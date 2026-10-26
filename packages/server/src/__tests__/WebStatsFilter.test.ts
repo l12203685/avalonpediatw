@@ -17,7 +17,8 @@ import {
   togglePreset,
   withClauses,
 } from '../../../web/src/stats/filterDraft';
-import { filterFromParams, filterHash, parseStatsQuery } from '../../../web/src/stats/statsFilter';
+import { filterFromParams, filterHash, parseStatsQuery, useStatsFilter } from '../../../web/src/stats/statsFilter';
+import { followsFilter } from '../../../web/src/stats/filteredRoutes';
 import { parseStatsHash } from '../../../web/src/utils/statsLinks';
 
 const AS_OF = '2026-10-25';
@@ -117,5 +118,27 @@ describe('filter share links', () => {
     expect(parseStatsHash('#leaderboard?f=1.x')).toEqual({ kind: 'stats', filter: '1.x' });
     expect(parseStatsHash('#practice?f=1.x')).toBeNull();
     expect(parseStatsQuery('f=1.abc&preset=online&x=1')).toEqual({ filter: '1.abc', preset: 'online' });
+  });
+});
+
+describe('applying a filter', () => {
+  it('keeps only clauses the engine accepts, so the chips and their counts line up', () => {
+    useStatsFilter.getState().setFilter({
+      v: 1,
+      clauses: [
+        { kind: 'excludePlayers', scope: 'dropGames', who: { by: 'metric', metric: 'roleTheory', op: 'gt', pr: 150 } },
+        { kind: 'category', in: ['線瓦'] },
+      ],
+    });
+    const s = useStatsFilter.getState();
+    expect(s.filter?.clauses).toEqual([{ kind: 'category', in: ['線瓦'] }]);
+    expect(s.warnings).toHaveLength(1);
+    s.setFilter({ v: 1, clauses: [] });
+    expect(useStatsFilter.getState()).toMatchObject({ filter: null, key: '', warnings: [] });
+  });
+
+  it('only the analysis paths that follow the filter wait for the engine', () => {
+    for (const p of ['/overview', '/players', '/players/%E8%99%9B', '/lake', '/feature-studies', '/leaderboard']) expect(followsFilter(p), p).toBe(true);
+    for (const p of ['/wiki', '/profile/x/archetype', '/profile/x/playstyle', '/games']) expect(followsFilter(p), p).toBe(false);
   });
 });

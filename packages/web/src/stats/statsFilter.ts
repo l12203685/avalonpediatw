@@ -8,13 +8,13 @@
  *   展開後換成完整連結。
  */
 import { create } from 'zustand';
-import { canonicalFilterKey, decodeFilter, encodeFilter, presetFilter, type GameFilter } from '@avalon/shared/stats';
+import { canonicalFilterKey, decodeFilter, encodeFilter, presetFilter, sanitizeFilter, type GameFilter } from '@avalon/shared/stats';
 
 export interface StatsFilterState {
   filter: GameFilter | null;
   /** canonicalFilterKey(filter)；'' = 不篩選。 */
   key: string;
-  /** 分享連結解碼時丟掉的條件 (給面板顯示)。 */
+  /** 分享連結解碼或套用時丟掉的條件 (給面板顯示)。 */
   warnings: string[];
   /** 「重試」的次數：分析分頁以 key + nonce 重新掛載，重新拿資料。 */
   nonce: number;
@@ -32,7 +32,11 @@ export const useStatsFilter = create<StatsFilterState>((set) => ({
   key: '',
   warnings: [],
   nonce: 0,
-  setFilter: (filter, warnings = []): void => set({ ...normalize(filter), warnings }),
+  // 只存引擎會接受的子句 (sanitizeFilter：PR 超出 0–100 等丟掉並提醒)，標籤與各條件的局數才會對得上
+  setFilter: (filter, warnings = []): void => {
+    const clean = filter ? sanitizeFilter(filter) : { filter: null, warnings: [] };
+    set({ ...normalize(clean.filter), warnings: [...warnings, ...clean.warnings] });
+  },
   retry: (): void => set((s) => ({ nonce: s.nonce + 1 })),
 }));
 

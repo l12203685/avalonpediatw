@@ -13,7 +13,7 @@ import { parseStudyHash, studyHash } from '../../utils/statsLinks';
  *    數據分析，但不清 hash，交給這裡。
  */
 
-const STUDY_EVENT = 'avalon:study-hash';
+export const STUDY_EVENT = 'avalon:study-hash';
 
 interface StudyHistoryState {
   avalonStudy?: string;

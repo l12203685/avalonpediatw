@@ -1289,7 +1289,7 @@
       "smallPopulation": "A player condition ranks fewer than 10 eligible players.",
       "unresolved": "No such players: {{names}}; those conditions are off.",
       "inactive": "Condition {{index}} is off: {{reason}}",
-      "linkWarnings": "{{count}} conditions in the shared link were not recognised and were skipped.",
+      "linkWarnings": "{{count}} conditions were not recognised or out of range and were skipped.",
       "unavailable": "Filtering is temporarily unavailable (the daily dataset is not ready); the numbers below are for all games.",
       "retry": "Retry",
       "notFiltered": "This block does not follow the filter (all games).",

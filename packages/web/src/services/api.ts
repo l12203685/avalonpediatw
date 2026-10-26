@@ -5,7 +5,7 @@
 
 import type { OutcomeCounts, PlayerOutcomeBlocks, PlayerVoting } from '@avalon/shared';
 import type { GameFilter, StatsResult } from '@avalon/shared/stats';
-import { filteredRoute, withFilteredLakeClaim } from '../stats/filteredRoutes';
+import { filteredRoute, followsFilter, withFilteredLakeClaim } from '../stats/filteredRoutes';
 import { FilterUnavailableError, filteredStats } from '../stats/statsEngine';
 import { currentStatsFilter } from '../stats/statsFilter';
 
@@ -1002,8 +1002,9 @@ async function filteredResult(path: string, filter: GameFilter, key: string): Pr
  * (stats/filteredRoutes.ts，形狀與伺服器路由相同)；特徵研究只有 L141 換成重算的版本，其餘路徑照常打 API。
  */
 async function analysisApiFetch<T>(path: string): Promise<T> {
-  const { filter, key } = currentStatsFilter();
-  if (filter && key) {
+  const { key } = currentStatsFilter();
+  const filter = key && followsFilter(path) ? currentStatsFilter().filter : null;
+  if (filter && path !== '/feature-studies') {
     const route = filteredRoute(path, await filteredResult(path, filter, key));
     if (route?.kind === 'notFound') throw new AnalysisApiError(404, path, 'Player not found');
     if (route) return route.data as T;
@@ -1012,7 +1013,7 @@ async function analysisApiFetch<T>(path: string): Promise<T> {
   if (!res.ok) throw new AnalysisApiError(res.status, path, await readServerError(res));
   const body = (await res.json()) as ApiEnvelope<T>;
   if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
-  if (filter && key && path === '/feature-studies') {
+  if (filter && path === '/feature-studies') {
     return withFilteredLakeClaim(body.data as unknown as FeatureStudiesData, await filteredResult(path, filter, key)) as T;
   }
   return body.data;

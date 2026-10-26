@@ -134,13 +134,13 @@ export default function AnalyticsPage(): JSX.Element {
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={`${activeTab}|${filterKey}`}
+            key={activeTab}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'boards'   && <BoardsTab />}
+            {activeTab === 'boards'   && <BoardsTab key={filterKey} />}
             {activeTab === 'analysis' && <AnalysisSection focus={statsFocus} />}
           </motion.div>
         </AnimatePresence>

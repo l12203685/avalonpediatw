@@ -505,9 +505,12 @@ function ExcludeRule({ rule, vocab, onChange, onRemove }: {
   const role = useRoleLabel();
   const metricLabel = useMetricLabel();
   const who = rule.who;
-  // 和 PR 比 (預設) 或和數值比：有 value 鍵就是數值 (PR 欄暫時清空時不會跳成數值)
-  const byPr = who.by === 'metric' && who.value === undefined;
-  const [namesText, setNamesText] = useState(who.by === 'names' ? who.names.join('、') : '');
+  // 和 PR 比 (預設) 或和數值比：有 value 鍵就是數值 (欄位暫時清空時鍵還在，不會跳成另一種)
+  const byPr = who.by === 'metric' && !('value' in who);
+  const names = who.by === 'names' ? who.names.join('、') : '';
+  const [namesText, setNamesText] = useState(names);
+  // 草稿換了名字 (還原、刪掉前一條、套用 JSON、外面改了篩選) → 欄位跟著換；自己打到一半的分隔符號不動
+  if (splitNames(namesText).join('、') !== names) setNamesText(names);
   const setWho = (next: PlayerSelector): void => onChange({ ...rule, who: next });
   const f = 'analytics.filter.fields';
   return (
@@ -515,7 +518,7 @@ function ExcludeRule({ rule, vocab, onChange, onRemove }: {
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-zinc-500">{t(`${f}.by`)}</span>
         <Toggle on={who.by === 'metric'} onClick={() => onChange(switchSelector(rule, 'metric'))}>{t(`${f}.byMetric`)}</Toggle>
-        <Toggle on={who.by === 'names'} onClick={() => { setNamesText(''); onChange(switchSelector(rule, 'names')); }}>{t(`${f}.byNames`)}</Toggle>
+        <Toggle on={who.by === 'names'} onClick={() => onChange(switchSelector(rule, 'names'))}>{t(`${f}.byNames`)}</Toggle>
         <span className="flex-1" />
         <IconButton label={t('analytics.filter.remove')} onClick={onRemove}><Trash2 size={13} /></IconButton>
       </div>
@@ -558,7 +561,9 @@ function ExcludeRule({ rule, vocab, onChange, onRemove }: {
             </select>
             <NumberInput
               value={byPr ? who.pr : who.value}
-              onChange={(n) => setWho(byPr ? { ...who, pr: n } : { ...who, value: n })}
+              onChange={(n) => setWho(byPr
+                ? { ...who, pr: n === undefined ? undefined : Math.min(100, Math.max(0, n)) }
+                : { ...who, value: n })}
               label={byPr ? t(`${f}.pr`) : t(`${f}.value`)}
               min={byPr ? 0 : undefined}
               max={byPr ? 100 : undefined}
@@ -581,7 +586,7 @@ function ExcludeRule({ rule, vocab, onChange, onRemove }: {
             <label className="inline-flex items-center gap-1 text-xs text-zinc-400">
               {t(`${f}.minGames`)}
               <NumberInput value={who.minGames} placeholder={t(`${f}.minGamesHint`)} label={t(`${f}.minGames`)} min={0} wide
-                onChange={(n) => setWho(withOptional(who, 'minGames', n === undefined ? undefined : Math.max(0, Math.round(n))))} />
+                onChange={(n) => setWho(withOptional(who, 'minGames', n === undefined ? undefined : Math.min(999999, Math.max(0, Math.round(n)))))} />
             </label>
           </div>
         </>

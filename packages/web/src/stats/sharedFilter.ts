@@ -4,6 +4,7 @@
  */
 import { useEffect } from 'react';
 import { loadFilterVocab } from './statsEngine';
+import { STUDY_EVENT } from '../components/analytics/studyLink';
 import { filterFromParams, filterHash, useStatsFilter, type StatsHashParams } from './statsFilter';
 
 function today(): string {
@@ -40,7 +41,15 @@ export function useFilterHashSync(): void {
   const filter = useStatsFilter((s) => s.filter);
   const key = useStatsFilter((s) => s.key);
   useEffect(() => {
-    writeHash(filterHash(key ? filter : null));
+    const sync = (): void => writeHash(filterHash(key ? filter : null));
+    sync();
+    // App 處理 #stats 連結、關掉從外部連結開的研究時會清掉 hash：再寫回去
+    window.addEventListener('hashchange', sync);
+    window.addEventListener(STUDY_EVENT, sync);
+    return (): void => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener(STUDY_EVENT, sync);
+    };
   }, [filter, key]);
   useEffect(() => (): void => writeHash('#stats'), []);
 }

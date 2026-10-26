@@ -1289,7 +1289,7 @@
       "smallPopulation": "有一條玩家條件的 PR 母體不到 10 人。",
       "unresolved": "找不到這些玩家：{{names}}；相關條件不生效。",
       "inactive": "第 {{index}} 條條件沒有生效：{{reason}}",
-      "linkWarnings": "分享連結裡有 {{count}} 個條件無法辨識，已略過。",
+      "linkWarnings": "有 {{count}} 個條件無法辨識或超出範圍，已略過。",
       "unavailable": "篩選暫時無法使用（每日資料集尚未就緒或更新中）；下面仍是全部對局的數字。",
       "retry": "重試",
       "notFiltered": "此區塊不隨篩選變動（仍是全部對局）。",

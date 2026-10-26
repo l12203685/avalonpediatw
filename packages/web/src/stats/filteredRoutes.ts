@@ -21,6 +21,11 @@ export type FilteredRoute =
   | { kind: 'data'; data: unknown }
   | { kind: 'notFound' };
 
+/** 這條路徑有篩選時要不要等引擎 (其餘路徑，例：/wiki、/profile/*，照常打 API，不等資料集)。 */
+export function followsFilter(path: string): boolean {
+  return (FILTERED_PATHS as readonly string[]).includes(path) || path === '/feature-studies' || /^\/players\/[^/]+$/.test(path);
+}
+
 /** 五成雙到一位小數 (同 generate_cache.py rnd1 / 伺服器 sheetsAnalysis.rnd1)。 */
 function rnd1(n: number): number {
   const scaled = n * 10;
