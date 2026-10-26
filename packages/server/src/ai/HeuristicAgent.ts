@@ -25,7 +25,8 @@ import {
   resolveAgentTuning,
   type AgentTuning,
 } from './AgentTuning';
-import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
+import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelWeights } from './assassin/AssassinModel';
+import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
@@ -2621,17 +2622,35 @@ export class HeuristicAgent implements AvalonAgent {
     // (see types.ts). Prefer it when available; fall back to `knownEvils`
     // for backwards compatibility with tests / non-harness callers.
     const evilSet = new Set<string>(obs.allEvilIds ?? obs.knownEvils);
-    const goodPlayers = allIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
+    const allGood = allIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
 
-    if (goodPlayers.length === 0) {
+    if (allGood.length === 0) {
       return { type: 'assassinate', targetId: allIds.find(id => id !== obs.myPlayerId) ?? allIds[0] };
     }
+
+    // Logic-first batch 1G (2026-10-26, practice report (b), INV-A2):
+    // `assassinVisibleRedTier` ranks every candidate who, as captain on a
+    // non-forced proposal, certainly put a red Merlin sees on the team
+    // strictly below every candidate who never did (a lexicographic tier on
+    // top of the scores; when every candidate did, the scores decide alone);
+    // `assassinVisibleRedLikelihood` multiplies by the measured likelihood
+    // of each lead with one seen teammate (Morgana or Mordred, the assassin
+    // cannot tell). Both on both paths (`assassin/VisibleRedProposals.ts`).
+    const visibleRed = {
+      tier: this.tuning.assassinVisibleRedTier,
+      likelihood: this.tuning.assassinVisibleRedLikelihood,
+    };
+    const goodPlayers = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood)) : allGood;
 
     // AgentTuning.assassinModel (2026-10-12): conditional-logit model
     // trained on the logged games (`assassin/AssassinModel.ts`), using
     // only the public history plus the assassin's own known allies.
     if (this.tuning.assassinModel) {
-      return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
+      if (!visibleRed.tier && !visibleRed.likelihood) {
+        return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
+      }
+      const scores = scoreAssassinCandidates(obs, goodPlayers, this.assassinModelWeights);
+      return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }
 
     // Edward 2026-04-24 batch 2 fix #6: assassin must first prefer
@@ -2746,6 +2765,15 @@ export class HeuristicAgent implements AvalonAgent {
       );
     }
 
+    // Batch 1G likelihood: the heuristic score read as a log-odds, so the
+    // measured multiplier of each ambiguous lead adds its logarithm.
+    if (visibleRed.likelihood) {
+      const evidence = visibleRedEvidence(obs, candidatePool);
+      for (const id of candidatePool) {
+        merlinScore.set(id, (merlinScore.get(id) ?? 0) + (evidence.get(id)?.logLikelihood ?? 0));
+      }
+    }
+
     const target = candidatePool.reduce((best, id) =>
       (merlinScore.get(id) ?? 0) > (merlinScore.get(best) ?? 0) ? id : best
     , candidatePool[0]);
@@ -2832,25 +2860,11 @@ export class HeuristicAgent implements AvalonAgent {
    * teammates is Mordred. So `certain` = the reds Merlin surely sees (the
    * assassin itself, Oberon, and — when there is no Mordred in the game or
    * the assassin is Mordred — every teammate); `ambiguous` = the teammates
-   * among whom exactly one (Mordred) is invisible to Merlin.
+   * among whom exactly one (Mordred) is invisible to Merlin. (Shared with
+   * the batch-1G tier since 2026-10-26: `assassin/VisibleRedProposals.ts`.)
    */
-  private merlinSightFromAssassin(obs: PlayerObservation): { certain: Set<string>; ambiguous: string[] } {
-    const self = obs.myPlayerId;
-    const teammates = obs.knownEvils.filter((id) => id !== self);
-    const all = new Set<string>(obs.allEvilIds ?? [...teammates, self]);
-    const certain = new Set<string>();
-    const selfIsMordred = (obs.myRole as string) === 'mordred';
-    if (!selfIsMordred) certain.add(self);
-    for (const id of all) if (id !== self && !teammates.includes(id)) certain.add(id); // Oberon
-    const mordredInGame = AVALON_CONFIG[obs.playerCount]?.roles.includes('mordred') ?? false;
-    if (!mordredInGame || selfIsMordred) {
-      // No hidden Mordred among the teammates: Merlin sees them all.
-      for (const id of teammates) certain.add(id);
-      return { certain, ambiguous: [] };
-    }
-    // A lone teammate is Mordred himself (invisible); otherwise exactly one
-    // of them is.
-    return { certain, ambiguous: teammates.length >= 2 ? teammates : [] };
+  private merlinSightFromAssassin(obs: PlayerObservation): { certain: ReadonlySet<string>; ambiguous: readonly string[] } {
+    return merlinSightFromAssassin(obs);
   }
 
   /**

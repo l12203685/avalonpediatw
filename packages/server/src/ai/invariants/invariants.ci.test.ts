@@ -45,7 +45,9 @@ import { staticResultReads } from './staticScan';
  * Batch 1D left replay Pe2 149 / PL 20 / R1 0, self-play Pe2 49 / PL 7 /
  * R1 4; batches 1E / 1F (Percival = loyal + thumb constraint, blue lake;
  * red possible claims only) brought all three to 0 here and on the full
- * run — enforced. Nothing is pending now.
+ * run — enforced. Batch 1G added INV-A2 (the assassination tier) and
+ * brought it to 0 here and on the full run (enforced; before the batch:
+ * replay 6 of 22, self-play 0 of 3 on this sample). Nothing is pending now.
  */
 const PENDING_BASELINE: Record<'replay' | 'probe' | 'selfplay', Record<string, number>> = {
   replay: {},
@@ -110,6 +112,10 @@ describe('invariant harness — CI sample', () => {
       expect(result.replay.tallies.get(id)?.opportunities ?? 0, `replay ${id} opportunities`).toBeGreaterThan(0);
       expect(result.selfplay.tallies.get(id)?.opportunities ?? 0, `self-play ${id} opportunities`).toBeGreaterThan(0);
     }
+    // Batch 1G: the assassination tier has opportunities (some candidate certainly
+    // proposed a seen red, not every one did) on the replays and in self-play.
+    expect(result.replay.tallies.get('INV-A2')?.opportunities ?? 0, 'replay INV-A2 opportunities').toBeGreaterThan(0);
+    expect(result.selfplay.tallies.get('INV-A2')?.opportunities ?? 0, 'self-play INV-A2 opportunities').toBeGreaterThan(0);
     const pe2 = result.replay.tallies.get('INV-Pe2');
     expect((pe2?.opportunities ?? 0) - Object.values(pe2?.exempt ?? {}).reduce((a, b) => a + b, 0), 'replay INV-Pe2 non-exempt').toBeGreaterThan(0);
     // INV-B3 (static), enforced since batch 1C: no agent code reads a mission result without its fail count.

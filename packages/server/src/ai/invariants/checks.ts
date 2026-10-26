@@ -42,6 +42,7 @@ import {
   percivalR1IncludedThumb,
 } from '../PercivalThumbs';
 import { inferRedsFromTaskFails } from '../forward/ForwardAgent';
+import { visibleRedEvidence } from '../assassin/VisibleRedProposals';
 import type { PlayerObservation } from '../types';
 import type { DecisionRecord } from './AuditAgent';
 import { certaintyOf, cutAtLake, isForcedProposal, publicCertaintyOf, type Truth } from './context';
@@ -319,11 +320,38 @@ export function checkDecision(
 
     case 'assassinate': {
       if (rec.action?.type !== 'assassinate') break;
+      const target = rec.action.targetId;
       const known = new Set([...(obs.allEvilIds ?? []), ...obs.knownEvils, me]);
-      const hit = known.has(rec.action.targetId);
+      const hit = known.has(target);
       L.record('INV-A1', { violated: hit });
       L.inc('A.n');
-      if (truth?.evil.has(rec.action.targetId)) L.inc('A.targetEvil');
+      if (truth?.evil.has(target)) L.inc('A.targetEvil');
+      // INV-A2 (batch 1G): a candidate who, as captain on a non-forced
+      // proposal, certainly put a red Merlin sees on the team is never
+      // preferred over one who never did (opportunity = some candidate did;
+      // every candidate did = exempt, the scores decide).
+      const candidates = obs.allPlayerIds.filter((id) => !known.has(id));
+      const evidence = visibleRedEvidence(obs, candidates);
+      const flagged = candidates.filter((id) => evidence.get(id)?.tier === 1);
+      const humanTarget = rec.human?.target;
+      if (flagged.length > 0) {
+        if (flagged.length === candidates.length) L.record('INV-A2', { exempt: 'every candidate proposed a seen red' });
+        else {
+          L.record('INV-A2', { violated: flagged.includes(target) });
+          if (humanTarget !== undefined) L.human('INV-A2', flagged.includes(humanTarget));
+        }
+      }
+      if (truth) {
+        const merlin = [...truth.roles].find(([, r]) => r === 'merlin')?.[0];
+        if (target === merlin) L.inc('A.hitMerlin');
+        if (merlin !== undefined && flagged.includes(merlin)) L.inc('A2.merlinFlagged');
+        if (humanTarget !== undefined) {
+          L.inc('A.human.n');
+          if (humanTarget === merlin) L.inc('A.human.hitMerlin');
+          if (flagged.includes(humanTarget)) L.inc('A2.human.targetFlagged');
+        }
+      }
+      if (flagged.length > 0) L.inc('A2.someFlagged');
       break;
     }
 

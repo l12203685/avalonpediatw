@@ -1778,3 +1778,47 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
   --base teamDominanceGate --base mustFailGate
 # 換 --seed 357913 / 468024
 ```
+
+
+## 19. 邏輯第一原理 第 1G 批：刺殺時確定把梅林看得到的紅放進自己隊的隊長排在後面（2026-10-26；`assassinVisibleRedTier`、`assassinVisibleRedLikelihood`）
+
+**來由**：`logic_first.md` 第 9 節（練習回報 (b)：刺殺時紅方知道全部紅方含奧伯倫，當隊長時把梅林看得到的紅 —— 刺客、莫甘娜、奧伯倫 —— 放進自己隊的人很不可能是梅林）。真人資料：梅林隊長的非強制提議有看得到的紅 2.9–22.8%（依回合），忠臣 / 派西 20.8–61.4%，概似比 0.12–0.45，R1 也一樣（0.13）。`assassinVisibleRedTier` 把在 R1 起的非強制提議**確定**這樣做的候選排在每一位從沒這樣做的候選之後（層級，不是硬排除）；`assassinVisibleRedLikelihood` 對「只有一位看得到的隊友」（莫甘娜或莫德雷德）的提議乘上量到的概似比。模型與舊啟發式兩條刺殺路徑都適用，不重新訓練模型。兩個開關預設開，legacy 全關。不變量：新的 INV-A2 在 1970 局重播（改前 182 / 897）與 2000 局自我對打（改前 70 / 474）上 0 違規（`logic_first.md` 9.3）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 9.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 18 節的 variant**（`lane/r7-ai-1ef` 正式預設的 26 個開關）；variant = 同樣 26 個再加本批兩個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 579135 / 680246 / 791357（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts、src、r7 的計畫文件，也不在 main 與各 lane 分支上；第 15–18 節用掉的十二個避開）；沒有選版本的種子，三個都是確認種子（版本在跑之前定案）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 579135（5000） | 88.24%（86.08%） | **+2.16pp [+1.73pp, +2.59pp]** | 13.92%（13.92%） | +0.00pp | 51.08% | 74.06% / 74.06% / 74.06% | 54.7% / 46.3% / 46.3%（1297） |
+| 680246（5000） | 87.10%（84.66%） | **+2.44pp [+1.99pp, +2.89pp]** | 15.34%（15.34%） | +0.00pp | 51.22% | 73.18% / 73.18% / 73.18% | 51.9% / 42.8% / 42.8%（1341） |
+| 791357（5000） | 87.60%（85.40%） | **+2.20pp [+1.77pp, +2.63pp]** | 14.60%（14.60%） | +0.00pp | 51.10% | 73.14% / 73.14% / 73.14% | 53.8% / 45.6% / 45.6%（1343） |
+| **三個合併（15000）** | — | **+2.26pp [+2.01pp, +2.51pp]** | — | +0.00pp | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13–18 節；藍方三個種子的差恆為 0，不合併。ForwardAgent 每個種子約 211 萬個決策（2,104,896 / 2,109,756 / 2,114,208）、0 次 fallback。）
+
+讀法：
+
+- **紅方立場變強**（三個種子與合併區間都在 0 以上）：開關只動刺客的選擇，刺殺前每一局逐局相同（三紅率三欄相同），所以差全部來自三藍局的刺中率 —— 約 +8.5 點（46.3 → 54.7%、42.8 → 51.9%、45.6 → 53.8%）。機器人梅林從不派含看得到的紅的隊（INV-M1），層級在自我對打裡從來不會把真梅林排到後面；對真人梅林（10.5% 的局確定放過看得到的紅）效果較小（重播刺中率 30.1 → 37.2%，`logic_first.md` 9.3）。
+- **藍方立場不變**（藍方座位不讀這兩個開關，逐局相同）。
+- 本批沒有任何立場的區間整個在 0 以下 → **沒有新的補償工作單**；第 16 節開的紅方補償工作單（`logic_first.md` 6.7）原因在紅方信念，本批不算補償，仍開著。
+
+**這一節用到的種子**：579135、680246、791357。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 579135 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --flag teamDominanceGate --flag mustFailGate \
+  --flag percivalLoyalVote --flag percivalCertainExclusion --flag percivalBlueLake --flag redPossibleClaimsOnly \
+  --flag assassinVisibleRedTier --flag assassinVisibleRedLikelihood \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility \
+  --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits \
+  --base teamDominanceGate --base mustFailGate \
+  --base percivalLoyalVote --base percivalCertainExclusion --base percivalBlueLake --base redPossibleClaimsOnly
+# 換 --seed 680246 / 791357
+```

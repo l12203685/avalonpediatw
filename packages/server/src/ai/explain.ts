@@ -31,6 +31,8 @@ import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1Teammate';
 import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { AVALON_CONFIG } from '@avalon/shared';
+import { scoreAssassinCandidates } from './assassin/AssassinModel';
+import { adjustedProbabilities, visibleRedEvidence } from './assassin/VisibleRedProposals';
 
 export interface ExplainedSuspect {
   seat: number;
@@ -625,7 +627,22 @@ export function explainLakeClaim(
   };
 }
 
-export function explainAssassination(obs: PlayerObservation, targetId: string, agent?: AvalonAgent): DecisionExplanation {
+/**
+ * The assassination. Since logic-first batch 1G (2026-10-26, practice report
+ * (b)) the text states the visible-red tier whenever it applies: the
+ * candidates who, as captain on a non-forced proposal, certainly put a red
+ * Merlin sees on their team, ranked below everyone who never did
+ * (`assassin/VisibleRedProposals.ts`). With the assassination model on, the
+ * ranked list is the model's probability (what the pick uses, with the
+ * batch-1G likelihood when that switch is on); the ToM Merlin probability
+ * stays in the text as a second opinion.
+ */
+export function explainAssassination(
+  obs: PlayerObservation,
+  targetId: string,
+  agent?: AvalonAgent,
+  tuning: AgentTuning = agent instanceof HeuristicAgent ? agent.tuning : getDefaultAgentTuning(),
+): DecisionExplanation {
   const evil = new Set([...(obs.allEvilIds ?? []), ...obs.knownEvils, obs.myPlayerId]);
   const candidates = obs.allPlayerIds.filter((id) => !evil.has(id));
   let tom: Ranked[] = [];
@@ -637,16 +654,43 @@ export function explainAssassination(obs: PlayerObservation, targetId: string, a
   } catch {
     tom = [];
   }
+  let model: Ranked[] = [];
+  if (tuning.assassinModel && candidates.length > 0) {
+    const probs = adjustedProbabilities(obs, candidates, scoreAssassinCandidates(obs, candidates), tuning.assassinVisibleRedLikelihood);
+    model = candidates
+      .map((id) => ({ id, score: probs.get(id) ?? 0 }))
+      .sort((a, b) => b.score - a.score || seatOfId(obs, a.id) - seatOfId(obs, b.id));
+  }
   const like = rankMerlinLike(obs, candidates);
   const parts: string[] = [`候選 ${candidates.length} 人（排除紅方）`];
+  let rule: string | undefined;
+  if (tuning.assassinVisibleRedTier && candidates.length > 0) {
+    const evidence = visibleRedEvidence(obs, candidates);
+    const flagged = candidates.filter((id) => evidence.get(id)?.tier === 1);
+    if (flagged.length > 0 && flagged.length < candidates.length) {
+      parts.push(
+        `${seatsTxt(obs, flagged)}當隊長時把梅林一定看得到的紅（刺客、奧伯倫，或兩位隊友都在、其中一位一定是莫甘娜）放進自己的隊（非強制提議），`
+          + `梅林幾乎不會這樣派，排在其餘 ${candidates.length - flagged.length} 人之後`,
+      );
+      rule = '刺殺：當隊長時確定把梅林看得到的紅放進自己隊的人排在後面，其餘再看分數';
+    } else if (flagged.length === candidates.length) {
+      parts.push('每位候選當隊長時都曾把梅林一定看得到的紅放進自己的隊，改照分數');
+    }
+  }
+  if (model.length > 0) {
+    parts.push(scoreTxt(model, targetId, '刺殺模型機率', '高', 0, `前三：${rankedTxt(obs, model)}`));
+  }
   if (tom.length > 0) {
     parts.push(scoreTxt(tom, targetId, 'ToM 梅林機率', '高', 0, `前三：${rankedTxt(obs, tom)}`));
   }
   parts.push(scoreTxt(like, targetId, '像梅林分數', '高', 0));
+  const ranked = model.length > 0 ? model : tom.length > 0 ? tom : like;
+  const label = model.length > 0 ? '刺殺模型機率' : tom.length > 0 ? '梅林機率' : '像梅林';
   const base: DecisionExplanation = {
     reason: `刺 ${seatTxt(obs, targetId)}：${parts.join('；')}。`,
     knowledge: describeKnowledge(obs),
-    ...suspectsOf(obs, tom.length > 0 ? '梅林機率' : '像梅林', tom.length > 0 ? tom : like),
+    ...suspectsOf(obs, label, ranked),
   };
-  return withReplay(base, replayRule(obs, agent, { type: 'assassinate', targetId }));
+  const replayed = withReplay(base, replayRule(obs, agent, { type: 'assassinate', targetId }));
+  return rule ? { ...replayed, rule: replayed.rule ? `${rule}（${replayed.rule}）` : rule } : replayed;
 }

@@ -220,7 +220,30 @@ describe('AgentTuning — flags', () => {
     expect(AGENT_TUNING_ENV.percivalCertainExclusion).toBe('AVALON_TUNING_PERCIVAL_CERTAIN_EXCLUSION');
     expect(AGENT_TUNING_ENV.percivalBlueLake).toBe('AVALON_TUNING_PERCIVAL_BLUE_LAKE');
     expect(AGENT_TUNING_ENV.redPossibleClaimsOnly).toBe('AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY');
+    // Batch 1G (logic_first.md 第 9 節, 2026-10-26): the assassination tier for
+    // candidates who certainly proposed a red Merlin sees, and the soft likelihood.
+    const LOGIC_1G = ['assassinVisibleRedTier', 'assassinVisibleRedLikelihood'] as const;
+    for (const key of LOGIC_1G) {
+      expect(DEFAULT_AGENT_TUNING[key]).toBe(true);
+      expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      expect(parseTuningFlag(key)).toEqual({ [key]: true });
+      expect(tuningFromEnv({ [AGENT_TUNING_ENV[key]]: '0' })).toEqual({ [key]: false });
+      expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, [key]: true })).toBe(key);
+    }
+    expect(AGENT_TUNING_ENV.assassinVisibleRedTier).toBe('AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER');
+    expect(AGENT_TUNING_ENV.assassinVisibleRedLikelihood).toBe('AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD');
     expect(describeAgentTuning(DEFAULT_AGENT_TUNING)).toBe(
+      'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
+        'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
+        'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
+        'percivalR1ThumbOnThumb,goodQuestSuccessGuard,assassinHeuristicVisibility,' +
+        'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
+        'teamDominanceGate,mustFailGate,' +
+        'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
+        'assassinVisibleRedTier,assassinVisibleRedLikelihood',
+    );
+    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
+    expect(describeAgentTuning(before1G)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
         'goodVouchFollowUp,teamReuse,redR1Teammate,percivalNoThumbsR1,' +
@@ -230,7 +253,7 @@ describe('AgentTuning — flags', () => {
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly',
     );
     const before1EF = {
-      ...DEFAULT_AGENT_TUNING, percivalLoyalVote: false, percivalCertainExclusion: false, percivalBlueLake: false, redPossibleClaimsOnly: false,
+      ...before1G, percivalLoyalVote: false, percivalCertainExclusion: false, percivalBlueLake: false, redPossibleClaimsOnly: false,
     };
     expect(describeAgentTuning(before1EF)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +

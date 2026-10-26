@@ -118,6 +118,13 @@
  *     （S1-8：派西的湖是藍方湖，避開名單只剩 `knownEvils`；INV-PL）、
  *     `redPossibleClaimsOnly`（S1-10：紅方持湖者不做「好人持湖者不可能為真」
  *     的宣告，改宣另一邊，兩邊都不可能時不宣告；INV-R1）。
+ *   - 2026-10-26 邏輯第一第 1G 批（刺殺；練習回報 (b)；`docs/ai/logic_first.md`
+ *     第 9 節；兩個開關各做一件事，legacy 全關，不變量歸零後預設開）：
+ *     `assassinVisibleRedTier`（非強制提議當隊長時確定把梅林看得到的紅放進
+ *     隊的候選，排在每一位從沒這樣做過的候選之後；字典序的層級、不是硬排除；
+ *     INV-A2）、`assassinVisibleRedLikelihood`（隊上只有一位看得到的隊友 ——
+ *     莫甘娜或莫德雷德、刺客分不出 —— 的非強制提議，乘上真人資料量到的概似比）。
+ *     模型與舊啟發式兩條刺殺路徑都適用（`assassin/VisibleRedProposals.ts`）。
  *
  * 三層來源，後者覆蓋前者：
  *   1. `LEGACY_AGENT_TUNING`：2026-10-12 之前的行為（全部關閉）。
@@ -333,6 +340,24 @@ export interface AgentTuning {
    * 放進確定紅（確定性層自動做到，INV-R2）。
    */
   redPossibleClaimsOnly: boolean;
+  /**
+   * 刺殺的「看得到的紅」層級（2026-10-26，第 1G 批，練習回報 (b)，INV-A2）：
+   * 刺殺時刺客知道全部紅方（含奧伯倫），但分不出兩位隊友誰是莫德雷德（梅林
+   * 唯一看不到的紅）。候選人在 R1 起的非強制提議當隊長時，隊上「一定有」梅林
+   * 看得到的紅（刺客自己、奧伯倫，或兩位隊友都在）→ 排在每一位從沒這樣做過
+   * 的候選之後（字典序層級，分數只在同一層裡比；全部候選都做過時照分數）。
+   * 真人梅林這樣派的比例 2.2–19.7%（依回合），忠臣 / 派西 17.8–51.1%，
+   * 概似比 0.12–0.46；R1 也算（真人梅林 R1 同樣避開）。模型與舊啟發式都適用。
+   */
+  assassinVisibleRedTier: boolean;
+  /**
+   * 刺殺的軟性概似（2026-10-26，第 1G 批）：候選人當隊長的非強制提議，隊上
+   * 只有一位看得到的隊友（莫甘娜或莫德雷德，刺客分不出、各 ½）時，機率乘上
+   * ½·LR(有看得到的紅) + ½·LR(沒有)（依回合，真人資料：R1 1.18、R2 1.17、
+   * R3 0.98、R4 1.00、R5 0.70）。模型路徑加在線性分數的對數上；舊啟發式把
+   * 分數當對數勝算加上去。
+   */
+  assassinVisibleRedLikelihood: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -366,6 +391,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'percivalCertainExclusion',
   'percivalBlueLake',
   'redPossibleClaimsOnly',
+  'assassinVisibleRedTier',
+  'assassinVisibleRedLikelihood',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -398,6 +425,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalCertainExclusion: false,
   percivalBlueLake: false,
   redPossibleClaimsOnly: false,
+  assassinVisibleRedTier: false,
+  assassinVisibleRedLikelihood: false,
 });
 
 /**
@@ -533,6 +562,10 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     `percivalCertainExclusion`、`percivalBlueLake`、`redPossibleClaimsOnly`
  *     預設開（INV-Pe2 / PL / R1 在 1970 局重播與 2000 局自我對打上為 0）。
  *     強度只回報（strength_benchmark.md 第 18 節）。
+ *   - 2026-10-26 第 1G 批（刺殺：確定把梅林看得到的紅放進自己隊的隊長排在後面；
+ *     `logic_first.md` 第 9 節）：`assassinVisibleRedTier`、`assassinVisibleRedLikelihood`
+ *     預設開（INV-A2 在 1970 局重播與 2000 局自我對打上為 0）。強度只回報
+ *     （strength_benchmark.md 第 19 節）。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -569,6 +602,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalCertainExclusion: true,
   percivalBlueLake: true,
   redPossibleClaimsOnly: true,
+  assassinVisibleRedTier: true,
+  assassinVisibleRedLikelihood: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -601,6 +636,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   percivalCertainExclusion: 'AVALON_TUNING_PERCIVAL_CERTAIN_EXCLUSION',
   percivalBlueLake: 'AVALON_TUNING_PERCIVAL_BLUE_LAKE',
   redPossibleClaimsOnly: 'AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY',
+  assassinVisibleRedTier: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER',
+  assassinVisibleRedLikelihood: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD',
 });
 
 function parseBool(raw: string): boolean | undefined {

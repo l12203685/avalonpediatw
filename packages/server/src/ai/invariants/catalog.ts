@@ -35,7 +35,9 @@
  * `percivalLoyalVote`, `percivalCertainExclusion`, `percivalBlueLake` — and
  * the red possible-claim guard `redPossibleClaimsOnly`) brought INV-Pe2,
  * PL and R1 to 0 on the replays and the self-play games; every rule of the
- * catalog is enforced from then on.
+ * catalog is enforced from then on. Batch 1G (2026-10-26, 第 9 節, practice
+ * report (b): `assassinVisibleRedTier`) added INV-A2 and brought it to 0 on
+ * the replays and the self-play games — enforced.
  */
 
 export type InvariantKind = 'hard' | 'policy' | 'metamorphic' | 'structural' | 'static';
@@ -97,6 +99,8 @@ export const INVARIANTS: readonly InvariantSpec[] = [
     rule: 'Merlin never proposes, and from R3 never approves, a team holding a visible red (R1-R2 votes = policy)' },
   { id: 'INV-A1', refs: ['A1'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'the assassin never targets a known red' },
+  { id: 'INV-A2', refs: ['A1', 'M1', 'owner report (b)'], kind: 'hard', status: 'enforced', side: 'red',
+    rule: 'the assassin never prefers a candidate who, as captain on a non-forced proposal, certainly put a red Merlin sees on the team (assassin, Oberon, or both seen teammates) over a candidate who never did (every candidate did = exempt)' },
   { id: 'INV-R1', refs: ['C8', 'K5'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'a red holder never makes a claim that cannot be true for a good holder (public L1)' },
   { id: 'INV-R2', refs: ['K5'], kind: 'hard', status: 'enforced', side: 'good',
