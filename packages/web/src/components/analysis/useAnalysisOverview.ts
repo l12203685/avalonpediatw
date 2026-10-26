@@ -7,28 +7,18 @@ import {
   type FinalOutcomeSummary,
   type MissionStageSummary,
 } from '../../services/api';
+import { filterScopedLoader } from '../../stats/filterScopedLoader';
+import { useStatsFilter } from '../../stats/statsFilter';
 
 /**
  * 深度分析各分頁共用的 /api/analysis/overview 資料 — module 級快取，整個
  * AnalyticsPage 只打一次 API：分析副標的場數、總覽卡、刺殺結算卡、位置勝率圖、
- * 各角色最終勝率表都讀這裡。
+ * 各角色最終勝率表都讀這裡。快取依篩選分開存 (stats/filterScopedLoader.ts)，hook 跟著篩選換資料。
  */
-let cached: AnalysisOverview | null = null;
-let inflight: Promise<AnalysisOverview> | null = null;
+const overviewLoader = filterScopedLoader(fetchAnalysisOverview);
 
 export function loadAnalysisOverview(force = false): Promise<AnalysisOverview> {
-  if (!force && cached) return Promise.resolve(cached);
-  if (!force && inflight) return inflight;
-  const p = fetchAnalysisOverview()
-    .then(d => {
-      cached = d;
-      return d;
-    })
-    .finally(() => {
-      if (inflight === p) inflight = null;
-    });
-  inflight = p;
-  return p;
+  return overviewLoader.load(force);
 }
 
 export interface AnalysisOverviewState {
@@ -39,10 +29,19 @@ export interface AnalysisOverviewState {
 }
 
 export function useAnalysisOverview(): AnalysisOverviewState {
-  const [overview, setOverview] = useState<AnalysisOverview | null>(cached);
-  const [loading, setLoading] = useState<boolean>(cached === null);
+  const filterKey = useStatsFilter(s => s.key);
+  const [overview, setOverview] = useState<AnalysisOverview | null>(overviewLoader.peek);
+  const [loading, setLoading] = useState<boolean>(() => overviewLoader.peek() === null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // 跟著篩選 (分析副標的場數等，掛在不會因篩選重新掛載的地方)：換了篩選先顯示那個篩選已有的資料
+  const [seenKey, setSeenKey] = useState(filterKey);
+  if (seenKey !== filterKey) {
+    setSeenKey(filterKey);
+    const cached = overviewLoader.peek();
+    if (cached) setOverview(cached);
+    else setLoading(true);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +60,7 @@ export function useAnalysisOverview(): AnalysisOverviewState {
     return (): void => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [reloadKey, filterKey]);
 
   const reload = useCallback((): void => {
     setLoading(true);

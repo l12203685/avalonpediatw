@@ -83,7 +83,9 @@ export type MetricId =
   | 'roleTheory' | 'positionTheory' | 'overallTheory'
   | 'finalWinRate' | 'missionWinRate' | 'excessWinRate' | 'games'
   | 'roleFinalWinRate' | 'roleGames' | 'merlinSurvivalRate' | 'assassinHitRate'
-  | 'daysSinceLastPlayed' | 'daysSinceFirstPlayed';
+  | 'daysSinceLastPlayed' | 'daysSinceFirstPlayed'
+  // 強硬度（players[].voting；滿 10 票才有值）
+  | 'r3RejectLoyal' | 'r3RejectRed' | 'evilTeamReject' | 'goodTeamApprove' | 'evilTeamRejectR3' | 'goodTeamApproveR3';
 
 export type CompareOp = 'gt' | 'ge' | 'lt' | 'le';
 
@@ -103,7 +105,7 @@ export type PlayerSelector =
     evaluatedOn?: 'unfiltered' | 'filtered';
     /** 沒資格的人（例：角色窗沒打滿）：'keep'（預設，不會被選中）或 'select'（一律被選中）。 */
     ineligible?: 'keep' | 'select';
-    /** 覆寫資格門檻（場數）；角色理論仍須打滿每個角色視窗。 */
+    /** 覆寫資格門檻（場數；強硬度指標是票數，不能低於 10 票）；角色理論仍須打滿每個角色視窗。 */
     minGames?: number;
     /** 選「有資格但不符合」的人。 */
     invert?: boolean;
@@ -153,4 +155,5 @@ export const GAME_CLAUSE_KINDS = [
 export const METRIC_IDS: readonly MetricId[] = [
   'roleTheory', 'positionTheory', 'overallTheory', 'finalWinRate', 'missionWinRate', 'excessWinRate', 'games',
   'roleFinalWinRate', 'roleGames', 'merlinSurvivalRate', 'assassinHitRate', 'daysSinceLastPlayed', 'daysSinceFirstPlayed',
+  'r3RejectLoyal', 'r3RejectRed', 'evilTeamReject', 'goodTeamApprove', 'evilTeamRejectR3', 'goodTeamApproveR3',
 ];

@@ -7,17 +7,23 @@
  *  - Deep links (the SPA has no router; the bots link these):
  *      #stats  (#analytics, #leaderboard, #rank) → 數據分析
  *      #player=<名字>                             → 數據分析 → 玩家雷達, that player
+ *      #stats?f=1.<base64url>                     → 數據分析，套用分享的篩選 (stats/statsFilter.ts；
+ *        hash 留在網址列，跟著篩選更新)；#stats?preset=online 等短碼 = 預設集 (機器人用)
  *      #study=<loopId> (例 #study=l141)            → 數據分析 + 那項特徵研究的完整研究
  *        (2026-10-14 Edward：「查看完整研究」大多點不開。這個 hash 在研究打開時留在網址列，
  *        可以複製分享；關閉時由 FeatureStudyReport 清掉，App 不會像 #stats 那樣先清掉它)
  */
 import type { GameState } from '../store/gameStore';
+import { parseStatsQuery } from '../stats/statsFilter';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
 ]);
 
-export type StatsLink = { kind: 'stats' } | { kind: 'player'; name: string } | { kind: 'study'; loopId: string };
+export type StatsLink =
+  | { kind: 'stats'; filter?: string; preset?: string }
+  | { kind: 'player'; name: string }
+  | { kind: 'study'; loopId: string };
 
 const STATS_HASHES = new Set(['stats', 'analytics', 'leaderboard', 'rank']);
 
@@ -54,6 +60,11 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
     }
     name = name.trim();
     return name ? { kind: 'player', name } : { kind: 'stats' };
+  }
+  const q = raw.indexOf('?');
+  if (q >= 0 && STATS_HASHES.has(raw.slice(0, q).toLowerCase())) {
+    const params = parseStatsQuery(raw.slice(q + 1));
+    return { kind: 'stats', ...params };
   }
   return STATS_HASHES.has(raw.toLowerCase()) ? { kind: 'stats' } : null;
 }

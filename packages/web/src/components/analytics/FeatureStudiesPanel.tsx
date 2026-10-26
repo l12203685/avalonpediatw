@@ -11,6 +11,9 @@ import {
   type LakeClaimCell,
   type LakeClaimData,
 } from '../../services/api';
+import { filterScopedLoader } from '../../stats/filterScopedLoader';
+import { isFilterableStudy } from '../../stats/filteredRoutes';
+import NotFilteredNote from '../analysis/filter/NotFilteredNote';
 import { StatTable, type StatColumn, type Tone } from '../analysis/ui';
 import { useRoleLabel } from '../analysis/roleLabels';
 import { studyHash } from '../../utils/statsLinks';
@@ -53,22 +56,10 @@ export const LOW_SAMPLE_N = 30;
 
 // ─── Module-level cache + hook ───────────────────────────────────────────────
 
-let fsCache: FeatureStudiesData | null = null;
-let fsInflight: Promise<FeatureStudiesData> | null = null;
+const studiesLoader = filterScopedLoader(fetchFeatureStudies);
 
 export function loadFeatureStudies(force = false): Promise<FeatureStudiesData> {
-  if (!force && fsCache) return Promise.resolve(fsCache);
-  if (!force && fsInflight) return fsInflight;
-  const p = fetchFeatureStudies()
-    .then(d => {
-      fsCache = d;
-      return d;
-    })
-    .finally(() => {
-      if (fsInflight === p) fsInflight = null;
-    });
-  fsInflight = p;
-  return p;
+  return studiesLoader.load(force);
 }
 
 export interface FeatureStudiesState {
@@ -81,8 +72,8 @@ export interface FeatureStudiesState {
 }
 
 export function useFeatureStudies(): FeatureStudiesState {
-  const [data, setData] = useState<FeatureStudiesData | null>(fsCache);
-  const [loading, setLoading] = useState<boolean>(fsCache === null);
+  const [data, setData] = useState<FeatureStudiesData | null>(studiesLoader.peek);
+  const [loading, setLoading] = useState<boolean>(() => studiesLoader.peek() === null);
   const [error, setError] = useState<string | null>(null);
   const [notGenerated, setNotGenerated] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -305,7 +296,12 @@ export function FeatureStudyCard({ loopId, defaultOpen = true }: {
       </p>
     );
   }
-  return <FeatureCard feature={feature} defaultOpen={defaultOpen} orderIndex={0} />;
+  return (
+    <>
+      {!isFilterableStudy(loopId) && <NotFilteredNote />}
+      <FeatureCard feature={feature} defaultOpen={defaultOpen} orderIndex={0} />
+    </>
+  );
 }
 
 /** 「查看完整研究」連結：href 是 #study=<id> (中鍵／新分頁也能開)，點擊直接打開站內完整研究。 */

@@ -9,6 +9,8 @@ import {
   FeatureVisual, LoadFailed, StudyErrorBoundary, studyMinSample, useFeatureStudies,
 } from './FeatureStudiesPanel';
 import { closeStudy, useOpenStudy } from './studyLink';
+import NotFilteredNote from '../analysis/filter/NotFilteredNote';
+import { isFilterableStudy } from '../../stats/filteredRoutes';
 
 /**
  * 完整研究 (2026-10-14 Edward：「查看完整研究」大多點不開)。
@@ -331,7 +333,12 @@ function StudyDialog({ loopId }: { loopId: string }): JSX.Element {
   } else if (!feature) {
     body = <p className="py-10 text-center text-sm text-zinc-400">{t('analytics.featureStudies.notFound', { loopId })}</p>;
   } else {
-    body = <StudyBody feature={feature} />;
+    body = (
+      <>
+        {!isFilterableStudy(feature.loopId) && <NotFilteredNote />}
+        <StudyBody feature={feature} />
+      </>
+    );
   }
 
   return (

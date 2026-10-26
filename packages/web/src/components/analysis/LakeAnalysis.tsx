@@ -6,6 +6,7 @@ import type { LakeAnalysisData, LakeRoleStat, OutcomeBreakdown } from '../../ser
 import { SectionTabs } from './ui';
 import OutcomeBlocksTable, { type OutcomeGroup } from './OutcomeBlocksTable';
 import { roleOrderIndex, useRoleLabel } from './roleLabels';
+import { filterScopedLoader } from '../../stats/filterScopedLoader';
 
 /**
  * 湖中女神分析 — Edward 2026-04-26 spec
@@ -37,31 +38,15 @@ import { roleOrderIndex, useRoleLabel } from './roleLabels';
 
 export type LakeView = 'faction' | 'holderRole' | 'targetRole';
 
-let lakeCache: LakeAnalysisData | null = null;
-let lakeInflight: Promise<LakeAnalysisData> | null = null;
-
-function loadLake(): Promise<LakeAnalysisData> {
-  if (lakeCache) return Promise.resolve(lakeCache);
-  if (lakeInflight) return lakeInflight;
-  const p = fetchAnalysisLake()
-    .then(d => {
-      lakeCache = d;
-      return d;
-    })
-    .finally(() => {
-      if (lakeInflight === p) lakeInflight = null;
-    });
-  lakeInflight = p;
-  return p;
-}
+const lakeLoader = filterScopedLoader(fetchAnalysisLake);
 
 function useLakeData(): { data: LakeAnalysisData | null; loading: boolean; error: string | null } {
-  const [data, setData] = useState<LakeAnalysisData | null>(lakeCache);
-  const [loading, setLoading] = useState(lakeCache === null);
+  const [data, setData] = useState<LakeAnalysisData | null>(lakeLoader.peek);
+  const [loading, setLoading] = useState(() => lakeLoader.peek() === null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    loadLake()
+    lakeLoader.load()
       .then(d => { if (!cancelled) setData(d); })
       .catch(err => { if (!cancelled) setError(getErrorMessage(err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
