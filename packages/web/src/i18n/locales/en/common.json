@@ -1464,6 +1464,33 @@
         "daysSinceLastPlayed": "dated games",
         "daysSinceFirstPlayed": "dated games",
         "voting": "at least 10 votes in that cell"
+      },
+      "period": {
+        "title": "Period",
+        "days": "Last {{count}} days",
+        "year": "Last 12 months",
+        "all": "All"
+      }
+    },
+    "winRates": {
+      "tab": "Win rates",
+      "loading": "Loading win rates…",
+      "minGames": "Minimum games",
+      "sort": "Sort by",
+      "scopeFiltered": "{{count}} players with the minimum games in the filtered games",
+      "scopeAll": "{{count}} players with the minimum games over all games (use Period above for a date range)",
+      "empty": "Nobody has the minimum games; lower it or widen the filter.",
+      "note": "Filtered games only. Final win rate: red wins = 3-Red + 3-Blue Merlin killed, blue wins = 3-Blue Merlin alive; the red / blue columns show their games. Excess = final win rate − the rate expected from the roles drawn. Few games swing a lot. Click a name for the player radar.",
+      "boardsEmptyHint": "The filtered period is short and nobody reaches this board's game threshold; see \"{{tab}}\" for the period's win rates.",
+      "col": {
+        "name": "Player",
+        "games": "Games",
+        "wins": "Wins",
+        "finalWinRate": "Final win rate",
+        "red": "Red",
+        "blue": "Blue",
+        "excess": "Excess",
+        "lastPlayed": "Last game"
       }
     }
   },

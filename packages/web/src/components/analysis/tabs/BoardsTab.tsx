@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import LeaderboardBoards from '../LeaderboardBoards';
 import LeaderboardV3Table from '../../LeaderboardV3Table';
 import NotFilteredNote from '../filter/NotFilteredNote';
+import PeriodWinRates from '../PeriodWinRates';
 
 /**
  * 排行：角色理論勝率排行等各榜 (LeaderboardBoards) + 精算榜 (V3 8-metric)。
@@ -15,6 +16,7 @@ export default function BoardsTab(): JSX.Element {
   const { t } = useTranslation('common');
   return (
     <LeaderboardBoards
+      winRates={{ label: t('analytics.winRates.tab'), content: <PeriodWinRates /> }}
       precision={{
         label: t('analytics.r6.boards.tab.precision'),
         content: (

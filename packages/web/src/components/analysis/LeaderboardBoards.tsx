@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Loader, AlertCircle, RefreshCw, Clock, Trophy, MapPin, Layers, History, TrendingUp, Crosshair,
-  Sparkles, Crown, Calculator, ListOrdered, type LucideIcon,
+  Sparkles, Crown, Calculator, ListOrdered, Percent, type LucideIcon,
 } from 'lucide-react';
+import { useStatsFilter } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
 import { SectionTabs, StatTable, type SectionTabItem, type StatColumn } from './ui';
 import {
@@ -59,6 +60,7 @@ const BOARD_ICONS: Record<string, LucideIcon> = {
 
 /** 精算榜的小分頁 id (不會跟快取的榜 id 撞到)。 */
 const PRECISION_TAB = '__precision';
+const WIN_RATES_TAB = '__winRates';
 /** 排行還沒有資料 (載入中／尚未產生／錯誤) 時，第一個小分頁顯示狀態。 */
 const STATUS_TAB = 'main';
 
@@ -137,9 +139,14 @@ type BoardsNotice = 'notGenerated' | 'backendOutdated' | 'upgrading';
 export interface LeaderboardBoardsProps {
   /** 最後一個小分頁 (精算榜)；排行載入失敗時照樣可以切過去。 */
   precision?: { label: ReactNode; content: ReactNode };
+  /**
+   * 勝率表 (2026-10-26 玩家回饋：只看某段期間的玩家勝率)：放在第一個榜後面；篩選很窄、各榜都空時照樣切得到。
+   */
+  winRates?: { label: string; content: ReactNode };
 }
 
-export default function LeaderboardBoards({ precision }: LeaderboardBoardsProps): JSX.Element {
+export default function LeaderboardBoards({ precision, winRates }: LeaderboardBoardsProps): JSX.Element {
+  const filtered = useStatsFilter((s) => s.key !== '');
   const { t } = useTranslation('common');
   const isEn = useIsEn();
   const [data, setData] = useState<AnalysisLeaderboardData | null>(null);
@@ -203,10 +210,13 @@ export default function LeaderboardBoards({ precision }: LeaderboardBoardsProps)
       ? t(`analytics.r6.boards.tab.${entry.id}`)
       : boardTitle(entry.board, isEn);
 
+  const boardItems: SectionTabItem[] = showBoards
+    ? entries.map(e => ({ id: e.id, label: tabLabel(e), icon: BOARD_ICONS[e.id] ?? ListOrdered }))
+    : [{ id: STATUS_TAB, label: t('analytics.r6.boards.tab.main'), icon: Trophy }];
   const items: SectionTabItem[] = [
-    ...(showBoards
-      ? entries.map(e => ({ id: e.id, label: tabLabel(e), icon: BOARD_ICONS[e.id] ?? ListOrdered }))
-      : [{ id: STATUS_TAB, label: t('analytics.r6.boards.tab.main'), icon: Trophy }]),
+    ...boardItems.slice(0, 1),
+    ...(winRates ? [{ id: WIN_RATES_TAB, label: winRates.label, icon: Percent }] : []),
+    ...boardItems.slice(1),
     ...(precision ? [{ id: PRECISION_TAB, label: precision.label, icon: Calculator }] : []),
   ];
 
@@ -249,6 +259,7 @@ export default function LeaderboardBoards({ precision }: LeaderboardBoardsProps)
     return (
       <div className="px-4 py-4 rounded-xl border border-gray-700 bg-avalon-card/30 text-sm text-gray-500">
         {t('analytics.boards.empty', { days: settings.activeDays, games: settings.mainGames })}
+        {filtered && winRates && <p className="mt-1 text-amber-300">{t('analytics.winRates.boardsEmptyHint', { tab: winRates.label })}</p>}
       </div>
     );
   };
@@ -269,6 +280,7 @@ export default function LeaderboardBoards({ precision }: LeaderboardBoardsProps)
         ariaLabel={t('analytics.r6.boards.tabsLabel')}
       >
         {active => {
+          if (active === WIN_RATES_TAB) return winRates?.content;
           if (active === PRECISION_TAB) {
             return (
               <div>

@@ -1464,6 +1464,33 @@
         "daysSinceLastPlayed": "有日期的局",
         "daysSinceFirstPlayed": "有日期的局",
         "voting": "該項至少 10 票"
+      },
+      "period": {
+        "title": "期間",
+        "days": "近 {{count}} 天",
+        "year": "近一年",
+        "all": "全部"
+      }
+    },
+    "winRates": {
+      "tab": "勝率表",
+      "loading": "載入勝率表…",
+      "minGames": "最低場數",
+      "sort": "排序",
+      "scopeFiltered": "篩選後的局裡有出賽、達到最低場數的 {{count}} 人",
+      "scopeAll": "全部對局、達到最低場數的 {{count}} 人（用上方「期間」只看某段日子）",
+      "empty": "沒有玩家達到最低場數；把最低場數調低，或放寬篩選。",
+      "note": "只看篩選後的局。最終勝率：紅勝 = 三紅 + 三藍死，藍勝 = 三藍活；紅方／藍方欄附場數。超額勝率 = 最終勝率 − 依他抽到的角色預期的勝率（扣掉抽角色的運氣）。場數少時波動大。點名字看玩家雷達。",
+      "boardsEmptyHint": "篩選後的期間較短，這個榜的場數門檻沒人達到；看「{{tab}}」比這段期間的勝率。",
+      "col": {
+        "name": "玩家",
+        "games": "場數",
+        "wins": "勝場",
+        "finalWinRate": "最終勝率",
+        "red": "紅方勝率",
+        "blue": "藍方勝率",
+        "excess": "超額勝率",
+        "lastPlayed": "最後出賽"
       }
     }
   },

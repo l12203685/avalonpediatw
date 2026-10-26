@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Check, ChevronDown, ChevronUp, Filter, Link2, Loader, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import {
+  addDays,
   ALL_ROLES,
   METRICS,
   PRESETS,
@@ -75,7 +76,9 @@ export default function StatsFilterBar(): JSX.Element {
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
 
   const asOf = vocab?.asOf ?? new Date().toISOString().slice(0, 10);
-  const presets = useMemo(() => PRESETS.map((p) => ({ preset: p, filter: presetFilter(p.id, asOf) as GameFilter })), [asOf]);
+  // 近一年在下方的「期間」列 (2026-10-26)
+  const presets = useMemo(() => PRESETS.filter((p) => p.id !== 'lastYear')
+    .map((p) => ({ preset: p, filter: presetFilter(p.id, asOf) as GameFilter })), [asOf]);
 
   const copy = async (): Promise<void> => {
     try {
@@ -140,6 +143,7 @@ export default function StatsFilterBar(): JSX.Element {
         )}
       </div>
 
+      <PeriodRow filter={filter} vocabAsOf={vocab?.asOf} onChange={(f) => setFilter(f)} />
       <StatusLine status={status} total={vocab?.totalGames} retry={retry} />
       {linkWarnings.length > 0 && (
         <p className="mt-1 text-xs text-amber-300">{t('analytics.filter.linkWarnings', { count: linkWarnings.length })}</p>
@@ -161,6 +165,70 @@ export default function StatsFilterBar(): JSX.Element {
 
       {open && <FilterEditor applied={filter} vocab={vocab} onApply={(f) => setFilter(f)} />}
     </section>
+  );
+}
+
+/** 期間的快速選項 (天數，含基準日；0 = 全部)。 */
+const PERIOD_DAYS = [7, 30, 90, 365, 0] as const;
+
+/**
+ * 期間 (2026-10-26 玩家回饋：「我想要看近期的玩家勝率就好 … 例如這颱風天我就想要看這四天」「以前是可以篩選日期?」)：
+ * 篩選列上直接選近 7 / 30 / 90 天、近一年、全部，或填起訖日；點了就套用 (換掉日期條件，其餘條件不動)。
+ * 「近 N 天」以資料的基準日 (每日更新的日期) 往回算，含基準日。
+ * 選了期間時，排行的「新人」「近期有出賽」改看全部對局 (activity 'all')：只看期間內的局時，每個人的首次出賽
+ * 都會變成期間第一天、人人都像新人。榜上的數字仍只算期間內的局。選「全部」時拿掉這個設定。
+ */
+function PeriodRow({ filter, vocabAsOf, onChange }: {
+  filter: GameFilter | null; vocabAsOf?: string; onChange: (f: GameFilter) => void;
+}): JSX.Element {
+  const { t } = useTranslation('common');
+  const date = clausesOf(filter, 'date').find((c) => !c.not);
+  const range = (days: number, asOf: string): { from: string; to: string } => ({ from: addDays(asOf, -(days - 1)), to: asOf });
+  const isOn = (days: number): boolean => {
+    if (days === 0) return !date;
+    if (!date || !vocabAsOf) return false;
+    const r = range(days, vocabAsOf);
+    return date.from === r.from && date.to === r.to && date.undated !== 'include';
+  };
+  const withActivity = (f: GameFilter, hasDate: boolean): GameFilter => {
+    const options = { ...(f.options ?? {}) };
+    if (hasDate) options.activity = 'all';
+    else if (options.activity === 'all') delete options.activity;
+    const next: GameFilter = { ...f, options };
+    if (!Object.keys(options).length) delete next.options;
+    return next;
+  };
+  const pick = (days: number): void => {
+    if (days === 0) {
+      onChange(withActivity(withClauses(filter, 'date', null), false));
+      return;
+    }
+    const apply = (asOf: string): void => onChange(withActivity(
+      withClauses(useStatsFilter.getState().filter, 'date', { kind: 'date', ...range(days, asOf) }), true,
+    ));
+    if (vocabAsOf) apply(vocabAsOf);
+    else void loadFilterVocab().then((v) => apply(v.asOf), () => apply(new Date().toISOString().slice(0, 10)));
+  };
+  const setEnd = (patch: { from?: string; to?: string }): void => {
+    const next = { ...(date ?? {}), ...patch };
+    const clean = { kind: 'date' as const, ...(next.from ? { from: next.from } : {}), ...(next.to ? { to: next.to } : {}) };
+    const hasDate = Boolean(clean.from || clean.to);
+    onChange(withActivity(withClauses(filter, 'date', hasDate ? clean : null), hasDate));
+  };
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="filter-period">
+      <span className="mr-1 text-xs font-semibold text-zinc-400">{t('analytics.filter.period.title')}</span>
+      {PERIOD_DAYS.map((d) => (
+        <button key={d} type="button" aria-pressed={isOn(d)} onClick={() => pick(d)} className={chipClass(isOn(d))} data-testid={`filter-period-${d}`}>
+          {d === 0 ? t('analytics.filter.period.all') : d === 365 ? t('analytics.filter.period.year') : t('analytics.filter.period.days', { count: d })}
+        </button>
+      ))}
+      <input type="date" className={inputClass} value={date?.from ?? ''} onChange={(e) => setEnd({ from: e.target.value })}
+        aria-label={t('analytics.filter.fields.from')} data-testid="filter-period-from" />
+      <span className="text-xs text-zinc-500">～</span>
+      <input type="date" className={inputClass} value={date?.to ?? ''} onChange={(e) => setEnd({ to: e.target.value })}
+        aria-label={t('analytics.filter.fields.to')} data-testid="filter-period-to" />
+    </div>
   );
 }
 
