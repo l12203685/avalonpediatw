@@ -639,6 +639,7 @@ function tallyGame(t: SelfPlayTally, ctx: GameContext, result: SelfPlayResult): 
   if (!obs) return;
   const isGood = (id: string): boolean => ctx.camp.get(id) === 'good';
   for (const l of obs.lakeHistory ?? []) {
+    if (l.declaredClaim === 'none') continue;
     if (!isGood(l.holderId)) continue;
     const later = obs.voteHistory.filter((v) => v.round > l.round);
     const led = later.filter((v) => v.leader === l.holderId);

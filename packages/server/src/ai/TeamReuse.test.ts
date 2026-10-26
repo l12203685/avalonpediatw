@@ -9,6 +9,7 @@ import {
   setTeamReuseOptions,
   teamReuseActive,
   teamReuseCandidateTeams,
+  teamReuseGuard,
   teamReuseOptionsFromEnv,
   teamReusePlan,
   teamReuseScorer,
@@ -16,6 +17,7 @@ import {
 import { ForwardAgent } from './forward/ForwardAgent';
 import { HeuristicAgent } from './HeuristicAgent';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, type AgentTuning } from './AgentTuning';
+import { LEGACY_BELIEF_OPTIONS } from './belief/BeliefOptions';
 import type { PlayerObservation, QuestRecord, VoteRecord } from './types';
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
@@ -166,9 +168,18 @@ describe('TeamReuse — candidates and bonus', () => {
     const lakeBonus = teamReuseScorer(teamReusePlan(lake)!, lake);
     expect(lakeBonus(['P1', 'P5', 'P6', 'P7'])).toBe(0);
     expect(lakeBonus(['P1', 'P6', 'P7', 'P9'])).toBeCloseTo(0.5 * w);
-    // P5 declared P9 blue but led R2 without P9: a 硬3 violator, treated as red by a good leader.
+    // P5 declared P9 blue but led R2 without P9. Legacy beliefs: a 硬3 violator,
+    // treated as red by a good leader (bonus 0). Batch 1C (`rule3PostLakeOnly`,
+    // the default): that team came before P5's lake, and a 硬3 flag is a
+    // probability anyway — the guard keeps only certain reds, so the bonus stays.
     const r3 = obs({ lakeHistory: [{ round: 2, holderId: 'P5', targetId: 'P9', declaredClaim: 'good' }] });
-    expect(teamReuseScorer(teamReusePlan(r3)!, r3)(['P1', 'P5', 'P6', 'P9'])).toBe(0);
+    expect(teamReuseScorer(teamReusePlan(r3)!, r3, teamReuseGuard(r3, undefined, LEGACY_BELIEF_OPTIONS))(['P1', 'P5', 'P6', 'P9'])).toBe(0);
+    expect(teamReuseScorer(teamReusePlan(r3)!, r3)(['P1', 'P5', 'P6', 'P9'])).toBeCloseTo(0.5 * w);
+    // A certain red is refused under the 1C guard: R1 showed three fail cards,
+    // so P2 / P3 / P4 are red for everyone (C4).
+    const certain = obs({ questHistory: [{ round: 1, team: ['P2', 'P3', 'P4'], result: 'fail', failCount: 3 }, QUESTS[1]] });
+    expect(teamReuseScorer(teamReusePlan(certain)!, certain)(['P1', 'P5', 'P6', 'P2'])).toBe(0);
+    expect(teamReuseScorer(teamReusePlan(certain)!, certain)(['P1', 'P5', 'P6', 'P7'])).toBeCloseTo(0.75 * w);
     // The leader itself declared P6 red (硬2 on its own team).
     const own = obs({ lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P6', declaredClaim: 'evil' }] });
     expect(teamReuseScorer(teamReusePlan(own)!, own)(['P1', 'P5', 'P6', 'P7'])).toBe(0);

@@ -45,6 +45,8 @@ import {
   PYRAMID_VIOLATOR_FLOOR,
   type PyramidScores,
 } from '../baseline';
+import { defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from '../belief/BeliefOptions';
+import { beliefFailCards, missionFailed } from '../missionFacts';
 
 // ── Role signal package ─────────────────────────────────────────
 /**
@@ -66,6 +68,12 @@ export interface RoleSignals {
   merlinHidingFromAssassin: boolean;
   /** Percival "娜出賣隊友" — B reject containing known evil → trust B more. */
   morganaBetrayal: boolean;
+  /**
+   * Percival leading in R1 with `AgentTuning.percivalNoThumbsR1` on
+   * (2026-10-14, `PercivalThumbs.ts`): no bonus for a team with thumb A
+   * only. Set by `ForwardAgent.decide`; absent = false.
+   */
+  percivalNoThumbsR1?: boolean;
   /** Oberon-only: have I appeared on at least one prior mission? */
   oberonMissionParticipatedBefore: boolean;
   /** Oberon-only: did any of my prior missions fail publicly? */
@@ -109,6 +117,7 @@ function scoreWizardAsMerlin(
   wizardId: string,
   obs: PlayerObservation,
   pyramid: PyramidScores,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): number {
   if (obs.voteHistory.length === 0) return 0.5;
   const knownEvilSet = new Set(obs.knownEvils);
@@ -116,7 +125,9 @@ function scoreWizardAsMerlin(
   let total = 0;
 
   // Signal 1: rejected teams that contained pyramid-suspect / known-evil.
+  // S1-9a: the forced fifth proposal's synthetic votes are not votes.
   for (const v of obs.voteHistory) {
+    if (opts.forcedVotesZero && isForcedVoteRecord(v)) continue;
     const teamHasSuspect = v.team.some(
       (id) => knownEvilSet.has(id) ||
         ((pyramid.scores.get(id) ?? 0.5) >= PYRAMID_VIOLATOR_FLOOR),
@@ -129,9 +140,10 @@ function scoreWizardAsMerlin(
     if (teamHasSuspect && myVote === true) score -= 0.5; // approve sketchy → red signal
   }
 
-  // Signal 2: appeared on fail mission → NOT Merlin.
+  // Signal 2: appeared on a mission that showed a fail card → NOT Merlin
+  // (S1-1: by fail cards, so an R4 success with a card counts).
   for (const q of obs.questHistory) {
-    if (q.result === 'fail' && q.team.includes(wizardId)) {
+    if (beliefFailCards(q, opts.certainFacts) > 0 && q.team.includes(wizardId)) {
       score -= 1;
       total += 1;
     }
@@ -163,12 +175,14 @@ function scoreWizardAsMerlin(
 function detectMerlinHidingFromAssassin(
   wizardId: string,
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions>,
 ): boolean {
   if (obs.voteHistory.length < 2) return false;
   let suspiciouslyBaseline = 0;
   let total = 0;
   for (const v of obs.voteHistory) {
     if (v.round > 3) continue; // only R1-R3
+    if (opts.forcedVotesZero && isForcedVoteRecord(v)) continue; // S1-9a: no vote was held
     const myVote = v.votes[wizardId];
     if (myVote === undefined) continue;
     total += 1;
@@ -190,14 +204,17 @@ function detectMerlinHidingFromAssassin(
 function detectMorganaBetrayal(
   wizardId: string,
   obs: PlayerObservation,
+  opts: Readonly<BeliefOptions>,
 ): boolean {
-  // Failed-mission members = public information any role can read.
+  // Failed-mission members = public information any role can read
+  // (S1-1: by fail cards).
   const failedMembers = new Set<string>();
   for (const q of obs.questHistory) {
-    if (q.result === 'fail') for (const id of q.team) failedMembers.add(id);
+    if (beliefFailCards(q, opts.certainFacts) > 0) for (const id of q.team) failedMembers.add(id);
   }
   if (failedMembers.size === 0) return false;
   for (const v of obs.voteHistory) {
+    if (opts.forcedVotesZero && isForcedVoteRecord(v)) continue;
     const myVote = v.votes[wizardId];
     if (myVote !== false) continue;
     if (v.team.some((id) => failedMembers.has(id))) return true;
@@ -217,11 +234,14 @@ function detectMorganaBetrayal(
  * - oberon:   participation flags from buildOberonContext (subset)
  * - loyal:    neutral (no override)
  */
-export function getRoleSignals(obs: PlayerObservation): RoleSignals {
+export function getRoleSignals(
+  obs: PlayerObservation,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
+): RoleSignals {
   const role = obs.myRole;
   if (role === 'loyal' || role === 'minion') return neutralRoleSignals();
 
-  const pyramid = computePyramidScores(obs);
+  const pyramid = computePyramidScores(obs, opts);
 
   const knownWizardSuspicions = new Map<string, number>();
   const wizardMerlinScores = new Map<string, number>();
@@ -236,7 +256,7 @@ export function getRoleSignals(obs: PlayerObservation): RoleSignals {
     }
     for (const w of wizards) {
       knownWizardSuspicions.set(w, pyramid.scores.get(w) ?? 0.5);
-      wizardMerlinScores.set(w, scoreWizardAsMerlin(w, obs, pyramid));
+      wizardMerlinScores.set(w, scoreWizardAsMerlin(w, obs, pyramid, opts));
     }
     // Pick A = max merlinScore wizard, B = the other.
     let aId = wizards[0];
@@ -244,8 +264,8 @@ export function getRoleSignals(obs: PlayerObservation): RoleSignals {
     if ((wizardMerlinScores.get(bId) ?? 0) > (wizardMerlinScores.get(aId) ?? 0)) {
       [aId, bId] = [bId, aId];
     }
-    const merlinHidingFromAssassin = detectMerlinHidingFromAssassin(aId, obs);
-    const morganaBetrayal = detectMorganaBetrayal(bId, obs);
+    const merlinHidingFromAssassin = detectMerlinHidingFromAssassin(aId, obs, opts);
+    const morganaBetrayal = detectMorganaBetrayal(bId, obs, opts);
     return {
       ...neutralRoleSignals(),
       knownWizardSuspicions,
@@ -294,7 +314,8 @@ export function getRoleSignals(obs: PlayerObservation): RoleSignals {
     for (const q of obs.questHistory) {
       if (q.team.includes(obs.myPlayerId)) {
         mp = true;
-        if (q.result === 'fail') fm = true;
+        // The public outcome (did the mission fail), not a camp fact.
+        if (missionFailed(q)) fm = true;
       }
     }
     return {
@@ -400,9 +421,16 @@ function biasForMerlin(
  *          if "梅躲刺" → distrust A too (don't include);
  *          if "娜出賣隊友" → optionally include B.
  *   voteOnTeam:
- *     team ∩ B → reject (default — not trust B);
+ *     team ∩ B → reject-leaning (default — not trust B; soft: B is only the
+ *       likelier Morgana);
  *     team 高 pyramid 疑紅 → reject;
- *     team has both wizards (intersection) → reject.
+ *     team has both wizards (intersection) → it holds a certain red. When one
+ *       fail decides (non-forced R3+) that is a hard reject outside this
+ *       bias: `PercivalThumbs.percivalBothThumbsReject` (logic-first batch
+ *       1E, `AgentTuning.percivalLoyalVote`) and the 1D must-fail gate; in R4
+ *       (two fails) the B term below leans reject (probability layer, D2).
+ *     With `percivalCertainExclusion` a tie between the thumbs leaves A / B
+ *     unset (no seat-order split), so neither term fires.
  *   voteOnQuest:
  *     on-team success (good faction).
  *
@@ -419,6 +447,7 @@ function biasForPercival(
     teamIncludesPercivalB: boolean;
     merlinHidingFromAssassin: boolean;
     morganaBetrayal: boolean;
+    percivalNoThumbsR1?: boolean;
   },
 ): RoleBiasDelta {
   if (isTeamSelect(action)) {
@@ -431,7 +460,13 @@ function biasForPercival(
         bias = { findMerlin: -0.2, hidePercival: -0.2, threeBlueWins: -0.1 };
       }
     } else if (signals.teamIncludesPercivalA) {
-      if (signals.merlinHidingFromAssassin) {
+      if (signals.percivalNoThumbsR1) {
+        // AgentTuning.percivalNoThumbsR1 (2026-10-14): R1 has no basis for
+        // trusting A (no mission result; with no vote yet A is merely the
+        // lower-seated thumb) → no bonus. Such a team only appears when the
+        // candidate pool had to restore a thumb.
+        bias = {};
+      } else if (signals.merlinHidingFromAssassin) {
         // 梅躲刺 detected → don't reward A inclusion.
         bias = { findMerlin: 0.1, hidePercival: 0.1 };
       } else {
@@ -817,6 +852,7 @@ export function applyRoleBias(
     teamIncludesPercivalB: boolean;
     merlinHidingFromAssassin: boolean;
     morganaBetrayal: boolean;
+    percivalNoThumbsR1?: boolean;
     mordredR1Leader: boolean;
     targetIsKnownAlly: boolean;
     targetIsOberon: boolean;

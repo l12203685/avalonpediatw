@@ -25,7 +25,11 @@ import {
   resolveAgentTuning,
   type AgentTuning,
 } from './AgentTuning';
-import { pickAssassinTargetByModel, type AssassinModelWeights } from './assassin/AssassinModel';
+import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelWeights } from './assassin/AssassinModel';
+import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
+import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
+import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
+import { beliefFailCards, missionFailed } from './missionFacts';
 import {
   assassinTargetPenalty,
   voteInnerBlackBonus,
@@ -56,8 +60,20 @@ import {
   computePyramidScores,
   findHardRuleViolations,
   findTeamHardRuleViolations,
+  getFailedMissionSuspects,
+  getLoyalSuspectSet,
   type PyramidScores,
 } from './baseline';
+
+import {
+  anyGate,
+  certaintyFor,
+  compliantTeams,
+  gateOptionsFrom,
+  goodVoteGate,
+  teamGateBreach,
+  type GateOptions,
+} from './LogicGates';
 
 // ── Strategy thresholds ────────────────────────────────────────
 // #97 Phase 1 (2026-04-22): SUSPICION_REJECT_THRESHOLD / STRICT_THRESHOLD /
@@ -568,7 +584,8 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
     const onTeam = quest.team.includes(myId);
     if (onTeam) {
       missionParticipatedBefore = true;
-      if (quest.result === 'fail') {
+      // The public outcome (the mission failed), not a camp fact.
+      if (missionFailed(quest)) {
         failedInMission = true;
         // Track the EARLIEST round where Oberon was on a failed mission.
         // Rule 3 (batch 8 generalisation) triggers on any round > this.
@@ -577,7 +594,7 @@ function buildOberonContext(obs: PlayerObservation): OberonContext {
         }
       }
     }
-    if (quest.result === 'fail') {
+    if (missionFailed(quest)) {
       totalMissionFails++;
       // R1-R3 failed missions contribute members to the teammate-suspect
       // pool (Rule 4). R4 quest_history entries wouldn't hurt semantically
@@ -764,6 +781,19 @@ export class HeuristicAgent implements AvalonAgent {
    */
   readonly tuning: AgentTuning;
   /**
+   * The belief switches of `tuning` (logic-first batch 1C, 2026-10-22,
+   * `belief/BeliefOptions.ts`): every pyramid / suspect-set / vote-memory
+   * reader of this agent passes them, so two tunings in one process never
+   * share a belief setting.
+   */
+  readonly belief: Readonly<BeliefOptions>;
+  /**
+   * The decision gates of `tuning` (logic-first batch 1D, 2026-10-22,
+   * `LogicGates.ts`): the same gates ForwardAgent applies, so the baseline
+   * fallback never proposes or approves what the production path refuses.
+   */
+  readonly gates: Readonly<GateOptions>;
+  /**
    * Assassin-model weights used when `tuning.assassinModel` is on.
    * `undefined` = the bundled `ASSASSIN_MODEL_WEIGHTS`; `scripts/
    * assassinModel.ts` injects a freshly fitted model so its "agent+model"
@@ -785,6 +815,8 @@ export class HeuristicAgent implements AvalonAgent {
     void _legacyDifficulty;
     this.priors = priors ?? getDefaultPriors();
     this.tuning = resolveAgentTuning(tuning);
+    this.belief = beliefOptionsFrom(this.tuning);
+    this.gates = gateOptionsFrom(this.tuning);
     this.assassinModelWeights = assassinModelWeights;
   }
 
@@ -976,6 +1008,8 @@ export class HeuristicAgent implements AvalonAgent {
       const key = `${record.round}-${record.attempt}`;
       if (this.memory.processedVoteAttempts.has(key)) continue;
       this.memory.processedVoteAttempts.add(key);
+      // S1-9a (`forcedVoteZeroBits`): the forced fifth proposal holds no vote.
+      if (this.belief.forcedVotesZero && isForcedVoteRecord(record)) continue;
 
       for (const [pid, approved] of Object.entries(record.votes)) {
         if (approved) {
@@ -1041,7 +1075,7 @@ export class HeuristicAgent implements AvalonAgent {
         );
       }
 
-      if (quest.result !== 'fail') continue;
+      if (beliefFailCards(quest, this.belief.certainFacts) === 0) continue;
 
       // Blacklist bookkeeping for failed quests
       for (const pid of quest.team) {
@@ -1058,6 +1092,8 @@ export class HeuristicAgent implements AvalonAgent {
         (r) => r.round === quest.round && r.approved,
       );
       if (!approvingRecord) continue;
+      // S1-9a: the forced fifth proposal's unanimous approve is synthetic.
+      if (this.belief.forcedVotesZero && isForcedVoteRecord(approvingRecord)) continue;
 
       for (const [pid, approved] of Object.entries(approvingRecord.votes)) {
         if (approved && approvingRecord.team.includes(pid)) {
@@ -1081,7 +1117,7 @@ export class HeuristicAgent implements AvalonAgent {
   private ingestLeaderStats(obs: PlayerObservation): void {
     const tally = new Map<string, number>();
     for (const quest of obs.questHistory) {
-      if (quest.result !== 'fail') continue;
+      if (beliefFailCards(quest, this.belief.certainFacts) === 0) continue;
       const approvingRecord = obs.voteHistory.find(
         (r) => r.round === quest.round && r.approved,
       );
@@ -1324,7 +1360,7 @@ export class HeuristicAgent implements AvalonAgent {
       // sort so role-private knowledge (knownEvils etc.) still wins;
       // pyramid only breaks ties when tier+suspicion are identical.
       const pyramid: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const pyramidScore = (id: string): number =>
         pyramid?.scores.get(id) ?? 0.5;
@@ -1380,7 +1416,15 @@ export class HeuristicAgent implements AvalonAgent {
       // Wave B legacy (dual-thumb intersection + smart Merlin pick) is
       // preserved INSIDE selectPercivalTeam; flag-stable for emergency
       // rollback by toggling USE_PYRAMID_BASELINE.
-      if (knownWizards && knownWizards.length > 0) {
+      // AgentTuning.percivalCertainExclusion (logic-first batch 1E, S1-6):
+      // from R2 on Percival builds his team as a loyal (no 鐵咬 on a
+      // predicted Morgana; the beliefs carry the thumb constraint); the R1
+      // no-thumb rulings (`selectPercivalTeam`'s R1 branch) still apply.
+      const percivalR1Rule =
+        (currentRound ?? 1) === 1 &&
+        (obs.voteHistory.length === 0 || percivalNoThumbsR1Active(this.tuning, obs));
+      const percivalAsLoyalTeam = this.tuning.percivalCertainExclusion && !percivalR1Rule;
+      if (knownWizards && knownWizards.length > 0 && !percivalAsLoyalTeam) {
         const percivalTeam = this.selectPercivalTeam(
           obs, teamSize, filteredCandidates, pyramid,
         );
@@ -1389,7 +1433,10 @@ export class HeuristicAgent implements AvalonAgent {
         const percivalFixed = this.fixupTeamHardRules(
           obs, percivalTeam, filteredCandidates, pyramid, teamSize,
         );
-        return { type: 'team_select', teamIds: enforceR1P1Ban(percivalFixed) };
+        return {
+          type: 'team_select',
+          teamIds: this.gateGoodTeam(obs, enforceR1P1Ban(percivalFixed), teamSize, pyramidScore, knownEvilSet),
+        };
       }
 
       const team = [myPlayerId, ...filteredCandidates].slice(0, teamSize);
@@ -1398,7 +1445,10 @@ export class HeuristicAgent implements AvalonAgent {
       const teamFixed = this.fixupTeamHardRules(
         obs, team, filteredCandidates, pyramid, teamSize,
       );
-      return { type: 'team_select', teamIds: enforceR1P1Ban(teamFixed) };
+      return {
+        type: 'team_select',
+        teamIds: this.gateGoodTeam(obs, enforceR1P1Ban(teamFixed), teamSize, pyramidScore, knownEvilSet),
+      };
     } else {
       // Evil: include self, prefer to include one evil ally on larger teams
       // Main logic stays shared — per-role strategy only nudges the
@@ -1412,7 +1462,7 @@ export class HeuristicAgent implements AvalonAgent {
       // shift (the camp goal is unchanged: 3 fails or assassinate).
       const evilAllies = knownEvils.filter(id => id !== myPlayerId);
       const pyramidEvil: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const evilPyramidScore = (id: string): number =>
         pyramidEvil?.scores.get(id) ?? 0.5;
@@ -1460,6 +1510,36 @@ export class HeuristicAgent implements AvalonAgent {
       );
       return { type: 'team_select', teamIds: enforceR1P1Ban(teamFixedEvil) };
     }
+  }
+
+  /**
+   * Logic-first batch 1D (2026-10-22, `LogicGates.ts`): the good leader's
+   * final team check on the baseline path — the same gates as ForwardAgent
+   * (`mustFailGate`: no team that must fail in the leader's own view;
+   * `teamDominanceGate`: no strictly dominated team). A team that passes is
+   * returned unchanged; otherwise the best compliant self-inclusive team
+   * (fewest seats the leader sees as red, then lowest pyramid suspicion).
+   */
+  private gateGoodTeam(
+    obs: PlayerObservation,
+    team: string[],
+    teamSize: number,
+    score: (id: string) => number,
+    avoid: ReadonlySet<string>,
+  ): string[] {
+    if (obs.myTeam !== 'good' || !anyGate(this.gates)) return team;
+    const view = certaintyFor(obs);
+    if (teamGateBreach(obs, view, team, obs.currentRound ?? 1, this.gates) === null) return team;
+    const isR1P1 = (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0;
+    const banned = isR1P1 ? bannedComboSetFor(obs.playerCount) : new Set<string>();
+    const teams = compliantTeams(obs, view, teamSize, this.gates, {
+      rank: (t) => t.filter((id) => avoid.has(id)).length,
+      score,
+      allowed: banned.size > 0
+        ? (t: readonly string[]): boolean => !banned.has(canonicalSeatString(t, obs.allPlayerIds))
+        : undefined,
+    });
+    return teams[0] ?? team;
   }
 
   /**
@@ -1560,12 +1640,8 @@ export class HeuristicAgent implements AvalonAgent {
    * empty set (caller should then fall back to raw suspicion scores).
    */
   private getFailedMissionSuspects(obs: PlayerObservation): Set<string> {
-    const suspects = new Set<string>();
-    for (const quest of obs.questHistory) {
-      if (quest.result !== 'fail') continue;
-      for (const pid of quest.team) suspects.add(pid);
-    }
-    return suspects;
+    // Batch 1C: the baseline tool, with this agent's belief switches (fail cards, S1-1).
+    return getFailedMissionSuspects(obs, this.belief);
   }
 
   /**
@@ -1588,18 +1664,8 @@ export class HeuristicAgent implements AvalonAgent {
    * Self is explicitly excluded (a loyal never self-suspects).
    */
   private getLoyalSuspectSet(obs: PlayerObservation): Set<string> {
-    const suspects = this.getFailedMissionSuspects(obs);
-    // Add outer-white approvers.
-    for (const record of obs.voteHistory) {
-      for (const [pid, approved] of Object.entries(record.votes)) {
-        if (pid === obs.myPlayerId) continue;
-        const onTeam = record.team.includes(pid);
-        if (!onTeam && approved === true) {
-          suspects.add(pid);
-        }
-      }
-    }
-    return suspects;
+    // Batch 1C: the baseline tool (forced votes skipped with S1-9a).
+    return getLoyalSuspectSet(obs, this.belief);
   }
 
   // ── Team Vote ────────────────────────────────────────────────
@@ -1622,6 +1688,17 @@ export class HeuristicAgent implements AvalonAgent {
       return { type: 'team_vote', vote: true };
     }
 
+    // ── Logic-first batch 1D (2026-10-22, `LogicGates.ts`) ──────
+    // The good vote gates, as on the production ForwardAgent path: never
+    // approve a team that must fail in this seat's own view (`mustFailGate`;
+    // on the team with one fail deciding, nor one holding a seat it declared
+    // red itself — P2) nor a strictly dominated one (`teamDominanceGate`).
+    // R3+ only (R1–R2 = the normal-vote table rule below, owner's D3
+    // ruling); the forced fifth proposal returned above.
+    if (myTeam === 'good' && goodVoteGate(obs, this.gates) !== null) {
+      return { type: 'team_vote', vote: false };
+    }
+
     // ── Wave B 2026-04-28 — 4 lake hard rules (vote side) ────────
     // ── Edward 2026-04-29 post-fix — universal team sweep ────────
     // For every player in the proposed team (NOT just the leader),
@@ -1641,7 +1718,7 @@ export class HeuristicAgent implements AvalonAgent {
     // decisive cleanup window may break the rule (e.g. listening +
     // attacking). `mayBreakHardRules(obs)` encodes that gate.
     if (USE_PYRAMID_BASELINE && !mayBreakHardRules(obs)) {
-      const pyramidPre = computePyramidScores(obs);
+      const pyramidPre = computePyramidScores(obs, this.belief);
       const teamViolations = findTeamHardRuleViolations(
         pyramidPre.lakeChain,
         proposedTeam,
@@ -1775,10 +1852,21 @@ export class HeuristicAgent implements AvalonAgent {
         return { type: 'team_vote', vote: false };
       }
 
+      // ── AgentTuning.percivalLoyalVote (logic-first batch 1E, S1-6) ──
+      // Percival = a loyal + "exactly one thumb is red" (Pe1): both thumbs on
+      // a non-forced R3+ team that one fail decides → reject; a team with no
+      // thumb says nothing about camps, so the "no thumb ⇒ reject" rule and
+      // the "on the team ⇒ approve" shortcut below no longer apply — Percival
+      // falls through to the loyal team-aware thresholds.
+      const percivalAsLoyal = this.tuning.percivalLoyalVote;
+      if (percivalBothThumbsReject(this.tuning, obs)) {
+        return { type: 'team_vote', vote: false };
+      }
+
       // Percival: skeptical of teams without any wizard candidate (Merlin/Morgana).
       // Edward 2026-04-29 unified-hard rollout: no wizard on team → unconditional reject
       // (was: 'hard' rejected outright, 'normal' rolled a 65% reject — now both gone).
-      if (knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
+      if (!percivalAsLoyal && knownWizards && knownWizards.length > 0 && proposedTeam.length >= 3) {
         const hasWizard = proposedTeam.some(id => knownWizards.includes(id));
         if (!hasWizard) {
           return { type: 'team_vote', vote: false };
@@ -1803,7 +1891,7 @@ export class HeuristicAgent implements AvalonAgent {
       //   3. innerBlackBonus EV table 對派西 R2 = 0.105, 但 R1-R2 已 force
       //      normal, R3+ 派西的 hard rule = on-team approve (即使 R2 EV
       //      table 有 entry 也不該 fire).
-      if ((obs.myRole as string) === 'percival' && proposedTeam.includes(myPlayerId)) {
+      if (!percivalAsLoyal && (obs.myRole as string) === 'percival' && proposedTeam.includes(myPlayerId)) {
         return { type: 'team_vote', vote: true };
       }
 
@@ -1820,7 +1908,7 @@ export class HeuristicAgent implements AvalonAgent {
       // explicitly removes — it ignored team composition (e.g. one
       // 0.65-suspect on an otherwise blue 4-man team should NOT auto-reject).
       const pyramidVote: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const teamRedScore = (id: string): number =>
         pyramidVote?.scores.get(id) ?? 0.5;
@@ -1878,7 +1966,7 @@ export class HeuristicAgent implements AvalonAgent {
       // through (approve) is a cover burn for marginal gain — better
       // to reject. Captured below as `pyramidEvilCleanlinessShield`.
       const pyramidVoteEvil: PyramidScores | null = USE_PYRAMID_BASELINE
-        ? computePyramidScores(obs)
+        ? computePyramidScores(obs, this.belief)
         : null;
       const hasSelf  = proposedTeam.includes(obs.myPlayerId);
       const hasAlly  = proposedTeam.some(id => knownEvils.includes(id));
@@ -2288,7 +2376,7 @@ export class HeuristicAgent implements AvalonAgent {
           //     assassin does in this regime).
           //   joint-mission succeeded → teammate = mordred → mirror
           //     mordred's success (both hiding).
-          return priorJoint.result === 'fail' ? 'fail' : 'success';
+          return beliefFailCards(priorJoint, this.belief.certainFacts) > 0 ? 'fail' : 'success';
         }
       }
       if (teammateCount >= 2) {
@@ -2457,7 +2545,7 @@ export class HeuristicAgent implements AvalonAgent {
     // listening + not under hierarchy. We use the score to break ties
     // in baseline rates only; never override deterministic rules.
     const pyramidQuest: PyramidScores | null = USE_PYRAMID_BASELINE
-      ? computePyramidScores(obs)
+      ? computePyramidScores(obs, this.belief)
       : null;
     const ownPyramidScore = pyramidQuest?.scores.get(obs.myPlayerId) ?? 0.5;
     // Cover-burn bonus: if our score is already blown (>= 0.7) the
@@ -2534,17 +2622,37 @@ export class HeuristicAgent implements AvalonAgent {
     // (see types.ts). Prefer it when available; fall back to `knownEvils`
     // for backwards compatibility with tests / non-harness callers.
     const evilSet = new Set<string>(obs.allEvilIds ?? obs.knownEvils);
-    const goodPlayers = allIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
+    const allGood = allIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
 
-    if (goodPlayers.length === 0) {
+    if (allGood.length === 0) {
       return { type: 'assassinate', targetId: allIds.find(id => id !== obs.myPlayerId) ?? allIds[0] };
     }
+
+    // Batch 1G (2026-10-26, practice report (b), INV-A2; a tier-2 —
+    // human-likeness — rule since the review): `assassinVisibleRedTier`
+    // ranks every candidate who, as captain on a non-forced proposal,
+    // certainly put a red Merlin sees on the team strictly below every
+    // candidate who never did (a lexicographic tier on top of the scores;
+    // when every candidate did, the scores decide alone), on both paths.
+    // `assassinVisibleRedLikelihood` (default off: it double-counts the
+    // model's leader features, study (c)) multiplies by the measured
+    // likelihood ratio of each lead with one seen teammate — on the model
+    // path only, whose score is a log-probability (`assassin/VisibleRedProposals.ts`).
+    const visibleRed = {
+      tier: this.tuning.assassinVisibleRedTier,
+      likelihood: this.tuning.assassinVisibleRedLikelihood,
+    };
+    const goodPlayers = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood)) : allGood;
 
     // AgentTuning.assassinModel (2026-10-12): conditional-logit model
     // trained on the logged games (`assassin/AssassinModel.ts`), using
     // only the public history plus the assassin's own known allies.
     if (this.tuning.assassinModel) {
-      return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
+      if (!visibleRed.tier && !visibleRed.likelihood) {
+        return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
+      }
+      const scores = scoreAssassinCandidates(obs, goodPlayers, this.assassinModelWeights);
+      return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }
 
     // Edward 2026-04-24 batch 2 fix #6: assassin must first prefer
@@ -2627,7 +2735,7 @@ export class HeuristicAgent implements AvalonAgent {
     // to merlinScore so candidates the table sees as bluest get
     // ranked highest — exactly the Merlin profile.
     const pyramidAssassinate: PyramidScores | null = USE_PYRAMID_BASELINE
-      ? computePyramidScores(obs)
+      ? computePyramidScores(obs, this.belief)
       : null;
 
     for (const id of candidatePool) {
@@ -2706,6 +2814,7 @@ export class HeuristicAgent implements AvalonAgent {
    * (unmistaken vs. mistaken); the absolute magnitude is secondary.
    */
   private getMistakeCount(playerId: string, obs: PlayerObservation): number {
+    if (this.tuning.assassinHeuristicVisibility) return this.getCertainMistakeCount(playerId, obs);
     let mistakes = 0;
     for (const record of obs.voteHistory) {
       const teamHasThumb = record.team.some(id => obs.knownEvils.includes(id));
@@ -2737,6 +2846,48 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   /**
+   * What Merlin sees, from the assassin's seat (`AgentTuning.
+   * assassinHeuristicVisibility`, 2026-10-14, S1-11 / logic_audit.md F12):
+   * Merlin sees every red but Mordred. The assassin knows the whole red
+   * roster at the assassination (`allEvilIds`) but not which of its seen
+   * teammates is Mordred. So `certain` = the reds Merlin surely sees (the
+   * assassin itself, Oberon, and — when there is no Mordred in the game or
+   * the assassin is Mordred — every teammate); `ambiguous` = the teammates
+   * among whom exactly one (Mordred) is invisible to Merlin. (Shared with
+   * the batch-1G tier since 2026-10-26: `assassin/VisibleRedProposals.ts`.)
+   */
+  private merlinSightFromAssassin(obs: PlayerObservation): { certain: ReadonlySet<string>; ambiguous: readonly string[] } {
+    return merlinSightFromAssassin(obs);
+  }
+
+  /**
+   * The 2026-10-14 version of `getMistakeCount`: count only the mistakes
+   * that are certain from what Merlin sees (`merlinSightFromAssassin`). A
+   * team holds a visible red for sure when it holds a `certain` red or more
+   * ambiguous teammates than could all be Mordred (≥ 2 of them); it is
+   * surely free of visible reds when it holds neither kind. A team with
+   * exactly one ambiguous teammate is unclear and counts as no mistake —
+   * Merlin could have been on either side of it.
+   */
+  private getCertainMistakeCount(playerId: string, obs: PlayerObservation): number {
+    const { certain, ambiguous } = this.merlinSightFromAssassin(obs);
+    let mistakes = 0;
+    for (const record of obs.voteHistory) {
+      const certainOnTeam = record.team.some((id) => certain.has(id));
+      const ambiguousOnTeam = record.team.filter((id) => ambiguous.includes(id)).length;
+      const surelyThumb = certainOnTeam || ambiguousOnTeam >= 2;
+      const surelyClean = !certainOnTeam && ambiguousOnTeam === 0;
+      const onTeam = record.team.includes(playerId);
+      const vote = record.votes[playerId];
+      if (record.leader === playerId && surelyThumb) mistakes += 1;
+      if (vote === undefined) continue;
+      if (surelyClean && onTeam && vote === false) mistakes += 1;
+      if (surelyThumb && !onTeam && vote === true) mistakes += 1;
+    }
+    return mistakes;
+  }
+
+  /**
    * Score how "Percival-like" a player's leadership pattern is. Percival
    * typically includes a wizard candidate (Merlin or Morgana) on every
    * team he proposes — Merlin, by contrast, avoids any *known* evil but
@@ -2754,9 +2905,20 @@ export class HeuristicAgent implements AvalonAgent {
   private getPercivalLikenessPenalty(playerId: string, obs: PlayerObservation): number {
     let morganaIncludedAsLeader = 0;
     let ledCount = 0;
+    // `assassinHeuristicVisibility` (2026-10-14): the assassin sees its
+    // teammates but not their roles, so "Morgana on the team" is the share
+    // of the seen teammates on it (both of Morgana / Mordred → certain, one
+    // → ½); the old reading counted Mordred as Morgana.
+    const teammates = obs.knownEvils.filter((id) => id !== obs.myPlayerId);
     for (const vote of obs.voteHistory) {
       if (vote.leader !== playerId) continue;
       ledCount++;
+      if (this.tuning.assassinHeuristicVisibility) {
+        if (teammates.length > 0) {
+          morganaIncludedAsLeader += vote.team.filter((id) => teammates.includes(id)).length / teammates.length;
+        }
+        continue;
+      }
       // Morgana is visible to the assassin — check if this leader
       // consistently includes her on proposed teams (Percival thumb).
       if (vote.team.some((id) => obs.knownEvils.includes(id))) {
@@ -2766,7 +2928,10 @@ export class HeuristicAgent implements AvalonAgent {
     if (ledCount === 0) return 0;
     // Two-thumb leaders → 1.5 penalty (similar magnitude to the "+1.5
     // merlin behaviour" signals in getMerlinScore so the two balance).
-    return morganaIncludedAsLeader >= 1 ? 1.5 * (morganaIncludedAsLeader / ledCount) : 0;
+    // (With `assassinHeuristicVisibility` the count is an expectation, so any
+    // positive share counts.)
+    const threshold = this.tuning.assassinHeuristicVisibility ? Number.MIN_VALUE : 1;
+    return morganaIncludedAsLeader >= threshold ? 1.5 * (morganaIncludedAsLeader / ledCount) : 0;
   }
 
   /**
@@ -2793,7 +2958,7 @@ export class HeuristicAgent implements AvalonAgent {
     }
 
     // Never on a failed quest → suspicious of being the protected Merlin.
-    const onFailedQuest = obs.questHistory.some(q => q.result === 'fail' && q.team.includes(playerId));
+    const onFailedQuest = obs.questHistory.some(q => beliefFailCards(q, this.belief.certainFacts) > 0 && q.team.includes(playerId));
     if (!onFailedQuest && obs.questHistory.length > 0) {
       score += 1.5;
     }
@@ -2801,7 +2966,7 @@ export class HeuristicAgent implements AvalonAgent {
     // Always on successful quests = likely trusted good role (Merlin is always trusted).
     {
       const questAppearances = obs.questHistory.filter(q => q.team.includes(playerId));
-      const allSucceeded = questAppearances.every(q => q.result === 'success');
+      const allSucceeded = questAppearances.every(q => beliefFailCards(q, this.belief.certainFacts) === 0);
       if (allSucceeded && questAppearances.length >= 2) score += 1.0;
     }
 
@@ -3018,9 +3183,19 @@ export class HeuristicAgent implements AvalonAgent {
 
     // ── Node 1: R1P1 special-case (per Edward Q2=C)
     // Edward verbatim: R1P1 派西派 myself + 2 non-wizard.
+    // AgentTuning.percivalNoThumbsR1 (2026-10-14, Edward「一開始在沒任何資訊時
+    // 先預設不派」): the same no-thumb team for every R1 proposal (P1–P5,
+    // the forced one included; 6–10-player games, `PercivalThumbs.ts`).
+    // D5 (2026-10-14): a lone wizard (Morgana off in the lobby) is certainly
+    // Merlin, so with the switch on the R1-P1 no-thumb branch no longer drops
+    // him; `percivalR1ThumbOnThumb` keeps the thumb the other thumb put on
+    // its own R1 team (PercivalThumbs.ts).
     const isR1P1 = (currentRound ?? 1) === 1 && voteHistory.length === 0;
-    if (isR1P1) {
+    const loneMerlin = this.tuning.percivalNoThumbsR1 && knownWizards.length === 1;
+    if ((isR1P1 && !loneMerlin) || percivalNoThumbsR1Active(this.tuning, obs)) {
       const team: string[] = [myPlayerId];
+      const keep = percivalR1ThumbException(this.tuning, obs);
+      if (keep && keep !== myPlayerId && candidatesIn.includes(keep) && team.length < teamSize) team.push(keep);
       const wizardSet = new Set(knownWizards);
       const nonWizardCandidates = candidatesIn.filter(
         (id) => id !== myPlayerId && !wizardSet.has(id),
@@ -3193,8 +3368,9 @@ export class HeuristicAgent implements AvalonAgent {
   private scoreWizardAsMerlin(wizardId: string, obs: PlayerObservation): number {
     let score = 0;
 
-    // Signal 1: vote pattern.
+    // Signal 1: vote pattern (S1-9a: the forced fifth proposal holds no vote).
     for (const record of obs.voteHistory) {
+      if (this.belief.forcedVotesZero && isForcedVoteRecord(record)) continue;
       const theirVote = record.votes[wizardId];
       if (theirVote === undefined) continue;
 
@@ -3228,18 +3404,18 @@ export class HeuristicAgent implements AvalonAgent {
       if (record.leader !== wizardId) continue;
       // Did this leader's team later fail (as a proxy for "contained evil")?
       const failed = obs.questHistory.find(
-        (q) => q.round === record.round && q.result === 'fail',
+        (q) => q.round === record.round && beliefFailCards(q, this.belief.certainFacts) > 0,
       );
       if (failed && failed.team.every((id) => record.team.includes(id))) {
         score -= 1.0;  // Morgana-ish: led a tainted team.
-      } else if (record.approved) {
+      } else if (record.approved && !(this.belief.forcedVotesZero && isForcedVoteRecord(record))) {
         score += 0.5;  // Clean approved team: Merlin-ish.
       }
     }
 
     // Signal 3: participation in failed quests.
     for (const quest of obs.questHistory) {
-      if (quest.result !== 'fail') continue;
+      if (beliefFailCards(quest, this.belief.certainFacts) === 0) continue;
       if (quest.team.includes(wizardId)) {
         // Morgana herself could have dropped the fail token.
         score -= 0.5;
@@ -3412,6 +3588,10 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   /** Percival likeness penalty for assassin targeting (tests only). */
+  _getMistakeCountForTesting(playerId: string, obs: PlayerObservation): number {
+    return this.getMistakeCount(playerId, obs);
+  }
+
   _getPercivalLikenessPenaltyForTesting(playerId: string, obs: PlayerObservation): number {
     return this.getPercivalLikenessPenalty(playerId, obs);
   }

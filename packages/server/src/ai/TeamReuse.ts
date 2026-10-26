@@ -60,6 +60,15 @@
  * since 2026-10-13 round 3.
  *
  * Pure functions of the observation; no `Math.random`.
+ *
+ * 2026-10-22 (logic-first batch 1C, `belief/BeliefOptions.ts`): the plan
+ * and the guard take the belief switches. `certainFacts` (S1-1): the
+ * reference mission team is one that showed no fail card (`failCount`
+ * 0; an R4 success with a card is not a "successful team", C5).
+ * `rule3PostLake` (S1-2, logic_audit.md F14): the seats a good leader
+ * treats as red are the reds it can see plus the certainty layer's
+ * certain reds — no longer every 硬3 key (pre-lake flags and the 0.5
+ * clause) nor a pyramid score ≥ 0.85, which are probabilities.
  */
 
 import { AVALON_CONFIG } from '@avalon/shared';
@@ -67,6 +76,9 @@ import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { analyzeLakeChain, findTeamHardRuleViolations, findRule3Violators } from './baseline/lakeChainTracker';
 import { computePyramidScores, type PyramidScores } from './baseline/pyramidScorer';
+import { buildCertainty } from './belief/Certainty';
+import { defaultBeliefOptions, type BeliefOptions } from './belief/BeliefOptions';
+import { beliefFailCards, failCards } from './missionFacts';
 
 /** Weights of the reuse prior for one camp of leaders. */
 export interface TeamReuseWeights {
@@ -183,7 +195,10 @@ export function teamReuseActive(tuning: Pick<AgentTuning, 'teamReuse'>, obs: Pla
  * proposal of the game, first proposal after a failed mission, or R1 with
  * `r1 = 0`).
  */
-export function teamReusePlan(obs: PlayerObservation): TeamReusePlan | null {
+export function teamReusePlan(
+  obs: PlayerObservation,
+  belief: Readonly<Pick<BeliefOptions, 'certainFacts'>> = defaultBeliefOptions(),
+): TeamReusePlan | null {
   const opts = weightsFor(obs);
   const round = obs.currentRound ?? 1;
   const earlier = obs.voteHistory.filter((v) => v.round === round && !v.approved);
@@ -195,7 +210,8 @@ export function teamReusePlan(obs: PlayerObservation): TeamReusePlan | null {
   }
   const lastQuest = [...obs.questHistory].reverse().find((q) => q.round === round - 1)
     ?? obs.questHistory[obs.questHistory.length - 1];
-  const missionOk = lastQuest !== undefined && lastQuest.result === 'success';
+  // S1-1 (C5): a reference "successful team" showed no fail card.
+  const missionOk = lastQuest !== undefined && beliefFailCards(lastQuest, belief.certainFacts) === 0;
   if (earlier.length === 0) {
     if (missionOk && opts.success > 0) refs.push({ team: lastQuest.team, weight: opts.success, kind: 'mission' });
   } else {
@@ -283,24 +299,40 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 }
 
 /**
- * Seats a good leader treats as red for the guard: the reds it can see
- * (`knownEvils`), the lake-chain / 硬3 violators, every member of a failed
- * mission whose fail cards cover all its members but the leader (certain
- * reds), and any seat the pyramid scores ≥ `GUARD_RED_SUSPICION` (review
- * 2026-10-13: without the last two the bonus could put a deducible red
- * back on the team).
+ * Seats a good leader treats as red for the guard.
+ *
+ * `rule3PostLake` on (S1-2, logic_audit.md F14): the reds it can see
+ * (`knownEvils`) and the certainty layer's certain reds (L1*: rules, its
+ * own sight, every fail count, its own lake results, A0 on the public
+ * declarations) — facts only; a 硬3 flag and a high pyramid score are
+ * probabilities and no longer count.
+ *
+ * Off (legacy): `knownEvils`, the lake-chain / 硬3 violators, every member
+ * of a failed mission whose fail cards cover all its members but the
+ * leader (certain reds), and any seat the pyramid scores ≥
+ * `GUARD_RED_SUSPICION` (review 2026-10-13: without the last two the bonus
+ * could put a deducible red back on the team).
  */
 export const GUARD_RED_SUSPICION = 0.85;
 
-function goodLeaderRedSet(obs: PlayerObservation, pyramid: PyramidScores): Set<string> {
+function goodLeaderRedSet(
+  obs: PlayerObservation,
+  pyramid: PyramidScores,
+  belief: Readonly<BeliefOptions>,
+): Set<string> {
   const red = new Set<string>(obs.knownEvils);
+  if (belief.rule3PostLake) {
+    const certainty = pyramid.certainty ?? buildCertainty(obs);
+    for (const id of certainty.certRed('L1*')) red.add(id);
+    red.delete(obs.myPlayerId);
+    return red;
+  }
   const chain = analyzeLakeChain(obs);
   for (const id of chain.violators) red.add(id);
-  for (const id of findRule3Violators(chain, obs).keys()) red.add(id);
+  for (const id of findRule3Violators(chain, obs, belief).keys()) red.add(id);
   for (const q of obs.questHistory) {
-    if (q.result !== 'fail') continue;
     const others = q.team.filter((id) => id !== obs.myPlayerId);
-    if (others.length > 0 && q.failCount >= others.length) for (const id of others) red.add(id);
+    if (others.length > 0 && failCards(q) >= others.length) for (const id of others) red.add(id);
   }
   for (const [id, s] of pyramid.scores) if (s >= GUARD_RED_SUSPICION) red.add(id);
   red.delete(obs.myPlayerId);
@@ -312,14 +344,17 @@ function goodLeaderRedSet(obs: PlayerObservation, pyramid: PyramidScores): Set<s
  * and is spared `PRIOR_PENALTY`. It refuses a team that breaks 硬1 / 硬2 of
  * any member's lake declaration (the leader's own included) and, for a good
  * leader, a team holding a seat of `goodLeaderRedSet`. `pyramid` defaults
- * to `computePyramidScores(obs)` (what the ForwardAgent uses).
+ * to `computePyramidScores(obs, belief)` (what the ForwardAgent uses).
  */
 export function teamReuseGuard(
   obs: PlayerObservation,
-  pyramid: PyramidScores = computePyramidScores(obs),
+  pyramid?: PyramidScores,
+  belief: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): (team: readonly string[]) => boolean {
   const chain = analyzeLakeChain(obs);
-  const redSet = obs.myTeam === 'good' ? goodLeaderRedSet(obs, pyramid) : new Set<string>();
+  const redSet = obs.myTeam === 'good'
+    ? goodLeaderRedSet(obs, pyramid ?? computePyramidScores(obs, belief), belief)
+    : new Set<string>();
   return (team: readonly string[]): boolean =>
     !team.some((id) => redSet.has(id)) && findTeamHardRuleViolations(chain, team).length === 0;
 }

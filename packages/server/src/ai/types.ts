@@ -20,9 +20,16 @@ export type { VoteRecord, QuestRecord };
  *   - who they targeted
  *   - what camp they publicly claimed to have seen ('good' | 'evil')
  *
- * Records appear in `lakeHistory` only AFTER the holder has declared.
- * Pending lake (used but not yet declared) is NOT included to avoid
- * leaking the holder's pending state.
+ * Records appear in `lakeHistory` only AFTER the holder has declared, or —
+ * since 2026-10-14 (S1-9c, docs/ai/logic_first.md) — after the lake phase
+ * ended without a declaration (`declaredClaim: 'none'`). A pending lake
+ * (inspected, declaration still open) is NOT included to avoid leaking the
+ * holder's pending state.
+ *
+ * `'none'` is plumbing only: every reader that interprets claims skips it
+ * (`belief/Certainty.declaredLakes`); legality readers (who was already
+ * inspected) count it. Stage 3 will read it as a likelihood (red holders
+ * leave a lake undeclared about 18 times as often as good ones).
  *
  * Wave A scope: schema only — no caller in HeuristicAgent or
  * SelfPlayEngine reads `lakeHistory` yet. Wave B will wire the four
@@ -35,8 +42,20 @@ export interface LakePublicRecord {
   holderId:       string;
   /** Player who was inspected. */
   targetId:       string;
-  /** Public claim: what camp the holder declared they saw. */
-  declaredClaim:  'good' | 'evil';
+  /** Public claim: what camp the holder declared they saw; `'none'` = the lake phase ended undeclared. */
+  declaredClaim:  'good' | 'evil' | 'none';
+}
+
+/**
+ * The holder's own private Lady-of-the-Lake result (S1-9b, 2026-10-14):
+ * what the holder actually saw. Only ever present in the holder's own
+ * observation (`PlayerObservation.myLakeResults`); never in anyone else's.
+ */
+export interface PrivateLakeResult {
+  round:    number;
+  targetId: string;
+  /** The target's camp as the lake shows it (Mordred / Oberon red, Merlin good). */
+  result:   'good' | 'evil';
 }
 
 // ── Observation ────────────────────────────────────────────────
@@ -52,12 +71,14 @@ export interface PlayerObservation {
   knownEvils:    string[];    // IDs of players I know are evil (my role's knowledge)
   knownWizards?: string[];   // IDs that look like Merlin/Morgana to Percival (can't tell which)
   /**
-   * Edward 2026-04-24 batch 3 fix — assassin POV only: the full evil
+   * Edward 2026-04-24 batch 3 fix — assassinator POV only: the full evil
    * roster (including Oberon/Mordred that `knownEvils` hides mid-game).
    * Populated by the harness when `gamePhase === 'assassination'` so the
    * assassin can hard-filter the candidate pool to loyal good only (no
    * targeting Oberon/Mordred as "good"). `undefined` in all other phases
-   * and for all other roles.
+   * and for all other roles. The assassinator is the `assassin`, or
+   * Mordred / Morgana when no assassin is dealt (`game/assassinator.ts`;
+   * the 7-player setup: Mordred, 2026-10-26 fix).
    */
   allEvilIds?:   string[];
 
@@ -82,6 +103,28 @@ export interface PlayerObservation {
    * wire the four hard 湖中 rules (傳遞鏈) on top of this field.
    */
   lakeHistory?:  LakePublicRecord[];
+  /**
+   * S1-9b (2026-10-14): this player's own lake results — what they saw
+   * when they held the lake (at most one entry per lake they held). Private:
+   * the harness fills it for the holder only (GameServer, SelfPlayEngine,
+   * the replay). Optional; readers treat `undefined` as `[]`.
+   */
+  myLakeResults?: PrivateLakeResult[];
+  /**
+   * Number of reds in this game (the public lobby setup). Optional; readers
+   * fall back to the standard table (`belief/Certainty.evilCountFor`). It
+   * differs from the table in the 9-player Oberon variants.
+   */
+  evilCount?:    number;
+  /**
+   * The roles dealt this game — the public lobby setup (role toggles, the
+   * 9-player variants), one entry per seat, unordered; never who holds
+   * which. Optional; readers fall back to the standard table
+   * (`AVALON_CONFIG[playerCount].roles`). Added 2026-10-26 so the
+   * assassination tier knows whether a Mordred can hide among the
+   * assassin's teammates when the host switched Mordred off.
+   */
+  lobbyRoles?:   Role[];
 }
 
 // ── Actions ────────────────────────────────────────────────────

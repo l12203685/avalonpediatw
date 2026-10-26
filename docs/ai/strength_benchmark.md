@@ -21,8 +21,9 @@
 | `teamReuse` 派隊沿用前一隊（2026-10-13 第三輪；對照組 = 整合後正式預設；同日審查修正後重跑，第 11 節） | 是（派隊 R2+ 完全相同 ED 3.5→11.8、Sin 4.4→22.7、top 3.0→15.4、population 3.8→16.1；Jaccard 39.2→48.8、42.5→57.1、40.2→52.4、41.2→53.1；Sin、top、population 超過 default 基準，ED 與基準大致持平；其他決策不變） | 單邊立場（只有一邊用開關）：選版本種子 44444 紅方 +2.9pp [+2.1pp, +3.7pp]、藍方 +5.9pp [+4.9pp, +7.0pp]；五個種子合併紅方 +2.77pp [+2.41pp, +3.13pp]、藍方 +5.08pp [+4.62pp, +5.54pp]（兩個新種子 67890 / 68888 合併 +2.61pp / +5.13pp）；十個座位都開的機器人自打自：藍勝 7.1% → 10.5%（紅勝 −3.4pp [−4.4pp, −2.4pp]） | **是**（兩個立場都變強；紅方變強有一部分可能來自不像真人的「把自己換進成功隊」，第 11.4、11.5 節） |
 | `redR1Teammate` 紅方首局帶隊友（2026-10-13 第三輪；對照組 = 整合後的正式預設；只在 10 人局；第 12 節） | 放隊友的比例是（說話隊 0%→47.7%，真人 48.0%）；逐次「放不放隊友」與真人相同，去掉抽籤運氣的期望值 ED 49.0→53.9、Sin 39.4→52.6、top 52.2→53.6（population 56.1→54.6），但與關掉時逐次配對只有 Sin 明確較好（46 對 19，McNemar p=0.001），top 持平（175 對 170），ED 看不出（11 對 5，p=0.21）；派隊 Jaccard 四群都升；其他決策逐項不變 | 紅方立場：選版本 77777 +0.32pp、新種子 88888 +0.24pp、99999 −0.22pp，三個種子合併 +0.10pp [−0.19pp, +0.39pp]；藍方立場恆為 0（審查修正後三個種子重跑，結果逐欄相同） | **是**（確認規則在跑確認種子前寫好；R2 起與強制局沒有動；5–9 人局不適用，第 12.5 節） |
 | **2026-10-13 第三輪正式預設**（第 9 節正式預設 + `goodVouchFollowUp` + `teamReuse` + `redR1Teammate`；對照組 = 第 9 節正式預設；第 13 節） | 是（派隊完全相同 R2+ ED 3.5→11.8、Sin 4.4→22.7、top 3.0→15.6、population 3.8→16.2；Jaccard R2+ 39.2→49.0、42.5→57.1、40.2→52.5、41.2→53.2；R1 紅方放隊友照真人比例；投票 R3+ 略升；其他決策逐項相同） | 三個新種子 101010 / 202020 / 303030 合併：紅方 **+3.18pp [+2.70pp, +3.65pp]**、藍方 **+4.89pp [+4.28pp, +5.49pp]**（每個種子兩個立場都在 0 以上）；十個座位都用新預設的機器人自打自（seed 404040）：藍勝 7.42% → 11.32%（紅勝 −3.90pp [−4.96pp, −2.84pp]） | **是**（整組保留；兩個立場都變強，第 13.5 節） |
+| `percivalNoThumbsR1` 派西首局不放拇指（2026-10-14 Edward 裁定「一開始在沒任何資訊時先預設不派」；對照組 = 第三輪正式預設；只在 10 人局；第 14 節） | 是（派西派隊「拇指組合與真人相同」population 40.4→58.4%、top 40.7→59.0%、Sin 40.8→57.0%，ED 22/47→29/47；R1 派西隊有拇指 70.1%→0%，真人 16.7%；一致性基準只有 R1 派西隊長的派隊列改變，R1 派西派隊 Jaccard ED 30.7→44.3、Sin 30.6→35.5、top 29.2→36.3、population 29.8→34.6%，其他逐項相同） | 藍方立場：第一個種子 515151 +0.16pp [−0.37pp, +0.69pp]；確認種子 626262 +0.02pp、737373 −0.18pp；三個合併 **+0.01pp [−0.31pp, +0.32pp]**，兩個確認種子合併 −0.08pp [−0.47pp, +0.32pp]；紅方立場恆為 0。十座位同設定（描述用，新種子 909090）藍勝 11.24%→10.54%，配對差 −0.70pp [−1.24pp, −0.16pp]（等於第四個藍方種子；四個合併 −0.18pp [−0.45pp, +0.10pp]） | **是**（依預先登記的規則；909090 的負數列給 Edward，第 14.4、14.5 節） |
 
-採用標準（任務 B 原文）：一致性基準更像真人（ED、Sin、top 群）**且**自我對打不變弱（variant 合計勝率的 95% 區間下界 ≥ 50% − 2pp = 48%）→ 預設打開；否則維持關閉並記錄數字。注意「合計」是紅方立場與藍方立場的平均：只動一方的開關另一方的差恆為 0，所以合計 = 50% + 該立場差 / 2，這條規則等於允許單一立場最多約 −4pp 的**顯著變弱**（區間不含 0 也算通過），以更像真人為交換；本文件中 `evilLakeClaimAlwaysGood` 即屬此例（第 2 節第 2 點）。**2026-10-12 整合裁定**：依 Edward 的原文「更像真人，而且不能讓它變弱」，單一立場的 95% 區間不含 0 就算變弱，所以 `evilLakeClaimAlwaysGood` 不進預設（開關保留）；其餘採用的開關每個立場的區間都含 0 或為正。正式預設在 `packages/server/src/ai/AgentTuning.ts` 的 `DEFAULT_AGENT_TUNING`；2026-10-12 之前的行為 = `LEGACY_AGENT_TUNING`（全關）。部署時可用環境變數臨時切換（`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR`、`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR_EVIL_ONLY`、`AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD`、`AVALON_TUNING_GOOD_LAKE_MOST_SUSPICIOUS`、`AVALON_TUNING_HUMAN_QUEST_CARDS`、`AVALON_TUNING_ASSASSIN_MODEL`、`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY`、`AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP`、`AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE`、`AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES`、`AVALON_TUNING_GOOD_LAKE_INFO_MAX`、`AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP`、`AVALON_TUNING_TEAM_REUSE`、`AVALON_TUNING_RED_R1_TEAMMATE`；布林用 1/0，先驗用數字，例如 `AVALON_TUNING_ASSASSIN_MODEL=0` 關掉刺殺模型）。**2026-10-13**：`evilLakeHumanStrategy` 依同一條「更像真人，而且不能讓它變弱」規則判定，但對照組換成當時的正式預設（不是 legacy），所以它那幾列的 C 局紅勝率是 93.0% 左右（正式預設自打自），不是 88.4%。同日補上一條做法：**在一個種子上挑版本後，至少再用兩個沒用過的種子確認**，才算「不變弱」 —— `evilLakeHumanStrategy` 就是在挑版本的種子上過關、換種子後變弱。**2026-10-13 第二輪**（第 8 節）的對照組是「不含新湖法的舊預設」，選版本用 seed 31337、確認用 8080 與 2718，以三個種子合併判定；新湖法已依裁定打開，所以補強改用「對只開新湖法的邊際不變弱」判定，和原定標準不同，見第 8.6 節。
+採用標準（任務 B 原文）：一致性基準更像真人（ED、Sin、top 群）**且**自我對打不變弱（variant 合計勝率的 95% 區間下界 ≥ 50% − 2pp = 48%）→ 預設打開；否則維持關閉並記錄數字。注意「合計」是紅方立場與藍方立場的平均：只動一方的開關另一方的差恆為 0，所以合計 = 50% + 該立場差 / 2，這條規則等於允許單一立場最多約 −4pp 的**顯著變弱**（區間不含 0 也算通過），以更像真人為交換；本文件中 `evilLakeClaimAlwaysGood` 即屬此例（第 2 節第 2 點）。**2026-10-12 整合裁定**：依 Edward 的原文「更像真人，而且不能讓它變弱」，單一立場的 95% 區間不含 0 就算變弱，所以 `evilLakeClaimAlwaysGood` 不進預設（開關保留）；其餘採用的開關每個立場的區間都含 0 或為正。正式預設在 `packages/server/src/ai/AgentTuning.ts` 的 `DEFAULT_AGENT_TUNING`；2026-10-12 之前的行為 = `LEGACY_AGENT_TUNING`（全關）。部署時可用環境變數臨時切換（`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR`、`AVALON_TUNING_R3_NORMAL_VOTE_PRIOR_EVIL_ONLY`、`AVALON_TUNING_EVIL_LAKE_CLAIM_GOOD`、`AVALON_TUNING_GOOD_LAKE_MOST_SUSPICIOUS`、`AVALON_TUNING_HUMAN_QUEST_CARDS`、`AVALON_TUNING_ASSASSIN_MODEL`、`AVALON_TUNING_EVIL_LAKE_HUMAN_STRATEGY`、`AVALON_TUNING_EVIL_VOUCH_FOLLOW_UP`、`AVALON_TUNING_EVIL_LAKE_FRAME_HUMAN_RATE`、`AVALON_TUNING_OBERON_LAKE_SEEKS_TEAMMATES`、`AVALON_TUNING_GOOD_LAKE_INFO_MAX`、`AVALON_TUNING_GOOD_VOUCH_FOLLOW_UP`、`AVALON_TUNING_TEAM_REUSE`、`AVALON_TUNING_RED_R1_TEAMMATE`、`AVALON_TUNING_PERCIVAL_NO_THUMBS_R1`；邏輯第一原理各批：`AVALON_TUNING_PERCIVAL_R1_THUMB_ON_THUMB`、`AVALON_TUNING_GOOD_QUEST_SUCCESS_GUARD`、`AVALON_TUNING_ASSASSIN_HEURISTIC_VISIBILITY`（1A / 1B）、`AVALON_TUNING_BELIEF_CERTAIN_FACTS`、`AVALON_TUNING_RULE3_POST_LAKE_ONLY`、`AVALON_TUNING_BELIEF_CHAIN_PROJECTION`、`AVALON_TUNING_FORCED_VOTE_ZERO_BITS`（1C）、`AVALON_TUNING_TEAM_DOMINANCE_GATE`、`AVALON_TUNING_MUST_FAIL_GATE`（1D）、`AVALON_TUNING_PERCIVAL_LOYAL_VOTE`、`AVALON_TUNING_PERCIVAL_CERTAIN_EXCLUSION`、`AVALON_TUNING_PERCIVAL_BLUE_LAKE`、`AVALON_TUNING_RED_POSSIBLE_CLAIMS_ONLY`（1E / 1F）、`AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER`、`AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD`（1G；後者審查後預設關）；布林用 1/0，先驗用數字，例如 `AVALON_TUNING_ASSASSIN_MODEL=0` 關掉刺殺模型）。**2026-10-13**：`evilLakeHumanStrategy` 依同一條「更像真人，而且不能讓它變弱」規則判定，但對照組換成當時的正式預設（不是 legacy），所以它那幾列的 C 局紅勝率是 93.0% 左右（正式預設自打自），不是 88.4%。同日補上一條做法：**在一個種子上挑版本後，至少再用兩個沒用過的種子確認**，才算「不變弱」 —— `evilLakeHumanStrategy` 就是在挑版本的種子上過關、換種子後變弱。**2026-10-13 第二輪**（第 8 節）的對照組是「不含新湖法的舊預設」，選版本用 seed 31337、確認用 8080 與 2718，以三個種子合併判定；新湖法已依裁定打開，所以補強改用「對只開新湖法的邊際不變弱」判定，和原定標準不同，見第 8.6 節。
 
 新預設在一致性基準上的整體數字（`agreementBenchmark.ts` 不加 `--legacy`，與逐開關的效果相加一致）：投票 R3+ ED 61.6→63.7、Sin 62.3→65.2、top 59.0→61.9；任務牌 Sin 79.8→82.4、top 79.7→82.3、population 77.4→79.7（修正版；第一版曾量到 85.3 / 82.7，見第 2 節第 4 點）；湖目標 ED 2.0→13.7、Sin 13.2→19.5；紅方湖宣告不變（`evilLakeClaimAlwaysGood` 與 2026-10-13 的 `evilLakeHumanStrategy` 都未採用，ED 50.0、Sin 61.1、top 60.4；打開 `evilLakeHumanStrategy` 時為 78.6 / 90.7 / 79.5，見第 6 節）；刺殺目標 Sin 20.4→42.9、top 20.8→38.8（ED n=17 不變）；派隊與 R1–R2 投票不受影響。（這一段是 2026-10-12 的正式預設。2026-10-13 第二輪的正式預設（加上 `evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`）：任務牌、刺殺不變；派隊 Jaccard R2+ Sin 42.3→42.5、top 40.0→40.2、population 41.1→41.2；投票 R3+ ED 63.7→64.1、Sin 65.2→65.9、top 61.9→62.7、population 63.6→64.2；紅方湖宣告 ED 50.0→78.6、Sin 61.1→85.2、top 60.4→74.6、population 58.2→69.1；紅方湖目標 ED 0.0→7.1、Sin 17.9→14.3、top 10.7→15.3、population 10.4→16.3，見第 8.5 節。；整合後再加上好人湖 `goodLakeInfoMax`：好人持湖的湖目標 ED 35.1、Sin 22.9、top 25.8、population 24.7，全部持湖者 27.5 / 20.1 / 21.8 / 21.8，見第 9 節。第三輪再加上 `goodVouchFollowUp`、`teamReuse`、`redR1Teammate`：派隊完全相同 R2+ 11.8 / 22.7 / 15.6 / 16.2%、Jaccard R2+ 49.0 / 57.1 / 52.5 / 53.2%（ED / Sin / top / population），投票 R3+ 64.1 / 66.0 / 62.8 / 64.3%，R1 派隊完全相同 Sin 2.9→3.8%，其他不變，見第 13.4 節。）
 
@@ -1493,3 +1494,352 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreeme
 | 12 | `--flag goodVouchFollowUp=0 --flag teamReuse=0`（再加 `--flag redR1Teammate=0` = 左欄） | 不需要：`redR1TeammateStudy.ts --agent` 只看 R1，另外兩個開關在 R1 不作用 | 一致性基準與 12.3 相同；研究腳本不加旗標與 12.3 逐項相同（例如 population 54.2%、548 / 606；Sin 58.5%、46 / 19） |
 
 這三次「只開一個開關」的一致性基準也是 13.4「和三條線各自的變化比」的根據（都是 283,061 個決策、0 次 fallback）。`selfPlayStrength.ts`、`selfPlayHomogeneous.ts`、`redLakeDiagnosis.ts` 從 legacy 起、旗標寫全，合併後照樣得到各節的數字（13.1 的逐決策比對）。審查後這三個腳本與 `agreementBenchmark.ts` 都讀同一組實驗用環境變數（`AVALON_EVIL_LAKE_HUMAN_VARIANT`、`AVALON_VOUCH_FOLLOW_UP_VARIANT`、`AVALON_GOOD_VOUCH_VARIANT`、`AVALON_TEAM_REUSE_VARIANT`、`AVALON_RED_R1_TEAMMATE_VARIANT`；原本 `selfPlayHomogeneous.ts` 只讀 `teamReuse` 那個，`redLakeDiagnosis.ts` 少讀 `goodVouchFollowUp` 與 `teamReuse` 兩個）；沒設時用預設，數字不變（13.3 的 404040 重跑輸出逐字相同）。
+
+## 14. 派西首局不放拇指（percivalNoThumbsR1，2026-10-14）
+
+**來由**：Edward 2026-10-14 原文「一開始在沒任何資訊時先預設不派 你可以參考過去歷史真人牌局經驗 分成 兩根拇指都在派西前動作 一根拇指在派西前動作 兩根拇指都在派西後動作 還有 派西自己的位置 兩根拇指的位置 去分析需不需要做出不同策略的調整」。「拇指」= 派西看得到、分不出誰是誰的梅林與莫甘娜。
+
+- 真人資料、機器人原本的做法、預先登記的策略與採用規則：`percival_thumbs.md` 第 1–9 節。
+- 結果的完整版：同文件第 11 節。
+
+**結論：採用**（`DEFAULT_AGENT_TUNING.percivalNoThumbsR1 = true`，legacy 仍關；`AVALON_TUNING_PERCIVAL_NO_THUMBS_R1=0` 可關掉；只在 10 人局）。
+
+- 做法：派西 R1（第一個任務結果出來之前，五次提議含強制局）當隊長時兩根拇指都不放，不分配置、座位；R2 起、湖都不變（14.1）。
+- 更像真人（14.2）：
+  - 派西派隊「拇指組合與真人相同」population 40.4→58.4%、top 40.7→59.0%、Sin 40.8→57.0%（ED 22/47→29/47）；
+  - 一致性基準只有 R1 派西隊長的派隊列改變，其他逐項相同。
+- 不變弱（14.3）：
+  - 藍方立場三個種子合併 +0.01pp [−0.31pp, +0.32pp]，兩個確認種子合併 −0.08pp [−0.47pp, +0.32pp]；
+  - 紅方立場恆為 0；0 次 fallback。
+- 但要注意（14.4）：描述用的十座位同設定（新種子 909090）藍方 −0.70pp [−1.24pp, −0.16pp]。
+  - 開關只動派西，所以它等於第四個藍方立場的種子；
+  - 和三個判定種子合併 −0.18pp [−0.45pp, +0.10pp]。
+  - 依預先登記的規則它不參與判定，列給 Edward。
+
+### 14.1 開關（`src/ai/PercivalThumbs.ts`）
+
+1. **ForwardAgent 候選池**：R1 兩根拇指都排除，嚴重度同推定莫甘娜（2），人數不夠才依 2026-10-10 的補位順序放回（10 人局 R1 不會發生）。
+2. **評分**：`RoleStrategy.biasForPercival` 在 R1 不再給「隊上只有 A」加分。原本 R1 第一次提議兩根拇指的分數都是 0.5，A = 座位較小的那根，所以一律放它。
+3. **fallback**：`HeuristicAgent.selectPercivalTeam` 的 R1-P1「兩根都不放」延伸到 R1-P2 到 P5。
+4. **賽後回顧**：`explain.replayRule` 寫「派西首局不放拇指」。
+5. **不改的**：R2 起的辨識、兩根都放（照舊不放）、湖的避開名單（`LakePolicy.ts`）。
+6. **只在 10 人局**（`PERCIVAL_NO_THUMBS_R1_PLAYER_COUNT`）：
+   - 預先登記沒有寫人數；資料與基準都是 10 人局；
+   - 5 人局 R1-P1 的禁止組合可能剛好是僅剩的不放拇指隊。
+   - 10 人局的每個量到的決策都不受影響。
+
+### 14.2 一致性基準
+
+`agreementBenchmark.ts --player ED --player Sin`：正式預設 vs `--flag percivalNoThumbsR1`，283,061 個決策、0 次 fallback（兩次都是）。格式：ED / Sin / top / population。
+
+| 項目 | 正式預設（第 13 節） | 打開 |
+|---|---|---|
+| 派隊完全相同 R1 role=percival | 7.1 / 0.0 / 0.7 / 0.9%（14 / 49 / 270 / 941） | **14.3 / 0.0 / 4.4 / 3.4%** |
+| 派隊 Jaccard R1 role=percival | 30.7 / 30.6 / 29.2 / 29.8% | **44.3 / 35.5 / 36.3 / 34.6%** |
+| 派隊完全相同 R1（全部角色） | 3.5 / 3.8 / 2.6 / 2.7% | 4.2 / 3.8 / 3.0 / 2.9% |
+| 派隊 Jaccard R1（全部角色） | 30.6 / 33.4 / 32.5 / 32.7% | 32.0 / 33.9 / 33.3 / 33.2% |
+| 派隊 R2+（含 R2+ 派西 11.6 / 49.0%）、投票、任務牌、湖目標、湖宣告、刺殺 | — | 逐項相同 |
+
+- 逐項比對兩份 JSON：變了的只有 R1 派西隊長的派隊列、含它們的合計列，以及 R1 好人隊長的分歧情境計數。
+- 用 `--flag percivalNoThumbsR1=0` 再跑一次，和改程式之前逐項相同。
+- 目標指標（`percivalThumbsStudy.ts --agent`，派西當隊長的 3013 次提議）「拇指組合相同」：
+  - population 40.4% → 58.4%、top 40.7% → 59.0%、Sin 40.8% → 57.0%、ED 22/47 → 29/47；
+  - 全部來自 R1（population 25.5% → 83.3%），R2 起 47.2% 不變；
+  - R1 放拇指 70.1% → 0%（真人 16.7%）。
+- 採用規則 A（三個群不低於正式預設、次要指標不下降、其他逐項相同、0 次 fallback）成立。
+
+### 14.3 自我對打
+
+**對照組 = 第三輪整合後的正式預設**。`--base` 十二個開關：`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`、`evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`、`goodLakeInfoMax`、`goodVouchFollowUp`、`teamReuse`、`redR1Teammate`。variant = 同樣十二個再加 `percivalNoThumbsR1`。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true。
+
+**種子與判定**（`percival_thumbs.md` 第 9.3 節，在跑任何種子之前寫好；這些種子沒有出現在本文件、`agreement_benchmark.md`、scripts 或 src）：
+
+- 515151 第一個跑。版本已定案、只跑這一版，沒有在種子上挑。
+- 626262、737373 確認（515151 跑完之後才開跑）。
+- 848484 保留，只在 515151 之後發現 bug、必須改程式時才用。沒有發現，所以沒有用。
+- 「變弱」= 藍方立場 95% 區間整個在 0 以下。三個種子合併、兩個確認種子合併都不變弱 → 成立。
+- 紅方立場必須恰好 +0.00pp，否則是接線錯誤。
+
+| 種子（組數） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|
+| 515151（5000） | +0.00pp（89.52% = 89.52%） | 10.64%（10.48%） | +0.16pp [−0.37pp, +0.69pp] | 50.08% | 80.72% / 80.76% / 80.72% | 45.6% (964) / 44.7% (962) / 45.6% (964) |
+| 626262（5000，確認） | +0.00pp（88.66%） | 11.36%（11.34%） | +0.02pp [−0.54pp, +0.58pp] | 50.01% | 79.88% / 79.68% / 79.88% | 43.6% (1006) / 44.1% (1016) / 43.6% (1006) |
+| 737373（5000，確認） | +0.00pp（88.30%） | 11.52%（11.70%） | −0.18pp [−0.74pp, +0.38pp] | 49.91% | 79.14% / 79.16% / 79.14% | 43.9% (1043) / 44.7% (1042) / 43.9% (1043) |
+| **三個合併（15000）** | 0 | 11.17%（11.17%） | **+0.01pp [−0.31pp, +0.32pp]** | — | — / 79.87% / 79.91% | — / 44.5% / 44.4% |
+| **兩個確認種子合併** | 0 | — | **−0.08pp [−0.47pp, +0.32pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13 節。ForwardAgent 每個種子約 231 萬個決策（2,314,866 / 2,312,786 / 2,318,034）、0 次 fallback。B 局藍勝 1676 / 15000，C 局也是 1676。）
+
+判定：
+
+- 紅方立場每個種子都是 +0.00pp，A 局與 C 局逐局相同；診斷腳本的逐決策雜湊比對也是 15000 局全部相同（14.4）。
+- 藍方兩個合併區間都含 0 → **不變弱 → 採用**。
+
+### 14.4 行為與十座位同設定（描述用，不參與判定）
+
+自我對打裡的行為：用沒有進版本庫的診斷腳本，播種與上表相同，勝場、三藍、刺中、決策數逐一相同；三個種子合併，B = 打開的派西，C = 正式預設。
+
+- R1 派西的隊有拇指：
+  - 說話隊 C 77.4%（4712/6085）→ B 0%；
+  - 強制局 C 53.3%（798/1498）→ B 0%。原本放的那根是梅林 396 次、莫甘娜 402 次，等於亂猜。
+- 派西帶的 R1 強制局任務失敗：B 72.2%，C 73.8%（C 裡有拇指 74.4%、沒有 73.1%）。
+- R2 起派西的隊放一根拇指：B 52.2%，C 52.4%；那根是梅林 72.5% / 72.1%。
+- 有決策不同的局 36.7%；勝負不同的局 4.0%（594 局），兩個方向抵銷。
+
+**十座位同設定**（`selfPlayHomogeneous.ts --games 5000 --seed 909090`，新種子，同樣的 `--flag` / `--base`）：
+
+- 十個座位都是舊預設：紅勝 88.76%（4438 / 5000）。
+- 十個座位都打開：紅勝 89.46%（4473 / 5000）。
+- 配對差紅 **+0.70pp [+0.16pp, +1.24pp]**（藍勝 11.24% → 10.54%）；ForwardAgent 1,547,613 個決策、0 次 fallback。
+
+讀法：
+
+- 開關只在派西的派隊路徑讀，紅方座位開與關的行為完全相同。所以「十個座位都打開」的對局就是 909090 的 B 局。
+- 這個描述用的數字其實是**第四個藍方立場的種子**，而且單看它，區間整個在 0 以下。
+- 四個種子的點估計：+0.16 / +0.02 / −0.18 / −0.70pp。
+- 合併：
+  - 四個種子 −0.18pp [−0.45pp, +0.10pp]；
+  - 沒有先跑過的三個（626262 / 737373 / 909090）−0.30pp [−0.62pp, +0.02pp]。
+- 藍方可能有約 0.2pp 的小負效果，量不確定；原因沒有追。R1 強制局的任務反而略好，可能是 R1 紀錄不同之後，其他機器人的判讀跟著變。
+- 依預先登記，這一項只描述、不改判定。
+
+### 14.5 決定與待決事項
+
+- **採用**：`DEFAULT_AGENT_TUNING.percivalNoThumbsR1 = true`。
+  - 線上機器人與網站練習模式都走 ForwardAgent，所以同樣生效；只在 10 人局。
+  - 正式預設的一致性基準（不加旗標）現在就是 14.2 的「打開」那一欄。
+- **待 Edward 決定**：
+  1. 十座位同設定的 −0.70pp（14.4）：
+     - 維持打開（先像真人，藍方再從 R2 起的辨識補），或先關掉；
+     - 或用新種子（848484 以外）再多跑幾個藍方立場。
+  2. R2 起的辨識：真人跟著「只有一根拇指出過成功任務」放那根，機器人只跟一半（`percival_thumbs.md` 9.4）。要另外預先登記、用新種子驗證。
+  3. 候選池與評分的 A / B 分法不一致（同上 9.4 第 2 點）。
+  4. 湖的避開名單用哪一種「像真人」量（「拇指或不是」與真人相同 78.2%，但湖拇指的頻率機器人 0%、真人 22%）。
+  5. 用頻率量，R1 強制局機器人現在 0% 放拇指，真人 36.9%；依預先登記的 T1 / T2 沒有加規則。
+  6. 5–9 人局不適用。
+
+**這一節用到的種子**：
+
+- 判定：515151、626262、737373；
+- 描述：909090；
+- 保留：848484（沒用）。
+- 開跑前在 seed 9 上做過三次小試跑，沒有用在任何判斷：
+  - `selfPlayStrength.ts` 40 組（確認紅方差恆為 0、0 次 fallback）；
+  - 診斷腳本 300 組與 20 組（確認開關在自我對打裡有作用）。
+- 之後要加種子，避開以上全部。
+
+重跑（原始輸出不進版本庫；同樣的指令會得到完全相同的數字）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 515151 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax \
+  --flag goodVouchFollowUp --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax \
+  --base goodVouchFollowUp --base teamReuse --base redR1Teammate
+# 換 --seed 626262 / 737373；十個座位同設定：selfPlayHomogeneous.ts --games 5000 --seed 909090 [同上的 --flag / --base]
+# 一致性基準：正式預設（已含本開關）/ 關掉本開關；派西的針對性一致率見 percival_thumbs.md 11.5 末
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/agreementBenchmark.ts --player ED --player Sin [--flag percivalNoThumbsR1=0]
+```
+
+## 15. 邏輯第一原理 第 1A / 1B 批（2026-10-14；`percivalR1ThumbOnThumb`、`goodQuestSuccessGuard`、`assassinHeuristicVisibility`）
+
+**來由**：Edward 2026-10-14 的新採用順序（邏輯正確 → 像真人 → 強度；`docs/ai/logic_first.md` 第 1 節）。這一批的內容、不變量與一致性見 `logic_first.md` 第 5 節；本節只記強度（**只回報，不用來判定**）。
+
+**對照組 = 第 14 節的正式預設**（13 個開關：`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`、`evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`、`goodLakeInfoMax`、`goodVouchFollowUp`、`teamReuse`、`redR1Teammate`、`percivalNoThumbsR1`）；variant = 同樣 13 個再加這一批的三個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個種子都是新的（沒有出現在本文件、`agreement_benchmark.md`、scripts 或 src）。
+
+| 種子（組數） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|
+| 111222（5000） | +0.00pp（89.94% = 89.94%） | 10.08%（10.06%） | +0.02pp [−0.10pp, +0.14pp] | 50.01% | 81.08% / 81.04% / 81.08% | 46.8% (946) / 46.8% (948) / 46.8% (946) |
+| 222333（5000） | +0.00pp（88.82%） | 11.36%（11.18%） | +0.18pp [+0.06pp, +0.30pp] | 50.09% | 79.88% / 79.70% / 79.88% | 44.4% (1006) / 44.0% (1015) / 44.4% (1006) |
+| 333444（5000） | +0.00pp（89.00%） | 11.08%（11.00%） | +0.08pp [−0.07pp, +0.23pp] | 50.04% | 79.54% / 79.46% / 79.54% | 46.2% (1023) / 46.1% (1027) / 46.2% (1023) |
+| **三個合併（15000）** | 0 | — | **+0.10pp [+0.02pp, +0.17pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13、14 節。ForwardAgent 每個種子約 231 萬個決策（2,306,347 / 2,321,533 / 2,314,218）、0 次 fallback。）
+
+讀法：三個開關只在好人座位（派西 R1、好人任務牌防護）與刺殺 fallback（正式預設走模型，不會觸發）讀，所以紅方立場逐局相同、差恆為 0；藍方立場略強、區間不含 0。依第一關的規則：不變量 INV-R1NT / INV-Q1 / INV-A1 為 0 → 採用；強度只回報。
+
+**這一節用到的種子**：111222、222333、333444。之後要加種子，避開以上全部與第 14 節的。
+
+## 16. 邏輯第一原理 第 1C 批：信念（2026-10-22；`beliefCertainFacts`、`rule3PostLakeOnly`、`beliefChainProjection`、`forcedVoteZeroBits`）
+
+**來由**：`logic_first.md` 第 6 節（S1-1 確定事實進入信念、S1-2 硬3 只看湖後、S1-3 湖鏈投影、S1-9a 強制票 0 bit）。四個開關全部預設開，legacy 全關。不變量：INV-B1 / B2 / B3 / H3a / H3b / F0 在 1970 局重播與 2000 局自我對打上 0 違規（`logic_first.md` 6.2）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 6.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 15 節的 variant**（`r7/ai-base` 正式預設的 16 個開關）；variant = 同樣 16 個再加本批四個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 444555 / 555666 / 666777（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts 或 src；第 15 節用掉的避開）；沒有預先選版本的種子，三個都是確認種子（版本在跑之前定案，沒有在種子上挑）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 444555（5000） | 87.36%（88.46%） | **−1.10pp [−2.01pp, −0.19pp]** | 13.08%（11.54%） | **+1.54pp [+0.41pp, +2.67pp]** | 50.22% | 78.08% / 74.72% / 79.50% | 42.3% (1096) / 48.3% (1264) / 43.7% (1025) |
+| 555666（5000） | 87.44%（88.70%） | **−1.26pp [−2.14pp, −0.38pp]** | 14.12%（11.30%） | **+2.82pp [+1.71pp, +3.93pp]** | 50.78% | 78.00% / 74.42% / 80.32% | 42.9% (1100) / 44.8% (1279) / 42.6% (984) |
+| 666777（5000） | 88.50%（90.10%） | **−1.60pp [−2.48pp, −0.72pp]** | 13.38%（9.90%） | **+3.48pp [+2.38pp, +4.58pp]** | 50.94% | 78.98% / 74.02% / 80.68% | 45.3% (1051) / 48.5% (1299) / 48.8% (966) |
+| **三個合併（15000）** | — | **−1.33pp [−1.84pp, −0.81pp]** | — | **+2.63pp [+1.99pp, +3.27pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權。ForwardAgent 每個種子約 226 萬個決策（2,265,595 / 2,257,050 / 2,252,504）、0 次 fallback。variant 當紅方時紅方持湖湖隊友 99.6%（對照 100%）：湖隊友的規則沒變，少掉的那 0.4% 是確定性層把奧伯倫推成「確定紅」之後的候選變化。）
+
+讀法：
+
+- **藍方立場變強**（合併區間整個在 0 以上）：好人信念裡確定紅 / 確定藍釘住、硬3 不再把誠實持湖者釘紅、鏈序與強制票修正，派隊與投票直接受益；三紅率 variant 當藍方時從約 80% 降到約 74.5%。
+- **紅方立場變弱**（合併區間整個在 0 以下）：紅方座位同樣讀這四個開關。依第一關的規則**照樣採用**，開一張第三關的**紅方補償工作單**（`logic_first.md` 6.7：候選原因是藍方變強本身、紅方的隊伍訊號把推得出的確定紅（奧伯倫）當成隊友、湖後硬3 概似比 6 讓紅方言行一致的自保變小；補償在紅方策略做，種子協定判定）。
+- 紅方 variant 與對照不是逐局相同（和第 14、15 節不同）：紅方的信念也變了，所以紅方差不恆為 0。
+
+**這一節用到的種子**：444555、555666、666777。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 444555 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility
+# 換 --seed 555666 / 666777
+```
+
+## 17. 邏輯第一原理 第 1D 批：決策閘門（2026-10-22；`teamDominanceGate`、`mustFailGate`）
+
+**來由**：`logic_first.md` 第 7 節（S1-3 派隊閘門：好人不派、R3 起不贊成「嚴格被支配」的隊，湖鏈 A→B→C 閉合；S1-4 + S1-5 必敗隊閘門：好人不派、R3 起非強制局不贊成「每一種可能的紅方組合都足以讓任務失敗」的隊，在派西 / 莫甘娜「在隊上一律贊成」等所有角色捷徑之前執行；R1–R2 照桌規，Edward 對 D3 的定案裁定）。兩個開關預設開，legacy 全關。不變量：INV-T1 / V1 / K1 / K1V / K2 / P3 / L1（以及 INV-Pe1）在 1970 局重播、探針與 2000 局自我對打上 0 違規（`logic_first.md` 7.2）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 7.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 16 節的 variant**（`lane/r7-ai-1c` 正式預設的 20 個開關：`r3NormalVotePrior=0.6`、`r3NormalVotePriorEvilOnly`、`goodLakeTargetMostSuspicious`、`humanQuestCardRules`、`assassinModel`、`evilLakeHumanStrategy`、`evilVouchFollowUp`、`evilLakeFrameHumanRate`、`goodLakeInfoMax`、`goodVouchFollowUp`、`teamReuse`、`redR1Teammate`、`percivalNoThumbsR1`、`percivalR1ThumbOnThumb`、`goodQuestSuccessGuard`、`assassinHeuristicVisibility`、`beliefCertainFacts`、`rule3PostLakeOnly`、`beliefChainProjection`、`forcedVoteZeroBits`）；variant = 同樣 20 個再加本批兩個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 777888 / 888999 / 135791（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts 或 src，也不在 `lane/r7-ai-1c` 上；第 15、16 節用掉的避開）；沒有選版本的種子，三個都是確認種子（版本在跑之前定案）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 777888（5000） | 87.58%（87.58%） | +0.00pp | 13.42%（12.42%） | **+1.00pp [+0.65pp, +1.35pp]** | 50.50% | 76.12% / 74.18% / 76.12% | 48.0% (1194) / 48.0% (1291) / 48.0% (1194) |
+| 888999（5000） | 88.06%（88.06%） | +0.00pp | 13.14%（11.94%） | **+1.20pp [+0.83pp, +1.57pp]** | 50.60% | 76.90% / 74.74% / 76.90% | 48.3% (1155) / 48.0% (1263) / 48.3% (1155) |
+| 135791（5000） | 86.54%（86.54%） | +0.00pp | 14.36%（13.46%） | **+0.90pp [+0.51pp, +1.29pp]** | 50.45% | 75.98% / 74.18% / 75.98% | 44.0% (1201) / 44.4% (1291) / 44.0% (1201) |
+| **三個合併（15000）** | — | **0** | — | **+1.04pp [+0.82pp, +1.25pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13–16 節。ForwardAgent 每個種子約 210 萬個決策（2,101,440 / 2,103,619 / 2,103,421）、0 次 fallback。）
+
+讀法：
+
+- **紅方立場逐局相同、差恆為 0**：兩個閘門只綁好人座位（紅方座位不讀這兩個開關；紅方 R1 隊長「照忠臣視角派隊」的路徑在 R1 沒有任何任務結果與湖，閘門不會觸發），所以 variant 當紅方時每一局都和對照相同。
+- **藍方立場變強**（合併區間整個在 0 以上，三個種子都是）：好人不再派、不再贊成必敗隊與被湖鏈嚴格支配的隊；三紅率 variant 當藍方時再降約 2 點（約 76% → 74%）。
+- 第 16 節開的紅方補償工作單（`logic_first.md` 6.7）不受本批影響、仍然開著；本批沒有新的補償項目。
+
+**這一節用到的種子**：777888、888999、135791。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 777888 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --flag teamDominanceGate --flag mustFailGate \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility \
+  --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits
+# 換 --seed 888999 / 135791
+```
+
+## 18. 邏輯第一原理 第 1E / 1F 批：派西 = 帶拇指限制的忠臣、紅方只做可能為真的宣告（2026-10-26；`percivalLoyalVote`、`percivalCertainExclusion`、`percivalBlueLake`、`redPossibleClaimsOnly`）
+
+**來由**：`logic_first.md` 第 8 節（S1-6 派西 = 忠臣 + 「兩根拇指恰好一紅」：拿掉「派西在隊上一律贊成」與「沒有拇指就反對」，R3 起一張失敗就夠時兩拇指同隊反對，只硬排除確定紅、同分不依座位序；S1-8 派西的湖 = 藍方湖；S1-10 紅方持湖者不做好人不可能為真的宣告，兩邊都不可能時不宣告）。四個開關預設開，legacy 全關。不變量：INV-Pe2 / PL / R1 在 1970 局重播與 2000 局自我對打上 0 違規（`logic_first.md` 8.2）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 8.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 17 節的 variant**（`lane/r7-ai-1d` 正式預設的 22 個開關：第 17 節的 20 個再加 `teamDominanceGate`、`mustFailGate`）；variant = 同樣 22 個再加本批四個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 246802 / 357913 / 468024（沒有當作種子出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts、src、r7 的計畫文件或 main 與各 lane 分支上 —— 246802 在 main 上出現過一次，是 `packages/server/test_generate_cache.py` 一個快取測試裡的字串設定值，不是種子，沒有重複使用（2026-10-26 審查更正原本「main 上沒有」的寫法）；第 15–17 節用掉的九個避開）；沒有選版本的種子，三個都是確認種子（版本在跑之前定案；第一次跑完發現「兩邊都不可能」的紅方宣告還會照原宣告，改成不宣告之後三個種子整組重跑，本節是重跑的數字）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 246802（5000） | 86.76%（86.52%） | +0.24pp [−0.06pp, +0.54pp] | 14.52%（13.48%） | **+1.04pp [+0.33pp, +1.75pp]** | 50.64% | 75.16% / 73.70% / 74.54% | 46.7% (1242) / 44.8% (1315) / 47.1% (1273) |
+| 357913（5000） | 85.80%（85.54%） | +0.26pp [−0.02pp, +0.54pp] | 15.54%（14.46%） | **+1.08pp [+0.35pp, +1.81pp]** | 50.67% | 74.46% / 72.60% / 74.04% | 44.4% (1277) / 43.3% (1370) / 44.3% (1298) |
+| 468024（5000） | 86.60%（86.16%） | **+0.44pp [+0.11pp, +0.77pp]** | 15.42%（13.84%） | **+1.58pp [+0.82pp, +2.34pp]** | 51.01% | 74.94% / 72.66% / 73.96% | 46.5% (1253) / 43.6% (1367) / 46.9% (1302) |
+| **三個合併（15000）** | — | **+0.30pp [+0.13pp, +0.48pp]** | — | **+1.22pp [+0.80pp, +1.64pp]** | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13–17 節。ForwardAgent 每個種子約 211 萬個決策（2,108,971 / 2,120,123 / 2,125,062）、0 次 fallback。）
+
+讀法：
+
+- **藍方立場變強**（三個種子與合併區間都在 0 以上）：派西不再硬排除「在失敗任務上」的整隊與不確定的拇指（候選更好）、在隊上不再自動贊成含確定紅的隊、對兩拇指同隊的一張失敗隊反對；三紅率 variant 當藍方時再降約 1 點。
+- **紅方立場略強**（合併區間在 0 以上）：紅方座位只讀 `redPossibleClaimsOnly`。不做會自我證明是紅的宣告（例如替公開確定紅的隊友洗白、說同在一個失敗張數夠多的任務上的藍方是藍）之後，藍方少了一個把紅方持湖者釘成確定紅的機會。副作用：紅方湖到藍方時宣紅的比例（variant 當紅方 vs 對照）30.7 → 38.9%、27.6 → 36.4%、30.1 → 38.2%（真人 25.9%）—— 原本宣好的宣告有一部分在公開局面上不可能為真，只能宣紅；嫁禍率離真人更遠，屬第 2 階段。
+- 本批沒有任何立場的區間整個在 0 以下 → **沒有新的補償工作單**；第 16 節開的紅方補償工作單（`logic_first.md` 6.7）仍開著。
+
+**這一節用到的種子**：246802、357913、468024。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 246802 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --flag teamDominanceGate --flag mustFailGate \
+  --flag percivalLoyalVote --flag percivalCertainExclusion --flag percivalBlueLake --flag redPossibleClaimsOnly \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility \
+  --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits \
+  --base teamDominanceGate --base mustFailGate
+# 換 --seed 357913 / 468024
+```
+
+
+## 19. 邏輯第一原理 第 1G 批：刺殺時確定把梅林看得到的紅放進自己隊的隊長排在後面（2026-10-26；`assassinVisibleRedTier`、`assassinVisibleRedLikelihood`）
+
+**來由**：`logic_first.md` 第 9 節（練習回報 (b)：刺殺時紅方知道全部紅方含奧伯倫，當隊長時把梅林看得到的紅 —— 刺客、莫甘娜、奧伯倫 —— 放進自己隊的人很不可能是梅林）。真人資料：梅林隊長的非強制提議有看得到的紅 2.9–22.8%（依回合），忠臣 / 派西 20.8–61.4%，概似比 0.12–0.45，R1 也一樣（0.13）。`assassinVisibleRedTier` 把在 R1 起的非強制提議**確定**這樣做的候選排在每一位從沒這樣做的候選之後（層級，不是硬排除）；`assassinVisibleRedLikelihood` 對「只有一位看得到的隊友」（莫甘娜或莫德雷德）的提議乘上量到的概似比。模型與舊啟發式兩條刺殺路徑都適用，不重新訓練模型。兩個開關預設開，legacy 全關。不變量：新的 INV-A2 在 1970 局重播（改前 182 / 897）與 2000 局自我對打（改前 70 / 474）上 0 違規（`logic_first.md` 9.3）；一致性見 `agreement_benchmark.md` 第 7 節末與 `logic_first.md` 9.4。本節是強度，**只回報**（第一關的修改；變弱時開補償工作單，不回退）。
+
+**對照組 = 第 18 節的 variant**（`lane/r7-ai-1ef` 正式預設的 26 個開關）；variant = 同樣 26 個再加本批兩個。每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback。三個新種子 579135 / 680246 / 791357（沒有出現在本文件、`agreement_benchmark.md`、`logic_first.md`、scripts、src、r7 的計畫文件，也不在 main 與各 lane 分支上；第 15–18 節用掉的十二個避開）；沒有選版本的種子，三個都是確認種子（版本在跑之前定案）。
+
+| 種子（組數） | 紅方立場 A（對照 C） | 紅方差 A−C | 藍方立場 B（對照 C） | 藍方差 B−C | 合計 | 三紅率 A / B / C | 三藍局刺中率 A / B / C |
+|---|---|---|---|---|---|---|---|
+| 579135（5000） | 88.24%（86.08%） | **+2.16pp [+1.73pp, +2.59pp]** | 13.92%（13.92%） | +0.00pp | 51.08% | 74.06% / 74.06% / 74.06% | 54.7% / 46.3% / 46.3%（1297） |
+| 680246（5000） | 87.10%（84.66%） | **+2.44pp [+1.99pp, +2.89pp]** | 15.34%（15.34%） | +0.00pp | 51.22% | 73.18% / 73.18% / 73.18% | 51.9% / 42.8% / 42.8%（1341） |
+| 791357（5000） | 87.60%（85.40%） | **+2.20pp [+1.77pp, +2.63pp]** | 14.60%（14.60%） | +0.00pp | 51.10% | 73.14% / 73.14% / 73.14% | 53.8% / 45.6% / 45.6%（1343） |
+| **三個合併（15000）** | — | **+2.26pp [+2.01pp, +2.51pp]** | — | +0.00pp | — | — | — |
+
+（合併 = 逐種子結果以區間寬度加權，同第 6、7、9、13–18 節；藍方三個種子的差恆為 0，不合併。ForwardAgent 每個種子約 211 萬個決策（2,104,896 / 2,109,756 / 2,114,208）、0 次 fallback。）
+
+讀法：
+
+- **紅方立場變強**（三個種子與合併區間都在 0 以上）：開關只動刺客的選擇，刺殺前每一局逐局相同（三紅率三欄相同），所以差全部來自三藍局的刺中率 —— 約 +8.5 點（46.3 → 54.7%、42.8 → 51.9%、45.6 → 53.8%）。機器人梅林從不派含看得到的紅的隊（INV-M1），層級在自我對打裡從來不會把真梅林排到後面；對真人梅林（10.5% 的局確定放過看得到的紅）效果較小（重播刺中率 30.1 → 37.2%，`logic_first.md` 9.3）。
+- **藍方立場不變**（藍方座位不讀這兩個開關，逐局相同）。
+- 本批沒有任何立場的區間整個在 0 以下 → **沒有新的補償工作單**；第 16 節開的紅方補償工作單（`logic_first.md` 6.7）原因在紅方信念，本批不算補償，仍開著。
+
+**這一節用到的種子**：579135、680246、791357。之後要加種子，避開本文件全部各節的。
+
+重跑（原始輸出不進版本庫）：
+
+```bash
+USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPlayStrength.ts --games 5000 --seed 579135 \
+  --flag r3NormalVotePrior=0.6 --flag r3NormalVotePriorEvilOnly --flag goodLakeTargetMostSuspicious --flag humanQuestCardRules --flag assassinModel \
+  --flag evilLakeHumanStrategy --flag evilVouchFollowUp --flag evilLakeFrameHumanRate --flag goodLakeInfoMax --flag goodVouchFollowUp \
+  --flag teamReuse --flag redR1Teammate --flag percivalNoThumbsR1 --flag percivalR1ThumbOnThumb --flag goodQuestSuccessGuard --flag assassinHeuristicVisibility \
+  --flag beliefCertainFacts --flag rule3PostLakeOnly --flag beliefChainProjection --flag forcedVoteZeroBits \
+  --flag teamDominanceGate --flag mustFailGate \
+  --flag percivalLoyalVote --flag percivalCertainExclusion --flag percivalBlueLake --flag redPossibleClaimsOnly \
+  --flag assassinVisibleRedTier --flag assassinVisibleRedLikelihood \
+  --base r3NormalVotePrior=0.6 --base r3NormalVotePriorEvilOnly --base goodLakeTargetMostSuspicious --base humanQuestCardRules --base assassinModel \
+  --base evilLakeHumanStrategy --base evilVouchFollowUp --base evilLakeFrameHumanRate --base goodLakeInfoMax --base goodVouchFollowUp \
+  --base teamReuse --base redR1Teammate --base percivalNoThumbsR1 --base percivalR1ThumbOnThumb --base goodQuestSuccessGuard --base assassinHeuristicVisibility \
+  --base beliefCertainFacts --base rule3PostLakeOnly --base beliefChainProjection --base forcedVoteZeroBits \
+  --base teamDominanceGate --base mustFailGate \
+  --base percivalLoyalVote --base percivalCertainExclusion --base percivalBlueLake --base redPossibleClaimsOnly
+# 換 --seed 680246 / 791357
+```
+
+## 20. 第 1G 批審查修正：層級改歸第二關、軟性概似預設關（2026-10-26；`lane/r7-ai-fix`）
+
+**來由**：`logic_first.md` 第 10 節。審查指出第 1G 批的層級是很強的真人規律（真人梅林刺殺時 10.5% 確定放過看得到的紅），不是絕對正確的約束，改歸第二關；軟性概似的乘數公式錯了（兩個比值的平均，而不是兩個比例的比值），改成量到的數字（R1 1.25、R2 1.64、R3 1.03、R4 1.51、R5 1.01），又和刺殺模型的隊長特徵重複計算、交叉驗證後沒有增益，所以**預設關**。新的正式預設 = 26 個開關 + `assassinVisibleRedTier`。本節用第 19 節的三個種子重跑，比對第 1G 批的數字（不是新的確認種子）。
+
+對照 = `lane/r7-ai-1ef` 正式預設的 26 個開關（同 9.5），variant = 26 個再加 `assassinVisibleRedTier`（審查後的正式預設；軟性概似關）；每個種子 5000 組 × 3 局，USE_FORWARD_REASONING=true，0 次 fallback（ForwardAgent 決策數與第 1G 批逐種子相同：2,104,896 / 2,109,756 / 2,114,208）。種子沿用第 19 節的三個。
+
+| 種子 | 紅方差（第 1G 批：層級 + 舊乘數） | **紅方差（審查後：只開層級）** | 三藍局刺中率 A（1G → 審查後；對照 C） | 藍方差 |
+|---|---|---|---|---|
+| 579135 | +2.16pp [+1.73, +2.59] | **+2.00pp [+1.61, +2.39]** | 54.7 → 54.0%（46.3%；1297 局） | +0.00 |
+| 680246 | +2.44pp [+1.99, +2.89] | **+2.50pp [+2.07, +2.93]** | 51.9 → 52.1%（42.8%；1341） | +0.00 |
+| 791357 | +2.20pp [+1.77, +2.63] | **+2.24pp [+1.83, +2.65]** | 53.8 → 54.0%（45.6%；1343） | +0.00 |
+| **合併** | +2.26pp [+2.01, +2.51] | **+2.23pp [+1.99, +2.46]** | — | +0.00 |
+
+差 −0.03pp：自我對打裡軟性概似幾乎沒有作用（三紅率、刺殺前的每一局都相同）。紅方 +2.2pp 幾乎全部來自層級，而且如 10.1 所說，**這是機器人梅林從不派看得到的紅造成的高估**（自我對打 `A2.merlinFlagged` 0 / 541）；對真人梅林，重播的刺中率 +5.8 點才是比較接近真實的效果。藍方座位不讀這兩個開關（恆為 0）。沒有立場的區間整個在 0 以下 → 沒有補償工作單；第 1G 批是第二關的修改，強度照第 1 節只回報。
+
+**一個重要的讀法**：機器人梅林從不派含看得到的紅的隊（INV-M1），所以層級在自我對打裡從不把真梅林排到後面（`A2.merlinFlagged` 自我對打 0 / 541、重播 110 / 1048）—— 在自我對打裡它是完美的過濾器。真人梅林有 10.5% 的局會被標記，重播的刺中率 30.1 → 35.9%（+5.8 點）比自我對打的三藍局 +8 點更接近對真人的效果。
+
+**這一節用到的種子**：579135、680246、791357（第 19 節已用過，本節是重跑）。
+
+重跑（原始輸出不進版本庫）：第 19 節的指令，`--flag` 只加 `assassinVisibleRedTier`（拿掉 `--flag assassinVisibleRedLikelihood`），`--base` 不變。

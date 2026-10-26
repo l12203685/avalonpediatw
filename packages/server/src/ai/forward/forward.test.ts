@@ -109,7 +109,7 @@ describe('extractFacts', () => {
     expect(facts.outerWhiteApprovers.has('P3')).toBe(true);
   });
 
-  it('captures lake-chain violators from the public lake history', () => {
+  it('captures the lake chain from the public lake history (no cycle violators since S1-11)', () => {
     const obs = makeObs({
       lakeHistory: [
         { round: 2, holderId: 'P1', targetId: 'P2', declaredClaim: 'good' },
@@ -117,8 +117,7 @@ describe('extractFacts', () => {
       ],
     });
     const facts = extractFacts(obs);
-    expect(facts.lakeViolators.has('P1')).toBe(true);
-    expect(facts.lakeViolators.has('P2')).toBe(true);
+    expect(facts.lakeViolators.size).toBe(0);
     expect(facts.lakeChain.length).toBe(2);
   });
 });

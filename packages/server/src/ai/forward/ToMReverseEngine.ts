@@ -37,6 +37,7 @@ import {
   PYRAMID_HARD_BLUE,
   PYRAMID_VIOLATOR_FLOOR,
 } from '../baseline';
+import { defaultBeliefOptions, type BeliefOptions } from '../belief/BeliefOptions';
 import type { Facts, MindState, RoleProbDistribution } from './types';
 
 // ── Constants ───────────────────────────────────────────────────
@@ -142,6 +143,9 @@ function projectObsFromSeat(
     questHistory: obs.questHistory,
     proposedTeam: obs.proposedTeam,
     lakeHistory: obs.lakeHistory,
+    // Public substrate: no private lake results; the lobby's red count is public.
+    myLakeResults: undefined,
+    evilCount: obs.evilCount,
   };
 }
 
@@ -171,8 +175,9 @@ function projectObsFromSeat(
 function predictRoleDist(
   obs: PlayerObservation,
   targetId: string,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): RoleProbDistribution {
-  const myPyramid = computePyramidScores(obs);
+  const myPyramid = computePyramidScores(obs, opts);
   const targetScore = myPyramid.scores.get(targetId) ?? 0.5;
 
   const raw = new Map<Role, number>();
@@ -317,10 +322,11 @@ export function reverseEngineerMind(
   obs: PlayerObservation,
   facts: Facts,
   targetId: string,
+  opts: Readonly<BeliefOptions> = defaultBeliefOptions(),
 ): MindState {
   // Pyramid from the target's POV (public-only seat).
   const targetObs = projectObsFromSeat(obs, targetId);
-  const targetPyramid = computePyramidScores(targetObs);
+  const targetPyramid = computePyramidScores(targetObs, opts);
 
   // The target's interpretation = their pyramid suspicion map.
   const interpretation = new Map<string, number>(targetPyramid.scores);
@@ -329,7 +335,7 @@ export function reverseEngineerMind(
   const predictedLogic = describePredictedLogic(facts, targetId);
 
   // Role probability distribution from agent's POV.
-  const predictedRoleProb = predictRoleDist(obs, targetId);
+  const predictedRoleProb = predictRoleDist(obs, targetId, opts);
 
   // Role-conditioned purpose summary.
   const predictedPurpose = describePredictedPurpose(predictedRoleProb);
