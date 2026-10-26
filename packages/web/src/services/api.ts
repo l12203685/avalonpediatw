@@ -4,6 +4,10 @@
  */
 
 import type { OutcomeCounts, PlayerOutcomeBlocks, PlayerVoting } from '@avalon/shared';
+import type { GameFilter, StatsResult } from '@avalon/shared/stats';
+import { filteredRoute, withFilteredLakeClaim } from '../stats/filteredRoutes';
+import { FilterUnavailableError, filteredStats } from '../stats/statsEngine';
+import { currentStatsFilter } from '../stats/statsFilter';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -982,11 +986,35 @@ async function readServerError(res: Response): Promise<string | undefined> {
   }
 }
 
+/** 篩選後的結果拿不到時的錯誤文字 (FilterBar 也顯示同一件事)。 */
+export const FILTER_UNAVAILABLE = 'Filtered statistics temporarily unavailable';
+
+async function filteredResult(path: string, filter: GameFilter, key: string): Promise<StatsResult> {
+  try {
+    return await filteredStats(filter, key);
+  } catch (err) {
+    throw new AnalysisApiError(err instanceof FilterUnavailableError && err.status ? err.status : 503, path, FILTER_UNAVAILABLE);
+  }
+}
+
+/**
+ * 分析 API。有篩選時 (stats/statsFilter.ts)，會隨篩選變動的路徑改用瀏覽器端引擎的結果
+ * (stats/filteredRoutes.ts，形狀與伺服器路由相同)；特徵研究只有 L141 換成重算的版本，其餘路徑照常打 API。
+ */
 async function analysisApiFetch<T>(path: string): Promise<T> {
+  const { filter, key } = currentStatsFilter();
+  if (filter && key) {
+    const route = filteredRoute(path, await filteredResult(path, filter, key));
+    if (route?.kind === 'notFound') throw new AnalysisApiError(404, path, 'Player not found');
+    if (route) return route.data as T;
+  }
   const res = await fetch(`${SERVER_URL}/api/analysis${path}`);
   if (!res.ok) throw new AnalysisApiError(res.status, path, await readServerError(res));
   const body = (await res.json()) as ApiEnvelope<T>;
   if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
+  if (filter && key && path === '/feature-studies') {
+    return withFilteredLakeClaim(body.data as unknown as FeatureStudiesData, await filteredResult(path, filter, key)) as T;
+  }
   return body.data;
 }
 

@@ -7,6 +7,7 @@ import { isThinPairCell } from '../../utils/analysisDisplay';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import { pairOutcomeCounts } from './seatRoleBlocks';
 import { SectionTabs, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem } from './ui';
+import NotFilteredNote from './filter/NotFilteredNote';
 
 type MatrixKey = 'coWin' | 'coLose' | 'winCorr' | 'coWinMinusLose' | 'outcomePair';
 
@@ -241,6 +242,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
 
   return (
     <div className="space-y-2">
+      <NotFilteredNote text={t('analytics.filter.chemistryFiltered')} />
       <div className="flex flex-wrap items-center gap-2">
         <SectionTabs
           items={matrixItems}

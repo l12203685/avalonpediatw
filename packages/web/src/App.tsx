@@ -37,6 +37,7 @@ import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
 import { submitError } from './services/api';
 import { PUBLIC_STATS_STATES, parseStatsHash, type StatsLink } from './utils/statsLinks';
+import { applySharedFilter } from './stats/sharedFilter';
 
 function App(): JSX.Element {
   const { t } = useTranslation();
@@ -58,6 +59,11 @@ function App(): JSX.Element {
       setStatsFirst(true);
       // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close)
       if (link.kind === 'study') return;
+      // #stats?f=… (a shared filter) stays too: the filter bar keeps it in sync with the filter
+      if (link.kind === 'stats' && (link.filter || link.preset)) {
+        applySharedFilter(link);
+        return;
+      }
       // consumed: a later reload starts where the user is, not back on this link
       try {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);

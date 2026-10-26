@@ -25,6 +25,7 @@ import {
   trioOrder,
   type Clause,
   type GameFilter,
+  type MetricId,
   type PlayerRow,
   type PlayerSelector,
 } from '@avalon/shared/stats';
@@ -219,6 +220,44 @@ describe('excluding players', () => {
       expect(g.seatPlayers.some((n) => n !== null && dropped.has(n))).toBe(false);
     }
     expect(result.players.players.some((p) => dropped.has(p.name))).toBe(false);
+  });
+
+  it('toughness (強硬度) metrics: players with at least 10 votes in that cell are eligible, the rest are kept', () => {
+    const fixture = path.resolve(__dirname, '..', 'fixtures', 'stats_parity', 'invented');
+    const inv = decodeGamesDataset(JSON.parse(fs.readFileSync(path.join(fixture, 'games.json'), 'utf-8')));
+    const everyone = computeStats(inv, { asOf: '2026-02-28' }, null).players.players;
+    const cells = {
+      r3RejectLoyal: (p: PlayerRow) => p.voting?.r3Reject.loyal,
+      r3RejectRed: (p: PlayerRow) => p.voting?.r3Reject.red,
+      evilTeamReject: (p: PlayerRow) => p.voting?.teamComposition.all.evilTeamReject,
+      goodTeamApprove: (p: PlayerRow) => p.voting?.teamComposition.all.goodTeamApprove,
+      evilTeamRejectR3: (p: PlayerRow) => p.voting?.teamComposition.r3Plus.evilTeamReject,
+      goodTeamApproveR3: (p: PlayerRow) => p.voting?.teamComposition.r3Plus.goodTeamApprove,
+    } as const;
+    for (const [metric, cell] of Object.entries(cells)) {
+      const rated = everyone.filter((p) => cell(p as PlayerRow)?.rate != null);
+      expect(rated.length, metric).toBeGreaterThan(1);
+      const rates = rated.map((p) => cell(p as PlayerRow)!.rate as number);
+      const median = [...rates].sort((a, b) => a - b)[Math.floor(rates.length / 2)];
+      const filter: GameFilter = {
+        v: 1,
+        clauses: [{ kind: 'excludePlayers', scope: 'hideFromLists', who: { by: 'metric', metric: metric as MetricId, op: 'ge', value: median } }],
+      };
+      const app = applyFilter(inv, { asOf: '2026-02-28' }, filter);
+      expect(app.meta.clauses[0], metric).toMatchObject({ eligible: rated.length, selected: rates.filter((r) => r >= median).length });
+      expect([...app.hidden].sort(), metric).toEqual(rated.filter((p) => cell(p as PlayerRow)!.rate! >= median).map((p) => p.name).sort());
+      // PR 和值用同一個母體：PR ≥ 0 = 每個有值的人。
+      const byPr = applyFilter(inv, { asOf: '2026-02-28' }, {
+        v: 1, clauses: [{ kind: 'excludePlayers', scope: 'hideFromLists', who: { by: 'metric', metric: metric as MetricId, op: 'ge', pr: 0 } }],
+      });
+      expect(byPr.hidden.size, metric).toBe(rated.length);
+    }
+    // 票數門檻只能往上加
+    const strict = applyFilter(inv, { asOf: '2026-02-28' }, {
+      v: 1, clauses: [{ kind: 'excludePlayers', scope: 'hideFromLists', who: { by: 'metric', metric: 'evilTeamReject', op: 'ge', pr: 0, minGames: 1e6 } }],
+    });
+    expect(strict.hidden.size).toBe(0);
+    expect(sanitizeFilter({ v: 1, clauses: [{ kind: 'excludePlayers', scope: 'dropGames', who: { by: 'metric', metric: 'goodTeamApproveR3', op: 'lt', pr: 20 } }] }).warnings).toEqual([]);
   });
 });
 

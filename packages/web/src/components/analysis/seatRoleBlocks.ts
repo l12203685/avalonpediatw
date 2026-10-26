@@ -12,6 +12,7 @@ import {
   type OutcomeFaction,
 } from '../../services/api';
 import type { MetricBlockKey, MetricBlockValues } from './ui';
+import { filterScopedLoader } from '../../stats/filterScopedLoader';
 
 /**
  * 「位置」「角色與默契」兩個分頁的資料整理 (2026-10-14 Edward：「角色勝率那邊應該分三塊」+「用條件機率」)。
@@ -198,25 +199,10 @@ export function pairOutcomeCounts(m: ChemistryMatrix | null | undefined, ri: num
   return counts.三紅 + counts.三藍死 + counts.三藍活 === games ? counts : null;
 }
 
-// ── /players 只抓一次 ─────────────────────────────────────────────────────────
+// ── /players 每個篩選只抓一次 ─────────────────────────────────────────────────
 
-let playersCache: PlayerWithSeatStats[] | null = null;
-let playersInflight: Promise<PlayerWithSeatStats[]> | null = null;
-
-function loadPlayers(): Promise<PlayerWithSeatStats[]> {
-  if (playersCache) return Promise.resolve(playersCache);
-  if (playersInflight) return playersInflight;
-  const p = fetchAnalysisPlayers()
-    .then(({ players }) => {
-      playersCache = Array.isArray(players) ? (players as PlayerWithSeatStats[]) : [];
-      return playersCache;
-    })
-    .finally(() => {
-      if (playersInflight === p) playersInflight = null;
-    });
-  playersInflight = p;
-  return p;
-}
+const playersLoader = filterScopedLoader(() => fetchAnalysisPlayers()
+  .then(({ players }) => (Array.isArray(players) ? (players as PlayerWithSeatStats[]) : [])));
 
 export interface PlayersState {
   players: PlayerWithSeatStats[] | null;
@@ -226,13 +212,14 @@ export interface PlayersState {
 
 /** /api/analysis/players (module 級快取：玩家 × 位置、各角色勝率兩個小分頁共用一次請求)。 */
 export function useAnalysisPlayerRows(): PlayersState {
-  const [state, setState] = useState<PlayersState>(() => ({
-    players: playersCache, loading: playersCache === null, error: null,
-  }));
+  const [state, setState] = useState<PlayersState>(() => {
+    const cached = playersLoader.peek();
+    return { players: cached, loading: cached === null, error: null };
+  });
   useEffect(() => {
-    if (playersCache) return undefined;
+    if (playersLoader.peek()) return undefined;
     let cancelled = false;
-    loadPlayers()
+    playersLoader.load()
       .then(players => { if (!cancelled) setState({ players, loading: false, error: null }); })
       .catch(err => { if (!cancelled) setState({ players: null, loading: false, error: getErrorMessage(err) }); });
     return (): void => { cancelled = true; };

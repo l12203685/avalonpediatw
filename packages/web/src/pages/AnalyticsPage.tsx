@@ -18,6 +18,9 @@ import RolesTab from '../components/analysis/tabs/RolesTab';
 import PlayersTab from '../components/analysis/tabs/PlayersTab';
 import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
 import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
+import StatsFilterBar from '../components/analysis/filter/StatsFilterBar';
+import { useStatsFilter } from '../stats/statsFilter';
+import { useFilterHashSync } from '../stats/sharedFilter';
 
 /**
  * #98 (2026-04-23) IA 重整：數據排行頁拆成兩大區 —
@@ -54,6 +57,10 @@ import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLi
  * (2026-10-14 Edward：「查看完整研究」大多點不開) 掛一個 FeatureStudyReportHost：網址 #study=<id>
  *   時顯示那項特徵研究的完整研究 (各分頁卡片的連結都打開它)；從 #study= 連結直接進來時，
  *   先切到 分析 → 該研究卡片所在的分頁 (STUDY_HOME_TAB)，關掉研究後就在卡片旁邊。
+ *
+ * (2026-10-26 複合篩選畫面，Edward 2026-10-14 要求、四季 10-26 轉達) 上層 tab 下面掛 StatsFilterBar：兩個 tab
+ *   都跟著篩選 (stats/statsFilter.ts；資料請求在 services/api.ts 改用瀏覽器端引擎的結果)。分頁內容以篩選的 key
+ *   重新掛載，各元件照原本的方式再拿一次資料；網址列跟著篩選 (#stats?f=…，可直接分享)。
  */
 type TopTab = 'boards' | 'analysis';
 type AnalysisTab =
@@ -80,6 +87,8 @@ export default function AnalyticsPage(): JSX.Element {
   const { setGameState } = useGameStore();
   // openPlayerStats (排行的名字、#player= 連結) → 分析 → 玩家雷達，選好那位。
   const statsFocus = useGameStore((s) => s.statsFocus);
+  const filterKey = useStatsFilter((s) => `${s.key}|${s.nonce}`);
+  useFilterHashSync();
   const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus || studyInLocation() ? 'analysis' : 'boards'));
   const [seenFocus, setSeenFocus] = useState(statsFocus);
   if (statsFocus !== seenFocus) {
@@ -121,9 +130,11 @@ export default function AnalyticsPage(): JSX.Element {
           />
         </div>
 
+        <StatsFilterBar />
+
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
+            key={`${activeTab}|${filterKey}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -178,6 +189,7 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
   }
   const { overview } = useAnalysisOverview();
   const totalGames = overview?.totalGames;
+  const filterKey = useStatsFilter((s) => `${s.key}|${s.nonce}`);
 
   return (
     <div>
@@ -205,7 +217,7 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
       </div>
       <AnimatePresence mode="wait">
         <motion.div
-          key={tab}
+          key={`${tab}|${filterKey}`}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}

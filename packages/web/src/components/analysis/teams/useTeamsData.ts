@@ -7,6 +7,7 @@ import {
   type CaptainAnalysisData,
   type RoundsAnalysisData,
 } from '../../../services/api';
+import { filterScopedLoader, type FilterScopedLoader } from '../../../stats/filterScopedLoader';
 
 /**
  * 派隊分頁的資料 (2026-10-14 Edward：派隊「分析很好但太散」→ 依主題拆成小分頁)。
@@ -22,36 +23,10 @@ export interface TeamsResource<T> {
   notGenerated: boolean;
 }
 
-interface Loader<T> {
-  load: () => Promise<T>;
-  peek: () => T | null;
-}
+type Loader<T> = FilterScopedLoader<T>;
 
-function makeLoader<T>(fetcher: () => Promise<T>): Loader<T> {
-  let cached: T | null = null;
-  let inflight: Promise<T> | null = null;
-  return {
-    load: (): Promise<T> => {
-      if (cached) return Promise.resolve(cached);
-      if (!inflight) {
-        const p = fetcher()
-          .then(d => {
-            cached = d;
-            return d;
-          })
-          .finally(() => {
-            if (inflight === p) inflight = null;
-          });
-        inflight = p;
-      }
-      return inflight;
-    },
-    peek: (): T | null => cached,
-  };
-}
-
-const captainLoader = makeLoader(fetchAnalysisCaptain);
-const roundsLoader = makeLoader(fetchAnalysisRounds);
+const captainLoader = filterScopedLoader(fetchAnalysisCaptain);
+const roundsLoader = filterScopedLoader(fetchAnalysisRounds);
 
 function useResource<T>(loader: Loader<T>): TeamsResource<T> {
   const [state, setState] = useState<TeamsResource<T>>(() => {

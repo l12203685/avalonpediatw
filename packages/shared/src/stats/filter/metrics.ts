@@ -9,6 +9,7 @@ import { OUTCOME_BLUE_ALIVE, OUTCOME_BLUE_DEAD, type Role } from '../constants';
 import type { GamesDatasetConfig } from '../dataset';
 import { Rational } from '../fraction';
 import { daysBetween } from '../leaderboard';
+import type { VotingRate } from '../../derived/playerVoting';
 import type { PlayerRow } from '../players';
 import { pySlice, rate } from '../pyround';
 import { theoryKey, type PlayerSeat, type RoleWindows, type TheoryWindow } from '../theory';
@@ -46,6 +47,24 @@ function assassinAttempts(row: PlayerRow, ctx: MetricContext): PlayerSeat[] {
 }
 
 const atLeast = (n: number, min: number | undefined, dflt: number): boolean => n >= (min ?? dflt);
+
+/**
+ * 強硬度（players[].voting，voting_stats.py）：一格的比率；未滿 minVotes（10）票沒有值。資格 = 有值且票數
+ * 至少 minGames（這裡是票數；低於 10 票仍沒有值）。
+ */
+function votingMetric(
+  id: MetricId, label: string, labelEn: string, eligibility: string, cell: (r: PlayerRow) => VotingRate | undefined,
+): MetricDef {
+  return {
+    id, label, labelEn, needsRole: false,
+    value: (r) => cell(r)?.rate ?? null,
+    eligible: (r, _c, _role, min) => {
+      const c = cell(r);
+      return Boolean(c) && c?.rate !== null && atLeast((c as VotingRate).votes, min, 0);
+    },
+    eligibility,
+  };
+}
 
 export const METRICS: Readonly<Record<MetricId, MetricDef>> = {
   roleTheory: {
@@ -133,6 +152,18 @@ export const METRICS: Readonly<Record<MetricId, MetricDef>> = {
     eligible: (r, _c, _role, min) => Boolean(r.firstPlayed) && atLeast(r.totalGames, min, 0),
     eligibility: '有日期的局',
   },
+  r3RejectLoyal: votingMetric('r3RejectLoyal', '忠臣第 3 局後反對率', 'Loyal reject rate from round 3',
+    '當忠臣時第 3 局後至少 10 票', (r) => r.voting?.r3Reject.loyal),
+  r3RejectRed: votingMetric('r3RejectRed', '紅方第 3 局後反對率', 'Red reject rate from round 3',
+    '當紅方時第 3 局後至少 10 票', (r) => r.voting?.r3Reject.red),
+  evilTeamReject: votingMetric('evilTeamReject', '有紅方的隊反對率', 'Reject rate on teams with red',
+    '有紅方的隊至少 10 票', (r) => r.voting?.teamComposition.all.evilTeamReject),
+  goodTeamApprove: votingMetric('goodTeamApprove', '全藍的隊贊成率', 'Approve rate on all-blue teams',
+    '全藍的隊至少 10 票', (r) => r.voting?.teamComposition.all.goodTeamApprove),
+  evilTeamRejectR3: votingMetric('evilTeamRejectR3', 'R3–R5 有紅方的隊反對率', 'Reject rate on teams with red, R3–R5',
+    'R3–R5 有紅方的隊至少 10 票', (r) => r.voting?.teamComposition.r3Plus.evilTeamReject),
+  goodTeamApproveR3: votingMetric('goodTeamApproveR3', 'R3–R5 全藍的隊贊成率', 'Approve rate on all-blue teams, R3–R5',
+    'R3–R5 全藍的隊至少 10 票', (r) => r.voting?.teamComposition.r3Plus.goodTeamApprove),
 };
 
 /** 有資格者之中的百分等級（0–100，一位小數，五成雙）。`population` 含 value 本人。 */
