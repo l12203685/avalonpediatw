@@ -305,10 +305,7 @@ describe('practice mode — full games over sockets', () => {
     expect(res.ok).toBe(true);
     const roomId = res.roomId!;
     try {
-      // 90 s: since the logic-first stage-1 bots (2026-10-26) a game can pass 45 s on a 2-core CI runner while
-      // the heavier self-play / invariant files run alongside (locally ~2 s); the STUCK dump below still shows
-      // a real hang.
-      await waitFor(() => human.ended, { label: `practice game ${uid} ends`, timeoutMs: 90000 });
+      await waitFor(() => human.ended, { label: `practice game ${uid} ends`, timeoutMs: 45000 });
     } catch (err) {
       const r = human.latest;
       const ids = r ? Object.keys(r.players) : [];
@@ -414,7 +411,7 @@ describe('practice mode — full games over sockets', () => {
     sockets.push(host);
     host.emit('game:create-room', 'Host');
     await waitFor(() => vi.mocked(supabase.saveRoom).mock.calls.length > 0, { label: 'normal room persisted' });
-  }, 480000);
+  }, 240000);
 
   it('practice rooms are unlisted, unjoinable and unwatchable; trace/flags only after the end', async () => {
     await boot(sink);

@@ -219,6 +219,26 @@ describe('GameServer visibility — Edward 2026-04-26 00:22 spec', () => {
       expect(sanitized.players.p9_oberon.team).toBeNull();
     });
 
+    it('刺殺階段紅方開牌相認 (Edward 2026-10-26): at the assassination every red sees every red with its role', () => {
+      const server = makeServer();
+      const room = { ...make9pRoom(), state: 'discussion' } as Room;
+      const view = (id: string): Room => (server as unknown as {
+        sanitizeRoomForPlayer(room: Room, playerId: string, revealAll?: boolean): Room;
+      }).sanitizeRoomForPlayer(room, id);
+      for (const viewer of ['p6_assassin', 'p9_oberon', 'p8_mordred']) {
+        const v = view(viewer);
+        expect(v.players.p6_assassin.role, viewer).toBe('assassin');
+        expect(v.players.p7_morgana.role, viewer).toBe('morgana');
+        expect(v.players.p8_mordred.role, viewer).toBe('mordred');
+        expect(v.players.p9_oberon.role, viewer).toBe('oberon');
+        expect(v.players.p1_merlin.team, viewer).toBeNull(); // blues stay hidden
+      }
+      // Blues learn nothing new at the assassination.
+      const loyal = view('p3_loyal');
+      expect(loyal.players.p6_assassin.team).toBeNull();
+      expect(view('p1_merlin').players.p8_mordred.team).toBeNull();
+    });
+
     it('revealAll=true exposes full roles (game-end disclosure)', () => {
       const server = makeServer();
       const room = make9pRoom();

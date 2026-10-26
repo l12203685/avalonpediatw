@@ -554,9 +554,16 @@ export class GameServer {
 
     const myRole  = myPlayer.role;
     const myTeam  = myPlayer.team;
+    // 刺殺階段紅方開牌相認 (Edward 2026-10-26): from the assassination on, every red (Oberon included)
+    // sees every red. The server refuses an assassination on a red, so a human assassin must see them.
+    const redsRevealed = room.state === 'discussion' && myTeam === 'evil';
 
     for (const [pid, p] of Object.entries(room.players)) {
       if (pid === playerId || !p.role) continue;
+      if (redsRevealed) {
+        if (p.team === 'evil') visible.add(pid);
+        continue;
+      }
 
       if (myRole === 'merlin') {
         // Edward 2026-04-26 00:22 spec correction:「梅林知道三個紅方位置 (刺客
@@ -598,11 +605,15 @@ export class GameServer {
     const myPlayer = room.players[playerId];
     const myRole = myPlayer?.role ?? null;
     const myTeam = myPlayer?.team ?? null;
+    // 刺殺階段紅方開牌相認 (Edward 2026-10-26): reds show each other their cards — role included.
+    const redsRevealed = room.state === 'discussion' && myTeam === 'evil';
 
     for (const [pid, player] of Object.entries(room.players)) {
       if (pid === playerId || revealAll) {
         // Self always sees full role; revealAll = game-end full disclosure.
         players[pid] = player;
+      } else if (redsRevealed && player.team === 'evil') {
+        players[pid] = { ...player, vote: undefined };
       } else if (visibleIds?.has(pid)) {
         // Visible peer — apply per-viewer reveal rules. We surface enough info
         // to satisfy each role's canonical knowledge scope without leaking the
