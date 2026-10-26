@@ -99,7 +99,7 @@
 
 - 第 2 階段（紅方抹黑依三類目標、頻率拉近真人）與第 3 階段（信念引擎）：未開始。
 - 模擬瓦：題庫改每日更新時要加 30 天截止（目前題庫來自 2026-04-03 快照，全部超過 1 個月）。
-- 協作者：GPT 的 `gpt/filter-ui` 與 IG 方案尚未交付；Gemini 的三份文件只在 Edward 的 Google Drive，尚未進 repo；Gemini 的工作包 E/F/G/H 需要 CLI 環境。
+- 協作者：篩選畫面已由 Claude 直接做（10/26，見 §7.1，不再等 GPT 的 `gpt/filter-ui`）；GPT 的 IG 方案尚未交付；Gemini 的三份文件只在 Edward 的 Google Drive，尚未進 repo；Gemini 的工作包 E/F/G/H 需要 CLI 環境。
 - IG + Threads 粉專方案：研究完成，方案未交付。
 - 暫存分支 `save/r6-r9`：內容尚未全部整合，整合後刪除。
 - 「像四季那樣」由總經理直接透過瀏覽器操作 GPT／Gemini：雲端 session 沒有瀏覽器，做不到；需要 Edward 電腦上的 Claude Desktop 或 Remote Control。
@@ -153,9 +153,9 @@
 
 桌機全部通過；手機三頁稍長，未修（兩張 10 列表在手機上放不進一屏，要改版面才行，等 Edward 決定）。
 
-### 7.3 第 3 項的發現：1C 完成版與 1D 已遺失
+### 7.3 第 3 項：第 1 階段已由另一個 session 完成
 
-`save/r6-r9` 的 bundle（10/14）只有 `lane/r7-ai-1ab` @ 5029bb6 與 1C 剛開始的 `wip/r7-ai-1c` @ ffca4cf。§3.3 的 `r7/ai-base` 0f84b62、1C 完成版 0459351、1D 0821680 只在當時的雲端容器，沒有推，GitHub 上也沒有，已經不在。第 1 階段要從 1A/1B 與 1C 開頭重做 1C、1D，再做 1E/1F。教訓：未上 main 的工作也要推到暫存分支（Edward 核准過 `save/r6-r9` 這種例外）。
+本 session 一度以為 1C 完成版與 1D 已遺失（`save/r6-r9` 的 bundle 只有 1A/1B 與 1C 開頭），判斷錯誤：10/22 起的那個 session 仍在跑，10/26 已把 1A–1G 與審查修正併入 main（d37a092，見 §3.3），並把篩選畫面一起合併（5241c25）。第 3 項下一步是第 2 階段。
 
 ### 7.4 玩家回報：新人榜少了一位新玩家
 
