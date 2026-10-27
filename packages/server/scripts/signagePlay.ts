@@ -34,7 +34,7 @@ type Browser = any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const BASE = 'https://avalon.signage-cloud.org';
-const LETTERS = 'ABCDEFGHI';
+const LETTERS = 'ABCDEFGHIJ';
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function arg(name: string, dflt: string): string {
@@ -338,6 +338,7 @@ async function main(): Promise<void> {
     const started = new Set<string>();
     let ended = false;
     let lastStatus = '';
+    let endWinner: 'good' | 'evil' | null = null; let endMissions = '';
     while (!ended) {
       for (const b of bots) {
         const s = await snap(b.page);
@@ -352,6 +353,10 @@ async function main(): Promise<void> {
         if (b === bots[0] && s.status !== lastStatus) {
           log(`狀態：${s.status}（任務 ${s.missions.map((x) => (x ? '藍' : '紅')).join('')}）`); lastStatus = s.status;
           if (s.status === '遊戲結束') {
+            endMissions = s.missions.map((x) => (x ? 'S' : 'F')).join('');
+            const logs: string[] = await host.evaluate('window.app.logs.slice(0, 12).map((l) => l.msg)');
+            endWinner = logs.some((x) => /壞人獲勝/.test(x)) ? 'evil' : logs.some((x) => /好人獲勝/.test(x)) ? 'good' : null;
+            log(`結算：${logs.slice(0, 4).join(' / ')}`);
             // 對帳用：練習台自己的派票紀錄，和每個座位自己拼出來的紀錄（只寫本機紀錄檔）。
             await invoke(host, 'SyncGameStatistics', false); await sleep(1000);
             fs.appendFileSync(logFile, `  [private] platform ${JSON.stringify(await host.evaluate('window.app.game_statistics'))}\n`);
@@ -368,6 +373,12 @@ async function main(): Promise<void> {
           ended = true;
           const end: string[] = await host.evaluate('window.app.logs.slice(0, 8).map((l) => l.msg)');
           log(`第 ${g} 局結束：${end.join(' / ')}`);
+          // 計分用（本機）：勝方、我們每個座位的陣營。
+          const winner = endWinner ?? (end.some((x) => /壞人獲勝/.test(x)) ? 'evil' : end.some((x) => /好人獲勝/.test(x)) ? 'good' : 'unknown');
+          fs.appendFileSync(path.join(LOG_DIR, 'results.jsonl'), JSON.stringify({
+            at: new Date().toISOString(), winner, missions: endMissions,
+            ours: bots.map((x) => ({ label: x.label, role: x.seat.role, team: x.seat.team })), platformRobots: FILL_ROBOTS,
+          }) + '\n');
         }
       }
       await sleep(300);
