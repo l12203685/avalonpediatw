@@ -105,7 +105,7 @@ class SeatTracker {
   lakeHolders: number[] = []; myLake: PrivateLakeResult[] = [];
   declaredLakes = new Set<number>();
   plan: string[] | null = null; planKey = '';
-  private votingOpen = false; private pendingTeam: { leader: string; team: string[] } | null = null;
+  private votingOpen = false; private pendingTeam: { leader: string; team: string[]; round: number; attempt: number } | null = null;
   private lastMissionCount = 0;
   agent: HeuristicAgent;
 
@@ -130,7 +130,13 @@ class SeatTracker {
   update(s: Snap): void {
     const leaderU = s.users.find((u) => u.crown);
     const team = s.users.filter((u) => u.tick).map((u) => sid(u.set));
-    if (leaderU && team.length > 0 && /投票|任務/.test(s.status)) this.pendingTeam = { leader: sid(leaderU.set), team };
+    // 出任務時，交完牌的人兵牌會先收掉（隊伍看起來越來越小）：同一個隊長的同一次提議只會變大、不會變小。
+    if (leaderU && team.length > 0 && /投票|任務/.test(s.status)) {
+      const leader = sid(leaderU.set);
+      const p = this.pendingTeam;
+      const same = p && p.leader === leader && p.round === s.missions.length && p.attempt === this.votes.length;
+      if (!same || team.length >= p.team.length) this.pendingTeam = { leader, team, round: s.missions.length, attempt: this.votes.length };
+    }
     // 投票階段開始 → 等全部黑白球翻開（翻開後一直顯示到下一次投票），記一筆提議。
     if (s.status === '投票') this.votingOpen = true;
     const bags = s.users.map((u) => u.vote_bag);
