@@ -327,7 +327,15 @@ async function main(): Promise<void> {
         }
         if (!started.has(b.label)) continue;
         b.seat.update(s);
-        if (b === bots[0] && s.status !== lastStatus) { log(`狀態：${s.status}（任務 ${s.missions.map((x) => (x ? '藍' : '紅')).join('')}）`); lastStatus = s.status; }
+        if (b === bots[0] && s.status !== lastStatus) {
+          log(`狀態：${s.status}（任務 ${s.missions.map((x) => (x ? '藍' : '紅')).join('')}）`); lastStatus = s.status;
+          if (s.status === '遊戲結束') {
+            // 對帳用：練習台自己的派票紀錄，和每個座位自己拼出來的紀錄（只寫本機紀錄檔）。
+            await invoke(host, 'SyncGameStatistics', false); await sleep(1000);
+            fs.appendFileSync(logFile, `  [private] platform ${JSON.stringify(await host.evaluate('window.app.game_statistics'))}\n`);
+            for (const x of bots) fs.appendFileSync(logFile, `  [private] seat ${x.label} ${JSON.stringify({ votes: x.seat.votes, quests: x.seat.quests, lake: x.seat.myLake })}\n`);
+          }
+        }
         if (s.gaming) {
           try { await act(b, s, log); } catch (e) { log(`${b.label} 動作失敗：${String(e).slice(0, 200)}`); b.busyUntil = Date.now() + 2000; }
         } else if (started.size > 0 && b === bots[0]) {
