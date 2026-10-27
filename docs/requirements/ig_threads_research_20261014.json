@@ -1,0 +1,201 @@
+{
+ "summary": "Research method caveat: WebFetch and curl to developers.facebook.com / developers.meta.com were blocked in this sandbox (DNS failure and a 403 from the egress proxy under organization policy). Every fact below therefore comes from WebSearch snippets that quote the official Meta pages. Where official pages disagreed with each other, or only third-party sources had the answer, the fact is marked unverified.\n\n1. Instagram: you need a professional account (Business or Creator). With \"Instagram API with Instagram Login\" (graph.instagram.com) no Facebook Page is required. The Facebook Login path does need a linked Page.\n2. Instagram limits: the guide gives 100 API posts per rolling 24 hours, but other Meta pages say 50. Carousels count as one post. Feed images, carousels (up to 10 items) and Reels can be published. Story publishing through Instagram Login is unclear in Meta's own docs.\n3. Instagram features: there is no native API scheduling, so the app has to schedule. Comments can be read, replied to, hidden and deleted. Tokens last 60 days and can be refreshed. Standard Access is enough for your own account, so no App Review is needed. Since 2026-06-22 an is_ai_generated flag adds the \"AI info\" label.\n4. Threads: any public profile works, including ones without a linked Instagram account since 2025-09-23. Limits are 250 posts and 1,000 replies per rolling 24 hours. The API supports text (500 characters), image, video, carousels of 2 to 20 items, polls (2 to 4 options, text posts only), one topic tag, link previews (text posts only), GIFs, spoilers, ghost posts, quote posts, reply controls and approvals, hiding replies, insights and webhooks. Tokens last 60 days. Your own account and tester accounts work without App Review.\n5. Policy: realistic AI-generated video or audio must be disclosed. Meta's spam policy targets very-high-frequency or inauthentic automation and paid engagement. Instagram DMs must be sent within 24 hours, and the 7-day Human Agent tag cannot be used for automated messages. Taiwan is one of Threads' strongest markets (Mosseri, Sensor Tower 2024; Threads in the TWNIC 2024 top 6), but there is no official 2026 user count for Taiwan.",
+ "facts": [
+  {
+   "topic": "IG account requirements",
+   "claim": "Instagram API with Instagram Login (Business Login for Instagram, Instagram User token, host graph.instagram.com) works with Instagram professional accounts (Business or Creator) and does NOT require a linked Facebook Page. It cannot access ads or tagging.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/",
+   "sourceDate": "page age unknown (search metadata ~600+ days old, i.e. around early 2025)",
+   "verified": true
+  },
+  {
+   "topic": "IG account requirements",
+   "claim": "Instagram API with Facebook Login requires the professional account to be connected to a Facebook Page (Page token, graph.facebook.com). Some features exist only on this path: story_insights, the Instagram Audio API, and the reposts_count, saved_count and shares_count fields.",
+   "source": "https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-facebook-login",
+   "sourceDate": "unknown; changelog items dated 2026-04-22 and 2026-06-22",
+   "verified": true
+  },
+  {
+   "topic": "IG permissions",
+   "claim": "Scopes for the Instagram Login path are instagram_business_basic, instagram_business_content_publish, instagram_business_manage_comments and instagram_business_manage_messages. They replace the older business_* names.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/",
+   "sourceDate": "unknown (~early 2025)",
+   "verified": true
+  },
+  {
+   "topic": "IG app review for own account",
+   "claim": "Standard Access, the default, is enough when the app only serves Instagram accounts you own or manage that are added to the app in the App Dashboard. No login flow is needed, only long-lived tokens. Serving other people's accounts needs Advanced Access, which requires App Review plus Business Verification. Meta notes some features may not work fully under Standard Access.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/overview/ ; https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login",
+   "sourceDate": "unknown (search metadata ~630 days old, ~Jan 2025)",
+   "verified": true
+  },
+  {
+   "topic": "IG publishing flow",
+   "claim": "Publishing takes two steps: POST /<IG_ID>/media creates a container, then POST /<IG_ID>/media_publish publishes it. Containers expire after 24 hours, and there is a cap of 400 containers per rolling 24 hours.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/content-publishing/",
+   "sourceDate": "guide shows 'Updated: Jun 30, 2026'",
+   "verified": true
+  },
+  {
+   "topic": "IG publishing rate limit",
+   "claim": "The content publishing guide says 100 API-published posts per rolling 24 hours, with a carousel counting as 1 post, checkable via GET /<IG_ID>/content_publishing_limit. However, the content_publishing_limit and media_publish reference pages (and one third-party check of a live endpoint on 2026-09-11) give quota_total 50. Meta has not reconciled the two figures, so read the endpoint for each account instead of hardcoding a number.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/content-publishing/ ; https://social-api.ai/blog/instagram-accounts-are-limited-to-100-api-published-posts",
+   "sourceDate": "guide updated 2026-06-30; third-party check dated 2026-09-11",
+   "verified": false
+  },
+  {
+   "topic": "IG media types",
+   "claim": "The API can publish single images (JPEG), single videos as Reels (media_type=REELS) and carousels (media_type=CAROUSEL). The IG User Media reference also documents media_type=STORIES (image or video), and the Facebook Login overview says Stories are business accounts only (not Creator). Stories on the Instagram Login path are ambiguous: the publishing guide contains a line saying 'Reels and stories are not supported'. Third-party specs list carousels of 2 to 10 items, JPEG images up to 8 MB, and Reels of 3 s to 15 min up to 300 MB.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media/ ; https://www.upload-post.com/instagram-api/",
+   "sourceDate": "unknown / 2026 (third-party)",
+   "verified": false
+  },
+  {
+   "topic": "IG scheduling",
+   "claim": "No official Meta doc for IG organic publishing documents scheduled_publish_time. Meta tells apps to enforce the publishing limit themselves, 'especially if your app allows app users to schedule posts', which means scheduling is done by the app: store the post and call /media then /media_publish at the chosen time. One vendor blog claims scheduled_publish_time works; that claim is unverified.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/content-publishing/",
+   "sourceDate": "2026-06-30",
+   "verified": true
+  },
+  {
+   "topic": "IG 2026 publishing features",
+   "claim": "Changelog entries: on 2026-06-22 an is_ai_generated=true flag on the media container started applying the 'AI info' label (for carousels, set it on the parent container only). On 2026-04-22 publish-time 'Paid partnership' labels were added (is_paid_partnership, branded_content_sponsor_ids). Trial Reels are also listed (trial_params), with no date shown in the snippet.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/changelog",
+   "sourceDate": "changelog last updated 2026-06-22",
+   "verified": true
+  },
+  {
+   "topic": "IG comment moderation",
+   "claim": "The API can get, reply to, delete, hide/unhide and disable/enable comments on your own media (instagram_business_manage_comments). Replies can only go on top-level comments. You cannot reply to hidden comments or to comments on live video; for those, use a Messaging API private reply. Mentions are also supported.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/overview/ ; https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-comment/replies",
+   "sourceDate": "unknown (~early 2025)",
+   "verified": true
+  },
+  {
+   "topic": "IG insights",
+   "claim": "Media and user insights are available. Since Graph API v22.0 'views' replaced 'impressions' and 'plays', fully from 2025-04-21. Reach and total_interactions remain, and metrics are organic only. Exact availability of saved, shares and follower_demographics on the Instagram Login path was not confirmed.",
+   "source": "https://developers.facebook.com/docs/graph-api/changelog/version22.0/ ; https://developers.facebook.com/docs/instagram-platform/insights/",
+   "sourceDate": "v22.0 released Jan 2025; effective 2025-04-21",
+   "verified": true
+  },
+  {
+   "topic": "IG token lifetime",
+   "claim": "A short-lived Instagram User token lasts 1 hour. Exchanging it server-side (grant_type=ig_exchange_token, needs the app secret) gives a long-lived token valid 60 days. Refresh it with GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token once the token is at least 24 hours old and still valid; each refresh gives a new 60-day window. A token not refreshed within 60 days expires permanently.",
+   "source": "https://developers.facebook.com/docs/instagram-platform/reference/refresh_access_token/",
+   "sourceDate": "unknown (~2025)",
+   "verified": true
+  },
+  {
+   "topic": "IG messaging policy",
+   "claim": "DMs must be sent within the 24-hour standard messaging window. The HUMAN_AGENT tag extends it to 7 days but needs app review, and automated messages are an explicitly disallowed use of it.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/messenger-platform/policy ; https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/",
+   "sourceDate": "unknown",
+   "verified": true
+  },
+  {
+   "topic": "Threads account requirements",
+   "claim": "Since 2025-09-23 the Threads API works for Threads profiles without a linked Instagram account. Since 2026-01-30 those profiles also get followers_count and follower_demographics. No professional or business account type is required. Reply and mention webhooks only work for public profiles.",
+   "source": "https://developers.facebook.com/docs/threads/changelog ; https://developers.facebook.com/docs/threads/webhooks",
+   "sourceDate": "changelog latest entry 2026-08-12",
+   "verified": true
+  },
+  {
+   "topic": "Threads app review for own account",
+   "claim": "Without Advanced Access for threads_content_publish, an app can post only to the developer's own Threads account and invited tester accounts. Testers are invited in the App Dashboard and accept in Threads. App Review is needed only to act for other users. threads_basic is required for every endpoint. Webhooks need Advanced Access and a verified business, so they are not available to a pure self-use app.",
+   "source": "https://developers.facebook.com/docs/threads/create-posts ; https://developers.facebook.com/docs/threads/get-started ; https://developers.facebook.com/docs/threads/webhooks",
+   "sourceDate": "unknown (2025-2026)",
+   "verified": true
+  },
+  {
+   "topic": "Threads permissions",
+   "claim": "Permissions: threads_basic, threads_content_publish, threads_read_replies, threads_manage_replies, threads_manage_insights, threads_keyword_search (own posts only until approved), threads_manage_mentions, threads_delete, threads_location_tagging, threads_profile_discovery and threads_share_to_instagram (added 2026-03-25 for cross-sharing a post to the linked IG account as a Story).",
+   "source": "https://developers.facebook.com/documentation/threads/overview ; https://developers.facebook.com/docs/threads/changelog",
+   "sourceDate": "2026",
+   "verified": true
+  },
+  {
+   "topic": "Threads rate limits",
+   "claim": "Limits are 250 API-published posts per rolling 24 hours (a carousel counts as 1) and 1,000 replies per rolling 24 hours. Check usage with GET /{threads-user-id}/threads_publishing_limit (quota_total 250, quota_duration 86400).",
+   "source": "https://developers.facebook.com/documentation/threads/overview",
+   "sourceDate": "page ~295 days old in search metadata (~Dec 2025)",
+   "verified": true
+  },
+  {
+   "topic": "Threads post types",
+   "claim": "TEXT posts allow 500 characters, and emojis count as their UTF-8 byte length. Image: JPEG/PNG, max 8 MB, width 320 to 1440 px. Video: MOV/MP4, max 5 min, max 1 GB, 23 to 60 FPS. Carousels hold 2 to 20 images and/or videos. Create the container, wait about 30 s, then call threads_publish.",
+   "source": "https://developers.facebook.com/docs/threads/posts/",
+   "sourceDate": "page ~182 days old in search metadata (~Apr 2026)",
+   "verified": true
+  },
+  {
+   "topic": "Threads post features",
+   "claim": "poll_attachment takes 2 to 4 options of 1 to 25 characters each, on text-only posts; total_votes was added 2025-08-12. link_attachment (link preview) works on TEXT posts only. topic_tag allows one tag per post. Posts can carry at most 5 links (from 2025-12-22). quote_post_id creates quote posts. GIFs come via GIPHY (2026-02-27; Tenor ended 2026-03-31).",
+   "source": "https://developers.facebook.com/documentation/threads/create-posts/polls ; https://developers.facebook.com/docs/threads/posts/ ; https://developers.facebook.com/docs/threads/changelog",
+   "sourceDate": "2025-08 to 2026-03",
+   "verified": true
+  },
+  {
+   "topic": "Threads post features",
+   "claim": "text_attachment adds long-form formatted text of up to 10,000 characters (text-only posts, not with polls). Spoilers are set via text_entities, max 10 per post; media spoilers work on IMAGE, VIDEO and CAROUSEL. Ghost posts (text-only, auto-archive after 24 hours) are available.",
+   "source": "https://developers.facebook.com/documentation/threads/create-posts/text-attachments ; https://developers.facebook.com/blog/post/2026/04/14/whats-new-in-the-threads-api/",
+   "sourceDate": "doc pages 2026-07-02; blog 2026-04-14",
+   "verified": true
+  },
+  {
+   "topic": "Threads reply management",
+   "claim": "reply_control is set at creation to one of everyone, accounts_you_follow, mentioned_only, parent_post_author_only or followers_only. POST /{reply-id}/manage_reply with hide=true/false hides or unhides top-level replies along with their nested replies. Reply approvals (pending replies) are supported from 2026-02-13. Webhooks cover replies, mentions, publish and delete.",
+   "source": "https://developers.facebook.com/documentation/threads/reply-management ; https://developers.facebook.com/docs/threads/webhooks",
+   "sourceDate": "2026-02-13",
+   "verified": true
+  },
+  {
+   "topic": "Threads insights",
+   "claim": "Per-post metrics are views, likes, replies, reposts, quotes and shares (views and shares are flagged 'in development'). Account metrics come from /threads_insights: views, likes, etc., followers_count, and follower_demographics (needs 100 or more followers, one breakdown per call). The default range is yesterday to today. Requires threads_manage_insights.",
+   "source": "https://developers.facebook.com/docs/threads/insights/",
+   "sourceDate": "unknown (2025-2026)",
+   "verified": true
+  },
+  {
+   "topic": "Threads token lifetime",
+   "claim": "A short-lived token lasts 1 hour. Exchange it (GET graph.threads.net/access_token?grant_type=th_exchange_token) for a long-lived token valid 60 days. Refresh with GET /refresh_access_token?grant_type=th_refresh_token once the token is at least 24 hours old and still valid; each refresh gives a new 60-day window. A token not refreshed in 60 days cannot be refreshed. Since 2026-08-12 the response includes token_type.",
+   "source": "https://developers.facebook.com/docs/threads/get-started/long-lived-tokens/",
+   "sourceDate": "unknown; changelog 2026-08-12",
+   "verified": true
+  },
+  {
+   "topic": "Threads scheduling",
+   "claim": "The Threads API has no documented native scheduled-publish parameter. Scheduling is done by the app or a third-party tool calling the API at the chosen time. Whether the Threads app itself has a native scheduler is disputed among vendor blogs.",
+   "source": "https://developers.facebook.com/docs/threads/posts/ ; https://www.socialchamp.com/blog/schedule-threads-posts/",
+   "sourceDate": "2025-2026",
+   "verified": false
+  },
+  {
+   "topic": "Meta AI labeling policy",
+   "claim": "Meta applies an 'AI info' label (renamed from 'Made with AI' in July 2024) based on C2PA and other industry signals or on self-disclosure. Creators MUST disclose organic photorealistic video or realistic audio that was digitally created or altered, and penalties may apply. AI-generated static images and text are not explicitly required to be disclosed in the sources found. Meta reaffirmed this in Feb 2026.",
+   "source": "https://about.fb.com/news/2024/04/metas-approach-to-labeling-ai-generated-content-and-manipulated-media/ ; https://about.fb.com/news/2026/02/meta-prepares-for-2026-us-midterms/ ; https://transparency.meta.com/governance/tracking-impact/labeling-ai-content/",
+   "sourceDate": "2024-04 (updated 2024-07/09); 2026-02",
+   "verified": true
+  },
+  {
+   "topic": "Meta spam / automation policy",
+   "claim": "Meta's Spam Community Standard covers engagement, manual or automated, at very high frequencies, and can restrict lower-frequency accounts that show other inauthenticity signals. It bans buying or selling likes, follows and views, and bans engagement-gated giveaways and like-gating. Instagram guidelines say to avoid artificially collecting likes or followers and posting repetitive comments or content. No explicit ban on API-based posting to your own account was found.",
+   "source": "https://transparency.meta.com/policies/community-standards/spam/ ; https://help.instagram.com/263751177667145/",
+   "sourceDate": "unknown (live policy page)",
+   "verified": true
+  },
+  {
+   "topic": "Threads in Taiwan",
+   "claim": "In March 2024 Adam Mosseri said Threads was doing 'exceptionally well in Taiwan'. Sensor Tower data cited by MIT Technology Review showed Threads was the most-downloaded social app in Taiwan almost every day of early 2024. TWNIC's 2024 Taiwan Internet Report ranked Threads 6th among social platforms in Taiwan, above Dcard and Xiaohongshu.",
+   "source": "https://www.technologyreview.com/2024/04/02/1090518/threads-taiwan-election-politics-popular/ ; https://news.pts.org.tw/article/726382",
+   "sourceDate": "2024-04-02; TWNIC 2024 report",
+   "verified": true
+  },
+  {
+   "topic": "Threads in Taiwan",
+   "claim": "Two figures here come from secondary sources only. First, a Similarweb-based article says Taiwan ranks #2 worldwide in Threads web traffic and that Taiwanese users spend about 10m23s per visit. Second, academic Wang Hung-en's poll (n=1300) reports that more than half of Taiwanese use Threads. No official 2026 user count for Taiwan was found. Globally, Meta announced 500M monthly users in June 2026.",
+   "source": "https://ketagalanmedia.com/2026/03/11/the-digital-night-market-why-threads-is-so-popular-in-taiwan ; https://www.mirrormedia.mg/external/dailycolumn_82876 ; https://gigazine.net/gsc_news/en/20260617-threads-500-million-mau/",
+   "sourceDate": "2026-03-11; 2026-09-02; 2026-06-16",
+   "verified": false
+  }
+ ]
+}
