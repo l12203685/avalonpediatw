@@ -378,9 +378,10 @@ export interface AgentTuning {
    * 隊伍用「會不會過」評分（2026-10-27，練習台實戰）：派隊與投票原本看隊上的**平均**嫌疑，但一張失敗牌
    * 就讓任務失敗（7 人以上第 4 局兩張）——隊上一位 0.95 的人，其他人再乾淨，這隊也幾乎一定失敗。開：用每個人的
    * 紅方機率算「隊上紅方少於該局失敗牌數」的機率，再和同樣人數的所有隊伍比排名（排名 0–1 取代平均嫌疑）。
-   * 用排名而不是機率本身：後期幾乎每一隊都有風險，要比的是「這隊比其他可能的隊好多少」。
+   * 範圍：0 關；1 派隊與投票都用；2 只有投票；3 只有賽點（下一次任務失敗紅方就贏）的派隊與投票；4 只有賽點的投票。
+   * 第 5 次強制提議藍方一律贊成（有開就套用）。
    */
-  teamPassRank: boolean;
+  teamPassRank: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -453,7 +454,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedTier: false,
   assassinVisibleRedLikelihood: false,
   returnLake: false,
-  teamPassRank: false,
+  teamPassRank: 0,
 });
 
 /**
@@ -597,7 +598,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *   - 2026-10-26 Edward 裁定：`returnLake`（還湖）預設開；刺殺階段紅方開牌相認
  *     （`allEvilRoles`，梅林看得到的紅 = 莫德雷德以外的紅方）；第 5 次強制提議也算。
  *   - 2026-10-27 練習台實戰（派西在兩局失敗後贊成隊上有 0.95 嫌疑的人的隊、任務三張失敗）：
- *     `teamPassRank` 預設開。
+ *     `teamPassRank`（範圍見欄位說明）；預設值見 strength_benchmark.md 第 22 節。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -637,7 +638,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedTier: true,
   assassinVisibleRedLikelihood: false,
   returnLake: true,
-  teamPassRank: true,
+  teamPassRank: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -701,6 +702,12 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value)) throw new Error(`r3NormalVotePrior needs a number, got "${raw}"`);
     return { r3NormalVotePrior: value };
   }
+  if (name === 'teamPassRank') {
+    // 範圍 0–4；只寫名字 = 1（派隊與投票都用）。
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`teamPassRank needs 0–4, got "${raw}"`);
+    return { teamPassRank: value };
+  }
   const value = raw === undefined ? true : parseBool(raw);
   if (value === undefined) throw new Error(`${name} needs a boolean, got "${raw}"`);
   return { [name]: value } as Partial<AgentTuning>;
@@ -741,6 +748,7 @@ export function describeAgentTuning(t: AgentTuning): string {
   for (const key of AGENT_TUNING_KEYS) {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
+    if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
     if (t[key]) parts.push(key);
   }
   return parts.length === 0 ? 'legacy' : parts.join(',');

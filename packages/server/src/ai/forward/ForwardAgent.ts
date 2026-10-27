@@ -879,7 +879,7 @@ export class ForwardAgent implements AvalonAgent {
     // ranked against every other team, a risky forced team can score below "reject", so the rule is
     // stated outright (with the switch, so the legacy table stays bit-identical).
     if (
-      decisionType === 'team_vote' && this.baseline.tuning.teamPassRank &&
+      decisionType === 'team_vote' && this.baseline.tuning.teamPassRank > 0 &&
       obs.myTeam === 'good' && (obs.failCount ?? 0) >= 4
     ) {
       const action: AgentAction = { type: 'team_vote', vote: true };
@@ -1943,7 +1943,7 @@ export class ForwardAgent implements AvalonAgent {
     interp: InterpretationResult,
     pyramid: PyramidScores,
   ): Candidate {
-    const signals = buildTeamSignals(teamIds, obs, pyramid, this.lakeRuleCheck(obs), this.baseline.tuning.teamPassRank);
+    const signals = buildTeamSignals(teamIds, obs, pyramid, this.lakeRuleCheck(obs), passRankApplies(this.baseline.tuning.teamPassRank, obs, 'team_select'));
     return {
       action: { type: 'team_select', teamIds: [...teamIds] },
       description: `team [${teamIds.join(',')}]`,
@@ -1971,7 +1971,7 @@ export class ForwardAgent implements AvalonAgent {
     pyramid: PyramidScores,
   ): Candidate[] {
     const proposedTeam = obs.proposedTeam ?? [];
-    const signals = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs), this.baseline.tuning.teamPassRank);
+    const signals = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs), passRankApplies(this.baseline.tuning.teamPassRank, obs, 'team_vote'));
 
     return [
       {
@@ -2369,6 +2369,23 @@ function buildTeamSignals(
     merlinProbForTarget: 0,
     ...(passRank ? { passRank: teamPassRanks(obs, pyramid, knownEvilSet).rankOf(teamIds) } : {}),
   };
+}
+
+/**
+ * Whether the `teamPassRank` scope (see `AgentTuning.teamPassRank`) covers this decision: 1 every team
+ * select and vote, 2 votes only, 3 match point only (the next failed mission is red's third), 4 match-point
+ * votes only.
+ */
+export function passRankApplies(scope: number, obs: PlayerObservation, decision: 'team_select' | 'team_vote'): boolean {
+  if (scope <= 0) return false;
+  const matchPoint = (obs.questResults ?? []).filter((r) => r === 'fail').length >= 2;
+  switch (scope) {
+    case 1: return true;
+    case 2: return decision === 'team_vote';
+    case 3: return matchPoint;
+    case 4: return matchPoint && decision === 'team_vote';
+    default: return false;
+  }
 }
 
 /**

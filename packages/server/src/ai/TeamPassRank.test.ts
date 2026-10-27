@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation, VoteRecord } from './types';
 import { HeuristicAgent } from './HeuristicAgent';
-import { ForwardAgent, teamPassProb } from './forward/ForwardAgent';
+import { ForwardAgent, passRankApplies, teamPassProb } from './forward/ForwardAgent';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `S${i + 1}`);
 
@@ -44,7 +44,7 @@ const OBS: PlayerObservation = {
 
 // Production routes every R3+ decision through ForwardAgent (vitest's HeuristicAgent.act cannot lazy-load
 // it, so it is built directly, as in ForwardAgent.tuning.test.ts).
-function decide(teamPassRank: boolean): boolean {
+function decide(teamPassRank: number): boolean {
   const agent = new ForwardAgent('S6', new HeuristicAgent('S6', undefined, undefined, { teamPassRank }));
   agent.onGameStart(OBS);
   const a = agent.act(OBS);
@@ -59,11 +59,20 @@ describe('teamPassRank', () => {
     expect(teamPassProb(['A', 'B', 'C'], p, 2)).toBeGreaterThan(0.8);
   });
 
-  it('Percival rejects the match-point team holding the lake-declared red and a failed-mission seat', () => {
-    expect(decide(true)).toBe(false);
+  it('Percival rejects the match-point team holding the lake-declared red and a failed-mission seat (every scope)', () => {
+    for (const scope of [1, 2, 3, 4]) expect(decide(scope)).toBe(false);
   });
 
   it('switch off = the average-suspicion scorer of before (approved)', () => {
-    expect(decide(false)).toBe(true);
+    expect(decide(0)).toBe(true);
+  });
+
+  it('scopes: votes only, match point only', () => {
+    const early = { ...OBS, questResults: ['fail' as const] };
+    expect(passRankApplies(2, OBS, 'team_select')).toBe(false);
+    expect(passRankApplies(2, OBS, 'team_vote')).toBe(true);
+    expect(passRankApplies(3, early, 'team_vote')).toBe(false);
+    expect(passRankApplies(3, OBS, 'team_select')).toBe(true);
+    expect(passRankApplies(4, OBS, 'team_select')).toBe(false);
   });
 });
