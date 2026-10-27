@@ -4,7 +4,7 @@
  *「之後我希望你直接在這個平台上進行模擬戰」「我會用 ED 你用百科機器人 A~I 來跟我玩一場」。
  *
  *   pnpm --filter @avalon/server exec tsx scripts/signagePlay.ts \
- *     [--bots 9] [--fill-robots 0] [--games 1] [--pace 1500] [--password XXXX] [--log DIR]
+ *     [--bots 9] [--fill-robots 0] [--games 1] [--pace 300] [--password XXXX] [--log DIR]
  *
  * 每個機器人一個獨立的瀏覽器分頁（自己的登入、自己的連線），走練習台本來的介面：
  *   - A 開私房（有密碼），其他機器人從大廳用同一組密碼加入；
@@ -44,7 +44,8 @@ function arg(name: string, dflt: string): string {
 const N_BOTS = Number(arg('bots', '9'));
 const FILL_ROBOTS = Number(arg('fill-robots', '0'));
 const GAMES = Number(arg('games', '1'));
-const PACE = Number(arg('pace', '1500'));
+/** 每個動作之後等伺服器回應的時間（毫秒）。Edward 10/27：機器人動作可以瞬間完成，不用慢慢點。 */
+const PACE = Number(arg('pace', '300'));
 const PASSWORD = arg('password', `bk${Math.floor(Math.random() * 9000 + 1000)}`);
 const LOG_DIR = arg('log', '.');
 const DESC = arg('desc', '百科機器人模擬戰');
@@ -131,6 +132,7 @@ class SeatTracker {
     this.team = s.myself.is_good ? 'good' : 'evil';
     this.nightView = Object.fromEntries(s.users.filter((u) => u.set !== s.myself.set && u.role !== 'unknown').map((u) => [sid(u.set), u.role]));
     const seen = Object.keys(this.nightView);
+    this.knownEvils = []; this.knownWizards = undefined;
     if (this.role === 'percival') { this.knownWizards = seen; this.knownEvils = []; }
     else if (this.role === 'merlin' || this.team === 'evil') this.knownEvils = seen;
     this.votes = []; this.quests = []; this.lakeHolders = []; this.myLake = []; this.declaredLakes.clear();
@@ -233,15 +235,14 @@ async function act(bot: Bot, s: Snap, log: (m: string) => void): Promise<void> {
       const a = t.agent.act(t.obs(s, 'team_select'));
       t.plan = a.type === 'team_select' ? a.teamIds : null; t.planKey = key;
       log(`${bot.label} 派隊 ${t.plan?.map((x) => x.slice(1)).join(',')}`);
-      later(PACE * 2); return;
     }
+    // 一次點完：先收掉不要的兵牌，再補上要的人。
     const want = new Set(t.plan ?? []);
-    const wrong = s.users.find((u) => u.tick && !want.has(sid(u.set)));
-    const miss = s.users.find((u) => !u.tick && want.has(sid(u.set)));
-    if (wrong) { await invoke(bot.page, 'Touch', wrong.set); later(400); return; }
-    if (miss && s.free_ticks > 0) { await invoke(bot.page, 'Touch', miss.set); later(700); return; }
-    if (m.can_start_vote && s.free_ticks === 0) { await invoke(bot.page, 'StartVote'); later(); }
-    return;
+    for (const u of s.users.filter((x) => x.tick && !want.has(sid(x.set)))) await invoke(bot.page, 'Touch', u.set);
+    for (const u of s.users.filter((x) => !x.tick && want.has(sid(x.set)))) await invoke(bot.page, 'Touch', u.set);
+    const after = await snap(bot.page);
+    if (after?.myself.can_start_vote && after.free_ticks === 0) await invoke(bot.page, 'StartVote');
+    later(); return;
   }
   if (m.can_vote && m.vote_bag === null) {
     await sync();
@@ -261,7 +262,7 @@ async function act(bot: Bot, s: Snap, log: (m: string) => void): Promise<void> {
     await sync();
     const target = t.agent.pickLakeTarget(t.obs(s, 'team_select'), valid);
     log(`${bot.label} 湖 ${target.slice(1)}`);
-    await invoke(bot.page, 'Touch', Number(target.slice(1))); later(PACE * 2); return;
+    await invoke(bot.page, 'Touch', Number(target.slice(1))); later(); return;
   }
   if (m.can_select_lake_result) {
     const mine = s.lake_result.findIndex((l) => l.from === m.set && l.to !== null && l.result === null);
@@ -285,7 +286,7 @@ async function act(bot: Bot, s: Snap, log: (m: string) => void): Promise<void> {
     await sync();
     const a = t.agent.act(t.obs(s, 'assassination', { allEvilIds: Object.keys(allEvilRoles), allEvilRoles }));
     if (a.type === 'assassinate') { log(`${bot.label} 刺殺 ${a.targetId.slice(1)}`); await invoke(bot.page, 'Touch', Number(a.targetId.slice(1))); }
-    later(PACE * 3);
+    later();
   }
 }
 
