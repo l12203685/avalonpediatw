@@ -665,7 +665,7 @@
           "seatCol": "Seat",
           "red": "Sitting here as red",
           "blue": "Sitting here as blue",
-          "note": "All games, each seat counted once per game (as red or as blue that game). Without the side split every seat shows the same three-outcome split, so it is always split by side; per role see \"Seat × role\"."
+          "note": "Each seat counted once per game; without the side split every seat looks the same, so it is split by side; per role see \"Seat × role\"."
         },
         "seatRoles": {
           "allSeats": "All seats",
@@ -1051,7 +1051,6 @@
           "m1PassHint": "How often mission 1 passed (whether or not the 1-1 team went); n = this group's games"
         },
         "progression": {
-          "intro": "Each mission's pass rate, what happened after mission 1 passed or failed, and the outcome of every full mission path.",
           "roundCaption": "Pass rate per mission",
           "round": "Mission",
           "roundN": "Mission {{n}}",

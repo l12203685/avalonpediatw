@@ -50,24 +50,24 @@ export default function SeatPositionChart(): JSX.Element {
   }));
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {(['red', 'blue'] as const).map(faction => (
-          <MetricBlocks
-            key={faction}
-            rows={rowsFor(faction)}
-            caption={
-              <span className={faction === 'red' ? 'text-red-300' : 'text-blue-300'}>
-                {t(`analytics.r6.tabsb.seats.${faction}`)}
-              </span>
-            }
-            groupLabel={t('analytics.r6.tabsb.seats.seatCol')}
-            showRules={wide}
-            lowSample={minCell > 0 ? minCell : undefined}
-          />
-        ))}
-      </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500">{t('analytics.r6.tabsb.seats.note')}</p>
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      {(['red', 'blue'] as const).map(faction => (
+        <MetricBlocks
+          key={faction}
+          rows={rowsFor(faction)}
+          caption={
+            <span className={faction === 'red' ? 'text-red-300' : 'text-blue-300'}>
+              {t(`analytics.r6.tabsb.seats.${faction}`)}
+            </span>
+          }
+          groupLabel={t('analytics.r6.tabsb.seats.seatCol')}
+          showRules={wide}
+          lowSample={minCell > 0 ? minCell : undefined}
+          // 兩張表的說明合併放在藍方那張下面 (手機一屏)
+          showNote={faction === 'blue'}
+          footnote={faction === 'blue' ? t('analytics.r6.tabsb.seats.note') : undefined}
+        />
+      ))}
     </div>
   );
 }

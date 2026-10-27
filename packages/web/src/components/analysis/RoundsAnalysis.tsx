@@ -4,6 +4,7 @@ import { StatTable, type StatColumn } from './ui';
 import type { RoundsAnalysisData } from '../../services/api';
 import { useRoundsData } from './teams/useTeamsData';
 import TeamsLoadState from './teams/TeamsLoadState';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 import OutcomeBlocksTable, {
   BlockHeader, OutcomeBlocksNote, lacksOutcomes,
   type OutcomeGroupRow, type OutcomeGroupRowWithBlocks,
@@ -137,6 +138,7 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
 }
 
 function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
   const { t } = useTranslation('common');
 
   const roundRows = useMemo<RoundRow[]>(
@@ -189,7 +191,6 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-zinc-400 leading-relaxed">{t(`${PG}.intro`)}</p>
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-3">
           <StatTable
@@ -211,8 +212,9 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
           rows={pathRows}
           renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
           lowSample={lowSample}
-          // 約與左欄 (各任務成功率 + 任務 1 之後) 同高，1280×800 一屏放得下；其餘路徑在表格自己的容器裡捲
-          maxHeight={300}
+          // 約與左欄 (各任務成功率 + 任務 1 之後) 同高，1280×800 一屏放得下；手機矮一點，390×844 也一屏；
+          // 其餘路徑在表格自己的容器裡捲
+          maxHeight={wide ? 300 : 250}
         />
       </div>
       <OutcomeBlocksNote

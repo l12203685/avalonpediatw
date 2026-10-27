@@ -45,6 +45,8 @@ export interface MetricBlocksProps {
   caption?: ReactNode;
   /** 接在預設說明後面的補充。 */
   footnote?: ReactNode;
+  /** 表格下的說明 (預設 true)；同一頁有兩張表時只留一張的，手機一屏放得下。 */
+  showNote?: boolean;
   /** 第一欄的表頭 (預設「分組」)。 */
   groupLabel?: ReactNode;
   /** 表頭下的一行規則說明 (預設 true)。 */
@@ -81,6 +83,7 @@ export default function MetricBlocks({
   lowSample,
   caption,
   footnote,
+  showNote = true,
   groupLabel,
   showRules = true,
   bars = true,
@@ -134,13 +137,13 @@ export default function MetricBlocks({
       framed={framed}
       onRowClick={onRowClick}
       highlightRow={highlightRow}
-      footnote={
+      footnote={showNote ? (
         <>
           {t('analytics.ui.blocks.cellNote')}
           {lowSample !== undefined && lowSample > 0 && <> {t('analytics.ui.blocks.lowSampleNote', { min: lowSample })}</>}
           {footnote && <> {footnote}</>}
         </>
-      }
+      ) : undefined}
     />
   );
 }
