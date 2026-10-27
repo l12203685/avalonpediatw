@@ -66,20 +66,20 @@ interface Snap {
   missions: boolean[]; mission_result: boolean[]; lake_result: SLake[];
 }
 
+// 送進瀏覽器的程式一律用字串：tsx 會在函式裡插入 __name 輔助函式，瀏覽器端沒有它。
+const SNAP_JS = `(() => {
+  const a = window.app;
+  if (!a || !a.data_ready) return null;
+  const j = (v) => JSON.parse(JSON.stringify(v ?? null));
+  return { gaming: a.gaming, status: a.game_status, myself: j(a.myself), users: j(a.users), free_ticks: a.free_ticks,
+    missions: j(a.missions) ?? [], mission_result: j(a.mission_result) ?? [], lake_result: j(a.lake_result) ?? [] };
+})()`;
 async function snap(p: Page): Promise<Snap | null> {
-  return p.evaluate(() => {
-    const a = (window as unknown as { app?: Record<string, unknown> }).app;
-    if (!a || !a.data_ready) return null;
-    const j = (v: unknown) => JSON.parse(JSON.stringify(v ?? null));
-    return {
-      gaming: a.gaming, status: a.game_status, myself: j(a.myself), users: j(a.users), free_ticks: a.free_ticks,
-      missions: j(a.missions) ?? [], mission_result: j(a.mission_result) ?? [], lake_result: j(a.lake_result) ?? [],
-    } as never;
-  });
+  return p.evaluate(SNAP_JS);
 }
 const invoke = (p: Page, method: string, ...args: unknown[]) =>
-  p.evaluate(([m, a]: readonly [string, unknown[]]) => (window as unknown as { connection: { invoke: (...x: unknown[]) => Promise<unknown> } })
-    .connection.invoke(m as string, ...(a as unknown[])), [method, args] as const);
+  p.evaluate(`window.connection.invoke(${[method, ...args].map((x) => JSON.stringify(x)).join(', ')})`);
+const READY_JS = 'window.app && window.app.data_ready === true';
 
 // ── 角色字串 ────────────────────────────────────────────────────────────────────────────
 const ROLE_OF: Record<string, Role> = {
@@ -285,19 +285,19 @@ async function main(): Promise<void> {
   await host.locator('input[placeholder^="密碼"]').fill(PASSWORD);
   await host.getByRole('button', { name: /建立房間/ }).click();
   await host.waitForLoadState('networkidle');
-  await host.waitForFunction(() => (window as unknown as { app?: { data_ready?: boolean } }).app?.data_ready === true);
+  await host.waitForFunction(READY_JS);
   // 其他人從大廳找房間加入
   for (const b of bots.slice(1)) {
-    await b.page.waitForFunction((d: string) => ((window as unknown as { app: { rooms: { description_title: string }[] } }).app.rooms ?? []).some((r) => r.description_title === d), DESC, { timeout: 30000 });
-    await b.page.evaluate(([d, pw]: string[]) => {
-      const a = (window as unknown as { app: { rooms: { name: string; description_title: string }[] } }).app;
-      const room = a.rooms.find((r) => r.description_title === d)!;
-      (document.getElementById('room_name') as HTMLInputElement).value = room.name;
-      (document.getElementById('room_password') as HTMLInputElement).value = pw;
-      (document.getElementById('join_room') as HTMLFormElement).submit();
-    }, [DESC, PASSWORD]);
+    const room = `(window.app.rooms || []).find((r) => r.description_title === ${JSON.stringify(DESC)})`;
+    await b.page.waitForFunction(`!!${room}`, undefined, { timeout: 30000 });
+    await b.page.evaluate(`(() => {
+      const room = ${room};
+      document.getElementById('room_name').value = room.name;
+      document.getElementById('room_password').value = ${JSON.stringify(PASSWORD)};
+      document.getElementById('join_room').submit();
+    })()`);
     await b.page.waitForLoadState('networkidle');
-    await b.page.waitForFunction(() => (window as unknown as { app?: { data_ready?: boolean } }).app?.data_ready === true);
+    await b.page.waitForFunction(READY_JS);
   }
   for (let i = 0; i < FILL_ROBOTS; i++) { await invoke(host, 'AddRobot'); await sleep(600); }
   log(`房間「${DESC}」密碼 ${PASSWORD}；機器人 ${bots.map((b) => b.label).join('')} 已入座`);
@@ -332,7 +332,7 @@ async function main(): Promise<void> {
           try { await act(b, s, log); } catch (e) { log(`${b.label} 動作失敗：${String(e).slice(0, 200)}`); b.busyUntil = Date.now() + 2000; }
         } else if (started.size > 0 && b === bots[0]) {
           ended = true;
-          const end = await host.evaluate(() => (window as unknown as { app: { logs: { msg: string }[] } }).app.logs.slice(0, 8).map((l) => l.msg));
+          const end: string[] = await host.evaluate('window.app.logs.slice(0, 8).map((l) => l.msg)');
           log(`第 ${g} 局結束：${end.join(' / ')}`);
         }
       }
