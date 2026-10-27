@@ -584,6 +584,12 @@ export interface CandidateSignals {
   readonly numKnownEvilOnTeam: number;
   /** For assassinate: predicted P(target = merlin) from ToM. */
   readonly merlinProbForTarget: number;
+  /**
+   * `teamPassRank` on (team_select / team_vote): where this team's chance of passing — fewer reds on it
+   * than the round's fail cards — ranks among every legal team of the same size, 0 (worst) … 1 (best).
+   * The scorer reads it in place of the average suspicion. Undefined when the switch is off.
+   */
+  readonly passRank?: number;
 }
 
 // ── Reasoning trace ─────────────────────────────────────────────
@@ -866,6 +872,37 @@ export class ForwardAgent implements AvalonAgent {
           },
         };
       }
+    }
+
+    // ── forced fifth proposal (rules: a fifth rejection in one round is a red win) ──
+    // A good seat approves it. Before `teamPassRank` the average-suspicion scorer approved it in effect;
+    // ranked against every other team, a risky forced team can score below "reject", so the rule is
+    // stated outright (with the switch, so the legacy table stays bit-identical).
+    if (
+      decisionType === 'team_vote' && this.baseline.tuning.teamPassRank &&
+      obs.myTeam === 'good' && (obs.failCount ?? 0) >= 4
+    ) {
+      const action: AgentAction = { type: 'team_vote', vote: true };
+      return {
+        action,
+        reasoningTrace: {
+          decisionType,
+          purposes: zeroPurposeVector(),
+          candidatesEvaluated: 1,
+          chosen: {
+            action,
+            description: 'forced fifth proposal approve',
+            signals: {
+              avgSuspicion: 0, maxSuspicion: 0, includesKnownEvil: false,
+              includesSelf: (obs.proposedTeam ?? []).includes(obs.myPlayerId),
+              violatesLakeRules: false, numKnownEvilOnTeam: 0, merlinProbForTarget: 0,
+            },
+          },
+          chosenScore: 0,
+          usedFallback: false,
+          summary: `${decisionType} → forced fifth proposal approve (round=${obs.currentRound ?? 1})`,
+        },
+      };
     }
 
     // ── AgentTuning.percivalLoyalVote (logic-first batch 1E, S1-6, Pe1) ──
@@ -1906,7 +1943,7 @@ export class ForwardAgent implements AvalonAgent {
     interp: InterpretationResult,
     pyramid: PyramidScores,
   ): Candidate {
-    const signals = buildTeamSignals(teamIds, obs, pyramid, this.lakeRuleCheck(obs));
+    const signals = buildTeamSignals(teamIds, obs, pyramid, this.lakeRuleCheck(obs), this.baseline.tuning.teamPassRank);
     return {
       action: { type: 'team_select', teamIds: [...teamIds] },
       description: `team [${teamIds.join(',')}]`,
@@ -1934,7 +1971,7 @@ export class ForwardAgent implements AvalonAgent {
     pyramid: PyramidScores,
   ): Candidate[] {
     const proposedTeam = obs.proposedTeam ?? [];
-    const signals = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs));
+    const signals = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs), this.baseline.tuning.teamPassRank);
 
     return [
       {
@@ -2149,8 +2186,10 @@ export function computePurposeAlignment(
   const isTeamSelect = action.type === 'team_select';
 
   // Suspicion-weighted alignment helpers.
-  const lowSuspicion = 1 - 2 * s.avgSuspicion; // [1 .. -1] as suspicion 0 .. 1
-  const highSuspicion = 2 * s.avgSuspicion - 1;
+  // `teamPassRank`: one fail card sinks the mission, so a team is as good as its chance to pass, not its
+  // average suspicion — ranked against the other teams of the same size (see `teamPassRanks`).
+  const lowSuspicion = s.passRank !== undefined ? 2 * s.passRank - 1 : 1 - 2 * s.avgSuspicion; // [1 .. -1]
+  const highSuspicion = -lowSuspicion;
 
   // For team_vote: approve aligns with the team's signals; reject
   // inverts. Use a sign multiplier so reject inverts every alignment.
@@ -2280,6 +2319,7 @@ function buildTeamSignals(
   obs: PlayerObservation,
   pyramid: PyramidScores,
   lakeRules?: (team: readonly string[]) => boolean,
+  passRank = false,
 ): CandidateSignals {
   if (teamIds.length === 0) {
     return {
@@ -2327,7 +2367,61 @@ function buildTeamSignals(
     violatesLakeRules: lakeRules ? lakeRules(teamIds) : false,
     numKnownEvilOnTeam: knownEvilCount,
     merlinProbForTarget: 0,
+    ...(passRank ? { passRank: teamPassRanks(obs, pyramid, knownEvilSet).rankOf(teamIds) } : {}),
   };
+}
+
+/**
+ * P(fewer than `need` reds on `team`) with each seat red independently with `p(id)` — a red is assumed to
+ * play its fail card. Exported for tests.
+ */
+export function teamPassProb(team: readonly string[], p: (id: string) => number, need: number): number {
+  let dist = [1]; // dist[k] = P(k reds so far)
+  for (const id of team) {
+    const q = Math.min(1, Math.max(0, p(id)));
+    const next = new Array<number>(dist.length + 1).fill(0);
+    dist.forEach((v, k) => { next[k] += v * (1 - q); next[k + 1] += v * q; });
+    dist = next;
+  }
+  return dist.slice(0, need).reduce((a, b) => a + b, 0);
+}
+
+const passRankCache = new WeakMap<PlayerObservation, { pyramid: PyramidScores; rankOf: (team: readonly string[]) => number }>();
+
+/**
+ * The pass-probability rank of every legal team of the current round's size, from the viewer's red
+ * probabilities: a seat it can prove red (or sees red) = 1, itself on the good side = 0, everyone else the
+ * pyramid score. `rankOf(team)` = share of teams that pass less often (ties count half). Cached per
+ * observation: one table serves every candidate of a decision.
+ */
+function teamPassRanks(obs: PlayerObservation, pyramid: PyramidScores, knownEvil: ReadonlySet<string>) {
+  const hit = passRankCache.get(obs);
+  if (hit && hit.pyramid === pyramid) return hit;
+  const round = obs.currentRound ?? 1;
+  const size = AVALON_CONFIG[obs.playerCount]?.questTeams[round - 1] ?? 0;
+  const need = AVALON_CONFIG[obs.playerCount]?.questFailsRequired?.[round - 1] ?? 1;
+  const p = (id: string): number =>
+    knownEvil.has(id) ? 1 : id === obs.myPlayerId && obs.myTeam === 'good' ? 0 : pyramid.scores.get(id) ?? 0.5;
+  const all: number[] = [];
+  const ids = obs.allPlayerIds;
+  const pick: string[] = [];
+  const walk = (from: number): void => {
+    if (pick.length === size) { all.push(teamPassProb(pick, p, need)); return; }
+    for (let i = from; i <= ids.length - (size - pick.length); i++) { pick.push(ids[i]); walk(i + 1); pick.pop(); }
+  };
+  if (size > 0) walk(0);
+  all.sort((a, b) => a - b);
+  const rankOf = (team: readonly string[]): number => {
+    if (all.length === 0) return 0.5;
+    const x = teamPassProb(team, p, need);
+    const eps = 1e-12;
+    let below = 0; let equal = 0;
+    for (const v of all) { if (v < x - eps) below++; else if (v <= x + eps) equal++; }
+    return (below + equal / 2) / all.length;
+  };
+  const entry = { pyramid, rankOf };
+  passRankCache.set(obs, entry);
+  return entry;
 }
 
 // ── Re-exports for tests ────────────────────────────────────────

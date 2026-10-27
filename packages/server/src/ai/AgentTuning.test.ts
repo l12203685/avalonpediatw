@@ -244,14 +244,18 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier,returnLake',
+        'assassinVisibleRedTier,returnLake,teamPassRank',
     );
+    // 隊伍用「會不會過」評分 (2026-10-27): on by default, off in the legacy table.
+    expect(DEFAULT_AGENT_TUNING.teamPassRank).toBe(true);
+    expect(LEGACY_AGENT_TUNING.teamPassRank).toBe(false);
+    expect(tuningFromEnv({ AVALON_TUNING_TEAM_PASS_RANK: '0' })).toEqual({ teamPassRank: false });
     // 還湖 (Edward 2026-10-26): on by default, off in the legacy table, with its own switch.
     expect(DEFAULT_AGENT_TUNING.returnLake).toBe(true);
     expect(LEGACY_AGENT_TUNING.returnLake).toBe(false);
     expect(AGENT_TUNING_ENV.returnLake).toBe('AVALON_TUNING_RETURN_LAKE');
     expect(tuningFromEnv({ AVALON_TUNING_RETURN_LAKE: '0' })).toEqual({ returnLake: false });
-    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false };
+    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false, teamPassRank: false };
     expect(describeAgentTuning(before1G)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +

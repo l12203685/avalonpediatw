@@ -77,11 +77,15 @@ const SNAP_JS = `(() => {
   return { gaming: a.gaming, status: a.game_status, myself: j(a.myself), users: j(a.users), free_ticks: a.free_ticks,
     missions: j(a.missions) ?? [], mission_result: j(a.mission_result) ?? [], lake_result: j(a.lake_result) ?? [] };
 })()`;
+/** page.evaluate 沒有逾時；連線斷掉或伺服器沒回應時不能讓整個迴圈卡住。 */
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`逾時：${what}`)), ms))]);
+}
 async function snap(p: Page): Promise<Snap | null> {
-  return p.evaluate(SNAP_JS);
+  return withTimeout(p.evaluate(SNAP_JS), 10000, 'snap');
 }
 const invoke = (p: Page, method: string, ...args: unknown[]) =>
-  p.evaluate(`window.connection.invoke(${[method, ...args].map((x) => JSON.stringify(x)).join(', ')})`);
+  withTimeout(p.evaluate(`window.connection.invoke(${[method, ...args].map((x) => JSON.stringify(x)).join(', ')})`), 10000, method);
 const READY_JS = 'window.app && window.app.data_ready === true';
 
 interface PlatformRecord {
@@ -211,6 +215,12 @@ interface Bot { label: string; name: string; page: Page; seat: SeatTracker; busy
 async function login(browser: Browser, name: string): Promise<Page> {
   const ctx = await browser.newContext({ locale: 'zh-TW', viewport: { width: 1366, height: 900 } });
   const p = await ctx.newPage();
+  // 練習台用 alert() 提示錯誤（例：不合法的操作）；沒人按會卡住整個分頁，所以自動按掉並記下來。
+  p.on('dialog', (d: { message(): string; accept(): Promise<void> }) => {
+    console.log(`${name} 練習台提示：${d.message()}`);
+    void d.accept();
+  });
+  p.setDefaultTimeout(15000);
   await p.goto(`${BASE}/Account/Login`, { waitUntil: 'networkidle' });
   const f = p.locator('form[action="/Account/Submit"]');
   await f.locator('input[name=NickName]').fill(name);
@@ -341,7 +351,7 @@ async function main(): Promise<void> {
     let endWinner: 'good' | 'evil' | null = null; let endMissions = '';
     while (!ended) {
       for (const b of bots) {
-        const s = await snap(b.page);
+        const s = await snap(b.page).catch((e: unknown) => { log(`${b.label} 讀畫面失敗：${String(e).slice(0, 120)}`); return null; });
         if (!s) continue;
         if (s.gaming && !started.has(b.label)) {
           b.seat.start(s); started.add(b.label);

@@ -374,6 +374,13 @@ export interface AgentTuning {
    * 不還湖 = 認壞（確定性層 A2）。
    */
   returnLake: boolean;
+  /**
+   * 隊伍用「會不會過」評分（2026-10-27，練習台實戰）：派隊與投票原本看隊上的**平均**嫌疑，但一張失敗牌
+   * 就讓任務失敗（7 人以上第 4 局兩張）——隊上一位 0.95 的人，其他人再乾淨，這隊也幾乎一定失敗。開：用每個人的
+   * 紅方機率算「隊上紅方少於該局失敗牌數」的機率，再和同樣人數的所有隊伍比排名（排名 0–1 取代平均嫌疑）。
+   * 用排名而不是機率本身：後期幾乎每一隊都有風險，要比的是「這隊比其他可能的隊好多少」。
+   */
+  teamPassRank: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -410,6 +417,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'assassinVisibleRedTier',
   'assassinVisibleRedLikelihood',
   'returnLake',
+  'teamPassRank',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -445,6 +453,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedTier: false,
   assassinVisibleRedLikelihood: false,
   returnLake: false,
+  teamPassRank: false,
 });
 
 /**
@@ -587,6 +596,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
  *     見 strength_benchmark.md 第 19、20 節。
  *   - 2026-10-26 Edward 裁定：`returnLake`（還湖）預設開；刺殺階段紅方開牌相認
  *     （`allEvilRoles`，梅林看得到的紅 = 莫德雷德以外的紅方）；第 5 次強制提議也算。
+ *   - 2026-10-27 練習台實戰（派西在兩局失敗後贊成隊上有 0.95 嫌疑的人的隊、任務三張失敗）：
+ *     `teamPassRank` 預設開。
  *
  * 2026-10-13 起正式伺服器的機器人湖目標與湖宣告改由機器人自己的 agent
  * 決定（`GameServer.pickBotLakeTarget` / `decideBotLakeClaim` 呼叫
@@ -626,6 +637,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedTier: true,
   assassinVisibleRedLikelihood: false,
   returnLake: true,
+  teamPassRank: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -661,6 +673,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   assassinVisibleRedTier: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_TIER',
   assassinVisibleRedLikelihood: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD',
   returnLake: 'AVALON_TUNING_RETURN_LAKE',
+  teamPassRank: 'AVALON_TUNING_TEAM_PASS_RANK',
 });
 
 function parseBool(raw: string): boolean | undefined {

@@ -209,7 +209,9 @@ describe('TeamReuse — ForwardAgent wiring', () => {
     const off = pick(o, { teamReuse: false });
     expect(off.filter((id) => rejected.includes(id)).length).toBeLessThanOrEqual(2); // overlap ≤ 50%: no penalty
     expect(pick(o, { ...LEGACY_AGENT_TUNING })).not.toEqual([...rejected].sort());
-    expect(pick(o, { teamReuse: true })).toEqual([...rejected].sort());
+    // Isolated from `teamPassRank` (2026-10-27): ranked by pass chance, this rejected team keeps P1 of the
+    // failed R1 mission and loses to cleaner teams — the switch under test here is the reuse bonus alone.
+    expect(pick(o, { teamReuse: true, teamPassRank: false })).toEqual([...rejected].sort());
   });
 
   it('red leaders use the red weights (3× the good ones by default)', () => {
