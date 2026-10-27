@@ -245,9 +245,10 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier,returnLake',
+        'assassinVisibleRedTier,returnLake,teamPassRank=4',
     );
     // 隊伍用「會不會過」評分 (2026-10-27): on by default, off in the legacy table.
+    expect(DEFAULT_AGENT_TUNING.teamPassRank).toBe(4);
     expect(LEGACY_AGENT_TUNING.teamPassRank).toBe(0);
     expect(tuningFromEnv({ AVALON_TUNING_TEAM_PASS_RANK: '2' })).toEqual({ teamPassRank: 2 });
     expect(parseTuningFlag('teamPassRank=4')).toEqual({ teamPassRank: 4 });
