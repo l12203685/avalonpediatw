@@ -162,32 +162,39 @@ export interface VisibleRedEvidence {
   logLikelihood: number;
 }
 
-/** Leads the tier counts: every proposal from R1 on, the forced fifth included (Edward 2026-10-26). */
-function countsForTier(v: VoteRecord): boolean {
+/**
+ * Leads the tier counts: every proposal from R1 on, the forced fifth included (Edward 2026-10-26).
+ * `ignoreDoomed` (`AgentTuning.assassinIgnoreDoomed`, optimization loop round 2 candidate B — changes that
+ * ruling, so off by default): the non-forced R1–R2 proposals the normal votes always reject do not count —
+ * the counter to 派拇指躲刺.
+ */
+function countsForTier(v: VoteRecord, ignoreDoomed = false): boolean {
+  if (ignoreDoomed && v.round <= 2 && v.attempt < 5) return false;
   return v.round >= VISIBLE_RED_FIRST_ROUND;
 }
 
 /** Leads the soft factor counts: non-forced only (its rates were measured on non-forced leads). */
-function countsForLikelihood(v: VoteRecord): boolean {
-  return v.attempt < 5 && countsForTier(v);
+function countsForLikelihood(v: VoteRecord, ignoreDoomed = false): boolean {
+  return v.attempt < 5 && countsForTier(v, ignoreDoomed);
 }
 
 /** Per-candidate evidence from the assassinator's observation. */
 export function visibleRedEvidence(
   obs: PlayerObservation,
   candidates: readonly string[],
+  ignoreDoomed = false,
 ): Map<string, VisibleRedEvidence> {
   const sight = merlinSightFromAssassin(obs);
   const out = new Map<string, VisibleRedEvidence>();
   for (const id of candidates) out.set(id, { certainRounds: [], ambiguousRounds: [], tier: 0, logLikelihood: 0 });
   for (const v of obs.voteHistory) {
     const e = out.get(v.leader);
-    if (!e || !countsForTier(v)) continue;
+    if (!e || !countsForTier(v, ignoreDoomed)) continue;
     const k = classifyTeamForAssassin(v.team, sight);
     if (k === 'certain') {
       e.certainRounds.push(v.round);
       e.tier = 1;
-    } else if (k === 'ambiguous' && countsForLikelihood(v)) {
+    } else if (k === 'ambiguous' && countsForLikelihood(v, ignoreDoomed)) {
       e.ambiguousRounds.push(v.round);
       // One of k seen teammates, exactly one of whom is Mordred: seen with (k − 1) / k.
       const pSeen = (sight.ambiguous.length - 1) / sight.ambiguous.length;
@@ -201,6 +208,8 @@ export interface VisibleRedOptions {
   tier: boolean;
   /** Add `logLikelihood` to the scores (a log-probability scale: the model path only). */
   likelihood: boolean;
+  /** `countsForTier`'s `ignoreDoomed`. */
+  ignoreDoomed?: boolean;
 }
 
 /**
@@ -228,7 +237,7 @@ export function pickWithVisibleRed(
   opts: VisibleRedOptions,
 ): string {
   if (candidates.length === 0) throw new Error('pickWithVisibleRed: no candidates');
-  const evidence = visibleRedEvidence(obs, candidates);
+  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false);
   const pool = opts.tier ? tierCandidates(candidates, evidence) : [...candidates];
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const score = (id: string): number =>

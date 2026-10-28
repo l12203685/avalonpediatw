@@ -405,6 +405,12 @@ export interface AgentTuning {
    * （`belief/BayesBelief.ts`、`likelihoods.json`）。開了就蓋過 `worldShareBelief`。紅方不變。
    */
   bayesBelief: boolean;
+  /** 刺客的「派過可見紅」不算第 1、2 局注定被否決的提議（反制派拇指躲刺；改 Edward 10/26 裁定，預設關）。 */
+  assassinIgnoreDoomed: boolean;
+  /** 第 1、2 局沒有其他可見隊友時，紅方出成功藏身的機率（0 = 關；`RedRound2.ts`）。 */
+  redHideEarly: number;
+  /** 第 3 局起紅方不在隊上、隊上沒有可見紅時贊成的機率（0 = 關；`RedRound2.ts`）。 */
+  redCleanApprove: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -446,6 +452,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodLeaderWorldPick',
   'worldShareBelief',
   'bayesBelief',
+  'assassinIgnoreDoomed',
+  'redHideEarly',
+  'redCleanApprove',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -486,6 +495,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLeaderWorldPick: 0,
   worldShareBelief: false,
   bayesBelief: false,
+  assassinIgnoreDoomed: false,
+  redHideEarly: 0,
+  redCleanApprove: 0,
 });
 
 /**
@@ -674,6 +686,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLeaderWorldPick: 0,
   worldShareBelief: false,
   bayesBelief: true,
+  assassinIgnoreDoomed: false,
+  redHideEarly: 0,
+  redCleanApprove: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -714,6 +729,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodLeaderWorldPick: 'AVALON_TUNING_GOOD_LEADER_WORLD_PICK',
   worldShareBelief: 'AVALON_TUNING_WORLD_SHARE_BELIEF',
   bayesBelief: 'AVALON_TUNING_BAYES_BELIEF',
+  assassinIgnoreDoomed: 'AVALON_TUNING_ASSASSIN_IGNORE_DOOMED',
+  redHideEarly: 'AVALON_TUNING_RED_HIDE_EARLY',
+  redCleanApprove: 'AVALON_TUNING_RED_CLEAN_APPROVE',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -740,6 +758,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 0.6 : Number.parseFloat(raw);
     if (!Number.isFinite(value)) throw new Error(`r3NormalVotePrior needs a number, got "${raw}"`);
     return { r3NormalVotePrior: value };
+  }
+  if (name === 'redHideEarly' || name === 'redCleanApprove') {
+    const value = raw === undefined ? 0.3 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs a probability, got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
   }
   if (name === 'goodLeaderWorldPick') {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
@@ -793,6 +816,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
     if (t[key]) parts.push(key);
   }

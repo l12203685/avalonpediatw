@@ -55,7 +55,7 @@ describe('AgentTuning — flags', () => {
     expect(LEGACY_AGENT_TUNING.r3NormalVotePrior).toBe(0);
     expect(LEGACY_AGENT_TUNING.teamPassRank).toBe(0);
     for (const key of AGENT_TUNING_KEYS) {
-      if (key !== 'r3NormalVotePrior' && key !== 'teamPassRank' && key !== 'goodLeaderWorldPick') expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      if (!['r3NormalVotePrior', 'teamPassRank', 'goodLeaderWorldPick', 'redHideEarly', 'redCleanApprove'].includes(key)) expect(LEGACY_AGENT_TUNING[key]).toBe(false);
     }
     expect(describeAgentTuning(LEGACY_AGENT_TUNING)).toBe('legacy');
   });

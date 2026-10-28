@@ -52,6 +52,7 @@
  */
 
 import { merlinDoomedRedCover } from '../MerlinCover';
+import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -706,11 +707,38 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
+    if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
+      const hide = redHideEarlyCard(this.baseline.tuning, obs);
+      if (hide) return this.ruleDecision(obs, { type: 'quest_vote', vote: hide }, 'red hide early (A1)');
+    }
+    if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
+      const yes = redCleanApproveVote(this.baseline.tuning, obs);
+      if (yes) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red clean approve (A2)');
+    }
     const d = this.decideCore(obs);
     // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
     const covered = merlinDoomedRedCover(this.baseline.tuning, obs, d.action);
     if (covered === d.action) return d;
     return { ...d, action: covered, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin doomed-red cover` } };
+  }
+
+  private ruleDecision(obs: PlayerObservation, action: AgentAction, description: string): ForwardDecision {
+    return {
+      action,
+      reasoningTrace: {
+        decisionType: obs.gamePhase as DecisionType,
+        purposes: zeroPurposeVector(),
+        candidatesEvaluated: 1,
+        chosen: {
+          action, description,
+          signals: { avgSuspicion: 0, maxSuspicion: 0, includesKnownEvil: false, includesSelf: false, violatesLakeRules: false, numKnownEvilOnTeam: 0, merlinProbForTarget: 0 },
+        },
+        chosenScore: 0,
+        usedFallback: false,
+        summary: `${obs.gamePhase} → ${description}`,
+      },
+    };
   }
 
   private decideCore(obs: PlayerObservation): ForwardDecision {

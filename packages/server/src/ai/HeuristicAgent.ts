@@ -2641,8 +2641,9 @@ export class HeuristicAgent implements AvalonAgent {
     const visibleRed = {
       tier: this.tuning.assassinVisibleRedTier,
       likelihood: this.tuning.assassinVisibleRedLikelihood,
+      ignoreDoomed: this.tuning.assassinIgnoreDoomed,
     };
-    const goodPlayers = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood)) : allGood;
+    const goodPlayers = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed)) : allGood;
 
     // AgentTuning.assassinModel (2026-10-12): conditional-logit model
     // trained on the logged games (`assassin/AssassinModel.ts`), using
