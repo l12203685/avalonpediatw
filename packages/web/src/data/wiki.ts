@@ -18,7 +18,15 @@ export interface WikiArticle {
   tags: string[];
   author: string;
   updatedAt: Date;
-  views: number;
+  /** Absent means 完成. 待完成 = a stub / half-written article, listed apart (Edward 2026-10-28). */
+  status?: WikiStatus;
+}
+
+export const WIKI_STATUSES = ['完成', '待完成'] as const;
+export type WikiStatus = (typeof WIKI_STATUSES)[number];
+
+export function isWikiPending(article: { status?: string }): boolean {
+  return article.status === '待完成';
 }
 
 // Avalon Game Rules & Strategy Wiki
@@ -58,6 +66,18 @@ export const WIKI_CATEGORIES: WikiCategory[] = [
     name: '常見問題',
     icon: '❓',
     description: '獲得常見問題的答案',
+  },
+  {
+    id: 'replays',
+    name: '覆盤',
+    icon: '🔁',
+    description: '實戰與模擬牌局的派票覆盤',
+  },
+  {
+    id: 'events',
+    name: '賽事與戰績',
+    icon: '🏆',
+    description: '線上實戰比賽、戰績報表與數據統計',
   },
 ];
 
@@ -108,7 +128,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['基礎', '規則', '陣營'],
     author: 'Ed',
     updatedAt: new Date('2023-06-11'),
-    views: 2841,
   },
   {
     id: 'rules-flow',
@@ -172,7 +191,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['規則', '流程', '湖中女神'],
     author: 'Ed',
     updatedAt: new Date('2023-06-11'),
-    views: 1924,
   },
   {
     id: 'rules-voting',
@@ -229,7 +247,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['投票', '黑白球', '異常票'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-13'),
-    views: 1456,
   },
 
   // ==================== 角色指南 ====================
@@ -297,7 +314,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '好陣營', '梅林', '派票'],
     author: 'Hao',
     updatedAt: new Date('2023-06-07'),
-    views: 3241,
   },
   {
     id: 'roles-percival',
@@ -362,7 +378,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '好陣營', '派西維爾'],
     author: '皓子, Dean',
     updatedAt: new Date('2023-06-13'),
-    views: 2156,
   },
   {
     id: 'roles-loyal',
@@ -422,7 +437,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '好陣營', '忠臣', '雜魚'],
     author: '皓子',
     updatedAt: new Date('2023-05-24'),
-    views: 1987,
   },
   {
     id: 'roles-assassin',
@@ -471,7 +485,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '壞陣營', '刺客', '刺殺'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 2876,
   },
   {
     id: 'roles-morgana',
@@ -524,7 +537,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '壞陣營', '莫甘娜'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 1654,
   },
   {
     id: 'roles-mordred',
@@ -573,7 +585,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '壞陣營', '莫德雷德'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 1432,
   },
   {
     id: 'roles-oberon',
@@ -639,7 +650,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['角色', '壞陣營', '奧伯倫'],
     author: '皓子',
     updatedAt: new Date('2023-07-05'),
-    views: 1876,
   },
 
   // ==================== 戰術分析 ====================
@@ -704,7 +714,6 @@ export const WIKI_ARTICLES: WikiArticle[] = [
     tags: ['戰術', '紅方', '位階法'],
     author: 'Ed',
     updatedAt: new Date('2023-06-26'),
-    views: 2134,
   },
   {
     id: 'strategies-zone-voting',
@@ -780,7 +789,6 @@ oox
     tags: ['戰術', '派票', '區間'],
     author: 'Ed',
     updatedAt: new Date('2023-06-13'),
-    views: 2456,
   },
   {
     id: 'strategies-info-priority',
@@ -831,7 +839,6 @@ oox
     tags: ['戰術', '資訊', '新手'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 1734,
   },
   {
     id: 'strategies-assassination',
@@ -890,14 +897,14 @@ oox
     tags: ['戰術', '刺殺', '梅林識別'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 2234,
   },
 
   // ==================== 角色數據策略 ====================
   {
     id: 'strategy-merlin-data',
     title: '梅林數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：梅林勝率 62.3%，座位 5 最強（75.2%），三藍死率 28.8%。如何在高勝率下保命？',
     content: `# 梅林數據解析（2146 局實戰）
 
@@ -954,12 +961,12 @@ oox
     tags: ['數據分析', '梅林', '座位勝率', '策略'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
   {
     id: 'strategy-percival-data',
     title: '派西維爾數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：派西勝率 59.4%，座位 0 最佳（63.8%），高達 73.5% 的局是藍方勝。辨別真假梅林的關鍵策略。',
     content: `# 派西維爾數據解析（2146 局實戰）
 
@@ -1018,12 +1025,12 @@ oox
     tags: ['數據分析', '派西維爾', '座位勝率', '梅林辨別'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
   {
     id: 'strategy-loyal-data',
     title: '忠臣數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：忠臣出場 3475 次（每局 1.62 名），勝率 55.7%。座位分布均勻，如何從數據看出「雜魚的關鍵作用」？',
     content: `# 忠臣數據解析（2146 局實戰）
 
@@ -1082,12 +1089,12 @@ oox
     tags: ['數據分析', '忠臣', '座位勝率', '雜魚策略'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
   {
     id: 'strategy-mordred-data',
     title: '莫德雷德數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：莫德勝率 48.4%（紅方最低），但座位 5 達 54.2%。梅林看不到你，如何最大化這個優勢？',
     content: `# 莫德雷德數據解析（2146 局實戰）
 
@@ -1150,12 +1157,12 @@ oox
     tags: ['數據分析', '莫德雷德', '座位勝率', '紅方策略'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
   {
     id: 'strategy-morgana-data',
     title: '莫甘娜數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：莫甘娜勝率 49.2%，座位 5 最強（53.4%）。假梅林的演技怎麼拿捏？',
     content: `# 莫甘娜數據解析（2146 局實戰）
 
@@ -1222,12 +1229,12 @@ oox
     tags: ['數據分析', '莫甘娜', '座位勝率', '假梅林策略'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
   {
     id: 'strategy-assassin-data',
     title: '刺客數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：刺客勝率 52.2%（紅方最高），座位 5 達 60.4%。三藍局刺中率如何計算？刺殺梅林的數據線索。',
     content: `# 刺客數據解析（2146 局實戰）
 
@@ -1301,12 +1308,12 @@ oox
     tags: ['數據分析', '刺客', '座位勝率', '刺殺策略'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
   {
     id: 'strategy-oberon-data',
     title: '奧伯倫數據解析 — 2146 局實戰分析',
-    category: 'strategies',
+    category: 'events',
+    status: '待完成',
     excerpt: '基於 2146 局數據：奧伯倫勝率 47.2%（紅方最低），座位 1 僅 39.8%。孤狼角色的最佳打法是什麼？',
     content: `# 奧伯倫數據解析（2146 局實戰）
 
@@ -1377,7 +1384,6 @@ oox
     tags: ['數據分析', '奧伯倫', '座位勝率', '孤狼策略'],
     author: 'Data Analysis',
     updatedAt: new Date('2026-04-17'),
-    views: 0,
   },
 
   // ==================== 新手入門 ====================
@@ -1431,7 +1437,6 @@ oox
     tags: ['新手', '入門', '基礎'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 4521,
   },
   {
     id: 'beginner-mistakes',
@@ -1514,7 +1519,6 @@ oox
     tags: ['新手', '常見錯誤', '入門'],
     author: 'Ed',
     updatedAt: new Date('2023-06-02'),
-    views: 3456,
   },
 
   // ==================== 名詞解釋 ====================
@@ -1598,7 +1602,6 @@ oox
     tags: ['名詞', '術語', '派票'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 2789,
   },
   {
     id: 'glossary-lake',
@@ -1659,7 +1662,6 @@ oox
     tags: ['名詞', '湖中女神', '術語'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 1892,
   },
   {
     id: 'glossary-combat',
@@ -1713,7 +1715,6 @@ oox
     tags: ['名詞', '術語', '攻防'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 1567,
   },
 
   // ==================== 常見問題 ====================
@@ -1759,6 +1760,5 @@ A: 通常 20-30 分鐘，熟練玩家可以更快，新手可能需要 45 分鐘
     tags: ['FAQ', '新手', '基礎'],
     author: 'Avalon Wiki',
     updatedAt: new Date('2023-06-11'),
-    views: 4214,
   },
 ];

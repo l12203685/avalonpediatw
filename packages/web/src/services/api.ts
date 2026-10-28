@@ -1437,6 +1437,8 @@ export interface WikiArticleApi {
   excerpt: string;
   tags: string[];
   source: string;
+  /** Absent means 完成; '待完成' marks a stub / half-written article. */
+  status?: string;
 }
 
 export async function fetchWikiArticles(): Promise<{ articles: WikiArticleApi[]; total: number }> {

@@ -29,6 +29,23 @@
     "personalStats": "個人戰績",
     "admin": "管理"
   },
+  "wiki": {
+    "all": "全部",
+    "pendingToggle": "待完成（{{count}}）",
+    "pendingHint": "還沒寫完的文章，歡迎補寫",
+    "pendingBadge": "待完成",
+    "pendingBanner": "這篇還沒寫完，歡迎補寫",
+    "category": {
+      "rules": "遊戲規則",
+      "roles": "角色指南",
+      "strategies": "戰術分析",
+      "beginner": "新手入門",
+      "glossary": "名詞解釋",
+      "faq": "常見問題",
+      "replays": "覆盤",
+      "events": "賽事與戰績"
+    }
+  },
   "gate": {
     "modalTitle": "登入以繼續",
     "modalHint": "這個功能需要登入帳號，綁定後戰績自動保存",

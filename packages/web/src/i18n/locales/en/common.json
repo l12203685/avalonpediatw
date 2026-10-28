@@ -29,6 +29,23 @@
     "personalStats": "Personal Stats",
     "admin": "Admin"
   },
+  "wiki": {
+    "all": "All",
+    "pendingToggle": "Unfinished ({{count}})",
+    "pendingHint": "Drafts that still need writing. Help welcome",
+    "pendingBadge": "Unfinished",
+    "pendingBanner": "This article isn't finished yet. Feel free to help write it",
+    "category": {
+      "rules": "Rules",
+      "roles": "Roles",
+      "strategies": "Strategy",
+      "beginner": "Beginner",
+      "glossary": "Glossary",
+      "faq": "FAQ",
+      "replays": "Replays",
+      "events": "Events & Records"
+    }
+  },
   "gate": {
     "modalTitle": "Sign in to continue",
     "modalHint": "This feature needs a signed-in account — bind now so your stats carry over",
