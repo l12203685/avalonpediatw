@@ -1574,6 +1574,72 @@
         "excess": "Excess",
         "lastPlayed": "Last game"
       }
+    },
+    "r7": {
+      "verdict": {
+        "clear": "The gap is real",
+        "luck": "The gap could be luck",
+        "open": " (",
+        "close": ")"
+      },
+      "mix": {
+        "viewBars": "Bars",
+        "nLabel": "How many players",
+        "top": "Top {{count}}",
+        "all": "All",
+        "overall": "All players",
+        "overallSub": "every player-game once",
+        "allGames": "All {{value}} games:",
+        "legendWon": "solid = won",
+        "legendLost": "striped = lost",
+        "legendSide": "always from the player's own side",
+        "colPlayer": "Player",
+        "colMix": "Game result",
+        "colMission": "Missions",
+        "colAssassination": "Assassin.",
+        "colFinal": "Final",
+        "unitGames": "games",
+        "unitThreeBlue": "three-success games",
+        "side": {
+          "threeRed": {
+            "won": "on Red",
+            "lost": "on Blue"
+          },
+          "threeBlueDead": {
+            "won": "on Red, Merlin hit",
+            "lost": "on Blue, Merlin hit"
+          },
+          "threeBlueAlive": {
+            "won": "on Blue, Merlin survived",
+            "lost": "on Red, missed"
+          }
+        },
+        "tipWon": "{{name}} · {{outcome}} · won ({{side}}): {{games}} games, {{pct}} of their games",
+        "tipLost": "{{name}} · {{outcome}} · lost ({{side}}): {{games}} games, {{pct}} of their games",
+        "tipWin": {
+          "mission": "{{name}} · missions won: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "assassination": "{{name}} · assassination won: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "final": "{{name}} · final won: {{win}} / {{n}} {{unit}} ({{pct}})"
+        },
+        "tipLose": {
+          "mission": "{{name}} · missions lost: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "assassination": "{{name}} · assassination lost: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "final": "{{name}} · final lost: {{win}} / {{n}} {{unit}} ({{pct}})"
+        },
+        "note": "Sorted by games. In each game-result part solid = the player won, striped = lost; the solid parts add up to the final win rate. Missions / assassination / final = share their side won; assassination counts three-success games only. Hover (or tap) a segment for counts; tap a column name for its definition.",
+        "tableNote": "Outcome columns = share of the player's games (hidden on phones); missions, assassination, final = share their side won, assassination n = three-success games. All players = every player-game once."
+      },
+      "seatKill": {
+        "merlinLead": "Merlin's seat: ",
+        "merlinRest": ". Seat {{hiSeat}} is hit most often ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}})",
+        "assassinLead": "Assassin's seat: ",
+        "assassinRest": ". Seat {{hiSeat}} hits most ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}}).",
+        "groups": "; Merlin in seats 1–5 is hit {{front}} (n={{frontN}}), in seats 6–10 {{back}} (n={{backN}}).",
+        "front": "Seats 1–5",
+        "back": "Seats 6–10",
+        "rateLabel": "Hit rate",
+        "note": "Hit rate = Merlin hit ÷ three-success games; n = three-success games with that role in that seat; the white line = the hit rate over all three-success games. \"Real / could be luck\" comes from a chi-square test over the hit / miss counts of all 10 seats."
+      }
     }
   },
   "guest": {
@@ -1689,6 +1755,72 @@
       "def": "Final win rate in your best role.",
       "calc": "The highest final win rate among roles with at least 3 games.",
       "meaning": "How strong your best role is."
+    },
+    "outcomeMix": {
+      "name": "Game result (share within share)",
+      "def": "How their games split into three fails / three successes + Merlin hit / three successes + Merlin alive; each part is split again into won (solid) and lost (striped).",
+      "calc": "Three fails = on Red (won) + on Blue (lost); Merlin hit = on Red (won) + on Blue (lost); Merlin alive = on Blue (won) + on Red (lost). Each ÷ their games.",
+      "meaning": "The solid parts add up to the final win rate. More stripes in a part = they often lose that kind of ending."
+    },
+    "chiSquare": {
+      "name": "p-value (is the gap luck?)",
+      "def": "If the grouping (say, the seat) had no effect at all, the chance that luck alone would produce a gap this large.",
+      "calc": "Chi-square test: work out how many games each cell should have if the grouping did not matter, add up how far the real counts are from that (χ²), and turn it into a probability p.",
+      "meaning": "p below 0.05: luck rarely makes a gap this big, so the gap is real. p above 0.05: the gap could be luck. p says whether a gap is real, not why."
+    },
+    "threeRedRate": {
+      "name": "Three-fail rate",
+      "def": "Share of these games Red won on missions (three failed missions).",
+      "calc": "Three-fail games ÷ games in the group.",
+      "meaning": "Higher = Blue struggles to pass missions in this situation. Blue's mission win rate = 100% − this."
+    },
+    "killRate": {
+      "name": "Hit rate",
+      "def": "After three successful missions, the share where the assassin hit Merlin.",
+      "calc": "Merlin hit ÷ (Merlin hit + Merlin alive). Three-success games only, n = those games; three-fail games have no assassination.",
+      "meaning": "Higher = Merlin is easier to spot in this situation. Merlin survival = 100% − hit rate."
+    },
+    "redGameWinRate": {
+      "name": "Red win rate (whole game)",
+      "def": "Share of these games Red won in the end: three fails, or three successes and Merlin hit.",
+      "calc": "(Three fails + Merlin hit) ÷ games in the group.",
+      "meaning": "Blue win rate = 100% − this = Merlin alive ÷ games."
+    },
+    "missionSuccessRate": {
+      "name": "Mission success rate",
+      "def": "Of the games that reached this mission, the share where it succeeded (Blue).",
+      "calc": "Games where this mission succeeded ÷ games that reached it. Success follows the rules: with 7+ players mission 4 needs two fail cards to fail.",
+      "meaning": "Lower = Red breaks this mission more often."
+    },
+    "failCards": {
+      "name": "Fail cards",
+      "def": "How many fail cards came out on this mission.",
+      "calc": "Games with 0 / 1 / 2+ fail cards ÷ games that reached the mission.",
+      "meaning": "2+ = at least two Red players on the team both failed it. On mission 4 (7+ players) a single fail card still lets it succeed."
+    },
+    "captainFaction": {
+      "name": "Leader's side",
+      "def": "For the team that actually went on each mission, whether its leader was Red or Blue.",
+      "calc": "Games with a Red (or Blue) leader ÷ games that reached the mission.",
+      "meaning": "Red leaders tend to put Red players on the team, so their missions fail more often."
+    },
+    "firstProposal": {
+      "name": "1-1",
+      "def": "The first team proposal for the first mission.",
+      "calc": "Whether Merlin / Percival was on that team and how many Red players it had, then how those games ended — whether or not the 1-1 team actually went.",
+      "meaning": "At 1-1 nobody has information yet, so this shows whether the team make-up is linked to the result."
+    },
+    "missionPath": {
+      "name": "Mission path",
+      "def": "The order in which missions succeeded or failed, e.g. fail-fail-pass-pass-pass.",
+      "calc": "Each game's real mission results in order; games with the same path are counted together.",
+      "meaning": "The path decides three fails or three successes; for three successes look at the assassination."
+    },
+    "lakeCombo": {
+      "name": "Holder → target",
+      "def": "For this Lady of the Lake: which side held the Lake and which side they checked.",
+      "calc": "Four groups by the two players' real sides; missions, assassination and whole-game results for each.",
+      "meaning": "Shows how who holds and who gets checked relates to the result — a link, not proof the Lake helps either side."
     }
   }
 }
