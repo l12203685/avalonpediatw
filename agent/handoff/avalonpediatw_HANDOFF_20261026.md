@@ -180,3 +180,12 @@ Edward 10/26 裁定：是同一人；新人榜改成「以初次超過門檻場�
   筆記裡兩個玩家的名字改成玩家甲、玩家乙，研究腳本路徑拿掉；IG／Threads 研究 → `docs/requirements/ig_threads_research_20261014.json`。
 - 模擬瓦（r8）與篩選引擎（r9）的設計已有 `docs/SIMULATION.md`、`docs/stats/filter_engine.md`，原筆記不另存。
 - Edward 10/27「可刪」→ 刪除 GitHub 上的 `save/r6-r9`。
+
+### 7.6 練習台模擬戰與機器人修正（10/27–28）
+
+- Edward 10/27：「加權限」→ `.claude/settings.json` 允許規則；刪遠端分支仍被 GitHub 那層擋（403），請 Edward 自己刪（他當時沒登入 GitHub）。
+- 練習台（avalon.signage-cloud.org，只要暱稱、沒有密碼）：`packages/server/scripts/signagePlay.ts`，百科機器人 A–J 各一個分頁，每個座位只讀自己的畫面與公開「派票紀錄」，用正式的 HeuristicAgent 下棋；動作瞬間完成（Edward：不用慢慢點）。私房、有密碼。對帳：每個座位的紀錄和練習台自己的紀錄逐筆一致。
+- Edward 10/27：「不一定要用這個平台進行優化，你可以自己每一輪私下跑 15–30 萬局，平台只是未來要跟真人對戰時會用」；目標 = 期望勝率 Σ 抽角機率 × 抽位置機率 × 勝率 → `scripts/seatEV.ts`（單一座位，strength_benchmark.md 第 22 節）。
+- 修正：(1) 確定性層分段退回（logic_first.md 第 10A 節）；(2) teamPassRank 範圍開關，預設關（第 22 節）。
+- 下一步：藍方的派隊與投票（全機器人局藍方各角色勝率約 13%），用單一座位期望勝率 15–30 萬局評估；照順序 邏輯 > 像真人 > 強度。
+

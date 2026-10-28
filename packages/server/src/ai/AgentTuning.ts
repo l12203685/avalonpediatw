@@ -638,7 +638,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedTier: true,
   assassinVisibleRedLikelihood: false,
   returnLake: true,
-  teamPassRank: 4,
+  teamPassRank: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
