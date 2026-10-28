@@ -411,6 +411,12 @@ export interface AgentTuning {
   redHideEarly: number;
   /** 第 3 局起紅方不在隊上、隊上沒有可見紅時贊成的機率（0 = 關；`RedRound2.ts`）。 */
   redCleanApprove: number;
+  /** 派西的貝氏信念用梅林／莫甘娜各自的真人動作表讀兩根拇指（第 3 回合，`BayesBelief.thumbRoles`）。 */
+  bayesThumbRoles: boolean;
+  /**
+   * 派拇指躲刺的比例（第 3 回合）：梅林在注定被否決的提議裡，只在這個比例的情況躲刺（依局面雜湊決定，1 = 每次）。
+   */
+  merlinCoverRate: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -455,6 +461,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'assassinIgnoreDoomed',
   'redHideEarly',
   'redCleanApprove',
+  'bayesThumbRoles',
+  'merlinCoverRate',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -498,6 +506,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinIgnoreDoomed: false,
   redHideEarly: 0,
   redCleanApprove: 0,
+  bayesThumbRoles: false,
+  merlinCoverRate: 1,
 });
 
 /**
@@ -689,6 +699,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinIgnoreDoomed: true,
   redHideEarly: 0,
   redCleanApprove: 0,
+  bayesThumbRoles: false,
+  merlinCoverRate: 1,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -732,6 +744,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   assassinIgnoreDoomed: 'AVALON_TUNING_ASSASSIN_IGNORE_DOOMED',
   redHideEarly: 'AVALON_TUNING_RED_HIDE_EARLY',
   redCleanApprove: 'AVALON_TUNING_RED_CLEAN_APPROVE',
+  bayesThumbRoles: 'AVALON_TUNING_BAYES_THUMB_ROLES',
+  merlinCoverRate: 'AVALON_TUNING_MERLIN_COVER_RATE',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -759,7 +773,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value)) throw new Error(`r3NormalVotePrior needs a number, got "${raw}"`);
     return { r3NormalVotePrior: value };
   }
-  if (name === 'redHideEarly' || name === 'redCleanApprove') {
+  if (name === 'redHideEarly' || name === 'redCleanApprove' || name === 'merlinCoverRate') {
     const value = raw === undefined ? 0.3 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs a probability, got "${raw}"`);
     return { [name]: value } as Partial<AgentTuning>;
@@ -817,6 +831,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
     if (key === 'redHideEarly' || key === 'redCleanApprove') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
     if (t[key]) parts.push(key);
   }

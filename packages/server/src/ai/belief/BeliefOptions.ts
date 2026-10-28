@@ -45,11 +45,13 @@ export interface BeliefOptions {
    * consistent worlds with the human-record action likelihoods (`BayesBelief.ts`). Wins over `worldShare`.
    */
   bayes?: boolean;
+  /** `bayesThumbRoles`: Percival reads its thumbs with the Merlin / Morgana tables (`BayesOptions.thumbRoles`). */
+  bayesThumbRoles?: boolean;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -69,6 +71,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     forcedVotesZero: tuning.forcedVoteZeroBits,
     worldShare: tuning.worldShareBelief,
     bayes: tuning.bayesBelief,
+    bayesThumbRoles: tuning.bayesThumbRoles,
   };
 }
 

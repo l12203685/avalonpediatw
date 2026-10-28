@@ -17,6 +17,8 @@ import TABLE from './likelihoods.json';
 interface Table {
   vote: Record<string, [number, number]>;
   proposal: Record<string, number>;
+  voteRole: Record<string, [number, number]>;
+  proposalRole: Record<string, number>;
   mission: Record<string, number[]>;
   redLake: Record<string, [number, number]>;
 }
@@ -25,16 +27,19 @@ const T = TABLE as unknown as Table;
 const bucket = (round: number): string => (round <= 2 ? 'r12' : 'r3');
 const smooth = (hit: number, n: number): number => (hit + 1) / (n + 2);
 
+/** `camp` = 'good' | 'evil', or a role key 'merlin' | 'morgana' (the role tables, Percival's thumbs). */
 function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, approve: boolean): number {
-  const c = T.vote[`${camp}|${on ? 'on' : 'off'}|${hasRed ? 'red' : 'clean'}|${bucket(round)}`] ?? [1, 2];
+  const key = `${camp}|${on ? 'on' : 'off'}|${hasRed ? 'red' : 'clean'}|${bucket(round)}`;
+  const c = (camp === 'merlin' || camp === 'morgana' ? T.voteRole[key] : T.vote[key]) ?? [1, 2];
   const p = smooth(c[0], c[1]);
   return approve ? p : 1 - p;
 }
 
 function proposalProb(camp: string, round: number, k: number): number {
+  const tab = camp === 'merlin' || camp === 'morgana' ? T.proposalRole : T.proposal;
   let total = 0;
-  for (let j = 0; j <= 5; j++) total += (T.proposal[`${camp}|${bucket(round)}|${j}`] ?? 0) + 1;
-  return ((T.proposal[`${camp}|${bucket(round)}|${k}`] ?? 0) + 1) / total;
+  for (let j = 0; j <= 5; j++) total += (tab[`${camp}|${bucket(round)}|${j}`] ?? 0) + 1;
+  return ((tab[`${camp}|${bucket(round)}|${k}`] ?? 0) + 1) / total;
 }
 
 function missionProb(round: number, reds: number, fails: number): number {
@@ -53,10 +58,22 @@ function choose(n: number, k: number): number {
 }
 
 const cache = new WeakMap<PlayerObservation, Map<string, number>>();
+const cacheThumbs = new WeakMap<PlayerObservation, Map<string, number>>();
+
+export interface BayesOptions {
+  /**
+   * `bayesThumbRoles` (optimization loop round 3): for Percival, in every world the good thumb is Merlin and
+   * the red one Morgana — their actions are read with the role tables (`voteRole`, `proposalRole`), so the
+   * posterior tells the thumbs apart.
+   */
+  thumbRoles?: boolean;
+}
 
 /** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */
-export function bayesRedShare(obs: PlayerObservation): Map<string, number> {
-  const hit = cache.get(obs);
+export function bayesRedShare(obs: PlayerObservation, opts: Readonly<BayesOptions> = {}): Map<string, number> {
+  const thumbs = opts.thumbRoles && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2 ? obs.knownWizards ?? [] : [];
+  const store = thumbs.length > 0 ? cacheThumbs : cache;
+  const hit = store.get(obs);
   if (hit) return hit;
   const view = buildCertainty(obs);
   const worlds = view.worlds('L1*');
@@ -67,13 +84,15 @@ export function bayesRedShare(obs: PlayerObservation): Map<string, number> {
   const all = view.maskOf(ids);
   const logW = worlds.map((w) => {
     const red = (id: string): boolean => (w & bit(id)) !== 0;
+    // Percival's thumbs: the good one is Merlin, the red one Morgana (in this world).
+    const campOf = (id: string): string => (thumbs.includes(id) ? (red(id) ? 'morgana' : 'merlin') : red(id) ? 'evil' : 'good');
     let lp = 0;
     for (const v of obs.voteHistory) {
       const teamMask = view.maskOf(v.team);
       const hasRed = (w & teamMask) !== 0;
       // Proposal (the leader on its own team; not the viewer's own).
       if (v.leader !== me && v.team.includes(v.leader)) {
-        const camp = red(v.leader) ? 'evil' : 'good';
+        const camp = campOf(v.leader);
         const others = all & ~bit(v.leader);
         const redsAvail = sizeOf(w & others);
         const goodsAvail = sizeOf(others) - redsAvail;
@@ -85,7 +104,7 @@ export function bayesRedShare(obs: PlayerObservation): Map<string, number> {
       if (v.attempt >= 5) continue;
       for (const id of ids) {
         if (id === me || v.votes[id] === undefined) continue;
-        lp += Math.log(voteProb(red(id) ? 'evil' : 'good', v.team.includes(id), hasRed, v.round, v.votes[id]));
+        lp += Math.log(voteProb(campOf(id), v.team.includes(id), hasRed, v.round, v.votes[id]));
       }
     }
     for (const q of obs.questHistory) {
@@ -103,7 +122,7 @@ export function bayesRedShare(obs: PlayerObservation): Map<string, number> {
   const out = new Map<string, number>();
   if (worlds.length === 0) {
     for (const id of ids) out.set(id, id === me ? (obs.myTeam === 'evil' ? 1 : 0) : 0.5);
-    cache.set(obs, out);
+    store.set(obs, out);
     return out;
   }
   const max = Math.max(...logW);
@@ -115,6 +134,6 @@ export function bayesRedShare(obs: PlayerObservation): Map<string, number> {
     worlds.forEach((w, i) => { if (w & b) s += wts[i]; });
     out.set(id, s / tot);
   }
-  cache.set(obs, out);
+  store.set(obs, out);
   return out;
 }

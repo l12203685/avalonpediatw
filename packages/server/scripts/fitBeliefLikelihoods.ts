@@ -10,6 +10,8 @@
  *   - proposal：`隊長陣營|回合段|隊上紅數（不含隊長）` → 次數（隊長在自己隊上的提議）。
  *   - mission：`回合|隊上紅數` → 失敗牌張數的分布。
  *   - redLake：`目標陣營` → 紅方持湖者宣告「紅」的次數 / 總數。
+ *   - voteRole / proposalRole：同 vote / proposal，但只算梅林與莫甘娜（`角色|…`）——派西分辨兩根拇指用
+ *     （第 3 回合，2026-10-28）。proposalRole 的紅數不含隊長自己。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -32,6 +34,8 @@ const vote: Record<string, [number, number]> = {};
 const proposal: Record<string, number> = {};
 const mission: Record<string, number[]> = {};
 const redLake: Record<string, [number, number]> = {};
+const voteRole: Record<string, [number, number]> = {};
+const proposalRole: Record<string, number> = {};
 const bump = (t: Record<string, [number, number]>, k: string, hit: boolean) => { const v = (t[k] ??= [0, 0]); if (hit) v[0]++; v[1]++; };
 const bucket = (round: number) => (round <= 2 ? 'r12' : 'r3');
 
@@ -43,11 +47,18 @@ for (const g of games) {
       const k = p.teamSeats.filter((s) => s !== p.leaderSeat && red(s)).length;
       const key = `${red(p.leaderSeat) ? 'evil' : 'good'}|${bucket(p.round)}|${k}`;
       proposal[key] = (proposal[key] ?? 0) + 1;
+      const role = g.seatRoles[p.leaderSeat - 1];
+      if (role === 'merlin' || role === 'morgana') {
+        const rk = `${role}|${bucket(p.round)}|${k}`;
+        proposalRole[rk] = (proposalRole[rk] ?? 0) + 1;
+      }
     }
     if (p.forced || !p.votesReliable) continue;
     for (let seat = 1; seat <= 10; seat++) {
       const key = `${red(seat) ? 'evil' : 'good'}|${p.teamSeats.includes(seat) ? 'on' : 'off'}|${reds > 0 ? 'red' : 'clean'}|${bucket(p.round)}`;
       bump(vote, key, p.votes[seat - 1]);
+      const role = g.seatRoles[seat - 1];
+      if (role === 'merlin' || role === 'morgana') bump(voteRole, `${role}|${key.split('|').slice(1).join('|')}`, p.votes[seat - 1]);
     }
   }
   for (const q of g.quests) {
@@ -61,9 +72,10 @@ for (const g of games) {
   }
 }
 
-const table = { source: 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake };
+const table = { source: 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole };
 fs.writeFileSync(out, JSON.stringify(table, null, 1) + '\n');
 console.log(`wrote ${out}: ${games.length} games`);
 for (const [k, [a, n]] of Object.entries(vote).sort()) console.log(`  vote ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, d] of Object.entries(mission).sort()) console.log(`  mission ${k} fails ${d.join('/')}`);
+for (const [k, [a, n]] of Object.entries(voteRole).sort()) console.log(`  voteRole ${k.padEnd(26)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(redLake)) console.log(`  redLake target ${k}: declared red ${(100 * a / n).toFixed(1)}% (${n})`);

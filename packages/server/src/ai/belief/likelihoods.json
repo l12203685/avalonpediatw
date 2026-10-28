@@ -282,5 +282,81 @@
    74,
    418
   ]
+ },
+ "voteRole": {
+  "merlin|off|red|r12": [
+   247,
+   8819
+  ],
+  "morgana|off|red|r12": [
+   265,
+   8066
+  ],
+  "merlin|on|red|r12": [
+   3448,
+   3648
+  ],
+  "merlin|off|red|r3": [
+   302,
+   3554
+  ],
+  "morgana|off|red|r3": [
+   853,
+   4251
+  ],
+  "merlin|off|clean|r3": [
+   207,
+   479
+  ],
+  "morgana|off|clean|r3": [
+   661,
+   2674
+  ],
+  "morgana|on|red|r12": [
+   4314,
+   4401
+  ],
+  "merlin|on|red|r3": [
+   1835,
+   2947
+  ],
+  "morgana|on|red|r3": [
+   1857,
+   2250
+  ],
+  "merlin|on|clean|r12": [
+   1903,
+   1929
+  ],
+  "morgana|off|clean|r12": [
+   73,
+   3007
+  ],
+  "merlin|off|clean|r12": [
+   95,
+   1078
+  ],
+  "merlin|on|clean|r3": [
+   1991,
+   2195
+  ]
+ },
+ "proposalRole": {
+  "morgana|r12|1": 920,
+  "merlin|r12|1": 725,
+  "morgana|r12|2": 237,
+  "merlin|r3|1": 325,
+  "morgana|r3|1": 376,
+  "merlin|r3|0": 680,
+  "merlin|r12|0": 1001,
+  "morgana|r12|0": 619,
+  "merlin|r12|2": 66,
+  "morgana|r3|2": 116,
+  "morgana|r3|0": 283,
+  "merlin|r3|2": 22,
+  "morgana|r3|3": 37,
+  "merlin|r3|3": 3,
+  "morgana|r12|3": 6,
+  "merlin|r12|3": 6
  }
 }

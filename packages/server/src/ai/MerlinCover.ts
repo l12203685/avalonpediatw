@@ -28,6 +28,8 @@ export function merlinDoomedRedCover(tuning: Readonly<AgentTuning>, obs: PlayerO
   const swappable = team.filter((id) => id !== obs.myPlayerId);
   if (swappable.length === 0) return action;
   const h = fnv1a32(`${obs.myPlayerId}|R${obs.currentRound}|A${obs.failCount}|${team.join(',')}`);
+  // `merlinCoverRate` (round 3): cover only this share of the doomed proposals (a mixed strategy).
+  if ((h % 1000) / 1000 >= (tuning.merlinCoverRate ?? 1)) return action;
   const out = swappable[h % swappable.length];
   const red = visible[Math.floor(h / 7) % visible.length];
   return { type: 'team_select', teamIds: team.map((id) => (id === out ? red : id)) };
