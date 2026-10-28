@@ -32,6 +32,8 @@ export interface DecisionRecord {
   obs: PlayerObservation;
   /** team_select / team_vote / quest_vote / assassinate. */
   action?: AgentAction;
+  /** assassinate: the deciding agent's `assassinIgnoreDoomed` (INV-A2 under the 2026-10-28 ruling). */
+  assassinIgnoreDoomed?: boolean;
   /** lake_target: the chosen target; lake_claim: the inspected target. */
   lakeTarget?: string;
   /** lake_target: the legal targets offered. */
@@ -114,6 +116,7 @@ export class AuditAgent implements AvalonAgent {
         action: d.action,
         usedFallback: d.reasoningTrace.usedFallback,
       };
+      if (obs.gamePhase === 'assassination') rec.assassinIgnoreDoomed = this.base.tuning.assassinIgnoreDoomed;
       if (obs.gamePhase === 'team_select') rec.exclusions = this.fwd.lastTeamExclusions();
       this.records.push(rec);
       return rec;

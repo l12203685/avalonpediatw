@@ -239,13 +239,27 @@ describe('batch 1G — the practice report (b) fixture', () => {
 
   it('the soft factor is off by default and, when on, adds ln LR to the model score only (review fix: double counting)', () => {
     expect(ON.assassinVisibleRedLikelihood).toBe(false);
-    // P5 and P8 tie on the model; P5 led one ambiguous R2 team (LR 1.64 > 1).
-    const o = assassinationObs([vote(2, 2, 'P5', ['P5', 'P2', 'P6', 'P8'], [], false)]);
+    // P5 and P8 tie on the model; P5 led one ambiguous R3 team (LR 1.03 > 1). (An R2 non-forced lead no longer
+    // counts: Edward 2026-10-28, `assassinIgnoreDoomed`.)
+    const o = assassinationObs([vote(3, 2, 'P5', ['P5', 'P2', 'P6', 'P8'], [], false)]);
     const weights = seatOnlyWeights({ P5: 0.16, P6: 0.14, P7: 0.36, P8: 0.16, P9: 0.14, P10: 0.04 });
     expect(forwardAssassinate(o, ON, weights)).toBe('P5'); // tie → seat order
-    const o2 = assassinationObs([vote(2, 2, 'P8', ['P8', 'P2', 'P6', 'P9'], [], false)]);
+    const o2 = assassinationObs([vote(3, 2, 'P8', ['P8', 'P2', 'P6', 'P9'], [], false)]);
     expect(forwardAssassinate(o2, ON, weights)).toBe('P5'); // off: the ambiguous lead changes nothing
     expect(forwardAssassinate(o2, { ...ON, assassinVisibleRedLikelihood: true }, weights)).toBe('P8');
+  });
+
+  it('Edward 2026-10-28 (assassinIgnoreDoomed): a non-forced R1–R2 lead no longer counts; the forced fifth still does', () => {
+    expect(ON.assassinIgnoreDoomed).toBe(true);
+    const weights = seatOnlyWeights({ P5: 0.16, P6: 0.14, P7: 0.36, P8: 0.16, P9: 0.14, P10: 0.04 });
+    const withLead = (attempt: number): PlayerObservation => {
+      const o = assassinationObs();
+      // P7's visible-red lead (Oberon P4 on the team) moved from R3 to R2.
+      return { ...o, voteHistory: o.voteHistory.map((v) => (v.leader === 'P7' ? { ...v, round: 2, attempt } : v)) };
+    };
+    expect(forwardAssassinate(withLead(2), ON, weights)).toBe('P7'); // doomed proposal: the model decides
+    expect(forwardAssassinate(withLead(2), { ...ON, assassinIgnoreDoomed: false }, weights)).not.toBe('P7'); // the 10/26 rule
+    expect(forwardAssassinate(withLead(5), ON, weights)).not.toBe('P7'); // forced fifth: still counts
   });
 
   it('the practice review states the reason when the tier applies', () => {

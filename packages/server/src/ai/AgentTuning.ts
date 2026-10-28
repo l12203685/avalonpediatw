@@ -405,7 +405,7 @@ export interface AgentTuning {
    * （`belief/BayesBelief.ts`、`likelihoods.json`）。開了就蓋過 `worldShareBelief`。紅方不變。
    */
   bayesBelief: boolean;
-  /** 刺客的「派過可見紅」不算第 1、2 局注定被否決的提議（反制派拇指躲刺；改 Edward 10/26 裁定，預設關）。 */
+  /** 刺客的「派過可見紅」不算第 1、2 局注定被否決的提議（反制派拇指躲刺；Edward 10/28 同意修改 10/26 裁定，預設開）。 */
   assassinIgnoreDoomed: boolean;
   /** 第 1、2 局沒有其他可見隊友時，紅方出成功藏身的機率（0 = 關；`RedRound2.ts`）。 */
   redHideEarly: number;
@@ -686,7 +686,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLeaderWorldPick: 0,
   worldShareBelief: false,
   bayesBelief: true,
-  assassinIgnoreDoomed: false,
+  assassinIgnoreDoomed: true,
   redHideEarly: 0,
   redCleanApprove: 0,
 });

@@ -190,7 +190,9 @@ function multisetPermutations(items: readonly string[]): string[][] {
  * (Edward 2026-10-26).
  * `null` when the roster does not fit the lobby (counted, not checked).
  */
-function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[]): Set<string> | null {
+function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[], ignoreDoomed = false): Set<string> | null {
+  // Edward 2026-10-28 (round 2, B): the non-forced R1–R2 proposals the normal votes always reject do not count.
+  if (ignoreDoomed) obs = { ...obs, voteHistory: obs.voteHistory.filter((v) => !(v.round <= 2 && v.attempt < 5)) };
   // 刺殺階段紅方開牌相認 (Edward 2026-10-26): with the reds' roles known, a lead certainly holds a red
   // Merlin sees iff it holds a red who is not Mordred.
   if (obs.allEvilRoles) {
@@ -414,7 +416,7 @@ export function checkDecision(
       // some candidate did; every candidate did = exempt, the scores decide).
       // Classified by the harness's own brute force (`a2FlaggedIndependently`).
       const candidates = obs.allPlayerIds.filter((id) => !known.has(id));
-      const flaggedSet = a2FlaggedIndependently(obs, candidates);
+      const flaggedSet = a2FlaggedIndependently(obs, candidates, rec.assassinIgnoreDoomed === true);
       if (flaggedSet === null) L.inc('A2.rosterMismatch');
       const flagged = candidates.filter((id) => flaggedSet?.has(id) ?? false);
       const humanTarget = rec.human?.target;

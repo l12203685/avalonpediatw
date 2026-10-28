@@ -165,8 +165,8 @@ export interface VisibleRedEvidence {
 /**
  * Leads the tier counts: every proposal from R1 on, the forced fifth included (Edward 2026-10-26).
  * `ignoreDoomed` (`AgentTuning.assassinIgnoreDoomed`, optimization loop round 2 candidate B — changes that
- * ruling, so off by default): the non-forced R1–R2 proposals the normal votes always reject do not count —
- * the counter to 派拇指躲刺.
+ * ruling): the non-forced R1–R2 proposals the normal votes always reject do not count —
+ * the counter to 派拇指躲刺. Edward 2026-10-28 amended the ruling: on by default.
  */
 function countsForTier(v: VoteRecord, ignoreDoomed = false): boolean {
   if (ignoreDoomed && v.round <= 2 && v.attempt < 5) return false;
