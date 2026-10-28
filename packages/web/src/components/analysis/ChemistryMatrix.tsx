@@ -6,12 +6,17 @@ import type { ChemistryData, ChemistryMatrix as ChemistryMatrixType } from '../.
 import { isThinPairCell } from '../../utils/analysisDisplay';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import { pairOutcomeCounts } from './seatRoleBlocks';
-import { SectionTabs, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem } from './ui';
+import { SectionTabs, Term, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem, type StatTermKey } from './ui';
 import NotFilteredNote from './filter/NotFilteredNote';
 
 type MatrixKey = 'coWin' | 'coLose' | 'winCorr' | 'coWinMinusLose' | 'outcomePair';
 
 const MATRIX_KEYS: MatrixKey[] = ['coWin', 'coLose', 'winCorr', 'coWinMinusLose', 'outcomePair'];
+
+/** 矩陣名稱的名詞說明 (Term)；三結果配對沒有。 */
+const MATRIX_TERM: Partial<Record<MatrixKey, StatTermKey>> = {
+  coWin: 'coWin', coLose: 'coWin', winCorr: 'winCorr', coWinMinusLose: 'coWinMinusLose',
+};
 const BLOCKS: readonly MetricBlockKey[] = ['mission', 'assassination', 'final'];
 
 /** 三結果配對：與全體同一塊的差 (百分點)，正 = 紅方較好。 */
@@ -283,7 +288,11 @@ export default function ChemistryMatrixPanel(): JSX.Element {
         )}
       </div>
       <p className="text-[11px] leading-snug text-zinc-400">
-        <span className="font-semibold text-zinc-300">{t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}</span>
+        <span className="font-semibold text-zinc-300">
+          {MATRIX_TERM[matrixKey]
+            ? <Term term={MATRIX_TERM[matrixKey]!}>{t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}</Term>
+            : t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}
+        </span>
         {matrixKey === 'outcomePair' && <> · {t('analytics.r6.tabsb.chemistry.pairDescription')}</>}
         {' — '}{guide(matrixKey, block)}
       </p>
