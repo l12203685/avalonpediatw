@@ -79,7 +79,7 @@
     "createRoom": "建立房間",
     "joinRoom": "加入房間",
     "playOnPlatform": "前往 signage-cloud 開局",
-    "playPlatformNotice": "對局已改到 signage-cloud 進行；本站保留百科、戰績與大廳聊天。",
+    "playPlatformNotice": "對局已改到 signage-cloud 進行；本站保留百科與戰績。",
     "playPlatformNoticeLink": "前往 signage-cloud",
     "wikiAndGuide": "百科攻略",
     "leaderboard": "勝率排行",

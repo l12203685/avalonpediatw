@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, PLAY_PLATFORM_URL } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
-import PublicChatPanel from '../components/PublicChatPanel';
 import AuthGateModal, { AuthGateTarget } from '../components/AuthGateModal';
 import BindingField from '../components/BindingField';
 import InstallButton from '../components/InstallButton';
@@ -95,9 +94,7 @@ export default function HomePage(): JSX.Element {
   }, [currentPlayer]);
 
   // After an OAuth reload, check where the user was heading and route them there.
-  // 'chat' branch: user was gated on the lobby chat input — stay on home but
-  // scroll / focus the chat so the comeback loop is obvious. Slight 300ms
-  // timeout so PublicChatPanel has time to mount and wire up its socket.
+  // 'chat' branch: left from the removed main-page chat (2026-10-28) — stay on home.
   useEffect(() => {
     const target = localStorage.getItem('pendingGateTarget') as AuthGateTarget | null;
     if (!target) return;
@@ -107,13 +104,7 @@ export default function HomePage(): JSX.Element {
     // lobby; games are played on signage-cloud now.
     if (target === 'stats') setGameState('personalStats');
     else if (target === 'settings') setGameState('settings');
-    else if (target === 'chat') {
-      // User came back from the lobby-chat gate. Stay on home; the chat
-      // input unlocks itself once currentPlayer.provider !== 'guest'.
-      // No explicit scroll/focus — the panel is already in view in the
-      // right-column layout, and focusing a text field without a visible
-      // cue would feel jumpy.
-    }
+    // 'chat' (the removed main-page chat): stay on home.
   }, [currentPlayer, setGameState]);
 
   const tryGatedNavigate = (target: AuthGateTarget, proceed: () => void): void => {
@@ -407,15 +398,15 @@ export default function HomePage(): JSX.Element {
                 </p>
               </div>
 
-              {/* Main content: 6-button grid + lobby chat */}
+              {/* Main content: the button grid, centred (the lobby chat column was removed 2026-10-28) */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
-                className="grid grid-cols-1 md:grid-cols-5 gap-2 sm:gap-4 pt-1 sm:pt-2"
+                className="max-w-xl mx-auto w-full pt-1 sm:pt-2"
               >
                 {/* Buttons area — 2×3 on mobile, 3×2 on desktop */}
-                <div className="md:col-span-3 space-y-3">
+                <div className="space-y-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                     {/*
                       #86 IA v3 — 6 main buttons（2026-04-23 拆兩頁）
@@ -536,8 +527,8 @@ export default function HomePage(): JSX.Element {
                   )}
                 </div>
 
-                {/* #63 — Main-page public chat (guests read-only) */}
-                <PublicChatPanel />
+                {/* #63 main-page public chat removed (Edward 2026-10-28: the synced chat made the page very long
+                    and is no longer needed here). The LINE / Discord sync itself runs server-side as before. */}
               </motion.div>
 
               {/* Edward 2026-04-25 19:18: footer 「欺騙與邏輯的推理遊戲」
