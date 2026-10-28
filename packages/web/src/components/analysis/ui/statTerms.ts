@@ -31,6 +31,11 @@ export const STAT_TERMS = [
   'firstProposal',
   'missionPath',
   'lakeCombo',
+  'evilTeamReject',
+  'goodTeamApprove',
+  'r3Reject',
+  'flipRate',
+  'signedEv',
 ] as const;
 
 export type StatTermKey = (typeof STAT_TERMS)[number];

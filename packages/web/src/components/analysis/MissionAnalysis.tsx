@@ -3,7 +3,9 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { fetchAnalysisMissions, getErrorMessage } from '../../services/api';
 import type { MissionAnalysisData } from '../../services/api';
-import { SectionTabs, StatTable, OUTCOME_COLORS, type StatColumn } from './ui';
+import { SectionTabs, StatTable, Takeaway, OUTCOME_COLORS, formatRate, type StatColumn } from './ui';
+import { useRoundsData } from './teams/useTeamsData';
+import { redFinalRate } from './outcomeTest';
 import OutcomeBlocksTable, { useMinCellGames, type OutcomeGroup } from './OutcomeBlocksTable';
 import { useAnalysisOverview } from './useAnalysisOverview';
 
@@ -23,6 +25,13 @@ import { useAnalysisOverview } from './useAnalysisOverview';
  *     最上面一列是全部局當對照。舊的「三藍死 %」除以全部局，不是刺殺成功率。
  *   - 兩張表用 SectionTabs 分成兩頁，桌機一頁一屏。
  *   - 「通過」沿用快取口徑：該輪 0 張失敗票 (generate_cache.py compute_missions)；表下註明。
+ *
+ * (2026-10-28 Edward：結果更直觀、名詞白話；修正)
+ *   - 舊表把「0 張失敗票」標成「通過率」：第 4 個任務 (7 人以上) 1 張失敗票仍然成功，所以任務 4 的「通過率」
+ *     65.7% 跟派隊分頁的成功率 84.1% 對不起來。改成：成功率 (照規則，跟派隊 › 任務進程同一份 /rounds 資料)
+ *     + 0／1／2+ 張失敗票三欄；/rounds 沒有時成功率顯示「—」。
+ *   - 「任務 → 結局」的分組沿用快取 (0 張失敗＝通過)：第 4 輪那兩列改叫「0 張失敗票／有失敗票」，不再說成敗。
+ *   - 兩頁最上面各一句話 (從資料當下算)：最難／最容易成功的任務；結局差最多的那一輪。
  */
 
 type MissionView = 'pass' | 'outcome';
@@ -30,7 +39,9 @@ type MissionView = 'pass' | 'outcome';
 interface PassRow {
   round: number;
   n: number;
-  passRate: number | null;
+  /** 照規則的任務成功率 (/rounds roundProgression)；沒有時 null。 */
+  successRate: number | null;
+  zeroFail: number | null;
   oneFail: number | null;
   twoFail: number | null;
 }
@@ -41,6 +52,7 @@ export default function MissionAnalysis(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { overview } = useAnalysisOverview();
+  const { data: rounds } = useRoundsData();
   const min = useMinCellGames();
   const k = 'analytics.r6.tabsa.missions';
 
@@ -76,12 +88,16 @@ export default function MissionAnalysis(): JSX.Element {
   }
 
   const share = (part: number, total: number): number | null => (total > 0 ? (part / total) * 100 : null);
+  const progression = ['第一局', '第二局', '第三局', '第四局', '第五局'].map(key => rounds?.roundProgression?.[key]);
   const passRows: PassRow[] = (data.missionPassRates ?? []).map(m => {
     const dist = (data.missionOutcomeByRound ?? []).find(o => o.round === m.round);
+    // roundProgression 的鍵 第一局..第五局 (generate_cache.py round_labels)；局數對得上才用 (不同篩選／快取不混用)
+    const prog = progression[m.round - 1];
     return {
       round: m.round,
       n: m.totalGames,
-      passRate: m.passRate,
+      successRate: prog && prog.total === m.totalGames && Number.isFinite(prog.bluePct) ? prog.bluePct : null,
+      zeroFail: dist ? share(dist.allPass, dist.total) : m.passRate,
       oneFail: dist ? share(dist.oneFail, dist.total) : null,
       twoFail: dist ? share(dist.twoFail, dist.total) : null,
     };
@@ -91,12 +107,17 @@ export default function MissionAnalysis(): JSX.Element {
     { key: 'round', label: t(`${k}.round`), value: r => t('analytics.deep.mission.missionLabel', { round: r.round }) },
     { key: 'n', label: t(`${k}.reached`), title: t(`${k}.reachedTitle`), format: 'int', className: 'text-zinc-400' },
     {
-      key: 'passRate', label: t(`${k}.passRate`), title: t(`${k}.passRateTitle`), format: 'pct', emphasis: true,
-      bar: { color: '#22c55e' }, lowSample: min, n: r => (r.n < min ? r.n : null),
+      key: 'successRate', label: t('analytics.r7.missions.success'), term: 'missionSuccessRate', format: 'pct', emphasis: true,
+      bar: { color: OUTCOME_COLORS.三藍活 }, tone: 'blue', lowSample: min, n: r => (r.n < min ? r.n : null),
     },
-    { key: 'oneFail', label: t('analytics.deep.mission.fail1'), format: 'pct', bar: { color: OUTCOME_COLORS.三藍死 } },
-    { key: 'twoFail', label: t('analytics.deep.mission.fail2'), format: 'pct', bar: { color: OUTCOME_COLORS.三紅 } },
+    { key: 'zeroFail', label: t('analytics.r7.missions.zeroFail'), term: 'failCards', format: 'pct', className: 'text-zinc-400' },
+    { key: 'oneFail', label: t('analytics.deep.mission.fail1'), term: 'failCards', format: 'pct', bar: { color: OUTCOME_COLORS.三藍死 } },
+    { key: 'twoFail', label: t('analytics.deep.mission.fail2'), term: 'failCards', format: 'pct', bar: { color: OUTCOME_COLORS.三紅 } },
   ];
+  const withSuccess = passRows.filter(r => r.successRate !== null);
+  const hardest = withSuccess.length > 1 ? withSuccess.reduce((a, b) => ((b.successRate ?? 0) < (a.successRate ?? 0) ? b : a)) : null;
+  const easiest = withSuccess.length > 1 ? withSuccess.reduce((a, b) => ((b.successRate ?? 0) > (a.successRate ?? 0) ? b : a)) : null;
+  const m4 = passRows.find(r => r.round === 4);
 
   const corr = (data.missionOutcomeCorrelation ?? []).filter(c => c.round <= 4);
   const groups: OutcomeGroup[] = [];
@@ -104,11 +125,17 @@ export default function MissionAnalysis(): JSX.Element {
     groups.push({ key: 'all', label: t('analytics.r6.tabsa.outcomeTable.all'), counts: overview.outcomeBreakdown, reference: true });
   }
   for (const c of corr) {
+    // 第 4 輪：快取以「0 張失敗票」分組，但 7 人以上 1 張失敗票任務仍成功 → 不說成敗，只說有沒有失敗票
+    const r4 = c.round === 4;
     groups.push(
-      { key: `p${c.round}`, label: t(`${k}.passed`, { round: c.round }), counts: c.passedOutcomes, tone: 'blue' },
-      { key: `f${c.round}`, label: t(`${k}.failed`, { round: c.round }), counts: c.failedOutcomes, tone: 'red' },
+      { key: `p${c.round}`, label: t(r4 ? 'analytics.r7.missions.r4Zero' : `${k}.passed`, { round: c.round }), counts: c.passedOutcomes, tone: 'blue' },
+      { key: `f${c.round}`, label: t(r4 ? 'analytics.r7.missions.r4Some' : `${k}.failed`, { round: c.round }), counts: c.failedOutcomes, tone: 'red' },
     );
   }
+  const gaps = corr
+    .map(c => ({ round: c.round, passed: redFinalRate(c.passedOutcomes), failed: redFinalRate(c.failedOutcomes), pn: c.passedGames, fn: c.failedGames }))
+    .filter((g): g is { round: number; passed: number; failed: number; pn: number; fn: number } => g.passed !== null && g.failed !== null && g.round !== 4);
+  const widest = gaps.length > 0 ? gaps.reduce((a, b) => (Math.abs(b.failed - b.passed) > Math.abs(a.failed - a.passed) ? b : a)) : null;
 
   const items = [
     { id: 'pass' as MissionView, label: t(`${k}.tabs.pass`) },
@@ -118,24 +145,48 @@ export default function MissionAnalysis(): JSX.Element {
   return (
     <SectionTabs items={items} persistKey="analysis.missions" ariaLabel={t('analytics.analysis.tabs.missions')}>
       {(view) => (view === 'pass' ? (
-        <StatTable
-          caption={t(`${k}.passCaption`)}
-          columns={passColumns}
-          rows={passRows}
-          rowKey={r => String(r.round)}
-          footnote={t(`${k}.passNote`)}
-        />
+        <div className="space-y-2">
+          {hardest && easiest && (
+            <Takeaway>
+              <p>
+                {t('analytics.r7.missions.passTakeaway', {
+                  hard: hardest.round, hardRate: formatRate(hardest.successRate), easy: easiest.round, easyRate: formatRate(easiest.successRate),
+                })}
+                {m4?.oneFail !== null && m4?.oneFail !== undefined && t('analytics.r7.missions.m4', { rate: formatRate(m4.oneFail) })}
+              </p>
+            </Takeaway>
+          )}
+          <StatTable
+            caption={t(`${k}.passCaption`)}
+            columns={passColumns}
+            rows={passRows}
+            rowKey={r => String(r.round)}
+            footnote={t('analytics.r7.missions.passNote')}
+          />
+        </div>
       ) : corr.length === 0 ? (
         <p className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 text-center text-xs text-zinc-500">
           {t(`${k}.noCorrelation`)}
         </p>
       ) : (
-        <OutcomeBlocksTable
-          caption={t(`${k}.outcomeCaption`)}
-          rows={groups}
-          groupLabel={t(`${k}.group`)}
-          footnote={t(`${k}.outcomeNote`)}
-        />
+        <div className="space-y-2">
+          {widest && (
+            <Takeaway>
+              <p>
+                {t('analytics.r7.missions.outcomeTakeaway', {
+                  round: widest.round, failed: formatRate(widest.failed), fn: widest.fn, passed: formatRate(widest.passed), pn: widest.pn,
+                  gap: Math.abs(widest.failed - widest.passed).toFixed(1),
+                })}
+              </p>
+            </Takeaway>
+          )}
+          <OutcomeBlocksTable
+            caption={t(`${k}.outcomeCaption`)}
+            rows={groups}
+            groupLabel={t(`${k}.group`)}
+            footnote={t('analytics.r7.missions.outcomeNote')}
+          />
+        </div>
       ))}
     </SectionTabs>
   );

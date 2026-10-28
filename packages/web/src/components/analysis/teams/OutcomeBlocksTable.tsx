@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatTable, type StatColumn, type Tone } from '../ui';
+import { StatTable, Term, type StatColumn, type StatTermKey, type Tone } from '../ui';
 import { outcomeBlocks, type OutcomeBlocks, type OutcomeBreakdown } from '../../../services/api';
 
 /**
@@ -64,6 +64,13 @@ const BLOCK_TONE: Readonly<Record<OutcomeBlockKey, Tone>> = {
   final: 'red',
 };
 
+/** 三塊副標的名詞說明 (2026-10-28 Edward：每個指標都要白話的定義與算法)。 */
+export const BLOCK_TERM: Readonly<Record<OutcomeBlockKey, StatTermKey>> = {
+  mission: 'threeRedRate',
+  assassination: 'killRate',
+  final: 'redGameWinRate',
+};
+
 /** 兩行表頭：塊名 + 這格算的是什麼 (固定寬度，窄螢幕不撐開)。 */
 export function BlockHeader({ name, sub }: { name: ReactNode; sub: ReactNode }): JSX.Element {
   return (
@@ -120,7 +127,7 @@ export default function OutcomeBlocksTable<R extends OutcomeGroupRow>({
       label: (
         <BlockHeader
           name={t(`analytics.r6.teams.blocks.${block}`)}
-          sub={t(`analytics.r6.teams.blocks.${block}Sub`)}
+          sub={<Term term={BLOCK_TERM[block]}>{t(`analytics.r6.teams.blocks.${block}Sub`)}</Term>}
         />
       ),
       title: t(`analytics.r6.teams.blocks.${block}Hint`),

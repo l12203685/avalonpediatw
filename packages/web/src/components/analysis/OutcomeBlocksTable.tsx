@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { outcomeBlocks, theorySettings, type OutcomeBlocks } from '../../services/api';
-import { StatTable, OUTCOME_COLORS, type StatColumn, type Tone } from './ui';
+import { StatTable, Term, OUTCOME_COLORS, type StatColumn, type StatTermKey, type Tone } from './ui';
 import { useAnalysisOverview } from './useAnalysisOverview';
 
 /**
@@ -47,11 +47,11 @@ export interface OutcomeBlocksTableProps {
   className?: string;
 }
 
-function BlockHeader({ name, rule }: { name: string; rule: string }): JSX.Element {
+function BlockHeader({ name, rule, term }: { name: string; rule: string; term: StatTermKey }): JSX.Element {
   return (
     <span className="inline-flex flex-col items-end gap-0.5">
       <span className="text-[11px] font-semibold text-zinc-300">{name}</span>
-      <span className="block whitespace-nowrap text-[10px] font-normal leading-snug text-zinc-500">{rule}</span>
+      <span className="block whitespace-nowrap text-[10px] font-normal leading-snug text-zinc-500"><Term term={term}>{rule}</Term></span>
     </span>
   );
 }
@@ -87,7 +87,7 @@ export default function OutcomeBlocksTable({
     },
     {
       key: 'mission',
-      label: <BlockHeader name={t(`${k}.mission`)} rule={t(`${k}.missionRule`)} />,
+      label: <BlockHeader name={t(`${k}.mission`)} rule={t(`${k}.missionRule`)} term="threeRedRate" />,
       title: t(`${k}.missionTitle`),
       align: 'right',
       format: 'pct',
@@ -99,7 +99,7 @@ export default function OutcomeBlocksTable({
     },
     {
       key: 'assassination',
-      label: <BlockHeader name={t(`${k}.assassination`)} rule={t(`${k}.assassinationRule`)} />,
+      label: <BlockHeader name={t(`${k}.assassination`)} rule={t(`${k}.assassinationRule`)} term="killRate" />,
       title: t(`${k}.assassinationTitle`),
       align: 'right',
       format: 'pct',
@@ -111,7 +111,7 @@ export default function OutcomeBlocksTable({
     },
     {
       key: 'final',
-      label: <BlockHeader name={t(`${k}.final`)} rule={t(`${k}.finalRule`)} />,
+      label: <BlockHeader name={t(`${k}.final`)} rule={t(`${k}.finalRule`)} term="redGameWinRate" />,
       title: t(`${k}.finalTitle`),
       align: 'right',
       format: 'pct',

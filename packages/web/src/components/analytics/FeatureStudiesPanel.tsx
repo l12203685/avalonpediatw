@@ -783,13 +783,13 @@ function VoteFlipVisual({ feature, full }: { feature: FeatureStudyEntry; full: b
   ];
   if (full) {
     columns.push(
-      { key: 'flipRedPct', label: t(`${k}.flipRed`), title: t(`${k}.flipColsTitle`), format: v => pctText(v, 2), align: 'right' },
-      { key: 'flipBluePct', label: t(`${k}.flipBlue`), title: t(`${k}.flipColsTitle`), format: v => pctText(v, 2), align: 'right' },
+      { key: 'flipRedPct', label: t(`${k}.flipRed`), title: t(`${k}.flipColsTitle`), term: 'flipRate', format: v => pctText(v, 2), align: 'right' },
+      { key: 'flipBluePct', label: t(`${k}.flipBlue`), title: t(`${k}.flipColsTitle`), term: 'flipRate', format: v => pctText(v, 2), align: 'right' },
     );
   }
   columns.push(
     {
-      key: 'signedEv', label: t(`${k}.signedEv`), title: t(`${k}.signedEvTitle`), align: 'right', emphasis: true,
+      key: 'signedEv', label: t(`${k}.signedEv`), title: t(`${k}.signedEvTitle`), term: 'signedEv', align: 'right', emphasis: true,
       format: v => signedPp(v), tone: r => (r.signedEv >= 0 ? 'blue' : 'red'),
     },
     { key: 'totalChances', label: t(`${k}.chances`), title: t(`${k}.chancesTitle`), format: 'int', className: 'text-zinc-400' },

@@ -1,18 +1,27 @@
 import { useTranslation } from 'react-i18next';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
+import VotingOverview from '../VotingOverview';
+import { SectionTabs } from '../ui';
+
+type VotesView = 'overview' | 'flip';
 
 /**
- * 投票：目前只有改隊後翻轉率 (L136) 一項。
+ * 投票。
  *
- * (2026-10-14 Edward：一頁一屏、表格優先) L136 的發散長條圖改成數字表 (FeatureStudiesPanel)，
- * 整頁在桌機一個螢幕內，不必再分小分頁；「查看完整研究」打開站內的完整研究 (#study=l136)。
+ * (2026-10-14 Edward：一頁一屏、表格優先) L136 的發散長條圖改成數字表 (FeatureStudiesPanel)。
+ * (2026-10-28 Edward：「投票…應該可以呈現更直觀的結果 一樣需要名詞解釋跟定義」) 加「投票概況」小分頁放在前面：
+ *  全部玩家的票加總 —— 有紅方的隊伍多常被投反對、全藍的隊伍多常被投贊成、第 3 個任務起忠臣與紅方多常投反對
+ *  (VotingOverview，一句話結論 + 兩張表，名詞可點開看定義)；L136 (改隊後翻票) 移到第二個小分頁。
  */
 export default function VotesTab(): JSX.Element {
   const { t } = useTranslation('common');
+  const items: { id: VotesView; label: string }[] = [
+    { id: 'overview', label: t('analytics.r7.votes.tabs.overview') },
+    { id: 'flip', label: t('analytics.r7.votes.tabs.flip') },
+  ];
   return (
-    <div className="space-y-3">
-      <p className="text-xs text-zinc-500 leading-relaxed">{t('analytics.analysis.votesNote')}</p>
-      <FeatureStudyCard loopId="L136" defaultOpen />
-    </div>
+    <SectionTabs items={items} persistKey="analysis.votes" ariaLabel={t('analytics.analysis.tabs.votes')}>
+      {(view) => (view === 'flip' ? <FeatureStudyCard loopId="L136" defaultOpen /> : <VotingOverview />)}
+    </SectionTabs>
   );
 }
