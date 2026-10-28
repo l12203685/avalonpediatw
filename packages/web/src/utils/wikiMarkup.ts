@@ -42,10 +42,10 @@ function inlineColors(text: string): string {
   });
 }
 
-/** Leading HackMD front matter (`---` … `---`) and `[TOC]` lines. */
+/** Leading HackMD front matter (`---` … `---`; the HackMD exports often carry two blocks) and `[TOC]` lines. */
 function stripHackmdArtifacts(content: string): string {
   return content
-    .replace(/^\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/, '')
+    .replace(/^(?:\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))+/, '')
     .replace(/^[ \t]*\[TOC\][ \t]*\r?\n?/gim, '');
 }
 
@@ -84,6 +84,7 @@ export function wikiExcerpt(text: string): string {
     .replace(/^\s*-{3,}\s*/, '')
     .replace(/^(?:\s*(?:title|tags|description|最後編輯日|最後編輯者)\s*[:：][^\n]*\n?)+/i, '')
     .replace(/<[^>]+>/g, '')
+    .replace(/^\s*```[^\n]*$/gm, '') // code-fence lines (e.g. 「``` json」)
     .replace(/\[TOC\]/gi, '')
     .trim();
 }

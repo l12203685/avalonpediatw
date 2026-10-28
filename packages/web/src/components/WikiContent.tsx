@@ -1,17 +1,22 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, Eye, Calendar } from 'lucide-react';
+import { Search, X, Calendar, ChevronDown, PencilLine } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
-import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
+import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
 import { ARTICLE_TO_ROLE, ROLE_STATS } from '../data/roleStats';
 import { VIDEO_BY_ROLE } from '../data/roleVideos';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
+
+/** 舊資料的標籤常是分類代號（roles、strategies…），和現在的分類對不上，不顯示。 */
+const CATEGORY_IDS = new Set(WIKI_CATEGORIES.map(c => c.id.toLowerCase()));
+const displayTags = (tags: readonly string[]): string[] => tags.filter(tag => !CATEGORY_IDS.has(tag.toLowerCase()));
 
 function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
   return {
@@ -22,13 +27,14 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
     excerpt: a.excerpt,
     tags: a.tags,
     author: a.source === 'hackmd' ? 'HackMD Archive' : 'Avalon Wiki',
-    updatedAt: new Date('2024-01-01'),
-    views: 0,
+    status: a.status === '待完成' ? '待完成' : undefined,
   };
 }
 
 interface WikiContentProps {
   selectedCategory?: string;
+  /** Reports how many 完成 articles are listed (the page header shows it). */
+  onPublishedCountChange?: (count: number) => void;
 }
 
 const WIKI_COLOR_CLASS: Record<string, string> = {
@@ -151,8 +157,10 @@ const markdownComponents = {
   ),
 };
 
-export default function WikiContent({ selectedCategory }: WikiContentProps): JSX.Element {
+export default function WikiContent({ selectedCategory, onPublishedCountChange }: WikiContentProps): JSX.Element {
+  const { t } = useTranslation('common');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showPending, setShowPending] = useState(false);
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
   const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
   const [allArticles, setAllArticles] = useState<WikiArticle[]>(WIKI_ARTICLES);
@@ -165,10 +173,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
         const { articles } = await fetchWikiArticles();
         if (!cancelled && articles.length > 0) {
           const apiArticles = articles.map(apiToWikiArticle);
-          // Merge: hardcoded first (they have better formatting), then API articles not already present
-          const existingIds = new Set(WIKI_ARTICLES.map(a => a.title.toLowerCase()));
-          const newArticles = apiArticles.filter(a => !existingIds.has(a.title.toLowerCase()));
-          setAllArticles([...WIKI_ARTICLES, ...newArticles]);
+          setAllArticles(mergeWikiArticles(WIKI_ARTICLES, apiArticles));
         }
       } catch {
         // API not available, use hardcoded only
@@ -201,9 +206,27 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
     }
   }, [selectedArticle]);
 
+  // 完成 articles make the main list; 待完成 ones (stubs / half-written) sit in a collapsed section.
+  const [publishedArticles, pendingArticles] = useMemo(() => {
+    const published: WikiArticle[] = [];
+    const pending: WikiArticle[] = [];
+    for (const article of allArticles) (isWikiPending(article) ? pending : published).push(article);
+    return [published, pending];
+  }, [allArticles]);
+
+  useEffect(() => {
+    onPublishedCountChange?.(publishedArticles.length);
+  }, [publishedArticles.length, onPublishedCountChange]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const article of publishedArticles) counts.set(article.category, (counts.get(article.category) ?? 0) + 1);
+    return counts;
+  }, [publishedArticles]);
+
   // 搜索和過濾文章
-  const filteredArticles = useMemo(() => {
-    return allArticles.filter((article) => {
+  const matchesFilters = useCallback(
+    (article: WikiArticle): boolean => {
       const matchesCategory = !activeCategory || article.category === activeCategory;
       const matchesSearch =
         !searchQuery ||
@@ -213,8 +236,14 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
         article.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
       return matchesCategory && matchesSearch;
-    });
-  }, [activeCategory, searchQuery, allArticles]);
+    },
+    [activeCategory, searchQuery],
+  );
+  const filteredArticles = useMemo(() => publishedArticles.filter(matchesFilters), [publishedArticles, matchesFilters]);
+  const filteredPending = useMemo(() => pendingArticles.filter(matchesFilters), [pendingArticles, matchesFilters]);
+  const selectedRole = selectedArticle
+    ? WIKI_ARTICLE_ROLE[selectedArticle.id] ?? ARTICLE_TO_ROLE[selectedArticle.id]
+    : undefined;
 
   return (
     <div className="bg-gradient-to-b from-avalon-dark to-black px-3 py-3">
@@ -245,7 +274,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
           </div>
         </motion.div>
 
-        {/* 分類過濾 — 緊湊 1-2 列（全部 + 6 類） */}
+        {/* 分類過濾 — 緊湊 1-2 列（全部 + 各分類；數字只算完成的文章） */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -260,7 +289,8 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
             }`}
           >
-            全部
+            {t('wiki.all')}
+            <span className="ml-1 opacity-60 tabular-nums">{publishedArticles.length}</span>
           </button>
 
           {WIKI_CATEGORIES.map((category) => (
@@ -274,7 +304,8 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
               }`}
             >
               <span>{category.icon}</span>
-              {category.name}
+              {t(`wiki.category.${category.id}`, { defaultValue: category.name })}
+              <span className="opacity-60 tabular-nums">{categoryCounts.get(category.id) ?? 0}</span>
             </button>
           ))}
         </motion.div>
@@ -292,14 +323,16 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
 
         {/* 文章列表 — 格狀，點擊用 modal 呈現（不跳走） */}
         {filteredArticles.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-8"
-          >
-            <p className="text-gray-400 text-base">未找到相關文章</p>
-            <p className="text-gray-500 text-xs mt-1">試試其他搜尋詞或選擇不同的分類</p>
-          </motion.div>
+          filteredPending.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-center py-8"
+            >
+              <p className="text-gray-400 text-base">未找到相關文章</p>
+              <p className="text-gray-500 text-xs mt-1">試試其他搜尋詞或選擇不同的分類</p>
+            </motion.div>
+          )
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredArticles.map((article, index) => (
@@ -318,7 +351,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                     <h3 className="text-base font-bold text-white mb-1 leading-snug">{article.title}</h3>
                     <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{wikiExcerpt(article.excerpt)}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {article.tags.slice(0, 4).map((tag) => (
+                      {displayTags(article.tags).slice(0, 4).map((tag) => (
                         <span
                           key={tag}
                           className="inline-block bg-gray-700/50 text-gray-200 text-[10px] px-1.5 py-0.5 rounded"
@@ -329,19 +362,54 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700">
-                  <div className="flex items-center gap-1">
-                    <Eye size={12} />
-                    {article.views.toLocaleString()} 次閱讀
+                {article.updatedAt && (
+                  <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700">
+                    <div className="flex items-center gap-1">
+                      <Calendar size={12} />
+                      {article.updatedAt.toLocaleDateString('zh-TW')}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    {article.updatedAt.toLocaleDateString('zh-TW')}
-                  </div>
-                </div>
+                )}
               </motion.button>
             ))}
           </div>
+        )}
+
+        {/* 待完成 — stubs and half-written articles, collapsed by default (Edward 2026-10-28) */}
+        {filteredPending.length > 0 && (
+          <section className="border border-dashed border-gray-600 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setShowPending((v) => !v)}
+              aria-expanded={showPending}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-300 hover:text-white"
+            >
+              <PencilLine size={14} className="text-amber-400 shrink-0" />
+              <span className="font-semibold">{t('wiki.pendingToggle', { count: filteredPending.length })}</span>
+              <span className="text-[11px] text-gray-500 truncate flex-1 min-w-0">{t('wiki.pendingHint')}</span>
+              <ChevronDown size={16} className={`shrink-0 transition-transform ${showPending ? 'rotate-180' : ''}`} />
+            </button>
+            {showPending && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 px-3 pb-3">
+                {filteredPending.map((article) => (
+                  <button
+                    key={article.id}
+                    type="button"
+                    onClick={() => setSelectedArticle(article)}
+                    className="text-left px-3 py-2 rounded-md border border-gray-700 bg-avalon-card/20 hover:border-amber-400 transition-colors"
+                  >
+                    <div className="flex items-start gap-2">
+                      <h3 className="flex-1 min-w-0 text-sm font-semibold text-gray-200 leading-snug break-words">{article.title}</h3>
+                      <span className="shrink-0 text-[10px] font-semibold text-amber-300 border border-amber-500/50 rounded px-1 py-0.5 leading-none">
+                        {t('wiki.pendingBadge')}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 leading-snug">{wikiExcerpt(article.excerpt)}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
         )}
       </div>
 
@@ -378,15 +446,19 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
               </div>
 
               <div className="px-3 py-3 md:px-4 md:py-4">
+                {isWikiPending(selectedArticle) && (
+                  <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-xs text-amber-200">
+                    <PencilLine size={14} className="shrink-0" />
+                    {t('wiki.pendingBanner')}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-3 text-[10px] text-gray-400 pb-2 border-b border-gray-700 mb-3">
-                  <div className="flex items-center gap-1">
-                    <Eye size={12} />
-                    {selectedArticle.views.toLocaleString()}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    {selectedArticle.updatedAt.toLocaleDateString('zh-TW')}
-                  </div>
+                  {selectedArticle.updatedAt && (
+                    <div className="flex items-center gap-1">
+                      <Calendar size={12} />
+                      {selectedArticle.updatedAt.toLocaleDateString('zh-TW')}
+                    </div>
+                  )}
                   <span>{selectedArticle.author}</span>
                 </div>
 
@@ -401,15 +473,15 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 </div>
 
                 {/* Role stats card for character articles */}
-                {ARTICLE_TO_ROLE[selectedArticle.id] && ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                {selectedRole && ROLE_STATS[selectedRole] && (
                   <div className="mt-4">
-                    <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                    <RoleStatsCard role={ROLE_STATS[selectedRole]} />
                   </div>
                 )}
                 {/* Role short video */}
-                {ARTICLE_TO_ROLE[selectedArticle.id] && VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                {selectedRole && VIDEO_BY_ROLE[selectedRole] && (
                   <div className="mt-4">
-                    <RoleVideoCard video={VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                    <RoleVideoCard video={VIDEO_BY_ROLE[selectedRole]} />
                   </div>
                 )}
               </div>

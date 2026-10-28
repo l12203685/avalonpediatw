@@ -5,6 +5,7 @@ import StreamsSection from '../components/StreamsSection';
 import { BookOpen, Users, Lightbulb, ArrowLeft, BarChart3, Youtube } from 'lucide-react';
 import { useState } from 'react';
 import { TOTAL_UNIQUE_GAMES } from '../data/roleStats';
+import { WIKI_ARTICLES, WIKI_CATEGORIES, isWikiPending } from '../data/wiki';
 
 type WikiTab = 'articles' | 'streams';
 
@@ -13,6 +14,8 @@ export default function WikiPage(): JSX.Element {
   const [activeTab, setActiveTab] = useState<WikiTab>('articles');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [showContributeMsg, setShowContributeMsg] = useState(false);
+  // 完成 articles only (待完成 stubs are listed apart); WikiContent reports the merged count once the API loads.
+  const [publishedCount, setPublishedCount] = useState(() => WIKI_ARTICLES.filter((a) => !isWikiPending(a)).length);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black">
@@ -50,14 +53,14 @@ export default function WikiPage(): JSX.Element {
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg px-2 py-1 flex items-baseline justify-center gap-1"
             >
-              <span className="text-base font-bold text-yellow-400 leading-none">6</span>
+              <span className="text-base font-bold text-yellow-400 leading-none">{WIKI_CATEGORIES.length}</span>
               <span className="text-gray-400 text-[11px] leading-none">個文章分類</span>
             </motion.div>
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="bg-avalon-card/50 border border-gray-600 rounded-lg px-2 py-1 flex items-baseline justify-center gap-1"
             >
-              <span className="text-base font-bold text-yellow-400 leading-none">140+</span>
+              <span className="text-base font-bold text-yellow-400 leading-none tabular-nums">{publishedCount}</span>
               <span className="text-gray-400 text-[11px] leading-none">篇詳細文章</span>
             </motion.div>
             <motion.div
@@ -111,7 +114,7 @@ export default function WikiPage(): JSX.Element {
           >
             {/* Wiki 文章列表 + modal 呈現（不跳頁） — 分類 chip 在 WikiContent 內，避免重複 */}
             <div id="wiki-content">
-              <WikiContent selectedCategory={selectedCategory} key={selectedCategory} />
+              <WikiContent selectedCategory={selectedCategory} key={selectedCategory} onPublishedCountChange={setPublishedCount} />
             </div>
           </motion.div>
         ) : (
