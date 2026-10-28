@@ -51,6 +51,7 @@
  *   flag in the reasoning trace.
  */
 
+import { merlinDoomedRedCover } from '../MerlinCover';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -691,7 +692,8 @@ export class ForwardAgent implements AvalonAgent {
    * when the caller wants the reasoning trace (PR3 wiring + tests).
    */
   act(obs: PlayerObservation): AgentAction {
-    return this.decide(obs).action;
+    // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
+    return merlinDoomedRedCover(this.baseline.tuning, obs, this.decide(obs).action);
   }
 
   /**

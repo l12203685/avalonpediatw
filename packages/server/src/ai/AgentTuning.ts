@@ -382,6 +382,12 @@ export interface AgentTuning {
    * 第 5 次強制提議藍方一律贊成（有開就套用）。
    */
   teamPassRank: number;
+  /**
+   * 梅林在注定被否決的提議裡放一個看得到的紅（2026-10-28，優化迴圈第 1 回合）：第 1、2 局非強制的提議照裁定一律
+   * 正常票、一定被否決；梅林在這些提議裡換一個看得到的紅進去，讓刺客的「派過可見紅的隊長排除」把他排除。
+   * 強制提議與第 3 局起照常（`MerlinCover.ts`）。
+   */
+  merlinDoomedRed: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -419,6 +425,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'assassinVisibleRedLikelihood',
   'returnLake',
   'teamPassRank',
+  'merlinDoomedRed',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -455,6 +462,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedLikelihood: false,
   returnLake: false,
   teamPassRank: 0,
+  merlinDoomedRed: false,
 });
 
 /**
@@ -639,6 +647,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedLikelihood: false,
   returnLake: true,
   teamPassRank: 0,
+  merlinDoomedRed: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -675,6 +684,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   assassinVisibleRedLikelihood: 'AVALON_TUNING_ASSASSIN_VISIBLE_RED_LIKELIHOOD',
   returnLake: 'AVALON_TUNING_RETURN_LAKE',
   teamPassRank: 'AVALON_TUNING_TEAM_PASS_RANK',
+  merlinDoomedRed: 'AVALON_TUNING_MERLIN_DOOMED_RED',
 });
 
 function parseBool(raw: string): boolean | undefined {
