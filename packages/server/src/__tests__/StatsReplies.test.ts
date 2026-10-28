@@ -231,7 +231,6 @@ describe('formatPlayerCard', () => {
           sampleSize: 1010,
           hasData: true,
         },
-        axisLabels: { honesty: '誠實度', consistency: '一致度', stickiness: '專精度', flip: '浮動度' },
       },
       playstyle: {
         data: {
@@ -264,7 +263,7 @@ describe('formatPlayerCard', () => {
     expect(text).not.toContain('超額');
     expect(text).not.toContain('59.1'); // the legacy roleTheory is never shown
     expect(text).toContain('擅長角色：刺客 62.3%（106 場）、梅林 65.6%（96 場）；較弱：莫甘娜 50.6%（89 場）');
-    expect(text).toContain('誠實度 83（PR37）');
+    expect(text).toContain('🧭 風格：持湖說真話 83%（高於 37% 玩家）、異常票（隊外白、隊內黑）10.0%（多於 81% 玩家）、最強角色勝率 58.6%（高於 73% 玩家）');
     expect(text).toContain('刺客目標座位偏好 5、2、6 號');
     expect(text).toContain('大小寫不同的寫法目前另列：Hao、hao（同一人，戰績更新後會合併）');
     expect(lines[lines.length - 2]).toBe(theoryFootnote(3));

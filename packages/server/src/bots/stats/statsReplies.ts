@@ -188,8 +188,7 @@ export function formatNameProblem(
 
 export interface PlayerCardInput {
   player: PlayerStats;
-  /** `axisLabels` is the cache's label map (string values, e.g. honesty → 誠實度). */
-  archetype?: { data: ArchetypePlayerData; axisLabels?: Record<string, unknown> | null } | null;
+  archetype?: { data: ArchetypePlayerData } | null;
   strength?: StrengthPlayerData | null;
   playstyle?: { data: PlaystylePlayerData; labels: PlaystyleData['labels'] } | null;
   /** Other rows of the same player spelled differently (old caches only), shown as a hint. */
@@ -208,13 +207,25 @@ export interface PlayerCardInput {
   newcomerRank?: number | null;
 }
 
-const ARCHETYPE_AXES: Array<keyof ArchetypeAxes> = ['honesty', 'consistency', 'stickiness', 'flip'];
-const ARCHETYPE_FALLBACK_LABELS: Record<keyof ArchetypeAxes, string> = {
-  honesty: '誠實度',
-  consistency: '一致度',
-  stickiness: '專精度',
-  flip: '浮動度',
-};
+/**
+ * The style line in plain words (Edward 2026-10-28: 「誠實度、一致度、專精度、浮動度」看不懂). The cache's four axes are
+ * three numbers: 一致度 = 100 − 浮動度 (both are the anomaly-vote rate × 5), so only one is shown, as the rate itself;
+ * PR is said as the share of players below.
+ */
+function archetypeParts(axes: ArchetypeAxes, percentiles: Partial<ArchetypeAxes> | undefined): string[] {
+  const parts: string[] = [];
+  const rank = (k: keyof ArchetypeAxes, more: string): string => {
+    const pr = percentiles?.[k];
+    return typeof pr === 'number' ? `（${more}${Math.round(pr)}% 玩家）` : '';
+  };
+  if (typeof axes.honesty === 'number') parts.push(`持湖說真話 ${num(axes.honesty)}%${rank('honesty', '高於 ')}`);
+  // The cache clips the anomaly axis at 100 (a rate of 20% or more).
+  if (typeof axes.flip === 'number') {
+    parts.push(`異常票（隊外白、隊內黑）${axes.flip >= 100 ? '≥20' : num(axes.flip / 5)}%${rank('flip', '多於 ')}`);
+  }
+  if (typeof axes.stickiness === 'number') parts.push(`最強角色勝率 ${num(axes.stickiness)}%${rank('stickiness', '高於 ')}`);
+  return parts;
+}
 
 function strengthLine(strength: StrengthPlayerData | null | undefined): string | null {
   if (!strength?.hasData || !Array.isArray(strength.roles)) return null;
@@ -230,14 +241,8 @@ function strengthLine(strength: StrengthPlayerData | null | undefined): string |
 }
 
 function archetypeLine(arch: PlayerCardInput['archetype']): string | null {
-  if (!arch?.data?.hasData) return null;
-  const { axes, percentiles } = arch.data;
-  const parts = ARCHETYPE_AXES.filter((k) => typeof axes?.[k] === 'number').map((k) => {
-    const given = arch.axisLabels?.[k];
-    const label = typeof given === 'string' && given ? given : ARCHETYPE_FALLBACK_LABELS[k];
-    const pr = percentiles?.[k];
-    return `${label} ${num(axes[k])}${typeof pr === 'number' ? `（PR${Math.round(pr)}）` : ''}`;
-  });
+  if (!arch?.data?.hasData || !arch.data.axes) return null;
+  const parts = archetypeParts(arch.data.axes, arch.data.percentiles);
   if (parts.length === 0) return null;
   return `🧭 風格：${parts.join('、')}`;
 }
