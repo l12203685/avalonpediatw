@@ -72,6 +72,7 @@ import {
   bucketDeclarerVoteBias,
 } from '../priors/EvActionPriors';
 import { CERTAINTY_EPS, buildCertainty, type CertaintyView } from '../belief/Certainty';
+import { bayesRedShare } from '../belief/BayesBelief';
 import { defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from '../belief/BeliefOptions';
 import { beliefFailCards } from '../missionFacts';
 
@@ -477,7 +478,10 @@ export function computePyramidScores(
     applyChainProjection(scores, lakeChain, new Set([...hardRed, ...hardBlue]));
   }
   // worldShareBelief: a good viewer's suspicion is its share of the consistent worlds (see BeliefOptions).
-  if (opts.worldShare && obs.myTeam === 'good') {
+  if (opts.bayes && obs.myTeam === 'good') {
+    const post = bayesRedShare(obs);
+    for (const id of obs.allPlayerIds) scores.set(id, id === obs.myPlayerId ? 0 : post.get(id) ?? 0.5);
+  } else if (opts.worldShare && obs.myTeam === 'good') {
     const view = buildCertainty(obs);
     for (const id of obs.allPlayerIds) scores.set(id, id === obs.myPlayerId ? 0 : view.uniformRedShare(id));
   }

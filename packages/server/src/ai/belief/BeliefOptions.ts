@@ -40,11 +40,16 @@ export interface BeliefOptions {
    * (`scripts/beliefCalibration.ts`). Optional: absent = off.
    */
   worldShare?: boolean;
+  /**
+   * `bayesBelief` (2026-10-28, stage-3 belief engine): a good viewer's suspicion = the Bayes posterior over the
+   * consistent worlds with the human-record action likelihoods (`BayesBelief.ts`). Wins over `worldShare`.
+   */
+  bayes?: boolean;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -63,6 +68,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     chainProjection: tuning.beliefChainProjection,
     forcedVotesZero: tuning.forcedVoteZeroBits,
     worldShare: tuning.worldShareBelief,
+    bayes: tuning.bayesBelief,
   };
 }
 

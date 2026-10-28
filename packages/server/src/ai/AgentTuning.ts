@@ -400,6 +400,11 @@ export interface AgentTuning {
    * 只換藍方座位的嫌疑分數（`BeliefOptions.worldShare`），紅方不變。
    */
   worldShareBelief: boolean;
+  /**
+   * 藍方的嫌疑 = 貝氏後驗（2026-10-28，第三階段信念引擎）：確定性層的世界 × 真人牌譜的動作概似
+   * （`belief/BayesBelief.ts`、`likelihoods.json`）。開了就蓋過 `worldShareBelief`。紅方不變。
+   */
+  bayesBelief: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -440,6 +445,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinDoomedRed',
   'goodLeaderWorldPick',
   'worldShareBelief',
+  'bayesBelief',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -479,6 +485,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinDoomedRed: false,
   goodLeaderWorldPick: 0,
   worldShareBelief: false,
+  bayesBelief: false,
 });
 
 /**
@@ -666,6 +673,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinDoomedRed: false,
   goodLeaderWorldPick: 0,
   worldShareBelief: false,
+  bayesBelief: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -705,6 +713,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinDoomedRed: 'AVALON_TUNING_MERLIN_DOOMED_RED',
   goodLeaderWorldPick: 'AVALON_TUNING_GOOD_LEADER_WORLD_PICK',
   worldShareBelief: 'AVALON_TUNING_WORLD_SHARE_BELIEF',
+  bayesBelief: 'AVALON_TUNING_BAYES_BELIEF',
 });
 
 function parseBool(raw: string): boolean | undefined {
