@@ -299,13 +299,14 @@ describe('explain (read-only reasons)', () => {
   });
 
   it('ties are not shown as a ranking; Oberon gets the public view', () => {
-    // Round 1, no history: every pyramid score is the 0.50 prior.
+    // Round 1, no history: a blue seat's suspicion is the Bayes prior, 4 reds among the 9 others = 0.44
+    // (`bayesBelief`, 2026-10-28; the pyramid's flat 0.50 before).
     const fresh = obs({ currentRound: 1, questResults: [], voteHistory: [], questHistory: [], gamePhase: 'team_select', proposedTeam: [] });
     const prop = explainTeamProposal(fresh, ['s1', 's2', 's3']);
     expect(prop.suspects).toEqual([]);
-    expect(prop.suspectsNote).toBe('尚無區分（全員 0.50）');
-    expect(prop.reason).toContain('隊上最可疑：尚無區分（全員 0.50）');
-    expect(prop.reason).not.toMatch(/2家 0\.50、3家 0\.50/);
+    expect(prop.suspectsNote).toBe('尚無區分（全員 0.44）');
+    expect(prop.reason).toContain('隊上最可疑：尚無區分（全員 0.44）');
+    expect(prop.reason).not.toMatch(/2家 0\.44、3家 0\.44/);
 
     const oberon = { myRole: 'oberon', myTeam: 'evil', knownEvils: [] } as Partial<PlayerObservation>;
     const vote = explainTeamVote(obs({ ...oberon }), true);
@@ -318,8 +319,16 @@ describe('explain (read-only reasons)', () => {
     expect(lake.reason).not.toContain('像梅林');
 
     // Partial ties: the list stays, with a note that seat order broke the tie.
-    // Here seats 5 and 6 (both on the failed R1 team) tie for third place.
-    const failed = explainTeamVote(obs({}), false);
+    // Here seats 5 and 6 (both on the failed R1 team) tie for third place — on the pyramid (the Bayes
+    // posterior of the production default, 2026-10-28, ranks the three failed-mission seats first instead).
+    // (the review reads the default beliefs, so the switch goes through the environment)
+    process.env.AVALON_TUNING_BAYES_BELIEF = '0';
+    let failed: ReturnType<typeof explainTeamVote>;
+    try {
+      failed = explainTeamVote(obs({}), false, new HeuristicAgent('s1', undefined, undefined, { bayesBelief: false }));
+    } finally {
+      delete process.env.AVALON_TUNING_BAYES_BELIEF;
+    }
     expect(failed.suspects.map((x) => x.seat)).toEqual([2, 8, 5]);
     expect(failed.suspectsNote).toBe('另有 1 人同為 0.65，依座位順序只列前 3 位');
 
