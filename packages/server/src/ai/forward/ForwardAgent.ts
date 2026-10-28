@@ -1300,6 +1300,8 @@ export class ForwardAgent implements AvalonAgent {
         ? this.baseline.tuning.r3NormalVotePrior
         : 0;
     const selfOnProposedTeam = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
+    const worldPick = decisionType === 'team_select' && this.baseline.tuning.goodLeaderWorldPick > 0
+      ? goodLeaderWorldPickFor(this.baseline.tuning, obs, computePyramidScores(obs, this.belief)) : null;
     const scoredCandidates = candidates.map((c, i) => {
       let s = scoreCandidate(c, purposes, obs, interp, roleSignals);
       if (
@@ -1311,6 +1313,9 @@ export class ForwardAgent implements AvalonAgent {
       }
       if (reuseBonus && c.action.type === 'team_select') {
         s += reuseBonus(c.action.teamIds);
+      }
+      if (worldPick && c.action.type === 'team_select') {
+        s += worldPick.weight * worldPick.pass(c.action.teamIds);
       }
       if (
         c.action.type === 'team_select' &&
@@ -1936,6 +1941,18 @@ export class ForwardAgent implements AvalonAgent {
       }
     }
 
+    // `goodLeaderWorldPick`: the team that passes most often over the consistent worlds is always a candidate
+    // (if no gate bars it); the scorer adds weight × pass chance to every candidate.
+    const worldPick = goodLeaderWorldPickFor(this.baseline.tuning, obs, pyramid);
+    if (worldPick) {
+      const best = worldPick.best(teamSize);
+      const view = certaintyFor(obs);
+      if (best && teamGateBreach(obs, view, best, obs.currentRound ?? 1, this.gates) === null
+        && !candidates.some((c) => c.action.type === 'team_select' && sameTeam(c.action.teamIds, best))) {
+        candidates.push(this.makeTeamSelectCandidate(best, obs, interp, pyramid));
+      }
+    }
+
     return candidates;
   }
 
@@ -2441,6 +2458,61 @@ function teamPassRanks(obs: PlayerObservation, pyramid: PyramidScores, knownEvil
   const entry = { pyramid, rankOf };
   passRankCache.set(obs, entry);
   return entry;
+}
+
+function sameTeam(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id) => b.includes(id));
+}
+
+// Per observation: the pyramid is a pure function of (observation, belief switches), one agent per cache user.
+const worldPickCache = new WeakMap<PlayerObservation, WorldPickTable>();
+interface WorldPickTable { weight: number; pass: (team: readonly string[]) => number; best: (size: number) => string[] | null }
+
+/**
+ * `goodLeaderWorldPick` (good leader, R3+): P(team passes) over the viewer's consistent worlds (L1*), each
+ * world weighted by the pyramid (Π p over its reds × Π (1 − p) over its goods, p clamped to [0.02, 0.98]).
+ * `best(size)` = the team with the viewer on it that passes most often. Null when off or not applicable.
+ * Exported for tests.
+ */
+export function goodLeaderWorldPickFor(tuning: Readonly<{ goodLeaderWorldPick: number }>, obs: PlayerObservation, pyramid: PyramidScores): WorldPickTable | null {
+  if (!(tuning.goodLeaderWorldPick > 0) || obs.myTeam !== 'good' || (obs.currentRound ?? 1) < 3) return null;
+  const hit = worldPickCache.get(obs);
+  if (hit) return hit;
+  const view = certaintyFor(obs);
+  const worlds = view.worlds('L1*');
+  const ids = obs.allPlayerIds;
+  const p = ids.map((id) => Math.min(0.98, Math.max(0.02, pyramid.scores.get(id) ?? 0.5)));
+  const weights = worlds.map((w) => ids.reduce((acc, _id, i) => acc * ((w >> i) & 1 ? p[i] : 1 - p[i]), 1));
+  const total = weights.reduce((a, b) => a + b, 0);
+  const round = obs.currentRound ?? 1;
+  const need = AVALON_CONFIG[obs.playerCount]?.questFailsRequired?.[round - 1] ?? 1;
+  const popcount = (x: number): number => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
+  const pass = (team: readonly string[]): number => {
+    if (total <= 0) return 0;
+    const m = view.maskOf(team);
+    let s = 0;
+    worlds.forEach((w, i) => { if (popcount(w & m) < need) s += weights[i]; });
+    return s / total;
+  };
+  const best = (size: number): string[] | null => {
+    const others = ids.filter((id) => id !== obs.myPlayerId);
+    let bestTeam: string[] | null = null; let bestP = -1;
+    const pick: string[] = [];
+    const walk = (from: number): void => {
+      if (pick.length === size - 1) {
+        const team = [obs.myPlayerId, ...pick];
+        const v = pass(team);
+        if (v > bestP + 1e-12) { bestP = v; bestTeam = team; }
+        return;
+      }
+      for (let i = from; i <= others.length - (size - 1 - pick.length); i++) { pick.push(others[i]); walk(i + 1); pick.pop(); }
+    };
+    if (size >= 1) walk(0);
+    return bestTeam;
+  };
+  const table = { weight: tuning.goodLeaderWorldPick, pass, best };
+  worldPickCache.set(obs, table);
+  return table;
 }
 
 // ── Re-exports for tests ────────────────────────────────────────

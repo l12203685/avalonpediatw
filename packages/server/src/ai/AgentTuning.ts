@@ -388,6 +388,12 @@ export interface AgentTuning {
    * 強制提議與第 3 局起照常（`MerlinCover.ts`）。
    */
   merlinDoomedRed: boolean;
+  /**
+   * 藍方隊長用「所有符合紀錄的分配」挑隊（2026-10-28，優化迴圈第 1 回合）：第 3 局起，藍方隊長把每一隊「會過」的機率
+   * 用確定性層的世界（L1*）算——每個世界依金字塔嫌疑加權（紅的人乘 p、好的人乘 1−p）——並把最好的那隊加進候選；
+   * 每個候選的分數加上 權重 × 會過的機率。0 = 關；只寫名字 = 10。
+   */
+  goodLeaderWorldPick: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -426,6 +432,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'returnLake',
   'teamPassRank',
   'merlinDoomedRed',
+  'goodLeaderWorldPick',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -463,6 +470,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   returnLake: false,
   teamPassRank: 0,
   merlinDoomedRed: false,
+  goodLeaderWorldPick: 0,
 });
 
 /**
@@ -648,6 +656,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   returnLake: true,
   teamPassRank: 0,
   merlinDoomedRed: false,
+  goodLeaderWorldPick: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -685,6 +694,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   returnLake: 'AVALON_TUNING_RETURN_LAKE',
   teamPassRank: 'AVALON_TUNING_TEAM_PASS_RANK',
   merlinDoomedRed: 'AVALON_TUNING_MERLIN_DOOMED_RED',
+  goodLeaderWorldPick: 'AVALON_TUNING_GOOD_LEADER_WORLD_PICK',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -711,6 +721,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 0.6 : Number.parseFloat(raw);
     if (!Number.isFinite(value)) throw new Error(`r3NormalVotePrior needs a number, got "${raw}"`);
     return { r3NormalVotePrior: value };
+  }
+  if (name === 'goodLeaderWorldPick') {
+    const value = raw === undefined ? 10 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
+    return { goodLeaderWorldPick: value };
   }
   if (name === 'teamPassRank') {
     // 範圍 0–4；只寫名字 = 1（派隊與投票都用）。
@@ -759,6 +774,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
+    if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
     if (t[key]) parts.push(key);
   }
   return parts.length === 0 ? 'legacy' : parts.join(',');
