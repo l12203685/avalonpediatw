@@ -740,3 +740,12 @@ USE_FORWARD_REASONING=true npx tsx scripts/agreementBenchmark.ts --player ED --p
 # CI 樣本
 pnpm --filter @avalon/server exec vitest run src/ai/invariants
 ```
+
+## 10B. 優化迴圈第 1 回合（2026-10-28）
+
+- 藍方嫌疑改用貝氏後驗（`bayesBelief`）：起點是確定性層的世界（規則、約定、視野、湖結果），每個先前的動作依「在那個
+  分配下、那個人當時會這樣做」的機率加權（概似表 = 真人牌譜彙總，`scripts/fitBeliefLikelihoods.ts`）。確定性層照舊管
+  「確定」，貝氏只在確定性層留下的世界裡分機率，所以不變量不受影響（全部 0）。
+- 派拇指躲刺（`merlinDoomedRed`，Edward 10/28）：梅林在第 1、2 局非強制的提議（正常票一定否決）放一個看得到的紅。
+  INV-T1、INV-M1 對這個情況另記豁免，其他情況照舊 enforced（`MerlinCover.test.ts`）。
+

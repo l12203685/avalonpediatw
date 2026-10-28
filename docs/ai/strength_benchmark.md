@@ -1877,3 +1877,11 @@ USE_FORWARD_REASONING=true pnpm --filter @avalon/server exec tsx scripts/selfPla
 結論：賽點的投票是機率判斷、不是規則，而且單一座位期望勝率略降，所以**預設關**，開關留著。順帶看到的大問題：全機器人的局，藍方各角色勝率約 13%、紅方約 86.5%——藍方佔抽角的 6 成，期望勝率能進步的空間幾乎都在藍方的派隊與投票。
 
 重跑：`USE_FORWARD_REASONING=true npx tsx scripts/seatEV.ts --flag teamPassRank=4 --base teamPassRank=0 --games 30000 --seed 271001`（271002、271003 同）。
+
+## 23. 優化迴圈第 1 回合（藍方，2026-10-28）
+
+詳細表格與判斷在 `docs/ai/optimization_loop.md` 第 4 節「第 1 回合」。採用 `bayesBelief`（藍方嫌疑 = 確定性層世界 ×
+真人牌譜動作概似的貝氏後驗，`belief/BayesBelief.ts`）與 `merlinDoomedRed`（派拇指躲刺，`MerlinCover.ts`）。
+陣營一起換：藍方總勝率約 13.5% → 32%；單一座位期望勝率（種子 282001–282003 × 6,000）**+1.18pp [+0.82, +1.54]**。
+不採用：`goodLeaderWorldPick`（−0.4pp）。`worldShareBelief` 保留開關、預設關（被貝氏取代）。
+
