@@ -11,6 +11,7 @@
  * off, then the new one.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { withSeededRandom } from './benchmark/agreement';
 import { DEFAULT_AGENT_TUNING, type AgentTuning } from './AgentTuning';
 import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent, inferRedsFromTaskFails, percivalSignalsWithoutTie } from './forward/ForwardAgent';
@@ -130,13 +131,15 @@ describe('S1-6 Percival votes as a loyal (percivalLoyalVote)', () => {
 
   it('the fallback path (HeuristicAgent) drops the shortcut too', () => {
     const o = practice();
+    // The baseline vote carries a noise flip (`applyNoise`, about 6% here: not a finish-line decision, R4
+    // needs two fails), so the draws are seeded — unseeded, 1 run in ~17 approved (a main CI run, 2026-10-28).
     const legacy = new HeuristicAgent('P10', undefined, undefined, VOTE_OFF);
     legacy._ingestForTesting(o);
-    const a0 = legacy.actDirect(o);
+    const a0 = withSeededRandom('1EF-fallback-legacy', () => legacy.actDirect(o));
     expect(a0).toEqual({ type: 'team_vote', vote: true });
     const now = new HeuristicAgent('P10', undefined, undefined, ON);
     now._ingestForTesting(o);
-    expect(now.actDirect(o)).toEqual({ type: 'team_vote', vote: false });
+    expect(withSeededRandom('1EF-fallback-now', () => now.actDirect(o))).toEqual({ type: 'team_vote', vote: false });
   });
 
   // Both thumbs on the team: exactly one is red, so the team holds a certain
