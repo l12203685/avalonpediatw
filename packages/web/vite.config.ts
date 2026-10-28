@@ -78,6 +78,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@shared': path.resolve(__dirname, '../shared/src'),
       '@avalon/shared': path.resolve(__dirname, '../shared/src'),
+      // 百科文章的備份 (Edward 2026-10-28：伺服器休眠或連不上時百科照樣能看)：伺服器的 wiki_data.json 打包成
+      // 獨立的 chunk，只有 API 失敗時才載入 (型別見 src/wikiBundle.d.ts)。
+      '@wiki-bundle': path.resolve(__dirname, '../server/wiki_data.json'),
     },
   },
   server: {
