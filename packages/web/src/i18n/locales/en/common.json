@@ -1508,5 +1508,108 @@
     "renameEmptyError": "Name cannot be blank",
     "renameFailed": "Rename failed, please try again later",
     "renameSuccess": "Name updated"
+  },
+  "statTerms": {
+    "label": {
+      "def": "Definition",
+      "calc": "How it's computed",
+      "meaning": "How to read it"
+    },
+    "finalWinRate": {
+      "name": "Final win rate",
+      "def": "Share of games won in the end (assassination included).",
+      "calc": "Wins ÷ games. Red wins = three failed missions, or three successes and Merlin assassinated; Blue wins = three successes and Merlin survives.",
+      "meaning": "The plain win rate, but it depends on the roles drawn: red roles win more often."
+    },
+    "expectedWinRate": {
+      "name": "Expected win rate",
+      "def": "The final win rate an average player would have with the roles you drew.",
+      "calc": "Σ (your games as a role × everyone's average final win rate in that role) ÷ your games.",
+      "meaning": "A baseline: a player who drew more red roles has a higher expected win rate."
+    },
+    "excessWinRate": {
+      "name": "Excess win rate",
+      "def": "How much more (or less) you win than an average player once role-draw luck is removed.",
+      "calc": "Final win rate − expected win rate (percentage points). The expected rate uses everyone's average win rate in each role, weighted by your games in that role.",
+      "meaning": "+5 = with the same roles you win 5 points more than average; 0 = average; negative = below average. Noisy with few games."
+    },
+    "redWinRate": {
+      "name": "Red win rate",
+      "def": "Final win rate when on Red (Assassin, Morgana, Mordred, Oberon).",
+      "calc": "Red wins (three fails + Merlin assassinated) ÷ games on Red.",
+      "meaning": "Red's average is high; compare with other players' red rates, not with blue rates."
+    },
+    "blueWinRate": {
+      "name": "Blue win rate",
+      "def": "Final win rate when on Blue (Merlin, Percival, Loyal Servants).",
+      "calc": "Blue wins (three successes and Merlin survives) ÷ games on Blue.",
+      "meaning": "Blue's average is low; compare with other players' blue rates."
+    },
+    "roleTheory": {
+      "name": "Role-theory win rate",
+      "def": "Your expected win rate if every role were drawn at its standard rate.",
+      "calc": "Σ draw probability × your final win rate in the role (10 players: Loyal 4/10, the other six roles 1/10 each). A role with too few games uses the population average.",
+      "meaning": "Removes role-draw luck: how well you play each role."
+    },
+    "positionTheory": {
+      "name": "Position-theory win rate",
+      "def": "Your expected win rate if every seat came up equally often.",
+      "calc": "Σ 1/10 × your final win rate in seat 1–10. A seat with too few games uses the population average.",
+      "meaning": "Removes seat luck: how well you play from each seat."
+    },
+    "overallTheory": {
+      "name": "Overall-theory win rate",
+      "def": "Your expected win rate if roles and seats were both drawn at their standard rates.",
+      "calc": "Σ role draw probability × 1/10 × your final win rate in that role × seat cell. With 7 × 10 cells most players lack games in many cells; those use the population average.",
+      "meaning": "The most complete in theory, but often short of data; the more cells filled in, the closer it stays to average."
+    },
+    "missionWinRate": {
+      "name": "Mission win rate",
+      "def": "Share of games your side won the mission phase (before the assassination).",
+      "calc": "On Blue: games that reached three successes; on Red: games that reached three failures.",
+      "meaning": "Team picks, votes and mission cards, without the assassination."
+    },
+    "assassinWinRate": {
+      "name": "Assassination win rate",
+      "def": "After three successful missions, the share your side won the assassination.",
+      "calc": "Three-success games only. On Blue: Merlin survived ÷ those games; on Red: Merlin hit ÷ those games.",
+      "meaning": "Blue: hiding Merlin; Red: finding Merlin. Fewer games count, so n is shown."
+    },
+    "coWin": {
+      "name": "Won / lost together",
+      "def": "Games the two played on one team and won (or lost).",
+      "calc": "A count. If both won the same game, they were on the same team.",
+      "meaning": "Mostly how often the two play and share a team."
+    },
+    "winCorr": {
+      "name": "When I win, so do they",
+      "def": "Of my wins, the share where they won too.",
+      "calc": "Won together ÷ my total wins × 100%. Not a correlation coefficient, so never negative; row = me, column = them, and the two directions differ.",
+      "meaning": "A high value mostly means they often share my team; see Net chemistry for chemistry."
+    },
+    "coWinMinusLose": {
+      "name": "Net chemistry",
+      "def": "On my team, do they win with me more or lose with me more?",
+      "calc": "\"When I win, so do they\" minus \"when I lose, so do they\" (percentage points).",
+      "meaning": "Positive = we win together more often; negative = we lose together more often. How often we share a team cancels out."
+    },
+    "lakeTruth": {
+      "name": "Truthful lake claims",
+      "def": "Share of Lady of the Lake claims that matched the target's real side.",
+      "calc": "Matching claims ÷ claims made, Blue and Red together.",
+      "meaning": "Blue almost always tells the truth; lying is normal for Red, so players often on Red score lower."
+    },
+    "anomalyVote": {
+      "name": "Off-pattern votes",
+      "def": "Votes against the usual pattern: approving a team you're not on, or rejecting a team you're on.",
+      "calc": "Off-pattern votes ÷ all votes.",
+      "meaning": "Higher = less conventional voting; it can carry information or be random."
+    },
+    "topRoleWinRate": {
+      "name": "Best-role win rate",
+      "def": "Final win rate in your best role.",
+      "calc": "The highest final win rate among roles with at least 3 games.",
+      "meaning": "How strong your best role is."
+    }
   }
 }

@@ -15,6 +15,8 @@
  */
 import { useEffect, useState } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
+import Term from '../analysis/ui/Term';
+import type { StatTermKey } from '../analysis/ui/statTerms';
 import {
   fetchPlayerArchetype,
   getErrorMessage,
@@ -30,6 +32,7 @@ type AxisKey = keyof ArchetypePlayerResponse['data']['axes'];
 
 interface StyleRow {
   key: AxisKey;
+  term: StatTermKey;
   label: string;
   /** The rate shown, from the raw axis. */
   value: (axis: number) => string;
@@ -40,15 +43,15 @@ interface StyleRow {
 
 const ROWS: StyleRow[] = [
   {
-    key: 'honesty', label: '持湖說真話', value: (v) => `${v.toFixed(1)}%`, compare: '高於',
+    key: 'honesty', term: 'lakeTruth', label: '持湖說真話', value: (v) => `${v.toFixed(1)}%`, compare: '高於',
     help: '拿到湖中女神後，宣告和實際陣營相符的比例（藍紅合算；紅方說謊是正常戰術）',
   },
   {
-    key: 'flip', label: '異常票', value: (v) => (v >= 100 ? '≥20%' : `${(v / 5).toFixed(1)}%`), compare: '多於',
+    key: 'flip', term: 'anomalyVote', label: '異常票', value: (v) => (v >= 100 ? '≥20%' : `${(v / 5).toFixed(1)}%`), compare: '多於',
     help: '隊外投白、隊內投黑的比例（越高 = 投票越不照常規）',
   },
   {
-    key: 'stickiness', label: '最強角色勝率', value: (v) => `${v.toFixed(1)}%`, compare: '高於',
+    key: 'stickiness', term: 'topRoleWinRate', label: '最強角色勝率', value: (v) => `${v.toFixed(1)}%`, compare: '高於',
     help: '自己勝率最高的那個角色的勝率',
   },
 ];
@@ -109,7 +112,7 @@ export default function ArchetypeRadar({ playerName }: ArchetypeRadarProps): JSX
           return (
             <div key={row.key} data-testid={`style-row-${row.key}`}>
               <div className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="font-semibold text-gray-200">{row.label}</span>
+                <span className="font-semibold text-gray-200"><Term term={row.term}>{row.label}</Term></span>
                 <span className="text-white font-bold tabular-nums">{row.value(axis)}</span>
               </div>
               <div className="h-1.5 bg-zinc-800 rounded-full mt-1 overflow-hidden" aria-hidden>

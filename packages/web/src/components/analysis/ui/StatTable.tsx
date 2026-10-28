@@ -4,6 +4,8 @@ import {
   TONE_HEX, TONE_TEXT, formatInt, formatRate, formatText, toPercent,
   type PctScale, type Tone,
 } from './tokens';
+import Term from './Term';
+import type { StatTermKey } from './statTerms';
 
 /**
  * StatTable — 密集的數字表 (2026-10-14 Edward：「有些可以用表格數字，不一定要用圖」)。
@@ -39,6 +41,8 @@ export interface StatColumn<R> {
   label: ReactNode;
   /** 表頭的滑鼠提示 (完整說明)。 */
   title?: string;
+  /** 統計名詞：表頭變成可以滑鼠移上去／點開看定義、算法、怎麼看 (Term)。 */
+  term?: StatTermKey;
   /** 對齊；預設 text 靠左、數字靠右。 */
   align?: 'left' | 'right' | 'center';
   format?: StatFormat<R>;
@@ -188,7 +192,7 @@ export default function StatTable<R>({
                         stickyHeader ? 'sticky top-0' : ''
                       } ${sticky ? 'sticky left-0 z-20 shadow-[inset_-1px_0_0_#27272a]' : stickyHeader ? 'z-10' : ''} ${col.className ?? ''}`}
                     >
-                      {col.label}
+                      {col.term ? <Term term={col.term}>{col.label}</Term> : col.label}
                     </th>
                   );
                 })}

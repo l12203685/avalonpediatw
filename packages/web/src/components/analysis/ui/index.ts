@@ -18,3 +18,7 @@ export {
   formatInt, formatRate, formatText, outcomeTotal, toPercent,
 } from './tokens';
 export type { OutcomeCounts, OutcomeKey, PctScale, Tone } from './tokens';
+export { default as Term } from './Term';
+export type { TermProps } from './Term';
+export { STAT_TERMS } from './statTerms';
+export type { StatTermKey } from './statTerms';
