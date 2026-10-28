@@ -12,7 +12,8 @@ import {
  * 玩家雷達 > 理論勝率 (2026-10-14 Edward：近 50 場太少 —
  *   角色理論 = Σ 抽到該角色的機率 × 本人該角色最近 K 場的最終勝率 (各角色近 10 場、忠臣近 40 場)
  *   位置理論 = 近 100 場
- *   整體理論 = 生涯全部場次的角色理論，生涯滿 250 場才列)。
+ *   整體理論 = 生涯全部場次的角色理論，生涯滿 250 場才列；2026-10-28 起 = 生涯的位置 × 角色 (70 格)，
+ *   舊快取沒有 career.overallTheory 時仍顯示生涯角色理論)。
  *
  * 左表：三種理論勝率 + 用到的場數 / 視窗、是否打滿、補值格數、同一段場次實際的最終勝率。
  * 右表：角色理論每個角色用到的場次 (勝／場、視窗、進總和的勝率、打滿／未打滿／補值／沒打過)。
@@ -91,12 +92,12 @@ export default function TheoryPanel({
     },
     {
       key: 'overall',
-      rate: overallOk ? career.roleTheory : null,
+      rate: overallOk ? (career.overallTheory ?? career.roleTheory) : null,
       note: career ? t('analytics.r6.radar.theory.overallLocked', { min: settings.overallMinGames }) : pending,
       n: overallOk ? career.games : null,
       range: t('analytics.r6.radar.theory.windowCareer'),
       games: career ? t('analytics.r6.radar.theory.careerGames', { count: career.games }) : '—',
-      topUp: overallOk ? career.sparseRoles : null,
+      topUp: overallOk ? (career.sparseCells ?? career.sparseRoles) : null,
       final: career?.finalWinRate ?? null,
       finalN: career?.games ?? null,
     },

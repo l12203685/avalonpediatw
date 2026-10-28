@@ -1379,7 +1379,7 @@
         "name": "HAO",
         "roleTheory": 57.0,
         "positionTheory": 58.7,
-        "overallTheory": 54.7,
+        "overallTheory": 54.1,
         "finalWinRate": 58.0,
         "games": 100,
         "careerGames": 1131
@@ -1388,7 +1388,7 @@
         "name": "轆",
         "roleTheory": 57.0,
         "positionTheory": 61.8,
-        "overallTheory": 50.0,
+        "overallTheory": 49.7,
         "finalWinRate": 63.0,
         "games": 100,
         "careerGames": 579
@@ -1397,7 +1397,7 @@
         "name": "洋蔥",
         "roleTheory": 53.0,
         "positionTheory": 52.3,
-        "overallTheory": 48.0,
+        "overallTheory": 48.4,
         "finalWinRate": 55.0,
         "games": 100,
         "careerGames": 596
@@ -1406,7 +1406,7 @@
         "name": "豬羊",
         "roleTheory": 53.0,
         "positionTheory": 58.5,
-        "overallTheory": 53.4,
+        "overallTheory": 50.4,
         "finalWinRate": 56.0,
         "games": 100,
         "careerGames": 255
@@ -1415,7 +1415,7 @@
         "name": "呂安",
         "roleTheory": 51.0,
         "positionTheory": 46.4,
-        "overallTheory": 46.4,
+        "overallTheory": 46.8,
         "finalWinRate": 46.0,
         "games": 100,
         "careerGames": 231
@@ -1424,7 +1424,7 @@
         "name": "池",
         "roleTheory": 49.0,
         "positionTheory": 47.0,
-        "overallTheory": 46.7,
+        "overallTheory": 46.9,
         "finalWinRate": 45.0,
         "games": 100,
         "careerGames": 759
@@ -1433,7 +1433,7 @@
         "name": "Dean",
         "roleTheory": 49.0,
         "positionTheory": 52.1,
-        "overallTheory": 50.1,
+        "overallTheory": 50.2,
         "finalWinRate": 52.0,
         "games": 100,
         "careerGames": 496
@@ -1442,7 +1442,7 @@
         "name": "雪怪",
         "roleTheory": 49.0,
         "positionTheory": 50.9,
-        "overallTheory": 45.9,
+        "overallTheory": 45.6,
         "finalWinRate": 52.0,
         "games": 100,
         "careerGames": 416
@@ -1451,7 +1451,7 @@
         "name": "布叮咚瓜茶",
         "roleTheory": 49.0,
         "positionTheory": 55.0,
-        "overallTheory": 44.0,
+        "overallTheory": 44.5,
         "finalWinRate": 52.0,
         "games": 100,
         "careerGames": 226
@@ -1460,7 +1460,7 @@
         "name": "亞可",
         "roleTheory": 49.0,
         "positionTheory": 52.1,
-        "overallTheory": 46.7,
+        "overallTheory": 43.1,
         "finalWinRate": 50.0,
         "games": 100,
         "careerGames": 148
@@ -1560,7 +1560,7 @@
     "topPlayersByOverallTheory": [
       {
         "name": "HAO",
-        "overallTheory": 54.7,
+        "overallTheory": 54.1,
         "positionTheory": 53.4,
         "finalWinRate": 53.3,
         "games": 1131,
@@ -1568,7 +1568,7 @@
       },
       {
         "name": "豬羊",
-        "overallTheory": 53.4,
+        "overallTheory": 50.4,
         "positionTheory": 54.7,
         "finalWinRate": 54.5,
         "games": 255,
@@ -1576,7 +1576,7 @@
       },
       {
         "name": "Dean",
-        "overallTheory": 50.1,
+        "overallTheory": 50.2,
         "positionTheory": 49.7,
         "finalWinRate": 49.6,
         "games": 496,
@@ -1584,7 +1584,7 @@
       },
       {
         "name": "轆",
-        "overallTheory": 50.0,
+        "overallTheory": 49.7,
         "positionTheory": 51.2,
         "finalWinRate": 51.5,
         "games": 579,
@@ -1592,7 +1592,7 @@
       },
       {
         "name": "Vash",
-        "overallTheory": 48.3,
+        "overallTheory": 48.9,
         "positionTheory": 49.1,
         "finalWinRate": 48.3,
         "games": 267,
@@ -1600,7 +1600,7 @@
       },
       {
         "name": "洋蔥",
-        "overallTheory": 48.0,
+        "overallTheory": 48.4,
         "positionTheory": 49.4,
         "finalWinRate": 49.7,
         "games": 596,
@@ -1608,38 +1608,124 @@
       },
       {
         "name": "ED",
-        "overallTheory": 47.8,
+        "overallTheory": 48.0,
         "positionTheory": 48.3,
         "finalWinRate": 48.5,
         "games": 295,
         "careerGames": 295
       },
       {
-        "name": "發達",
-        "overallTheory": 47.3,
-        "positionTheory": 46.6,
+        "name": "池",
+        "overallTheory": 46.9,
+        "positionTheory": 47.4,
         "finalWinRate": 47.3,
-        "games": 406,
-        "careerGames": 406
-      },
-      {
-        "name": "Lori",
-        "overallTheory": 47.0,
-        "positionTheory": 47.9,
-        "finalWinRate": 47.8,
-        "games": 356,
-        "careerGames": 356
+        "games": 759,
+        "careerGames": 759
       },
       {
         "name": "JOY",
-        "overallTheory": 46.8,
+        "overallTheory": 46.7,
         "positionTheory": 45.8,
         "finalWinRate": 46.2,
         "games": 507,
         "careerGames": 507
+      },
+      {
+        "name": "發達",
+        "overallTheory": 46.5,
+        "positionTheory": 46.6,
+        "finalWinRate": 47.3,
+        "games": 406,
+        "careerGames": 406
       }
     ],
-    "gamesKey": "8dfa50ecc5120f84"
+    "roleSeatFinalWinRates": {
+      "刺客": {
+        "1": 66.8,
+        "2": 65.8,
+        "3": 64.9,
+        "4": 69.2,
+        "5": 72.7,
+        "6": 76.8,
+        "7": 68.3,
+        "8": 68.9,
+        "9": 70.5,
+        "10": 76.8
+      },
+      "莫甘娜": {
+        "1": 72.4,
+        "2": 65.3,
+        "3": 68.4,
+        "4": 72.4,
+        "5": 76.1,
+        "6": 68.5,
+        "7": 67.8,
+        "8": 68.0,
+        "9": 68.0,
+        "10": 73.4
+      },
+      "莫德雷德": {
+        "1": 71.3,
+        "2": 65.6,
+        "3": 69.2,
+        "4": 67.3,
+        "5": 79.5,
+        "6": 64.9,
+        "7": 65.4,
+        "8": 69.0,
+        "9": 68.4,
+        "10": 76.1
+      },
+      "奧伯倫": {
+        "1": 68.9,
+        "2": 68.2,
+        "3": 62.5,
+        "4": 69.1,
+        "5": 74.4,
+        "6": 73.9,
+        "7": 64.5,
+        "8": 73.1,
+        "9": 71.6,
+        "10": 74.0
+      },
+      "派西維爾": {
+        "1": 26.6,
+        "2": 27.9,
+        "3": 23.5,
+        "4": 28.8,
+        "5": 34.7,
+        "6": 31.6,
+        "7": 31.1,
+        "8": 27.1,
+        "9": 32.1,
+        "10": 37.2
+      },
+      "梅林": {
+        "1": 27.1,
+        "2": 23.1,
+        "3": 23.8,
+        "4": 26.5,
+        "5": 37.3,
+        "6": 32.1,
+        "7": 27.6,
+        "8": 24.9,
+        "9": 36.0,
+        "10": 42.5
+      },
+      "忠臣": {
+        "1": 30.7,
+        "2": 28.2,
+        "3": 29.3,
+        "4": 30.7,
+        "5": 33.7,
+        "6": 30.1,
+        "7": 27.1,
+        "8": 32.6,
+        "9": 28.6,
+        "10": 30.2
+      }
+    },
+    "gamesKey": "232d7d97c4876d53"
   },
   "players": {
     "players": [
@@ -2214,7 +2300,10 @@
             "from": "2022-03-05",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 54.1,
+            "sparseCells": 1,
+            "populationShare": 0.4
           }
         },
         "voting": {
@@ -2925,7 +3014,10 @@
             "from": "2023-08-16",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.2,
+            "sparseCells": 0,
+            "populationShare": 0.0
           }
         },
         "voting": {
@@ -3636,7 +3728,10 @@
             "from": "2023-08-16",
             "to": "2026-10-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.0,
+            "sparseCells": 2,
+            "populationShare": 1.0
           }
         },
         "voting": {
@@ -4347,7 +4442,10 @@
             "from": "2023-05-02",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.5,
+            "sparseCells": 4,
+            "populationShare": 1.0
           }
         },
         "voting": {
@@ -5058,7 +5156,10 @@
             "from": "2022-04-13",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.9,
+            "sparseCells": 9,
+            "populationShare": 3.6
           }
         },
         "voting": {
@@ -5769,7 +5870,10 @@
             "from": "2022-01-28",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.6,
+            "sparseCells": 8,
+            "populationShare": 3.2
           }
         },
         "voting": {
@@ -6480,7 +6584,10 @@
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.6,
+            "sparseCells": 7,
+            "populationShare": 2.0
           }
         },
         "voting": {
@@ -7191,7 +7298,10 @@
             "from": "2023-10-31",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 48.4,
+            "sparseCells": 11,
+            "populationShare": 4.4
           }
         },
         "voting": {
@@ -7902,7 +8012,10 @@
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 49.7,
+            "sparseCells": 16,
+            "populationShare": 5.4
           }
         },
         "voting": {
@@ -8613,7 +8726,10 @@
             "from": "2024-05-26",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 41.5,
+            "sparseCells": 26,
+            "populationShare": 10.8
           }
         },
         "voting": {
@@ -9324,7 +9440,10 @@
             "from": "2022-06-03",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.7,
+            "sparseCells": 27,
+            "populationShare": 11.8
           }
         },
         "voting": {
@@ -10025,7 +10144,10 @@
             "from": "2022-07-17",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 50.2,
+            "sparseCells": 27,
+            "populationShare": 11.2
           }
         },
         "voting": {
@@ -10731,7 +10853,10 @@
             "from": "2023-05-02",
             "to": "2025-08-15",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.6,
+            "sparseCells": 27,
+            "populationShare": 12.2
           }
         },
         "voting": {
@@ -11442,7 +11567,10 @@
             "from": "2024-09-08",
             "to": "2026-10-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.9,
+            "sparseCells": 25,
+            "populationShare": 11.6
           }
         },
         "voting": {
@@ -12148,7 +12276,10 @@
             "from": "2023-12-08",
             "to": "2026-01-02",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.9,
+            "sparseCells": 33,
+            "populationShare": 16.8
           }
         },
         "voting": {
@@ -12859,7 +12990,10 @@
             "from": "2023-04-15",
             "to": "2026-10-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.6,
+            "sparseCells": 43,
+            "populationShare": 18.4
           }
         },
         "voting": {
@@ -13570,7 +13704,10 @@
             "from": "2022-02-13",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.5,
+            "sparseCells": 36,
+            "populationShare": 17.2
           }
         },
         "voting": {
@@ -14281,7 +14418,10 @@
             "from": "2022-02-15",
             "to": "2026-10-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.2,
+            "sparseCells": 40,
+            "populationShare": 15.6
           }
         },
         "voting": {
@@ -14982,7 +15122,10 @@
             "from": "2023-05-02",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.3,
+            "sparseCells": 43,
+            "populationShare": 19.2
           }
         },
         "voting": {
@@ -15688,7 +15831,10 @@
             "from": "2023-10-12",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.6,
+            "sparseCells": 46,
+            "populationShare": 21.4
           }
         },
         "voting": {
@@ -16389,7 +16535,10 @@
             "from": "2023-09-24",
             "to": "2026-10-08",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.2,
+            "sparseCells": 51,
+            "populationShare": 23.0
           }
         },
         "voting": {
@@ -17090,7 +17239,10 @@
             "from": "2022-07-17",
             "to": "2026-10-10",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 48.0,
+            "sparseCells": 50,
+            "populationShare": 24.8
           }
         },
         "voting": {
@@ -17761,7 +17913,10 @@
             "from": "2022-02-15",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 41.9,
+            "sparseCells": 53,
+            "populationShare": 31.8
           }
         },
         "voting": {
@@ -18447,7 +18602,10 @@
             "from": "2022-07-17",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 48.9,
+            "sparseCells": 49,
+            "populationShare": 28.0
           }
         },
         "voting": {
@@ -19138,7 +19296,10 @@
             "from": "2023-05-02",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.5,
+            "sparseCells": 52,
+            "populationShare": 30.6
           }
         },
         "voting": {
@@ -19829,7 +19990,10 @@
             "from": "2023-08-16",
             "to": "2026-07-11",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 50.4,
+            "sparseCells": 57,
+            "populationShare": 31.2
           }
         },
         "voting": {
@@ -20515,7 +20679,10 @@
             "from": "2023-10-31",
             "to": "2025-05-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.1,
+            "sparseCells": 54,
+            "populationShare": 31.6
           }
         },
         "voting": {
@@ -21216,7 +21383,10 @@
             "from": "2024-01-12",
             "to": "2024-05-21",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.8,
+            "sparseCells": 57,
+            "populationShare": 32.0
           }
         },
         "voting": {
@@ -21892,7 +22062,10 @@
             "from": "2023-10-12",
             "to": "2026-10-10",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.5,
+            "sparseCells": 55,
+            "populationShare": 32.2
           }
         },
         "voting": {
@@ -22558,7 +22731,10 @@
             "from": "2022-10-02",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 49.8,
+            "sparseCells": 58,
+            "populationShare": 35.0
           }
         },
         "voting": {
@@ -23229,7 +23405,10 @@
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 41.4,
+            "sparseCells": 54,
+            "populationShare": 36.0
           }
         },
         "voting": {
@@ -23895,7 +24074,10 @@
             "from": "2025-05-17",
             "to": "2026-08-30",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.0,
+            "sparseCells": 59,
+            "populationShare": 40.8
           }
         },
         "voting": {
@@ -24536,7 +24718,10 @@
             "from": "2023-11-20",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.9,
+            "sparseCells": 62,
+            "populationShare": 45.2
           }
         },
         "voting": {
@@ -25182,7 +25367,10 @@
             "from": "2023-08-23",
             "to": "2024-10-07",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.7,
+            "sparseCells": 62,
+            "populationShare": 46.0
           }
         },
         "voting": {
@@ -25818,7 +26006,10 @@
             "from": "2025-06-08",
             "to": "2026-10-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.1,
+            "sparseCells": 62,
+            "populationShare": 47.8
           }
         },
         "voting": {
@@ -26429,7 +26620,10 @@
             "from": "2023-10-31",
             "to": "2024-02-13",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.3,
+            "sparseCells": 63,
+            "populationShare": 49.6
           }
         },
         "voting": {
@@ -27070,7 +27264,10 @@
             "from": "2022-02-13",
             "to": "2025-05-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.1,
+            "sparseCells": 65,
+            "populationShare": 48.6
           }
         },
         "voting": {
@@ -27676,7 +27873,10 @@
             "from": "2024-06-12",
             "to": "2026-05-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.3,
+            "sparseCells": 64,
+            "populationShare": 49.8
           }
         },
         "voting": {
@@ -28312,7 +28512,10 @@
             "from": "2024-04-11",
             "to": "2024-07-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 47.6,
+            "sparseCells": 64,
+            "populationShare": 50.6
           }
         },
         "voting": {
@@ -28918,7 +29121,10 @@
             "from": "2023-05-02",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.5,
+            "sparseCells": 67,
+            "populationShare": 59.0
           }
         },
         "voting": {
@@ -29519,7 +29725,10 @@
             "from": "2023-05-05",
             "to": "2024-04-19",
             "sparseRoles": 0,
-            "sparseSeats": 1
+            "sparseSeats": 1,
+            "overallTheory": 48.4,
+            "sparseCells": 65,
+            "populationShare": 60.4
           }
         },
         "voting": {
@@ -30130,7 +30339,10 @@
             "from": "2023-05-12",
             "to": "2024-04-19",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 47.2,
+            "sparseCells": 67,
+            "populationShare": 62.8
           }
         },
         "voting": {
@@ -30726,7 +30938,10 @@
             "from": "2024-05-29",
             "to": "2024-08-16",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.5,
+            "sparseCells": 69,
+            "populationShare": 61.8
           }
         },
         "voting": {
@@ -31327,7 +31542,10 @@
             "from": "2022-10-02",
             "to": "2025-09-06",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.6,
+            "sparseCells": 69,
+            "populationShare": 70.4
           }
         },
         "voting": {
@@ -31908,7 +32126,10 @@
             "from": "2022-10-02",
             "to": "2024-01-29",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.8,
+            "sparseCells": 67,
+            "populationShare": 68.0
           }
         },
         "voting": {
@@ -32489,7 +32710,10 @@
             "from": "2023-05-02",
             "to": "2025-07-05",
             "sparseRoles": 1,
-            "sparseSeats": 1
+            "sparseSeats": 1,
+            "overallTheory": 47.4,
+            "sparseCells": 68,
+            "populationShare": 66.0
           }
         },
         "voting": {
@@ -33055,7 +33279,10 @@
             "from": "2023-03-04",
             "to": "2025-09-06",
             "sparseRoles": 2,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 50.7,
+            "sparseCells": 67,
+            "populationShare": 63.6
           }
         },
         "voting": {
@@ -33631,7 +33858,10 @@
             "from": "2023-08-16",
             "to": "2024-07-12",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.8,
+            "sparseCells": 68,
+            "populationShare": 67.2
           }
         },
         "voting": {
@@ -34192,7 +34422,10 @@
             "from": "2024-05-03",
             "to": "2025-07-23",
             "sparseRoles": 1,
-            "sparseSeats": 1
+            "sparseSeats": 1,
+            "overallTheory": 44.6,
+            "sparseCells": 68,
+            "populationShare": 70.4
           }
         },
         "voting": {
@@ -34733,7 +34966,10 @@
             "from": "2023-12-16",
             "to": "2025-09-06",
             "sparseRoles": 1,
-            "sparseSeats": 2
+            "sparseSeats": 2,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 74.8
           }
         },
         "voting": {
@@ -35254,7 +35490,10 @@
             "from": "2022-09-11",
             "to": "2026-02-27",
             "sparseRoles": 1,
-            "sparseSeats": 2
+            "sparseSeats": 2,
+            "overallTheory": 48.6,
+            "sparseCells": 69,
+            "populationShare": 74.6
           }
         },
         "voting": {
@@ -35790,7 +36029,10 @@
             "from": "2024-09-21",
             "to": "2024-10-11",
             "sparseRoles": 2,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 76.4
           }
         },
         "voting": {
@@ -36291,7 +36533,10 @@
             "from": "2023-05-05",
             "to": "2024-04-19",
             "sparseRoles": 3,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 76.0
           }
         },
         "voting": {
@@ -36827,7 +37072,10 @@
             "from": "2024-01-05",
             "to": "2026-10-25",
             "sparseRoles": 2,
-            "sparseSeats": 5
+            "sparseSeats": 5,
+            "overallTheory": 46.8,
+            "sparseCells": 70,
+            "populationShare": 80.2
           }
         },
         "voting": {
@@ -37358,7 +37606,10 @@
             "from": "2026-08-15",
             "to": "2026-10-24",
             "sparseRoles": 3,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 45.3,
+            "sparseCells": 70,
+            "populationShare": 77.2
           }
         },
         "voting": {
@@ -37889,7 +38140,10 @@
             "from": "2024-12-10",
             "to": "2025-07-05",
             "sparseRoles": 2,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 44.7,
+            "sparseCells": 70,
+            "populationShare": 83.2
           }
         },
         "voting": {
@@ -38400,7 +38654,10 @@
             "from": "2024-10-22",
             "to": "2025-01-27",
             "sparseRoles": 4,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 44.2,
+            "sparseCells": 70,
+            "populationShare": 82.2
           }
         },
         "voting": {
@@ -38891,7 +39148,10 @@
             "from": "2022-09-11",
             "to": "2024-11-17",
             "sparseRoles": 4,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 81.2
           }
         },
         "voting": {
@@ -39387,7 +39647,10 @@
             "from": "2023-06-21",
             "to": "2026-10-09",
             "sparseRoles": 5,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 80.8
           }
         },
         "voting": {
@@ -39868,7 +40131,10 @@
             "from": "2023-08-26",
             "to": "2024-03-02",
             "sparseRoles": 4,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 46.3,
+            "sparseCells": 69,
+            "populationShare": 80.8
           }
         },
         "voting": {
@@ -40354,7 +40620,10 @@
             "from": "2022-02-13",
             "to": "2023-11-26",
             "sparseRoles": 4,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 81.6
           }
         },
         "voting": {
@@ -40855,7 +41124,10 @@
             "from": "2025-09-12",
             "to": "2026-01-20",
             "sparseRoles": 3,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 47.8,
+            "sparseCells": 70,
+            "populationShare": 83.4
           }
         },
         "voting": {
@@ -41331,7 +41603,10 @@
             "from": "2023-06-21",
             "to": "2025-03-30",
             "sparseRoles": 3,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 84.2
           }
         },
         "voting": {
@@ -41807,7 +42082,10 @@
             "from": "2025-09-02",
             "to": "2026-10-09",
             "sparseRoles": 5,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 43.0,
+            "sparseCells": 70,
+            "populationShare": 87.6
           }
         },
         "voting": {
@@ -42288,7 +42566,10 @@
             "from": "2024-10-04",
             "to": "2024-11-02",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.4,
+            "sparseCells": 70,
+            "populationShare": 88.4
           }
         },
         "voting": {
@@ -42764,7 +43045,10 @@
             "from": "2022-03-05",
             "to": "2022-11-06",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 48.0,
+            "sparseCells": 70,
+            "populationShare": 86.2
           }
         },
         "voting": {
@@ -43235,7 +43519,10 @@
             "from": "2024-04-24",
             "to": "2024-08-28",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 85.6
           }
         },
         "voting": {
@@ -43691,7 +43978,10 @@
             "from": "2026-10-22",
             "to": "2026-10-25",
             "sparseRoles": 6,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 43.0,
+            "sparseCells": 70,
+            "populationShare": 84.4
           }
         },
         "voting": {
@@ -44162,7 +44452,10 @@
             "from": "2023-12-01",
             "to": "2024-02-24",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 47.4,
+            "sparseCells": 70,
+            "populationShare": 85.2
           }
         },
         "voting": {
@@ -44638,7 +44931,10 @@
             "from": "2025-01-03",
             "to": "2025-07-21",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 87.0
           }
         },
         "voting": {
@@ -45109,7 +45405,10 @@
             "from": "2022-07-17",
             "to": "2022-09-11",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 86.6
           }
         },
         "voting": {
@@ -45565,7 +45864,10 @@
             "from": "2022-03-05",
             "to": "2022-07-17",
             "sparseRoles": 5,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 47.8,
+            "sparseCells": 70,
+            "populationShare": 85.6
           }
         },
         "voting": {
@@ -46026,7 +46328,10 @@
             "from": "2022-02-14",
             "to": "2025-04-12",
             "sparseRoles": 5,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 90.6
           }
         },
         "voting": {
@@ -46482,7 +46787,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.0,
+            "sparseCells": 70,
+            "populationShare": 87.0
           }
         },
         "voting": {
@@ -46958,7 +47266,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 90.0
           }
         },
         "voting": {
@@ -47414,7 +47725,10 @@
             "from": "2022-03-05",
             "to": "2026-10-25",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 88.4
           }
         },
         "voting": {
@@ -47875,7 +48189,10 @@
             "from": "2025-06-10",
             "to": "2026-08-30",
             "sparseRoles": 4,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 44.3,
+            "sparseCells": 70,
+            "populationShare": 91.6
           }
         },
         "voting": {
@@ -48316,7 +48633,10 @@
             "from": "2024-01-05",
             "to": "2024-02-10",
             "sparseRoles": 5,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.5,
+            "sparseCells": 70,
+            "populationShare": 89.4
           }
         },
         "voting": {
@@ -48777,7 +49097,10 @@
             "from": "2024-04-15",
             "to": "2024-04-26",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 90.6
           }
         },
         "voting": {
@@ -49223,7 +49546,10 @@
             "from": "2022-09-11",
             "to": "2024-02-13",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 47.4,
+            "sparseCells": 69,
+            "populationShare": 89.0
           }
         },
         "voting": {
@@ -49679,7 +50005,10 @@
             "from": "2025-01-03",
             "to": "2025-12-23",
             "sparseRoles": 5,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 44.3,
+            "sparseCells": 70,
+            "populationShare": 90.8
           }
         },
         "voting": {
@@ -50120,7 +50449,10 @@
             "from": "2026-10-09",
             "to": "2026-10-25",
             "sparseRoles": 5,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 90.2
           }
         },
         "voting": {
@@ -50566,7 +50898,10 @@
             "from": "2023-08-16",
             "to": "2023-09-28",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 89.8
           }
         },
         "voting": {
@@ -51012,7 +51347,10 @@
             "from": "2023-08-16",
             "to": "2025-07-09",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 90.4
           }
         },
         "voting": {
@@ -51458,7 +51796,10 @@
             "from": "2023-10-31",
             "to": "2023-11-02",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.3,
+            "sparseCells": 70,
+            "populationShare": 90.6
           }
         },
         "voting": {
@@ -51899,7 +52240,10 @@
             "from": "2025-12-17",
             "to": "2026-01-28",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 92.4
           }
         },
         "voting": {
@@ -52355,7 +52699,10 @@
             "from": "2022-11-06",
             "to": "2023-04-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 94.4
           }
         },
         "voting": {
@@ -52796,7 +53143,10 @@
             "from": "2024-01-03",
             "to": "2026-10-17",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 92.8
           }
         },
         "voting": {
@@ -53227,7 +53577,10 @@
             "from": "2024-10-19",
             "to": "2024-11-13",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 91.0
           }
         },
         "voting": {
@@ -53653,7 +54006,10 @@
             "from": "2022-03-05",
             "to": "2023-06-21",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.2,
+            "sparseCells": 70,
+            "populationShare": 91.8
           }
         },
         "voting": {
@@ -54084,7 +54440,10 @@
             "from": "2024-04-12",
             "to": "2024-06-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.4,
+            "sparseCells": 70,
+            "populationShare": 94.4
           }
         },
         "voting": {
@@ -54520,7 +54879,10 @@
             "from": "2024-04-16",
             "to": "2024-05-11",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 93.8
           }
         },
         "voting": {
@@ -54941,7 +55303,10 @@
             "from": "2025-12-09",
             "to": "2026-06-02",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 90.8
           }
         },
         "voting": {
@@ -55357,7 +55722,10 @@
             "from": "2025-10-28",
             "to": "2025-12-09",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.2,
+            "sparseCells": 70,
+            "populationShare": 91.6
           }
         },
         "voting": {
@@ -55778,7 +56146,10 @@
             "from": "2024-02-02",
             "to": "2024-10-02",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 91.8
           }
         },
         "voting": {
@@ -56209,7 +56580,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 95.4
           }
         },
         "voting": {
@@ -56635,7 +57009,10 @@
             "from": "2024-05-30",
             "to": "2024-07-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 96.2
           }
         },
         "voting": {
@@ -57056,7 +57433,10 @@
             "from": "2023-12-17",
             "to": "2026-01-28",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.9,
+            "sparseCells": 70,
+            "populationShare": 95.0
           }
         },
         "voting": {
@@ -57472,7 +57852,10 @@
             "from": "2023-11-09",
             "to": "2024-03-09",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.4,
+            "sparseCells": 70,
+            "populationShare": 95.2
           }
         },
         "voting": {
@@ -57893,7 +58276,10 @@
             "from": "2024-01-03",
             "to": "2024-02-05",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 95.2
           }
         },
         "voting": {
@@ -58309,7 +58695,10 @@
             "from": "2025-08-11",
             "to": "2025-08-15",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.9,
+            "sparseCells": 70,
+            "populationShare": 93.4
           }
         },
         "voting": {
@@ -58720,7 +59109,10 @@
             "from": "2022-09-11",
             "to": "2024-02-12",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 94.8
           }
         },
         "voting": {
@@ -59131,7 +59523,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 96.0
           }
         },
         "voting": {
@@ -59537,7 +59932,10 @@
             "from": "2022-02-13",
             "to": "2023-11-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 96.8
           }
         },
         "voting": {
@@ -59938,7 +60336,10 @@
             "from": "2023-05-13",
             "to": "2023-05-13",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 48.2,
+            "sparseCells": 70,
+            "populationShare": 94.4
           }
         },
         "voting": {
@@ -60349,7 +60750,10 @@
             "from": "2024-05-26",
             "to": "2024-06-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.8,
+            "sparseCells": 70,
+            "populationShare": 95.6
           }
         },
         "voting": {
@@ -60755,7 +61159,10 @@
             "from": "2024-07-26",
             "to": "2024-08-29",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.8,
+            "sparseCells": 70,
+            "populationShare": 95.6
           }
         },
         "voting": {
@@ -61156,7 +61563,10 @@
             "from": "2026-10-23",
             "to": "2026-10-25",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 95.0
           }
         },
         "voting": {
@@ -61557,7 +61967,10 @@
             "from": "2022-09-11",
             "to": "2022-09-11",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.6,
+            "sparseCells": 70,
+            "populationShare": 97.0
           }
         },
         "voting": {
@@ -61963,7 +62376,10 @@
             "from": "2022-09-11",
             "to": "2022-09-11",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 96.4
           }
         },
         "voting": {
@@ -62354,7 +62770,10 @@
             "from": "2022-09-11",
             "to": "2022-09-11",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.4,
+            "sparseCells": 70,
+            "populationShare": 95.2
           }
         },
         "voting": {
@@ -62755,7 +63174,10 @@
             "from": "2025-06-27",
             "to": "2025-07-10",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 95.8
           }
         },
         "voting": {
@@ -63161,7 +63583,10 @@
             "from": "2026-10-24",
             "to": "2026-10-24",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.9,
+            "sparseCells": 70,
+            "populationShare": 95.8
           }
         },
         "voting": {
@@ -63552,7 +63977,10 @@
             "from": "2025-01-12",
             "to": "2025-07-10",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.8,
+            "sparseCells": 70,
+            "populationShare": 94.8
           }
         },
         "voting": {
@@ -63953,7 +64381,10 @@
             "from": "2026-02-27",
             "to": "2026-02-27",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -64349,7 +64780,10 @@
             "from": "2026-07-11",
             "to": "2026-07-11",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.4,
+            "sparseCells": 70,
+            "populationShare": 95.4
           }
         },
         "voting": {
@@ -64740,7 +65174,10 @@
             "from": "2023-05-05",
             "to": "2023-05-05",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.4,
+            "sparseCells": 70,
+            "populationShare": 95.6
           }
         },
         "voting": {
@@ -65126,7 +65563,10 @@
             "from": "2023-06-21",
             "to": "2023-06-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.1,
+            "sparseCells": 70,
+            "populationShare": 96.2
           }
         },
         "voting": {
@@ -65522,7 +65962,10 @@
             "from": "2024-07-06",
             "to": "2024-07-13",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 97.4
           }
         },
         "voting": {
@@ -65918,7 +66361,10 @@
             "from": "2025-01-19",
             "to": "2025-01-19",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 96.2
           }
         },
         "voting": {
@@ -66309,7 +66755,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.1,
+            "sparseCells": 70,
+            "populationShare": 97.0
           }
         },
         "voting": {
@@ -66695,7 +67144,10 @@
             "from": "2024-07-12",
             "to": "2024-07-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.2
           }
         },
         "voting": {
@@ -67086,7 +67538,10 @@
             "from": "2025-12-24",
             "to": "2025-12-24",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 96.4
           }
         },
         "voting": {
@@ -67472,7 +67927,10 @@
             "from": "2022-02-13",
             "to": "2022-02-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.4,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -67853,7 +68311,10 @@
             "from": "2024-04-03",
             "to": "2024-07-05",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 97.2
           }
         },
         "voting": {
@@ -68234,7 +68695,10 @@
             "from": "2024-05-31",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -68620,7 +69084,10 @@
             "from": "2024-09-21",
             "to": "2024-09-28",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -69006,7 +69473,10 @@
             "from": "2025-01-17",
             "to": "2025-01-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -69392,7 +69862,10 @@
             "from": "2026-07-31",
             "to": "2026-07-31",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -69778,7 +70251,10 @@
             "from": "2026-08-22",
             "to": "2026-08-22",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 97.2
           }
         },
         "voting": {
@@ -70154,7 +70630,10 @@
             "from": "2022-02-13",
             "to": "2022-02-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 97.4
           }
         },
         "voting": {
@@ -70535,7 +71014,10 @@
             "from": "2024-09-02",
             "to": "2024-09-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -70916,7 +71398,10 @@
             "from": "2024-09-07",
             "to": "2024-09-07",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -71297,7 +71782,10 @@
             "from": "2024-10-04",
             "to": "2024-10-04",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -71678,7 +72166,10 @@
             "from": "2025-03-18",
             "to": "2025-03-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -72059,7 +72550,10 @@
             "from": "2025-04-25",
             "to": "2025-04-25",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 97.4
           }
         },
         "voting": {
@@ -72440,7 +72934,10 @@
             "from": "2025-06-01",
             "to": "2025-06-01",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 98.6
           }
         },
         "voting": {
@@ -72821,7 +73318,10 @@
             "from": "2025-07-29",
             "to": "2025-07-29",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -73202,7 +73702,10 @@
             "from": "2026-01-20",
             "to": "2026-05-23",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 98.6
           }
         },
         "voting": {
@@ -73578,7 +74081,10 @@
             "from": "2022-02-13",
             "to": "2022-02-14",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -73954,7 +74460,10 @@
             "from": "2023-05-05",
             "to": "2023-05-05",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -74330,7 +74839,10 @@
             "from": "2023-05-26",
             "to": "2023-05-26",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 98.2
           }
         },
         "voting": {
@@ -74706,7 +75218,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -75082,7 +75597,10 @@
             "from": "2024-03-02",
             "to": "2024-03-08",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -75458,7 +75976,10 @@
             "from": "2024-03-23",
             "to": "2024-03-23",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -75834,7 +76355,10 @@
             "from": "2024-04-30",
             "to": "2024-04-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -76210,7 +76734,10 @@
             "from": "2024-04-30",
             "to": "2024-04-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -76586,7 +77113,10 @@
             "from": "2024-05-31",
             "to": "2024-05-31",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -76962,7 +77492,10 @@
             "from": "2024-06-06",
             "to": "2024-06-06",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -77338,7 +77871,10 @@
             "from": "2024-07-12",
             "to": "2024-07-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -77714,7 +78250,10 @@
             "from": "2024-11-15",
             "to": "2024-11-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -78090,7 +78629,10 @@
             "from": "2025-07-09",
             "to": "2025-07-09",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.6,
+            "sparseCells": 70,
+            "populationShare": 98.2
           }
         },
         "voting": {
@@ -78466,7 +79008,10 @@
             "from": "2025-09-12",
             "to": "2025-09-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.3,
+            "sparseCells": 70,
+            "populationShare": 97.6
           }
         },
         "voting": {
@@ -78837,7 +79382,10 @@
             "from": "2022-02-13",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -79208,7 +79756,10 @@
             "from": "2022-02-15",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -79579,7 +80130,10 @@
             "from": "2023-05-02",
             "to": "2023-05-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -79950,7 +80504,10 @@
             "from": "2024-03-02",
             "to": "2026-08-14",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -80321,7 +80878,10 @@
             "from": "2024-09-13",
             "to": "2024-09-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 99.6
           }
         },
         "voting": {
@@ -80692,7 +81252,10 @@
             "from": "2024-09-21",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -81063,7 +81626,10 @@
             "from": "2024-09-21",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -81434,7 +82000,10 @@
             "from": "2024-10-01",
             "to": "2024-10-01",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.6
           }
         },
         "voting": {
@@ -81800,7 +82369,10 @@
             "from": "2025-08-30",
             "to": "2025-08-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.6,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -82171,7 +82743,10 @@
             "from": "2026-01-28",
             "to": "2026-01-28",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -82542,7 +83117,10 @@
             "from": "2026-06-02",
             "to": "2026-06-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 99.6
           }
         },
         "voting": {
@@ -82913,7 +83491,10 @@
             "from": "2026-08-22",
             "to": "2026-08-22",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -83279,7 +83860,10 @@
             "from": "2023-05-03",
             "to": "2023-05-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -83645,7 +84229,10 @@
             "from": "2023-11-21",
             "to": "2023-11-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -84011,7 +84598,10 @@
             "from": "2024-01-03",
             "to": "2024-01-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -84377,7 +84967,10 @@
             "from": "2024-02-12",
             "to": "2024-02-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -84743,7 +85336,10 @@
             "from": "2022-02-16",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -85109,7 +85705,10 @@
             "from": "2022-02-16",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -85475,7 +86074,10 @@
             "from": "2022-02-16",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -85841,7 +86443,10 @@
             "from": "2024-04-20",
             "to": "2024-04-20",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -86207,7 +86812,10 @@
             "from": "2024-05-26",
             "to": "2024-05-26",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -86573,7 +87181,10 @@
             "from": "2024-05-26",
             "to": "2024-05-26",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -86939,7 +87550,10 @@
             "from": "2024-06-07",
             "to": "2024-06-07",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -87305,7 +87919,10 @@
             "from": "2024-08-09",
             "to": "2024-08-09",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -87671,7 +88288,10 @@
             "from": "2024-09-02",
             "to": "2024-09-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -88037,7 +88657,10 @@
             "from": "2024-09-21",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -88403,7 +89026,10 @@
             "from": "2024-10-22",
             "to": "2024-10-22",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -88769,7 +89395,10 @@
             "from": "2025-01-17",
             "to": "2025-01-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -89135,7 +89764,10 @@
             "from": "2025-03-18",
             "to": "2025-03-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -89501,7 +90133,10 @@
             "from": "2025-05-03",
             "to": "2025-05-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -89867,7 +90502,10 @@
             "from": "2025-11-30",
             "to": "2025-11-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -90233,7 +90871,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -90599,7 +91240,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -90965,7 +91609,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -91331,7 +91978,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -91697,7 +92347,10 @@
             "from": "2026-10-10",
             "to": "2026-10-10",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -92063,7 +92716,10 @@
             "from": "2026-10-17",
             "to": "2026-10-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -92785,7 +93441,10 @@
             "from": "2022-03-05",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 54.1,
+            "sparseCells": 1,
+            "populationShare": 0.4
           }
         },
         "voting": {
@@ -93425,7 +94084,10 @@
             "from": "2023-08-16",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.2,
+            "sparseCells": 0,
+            "populationShare": 0.0
           }
         },
         "voting": {
@@ -94065,7 +94727,10 @@
             "from": "2023-08-16",
             "to": "2026-10-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.0,
+            "sparseCells": 2,
+            "populationShare": 1.0
           }
         },
         "voting": {
@@ -94705,7 +95370,10 @@
             "from": "2023-05-02",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.5,
+            "sparseCells": 4,
+            "populationShare": 1.0
           }
         },
         "voting": {
@@ -95345,7 +96013,10 @@
             "from": "2022-04-13",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.9,
+            "sparseCells": 9,
+            "populationShare": 3.6
           }
         },
         "voting": {
@@ -95985,7 +96656,10 @@
             "from": "2022-01-28",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.6,
+            "sparseCells": 8,
+            "populationShare": 3.2
           }
         },
         "voting": {
@@ -96625,7 +97299,10 @@
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.6,
+            "sparseCells": 7,
+            "populationShare": 2.0
           }
         },
         "voting": {
@@ -97265,7 +97942,10 @@
             "from": "2023-10-31",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 48.4,
+            "sparseCells": 11,
+            "populationShare": 4.4
           }
         },
         "voting": {
@@ -97905,7 +98585,10 @@
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 49.7,
+            "sparseCells": 16,
+            "populationShare": 5.4
           }
         },
         "voting": {
@@ -98545,7 +99228,10 @@
             "from": "2024-05-26",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 41.5,
+            "sparseCells": 26,
+            "populationShare": 10.8
           }
         },
         "voting": {
@@ -99185,7 +99871,10 @@
             "from": "2022-06-03",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.7,
+            "sparseCells": 27,
+            "populationShare": 11.8
           }
         },
         "voting": {
@@ -99815,7 +100504,10 @@
             "from": "2022-07-17",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 50.2,
+            "sparseCells": 27,
+            "populationShare": 11.2
           }
         },
         "voting": {
@@ -100450,7 +101142,10 @@
             "from": "2023-05-02",
             "to": "2025-08-15",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.6,
+            "sparseCells": 27,
+            "populationShare": 12.2
           }
         },
         "voting": {
@@ -101090,7 +101785,10 @@
             "from": "2024-09-08",
             "to": "2026-10-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.9,
+            "sparseCells": 25,
+            "populationShare": 11.6
           }
         },
         "voting": {
@@ -101725,7 +102423,10 @@
             "from": "2023-12-08",
             "to": "2026-01-02",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.9,
+            "sparseCells": 33,
+            "populationShare": 16.8
           }
         },
         "voting": {
@@ -102365,7 +103066,10 @@
             "from": "2023-04-15",
             "to": "2026-10-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.6,
+            "sparseCells": 43,
+            "populationShare": 18.4
           }
         },
         "voting": {
@@ -103005,7 +103709,10 @@
             "from": "2022-02-13",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.5,
+            "sparseCells": 36,
+            "populationShare": 17.2
           }
         },
         "voting": {
@@ -103645,7 +104352,10 @@
             "from": "2022-02-15",
             "to": "2026-10-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.2,
+            "sparseCells": 40,
+            "populationShare": 15.6
           }
         },
         "voting": {
@@ -104275,7 +104985,10 @@
             "from": "2023-05-02",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.3,
+            "sparseCells": 43,
+            "populationShare": 19.2
           }
         },
         "voting": {
@@ -104910,7 +105623,10 @@
             "from": "2023-10-12",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.6,
+            "sparseCells": 46,
+            "populationShare": 21.4
           }
         },
         "voting": {
@@ -105540,7 +106256,10 @@
             "from": "2023-09-24",
             "to": "2026-10-08",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.2,
+            "sparseCells": 51,
+            "populationShare": 23.0
           }
         },
         "voting": {
@@ -106170,7 +106889,10 @@
             "from": "2022-07-17",
             "to": "2026-10-10",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 48.0,
+            "sparseCells": 50,
+            "populationShare": 24.8
           }
         },
         "voting": {
@@ -106770,7 +107492,10 @@
             "from": "2022-02-15",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 41.9,
+            "sparseCells": 53,
+            "populationShare": 31.8
           }
         },
         "voting": {
@@ -107385,7 +108110,10 @@
             "from": "2022-07-17",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 48.9,
+            "sparseCells": 49,
+            "populationShare": 28.0
           }
         },
         "voting": {
@@ -108005,7 +108733,10 @@
             "from": "2023-05-02",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.5,
+            "sparseCells": 52,
+            "populationShare": 30.6
           }
         },
         "voting": {
@@ -108625,7 +109356,10 @@
             "from": "2023-08-16",
             "to": "2026-07-11",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 50.4,
+            "sparseCells": 57,
+            "populationShare": 31.2
           }
         },
         "voting": {
@@ -109240,7 +109974,10 @@
             "from": "2023-10-31",
             "to": "2025-05-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.1,
+            "sparseCells": 54,
+            "populationShare": 31.6
           }
         },
         "voting": {
@@ -109870,7 +110607,10 @@
             "from": "2024-01-12",
             "to": "2024-05-21",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.8,
+            "sparseCells": 57,
+            "populationShare": 32.0
           }
         },
         "voting": {
@@ -110475,7 +111215,10 @@
             "from": "2023-10-12",
             "to": "2026-10-10",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.5,
+            "sparseCells": 55,
+            "populationShare": 32.2
           }
         },
         "voting": {
@@ -111070,7 +111813,10 @@
             "from": "2022-10-02",
             "to": "2026-02-27",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 49.8,
+            "sparseCells": 58,
+            "populationShare": 35.0
           }
         },
         "voting": {
@@ -111670,7 +112416,10 @@
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 41.4,
+            "sparseCells": 54,
+            "populationShare": 36.0
           }
         },
         "voting": {
@@ -112265,7 +113014,10 @@
             "from": "2025-05-17",
             "to": "2026-08-30",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.0,
+            "sparseCells": 59,
+            "populationShare": 40.8
           }
         },
         "voting": {
@@ -112835,7 +113587,10 @@
             "from": "2023-11-20",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.9,
+            "sparseCells": 62,
+            "populationShare": 45.2
           }
         },
         "voting": {
@@ -113410,7 +114165,10 @@
             "from": "2023-08-23",
             "to": "2024-10-07",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.7,
+            "sparseCells": 62,
+            "populationShare": 46.0
           }
         },
         "voting": {
@@ -113975,7 +114733,10 @@
             "from": "2025-06-08",
             "to": "2026-10-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.1,
+            "sparseCells": 62,
+            "populationShare": 47.8
           }
         },
         "voting": {
@@ -114515,7 +115276,10 @@
             "from": "2023-10-31",
             "to": "2024-02-13",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.3,
+            "sparseCells": 63,
+            "populationShare": 49.6
           }
         },
         "voting": {
@@ -115085,7 +115849,10 @@
             "from": "2022-02-13",
             "to": "2025-05-17",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 43.1,
+            "sparseCells": 65,
+            "populationShare": 48.6
           }
         },
         "voting": {
@@ -115620,7 +116387,10 @@
             "from": "2024-06-12",
             "to": "2026-05-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 44.3,
+            "sparseCells": 64,
+            "populationShare": 49.8
           }
         },
         "voting": {
@@ -116185,7 +116955,10 @@
             "from": "2024-04-11",
             "to": "2024-07-24",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 47.6,
+            "sparseCells": 64,
+            "populationShare": 50.6
           }
         },
         "voting": {
@@ -116720,7 +117493,10 @@
             "from": "2023-05-02",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.5,
+            "sparseCells": 67,
+            "populationShare": 59.0
           }
         },
         "voting": {
@@ -117250,7 +118026,10 @@
             "from": "2023-05-05",
             "to": "2024-04-19",
             "sparseRoles": 0,
-            "sparseSeats": 1
+            "sparseSeats": 1,
+            "overallTheory": 48.4,
+            "sparseCells": 65,
+            "populationShare": 60.4
           }
         },
         "voting": {
@@ -117790,7 +118569,10 @@
             "from": "2023-05-12",
             "to": "2024-04-19",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 47.2,
+            "sparseCells": 67,
+            "populationShare": 62.8
           }
         },
         "voting": {
@@ -118315,7 +119097,10 @@
             "from": "2024-05-29",
             "to": "2024-08-16",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.5,
+            "sparseCells": 69,
+            "populationShare": 61.8
           }
         },
         "voting": {
@@ -118845,7 +119630,10 @@
             "from": "2022-10-02",
             "to": "2025-09-06",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 45.6,
+            "sparseCells": 69,
+            "populationShare": 70.4
           }
         },
         "voting": {
@@ -119355,7 +120143,10 @@
             "from": "2022-10-02",
             "to": "2024-01-29",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 46.8,
+            "sparseCells": 67,
+            "populationShare": 68.0
           }
         },
         "voting": {
@@ -119865,7 +120656,10 @@
             "from": "2023-05-02",
             "to": "2025-07-05",
             "sparseRoles": 1,
-            "sparseSeats": 1
+            "sparseSeats": 1,
+            "overallTheory": 47.4,
+            "sparseCells": 68,
+            "populationShare": 66.0
           }
         },
         "voting": {
@@ -120360,7 +121154,10 @@
             "from": "2023-03-04",
             "to": "2025-09-06",
             "sparseRoles": 2,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 50.7,
+            "sparseCells": 67,
+            "populationShare": 63.6
           }
         },
         "voting": {
@@ -120865,7 +121662,10 @@
             "from": "2023-08-16",
             "to": "2024-07-12",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "overallTheory": 42.8,
+            "sparseCells": 68,
+            "populationShare": 67.2
           }
         },
         "voting": {
@@ -121355,7 +122155,10 @@
             "from": "2024-05-03",
             "to": "2025-07-23",
             "sparseRoles": 1,
-            "sparseSeats": 1
+            "sparseSeats": 1,
+            "overallTheory": 44.6,
+            "sparseCells": 68,
+            "populationShare": 70.4
           }
         },
         "voting": {
@@ -121825,7 +122628,10 @@
             "from": "2023-12-16",
             "to": "2025-09-06",
             "sparseRoles": 1,
-            "sparseSeats": 2
+            "sparseSeats": 2,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 74.8
           }
         },
         "voting": {
@@ -122275,7 +123081,10 @@
             "from": "2022-09-11",
             "to": "2026-02-27",
             "sparseRoles": 1,
-            "sparseSeats": 2
+            "sparseSeats": 2,
+            "overallTheory": 48.6,
+            "sparseCells": 69,
+            "populationShare": 74.6
           }
         },
         "voting": {
@@ -122740,7 +123549,10 @@
             "from": "2024-09-21",
             "to": "2024-10-11",
             "sparseRoles": 2,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 76.4
           }
         },
         "voting": {
@@ -123170,7 +123982,10 @@
             "from": "2023-05-05",
             "to": "2024-04-19",
             "sparseRoles": 3,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 76.0
           }
         },
         "voting": {
@@ -123635,7 +124450,10 @@
             "from": "2024-01-05",
             "to": "2026-10-25",
             "sparseRoles": 2,
-            "sparseSeats": 5
+            "sparseSeats": 5,
+            "overallTheory": 46.8,
+            "sparseCells": 70,
+            "populationShare": 80.2
           }
         },
         "voting": {
@@ -124095,7 +124913,10 @@
             "from": "2026-08-15",
             "to": "2026-10-24",
             "sparseRoles": 3,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 45.3,
+            "sparseCells": 70,
+            "populationShare": 77.2
           }
         },
         "voting": {
@@ -124555,7 +125376,10 @@
             "from": "2024-12-10",
             "to": "2025-07-05",
             "sparseRoles": 2,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 44.7,
+            "sparseCells": 70,
+            "populationShare": 83.2
           }
         },
         "voting": {
@@ -124995,7 +125819,10 @@
             "from": "2024-10-22",
             "to": "2025-01-27",
             "sparseRoles": 4,
-            "sparseSeats": 4
+            "sparseSeats": 4,
+            "overallTheory": 44.2,
+            "sparseCells": 70,
+            "populationShare": 82.2
           }
         },
         "voting": {
@@ -125415,7 +126242,10 @@
             "from": "2022-09-11",
             "to": "2024-11-17",
             "sparseRoles": 4,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 81.2
           }
         },
         "voting": {
@@ -125840,7 +126670,10 @@
             "from": "2023-06-21",
             "to": "2026-10-09",
             "sparseRoles": 5,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 80.8
           }
         },
         "voting": {
@@ -126250,7 +127083,10 @@
             "from": "2023-08-26",
             "to": "2024-03-02",
             "sparseRoles": 4,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 46.3,
+            "sparseCells": 69,
+            "populationShare": 80.8
           }
         },
         "voting": {
@@ -126665,7 +127501,10 @@
             "from": "2022-02-13",
             "to": "2023-11-26",
             "sparseRoles": 4,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 81.6
           }
         },
         "voting": {
@@ -127095,7 +127934,10 @@
             "from": "2025-09-12",
             "to": "2026-01-20",
             "sparseRoles": 3,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 47.8,
+            "sparseCells": 70,
+            "populationShare": 83.4
           }
         },
         "voting": {
@@ -127500,7 +128342,10 @@
             "from": "2023-06-21",
             "to": "2025-03-30",
             "sparseRoles": 3,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 84.2
           }
         },
         "voting": {
@@ -127905,7 +128750,10 @@
             "from": "2025-09-02",
             "to": "2026-10-09",
             "sparseRoles": 5,
-            "sparseSeats": 6
+            "sparseSeats": 6,
+            "overallTheory": 43.0,
+            "sparseCells": 70,
+            "populationShare": 87.6
           }
         },
         "voting": {
@@ -128315,7 +129163,10 @@
             "from": "2024-10-04",
             "to": "2024-11-02",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.4,
+            "sparseCells": 70,
+            "populationShare": 88.4
           }
         },
         "voting": {
@@ -128720,7 +129571,10 @@
             "from": "2022-03-05",
             "to": "2022-11-06",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 48.0,
+            "sparseCells": 70,
+            "populationShare": 86.2
           }
         },
         "voting": {
@@ -129120,7 +129974,10 @@
             "from": "2024-04-24",
             "to": "2024-08-28",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 85.6
           }
         },
         "voting": {
@@ -129505,7 +130362,10 @@
             "from": "2026-10-22",
             "to": "2026-10-25",
             "sparseRoles": 6,
-            "sparseSeats": 7
+            "sparseSeats": 7,
+            "overallTheory": 43.0,
+            "sparseCells": 70,
+            "populationShare": 84.4
           }
         },
         "voting": {
@@ -129905,7 +130765,10 @@
             "from": "2023-12-01",
             "to": "2024-02-24",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 47.4,
+            "sparseCells": 70,
+            "populationShare": 85.2
           }
         },
         "voting": {
@@ -130310,7 +131173,10 @@
             "from": "2025-01-03",
             "to": "2025-07-21",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 87.0
           }
         },
         "voting": {
@@ -130710,7 +131576,10 @@
             "from": "2022-07-17",
             "to": "2022-09-11",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 86.6
           }
         },
         "voting": {
@@ -131095,7 +131964,10 @@
             "from": "2022-03-05",
             "to": "2022-07-17",
             "sparseRoles": 5,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 47.8,
+            "sparseCells": 70,
+            "populationShare": 85.6
           }
         },
         "voting": {
@@ -131485,7 +132357,10 @@
             "from": "2022-02-14",
             "to": "2025-04-12",
             "sparseRoles": 5,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 90.6
           }
         },
         "voting": {
@@ -131870,7 +132745,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.0,
+            "sparseCells": 70,
+            "populationShare": 87.0
           }
         },
         "voting": {
@@ -132275,7 +133153,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 90.0
           }
         },
         "voting": {
@@ -132660,7 +133541,10 @@
             "from": "2022-03-05",
             "to": "2026-10-25",
             "sparseRoles": 5,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 88.4
           }
         },
         "voting": {
@@ -133050,7 +133934,10 @@
             "from": "2025-06-10",
             "to": "2026-08-30",
             "sparseRoles": 4,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 44.3,
+            "sparseCells": 70,
+            "populationShare": 91.6
           }
         },
         "voting": {
@@ -133420,7 +134307,10 @@
             "from": "2024-01-05",
             "to": "2024-02-10",
             "sparseRoles": 5,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.5,
+            "sparseCells": 70,
+            "populationShare": 89.4
           }
         },
         "voting": {
@@ -133810,7 +134700,10 @@
             "from": "2024-04-15",
             "to": "2024-04-26",
             "sparseRoles": 6,
-            "sparseSeats": 8
+            "sparseSeats": 8,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 90.6
           }
         },
         "voting": {
@@ -134185,7 +135078,10 @@
             "from": "2022-09-11",
             "to": "2024-02-13",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 47.4,
+            "sparseCells": 69,
+            "populationShare": 89.0
           }
         },
         "voting": {
@@ -134570,7 +135466,10 @@
             "from": "2025-01-03",
             "to": "2025-12-23",
             "sparseRoles": 5,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 44.3,
+            "sparseCells": 70,
+            "populationShare": 90.8
           }
         },
         "voting": {
@@ -134940,7 +135839,10 @@
             "from": "2026-10-09",
             "to": "2026-10-25",
             "sparseRoles": 5,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 90.2
           }
         },
         "voting": {
@@ -135315,7 +136217,10 @@
             "from": "2023-08-16",
             "to": "2023-09-28",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 89.8
           }
         },
         "voting": {
@@ -135690,7 +136595,10 @@
             "from": "2023-08-16",
             "to": "2025-07-09",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 90.4
           }
         },
         "voting": {
@@ -136065,7 +136973,10 @@
             "from": "2023-10-31",
             "to": "2023-11-02",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.3,
+            "sparseCells": 70,
+            "populationShare": 90.6
           }
         },
         "voting": {
@@ -136435,7 +137346,10 @@
             "from": "2025-12-17",
             "to": "2026-01-28",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 92.4
           }
         },
         "voting": {
@@ -136820,7 +137734,10 @@
             "from": "2022-11-06",
             "to": "2023-04-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 94.4
           }
         },
         "voting": {
@@ -137190,7 +138107,10 @@
             "from": "2024-01-03",
             "to": "2026-10-17",
             "sparseRoles": 6,
-            "sparseSeats": 9
+            "sparseSeats": 9,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 92.8
           }
         },
         "voting": {
@@ -137550,7 +138470,10 @@
             "from": "2024-10-19",
             "to": "2024-11-13",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 91.0
           }
         },
         "voting": {
@@ -137905,7 +138828,10 @@
             "from": "2022-03-05",
             "to": "2023-06-21",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.2,
+            "sparseCells": 70,
+            "populationShare": 91.8
           }
         },
         "voting": {
@@ -138265,7 +139191,10 @@
             "from": "2024-04-12",
             "to": "2024-06-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.4,
+            "sparseCells": 70,
+            "populationShare": 94.4
           }
         },
         "voting": {
@@ -138630,7 +139559,10 @@
             "from": "2024-04-16",
             "to": "2024-05-11",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 93.8
           }
         },
         "voting": {
@@ -138980,7 +139912,10 @@
             "from": "2025-12-09",
             "to": "2026-06-02",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 90.8
           }
         },
         "voting": {
@@ -139325,7 +140260,10 @@
             "from": "2025-10-28",
             "to": "2025-12-09",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.2,
+            "sparseCells": 70,
+            "populationShare": 91.6
           }
         },
         "voting": {
@@ -139675,7 +140613,10 @@
             "from": "2024-02-02",
             "to": "2024-10-02",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 91.8
           }
         },
         "voting": {
@@ -140035,7 +140976,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 95.4
           }
         },
         "voting": {
@@ -140390,7 +141334,10 @@
             "from": "2024-05-30",
             "to": "2024-07-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 96.2
           }
         },
         "voting": {
@@ -140740,7 +141687,10 @@
             "from": "2023-12-17",
             "to": "2026-01-28",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.9,
+            "sparseCells": 70,
+            "populationShare": 95.0
           }
         },
         "voting": {
@@ -141085,7 +142035,10 @@
             "from": "2023-11-09",
             "to": "2024-03-09",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.4,
+            "sparseCells": 70,
+            "populationShare": 95.2
           }
         },
         "voting": {
@@ -141435,7 +142388,10 @@
             "from": "2024-01-03",
             "to": "2024-02-05",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 95.2
           }
         },
         "voting": {
@@ -141780,7 +142736,10 @@
             "from": "2025-08-11",
             "to": "2025-08-15",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.9,
+            "sparseCells": 70,
+            "populationShare": 93.4
           }
         },
         "voting": {
@@ -142120,7 +143079,10 @@
             "from": "2022-09-11",
             "to": "2024-02-12",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 94.8
           }
         },
         "voting": {
@@ -142460,7 +143422,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 96.0
           }
         },
         "voting": {
@@ -142795,7 +143760,10 @@
             "from": "2022-02-13",
             "to": "2023-11-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 96.8
           }
         },
         "voting": {
@@ -143125,7 +144093,10 @@
             "from": "2023-05-13",
             "to": "2023-05-13",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 48.2,
+            "sparseCells": 70,
+            "populationShare": 94.4
           }
         },
         "voting": {
@@ -143465,7 +144436,10 @@
             "from": "2024-05-26",
             "to": "2024-06-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.8,
+            "sparseCells": 70,
+            "populationShare": 95.6
           }
         },
         "voting": {
@@ -143800,7 +144774,10 @@
             "from": "2024-07-26",
             "to": "2024-08-29",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.8,
+            "sparseCells": 70,
+            "populationShare": 95.6
           }
         },
         "voting": {
@@ -144130,7 +145107,10 @@
             "from": "2026-10-23",
             "to": "2026-10-25",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 95.0
           }
         },
         "voting": {
@@ -144460,7 +145440,10 @@
             "from": "2022-09-11",
             "to": "2022-09-11",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.6,
+            "sparseCells": 70,
+            "populationShare": 97.0
           }
         },
         "voting": {
@@ -144795,7 +145778,10 @@
             "from": "2022-09-11",
             "to": "2022-09-11",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.2,
+            "sparseCells": 70,
+            "populationShare": 96.4
           }
         },
         "voting": {
@@ -145115,7 +146101,10 @@
             "from": "2022-09-11",
             "to": "2022-09-11",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.4,
+            "sparseCells": 70,
+            "populationShare": 95.2
           }
         },
         "voting": {
@@ -145445,7 +146434,10 @@
             "from": "2025-06-27",
             "to": "2025-07-10",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 95.8
           }
         },
         "voting": {
@@ -145780,7 +146772,10 @@
             "from": "2026-10-24",
             "to": "2026-10-24",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 44.9,
+            "sparseCells": 70,
+            "populationShare": 95.8
           }
         },
         "voting": {
@@ -146100,7 +147095,10 @@
             "from": "2025-01-12",
             "to": "2025-07-10",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.8,
+            "sparseCells": 70,
+            "populationShare": 94.8
           }
         },
         "voting": {
@@ -146430,7 +147428,10 @@
             "from": "2026-02-27",
             "to": "2026-02-27",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -146755,7 +147756,10 @@
             "from": "2026-07-11",
             "to": "2026-07-11",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.4,
+            "sparseCells": 70,
+            "populationShare": 95.4
           }
         },
         "voting": {
@@ -147075,7 +148079,10 @@
             "from": "2023-05-05",
             "to": "2023-05-05",
             "sparseRoles": 6,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.4,
+            "sparseCells": 70,
+            "populationShare": 95.6
           }
         },
         "voting": {
@@ -147390,7 +148397,10 @@
             "from": "2023-06-21",
             "to": "2023-06-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.1,
+            "sparseCells": 70,
+            "populationShare": 96.2
           }
         },
         "voting": {
@@ -147715,7 +148725,10 @@
             "from": "2024-07-06",
             "to": "2024-07-13",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 97.4
           }
         },
         "voting": {
@@ -148040,7 +149053,10 @@
             "from": "2025-01-19",
             "to": "2025-01-19",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 96.2
           }
         },
         "voting": {
@@ -148360,7 +149376,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 47.1,
+            "sparseCells": 70,
+            "populationShare": 97.0
           }
         },
         "voting": {
@@ -148675,7 +149694,10 @@
             "from": "2024-07-12",
             "to": "2024-07-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.2
           }
         },
         "voting": {
@@ -148995,7 +150017,10 @@
             "from": "2025-12-24",
             "to": "2025-12-24",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 96.4
           }
         },
         "voting": {
@@ -149310,7 +150335,10 @@
             "from": "2022-02-13",
             "to": "2022-02-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.4,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -149620,7 +150648,10 @@
             "from": "2024-04-03",
             "to": "2024-07-05",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 97.2
           }
         },
         "voting": {
@@ -149930,7 +150961,10 @@
             "from": "2024-05-31",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -150245,7 +151279,10 @@
             "from": "2024-09-21",
             "to": "2024-09-28",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -150560,7 +151597,10 @@
             "from": "2025-01-17",
             "to": "2025-01-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 97.8
           }
         },
         "voting": {
@@ -150875,7 +151915,10 @@
             "from": "2026-07-31",
             "to": "2026-07-31",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -151190,7 +152233,10 @@
             "from": "2026-08-22",
             "to": "2026-08-22",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 97.2
           }
         },
         "voting": {
@@ -151495,7 +152541,10 @@
             "from": "2022-02-13",
             "to": "2022-02-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 97.4
           }
         },
         "voting": {
@@ -151805,7 +152854,10 @@
             "from": "2024-09-02",
             "to": "2024-09-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -152115,7 +153167,10 @@
             "from": "2024-09-07",
             "to": "2024-09-07",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -152425,7 +153480,10 @@
             "from": "2024-10-04",
             "to": "2024-10-04",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -152735,7 +153793,10 @@
             "from": "2025-03-18",
             "to": "2025-03-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -153045,7 +154106,10 @@
             "from": "2025-04-25",
             "to": "2025-04-25",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 97.4
           }
         },
         "voting": {
@@ -153355,7 +154419,10 @@
             "from": "2025-06-01",
             "to": "2025-06-01",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 98.6
           }
         },
         "voting": {
@@ -153665,7 +154732,10 @@
             "from": "2025-07-29",
             "to": "2025-07-29",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.0
           }
         },
         "voting": {
@@ -153975,7 +155045,10 @@
             "from": "2026-01-20",
             "to": "2026-05-23",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 98.6
           }
         },
         "voting": {
@@ -154280,7 +155353,10 @@
             "from": "2022-02-13",
             "to": "2022-02-14",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -154585,7 +155661,10 @@
             "from": "2023-05-05",
             "to": "2023-05-05",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -154890,7 +155969,10 @@
             "from": "2023-05-26",
             "to": "2023-05-26",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 98.2
           }
         },
         "voting": {
@@ -155195,7 +156277,10 @@
             "from": "2024-03-02",
             "to": "2024-03-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.3,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -155500,7 +156585,10 @@
             "from": "2024-03-02",
             "to": "2024-03-08",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.5,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -155805,7 +156893,10 @@
             "from": "2024-03-23",
             "to": "2024-03-23",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -156110,7 +157201,10 @@
             "from": "2024-04-30",
             "to": "2024-04-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -156415,7 +157509,10 @@
             "from": "2024-04-30",
             "to": "2024-04-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -156720,7 +157817,10 @@
             "from": "2024-05-31",
             "to": "2024-05-31",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -157025,7 +158125,10 @@
             "from": "2024-06-06",
             "to": "2024-06-06",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -157330,7 +158433,10 @@
             "from": "2024-07-12",
             "to": "2024-07-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 98.8
           }
         },
         "voting": {
@@ -157635,7 +158741,10 @@
             "from": "2024-11-15",
             "to": "2024-11-15",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.4
           }
         },
         "voting": {
@@ -157940,7 +159049,10 @@
             "from": "2025-07-09",
             "to": "2025-07-09",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.6,
+            "sparseCells": 70,
+            "populationShare": 98.2
           }
         },
         "voting": {
@@ -158245,7 +159357,10 @@
             "from": "2025-09-12",
             "to": "2025-09-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.3,
+            "sparseCells": 70,
+            "populationShare": 97.6
           }
         },
         "voting": {
@@ -158545,7 +159660,10 @@
             "from": "2022-02-13",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.7,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -158845,7 +159963,10 @@
             "from": "2022-02-15",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -159145,7 +160266,10 @@
             "from": "2023-05-02",
             "to": "2023-05-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -159445,7 +160569,10 @@
             "from": "2024-03-02",
             "to": "2026-08-14",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.7,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -159745,7 +160872,10 @@
             "from": "2024-09-13",
             "to": "2024-09-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 99.6
           }
         },
         "voting": {
@@ -160045,7 +161175,10 @@
             "from": "2024-09-21",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -160345,7 +161478,10 @@
             "from": "2024-09-21",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.5,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -160645,7 +161781,10 @@
             "from": "2024-10-01",
             "to": "2024-10-01",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.6
           }
         },
         "voting": {
@@ -160940,7 +162079,10 @@
             "from": "2025-08-30",
             "to": "2025-08-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.6,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -161240,7 +162382,10 @@
             "from": "2026-01-28",
             "to": "2026-01-28",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.4,
+            "sparseCells": 70,
+            "populationShare": 98.4
           }
         },
         "voting": {
@@ -161540,7 +162685,10 @@
             "from": "2026-06-02",
             "to": "2026-06-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 99.6
           }
         },
         "voting": {
@@ -161840,7 +162988,10 @@
             "from": "2026-08-22",
             "to": "2026-08-22",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.0
           }
         },
         "voting": {
@@ -162135,7 +163286,10 @@
             "from": "2023-05-03",
             "to": "2023-05-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -162430,7 +163584,10 @@
             "from": "2023-11-21",
             "to": "2023-11-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -162725,7 +163882,10 @@
             "from": "2024-01-03",
             "to": "2024-01-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -163020,7 +164180,10 @@
             "from": "2024-02-12",
             "to": "2024-02-12",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -163315,7 +164478,10 @@
             "from": "2022-02-16",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -163610,7 +164776,10 @@
             "from": "2022-02-16",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -163905,7 +165074,10 @@
             "from": "2022-02-16",
             "to": "2022-02-16",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -164200,7 +165372,10 @@
             "from": "2024-04-20",
             "to": "2024-04-20",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -164495,7 +165670,10 @@
             "from": "2024-05-26",
             "to": "2024-05-26",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -164790,7 +165968,10 @@
             "from": "2024-05-26",
             "to": "2024-05-26",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -165085,7 +166266,10 @@
             "from": "2024-06-07",
             "to": "2024-06-07",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -165380,7 +166564,10 @@
             "from": "2024-08-09",
             "to": "2024-08-09",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -165675,7 +166862,10 @@
             "from": "2024-09-02",
             "to": "2024-09-02",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.9,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -165970,7 +167160,10 @@
             "from": "2024-09-21",
             "to": "2024-09-21",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -166265,7 +167458,10 @@
             "from": "2024-10-22",
             "to": "2024-10-22",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -166560,7 +167756,10 @@
             "from": "2025-01-17",
             "to": "2025-01-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -166855,7 +168054,10 @@
             "from": "2025-03-18",
             "to": "2025-03-18",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.1,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -167150,7 +168352,10 @@
             "from": "2025-05-03",
             "to": "2025-05-03",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -167445,7 +168650,10 @@
             "from": "2025-11-30",
             "to": "2025-11-30",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.2,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -167740,7 +168948,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -168035,7 +169246,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -168330,7 +169544,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -168625,7 +169842,10 @@
             "from": "2023-12-17",
             "to": "2023-12-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.6,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -168920,7 +170140,10 @@
             "from": "2026-10-10",
             "to": "2026-10-10",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 46.0,
+            "sparseCells": 70,
+            "populationShare": 99.8
           }
         },
         "voting": {
@@ -169215,7 +170438,10 @@
             "from": "2026-10-17",
             "to": "2026-10-17",
             "sparseRoles": 7,
-            "sparseSeats": 10
+            "sparseSeats": 10,
+            "overallTheory": 45.8,
+            "sparseCells": 70,
+            "populationShare": 99.2
           }
         },
         "voting": {
@@ -196638,12 +197864,16 @@
       "roleWindowGames": 10,
       "loyalWindowGames": 40,
       "overallMinGames": 250,
+      "theoryMinGames": 0,
+      "requireRoleWindows": 1,
       "assassinAttempts": 20,
       "assassinMinAttempts": 10,
       "newcomerDays": 90,
       "newcomerMinGames": 10,
-      "roleTitleMinGames": 20,
-      "roleTitleGames": 20
+      "roleTitleGames": 50,
+      "roleTitleFallbackGames": 25,
+      "loyalTitleGames": 200,
+      "loyalTitleFallbackGames": 100
     },
     "boards": [
       {
@@ -196654,8 +197884,8 @@
         "period": "各角色近 10 場、忠臣近 40 場",
         "periodEn": "Each role's last 10 games (Loyal Servant: last 40)",
         "minGames": 100,
-        "note": "近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場；位置理論與最終勝率看最近 100 場；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
-        "noteEn": "Played in the last 90 days, at least 10 games in each special role and 40 as Loyal Servant; position theory and final win rate over the last 100 games; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "note": "近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場；位置理論、最終勝率、任務勝率、刺殺勝率看最近 100 場、整體理論看生涯；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 10 games in each special role and 40 as Loyal Servant; position theory, final, mission and assassination win rates over the last 100 games, overall theory over the career; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "roleWindowGames": {
           "刺客": 10,
           "莫甘娜": 10,
@@ -196672,8 +197902,13 @@
             "value": 57.0,
             "roleTheory": 57.0,
             "positionTheory": 58.7,
-            "overallTheory": 54.7,
+            "overallTheory": 54.1,
             "finalWinRate": 58.0,
+            "missionWinRate": 59.0,
+            "missionRedWinRate": 71.1,
+            "missionBlueWinRate": 51.6,
+            "assassinWinRate": 72.1,
+            "threeBlueGames": 43,
             "games": 100,
             "careerGames": 1131,
             "from": "2025-09-28",
@@ -196687,8 +197922,13 @@
             "value": 57.0,
             "roleTheory": 57.0,
             "positionTheory": 61.8,
-            "overallTheory": 50.0,
+            "overallTheory": 49.7,
             "finalWinRate": 63.0,
+            "missionWinRate": 52.0,
+            "missionRedWinRate": 53.1,
+            "missionBlueWinRate": 51.0,
+            "assassinWinRate": 75.5,
+            "threeBlueGames": 49,
             "games": 100,
             "careerGames": 579,
             "from": "2025-11-30",
@@ -196702,8 +197942,13 @@
             "value": 53.0,
             "roleTheory": 53.0,
             "positionTheory": 52.3,
-            "overallTheory": 48.0,
+            "overallTheory": 48.4,
             "finalWinRate": 55.0,
+            "missionWinRate": 51.0,
+            "missionRedWinRate": 44.2,
+            "missionBlueWinRate": 56.1,
+            "assassinWinRate": 64.3,
+            "threeBlueGames": 56,
             "games": 100,
             "careerGames": 596,
             "from": "2024-10-07",
@@ -196717,8 +197962,13 @@
             "value": 49.0,
             "roleTheory": 49.0,
             "positionTheory": 47.0,
-            "overallTheory": 46.7,
+            "overallTheory": 46.9,
             "finalWinRate": 45.0,
+            "missionWinRate": 50.0,
+            "missionRedWinRate": 43.6,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 50.9,
+            "threeBlueGames": 55,
             "games": 100,
             "careerGames": 759,
             "from": "2025-01-18",
@@ -196732,8 +197982,13 @@
             "value": 49.0,
             "roleTheory": 49.0,
             "positionTheory": 50.9,
-            "overallTheory": 45.9,
+            "overallTheory": 45.6,
             "finalWinRate": 52.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 59.1,
+            "missionBlueWinRate": 48.2,
+            "assassinWinRate": 57.8,
+            "threeBlueGames": 45,
             "games": 100,
             "careerGames": 416,
             "from": "2024-02-24",
@@ -196747,8 +198002,13 @@
             "value": 49.0,
             "roleTheory": 49.0,
             "positionTheory": 55.0,
-            "overallTheory": 44.0,
+            "overallTheory": 44.5,
             "finalWinRate": 52.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 49.0,
+            "missionBlueWinRate": 57.1,
+            "assassinWinRate": 50.0,
+            "threeBlueGames": 54,
             "games": 100,
             "careerGames": 226,
             "from": "2023-11-25",
@@ -196762,8 +198022,13 @@
             "value": 49.0,
             "roleTheory": 49.0,
             "positionTheory": 52.1,
-            "overallTheory": 46.7,
+            "overallTheory": 43.1,
             "finalWinRate": 50.0,
+            "missionWinRate": 54.0,
+            "missionRedWinRate": 50.0,
+            "missionBlueWinRate": 57.1,
+            "assassinWinRate": 51.9,
+            "threeBlueGames": 54,
             "games": 100,
             "careerGames": 148,
             "from": "2025-08-06",
@@ -196777,8 +198042,13 @@
             "value": 47.0,
             "roleTheory": 47.0,
             "positionTheory": 46.1,
-            "overallTheory": 46.8,
+            "overallTheory": 46.7,
             "finalWinRate": 45.0,
+            "missionWinRate": 54.0,
+            "missionRedWinRate": 53.8,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 47.1,
+            "threeBlueGames": 51,
             "games": 100,
             "careerGames": 507,
             "from": "2025-02-02",
@@ -196792,8 +198062,13 @@
             "value": 47.0,
             "roleTheory": 47.0,
             "positionTheory": 45.8,
-            "overallTheory": 47.3,
+            "overallTheory": 46.5,
             "finalWinRate": 48.0,
+            "missionWinRate": 52.0,
+            "missionRedWinRate": 60.5,
+            "missionBlueWinRate": 45.6,
+            "assassinWinRate": 51.2,
+            "threeBlueGames": 43,
             "games": 100,
             "careerGames": 406,
             "from": "2024-05-22",
@@ -196807,8 +198082,13 @@
             "value": 47.0,
             "roleTheory": 47.0,
             "positionTheory": 48.3,
-            "overallTheory": 44.0,
+            "overallTheory": 44.2,
             "finalWinRate": 48.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 54.8,
+            "missionBlueWinRate": 51.7,
+            "assassinWinRate": 51.0,
+            "threeBlueGames": 49,
             "games": 100,
             "careerGames": 390,
             "from": "2024-04-08",
@@ -196826,8 +198106,8 @@
         "period": "各人最近 100 場",
         "periodEn": "Each player's last 100 games",
         "minGames": 100,
-        "note": "近 90 天內有出賽、生涯至少 100 場；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
-        "noteEn": "Played in the last 90 days, at least 100 career games; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "note": "近 90 天內有出賽、生涯至少 100 場；最終勝率、任務勝率、刺殺勝率也看最近 100 場、整體理論看生涯；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 100 career games; final, mission and assassination win rates over the same 100 games, overall theory over the career; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "windowGames": 100,
         "rows": [
           {
@@ -196835,8 +198115,13 @@
             "name": "轆",
             "value": 61.8,
             "positionTheory": 61.8,
-            "overallTheory": 50.0,
+            "overallTheory": 49.7,
             "finalWinRate": 63.0,
+            "missionWinRate": 52.0,
+            "missionRedWinRate": 53.1,
+            "missionBlueWinRate": 51.0,
+            "assassinWinRate": 75.5,
+            "threeBlueGames": 49,
             "games": 100,
             "careerGames": 579,
             "from": "2025-12-23",
@@ -196848,8 +198133,13 @@
             "name": "HAO",
             "value": 58.7,
             "positionTheory": 58.7,
-            "overallTheory": 54.7,
+            "overallTheory": 54.1,
             "finalWinRate": 58.0,
+            "missionWinRate": 59.0,
+            "missionRedWinRate": 71.1,
+            "missionBlueWinRate": 51.6,
+            "assassinWinRate": 72.1,
+            "threeBlueGames": 43,
             "games": 100,
             "careerGames": 1131,
             "from": "2026-02-27",
@@ -196861,8 +198151,13 @@
             "name": "布叮咚瓜茶",
             "value": 55.0,
             "positionTheory": 55.0,
-            "overallTheory": 44.0,
+            "overallTheory": 44.5,
             "finalWinRate": 52.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 49.0,
+            "missionBlueWinRate": 57.1,
+            "assassinWinRate": 50.0,
+            "threeBlueGames": 54,
             "games": 100,
             "careerGames": 226,
             "from": "2024-07-04",
@@ -196874,8 +198169,13 @@
             "name": "洋蔥",
             "value": 52.3,
             "positionTheory": 52.3,
-            "overallTheory": 48.0,
+            "overallTheory": 48.4,
             "finalWinRate": 55.0,
+            "missionWinRate": 51.0,
+            "missionRedWinRate": 44.2,
+            "missionBlueWinRate": 56.1,
+            "assassinWinRate": 64.3,
+            "threeBlueGames": 56,
             "games": 100,
             "careerGames": 596,
             "from": "2024-12-05",
@@ -196887,8 +198187,13 @@
             "name": "亞可",
             "value": 52.1,
             "positionTheory": 52.1,
-            "overallTheory": 46.7,
+            "overallTheory": 43.1,
             "finalWinRate": 50.0,
+            "missionWinRate": 54.0,
+            "missionRedWinRate": 50.0,
+            "missionBlueWinRate": 57.1,
+            "assassinWinRate": 51.9,
+            "threeBlueGames": 54,
             "games": 100,
             "careerGames": 148,
             "from": "2025-08-16",
@@ -196900,8 +198205,13 @@
             "name": "雪怪",
             "value": 50.9,
             "positionTheory": 50.9,
-            "overallTheory": 45.9,
+            "overallTheory": 45.6,
             "finalWinRate": 52.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 59.1,
+            "missionBlueWinRate": 48.2,
+            "assassinWinRate": 57.8,
+            "threeBlueGames": 45,
             "games": 100,
             "careerGames": 416,
             "from": "2024-03-02",
@@ -196913,8 +198223,13 @@
             "name": "Sin",
             "value": 48.5,
             "positionTheory": 48.5,
-            "overallTheory": 46.3,
+            "overallTheory": 46.2,
             "finalWinRate": 49.0,
+            "missionWinRate": 47.0,
+            "missionRedWinRate": 44.2,
+            "missionBlueWinRate": 49.1,
+            "assassinWinRate": 57.7,
+            "threeBlueGames": 52,
             "games": 100,
             "careerGames": 1122,
             "from": "2025-09-28",
@@ -196926,8 +198241,13 @@
             "name": "黃某人",
             "value": 48.3,
             "positionTheory": 48.3,
-            "overallTheory": 44.0,
+            "overallTheory": 44.2,
             "finalWinRate": 48.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 54.8,
+            "missionBlueWinRate": 51.7,
+            "assassinWinRate": 51.0,
+            "threeBlueGames": 49,
             "games": 100,
             "careerGames": 390,
             "from": "2024-06-07",
@@ -196939,8 +198259,13 @@
             "name": "軒",
             "value": 47.0,
             "positionTheory": 47.0,
-            "overallTheory": 43.4,
+            "overallTheory": 43.5,
             "finalWinRate": 46.0,
+            "missionWinRate": 49.0,
+            "missionRedWinRate": 56.4,
+            "missionBlueWinRate": 40.0,
+            "assassinWinRate": 35.7,
+            "threeBlueGames": 42,
             "games": 100,
             "careerGames": 855,
             "from": "2025-07-27",
@@ -196952,8 +198277,13 @@
             "name": "池",
             "value": 47.0,
             "positionTheory": 47.0,
-            "overallTheory": 46.7,
+            "overallTheory": 46.9,
             "finalWinRate": 45.0,
+            "missionWinRate": 50.0,
+            "missionRedWinRate": 43.6,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 50.9,
+            "threeBlueGames": 55,
             "games": 100,
             "careerGames": 759,
             "from": "2025-08-12",
@@ -196970,148 +198300,853 @@
         "period": "各人生涯全部場次",
         "periodEn": "Each player's whole career",
         "minGames": 250,
-        "note": "近 90 天內有出賽、生涯至少 250 場；整體理論、位置理論、最終勝率都看生涯全部場次；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
-        "noteEn": "Played in the last 90 days, at least 250 career games; overall theory, position theory and final win rate over the whole career; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "note": "近 90 天內有出賽、生涯至少 250 場；每一列的數字都看生涯全部場次；位置 × 角色共 70 格，多數人很多格不到 5 場、用全體在該位置該角色的最終勝率補（「全體補值」欄 = 整體理論裡全體補的比重），補得越多越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 250 career games; every number over the whole career; there are 70 role × seat cells and most players have fewer than 5 games in many of them, topped up at the population's final win rate in that cell (the population-share column = how much of the overall theory that is), so the more is topped up the closer it stays to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "rows": [
           {
             "rank": 1,
             "name": "HAO",
-            "value": 54.7,
-            "overallTheory": 54.7,
+            "value": 54.1,
+            "overallTheory": 54.1,
+            "roleTheory": 54.7,
             "positionTheory": 53.4,
             "finalWinRate": 53.3,
+            "missionWinRate": 59.2,
+            "missionRedWinRate": 56.5,
+            "missionBlueWinRate": 60.7,
+            "assassinWinRate": 59.4,
+            "threeBlueGames": 614,
             "games": 1131,
             "careerGames": 1131,
             "from": "2022-03-05",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 1,
+            "populationShare": 0.4
           },
           {
             "rank": 2,
             "name": "轆",
-            "value": 50.0,
-            "overallTheory": 50.0,
+            "value": 49.7,
+            "overallTheory": 49.7,
+            "roleTheory": 50.0,
             "positionTheory": 51.2,
             "finalWinRate": 51.5,
+            "missionWinRate": 52.3,
+            "missionRedWinRate": 50.0,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 57.4,
+            "threeBlueGames": 303,
             "games": 579,
             "careerGames": 579,
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 16,
+            "populationShare": 5.4
           },
           {
             "rank": 3,
             "name": "Vash",
-            "value": 48.3,
-            "overallTheory": 48.3,
+            "value": 48.9,
+            "overallTheory": 48.9,
+            "roleTheory": 48.3,
             "positionTheory": 49.1,
             "finalWinRate": 48.3,
+            "missionWinRate": 50.6,
+            "missionRedWinRate": 41.1,
+            "missionBlueWinRate": 57.4,
+            "assassinWinRate": 53.5,
+            "threeBlueGames": 155,
             "games": 267,
             "careerGames": 267,
             "from": "2022-07-17",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 49,
+            "populationShare": 28.0
           },
           {
             "rank": 4,
             "name": "洋蔥",
-            "value": 48.0,
-            "overallTheory": 48.0,
+            "value": 48.4,
+            "overallTheory": 48.4,
+            "roleTheory": 48.0,
             "positionTheory": 49.4,
             "finalWinRate": 49.7,
+            "missionWinRate": 48.5,
+            "missionRedWinRate": 45.9,
+            "missionBlueWinRate": 50.4,
+            "assassinWinRate": 57.1,
+            "threeBlueGames": 310,
             "games": 596,
             "careerGames": 596,
             "from": "2023-10-31",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 11,
+            "populationShare": 4.4
           },
           {
             "rank": 5,
             "name": "ED",
-            "value": 47.8,
-            "overallTheory": 47.8,
+            "value": 48.0,
+            "overallTheory": 48.0,
+            "roleTheory": 47.8,
             "positionTheory": 48.3,
             "finalWinRate": 48.5,
+            "missionWinRate": 49.8,
+            "missionRedWinRate": 36.4,
+            "missionBlueWinRate": 58.8,
+            "assassinWinRate": 55.9,
+            "threeBlueGames": 179,
             "games": 295,
             "careerGames": 295,
             "from": "2022-07-17",
             "to": "2026-10-10",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 50,
+            "populationShare": 24.8
           },
           {
             "rank": 6,
-            "name": "發達",
-            "value": 47.3,
-            "overallTheory": 47.3,
-            "positionTheory": 46.6,
-            "finalWinRate": 47.3,
-            "games": 406,
-            "careerGames": 406,
-            "from": "2022-02-13",
-            "to": "2026-10-23",
-            "sparseRoles": 0,
-            "sparseSeats": 0
-          },
-          {
-            "rank": 7,
-            "name": "JOY",
-            "value": 46.8,
-            "overallTheory": 46.8,
-            "positionTheory": 45.8,
-            "finalWinRate": 46.2,
-            "games": 507,
-            "careerGames": 507,
-            "from": "2022-06-03",
-            "to": "2026-10-23",
-            "sparseRoles": 0,
-            "sparseSeats": 0
-          },
-          {
-            "rank": 8,
             "name": "池",
-            "value": 46.7,
-            "overallTheory": 46.7,
+            "value": 46.9,
+            "overallTheory": 46.9,
+            "roleTheory": 46.7,
             "positionTheory": 47.4,
             "finalWinRate": 47.3,
+            "missionWinRate": 53.6,
+            "missionRedWinRate": 49.8,
+            "missionBlueWinRate": 56.4,
+            "assassinWinRate": 49.0,
+            "threeBlueGames": 408,
             "games": 759,
             "careerGames": 759,
             "from": "2022-04-13",
             "to": "2026-10-23",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 9,
+            "populationShare": 3.6
+          },
+          {
+            "rank": 7,
+            "name": "JOY",
+            "value": 46.7,
+            "overallTheory": 46.7,
+            "roleTheory": 46.8,
+            "positionTheory": 45.8,
+            "finalWinRate": 46.2,
+            "missionWinRate": 52.9,
+            "missionRedWinRate": 46.9,
+            "missionBlueWinRate": 56.5,
+            "assassinWinRate": 51.4,
+            "threeBlueGames": 280,
+            "games": 507,
+            "careerGames": 507,
+            "from": "2022-06-03",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 27,
+            "populationShare": 11.8
+          },
+          {
+            "rank": 8,
+            "name": "發達",
+            "value": 46.5,
+            "overallTheory": 46.5,
+            "roleTheory": 47.3,
+            "positionTheory": 46.6,
+            "finalWinRate": 47.3,
+            "missionWinRate": 52.5,
+            "missionRedWinRate": 50.0,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 52.1,
+            "threeBlueGames": 213,
+            "games": 406,
+            "careerGames": 406,
+            "from": "2022-02-13",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 36,
+            "populationShare": 17.2
           },
           {
             "rank": 9,
             "name": "Sin",
-            "value": 46.3,
-            "overallTheory": 46.3,
+            "value": 46.2,
+            "overallTheory": 46.2,
+            "roleTheory": 46.3,
             "positionTheory": 46.9,
             "finalWinRate": 47.0,
+            "missionWinRate": 51.3,
+            "missionRedWinRate": 48.3,
+            "missionBlueWinRate": 53.5,
+            "assassinWinRate": 51.2,
+            "threeBlueGames": 592,
             "games": 1122,
             "careerGames": 1122,
             "from": "2023-08-16",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 0,
+            "populationShare": 0.0
           },
           {
             "rank": 10,
             "name": "黑羊",
-            "value": 46.2,
-            "overallTheory": 46.2,
+            "value": 45.6,
+            "overallTheory": 45.6,
+            "roleTheory": 46.2,
             "positionTheory": 45.7,
             "finalWinRate": 45.9,
+            "missionWinRate": 51.3,
+            "missionRedWinRate": 49.1,
+            "missionBlueWinRate": 52.7,
+            "assassinWinRate": 51.1,
+            "threeBlueGames": 370,
             "games": 712,
             "careerGames": 712,
             "from": "2022-02-13",
             "to": "2026-10-25",
             "sparseRoles": 0,
-            "sparseSeats": 0
+            "sparseSeats": 0,
+            "sparseCells": 7,
+            "populationShare": 2.0
+          }
+        ]
+      },
+      {
+        "id": "theory",
+        "metric": "roleTheory",
+        "title": "理論勝率",
+        "titleEn": "Theory win rates",
+        "period": "角色理論：各角色近 10 場、忠臣近 40 場；其他：最近 100 場",
+        "periodEn": "Role theory: Each role's last 10 games (Loyal Servant: last 40); the rest: the last 100 games",
+        "minGames": 0,
+        "note": "近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場；角色理論看各角色窗（沒打滿的變淡）、位置理論、最終勝率、任務勝率、刺殺勝率看最近 100 場（場數不夠的變淡）、整體理論看生涯（生涯不到 250 場的不算，顯示 —）；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 10 games in each special role and 40 as Loyal Servant; role theory over the role windows (dimmed when not full), position theory, final, mission and assassination win rates over the last 100 games (dimmed when shorter), overall theory over the career (— below 250 career games); Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "roleWindowGames": {
+          "刺客": 10,
+          "莫甘娜": 10,
+          "莫德雷德": 10,
+          "奧伯倫": 10,
+          "派西維爾": 10,
+          "梅林": 10,
+          "忠臣": 40
+        },
+        "windowGames": 100,
+        "overallMinGames": 250,
+        "requireRoleWindows": true,
+        "rows": [
+          {
+            "rank": 1,
+            "name": "HAO",
+            "value": 57.0,
+            "roleTheory": 57.0,
+            "positionTheory": 58.7,
+            "overallTheory": 54.1,
+            "finalWinRate": 58.0,
+            "missionWinRate": 59.0,
+            "missionRedWinRate": 71.1,
+            "missionBlueWinRate": 51.6,
+            "assassinWinRate": 72.1,
+            "threeBlueGames": 43,
+            "games": 100,
+            "careerGames": 1131,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2026-02-27",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 1,
+            "populationShare": 0.4
+          },
+          {
+            "rank": 2,
+            "name": "轆",
+            "value": 57.0,
+            "roleTheory": 57.0,
+            "positionTheory": 61.8,
+            "overallTheory": 49.7,
+            "finalWinRate": 63.0,
+            "missionWinRate": 52.0,
+            "missionRedWinRate": 53.1,
+            "missionBlueWinRate": 51.0,
+            "assassinWinRate": 75.5,
+            "threeBlueGames": 49,
+            "games": 100,
+            "careerGames": 579,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-12-23",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 16,
+            "populationShare": 5.4
+          },
+          {
+            "rank": 3,
+            "name": "洋蔥",
+            "value": 53.0,
+            "roleTheory": 53.0,
+            "positionTheory": 52.3,
+            "overallTheory": 48.4,
+            "finalWinRate": 55.0,
+            "missionWinRate": 51.0,
+            "missionRedWinRate": 44.2,
+            "missionBlueWinRate": 56.1,
+            "assassinWinRate": 64.3,
+            "threeBlueGames": 56,
+            "games": 100,
+            "careerGames": 596,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-12-05",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 11,
+            "populationShare": 4.4
+          },
+          {
+            "rank": 4,
+            "name": "池",
+            "value": 49.0,
+            "roleTheory": 49.0,
+            "positionTheory": 47.0,
+            "overallTheory": 46.9,
+            "finalWinRate": 45.0,
+            "missionWinRate": 50.0,
+            "missionRedWinRate": 43.6,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 50.9,
+            "threeBlueGames": 55,
+            "games": 100,
+            "careerGames": 759,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-08-12",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 1,
+            "sparseCells": 9,
+            "populationShare": 3.6
+          },
+          {
+            "rank": 5,
+            "name": "雪怪",
+            "value": 49.0,
+            "roleTheory": 49.0,
+            "positionTheory": 50.9,
+            "overallTheory": 45.6,
+            "finalWinRate": 52.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 59.1,
+            "missionBlueWinRate": 48.2,
+            "assassinWinRate": 57.8,
+            "threeBlueGames": 45,
+            "games": 100,
+            "careerGames": 416,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-03-02",
+            "to": "2026-10-17",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 43,
+            "populationShare": 18.4
+          },
+          {
+            "rank": 6,
+            "name": "布叮咚瓜茶",
+            "value": 49.0,
+            "roleTheory": 49.0,
+            "positionTheory": 55.0,
+            "overallTheory": null,
+            "finalWinRate": 52.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 49.0,
+            "missionBlueWinRate": 57.1,
+            "assassinWinRate": 50.0,
+            "threeBlueGames": 54,
+            "games": 100,
+            "careerGames": 226,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-07-04",
+            "to": "2026-10-10",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": null,
+            "populationShare": null
+          },
+          {
+            "rank": 7,
+            "name": "亞可",
+            "value": 49.0,
+            "roleTheory": 49.0,
+            "positionTheory": 52.1,
+            "overallTheory": null,
+            "finalWinRate": 50.0,
+            "missionWinRate": 54.0,
+            "missionRedWinRate": 50.0,
+            "missionBlueWinRate": 57.1,
+            "assassinWinRate": 51.9,
+            "threeBlueGames": 54,
+            "games": 100,
+            "careerGames": 148,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-08-16",
+            "to": "2026-10-17",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": null,
+            "populationShare": null
+          },
+          {
+            "rank": 8,
+            "name": "JOY",
+            "value": 47.0,
+            "roleTheory": 47.0,
+            "positionTheory": 46.1,
+            "overallTheory": 46.7,
+            "finalWinRate": 45.0,
+            "missionWinRate": 54.0,
+            "missionRedWinRate": 53.8,
+            "missionBlueWinRate": 54.1,
+            "assassinWinRate": 47.1,
+            "threeBlueGames": 51,
+            "games": 100,
+            "careerGames": 507,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-07-21",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 27,
+            "populationShare": 11.8
+          },
+          {
+            "rank": 9,
+            "name": "發達",
+            "value": 47.0,
+            "roleTheory": 47.0,
+            "positionTheory": 45.8,
+            "overallTheory": 46.5,
+            "finalWinRate": 48.0,
+            "missionWinRate": 52.0,
+            "missionRedWinRate": 60.5,
+            "missionBlueWinRate": 45.6,
+            "assassinWinRate": 51.2,
+            "threeBlueGames": 43,
+            "games": 100,
+            "careerGames": 406,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-06-01",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 2,
+            "sparseCells": 36,
+            "populationShare": 17.2
+          },
+          {
+            "rank": 10,
+            "name": "黃某人",
+            "value": 47.0,
+            "roleTheory": 47.0,
+            "positionTheory": 48.3,
+            "overallTheory": 44.2,
+            "finalWinRate": 48.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 54.8,
+            "missionBlueWinRate": 51.7,
+            "assassinWinRate": 51.0,
+            "threeBlueGames": 49,
+            "games": 100,
+            "careerGames": 390,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-06-07",
+            "to": "2026-10-24",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 40,
+            "populationShare": 15.6
+          },
+          {
+            "rank": 11,
+            "name": "Vash",
+            "value": 47.0,
+            "roleTheory": 47.0,
+            "positionTheory": 44.5,
+            "overallTheory": 48.9,
+            "finalWinRate": 44.0,
+            "missionWinRate": 48.0,
+            "missionRedWinRate": 41.0,
+            "missionBlueWinRate": 52.5,
+            "assassinWinRate": 50.9,
+            "threeBlueGames": 55,
+            "games": 100,
+            "careerGames": 267,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-02-24",
+            "to": "2026-10-23",
+            "sparseRoles": 0,
+            "sparseSeats": 1,
+            "sparseCells": 49,
+            "populationShare": 28.0
+          },
+          {
+            "rank": 12,
+            "name": "Sin",
+            "value": 46.0,
+            "roleTheory": 46.0,
+            "positionTheory": 48.5,
+            "overallTheory": 46.2,
+            "finalWinRate": 49.0,
+            "missionWinRate": 47.0,
+            "missionRedWinRate": 44.2,
+            "missionBlueWinRate": 49.1,
+            "assassinWinRate": 57.7,
+            "threeBlueGames": 52,
+            "games": 100,
+            "careerGames": 1122,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-09-28",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 0,
+            "populationShare": 0.0
+          },
+          {
+            "rank": 13,
+            "name": "黑羊",
+            "value": 46.0,
+            "roleTheory": 46.0,
+            "positionTheory": 44.1,
+            "overallTheory": 45.6,
+            "finalWinRate": 44.0,
+            "missionWinRate": 53.0,
+            "missionRedWinRate": 59.4,
+            "missionBlueWinRate": 50.0,
+            "assassinWinRate": 53.2,
+            "threeBlueGames": 47,
+            "games": 100,
+            "careerGames": 712,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-08-19",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 7,
+            "populationShare": 2.0
+          },
+          {
+            "rank": 14,
+            "name": "Emma",
+            "value": 44.0,
+            "roleTheory": 44.0,
+            "positionTheory": 42.4,
+            "overallTheory": 45.5,
+            "finalWinRate": 45.0,
+            "missionWinRate": 49.0,
+            "missionRedWinRate": 54.8,
+            "missionBlueWinRate": 44.8,
+            "assassinWinRate": 48.9,
+            "threeBlueGames": 45,
+            "games": 100,
+            "careerGames": 256,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-12-23",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 52,
+            "populationShare": 30.6
+          },
+          {
+            "rank": 15,
+            "name": "午夜",
+            "value": 43.0,
+            "roleTheory": 43.0,
+            "positionTheory": 41.5,
+            "overallTheory": 43.6,
+            "finalWinRate": 42.0,
+            "missionWinRate": 51.0,
+            "missionRedWinRate": 65.6,
+            "missionBlueWinRate": 44.1,
+            "assassinWinRate": 51.2,
+            "threeBlueGames": 41,
+            "games": 100,
+            "careerGames": 348,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-11-15",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 46,
+            "populationShare": 21.4
+          },
+          {
+            "rank": 16,
+            "name": "大星",
+            "value": 43.0,
+            "roleTheory": 43.0,
+            "positionTheory": 39.9,
+            "overallTheory": 43.2,
+            "finalWinRate": 41.0,
+            "missionWinRate": 50.0,
+            "missionRedWinRate": 39.4,
+            "missionBlueWinRate": 55.2,
+            "assassinWinRate": 49.1,
+            "threeBlueGames": 57,
+            "games": 100,
+            "careerGames": 344,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-04-20",
+            "to": "2026-10-08",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 51,
+            "populationShare": 23.0
+          },
+          {
+            "rank": 17,
+            "name": "小向",
+            "value": 43.0,
+            "roleTheory": 43.0,
+            "positionTheory": 42.9,
+            "overallTheory": null,
+            "finalWinRate": 43.0,
+            "missionWinRate": 45.0,
+            "missionRedWinRate": 35.0,
+            "missionBlueWinRate": 51.7,
+            "assassinWinRate": 50.9,
+            "threeBlueGames": 57,
+            "games": 100,
+            "careerGames": 182,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-08-06",
+            "to": "2026-08-30",
+            "sparseRoles": 0,
+            "sparseSeats": 1,
+            "sparseCells": null,
+            "populationShare": null
+          },
+          {
+            "rank": 18,
+            "name": "ED",
+            "value": 42.0,
+            "roleTheory": 42.0,
+            "positionTheory": 43.3,
+            "overallTheory": 48.0,
+            "finalWinRate": 43.0,
+            "missionWinRate": 42.0,
+            "missionRedWinRate": 34.1,
+            "missionBlueWinRate": 47.5,
+            "assassinWinRate": 52.7,
+            "threeBlueGames": 55,
+            "games": 100,
+            "careerGames": 295,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-01-29",
+            "to": "2026-10-10",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 50,
+            "populationShare": 24.8
+          },
+          {
+            "rank": 19,
+            "name": "K810",
+            "value": 42.0,
+            "roleTheory": 42.0,
+            "positionTheory": 39.9,
+            "overallTheory": null,
+            "finalWinRate": 41.0,
+            "missionWinRate": 49.0,
+            "missionRedWinRate": 48.7,
+            "missionBlueWinRate": 49.2,
+            "assassinWinRate": 44.0,
+            "threeBlueGames": 50,
+            "games": 100,
+            "careerGames": 153,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-09-28",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": null,
+            "populationShare": null
+          },
+          {
+            "rank": 20,
+            "name": "軒",
+            "value": 41.0,
+            "roleTheory": 41.0,
+            "positionTheory": 47.0,
+            "overallTheory": 43.5,
+            "finalWinRate": 46.0,
+            "missionWinRate": 49.0,
+            "missionRedWinRate": 56.4,
+            "missionBlueWinRate": 40.0,
+            "assassinWinRate": 35.7,
+            "threeBlueGames": 42,
+            "games": 100,
+            "careerGames": 855,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-07-27",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 1,
+            "sparseCells": 4,
+            "populationShare": 1.0
+          },
+          {
+            "rank": 21,
+            "name": "開司",
+            "value": 41.0,
+            "roleTheory": 41.0,
+            "positionTheory": 46.4,
+            "overallTheory": null,
+            "finalWinRate": 47.0,
+            "missionWinRate": 38.0,
+            "missionRedWinRate": 38.6,
+            "missionBlueWinRate": 37.5,
+            "assassinWinRate": 62.5,
+            "threeBlueGames": 48,
+            "games": 100,
+            "careerGames": 210,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-01-27",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": null,
+            "populationShare": null
+          },
+          {
+            "rank": 22,
+            "name": "豬豬",
+            "value": 40.0,
+            "roleTheory": 40.0,
+            "positionTheory": 38.1,
+            "overallTheory": 41.5,
+            "finalWinRate": 39.0,
+            "missionWinRate": 44.0,
+            "missionRedWinRate": 47.1,
+            "missionBlueWinRate": 42.4,
+            "assassinWinRate": 50.0,
+            "threeBlueGames": 46,
+            "games": 100,
+            "careerGames": 515,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-12-12",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 2,
+            "sparseCells": 26,
+            "populationShare": 10.8
+          },
+          {
+            "rank": 23,
+            "name": "尼克",
+            "value": 39.0,
+            "roleTheory": 39.0,
+            "positionTheory": 38.8,
+            "overallTheory": 45.0,
+            "finalWinRate": 39.0,
+            "missionWinRate": 47.0,
+            "missionRedWinRate": 44.7,
+            "missionBlueWinRate": 48.4,
+            "assassinWinRate": 43.1,
+            "threeBlueGames": 51,
+            "games": 100,
+            "careerGames": 916,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-09-14",
+            "to": "2026-10-24",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 2,
+            "populationShare": 1.0
+          },
+          {
+            "rank": 24,
+            "name": "TEN",
+            "value": 37.0,
+            "roleTheory": 37.0,
+            "positionTheory": 34.2,
+            "overallTheory": 41.9,
+            "finalWinRate": 34.0,
+            "missionWinRate": 42.0,
+            "missionRedWinRate": 47.2,
+            "missionBlueWinRate": 39.1,
+            "assassinWinRate": 38.6,
+            "threeBlueGames": 44,
+            "games": 100,
+            "careerGames": 279,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2024-09-18",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 53,
+            "populationShare": 31.8
+          },
+          {
+            "rank": 25,
+            "name": "菜",
+            "value": 33.0,
+            "roleTheory": 33.0,
+            "positionTheory": 36.4,
+            "overallTheory": 42.9,
+            "finalWinRate": 34.0,
+            "missionWinRate": 47.0,
+            "missionRedWinRate": 52.4,
+            "missionBlueWinRate": 43.1,
+            "assassinWinRate": 26.7,
+            "threeBlueGames": 45,
+            "games": 100,
+            "careerGames": 467,
+            "roleGames": 100,
+            "fullWindows": true,
+            "from": "2025-12-24",
+            "to": "2026-10-24",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 25,
+            "populationShare": 11.6
           }
         ]
       },
@@ -197123,8 +199158,8 @@
         "period": "各角色近 10 場、忠臣近 40 場 vs 再之前同樣場數",
         "periodEn": "Each role's last 10 games (Loyal Servant: last 40) vs the same number of games before them",
         "minGames": 200,
-        "note": "近 90 天內有出賽、六個特殊角色各至少 20 場、忠臣至少 80 場；各角色最近 10 場（忠臣 40 場）的角色理論勝率 − 每個角色再之前同樣場數的，只列有進步的人；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
-        "noteEn": "Played in the last 90 days, at least 20 games in each special role and 80 as Loyal Servant; role theory over each role's last 10 games (40 as Loyal Servant) minus that over the games before them in each role, improvers only; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "note": "近 90 天內有出賽、六個特殊角色各至少 20 場、忠臣至少 80 場；各角色最近 10 場（忠臣 40 場）的角色理論勝率 − 每個角色再之前同樣場數的，只列有進步的人；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 20 games in each special role and 80 as Loyal Servant; role theory over each role's last 10 games (40 as Loyal Servant) minus that over the games before them in each role, improvers only; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "roleWindowGames": {
           "刺客": 10,
           "莫甘娜": 10,
@@ -197379,8 +199414,8 @@
         "period": "2026-07-31 ～ 2026-10-28 打滿 10 場",
         "periodEn": "Reached 10 games 2026-07-31 to 2026-10-28",
         "minGames": 10,
-        "note": "第一次累積到 10 場是在近 90 天內（以前打過幾場也算新人）；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 10 場、忠臣 40 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論；不到 5 場的角色或位置，用全體的最終勝率補到 5 場",
-        "noteEn": "Reached 10 games for the first time within the last 90 days (a few earlier games still count as new); the exception: a newcomer has few games, so role theory takes all of their games in each role (at most the last 10, 40 as Loyal Servant) and position theory and final win rate all of their games; the fewer there are the closer the numbers stay to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their whole career; a role or seat with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "note": "第一次累積到 10 場是在近 90 天內（以前打過幾場也算新人）；例外：新人場數少，角色理論用他每個角色的全部場次（最多最近 10 場、忠臣 40 場），位置理論與最終勝率用他的全部場次，場數越少越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Reached 10 games for the first time within the last 90 days (a few earlier games still count as new); the exception: a newcomer has few games, so role theory takes all of their games in each role (at most the last 10, 40 as Loyal Servant) and position theory and final win rate all of their games; the fewer there are the closer the numbers stay to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "windowDays": 90,
         "allGames": true,
         "rows": [
@@ -197390,8 +199425,13 @@
             "value": 47.5,
             "roleTheory": 47.5,
             "positionTheory": 48.9,
-            "overallTheory": 47.5,
+            "overallTheory": 46.8,
             "finalWinRate": 50.0,
+            "missionWinRate": 52.1,
+            "missionRedWinRate": 57.1,
+            "missionBlueWinRate": 48.1,
+            "assassinWinRate": 54.5,
+            "threeBlueGames": 22,
             "games": 48,
             "careerGames": 48,
             "from": "2024-01-05",
@@ -197407,8 +199447,13 @@
             "value": 44.3,
             "roleTheory": 44.3,
             "positionTheory": 44.0,
-            "overallTheory": 44.3,
+            "overallTheory": 45.9,
             "finalWinRate": 40.9,
+            "missionWinRate": 36.4,
+            "missionRedWinRate": 44.4,
+            "missionBlueWinRate": 30.8,
+            "assassinWinRate": 55.6,
+            "threeBlueGames": 9,
             "games": 22,
             "careerGames": 22,
             "from": "2026-10-09",
@@ -197424,8 +199469,13 @@
             "value": 43.8,
             "roleTheory": 43.8,
             "positionTheory": 46.8,
-            "overallTheory": 43.8,
+            "overallTheory": 45.8,
             "finalWinRate": 50.0,
+            "missionWinRate": 60.0,
+            "missionRedWinRate": 75.0,
+            "missionBlueWinRate": 50.0,
+            "assassinWinRate": 50.0,
+            "threeBlueGames": 4,
             "games": 10,
             "careerGames": 10,
             "from": "2026-10-23",
@@ -197441,8 +199491,13 @@
             "value": 43.5,
             "roleTheory": 43.5,
             "positionTheory": 40.8,
-            "overallTheory": 43.5,
+            "overallTheory": 45.3,
             "finalWinRate": 39.6,
+            "missionWinRate": 54.2,
+            "missionRedWinRate": 62.5,
+            "missionBlueWinRate": 50.0,
+            "assassinWinRate": 40.9,
+            "threeBlueGames": 22,
             "games": 48,
             "careerGames": 48,
             "from": "2026-08-15",
@@ -197458,8 +199513,13 @@
             "value": 42.1,
             "roleTheory": 42.1,
             "positionTheory": 41.0,
-            "overallTheory": 42.1,
+            "overallTheory": 46.0,
             "finalWinRate": 36.0,
+            "missionWinRate": 44.0,
+            "missionRedWinRate": 30.0,
+            "missionBlueWinRate": 53.3,
+            "assassinWinRate": 40.0,
+            "threeBlueGames": 15,
             "games": 25,
             "careerGames": 25,
             "from": "2022-03-05",
@@ -197475,8 +199535,13 @@
             "value": 35.3,
             "roleTheory": 35.3,
             "positionTheory": 36.8,
-            "overallTheory": 35.3,
+            "overallTheory": 43.0,
             "finalWinRate": 30.0,
+            "missionWinRate": 36.7,
+            "missionRedWinRate": 36.4,
+            "missionBlueWinRate": 36.8,
+            "assassinWinRate": 35.7,
+            "threeBlueGames": 14,
             "games": 30,
             "careerGames": 30,
             "from": "2026-10-22",
@@ -197493,84 +199558,120 @@
         "metric": "finalWinRate",
         "title": "角色王",
         "titleEn": "Role champions",
-        "period": "各人該角色最近 20 場",
-        "periodEn": "Each player's last 20 games in the role",
-        "minGames": 20,
-        "note": "近 90 天內有出賽、生涯該角色至少 20 場；比各人該角色最近 20 場的最終勝率，同率者並列、各得稱號",
-        "noteEn": "Played in the last 90 days, at least 20 career games in the role; best final win rate over the last 20 games in it, players tied at the top all get the title",
-        "windowGames": 20,
+        "period": "忠臣近 100 場、其他角色近 25 場",
+        "periodEn": "Last 100 games as Loyal Servant, 25 in each other role",
+        "minGames": 25,
+        "note": "近 90 天內有出賽、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號；每個角色的場數：忠臣 200 場、其他角色 50 場，有出賽過該角色的人不到一半打滿時改用忠臣 100 場、其他角色 25 場",
+        "noteEn": "Played in the last 90 days, a full window in the role; best final win rate over the last games of that window, players tied at the top all get the title; games per role: 200 as Loyal Servant and 50 in each other role, or 100 / 25 when fewer than half of the players who have played the role have that many",
+        "roleWindowGames": {
+          "刺客": 25,
+          "莫甘娜": 25,
+          "莫德雷德": 25,
+          "奧伯倫": 25,
+          "派西維爾": 25,
+          "梅林": 25,
+          "忠臣": 100
+        },
         "rows": [
           {
             "rank": 1,
             "role": "刺客",
             "name": "HAO",
-            "value": 85.0,
-            "games": 20,
-            "wins": 17,
-            "careerRoleGames": 117
+            "value": 88.0,
+            "games": 25,
+            "wins": 22,
+            "careerRoleGames": 117,
+            "qualified": 21
           },
           {
             "rank": 2,
-            "role": "刺客",
-            "name": "雪怪",
-            "value": 85.0,
-            "games": 20,
-            "wins": 17,
-            "careerRoleGames": 40
+            "role": "莫甘娜",
+            "name": "HAO",
+            "value": 92.0,
+            "games": 25,
+            "wins": 23,
+            "careerRoleGames": 102,
+            "qualified": 19
           },
           {
             "rank": 3,
             "role": "莫甘娜",
             "name": "轆",
-            "value": 95.0,
-            "games": 20,
-            "wins": 19,
-            "careerRoleGames": 67
+            "value": 92.0,
+            "games": 25,
+            "wins": 23,
+            "careerRoleGames": 67,
+            "qualified": 19
           },
           {
             "rank": 4,
-            "role": "莫德雷德",
-            "name": "JOY",
-            "value": 90.0,
-            "games": 20,
-            "wins": 18,
-            "careerRoleGames": 55
+            "role": "莫甘娜",
+            "name": "雪怪",
+            "value": 92.0,
+            "games": 25,
+            "wins": 23,
+            "careerRoleGames": 47,
+            "qualified": 19
           },
           {
             "rank": 5,
-            "role": "奧伯倫",
+            "role": "莫德雷德",
             "name": "HAO",
-            "value": 90.0,
-            "games": 20,
-            "wins": 18,
-            "careerRoleGames": 98
+            "value": 88.0,
+            "games": 25,
+            "wins": 22,
+            "careerRoleGames": 104,
+            "qualified": 20
           },
           {
             "rank": 6,
-            "role": "派西維爾",
-            "name": "ED",
-            "value": 55.0,
-            "games": 20,
-            "wins": 11,
-            "careerRoleGames": 30
+            "role": "莫德雷德",
+            "name": "JOY",
+            "value": 88.0,
+            "games": 25,
+            "wins": 22,
+            "careerRoleGames": 55,
+            "qualified": 20
           },
           {
             "rank": 7,
-            "role": "梅林",
-            "name": "池",
-            "value": 45.0,
-            "games": 20,
-            "wins": 9,
-            "careerRoleGames": 59
+            "role": "奧伯倫",
+            "name": "HAO",
+            "value": 84.0,
+            "games": 25,
+            "wins": 21,
+            "careerRoleGames": 98,
+            "qualified": 20
           },
           {
             "rank": 8,
-            "role": "忠臣",
-            "name": "大星",
-            "value": 55.0,
-            "games": 20,
+            "role": "派西維爾",
+            "name": "ED",
+            "value": 56.0,
+            "games": 25,
+            "wins": 14,
+            "careerRoleGames": 30,
+            "qualified": 20
+          },
+          {
+            "rank": 9,
+            "role": "梅林",
+            "name": "ED",
+            "value": 44.0,
+            "games": 25,
             "wins": 11,
-            "careerRoleGames": 147
+            "careerRoleGames": 36,
+            "qualified": 21
+          },
+          {
+            "rank": 10,
+            "role": "忠臣",
+            "name": "Vash",
+            "value": 38.0,
+            "games": 100,
+            "wins": 38,
+            "careerRoleGames": 102,
+            "qualified": 20
           }
         ]
       }

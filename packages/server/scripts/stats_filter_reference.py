@@ -5,6 +5,7 @@
 全部或局條件之後的對局。支援資格不足的處理、反選、最低場數與隱藏／丟局兩種範圍。
 
 在剩餘對局上呼叫 generate_cache.build_cache；隱藏只移除名單，數字不變，排名補滿。
+options.leaderboard（上榜條件）合併到 LEADERBOARD_CONFIG 後只重算排行區塊（玩家列的理論視窗不變）。
 僅支援預設 activity=filtered。timeline_date 必須先在完整資料集上設定。
 
     reference_sections(games, filter, cache_as_of, games_key) -> (sections, meta)
@@ -74,7 +75,7 @@ def _metric(row: dict, metric: str) -> tuple[float | None, Callable[[int | None]
         last = theory.get(gc.theory_key(cfg["mainGames"]))
         return (last or {}).get("positionTheory"), lambda mg: total >= (cfg["mainGames"] if mg is None else mg)
     if metric == "overallTheory":
-        return theory["career"]["roleTheory"], lambda mg: total >= (cfg["overallMinGames"] if mg is None else mg)
+        return theory["career"]["overallTheory"], lambda mg: total >= (cfg["overallMinGames"] if mg is None else mg)
     if metric == "finalWinRate":
         return row["finalWinRate"], lambda mg: total >= (gc.MIN_GAMES_THRESHOLD if mg is None else mg)
     if metric == "games":
@@ -213,9 +214,16 @@ def reference_sections(
     more = {"lake": gc.compute_lake(list(g2)), "seatOrder": gc.compute_seat_order(list(g2)),
             "lakeClaim": gc.compute_lake_claim_feature(list(g2), as_of),
             "pairs": reference_pairs(g2, roster or {}, hidden)}
+    overrides = (flt.get("options") or {}).get("leaderboard") or {}
+    cfg = {**gc.LEADERBOARD_CONFIG, **overrides}
     if not hidden:
         cache = gc.build_cache(list(g2), {}, as_of, gc.cache_aliases({"players": {"aliases": aliases or {}}}),
                                games_key=games_key)
+        if overrides:
+            games2, _ = gc.drop_dates_after(list(g2), as_of)
+            ov = cache["overview"]
+            cache["leaderboard"] = gc.compute_leaderboard(games2, as_of, ov["roleFinalWinRates"], ov["seatFinalWinRates"],
+                                                          ov["roleSeatFinalWinRates"], cfg=cfg)
         return {**{k: cache[k] for k in ("overview", "players", "playerDetails", "missions", "rounds", "captainAnalysis",
                                         "leaderboard")}, **more}, meta
     # 數字先用完整 G2 計算，再移除隱藏玩家並依序補滿名單。
@@ -231,7 +239,8 @@ def reference_sections(
     timelines = gc.player_timelines
     with mock.patch.object(gc, "player_timelines",
                            lambda gs: {n: s for n, s in timelines(gs).items() if n not in hidden}):
-        leaderboard = gc.compute_leaderboard(games2, as_of, overview["roleFinalWinRates"], overview["seatFinalWinRates"])
+        leaderboard = gc.compute_leaderboard(games2, as_of, overview["roleFinalWinRates"], overview["seatFinalWinRates"],
+                                             overview["roleSeatFinalWinRates"], cfg=cfg)
     return {
         "overview": overview,
         "players": gc.compute_players_endpoint(listed, {k: v for k, v in (aliases or {}).items()

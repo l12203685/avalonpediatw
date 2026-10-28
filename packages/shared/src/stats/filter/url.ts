@@ -6,7 +6,10 @@
  * 資料集的正式名字，找不到時該子句不生效）。
  */
 import { ALL_ROLES } from '../constants';
-import { GAME_CLAUSE_KINDS, METRIC_IDS, type Clause, type FilterOptions, type GameFilter } from './types';
+import {
+  GAME_CLAUSE_KINDS, LEADERBOARD_OVERRIDE_RANGES, METRIC_IDS,
+  type Clause, type FilterOptions, type GameFilter, type LeaderboardOverrideKey, type LeaderboardOverrides,
+} from './types';
 
 export const FILTER_URL_VERSION = '1';
 
@@ -109,6 +112,26 @@ function sanitizeSelector(raw: unknown): Clause | string {
   return { kind: 'excludePlayers', scope: c.scope, who: selector, ...extra } as Clause;
 }
 
+/** options.leaderboard：只留已知的鍵、範圍內的整數（依 LEADERBOARD_OVERRIDE_RANGES 的順序）。 */
+export function sanitizeLeaderboardOverrides(raw: unknown, warnings: string[] = []): LeaderboardOverrides {
+  const out: LeaderboardOverrides = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    warnings.push('options.leaderboard');
+    return out;
+  }
+  const r = raw as Record<string, unknown>;
+  for (const key of Object.keys(r)) {
+    if (!(key in LEADERBOARD_OVERRIDE_RANGES)) warnings.push(`options.leaderboard.${key}`);
+  }
+  for (const [key, [lo, hi]] of Object.entries(LEADERBOARD_OVERRIDE_RANGES) as Array<[LeaderboardOverrideKey, readonly [number, number]]>) {
+    const v = r[key];
+    if (v === undefined) continue;
+    if (typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi) out[key] = v;
+    else warnings.push(`options.leaderboard.${key}`);
+  }
+  return out;
+}
+
 /** 外來的篩選 → 只含合法子句的 GameFilter（null = 不是篩選物件）與被丟掉的原因。 */
 export function sanitizeFilter(raw: unknown): { filter: GameFilter | null; warnings: string[] } {
   const warnings: string[] = [];
@@ -161,6 +184,10 @@ export function sanitizeFilter(raw: unknown): { filter: GameFilter | null; warni
   const o = (r.options ?? {}) as Record<string, unknown>;
   if (o.activity === 'all' || o.activity === 'none') options.activity = o.activity;
   if (typeof o.asOf === 'string' && DATE_RE.test(o.asOf)) options.asOf = o.asOf;
+  if (o.leaderboard !== undefined) {
+    const lb = sanitizeLeaderboardOverrides(o.leaderboard, warnings);
+    if (Object.keys(lb).length) options.leaderboard = lb;
+  }
   const filter: GameFilter = { v: 1, clauses };
   if (Object.keys(options).length) filter.options = options;
   return { filter, warnings };

@@ -637,6 +637,62 @@
         "positionTheory": "Position theory",
         "finalWinRate": "Final WR",
         "games": "Games"
+      },
+      "theory": {
+        "title": "Theory win rates",
+        "sortBy": "Sort by",
+        "col": {
+          "roleTheory": "Role theory",
+          "positionTheory": "Position theory",
+          "overallTheory": "Overall theory",
+          "finalWinRate": "Final WR",
+          "missionWinRate": "Mission WR",
+          "assassinWinRate": "Assassination WR",
+          "careerGames": "Career games",
+          "games": "Games"
+        },
+        "notFull": "Role windows not full yet ({{games}} games): indicative only",
+        "shortWindow": "Only {{games}} games, fewer than {{window}}",
+        "overallLocked": "Fewer than {{min}} career games: no overall theory",
+        "populationShare": "{{share}}% of the overall theory is the population average ({{cells}} of 70 cells have fewer than {{min}} games and are topped up at the population rate of that role in that seat)",
+        "shareShort": "{{share}}% pop.",
+        "missionSplit": "Red (三紅) {{red}} · Blue (三藍) {{blue}}",
+        "gamesTip": "Position theory, final, mission and assassination win rates over the last {{games}} games ({{career}} career games)",
+        "footnote": "Dimmed = not backed by its window (role windows not full, too few recent games) or cells with fewer than {{min}} games topped up at the population rate; the small number after overall theory = the population share in it; after mission WR = red / blue; n of assassination WR = 三藍 games."
+      },
+      "rules": {
+        "title": "Listing rules",
+        "adjust": "Adjust",
+        "reset": "Reset",
+        "chip": "Leaderboard listing rules changed",
+        "days": "Played in the last {{count}} days",
+        "anyTime": "Any time",
+        "lastGames": "Last {{count}} games",
+        "career": "Whole career",
+        "atLeast": "At least {{count}}",
+        "noMin": "No minimum",
+        "minGamesShort": "≥ {{count}} career games",
+        "roleWindowsShort": "role windows {{k}}/{{kl}} full",
+        "roleWindowsOffShort": "role windows need not be full",
+        "overallShort": "overall theory from {{count}} career games",
+        "titleAutoShort": "role champions: auto",
+        "titleFixedShort": "role champions {{other}}/{{loyal}} games",
+        "assassinShort": "≥ {{count}} assassinations",
+        "activeDays": "Recent activity",
+        "mainGames": "Position theory / rates over",
+        "theoryMinGames": "Min. career games",
+        "roleWindows": "Role windows (role / Loyal)",
+        "roleWindowsOption": "{{k}} / {{kl}} games",
+        "requireRoleWindows": "Full role windows to list",
+        "requireOn": "Required",
+        "requireOff": "Not required (dimmed)",
+        "overallMinGames": "Overall theory career games",
+        "roleTitles": "Role champion games",
+        "titleAuto": "Auto: {{full}}→{{fallback}}, Loyal {{loyal}}→{{loyalFallback}}",
+        "titleAutoDefault": "Auto: {{full}}→{{fallback}}, Loyal {{loyal}}→{{loyalFallback}}",
+        "titleFixed": "Fixed: others {{other}}, Loyal {{loyal}}",
+        "assassinMinAttempts": "Assassin board min.",
+        "attempts": "At least {{count}}"
       }
     },
     "analysis": {
@@ -1099,7 +1155,8 @@
           "assassin": "Assassin",
           "newcomers": "Newcomers",
           "roleTitles": "Role champions",
-          "precision": "Precision"
+          "precision": "Precision",
+          "theory": "Theory"
         },
         "who": "Who: ",
         "sparseNote": "Faded = a role or seat with fewer than {{min}} games, topped up to {{min}} at the population's final win rate.",
@@ -1111,7 +1168,7 @@
           "positionDef": "Position theory = Σ 1/10 × the player's final win rate in that seat.",
           "overallTitle": "Overall theory win rate",
           "overall": "The overall-theory board (at least {{games}} career games, whole career) arrives with the next daily refresh.",
-          "overallDef": "Overall theory = the role theory of the whole career = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role."
+          "overallDef": "Overall theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × 1/10 × the player's final win rate as that role in that seat (70 role × seat cells over the whole career; thin cells topped up at the population rate of the cell)."
         },
         "col": {
           "rankName": "# Player",
@@ -1136,8 +1193,13 @@
           "hitRate": "Hit rate",
           "hitsAttempts": "Hits / attempts",
           "winsGames": "Wins / games",
-          "careerRoleGames": "Career games in role"
-        }
+          "careerRoleGames": "Career games in role",
+          "missionWinRate": "Mission WR",
+          "assassinWinRate": "Assassination WR",
+          "titleWindow": "Window",
+          "qualified": "Qualified"
+        },
+        "lastN": "last {{count}}"
       },
       "overview": {
         "summary": {
@@ -1170,7 +1232,7 @@
           "defRole": "Role theory = Σ P(role) (Loyal Servant 4/10, others 1/10) × the player's recent final win rate as that role; every role window must be full.",
           "defRoleLegacy": "Role theory = Σ P(role) (Loyal Servant 4/10, others 1/10) × the player's final win rate as that role.",
           "defPosition": "Position theory = Σ 1/10 × final win rate per seat.",
-          "defOverall": "Overall theory = career role theory.",
+          "defOverall": "Overall theory = career role × seat theory (70 cells; thin cells topped up with the population average).",
           "topUp": "Roles or seats under {{n}} games are topped up to {{n}} at population rates.",
           "baseline": "baseline {{parts}} (red = below)",
           "baselineRole": "role {{value}}%",
@@ -1269,7 +1331,7 @@
           "careerGames": "{{count}} games",
           "cells": "{{count}} cells",
           "overallLocked": "Shown from {{min}} career games",
-          "note": "Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's recent final WR in that role (each role's last {{special}}, Loyal Servant's last {{loyal}}); position theory = Σ 1/10 × the player's final WR in each seat over the last {{position}} games; overall theory = role theory over the whole career, listed from {{overall}} career games.",
+          "note": "Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's recent final WR in that role (each role's last {{special}}, Loyal Servant's last {{loyal}}); position theory = Σ 1/10 × the player's final WR in each seat over the last {{position}} games; overall theory = Σ chance of the role × 1/10 × the career final WR as that role in that seat (70 role × seat cells), listed from {{overall}} career games.",
           "noteTopUp": "Cells with fewer than {{n}} games are topped up to {{n}} at the population final WR.",
           "colRole": "Role",
           "colWins": "Won / played",

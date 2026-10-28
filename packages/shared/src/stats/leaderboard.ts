@@ -7,18 +7,24 @@
  *   hidden       只從榜上拿掉（全排名算完後拿掉、依原排序補滿 topN、重編名次；角色王的候選排除他們）
  *   isActive     改寫「近 activeDays 天有出賽」的判斷（看全部局，或不限）
  *   newcomer     改寫新人的「第 newcomerMinGames 場在近 newcomerDays 天、每局都有日期」判斷；'none' = 不出新人榜
+ *   overrides    上榜條件（Edward 2026-10-28「"上榜"條件也做成可調整可變可選」）：蓋在 config.leaderboard 上，
+ *                = Python 的 compute_leaderboard(cfg=…)
  * 都不給時與 Python 完全相同。
  */
-import { ALL_ROLES, OUTCOME_BLUE_ALIVE, OUTCOME_BLUE_DEAD, isFinalWin } from './constants';
+import { ALL_ROLES, OUTCOME_BLUE_ALIVE, OUTCOME_BLUE_DEAD, isFinalWin, type Role } from './constants';
 import type { Game, GamesDatasetConfig, LeaderboardConfig } from './dataset';
+import { computeRoleSeatFinalWinRates } from './players';
 import { pySlice, rate, rnd1, sortByKey } from './pyround';
 import {
+  missionAssassination,
   playerTimelines,
   roleWindowGames,
   roleWindowTheory,
   theoryWindow,
   theoryWindows,
+  type OutcomeRates,
   type PlayerSeat,
+  type RoleSeatRates,
   type RoleWindows,
   type TheoryWindow,
 } from './theory';
@@ -105,30 +111,57 @@ function board(
   return { id, metric, title, titleEn, period, periodEn, minGames, note, noteEn, ...extra, rows };
 }
 
-function roleRow(name: string, rw: RoleWindows, last: TheoryWindow, career: TheoryWindow, careerGames: number): Row {
+function roleRow(
+  name: string, rw: RoleWindows, last: TheoryWindow, career: TheoryWindow, careerGames: number, outcomes: OutcomeRates,
+): Row {
   return {
     name, value: rw.roleTheory, roleTheory: rw.roleTheory,
-    positionTheory: last.positionTheory, overallTheory: career.roleTheory,
-    finalWinRate: last.finalWinRate, games: rw.games, careerGames,
+    positionTheory: last.positionTheory, overallTheory: career.overallTheory as number,
+    finalWinRate: last.finalWinRate, ...outcomes, games: rw.games, careerGames,
     from: rw.from, to: rw.to, sparseRoles: rw.sparseRoles, sparseSeats: last.sparseSeats,
   };
 }
 
-/** generate_cache.theory_legend：附在各榜說明後的三種理論勝率解釋（中、英）。 */
+/** generate_cache.theory_legend：附在各榜說明後的三種理論勝率（與任務 / 刺殺勝率）解釋（中、英）。 */
 export function theoryLegend(minCell: number, cfg: LeaderboardConfig): [string, string] {
   const k = cfg.roleWindowGames;
   const kl = cfg.loyalWindowGames;
   let zh = `角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的`
-    + `最近 ${k} 場、忠臣 ${kl} 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = 用生涯全部場次算的角色理論`;
+    + `最近 ${k} 場、忠臣 ${kl} 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × `
+    + `本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務`
+    + `（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過`;
   let en = `Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the `
     + `player's final win rate as that role (over their last ${k} games in each role, ${kl} as Loyal Servant); `
-    + `position theory = Σ 1/10 × their final win rate in that seat; overall theory = the role theory of their `
-    + `whole career`;
+    + `position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 `
+    + `× their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = `
+    + `their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / `
+    + `blue Merlin survived`;
   if (minCell > 0) {
-    zh += `；不到 ${minCell} 場的角色或位置，用全體的最終勝率補到 ${minCell} 場`;
-    en += `; a role or seat with fewer than ${minCell} games is topped up to ${minCell} at the population's final win rate`;
+    zh += `；不到 ${minCell} 場的角色、位置或格子，用全體的最終勝率補到 ${minCell} 場`;
+    en += `; a role, seat or cell with fewer than ${minCell} games is topped up to ${minCell} at the `
+      + `population's final win rate`;
   }
   return [zh, en];
+}
+
+/**
+ * generate_cache.role_title_windows：角色王每個角色的視窗——`active`（上榜名單裡近期有出賽的人）中玩過該角色的
+ * 人至少一半有完整視窗（忠臣 loyalTitleGames、其他 roleTitleGames）就用它，否則用退回視窗（Edward 2026-10-28）。
+ */
+export function roleTitleWindows(
+  active: ReadonlyArray<readonly [string, readonly PlayerSeat[]]>,
+  cfg: LeaderboardConfig,
+): Record<Role, number> {
+  const out = {} as Record<Role, number>;
+  for (const role of ALL_ROLES) {
+    const [full, fallback] = role === '忠臣'
+      ? [cfg.loyalTitleGames, cfg.loyalTitleFallbackGames]
+      : [cfg.roleTitleGames, cfg.roleTitleFallbackGames];
+    const counts = active.map(([, seats]) => seats.filter((s) => s.role === role).length).filter((n) => n > 0);
+    const enough = counts.filter((n) => n >= full).length;
+    out[role] = Math.trunc(Number(2 * enough >= counts.length ? full : fallback));
+  }
+  return out;
 }
 
 export interface LeaderboardOptions {
@@ -142,6 +175,10 @@ export interface LeaderboardOptions {
   newcomer?: 'none' | ((name: string, seats: readonly PlayerSeat[]) => { firstPlayed: string; qualifiedOn: string } | null);
   /** 已經算好的 playerTimelines(games)（省一次計算；必須是同一組局的）。 */
   timelines?: Map<string, PlayerSeat[]>;
+  /** overview.roleSeatFinalWinRates（沒給就從局算）。 */
+  roleSeatRates?: RoleSeatRates;
+  /** 上榜條件（篩選的 options.leaderboard）：蓋在 config.leaderboard 上，只影響排行。 */
+  overrides?: Partial<LeaderboardConfig>;
 }
 
 /** generate_cache.compute_leaderboard：空的榜不輸出。 */
@@ -153,8 +190,9 @@ export function computeLeaderboard(
   config: GamesDatasetConfig,
   options: LeaderboardOptions = {},
 ): LeaderboardSection {
-  const cfg = config.leaderboard;
+  const cfg: LeaderboardConfig = { ...config.leaderboard, ...(options.overrides ?? {}) } as LeaderboardConfig;
   const hidden = options.hidden ?? new Set<string>();
+  const roleSeatRates = options.roleSeatRates ?? computeRoleSeatFinalWinRates(games);
   const topN = cfg.topN;
   const activeDays = cfg.activeDays;
   const cell = cfg.theoryMinCellGames;
@@ -169,8 +207,11 @@ export function computeLeaderboard(
   const active: Array<[string, PlayerSeat[]]> = [];
   for (const [name, seats] of timelines) if (isActive(name, seats)) active.push([name, seats]);
   const listed = active.filter(([name]) => !hidden.has(name));
+  const activeZh = activeDays > 0 ? `近 ${activeDays} 天內有出賽` : '不限近期出賽';
+  const activeEn = activeDays > 0 ? `Played in the last ${activeDays} days` : 'Any player (no recent-activity rule)';
 
-  const window = (seats: readonly PlayerSeat[], n: number): TheoryWindow => theoryWindow(seats, roleRates, seatRates, cell, n);
+  const window = (seats: readonly PlayerSeat[], n: number, career = false): TheoryWindow =>
+    theoryWindow(seats, roleRates, seatRates, cell, n, career ? roleSeatRates : undefined);
   const roleWindows = (seats: readonly PlayerSeat[], previous = false): RoleWindows =>
     roleWindowTheory(seats, roleRates, cfg, cell, previous);
 
@@ -188,13 +229,17 @@ export function computeLeaderboard(
   const mainRows: Row[] = [];
   for (const [name, seats] of listed) {
     const rw = roleWindows(seats);
-    if (rw.fullWindows) mainRows.push(roleRow(name, rw, window(pySlice(seats, -n), n), window(seats, 0), seats.length));
+    if (rw.fullWindows) {
+      mainRows.push(roleRow(name, rw, window(pySlice(seats, -n), n), window(seats, 0, true), seats.length,
+        missionAssassination(pySlice(seats, -n))));
+    }
   }
   boards.push(board(
     'main', 'roleTheory', '角色理論勝率排行', 'Role-theory win rate', rolePeriod, rolePeriodEn, roleGames,
-    `近 ${activeDays} 天內有出賽、六個特殊角色各至少 ${k} 場、忠臣至少 ${kl} 場；位置理論與最終勝率看最近 ${n} 場；${legend}`,
-    `Played in the last ${activeDays} days, at least ${k} games in each special role and ${kl} as Loyal Servant; `
-    + `position theory and final win rate over the last ${n} games; ${legendEn}`,
+    `${activeZh}、六個特殊角色各至少 ${k} 場、忠臣至少 ${kl} 場；位置理論、最終勝率、任務勝率、刺殺勝率看最近 ${n} 場、`
+    + `整體理論看生涯；${legend}`,
+    `${activeEn}, at least ${k} games in each special role and ${kl} as Loyal Servant; position theory, final, `
+    + `mission and assassination win rates over the last ${n} games, overall theory over the career; ${legendEn}`,
     ranked(mainRows, topN), { roleWindowGames: windows },
   ));
 
@@ -205,37 +250,85 @@ export function computeLeaderboard(
     const last = window(pySlice(seats, -n), n);
     positionRows.push({
       name, value: last.positionTheory, positionTheory: last.positionTheory,
-      overallTheory: window(seats, 0).roleTheory, finalWinRate: last.finalWinRate, games: last.games,
+      overallTheory: window(seats, 0, true).overallTheory as number, finalWinRate: last.finalWinRate,
+      ...missionAssassination(pySlice(seats, -n)), games: last.games,
       careerGames: seats.length, from: last.from, to: last.to, sparseSeats: last.sparseSeats,
     });
   }
   boards.push(board(
     'position', 'positionTheory', '位置理論勝率排行', 'Position-theory win rate',
     `各人最近 ${n} 場`, `Each player's last ${n} games`, n,
-    `近 ${activeDays} 天內有出賽、生涯至少 ${n} 場；${legend}`,
-    `Played in the last ${activeDays} days, at least ${n} career games; ${legendEn}`,
+    `${activeZh}、生涯至少 ${n} 場；最終勝率、任務勝率、刺殺勝率也看最近 ${n} 場、整體理論看生涯；${legend}`,
+    `${activeEn}, at least ${n} career games; final, mission and assassination win rates over the same `
+    + `${n} games, overall theory over the career; ${legendEn}`,
     ranked(positionRows, topN), { windowGames: n },
   ));
 
-  // overall：整體理論 = 生涯的角色理論。
+  // overall：整體理論 = 生涯的角色 × 位置。
   const overallRows: Row[] = [];
   for (const [name, seats] of listed) {
     if (seats.length < overallMin) continue;
-    const career = window(seats, 0);
+    const career = window(seats, 0, true);
     overallRows.push({
-      name, value: career.roleTheory, overallTheory: career.roleTheory,
-      positionTheory: career.positionTheory, finalWinRate: career.finalWinRate, games: career.games,
+      name, value: career.overallTheory as number, overallTheory: career.overallTheory,
+      roleTheory: career.roleTheory, positionTheory: career.positionTheory,
+      finalWinRate: career.finalWinRate, ...missionAssassination(seats), games: career.games,
       careerGames: seats.length, from: career.from, to: career.to,
       sparseRoles: career.sparseRoles, sparseSeats: career.sparseSeats,
+      sparseCells: career.sparseCells, populationShare: career.populationShare,
     });
   }
+  const m5 = Math.max(cell, 1);
   boards.push(board(
     'overall', 'overallTheory', '整體理論勝率排行', 'Overall theory win rate',
     '各人生涯全部場次', "Each player's whole career", overallMin,
-    `近 ${activeDays} 天內有出賽、生涯至少 ${overallMin} 場；整體理論、位置理論、最終勝率都看生涯全部場次；${legend}`,
-    `Played in the last ${activeDays} days, at least ${overallMin} career games; overall theory, position `
-    + `theory and final win rate over the whole career; ${legendEn}`,
+    `${activeZh}、生涯至少 ${overallMin} 場；每一列的數字都看生涯全部場次；位置 × 角色共 70 格，多數人很多格不到 `
+    + `${m5} 場、用全體在該位置該角色的最終勝率補（「全體補值」欄 = 整體理論裡全體補的比重），`
+    + `補得越多越接近全體平均；${legend}`,
+    `${activeEn}, at least ${overallMin} career games; every number over the whole career; there are 70 role `
+    + `× seat cells and most players have fewer than ${m5} games in many of them, topped up at the `
+    + `population's final win rate in that cell (the population-share column = how much of the overall theory `
+    + `that is), so the more is topped up the closer it stays to the population; ${legendEn}`,
     ranked(overallRows, topN),
+  ));
+
+  // theory：一張表的所有理論勝率（網站的「理論勝率」分頁；Edward 2026-10-28）。窗撐不起的數字標出來，不混用：
+  // 生涯不到 overallMinGames 場的整體理論 = null、角色窗沒打滿 fullWindows = false、最近 N 場不足 games < windowGames。
+  const tMin = cfg.theoryMinGames;
+  const needRw = Boolean(cfg.requireRoleWindows);
+  const theoryRows: Row[] = [];
+  for (const [name, seats] of listed) {
+    if (seats.length < tMin) continue;
+    const rw = roleWindows(seats);
+    if (needRw && !rw.fullWindows) continue;
+    const last = window(pySlice(seats, -n), n);
+    const career = window(seats, 0, true);
+    const overallOk = seats.length >= overallMin;
+    theoryRows.push({
+      name, value: rw.roleTheory, roleTheory: rw.roleTheory,
+      positionTheory: last.positionTheory, overallTheory: overallOk ? career.overallTheory : null,
+      finalWinRate: last.finalWinRate, ...missionAssassination(pySlice(seats, -n)),
+      games: last.games, careerGames: seats.length, roleGames: rw.games, fullWindows: rw.fullWindows,
+      from: last.from, to: last.to, sparseRoles: rw.sparseRoles, sparseSeats: last.sparseSeats,
+      sparseCells: overallOk ? career.sparseCells : null,
+      populationShare: overallOk ? career.populationShare : null,
+    });
+  }
+  const [windowZh, windowEn] = n > 0 ? [`最近 ${n} 場`, `the last ${n} games`] : ['生涯全部場次', 'the whole career'];
+  const whoZh = activeZh + (tMin > 0 ? `、生涯至少 ${tMin} 場` : '') + (needRw ? `、六個特殊角色各至少 ${k} 場、忠臣至少 ${kl} 場` : '');
+  const whoEn = activeEn + (tMin > 0 ? `, at least ${tMin} career games` : '')
+    + (needRw ? `, at least ${k} games in each special role and ${kl} as Loyal Servant` : '');
+  boards.push(board(
+    'theory', 'roleTheory', '理論勝率', 'Theory win rates',
+    `角色理論：${rolePeriod}；其他：${windowZh}`, `Role theory: ${rolePeriodEn}; the rest: ${windowEn}`,
+    tMin,
+    `${whoZh}；角色理論看各角色窗（沒打滿的變淡）、位置理論、最終勝率、任務勝率、刺殺勝率看${windowZh}`
+    + `（場數不夠的變淡）、整體理論看生涯（生涯不到 ${overallMin} 場的不算，顯示 —）；${legend}`,
+    `${whoEn}; role theory over the role windows (dimmed when not full), position theory, final, mission and `
+    + `assassination win rates over ${windowEn} (dimmed when shorter), overall theory over the career (— below `
+    + `${overallMin} career games); ${legendEn}`,
+    ranked(theoryRows, theoryRows.length),
+    { roleWindowGames: windows, windowGames: n, overallMinGames: overallMin, requireRoleWindows: needRw },
   ));
 
   // improved：各角色窗 vs 再之前同樣場數（兩者都要打滿）。
@@ -254,9 +347,9 @@ export function computeLeaderboard(
   boards.push(board(
     'improved', 'roleTheoryDelta', '進步榜', 'Most improved',
     `${rolePeriod} vs 再之前同樣場數`, `${rolePeriodEn} vs the same number of games before them`, 2 * roleGames,
-    `近 ${activeDays} 天內有出賽、六個特殊角色各至少 ${2 * k} 場、忠臣至少 ${2 * kl} 場；各角色最近 ${k} 場（忠臣 ${kl} 場）`
+    `${activeZh}、六個特殊角色各至少 ${2 * k} 場、忠臣至少 ${2 * kl} 場；各角色最近 ${k} 場（忠臣 ${kl} 場）`
     + `的角色理論勝率 − 每個角色再之前同樣場數的，只列有進步的人；${legend}`,
-    `Played in the last ${activeDays} days, at least ${2 * k} games in each special role and ${2 * kl} as Loyal `
+    `${activeEn}, at least ${2 * k} games in each special role and ${2 * kl} as Loyal `
     + `Servant; role theory over each role's last ${k} games (${kl} as Loyal Servant) minus that over the games `
     + `before them in each role, improvers only; ${legendEn}`,
     ranked(improvedRows, topN), { roleWindowGames: windows },
@@ -284,9 +377,9 @@ export function computeLeaderboard(
   boards.push(board(
     'assassin', 'hitRate', '刺客刺中率', 'Assassin hit rate',
     `各人最近 ${aN} 次刺殺`, `Each player's last ${aN} assassinations`, aMin,
-    `近 ${activeDays} 天內有出賽、至少 ${aMin} 次刺殺；刺中率 = 三藍死 /（三藍死 + 三藍活），`
+    `${activeZh}、至少 ${aMin} 次刺殺；刺中率 = 三藍死 /（三藍死 + 三藍活），`
     + `看各人當刺客、任務做到三藍的最近 ${aN} 局（三紅沒有刺殺，不算）`,
-    `Played in the last ${activeDays} days, at least ${aMin} assassinations; hit rate = 三藍死 / (三藍死 + 三藍活) `
+    `${activeEn}, at least ${aMin} assassinations; hit rate = 三藍死 / (三藍死 + 三藍活) `
     + `over the last ${aN} games as Assassin that reached three successful missions (三紅 games have no assassination)`,
     ranked(assassinRows, topN), { windowGames: aN },
   ));
@@ -314,9 +407,10 @@ export function computeLeaderboard(
         qualified = dates[Math.max(m, 1) - 1];
         if (newStart !== null && qualified < newStart) continue;
       }
-      const career = window(seats, 0);
+      const career = window(seats, 0, true);
       newcomerRows.push({
-        ...roleRow(name, roleWindows(seats), career, career, seats.length), firstPlayed: first, qualifiedOn: qualified,
+        ...roleRow(name, roleWindows(seats), career, career, seats.length, missionAssassination(seats)),
+        firstPlayed: first, qualifiedOn: qualified,
       });
     }
   }
@@ -333,16 +427,16 @@ export function computeLeaderboard(
     ranked(newcomerRows, topN), { windowDays: d, allGames: true },
   ));
 
-  // roleTitles：每個角色，該角色最近 roleTitleGames 場最終勝率並列最高的人皆得稱號。
-  const tMin = cfg.roleTitleMinGames;
-  const tN = cfg.roleTitleGames;
+  // roleTitles：每個角色的視窗 W_r（roleTitleWindows），打滿 W_r 場才列，最近 W_r 場最終勝率並列最高的人皆得稱號。
+  const titleWindows = roleTitleWindows(listed, cfg);
   const titleRows: LeaderboardRow[] = [];
   for (const role of ALL_ROLES) {
+    const w = Math.max(titleWindows[role], 1);
     const candidates: Array<[string, number, number, number]> = [];
     for (const [name, seats] of listed) {
       const inRole = seats.filter((s) => s.role === role);
-      if (inRole.length < Math.max(tMin, 1)) continue;
-      const last = pySlice(inRole, -tN);
+      if (inRole.length < w) continue;
+      const last = pySlice(inRole, -w);
       const wins = last.filter((s) => isFinalWin(role, s.outcome)).length;
       candidates.push([name, last.length, wins, inRole.length]);
     }
@@ -352,16 +446,41 @@ export function computeLeaderboard(
     for (const [name, gamesN, wins, career] of holders) {
       titleRows.push({
         rank: titleRows.length + 1, role, name, value: best, games: gamesN, wins, careerRoleGames: career,
+        qualified: candidates.length,
       });
     }
   }
+  const others = ALL_ROLES.filter((r) => r !== '忠臣').map((r) => titleWindows[r]);
+  const lw = titleWindows['忠臣'];
+  let tPeriod: string;
+  let tPeriodEn: string;
+  if (new Set(others).size === 1) {
+    tPeriod = `忠臣近 ${lw} 場、其他角色近 ${others[0]} 場`;
+    tPeriodEn = `Last ${lw} games as Loyal Servant, ${others[0]} in each other role`;
+  } else {
+    const list = ALL_ROLES.filter((r) => r !== '忠臣').map((r) => `${r} ${titleWindows[r]}`).join('、');
+    tPeriod = `忠臣近 ${lw} 場；${list} 場`;
+    tPeriodEn = `Last ${lw} games as Loyal Servant; other roles: see each row`;
+  }
+  const lt = cfg.loyalTitleGames;
+  const lf = cfg.loyalTitleFallbackGames;
+  const rt = cfg.roleTitleGames;
+  const rf = cfg.roleTitleFallbackGames;
+  const auto = lt !== lf || rt !== rf;
+  const ruleZh = auto
+    ? `每個角色的場數：忠臣 ${lt} 場、其他角色 ${rt} 場，有出賽過該角色的人不到一半打滿時改用忠臣 ${lf} 場、其他角色 ${rf} 場`
+    : `每個角色的場數固定：忠臣 ${lt} 場、其他角色 ${rt} 場`;
+  const ruleEn = auto
+    ? `games per role: ${lt} as Loyal Servant and ${rt} in each other role, or ${lf} / ${rf} when fewer than half `
+      + `of the players who have played the role have that many`
+    : `fixed games per role: ${lt} as Loyal Servant, ${rt} in each other role`;
   boards.push(board(
     'roleTitles', 'finalWinRate', '角色王', 'Role champions',
-    `各人該角色最近 ${tN} 場`, `Each player's last ${tN} games in the role`, tMin,
-    `近 ${activeDays} 天內有出賽、生涯該角色至少 ${tMin} 場；比各人該角色最近 ${tN} 場的最終勝率，同率者並列、各得稱號`,
-    `Played in the last ${activeDays} days, at least ${tMin} career games in the role; best final win rate over `
-    + `the last ${tN} games in it, players tied at the top all get the title`,
-    titleRows, { windowGames: tN },
+    tPeriod, tPeriodEn, Math.min(...Object.values(titleWindows)),
+    `${activeZh}、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號；${ruleZh}`,
+    `${activeEn}, a full window in the role; best final win rate over the last games of that window, players `
+    + `tied at the top all get the title; ${ruleEn}`,
+    titleRows, { roleWindowGames: titleWindows },
   ));
 
   return {

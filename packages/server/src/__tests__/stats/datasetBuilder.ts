@@ -6,8 +6,9 @@ import { GAMES_DATASET_FIELDS, GAMES_DATASET_VERSION, type GamesDataset, type Ga
 
 export const TEST_LEADERBOARD_CONFIG = {
   theoryMinCellGames: 3, activeDays: 90, topN: 10, mainGames: 100, roleWindowGames: 10, loyalWindowGames: 40,
-  overallMinGames: 250, assassinAttempts: 20, assassinMinAttempts: 10, newcomerDays: 90, newcomerMinGames: 10,
-  roleTitleMinGames: 20, roleTitleGames: 20,
+  overallMinGames: 250, theoryMinGames: 0, requireRoleWindows: 1, assassinAttempts: 20, assassinMinAttempts: 10,
+  newcomerDays: 90, newcomerMinGames: 10,
+  roleTitleGames: 20, roleTitleFallbackGames: 20, loyalTitleGames: 20, loyalTitleFallbackGames: 20,
 };
 
 export const NOTE_TAGS = [

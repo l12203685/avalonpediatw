@@ -65,6 +65,7 @@ export function buildSections(
   const { hidden } = options;
   const stats = computePlayerStats(games, config);
   const overview = computeOverview(games, stats.rows, stats.roleFinalWinRates, stats.seatFinalWinRates, config, {
+    roleSeatFinalWinRates: stats.roleSeatFinalWinRates,
     hidden,
     gamesKey: options.gamesKey,
   });
@@ -73,7 +74,7 @@ export function buildSections(
   const listed = hidden && hidden.size ? stats.rows.filter((p) => !hidden.has(p.name)) : stats.rows;
   const leaderboard = computeLeaderboard(
     games, asOf, overview.roleFinalWinRates, overview.seatFinalWinRates, config,
-    { ...options.leaderboard, hidden, timelines: stats.timelines },
+    { ...options.leaderboard, hidden, timelines: stats.timelines, roleSeatRates: overview.roleSeatFinalWinRates },
   );
   return {
     sections: {

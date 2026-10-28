@@ -20,7 +20,7 @@ import type { PlayerSeat } from '../theory';
 import type { PairRoster } from '../pairs';
 import { compare, evaluateMetric, METRICS, type MetricContext } from './metrics';
 import { clausePredicate } from './predicates';
-import type { Clause, ExcludePlayersClause, GameClause, GameFilter, PlayerSelector } from './types';
+import type { Clause, ExcludePlayersClause, GameClause, GameFilter, LeaderboardOverrides, PlayerSelector } from './types';
 
 /** 引擎需要的快取資訊（伺服器 /api/analysis/games 的 context 是它的超集）。 */
 export interface StatsContext {
@@ -288,7 +288,12 @@ export function applyFilter(decoded: DecodedDataset, context: StatsContext, filt
     hidden,
     dropped,
     asOf,
-    leaderboard: leaderboardActivity(activity, all, asOf, decoded),
+    leaderboard: {
+      ...leaderboardActivity(activity, all, asOf, decoded, filter?.options?.leaderboard),
+      ...(filter?.options?.leaderboard && Object.keys(filter.options.leaderboard).length
+        ? { overrides: { ...filter.options.leaderboard } }
+        : {}),
+    },
     meta: {
       totalGames: all.length,
       gamesAfterClauses: g1.length,
@@ -310,10 +315,11 @@ function leaderboardActivity(
   all: readonly Game[],
   asOf: string,
   decoded: DecodedDataset,
+  overrides?: LeaderboardOverrides,
 ): Omit<LeaderboardOptions, 'hidden'> {
   if (activity === 'none') return { isActive: () => true, newcomer: 'none' };
   if (activity === 'filtered') return {};
-  const cfg = decoded.config.leaderboard;
+  const cfg = { ...decoded.config.leaderboard, ...(overrides ?? {}) };
   const activeFrom = windowStart(asOf, cfg.activeDays);
   const newStart = windowStart(asOf, cfg.newcomerDays);
   // 全部局（日期晚於 asOf 的局不算）上每人的最後 / 第一個日期、有沒有無日期的局、三種結果的局的日期
@@ -376,16 +382,19 @@ export function canonicalFilterKey(filter: GameFilter | null | undefined): strin
     return value;
   };
   const clauses = (filter.clauses ?? []).map((c) => JSON.stringify(norm(c))).sort();
+  const lb = filter.options?.leaderboard;
   const options = norm({
     activity: filter.options?.activity === 'filtered' ? undefined : filter.options?.activity,
     asOf: filter.options?.asOf === 'auto' ? undefined : filter.options?.asOf,
+    leaderboard: lb && Object.keys(lb).length ? lb : undefined,
   });
   return JSON.stringify({ v: 1, clauses, options });
 }
 
 function hasOptions(filter: GameFilter): boolean {
   const o = filter.options;
-  return Boolean(o && ((o.activity && o.activity !== 'filtered') || (o.asOf && o.asOf !== 'auto')));
+  return Boolean(o && ((o.activity && o.activity !== 'filtered') || (o.asOf && o.asOf !== 'auto')
+    || (o.leaderboard && Object.keys(o.leaderboard).length)));
 }
 
 /**

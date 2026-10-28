@@ -3,10 +3,15 @@
  * generate_cache.py 的 player_timelines / theory_window / role_window_theory / player_theory 逐行移植。
  *
  *   角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他 1/10）× 本人該角色的最終勝率（各角色自己的最近 K_r 場）
- *   位置理論 = Σ 1/10 × 本人該位置的最終勝率（最近 mainGames 場）；整體理論 = 生涯的角色理論
+ *   位置理論 = Σ 1/10 × 本人該位置的最終勝率（最近 mainGames 場）
+ *   整體理論 = Σ P(角色) × 1/10 × 本人在該位置當該角色的最終勝率（生涯；70 格，Edward 2026-10-28）
  *   不到 theoryMinCellGames 場的格子用族群率（一位小數的公開值）補到該場數；加總用精確分數，最後五成雙一次。
+ *   任務勝率 / 刺殺勝率（missionAssassination）：generate_cache.mission_assassination。
  */
-import { ALL_ROLES, ROLE_DEAL_TENTHS, SEATS, isFinalWin, isOutcome, seatLabel, type Role } from './constants';
+import {
+  ALL_ROLES, OUTCOME_BLUE_ALIVE, OUTCOME_BLUE_DEAD, OUTCOME_THREE_RED, RED_ROLES, ROLE_DEAL_TENTHS, SEATS,
+  isFinalWin, isOutcome, seatLabel, type Role,
+} from './constants';
 import type { Game, LeaderboardConfig } from './dataset';
 import { Rational } from './fraction';
 import { pySlice, rate } from './pyround';
@@ -31,6 +36,21 @@ export interface TheoryWindow {
   to: string;
   sparseRoles: number;
   sparseSeats: number;
+  /** 只有生涯（有 roleSeatRates 時）：整體理論、補值的格數、全體補值佔整體理論的比重 %。 */
+  overallTheory?: number;
+  sparseCells?: number;
+  populationShare?: number;
+}
+
+/** overview.roleSeatFinalWinRates：{角色: {"1".."10": 最終勝率 %}}。 */
+export type RoleSeatRates = Readonly<Record<string, Readonly<Record<string, number>>>>;
+
+export interface OutcomeRates {
+  missionWinRate: number;
+  missionRedWinRate: number | null;
+  missionBlueWinRate: number | null;
+  assassinWinRate: number | null;
+  threeBlueGames: number;
 }
 
 export interface RoleWindowCell {
@@ -109,13 +129,17 @@ function datedSpan(seats: readonly PlayerSeat[]): { from: string; to: string } {
   return { from, to };
 }
 
-/** generate_cache.theory_window：這些局的角色理論、位置理論、最終勝率。`window` 原樣寫出（0 = 生涯）。 */
+/**
+ * generate_cache.theory_window：這些局的角色理論、位置理論、最終勝率。`window` 原樣寫出（0 = 生涯）。
+ * 有 `roleSeatRates`（生涯）時另附 overallTheory、sparseCells、populationShare。
+ */
 export function theoryWindow(
   seats: readonly PlayerSeat[],
   roleRates: Readonly<Record<string, number>>,
   seatRates: Readonly<Record<string, number>>,
   minCell: number,
   window = 0,
+  roleSeatRates?: RoleSeatRates,
 ): TheoryWindow {
   const roleGames = new Map<string, number>();
   const roleWins = new Map<string, number>();
@@ -142,7 +166,7 @@ export function theoryWindow(
   }
   const m = Math.max(minCell, 1);
   const { from, to } = datedSpan(seats);
-  return {
+  const out: TheoryWindow = {
     window,
     games: seats.length,
     roleTheory: roleTheory.roundTenth(),
@@ -152,6 +176,71 @@ export function theoryWindow(
     to,
     sparseRoles: ALL_ROLES.filter((r) => (roleGames.get(r) ?? 0) < m).length,
     sparseSeats: SEATS.filter((s) => (seatGames.get(s) ?? 0) < m).length,
+  };
+  return roleSeatRates ? { ...out, ...overallTheory(seats, roleSeatRates, minCell) } : out;
+}
+
+/** generate_cache.overall_theory：整體理論 = Σ P(角色) × P(位置) × 本人該格的最終勝率（70 格，補值同上）。 */
+export function overallTheory(
+  seats: readonly PlayerSeat[],
+  roleSeatRates: RoleSeatRates,
+  minCell: number,
+): { overallTheory: number; sparseCells: number; populationShare: number } {
+  const games = new Map<string, number>();
+  const wins = new Map<string, number>();
+  for (const s of seats) {
+    const key = `${s.role}|${s.seat}`;
+    games.set(key, (games.get(key) ?? 0) + 1);
+    wins.set(key, (wins.get(key) ?? 0) + (isFinalWin(s.role, s.outcome) ? 1 : 0));
+  }
+  const m = Math.max(minCell, 1);
+  let total = Rational.ZERO;
+  let filled = Rational.ZERO;
+  let sparse = 0;
+  for (const r of ALL_ROLES) {
+    const population = roleSeatRates[r] ?? {};
+    for (const s of SEATS) {
+      const weight = Rational.of(ROLE_DEAL_TENTHS[r], 100);
+      const n = games.get(`${r}|${s}`) ?? 0;
+      total = total.add(weight.mul(cellRate(wins.get(`${r}|${s}`) ?? 0, n, Number(population[seatLabel(s)] ?? 0), minCell)));
+      if (n < m) {
+        sparse += 1;
+        filled = filled.add(weight.mul(Rational.of(m - n, m)));
+      }
+    }
+  }
+  return { overallTheory: total.roundTenth(), sparseCells: sparse, populationShare: filled.mul(Rational.of(100)).roundTenth() };
+}
+
+/** generate_cache.mission_assassination：任務勝率（紅方三紅、藍方三藍）與刺殺勝率（三藍局：紅方刺中、藍方躲過）。 */
+export function missionAssassination(seats: readonly PlayerSeat[]): OutcomeRates {
+  let red = 0;
+  let blue = 0;
+  let redM = 0;
+  let blueM = 0;
+  let threeBlue = 0;
+  let hits = 0;
+  for (const s of seats) {
+    const isRed = RED_ROLES.has(s.role);
+    const tb = s.outcome === OUTCOME_BLUE_DEAD || s.outcome === OUTCOME_BLUE_ALIVE;
+    if (isRed) {
+      red += 1;
+      if (s.outcome === OUTCOME_THREE_RED) redM += 1;
+    } else {
+      blue += 1;
+      if (tb) blueM += 1;
+    }
+    if (tb) {
+      threeBlue += 1;
+      if ((s.outcome === OUTCOME_BLUE_DEAD) === isRed) hits += 1;
+    }
+  }
+  return {
+    missionWinRate: rate(redM + blueM, seats.length),
+    missionRedWinRate: red ? rate(redM, red) : null,
+    missionBlueWinRate: blue ? rate(blueM, blue) : null,
+    assassinWinRate: threeBlue ? rate(hits, threeBlue) : null,
+    threeBlueGames: threeBlue,
   };
 }
 
@@ -225,16 +314,17 @@ export function roleWindowTheory(
   };
 }
 
-/** generate_cache.player_theory：{roleWindows, last<mainGames>, career}。 */
+/** generate_cache.player_theory：{roleWindows, last<mainGames>, career}（career 附整體理論）。 */
 export function playerTheory(
   seats: readonly PlayerSeat[],
   roleRates: Readonly<Record<string, number>>,
   seatRates: Readonly<Record<string, number>>,
   cfg: LeaderboardConfig,
+  roleSeatRates?: RoleSeatRates,
 ): PlayerTheory {
   const minCell = Number(cfg.theoryMinCellGames);
   const out: Record<string, TheoryWindow | RoleWindows> = { roleWindows: roleWindowTheory(seats, roleRates, cfg, minCell) };
   for (const n of theoryWindows(cfg)) out[theoryKey(n)] = theoryWindow(pySlice(seats, -n), roleRates, seatRates, minCell, n);
-  out.career = theoryWindow(seats, roleRates, seatRates, minCell, 0);
+  out.career = theoryWindow(seats, roleRates, seatRates, minCell, 0, roleSeatRates);
   return out as PlayerTheory;
 }

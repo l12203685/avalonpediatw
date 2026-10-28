@@ -15,7 +15,7 @@ import {
   RED_ROLES,
 } from './constants';
 import type { Game, GamesDatasetConfig } from './dataset';
-import { outcomeSplit, type OutcomeSplit, type PlayerRow } from './players';
+import { computeRoleSeatFinalWinRates, outcomeSplit, type OutcomeSplit, type PlayerRow } from './players';
 import { rate, rnd1, sortByKey } from './pyround';
 import { theoryConfig, theoryKey, type RoleWindows, type TheoryConfig, type TheoryWindow } from './theory';
 
@@ -44,10 +44,12 @@ export interface OverviewSection {
     name: string; excessWinRate: number | null; finalWinRate: number; expectedFinalWinRate: number | null; games: number;
   }>;
   seatFinalWinRates: Record<string, number>;
-  topPlayersByRoleTheory: Array<Record<string, number | string>>;
+  topPlayersByRoleTheory: Array<Record<string, number | string | null>>;
   theoryConfig: TheoryConfig;
-  topPlayersByPositionTheory: Array<Record<string, number | string>>;
-  topPlayersByOverallTheory: Array<Record<string, number | string>>;
+  topPlayersByPositionTheory: Array<Record<string, number | string | null>>;
+  topPlayersByOverallTheory: Array<Record<string, number | string | null>>;
+  /** 2026-10-28：{角色: {"1".."10": 族群最終勝率}}（整體理論的補值）。 */
+  roleSeatFinalWinRates: Record<string, Record<string, number>>;
   gamesKey?: string;
 }
 
@@ -132,7 +134,7 @@ export function shrunkExcess(excess: number, games: number, shrinkK: number): nu
   return games + shrinkK > 0 ? rnd1((excess * games) / (games + shrinkK)) : 0;
 }
 
-type RankedRow = Record<string, number | string> & { name: string; careerGames: number };
+type RankedRow = Record<string, number | string | null> & { name: string; careerGames: number };
 
 /** generate_cache._ranked_overview：依值（高先）、生涯場數、名字。 */
 function rankedOverview(rows: Array<[number, RankedRow]>, topN: number): RankedRow[] {
@@ -155,7 +157,8 @@ export function topPlayersByRoleTheory(players: readonly PlayerRow[], cfg: Games
     const career = block<TheoryWindow>(p, 'career');
     if (!(rw && last && career && rw.fullWindows)) continue;
     rows.push([rw.roleTheory, {
-      name: p.name, roleTheory: rw.roleTheory, positionTheory: last.positionTheory, overallTheory: career.roleTheory,
+      name: p.name, roleTheory: rw.roleTheory, positionTheory: last.positionTheory,
+      overallTheory: career.overallTheory ?? null,
       finalWinRate: last.finalWinRate, games: rw.games, careerGames: Math.trunc(p.totalGames),
     }]);
   }
@@ -177,14 +180,14 @@ export function topPlayersByPositionTheory(players: readonly PlayerRow[], cfg: G
   return rankedOverview(rows, cfg.leaderboard.topN);
 }
 
-/** overview.topPlayersByOverallTheory：生涯至少 overallMinGames 場，整體理論 = 生涯的角色理論。 */
+/** overview.topPlayersByOverallTheory：生涯至少 overallMinGames 場，整體理論 = 生涯的角色 × 位置理論。 */
 export function topPlayersByOverallTheory(players: readonly PlayerRow[], cfg: GamesDatasetConfig): RankedRow[] {
   const rows: Array<[number, RankedRow]> = [];
   for (const p of players) {
     const career = block<TheoryWindow>(p, 'career');
-    if (career === undefined || p.totalGames < cfg.leaderboard.overallMinGames) continue;
-    rows.push([career.roleTheory, {
-      name: p.name, overallTheory: career.roleTheory, positionTheory: career.positionTheory,
+    if (career === undefined || career.overallTheory === undefined || p.totalGames < cfg.leaderboard.overallMinGames) continue;
+    rows.push([career.overallTheory, {
+      name: p.name, overallTheory: career.overallTheory, positionTheory: career.positionTheory,
       finalWinRate: career.finalWinRate, games: career.games, careerGames: Math.trunc(p.totalGames),
     }]);
   }
@@ -195,6 +198,8 @@ export interface OverviewOptions {
   /** 只從排名清單拿掉的人（篩選的 hideFromLists）。 */
   hidden?: ReadonlySet<string>;
   gamesKey?: string;
+  /** computeRoleSeatFinalWinRates(games)（沒給就在這裡算）。 */
+  roleSeatFinalWinRates?: Record<string, Record<string, number>>;
 }
 
 /** generate_cache.compute_overview（族群率由呼叫者傳入：compute_role / seat_final_win_rates 的結果）。 */
@@ -270,6 +275,7 @@ export function computeOverview(
     theoryConfig: theoryConfig(cfg.leaderboard),
     topPlayersByPositionTheory: topPlayersByPositionTheory(listed, cfg),
     topPlayersByOverallTheory: topPlayersByOverallTheory(listed, cfg),
+    roleSeatFinalWinRates: options.roleSeatFinalWinRates ?? computeRoleSeatFinalWinRates(games),
   };
   if (options.gamesKey !== undefined) out.gamesKey = options.gamesKey;
   return out;

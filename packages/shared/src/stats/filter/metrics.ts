@@ -82,7 +82,8 @@ export const METRICS: Readonly<Record<MetricId, MetricDef>> = {
   },
   overallTheory: {
     id: 'overallTheory', label: '整體理論勝率', labelEn: 'Overall theory', needsRole: false,
-    value: (r) => r.theory.career.roleTheory,
+    // 整體理論 = 生涯的角色 × 位置理論（2026-10-28）。
+    value: (r) => r.theory.career.overallTheory ?? null,
     eligible: (r, c, _role, min) => atLeast(r.totalGames, min, c.config.leaderboard.overallMinGames),
     eligibility: '生涯至少 overallMinGames 場',
   },
@@ -113,8 +114,9 @@ export const METRICS: Readonly<Record<MetricId, MetricDef>> = {
   roleFinalWinRate: {
     id: 'roleFinalWinRate', label: '角色最終勝率', labelEn: 'Final win rate in a role', needsRole: true,
     value: (r, _c, role) => (role ? r.roleFinalWinRates[role] ?? null : null),
-    eligible: (r, c, role, min) => Boolean(role) && atLeast(r.rawRoleGames[role as Role] ?? 0, min, c.config.leaderboard.roleTitleMinGames),
-    eligibility: '該角色至少 roleTitleMinGames 場',
+    eligible: (r, c, role, min) => Boolean(role) && atLeast(r.rawRoleGames[role as Role] ?? 0, min,
+      role === '忠臣' ? c.config.leaderboard.loyalTitleFallbackGames : c.config.leaderboard.roleTitleFallbackGames),
+    eligibility: '該角色至少角色王的退回場數（忠臣 loyalTitleFallbackGames、其他 roleTitleFallbackGames）',
   },
   roleGames: {
     id: 'roleGames', label: '角色場數', labelEn: 'Games in a role', needsRole: true,

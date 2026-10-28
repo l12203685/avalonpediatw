@@ -327,6 +327,30 @@ describe('as-of day and who counts as active on the boards', () => {
       new Map((r.leaderboard.boards.find((b) => b.id === 'position')?.rows ?? []).map((x) => [x.name, x.value]));
     for (const [name, value] of position(filtered)) expect(position(none).get(name)).toBe(value);
   });
+
+  it('上榜條件 (options.leaderboard) re-ranks the boards only; the default view is the unfiltered result', () => {
+    const ctx = { asOf: '2026-02-28' };
+    const base = computeStats(inv, ctx, null);
+    const over = computeStats(inv, ctx, { v: 1, clauses: [], options: { leaderboard: {
+      activeDays: 0, mainGames: 0, requireRoleWindows: 0, theoryMinGames: 50, overallMinGames: 100,
+      roleTitleGames: 30, roleTitleFallbackGames: 30, loyalTitleGames: 90, loyalTitleFallbackGames: 90,
+    } } });
+    expect(over.filterKey).not.toBe('');
+    // The players' theory windows and every other section stay as they are.
+    expect(over.players).toEqual(base.players);
+    expect(over.overview).toEqual(base.overview);
+    expect(over.leaderboard.config).toMatchObject({ activeDays: 0, mainGames: 0, theoryMinGames: 50, theoryWindows: [] });
+    const theory = over.leaderboard.boards.find((b) => b.id === 'theory');
+    expect(theory?.rows.length).toBeGreaterThan(0);
+    for (const r of theory?.rows ?? []) {
+      expect(r.games).toBe(r.careerGames); // mainGames 0 = the whole career
+      expect((r.careerGames as number) >= 50).toBe(true);
+      if ((r.careerGames as number) < 100) expect(r.overallTheory).toBeNull();
+    }
+    const titles = over.leaderboard.boards.find((b) => b.id === 'roleTitles');
+    expect(titles?.roleWindowGames).toEqual({ 刺客: 30, 莫甘娜: 30, 莫德雷德: 30, 奧伯倫: 30, 派西維爾: 30, 梅林: 30, 忠臣: 90 });
+    expect(titles?.rows.every((r) => r.games === (r.role === '忠臣' ? 90 : 30))).toBe(true);
+  });
 });
 
 describe('dataset checks', () => {
@@ -392,6 +416,20 @@ describe('filter links, validation, presets', () => {
     expect(canonicalFilterKey({ v: 1, clauses: [] })).toBe('');
     expect(canonicalFilterKey(null)).toBe('');
     expect(canonicalFilterKey({ ...a, options: { activity: 'none' } })).not.toBe(canonicalFilterKey(a));
+    // 上榜條件: key order does not matter, an empty override is no override.
+    expect(canonicalFilterKey({ v: 1, clauses: [], options: { leaderboard: { mainGames: 50, activeDays: 0 } } }))
+      .toBe(canonicalFilterKey({ v: 1, clauses: [], options: { leaderboard: { activeDays: 0, mainGames: 50 } } }));
+    expect(canonicalFilterKey({ v: 1, clauses: [], options: { leaderboard: {} } })).toBe('');
+  });
+
+  it('上榜條件: only known keys, integers in range', () => {
+    const { filter: clean, warnings } = sanitizeFilter({
+      v: 1, clauses: [],
+      options: { leaderboard: { activeDays: 0, mainGames: 50.5, roleWindowGames: 0, requireRoleWindows: 1, loyalTitleGames: 200, bogus: 3 } },
+    });
+    expect(clean).toEqual({ v: 1, clauses: [], options: { leaderboard: { activeDays: 0, requireRoleWindows: 1, loyalTitleGames: 200 } } });
+    expect(warnings).toEqual(['options.leaderboard.bogus', 'options.leaderboard.mainGames', 'options.leaderboard.roleWindowGames']);
+    expect(sanitizeFilter({ v: 1, clauses: [], options: { leaderboard: [1] } }).warnings).toEqual(['options.leaderboard']);
   });
 
   it('presets', () => {

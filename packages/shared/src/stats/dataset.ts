@@ -36,12 +36,18 @@ export interface LeaderboardConfig {
   roleWindowGames: number;
   loyalWindowGames: number;
   overallMinGames: number;
+  /** theory 榜（一張表）：生涯至少幾場、是否要角色窗打滿（1 / 0）。 */
+  theoryMinGames: number;
+  requireRoleWindows: number;
   assassinAttempts: number;
   assassinMinAttempts: number;
   newcomerDays: number;
   newcomerMinGames: number;
-  roleTitleMinGames: number;
+  /** 角色王（Edward 2026-10-28）：特殊角色 / 忠臣的完整視窗與「不到一半人打滿」時的退回視窗。 */
   roleTitleGames: number;
+  roleTitleFallbackGames: number;
+  loyalTitleGames: number;
+  loyalTitleFallbackGames: number;
   [key: string]: number;
 }
 

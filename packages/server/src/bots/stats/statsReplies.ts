@@ -303,9 +303,12 @@ export function theoryFootnote(
 ): string {
   const topUp = minCellGames > 0 ? `；不到 ${minCellGames} 場的角色或位置用全體勝率補到 ${minCellGames} 場` : '';
   if (roleWindows) {
+    // 2026-10-28: 整體理論 = 位置 × 角色 (70 cells over the career), topped up the same way.
+    const cellTopUp = minCellGames > 0 ? `；不到 ${minCellGames} 場的角色、位置或格子用全體勝率補到 ${minCellGames} 場` : '';
     return (
       `※ 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 該角色最終勝率（每個角色看最近 ${roleWindows.special} 場、` +
-      `忠臣 ${roleWindows.loyal} 場）；位置理論 = Σ 1/10 × 該位置最終勝率；整體理論 = 生涯全部場次算的角色理論${topUp}`
+      `忠臣 ${roleWindows.loyal} 場）；位置理論 = Σ 1/10 × 該位置最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × ` +
+      `該位置該角色的最終勝率（生涯，70 格）${cellTopUp}`
     );
   }
   return `※ 角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他各 1/10）× 該角色最終勝率；位置理論 = Σ 1/10 × 該位置最終勝率${topUp}`;
@@ -353,7 +356,9 @@ function roleWindowTheoryLines(
     const label = last.games < last.window ? `全部 ${last.games} 場` : `近 ${last.window} 場`;
     lines.push(`位置理論（${label}）${pct(last.positionTheory)}｜最終勝率 ${pct(last.finalWinRate)}`);
   }
-  lines.push(`整體理論（生涯 ${career.games} 場）${pct(career.roleTheory)}｜位置理論 ${pct(career.positionTheory)}｜最終勝率 ${pct(career.finalWinRate)}`);
+  // Caches since 2026-10-28 carry 整體理論 (role × seat); before, 整體理論 was the career role theory.
+  const overall = typeof career.overallTheory === 'number' ? career.overallTheory : career.roleTheory;
+  lines.push(`整體理論（生涯 ${career.games} 場）${pct(overall)}｜位置理論 ${pct(career.positionTheory)}｜最終勝率 ${pct(career.finalWinRate)}`);
   return lines;
 }
 
@@ -453,7 +458,7 @@ export function formatPlayerCard(input: PlayerCardInput): string {
 /**
  * One printed ranking row. schemaVersion 3: every number over the board's window of the player's
  * games. schemaVersion 4 (overallTheory present): roleTheory over the per-role windows,
- * positionTheory / finalWinRate over the last 100 games, overallTheory = career role theory, and
+ * positionTheory / finalWinRate over the last 100 games, overallTheory = 整體理論 (career; role × seat since 2026-10-28), and
  * the career games are printed instead of the window's.
  */
 export interface LeaderboardLine {
@@ -463,7 +468,7 @@ export interface LeaderboardLine {
   positionTheory: number | null;
   finalWinRate: number | null;
   games: number;
-  /** schemaVersion 4: 整體理論 (career role theory). */
+  /** schemaVersion 4: 整體理論 (career; role × seat since 2026-10-28). */
   overallTheory?: number | null;
   careerGames?: number | null;
 }

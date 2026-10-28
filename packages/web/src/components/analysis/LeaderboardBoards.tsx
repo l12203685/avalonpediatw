@@ -7,6 +7,8 @@ import {
 import { useStatsFilter } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
 import { SectionTabs, StatTable, type SectionTabItem, type StatColumn } from './ui';
+import TheoryTable from './TheoryTable';
+import LeaderboardRules from './LeaderboardRules';
 import {
   fetchAnalysisLeaderboard,
   getErrorMessage,
@@ -42,12 +44,24 @@ import {
  *    (每一欄只在該榜有資料時出現)，一位小數。說明放在表格旁 (手機在表格下)，不另外拉長頁面。
  *  - 用全體勝率補值的格子 (有角色／位置不到 theoryMinCellGames 場) 變淡；門檻讀 leaderboard.config。
  *  - 角色王同率各給 (decisions lane)：同一個角色可能有好幾列，標「並列」。
+ *
+ * (2026-10-28 Edward：「位置理論跟整體理論還是可以合併吧? … 條件我不是說應該要都可以選嗎?」「"上榜"條件也做成
+ *  可調整可變可選」「精算榜呈現的內容是不是跟前面有點重複 應該可以合併?」)
+ *  - 快取有 `theory` 榜時，角色理論／位置理論／整體理論三個小分頁併成一個「理論勝率」(TheoryTable，一張表、
+ *    可換排序)；main / position / overall 仍在快取裡給機器人用，網站不再各開一頁。舊快取照舊三頁。
+ *  - 上方「上榜條件」(LeaderboardRules) 改篩選的 options.leaderboard，各榜跟著重算；恢復預設 = 回到快取。
+ *  - 精算榜不再是小分頁 (BoardsTab 不傳 precision；元件與 /api/leaderboard/v3 保留)：它的期望勝 = 最終勝率、
+ *    精準勝率是舊的任務口徑；有用的任務勝率／刺殺勝率併進理論表。
+ *  - 角色王多「視窗」(該角色用了近幾場：忠臣 200 或 100、其他 50 或 25) 與「有資格」(打滿視窗的人數) 兩欄。
  */
 
 /** 小分頁順序；不在這裡的 id 依快取順序排在後面。 */
-const BOARD_ORDER = ['main', 'position', 'overall', 'last50', 'improved', 'assassin', 'newcomers', 'roleTitles'];
+const BOARD_ORDER = ['theory', 'main', 'position', 'overall', 'last50', 'improved', 'assassin', 'newcomers', 'roleTitles'];
+/** 有 theory 榜時併進理論表、不另開小分頁的榜。 */
+const MERGED_INTO_THEORY = new Set(['main', 'position', 'overall']);
 
 const BOARD_ICONS: Record<string, LucideIcon> = {
+  theory: Trophy,
   main: Trophy,
   position: MapPin,
   overall: Layers,
@@ -201,9 +215,14 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
     const pending = boards.length > 0 && legacy
       ? PENDING_IDS.filter(id => !boards.some(b => b.id === id))
       : [];
-    return sortById<TabEntry>([...boards.map(b => ({ id: b.id, board: b })), ...pending.map(id => ({ id }))]);
+    const merged = boards.some(b => b.id === 'theory');
+    const shown = merged ? boards.filter(b => !MERGED_INTO_THEORY.has(b.id)) : boards;
+    return sortById<TabEntry>([...shown.map(b => ({ id: b.id, board: b })), ...pending.map(id => ({ id }))]);
   }, [data]);
   const showBoards = !loading && !notice && !error && entries.length > 0;
+  // 上榜條件：排行載入成功就顯示 (條件太嚴、各榜都空時也要能放寬或恢復預設)。
+  const rulesModified = useStatsFilter((s) => Boolean(s.filter?.options?.leaderboard));
+  const showRules = !loading && !notice && (!error || rulesModified);
 
   const tabLabel = (entry: TabEntry): string =>
     BOARD_ORDER.includes(entry.id) || !entry.board
@@ -212,7 +231,7 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
 
   const boardItems: SectionTabItem[] = showBoards
     ? entries.map(e => ({ id: e.id, label: tabLabel(e), icon: BOARD_ICONS[e.id] ?? ListOrdered }))
-    : [{ id: STATUS_TAB, label: t('analytics.r6.boards.tab.main'), icon: Trophy }];
+    : [{ id: STATUS_TAB, label: t('analytics.r6.boards.tab.theory'), icon: Trophy }];
   const items: SectionTabItem[] = [
     ...boardItems.slice(0, 1),
     ...(winRates ? [{ id: WIN_RATES_TAB, label: winRates.label, icon: Percent }] : []),
@@ -274,6 +293,7 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
           )}
         </p>
       )}
+      {showRules && <LeaderboardRules config={data?.config} />}
       <SectionTabs
         items={items}
         persistKey="boards"
@@ -291,6 +311,9 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
           }
           const entry = showBoards ? entries.find(e => e.id === active) : undefined;
           if (!entry) return statusPanel();
+          if (entry.board && entry.id === 'theory') {
+            return <TheoryTable board={entry.board} isEn={isEn} minCell={settings.theoryMinCellGames} />;
+          }
           if (!entry.board) {
             return (
               <PendingPanel
@@ -485,6 +508,21 @@ function boardColumns(
             value: (r: Row): string => `${r.wins ?? '—'}/${r.games}`,
           }]
         : []),
+      // 2026-10-28：每個角色用了近幾場 (忠臣 200 或 100、其他 50 或 25) 與打滿視窗的人數。
+      ...(board.roleWindowGames
+        ? [{
+            key: 'window',
+            label: label('titleWindow'),
+            align: 'right' as const,
+            value: (r: Row): string => {
+              const w = board.roleWindowGames?.[r.role ?? ''];
+              return typeof w === 'number' ? t('analytics.r6.boards.lastN', { count: w }) : '—';
+            },
+          }]
+        : []),
+      ...(hasField(rows, 'qualified')
+        ? [{ key: 'qualified', label: label('qualified'), format: 'int' as const, className: 'text-zinc-400' }]
+        : []),
       ...(hasField(rows, 'careerRoleGames')
         ? [{ key: 'careerRoleGames', label: label('careerRoleGames'), format: 'int' as const, className: 'text-zinc-400' }]
         : []),
@@ -556,6 +594,13 @@ function boardColumns(
     ...THEORY_FIELDS
       .filter(f => f !== field && hasField(rows, f))
       .map((f): StatColumn<Row> => ({ key: f, label: label(f), format: pctCell(f), align: 'right' })),
+    // 2026-10-28：任務勝率 (紅方三紅、藍方三藍) 與刺殺勝率 (三藍局，n = 三藍局數)，與最終勝率同一段場次。
+    ...(hasField(rows, 'missionWinRate')
+      ? [{ key: 'missionWinRate', label: label('missionWinRate'), format: pctCell(), align: 'right' as const }]
+      : []),
+    ...(rows.some(r => r.threeBlueGames !== undefined)
+      ? [{ key: 'assassinWinRate', label: label('assassinWinRate'), format: pctCell(), align: 'right' as const, n: 'threeBlueGames' }]
+      : []),
     // 視窗場數只在跟生涯場數不同時才列 (整體理論、新人 = 全部場次)。
     ...(hasField(rows, 'games') && rows.some(r => r.games !== r.careerGames)
       ? [{ key: 'games', label: label('windowGames'), format: 'int' as const }]

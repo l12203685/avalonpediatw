@@ -137,6 +137,14 @@ export interface PlayerTheoryWindow {
   to: string;
   sparseRoles: number;
   sparseSeats: number;
+  /**
+   * `career` only, caches since 2026-10-28: 整體理論 = Σ P(role) × P(seat) × the career final win rate as
+   * that role in that seat (70 cells topped up from overview.roleSeatFinalWinRates), how many cells were
+   * topped up and the population's share of it (%).
+   */
+  overallTheory?: number;
+  sparseCells?: number;
+  populationShare?: number;
 }
 
 /** One role's cell of players[].theory.roleWindows. */
@@ -326,7 +334,7 @@ export interface OverviewData {
   /**
    * All-time 角色理論 ranking (active or not). schemaVersion 4: everyone with full role windows,
    * ranked by theory.roleWindows.roleTheory (`games` = games in the role windows, 100;
-   * positionTheory / finalWinRate = the last mainGames games; overallTheory = career role theory).
+   * positionTheory / finalWinRate = the last mainGames games; overallTheory = career 整體理論, role × seat since 2026-10-28).
    * schemaVersion 3: ≥ mainGames career games, the roleTheory of the last mainGames games.
    */
   topPlayersByRoleTheory?: TheoryRankingRow[];
@@ -334,7 +342,7 @@ export interface OverviewData {
   theoryConfig?: TheoryConfig;
   /** schemaVersion 4: ≥ mainGames (100) career games, by the 位置理論 of the last mainGames games (all-time). */
   topPlayersByPositionTheory?: PositionTheoryRankingRow[];
-  /** schemaVersion 4: ≥ overallMinGames (250) career games, by 整體理論 = the career role theory (all-time). */
+  /** schemaVersion 4: ≥ overallMinGames (250) career games, by 整體理論 (all-time; since 2026-10-28 role × seat, before the career role theory). */
   topPlayersByOverallTheory?: OverallTheoryRankingRow[];
   /**
    * 複合篩選：同一次產生的每局資料集批次鍵；端點只提供與分析快取批次相同的資料集。
@@ -371,7 +379,7 @@ export interface TheoryRankingRow {
   name: string;
   roleTheory: number;
   positionTheory: number;
-  /** schemaVersion 4: the career role theory (整體理論). */
+  /** schemaVersion 4: 整體理論 (since 2026-10-28 the career role × seat theory; before, the career role theory). */
   overallTheory?: number;
   finalWinRate: number;
   games: number;
@@ -413,7 +421,7 @@ export interface OverallTheoryRankingRow {
  * pre-2026-10-13 ones (online / recent) older caches may carry.
  */
 export type LeaderboardBoardId =
-  | 'main' | 'position' | 'overall' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
+  | 'main' | 'position' | 'overall' | 'theory' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
   | 'last50' | 'online' | 'recent';
 
 /** What a board's `value` is. Absent on boards written before 2026-10-13 (excess). */
@@ -437,10 +445,26 @@ export interface LeaderboardRow {
   // the board's window of the player's games.
   roleTheory?: number;
   positionTheory?: number;
-  /** schemaVersion 4: 整體理論 = the career role theory. */
-  overallTheory?: number;
+  /** schemaVersion 4: 整體理論 (since 2026-10-28 role × seat over the career; before, the career role theory); null on the theory board below overallMinGames career games. */
+  overallTheory?: number | null;
   /** Final win rate within the window, %. */
   finalWinRate?: number;
+  /**
+   * 2026-10-28 (main / position / overall / theory / newcomers), over the same games as finalWinRate:
+   * 任務勝率 = their camp won the missions (red 三紅, blue 三藍), split by side; 刺殺勝率 = over the
+   * threeBlueGames 三藍 games only (red: Merlin killed, blue: Merlin survived); null without such games.
+   */
+  missionWinRate?: number;
+  missionRedWinRate?: number | null;
+  missionBlueWinRate?: number | null;
+  assassinWinRate?: number | null;
+  threeBlueGames?: number;
+  /** theory board: games in the role windows, and whether every role window is full. */
+  roleGames?: number;
+  fullWindows?: boolean;
+  /** overall / theory: role × seat cells topped up (of 70) and the population's share of 整體理論 (%). */
+  sparseCells?: number | null;
+  populationShare?: number | null;
   /** All of the player's games (main / last50 / improved / assassin / newcomers). */
   careerGames?: number;
   /** First / last dated game of the window, YYYY-MM-DD. */
@@ -478,6 +502,8 @@ export interface LeaderboardRow {
   role?: string;
   wins?: number;
   careerRoleGames?: number;
+  /** roleTitles (2026-10-28): how many players had a full window in the role. */
+  qualified?: number;
   // pre-2026-10-13 excess boards (older caches only; never printed any more)
   excessWinRate?: number;
   expectedFinalWinRate?: number;
@@ -494,7 +520,10 @@ export interface LeaderboardBoard {
   periodEn?: string;
   /** Last-N-games window (position 100, assassin 20, roleTitles 20; schemaVersion 3: main 100, last50 50, improved 50). */
   windowGames?: number;
-  /** schemaVersion 4 main / improved: the per-role windows {role: K_r} instead of windowGames. */
+  /**
+   * schemaVersion 4 main / improved / theory: the per-role windows {role: K_r} instead of windowGames;
+   * roleTitles (2026-10-28): the window W_r each role was scored on (Edward's 200 / 100 and 50 / 25 rule).
+   */
   roleWindowGames?: Record<string, number>;
   /** Day window (newcomers: first game within it; pre-2026-10-13 boards: the date window). */
   windowDays?: number;

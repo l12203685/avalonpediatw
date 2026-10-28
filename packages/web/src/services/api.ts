@@ -570,6 +570,13 @@ export interface PlayerTheoryWindow {
   to: string;
   sparseRoles: number;
   sparseSeats: number;
+  /**
+   * 只有 career (2026-10-28 起的快取)：整體理論 = Σ P(角色) × 1/10 × 本人在該位置當該角色的最終勝率
+   * (70 格，不到 theoryMinCellGames 場用全體該格的勝率補)、補值格數、全體補值佔整體理論的比重 (%)。
+   */
+  overallTheory?: number;
+  sparseCells?: number;
+  populationShare?: number;
 }
 
 /** players[].theory.roleWindows 的一格 (一個角色)。 */
@@ -1054,7 +1061,7 @@ export async function fetchAnalysisRounds(): Promise<RoundsAnalysisData> {
 // 舊後端沒有此路由時回 404 → 顯示「後端尚未更新」。
 
 export type AnalysisLeaderboardBoardId =
-  | 'main' | 'position' | 'overall' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
+  | 'main' | 'position' | 'overall' | 'theory' | 'improved' | 'assassin' | 'newcomers' | 'roleTitles'
   | 'last50' // schemaVersion 3 才有
   | 'online' | 'recent'; // online / recent：更舊的快取才有
 
@@ -1072,9 +1079,26 @@ export interface AnalysisLeaderboardRow {
   // schemaVersion 3：都是該榜視窗 (各人最近 N 場；新人 = 全部場次) 內的數字。
   roleTheory?: number;
   positionTheory?: number;
-  /** schemaVersion 4：整體理論 = 生涯全部場次的角色理論。 */
-  overallTheory?: number;
+  /**
+   * 整體理論 (2026-10-28 起 = 生涯的位置 × 角色；之前 = 生涯的角色理論)。theory 榜生涯不到 overallMinGames 場時為 null。
+   */
+  overallTheory?: number | null;
   finalWinRate?: number;
+  /**
+   * 2026-10-28 (main / position / overall / theory / newcomers)，與 finalWinRate 同一段場次：任務勝率 = 自己陣營
+   * 贏得任務 (紅方三紅、藍方三藍)，分紅藍；刺殺勝率 = 只看三藍局 (threeBlueGames 局)：紅方刺中、藍方躲過。
+   */
+  missionWinRate?: number;
+  missionRedWinRate?: number | null;
+  missionBlueWinRate?: number | null;
+  assassinWinRate?: number | null;
+  threeBlueGames?: number;
+  /** theory 榜：角色窗用到的場數、角色窗是否都打滿。 */
+  roleGames?: number;
+  fullWindows?: boolean;
+  /** overall / theory：位置 × 角色 70 格中補值的格數、全體補值佔整體理論的比重 (%)。 */
+  sparseCells?: number | null;
+  populationShare?: number | null;
   /** 生涯場數。 */
   careerGames?: number;
   from?: string;
@@ -1105,6 +1129,8 @@ export interface AnalysisLeaderboardRow {
   role?: string;
   wins?: number;
   careerRoleGames?: number;
+  /** 角色王 (2026-10-28)：該角色打滿視窗、有資格的人數。 */
+  qualified?: number;
   // 舊快取的超額榜才有 (網站不再顯示)
   excessWinRate?: number;
   expectedFinalWinRate?: number;
@@ -1125,8 +1151,14 @@ export interface AnalysisLeaderboardBoard {
    * last50 50、improved 50)。
    */
   windowGames?: number;
-  /** schemaVersion 4 的 main / improved：各角色的視窗 {角色: 場數}，取代 windowGames。 */
+  /**
+   * schemaVersion 4 的 main / improved / theory：各角色的視窗 {角色: 場數}，取代 windowGames；
+   * 角色王 (2026-10-28)：每個角色實際用的場數 (忠臣 200 或 100、其他 50 或 25，依多數人有沒有打滿)。
+   */
   roleWindowGames?: Record<string, number>;
+  /** theory 榜：整體理論要的生涯場數、是否要求角色窗打滿。 */
+  overallMinGames?: number;
+  requireRoleWindows?: boolean;
   /** 新人榜：第一次打滿門檻場數要在近 N 天內 (2026-10-26 前的快取：首次出賽在近 N 天內)。 */
   windowDays?: number;
   /** 新人榜：看全部場次 (例外)。 */
