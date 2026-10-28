@@ -169,14 +169,21 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   useEffect(() => {
     let cancelled = false;
     const run = async (): Promise<void> => {
+      let articles: WikiArticleApi[] = [];
       try {
-        const { articles } = await fetchWikiArticles();
-        if (!cancelled && articles.length > 0) {
-          const apiArticles = articles.map(apiToWikiArticle);
-          setAllArticles(mergeWikiArticles(WIKI_ARTICLES, apiArticles));
-        }
+        articles = (await fetchWikiArticles()).articles;
       } catch {
-        // API not available, use hardcoded only
+        // API not available (server asleep / offline): fall back to the bundled copy below
+      }
+      if (articles.length === 0) {
+        try {
+          articles = (await import('@wiki-bundle')).default;
+        } catch {
+          // bundle chunk failed to load too: hardcoded articles only
+        }
+      }
+      if (!cancelled && articles.length > 0) {
+        setAllArticles(mergeWikiArticles(WIKI_ARTICLES, articles.map(apiToWikiArticle)));
       }
     };
     void run();
