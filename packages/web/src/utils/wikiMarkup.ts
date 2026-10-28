@@ -84,6 +84,7 @@ export function wikiExcerpt(text: string): string {
     .replace(/^\s*-{3,}\s*/, '')
     .replace(/^(?:\s*(?:title|tags|description|最後編輯日|最後編輯者)\s*[:：][^\n]*\n?)+/i, '')
     .replace(/<[^>]+>/g, '')
+    .replace(/^\s*```[^\n]*$/gm, '') // code-fence lines (e.g. 「``` json」)
     .replace(/\[TOC\]/gi, '')
     .trim();
 }

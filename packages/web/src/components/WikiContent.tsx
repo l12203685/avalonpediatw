@@ -14,6 +14,10 @@ import { VIDEO_BY_ROLE } from '../data/roleVideos';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
 
+/** 舊資料的標籤常是分類代號（roles、strategies…），和現在的分類對不上，不顯示。 */
+const CATEGORY_IDS = new Set(WIKI_CATEGORIES.map(c => c.id.toLowerCase()));
+const displayTags = (tags: readonly string[]): string[] => tags.filter(tag => !CATEGORY_IDS.has(tag.toLowerCase()));
+
 function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
   return {
     id: a.id,
@@ -23,7 +27,6 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
     excerpt: a.excerpt,
     tags: a.tags,
     author: a.source === 'hackmd' ? 'HackMD Archive' : 'Avalon Wiki',
-    updatedAt: new Date('2024-01-01'),
     status: a.status === '待完成' ? '待完成' : undefined,
   };
 }
@@ -348,7 +351,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                     <h3 className="text-base font-bold text-white mb-1 leading-snug">{article.title}</h3>
                     <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{wikiExcerpt(article.excerpt)}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {article.tags.slice(0, 4).map((tag) => (
+                      {displayTags(article.tags).slice(0, 4).map((tag) => (
                         <span
                           key={tag}
                           className="inline-block bg-gray-700/50 text-gray-200 text-[10px] px-1.5 py-0.5 rounded"
@@ -359,12 +362,14 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700">
-                  <div className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    {article.updatedAt.toLocaleDateString('zh-TW')}
+                {article.updatedAt && (
+                  <div className="flex items-center gap-3 text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-700">
+                    <div className="flex items-center gap-1">
+                      <Calendar size={12} />
+                      {article.updatedAt.toLocaleDateString('zh-TW')}
+                    </div>
                   </div>
-                </div>
+                )}
               </motion.button>
             ))}
           </div>
@@ -448,10 +453,12 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   </div>
                 )}
                 <div className="flex flex-wrap gap-3 text-[10px] text-gray-400 pb-2 border-b border-gray-700 mb-3">
-                  <div className="flex items-center gap-1">
-                    <Calendar size={12} />
-                    {selectedArticle.updatedAt.toLocaleDateString('zh-TW')}
-                  </div>
+                  {selectedArticle.updatedAt && (
+                    <div className="flex items-center gap-1">
+                      <Calendar size={12} />
+                      {selectedArticle.updatedAt.toLocaleDateString('zh-TW')}
+                    </div>
+                  )}
                   <span>{selectedArticle.author}</span>
                 </div>
 

@@ -17,7 +17,8 @@ export interface WikiArticle {
   excerpt: string;
   tags: string[];
   author: string;
-  updatedAt: Date;
+  /** 最後更新日；沒有可靠日期的文章（API 來的舊文）不填、不顯示。 */
+  updatedAt?: Date;
   /** Absent means 完成. 待完成 = a stub / half-written article, listed apart (Edward 2026-10-28). */
   status?: WikiStatus;
 }
