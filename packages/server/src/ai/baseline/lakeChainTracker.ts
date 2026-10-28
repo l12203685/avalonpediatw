@@ -25,7 +25,7 @@
  */
 
 import type { PlayerObservation, LakePublicRecord, VoteRecord } from '../types';
-import { CertaintyView, certaintyParamsFor, enumerateWorlds } from '../belief/Certainty';
+import { CertaintyView, certaintyParamsFor, enumerateL1, enumerateWorlds } from '../belief/Certainty';
 import { defaultBeliefOptions, type BeliefOptions } from '../belief/BeliefOptions';
 import { missionFailed } from '../missionFacts';
 
@@ -454,7 +454,7 @@ function omissionStrictlyDominated(
       .map((l) => ({ round: l.round, targetId: l.targetId, result: l.declaredClaim as 'good' | 'evil' })),
   };
   const params = certaintyParamsFor(asHolder);
-  let worlds = enumerateWorlds(asHolder, { self: 'good', sight: false, ownLakeResults: true, lakes: true }, params);
+  let worlds = enumerateL1(asHolder, { self: 'good', sight: false, ownLakeResults: true }, params);
   if (worlds.length === 0) {
     worlds = enumerateWorlds(asHolder, { self: 'good', sight: false, ownLakeResults: true, lakes: false }, params);
   }

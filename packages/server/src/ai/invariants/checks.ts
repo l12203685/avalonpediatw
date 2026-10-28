@@ -57,6 +57,8 @@ const R12 = 'R1-R2 normal vote (D3)';
 const FORCED = 'forced 5th proposal';
 const TWO_FAILS = 'two fails needed (R4)';
 const L1_EMPTY = 'L1 empty (L0 fallback)';
+/** The 10/26 conventions contradicted the table and were dropped (`enumerateL1`): what they proved is not proved. */
+const CONVENTIONS_DROPPED = 'A1/A2 contradicted (A0 only)';
 const PINNED = 'pinned by a certainty';
 
 // ── The audit's world model (diagnostics only) ─────────────────
@@ -738,6 +740,7 @@ export function checkObservation(
     const before = cutAtLake(obs, l.round);
     if (claimPossibleForGoodHolder(before, l.holderId, l.targetId, l.declaredClaim)) continue;
     if (view.l1Empty) L.record('INV-R2', { exempt: L1_EMPTY });
+    else if (view.conventionsDropped) L.record('INV-R2', { exempt: CONVENTIONS_DROPPED });
     else L.record('INV-R2', { violated: !view.isCertRed(l.holderId, 'L1') });
   }
 }

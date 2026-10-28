@@ -121,6 +121,11 @@ export interface WorldOptions {
   ownLakeResults: boolean;
   /** Public lake declarations under A0 (level L1). */
   lakes: boolean;
+  /**
+   * With `lakes`: also the 10/26 table conventions A1 (no stalling) and A2 (return the lake). Default on;
+   * `enumerateL1` retries without them when they leave no world (see there).
+   */
+  conventions?: boolean;
 }
 
 function combinations(pool: readonly number[], k: number, base: number): number[] {
@@ -196,10 +201,11 @@ export function enumerateWorlds(
     : [];
 
   // A1 / A2 (L1, Edward 2026-10-26): caps on successful missions after two fails; admitted reds.
-  const caps = opts.lakes ? noStallCaps(obs, params).map((c) => ({ mask: c.team.reduce((m, id) => m | bit(id), 0), max: c.max })) : [];
+  const conventions = opts.lakes && opts.conventions !== false;
+  const caps = conventions ? noStallCaps(obs, params).map((c) => ({ mask: c.team.reduce((m, id) => m | bit(id), 0), max: c.max })) : [];
   // A2 is the table's inference: a good viewer it would name knows better (a human holder who did not
   // return the lake), so it never applies to the viewer's own good seat.
-  if (opts.lakes) {
+  if (conventions) {
     for (const id of admittedReds(obs)) if (!(selfMode === 'good' && id === obs.myPlayerId)) requiredMask |= bit(id);
   }
 
@@ -315,6 +321,8 @@ export class CertaintyView {
   readonly l1: readonly number[];
   /** A0 left no world: level L1* falls back to L0. */
   readonly l1Empty: boolean;
+  /** L1 holds without the 10/26 conventions (A1 / A2 contradicted the table; `enumerateL1`). */
+  readonly conventionsDropped: boolean;
   private readonly index: Map<string, number>;
   private readonly declaredBlue: Array<{ holder: string; target: string }>;
   private readonly allDeclaredBlue: Set<string>;
@@ -322,8 +330,9 @@ export class CertaintyView {
   private readonly ownRedContradicted: Set<string>;
   private readonly cache = new Map<string, { and: number; or: number }>();
 
-  constructor(obs: PlayerObservation, l0: number[], l1: number[], params: CertaintyParams) {
+  constructor(obs: PlayerObservation, l0: number[], l1: number[], params: CertaintyParams, conventionsDropped = false) {
     this.params = params;
+    this.conventionsDropped = conventionsDropped;
     this.ids = obs.allPlayerIds;
     this.index = new Map(this.ids.map((id, i) => [id, i]));
     this.l0 = l0;
@@ -493,12 +502,38 @@ export class CertaintyView {
   }
 }
 
+/**
+ * The L1 worlds, in steps: A0 + the 10/26 conventions (A1 no stalling, A2 return the lake); when those
+ * leave no world, A0 alone; the caller falls back to L0 when even that is empty. A human red who let a
+ * mission pass after two fails (A1 broken) must not erase what A0 still proves — e.g. that the holder who
+ * declared a good viewer red lied (2026-10-27: four INV-P3 breaches in the 牌譜 replays, all A1 conflicts).
+ */
+export function enumerateL1(
+  obs: PlayerObservation,
+  opts: Readonly<Omit<WorldOptions, 'lakes' | 'conventions'>>,
+  params: CertaintyParams = certaintyParamsFor(obs),
+): number[] {
+  return enumerateL1Staged(obs, opts, params).worlds;
+}
+
+/** `enumerateL1` plus whether it had to drop the conventions. */
+export function enumerateL1Staged(
+  obs: PlayerObservation,
+  opts: Readonly<Omit<WorldOptions, 'lakes' | 'conventions'>>,
+  params: CertaintyParams = certaintyParamsFor(obs),
+): { worlds: number[]; conventionsDropped: boolean } {
+  const full = enumerateWorlds(obs, { ...opts, lakes: true }, params);
+  if (full.length > 0) return { worlds: full, conventionsDropped: false };
+  const a0 = enumerateWorlds(obs, { ...opts, lakes: true, conventions: false }, params);
+  return { worlds: a0, conventionsDropped: a0.length > 0 };
+}
+
 /** The viewer's own certainty view (L0 / L1; private knowledge included). */
 export function buildCertainty(obs: PlayerObservation): CertaintyView {
   const params = certaintyParamsFor(obs);
   const l0 = enumerateWorlds(obs, { self: 'own', sight: true, ownLakeResults: true, lakes: false }, params);
-  const l1 = enumerateWorlds(obs, { self: 'own', sight: true, ownLakeResults: true, lakes: true }, params);
-  return new CertaintyView(obs, l0, l1, params);
+  const l1 = enumerateL1Staged(obs, { self: 'own', sight: true, ownLakeResults: true }, params);
+  return new CertaintyView(obs, l0, l1.worlds, params, l1.conventionsDropped);
 }
 
 /**
@@ -508,8 +543,8 @@ export function buildCertainty(obs: PlayerObservation): CertaintyView {
 export function buildPublicCertainty(obs: PlayerObservation): CertaintyView {
   const params = certaintyParamsFor(obs);
   const l0 = enumerateWorlds(obs, { self: 'free', sight: false, ownLakeResults: false, lakes: false }, params);
-  const l1 = enumerateWorlds(obs, { self: 'free', sight: false, ownLakeResults: false, lakes: true }, params);
-  return new CertaintyView(obs, l0, l1, params);
+  const l1 = enumerateL1Staged(obs, { self: 'free', sight: false, ownLakeResults: false }, params);
+  return new CertaintyView(obs, l0, l1.worlds, params, l1.conventionsDropped);
 }
 
 /**

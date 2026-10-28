@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { LakePublicRecord, PlayerObservation, QuestRecord } from './types';
-import { admittedReds, buildPublicCertainty, noStallCaps, returnLakeOptions } from './belief/Certainty';
+import { admittedReds, buildCertainty, buildPublicCertainty, noStallCaps, returnLakeOptions } from './belief/Certainty';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING } from './AgentTuning';
 import { pickLakeTargetForTeam } from './LakePolicy';
 import { explainLakeTarget } from './explain';
@@ -47,6 +47,26 @@ describe('A1 — no stalling after two failed missions', () => {
     expect(noStallCaps({ questHistory: r4 }, { failsRequired: [1, 1, 1, 2, 1] }).map((c) => c.max)).toEqual([0, 1]);
     const early = [quest(1, ['P7', 'P8', 'P9'], 1), quest(2, ['P3', 'P4', 'P5', 'P6'], 0)];
     expect(noStallCaps({ questHistory: early }, { failsRequired: [1, 1, 1, 2, 1] })).toEqual([]);
+  });
+});
+
+describe('A1 broken by a human red: the conventions step back before A0 does (2026-10-27)', () => {
+  // R2 and R3 failed, R4 passed with P1 and P10 on it (two reds let it pass: A1 broken). P10 declared
+  // Percival P5 red; P5 laked P9 (truly good) and declared it; P9 declared P1 red. A0 + A1 leave no world;
+  // A0 alone still proves P10 lied about P5 — before the fix L1 fell back to L0 and P5 approved P10's team.
+  const quests = [quest(1, ['P5', 'P6', 'P9'], 0), quest(2, ['P2', 'P5', 'P6', 'P9'], 1), quest(3, ['P2', 'P4', 'P7', 'P9'], 1), quest(4, ['P1', 'P6', 'P7', 'P9', 'P10'], 0)];
+  const lakes: LakePublicRecord[] = [
+    { round: 2, holderId: 'P10', targetId: 'P5', declaredClaim: 'evil' },
+    { round: 3, holderId: 'P5', targetId: 'P9', declaredClaim: 'good' },
+    { round: 4, holderId: 'P9', targetId: 'P1', declaredClaim: 'evil' },
+  ];
+  const o = obs({ myPlayerId: 'P5', myRole: 'percival', knownWizards: ['P3', 'P8'], currentRound: 5, questResults: ['success', 'fail', 'fail', 'success'],
+    questHistory: quests, lakeHistory: lakes, myLakeResults: [{ round: 3, targetId: 'P9', result: 'good' }] });
+
+  it('A0 + A1 leave no world, A0 alone does: the accuser of the good viewer is certainly red', () => {
+    const v = buildCertainty(o);
+    expect(v.l1Empty).toBe(false);
+    expect(v.isCertRed('P10')).toBe(true);
   });
 });
 
