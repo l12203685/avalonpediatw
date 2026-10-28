@@ -57,8 +57,16 @@ function choose(n: number, k: number): number {
   return r;
 }
 
-const cache = new WeakMap<PlayerObservation, Map<string, number>>();
-const cacheThumbs = new WeakMap<PlayerObservation, Map<string, number>>();
+interface Posterior {
+  worlds: readonly number[];
+  /** Normalized weight of each world (sums to 1); empty when there is no world. */
+  wts: number[];
+  bitOf: (id: string) => number;
+  maskOf: (ids: readonly string[]) => number;
+}
+
+const cache = new WeakMap<PlayerObservation, Posterior>();
+const cacheThumbs = new WeakMap<PlayerObservation, Posterior>();
 
 export interface BayesOptions {
   /**
@@ -69,8 +77,7 @@ export interface BayesOptions {
   thumbRoles?: boolean;
 }
 
-/** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */
-export function bayesRedShare(obs: PlayerObservation, opts: Readonly<BayesOptions> = {}): Map<string, number> {
+function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
   const thumbs = opts.thumbRoles && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2 ? obs.knownWizards ?? [] : [];
   const store = thumbs.length > 0 ? cacheThumbs : cache;
   const hit = store.get(obs);
@@ -119,21 +126,47 @@ export function bayesRedShare(obs: PlayerObservation, opts: Readonly<BayesOption
     }
     return lp;
   });
-  const out = new Map<string, number>();
-  if (worlds.length === 0) {
-    for (const id of ids) out.set(id, id === me ? (obs.myTeam === 'evil' ? 1 : 0) : 0.5);
-    store.set(obs, out);
-    return out;
+  let wts: number[] = [];
+  if (worlds.length > 0) {
+    const max = Math.max(...logW);
+    const raw = logW.map((x) => Math.exp(x - max));
+    const tot = raw.reduce((a, b) => a + b, 0);
+    wts = raw.map((x) => x / tot);
   }
-  const max = Math.max(...logW);
-  const wts = logW.map((x) => Math.exp(x - max));
-  const tot = wts.reduce((a, b) => a + b, 0);
-  for (const id of ids) {
-    const b = bit(id);
-    let s = 0;
-    worlds.forEach((w, i) => { if (w & b) s += wts[i]; });
-    out.set(id, s / tot);
-  }
+  const out: Posterior = { worlds, wts, bitOf: bit, maskOf: (t) => view.maskOf(t) };
   store.set(obs, out);
   return out;
+}
+
+const shareCache = new WeakMap<Posterior, Map<string, number>>();
+
+/** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */
+export function bayesRedShare(obs: PlayerObservation, opts: Readonly<BayesOptions> = {}): Map<string, number> {
+  const post = posterior(obs, opts);
+  const hit = shareCache.get(post);
+  if (hit) return hit;
+  const out = new Map<string, number>();
+  const me = obs.myPlayerId;
+  for (const id of obs.allPlayerIds) {
+    if (post.worlds.length === 0) { out.set(id, id === me ? (obs.myTeam === 'evil' ? 1 : 0) : 0.5); continue; }
+    const b = post.bitOf(id);
+    let s = 0;
+    post.worlds.forEach((w, i) => { if (w & b) s += post.wts[i]; });
+    out.set(id, s);
+  }
+  shareCache.set(post, out);
+  return out;
+}
+
+/**
+ * Posterior P(no red on `team`) (optimization loop round 3, `goodCleanVote`): the summed weight of the worlds
+ * with no red seat on the team. null when there is no world.
+ */
+export function bayesTeamClean(obs: PlayerObservation, team: readonly string[], opts: Readonly<BayesOptions> = {}): number | null {
+  const post = posterior(obs, opts);
+  if (post.worlds.length === 0) return null;
+  const mask = post.maskOf(team);
+  let s = 0;
+  post.worlds.forEach((w, i) => { if ((w & mask) === 0) s += post.wts[i]; });
+  return s;
 }

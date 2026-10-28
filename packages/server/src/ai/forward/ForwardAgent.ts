@@ -53,6 +53,7 @@
 
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
+import { goodCleanVoteReject } from '../GoodCleanVote';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -715,6 +716,11 @@ export class ForwardAgent implements AvalonAgent {
     if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
       const yes = redCleanApproveVote(this.baseline.tuning, obs);
       if (yes) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red clean approve (A2)');
+    }
+    // Round 3 (blue) candidate `goodCleanVote` (GoodCleanVote.ts): loyal / Percival reject a team the posterior
+    // gives too little chance of being clean (R3+).
+    if (goodCleanVoteReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'good clean vote (posterior)');
     }
     const d = this.decideCore(obs);
     // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
