@@ -19,6 +19,23 @@ export const STAT_TERMS = [
   'lakeTruth',
   'anomalyVote',
   'topRoleWinRate',
+  // 2026-10-28 分析分頁白話化
+  'outcomeMix',
+  'chiSquare',
+  'threeRedRate',
+  'killRate',
+  'redGameWinRate',
+  'missionSuccessRate',
+  'failCards',
+  'captainFaction',
+  'firstProposal',
+  'missionPath',
+  'lakeCombo',
+  'evilTeamReject',
+  'goodTeamApprove',
+  'r3Reject',
+  'flipRate',
+  'signedEv',
 ] as const;
 
 export type StatTermKey = (typeof STAT_TERMS)[number];

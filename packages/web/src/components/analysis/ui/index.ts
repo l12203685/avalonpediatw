@@ -4,6 +4,7 @@
  *  - StatTable：密集數字表 (比率 + n、樣本不足變淡、小長條、固定第一欄)
  *  - Donut：三種結果組成甜甜圈 (lg 全體 / sm 每位玩家)
  *  - MetricBlocks：任務結果 / 刺殺結果 / 遊戲結果 三塊條件結果表
+ *  - Takeaway / VerdictText：小分頁最上面的一句話結論、卡方檢定的白話判讀 (2026-10-28)
  */
 export { default as SectionTabs, useSectionTab } from './SectionTabs';
 export type { SectionTabItem, SectionTabsProps } from './SectionTabs';
@@ -21,4 +22,5 @@ export type { OutcomeCounts, OutcomeKey, PctScale, Tone } from './tokens';
 export { default as Term } from './Term';
 export type { TermProps } from './Term';
 export { STAT_TERMS } from './statTerms';
+export { Takeaway, VerdictText } from './Takeaway';
 export type { StatTermKey } from './statTerms';

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatTable, type StatColumn } from './ui';
+import { StatTable, Takeaway, formatRate, type StatColumn } from './ui';
 import type { CaptainAnalysisData } from '../../services/api';
 import { useCaptainData } from './teams/useTeamsData';
 import TeamsLoadState from './teams/TeamsLoadState';
@@ -21,6 +21,9 @@ import OutcomeBlocksTable, {
  *     每列一種 隊長陣營 × 任務結果，先是這個結果佔該陣營隊長任務的比例 (n = 該陣營隊長的任務數)，
  *     再接三塊條件結果 (任務結果、到三藍時的刺殺結果、遊戲結果，各附 n；見 teams/OutcomeBlocksTable)。
  *   這裡的單位是「任務」：一局有好幾個任務，每個任務各算一次 (n = 任務數)。
+ * (2026-10-28 Edward：結果要更直觀、名詞要白話) 最上面一句話：紅方／藍方隊長的任務各失敗幾成、紅方當隊長的
+ *   比例從任務 1 到最後一個任務怎麼變 (數字都從表上的資料當下算)；表頭可點開看定義 (Term)。
+ *   以任務為單位，同一局會算好幾次，所以這裡不做卡方檢定。
  */
 
 type Faction = '紅方' | '藍方';
@@ -90,7 +93,7 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
   const perMissionColumns: StatColumn<PerMissionRow>[] = [
     { key: 'label', label: t('analytics.r6.teams.captain.mission') },
     {
-      key: 'red', label: t('analytics.r6.teams.captain.redCaptain'),
+      key: 'red', label: t('analytics.r6.teams.captain.redCaptain'), term: 'captainFaction',
       format: 'pct', tone: 'red', bar: { max: 100 }, emphasis: true,
     },
     { key: 'blue', label: t('analytics.r6.teams.captain.blueCaptain'), format: 'pct', tone: 'blue' },
@@ -121,6 +124,12 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
     </span>
   );
 
+  const failShare = (faction: Faction): CaptainRow | undefined => captainRows.find(r => r.faction === faction && !r.passed);
+  const redFail = failShare('紅方');
+  const blueFail = failShare('藍方');
+  const firstMission = perMissionRows[0];
+  const lastMission = perMissionRows[perMissionRows.length - 1];
+
   return (
     <TeamsLoadState
       loading={loading}
@@ -130,6 +139,19 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
     >
       {() => (
         <div className="space-y-3">
+          {redFail && blueFail && firstMission && lastMission && (
+            <Takeaway>
+              <p>
+                {t('analytics.r7.captain.takeaway', {
+                  red: formatRate(redFail.share), redN: redFail.factionTotal,
+                  blue: formatRate(blueFail.share), blueN: blueFail.factionTotal,
+                })}
+                {perMissionRows.length > 1 && t('analytics.r7.captain.trend', {
+                  first: formatRate(firstMission.red), last: formatRate(lastMission.red), lastMission: lastMission.key,
+                })}
+              </p>
+            </Takeaway>
+          )}
           <p className="text-xs text-zinc-400 leading-relaxed">
             {t('analytics.r6.teams.captain.intro', { count: perMissionRows[0]?.games ?? 0 })}
           </p>

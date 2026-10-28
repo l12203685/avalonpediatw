@@ -825,7 +825,7 @@
         },
         "missions": {
           "tabs": {
-            "pass": "Pass rate",
+            "pass": "Success rate",
             "outcome": "Mission → ending"
           },
           "round": "Mission",
@@ -833,7 +833,7 @@
           "reachedTitle": "Games that reached this mission (the denominator)",
           "passRate": "Pass rate",
           "passRateTitle": "Share of this mission with 0 fail cards (the cache's definition of a pass)",
-          "passCaption": "Pass rate and fail-card split by mission",
+          "passCaption": "Success rate and fail cards by mission",
           "passNote": "Denominator = games that reached the mission. \"Pass\" follows the cache: 0 fail cards; on mission 4 a single fail card counts under \"1 fail\" here even where the rules let the mission pass.",
           "group": "Mission",
           "passed": "Mission {{round}} passed",
@@ -914,7 +914,7 @@
           "flipRed": "Flip % (red)",
           "flipBlue": "Flip % (blue)",
           "flipColsTitle": "Cache fields flipRedPct / flipBluePct: the role's flip rate under two groupings; see Method",
-          "signedEv": "signed EV",
+          "signedEv": "Flip gap (signed EV)",
           "signedEvTitle": "signed EV = flip % (blue) − flip % (red), in points; the original study reads a positive value as a \"good signal\"",
           "chances": "Chances",
           "chancesTitle": "Votes this role cast after the team changed",
@@ -1574,6 +1574,132 @@
         "excess": "Excess",
         "lastPlayed": "Last game"
       }
+    },
+    "r7": {
+      "verdict": {
+        "clear": "The gap is real",
+        "luck": "The gap could be luck",
+        "open": " (",
+        "close": ")"
+      },
+      "mix": {
+        "viewBars": "Bars",
+        "nLabel": "How many players",
+        "top": "Top {{count}}",
+        "all": "All",
+        "overall": "All players",
+        "overallSub": "every player-game once",
+        "allGames": "All {{value}} games:",
+        "legendWon": "solid = won",
+        "legendLost": "striped = lost",
+        "legendSide": "always from the player's own side",
+        "colPlayer": "Player",
+        "colMix": "Game result",
+        "colMission": "Missions",
+        "colAssassination": "Assassin.",
+        "colFinal": "Final",
+        "unitGames": "games",
+        "unitThreeBlue": "three-success games",
+        "side": {
+          "threeRed": {
+            "won": "on Red",
+            "lost": "on Blue"
+          },
+          "threeBlueDead": {
+            "won": "on Red, Merlin hit",
+            "lost": "on Blue, Merlin hit"
+          },
+          "threeBlueAlive": {
+            "won": "on Blue, Merlin survived",
+            "lost": "on Red, missed"
+          }
+        },
+        "tipWon": "{{name}} · {{outcome}} · won ({{side}}): {{games}} games, {{pct}} of their games",
+        "tipLost": "{{name}} · {{outcome}} · lost ({{side}}): {{games}} games, {{pct}} of their games",
+        "tipWin": {
+          "mission": "{{name}} · missions won: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "assassination": "{{name}} · assassination won: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "final": "{{name}} · final won: {{win}} / {{n}} {{unit}} ({{pct}})"
+        },
+        "tipLose": {
+          "mission": "{{name}} · missions lost: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "assassination": "{{name}} · assassination lost: {{win}} / {{n}} {{unit}} ({{pct}})",
+          "final": "{{name}} · final lost: {{win}} / {{n}} {{unit}} ({{pct}})"
+        },
+        "note": "Sorted by games. In each game-result part solid = the player won, striped = lost; the solid parts add up to the final win rate. Missions / assassination / final = share their side won; assassination counts three-success games only. Hover (or tap) a segment for counts; tap a column name for its definition.",
+        "tableNote": "Outcome columns = share of the player's games (hidden on phones); missions, assassination, final = share their side won, assassination n = three-success games. All players = every player-game once."
+      },
+      "seatKill": {
+        "merlinLead": "Merlin's seat: ",
+        "merlinRest": ". Seat {{hiSeat}} is hit most often ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}})",
+        "assassinLead": "Assassin's seat: ",
+        "assassinRest": ". Seat {{hiSeat}} hits most ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}}).",
+        "groups": "; Merlin in seats 1–5 is hit {{front}} (n={{frontN}}), in seats 6–10 {{back}} (n={{backN}}).",
+        "front": "Seats 1–5",
+        "back": "Seats 6–10",
+        "rateLabel": "Hit rate",
+        "note": "Hit rate = Merlin hit ÷ three-success games; n = three-success games with that role in that seat; the white line = the hit rate over all three-success games. \"Real / could be luck\" comes from a chi-square test over the hit / miss counts of all 10 seats."
+      },
+      "captain": {
+        "takeaway": "Missions led by a Red leader failed {{red}} of the time (n={{redN}} missions); Blue leaders {{blue}} (n={{blueN}}).",
+        "trend": " The share of Red leaders falls from {{first}} on mission 1 to {{last}} on mission {{lastMission}}."
+      },
+      "firstVote": {
+        "merlin": "With Merlin on the 1-1 team Red won {{yes}} (n={{yesN}}), without Merlin {{no}} (n={{noN}}): ",
+        "redCount": "With 0–3 Red players on the 1-1 team, Red's final win rate stays between {{min}} and {{max}}: ",
+        "end": ".",
+        "introRest": " = the first team proposal for mission 1. Whether Merlin / Percival was on it and how many Red players it had, versus mission 1 success and the result; \"real / could be luck\" compares the three-outcome shares."
+      },
+      "progression": {
+        "branch": "When mission 1 failed Red won {{failed}} (n={{failedN}}); when it succeeded {{passed}} (n={{passedN}}). ",
+        "hardest": "The hardest is {{label}} (success {{rate}}, n={{n}}). ",
+        "topPath": "The most common path is {{path}} ({{share}} of games, n={{n}})."
+      },
+      "missions": {
+        "success": "Success",
+        "zeroFail": "0 fails",
+        "passTakeaway": "The hardest mission is mission {{hard}} ({{hardRate}}), the easiest mission {{easy}} ({{easyRate}}). ",
+        "m4": "On mission 4, {{rate}} of games showed a single fail card — with 7+ players the mission still succeeds.",
+        "passNote": "Denominator = games that reached the mission. Success follows the rules (same data as Teams › Mission progress): with 7+ players mission 4 needs two fail cards to fail; 0 / 1 / 2+ fails = how many fail cards came out, adding up to 100%. The old table used \"0 fails\" as the pass rate, which made mission 4 look too low.",
+        "r4Zero": "Mission 4: 0 fail cards",
+        "r4Some": "Mission 4: some fail cards",
+        "outcomeTakeaway": "Mission {{round}} is most tied to the result: when it failed Red won {{failed}} (n={{fn}}), when it passed {{passed}} (n={{pn}}) — a {{gap}}-point gap.",
+        "outcomeNote": "\"Passed\" = 0 fail cards, \"failed\" = 1 or more (the cache's grouping). With 7+ players mission 4 still succeeds on a single fail card, so mission 4 rows say \"0 / some fail cards\" and are left out of the summary; mission 5 is omitted (its result decides three fails or three successes)."
+      },
+      "lake": {
+        "faction": "{{lake}}: when Red held the Lake Red won {{red}} (n={{redN}}); when Blue held it {{blue}} (n={{blueN}}): ",
+        "holderRole": "{{lake}}: Red won most when the holder was {{hi}} ({{hiRate}}, n={{hiN}}) and least with {{lo}} ({{loRate}}, n={{loN}}); outcome shares across the seven roles: ",
+        "targetRole": "{{lake}}: Red won most when the target was {{hi}} ({{hiRate}}, n={{hiN}}) and least with {{lo}} ({{loRate}}, n={{loN}}); outcome shares across the seven roles: ",
+        "end": "."
+      },
+      "votes": {
+        "tabs": {
+          "overview": "Voting overview",
+          "flip": "Flips after changes"
+        },
+        "missing": "This cache has no per-player vote counts; available after the next daily update.",
+        "takeawayTeam": "When a team had a Red player, {{evil}} of votes rejected it; when it was all Blue, {{good}} of votes approved it.",
+        "takeawayVoter": "From mission 3 on, Loyal Servants rejected {{loyal}} of the time, Red players {{red}}.",
+        "caption": {
+          "team": "By team: how people voted",
+          "voter": "By voter: rejections from mission 3 on"
+        },
+        "col": {
+          "team": "Situation",
+          "voter": "Voter",
+          "rate": "Share",
+          "votes": "Votes"
+        },
+        "rows": {
+          "evilAll": "Has Red → reject",
+          "goodAll": "All Blue → approve",
+          "evilR3": "M3+ · has Red → reject",
+          "goodR3": "M3+ · all Blue → approve",
+          "loyalR3": "Loyal Servants (any team)",
+          "redR3": "Red players (any team)"
+        },
+        "note": "Every vote on proposals 1–4 counts once (the forced 5th proposal has no vote); both sides' votes are included; share = matching votes ÷ votes. One player's many votes are not independent, so no significance test is done."
+      }
     }
   },
   "guest": {
@@ -1689,6 +1815,102 @@
       "def": "Final win rate in your best role.",
       "calc": "The highest final win rate among roles with at least 3 games.",
       "meaning": "How strong your best role is."
+    },
+    "outcomeMix": {
+      "name": "Game result (share within share)",
+      "def": "How their games split into three fails / three successes + Merlin hit / three successes + Merlin alive; each part is split again into won (solid) and lost (striped).",
+      "calc": "Three fails = on Red (won) + on Blue (lost); Merlin hit = on Red (won) + on Blue (lost); Merlin alive = on Blue (won) + on Red (lost). Each ÷ their games.",
+      "meaning": "The solid parts add up to the final win rate. More stripes in a part = they often lose that kind of ending."
+    },
+    "chiSquare": {
+      "name": "p-value (is the gap luck?)",
+      "def": "If the grouping (say, the seat) had no effect at all, the chance that luck alone would produce a gap this large.",
+      "calc": "Chi-square test: work out how many games each cell should have if the grouping did not matter, add up how far the real counts are from that (χ²), and turn it into a probability p.",
+      "meaning": "p below 0.05: luck rarely makes a gap this big, so the gap is real. p above 0.05: the gap could be luck. p says whether a gap is real, not why."
+    },
+    "threeRedRate": {
+      "name": "Three-fail rate",
+      "def": "Share of these games Red won on missions (three failed missions).",
+      "calc": "Three-fail games ÷ games in the group.",
+      "meaning": "Higher = Blue struggles to pass missions in this situation. Blue's mission win rate = 100% − this."
+    },
+    "killRate": {
+      "name": "Hit rate",
+      "def": "After three successful missions, the share where the assassin hit Merlin.",
+      "calc": "Merlin hit ÷ (Merlin hit + Merlin alive). Three-success games only, n = those games; three-fail games have no assassination.",
+      "meaning": "Higher = Merlin is easier to spot in this situation. Merlin survival = 100% − hit rate."
+    },
+    "redGameWinRate": {
+      "name": "Red win rate (whole game)",
+      "def": "Share of these games Red won in the end: three fails, or three successes and Merlin hit.",
+      "calc": "(Three fails + Merlin hit) ÷ games in the group.",
+      "meaning": "Blue win rate = 100% − this = Merlin alive ÷ games."
+    },
+    "missionSuccessRate": {
+      "name": "Mission success rate",
+      "def": "Of the games that reached this mission, the share where it succeeded (Blue).",
+      "calc": "Games where this mission succeeded ÷ games that reached it. Success follows the rules: with 7+ players mission 4 needs two fail cards to fail.",
+      "meaning": "Lower = Red breaks this mission more often."
+    },
+    "failCards": {
+      "name": "Fail cards",
+      "def": "How many fail cards came out on this mission.",
+      "calc": "Games with 0 / 1 / 2+ fail cards ÷ games that reached the mission.",
+      "meaning": "2+ = at least two Red players on the team both failed it. On mission 4 (7+ players) a single fail card still lets it succeed."
+    },
+    "captainFaction": {
+      "name": "Leader's side",
+      "def": "For the team that actually went on each mission, whether its leader was Red or Blue.",
+      "calc": "Games with a Red (or Blue) leader ÷ games that reached the mission.",
+      "meaning": "Red leaders tend to put Red players on the team, so their missions fail more often."
+    },
+    "firstProposal": {
+      "name": "1-1",
+      "def": "The first team proposal for the first mission.",
+      "calc": "Whether Merlin / Percival was on that team and how many Red players it had, then how those games ended — whether or not the 1-1 team actually went.",
+      "meaning": "At 1-1 nobody has information yet, so this shows whether the team make-up is linked to the result."
+    },
+    "missionPath": {
+      "name": "Mission path",
+      "def": "The order in which missions succeeded or failed, e.g. fail-fail-pass-pass-pass.",
+      "calc": "Each game's real mission results in order; games with the same path are counted together.",
+      "meaning": "The path decides three fails or three successes; for three successes look at the assassination."
+    },
+    "lakeCombo": {
+      "name": "Holder → target",
+      "def": "For this Lady of the Lake: which side held the Lake and which side they checked.",
+      "calc": "Four groups by the two players' real sides; missions, assassination and whole-game results for each.",
+      "meaning": "Shows how who holds and who gets checked relates to the result — a link, not proof the Lake helps either side."
+    },
+    "evilTeamReject": {
+      "name": "Team with Red → reject",
+      "def": "Share of votes rejecting a proposed team that has at least one Red player.",
+      "calc": "Reject votes on such teams ÷ all votes on them (proposals 1–4, both sides' votes).",
+      "meaning": "Higher = teams with Red get blocked more often. Red players vote too, so it never reaches 100%."
+    },
+    "goodTeamApprove": {
+      "name": "All-Blue team → approve",
+      "def": "Share of votes approving a proposed team that is all Blue.",
+      "calc": "Approve votes on such teams ÷ all votes on them (proposals 1–4).",
+      "meaning": "Higher = good teams pass more easily. Red often rejects them, and Blue can't always tell."
+    },
+    "r3Reject": {
+      "name": "Rejects from mission 3",
+      "def": "From mission 3 on, the share of this side's votes that were rejections (whatever the team).",
+      "calc": "Reject votes ÷ all votes, proposals 1–4 of missions 3+; Loyal Servants and Red counted separately.",
+      "meaning": "Compares how Loyal Servants and Red players vote."
+    },
+    "flipRate": {
+      "name": "Flip rate",
+      "def": "After a team changes, the share of votes that differ from the same player's vote on the previous team.",
+      "calc": "Flips ÷ votes after a team change (one-off study, numbers frozen at its snapshot).",
+      "meaning": "The two columns are the same role under the study's two groupings; see the full study."
+    },
+    "signedEv": {
+      "name": "Flip gap (signed EV)",
+      "def": "The difference between a role's two flip-rate columns.",
+      "calc": "Flip rate (Blue) − flip rate (Red), in percentage points.",
+      "meaning": "The study read positive values as a 'Blue signal', but roles differ by only about ±2 points — too small to notice at the table."
     }
   }
 }

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatTable, type StatColumn } from './ui';
+import { StatTable, Takeaway, Term, VerdictText, formatRate, type StatColumn } from './ui';
+import { outcomeChiSquare, redFinalRate } from './outcomeTest';
 import type { RoundsAnalysisData } from '../../services/api';
 import { useRoundsData } from './teams/useTeamsData';
 import TeamsLoadState from './teams/TeamsLoadState';
@@ -23,6 +24,9 @@ import OutcomeBlocksTable, {
  *     任務 1 成功／失敗之後 (原「任務 1 分歧」)、完整任務路徑 (原「常見局勢」：不再只挑 20 場以上且非全紅／全藍，
  *     快取存的路徑全列在可捲動的表裡，樣本少的變淡)。
  *   三塊的算法與舊快取 (沒有 outcomes) 的退路見 teams/OutcomeBlocksTable。
+ * (2026-10-28 Edward：結果更直觀、名詞白話) 兩個小分頁最上面各一句話 (Takeaway)，數字都從資料當下算：
+ *   1-1：有／沒有梅林、紅方 0–3 人時紅方最終勝率，加卡方檢定 (三種結局比例的差異明顯或可能只是運氣)；
+ *   任務進程：任務 1 成功／失敗之後紅方最終勝率、最難成功的任務、最常見的路徑。表頭可點開看定義 (Term)。
  */
 
 export type RoundsSection = 'firstVote' | 'progression';
@@ -103,7 +107,7 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
 
   const m1Column: StatColumn<OutcomeGroupRowWithBlocks<FirstVoteRow>> = {
     key: 'm1',
-    label: <BlockHeader name={t(`${FV}.m1Pass`)} sub={t(`${FV}.m1PassSub`)} />,
+    label: <BlockHeader name={t(`${FV}.m1Pass`)} sub={<Term term="missionSuccessRate">{t(`${FV}.m1PassSub`)}</Term>} />,
     title: t(`${FV}.m1PassHint`),
     align: 'center',
     format: 'pct',
@@ -113,9 +117,36 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
     tone: 'blue',
   };
 
+  const merlinIn = visionRows.find(r => r.key === 'merlinIn');
+  const merlinOut = visionRows.find(r => r.key === 'merlinOut');
+  const merlinTest = merlinIn?.outcomes && merlinOut?.outcomes ? outcomeChiSquare([merlinIn.outcomes, merlinOut.outcomes]) : null;
+  const redRates = redRows.map(r => redFinalRate(r.outcomes)).filter((v): v is number => v !== null);
+  const redTest = redRows.every(r => r.outcomes) ? outcomeChiSquare(redRows.map(r => r.outcomes)) : null;
+  const k7 = 'analytics.r7.firstVote';
+
   return (
     <div className="space-y-3">
-      <p className="text-xs text-zinc-400 leading-relaxed">{t(`${FV}.intro`)}</p>
+      {(merlinTest || redTest) && (
+        <Takeaway>
+          {merlinTest && merlinIn && merlinOut && (
+            <p>
+              {t(`${k7}.merlin`, { yes: formatRate(redFinalRate(merlinIn.outcomes)), yesN: merlinIn.n, no: formatRate(redFinalRate(merlinOut.outcomes)), noN: merlinOut.n })}
+              <VerdictText result={merlinTest} />
+              {t(`${k7}.end`)}
+            </p>
+          )}
+          {redTest && redRates.length > 1 && (
+            <p>
+              {t(`${k7}.redCount`, { min: formatRate(Math.min(...redRates)), max: formatRate(Math.max(...redRates)) })}
+              <VerdictText result={redTest} />
+              {t(`${k7}.end`)}
+            </p>
+          )}
+        </Takeaway>
+      )}
+      <p className="text-xs text-zinc-400 leading-relaxed">
+        <Term term="firstProposal">1-1</Term>{t(`${k7}.introRest`)}
+      </p>
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <OutcomeBlocksTable
           caption={t(`${FV}.visionCaption`)}
@@ -183,14 +214,33 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
   const roundColumns: StatColumn<RoundRow>[] = [
     { key: 'label', label: t(`${PG}.round`) },
     {
-      key: 'pass', label: t(`${PG}.pass`), title: t(`${PG}.roundHint`),
+      key: 'pass', label: t(`${PG}.pass`), title: t(`${PG}.roundHint`), term: 'missionSuccessRate',
       format: 'pct', tone: 'blue', n: 'total', lowSample, bar: { max: 100 }, emphasis: true,
     },
     { key: 'fail', label: t(`${PG}.fail`), title: t(`${PG}.roundHint`), format: 'pct', tone: 'red' },
   ];
 
+  const passedBranch = branchRows.find(r => r.key === 'passed');
+  const failedBranch = branchRows.find(r => r.key === 'failed');
+  const hardest = roundRows.length > 0 ? roundRows.reduce((a, b) => (b.pass < a.pass ? b : a)) : null;
+  const totalGames = branchRows.reduce((sum, r) => sum + r.n, 0);
+  const topPath = pathRows[0];
+  const k7 = 'analytics.r7.progression';
+
   return (
     <div className="space-y-3">
+      {(passedBranch?.outcomes && failedBranch?.outcomes) || hardest ? (
+        <Takeaway>
+          <p>
+            {passedBranch?.outcomes && failedBranch?.outcomes && t(`${k7}.branch`, {
+              failed: formatRate(redFinalRate(failedBranch.outcomes)), failedN: failedBranch.n,
+              passed: formatRate(redFinalRate(passedBranch.outcomes)), passedN: passedBranch.n,
+            })}
+            {hardest && t(`${k7}.hardest`, { label: hardest.label, rate: formatRate(hardest.pass), n: hardest.total })}
+            {topPath && totalGames > 0 && t(`${k7}.topPath`, { path: topPath.path, share: formatRate((topPath.n / totalGames) * 100), n: topPath.n })}
+          </p>
+        </Takeaway>
+      ) : null}
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <div className="min-w-0 space-y-3">
           <StatTable
@@ -208,7 +258,7 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
         </div>
         <OutcomeBlocksTable
           caption={t(`${PG}.pathCaption`)}
-          groupLabel={t(`${PG}.path`)}
+          groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
           rows={pathRows}
           renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
           lowSample={lowSample}
