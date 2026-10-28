@@ -476,6 +476,11 @@ export function computePyramidScores(
   if (opts.chainProjection) {
     applyChainProjection(scores, lakeChain, new Set([...hardRed, ...hardBlue]));
   }
+  // worldShareBelief: a good viewer's suspicion is its share of the consistent worlds (see BeliefOptions).
+  if (opts.worldShare && obs.myTeam === 'good') {
+    const view = buildCertainty(obs);
+    for (const id of obs.allPlayerIds) scores.set(id, id === obs.myPlayerId ? 0 : view.uniformRedShare(id));
+  }
 
   return {
     scores,

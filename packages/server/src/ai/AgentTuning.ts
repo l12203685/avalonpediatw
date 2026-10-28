@@ -394,6 +394,12 @@ export interface AgentTuning {
    * 每個候選的分數加上 權重 × 會過的機率。0 = 關；只寫名字 = 10。
    */
   goodLeaderWorldPick: number;
+  /**
+   * 藍方的嫌疑 = 確定性層所有符合紀錄的世界裡是紅的比例（2026-10-28，優化迴圈第 1 回合）：第 3 局自我對打的
+   * 對數損失，金字塔嫌疑 1.01 bits（比全部猜 0.44 的 0.99 還差），世界比例 0.82（`scripts/beliefCalibration.ts`）。
+   * 只換藍方座位的嫌疑分數（`BeliefOptions.worldShare`），紅方不變。
+   */
+  worldShareBelief: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -433,6 +439,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'teamPassRank',
   'merlinDoomedRed',
   'goodLeaderWorldPick',
+  'worldShareBelief',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -471,6 +478,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   teamPassRank: 0,
   merlinDoomedRed: false,
   goodLeaderWorldPick: 0,
+  worldShareBelief: false,
 });
 
 /**
@@ -657,6 +665,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   teamPassRank: 0,
   merlinDoomedRed: false,
   goodLeaderWorldPick: 0,
+  worldShareBelief: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -695,6 +704,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   teamPassRank: 'AVALON_TUNING_TEAM_PASS_RANK',
   merlinDoomedRed: 'AVALON_TUNING_MERLIN_DOOMED_RED',
   goodLeaderWorldPick: 'AVALON_TUNING_GOOD_LEADER_WORLD_PICK',
+  worldShareBelief: 'AVALON_TUNING_WORLD_SHARE_BELIEF',
 });
 
 function parseBool(raw: string): boolean | undefined {

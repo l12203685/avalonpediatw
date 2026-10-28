@@ -33,11 +33,18 @@ export interface BeliefOptions {
   rule3PostLake: boolean;
   chainProjection: boolean;
   forcedVotesZero: boolean;
+  /**
+   * `worldShareBelief` (2026-10-28, optimization loop round 1): a good viewer's suspicion = its share of the
+   * certainty layer's consistent worlds (L1*) — rules and conventions only. On the R3 self-play decisions the
+   * pyramid scored 1.01 bits of log loss (a constant guess: 0.99), the world share 0.82
+   * (`scripts/beliefCalibration.ts`). Optional: absent = off.
+   */
+  worldShare?: boolean;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -55,6 +62,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     rule3PostLake: tuning.rule3PostLakeOnly,
     chainProjection: tuning.beliefChainProjection,
     forcedVotesZero: tuning.forcedVoteZeroBits,
+    worldShare: tuning.worldShareBelief,
   };
 }
 
