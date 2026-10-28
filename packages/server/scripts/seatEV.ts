@@ -98,6 +98,9 @@ async function main(): Promise<void> {
       const agents = Array.from({ length: 10 }, (_, k) =>
         new SeededAgent(`P${k + 1}`, useVariant && `P${k + 1}` === focus ? variant : base, gameSeed));
       Math.random = seededRandom(`${gameSeed}|setup`);
+      // GameEngine prints every event as JSON on stdout; keep the run quiet (as selfPlayStrength.ts).
+      const originalLog = console.log;
+      console.log = (): void => undefined;
       try {
         const r = await engine.runGame(agents, false);
         const f = agents.find((x) => x.agentId === focus)!;
@@ -105,6 +108,7 @@ async function main(): Promise<void> {
         wins.push(r.winner === f.team ? 1 : 0);
       } finally {
         Math.random = originalRandom;
+        console.log = originalLog;
       }
     }
     add(all, wins[0], wins[1]);
