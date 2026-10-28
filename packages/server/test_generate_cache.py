@@ -1269,7 +1269,9 @@ class CommittedCachePropertyTest(unittest.TestCase):
             total = int(row["totalGames"])
             for key, n in [(gc.theory_key(n), n) for n in windows] + [("career", 0)]:
                 w = theory[key]
-                if list(w) != THEORY_WINDOW_FIELDS:
+                # career carries 整體理論 once the cache is regenerated (older caches: the window fields only).
+                expected = CAREER_FIELDS if key == "career" and "overallTheory" in w else THEORY_WINDOW_FIELDS
+                if list(w) != expected:
                     yield f"{key} fields {list(w)}"
                     continue
                 if (w["window"], w["games"]) != (n, min(n, total) if n else total):

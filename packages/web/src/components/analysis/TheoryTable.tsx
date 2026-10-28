@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../store/gameStore';
-import { StatTable, type StatColumn } from './ui';
+import { StatTable, Term, STAT_TERMS, type StatColumn, type StatTermKey } from './ui';
 import { fmtPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } from '../../services/api';
 
 /**
@@ -105,17 +105,23 @@ export default function TheoryTable({
   );
   const shortNote = (r: Row): string | null => (short(r) ? t('analytics.boards.theory.shortWindow', { games: r.games, window: windowGames }) : null);
 
+  // 名稱 = 名詞說明 (Term，移上去或點一下看定義、算法)；旁邊的箭頭 = 依這欄排序。
   const header = (key: TheorySortKey): ReactNode => (
-    <button
-      type="button"
-      onClick={() => choose(key)}
-      aria-pressed={sortKey === key}
-      className={`underline-offset-2 hover:underline ${sortKey === key ? 'text-amber-300' : ''}`}
-      data-testid={`theory-sort-${key}`}
-    >
-      {label(key)}
-      {sortKey === key ? ' ▾' : ''}
-    </button>
+    <span className="inline-flex items-center gap-0.5">
+      {(STAT_TERMS as readonly string[]).includes(key)
+        ? <Term term={key as StatTermKey} className={sortKey === key ? 'text-amber-300' : ''}>{label(key)}</Term>
+        : label(key)}
+      <button
+        type="button"
+        onClick={() => choose(key)}
+        aria-pressed={sortKey === key}
+        aria-label={label(key)}
+        className={`px-0.5 hover:text-zinc-200 ${sortKey === key ? 'text-amber-300' : 'text-zinc-600'}`}
+        data-testid={`theory-sort-${key}`}
+      >
+        {sortKey === key ? '▾' : '↕'}
+      </button>
+    </span>
   );
   const tone = (key: TheorySortKey): 'amber' | undefined => (sortKey === key ? 'amber' : undefined);
 
