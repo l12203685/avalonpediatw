@@ -1,23 +1,19 @@
 /**
- * Panel A — 玩家 Archetype 雷達 (4 axes)
+ * Panel A — 玩家風格（Edward 2026-10-28：原本的「誠實度、一致度、專精度、浮動度」看不懂，改成白話的三個數字）
  *
- * Axes (raw 0-100):
- *   honesty     — 誠實度  (L141 lake_truthful_pct)
- *   consistency — 一致度  (L142 proxy: 100 - anomaly_vote_rate * 5)
- *   stickiness  — 專精度  (L137 proxy: top role winrate)
- *   flip        — 浮動度  (L136 proxy: anomaly_vote_rate * 5)
+ * The cache's axes (raw 0-100) and what each row shows:
+ *   honesty     → 持湖說真話：拿到湖中女神後，宣告和實際陣營相符的比例（L141 lake_truthful_pct；藍紅合算）
+ *   flip        → 異常票：隊外投白、隊內投黑的比例（axis = rate × 5, clipped at 100）
+ *   stickiness  → 最強角色勝率：勝率最高的角色的勝率（L137 proxy: top role winrate）
+ *   consistency is 100 − flip (the same number), so it is not shown.
  *
- * Hover an axis → "你比 X% 玩家更 [軸]" via cohort percentile.
+ * Each row says how the player compares: "高於 X% 玩家" from the cohort percentile.
  *
  * Data source: backend /api/analysis/profile/:name/archetype.
  * Returns hasData=false when player has <10 games — component falls back to
- * an "資料不足" banner instead of the radar.
+ * an "資料不足" banner instead.
  */
-import { useEffect, useState, useMemo } from 'react';
-import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  ResponsiveContainer, Tooltip,
-} from 'recharts';
+import { useEffect, useState } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import {
   fetchPlayerArchetype,
@@ -30,23 +26,32 @@ interface ArchetypeRadarProps {
   playerName: string;
 }
 
-const AXIS_KEYS: Array<keyof ArchetypePlayerResponse['data']['axes']> = [
-  'honesty', 'consistency', 'stickiness', 'flip',
-];
+type AxisKey = keyof ArchetypePlayerResponse['data']['axes'];
 
-const AXIS_LABEL: Record<string, string> = {
-  honesty:     '誠實',
-  consistency: '一致',
-  stickiness:  '專精',
-  flip:        '浮動',
-};
-
-interface AxisChartDatum {
-  axis: string;            // raw key for tooltip lookup
-  dimension: string;       // display label (誠實 / 一致 / 專精 / 浮動)
-  value: number;
-  percentile: number;
+interface StyleRow {
+  key: AxisKey;
+  label: string;
+  /** The rate shown, from the raw axis. */
+  value: (axis: number) => string;
+  /** How the percentile is said: 高於 / 多於. */
+  compare: string;
+  help: string;
 }
+
+const ROWS: StyleRow[] = [
+  {
+    key: 'honesty', label: '持湖說真話', value: (v) => `${v.toFixed(1)}%`, compare: '高於',
+    help: '拿到湖中女神後，宣告和實際陣營相符的比例（藍紅合算；紅方說謊是正常戰術）',
+  },
+  {
+    key: 'flip', label: '異常票', value: (v) => (v >= 100 ? '≥20%' : `${(v / 5).toFixed(1)}%`), compare: '多於',
+    help: '隊外投白、隊內投黑的比例（越高 = 投票越不照常規）',
+  },
+  {
+    key: 'stickiness', label: '最強角色勝率', value: (v) => `${v.toFixed(1)}%`, compare: '高於',
+    help: '自己勝率最高的那個角色的勝率',
+  },
+];
 
 export default function ArchetypeRadar({ playerName }: ArchetypeRadarProps): JSX.Element {
   const [resp, setResp]       = useState<ArchetypePlayerResponse | null>(null);
@@ -64,20 +69,10 @@ export default function ArchetypeRadar({ playerName }: ArchetypeRadarProps): JSX
     return () => { cancelled = true; };
   }, [playerName]);
 
-  const chartData: AxisChartDatum[] = useMemo(() => {
-    if (!resp || !resp.data.hasData) return [];
-    return AXIS_KEYS.map(k => ({
-      axis:       k,
-      dimension:  AXIS_LABEL[k] ?? k,
-      value:      resp.data.axes[k],
-      percentile: resp.data.percentiles[k],
-    }));
-  }, [resp]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10 text-gray-400 gap-3">
-        <Loader size={20} className="animate-spin" /> 載入玩家風格雷達...
+        <Loader size={20} className="animate-spin" /> 載入玩家風格...
       </div>
     );
   }
@@ -100,58 +95,33 @@ export default function ArchetypeRadar({ playerName }: ArchetypeRadarProps): JSX
     );
   }
 
-  // Top axis = where the player is most distinct.
-  const topAxis = [...chartData].sort((a, b) => b.percentile - a.percentile)[0];
-
   return (
     <div className="bg-zinc-900/50 border border-gray-700 rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-gray-300">玩家風格雷達</h3>
-        <span className="text-xs text-gray-500">{resp.data.sampleSize} 場 · 對比 {resp.cohort.n} 玩家</span>
+        <h3 className="text-sm font-bold text-gray-300">玩家風格</h3>
+        <span className="text-xs text-gray-500">{resp.data.sampleSize} 場 · 對比 {resp.cohort.n} 位玩家</span>
       </div>
 
-      <ResponsiveContainer width="100%" height={280}>
-        <RadarChart data={chartData}>
-          <PolarGrid stroke="#374151" />
-          <PolarAngleAxis dataKey="dimension" tick={{ fontSize: 11, fill: '#d1d5db' }} />
-          <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#6b7280' }} />
-          <Radar
-            name={resp.player.name}
-            dataKey="value"
-            stroke="#a855f7"
-            fill="#a855f7"
-            fillOpacity={0.35}
-          />
-          <Tooltip
-            content={({ active, payload }) => {
-              if (!active || !payload?.[0]) return null;
-              const d = payload[0].payload as AxisChartDatum;
-              return (
-                <div className="bg-zinc-900 border border-gray-700 rounded-lg px-3 py-2 text-xs">
-                  <div className="text-white font-semibold">{d.dimension}</div>
-                  <div className="text-gray-300">分數: {d.value.toFixed(1)}</div>
-                  <div className="text-purple-300">你比 {d.percentile}% 玩家更{d.dimension}</div>
-                </div>
-              );
-            }}
-          />
-        </RadarChart>
-      </ResponsiveContainer>
-
-      {/* Highlight the player's defining axis */}
-      <div className="bg-purple-900/20 border border-purple-700/40 rounded-lg px-3 py-2 text-xs text-purple-200">
-        最突出: <span className="font-bold">{topAxis.dimension}</span>
-        <span className="text-purple-300 ml-2">(超越 {topAxis.percentile}% 玩家)</span>
-      </div>
-
-      {/* Per-axis explanation */}
-      <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-500">
-        {AXIS_KEYS.map(k => (
-          <div key={k} className="flex items-baseline gap-1">
-            <span className="font-semibold text-gray-400">{AXIS_LABEL[k]}:</span>
-            <span>{resp.axisHelp[k]}</span>
-          </div>
-        ))}
+      <div className="space-y-3">
+        {ROWS.map(row => {
+          const axis = resp.data.axes[row.key];
+          const pr = Math.round(resp.data.percentiles[row.key]);
+          return (
+            <div key={row.key} data-testid={`style-row-${row.key}`}>
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="font-semibold text-gray-200">{row.label}</span>
+                <span className="text-white font-bold tabular-nums">{row.value(axis)}</span>
+              </div>
+              <div className="h-1.5 bg-zinc-800 rounded-full mt-1 overflow-hidden" aria-hidden>
+                <div className="h-full bg-purple-500/80" style={{ width: `${pr}%` }} />
+              </div>
+              <div className="flex justify-between gap-2 text-[11px] mt-0.5">
+                <span className="text-gray-500">{row.help}</span>
+                <span className="text-purple-300 whitespace-nowrap">{row.compare} {pr}% 玩家</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

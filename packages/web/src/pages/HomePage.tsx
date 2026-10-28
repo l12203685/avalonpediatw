@@ -11,8 +11,6 @@ import {
   Lock,
   BarChart3,
   Clock,
-  User,
-  Bot,
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, PLAY_PLATFORM_URL } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -21,7 +19,6 @@ import BindingField from '../components/BindingField';
 import InstallButton from '../components/InstallButton';
 import ForceUpdateButton from '../components/ForceUpdateButton';
 import PracticeSetupPanel from '../components/practice/PracticeSetupPanel';
-import { PRACTICE_NS } from '../i18n/practice';
 
 /** `#practice` opens the practice setup directly (works for guests too). */
 const PRACTICE_HASH = '#practice';
@@ -45,7 +42,6 @@ interface OpenRoom {
 
 export default function HomePage(): JSX.Element {
   const { t } = useTranslation();
-  const { t: tp } = useTranslation(PRACTICE_NS);
   const { setGameState, setCurrentPlayer, currentPlayer, addToast } = useGameStore();
   const [playerName, setPlayerName] = useState(
     currentPlayer?.name ?? localStorage.getItem('avalon_player_name') ?? ''
@@ -64,10 +60,6 @@ export default function HomePage(): JSX.Element {
     window.addEventListener('hashchange', onHash);
     return (): void => window.removeEventListener('hashchange', onHash);
   }, []);
-  const openPractice = (): void => {
-    setMode('practice');
-    try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${PRACTICE_HASH}`); } catch { /* ignore */ }
-  };
   const closePractice = (): void => {
     setMode('home');
     try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`); } catch { /* ignore */ }
@@ -107,13 +99,6 @@ export default function HomePage(): JSX.Element {
     // 'chat' (the removed main-page chat): stay on home.
   }, [currentPlayer, setGameState]);
 
-  const tryGatedNavigate = (target: AuthGateTarget, proceed: () => void): void => {
-    if (isGuestPlayer(currentPlayer)) {
-      setAuthGateTarget(target);
-      return;
-    }
-    proceed();
-  };
   // Per-room phase-timer multiplier (1x default). null = unlimited.
   const [timerMultiplier, setTimerMultiplier] = useState<TimerMultiplier>(1);
   // 娛樂局 (Edward 2026-04-24 14:43): 勾選後此局戰績不計入 ELO。
@@ -407,7 +392,7 @@ export default function HomePage(): JSX.Element {
               >
                 {/* Buttons area — 2×3 on mobile, 3×2 on desktop */}
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     {/*
                       #86 IA v3 — 6 main buttons（2026-04-23 拆兩頁）
                         Row 1: 建立房間 / 加入房間 / 數據排行
@@ -452,21 +437,8 @@ export default function HomePage(): JSX.Element {
                       <span className="truncate">{t('home.stats')}</span>
                     </motion.button>
 
-                    {/* Row 2 — Personal Stats / Wiki / My Profile
-                        Edward 2026-04-25 22:10: 砍按鈕底下「當前: Edward」副字，
-                        統一用單行 layout (與 Row 1/Row 2 其他按鈕一致)。登入狀態
-                        改顯示在大廳左上 chip。 */}
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => tryGatedNavigate('stats', () => setGameState('personalStats'))}
-                      data-testid="home-btn-personal-stats"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
-                    >
-                      <User size={18} className="flex-shrink-0" />
-                      <span className="truncate">{t('home.personalStats')}</span>
-                    </motion.button>
-
+                    {/* 2026-10-28 Edward：「個人資料」「個人戰績」「與機器人練習」目前用不到，首頁不放入口
+                        （頁面保留：登入/綁定在左上角，個人分析從數據排行點玩家進入）。 */}
                     <motion.button
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
@@ -478,41 +450,7 @@ export default function HomePage(): JSX.Element {
                       <span className="truncate">{t('home.wikiAndGuide')}</span>
                     </motion.button>
 
-                    {/* Edward 2026-04-25 19:44: 砍「登入綁定」入口，改為直達
-                        ProfilePage 的「個人資料」按鈕。SettingsPage 的密碼/信箱
-                        管理 + 清除本機資料三段都已搬到 ProfilePage，避免兩頁
-                        重疊。SettingsPage 元件保留 (BindingField + OAuth callback
-                        仍 route 到 settings)，只是 HomePage 不再放入口。 */}
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => tryGatedNavigate('stats', () => {
-                        // navigateToProfile('me') 同步設定 profileUserId='me'
-                        // 讓 ProfilePage 走自身分支 (fetchMyProfile + 顯示
-                        // 編輯/綁定/密碼等 own-only sections)。
-                        useGameStore.getState().navigateToProfile('me');
-                      })}
-                      data-testid="home-btn-profile"
-                      className="w-full min-w-0 bg-zinc-700 hover:bg-zinc-600 text-white font-semibold py-2.5 sm:py-3 px-2 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-1.5 sm:gap-2 shadow-md text-sm sm:text-base"
-                    >
-                      <User size={18} className="flex-shrink-0" />
-                      <span className="truncate">{t('home.profile', { defaultValue: '個人資料' })}</span>
-                    </motion.button>
                   </div>
-
-                  {/* 2026-10-13 網站「與機器人練習」— one click into a private,
-                      unrecorded game against 9 bots + a post-game review of
-                      every bot decision. No login needed. */}
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={openPractice}
-                    data-testid="home-btn-practice"
-                    className="w-full min-w-0 bg-emerald-900/50 hover:bg-emerald-800/60 border border-emerald-500/70 text-emerald-50 font-semibold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg transition-all flex items-center justify-center gap-2 shadow-md text-sm sm:text-base"
-                  >
-                    <Bot size={18} className="flex-shrink-0 text-emerald-300" />
-                    <span className="text-center leading-snug">{tp('entry')}</span>
-                  </motion.button>
 
                   {/* Admin link — small text, only shown to admins */}
                   {isAdminUser && (

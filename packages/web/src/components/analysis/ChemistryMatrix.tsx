@@ -30,7 +30,18 @@ const THIN_PAIR_CELL = 'bg-gray-900/30 text-gray-500 border border-dashed border
 function cellColor(value: number, key: MatrixKey): string {
   if (isNaN(value)) return 'bg-gray-900/30 text-gray-700';
 
-  if (key === 'coWinMinusLose' || key === 'winCorr') {
+  // 同隊贏 / 同隊輸 are game counts, not rates: no scale.
+  if (key === 'coWin' || key === 'coLose') return 'bg-gray-800/40 text-gray-300';
+
+  // 我贏時他也贏 = 同隊贏 ÷ 我的勝場 (0–100, never negative): mostly how often the two play on one team.
+  if (key === 'winCorr') {
+    if (value >= 30) return 'bg-green-500/70 text-green-100';
+    if (value >= 20) return 'bg-green-700/50 text-green-200';
+    if (value >= 10) return 'bg-gray-700/40 text-gray-300';
+    return 'bg-gray-900/30 text-gray-500';
+  }
+
+  if (key === 'coWinMinusLose') {
     if (value >= 15)  return 'bg-green-500/70 text-green-100';
     if (value >= 5)   return 'bg-green-700/50 text-green-200';
     if (value >= -5)  return 'bg-gray-700/40 text-gray-300';
@@ -200,7 +211,19 @@ export default function ChemistryMatrixPanel(): JSX.Element {
   };
 
   const legend = (key: MatrixKey): JSX.Element => {
-    if (key === 'coWinMinusLose' || key === 'winCorr') {
+    if (key === 'coWin' || key === 'coLose') {
+      return <span className="text-gray-400">{t('analytics.deep.chemistry.labelCount')}</span>;
+    }
+    if (key === 'winCorr') {
+      return (
+        <>
+          <span className="text-green-400">{t('analytics.deep.chemistry.labelShareHigh')}</span>
+          <span className="text-gray-400">{t('analytics.deep.chemistry.labelShareMid')}</span>
+          <span className="text-gray-500">{t('analytics.deep.chemistry.labelShareLow')}</span>
+        </>
+      );
+    }
+    if (key === 'coWinMinusLose') {
       return (
         <>
           <span className="text-green-400">{t('analytics.deep.chemistry.labelHigh')}</span>
@@ -233,7 +256,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
       case 'coWin': return t('analytics.deep.chemistry.guideCoWin');
       case 'coLose': return t('analytics.deep.chemistry.guideCoLose');
       case 'winCorr': return `${t('analytics.deep.chemistry.guideWinCorr1')} ${t('analytics.deep.chemistry.guideWinCorr2')}`;
-      case 'coWinMinusLose': return t('analytics.deep.chemistry.guideCoWinMinusLose1');
+      case 'coWinMinusLose': return `${t('analytics.deep.chemistry.guideCoWinMinusLose1')} ${t('analytics.deep.chemistry.guideCoWinMinusLose2')}`;
       default: return t(`analytics.r6.tabsb.chemistry.guide.${block}`, {
         ref: formatRate(baseline?.[block].win ?? null), n: baseline?.[block].n ?? '—',
       });

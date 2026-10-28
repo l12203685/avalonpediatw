@@ -13,6 +13,7 @@ import { StatTable, type StatColumn } from './ui';
  * 這張表只看篩選後的局：期間內有出賽的每一位玩家、場數、最終勝率 (紅勝 = 三紅 + 三藍死、藍勝 = 三藍活)、
  * 紅藍各自的勝率與超額勝率 (扣掉抽到角色的運氣)，最低場數自己選。資料是 /api/analysis/players
  * (有篩選時由瀏覽器端引擎重算)，沒有篩選時就是全部對局。
+ * 預設依場數排序、最低 50 場 (Edward 2026-10-28)；篩一段短期間時最低 3 場 (50 場會讓表變空)。
  */
 type SortKey = 'finalWinRate' | 'excessWinRate' | 'totalGames';
 
@@ -30,8 +31,8 @@ export default function PeriodWinRates(): JSX.Element {
   const filtered = useStatsFilter((s) => s.key !== '');
   const openPlayerStats = useGameStore((s) => s.openPlayerStats);
   const { players, loading, error } = useAnalysisPlayerRows();
-  const [minGames, setMinGames] = useState<number>(filtered ? 3 : 20);
-  const [sort, setSort] = useState<SortKey>('finalWinRate');
+  const [minGames, setMinGames] = useState<number>(filtered ? 3 : 50);
+  const [sort, setSort] = useState<SortKey>('totalGames');
   const k = 'analytics.winRates';
 
   const rows = useMemo(() => {
@@ -57,7 +58,7 @@ export default function PeriodWinRates(): JSX.Element {
 
   const columns: StatColumn<PlayerWithSeatStats>[] = [
     { key: 'name', label: t(`${k}.col.name`), format: (v, _r, i) => `${i + 1}. ${String(v)}` },
-    { key: 'totalGames', label: t(`${k}.col.games`), format: 'int', align: 'right' },
+    { key: 'totalGames', label: t(`${k}.col.games`), format: 'int', align: 'right', emphasis: sort === 'totalGames' },
     { key: 'wins', label: t(`${k}.col.wins`), value: wins, format: 'int', align: 'right' },
     { key: 'finalWinRate', label: t(`${k}.col.finalWinRate`), format: 'pct', align: 'right', emphasis: sort === 'finalWinRate', tone: 'amber' },
     { key: 'finalRedWinRate', label: t(`${k}.col.red`), format: 'pct', align: 'right', tone: 'red', n: 'rawRedGames' },
@@ -83,9 +84,9 @@ export default function PeriodWinRates(): JSX.Element {
           {t(`${k}.sort`)}
           <select className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100" value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}>
+            <option value="totalGames">{t(`${k}.col.games`)}</option>
             <option value="finalWinRate">{t(`${k}.col.finalWinRate`)}</option>
             <option value="excessWinRate">{t(`${k}.col.excess`)}</option>
-            <option value="totalGames">{t(`${k}.col.games`)}</option>
           </select>
         </label>
         <span>{t(filtered ? `${k}.scopeFiltered` : `${k}.scopeAll`, { count: rows.length })}</span>

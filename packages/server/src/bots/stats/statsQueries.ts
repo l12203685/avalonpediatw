@@ -87,7 +87,7 @@ export async function playerCardReply(query: string): Promise<string> {
     const newcomer = findTheoryBoard(leaderboard, 'newcomers')?.rows.find((r) => r.name === player.name);
     return formatPlayerCard({
       player,
-      archetype: archetype ? { data: archetype.data, axisLabels: archetype.axisLabels } : null,
+      archetype: archetype ? { data: archetype.data } : null,
       strength: strength?.data ?? null,
       playstyle: playstyle ? { data: playstyle.data, labels: playstyle.labels } : null,
       caseVariants: match.caseVariants,

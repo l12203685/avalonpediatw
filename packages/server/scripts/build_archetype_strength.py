@@ -317,17 +317,19 @@ def main() -> None:
             "means": cohort_means,
             "stds":  cohort_stds,
         },
+        # Plain names (Edward 2026-10-28). consistency = 100 - flip carries no extra information; the
+        # site and the bots show honesty, flip (as the anomaly rate, flip / 5) and stickiness only.
         "axisLabels": {
-            "honesty":     "誠實度",
-            "consistency": "一致度",
-            "stickiness":  "專精度",
-            "flip":        "浮動度",
+            "honesty":     "持湖說真話",
+            "consistency": "照常規投票",
+            "stickiness":  "最強角色勝率",
+            "flip":        "異常票",
         },
         "axisHelp": {
-            "honesty":     "持湖宣告真實率 (越高 = 越誠實)",
-            "consistency": "投票異常率反向 (越高 = 言行越一致)",
-            "stickiness":  "最強角色勝率 (越高 = 角色專精)",
-            "flip":        "投票異常率 (越高 = 投票越浮動)",
+            "honesty":     "拿到湖中女神後，宣告和實際陣營相符的比例（藍紅合算）",
+            "consistency": "100 − 異常票指標（與異常票同一個數字）",
+            "stickiness":  "自己勝率最高的那個角色的勝率",
+            "flip":        "隊外投白、隊內投黑的比例 × 5（上限 100）",
         },
     }
 
