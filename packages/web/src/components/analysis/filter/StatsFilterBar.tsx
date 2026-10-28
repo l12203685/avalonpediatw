@@ -149,6 +149,27 @@ export default function StatsFilterBar(): JSX.Element {
         <p className="mt-1 text-xs text-amber-300">{t('analytics.filter.linkWarnings', { count: linkWarnings.length })}</p>
       )}
 
+      {filter?.options?.leaderboard && (
+        <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-950/50 border border-amber-800 pl-2.5 pr-1 py-0.5 text-xs text-amber-100" data-testid="filter-leaderboard-rules">
+          {t('analytics.boards.rules.chip')}
+          <button
+            type="button"
+            aria-label={t('analytics.filter.remove')}
+            title={t('analytics.filter.remove')}
+            onClick={() => {
+              const options = { ...(filter.options ?? {}) };
+              delete options.leaderboard;
+              const next: GameFilter = { ...filter, options };
+              if (!Object.keys(options).length) delete next.options;
+              setFilter(next.clauses.length || next.options ? next : null);
+            }}
+            className="rounded-full p-0.5 hover:bg-amber-800"
+          >
+            <X size={11} />
+          </button>
+        </p>
+      )}
+
       {filter && filter.clauses.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="filter-active">
           {filter.clauses.map((c, i) => (

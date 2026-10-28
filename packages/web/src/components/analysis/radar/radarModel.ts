@@ -57,7 +57,7 @@ export interface PlayerRadarModel {
   roleWindows: PlayerRoleWindows | null;
   /** 位置理論 (近 positionGames 場)；快取沒有那個視窗為 null。 */
   positionWindow: PlayerTheoryWindow | null;
-  /** 生涯 (整體理論 = 它的 roleTheory)。 */
+  /** 生涯 (整體理論 = 它的 overallTheory；舊快取 = 它的 roleTheory)。 */
   career: PlayerTheoryWindow | null;
 }
 
