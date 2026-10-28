@@ -16,6 +16,7 @@ export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerOb
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
   if (obs.myRole !== 'loyal' && (obs.myRole !== 'percival' || tuning.goodCleanVoteLoyalOnly)) return false;
   if ((obs.currentRound ?? 1) < 3) return false;
+  if ((obs.failCount ?? 0) + 1 > (tuning.goodCleanVoteMaxAttempt ?? 4)) return false;
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
   const p = bayesTeamClean(obs, team, { thumbRoles: tuning.bayesThumbRoles === true });

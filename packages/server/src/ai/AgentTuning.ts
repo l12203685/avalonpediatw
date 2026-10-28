@@ -428,6 +428,8 @@ export interface AgentTuning {
    * ——單一座位確認派西 −1.2pp。
    */
   goodCleanVoteLoyalOnly: boolean;
+  /** `goodCleanVote` 只在第幾次提議以前用（1–4，預設 4 = 所有非強制提議；3 = 投黑不會把下一個推成強制）。 */
+  goodCleanVoteMaxAttempt: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -476,6 +478,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinCoverRate',
   'goodCleanVote',
   'goodCleanVoteLoyalOnly',
+  'goodCleanVoteMaxAttempt',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -523,6 +526,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinCoverRate: 1,
   goodCleanVote: 0,
   goodCleanVoteLoyalOnly: false,
+  goodCleanVoteMaxAttempt: 4,
 });
 
 /**
@@ -718,6 +722,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinCoverRate: 1,
   goodCleanVote: 0,
   goodCleanVoteLoyalOnly: false,
+  goodCleanVoteMaxAttempt: 4,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -765,6 +770,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinCoverRate: 'AVALON_TUNING_MERLIN_COVER_RATE',
   goodCleanVote: 'AVALON_TUNING_GOOD_CLEAN_VOTE',
   goodCleanVoteLoyalOnly: 'AVALON_TUNING_GOOD_CLEAN_VOTE_LOYAL_ONLY',
+  goodCleanVoteMaxAttempt: 'AVALON_TUNING_GOOD_CLEAN_VOTE_MAX_ATTEMPT',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -801,6 +807,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
+  }
+  if (name === 'goodCleanVoteMaxAttempt') {
+    const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 1 || value > 4) throw new Error(`goodCleanVoteMaxAttempt needs 1–4, got "${raw}"`);
+    return { goodCleanVoteMaxAttempt: value };
   }
   if (name === 'teamPassRank') {
     // 範圍 0–4；只寫名字 = 1（派隊與投票都用）。
@@ -850,6 +861,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
     if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
     if (t[key]) parts.push(key);
