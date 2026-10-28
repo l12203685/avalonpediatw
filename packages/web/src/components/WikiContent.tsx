@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
-import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES, isWikiPending } from '../data/wiki';
+import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
 import { ARTICLE_TO_ROLE, ROLE_STATS } from '../data/roleStats';
@@ -170,10 +170,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         const { articles } = await fetchWikiArticles();
         if (!cancelled && articles.length > 0) {
           const apiArticles = articles.map(apiToWikiArticle);
-          // Merge: hardcoded first (they have better formatting), then API articles not already present
-          const existingIds = new Set(WIKI_ARTICLES.map(a => a.title.toLowerCase()));
-          const newArticles = apiArticles.filter(a => !existingIds.has(a.title.toLowerCase()));
-          setAllArticles([...WIKI_ARTICLES, ...newArticles]);
+          setAllArticles(mergeWikiArticles(WIKI_ARTICLES, apiArticles));
         }
       } catch {
         // API not available, use hardcoded only
@@ -241,6 +238,9 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   );
   const filteredArticles = useMemo(() => publishedArticles.filter(matchesFilters), [publishedArticles, matchesFilters]);
   const filteredPending = useMemo(() => pendingArticles.filter(matchesFilters), [pendingArticles, matchesFilters]);
+  const selectedRole = selectedArticle
+    ? WIKI_ARTICLE_ROLE[selectedArticle.id] ?? ARTICLE_TO_ROLE[selectedArticle.id]
+    : undefined;
 
   return (
     <div className="bg-gradient-to-b from-avalon-dark to-black px-3 py-3">
@@ -466,15 +466,15 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                 </div>
 
                 {/* Role stats card for character articles */}
-                {ARTICLE_TO_ROLE[selectedArticle.id] && ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                {selectedRole && ROLE_STATS[selectedRole] && (
                   <div className="mt-4">
-                    <RoleStatsCard role={ROLE_STATS[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                    <RoleStatsCard role={ROLE_STATS[selectedRole]} />
                   </div>
                 )}
                 {/* Role short video */}
-                {ARTICLE_TO_ROLE[selectedArticle.id] && VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]] && (
+                {selectedRole && VIDEO_BY_ROLE[selectedRole] && (
                   <div className="mt-4">
-                    <RoleVideoCard video={VIDEO_BY_ROLE[ARTICLE_TO_ROLE[selectedArticle.id]]} />
+                    <RoleVideoCard video={VIDEO_BY_ROLE[selectedRole]} />
                   </div>
                 )}
               </div>
