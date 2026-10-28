@@ -313,7 +313,9 @@ describe('review: practice-review texts', () => {
       seed: string; obs: PlayerObservation;
     };
     const o = withoutNoStall(fx.obs);
-    const agent = new HeuristicAgent(o.myPlayerId, undefined, undefined, ON);
+    // On the pyramid (the scorer this fixture came from); with `bayesBelief` (2026-10-28) the top team is no
+    // longer a must-fail one, so no gate has to bar it.
+    const agent = new HeuristicAgent(o.myPlayerId, undefined, undefined, { ...ON, bayesBelief: false });
     const view = buildCertainty(o);
     const r = withSeededRandom(fx.seed, () => replayRule(o, agent, { type: 'team_select', teamIds: [] }, { forwardActive: true }));
     expect(r?.rule).toMatch(/^邏輯閘門（好人隊長）：前向推理原本最高分的隊 .*（必敗隊） → 不派/);

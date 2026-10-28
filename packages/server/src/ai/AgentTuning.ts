@@ -670,10 +670,10 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinVisibleRedLikelihood: false,
   returnLake: true,
   teamPassRank: 0,
-  merlinDoomedRed: false,
+  merlinDoomedRed: true,
   goodLeaderWorldPick: 0,
   worldShareBelief: false,
-  bayesBelief: false,
+  bayesBelief: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */

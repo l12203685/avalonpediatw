@@ -72,9 +72,11 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 // and an uncertain seat (K1′), and `mustFailGate` keeps a seat the leader
 // declared red off a one-fail team — each enforces the word on its own. The
 // full current default is checked separately.
+// The lane was measured on the pyramid: blue suspicion is the Bayes posterior in production since 2026-10-28
+// (`bayesBelief`); off here, like the other later switches.
 const LANE_BASE: AgentTuning = {
   ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false,
-  teamDominanceGate: false, mustFailGate: false,
+  teamDominanceGate: false, mustFailGate: false, bayesBelief: false,
 };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };
@@ -214,7 +216,9 @@ describe('GoodLakeFollowUp — ForwardAgent wiring', () => {
 
   it('full current default (round-3 switches together): the vouched seat is on the R3 team and the forced fifth team', () => {
     expect(DEFAULT_AGENT_TUNING.goodVouchFollowUp).toBe(true);
-    const r3 = teamOf(forward(DEFAULT_AGENT_TUNING).decide(obs({})));
+    // The round-3 default on the pyramid (before `bayesBelief`, 2026-10-28).
+    const ROUND3: AgentTuning = { ...DEFAULT_AGENT_TUNING, bayesBelief: false };
+    const r3 = teamOf(forward(ROUND3).decide(obs({})));
     expect(r3).toHaveLength(4);
     expect(r3).toEqual(expect.arrayContaining(['P1', 'P5']));
     const rejected = (attempt: number, leader: string): VoteRecord =>
@@ -223,7 +227,7 @@ describe('GoodLakeFollowUp — ForwardAgent wiring', () => {
       failCount: 4,
       voteHistory: [...VOTES, rejected(1, 'P6'), rejected(2, 'P7'), rejected(3, 'P8'), rejected(4, 'P9')],
     });
-    const d = forward(DEFAULT_AGENT_TUNING).decide(forced);
+    const d = forward(ROUND3).decide(forced);
     expect(d.reasoningTrace.usedFallback).toBe(false);
     expect(teamOf(d)).toHaveLength(4);
     expect(teamOf(d)).toEqual(expect.arrayContaining(['P1', 'P5']));

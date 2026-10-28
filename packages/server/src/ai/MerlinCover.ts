@@ -16,7 +16,8 @@ export function doomedProposal(obs: PlayerObservation): boolean {
 
 /**
  * `merlinDoomedRed` on, Merlin leading a doomed proposal with no visible red on it: swap one teammate other
- * than Merlin for a visible red (both picked with `Math.random`, seeded by the callers that need it).
+ * than Merlin for a visible red. Both picks are a hash of the situation (seat, round, attempt, team), so the same
+ * observation always gives the same proposal.
  */
 export function merlinDoomedRedCover(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction): AgentAction {
   if (!tuning.merlinDoomedRed || action.type !== 'team_select' || obs.myRole !== 'merlin') return action;
@@ -26,7 +27,17 @@ export function merlinDoomedRedCover(tuning: Readonly<AgentTuning>, obs: PlayerO
   if (visible.length === 0 || team.some((id) => visible.includes(id))) return action;
   const swappable = team.filter((id) => id !== obs.myPlayerId);
   if (swappable.length === 0) return action;
-  const out = swappable[Math.floor(Math.random() * swappable.length)];
-  const red = visible[Math.floor(Math.random() * visible.length)];
+  const h = fnv1a32(`${obs.myPlayerId}|R${obs.currentRound}|A${obs.failCount}|${team.join(',')}`);
+  const out = swappable[h % swappable.length];
+  const red = visible[Math.floor(h / 7) % visible.length];
   return { type: 'team_select', teamIds: team.map((id) => (id === out ? red : id)) };
+}
+
+function fnv1a32(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
 }

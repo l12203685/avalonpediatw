@@ -18,6 +18,8 @@
  *   3. R1 cold-start sanity (loyal R1 still functions on neutral pyramid).
  */
 
+import { beliefOptionsFrom } from './belief/BeliefOptions';
+import { DEFAULT_AGENT_TUNING } from './AgentTuning';
 import { describe, it, expect } from 'vitest';
 import { HeuristicAgent } from './HeuristicAgent';
 import { computePyramidScores } from './baseline';
@@ -70,6 +72,10 @@ function quest(
 // ─────────────────────────────────────────────────────────────
 // Wave C Part 1 — Percival decision tree (5 missing nodes)
 // ─────────────────────────────────────────────────────────────
+
+// These tests pin the pyramid's own layers: blue seats' suspicion is the Bayes posterior in production since
+// 2026-10-28 (`bayesBelief`), so they read the pyramid with that switch off.
+const PYRAMID_ONLY = beliefOptionsFrom({ ...DEFAULT_AGENT_TUNING, bayesBelief: false });
 
 describe('Wave C · Percival decision tree (Edward 04-28 11:24 verbatim)', () => {
   it('R1P1 派西不帶 wizard (派 myself + 2 non-wizard) — Q2=C落地', () => {
@@ -335,7 +341,7 @@ describe('Wave C · loyal R1 cold-start (no history → neutral pyramid)', () =>
       voteHistory:  [],
       questHistory: [],
     });
-    const pyramid = computePyramidScores(obs);
+    const pyramid = computePyramidScores(obs, PYRAMID_ONLY);
     // Every non-self player should be at 0.5 (neutral) since R1 has no
     // public signals. Self is hardBlue (0).
     for (const id of obs.allPlayerIds) {
@@ -365,7 +371,7 @@ describe('Wave C · loyal R1 cold-start (no history → neutral pyramid)', () =>
         quest(1, ['P5', 'P6', 'P10'], 'fail', 1),
       ],
     });
-    const pyramid = computePyramidScores(obs);
+    const pyramid = computePyramidScores(obs, PYRAMID_ONLY);
     // P5 / P6 / P10 should now be > 0.5 (red lean from layer 2 mission
     // suspect).
     expect(pyramid.scores.get('P5')!).toBeGreaterThan(0.5);

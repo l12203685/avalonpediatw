@@ -89,7 +89,7 @@ describe('ForwardAgent — team size invariant (self-play crash regression)', ()
       // The legacy hard exclusions that emptied the pool (wizard B and every
       // "inferred red"); logic-first batch 1E keeps only certain reds
       // (`percivalCertainExclusion`) — the default case is checked below.
-      const legacy = new HeuristicAgent('P3', undefined, undefined, { ...DEFAULT_AGENT_TUNING, percivalCertainExclusion: false });
+      const legacy = new HeuristicAgent('P3', undefined, undefined, { ...DEFAULT_AGENT_TUNING, percivalCertainExclusion: false, bayesBelief: false });
       const decision = new ForwardAgent('P3', legacy).decide(obs);
       expect(decision.action.type).toBe('team_select');
       if (decision.action.type !== 'team_select') return;

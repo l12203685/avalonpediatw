@@ -306,12 +306,17 @@ describe('S1-3 / S1-4 on proposals (INV-T1, INV-K1, INV-K2)', () => {
       if (d.action.type !== 'team_select') throw new Error('not a proposal');
       return d.action.teamIds;
     };
-    const off = run(OFF);
+    // The fixture came from the pyramid scorer (`bayesBelief` off, 2026-10-28).
+    const off = run({ ...OFF, bayesBelief: false });
     expect([...off].sort()).toEqual([...fx.botTeamGatesOff].sort());
     expect(view.provablyFailable(off, 5)).toBe(true); // the breach
-    const on = run(ON);
+    const on = run({ ...ON, bayesBelief: false });
     expect(view.provablyFailable(on, 5)).toBe(false);
     expect(view.strictlyDominated(on)).toBeNull();
+    // The production default (Bayes posterior) proposes no must-fail or dominated team here either.
+    const prod = run(ON);
+    expect(view.provablyFailable(prod, 5)).toBe(false);
+    expect(view.strictlyDominated(prod)).toBeNull();
   });
 
   it('compliantTeams: every team passes both gates, best first, never empty', () => {
@@ -356,6 +361,12 @@ describe('S1-3 / S1-4 on proposals (INV-T1, INV-K1, INV-K2)', () => {
           expect(a.type).toBe('team_select');
           if (a.type !== 'team_select') continue;
           const view = buildCertainty(o);
+          // 派拇指躲刺 (`merlinDoomedRed`): on a doomed R2 proposal Merlin puts one seen red on the team — the
+          // only proposals it may; the R1–R2 normal votes reject them, so they never go on a mission.
+          if (role === 'merlin' && round <= 2 && failCount < 4) {
+            expect(a.teamIds.filter((id) => ['P2', 'P7', 'P9'].includes(id))).toHaveLength(1);
+            continue;
+          }
           expect({ round, failCount, role, mustFail: view.provablyFailable(a.teamIds, round) })
             .toEqual({ round, failCount, role, mustFail: false });
           expect({ round, failCount, role, dominated: view.strictlyDominated(a.teamIds) })

@@ -301,7 +301,10 @@ describe('ForwardAgent — percivalNoThumbsR1', () => {
         cases++;
         const other = thumbs.find((id) => id !== keep)!;
         expect(team).not.toContain(other);
-        if (team.includes(keep)) included++;
+        // The "usually included" count below was measured on the pyramid; the Bayes posterior (2026-10-28)
+        // weighs the thumbs by camp only and leaves the included thumb out in these fixtures — still allowed
+        // (the exception permits it, it does not require it). The hard part (the other thumb never) holds above.
+        if (forwardTeam(o, true, true, { bayesBelief: false }).includes(keep)) included++;
       }
     }
     // The fixtures produce several exception cases. The included thumb gets

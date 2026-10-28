@@ -115,7 +115,8 @@ describe('梅林 (merlin) — knownEvils hardpin (§1.4)', () => {
       currentRound: 1,
       currentLeader: 'P0',
     });
-    const baseline = new HeuristicAgent('test-merlin');
+    // 派拇指躲刺 (`merlinDoomedRed`, 2026-10-28) is the one exception — checked in MerlinCover.test.ts.
+    const baseline = new HeuristicAgent('test-merlin', undefined, undefined, { merlinDoomedRed: false });
     baseline.onGameStart(obs);
     const fa = new ForwardAgent('test-merlin', baseline);
     const { action } = fa.decide(obs);
