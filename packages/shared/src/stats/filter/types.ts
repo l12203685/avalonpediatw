@@ -138,7 +138,31 @@ export interface FilterOptions {
   activity?: 'filtered' | 'all' | 'none';
   /** 'auto'（預設）= min(快取 asOf, 日期子句的 to)；或指定 YYYY-MM-DD。 */
   asOf?: 'auto' | string;
+  /**
+   * 上榜條件（Edward 2026-10-28「數據排行部分 "上榜"條件也做成可調整可變可選」）：蓋在資料集的
+   * config.leaderboard 上、只重算排行（玩家的理論視窗不變）。鍵與範圍見 LEADERBOARD_OVERRIDE_RANGES。
+   */
+  leaderboard?: LeaderboardOverrides;
 }
+
+/** 可以覆寫的排行門檻與整數範圍（含兩端）。 */
+export const LEADERBOARD_OVERRIDE_RANGES = {
+  activeDays: [0, 3650],
+  mainGames: [0, 2000],
+  roleWindowGames: [1, 200],
+  loyalWindowGames: [1, 800],
+  requireRoleWindows: [0, 1],
+  theoryMinGames: [0, 5000],
+  overallMinGames: [0, 5000],
+  roleTitleGames: [1, 500],
+  roleTitleFallbackGames: [1, 500],
+  loyalTitleGames: [1, 2000],
+  loyalTitleFallbackGames: [1, 2000],
+  assassinMinAttempts: [1, 200],
+} as const satisfies Record<string, readonly [number, number]>;
+
+export type LeaderboardOverrideKey = keyof typeof LEADERBOARD_OVERRIDE_RANGES;
+export type LeaderboardOverrides = Partial<Record<LeaderboardOverrideKey, number>>;
 
 export interface GameFilter {
   v: 1;

@@ -12,7 +12,9 @@
     "hideTopRoleTheory",
     "onlineHideLowPosition",
     "offlineDropTopOverallFiltered",
-    "dropHeavyIncomplete"
+    "dropHeavyIncomplete",
+    "leaderboardRules",
+    "onlineLeaderboardRulesHidden"
   ],
   "aliases": {
     "Tovo Wren": "Ｚ測試"

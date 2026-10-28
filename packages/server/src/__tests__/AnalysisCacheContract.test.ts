@@ -555,7 +555,13 @@ describe('analysis_cache.json → web contract', () => {
         if (b.metric === 'roleTheory') {
           // main / newcomers (/ last50): what the site's table and /排行 print.
           for (const k of ['roleTheory', 'positionTheory', 'finalWinRate', 'careerGames']) num(p, r[k], `${rat}.${k}`);
-          if (V4) num(p, r.overallTheory, `${rat}.overallTheory`);
+          // theory (2026-10-28, one table): 整體理論 is null below overallMinGames career games.
+          if (V4 && !(b.id === 'theory' && r.overallTheory === null)) num(p, r.overallTheory, `${rat}.overallTheory`);
+          if (b.id === 'theory') {
+            for (const k of ['missionWinRate', 'threeBlueGames', 'roleGames']) num(p, r[k], `${rat}.${k}`);
+            if (r.assassinWinRate !== null) num(p, r.assassinWinRate, `${rat}.assassinWinRate`);
+            if (typeof r.fullWindows !== 'boolean') p.push(`${rat}.fullWindows: not a boolean`);
+          }
           if (r.value !== r.roleTheory) p.push(`${rat}.value ${show(r.value)} ≠ roleTheory ${show(r.roleTheory)}`);
         } else if (b.metric === 'positionTheory') {
           for (const k of ['positionTheory', 'finalWinRate', 'careerGames']) num(p, r[k], `${rat}.${k}`);

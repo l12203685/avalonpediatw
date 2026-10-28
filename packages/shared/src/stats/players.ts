@@ -304,10 +304,46 @@ export function computeSeatFinalWinRates(games: readonly Game[]): Record<string,
   return out;
 }
 
+/**
+ * overview.roleSeatFinalWinRates（generate_cache.compute_role_seat_final_win_rates）：{角色: {"1".."10": 最終勝率}}；
+ * 沒有人玩過的格 = 該角色的族群率。
+ */
+export function computeRoleSeatFinalWinRates(games: readonly Game[]): Record<string, Record<string, number>> {
+  const cellGames = new Map<string, number>();
+  const cellWins = new Map<string, number>();
+  for (const g of games) {
+    if (!isOutcome(g.outcome)) continue;
+    SEATS.forEach((seat, s) => {
+      if (!g.seatPlayers[s]) return;
+      const role = g.seatRoles.get(seat) as string;
+      inc(cellGames, `${role}|${seat}`);
+      inc(cellWins, `${role}|${seat}`, isFinalWin(role, g.outcome) ? 1 : 0);
+    });
+  }
+  const out: Record<string, Record<string, number>> = {};
+  for (const r of ALL_ROLES) {
+    let n = 0;
+    let w = 0;
+    for (const s of SEATS) {
+      n += cellGames.get(`${r}|${s}`) ?? 0;
+      w += cellWins.get(`${r}|${s}`) ?? 0;
+    }
+    const roleRate = rate(w, n);
+    const row: Record<string, number> = {};
+    for (const s of SEATS) {
+      const cn = cellGames.get(`${r}|${s}`) ?? 0;
+      row[seatLabel(s)] = cn ? rate(cellWins.get(`${r}|${s}`) ?? 0, cn) : roleRate;
+    }
+    out[r] = row;
+  }
+  return out;
+}
+
 export interface PlayerStatsResult {
   rows: PlayerRow[];
   roleFinalWinRates: Record<string, number>;
   seatFinalWinRates: Record<string, number>;
+  roleSeatFinalWinRates: Record<string, Record<string, number>>;
   timelines: Map<string, PlayerSeat[]>;
 }
 
@@ -315,16 +351,19 @@ export interface PlayerStatsResult {
 export function computePlayerStats(games: readonly Game[], config: GamesDatasetConfig): PlayerStatsResult {
   const roleFinalWinRates = computeRoleFinalWinRates(games);
   const seatFinalWinRates = computeSeatFinalWinRates(games);
+  const roleSeatFinalWinRates = computeRoleSeatFinalWinRates(games);
   const timelines = playerTimelines(games);
   const voting = computePlayerVoting(games);
   const rows: PlayerRow[] = [];
   for (const [name, t] of playerTallies(games)) {
     const row = t.toRow(name, roleFinalWinRates) as PlayerRow;
-    row.theory = playerTheory(timelines.get(name) ?? [], roleFinalWinRates, seatFinalWinRates, config.leaderboard);
+    row.theory = playerTheory(
+      timelines.get(name) ?? [], roleFinalWinRates, seatFinalWinRates, config.leaderboard, roleSeatFinalWinRates,
+    );
     row.voting = voting.get(name);
     rows.push(row);
   }
-  return { rows: sortByKey(rows, (r) => [-r.totalGames]), roleFinalWinRates, seatFinalWinRates, timelines };
+  return { rows: sortByKey(rows, (r) => [-r.totalGames]), roleFinalWinRates, seatFinalWinRates, roleSeatFinalWinRates, timelines };
 }
 
 export function emptyOutcome(): OutcomeSplit {

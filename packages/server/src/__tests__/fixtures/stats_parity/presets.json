@@ -37,5 +37,20 @@
       { "kind": "excludePlayers", "scope": "dropGames", "dropIncompleteGames": true, "who": { "by": "metric", "metric": "games", "op": "gt", "value": 300 } },
       { "kind": "excludePlayers", "scope": "hideFromLists", "who": { "by": "metric", "metric": "finalWinRate", "op": "le", "pr": 20, "ineligible": "select" } }
     ] }
+  },
+  {
+    "id": "leaderboardRules",
+    "filter": { "v": 1, "clauses": [], "options": { "leaderboard": {
+      "activeDays": 0, "mainGames": 0, "roleWindowGames": 5, "loyalWindowGames": 20, "requireRoleWindows": 0,
+      "theoryMinGames": 50, "overallMinGames": 100, "roleTitleGames": 30, "roleTitleFallbackGames": 15,
+      "loyalTitleGames": 120, "loyalTitleFallbackGames": 60, "assassinMinAttempts": 5
+    } } }
+  },
+  {
+    "id": "onlineLeaderboardRulesHidden",
+    "filter": { "v": 1, "clauses": [
+      { "kind": "category", "in": ["線瓦"] },
+      { "kind": "excludePlayers", "scope": "hideFromLists", "who": { "by": "metric", "metric": "roleTheory", "op": "gt", "pr": 90 } }
+    ], "options": { "leaderboard": { "activeDays": 30, "mainGames": 60, "overallMinGames": 80, "roleTitleGames": 8, "roleTitleFallbackGames": 8, "loyalTitleGames": 30, "loyalTitleFallbackGames": 30 } } }
   }
 ]
