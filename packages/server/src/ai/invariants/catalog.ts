@@ -119,7 +119,7 @@ export const INVARIANTS: readonly InvariantSpec[] = [
   { id: 'INV-PL2', refs: ['owner 2026-10-14', 'D4'], kind: 'metamorphic', status: 'enforced', side: 'good',
     rule: 'Percival lakes the seat the same lake policy picks for a loyal holding Percival\'s built-in fact (same observation, role loyal, the thumbs kept as "exactly one is red"; same draws) — the behavioural check of INV-PL (2026-10-26 review)' },
   { id: 'INV-M1', refs: ['M1'], kind: 'hard', status: 'enforced', side: 'good',
-    rule: 'Merlin never proposes, and from R3 never approves, a team holding a visible red (R1-R2 votes = policy)' },
+    rule: 'Merlin never proposes, and from R3 never approves, a team holding a visible red (R1-R2 votes = policy; a doomed non-forced R1-R2 proposal is exempt: 派拇指躲刺, Edward 2026-10-28)' },
   { id: 'INV-A1', refs: ['A1'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'the assassin never targets a known red' },
   { id: 'INV-A2', refs: ['player report (b)', 'human data 第 9.1 節'], kind: 'policy', status: 'enforced', side: 'red', tier: 2,

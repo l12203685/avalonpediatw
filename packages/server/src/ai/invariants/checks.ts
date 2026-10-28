@@ -18,6 +18,7 @@
  * numbers line by line.
  */
 
+import { doomedProposal } from '../MerlinCover';
 import { computePyramidScores } from '../baseline/pyramidScorer';
 import {
   analyzeLakeChain,
@@ -265,8 +266,11 @@ export function checkDecision(
       const team = rec.action.teamIds;
       const human = rec.human?.team;
 
-      // INV-T1
-      L.record('INV-T1', { violated: view.provablyFailable(team, round), unreliable });
+      // INV-T1. 派拇指躲刺 (Edward 2026-10-28, `merlinDoomedRed`): Merlin may put a seen red on a proposal the
+      // R1–R2 normal votes always reject (non-forced) — it never goes on a mission.
+      if (obs.myRole === 'merlin' && doomedProposal(obs) && view.provablyFailable(team, round)) {
+        L.record('INV-T1', { exempt: 'Merlin cover on a doomed R1-R2 proposal (派拇指躲刺)' });
+      } else L.record('INV-T1', { violated: view.provablyFailable(team, round), unreliable });
       if (view.provablyFailable(team, round)) L.inc(`T1.${rb(round)}.botMustFail`);
       if (human) L.human('INV-T1', view.provablyFailable(human, round));
 
@@ -296,7 +300,8 @@ export function checkDecision(
       // INV-M1 (proposals)
       if (obs.myRole === 'merlin') {
         const visible = team.some((id) => obs.knownEvils.includes(id));
-        L.record('INV-M1', { violated: visible });
+        if (visible && doomedProposal(obs)) L.record('INV-M1', { exempt: 'Merlin cover on a doomed R1-R2 proposal (派拇指躲刺)' });
+        else L.record('INV-M1', { violated: visible });
         if (visible) L.inc('T.merlin.knownRedOnTeam');
       }
 

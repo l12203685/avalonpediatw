@@ -692,8 +692,7 @@ export class ForwardAgent implements AvalonAgent {
    * when the caller wants the reasoning trace (PR3 wiring + tests).
    */
   act(obs: PlayerObservation): AgentAction {
-    // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
-    return merlinDoomedRedCover(this.baseline.tuning, obs, this.decide(obs).action);
+    return this.decide(obs).action;
   }
 
   /**
@@ -707,6 +706,14 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    const d = this.decideCore(obs);
+    // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
+    const covered = merlinDoomedRedCover(this.baseline.tuning, obs, d.action);
+    if (covered === d.action) return d;
+    return { ...d, action: covered, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin doomed-red cover` } };
+  }
+
+  private decideCore(obs: PlayerObservation): ForwardDecision {
     _forwardDecideCalls += 1;
     const decisionType = obs.gamePhase as DecisionType;
     if (decisionType === 'team_select') this.lastExclusions = new Map();
