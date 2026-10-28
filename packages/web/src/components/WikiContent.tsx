@@ -2,7 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Eye, Calendar } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
+import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_CATEGORIES } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
@@ -28,6 +29,24 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
 
 interface WikiContentProps {
   selectedCategory?: string;
+}
+
+const WIKI_COLOR_CLASS: Record<string, string> = {
+  red: 'text-red-400 font-semibold',
+  blue: 'text-sky-400 font-semibold',
+  orange: 'text-orange-400 font-semibold',
+  teal: 'text-teal-400 font-semibold',
+};
+
+/** The callout `normalizeWikiMarkup` builds starts with ⚠️. */
+function isWarningQuote(node: unknown): boolean {
+  const text = (n: unknown): string => {
+    const x = n as { type?: string; value?: string; children?: unknown[] } | undefined;
+    if (!x) return '';
+    if (x.type === 'text') return x.value ?? '';
+    return (x.children ?? []).map(text).join('');
+  };
+  return text(node).trimStart().startsWith('⚠️');
 }
 
 // Markdown renderer — uses react-markdown + remark-gfm for GitHub-Flavored Markdown
@@ -64,7 +83,10 @@ const markdownComponents = {
   em: ({ children }: { children?: ReactNode }): JSX.Element => (
     <em className="italic text-gray-100">{children}</em>
   ),
-  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => (
+  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => href?.startsWith(WIKI_COLOR_SCHEME) ? (
+    // Old HackMD `<font color>` (utils/wikiMarkup.ts): colored emphasis in the site's palette.
+    <span className={WIKI_COLOR_CLASS[href.slice(WIKI_COLOR_SCHEME.length)] ?? WIKI_COLOR_CLASS.red}>{children}</span>
+  ) : (
     <a
       href={href}
       target="_blank"
@@ -74,11 +96,17 @@ const markdownComponents = {
       {children}
     </a>
   ),
-  blockquote: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <blockquote className="border-l-4 border-yellow-500 bg-yellow-500/5 pl-3 py-1.5 my-2 text-sm text-gray-300 italic leading-snug">
-      {children}
-    </blockquote>
-  ),
+  blockquote: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element =>
+    isWarningQuote(node) ? (
+      // A run of whole-line red text in the old article (utils/wikiMarkup.ts): a warning callout.
+      <blockquote className="border-l-4 border-red-500 bg-red-500/10 pl-3 pr-2 py-2 my-2 text-sm text-red-200 not-italic leading-snug rounded-r">
+        {children}
+      </blockquote>
+    ) : (
+      <blockquote className="border-l-4 border-yellow-500 bg-yellow-500/5 pl-3 py-1.5 my-2 text-sm text-gray-300 italic leading-snug">
+        {children}
+      </blockquote>
+    ),
   code: ({ inline, children }: { inline?: boolean; children?: ReactNode }): JSX.Element =>
     inline ? (
       <code className="bg-gray-800 text-yellow-300 px-1 py-0.5 rounded text-xs font-mono">
@@ -288,7 +316,7 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-base font-bold text-white mb-1 leading-snug">{article.title}</h3>
-                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{article.excerpt}</p>
+                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{wikiExcerpt(article.excerpt)}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {article.tags.slice(0, 4).map((tag) => (
                         <span
@@ -366,8 +394,9 @@ export default function WikiContent({ selectedCategory }: WikiContentProps): JSX
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={markdownComponents}
+                    urlTransform={(url) => wikiUrlTransform(url, defaultUrlTransform)}
                   >
-                    {selectedArticle.content}
+                    {normalizeWikiMarkup(selectedArticle.content)}
                   </ReactMarkdown>
                 </div>
 
