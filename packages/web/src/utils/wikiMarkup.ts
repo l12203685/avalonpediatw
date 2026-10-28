@@ -42,10 +42,10 @@ function inlineColors(text: string): string {
   });
 }
 
-/** Leading HackMD front matter (`---` … `---`) and `[TOC]` lines. */
+/** Leading HackMD front matter (`---` … `---`; the HackMD exports often carry two blocks) and `[TOC]` lines. */
 function stripHackmdArtifacts(content: string): string {
   return content
-    .replace(/^\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/, '')
+    .replace(/^(?:\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))+/, '')
     .replace(/^[ \t]*\[TOC\][ \t]*\r?\n?/gim, '');
 }
 

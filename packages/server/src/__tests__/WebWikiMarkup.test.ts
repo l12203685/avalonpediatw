@@ -29,6 +29,11 @@ describe('normalizeWikiMarkup', () => {
     expect(out.trim()).toBe('正文');
   });
 
+  it('both front matter blocks of a HackMD export are dropped, a later --- rule stays', () => {
+    const src = '---\ntitle: a\ntags: [x]\n\n---\n\n---\ntitle: b\ntags: x\n---\n# 標題\n\n---\n\n下一段';
+    expect(normalizeWikiMarkup(src)).toBe('# 標題\n\n---\n\n下一段');
+  });
+
   it('the url transform keeps only our color scheme', () => {
     const fallback = (u: string) => (u.startsWith('javascript:') ? '' : u);
     expect(wikiUrlTransform('wiki-color:red', fallback)).toBe('wiki-color:red');
