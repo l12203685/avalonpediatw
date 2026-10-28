@@ -423,6 +423,11 @@ export interface AgentTuning {
    * 的比例 40%，機器人 2%，紅隊長的隊幾乎都放行。
    */
   goodCleanVote: number;
+  /**
+   * `goodCleanVote` 只給忠臣（第 3 回合）：派西分不出兩根拇指，兩根各算一半是紅，含梅林的隊也會被估成「不乾淨」
+   * ——單一座位確認派西 −1.2pp。
+   */
+  goodCleanVoteLoyalOnly: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -470,6 +475,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'bayesThumbRoles',
   'merlinCoverRate',
   'goodCleanVote',
+  'goodCleanVoteLoyalOnly',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -516,6 +522,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   bayesThumbRoles: false,
   merlinCoverRate: 1,
   goodCleanVote: 0,
+  goodCleanVoteLoyalOnly: false,
 });
 
 /**
@@ -710,6 +717,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   bayesThumbRoles: false,
   merlinCoverRate: 1,
   goodCleanVote: 0,
+  goodCleanVoteLoyalOnly: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -756,6 +764,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   bayesThumbRoles: 'AVALON_TUNING_BAYES_THUMB_ROLES',
   merlinCoverRate: 'AVALON_TUNING_MERLIN_COVER_RATE',
   goodCleanVote: 'AVALON_TUNING_GOOD_CLEAN_VOTE',
+  goodCleanVoteLoyalOnly: 'AVALON_TUNING_GOOD_CLEAN_VOTE_LOYAL_ONLY',
 });
 
 function parseBool(raw: string): boolean | undefined {

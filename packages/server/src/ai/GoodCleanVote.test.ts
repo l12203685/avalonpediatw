@@ -35,5 +35,7 @@ describe('goodCleanVote', () => {
     expect(goodCleanVoteReject(ON, obs({ myRole: 'merlin', knownEvils: ['P2', 'P3'] }))).toBe(false);
     expect(goodCleanVoteReject(ON, obs({ myRole: 'assassin', myTeam: 'evil' }))).toBe(false);
     expect(goodCleanVoteReject(ON, obs({ gamePhase: 'team_select' }))).toBe(false);
+    expect(goodCleanVoteReject({ ...ON, goodCleanVoteLoyalOnly: true }, obs({ myRole: 'percival', knownWizards: ['P7', 'P8'] }))).toBe(false);
+    expect(goodCleanVoteReject({ ...ON, goodCleanVoteLoyalOnly: true }, obs())).toBe(true);
   });
 });
