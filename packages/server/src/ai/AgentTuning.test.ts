@@ -259,7 +259,7 @@ describe('AgentTuning — flags', () => {
     expect(LEGACY_AGENT_TUNING.returnLake).toBe(false);
     expect(AGENT_TUNING_ENV.returnLake).toBe('AVALON_TUNING_RETURN_LAKE');
     expect(tuningFromEnv({ AVALON_TUNING_RETURN_LAKE: '0' })).toEqual({ returnLake: false });
-    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false, teamPassRank: 0, merlinDoomedRed: false, bayesBelief: false, assassinIgnoreDoomed: false, goodCleanVote: 0, percivalThumbLogic: false, redCleanLook: false, redRankOrder: false };
+    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false, teamPassRank: 0, merlinDoomedRed: false, bayesBelief: false, assassinIgnoreDoomed: false, goodCleanVote: 0, percivalThumbLogic: false, redCleanLook: false, redStackRatio: 0, redRankOrder: false };
     expect(describeAgentTuning(before1G)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +
