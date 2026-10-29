@@ -49,8 +49,16 @@ function stripHackmdArtifacts(content: string): string {
     .replace(/^[ \t]*\[TOC\][ \t]*\r?\n?/gim, '');
 }
 
+/**
+ * `<!-- … -->`: text the authors commented out in HackMD (old drafts, sign-up lists). HackMD hides it; the site
+ * doesn't parse HTML, so without this it was printed as text (Edward 2026-10-29 百科整併時看到).
+ */
+function stripHtmlComments(content: string): string {
+  return content.replace(/[ \t]*<!--[\s\S]*?-->[ \t]*/g, '');
+}
+
 export function normalizeWikiMarkup(content: string): string {
-  const lines = stripHackmdArtifacts(content).replace(/<br\s*\/?>/gi, '  \n').split('\n');
+  const lines = stripHtmlComments(stripHackmdArtifacts(content)).replace(/<br\s*\/?>/gi, '  \n').split('\n');
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     // A run of two or more whole-line red lines → one warning callout.

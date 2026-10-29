@@ -34,6 +34,14 @@ describe('normalizeWikiMarkup', () => {
     expect(normalizeWikiMarkup(src)).toBe('# 標題\n\n---\n\n下一段');
   });
 
+  it('HTML comments (text commented out in HackMD) are not shown', () => {
+    const src = '## 亞瑟的忠臣\n<!-- * 可以說是這個遊戲最重要的角色\n* 遊戲一開始…    -->\n* 任務派票就是選你視角中的"好人"\n* 文字 <!-- 註解 --> 後面';
+    const out = normalizeWikiMarkup(src);
+    expect(out).not.toMatch(/<!--|-->|最重要的角色|註解/);
+    expect(out).toContain('* 任務派票就是選你視角中的"好人"');
+    expect(out).toContain('* 文字後面');
+  });
+
   it('the url transform keeps only our color scheme and article links', () => {
     const fallback = (u: string) => (u.startsWith('javascript:') ? '' : u);
     expect(wikiUrlTransform('wiki-color:red', fallback)).toBe('wiki-color:red');
