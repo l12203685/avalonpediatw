@@ -33,14 +33,18 @@ export function merlinLoyalStyleTeam(
   if (!tuning.merlinLoyalStyle || action.type !== 'team_select' || obs.myRole !== 'merlin') return action;
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
-  const pool = obs.allPlayerIds.filter((id) => id !== me && !seen.has(id));
   const size = action.teamIds.length;
+  // `merlinLoyalCover` (round 7 candidate): on a doomed R1–R2 proposal (the normal votes reject it), at rate c the
+  // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
+  const cover = merlinLoyalCoverNow(tuning, obs);
+  const pool = obs.allPlayerIds.filter((id) => id !== me && (cover || !seen.has(id)));
   if (pool.length < size - 1) return action;
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
   const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
+    if (cover && fill.filter((id) => seen.has(id)).length !== 1) continue;
     const team = [me, ...fill];
     const p = bayesTeamClean(publicView, team) ?? 0;
     // Loyal plausibility first; the extension / correction / zone signal only breaks near-ties.
@@ -48,8 +52,18 @@ export function merlinLoyalStyleTeam(
   }
   // Highest first (stable); the logic gates (must-fail / dominated) still bind.
   scored.sort((x, y) => y.score - x.score);
-  const best = scored.find((c) => allowed(c.team));
+  // A cover team holds a seen red by design (doomed, never a mission), as `merlinDoomedRed` does: no gate on it.
+  const best = cover ? scored[0] : scored.find((c) => allowed(c.team));
   return best ? { type: 'team_select', teamIds: best.team } : action;
+}
+
+/** `merlinLoyalCover`: this doomed R1–R2 proposal carries one seen red (hashed per seat, round and attempt). */
+function merlinLoyalCoverNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const c = tuning.merlinLoyalCover ?? 0;
+  if (c <= 0 || (obs.currentRound ?? 1) > 2 || (obs.failCount ?? 0) >= 4 || obs.knownEvils.length === 0) return false;
+  let h = 0x811c9dc5;
+  for (const ch of `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|cover`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000 < c;
 }
 
 /**

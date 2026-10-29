@@ -78,3 +78,22 @@ describe('merlinVoteCover (梅林只想裝雜魚)', () => {
     expect(merlinVoteCoverApprove(on, { ...vobs, failCount: 4 } as PlayerObservation)).toBe(false);
   });
 });
+
+describe('merlinLoyalCover (派拇指躲刺 inside the loyal style)', () => {
+  const r1 = {
+    myPlayerId: 'P1', myRole: 'merlin', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P4', 'P6', 'P9'],
+    currentRound: 1, currentLeader: 'P1', failCount: 0, questResults: [], gamePhase: 'team_select',
+    questHistory: [], voteHistory: [], proposedTeam: [], lakeHistory: [],
+  } as unknown as PlayerObservation;
+  const t = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P3'] };
+  const seenOn = (a: ReturnType<typeof merlinLoyalStyleTeam>): number =>
+    a.type === 'team_select' ? a.teamIds.filter((id) => ['P4', 'P6', 'P9'].includes(id)).length : -1;
+  it('c = 1: a doomed R1 proposal carries exactly one seen red', () => {
+    expect(seenOn(merlinLoyalStyleTeam({ ...ON, merlinLoyalCover: 1 }, r1, t))).toBe(1);
+  });
+  it('c = 0, R3, or the forced fifth: no seen red', () => {
+    expect(seenOn(merlinLoyalStyleTeam(ON, r1, t))).toBe(0);
+    expect(seenOn(merlinLoyalStyleTeam({ ...ON, merlinLoyalCover: 1 }, { ...r1, failCount: 4 } as PlayerObservation, t))).toBe(0);
+    expect(seenOn(merlinLoyalStyleTeam({ ...ON, merlinLoyalCover: 1 }, obs, { type: 'team_select', teamIds: ['P1', 'P2', 'P3', 'P5'] }))).toBe(0);
+  });
+});
