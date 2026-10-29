@@ -443,6 +443,10 @@ export interface AgentTuning {
    * 最乾淨的那一隊（反制 `goodCleanVote`）。
    */
   redCleanLook: boolean;
+  /** 第 4 回合紅方 C1（`RedRound4.ts`，Edward 10/29「適時疊隊友」）：多帶一個隊友的門檻比例（0 = 關）。 */
+  redStackRatio: number;
+  /** 第 4 回合紅方 C2（`RedRound4.ts`，Edward 10/29「衝隊友要分工」）：最乾淨的前幾個紅不替隊友投外白（0 = 關）。 */
+  redDivisionVote: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -495,6 +499,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodCleanVoteMaxAttempt',
   'percivalThumbLogic',
   'redCleanLook',
+  'redStackRatio',
+  'redDivisionVote',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -546,6 +552,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanVoteMaxAttempt: 4,
   percivalThumbLogic: false,
   redCleanLook: false,
+  redStackRatio: 0,
+  redDivisionVote: 0,
 });
 
 /**
@@ -745,6 +753,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanVoteMaxAttempt: 4,
   percivalThumbLogic: true,
   redCleanLook: false,
+  redStackRatio: 0,
+  redDivisionVote: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -796,6 +806,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodCleanVoteMaxAttempt: 'AVALON_TUNING_GOOD_CLEAN_VOTE_MAX_ATTEMPT',
   percivalThumbLogic: 'AVALON_TUNING_PERCIVAL_THUMB_LOGIC',
   redCleanLook: 'AVALON_TUNING_RED_CLEAN_LOOK',
+  redStackRatio: 'AVALON_TUNING_RED_STACK_RATIO',
+  redDivisionVote: 'AVALON_TUNING_RED_DIVISION_VOTE',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -823,7 +835,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value)) throw new Error(`r3NormalVotePrior needs a number, got "${raw}"`);
     return { r3NormalVotePrior: value };
   }
-  if (name === 'redHideEarly' || name === 'redCleanApprove' || name === 'merlinCoverRate' || name === 'goodCleanVote') {
+  if (name === 'redHideEarly' || name === 'redCleanApprove' || name === 'merlinCoverRate' || name === 'goodCleanVote' || name === 'redStackRatio') {
     const value = raw === undefined ? 0.3 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs a probability, got "${raw}"`);
     return { [name]: value } as Partial<AgentTuning>;
@@ -832,6 +844,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
+  }
+  if (name === 'redDivisionVote') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`redDivisionVote needs 0–3, got "${raw}"`);
+    return { redDivisionVote: value };
   }
   if (name === 'goodCleanVoteMaxAttempt') {
     const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
@@ -885,7 +902,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

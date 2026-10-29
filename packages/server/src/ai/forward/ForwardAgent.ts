@@ -54,7 +54,7 @@
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
 import { goodCleanVoteReject } from '../GoodCleanVote';
-import { redCleanLookTeam } from '../RedRound4';
+import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -717,6 +717,10 @@ export class ForwardAgent implements AvalonAgent {
     if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
       const yes = redCleanApproveVote(this.baseline.tuning, obs);
       if (yes) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red clean approve (A2)');
+    }
+    // Round 4 (red) candidate C2 `redDivisionVote` (RedRound4.ts): the cleanest reds do not push teammates off the team.
+    if (redDivisionReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
     // Round 3 (blue) candidate `goodCleanVote` (GoodCleanVote.ts): loyal / Percival reject a team the posterior
     // gives too little chance of being clean (R3+).

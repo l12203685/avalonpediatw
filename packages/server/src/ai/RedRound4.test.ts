@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING } from './AgentTuning';
-import { redCleanLookTeam } from './RedRound4';
+import { redCleanLookTeam, redDivisionReject } from './RedRound4';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const ON = { ...DEFAULT_AGENT_TUNING, redCleanLook: true };
@@ -49,5 +49,31 @@ describe('redCleanLook', () => {
     expect(redCleanLookTeam(ON, obs({ myRole: 'oberon', knownEvils: [] }), t)).toBe(t);
     const v = { type: 'team_vote' as const, vote: true };
     expect(redCleanLookTeam(ON, obs(), v)).toBe(v);
+  });
+});
+
+describe('redStackRatio (C1, Edward 10/29「適時疊隊友」)', () => {
+  it('a loose ratio stacks one more teammate on top of the cleanest team', () => {
+    const a = redCleanLookTeam({ ...ON, redStackRatio: 0.01 }, obs(), { type: 'team_select', teamIds: ['P1', 'P2', 'P5', 'P6'] });
+    if (a.type !== 'team_select') throw new Error(a.type);
+    expect(a.teamIds.filter((id) => ['P1', 'P2', 'P3'].includes(id))).toHaveLength(2);
+  });
+});
+
+describe('redDivisionVote (C2, Edward 10/29「衝隊友要分工」)', () => {
+  // R1 P4/P8/P9 succeeded; R2 the same three plus P2 failed: P2 is the exposed red; P1 and P3 look alike (seat order).
+  const vote = (me: string, mates: string[]) => obs({
+    myPlayerId: me, knownEvils: mates, gamePhase: 'team_vote', currentLeader: 'P2', proposedTeam: ['P2', 'P5', 'P6', 'P7'],
+    questResults: ['success', 'fail'],
+    questHistory: [
+      { round: 1, team: ['P4', 'P8', 'P9'], result: 'success', failCount: 0 },
+      { round: 2, team: ['P2', 'P4', 'P8', 'P9'], result: 'fail', failCount: 1 },
+    ],
+  });
+  it('the cleanest red stays clean (rejects); the others still push', () => {
+    const on = { ...DEFAULT_AGENT_TUNING, redDivisionVote: 1 };
+    expect(redDivisionReject(on, vote('P1', ['P2', 'P3']))).toBe(true);
+    expect(redDivisionReject(on, vote('P3', ['P1', 'P2']))).toBe(false);
+    expect(redDivisionReject(DEFAULT_AGENT_TUNING, vote('P1', ['P2', 'P3']))).toBe(false);
   });
 });

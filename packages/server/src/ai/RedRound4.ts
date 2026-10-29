@@ -5,10 +5,17 @@
  *    挑藍方自己估起來最乾淨的那一隊——站在每個可能是藍方的玩家的位置（自己看不到的人：不在 knownEvils、不是自己），
  *    用他們的貝氏信念（同一份公開紀錄、只少了紅方的私人資訊）算「這隊沒有紅」的機率，取平均最高的。
  *    隊伍大小沿用原本流程選的隊。奧伯倫不適用（看不到隊友，湊不出確定的失敗張數）。
+ *
+ * Edward 2026-10-29：「梅林用那樣的策略躲刺，紅方要做的其實應該是盡可能適時的疊隊友衝隊友，但記得要分工合作，
+ * 不能一次爆開全被抓到。」（出任務的失敗牌分工已有位階法：兩個相認紅同隊時刺客出失敗、莫德雷德出成功。）
+ * C1 `redStackRatio`（疊隊友，適時）：B1 的隊伍再多帶一個隊友——只在多帶之後藍方估的乾淨機率仍有最乾淨隊的
+ *    這個比例以上時（0 = 關）。兩個紅同隊，一張失敗由位階法分給一人，另一人留著不爆。
+ * C2 `redDivisionVote`（衝隊友要分工）：第 3 局起不在隊上、隊上有隊友時，替隊友投白（外白）的只有已經比較曝光的紅；
+ *    藍方估起來最乾淨的前 N 個紅照正常票投黑，保持乾淨（0 = 關）。每個紅都用同一份公開紀錄排序，不用溝通就分得出工。
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
-import { bayesTeamClean } from './belief/BayesBelief';
+import { bayesRedShare, bayesTeamClean } from './belief/BayesBelief';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -44,16 +51,54 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
   const failsNeeded = obs.currentRound === 4 && obs.playerCount >= 7 ? 2 : 1;
   if (mates.length < failsNeeded - 1 || viewers.length < size - failsNeeded) return action;
   const views = viewers.map((v) => blueView(obs, v));
-  let best: string[] | null = null;
-  let bestScore = -1;
-  for (const reds of combinations(mates, failsNeeded - 1)) {
-    for (const fill of combinations(viewers, size - failsNeeded)) {
-      const team = [me, ...reds, ...fill];
-      let sum = 0;
-      for (const view of views) sum += bayesTeamClean(view, team) ?? 0;
-      const score = sum / views.length;
-      if (score > bestScore) { bestScore = score; best = team; }
+  const bestOf = (redCount: number): { team: string[] | null; score: number } => {
+    let team: string[] | null = null;
+    let score = -1;
+    if (mates.length < redCount - 1 || viewers.length < size - redCount || redCount > size) return { team, score };
+    for (const reds of combinations(mates, redCount - 1)) {
+      for (const fill of combinations(viewers, size - redCount)) {
+        const t = [me, ...reds, ...fill];
+        let sum = 0;
+        for (const view of views) sum += bayesTeamClean(view, t) ?? 0;
+        if (sum / views.length > score) { score = sum / views.length; team = t; }
+      }
     }
+    return { team, score };
+  };
+  const min = bestOf(failsNeeded);
+  // C1: stack one more teammate when that costs little of the cleanest look.
+  const ratio = tuning.redStackRatio ?? 0;
+  if (ratio > 0) {
+    const stacked = bestOf(failsNeeded + 1);
+    if (stacked.team && stacked.score >= ratio * min.score) return { type: 'team_select', teamIds: stacked.team };
   }
-  return best ? { type: 'team_select', teamIds: best } : action;
+  return min.team ? { type: 'team_select', teamIds: min.team } : action;
+}
+
+/**
+ * C2: true = this red votes reject (stays clean) instead of approving a teammate's team off the team. The reds
+ * blue rates cleanest (average over the possible-blue seats' posteriors, public records only) are the first
+ * `redDivisionVote` of them.
+ */
+export function redDivisionReject(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const hidden = tuning.redDivisionVote ?? 0;
+  if (hidden <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil' || obs.myRole === 'oberon') return false;
+  if ((obs.currentRound ?? 1) < 3 || (obs.failCount ?? 0) >= 4) return false;
+  const me = obs.myPlayerId;
+  const team = obs.proposedTeam ?? [];
+  const mates = obs.knownEvils.filter((id) => id !== me);
+  if (team.includes(me) || !team.some((id) => mates.includes(id))) return false;
+  // Red already at two failed missions: every vote counts, push.
+  if ((obs.questResults ?? []).filter((r) => r === 'fail').length >= 2) return false;
+  const viewers = obs.allPlayerIds.filter((id) => id !== me && !mates.includes(id));
+  const reds = [me, ...mates];
+  const suspicion = new Map(reds.map((id) => [id, 0]));
+  for (const v of viewers) {
+    const share = bayesRedShare(blueView(obs, v));
+    for (const id of reds) if (id !== v) suspicion.set(id, (suspicion.get(id) ?? 0) + (share.get(id) ?? 0));
+  }
+  // Rounded so float noise between equal suspicions does not split the reds' shared ranking (ties: seat id).
+  const key = (id: string): number => Math.round((suspicion.get(id) ?? 0) * 1e6);
+  const order = [...reds].sort((a, b) => key(a) - key(b) || a.localeCompare(b));
+  return order.slice(0, hidden).includes(me);
 }
