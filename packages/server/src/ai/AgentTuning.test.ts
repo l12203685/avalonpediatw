@@ -246,7 +246,7 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier,returnLake,merlinDoomedRed,bayesBelief,assassinIgnoreDoomed,goodCleanVote=0.25,percivalThumbLogic,redCleanLook,redRankOrder',
+        'assassinVisibleRedTier,returnLake,merlinDoomedRed,bayesBelief,assassinIgnoreDoomed,goodCleanVote=0.25,percivalThumbLogic,redCleanLook,redStackRatio=0.8,redRankOrder',
     );
     // 隊伍用「會不會過」評分 (2026-10-27): on by default, off in the legacy table.
     // Off by default: single-seat expected win rate −0.05pp (strength_benchmark.md 第 22 節).
