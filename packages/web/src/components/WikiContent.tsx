@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
+import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiImageSrc, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
@@ -153,7 +153,7 @@ const markdownComponents = {
     <td className="border border-gray-700 px-2 py-1 text-gray-200 align-top">{children}</td>
   ),
   img: ({ src, alt }: { src?: string; alt?: string }): JSX.Element => (
-    <img src={src} alt={alt ?? ''} className="max-w-full rounded-md my-2 border border-gray-700" />
+    <img src={wikiImageSrc(src, import.meta.env.BASE_URL)} alt={alt ?? ''} className="max-w-full rounded-md my-2 border border-gray-700" />
   ),
 };
 

@@ -217,6 +217,23 @@ describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分
     expect(broken).toEqual([]);
   });
 
+  it('articles do not depend on HackMD: no hackmd.io links, every /wiki-images/ picture is in the web public folder', () => {
+    // 2026-10-29：網站是百科唯一的家，不再用 HackMD；圖片放 packages/web/public/wiki-images/。
+    const publicDir = path.resolve(__dirname, '..', '..', '..', 'web', 'public');
+    const hackmd = jsonArticles.filter((a) => a.content.includes('hackmd.io')).map((a) => a.id);
+    expect(hackmd).toEqual([]);
+    const missing: string[] = [];
+    let images = 0;
+    for (const a of jsonArticles) {
+      for (const m of a.content.matchAll(/\]\((\/wiki-images\/[^)\s]+)\)/g)) {
+        images++;
+        if (!fs.existsSync(path.join(publicDir, m[1]))) missing.push(`${a.id} → ${m[1]}`);
+      }
+    }
+    expect(images).toBeGreaterThan(0);
+    expect(missing).toEqual([]);
+  });
+
   it('docs/avalon-wiki holds one article per file, matching the site text', () => {
     const files: Record<string, string> = {
       '派票策略/視角與區間派票法.md': 'wiki-57',
