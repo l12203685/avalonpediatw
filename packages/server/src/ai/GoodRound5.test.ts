@@ -31,9 +31,20 @@ describe('goodCleanLead', () => {
     expect(a.teamIds.filter((id) => ['P2', 'P3', 'P4'].includes(id))).toHaveLength(0);
   });
 
+  it('the logic gates still bind: a barred top team gives way to the next best', () => {
+    const t = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P9', 'P10'] };
+    const top = goodCleanLeadTeam(ON, obs(), t);
+    if (top.type !== 'team_select') throw new Error(top.type);
+    const key = [...top.teamIds].sort().join(',');
+    const next = goodCleanLeadTeam(ON, obs(), t, (team) => [...team].sort().join(',') !== key);
+    if (next.type !== 'team_select') throw new Error(next.type);
+    expect([...next.teamIds].sort().join(',')).not.toBe(key);
+    expect(goodCleanLeadTeam(ON, obs(), t, () => false)).toBe(t);
+  });
+
   it('untouched: off, R1, Merlin, red, the role not in scope', () => {
     const t = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P9', 'P10'] };
-    expect(goodCleanLeadTeam(DEFAULT_AGENT_TUNING, obs(), t)).toBe(t);
+    expect(goodCleanLeadTeam({ ...DEFAULT_AGENT_TUNING, goodCleanLead: 0 }, obs(), t)).toBe(t);
     expect(goodCleanLeadTeam(ON, obs({ currentRound: 1 }), t)).toBe(t);
     expect(goodCleanLeadTeam(ON, obs({ myRole: 'merlin' }), t)).toBe(t);
     expect(goodCleanLeadTeam(ON, obs({ myRole: 'assassin', myTeam: 'evil' }), t)).toBe(t);

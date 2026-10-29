@@ -76,7 +76,7 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 // (`bayesBelief`); off here, like the other later switches (and `goodCleanVote`, round 3, which rejects first).
 const LANE_BASE: AgentTuning = {
   ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false,
-  teamDominanceGate: false, mustFailGate: false, bayesBelief: false, goodCleanVote: 0,
+  teamDominanceGate: false, mustFailGate: false, bayesBelief: false, goodCleanVote: 0, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false,
 };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };

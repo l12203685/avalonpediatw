@@ -30,7 +30,7 @@ describe('merlinLoyalStyle', () => {
   });
   it('off / not Merlin: unchanged', () => {
     const t = { type: 'team_select' as const, teamIds: ['P1', 'P4', 'P8', 'P10'] };
-    expect(merlinLoyalStyleTeam(DEFAULT_AGENT_TUNING, obs, t)).toBe(t);
+    expect(merlinLoyalStyleTeam({ ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: false }, obs, t)).toBe(t);
     expect(merlinLoyalStyleTeam(ON, { ...obs, myRole: 'loyal' } as PlayerObservation, t)).toBe(t);
   });
 });

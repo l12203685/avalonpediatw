@@ -25,7 +25,7 @@ const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0 };
 // Gates off — and Percival's own batch-1E vote rule off, so the old
 // "Percival on the team ⇒ approve" shortcut is what the gate is shown against.
-const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, teamDominanceGate: false, mustFailGate: false, percivalLoyalVote: false };
+const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, teamDominanceGate: false, mustFailGate: false, percivalLoyalVote: false, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false };
 const GATES = { teamDominance: true, mustFail: true };
 
 function quest(round: number, team: string[], failCount: number): QuestRecord {
@@ -364,7 +364,10 @@ describe('S1-3 / S1-4 on proposals (INV-T1, INV-K1, INV-K2)', () => {
           const view = buildCertainty(o);
           // 派拇指躲刺 (`merlinDoomedRed`): on a doomed R2 proposal Merlin puts one seen red on the team — the
           // only proposals it may; the R1–R2 normal votes reject them, so they never go on a mission.
-          if (role === 'merlin' && round <= 2 && failCount < 4) {
+          // `merlinLoyalStyle` (round 5, default) replaces the cover: Merlin proposes like a loyal, never with a seen red.
+          if (role === 'merlin' && ON.merlinLoyalStyle) {
+            expect(a.teamIds.filter((id) => ['P2', 'P7', 'P9'].includes(id))).toHaveLength(0);
+          } else if (role === 'merlin' && round <= 2 && failCount < 4) {
             expect(a.teamIds.filter((id) => ['P2', 'P7', 'P9'].includes(id))).toHaveLength(1);
             continue;
           }

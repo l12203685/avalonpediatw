@@ -24,7 +24,12 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 }
 
 /** Merlin's loyal-style team, or the action unchanged. */
-export function merlinLoyalStyleTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction): AgentAction {
+export function merlinLoyalStyleTeam(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  action: AgentAction,
+  allowed: (team: readonly string[]) => boolean = () => true,
+): AgentAction {
   if (!tuning.merlinLoyalStyle || action.type !== 'team_select' || obs.myRole !== 'merlin') return action;
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
@@ -34,16 +39,17 @@ export function merlinLoyalStyleTeam(tuning: Readonly<AgentTuning>, obs: PlayerO
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
-  let best: string[] | null = null;
-  let bestScore = -Infinity;
+  const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
     const team = [me, ...fill];
     const p = bayesTeamClean(publicView, team) ?? 0;
     // Loyal plausibility first; the extension / correction / zone signal only breaks near-ties.
-    const score = Math.log(Math.max(p, 1e-12)) + 0.05 * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me);
-    if (score > bestScore) { bestScore = score; best = team; }
+    scored.push({ team, score: Math.log(Math.max(p, 1e-12)) + 0.05 * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me) });
   }
-  return best ? { type: 'team_select', teamIds: best } : action;
+  // Highest first (stable); the logic gates (must-fail / dominated) still bind.
+  scored.sort((x, y) => y.score - x.score);
+  const best = scored.find((c) => allowed(c.team));
+  return best ? { type: 'team_select', teamIds: best.team } : action;
 }
 
 /**
@@ -64,6 +70,7 @@ export function percivalLoyalStyleTeam(
   tuning: Readonly<AgentTuning>,
   obs: PlayerObservation,
   action: AgentAction,
+  allowed: (team: readonly string[]) => boolean = () => true,
 ): { action: AgentAction; plan: PercivalPlan | null } {
   const thumbs = obs.knownWizards ?? [];
   if (!tuning.percivalLoyalStyle || action.type !== 'team_select' || obs.myRole !== 'percival' || thumbs.length !== 2) {
@@ -74,15 +81,15 @@ export function percivalLoyalStyleTeam(
   const size = action.teamIds.length;
   const opts = { strictMerlin: tuning.percivalThumbLogic === true, thumbRoles: tuning.bayesThumbRoles === true };
   const publicView = { ...obs, myRole: 'loyal', knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  let best: string[] | null = null;
-  let bestScore = -Infinity;
+  const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(others, size - 1)) {
     const team = [me, ...fill];
     const priv = bayesTeamClean(obs, team, opts) ?? 0;
     const pub = bayesTeamClean(publicView, team) ?? 0;
-    const score = Math.log(Math.max(priv, 1e-12)) + 0.5 * Math.log(Math.max(pub, 1e-12));
-    if (score > bestScore) { bestScore = score; best = team; }
+    scored.push({ team, score: Math.log(Math.max(priv, 1e-12)) + 0.5 * Math.log(Math.max(pub, 1e-12)) });
   }
+  scored.sort((x, y) => y.score - x.score);
+  const best = scored.find((c) => allowed(c.team))?.team;
   if (!best) return { action, plan: null };
   // Which of Edward's five plans this team is: the thumb believed to be Merlin (posterior), and whether it is on the team.
   const [a, b] = thumbs;
