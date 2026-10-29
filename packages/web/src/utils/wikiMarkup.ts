@@ -49,8 +49,16 @@ function stripHackmdArtifacts(content: string): string {
     .replace(/^[ \t]*\[TOC\][ \t]*\r?\n?/gim, '');
 }
 
+/**
+ * `<!-- … -->`: text the authors commented out in HackMD (old drafts, sign-up lists). HackMD hides it; the site
+ * doesn't parse HTML, so without this it was printed as text (Edward 2026-10-29 百科整併時看到).
+ */
+function stripHtmlComments(content: string): string {
+  return content.replace(/[ \t]*<!--[\s\S]*?-->[ \t]*/g, '');
+}
+
 export function normalizeWikiMarkup(content: string): string {
-  const lines = stripHackmdArtifacts(content).replace(/<br\s*\/?>/gi, '  \n').split('\n');
+  const lines = stripHtmlComments(stripHackmdArtifacts(content)).replace(/<br\s*\/?>/gi, '  \n').split('\n');
   const out: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     // A run of two or more whole-line red lines → one warning callout.
@@ -73,12 +81,41 @@ export function normalizeWikiMarkup(content: string): string {
   return out.join('\n');
 }
 
-/** react-markdown `urlTransform`: keep our color pseudo-links, sanitize everything else the default way. */
+/**
+ * `[標題](wiki:wiki-57)`：連到另一篇百科文章（「延伸閱讀」、文中的「參閱」；Edward 2026-10-29 百科整併）。
+ * WikiContent 在同一個文章視窗裡換成那篇，不開新分頁。
+ */
+export const WIKI_ARTICLE_SCHEME = 'wiki:';
+
+/** The article id of a `wiki:` link, or null for any other href. */
+export function wikiArticleId(href: string | undefined): string | null {
+  if (!href?.startsWith(WIKI_ARTICLE_SCHEME)) return null;
+  const id = href.slice(WIKI_ARTICLE_SCHEME.length).trim();
+  return id || null;
+}
+
+/** react-markdown `urlTransform`: keep our color pseudo-links and article links, sanitize everything else the default way. */
 export function wikiUrlTransform(url: string, fallback: (u: string) => string): string {
-  return url.startsWith(WIKI_COLOR_SCHEME) ? url : fallback(url);
+  return url.startsWith(WIKI_COLOR_SCHEME) || url.startsWith(WIKI_ARTICLE_SCHEME) ? url : fallback(url);
 }
 
 /** A card excerpt in plain text: no front matter (`title: …` lines), no `[TOC]`, no HTML tags. */
+/**
+ * The card excerpt: the stored excerpt when it says something, else the opening prose of the article (most stored
+ * excerpts are only the HackMD `title:` line, so the cards showed nothing).
+ */
+export function wikiCardExcerpt(excerpt: string, content: string): string {
+  const stored = wikiExcerpt(excerpt);
+  if (stored) return stored;
+  const body = normalizeWikiMarkup(content)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(#|```|>|\||-{3,}|\[TOC\])/i.test(l))
+    .map((l) => l.replace(/^[*\-+]\s+|^\d+\.\s+/, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, ''))
+    .join(' ');
+  return body.length > 120 ? `${body.slice(0, 120)}…` : body;
+}
+
 export function wikiExcerpt(text: string): string {
   return stripHackmdArtifacts(text)
     .replace(/^\s*-{3,}\s*/, '')

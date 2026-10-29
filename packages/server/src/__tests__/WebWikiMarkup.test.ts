@@ -2,7 +2,7 @@
  * 百科舊式 HTML → 網站樣式（packages/web/src/utils/wikiMarkup.ts，Edward 2026-10-28）。
  */
 import { describe, expect, it } from 'vitest';
-import { normalizeWikiMarkup, wikiExcerpt, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
+import { normalizeWikiMarkup, wikiArticleId, wikiExcerpt, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
 
 describe('normalizeWikiMarkup', () => {
   it('a run of whole-line red text becomes a warning callout (the 點跳夾 notice)', () => {
@@ -34,13 +34,38 @@ describe('normalizeWikiMarkup', () => {
     expect(normalizeWikiMarkup(src)).toBe('# 標題\n\n---\n\n下一段');
   });
 
-  it('the url transform keeps only our color scheme', () => {
+  it('HTML comments (text commented out in HackMD) are not shown', () => {
+    const src = '## 亞瑟的忠臣\n<!-- * 可以說是這個遊戲最重要的角色\n* 遊戲一開始…    -->\n* 任務派票就是選你視角中的"好人"\n* 文字 <!-- 註解 --> 後面';
+    const out = normalizeWikiMarkup(src);
+    expect(out).not.toMatch(/<!--|-->|最重要的角色|註解/);
+    expect(out).toContain('* 任務派票就是選你視角中的"好人"');
+    expect(out).toContain('* 文字後面');
+  });
+
+  it('the url transform keeps only our color scheme and article links', () => {
     const fallback = (u: string) => (u.startsWith('javascript:') ? '' : u);
     expect(wikiUrlTransform('wiki-color:red', fallback)).toBe('wiki-color:red');
+    expect(wikiUrlTransform('wiki:wiki-57', fallback)).toBe('wiki:wiki-57');
     expect(wikiUrlTransform('javascript:alert(1)', fallback)).toBe('');
+  });
+
+  it('wiki: links name an article id; other hrefs are not article links', () => {
+    expect(wikiArticleId('wiki:wiki-57')).toBe('wiki-57');
+    expect(wikiArticleId('wiki-color:red')).toBeNull();
+    expect(wikiArticleId('https://hackmd.io/x')).toBeNull();
+    expect(wikiArticleId('wiki:')).toBeNull();
+    expect(wikiArticleId(undefined)).toBeNull();
   });
 
   it('card excerpts drop front-matter lines and tags', () => {
     expect(wikiExcerpt('title: 名詞說明與簡稱\ntags: roles\n名詞的<font color=red>說明</font>')).toBe('名詞的說明');
+  });
+});
+
+describe('wikiCardExcerpt', () => {
+  it('a stored excerpt that is only the HackMD title line falls back to the opening prose', async () => {
+    const { wikiCardExcerpt } = await import('../../../web/src/utils/wikiMarkup');
+    expect(wikiCardExcerpt('title: 視角', '---\ntitle: 視角\n---\n## 視角\n* 視角通常用以描述該玩家對場上其他玩家陣營的看法')).toContain('視角通常用以描述');
+    expect(wikiCardExcerpt('為遊戲新手解答基本問題', '# x')).toBe('為遊戲新手解答基本問題');
   });
 });
