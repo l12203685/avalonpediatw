@@ -99,6 +99,15 @@ export function wikiUrlTransform(url: string, fallback: (u: string) => string): 
   return url.startsWith(WIKI_COLOR_SCHEME) || url.startsWith(WIKI_ARTICLE_SCHEME) ? url : fallback(url);
 }
 
+/**
+ * 文章裡的圖片放在網站自己的 public/wiki-images/（不再連 HackMD），內文寫成 `/wiki-images/<檔名>`。
+ * 網站部署在子路徑（VITE_BASE，例如 /avalonpediatw/）時補上前綴；外部網址原樣不動。
+ */
+export function wikiImageSrc(src: string | undefined, base: string): string | undefined {
+  if (!src || !src.startsWith('/') || src.startsWith('//')) return src;
+  return base.replace(/\/+$/, '') + src;
+}
+
 /** A card excerpt in plain text: no front matter (`title: …` lines), no `[TOC]`, no HTML tags. */
 /**
  * The card excerpt: the stored excerpt when it says something, else the opening prose of the article (most stored

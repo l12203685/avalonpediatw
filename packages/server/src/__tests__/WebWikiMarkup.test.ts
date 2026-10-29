@@ -57,6 +57,15 @@ describe('normalizeWikiMarkup', () => {
     expect(wikiArticleId(undefined)).toBeNull();
   });
 
+  it('site-relative image paths get the deploy base; external and empty srcs are left alone', async () => {
+    const { wikiImageSrc } = await import('../../../web/src/utils/wikiMarkup');
+    expect(wikiImageSrc('/wiki-images/a.png', '/')).toBe('/wiki-images/a.png');
+    expect(wikiImageSrc('/wiki-images/a.png', '/avalonpediatw/')).toBe('/avalonpediatw/wiki-images/a.png');
+    expect(wikiImageSrc('https://example.com/a.png', '/avalonpediatw/')).toBe('https://example.com/a.png');
+    expect(wikiImageSrc('//cdn.example.com/a.png', '/x/')).toBe('//cdn.example.com/a.png');
+    expect(wikiImageSrc(undefined, '/x/')).toBeUndefined();
+  });
+
   it('card excerpts drop front-matter lines and tags', () => {
     expect(wikiExcerpt('title: 名詞說明與簡稱\ntags: roles\n名詞的<font color=red>說明</font>')).toBe('名詞的說明');
   });
