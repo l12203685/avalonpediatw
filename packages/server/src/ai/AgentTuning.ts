@@ -451,6 +451,11 @@ export interface AgentTuning {
   redFavoriteMate: number;
   /** 第 4 回合紅方 D2（`RedRound4.ts`，Edward 10/29「分拆成 2 邊」）：莫德雷德送自己、刺客與莫甘娜送熱門隊友。 */
   redTwoLines: boolean;
+  /**
+   * 第 5 回合藍方 L5（`GoodRound5.ts`）：第 2 局起藍方當隊長派「這隊沒有紅」後驗機率最高的隊。
+   * 分角色：0 = 關、1 = 忠臣、2 = 派西、3 = 兩者（Edward 10/29：藍方分忠臣／派西／梅林改）。
+   */
+  goodCleanLead: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -507,6 +512,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redDivisionVote',
   'redFavoriteMate',
   'redTwoLines',
+  'goodCleanLead',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -562,6 +568,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redDivisionVote: 0,
   redFavoriteMate: 0,
   redTwoLines: false,
+  goodCleanLead: 0,
 });
 
 /**
@@ -765,6 +772,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redDivisionVote: 0,
   redFavoriteMate: 0,
   redTwoLines: false,
+  goodCleanLead: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -820,6 +828,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redDivisionVote: 'AVALON_TUNING_RED_DIVISION_VOTE',
   redFavoriteMate: 'AVALON_TUNING_RED_FAVORITE_MATE',
   redTwoLines: 'AVALON_TUNING_RED_TWO_LINES',
+  goodCleanLead: 'AVALON_TUNING_GOOD_CLEAN_LEAD',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -856,6 +865,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
+  }
+  if (name === 'goodCleanLead') {
+    const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`goodCleanLead needs 0–3, got "${raw}"`);
+    return { goodCleanLead: value };
   }
   if (name === 'redDivisionVote' || name === 'redFavoriteMate') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
@@ -914,7 +928,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
