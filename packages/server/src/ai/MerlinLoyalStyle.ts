@@ -92,3 +92,29 @@ export function percivalLoyalStyleTeam(
   const plan: PercivalPlan = trustA ? (best.includes(a) ? '信A派A' : '信A不派A') : trustB ? (best.includes(b) ? '信B派B' : '信B不派B') : 'AB交集';
   return { action: { type: 'team_select', teamIds: best }, plan };
 }
+
+/**
+ * 梅林投票雜魚化（優化迴圈第 7 回合・梅林候選，2026-10-29；`AgentTuning.merlinVoteCover`）。
+ *
+ * 百科〈忠臣〉遊戲心態「梅林只想裝雜魚」；〈異常票基礎篇〉內黑外白都在釋放視角，「梅林被刺可能性變高」。
+ * 機器人梅林第 3 局起對有他看得到的紅的隊贊成 0%（真人 25.7%），刺客一讀投票（`assassinMerlinVotes`）就抓得到。
+ * 規則：第 3 局起、非強制、隊上有看得到的紅、紅方還沒聽牌（失敗 < 2）、而且只看公開紀錄的忠臣會覺得這隊乾淨
+ * （P 不低於忠臣投黑門檻 `goodCleanVote`，雜魚會贊成的隊）→ 以比例 q 照雜魚投白（同一局同一次提議的結果固定，用雜湊決定）。
+ * 回傳 true = 這一票改投白。
+ */
+export function merlinVoteCoverApprove(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const q = tuning.merlinVoteCover ?? 0;
+  if (q <= 0 || obs.gamePhase !== 'team_vote' || obs.myRole !== 'merlin') return false;
+  const round = obs.currentRound ?? 1;
+  if (round < 3 || (obs.failCount ?? 0) >= 4) return false;
+  const team = obs.proposedTeam ?? [];
+  const seen = new Set(obs.knownEvils);
+  if (team.length === 0 || !team.some((id) => seen.has(id))) return false;
+  if (obs.questResults.filter((r) => r === 'fail').length >= 2) return false;
+  const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
+  const p = bayesTeamClean(publicView, team) ?? 0;
+  if (p < Math.max(tuning.goodCleanVote || 0.25, 0.25)) return false;
+  let h = 0x811c9dc5;
+  for (const c of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|${team.join(',')}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000 < q;
+}

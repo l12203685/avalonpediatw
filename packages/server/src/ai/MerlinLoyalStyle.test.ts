@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING } from './AgentTuning';
-import { merlinLoyalStyleTeam, percivalLoyalStyleTeam } from './MerlinLoyalStyle';
+import { merlinLoyalStyleTeam, merlinVoteCoverApprove, percivalLoyalStyleTeam } from './MerlinLoyalStyle';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const ON = { ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: true };
@@ -53,5 +53,28 @@ describe('percivalLoyalStyle (Edward 10/29: 信A/信B ± 派, or the AB intersec
     if (action.type !== 'team_select') throw new Error(action.type);
     expect(plan?.startsWith('信A')).toBe(true);
     expect(action.teamIds.some((id) => ['P2', 'P3', 'P8'].includes(id))).toBe(false);
+  });
+});
+
+describe('merlinVoteCover (梅林只想裝雜魚)', () => {
+  // R1 P2 P3 P5 and R2 P2 P3 P5 P7 both succeeded: in public the R2 team looks clean, but Merlin sees P7.
+  const vobs = {
+    myPlayerId: 'P1', myRole: 'merlin', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P4', 'P6', 'P7'],
+    currentRound: 3, currentLeader: 'P2', failCount: 0, questResults: ['success', 'success'], gamePhase: 'team_vote',
+    questHistory: [
+      { round: 1, team: ['P2', 'P3', 'P5'], result: 'success', failCount: 0 },
+      { round: 2, team: ['P2', 'P3', 'P5', 'P7'], result: 'success', failCount: 0 },
+    ],
+    voteHistory: [], proposedTeam: ['P2', 'P3', 'P5', 'P7'], lakeHistory: [],
+  } as unknown as PlayerObservation;
+  it('q = 1: approves the public-clean team with a seen red', () => {
+    expect(merlinVoteCoverApprove({ ...DEFAULT_AGENT_TUNING, merlinVoteCover: 1 }, vobs)).toBe(true);
+  });
+  it('off, a team with no seen red, or a fail would be fatal: no cover', () => {
+    const on = { ...DEFAULT_AGENT_TUNING, merlinVoteCover: 1 };
+    expect(merlinVoteCoverApprove(DEFAULT_AGENT_TUNING, vobs)).toBe(false);
+    expect(merlinVoteCoverApprove(on, { ...vobs, proposedTeam: ['P2', 'P3', 'P5', 'P8'] } as PlayerObservation)).toBe(false);
+    expect(merlinVoteCoverApprove(on, { ...vobs, questResults: ['fail', 'fail'] } as PlayerObservation)).toBe(false);
+    expect(merlinVoteCoverApprove(on, { ...vobs, failCount: 4 } as PlayerObservation)).toBe(false);
   });
 });
