@@ -55,9 +55,3 @@ jobs:
         env:
           GOOGLE_SHEETS_CREDENTIALS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS_JSON }}
           GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
-
-      - name: Sync HackMD
-        run: npm run sync-hackmd
-        env:
-          HACKMD_API_TOKEN: ${{ secrets.HACKMD_API_TOKEN }}
-          HACKMD_NOTE_ID: ${{ secrets.HACKMD_NOTE_ID }}
