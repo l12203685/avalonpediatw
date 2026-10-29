@@ -97,6 +97,12 @@ export interface BayesOptions {
    * the loyal Merlin mixture read those proposals with the zone model (averaged over which red is the unseen Mordred).
    */
   zoneMerlin?: boolean;
+  /**
+   * `merlinLoyalStyle` (round 5, Edward 2026-10-29): Merlin proposes like a loyal but never with a red it sees, in every
+   * round — so the R1–R2 non-forced proposals of the Merlin candidate read with the strict model too (no seen red;
+   * uniform over the clean picks), instead of being skipped as 派拇指躲刺.
+   */
+  merlinEarlyStrict?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -108,7 +114,8 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   const strict = opts.strictMerlin && percival ? obs.knownWizards ?? [] : [];
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
   const zone = opts.zoneMerlin === true;
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}`;
+  const early = opts.merlinEarlyStrict === true;
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -128,7 +135,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
     for (const v of obs.voteHistory) {
       const teamMask = view.maskOf(v.team);
       const hasRed = (w & teamMask) !== 0;
-      const doomed = v.round <= 2 && v.attempt < 5;
+      const doomed = v.round <= 2 && v.attempt < 5 && !early;
       // Strict Merlin (Percival's good thumb in this world): proposals from its seen-clean pool.
       if (strict.includes(v.leader) && !red(v.leader) && v.team.includes(v.leader)) {
         if (doomed && zone) {
@@ -176,7 +183,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
       const p = missionProb(q.round, sizeOf(w & view.maskOf(q.team)), q.failCount ?? 0);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
-    if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode, zone);
+    if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode, zone, early);
     for (const l of obs.lakeHistory ?? []) {
       if (l.declaredClaim === 'none' || l.holderId === me || !red(l.holderId)) continue;
       const c = T.redLake[red(l.targetId) ? 'evil' : 'good'] ?? [1, 2];
@@ -240,6 +247,7 @@ function merlinMixtureLog(
   w: number,
   mode: number,
   zone = false,
+  earlyStrict = false,
 ): number {
   const ids = obs.allPlayerIds;
   const me = obs.myPlayerId;
@@ -250,7 +258,8 @@ function merlinMixtureLog(
   const reds = ids.filter((id) => red(id));
   if (blues.length === 0 || reds.length === 0) return 0;
   const all = view.maskOf(ids);
-  const late = obs.voteHistory.filter((v) => v.round >= 3);
+  // With `merlinEarlyStrict` the R1–R2 proposals of the Merlin candidate read with the strict model as well.
+  const late = obs.voteHistory.filter((v) => v.round >= 3 || (earlyStrict && mode >= 2 && v.attempt < 5 && v.leader !== me));
   const early = zone ? obs.voteHistory.filter((v) => v.round <= 2 && v.attempt < 5) : [];
   let sum = 0;
   for (const m of blues) {
@@ -274,7 +283,7 @@ function merlinMixtureLog(
         const seenRed = (w & teamMask & ~bit(d)) !== 0;
         const hasRed = (w & teamMask) !== 0;
         const on = v.team.includes(m);
-        if (v.attempt < 5 && v.votes[m] !== undefined) {
+        if (v.round >= 3 && v.attempt < 5 && v.votes[m] !== undefined) {
           const pg = voteProb('good', on, hasRed, v.round, true);
           let pm: number;
           if (mode >= 2) {

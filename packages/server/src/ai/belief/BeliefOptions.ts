@@ -53,11 +53,13 @@ export interface BeliefOptions {
   loyalMerlinRead?: number;
   /** `merlinZoneSignal`: read Merlin's R1–R2 proposals as zone cuts (`BayesOptions.zoneMerlin`). */
   merlinZoneSignal?: boolean;
+  /** `merlinLoyalStyle`: read the Merlin candidate's R1–R2 proposals strictly (`BayesOptions.merlinEarlyStrict`). */
+  merlinLoyalStyle?: boolean;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic' | 'loyalMerlinRead' | 'merlinZoneSignal'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic' | 'loyalMerlinRead' | 'merlinZoneSignal' | 'merlinLoyalStyle'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -81,6 +83,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     percivalThumbLogic: tuning.percivalThumbLogic,
     loyalMerlinRead: tuning.loyalMerlinRead,
     merlinZoneSignal: tuning.merlinZoneSignal,
+    merlinLoyalStyle: tuning.merlinLoyalStyle,
   };
 }
 

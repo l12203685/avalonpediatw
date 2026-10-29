@@ -57,6 +57,7 @@ import { goodCleanVoteReject } from '../GoodCleanVote';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
+import { merlinLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -744,6 +745,13 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    // Round 5 (Merlin) candidate `merlinLoyalStyle` (MerlinLoyalStyle.ts): Merlin proposes like a loyal, never with a
+    // red it sees — every round, instead of the cover or the zone cut.
+    if (this.baseline.tuning.merlinLoyalStyle && obs.myRole === 'merlin' && d.action.type === 'team_select') {
+      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action);
+      if (styled !== d.action) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin loyal-style team` } };
+      return d;
+    }
     // Round 5 (Merlin) candidate `merlinZoneSignal` (ZoneModel.ts): on a doomed R1–R2 proposal Merlin cuts zones and
     // extends / corrects the earlier proposals (no seen red on the team) instead of the 派拇指躲刺 cover.
     if (this.baseline.tuning.merlinZoneSignal && obs.myRole === 'merlin' && d.action.type === 'team_select'

@@ -478,6 +478,11 @@ export interface AgentTuning {
    * 依位階分配失敗牌（第 1–3 局兩個相認紅：刺客出失敗、莫德雷德出成功、莫甘娜先觀察……）。邏輯修正，預設開。
    */
   redRankOrder: boolean;
+  /**
+   * 第 5 回合藍方・梅林（`MerlinLoyalStyle.ts`，Edward 2026-10-29）：梅林派票跟場上忠臣做一樣的事——用只看公開紀錄的忠臣
+   * 視角挑最合理的隊，但隊上不放他看得到的紅（每一局，取代派拇指躲刺）；忠臣、派西讀梅林候選人第 1、2 局的提議也用嚴格模型。
+   */
+  merlinLoyalStyle: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -539,6 +544,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'assassinMerlinVotes',
   'merlinZoneSignal',
   'redRankOrder',
+  'merlinLoyalStyle',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -599,6 +605,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinMerlinVotes: 0,
   merlinZoneSignal: false,
   redRankOrder: false,
+  merlinLoyalStyle: false,
 });
 
 /**
@@ -807,6 +814,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinMerlinVotes: 0,
   merlinZoneSignal: false,
   redRankOrder: true,
+  merlinLoyalStyle: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -867,6 +875,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   assassinMerlinVotes: 'AVALON_TUNING_ASSASSIN_MERLIN_VOTES',
   merlinZoneSignal: 'AVALON_TUNING_MERLIN_ZONE_SIGNAL',
   redRankOrder: 'AVALON_TUNING_RED_RANK_ORDER',
+  merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
 });
 
 function parseBool(raw: string): boolean | undefined {
