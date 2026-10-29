@@ -26,6 +26,7 @@ import {
   type AgentTuning,
 } from './AgentTuning';
 import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelWeights } from './assassin/AssassinModel';
+import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
@@ -2649,10 +2650,16 @@ export class HeuristicAgent implements AvalonAgent {
     // trained on the logged games (`assassin/AssassinModel.ts`), using
     // only the public history plus the assassin's own known allies.
     if (this.tuning.assassinModel) {
-      if (!visibleRed.tier && !visibleRed.likelihood) {
+      const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
+      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
       const scores = scoreAssassinCandidates(obs, goodPlayers, this.assassinModelWeights);
+      // Round 6 (red) candidate `assassinMerlinVotes` (assassin/MerlinVoteRead.ts): read Merlin off the R3+ votes.
+      if (voteWeight > 0) {
+        const reds = [...evilSet];
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteWeight * merlinVoteLogRatio(obs, id, reds));
+      }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }
 

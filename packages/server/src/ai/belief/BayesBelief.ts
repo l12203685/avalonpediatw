@@ -275,3 +275,8 @@ function merlinMixtureLog(
   }
   return Math.log(sum / (blues.length * reds.length));
 }
+
+/** P(vote) of a generic blue voter (the human vote table), for callers outside the posterior (the assassin). */
+export function genericGoodVoteProb(on: boolean, hasRed: boolean, round: number, approve: boolean): number {
+  return voteProb('good', on, hasRed, round, approve);
+}
