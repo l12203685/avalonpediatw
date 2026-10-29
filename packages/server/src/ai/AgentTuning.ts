@@ -447,6 +447,10 @@ export interface AgentTuning {
   redStackRatio: number;
   /** 第 4 回合紅方 C2（`RedRound4.ts`，Edward 10/29「衝隊友要分工」）：最乾淨的前幾個紅不替隊友投外白（0 = 關）。 */
   redDivisionVote: number;
+  /** 第 4 回合紅方 D1（`RedRound4.ts`，Edward 10/29「帶被選到次數超過平均的隊友」）：1 = 自己＋熱門隊友、2 = 只帶熱門隊友（0 = 關）。 */
+  redFavoriteMate: number;
+  /** 第 4 回合紅方 D2（`RedRound4.ts`，Edward 10/29「分拆成 2 邊」）：莫德雷德送自己、刺客與莫甘娜送熱門隊友。 */
+  redTwoLines: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -501,6 +505,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redCleanLook',
   'redStackRatio',
   'redDivisionVote',
+  'redFavoriteMate',
+  'redTwoLines',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -554,6 +560,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanLook: false,
   redStackRatio: 0,
   redDivisionVote: 0,
+  redFavoriteMate: 0,
+  redTwoLines: false,
 });
 
 /**
@@ -755,6 +763,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanLook: false,
   redStackRatio: 0,
   redDivisionVote: 0,
+  redFavoriteMate: 0,
+  redTwoLines: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -808,6 +818,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redCleanLook: 'AVALON_TUNING_RED_CLEAN_LOOK',
   redStackRatio: 'AVALON_TUNING_RED_STACK_RATIO',
   redDivisionVote: 'AVALON_TUNING_RED_DIVISION_VOTE',
+  redFavoriteMate: 'AVALON_TUNING_RED_FAVORITE_MATE',
+  redTwoLines: 'AVALON_TUNING_RED_TWO_LINES',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -845,10 +857,10 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
   }
-  if (name === 'redDivisionVote') {
+  if (name === 'redDivisionVote' || name === 'redFavoriteMate') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`redDivisionVote needs 0–3, got "${raw}"`);
-    return { redDivisionVote: value };
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`${name} needs 0–3, got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
   }
   if (name === 'goodCleanVoteMaxAttempt') {
     const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
@@ -902,7 +914,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

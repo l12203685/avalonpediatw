@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING } from './AgentTuning';
-import { redCleanLookTeam, redDivisionReject } from './RedRound4';
+import { favoriteMate, redCleanLookTeam, redDivisionReject } from './RedRound4';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const ON = { ...DEFAULT_AGENT_TUNING, redCleanLook: true };
@@ -75,5 +75,33 @@ describe('redDivisionVote (C2, Edward 10/29「衝隊友要分工」)', () => {
     expect(redDivisionReject(on, vote('P1', ['P2', 'P3']))).toBe(true);
     expect(redDivisionReject(on, vote('P3', ['P1', 'P2']))).toBe(false);
     expect(redDivisionReject(DEFAULT_AGENT_TUNING, vote('P1', ['P2', 'P3']))).toBe(false);
+  });
+});
+
+describe('redFavoriteMate / redTwoLines (D1 / D2, Edward 10/29)', () => {
+  // Blue leaders P5 and P8 both put teammate P3 on their (R1–R2) teams: P3 is the favorite.
+  const votes = [
+    { round: 1, attempt: 1, leader: 'P5', team: ['P5', 'P3', 'P6'], approved: false, votes: {} },
+    { round: 1, attempt: 2, leader: 'P8', team: ['P8', 'P3', 'P9'], approved: false, votes: {} },
+    { round: 1, attempt: 3, leader: 'P2', team: ['P2', 'P1', 'P4'], approved: false, votes: {} },
+  ];
+  const fav = (role: string) => obs({ myRole: role as PlayerObservation['myRole'], voteHistory: votes as unknown as PlayerObservation['voteHistory'] });
+  it('the favorite: picked by blue leaders more than average', () => {
+    expect(favoriteMate(fav('assassin'))).toBe('P3');
+    expect(favoriteMate(obs())).toBeNull();
+  });
+  it('D1 = 2 sends the favorite instead of the leader; D2 splits by role', () => {
+    const t = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P5', 'P6'] };
+    const d1 = redCleanLookTeam({ ...ON, redFavoriteMate: 2 }, fav('assassin'), t);
+    if (d1.type !== 'team_select') throw new Error(d1.type);
+    expect(d1.teamIds).toContain('P3');
+    expect(d1.teamIds).not.toContain('P1');
+    const lineThumb = redCleanLookTeam({ ...ON, redTwoLines: true }, fav('morgana'), t);
+    if (lineThumb.type !== 'team_select') throw new Error(lineThumb.type);
+    expect(lineThumb.teamIds).toContain('P3');
+    const lineMordred = redCleanLookTeam({ ...ON, redTwoLines: true }, fav('mordred'), t);
+    if (lineMordred.type !== 'team_select') throw new Error(lineMordred.type);
+    expect(lineMordred.teamIds).toContain('P1');
+    expect(lineMordred.teamIds).not.toContain('P3');
   });
 });

@@ -12,6 +12,14 @@
  *    這個比例以上時（0 = 關）。兩個紅同隊，一張失敗由位階法分給一人，另一人留著不爆。
  * C2 `redDivisionVote`（衝隊友要分工）：第 3 局起不在隊上、隊上有隊友時，替隊友投白（外白）的只有已經比較曝光的紅；
  *    藍方估起來最乾淨的前 N 個紅照正常票投黑，保持乾淨（0 = 關）。每個紅都用同一份公開紀錄排序，不用溝通就分得出工。
+ *
+ * Edward 2026-10-29：「既然允許梅林去派可見拇指，那只要發現某個隊友拿超過平均被選到的次數以上，這時隊友就應該盡量
+ * 在隊伍選擇上帶這個人。甚至是分拆成 2 邊：一邊目標是送莫德雷德進任務，另一邊則是送可見拇指（刺客或莫甘娜）進任務。」
+ * 「熱門隊友」= 被藍方隊長（紅方知道哪些隊長是紅的，只算其他隊長的提議）選進隊伍的次數超過全體平均的隊友，取最多的那個。
+ * D1 `redFavoriteMate`：第 3 局起紅隊長的隊伍帶熱門隊友（1 = 自己＋熱門隊友；2 = 只帶熱門隊友、自己不上，
+ *    10 人局第 4 局要兩張失敗時仍是自己＋熱門隊友）；其餘位置照 B1 挑藍方估起來最乾淨的人（0 = 關）。
+ * D2 `redTwoLines`：分兩邊——莫德雷德當隊長送自己（梅林看不到他）；刺客、莫甘娜當隊長送熱門隊友（多半是被梅林派過的
+ *    可見拇指，自己不上）。紅方互相不知道角色，每個紅只看自己的角色就分得出邊。
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
@@ -65,6 +73,22 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
     }
     return { team, score };
   };
+  // D1 / D2: the reds on the team are fixed (the favorite teammate, or the leader), the rest is B1's cleanest fill.
+  const fixedReds = fixedRedSet(tuning, obs, failsNeeded);
+  if (fixedReds) {
+    const blues = viewers.filter((id) => !fixedReds.includes(id));
+    if (blues.length >= size - fixedReds.length && fixedReds.length <= size) {
+      let team: string[] | null = null;
+      let score = -1;
+      for (const fill of combinations(blues, size - fixedReds.length)) {
+        const t = [...fixedReds, ...fill];
+        let sum = 0;
+        for (const view of views) sum += bayesTeamClean(view, t) ?? 0;
+        if (sum / views.length > score) { score = sum / views.length; team = t; }
+      }
+      if (team) return { type: 'team_select', teamIds: team };
+    }
+  }
   const min = bestOf(failsNeeded);
   // C1: stack one more teammate when that costs little of the cleanest look.
   const ratio = tuning.redStackRatio ?? 0;
@@ -101,4 +125,42 @@ export function redDivisionReject(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const key = (id: string): number => Math.round((suspicion.get(id) ?? 0) * 1e6);
   const order = [...reds].sort((a, b) => key(a) - key(b) || a.localeCompare(b));
   return order.slice(0, hidden).includes(me);
+}
+
+/**
+ * The teammate blue leaders pick most (proposals led by seats red does not know as red), when that is above the
+ * all-seat average; null otherwise.
+ */
+export function favoriteMate(obs: PlayerObservation): string | null {
+  const me = obs.myPlayerId;
+  const reds = new Set([me, ...obs.knownEvils]);
+  const count = new Map(obs.allPlayerIds.map((id) => [id, 0]));
+  for (const v of obs.voteHistory) {
+    if (reds.has(v.leader)) continue;
+    for (const id of v.team) count.set(id, (count.get(id) ?? 0) + 1);
+  }
+  const avg = [...count.values()].reduce((a, b) => a + b, 0) / Math.max(1, count.size);
+  let best: string | null = null;
+  for (const id of obs.knownEvils) {
+    if (id === me) continue;
+    const c = count.get(id) ?? 0;
+    if (c > avg && (best === null || c > (count.get(best) ?? 0))) best = id;
+  }
+  return best;
+}
+
+/** D1 / D2: the reds the leader's team carries, or null for B1's own choice. */
+function fixedRedSet(tuning: Readonly<AgentTuning>, obs: PlayerObservation, failsNeeded: number): string[] | null {
+  const me = obs.myPlayerId;
+  let mode = tuning.redFavoriteMate ?? 0;
+  if (tuning.redTwoLines) {
+    // Mordred sends himself (B1); the visible thumbs send the favorite teammate.
+    if (obs.myRole === 'mordred') return null;
+    mode = 2;
+  }
+  if (mode <= 0) return null;
+  const fav = favoriteMate(obs);
+  if (!fav) return null;
+  if (mode === 1 || failsNeeded >= 2) return [me, fav];
+  return [fav];
 }
