@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
+import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
@@ -252,6 +252,36 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
     ? WIKI_ARTICLE_ROLE[selectedArticle.id] ?? ARTICLE_TO_ROLE[selectedArticle.id]
     : undefined;
 
+  // `[標題](wiki:wiki-57)` links (延伸閱讀 etc.) swap the open article in place; an unknown id is plain text.
+  const articleComponents = useMemo(() => {
+    const byId = new Map(allArticles.map((a) => [a.id, a]));
+    return {
+      ...markdownComponents,
+      a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => {
+        const id = wikiArticleId(href);
+        if (id === null) return markdownComponents.a({ children, href });
+        const target = byId.get(id);
+        return target ? (
+          <button
+            type="button"
+            onClick={() => setSelectedArticle(target)}
+            className="inline text-left text-yellow-400 underline hover:text-yellow-300"
+          >
+            {children}
+          </button>
+        ) : (
+          <span>{children}</span>
+        );
+      },
+    };
+  }, [allArticles]);
+
+  // Opening a linked article starts it from the top.
+  const modalRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    modalRef.current?.scrollTo?.({ top: 0 });
+  }, [selectedArticle?.id]);
+
   return (
     <div className="bg-gradient-to-b from-avalon-dark to-black px-3 py-3">
       <div className="max-w-6xl mx-auto space-y-3">
@@ -434,6 +464,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
             aria-label={selectedArticle.title}
           >
             <motion.div
+              ref={modalRef}
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
@@ -472,7 +503,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                 <div className="max-w-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    components={markdownComponents}
+                    components={articleComponents}
                     urlTransform={(url) => wikiUrlTransform(url, defaultUrlTransform)}
                   >
                     {normalizeWikiMarkup(selectedArticle.content)}

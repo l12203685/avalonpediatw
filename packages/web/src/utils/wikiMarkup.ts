@@ -73,9 +73,22 @@ export function normalizeWikiMarkup(content: string): string {
   return out.join('\n');
 }
 
-/** react-markdown `urlTransform`: keep our color pseudo-links, sanitize everything else the default way. */
+/**
+ * `[標題](wiki:wiki-57)`：連到另一篇百科文章（「延伸閱讀」、文中的「參閱」；Edward 2026-10-29 百科整併）。
+ * WikiContent 在同一個文章視窗裡換成那篇，不開新分頁。
+ */
+export const WIKI_ARTICLE_SCHEME = 'wiki:';
+
+/** The article id of a `wiki:` link, or null for any other href. */
+export function wikiArticleId(href: string | undefined): string | null {
+  if (!href?.startsWith(WIKI_ARTICLE_SCHEME)) return null;
+  const id = href.slice(WIKI_ARTICLE_SCHEME.length).trim();
+  return id || null;
+}
+
+/** react-markdown `urlTransform`: keep our color pseudo-links and article links, sanitize everything else the default way. */
 export function wikiUrlTransform(url: string, fallback: (u: string) => string): string {
-  return url.startsWith(WIKI_COLOR_SCHEME) ? url : fallback(url);
+  return url.startsWith(WIKI_COLOR_SCHEME) || url.startsWith(WIKI_ARTICLE_SCHEME) ? url : fallback(url);
 }
 
 /** A card excerpt in plain text: no front matter (`title: …` lines), no `[TOC]`, no HTML tags. */

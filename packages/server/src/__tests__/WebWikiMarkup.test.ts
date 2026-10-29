@@ -2,7 +2,7 @@
  * 百科舊式 HTML → 網站樣式（packages/web/src/utils/wikiMarkup.ts，Edward 2026-10-28）。
  */
 import { describe, expect, it } from 'vitest';
-import { normalizeWikiMarkup, wikiExcerpt, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
+import { normalizeWikiMarkup, wikiArticleId, wikiExcerpt, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
 
 describe('normalizeWikiMarkup', () => {
   it('a run of whole-line red text becomes a warning callout (the 點跳夾 notice)', () => {
@@ -34,10 +34,19 @@ describe('normalizeWikiMarkup', () => {
     expect(normalizeWikiMarkup(src)).toBe('# 標題\n\n---\n\n下一段');
   });
 
-  it('the url transform keeps only our color scheme', () => {
+  it('the url transform keeps only our color scheme and article links', () => {
     const fallback = (u: string) => (u.startsWith('javascript:') ? '' : u);
     expect(wikiUrlTransform('wiki-color:red', fallback)).toBe('wiki-color:red');
+    expect(wikiUrlTransform('wiki:wiki-57', fallback)).toBe('wiki:wiki-57');
     expect(wikiUrlTransform('javascript:alert(1)', fallback)).toBe('');
+  });
+
+  it('wiki: links name an article id; other hrefs are not article links', () => {
+    expect(wikiArticleId('wiki:wiki-57')).toBe('wiki-57');
+    expect(wikiArticleId('wiki-color:red')).toBeNull();
+    expect(wikiArticleId('https://hackmd.io/x')).toBeNull();
+    expect(wikiArticleId('wiki:')).toBeNull();
+    expect(wikiArticleId(undefined)).toBeNull();
   });
 
   it('card excerpts drop front-matter lines and tags', () => {
