@@ -488,6 +488,12 @@ export interface AgentTuning {
    * 分數 = log P(自己信念：全隊沒紅) + 0.5 × log P(公開忠臣視角：全隊沒紅)；不硬閃拇指，夾不夾由分數決定。
    */
   percivalLoyalStyle: boolean;
+  /**
+   * 第 1 局讀前面的派票（Edward 2026-10-29）：拿掉第 1 局「跟前面被否決的隊重疊過半就扣分」（5/11 修補、會變成填空／反邊），
+   * `goodCleanLead` 也在第 1 局第 2 次提議起照判讀派隊——1 派 168，2 家忠臣看來 1 有三分之二是能力者，168 有參考價值，
+   * 延伸或修正由信念決定。
+   */
+  r1ReadPrior: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -551,6 +557,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redRankOrder',
   'merlinLoyalStyle',
   'percivalLoyalStyle',
+  'r1ReadPrior',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -613,6 +620,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redRankOrder: false,
   merlinLoyalStyle: false,
   percivalLoyalStyle: false,
+  r1ReadPrior: false,
 });
 
 /**
@@ -823,6 +831,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redRankOrder: true,
   merlinLoyalStyle: false,
   percivalLoyalStyle: false,
+  r1ReadPrior: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -885,6 +894,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redRankOrder: 'AVALON_TUNING_RED_RANK_ORDER',
   merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
   percivalLoyalStyle: 'AVALON_TUNING_PERCIVAL_LOYAL_STYLE',
+  r1ReadPrior: 'AVALON_TUNING_R1_READ_PRIOR',
 });
 
 function parseBool(raw: string): boolean | undefined {

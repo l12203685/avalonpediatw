@@ -29,7 +29,9 @@ export function goodCleanLeadTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const loyal = obs.myRole === 'loyal' && (scope & 1) !== 0;
   const percival = obs.myRole === 'percival' && (scope & 2) !== 0;
   if (!loyal && !percival) return action;
-  if ((obs.currentRound ?? 1) < 2) return action;
+  // R1: only with `r1ReadPrior` and an earlier proposal on the table to read (1-2 onwards).
+  const round = obs.currentRound ?? 1;
+  if (round < 2 && !(tuning.r1ReadPrior && obs.voteHistory.some((v) => v.round === 1))) return action;
   const me = obs.myPlayerId;
   const others = obs.allPlayerIds.filter((id) => id !== me);
   const size = action.teamIds.length;
