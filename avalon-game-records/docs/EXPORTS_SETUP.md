@@ -1,10 +1,10 @@
 # 衍生輸出設定指南
 
-本文件說明如何啟用 `games/**/*.json` → CSV / Google Sheets / HackMD 的自動同步。
+本文件說明如何啟用 `games/**/*.json` → CSV / Google Sheets 的自動同步。
 `exports/games.csv` 與 `STATS.md` 不需任何設定即會自動產生；
-Google Sheets 與 HackMD 同步為選用，沒設定對應 Secrets 就會自動跳過（不會報錯中斷）。
+Google Sheets 同步為選用，沒設定對應 Secrets 就會自動跳過（不會報錯中斷）。
 
-所有設定都是**單向**：JSON 是唯一真相來源，Sheets / HackMD 只是被動接收算好的結果，
+所有設定都是**單向**：JSON 是唯一真相來源，Sheets 只是被動接收算好的結果，
 不會、也不該手動回頭改它們再同步回 JSON。
 
 ---
@@ -39,33 +39,15 @@ GitHub 預設可能把 Actions 的寫入權限設成唯讀，這樣 Action 算�
 
 ---
 
-## 2. HackMD 自動統計頁
-
-1. 登入 HackMD → `Settings → API` → 產生一個 Access Token。
-2. 手動建立一個新 note 當同步目標（內容隨意，例如先打個標題就好）。
-3. 從該 note 的網址取得 note ID：`https://hackmd.io/`**`<note id>`**。
-4. 到本 repo（avalonpediatw）`Settings → Secrets and variables → Actions`，新增：
-   - `HACKMD_API_TOKEN`
-   - `HACKMD_NOTE_ID`
-
-同步時會用 `STATS.md` 的完整內容覆寫該 note，所以**不要手動編輯這個 note**，下次同步會蓋掉。
-
-> 腳本對接的是 HackMD API v1（`https://api.hackmd.io/v1`，`PATCH /notes/{noteId}`，
-> body `{ "content": "..." }`，header `Authorization: Bearer <token>`）。
-> 若 HackMD 之後調整了 API，第一次跑就會在 Action log 看到明確的 HTTP 錯誤訊息
-> （而不是悄悄失敗），照錯誤訊息調整 `scripts/sync-hackmd.mjs` 即可。
-
----
-
-## 3. 驗證設定
+## 2. 驗證設定
 
 到本 repo（avalonpediatw）的 `Actions` 頁籤 → 選 `Game records exports` workflow
 （定義在 repo 根目錄的 `.github/workflows/game-records-exports.yml`）→
 `Run workflow`（手動觸發，不用等真的有新對局）。跑完後檢查：
 
-- Log 裡有沒有 `Synced ... to Google Sheet ...` / `Synced STATS.md to HackMD note ...`
+- Log 裡有沒有 `Synced ... to Google Sheet ...`
   （沒設 Secrets 的話會看到 `skipping ... sync` 訊息，這是正常的，不是錯誤）。
-- 對應的 Google Sheet 分頁 / HackMD note 內容是否更新。
+- 對應的 Google Sheet 分頁內容是否更新。
 - `exports/games.csv` 與 `STATS.md` 是否被 commit 回 `main`
   （目前 `games/` 還沒有真實對局資料，這兩個檔案的內容會是「尚無資料」，這是預期行為）。
 
