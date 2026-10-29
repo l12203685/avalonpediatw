@@ -11,9 +11,11 @@
  * 自己的動作不算（自己知道自己為什麼這樣做）。每個動作用的是那個世界裡當時的身分，事件依時間逐一累加（資訊流）。
  */
 import type { PlayerObservation } from '../types';
+import type { AgentTuning } from '../AgentTuning';
 import { buildCertainty } from './Certainty';
 import { zoneTeamLogProb, type PriorProposal } from './ZoneModel';
 import TABLE from './likelihoods.json';
+import BOT_TABLE from './likelihoods_bot.json';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -24,31 +26,56 @@ interface Table {
   redLake: Record<string, [number, number]>;
 }
 const T = TABLE as unknown as Table;
+/** The same tables fitted on bot self-play (`scripts/fitBeliefLikelihoods.ts --bots`; `BayesOptions.botTables`). */
+const TB = BOT_TABLE as unknown as Table;
+/**
+ * The bot-table weight of the posterior being computed (`BayesOptions.botTables`; 0 = the human tables alone). Set by
+ * `posterior()` for the duration of one synchronous computation, so the helpers below read it without threading it.
+ */
+let mix = 0;
+const blend = (human: number, bot: number): number => (mix > 0 ? (1 - mix) * human + mix * bot : human);
 
 const bucket = (round: number): string => (round <= 2 ? 'r12' : 'r3');
 const smooth = (hit: number, n: number): number => (hit + 1) / (n + 2);
 
 /** `camp` = 'good' | 'evil', or a role key 'merlin' | 'morgana' (the role tables, Percival's thumbs). */
-function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, approve: boolean): number {
+function voteProbIn(t: Table, camp: string, on: boolean, hasRed: boolean, round: number): number {
   const key = `${camp}|${on ? 'on' : 'off'}|${hasRed ? 'red' : 'clean'}|${bucket(round)}`;
-  const c = (camp === 'merlin' || camp === 'morgana' ? T.voteRole[key] : T.vote[key]) ?? [1, 2];
-  const p = smooth(c[0], c[1]);
+  const c = (camp === 'merlin' || camp === 'morgana' ? t.voteRole[key] : t.vote[key]) ?? [1, 2];
+  return smooth(c[0], c[1]);
+}
+
+function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, approve: boolean): number {
+  const p = blend(voteProbIn(T, camp, on, hasRed, round), voteProbIn(TB, camp, on, hasRed, round));
   return approve ? p : 1 - p;
 }
 
-function proposalProb(camp: string, round: number, k: number): number {
-  const tab = camp === 'merlin' || camp === 'morgana' ? T.proposalRole : T.proposal;
+function proposalProbIn(t: Table, camp: string, round: number, k: number): number {
+  const tab = camp === 'merlin' || camp === 'morgana' ? t.proposalRole : t.proposal;
   let total = 0;
   for (let j = 0; j <= 5; j++) total += (tab[`${camp}|${bucket(round)}|${j}`] ?? 0) + 1;
   return ((tab[`${camp}|${bucket(round)}|${k}`] ?? 0) + 1) / total;
 }
 
-function missionProb(round: number, reds: number, fails: number): number {
-  if (fails > reds) return 0;
-  const d = T.mission[`${round}|${reds}`];
+function proposalProb(camp: string, round: number, k: number): number {
+  return blend(proposalProbIn(T, camp, round, k), proposalProbIn(TB, camp, round, k));
+}
+
+function missionProbIn(t: Table, round: number, reds: number, fails: number): number {
+  const d = t.mission[`${round}|${reds}`];
   if (!d) return fails === reds ? 0.9 : 0.1;
   const n = d.slice(0, reds + 1).reduce((a, b) => a + b + 1, 0);
   return ((d[fails] ?? 0) + 1) / n;
+}
+
+function missionProb(round: number, reds: number, fails: number): number {
+  if (fails > reds) return 0;
+  return blend(missionProbIn(T, round, reds, fails), missionProbIn(TB, round, reds, fails));
+}
+
+function redLakeProb(targetRed: boolean): number {
+  const at = (t: Table): number => { const c = t.redLake[targetRed ? 'evil' : 'good'] ?? [1, 2]; return smooth(c[0], c[1]); };
+  return blend(at(T), at(TB));
 }
 
 function choose(n: number, k: number): number {
@@ -69,6 +96,12 @@ interface Posterior {
 const caches = new Map<string, WeakMap<PlayerObservation, Posterior>>();
 
 export interface BayesOptions {
+  /**
+   * `beliefBotTables` (Edward 2026-10-30): weight of the likelihood tables fitted on bot self-play (`likelihoods_bot.json`)
+   * against the human ones — the blues read what their current opponents actually do (bot reds vote off-team for a team
+   * with a teammate 95% and almost never otherwise, which the human tables read as nearly nothing). 0 = human only.
+   */
+  botTables?: number;
   /**
    * `bayesThumbRoles` (optimization loop round 3): for Percival, in every world the good thumb is Merlin and
    * the red one Morgana — their actions are read with the role tables (`voteRole`, `proposalRole`), so the
@@ -109,13 +142,22 @@ export interface BayesOptions {
 const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
+  mix = Math.min(Math.max(opts.botTables ?? 0, 0), 1);
+  try {
+    return posteriorWith(obs, opts);
+  } finally {
+    mix = 0;
+  }
+}
+
+function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
   const percival = obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2;
   const thumbs = opts.thumbRoles && percival ? obs.knownWizards ?? [] : [];
   const strict = opts.strictMerlin && percival ? obs.knownWizards ?? [] : [];
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
   const zone = opts.zoneMerlin === true;
   const early = opts.merlinEarlyStrict === true;
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}`;
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${mix > 0 ? `b${mix}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -171,7 +213,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
         if (strict.includes(id) && !red(id) && v.round >= 3) {
           // Strict Merlin: approves a team with a red it sees all but never (one red: Mordred with 1/reds).
           const k = sizeOf(w & teamMask);
-          const pClean = smooth(...(T.vote[`good|${v.team.includes(id) ? 'on' : 'off'}|clean|r3`] ?? [1, 2]) as [number, number]);
+          const pClean = voteProb('good', v.team.includes(id), false, 3, true);
           const pYes = k === 0 ? pClean : k === 1 ? pClean / sizeOf(w & all) + STRICT_EPS : STRICT_EPS;
           lp += Math.log(v.votes[id] ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
           continue;
@@ -186,8 +228,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
     if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode, zone, early);
     for (const l of obs.lakeHistory ?? []) {
       if (l.declaredClaim === 'none' || l.holderId === me || !red(l.holderId)) continue;
-      const c = T.redLake[red(l.targetId) ? 'evil' : 'good'] ?? [1, 2];
-      const p = smooth(c[0], c[1]);
+      const p = redLakeProb(red(l.targetId));
       lp += Math.log(l.declaredClaim === 'evil' ? p : 1 - p);
     }
     return lp;
@@ -205,6 +246,18 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
 }
 
 const shareCache = new WeakMap<Posterior, Map<string, number>>();
+
+/** The posterior options a seat's tuning asks for (one place for every caller). */
+export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions {
+  return {
+    thumbRoles: t.bayesThumbRoles === true,
+    strictMerlin: t.percivalThumbLogic === true,
+    merlinMixture: t.loyalMerlinRead ?? 0,
+    zoneMerlin: t.merlinZoneSignal === true,
+    merlinEarlyStrict: t.merlinLoyalStyle === true,
+    botTables: t.beliefBotTables ?? 0,
+  };
+}
 
 /** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */
 export function bayesRedShare(obs: PlayerObservation, opts: Readonly<BayesOptions> = {}): Map<string, number> {
@@ -289,8 +342,7 @@ function merlinMixtureLog(
           if (mode >= 2) {
             pm = seenRed ? STRICT_EPS : voteProb('good', on, false, v.round, true);
           } else {
-            const c = T.voteRole[`merlin|${on ? 'on' : 'off'}|${seenRed ? 'red' : 'clean'}|${bucket(v.round)}`] ?? [1, 2];
-            pm = smooth(c[0], c[1]);
+            pm = voteProb('merlin', on, seenRed, v.round, true);
           }
           pm = Math.min(Math.max(pm, STRICT_EPS), 1 - STRICT_EPS);
           lr += Math.log(v.votes[m] ? pm / pg : (1 - pm) / (1 - pg));

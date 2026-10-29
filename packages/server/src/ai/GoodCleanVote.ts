@@ -8,7 +8,7 @@
  */
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
-import { bayesTeamClean } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 
 /** true = 這一票改投黑。 */
 export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
@@ -21,6 +21,6 @@ export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerOb
   if ((obs.failCount ?? 0) + 1 > (tuning.goodCleanVoteMaxAttempt ?? 4)) return false;
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
-  const p = bayesTeamClean(obs, team, { thumbRoles: tuning.bayesThumbRoles === true, strictMerlin: tuning.percivalThumbLogic === true, merlinMixture: tuning.loyalMerlinRead ?? 0, zoneMerlin: tuning.merlinZoneSignal === true, merlinEarlyStrict: tuning.merlinLoyalStyle === true });
+  const p = bayesTeamClean(obs, team, bayesOptionsOf(tuning));
   return p !== null && p < tau;
 }

@@ -10,7 +10,7 @@
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
-import { bayesTeamClean } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -40,7 +40,7 @@ export function goodCleanLeadTeam(
   const me = obs.myPlayerId;
   const others = obs.allPlayerIds.filter((id) => id !== me);
   const size = action.teamIds.length;
-  const opts = { thumbRoles: tuning.bayesThumbRoles === true, strictMerlin: tuning.percivalThumbLogic === true, merlinMixture: tuning.loyalMerlinRead ?? 0, zoneMerlin: tuning.merlinZoneSignal === true, merlinEarlyStrict: tuning.merlinLoyalStyle === true };
+  const opts = bayesOptionsOf(tuning);
   const scored: { team: string[]; p: number }[] = [];
   for (const fill of combinations(others, size - 1)) {
     const team = [me, ...fill];
