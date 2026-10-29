@@ -577,7 +577,8 @@ describe('ForwardAgent.decide team_vote R1-R2 force normal', () => {
   });
 
   it('R3 team_vote runs full forward pipeline (no delegation)', () => {
-    const baseline = new HeuristicAgent('R3');
+    // `goodCleanVote` (round 3) would reject this team by rule ahead of the pipeline: off.
+    const baseline = new HeuristicAgent('R3', undefined, undefined, { goodCleanVote: 0 });
     baseline.onGameStart(makeObs({}));
     const fa = new ForwardAgent('R3', baseline);
     const obs = makeObs({

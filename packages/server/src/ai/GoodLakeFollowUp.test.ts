@@ -73,10 +73,10 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 // declared red off a one-fail team — each enforces the word on its own. The
 // full current default is checked separately.
 // The lane was measured on the pyramid: blue suspicion is the Bayes posterior in production since 2026-10-28
-// (`bayesBelief`); off here, like the other later switches.
+// (`bayesBelief`); off here, like the other later switches (and `goodCleanVote`, round 3, which rejects first).
 const LANE_BASE: AgentTuning = {
   ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false,
-  teamDominanceGate: false, mustFailGate: false, bayesBelief: false,
+  teamDominanceGate: false, mustFailGate: false, bayesBelief: false, goodCleanVote: 0,
 };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };

@@ -24,9 +24,10 @@ import { replayRule } from './explain';
 import type { LakePublicRecord, PlayerObservation, QuestRecord, VoteRecord } from './types';
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
-const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING };
+// `goodCleanVote` (round 3) rejects ahead of the rules tested here: off.
+const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0 };
 /** Percival's batch-1E vote rule off (the 1D production default for votes). */
-const VOTE_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, percivalLoyalVote: false };
+const VOTE_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, percivalLoyalVote: false };
 
 function quest(round: number, team: string[], failCount: number): QuestRecord {
   const need = round === 4 ? 2 : 1;

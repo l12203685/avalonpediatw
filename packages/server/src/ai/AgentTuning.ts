@@ -732,11 +732,11 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanApprove: 0,
   bayesThumbRoles: false,
   merlinCoverRate: 1,
-  goodCleanVote: 0,
+  goodCleanVote: 0.25,
   goodCleanVoteLoyalOnly: false,
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
-  percivalThumbLogic: false,
+  percivalThumbLogic: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */

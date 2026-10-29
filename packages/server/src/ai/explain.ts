@@ -399,6 +399,12 @@ export function replayRule(
         mismatch: !sameAction(action, real),
       };
     }
+    if (desc === 'good clean vote (posterior)') {
+      return {
+        rule: '好人看機率投票：第 3 局起，估「這隊沒有紅」的機率太低（低於門檻） → 反對（忠臣與派西）',
+        mismatch: !sameAction(action, real),
+      };
+    }
     if (desc === 'red vouch follow-up reject') {
       return {
         rule: '紅方持湖者言行一致：自己不在隊上，隊伍漏掉自己宣藍的人、或放了宣紅的人 → 反對',

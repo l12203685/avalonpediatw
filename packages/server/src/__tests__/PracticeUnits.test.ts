@@ -292,10 +292,14 @@ describe('explain (read-only reasons)', () => {
       lakeHistory: [{ round: 2, holderId: 's1', targetId: 's5', declaredClaim: 'good' }],
       proposedTeam: ['s3', 's6', 's7', 's9'],
     });
-    const agent = new HeuristicAgent('s1', undefined, undefined, { ...DEFAULT_AGENT_TUNING });
+    // `goodCleanVote` (round 3) rejects this team first: off here, so the lake rule is the one that fires.
+    const agent = new HeuristicAgent('s1', undefined, undefined, { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0 });
     const r = replayRule(o, agent, { type: 'team_vote', vote: false }, { forwardActive: true });
     expect(r?.rule).toBe('持湖者言行一致：自己不在隊上，隊伍漏掉自己（或湖鏈上）宣藍的人、或放了宣紅的人 → 反對');
     expect(r?.mismatch).toBe(false);
+    // With the production default the posterior vote rule fires first, and the review names it.
+    const prod = replayRule(o, new HeuristicAgent('s1', undefined, undefined, { ...DEFAULT_AGENT_TUNING }), { type: 'team_vote', vote: false }, { forwardActive: true });
+    expect(prod?.rule).toContain('好人看機率投票');
   });
 
   it('ties are not shown as a ranking; Oberon gets the public view', () => {

@@ -30,7 +30,7 @@ describe('goodCleanVote', () => {
   });
 
   it('off: threshold 0, R1–R2, Merlin, red, not a vote', () => {
-    expect(goodCleanVoteReject(DEFAULT_AGENT_TUNING, obs())).toBe(false);
+    expect(goodCleanVoteReject({ ...DEFAULT_AGENT_TUNING, goodCleanVote: 0 }, obs())).toBe(false);
     expect(goodCleanVoteReject(ON, obs({ currentRound: 2 }))).toBe(false);
     expect(goodCleanVoteReject(ON, obs({ myRole: 'merlin', knownEvils: ['P2', 'P3'] }))).toBe(false);
     expect(goodCleanVoteReject(ON, obs({ myRole: 'assassin', myTeam: 'evil' }))).toBe(false);
