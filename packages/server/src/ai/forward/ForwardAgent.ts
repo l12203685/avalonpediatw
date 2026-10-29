@@ -716,6 +716,14 @@ export class ForwardAgent implements AvalonAgent {
       const hide = redHideEarlyCard(this.baseline.tuning, obs);
       if (hide) return this.ruleDecision(obs, { type: 'quest_vote', vote: hide }, 'red hide early (A1)');
     }
+    // 位階法 (Edward 4/24; `redRankOrder`): the recognised reds split the fail cards — it lived only on the
+    // baseline fallback path, so the production pipeline had every red fail (two reds on R2/R3: 2 fail cards).
+    // The human quest-card rules keep their place ahead of it (decideCore), as on the baseline path.
+    if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil' && this.baseline.tuning.redRankOrder
+      && !(this.baseline.tuning.humanQuestCardRules && humanQuestCardRule(obs) !== null)) {
+      const ranked = this.baseline.redRankOrderQuestVote(obs);
+      if (ranked) return this.ruleDecision(obs, { type: 'quest_vote', vote: ranked }, `red rank order (位階法) ${ranked}`);
+    }
     if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
       const yes = redCleanApproveVote(this.baseline.tuning, obs);
       if (yes) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red clean approve (A2)');

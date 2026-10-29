@@ -2401,6 +2401,15 @@ export class HeuristicAgent implements AvalonAgent {
     return null;
   }
 
+  /**
+   * 位階法 (Edward 2026-04-24 batch 10) for the production ForwardAgent path (`AgentTuning.redRankOrder`): the
+   * recognised reds' fail / success split, or null when it does not apply (blue, Oberon, switch off).
+   */
+  redRankOrderQuestVote(obs: PlayerObservation): 'fail' | 'success' | null {
+    if (obs.myTeam !== 'evil' || !EVIL_HIERARCHY_ROLES.has(obs.myRole as string)) return null;
+    return this.chooseRedHierarchyVote(obs);
+  }
+
   // ── Quest Vote ───────────────────────────────────────────────
 
   private voteOnQuest(obs: PlayerObservation): AgentAction {
