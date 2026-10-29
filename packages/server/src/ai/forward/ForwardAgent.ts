@@ -1360,7 +1360,10 @@ export class ForwardAgent implements AvalonAgent {
     const reuseGuard = reusePlan ? teamReuseGuard(obs, undefined, this.belief) : null;
     const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;
     const priorAttemptTeams = new Set<string>();
-    if (decisionType === 'team_select') {
+    // `r1ReadPrior` (Edward 2026-10-29): the R1 penalty for keeping more than half of an earlier rejected team pushed
+    // later leaders to the opposite side (填空／反邊); 1 派 168 is information (two to one, an ability user), to be
+    // read and extended / corrected — so with the switch on there is no penalty at all.
+    if (decisionType === 'team_select' && !this.baseline.tuning.r1ReadPrior) {
       const curRound = obs.currentRound ?? 1;
       for (const v of obs.voteHistory) {
         if (v.round !== curRound) continue;
