@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import {
+  reuseVoteFactor,
   DEFAULT_TEAM_REUSE_OPTIONS,
   keptShare,
   setTeamReuseOptions,
@@ -273,5 +274,18 @@ describe('TeamReuse — ForwardAgent wiring', () => {
       voteHistory: [vote(1, 1, 'P1', ['P1', 'P2', 'P3'], false)],
     });
     expect(pick(r1, { teamReuse: true })).toEqual(pick(r1, { teamReuse: false }));
+  });
+});
+
+describe('reuseVoteFactor (Edward 10/29: 五白差最後一白 → 照派)', () => {
+  const IDS10 = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
+  const o = { playerCount: 10, allPlayerIds: IDS10 } as unknown as PlayerObservation;
+  const v = (yes: string[], team = ['P1', 'P2', 'P3', 'P4']) =>
+    ({ round: 3, attempt: 1, leader: 'P1', team, approved: false, votes: Object.fromEntries(IDS10.map((id) => [id, yes.includes(id)])) });
+  it('five approvals (one short) ×2; far short ×0.4; an on-team reject halves it', () => {
+    expect(reuseVoteFactor(o, v(['P1', 'P2', 'P3', 'P4', 'P5']))).toBe(2);
+    expect(reuseVoteFactor(o, v(['P1', 'P2', 'P3', 'P4']))).toBe(1);
+    expect(reuseVoteFactor(o, v(['P1', 'P2']))).toBeCloseTo(0.2);
+    expect(reuseVoteFactor(o, v(['P1', 'P2', 'P3', 'P5', 'P6']))).toBe(1);
   });
 });

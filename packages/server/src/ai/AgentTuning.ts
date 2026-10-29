@@ -494,6 +494,11 @@ export interface AgentTuning {
    * 延伸或修正由信念決定。
    */
   r1ReadPrior: boolean;
+  /**
+   * 照派／跟派看那次投票（`TeamReuse.reuseVoteFactor`，Edward 2026-10-29）：被否決可能只是正常票；異常票有意義——
+   * 五白差最後一白的隊值得照派（×2），差很多票 ×0.4，隊上有人投黑再 ×0.5。
+   */
+  reuseByVotes: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -558,6 +563,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinLoyalStyle',
   'percivalLoyalStyle',
   'r1ReadPrior',
+  'reuseByVotes',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -621,6 +627,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinLoyalStyle: false,
   percivalLoyalStyle: false,
   r1ReadPrior: false,
+  reuseByVotes: false,
 });
 
 /**
@@ -832,6 +839,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinLoyalStyle: false,
   percivalLoyalStyle: false,
   r1ReadPrior: false,
+  reuseByVotes: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -895,6 +903,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
   percivalLoyalStyle: 'AVALON_TUNING_PERCIVAL_LOYAL_STYLE',
   r1ReadPrior: 'AVALON_TUNING_R1_READ_PRIOR',
+  reuseByVotes: 'AVALON_TUNING_REUSE_BY_VOTES',
 });
 
 function parseBool(raw: string): boolean | undefined {
