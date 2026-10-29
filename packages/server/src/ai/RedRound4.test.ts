@@ -43,7 +43,7 @@ describe('redCleanLook', () => {
 
   it('untouched: switch off, R1–R2, blue, Oberon, votes', () => {
     const t = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P5', 'P6'] };
-    expect(redCleanLookTeam(DEFAULT_AGENT_TUNING, obs(), t)).toBe(t);
+    expect(redCleanLookTeam({ ...DEFAULT_AGENT_TUNING, redCleanLook: false }, obs(), t)).toBe(t);
     expect(redCleanLookTeam(ON, obs({ currentRound: 2 }), t)).toBe(t);
     expect(redCleanLookTeam(ON, obs({ myRole: 'loyal', myTeam: 'good', knownEvils: [] }), t)).toBe(t);
     expect(redCleanLookTeam(ON, obs({ myRole: 'oberon', knownEvils: [] }), t)).toBe(t);

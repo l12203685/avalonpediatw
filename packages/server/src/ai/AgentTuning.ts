@@ -760,7 +760,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
   percivalThumbLogic: true,
-  redCleanLook: false,
+  redCleanLook: true,
   redStackRatio: 0,
   redDivisionVote: 0,
   redFavoriteMate: 0,
