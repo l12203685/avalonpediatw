@@ -12,7 +12,7 @@
  */
 import type { PlayerObservation } from '../types';
 import { buildCertainty } from './Certainty';
-import { zoneTeamLogProb } from './ZoneModel';
+import { zoneTeamLogProb, type PriorProposal } from './ZoneModel';
 import TABLE from './likelihoods.json';
 
 interface Table {
@@ -135,7 +135,8 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
           // Zone-cutting Merlin (R1–R2 non-forced): averaged over which red is the unseen Mordred.
           const reds = ids.filter((id) => red(id));
           let zs = 0;
-          for (const d of reds) zs += Math.exp(zoneLog(ids, v.leader, v.team, new Set(reds.filter((r) => r !== d))));
+          const prior = priorOf(obs, v);
+          for (const d of reds) zs += Math.exp(zoneLog(ids, v.leader, v.team, new Set(reds.filter((r) => r !== d)), prior));
           lp += Math.log(zs / Math.max(1, reds.length));
         } else if (!doomed) {
           const k = sizeOf(w & teamMask);
@@ -266,7 +267,7 @@ function merlinMixtureLog(
         const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
         if (n <= 0) continue;
         const generic = proposalProb('good', v.round, k) / n;
-        lr += zoneLog(ids, m, v.team, new Set(reds.filter((r) => r !== d))) - Math.log(generic);
+        lr += zoneLog(ids, m, v.team, new Set(reds.filter((r) => r !== d)), priorOf(obs, v)) - Math.log(generic);
       }
       for (const v of late) {
         const teamMask = view.maskOf(v.team);
@@ -310,13 +311,20 @@ export function genericGoodVoteProb(on: boolean, hasRed: boolean, round: number,
   return voteProb('good', on, hasRed, round, approve);
 }
 
-/** Memoized `zoneTeamLogProb` (the same leader / team / seen set recurs across worlds and Merlin candidates). */
+/** The proposals on the table before `v` by other leaders (R1–R2, for 延伸／修正). */
+function priorOf(obs: PlayerObservation, v: PlayerObservation['voteHistory'][number]): PriorProposal[] {
+  const at = obs.voteHistory.indexOf(v);
+  return obs.voteHistory.slice(0, Math.max(0, at)).filter((p) => p.round <= 2 && p.leader !== v.leader).map((p) => ({ leader: p.leader, team: p.team }));
+}
+
+/** Memoized `zoneTeamLogProb` (the same leader / team / seen set / prior recurs across worlds and Merlin candidates). */
 const zoneMemo = new Map<string, number>();
-function zoneLog(order: readonly string[], leader: string, team: readonly string[], seen: ReadonlySet<string>): number {
-  const key = `${order.length}|${leader}|${[...team].sort().join(',')}|${[...seen].sort().join(',')}`;
+function zoneLog(order: readonly string[], leader: string, team: readonly string[], seen: ReadonlySet<string>, prior: readonly PriorProposal[] = []): number {
+  const priorKey = prior.map((p) => `${p.leader}:${[...p.team].sort().join('.')}`).join(';');
+  const key = `${order.length}|${leader}|${[...team].sort().join(',')}|${[...seen].sort().join(',')}|${priorKey}`;
   let v = zoneMemo.get(key);
   if (v === undefined) {
-    v = zoneTeamLogProb(order, leader, team, seen);
+    v = zoneTeamLogProb(order, leader, team, seen, prior);
     if (zoneMemo.size > 200000) zoneMemo.clear();
     zoneMemo.set(key, v);
   }

@@ -744,11 +744,12 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
-    // Round 5 (Merlin) candidate `merlinZoneSignal` (ZoneModel.ts): on a doomed R1–R2 proposal Merlin cuts zones
-    // (no seen red on the team, the thumbs in the gaps) instead of the 派拇指躲刺 cover.
+    // Round 5 (Merlin) candidate `merlinZoneSignal` (ZoneModel.ts): on a doomed R1–R2 proposal Merlin cuts zones and
+    // extends / corrects the earlier proposals (no seen red on the team) instead of the 派拇指躲刺 cover.
     if (this.baseline.tuning.merlinZoneSignal && obs.myRole === 'merlin' && d.action.type === 'team_select'
       && (obs.currentRound ?? 1) <= 2 && (obs.failCount ?? 0) < 4) {
-      const zoned = bestZoneTeam(obs.allPlayerIds, obs.myPlayerId, d.action.teamIds.length, new Set(obs.knownEvils));
+      const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== obs.myPlayerId).map((p) => ({ leader: p.leader, team: p.team }));
+      const zoned = bestZoneTeam(obs.allPlayerIds, obs.myPlayerId, d.action.teamIds.length, new Set(obs.knownEvils), prior);
       if (zoned) return { ...d, action: { type: 'team_select', teamIds: zoned }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin zone cut` } };
     }
     // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
