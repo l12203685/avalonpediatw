@@ -4,6 +4,11 @@
  * 「在某種身分分配下，一個人做出這個動作」的機率，只存彙總次數（不含名字、不含單局紀錄）。
  *
  *   npx tsx scripts/fitBeliefLikelihoods.ts [--out src/ai/belief/likelihoods.json]
+ *   USE_FORWARD_REASONING=true npx tsx scripts/fitBeliefLikelihoods.ts --bots 600 [--out src/ai/belief/likelihoods_bot.json]
+ *
+ * `--bots N`（優化迴圈，Edward 2026-10-30：「舊的藍方沒有從派票或投票直接分辨出誰是藍誰是紅，所以紅方根本不需要隱藏」）：
+ * 改從全機器人自我對打 N 局（正式預設）統計同一組表，給 `AgentTuning.beliefBotTables` 用——藍方照「目前的對手實際怎麼做」
+ * 讀派隊、投票與任務牌；紅方之後得學會偽裝。每個回合採用新預設後重新擬合。
  *
  * 表（key → [次數, 總數] 或分布）：
  *   - vote：`陣營|在隊上|隊上有紅|回合段` → 贊成次數 / 總票數（非強制、票型可信的提議；回合段 r12 / r3）。
@@ -15,20 +20,65 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { campOf, parseReplayGame, rowsFromSheet, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
+import { HeuristicAgent } from '../src/ai/HeuristicAgent';
+import { SelfPlayEngine } from '../src/ai/SelfPlayEngine';
+import { seededRandom } from '../src/ai/benchmark/agreement';
+import { campOf, parseReplayGame, rowsFromSheet } from '../src/ai/benchmark/sheetsReplay';
+import type { PlayerObservation, Role } from '../src/ai/types';
 
-const out = (() => {
-  const i = process.argv.indexOf('--out');
-  return i >= 0 ? process.argv[i + 1] : path.resolve(__dirname, '../src/ai/belief/likelihoods.json');
-})();
-
-const data = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../sheets_cache.json'), 'utf8')) as Record<string, string[][]>;
-const games: ReplayGame[] = [];
-for (const row of rowsFromSheet(data['牌譜'] ?? [])) {
-  if (!(row['文字記錄'] ?? '').trim()) continue;
-  const r = parseReplayGame(row);
-  if (r.ok && r.game.playerCount === 10) games.push(r.game);
+/** The fields the tables read (a `ReplayGame` has them; bot games are converted to it). */
+interface FitGame {
+  seatRoles: Role[];
+  proposals: { round: number; leaderSeat: number; teamSeats: number[]; forced: boolean; votesReliable: boolean; votes: boolean[] }[];
+  quests: { round: number; teamSeats: number[]; failCount: number }[];
+  lakes: { holderSeat: number; targetSeat: number; claim: 'good' | 'evil' | null }[];
 }
+
+const arg = (name: string): string | undefined => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
+const botGames = Number(arg('--bots') ?? 0);
+const out = arg('--out') ?? path.resolve(__dirname, botGames > 0 ? '../src/ai/belief/likelihoods_bot.json' : '../src/ai/belief/likelihoods.json');
+
+class Rec extends HeuristicAgent {
+  last?: PlayerObservation; role = '';
+  onGameStart(o: PlayerObservation): void { this.role = o.myRole; super.onGameStart(o); }
+  onGameEnd(o: PlayerObservation, w: boolean): void { this.last = o; super.onGameEnd(o, w); }
+}
+
+async function loadBotGames(n: number): Promise<FitGame[]> {
+  const engine = new SelfPlayEngine();
+  const log = console.log; const orig = Math.random;
+  const games: FitGame[] = [];
+  for (let i = 0; i < n; i++) {
+    const agents = Array.from({ length: 10 }, (_, k) => new Rec(`P${k + 1}`));
+    Math.random = seededRandom(`fitbot|${i}`);
+    console.log = () => undefined;
+    try { await engine.runGame(agents, false); } finally { console.log = log; Math.random = orig; }
+    const o = agents[0].last;
+    if (!o) continue;
+    const seat = (id: string): number => Number(id.slice(1));
+    games.push({
+      seatRoles: agents.map((a) => a.role as Role),
+      proposals: o.voteHistory.map((v) => ({ round: v.round, leaderSeat: seat(v.leader), teamSeats: v.team.map(seat), forced: v.attempt >= 5, votesReliable: v.attempt < 5, votes: agents.map((a) => v.votes[a.agentId] === true) })),
+      quests: o.questHistory.map((q) => ({ round: q.round, teamSeats: q.team.map(seat), failCount: q.failCount ?? 0 })),
+      lakes: (o.lakeHistory ?? []).map((l) => ({ holderSeat: seat(l.holderId), targetSeat: seat(l.targetId), claim: l.declaredClaim === 'none' ? null : l.declaredClaim })),
+    });
+  }
+  return games;
+}
+
+function loadHumanGames(): FitGame[] {
+  const data = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../sheets_cache.json'), 'utf8')) as Record<string, string[][]>;
+  const games: FitGame[] = [];
+  for (const row of rowsFromSheet(data['牌譜'] ?? [])) {
+    if (!(row['文字記錄'] ?? '').trim()) continue;
+    const r = parseReplayGame(row);
+    if (r.ok && r.game.playerCount === 10) games.push(r.game);
+  }
+  return games;
+}
+
+(async () => {
+const games: FitGame[] = botGames > 0 ? await loadBotGames(botGames) : loadHumanGames();
 
 const vote: Record<string, [number, number]> = {};
 const proposal: Record<string, number> = {};
@@ -72,10 +122,11 @@ for (const g of games) {
   }
 }
 
-const table = { source: 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole };
+const table = { source: botGames > 0 ? 'self-play (production defaults)' : 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole };
 fs.writeFileSync(out, JSON.stringify(table, null, 1) + '\n');
 console.log(`wrote ${out}: ${games.length} games`);
 for (const [k, [a, n]] of Object.entries(vote).sort()) console.log(`  vote ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, d] of Object.entries(mission).sort()) console.log(`  mission ${k} fails ${d.join('/')}`);
 for (const [k, [a, n]] of Object.entries(voteRole).sort()) console.log(`  voteRole ${k.padEnd(26)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(redLake)) console.log(`  redLake target ${k}: declared red ${(100 * a / n).toFixed(1)}% (${n})`);
+})();
