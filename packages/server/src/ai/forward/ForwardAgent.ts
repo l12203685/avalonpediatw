@@ -1355,7 +1355,7 @@ export class ForwardAgent implements AvalonAgent {
     // Off → no change.
     const reusePlan =
       decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
-        ? teamReusePlan(obs, this.belief)
+        ? teamReusePlan(obs, this.belief, this.baseline.tuning.reuseByVotes === true)
         : null;
     const reuseGuard = reusePlan ? teamReuseGuard(obs, undefined, this.belief) : null;
     const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;

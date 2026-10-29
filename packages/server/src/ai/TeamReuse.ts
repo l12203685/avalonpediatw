@@ -195,9 +195,24 @@ export function teamReuseActive(tuning: Pick<AgentTuning, 'teamReuse'>, obs: Pla
  * proposal of the game, first proposal after a failed mission, or R1 with
  * `r1 = 0`).
  */
+/**
+ * `reuseByVotes` (Edward 2026-10-29): 被否決可能只是正常票，不代表大家否認這個組合；異常票則是有意義的——例如出現五白，
+ * 可能就是差最後一個好人的那一白，所以又照派。照派／跟派一支被否決的隊的權重看那次投票：差一票就過 ×2、
+ * 差兩票 ×1、差更多 ×0.4；隊上有人投黑（內黑：隊員自己說這隊有紅）再 ×0.5。
+ */
+export function reuseVoteFactor(obs: PlayerObservation, v: PlayerObservation['voteHistory'][number]): number {
+  const approvals = Object.values(v.votes).filter(Boolean).length;
+  const needed = Math.floor(obs.playerCount / 2) + 1;
+  const short = needed - approvals;
+  let f = short <= 1 ? 2 : short === 2 ? 1 : 0.4;
+  if (v.team.some((id) => v.votes[id] === false)) f *= 0.5;
+  return f;
+}
+
 export function teamReusePlan(
   obs: PlayerObservation,
   belief: Readonly<Pick<BeliefOptions, 'certainFacts'>> = defaultBeliefOptions(),
+  byVotes = false,
 ): TeamReusePlan | null {
   const opts = weightsFor(obs);
   const round = obs.currentRound ?? 1;
@@ -215,7 +230,9 @@ export function teamReusePlan(
   if (earlier.length === 0) {
     if (missionOk && opts.success > 0) refs.push({ team: lastQuest.team, weight: opts.success, kind: 'mission' });
   } else {
-    if (opts.reject > 0) for (const v of earlier) refs.push({ team: v.team, weight: opts.reject, kind: 'proposal' });
+    if (opts.reject > 0) {
+      for (const v of earlier) refs.push({ team: v.team, weight: opts.reject * (byVotes ? reuseVoteFactor(obs, v) : 1), kind: 'proposal' });
+    }
     if (missionOk && opts.mission > 0) refs.push({ team: lastQuest.team, weight: opts.mission, kind: 'mission' });
   }
   return { refs, replacesPriorPenalty: true };
