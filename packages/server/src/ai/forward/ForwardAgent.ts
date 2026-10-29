@@ -57,7 +57,7 @@ import { goodCleanVoteReject } from '../GoodCleanVote';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
-import { merlinLoyalStyleTeam } from '../MerlinLoyalStyle';
+import { merlinLoyalStyleTeam, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -745,6 +745,12 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    // Round 5 (Percival) candidate `percivalLoyalStyle` (MerlinLoyalStyle.ts): the loyal-looking team that integrates
+    // the two thumbs (Edward's five plans: trust A ± send A, trust B ± send B, or the AB intersection).
+    if (this.baseline.tuning.percivalLoyalStyle && obs.myRole === 'percival' && d.action.type === 'team_select') {
+      const { action: styled, plan } = percivalLoyalStyleTeam(this.baseline.tuning, obs, d.action);
+      if (plan) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → percival loyal-style team (${plan})` } };
+    }
     // Round 5 (Merlin) candidate `merlinLoyalStyle` (MerlinLoyalStyle.ts): Merlin proposes like a loyal, never with a
     // red it sees — every round, instead of the cover or the zone cut.
     if (this.baseline.tuning.merlinLoyalStyle && obs.myRole === 'merlin' && d.action.type === 'team_select') {

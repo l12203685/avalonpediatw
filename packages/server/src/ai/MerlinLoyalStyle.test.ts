@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING } from './AgentTuning';
-import { merlinLoyalStyleTeam } from './MerlinLoyalStyle';
+import { merlinLoyalStyleTeam, percivalLoyalStyleTeam } from './MerlinLoyalStyle';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const ON = { ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: true };
@@ -32,5 +32,26 @@ describe('merlinLoyalStyle', () => {
     const t = { type: 'team_select' as const, teamIds: ['P1', 'P4', 'P8', 'P10'] };
     expect(merlinLoyalStyleTeam(DEFAULT_AGENT_TUNING, obs, t)).toBe(t);
     expect(merlinLoyalStyleTeam(ON, { ...obs, myRole: 'loyal' } as PlayerObservation, t)).toBe(t);
+  });
+});
+
+describe('percivalLoyalStyle (Edward 10/29: 信A/信B ± 派, or the AB intersection)', () => {
+  // Thumbs P7 / P8; thumb P8 led an R3 team with both certain reds (P2, P3) → P8 reads as Morgana: trust P7.
+  const pobs = {
+    myPlayerId: 'P1', myRole: 'percival', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: [],
+    knownWizards: ['P7', 'P8'], currentRound: 4, currentLeader: 'P1', failCount: 0, questResults: ['fail', 'success', 'fail'],
+    gamePhase: 'team_select', proposedTeam: [], lakeHistory: [],
+    questHistory: [
+      { round: 1, team: ['P1', 'P2', 'P3'], result: 'fail', failCount: 2 },
+      { round: 2, team: ['P1', 'P4', 'P5', 'P6'], result: 'success', failCount: 0 },
+      { round: 3, team: ['P8', 'P2', 'P3', 'P9'], result: 'fail', failCount: 2 },
+    ],
+    voteHistory: [{ round: 3, attempt: 1, leader: 'P8', team: ['P8', 'P2', 'P3', 'P9'], approved: true, votes: {} }],
+  } as unknown as PlayerObservation;
+  it('trusts the thumb whose information holds, never sends the certain reds', () => {
+    const { action, plan } = percivalLoyalStyleTeam({ ...DEFAULT_AGENT_TUNING, percivalLoyalStyle: true }, pobs, { type: 'team_select', teamIds: ['P1', 'P2', 'P8', 'P9', 'P10'] });
+    if (action.type !== 'team_select') throw new Error(action.type);
+    expect(plan?.startsWith('信A')).toBe(true);
+    expect(action.teamIds.some((id) => ['P2', 'P3', 'P8'].includes(id))).toBe(false);
   });
 });
