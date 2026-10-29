@@ -27,6 +27,7 @@ import {
 } from './AgentTuning';
 import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelWeights } from './assassin/AssassinModel';
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
+import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
 import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
@@ -2660,7 +2661,8 @@ export class HeuristicAgent implements AvalonAgent {
     // only the public history plus the assassin's own known allies.
     if (this.tuning.assassinModel) {
       const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
-      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0) {
+      const leadWeight = this.tuning.assassinLeadRead ?? 0;
+      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
       const scores = scoreAssassinCandidates(obs, goodPlayers, this.assassinModelWeights);
@@ -2668,6 +2670,11 @@ export class HeuristicAgent implements AvalonAgent {
       if (voteWeight > 0) {
         const reds = [...evilSet];
         for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteWeight * merlinVoteLogRatio(obs, id, reds));
+      }
+      // Round 6 (red) candidate `assassinLeadRead` (assassin/MerlinLeadRead.ts): 資訊過度超前 — clean teams the public could not have picked.
+      if (leadWeight > 0) {
+        const reds = [...evilSet];
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadWeight * merlinLeadLogRatio(obs, id, reds));
       }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }
