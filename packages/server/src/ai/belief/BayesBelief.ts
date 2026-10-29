@@ -12,6 +12,7 @@
  */
 import type { PlayerObservation } from '../types';
 import { buildCertainty } from './Certainty';
+import { zoneTeamLogProb } from './ZoneModel';
 import TABLE from './likelihoods.json';
 
 interface Table {
@@ -90,6 +91,12 @@ export interface BayesOptions {
    * its proposals from the seen-clean pool too). 0 = off. Loyal viewers only (Percival: `strictMerlin`).
    */
   merlinMixture?: number;
+  /**
+   * `merlinZoneSignal` (round 5, Edward 2026-10-29): Merlin cuts zones with its R1–R2 non-forced proposals (no seen red
+   * on the team, the thumbs in the gaps; `ZoneModel.ts`) instead of 派拇指躲刺. With it on, the strict Percival model and
+   * the loyal Merlin mixture read those proposals with the zone model (averaged over which red is the unseen Mordred).
+   */
+  zoneMerlin?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -100,7 +107,8 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   const thumbs = opts.thumbRoles && percival ? obs.knownWizards ?? [] : [];
   const strict = opts.strictMerlin && percival ? obs.knownWizards ?? [] : [];
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}`;
+  const zone = opts.zoneMerlin === true;
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -123,7 +131,13 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
       const doomed = v.round <= 2 && v.attempt < 5;
       // Strict Merlin (Percival's good thumb in this world): proposals from its seen-clean pool.
       if (strict.includes(v.leader) && !red(v.leader) && v.team.includes(v.leader)) {
-        if (!doomed) {
+        if (doomed && zone) {
+          // Zone-cutting Merlin (R1–R2 non-forced): averaged over which red is the unseen Mordred.
+          const reds = ids.filter((id) => red(id));
+          let zs = 0;
+          for (const d of reds) zs += Math.exp(zoneLog(ids, v.leader, v.team, new Set(reds.filter((r) => r !== d))));
+          lp += Math.log(zs / Math.max(1, reds.length));
+        } else if (!doomed) {
           const k = sizeOf(w & teamMask);
           const reds = sizeOf(w & all);
           const pool = ids.length - 1 - (reds - 1); // the blues + the unseen Mordred
@@ -161,7 +175,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
       const p = missionProb(q.round, sizeOf(w & view.maskOf(q.team)), q.failCount ?? 0);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
-    if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode);
+    if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode, zone);
     for (const l of obs.lakeHistory ?? []) {
       if (l.declaredClaim === 'none' || l.holderId === me || !red(l.holderId)) continue;
       const c = T.redLake[red(l.targetId) ? 'evil' : 'good'] ?? [1, 2];
@@ -224,6 +238,7 @@ function merlinMixtureLog(
   view: ReturnType<typeof buildCertainty>,
   w: number,
   mode: number,
+  zone = false,
 ): number {
   const ids = obs.allPlayerIds;
   const me = obs.myPlayerId;
@@ -235,10 +250,24 @@ function merlinMixtureLog(
   if (blues.length === 0 || reds.length === 0) return 0;
   const all = view.maskOf(ids);
   const late = obs.voteHistory.filter((v) => v.round >= 3);
+  const early = zone ? obs.voteHistory.filter((v) => v.round <= 2 && v.attempt < 5) : [];
   let sum = 0;
   for (const m of blues) {
     for (const d of reds) {
       let lr = 0;
+      // Zone-cutting Merlin's R1–R2 non-forced proposals vs the generic blue proposal.
+      for (const v of early) {
+        if (v.leader !== m || !v.team.includes(m)) continue;
+        const teamMask = view.maskOf(v.team);
+        const others = all & ~bit(m);
+        const redsAvail = sizeOf(w & others);
+        const goodsAvail = sizeOf(others) - redsAvail;
+        const k = sizeOf(w & teamMask & ~bit(m));
+        const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
+        if (n <= 0) continue;
+        const generic = proposalProb('good', v.round, k) / n;
+        lr += zoneLog(ids, m, v.team, new Set(reds.filter((r) => r !== d))) - Math.log(generic);
+      }
       for (const v of late) {
         const teamMask = view.maskOf(v.team);
         const seenRed = (w & teamMask & ~bit(d)) !== 0;
@@ -279,4 +308,17 @@ function merlinMixtureLog(
 /** P(vote) of a generic blue voter (the human vote table), for callers outside the posterior (the assassin). */
 export function genericGoodVoteProb(on: boolean, hasRed: boolean, round: number, approve: boolean): number {
   return voteProb('good', on, hasRed, round, approve);
+}
+
+/** Memoized `zoneTeamLogProb` (the same leader / team / seen set recurs across worlds and Merlin candidates). */
+const zoneMemo = new Map<string, number>();
+function zoneLog(order: readonly string[], leader: string, team: readonly string[], seen: ReadonlySet<string>): number {
+  const key = `${order.length}|${leader}|${[...team].sort().join(',')}|${[...seen].sort().join(',')}`;
+  let v = zoneMemo.get(key);
+  if (v === undefined) {
+    v = zoneTeamLogProb(order, leader, team, seen);
+    if (zoneMemo.size > 200000) zoneMemo.clear();
+    zoneMemo.set(key, v);
+  }
+  return v;
 }

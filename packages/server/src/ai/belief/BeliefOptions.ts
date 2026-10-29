@@ -51,11 +51,13 @@ export interface BeliefOptions {
   percivalThumbLogic?: boolean;
   /** `loyalMerlinRead`: loyals read one of the blues as Merlin (`BayesOptions.merlinMixture`, 0 / 1 / 2). */
   loyalMerlinRead?: number;
+  /** `merlinZoneSignal`: read Merlin's R1–R2 proposals as zone cuts (`BayesOptions.zoneMerlin`). */
+  merlinZoneSignal?: boolean;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic' | 'loyalMerlinRead'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic' | 'loyalMerlinRead' | 'merlinZoneSignal'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -78,6 +80,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     bayesThumbRoles: tuning.bayesThumbRoles,
     percivalThumbLogic: tuning.percivalThumbLogic,
     loyalMerlinRead: tuning.loyalMerlinRead,
+    merlinZoneSignal: tuning.merlinZoneSignal,
   };
 }
 
