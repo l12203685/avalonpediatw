@@ -479,7 +479,7 @@ export function computePyramidScores(
   }
   // worldShareBelief: a good viewer's suspicion is its share of the consistent worlds (see BeliefOptions).
   if (opts.bayes && obs.myTeam === 'good') {
-    const post = bayesRedShare(obs, { thumbRoles: opts.bayesThumbRoles === true, strictMerlin: opts.percivalThumbLogic === true });
+    const post = bayesRedShare(obs, { thumbRoles: opts.bayesThumbRoles === true, strictMerlin: opts.percivalThumbLogic === true, merlinMixture: opts.loyalMerlinRead ?? 0 });
     for (const id of obs.allPlayerIds) scores.set(id, id === obs.myPlayerId ? 0 : post.get(id) ?? 0.5);
   } else if (opts.worldShare && obs.myTeam === 'good') {
     const view = buildCertainty(obs);

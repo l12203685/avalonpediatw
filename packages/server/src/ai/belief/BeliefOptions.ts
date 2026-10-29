@@ -49,11 +49,13 @@ export interface BeliefOptions {
   bayesThumbRoles?: boolean;
   /** `percivalThumbLogic`: Percival reads its good thumb as a strict Merlin (`BayesOptions.strictMerlin`). */
   percivalThumbLogic?: boolean;
+  /** `loyalMerlinRead`: loyals read one of the blues as Merlin (`BayesOptions.merlinMixture`, 0 / 1 / 2). */
+  loyalMerlinRead?: number;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic' | 'loyalMerlinRead'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -75,6 +77,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     bayes: tuning.bayesBelief,
     bayesThumbRoles: tuning.bayesThumbRoles,
     percivalThumbLogic: tuning.percivalThumbLogic,
+    loyalMerlinRead: tuning.loyalMerlinRead,
   };
 }
 

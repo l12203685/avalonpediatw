@@ -83,6 +83,13 @@ export interface BayesOptions {
    * Morgana, the usual red tables.
    */
   strictMerlin?: boolean;
+  /**
+   * `loyalMerlinRead` (round 5, loyals): in every world one of the blues is Merlin (who, averaged over; and which
+   * red is the Mordred he cannot see, averaged over). From R3 that blue's votes follow a Merlin model on "the team
+   * holds a red Merlin sees": 1 = the human Merlin table (approves such a team 25.7%), 2 = strict (all but never;
+   * its proposals from the seen-clean pool too). 0 = off. Loyal viewers only (Percival: `strictMerlin`).
+   */
+  merlinMixture?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -92,7 +99,8 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   const percival = obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2;
   const thumbs = opts.thumbRoles && percival ? obs.knownWizards ?? [] : [];
   const strict = opts.strictMerlin && percival ? obs.knownWizards ?? [] : [];
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}`;
+  const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -153,6 +161,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
       const p = missionProb(q.round, sizeOf(w & view.maskOf(q.team)), q.failCount ?? 0);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
+    if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode);
     for (const l of obs.lakeHistory ?? []) {
       if (l.declaredClaim === 'none' || l.holderId === me || !red(l.holderId)) continue;
       const c = T.redLake[red(l.targetId) ? 'evil' : 'good'] ?? [1, 2];
@@ -204,4 +213,65 @@ export function bayesTeamClean(obs: PlayerObservation, team: readonly string[], 
   let s = 0;
   post.worlds.forEach((w, i) => { if ((w & mask) === 0) s += post.wts[i]; });
   return s;
+}
+
+/**
+ * log Σ_{Merlin m, Mordred d} P(m) P(d) Π (Merlin model / generic blue model) over m's R3+ votes (and, strict, its
+ * R3+ proposals) — the factor by which "one of the blues is Merlin" re-weighs world `w` (`merlinMixture`).
+ */
+function merlinMixtureLog(
+  obs: PlayerObservation,
+  view: ReturnType<typeof buildCertainty>,
+  w: number,
+  mode: number,
+): number {
+  const ids = obs.allPlayerIds;
+  const me = obs.myPlayerId;
+  const bit = (id: string): number => view.bitOf(id);
+  const red = (id: string): boolean => (w & bit(id)) !== 0;
+  const sizeOf = (x: number): number => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
+  const blues = ids.filter((id) => id !== me && !red(id));
+  const reds = ids.filter((id) => red(id));
+  if (blues.length === 0 || reds.length === 0) return 0;
+  const all = view.maskOf(ids);
+  const late = obs.voteHistory.filter((v) => v.round >= 3);
+  let sum = 0;
+  for (const m of blues) {
+    for (const d of reds) {
+      let lr = 0;
+      for (const v of late) {
+        const teamMask = view.maskOf(v.team);
+        const seenRed = (w & teamMask & ~bit(d)) !== 0;
+        const hasRed = (w & teamMask) !== 0;
+        const on = v.team.includes(m);
+        if (v.attempt < 5 && v.votes[m] !== undefined) {
+          const pg = voteProb('good', on, hasRed, v.round, true);
+          let pm: number;
+          if (mode >= 2) {
+            pm = seenRed ? STRICT_EPS : voteProb('good', on, false, v.round, true);
+          } else {
+            const c = T.voteRole[`merlin|${on ? 'on' : 'off'}|${seenRed ? 'red' : 'clean'}|${bucket(v.round)}`] ?? [1, 2];
+            pm = smooth(c[0], c[1]);
+          }
+          pm = Math.min(Math.max(pm, STRICT_EPS), 1 - STRICT_EPS);
+          lr += Math.log(v.votes[m] ? pm / pg : (1 - pm) / (1 - pg));
+        }
+        if (mode >= 2 && v.leader === m && on) {
+          // Generic blue proposal vs the strict Merlin pick from the seen-clean pool (the blues + Mordred d).
+          const others = all & ~bit(m);
+          const redsAvail = sizeOf(w & others);
+          const goodsAvail = sizeOf(others) - redsAvail;
+          const k = sizeOf(w & teamMask & ~bit(m));
+          const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
+          if (n <= 0) continue;
+          const generic = proposalProb('good', v.round, k) / n;
+          const pool = goodsAvail + 1;
+          const strict = seenRed ? STRICT_EPS / choose(ids.length - 1, v.team.length - 1) : 1 / choose(pool, v.team.length - 1);
+          lr += Math.log(strict / generic);
+        }
+      }
+      sum += Math.exp(lr);
+    }
+  }
+  return Math.log(sum / (blues.length * reds.length));
 }
