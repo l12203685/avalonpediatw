@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
+import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
@@ -386,7 +386,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-base font-bold text-white mb-1 leading-snug">{article.title}</h3>
-                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{wikiExcerpt(article.excerpt)}</p>
+                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{wikiCardExcerpt(article.excerpt, article.content)}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {displayTags(article.tags).slice(0, 4).map((tag) => (
                         <span
@@ -441,7 +441,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                         {t('wiki.pendingBadge')}
                       </span>
                     </div>
-                    <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 leading-snug">{wikiExcerpt(article.excerpt)}</p>
+                    <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 leading-snug">{wikiCardExcerpt(article.excerpt, article.content)}</p>
                   </button>
                 ))}
               </div>

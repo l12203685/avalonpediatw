@@ -61,3 +61,11 @@ describe('normalizeWikiMarkup', () => {
     expect(wikiExcerpt('title: 名詞說明與簡稱\ntags: roles\n名詞的<font color=red>說明</font>')).toBe('名詞的說明');
   });
 });
+
+describe('wikiCardExcerpt', () => {
+  it('a stored excerpt that is only the HackMD title line falls back to the opening prose', async () => {
+    const { wikiCardExcerpt } = await import('../../../web/src/utils/wikiMarkup');
+    expect(wikiCardExcerpt('title: 視角', '---\ntitle: 視角\n---\n## 視角\n* 視角通常用以描述該玩家對場上其他玩家陣營的看法')).toContain('視角通常用以描述');
+    expect(wikiCardExcerpt('為遊戲新手解答基本問題', '# x')).toBe('為遊戲新手解答基本問題');
+  });
+});

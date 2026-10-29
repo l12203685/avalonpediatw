@@ -100,6 +100,22 @@ export function wikiUrlTransform(url: string, fallback: (u: string) => string): 
 }
 
 /** A card excerpt in plain text: no front matter (`title: …` lines), no `[TOC]`, no HTML tags. */
+/**
+ * The card excerpt: the stored excerpt when it says something, else the opening prose of the article (most stored
+ * excerpts are only the HackMD `title:` line, so the cards showed nothing).
+ */
+export function wikiCardExcerpt(excerpt: string, content: string): string {
+  const stored = wikiExcerpt(excerpt);
+  if (stored) return stored;
+  const body = normalizeWikiMarkup(content)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(#|```|>|\||-{3,}|\[TOC\])/i.test(l))
+    .map((l) => l.replace(/^[*\-+]\s+|^\d+\.\s+/, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, ''))
+    .join(' ');
+  return body.length > 120 ? `${body.slice(0, 120)}…` : body;
+}
+
 export function wikiExcerpt(text: string): string {
   return stripHackmdArtifacts(text)
     .replace(/^\s*-{3,}\s*/, '')
