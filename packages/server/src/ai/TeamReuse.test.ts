@@ -61,7 +61,7 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 }
 
 function agentWith(tuning: Partial<AgentTuning>, id = 'P1'): ForwardAgent {
-  return new ForwardAgent(id, new HeuristicAgent(id, undefined, undefined, { ...DEFAULT_AGENT_TUNING, ...tuning }));
+  return new ForwardAgent(id, new HeuristicAgent(id, undefined, undefined, { ...DEFAULT_AGENT_TUNING, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false, ...tuning }));
 }
 
 function pick(o: PlayerObservation, tuning: Partial<AgentTuning>): string[] {

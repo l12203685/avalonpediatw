@@ -23,7 +23,12 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 }
 
 /** L5: the leader's cleanest team (same size as the pipeline's), or the action unchanged. */
-export function goodCleanLeadTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction): AgentAction {
+export function goodCleanLeadTeam(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  action: AgentAction,
+  allowed: (team: readonly string[]) => boolean = () => true,
+): AgentAction {
   const scope = tuning.goodCleanLead ?? 0;
   if (scope <= 0 || action.type !== 'team_select' || obs.myTeam !== 'good') return action;
   const loyal = obs.myRole === 'loyal' && (scope & 1) !== 0;
@@ -36,13 +41,15 @@ export function goodCleanLeadTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const others = obs.allPlayerIds.filter((id) => id !== me);
   const size = action.teamIds.length;
   const opts = { thumbRoles: tuning.bayesThumbRoles === true, strictMerlin: tuning.percivalThumbLogic === true, merlinMixture: tuning.loyalMerlinRead ?? 0, zoneMerlin: tuning.merlinZoneSignal === true, merlinEarlyStrict: tuning.merlinLoyalStyle === true };
-  let best: string[] | null = null;
-  let bestP = -1;
+  const scored: { team: string[]; p: number }[] = [];
   for (const fill of combinations(others, size - 1)) {
     const team = [me, ...fill];
     const p = bayesTeamClean(obs, team, opts);
     if (p === null) return action;
-    if (p > bestP + 1e-12) { bestP = p; best = team; }
+    scored.push({ team, p });
   }
-  return best ? { type: 'team_select', teamIds: best } : action;
+  // Highest first (stable: enumeration order breaks ties); the logic gates (must-fail / dominated) still bind.
+  scored.sort((x, y) => (y.p - x.p > 1e-12 ? 1 : x.p - y.p > 1e-12 ? -1 : 0));
+  const best = scored.find((c) => allowed(c.team));
+  return best ? { type: 'team_select', teamIds: best.team } : action;
 }

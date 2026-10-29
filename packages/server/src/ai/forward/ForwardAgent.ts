@@ -746,20 +746,23 @@ export class ForwardAgent implements AvalonAgent {
     const core = this.decideCore(obs);
     // Round 4 (red) candidate `redCleanLook` (RedRound4.ts): the red leader's team blue rates cleanest.
     // Round 5 (blue) candidate `goodCleanLead` (GoodRound5.ts): the blue leader's cleanest team.
-    const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action);
+    // The new good-leader team rules keep the logic gates (must-fail / dominated, `LogicGates.ts`; INV-T1).
+    const gateOk = (team: readonly string[]): boolean => obs.myTeam !== 'good' || !anyGate(this.gates)
+      || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null;
+    const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action, gateOk);
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
     // Round 5 (Percival) candidate `percivalLoyalStyle` (MerlinLoyalStyle.ts): the loyal-looking team that integrates
     // the two thumbs (Edward's five plans: trust A ± send A, trust B ± send B, or the AB intersection).
     if (this.baseline.tuning.percivalLoyalStyle && obs.myRole === 'percival' && d.action.type === 'team_select') {
-      const { action: styled, plan } = percivalLoyalStyleTeam(this.baseline.tuning, obs, d.action);
+      const { action: styled, plan } = percivalLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (plan) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → percival loyal-style team (${plan})` } };
     }
     // Round 5 (Merlin) candidate `merlinLoyalStyle` (MerlinLoyalStyle.ts): Merlin proposes like a loyal, never with a
     // red it sees — every round, instead of the cover or the zone cut.
     if (this.baseline.tuning.merlinLoyalStyle && obs.myRole === 'merlin' && d.action.type === 'team_select') {
-      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action);
+      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (styled !== d.action) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin loyal-style team` } };
       return d;
     }
