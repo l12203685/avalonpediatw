@@ -37,6 +37,7 @@ describe('goodCleanVote', () => {
     expect(goodCleanVoteReject(ON, obs({ gamePhase: 'team_select' }))).toBe(false);
     expect(goodCleanVoteReject({ ...ON, goodCleanVoteLoyalOnly: true }, obs({ myRole: 'percival', knownWizards: ['P7', 'P8'] }))).toBe(false);
     expect(goodCleanVoteReject({ ...ON, goodCleanVoteLoyalOnly: true }, obs())).toBe(true);
+    expect(goodCleanVoteReject({ ...ON, goodCleanVotePercivalOnly: true }, obs())).toBe(false);
     expect(goodCleanVoteReject({ ...ON, goodCleanVoteMaxAttempt: 3 }, obs({ failCount: 3 }))).toBe(false);
     expect(goodCleanVoteReject({ ...ON, goodCleanVoteMaxAttempt: 3 }, obs({ failCount: 2 }))).toBe(true);
   });

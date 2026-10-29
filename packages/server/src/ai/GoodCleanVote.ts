@@ -14,7 +14,9 @@ import { bayesTeamClean } from './belief/BayesBelief';
 export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   const tau = tuning.goodCleanVote ?? 0;
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
-  if (obs.myRole !== 'loyal' && (obs.myRole !== 'percival' || tuning.goodCleanVoteLoyalOnly)) return false;
+  const loyal = obs.myRole === 'loyal' && !tuning.goodCleanVotePercivalOnly;
+  const percival = obs.myRole === 'percival' && !tuning.goodCleanVoteLoyalOnly;
+  if (!loyal && !percival) return false;
   if ((obs.currentRound ?? 1) < 3) return false;
   if ((obs.failCount ?? 0) + 1 > (tuning.goodCleanVoteMaxAttempt ?? 4)) return false;
   const team = obs.proposedTeam ?? [];

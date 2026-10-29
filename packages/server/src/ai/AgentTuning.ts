@@ -428,6 +428,8 @@ export interface AgentTuning {
    * ——單一座位確認派西 −1.2pp。
    */
   goodCleanVoteLoyalOnly: boolean;
+  /** `goodCleanVote` 只給派西（第 3 回合，分角色量：Edward 10/29「藍方要分忠臣、派西、梅林三個角色」）。 */
+  goodCleanVotePercivalOnly: boolean;
   /** `goodCleanVote` 只在第幾次提議以前用（1–4，預設 4 = 所有非強制提議；3 = 投黑不會把下一個推成強制）。 */
   goodCleanVoteMaxAttempt: number;
 }
@@ -478,6 +480,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinCoverRate',
   'goodCleanVote',
   'goodCleanVoteLoyalOnly',
+  'goodCleanVotePercivalOnly',
   'goodCleanVoteMaxAttempt',
 ];
 
@@ -526,6 +529,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinCoverRate: 1,
   goodCleanVote: 0,
   goodCleanVoteLoyalOnly: false,
+  goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
 });
 
@@ -722,6 +726,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinCoverRate: 1,
   goodCleanVote: 0,
   goodCleanVoteLoyalOnly: false,
+  goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
 });
 
@@ -770,6 +775,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinCoverRate: 'AVALON_TUNING_MERLIN_COVER_RATE',
   goodCleanVote: 'AVALON_TUNING_GOOD_CLEAN_VOTE',
   goodCleanVoteLoyalOnly: 'AVALON_TUNING_GOOD_CLEAN_VOTE_LOYAL_ONLY',
+  goodCleanVotePercivalOnly: 'AVALON_TUNING_GOOD_CLEAN_VOTE_PERCIVAL_ONLY',
   goodCleanVoteMaxAttempt: 'AVALON_TUNING_GOOD_CLEAN_VOTE_MAX_ATTEMPT',
 });
 
