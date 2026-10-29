@@ -55,6 +55,7 @@ import { merlinDoomedRedCover } from '../MerlinCover';
 import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
 import { goodCleanVoteReject } from '../GoodCleanVote';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
+import { goodCleanLeadTeam } from '../GoodRound5';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -729,8 +730,11 @@ export class ForwardAgent implements AvalonAgent {
     }
     const core = this.decideCore(obs);
     // Round 4 (red) candidate `redCleanLook` (RedRound4.ts): the red leader's team blue rates cleanest.
-    const looked = redCleanLookTeam(this.baseline.tuning, obs, core.action);
-    const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary} → red clean-look team` } };
+    // Round 5 (blue) candidate `goodCleanLead` (GoodRound5.ts): the blue leader's cleanest team.
+    const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action);
+    const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
+    const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
+    const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
     // `merlinDoomedRed` (MerlinCover.ts): a cover swap on the final proposal, after the pipeline chose it.
     const covered = merlinDoomedRedCover(this.baseline.tuning, obs, d.action);
     if (covered === d.action) return d;
