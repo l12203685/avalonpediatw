@@ -33,7 +33,7 @@ export function goodCleanLeadTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const me = obs.myPlayerId;
   const others = obs.allPlayerIds.filter((id) => id !== me);
   const size = action.teamIds.length;
-  const opts = { thumbRoles: tuning.bayesThumbRoles === true, strictMerlin: tuning.percivalThumbLogic === true, merlinMixture: tuning.loyalMerlinRead ?? 0 };
+  const opts = { thumbRoles: tuning.bayesThumbRoles === true, strictMerlin: tuning.percivalThumbLogic === true, merlinMixture: tuning.loyalMerlinRead ?? 0, zoneMerlin: tuning.merlinZoneSignal === true };
   let best: string[] | null = null;
   let bestP = -1;
   for (const fill of combinations(others, size - 1)) {

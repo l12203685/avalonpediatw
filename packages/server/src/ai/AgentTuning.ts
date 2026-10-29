@@ -467,6 +467,12 @@ export interface AgentTuning {
    * 加到刺殺分數上（0 = 關）。Edward 10/29：紅方要逼梅林給資訊、找到刺殺對象。
    */
   assassinMerlinVotes: number;
+  /**
+   * 第 5 回合藍方・梅林（`belief/ZoneModel.ts`，Edward 2026-10-29；百科〈視角與區間派票法〉）：梅林第 1、2 局非強制提議改用
+   * 「切區間」給資訊——隊上沒有他看得到的紅、隊員之間的空位裝著拇指（取代派拇指躲刺）；忠臣（`loyalMerlinRead`）與派西
+   * （`percivalThumbLogic`）用同一個模型讀這些提議（1-2～1-4 延伸或修正、2-x 加上任務結果都在同一組拇指下自然成立）。
+   */
+  merlinZoneSignal: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -526,6 +532,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodCleanLead',
   'loyalMerlinRead',
   'assassinMerlinVotes',
+  'merlinZoneSignal',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -584,6 +591,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanLead: 0,
   loyalMerlinRead: 0,
   assassinMerlinVotes: 0,
+  merlinZoneSignal: false,
 });
 
 /**
@@ -790,6 +798,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanLead: 0,
   loyalMerlinRead: 0,
   assassinMerlinVotes: 0,
+  merlinZoneSignal: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -848,6 +857,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodCleanLead: 'AVALON_TUNING_GOOD_CLEAN_LEAD',
   loyalMerlinRead: 'AVALON_TUNING_LOYAL_MERLIN_READ',
   assassinMerlinVotes: 'AVALON_TUNING_ASSASSIN_MERLIN_VOTES',
+  merlinZoneSignal: 'AVALON_TUNING_MERLIN_ZONE_SIGNAL',
 });
 
 function parseBool(raw: string): boolean | undefined {
