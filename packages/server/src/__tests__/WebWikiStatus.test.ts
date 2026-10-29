@@ -42,7 +42,29 @@ const TRIAGED_PENDING = wiki(
 const MERGED_JSON_IDS = wiki(
   6, 10, 14, 15, 20, 29, 31, 36, 37, 43, 46, 49, 53, 55, 60, 61, 64, 67, 68, 69, 70, 73, 89, 96, 105,
   113, 114, 115, 116, 119, 122, 124, 130, 131, 132, 133, 137, 154, 167, 168, 169, 171, 172, 173, 174, 178,
+  // 2026-10-29 整併（讀完全部文章後，同一個觀念只留一篇主文）
+  7, 13, 16, 17, 19, 76, 118, 125, 180,
 );
+
+/** 2026-10-29: main article ← the articles merged into it (each main ends with 「本文整合自」 naming them). */
+const MERGES_1029: Record<string, string[]> = {
+  'wiki-57': ['五人局視角區間範例', '區間派票法之變體 (點/夾/跳)'],
+  'wiki-18': ['外灑與外灑出任務後的區間解讀'],
+  'wiki-24': ['3 家對 1AB, 2CD 之後的解讀與反饋'],
+  'wiki-23': ['填空型派票分析'],
+  'wiki-50': ['能力者與超前資訊的條件關係'],
+  'wiki-38': ['牌局範例: 異常票(內黑外白)'],
+  'wiki-39': ['壞人的數量'],
+  'wiki-144': ['雙重假設'],
+};
+
+/** 2026-10-29: articles split off a source that bundled two topics. */
+const SPLITS_1029 = [
+  { source: 'wiki-106', sourceTitle: /入門行動方針/, id: 'wiki-201', title: '阿瓦隆角色玩法 - 藍方基礎原則', heading: '# 藍方基礎原則' },
+  { source: 'wiki-92', sourceTitle: /^常見錯誤 - 遊戲觀念$/, id: 'wiki-202', title: '常見錯誤 - 遊戲品格', heading: '# 常見錯誤 - 遊戲品格' },
+];
+
+const DOCS = path.resolve(__dirname, '..', '..', '..', '..', 'docs', 'avalon-wiki');
 const MERGED_HARDCODED_IDS = [
   'roles-merlin', 'roles-percival', 'roles-loyal', 'roles-oberon', 'roles-assassin', 'strategies-assassination',
   'roles-morgana', 'roles-mordred', 'strategies-red-basic', 'beginner-guide', 'strategies-info-priority',
@@ -144,5 +166,87 @@ describe('wiki merges', () => {
     const report = jsonById.get('wiki-40')!.content;
     expect(report).not.toMatch(/玩家統計|出賽次數|高手/);
     expect(report).toMatch(/年度趨勢/);
+  });
+});
+
+describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分拆)', () => {
+  it('each merged main article ends with 「本文整合自」 naming its sources', () => {
+    for (const [id, sources] of Object.entries(MERGES_1029)) {
+      const lines = jsonById.get(id)!.content.trimEnd().split('\n');
+      const note = lines[lines.length - 1];
+      expect(note, id).toMatch(/^> 本文整合自/);
+      for (const s of sources) expect(note, id).toContain(`〈${s}〉`);
+    }
+  });
+
+  it('a merge keeps the merged text (a sample line from each source is in the main article)', () => {
+    const samples: Record<string, string[]> = {
+      'wiki-57': ['僅有 5 家好人時, 有 {1} 鐵好的視角', '379 => 夾8 給 [0, 1, 2], [4, 5, 6] 兩個區間'],
+      'wiki-18': ['白話就是常聽到的: 場內至少一壞, 場外白區間, 場外黑球區間', '外撒 = 至少作對洗壞人尾派這件事'],
+      'wiki-24': ['尊重 = 參考', '修正"通常"認為 AC 至少有一壞'],
+      'wiki-23': ['直接派反邊是沒有經過思考的表現', '不能是尾派'],
+      'wiki-50': ['結論: 只有 1, 2, 4, 8 這幾條描述 (推論) 是正確的', '刻意本身就是能力的展現'],
+      'wiki-38': ['8外白: 可以考慮兩種狀況', '換個角度思考: 若 8 為梅林會做這個動作嗎?'],
+      'wiki-39': ['那等同 8 家自己告訴大家壞人是 8 家', '0肯定是會派自己'],
+      'wiki-144': ['什麼是雙重假設: 當兩件事情敘述彼此不相關的時候就稱為雙重假設'],
+    };
+    for (const [id, lines] of Object.entries(samples)) {
+      for (const l of lines) expect(jsonById.get(id)!.content, id).toContain(l);
+    }
+  });
+
+  it('split-off articles stand alone and the source no longer carries them', () => {
+    for (const s of SPLITS_1029) {
+      const src = jsonById.get(s.source)!;
+      const part = jsonById.get(s.id)!;
+      expect(src.title).toMatch(s.sourceTitle);
+      expect(src.content).not.toContain(`\n${s.heading}\n`);
+      expect(part.title).toBe(s.title);
+      expect(part.content).toContain(`\n${s.heading}\n`);
+      expect(isWikiPending(part)).toBe(false);
+    }
+    expect(jsonById.get('wiki-201')!.category).toBe('roles');
+  });
+
+  it('every [標題](wiki:id) link points at an article on the site', () => {
+    const ids = new Set([...jsonArticles.map((a) => a.id), ...WIKI_ARTICLES.map((a) => a.id)]);
+    const broken: string[] = [];
+    for (const a of jsonArticles) {
+      for (const m of a.content.matchAll(/\]\(wiki:([^)\s]+)\)/g)) if (!ids.has(m[1])) broken.push(`${a.id} → ${m[1]}`);
+    }
+    expect(broken).toEqual([]);
+  });
+
+  it('docs/avalon-wiki holds one article per file, matching the site text', () => {
+    const files: Record<string, string> = {
+      '派票策略/視角與區間派票法.md': 'wiki-57',
+      '派票策略/外灑相關討論.md': 'wiki-18',
+      '進階思考/延伸與修正.md': 'wiki-24',
+      '派票策略/平衡策略.md': 'wiki-23',
+      '入門基礎/能力者.md': 'wiki-50',
+      '湖中與投票/為什麼不該亂開場外白球.md': 'wiki-38',
+      '派票策略/為什麼知道你是壞人.md': 'wiki-39',
+      '進階思考/邏輯一致性.md': 'wiki-144',
+      '入門基礎/入門行動方針.md': 'wiki-106',
+      '角色/藍方基礎原則.md': 'wiki-201',
+      '入門基礎/常見錯誤 - 任務派票.md': 'wiki-90',
+      '入門基礎/常見錯誤 - 湖中女神.md': 'wiki-91',
+      '入門基礎/常見錯誤 - 遊戲觀念.md': 'wiki-92',
+      '入門基礎/常見錯誤 - 遊戲品格.md': 'wiki-202',
+      '入門基礎/常見錯誤 - 黑白球投票.md': 'wiki-93',
+      '入門基礎/阿瓦隆名詞介紹 - 黑白球投票.md': 'wiki-148',
+      '入門基礎/阿瓦隆名詞介紹 - 動作相關.md': 'wiki-149',
+      '入門基礎/阿瓦隆名詞介紹 - 任務牌指派.md': 'wiki-150',
+      '入門基礎/阿瓦隆名詞介紹 - 湖中女神.md': 'wiki-151',
+    };
+    for (const [file, id] of Object.entries(files)) {
+      expect(fs.readFileSync(path.join(DOCS, file), 'utf-8').trim(), file).toBe(jsonById.get(id)!.content.trim());
+    }
+    const gone = [
+      '入門基礎/新手常見錯誤.md', '入門基礎/名詞說明與簡稱.md', '派票策略/五人局視角區間範例.md',
+      '派票策略/區間派票法之變體 (點_夾_跳).md', '派票策略/外灑與外灑出任務後的區間解讀.md', '派票策略/填空型派票分析.md',
+      '派票策略/壞人的數量.md', '進階思考/雙重假設.md',
+    ];
+    expect(gone.filter((f) => fs.existsSync(path.join(DOCS, f)))).toEqual([]);
   });
 });
