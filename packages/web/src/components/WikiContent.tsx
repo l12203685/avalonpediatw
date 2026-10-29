@@ -26,7 +26,7 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
     content: a.content,
     excerpt: a.excerpt,
     tags: a.tags,
-    author: a.source === 'hackmd' ? 'HackMD Archive' : 'Avalon Wiki',
+    author: '阿瓦隆百科',
     status: a.status === '待完成' ? '待完成' : undefined,
   };
 }
