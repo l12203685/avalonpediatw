@@ -473,6 +473,11 @@ export interface AgentTuning {
    */
   assassinLeadRead: number;
   /**
+   * 第 7 回合梅林（`MerlinLoyalStyle.merlinVoteCoverApprove`；百科〈忠臣〉「梅林只想裝雜魚」）：第 3 局起、非強制、
+   * 隊上有看得到的紅但公開看起來乾淨（雜魚會贊成）、紅方還沒聽牌時，以這個比例照雜魚投白（0 = 關）。
+   */
+  merlinVoteCover: number;
+  /**
    * 第 5 回合藍方・梅林（`belief/ZoneModel.ts`，Edward 2026-10-29；百科〈視角與區間派票法〉）：梅林第 1、2 局非強制提議改用
    * 「切區間」給資訊——隊上沒有他看得到的紅、隊員之間的空位裝著拇指（取代派拇指躲刺）；忠臣（`loyalMerlinRead`）與派西
    * （`percivalThumbLogic`）用同一個模型讀這些提議（1-2～1-4 延伸或修正、2-x 加上任務結果都在同一組拇指下自然成立）。
@@ -564,6 +569,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'loyalMerlinRead',
   'assassinMerlinVotes',
   'assassinLeadRead',
+  'merlinVoteCover',
   'merlinZoneSignal',
   'redRankOrder',
   'merlinLoyalStyle',
@@ -629,6 +635,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   loyalMerlinRead: 0,
   assassinMerlinVotes: 0,
   assassinLeadRead: 0,
+  merlinVoteCover: 0,
   merlinZoneSignal: false,
   redRankOrder: false,
   merlinLoyalStyle: false,
@@ -842,6 +849,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   loyalMerlinRead: 0,
   assassinMerlinVotes: 0,
   assassinLeadRead: 0,
+  merlinVoteCover: 0,
   merlinZoneSignal: false,
   redRankOrder: true,
   merlinLoyalStyle: false,
@@ -907,6 +915,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   loyalMerlinRead: 'AVALON_TUNING_LOYAL_MERLIN_READ',
   assassinMerlinVotes: 'AVALON_TUNING_ASSASSIN_MERLIN_VOTES',
   assassinLeadRead: 'AVALON_TUNING_ASSASSIN_LEAD_READ',
+  merlinVoteCover: 'AVALON_TUNING_MERLIN_VOTE_COVER',
   merlinZoneSignal: 'AVALON_TUNING_MERLIN_ZONE_SIGNAL',
   redRankOrder: 'AVALON_TUNING_RED_RANK_ORDER',
   merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
@@ -949,6 +958,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
+  }
+  if (name === 'merlinVoteCover') {
+    const value = raw === undefined ? 0.25 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`merlinVoteCover needs a number in [0, 1], got "${raw}"`);
+    return { merlinVoteCover: value };
   }
   if (name === 'assassinLeadRead') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
@@ -1027,7 +1041,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinLeadRead') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinLeadRead' || key === 'merlinVoteCover') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

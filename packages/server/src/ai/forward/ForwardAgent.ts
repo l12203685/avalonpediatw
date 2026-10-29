@@ -57,7 +57,7 @@ import { goodCleanVoteReject } from '../GoodCleanVote';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
-import { merlinLoyalStyleTeam, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
+import { merlinLoyalStyleTeam, merlinVoteCoverApprove, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -737,6 +737,11 @@ export class ForwardAgent implements AvalonAgent {
     // gives too little chance of being clean (R3+).
     if (goodCleanVoteReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'good clean vote (posterior)');
+    }
+    // Round 7 (Merlin) candidate `merlinVoteCover` (MerlinLoyalStyle.ts): 梅林只想裝雜魚 — approve a red team the
+    // public reads as clean at rate q, while a fail is not yet fatal.
+    if (merlinVoteCoverApprove(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'merlin vote cover (loyal-looking approve)');
     }
     const core = this.decideCore(obs);
     // Round 4 (red) candidate `redCleanLook` (RedRound4.ts): the red leader's team blue rates cleanest.
