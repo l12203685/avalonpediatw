@@ -47,11 +47,13 @@ export interface BeliefOptions {
   bayes?: boolean;
   /** `bayesThumbRoles`: Percival reads its thumbs with the Merlin / Morgana tables (`BayesOptions.thumbRoles`). */
   bayesThumbRoles?: boolean;
+  /** `percivalThumbLogic`: Percival reads its good thumb as a strict Merlin (`BayesOptions.strictMerlin`). */
+  percivalThumbLogic?: boolean;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
-  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles'
+  'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic'
 >;
 
 /** Every switch off: the belief code before 2026-10-22. */
@@ -72,6 +74,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     worldShare: tuning.worldShareBelief,
     bayes: tuning.bayesBelief,
     bayesThumbRoles: tuning.bayesThumbRoles,
+    percivalThumbLogic: tuning.percivalThumbLogic,
   };
 }
 

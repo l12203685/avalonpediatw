@@ -65,8 +65,7 @@ interface Posterior {
   maskOf: (ids: readonly string[]) => number;
 }
 
-const cache = new WeakMap<PlayerObservation, Posterior>();
-const cacheThumbs = new WeakMap<PlayerObservation, Posterior>();
+const caches = new Map<string, WeakMap<PlayerObservation, Posterior>>();
 
 export interface BayesOptions {
   /**
@@ -75,11 +74,27 @@ export interface BayesOptions {
    * posterior tells the thumbs apart.
    */
   thumbRoles?: boolean;
+  /**
+   * `percivalThumbLogic` (round 3, Edward 2026-10-29): Percival's two thumbs are exactly one Merlin and one Morgana,
+   * and Merlin's information is right while Morgana's need not be. In a world where a thumb is Merlin, its proposals
+   * (R3+ or the forced fifth; the doomed R1–R2 ones are skipped: 派拇指躲刺) come from the players Merlin sees as
+   * clean (the blues and the unseen Mordred) — two or more reds on them is all but impossible, exactly one red must
+   * be Mordred — and from R3 on it does not approve a team holding a red it sees. In a world where the thumb is
+   * Morgana, the usual red tables.
+   */
+  strictMerlin?: boolean;
 }
 
+/** Near-impossible event under the strict-Merlin model. */
+const STRICT_EPS = 0.03;
+
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
-  const thumbs = opts.thumbRoles && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2 ? obs.knownWizards ?? [] : [];
-  const store = thumbs.length > 0 ? cacheThumbs : cache;
+  const percival = obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2;
+  const thumbs = opts.thumbRoles && percival ? obs.knownWizards ?? [] : [];
+  const strict = opts.strictMerlin && percival ? obs.knownWizards ?? [] : [];
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}`;
+  let store = caches.get(key);
+  if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
   if (hit) return hit;
   const view = buildCertainty(obs);
@@ -97,8 +112,20 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
     for (const v of obs.voteHistory) {
       const teamMask = view.maskOf(v.team);
       const hasRed = (w & teamMask) !== 0;
-      // Proposal (the leader on its own team; not the viewer's own).
-      if (v.leader !== me && v.team.includes(v.leader)) {
+      const doomed = v.round <= 2 && v.attempt < 5;
+      // Strict Merlin (Percival's good thumb in this world): proposals from its seen-clean pool.
+      if (strict.includes(v.leader) && !red(v.leader) && v.team.includes(v.leader)) {
+        if (!doomed) {
+          const k = sizeOf(w & teamMask);
+          const reds = sizeOf(w & all);
+          const pool = ids.length - 1 - (reds - 1); // the blues + the unseen Mordred
+          const n = choose(pool, v.team.length - 1);
+          // Probabilities of this exact team: ε spread over every possible team when Merlin could not pick it.
+          const any = choose(ids.length - 1, v.team.length - 1);
+          lp += Math.log(k >= 2 || n === 0 ? STRICT_EPS / any : (k === 1 ? 1 / reds : 1) / n);
+        }
+      } else if (v.leader !== me && v.team.includes(v.leader)) {
+        // Proposal (the leader on its own team; not the viewer's own).
         const camp = campOf(v.leader);
         const others = all & ~bit(v.leader);
         const redsAvail = sizeOf(w & others);
@@ -111,6 +138,14 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
       if (v.attempt >= 5) continue;
       for (const id of ids) {
         if (id === me || v.votes[id] === undefined) continue;
+        if (strict.includes(id) && !red(id) && v.round >= 3) {
+          // Strict Merlin: approves a team with a red it sees all but never (one red: Mordred with 1/reds).
+          const k = sizeOf(w & teamMask);
+          const pClean = smooth(...(T.vote[`good|${v.team.includes(id) ? 'on' : 'off'}|clean|r3`] ?? [1, 2]) as [number, number]);
+          const pYes = k === 0 ? pClean : k === 1 ? pClean / sizeOf(w & all) + STRICT_EPS : STRICT_EPS;
+          lp += Math.log(v.votes[id] ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
+          continue;
+        }
         lp += Math.log(voteProb(campOf(id), v.team.includes(id), hasRed, v.round, v.votes[id]));
       }
     }

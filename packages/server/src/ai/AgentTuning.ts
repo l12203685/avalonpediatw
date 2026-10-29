@@ -432,6 +432,12 @@ export interface AgentTuning {
   goodCleanVotePercivalOnly: boolean;
   /** `goodCleanVote` 只在第幾次提議以前用（1–4，預設 4 = 所有非強制提議；3 = 投黑不會把下一個推成強制）。 */
   goodCleanVoteMaxAttempt: number;
+  /**
+   * 派西的拇指邏輯（第 3 回合・派西，Edward 2026-10-29）：兩根拇指必定一好一壞，世界只有「A 梅 B 娜」或「A 娜 B 梅」；
+   * 梅林給的是正確資訊（第 3 局起或強制提議，梅林只會從他看起來乾淨的人裡挑，不會贊成有他看得到的紅的隊），
+   * 莫甘娜不一定。貝氏信念在「這根拇指是梅林」的世界用這個嚴格模型讀它的派隊與投票（`BayesBelief.strictMerlin`）。
+   */
+  percivalThumbLogic: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -482,6 +488,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodCleanVoteLoyalOnly',
   'goodCleanVotePercivalOnly',
   'goodCleanVoteMaxAttempt',
+  'percivalThumbLogic',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -531,6 +538,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanVoteLoyalOnly: false,
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
+  percivalThumbLogic: false,
 });
 
 /**
@@ -728,6 +736,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodCleanVoteLoyalOnly: false,
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
+  percivalThumbLogic: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -777,6 +786,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodCleanVoteLoyalOnly: 'AVALON_TUNING_GOOD_CLEAN_VOTE_LOYAL_ONLY',
   goodCleanVotePercivalOnly: 'AVALON_TUNING_GOOD_CLEAN_VOTE_PERCIVAL_ONLY',
   goodCleanVoteMaxAttempt: 'AVALON_TUNING_GOOD_CLEAN_VOTE_MAX_ATTEMPT',
+  percivalThumbLogic: 'AVALON_TUNING_PERCIVAL_THUMB_LOGIC',
 });
 
 function parseBool(raw: string): boolean | undefined {

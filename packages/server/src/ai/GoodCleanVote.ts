@@ -21,6 +21,6 @@ export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerOb
   if ((obs.failCount ?? 0) + 1 > (tuning.goodCleanVoteMaxAttempt ?? 4)) return false;
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
-  const p = bayesTeamClean(obs, team, { thumbRoles: tuning.bayesThumbRoles === true });
+  const p = bayesTeamClean(obs, team, { thumbRoles: tuning.bayesThumbRoles === true, strictMerlin: tuning.percivalThumbLogic === true });
   return p !== null && p < tau;
 }
