@@ -35,6 +35,23 @@ const TB = BOT_TABLE as unknown as Table;
 let mix = 0;
 const blend = (human: number, bot: number): number => (mix > 0 ? (1 - mix) * human + mix * bot : human);
 
+/**
+ * Memo of the blended table lookups for the current `mix` (the posterior asks the same few hundred cells millions of
+ * times per game; building the string keys was ~40% of a game's CPU). Pure cache: same numbers as the uncached path.
+ */
+interface ProbMemo { vote: Float64Array; voteLog: Float64Array; proposal: Float64Array; mission: Float64Array }
+const memos = new Map<number, ProbMemo>();
+const newMemo = (): ProbMemo => ({ vote: new Float64Array(32).fill(NaN), voteLog: new Float64Array(64).fill(NaN), proposal: new Float64Array(48).fill(NaN), mission: new Float64Array(216).fill(NaN) });
+let memo: ProbMemo = newMemo();
+memos.set(0, memo);
+function useMix(m: number): void {
+  mix = m;
+  let x = memos.get(m);
+  if (!x) { x = newMemo(); memos.set(m, x); }
+  memo = x;
+}
+const CAMP_INDEX: Record<string, number> = { good: 0, evil: 1, merlin: 2, morgana: 3 };
+
 const bucket = (round: number): string => (round <= 2 ? 'r12' : 'r3');
 const smooth = (hit: number, n: number): number => (hit + 1) / (n + 2);
 
@@ -45,8 +62,30 @@ function voteProbIn(t: Table, camp: string, on: boolean, hasRed: boolean, round:
   return smooth(c[0], c[1]);
 }
 
+const CAMP_NAMES = ['good', 'evil', 'merlin', 'morgana'] as const;
+/** log P(vote) by camp index (good 0, evil 1, merlin 2, morgana 3) — the memoized form of `Math.log(voteProb(…))`. */
+function voteLogIx(ci: number, on: boolean, hasRed: boolean, r3: boolean, approve: boolean): number {
+  const idx = (ci << 4) | (on ? 8 : 0) | (hasRed ? 4 : 0) | (r3 ? 2 : 0) | (approve ? 1 : 0);
+  let lp = memo.voteLog[idx];
+  if (Number.isNaN(lp)) {
+    lp = Math.log(voteProb(CAMP_NAMES[ci], on, hasRed, r3 ? 3 : 1, approve));
+    memo.voteLog[idx] = lp;
+  }
+  return lp;
+}
+
+function proposalProbIx(ci: number, r3: boolean, k: number): number {
+  return proposalProb(CAMP_NAMES[ci], r3 ? 3 : 1, k);
+}
+
 function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, approve: boolean): number {
-  const p = blend(voteProbIn(T, camp, on, hasRed, round), voteProbIn(TB, camp, on, hasRed, round));
+  const ci = CAMP_INDEX[camp];
+  const idx = ci === undefined ? -1 : (ci << 3) | (on ? 4 : 0) | (hasRed ? 2 : 0) | (round <= 2 ? 0 : 1);
+  let p = idx >= 0 ? memo.vote[idx] : NaN;
+  if (Number.isNaN(p)) {
+    p = blend(voteProbIn(T, camp, on, hasRed, round), voteProbIn(TB, camp, on, hasRed, round));
+    if (idx >= 0) memo.vote[idx] = p;
+  }
   return approve ? p : 1 - p;
 }
 
@@ -58,7 +97,14 @@ function proposalProbIn(t: Table, camp: string, round: number, k: number): numbe
 }
 
 function proposalProb(camp: string, round: number, k: number): number {
-  return blend(proposalProbIn(T, camp, round, k), proposalProbIn(TB, camp, round, k));
+  const ci = CAMP_INDEX[camp];
+  const idx = ci === undefined || k < 0 || k > 5 ? -1 : ci * 12 + (round <= 2 ? 0 : 6) + k;
+  let p = idx >= 0 ? memo.proposal[idx] : NaN;
+  if (Number.isNaN(p)) {
+    p = blend(proposalProbIn(T, camp, round, k), proposalProbIn(TB, camp, round, k));
+    if (idx >= 0) memo.proposal[idx] = p;
+  }
+  return p;
 }
 
 function missionProbIn(t: Table, round: number, reds: number, fails: number): number {
@@ -70,7 +116,13 @@ function missionProbIn(t: Table, round: number, reds: number, fails: number): nu
 
 function missionProb(round: number, reds: number, fails: number): number {
   if (fails > reds) return 0;
-  return blend(missionProbIn(T, round, reds, fails), missionProbIn(TB, round, reds, fails));
+  const idx = round >= 1 && round <= 6 && reds >= 0 && reds <= 5 && fails >= 0 && fails <= 5 ? ((round - 1) * 6 + reds) * 6 + fails : -1;
+  let p = idx >= 0 ? memo.mission[idx] : NaN;
+  if (Number.isNaN(p)) {
+    p = blend(missionProbIn(T, round, reds, fails), missionProbIn(TB, round, reds, fails));
+    if (idx >= 0) memo.mission[idx] = p;
+  }
+  return p;
 }
 
 function redLakeProb(targetRed: boolean): number {
@@ -142,11 +194,11 @@ export interface BayesOptions {
 const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
-  mix = Math.min(Math.max(opts.botTables ?? 0, 0), 1);
+  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1));
   try {
     return posteriorWith(obs, opts);
   } finally {
-    mix = 0;
+    useMix(0);
   }
 }
 
@@ -165,29 +217,49 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const view = buildCertainty(obs);
   const worlds = view.worlds('L1*');
   const ids = obs.allPlayerIds;
-  const bit = (id: string): number => view.bitOf(id);
+  const bitMap = new Map(ids.map((id) => [id, view.bitOf(id)] as const));
+  const bit = (id: string): number => bitMap.get(id) ?? view.bitOf(id);
   const me = obs.myPlayerId;
   const sizeOf = (x: number): number => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
   const all = view.maskOf(ids);
+  const thumbMask = view.maskOf(thumbs);
+  const strictMask = view.maskOf(strict);
+  // Everything that does not depend on the world, computed once (the world loop below runs it for every world).
+  const pre = obs.voteHistory.map((v) => {
+    const teamMask = view.maskOf(v.team);
+    return {
+      v,
+      teamMask,
+      leaderBit: bit(v.leader),
+      leaderOn: v.team.includes(v.leader),
+      doomed: v.round <= 2 && v.attempt < 5 && !early,
+      r3: v.round > 2,
+      voters: v.attempt >= 5 ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
+        .map((id) => ({ b: bit(id), on: v.team.includes(id), yes: v.votes[id] === true, raw: v.votes[id] })),
+    };
+  });
+  const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
+  const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
+    .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
+  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early) : null;
   const logW = worlds.map((w) => {
     const red = (id: string): boolean => (w & bit(id)) !== 0;
-    // Percival's thumbs: the good one is Merlin, the red one Morgana (in this world).
-    const campOf = (id: string): string => (thumbs.includes(id) ? (red(id) ? 'morgana' : 'merlin') : red(id) ? 'evil' : 'good');
+    // Percival's thumbs: the good one is Merlin, the red one Morgana (in this world). Camp index: good 0, evil 1, merlin 2, morgana 3.
+    const campIx = (b: number): number => ((thumbMask & b) !== 0 ? ((w & b) !== 0 ? 3 : 2) : (w & b) !== 0 ? 1 : 0);
     let lp = 0;
-    for (const v of obs.voteHistory) {
-      const teamMask = view.maskOf(v.team);
+    for (const p of pre) {
+      const { v, teamMask } = p;
       const hasRed = (w & teamMask) !== 0;
-      const doomed = v.round <= 2 && v.attempt < 5 && !early;
       // Strict Merlin (Percival's good thumb in this world): proposals from its seen-clean pool.
-      if (strict.includes(v.leader) && !red(v.leader) && v.team.includes(v.leader)) {
-        if (doomed && zone) {
+      if ((strictMask & p.leaderBit) !== 0 && (w & p.leaderBit) === 0 && p.leaderOn) {
+        if (p.doomed && zone) {
           // Zone-cutting Merlin (R1–R2 non-forced): averaged over which red is the unseen Mordred.
           const reds = ids.filter((id) => red(id));
           let zs = 0;
           const prior = priorOf(obs, v);
           for (const d of reds) zs += Math.exp(zoneLog(ids, v.leader, v.team, new Set(reds.filter((r) => r !== d)), prior));
           lp += Math.log(zs / Math.max(1, reds.length));
-        } else if (!doomed) {
+        } else if (!p.doomed) {
           const k = sizeOf(w & teamMask);
           const reds = sizeOf(w & all);
           const pool = ids.length - 1 - (reds - 1); // the blues + the unseen Mordred
@@ -196,40 +268,37 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
           const any = choose(ids.length - 1, v.team.length - 1);
           lp += Math.log(k >= 2 || n === 0 ? STRICT_EPS / any : (k === 1 ? 1 / reds : 1) / n);
         }
-      } else if (v.leader !== me && v.team.includes(v.leader)) {
+      } else if (v.leader !== me && p.leaderOn) {
         // Proposal (the leader on its own team; not the viewer's own).
-        const camp = campOf(v.leader);
-        const others = all & ~bit(v.leader);
+        const others = all & ~p.leaderBit;
         const redsAvail = sizeOf(w & others);
         const goodsAvail = sizeOf(others) - redsAvail;
-        const k = sizeOf(w & teamMask & ~bit(v.leader));
+        const k = sizeOf(w & teamMask & ~p.leaderBit);
         const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
-        if (n > 0) lp += Math.log(proposalProb(camp, v.round, k) / n);
+        if (n > 0) lp += Math.log(proposalProbIx(campIx(p.leaderBit), p.r3, k) / n);
       }
-      // Votes (no vote on the forced fifth proposal).
-      if (v.attempt >= 5) continue;
-      for (const id of ids) {
-        if (id === me || v.votes[id] === undefined) continue;
-        if (strict.includes(id) && !red(id) && v.round >= 3) {
+      // Votes (no vote on the forced fifth proposal: `voters` is empty there).
+      for (const x of p.voters) {
+        if ((strictMask & x.b) !== 0 && (w & x.b) === 0 && p.r3) {
           // Strict Merlin: approves a team with a red it sees all but never (one red: Mordred with 1/reds).
           const k = sizeOf(w & teamMask);
-          const pClean = voteProb('good', v.team.includes(id), false, 3, true);
+          const pClean = voteProb('good', x.on, false, 3, true);
           const pYes = k === 0 ? pClean : k === 1 ? pClean / sizeOf(w & all) + STRICT_EPS : STRICT_EPS;
-          lp += Math.log(v.votes[id] ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
+          lp += Math.log(x.raw ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
           continue;
         }
-        lp += Math.log(voteProb(campOf(id), v.team.includes(id), hasRed, v.round, v.votes[id]));
+        lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes);
       }
     }
-    for (const q of obs.questHistory) {
-      const p = missionProb(q.round, sizeOf(w & view.maskOf(q.team)), q.failCount ?? 0);
+    for (const q of quests) {
+      const p = missionProb(q.round, sizeOf(w & q.mask), q.fails);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
-    if (mixMode > 0) lp += merlinMixtureLog(obs, view, w, mixMode, zone, early);
-    for (const l of obs.lakeHistory ?? []) {
-      if (l.declaredClaim === 'none' || l.holderId === me || !red(l.holderId)) continue;
-      const p = redLakeProb(red(l.targetId));
-      lp += Math.log(l.declaredClaim === 'evil' ? p : 1 - p);
+    if (mixPre) lp += merlinMixtureLog(mixPre, w);
+    for (const l of lakes) {
+      if ((w & l.hb) === 0) continue;
+      const p = redLakeProb((w & l.tb) !== 0);
+      lp += Math.log(l.evil ? p : 1 - p);
     }
     return lp;
   });
@@ -294,49 +363,64 @@ export function bayesTeamClean(obs: PlayerObservation, team: readonly string[], 
  * log Σ_{Merlin m, Mordred d} P(m) P(d) Π (Merlin model / generic blue model) over m's R3+ votes (and, strict, its
  * R3+ proposals) — the factor by which "one of the blues is Merlin" re-weighs world `w` (`merlinMixture`).
  */
-function merlinMixtureLog(
-  obs: PlayerObservation,
-  view: ReturnType<typeof buildCertainty>,
-  w: number,
-  mode: number,
-  zone = false,
-  earlyStrict = false,
-): number {
+interface MixPre {
+  ids: readonly string[];
+  me: string;
+  all: number;
+  mode: number;
+  bits: { id: string; b: number }[];
+  late: { v: PlayerObservation['voteHistory'][number]; teamMask: number; leaderBit: number; r3: boolean; voted: boolean; votes: Record<string, boolean> }[];
+  early: { v: PlayerObservation['voteHistory'][number]; teamMask: number; prior: PriorProposal[] }[];
+  anyByLen: Map<number, number>;
+}
+
+function merlinMixturePre(obs: PlayerObservation, view: ReturnType<typeof buildCertainty>, mode: number, zone: boolean, earlyStrict: boolean): MixPre {
   const ids = obs.allPlayerIds;
   const me = obs.myPlayerId;
-  const bit = (id: string): number => view.bitOf(id);
-  const red = (id: string): boolean => (w & bit(id)) !== 0;
-  const sizeOf = (x: number): number => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
-  const blues = ids.filter((id) => id !== me && !red(id));
-  const reds = ids.filter((id) => red(id));
-  if (blues.length === 0 || reds.length === 0) return 0;
-  const all = view.maskOf(ids);
   // With `merlinEarlyStrict` the R1–R2 proposals of the Merlin candidate read with the strict model as well.
-  const late = obs.voteHistory.filter((v) => v.round >= 3 || (earlyStrict && mode >= 2 && v.attempt < 5 && v.leader !== me));
-  const early = zone ? obs.voteHistory.filter((v) => v.round <= 2 && v.attempt < 5) : [];
+  const late = obs.voteHistory.filter((v) => v.round >= 3 || (earlyStrict && mode >= 2 && v.attempt < 5 && v.leader !== me))
+    .map((v) => ({ v, teamMask: view.maskOf(v.team), leaderBit: view.bitOf(v.leader), r3: v.round > 2, voted: v.round >= 3 && v.attempt < 5, votes: v.votes }));
+  const early = zone ? obs.voteHistory.filter((v) => v.round <= 2 && v.attempt < 5).map((v) => ({ v, teamMask: view.maskOf(v.team), prior: priorOf(obs, v) })) : [];
+  const anyByLen = new Map<number, number>();
+  for (const v of obs.voteHistory) anyByLen.set(v.team.length, choose(ids.length - 1, v.team.length - 1));
+  return { ids, me, all: view.maskOf(ids), mode, bits: ids.map((id) => ({ id, b: view.bitOf(id) })), late, early, anyByLen };
+}
+
+/**
+ * log Σ_{Merlin m, Mordred d} P(m) P(d) Π (Merlin model / generic blue model) over m's R3+ votes (and, strict, its
+ * R3+ proposals) — the factor by which "one of the blues is Merlin" re-weighs world `w` (`merlinMixture`).
+ */
+function merlinMixtureLog(pre: MixPre, w: number): number {
+  const { ids, me, all, mode } = pre;
+  const sizeOf = (x: number): number => { let c = 0; while (x) { x &= x - 1; c++; } return c; };
+  const blues = pre.bits.filter((x) => x.id !== me && (w & x.b) === 0);
+  const reds = pre.bits.filter((x) => (w & x.b) !== 0);
+  if (blues.length === 0 || reds.length === 0) return 0;
   let sum = 0;
   for (const m of blues) {
+    const others = all & ~m.b;
+    const redsAvail = sizeOf(w & others);
+    const goodsAvail = sizeOf(others) - redsAvail;
     for (const d of reds) {
       let lr = 0;
       // Zone-cutting Merlin's R1–R2 non-forced proposals vs the generic blue proposal.
-      for (const v of early) {
-        if (v.leader !== m || !v.team.includes(m)) continue;
-        const teamMask = view.maskOf(v.team);
-        const others = all & ~bit(m);
-        const redsAvail = sizeOf(w & others);
-        const goodsAvail = sizeOf(others) - redsAvail;
-        const k = sizeOf(w & teamMask & ~bit(m));
+      for (const e of pre.early) {
+        const v = e.v;
+        if (v.leader !== m.id || (e.teamMask & m.b) === 0) continue;
+        const k = sizeOf(w & e.teamMask & ~m.b);
         const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
         if (n <= 0) continue;
         const generic = proposalProb('good', v.round, k) / n;
-        lr += zoneLog(ids, m, v.team, new Set(reds.filter((r) => r !== d)), priorOf(obs, v)) - Math.log(generic);
+        lr += zoneLog(ids, m.id, v.team, new Set(reds.filter((r) => r.id !== d.id).map((r) => r.id)), e.prior) - Math.log(generic);
       }
-      for (const v of late) {
-        const teamMask = view.maskOf(v.team);
-        const seenRed = (w & teamMask & ~bit(d)) !== 0;
+      for (const x of pre.late) {
+        const v = x.v;
+        const teamMask = x.teamMask;
+        const seenRed = (w & teamMask & ~d.b) !== 0;
         const hasRed = (w & teamMask) !== 0;
-        const on = v.team.includes(m);
-        if (v.round >= 3 && v.attempt < 5 && v.votes[m] !== undefined) {
+        const on = (teamMask & m.b) !== 0;
+        const vote = x.votes[m.id];
+        if (x.voted && vote !== undefined) {
           const pg = voteProb('good', on, hasRed, v.round, true);
           let pm: number;
           if (mode >= 2) {
@@ -345,19 +429,16 @@ function merlinMixtureLog(
             pm = voteProb('merlin', on, seenRed, v.round, true);
           }
           pm = Math.min(Math.max(pm, STRICT_EPS), 1 - STRICT_EPS);
-          lr += Math.log(v.votes[m] ? pm / pg : (1 - pm) / (1 - pg));
+          lr += Math.log(vote ? pm / pg : (1 - pm) / (1 - pg));
         }
-        if (mode >= 2 && v.leader === m && on) {
+        if (mode >= 2 && v.leader === m.id && on) {
           // Generic blue proposal vs the strict Merlin pick from the seen-clean pool (the blues + Mordred d).
-          const others = all & ~bit(m);
-          const redsAvail = sizeOf(w & others);
-          const goodsAvail = sizeOf(others) - redsAvail;
-          const k = sizeOf(w & teamMask & ~bit(m));
+          const k = sizeOf(w & teamMask & ~m.b);
           const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
           if (n <= 0) continue;
           const generic = proposalProb('good', v.round, k) / n;
           const pool = goodsAvail + 1;
-          const strict = seenRed ? STRICT_EPS / choose(ids.length - 1, v.team.length - 1) : 1 / choose(pool, v.team.length - 1);
+          const strict = seenRed ? STRICT_EPS / (pre.anyByLen.get(v.team.length) ?? choose(ids.length - 1, v.team.length - 1)) : 1 / choose(pool, v.team.length - 1);
           lr += Math.log(strict / generic);
         }
       }
