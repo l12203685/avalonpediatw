@@ -41,13 +41,16 @@ interface LobbyRoom { name: string; description_title?: string; is_publish_room?
 interface Snapshot {
   gaming: boolean; status: string; story: unknown; users: unknown; missions: unknown; missionResult: unknown;
   lake: unknown; meetings: unknown; missionHistorys: unknown; roles: unknown; dayTime: unknown;
+  /** 局末才取：系統訊息（含刺殺、勝負）。 */
+  logs?: unknown;
 }
+const ENDED = '遊戲結束';
 
 const SNAP_JS = `(() => { const a = window.app; if (!a || !a.data_ready) return null;
   const j = (v) => JSON.parse(JSON.stringify(v ?? null));
   return { gaming: !!a.gaming, status: a.game_status ?? '', story: j(a.story_message), users: j(a.users), missions: j(a.missions),
     missionResult: j(a.mission_result), lake: j(a.lake_result), meetings: j(a.meetings), missionHistorys: j(a.mission_historys),
-    roles: j(a.game_roles), dayTime: j(a.day_time) }; })()`;
+    roles: j(a.game_roles), dayTime: j(a.day_time), logs: a.game_status === '遊戲結束' ? j(a.logs) : undefined }; })()`;
 
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return Promise.race([p, new Promise<T>((_, rej) => setTimeout(() => rej(new Error(`逾時：${what}`)), ms))]);
@@ -82,30 +85,43 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
     console.log(`${stamp()} 開始旁觀 ${room.name}`);
     let game: { startedAt: string; timeline: { t: string; s: Snapshot }[] } | null = null;
     let last = '';
-    let wasGaming = false;
+    // 練習台局末顯示「遊戲結束」但 gaming 仍是 true（房主重開才變）；所以「結束」看狀態，
+    // 「開局」看 gaming 為 true 且狀態不是遊戲結束。剛進房就是遊戲結束的那局不記。
+    let inGame = false;
+    let sawEnd = false;
     while (!stop()) {
       if (!/\/Room/i.test(page.url())) break; // 房間消失 → 被導回大廳
       let s: Snapshot | null = null;
       try { s = await withTimeout(page.evaluate(SNAP_JS), 10000, 'snap'); } catch { s = null; }
       if (s) {
-        if (s.gaming && !wasGaming) { game = { startedAt: stamp(), timeline: [] }; last = ''; console.log(`${stamp()} ${room.name} 開局`); }
+        const live = s.gaming && s.status !== ENDED;
+        if (live && !inGame) {
+          inGame = true; sawEnd = false; game = { startedAt: stamp(), timeline: [] }; last = '';
+          console.log(`${stamp()} ${room.name} 開局`);
+        }
         const key = JSON.stringify(s);
         if (game && key !== last) { game.timeline.push({ t: stamp(), s }); last = key; }
-        if (!s.gaming && wasGaming && game) {
-          // 局末：多等一下讓公開角色、勝負的畫面資料進來，再取最後一張
+        if (inGame && game && (s.status === ENDED || !s.gaming) && !sawEnd) {
+          sawEnd = true;
+          // 局末：多等一下讓公開角色、刺殺、勝負的畫面資料進來，再取最後一張
           await sleep(3000);
           let end: Snapshot | null = null;
           try { end = await withTimeout(page.evaluate(SNAP_JS), 10000, 'snap'); } catch { end = null; }
           const text: string = await page.evaluate('document.body.innerText').catch(() => '');
+          // 練習台自己的「紀錄下載」頁（整局派票紀錄；中途才進房時補前面漏掉的提議）
+          let statsHtml = '';
+          try {
+            const res = await page.request.get(`${BASE}/Statistics/Index/${encodeURIComponent(room.name)}`, { timeout: 20000 });
+            statsHtml = res.ok() ? await res.text() : `HTTP ${res.status()}`;
+          } catch (err) { statsHtml = `ERROR ${err instanceof Error ? err.message : String(err)}`; }
           const file = path.join(OUT, `${safe(game.startedAt)}_${safe(room.name)}.json`);
           fs.writeFileSync(file, JSON.stringify({
             source: 'signage-cloud', room: room.name, title: room.description_title ?? '', publicRoom: room.is_publish_room ?? null,
-            startedAt: game.startedAt, endedAt: stamp(), end, endText: text.slice(0, 4000), timeline: game.timeline,
+            startedAt: game.startedAt, endedAt: stamp(), end, endText: text.slice(0, 6000), statsHtml, timeline: game.timeline,
           }));
           console.log(`${stamp()} ${room.name} 結束，存檔 ${path.basename(file)}（${game.timeline.length} 張快照）`);
-          game = null;
+          game = null; inGame = false;
         }
-        wasGaming = s.gaming;
       }
       await sleep(POLL_MS);
     }
