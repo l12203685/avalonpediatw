@@ -758,7 +758,10 @@
           "cellTitle": "{{name}} · {{seat}} · {{mode}}: missions {{rate}} (n={{n}}), everyone {{ref}}",
           "cellGames": "All games in this seat (either side): 3-Red {{threeRed}} (n={{n}}), Merlin killed in 3-Blue games {{kill}} (n={{nBlue}})",
           "note": "Players with {{min}}+ games (up to {{max}}). Each cell = the player's own-side mission win rate in that seat (3-Red = red win, 3-Blue = blue win), n = games; green / red = above / below everyone's rate in that seat (same side).",
-          "noteBlocks": "The assassination and game-result blocks need 3-Blue killed / alive counts per side, which this cache does not have yet; hover a cell for all games in that seat."
+          "noteBlocks": "The assassination and game-result blocks need 3-Blue killed / alive counts per side, which this cache does not have yet; hover a cell for all games in that seat.",
+          "best": "Best seat",
+          "worst": "Worst seat",
+          "noteMarks": "Big number = mission win rate (%), small = difference from everyone in that seat (points); ▲ yellow ring = the seat where this player beats everyone the most, ▼ white ring = where they trail the most (cells with enough games only)."
         },
         "order": {
           "all": "All",
