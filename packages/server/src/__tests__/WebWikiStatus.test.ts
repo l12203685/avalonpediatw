@@ -35,9 +35,10 @@ const categoryIds = new Set(WIKI_CATEGORIES.map((c) => c.id));
 const wiki = (...ns: number[]): string[] => ns.map((n) => `wiki-${n}`);
 
 /** Stubs, half-written pieces and unreadable PDF extractions (wiki triage §1). */
+// 2026-10-30 Edward：wiki-11（內黑的用途）、12（刺客）、27（換位思考）、147（湖中女神使用方針）、156（S1 總覽）補完，不再待完成。
 const TRIAGED_PENDING = wiki(
-  11, 27, 58, 64, 60, 12, 34, 4, 52, 53, 29, 74, 68, 70, 2, 3, 5, 41, 42,
-  144, 180, 141, 88, 122, 124, 89, 134, 100, 113, 147, 156, 155,
+  58, 64, 60, 34, 4, 52, 53, 29, 74, 68, 70, 2, 3, 5, 41, 42,
+  144, 180, 141, 88, 122, 124, 89, 134, 100, 113, 155,
 );
 
 /** Articles merged into another article or removed (wiki triage §2). They must not come back. */
@@ -79,6 +80,11 @@ const MERGED_HARDCODED_IDS = [
  * same source and definitions as the analytics page); the old static data/roleStats.ts counted 三藍死 as a good win.
  */
 const DATA_ARTICLE_IDS = WIKI_ARTICLES.filter((a) => /^strategy-[a-z]+-data$/.test(a.id)).map((a) => a.id);
+
+
+/** 2026-10-30 全站重寫（內容維持、標點統一全形、論點加層級標記）：比對原文時忽略空白、標點與層級標記。 */
+const loose = (t: string): string =>
+  t.replace(/【[^】]*】/g, '').replace(/[\s,，、。.:：;；!！?？"'「」『』()（）\[\]*`/／＝=＞>]/g, '');
 
 describe('wiki categories and status', () => {
   const all = [...jsonArticles, ...WIKI_ARTICLES];
@@ -164,7 +170,7 @@ describe('wiki merges', () => {
       expect(a!.category).toBe('roles');
     }
     for (const id of wiki(175, 176, 25, 21, 12)) {
-      expect(jsonById.get(id)!.content).toMatch(/^# 角色能力$/m);
+      expect(jsonById.get(id)!.content, id).toMatch(/^#{1,2} 角色能力$/m);
     }
   });
 
@@ -214,23 +220,24 @@ describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分
       const lines = jsonById.get(id)!.content.trimEnd().split('\n');
       const note = lines[lines.length - 1];
       expect(note, id).toMatch(/^> 本文整合自/);
-      for (const s of sources) expect(note, id).toContain(`〈${s}〉`);
+      for (const s of sources) expect(loose(note), id).toContain(loose(`〈${s}〉`));
     }
   });
 
   it('a merge keeps the merged text (a sample line from each source is in the main article)', () => {
+    // 2026-10-30 全站重寫後的寫法（意思不變；原句見 git 歷史）
     const samples: Record<string, string[]> = {
-      'wiki-57': ['僅有 5 家好人時, 有 {1} 鐵好的視角', '379 => 夾8 給 [0, 1, 2], [4, 5, 6] 兩個區間'],
-      'wiki-18': ['白話就是常聽到的: 場內至少一壞, 場外白區間, 場外黑球區間', '外撒 = 至少作對洗壞人尾派這件事'],
-      'wiki-24': ['尊重 = 參考', '修正"通常"認為 AC 至少有一壞'],
+      'wiki-57': ['只有 5 家是好人時，才有「1 鐵好」的視角', '379 ⇒ 夾 8，給出 [0, 1, 2]、[4, 5, 6] 兩個區間'],
+      'wiki-18': ['白話就是常聽到的: 場內至少一壞, 場外白區間, 場外黑球區間', '外灑至少做到「洗掉壞人尾派」這件事'],
+      'wiki-24': ['尊重 = 參考', '修正「通常」代表認為 A、C 至少有一壞'],
       'wiki-23': ['直接派反邊是沒有經過思考的表現', '不能是尾派'],
       'wiki-50': ['結論: 只有 1, 2, 4, 8 這幾條描述 (推論) 是正確的', '刻意本身就是能力的展現'],
-      'wiki-38': ['8外白: 可以考慮兩種狀況', '換個角度思考: 若 8 為梅林會做這個動作嗎?'],
-      'wiki-39': ['那等同 8 家自己告訴大家壞人是 8 家', '0肯定是會派自己'],
-      'wiki-144': ['什麼是雙重假設: 當兩件事情敘述彼此不相關的時候就稱為雙重假設'],
+      'wiki-38': ['8外白: 可以考慮兩種狀況', '換個角度：若 8 是梅林，會做這個動作嗎？'],
+      'wiki-39': ['就等於 8 家自己告訴大家：壞人是 8 家', '0 一定會派自己'],
+      'wiki-144': ['定義：當兩件事情的敘述彼此不相關時，就稱為雙重假設'],
     };
     for (const [id, lines] of Object.entries(samples)) {
-      for (const l of lines) expect(jsonById.get(id)!.content, id).toContain(l);
+      for (const l of lines) expect(loose(jsonById.get(id)!.content), `${id}: ${l}`).toContain(loose(l));
     }
   });
 

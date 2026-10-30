@@ -160,7 +160,8 @@ describe('the real wiki_data.json', () => {
 
   it('has every article under its category and all the links', () => {
     expect(graph.branches.map((b) => [b.id, b.articleCount])).toEqual([
-      ['beginner', 16], ['rules', 4], ['roles', 13], ['glossary', 5], ['strategies', 33], ['replays', 8], ['events', 13], ['faq', 1],
+      // 2026-10-30 新增 7 篇：規則說明書、術語速查、1-1 開局、強制局、聽牌與決勝局、湖中進階、如何解讀數據
+      ['beginner', 16], ['rules', 5], ['roles', 13], ['glossary', 6], ['strategies', 37], ['replays', 8], ['events', 14], ['faq', 1],
     ]);
     const unique = new Set(data.flatMap((a) => [...a.content.matchAll(/wiki:([\w-]+)/g)].filter((m) => m[1] !== a.id).map((m) => `${a.id}>${m[1]}`)));
     expect(graph.edges).toHaveLength(unique.size);
@@ -224,9 +225,12 @@ describe('the real wiki_data.json', () => {
     expectNoOverlap(layout);
     expect(layout.maxRows).toBeLessThanOrEqual(12);
     const strategies = layout.leaves.filter((l) => l.branchKey === 'branch/strategies');
-    expect(new Set(strategies.map((l) => l.column)).size).toBe(3); // 33 articles → 3 columns of 11
+    // N articles → ceil(N / 12) columns, filled top to bottom (33 → 3 × 11; 37 after 2026-10-30 → 4 × 10)
+    const columns = Math.ceil(strategies.length / 12);
+    expect(new Set(strategies.map((l) => l.column)).size).toBe(columns);
     expect(strategies.map((l) => l.leaf.articleId)).toEqual(graph.branches.find((b) => b.id === 'strategies')!.leaves.map((l) => l.articleId));
-    expect(strategies.slice(0, 11).every((l) => l.column === 0)).toBe(true);
+    const perColumn = Math.ceil(strategies.length / columns);
+    expect(strategies.slice(0, perColumn).every((l) => l.column === 0)).toBe(true);
     // the reading path still reads down the first column of 新手入門
     const beginner = layout.leaves.filter((l) => l.branchKey === 'branch/beginner');
     const firstColumn = beginner.filter((l) => l.column === 0);

@@ -390,7 +390,7 @@ export function fitScale(bounds: MindMapLayout['bounds'], width: number, height:
 }
 
 /** Title caps fitMindMapToViewport tries (content px at leafFont 13: 160 ≈ 12 CJK characters). */
-const LABEL_CAPS = [160, 184, 208, 232];
+const LABEL_CAPS = [136, 160, 184, 208, 232];
 
 /**
  * The column split and title cap that show the whole (fully expanded) map in a width × height viewport with the
