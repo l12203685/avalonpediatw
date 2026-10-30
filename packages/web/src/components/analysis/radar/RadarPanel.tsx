@@ -6,7 +6,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { fmtPct } from '../../../services/api';
 import type { AnalysisTheorySettings } from '../../../services/api';
-import { StatTable, type StatColumn, type Tone } from '../ui';
+import { InfoTip, StatTable, type StatColumn, type Tone } from '../ui';
 import { roleWindowSizes, type AxisKey, type AxisRow, type PlayerRadarModel } from './radarModel';
 
 /**
@@ -16,6 +16,7 @@ import { roleWindowSizes, type AxisKey, type AxisRow, type PlayerRadarModel } fr
  * 每條軸的數字、n (分母) 與定義放在旁邊的表裡。算不出來的軸 (例：舊快取還沒有角色理論、
  * 從沒當紅方打到三藍) 不畫，不畫成 0%；表格那一列顯示「—」。
  * 紅方刺中率、藍方梅林存活率是刺殺結果 (只看到達三藍的局)，不是 三藍死 / 全部紅方場。
+ * (2026-10-30 Edward：說明太冗長) 原本表格最右邊的「定義」欄改成軸名旁的 ⓘ，表格註腳也收進 ⓘ；完整版在說明頁。
  */
 
 const AXIS_TONE: Partial<Record<AxisKey, Tone>> = {
@@ -90,7 +91,18 @@ export default function RadarPanel({
   });
 
   const columns: StatColumn<AxisRow>[] = [
-    { key: 'label', label: t('analytics.r6.radar.colAxis'), value: row => label(row.key), tone: row => AXIS_TONE[row.key] },
+    {
+      key: 'label',
+      label: t('analytics.r6.radar.colAxis'),
+      value: row => label(row.key),
+      tone: row => AXIS_TONE[row.key],
+      format: (_v, row) => (
+        <span className="inline-flex items-center gap-0.5">
+          {label(row.key)}
+          <InfoTip title={label(row.key)} testId={`radar-axis-info-${row.key}`}><p>{definition(row.key)}</p></InfoTip>
+        </span>
+      ),
+    },
     {
       key: 'value',
       label: t('analytics.r6.radar.colValue'),
@@ -102,23 +114,13 @@ export default function RadarPanel({
       tone: row => AXIS_TONE[row.key],
       emphasis: true,
     },
-    {
-      key: 'def',
-      label: t('analytics.r6.radar.colDef'),
-      // 手機上給固定寬度讓說明換行 (表格的欄寬隨內容撐開，只寫 whitespace-normal 不會換行)。
-      format: (_v, row) => (
-        <span className="block w-32 whitespace-normal text-[10px] font-normal leading-snug text-zinc-500 sm:w-auto">
-          {definition(row.key)}
-        </span>
-      ),
-    },
   ];
 
   return (
     <div className="grid items-start gap-3 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-1" role="img" aria-label={t('analytics.r6.radar.chartAria', { name: model.player.name })}>
         {chartData.length >= 3 ? (
-          // 手機矮一點 (表格的說明欄換行後比較高)，桌機 292 px 剛好和右邊的表等高。
+          // 手機矮一點，桌機 292 px 剛好和右邊的表等高。
           <div className="h-64 sm:h-[292px]">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={chartData} outerRadius="66%" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>

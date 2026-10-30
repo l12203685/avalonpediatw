@@ -65,22 +65,24 @@ export default function RoleFinalWinRates(): JSX.Element {
     };
   });
 
+  // 2026-10-30：表格說明收進表名旁的 ⓘ；舊快取的「下次每日更新後提供」是資料狀態，照樣印出來。
   return (
-    <MetricBlocks
-      className="max-w-3xl"
-      rows={rows}
-      caption={t('analytics.r6.tabsb.roleBlocks.title')}
-      groupLabel={t('analytics.r6.tabsb.roleBlocks.roleCol')}
-      showRules={wide}
-      lowSample={minCell > 0 ? minCell : undefined}
-      footnote={
-        <>
-          {!population.counts && <span className="text-amber-300/80">{t('analytics.r6.tabsb.roleBlocks.pending')} </span>}
-          {t('analytics.r6.tabsb.roleBlocks.note')}{' '}
-          {t('analytics.deep.roleFinal.note')}
-          {minCell > 0 && t('analytics.deep.roleFinal.noteTopUp', { n: minCell })}
-        </>
-      }
-    />
+    <div className="min-w-0 max-w-3xl">
+      <MetricBlocks
+        rows={rows}
+        caption={t('analytics.r6.tabsb.roleBlocks.title')}
+        groupLabel={t('analytics.r6.tabsb.roleBlocks.roleCol')}
+        showRules={wide}
+        lowSample={minCell > 0 ? minCell : undefined}
+        footnote={
+          <>
+            {t('analytics.r6.tabsb.roleBlocks.note')}{' '}
+            {t('analytics.deep.roleFinal.note')}
+            {minCell > 0 && t('analytics.deep.roleFinal.noteTopUp', { n: minCell })}
+          </>
+        }
+      />
+      {!population.counts && <p className="mt-1.5 text-[10px] leading-relaxed text-amber-300/80">{t('analytics.r6.tabsb.roleBlocks.pending')}</p>}
+    </div>
   );
 }

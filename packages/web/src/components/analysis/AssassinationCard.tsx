@@ -5,7 +5,7 @@ import { outcomeBlocks } from '../../services/api';
 import { chiSquareIndependence, type ChiSquareResult } from '../../utils/chiSquare';
 import { useAnalysisOverview, deriveStages } from './useAnalysisOverview';
 import {
-  MetricBlocks, StatTable, Takeaway, Term, VerdictText, OUTCOME_COLORS, formatRate,
+  InfoTip, MetricBlocks, StatTable, Takeaway, Term, VerdictText, OUTCOME_COLORS, formatRate,
   type MetricBlockRow, type StatColumn,
 } from './ui';
 import { useMinCellGames } from './OutcomeBlocksTable';
@@ -77,10 +77,14 @@ export default function AssassinationCard(): JSX.Element {
         <div className="flex items-center gap-2 mb-1">
           <Crosshair size={16} className="text-amber-300" />
           <h3 className="text-sm font-bold text-gray-300">{t('analytics.deep.assassination.title')}</h3>
+          {/* 2026-10-30：副標與規則收進 ⓘ */}
+          <InfoTip title={t('analytics.deep.assassination.title')}>
+            <p>{t('analytics.deep.assassination.sub')}</p>
+            <p>{t('analytics.deep.assassination.rule')}</p>
+          </InfoTip>
         </div>
-        <p className="text-[10px] text-gray-500 mb-3">{t('analytics.deep.assassination.sub')}</p>
 
-        <div className="grid grid-cols-3 gap-3 mb-3">
+        <div className="grid grid-cols-3 gap-3 mb-3 mt-2">
           <div className="bg-gray-800/40 rounded-lg px-3 py-2">
             <p className="text-xl font-black text-white">{games.toLocaleString()}</p>
             <p className="text-[10px] text-gray-500">{t('analytics.deep.assassination.threeBlueGames')}</p>
@@ -110,9 +114,8 @@ export default function AssassinationCard(): JSX.Element {
           <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')}</span>
         </div>
 
-        <p className="text-[10px] text-gray-600 mt-2">{t('analytics.deep.assassination.rule')}</p>
         {legacy && (
-          <p className="text-[10px] text-gray-600 mt-0.5">{t('analytics.deep.assassination.legacy')}</p>
+          <p className="text-[10px] text-gray-600 mt-2">{t('analytics.deep.assassination.legacy')}</p>
         )}
       </motion.div>
 

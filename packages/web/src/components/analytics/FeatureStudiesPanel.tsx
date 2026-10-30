@@ -452,12 +452,13 @@ function claimRows(cells: LakeClaimCell[], groupOf: (c: LakeClaimCell) => string
   return rows;
 }
 
-function LakeClaimTable({ rows, min, firstLabel, full, caption }: {
+function LakeClaimTable({ rows, min, firstLabel, full, caption, footnote }: {
   rows: ClaimRow[];
   min: number;
   firstLabel: string;
   full: boolean;
   caption?: ReactNode;
+  footnote?: ReactNode;
 }): JSX.Element {
   const { t } = useTranslation('common');
   const k = 'analytics.r6.tabsa.studyTable';
@@ -495,6 +496,7 @@ function LakeClaimTable({ rows, min, firstLabel, full, caption }: {
       ]}
       rows={rows}
       rowKey={row => row.key}
+      footnote={footnote}
     />
   );
 }
@@ -530,6 +532,14 @@ function LakeClaimVisual({ feature, full }: { feature: FeatureStudyEntry; full: 
           full={full}
           firstLabel={t('analytics.featureStudies.lake.lake')}
           caption={<span className="text-[11px] font-semibold text-zinc-500">{t('analytics.r6.tabsa.studyTable.byLake')}</span>}
+          footnote={
+            <>
+              {t('analytics.featureStudies.lake.columns')} · <LowHint min={min} />
+              {typeof data.undeclared === 'number' && data.undeclared > 0 && (
+                <> {t('analytics.featureStudies.lake.undeclared', { count: data.undeclared })}</>
+              )}
+            </>
+          }
         />
         {byHolder.length > 0 && (
           <LakeClaimTable
@@ -541,12 +551,6 @@ function LakeClaimVisual({ feature, full }: { feature: FeatureStudyEntry; full: 
           />
         )}
       </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500">
-        {t('analytics.featureStudies.lake.columns')} · <LowHint min={min} />
-        {typeof data.undeclared === 'number' && data.undeclared > 0 && (
-          <> {t('analytics.featureStudies.lake.undeclared', { count: data.undeclared })}</>
-        )}
-      </p>
     </div>
   );
 }
@@ -643,6 +647,7 @@ function AssassinTargetVisual({ feature, full }: { feature: FeatureStudyEntry; f
           columns={tierColumns}
           rows={tierRows}
           rowKey={r => r.tier}
+          footnote={<>{t(`${k}.hitRateNote`)} <LowHint min={min} />{full && <> <ComputedCiHint /></>}</>}
         />
         {seatRows.length > 0 && (
           <StatTable
@@ -653,10 +658,6 @@ function AssassinTargetVisual({ feature, full }: { feature: FeatureStudyEntry; f
           />
         )}
       </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500">
-        {t(`${k}.hitRateNote`)} <LowHint min={min} />
-        {full && <> <ComputedCiHint /></>}
-      </p>
     </div>
   );
 }

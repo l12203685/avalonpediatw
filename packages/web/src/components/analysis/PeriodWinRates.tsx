@@ -4,7 +4,7 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useStatsFilter } from '../../stats/statsFilter';
 import { useAnalysisPlayerRows, type PlayerWithSeatStats } from './seatRoleBlocks';
-import { StatTable, type StatColumn } from './ui';
+import { InfoTip, StatTable, type StatColumn } from './ui';
 
 /**
  * 勝率表 (2026-10-26，玩家回饋：「我想要看近期的玩家勝率就好，篩掉最近沒出現的，例如這颱風天我就想要看這四天」)。
@@ -89,7 +89,10 @@ export default function PeriodWinRates(): JSX.Element {
             <option value="excessWinRate">{t(`${k}.col.excess`)}</option>
           </select>
         </label>
-        <span>{t(filtered ? `${k}.scopeFiltered` : `${k}.scopeAll`, { count: rows.length })}</span>
+        <span className="inline-flex items-center gap-1">
+          {t(filtered ? `${k}.scopeFiltered` : `${k}.scopeAll`, { count: rows.length })}
+          <InfoTip title={t(`${k}.tab`)}><p>{t(`${k}.note`)}</p></InfoTip>
+        </span>
       </div>
       <StatTable
         columns={columns}
@@ -99,7 +102,6 @@ export default function PeriodWinRates(): JSX.Element {
         maxHeight="min(60vh, 32rem)"
         onRowClick={(r) => openPlayerStats(r.name)}
         empty={t(`${k}.empty`)}
-        footnote={t(`${k}.note`)}
       />
     </div>
   );

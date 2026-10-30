@@ -1,7 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../store/gameStore';
-import { StatTable, Term, STAT_TERMS, type StatColumn, type StatTermKey } from './ui';
+import { InfoTip, StatTable, Term, STAT_TERMS, type StatColumn, type StatTermKey } from './ui';
+import BoardInfo from './BoardInfo';
 import { fmtPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } from '../../services/api';
 
 /**
@@ -12,7 +13,10 @@ import { fmtPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } fr
  *
  * 窗撐不起的數字不混用：整體理論生涯不到 overallMinGames 場 = —；角色窗沒打滿的角色理論、最近 N 場不夠的
  * 位置理論 / 最終 / 任務 / 刺殺變淡；有格子用全體勝率補值的也變淡 (同其他榜)。整體理論後面的小字 = 全體補值的比重。
- * 欄位 key 固定 (roleTheory、positionTheory、overallTheory、finalWinRate、missionWinRate、assassinWinRate)，名詞解釋之後掛上去。
+ * 欄位 key 固定 (roleTheory、positionTheory、overallTheory、finalWinRate、missionWinRate、assassinWinRate)，表頭是名詞說明 (Term)。
+ *
+ * (2026-10-30 Edward：「理論勝率的右邊 上綁文字說明有點太過冗長 … 用滑鼠移過去再顯示定義跟算法就好」) 標題旁的期間副標、
+ * 表格右邊整欄的上榜條件與定義、表格下方的灰字註腳都收進標題旁的 ⓘ (InfoTip)，完整版在說明頁；表格本身不變。
  */
 
 type Row = AnalysisLeaderboardRow;
@@ -218,15 +222,16 @@ export default function TheoryTable({
     },
   ];
 
-  const note = isEn && board.noteEn ? board.noteEn : board.note;
-  const [who, ...rest] = (note ?? '').split(/[；;]/).map((s) => s.trim()).filter(Boolean);
-  const period = isEn && board.periodEn ? board.periodEn : board.period;
-
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
         <h3 className="text-sm font-bold text-white">{t('analytics.boards.theory.title')}</h3>
-        <span className="text-xs text-zinc-400">{period}</span>
+        <InfoTip title={t('analytics.boards.theory.title')} testId="theory-info">
+          <BoardInfo board={board} isEn={isEn}>
+            <p className="text-zinc-400">{t('analytics.boards.theory.footnote', { min: minCell })}</p>
+            <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
+          </BoardInfo>
+        </InfoTip>
         <label className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400">
           {t('analytics.boards.theory.sortBy')}
           <select
@@ -239,29 +244,13 @@ export default function TheoryTable({
           </select>
         </label>
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
-        <StatTable
-          columns={columns}
-          rows={rows}
-          maxHeight={TABLE_MAX_HEIGHT}
-          rowKey={(row) => `theory-${row.name}`}
-          onRowClick={(row) => openPlayerStats(row.name)}
-          footnote={<>{t('analytics.boards.theory.footnote', { min: minCell })} {t('analytics.r6.boards.clickHint')}</>}
-        />
-        <aside className="text-[11px] leading-relaxed text-zinc-500 space-y-1.5 min-w-0">
-          {who && (
-            <p>
-              <span className="font-semibold text-zinc-300">{t('analytics.r6.boards.who')}</span>
-              {who}
-            </p>
-          )}
-          {rest.length > 0 && (
-            <ul className="list-disc pl-4 space-y-0.5 marker:text-zinc-700">
-              {rest.map((c, i) => <li key={i}>{c}</li>)}
-            </ul>
-          )}
-        </aside>
-      </div>
+      <StatTable
+        columns={columns}
+        rows={rows}
+        maxHeight={TABLE_MAX_HEIGHT}
+        rowKey={(row) => `theory-${row.name}`}
+        onRowClick={(row) => openPlayerStats(row.name)}
+      />
     </div>
   );
 }

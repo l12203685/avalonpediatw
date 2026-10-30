@@ -123,10 +123,10 @@ export default function VotingOverview(): JSX.Element {
             columns={columns(group)}
             rows={rows.filter(x => x.group === group)}
             rowKey={x => x.key}
+            footnote={t(`${k}.note`)}
           />
         ))}
       </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500">{t(`${k}.note`)}</p>
     </div>
   );
 }

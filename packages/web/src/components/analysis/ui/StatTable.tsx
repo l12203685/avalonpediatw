@@ -5,6 +5,7 @@ import {
   type PctScale, type Tone,
 } from './tokens';
 import Term from './Term';
+import InfoTip from './InfoTip';
 import type { StatTermKey } from './statTerms';
 
 /**
@@ -17,7 +18,9 @@ import type { StatTermKey } from './statTerms';
  *  - tone：'red' / 'blue' / 'amber' (或依列決定的函式) 決定文字顏色。
  *  - 第一欄固定 (sticky)、tabular-nums、斑馬紋、緊湊間距；寬度不夠時只在表格自己的容器裡橫捲，
  *    不會撐寬頁面 (320px 也一樣)。給 maxHeight 時表頭固定、表身在容器內直捲，整頁不必拉長。
- *  - caption (表格上方標題) / footnote (下方小字) / empty (沒有資料時的文字)。
+ *  - caption (表格上方標題) / footnote (表格說明) / empty (沒有資料時的文字)。
+ *    (2026-10-30 Edward：說明太冗長) footnote 不再印在表格下面：有 caption 時是標題旁的 ⓘ，沒有時是表格右下角
+ *    一個小「ⓘ 說明」，滑過／點一下才顯示，末尾連到說明頁。
  */
 
 export type StatFormat<R> =
@@ -167,7 +170,12 @@ export default function StatTable<R>({
 
   return (
     <div className={`min-w-0 ${className}`}>
-      {caption && <div id={captionId} className="text-sm font-bold text-zinc-400 mb-1.5">{caption}</div>}
+      {caption && (
+        <div className="mb-1.5 flex items-center gap-1">
+          <div id={captionId} className="text-sm font-bold text-zinc-400">{caption}</div>
+          {footnote && <InfoTip title={caption}>{footnote}</InfoTip>}
+        </div>
+      )}
       <div
         className={`max-w-full overflow-x-auto overscroll-x-contain ${stickyHeader ? 'overflow-y-auto' : ''} ${frame}`}
         style={stickyHeader ? { maxHeight } : undefined}
@@ -265,7 +273,11 @@ export default function StatTable<R>({
           </table>
         )}
       </div>
-      {footnote && <div className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">{footnote}</div>}
+      {footnote && !caption && (
+        <div className="mt-1 flex justify-end">
+          <InfoTip text={t('analytics.ui.info.label')}>{footnote}</InfoTip>
+        </div>
+      )}
     </div>
   );
 }

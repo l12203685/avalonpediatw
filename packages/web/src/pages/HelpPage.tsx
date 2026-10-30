@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, HelpCircle, Shield, ChevronDown, User, Users, Gamepad2, RefreshCcw } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { forceRefresh } from '../utils/forceRefresh';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
+import StatTermsHelp from '../components/analysis/StatTermsHelp';
+import { STATS_HELP_ANCHOR, clearStatsHelpAnchor, peekStatsHelpAnchor, takeStatsHelpReturn } from '../utils/statsHelp';
 
 interface FaqItem {
   q: string;
@@ -182,6 +184,17 @@ export default function HelpPage(): JSX.Element {
     setOpenKey(prev => (prev === key ? null : key));
   };
 
+  // 2026-10-30：從數據頁的 ⓘ「完整說明」來的 → 捲到「統計名詞與算法」，「返回」回到那一頁。
+  useEffect(() => {
+    const anchor = peekStatsHelpAnchor();
+    if (!anchor) return;
+    const id = window.setTimeout(() => {
+      clearStatsHelpAnchor();
+      document.getElementById(anchor)?.scrollIntoView({ block: 'start' });
+    }, 50);
+    return (): void => window.clearTimeout(id);
+  }, []);
+
   return (
     <div className="min-h-screen bg-black p-4">
       {/* Background decorations */}
@@ -212,7 +225,7 @@ export default function HelpPage(): JSX.Element {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setGameState('home')}
+            onClick={() => setGameState(takeStatsHelpReturn() ?? 'home')}
             className="flex items-center gap-2 bg-zinc-900/70 hover:bg-zinc-800 text-white px-3 py-2 rounded-lg border border-zinc-700 hover:border-white transition-all"
           >
             <ArrowLeft size={18} />
@@ -238,6 +251,17 @@ export default function HelpPage(): JSX.Element {
             （為什麼有訪客、為什麼可以綁多帳號）與
             <span className="text-white font-semibold"> 隱私處理 </span>
             （資料怎麼用）。有其他疑問請到首頁點「回報問題」或聯絡管理員 Discord。
+          </p>
+          <p className="mt-2 text-zinc-300 text-sm md:text-base leading-relaxed">
+            戰績排行與數據分析的名詞、算法與各表說明，集中在下方
+            <button
+              type="button"
+              onClick={() => document.getElementById(STATS_HELP_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="text-white font-semibold underline underline-offset-2"
+            >
+              「統計名詞與算法」
+            </button>
+            。
           </p>
         </motion.div>
 
@@ -274,6 +298,9 @@ export default function HelpPage(): JSX.Element {
             </div>
           </motion.section>
         ))}
+
+        {/* 統計名詞與算法 — 2026-10-30 (數據頁的段落說明集中到這裡) */}
+        <StatTermsHelp />
 
         {/* Troubleshooting section — 2026-04-24 #cache-upgrade */}
         <motion.section

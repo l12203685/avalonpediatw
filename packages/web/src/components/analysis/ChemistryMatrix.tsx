@@ -6,7 +6,7 @@ import type { ChemistryData, ChemistryMatrix as ChemistryMatrixType } from '../.
 import { isThinPairCell } from '../../utils/analysisDisplay';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import { pairOutcomeCounts } from './seatRoleBlocks';
-import { SectionTabs, Term, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem, type StatTermKey } from './ui';
+import { InfoTip, SectionTabs, Term, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem, type StatTermKey } from './ui';
 import NotFilteredNote from './filter/NotFilteredNote';
 
 type MatrixKey = 'coWin' | 'coLose' | 'winCorr' | 'coWinMinusLose' | 'outcomePair';
@@ -287,14 +287,17 @@ export default function ChemistryMatrixPanel(): JSX.Element {
           />
         )}
       </div>
-      <p className="text-[11px] leading-snug text-zinc-400">
+      {/* 2026-10-30：怎麼看 (guide) 收進 ⓘ，畫面只留矩陣名稱 (名詞說明) */}
+      <p className="flex items-center gap-1 text-[11px] leading-snug text-zinc-400">
         <span className="font-semibold text-zinc-300">
           {MATRIX_TERM[matrixKey]
             ? <Term term={MATRIX_TERM[matrixKey]!}>{t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}</Term>
             : t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}
         </span>
-        {matrixKey === 'outcomePair' && <> · {t('analytics.r6.tabsb.chemistry.pairDescription')}</>}
-        {' — '}{guide(matrixKey, block)}
+        <InfoTip title={t(`analytics.deep.chemistry.descriptions.${matrixKey}`)}>
+          {matrixKey === 'outcomePair' && <p>{t('analytics.r6.tabsb.chemistry.pairDescription')}</p>}
+          <p>{guide(matrixKey, block)}</p>
+        </InfoTip>
       </p>
       <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">{legend(matrixKey)}</p>
       {renderMatrix(matrixKey, block)}

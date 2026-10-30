@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { BarChart3, Loader, Table2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
-  SectionTabs, StatTable, Term, useSectionTab,
+  InfoTip, SectionTabs, StatTable, Term, useSectionTab,
   OUTCOME_COLORS, OUTCOME_LABEL_KEYS, OUTCOME_ORDER, formatInt, formatRate,
   type SectionTabItem, type StatColumn, type Tone,
 } from '../ui';
@@ -260,7 +260,6 @@ function ShareTable({ rows }: { rows: ShareRow[] }): JSX.Element {
       rowKey={row => row.key}
       highlightRow={row => row.overall}
       maxHeight="25rem"
-      footnote={t(`${k}.tableNote`)}
     />
   );
 }
@@ -343,9 +342,15 @@ export default function OutcomeGamesBlock({ overview }: { overview: AnalysisOver
   return (
     <section aria-labelledby={titleId} className="h-full min-w-0 rounded-xl border border-gray-700 bg-avalon-card/30 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 id={titleId} className="text-sm font-bold text-zinc-300">
-          {t('analytics.r6.overview.outcomes.title')}
-        </h3>
+        <div className="flex items-center gap-1">
+          <h3 id={titleId} className="text-sm font-bold text-zinc-300">
+            {t('analytics.r6.overview.outcomes.title')}
+          </h3>
+          {/* 2026-10-30：圖／表下方的註腳收進 ⓘ */}
+          <InfoTip title={t('analytics.r6.overview.outcomes.title')}>
+            <p>{view === 'table' ? t(`${k}.tableNote`) : t(`${k}.note`)}</p>
+          </InfoTip>
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <SectionTabs items={nItems} value={topN} onChange={setTopN} ariaLabel={t(`${k}.nLabel`)} />
           <SectionTabs items={viewItems} value={view} onChange={setView} ariaLabel={t('analytics.r6.overview.outcomes.viewLabel')} />
@@ -363,9 +368,7 @@ export default function OutcomeGamesBlock({ overview }: { overview: AnalysisOver
       ) : (
         <>
           <ShareBars rows={rows} />
-          <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">
-            {pending ? t('analytics.r6.overview.outcomes.playersPending') : t(`${k}.note`)}
-          </p>
+          {pending && <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">{t('analytics.r6.overview.outcomes.playersPending')}</p>}
         </>
       )}
     </section>

@@ -63,9 +63,8 @@ export default function SeatPositionChart(): JSX.Element {
           groupLabel={t('analytics.r6.tabsb.seats.seatCol')}
           showRules={wide}
           lowSample={minCell > 0 ? minCell : undefined}
-          // 兩張表的說明合併放在藍方那張下面 (手機一屏)
-          showNote={faction === 'blue'}
-          footnote={faction === 'blue' ? t('analytics.r6.tabsb.seats.note') : undefined}
+          // 2026-10-30：說明收進表名旁的 ⓘ，兩張表各一個 (不佔畫面)
+          footnote={t('analytics.r6.tabsb.seats.note')}
         />
       ))}
     </div>
