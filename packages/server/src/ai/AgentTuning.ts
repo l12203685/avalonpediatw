@@ -488,6 +488,8 @@ export interface AgentTuning {
    * 藍方照對手實際的做法讀派隊、投票與任務牌，逼紅方偽裝；每回合採用新預設後重新擬合。
    */
   beliefBotTables: number;
+  /** 用重新擬合的機器人表（`belief/likelihoods_bot_next.json`）取代現行的那張（每回合採用新預設後重新擬合，先量再換）。 */
+  beliefBotTablesNext: boolean;
   /**
    * 梅林照雜魚的票型投票的比例（強桌差距 B1，`MerlinLoyalStyle.merlinNormalVoteNow`；0 = 關）：第 3 局起、非強制，照
    * 「坐在這個位置、只看公開紀錄的忠臣」會投的票投，只在致命時（看得到的紅會讓紅方當場拿下）擋。
@@ -595,6 +597,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinVoteCover',
   'merlinLoyalCover',
   'beliefBotTables',
+  'beliefBotTablesNext',
   'merlinNormalVote',
   'redNormalVote',
   'redLoyalLeadEarly',
@@ -666,6 +669,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinVoteCover: 0,
   merlinLoyalCover: 0,
   beliefBotTables: 0,
+  beliefBotTablesNext: false,
   merlinNormalVote: 0,
   redNormalVote: 0,
   redLoyalLeadEarly: false,
@@ -885,6 +889,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinVoteCover: 0,
   merlinLoyalCover: 0,
   beliefBotTables: 1,
+  beliefBotTablesNext: false,
   merlinNormalVote: 0,
   redNormalVote: 1,
   redLoyalLeadEarly: false,
@@ -956,6 +961,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinVoteCover: 'AVALON_TUNING_MERLIN_VOTE_COVER',
   merlinLoyalCover: 'AVALON_TUNING_MERLIN_LOYAL_COVER',
   beliefBotTables: 'AVALON_TUNING_BELIEF_BOT_TABLES',
+  beliefBotTablesNext: 'AVALON_TUNING_BELIEF_BOT_TABLES_NEXT',
   merlinNormalVote: 'AVALON_TUNING_MERLIN_NORMAL_VOTE',
   redNormalVote: 'AVALON_TUNING_RED_NORMAL_VOTE',
   redLoyalLeadEarly: 'AVALON_TUNING_RED_LOYAL_LEAD_EARLY',
