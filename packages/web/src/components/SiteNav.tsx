@@ -7,6 +7,9 @@ import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { useGameStore, type GameState } from '../store/gameStore';
 import { fetchAdminMe } from '../services/api';
 import { getStoredToken } from '../services/socket';
+import { useInstallPrompt } from '../hooks/useInstallPrompt';
+import IOSInstallGuide from './IOSInstallGuide';
+import ForceUpdateButton from './ForceUpdateButton';
 
 /**
  * 全站頂端導覽列（Edward 2026-10-30：「不要有首頁，一連進來直接看到內容」「頁籤直接分成 戰績排行／數據分析／
@@ -50,6 +53,14 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
   const setGameState = useGameStore((s) => s.setGameState);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
   const [isAdmin, setIsAdmin] = useState(false);
+  // 左上角 logo＝加到手機桌面（Edward 2026-10-30）：能安裝時點 logo 彈安裝；iOS 開手動教學；已安裝或不支援時只是 logo。
+  const { deferredPrompt, isStandalone, isIOS, promptInstall } = useInstallPrompt();
+  const [showIosGuide, setShowIosGuide] = useState(false);
+  const installable = !isStandalone && (deferredPrompt !== null || isIOS);
+  const install = (): void => {
+    if (deferredPrompt !== null) void promptInstall();
+    else if (isIOS) setShowIosGuide(true);
+  };
 
   // 管理頁的入口只給管理員（原本在首頁）。
   useEffect(() => {
@@ -83,7 +94,21 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <img src="/logo.png" alt="" aria-hidden="true" className="hidden h-8 w-8 rounded-full sm:block" />
+          {installable ? (
+            <button
+              type="button"
+              onClick={install}
+              data-testid="site-install"
+              title={t('home.installApp', { defaultValue: '加到手機桌面' })}
+              aria-label={t('home.installApp', { defaultValue: '加到手機桌面' })}
+              className="relative h-8 w-8 flex-shrink-0 rounded-full ring-2 ring-emerald-500/70 transition hover:ring-emerald-300"
+            >
+              <img src="/logo.png" alt="" className="h-8 w-8 rounded-full" />
+              <span className="absolute -bottom-1 -right-1 rounded-full bg-emerald-500 px-1 text-[9px] font-bold leading-3 text-black">+</span>
+            </button>
+          ) : (
+            <img src="/logo.png" alt="" aria-hidden="true" className="h-8 w-8 flex-shrink-0 rounded-full" />
+          )}
           <div role="tablist" className="grid flex-1 grid-cols-4 gap-1 rounded-lg bg-zinc-900 p-1 sm:flex-none">
             {tabs.map(({ id, label, Icon }) => (
               <button
@@ -104,14 +129,14 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:ml-auto">
+        <div className="flex items-center gap-1 sm:ml-auto sm:gap-1.5">
           <a
             href={PLAY_PLATFORM_URL}
             target="_blank"
             rel="noopener noreferrer"
             data-testid="site-play"
             title={t('home.playOnPlatform')}
-            className="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-amber-400 px-3 py-1.5 text-sm font-bold text-black transition-colors hover:bg-amber-300 sm:flex-none"
+            className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-amber-400 px-2 py-1.5 sm:gap-1.5 sm:px-3 text-sm font-bold text-black transition-colors hover:bg-amber-300 sm:flex-none"
           >
             <Play size={16} className="flex-shrink-0" />
             {t('home.playShort', { defaultValue: '開局' })}
@@ -125,13 +150,17 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
               rel="noopener noreferrer"
               data-testid={`site-link-${key}`}
               title={label}
-              className="flex h-8 flex-shrink-0 items-center justify-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-xs font-semibold text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
+              className="flex h-8 flex-shrink-0 items-center justify-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900 px-1.5 text-xs font-semibold sm:gap-1 sm:px-2 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
             >
               <Icon size={15} className="flex-shrink-0" />
               <span className="lg:hidden">{short}</span>
               <span className="hidden lg:inline">{label}</span>
             </a>
           ))}
+          <ForceUpdateButton
+            compact
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
+          />
           {isAdmin && (
             <button
               type="button"
@@ -145,6 +174,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
           )}
         </div>
       </div>
+      <IOSInstallGuide isOpen={showIosGuide} onClose={() => setShowIosGuide(false)} />
     </nav>
   );
 }

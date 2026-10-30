@@ -16,8 +16,6 @@ import { startVersionCheck } from './services/versionCheck';
 import { forceRefresh } from './utils/forceRefresh';
 import SiteNav, { lastSiteTab, siteTabOf } from './components/SiteNav';
 import StreamsPage from './pages/StreamsPage';
-import InstallButton from './components/InstallButton';
-import ForceUpdateButton from './components/ForceUpdateButton';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -459,13 +457,6 @@ function App(): JSX.Element {
       ) : (
         <div className="relative z-10 h-full">
           {siteTab && <SiteNav active={siteTab} />}
-          {/* 加到手機桌面＋清除快取重新整理（原本在首頁右下角；Edward 2026-10-30：有更新時要像之前一樣有按鈕） */}
-          {siteTab && (
-            <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
-              <InstallButton />
-              <ForceUpdateButton />
-            </div>
-          )}
           {/* Edward 2026-04-25 23:39 — Lobby + Game 共用 RoomPage. RoomPage
               internally branches on `room.state` to swap top section + toolbar
               while keeping the rails+chat layout phase-agnostic. */}
