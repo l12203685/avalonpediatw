@@ -51,14 +51,14 @@
       "openStats": "到數據分析頁"
     },
     "category": {
-      "rules": "遊戲規則",
-      "roles": "角色指南",
-      "strategies": "戰術分析",
-      "beginner": "新手入門",
-      "glossary": "名詞解釋",
-      "faq": "常見問題",
-      "replays": "覆盤",
-      "events": "賽事與戰績",
+      "rules": "規則與名詞",
+      "beginner": "入門與基礎觀念",
+      "roles": "角色",
+      "strategies": "任務派票",
+      "voting": "投票與湖中",
+      "advanced": "進階思考",
+      "replays": "覆盤與賽事",
+      "data": "數據",
       "about": "關於本站"
     }
   },

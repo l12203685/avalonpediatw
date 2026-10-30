@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { WIKI_CATEGORIES } from '../../data/wiki';
+import { WIKI_ARTICLES, WIKI_CATEGORIES } from '../../data/wiki';
 import type { WikiArticle } from '../../data/wiki';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { buildWikiGraph } from '../../utils/wikiGraph';
@@ -14,10 +14,16 @@ import WikiMindMapTree from './WikiMindMapTree';
  * 樹與關聯由 utils/wikiGraph.ts 從文章內容算出來。
  */
 
-/** 新手入門排第一（它照〈關於阿瓦隆百科〉的建議閱讀順序），其餘大致由淺到深。 */
-const MAP_CATEGORY_ORDER = ['beginner', 'rules', 'roles', 'glossary', 'strategies', 'replays', 'events', 'faq', 'about'];
+/** 入門與基礎觀念排第一（它照〈關於阿瓦隆百科〉的建議閱讀順序），其餘照學習路徑由淺到深。 */
+const MAP_CATEGORY_ORDER = ['beginner', 'rules', 'roles', 'strategies', 'voting', 'advanced', 'replays', 'data', 'about'];
 
 const DESKTOP_QUERY = '(min-width: 1024px)';
+
+/**
+ * 每個分類的文章由上而下是一條閱讀線（wiki_data.json 的順序，2026-10-30 晚全站整併）；寫死在前端的文章
+ * （新手常見問題、角色數據）排在同分類的 JSON 文章後面，不插到閱讀線前面。
+ */
+const HARDCODED_IDS = new Set(WIKI_ARTICLES.map((a) => a.id));
 
 interface WikiMindMapProps {
   articles: WikiArticle[];
@@ -39,7 +45,10 @@ export default function WikiMindMap({ articles, onOpen }: WikiMindMapProps): JSX
       .map((c) => ({ id: c.id, name: t(`wiki.category.${c.id}`, { defaultValue: c.name }), icon: c.icon }));
   }, [t]);
 
-  const graph = useMemo(() => buildWikiGraph(articles, categories), [articles, categories]);
+  const graph = useMemo(() => {
+    const ordered = [...articles.filter((a) => !HARDCODED_IDS.has(a.id)), ...articles.filter((a) => HARDCODED_IDS.has(a.id))];
+    return buildWikiGraph(ordered, categories);
+  }, [articles, categories]);
   const articlesById = useMemo(() => new Map(articles.map((a) => [a.id, a])), [articles]);
   const open = useCallback(
     (id: string): void => {

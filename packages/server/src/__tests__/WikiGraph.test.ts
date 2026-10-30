@@ -155,7 +155,8 @@ describe('buildWikiGraph', () => {
 
 describe('the real wiki_data.json', () => {
   const data: WikiGraphArticle[] = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../wiki_data.json'), 'utf8'));
-  const cats = ['beginner', 'rules', 'roles', 'glossary', 'strategies', 'replays', 'events', 'faq', 'about'].map((id) => ({ id, name: id }));
+  // 2026-10-30 晚：分類＝學習路徑（components/wikiMap/WikiMindMap.tsx 的 MAP_CATEGORY_ORDER）
+  const cats = ['beginner', 'rules', 'roles', 'strategies', 'voting', 'advanced', 'replays', 'data', 'about'].map((id) => ({ id, name: id }));
   const graph = buildWikiGraph(data, cats);
 
   it('has every article under its category and all the links', () => {
@@ -167,7 +168,9 @@ describe('the real wiki_data.json', () => {
       // Edward 2026-10-30：F 組新文章 9 篇（211～219）：beginner +2（帶新手開局、什麼時候該說話）、rules +1（7～9 人局的差異）、
       // roles +2（梅林可以派拇指嗎、莫甘娜與莫德雷德的深度玩法）、glossary +1（標記說明）、strategies +3（機率速算表、尾家的決策、思考的層次）；
       // 〈賽事回顧可以學到的原理〉併進 wiki-156、〈無奈區間〉併進 wiki-57，不另成篇（文章總篇數不要過多）
-      ['beginner', 17], ['rules', 3], ['roles', 14], ['glossary', 6], ['strategies', 33], ['replays', 12], ['events', 12], ['faq', 1], ['about', 2],
+      // 2026-10-30 晚 Edward：全站章節重新整併（心智圖、知識關聯與閱讀方向更直觀精簡）：100 → 49 篇，分類照學習路徑重排
+      // （名詞解釋、常見問題、賽事與戰績拆進規則與名詞、任務派票、投票與湖中、覆盤與賽事、數據；新增投票與湖中、進階思考、數據）
+      ['beginner', 7], ['rules', 4], ['roles', 9], ['strategies', 8], ['voting', 5], ['advanced', 5], ['replays', 8], ['data', 2], ['about', 1],
     ]);
     // 2026-10-30：部分文章連到寫死的〈角色數據〉（strategy-*-data），它們不在 wiki_data.json，這張圖只算 JSON 裡的文章。
     const ids = new Set(data.map((a) => a.id));
@@ -176,20 +179,25 @@ describe('the real wiki_data.json', () => {
     expect(graph.edges.length).toBeGreaterThan(150);
   });
 
-  it('starts the beginner branch with 關於阿瓦隆百科 and its 23-article reading order', () => {
+  it('starts the beginner branch with 關於阿瓦隆百科 and its 20-article reading order', () => {
     // 2026-10-30 Edward 裁定（E18 a+c）：規則說明書第 1、術語速查第 2，鐵邏輯排在規則之後，常見錯誤（湖中、黑白球）排在任務派票之後。
     // Edward 2026-10-30：〈標記說明〉（wiki-211）排第 3，閱讀順序 22 → 23 篇；新手入門分類 15 → 17 篇。
     // 〈關於阿瓦隆百科〉改放 about 分類，在新手分支是捷徑葉子。
+    // 2026-10-30 晚：照新的學習路徑重寫（規則 → 基礎觀念 → 角色 → 派票 → 投票（異常票）與湖中 → 刺殺 → 進階思考 → 覆盤與賽事 → 數據），
+    // 23 → 20 篇；規則說明書、術語速查、標記說明仍是前三篇，常見錯誤仍排在派票、黑白球與湖中之後。
     const leaves = graph.branches[0].leaves;
     expect(leaves[0].articleId).toBe('wiki-153');
     expect(leaves[0].guide).toBe(true);
-    expect(graph.readingOrder).toHaveLength(23);
-    expect(graph.readingOrder.slice(0, 6)).toEqual(['wiki-203', 'wiki-204', 'wiki-211', 'wiki-71', 'wiki-63', 'wiki-66']);
-    expect(graph.readingOrder.slice(12, 15)).toEqual(['wiki-90', 'wiki-91', 'wiki-93']);
-    expect(graph.readingOrder[22]).toBe('wiki-26');
-    expect(leaves.slice(1, 24).map((l) => l.articleId)).toEqual(graph.readingOrder);
-    expect(leaves.slice(1, 24).map((l) => l.readingStep)).toEqual(Array.from({ length: 23 }, (_, i) => i + 1));
-    expect(leaves).toHaveLength(1 + 23 + (17 - 8)); // guide + reading order + beginner articles not in it
+    expect(graph.readingOrder).toHaveLength(20);
+    expect(graph.readingOrder.slice(0, 6)).toEqual(['wiki-203', 'wiki-204', 'wiki-211', 'wiki-71', 'wiki-106', 'wiki-66']);
+    expect(graph.readingOrder.slice(12, 16)).toEqual(['wiki-148', 'wiki-38', 'wiki-147', 'wiki-90']);
+    expect(graph.readingOrder.slice(16)).toEqual(['wiki-12', 'wiki-26', 'wiki-156', 'wiki-209']);
+    expect(leaves.slice(1, 21).map((l) => l.articleId)).toEqual(graph.readingOrder);
+    expect(leaves.slice(1, 21).map((l) => l.readingStep)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    // every category is on the path: each branch has at least one article in the reading order
+    const onPath = new Set(graph.readingOrder.map((id) => graph.articles[id].category));
+    expect([...onPath].sort()).toEqual(['advanced', 'beginner', 'data', 'replays', 'roles', 'rules', 'strategies', 'voting']);
+    expect(leaves).toHaveLength(1 + 20 + (7 - 6)); // guide + reading order + beginner articles not in it
   });
 
   /** No two article rows (dot + label) overlap, every row sits inside its branch box. */
@@ -230,16 +238,18 @@ describe('the real wiki_data.json', () => {
       expect(n.y).toBeGreaterThan(layout.bounds.minY);
       expect(n.y).toBeLessThan(layout.bounds.maxY);
     }
-    expect(layout.anchorOf['wiki-63']).toBe('rules/wiki-63');
+    expect(layout.anchorOf['wiki-203']).toBe('rules/wiki-203');
   });
 
   it('splits big branches into columns, top to bottom then the next column, without overlaps', () => {
-    const layout = layoutWikiMindMap(graph, new Set(), {}, 12);
+    // 2026-10-30 晚（49 篇）：最高的一側是幾個小分類疊起來的，每欄 12 行時沒有分類要分欄；改用每欄 6 行來測分欄。
+    const layout = layoutWikiMindMap(graph, new Set(), {}, 6);
     expectNoOverlap(layout);
-    expect(layout.maxRows).toBeLessThanOrEqual(12);
+    expect(layout.maxRows).toBeLessThanOrEqual(6);
     const strategies = layout.leaves.filter((l) => l.branchKey === 'branch/strategies');
-    // N articles → ceil(N / 12) columns, filled top to bottom (33 → 3 × 11; 37 after 2026-10-30 → 4 × 10)
-    const columns = Math.ceil(strategies.length / 12);
+    // N articles → ceil(N / 6) columns, filled top to bottom (8 → 2 × 4)
+    const columns = Math.ceil(strategies.length / 6);
+    expect(columns).toBeGreaterThan(1);
     expect(new Set(strategies.map((l) => l.column)).size).toBe(columns);
     expect(strategies.map((l) => l.leaf.articleId)).toEqual(graph.branches.find((b) => b.id === 'strategies')!.leaves.map((l) => l.articleId));
     const perColumn = Math.ceil(strategies.length / columns);
@@ -261,9 +271,10 @@ describe('the real wiki_data.json', () => {
       expect(fit.scale * DEFAULT_MIND_MAP_METRICS.leafFont, `${w}×${h}`).toBeGreaterThanOrEqual(11);
       expectNoOverlap(layout);
     }
-    // one column everywhere would be far smaller
+    // the chosen column count is never worse than one column everywhere (2026-10-30 晚：49 篇之後一欄也放得下，但分欄的字更大)
     const single = layoutWikiMindMap(graph);
-    expect(fitScale(single.bounds, 1254, 730) * DEFAULT_MIND_MAP_METRICS.leafFont).toBeLessThan(9);
+    const fit = fitMindMapToViewport(graph, 1254, 730);
+    expect(fit.scale).toBeGreaterThanOrEqual(fitScale(single.bounds, 1254, 730) - 1e-9);
   });
 });
 
