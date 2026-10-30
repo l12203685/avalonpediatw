@@ -47,7 +47,7 @@ describe('redNormalVote', () => {
     expect(redNormalVoteNow(on, obs({ myRole: 'oberon' } as Partial<PlayerObservation>))).toBe(false);
     expect(redNormalVoteNow(on, obs({ currentRound: 2 }))).toBe(false);
     expect(redNormalVoteNow(on, obs({ failCount: 4 }))).toBe(false);
-    expect(redNormalVoteNow(DEFAULT_AGENT_TUNING, obs())).toBe(false);
+    expect(redNormalVoteNow({ ...DEFAULT_AGENT_TUNING, redNormalVote: 0 }, obs())).toBe(false);
   });
 });
 
