@@ -16,7 +16,7 @@ export type { DonutProps } from './Donut';
 export { default as MetricBlocks } from './MetricBlocks';
 export type { MetricBlockKey, MetricBlockRow, MetricBlockValues, MetricBlocksProps, MetricCell } from './MetricBlocks';
 export {
-  OUTCOME_COLORS, OUTCOME_LABEL_KEYS, OUTCOME_ORDER, TONE_HEX, TONE_TEXT,
+  OUTCOME_COLORS, OUTCOME_LABEL_KEYS, OUTCOME_ORDER, RATE_DIGITS, THEORY_DIGITS, TONE_HEX, TONE_TEXT,
   formatInt, formatRate, formatText, outcomeTotal, toPercent,
 } from './tokens';
 export type { OutcomeCounts, OutcomeKey, PctScale, Tone } from './tokens';

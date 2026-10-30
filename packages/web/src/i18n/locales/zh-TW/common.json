@@ -691,16 +691,16 @@
         "career": "生涯全部場次",
         "atLeast": "至少 {{count}} 場",
         "noMin": "不限",
-        "minGamesShort": "生涯 ≥ {{count}} 場",
+        "minGamesShort": "角色／位置 ≥ {{count}} 場",
         "roleWindowsShort": "角色窗 {{k}}/{{kl}} 打滿",
         "roleWindowsOffShort": "角色窗不必打滿",
-        "overallShort": "整體理論生涯 ≥ {{count}} 場",
+        "overallShort": "整體理論 ≥ {{count}} 場",
         "titleAutoShort": "角色王自動",
         "titleFixedShort": "角色王 {{other}}/{{loyal}} 場",
         "assassinShort": "刺殺 ≥ {{count}} 次",
         "activeDays": "近期出賽",
         "mainGames": "位置理論・勝率看",
-        "theoryMinGames": "最低生涯場數",
+        "theoryMinGames": "角色／位置最低場數",
         "roleWindows": "角色窗（各角色/忠臣）",
         "roleWindowsOption": "{{k}} / {{kl}} 場",
         "requireRoleWindows": "角色窗打滿才列",
@@ -712,7 +712,10 @@
         "titleAutoDefault": "自動：{{full}}→{{fallback}}・忠臣 {{loyal}}→{{loyalFallback}}",
         "titleFixed": "固定：其他 {{other}}、忠臣 {{loyal}} 場",
         "assassinMinAttempts": "刺殺榜最低次數",
-        "attempts": "至少 {{count}} 次"
+        "attempts": "至少 {{count}} 次",
+        "overallLinked": "整體理論最低場數",
+        "overallLinkedValue": "{{count}} 場（2 倍連動）",
+        "overallLinkedHint": "整體理論的最低場數固定是角色／位置最低場數的 2 倍，跟著上一格一起變。"
       }
     },
     "analysis": {
@@ -1222,7 +1225,17 @@
           "titleWindow": "視窗",
           "qualified": "有資格"
         },
-        "lastN": "近 {{count}} 場"
+        "lastN": "近 {{count}} 場",
+        "roleTop": {
+          "subtitle": "每個角色最終勝率前 {{count}} 名",
+          "qualified": "{{count}} 人有資格",
+          "rateParen": "（{{rate}}）",
+          "tip": "{{name}}：{{wins}} 勝 / {{games}} 場（該角色生涯 {{career}} 場）",
+          "holder": "角色王",
+          "empty": "還沒有人打滿 {{count}} 場",
+          "legacy": "目前只列各角色的角色王；下次每日更新後列出每個角色前 10 名。",
+          "nHint": "每個角色比各人該角色最近 N 場（卡片標題下）的最終勝率；滑鼠移到名字上看勝場 / 場數。"
+        }
       },
       "overview": {
         "summary": {

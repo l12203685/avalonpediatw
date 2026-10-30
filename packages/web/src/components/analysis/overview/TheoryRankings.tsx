@@ -1,8 +1,8 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../../store/gameStore';
-import { fmtPct, theorySettings, type AnalysisOverview, type AnalysisTheorySettings } from '../../../services/api';
-import { InfoTip, StatTable, Term, type StatColumn, type StatTermKey } from '../ui';
+import { fmtPct, fmtTheoryPct, theorySettings, type AnalysisOverview, type AnalysisTheorySettings } from '../../../services/api';
+import { InfoTip, StatTable, Term, THEORY_DIGITS, type StatColumn, type StatTermKey } from '../ui';
 
 /**
  * 三種理論勝率排行並排 (2026-10-14 Edward：「角色理論勝率旁邊再呈現位置理論勝率（也是要 100 場）&
@@ -130,7 +130,7 @@ function buildRankings(t: TFn, overview: AnalysisOverview, settings: AnalysisThe
   const join = (...parts: Array<string | null>): string =>
     [...parts.filter((p): p is string => !!p), t(`${k}.tipOpen`)].join(' · ');
   const lastPos = (v: unknown, games: number): string | null =>
-    isNum(v) ? t(`${k}.tipPositionLast`, { games, value: fmtPct(v) }) : null;
+    isNum(v) ? t(`${k}.tipPositionLast`, { games, value: fmtTheoryPct(v) }) : null;
   const lastFinal = (v: unknown, games: number): string | null =>
     isNum(v) ? t(`${k}.tipFinalLast`, { games, value: fmtPct(v) }) : null;
 
@@ -149,7 +149,7 @@ function buildRankings(t: TFn, overview: AnalysisOverview, settings: AnalysisThe
         r => r.games,
         r => join(
           lastPos(r.positionTheory, settings.mainGames),
-          isNum(r.overallTheory) ? t(`${k}.tipOverall`, { value: fmtPct(r.overallTheory) }) : null,
+          isNum(r.overallTheory) ? t(`${k}.tipOverall`, { value: fmtTheoryPct(r.overallTheory) }) : null,
           lastFinal(r.finalWinRate, settings.mainGames),
           career(r.careerGames),
         ),
@@ -179,7 +179,7 @@ function buildRankings(t: TFn, overview: AnalysisOverview, settings: AnalysisThe
         r => r.overallTheory,
         r => r.games,
         r => join(
-          isNum(r.positionTheory) ? t(`${k}.tipPositionCareer`, { value: fmtPct(r.positionTheory) }) : null,
+          isNum(r.positionTheory) ? t(`${k}.tipPositionCareer`, { value: fmtTheoryPct(r.positionTheory) }) : null,
           isNum(r.finalWinRate) ? t(`${k}.tipFinalCareer`, { value: fmtPct(r.finalWinRate) }) : null,
           career(r.careerGames),
         ),
@@ -236,6 +236,7 @@ function TheoryTable({ ranking, lowSample, topUp, scope, hideCaption = false }: 
       label: t('analytics.r6.overview.theory.value'),
       title: t('analytics.r6.overview.theory.nHint'),
       format: 'pct',
+      digits: THEORY_DIGITS, // 三種理論勝率一位小數 (Edward 2026-10-30)
       n: 'n',
       lowSample: lowSample > 0 ? lowSample : undefined,
       emphasis: true,
@@ -276,8 +277,8 @@ export function useTheoryRankings(overview: AnalysisOverview): TheoryRankingsInf
   const [role, position] = rankings;
   const lowSample = settings.theoryMinCellGames;
   const baselineParts = [
-    role.baseline !== null ? t(`${k}.baselineRole`, { value: role.baseline.toFixed(1) }) : null,
-    position.baseline !== null ? t(`${k}.baselineSeat`, { value: position.baseline.toFixed(1) }) : null,
+    role.baseline !== null ? t(`${k}.baselineRole`, { value: role.baseline.toFixed(THEORY_DIGITS) }) : null,
+    position.baseline !== null ? t(`${k}.baselineSeat`, { value: position.baseline.toFixed(THEORY_DIGITS) }) : null,
   ].filter((p): p is string => !!p);
   const scope = baselineParts.length > 0
     ? `${t(`${k}.scope`)}${t(`${k}.sentenceSep`)}${t(`${k}.baseline`, { parts: baselineParts.join(t(`${k}.listSep`)) })}`

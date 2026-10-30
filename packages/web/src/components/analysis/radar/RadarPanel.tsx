@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, Tooltip,
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
-import { fmtPct } from '../../../services/api';
+import { fmtPct, fmtTheoryPct } from '../../../services/api';
 import type { AnalysisTheorySettings } from '../../../services/api';
 import { InfoTip, StatTable, type StatColumn, type Tone } from '../ui';
 import { roleWindowSizes, type AxisKey, type AxisRow, type PlayerRadarModel } from './radarModel';
@@ -69,7 +69,9 @@ function AxisTick({ x = 0, y = 0, textAnchor = 'middle', verticalAnchor = 'middl
 
 function formatAxis(key: AxisKey, v: number | null): string {
   if (v === null) return '—';
-  return key === 'experience' ? v.toFixed(1) : fmtPct(v);
+  if (key === 'experience') return v.toFixed(1);
+  // 角色理論／位置理論一位小數，其他勝率整數 (Edward 2026-10-30)。
+  return key === 'roleTheory' || key === 'positionTheory' ? fmtTheoryPct(v) : fmtPct(v);
 }
 
 export default function RadarPanel({

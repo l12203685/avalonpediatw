@@ -691,16 +691,16 @@
         "career": "Whole career",
         "atLeast": "At least {{count}}",
         "noMin": "No minimum",
-        "minGamesShort": "≥ {{count}} career games",
+        "minGamesShort": "role / position ≥ {{count}} games",
         "roleWindowsShort": "role windows {{k}}/{{kl}} full",
         "roleWindowsOffShort": "role windows need not be full",
-        "overallShort": "overall theory from {{count}} career games",
+        "overallShort": "overall theory ≥ {{count}} games",
         "titleAutoShort": "role champions: auto",
         "titleFixedShort": "role champions {{other}}/{{loyal}} games",
         "assassinShort": "≥ {{count}} assassinations",
         "activeDays": "Recent activity",
         "mainGames": "Position theory / rates over",
-        "theoryMinGames": "Min. career games",
+        "theoryMinGames": "Role / position min. games",
         "roleWindows": "Role windows (role / Loyal)",
         "roleWindowsOption": "{{k}} / {{kl}} games",
         "requireRoleWindows": "Full role windows to list",
@@ -712,7 +712,10 @@
         "titleAutoDefault": "Auto: {{full}}→{{fallback}}, Loyal {{loyal}}→{{loyalFallback}}",
         "titleFixed": "Fixed: others {{other}}, Loyal {{loyal}}",
         "assassinMinAttempts": "Assassin board min.",
-        "attempts": "At least {{count}}"
+        "attempts": "At least {{count}}",
+        "overallLinked": "Overall theory min. games",
+        "overallLinkedValue": "{{count}} (2×, linked)",
+        "overallLinkedHint": "The overall-theory minimum is always twice the role / position minimum and follows it."
       }
     },
     "analysis": {
@@ -1222,7 +1225,17 @@
           "titleWindow": "Window",
           "qualified": "Qualified"
         },
-        "lastN": "last {{count}}"
+        "lastN": "last {{count}}",
+        "roleTop": {
+          "subtitle": "Top {{count}} by final win rate in each role",
+          "qualified": "{{count}} qualified",
+          "rateParen": " ({{rate}})",
+          "tip": "{{name}}: {{wins}} wins / {{games}} games ({{career}} career games in the role)",
+          "holder": "Role champion",
+          "empty": "Nobody has {{count}} games yet",
+          "legacy": "Only the champions for now; each role's top 10 arrives with the next daily refresh.",
+          "nHint": "Each role compares the final win rate over each player's last N games in it (under the card title); hover a name for wins / games."
+        }
       },
       "overview": {
         "summary": {

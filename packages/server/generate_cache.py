@@ -287,13 +287,16 @@ LEADERBOARD_CONFIG: dict[str, Any] = {
                                     # the main board needs N games in every special role ...
     "loyalWindowGames": 40,         # ... and N games as 忠臣 (dealt 4 times as often); improved: the
                                     # windows before those, so 2 x N in every role
-    "overallMinGames": 250,         # 整體理論 (career role × seat): the overall board needs N career games,
-                                    # the theory board shows it (else —) from N career games
+    # (Edward 2026-10-30「計算角色理論跟位置理論應該最低分別都是預設 50 場，整體理論預設是角色理論跟位置理論的
+    # 2 倍＝100 場」) theoryMinGames 0 -> 50, overallMinGames 250 -> 100 = 2 × theoryMinGames; the site's
+    # listing rules change both together (角色／位置最低場數 30 / 50 / 100 / 150, 整體理論 = 2 ×).
+    "overallMinGames": 100,         # 整體理論 (career role × seat): the overall board needs N career games,
+                                    # the theory board shows it (else —) from N career games; 2 × theoryMinGames
     # theory board (Edward 2026-10-28「位置理論跟整體理論還是可以合併吧? ... 條件我不是說應該要都可以選嗎?」):
-    # one table with every theory rate; listed = active, >= theoryMinGames career games and, when
-    # requireRoleWindows is 1, full role windows (the defaults list the same players as main).
+    # one table with every theory rate; listed = active, >= theoryMinGames career games (角色理論 /
+    # 位置理論's minimum, one knob for both) and, when requireRoleWindows is 1, full role windows.
     # mainGames = 0 (a filter override) means the whole career for the last-N numbers.
-    "theoryMinGames": 0,
+    "theoryMinGames": 50,
     "requireRoleWindows": 1,
     "assassinAttempts": 20,         # assassin: the last N assassinations as 刺客 (刺客 games that reached 三藍)
     "assassinMinAttempts": 10,
@@ -3220,7 +3223,9 @@ def compute_captain_analysis(games: list[GameRow]) -> dict:
 #               active players with W_r games in the role, scored on their last W_r: every player tied
 #               at the best (rounded) final win rate gets the title (Edward 2026-10-14「各給」), so a role
 #               can have several rows -- roles in ALL_ROLES order, a role's holders by career games in
-#               the role (more first), then name; not cut to topN
+#               the role (more first), then name; not cut to topN. roleTop (Edward 2026-10-30) = {role:
+#               the same candidates' top topN rows, rate first, ties ordered like the holders, `rank` =
+#               1 + players with a higher rate}, so the site lists each role's top 10
 # value = the board's sort key (the theory rate, the difference, the hit rate, the final win rate);
 # rows are ordered by value, then games, then career games (more first), then name. `rank` is the
 # row number (1..n) on every board; on roleTitles it is only the row's position, not a ranking.
@@ -3514,8 +3519,11 @@ def compute_leaderboard(
 
     # roleTitles: per role, the best final win rate over the last W_r games in it (players with a full
     # window only); every player tied at that rate gets the title (Edward 2026-10-14「各給」).
+    # roleTop (Edward 2026-10-30「角色王可以列出每一個角色對應的勝率 TOP10 的玩家嗎？」): the same candidates
+    # and rate, each role's top topN; rank by rate (ties share it), ties ordered like the holders.
     title_windows = role_title_windows(active, cfg)
     title_rows: list[dict] = []
+    role_top: dict[str, list[dict]] = {}
     for role in ALL_ROLES:
         w = max(title_windows[role], 1)
         candidates = []
@@ -3528,6 +3536,11 @@ def compute_leaderboard(
             candidates.append((name, len(last), wins, len(in_role)))
         if not candidates:
             continue
+        ordered = sorted(candidates, key=lambda c: (-_rate(c[2], c[1]), -c[1], -c[3], c[0]))[:top_n]
+        role_top[role] = [{
+            "rank": 1 + sum(1 for c in candidates if _rate(c[2], c[1]) > _rate(wins, games_n)),
+            "name": name, "value": _rate(wins, games_n), "games": games_n, "wins": wins, "careerRoleGames": career,
+        } for name, games_n, wins, career in ordered]
         # Ties compare the published (rounded) rate, the number every reader sees.
         best = max(_rate(c[2], c[1]) for c in candidates)
         holders = sorted((c for c in candidates if _rate(c[2], c[1]) == best), key=lambda c: (-c[1], -c[3], c[0]))
@@ -3552,10 +3565,11 @@ def compute_leaderboard(
     boards.append(_board(
         "roleTitles", "finalWinRate", "角色王", "Role champions",
         t_period, t_period_en, min(title_windows.values()),
-        f"{active_zh}、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號；{rule_zh}",
+        f"{active_zh}、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號，"
+        f"每個角色另列前 {top_n} 名；{rule_zh}",
         f"{active_en}, a full window in the role; best final win rate over the last games of that window, players "
-        f"tied at the top all get the title; {rule_en}",
-        title_rows, roleWindowGames=title_windows,
+        f"tied at the top all get the title, and each role lists its top {top_n}; {rule_en}",
+        title_rows, roleWindowGames=title_windows, roleTop=role_top,
     ))
 
     return {

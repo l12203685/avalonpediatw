@@ -525,6 +525,12 @@ export interface LeaderboardBoard {
    * roleTitles (2026-10-28): the window W_r each role was scored on (Edward's 200 / 100 and 50 / 25 rule).
    */
   roleWindowGames?: Record<string, number>;
+  /**
+   * roleTitles (Edward 2026-10-30「角色王可以列出每一個角色對應的勝率 TOP10 的玩家嗎？」): {role: the top topN
+   * of the players with a full window in it}, by the same final win rate; `rank` = 1 + players with a
+   * higher rate (ties share it). `rows` stays the title holders, which the bots print. Older caches: absent.
+   */
+  roleTop?: Record<string, Array<Pick<LeaderboardRow, 'rank' | 'name' | 'value' | 'games' | 'wins' | 'careerRoleGames'>>>;
   /** Day window (newcomers: first game within it; pre-2026-10-13 boards: the date window). */
   windowDays?: number;
   /** newcomers: every game of the player counts (the documented exception). */

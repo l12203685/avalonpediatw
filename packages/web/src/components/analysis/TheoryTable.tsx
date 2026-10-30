@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../store/gameStore';
 import { InfoTip, StatTable, Term, STAT_TERMS, type StatColumn, type StatTermKey } from './ui';
 import BoardInfo from './BoardInfo';
-import { fmtPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } from '../../services/api';
+import { fmtPct, fmtTheoryPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } from '../../services/api';
 
 /**
  * 理論勝率：一張表 (Edward 2026-10-28「位置理論跟整體理論還是可以合併吧? 我不知道為什麼要分兩個頁面? 是因為條件不同嗎?
@@ -100,10 +100,10 @@ export default function TheoryTable({
   const label = (key: string): string => t(`analytics.boards.theory.col.${key}`);
   const short = (r: Row): boolean => windowGames > 0 && r.games < windowGames;
 
-  /** 比率格；`dim` 時變淡並附原因。 */
-  const pct = (v: unknown, dim: string | null, extra?: ReactNode): ReactNode => (
+  /** 比率格；`dim` 時變淡並附原因。`theory`：角色／位置／整體理論一位小數，其他勝率整數 (Edward 2026-10-30)。 */
+  const pct = (v: unknown, dim: string | null, extra?: ReactNode, theory = false): ReactNode => (
     <span className={dim ? 'opacity-50' : undefined} title={dim ?? undefined}>
-      {fmtPct(isNum(v) ? v : null)}
+      {(theory ? fmtTheoryPct : fmtPct)(isNum(v) ? v : null)}
       {extra}
     </span>
   );
@@ -148,7 +148,7 @@ export default function TheoryTable({
       emphasis: sortKey === 'roleTheory',
       format: (v, r) => pct(v, r.fullWindows === false
         ? t('analytics.boards.theory.notFull', { games: r.roleGames ?? r.games })
-        : (r.sparseRoles ?? 0) > 0 ? t('analytics.r6.boards.sparseCell', { count: r.sparseRoles, min: minCell }) : null),
+        : (r.sparseRoles ?? 0) > 0 ? t('analytics.r6.boards.sparseCell', { count: r.sparseRoles, min: minCell }) : null, undefined, true),
     },
     {
       key: 'positionTheory',
@@ -157,7 +157,7 @@ export default function TheoryTable({
       tone: tone('positionTheory'),
       emphasis: sortKey === 'positionTheory',
       format: (v, r) => pct(v, shortNote(r)
-        ?? ((r.sparseSeats ?? 0) > 0 ? t('analytics.r6.boards.sparseCell', { count: r.sparseSeats, min: minCell }) : null)),
+        ?? ((r.sparseSeats ?? 0) > 0 ? t('analytics.r6.boards.sparseCell', { count: r.sparseSeats, min: minCell }) : null), undefined, true),
     },
     {
       key: 'overallTheory',
@@ -173,7 +173,7 @@ export default function TheoryTable({
           >
             {t('analytics.boards.theory.shareShort', { share: Math.round(r.populationShare) })}
           </span>
-        ) : null)
+        ) : null, true)
         : <span className="text-zinc-600" title={overallMin !== null ? t('analytics.boards.theory.overallLocked', { min: overallMin }) : undefined}>—</span>),
     },
     {

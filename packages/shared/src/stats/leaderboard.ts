@@ -428,8 +428,11 @@ export function computeLeaderboard(
   ));
 
   // roleTitles：每個角色的視窗 W_r（roleTitleWindows），打滿 W_r 場才列，最近 W_r 場最終勝率並列最高的人皆得稱號。
+  // roleTop（Edward 2026-10-30「角色王可以列出每一個角色對應的勝率 TOP10 的玩家嗎？」）：同一批候選、同一個勝率，
+  // 每個角色前 topN 名；名次依勝率（同率同名次），同率時排序同稱號（場數、該角色生涯場數多的先、名字）。
   const titleWindows = roleTitleWindows(listed, cfg);
   const titleRows: LeaderboardRow[] = [];
+  const roleTop: Record<string, LeaderboardRow[]> = {};
   for (const role of ALL_ROLES) {
     const w = Math.max(titleWindows[role], 1);
     const candidates: Array<[string, number, number, number]> = [];
@@ -441,6 +444,14 @@ export function computeLeaderboard(
       candidates.push([name, last.length, wins, inRole.length]);
     }
     if (!candidates.length) continue;
+    const ordered = sortByKey(candidates, (c) => [-rate(c[2], c[1]), -c[1], -c[3], c[0]]).slice(0, topN);
+    roleTop[role] = ordered.map(([name, gamesN, wins, career]) => {
+      const value = rate(wins, gamesN);
+      return {
+        rank: 1 + candidates.filter((c) => rate(c[2], c[1]) > value).length,
+        name, value, games: gamesN, wins, careerRoleGames: career,
+      };
+    });
     const best = Math.max(...candidates.map((c) => rate(c[2], c[1])));
     const holders = sortByKey(candidates.filter((c) => rate(c[2], c[1]) === best), (c) => [-c[1], -c[3], c[0]]);
     for (const [name, gamesN, wins, career] of holders) {
@@ -477,10 +488,11 @@ export function computeLeaderboard(
   boards.push(board(
     'roleTitles', 'finalWinRate', '角色王', 'Role champions',
     tPeriod, tPeriodEn, Math.min(...Object.values(titleWindows)),
-    `${activeZh}、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號；${ruleZh}`,
+    `${activeZh}、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號，`
+    + `每個角色另列前 ${topN} 名；${ruleZh}`,
     `${activeEn}, a full window in the role; best final win rate over the last games of that window, players `
-    + `tied at the top all get the title; ${ruleEn}`,
-    titleRows, { roleWindowGames: titleWindows },
+    + `tied at the top all get the title, and each role lists its top ${topN}; ${ruleEn}`,
+    titleRows, { roleWindowGames: titleWindows, roleTop },
   ));
 
   return {

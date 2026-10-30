@@ -11,7 +11,7 @@ import type { StatTermKey } from './statTerms';
 /**
  * StatTable — 密集的數字表 (2026-10-14 Edward：「有些可以用表格數字，不一定要用圖」)。
  *
- *  - 欄位設定 StatColumn：format 'pct' (一位小數 + %) / 'int' (千分位) / 'text' / 自訂函式；
+ *  - 欄位設定 StatColumn：format 'pct' (整數 + %，理論勝率欄給 digits: THEORY_DIGITS) / 'int' (千分位) / 'text' / 自訂函式；
  *    null、NaN 一律顯示「—」。
  *  - n：另一個欄位 (或函式) 當樣本數，小字接在比率後面；lowSample：n 低於門檻時整格變淡並提示樣本不足。
  *  - bar：比率後面 (或背後) 的小長條，max 預設 100；顏色可給 hex 或 tone。
@@ -53,6 +53,8 @@ export interface StatColumn<R> {
   value?: (row: R) => unknown;
   /** pct 欄的刻度 (預設跟表格的 pctScale)。 */
   scale?: PctScale;
+  /** pct 欄的小數位 (預設 RATE_DIGITS = 整數；角色／位置／整體理論給 THEORY_DIGITS)。 */
+  digits?: number;
   bar?: StatColumnBar;
   /** 樣本數：列物件的欄位名或函式；顯示成比率後面的小字 n=…。 */
   n?: string | ((row: R) => number | null | undefined);
@@ -153,7 +155,7 @@ export default function StatTable<R>({
     const raw = cellValue(col, row);
     const fmt = col.format ?? 'text';
     if (typeof fmt === 'function') return fmt(raw, row, index);
-    if (fmt === 'pct') return formatRate(raw, col.scale ?? pctScale);
+    if (fmt === 'pct') return formatRate(raw, col.scale ?? pctScale, col.digits);
     if (fmt === 'int') return formatInt(raw);
     return formatText(raw);
   };

@@ -2225,8 +2225,16 @@ class LeaderboardTest(unittest.TestCase):
         board = self.boards["roleTitles"]
         self.assertEqual((board["period"], board["minGames"]), ("忠臣近 20 場、其他角色近 20 場", 20))
         self.assertEqual(board["roleWindowGames"], {r: 20 for r in ROLE_ORDER})  # full = fallback: fixed
-        self.assertTrue(board["note"].endswith("同率者並列、各得稱號；每個角色的場數固定：忠臣 20 場、其他角色 20 場"))
-        self.assertIn("players tied at the top all get the title", board["noteEn"])
+        self.assertTrue(board["note"].endswith("同率者並列、各得稱號，每個角色另列前 10 名；每個角色的場數固定：忠臣 20 場、其他角色 20 場"))
+        self.assertIn("players tied at the top all get the title, and each role lists its top 10", board["noteEn"])
+        # roleTop (Edward 2026-10-30): each role's top 10 of the same candidates; the holders lead it.
+        self.assertEqual(list(board["roleTop"]), ROLE_ORDER)
+        self.assertEqual([r["name"] for r in board["roleTop"]["忠臣"]][:4], ["壬", "庚", "辛", "癸"])
+        for role, top in board["roleTop"].items():
+            with self.subTest(role=role):
+                self.assertLessEqual(len(top), 10)
+                self.assertEqual(top[0]["rank"], 1)
+                self.assertEqual([r["value"] for r in top], sorted((r["value"] for r in top), reverse=True))
         # Roles in ROLE_ORDER; `rank` is the row number. 刺客..梅林: one player each (seats 1-6).
         self.assertEqual([r["role"] for r in board["rows"]], ROLE_ORDER[:6] + ["忠臣"] * 4)
         self.assertEqual([r["rank"] for r in board["rows"]], list(range(1, 11)))
@@ -2262,6 +2270,9 @@ class LeaderboardTest(unittest.TestCase):
         # Same games and career games: by name (code points, 乙 U+4E59 before 甲 U+7532); 丙 14/20 = 70.0 is
         # not a holder.
         self.assertEqual(assassins, [("乙", 75.0), ("甲", 75.0)])
+        # roleTop lists 丙 too; tied players share the rank, the next one counts them (1, 1, 3).
+        self.assertEqual([(r["rank"], r["name"], r["value"], r["games"], r["wins"]) for r in board["roleTop"]["刺客"]],
+                         [(1, "乙", 75.0, 20, 15), (1, "甲", 75.0, 20, 15), (3, "丙", 70.0, 20, 14)])
         # Fable Willowgle holder when nobody ties.
         cache = build_fresh(runs({"甲": 15, "乙": 16}))
         board = next(b for b in cache["leaderboard"]["boards"] if b["id"] == "roleTitles")
@@ -2959,6 +2970,11 @@ class LeaderboardConfigTest(unittest.TestCase):
             self.assertEqual(list(row["theory"]), ["roleWindows"] + [gc.theory_key(n) for n in windows] + ["career"])
             self.assertEqual({r: c["window"] for r, c in row["theory"]["roleWindows"]["roles"].items()},
                              cache["overview"]["theoryConfig"]["roleWindowGames"])
+
+    def test_theory_thresholds(self) -> None:
+        """Edward 2026-10-30: 角色理論 / 位置理論 from 50 career games, 整體理論 from 2 × that = 100."""
+        self.assertEqual(REAL_LEADERBOARD_CONFIG["theoryMinGames"], 50)
+        self.assertEqual(REAL_LEADERBOARD_CONFIG["overallMinGames"], 2 * REAL_LEADERBOARD_CONFIG["theoryMinGames"])
 
     def test_windows_follow_main_games(self) -> None:
         self.assertEqual(gc.theory_windows(), [100])

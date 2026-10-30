@@ -1,9 +1,9 @@
 {
   "format": "avalon-games",
   "version": 2,
-  "key": "d9134d485b5918f6",
+  "key": "39dcf8b11b0421a9",
   "cacheSchemaVersion": 4,
-  "config": {"leaderboard":{"theoryMinCellGames":5,"activeDays":90,"topN":10,"mainGames":100,"roleWindowGames":10,"loyalWindowGames":40,"overallMinGames":250,"theoryMinGames":0,"requireRoleWindows":1,"assassinAttempts":20,"assassinMinAttempts":10,"newcomerDays":90,"newcomerMinGames":10,"roleTitleGames":50,"roleTitleFallbackGames":25,"loyalTitleGames":200,"loyalTitleFallbackGames":100},"theoryWindows":[100],"minGamesThreshold":30,"excessShrinkK":20,"lakeClaimMinSample":30},
+  "config": {"leaderboard":{"theoryMinCellGames":5,"activeDays":90,"topN":10,"mainGames":100,"roleWindowGames":10,"loyalWindowGames":40,"overallMinGames":100,"theoryMinGames":50,"requireRoleWindows":1,"assassinAttempts":20,"assassinMinAttempts":10,"newcomerDays":90,"newcomerMinGames":10,"roleTitleGames":50,"roleTitleFallbackGames":25,"loyalTitleGames":200,"loyalTitleFallbackGames":100},"theoryWindows":[100],"minGamesThreshold":30,"excessShrinkK":20,"lakeClaimMinSample":30},
   "constants": {"allRoles":["刺客","莫甘娜","莫德雷德","奧伯倫","派西維爾","梅林","忠臣"],"configRoleOrder":["刺客","莫甘娜","莫德雷德","奧伯倫","派西維爾","梅林"],"redRoles":["刺客","莫甘娜","莫德雷德","奧伯倫"],"seats":["1","2","3","4","5","6","7","8","9","0"],"roleDealTenths":{"刺客":1,"莫甘娜":1,"莫德雷德":1,"奧伯倫":1,"派西維爾":1,"梅林":1,"忠臣":4}},
   "counts": {"games":520,"fromSheet":520,"fromDiscord":0,"players":20,"dated":503,"undated":17},
   "vocab": {"category":["線瓦","面瓦","娛樂","","其他"],"outcome":["三紅","三藍死","三藍活","","其他"],"state":["藍藍藍","紅紅紅","紅紅藍紅","紅藍紅紅","藍藍紅藍","紅紅藍藍藍","紅藍紅藍紅","藍紅藍藍","藍紅紅紅","藍紅藍紅紅","紅藍藍紅藍","紅藍藍藍","紅藍紅藍藍","紅藍藍紅紅","紅紅藍藍紅","藍紅藍紅藍","藍藍紅紅紅","藍藍紅紅藍","藍紅紅藍藍","藍紅紅藍紅","?"],"noteTags":["season:S1","season:S2","season:S3","season:S5","venue:古亭","venue:九號","venue:台中","venue:東門","venue:小巨蛋","venue:Discopia星球","venue:台中家","venue:學餐","venue:新竹謎寶","venue:不鳥谷","venue:政大","flag:spectated","flag:notRecorderGame","flag:review","flag:badGame","flag:lakeCorrected","flag:substitution","flag:incident"]},
