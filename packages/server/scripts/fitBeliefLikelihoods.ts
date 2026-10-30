@@ -129,4 +129,6 @@ for (const [k, [a, n]] of Object.entries(vote).sort()) console.log(`  vote ${k.p
 for (const [k, d] of Object.entries(mission).sort()) console.log(`  mission ${k} fails ${d.join('/')}`);
 for (const [k, [a, n]] of Object.entries(voteRole).sort()) console.log(`  voteRole ${k.padEnd(26)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(redLake)) console.log(`  redLake target ${k}: declared red ${(100 * a / n).toFixed(1)}% (${n})`);
+// The self-play engine leaves timers behind: exit once the table is written.
+process.exit(0);
 })();

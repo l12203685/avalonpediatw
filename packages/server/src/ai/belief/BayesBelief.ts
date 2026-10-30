@@ -16,6 +16,7 @@ import { buildCertainty } from './Certainty';
 import { zoneTeamLogProb, type PriorProposal } from './ZoneModel';
 import TABLE from './likelihoods.json';
 import BOT_TABLE from './likelihoods_bot.json';
+import BOT_TABLE_NEXT from './likelihoods_bot_next.json';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -27,7 +28,10 @@ interface Table {
 }
 const T = TABLE as unknown as Table;
 /** The same tables fitted on bot self-play (`scripts/fitBeliefLikelihoods.ts --bots`; `BayesOptions.botTables`). */
-const TB = BOT_TABLE as unknown as Table;
+const TB_CURRENT = BOT_TABLE as unknown as Table;
+/** The refit candidate (`BayesOptions.botTablesNext`): fitted on the latest defaults, measured against the current table. */
+const TB_NEXT = BOT_TABLE_NEXT as unknown as Table;
+let TB = TB_CURRENT;
 /**
  * The bot-table weight of the posterior being computed (`BayesOptions.botTables`; 0 = the human tables alone). Set by
  * `posterior()` for the duration of one synchronous computation, so the helpers below read it without threading it.
@@ -44,10 +48,13 @@ const memos = new Map<number, ProbMemo>();
 const newMemo = (): ProbMemo => ({ vote: new Float64Array(32).fill(NaN), voteLog: new Float64Array(64).fill(NaN), proposal: new Float64Array(48).fill(NaN), mission: new Float64Array(216).fill(NaN) });
 let memo: ProbMemo = newMemo();
 memos.set(0, memo);
-function useMix(m: number): void {
+const memosNext = new Map<number, ProbMemo>();
+function useMix(m: number, next = false): void {
   mix = m;
-  let x = memos.get(m);
-  if (!x) { x = newMemo(); memos.set(m, x); }
+  TB = next ? TB_NEXT : TB_CURRENT;
+  const store = next ? memosNext : memos;
+  let x = store.get(m);
+  if (!x) { x = newMemo(); store.set(m, x); }
   memo = x;
 }
 const CAMP_INDEX: Record<string, number> = { good: 0, evil: 1, merlin: 2, morgana: 3 };
@@ -154,6 +161,8 @@ export interface BayesOptions {
    * with a teammate 95% and almost never otherwise, which the human tables read as nearly nothing). 0 = human only.
    */
   botTables?: number;
+  /** Read with the refit bot table (`likelihoods_bot_next.json`) instead of the current one (`beliefBotTablesNext`). */
+  botTablesNext?: boolean;
   /**
    * `bayesThumbRoles` (optimization loop round 3): for Percival, in every world the good thumb is Merlin and
    * the red one Morgana — their actions are read with the role tables (`voteRole`, `proposalRole`), so the
@@ -194,7 +203,7 @@ export interface BayesOptions {
 const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
-  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1));
+  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true);
   try {
     return posteriorWith(obs, opts);
   } finally {
@@ -209,7 +218,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
   const zone = opts.zoneMerlin === true;
   const early = opts.merlinEarlyStrict === true;
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${mix > 0 ? `b${mix}` : ''}`;
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : ''}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -325,6 +334,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     zoneMerlin: t.merlinZoneSignal === true,
     merlinEarlyStrict: t.merlinLoyalStyle === true,
     botTables: t.beliefBotTables ?? 0,
+    botTablesNext: t.beliefBotTablesNext === true,
   };
 }
 
