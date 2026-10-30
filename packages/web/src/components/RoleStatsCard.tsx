@@ -1,150 +1,143 @@
-import { motion } from 'framer-motion';
-import { BarChart3, Target, Users, TrendingUp } from 'lucide-react';
-import { type RoleData, formatWinRate, TOTAL_UNIQUE_GAMES } from '../data/roleStats';
+import { BarChart3, Loader, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { outcomeBlocks, roleFaction, theorySettings, type OutcomeCounts } from '../services/api';
+import { useAnalysisOverview } from './analysis/useAnalysisOverview';
+import { blockValues, seatFactionCounts, useIsWide } from './analysis/seatRoleBlocks';
+import { MetricBlocks, type MetricBlockRow } from './analysis/ui';
+import { useStatsFilter } from '../stats/statsFilter';
+import { WIKI_ROLE_NAMES } from '../data/wiki';
 import { CampDisc } from './CampDisc';
 
+/**
+ * 百科角色文章與「X數據解析」的實戰數據卡 (2026-10-30)。
+ *
+ * 以前讀 data/roleStats.ts 的靜態數字：好人角色把「三藍死」算成贏、紅方只算三紅，而且只記錄了 4 個座位。
+ * 現在跟數據分析頁同一個來源、同一個口徑：/api/analysis/overview 的 seatPositionWinRates
+ * (每個位置 × 角色的 三紅／三藍死／三藍活 局數，全部對局)，三塊結果一律由 @avalon/shared 的 outcomeBlocks 算：
+ *   任務結果 (n = 全部局)、刺殺結果 (n = 打到三藍的局)、遊戲結果 = 最終勝率 (三藍活才算藍方贏)。
+ * 第一列 = 全部位置 (同數據分析頁「位置 × 角色」表的「全部位置」列)，下面是 1–10 號各位置。
+ * 讀取中顯示讀取中，讀不到顯示稍後再試；不退回任何寫死的數字。篩選跟著數據分析頁 (useStatsFilter)。
+ */
+
 interface RoleStatsCardProps {
-  role: RoleData;
+  /** 角色代號 (merlin、percival、loyal_servant、mordred、morgana、assassin、oberon)。 */
+  role: string;
 }
 
-function WinRateBar({ label, rate, color }: { label: string; rate: number; color: string }): JSX.Element {
-  const pct = rate * 100;
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="w-16 text-gray-400 shrink-0">{label}</span>
-      <div className="flex-1 bg-gray-700 rounded-full h-3 overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-          className={`h-full rounded-full ${color}`}
-        />
+function addCounts(a: OutcomeCounts | undefined, b: OutcomeCounts): OutcomeCounts {
+  return {
+    三紅: (a?.三紅 ?? 0) + b.三紅,
+    三藍死: (a?.三藍死 ?? 0) + b.三藍死,
+    三藍活: (a?.三藍活 ?? 0) + b.三藍活,
+  };
+}
+
+export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element | null {
+  const { t } = useTranslation('common');
+  const { overview, loading, error, reload } = useAnalysisOverview();
+  const filtered = useStatsFilter(s => s.key !== '');
+  const wide = useIsWide();
+  const name = WIKI_ROLE_NAMES[role];
+  if (!name) return null;
+
+  const faction = roleFaction(name);
+  const isGood = faction === 'blue';
+  const k = 'wiki.liveStats';
+
+  const header = (
+    <div className="flex items-center justify-between gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5 min-w-0">
+        <BarChart3 size={16} className="text-yellow-400 shrink-0" />
+        <h3 className="text-sm font-bold text-white">{t(`${k}.title`, { role: name })}</h3>
       </div>
-      <span className="w-12 text-right text-gray-300 font-mono">{formatWinRate(rate)}</span>
+      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded shrink-0 ${isGood ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300'}`}>
+        <CampDisc team={isGood ? 'good' : 'evil'} className="w-3.5 h-3.5" alt={t(isGood ? `${k}.good` : `${k}.evil`)} />
+        {t(isGood ? `${k}.good` : `${k}.evil`)}
+      </span>
     </div>
   );
-}
 
-export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element {
-  const { stats, faction, name_zh, name_en } = role;
-  const isGood = faction === 'good';
-  const factionColor = isGood ? 'text-blue-400' : 'text-red-400';
-  const factionBg = isGood ? 'border-blue-500/40' : 'border-red-500/40';
-  const barColor = isGood ? 'bg-blue-500' : 'bg-red-500';
-  const factionLabel = isGood ? '正義方' : '邪惡方';
-
-  const breakdown = stats.result_breakdown;
-  const totalBreakdown = breakdown['\u4e09\u7d05'] + breakdown['\u4e09\u85cd\u6b7b'] + breakdown['\u4e09\u85cd\u6d3b'];
-
-  // For Merlin, assassination rate is meaningful
-  const isMerlin = role.id === 'merlin';
-  const assassinationRate = isMerlin && totalBreakdown > 0
-    ? breakdown['\u4e09\u85cd\u6b7b'] / (breakdown['\u4e09\u85cd\u6b7b'] + breakdown['\u4e09\u85cd\u6d3b'])
-    : null;
-
-  // Sort seats by win rate descending
-  const seatEntries = Object.entries(stats.seat_win_rates)
-    .sort(([, a], [, b]) => b - a);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className={`bg-avalon-card/60 border ${factionBg} rounded-lg p-3 space-y-3`}
+  // 手機不加外框與內距：三塊結果表在 375px 的文章視窗裡才放得下。
+  const frame = (body: JSX.Element): JSX.Element => (
+    <div
+      className={`sm:bg-avalon-card/60 sm:border ${isGood ? 'sm:border-blue-500/40' : 'sm:border-red-500/40'} rounded-lg sm:p-3 space-y-3 min-w-0`}
+      data-testid="role-live-stats"
     >
-      {/* Header — 角色標題 + 陣營標籤同行 (砍多餘換行) */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <BarChart3 size={16} className="text-yellow-400 shrink-0" />
-          <h3 className="text-sm font-bold text-white truncate">
-            {name_zh} ({name_en}) 實戰數據
-          </h3>
-        </div>
-        {/* Edward 2026-04-25 camp emblem unification: faction chip leads with
-            the central 圓盤 disc (clipped from team-good / team-evil) so the
-            analytics surface matches the live game's role-reveal and
-            end-screen visual language. Star frame intentionally cropped out
-            — disc-only reads cleaner at chip size. */}
-        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded shrink-0 ${isGood ? 'bg-blue-900/60 text-blue-300' : 'bg-red-900/60 text-red-300'}`}>
-          <CampDisc team={isGood ? 'good' : 'evil'} className="w-3.5 h-3.5" alt={factionLabel} />
-          {factionLabel}
-        </span>
-      </div>
+      {header}
+      {body}
+    </div>
+  );
 
-      {/* Key metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-gray-800/50 rounded-lg px-2 py-1.5 text-center">
-          <div className="text-base font-bold text-yellow-400 leading-tight">{stats.total_games.toLocaleString()}</div>
-          <div className="text-[10px] text-gray-400 leading-tight">場次</div>
-        </div>
-        <div className="bg-gray-800/50 rounded-lg px-2 py-1.5 text-center">
-          <div className={`text-base font-bold leading-tight ${factionColor}`}>{formatWinRate(stats.win_rate)}</div>
-          <div className="text-[10px] text-gray-400 leading-tight">勝率</div>
-        </div>
-        <div className="bg-gray-800/50 rounded-lg px-2 py-1.5 text-center">
-          <div className="text-base font-bold text-blue-400 leading-tight">{stats.wins}</div>
-          <div className="text-[10px] text-gray-400 leading-tight">勝場</div>
-        </div>
-        <div className="bg-gray-800/50 rounded-lg px-2 py-1.5 text-center">
-          <div className="text-base font-bold text-gray-400 leading-tight">{stats.losses}</div>
-          <div className="text-[10px] text-gray-400 leading-tight">敗場</div>
-        </div>
-      </div>
+  if (loading && !overview) {
+    return frame(
+      <div className="flex items-center gap-2 py-4 text-xs text-gray-400">
+        <Loader size={14} className="animate-spin" /> {t(`${k}.loading`)}
+      </div>,
+    );
+  }
 
-      {/* Result breakdown */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <Target size={12} className="text-yellow-400" />
-          <span className="text-xs font-semibold text-gray-300">結果分布 (2,146 局)</span>
-        </div>
-        <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
-          <div className="bg-red-900/30 border border-red-800/40 rounded px-1.5 py-1">
-            <div className="font-bold text-red-400">{breakdown['\u4e09\u7d05']}</div>
-            <div className="text-gray-500 text-[10px]">三紅</div>
-            <div className="text-gray-500 text-[10px]">{totalBreakdown > 0 ? formatWinRate(breakdown['\u4e09\u7d05'] / totalBreakdown) : '-'}</div>
-          </div>
-          <div className="bg-blue-900/30 border border-blue-800/40 rounded px-1.5 py-1">
-            <div className="font-bold text-blue-300">{breakdown['\u4e09\u85cd\u6b7b']}</div>
-            <div className="text-gray-500 text-[10px]">三藍死</div>
-            <div className="text-gray-500 text-[10px]">{totalBreakdown > 0 ? formatWinRate(breakdown['\u4e09\u85cd\u6b7b'] / totalBreakdown) : '-'}</div>
-          </div>
-          <div className="bg-amber-900/30 border border-amber-800/40 rounded px-1.5 py-1">
-            <div className="font-bold text-amber-400">{breakdown['\u4e09\u85cd\u6d3b']}</div>
-            <div className="text-gray-500 text-[10px]">三藍活</div>
-            <div className="text-gray-500 text-[10px]">{totalBreakdown > 0 ? formatWinRate(breakdown['\u4e09\u85cd\u6d3b'] / totalBreakdown) : '-'}</div>
-          </div>
-        </div>
-        {isMerlin && assassinationRate !== null && (
-          <div className="mt-1.5 text-xs text-center">
-            <span className="text-gray-400">三藍後被刺殺率：</span>
-            <span className="text-red-400 font-bold">{formatWinRate(assassinationRate)}</span>
-          </div>
+  const seats = seatFactionCounts(overview);
+  if (!seats) {
+    return frame(
+      <div className="flex flex-wrap items-center gap-2 py-3 text-xs text-gray-400">
+        <span>{error || !overview ? t(`${k}.failed`) : t('analytics.r6.tabsb.pendingUpdate')}</span>
+        {(error || !overview) && (
+          <button
+            type="button"
+            onClick={reload}
+            className="inline-flex items-center gap-1 rounded border border-gray-600 px-2 py-0.5 text-gray-300 hover:border-yellow-500 hover:text-yellow-300"
+          >
+            <RefreshCw size={12} /> {t(`${k}.retry`)}
+          </button>
         )}
-      </div>
+      </div>,
+    );
+  }
 
-      {/* Seat win rates */}
-      <div>
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <Users size={12} className="text-yellow-400" />
-          <span className="text-xs font-semibold text-gray-300">各座位勝率</span>
-        </div>
-        <div className="space-y-1">
-          {seatEntries.map(([seat, rate]) => (
-            <WinRateBar
-              key={seat}
-              label={`${Number(seat) + 1} 號位`}
-              rate={rate}
-              color={barColor}
-            />
-          ))}
-        </div>
-      </div>
+  const minCell = theorySettings(overview?.theoryConfig).theoryMinCellGames;
+  let all: OutcomeCounts | undefined;
+  const seatRows: MetricBlockRow[] = [];
+  for (const s of seats) {
+    const c = s.roles[name];
+    if (!c) continue;
+    all = addCounts(all, c);
+    seatRows.push({
+      key: s.seat,
+      label: t('analytics.r6.tabsb.seats.seatLabel', { n: s.seat }),
+      tone: faction,
+      ...blockValues(outcomeBlocks(c, faction)),
+    });
+  }
+  if (!all) {
+    return frame(<p className="py-3 text-xs text-gray-400">{t('analytics.r6.tabsb.pendingUpdate')}</p>);
+  }
+  const totalRow: MetricBlockRow = {
+    key: 'all',
+    label: t(`${k}.allRow`),
+    title: t('analytics.r6.tabsb.seatRoles.allSeats'),
+    tone: faction,
+    ...blockValues(outcomeBlocks(all, faction)),
+  };
 
-      {/* Data source note */}
-      <div className="text-[10px] text-gray-600 text-center pt-1 border-t border-gray-700/50">
-        資料來源：阿瓦隆百科 {TOTAL_UNIQUE_GAMES.toLocaleString()} 局實戰紀錄 (2020-2023)
+  return frame(
+    <>
+      <MetricBlocks
+        rows={[totalRow, ...seatRows]}
+        groupLabel={t(`${k}.seatCol`)}
+        showRules={wide}
+        lowSample={minCell > 0 ? minCell : undefined}
+        highlightRow={row => row.key === 'all'}
+        footnote={
+          <>
+            {t(`${k}.note`, { role: name })}
+            {role === 'loyal_servant' && <> {t(`${k}.loyalNote`)}</>}
+          </>
+        }
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-700/50 pt-2 text-[10px] text-gray-500">
+        <span>{filtered ? t(`${k}.sourceFiltered`) : t(`${k}.source`)}</span>
+        <a href="#stats" className="text-yellow-400 underline hover:text-yellow-300">{t(`${k}.openStats`)}</a>
       </div>
-    </motion.div>
+    </>,
   );
 }

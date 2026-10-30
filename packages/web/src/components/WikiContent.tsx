@@ -6,10 +6,9 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiImageSrc, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
-import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
+import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_DATA_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
-import { ARTICLE_TO_ROLE, ROLE_STATS } from '../data/roleStats';
 import { VIDEO_BY_ROLE } from '../data/roleVideos';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
@@ -276,9 +275,9 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   );
   const filteredArticles = useMemo(() => publishedArticles.filter(matchesFilters), [publishedArticles, matchesFilters]);
   const filteredPending = useMemo(() => pendingArticles.filter(matchesFilters), [pendingArticles, matchesFilters]);
-  const selectedRole = selectedArticle
-    ? WIKI_ARTICLE_ROLE[selectedArticle.id] ?? ARTICLE_TO_ROLE[selectedArticle.id]
-    : undefined;
+  // 角色文章：文末放即時的實戰數據卡與短片；「X數據解析」：數據卡放在文章開頭（文章在解讀這張卡）。
+  const selectedRole = selectedArticle ? WIKI_ARTICLE_ROLE[selectedArticle.id] : undefined;
+  const dataRole = selectedArticle ? WIKI_DATA_ARTICLE_ROLE[selectedArticle.id] : undefined;
 
   // `[標題](wiki:wiki-57)` links (延伸閱讀 etc.) swap the open article in place; an unknown id is plain text.
   const articleComponents = useMemo(() => {
@@ -522,7 +521,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/80 flex items-start md:items-center justify-center p-3 md:p-6 overflow-y-auto"
+            className="fixed inset-0 z-50 bg-black/80 flex items-start md:items-center justify-center p-2 sm:p-3 md:p-6 overflow-y-auto"
             onClick={() => setSelectedArticle(null)}
             role="dialog"
             aria-modal="true"
@@ -548,7 +547,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                 </button>
               </div>
 
-              <div className="px-3 py-3 md:px-4 md:py-4">
+              <div className="px-2 py-3 sm:px-3 md:px-4 md:py-4">
                 {isWikiPending(selectedArticle) && (
                   <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-xs text-amber-200">
                     <PencilLine size={14} className="shrink-0" />
@@ -565,6 +564,11 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   <span>{selectedArticle.author}</span>
                 </div>
 
+                {dataRole && (
+                  <div className="mb-4">
+                    <RoleStatsCard role={dataRole} />
+                  </div>
+                )}
                 <div className="max-w-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -575,10 +579,10 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   </ReactMarkdown>
                 </div>
 
-                {/* Role stats card for character articles */}
-                {selectedRole && ROLE_STATS[selectedRole] && (
+                {/* Live role stats for character articles (same source as the analytics page) */}
+                {selectedRole && (
                   <div className="mt-4">
-                    <RoleStatsCard role={ROLE_STATS[selectedRole]} />
+                    <RoleStatsCard role={selectedRole} />
                   </div>
                 )}
                 {/* Role short video */}
