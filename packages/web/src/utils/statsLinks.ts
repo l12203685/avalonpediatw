@@ -18,6 +18,8 @@ import { parseStatsQuery } from '../stats/statsFilter';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
+  // 'home' = 進站（沒有首頁了，直接開數據排行／百科攻略；Edward 2026-10-30）
+  'home',
 ]);
 
 export type StatsLink =

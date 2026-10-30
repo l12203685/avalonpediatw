@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import WikiContent from '../components/WikiContent';
 import StreamsSection from '../components/StreamsSection';
-import { BookOpen, Users, Lightbulb, ArrowLeft, BarChart3, Youtube } from 'lucide-react';
+import { BookOpen, Users, Lightbulb, BarChart3, Youtube } from 'lucide-react';
 import { useState } from 'react';
 import { TOTAL_UNIQUE_GAMES } from '../data/roleStats';
 import { WIKI_ARTICLES, WIKI_CATEGORIES, isWikiPending } from '../data/wiki';
@@ -19,19 +19,6 @@ export default function WikiPage(): JSX.Element {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-avalon-dark to-black">
-      {/* 返回按钮 */}
-      <div className="absolute top-3 left-3 z-20">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setGameState('home')}
-          className="flex items-center gap-1.5 bg-avalon-card/50 hover:bg-avalon-card/80 text-white text-sm px-3 py-1.5 rounded-lg border border-gray-600 transition-all"
-        >
-          <ArrowLeft size={16} />
-          返回
-        </motion.button>
-      </div>
-
       {/* Hero 區域 */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}

@@ -14,7 +14,7 @@ import {
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
 import { startVersionCheck } from './services/versionCheck';
 import { forceRefresh } from './utils/forceRefresh';
-import HomePage from './pages/HomePage';
+import SiteNav, { lastSiteTab, siteTabOf } from './components/SiteNav';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -330,7 +330,11 @@ function App(): JSX.Element {
 
   const publicStatsPage = PUBLIC_STATS_STATES.has(gameState);
 
-  if (isLoading && !(statsFirst && publicStatsPage)) {
+  // Edward 2026-10-30：沒有首頁 — 'home' 直接開上次的分頁（數據排行／百科攻略），內容頁不等登入就顯示。
+  const shownState = gameState === 'home' ? lastSiteTab() : gameState;
+  const siteTab = siteTabOf(shownState);
+
+  if (isLoading && !(statsFirst || publicStatsPage)) {
     return (
       <div className="flex items-center justify-center min-h-screen px-4 bg-gradient-to-br from-avalon-dark to-avalon-card">
         <div className="text-white text-center">
@@ -443,19 +447,19 @@ function App(): JSX.Element {
         : <LoginPage />
       ) : (
         <>
-          {gameState === 'home' && <HomePage />}
+          {siteTab && <SiteNav active={siteTab} />}
           {/* Edward 2026-04-25 23:39 — Lobby + Game 共用 RoomPage. RoomPage
               internally branches on `room.state` to swap top section + toolbar
               while keeping the rails+chat layout phase-agnostic. */}
           {(gameState === 'lobby' || gameState === 'playing' || gameState === 'voting' || gameState === 'ended') && <RoomPage />}
-          {gameState === 'wiki' && <WikiPage />}
+          {shownState === 'wiki' && <WikiPage />}
           {gameState === 'leaderboard' && <LeaderboardPage />}
           {gameState === 'profile' && <ProfilePage />}
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
           {/* legacy 'analysis' route (WikiPage / PersonalStatsPage links) lands on the merged analytics page */}
           {gameState === 'analysis' && <AnalyticsPage />}
-          {gameState === 'analytics' && <AnalyticsPage />}
+          {shownState === 'analytics' && <AnalyticsPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage
