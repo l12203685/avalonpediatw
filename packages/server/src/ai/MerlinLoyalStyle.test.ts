@@ -8,7 +8,8 @@ import { DEFAULT_AGENT_TUNING } from './AgentTuning';
 import { merlinLoyalStyleTeam, merlinVoteCoverApprove, percivalLoyalStyleTeam } from './MerlinLoyalStyle';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
-const ON = { ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: true };
+// Human tables: the expectations below are the human-table loyal plausibility (`beliefBotTables` reads differently).
+const ON = { ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: true, beliefBotTables: 0 };
 const obs = {
   myPlayerId: 'P1', myRole: 'merlin', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P4', 'P6', 'P9'],
   currentRound: 3, currentLeader: 'P1', failCount: 0, questResults: ['fail', 'success'], gamePhase: 'team_select',
