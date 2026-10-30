@@ -151,7 +151,13 @@ export default function OutcomeBlocksTable<R extends OutcomeGroupRow>({
       rowKey={row => row.key}
       rowTitle={row => row.title}
       maxHeight={maxHeight}
-      footnote={footnote}
+      footnote={
+        <>
+          <p>{t('analytics.r6.teams.blocks.note')}</p>
+          {min !== undefined && <p>{t('analytics.r6.teams.blocks.lowSample', { min })}</p>}
+          {footnote && <p>{footnote}</p>}
+        </>
+      }
     />
   );
 }
@@ -162,20 +168,12 @@ export function lacksOutcomes(...lists: ReadonlyArray<readonly OutcomeGroupRow[]
 }
 
 /**
- * 每個小分頁底下一行說明：三塊各怎麼算 (都從紅方看)、n 是分母、淡色門檻 (快取的 theoryMinCellGames；0 = 不標)；
- * pending (舊快取沒有三種結果的局數) 時再加一句「刺殺與遊戲結果下次每日更新後提供」。
- * 放在頁面底部一次，不在每張表下重複。
+ * 舊快取 (沒有三種結果的局數) 時，小分頁底下一行「刺殺與遊戲結果下次每日更新後提供」；有資料時不顯示。
+ * (2026-10-30 Edward：說明太冗長) 三塊怎麼算、n、淡色門檻原本也印在這一行，改放進每張表標題旁的 ⓘ
+ * (OutcomeBlocksTable 的 footnote)，完整版在說明頁。
  */
-export function OutcomeBlocksNote({
-  lowSample, extra, pending = false,
-}: { lowSample?: number; extra?: ReactNode; pending?: boolean }): JSX.Element {
+export function OutcomeBlocksNote({ pending = false }: { pending?: boolean }): JSX.Element | null {
   const { t } = useTranslation('common');
-  return (
-    <p className="text-[10px] leading-relaxed text-zinc-500">
-      {pending && <span className="text-amber-300/80">{t('analytics.r6.teams.blocks.pendingNote')} </span>}
-      {t('analytics.r6.teams.blocks.note')}
-      {lowSample !== undefined && lowSample > 0 && <> {t('analytics.r6.teams.blocks.lowSample', { min: lowSample })}</>}
-      {extra && <> {extra}</>}
-    </p>
-  );
+  if (!pending) return null;
+  return <p className="text-[10px] leading-relaxed text-amber-300/80">{t('analytics.r6.teams.blocks.pendingNote')}</p>;
 }

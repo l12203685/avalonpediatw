@@ -144,9 +144,6 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
           )}
         </Takeaway>
       )}
-      <p className="text-xs text-zinc-400 leading-relaxed">
-        <Term term="firstProposal">1-1</Term>{t(`${k7}.introRest`)}
-      </p>
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <OutcomeBlocksTable
           caption={t(`${FV}.visionCaption`)}
@@ -154,6 +151,7 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
           rows={visionRows}
           leadColumns={[m1Column]}
           lowSample={lowSample}
+          footnote={<><Term term="firstProposal">1-1</Term>{t(`${k7}.introRest`)}</>}
         />
         <OutcomeBlocksTable
           caption={t(`${FV}.redCountCaption`)}
@@ -161,9 +159,10 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
           rows={redRows}
           leadColumns={[m1Column]}
           lowSample={lowSample}
+          footnote={<><Term term="firstProposal">1-1</Term>{t(`${k7}.introRest`)}</>}
         />
       </div>
-      <OutcomeBlocksNote lowSample={lowSample} pending={lacksOutcomes(visionRows, redRows)} />
+      <OutcomeBlocksNote pending={lacksOutcomes(visionRows, redRows)} />
     </div>
   );
 }
@@ -265,13 +264,10 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
           // 約與左欄 (各任務成功率 + 任務 1 之後) 同高，1280×800 一屏放得下；手機矮一點，390×844 也一屏；
           // 其餘路徑在表格自己的容器裡捲
           maxHeight={wide ? 300 : 250}
+          footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
         />
       </div>
-      <OutcomeBlocksNote
-        lowSample={lowSample}
-        pending={lacksOutcomes(branchRows, pathRows)}
-        extra={t(`${PG}.pathNote`, { count: pathRows.length })}
-      />
+      <OutcomeBlocksNote pending={lacksOutcomes(branchRows, pathRows)} />
     </div>
   );
 }

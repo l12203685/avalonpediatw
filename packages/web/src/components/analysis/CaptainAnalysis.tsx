@@ -152,15 +152,13 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
               </p>
             </Takeaway>
           )}
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            {t('analytics.r6.teams.captain.intro', { count: perMissionRows[0]?.games ?? 0 })}
-          </p>
           <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <StatTable
               caption={t('analytics.r6.teams.captain.perMissionCaption')}
               columns={perMissionColumns}
               rows={perMissionRows}
               rowKey={row => row.key}
+              footnote={t('analytics.r6.teams.captain.intro', { count: perMissionRows[0]?.games ?? 0 })}
             />
             <OutcomeBlocksTable
               caption={t('analytics.r6.teams.captain.resultCaption')}
@@ -169,13 +167,10 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
               renderLabel={renderLabel}
               leadColumns={[shareColumn]}
               lowSample={lowSample}
+              footnote={t('analytics.r6.teams.captain.nNote')}
             />
           </div>
-          <OutcomeBlocksNote
-            lowSample={lowSample}
-            pending={lacksOutcomes(captainRows)}
-            extra={t('analytics.r6.teams.captain.nNote')}
-          />
+          <OutcomeBlocksNote pending={lacksOutcomes(captainRows)} />
         </div>
       )}
     </TeamsLoadState>

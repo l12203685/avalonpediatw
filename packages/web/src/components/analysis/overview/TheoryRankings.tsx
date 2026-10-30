@@ -2,7 +2,7 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../../store/gameStore';
 import { fmtPct, theorySettings, type AnalysisOverview, type AnalysisTheorySettings } from '../../../services/api';
-import { StatTable, type StatColumn } from '../ui';
+import { InfoTip, StatTable, Term, type StatColumn, type StatTermKey } from '../ui';
 
 /**
  * 三種理論勝率排行並排 (2026-10-14 Edward：「角色理論勝率旁邊再呈現位置理論勝率（也是要 100 場）&
@@ -19,6 +19,7 @@ import { StatTable, type StatColumn } from '../ui';
  *  schemaVersion 3 的快取沒有後兩個欄位 → 那兩格併成一格「下次每日更新後提供」(附定義與期間)，角色理論照列今天的榜
  *  並註明下次更新後改成各角色視窗。
  *  名次：同分同名次 (例 1、2、3、3、5)。
+ *  (2026-10-30 Edward：說明太冗長) 表名旁的期間小字、表下的定義段落、區塊副標收進 ⓘ (InfoTip)；表名本身是名詞說明 (Term)。
  */
 
 export type TheoryKind = 'role' | 'position' | 'overall';
@@ -187,12 +188,18 @@ function buildRankings(t: TFn, overview: AnalysisOverview, settings: AnalysisThe
   ];
 }
 
-/** 表格標題：排行名稱 + 期間與門檻。 */
-function TheoryCaption({ ranking }: { ranking: Ranking }): JSX.Element {
+const KIND_TERM: Record<TheoryKind, StatTermKey> = { role: 'roleTheory', position: 'positionTheory', overall: 'overallTheory' };
+
+/** 表格標題：排行名稱 (名詞說明) + ⓘ (期間與門檻、定義、補值；手機另加區塊說明 scope)。 */
+function TheoryCaption({ ranking, topUp, scope }: { ranking: Ranking; topUp: string | null; scope?: string }): JSX.Element {
   return (
-    <span className="flex flex-wrap items-baseline gap-x-1.5 text-sm font-bold">
-      <span className="text-zinc-200">{ranking.label}</span>
-      <span className="text-[10px] font-normal text-zinc-500">{ranking.window}</span>
+    <span className="flex flex-wrap items-center gap-x-1 text-sm font-bold">
+      <Term term={KIND_TERM[ranking.kind]} className="text-zinc-200">{ranking.label}</Term>
+      <InfoTip title={ranking.label}>
+        <p>{ranking.window}</p>
+        <p>{ranking.definition}{topUp && <> {topUp}</>}</p>
+        {scope && <p>{scope}</p>}
+      </InfoTip>
     </span>
   );
 }
@@ -201,9 +208,11 @@ function TheoryCaption({ ranking }: { ranking: Ranking }): JSX.Element {
  * 一個排行的數字表。hideCaption：標題只留給螢幕閱讀器 (桌機把三個標題放在同一列格線裡，
  * 標題換行時三個表頭仍對齊)。
  */
-function TheoryTable({ ranking, lowSample, hideCaption = false }: {
+function TheoryTable({ ranking, lowSample, topUp, scope, hideCaption = false }: {
   ranking: Ranking;
   lowSample: number;
+  topUp: string | null;
+  scope?: string;
   hideCaption?: boolean;
 }): JSX.Element {
   const { t } = useTranslation('common');
@@ -235,7 +244,7 @@ function TheoryTable({ ranking, lowSample, hideCaption = false }: {
   ];
   return (
     <StatTable
-      caption={hideCaption ? <span className="sr-only">{ranking.label} {ranking.window}</span> : <TheoryCaption ranking={ranking} />}
+      caption={hideCaption ? <span className="sr-only">{ranking.label} {ranking.window}</span> : <TheoryCaption ranking={ranking} topUp={topUp} scope={scope} />}
       columns={columns}
       rows={ranking.rows ?? []}
       rowKey={row => row.name}
@@ -315,46 +324,41 @@ function PendingPanel({ missing, roleUpgrade }: { missing: Ranking[]; roleUpgrad
   );
 }
 
-/** 桌機：三個表並排，定義寫在下面；快取還沒有的排行併成一格說明。 */
+/** 桌機：三個表並排，定義在各表名旁的 ⓘ；快取還沒有的排行併成一格說明。 */
 export default function TheoryRankings({ overview }: { overview: AnalysisOverview }): JSX.Element {
   const { t } = useTranslation('common');
   const titleId = useId();
   const info = useTheoryRankings(overview);
   const present = info.rankings.filter(r => r.rows !== null);
   const missing = info.rankings.filter(r => r.rows === null);
-  const role = present.find(r => r.kind === 'role');
-  const others = present.filter(r => r.kind !== 'role');
   return (
     <section aria-labelledby={titleId} className={CARD}>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+      <div className="mb-2 flex flex-wrap items-center gap-x-1">
         <h3 id={titleId} className="text-sm font-bold text-zinc-300">{t('analytics.r6.overview.theory.title')}</h3>
-        <span className="text-[10px] text-zinc-500">{info.scope}</span>
+        <InfoTip title={t('analytics.r6.overview.theory.title')}>
+          <p>{info.scope}</p>
+          {present.map(r => (
+            <p key={r.kind}>
+              <span className="font-semibold text-zinc-100">{r.label}</span>
+              <span className="ml-1.5 text-zinc-500">{r.window}</span>
+              <br />
+              {r.definition}
+            </p>
+          ))}
+          {info.topUp && <p>{info.topUp}</p>}
+        </InfoTip>
       </div>
       {/* 第一列三個標題、第二列三個表 (格線列高取最高的標題，表頭一定對齊)；缺的排行併成一格跨兩列 */}
       <div className="grid grid-cols-3 gap-x-3">
         {present.map(r => (
-          <div key={`caption-${r.kind}`} aria-hidden className="min-w-0">
-            <TheoryCaption ranking={r} />
+          <div key={`caption-${r.kind}`} className="min-w-0">
+            <TheoryCaption ranking={r} topUp={info.topUp} />
           </div>
         ))}
         {missing.length > 0 && <PendingPanel missing={missing} roleUpgrade={info.roleUpgrade} />}
-        {present.map(r => <TheoryTable key={r.kind} ranking={r} lowSample={info.lowSample} hideCaption />)}
+        {present.map(r => <TheoryTable key={r.kind} ranking={r} lowSample={info.lowSample} topUp={info.topUp} hideCaption />)}
       </div>
-      <div className="mt-1.5 space-y-0.5 text-[10px] leading-snug text-zinc-500">
-        {role && (
-          <p>
-            {role.definition}
-            {others.length === 0 && info.topUp && <> {info.topUp}</>}
-          </p>
-        )}
-        {others.length > 0 && (
-          <p>
-            {others.map(r => r.definition).join(' ')}
-            {info.topUp && <> {info.topUp}</>}
-          </p>
-        )}
-        {missing.length === 0 && info.roleUpgrade && <p className="text-amber-300/80">{info.roleUpgrade}</p>}
-      </div>
+      {missing.length === 0 && info.roleUpgrade && <p className="mt-1.5 text-[10px] leading-snug text-amber-300/80">{info.roleUpgrade}</p>}
     </section>
   );
 }
@@ -364,15 +368,8 @@ export function TheoryRankingPanel({ info, kind }: { info: TheoryRankingsInfo; k
   const ranking = info.rankings.find(r => r.kind === kind) ?? info.rankings[0];
   return (
     <section aria-label={ranking.label} className={CARD}>
-      <TheoryTable ranking={ranking} lowSample={info.lowSample} />
-      <div className="mt-1.5 space-y-0.5 text-[10px] leading-snug text-zinc-500">
-        <p>
-          {ranking.definition}
-          {info.topUp && <> {info.topUp}</>}
-        </p>
-        <p>{info.scope}</p>
-        {ranking.kind === 'role' && info.roleUpgrade && <p className="text-amber-300/80">{info.roleUpgrade}</p>}
-      </div>
+      <TheoryTable ranking={ranking} lowSample={info.lowSample} topUp={info.topUp} scope={info.scope} />
+      {ranking.kind === 'role' && info.roleUpgrade && <p className="mt-1.5 text-[10px] leading-snug text-amber-300/80">{info.roleUpgrade}</p>}
     </section>
   );
 }

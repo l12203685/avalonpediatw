@@ -40,20 +40,19 @@ export default function BlocksPanel({
 
   const minCell = settings.theoryMinCellGames;
 
+  // 2026-10-30：表格說明收進 ⓘ；舊快取還沒有各角色列的提示是資料狀態，照樣印在表格下面。
   return (
-    <MetricBlocks
-      className="lg:max-w-4xl"
-      rows={rows}
-      lowSample={minCell > 0 ? minCell : undefined}
-      groupLabel={t('analytics.r6.radar.blocks.group')}
-      empty={t('analytics.r6.radar.blocks.empty')}
-      footnote={
-        rows.length > 0 && (
-          roles
-            ? t('analytics.r6.radar.blocks.rolesNote')
-            : <span className="text-amber-300/80">{t('analytics.r6.radar.blocks.rolesPending')}</span>
-        )
-      }
-    />
+    <div className="min-w-0 lg:max-w-4xl">
+      <MetricBlocks
+        rows={rows}
+        lowSample={minCell > 0 ? minCell : undefined}
+        groupLabel={t('analytics.r6.radar.blocks.group')}
+        empty={t('analytics.r6.radar.blocks.empty')}
+        footnote={rows.length > 0 && roles ? t('analytics.r6.radar.blocks.rolesNote') : undefined}
+      />
+      {rows.length > 0 && !roles && (
+        <p className="mt-1.5 text-[10px] leading-relaxed text-amber-300/80">{t('analytics.r6.radar.blocks.rolesPending')}</p>
+      )}
+    </div>
   );
 }

@@ -288,6 +288,11 @@
         "finalHint": "Game result: 3-Blue Merlin alive is a blue win, 3-Red and 3-Blue Merlin killed are red wins; denominator = all of this group's games",
         "cellNote": "Each cell is the group's own side's win rate (red groups count red wins, blue groups blue wins); n = the denominator. Assassination counts only games that reached 3 blue missions.",
         "lowSampleNote": "Faded = fewer than {{min}} games."
+      },
+      "info": {
+        "label": "About",
+        "more": "Full explanation →",
+        "period": "Window: "
       }
     },
     "tab": {
@@ -1704,6 +1709,16 @@
         },
         "note": "Every vote on proposals 1–4 counts once (the forced 5th proposal has no vote); both sides' votes are included; share = matching votes ÷ votes. One player's many votes are not independent, so no significance test is done."
       }
+    },
+    "help": {
+      "title": "Stats terms & formulas",
+      "intro": "Every term, formula and table note used on the leaderboards and in the analysis tabs is listed here. On the tables, hover over (or tap) a term with a dotted underline to see the same definition and formula; the ⓘ next to a table title explains that table.",
+      "terms": "Terms (definition / formula / how to read)",
+      "symbols": "Table markings (faded cells, top-ups, n)",
+      "boards": "Leaderboards",
+      "tables": "Analysis tables",
+      "colon": ": ",
+      "sep": " / "
     }
   },
   "guest": {

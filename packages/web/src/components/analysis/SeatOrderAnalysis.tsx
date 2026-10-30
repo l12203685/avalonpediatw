@@ -120,9 +120,6 @@ export default function SeatOrderAnalysis(): JSX.Element {
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-zinc-500">
-        {t('analytics.r6.tabsb.order.sub', { games: data.totalGames })}
-      </p>
       <div className={`grid grid-cols-1 gap-3 ${hasInterleave ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]' : ''}`}>
         <MetricBlocks
           rows={rows}
@@ -130,7 +127,7 @@ export default function SeatOrderAnalysis(): JSX.Element {
           groupLabel={t('analytics.deep.seatOrder.permCol')}
           showRules={wide}
           lowSample={lowSample}
-          footnote={t('analytics.r6.tabsb.order.blocksNote')}
+          footnote={<>{t('analytics.r6.tabsb.order.sub', { games: data.totalGames })} {t('analytics.r6.tabsb.order.blocksNote')}</>}
         />
         {hasInterleave && (
           <StatTable

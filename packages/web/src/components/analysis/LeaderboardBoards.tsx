@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { useStatsFilter } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
-import { SectionTabs, StatTable, type SectionTabItem, type StatColumn } from './ui';
+import { InfoTip, SectionTabs, StatTable, type SectionTabItem, type StatColumn } from './ui';
+import BoardInfo from './BoardInfo';
 import TheoryTable from './TheoryTable';
 import LeaderboardRules from './LeaderboardRules';
 import {
@@ -53,6 +54,9 @@ import {
  *  - 精算榜不再是小分頁 (BoardsTab 不傳 precision；元件與 /api/leaderboard/v3 保留)：它的期望勝 = 最終勝率、
  *    精準勝率是舊的任務口徑；有用的任務勝率／刺殺勝率併進理論表。
  *  - 角色王多「視窗」(該角色用了近幾場：忠臣 200 或 100、其他 50 或 25) 與「有資格」(打滿視窗的人數) 兩欄。
+ *
+ * (2026-10-30 Edward：「理論勝率的右邊 上綁文字說明有點太過冗長 其它說明也是類似」) 各榜的期間、表格旁的上榜條件與定義、
+ * 表格下的註腳收進標題旁的 ⓘ (InfoTip + BoardInfo)，完整版集中在說明頁的「統計名詞與算法」。
  */
 
 /** 小分頁順序；不在這裡的 id 依快取順序排在後面。 */
@@ -90,20 +94,6 @@ function useIsEn(): boolean {
 
 function boardTitle(board: AnalysisLeaderboardBoard, isEn: boolean): string {
   return isEn && board.titleEn ? board.titleEn : board.title;
-}
-
-function boardPeriod(board: AnalysisLeaderboardBoard, isEn: boolean): string {
-  return isEn && board.periodEn ? board.periodEn : board.period;
-}
-
-function boardNote(board: AnalysisLeaderboardBoard, isEn: boolean): string | undefined {
-  return isEn && board.noteEn ? board.noteEn : board.note;
-}
-
-/** 說明拆成子句 (；/ ;)：第一句是誰上榜，後面是視窗與定義。 */
-function noteClauses(note: string | undefined): string[] {
-  if (!note) return [];
-  return note.split(/[；;]/).map(s => s.trim()).filter(Boolean);
 }
 
 function isNum(v: unknown): v is number {
@@ -351,12 +341,16 @@ function PendingPanel({ id, games }: { id: PendingId; games: number }): JSX.Elem
   const { t } = useTranslation('common');
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-bold text-white">{t(`analytics.r6.boards.pending.${id}Title`)}</h3>
+      <div className="flex items-center gap-1">
+        <h3 className="text-sm font-bold text-white">{t(`analytics.r6.boards.pending.${id}Title`)}</h3>
+        <InfoTip title={t(`analytics.r6.boards.pending.${id}Title`)}>
+          <p>{t(`analytics.r6.boards.pending.${id}Def`)}</p>
+        </InfoTip>
+      </div>
       <div className="flex items-center gap-3 px-4 py-4 rounded-xl border border-amber-800/40 bg-amber-900/10 text-amber-300 text-sm">
         <Clock size={18} className="flex-shrink-0" />
         <span>{t(`analytics.r6.boards.pending.${id}`, { games })}</span>
       </div>
-      <p className="text-[11px] leading-relaxed text-zinc-500">{t(`analytics.r6.boards.pending.${id}Def`)}</p>
     </div>
   );
 }
@@ -374,48 +368,31 @@ function BoardPanel({
   const openPlayerStats = useGameStore((s) => s.openPlayerStats);
   const rows = board.rows;
   const { columns, sparse } = useMemo(() => boardColumns(board, t, minCell), [board, t, minCell]);
-  const [who, ...rest] = noteClauses(boardNote(board, isEn));
 
   return (
     <div className="space-y-2">
-      <div className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap">
+      <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap">
         <h3 className="text-sm font-bold text-white">{boardTitle(board, isEn)}</h3>
-        <span className="text-xs text-zinc-400">{boardPeriod(board, isEn)}</span>
+        <InfoTip title={boardTitle(board, isEn)} testId={`board-info-${board.id}`}>
+          <BoardInfo board={board} isEn={isEn}>
+            <p className="text-zinc-400">{t('analytics.boards.principle', { days: activeDays })}</p>
+            {sparse && <p className="text-zinc-400">{t('analytics.r6.boards.sparseNote', { min: minCell })}</p>}
+            <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
+          </BoardInfo>
+        </InfoTip>
         {board.allGames && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-800/50 text-amber-300">
             {t('analytics.boards.exception')}
           </span>
         )}
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <StatTable
-          columns={columns}
-          rows={rows}
-          rowKey={(row, i) => `${board.id}-${row.rank}-${row.role ?? ''}-${row.name}-${i}`}
-          onRowClick={row => openPlayerStats(row.name)}
-          rowTitle={row => rowTip(t, row) || undefined}
-          footnote={
-            <>
-              {sparse && <>{t('analytics.r6.boards.sparseNote', { min: minCell })} </>}
-              {t('analytics.r6.boards.clickHint')}
-            </>
-          }
-        />
-        <aside className="text-[11px] leading-relaxed text-zinc-500 space-y-1.5 min-w-0">
-          {who && (
-            <p>
-              <span className="font-semibold text-zinc-300">{t('analytics.r6.boards.who')}</span>
-              {who}
-            </p>
-          )}
-          {rest.length > 0 && (
-            <ul className="list-disc pl-4 space-y-0.5 marker:text-zinc-700">
-              {rest.map((c, i) => <li key={i}>{c}</li>)}
-            </ul>
-          )}
-          <p className="text-zinc-600">{t('analytics.boards.principle', { days: activeDays })}</p>
-        </aside>
-      </div>
+      <StatTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row, i) => `${board.id}-${row.rank}-${row.role ?? ''}-${row.name}-${i}`}
+        onRowClick={row => openPlayerStats(row.name)}
+        rowTitle={row => rowTip(t, row) || undefined}
+      />
     </div>
   );
 }

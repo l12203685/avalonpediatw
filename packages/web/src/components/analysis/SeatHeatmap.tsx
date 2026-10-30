@@ -9,8 +9,8 @@ import {
 import { SectionTabs, StatTable, formatRate, type SectionTabItem, type StatColumn } from './ui';
 
 /** 30 場以上的玩家才列 (同舊版)；最多 25 位 (快取 players 依場數排序)。 */
-const MIN_PLAYER_GAMES = 30;
-const MAX_ROWS = 25;
+export const MIN_PLAYER_GAMES = 30;
+export const MAX_ROWS = 25;
 
 /**
  * 與全體在這個位置的差 → 底色。Edward 2026-10-30：顏色更深更亮（實心底＋白字，取代半透明）。
