@@ -1,6 +1,7 @@
 /**
  * Strong-table gap B1 `merlinNormalVote`: Merlin votes as a public-view loyal in its seat would — so on its own team it
- * approves even with a red it sees — and blocks only a team whose seen reds could end the game on the spot.
+ * approves even with a red it sees — and blocks a team whose seen reds could end the game on the spot, and (hard rule
+ * INV-V1, the good vote gates) any team that must fail in its own view.
  */
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
@@ -30,9 +31,13 @@ function vote(o: PlayerObservation, tuning: Partial<AgentTuning>): boolean {
 }
 
 describe('merlinNormalVote', () => {
-  it('off: Merlin rejects its own team holding a seen red; q = 1: it votes as a loyal would (approve)', () => {
+  it('INV-V1: an R3 team holding a seen red must fail in Merlin\'s view, so it stays rejected even at q = 1', () => {
     expect(vote(obs(), {})).toBe(false);
-    expect(vote(obs(), { merlinNormalVote: 1 })).toBe(true);
+    expect(vote(obs(), { merlinNormalVote: 1 })).toBe(false);
+    // The loyal in this seat would approve (R1 / R2 passed with P1 P2 P3); the gate is what blocks it.
+    const a = new ForwardAgent('P1', new HeuristicAgent('P1', undefined, undefined, { ...DEFAULT_AGENT_TUNING, merlinNormalVote: 1 }));
+    a.onGameStart(obs());
+    expect(a.decide(obs()).reasoningTrace?.summary).toContain('gated team blocked');
   });
   it('a fatal team stays blocked (two fails already)', () => {
     const o = obs({ questResults: ['fail', 'fail'], questHistory: [] } as Partial<PlayerObservation>);

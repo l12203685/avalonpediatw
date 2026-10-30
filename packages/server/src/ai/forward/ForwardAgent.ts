@@ -760,18 +760,19 @@ export class ForwardAgent implements AvalonAgent {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'good clean vote (posterior)');
     }
     // Strong-table gap B1 `merlinNormalVote` (MerlinLoyalStyle.ts): at rate q Merlin casts the vote a public-view loyal in
-    // this seat would, blocking only a team whose seen reds could lose the game on the spot.
+    // this seat would, blocking a team whose seen reds could lose the game on the spot — and, the hard rule INV-V1, any team
+    // that must fail in Merlin's own view (the good vote gates; round 11 found the bare loyal vote approving those).
     if (merlinNormalVoteNow(this.baseline.tuning, obs)) {
       _forwardDecideCalls -= 1;
       const asLoyal = this.decide(loyalViewOf(obs));
       if (asLoyal.action.type === 'team_vote') {
-        const vote = asLoyal.action.vote && !merlinVoteFatal(obs);
-        return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; fatal team blocked' : ''})`);
+        const vote = asLoyal.action.vote && !merlinVoteFatal(obs) && goodVoteGate(obs, this.gates) === null;
+        return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; gated team blocked' : ''})`);
       }
     }
     // Round 7 (Merlin) candidate `merlinVoteCover` (MerlinLoyalStyle.ts): 梅林只想裝雜魚 — approve a red team the
-    // public reads as clean at rate q, while a fail is not yet fatal.
-    if (merlinVoteCoverApprove(this.baseline.tuning, obs)) {
+    // public reads as clean at rate q, while a fail is not yet fatal — never past the good vote gates (INV-V1).
+    if (merlinVoteCoverApprove(this.baseline.tuning, obs) && goodVoteGate(obs, this.gates) === null) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'merlin vote cover (loyal-looking approve)');
     }
     const core = this.decideCore(obs);
