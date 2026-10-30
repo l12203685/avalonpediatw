@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, Calendar, ChevronDown, PencilLine } from 'lucide-react';
+import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiImageSrc, wikiUrlTransform } from '../utils/wikiMarkup';
@@ -13,6 +13,7 @@ import { ARTICLE_TO_ROLE, ROLE_STATS } from '../data/roleStats';
 import { VIDEO_BY_ROLE } from '../data/roleVideos';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
+import WikiMindMap from './wikiMap/WikiMindMap';
 
 /** 舊資料的標籤常是分類代號（roles、strategies…），和現在的分類對不上，不顯示。 */
 const CATEGORY_IDS = new Set(WIKI_CATEGORIES.map(c => c.id.toLowerCase()));
@@ -29,6 +30,26 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
     author: '阿瓦隆百科',
     status: a.status === '待完成' ? '待完成' : undefined,
   };
+}
+
+/** 列表 = 文章卡片；心智圖 = 分類樹 + 文章間的引用關係（Edward 2026-10-30）。 */
+type WikiView = 'list' | 'map';
+const WIKI_VIEW_KEY = 'avalon.wiki.view';
+
+function readStoredView(): WikiView {
+  try {
+    return window.localStorage.getItem(WIKI_VIEW_KEY) === 'map' ? 'map' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function storeView(view: WikiView): void {
+  try {
+    window.localStorage.setItem(WIKI_VIEW_KEY, view);
+  } catch {
+    // private mode / blocked storage: the choice just isn't remembered
+  }
 }
 
 interface WikiContentProps {
@@ -164,6 +185,12 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
   const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
   const [allArticles, setAllArticles] = useState<WikiArticle[]>(WIKI_ARTICLES);
+  // A category asked for by the page (「新手指南」) needs the list.
+  const [view, setViewState] = useState<WikiView>(() => (selectedCategory ? 'list' : readStoredView()));
+  const setView = (next: WikiView): void => {
+    setViewState(next);
+    storeView(next);
+  };
 
   // Fetch wiki articles from API, merge with hardcoded
   useEffect(() => {
@@ -282,9 +309,45 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
     modalRef.current?.scrollTo?.({ top: 0 });
   }, [selectedArticle?.id]);
 
+  const viewToggle = (
+    <div className="flex items-center gap-2">
+      <div role="tablist" aria-label="百科檢視" className="shrink-0 inline-flex rounded-lg border border-zinc-700 bg-black/40 p-0.5">
+        {([
+          ['list', '列表', LayoutGrid],
+          ['map', '心智圖', Network],
+        ] as const).map(([id, label, Icon]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
+              view === id ? 'bg-yellow-500 text-black' : 'text-zinc-300 hover:text-white'
+            }`}
+          >
+            <Icon size={14} />
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'map' && (
+        <span className="hidden sm:inline min-w-0 text-[11px] text-zinc-500 leading-snug">分類 → 文章的樹狀圖，線條是文章之間的互相引用</span>
+      )}
+    </div>
+  );
+
   return (
     <div className="bg-gradient-to-b from-avalon-dark to-black px-3 py-3">
+      {view === 'map' ? (
+        <div className="max-w-[1600px] mx-auto space-y-3">
+          {viewToggle}
+          <WikiMindMap articles={allArticles} onOpen={setSelectedArticle} />
+        </div>
+      ) : (
       <div className="max-w-6xl mx-auto space-y-3">
+        {viewToggle}
+
         {/* 搜索欄 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -449,6 +512,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
           </section>
         )}
       </div>
+      )}
 
       {/* Article Modal — 文章點開不跳頁，疊在當前 tab 上，關閉後回到列表 */}
       <AnimatePresence>
