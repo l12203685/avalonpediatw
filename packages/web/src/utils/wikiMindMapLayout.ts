@@ -389,8 +389,12 @@ export function fitScale(bounds: MindMapLayout['bounds'], width: number, height:
   return Math.min(width / (bounds.maxX - bounds.minX), height / (bounds.maxY - bounds.minY));
 }
 
-/** Title caps fitMindMapToViewport tries (content px at leafFont 13: 160 ≈ 12 CJK characters). */
-const LABEL_CAPS = [136, 160, 184, 208, 232];
+/**
+ * Title caps fitMindMapToViewport tries (content px at leafFont 13: 160 ≈ 12 CJK characters).
+ * 112 added 2026-10-30 (Edward 裁定後百科 100 篇): at 1254 × 730 the 136 cap no longer keeps titles ≥ 11px;
+ * a shorter cap (titles cut in the middle, full title in the hover tooltip) is preferred over smaller text.
+ */
+const LABEL_CAPS = [112, 136, 160, 184, 208, 232];
 
 /**
  * The column split and title cap that show the whole (fully expanded) map in a width × height viewport with the

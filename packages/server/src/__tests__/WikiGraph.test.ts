@@ -164,7 +164,10 @@ describe('the real wiki_data.json', () => {
       // 2026-10-30 Edward 裁定後新增 strategies：紅方進任務 - 出失敗還是出成功（wiki-210）
       // 2026-10-30 Edward 裁定（wiki_decisions.md）：合併／刪除 10 篇（3、5、9、47、58、59、74、88、101、144）；改分類：
       // 41／42／65／117 → replays，44／98 → strategies，100（學習地圖）→ beginner，153／164 → 新分類 about（關於本站）
-      ['beginner', 15], ['rules', 2], ['roles', 12], ['glossary', 5], ['strategies', 30], ['replays', 12], ['events', 12], ['faq', 1], ['about', 2],
+      // Edward 2026-10-30：F 組新文章 9 篇（211～219）：beginner +2（帶新手開局、什麼時候該說話）、rules +1（7～9 人局的差異）、
+      // roles +2（梅林可以派拇指嗎、莫甘娜與莫德雷德的深度玩法）、glossary +1（標記說明）、strategies +3（機率速算表、尾家的決策、思考的層次）；
+      // 〈賽事回顧可以學到的原理〉併進 wiki-156、〈無奈區間〉併進 wiki-57，不另成篇（文章總篇數不要過多）
+      ['beginner', 17], ['rules', 3], ['roles', 14], ['glossary', 6], ['strategies', 33], ['replays', 12], ['events', 12], ['faq', 1], ['about', 2],
     ]);
     // 2026-10-30：部分文章連到寫死的〈角色數據〉（strategy-*-data），它們不在 wiki_data.json，這張圖只算 JSON 裡的文章。
     const ids = new Set(data.map((a) => a.id));
@@ -173,19 +176,20 @@ describe('the real wiki_data.json', () => {
     expect(graph.edges.length).toBeGreaterThan(150);
   });
 
-  it('starts the beginner branch with 關於阿瓦隆百科 and its 22-article reading order', () => {
+  it('starts the beginner branch with 關於阿瓦隆百科 and its 23-article reading order', () => {
     // 2026-10-30 Edward 裁定（E18 a+c）：規則說明書第 1、術語速查第 2，鐵邏輯排在規則之後，常見錯誤（湖中、黑白球）排在任務派票之後。
+    // Edward 2026-10-30：〈標記說明〉（wiki-211）排第 3，閱讀順序 22 → 23 篇；新手入門分類 15 → 17 篇。
     // 〈關於阿瓦隆百科〉改放 about 分類，在新手分支是捷徑葉子。
     const leaves = graph.branches[0].leaves;
     expect(leaves[0].articleId).toBe('wiki-153');
     expect(leaves[0].guide).toBe(true);
-    expect(graph.readingOrder).toHaveLength(22);
-    expect(graph.readingOrder.slice(0, 5)).toEqual(['wiki-203', 'wiki-204', 'wiki-71', 'wiki-63', 'wiki-66']);
-    expect(graph.readingOrder.slice(11, 14)).toEqual(['wiki-90', 'wiki-91', 'wiki-93']);
-    expect(graph.readingOrder[21]).toBe('wiki-26');
-    expect(leaves.slice(1, 23).map((l) => l.articleId)).toEqual(graph.readingOrder);
-    expect(leaves.slice(1, 23).map((l) => l.readingStep)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1));
-    expect(leaves).toHaveLength(1 + 22 + (15 - 8)); // guide + reading order + beginner articles not in it
+    expect(graph.readingOrder).toHaveLength(23);
+    expect(graph.readingOrder.slice(0, 6)).toEqual(['wiki-203', 'wiki-204', 'wiki-211', 'wiki-71', 'wiki-63', 'wiki-66']);
+    expect(graph.readingOrder.slice(12, 15)).toEqual(['wiki-90', 'wiki-91', 'wiki-93']);
+    expect(graph.readingOrder[22]).toBe('wiki-26');
+    expect(leaves.slice(1, 24).map((l) => l.articleId)).toEqual(graph.readingOrder);
+    expect(leaves.slice(1, 24).map((l) => l.readingStep)).toEqual(Array.from({ length: 23 }, (_, i) => i + 1));
+    expect(leaves).toHaveLength(1 + 23 + (17 - 8)); // guide + reading order + beginner articles not in it
   });
 
   /** No two article rows (dot + label) overlap, every row sits inside its branch box. */
