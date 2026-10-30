@@ -12,13 +12,14 @@
  * - 房間消失（練習台把觀眾導回大廳）就關掉那個分頁。
  *
  * 輸出含玩家暱稱：**不要放進公開 repo**（--out 預設在系統暫存目錄）。
- * 有設定環境變數 DISCORD_PAIPU_WEBHOOK_URL（DC 牌譜頻道的 Webhook）時，每局結束把牌譜貼過去（scripts/signagePaipu.ts）。
+ * 有設定 DISCORD_BOT_TOKEN（或 DISCORD_PAIPU_WEBHOOK_URL）時，每局結束把牌譜貼到 DC 牌譜頻道（scripts/signagePaipu.ts）；
+ * 每日匯入（import-discord-records.yml）再把牌譜收進戰績。GitHub Actions 每晚排程：.github/workflows/signage-recorder.yml。
  */
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { gameToPaipu, isPostable, paipuThreadName, postPaipu, type RecordedGame } from './signagePaipu';
+import { gameToPaipu, isPostable, paipuTags, paipuThreadName, postPaipu, type RecordedGame } from './signagePaipu';
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -124,11 +125,11 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
             startedAt: game.startedAt, endedAt: stamp(), end, endText: text.slice(0, 6000), statsHtml, timeline: game.timeline,
           }));
           console.log(`${stamp()} ${room.name} 結束，存檔 ${path.basename(file)}（${game.timeline.length} 張快照）`);
-          // Edward 2026-10-30：每局牌譜貼到 DC 牌譜頻道（附座位暱稱）；有設定 DISCORD_PAIPU_WEBHOOK_URL 才貼
+          // Edward 2026-10-30：每局牌譜貼到 DC 牌譜頻道（附座位暱稱）；有設定 DISCORD_BOT_TOKEN 或 DISCORD_PAIPU_WEBHOOK_URL 才貼
           try {
             const saved = JSON.parse(fs.readFileSync(file, 'utf-8')) as RecordedGame;
             const text = isPostable(saved) ? gameToPaipu(saved) : null;
-            if (text && (await postPaipu(text, paipuThreadName(saved, text)))) console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord`);
+            if (text && (await postPaipu(text, paipuThreadName(saved, text), paipuTags(saved)))) console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord`);
           } catch (err) {
             console.log(`${stamp()} ${room.name} 牌譜貼到 Discord 失敗：${err instanceof Error ? err.message : String(err)}`);
           }

@@ -2,7 +2,7 @@
  * 記錄員存的局（scripts/signageRecorder.ts 的 JSON）→ 百科〈遊戲紀錄〉（wiki-65）牌譜寫法，並可貼到 Discord。
  *
  *   tsx scripts/signagePaipu.ts <局.json> [...]            印出牌譜
- *   tsx scripts/signagePaipu.ts --post <局.json> [...]     貼到 DISCORD_PAIPU_WEBHOOK_URL（DC 牌譜頻道的 Webhook）
+ *   tsx scripts/signagePaipu.ts --post <局.json> [...]     貼到 DC 牌譜頻道（DISCORD_BOT_TOKEN，或 DISCORD_PAIPU_WEBHOOK_URL）
  *
  * Edward 2026-10-30：「貼在 DC 的牌譜頻道，要附座位暱稱」。Webhook 網址是密鑰，只從環境變數讀，不寫進 repo。
  * 牌譜格式（照 DC 牌譜頻道過去的文章）：一行一次提議（隊伍座位；`-` 內黑、`+` 外白；強制局不投票、不標記號）、
@@ -53,10 +53,8 @@ export function gameToPaipu(game: RecordedGame): string | null {
       attempt = 0;
       if (mi >= 2 && mi <= 4 && lakes[mi - 2]) {
         const lk = lakes[mi - 2];
-        // 持湖者沒在練習台按好／壞（畫面顯示「不明」）時寫「沒講」，同 DC 群牌譜彙整的寫法
-        lines.push(lk.result === true || lk.result === false
-          ? `${d(lk.from)}>${d(lk.to as number)} ${lk.result ? 'o' : 'x'}`
-          : `${d(lk.from)}>${d(lk.to as number)}沒講`);
+        // 持湖者沒在練習台按好／壞（畫面顯示「不明」）時寫「?」：DC 牌譜頻道的寫法，每日匯入（discord_records_import.py）讀得懂
+        lines.push(`${d(lk.from)}>${d(lk.to as number)} ${lk.result === true ? 'o' : lk.result === false ? 'x' : '?'}`);
       }
     }
   }
@@ -100,8 +98,45 @@ export function paipuThreadName(game: RecordedGame, text: string): string {
   return `${mmdd}${(game.title || game.room).replace(/^阿瓦隆百科/, '')} ${when} ${kind}`.trim().slice(0, 100);
 }
 
-/** 貼到 Discord Webhook（DISCORD_PAIPU_WEBHOOK_URL）；沒設定時不做事，回傳 false。 */
-export async function postPaipu(text: string, threadName?: string): Promise<boolean> {
+/** 論壇標籤：結果（三紅／三藍被刀／三藍躲刺，每日匯入用的名稱）＋線瓦（線上局）。 */
+export function paipuTags(game: RecordedGame): string[] {
+  const kind = gameKind(game);
+  const result = kind === '三紅' ? '三紅' : kind === '三藍死' ? '三藍被刀' : kind === '三藍活' ? '三藍躲刺' : '';
+  return result ? [result, '線瓦'] : ['線瓦'];
+}
+
+/** DC 牌譜頻道（論壇）。頻道 id 不是密鑰。 */
+const PAIPU_FORUM_ID = process.env.DISCORD_PAIPU_CHANNEL_ID || '1132683080134578276';
+
+/**
+ * 貼到 DC 牌譜頻道，開一個新討論串。有 DISCORD_BOT_TOKEN 時用機器人發（可以掛結果標籤；GitHub Actions 排程用這個），
+ * 否則用 DISCORD_PAIPU_WEBHOOK_URL；兩個都沒有時不做事，回傳 false。
+ */
+export async function postPaipu(text: string, threadName?: string, tags: string[] = []): Promise<boolean> {
+  const bot = process.env.DISCORD_BOT_TOKEN;
+  if (bot && threadName) {
+    const api = 'https://discord.com/api/v10';
+    const headers = { Authorization: `Bot ${bot}`, 'Content-Type': 'application/json' };
+    let appliedTags: string[] = [];
+    if (tags.length) {
+      const ch = await fetch(`${api}/channels/${PAIPU_FORUM_ID}`, { headers });
+      if (ch.ok) {
+        const avail = ((await ch.json()) as { available_tags?: { id: string; name: string }[] }).available_tags ?? [];
+        appliedTags = tags.map((n) => avail.find((t) => t.name === n)?.id).filter((x): x is string => Boolean(x));
+      }
+    }
+    const res = await fetch(`${api}/channels/${PAIPU_FORUM_ID}/threads`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: threadName, applied_tags: appliedTags,
+        message: { content: text.slice(0, 1990), allowed_mentions: { parse: [] } },
+      }),
+    });
+    // 錯誤只印狀態碼：公開 repo 的 Actions log 不放牌譜內容與暱稱
+    if (!res.ok) throw new Error(`Discord ${res.status}`);
+    return true;
+  }
   const url = process.env.DISCORD_PAIPU_WEBHOOK_URL;
   if (!url) return false;
   const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}wait=true`, {
@@ -112,7 +147,7 @@ export async function postPaipu(text: string, threadName?: string): Promise<bool
       ...(threadName ? { thread_name: threadName } : {}),
     }),
   });
-  if (!res.ok) throw new Error(`Discord webhook ${res.status}: ${await res.text().catch(() => '')}`);
+  if (!res.ok) throw new Error(`Discord webhook ${res.status}`);
   return true;
 }
 
@@ -125,10 +160,10 @@ if (process.argv[1] && path.basename(process.argv[1]).startsWith('signagePaipu')
       const game = JSON.parse(fs.readFileSync(f, 'utf-8')) as RecordedGame;
       const text = isPostable(game) ? gameToPaipu(game) : null;
       if (!text) { console.log(`# ${path.basename(f)}：未完成或非真人 10 人局，略過`); continue; }
-      if (process.argv.includes('--json')) { console.log(JSON.stringify({ text, thread: paipuThreadName(game, text) })); continue; }
+      if (process.argv.includes('--json')) { console.log(JSON.stringify({ text, thread: paipuThreadName(game, text), tags: paipuTags(game) })); continue; }
       if (post) {
-        const ok = await postPaipu(text, paipuThreadName(game, text));
-        console.log(ok ? `已貼出 ${path.basename(f)}` : '沒有設定 DISCORD_PAIPU_WEBHOOK_URL，未貼出');
+        const ok = await postPaipu(text, paipuThreadName(game, text), paipuTags(game));
+        console.log(ok ? `已貼出 ${path.basename(f)}` : '沒有設定 DISCORD_BOT_TOKEN 或 DISCORD_PAIPU_WEBHOOK_URL，未貼出');
         await new Promise((r) => setTimeout(r, 1500));
       } else {
         console.log(`${text}\n`);

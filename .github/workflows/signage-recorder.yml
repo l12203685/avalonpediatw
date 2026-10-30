@@ -1,0 +1,72 @@
+name: Signage recorder
+# 遊玩頁（avalon.signage-cloud.org）對局記錄員——Edward 2026-10-31：「免費 B 應該更好」「一開始只需要注意晚上 1900~2400」。
+#
+# 每晚 18:40（台灣時間）開始，以「阿瓦隆百科」暱稱旁觀所有房間（只讀畫面資料，不按任何按鈕），到 00:15 結束。
+# 每打完一局真人 10 人局，就用機器人（DISCORD_BOT_TOKEN）在 DC 牌譜頻道開一篇討論串：牌譜、六碼、刺殺、座位暱稱，
+# 並掛結果標籤（三紅／三藍被刀／三藍躲刺）＋線瓦。凌晨的 import-discord-records.yml 再把這些貼文收進戰績。
+# 程式：packages/server/scripts/signageRecorder.ts、signagePaipu.ts。
+#
+# 公開 repo：log 只有時間、房號、檔名與狀態碼，不含玩家暱稱或牌譜內容。原始紀錄（含暱稱）不進 repo；
+# 有設定 secret RECORDER_ARCHIVE_KEY 時，才加密成 artifact 保留 30 天（openssl aes-256-cbc -pbkdf2，用這把鑰匙解）。
+on:
+  schedule:
+    - cron: '40 10 * * *'   # 18:40 台灣時間（GitHub 排程常延後幾分鐘到幾十分鐘，所以提早開）
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: '跑幾小時（最多 5.7；空白 = 跑到台灣時間 00:15）'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signage-recorder
+  cancel-in-progress: false
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packages/server/scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install recorder runtime
+        run: |
+          npm install -g tsx@4.19.2 playwright@1.49.1
+          npx -y playwright@1.49.1 install --with-deps chromium
+      - name: Record
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          HOURS_INPUT: ${{ inputs.hours }}
+        run: |
+          export NODE_PATH="$(npm root -g)"
+          if [ -n "$HOURS_INPUT" ]; then
+            HOURS="$HOURS_INPUT"
+          else
+            # 跑到台灣時間 00:15（UTC 16:15）
+            HOURS=$(python3 -c "import datetime as d;n=d.datetime.utcnow();e=n.replace(hour=16,minute=15,second=0,microsecond=0);e=e if e>n else e+d.timedelta(days=1);print(round(min((e-n).total_seconds()/3600,5.7),2))")
+          fi
+          echo "跑 $HOURS 小時"
+          [ -n "$DISCORD_BOT_TOKEN" ] || echo "::warning::沒有 DISCORD_BOT_TOKEN，只記錄不貼 DC"
+          mkdir -p records
+          tsx packages/server/scripts/signageRecorder.ts --out records --hours "$HOURS"
+          echo "存了 $(ls records | grep -vc incomplete) 局（另有 $(ls records | grep -c incomplete) 個未完成檔）" >> "$GITHUB_STEP_SUMMARY"
+      - name: Encrypt raw records
+        if: always()
+        env:
+          KEY: ${{ secrets.RECORDER_ARCHIVE_KEY }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$(ls records 2>/dev/null)" ]; then echo "不保留原始紀錄"; exit 0; fi
+          tar czf - records | openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:KEY -out records.tgz.enc
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('records.tgz.enc') != ''
+        with:
+          name: signage-records-${{ github.run_id }}
+          path: records.tgz.enc
+          retention-days: 30
