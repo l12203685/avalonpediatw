@@ -111,8 +111,10 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
           // 練習台自己的「紀錄下載」頁（整局派票紀錄；中途才進房時補前面漏掉的提議）
           let statsHtml = '';
           try {
-            const res = await page.request.get(`${BASE}/Statistics/Index/${encodeURIComponent(room.name)}`, { timeout: 20000 });
-            statsHtml = res.ok() ? await res.text() : `HTTP ${res.status()}`;
+            // 在頁面裡抓（帶登入 cookie、走瀏覽器的網路設定）
+            statsHtml = await withTimeout(page.evaluate(
+              `fetch('/Statistics/Index/${encodeURIComponent(room.name)}', { credentials: 'include' }).then((r) => r.ok ? r.text() : 'HTTP ' + r.status)`,
+            ), 20000, 'statistics');
           } catch (err) { statsHtml = `ERROR ${err instanceof Error ? err.message : String(err)}`; }
           const file = path.join(OUT, `${safe(game.startedAt)}_${safe(room.name)}.json`);
           fs.writeFileSync(file, JSON.stringify({
