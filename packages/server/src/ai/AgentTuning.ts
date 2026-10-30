@@ -886,7 +886,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinLoyalCover: 0,
   beliefBotTables: 1,
   merlinNormalVote: 0,
-  redNormalVote: 0,
+  redNormalVote: 1,
   redLoyalLeadEarly: false,
   merlinZoneSignal: false,
   redRankOrder: true,
