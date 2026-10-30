@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Loader, AlertCircle, RefreshCw, Clock, Trophy, MapPin, Layers, History, TrendingUp, Crosshair,
-  Sparkles, Crown, Calculator, ListOrdered, Percent, type LucideIcon,
+  Sparkles, Crown, Calculator, ListOrdered, Percent, Activity, type LucideIcon,
 } from 'lucide-react';
 import { useStatsFilter } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
@@ -11,6 +11,7 @@ import BoardInfo from './BoardInfo';
 import TheoryTable from './TheoryTable';
 import LeaderboardRules from './LeaderboardRules';
 import RoleChampions from './RoleChampions';
+import EloBoard from './EloBoard';
 import {
   fetchAnalysisLeaderboard,
   getErrorMessage,
@@ -64,6 +65,9 @@ import {
  *
  * (2026-10-30 Edward：「理論勝率的右邊 上綁文字說明有點太過冗長 其它說明也是類似」) 各榜的期間、表格旁的上榜條件與定義、
  * 表格下的註腳收進標題旁的 ⓘ (InfoTip + BoardInfo)，完整版集中在說明頁的「統計名詞與算法」。
+ *
+ * (2026-10-30 Edward：「新版把網站上的 ELO 都完全統一成你研發的版本」) 第二個小分頁「Elo」(EloBoard，讀
+ * /api/analysis/rating)：網站唯一的 Elo。不是排行快取的榜，排行載入失敗時照樣切得到；不隨篩選重算。
  */
 
 /** 小分頁順序；不在這裡的 id 依快取順序排在後面。 */
@@ -86,6 +90,7 @@ const BOARD_ICONS: Record<string, LucideIcon> = {
 /** 精算榜的小分頁 id (不會跟快取的榜 id 撞到)。 */
 const PRECISION_TAB = '__precision';
 const WIN_RATES_TAB = '__winRates';
+const ELO_TAB = '__elo';
 /** 排行還沒有資料 (載入中／尚未產生／錯誤) 時，第一個小分頁顯示狀態。 */
 const STATUS_TAB = 'main';
 
@@ -231,6 +236,7 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
     : [{ id: STATUS_TAB, label: t('analytics.r6.boards.tab.theory'), icon: Trophy }];
   const items: SectionTabItem[] = [
     ...boardItems.slice(0, 1),
+    { id: ELO_TAB, label: t('analytics.elo.tab'), icon: Activity },
     ...(winRates ? [{ id: WIN_RATES_TAB, label: winRates.label, icon: Percent }] : []),
     ...boardItems.slice(1),
     ...(precision ? [{ id: PRECISION_TAB, label: precision.label, icon: Calculator }] : []),
@@ -298,6 +304,7 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
       >
         {active => {
           if (active === WIN_RATES_TAB) return winRates?.content;
+          if (active === ELO_TAB) return <EloBoard />;
           if (active === PRECISION_TAB) {
             return (
               <div>

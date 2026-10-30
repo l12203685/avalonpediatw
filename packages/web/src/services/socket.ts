@@ -396,7 +396,7 @@ export function createRoom(
   timerMultiplier?: TimerMultiplier,
   /**
    * Casual match (Edward 2026-04-24 14:43): when `true` the server tags the
-   * room as 娛樂局 and the ELO pipeline skips the resulting game. Defaults
+   * room as 娛樂局 and the stats pipeline skips the resulting game. Defaults
    * to `false` — omitting the arg keeps the legacy ranked behaviour.
    */
   casual?: boolean,

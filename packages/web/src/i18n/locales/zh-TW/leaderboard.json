@@ -3,7 +3,6 @@
   "all": "全部",
   "searchPlaceholder": "搜尋玩家名稱...",
   "dbOffline": "資料庫未連線",
-  "dbOfflineHint": "ELO 排名暫時不可用。遊戲功能正常運作，數據將在資料庫恢復後顯示。",
   "loadFailed": "無法載入排行榜，請確認伺服器連線",
   "showingCount": "顯示 {{filtered}} / 總計 {{total}} 人",
   "noData": "還沒有排行榜資料",
@@ -14,17 +13,14 @@
   "games": "場",
   "winRate": "勝率",
   "theoreticalWinRate": "理論勝率",
-  "elo": "ELO",
   "groupEmpty": "此組目前沒有玩家",
   "v3": {
     "title": "8 指標排行榜",
-    "tabClassic": "傳統排行 (5 組 ELO 分層)",
     "tabEight": "8 指標精算榜",
     "eligibilityRule": "上榜條件: 所有能力角 (刺/娜/德/奧/派/梅) ≥ 3 場 且 忠臣 ≥ 15 場",
     "popAvgExplain": "母體均值 (PopAvg) = 全社群 2146 場該指標的整體平均, 用來比較個人是否高於平均",
     "headers": {
       "player": "玩家",
-      "elo": "ELO",
       "totalGames": "場",
       "redGames": "紅",
       "blueGames": "藍",
@@ -39,7 +35,6 @@
       "precision": "精準勝率"
     },
     "tooltips": {
-      "elo": "ELO 分數: 依勝率 + 對手強度 + 場數信賴推導, 全社群統一尺",
       "threeRed": "三紅: 玩紅角 (Resistance) 時, 連 3 任務成功的局比",
       "threeBlueDead": "三藍死: 玩紅角時, 三藍但梅林被刺 (敗) 的局比",
       "threeBlueAlive": "三藍活: 玩藍角時, 三藍且梅林存活 (勝) 的局比",
@@ -79,13 +74,6 @@
         "lt100": "<100 場",
         "100to200": "100-200 場",
         "gt200": ">200 場"
-      },
-      "tier": {
-        "label": "ELO 分類",
-        "novice": "入門新手",
-        "mid": "中堅玩家",
-        "top": "頂尖高玩",
-        "loadFailed": "ELO 資料載入失敗"
       }
     }
   }

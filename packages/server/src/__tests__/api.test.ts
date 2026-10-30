@@ -6,7 +6,7 @@
  * (RoomManager injection, GameHistoryRepository, etc.) which no longer applies.
  * TODO: Rewrite tests against the new apiRouter once the route surface stabilises.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi, type MockedFunction } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import http from 'http';
 import express from 'express';
 // Old import no longer valid: createApiRouter was removed in the apiRouter refactor
@@ -22,7 +22,6 @@ import type { Room } from '@avalon/shared';
 // ---------------------------------------------------------------------------
 
 vi.mock('../services/firebase', () => ({
-  getLeaderboard: vi.fn(),
   getFullUserProfile: vi.fn(),
   getAdminDB: vi.fn(),
   getAdminFirestore: vi.fn(),
@@ -51,8 +50,6 @@ vi.mock('../services/GameHistoryRepository', () => ({
     return mockHistoryInstance;
   },
 }));
-
-import { getLeaderboard } from '../services/firebase';
 
 // ---------------------------------------------------------------------------
 // Lightweight HTTP client helpers
@@ -360,41 +357,3 @@ describe.skip('GET /api/replay/:roomId', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// GET /api/leaderboard
-// ---------------------------------------------------------------------------
-
-describe.skip('GET /api/leaderboard', () => {
-  const ctx = makeTestContext();
-
-  beforeAll(() => ctx.start());
-  afterAll(() => ctx.stop());
-  beforeEach(() => vi.clearAllMocks());
-
-  it('returns 200 with leaderboard data', async () => {
-    (getLeaderboard as MockedFunction<typeof getLeaderboard>).mockResolvedValue([
-      { uid: 'u1', totalGames: 10, gamesWon: 7, gamesLost: 3, rolesPlayed: {}, eloRating: 1200 },
-    ]);
-    const { status, body } = await httpGet(ctx.getPort(), '/api/leaderboard') as { status: number; body: { leaderboard: unknown[] } };
-    expect(status).toBe(200);
-    expect(body.leaderboard).toHaveLength(1);
-  });
-
-  it('defaults limit to 50', async () => {
-    (getLeaderboard as MockedFunction<typeof getLeaderboard>).mockResolvedValue([]);
-    await httpGet(ctx.getPort(), '/api/leaderboard');
-    expect(getLeaderboard).toHaveBeenCalledWith(50);
-  });
-
-  it('caps limit at 100', async () => {
-    (getLeaderboard as MockedFunction<typeof getLeaderboard>).mockResolvedValue([]);
-    await httpGet(ctx.getPort(), '/api/leaderboard?limit=999');
-    expect(getLeaderboard).toHaveBeenCalledWith(100);
-  });
-
-  it('returns 500 when service throws', async () => {
-    (getLeaderboard as MockedFunction<typeof getLeaderboard>).mockRejectedValue(new Error('Service error'));
-    const { status } = await httpGet(ctx.getPort(), '/api/leaderboard');
-    expect(status).toBe(500);
-  });
-});

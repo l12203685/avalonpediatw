@@ -156,17 +156,6 @@ export async function upsertUser(data: DbUser): Promise<string | null> {
   }
 }
 
-/**
- * 依 UUID 取得用戶 ELO
- */
-export async function getUserElo(userId: string): Promise<number> {
-  const db = getSupabaseClient();
-  if (!db) return 1000;
-  const { data, error } = await db.from('users').select('elo_rating').eq('id', userId).single();
-  if (error) return 1000;
-  return data?.elo_rating ?? 1000;
-}
-
 // ── 房間 ─────────────────────────────────────────────────────
 
 export async function saveRoom(roomId: string, hostUserId: string | null, playerCount: number): Promise<void> {
@@ -214,7 +203,7 @@ export async function updateRoomState(
 // ── 遊戲記錄 ─────────────────────────────────────────────────
 
 /**
- * 一局結束後，批次儲存所有玩家的遊戲記錄並更新 ELO。
+ * 一局結束後，批次儲存所有玩家的遊戲記錄並更新勝負統計（elo_delta 固定 0：舊 ELO 已移除）。
  *
  * Returns true when the insert + stats update actually ran against Supabase,
  * false when the call was a no-op (client not configured, empty input, or
@@ -233,7 +222,7 @@ export async function saveGameRecords(records: DbGameRecord[]): Promise<boolean>
       return false;
     }
 
-    // 更新每位玩家的 ELO 和勝負統計
+    // 更新每位玩家的勝負統計
     for (const record of records) {
       await db.rpc('update_player_stats', {
         p_user_id:  record.player_user_id,

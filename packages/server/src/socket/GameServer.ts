@@ -19,7 +19,6 @@ import {
   saveGameRecords,
   saveGameEvents,
   awardBadges,
-  getUserElo,
   DbGameRecord,
 } from '../services/supabase';
 import { GameHistoryRepository } from '../services/GameHistoryRepository';
@@ -73,10 +72,6 @@ const lobbyChatLimiter = new SocketRateLimiter({
   windowMs: 2000,
   maxRequests: 2,
 });
-
-// ELO constants
-const ELO_WIN  =  20;
-const ELO_LOSE = -15;
 
 // ─── Discord role-reveal lazy loader ─────────────────────────────────────
 //
@@ -771,7 +766,7 @@ export class GameServer {
       socket.data.playerId = playerId;
       this.playerToSocket.set(playerId, socket.id);
 
-      // Track supabase UUID for ELO persistence
+      // Track supabase UUID for game-record persistence
       if (socket.data.supabaseId) {
         this.supabaseIds.set(playerId, socket.data.supabaseId as string);
       }
@@ -893,7 +888,7 @@ export class GameServer {
       socket.data.playerId = playerId;
       this.playerToSocket.set(playerId, socket.id);
 
-      // Track supabase UUID for ELO persistence
+      // Track supabase UUID for game-record persistence
       if (socket.data.supabaseId) {
         this.supabaseIds.set(playerId, socket.data.supabaseId as string);
       }
@@ -1454,7 +1449,7 @@ export class GameServer {
     this.io.to(roomId).emit('game:ended', room);
 
     // 網站「與機器人練習」: practice games are never recorded (no Supabase /
-    // Firestore / GitHub archive / ELO / stats). The bot decision trace goes
+    // Firestore / GitHub archive / stats). The bot decision trace goes
     // to the owner now that every role is public; the sweep removes the room
     // after the review window.
     if (this.isPracticeRoom(roomId)) {
@@ -1501,9 +1496,6 @@ export class GameServer {
       if (!team) continue;
 
       const playerWon = evilWins ? team === 'evil' : team === 'good';
-      const eloBefore = await getUserElo(supabaseId);
-      const eloDelta  = playerWon ? ELO_WIN : ELO_LOSE;
-      const eloAfter  = Math.max(0, eloBefore + eloDelta);
 
       records.push({
         room_id:        roomId,
@@ -1511,9 +1503,11 @@ export class GameServer {
         role:           player.role || 'unknown',
         team,
         won:            playerWon,
-        elo_before:     eloBefore,
-        elo_after:      eloAfter,
-        elo_delta:      eloDelta,
+        // 舊 ±20/−15 ELO 已移除（2026-10-30：網站唯一的 Elo 是分析快取的 rating 區塊，由牌譜重放）；
+        // game_records 的 elo_* 欄位是 NOT NULL 的舊欄位，固定寫 0，users.elo_rating 不再變動。
+        elo_before:     0,
+        elo_after:      0,
+        elo_delta:      0,
         player_count:   playerCount,
         duration_sec:   durationSec,
       });
@@ -1523,26 +1517,6 @@ export class GameServer {
       const recordsSaved = await saveGameRecords(records);
       if (recordsSaved) {
         console.log(`[supabase] Saved ${records.length} game records for room ${roomId}`);
-      }
-
-      // Emit ELO deltas to all players in room so end screen can show +/- ELO
-      const eloDeltas: Record<string, number> = {};
-      for (const record of records) {
-        // Map supabase ID back to socket uid
-        for (const [uid, sid] of this.supabaseIds.entries()) {
-          if (sid === record.player_user_id) {
-            eloDeltas[uid] = record.elo_delta;
-            break;
-          }
-        }
-      }
-      if (Object.keys(eloDeltas).length > 0) {
-        // Attach eloDeltas to room and re-broadcast so end screen can show +/- ELO
-        const currentRoom = this.roomManager.getRoom(roomId);
-        if (currentRoom) {
-          currentRoom.eloDeltas = eloDeltas;
-          this.broadcastRoomState(roomId, currentRoom, true);
-        }
       }
 
       // Award badges based on this game's results
@@ -1680,12 +1654,6 @@ export class GameServer {
 
     // 大局觀 — 8人以上獲勝
     if (record.won && playerCount >= 8) badges.push('大局觀');
-
-    // 穩健 — ELO 1000 以上時獲勝
-    if (record.won && record.elo_before >= 1000) badges.push('穩健');
-
-    // 浴火重生 — ELO 800 以下時獲勝
-    if (record.won && record.elo_before < 800) badges.push('浴火重生');
 
     // 速戰速決 — 5 分鐘內獲勝
     if (record.won && record.duration_sec != null && record.duration_sec < 300) badges.push('速戰速決');

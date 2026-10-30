@@ -31,7 +31,6 @@ vi.mock('../../services/supabase', async (importOriginal) => {
     saveGameRecords: vi.fn(async () => true),
     saveGameEvents: vi.fn(async () => true),
     awardBadges: vi.fn(async () => undefined),
-    getUserElo: vi.fn(async () => 1000),
   };
 });
 // The scripted human acts faster than a person; keep only the practice-create limit real.

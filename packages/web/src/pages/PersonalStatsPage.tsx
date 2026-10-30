@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { getStoredToken } from '../services/socket';
-import { getEloRank } from '../utils/eloRank';
+import { getGamesTier } from '../utils/gamesTier';
 import { CampDisc } from '../components/CampDisc';
 import ArchetypeRadar from '../components/profile/ArchetypeRadar';
 import StrengthSignature from '../components/profile/StrengthSignature';
@@ -26,7 +26,7 @@ import { claimHistory } from '../services/auth';
  * 個人資料頁 vs 個人戰績頁職責分離：
  *   - ProfilePage: 帳號相關 (綁定 / 密碼 / 信箱 / 清除本機資料)
  *   - PersonalStatsPage (本檔): 所有戰績相關 — 總場次 / 勝率 / 角色分布 /
- *     ELO 趨勢 / Panel A 角色雷達 / Panel B 強項簽名 / Panel C 對戰風格 /
+ *     Panel A 角色雷達 / Panel B 強項簽名 / Panel C 對戰風格 /
  *     近 50 場 / 玩家追蹤列表 + 對戰歷史 + 兩個外連 link (數據分析 / 排行榜)
  *
  * 獨立勝率 = 排除同場後我方理論勝率
@@ -151,9 +151,6 @@ function GameRow({ game, onReplay, roleNames, t, locale }: GameRowProps): JSX.El
           {roleNames[game.role] ?? game.role}
         </span>
         <span className="text-xs text-gray-500 ml-2">{t('profile:record.playerCount', { count: game.player_count })}</span>
-      </div>
-      <div className={`text-sm font-bold ${game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-        {game.elo_delta >= 0 ? `+${game.elo_delta}` : game.elo_delta}
       </div>
       <div className="text-xs text-gray-600 w-14 text-right">{formatDate(game.created_at, locale)}</div>
       <button
@@ -621,7 +618,7 @@ export default function PersonalStatsPage(): JSX.Element {
               </motion.section>
             )}
 
-            {/* 2026-04-27 Edward 23:47：從 ProfilePage 搬來 — ELO + 段位 + 徽章 */}
+            {/* 2026-04-27 Edward 23:47：從 ProfilePage 搬來 — Elo + 段位 + 徽章 */}
             {profileLoading && (
               <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4 flex items-center justify-center text-zinc-400 gap-2">
                 <Loader size={16} className="animate-spin" /> 載入戰績...
@@ -629,14 +626,18 @@ export default function PersonalStatsPage(): JSX.Element {
             )}
             {!profileLoading && profile && (
               <>
-                {/* ELO + 段位 + 徽章 一行 */}
+                {/* Elo (網站唯一的 Elo：分析快取 rating 區塊，2026-10-30；沒有計入 Elo 的局時不顯示) + 段位 + 徽章 一行 */}
                 <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <TrendingUp size={16} className="text-blue-400" />
-                    <span className="text-blue-300 font-bold text-lg" data-testid="personal-stats-elo">{profile.elo_rating}</span>
-                    <span className="text-gray-500 text-sm">ELO</span>
+                    {typeof profile.elo_rating === 'number' && (
+                      <>
+                        <TrendingUp size={16} className="text-blue-400" />
+                        <span className="text-blue-300 font-bold text-lg" data-testid="personal-stats-elo">{profile.elo_rating}</span>
+                        <span className="text-gray-500 text-sm">Elo</span>
+                      </>
+                    )}
                     {(() => {
-                      const rank = getEloRank(profile.elo_rating, profile.total_games);
+                      const rank = getGamesTier(profile.total_games);
                       return (
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
                           {rank.label}
@@ -708,63 +709,6 @@ export default function PersonalStatsPage(): JSX.Element {
                     </div>
                   </div>
                 )}
-
-                {/* ELO 趨勢 sparkline */}
-                {profile.recent_games.length >= 2 && (() => {
-                  const games = [...profile.recent_games].reverse();
-                  const points: number[] = [];
-                  const startElo = games.reduce((acc, g) => acc - g.elo_delta, profile.elo_rating);
-                  let elo = startElo;
-                  points.push(elo);
-                  for (const g of games) {
-                    elo += g.elo_delta;
-                    points.push(elo);
-                  }
-
-                  const W = 320, H = 80, PAD = 12;
-                  const minElo = Math.min(...points) - 10;
-                  const maxElo = Math.max(...points) + 10;
-                  const range = maxElo - minElo || 1;
-                  const toX = (i: number) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
-                  const toY = (v: number) => PAD + (1 - (v - minElo) / range) * (H - PAD * 2);
-
-                  const pathD = points.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(1)},${toY(v).toFixed(1)}`).join(' ');
-                  const trend = points[points.length - 1] - points[0];
-                  const strokeColor = trend >= 0 ? '#60a5fa' : '#f87171';
-                  const fillId = `elo-fill-${trend >= 0 ? 'up' : 'down'}`;
-
-                  const areaD = pathD
-                    + ` L${toX(points.length - 1).toFixed(1)},${(H - PAD).toFixed(1)}`
-                    + ` L${toX(0).toFixed(1)},${(H - PAD).toFixed(1)} Z`;
-
-                  return (
-                    <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-bold text-gray-300">{t('profile:stats.eloTrend', { count: games.length })}</h3>
-                        <span className={`text-sm font-bold ${trend >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-                          {trend >= 0 ? '+' : ''}{trend.toFixed(0)} pts
-                        </span>
-                      </div>
-                      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 80 }}>
-                        <defs>
-                          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" />
-                            <stop offset="100%" stopColor={strokeColor} stopOpacity="0.02" />
-                          </linearGradient>
-                        </defs>
-                        <path d={areaD} fill={`url(#${fillId})`} />
-                        <path d={pathD} fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        {points.map((v, i) => {
-                          const g = games[i - 1];
-                          const dotColor = !g ? '#9ca3af' : g.won ? '#60a5fa' : '#f87171';
-                          return <circle key={i} cx={toX(i)} cy={toY(v)} r="3" fill={dotColor} />;
-                        })}
-                        <text x={toX(0)} y={H - 2} textAnchor="middle" fontSize="9" fill="#6b7280">{points[0].toFixed(0)}</text>
-                        <text x={toX(points.length - 1)} y={H - 2} textAnchor="middle" fontSize="9" fill={strokeColor}>{points[points.length - 1].toFixed(0)}</text>
-                      </svg>
-                    </div>
-                  );
-                })()}
 
                 {/* 角色勝率 */}
                 {roleStats.length > 0 && (
@@ -839,7 +783,7 @@ export default function PersonalStatsPage(): JSX.Element {
                 )}
 
                 {/* 近 N 場 (recent_games — 與下方近 50 場 timeline 不同 source；
-                    這裡走 profile.recent_games 含 ELO delta + role + 牌譜入口) */}
+                    這裡走 profile.recent_games 含 role + 牌譜入口) */}
                 <div className="bg-avalon-card/40 border border-gray-700 rounded-xl p-4">
                   <h3 className="text-sm font-bold text-gray-300 mb-3">{t('profile:stats.recentNGames', { count: profile.recent_games.length })}</h3>
                   {profile.recent_games.length === 0 ? (
@@ -996,9 +940,6 @@ export default function PersonalStatsPage(): JSX.Element {
                                 <CampDisc team={replay.game.won ? 'good' : 'evil'} className="w-4 h-4" />
                                 {replay.game.won ? t('profile:replay.win') : t('profile:replay.loss')}
                               </div>
-                              <div className={`text-sm font-bold ${replay.game.elo_delta >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-                                ELO {replay.game.elo_delta >= 0 ? `+${replay.game.elo_delta}` : replay.game.elo_delta}
-                              </div>
                               <div className="text-xs text-gray-500 ml-auto">
                                 {formatDate(replay.game.created_at, locale)}
                               </div>
@@ -1137,7 +1078,7 @@ function PairRow({
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-white text-sm truncate">{friend.display_name}</p>
         <p className="text-[11px] text-zinc-500">
-          {pair ? `同場 ${pair.sharedGames}/${pair.totalGames}` : 'ELO ' + friend.elo_rating}
+          {pair ? `同場 ${pair.sharedGames}/${pair.totalGames}` : '—'}
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2 text-center">

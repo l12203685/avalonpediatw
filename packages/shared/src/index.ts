@@ -17,7 +17,7 @@ export * from './derived/roleProbability';
 export * from './derived/outcomeBlocks';
 export * from './derived/playerVoting';
 export * from './i18n/winReason.zh';
-export * from './i18n/eloTag.zh';
+export * from './i18n/tierGroup.zh';
 
 // V2 Phase 2c — V1→V2 converter
 export * from './derived/v1ToV2Converter';

@@ -30,10 +30,10 @@ import { SHEETS_UNKNOWN_PLAYER_ID } from './sheetsGameRecordParser';
  * Edward 2026-04-24 17:36：`sheets:unknown` 是 Sheets 匯入時「空玩家名」的
  * aggregate fallback 偽 UUID（見 sheetsGameRecordParser.ts:341）。
  * 後端統計模組**完全跳過**此 ID：
- *   - 不算 ELO / 勝率 / 戰績（無意義累計）
+ *   - 不算勝率 / 戰績（無意義累計）
  *   - 不寫 computed_stats/sheets:unknown Firestore doc（占空間）
  *   - 不影響排行榜 tier group 計算
- * 前端 /api/leaderboard/v2 保留 filter 當防線（see routes/api.ts:257）。
+ * （原本的 /api/leaderboard/v2 讀這裡；2026-10-30 該路由移除。）
  */
 const SHEETS_UNKNOWN_ID: PlayerId = SHEETS_UNKNOWN_PLAYER_ID;
 
@@ -77,7 +77,6 @@ export class ComputedStatsRepositoryV2 {
         timestamp: new Date().toISOString(),
         event: 'computed_stats_v2_saved',
         playerId: stats.playerId,
-        elo: stats.elo,
         tier: stats.tier,
         totalGames: stats.totalGames,
         lastComputedGameId: stats.lastComputedGameId,
@@ -124,7 +123,7 @@ export class ComputedStatsRepositoryV2 {
   async recomputeForPlayers(
     games: GameRecordV2[],
     playerIds: PlayerId[],
-    opts?: { initialElo?: number; minGamesForTier?: number },
+    opts?: { minGamesForTier?: number },
   ): Promise<{ updated: number; skipped: number }> {
     let updated = 0;
     let skipped = 0;
@@ -162,7 +161,6 @@ export class ComputedStatsRepositoryV2 {
    * 慢但正確，一天跑一次即可。
    */
   async recomputeAll(opts?: {
-    initialElo?: number;
     minGamesForTier?: number;
     pageSize?: number;
   }): Promise<{ players: number; games: number; updated: number }> {
@@ -188,7 +186,7 @@ export class ComputedStatsRepositoryV2 {
    * 對單一新戰績增量重算：只處理該局的 playerSeats 非空玩家。
    * Caller 保證已把該局寫入 `games_v2/`。
    *
-   * Edward 2026-04-24 14:43：「在計算ELO時排除有AI 與 有 勾選"娛樂局" 的場次」
+   * Edward 2026-04-24 14:43：排除有 AI 與勾選「娛樂局」的場次
    *   - `newGame.hasAI === true`  → 此局含 AI 玩家 → skip incremental recompute
    *   - `newGame.casual === true` → 娛樂局 → skip incremental recompute
    *
@@ -198,7 +196,7 @@ export class ComputedStatsRepositoryV2 {
    */
   async recomputeForGame(
     newGame: GameRecordV2,
-    opts?: { initialElo?: number; minGamesForTier?: number; pageSize?: number },
+    opts?: { minGamesForTier?: number; pageSize?: number },
   ): Promise<{ updated: number; skipped: number }> {
     if (newGame.hasAI || newGame.casual) {
       console.log(JSON.stringify({

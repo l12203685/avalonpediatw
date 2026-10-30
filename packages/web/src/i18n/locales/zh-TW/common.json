@@ -205,13 +205,13 @@
     "logoutHint": "登出後將清除本機暫存，下次開啟需重新登入或使用訪客模式。",
     "logoutConfirm": "確定要登出？",
     "logoutConfirmBody": "登出將清除本機遊戲暫存與玩家名稱。確定繼續？",
-    "upgradeGuest": "將訪客資料綁定為正式帳號（Google/Discord/Line），保留所有戰績與 ELO。",
+    "upgradeGuest": "將訪客資料綁定為正式帳號（Google/Discord/Line），保留所有戰績。",
     "upgradeWithGoogle": "綁定 Google",
     "upgradeWithDiscord": "綁定 Discord",
     "upgradeWithLine": "綁定 Line",
     "upgradeGoogleUnavailable": "此環境未設定 Google 登入",
     "upgradeFailed": "綁定失敗，請稍後再試",
-    "upgradeHint": "完成社群登入後，系統會把訪客 ELO / 戰績 / 追蹤列表合併到新帳號。",
+    "upgradeHint": "完成社群登入後，系統會把訪客戰績 / 追蹤列表合併到新帳號。",
     "alreadyRegistered": "目前為正式帳號，不需要再綁定。",
     "currentName": "目前名稱",
     "comingSoon": "即將上線",
@@ -320,7 +320,6 @@
       "boards": "排行",
       "analysis": "分析"
     },
-    "expandTiers": "分層瀏覽 (5 組 ELO 分層)",
     "collapseTiers": "收合分層瀏覽",
     "radarHint": "點玩家可展開能力雷達",
     "featureStudies": {
@@ -1748,6 +1747,46 @@
       "tables": "數據分析各表",
       "colon": "：",
       "sep": "／"
+    },
+    "elo": {
+      "tab": "Elo",
+      "radarTab": "Elo 走勢",
+      "boardTitle": "Elo 排行",
+      "loading": "載入 Elo…",
+      "loadFailed": "Elo 載入失敗。",
+      "notGenerated": "Elo 尚未產生，下次每日更新後提供。",
+      "notRated": "這位玩家還沒有計入 Elo 的局（只算 10 個座位都有寫名字的局）。",
+      "notFiltered": "Elo 依對局先後計算，不隨篩選變動：這裡是全部對局的結果。",
+      "boardInfo1": "Elo：扣掉隊友、對手、抽到的角色與座位之後的實力分數；1500 是平均老手。定義與算法見說明頁的「統計名詞與算法」。",
+      "boardInfo2": "預設列出近 {{days}} 天有出賽、計入 {{games}} 場以上的玩家，可以放寬；不到 {{provisional}} 場的標「暫定」。名次相差不到 ±1σ 可視為同一級。",
+      "boardInfo3": "計入 {{games}} 局（另有 {{skipped}} 局有座位沒寫名字，不計）；資料到 {{date}}，每日從第一局依時間重算。",
+      "average": "平均老手的模型理論勝率 {{theory}}",
+      "activeOnly": "只列近 {{days}} 天有出賽",
+      "minGames": "最低場數",
+      "allGames": "不限",
+      "atLeast": "≥ {{count}} 場",
+      "shown": "{{count}} 人",
+      "empty": "沒有符合條件的玩家，可以放寬條件。",
+      "rowTip": "首次 {{first}} · 最後 {{last}}",
+      "provisional": "暫定",
+      "provisionalHint": "計入不到 {{count}} 場，分數還不穩定",
+      "rankOf": "第 {{rank}} 名（全部玩家）",
+      "games": "計入 {{count}} 場",
+      "gamesSoFar": "累計 {{count}} 場",
+      "modelTheory": "模型理論勝率",
+      "dataThrough": "資料到 {{date}}",
+      "current": "目前",
+      "noPoints": "還沒有有日期的局，畫不出走勢。",
+      "chartNote": "線＝每個出賽日結束時的 Elo；淺色帶＝±1σ（估計誤差）；灰色虛線＝1500（平均老手）。最後一段虛線：沒出賽的期間，其他人的變動讓目前的 Elo 跟著移動。",
+      "chartAria": "{{name}} 的 Elo 走勢，{{from}} 到 {{to}}，目前 {{elo}}",
+      "col": {
+        "rankName": "名次／玩家",
+        "elo": "Elo",
+        "sigma": "±1σ",
+        "games": "場數",
+        "modelTheory": "模型理論勝率",
+        "lastPlayed": "最後出賽"
+      }
     }
   },
   "guest": {
@@ -1815,6 +1854,18 @@
       "def": "角色和座位都照標準機率抽到時，你會有的期望勝率。",
       "calc": "Σ 角色抽到機率 × 1/10 × 你在「該角色 × 該座位」的最終勝率。格子很多（7 × 10），大部分人很多格場數不夠，那些格子用全體玩家的平均補上。",
       "meaning": "理論上最完整，但樣本常常不夠；補上的格子越多，數字越接近平均。"
+    },
+    "elo": {
+      "name": "Elo",
+      "def": "扣掉隊友、對手、抽到的角色和座位之後，你有多強的一個分數。1500 是平均老手的水準；分數越高，對上平均玩家時越容易贏。",
+      "calc": "從第一局依時間一路重算。每局開打前，模型用「藍方每人分數的平均 − 紅方每人分數的平均」，加上藍方的基礎勝率與每個角色在每個座位的校正，算出藍方會贏的機率；打完後，結果比預期好就加分、比預期差就扣分，同一隊每人加減一樣多（梅林、刺客也一樣，不另外加權）。三藍死算紅方贏。新玩家從比老手平均略低的分數開始；久沒出賽不會扣分。只算 10 個座位都有寫名字的局。顯示的 Elo ＝ 1500 ＋ 400 × log10（你的模型理論勝率的賠率 ÷ 平均老手的賠率）。±1σ 是估計誤差，場數越多越小。",
+      "meaning": "跟理論勝率互補：理論勝率看你抽到各角色時贏多少，Elo 另外考慮了同桌的強弱。兩人相差不到 ±1σ 可視為同一級；場數不夠的標「暫定」。Elo 依對局先後計算，不隨篩選改變。"
+    },
+    "eloModelTheory": {
+      "name": "模型理論勝率",
+      "def": "Elo 模型估計的：照標準機率抽角色、隊友和對手都是平均老手時，你的勝率。",
+      "calc": "Σ 抽到角色的機率（忠臣 4/10、其他角色各 1/10）× 你當該角色、其他 9 人都是平均老手、座位校正取近期平均時，模型算出的勝率。",
+      "meaning": "Elo 就是從它換算來的；和角色理論勝率用同一種平均方式，可以並排比較。"
     },
     "missionWinRate": {
       "name": "任務勝率",

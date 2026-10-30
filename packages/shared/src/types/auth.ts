@@ -36,7 +36,6 @@ export interface UserProfile extends User {
   winRate: number;
   averageGameDuration: number;
   favoriteRole?: string;
-  eloRating: number;
   badges: string[];
 }
 
@@ -50,7 +49,6 @@ export interface UserStats {
   totalKills: number;
   averageGameDuration: number;
   lastGameAt: number;
-  eloRating: number;
   updatedAt: number;
 }
 

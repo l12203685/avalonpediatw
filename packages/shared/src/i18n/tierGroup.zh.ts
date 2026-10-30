@@ -1,27 +1,10 @@
 /**
- * ELO 標籤中文顯示。Edward 2026-04-24 13:43 雙維度分類：
- *   - novice_tag → 入門新手
- *   - mid_tag    → 中堅玩家
- *   - top_tag    → 頂尖高玩
+ * 場次組 TierGroup 的中文顯示。
  *
- * Edward 2026-04-24：UI tab 標籤改「純數字 label」，讓玩家一眼看懂門檻。
+ * （原 eloTag.zh.ts：2026-10-30 舊 V2 ELO 與 ELO 標籤移除，只留場次組的標籤。）
  */
 
-import type { EloTag } from '../derived/gameMetrics';
 import type { TierGroup } from '../derived/gameMetrics';
-
-export const ELO_TAG_ZH: Record<EloTag, string> = {
-  novice_tag: '入門新手',
-  mid_tag: '中堅玩家',
-  top_tag: '頂尖高玩',
-};
-
-/** Format an EloTag to its Chinese display. Unknown / null / undefined → ''. */
-export function formatEloTagZh(tag: EloTag | null | undefined | string): string {
-  if (tag == null || tag === '') return '';
-  if (tag in ELO_TAG_ZH) return ELO_TAG_ZH[tag as EloTag];
-  return String(tag);
-}
 
 /**
  * TierGroup 中文顯示（純數字門檻 label，UI tab 標籤用）。

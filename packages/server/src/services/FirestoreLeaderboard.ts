@@ -4,16 +4,16 @@
  * Primary data source: Google Sheets player stats (2145+ games, 60+ players).
  * Fallback: Firestore `games` collection (online games only).
  *
- * ELO is derived from aggregate win/loss records using a simplified model:
- * players start at 1000 and are adjusted based on win rate and game volume
- * relative to the population average.
+ * elo_rating is the site's only Elo (Edward 2026-10-30「新版把網站上的 ELO 都完全統一成你研發的版本」): the
+ * analysis cache's rating section (generate_cache.py compute_rating, the 團隊 Elo replayed over the 牌譜),
+ * looked up by the player's name; null for a player without a rated game. The old formulas (sheets: 1000 +
+ * win-rate / volume / theory bonuses; Firestore games: team-average K-factor ELO) are gone.
  */
 
 import { getAdminFirestore } from './firebase';
-import { computeNewElo, expectedScore } from './EloRanking';
-import type { GameRecord, GamePlayerRecord } from './GameHistoryRepository';
+import type { GameRecord } from './GameHistoryRepository';
 import { findSamePlayerName, playerNameKey } from '@avalon/shared';
-import { getAllPlayerStats, getPlayerAliases, isSheetsReady } from './sheetsAnalysis';
+import { getAllPlayerStats, getEloOf, getPlayerAliases, isSheetsReady } from './sheetsAnalysis';
 import type { PlayerStats } from './sheetsAnalysis';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +25,8 @@ export interface LeaderboardEntry {
   display_name: string;
   photo_url: string | null;
   provider: string;
-  elo_rating: number;
+  /** The rating section's Elo (rounded); null without a rated game. */
+  elo_rating: number | null;
   total_games: number;
   games_won: number;
   games_lost: number;
@@ -39,7 +40,6 @@ export interface RecentGame {
   role: string;
   team: 'good' | 'evil';
   won: boolean;
-  elo_delta: number;
   player_count: number;
   created_at: string;
 }
@@ -49,7 +49,8 @@ export interface UserProfile {
   display_name: string;
   photo_url: string | null;
   provider: string;
-  elo_rating: number;
+  /** The rating section's Elo (rounded); null without a rated game. */
+  elo_rating: number | null;
   total_games: number;
   games_won: number;
   games_lost: number;
@@ -66,30 +67,25 @@ export interface UserProfile {
 interface PlayerAgg {
   id: string;
   displayName: string;
-  elo: number;
   totalGames: number;
   gamesWon: number;
   gamesLost: number;
-  /** Per-game snapshots for recent_games & ELO history */
+  /** Per-game snapshots for recent_games */
   gameHistory: {
     gameId: string;
     role: string;
     team: 'good' | 'evil';
     won: boolean;
-    eloBefore: number;
-    eloAfter: number;
     playerCount: number;
     createdAt: number;
   }[];
 }
 
-const STARTING_ELO = 1000;
-
 /**
  * Minimum games required to appear on the public leaderboard list.
  *
  * Edward 2026-04-26 16:05：raw 牌譜 rebuild 把實際 distinct 玩家從 62 拉到 198 後，
- * top-N 被一群 1-3 場 100% 勝率玩家佔走 — ELO 算法對小樣本不抗噪。20 場是
+ * top-N 被一群 1-3 場 100% 勝率玩家佔走 — 小樣本不抗噪。20 場是
  * 統計意義 floor（與 deriveBadgesFromStats 內 `穩定發揮 / 勝率王` 的 10 場
  * 觸發分開：badge 仍可早觸發，上榜門檻較嚴）。
  *
@@ -107,7 +103,7 @@ const MIN_LEADERBOARD_GAMES = 20;
 
 /**
  * Load every document from `games` collection, sorted by createdAt ascending,
- * and compute per-player stats including ELO progression.
+ * and compute per-player win / loss stats (no rating: the site's Elo comes from the analysis cache).
  */
 async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
   const firestore = getAdminFirestore();
@@ -122,7 +118,7 @@ async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
     const game = doc.data() as GameRecord;
     if (!game.players || game.players.length === 0) continue;
 
-    // Edward 2026-04-28：含 AI 玩家的局 / host 勾選的娛樂局不算 ELO/勝率。
+    // Edward 2026-04-28：含 AI 玩家的局 / host 勾選的娛樂局不算勝率。
     // 與 V2 路徑 (`filterRankedGames` in shared/derived/gameMetrics) 對齊：
     // 嚴格 `=== true` 比較 → 舊 V1 row 沒這兩個 field (undefined) 仍視為 ranked，
     // 維持歷史戰績不漏。
@@ -135,7 +131,6 @@ async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
         players.set(p.playerId, {
           id: p.playerId,
           displayName: p.displayName || p.playerId,
-          elo: STARTING_ELO,
           totalGames: 0,
           gamesWon: 0,
           gamesLost: 0,
@@ -144,41 +139,12 @@ async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
       }
     }
 
-    // Compute team average ELOs before this game
-    const goodElos: number[] = [];
-    const evilElos: number[] = [];
-    for (const p of game.players) {
-      if (!p.playerId) continue;
-      const agg = players.get(p.playerId)!;
-      if (p.team === 'good') goodElos.push(agg.elo);
-      else if (p.team === 'evil') evilElos.push(agg.elo);
-      // If team is null (imported data without role info), skip ELO calc
-    }
-
-    const goodAvg = goodElos.length > 0
-      ? goodElos.reduce((a, b) => a + b, 0) / goodElos.length
-      : STARTING_ELO;
-    const evilAvg = evilElos.length > 0
-      ? evilElos.reduce((a, b) => a + b, 0) / evilElos.length
-      : STARTING_ELO;
-
     // Update each player
     for (const p of game.players) {
       if (!p.playerId) continue;
       const agg = players.get(p.playerId)!;
-      const eloBefore = agg.elo;
-
-      // Determine if player won
       const won = p.won;
 
-      // Only compute ELO delta if we know the team
-      let eloAfter = eloBefore;
-      if (p.team === 'good' || p.team === 'evil') {
-        const opponentAvg = p.team === 'good' ? evilAvg : goodAvg;
-        eloAfter = computeNewElo(eloBefore, won, opponentAvg, p.role ?? null);
-      }
-
-      agg.elo = eloAfter;
       agg.totalGames += 1;
       if (won) agg.gamesWon += 1;
       else agg.gamesLost += 1;
@@ -191,8 +157,6 @@ async function aggregatePlayerStats(): Promise<Map<string, PlayerAgg>> {
         role: p.role ?? 'unknown',
         team: p.team ?? 'good',
         won,
-        eloBefore,
-        eloAfter,
         playerCount: game.playerCount,
         createdAt: game.createdAt,
       });
@@ -225,10 +189,9 @@ export function invalidateLeaderboardCache(): void {
 }
 
 /**
- * Get leaderboard: all players who have played at least 1 game, sorted by ELO
- * descending. The full list is returned so the frontend can split into tiers
- * (including the 菜雞 pre-tier for < 30 games). A cap of 10000 is applied as
- * a safety net; realistic populations are ~300-500 players.
+ * Get leaderboard: all players with >= MIN_LEADERBOARD_GAMES games, sorted by Elo
+ * (the analysis cache's rating section; players without one last, then by games).
+ * A cap of 10000 is applied as a safety net; realistic populations are ~300-500 players.
  *
  * Strategy:
  *   1. Try Google Sheets player stats (primary source, 2145+ games).
@@ -244,83 +207,39 @@ export async function getFirestoreLeaderboard(limit = 10000): Promise<Leaderboar
   // Fallback: Firestore games collection
   const players = await getAggregated();
 
-  const sorted = [...players.values()]
-    .filter(p => p.totalGames >= MIN_LEADERBOARD_GAMES)
-    .sort((a, b) => b.elo - a.elo)
-    .slice(0, limit);
-
-  return sorted.map(p => ({
-    id: p.id,
-    display_name: p.displayName,
-    photo_url: null,
-    provider: 'guest',
-    elo_rating: p.elo,
-    total_games: p.totalGames,
-    games_won: p.gamesWon,
-    games_lost: p.gamesLost,
-    badges: deriveBadges(p),
-    win_rate: p.totalGames > 0 ? Math.round((p.gamesWon / p.totalGames) * 100) : 0,
-  }));
+  const entries: LeaderboardEntry[] = [];
+  for (const p of players.values()) {
+    if (p.totalGames < MIN_LEADERBOARD_GAMES) continue;
+    entries.push({
+      id: p.id,
+      display_name: p.displayName,
+      photo_url: null,
+      provider: 'guest',
+      elo_rating: await eloRating(p.displayName),
+      total_games: p.totalGames,
+      games_won: p.gamesWon,
+      games_lost: p.gamesLost,
+      badges: deriveBadges(p),
+      win_rate: p.totalGames > 0 ? Math.round((p.gamesWon / p.totalGames) * 100) : 0,
+    });
+  }
+  return sortByElo(entries).slice(0, limit);
 }
 
-// ---------------------------------------------------------------------------
-// Sheets-based ELO computation
-// ---------------------------------------------------------------------------
-
-/**
- * Compute ELO ratings from Google Sheets aggregate player stats.
- *
- * Algorithm: two-factor composite scoring.
- *   1. Win rate contribution (dominant factor) -- maps win rate to a wide ELO
- *      range using a linear scale centered at 1000.
- *   2. Volume bonus -- players with more games get a small ELO bump to reward
- *      experience and statistical significance.
- *   3. Role theory bonus -- higher roleTheory (theoretical win rate based on
- *      role composition) gives a small additional bump.
- *
- * This produces an ELO spread of roughly 750-1500, matching the frontend
- * tier system (菜雞 <30 games, 初學 ≥0, 新手 ≥950, 中堅 ≥1050, 高手 ≥1150, 大師 ≥1300).
- * LeaderboardPage re-ranks by percentile (15/25/30/25/15) at render time.
- */
-function computeEloFromSheets(players: PlayerStats[]): Map<string, { elo: number; stats: PlayerStats }> {
-  const result = new Map<string, { elo: number; stats: PlayerStats }>();
-
-  // Find max games for normalization
-  let maxGames = 1;
-  for (const p of players) {
-    if (p.totalGames > maxGames) maxGames = p.totalGames;
+/** The site's Elo of `name` (analysis cache rating section), rounded; null without one or without the cache. */
+async function eloRating(name: string): Promise<number | null> {
+  try {
+    const row = await getEloOf(name);
+    return row ? Math.round(row.elo) : null;
+  } catch {
+    return null;
   }
+}
 
-  for (const p of players) {
-    if (p.totalGames < 1) continue;
-
-    const winRateFraction = (p.winRate || 0) / 100;
-
-    // Win rate contribution: 50% -> 1000, spread +/- 500
-    // A 55% win rate player = 1050, 60% = 1100, etc.
-    const winRateElo = 1000 + (winRateFraction - 0.5) * 1000;
-
-    // Volume bonus: up to +150 for the most experienced player
-    // Uses log scale so early games matter more
-    const volumeBonus = Math.min(
-      Math.log2(Math.max(p.totalGames, 1)) / Math.log2(maxGames) * 150,
-      150,
-    );
-
-    // Role theory bonus: theoretical win rate above average gives +0..100
-    const roleTheoryFraction = (p.roleTheory || 50) / 100;
-    const theoryBonus = (roleTheoryFraction - 0.5) * 200;
-
-    // Minimum 10 games for reliable rating; penalize low-game players
-    const reliabilityFactor = Math.min(p.totalGames / 30, 1);
-
-    let elo = winRateElo + (volumeBonus + theoryBonus) * reliabilityFactor;
-    elo = Math.max(100, Math.round(elo));
-
-    result.set(p.name, { elo, stats: p });
-  }
-
-  return result;
+/** Highest Elo first; players without an Elo after them, most games first. */
+function sortByElo(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  return entries.sort((a, b) =>
+    (b.elo_rating ?? -Infinity) - (a.elo_rating ?? -Infinity) || b.total_games - a.total_games);
 }
 
 /**
@@ -341,12 +260,11 @@ async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> 
     const sheetsPlayers = await getAllPlayerStats();
     if (sheetsPlayers.length === 0) return [];
 
-    const eloMap = computeEloFromSheets(sheetsPlayers);
-
     const entries: LeaderboardEntry[] = [];
-    for (const [name, { elo, stats }] of eloMap) {
+    for (const stats of sheetsPlayers) {
       // Edward 2026-04-26 16:05: 上榜門檻 — < 20 場不上榜（避免小樣本 100% 勝率玩家浮榜）
       if (stats.totalGames < MIN_LEADERBOARD_GAMES) continue;
+      const name = stats.name;
 
       const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
       const totalLosses = stats.totalGames - totalWins;
@@ -355,17 +273,16 @@ async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> 
         display_name: name,
         photo_url: null,
         provider: 'sheets',
-        elo_rating: elo,
+        elo_rating: await eloRating(name),
         total_games: stats.totalGames,
         games_won: totalWins,
         games_lost: totalLosses,
-        badges: deriveBadgesFromStats(stats, elo),
+        badges: deriveBadgesFromStats(stats),
         win_rate: Math.round(stats.winRate),
       });
     }
 
-    entries.sort((a, b) => b.elo_rating - a.elo_rating);
-    return entries.slice(0, limit);
+    return sortByElo(entries).slice(0, limit);
   } catch (err) {
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
@@ -376,7 +293,7 @@ async function getSheetsLeaderboard(limit: number): Promise<LeaderboardEntry[]> 
   }
 }
 
-function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
+function deriveBadgesFromStats(stats: PlayerStats): string[] {
   const badges: string[] = [];
 
   // Experience badges
@@ -389,12 +306,6 @@ function deriveBadgesFromStats(stats: PlayerStats, elo: number): string[] {
   const winRate = (stats.winRate || 0) / 100;
   if (stats.totalGames >= 10 && winRate >= 0.7) badges.push('勝率王');
   else if (stats.totalGames >= 10 && winRate >= 0.6) badges.push('穩定發揮');
-
-  // ELO tier badges (thresholds match frontend eloRank.ts)
-  if (elo >= 1300) badges.push('大師');
-  else if (elo >= 1150) badges.push('高手');
-  else if (elo >= 1050) badges.push('中堅');
-  else if (elo >= 950) badges.push('新手');
 
   // Role-specific badges from Sheets data.
   // Canonical role names only (cache has been migrated to the full names).
@@ -427,17 +338,16 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
   if (isSheetsReady()) {
     try {
       const sheetsPlayers = await getAllPlayerStats();
-      const eloMap = computeEloFromSheets(sheetsPlayers);
+      const statsByName = new Map(sheetsPlayers.filter(p => p.totalGames >= 1).map(p => [p.name, p] as const));
       // Sheets names ignore case / width (@avalon/shared findSamePlayerName, the stats API's
       // lookup): "nova" finds the cache's "Nova", "(Nova)" or "@Nova" does not; most games first
       // among an old cache's spellings; an old name in players.aliases finds the official name.
-      const sheetName = eloMap.has(playerId)
+      const sheetName = statsByName.has(playerId)
         ? playerId
-        : findSamePlayerName(playerId, [...eloMap.keys()], (name) => eloMap.get(name)?.stats.totalGames ?? 0,
+        : findSamePlayerName(playerId, [...statsByName.keys()], (name) => statsByName.get(name)?.totalGames ?? 0,
           await getPlayerAliases());
-      const entry = sheetName === undefined ? undefined : eloMap.get(sheetName);
-      if (sheetName !== undefined && entry) {
-        const { elo, stats } = entry;
+      const stats = sheetName === undefined ? undefined : statsByName.get(sheetName);
+      if (sheetName !== undefined && stats) {
         const totalWins = Math.round(stats.totalGames * (stats.winRate / 100));
         const totalLosses = stats.totalGames - totalWins;
 
@@ -463,7 +373,6 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
                   role: g.role,
                   team: g.team,
                   won: g.won,
-                  elo_delta: g.eloAfter - g.eloBefore,
                   player_count: g.playerCount,
                   created_at: new Date(g.createdAt).toISOString(),
                 }));
@@ -479,11 +388,11 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
           display_name: sheetName,
           photo_url: null,
           provider: 'sheets',
-          elo_rating: elo,
+          elo_rating: await eloRating(sheetName),
           total_games: stats.totalGames,
           games_won: totalWins,
           games_lost: totalLosses,
-          badges: deriveBadgesFromStats(stats, elo),
+          badges: deriveBadgesFromStats(stats),
           recent_games: recent,
         };
       }
@@ -516,7 +425,6 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
         role: g.role,
         team: g.team,
         won: g.won,
-        elo_delta: g.eloAfter - g.eloBefore,
         player_count: g.playerCount,
         created_at: new Date(g.createdAt).toISOString(),
       }));
@@ -526,7 +434,7 @@ export async function getFirestoreUserProfile(playerId: string): Promise<UserPro
       display_name: p.displayName,
       photo_url: null,
       provider: 'guest',
-      elo_rating: p.elo,
+      elo_rating: await eloRating(p.displayName),
       total_games: p.totalGames,
       games_won: p.gamesWon,
       games_lost: p.gamesLost,
@@ -587,10 +495,6 @@ function deriveBadges(p: PlayerAgg): string[] {
   const winRate = p.totalGames > 0 ? p.gamesWon / p.totalGames : 0;
   if (p.totalGames >= 10 && winRate >= 0.7) badges.push('勝率王');
   if (p.totalGames >= 10 && winRate >= 0.6) badges.push('穩定發揮');
-
-  if (p.elo >= 1300) badges.push('大師');
-  else if (p.elo >= 1150) badges.push('高手');
-  else if (p.elo >= 1050) badges.push('中堅');
 
   // Streak detection
   const history = p.gameHistory;

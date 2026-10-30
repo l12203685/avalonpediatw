@@ -283,7 +283,6 @@ export interface Room {
   roleOptions: RoleOptions;    // Host-configured optional role toggles
   readyPlayerIds: string[];    // Player IDs who clicked "Ready" in lobby
   isPrivate?: boolean;         // Room requires password to join
-  eloDeltas?: Record<string, number>; // playerId -> elo delta (populated on game end)
   // Lady of the Lake
   ladyOfTheLakeHolder?: string;     // Player ID who currently holds the Lady token
   ladyOfTheLakeTarget?: string;     // Player ID being inspected (during lady_of_the_lake phase)

@@ -21,7 +21,6 @@ import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import WikiPage from './pages/WikiPage';
-import LeaderboardPage from './pages/LeaderboardPage';
 import ProfilePage from './pages/ProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import AiStatsPage from './pages/AiStatsPage';
@@ -33,7 +32,6 @@ import ClaimsNewPage from './pages/ClaimsNewPage';
 import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
 import AdminImportPage from './pages/AdminImportPage';
-import AdminEloPage from './pages/AdminEloPage';
 import HelpPage from './pages/HelpPage';
 import ToastContainer from './components/ToastContainer';
 import { submitError } from './services/api';
@@ -462,12 +460,12 @@ function App(): JSX.Element {
               while keeping the rails+chat layout phase-agnostic. */}
           {(gameState === 'lobby' || gameState === 'playing' || gameState === 'voting' || gameState === 'ended') && <RoomPage />}
           {shownState === 'wiki' && <WikiPage />}
-          {gameState === 'leaderboard' && <LeaderboardPage />}
           {gameState === 'profile' && <ProfilePage />}
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
-          {/* legacy 'analysis' route (WikiPage / PersonalStatsPage links) lands on the merged analytics page */}
-          {(shownState === 'analysis' || shownState === 'analytics') && <AnalyticsPage />}
+          {/* legacy 'analysis' route (WikiPage / PersonalStatsPage links) lands on the merged analytics page;
+              legacy 'leaderboard' (舊排行頁，2026-10-30 起併入戰績排行：原本的「傳統 ELO 分層」已移除) = 戰績排行 */}
+          {(shownState === 'analysis' || shownState === 'analytics' || shownState === 'leaderboard') && <AnalyticsPage />}
           {shownState === 'streams' && <StreamsPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
@@ -482,7 +480,6 @@ function App(): JSX.Element {
           {gameState === 'claimsNew' && <ClaimsNewPage />}
           {gameState === 'adminClaims' && <AdminClaimsPage />}
           {gameState === 'adminAdmins' && <AdminAdminsPage />}
-          {gameState === 'adminElo' && <AdminEloPage />}
           {gameState === 'adminImport' && <AdminImportPage />}
           {gameState === 'help' && <HelpPage />}
           {/* Phase C 簡化：保留 forgot/reset 兩頁給密碼重設流程；註冊頁已併入 LoginPage */}

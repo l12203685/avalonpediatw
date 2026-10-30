@@ -23,6 +23,8 @@ import {
   getPlayerPlaystyle,
   getFeatureStudies,
   getLeaderboard,
+  getRatingBoard,
+  getPlayerRating,
   invalidateCache,
   isSheetsReady,
   assassinationWinRates,
@@ -361,6 +363,50 @@ router.get('/leaderboard', limiter, async (_req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/leaderboard]', msg);
     return fail(res, 500, 'Failed to load leaderboard');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/rating
+// 團隊 Elo（網站唯一的 Elo；generate_cache.py compute_rating / RATING_CONFIG，Edward 2026-10-30）：每位玩家目前的
+// Elo、±1σ、場數、模型理論勝率，加上排行的 asOf（網站預設只列近 activeDays 天有出賽者）。每人的走勢在
+// /rating/:name。快取還沒有這一段 → 503，跟 leaderboard 一樣。依對局順序而定，不隨複合篩選重算。
+// ---------------------------------------------------------------------------
+router.get('/rating', limiter, async (_req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const data = await getRatingBoard();
+    if (!data) {
+      return fail(res, 503, 'Rating not yet generated');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/rating]', msg);
+    return fail(res, 500, 'Failed to load rating');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/rating/:name
+// 一位玩家的 Elo 與走勢（每個出賽日最後一局後的 [日期, Elo, ±1σ, 累計場數]）；名字比對同其他玩家路由。
+// 沒有計入 Elo 的局 → 404；快取還沒有這一段 → 503。
+// ---------------------------------------------------------------------------
+router.get('/rating/:name', limiter, async (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const data = await getPlayerRating(nameParam(req));
+    if (data === undefined) {
+      return fail(res, 503, 'Rating not yet generated');
+    }
+    if (!data) {
+      return fail(res, 404, 'Player not rated');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/rating/:name]', msg);
+    return fail(res, 500, 'Failed to load rating');
   }
 });
 

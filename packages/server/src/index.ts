@@ -15,16 +15,11 @@ import { feedbackRouter } from './routes/feedback';
 import { analysisRouter } from './routes/analysis';
 import { statsRouter } from './routes/stats';
 import { claimsRouter } from './routes/claims';
-import { adminEloRouter } from './routes/adminElo';
 import { adminImportRouter } from './routes/adminImport';
 import { healthDeepRouter } from './routes/healthDeep';
 import { versionRouter } from './routes/version';
 import { startSelfPlayScheduler, getSelfPlayStatus } from './ai/SelfPlayScheduler';
 import { ensureAdminsSeed } from './services/AdminService';
-import {
-  loadEloConfigFromFirestore,
-  subscribeEloConfigChanges,
-} from './services/EloConfigLoader';
 import {
   initializeBots,
   registerBotRoutes,
@@ -94,8 +89,6 @@ app.use('/api/analysis', analysisRouter);
 app.use('/api/stats', statsRouter);
 // Claim system: /api/claims/* (player) + /api/admin/* (admin whitelist)
 app.use('/api', claimsRouter);
-// #54 Phase 2 Day 3: admin-only ELO config (/api/admin/elo/config)
-app.use('/api', adminEloRouter);
 // #49 history import (hineko_20260424_1035): admin-only bulk game import
 //   POST /api/admin/games/import/json — upload ProAvalon JSON array
 //   POST /api/admin/games/import/sheets — 501 stub (CLI only for now)
@@ -150,12 +143,6 @@ async function main() {
     console.log('✓ Firebase initialized');
     // Seed admin whitelist (idempotent — no-op if already seeded)
     await ensureAdminsSeed();
-
-    // #54 Phase 3: load persisted ELO config from Firestore + subscribe for hot
-    // reload. Safe if Firebase admin is not ready — logs warning and uses
-    // DEFAULT_ELO_CONFIG.
-    await loadEloConfigFromFirestore();
-    subscribeEloConfigChanges();
   } catch (err) {
     console.error('Firebase initialization failed:', err);
     // Continue anyway — individual auth will fail but health checks + guest-only

@@ -3,7 +3,7 @@
  *
  * A practice room is a private 10-seat room (the player + 9 bots) whose id
  * starts with `PRACTICE-`. It is never listed, cannot be joined or watched by
- * anyone else, and is never recorded (no game record, ELO, stats or archive).
+ * anyone else, and is never recorded (no game record, stats or archive).
  * Every bot decision is traced server-side and sent to the player only after
  * the game ends, so the post-game review can show why each bot did what it did.
  *

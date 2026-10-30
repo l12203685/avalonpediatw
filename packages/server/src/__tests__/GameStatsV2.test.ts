@@ -9,8 +9,6 @@ import {
 import {
   ALL_TIER_GROUPS,
   computeAssassinPrecision,
-  computeELO,
-  computeEloTag,
   computeLadyHonesty,
   computeLeaderboardByTier,
   computeMerlinAssassinationRate,
@@ -26,7 +24,6 @@ import {
   computeTheoreticalWinRate,
   computeTier,
   computeTierGroup,
-  recomputeEloFromV2,
   TIER_MIN_GAMES,
 } from '../services/GameStatsV2';
 
@@ -315,78 +312,36 @@ describe('computeAssassinPrecision', () => {
 });
 
 // ---------------------------------------------------------------------------
-// ELO
-// ---------------------------------------------------------------------------
-
-describe('computeELO', () => {
-  it('increases when player wins', () => {
-    const games = [fixtureGoodWins()];
-    const alice = computeELO(games, 'uid-alice');
-    expect(alice).toBeGreaterThan(1000);  // good 贏
-  });
-
-  it('decreases when player loses', () => {
-    const games = [fixtureMerlinKilled()];
-    const alice = computeELO(games, 'uid-alice');
-    expect(alice).toBeLessThan(1000);
-  });
-
-  it('enforces minElo floor 100', () => {
-    // Run many losses — should still be >= 100
-    const games: GameRecordV2[] = [];
-    for (let i = 0; i < 50; i += 1) {
-      games.push({
-        ...fixtureThreeRed(),
-        gameId: `game-loss-${i}`,
-        playedAt: 1_745_000_000_000 + i,
-      });
-    }
-    const alice = computeELO(games, 'uid-alice');
-    expect(alice).toBeGreaterThanOrEqual(100);
-  });
-});
-
-describe('recomputeEloFromV2', () => {
-  it('returns a map keyed by playerId with ELO per player', () => {
-    const games = [fixtureGoodWins(), fixtureMerlinKilled()];
-    const map = recomputeEloFromV2(games);
-    expect(map.has('uid-alice')).toBe(true);
-    expect(map.has('uid-frank')).toBe(true);
-    expect(map.size).toBeGreaterThanOrEqual(8);  // 8 players from fixture
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Tier + Leaderboard
 // ---------------------------------------------------------------------------
 
 describe('computeTier (legacy 3-tier backcompat)', () => {
   // Edward 2026-04-24 13:43：雙維度取代；但 computeTier 仍保留以不破壞舊呼叫端。
   // Edward 2026-04-26 12:32-12:35 — 砍 6-tier → **3-tier 絕對固定切點 + 場數區間
-  // chip label**（對齊 web/utils/eloRank.ts SSoT）：
+  // chip label**：
   //   `<100 場`    : 1-99    → tier='新手'   (backcompat 中文字串)
   //   `100-199 場` : 100-199 → tier='中堅'   (backcompat 中文字串)
   //   `≥200 場`    : 200+    → tier='大師'   (backcompat 中文字串)
   // UI chip text 不再用 abstract 命名（菜雞/初學/新手/中堅/高手/大師），
   // 但 server 此處仍輸出 PlayerTier 中文字串以保 backcompat 存量 Firestore doc。
 
-  it('uses totalGames (not ELO) for tier assignment', () => {
-    expect(computeTier(9999, 5)).toBe('新手');
-    expect(computeTier(100, 200)).toBe('大師');
+  it('uses totalGames for tier assignment', () => {
+    expect(computeTier(5)).toBe('新手');
+    expect(computeTier(200)).toBe('大師');
   });
 
   it('classifies every legacy band by totalGames thresholds', () => {
-    expect(computeTier(1000, 0)).toBe('新手');
-    expect(computeTier(1000, 1)).toBe('新手');
-    expect(computeTier(1000, 99)).toBe('新手');
-    expect(computeTier(1000, 100)).toBe('中堅');
-    expect(computeTier(1000, 199)).toBe('中堅');
-    expect(computeTier(1000, 200)).toBe('大師');
-    expect(computeTier(1000, 999)).toBe('大師');
+    expect(computeTier(0)).toBe('新手');
+    expect(computeTier(1)).toBe('新手');
+    expect(computeTier(99)).toBe('新手');
+    expect(computeTier(100)).toBe('中堅');
+    expect(computeTier(199)).toBe('中堅');
+    expect(computeTier(200)).toBe('大師');
+    expect(computeTier(999)).toBe('大師');
   });
 
   it('ignores legacy minGames override parameter', () => {
-    expect(computeTier(1200, 5, 3)).toBe('新手');
+    expect(computeTier(5, 3)).toBe('新手');
     expect(TIER_MIN_GAMES).toBe(0);
   });
 });
@@ -418,35 +373,6 @@ describe('computeTierGroup (dual-dim · games)', () => {
 
   it('ALL_TIER_GROUPS lists 5 groups in low→high order', () => {
     expect(ALL_TIER_GROUPS).toEqual(['rookie', 'regular', 'veteran', 'expert', 'master']);
-  });
-});
-
-describe('computeEloTag (dual-dim · ELO)', () => {
-  // Edward 2026-04-24 13:43：3 塊 ELO 標籤。
-  //   硬閾值: < 1100 novice / 1100-1399 mid / ≥ 1400 top
-
-  it('falls back to hard thresholds when no distribution', () => {
-    expect(computeEloTag(900)).toBe('novice_tag');
-    expect(computeEloTag(1099)).toBe('novice_tag');
-    expect(computeEloTag(1100)).toBe('mid_tag');
-    expect(computeEloTag(1399)).toBe('mid_tag');
-    expect(computeEloTag(1400)).toBe('top_tag');
-    expect(computeEloTag(2000)).toBe('top_tag');
-  });
-
-  it('uses percentile split when distribution provided', () => {
-    // distribution: 100 evenly-spaced ELOs 1000..1999
-    const dist: number[] = [];
-    for (let i = 0; i < 100; i += 1) dist.push(1000 + i * 10);
-    // 33rd percentile ≈ 1320, 66th ≈ 1650
-    expect(computeEloTag(1100, dist)).toBe('novice_tag');
-    expect(computeEloTag(1500, dist)).toBe('mid_tag');
-    expect(computeEloTag(1800, dist)).toBe('top_tag');
-  });
-
-  it('falls back to hard thresholds on empty / too-short distribution', () => {
-    expect(computeEloTag(1500, [])).toBe('top_tag');
-    expect(computeEloTag(1500, [1200, 1300])).toBe('top_tag');
   });
 });
 
@@ -584,9 +510,7 @@ describe('computeLeaderboardByTier (dual-dim)', () => {
     const stats = [
       {
         playerId: 'a',
-        elo: 1700,
         tierGroup: 'master' as const,
-        eloTag: 'top_tag' as const,
         theoreticalWinRate: 0.55,
         tier: '大師' as const,
         totalGames: 260,
@@ -594,9 +518,7 @@ describe('computeLeaderboardByTier (dual-dim)', () => {
       },
       {
         playerId: 'b',
-        elo: 1500,
         tierGroup: 'expert' as const,
-        eloTag: 'top_tag' as const,
         theoreticalWinRate: 0.50,
         tier: '高手' as const,
         totalGames: 210,
@@ -604,9 +526,7 @@ describe('computeLeaderboardByTier (dual-dim)', () => {
       },
       {
         playerId: 'c',
-        elo: 500,
         tierGroup: 'rookie' as const,
-        eloTag: 'novice_tag' as const,
         theoreticalWinRate: 0.20,
         tier: '菜雞' as const,
         totalGames: 12,
@@ -614,9 +534,7 @@ describe('computeLeaderboardByTier (dual-dim)', () => {
       },
       {
         playerId: 'd',
-        elo: 1800,
         tierGroup: 'master' as const,
-        eloTag: 'top_tag' as const,
         theoreticalWinRate: 0.70,
         tier: '大師' as const,
         totalGames: 300,
@@ -663,12 +581,11 @@ describe('computeLeaderboardByTier (dual-dim)', () => {
     );
   });
 
-  it('fallbacks tierGroup/eloTag/theoreticalWinRate for legacy docs without new fields', () => {
+  it('fallbacks tierGroup/theoreticalWinRate for legacy docs without new fields', () => {
     const legacy = [{
       playerId: 'legacy-1',
-      elo: 1500,
       tier: '大師' as const,
-      // tierGroup/eloTag/theoreticalWinRate missing — simulates pre-migration Firestore doc
+      // tierGroup/theoreticalWinRate missing — simulates pre-migration Firestore doc
       totalGames: 260,
       computedAt: 0,
       lastComputedGameId: null,
@@ -683,7 +600,6 @@ describe('computeLeaderboardByTier (dual-dim)', () => {
     const lb = computeLeaderboardByTier(legacy);
     expect(lb.master).toHaveLength(1);
     expect(lb.master[0].tierGroup).toBe('master');
-    expect(lb.master[0].eloTag).toBe('top_tag');
     expect(lb.master[0].theoreticalWinRate).toBeCloseTo(0.55);
   });
 });
@@ -701,36 +617,24 @@ describe('computePlayerStatsV2', () => {
     expect(stats.winRate.wins).toBe(1);
     expect(stats.lastComputedGameId).toBe('game-003');  // 最新 playedAt
     expect(stats.merlinAssassinationRate.timesAsMerlin).toBe(3);
-    expect(stats.elo).toBeDefined();
-    // 新雙維度
+    // 2026-10-30：舊 V2 ELO 移除，快照不再有 elo / eloTag
+    expect(stats).not.toHaveProperty('elo');
+    expect(stats).not.toHaveProperty('eloTag');
     expect(stats.tierGroup).toBeDefined();
-    expect(stats.eloTag).toBeDefined();
     expect(typeof stats.theoreticalWinRate).toBe('number');
     // 舊 tier 仍保留 (backcompat)
     expect(stats.tier).toBeDefined();
   });
 
-  it('assigns rookie group for low-game players regardless of initialElo', () => {
+  it('assigns rookie group for low-game players', () => {
     const games = [fixtureGoodWins()];
     const stats = computePlayerStatsV2(games, 'uid-alice', {
-      initialElo: 1500,
       minGamesForTier: 1,
     });
     // Edward 2026-04-24 13:43：tierGroup 由場次決定；1 局 < 100 → rookie
     expect(stats.tierGroup).toBe('rookie');
     // 舊 tier (Edward 2026-04-26 12:32-12:35 砍 3-tier)：1 局 < 100 → 新手
     expect(stats.tier).toBe('新手');
-  });
-
-  it('accepts eloDistribution to switch eloTag to percentile mode', () => {
-    const games = [fixtureGoodWins()];
-    const dist: number[] = [];
-    for (let i = 0; i < 60; i += 1) dist.push(900 + i * 5);  // 900..1195
-    const stats = computePlayerStatsV2(games, 'uid-alice', {
-      initialElo: 1000,
-      eloDistribution: dist,
-    });
-    expect(stats.eloTag === 'novice_tag' || stats.eloTag === 'mid_tag' || stats.eloTag === 'top_tag').toBe(true);
   });
 
   // Edward 2026-04-24 14:43：「在計算ELO時排除有AI 與 有 勾選"娛樂局" 的場次」
