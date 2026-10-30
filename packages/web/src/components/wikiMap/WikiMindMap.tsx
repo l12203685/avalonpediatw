@@ -15,7 +15,7 @@ import WikiMindMapTree from './WikiMindMapTree';
  */
 
 /** 新手入門排第一（它照〈關於阿瓦隆百科〉的建議閱讀順序），其餘大致由淺到深。 */
-const MAP_CATEGORY_ORDER = ['beginner', 'rules', 'roles', 'glossary', 'strategies', 'replays', 'events', 'faq'];
+const MAP_CATEGORY_ORDER = ['beginner', 'rules', 'roles', 'glossary', 'strategies', 'replays', 'events', 'faq', 'about'];
 
 const DESKTOP_QUERY = '(min-width: 1024px)';
 
