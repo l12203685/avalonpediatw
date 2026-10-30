@@ -11,6 +11,10 @@ import {
   Lock,
   BarChart3,
   Clock,
+  Instagram,
+  Youtube,
+  MessageCircle,
+  MessageSquare,
 } from 'lucide-react';
 import { TIMER_MULTIPLIER_OPTIONS, TimerMultiplier, PLAY_PLATFORM_URL } from '@avalon/shared';
 import LanguageSwitcher from '../components/LanguageSwitcher';
@@ -39,6 +43,17 @@ interface OpenRoom {
   inProgress: boolean;
   isPrivate: boolean;
 }
+
+/**
+ * 社群連結（Edward 2026-10-30：Linktree 的內容直接放首頁，不用再多一個跳轉頁）。
+ * 網址取自 linktr.ee/avalonpediatw 的公開按鈕。
+ */
+const COMMUNITY_LINKS = [
+  { key: 'line', label: 'LINE', href: 'https://line.me/ti/g/oO5RUpWeoj', Icon: MessageCircle },
+  { key: 'discord', label: 'Discord', href: 'https://discord.com/invite/mBqFqM2TXs', Icon: MessageSquare },
+  { key: 'instagram', label: 'Instagram', href: 'https://www.instagram.com/avalonpediatw/', Icon: Instagram },
+  { key: 'youtube', label: 'YouTube', href: 'https://www.youtube.com/@AvalonPediaTW/streams', Icon: Youtube },
+] as const;
 
 export default function HomePage(): JSX.Element {
   const { t } = useTranslation();
@@ -452,6 +467,23 @@ export default function HomePage(): JSX.Element {
 
                   </div>
 
+                  {/* 社群（原 Linktree 的按鈕，Edward 2026-10-30） */}
+                  <div data-testid="home-community-links" className="grid grid-cols-4 gap-2 sm:gap-3 pt-1">
+                    {COMMUNITY_LINKS.map(({ key, label, href, Icon }) => (
+                      <a
+                        key={key}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid={`home-link-${key}`}
+                        className="min-w-0 bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 hover:text-white rounded-lg py-2 px-1 transition-colors flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm"
+                      >
+                        <Icon size={16} className="flex-shrink-0" />
+                        <span className="truncate">{label}</span>
+                      </a>
+                    ))}
+                  </div>
+
                   {/* Admin link — small text, only shown to admins */}
                   {isAdminUser && (
                     <div className="pt-1">
@@ -650,26 +682,6 @@ export default function HomePage(): JSX.Element {
           <InstallButton />
           <ForceUpdateButton />
         </div>
-
-        {/* Edward 2026-04-25 19:56: 大廳最下方加 by avalonpediatw + linktree 連結。
-            fixed bottom-center, text-xs, white/40 — 不搶焦但可見。z-30 比 logo bg
-            高，比 modal/AuthGate (z-50) 低，避免遮蔽 modal。只在 home mode 顯示，
-            create/join 表單模式時隱藏避免推擠。 */}
-        {mode === 'home' && (
-          <div className="fixed bottom-3 inset-x-0 z-30 flex justify-center pointer-events-none">
-            <p className="text-[10px] sm:text-xs text-white/40 pointer-events-auto">
-              by{' '}
-              <a
-                href="https://linktr.ee/avalonpediatw"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-2 hover:text-white/70 transition-colors"
-              >
-                avalonpediatw
-              </a>
-            </p>
-          </div>
-        )}
 
         {/* Password modal for private rooms */}
         {pendingJoinRoom && (
