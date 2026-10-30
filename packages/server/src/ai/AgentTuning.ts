@@ -498,6 +498,8 @@ export interface AgentTuning {
    * 投票，只在這隊會讓紅方三紅（有隊友、已兩紅 → 白）或藍方三藍（沒隊友、已兩藍 → 黑）時照紅方利益投。
    */
   redNormalVote: number;
+  /** 紅隊長第 1、2 局非強制（注定被否決）的提議照公開視角的忠臣派隊（強桌差距 R2，`RedVoteCamouflage.redLoyalLeadEarlyNow`）。 */
+  redLoyalLeadEarly: boolean;
   /**
    * 第 5 回合藍方・梅林（`belief/ZoneModel.ts`，Edward 2026-10-29；百科〈視角與區間派票法〉）：梅林第 1、2 局非強制提議改用
    * 「切區間」給資訊——隊上沒有他看得到的紅、隊員之間的空位裝著拇指（取代派拇指躲刺）；忠臣（`loyalMerlinRead`）與派西
@@ -595,6 +597,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'beliefBotTables',
   'merlinNormalVote',
   'redNormalVote',
+  'redLoyalLeadEarly',
   'merlinZoneSignal',
   'redRankOrder',
   'merlinLoyalStyle',
@@ -665,6 +668,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefBotTables: 0,
   merlinNormalVote: 0,
   redNormalVote: 0,
+  redLoyalLeadEarly: false,
   merlinZoneSignal: false,
   redRankOrder: false,
   merlinLoyalStyle: false,
@@ -883,6 +887,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefBotTables: 1,
   merlinNormalVote: 0,
   redNormalVote: 0,
+  redLoyalLeadEarly: false,
   merlinZoneSignal: false,
   redRankOrder: true,
   merlinLoyalStyle: true,
@@ -953,6 +958,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   beliefBotTables: 'AVALON_TUNING_BELIEF_BOT_TABLES',
   merlinNormalVote: 'AVALON_TUNING_MERLIN_NORMAL_VOTE',
   redNormalVote: 'AVALON_TUNING_RED_NORMAL_VOTE',
+  redLoyalLeadEarly: 'AVALON_TUNING_RED_LOYAL_LEAD_EARLY',
   merlinZoneSignal: 'AVALON_TUNING_MERLIN_ZONE_SIGNAL',
   redRankOrder: 'AVALON_TUNING_RED_RANK_ORDER',
   merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
