@@ -398,7 +398,7 @@ export function checkDecision(
       }
       // INV-M1 (votes)
       if (obs.myRole === 'merlin' && team.some((id) => obs.knownEvils.includes(id))) {
-        const exempt = voteExemption(obs, view, false);
+        const exempt = voteExemption(obs, view, false) ?? ((team ?? []).includes(obs.myPlayerId) ? MERLIN_ON_TEAM : undefined);
         L.record('INV-M1', { exempt, violated: approve });
       }
       teamVoteDiagnostics(rec, approve, L, truth);
