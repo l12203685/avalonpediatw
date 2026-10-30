@@ -488,7 +488,10 @@ export interface AgentTuning {
    * 藍方照對手實際的做法讀派隊、投票與任務牌，逼紅方偽裝；每回合採用新預設後重新擬合。
    */
   beliefBotTables: number;
-  /** 用重新擬合的機器人表（`belief/likelihoods_bot_next.json`）取代現行的那張（每回合採用新預設後重新擬合，先量再換）。 */
+  /**
+   * 用重新擬合的機器人表（`belief/likelihoods_bot_next.json`）取代現行的那張（每回合採用新預設後重新擬合，先量再換）。
+   * 第 13 回合用第 12 回合預設重新擬合（600 局）：藍方 +0.0pp，不採用。
+   */
   beliefBotTablesNext: boolean;
   /**
    * 梅林照雜魚的票型投票的比例（強桌差距 B1，`MerlinLoyalStyle.merlinNormalVoteNow`；0 = 關）：第 3 局起、非強制，照
@@ -505,6 +508,8 @@ export interface AgentTuning {
   /**
    * 好人不在隊上的票（強桌差距 B3，`GoodCleanVote.goodTailVote`；0 = 關，否則為乾淨機率門檻 τ）：第 3 局起忠臣／派西不在隊上時
    * 預設投黑，只有這隊乾淨機率 ≥ τ 而且要洗掉偏紅的尾派（或這隊過了就三藍）時外白。
+   * 第 13 回合採用 0.85（和 `goodKeyVote=0.5` 一起，對第 12 回合紅方兩組新種子藍方 +4.3／+2.8pp）：刺客讀票時把「不在隊上贊成
+   * 有梅林看得到的紅的隊」當成不是梅林，藍方少外白，梅林的 0% 就不再突出。
    */
   goodTailVote: number;
   /** 刺客讀派隊的資訊超前時，公開視角照機器人藍方實際的讀法（`beliefBotTables` 的表）算，而不是真人表（第 10 回合紅方候選）。 */
@@ -564,6 +569,18 @@ export interface AgentTuning {
    * 第 12 回合採用（在 `assassinVoteModel=2` 之上兩組新種子紅方 +1.4／+1.5pp）。
    */
   mordredHideR1: boolean;
+  /**
+   * 第 13 回合藍方・忠臣／派西（`GoodCleanVote.goodKeyVoteReject`；0 = 關，否則為乾淨機率門檻）：紅方已兩紅（關鍵局）、第 3 局起、
+   * 非強制時，忠臣與派西（在不在隊上都一樣）估「這隊沒有紅」的機率低於這個門檻就投黑——一個紅就輸掉整場，門檻比平常的
+   * `goodCleanVote` 高；梅林在關鍵局內黑看得到紅的隊（Edward 10/30 裁定允許）也因此混在藍方的內黑裡。
+   * 第 13 回合採用 0.5（和 `goodTailVote=0.85` 一起）。
+   */
+  goodKeyVote: number;
+  /**
+   * 第 13 回合藍方・梅林（`LakePolicy.pickLakeTargetForTeam`）：梅林持湖時照只看公開紀錄的忠臣挑湖目標（可能湖到他看得到的紅，
+   * 照實宣告），而不是避開看得到的紅（自我對打：梅林湖到看得到的紅 0%，其他藍方 23%）。
+   */
+  merlinLakeLoyal: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -643,6 +660,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'assassinLakeRead',
   'redCleanLookBot',
   'mordredHideR1',
+  'goodKeyVote',
+  'merlinLakeLoyal',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -721,6 +740,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinLakeRead: 0,
   redCleanLookBot: false,
   mordredHideR1: false,
+  goodKeyVote: 0,
+  merlinLakeLoyal: false,
 });
 
 /**
@@ -935,7 +956,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinNormalVote: 1,
   redNormalVote: 1,
   redLoyalLeadEarly: false,
-  goodTailVote: 0,
+  goodTailVote: 0.85,
   assassinLeadReadBot: false,
   merlinZoneSignal: false,
   redRankOrder: true,
@@ -947,6 +968,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinLakeRead: 0,
   redCleanLookBot: false,
   mordredHideR1: true,
+  goodKeyVote: 0.5,
+  merlinLakeLoyal: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1025,6 +1048,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   assassinLakeRead: 'AVALON_TUNING_ASSASSIN_LAKE_READ',
   redCleanLookBot: 'AVALON_TUNING_RED_CLEAN_LOOK_BOT',
   mordredHideR1: 'AVALON_TUNING_MORDRED_HIDE_R1',
+  goodKeyVote: 'AVALON_TUNING_GOOD_KEY_VOTE',
+  merlinLakeLoyal: 'AVALON_TUNING_MERLIN_LAKE_LOYAL',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1061,6 +1086,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
+  }
+  if (name === 'goodKeyVote') {
+    const value = raw === undefined ? 0.5 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`goodKeyVote needs a number in [0, 1], got "${raw}"`);
+    return { goodKeyVote: value };
   }
   if (name === 'goodTailVote') {
     const value = raw === undefined ? 0.5 : Number.parseFloat(raw);
@@ -1179,7 +1209,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

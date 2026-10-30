@@ -54,3 +54,22 @@ export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservati
   const tailRed = bayesRedShare(obs, opts).get(tail) ?? 0;
   return tailRed >= 0.4;
 }
+
+/**
+ * 關鍵局的好人票（優化迴圈第 13 回合・藍方，2026-10-31；`AgentTuning.goodKeyVote` = 門檻）。
+ *
+ * 第 12 回合刺客（`assassinVoteModel=2`）在「紅方已兩紅、梅林在隊上、隊上有他看得到的紅」這一格讀票：梅林 0% 贊成、其他藍方
+ * 52%（自我對打）。這一票本來就是整場的勝負——隊上一個紅就三紅——所以忠臣與派西在關鍵局用比平常（`goodCleanVote`）高的門檻：
+ * 第 3 局起、非強制、紅方已兩紅，估「這隊沒有紅」的機率低於門檻就投黑（在不在隊上都一樣）。只會把贊成改成反對。
+ */
+export function goodKeyVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const tau = tuning.goodKeyVote ?? 0;
+  if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
+  if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return false;
+  if ((obs.currentRound ?? 1) < 3 || (obs.failCount ?? 0) >= 4) return false;
+  if ((obs.questResults ?? []).filter((r) => r === 'fail').length < 2) return false;
+  const team = obs.proposedTeam ?? [];
+  if (team.length === 0) return false;
+  const p = bayesTeamClean(obs, team, bayesOptionsOf(tuning));
+  return p !== null && p < tau;
+}

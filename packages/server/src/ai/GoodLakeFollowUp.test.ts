@@ -77,6 +77,7 @@ function obs(partial: Partial<PlayerObservation>): PlayerObservation {
 const LANE_BASE: AgentTuning = {
   ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false,
   teamDominanceGate: false, mustFailGate: false, bayesBelief: false, goodCleanVote: 0, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false,
+  goodTailVote: 0, goodKeyVote: 0, // round 13: the off-team / key-round posterior votes fire first
 };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };

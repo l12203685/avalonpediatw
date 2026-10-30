@@ -32,6 +32,7 @@ import {
 } from './ForwardAgent';
 import { interpret } from './InterpretationModule';
 import { HeuristicAgent } from '../HeuristicAgent';
+import { DEFAULT_AGENT_TUNING } from '../AgentTuning';
 
 // Helper: shorten boilerplate for an observation.
 function makeObs(partial: Partial<PlayerObservation>): PlayerObservation {
@@ -361,7 +362,10 @@ describe('ForwardAgent.decide (full pipeline)', () => {
       ],
       questResults: ['success', 'success'],
     });
-    const { action, reasoningTrace } = agent.decide(obs);
+    // Round 13 `goodTailVote` decides an off-the-team vote ahead of the pipeline: off here.
+    const piped = new ForwardAgent('test-fwd', new HeuristicAgent('test-fwd', undefined, undefined, { ...DEFAULT_AGENT_TUNING, goodTailVote: 0 }));
+    piped.onGameStart(makeObs({}));
+    const { action, reasoningTrace } = piped.decide(obs);
     expect(action.type).toBe('team_vote');
     expect(reasoningTrace.candidatesEvaluated).toBeGreaterThanOrEqual(2);
   });
