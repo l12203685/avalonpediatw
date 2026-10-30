@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
-  ArrowLeft, Trophy, BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar,
+  Trophy, BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
@@ -84,7 +84,6 @@ const ANALYSIS_TABS: AnalysisTabDef[] = [
 
 export default function AnalyticsPage(): JSX.Element {
   const { t } = useTranslation();
-  const { setGameState } = useGameStore();
   // openPlayerStats (排行的名字、#player= 連結) → 分析 → 玩家雷達，選好那位。
   const statsFocus = useGameStore((s) => s.statsFocus);
   const filterKey = useStatsFilter((s) => `${s.key}|${s.nonce}`);
@@ -100,20 +99,6 @@ export default function AnalyticsPage(): JSX.Element {
   return (
     <div className="min-h-screen bg-black p-4 pb-24">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <motion.button
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setGameState('home')}
-            className="p-2 bg-zinc-900/70 rounded-lg border border-zinc-700 hover:border-white text-zinc-300 hover:text-white transition-colors"
-            aria-label={t('nav.back')}
-          >
-            <ArrowLeft size={20} />
-          </motion.button>
-          <h1 className="text-2xl font-black text-white">{t('nav.analytics')}</h1>
-        </div>
-
         {/* Top-level tabs (2 tabs) */}
         <div className="flex flex-wrap gap-2 mb-6 border-b border-zinc-800 pb-2">
           <TopTabButton
