@@ -405,6 +405,20 @@ export function replayRule(
         mismatch: !sameAction(action, real),
       };
     }
+    if (desc === 'good key-round vote (posterior)') {
+      return {
+        rule: '關鍵局好人票：紅方已兩勝，第 3 局起，估「這隊沒有紅」的機率低於關鍵局的門檻 → 反對（忠臣與派西，在不在隊上都一樣）',
+        mismatch: !sameAction(action, real),
+      };
+    }
+    if (desc.startsWith('good tail vote')) {
+      return {
+        rule: desc.includes('wash the tail')
+          ? '好人場外票：不在隊上，這隊夠乾淨，而且要洗掉偏紅的尾派（或這隊過了就三藍） → 外白贊成'
+          : '好人場外票：第 3 局起不在隊上照一般票，外白只用來洗尾或三藍 → 反對（忠臣與派西）',
+        mismatch: !sameAction(action, real),
+      };
+    }
     if (desc === 'red vouch follow-up reject') {
       return {
         rule: '紅方持湖者言行一致：自己不在隊上，隊伍漏掉自己宣藍的人、或放了宣紅的人 → 反對',

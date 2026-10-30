@@ -53,7 +53,7 @@
 
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
-import { goodCleanVoteReject, goodTailVote } from '../GoodCleanVote';
+import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCleanVote';
 import { redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
@@ -753,10 +753,19 @@ export class ForwardAgent implements AvalonAgent {
     if (redDivisionReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
+    // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior
+    // gives less than the (higher) key-round threshold of being clean, on or off the team.
+    if (goodKeyVoteReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'good key-round vote (posterior)');
+    }
     // Strong-table gap B3 `goodTailVote` (GoodCleanVote.ts): off the team, a loyal / Percival votes normal (reject) unless
     // the team is clean enough and the outer white washes a suspect tail (or wins the game).
-    const tailVote = goodTailVote(this.baseline.tuning, obs);
-    if (tailVote !== null) return this.ruleDecision(obs, { type: 'team_vote', vote: tailVote }, `good tail vote (${tailVote ? 'outer white: wash the tail' : 'normal vote off the team'})`);
+    // The outer white never passes the good vote gates (must-fail / dominated team; INV-V1, INV-K1V).
+    const tailRule = goodTailVote(this.baseline.tuning, obs);
+    if (tailRule !== null) {
+      const tailVote = tailRule && goodVoteGate(obs, this.gates) === null;
+      return this.ruleDecision(obs, { type: 'team_vote', vote: tailVote }, `good tail vote (${tailVote ? 'outer white: wash the tail' : tailRule ? 'outer white blocked by a vote gate' : 'normal vote off the team'})`);
+    }
     // Round 3 (blue) candidate `goodCleanVote` (GoodCleanVote.ts): loyal / Percival reject a team the posterior
     // gives too little chance of being clean (R3+).
     if (goodCleanVoteReject(this.baseline.tuning, obs)) {

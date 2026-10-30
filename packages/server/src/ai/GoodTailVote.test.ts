@@ -27,7 +27,7 @@ describe('goodTailVote', () => {
     expect(goodTailVote(on(0.01), obs({ questResults: ['success', 'success'] }))).toBe(true);
   });
   it('not applicable: off, on the team, Merlin, R1–R2, forced', () => {
-    expect(goodTailVote(DEFAULT_AGENT_TUNING, obs())).toBeNull();
+    expect(goodTailVote(on(0), obs())).toBeNull();
     expect(goodTailVote(on(0.5), obs({ proposedTeam: ['P1', 'P2', 'P3', 'P4'] }))).toBeNull();
     expect(goodTailVote(on(0.5), obs({ myRole: 'merlin' } as Partial<PlayerObservation>))).toBeNull();
     expect(goodTailVote(on(0.5), obs({ currentRound: 2 }))).toBeNull();
