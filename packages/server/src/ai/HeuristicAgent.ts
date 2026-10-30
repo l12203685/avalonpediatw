@@ -2674,7 +2674,8 @@ export class HeuristicAgent implements AvalonAgent {
       // Round 6 (red) candidate `assassinLeadRead` (assassin/MerlinLeadRead.ts): 資訊過度超前 — clean teams the public could not have picked.
       if (leadWeight > 0) {
         const reds = [...evilSet];
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadWeight * merlinLeadLogRatio(obs, id, reds));
+        const leadOpts = this.tuning.assassinLeadReadBot ? { botTables: this.tuning.beliefBotTables ?? 0 } : {};
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadWeight * merlinLeadLogRatio(obs, id, reds, leadOpts));
       }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }

@@ -12,7 +12,7 @@
  * 誰是莫德雷德：有 `allEvilRoles` 就用，否則對每個紅方取平均。
  */
 import type { PlayerObservation } from '../types';
-import { bayesTeamClean } from '../belief/BayesBelief';
+import { bayesTeamClean, type BayesOptions } from '../belief/BayesBelief';
 
 const EPS = 0.05;
 const EPS_DOOMED = 0.5;
@@ -39,20 +39,24 @@ function loyalViewBefore(obs: PlayerObservation, index: number): PlayerObservati
   } as PlayerObservation;
 }
 
-/** Public P(clean) of every non-forced proposal `candidate` led, cached per observation. */
-const cleanCache = new WeakMap<PlayerObservation, Map<number, number>>();
-function publicClean(obs: PlayerObservation, index: number): number {
+/** Public P(clean) of every non-forced proposal `candidate` led, cached per observation (and table choice). */
+const cleanCache = new WeakMap<PlayerObservation, Map<string, number>>();
+function publicClean(obs: PlayerObservation, index: number, opts: Readonly<BayesOptions>): number {
   let m = cleanCache.get(obs);
   if (!m) { m = new Map(); cleanCache.set(obs, m); }
-  const hit = m.get(index);
+  const key = `${index}|${opts.botTables ?? 0}`;
+  const hit = m.get(key);
   if (hit !== undefined) return hit;
-  const p = bayesTeamClean(loyalViewBefore(obs, index), obs.voteHistory[index].team) ?? 0.5;
-  m.set(index, p);
+  const p = bayesTeamClean(loyalViewBefore(obs, index), obs.voteHistory[index].team, opts) ?? 0.5;
+  m.set(key, p);
   return p;
 }
 
-/** log [ mean over Mordred d of P(proposals | Merlin) / P(proposals | loyal) ] for `candidate`. */
-export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[]): number {
+/**
+ * log [ mean over Mordred d of P(proposals | Merlin) / P(proposals | loyal) ] for `candidate`. `opts`: the loyal model the public view is read with — the human tables by default; `assassinLeadReadBot` reads it the way
+ * the bot blues actually do (`beliefBotTables`), the view Merlin's loyal-style proposals are built from.
+ */
+export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], opts: Readonly<BayesOptions> = {}): number {
   const leads: number[] = [];
   obs.voteHistory.forEach((v, i) => { if (v.leader === candidate && v.attempt < 5) leads.push(i); });
   if (leads.length === 0 || reds.length === 0) return 0;
@@ -65,7 +69,7 @@ export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, re
     for (const i of leads) {
       const v = obs.voteHistory[i];
       const seenRed = v.team.some((id) => id !== d && reds.includes(id));
-      const p = Math.min(Math.max(publicClean(obs, i), P_FLOOR), 1 - P_FLOOR);
+      const p = Math.min(Math.max(publicClean(obs, i, opts), P_FLOOR), 1 - P_FLOOR);
       const eps = v.round <= 2 ? EPS_DOOMED : EPS;
       lr += seenRed ? Math.log(eps / (1 - p)) : Math.log((1 - eps) / p);
     }
