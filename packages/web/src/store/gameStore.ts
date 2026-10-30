@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
-export type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis' | 'analytics' | 'settings' | 'personalStats' | 'profileSettings' | 'claimsNew' | 'adminClaims' | 'adminAdmins' | 'adminElo' | 'adminImport' | 'help' | 'forgotPassword' | 'resetPassword';
+export type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis' | 'analytics' | 'settings' | 'personalStats' | 'profileSettings' | 'claimsNew' | 'adminClaims' | 'adminAdmins' | 'adminElo' | 'adminImport' | 'help' | 'streams' | 'forgotPassword' | 'resetPassword';
 export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface Toast {
@@ -56,7 +56,7 @@ export const useGameStore = create<GameStore>((set) => ({
     set(state === 'analytics' || state === 'analysis' ? { gameState: state } : { gameState: state, statsFocus: null }),
   navigateToProfile: (userId) => set({ gameState: 'profile', profileUserId: userId }),
   openPlayerStats: (name): void => set((s) => ({
-    gameState: 'analytics',
+    gameState: 'analysis',
     statsFocus: { name, seq: (s.statsFocus?.seq ?? 0) + 1 },
   })),
   navigateToReplay: (roomId) => set({ gameState: 'replay', replayRoomId: roomId }),

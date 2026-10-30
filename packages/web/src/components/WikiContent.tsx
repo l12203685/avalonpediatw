@@ -36,11 +36,12 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
 type WikiView = 'list' | 'map';
 const WIKI_VIEW_KEY = 'avalon.wiki.view';
 
+/** 預設心智圖（Edward 2026-10-30）；選過列表的人記住列表。 */
 function readStoredView(): WikiView {
   try {
-    return window.localStorage.getItem(WIKI_VIEW_KEY) === 'map' ? 'map' : 'list';
+    return window.localStorage.getItem(WIKI_VIEW_KEY) === 'list' ? 'list' : 'map';
   } catch {
-    return 'list';
+    return 'map';
   }
 }
 
@@ -313,8 +314,8 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
     <div className="flex items-center gap-2">
       <div role="tablist" aria-label="百科檢視" className="shrink-0 inline-flex rounded-lg border border-zinc-700 bg-black/40 p-0.5">
         {([
-          ['list', '列表', LayoutGrid],
           ['map', '心智圖', Network],
+          ['list', '列表', LayoutGrid],
         ] as const).map(([id, label, Icon]) => (
           <button
             key={id}
