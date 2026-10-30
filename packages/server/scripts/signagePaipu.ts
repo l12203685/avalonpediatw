@@ -6,7 +6,7 @@
  *
  * Edward 2026-10-30：「貼在 DC 的牌譜頻道，要附座位暱稱」。Webhook 網址是密鑰，只從環境變數讀，不寫進 repo。
  * 牌譜格式（照 DC 牌譜頻道過去的文章）：一行一次提議（隊伍座位；`-` 內黑、`+` 外白；強制局不投票、不標記號）、
- * 任務牌 o／x、湖中 `x>y o`（練習台沒記到宣告時寫 `?`，要人工補）、「刺客刺殺:X」（三紅留空）、六碼＝刺娜德奧派梅的座位、
+ * 任務牌 o／x、湖中 `x>y o`（練習台沒記到宣告時寫 `?`，要人工補）、「刺客刺殺:X」（三紅寫 x）、六碼＝刺娜德奧派梅的座位、
  * 依座位「1.暱稱」每人一行。座位 10 寫成 0。
  */
 import fs from 'node:fs';
@@ -29,7 +29,8 @@ export function gameToPaipu(game: RecordedGame): string | null {
   if (!end || game.incomplete) return null;
   const users = [...end.users].sort((a, b) => a.set - b.set);
   const lakes = (end.lake ?? []).filter((l) => l.to !== null);
-  const lines: string[] = [];
+  // 結果寫在文章最前面（Edward 10/31：標題只放時間和局數）；匯入程式略過牌譜前的文字
+  const lines: string[] = [`結果:${resultTag(game)}`];
   let mi = 0;
   let attempt = 0;
   for (const m of end.meetings) {
@@ -64,8 +65,8 @@ export function gameToPaipu(game: RecordedGame): string | null {
   // 刺殺對象：刺中＝「刺客背刺 N家 梅林」；刺錯＝「N家擋刀」；被刺的人在局末畫面標 dead。
   const stabbed = users.find((u) => (u as { dead?: boolean }).dead)?.set
     ?? Number(logs.map((x) => /背刺\s*(\d+)\s*家|(\d+)\s*家擋刀/.exec(x)).find(Boolean)?.slice(1).find(Boolean) ?? NaN);
-  // Edward 10/31：牌譜各行 → 刺客刺殺:X（三紅留空）→ 六碼配置（刺娜德奧派梅）→ 依座位「1.暱稱」每人一行
-  lines.push(`刺客刺殺:${Number.isFinite(stabbed) ? d(stabbed) : ''}`);
+  // Edward 10/31：牌譜各行 → 刺客刺殺:X（三紅寫 x，照頻道格式）→ 六碼配置（刺娜德奧派梅）→ 依座位「1.暱稱」每人一行
+  lines.push(`刺客刺殺:${Number.isFinite(stabbed) ? d(stabbed) : 'x'}`);
   lines.push(ROLE_ORDER.map(roleAt).join(''));
   for (const u of users) lines.push(`${d(u.set)}.${u.name}`);
   return lines.join('\n');
@@ -86,23 +87,51 @@ export function isPostable(game: RecordedGame): boolean {
   return users.length === 10 && !users.some((u) => (u as { is_robot?: boolean }).is_robot);
 }
 
+/** 台灣時間的 Date（取 UTC 欄位來讀）。 */
+const twTime = (iso?: string): Date | null => (iso ? new Date(Date.parse(iso) + 8 * 3600_000) : null);
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+const twDay = (iso?: string): string => { const t = twTime(iso); return t ? `${t.getUTCFullYear()}${pad2(t.getUTCMonth() + 1)}${pad2(t.getUTCDate())}` : ''; };
+
 /**
- * 牌譜頻道是論壇頻道（Webhook 要帶 thread_name）：一局一個討論串，標題「月日房名 時:分 結果」（台灣時間，例：1030直播局2 22:42 三紅）。
+ * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_HHMM_第x局」（台灣時間、開局時刻；
+ * Edward 10/31：配置與結果寫在文章裡）。第幾局＝當天第幾個打完的真人 10 人局（見 dayIndex）。
  */
-export function paipuThreadName(game: RecordedGame, text: string): string {
-  const t = game.startedAt ? new Date(Date.parse(game.startedAt) + 8 * 3600_000) : null;
-  const when = t ? `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}` : '';
-  void text;
-  const kind = gameKind(game);
-  // 過去文章標題是「1025一般場6」：月日在前
-  const mmdd = t ? `${String(t.getUTCMonth() + 1).padStart(2, '0')}${String(t.getUTCDate()).padStart(2, '0')}` : '';
-  return `${mmdd}${(game.title || game.room).replace(/^阿瓦隆百科/, '')} ${when} ${kind}`.trim().slice(0, 100);
+export function paipuThreadName(game: RecordedGame, index?: number): string {
+  const t = twTime(game.startedAt);
+  const hhmm = t ? `${pad2(t.getUTCHours())}${pad2(t.getUTCMinutes())}` : '';
+  return [twDay(game.startedAt), hhmm, index ? `第${index}局` : ''].filter(Boolean).join('_').slice(0, 100);
 }
 
-/** 論壇標籤：結果（三紅／三藍被刀／三藍躲刺，每日匯入用的名稱）＋線瓦（線上局）。 */
-export function paipuTags(game: RecordedGame): string[] {
+/**
+ * 這局是當天（台灣日期，依開局時刻）第幾個打完的真人 10 人局：數同資料夾裡同一天、比它早或同時結束的可貼局。
+ * 用結束順序而不是開局順序，同時開好幾桌時編號才不會重複。
+ */
+export function dayIndex(file: string): number | undefined {
+  try {
+    const me = JSON.parse(fs.readFileSync(file, 'utf-8')) as RecordedGame & { endedAt?: string };
+    const day = twDay(me.startedAt);
+    const dir = path.dirname(file);
+    let n = 0;
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.json') || f.includes('incomplete')) continue;
+      const g = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')) as RecordedGame & { endedAt?: string };
+      if (twDay(g.startedAt) === day && isPostable(g) && gameToPaipu(g) && (g.endedAt ?? '') <= (me.endedAt ?? '')) n += 1;
+    }
+    return n || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 結果，用論壇標籤的名稱：三紅／三藍被刀／三藍躲刺。 */
+function resultTag(game: RecordedGame): string {
   const kind = gameKind(game);
-  const result = kind === '三紅' ? '三紅' : kind === '三藍死' ? '三藍被刀' : kind === '三藍活' ? '三藍躲刺' : '';
+  return kind === '三紅' ? '三紅' : kind === '三藍死' ? '三藍被刀' : kind === '三藍活' ? '三藍躲刺' : '';
+}
+
+/** 論壇標籤：結果（每日匯入用的名稱）＋線瓦（線上局）。 */
+export function paipuTags(game: RecordedGame): string[] {
+  const result = resultTag(game);
   return result ? [result, '線瓦'] : ['線瓦'];
 }
 
@@ -161,9 +190,9 @@ if (process.argv[1] && path.basename(process.argv[1]).startsWith('signagePaipu')
       const game = JSON.parse(fs.readFileSync(f, 'utf-8')) as RecordedGame;
       const text = isPostable(game) ? gameToPaipu(game) : null;
       if (!text) { console.log(`# ${path.basename(f)}：未完成或非真人 10 人局，略過`); continue; }
-      if (process.argv.includes('--json')) { console.log(JSON.stringify({ text, thread: paipuThreadName(game, text), tags: paipuTags(game) })); continue; }
+      if (process.argv.includes('--json')) { console.log(JSON.stringify({ text, thread: paipuThreadName(game, dayIndex(f)), tags: paipuTags(game) })); continue; }
       if (post) {
-        const ok = await postPaipu(text, paipuThreadName(game, text), paipuTags(game));
+        const ok = await postPaipu(text, paipuThreadName(game, dayIndex(f)), paipuTags(game));
         console.log(ok ? `已貼出 ${path.basename(f)}` : '沒有設定 DISCORD_BOT_TOKEN 或 DISCORD_PAIPU_WEBHOOK_URL，未貼出');
         await new Promise((r) => setTimeout(r, 1500));
       } else {
