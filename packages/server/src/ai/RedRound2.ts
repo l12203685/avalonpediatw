@@ -28,3 +28,14 @@ export function redCleanApproveVote(tuning: Readonly<AgentTuning>, obs: PlayerOb
   if (team.includes(obs.myPlayerId) || team.some((id) => obs.knownEvils.includes(id))) return null;
   return Math.random() < tuning.redCleanApprove ? true : null;
 }
+
+/**
+ * 第 12 回合 `mordredHideR1`：第 1 局莫德雷德是隊上唯一看得到的紅時出成功藏身。藍方照機器人表讀任務牌（第 7 回合起；機器人紅方
+ * 幾乎從不藏），成功的隊被讀成乾淨，之後莫德雷德被帶進隊伍；梅林看不到他，派隊與投票都擋不了。
+ */
+export function mordredHideR1Card(tuning: Readonly<AgentTuning>, obs: PlayerObservation): 'success' | null {
+  if (!tuning.mordredHideR1 || obs.myRole !== 'mordred' || (obs.currentRound ?? 1) !== 1) return null;
+  const team = obs.proposedTeam ?? [];
+  if (team.some((id) => id !== obs.myPlayerId && obs.knownEvils.includes(id))) return null;
+  return 'success';
+}
