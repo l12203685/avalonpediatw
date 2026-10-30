@@ -507,6 +507,8 @@ export interface AgentTuning {
    * 預設投黑，只有這隊乾淨機率 ≥ τ 而且要洗掉偏紅的尾派（或這隊過了就三藍）時外白。
    */
   goodTailVote: number;
+  /** 刺客讀派隊的資訊超前時，公開視角照機器人藍方實際的讀法（`beliefBotTables` 的表）算，而不是真人表（第 10 回合紅方候選）。 */
+  assassinLeadReadBot: boolean;
   /**
    * 第 5 回合藍方・梅林（`belief/ZoneModel.ts`，Edward 2026-10-29；百科〈視角與區間派票法〉）：梅林第 1、2 局非強制提議改用
    * 「切區間」給資訊——隊上沒有他看得到的紅、隊員之間的空位裝著拇指（取代派拇指躲刺）；忠臣（`loyalMerlinRead`）與派西
@@ -607,6 +609,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redNormalVote',
   'redLoyalLeadEarly',
   'goodTailVote',
+  'assassinLeadReadBot',
   'merlinZoneSignal',
   'redRankOrder',
   'merlinLoyalStyle',
@@ -680,6 +683,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redNormalVote: 0,
   redLoyalLeadEarly: false,
   goodTailVote: 0,
+  assassinLeadReadBot: false,
   merlinZoneSignal: false,
   redRankOrder: false,
   merlinLoyalStyle: false,
@@ -901,6 +905,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redNormalVote: 1,
   redLoyalLeadEarly: false,
   goodTailVote: 0,
+  assassinLeadReadBot: false,
   merlinZoneSignal: false,
   redRankOrder: true,
   merlinLoyalStyle: true,
@@ -974,6 +979,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redNormalVote: 'AVALON_TUNING_RED_NORMAL_VOTE',
   redLoyalLeadEarly: 'AVALON_TUNING_RED_LOYAL_LEAD_EARLY',
   goodTailVote: 'AVALON_TUNING_GOOD_TAIL_VOTE',
+  assassinLeadReadBot: 'AVALON_TUNING_ASSASSIN_LEAD_READ_BOT',
   merlinZoneSignal: 'AVALON_TUNING_MERLIN_ZONE_SIGNAL',
   redRankOrder: 'AVALON_TUNING_RED_RANK_ORDER',
   merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
