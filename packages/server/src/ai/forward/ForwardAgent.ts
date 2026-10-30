@@ -767,8 +767,12 @@ export class ForwardAgent implements AvalonAgent {
       _forwardDecideCalls -= 1;
       const asLoyal = this.decide(loyalViewOf(obs));
       if (asLoyal.action.type === 'team_vote') {
-        const onTeam = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
-        const vote = asLoyal.action.vote && !merlinVoteFatal(obs) && (onTeam || goodVoteGate(obs, this.gates) === null);
+        const team = obs.proposedTeam ?? [];
+        const onTeam = team.includes(obs.myPlayerId);
+        // 外白（不在隊上贊成）一個有看得到紅的隊 = 異常票外白：不做（INV-M1）；也不越過好人投票關卡（INV-V1）。
+        const seenRed = team.some((id) => obs.knownEvils.includes(id));
+        const vote = asLoyal.action.vote && !merlinVoteFatal(obs)
+          && (onTeam || (!seenRed && goodVoteGate(obs, this.gates) === null));
         return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; gated team blocked' : ''})`);
       }
     }

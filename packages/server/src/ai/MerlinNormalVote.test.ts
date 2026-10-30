@@ -32,7 +32,7 @@ function vote(o: PlayerObservation, tuning: Partial<AgentTuning>): boolean {
 
 describe('merlinNormalVote', () => {
   it('on the team (正常票內白, Edward 10/30): q = 1 approves as a loyal would, even with a seen red', () => {
-    expect(vote(obs(), {})).toBe(false);
+    expect(vote(obs(), { merlinNormalVote: 0 })).toBe(false);
     expect(vote(obs(), { merlinNormalVote: 1 })).toBe(true);
   });
   it('off the team (外白): a team that must fail in Merlin\'s view stays rejected even at q = 1 (INV-V1)', () => {
@@ -55,6 +55,8 @@ describe('merlinNormalVote', () => {
     expect(merlinNormalVoteNow(on, obs({ myRole: 'loyal' } as Partial<PlayerObservation>))).toBe(false);
     expect(merlinNormalVoteNow(on, obs({ currentRound: 2 }))).toBe(false);
     expect(merlinNormalVoteNow(on, obs({ failCount: 4 }))).toBe(false);
-    expect(merlinNormalVoteNow(DEFAULT_AGENT_TUNING, obs())).toBe(false);
+    expect(merlinNormalVoteNow({ ...DEFAULT_AGENT_TUNING, merlinNormalVote: 0 }, obs())).toBe(false);
+    // round 11 adopted it (Edward 10/30 rulings): on by default
+    expect(merlinNormalVoteNow(DEFAULT_AGENT_TUNING, obs())).toBe(true);
   });
 });
