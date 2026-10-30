@@ -155,29 +155,37 @@ describe('buildWikiGraph', () => {
 
 describe('the real wiki_data.json', () => {
   const data: WikiGraphArticle[] = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../wiki_data.json'), 'utf8'));
-  const cats = ['beginner', 'rules', 'roles', 'glossary', 'strategies', 'replays', 'events', 'faq'].map((id) => ({ id, name: id }));
+  const cats = ['beginner', 'rules', 'roles', 'glossary', 'strategies', 'replays', 'events', 'faq', 'about'].map((id) => ({ id, name: id }));
   const graph = buildWikiGraph(data, cats);
 
   it('has every article under its category and all the links', () => {
     expect(graph.branches.map((b) => [b.id, b.articleCount])).toEqual([
       // 2026-10-30 新增 7 篇：規則說明書、術語速查、1-1 開局、強制局、聽牌與決勝局、湖中進階、如何解讀數據
       // 2026-10-30 Edward 裁定後新增 strategies：紅方進任務 - 出失敗還是出成功（wiki-210）
-      ['beginner', 16], ['rules', 5], ['roles', 13], ['glossary', 6], ['strategies', 38], ['replays', 8], ['events', 14], ['faq', 1],
+      // 2026-10-30 Edward 裁定（wiki_decisions.md）：合併／刪除 10 篇（3、5、9、47、58、59、74、88、101、144）；改分類：
+      // 41／42／65／117 → replays，44／98 → strategies，100（學習地圖）→ beginner，153／164 → 新分類 about（關於本站）
+      ['beginner', 15], ['rules', 2], ['roles', 12], ['glossary', 5], ['strategies', 30], ['replays', 12], ['events', 12], ['faq', 1], ['about', 2],
     ]);
-    const unique = new Set(data.flatMap((a) => [...a.content.matchAll(/wiki:([\w-]+)/g)].filter((m) => m[1] !== a.id).map((m) => `${a.id}>${m[1]}`)));
+    // 2026-10-30：部分文章連到寫死的〈角色數據〉（strategy-*-data），它們不在 wiki_data.json，這張圖只算 JSON 裡的文章。
+    const ids = new Set(data.map((a) => a.id));
+    const unique = new Set(data.flatMap((a) => [...a.content.matchAll(/wiki:([\w-]+)/g)].filter((m) => m[1] !== a.id && ids.has(m[1])).map((m) => `${a.id}>${m[1]}`)));
     expect(graph.edges).toHaveLength(unique.size);
     expect(graph.edges.length).toBeGreaterThan(150);
   });
 
-  it('starts the beginner branch with 關於阿瓦隆百科 and its 17-article reading order', () => {
+  it('starts the beginner branch with 關於阿瓦隆百科 and its 22-article reading order', () => {
+    // 2026-10-30 Edward 裁定（E18 a+c）：規則說明書第 1、術語速查第 2，鐵邏輯排在規則之後，常見錯誤（湖中、黑白球）排在任務派票之後。
+    // 〈關於阿瓦隆百科〉改放 about 分類，在新手分支是捷徑葉子。
     const leaves = graph.branches[0].leaves;
     expect(leaves[0].articleId).toBe('wiki-153');
-    expect(graph.readingOrder).toHaveLength(17);
-    expect(graph.readingOrder.slice(0, 3)).toEqual(['wiki-71', 'wiki-63', 'wiki-165']);
-    expect(graph.readingOrder[16]).toBe('wiki-26');
-    expect(leaves.slice(1, 18).map((l) => l.articleId)).toEqual(graph.readingOrder);
-    expect(leaves.slice(1, 18).map((l) => l.readingStep)).toEqual(Array.from({ length: 17 }, (_, i) => i + 1));
-    expect(leaves).toHaveLength(1 + 17 + (16 - 1 - 5)); // guide + reading order + beginner articles not in it
+    expect(leaves[0].guide).toBe(true);
+    expect(graph.readingOrder).toHaveLength(22);
+    expect(graph.readingOrder.slice(0, 5)).toEqual(['wiki-203', 'wiki-204', 'wiki-71', 'wiki-63', 'wiki-66']);
+    expect(graph.readingOrder.slice(11, 14)).toEqual(['wiki-90', 'wiki-91', 'wiki-93']);
+    expect(graph.readingOrder[21]).toBe('wiki-26');
+    expect(leaves.slice(1, 23).map((l) => l.articleId)).toEqual(graph.readingOrder);
+    expect(leaves.slice(1, 23).map((l) => l.readingStep)).toEqual(Array.from({ length: 22 }, (_, i) => i + 1));
+    expect(leaves).toHaveLength(1 + 22 + (15 - 8)); // guide + reading order + beginner articles not in it
   });
 
   /** No two article rows (dot + label) overlap, every row sits inside its branch box. */

@@ -36,10 +36,14 @@ const wiki = (...ns: number[]): string[] => ns.map((n) => `wiki-${n}`);
 
 /** Stubs, half-written pieces and unreadable PDF extractions (wiki triage §1). */
 // 2026-10-30 Edward：wiki-11（內黑的用途）、12（刺客）、27（換位思考）、147（湖中女神使用方針）、156（S1 總覽）補完，不再待完成。
+// 2026-10-30 Edward 裁定（wiki_decisions.md）：wiki-2 改寫成〈第一局開藍後 - 三加一還是拆車〉、41／42 換成打字還原的牌譜集、
+// 100 改成學習地圖，不再待完成；3、5、58、74、88、144 併入或刪除（見 MERGED_JSON_IDS）。
 const TRIAGED_PENDING = wiki(
-  58, 64, 60, 34, 4, 52, 53, 29, 74, 68, 70, 2, 3, 5, 41, 42,
-  144, 180, 141, 88, 122, 124, 89, 134, 100, 113, 155,
+  58, 64, 60, 34, 4, 52, 53, 29, 74, 68, 70, 3, 5,
+  144, 180, 141, 88, 122, 124, 89, 134, 113, 155,
 );
+/** 2026-10-30 Edward 裁定後補完、移出待完成的文章。 */
+const FINISHED_1030 = wiki(2, 41, 42, 100);
 
 /** Articles merged into another article or removed (wiki triage §2). They must not come back. */
 const MERGED_JSON_IDS = wiki(
@@ -47,6 +51,8 @@ const MERGED_JSON_IDS = wiki(
   113, 114, 115, 116, 119, 122, 124, 130, 131, 132, 133, 137, 154, 167, 168, 169, 171, 172, 173, 174, 178,
   // 2026-10-29 整併（讀完全部文章後，同一個觀念只留一篇主文）
   7, 13, 16, 17, 19, 76, 118, 125, 180,
+  // 2026-10-30 Edward 裁定（文章總篇數不要過多，講同一件事的合併；空白殘頁刪除）
+  3, 5, 9, 47, 58, 59, 74, 88, 101, 144,
 );
 
 /** 2026-10-29: main article ← the articles merged into it (each main ends with 「本文整合自」 naming them). */
@@ -58,7 +64,19 @@ const MERGES_1029: Record<string, string[]> = {
   'wiki-50': ['能力者與超前資訊的條件關係'],
   'wiki-38': ['牌局範例: 異常票(內黑外白)'],
   'wiki-39': ['壞人的數量'],
-  'wiki-144': ['雙重假設'],
+};
+
+/**
+ * 2026-10-30 Edward 裁定（B10／E15／E6／E11／E16）：main article ← the articles merged into it. wiki-144（邏輯一致性，含〈雙重假設〉）
+ * 併進 wiki-26，所以原本 MERGES_1029 的 wiki-144 那一條改由 wiki-26 承接。
+ */
+const MERGES_1030: Record<string, string[]> = {
+  'wiki-26': ['優勢與劣勢策略 - 選在多數情境都成立的派票', '邏輯一致性', '雙重假設'],
+  'wiki-24': ['3 家對 1AB, 2CD 之後的解讀與反饋', '解讀前人派票（二） - 第二層思考', '解讀前人派票（三） - 分類與反饋'],
+  'wiki-25': ['雜談 - 派一個人時要不要參考他的派票'],
+  'wiki-182': ['積分賽計分方式（10 人局）', '戰績報表（外部試算表）'],
+  'wiki-62': ['平衡策略與反邊填空'],
+  'wiki-209': ['牌譜數據報告（2,146 局，資料至 2026-02）'],
 };
 
 /** 2026-10-29: articles split off a source that bundled two topics. */
@@ -100,6 +118,8 @@ describe('wiki categories and status', () => {
   });
 
   it('every triaged stub is still 待完成, unless it was merged into another article', () => {
+    // 2026-10-30 Edward 裁定：補完的那幾篇不再待完成
+    for (const id of FINISHED_1030) expect(isWikiPending(jsonById.get(id)!), id).toBe(false);
     const wrong = TRIAGED_PENDING.filter((id) => {
       const a = jsonById.get(id);
       return a ? !isWikiPending(a) : !MERGED_JSON_IDS.includes(id);
@@ -180,13 +200,17 @@ describe('wiki merges', () => {
 
   it('覆盤 articles are titled by what they teach; the game code opens the article', () => {
     // 2026-10-30 標題盤點：數字代碼看不出內容，標題改成「覆盤 - 情境＋重點」，代碼（模擬／面瓦 + 角色位置）移到內文第一行。
-    const replays = jsonArticles.filter((a) => a.category === 'replays');
+    // 2026-10-30 Edward 裁定（E1／E17）：手寫牌譜集（wiki-41／42）與多場片段的範例（wiki-117）也放覆盤，沒有六碼代碼時第一行寫來源；
+    // 〈牌譜記錄格式〉（wiki-65）是覆盤分類的導言，不是覆盤本身，所以不套這條。
+    const REPLAY_GUIDES = ['wiki-65'];
+    const replays = jsonArticles.filter((a) => a.category === 'replays' && !REPLAY_GUIDES.includes(a.id));
     expect(replays.length).toBeGreaterThan(0);
+    expect(jsonById.get('wiki-65')!.category).toBe('replays');
     for (const a of replays) {
       expect(a.title).toMatch(/^覆盤 - \S/);
       expect(a.title).not.toMatch(/\d{6}/);
       const body = a.content.replace(/^(?:\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))+/, '');
-      expect(body, a.id).toMatch(/^> 牌局代碼：(模擬|面瓦) \d{6}/);
+      expect(body, a.id).toMatch(/^> 牌局代碼：(?:(模擬|面瓦) \d{6}|牌譜集（手寫原稿還原）|牌局片段（[^）\n]+）)/);
     }
   });
 
@@ -216,7 +240,7 @@ describe('wiki merges', () => {
 
 describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分拆)', () => {
   it('each merged main article ends with 「本文整合自」 naming its sources', () => {
-    for (const [id, sources] of Object.entries(MERGES_1029)) {
+    for (const [id, sources] of Object.entries({ ...MERGES_1029, ...MERGES_1030 })) {
       const lines = jsonById.get(id)!.content.trimEnd().split('\n');
       const note = lines[lines.length - 1];
       expect(note, id).toMatch(/^> 本文整合自/);
@@ -231,10 +255,16 @@ describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分
       'wiki-18': ['白話就是常聽到的: 場內至少一壞, 場外白區間, 場外黑球區間', '外灑至少做到「洗掉壞人尾派」這件事'],
       'wiki-24': ['尊重 = 參考', '修正「通常」代表認為 A、C 至少有一壞'],
       'wiki-23': ['直接派反邊是沒有經過思考的表現', '不能是尾派'],
+      // 2026-10-30 Edward 裁定（E16）：〈平衡策略與反邊填空〉拆開，平衡策略併進 wiki-62〈大局觀 - 平衡與廣泛性〉
+      'wiki-62': ['讓梅林有機會拔掉被疊票的拇指', '萬一派西把雙拇指認錯？'],
       'wiki-50': ['結論: 只有 1, 2, 4, 8 這幾條描述 (推論) 是正確的', '刻意本身就是能力的展現'],
       'wiki-38': ['8外白: 可以考慮兩種狀況', '換個角度：若 8 是梅林，會做這個動作嗎？'],
       'wiki-39': ['就等於 8 家自己告訴大家：壞人是 8 家', '0 一定會派自己'],
-      'wiki-144': ['定義：當兩件事情的敘述彼此不相關時，就稱為雙重假設'],
+      // 〈邏輯一致性〉（含〈雙重假設〉）2026-10-30 併進 wiki-26
+      'wiki-26': ['定義：當兩件事情的敘述彼此不相關時，就稱為雙重假設', '嚴格優勢策略'],
+      'wiki-24': ['因此可能出現「非延伸也非修正」的派票', '79 幾乎不能派，34 應該會有最後一隻', '隊伍外資訊：沒被選的區間、被閃躲的人選、被看到的人選'],
+      'wiki-25': ['紅方派票不會每次都疊隊友'],
+      'wiki-182': ['刺客指認梅林錯誤：梅林 +5 分', '本站目前不計分'],
     };
     for (const [id, lines] of Object.entries(samples)) {
       for (const l of lines) expect(loose(jsonById.get(id)!.content), `${id}: ${l}`).toContain(loose(l));
@@ -289,7 +319,6 @@ describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分
       '入門基礎/能力者.md': 'wiki-50',
       '湖中與投票/為什麼不該亂開場外白球.md': 'wiki-38',
       '派票策略/為什麼知道你是壞人.md': 'wiki-39',
-      '進階思考/邏輯一致性.md': 'wiki-144',
       '入門基礎/入門行動方針.md': 'wiki-106',
       '角色/藍方基礎原則.md': 'wiki-201',
       '入門基礎/常見錯誤 - 任務派票.md': 'wiki-90',
@@ -309,6 +338,9 @@ describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分
       '入門基礎/新手常見錯誤.md', '入門基礎/名詞說明與簡稱.md', '派票策略/五人局視角區間範例.md',
       '派票策略/區間派票法之變體 (點_夾_跳).md', '派票策略/外灑與外灑出任務後的區間解讀.md', '派票策略/填空型派票分析.md',
       '派票策略/壞人的數量.md', '進階思考/雙重假設.md',
+      // 2026-10-30 Edward 裁定：併入或刪除的文章，副本一起移除
+      '進階思考/邏輯一致性.md', '進階思考/優勢策略.md', '進階思考/第二層思考-派票的延伸與拓展.md', '進階思考/雜談.md',
+      '進階思考/觀念1.md', '入門基礎/計分機制.md',
     ];
     expect(gone.filter((f) => fs.existsSync(path.join(DOCS, f)))).toEqual([]);
   });
