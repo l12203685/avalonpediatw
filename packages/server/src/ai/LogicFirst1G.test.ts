@@ -36,8 +36,9 @@ import type { PlayerObservation, QuestRecord, VoteRecord } from './types';
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 const CANDIDATES = ['P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
-const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING };
-const TIER_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
+// Isolated from the round-6 lead read (`assassinLeadRead`): these tests are about the visible-red tier and likelihood.
+const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinLeadRead: 0 };
+const TIER_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinLeadRead: 0, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
 
 function vote(round: number, attempt: number, leader: string, team: string[], approvers: string[], approved: boolean): VoteRecord {
   return { round, attempt, leader, team, approved, votes: Object.fromEntries(IDS.map((id) => [id, approvers.includes(id)])) };
