@@ -14,6 +14,8 @@ import { RefreshCw } from 'lucide-react';
 interface ForceUpdateButtonProps {
   /** Optional className override for layout positioning */
   className?: string;
+  /** 只顯示圖示的小方框（導覽列右上角；Edward 2026-10-30） */
+  compact?: boolean;
 }
 
 async function forceUpdate(): Promise<void> {
@@ -44,7 +46,7 @@ async function forceUpdate(): Promise<void> {
   window.location.reload();
 }
 
-export default function ForceUpdateButton({ className }: ForceUpdateButtonProps): JSX.Element {
+export default function ForceUpdateButton({ className, compact = false }: ForceUpdateButtonProps): JSX.Element {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
 
@@ -82,8 +84,8 @@ export default function ForceUpdateButton({ className }: ForceUpdateButtonProps)
         'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-900/40 border border-orange-700/50 text-orange-200 hover:bg-orange-900/60 hover:text-orange-100 text-[11px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-wait'
       }
     >
-      <RefreshCw size={12} className={busy ? 'animate-spin' : ''} />
-      <span>{label}</span>
+      <RefreshCw size={compact ? 15 : 12} className={busy ? 'animate-spin' : ''} />
+      {compact ? <span className="sr-only">{label}</span> : <span>{label}</span>}
     </button>
   );
 }
