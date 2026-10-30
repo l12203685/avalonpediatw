@@ -23,7 +23,7 @@
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
-import { bayesRedShare, bayesTeamClean } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesRedShare, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -59,6 +59,8 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
   const failsNeeded = obs.currentRound === 4 && obs.playerCount >= 7 ? 2 : 1;
   if (mates.length < failsNeeded - 1 || viewers.length < size - failsNeeded) return action;
   const views = viewers.map((v) => blueView(obs, v));
+  // Round 12 `redCleanLookBot`: read each seat's posterior the way the blue bots actually do (bot tables, Merlin layer).
+  const blueOpts: Readonly<BayesOptions> = tuning.redCleanLookBot ? bayesOptionsOf(tuning) : {};
   const bestOf = (redCount: number): { team: string[] | null; score: number } => {
     let team: string[] | null = null;
     let score = -1;
@@ -67,7 +69,7 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
       for (const fill of combinations(viewers, size - redCount)) {
         const t = [me, ...reds, ...fill];
         let sum = 0;
-        for (const view of views) sum += bayesTeamClean(view, t) ?? 0;
+        for (const view of views) sum += bayesTeamClean(view, t, blueOpts) ?? 0;
         if (sum / views.length > score) { score = sum / views.length; team = t; }
       }
     }
@@ -83,7 +85,7 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
       for (const fill of combinations(blues, size - fixedReds.length)) {
         const t = [...fixedReds, ...fill];
         let sum = 0;
-        for (const view of views) sum += bayesTeamClean(view, t) ?? 0;
+        for (const view of views) sum += bayesTeamClean(view, t, blueOpts) ?? 0;
         if (sum / views.length > score) { score = sum / views.length; team = t; }
       }
       if (team) return { type: 'team_select', teamIds: team };

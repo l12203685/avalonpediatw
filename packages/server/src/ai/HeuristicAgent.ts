@@ -27,6 +27,7 @@ import {
 } from './AgentTuning';
 import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelWeights } from './assassin/AssassinModel';
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
+import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
 import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
 import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
@@ -2662,14 +2663,21 @@ export class HeuristicAgent implements AvalonAgent {
     if (this.tuning.assassinModel) {
       const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
       const leadWeight = this.tuning.assassinLeadRead ?? 0;
-      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0) {
+      const lakeWeight = this.tuning.assassinLakeRead ?? 0;
+      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0 && lakeWeight <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
       const scores = scoreAssassinCandidates(obs, goodPlayers, this.assassinModelWeights);
       // Round 6 (red) candidate `assassinMerlinVotes` (assassin/MerlinVoteRead.ts): read Merlin off the R3+ votes.
       if (voteWeight > 0) {
         const reds = [...evilSet];
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteWeight * merlinVoteLogRatio(obs, id, reds));
+        const model = this.tuning.assassinVoteModel >= 2 ? 'normalFit' : this.tuning.assassinVoteModel ? 'normal' : 'strict';
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteWeight * merlinVoteLogRatio(obs, id, reds, model));
+      }
+      // Round 12 (red) candidate `assassinLakeRead` (assassin/MerlinLakeRead.ts): Merlin never lakes a red he sees.
+      if (lakeWeight > 0) {
+        const reds = [...evilSet];
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + lakeWeight * merlinLakeLogRatio(obs, id, reds));
       }
       // Round 6 (red) candidate `assassinLeadRead` (assassin/MerlinLeadRead.ts): 資訊過度超前 — clean teams the public could not have picked.
       if (leadWeight > 0) {
