@@ -64,8 +64,15 @@ export function toPercent(v: unknown, scale: PctScale = 'percent'): number | nul
   return scale === 'fraction' ? v * 100 : v;
 }
 
-/** 百分比顯示：一位小數、null 顯示「—」(同 api.ts fmtPct)。 */
-export function formatRate(v: unknown, scale: PctScale = 'percent', digits = 1): string {
+/**
+ * 勝率的小數位 (Edward 2026-10-30)：一般勝率整數，只有角色理論／位置理論／整體理論一位小數。
+ * 與 services/api.ts 的 RATE_DIGITS / THEORY_DIGITS 相同 (這裡不 import api.ts)。
+ */
+export const RATE_DIGITS = 0;
+export const THEORY_DIGITS = 1;
+
+/** 百分比顯示：預設整數 (理論勝率傳 THEORY_DIGITS)、null 顯示「—」(同 api.ts fmtPct)。 */
+export function formatRate(v: unknown, scale: PctScale = 'percent', digits: number = RATE_DIGITS): string {
   const pct = toPercent(v, scale);
   return pct === null ? '—' : `${pct.toFixed(digits)}%`;
 }

@@ -10,6 +10,7 @@ import { InfoTip, SectionTabs, StatTable, type SectionTabItem, type StatColumn }
 import BoardInfo from './BoardInfo';
 import TheoryTable from './TheoryTable';
 import LeaderboardRules from './LeaderboardRules';
+import RoleChampions from './RoleChampions';
 import {
   fetchAnalysisLeaderboard,
   getErrorMessage,
@@ -18,6 +19,7 @@ import {
   isTheoryBoard,
   fmtPct,
   fmtSignedPoints,
+  THEORY_DIGITS,
   theorySettings,
   type AnalysisLeaderboardData,
   type AnalysisLeaderboardBoard,
@@ -42,7 +44,7 @@ import {
  *    快取的標題當標籤)；標題、期間、說明一律讀快取。精算榜 (LeaderboardV3Table) 由 BoardsTab 傳進來，
  *    從各榜下方改成最後一個小分頁。
  *  - 榜的內容是數字表 (StatTable)：名次＋名字 (點一列開該玩家的玩家雷達)、榜的數字、該榜帶的其他欄
- *    (每一欄只在該榜有資料時出現)，一位小數。說明放在表格旁 (手機在表格下)，不另外拉長頁面。
+ *    (每一欄只在該榜有資料時出現)。說明放在表格旁 (手機在表格下)，不另外拉長頁面。
  *  - 用全體勝率補值的格子 (有角色／位置不到 theoryMinCellGames 場) 變淡；門檻讀 leaderboard.config。
  *  - 角色王同率各給 (decisions lane)：同一個角色可能有好幾列，標「並列」。
  *
@@ -54,6 +56,11 @@ import {
  *  - 精算榜不再是小分頁 (BoardsTab 不傳 precision；元件與 /api/leaderboard/v3 保留)：它的期望勝 = 最終勝率、
  *    精準勝率是舊的任務口徑；有用的任務勝率／刺殺勝率併進理論表。
  *  - 角色王多「視窗」(該角色用了近幾場：忠臣 200 或 100、其他 50 或 25) 與「有資格」(打滿視窗的人數) 兩欄。
+ *
+ * (2026-10-30 Edward：「角色王可以列出每一個角色對應的勝率 TOP10 的玩家嗎？玩家名稱(勝率) 這樣」「大部分勝率都只需要顯示到
+ *  整數位，只有角色理論／位置理論／整體理論才需要顯示到小數第一位」)
+ *  - 角色王改成每個角色一張小卡、列前 10 名 (RoleChampions，讀 roleTitles 榜的 roleTop)。
+ *  - 勝率整數 (fmtPct 預設)；角色／位置／整體理論 (與進步榜的角色理論差) 一位小數 (THEORY_DIGITS)。
  *
  * (2026-10-30 Edward：「理論勝率的右邊 上綁文字說明有點太過冗長 其它說明也是類似」) 各榜的期間、表格旁的上榜條件與定義、
  * 表格下的註腳收進標題旁的 ⓘ (InfoTip + BoardInfo)，完整版集中在說明頁的「統計名詞與算法」。
@@ -304,6 +311,9 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
           if (entry.board && entry.id === 'theory') {
             return <TheoryTable board={entry.board} isEn={isEn} minCell={settings.theoryMinCellGames} />;
           }
+          if (entry.board && entry.id === 'roleTitles') {
+            return <RoleChampions board={entry.board} isEn={isEn} activeDays={settings.activeDays} />;
+          }
           if (!entry.board) {
             return (
               <PendingPanel
@@ -428,15 +438,19 @@ function boardColumns(
   const label = (key: string): string => t(`analytics.r6.boards.col.${key}`);
   const metric = isTheoryField(board.metric) ? board.metric : undefined;
 
-  /** 比率格：一位小數；有補值的格子變淡並附提示。 */
-  const pctCell = (field?: TheoryField) => (v: unknown, row: Row): ReactNode => {
+  /**
+   * 比率格：角色／位置／整體理論一位小數、其他勝率整數 (Edward 2026-10-30；`theory` 覆寫，例：進步榜的角色理論)；
+   * 有補值的格子變淡並附提示。
+   */
+  const pctCell = (field?: TheoryField, theory = field !== undefined && field !== 'finalWinRate') => (v: unknown, row: Row): ReactNode => {
     const filled = field ? sparseCells(row, field, metric) : 0;
+    const text = fmtPct(isNum(v) ? v : null, theory ? THEORY_DIGITS : undefined);
     return filled > 0 ? (
       <span className="opacity-50" title={t('analytics.r6.boards.sparseCell', { count: filled, min: minCell })}>
-        {fmtPct(isNum(v) ? v : null)}
+        {text}
       </span>
     ) : (
-      fmtPct(isNum(v) ? v : null)
+      text
     );
   };
 
@@ -509,8 +523,9 @@ function boardColumns(
 
   // 進步榜：角色理論的差，單位是百分點 (不是相對成長 %)。
   if (board.metric === 'roleTheoryDelta') {
+    // 近期／之前的角色理論一位小數，最終勝率整數。
     const pct = (key: keyof Row): StatColumn<Row>[] =>
-      hasField(rows, key) ? [{ key, label: label(key), format: pctCell(), align: 'right' }] : [];
+      hasField(rows, key) ? [{ key, label: label(key), format: pctCell(undefined, String(key).endsWith('RoleTheory')), align: 'right' }] : [];
     const columns: StatColumn<Row>[] = [
       nameCol,
       {
@@ -518,7 +533,7 @@ function boardColumns(
         label: label('delta'),
         align: 'right',
         emphasis: true,
-        format: v => <span className={deltaClass(v)}>{fmtSignedPoints(isNum(v) ? v : null)}</span>,
+        format: v => <span className={deltaClass(v)}>{fmtSignedPoints(isNum(v) ? v : null, THEORY_DIGITS)}</span>,
       },
       ...pct('recentRoleTheory'),
       ...pct('priorRoleTheory'),

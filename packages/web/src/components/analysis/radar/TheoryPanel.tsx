@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fmtPct, roleFaction } from '../../../services/api';
+import { fmtTheoryPct, roleFaction } from '../../../services/api';
 import type { AnalysisTheorySettings } from '../../../services/api';
 import { StatTable, type StatColumn } from '../ui';
 import {
@@ -115,7 +115,7 @@ export default function TheoryPanel({
       key: 'rate',
       label: t('analytics.r6.radar.theory.colRate'),
       align: 'right',
-      format: (_v, row) => (row.rate === null ? muted(row.note) : fmtPct(row.rate)),
+      format: (_v, row) => (row.rate === null ? muted(row.note) : fmtTheoryPct(row.rate)),
       n: row => (row.rate === null ? null : row.n),
       tone: 'amber',
       emphasis: true,

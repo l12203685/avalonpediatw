@@ -1483,7 +1483,7 @@
         "忠臣": 40
       },
       "positionGames": 100,
-      "overallMinGames": 250
+      "overallMinGames": 100
     },
     "topPlayersByPositionTheory": [
       {
@@ -1583,6 +1583,14 @@
         "careerGames": 496
       },
       {
+        "name": "Ray",
+        "overallTheory": 49.8,
+        "positionTheory": 47.0,
+        "finalWinRate": 48.2,
+        "games": 218,
+        "careerGames": 218
+      },
+      {
         "name": "轆",
         "overallTheory": 49.7,
         "positionTheory": 51.2,
@@ -1607,6 +1615,14 @@
         "careerGames": 596
       },
       {
+        "name": "Yumi",
+        "overallTheory": 48.4,
+        "positionTheory": 47.2,
+        "finalWinRate": 45.6,
+        "games": 103,
+        "careerGames": 103
+      },
+      {
         "name": "ED",
         "overallTheory": 48.0,
         "positionTheory": 48.3,
@@ -1615,28 +1631,12 @@
         "careerGames": 295
       },
       {
-        "name": "池",
-        "overallTheory": 46.9,
-        "positionTheory": 47.4,
-        "finalWinRate": 47.3,
-        "games": 759,
-        "careerGames": 759
-      },
-      {
-        "name": "JOY",
-        "overallTheory": 46.7,
-        "positionTheory": 45.8,
-        "finalWinRate": 46.2,
-        "games": 507,
-        "careerGames": 507
-      },
-      {
-        "name": "發達",
-        "overallTheory": 46.5,
-        "positionTheory": 46.6,
-        "finalWinRate": 47.3,
-        "games": 406,
-        "careerGames": 406
+        "name": "嚇吃手",
+        "overallTheory": 47.6,
+        "positionTheory": 47.7,
+        "finalWinRate": 47.7,
+        "games": 128,
+        "careerGames": 128
       }
     ],
     "roleSeatFinalWinRates": {
@@ -1725,7 +1725,7 @@
         "10": 30.2
       }
     },
-    "gamesKey": "232d7d97c4876d53"
+    "gamesKey": "acae6c95512166b4"
   },
   "players": {
     "players": [
@@ -197863,8 +197863,8 @@
       "mainGames": 100,
       "roleWindowGames": 10,
       "loyalWindowGames": 40,
-      "overallMinGames": 250,
-      "theoryMinGames": 0,
+      "overallMinGames": 100,
+      "theoryMinGames": 50,
       "requireRoleWindows": 1,
       "assassinAttempts": 20,
       "assassinMinAttempts": 10,
@@ -198299,9 +198299,9 @@
         "titleEn": "Overall theory win rate",
         "period": "各人生涯全部場次",
         "periodEn": "Each player's whole career",
-        "minGames": 250,
-        "note": "近 90 天內有出賽、生涯至少 250 場；每一列的數字都看生涯全部場次；位置 × 角色共 70 格，多數人很多格不到 5 場、用全體在該位置該角色的最終勝率補（「全體補值」欄 = 整體理論裡全體補的比重），補得越多越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
-        "noteEn": "Played in the last 90 days, at least 250 career games; every number over the whole career; there are 70 role × seat cells and most players have fewer than 5 games in many of them, topped up at the population's final win rate in that cell (the population-share column = how much of the overall theory that is), so the more is topped up the closer it stays to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "minGames": 100,
+        "note": "近 90 天內有出賽、生涯至少 100 場；每一列的數字都看生涯全部場次；位置 × 角色共 70 格，多數人很多格不到 5 場、用全體在該位置該角色的最終勝率補（「全體補值」欄 = 整體理論裡全體補的比重），補得越多越接近全體平均；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 100 career games; every number over the whole career; there are 70 role × seat cells and most players have fewer than 5 games in many of them, topped up at the population's final win rate in that cell (the population-share column = how much of the overall theory that is), so the more is topped up the closer it stays to the population; Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "rows": [
           {
             "rank": 1,
@@ -198481,6 +198481,28 @@
           },
           {
             "rank": 9,
+            "name": "FOX",
+            "value": 46.5,
+            "overallTheory": 46.5,
+            "roleTheory": 46.6,
+            "positionTheory": 40.6,
+            "finalWinRate": 45.0,
+            "missionWinRate": 56.8,
+            "missionRedWinRate": 51.2,
+            "missionBlueWinRate": 60.0,
+            "assassinWinRate": 46.8,
+            "threeBlueGames": 62,
+            "games": 111,
+            "careerGames": 111,
+            "from": "2023-05-02",
+            "to": "2026-10-25",
+            "sparseRoles": 0,
+            "sparseSeats": 0,
+            "sparseCells": 67,
+            "populationShare": 59.0
+          },
+          {
+            "rank": 10,
             "name": "Sin",
             "value": 46.2,
             "overallTheory": 46.2,
@@ -198500,28 +198522,6 @@
             "sparseSeats": 0,
             "sparseCells": 0,
             "populationShare": 0.0
-          },
-          {
-            "rank": 10,
-            "name": "黑羊",
-            "value": 45.6,
-            "overallTheory": 45.6,
-            "roleTheory": 46.2,
-            "positionTheory": 45.7,
-            "finalWinRate": 45.9,
-            "missionWinRate": 51.3,
-            "missionRedWinRate": 49.1,
-            "missionBlueWinRate": 52.7,
-            "assassinWinRate": 51.1,
-            "threeBlueGames": 370,
-            "games": 712,
-            "careerGames": 712,
-            "from": "2022-02-13",
-            "to": "2026-10-25",
-            "sparseRoles": 0,
-            "sparseSeats": 0,
-            "sparseCells": 7,
-            "populationShare": 2.0
           }
         ]
       },
@@ -198532,9 +198532,9 @@
         "titleEn": "Theory win rates",
         "period": "角色理論：各角色近 10 場、忠臣近 40 場；其他：最近 100 場",
         "periodEn": "Role theory: Each role's last 10 games (Loyal Servant: last 40); the rest: the last 100 games",
-        "minGames": 0,
-        "note": "近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場；角色理論看各角色窗（沒打滿的變淡）、位置理論、最終勝率、任務勝率、刺殺勝率看最近 100 場（場數不夠的變淡）、整體理論看生涯（生涯不到 250 場的不算，顯示 —）；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
-        "noteEn": "Played in the last 90 days, at least 10 games in each special role and 40 as Loyal Servant; role theory over the role windows (dimmed when not full), position theory, final, mission and assassination win rates over the last 100 games (dimmed when shorter), overall theory over the career (— below 250 career games); Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
+        "minGames": 50,
+        "note": "近 90 天內有出賽、生涯至少 50 場、六個特殊角色各至少 10 場、忠臣至少 40 場；角色理論看各角色窗（沒打滿的變淡）、位置理論、最終勝率、任務勝率、刺殺勝率看最近 100 場（場數不夠的變淡）、整體理論看生涯（生涯不到 100 場的不算，顯示 —）；角色理論 = Σ 抽到該角色的機率（忠臣 4/10、其他角色各 1/10）× 本人該角色的最終勝率（每個角色看他當該角色的最近 10 場、忠臣 40 場）；位置理論 = Σ 1/10 × 本人該位置的最終勝率；整體理論 = Σ 抽到該角色的機率 × 1/10 × 本人在該位置當該角色的最終勝率（位置 × 角色共 70 格，看生涯全部場次）；任務勝率 = 自己陣營贏得任務（紅方三紅、藍方三藍）；刺殺勝率 = 三藍局中紅方刺中梅林、藍方梅林躲過；不到 5 場的角色、位置或格子，用全體的最終勝率補到 5 場",
+        "noteEn": "Played in the last 90 days, at least 50 career games, at least 10 games in each special role and 40 as Loyal Servant; role theory over the role windows (dimmed when not full), position theory, final, mission and assassination win rates over the last 100 games (dimmed when shorter), overall theory over the career (— below 100 career games); Role theory = Σ chance of being dealt the role (Loyal Servant 4/10, every other role 1/10) × the player's final win rate as that role (over their last 10 games in each role, 40 as Loyal Servant); position theory = Σ 1/10 × their final win rate in that seat; overall theory = Σ chance of the role × 1/10 × their final win rate as that role in that seat (70 role × seat cells, whole career); mission win rate = their camp won the missions (red 三紅, blue 三藍); assassination win rate = in 三藍 games, red hit Merlin / blue Merlin survived; a role, seat or cell with fewer than 5 games is topped up to 5 at the population's final win rate",
         "roleWindowGames": {
           "刺客": 10,
           "莫甘娜": 10,
@@ -198545,7 +198545,7 @@
           "忠臣": 40
         },
         "windowGames": 100,
-        "overallMinGames": 250,
+        "overallMinGames": 100,
         "requireRoleWindows": true,
         "rows": [
           {
@@ -198674,7 +198674,7 @@
             "value": 49.0,
             "roleTheory": 49.0,
             "positionTheory": 55.0,
-            "overallTheory": null,
+            "overallTheory": 44.5,
             "finalWinRate": 52.0,
             "missionWinRate": 53.0,
             "missionRedWinRate": 49.0,
@@ -198689,8 +198689,8 @@
             "to": "2026-10-10",
             "sparseRoles": 0,
             "sparseSeats": 0,
-            "sparseCells": null,
-            "populationShare": null
+            "sparseCells": 55,
+            "populationShare": 32.2
           },
           {
             "rank": 7,
@@ -198698,7 +198698,7 @@
             "value": 49.0,
             "roleTheory": 49.0,
             "positionTheory": 52.1,
-            "overallTheory": null,
+            "overallTheory": 43.1,
             "finalWinRate": 50.0,
             "missionWinRate": 54.0,
             "missionRedWinRate": 50.0,
@@ -198713,8 +198713,8 @@
             "to": "2026-10-17",
             "sparseRoles": 0,
             "sparseSeats": 0,
-            "sparseCells": null,
-            "populationShare": null
+            "sparseCells": 62,
+            "populationShare": 47.8
           },
           {
             "rank": 8,
@@ -198938,7 +198938,7 @@
             "value": 43.0,
             "roleTheory": 43.0,
             "positionTheory": 42.9,
-            "overallTheory": null,
+            "overallTheory": 42.0,
             "finalWinRate": 43.0,
             "missionWinRate": 45.0,
             "missionRedWinRate": 35.0,
@@ -198953,8 +198953,8 @@
             "to": "2026-08-30",
             "sparseRoles": 0,
             "sparseSeats": 1,
-            "sparseCells": null,
-            "populationShare": null
+            "sparseCells": 59,
+            "populationShare": 40.8
           },
           {
             "rank": 18,
@@ -198986,7 +198986,7 @@
             "value": 42.0,
             "roleTheory": 42.0,
             "positionTheory": 39.9,
-            "overallTheory": null,
+            "overallTheory": 44.9,
             "finalWinRate": 41.0,
             "missionWinRate": 49.0,
             "missionRedWinRate": 48.7,
@@ -199001,8 +199001,8 @@
             "to": "2026-10-25",
             "sparseRoles": 0,
             "sparseSeats": 0,
-            "sparseCells": null,
-            "populationShare": null
+            "sparseCells": 62,
+            "populationShare": 45.2
           },
           {
             "rank": 20,
@@ -199034,7 +199034,7 @@
             "value": 41.0,
             "roleTheory": 41.0,
             "positionTheory": 46.4,
-            "overallTheory": null,
+            "overallTheory": 41.4,
             "finalWinRate": 47.0,
             "missionWinRate": 38.0,
             "missionRedWinRate": 38.6,
@@ -199049,8 +199049,8 @@
             "to": "2026-10-25",
             "sparseRoles": 0,
             "sparseSeats": 0,
-            "sparseCells": null,
-            "populationShare": null
+            "sparseCells": 54,
+            "populationShare": 36.0
           },
           {
             "rank": 22,
@@ -199561,8 +199561,8 @@
         "period": "忠臣近 100 場、其他角色近 25 場",
         "periodEn": "Last 100 games as Loyal Servant, 25 in each other role",
         "minGames": 25,
-        "note": "近 90 天內有出賽、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號；每個角色的場數：忠臣 200 場、其他角色 50 場，有出賽過該角色的人不到一半打滿時改用忠臣 100 場、其他角色 25 場",
-        "noteEn": "Played in the last 90 days, a full window in the role; best final win rate over the last games of that window, players tied at the top all get the title; games per role: 200 as Loyal Servant and 50 in each other role, or 100 / 25 when fewer than half of the players who have played the role have that many",
+        "note": "近 90 天內有出賽、該角色至少打滿該角色的場數；比各人該角色最近這些場的最終勝率，同率者並列、各得稱號，每個角色另列前 10 名；每個角色的場數：忠臣 200 場、其他角色 50 場，有出賽過該角色的人不到一半打滿時改用忠臣 100 場、其他角色 25 場",
+        "noteEn": "Played in the last 90 days, a full window in the role; best final win rate over the last games of that window, players tied at the top all get the title, and each role lists its top 10; games per role: 200 as Loyal Servant and 50 in each other role, or 100 / 25 when fewer than half of the players who have played the role have that many",
         "roleWindowGames": {
           "刺客": 25,
           "莫甘娜": 25,
@@ -199571,6 +199571,582 @@
           "派西維爾": 25,
           "梅林": 25,
           "忠臣": 100
+        },
+        "roleTop": {
+          "刺客": [
+            {
+              "rank": 1,
+              "name": "HAO",
+              "value": 88.0,
+              "games": 25,
+              "wins": 22,
+              "careerRoleGames": 117
+            },
+            {
+              "rank": 2,
+              "name": "洋蔥",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 61
+            },
+            {
+              "rank": 2,
+              "name": "轆",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 61
+            },
+            {
+              "rank": 2,
+              "name": "雪怪",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 40
+            },
+            {
+              "rank": 5,
+              "name": "尼克",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 88
+            },
+            {
+              "rank": 5,
+              "name": "菜",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 47
+            },
+            {
+              "rank": 5,
+              "name": "黃某人",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 45
+            },
+            {
+              "rank": 5,
+              "name": "TEN",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 26
+            },
+            {
+              "rank": 9,
+              "name": "發達",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 38
+            },
+            {
+              "rank": 9,
+              "name": "午夜",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 25
+            }
+          ],
+          "莫甘娜": [
+            {
+              "rank": 1,
+              "name": "HAO",
+              "value": 92.0,
+              "games": 25,
+              "wins": 23,
+              "careerRoleGames": 102
+            },
+            {
+              "rank": 1,
+              "name": "轆",
+              "value": 92.0,
+              "games": 25,
+              "wins": 23,
+              "careerRoleGames": 67
+            },
+            {
+              "rank": 1,
+              "name": "雪怪",
+              "value": 92.0,
+              "games": 25,
+              "wins": 23,
+              "careerRoleGames": 47
+            },
+            {
+              "rank": 4,
+              "name": "黑羊",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 76
+            },
+            {
+              "rank": 4,
+              "name": "洋蔥",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 55
+            },
+            {
+              "rank": 4,
+              "name": "Emma",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 28
+            },
+            {
+              "rank": 7,
+              "name": "軒",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 89
+            },
+            {
+              "rank": 7,
+              "name": "JOY",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 51
+            },
+            {
+              "rank": 7,
+              "name": "發達",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 43
+            },
+            {
+              "rank": 7,
+              "name": "TEN",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 25
+            }
+          ],
+          "莫德雷德": [
+            {
+              "rank": 1,
+              "name": "HAO",
+              "value": 88.0,
+              "games": 25,
+              "wins": 22,
+              "careerRoleGames": 104
+            },
+            {
+              "rank": 1,
+              "name": "JOY",
+              "value": 88.0,
+              "games": 25,
+              "wins": 22,
+              "careerRoleGames": 55
+            },
+            {
+              "rank": 3,
+              "name": "ED",
+              "value": 84.0,
+              "games": 25,
+              "wins": 21,
+              "careerRoleGames": 36
+            },
+            {
+              "rank": 4,
+              "name": "轆",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 57
+            },
+            {
+              "rank": 4,
+              "name": "午夜",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 38
+            },
+            {
+              "rank": 4,
+              "name": "雪怪",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 33
+            },
+            {
+              "rank": 7,
+              "name": "軒",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 93
+            },
+            {
+              "rank": 7,
+              "name": "尼克",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 85
+            },
+            {
+              "rank": 7,
+              "name": "洋蔥",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 75
+            },
+            {
+              "rank": 7,
+              "name": "Emma",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 29
+            }
+          ],
+          "奧伯倫": [
+            {
+              "rank": 1,
+              "name": "HAO",
+              "value": 84.0,
+              "games": 25,
+              "wins": 21,
+              "careerRoleGames": 98
+            },
+            {
+              "rank": 2,
+              "name": "菜",
+              "value": 80.0,
+              "games": 25,
+              "wins": 20,
+              "careerRoleGames": 58
+            },
+            {
+              "rank": 3,
+              "name": "池",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 72
+            },
+            {
+              "rank": 3,
+              "name": "洋蔥",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 68
+            },
+            {
+              "rank": 3,
+              "name": "轆",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 63
+            },
+            {
+              "rank": 3,
+              "name": "黃某人",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 49
+            },
+            {
+              "rank": 3,
+              "name": "發達",
+              "value": 76.0,
+              "games": 25,
+              "wins": 19,
+              "careerRoleGames": 32
+            },
+            {
+              "rank": 8,
+              "name": "Sin",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 123
+            },
+            {
+              "rank": 8,
+              "name": "黑羊",
+              "value": 72.0,
+              "games": 25,
+              "wins": 18,
+              "careerRoleGames": 67
+            },
+            {
+              "rank": 10,
+              "name": "豬豬",
+              "value": 68.0,
+              "games": 25,
+              "wins": 17,
+              "careerRoleGames": 50
+            }
+          ],
+          "派西維爾": [
+            {
+              "rank": 1,
+              "name": "ED",
+              "value": 56.0,
+              "games": 25,
+              "wins": 14,
+              "careerRoleGames": 30
+            },
+            {
+              "rank": 2,
+              "name": "HAO",
+              "value": 52.0,
+              "games": 25,
+              "wins": 13,
+              "careerRoleGames": 107
+            },
+            {
+              "rank": 3,
+              "name": "Vash",
+              "value": 44.0,
+              "games": 25,
+              "wins": 11,
+              "careerRoleGames": 25
+            },
+            {
+              "rank": 4,
+              "name": "黑羊",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 92
+            },
+            {
+              "rank": 4,
+              "name": "池",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 65
+            },
+            {
+              "rank": 4,
+              "name": "轆",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 48
+            },
+            {
+              "rank": 7,
+              "name": "Sin",
+              "value": 32.0,
+              "games": 25,
+              "wins": 8,
+              "careerRoleGames": 130
+            },
+            {
+              "rank": 7,
+              "name": "JOY",
+              "value": 32.0,
+              "games": 25,
+              "wins": 8,
+              "careerRoleGames": 49
+            },
+            {
+              "rank": 7,
+              "name": "菜",
+              "value": 32.0,
+              "games": 25,
+              "wins": 8,
+              "careerRoleGames": 42
+            },
+            {
+              "rank": 7,
+              "name": "黃某人",
+              "value": 32.0,
+              "games": 25,
+              "wins": 8,
+              "careerRoleGames": 35
+            }
+          ],
+          "梅林": [
+            {
+              "rank": 1,
+              "name": "ED",
+              "value": 44.0,
+              "games": 25,
+              "wins": 11,
+              "careerRoleGames": 36
+            },
+            {
+              "rank": 2,
+              "name": "發達",
+              "value": 40.0,
+              "games": 25,
+              "wins": 10,
+              "careerRoleGames": 43
+            },
+            {
+              "rank": 2,
+              "name": "開司",
+              "value": 40.0,
+              "games": 25,
+              "wins": 10,
+              "careerRoleGames": 27
+            },
+            {
+              "rank": 4,
+              "name": "軒",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 71
+            },
+            {
+              "rank": 4,
+              "name": "轆",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 63
+            },
+            {
+              "rank": 4,
+              "name": "洋蔥",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 61
+            },
+            {
+              "rank": 4,
+              "name": "池",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 59
+            },
+            {
+              "rank": 4,
+              "name": "黃某人",
+              "value": 36.0,
+              "games": 25,
+              "wins": 9,
+              "careerRoleGames": 36
+            },
+            {
+              "rank": 9,
+              "name": "HAO",
+              "value": 32.0,
+              "games": 25,
+              "wins": 8,
+              "careerRoleGames": 111
+            },
+            {
+              "rank": 9,
+              "name": "午夜",
+              "value": 32.0,
+              "games": 25,
+              "wins": 8,
+              "careerRoleGames": 40
+            }
+          ],
+          "忠臣": [
+            {
+              "rank": 1,
+              "name": "Vash",
+              "value": 38.0,
+              "games": 100,
+              "wins": 38,
+              "careerRoleGames": 102
+            },
+            {
+              "rank": 2,
+              "name": "HAO",
+              "value": 36.0,
+              "games": 100,
+              "wins": 36,
+              "careerRoleGames": 492
+            },
+            {
+              "rank": 3,
+              "name": "轆",
+              "value": 35.0,
+              "games": 100,
+              "wins": 35,
+              "careerRoleGames": 220
+            },
+            {
+              "rank": 4,
+              "name": "雪怪",
+              "value": 34.0,
+              "games": 100,
+              "wins": 34,
+              "careerRoleGames": 189
+            },
+            {
+              "rank": 5,
+              "name": "ED",
+              "value": 33.0,
+              "games": 100,
+              "wins": 33,
+              "careerRoleGames": 111
+            },
+            {
+              "rank": 6,
+              "name": "JOY",
+              "value": 30.0,
+              "games": 100,
+              "wins": 30,
+              "careerRoleGames": 215
+            },
+            {
+              "rank": 7,
+              "name": "洋蔥",
+              "value": 29.0,
+              "games": 100,
+              "wins": 29,
+              "careerRoleGames": 209
+            },
+            {
+              "rank": 7,
+              "name": "發達",
+              "value": 29.0,
+              "games": 100,
+              "wins": 29,
+              "careerRoleGames": 164
+            },
+            {
+              "rank": 7,
+              "name": "黃某人",
+              "value": 29.0,
+              "games": 100,
+              "wins": 29,
+              "careerRoleGames": 148
+            },
+            {
+              "rank": 7,
+              "name": "Emma",
+              "value": 29.0,
+              "games": 100,
+              "wins": 29,
+              "careerRoleGames": 104
+            }
+          ]
         },
         "rows": [
           {

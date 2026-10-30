@@ -1,9 +1,9 @@
 {
   "format": "avalon-games",
   "version": 2,
-  "key": "232d7d97c4876d53",
+  "key": "acae6c95512166b4",
   "cacheSchemaVersion": 4,
-  "config": {"leaderboard":{"theoryMinCellGames":5,"activeDays":90,"topN":10,"mainGames":100,"roleWindowGames":10,"loyalWindowGames":40,"overallMinGames":250,"theoryMinGames":0,"requireRoleWindows":1,"assassinAttempts":20,"assassinMinAttempts":10,"newcomerDays":90,"newcomerMinGames":10,"roleTitleGames":50,"roleTitleFallbackGames":25,"loyalTitleGames":200,"loyalTitleFallbackGames":100},"theoryWindows":[100],"minGamesThreshold":30,"excessShrinkK":20,"lakeClaimMinSample":30},
+  "config": {"leaderboard":{"theoryMinCellGames":5,"activeDays":90,"topN":10,"mainGames":100,"roleWindowGames":10,"loyalWindowGames":40,"overallMinGames":100,"theoryMinGames":50,"requireRoleWindows":1,"assassinAttempts":20,"assassinMinAttempts":10,"newcomerDays":90,"newcomerMinGames":10,"roleTitleGames":50,"roleTitleFallbackGames":25,"loyalTitleGames":200,"loyalTitleFallbackGames":100},"theoryWindows":[100],"minGamesThreshold":30,"excessShrinkK":20,"lakeClaimMinSample":30},
   "constants": {"allRoles":["刺客","莫甘娜","莫德雷德","奧伯倫","派西維爾","梅林","忠臣"],"configRoleOrder":["刺客","莫甘娜","莫德雷德","奧伯倫","派西維爾","梅林"],"redRoles":["刺客","莫甘娜","莫德雷德","奧伯倫"],"seats":["1","2","3","4","5","6","7","8","9","0"],"roleDealTenths":{"刺客":1,"莫甘娜":1,"莫德雷德":1,"奧伯倫":1,"派西維爾":1,"梅林":1,"忠臣":4}},
   "counts": {"games":2284,"fromSheet":2146,"fromDiscord":138,"players":190,"dated":2221,"undated":63},
   "vocab": {"category":["線瓦","面瓦","娛樂","","其他"],"outcome":["三紅","三藍死","三藍活","","其他"],"state":["藍紅紅紅","藍紅紅藍紅","藍藍藍","紅紅藍藍藍","藍紅紅藍藍","紅紅紅","藍紅藍紅藍","紅藍紅藍紅","紅紅藍藍紅","紅藍藍藍","藍紅藍藍","藍藍紅紅藍","紅藍紅藍藍","藍紅藍紅紅","藍藍紅藍","紅藍藍紅紅","紅藍紅紅","紅藍藍紅藍","藍藍紅紅紅","紅紅藍","紅藍紅","紅紅紅藍","紅紅紅藍藍","紅紅藍藍","藍藍","紅藍藍","紅紅藍紅","?"],"noteTags":["season:S1","season:S2","season:S3","season:S5","venue:古亭","venue:九號","venue:台中","venue:東門","venue:小巨蛋","venue:Discopia星球","venue:台中家","venue:學餐","venue:新竹謎寶","venue:不鳥谷","venue:政大","flag:spectated","flag:notRecorderGame","flag:review","flag:badGame","flag:lakeCorrected","flag:substitution","flag:incident"]},

@@ -175,7 +175,8 @@ export default function MissionAnalysis(): JSX.Element {
               <p>
                 {t('analytics.r7.missions.outcomeTakeaway', {
                   round: widest.round, failed: formatRate(widest.failed), fn: widest.fn, passed: formatRate(widest.passed), pn: widest.pn,
-                  gap: Math.abs(widest.failed - widest.passed).toFixed(1),
+                  // 勝率顯示整數 (Edward 2026-10-30)：差用顯示出來的兩個整數相減，讀者自己算得出來。
+                  gap: Math.abs(Math.round(widest.failed) - Math.round(widest.passed)),
                 })}
               </p>
             </Takeaway>

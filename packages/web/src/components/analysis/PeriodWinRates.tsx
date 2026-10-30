@@ -4,7 +4,7 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useStatsFilter } from '../../stats/statsFilter';
 import { useAnalysisPlayerRows, type PlayerWithSeatStats } from './seatRoleBlocks';
-import { InfoTip, StatTable, type StatColumn } from './ui';
+import { InfoTip, RATE_DIGITS, StatTable, type StatColumn } from './ui';
 
 /**
  * 勝率表 (2026-10-26，玩家回饋：「我想要看近期的玩家勝率就好，篩掉最近沒出現的，例如這颱風天我就想要看這四天」)。
@@ -65,7 +65,7 @@ export default function PeriodWinRates(): JSX.Element {
     { key: 'finalBlueWinRate', label: t(`${k}.col.blue`), term: 'blueWinRate', format: 'pct', align: 'right', tone: 'blue', n: 'rawBlueGames' },
     {
       key: 'excessWinRate', label: t(`${k}.col.excess`), term: 'excessWinRate', align: 'right', emphasis: sort === 'excessWinRate',
-      format: (v) => (num(v) === null ? '—' : `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(1)}`),
+      format: (v) => (num(v) === null ? '—' : `${(v as number) > 0 ? '+' : ''}${(v as number).toFixed(RATE_DIGITS)}`),
     },
     { key: 'lastPlayed', label: t(`${k}.col.lastPlayed`), format: 'text', className: 'text-zinc-400' },
   ];

@@ -6,7 +6,7 @@ import type { ChemistryData, ChemistryMatrix as ChemistryMatrixType } from '../.
 import { isThinPairCell } from '../../utils/analysisDisplay';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import { pairOutcomeCounts } from './seatRoleBlocks';
-import { InfoTip, SectionTabs, Term, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem, type StatTermKey } from './ui';
+import { InfoTip, SectionTabs, Term, RATE_DIGITS, formatRate, useSectionTab, type MetricBlockKey, type SectionTabItem, type StatTermKey } from './ui';
 import NotFilteredNote from './filter/NotFilteredNote';
 
 type MatrixKey = 'coWin' | 'coLose' | 'winCorr' | 'coWinMinusLose' | 'outcomePair';
@@ -192,7 +192,7 @@ export default function ChemistryMatrixPanel(): JSX.Element {
                     }
                   } else if (!isSelf && !isNaN(val)) {
                     colour = cellColor(val, key);
-                    title = `${rowName} × ${players[ci]}: ${val.toFixed(1)}`;
+                    title = `${rowName} × ${players[ci]}: ${val.toFixed(RATE_DIGITS)}`;
                   }
                   return (
                     <td key={ci} className="p-0.5">

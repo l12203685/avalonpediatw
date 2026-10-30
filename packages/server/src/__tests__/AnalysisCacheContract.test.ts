@@ -579,6 +579,19 @@ describe('analysis_cache.json → web contract', () => {
         }
         if (r.role !== undefined) str(p, r.role, `${rat}.role`);
       });
+      // roleTitles (Edward 2026-10-30): each role's top topN, rate first; older caches have no roleTop.
+      if (b.id === 'roleTitles' && b.roleTop !== undefined) {
+        const top = obj(p, b.roleTop, `${at}.roleTop`);
+        for (const [role, list] of Object.entries(top)) {
+          if (!ROLES.includes(role)) p.push(`${at}.roleTop: unknown role ${show(role)}`);
+          const rows = arr(p, list, `${at}.roleTop.${role}`, { nonEmpty: true });
+          rows.forEach((r, j) => {
+            str(p, r.name, `${at}.roleTop.${role}[${j}].name`);
+            for (const k of ['rank', 'value', 'games', 'wins', 'careerRoleGames']) num(p, r[k], `${at}.roleTop.${role}[${j}].${k}`);
+            if (j > 0 && (r.value as number) > (rows[j - 1].value as number)) p.push(`${at}.roleTop.${role}[${j}]: not ordered by value`);
+          });
+        }
+      }
     });
     expect(p).toEqual([]);
   });

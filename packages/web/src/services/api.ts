@@ -856,19 +856,32 @@ export function finalFields(
   return out;
 }
 
-/** 百分比顯示；null / 非數字顯示「—」。 */
-export function fmtPct(v: number | null | undefined, digits = 1): string {
+/**
+ * 勝率的小數位 (Edward 2026-10-30「大部分勝率都只需要顯示到整數位，只有角色理論／位置理論／整體理論才需要顯示到
+ * 小數第一位」)：一般勝率整數 (RATE_DIGITS)，三種理論勝率 (與它們的差) 一位小數 (THEORY_DIGITS)。
+ * 分析頁共用 UI 的 formatRate (components/analysis/ui/tokens.ts) 用同一組值。
+ */
+export const RATE_DIGITS = 0;
+export const THEORY_DIGITS = 1;
+
+/** 百分比顯示 (預設整數)；null / 非數字顯示「—」。 */
+export function fmtPct(v: number | null | undefined, digits = RATE_DIGITS): string {
   return isFiniteNum(v) ? `${v.toFixed(digits)}%` : '—';
 }
 
+/** 角色理論／位置理論／整體理論：一位小數。 */
+export function fmtTheoryPct(v: number | null | undefined): string {
+  return fmtPct(v, THEORY_DIGITS);
+}
+
 /** 帶正負號的百分點顯示 (超額勝率用)；null 顯示「—」。 */
-export function fmtSignedPct(v: number | null | undefined, digits = 1): string {
+export function fmtSignedPct(v: number | null | undefined, digits = RATE_DIGITS): string {
   if (!isFiniteNum(v)) return '—';
   return `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`;
 }
 
-/** 帶正負號的百分點差 (不加 %，例：+10.4)；用在兩個百分比相減，避免讀成相對成長。 */
-export function fmtSignedPoints(v: number | null | undefined, digits = 1): string {
+/** 帶正負號的百分點差 (不加 %，例：+10)；用在兩個百分比相減，避免讀成相對成長。理論勝率的差傳 THEORY_DIGITS。 */
+export function fmtSignedPoints(v: number | null | undefined, digits = RATE_DIGITS): string {
   if (!isFiniteNum(v)) return '—';
   return `${v > 0 ? '+' : ''}${v.toFixed(digits)}`;
 }
@@ -1136,6 +1149,16 @@ export interface AnalysisLeaderboardRow {
   expectedFinalWinRate?: number;
 }
 
+/** 角色王 roleTop 的一列：該角色最近 games (= 視窗) 場的最終勝率 value、勝場、該角色生涯場數。 */
+export interface AnalysisRoleTopRow {
+  rank: number;
+  name: string;
+  value: number;
+  games: number;
+  wins: number;
+  careerRoleGames: number;
+}
+
 export interface AnalysisLeaderboardBoard {
   /** 固定 id；未知 id 仍可解析 (以小卡通用格式顯示)。 */
   id: AnalysisLeaderboardBoardId | (string & Record<never, never>);
@@ -1156,6 +1179,11 @@ export interface AnalysisLeaderboardBoard {
    * 角色王 (2026-10-28)：每個角色實際用的場數 (忠臣 200 或 100、其他 50 或 25，依多數人有沒有打滿)。
    */
   roleWindowGames?: Record<string, number>;
+  /**
+   * 角色王 (Edward 2026-10-30「角色王可以列出每一個角色對應的勝率 TOP10 的玩家嗎？」)：{角色: 打滿視窗的人裡
+   * 該角色最終勝率前 topN 名}；rank = 1 + 勝率更高的人數 (同率同名次)。rows 仍是角色王 (機器人讀)；舊快取沒有。
+   */
+  roleTop?: Record<string, AnalysisRoleTopRow[]>;
   /** theory 榜：整體理論要的生涯場數、是否要求角色窗打滿。 */
   overallMinGames?: number;
   requireRoleWindows?: boolean;

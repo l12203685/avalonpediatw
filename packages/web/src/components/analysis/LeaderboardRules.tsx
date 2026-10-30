@@ -11,13 +11,18 @@ import { useStatsFilter } from '../../stats/statsFilter';
  *
  * 目前值讀這次排行的 leaderboard.config (= 合併後的設定)；預設值讀沒有覆寫時的 config (第一次看到就記住)，
  * 沒看過時用產生器的預設 (FALLBACK_DEFAULTS，只用來判斷「跟預設一樣」)。
+ *
+ * (2026-10-30 Edward：「計算角色理論跟位置理論應該最低分別都是預設 50 場，整體理論預設是角色理論跟位置理論的 2 倍＝100 場。
+ *  然後選擇時就是直接選角色／位置最低場數（可以選 30／50／100／150）這樣」) 原本的「最低生涯場數」與「整體理論生涯場數」
+ * 兩個選單併成一個「角色／位置最低場數」(theoryMinGames)，整體理論 (overallMinGames) 固定是它的 2 倍、一起寫進覆寫，
+ * 只顯示成連動的唯讀說明。預設 50 / 100 與 generate_cache.py LEADERBOARD_CONFIG 一致。
  */
 
 type Config = Record<string, unknown>;
 
 const FALLBACK_DEFAULTS: Record<LeaderboardOverrideKey, number> = {
-  activeDays: 90, mainGames: 100, roleWindowGames: 10, loyalWindowGames: 40, requireRoleWindows: 1, theoryMinGames: 0,
-  overallMinGames: 250, roleTitleGames: 50, roleTitleFallbackGames: 25, loyalTitleGames: 200, loyalTitleFallbackGames: 100,
+  activeDays: 90, mainGames: 100, roleWindowGames: 10, loyalWindowGames: 40, requireRoleWindows: 1, theoryMinGames: 50,
+  overallMinGames: 100, roleTitleGames: 50, roleTitleFallbackGames: 25, loyalTitleGames: 200, loyalTitleFallbackGames: 100,
   assassinMinAttempts: 10,
 };
 const KEYS = Object.keys(FALLBACK_DEFAULTS) as LeaderboardOverrideKey[];
@@ -27,9 +32,10 @@ let rememberedOpen = false;
 
 const ACTIVE_DAYS = [30, 60, 90, 180, 365, 0];
 const MAIN_GAMES = [50, 100, 150, 200, 0];
-const MIN_GAMES = [0, 50, 100, 200, 300, 500];
+/** 角色／位置最低場數 (theoryMinGames)；整體理論最低場數 = OVERALL_FACTOR 倍 (Edward 2026-10-30)。 */
+const THEORY_MIN_GAMES = [30, 50, 100, 150];
+const OVERALL_FACTOR = 2;
 const ROLE_WINDOWS: Array<[number, number]> = [[5, 20], [10, 40], [15, 60], [20, 80]];
-const OVERALL_MIN = [100, 250, 500, 1000];
 /** 角色王：'auto' = 預設規則；其他 = 固定場數 (其他角色 / 忠臣)。 */
 const TITLE_FIXED: Array<[number, number]> = [[25, 100], [50, 200], [20, 80], [10, 40]];
 const ASSASSIN_MIN = [5, 10, 15, 20];
@@ -78,6 +84,8 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
   const days = (d: number): string => (d > 0 ? t(`${r}.days`, { count: d }) : t(`${r}.anyTime`));
   const games = (n: number): string => (n > 0 ? t(`${r}.lastGames`, { count: n }) : t(`${r}.career`));
   const atLeast = (n: number): string => (n > 0 ? t(`${r}.atLeast`, { count: n }) : t(`${r}.noMin`));
+  // 角色／位置最低場數改了，整體理論跟著變成 2 倍 (一起寫進覆寫；跟預設一樣的鍵 apply 會拿掉)。
+  const setTheoryMin = (n: number): void => apply({ theoryMinGames: n, overallMinGames: OVERALL_FACTOR * n });
   const titleAuto = cur('roleTitleGames') !== cur('roleTitleFallbackGames') || cur('loyalTitleGames') !== cur('loyalTitleFallbackGames');
   const titleValue = titleAuto ? 'auto' : `${cur('roleTitleGames')}/${cur('loyalTitleGames')}`;
   const titleLabel = titleAuto
@@ -94,7 +102,7 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
   const summary = [
     days(cur('activeDays')),
     games(cur('mainGames')),
-    cur('theoryMinGames') > 0 ? t(`${r}.minGamesShort`, { count: cur('theoryMinGames') }) : null,
+    t(`${r}.minGamesShort`, { count: cur('theoryMinGames') }),
     cur('requireRoleWindows') ? t(`${r}.roleWindowsShort`, { k: cur('roleWindowGames'), kl: cur('loyalWindowGames') }) : t(`${r}.roleWindowsOffShort`),
     t(`${r}.overallShort`, { count: cur('overallMinGames') }),
     titleAuto ? t(`${r}.titleAutoShort`) : t(`${r}.titleFixedShort`, { other: cur('roleTitleGames'), loyal: cur('loyalTitleGames') }),
@@ -156,8 +164,16 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
             (v) => apply({ activeDays: Number(v) }), 'rule-activeDays')}
           {select(t(`${r}.mainGames`), String(cur('mainGames')), opts(MAIN_GAMES, cur('mainGames'), games),
             (v) => apply({ mainGames: Number(v) }), 'rule-mainGames')}
-          {select(t(`${r}.theoryMinGames`), String(cur('theoryMinGames')), opts(MIN_GAMES, cur('theoryMinGames'), atLeast),
-            (v) => apply({ theoryMinGames: Number(v) }), 'rule-theoryMinGames')}
+          {select(t(`${r}.theoryMinGames`), String(cur('theoryMinGames')), opts(THEORY_MIN_GAMES, cur('theoryMinGames'), atLeast),
+            (v) => setTheoryMin(Number(v)), 'rule-theoryMinGames')}
+          <div className="flex min-w-0 flex-col gap-0.5 text-[11px] text-zinc-500" title={t(`${r}.overallLinkedHint`)} data-testid="rule-overallMinGames">
+            <span className="truncate">{t(`${r}.overallLinked`)}</span>
+            <span className="w-full min-w-0 truncate rounded-md border border-dashed border-zinc-700 px-1.5 py-1 text-xs text-zinc-300">
+              {cur('overallMinGames') === OVERALL_FACTOR * cur('theoryMinGames')
+                ? t(`${r}.overallLinkedValue`, { count: cur('overallMinGames') })
+                : t(`${r}.atLeast`, { count: cur('overallMinGames') })}
+            </span>
+          </div>
           {select(t(`${r}.roleWindows`), rw,
             (ROLE_WINDOWS.some(([k, kl]) => `${k}/${kl}` === rw) ? ROLE_WINDOWS : [[cur('roleWindowGames'), cur('loyalWindowGames')] as [number, number], ...ROLE_WINDOWS])
               .map(([k, kl]) => [`${k}/${kl}`, t(`${r}.roleWindowsOption`, { k, kl })]),
@@ -168,8 +184,6 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
           {select(t(`${r}.requireRoleWindows`), String(cur('requireRoleWindows')),
             [['1', t(`${r}.requireOn`)], ['0', t(`${r}.requireOff`)]],
             (v) => apply({ requireRoleWindows: Number(v) }), 'rule-requireRoleWindows')}
-          {select(t(`${r}.overallMinGames`), String(cur('overallMinGames')), opts(OVERALL_MIN, cur('overallMinGames'), (n) => t(`${r}.atLeast`, { count: n })),
-            (v) => apply({ overallMinGames: Number(v) }), 'rule-overallMinGames')}
           {select(t(`${r}.roleTitles`), titleValue,
             [
               ['auto', titleAuto ? titleLabel : t(`${r}.titleAutoDefault`, { full: defaults.roleTitleGames, fallback: defaults.roleTitleFallbackGames, loyal: defaults.loyalTitleGames, loyalFallback: defaults.loyalTitleFallbackGames })],
