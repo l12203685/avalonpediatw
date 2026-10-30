@@ -84,8 +84,13 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 async function snap(p: Page): Promise<Snap | null> {
   return withTimeout(p.evaluate(SNAP_JS), 10000, 'snap');
 }
-const invoke = (p: Page, method: string, ...args: unknown[]) =>
-  withTimeout(p.evaluate(`window.connection.invoke(${[method, ...args].map((x) => JSON.stringify(x)).join(', ')})`), 10000, method);
+/**
+ * 呼叫練習台的 hub 方法。2026-10-30：練習台的 StartGame 開始不回應（遊戲照樣開始），等回應會讓整支程式逾時中斷，
+ * 所以逾時只記下來、照房間狀態繼續 —— 動作有沒有生效看下一次的畫面資料。
+ */
+const invoke = (p: Page, method: string, ...args: unknown[]): Promise<unknown> =>
+  withTimeout(p.evaluate(`window.connection.invoke(${[method, ...args].map((x) => JSON.stringify(x)).join(', ')})`), 10000, method)
+    .catch((err: unknown) => { console.log(`${method} 沒有回應（${err instanceof Error ? err.message : String(err)}），照房間狀態繼續`); });
 const READY_JS = 'window.app && window.app.data_ready === true';
 
 interface PlatformRecord {
