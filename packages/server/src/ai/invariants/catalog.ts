@@ -85,7 +85,7 @@ export const INVARIANTS: readonly InvariantSpec[] = [
   { id: 'INV-T1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good leader never proposes a team that must fail (minReds at L1* >= fails required)' },
   { id: 'INV-V1', refs: ['C2', 'C4', 'C6', 'P1', 'P2', 'K2'], kind: 'hard', status: 'enforced', side: 'good',
-    rule: 'a good voter never approves a must-fail team on a non-forced proposal (R1-R2 = the normal-vote table rule, registered exemption; owner ruling on D3 final)' },
+    rule: 'a good voter never approves a must-fail team on a non-forced proposal (R1-R2 = the normal-vote table rule, registered exemption; owner ruling on D3 final; Merlin on the team voting as a loyal = 正常票內白, owner 2026-10-30)' },
   { id: 'INV-K1', refs: ['K1′', 'K3', 'X4'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'a good leader never proposes a strictly dominated team (A in, B out, A declared B blue, someone else can be the only red), pairwise so chains close; a declaration the leader itself saw contradicted binds nothing' },
   { id: 'INV-K1V', refs: ['K1′', 'K3', 'X4'], kind: 'hard', status: 'enforced', side: 'good',

@@ -57,6 +57,8 @@ const rb = (round: number): string => (round <= 2 ? 'R1-2' : 'R3+');
 const R12 = 'R1-R2 normal vote (D3)';
 const FORCED = 'forced 5th proposal';
 const TWO_FAILS = 'two fails needed (R4)';
+/** Edward 2026-10-30：梅林「正常票內白」（自己在隊上時照忠臣贊成）沒有任何問題 — INV-V1 不算違規。 */
+const MERLIN_ON_TEAM = 'Merlin on-team normal vote (owner 10/30)';
 const L1_EMPTY = 'L1 empty (L0 fallback)';
 /** The 10/26 conventions contradicted the table and were dropped (`enumerateL1`): what they proved is not proved. */
 const CONVENTIONS_DROPPED = 'A1/A2 contradicted (A0 only)';
@@ -337,7 +339,8 @@ export function checkDecision(
 
       // INV-V1
       if (view.provablyFailable(team, round)) {
-        const exempt = voteExemption(obs, view, false);
+        const exempt = voteExemption(obs, view, false)
+          ?? (obs.myRole === 'merlin' && (team ?? []).includes(obs.myPlayerId) ? MERLIN_ON_TEAM : undefined);
         L.record('INV-V1', { exempt, violated: approve, unreliable });
         if (!exempt && humanVote !== undefined) L.human('INV-V1', humanVote);
       }
