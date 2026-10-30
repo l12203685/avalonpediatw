@@ -19,7 +19,7 @@ export interface RoleVideo {
   slug: string;
   /** Chinese title shown in the UI */
   title_zh: string;
-  /** Role identifier — matches keys in ROLE_STATS */
+  /** Role identifier — matches keys in WIKI_ROLE_NAMES (data/wiki.ts) */
   role_tag: string;
   /** File size in bytes (for progress/placeholder sizing) */
   size_bytes: number;

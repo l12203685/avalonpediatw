@@ -10,6 +10,8 @@ import {
   WIKI_ARTICLES,
   WIKI_ARTICLE_ROLE,
   WIKI_CATEGORIES,
+  WIKI_DATA_ARTICLE_ROLE,
+  WIKI_ROLE_NAMES,
   WIKI_STATUSES,
   isWikiPending,
   mergeWikiArticles,
@@ -72,7 +74,10 @@ const MERGED_HARDCODED_IDS = [
   'rules-flow', 'strategies-zone-voting',
 ];
 
-/** The hard-coded 「X數據解析 — 2146 局實戰分析」 pieces: stale numbers, to be replaced by live stats. */
+/**
+ * The hard-coded 「X數據解析」 pieces. 2026-10-30: their numbers come from the live stats card (RoleStatsCard,
+ * same source and definitions as the analytics page); the old static data/roleStats.ts counted 三藍死 as a good win.
+ */
 const DATA_ARTICLE_IDS = WIKI_ARTICLES.filter((a) => /^strategy-[a-z]+-data$/.test(a.id)).map((a) => a.id);
 
 describe('wiki categories and status', () => {
@@ -98,11 +103,22 @@ describe('wiki categories and status', () => {
     expect(isWikiPending(jsonById.get('wiki-140')!)).toBe(true);
   });
 
-  it('the hard-coded 數據解析 articles are 待完成', () => {
+  it('the 數據解析 articles read the live stats and hard-code no numbers', () => {
     expect(DATA_ARTICLE_IDS).toHaveLength(7);
     for (const id of DATA_ARTICLE_IDS) {
-      expect(isWikiPending(WIKI_ARTICLES.find((a) => a.id === id)!)).toBe(true);
+      const a = WIKI_ARTICLES.find((x) => x.id === id)!;
+      expect(isWikiPending(a), id).toBe(false);
+      // the live card is shown for every one of them, for a role the card knows
+      expect(WIKI_ROLE_NAMES[WIKI_DATA_ARTICLE_ROLE[id]], id).toBeDefined();
+      for (const text of [a.title, a.excerpt, a.content]) {
+        // no stale sample sizes or win rates (the old static numbers: 2146 局、62.3%…)
+        expect(text, id).not.toMatch(/2,?146|\d+\.\d+ ?%/);
+      }
+      // the outcome definition the site uses: 好人勝＝三藍活；三藍死算紅方贏
+      expect(a.content, id).toMatch(/三藍死算紅方贏/);
+      expect(a.content, id).toMatch(/好人勝＝三藍活/);
     }
+    expect(Object.keys(WIKI_DATA_ARTICLE_ROLE).sort()).toEqual([...DATA_ARTICLE_IDS].sort());
   });
 
   it('every category that is offered has at least one finished article', () => {

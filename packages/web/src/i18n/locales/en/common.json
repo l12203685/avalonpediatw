@@ -35,6 +35,21 @@
     "pendingHint": "Drafts that still need writing. Help welcome",
     "pendingBadge": "Unfinished",
     "pendingBanner": "This article isn't finished yet. Feel free to help write it",
+    "liveStats": {
+      "title": "{{role}}: live game data",
+      "good": "Good",
+      "evil": "Evil",
+      "loading": "Loading…",
+      "failed": "Couldn't load the data. Please try again later",
+      "retry": "Retry",
+      "allRow": "All",
+      "seatCol": "Seat",
+      "note": "The first row (All) is {{role}} across all seats; the rows below are seats 1–10. All seven roles are in every game, so that row is the whole team's result and roles on the same team match; differences between roles show up by seat and on the player radar.",
+      "loyalNote": "There are several Loyal Servants per game, so n counts each one.",
+      "source": "Same statistics as the Analytics page (all games), updated daily.",
+      "sourceFiltered": "Same statistics as the Analytics page, with the Analytics page's filter applied.",
+      "openStats": "Open Analytics"
+    },
     "category": {
       "rules": "Rules",
       "roles": "Roles",
