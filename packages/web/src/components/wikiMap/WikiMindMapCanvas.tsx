@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
-import { BookOpen, ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, Maximize, MoveHorizontal, ZoomIn, ZoomOut } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, ChevronsDownUp, ChevronsUpDown, ListOrdered, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react';
 import type { WikiArticle } from '../../data/wiki';
 import { wikiCardExcerpt } from '../../utils/wikiMarkup';
 import { relatedArticles } from '../../utils/wikiGraph';
 import type { WikiGraph, WikiRelationKind } from '../../utils/wikiGraph';
-import { DEFAULT_MIND_MAP_METRICS, layoutWikiMindMap } from '../../utils/wikiMindMapLayout';
+import { DEFAULT_MIND_MAP_METRICS, fitMindMapToViewport, fitScale, layoutWikiMindMap } from '../../utils/wikiMindMapLayout';
 import type { MindMapLayout, MindMapLeafNode, MindMapNode } from '../../utils/wikiMindMapLayout';
 import { RELATION_CHIP_CLASS, RELATION_LABEL, RELATION_STROKE } from './relationStyle';
 
 /**
- * 桌面版百科心智圖：SVG，根在中間、分類分左右（utils/wikiMindMapLayout.ts）。
- *   - 滑過文章 = 預覽關聯，點一下 = 固定選取（右側面板列出相關文章）；雙擊或面板上的標題 = 開文章；
+ * 桌面版百科心智圖：SVG，根在中間、分類分左右（utils/wikiMindMapLayout.ts）。整張圖預設放進一個畫面：
+ * 畫布高度填滿視窗，文章多的分類依畫面大小分欄（Edward 2026-10-30：預設心智圖、一張頁面裡呈現）。
+ *   - 滑過文章 = 預覽關聯（工具列顯示完整標題），點一下 = 固定選取（浮動面板列出相關文章）；
+ *     雙擊或面板上的標題 = 開文章；
  *   - 點分類 = 收合／展開；
  *   - 滾輪 = 上下捲動（到底就讓頁面捲）、Ctrl/⌘＋滾輪或按鈕 = 縮放、拖曳 = 移動。
  */
@@ -26,6 +28,9 @@ const MIN_K = 0.3;
 const MAX_K = 2.5;
 const ROW = DEFAULT_MIND_MAP_METRICS.rowHeight;
 const PILL_H = 26;
+
+/** 「全覽」最多放大到這裡（大螢幕上字不要大得誇張）。 */
+const FIT_MAX_K = 1.25;
 
 const clampK = (k: number): number => Math.min(MAX_K, Math.max(MIN_K, k));
 
@@ -62,8 +67,12 @@ interface WikiMindMapCanvasProps {
 
 export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiMindMapCanvasProps): JSX.Element {
   const markerId = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const frameRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  /** The frame fills the window below where it starts (one screen, no page scroll for the map). */
+  const [frameH, setFrameH] = useState<number | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [showGuide, setShowGuide] = useState(false);
   const [rawView, setView] = useState<View>({ k: 1, tx: 0, ty: 0 });
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -71,11 +80,22 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
   /** The leaf hovered / clicked (an article can have two: its own and a reading-path shortcut); lines start there. */
   const [hoverKey, setHoverKey] = useState<string | null>(null);
   const [pinnedKey, setPinnedKey] = useState<string | null>(null);
-  /** The graph the view was last fitted to: the full article list arrives after the first render (API / bundle). */
-  const fittedRef = useRef<WikiGraph | null>(null);
+  /** What the view was last fitted to: the full article list arrives after the first render (API / bundle). */
+  const fittedRef = useRef<{ graph: WikiGraph; maxRows: number; w: number; h: number } | null>(null);
   const draggedRef = useRef(false);
 
-  const layout = useMemo(() => layoutWikiMindMap(graph, collapsed), [graph, collapsed]);
+  // Column split for this viewport (from the fully expanded map, so collapsing doesn't reshuffle the others).
+  const { maxRows, maxLeafLabel } = useMemo(
+    () =>
+      size.w && size.h
+        ? fitMindMapToViewport(graph, size.w, size.h, {}, FIT_MAX_K)
+        : { maxRows: Infinity, maxLeafLabel: DEFAULT_MIND_MAP_METRICS.maxLeafLabel },
+    [graph, size.w, size.h],
+  );
+  const layout = useMemo(
+    () => layoutWikiMindMap(graph, collapsed, { maxLeafLabel }, maxRows),
+    [graph, collapsed, maxLeafLabel, maxRows],
+  );
   const { bounds } = layout;
   // Collapsing / resizing changes the bounds: the shown view is always clamped onto the map.
   const view = useMemo(
@@ -97,6 +117,18 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
 
   // ── viewport ──────────────────────────────────────────────────────────────
   useLayoutEffect(() => {
+    const el = frameRef.current;
+    if (!el) return undefined;
+    const measure = (): void => {
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setFrameH(Math.max(480, Math.round(window.innerHeight - top - 12)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return (): void => window.removeEventListener('resize', measure);
+  }, []);
+
+  useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return undefined;
     const measure = (): void => setSize({ w: el.clientWidth, h: el.clientHeight });
@@ -107,15 +139,9 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
     return (): void => ro.disconnect();
   }, []);
 
-  const fitWidth = useCallback((): void => {
-    if (!size.w) return;
-    const k = clampK(Math.min(1, size.w / (bounds.maxX - bounds.minX)));
-    setView({ k, tx: size.w / 2 - ((bounds.minX + bounds.maxX) / 2) * k, ty: -bounds.minY * k });
-  }, [size.w, bounds]);
-
   const fitAll = useCallback((): void => {
     if (!size.w || !size.h) return;
-    const k = clampK(Math.min(1, size.w / (bounds.maxX - bounds.minX), size.h / (bounds.maxY - bounds.minY)));
+    const k = clampK(Math.min(FIT_MAX_K, fitScale(bounds, size.w, size.h)));
     setView({
       k,
       tx: size.w / 2 - ((bounds.minX + bounds.maxX) / 2) * k,
@@ -125,10 +151,11 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
 
   // First real size / new articles: the whole map on one screen (Edward 2026-10-30「希望可以放在一張頁面裡呈現」).
   useEffect(() => {
-    if (fittedRef.current === graph || !size.w || !size.h) return;
-    fittedRef.current = graph;
+    const f = fittedRef.current;
+    if (!size.w || !size.h || (f && f.graph === graph && f.maxRows === maxRows && f.w === size.w && f.h === size.h)) return;
+    fittedRef.current = { graph, maxRows, w: size.w, h: size.h };
     fitAll();
-  }, [graph, size, fitAll]);
+  }, [graph, maxRows, size, fitAll]);
 
   // Wheel / drag / zoom start from the shown (clamped) view.
   const viewRef = useRef(view);
@@ -204,7 +231,7 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
       if (layout.byKey[layout.anchorOf[id]]?.kind === 'branch' && home) {
         const opened = new Set([...collapsed].filter((b) => b !== home));
         setCollapsed(opened);
-        next = layoutWikiMindMap(graph, opened);
+        next = layoutWikiMindMap(graph, opened, { maxLeafLabel }, maxRows);
       }
       const node = next.byKey[next.anchorOf[id]];
       if (!node || !size.w) return;
@@ -215,7 +242,7 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
       if (next === layout && sx > margin && sx < size.w - margin && sy > margin && sy < size.h - margin) return;
       setView(clampView({ k: v.k, tx: size.w / 2 - node.x * v.k, ty: size.h / 2 - node.y * v.k }, next.bounds, size.w, size.h));
     },
-    [graph, layout, collapsed, size, pinLeaf, hoverLeaf],
+    [graph, layout, collapsed, maxLeafLabel, maxRows, size, pinLeaf, hoverLeaf],
   );
 
   const toggleBranch = useCallback((id: string): void => {
@@ -243,11 +270,25 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
     return keys;
   }, [activeId, kindOf, layout]);
 
-  const treeLayer = useMemo(
-    () => (
+  const treeLayer = useMemo(() => {
+    const litBranches = new Set(layout.leaves.filter((n) => highlightedKeys.has(n.key)).map((n) => n.branchKey));
+    return (
       <g>
+        {layout.boxes.map((box) => (
+          <rect
+            key={box.branchKey}
+            x={box.x}
+            y={box.y}
+            width={box.width}
+            height={box.height}
+            rx={10}
+            fill="rgba(24,24,27,0.6)"
+            stroke={litBranches.has(box.branchKey) ? '#52525b' : '#27272a'}
+            opacity={activeId === null || litBranches.has(box.branchKey) ? 1 : 0.5}
+          />
+        ))}
         {layout.links.map((l) => {
-          const lit = activeId !== null && (highlightedKeys.has(l.to) || (l.from === 'root' && layout.leaves.some((n) => n.branchKey === l.to && highlightedKeys.has(n.key))));
+          const lit = activeId !== null && litBranches.has(l.from === 'root' ? l.to : l.from);
           return (
             <path
               key={`${l.from}>${l.to}`}
@@ -260,9 +301,8 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
           );
         })}
       </g>
-    ),
-    [layout, activeId, highlightedKeys],
-  );
+    );
+  }, [layout, activeId, highlightedKeys]);
 
   const relationLayer = useMemo(() => {
     if (!activeId) return null;
@@ -382,39 +422,67 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
     );
   }, [layout, activeId, pinnedId, kindOf, highlightedKeys, graph, toggleBranch, onOpen, hoverLeaf, pinLeaf]);
 
+  const hovered = hoverId ? graph.articles[hoverId] : undefined;
+  const panelOpen = pinnedId !== null || showGuide;
+  // The panel goes over the other half of the map than the pinned article (the reading order lives on the right).
+  const pinnedNode = pinnedId ? layout.byKey[pinnedKey ?? ''] ?? layout.byKey[layout.anchorOf[pinnedId]] : undefined;
+  const panelLeft = !pinnedNode || pinnedNode.side === 1;
+
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_18rem] gap-3" data-testid="wiki-mindmap-canvas">
-      <div className="flex flex-col h-[calc(100vh-8rem)] min-h-[520px] overflow-hidden rounded-lg border border-zinc-800 bg-black">
-        {/* controls */}
-        <div className="flex items-center gap-1 px-2 py-1.5 border-b border-zinc-800 bg-zinc-950">
-          <CanvasButton label="放大" onClick={() => zoomAt(1.2, size.w / 2, size.h / 2)}>
-            <ZoomIn size={15} />
-          </CanvasButton>
-          <CanvasButton label="縮小" onClick={() => zoomAt(1 / 1.2, size.w / 2, size.h / 2)}>
-            <ZoomOut size={15} />
-          </CanvasButton>
-          <CanvasButton label="符合寬度" onClick={fitWidth}>
-            <MoveHorizontal size={15} />
-          </CanvasButton>
-          <CanvasButton label="全覽" onClick={fitAll}>
-            <Maximize size={15} />
-          </CanvasButton>
-          <CanvasButton
-            label={allCollapsed ? '展開全部分類' : '收合全部分類'}
-            onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(graph.branches.map((b) => b.id)))}
-          >
-            {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
-          </CanvasButton>
-          <span className="ml-1 text-[11px] text-zinc-500 tabular-nums">{Math.round(view.k * 100)}%</span>
-          <span className="ml-auto min-w-0 truncate text-[11px] text-zinc-500">
-            滑過文章看關聯・點一下固定・雙擊開啟・點分類收合・滾輪捲動・Ctrl／⌘＋滾輪縮放・拖曳移動
-          </span>
-        </div>
+    <div
+      ref={frameRef}
+      className="flex flex-col overflow-hidden rounded-lg border border-zinc-800 bg-black"
+      style={{ height: frameH ?? 'calc(100vh - 8rem)' }}
+      data-testid="wiki-mindmap-canvas"
+    >
+      {/* controls */}
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950">
+        <CanvasButton label="放大" onClick={() => zoomAt(1.2, size.w / 2, size.h / 2)}>
+          <ZoomIn size={15} />
+        </CanvasButton>
+        <CanvasButton label="縮小" onClick={() => zoomAt(1 / 1.2, size.w / 2, size.h / 2)}>
+          <ZoomOut size={15} />
+        </CanvasButton>
+        <CanvasButton label="全覽（整張圖）" onClick={fitAll}>
+          <Maximize size={15} />
+        </CanvasButton>
+        <CanvasButton
+          label={allCollapsed ? '展開全部分類' : '收合全部分類'}
+          onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(graph.branches.map((b) => b.id)))}
+        >
+          {allCollapsed ? <ChevronsUpDown size={15} /> : <ChevronsDownUp size={15} />}
+        </CanvasButton>
+        <CanvasButton
+          label="新手建議閱讀順序"
+          active={showGuide && pinnedId === null}
+          onClick={() => {
+            const open = !(showGuide && pinnedId === null);
+            pinLeaf(null);
+            setShowGuide(open);
+          }}
+        >
+          <ListOrdered size={15} />
+        </CanvasButton>
+        <span className="ml-1 text-[11px] text-zinc-500 tabular-nums">{Math.round(view.k * 100)}%</span>
+        <span className="ml-auto min-w-0 truncate pl-2 text-[12px]" data-testid="wiki-mindmap-hover">
+          {hovered ? (
+            <>
+              <span className="text-zinc-100 font-semibold">{hovered.title}</span>
+              <span className="text-zinc-500">
+                {'　'}引用 {graph.outgoing[hovered.id]?.length ?? 0}・被引用 {graph.incoming[hovered.id]?.length ?? 0}・點一下看相關文章、雙擊開啟
+              </span>
+            </>
+          ) : (
+            <span className="text-zinc-500">滑過文章看關聯・點一下固定・雙擊開啟・點分類收合・滾輪捲動・Ctrl／⌘＋滾輪縮放・拖曳移動</span>
+          )}
+        </span>
+      </div>
+      <div className="relative flex-1 min-h-0">
         <div
           ref={containerRef}
           onPointerDown={onPointerDown}
           onMouseLeave={() => hoverLeaf(null)}
-          className="relative flex-1 min-h-0 overflow-hidden select-none cursor-grab active:cursor-grabbing"
+          className="absolute inset-0 overflow-hidden select-none cursor-grab active:cursor-grabbing"
           style={{
             touchAction: 'none',
             backgroundImage: 'radial-gradient(circle, rgba(63,63,70,0.45) 1px, transparent 1px)',
@@ -446,29 +514,50 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
             </g>
           </svg>
         </div>
-      </div>
 
-      <MapPanel
-        graph={graph}
-        articlesById={articlesById}
-        activeId={activeId}
-        pinned={activeId !== null && activeId === pinnedId}
-        onSelect={focusArticle}
-        onOpen={onOpen}
-        onClear={() => pinLeaf(null)}
-      />
+        {/* floating panel: only for a pinned article or the reading order, so the map keeps the full width */}
+        {panelOpen && (
+          <MapPanel
+            left={panelLeft}
+            graph={graph}
+            articlesById={articlesById}
+            activeId={pinnedId}
+            onSelect={focusArticle}
+            onOpen={onOpen}
+            onClose={() => {
+              pinLeaf(null);
+              setShowGuide(false);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-function CanvasButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }): JSX.Element {
+function CanvasButton({
+  label,
+  onClick,
+  active = false,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  children: ReactNode;
+}): JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="w-8 h-8 inline-flex items-center justify-center rounded-md border border-zinc-700 bg-zinc-900/90 text-zinc-300 hover:text-white hover:border-yellow-500 transition-colors"
+      aria-pressed={active}
+      className={`w-7 h-7 inline-flex items-center justify-center rounded-md border transition-colors ${
+        active
+          ? 'border-yellow-500 bg-yellow-500 text-black'
+          : 'border-zinc-700 bg-zinc-900/90 text-zinc-300 hover:text-white hover:border-yellow-500'
+      }`}
     >
       {children}
     </button>
@@ -561,14 +650,16 @@ function LeafNode({ node, isActive, isPinned, kind, opacity, homeIcon, onHover, 
 interface MapPanelProps {
   graph: WikiGraph;
   articlesById: ReadonlyMap<string, WikiArticle>;
+  /** The pinned article; none = the reading order. */
   activeId: string | null;
-  pinned: boolean;
+  /** Float over the left edge of the map instead of the right. */
+  left: boolean;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
-  onClear: () => void;
+  onClose: () => void;
 }
 
-function MapPanel({ graph, articlesById, activeId, pinned, onSelect, onOpen, onClear }: MapPanelProps): JSX.Element {
+function MapPanel({ graph, articlesById, activeId, left, onSelect, onOpen, onClose }: MapPanelProps): JSX.Element {
   const info = activeId ? graph.articles[activeId] : undefined;
   const article = activeId ? articlesById.get(activeId) : undefined;
   const branch = info ? graph.branches.find((b) => b.id === info.category) : undefined;
@@ -578,9 +669,14 @@ function MapPanel({ graph, articlesById, activeId, pinned, onSelect, onOpen, onC
 
   return (
     <aside
-      className="h-[calc(100vh-8rem)] min-h-[520px] overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm"
+      className={`absolute top-2 bottom-2 ${left ? 'left-2' : 'right-2'} w-72 overflow-y-auto rounded-lg border border-zinc-700 bg-zinc-950/95 p-3 pt-2 text-sm shadow-2xl shadow-black/60 backdrop-blur-sm`}
       data-testid="wiki-mindmap-panel"
     >
+      <div className="flex justify-end -mb-1">
+        <button type="button" onClick={onClose} aria-label="關閉面板" title="關閉（取消選取）" className="p-1 text-zinc-500 hover:text-white">
+          <X size={16} />
+        </button>
+      </div>
       {info ? (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-[11px] text-zinc-400">
@@ -588,11 +684,6 @@ function MapPanel({ graph, articlesById, activeId, pinned, onSelect, onOpen, onC
               {branch?.icon} {branch?.name ?? info.category}
             </span>
             {info.pending && <span className="text-amber-300 border border-amber-500/40 rounded px-1">待完成</span>}
-            {pinned && (
-              <button type="button" onClick={onClear} className="ml-auto text-zinc-500 hover:text-white">
-                取消選取
-              </button>
-            )}
           </div>
           <button
             type="button"

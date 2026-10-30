@@ -16,10 +16,15 @@ import {
   type WikiGraphArticle,
 } from '../../../web/src/utils/wikiGraph';
 import {
+  DEFAULT_MIND_MAP_METRICS,
   assignSides,
   estimateTextWidth,
+  fitMindMapToViewport,
+  fitScale,
   layoutWikiMindMap,
+  truncateMiddle,
   truncateToWidth,
+  type MindMapLayout,
 } from '../../../web/src/utils/wikiMindMapLayout';
 
 const art = (id: string, category: string, content = '', status?: string): WikiGraphArticle => ({
@@ -173,16 +178,33 @@ describe('the real wiki_data.json', () => {
     expect(leaves).toHaveLength(1 + 17 + (16 - 1 - 5)); // guide + reading order + beginner articles not in it
   });
 
-  it('lays out without overlaps, balanced left / right', () => {
-    const layout = layoutWikiMindMap(graph);
-    for (const side of [1, -1]) {
-      const ys = layout.leaves.filter((l) => l.side === side).map((l) => l.y).sort((a, b) => a - b);
-      for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(24);
-      for (const l of layout.leaves.filter((n) => n.side === side)) {
-        expect(Math.sign(l.x)).toBe(side);
-        expect(Math.abs(l.labelX)).toBeGreaterThan(Math.abs(l.x));
+  /** No two article rows (dot + label) overlap, every row sits inside its branch box. */
+  const expectNoOverlap = (layout: MindMapLayout) => {
+    const row = DEFAULT_MIND_MAP_METRICS.rowHeight;
+    const rects = layout.leaves.map((l) => {
+      const ends = [l.x, l.labelX + l.side * l.width];
+      return { l, x1: Math.min(...ends), x2: Math.max(...ends), y1: l.y - row / 2, y2: l.y + row / 2 };
+    });
+    for (let i = 0; i < rects.length; i++) {
+      const a = rects[i];
+      expect(Math.sign(a.l.x)).toBe(a.l.side);
+      expect(Math.abs(a.l.labelX)).toBeGreaterThan(Math.abs(a.l.x));
+      const box = layout.boxes.find((b) => b.branchKey === a.l.branchKey)!;
+      expect(a.x1).toBeGreaterThanOrEqual(box.x - 0.01);
+      expect(a.x2).toBeLessThanOrEqual(box.x + box.width + 0.01);
+      expect(a.y1).toBeGreaterThanOrEqual(box.y - 0.01);
+      expect(a.y2).toBeLessThanOrEqual(box.y + box.height + 0.01);
+      for (let j = i + 1; j < rects.length; j++) {
+        const b = rects[j];
+        const overlap = a.x1 < b.x2 - 0.01 && b.x1 < a.x2 - 0.01 && a.y1 < b.y2 - 0.01 && b.y1 < a.y2 - 0.01;
+        expect(overlap, `${a.l.key} / ${b.l.key}`).toBe(false);
       }
     }
+  };
+
+  it('lays out without overlaps, balanced left / right', () => {
+    const layout = layoutWikiMindMap(graph);
+    expectNoOverlap(layout);
     const right = layout.leaves.filter((l) => l.side === 1).length;
     const left = layout.leaves.filter((l) => l.side === -1).length;
     expect(Math.abs(right - left)).toBeLessThanOrEqual(15);
@@ -195,6 +217,36 @@ describe('the real wiki_data.json', () => {
       expect(n.y).toBeLessThan(layout.bounds.maxY);
     }
     expect(layout.anchorOf['wiki-63']).toBe('rules/wiki-63');
+  });
+
+  it('splits big branches into columns, top to bottom then the next column, without overlaps', () => {
+    const layout = layoutWikiMindMap(graph, new Set(), {}, 12);
+    expectNoOverlap(layout);
+    expect(layout.maxRows).toBeLessThanOrEqual(12);
+    const strategies = layout.leaves.filter((l) => l.branchKey === 'branch/strategies');
+    expect(new Set(strategies.map((l) => l.column)).size).toBe(3); // 33 articles → 3 columns of 11
+    expect(strategies.map((l) => l.leaf.articleId)).toEqual(graph.branches.find((b) => b.id === 'strategies')!.leaves.map((l) => l.articleId));
+    expect(strategies.slice(0, 11).every((l) => l.column === 0)).toBe(true);
+    // the reading path still reads down the first column of 新手入門
+    const beginner = layout.leaves.filter((l) => l.branchKey === 'branch/beginner');
+    const firstColumn = beginner.filter((l) => l.column === 0);
+    expect(firstColumn[0].leaf.guide).toBe(true);
+    expect(firstColumn.slice(1).map((l) => l.leaf.readingStep)).toEqual(firstColumn.slice(1).map((_, i) => i + 1));
+    expect(layout.bounds.maxY - layout.bounds.minY).toBeLessThan(layoutWikiMindMap(graph).bounds.maxY - layoutWikiMindMap(graph).bounds.minY);
+  });
+
+  it('fits the whole map on a laptop screen with readable titles', () => {
+    // 1280×900 window: canvas ≈ 1254 × 730. Titles are 13px at scale 1, so ≥ 0.85 keeps them ≥ 11px.
+    for (const [w, h] of [[1254, 730], [1414, 730], [1894, 910]]) {
+      const fit = fitMindMapToViewport(graph, w, h);
+      const layout = layoutWikiMindMap(graph, new Set(), { maxLeafLabel: fit.maxLeafLabel }, fit.maxRows);
+      expect(fitScale(layout.bounds, w, h)).toBeGreaterThanOrEqual(fit.scale - 1e-9);
+      expect(fit.scale * DEFAULT_MIND_MAP_METRICS.leafFont, `${w}×${h}`).toBeGreaterThanOrEqual(11);
+      expectNoOverlap(layout);
+    }
+    // one column everywhere would be far smaller
+    const single = layoutWikiMindMap(graph);
+    expect(fitScale(single.bounds, 1254, 730) * DEFAULT_MIND_MAP_METRICS.leafFont).toBeLessThan(9);
   });
 });
 
@@ -225,10 +277,13 @@ describe('layoutWikiMindMap', () => {
     expect(shut.byKey['branch/rules'].side).toBe(open.byKey['branch/rules'].side);
   });
 
-  it('connects root → branches → leaves', () => {
+  it('connects root → branches → article boxes', () => {
     const layout = layoutWikiMindMap(graph);
     expect(layout.links.filter((l) => l.from === 'root')).toHaveLength(layout.branches.length);
-    expect(layout.links.filter((l) => l.from !== 'root')).toHaveLength(layout.leaves.length);
+    expect(layout.links.filter((l) => l.from !== 'root')).toHaveLength(layout.boxes.length);
+    expect(layout.boxes).toHaveLength(layout.branches.length);
+    const shut = layoutWikiMindMap(graph, new Set(['rules']));
+    expect(shut.boxes.map((b) => b.branchKey)).not.toContain('branch/rules');
   });
 });
 
@@ -237,6 +292,16 @@ describe('text helpers', () => {
     expect(estimateTextWidth('阿瓦隆', 10)).toBe(30);
     expect(estimateTextWidth('ab', 10)).toBeCloseTo(11.2);
     expect(estimateTextWidth('⚫', 10)).toBe(10);
+  });
+
+  it('cuts long series titles in the middle so they stay distinguishable', () => {
+    const a = truncateMiddle('阿瓦隆百科線上實戰比賽第一季(新人挑戰賽)第3集', 120, 10);
+    const b = truncateMiddle('阿瓦隆百科線上實戰比賽第一季(新人挑戰賽)第4集', 120, 10);
+    expect(a).toContain('…');
+    expect(a.endsWith('第3集')).toBe(true);
+    expect(a).not.toBe(b);
+    expect(estimateTextWidth(a, 10)).toBeLessThanOrEqual(120);
+    expect(truncateMiddle('短', 60, 10)).toBe('短');
   });
 
   it('truncates to the width with an ellipsis', () => {
