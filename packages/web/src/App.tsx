@@ -15,6 +15,9 @@ import { initializeSocket, disconnectSocket, getStoredToken } from './services/s
 import { startVersionCheck } from './services/versionCheck';
 import { forceRefresh } from './utils/forceRefresh';
 import SiteNav, { lastSiteTab, siteTabOf } from './components/SiteNav';
+import StreamsPage from './pages/StreamsPage';
+import InstallButton from './components/InstallButton';
+import ForceUpdateButton from './components/ForceUpdateButton';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -55,7 +58,7 @@ function App(): JSX.Element {
       if (!link) return;
       const store = useGameStore.getState();
       if (link.kind === 'player') store.openPlayerStats(link.name);
-      else store.setGameState('analytics');
+      else store.setGameState(link.kind === 'study' ? 'analysis' : 'analytics');
       setStatsFirst(true);
       // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close)
       if (link.kind === 'study') return;
@@ -374,6 +377,14 @@ function App(): JSX.Element {
 
   return (
     <div className={rootClass}>
+      {/* Edward 2026-10-30：原本首頁背景那個模糊淡化的阿瓦隆百科 logo 很好 — 沒有首頁之後改成內容頁的共同背景。 */}
+      {siteTab && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-30 blur-sm"
+          style={{ backgroundImage: 'url(/logo.png)' }}
+        />
+      )}
       {/* Connection status banner */}
       <AnimatePresence>
         {showConnectionBanner && (
@@ -446,8 +457,15 @@ function App(): JSX.Element {
         : gameState === 'resetPassword'  ? <ResetPasswordPage />
         : <LoginPage />
       ) : (
-        <>
+        <div className="relative z-10 h-full">
           {siteTab && <SiteNav active={siteTab} />}
+          {/* 加到手機桌面＋清除快取重新整理（原本在首頁右下角；Edward 2026-10-30：有更新時要像之前一樣有按鈕） */}
+          {siteTab && (
+            <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
+              <InstallButton />
+              <ForceUpdateButton />
+            </div>
+          )}
           {/* Edward 2026-04-25 23:39 — Lobby + Game 共用 RoomPage. RoomPage
               internally branches on `room.state` to swap top section + toolbar
               while keeping the rails+chat layout phase-agnostic. */}
@@ -458,8 +476,8 @@ function App(): JSX.Element {
           {gameState === 'friends' && <FriendsPage />}
           {gameState === 'aiStats' && <AiStatsPage />}
           {/* legacy 'analysis' route (WikiPage / PersonalStatsPage links) lands on the merged analytics page */}
-          {gameState === 'analysis' && <AnalyticsPage />}
-          {shownState === 'analytics' && <AnalyticsPage />}
+          {(shownState === 'analysis' || shownState === 'analytics') && <AnalyticsPage />}
+          {shownState === 'streams' && <StreamsPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage
@@ -479,7 +497,7 @@ function App(): JSX.Element {
           {/* Phase C 簡化：保留 forgot/reset 兩頁給密碼重設流程；註冊頁已併入 LoginPage */}
           {gameState === 'forgotPassword'   && <ForgotPasswordPage />}
           {gameState === 'resetPassword'    && <ResetPasswordPage />}
-        </>
+        </div>
       )}
       <ToastContainer />
     </div>

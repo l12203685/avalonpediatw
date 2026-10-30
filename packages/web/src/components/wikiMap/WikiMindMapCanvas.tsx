@@ -123,12 +123,12 @@ export default function WikiMindMapCanvas({ graph, articlesById, onOpen }: WikiM
     });
   }, [size, bounds]);
 
-  // First real size / new articles: fit the width, top of the map at the top (the 新手 reading path starts there).
+  // First real size / new articles: the whole map on one screen (Edward 2026-10-30「希望可以放在一張頁面裡呈現」).
   useEffect(() => {
     if (fittedRef.current === graph || !size.w || !size.h) return;
     fittedRef.current = graph;
-    fitWidth();
-  }, [graph, size, fitWidth]);
+    fitAll();
+  }, [graph, size, fitAll]);
 
   // Wheel / drag / zoom start from the shown (clamped) view.
   const viewRef = useRef(view);

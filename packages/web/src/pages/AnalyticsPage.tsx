@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
-  Trophy, BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar,
+  BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
@@ -62,7 +62,6 @@ import { useFilterHashSync } from '../stats/sharedFilter';
  *   都跟著篩選 (stats/statsFilter.ts；資料請求在 services/api.ts 改用瀏覽器端引擎的結果)。分頁內容以篩選的 key
  *   重新掛載，各元件照原本的方式再拿一次資料；網址列跟著篩選 (#stats?f=…，可直接分享)。
  */
-type TopTab = 'boards' | 'analysis';
 type AnalysisTab =
   | 'overview' | 'teams' | 'votes' | 'missions'
   | 'lake' | 'assassination' | 'position' | 'roles' | 'players';
@@ -83,75 +82,39 @@ const ANALYSIS_TABS: AnalysisTabDef[] = [
 ];
 
 export default function AnalyticsPage(): JSX.Element {
-  const { t } = useTranslation();
-  // openPlayerStats (排行的名字、#player= 連結) → 分析 → 玩家雷達，選好那位。
+  // 2026-10-30 Edward：頁籤直接分成 戰績排行／數據分析（導覽列），這頁不再有自己的「排行／分析」切換。
+  // gameState 'analysis' = 數據分析；其餘（'analytics'、舊 'leaderboard'）= 戰績排行。
+  // openPlayerStats（排行的名字、#player= 連結）與 #study= 連結都直接進 'analysis'。
+  const gameState = useGameStore((s) => s.gameState);
+  const setGameState = useGameStore((s) => s.setGameState);
   const statsFocus = useGameStore((s) => s.statsFocus);
   const filterKey = useStatsFilter((s) => `${s.key}|${s.nonce}`);
   useFilterHashSync();
-  const [activeTab, setActiveTab] = useState<TopTab>(() => (statsFocus || studyInLocation() ? 'analysis' : 'boards'));
-  const [seenFocus, setSeenFocus] = useState(statsFocus);
-  if (statsFocus !== seenFocus) {
-    // a new openPlayerStats while this page is open (React's "adjust state on prop change")
-    setSeenFocus(statsFocus);
-    if (statsFocus) setActiveTab('analysis');
-  }
+  const view: 'boards' | 'analysis' = gameState === 'analysis' ? 'analysis' : 'boards';
+  useEffect(() => {
+    if (view === 'boards' && (statsFocus || studyInLocation())) setGameState('analysis');
+  }, [view, statsFocus, setGameState]);
 
   return (
-    <div className="min-h-screen bg-black p-4 pb-24">
+    <div className="min-h-screen p-4 pb-24">
       <div className="max-w-6xl mx-auto">
-        {/* Top-level tabs (2 tabs) */}
-        <div className="flex flex-wrap gap-2 mb-6 border-b border-zinc-800 pb-2">
-          <TopTabButton
-            active={activeTab === 'boards'}
-            onClick={() => setActiveTab('boards')}
-            icon={Trophy}
-            label={t('analytics.tab.boards')}
-          />
-          <TopTabButton
-            active={activeTab === 'analysis'}
-            onClick={() => setActiveTab('analysis')}
-            icon={BarChart3}
-            label={t('analytics.tab.analysis')}
-          />
-        </div>
-
         <StatsFilterBar />
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
+            key={view}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'boards'   && <BoardsTab key={filterKey} />}
-            {activeTab === 'analysis' && <AnalysisSection focus={statsFocus} />}
+            {view === 'boards'   && <BoardsTab key={filterKey} />}
+            {view === 'analysis' && <AnalysisSection focus={statsFocus} />}
           </motion.div>
         </AnimatePresence>
       </div>
       <FeatureStudyReportHost />
     </div>
-  );
-}
-
-function TopTabButton({
-  active, onClick, icon: Icon, label,
-}: { active: boolean; onClick: () => void; icon: typeof Trophy; label: string }): JSX.Element {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-        active
-          ? 'bg-white text-black'
-          : 'bg-zinc-900/70 border border-zinc-700 text-zinc-300 hover:border-white hover:text-white'
-      }`}
-    >
-      <Icon size={16} />
-      {label}
-    </motion.button>
   );
 }
 
