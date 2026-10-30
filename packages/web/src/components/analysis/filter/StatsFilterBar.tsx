@@ -94,11 +94,39 @@ export default function StatsFilterBar(): JSX.Element {
 
   return (
     <section className="mb-4 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3" data-testid="stats-filter" aria-label={t('analytics.filter.title')}>
+      {/* 2026-10-30 Edward：期間放在篩選最一開始；只看線瓦／面瓦／排除娛樂局／只看 10 人全寫收進「更多篩選」。 */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="inline-flex items-center gap-1 text-sm font-bold text-zinc-200 mr-1">
           <Filter size={14} />
           {t('analytics.filter.title')}
         </span>
+        <PeriodRow filter={filter} vocabAsOf={vocab?.asOf} onChange={(f) => setFilter(f)} />
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="inline-flex items-center gap-1 rounded-lg border border-zinc-600 px-2.5 py-1 text-xs font-semibold text-zinc-200 hover:border-white"
+          data-testid="filter-edit"
+        >
+          {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          {open ? t('analytics.filter.collapse') : t('analytics.filter.more', { defaultValue: '更多篩選' })}
+        </button>
+        {key && (
+          <>
+            <button type="button" onClick={() => { void copy(); }} className="inline-flex items-center gap-1 rounded-lg border border-zinc-600 px-2.5 py-1 text-xs text-zinc-200 hover:border-white" data-testid="filter-share">
+              <Link2 size={12} />
+              {copied === 'ok' ? t('analytics.filter.copied') : copied === 'fail' ? t('analytics.filter.copyFailed') : t('analytics.filter.share')}
+            </button>
+            <button type="button" onClick={() => setFilter(null)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-400 hover:text-white" data-testid="filter-clear">
+              <X size={12} />
+              {t('analytics.filter.clearAll')}
+            </button>
+          </>
+        )}
+      </div>
+      {/* 常用條件仍可一鍵套用（收在更多篩選裡）；已套用的會出現在下面的條件標籤 */}
+      {open && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="filter-presets">
         {presets.map(({ preset, filter: pf }) => {
           const on = hasPreset(filter, pf);
           return (
@@ -119,31 +147,8 @@ export default function StatsFilterBar(): JSX.Element {
             </button>
           );
         })}
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          className="inline-flex items-center gap-1 rounded-lg border border-zinc-600 px-2.5 py-1 text-xs font-semibold text-zinc-200 hover:border-white"
-          data-testid="filter-edit"
-        >
-          {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          {open ? t('analytics.filter.collapse') : t('analytics.filter.edit')}
-        </button>
-        {key && (
-          <>
-            <button type="button" onClick={() => { void copy(); }} className="inline-flex items-center gap-1 rounded-lg border border-zinc-600 px-2.5 py-1 text-xs text-zinc-200 hover:border-white" data-testid="filter-share">
-              <Link2 size={12} />
-              {copied === 'ok' ? t('analytics.filter.copied') : copied === 'fail' ? t('analytics.filter.copyFailed') : t('analytics.filter.share')}
-            </button>
-            <button type="button" onClick={() => setFilter(null)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-zinc-400 hover:text-white" data-testid="filter-clear">
-              <X size={12} />
-              {t('analytics.filter.clearAll')}
-            </button>
-          </>
-        )}
-      </div>
-
-      <PeriodRow filter={filter} vocabAsOf={vocab?.asOf} onChange={(f) => setFilter(f)} />
+        </div>
+      )}
       <StatusLine status={status} total={vocab?.totalGames} retry={retry} />
       {linkWarnings.length > 0 && (
         <p className="mt-1 text-xs text-amber-300">{t('analytics.filter.linkWarnings', { count: linkWarnings.length })}</p>
@@ -237,7 +242,7 @@ function PeriodRow({ filter, vocabAsOf, onChange }: {
     onChange(withActivity(withClauses(filter, 'date', hasDate ? clean : null), hasDate));
   };
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="filter-period">
+    <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-period">
       <span className="mr-1 text-xs font-semibold text-zinc-400">{t('analytics.filter.period.title')}</span>
       {PERIOD_DAYS.map((d) => (
         <button key={d} type="button" aria-pressed={isOn(d)} onClick={() => pick(d)} className={chipClass(isOn(d))} data-testid={`filter-period-${d}`}>
