@@ -5,8 +5,8 @@
  *   tsx scripts/signagePaipu.ts --post <局.json> [...]     貼到 DISCORD_PAIPU_WEBHOOK_URL（DC 牌譜頻道的 Webhook）
  *
  * Edward 2026-10-30：「貼在 DC 的牌譜頻道，要附座位暱稱」。Webhook 網址是密鑰，只從環境變數讀，不寫進 repo。
- * 牌譜格式：一行一次提議（隊伍座位；`-` 內黑、`+` 外白；強制局不投票、不標記號）、任務牌 o／x、湖中 `x>y o`，
- * 打到三藍時「刺客刺殺:X」（練習台只記得到刺客最後刺的人）、六碼＝刺娜德奧派梅的座位、依座位每人一行暱稱。座位 10 寫成 0。
+ * 牌譜格式（照 DC 牌譜頻道過去的文章）：一行一次提議（隊伍座位；`-` 內黑、`+` 外白；強制局不投票、不標記號）、
+ * 任務牌 o／x、湖中 `x>y o`、六碼＝刺娜德奧派梅的座位、「刺客刺殺:X」（三紅留空）、依座位「1.暱稱」每人一行。座位 10 寫成 0。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,9 +40,9 @@ export function gameToPaipu(game: RecordedGame): string | null {
     if (!forced) {
       const blackIn = [...team].filter((s) => !whites.has(s));
       const whiteOut = [...whites].filter((s) => !team.has(s));
-      // 外白在前、內黑在後（試算表「轉貼用」分頁＝過去貼到 DC 的格式，例：3450 69+ 3-）
-      if (whiteOut.length) line += ` ${digits(whiteOut)}+`;
+      // 內黑在前、外白在後（DC 牌譜頻道過去多數文章的寫法，例：2579 7- 1+）
       if (blackIn.length) line += ` ${digits(blackIn)}-`;
+      if (whiteOut.length) line += ` ${digits(whiteOut)}+`;
     }
     lines.push(line);
     const ms = end.missionHistorys[mi];
@@ -65,10 +65,10 @@ export function gameToPaipu(game: RecordedGame): string | null {
   // 刺殺對象：刺中＝「刺客背刺 N家 梅林」；刺錯＝「N家擋刀」；被刺的人在局末畫面標 dead。
   const stabbed = users.find((u) => (u as { dead?: boolean }).dead)?.set
     ?? Number(logs.map((x) => /背刺\s*(\d+)\s*家|(\d+)\s*家擋刀/.exec(x)).find(Boolean)?.slice(1).find(Boolean) ?? NaN);
-  // 過去貼到 DC 的格式（試算表「轉貼用」分頁）：牌譜各行 → 刺客刺殺:X → 六碼（刺娜德奧派梅）→ 依座位每人一行暱稱
-  if (Number.isFinite(stabbed)) lines.push(`刺客刺殺:${d(stabbed)}`);
+  // DC 牌譜頻道過去文章的格式：牌譜各行 → 六碼（刺娜德奧派梅）→ 刺客刺殺:X（三紅留空）→ 依座位「1.暱稱」每人一行
   lines.push(ROLE_ORDER.map(roleAt).join(''));
-  for (const u of users) lines.push(u.name);
+  lines.push(`刺客刺殺:${Number.isFinite(stabbed) ? d(stabbed) : ''}`);
+  for (const u of users) lines.push(`${d(u.set)}.${u.name}`);
   return lines.join('\n');
 }
 
@@ -88,14 +88,16 @@ export function isPostable(game: RecordedGame): boolean {
 }
 
 /**
- * 牌譜頻道是論壇頻道（Webhook 要帶 thread_name）：一局一個討論串，標題「房名 月/日 時:分 結果」（台灣時間）。
+ * 牌譜頻道是論壇頻道（Webhook 要帶 thread_name）：一局一個討論串，標題「月日房名 時:分 結果」（台灣時間，例：1030直播局2 22:42 三紅）。
  */
 export function paipuThreadName(game: RecordedGame, text: string): string {
   const t = game.startedAt ? new Date(Date.parse(game.startedAt) + 8 * 3600_000) : null;
-  const when = t ? `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}` : '';
+  const when = t ? `${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}` : '';
   void text;
   const kind = gameKind(game);
-  return `${(game.title || game.room).replace(/^阿瓦隆百科/, '')} ${when} ${kind}`.trim().slice(0, 100);
+  // 過去文章標題是「1025一般場6」：月日在前
+  const mmdd = t ? `${String(t.getUTCMonth() + 1).padStart(2, '0')}${String(t.getUTCDate()).padStart(2, '0')}` : '';
+  return `${mmdd}${(game.title || game.room).replace(/^阿瓦隆百科/, '')} ${when} ${kind}`.trim().slice(0, 100);
 }
 
 /** 貼到 Discord Webhook（DISCORD_PAIPU_WEBHOOK_URL）；沒設定時不做事，回傳 false。 */
