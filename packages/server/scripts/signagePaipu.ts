@@ -40,8 +40,9 @@ export function gameToPaipu(game: RecordedGame): string | null {
     if (!forced) {
       const blackIn = [...team].filter((s) => !whites.has(s));
       const whiteOut = [...whites].filter((s) => !team.has(s));
-      if (blackIn.length) line += ` ${digits(blackIn)}-`;
+      // 外白在前、內黑在後（試算表「轉貼用」分頁＝過去貼到 DC 的格式，例：3450 69+ 3-）
       if (whiteOut.length) line += ` ${digits(whiteOut)}+`;
+      if (blackIn.length) line += ` ${digits(blackIn)}-`;
     }
     lines.push(line);
     const ms = end.missionHistorys[mi];
@@ -57,34 +58,52 @@ export function gameToPaipu(game: RecordedGame): string | null {
     }
   }
   const roleAt = (name: string): string => { const u = users.find((x) => x.role === name); return u ? d(u.set) : '?'; };
-  lines.push(ROLE_ORDER.map(roleAt).join(''));
   const logs = (end.logs ?? []).map((l) => String(l.msg ?? ''));
   const stab = logs.map((x) => /背刺\s*(\d+)\s*家/.exec(x)).find(Boolean);
-  if (stab) lines.push(`刺殺：${d(Number(stab[1]))}`);
-  const redWon = logs.some((x) => x.includes('壞人獲勝'));
-  const blueWon = logs.some((x) => x.includes('好人獲勝'));
+  // 過去貼到 DC 的格式（試算表「轉貼用」分頁）：牌譜各行 → 刺客刺殺:X → 六碼（刺娜德奧派梅）→ 依座位每人一行暱稱
+  if (stab) lines.push(`刺客刺殺:${d(Number(stab[1]))}`);
+  lines.push(ROLE_ORDER.map(roleAt).join(''));
+  for (const u of users) lines.push(u.name);
+  return lines.join('\n');
+}
+
+/** 局的結果（三紅／三藍死／三藍活），討論串標題用。 */
+export function gameKind(game: RecordedGame): string {
+  const end = game.end;
+  if (!end) return '';
+  const logs = (end.logs ?? []).map((l) => String(l.msg ?? ''));
   const blueRounds = end.missionHistorys.filter((ms, i) => ms.result.filter((r) => !r).length < (i === 3 && ms.result.length >= 4 ? 2 : 1)).length;
-  const kind = blueRounds < 3 ? '三紅' : redWon ? '三藍死' : '三藍活';
-  const when = (game.startedAt ?? '').slice(0, 16).replace('T', ' ');
-  const seats = users.map((u) => `${d(u.set)} ${u.name}`).join(' / ');
-  return [
-    `**【${game.title || game.room}】** ${when} UTC`,
-    `座位：${seats}`,
-    '```',
-    ...lines,
-    '```',
-    `結果：${kind}（${redWon ? '紅方勝' : blueWon ? '好人勝' : '?'}）`,
-  ].join('\n');
+  return blueRounds < 3 ? '三紅' : logs.some((x) => x.includes('壞人獲勝')) ? '三藍死' : '三藍活';
+}
+
+/** 只貼真人 10 人局（遊玩頁內建機器人的練習局不貼）。 */
+export function isPostable(game: RecordedGame): boolean {
+  const users = game.end?.users ?? [];
+  return users.length === 10 && !users.some((u) => (u as { is_robot?: boolean }).is_robot);
+}
+
+/**
+ * 牌譜頻道是論壇頻道（Webhook 要帶 thread_name）：一局一個討論串，標題「房名 月/日 時:分 結果」（台灣時間）。
+ */
+export function paipuThreadName(game: RecordedGame, text: string): string {
+  const t = game.startedAt ? new Date(Date.parse(game.startedAt) + 8 * 3600_000) : null;
+  const when = t ? `${t.getUTCMonth() + 1}/${t.getUTCDate()} ${String(t.getUTCHours()).padStart(2, '0')}:${String(t.getUTCMinutes()).padStart(2, '0')}` : '';
+  void text;
+  const kind = gameKind(game);
+  return `${(game.title || game.room).replace(/^阿瓦隆百科/, '')} ${when} ${kind}`.trim().slice(0, 100);
 }
 
 /** 貼到 Discord Webhook（DISCORD_PAIPU_WEBHOOK_URL）；沒設定時不做事，回傳 false。 */
-export async function postPaipu(text: string): Promise<boolean> {
+export async function postPaipu(text: string, threadName?: string): Promise<boolean> {
   const url = process.env.DISCORD_PAIPU_WEBHOOK_URL;
   if (!url) return false;
-  const res = await fetch(url, {
+  const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}wait=true`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: '阿瓦隆百科記錄員', content: text.slice(0, 1990), allowed_mentions: { parse: [] } }),
+    body: JSON.stringify({
+      username: '阿瓦隆百科記錄員', content: text.slice(0, 1990), allowed_mentions: { parse: [] },
+      ...(threadName ? { thread_name: threadName } : {}),
+    }),
   });
   if (!res.ok) throw new Error(`Discord webhook ${res.status}: ${await res.text().catch(() => '')}`);
   return true;
@@ -93,13 +112,15 @@ export async function postPaipu(text: string): Promise<boolean> {
 if (process.argv[1] && path.basename(process.argv[1]).startsWith('signagePaipu')) {
   const args = process.argv.slice(2);
   const post = args.includes('--post');
-  const files = args.filter((a) => a !== '--post');
+  const files = args.filter((a) => a !== '--post' && a !== '--json');
   void (async () => {
     for (const f of files) {
-      const text = gameToPaipu(JSON.parse(fs.readFileSync(f, 'utf-8')) as RecordedGame);
-      if (!text) { console.log(`# ${path.basename(f)}：未完成，略過`); continue; }
+      const game = JSON.parse(fs.readFileSync(f, 'utf-8')) as RecordedGame;
+      const text = isPostable(game) ? gameToPaipu(game) : null;
+      if (!text) { console.log(`# ${path.basename(f)}：未完成或非真人 10 人局，略過`); continue; }
+      if (process.argv.includes('--json')) { console.log(JSON.stringify({ text, thread: paipuThreadName(game, text) })); continue; }
       if (post) {
-        const ok = await postPaipu(text);
+        const ok = await postPaipu(text, paipuThreadName(game, text));
         console.log(ok ? `已貼出 ${path.basename(f)}` : '沒有設定 DISCORD_PAIPU_WEBHOOK_URL，未貼出');
         await new Promise((r) => setTimeout(r, 1500));
       } else {
