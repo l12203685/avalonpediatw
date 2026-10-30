@@ -51,14 +51,14 @@
       "openStats": "Open Analytics"
     },
     "category": {
-      "rules": "Rules",
+      "rules": "Rules & Terms",
+      "beginner": "Getting Started",
       "roles": "Roles",
-      "strategies": "Strategy",
-      "beginner": "Beginner",
-      "glossary": "Glossary",
-      "faq": "FAQ",
-      "replays": "Replays",
-      "events": "Events & Records",
+      "strategies": "Team Proposals",
+      "voting": "Voting & Lady of the Lake",
+      "advanced": "Advanced Thinking",
+      "replays": "Replays & Events",
+      "data": "Data",
       "about": "About"
     }
   },
