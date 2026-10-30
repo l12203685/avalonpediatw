@@ -29,8 +29,7 @@ export function gameToPaipu(game: RecordedGame): string | null {
   if (!end || game.incomplete) return null;
   const users = [...end.users].sort((a, b) => a.set - b.set);
   const lakes = (end.lake ?? []).filter((l) => l.to !== null);
-  // 結果寫在文章最前面（Edward 10/31：標題只放時間和局數）；匯入程式略過牌譜前的文字
-  const lines: string[] = [`結果:${resultTag(game)}`];
+  const lines: string[] = [];
   let mi = 0;
   let attempt = 0;
   for (const m of end.meetings) {
@@ -93,8 +92,8 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
 const twDay = (iso?: string): string => { const t = twTime(iso); return t ? `${t.getUTCFullYear()}${pad2(t.getUTCMonth() + 1)}${pad2(t.getUTCDate())}` : ''; };
 
 /**
- * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_HHMM_第x局」（台灣時間、開局時刻；
- * Edward 10/31：配置與結果寫在文章裡）。第幾局＝當天第幾個打完的真人 10 人局（見 dayIndex）。
+ * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_HHMM_第x局」（台灣時間、開局時刻；Edward 10/31）。
+ * 配置寫在牌譜裡、結果用論壇標籤（同過去的貼文，內文不另寫結果）。第幾局＝當天第幾個打完的真人 10 人局（見 dayIndex）。
  */
 export function paipuThreadName(game: RecordedGame, index?: number): string {
   const t = twTime(game.startedAt);
