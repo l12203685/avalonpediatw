@@ -6,7 +6,7 @@
  *
  * Edward 2026-10-30：「貼在 DC 的牌譜頻道，要附座位暱稱」。Webhook 網址是密鑰，只從環境變數讀，不寫進 repo。
  * 牌譜格式：一行一次提議（隊伍座位；`-` 內黑、`+` 外白；強制局不投票、不標記號）、任務牌 o／x、湖中 `x>y o`，
- * 最後六碼＝刺娜德奧派梅的座位；打到三藍時多一行「刺殺：X」（練習台只記得到刺客最後刺的人）。座位 10 寫成 0。
+ * 打到三藍時「刺客刺殺:X」（練習台只記得到刺客最後刺的人）、六碼＝刺娜德奧派梅的座位、依座位每人一行暱稱。座位 10 寫成 0。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,9 +59,11 @@ export function gameToPaipu(game: RecordedGame): string | null {
   }
   const roleAt = (name: string): string => { const u = users.find((x) => x.role === name); return u ? d(u.set) : '?'; };
   const logs = (end.logs ?? []).map((l) => String(l.msg ?? ''));
-  const stab = logs.map((x) => /背刺\s*(\d+)\s*家/.exec(x)).find(Boolean);
+  // 刺殺對象：刺中＝「刺客背刺 N家 梅林」；刺錯＝「N家擋刀」；被刺的人在局末畫面標 dead。
+  const stabbed = users.find((u) => (u as { dead?: boolean }).dead)?.set
+    ?? Number(logs.map((x) => /背刺\s*(\d+)\s*家|(\d+)\s*家擋刀/.exec(x)).find(Boolean)?.slice(1).find(Boolean) ?? NaN);
   // 過去貼到 DC 的格式（試算表「轉貼用」分頁）：牌譜各行 → 刺客刺殺:X → 六碼（刺娜德奧派梅）→ 依座位每人一行暱稱
-  if (stab) lines.push(`刺客刺殺:${d(Number(stab[1]))}`);
+  if (Number.isFinite(stabbed)) lines.push(`刺客刺殺:${d(stabbed)}`);
   lines.push(ROLE_ORDER.map(roleAt).join(''));
   for (const u of users) lines.push(u.name);
   return lines.join('\n');
