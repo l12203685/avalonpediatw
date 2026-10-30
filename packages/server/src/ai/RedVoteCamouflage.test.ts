@@ -8,7 +8,7 @@ import { DEFAULT_AGENT_TUNING, type AgentTuning } from './AgentTuning';
 import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
 import { loyalViewOf } from './RedR1Teammate';
-import { redNormalVoteNow, redVoteCritical } from './RedVoteCamouflage';
+import { redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from './RedVoteCamouflage';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 // R3: P3 sends P2 P3 P5 P6; P1 (assassin) is off the team, its teammate P2 is on it.
@@ -48,5 +48,31 @@ describe('redNormalVote', () => {
     expect(redNormalVoteNow(on, obs({ currentRound: 2 }))).toBe(false);
     expect(redNormalVoteNow(on, obs({ failCount: 4 }))).toBe(false);
     expect(redNormalVoteNow(DEFAULT_AGENT_TUNING, obs())).toBe(false);
+  });
+});
+
+describe('redLoyalLeadEarly', () => {
+  // R2, first proposal, P1 (assassin) leads; teammates P2 and P8.
+  const r2 = (partial: Partial<PlayerObservation> = {}): PlayerObservation => obs({
+    currentRound: 2, currentLeader: 'P1', gamePhase: 'team_select', proposedTeam: [], questResults: ['fail'],
+    questHistory: [{ round: 1, team: ['P4', 'P8', 'P9'], result: 'fail', failCount: 1 }], ...partial,
+  } as Partial<PlayerObservation>);
+  const team = (o: PlayerObservation, tuning: Partial<AgentTuning>): string[] => {
+    const a = new ForwardAgent(o.myPlayerId, new HeuristicAgent(o.myPlayerId, undefined, undefined, { ...DEFAULT_AGENT_TUNING, ...tuning }));
+    a.onGameStart(o);
+    const d = a.decide(o);
+    if (d.action.type !== 'team_select') throw new Error(d.action.type);
+    return [...d.action.teamIds].sort();
+  };
+  it('on: the team a loyal in the seat would send', () => {
+    expect(team(r2(), { redLoyalLeadEarly: true })).toEqual(team(loyalViewOf(r2()), {}));
+  });
+  it('only red leaders, R1–R2, non-forced', () => {
+    const on = { ...DEFAULT_AGENT_TUNING, redLoyalLeadEarly: true };
+    expect(redLoyalLeadEarlyNow(on, r2())).toBe(true);
+    expect(redLoyalLeadEarlyNow(on, r2({ failCount: 4 }))).toBe(false);
+    expect(redLoyalLeadEarlyNow(on, r2({ currentRound: 3 }))).toBe(false);
+    expect(redLoyalLeadEarlyNow(on, r2({ myRole: 'oberon' } as Partial<PlayerObservation>))).toBe(false);
+    expect(redLoyalLeadEarlyNow(DEFAULT_AGENT_TUNING, r2())).toBe(false);
   });
 });

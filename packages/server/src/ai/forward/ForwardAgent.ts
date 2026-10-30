@@ -54,7 +54,7 @@
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
 import { goodCleanVoteReject } from '../GoodCleanVote';
-import { redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
+import { redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
@@ -725,6 +725,13 @@ export class ForwardAgent implements AvalonAgent {
       && !(this.baseline.tuning.humanQuestCardRules && humanQuestCardRule(obs) !== null)) {
       const ranked = this.baseline.redRankOrderQuestVote(obs);
       if (ranked) return this.ruleDecision(obs, { type: 'quest_vote', vote: ranked }, `red rank order (位階法) ${ranked}`);
+    }
+    // Strong-table gap R2 `redLoyalLeadEarly` (RedVoteCamouflage.ts): a red leader's doomed R1–R2 proposal is the team a
+    // public-view loyal in this seat would send (it never goes on a mission; stacking teammates only gives the reds away).
+    if (redLoyalLeadEarlyNow(this.baseline.tuning, obs)) {
+      _forwardDecideCalls -= 1;
+      const asLoyal = this.decide(loyalViewOf(obs));
+      if (asLoyal.action.type === 'team_select') return this.ruleDecision(obs, asLoyal.action, 'red loyal lead (doomed R1–R2 proposal)');
     }
     // Strong-table gap R1 `redNormalVote` (RedVoteCamouflage.ts): off the team, at rate q a red casts the vote a public-view
     // loyal in this seat would, except when the red camp's win or loss rides on this team.
