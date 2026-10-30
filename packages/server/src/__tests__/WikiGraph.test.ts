@@ -149,7 +149,7 @@ describe('buildWikiGraph', () => {
   });
 
   it('cleans titles', () => {
-    expect(cleanWikiTitle('  新手常見疑問 - 遊戲開始該做什麼  入門行動方針 ')).toBe('新手常見疑問 - 遊戲開始該做什麼 入門行動方針');
+    expect(cleanWikiTitle('  入門行動方針  -  遊戲開始該做什麼？ ')).toBe('入門行動方針 - 遊戲開始該做什麼？');
   });
 });
 
@@ -295,10 +295,11 @@ describe('text helpers', () => {
   });
 
   it('cuts long series titles in the middle so they stay distinguishable', () => {
-    const a = truncateMiddle('阿瓦隆百科線上實戰比賽第一季(新人挑戰賽)第3集', 120, 10);
-    const b = truncateMiddle('阿瓦隆百科線上實戰比賽第一季(新人挑戰賽)第4集', 120, 10);
+    const a = truncateMiddle('S1 新人挑戰賽 - 第 3 集回顧（2023-09-01）', 120, 10);
+    const b = truncateMiddle('S1 新人挑戰賽 - 第 4 集回顧（2023-09-07）', 120, 10);
     expect(a).toContain('…');
-    expect(a.endsWith('第3集')).toBe(true);
+    expect(a.startsWith('S1 新人挑戰賽')).toBe(true);
+    expect(a.endsWith('09-01）')).toBe(true);
     expect(a).not.toBe(b);
     expect(estimateTextWidth(a, 10)).toBeLessThanOrEqual(120);
     expect(truncateMiddle('短', 60, 10)).toBe('短');

@@ -107,7 +107,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   // ==================== 角色數據（待完成：之後改接 live 統計） ====================
   {
     id: 'strategy-merlin-data',
-    title: '梅林數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 梅林（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：梅林勝率 62.3%，座位 5 最強（75.2%），三藍死率 28.8%。如何在高勝率下保命？',
@@ -169,7 +169,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategy-percival-data',
-    title: '派西維爾數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 派西維爾（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：派西勝率 59.4%，座位 0 最佳（63.8%），高達 73.5% 的局是藍方勝。辨別真假梅林的關鍵策略。',
@@ -233,7 +233,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategy-loyal-data',
-    title: '忠臣數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 忠臣（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：忠臣出場 3475 次（每局 1.62 名），勝率 55.7%。座位分布均勻，如何從數據看出「雜魚的關鍵作用」？',
@@ -297,7 +297,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategy-mordred-data',
-    title: '莫德雷德數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 莫德雷德（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：莫德勝率 48.4%（紅方最低），但座位 5 達 54.2%。梅林看不到你，如何最大化這個優勢？',
@@ -365,7 +365,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategy-morgana-data',
-    title: '莫甘娜數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 莫甘娜（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：莫甘娜勝率 49.2%，座位 5 最強（53.4%）。假梅林的演技怎麼拿捏？',
@@ -437,7 +437,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategy-assassin-data',
-    title: '刺客數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 刺客（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：刺客勝率 52.2%（紅方最高），座位 5 達 60.4%。三藍局刺中率如何計算？刺殺梅林的數據線索。',
@@ -516,7 +516,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   },
   {
     id: 'strategy-oberon-data',
-    title: '奧伯倫數據解析 — 2146 局實戰分析',
+    title: '角色數據 - 奧伯倫（2,146 局中 0／1／4／5 家樣本，至 2026-02）',
     category: 'events',
     status: '待完成',
     excerpt: '基於 2146 局數據：奧伯倫勝率 47.2%（紅方最低），座位 1 僅 39.8%。孤狼角色的最佳打法是什麼？',
@@ -594,7 +594,7 @@ export const WIKI_ARTICLES: WikiArticle[] = [
   // ==================== 常見問題 ====================
   {
     id: 'faq-basic',
-    title: '新手常見問題',
+    title: '新手常見問題（規則篇）',
     category: 'faq',
     excerpt: '為遊戲新手解答基本問題：人數、說謊、暗殺、湖中女神等。',
     content: `# 新手常見問題

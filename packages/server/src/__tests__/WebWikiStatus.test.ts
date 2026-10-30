@@ -60,7 +60,7 @@ const MERGES_1029: Record<string, string[]> = {
 
 /** 2026-10-29: articles split off a source that bundled two topics. */
 const SPLITS_1029 = [
-  { source: 'wiki-106', sourceTitle: /入門行動方針/, id: 'wiki-201', title: '阿瓦隆角色玩法 - 藍方基礎原則', heading: '# 藍方基礎原則' },
+  { source: 'wiki-106', sourceTitle: /入門行動方針/, id: 'wiki-201', title: '藍方基礎原則', heading: '# 藍方基礎原則' },
   { source: 'wiki-92', sourceTitle: /^常見錯誤 - 遊戲觀念$/, id: 'wiki-202', title: '常見錯誤 - 遊戲品格', heading: '# 常見錯誤 - 遊戲品格' },
 ];
 
@@ -156,10 +156,33 @@ describe('wiki merges', () => {
     expect(jsonById.get('wiki-170')!.content).not.toMatch(/假梅林|讓派西維爾 ?誤認你是梅林/);
   });
 
-  it('覆盤 articles are titled by game, one article per title', () => {
+  it('覆盤 articles are titled by what they teach; the game code opens the article', () => {
+    // 2026-10-30 標題盤點：數字代碼看不出內容，標題改成「覆盤 - 情境＋重點」，代碼（模擬／面瓦 + 角色位置）移到內文第一行。
     const replays = jsonArticles.filter((a) => a.category === 'replays');
     expect(replays.length).toBeGreaterThan(0);
-    for (const a of replays) expect(a.title).toMatch(/^覆盤 (模擬|面瓦) \d{6}/);
+    for (const a of replays) {
+      expect(a.title).toMatch(/^覆盤 - \S/);
+      expect(a.title).not.toMatch(/\d{6}/);
+      const body = a.content.replace(/^(?:\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))+/, '');
+      expect(body, a.id).toMatch(/^> 牌局代碼：(模擬|面瓦) \d{6}/);
+    }
+  });
+
+  it('titles use 「 - 」 as the separator, without emoji, HTML or lost punctuation (2026-10-30 標題盤點)', () => {
+    const bad = [...jsonArticles, ...WIKI_ARTICLES].filter(
+      (a) => /[—－]|\p{Extended_Pictographic}|<[a-z]|\s{2}|^\s|\s$|\S-\s|\s-\S|戰積(?!分)/u.test(a.title),
+    );
+    expect(bad.map((a) => `${a.id}: ${a.title}`)).toEqual([]);
+  });
+
+  it('the front matter title matches the article title', () => {
+    const wrong: string[] = [];
+    for (const a of jsonArticles) {
+      const fm = a.content.match(/^(?:\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))+/);
+      if (!fm) continue;
+      for (const m of fm[0].matchAll(/^title: (.*)$/gm)) if (m[1] !== a.title) wrong.push(`${a.id}: ${m[1]}`);
+    }
+    expect(wrong).toEqual([]);
   });
 
   it('牌譜分析報告 keeps only aggregate numbers (no per-player tables)', () => {
