@@ -1357,6 +1357,7 @@
       "title": "Filter",
       "presets": "Quick filters",
       "edit": "Custom filter",
+      "more": "More filters",
       "collapse": "Collapse",
       "apply": "Apply",
       "applied": "Applied",

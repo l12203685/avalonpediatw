@@ -118,10 +118,11 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
   );
 
   return (
-    <section className={`mb-2 rounded-lg border px-2.5 py-1.5 ${modified ? 'border-amber-800/60 bg-amber-950/20' : 'border-zinc-800 bg-zinc-950/60'}`} data-testid="leaderboard-rules" aria-label={t(`${r}.title`)}>
+    // 2026-10-30 Edward：「上榜條件應該更重要」— 比篩選的常用條件更醒目（黃框、標題放大）。
+    <section className={`mb-3 rounded-lg border px-3 py-2 ${modified ? 'border-amber-500/70 bg-amber-950/40' : 'border-amber-700/50 bg-zinc-950/70'}`} data-testid="leaderboard-rules" aria-label={t(`${r}.title`)}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-        <span className="inline-flex items-center gap-1 font-semibold text-zinc-200">
-          <SlidersHorizontal size={12} />
+        <span className="inline-flex items-center gap-1 text-sm font-bold text-amber-200">
+          <SlidersHorizontal size={14} />
           {t(`${r}.title`)}
         </span>
         <span className={`min-w-0 ${modified ? 'text-amber-200' : 'text-zinc-400'}`}>{summary}</span>
