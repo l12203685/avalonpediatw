@@ -140,3 +140,31 @@ export function merlinVoteCoverApprove(tuning: Readonly<AgentTuning>, obs: Playe
   for (const c of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|${team.join(',')}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
   return (h % 10000) / 10000 < q;
 }
+
+/**
+ * 梅林照雜魚的票型投票（強桌差距 B1，2026-10-30；`AgentTuning.merlinNormalVote` = 比例 q）。
+ *
+ * `docs/ai/strong_table_gap.md`：機器人梅林第 3 局起在隊上、隊裡有他看得到的紅時贊成 0%（梅林勝率前 1/4 的玩家 48%），
+ * 不在隊上、看得到的都乾淨時贊成 97%（強者 41%）——票型直接報出拇指。百科〈忠臣〉「梅林只想裝雜魚」、〈外白〉「梅林亂外白
+ * 被紅方抓到容易死」。規則：第 3 局起、非強制，以比例 q（依座位、回合、第幾次提議雜湊）照「坐在這個位置、只看公開紀錄的
+ * 忠臣」會投的票投；只有致命時才用自己的資訊擋：隊上有看得到的紅而且紅方已兩紅，或第 4 局隊上有兩個以上看得到的紅。
+ * 回傳 true = 這一票改照雜魚投（由 `ForwardAgent.decide` 算出那一票）。
+ */
+export function merlinNormalVoteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const q = tuning.merlinNormalVote ?? 0;
+  if (q <= 0 || obs.gamePhase !== 'team_vote' || obs.myRole !== 'merlin') return false;
+  const round = obs.currentRound ?? 1;
+  if (round < 3 || (obs.failCount ?? 0) >= 4) return false;
+  let h = 0x811c9dc5;
+  for (const ch of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|normal`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000 < q;
+}
+
+/** Whether approving `obs.proposedTeam` could lose the game on the spot for Merlin's camp (the seen reds alone). */
+export function merlinVoteFatal(obs: PlayerObservation): boolean {
+  const seen = new Set(obs.knownEvils);
+  const reds = (obs.proposedTeam ?? []).filter((id) => seen.has(id)).length;
+  if (reds === 0) return false;
+  const fails = obs.questResults.filter((r) => r === 'fail').length;
+  return fails >= 2 || ((obs.currentRound ?? 1) === 4 && obs.playerCount >= 7 && reds >= 2);
+}
