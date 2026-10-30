@@ -4,8 +4,9 @@
  * Phase 1 為 stub；Phase 2b 已把純函式挪到 `@avalon/shared/derived/gameMetrics`，
  * 前後端共用。此檔作為 server-side 薄 wrapper，保留 signature 以維持呼叫端相容，
  * 並補上 Phase 2a 的舊 API（`computePlayerQuestSuccessRate` / `computePlayerVotingAlignment`
- * / `computeMerlinSurvivalRate` / `computeAssassinPrecision` / `computeLadyHonesty` /
- * `recomputeEloFromV2`）。
+ * / `computeMerlinSurvivalRate` / `computeAssassinPrecision` / `computeLadyHonesty`）。
+ * 2026-10-30：舊 V2 ELO（computeELO / computeEloTag / recomputeEloFromV2）移除；網站唯一的 Elo 是分析快取的
+ * rating 區塊（generate_cache.py compute_rating）。
  *
  * Edward 2026-04-24：
  *   - 一天更新一次；存 `computed_stats/{playerId}` 帶 `lastComputedGameId` metadata
@@ -16,7 +17,6 @@
 import type {
   AlignmentStatsV2,
   ComputedPlayerStatsV2,
-  EloTag,
   GameRecordV2,
   LeaderboardEntryV2,
   MerlinAssassinationStats,
@@ -31,14 +31,9 @@ import type {
 } from '@avalon/shared';
 import {
   ALL_TIER_GROUPS,
-  ELO_TAG_HARD_THRESHOLDS,
-  ELO_TAG_PERCENTILES,
   TIER_GROUP_THRESHOLDS,
   TIER_MIN_GAMES,
   TIER_THRESHOLDS,
-  collectAllPlayerIds,
-  computeELO as computeELOShared,
-  computeEloTag as computeEloTagShared,
   computeLeaderboardByTier as computeLeaderboardByTierShared,
   computeMerlinAssassinationRate as computeMerlinAssassinationRateShared,
   computePlayerLadyAccuracy as computePlayerLadyAccuracyShared,
@@ -59,7 +54,6 @@ export type { PlayerId, Seat };
 export type {
   AlignmentStatsV2,
   ComputedPlayerStatsV2,
-  EloTag,
   LeaderboardEntryV2,
   MerlinAssassinationStats,
   PlayerRoleStatsV2,
@@ -120,37 +114,19 @@ export function computeMerlinAssassinationRate(
   return computeMerlinAssassinationRateShared(games, playerId);
 }
 
-/** ELO 分數（純函式、批次重算版）。 */
-export function computeELO(
-  games: GameRecordV2[],
-  playerId: PlayerId,
-  initialElo = 1000,
-): number {
-  return computeELOShared(games, playerId, initialElo);
-}
-
 /**
  * @deprecated 舊 6-tier（中文）；新代碼請用 `computeTierGroup`。
  */
 export function computeTier(
-  elo: number,
   totalGames: number,
   minGames = TIER_MIN_GAMES,
 ): PlayerTier {
-  return computeTierShared(elo, totalGames, minGames);
+  return computeTierShared(totalGames, minGames);
 }
 
 /** 維度 1：場次組（rookie/regular/veteran/expert/master）。 */
 export function computeTierGroup(totalGames: number): TierGroup {
   return computeTierGroupShared(totalGames);
-}
-
-/** 維度 2：ELO 標籤（novice/mid/top）。傳 distribution 走百分位，否則硬閾值。 */
-export function computeEloTag(
-  elo: number,
-  eloDistribution?: number[] | null,
-): EloTag {
-  return computeEloTagShared(elo, eloDistribution ?? null);
 }
 
 /**
@@ -185,9 +161,7 @@ export function computePlayerStatsV2(
   games: GameRecordV2[],
   playerId: PlayerId,
   opts?: {
-    initialElo?: number;
     minGamesForTier?: number;
-    eloDistribution?: number[] | null;
   },
 ): ComputedPlayerStatsV2 {
   return computePlayerStatsV2Shared(games, playerId, opts);
@@ -276,21 +250,6 @@ export function expandRolesForAllSeats(
   return expandRolesForAllSeatsShared(roles, playerCount);
 }
 
-/**
- * 全歷史重算 ELO → 回傳每位玩家的最終分數 map。派生不存（repo 自行 upsert）。
- */
-export function recomputeEloFromV2(
-  games: GameRecordV2[],
-): Map<PlayerId, number> {
-  const out = new Map<PlayerId, number>();
-  const playerIds = collectAllPlayerIds(games);
-  for (const pid of playerIds) {
-    const elo = computeELOShared(games, pid);
-    out.set(pid, elo);
-  }
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers re-export
 // ---------------------------------------------------------------------------
@@ -302,6 +261,4 @@ export {
   TIER_MIN_GAMES,
   TIER_GROUP_THRESHOLDS,
   ALL_TIER_GROUPS,
-  ELO_TAG_HARD_THRESHOLDS,
-  ELO_TAG_PERCENTILES,
 };

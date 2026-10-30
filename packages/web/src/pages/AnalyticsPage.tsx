@@ -24,15 +24,14 @@ import { useFilterHashSync } from '../stats/sharedFilter';
 
 /**
  * #98 (2026-04-23) IA 重整：數據排行頁拆成兩大區 —
- *  - 勝率排行 (ELO Leaderboard)：原本 LeaderboardPage 的排名清單；點玩家彈出雷達彈窗
+ *  - 勝率排行：原本 LeaderboardPage 的排名清單；點玩家彈出雷達彈窗
  *  - 深度分析 (Deep Analysis)：把 AnalysisPage 的分頁內容直接搬進來
  * 「玩家雷達」不再獨立 tab，融進勝率排行的點擊體驗。
  *
  * (2026-04-27) 新增第三 tab「特徵研究」: 把 v7 features 研究 (loops 136/139/141/
  * 142/143) 萃取成可瀏覽的玩家信號頁。
  *
- * (2026-04-27 23:42 batch) Edward「ELO 分數可以直接列在表上, 傳統排行就不用顯示了」
- *   - V3 表加入 ELO 欄 (從 V2 endpoint join), 砍「分層瀏覽 (5 組 ELO 分層)」collapse
+ * (2026-04-27 23:42 batch) V3 表加入當時的 ELO 欄、砍分層瀏覽 (2026-10-30 舊 ELO 全部移除，見下)
  *
  * (2026-10-12 兩段結算 / 排行改版, docs/stats/two_stage_outcome.md)
  *   top tab 改成兩個：
@@ -48,7 +47,8 @@ import { useFilterHashSync } from '../stats/sharedFilter';
  * (2026-10-13 Edward：角色理論／位置理論、各人最近 N 場) 排行改成角色理論勝率 main 榜
  *   (各人最近 100 場) + 近 50 場 / 進步 / 刺客 / 新人 (例外：全部場次) / 角色王小卡；
  *   超額勝率不再顯示。總覽與玩家雷達同步改用角色理論／位置理論。
- * LeaderboardPage 仍保留供 'leaderboard' route 用作備援/Alternative entry。
+ * (2026-10-30 Edward：「新版把網站上的 ELO 都完全統一成你研發的版本」) 舊 LeaderboardPage (含「傳統 ELO 分層」) 刪除，
+ * 'leaderboard' route 改開戰績排行；網站唯一的 Elo 是戰績排行的「Elo」小分頁與玩家雷達的「Elo 走勢」。
  *
  * (2026-10-14 第六輪分工前置) 各分頁內容拆到 components/analysis/tabs/ 下各自一個檔案
  *   (BoardsTab、OverviewTab、TeamsTab … PlayersTab)，一個分頁只有一個負責的檔案；

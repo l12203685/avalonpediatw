@@ -21,7 +21,8 @@ export interface LeaderboardEntry {
   display_name: string;
   photo_url: string | null;
   provider: string;
-  elo_rating: number;
+  /** 網站唯一的 Elo（分析快取 rating 區塊，四捨五入）；沒有計入 Elo 的局時 null */
+  elo_rating: number | null;
   total_games: number;
   games_won: number;
   games_lost: number;
@@ -35,7 +36,6 @@ export interface RecentGame {
   role: string;
   team: 'good' | 'evil';
   won: boolean;
-  elo_delta: number;
   player_count: number;
   created_at: string;
 }
@@ -46,7 +46,8 @@ export interface UserProfile {
   photo_url: string | null;
   email?: string | null;
   provider: string;
-  elo_rating: number;
+  /** 網站唯一的 Elo（分析快取 rating 區塊，四捨五入）；沒有計入 Elo 的局時 null */
+  elo_rating: number | null;
   total_games: number;
   games_won: number;
   games_lost: number;
@@ -240,7 +241,6 @@ export interface FriendEntry {
   id: string;
   display_name: string;
   photo_url: string | null;
-  elo_rating: number;
   badges: string[];
 }
 
@@ -270,7 +270,6 @@ export interface UserSearchEntry {
   display_name: string;
   photo_url: string | null;
   provider: string;
-  elo_rating: number;
   badges: string[];
   following: boolean;
   short_code: string;
@@ -1214,6 +1213,79 @@ export async function fetchAnalysisLeaderboard(): Promise<AnalysisLeaderboardDat
   return analysisApiFetch<AnalysisLeaderboardData>('/leaderboard');
 }
 
+// ── Elo（網站唯一的 Elo：generate_cache.py compute_rating，Edward 2026-10-30）────────────────────────────
+
+/** 一位玩家的 Elo（/api/analysis/rating 的 players[]）。 */
+export interface RatingPlayerRow {
+  rank: number;
+  name: string;
+  /** 1500 + 400·log10（模型理論勝率的賠率 ÷ 平均老手的賠率），一位小數 */
+  elo: number;
+  /** ±1σ（Elo 點） */
+  sigma: number;
+  /** 計入 Elo 的場數（10 個座位都有名字的局） */
+  games: number;
+  /** 模型理論勝率（%） */
+  modelTheory: number;
+  /** 場數 < config.provisionalGames（暫定） */
+  provisional: boolean;
+  firstPlayed: string | null;
+  lastPlayed: string | null;
+}
+
+/** RATING_CONFIG 中網站會讀的鍵（其他鍵照樣在裡面，只做說明用）。 */
+export interface RatingConfig {
+  k?: number;
+  newcomerOffset?: number;
+  veteranGames?: number;
+  provisionalGames?: number;
+  boardMinGames?: number;
+  activeDays?: number;
+  [key: string]: unknown;
+}
+
+export interface RatingBoardData {
+  schemaVersion: number;
+  config: RatingConfig;
+  games: number;
+  skippedGames: number;
+  from: string | null;
+  dataThrough: string | null;
+  /** 平均老手的模型理論勝率（%） */
+  averageTheory: number;
+  blueWinRate: number;
+  players: RatingPlayerRow[];
+  /** 排行的 asOf（近 N 天有出賽以這天為準）；舊快取沒有排行時 null */
+  asOf: string | null;
+}
+
+/** [日期, Elo, ±1σ, 累計場數]：玩家每個出賽日最後一局後的 Elo。 */
+export type RatingSeriesPoint = [string, number, number, number];
+
+export interface PlayerRatingData {
+  player: RatingPlayerRow;
+  series: RatingSeriesPoint[];
+  config: RatingConfig;
+  dataThrough: string | null;
+  averageTheory: number;
+  asOf: string | null;
+}
+
+/** Elo 排行（不隨複合篩選：Elo 依對局順序而定）。 */
+export async function fetchAnalysisRating(): Promise<RatingBoardData> {
+  return analysisApiFetch<RatingBoardData>('/rating');
+}
+
+/** 一位玩家的 Elo 與走勢；沒有計入 Elo 的局 → 404（AnalysisApiError）。 */
+export async function fetchPlayerRating(name: string): Promise<PlayerRatingData> {
+  return analysisApiFetch<PlayerRatingData>(`/rating/${encodeURIComponent(name)}`);
+}
+
+/** Elo 顯示成整數；±σ 也整數。 */
+export function fmtElo(v: number | null | undefined): string {
+  return isFiniteNum(v) ? String(Math.round(v)) : '—';
+}
+
 export interface LakeRoleStat {
   role: string;
   games: number;
@@ -1836,75 +1908,4 @@ export async function removeAdminApi(token: string, email: string): Promise<stri
 export async function fetchAuditLog(token: string): Promise<AuditLogEntryApi[]> {
   const data = await claimApi<{ entries: AuditLogEntryApi[] }>('/api/admin/audit', { token });
   return data.entries;
-}
-
-// ── #54 Phase 2 Day 3: ELO admin ──────────────────────────────────────────────
-
-export type EloAttributionMode = 'legacy' | 'per_event';
-
-export interface EloConfigView {
-  startingElo: number;
-  minElo: number;
-  baseKFactor: number;
-  teamBaselines: { good: number; evil: number };
-  outcomeWeights: {
-    good_wins_quests: number;
-    evil_wins_quests: number;
-    assassin_kills_merlin: number;
-  };
-  roleKWeights: Record<string, number>;
-  attributionMode: EloAttributionMode;
-  attributionWeights: {
-    proposal: number;
-    outerWhiteInnerBlack: number;
-    information?: number;
-    misdirection?: number;
-  };
-}
-
-export interface EloConfigResult {
-  config: EloConfigView;
-  supabaseReady: boolean;
-  warning?: string;
-}
-
-export async function fetchEloConfig(token: string): Promise<EloConfigResult> {
-  const data = await claimApi<{ config: EloConfigView; supabaseReady: boolean }>(
-    '/api/admin/elo/config',
-    { token },
-  );
-  return { config: data.config, supabaseReady: data.supabaseReady };
-}
-
-export async function updateEloConfig(
-  token: string,
-  patch: {
-    attributionMode?: EloAttributionMode;
-    attributionWeights?: Partial<EloConfigView['attributionWeights']>;
-  },
-): Promise<EloConfigResult> {
-  // Direct fetch so we can surface the Supabase "in-memory only" warning that
-  // the server returns as HTTP 207 with a `warning` field outside the envelope.
-  const res = await fetch(`${SERVER_URL}/api/admin/elo/config`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(patch),
-  });
-  const body = (await res.json().catch(() => ({}))) as {
-    success?: boolean;
-    data?: { config: EloConfigView; supabaseReady: boolean };
-    error?: string;
-    warning?: string;
-  };
-  if (!res.ok || body.success === false || !body.data) {
-    throw new Error(body.error || `API ${res.status}: /api/admin/elo/config`);
-  }
-  return {
-    config: body.data.config,
-    supabaseReady: body.data.supabaseReady,
-    warning: body.warning,
-  };
 }

@@ -17,8 +17,8 @@ export type BadgeName =
   | '梅林逃脫'  // Merlin Escaped — Merlin survived the assassination (assassin guessed wrong)
   | '十人戰場'  // 10-Player Battlefield — participated in a 10-player game
   | '大局觀'    // Big Picture — won a game with 8+ players
-  | '穩健'      // Steady — won with ELO ≥ 1000
-  | '浴火重生'  // Phoenix Rising — won with ELO < 800
+  | '穩健'      // Steady — (old ELO badge, no longer awarded since 2026-10-30; kept for already-awarded rows)
+  | '浴火重生'  // Phoenix Rising — (old ELO badge, no longer awarded since 2026-10-30)
   | '速戰速決'; // Quick Victory — won a game in under 5 minutes
 
 // ── Game Event Types ─────────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ export interface DbUser {
   display_name: string;
   photo_url: string | null;
   provider: 'google' | 'discord' | 'line' | 'email' | 'guest';
+  /** 舊 ELO 欄位（Supabase schema NOT NULL）；2026-10-30 起不再計算，網站的 Elo 在分析快取 rating 區塊。 */
   elo_rating: number;
   total_games: number;
   games_won: number;
@@ -81,6 +82,7 @@ export interface DbGameRecord {
   role: Role;
   team: Team;
   won: boolean;
+  /** 舊 ELO 欄位（NOT NULL）；2026-10-30 起固定寫 0。 */
   elo_before: number;
   elo_after: number;
   elo_delta: number;
@@ -163,6 +165,6 @@ export interface ReplayData {
 export interface ProfileData extends DbUser {
   win_rate: number;            // computed: games_won / total_games * 100
   recent_games: Array<
-    Pick<DbGameRecord, 'role' | 'won' | 'elo_delta' | 'player_count' | 'created_at'>
+    Pick<DbGameRecord, 'role' | 'won' | 'player_count' | 'created_at'>
   >;
 }

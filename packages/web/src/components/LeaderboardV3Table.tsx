@@ -12,8 +12,7 @@
  *   - 砍 raw/shrunk toggle (前端永遠用 raw)
  *   - 砍 主玩角色 filter (不適用 — 角色每局隨機分配)
  *   - 場次區間: 5 檔 → 3 檔 (<100 / 100-200 / >200)
- *   - 加入 ELO 分數欄 (從 V2 endpoint join)
- *   - 修 ELO 分類 filter chip click bug (state val 對齊 *_tag 簡碼)
+ *   (2026-10-30：舊 V2 ELO 欄與 ELO 分類篩選移除 — 網站唯一的 Elo 在戰績排行的「Elo」小分頁)
  *   - 表格字體縮緊不換行
  *   - 母體均值 + tooltip 文案明確化
  *
@@ -40,23 +39,8 @@ interface EightMetrics {
   expectedWin: number;
 }
 
-/** ELO tag from V2 endpoint, used for tier filter. */
-type EloTagFilter = 'novice_tag' | 'mid_tag' | 'top_tag';
-
 /** Game-count bucket filter values (Edward 2026-04-27 simplified to 3 buckets). */
 type GamesFilter = 'all' | 'lt100' | '100to200' | 'gt200';
-
-/** ELO tier filter values. `'all'` = no filter. */
-type TierFilter = 'all' | EloTagFilter;
-
-/** Per-player join data from V2 endpoint: tag (for filter) + score (for display). */
-interface EloInfo {
-  tag: EloTagFilter;
-  score: number;
-}
-
-/** Map of playerId → ELO info from V2 endpoint. */
-type EloInfoMap = Record<string, EloInfo>;
 
 interface V3Entry {
   playerId: string;
@@ -92,7 +76,6 @@ interface V3Response {
 }
 
 type MetricKey =
-  | 'elo'
   | 'totalGames'
   | 'redGames'
   | 'blueGames'
@@ -175,31 +158,28 @@ function bucketGames(total: number): Exclude<GamesFilter, 'all'> {
 }
 
 /** Read filters from URL query string with safe fallbacks. */
-function readFiltersFromUrl(): { games: GamesFilter; tier: TierFilter } {
+function readFiltersFromUrl(): { games: GamesFilter } {
   if (typeof window === 'undefined') {
-    return { games: 'all', tier: 'all' };
+    return { games: 'all' };
   }
   const params = new URLSearchParams(window.location.search);
   const gpRaw = params.get('gp');
-  const tierRaw = params.get('tier');
 
   const validGames: GamesFilter[] = ['all', 'lt100', '100to200', 'gt200'];
-  const validTier: TierFilter[] = ['all', 'novice_tag', 'mid_tag', 'top_tag'];
 
   const games = (validGames as string[]).includes(gpRaw ?? '') ? (gpRaw as GamesFilter) : 'all';
-  const tier = (validTier as string[]).includes(tierRaw ?? '') ? (tierRaw as TierFilter) : 'all';
 
-  return { games, tier };
+  return { games };
 }
 
 /** Persist filters to URL query string (replaceState — no history entry). */
-function writeFiltersToUrl(games: GamesFilter, tier: TierFilter): void {
+function writeFiltersToUrl(games: GamesFilter): void {
   if (typeof window === 'undefined') return;
   const params = new URLSearchParams(window.location.search);
   if (games === 'all') params.delete('gp');
   else params.set('gp', games);
-  if (tier === 'all') params.delete('tier');
-  else params.set('tier', tier);
+  // Strip the removed ELO-tier filter (?tier=, 2026-10-30)
+  params.delete('tier');
   // Strip legacy ?main= param (Edward 2026-04-27 砍主玩角色 filter)
   params.delete('main');
   const qs = params.toString();
@@ -248,18 +228,11 @@ export default function LeaderboardV3Table(): JSX.Element {
   // ─────────────────────────────────────────────────────────────────────
   // Filter state (Edward 2026-04-27 batch revisions)
   //   - 場次區間: 3 檔 (<100 / 100-200 / >200)
-  //   - ELO 分類: 從 V2 endpoint join
-  //   - URL persisted via ?gp=&tier=
+  //   - URL persisted via ?gp=
   //   - 砍 主玩角色 filter (角色每局隨機分配, 不是 player skill)
   // ─────────────────────────────────────────────────────────────────────
   const initial = useMemo(() => readFiltersFromUrl(), []);
   const [gamesFilter, setGamesFilter] = useState<GamesFilter>(initial.games);
-  const [tierFilter, setTierFilter] = useState<TierFilter>(initial.tier);
-
-  /** ELO info map (playerId → { tag, score }) joined from V2 endpoint. Null = not loaded yet. */
-  const [eloInfoMap, setEloInfoMap] = useState<EloInfoMap | null>(null);
-  /** True if V2 fetch failed — we disable tier filter and show tooltip. */
-  const [eloLoadFailed, setEloLoadFailed] = useState(false);
 
   useEffect(() => {
     fetch(`${SERVER_URL}/api/leaderboard/v3`)
@@ -276,47 +249,13 @@ export default function LeaderboardV3Table(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Fetch V2 endpoint to build playerId → ELO info (tag + score) map. */
-  useEffect(() => {
-    fetch(`${SERVER_URL}/api/leaderboard/v2`)
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return (await r.json()) as
-          | {
-              version: 2;
-              groups: Record<
-                string,
-                Array<{ playerId: string; eloTag: EloTagFilter; elo: number }>
-              >;
-            }
-          | { message: string };
-      })
-      .then((payload) => {
-        if ('message' in payload) {
-          setEloLoadFailed(true);
-          return;
-        }
-        const map: EloInfoMap = {};
-        for (const group of Object.values(payload.groups ?? {})) {
-          for (const entry of group) {
-            if (entry?.playerId && entry?.eloTag && typeof entry.elo === 'number') {
-              map[entry.playerId] = { tag: entry.eloTag, score: entry.elo };
-            }
-          }
-        }
-        setEloInfoMap(map);
-      })
-      .catch(() => setEloLoadFailed(true));
-  }, []);
-
   /** Persist filter state to URL (replaceState — no history entry). */
   useEffect(() => {
-    writeFiltersToUrl(gamesFilter, tierFilter);
-  }, [gamesFilter, tierFilter]);
+    writeFiltersToUrl(gamesFilter);
+  }, [gamesFilter]);
 
   /** Read metric value from entry. Edward 2026-04-27: 永遠用 raw (砍 raw/shrunk toggle). */
   const getValue = (e: V3Entry, key: MetricKey): number => {
-    if (key === 'elo') return eloInfoMap?.[e.playerId]?.score ?? -1;
     if (key === 'totalGames') return e.totalGames;
     if (key === 'redGames') return e.redGames;
     if (key === 'blueGames') return e.blueGames;
@@ -330,11 +269,6 @@ export default function LeaderboardV3Table(): JSX.Element {
     const masked = data.entries.filter((e) => {
       // 場次區間
       if (gamesFilter !== 'all' && bucketGames(e.totalGames) !== gamesFilter) return false;
-      // ELO tier — only apply if eloInfoMap loaded; if entry missing from map, exclude when filtering
-      if (tierFilter !== 'all') {
-        if (!eloInfoMap) return false;
-        if (eloInfoMap[e.playerId]?.tag !== tierFilter) return false;
-      }
       return true;
     });
     masked.sort((a, b) => {
@@ -345,15 +279,14 @@ export default function LeaderboardV3Table(): JSX.Element {
     });
     return masked;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, sortKey, sortDir, gamesFilter, tierFilter, eloInfoMap]);
+  }, [data, sortKey, sortDir, gamesFilter]);
 
   /** True iff any filter is active. */
-  const hasActiveFilter = gamesFilter !== 'all' || tierFilter !== 'all';
+  const hasActiveFilter = gamesFilter !== 'all';
 
   /** Clear all filters back to defaults. */
   const clearFilters = (): void => {
     setGamesFilter('all');
-    setTierFilter('all');
   };
 
   const handleSort = (key: MetricKey): void => {
@@ -398,12 +331,6 @@ export default function LeaderboardV3Table(): JSX.Element {
     derived?: boolean;
     align: 'left' | 'right';
   }> = [
-    {
-      key: 'elo',
-      label: t('leaderboard:v3.headers.elo'),
-      tip: t('leaderboard:v3.tooltips.elo'),
-      align: 'right',
-    },
     { key: 'totalGames', label: t('leaderboard:v3.headers.totalGames'), align: 'right' },
     { key: 'redGames', label: t('leaderboard:v3.headers.redGames'), align: 'right' },
     { key: 'blueGames', label: t('leaderboard:v3.headers.blueGames'), align: 'right' },
@@ -560,7 +487,7 @@ export default function LeaderboardV3Table(): JSX.Element {
           )}
         </div>
 
-        {/* Filter chips — Edward 2026-04-27 simplified to 場次 (3 檔) + ELO 分類 */}
+        {/* Filter chips — Edward 2026-04-27 simplified to 場次 (3 檔) */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px]">
           {/* 場次區間 — 3 檔 */}
           <div className="inline-flex items-center gap-1">
@@ -585,42 +512,6 @@ export default function LeaderboardV3Table(): JSX.Element {
                 {label}
               </button>
             ))}
-          </div>
-
-          {/* ELO 分類 — Edward 2026-04-27 修 chip click bug (state val 對齊 *_tag) */}
-          <div
-            className="inline-flex items-center gap-1"
-            title={eloLoadFailed ? t('leaderboard:v3.filters.tier.loadFailed') : undefined}
-          >
-            <span className={`mr-1 ${eloLoadFailed ? 'text-gray-600' : 'text-gray-500'}`}>
-              {t('leaderboard:v3.filters.tier.label')}
-            </span>
-            {(
-              [
-                ['all', t('leaderboard:v3.filters.all')],
-                ['novice_tag', t('leaderboard:v3.filters.tier.novice')],
-                ['mid_tag', t('leaderboard:v3.filters.tier.mid')],
-                ['top_tag', t('leaderboard:v3.filters.tier.top')],
-              ] as const
-            ).map(([val, label]) => {
-              const disabled = eloLoadFailed && val !== 'all';
-              return (
-                <button
-                  key={val}
-                  onClick={() => !disabled && setTierFilter(val as TierFilter)}
-                  disabled={disabled}
-                  className={`px-2 py-0.5 rounded-full border transition-all whitespace-nowrap ${
-                    disabled
-                      ? 'bg-gray-900/40 text-gray-600 border-gray-800 cursor-not-allowed'
-                      : tierFilter === val
-                        ? 'bg-blue-900/50 text-blue-200 border-blue-600'
-                        : 'bg-gray-800/60 text-gray-400 border-gray-700 hover:border-gray-500'
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
           </div>
         </div>
       </div>
@@ -747,7 +638,6 @@ export default function LeaderboardV3Table(): JSX.Element {
             {sorted.map((e, idx) => {
               // Edward 2026-04-27: 永遠用 raw 數值 (砍 raw/shrunk toggle)
               const m = e.raw;
-              const eloInfo = eloInfoMap?.[e.playerId];
               // Per-cell emphasis class for current outcomeMode.
               //   highlight → brighter accent + ring; dim → opacity-50; normal → ''
               const cellCls = (k: MetricKey): string => {
@@ -765,9 +655,6 @@ export default function LeaderboardV3Table(): JSX.Element {
                   <td className="py-1 pl-2 pr-2 sticky left-0 bg-zinc-950 whitespace-nowrap">
                     <span className="text-gray-500 mr-1">{idx + 1}</span>
                     <span className="text-white font-medium">{e.displayName}</span>
-                  </td>
-                  <td className={`py-1 px-1 text-right text-yellow-300 font-semibold whitespace-nowrap ${cellCls('elo')}`}>
-                    {eloInfo ? eloInfo.score : '—'}
                   </td>
                   <td className={`py-1 px-1 text-right text-gray-300 whitespace-nowrap ${cellCls('totalGames')}`}>
                     {e.totalGames}

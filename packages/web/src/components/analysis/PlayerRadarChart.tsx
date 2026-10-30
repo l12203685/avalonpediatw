@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader, AlertCircle, Radar, Table2, Sigma } from 'lucide-react';
+import { Loader, AlertCircle, Radar, Table2, Sigma, TrendingUp } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   fetchAnalysisPlayers,
@@ -16,6 +16,7 @@ import PlayerPicker, { filterPlayers } from './radar/PlayerPicker';
 import RadarPanel from './radar/RadarPanel';
 import BlocksPanel from './radar/BlocksPanel';
 import TheoryPanel from './radar/TheoryPanel';
+import EloPanel from './radar/EloPanel';
 import { buildRadarModel } from './radar/radarModel';
 
 /**
@@ -35,8 +36,11 @@ import { buildRadarModel } from './radar/radarModel';
  *   - 視窗、門檻 (補值、整體理論的場數) 讀 overview.theoryConfig (theorySettings)，不寫死；
  *     舊快取缺的欄位顯示「下次每日更新後提供」，不畫成 0%。
  * 數字整理在 radar/radarModel (三塊結果用 @avalon/shared playerOutcomeBlocks，不在這裡重算)。
+ *
+ * (2026-10-30 Edward：「ELO 曲線不錯，可以放在玩家頁面」) 第四個小分頁「Elo 走勢」(radar/EloPanel)：目前的 Elo、±1σ
+ *  與依時間的走勢 (/api/analysis/rating/:name)，自己拿資料，不等雷達資料。
  */
-type RadarSection = 'radar' | 'blocks' | 'theory';
+type RadarSection = 'radar' | 'blocks' | 'theory' | 'elo';
 
 export default function PlayerRadarChart({ focus = null }: { focus?: { name: string; seq: number } | null } = {}): JSX.Element {
   const { t } = useTranslation('common');
@@ -132,6 +136,7 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     { id: 'radar', label: t('analytics.r6.radar.tabs.radar'), icon: Radar },
     { id: 'blocks', label: t('analytics.r6.radar.tabs.blocks'), icon: Table2 },
     { id: 'theory', label: t('analytics.r6.radar.tabs.theory'), icon: Sigma },
+    { id: 'elo', label: t('analytics.elo.radarTab'), icon: TrendingUp },
   ], [t]);
 
   if (loading) {
@@ -190,6 +195,8 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
         ariaLabel={t('analytics.r6.radar.tabs.label')}
       >
         {active => {
+          // Elo 走勢有自己的資料 (/rating/:name)，雷達資料失敗或還在載入時照樣顯示。
+          if (active === 'elo') return selectedName ? <EloPanel name={selectedName} /> : null;
           if (radarError) {
             return (
               <div className="flex items-center justify-center py-16 text-red-400 gap-3">

@@ -124,7 +124,7 @@ export function buildV2RecordFromRoom(
 
   const record = convertV1ToV2(v1);
 
-  // Edward 2026-04-24 14:43: ELO-exclusion flags. Snapshot AI-participation
+  // Edward 2026-04-24 14:43: stats-exclusion flags. Snapshot AI-participation
   // at game-end and carry the host-selected casual-match flag into the V2
   // record so downstream stats repo / leaderboard compute can skip them.
   //

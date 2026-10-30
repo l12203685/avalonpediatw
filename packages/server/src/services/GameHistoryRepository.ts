@@ -16,10 +16,10 @@ import { invalidateLeaderboardCache } from './FirestoreLeaderboard';
  * Collection: games/{gameId}
  * Sub-collection: games/{gameId}/rounds/{roundIndex}
  *
- * #54 Phase 2 (2026-04-22): Added optional per-event history fields so
- * the new EloAttributionService can compute per-player factor deltas.
- * All fields are optional — legacy records (pre-Phase 2) omit them and
- * the service falls back to Phase 1 team-average ELO automatically.
+ * #54 Phase 2 (2026-04-22): Added optional per-event history fields (votes,
+ * quests, lady) for replays and research. All fields are optional — legacy
+ * records (pre-Phase 2) omit them. (Their first reader, the per-event ELO
+ * attribution, was removed 2026-10-30 with the rest of the old ELO.)
  */
 export interface GameRecord {
   gameId: string;
@@ -46,7 +46,7 @@ export interface GameRecord {
   /** Seat index of the first leader at game start (rotation reconstruction). */
   leaderStartIndex?: number;
 
-  // ---- ELO/leaderboard exclusion flags (Edward 2026-04-28) ----
+  // ---- stats/leaderboard exclusion flags (Edward 2026-04-28) ----
   // Mirror the V2 record's exclusion flags onto the V1 record so the legacy
   // V1 Firestore fallback path (`FirestoreLeaderboard.aggregatePlayerStats`)
   // can skip AI-inclusive / casual games when computing rankings. Both fields
@@ -106,7 +106,7 @@ export class GameHistoryRepository {
         })
       );
 
-      // ELO-exclusion flags (Edward 2026-04-28) — snapshot AI-participation
+      // Stats-exclusion flags (Edward 2026-04-28) — snapshot AI-participation
       // and casual-match status so the V1 Firestore fallback leaderboard
       // (`aggregatePlayerStats`) can skip these records. Same semantics as
       // `liveGameToV2.buildV2RecordFromRoom`.

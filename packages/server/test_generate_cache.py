@@ -3,7 +3,8 @@
 theory win rates (TheoryTest: hand-computed), the leaderboard, the featureStudies it
 computes / annotates, and the game-level dataset games_cache.json written with the cache
 (複合篩選, Edward 2026-10-14: NoteTagTest, GamesDatasetTest, SnapshotDatasetTest,
-DatasetEndToEndTest -- round trip, no free text, written together or withheld). Every cache is
+DatasetEndToEndTest -- round trip, no free text, written together or withheld), the 團隊 Elo (RatingTest:
+compute_rating, invented names, hand-computed + a frozen golden replay). Every cache is
 built for a fixed reference day (never "today").
 
 No network and no Google libraries needed (stdlib unittest; pytest also collects it).
@@ -22,6 +23,7 @@ import copy
 import datetime as dt
 import io
 import json
+import math
 import os
 import stat
 import sys
@@ -94,7 +96,7 @@ def fake_cache(games: int = 100, players: int = 3, chem_players: int = 2, player
         "players": {"players": rows, "total": players},
         "playerDetails": {r["name"]: {"player": r, "radar": {}} for r in rows},
         "chemistry": {k: dict(matrix) for k in gc.CHEMISTRY_MATRICES},
-        "missions": {}, "lake": {}, "rounds": {}, "seatOrder": {}, "captainAnalysis": {}, "leaderboard": {},
+        "missions": {}, "lake": {}, "rounds": {}, "seatOrder": {}, "captainAnalysis": {}, "leaderboard": {}, "rating": {},
         "strength": {"perPlayer": {}},
     }
 
@@ -2947,6 +2949,184 @@ class PlayerAliasTest(unittest.TestCase):
         carried = gc.carry_over_sections(new, prev, {"archetype": placeholder})
         self.assertEqual(carried["archetype"], 0)
         self.assertEqual(new["archetype"]["perPlayer"], {"Ilse Marr": {"hasData": True, "sampleSize": 40}})
+
+
+# ---------------------------------------------------------------------------
+# rating: 團隊 Elo (compute_rating, Edward 2026-10-30). Invented names only.
+# ---------------------------------------------------------------------------
+
+ELO_POOL = ["天樞", "天璇", "天璣", "天權", "玉衡", "開陽", "搖光", "北辰", "南箕", "東井", "西壁", "中台"]
+
+
+def elo_log() -> list[list[str]]:
+    """36 games, two a day from 2026-03-01, 12 invented players: game i seats ELO_POOL[(i + j) % 12] in seat
+    index j and deals rot_config(i); results cycle 三紅, 三藍活, 三藍死, 三紅, 三藍活, 三紅."""
+    cycle = ["三紅", "三藍活", "三藍死", "三紅", "三藍活", "三紅"]
+    return [LOG_HEADERS] + [
+        log_row(f"E{i}", rot_config(i), cycle[i % 6], [ELO_POOL[(i + j) % 12] for j in range(10)],
+                date=(dt.date(2026, 3, 1) + dt.timedelta(days=i // 2)).isoformat())
+        for i in range(36)
+    ]
+
+
+def hand_elo(rel: float, base: float, sd: float, cfg: dict) -> tuple[float, float, float]:
+    """The display conversion written out again: (elo, ±1σ, model theory 0..1) of a player rel above the
+    veterans' mean, the intercept + mean seat offset being `base`."""
+    def theory(x: float) -> float:
+        total = 0.0
+        for role, tenths in gc.ROLE_DEAL_TENTHS.items():
+            if role in RED_ROLES:
+                total += tenths / 10 * (1 - 1 / (1 + math.exp(-(base - x / 4))))
+            else:
+                total += tenths / 10 / (1 + math.exp(-(base + x / 6)))
+        return total
+
+    def elo(x: float) -> float:
+        th, th0 = theory(x), theory(0.0)
+        return cfg["eloBase"] + cfg["eloScale"] * math.log10((th / (1 - th)) / (th0 / (1 - th0)))
+
+    return elo(rel), (elo(rel + sd) - elo(rel - sd)) / 2, theory(rel)
+
+
+# compute_rating(elo_log()) frozen 2026-10-30 (RATING_CONFIG above); test_one_game_by_hand and the tests after it
+# check the rules themselves, this pins the whole replay (order, offsets, newcomers, display conversion).
+GOLDEN_RATING_META = (36, "2026-03-01", "2026-03-18", 46.1, 30.7)
+GOLDEN_RATING_ROWS = [
+    (1, "搖光", 1503.5, 11.6, 30, 46.7), (2, "西壁", 1503.1, 11.6, 30, 46.6), (3, "北辰", 1502.9, 11.6, 30, 46.6),
+    (4, "天璇", 1502.9, 11.6, 30, 46.6), (5, "天璣", 1499.5, 11.7, 30, 46.1), (6, "天樞", 1499.3, 11.7, 30, 46.1),
+    (7, "天權", 1498.6, 11.7, 30, 45.9), (8, "開陽", 1498.6, 11.7, 30, 46.0), (9, "中台", 1498.5, 11.7, 30, 45.9),
+    (10, "東井", 1498.5, 11.7, 30, 45.9), (11, "南箕", 1497.5, 11.7, 30, 45.8), (12, "玉衡", 1497.1, 11.7, 30, 45.7),
+]
+GOLDEN_RATING_SERIES = [["2026-03-01", 1485, 12, 1], ["2026-03-02", 1485, 12, 2], ["2026-03-03", 1487, 12, 4]]
+
+
+class RatingTest(unittest.TestCase):
+    CFG = gc.RATING_CONFIG
+
+    def rows(self, log: list[list[str]]) -> list:
+        return run_like_games(log)
+
+    def test_config(self) -> None:
+        # Edward 2026-10-30: everyone weighs the same (no Merlin / assassin multiplier); the researched values.
+        self.assertEqual({k: self.CFG[k] for k in ("k", "baseRate", "cellRate", "initialBlueWinRate", "newcomerOffset",
+                                                    "veteranGames", "priorSigma", "eloBase", "eloScale",
+                                                    "provisionalGames", "boardMinGames")},
+                         {"k": 0.05, "baseRate": 0.01, "cellRate": 0.01, "initialBlueWinRate": 0.3,
+                          "newcomerOffset": -0.5, "veteranGames": 30, "priorSigma": 0.4, "eloBase": 1500,
+                          "eloScale": 400, "provisionalGames": 30, "boardMinGames": 30})
+        self.assertEqual(self.CFG["activeDays"], REAL_LEADERBOARD_CONFIG["activeDays"])
+        # Order-dependent: never part of the filter engine's parity sections.
+        self.assertNotIn("rating", gc.GAMES_DATASET_SECTIONS)
+        self.assertIn("rating", gc.SHEET_SECTIONS)
+
+    def test_one_game_by_hand(self) -> None:
+        rating = gc.compute_rating(self.rows([LOG_HEADERS, dated("G1", "2026/05/01", "三藍活")]))
+        # Everyone starts at 0 (no veteran yet) - 0.5; p = σ(logit 0.3) = 0.3; e = 1 - 0.3 = 0.7.
+        p, e = 0.3, 0.7
+        base = math.log(0.3 / 0.7) + 0.01 * e + 10 * 0.01 * e  # β after the game + the one game's 10 offsets
+        by_name = {r["name"]: r for r in rating["players"]}
+        for name, role in zip(SEAT_NAMES, ["刺客", "莫甘娜", "莫德雷德", "奧伯倫", "派西維爾", "梅林"] + ["忠臣"] * 4):
+            red = role in RED_ROLES
+            rel = -0.5 + (-1 if red else 1) * 0.05 * e
+            sd = 1 / math.sqrt(1 / 0.4 ** 2 + p * (1 - p) / (4 if red else 6) ** 2)
+            elo, sigma, theory = hand_elo(rel, base, sd, self.CFG)
+            self.assertEqual((by_name[name]["elo"], by_name[name]["sigma"], by_name[name]["modelTheory"]),
+                             (round(elo, 1), round(sigma, 1), round(theory * 100, 1)), name)
+            self.assertEqual((by_name[name]["games"], by_name[name]["provisional"]), (1, True))
+            self.assertEqual(rating["series"][name], [["2026-05-01", round(elo), round(sigma), 1]])
+        self.assertEqual((rating["games"], rating["skippedGames"], rating["from"], rating["dataThrough"]),
+                         (1, 0, "2026-05-01", "2026-05-01"))
+        self.assertEqual([r["rank"] for r in rating["players"]], list(range(1, 11)))
+        # The blue side won: every blue player is above every red player.
+        self.assertEqual({r["name"] for r in rating["players"][:6]}, set(SEAT_NAMES[4:]))
+
+    def test_three_blue_dead_is_a_red_win_and_nobody_is_weighted(self) -> None:
+        model = gc._RatingModel(self.CFG)
+        game = self.rows([LOG_HEADERS, dated("G1", "2026/05/01", "三藍死")])[0]
+        self.assertAlmostEqual(model.play(game), 0.3)
+        # e = 0 - 0.3: every blue player -0.015, every red player +0.015 -- Merlin (seat 6) like the 忠臣,
+        # the assassin (seat 1) like the other reds.
+        self.assertAlmostEqual(model.r["己"], -0.515)
+        self.assertAlmostEqual(model.r["庚"], -0.515)
+        self.assertAlmostEqual(model.r["甲"], -0.485)
+        self.assertAlmostEqual(model.r["乙"], -0.485)
+        self.assertAlmostEqual(model.beta, math.log(0.3 / 0.7) - 0.003)
+        self.assertEqual(len(model.cells), 10)
+        self.assertAlmostEqual(model.cells[("梅林", "6")], -0.003)
+        self.assertAlmostEqual(model.cells[("忠臣", "0")], -0.003)
+
+    def test_newcomer_starts_below_the_veterans(self) -> None:
+        log = [LOG_HEADERS] + [dated(f"V{i}", (dt.date(2026, 3, 1) + dt.timedelta(days=i)).isoformat(), ("三紅", "三藍活")[i % 2]) for i in range(30)]
+        log.append(dated("N1", "2026/05/01", "三紅", SEAT_NAMES[:9] + ["新人"]))
+        games = self.rows(log)
+        model = gc._RatingModel(self.CFG)
+        for g in games[:30]:
+            model.play(g)
+        veterans = sum(model.r[n] for n in SEAT_NAMES) / 10
+        self.assertAlmostEqual(model.veteran_mean(), veterans)
+        p = model.play(games[30])
+        # 新人 sits in seat 10 (忠臣, blue): start = veterans' mean - 0.5, then + k·(0 - p).
+        self.assertAlmostEqual(model.r["新人"], veterans - 0.5 - 0.05 * p)
+        rating = gc.compute_rating(games)
+        rows = {r["name"]: r for r in rating["players"]}
+        self.assertEqual((rows["新人"]["games"], rows["新人"]["provisional"]), (1, True))
+        self.assertEqual((rows["甲"]["games"], rows["甲"]["provisional"]), (31, False))
+        self.assertEqual(rows["癸"]["games"], 30)
+
+    def test_order_skips_and_undated(self) -> None:
+        log = [
+            LOG_HEADERS,
+            dated("U0", "", "三紅"),                               # undated, top of 牌譜: rated, no point
+            dated("B", "2026/06/02", "三藍活"),
+            dated("A", "2026/06/01", "三紅"),                      # earlier date: played first
+            dated("C", "", "三藍死"),                              # undated: takes A's 06-01, after A
+            dated("X1", "2026/06/03", "三紅", SEAT_NAMES[:9] + [""]),   # an empty seat
+            dated("X2", "2026/06/03", "三紅", SEAT_NAMES[:9] + ["甲"]),  # 甲 in two seats
+            dated("X3", "2026/06/03", "平手"),                     # no result: not counted at all
+        ]
+        rating = gc.compute_rating(self.rows(log))
+        self.assertEqual((rating["games"], rating["skippedGames"], rating["from"], rating["dataThrough"]),
+                         (4, 2, "2026-06-01", "2026-06-02"))
+        self.assertEqual([(d, n) for d, _, _, n in rating["series"]["甲"]], [("2026-06-01", 3), ("2026-06-02", 4)])
+        row = next(r for r in rating["players"] if r["name"] == "甲")
+        self.assertEqual((row["firstPlayed"], row["lastPlayed"], row["games"]), ("2026-06-01", "2026-06-02", 4))
+        # The order matters (A, B above C: C takes B's day and is played last); the as-of day does not.
+        swapped = [log[0], log[1], log[3], log[2], *log[4:]]
+        self.assertNotEqual(gc.compute_rating(self.rows(swapped))["players"], rating["players"])
+        a = build_fresh(log, dt.date(2026, 10, 12))["rating"]
+        b = build_fresh(log, dt.date(2026, 12, 31))["rating"]
+        self.assertEqual(a, b)
+        self.assertEqual(json.loads(json.dumps(a)), a)
+
+    def test_golden(self) -> None:
+        rating = gc.compute_rating(self.rows(elo_log()))
+        self.assertEqual((rating["games"], rating["from"], rating["dataThrough"], rating["averageTheory"],
+                          rating["blueWinRate"]), GOLDEN_RATING_META)
+        self.assertEqual([(r["rank"], r["name"], r["elo"], r["sigma"], r["games"], r["modelTheory"])
+                          for r in rating["players"]], GOLDEN_RATING_ROWS)
+        self.assertEqual(rating["series"]["天樞"][:3], GOLDEN_RATING_SERIES)
+        self.assertEqual(rating["config"], dict(gc.RATING_CONFIG))
+        self.assertEqual(set(rating["series"]), set(ELO_POOL))
+
+    def test_committed_cache(self) -> None:
+        # Shape only (the numbers move every day): every rated name is a players row with at least as many games.
+        if not COMMITTED_CACHE.exists():
+            self.skipTest(f"{COMMITTED_CACHE.name} not found")
+        cache = json.loads(COMMITTED_CACHE.read_text(encoding="utf-8"))
+        if "rating" not in cache:
+            self.skipTest("the committed cache predates the rating section")
+        rating = cache["rating"]
+        totals = {p["name"]: p["totalGames"] for p in cache["players"]["players"]}
+        self.assertTrue(rating["players"])
+        for row in rating["players"]:
+            self.assertIn(row["name"], totals)
+            self.assertLessEqual(row["games"], totals[row["name"]])
+            self.assertEqual(row["provisional"], row["games"] < rating["config"]["provisionalGames"])
+            points = rating["series"].get(row["name"], [])
+            self.assertEqual([p[0] for p in points], sorted(p[0] for p in points))
+            if points:
+                self.assertEqual((points[-1][0], points[-1][3]), (row["lastPlayed"], row["games"]))
+        self.assertEqual([r["elo"] for r in rating["players"]], sorted((r["elo"] for r in rating["players"]), reverse=True))
 
 
 class LeaderboardConfigTest(unittest.TestCase):

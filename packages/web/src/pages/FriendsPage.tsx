@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  ArrowLeft, Users, TrendingUp, Loader, UserMinus, UserPlus,
+  ArrowLeft, Users, Loader, UserMinus, UserPlus,
   Search, CheckCircle2,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
@@ -10,7 +10,6 @@ import {
   FriendEntry, UserSearchEntry,
 } from '../services/api';
 import { getStoredToken } from '../services/socket';
-import { getEloRank } from '../utils/eloRank';
 
 type FriendsTab = 'search' | 'following';
 
@@ -106,7 +105,6 @@ export default function FriendsPage(): JSX.Element {
             id:           target.id,
             display_name: target.display_name,
             photo_url:    target.photo_url,
-            elo_rating:   target.elo_rating,
             badges:       target.badges,
           },
         ];
@@ -157,7 +155,6 @@ export default function FriendsPage(): JSX.Element {
               id:           prof.id,
               display_name: prof.display_name,
               photo_url:    prof.photo_url,
-              elo_rating:   prof.elo_rating,
               badges:       prof.badges,
             },
           ];
@@ -193,7 +190,6 @@ export default function FriendsPage(): JSX.Element {
   );
 
   const renderSearchResult = (user: UserSearchEntry): JSX.Element => {
-    const rank = getEloRank(user.elo_rating);
     const isBusy = followingId === user.id || unfollowing === user.id;
     return (
       <div
@@ -219,11 +215,6 @@ export default function FriendsPage(): JSX.Element {
           <div className="font-semibold text-white truncate">{user.display_name}</div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-[10px] text-gray-500 font-mono">#{user.short_code}</span>
-            <TrendingUp size={11} className="text-blue-400" />
-            <span className="text-xs text-blue-300">{user.elo_rating}</span>
-            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
-              {rank.label}
-            </span>
           </div>
         </button>
 
@@ -414,7 +405,6 @@ export default function FriendsPage(): JSX.Element {
                 {!friendsLoading && !friendsError && friends.length > 0 && (
                   <div className="space-y-2">
                     {friends.map((friend) => {
-                      const rank = getEloRank(friend.elo_rating);
                       return (
                         <div
                           key={friend.id}
@@ -437,13 +427,6 @@ export default function FriendsPage(): JSX.Element {
                             onClick={() => navigateToProfile(friend.id)}
                           >
                             <div className="font-semibold text-white truncate">{friend.display_name}</div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <TrendingUp size={11} className="text-blue-400" />
-                              <span className="text-xs text-blue-300">{friend.elo_rating}</span>
-                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full border ${rank.color} ${rank.bgColor} ${rank.borderColor}`}>
-                                {rank.label}
-                              </span>
-                            </div>
                             {friend.badges.length > 0 && (
                               <div className="flex gap-1 mt-1 flex-wrap">
                                 {friend.badges.slice(0, 3).map((b) => (

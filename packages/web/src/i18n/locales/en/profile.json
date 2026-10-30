@@ -8,10 +8,13 @@
   "losses": "L",
   "totalGames": "Total Games",
   "totalGamesLabel": "Games Played",
-  "eloRating": "ELO Rating",
   "rank": "Rank",
   "viewReplay": "View Replay",
-  "follow": "Follow",
+  "follow": {
+    "followSuccess": "Following {{name}}",
+    "unfollowSuccess": "Unfollowed {{name}}",
+    "loading": "…"
+  },
   "unfollow": "Unfollow",
   "editProfile": "Edit Profile",
   "editShort": "Edit",
@@ -55,7 +58,7 @@
     "noticeMerged": "{{provider}} linked — old account history merged into this one",
     "noticeError": "{{provider}} link failed ({{reason}})",
     "googleHint": "To link a Google email, log in again with Google — the system will merge into this account",
-    "helpText": "Link multiple login methods to the same account. After linking, any method signs into the same stats, ELO, and badges. If the target account already has records, they are merged into the currently logged-in account."
+    "helpText": "Link multiple login methods to the same account. After linking, any method signs into the same stats and badges. If the target account already has records, they are merged into the currently logged-in account."
   },
   "edit": {
     "errLogin": "Please log in first",
@@ -83,7 +86,6 @@
     "recentGamesSuffix": "— last {{count}} games",
     "good": "Good",
     "evil": "Evil",
-    "eloTrend": "ELO Trend (last {{count}} games)",
     "roleWinRates": "Role Win Rates",
     "playerCountWinRates": "Win Rate by Player Count",
     "playersCount": "{{count}}-player",
@@ -93,11 +95,6 @@
     "win": "W",
     "loss": "L",
     "playerCount": "{{count}}-player"
-  },
-  "follow": {
-    "followSuccess": "Following {{name}}",
-    "unfollowSuccess": "Unfollowed {{name}}",
-    "loading": "…"
   },
   "replay": {
     "title": "Game Record —",

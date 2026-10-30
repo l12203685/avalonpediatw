@@ -49,7 +49,7 @@
 | `roleOutcomes` | schemaVersion 4：各角色生涯的 `{"三紅": n, "三藍死": n, "三藍活": n}`（七個角色都有，沒打過是 0）；各角色的三塊結果從這裡算（見〈三塊結果〉） |
 | `theory` | 理論勝率：schemaVersion 4 = `roleWindows`（角色理論）、`last100`（位置理論）、`career`（整體理論）；schemaVersion 3 = `last100`、`last50`、`career`（見〈理論勝率〉） |
 
-舊欄位語意（保留不改）：`winRate`、`redWin`、`blueWin`、`roleWinRates`、`seat*WinRates` 都是任務結算口徑（三藍死算藍勝）。`roleTheory` ≈ 本人任務結算勝率（用本人自己的角色分配加權，所以幾乎等於本人勝率），`positionTheory` 恆為 0：兩個都**不是** Edward 定義的理論勝率，網站與機器人不顯示；數值不改，因為網站精算榜的 ELO 加分（`FirestoreLeaderboard.ts`）還在讀 `roleTheory`。正確的理論勝率在 `theory`。
+舊欄位語意（保留不改）：`winRate`、`redWin`、`blueWin`、`roleWinRates`、`seat*WinRates` 都是任務結算口徑（三藍死算藍勝）。`roleTheory` ≈ 本人任務結算勝率（用本人自己的角色分配加權，所以幾乎等於本人勝率），`positionTheory` 恆為 0：兩個都**不是** Edward 定義的理論勝率，網站與機器人不顯示；數值不改（舊讀者；原本讀它的 `FirestoreLeaderboard.ts` ELO 加分已在 2026-10-30 移除）。正確的理論勝率在 `theory`。
 
 超額勝率是什麼（回答 Edward 10/13 的問題）：超額勝率 = 期間最終勝率 − Σ（本人該角色出現比例 × 全體該角色最終勝率）。意思是「你實際的勝率，比『一個抽到跟你一樣多紅角、藍角的普通玩家』高或低多少」。它用的是本人實際抽到的角色比例，不是抽到各角色的機率，所以和下面的角色理論勝率不同。
 
@@ -236,7 +236,7 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 - **任務勝率／刺殺勝率**（2026-10-28，Edward：「倒是可以加 任務勝率(藍方任務三藍 or 紅方任務三紅) 刺殺勝率(藍方躲刺成功 or 紅方刺殺成功) 這兩個」；`generate_cache.mission_assassination`）：與該列 `finalWinRate` 同一段場次。`missionWinRate` = 自己陣營贏得任務的局 ÷ 場數（紅方：三紅；藍方：三藍，含三藍死、三藍活）＝ 舊的任務結算勝率，生涯版等於 `players[].missionWinRate`；`missionRedWinRate` / `missionBlueWinRate` = 紅方局、藍方局各自的（沒有那一方的局為 null）。`assassinWinRate` = 只看三藍局（`threeBlueGames` 局）：紅方時梅林被刺中（三藍死）、藍方時梅林躲過（三藍活）算贏；沒有三藍局為 null。最終勝率 = 任務勝率 × 刺殺的結果：紅方三紅直接贏，三藍時看刺殺。
 - **角色王的視窗**（2026-10-28，Edward：「角色王我建議 忠臣用 近200場 如果大部分人場數都不到200場忠臣 => 改用 100場；其它角色用 近 50 場 如果場數不夠改用 25場」；`role_title_windows`）：每個角色各自決定 W——上榜名單裡（近期有出賽、不含只是不上榜的人）**有玩過該角色**的人，至少一半有 `loyalTitleGames`（200；其他角色 `roleTitleGames` 50）場就用它，否則用 `loyalTitleFallbackGames`（100；其他 `roleTitleFallbackGames` 25）。打滿 W 場的人才列，比最近 W 場的最終勝率。2026-10-28 的快取：近 90 天有出賽、玩過忠臣的 41 人中只有 10 人有 200 場（其他角色 37～39 人中 8～11 人有 50 場），所以七個角色都退到 100／25 場，每個角色各有 19～21 人打滿、可以爭稱號。「至少一半」把「有玩過」算在分母，所以只玩過幾場的人也算「大部分人」的一份——照字面讀 Edward 的「大部分人場數都不到」；如果想改成「只算場數已經不少的人」，改 `role_title_windows` 一處即可。完整與退回視窗設成一樣 = 固定視窗（測試用 20/20）。
 - **上榜條件可調整**（2026-10-28，Edward：「數據排行部分 "上榜"條件也做成可調整可變可選」）：篩選多一個選項 `options.leaderboard`（`LEADERBOARD_OVERRIDE_RANGES` 白名單：`activeDays` 0–3650（0 = 不限）、`mainGames` 0–2000（0 = 生涯）、`roleWindowGames` 1–200、`loyalWindowGames` 1–800、`requireRoleWindows` 0/1、`theoryMinGames` 0–5000、`overallMinGames` 0–5000、角色王四個鍵、`assassinMinAttempts` 1–200；整數，`sanitizeFilter` 驗證），進篩選鍵與分享連結。引擎（`computeLeaderboard` 的 `overrides`）與 Python（`compute_leaderboard(cfg=…)`）把它蓋在 `LEADERBOARD_CONFIG` 上**只重算排行**，玩家的理論視窗、總覽不變；排行的 `config` 是合併後的設定。沒有覆寫 = 快取原樣。網站排行上方一列「上榜條件」：摘要＋「調整」展開一排下拉（近期出賽、位置理論與勝率看近幾場或生涯、最低生涯場數、角色窗 k/kl、角色窗打滿才列、整體理論生涯場數、角色王自動或固定、刺殺榜最低次數），「恢復預設」拿掉覆寫。一致性 preset：`leaderboardRules`、`onlineLeaderboardRulesHidden`。
-- **網站**：有 `theory` 榜時，角色理論／位置理論／整體理論三個小分頁併成「理論勝率」一張表（`TheoryTable`，「排序依」或點表頭換排序，預設角色理論；窗撐不起的數字變淡或顯示 —）；`main` / `position` / `overall` 仍寫在快取裡給機器人與舊讀者。精算榜（`LeaderboardV3Table`，`/api/leaderboard/v3`）不再是排行的小分頁：它的「期望勝」就是最終勝率，「精準勝率」是角色 × 位置但用舊的任務口徑（`roleSeatStats.winRate`，三藍死算藍勝）並向單一全體平均收縮，跟現在的最終勝率口徑不一致；ELO 欄讀 Firestore `computed_stats`（只有線上對局寫入，每日牌譜重算不會更新，正式環境多半是空的）。元件與路由保留（排行頁 `LeaderboardPage` 仍可用），有用的任務勝率、刺殺勝率併進理論表。
+- **網站**：有 `theory` 榜時，角色理論／位置理論／整體理論三個小分頁併成「理論勝率」一張表（`TheoryTable`，「排序依」或點表頭換排序，預設角色理論；窗撐不起的數字變淡或顯示 —）；`main` / `position` / `overall` 仍寫在快取裡給機器人與舊讀者。精算榜（`LeaderboardV3Table`，`/api/leaderboard/v3`）不再是排行的小分頁：它的「期望勝」就是最終勝率，「精準勝率」是角色 × 位置但用舊的任務口徑（`roleSeatStats.winRate`，三藍死算藍勝）並向單一全體平均收縮，跟現在的最終勝率口徑不一致；原本的 ELO 欄（Firestore `computed_stats`）已在 2026-10-30 移除。元件與路由保留（排行頁 `LeaderboardPage` 已刪除，見下方 Elo 段），有用的任務勝率、刺殺勝率併進理論表。
 - 排序：value 高 → 低，同分看 `games` 多的、再看 `careerGames` 多的、再看名字。每榜最多 `topN`（10）列（角色王、`theory` 除外：角色王每位稱號持有人一列、`theory` 列出全部符合的人，不截斷）；做不出來的榜（沒有人符合）就不放。`rank` 是列號（1、2、3…）；角色王的 `rank` 只是列的順序，不是角色之間的名次。
 - 角色王的列：角色照 刺客、莫甘娜、莫德雷德、奧伯倫、派西維爾、梅林、忠臣 的順序；同一個角色的稱號持有人（同率，比的是公開的一位小數勝率）依該角色最近場數（`games`）多的、該角色生涯場數（`careerRoleGames`）多的、名字排，順序固定。讀者（網站排行頁、機器人週一戰績週報的角色王那行）要能處理同一個角色好幾列：機器人寫成「莫甘娜 甲／乙 90.0%」（每個角色最多列 5 個名字，再多寫「等 N 人」）。
 - 進步榜的 value 是兩段角色理論勝率相減，單位是**百分點**（網站顯示「+10.4 個百分點」，機器人顯示「+10.4」），不是相對成長幾 %。兩段都打滿時，角色理論剛好等於該段 100 場的最終勝率，所以列裡不再另附 `recentFinalWinRate` / `priorFinalWinRate`。
@@ -249,6 +249,26 @@ Edward 10/14 補充：「角色理論 50 場太少了，因為每 10 場除了�
 - 守門（`validate_new_cache`）：新快取的 `players[].theory.career.games` 必須等於 `totalGames`，`leaderboard.boards` 必須是陣列；從舊版（沒有 `theory` / `roleOutcomes`）換成新版不算欄位遺失。
 - 改設定時：所有門檻都只改 `LEADERBOARD_CONFIG`，機器人與網站的榜名、期間、上榜條件、說明文字都讀快取，隔天重算後自動跟上。`/help`（Discord）與 `/指令`（LINE）的「角色理論勝率排行 Top 10（…）」也讀快取（`statsQueries.leaderboardScopeText` → `statsReplies.leaderboardScope`：主榜的 `period`，沒有主榜時看設定），所以推上去之後、第一次每日重算之前，舊的 schemaVersion 3 快取仍顯示「各人最近 100 場」，和 `/排行` 一致；讀不到快取時不寫期間。只有兩處寫的是預設值：Discord `/排行` 指令的說明（`bots/discord/client.ts`；部署時向 Discord 註冊一次，讀不到快取，所以直接寫 schemaVersion 4 的「各角色近 10 場、忠臣近 40 場」，推上去到第一次重算之間會和舊快取的 `/排行` 不一致），以及舊快取才會出現的「排行改版中」提示（`LEADERBOARD_PENDING_NOTE`）；`formatStatsHelp` 沒給期間時的預設（`DEFAULT_LEADERBOARD_SCOPE`）也是。改 `roleWindowGames` / `loyalWindowGames` 時這幾行要一起改。
 - 本機預覽：環境變數 `AVALON_ANALYSIS_CACHE=<檔案>` 讓後端（`services/sheetsAnalysis.ts`）與 `AnalysisCacheContract.test.ts` 改讀那個檔（例如每日重算前，用 `sheets_cache.json` 快照離線產生的 schemaVersion 4 快取）；正式環境不設。
+
+## Elo（`rating` 段，2026-10-30）
+
+Edward 2026-10-30：「新版把網站上的 ELO 都完全統一成你研發的版本」「ELO 不能設計梅林跟刺客加權，因為不一定是梅林跟刺客導致刺對／刺錯」「ELO 曲線不錯，可以放在玩家頁面」。
+網站只剩這一種 Elo：`generate_cache.py` 的 `compute_rating`，參數全在 `RATING_CONFIG`（也寫進 `rating.config`，讀者不寫死）。
+
+- **計入的局**：結果是三紅／三藍死／三藍活、10 個座位都有不同的名字（名字已併大小寫與別名）。順序同 `player_timelines`（日期時間，缺日期沿用上一局）。娛樂局照算（網站其他統計也沒排除）。每日從第一局整段重放，不存狀態。
+- **模型**（每局，R 為 logit 單位）：
+  `P(藍勝) = σ(β + Σ_10 座位 c[角色, 座位] + 平均(藍方 6 人 R) − 平均(紅方 4 人 R))`；`y = 1` 只在三藍活（三藍死是紅勝）；`e = y − P(藍勝)`。
+  藍方每人 `R += k·e`，紅方每人 `R −= k·e`，**所有人同權重**（梅林、刺客不加權）；`β += baseRate·e`；這局 10 格 `c += cellRate·e`。
+  新玩家起始 R = 當時生涯 ≥ `veteranGames` 場玩家的平均 + `newcomerOffset`；不做閒置衰減。
+- **顯示**：`modelTheory` = Σ 抽到角色的機率（忠臣 4/10、其他 1/10）× 本人當該角色、其他 9 人是平均老手、座位偏移取最近 `offsetWindowGames` 局平均時的勝率；
+  `elo = eloBase + eloScale·log10(modelTheory 的賠率 ÷ 平均老手的賠率)`（平均老手 = 1500）；
+  `sigma` = ±1σ：`1/√(1/priorSigma² + Σ 每局 p(1−p)/隊伍人數²)` 換成 Elo 點。場數 < `provisionalGames` 標 `provisional`（暫定）。
+- **輸出**：`rating.players[]`（`rank`、`name`、`elo`、`sigma`、`games`、`modelTheory`、`provisional`、`firstPlayed`、`lastPlayed`，依 Elo 排序）、`rating.series[name]`（每個出賽日最後一局後的 `[日期, Elo, ±1σ, 累計場數]`；無日期的局會動分數但沒有點）、`games`／`skippedGames`／`from`／`dataThrough`／`averageTheory`／`blueWinRate`。
+  跟 as-of 日無關，所以不影響「只差日期就不寫檔」。
+- **複合篩選**：Elo 依對局順序而定，篩掉部分局重算沒有意義，不在引擎對帳（`engineParity`、`GAMES_DATASET_SECTIONS`）裡；網站篩選中照樣顯示全部對局的 Elo 並註明。
+- **讀者**：`/api/analysis/rating`（不含 series，附排行的 asOf）、`/api/analysis/rating/:name`（一位玩家與走勢）；網站「戰績排行 → Elo」（預設近 `activeDays` 天有出賽、≥ `boardMinGames` 場）與「數據分析 → 玩家雷達 → Elo 走勢」；`/api/leaderboard`、`/api/profile/*` 的 `elo_rating` 也讀這裡（四捨五入，沒有計入的局時 null）。
+- **已移除的舊 ELO**：線上平台 `EloRanking.ts` 系列（K=32 × 角色／結果權重、per_event 歸因、影子寫入、`/api/admin/elo/config` 與管理頁）、`@avalon/shared` `computeELO`／`EloTag`（`/api/leaderboard/v2` 與舊排行頁的「傳統 ELO 分層」）、`FirestoreLeaderboard.ts` 的 `computeEloFromSheets` 與線上局 K-factor ELO、RTDB `calculateElo`、線上對局結束的 ±20/−15。Supabase／Firestore 的 `elo_rating`、`elo_*` 欄位是舊儲存欄位，不再計算（新局寫 0）。
+- **驗證（2026-10-30 原型，1,829 局：前 60% 暖身、60–80% 驗證、最後 20% 測試）**：無加權版驗證 log loss 0.5775、測試 0.5433（只用歷史藍勝率 0.6013／0.5846）；`k` 0.035～0.1、`newcomerOffset` −0.25～−1 的差異都在雜訊內。
 
 ## 特徵研究（`featureStudies`）
 

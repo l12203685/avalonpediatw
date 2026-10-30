@@ -558,6 +558,59 @@ export interface LeaderboardSection {
   boards: LeaderboardBoard[];
 }
 
+/**
+ * rating: 團隊 Elo (generate_cache.py compute_rating / RATING_CONFIG, Edward 2026-10-30), the site's only Elo.
+ * Replayed over every complete game in timeline order; the filter engine never recomputes it.
+ */
+export interface RatingPlayerRow {
+  rank: number;
+  name: string;
+  /** 1500 + 400·log10(modelTheory odds ÷ the average veteran's), one decimal. */
+  elo: number;
+  /** ±1σ in Elo points, one decimal. */
+  sigma: number;
+  /** Rated games (complete games only). */
+  games: number;
+  /** 模型理論勝率 in percent, one decimal. */
+  modelTheory: number;
+  /** games < config.provisionalGames (暫定). */
+  provisional: boolean;
+  firstPlayed: string | null;
+  lastPlayed: string | null;
+}
+
+/** [date, elo, ±1σ, rated games so far] after the last game of a day the player played. */
+export type RatingSeriesPoint = [string, number, number, number];
+
+export interface RatingSection {
+  schemaVersion: number;
+  /** A copy of RATING_CONFIG (k, newcomerOffset, provisionalGames, boardMinGames, activeDays …). */
+  config: Record<string, unknown>;
+  games: number;
+  skippedGames: number;
+  from: string | null;
+  dataThrough: string | null;
+  /** The average veteran's 模型理論勝率 (percent). */
+  averageTheory: number;
+  /** The model's blue win rate at the average seat offset (percent). */
+  blueWinRate: number;
+  players: RatingPlayerRow[];
+  series: Record<string, RatingSeriesPoint[]>;
+}
+
+/** /api/analysis/rating: the section without the per-player series, plus the leaderboard's asOf. */
+export type RatingBoard = Omit<RatingSection, 'series'> & { asOf: string | null };
+
+/** /api/analysis/rating/:name: one player's row and Elo curve. */
+export interface PlayerRating {
+  player: RatingPlayerRow;
+  series: RatingSeriesPoint[];
+  config: Record<string, unknown>;
+  dataThrough: string | null;
+  averageTheory: number;
+  asOf: string | null;
+}
+
 /** A board written by the theory generator (schemaVersion 3): it says what its value is. */
 export function isTheoryBoard(board: Pick<LeaderboardBoard, 'metric'> | null | undefined): boolean {
   return typeof board?.metric === 'string' && board.metric.length > 0;
@@ -904,6 +957,8 @@ export interface AnalysisCache {
   featureStudies?: FeatureStudiesData;
   /** Written by generate_cache.py since 2026-10-12; absent in older caches. */
   leaderboard?: LeaderboardSection;
+  /** 團隊 Elo, written by generate_cache.py since 2026-10-30; absent in older caches. */
+  rating?: RatingSection;
 }
 
 // ---------------------------------------------------------------------------
@@ -1265,6 +1320,58 @@ export async function getPlayerByName(name: string): Promise<PlayerStats | null>
  */
 export async function getLeaderboard(): Promise<LeaderboardSection | null> {
   return loadCache().leaderboard ?? null;
+}
+
+/** The Elo board (rating section without the series); null when the cache predates it (route: 503). */
+export async function getRatingBoard(): Promise<RatingBoard | null> {
+  const c = loadCache();
+  if (!c.rating) return null;
+  const { series: _series, ...board } = c.rating;
+  void _series;
+  return { ...board, asOf: c.leaderboard?.asOf ?? null };
+}
+
+/** name → Elo row of the rating section (players[].name), for the lookups below. */
+function ratingRows(rating: RatingSection): Record<string, RatingPlayerRow> {
+  const rows: Record<string, RatingPlayerRow> = {};
+  for (const row of rating.players) rows[row.name] = row;
+  return rows;
+}
+
+/**
+ * One player's Elo row and curve, `name` matched like the other per-player routes (case / width,
+ * players.aliases). undefined when the cache predates the section, null when the player has no rated game.
+ */
+export async function getPlayerRating(name: string): Promise<PlayerRating | null | undefined> {
+  const c = loadCache();
+  const rating = c.rating;
+  if (!rating) return undefined;
+  const player = findRatingRow(c, rating, name);
+  if (!player) return null;
+  return {
+    player,
+    series: byName(rating.series, player.name) ?? [],
+    config: rating.config,
+    dataThrough: rating.dataThrough,
+    averageTheory: rating.averageTheory,
+    asOf: c.leaderboard?.asOf ?? null,
+  };
+}
+
+function findRatingRow(c: AnalysisCache, rating: RatingSection, name: string): RatingPlayerRow | undefined {
+  const rows = ratingRows(rating);
+  const key = findPlayerKey(rows, playerDetailsKey(c, name) ?? name, (k) => rows[k]?.games ?? 0,
+    cachePlayerAliases(c.players));
+  return key === undefined ? undefined : byName(rows, key);
+}
+
+/**
+ * The Elo row of `name` (null without a rated game or on a cache without the section) — for the profile /
+ * leaderboard routes that show a player's Elo next to other numbers (FirestoreLeaderboard).
+ */
+export async function getEloOf(name: string): Promise<RatingPlayerRow | null> {
+  const c = loadCache();
+  return c.rating ? findRatingRow(c, c.rating, name) ?? null : null;
 }
 
 export async function getChemistry(): Promise<ChemistryData> {

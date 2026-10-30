@@ -154,7 +154,6 @@ export async function createUserProfile(user: User): Promise<void> {
     gamesWon: 0,
     gamesLost: 0,
     winRate: 0,
-    eloRating: 1000,
     badges: [],
   });
 }
@@ -188,7 +187,6 @@ interface UserStats {
   gamesWon: number;
   gamesLost: number;
   rolesPlayed: Record<string, number>;
-  eloRating: number;
   totalKills?: number;
   averageGameDuration?: number;
   lastGameAt?: number;
@@ -226,10 +224,7 @@ export async function updateUserStats(
     gamesWon: 0,
     gamesLost: 0,
     rolesPlayed: {},
-    eloRating: 1000,
   };
-
-  const newElo = calculateElo(current.eloRating, gameResult.won);
 
   await statsRef.update({
     totalGames: (current.totalGames || 0) + 1,
@@ -240,41 +235,13 @@ export async function updateUserStats(
     averageGameDuration:
       ((current.averageGameDuration || 0) * (current.totalGames || 1) + gameResult.duration) /
       ((current.totalGames || 1) + 1),
-    eloRating: newElo,
     lastGameAt: Date.now(),
     updatedAt: Date.now(),
   });
 }
 
-/**
- * Simple ELO calculation
- */
-function calculateElo(currentElo: number, won: boolean, K = 32): number {
-  if (won) {
-    return currentElo + K;
-  } else {
-    return Math.max(0, currentElo - K);
-  }
-}
-
-/**
- * Get leaderboard — top N players sorted by ELO descending
- */
-export async function getLeaderboard(limit = 50): Promise<(UserStats & { uid: string })[]> {
-  const db = getAdminDB();
-  const snapshot = await db.ref('user-stats')
-    .orderByChild('eloRating')
-    .limitToLast(limit)
-    .once('value');
-
-  const results: (UserStats & { uid: string })[] = [];
-  snapshot.forEach((child) => {
-    const val = child.val() as UserStats;
-    if (val) results.push({ ...val, uid: child.key as string });
-  });
-
-  return results.reverse(); // highest ELO first
-}
+// The RTDB K=32 ELO (calculateElo) and its getLeaderboard were removed 2026-10-30: the site's only Elo
+// is the analysis cache's rating section (generate_cache.py compute_rating).
 
 /**
  * Get full user profile merged with stats — used for profile page
@@ -291,7 +258,6 @@ export async function getFullUserProfile(uid: string): Promise<UserProfile | nul
     totalKills: stats?.totalKills ?? 0,
     winRate: stats?.totalGames ? (stats.gamesWon / stats.totalGames) * 100 : 0,
     averageGameDuration: stats?.averageGameDuration ?? 0,
-    eloRating: stats?.eloRating ?? 1000,
     badges: [],
   };
 }

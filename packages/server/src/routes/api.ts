@@ -32,9 +32,7 @@ import { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { getSelfPlayStatus, buildAgents } from '../ai/SelfPlayScheduler';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 import { verifyGuestToken } from '../middleware/guestAuth';
-import { ComputedStatsRepositoryV2 } from '../services/ComputedStatsRepositoryV2';
 import { getLeaderboardV3 } from '../services/LeaderboardV3';
-import { resolveDisplayNameFallback } from '@avalon/shared';
 
 const router: IRouter = Router();
 
@@ -130,7 +128,7 @@ function emptyProfile(auth: ResolvedAuth): {
   photo_url: string | null;
   email: string | null;
   provider: string;
-  elo_rating: number;
+  elo_rating: number | null;
   total_games: number;
   games_won: number;
   games_lost: number;
@@ -144,7 +142,7 @@ function emptyProfile(auth: ResolvedAuth): {
     photo_url:    auth.photoUrl ?? null,
     email:        auth.email ?? null,
     provider:     auth.provider || 'guest',
-    elo_rating:   1000,
+    elo_rating:   null,
     total_games:  0,
     games_won:    0,
     games_lost:   0,
@@ -287,34 +285,8 @@ router.get('/leaderboard/v3', publicLimiter, async (_req: Request, res: Response
   }
 });
 
-// ── GET /api/leaderboard/v2 ────────────────────────────────────
-// Edward 2026-04-24 雙維度分類排行榜（TierGroup × EloTag）。
-// 讀 `computed_stats/` collection → computeLeaderboardByTier 分組 → enrich displayName。
-// 回傳 `{ version: 2, groups: { rookie, regular, veteran, expert, master } }`，前端 LeaderboardPage 依此渲染。
-router.get('/leaderboard/v2', publicLimiter, async (_req: Request, res: Response) => {
-  try {
-    const repo = new ComputedStatsRepositoryV2();
-    const rawGroups = await repo.getLeaderboard();
-    // Edward 2026-04-24 15:27：`sheets:unknown` 是全站平均 aggregate 玩家，
-    // 不進排行榜（但其戰績已貢獻給其他玩家 stats）。
-    const groups = Object.fromEntries(
-      Object.entries(rawGroups).map(([tierGroup, entries]) => [
-        tierGroup,
-        entries
-          .filter((e) => e.playerId !== 'sheets:unknown')
-          .map((e) => ({
-            ...e,
-            displayName: resolveDisplayNameFallback(e.playerId),
-            photoUrl: null,
-          })),
-      ]),
-    );
-    return res.json({ version: 2, groups });
-  } catch (err) {
-    console.error('[api/leaderboard/v2] error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
-});
+// /api/leaderboard/v2（computed_stats 的「傳統 ELO 分層」）2026-10-30 移除：網站唯一的 Elo 是
+// /api/analysis/rating（generate_cache.py compute_rating）。
 
 // ── GET /api/profile/me ───────────────────────────────────────
 router.get('/profile/me', publicLimiter, async (req: Request, res: Response) => {
@@ -527,7 +499,7 @@ router.patch('/profile/me', publicLimiter, async (req: Request, res: Response) =
         photo_url:    updatedPhotoUrl,
         email:        auth.email ?? null,
         provider:     auth.provider ?? 'unknown',
-        elo_rating:   1000,
+        elo_rating:   null,
         total_games:  0,
         games_won:    0,
         games_lost:   0,
@@ -939,7 +911,7 @@ router.patch('/user/password', publicLimiter, async (req: Request, res: Response
 // 該帳號的密碼。三項都對才允許 merge，避免惡意 claim 別人的戰績。
 //
 // 成功後：(舊 uuid, 當前登入 uuid) 走 mergeUserAccounts — 戰績、好友、
-// ELO、徽章都併到當前帳號，舊 auth_users row 刪除。
+// 徽章都併到當前帳號，舊 auth_users row 刪除。
 router.post('/user/claim-history', publicLimiter, async (req: Request, res: Response) => {
   const auth = await resolvePlayerAuth(req.headers.authorization);
   if (!auth) return res.status(401).json({ error: 'Unauthorized' });

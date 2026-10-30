@@ -39,7 +39,9 @@ Where each top-level section comes from:
                               the readers, see load_player_aliases); leaderboard =
                               the boards of compute_leaderboard over each
                               player's last N games, constants in
-                              LEADERBOARD_CONFIG) and chemistry (同贏 / 同輸 /
+                              LEADERBOARD_CONFIG; rating = the 團隊 Elo replayed
+                              over every complete game in timeline order,
+                              compute_rating / RATING_CONFIG) and chemistry (同贏 / 同輸 /
                               贏相關 / 同贏-同輸 tabs, labels renamed to the
                               players' spellings: canonicalize_chemistry).
                               生涯報表 is not read.
@@ -188,7 +190,7 @@ GAME_SOURCE_DISCORD = 1
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
     "overview", "players", "playerDetails", "chemistry", "missions",
-    "lake", "rounds", "seatOrder", "captainAnalysis", "leaderboard",
+    "lake", "rounds", "seatOrder", "captainAnalysis", "leaderboard", "rating",
 )
 # Sections recomputed here from the refreshed players.
 DERIVED_SECTIONS = ("strength",)
@@ -1316,7 +1318,8 @@ def parse_game_log(rows: list[list[str]], source: int = GAME_SOURCE_SHEET, *, ke
 #                    the ROUNDED values, i.e. the player's own win rate up to
 #                    rounding noise (not the 1/10-4/10 role-pick weighting of
 #                    packages/shared roleProbability.ts). LEGACY: kept unchanged
-#                    because FirestoreLeaderboard's ELO bonus reads it; the owner's
+#                    (older readers; it once fed FirestoreLeaderboard's ELO bonus, removed
+#                    2026-10-30 -- the site's Elo is the rating section); the owner's
 #                    角色理論 / 位置理論 are in `theory` (theory_window, 2026-10-13)
 #   positionTheory = 0.0 for everyone (the rebuild never computed it; legacy, see theory)
 #   roleSeatStats  = "角色|座號" (座號 1..10, seat 0 written as 10) for every
@@ -3607,6 +3610,222 @@ def leaderboard_summary(leaderboard: Mapping[str, Any] | None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# rating: 團隊 Elo（Edward 2026-10-30「新版把網站上的 ELO 都完全統一成你研發的版本」）
+# ---------------------------------------------------------------------------
+#
+# 網站唯一的 Elo。每局（結果是三紅／三藍死／三藍活、10 個座位都有不同的名字）依 player_timelines 的順序
+# 從第一局重放到最後一局，每日更新整段重算（不存狀態，舊局更正或新增別名隔天自動算對）：
+#
+#   P(藍勝) = σ( β + Σ_10 個座位 c[角色, 座位] + 平均(藍方 6 人的 R) − 平均(紅方 4 人的 R) )
+#   y = 1 只在三藍活；三紅、三藍死都是紅方贏（兩段結算的最終結果）
+#   e = y − P(藍勝)
+#   藍方每人 R += k·e，紅方每人 R −= k·e（所有人同權重：Edward「ELO 不能設計梅林跟刺客加權，
+#   因為不一定是梅林跟刺客導致刺對／刺錯」）
+#   β += baseRate·e；這局的 10 格 c[角色, 座位] 各 += cellRate·e
+#   新玩家起始 R = 當時生涯 ≥ veteranGames 場玩家的平均 R + newcomerOffset；不做閒置衰減。
+#
+# 顯示（players[]、series）：
+#   modelTheory = Σ 抽到角色的機率（忠臣 4/10、其他 1/10）× 本人當該角色、其他 9 人都是平均老手
+#                 （R = 老手平均）、座位偏移取最近 offsetWindowGames 局平均時的勝率
+#   elo         = eloBase + eloScale·log10( modelTheory 的賠率 ÷ 平均老手 modelTheory 的賠率 )
+#   sigma       = ±1σ（Elo 點）：R 的估計誤差 1/√(1/priorSigma² + Σ 每局 p(1−p)/隊伍人數²) 換成 Elo
+# Elo 依對局順序而定，複合篩選不重算這一段（不在 GAMES_DATASET_SECTIONS／引擎對帳裡）。
+# 2026-10-30 原型驗證（前 60% 暖身、60–80% 驗證、最後 20% 測試，1,829 局）：驗證 log loss 0.5775、
+# 測試 0.5433（只用歷史藍勝率 0.6013／0.5846）；k 0.035～0.1、newcomerOffset −0.25～−1 差異都在雜訊內。
+
+RATING_CONFIG: dict[str, Any] = {
+    "k": 0.05,                  # 每局每人 R 的變動 = k × (結果 − 賽前預測)，logit 單位
+    "baseRate": 0.01,           # 截距 β（藍方基礎勝率）的學習率
+    "cellRate": 0.01,           # 角色 × 座位 70 格偏移的學習率
+    "initialBlueWinRate": 0.3,  # β 的起點 = logit(0.3)
+    "newcomerOffset": -0.5,     # 新玩家起始 R = 老手平均 + 這個值（logit）
+    "veteranGames": 30,         # 「老手」= 已計入這麼多場
+    "offsetWindowGames": 300,   # 理論勝率的座位偏移：最近 N 局的平均
+    "priorSigma": 0.4,          # ±1σ 的先驗（logit）
+    "eloBase": 1500,
+    "eloScale": 400,
+    "provisionalGames": 30,     # 少於 N 場標「暫定」
+    "boardMinGames": 30,        # 網站 Elo 頁籤的預設上榜場數
+    "activeDays": LEADERBOARD_CONFIG["activeDays"],  # 網站 Elo 頁籤預設：近 N 天有出賽
+}
+RATING_SCHEMA_VERSION = 1
+_RATING_SIDE = {"blue": 6, "red": 4}  # 理論勝率的隊伍人數（10 人局）
+
+
+def _sigmoid(x: float) -> float:
+    if x >= 0:
+        return 1.0 / (1.0 + math.exp(-x))
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
+def _logit(p: float) -> float:
+    return math.log(p / (1.0 - p))
+
+
+def rating_games(games: list[GameRow]) -> tuple[list[tuple[str, GameRow]], int]:
+    """Elo 計入的局（timeline 日期、局），依 player_timelines 的順序；第二個值 = 有結果但沒計入的局數
+    （有座位沒寫名字，或同一個名字坐兩個座位）。"""
+    keyed: list[tuple[tuple[str, int], GameRow]] = []
+    last_date = ""
+    skipped = 0
+    for i, g in enumerate(games):
+        if g.date:
+            last_date = g.date
+        if g.outcome not in OUTCOMES:
+            continue
+        names = [g.seat_players.get(s) or "" for s in SEATS]
+        if not all(names) or len(set(names)) != PLAYERS_PER_GAME or not all(g.seat_roles.get(s) for s in SEATS):
+            skipped += 1
+            continue
+        fixed = getattr(g, "timeline_date", None)
+        keyed.append(((fixed if fixed is not None else (g.date or last_date), i), g))
+    keyed.sort(key=lambda kg: kg[0])
+    return [(k[0], g) for k, g in keyed], skipped
+
+
+class _RatingModel:
+    """compute_rating 的重放狀態（見本段開頭的公式）。"""
+
+    def __init__(self, cfg: Mapping[str, Any]) -> None:
+        self.cfg = cfg
+        self.r: dict[str, float] = {}
+        self.games: Counter = Counter()
+        self.info: dict[str, float] = {}
+        self.cells: defaultdict = defaultdict(float)
+        self.beta = _logit(float(cfg["initialBlueWinRate"]))
+        self.window: list[list[tuple[str, str]]] = []
+        self.window_counts: Counter = Counter()
+
+    def veteran_mean(self) -> float:
+        vets = [v for p, v in self.r.items() if self.games[p] >= self.cfg["veteranGames"]]
+        return sum(vets) / len(vets) if vets else 0.0
+
+    def play(self, g: GameRow) -> float:
+        """更新一局，回傳賽前的藍勝預測。"""
+        cfg = self.cfg
+        seats = [(s, g.seat_roles[s], g.seat_players[s]) for s in SEATS]
+        for _, _, name in seats:
+            if name not in self.r:
+                self.r[name] = self.veteran_mean() + float(cfg["newcomerOffset"])
+                self.info[name] = 1.0 / float(cfg["priorSigma"]) ** 2
+        blue = [name for _, role, name in seats if role not in RED_ROLES]
+        red = [name for _, role, name in seats if role in RED_ROLES]
+        keys = [(role, s) for s, role, _ in seats]
+        team = (sum(self.r[n] for n in blue) / len(blue) if blue else 0.0) - (
+            sum(self.r[n] for n in red) / len(red) if red else 0.0)
+        p = _sigmoid(self.beta + sum(self.cells[k] for k in keys) + team)
+        e = (1.0 if g.outcome == OUTCOME_BLUE_ALIVE else 0.0) - p
+        for k in keys:
+            self.cells[k] += float(cfg["cellRate"]) * e
+        for side, sign in ((blue, 1.0), (red, -1.0)):
+            for name in side:
+                self.r[name] += sign * float(cfg["k"]) * e
+                self.info[name] += p * (1.0 - p) / len(side) ** 2
+        self.beta += float(cfg["baseRate"]) * e
+        for _, _, name in seats:
+            self.games[name] += 1
+        self.window.append(keys)
+        self.window_counts.update(keys)
+        if len(self.window) > int(cfg["offsetWindowGames"]):
+            self.window_counts.subtract(self.window.pop(0))
+        return p
+
+    def snapshot(self) -> tuple[Callable[[str], tuple[float, float, float]], float, float]:
+        """目前狀態下的換算 name → (elo, ±1σ 的 Elo 點, 模型理論勝率 0..1)，平均老手的模型理論勝率，
+        平均座位偏移下的藍勝率（兩者 0..1）。"""
+        cfg = self.cfg
+        vm = self.veteran_mean()
+        n = len(self.window)
+        off = sum(c * self.cells[k] for k, c in self.window_counts.items() if c) / n if n else 0.0
+        base = self.beta + off
+
+        def theory(rel: float) -> float:
+            total = 0.0
+            for role, tenths in ROLE_DEAL_TENTHS.items():
+                if role in RED_ROLES:
+                    total += tenths / 10 * (1.0 - _sigmoid(base - rel / _RATING_SIDE["red"]))
+                else:
+                    total += tenths / 10 * _sigmoid(base + rel / _RATING_SIDE["blue"])
+            return total
+
+        odds0 = theory(0.0) / (1.0 - theory(0.0))
+
+        def elo(rel: float) -> float:
+            th = theory(rel)
+            return float(cfg["eloBase"]) + float(cfg["eloScale"]) * math.log10(th / (1.0 - th) / odds0)
+
+        def convert(name: str) -> tuple[float, float, float]:
+            rel = self.r[name] - vm
+            sd = 1.0 / math.sqrt(self.info[name])
+            return elo(rel), (elo(rel + sd) - elo(rel - sd)) / 2, theory(rel)
+
+        return convert, theory(0.0), _sigmoid(base)
+
+
+def compute_rating(games: list[GameRow], cfg: Mapping[str, Any] | None = None) -> dict:
+    """The rating section: every rated player's current Elo, ±1σ, games and model theory win rate, and their
+    Elo after each day they played (series: [date, elo, ±1σ, games so far]; undated games at the top of 牌譜
+    move the rating but get no point). Names are the cache's (canonicalized) spellings. Pure."""
+    cfg = RATING_CONFIG if cfg is None else cfg
+    ordered, skipped = rating_games(games)
+    model = _RatingModel(cfg)
+    series: dict[str, list[list[Any]]] = {}
+    first: dict[str, str] = {}
+    last: dict[str, str] = {}
+    today: list[str] = []
+    for i, (day, g) in enumerate(ordered):
+        model.play(g)
+        for name in g.seat_players.values():
+            if day:
+                first.setdefault(name, day)
+                last[name] = day
+            today.append(name)
+        if i + 1 == len(ordered) or ordered[i + 1][0] != day:
+            if day:
+                convert = model.snapshot()[0]
+                for name in dict.fromkeys(today):
+                    elo, sigma, _ = convert(name)
+                    series.setdefault(name, []).append([day, round(elo), round(sigma), model.games[name]])
+            today = []
+    convert, average_theory, blue_win_rate = model.snapshot()
+    players = []
+    for name in model.r:
+        elo, sigma, theory = convert(name)
+        n = model.games[name]
+        players.append({
+            "name": name, "elo": round(elo, 1), "sigma": round(sigma, 1), "games": n,
+            "modelTheory": round(theory * 100, 1), "provisional": n < cfg["provisionalGames"],
+            "firstPlayed": first.get(name), "lastPlayed": last.get(name),
+        })
+    players.sort(key=lambda r: (-r["elo"], -r["games"], r["name"]))
+    for rank, row in enumerate(players, 1):
+        row["rank"] = rank
+    return {
+        "schemaVersion": RATING_SCHEMA_VERSION,
+        "config": dict(cfg),
+        "games": len(ordered),
+        "skippedGames": skipped,
+        "from": next((d for d, _ in ordered if d), None),
+        "dataThrough": ordered[-1][0] if ordered and ordered[-1][0] else None,
+        "averageTheory": round(average_theory * 100, 1),
+        "blueWinRate": round(blue_win_rate * 100, 1),
+        "players": players,
+        "series": series,
+    }
+
+
+def rating_summary(rating: Mapping[str, Any] | None) -> str:
+    """One line for logs: counts only, no names."""
+    if not isinstance(rating, Mapping):
+        return "無"
+    players = rating.get("players") or []
+    listed = sum(1 for r in players if isinstance(r, Mapping) and not r.get("provisional"))
+    return (f"{rating.get('games')} 局計入（{rating.get('skippedGames')} 局缺名字不計）；{len(players)} 位玩家，"
+            f"{listed} 位 ≥ {(rating.get('config') or {}).get('provisionalGames')} 場；資料到 {rating.get('dataThrough')}")
+
+
+# ---------------------------------------------------------------------------
 # featureStudies: L141 from the game log; caveats for the carried-over studies
 # ---------------------------------------------------------------------------
 
@@ -3954,6 +4173,8 @@ def build_cache(
         "captainAnalysis": compute_captain_analysis(games),
         "leaderboard": compute_leaderboard(games, as_of, overview["roleFinalWinRates"], overview["seatFinalWinRates"],
                                            overview["roleSeatFinalWinRates"]),
+        # Elo（compute_rating）：依對局順序重放，跟 as_of 無關；複合篩選不重算。
+        "rating": compute_rating(games),
     }
 
 
@@ -5150,6 +5371,7 @@ def run(
     print(f"  playerDetails: {len(cache['playerDetails'])} entries")
     print(f"  chemistry: {len(cache['chemistry'])} matrices")
     print(f"  leaderboard: {leaderboard_summary(cache.get('leaderboard'))}")
+    print(f"  rating: {rating_summary(cache.get('rating'))}")
     print(f"  refreshed from the Sheet: {', '.join(SHEET_SECTIONS)}")
     print(f"  recomputed from players: {', '.join(DERIVED_SECTIONS)}")
     print(f"  carried over from the existing cache: {carried_desc}")
@@ -5160,6 +5382,7 @@ def run(
         "### 戰績分析快取",
         f"- 局數：{prev_games} → {cache['overview']['totalGames']}；玩家：{prev_players} → {cache['overview']['totalPlayers']}",
         f"- 排行榜：{leaderboard_summary(cache.get('leaderboard'))}",
+        f"- Elo：{rating_summary(cache.get('rating'))}",
         f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
         f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}；featureStudies 的 L141 由牌譜重算、其餘沿用並改寫結論",
         *dataset_lines,

@@ -599,6 +599,53 @@ describe('analysis_cache.json → web contract', () => {
   // Players' report 2026-10-13 「全員 46%」: the 位置 heatmap tooltip (players[].seatOutcomes) and the
   // 三結果配對 matrix (chemistry.outcomePair) showed the overall 三紅 45.5 % for every player / pair —
   // the generator projected the overall split. Whatever is served must be per player / per pair.
+  it('GET /rating + /rating/:name — Elo 頁籤與玩家雷達的 Elo 曲線 (503 until the cache carries the section)', async () => {
+    const res = await request(server).get('/api/analysis/rating');
+    const section = (committedCache as { rating?: { players: Json[]; series: Record<string, unknown[]> } }).rating;
+    if (res.status === 503) {
+      expect(section).toBeUndefined();
+      expect(res.body).toEqual({ success: false, error: 'Rating not yet generated' });
+      expect((await request(server).get(`/api/analysis/rating/${encodeURIComponent(playerNames[0])}`)).status).toBe(503);
+      return;
+    }
+    expect(res.status, JSON.stringify(res.body).slice(0, 200)).toBe(200);
+    const p: Problems = [];
+    const d = res.body.data as Json;
+    expect(d.series, 'the board is served without the per-player series').toBeUndefined();
+    for (const k of ['schemaVersion', 'games', 'skippedGames', 'averageTheory', 'blueWinRate']) num(p, d[k], k);
+    const cfg = obj(p, d.config, 'config');
+    for (const k of ['k', 'provisionalGames', 'boardMinGames', 'activeDays', 'eloBase', 'eloScale']) num(p, cfg[k], `config.${k}`);
+    expect(Object.keys(cfg).some((k) => /merlin|assassin|key/i.test(k)), 'no Merlin / assassin weighting').toBe(false);
+    if (d.asOf !== null) str(p, d.asOf, 'asOf');
+    const rows = arr(p, d.players, 'players', { nonEmpty: true });
+    rows.forEach((r, i) => {
+      const at = `players[${i}]`;
+      for (const k of ['rank', 'elo', 'sigma', 'games', 'modelTheory']) num(p, r[k], `${at}.${k}`);
+      str(p, r.name, `${at}.name`);
+      bool(p, r.provisional, `${at}.provisional`);
+      if (r.lastPlayed !== null) str(p, r.lastPlayed, `${at}.lastPlayed`);
+      if (!playerNames.includes(String(r.name))) p.push(`${at}.name ${show(r.name)} is not a players row`);
+      if (i > 0 && (r.elo as number) > (rows[i - 1].elo as number)) p.push(`${at}: not sorted by elo`);
+    });
+    expect(p).toEqual([]);
+    // Every rated player opens their curve, also by another letter case; the last point is their last day.
+    for (const row of rows.slice(0, 40)) {
+      const name = String(row.name);
+      const one = await request(server).get(`/api/analysis/rating/${encodeURIComponent(name.toUpperCase())}`);
+      expect(one.status, name).toBe(200);
+      const body = one.body.data as { player: Json; series: unknown[][] };
+      expect(body.player).toEqual(row);
+      expect(body.series).toEqual(section?.series[name] ?? []);
+      body.series.forEach((pt) => {
+        expect(pt).toHaveLength(4);
+        expect(typeof pt[0]).toBe('string');
+      });
+      if (body.series.length > 0) expect(body.series[body.series.length - 1][0]).toBe(row.lastPlayed);
+    }
+    expect((await request(server).get('/api/analysis/rating/__proto__')).status).toBe(404);
+    expect((await request(server).get('/api/analysis/rating/%E6%B2%92%E6%9C%89%E9%80%99%E5%80%8B%E4%BA%BA')).status).toBe(404);
+  });
+
   it('GET /players + /chemistry — seat / pair outcome splits are never one split for everyone', async () => {
     const splits = (o: Json): string => `${o.threeRedPct}/${o.threeBlueDeadPct}/${o.threeBlueAlivePct}`;
     const players = (await analysis('/players')).players as Json[];

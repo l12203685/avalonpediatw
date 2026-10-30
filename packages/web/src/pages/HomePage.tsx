@@ -116,7 +116,7 @@ export default function HomePage(): JSX.Element {
 
   // Per-room phase-timer multiplier (1x default). null = unlimited.
   const [timerMultiplier, setTimerMultiplier] = useState<TimerMultiplier>(1);
-  // 娛樂局 (Edward 2026-04-24 14:43): 勾選後此局戰績不計入 ELO。
+  // 娛樂局 (Edward 2026-04-24 14:43): 勾選後此局戰績不計入戰績統計。
   // 預設 false 以保留原本排位行為。
   const [casualMatch, setCasualMatch] = useState<boolean>(false);
 
@@ -565,11 +565,11 @@ export default function HomePage(): JSX.Element {
               {/* 娛樂局 — Edward 2026-04-24 14:43：
                     「遊戲開房多勾選一個"娛樂局" 的選項 在計算ELO時排除
                      有AI 與 有 勾選"娛樂局" 的場次」
-                  勾選後此局戰績不計入 ELO / 排行榜。 */}
+                  勾選後此局戰績不計入戰績統計 / 排行榜。 */}
               <div className="space-y-1">
                 <label
                   className="flex items-start gap-3 bg-zinc-800/40 border border-zinc-700 rounded-lg px-4 py-3 cursor-pointer hover:border-zinc-500 transition-colors"
-                  title="勾選後此局戰績不計入 ELO (Casual match — not counted toward ELO)"
+                  title="勾選後此局戰績不計入戰績統計 (Casual match — not counted in the stats)"
                 >
                   <input
                     type="checkbox"
@@ -583,7 +583,7 @@ export default function HomePage(): JSX.Element {
                       娛樂局
                     </div>
                     <p className="text-[10px] text-zinc-400 leading-relaxed mt-0.5">
-                      勾選後此局戰績不計入 ELO 與排行榜。有 AI 參與的對局也會自動排除。
+                      勾選後此局戰績不計入戰績統計與排行榜。有 AI 參與的對局也會自動排除。
                     </p>
                   </div>
                 </label>

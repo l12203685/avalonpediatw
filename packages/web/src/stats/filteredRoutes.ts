@@ -5,7 +5,7 @@
  * 區塊，組成與伺服器路由相同形狀的 data。不篩選時引擎結果 = 快取的同名區塊 (每日一致性檢查保證)，所以這裡
  * 對不篩選的結果算出來的回應必須與伺服器的回應逐欄相同 (AnalysisFilteredRoutes.test.ts 用正式快取比對)。
  *
- * 不隨篩選變動的路徑 (特徵研究 L141 以外的研究、/profile/*、精算榜、ELO) 不在這裡：照常打 API，介面標示
+ * 不隨篩選變動的路徑 (特徵研究 L141 以外的研究、/profile/*、精算榜、/rating 的 Elo) 不在這裡：照常打 API，介面標示
  * 「此區塊不隨篩選變動」。
  */
 import { findSamePlayerName, playerOutcomeBlocks } from '@avalon/shared';

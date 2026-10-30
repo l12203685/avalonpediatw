@@ -34,7 +34,7 @@ export class RoomManager {
     hostId: string,
     timerConfig?: TimerConfig,
     /**
-     * Edward 2026-04-24: 娛樂局 — 勾選後此局戰績不計入 ELO. Defaults to `false`
+     * Edward 2026-04-24: 娛樂局 — 勾選後此局戰績不計入戰績統計. Defaults to `false`
      * so omitted / legacy clients keep the normal (ranked) behaviour.
      */
     casual: boolean = false,

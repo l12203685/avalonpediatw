@@ -8,10 +8,13 @@
   "losses": "敗",
   "totalGames": "總場數",
   "totalGamesLabel": "總場次",
-  "eloRating": "ELO 分數",
   "rank": "段位",
   "viewReplay": "查看遊戲紀錄",
-  "follow": "追蹤",
+  "follow": {
+    "followSuccess": "已追蹤 {{name}}",
+    "unfollowSuccess": "已取消追蹤 {{name}}",
+    "loading": "…"
+  },
   "unfollow": "取消追蹤",
   "editProfile": "編輯個人資料",
   "editShort": "編輯",
@@ -55,7 +58,7 @@
     "noticeMerged": "{{provider}} 已綁定並合併舊帳號戰績",
     "noticeError": "{{provider}} 綁定失敗（{{reason}}）",
     "googleHint": "綁定 Google 信箱請用 Google 重新登入 — 系統會自動合併到此帳號",
-    "helpText": "綁多種登入方式到同一個帳號：綁定後從任一方式登入，戰績、ELO、徽章都看到同一份。目標帳號若已經有紀錄，會合併到目前登入的這個帳號。"
+    "helpText": "綁多種登入方式到同一個帳號：綁定後從任一方式登入，戰績、徽章都看到同一份。目標帳號若已經有紀錄，會合併到目前登入的這個帳號。"
   },
   "edit": {
     "errLogin": "請先登入",
@@ -83,7 +86,6 @@
     "recentGamesSuffix": "— 近 {{count}} 局",
     "good": "正義方",
     "evil": "邪惡方",
-    "eloTrend": "ELO 趨勢 (近 {{count}} 局)",
     "roleWinRates": "角色勝率",
     "playerCountWinRates": "人數勝率",
     "playersCount": "{{count}} 人局",
@@ -93,11 +95,6 @@
     "win": "勝",
     "loss": "敗",
     "playerCount": "{{count}}人局"
-  },
-  "follow": {
-    "followSuccess": "已追蹤 {{name}}",
-    "unfollowSuccess": "已取消追蹤 {{name}}",
-    "loading": "…"
   },
   "replay": {
     "title": "遊戲紀錄 —",

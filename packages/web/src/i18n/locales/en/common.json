@@ -205,13 +205,13 @@
     "logoutHint": "Logging out clears local cache; next visit will require login or guest mode again.",
     "logoutConfirm": "Log out?",
     "logoutConfirmBody": "Logging out clears your local game cache and player name. Continue?",
-    "upgradeGuest": "Bind guest data to a registered account (Google/Discord/Line) while keeping all records and ELO.",
+    "upgradeGuest": "Bind guest data to a registered account (Google/Discord/Line) while keeping all records.",
     "upgradeWithGoogle": "Bind with Google",
     "upgradeWithDiscord": "Bind with Discord",
     "upgradeWithLine": "Bind with Line",
     "upgradeGoogleUnavailable": "Google login is not configured in this environment",
     "upgradeFailed": "Bind failed, please try again later",
-    "upgradeHint": "After the social login completes, your guest ELO / match history / watchlist will be merged into the new account.",
+    "upgradeHint": "After the social login completes, your guest match history / watchlist will be merged into the new account.",
     "alreadyRegistered": "Already a registered account — no binding needed.",
     "currentName": "Current name",
     "comingSoon": "Coming soon",
@@ -320,7 +320,6 @@
       "boards": "Boards",
       "analysis": "Analysis"
     },
-    "expandTiers": "Tier view (5 ELO groups)",
     "collapseTiers": "Hide tier view",
     "radarHint": "Tap a player to see the radar",
     "featureStudies": {
@@ -1748,6 +1747,46 @@
       "tables": "Analysis tables",
       "colon": ": ",
       "sep": " / "
+    },
+    "elo": {
+      "tab": "Elo",
+      "radarTab": "Elo trend",
+      "boardTitle": "Elo ranking",
+      "loading": "Loading Elo…",
+      "loadFailed": "Could not load Elo.",
+      "notGenerated": "Elo is not generated yet; it arrives with the next daily update.",
+      "notRated": "This player has no rated game yet (only games with a name in all 10 seats count).",
+      "notFiltered": "Elo depends on the order of games, so it ignores the filter: these are the numbers over all games.",
+      "boardInfo1": "Elo: strength after accounting for teammates, opponents, the role and the seat dealt; 1500 is the average veteran. Definition and method: Help, \"Stat terms and methods\".",
+      "boardInfo2": "By default: played in the last {{days}} days and {{games}}+ rated games (you can relax both); fewer than {{provisional}} games is marked provisional. Ranks within ±1σ are effectively tied.",
+      "boardInfo3": "{{games}} games rated ({{skipped}} more have an empty seat and are not counted); data through {{date}}, replayed from the first game every day.",
+      "average": "Average veteran's model theory win rate {{theory}}",
+      "activeOnly": "Played in the last {{days}} days",
+      "minGames": "Min games",
+      "allGames": "Any",
+      "atLeast": "≥ {{count}}",
+      "shown": "{{count}} players",
+      "empty": "No player matches; relax the conditions.",
+      "rowTip": "First {{first}} · last {{last}}",
+      "provisional": "provisional",
+      "provisionalHint": "Fewer than {{count}} rated games: the rating is not settled yet",
+      "rankOf": "rank {{rank}} (all players)",
+      "games": "{{count}} rated games",
+      "gamesSoFar": "{{count}} games so far",
+      "modelTheory": "Model theory win rate",
+      "dataThrough": "data through {{date}}",
+      "current": "now",
+      "noPoints": "No dated game yet, so there is no trend to draw.",
+      "chartNote": "Line = Elo at the end of each day played; band = ±1σ (estimation error); grey dashes = 1500 (average veteran). The final dashed segment: while the player sat out, other players' games moved their current Elo.",
+      "chartAria": "Elo trend of {{name}}, {{from}} to {{to}}, now {{elo}}",
+      "col": {
+        "rankName": "Rank / player",
+        "elo": "Elo",
+        "sigma": "±1σ",
+        "games": "Games",
+        "modelTheory": "Model theory",
+        "lastPlayed": "Last played"
+      }
     }
   },
   "guest": {
@@ -1815,6 +1854,18 @@
       "def": "Your expected win rate if roles and seats were both drawn at their standard rates.",
       "calc": "Σ role draw probability × 1/10 × your final win rate in that role × seat cell. With 7 × 10 cells most players lack games in many cells; those use the population average.",
       "meaning": "The most complete in theory, but often short of data; the more cells filled in, the closer it stays to average."
+    },
+    "elo": {
+      "name": "Elo",
+      "def": "How strong you are once teammates, opponents and the role and seat you were dealt are accounted for. 1500 is the average veteran; the higher, the more often you beat an average player.",
+      "calc": "Replayed from the first game in time order. Before each game the model turns \"mean rating of the blue players − mean rating of the red players\", plus the blue base rate and a correction for every role in every seat, into the chance that blue wins; afterwards everyone gains if their side did better than expected and loses if it did worse, the same amount for every teammate (Merlin and the assassin included, no extra weight). 三藍死 counts as a red win. Newcomers start a little below the veterans' average; time away costs nothing. Only games with a name in all 10 seats count. Shown Elo = 1500 + 400 × log10(odds of your model theory win rate ÷ the average veteran's). ±1σ is the estimation error and shrinks with games.",
+      "meaning": "Complements the theory win rates: those show how you do with each role, Elo also accounts for who was at the table. Two players within ±1σ are effectively tied; too few games is marked provisional. Elo depends on the order of games, so it ignores the filter."
+    },
+    "eloModelTheory": {
+      "name": "Model theory win rate",
+      "def": "The Elo model's estimate of your win rate when roles are dealt at the standard odds and everyone else is an average veteran.",
+      "calc": "Σ chance of the role (忠臣 4/10, every other role 1/10) × the model's win rate with you in that role, the other 9 average veterans and the recent average seat correction.",
+      "meaning": "Elo is converted from it; it averages like the role theory win rate, so the two can be compared side by side."
     },
     "missionWinRate": {
       "name": "Mission win rate",

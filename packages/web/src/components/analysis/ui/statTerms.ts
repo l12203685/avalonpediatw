@@ -11,6 +11,9 @@ export const STAT_TERMS = [
   'roleTheory',
   'positionTheory',
   'overallTheory',
+  // 2026-10-30 網站唯一的 Elo (generate_cache.py compute_rating)
+  'elo',
+  'eloModelTheory',
   'missionWinRate',
   'assassinWinRate',
   'coWin',

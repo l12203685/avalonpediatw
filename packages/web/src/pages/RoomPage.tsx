@@ -637,7 +637,7 @@ export default function RoomPage(): JSX.Element {
           {(room.casual || playerList.some(p => p.isBot)) && (
             <span
               className="inline-flex items-center px-1 py-0.5 rounded-full text-[clamp(0.5rem,1.5vw,0.62rem)] font-semibold bg-amber-900/40 border border-amber-600 text-amber-200 whitespace-nowrap"
-              title="此局不計 ELO"
+              title="此局不計入戰績統計"
             >
               {room.casual ? '娛樂' : '含 AI'}
             </span>

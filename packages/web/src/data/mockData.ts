@@ -137,7 +137,6 @@ export interface LeaderboardEntry {
   userId: string;
   displayName: string;
   photoURL?: string;
-  eloRating: number;
   totalGames: number;
   gamesWon: number;
   winRate: number;
@@ -150,7 +149,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 1,
     userId: 'user1',
     displayName: '天選梅林',
-    eloRating: 1842,
     totalGames: 87,
     gamesWon: 62,
     winRate: 71.3,
@@ -161,7 +159,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 2,
     userId: 'user2',
     displayName: '黑暗刺客',
-    eloRating: 1778,
     totalGames: 103,
     gamesWon: 71,
     winRate: 68.9,
@@ -172,7 +169,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 3,
     userId: 'user3',
     displayName: '圓桌領袖',
-    eloRating: 1720,
     totalGames: 65,
     gamesWon: 42,
     winRate: 64.6,
@@ -183,7 +179,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 4,
     userId: 'user4',
     displayName: '謎霧摩根',
-    eloRating: 1695,
     totalGames: 94,
     gamesWon: 58,
     winRate: 61.7,
@@ -194,7 +189,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 5,
     userId: 'user5',
     displayName: '忠誠守護',
-    eloRating: 1650,
     totalGames: 78,
     gamesWon: 47,
     winRate: 60.3,
@@ -205,7 +199,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 6,
     userId: 'user6',
     displayName: '奧伯倫影',
-    eloRating: 1612,
     totalGames: 55,
     gamesWon: 32,
     winRate: 58.2,
@@ -216,7 +209,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 7,
     userId: 'user7',
     displayName: '珀西白騎',
-    eloRating: 1580,
     totalGames: 43,
     gamesWon: 24,
     winRate: 55.8,
@@ -227,7 +219,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 8,
     userId: 'user8',
     displayName: '戰場老兵',
-    eloRating: 1545,
     totalGames: 120,
     gamesWon: 65,
     winRate: 54.2,
@@ -238,7 +229,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 9,
     userId: 'user9',
     displayName: '新手騎士',
-    eloRating: 1510,
     totalGames: 28,
     gamesWon: 15,
     winRate: 53.6,
@@ -249,7 +239,6 @@ export const MOCK_LEADERBOARD: LeaderboardEntry[] = [
     rank: 10,
     userId: 'user10',
     displayName: '幻影刺客',
-    eloRating: 1487,
     totalGames: 39,
     gamesWon: 20,
     winRate: 51.3,
@@ -277,7 +266,6 @@ export interface MockUserProfile {
   uid: string;
   displayName: string;
   photoURL?: string;
-  eloRating: number;
   totalGames: number;
   gamesWon: number;
   gamesLost: number;
@@ -291,7 +279,6 @@ export interface MockUserProfile {
 export const MOCK_MY_PROFILE: MockUserProfile = {
   uid: 'me',
   displayName: '你的名字',
-  eloRating: 1650,
   totalGames: 42,
   gamesWon: 26,
   gamesLost: 16,
