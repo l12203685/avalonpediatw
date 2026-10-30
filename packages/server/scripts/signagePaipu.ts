@@ -53,7 +53,10 @@ export function gameToPaipu(game: RecordedGame): string | null {
       attempt = 0;
       if (mi >= 2 && mi <= 4 && lakes[mi - 2]) {
         const lk = lakes[mi - 2];
-        lines.push(`${d(lk.from)}>${d(lk.to as number)} ${lk.result === true ? 'o' : lk.result === false ? 'x' : '?'}`);
+        // 持湖者沒在練習台按好／壞（畫面顯示「不明」）時寫「沒講」，同 DC 群牌譜彙整的寫法
+        lines.push(lk.result === true || lk.result === false
+          ? `${d(lk.from)}>${d(lk.to as number)} ${lk.result ? 'o' : 'x'}`
+          : `${d(lk.from)}>${d(lk.to as number)}沒講`);
       }
     }
   }
