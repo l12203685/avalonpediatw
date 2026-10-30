@@ -1,7 +1,7 @@
 /**
  * Strong-table gap B1 `merlinNormalVote`: Merlin votes as a public-view loyal in its seat would — so on its own team it
- * approves even with a red it sees — and blocks a team whose seen reds could end the game on the spot, and (hard rule
- * INV-V1, the good vote gates) any team that must fail in its own view.
+ * approves even with a red it sees (正常票內白, Edward 2026-10-30) — and blocks a team whose seen reds could end the game on
+ * the spot and, off the team, any team that must fail in its own view (the good vote gates, INV-V1).
  */
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
@@ -31,13 +31,18 @@ function vote(o: PlayerObservation, tuning: Partial<AgentTuning>): boolean {
 }
 
 describe('merlinNormalVote', () => {
-  it('INV-V1: an R3 team holding a seen red must fail in Merlin\'s view, so it stays rejected even at q = 1', () => {
+  it('on the team (正常票內白, Edward 10/30): q = 1 approves as a loyal would, even with a seen red', () => {
     expect(vote(obs(), {})).toBe(false);
-    expect(vote(obs(), { merlinNormalVote: 1 })).toBe(false);
-    // The loyal in this seat would approve (R1 / R2 passed with P1 P2 P3); the gate is what blocks it.
+    expect(vote(obs(), { merlinNormalVote: 1 })).toBe(true);
+  });
+  it('off the team (外白): a team that must fail in Merlin\'s view stays rejected even at q = 1 (INV-V1)', () => {
+    const o = obs({ proposedTeam: ['P2', 'P3', 'P5', 'P4'] });
+    expect(vote(o, { merlinNormalVote: 1 })).toBe(false);
     const a = new ForwardAgent('P1', new HeuristicAgent('P1', undefined, undefined, { ...DEFAULT_AGENT_TUNING, merlinNormalVote: 1 }));
-    a.onGameStart(obs());
-    expect(a.decide(obs()).reasoningTrace?.summary).toContain('gated team blocked');
+    a.onGameStart(o);
+    const s = a.decide(o).reasoningTrace?.summary ?? '';
+    // either the loyal in this seat already rejects it, or the gate blocks the approval
+    expect(s).toContain('merlin normal vote');
   });
   it('a fatal team stays blocked (two fails already)', () => {
     const o = obs({ questResults: ['fail', 'fail'], questHistory: [] } as Partial<PlayerObservation>);

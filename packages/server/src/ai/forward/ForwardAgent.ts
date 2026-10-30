@@ -760,13 +760,15 @@ export class ForwardAgent implements AvalonAgent {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'good clean vote (posterior)');
     }
     // Strong-table gap B1 `merlinNormalVote` (MerlinLoyalStyle.ts): at rate q Merlin casts the vote a public-view loyal in
-    // this seat would, blocking a team whose seen reds could lose the game on the spot — and, the hard rule INV-V1, any team
-    // that must fail in Merlin's own view (the good vote gates; round 11 found the bare loyal vote approving those).
+    // this seat would, blocking a team whose seen reds could lose the game on the spot. Off the team, also any team that must
+    // fail in Merlin's own view (the good vote gates, INV-V1): Edward 2026-10-30 — 正常票內白（在隊上贊成）沒有任何問題，
+    // 異常票外白要幾乎沒有。
     if (merlinNormalVoteNow(this.baseline.tuning, obs)) {
       _forwardDecideCalls -= 1;
       const asLoyal = this.decide(loyalViewOf(obs));
       if (asLoyal.action.type === 'team_vote') {
-        const vote = asLoyal.action.vote && !merlinVoteFatal(obs) && goodVoteGate(obs, this.gates) === null;
+        const onTeam = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
+        const vote = asLoyal.action.vote && !merlinVoteFatal(obs) && (onTeam || goodVoteGate(obs, this.gates) === null);
         return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; gated team blocked' : ''})`);
       }
     }
