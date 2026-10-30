@@ -161,7 +161,8 @@ describe('the real wiki_data.json', () => {
   it('has every article under its category and all the links', () => {
     expect(graph.branches.map((b) => [b.id, b.articleCount])).toEqual([
       // 2026-10-30 新增 7 篇：規則說明書、術語速查、1-1 開局、強制局、聽牌與決勝局、湖中進階、如何解讀數據
-      ['beginner', 16], ['rules', 5], ['roles', 13], ['glossary', 6], ['strategies', 37], ['replays', 8], ['events', 14], ['faq', 1],
+      // 2026-10-30 Edward 裁定後新增 strategies：紅方進任務 - 出失敗還是出成功（wiki-210）
+      ['beginner', 16], ['rules', 5], ['roles', 13], ['glossary', 6], ['strategies', 38], ['replays', 8], ['events', 14], ['faq', 1],
     ]);
     const unique = new Set(data.flatMap((a) => [...a.content.matchAll(/wiki:([\w-]+)/g)].filter((m) => m[1] !== a.id).map((m) => `${a.id}>${m[1]}`)));
     expect(graph.edges).toHaveLength(unique.size);
