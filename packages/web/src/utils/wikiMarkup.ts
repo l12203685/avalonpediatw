@@ -14,6 +14,26 @@ export type WikiColor = 'red' | 'blue' | 'orange' | 'teal';
 
 export const WIKI_COLOR_SCHEME = 'wiki-color:';
 
+/**
+ * 論點層級標記（Edward 2026-10-30：文章要恆久正確 — 每個論點標明是規則事實／邏輯必然／經驗法則／社群慣例／時效資料）。
+ * 文章裡寫 `【規則】` 等，渲染成小標籤（WikiContent 的 a 元件看 `wiki-tag:` 開頭）。
+ */
+export const WIKI_TAG_SCHEME = 'wiki-tag:';
+export const WIKI_TAGS: Readonly<Record<string, { label: string; hint: string }>> = {
+  rule: { label: '規則', hint: '規則事實：遊戲規則直接規定的事' },
+  logic: { label: '邏輯', hint: '邏輯必然：從規則與已知資訊一定推得出來' },
+  exp: { label: '經驗', hint: '經驗法則：多數情況成立，但有例外' },
+  conv: { label: '慣例', hint: '社群慣例：本站／社群約定的做法' },
+  time: { label: '時效', hint: '時效資料：特定時間點的紀錄或數據' },
+  stance: { label: '本站立場', hint: '本站立場：站方的裁定' },
+};
+const TAG_BY_LABEL: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(WIKI_TAGS).map(([k, v]) => [v.label, k]));
+
+/** `【規則】` → `[規則](wiki-tag:rule)`（不在行內程式碼或程式碼區塊裡時）。 */
+function layerTags(line: string): string {
+  return line.replace(/【(規則|邏輯|經驗|慣例|時效|本站立場)】/g, (_m, label: string) => ` [${label}](${WIKI_TAG_SCHEME}${TAG_BY_LABEL[label]})`);
+}
+
 const COLOR_OF: Record<string, WikiColor> = {
   ff0000: 'red', '0000ff': 'blue', ff8000: 'orange', '008080': 'teal',
 };
@@ -60,6 +80,7 @@ function stripHtmlComments(content: string): string {
 export function normalizeWikiMarkup(content: string): string {
   const lines = stripHtmlComments(stripHackmdArtifacts(content)).replace(/<br\s*\/?>/gi, '  \n').split('\n');
   const out: string[] = [];
+  let inFence = false;
   for (let i = 0; i < lines.length; i++) {
     // A run of two or more whole-line red lines → one warning callout.
     let j = i;
@@ -76,7 +97,8 @@ export function normalizeWikiMarkup(content: string): string {
       i = j - 1;
       continue;
     }
-    out.push(inlineColors(lines[i]));
+    out.push(inFence ? lines[i] : layerTags(inlineColors(lines[i])));
+    if (/^\s*(```|~~~)/.test(lines[i])) inFence = !inFence;
   }
   return out.join('\n');
 }
@@ -96,7 +118,7 @@ export function wikiArticleId(href: string | undefined): string | null {
 
 /** react-markdown `urlTransform`: keep our color pseudo-links and article links, sanitize everything else the default way. */
 export function wikiUrlTransform(url: string, fallback: (u: string) => string): string {
-  return url.startsWith(WIKI_COLOR_SCHEME) || url.startsWith(WIKI_ARTICLE_SCHEME) ? url : fallback(url);
+  return url.startsWith(WIKI_COLOR_SCHEME) || url.startsWith(WIKI_ARTICLE_SCHEME) || url.startsWith(WIKI_TAG_SCHEME) ? url : fallback(url);
 }
 
 /**

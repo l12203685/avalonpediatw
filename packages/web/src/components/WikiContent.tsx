@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import { WIKI_COLOR_SCHEME, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiImageSrc, wikiUrlTransform } from '../utils/wikiMarkup';
+import { WIKI_COLOR_SCHEME, WIKI_TAG_SCHEME, WIKI_TAGS, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiImageSrc, wikiUrlTransform } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_DATA_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
@@ -58,6 +58,15 @@ interface WikiContentProps {
   onPublishedCountChange?: (count: number) => void;
 }
 
+const WIKI_TAG_CLASS: Record<string, string> = {
+  rule: 'bg-sky-900/70 text-sky-200',
+  logic: 'bg-emerald-900/70 text-emerald-200',
+  exp: 'bg-zinc-700 text-zinc-200',
+  conv: 'bg-amber-900/70 text-amber-200',
+  time: 'bg-rose-900/70 text-rose-200',
+  stance: 'bg-yellow-600 text-black',
+};
+
 const WIKI_COLOR_CLASS: Record<string, string> = {
   red: 'text-red-400 font-semibold',
   blue: 'text-sky-400 font-semibold',
@@ -110,7 +119,15 @@ const markdownComponents = {
   em: ({ children }: { children?: ReactNode }): JSX.Element => (
     <em className="italic text-gray-100">{children}</em>
   ),
-  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => href?.startsWith(WIKI_COLOR_SCHEME) ? (
+  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => href?.startsWith(WIKI_TAG_SCHEME) ? (
+    // 論點層級標記 【規則】【邏輯】… (utils/wikiMarkup.ts)
+    <span
+      title={WIKI_TAGS[href.slice(WIKI_TAG_SCHEME.length)]?.hint}
+      className={`mx-0.5 inline-block rounded px-1 align-middle text-[10px] font-semibold leading-4 ${WIKI_TAG_CLASS[href.slice(WIKI_TAG_SCHEME.length)] ?? WIKI_TAG_CLASS.exp}`}
+    >
+      {children}
+    </span>
+  ) : href?.startsWith(WIKI_COLOR_SCHEME) ? (
     // Old HackMD `<font color>` (utils/wikiMarkup.ts): colored emphasis in the site's palette.
     <span className={WIKI_COLOR_CLASS[href.slice(WIKI_COLOR_SCHEME.length)] ?? WIKI_COLOR_CLASS.red}>{children}</span>
   ) : (
