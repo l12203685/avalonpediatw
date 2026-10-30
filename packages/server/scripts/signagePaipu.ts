@@ -6,7 +6,8 @@
  *
  * Edward 2026-10-30：「貼在 DC 的牌譜頻道，要附座位暱稱」。Webhook 網址是密鑰，只從環境變數讀，不寫進 repo。
  * 牌譜格式（照 DC 牌譜頻道過去的文章）：一行一次提議（隊伍座位；`-` 內黑、`+` 外白；強制局不投票、不標記號）、
- * 任務牌 o／x、湖中 `x>y o`、六碼＝刺娜德奧派梅的座位、「刺客刺殺:X」（三紅留空）、依座位「1.暱稱」每人一行。座位 10 寫成 0。
+ * 任務牌 o／x、湖中 `x>y o`（練習台沒記到宣告時寫 `?`，要人工補）、「刺客刺殺:X」（三紅留空）、六碼＝刺娜德奧派梅的座位、
+ * 依座位「1.暱稱」每人一行。座位 10 寫成 0。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,9 +64,9 @@ export function gameToPaipu(game: RecordedGame): string | null {
   // 刺殺對象：刺中＝「刺客背刺 N家 梅林」；刺錯＝「N家擋刀」；被刺的人在局末畫面標 dead。
   const stabbed = users.find((u) => (u as { dead?: boolean }).dead)?.set
     ?? Number(logs.map((x) => /背刺\s*(\d+)\s*家|(\d+)\s*家擋刀/.exec(x)).find(Boolean)?.slice(1).find(Boolean) ?? NaN);
-  // DC 牌譜頻道過去文章的格式：牌譜各行 → 六碼（刺娜德奧派梅）→ 刺客刺殺:X（三紅留空）→ 依座位「1.暱稱」每人一行
-  lines.push(ROLE_ORDER.map(roleAt).join(''));
+  // Edward 10/31：牌譜各行 → 刺客刺殺:X（三紅留空）→ 六碼配置（刺娜德奧派梅）→ 依座位「1.暱稱」每人一行
   lines.push(`刺客刺殺:${Number.isFinite(stabbed) ? d(stabbed) : ''}`);
+  lines.push(ROLE_ORDER.map(roleAt).join(''));
   for (const u of users) lines.push(`${d(u.set)}.${u.name}`);
   return lines.join('\n');
 }
