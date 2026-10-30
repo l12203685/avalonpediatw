@@ -57,7 +57,7 @@ import { goodCleanVoteReject } from '../GoodCleanVote';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
-import { merlinLoyalStyleTeam, merlinVoteCoverApprove, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
+import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -737,6 +737,16 @@ export class ForwardAgent implements AvalonAgent {
     // gives too little chance of being clean (R3+).
     if (goodCleanVoteReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'good clean vote (posterior)');
+    }
+    // Strong-table gap B1 `merlinNormalVote` (MerlinLoyalStyle.ts): at rate q Merlin casts the vote a public-view loyal in
+    // this seat would, blocking only a team whose seen reds could lose the game on the spot.
+    if (merlinNormalVoteNow(this.baseline.tuning, obs)) {
+      _forwardDecideCalls -= 1;
+      const asLoyal = this.decide(loyalViewOf(obs));
+      if (asLoyal.action.type === 'team_vote') {
+        const vote = asLoyal.action.vote && !merlinVoteFatal(obs);
+        return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; fatal team blocked' : ''})`);
+      }
     }
     // Round 7 (Merlin) candidate `merlinVoteCover` (MerlinLoyalStyle.ts): 梅林只想裝雜魚 — approve a red team the
     // public reads as clean at rate q, while a fail is not yet fatal.

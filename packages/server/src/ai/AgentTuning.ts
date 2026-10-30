@@ -489,6 +489,11 @@ export interface AgentTuning {
    */
   beliefBotTables: number;
   /**
+   * 梅林照雜魚的票型投票的比例（強桌差距 B1，`MerlinLoyalStyle.merlinNormalVoteNow`；0 = 關）：第 3 局起、非強制，照
+   * 「坐在這個位置、只看公開紀錄的忠臣」會投的票投，只在致命時（看得到的紅會讓紅方當場拿下）擋。
+   */
+  merlinNormalVote: number;
+  /**
    * 第 5 回合藍方・梅林（`belief/ZoneModel.ts`，Edward 2026-10-29；百科〈視角與區間派票法〉）：梅林第 1、2 局非強制提議改用
    * 「切區間」給資訊——隊上沒有他看得到的紅、隊員之間的空位裝著拇指（取代派拇指躲刺）；忠臣（`loyalMerlinRead`）與派西
    * （`percivalThumbLogic`）用同一個模型讀這些提議（1-2～1-4 延伸或修正、2-x 加上任務結果都在同一組拇指下自然成立）。
@@ -583,6 +588,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinVoteCover',
   'merlinLoyalCover',
   'beliefBotTables',
+  'merlinNormalVote',
   'merlinZoneSignal',
   'redRankOrder',
   'merlinLoyalStyle',
@@ -651,6 +657,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinVoteCover: 0,
   merlinLoyalCover: 0,
   beliefBotTables: 0,
+  merlinNormalVote: 0,
   merlinZoneSignal: false,
   redRankOrder: false,
   merlinLoyalStyle: false,
@@ -867,6 +874,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinVoteCover: 0,
   merlinLoyalCover: 0,
   beliefBotTables: 0,
+  merlinNormalVote: 0,
   merlinZoneSignal: false,
   redRankOrder: true,
   merlinLoyalStyle: true,
@@ -935,6 +943,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinVoteCover: 'AVALON_TUNING_MERLIN_VOTE_COVER',
   merlinLoyalCover: 'AVALON_TUNING_MERLIN_LOYAL_COVER',
   beliefBotTables: 'AVALON_TUNING_BELIEF_BOT_TABLES',
+  merlinNormalVote: 'AVALON_TUNING_MERLIN_NORMAL_VOTE',
   merlinZoneSignal: 'AVALON_TUNING_MERLIN_ZONE_SIGNAL',
   redRankOrder: 'AVALON_TUNING_RED_RANK_ORDER',
   merlinLoyalStyle: 'AVALON_TUNING_MERLIN_LOYAL_STYLE',
@@ -977,6 +986,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 10 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0) throw new Error(`goodLeaderWorldPick needs a number ≥ 0, got "${raw}"`);
     return { goodLeaderWorldPick: value };
+  }
+  if (name === 'merlinNormalVote') {
+    const value = raw === undefined ? 1 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`merlinNormalVote needs a number in [0, 1], got "${raw}"`);
+    return { merlinNormalVote: value };
   }
   if (name === 'beliefBotTables') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
@@ -1070,7 +1084,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
