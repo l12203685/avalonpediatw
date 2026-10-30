@@ -53,7 +53,7 @@
 
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
-import { goodCleanVoteReject } from '../GoodCleanVote';
+import { goodCleanVoteReject, goodTailVote } from '../GoodCleanVote';
 import { redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
@@ -750,6 +750,10 @@ export class ForwardAgent implements AvalonAgent {
     if (redDivisionReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
+    // Strong-table gap B3 `goodTailVote` (GoodCleanVote.ts): off the team, a loyal / Percival votes normal (reject) unless
+    // the team is clean enough and the outer white washes a suspect tail (or wins the game).
+    const tailVote = goodTailVote(this.baseline.tuning, obs);
+    if (tailVote !== null) return this.ruleDecision(obs, { type: 'team_vote', vote: tailVote }, `good tail vote (${tailVote ? 'outer white: wash the tail' : 'normal vote off the team'})`);
     // Round 3 (blue) candidate `goodCleanVote` (GoodCleanVote.ts): loyal / Percival reject a team the posterior
     // gives too little chance of being clean (R3+).
     if (goodCleanVoteReject(this.baseline.tuning, obs)) {
