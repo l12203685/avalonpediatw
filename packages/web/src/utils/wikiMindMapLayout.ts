@@ -135,7 +135,7 @@ export function truncateToWidth(text: string, maxWidth: number, fontSize: number
 
 /**
  * The text, cut with … in the middle so it fits maxWidth: series titles keep what tells them apart
- * (「阿瓦隆百科線上實戰比賽第一季(新人挑戰賽)第3集」→「阿瓦隆百科線上實…第3集」).
+ * (「S1 新人挑戰賽 - 第 3 集回顧（2023-09-01）」→「S1 新人挑戰賽…09-01）」).
  */
 export function truncateMiddle(text: string, maxWidth: number, fontSize: number): string {
   if (estimateTextWidth(text, fontSize) <= maxWidth) return text;
