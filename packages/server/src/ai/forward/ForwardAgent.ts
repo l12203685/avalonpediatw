@@ -54,6 +54,7 @@
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
 import { goodCleanVoteReject } from '../GoodCleanVote';
+import { redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
@@ -724,6 +725,15 @@ export class ForwardAgent implements AvalonAgent {
       && !(this.baseline.tuning.humanQuestCardRules && humanQuestCardRule(obs) !== null)) {
       const ranked = this.baseline.redRankOrderQuestVote(obs);
       if (ranked) return this.ruleDecision(obs, { type: 'quest_vote', vote: ranked }, `red rank order (位階法) ${ranked}`);
+    }
+    // Strong-table gap R1 `redNormalVote` (RedVoteCamouflage.ts): off the team, at rate q a red casts the vote a public-view
+    // loyal in this seat would, except when the red camp's win or loss rides on this team.
+    if (redNormalVoteNow(this.baseline.tuning, obs)) {
+      const forced = redVoteCritical(obs);
+      if (forced !== null) return this.ruleDecision(obs, { type: 'team_vote', vote: forced }, 'red normal vote (critical team: camp interest)');
+      _forwardDecideCalls -= 1;
+      const asLoyal = this.decide(loyalViewOf(obs));
+      if (asLoyal.action.type === 'team_vote') return this.ruleDecision(obs, { type: 'team_vote', vote: asLoyal.action.vote }, 'red normal vote (as a loyal)');
     }
     if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
       const yes = redCleanApproveVote(this.baseline.tuning, obs);
