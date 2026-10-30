@@ -12,12 +12,21 @@ import { SectionTabs, StatTable, formatRate, type SectionTabItem, type StatColum
 const MIN_PLAYER_GAMES = 30;
 const MAX_ROWS = 25;
 
+/**
+ * 與全體在這個位置的差 → 底色。Edward 2026-10-30：顏色更深更亮（實心底＋白字，取代半透明）。
+ */
 function colorForDeviation(deviation: number): string {
-  if (deviation >= 8)  return 'bg-green-600/80 text-green-100';
-  if (deviation >= 3)  return 'bg-green-700/60 text-green-200';
-  if (deviation >= -3) return 'bg-gray-600/60 text-gray-200';
-  if (deviation >= -8) return 'bg-red-700/60 text-red-200';
-  return 'bg-red-600/80 text-red-100';
+  if (deviation >= 8)  return 'bg-emerald-500 text-white';
+  if (deviation >= 3)  return 'bg-emerald-700 text-emerald-50';
+  if (deviation > -3)  return 'bg-zinc-700 text-zinc-100';
+  if (deviation > -8)  return 'bg-rose-700 text-rose-50';
+  return 'bg-rose-500 text-white';
+}
+
+/** 差距的文字：+5 / −3 / ±0（整數百分點）。 */
+function formatDelta(deviation: number): string {
+  const d = Math.round(deviation);
+  return d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '±0';
 }
 
 /**
@@ -82,6 +91,31 @@ export default function SeatHeatmap(): JSX.Element {
   };
 
   const renderTable = (mode: SeatMode): JSX.Element => {
+    /**
+     * Edward 2026-10-30「直接強調最優／最劣的位置」：每位玩家在樣本夠的位置裡，和全體同位置相比差最多的
+     * 正、負兩格（比的是差距，不是原始勝率，避免本來就高勝率的位置永遠被標成最優）。
+     */
+    const extremes = new Map<string, { best: string | null; worst: string | null }>();
+    const extremesOf = (p: PlayerWithSeatStats): { best: string | null; worst: string | null } => {
+      const hit = extremes.get(p.name);
+      if (hit) return hit;
+      let best: string | null = null; let worst: string | null = null;
+      let hi = -Infinity; let lo = Infinity;
+      for (const seat of PLAYER_SEAT_KEYS) {
+        const n = playerSeatGames(p, seat, mode);
+        const ref = reference(seat, mode);
+        const rate = playerSeatRate(p, seat, mode);
+        if (n === 0 || ref === null || typeof rate !== 'number' || (n !== null && minCell > 0 && n < minCell)) continue;
+        if (n === null && rate === 0) continue;
+        const d = rate - ref;
+        if (d > hi) { hi = d; best = seat; }
+        if (d < lo) { lo = d; worst = seat; }
+      }
+      const out = { best: hi > 0 ? best : null, worst: lo < 0 ? worst : null };
+      extremes.set(p.name, out);
+      return out;
+    };
+
     const seatColumn = (seat: string): StatColumn<PlayerWithSeatStats> => {
       const ref = reference(seat, mode);
       const seatLabel = t('analytics.r6.tabsb.seats.seatLabel', { n: seatNumber(seat) });
@@ -119,9 +153,23 @@ export default function SeatHeatmap(): JSX.Element {
               kill: formatRate(games.assassination.win), nBlue: games.assassination.n,
             }));
           }
+          const { best, worst } = extremesOf(p);
+          const mark = seat === best ? 'best' : seat === worst ? 'worst' : null;
+          const ring = mark === 'best' ? ' ring-2 ring-yellow-300' : mark === 'worst' ? ' ring-2 ring-white' : '';
           return (
-            <span title={parts.join('\n')} className={`inline-block min-w-[2.6rem] rounded px-1 text-center font-bold ${colour}`}>
-              {v.toFixed(1)}
+            <span
+              title={parts.join('\n')}
+              data-mark={mark ?? undefined}
+              className={`inline-flex min-w-[2.6rem] flex-col items-center rounded px-1 leading-tight font-bold ${colour}${ring}`}
+            >
+              <span>
+                {mark === 'best' && <span aria-label={t('analytics.r6.tabsb.heatmap.best')}>▲</span>}
+                {mark === 'worst' && <span aria-label={t('analytics.r6.tabsb.heatmap.worst')}>▼</span>}
+                {Math.round(v)}
+              </span>
+              {ref !== null && !thin && (
+                <span className="text-[10px] font-semibold opacity-90">{formatDelta(v - ref)}</span>
+              )}
             </span>
           );
         },
@@ -150,6 +198,7 @@ export default function SeatHeatmap(): JSX.Element {
           <>
             {t('analytics.r6.tabsb.heatmap.note', { min: MIN_PLAYER_GAMES, max: MAX_ROWS })}
             {minCell > 0 && <> {t('analytics.ui.blocks.lowSampleNote', { min: minCell })}</>}
+            {' '}{t('analytics.r6.tabsb.heatmap.noteMarks')}
             {' '}{t('analytics.r6.tabsb.heatmap.noteBlocks')}
           </>
         }
