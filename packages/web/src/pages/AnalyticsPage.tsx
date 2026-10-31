@@ -198,8 +198,8 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
           {tab === 'strength'      && <StrengthTab />}
           {tab === 'stateTree'     && <StateTreeTab />}
           {tab === 'players'       && <PlayersTab focus={focus} />}
-          {/* 2026-10-31 Edward：每個分析分頁都有「自動發現」（跟這頁指標有關的明顯差異；玩家雷達是個人頁，不放） */}
-          {tab !== 'players' && <DiscoveryBlock page={tab} />}
+          {/* 2026-10-31 Edward：每個分析分頁都有「自動發現」（跟這頁指標有關的明顯差異；玩家雷達是個人頁、局勢樹本身就是分支比較，不放） */}
+          {tab !== 'players' && tab !== 'stateTree' && <DiscoveryBlock page={tab} />}
         </motion.div>
       </AnimatePresence>
     </div>
