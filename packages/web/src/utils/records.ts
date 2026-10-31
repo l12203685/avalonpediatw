@@ -179,10 +179,10 @@ export function recordsText(game: RecordGame): string {
   const lakes = new Map(game.lakes.map((l) => [l.after, l]));
   const lines: string[] = [];
   game.rounds.forEach((round, i) => {
-    for (const p of round.proposals) lines.push([p.team, ...p.votes].join(' '));
+    round.proposals.forEach((p, a) => lines.push(proposalLine(p, a)));
     lines.push(round.mission);
     const lake = lakes.get(i + 1);
-    if (lake) lines.push(`${lake.holder}>${lake.target}${lake.claim ? ` ${lake.claim}` : ''}`);
+    if (lake) lines.push(lakeLine(lake));
   });
   lines.push(game.config);
   lines.push(`刺客刺殺:${game.outcome === '三紅' ? '' : game.assassination}`);
@@ -297,4 +297,44 @@ export function resultSentence(game: RecordGame, prefs: RecordDisplayPrefs): str
   if (!prefs.roles) return `藍方拿下三次任務；刺殺 ${seatLabel(game, target, prefs)}`;
   const base = `藍方拿下三次任務；刺客 ${seatLabel(game, assassin, { ...prefs, roles: false })} 刺殺 ${seatLabel(game, target, prefs)}`;
   return `${base}${target === game.config[5] ? '，刺中梅林' : '，沒刺中'}`;
+}
+
+/**
+ * 每次提議的隊長（Edward 2026-10-31 的試算表牌譜有「隊長」欄）。DC 牌譜沒寫隊長，隊伍座位也是排序過的，只能推算：
+ * 隊長每次提議（跨輪也一樣）往下一個座位輪替（1→2→…→9→0→1），第一位隊長不知道。隊長通常會派自己上車，所以試十種起點，
+ * 取「隊長在隊伍裡」次數最多的那個；要夠明確（至少八成的提議、而且比第二名多 3 次以上）才採用，否則回傳 null（畫面照舊顯示第幾輪第幾次）。
+ * 回傳每輪每次提議的隊長座位。
+ */
+export const LEADER_MIN_SHARE = 0.8;
+export const LEADER_MIN_MARGIN = 3;
+
+export function deriveLeaders(game: RecordGame): string[][] | null {
+  const teams = game.rounds.flatMap((r) => r.proposals.map((p) => p.team));
+  if (teams.length === 0) return null;
+  const leaderAt = (start: number, k: number): string => RECORDS_SEATS[(start + k) % RECORDS_SEATS.length];
+  const cover = RECORDS_SEATS.map((_, start) => teams.filter((team, k) => team.includes(leaderAt(start, k))).length);
+  const best = Math.max(...cover);
+  const start = cover.indexOf(best);
+  const second = Math.max(...cover.filter((_, i) => i !== start));
+  if (best < teams.length * LEADER_MIN_SHARE || best - second < LEADER_MIN_MARGIN) return null;
+  let k = 0;
+  return game.rounds.map((r) => r.proposals.map(() => leaderAt(start, k++)));
+}
+
+/**
+ * 一次提議在 DC 牌譜裡的那一行（Edward 10/31：「異常票要列出來…基本上就是 DC 牌譜格式的文字」）：隊伍座位，
+ * 接著內黑（隊內反對）座位加 -、外白（隊外贊成）座位加 +，順序同 DC 牌譜頻道的寫法（內黑在前），例：「2579 7- 1+」、
+ * 「1345 26780+」。強制局（第 5 次、沒有標記）只有隊伍。從實際的票重組，所以不管原文怎麼寫標記，順序都一致。
+ */
+export function proposalLine(proposal: RecordProposal, attemptIndex: number): string {
+  const votes = proposalVotes(proposal, attemptIndex);
+  if (!votes) return proposal.team;
+  const black = RECORDS_SEATS.filter((s) => proposal.team.includes(s) && votes[s] === 'reject').join('');
+  const white = RECORDS_SEATS.filter((s) => !proposal.team.includes(s) && votes[s] === 'approve').join('');
+  return [proposal.team, black && `${black}-`, white && `${white}+`].filter(Boolean).join(' ');
+}
+
+/** 湖在 DC 牌譜裡的那一行（例：「0>3 x」）。 */
+export function lakeLine(lake: RecordLake): string {
+  return `${lake.holder}>${lake.target}${lake.claim ? ` ${lake.claim}` : ''}`;
 }

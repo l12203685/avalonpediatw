@@ -19,7 +19,9 @@ import {
   resultSentence,
   roleOfSeat,
   seatLabel,
-  sortedTeam,
+  deriveLeaders,
+  lakeLine,
+  proposalLine,
   winnerOf,
   type RecordDisplayPrefs,
   type RecordGame,
@@ -31,7 +33,9 @@ import {
  * 牌譜紀錄的一局（Edward 2026-10-31：「牌譜我希望呈現在一個頁面內呈現，不需要往下拉」「角色跟玩家名稱可以選擇是否展示」）。
  *
  * - 寬度 ≥1024px：整局放在一個畫面，頁面不捲動。左欄投票矩陣（同對局畫面 LiveScoresheet 的畫法：白格贊成、黑格反對、
- *   盾牌 = 上隊、黃列任務、青列湖），列高依可用高度自動壓縮（14–28px，非正方形格子）；右欄標題、到 DC 討論、結果、
+ *   盾牌 = 上隊、黃列任務、青列湖），列高依可用高度自動壓縮（14–28px，非正方形格子）。欄位照 Edward 的試算表牌譜
+ *   （10/31：「文字牌譜直接顯示在視覺牌譜旁邊」）：隊長｜1～0｜結果｜隊長｜文字紀錄——每一列右邊就是那一列的 DC 牌譜文字，
+ *   隊長由輪替推算（utils/records deriveLeaders，推算不出來時第一欄顯示第幾輪第幾次）；右欄標題、到 DC 討論、結果、
  *   任務、開關、DC 格式文字（預設收合）、討論串回覆（面板內捲動）。
  * - 手機：同樣順序排成一欄，矩陣用固定 20px 的列高；DC 文字與回覆在矩陣下面（頁面會捲動）。
  * - 「顯示角色」「顯示名稱」預設都關（recordsPrefs）。角色與暱稱顯示在矩陣表頭 1～0 正上方（Edward 10/31：「就顯示在 1~0
@@ -81,6 +85,19 @@ function useFitToViewport(ref: RefObject<HTMLElement>): number | null {
     };
   }, [ref]);
   return height;
+}
+
+/** 寬度 ≥640px：矩陣右邊多放「結果」與第二個「隊長」欄（手機只留文字紀錄）。 */
+function useWide(): boolean {
+  const query = '(min-width: 640px)';
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const update = (): void => setWide(mq.matches);
+    mq.addEventListener('change', update);
+    return (): void => mq.removeEventListener('change', update);
+  }, []);
+  return wide;
 }
 
 function seatName(game: RecordGame, seat: string): string {
@@ -184,6 +201,10 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
     return (): void => observer.disconnect();
   }, [fit, rowCount, prefs.names, prefs.roles]);
 
+  const wide = useWide();
+  const leaders = useMemo(() => deriveLeaders(game), [game]);
+  // 試算表牌譜的第二個「隊長」欄（在文字紀錄前面）：寬螢幕、而且推算得出隊長時才放
+  const lead2 = wide && leaders !== null;
   const rowStyle = { height: rowPx };
   const shield = Math.max(8, rowPx - 3);
   const text = rowPx < 18 ? 'text-[9px] sm:text-[10px]' : 'text-[9px] sm:text-[11px]';
@@ -196,7 +217,12 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
       const approves = approveCount(p, a);
       rows.push(
         <tr key={`p-${r}-${a}`} style={rowStyle} className="border-b border-zinc-800/60">
-          <td className="bg-zinc-950 p-0 text-center font-mono leading-none text-zinc-400">{r + 1}-{a + 1}</td>
+          <td
+            title={`第 ${r + 1} 輪第 ${a + 1} 次提議`}
+            className={`bg-zinc-950 p-0 text-center font-mono leading-none ${leaders ? 'font-bold text-yellow-400' : 'text-zinc-400'}`}
+          >
+            {leaders ? leaders[r][a] : `${r + 1}-${a + 1}`}
+          </td>
           {RECORDS_SEATS.map((seat) => {
             const vote = votes?.[seat];
             return (
@@ -211,11 +237,14 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
               </td>
             );
           })}
-          <td className="whitespace-nowrap px-1 py-0 font-mono leading-none">
-            <span className="text-zinc-200">{sortedTeam(p.team)}</span>{' '}
-            <span className={forced ? 'text-amber-300' : a === last ? 'text-emerald-300' : 'text-zinc-500'}>
+          {wide && (
+            <td className={`whitespace-nowrap px-1 py-0 text-center leading-none ${forced ? 'text-amber-300' : a === last ? 'text-emerald-300' : 'text-zinc-500'}`}>
               {forced ? '強制' : `${approves}票${a === last ? '過' : ''}`}
-            </span>
+            </td>
+          )}
+          {lead2 && <td className="p-0 text-center font-mono font-bold leading-none text-yellow-400">{leaders?.[r][a]}</td>}
+          <td className="max-w-0 truncate px-1 py-0 font-mono leading-none text-zinc-100" title={proposalLine(p, a)} data-testid="records-text-line">
+            {proposalLine(p, a)}
           </td>
         </tr>,
       );
@@ -224,7 +253,7 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
     const fails = missionFails(round.mission);
     rows.push(
       <tr key={`m-${r}`} style={rowStyle} className="border-b border-yellow-900/50 bg-yellow-800/25">
-        <td className="bg-yellow-900/60 p-0 text-center font-bold leading-none text-yellow-200">{r + 1}</td>
+        <td title={`第 ${r + 1} 輪任務`} className="bg-yellow-900/60 p-0 text-center font-bold leading-none text-yellow-200">任務</td>
         <td colSpan={RECORDS_SEATS.length} className="px-1 py-0">
           <div className="flex items-center justify-center gap-1.5 whitespace-nowrap leading-none text-yellow-100">
             <span className="font-bold">第 {r + 1} 輪任務</span>
@@ -238,14 +267,22 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
             </span>
           </div>
         </td>
-        <td className="whitespace-nowrap px-1 py-0 font-mono leading-none text-yellow-100/80">{round.mission}</td>
+        {wide && (
+          <td className={`p-0 text-center font-mono font-bold leading-none text-white ${red ? 'bg-red-600/80' : 'bg-blue-600/80'}`}>
+            {round.mission}
+          </td>
+        )}
+        {lead2 && <td className="p-0" />}
+        <td className={`px-1 py-0 font-mono font-bold leading-none ${red ? 'text-red-300' : 'text-blue-300'}`} data-testid="records-text-line">
+          {round.mission}
+        </td>
       </tr>,
     );
     const lake = lakes.get(r + 1);
     if (lake) {
       rows.push(
         <tr key={`l-${r}`} style={rowStyle} className="border-b border-cyan-900/50 bg-cyan-800/25">
-          <td className="bg-cyan-900/60 p-0 text-center font-bold leading-none text-cyan-200">湖</td>
+          <td className="bg-cyan-900/60 p-0 text-center font-bold leading-none text-cyan-200">湖中</td>
           <td colSpan={RECORDS_SEATS.length} className="max-w-0 px-1 py-0">
             <div className="truncate text-center leading-none text-cyan-50" data-testid="records-lake">
               {seatLabel(game, lake.holder, prefs)} 驗 {seatLabel(game, lake.target, prefs)} →{' '}
@@ -254,9 +291,9 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
               </span>
             </div>
           </td>
-          <td className="whitespace-nowrap px-1 py-0 font-mono leading-none text-cyan-100/80">
-            {lake.holder}&gt;{lake.target} {lake.claim || '-'}
-          </td>
+          {wide && <td className="bg-cyan-600/70 p-0 text-center font-mono font-bold leading-none text-white">{lakeLine(lake)}</td>}
+          {lead2 && <td className="p-0" />}
+          <td className="px-1 py-0 font-mono leading-none text-cyan-100" data-testid="records-text-line">{lakeLine(lake)}</td>
         </tr>,
       );
     }
@@ -267,13 +304,21 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
       <div className={fit ? 'min-h-0 flex-1 overflow-auto' : ''}>
         <table className={`w-full table-fixed border-collapse ${text}`}>
           <colgroup>
-            <col className="w-[22px] sm:w-[34px]" />
+            <col className="w-[24px] sm:w-[34px]" />
             {RECORDS_SEATS.map((seat) => <col key={seat} className="w-auto" />)}
-            <col className="w-[60px] sm:w-[84px]" />
+            {wide && <col className="w-[52px] lg:w-[60px]" />}
+            {lead2 && <col className="w-[30px]" />}
+            <col className="w-[78px] sm:w-[104px] xl:w-[120px]" />
           </colgroup>
           <thead ref={headRef} className="sticky top-0 z-10 bg-zinc-950">
             <tr className="border-b border-zinc-700">
-              <th scope="col" className="bg-zinc-950 px-0 py-0.5 text-center font-semibold text-zinc-500">次</th>
+              <th
+                scope="col"
+                title={leaders ? '隊長（牌譜沒寫，依輪替推算）' : '第幾輪第幾次提議'}
+                className="bg-zinc-950 px-0 py-0.5 text-center font-semibold text-zinc-500"
+              >
+                {leaders ? '隊長' : '次'}
+              </th>
               {RECORDS_SEATS.map((seat) => (
                 <th
                   key={seat}
@@ -295,7 +340,9 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
                   )}
                 </th>
               ))}
-              <th scope="col" className="bg-zinc-950 px-1 py-0.5 text-left font-semibold text-zinc-500">隊伍</th>
+              {wide && <th scope="col" className="bg-zinc-950 px-0 py-0.5 text-center font-semibold text-zinc-500">結果</th>}
+              {lead2 && <th scope="col" className="bg-zinc-950 px-0 py-0.5 text-center font-semibold text-zinc-500">隊長</th>}
+              <th scope="col" className="bg-zinc-950 px-1 py-0.5 text-left font-semibold text-zinc-500">文字紀錄</th>
             </tr>
           </thead>
           <tbody>{rows}</tbody>
@@ -306,7 +353,7 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
         <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 border border-zinc-500 bg-white" />贊成</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 border border-zinc-500 bg-black" />反對</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 border border-zinc-700 bg-zinc-900" />強制局（不投票）</span>
-        <span>「次」= 第幾輪第幾次提議</span>
+        <span>{leaders ? '隊長依輪替推算（DC 牌譜沒寫隊長）' : '「次」= 第幾輪第幾次提議（隊長推算不出來）'}</span>
       </div>
     </div>
   );
