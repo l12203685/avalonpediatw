@@ -614,6 +614,7 @@ export interface AgentTuning {
   /**
    * 第 16 回合紅方（`RedRound2.redHideR1Card`）：`redHideR1` 給誰用——0 = 刺客與莫甘娜（第 14 回合），1 = 只有刺客，2 = 只有莫甘娜。
    * 第 15 回合拆解：藏牌抬高刺中率主要來自刺客模型的「自己派的隊含刺客」，刺客藏牌可能比莫甘娜藏牌值錢。
+   * 第 16 回合採用 1（在 `redKeyWhite=1` 之上三組種子紅方 +2.6／+2.1／+2.8pp：莫甘娜照舊出失敗，三紅率約 +5pp，刺中率不變）。
    */
   redHideR1Who: number;
   /**
@@ -1047,7 +1048,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefBotMissionNext: false,
   goodTailVoteLoyalOnly: false,
   goodTailVotePercival: 0,
-  redHideR1Who: 0,
+  redHideR1Who: 1,
   redKeyWhite: 1,
   redCleanWhite: 0,
   oberonNormalVote: false,

@@ -34,7 +34,8 @@ describe('redHideR1Who', () => {
     voteHistory: [], lakeHistory: [],
   }) as unknown as PlayerObservation;
   const t = (who: number) => ({ ...DEFAULT_AGENT_TUNING, redHideR1: 1, redHideR1Who: who });
-  it('0 = both, 1 = the assassin only, 2 = Morgana only', () => {
+  it('0 = both, 1 = the assassin only (default since round 16), 2 = Morgana only', () => {
+    expect(DEFAULT_AGENT_TUNING.redHideR1Who).toBe(1);
     expect(redHideR1Card(t(0), quest('assassin'))).toBe('success');
     expect(redHideR1Card(t(0), quest('morgana'))).toBe('success');
     expect(redHideR1Card(t(1), quest('assassin'))).toBe('success');
