@@ -730,6 +730,7 @@
         "assassination": "Assassination",
         "position": "Seats",
         "roles": "Roles & chemistry",
+        "strength": "Lineup strength",
         "players": "Player radar"
       },
       "votesNote": "Votes currently has a single study (vote flip rate after a team change); other vote metrics (approval rate, reject chains, follow votes) are not in the cache yet and will land here when they are.",

@@ -3,7 +3,9 @@
  * 呼叫 computeStats (@avalon/shared/stats)。
  */
 import {
+  applyFilter,
   computeStats,
+  computeStrengthReport,
   decodeGamesDataset,
   sanitizeFilter,
   type DecodedDataset,
@@ -11,6 +13,8 @@ import {
   type GamesDataset,
   type PairRoster,
   type StatsResult,
+  type StrengthGrouping,
+  type StrengthReport,
 } from '@avalon/shared/stats';
 
 /** /api/analysis/games 的 context (伺服器 services/gamesDataset.ts GamesContext 的子集)。 */
@@ -98,6 +102,14 @@ function loaded(serverUrl: string): Promise<Loaded> {
 
 export async function filterVocab(serverUrl: string): Promise<FilterVocab> {
   return (await loaded(serverUrl)).vocab;
+}
+
+/** 數據分析「陣容強度」：篩選後的局依 grouping 分組的報告 (@avalon/shared computeStrengthReport)。 */
+export async function computeStrength(serverUrl: string, raw: GameFilter | null, grouping: StrengthGrouping): Promise<StrengthReport> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+  return computeStrengthReport(games, grouping);
 }
 
 /** 篩選後的全部區塊。外來的篩選先過 sanitizeFilter。 */

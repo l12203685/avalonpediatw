@@ -537,7 +537,7 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
           <>
             <ResultBanner post={post} game={game} prefs={prefs} />
             <MissionTrack game={game} />
-            <LineupSummary post={post} />
+            <LineupSummary post={post} showRoles={prefs.roles} />
             <Toggles prefs={prefs} onChange={setPref} />
           </>
         ) : (

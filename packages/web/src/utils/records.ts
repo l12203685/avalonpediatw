@@ -12,7 +12,7 @@
  * 純函式放這裡，packages/server/src/__tests__/WebRecords.test.ts 測（web 沒有測試執行器）。
  */
 import { playerNameKey } from '@avalon/shared';
-import { matchesLineup, type GameLineup } from '@avalon/shared/stats';
+import { matchesLineup, roleStrength, type GameLineup, type LineupSeats, type RoleStrength } from '@avalon/shared/stats';
 import {
   DEFAULT_LINEUP_FILTER,
   lineupCondition,
@@ -250,7 +250,24 @@ export function mistakeDetails(post: RecordPost, tag: string): string[] {
 export function postLineup(post: RecordPost): GameLineup | null {
   const l = post.lineup;
   if (!l || !post.game) return null;
-  return { pool: l.pool, s: l.s, prs: l.prs, prov: RECORDS_SEATS.map((seat) => l.prov.includes(seat)) };
+  return { pool: l.pool, s: l.s, prs: l.prs, prov: RECORDS_SEATS.map((seat) => l.prov.includes(seat)), elos: null };
+}
+
+/** 貼文的角色（配置）與有寫名字的座位，給角色條件與角色強度用。 */
+export function postSeats(post: RecordPost): LineupSeats | null {
+  const game = post.game;
+  if (!game) return null;
+  return {
+    roles: RECORDS_SEATS.map((seat) => roleOfSeat(game.config, seat).name),
+    known: RECORDS_SEATS.map((_, i) => Boolean((game.names[i] ?? '').trim())),
+  };
+}
+
+/** 貼文的紅方／忠臣／藍方 PR（平均、最高、最低）與梅林、派西、刺客 PR；沒評分 = null。 */
+export function postRoleStrength(post: RecordPost): RoleStrength | null {
+  const lineup = postLineup(post);
+  const seats = postSeats(post);
+  return lineup && seats ? roleStrength(lineup, seats) : null;
 }
 
 export type RecordResultFilter = 'all' | RecordOutcome | 'unreadable';
@@ -306,7 +323,9 @@ export function parseRecordsFilter(text: string | null): RecordFilter {
 
 /** 這篇有沒有通過篩選。暱稱比對用 playerNameKey（同戰績的認人規則），也比對標題。 */
 export function matchesRecords(post: RecordPost, filter: RecordFilter): boolean {
-  if (lineupFilterActive(filter.lineup) && !matchesLineup(postLineup(post), lineupCondition(filter.lineup))) return false;
+  if (lineupFilterActive(filter.lineup) && !matchesLineup(postLineup(post), lineupCondition(filter.lineup), postSeats(post))) {
+    return false;
+  }
   if (filter.mistakes.length > 0) {
     const own = mistakeTags(post);
     if (!filter.mistakes.some((t) => own.includes(t))) return false;

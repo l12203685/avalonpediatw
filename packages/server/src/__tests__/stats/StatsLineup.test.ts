@@ -32,7 +32,7 @@ function ids(clause: LineupClause): string[] {
 describe('lineup field', () => {
   it('decodes [pool, S×10, PRs, provisional bits]; [] is not scored', () => {
     const [high, mid, none] = decoded.games;
-    expect(high.lineup).toEqual({ pool: 33, s: 70, prs: HIGH, prov: [...Array(9).fill(false), true] });
+    expect(high.lineup).toEqual({ pool: 33, s: 70, prs: HIGH, prov: [...Array(9).fill(false), true], elos: null });
     expect(mid.lineup?.s).toBe(52);
     expect(none.lineup).toBeNull();
     expect(decodeLineup([])).toBeNull();

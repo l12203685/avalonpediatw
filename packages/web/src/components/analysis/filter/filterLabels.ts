@@ -92,6 +92,11 @@ export function useClauseLabel(): (clause: Clause) => string {
           const parts: string[] = [];
           if (clause.sMin !== undefined) parts.push(`S ≥ ${clause.sMin}`);
           if (clause.strongPr !== undefined && clause.strongCount !== undefined) parts.push(`PR ${clause.strongPr}+ ≥ ${clause.strongCount}`);
+          if (clause.merlinPrMin !== undefined) parts.push(`${en ? 'Merlin' : '梅林'} PR ≥ ${clause.merlinPrMin}`);
+          if (clause.percivalPrMin !== undefined) parts.push(`${en ? 'Percival' : '派西'} PR ≥ ${clause.percivalPrMin}`);
+          if (clause.redMinPrMin !== undefined) parts.push(`${en ? 'weakest red' : '紅方最低'} PR ≥ ${clause.redMinPrMin}`);
+          if (clause.loyalMinPrMin !== undefined) parts.push(`${en ? 'weakest loyal' : '忠臣最低'} PR ≥ ${clause.loyalMinPrMin}`);
+          if (clause.gapMin !== undefined) parts.push(`${en ? 'red − blue mean PR' : '紅−藍平均 PR'} ≥ ${clause.gapMin}`);
           const glue = clause.combine === 'or' ? (en ? ' or ' : ' 或 ') : (en ? ' and ' : ' 且 ');
           return t(`${k}.lineup`, { detail: parts.join(glue) + (clause.includeUnscored ? (en ? ' (+ unscored)' : '（含未評分）') : '') });
         }

@@ -13,6 +13,8 @@ export * from './pyround';
 export * from './fraction';
 export * from './dataset';
 export * from './lineup';
+export * from './mistakes';
+export * from './strength';
 export * from './theory';
 export * from './players';
 export * from './overview';
