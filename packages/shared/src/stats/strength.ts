@@ -43,7 +43,9 @@ export type StrengthGrouping =
   | { kind: 'merlinVsAssassin' }
   | { kind: 'gap' }
   | { kind: 'weakRed'; pr: number }
-  | { kind: 'weakLoyal'; pr: number };
+  | { kind: 'weakLoyal'; pr: number }
+  /** 任一維度（STRENGTH_DIMENSIONS）依兩個切點分三組：後 1/3（< lo）、中間、前 1/3（≥ hi）。自動發現的連結用。 */
+  | { kind: 'tertile'; dim: string; lo?: number; hi?: number };
 
 export interface StrengthGroupDef {
   id: string;
@@ -54,6 +56,7 @@ export interface StrengthGroupDef {
 interface GameCtx {
   g: Game;
   strength: RoleStrength | null;
+  dims?: Record<string, number | null>;
 }
 
 interface GroupingDef {
@@ -133,12 +136,100 @@ export function groupingDef(grouping: StrengthGrouping): GroupingDef {
         },
       };
     }
+    case 'tertile': {
+      const lo = grouping.lo ?? 0;
+      const hi = grouping.hi ?? 0;
+      const dim = STRENGTH_DIMENSIONS.find((d) => d.id === grouping.dim);
+      const name = dim?.label ?? grouping.dim;
+      const f = (v: number): string => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+      return {
+        groups: [
+          { id: 'top', label: `${name} 前 1/3`, help: `${name} ≥ ${f(hi)}` },
+          { id: 'mid', label: '中間 1/3', help: `${f(lo)} ≤ ${name} < ${f(hi)}` },
+          { id: 'bottom', label: `${name} 後 1/3`, help: `${name} < ${f(lo)}` },
+        ],
+        classify: ({ dims }) => {
+          const v = dims?.[grouping.dim];
+          if (typeof v !== 'number') return -1;
+          return v >= hi ? 0 : v < lo ? 2 : 1;
+        },
+      };
+    }
     default: {
       const never: never = grouping;
       throw new Error(`unknown grouping ${(never as { kind: string }).kind}`);
     }
   }
 }
+
+// ── 強度維度（自動發現與「維度三分位」分組）────────────────
+
+export interface DimensionCtx {
+  g: Game;
+  strength: RoleStrength | null;
+  /** 每次提議的隊長座位（依輪替推算；推算不出來 = null）。 */
+  leaders: string[] | null;
+}
+
+export interface StrengthDimensionDef {
+  id: string;
+  label: string;
+  help: string;
+  /** 群組：桌、紅方、藍方、角色、座位。 */
+  group: string;
+  value: (c: DimensionCtx) => number | null;
+}
+
+function seatPr(c: DimensionCtx, seat: string | undefined | null): number | null {
+  if (!seat || !c.g.lineup) return null;
+  const i = (SEATS as readonly string[]).indexOf(seat);
+  return i >= 0 && c.g.seatPlayers[i] ? c.g.lineup.prs[i] : null;
+}
+
+function rolePr(role: string): (c: DimensionCtx) => number | null {
+  return (c) => {
+    const seats = SEATS.filter((s) => c.g.seatRoles.get(s) === role);
+    return seats.length === 1 ? seatPr(c, seats[0]) : null;
+  };
+}
+
+export const STRENGTH_DIMENSIONS: readonly StrengthDimensionDef[] = [
+  { id: 's', group: '桌', label: '桌上 S', help: '桌上 10 人開打前 PR 的平均', value: (c) => c.g.lineup?.s ?? null },
+  { id: 'redMean', group: '紅方', label: '紅方平均 PR', help: '紅方 4 人開打前 PR 的平均', value: (c) => c.strength?.pr.red?.mean ?? null },
+  { id: 'redMin', group: '紅方', label: '紅方最低 PR', help: '紅方 4 人裡 PR 最低的那位', value: (c) => c.strength?.pr.red?.min ?? null },
+  { id: 'redMax', group: '紅方', label: '紅方最高 PR', help: '紅方 4 人裡 PR 最高的那位', value: (c) => c.strength?.pr.red?.max ?? null },
+  { id: 'loyalMean', group: '藍方', label: '忠臣平均 PR', help: '4 位忠臣開打前 PR 的平均', value: (c) => c.strength?.pr.loyal?.mean ?? null },
+  { id: 'loyalMin', group: '藍方', label: '忠臣最低 PR', help: '4 位忠臣裡 PR 最低的那位', value: (c) => c.strength?.pr.loyal?.min ?? null },
+  { id: 'loyalMax', group: '藍方', label: '忠臣最高 PR', help: '4 位忠臣裡 PR 最高的那位', value: (c) => c.strength?.pr.loyal?.max ?? null },
+  { id: 'blueMean', group: '藍方', label: '藍方平均 PR', help: '藍方 6 人（忠臣、派西、梅林）開打前 PR 的平均', value: (c) => c.strength?.pr.blue?.mean ?? null },
+  {
+    id: 'gap', group: '桌', label: '紅藍平均 PR 差', help: '紅方平均 PR − 藍方平均 PR（正 = 紅方較強）',
+    value: (c) => (c.strength ? redBlueGap(c.strength) : null),
+  },
+  { id: 'merlin', group: '角色', label: '梅林 PR', help: '梅林的開打前 PR', value: rolePr('梅林') },
+  { id: 'percival', group: '角色', label: '派西 PR', help: '派西維爾的開打前 PR', value: rolePr('派西維爾') },
+  { id: 'assassin', group: '角色', label: '刺客 PR', help: '刺客的開打前 PR', value: rolePr('刺客') },
+  { id: 'morgana', group: '角色', label: '莫甘娜 PR', help: '莫甘娜的開打前 PR', value: rolePr('莫甘娜') },
+  { id: 'mordred', group: '角色', label: '莫德雷德 PR', help: '莫德雷德的開打前 PR', value: rolePr('莫德雷德') },
+  { id: 'oberon', group: '角色', label: '奧伯倫 PR', help: '奧伯倫的開打前 PR', value: rolePr('奧伯倫') },
+  { id: 'firstLeader', group: '座位', label: '首家 PR', help: '第一次提議的隊長（依輪替推算）的開打前 PR', value: (c) => seatPr(c, c.leaders?.[0]) },
+  { id: 'r1Tail', group: '座位', label: '第 1 輪尾家 PR', help: '第 1 輪第 5 次提議（強制局）的隊長的開打前 PR', value: (c) => seatPr(c, c.leaders?.[4]) },
+  { id: 'seat1', group: '座位', label: '1 號位 PR', help: '坐 1 號位的玩家的開打前 PR', value: (c) => seatPr(c, '1') },
+  { id: 'seat10', group: '座位', label: '10 號位 PR', help: '坐 10 號位（牌譜的 0）的玩家的開打前 PR', value: (c) => seatPr(c, '0') },
+  {
+    id: 'sentLeaders', group: '座位', label: '出任務隊長平均 PR', help: '每輪實際出任務那一隊的隊長（依輪替推算）PR 的平均',
+    value: (c) => {
+      if (!c.leaders) return null;
+      const byRound = new Map<number, number>();
+      c.g.votingProposals.forEach(([round], k) => byRound.set(round, k));
+      const prs = [...byRound.entries()]
+        .filter(([round]) => c.g.roundResults[round - 1])
+        .map(([, k]) => seatPr(c, c.leaders?.[k]))
+        .filter((v): v is number => v !== null);
+      return prs.length ? prs.reduce((a, b) => a + b, 0) / prs.length : null;
+    },
+  },
+];
 
 // ── 過程指標 ───────────────────────────────────────────
 
@@ -155,7 +246,7 @@ export interface StrengthMetricDef {
 const ROLE_ROWS = ['梅林', '派西維爾', '忠臣', '刺客', '莫甘娜', '莫德雷德', '奧伯倫'] as const;
 const ROLE_SHORT: Record<string, string> = { 派西維爾: '派西', 莫德雷德: '莫德' };
 
-export const METRIC_SECTIONS = ['陣容', '結果', '派隊與任務', '投票', '紅方出牌', '湖中女神', '失誤標籤'] as const;
+export const METRIC_SECTIONS = ['陣容', '結果', '派隊與任務', '投票', '紅方出牌', '湖中女神', '角色決策', '失誤標籤'] as const;
 
 export const STRENGTH_METRICS: readonly StrengthMetricDef[] = [
   { id: 's', section: '陣容', label: '平均 S', help: '桌上 10 人開打前 PR 的平均', kind: 'avg' },
@@ -169,7 +260,7 @@ export const STRENGTH_METRICS: readonly StrengthMetricDef[] = [
   { id: 'blueAlive', section: '結果', label: '三藍躲刺率', help: '藍方拿下三次任務、梅林沒被刺中的局 ÷ 全部局', kind: 'rate' },
   { id: 'hit', section: '結果', label: '刺中率', help: '三藍的局裡，刺客刺中梅林的比例', kind: 'rate' },
   { id: 'leaderOnR1', section: '派隊與任務', label: '第 1 輪隊長自己上車', help: '第 1 輪的提議裡，隊長把自己排進隊伍的比例（隊長依輪替推算，推算不出來的局不算）', kind: 'rate' },
-  { id: 'threePlusOne', section: '派隊與任務', label: '首輪成功後三加一', help: '第 1 輪任務成功的局裡，第 2 輪出任務的 4 人隊包含第 1 輪那 3 人的比例（其餘是拆車）', kind: 'rate' },
+  { id: 'threePlusOne', section: '派隊與任務', label: '首輪成功後三加一', help: '第 1 輪任務成功的局裡，第 2 輪出任務的 4 人隊包含第 1 輪那 3 人的比例（其餘是拆車）。成功的隊下一輪沿用是局勢使然的常態，不是失誤', kind: 'rate' },
   { id: 'proposalsPerRound', section: '派隊與任務', label: '每輪提議次數', help: '每個打過的任務輪平均提了幾次隊（含強制局）', kind: 'avg' },
   { id: 'forced', section: '派隊與任務', label: '走到強制局的輪', help: '任務輪裡走到第 5 次提議（尾家強制、不投票）的比例', kind: 'rate' },
   { id: 'r3SentRed', section: '派隊與任務', label: '第 3 輪起出任務的隊有紅', help: '第 3 輪起實際出任務的隊伍裡至少有一個紅方的比例', kind: 'rate' },
@@ -200,14 +291,21 @@ export const STRENGTH_METRICS: readonly StrengthMetricDef[] = [
   { id: 'lakeMerlin', section: '湖中女神', label: '被驗的是梅林', help: '湖中驗到梅林的比例', kind: 'rate' },
   { id: 'blueTruth', section: '湖中女神', label: '藍方宣告與事實相符', help: '藍方持湖、有寫宣告時，宣告的陣營跟被驗者真實陣營相同的比例', kind: 'rate' },
   { id: 'redTruth', section: '湖中女神', label: '紅方宣告與事實相符', help: '紅方持湖、有寫宣告時，宣告跟真實陣營相同（說實話）的比例', kind: 'rate' },
+  { id: 'merlinOffSeenApprove', section: '角色決策', label: '梅林隊外贊成看得到紅的隊', help: '梅林不在隊上、隊上有他看得到的紅方（莫德雷德看不到）時投贊成的比例（非強制、票數對得上的提議）', kind: 'rate' },
+  { id: 'merlinOnSeenApprove', section: '角色決策', label: '梅林隊上贊成看得到紅的隊', help: '梅林在隊上、隊上有他看得到的紅方時仍投贊成的比例', kind: 'rate' },
+  { id: 'merlinLeadSeen', section: '角色決策', label: '梅林當隊長派進看得到的紅', help: '梅林當隊長（依輪替推算）時，隊伍裡有他看得到的紅方的比例', kind: 'rate' },
+  { id: 'percivalThumb', section: '角色決策', label: '派西前兩輪派拇指', help: '派西第 1、2 輪當隊長（非強制）時，隊上有梅林或莫甘娜（拇指）的比例', kind: 'rate' },
+  { id: 'loyalLeadRed', section: '角色決策', label: '忠臣第 3 輪起派到紅', help: '忠臣第 3 輪起當隊長時，提出的隊伍有紅方的比例', kind: 'rate' },
+  { id: 'redLeadStack', section: '角色決策', label: '紅方隊長派 2 個以上相認紅', help: '刺客／莫甘娜／莫德雷德當隊長時，隊上有 2 個以上互相認識的紅方（含自己；奧伯倫不算）的比例', kind: 'rate' },
+  { id: 'killPercival', section: '角色決策', label: '刺客刺到派西', help: '三藍、有刺殺紀錄的局裡，刺客刺的是派西維爾的比例', kind: 'rate' },
   ...MISTAKE_TAGS.map((tag) => ({
     id: `mistake:${tag}`, section: '失誤標籤', label: tag,
     help: `有「${tag}」的局 ÷ 全部局（定義同牌譜紀錄的失誤標籤）`, kind: 'rate' as const,
   })),
 ];
 
-/** [分子, 分母]。 */
-type Facts = Map<string, [number, number]>;
+/** 指標 id → [分子, 分母]。 */
+export type Facts = Map<string, [number, number]>;
 
 function add(f: Facts, id: string, num: number, den = 1): void {
   const v = f.get(id) ?? [0, 0];
@@ -348,6 +446,38 @@ export function gameFacts(g: Game, strength: RoleStrength | null): Facts {
     });
   }
 
+  // 角色決策
+  if (rolesKnown) {
+    const seenByMerlin = (s: string): boolean => isRed(s) && roleOf(s) !== '莫德雷德';
+    const merlin = SEATS.find((s) => roleOf(s) === '梅林');
+    const mateOf = (a: string, b: string): boolean => isRed(a) && isRed(b) && roleOf(a) !== '奧伯倫' && roleOf(b) !== '奧伯倫';
+    for (const [round, props] of byRound) {
+      const cell = g.roundResults[round - 1] ?? '';
+      props.forEach((p, idx) => {
+        const forced = p.attempt >= 5;
+        const seen = [...p.team].some(seenByMerlin);
+        const went = Boolean(cell) && idx === props.length - 1;
+        if (merlin && !forced && seen && (new Set(p.approved).size > 5) === went) {
+          add(f, p.team.includes(merlin) ? 'merlinOnSeenApprove' : 'merlinOffSeenApprove', p.approved.includes(merlin) ? 1 : 0);
+        }
+        const leader = leaders?.[p.k];
+        if (!leader) return;
+        const role = roleOf(leader);
+        if (role === '梅林') add(f, 'merlinLeadSeen', seen ? 1 : 0);
+        if (role === '派西維爾' && round <= 2 && !forced) {
+          add(f, 'percivalThumb', [...p.team].some((s) => s !== leader && (roleOf(s) === '梅林' || roleOf(s) === '莫甘娜')) ? 1 : 0);
+        }
+        if (role === '忠臣' && round >= 3) add(f, 'loyalLeadRed', [...p.team].some(isRed) ? 1 : 0);
+        if (isRed(leader) && role !== '奧伯倫') {
+          add(f, 'redLeadStack', [...p.team].filter((s) => s === leader || mateOf(leader, s)).length >= 2 ? 1 : 0);
+        }
+      });
+    }
+    if ((g.outcome === OUTCOME_BLUE_DEAD || g.outcome === OUTCOME_BLUE_ALIVE) && /^[0-9]$/.test(g.kill)) {
+      add(f, 'killPercival', roleOf(g.kill) === '派西維爾' ? 1 : 0);
+    }
+  }
+
   // 失誤標籤
   if (rolesKnown && decided) {
     const tags = new Set(gameMistakes(g).map((m) => m[0]));
@@ -358,13 +488,25 @@ export function gameFacts(g: Game, strength: RoleStrength | null): Facts {
 
 // ── 報告 ───────────────────────────────────────────────
 
+/** 桌上 10 個座位的分布：最低、第 1 四分位、中位、平均、第 3 四分位、最高。 */
+export interface SeatSpread {
+  min: number;
+  q1: number;
+  median: number;
+  mean: number;
+  q3: number;
+  max: number;
+}
+
 export interface StrengthPoint {
   id: string;
   date: string;
   outcome: string;
   s: number;
-  /** 桌上 10 人賽前 Elo 的最低／中位／平均／最高；沒有座位 Elo 的舊資料 = null。 */
-  elo: { min: number; median: number; mean: number; max: number } | null;
+  /** 桌上 10 人開打前 PR 的分布（平均 = S）。 */
+  pr: SeatSpread;
+  /** 桌上 10 人賽前 Elo 的分布；沒有座位 Elo 的舊資料 = null。 */
+  elo: SeatSpread | null;
 }
 
 export interface OutcomeTally {
@@ -375,8 +517,28 @@ export interface OutcomeTally {
 }
 
 export interface HeatCell extends OutcomeTally {
-  quarter: string;
+  /** 半年：2024 H1。 */
+  period: string;
   bin: string;
+}
+
+/** 比率與 95% 信賴區間（Wilson），0–100。 */
+export interface RateCi {
+  rate: number;
+  lo: number;
+  hi: number;
+}
+
+/** 依 S 等量分箱的結果曲線的一箱。 */
+export interface SCurveBin {
+  lo: number;
+  hi: number;
+  /** 箱內 S 的平均（畫在橫軸上的位置）。 */
+  mid: number;
+  n: number;
+  threeRed: RateCi;
+  blueDead: RateCi;
+  blueAlive: RateCi;
 }
 
 export interface StrengthMetricValue {
@@ -395,8 +557,10 @@ export interface StrengthReport {
   games: number;
   scored: number;
   points: StrengthPoint[];
-  quarters: string[];
+  periods: string[];
   heatmap: HeatCell[];
+  /** 結果比率 vs S（約 8 個等量的箱）。 */
+  sCurve: SCurveBin[];
   overall: OutcomeTally;
   tiers: Array<{ id: string; label: string; range: string } & OutcomeTally>;
   comparison: StrengthComparison;
@@ -425,20 +589,132 @@ export function rollingMedian(values: readonly number[], half = 30): number[] {
   return values.map((_, i) => median(values.slice(Math.max(0, i - half), i + half + 1)));
 }
 
-/** YYYY-MM-DD → 2024Q3。 */
-export function quarterOf(date: string): string {
+/** YYYY-MM-DD → 2024 H2（半年）。 */
+export function halfYearOf(date: string): string {
   const [y, m] = date.split('-').map(Number);
-  return `${y}Q${Math.floor((m - 1) / 3) + 1}`;
+  return `${y} H${m <= 6 ? 1 : 2}`;
+}
+
+/** 排好序的值的分位數（線性內插，同試算表 PERCENTILE）。 */
+export function quantileSorted(sorted: readonly number[], q: number): number {
+  if (sorted.length === 0) return NaN;
+  const pos = (sorted.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+export function seatSpread(values: readonly number[]): SeatSpread {
+  const s = [...values].sort((a, b) => a - b);
+  return {
+    min: s[0], q1: quantileSorted(s, 0.25), median: quantileSorted(s, 0.5),
+    mean: s.reduce((a, b) => a + b, 0) / s.length, q3: quantileSorted(s, 0.75), max: s[s.length - 1],
+  };
+}
+
+/** Wilson 95% 信賴區間（0–100）。 */
+export function wilson(k: number, n: number, z = 1.96): RateCi {
+  if (n === 0) return { rate: NaN, lo: NaN, hi: NaN };
+  const p = k / n;
+  const den = 1 + (z * z) / n;
+  const center = (p + (z * z) / (2 * n)) / den;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / den;
+  return { rate: 100 * p, lo: 100 * Math.max(0, center - half), hi: 100 * Math.min(1, center + half) };
+}
+
+/**
+ * 經驗貝氏收縮：k／n 往整體比率 p0 拉，先驗強度 m 局（局數少的格子幾乎等於整體，局數多的才看得出差別）。
+ * 回傳 0–100。
+ */
+export function shrinkRate(k: number, n: number, p0: number, m = 20): number {
+  return (100 * (k + m * p0)) / (n + m);
+}
+
+/** 依 S 把局分成約 bins 個等量的箱（同分的局放同一箱），每箱的三種結果比率與 95% 信賴區間。 */
+export function outcomeByS(games: readonly Game[], bins = 8): SCurveBin[] {
+  const list = games
+    .filter((g) => g.lineup && (g.outcome === OUTCOME_THREE_RED || g.outcome === OUTCOME_BLUE_DEAD || g.outcome === OUTCOME_BLUE_ALIVE))
+    .sort((a, b) => a.lineup!.s - b.lineup!.s);
+  const out: SCurveBin[] = [];
+  let start = 0;
+  for (let b = 1; b <= bins && start < list.length; b++) {
+    let end = Math.round((list.length * b) / bins);
+    while (end < list.length && end > 0 && list[end].lineup!.s === list[end - 1].lineup!.s) end += 1;
+    if (end <= start) continue;
+    const chunk = list.slice(start, end);
+    const t = tally(chunk);
+    out.push({
+      lo: chunk[0].lineup!.s,
+      hi: chunk[chunk.length - 1].lineup!.s,
+      mid: chunk.reduce((a, g) => a + g.lineup!.s, 0) / chunk.length,
+      n: t.n,
+      threeRed: wilson(t.threeRed, t.n),
+      blueDead: wilson(t.blueDead, t.n),
+      blueAlive: wilson(t.blueAlive, t.n),
+    });
+    start = end;
+  }
+  return out;
+}
+
+export interface RiverPoint extends SeatSpread {
+  /** 這一點的日期（毫秒）與字串。 */
+  t: number;
+  date: string;
+  /** 視窗裡的局數。 */
+  n: number;
+  /** 視窗裡 S 的中位數。 */
+  s: number;
+  /** 視窗裡三種結果的比例（0–100）。 */
+  threeRed: number;
+  blueDead: number;
+  blueAlive: number;
+}
+
+/**
+ * 河流圖的資料（Edward 2026-10-31「ELO 最低／最高／中位／平均可以同時呈現在圖上吧？變成有點像河流區間那樣」）：
+ * 依日期排好的局，每點取前後各 half 局的視窗，桌上分布的每一項（最低、第 1 四分位、中位、平均、第 3 四分位、最高）
+ * 取視窗內的中位數，另附視窗的 S 中位數與三種結果比例。最多 maxPoints 點（等距抽樣），圖不會太密。
+ */
+export function riverSeries(points: readonly StrengthPoint[], key: 'elo' | 'pr', half = 30, maxPoints = 240): RiverPoint[] {
+  const usable = points.filter((p) => (key === 'elo' ? p.elo : p.pr));
+  const step = Math.max(1, Math.ceil(usable.length / maxPoints));
+  const out: RiverPoint[] = [];
+  const pick = (w: readonly StrengthPoint[], f: keyof SeatSpread): number =>
+    median(w.map((p) => (key === 'elo' ? p.elo! : p.pr)[f]));
+  for (let i = 0; i < usable.length; i += step) {
+    const w = usable.slice(Math.max(0, i - half), i + half + 1);
+    const share = (o: string): number => (100 * w.filter((p) => p.outcome === o).length) / w.length;
+    out.push({
+      t: Date.parse(`${usable[i].date}T00:00:00Z`),
+      date: usable[i].date,
+      n: w.length,
+      min: pick(w, 'min'), q1: pick(w, 'q1'), median: pick(w, 'median'), mean: pick(w, 'mean'), q3: pick(w, 'q3'), max: pick(w, 'max'),
+      s: median(w.map((p) => p.s)),
+      threeRed: share(OUTCOME_THREE_RED), blueDead: share(OUTCOME_BLUE_DEAD), blueAlive: share(OUTCOME_BLUE_ALIVE),
+    });
+  }
+  return out;
 }
 
 /** 每局的角色強度與指標貢獻跟分組方式無關：同一份解碼的局換分組時不用重算（失誤偵測最花時間）。 */
-const perGame = new WeakMap<Game, { strength: RoleStrength | null; facts: Facts }>();
+export interface GameInfo {
+  strength: RoleStrength | null;
+  facts: Facts;
+  dims: Record<string, number | null>;
+}
 
-function gameInfo(g: Game): { strength: RoleStrength | null; facts: Facts } {
+const perGame = new WeakMap<Game, GameInfo>();
+
+/** 一局的角色強度、各指標的 [分子, 分母] 與各強度維度的值（快取）。 */
+export function gameInfo(g: Game): GameInfo {
   let hit = perGame.get(g);
   if (!hit) {
     const strength = g.lineup ? roleStrength(g.lineup, gameSeats(g)) : null;
-    hit = { strength, facts: gameFacts(g, strength) };
+    const leaders = deriveLeaderSeats(g.votingProposals.map((p) => p[2]));
+    const ctx: DimensionCtx = { g, strength, leaders };
+    const dims = Object.fromEntries(STRENGTH_DIMENSIONS.map((d) => [d.id, d.value(ctx)]));
+    hit = { strength, facts: gameFacts(g, strength), dims };
     perGame.set(g, hit);
   }
   return hit;
@@ -456,26 +732,25 @@ export function computeStrengthReport(games: readonly Game[], grouping: Strength
         date: g.timelineDate,
         outcome: g.outcome,
         s: g.lineup!.s,
-        elo: elos ? {
-          min: Math.min(...elos), median: median(elos), mean: elos.reduce((a, b) => a + b, 0) / elos.length, max: Math.max(...elos),
-        } : null,
+        pr: seatSpread(g.lineup!.prs),
+        elo: elos ? seatSpread(elos) : null,
       };
     })
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   const cells = new Map<string, Game[]>();
-  const quarters = new Set<string>();
+  const periods = new Set<string>();
   for (const g of scored) {
     if (!g.timelineDate || !decided(g)) continue;
-    const q = quarterOf(g.timelineDate);
+    const period = halfYearOf(g.timelineDate);
     const bin = S_BINS.find((b) => g.lineup!.s >= b.min && g.lineup!.s < b.max)!;
-    quarters.add(q);
-    const key = `${q}|${bin.id}`;
+    periods.add(period);
+    const key = `${period}|${bin.id}`;
     cells.set(key, [...(cells.get(key) ?? []), g]);
   }
   const heatmap: HeatCell[] = [...cells.entries()].map(([key, list]) => {
-    const [quarter, bin] = key.split('|');
-    return { quarter, bin, ...tally(list) };
+    const [period, bin] = key.split('|');
+    return { period, bin, ...tally(list) };
   });
 
   const tiers = S_TIERS.map((t) => ({
@@ -483,15 +758,20 @@ export function computeStrengthReport(games: readonly Game[], grouping: Strength
     ...tally(scored.filter((g) => g.lineup!.s >= t.min && g.lineup!.s < t.max)),
   }));
 
-  // 分組比較
+  // 分組比較（維度三分位沒給切點時，用這批局的 1/3、2/3 分位數）
+  if (grouping.kind === 'tertile' && (grouping.lo === undefined || grouping.hi === undefined)) {
+    const dim = grouping.dim;
+    const vals = games.map((g) => gameInfo(g).dims[dim]).filter((v): v is number => typeof v === 'number').sort((a, b) => a - b);
+    grouping = { kind: 'tertile', dim, lo: quantileSorted(vals, 1 / 3), hi: quantileSorted(vals, 2 / 3) };
+  }
   const def = groupingDef(grouping);
   const sums: Facts[] = def.groups.map(() => new Map());
   const all: Facts = new Map();
   const counts = def.groups.map(() => 0);
   let excluded = 0;
   for (const g of games) {
-    const { strength, facts } = gameInfo(g);
-    const i = def.classify({ g, strength });
+    const { strength, facts, dims } = gameInfo(g);
+    const i = def.classify({ g, strength, dims });
     if (i < 0) {
       excluded += 1;
       continue;
@@ -511,8 +791,9 @@ export function computeStrengthReport(games: readonly Game[], grouping: Strength
     games: games.length,
     scored: scored.length,
     points,
-    quarters: [...quarters].sort(),
+    periods: [...periods].sort(),
     heatmap,
+    sCurve: outcomeByS(scored),
     overall: tally(scored),
     tiers,
     comparison: {

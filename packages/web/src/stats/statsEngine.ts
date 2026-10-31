@@ -2,7 +2,7 @@
  * 篩選重算的呼叫端：預設在 Worker 裡算 (stats.worker.ts)，瀏覽器不支援或 Worker 起不來時改在主執行緒算
  * (同一份 statsCompute.ts)。同一個篩選只算一次 (最近幾個篩選的結果留著，切回來不用重算)。
  */
-import type { GameFilter, StatsResult, StrengthGrouping, StrengthReport } from '@avalon/shared/stats';
+import type { DiscoveryResult, GameFilter, StatsResult, StrengthGrouping, StrengthReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
@@ -66,7 +66,7 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-type RequestType = 'vocab' | 'compute' | 'strength';
+type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery';
 
 async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
   const mod = await import('./statsCompute');
@@ -75,7 +75,9 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
       ? await mod.filterVocab(SERVER_URL)
       : type === 'strength'
         ? await mod.computeStrength(SERVER_URL, filter ?? null, grouping ?? { kind: 'tier' })
-        : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
+        : type === 'discovery'
+          ? await mod.computeDiscovery(SERVER_URL, filter ?? null)
+          : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
   } catch (err) {
     const status = err instanceof mod.GamesUnavailableError ? err.status : 0;
     throw new FilterUnavailableError(status, err instanceof Error ? err.message : String(err));
@@ -149,10 +151,26 @@ export function strengthReport(filter: GameFilter | null, filterKey: string, gro
   return p;
 }
 
+const discoveryResults = new Map<string, Promise<DiscoveryResult>>();
+
+/** 自動發現：目前篩選下的全部發現（Worker 裡掃描，同一個篩選只算一次）。失敗不快取。 */
+export function discoveryResult(filter: GameFilter | null, filterKey: string): Promise<DiscoveryResult> {
+  const hit = discoveryResults.get(filterKey);
+  if (hit) return hit;
+  const p = call<DiscoveryResult>('discovery', filter);
+  discoveryResults.set(filterKey, p);
+  p.catch(() => {
+    if (discoveryResults.get(filterKey) === p) discoveryResults.delete(filterKey);
+  });
+  while (discoveryResults.size > KEEP_RESULTS) discoveryResults.delete(discoveryResults.keys().next().value as string);
+  return p;
+}
+
 /** 測試／重試用：清掉 Worker 錯誤狀態以外的快取。 */
 export function resetFilteredStats(): void {
   results.clear();
   strengthResults.clear();
+  discoveryResults.clear();
   vocab = null;
   failAll(new FilterUnavailableError(0, 'reset'));
 }

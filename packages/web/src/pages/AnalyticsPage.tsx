@@ -17,6 +17,8 @@ import PositionTab from '../components/analysis/tabs/PositionTab';
 import RolesTab from '../components/analysis/tabs/RolesTab';
 import PlayersTab from '../components/analysis/tabs/PlayersTab';
 import StrengthTab from '../components/analysis/tabs/StrengthTab';
+import { useDiscoveryNav } from '../components/analysis/discovery/discoveryNav';
+import DiscoveryBlock from '../components/analysis/discovery/DiscoveryBlock';
 import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
 import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
 import StatsFilterBar from '../components/analysis/filter/StatsFilterBar';
@@ -138,6 +140,14 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
     setSeenFocus(focus);
     if (focus) setTab('players');
   }
+  // 自動發現的「看全部」「在組成比較打開」：切到陣容強度分頁
+  const navTab = useDiscoveryNav((s) => s.tab);
+  const navNonce = useDiscoveryNav((s) => s.nonce);
+  const [seenNav, setSeenNav] = useState(navNonce);
+  if (navNonce !== seenNav) {
+    setSeenNav(navNonce);
+    if (navTab) setTab(navTab);
+  }
   const { overview } = useAnalysisOverview();
   const totalGames = overview?.totalGames;
   const filterKey = useStatsFilter((s) => `${s.key}|${s.nonce}`);
@@ -184,6 +194,8 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
           {tab === 'roles'         && <RolesTab />}
           {tab === 'strength'      && <StrengthTab />}
           {tab === 'players'       && <PlayersTab focus={focus} />}
+          {/* 2026-10-31 Edward：每個分析分頁都有「自動發現」（跟這頁指標有關的明顯差異；玩家雷達是個人頁，不放） */}
+          {tab !== 'players' && <DiscoveryBlock page={tab} />}
         </motion.div>
       </AnimatePresence>
     </div>

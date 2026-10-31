@@ -5,8 +5,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  applyFilter, computeStrengthReport, decodeGamesDataset, decodeLineup, gameSeats, matchesLineup, quarterOf, redBlueGap,
-  rollingMedian, roleStrength, sanitizeFilter, type LineupTuple, type StrengthGrouping,
+  applyFilter, computeStrengthReport, decodeGamesDataset, decodeLineup, gameSeats, halfYearOf, matchesLineup, outcomeByS,
+  quantileSorted, redBlueGap, riverSeries, rollingMedian, roleStrength, sanitizeFilter, seatSpread, shrinkRate, wilson,
+  type LineupTuple, type StrengthGrouping, type StrengthPoint,
 } from '@avalon/shared/stats';
 import { TEN, makeDataset, type GameSpec } from './datasetBuilder';
 
@@ -102,10 +103,10 @@ describe('computeStrengthReport', () => {
     expect([report.games, report.scored]).toEqual([4, 3]);
   });
 
-  it('quarter × S bin cells and S tiers', () => {
-    expect(report.quarters).toEqual(['2024Q1', '2024Q2']);
-    expect(report.heatmap.find((c) => c.quarter === '2024Q1')).toMatchObject({ bin: 'ge65', n: 1, blueAlive: 1 });
-    expect(report.heatmap.find((c) => c.quarter === '2024Q2')).toMatchObject({ bin: '38-45', n: 2, threeRed: 2 });
+  it('half-year × S bin cells and S tiers', () => {
+    expect(report.periods).toEqual(['2024 H1']);
+    expect(report.heatmap.find((c) => c.bin === 'ge65')).toMatchObject({ period: '2024 H1', n: 1, blueAlive: 1 });
+    expect(report.heatmap.find((c) => c.bin === '38-45')).toMatchObject({ period: '2024 H1', n: 2, threeRed: 2 });
     expect(report.tiers.map((t) => t.n)).toEqual([1, 0, 2, 0]);
     expect(report.overall).toEqual({ n: 3, threeRed: 2, blueDead: 0, blueAlive: 1 });
   });
@@ -142,9 +143,66 @@ describe('computeStrengthReport', () => {
     expect(groups({ kind: 'percival' })).toEqual([1, 2, 0]);
   });
 
-  it('rolling median and quarters', () => {
+  it('rolling median and half years', () => {
     expect(rollingMedian([1, 9, 2, 8, 3], 1)).toEqual([5, 2, 8, 3, 5.5]);
-    expect(quarterOf('2025-12-31')).toBe('2025Q4');
+    expect([halfYearOf('2025-06-30'), halfYearOf('2025-07-01')]).toEqual(['2025 H1', '2025 H2']);
     expect(TEN).toHaveLength(10);
+  });
+
+  it('seat spread (min, quartiles, median, mean, max) of PR and Elo', () => {
+    expect(report.points[0].pr).toEqual(seatSpread(PRS_A));
+    expect(seatSpread([1, 2, 3, 4, 5])).toEqual({ min: 1, q1: 2, median: 3, mean: 3, q3: 4, max: 5 });
+    expect(quantileSorted([10, 20], 0.25)).toBe(12.5);
+  });
+
+  it('tertile grouping: explicit cuts, or cuts from the games', () => {
+    const groups = (g: StrengthGrouping) => computeStrengthReport(games, g).comparison.groups;
+    expect(groups({ kind: 'tertile', dim: 'merlin', lo: 50, hi: 80 }).map((x) => x.games)).toEqual([1, 0, 2]);
+    expect(groups({ kind: 'tertile', dim: 'merlin', lo: 50, hi: 80 })[0].label).toBe('梅林 PR 前 1/3');
+    expect(groups({ kind: 'tertile', dim: 's' }).reduce((a, x) => a + x.games, 0)).toBe(3);
+  });
+
+  it('decision metrics: Merlin votes and leads, red leaders stacking, the assassin hitting Percival', () => {
+    const m = (id: string) => report.comparison.metrics.find((x) => x.id === id)!;
+    // A, R3 1567 (Merlin 6 on the team, the assassin 1 visible): Merlin approves; R4 12567 likewise.
+    expect(m('merlinOnSeenApprove').values[0]).toEqual({ value: 100, n: 2 });
+    // C: team 157 has the visible assassin 1, Merlin 6 off the team, does not approve.
+    expect(m('merlinOffSeenApprove').values[2]).toEqual({ value: 0, n: 1 });
+    expect(m('killPercival').values[0]).toEqual({ value: 0, n: 1 });
+  });
+});
+
+describe('strength vs outcome helpers', () => {
+  it('Wilson interval and empirical-Bayes shrinkage', () => {
+    const w = wilson(5, 10);
+    expect(w.rate).toBe(50);
+    expect(w.lo).toBeCloseTo(23.66, 1);
+    expect(w.hi).toBeCloseTo(76.34, 1);
+    expect(shrinkRate(5, 5, 0.5)).toBeCloseTo(60); // (5 + 20·0.5) / 25
+    expect(shrinkRate(0, 0, 0.45)).toBeCloseTo(45);
+    expect(shrinkRate(100, 100, 0.5)).toBeCloseTo(100 * 110 / 120);
+  });
+
+  it('outcome by S: equal-count bins, ties kept together', () => {
+    const many = decodeGamesDataset(makeDataset(Array.from({ length: 40 }, (_, i) => ({
+      id: `S${i}`, date: '2025-01-01', outcome: i < 20 ? '三紅' : '三藍活',
+      lineup: [30, i < 20 ? 300 : 700, Array(10).fill(i < 20 ? 30 : 70), 0] as LineupTuple,
+    })))).games;
+    const bins = outcomeByS(many, 8);
+    expect(bins).toHaveLength(2); // only two distinct S values
+    expect(bins.map((b) => [b.lo, b.n, Math.round(b.threeRed.rate)])).toEqual([[30, 20, 100], [70, 20, 0]]);
+  });
+
+  it('river series: medians of the table spread over a ±half window, outcome shares, at most maxPoints', () => {
+    const pts: StrengthPoint[] = Array.from({ length: 10 }, (_, i) => ({
+      id: String(i), date: `2025-01-${String(i + 1).padStart(2, '0')}`, outcome: i % 2 ? '三紅' : '三藍活', s: 40 + i,
+      pr: { min: i, q1: i + 10, median: i + 20, mean: i + 21, q3: i + 30, max: i + 40 }, elo: null,
+    }));
+    const river = riverSeries(pts, 'pr', 1, 100);
+    expect(river).toHaveLength(10);
+    expect(river[5]).toMatchObject({ n: 3, median: 25, min: 5, max: 45, s: 45 });
+    expect(river[5].threeRed + river[5].blueAlive).toBeCloseTo(100);
+    expect(riverSeries(pts, 'pr', 1, 4)).toHaveLength(4);
+    expect(riverSeries(pts, 'elo')).toEqual([]);
   });
 });
