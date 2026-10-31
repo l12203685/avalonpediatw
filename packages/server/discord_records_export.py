@@ -1,12 +1,12 @@
 """
 Export the Discord forum #牌譜紀錄與覆盤 (one post = one game) as the list the website's
-「牌譜紀錄」tab shows: packages/server/paipu_cache.json, served by GET /api/analysis/paipu.
+「牌譜紀錄」tab shows: packages/server/records_cache.json, served by GET /api/analysis/records.
 
 Read-only: it lists the forum's posts and reads each post's starter message (the record) with the
 same bot token, client and parser as discord_records_import.py. It never reads the replies in a
 post's thread: they are chat, and this file is committed to a public repository, where a reply
 deleted or edited on Discord would stay in the git history. The site's server reads the replies
-live when someone opens a game (GET /api/analysis/paipu/:id/replies, services/paipuReplies.ts,
+live when someone opens a game (GET /api/analysis/records/:id/replies, services/recordsReplies.ts,
 memory cache only). It never writes to Discord or the stats Sheet, and runs in
 refresh-analysis-cache.yml next to generate_cache.py, so the file is committed together with the
 analysis cache.
@@ -25,15 +25,15 @@ What goes into the file, newest post first:
   The starter message itself is not stored; only what the parser extracted from it.
 
 Guards (exit 4, the existing file is kept): every string must have the expected shape
-(paipu_problems), and the number of posts must not drop by more than max(5, 10%) against the
+(records_problems), and the number of posts must not drop by more than max(5, 10%) against the
 existing file (a forum read that came back short), unless --allow-shrink.
 
 The log and $GITHUB_STEP_SUMMARY get counts only (public repository): no titles, names or records.
 
 Usage:
-    python discord_paipu_export.py                      # writes paipu_cache.json next to this file
-    python discord_paipu_export.py --output PATH
-    python discord_paipu_export.py --allow-shrink       # e.g. after many posts were deleted on purpose
+    python discord_records_export.py                      # writes records_cache.json next to this file
+    python discord_records_export.py --output PATH
+    python discord_records_export.py --allow-shrink       # e.g. after many posts were deleted on purpose
 
 Configuration (environment): DISCORD_BOT_TOKEN (View Channel + Read Message History on the forum,
 Message Content intent), DISCORD_RECORDS_FORUM_ID (default: the forum of discord_records_import).
@@ -57,9 +57,9 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import discord_records_import as dri
 import generate_cache as gc
 
-PAIPU_FORMAT = "avalon-paipu"
-PAIPU_VERSION = 1
-OUTPUT_PATH = Path(__file__).resolve().parent / "paipu_cache.json"
+RECORDS_FORMAT = "avalon-records"
+RECORDS_VERSION = 1
+OUTPUT_PATH = Path(__file__).resolve().parent / "records_cache.json"
 TITLE_MAX = 100
 NAME_MAX = 40
 TAG_MAX = 20
@@ -155,7 +155,7 @@ def post_entry(post: dri.Post, content: str | None) -> tuple[dict[str, Any] | No
     return entry, "game"
 
 
-def build_paipu(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | None], *,
+def build_records(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | None], *,
                 guild_id: str, forum_id: str) -> tuple[dict[str, Any], Counter]:
     """The file's document (posts newest first) and the counts per status. Pure apart from `fetch`;
     posts tagged 模擬 are not fetched."""
@@ -168,8 +168,8 @@ def build_paipu(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | Non
         if entry is not None:
             entries.append(entry)
     doc = {
-        "format": PAIPU_FORMAT,
-        "version": PAIPU_VERSION,
+        "format": RECORDS_FORMAT,
+        "version": RECORDS_VERSION,
         "guildId": guild_id,
         "forumId": forum_id,
         "counts": {
@@ -236,7 +236,7 @@ def game_problems(game: Any) -> list[str]:
     return out
 
 
-def paipu_problems(doc: Any) -> list[str]:
+def records_problems(doc: Any) -> list[str]:
     """Everything that is not the expected shape (fixed strings with counts, never a value). The
     write is refused when this is not empty: the file is public, so only the fields above, in
     their expected form, may be in it."""
@@ -245,7 +245,7 @@ def paipu_problems(doc: Any) -> list[str]:
     out: Counter = Counter()
     if list(doc) != ["format", "version", "guildId", "forumId", "counts", "posts"]:
         out["top-level keys"] += 1
-    if doc.get("format") != PAIPU_FORMAT or doc.get("version") != PAIPU_VERSION:
+    if doc.get("format") != RECORDS_FORMAT or doc.get("version") != RECORDS_VERSION:
         out["format or version"] += 1
     if not (_full("id", doc.get("guildId")) and _full("id", doc.get("forumId"))):
         out["guild or forum id"] += 1
@@ -299,7 +299,7 @@ def paipu_problems(doc: Any) -> list[str]:
     return [f"{name} ({n})" if n > 1 else name for name, n in out.items()]
 
 
-def dump_paipu(doc: Mapping[str, Any]) -> str:
+def dump_records(doc: Mapping[str, Any]) -> str:
     """One top-level key per line and one post per line (small daily diffs)."""
     def compact(value: Any) -> str:
         return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
@@ -358,7 +358,7 @@ def write_atomically(text: str, path: Path) -> None:
 def summary_lines(status: Counter, doc: Mapping[str, Any], result: str) -> list[str]:
     counts = doc["counts"]
     return [
-        "### 網站「牌譜紀錄」清單（paipu_cache.json）",
+        "### 網站「牌譜紀錄」清單（records_cache.json）",
         f"- 論壇貼文 {sum(status.values())} 篇：列出 {counts['posts']} 篇（讀得懂 {counts['games']}、"
         f"格式待修正 {counts['unreadable']}）；略過 模擬 {status['simulation']}、非牌譜貼文 {status['not a record']}",
         f"- 結果：{result}",
@@ -386,21 +386,21 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
                 print(f"  fetched {fetched} starter messages...", flush=True)
             return client.starter_content(post.id)
 
-        doc, status = build_paipu(posts, fetch, guild_id=client.forum_guild_id(forum_id), forum_id=forum_id)
+        doc, status = build_records(posts, fetch, guild_id=client.forum_guild_id(forum_id), forum_id=forum_id)
     except dri.DiscordError as exc:
         raise gc.FatalError(f"{exc} Nothing was written.", dri.EXIT_DISCORD, "Discord API error") from None
 
-    problems = paipu_problems(doc)
+    problems = records_problems(doc)
     if problems:
         gc._append_step_summary(summary_lines(status, doc, f"格式檢查沒過，未寫入（{len(problems)} 個問題）"))
-        raise gc.FatalError("The paipu list failed its shape check (" + "; ".join(problems[:10])
-                            + "); kept the existing file.", gc.EXIT_DATA, "Paipu list not written")
+        raise gc.FatalError("The records list failed its shape check (" + "; ".join(problems[:10])
+                            + "); kept the existing file.", gc.EXIT_DATA, "Records list not written")
     previous = load_previous(out)
     shrink = None if args.allow_shrink else shrink_problem(previous, doc)
     if shrink:
         gc._append_step_summary(summary_lines(status, doc, "篇數變少太多，未寫入"))
-        raise gc.FatalError(shrink, gc.EXIT_DATA, "Paipu list not written")
-    text = dump_paipu(doc)
+        raise gc.FatalError(shrink, gc.EXIT_DATA, "Records list not written")
+    text = dump_records(doc)
     try:
         unchanged = out.read_text(encoding="utf-8") == text
     except OSError:
@@ -418,7 +418,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Export the Discord 牌譜 forum as the website's paipu list.")
+    parser = argparse.ArgumentParser(description="Export the Discord 牌譜 forum as the website's records list.")
     parser.add_argument("--output", default=str(OUTPUT_PATH), metavar="PATH",
                         help=f"where to write the list (default {OUTPUT_PATH.name} next to this script)")
     parser.add_argument("--allow-shrink", action="store_true",

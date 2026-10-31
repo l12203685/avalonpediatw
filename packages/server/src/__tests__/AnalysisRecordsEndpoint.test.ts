@@ -1,7 +1,7 @@
 /**
- * GET /api/analysis/paipu（網站「牌譜紀錄」頁籤）：paipu_cache.json（discord_paipu_export.py 每天寫）原樣包成
- * { success, data }，預先壓縮、強 ETag / 304；檔案不存在或格式不對 → 503 'Paipu list not yet generated'。
- * 不需要試算表金鑰。/paipu/:id/replies：清單裡的貼文才讀、機器人訊息不顯示、快取。虛構的貼文、名字與回覆。
+ * GET /api/analysis/records（網站「牌譜紀錄」頁籤）：records_cache.json（discord_records_export.py 每天寫）原樣包成
+ * { success, data }，預先壓縮、強 ETag / 304；檔案不存在或格式不對 → 503 'Records list not yet generated'。
+ * 不需要試算表金鑰。/records/:id/replies：清單裡的貼文才讀、機器人訊息不顯示、快取。虛構的貼文、名字與回覆。
  */
 import fs from 'fs';
 import os from 'os';
@@ -20,18 +20,18 @@ vi.mock('../middleware/rateLimit', async (importOriginal) => {
 });
 
 import { analysisRouter } from '../routes/analysis';
-import { ENV_PAIPU_CACHE, PAIPU_NOT_GENERATED, invalidatePaipuPayload } from '../services/paipuList';
+import { ENV_RECORDS_CACHE, RECORDS_NOT_GENERATED, invalidateRecordsPayload } from '../services/recordsList';
 import {
   REPLIES_NOT_CONFIGURED,
   REPLIES_TTL_MS,
   REPLIES_UNAVAILABLE,
   createRepliesService,
   setRepliesServiceForTests,
-} from '../services/paipuReplies';
+} from '../services/recordsReplies';
 
 const NAMES = 'ABCDEFGHIJ'.split('').map((c) => `玩家${c}`);
 const DOC = {
-  format: 'avalon-paipu',
+  format: 'avalon-records',
   version: 1,
   guildId: '1132682489840812113',
   forumId: '1132683080134578276',
@@ -64,30 +64,30 @@ app.use('/api/analysis', analysisRouter);
 
 let dir: string;
 let file: string;
-const savedEnv = process.env[ENV_PAIPU_CACHE];
+const savedEnv = process.env[ENV_RECORDS_CACHE];
 
 beforeAll(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'paipu-endpoint-'));
-  file = path.join(dir, 'paipu_cache.json');
-  process.env[ENV_PAIPU_CACHE] = file;
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'records-endpoint-'));
+  file = path.join(dir, 'records_cache.json');
+  process.env[ENV_RECORDS_CACHE] = file;
 });
 
 afterAll(() => {
-  if (savedEnv === undefined) delete process.env[ENV_PAIPU_CACHE];
-  else process.env[ENV_PAIPU_CACHE] = savedEnv;
+  if (savedEnv === undefined) delete process.env[ENV_RECORDS_CACHE];
+  else process.env[ENV_RECORDS_CACHE] = savedEnv;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => {
   fs.writeFileSync(file, JSON.stringify(DOC), 'utf-8');
-  invalidatePaipuPayload();
+  invalidateRecordsPayload();
 });
 
-afterEach(() => invalidatePaipuPayload());
+afterEach(() => invalidateRecordsPayload());
 
-describe('GET /api/analysis/paipu', () => {
+describe('GET /api/analysis/records', () => {
   it('serves the list as { success, data } with an ETag', async () => {
-    const res = await request(app).get('/api/analysis/paipu').set('Accept-Encoding', 'identity');
+    const res = await request(app).get('/api/analysis/records').set('Accept-Encoding', 'identity');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data).toEqual(DOC);
@@ -96,14 +96,14 @@ describe('GET /api/analysis/paipu', () => {
   });
 
   it('answers 304 to a matching If-None-Match', async () => {
-    const first = await request(app).get('/api/analysis/paipu');
-    const second = await request(app).get('/api/analysis/paipu').set('If-None-Match', first.headers.etag);
+    const first = await request(app).get('/api/analysis/records');
+    const second = await request(app).get('/api/analysis/records').set('If-None-Match', first.headers.etag);
     expect(second.status).toBe(304);
   });
 
   it('sends gzip when asked', async () => {
     const res = await request(app)
-      .get('/api/analysis/paipu')
+      .get('/api/analysis/records')
       .set('Accept-Encoding', 'gzip')
       .buffer(true)
       .parse((r, cb) => {
@@ -121,26 +121,34 @@ describe('GET /api/analysis/paipu', () => {
 
   it('is 503 "not yet generated" without the file, and picks the file up once it exists', async () => {
     fs.rmSync(file);
-    invalidatePaipuPayload();
-    const missing = await request(app).get('/api/analysis/paipu');
+    invalidateRecordsPayload();
+    const missing = await request(app).get('/api/analysis/records');
     expect(missing.status).toBe(503);
-    expect(missing.body.error).toBe(PAIPU_NOT_GENERATED);
+    expect(missing.body.error).toBe(RECORDS_NOT_GENERATED);
     fs.writeFileSync(file, JSON.stringify(DOC), 'utf-8');
-    const later = await request(app).get('/api/analysis/paipu');
+    const later = await request(app).get('/api/analysis/records');
     expect(later.status).toBe(200);
+  });
+
+  it('still reads the file written before the rename (format avalon-paipu) and answers the old path', async () => {
+    fs.writeFileSync(file, JSON.stringify({ ...DOC, format: 'avalon-paipu' }), 'utf-8');
+    invalidateRecordsPayload();
+    const res = await request(app).get('/api/analysis/paipu').set('Accept-Encoding', 'identity');
+    expect(res.status).toBe(200);
+    expect(res.body.data.counts.posts).toBe(2);
   });
 
   it('is 503 for a file of another format or broken JSON', async () => {
     fs.writeFileSync(file, JSON.stringify({ ...DOC, format: 'avalon-games' }), 'utf-8');
-    invalidatePaipuPayload();
-    expect((await request(app).get('/api/analysis/paipu')).status).toBe(503);
+    invalidateRecordsPayload();
+    expect((await request(app).get('/api/analysis/records')).status).toBe(503);
     fs.writeFileSync(file, '{"format":', 'utf-8');
-    invalidatePaipuPayload();
-    expect((await request(app).get('/api/analysis/paipu')).status).toBe(503);
+    invalidateRecordsPayload();
+    expect((await request(app).get('/api/analysis/records')).status).toBe(503);
   });
 });
 
-describe('GET /api/analysis/paipu/:id/replies', () => {
+describe('GET /api/analysis/records/:id/replies', () => {
   afterEach(() => setRepliesServiceForTests(undefined));
 
   const reply = {
@@ -156,7 +164,7 @@ describe('GET /api/analysis/paipu/:id/replies', () => {
         return { ok: true as const, replies: [reply], fetchedAt: Date.UTC(2026, 9, 25, 15, 20), stale: false };
       },
     });
-    const res = await request(app).get('/api/analysis/paipu/1432000000000000001/replies');
+    const res = await request(app).get('/api/analysis/records/1432000000000000001/replies');
     expect(res.status).toBe(200);
     expect(res.body.data.replies).toEqual([reply]);
     expect(res.body.data.stale).toBe(false);
@@ -166,18 +174,18 @@ describe('GET /api/analysis/paipu/:id/replies', () => {
   it('reads no thread that is not in the list (other channels, simulations)', async () => {
     let called = false;
     setRepliesServiceForTests({ load: async () => { called = true; return { ok: false as const, status: 503, error: 'x' }; } });
-    expect((await request(app).get('/api/analysis/paipu/1432000000000000999/replies')).status).toBe(404);
-    expect((await request(app).get('/api/analysis/paipu/abc/replies')).status).toBe(404);
+    expect((await request(app).get('/api/analysis/records/1432000000000000999/replies')).status).toBe(404);
+    expect((await request(app).get('/api/analysis/records/abc/replies')).status).toBe(404);
     expect(called).toBe(false);
   });
 
   it('is 503 without a bot token, or when Discord cannot be read', async () => {
     setRepliesServiceForTests(null);
-    const none = await request(app).get('/api/analysis/paipu/1432000000000000001/replies');
+    const none = await request(app).get('/api/analysis/records/1432000000000000001/replies');
     expect(none.status).toBe(503);
     expect(none.body.error).toBe(REPLIES_NOT_CONFIGURED);
     setRepliesServiceForTests({ load: async () => ({ ok: false as const, status: 503, error: REPLIES_UNAVAILABLE }) });
-    const down = await request(app).get('/api/analysis/paipu/1432000000000000001/replies');
+    const down = await request(app).get('/api/analysis/records/1432000000000000001/replies');
     expect(down.status).toBe(503);
     expect(down.body.error).toBe(REPLIES_UNAVAILABLE);
   });
