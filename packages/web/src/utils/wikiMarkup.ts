@@ -59,6 +59,19 @@ function layerTags(line: string): string {
   });
 }
 
+/** For plain-text copies (llms.txt): old labels → `【邏輯】`／`【經驗】`, `【時效】` dropped; the marker stays as text. */
+export function canonicalLayerMarks(line: string): string {
+  return line.replace(LAYER_MARK_RE, (_m, label: string) => {
+    const layer = LAYER_OF_LABEL[label];
+    return layer ? `【${WIKI_TAGS[layer].label}】` : '';
+  });
+}
+
+/** One-line summaries (llms.txt): markers removed altogether. */
+export function stripLayerMarks(text: string): string {
+  return text.replace(LAYER_MARK_RE, '');
+}
+
 /** Whether normalized markup carries any layer marker (WikiContent then shows the color legend). */
 export function hasWikiLayers(normalized: string): boolean {
   return normalized.includes(`](${WIKI_TAG_SCHEME}`);
@@ -128,7 +141,7 @@ function inlineColors(text: string): string {
 }
 
 /** Leading HackMD front matter (`---` … `---`; the HackMD exports often carry two blocks) and `[TOC]` lines. */
-function stripHackmdArtifacts(content: string): string {
+export function stripHackmdArtifacts(content: string): string {
   return content
     .replace(/^(?:\s*---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))+/, '')
     .replace(/^[ \t]*\[TOC\][ \t]*\r?\n?/gim, '');
@@ -138,7 +151,7 @@ function stripHackmdArtifacts(content: string): string {
  * `<!-- … -->`: text the authors commented out in HackMD (old drafts, sign-up lists). HackMD hides it; the site
  * doesn't parse HTML, so without this it was printed as text (Edward 2026-10-29 百科整併時看到).
  */
-function stripHtmlComments(content: string): string {
+export function stripHtmlComments(content: string): string {
   return content.replace(/[ \t]*<!--[\s\S]*?-->[ \t]*/g, '');
 }
 

@@ -26,6 +26,9 @@
     />
     <meta name="author" content="Avalon Pedia TW" />
     <link rel="canonical" href="https://avalonpediatw.com/" />
+    <!-- 給 AI／爬蟲的純文字版本（網站需要 JavaScript；build 時由 vite.config.ts 產生，見 src/utils/llmsTxt.ts） -->
+    <link rel="alternate" type="text/markdown" href="/llms.txt" title="阿瓦隆百科目錄（llms.txt）" />
+    <link rel="alternate" type="text/markdown" href="/llms-full.txt" title="阿瓦隆百科全部文章（Markdown）" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
@@ -69,6 +72,7 @@
   </head>
   <body>
     <div id="root"></div>
+    <!--llms-noscript-->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
