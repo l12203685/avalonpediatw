@@ -52,7 +52,7 @@ describe('assassinVoteModel=3 (round-13 generic-blue rates)', () => {
 });
 
 describe('redHideR1', () => {
-  const ON = { ...DEFAULT_AGENT_TUNING, redHideR1: 1 };
+  const ON = { ...DEFAULT_AGENT_TUNING, redHideR1: 1, redHideR1Who: 0 };
   const quest = (p: Partial<PlayerObservation>) => ({
     ...base, myPlayerId: 'P2', myRole: 'morgana', knownEvils: ['P1', 'P2', 'P3'], currentRound: 1, gamePhase: 'quest_vote',
     proposedTeam: ['P2', 'P5', 'P6'], questResults: [], ...p,
