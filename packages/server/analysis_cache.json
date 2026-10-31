@@ -1725,7 +1725,7 @@
         "10": 30.1
       }
     },
-    "gamesKey": "5bb5db0b4cc303bb"
+    "gamesKey": "12c4c2ba9ffe145d"
   },
   "players": {
     "players": [
@@ -201111,7 +201111,12 @@
       "eloScale": 400,
       "provisionalGames": 30,
       "boardMinGames": 30,
-      "activeDays": 90
+      "activeDays": 90,
+      "lineupMinGames": 30,
+      "lineupActiveDays": null,
+      "lineupMinPool": 20,
+      "lineupMinNamedSeats": 8,
+      "lineupProvisionalCap": 50
     },
     "games": 1836,
     "skippedGames": 455,

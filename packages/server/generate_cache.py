@@ -3891,14 +3891,17 @@ def _lineup_snapshot(model: "_RatingModel", day: str, names: Sequence[str | None
     cap = float(cfg["lineupProvisionalCap"])
     prs: list[int] = []
     prov: list[bool] = []
+    elos: list[float] = []
     for name in names:
-        pr = _percentile_rank(pool, convert(name if name else "\0")[0])
+        elo = convert(name if name else "\0")[0]
+        pr = _percentile_rank(pool, elo)
         provisional = not name or model.games[name] < min_games
         if provisional:
             pr = min(pr, cap)
         prs.append(int(math.floor(pr + 0.5)))
         prov.append(provisional)
-    return {"pool": len(pool), "s": rnd1(sum(prs) / len(prs)), "prs": prs, "prov": prov}
+        elos.append(elo)
+    return {"pool": len(pool), "s": rnd1(sum(prs) / len(prs)), "prs": prs, "prov": prov, "elos": elos}
 
 
 def compute_lineups(
@@ -4630,8 +4633,9 @@ def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] |
 #   claims    最多三筆持湖、目標及宣告；x 紅、o 藍、- 未宣告。
 #   captains  每個任務的隊長；- 表示缺值，非 ASCII 數字轉 ?。
 #   votes     [回合, 提議次數, 隊伍, 贊成座位]；第 5 次強制派隊沒有票。
-#   lineup    陣容強度（compute_lineups，第 3 版起）：[玩家池人數, S×10, 座位 1..9、0 的 PR, 暫定座位位元]，
-#             位元 i = SEATS[i] 是暫定或沒寫名字；不評分為 []。由對局本身重放得出，解碼不需要它（守門會重算比對）。
+#   lineup    陣容強度（compute_lineups，第 3 版起）：[玩家池人數, S×10, 座位 1..9、0 的 PR, 暫定座位位元,
+#             座位 1..9、0 的賽前 Elo×10（2026-10-31 起；數據分析「陣容強度」的桌上 Elo 最低／中位／平均／最高）]，
+#             位元 i = SEATS[i] 是暫定或沒寫名字（沒寫名字的 Elo = 新人起始值）；不評分為 []。由對局本身重放得出，解碼不需要它（守門會重算比對）。
 # Python 與 TS 以相同規則解碼；編碼與解碼後的統計若不一致，禁止寫入資料集。
 
 GAMES_DATASET_FORMAT = "avalon-games"
@@ -4718,7 +4722,8 @@ def encode_lineup(lineup: Mapping[str, Any] | None) -> list:
     if not lineup:
         return []
     mask = sum(1 << i for i, p in enumerate(lineup["prov"]) if p)
-    return [int(lineup["pool"]), int(round(lineup["s"] * 10)), [int(x) for x in lineup["prs"]], mask]
+    return [int(lineup["pool"]), int(round(lineup["s"] * 10)), [int(x) for x in lineup["prs"]], mask,
+            [int(round(e * 10)) for e in lineup["elos"]]]
 
 
 def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | None = None) -> dict:
@@ -4921,9 +4926,11 @@ def games_dataset_privacy_problems(doc: Mapping[str, Any]) -> list[str]:
                 and isinstance(p[3], str) and re.fullmatch(r"[0-9]{0,10}", p[3])
                 and len(set(p[3])) == len(p[3]) and (p[1] < 5 or not p[3]) for p in votes),
             "lineup": isinstance(lineup, list) and (lineup == [] or (
-                len(lineup) == 4 and is_int(lineup[0], 1, 100_000) and is_int(lineup[1], 0, 1001)
+                len(lineup) == 5 and is_int(lineup[0], 1, 100_000) and is_int(lineup[1], 0, 1001)
                 and isinstance(lineup[2], list) and len(lineup[2]) == len(SEATS)
-                and all(is_int(x, 0, 101) for x in lineup[2]) and is_int(lineup[3], 0, 1 << len(SEATS)))),
+                and all(is_int(x, 0, 101) for x in lineup[2]) and is_int(lineup[3], 0, 1 << len(SEATS))
+                and isinstance(lineup[4], list) and len(lineup[4]) == len(SEATS)
+                and all(is_int(x, 0, 100_000) for x in lineup[4]))),
         }
         for name, ok in checks.items():
             if not ok:

@@ -2,7 +2,7 @@
  * 篩選重算的呼叫端：預設在 Worker 裡算 (stats.worker.ts)，瀏覽器不支援或 Worker 起不來時改在主執行緒算
  * (同一份 statsCompute.ts)。同一個篩選只算一次 (最近幾個篩選的結果留著，切回來不用重算)。
  */
-import type { GameFilter, StatsResult } from '@avalon/shared/stats';
+import type { GameFilter, StatsResult, StrengthGrouping, StrengthReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
@@ -66,21 +66,25 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-async function onMainThread<T>(type: 'vocab' | 'compute', filter?: GameFilter): Promise<T> {
+type RequestType = 'vocab' | 'compute' | 'strength';
+
+async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
   const mod = await import('./statsCompute');
   try {
     return (type === 'vocab'
       ? await mod.filterVocab(SERVER_URL)
-      : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
+      : type === 'strength'
+        ? await mod.computeStrength(SERVER_URL, filter ?? null, grouping ?? { kind: 'tier' })
+        : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
   } catch (err) {
     const status = err instanceof mod.GamesUnavailableError ? err.status : 0;
     throw new FilterUnavailableError(status, err instanceof Error ? err.message : String(err));
   }
 }
 
-function call<T>(type: 'vocab' | 'compute', filter?: GameFilter): Promise<T> {
+function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
   const w = getWorker();
-  if (!w) return onMainThread<T>(type, filter);
+  if (!w) return onMainThread<T>(type, filter, grouping);
   const id = nextId;
   nextId += 1;
   return new Promise<T>((resolve, reject) => {
@@ -89,10 +93,10 @@ function call<T>(type: 'vocab' | 'compute', filter?: GameFilter): Promise<T> {
       reject(new FilterUnavailableError(0, 'timeout'));
     }, TIMEOUT_MS);
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-    w.postMessage({ id, type, serverUrl: SERVER_URL, filter });
+    w.postMessage({ id, type, serverUrl: SERVER_URL, filter: filter ?? undefined, grouping });
   }).catch((err: unknown) => {
     // Worker 壞掉 (不是資料集拿不到) → 主執行緒再試一次
-    if (err instanceof FilterUnavailableError && err.message === 'worker failed') return onMainThread<T>(type, filter);
+    if (err instanceof FilterUnavailableError && err.message === 'worker failed') return onMainThread<T>(type, filter, grouping);
     throw err;
   });
 }
@@ -129,9 +133,26 @@ export function filteredStats(filter: GameFilter, key: string): Promise<StatsRes
   return p;
 }
 
+const strengthResults = new Map<string, Promise<StrengthReport>>();
+
+/** 數據分析「陣容強度」：目前篩選（沒有 = 全部局）下依 grouping 分組的報告。失敗不快取。 */
+export function strengthReport(filter: GameFilter | null, filterKey: string, grouping: StrengthGrouping): Promise<StrengthReport> {
+  const key = `${filterKey}|${JSON.stringify(grouping)}`;
+  const hit = strengthResults.get(key);
+  if (hit) return hit;
+  const p = call<StrengthReport>('strength', filter, grouping);
+  strengthResults.set(key, p);
+  p.catch(() => {
+    if (strengthResults.get(key) === p) strengthResults.delete(key);
+  });
+  while (strengthResults.size > KEEP_RESULTS) strengthResults.delete(strengthResults.keys().next().value as string);
+  return p;
+}
+
 /** 測試／重試用：清掉 Worker 錯誤狀態以外的快取。 */
 export function resetFilteredStats(): void {
   results.clear();
+  strengthResults.clear();
   vocab = null;
   failAll(new FilterUnavailableError(0, 'reset'));
 }

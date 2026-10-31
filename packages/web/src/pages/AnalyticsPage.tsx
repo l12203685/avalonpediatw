@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
-  BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar,
+  BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar, Gauge,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
@@ -16,6 +16,7 @@ import AssassinationTab from '../components/analysis/tabs/AssassinationTab';
 import PositionTab from '../components/analysis/tabs/PositionTab';
 import RolesTab from '../components/analysis/tabs/RolesTab';
 import PlayersTab from '../components/analysis/tabs/PlayersTab';
+import StrengthTab from '../components/analysis/tabs/StrengthTab';
 import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
 import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
 import StatsFilterBar from '../components/analysis/filter/StatsFilterBar';
@@ -64,7 +65,7 @@ import { useFilterHashSync } from '../stats/sharedFilter';
  */
 type AnalysisTab =
   | 'overview' | 'teams' | 'votes' | 'missions'
-  | 'lake' | 'assassination' | 'position' | 'roles' | 'players';
+  | 'lake' | 'assassination' | 'position' | 'roles' | 'strength' | 'players';
 
 interface AnalysisTabDef { id: AnalysisTab; labelKey: string; icon: typeof BarChart3 }
 
@@ -78,6 +79,8 @@ const ANALYSIS_TABS: AnalysisTabDef[] = [
   { id: 'assassination', labelKey: 'analytics.analysis.tabs.assassination', icon: Crosshair },
   { id: 'position',      labelKey: 'analytics.analysis.tabs.position',      icon: Map },
   { id: 'roles',         labelKey: 'analytics.analysis.tabs.roles',         icon: Users },
+  // 2026-10-31 Edward：陣容強度（走勢、季 × 強度、分層結果、不同組成的過程比較）
+  { id: 'strength',      labelKey: 'analytics.analysis.tabs.strength',      icon: Gauge },
   { id: 'players',       labelKey: 'analytics.analysis.tabs.players',       icon: Radar },
 ];
 
@@ -179,6 +182,7 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
           {tab === 'assassination' && <AssassinationTab />}
           {tab === 'position'      && <PositionTab />}
           {tab === 'roles'         && <RolesTab />}
+          {tab === 'strength'      && <StrengthTab />}
           {tab === 'players'       && <PlayersTab focus={focus} />}
         </motion.div>
       </AnimatePresence>

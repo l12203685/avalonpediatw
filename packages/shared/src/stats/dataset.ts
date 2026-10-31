@@ -70,10 +70,14 @@ export type GameTuple = [
 ];
 
 /**
- * 陣容強度（generate_cache.compute_lineups）：[玩家池人數, S×10, 座位 1..9、0 的 PR, 暫定座位位元]；不評分 = []。
+ * 陣容強度（generate_cache.compute_lineups）：[玩家池人數, S×10, 座位 1..9、0 的 PR, 暫定座位位元, 座位的賽前 Elo×10]
+ * （Elo 是 2026-10-31 加的第 5 項，較早的檔案只有 4 項）；不評分 = []。
  * PR = 開打前在「生涯已 ≥30 場」的玩家池裡的百分等級；暫定（<30 場）與沒寫名字的座位 PR 最高 50。
  */
-export type LineupTuple = [] | [pool: number, sTenths: number, prs: number[], provMask: number];
+export type LineupTuple =
+  | []
+  | [pool: number, sTenths: number, prs: number[], provMask: number]
+  | [pool: number, sTenths: number, prs: number[], provMask: number, elosTenths: number[]];
 
 /** 回合、提議序號、隊伍、贊成座位；第 5 次強制派隊的贊成座位固定為空。 */
 export type VotingProposal = [round: number, attempt: number, team: string, approved: string];
@@ -126,13 +130,16 @@ export interface GameLineup {
   prs: number[];
   /** 暫定（賽前 <30 場）或沒寫名字的座位：PR 最高 50，「PR X 以上有幾人」不算他們。 */
   prov: boolean[];
+  /** SEATS 順序每個座位的賽前 Elo（一位小數；沒寫名字 = 新人起始值）；2026-10-31 以前的資料沒有 = null。 */
+  elos: number[] | null;
 }
 
 /** lineup 欄 → GameLineup（[] 或缺欄 = null）。 */
 export function decodeLineup(raw: LineupTuple | undefined): GameLineup | null {
-  if (!raw || raw.length !== 4) return null;
+  if (!raw || (raw.length !== 4 && raw.length !== 5)) return null;
   const [pool, sTenths, prs, mask] = raw;
-  return { pool, s: sTenths / 10, prs: [...prs], prov: prs.map((_, i) => ((mask >> i) & 1) === 1) };
+  const elos = raw.length === 5 ? raw[4].map((e) => e / 10) : null;
+  return { pool, s: sTenths / 10, prs: [...prs], prov: prs.map((_, i) => ((mask >> i) & 1) === 1), elos };
 }
 
 /** PR 至少 minPr 的座位數（暫定與沒寫名字的不算）。 */

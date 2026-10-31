@@ -5,6 +5,7 @@ import {
   mistakeDetails,
   mistakeTags,
   postLineup,
+  postRoleStrength,
   type RecordPost,
 } from '../../utils/records';
 
@@ -67,7 +68,31 @@ export function MistakeChips({ post, size = 'sm' }: { post: RecordPost; size?: '
   );
 }
 
-export function LineupSummary({ post }: { post: RecordPost }): JSX.Element {
+function fmtGroup(g: { mean: number; max: number; min: number } | null): string {
+  return g ? `${Math.round(g.mean)}／${g.max}／${g.min}` : '—';
+}
+
+/**
+ * 角色的 PR（Edward 2026-10-31「當局的紅方／忠臣各自的最高／最低 ELO & PR，以及派西／梅林的 ELO & PR」）：
+ * 只在「顯示角色」打開時出現（關掉時哪個座位是什麼角色都不透露）。
+ */
+export function RoleStrengthLine({ post }: { post: RecordPost }): JSX.Element | null {
+  const st = postRoleStrength(post);
+  if (!st) return null;
+  const one = (v: number | null): string => (v === null ? '—' : String(v));
+  return (
+    <div
+      className="text-[11px] text-zinc-400"
+      data-testid="records-role-strength"
+      title="開打前 PR：紅方／忠臣是 平均／最高／最低；沒寫名字的座位所屬的那組不算"
+    >
+      <span className="text-red-300">紅方</span> {fmtGroup(st.pr.red)} · <span className="text-sky-300">忠臣</span> {fmtGroup(st.pr.loyal)}
+      {' · '}<span className="text-blue-300">派西</span> {one(st.pr.percival)} · <span className="text-blue-300">梅林</span> {one(st.pr.merlin)}
+    </div>
+  );
+}
+
+export function LineupSummary({ post, showRoles = false }: { post: RecordPost; showRoles?: boolean }): JSX.Element {
   const lineup = postLineup(post);
   return (
     <div className="flex flex-wrap items-center gap-1 text-[11px] text-zinc-400" data-testid="records-lineup-summary">
@@ -77,6 +102,7 @@ export function LineupSummary({ post }: { post: RecordPost }): JSX.Element {
         <span>PR ≥ 70 有 {countStrongSeats(lineup, 70)} 人 · 玩家池 {lineup.pool} 人</span>
       )}
       <MistakeChips post={post} />
+      {showRoles && <div className="basis-full"><RoleStrengthLine post={post} /></div>}
     </div>
   );
 }

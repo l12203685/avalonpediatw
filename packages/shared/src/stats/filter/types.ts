@@ -71,7 +71,10 @@ export interface GameIdClause extends Base { kind: 'gameId'; in: string[] }
  * combine = 且／或；沒評分的局只有 includeUnscored 才符合（判斷見 ../lineup.ts matchesLineup）。
  */
 export interface LineupClause extends Base {
-  kind: 'lineup'; sMin?: number; strongPr?: number; strongCount?: number; combine?: 'and' | 'or'; includeUnscored?: boolean;
+  kind: 'lineup'; sMin?: number; strongPr?: number; strongCount?: number;
+  /** 角色條件（Edward 2026-10-31）：梅林／派西 PR、紅方／忠臣最低 PR、紅方平均 − 藍方平均 PR。 */
+  merlinPrMin?: number; percivalPrMin?: number; redMinPrMin?: number; loyalMinPrMin?: number; gapMin?: number;
+  combine?: 'and' | 'or'; includeUnscored?: boolean;
 }
 
 // ── 玩家在局 ──

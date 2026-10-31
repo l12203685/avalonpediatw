@@ -4246,14 +4246,15 @@ def hand_lineup(model: Any, day: str, names: list, cfg: dict) -> dict | None:
         window is None or (dt.date.fromisoformat(day) - dt.date.fromisoformat(model.last_day[p])).days <= window))
     if len(pool) < cfg["lineupMinPool"]:
         return None
-    prs, prov = [], []
+    prs, prov, elos = [], [], []
     for name in names:
         x = convert(name or "\0")[0]
+        elos.append(x)
         pr = 100 * (sum(1 for e in pool if e < x) + 0.5 * sum(1 for e in pool if e == x)) / len(pool)
         p = not name or model.games[name] < cfg["lineupMinGames"]
         prs.append(int(math.floor((min(pr, cfg["lineupProvisionalCap"]) if p else pr) + 0.5)))
         prov.append(p)
-    return {"pool": len(pool), "s": gc.rnd1(sum(prs) / 10), "prs": prs, "prov": prov}
+    return {"pool": len(pool), "s": gc.rnd1(sum(prs) / 10), "prs": prs, "prov": prov, "elos": elos}
 
 
 class LineupTest(unittest.TestCase):
@@ -4342,8 +4343,9 @@ class LineupTest(unittest.TestCase):
 
     def test_dataset_field(self) -> None:
         self.assertEqual(gc.encode_lineup(None), [])
-        self.assertEqual(gc.encode_lineup({"pool": 21, "s": 55.5, "prs": [50] * 9 + [60], "prov": [True] + [False] * 8 + [True]}),
-                         [21, 555, [50] * 9 + [60], 1 | 1 << 9])
+        self.assertEqual(gc.encode_lineup({"pool": 21, "s": 55.5, "prs": [50] * 9 + [60], "prov": [True] + [False] * 8 + [True],
+                                           "elos": [1500.04] * 9 + [1487.66]}),
+                         [21, 555, [50] * 9 + [60], 1 | 1 << 9, [15000] * 9 + [14877]])
         games = run_like_games(elo_log())
         lineups, _ = gc.compute_lineups(games)  # real thresholds: 12 players never make a pool of 20
         self.assertEqual(lineups, [None] * 36)
@@ -4351,16 +4353,17 @@ class LineupTest(unittest.TestCase):
         at = gc.GAMES_DATASET_FIELDS.index("lineup")
         self.assertEqual({json.dumps(r[at]) for r in ds["games"]}, {"[]"})
         tampered = copy.deepcopy(ds)
-        tampered["games"][0][at] = [21, 555, [50] * 9, 0]
-        tampered["games"][1][at] = [21, 555, [101] * 10, 0]
+        tampered["games"][0][at] = [21, 555, [50] * 9, 0, [15000] * 10]
+        tampered["games"][1][at] = [21, 555, [101] * 10, 0, [15000] * 10]
+        tampered["games"][2][at] = [21, 555, [50] * 10, 0]  # the version before the seats' Elo
         tampered["key"] = gc.games_dataset_key(tampered)
-        self.assertEqual(gc.games_dataset_privacy_problems(tampered), ["games[].lineup: 2 row(s)"])
+        self.assertEqual(gc.games_dataset_privacy_problems(tampered), ["games[].lineup: 3 row(s)"])
 
     def test_round_trip_checks_the_lineup(self) -> None:
         games = run_like_games(dataset_log())
         dataset, cache = dataset_and_cache(games)
         tampered = copy.deepcopy(dataset)
-        tampered["games"][-1][gc.GAMES_DATASET_FIELDS.index("lineup")] = [25, 500, [50] * 10, 0]
+        tampered["games"][-1][gc.GAMES_DATASET_FIELDS.index("lineup")] = [25, 500, [50] * 10, 0, [15000] * 10]
         tampered["key"] = gc.games_dataset_key(tampered)
         cache = copy.deepcopy(cache)
         cache["overview"]["gamesKey"] = tampered["key"]

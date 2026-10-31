@@ -52,6 +52,8 @@ const SCHEMA: Record<string, KindSchema> = {
   lineup: {
     optional: {
       sMin: { range: [0, 100] }, strongPr: { range: [0, 100] }, strongCount: { range: [1, 10] },
+      merlinPrMin: { range: [0, 100] }, percivalPrMin: { range: [0, 100] }, redMinPrMin: { range: [0, 100] },
+      loyalMinPrMin: { range: [0, 100] }, gapMin: { range: [-100, 100] },
       combine: { enum: ['and', 'or'] }, includeUnscored: 'bool',
     },
   },
