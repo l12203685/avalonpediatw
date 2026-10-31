@@ -8,6 +8,7 @@ import type { GameFilter, StatsResult } from '@avalon/shared/stats';
 import { filteredRoute, followsFilter, withFilteredLakeClaim } from '../stats/filteredRoutes';
 import { FilterUnavailableError, filteredStats } from '../stats/statsEngine';
 import { currentStatsFilter } from '../stats/statsFilter';
+import type { PaipuList } from '../utils/paipu';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -1384,6 +1385,44 @@ export interface CaptainAnalysisData {
 
 export async function fetchAnalysisCaptain(): Promise<CaptainAnalysisData> {
   return analysisApiFetch<CaptainAnalysisData>('/captain');
+}
+
+// ── 牌譜紀錄（Discord 論壇 #牌譜紀錄與覆盤；utils/paipu.ts） ─────────────────────
+
+/** 牌譜紀錄清單（每天從 DC 論壇同步）。不跟著數據分析的篩選。 */
+export async function fetchPaipuList(): Promise<PaipuList> {
+  const res = await fetch(`${SERVER_URL}/api/analysis/paipu`);
+  if (!res.ok) throw new AnalysisApiError(res.status, '/paipu', await readServerError(res));
+  const body = (await res.json()) as ApiEnvelope<PaipuList>;
+  if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
+  return body.data;
+}
+
+/** 討論串裡的一則回覆（伺服器即時讀 DC，不含機器人訊息）。 */
+export interface PaipuReply {
+  id: string;
+  author: string;
+  time: string;
+  edited: boolean;
+  text: string;
+  attachments: Array<{ name: string; url: string; image: boolean }>;
+  replyTo?: string;
+}
+
+export interface PaipuRepliesData {
+  replies: PaipuReply[];
+  fetchedAt: string;
+  stale: boolean;
+}
+
+/** 一篇貼文討論串的回覆。 */
+export async function fetchPaipuReplies(id: string): Promise<PaipuRepliesData> {
+  const path = `/paipu/${encodeURIComponent(id)}/replies`;
+  const res = await fetch(`${SERVER_URL}/api/analysis${path}`);
+  if (!res.ok) throw new AnalysisApiError(res.status, path, await readServerError(res));
+  const body = (await res.json()) as ApiEnvelope<PaipuRepliesData>;
+  if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
+  return body.data;
 }
 
 // ── Panel A: Player archetype (4-axis radar) ─────────────────────────────────

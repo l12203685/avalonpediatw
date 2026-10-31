@@ -16,6 +16,7 @@ import { startVersionCheck } from './services/versionCheck';
 import { forceRefresh } from './utils/forceRefresh';
 import SiteNav, { lastSiteTab, siteTabOf } from './components/SiteNav';
 import StreamsPage from './pages/StreamsPage';
+import PaipuPage from './pages/PaipuPage';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -54,10 +55,12 @@ function App(): JSX.Element {
       if (!link) return;
       const store = useGameStore.getState();
       if (link.kind === 'player') store.openPlayerStats(link.name);
+      else if (link.kind === 'paipu') store.setGameState('paipu');
       else store.setGameState(link.kind === 'study' ? 'analysis' : 'analytics');
       setStatsFirst(true);
-      // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close)
-      if (link.kind === 'study') return;
+      // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close);
+      // #paipu=<id> likewise while that game is open (PaipuPage)
+      if (link.kind === 'study' || (link.kind === 'paipu' && link.id)) return;
       // #stats?f=… (a shared filter) stays too: the filter bar keeps it in sync with the filter
       if (link.kind === 'stats' && (link.filter || link.preset)) {
         applySharedFilter(link);
@@ -467,6 +470,7 @@ function App(): JSX.Element {
               legacy 'leaderboard' (舊排行頁，2026-10-30 起併入戰績排行：原本的「傳統 ELO 分層」已移除) = 戰績排行 */}
           {(shownState === 'analysis' || shownState === 'analytics' || shownState === 'leaderboard') && <AnalyticsPage />}
           {shownState === 'streams' && <StreamsPage />}
+          {shownState === 'paipu' && <PaipuPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage
