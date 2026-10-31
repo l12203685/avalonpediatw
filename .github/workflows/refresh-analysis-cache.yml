@@ -26,6 +26,8 @@ name: Refresh analysis cache
 #       裡的回覆），寫 packages/server/records_cache.json（只有標題、標籤、發文時間與解析後的牌譜；不存起始訊息
 #       原文；略過模擬與非牌譜貼文），跟快取一起 commit。沒設 token → notice 略過；讀取或檢查失敗 → 保留舊檔、
 #       快取照常推送，最後一步讓 job 亮紅燈。allow_shrink 也放寬清單篇數變少的檢查。公開紀錄只有數量。
+#       每篇讀得懂的牌譜另附陣容強度（S、每個座位的時點 PR，從同一次寫出的 games_cache.json 算）與可證明的失誤
+#       標籤（Edward 2026-10-31）；沒有 token 或讀 Discord 失敗時用 --annotate-only 只更新這兩項。
 
 on:
   schedule:
@@ -186,11 +188,18 @@ jobs:
           # Read-only: the forum's post list and each post's starter message (never the replies in a
           # thread). A failure keeps the committed records_cache.json (the write is atomic) and does not
           # hold back the analysis cache; the last step turns the job red. Counts only in the log.
+          # Without the token (or when the read fails) the committed list still gets today's 陣容強度 and
+          # 失誤標籤 from the games_cache.json written above (--annotate-only reads no Discord).
+          annotate() {
+            python packages/server/discord_records_export.py --output "${RECORDS_PATH}" --annotate-only || \
+              echo "::warning title=Records annotations not refreshed::discord_records_export.py --annotate-only failed; the list keeps its previous 陣容強度 / 失誤標籤."
+          }
           if [ -z "${DISCORD_BOT_TOKEN}" ]; then
             msg="Skipped: add the repository secret DISCORD_BOT_TOKEN to keep the site's 牌譜紀錄 tab up to date."
             echo "::notice title=Records list skipped::${msg}"
             echo "- 牌譜紀錄清單：略過（未設定 DISCORD_BOT_TOKEN）" >> "$GITHUB_STEP_SUMMARY"
             echo "records=skipped" >> "$GITHUB_OUTPUT"
+            annotate
             exit 0
           fi
           args=(--output "${RECORDS_PATH}")
@@ -210,6 +219,7 @@ jobs:
             echo "::error title=Records list export crashed::discord_records_export.py exited with ${rc}; see the traceback above. The committed list is kept."
           fi
           echo "records=failed" >> "$GITHUB_OUTPUT"
+          annotate
 
       - name: Commit and push if the cache changed
         if: steps.creds.outputs.secret != ''

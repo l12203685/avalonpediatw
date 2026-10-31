@@ -126,6 +126,7 @@ from __future__ import annotations
 from voting_stats import compute_player_voting, parse_voting_proposals
 
 import argparse
+import bisect
 import contextlib
 import copy
 import datetime as dt
@@ -133,6 +134,7 @@ import functools
 import gzip
 import hashlib
 import importlib.util
+import itertools
 import json
 import math
 import os
@@ -3647,6 +3649,13 @@ RATING_CONFIG: dict[str, Any] = {
     "provisionalGames": 30,     # 少於 N 場標「暫定」
     "boardMinGames": 30,        # 網站 Elo 頁籤的預設上榜場數
     "activeDays": LEADERBOARD_CONFIG["activeDays"],  # 網站 Elo 頁籤預設：近 N 天有出賽
+    # 陣容強度（lineup，Edward 2026-10-31）：每局賽前、每個座位在「當時玩家池」裡的 PR，S = 10 人 PR 的平均
+    "lineupMinGames": 30,         # 玩家池：開打前生涯已計入至少 N 場的人
+    # 玩家池另要求這局日期往前 N 天內出賽過；None = 不限（Edward 2026-10-31「一個人的程度不太會因為太久沒玩改變」）
+    "lineupActiveDays": None,
+    "lineupMinPool": 20,          # 玩家池少於 N 人的日期不評分
+    "lineupMinNamedSeats": 8,     # 至少 N 個座位有名字才評分（沒名字的座位當新人）
+    "lineupProvisionalCap": 50,   # 暫定（賽前 < lineupMinGames 場）與沒名字的座位：PR 最高算這個值
 }
 RATING_SCHEMA_VERSION = 1
 _RATING_SIDE = {"blue": 6, "red": 4}  # 理論勝率的隊伍人數（10 人局）
@@ -3696,13 +3705,14 @@ class _RatingModel:
         self.beta = _logit(float(cfg["initialBlueWinRate"]))
         self.window: list[list[tuple[str, str]]] = []
         self.window_counts: Counter = Counter()
+        self.last_day: dict[str, str] = {}  # 最後一次出賽的排序日期（陣容強度的玩家池用）
 
     def veteran_mean(self) -> float:
         vets = [v for p, v in self.r.items() if self.games[p] >= self.cfg["veteranGames"]]
         return sum(vets) / len(vets) if vets else 0.0
 
-    def play(self, g: GameRow) -> float:
-        """更新一局，回傳賽前的藍勝預測。"""
+    def play(self, g: GameRow, day: str = "") -> float:
+        """更新一局，回傳賽前的藍勝預測（day = 這局的排序日期，記成每人最後出賽日）。"""
         cfg = self.cfg
         seats = [(s, g.seat_roles[s], g.seat_players[s]) for s in SEATS]
         for _, _, name in seats:
@@ -3725,6 +3735,8 @@ class _RatingModel:
         self.beta += float(cfg["baseRate"]) * e
         for _, _, name in seats:
             self.games[name] += 1
+            if day:
+                self.last_day[name] = day
         self.window.append(keys)
         self.window_counts.update(keys)
         if len(self.window) > int(cfg["offsetWindowGames"]):
@@ -3756,8 +3768,10 @@ class _RatingModel:
             return float(cfg["eloBase"]) + float(cfg["eloScale"]) * math.log10(th / (1.0 - th) / odds0)
 
         def convert(name: str) -> tuple[float, float, float]:
-            rel = self.r[name] - vm
-            sd = 1.0 / math.sqrt(self.info[name])
+            # 還沒出賽過的名字 = 新人此刻的起始值（陣容強度給沒名字或第一場的座位用）
+            known = name in self.r
+            rel = self.r[name] - vm if known else float(cfg["newcomerOffset"])
+            sd = 1.0 / math.sqrt(self.info[name] if known else 1.0 / float(cfg["priorSigma"]) ** 2)
             return elo(rel), (elo(rel + sd) - elo(rel - sd)) / 2, theory(rel)
 
         return convert, theory(0.0), _sigmoid(base)
@@ -3775,7 +3789,7 @@ def compute_rating(games: list[GameRow], cfg: Mapping[str, Any] | None = None) -
     last: dict[str, str] = {}
     today: list[str] = []
     for i, (day, g) in enumerate(ordered):
-        model.play(g)
+        model.play(g, day)
         for name in g.seat_players.values():
             if day:
                 first.setdefault(name, day)
@@ -3823,6 +3837,261 @@ def rating_summary(rating: Mapping[str, Any] | None) -> str:
     listed = sum(1 for r in players if isinstance(r, Mapping) and not r.get("provisional"))
     return (f"{rating.get('games')} 局計入（{rating.get('skippedGames')} 局缺名字不計）；{len(players)} 位玩家，"
             f"{listed} 位 ≥ {(rating.get('config') or {}).get('provisionalGames')} 場；資料到 {rating.get('dataThrough')}")
+
+
+# ---------------------------------------------------------------------------
+# lineup: 陣容強度（Edward 2026-10-31「S = 場上 PR 的平均，直接用 S 來篩選；或是人數：PR X 有 Y 人以上」）
+# ---------------------------------------------------------------------------
+#
+# 每局開打前（照 compute_rating 的重放順序，同一天的第 1 局和第 8 局不一樣），把每個座位的 Elo 放進「當時的玩家池」
+# 排百分等級（中位秩，0–100 取整數）：
+#   玩家池 = 開打前生涯已計入 ≥ lineupMinGames 場的人（Elo 用當下的值）；lineupActiveDays 不是 None 時另要求這局日期
+#   往前 N 天內出賽過（預設 None：Edward 2026-10-31「如果不要有最近 90 天的條件呢？因為一個人的程度不太會因為太久沒玩
+#   改變」）。
+#   暫定（賽前 < lineupMinGames 場）與沒寫名字的座位：照新人起始值排，PR 最高算 lineupProvisionalCap，標 prov
+#   （網站算「PR X 以上有幾人」時一律不算他們）。
+#   S = 10 個座位 PR（整數）的平均，一位小數。
+# 不評分（None）：玩家池 < lineupMinPool 人、有名字的座位 < lineupMinNamedSeats、同一個名字坐兩個座位，或（有設
+# lineupActiveDays 時）沒有日期。
+# 為什麼用時點百分位而不用固定 Elo：Elo 的 k 小，早期大家擠在 1500 附近，固定門檻在 2023 年幾乎沒人達到；
+# 百分位永遠是「相對於當時活躍圈子」。研究見 Edward 2026-10-31 的陣容強度報告（1,600 局可評分）。
+
+
+def _days_apart(earlier: str, later: str) -> int:
+    return (dt.date.fromisoformat(later) - dt.date.fromisoformat(earlier)).days
+
+
+def _percentile_rank(pool: Sequence[float], x: float) -> float:
+    """x 在已排序 pool 裡的百分等級（0..100，同分取中位秩）。"""
+    lo = bisect.bisect_left(pool, x)
+    hi = bisect.bisect_right(pool, x)
+    return 100.0 * (lo + 0.5 * (hi - lo)) / len(pool)
+
+
+def _lineup_snapshot(model: "_RatingModel", day: str, names: Sequence[str | None],
+                     cfg: Mapping[str, Any]) -> dict | None:
+    """目前模型狀態下，這 10 個名字（SEATS 順序，None = 沒寫）的陣容強度；不評分回傳 None。"""
+    named = [n for n in names if n]
+    active = cfg.get("lineupActiveDays")
+    if (active is not None and not day) or len(named) < int(cfg["lineupMinNamedSeats"]) or len(set(named)) != len(named):
+        return None
+    min_games = int(cfg["lineupMinGames"])
+
+    def in_pool(player: str, games: int) -> bool:
+        if games < min_games:
+            return False
+        if active is None:
+            return True
+        return player in model.last_day and 0 <= _days_apart(model.last_day[player], day) <= int(active)
+
+    convert = model.snapshot()[0]
+    pool = sorted(convert(p)[0] for p, n in model.games.items() if in_pool(p, n))
+    if len(pool) < int(cfg["lineupMinPool"]):
+        return None
+    cap = float(cfg["lineupProvisionalCap"])
+    prs: list[int] = []
+    prov: list[bool] = []
+    for name in names:
+        pr = _percentile_rank(pool, convert(name if name else "\0")[0])
+        provisional = not name or model.games[name] < min_games
+        if provisional:
+            pr = min(pr, cap)
+        prs.append(int(math.floor(pr + 0.5)))
+        prov.append(provisional)
+    return {"pool": len(pool), "s": rnd1(sum(prs) / len(prs)), "prs": prs, "prov": prov}
+
+
+def compute_lineups(
+    games: Sequence[GameRow], cfg: Mapping[str, Any] | None = None,
+    queries: Sequence[tuple[str, Sequence[str | None]]] = (),
+) -> tuple[list[dict | None], list[dict | None]]:
+    """(每局的陣容強度，與 games 同順序；每個查詢的陣容強度)。
+
+    查詢 = (日期, 10 個名字)：不在這批局裡的一局（例：牌譜紀錄的貼文對不到局），用那天開打前（那天的局都還沒打）
+    的評分算。重放與 compute_rating 相同：(排序日期, 原順序) 排好，有結果且 10 個名字齊全不重複的局才更新評分。"""
+    cfg = RATING_CONFIG if cfg is None else cfg
+    keyed: list[tuple[tuple[str, int], int]] = []
+    last_date = ""
+    for i, g in enumerate(games):
+        if g.date:
+            last_date = g.date
+        fixed = getattr(g, "timeline_date", None)
+        keyed.append(((fixed if fixed is not None else (g.date or last_date), i), i))
+    keyed.sort(key=lambda k: k[0])
+    rated = {id(g) for _, g in rating_games(list(games))[0]}
+    pending = sorted(range(len(queries)), key=lambda q: queries[q][0])
+    out: list[dict | None] = [None] * len(games)
+    answers: list[dict | None] = [None] * len(queries)
+    model = _RatingModel(cfg)
+    for (day, _), i in keyed:
+        while pending and day and queries[pending[0]][0] <= day:
+            q = pending.pop(0)
+            answers[q] = _lineup_snapshot(model, queries[q][0], list(queries[q][1]), cfg)
+        g = games[i]
+        out[i] = _lineup_snapshot(model, day, [g.seat_players.get(s) or None for s in SEATS], cfg)
+        if id(g) in rated:
+            model.play(g, day)
+    for q in pending:
+        answers[q] = _lineup_snapshot(model, queries[q][0], list(queries[q][1]), cfg)
+    return out, answers
+
+
+def lineup_summary(lineups: Sequence[dict | None]) -> str:
+    """One line for logs: counts only."""
+    scored = [x for x in lineups if x]
+    high = sum(1 for x in scored if x["s"] >= 65)
+    return f"{len(scored)} / {len(lineups)} 局有陣容強度；S ≥ 65 的 {high} 局"
+
+
+# ---------------------------------------------------------------------------
+# mistakes: 可從紀錄直接證明的失誤（Edward 2026-10-31「把『嚴重失誤』還有失誤的類別寫成 tag，方便查詢或篩選」）
+# ---------------------------------------------------------------------------
+#
+# 只用公開紀錄，加上動作者自己知道的事（自己是藍方、自己持湖驗到的陣營）。「已證有紅」：某次失敗任務的隊伍 T
+# 出了 f 張失敗 → T 裡至少 f 個紅；新隊伍 P 跟 T 的交集大於 |T| − f 時 P 一定有紅（動作者自己與湖驗到的藍先從 T
+# 扣掉，湖驗到的紅直接算紅；多個失敗任務只在交集互不重疊時相加）。第 4 局要 2 張失敗，要證出 ≥ 2 紅才算。
+# 標籤描述「這局發生了什麼」，不寫是誰；細節只有輪次與座位號（網站滑鼠提示用）。
+#   已證有紅的隊出任務            出任務的隊伍（公開紀錄就）證得出足以讓任務失敗的紅                    嚴重
+#   藍方隊長派已證有紅的隊        藍方隊長（隊長照輪替推算，推算不出來就不判）提出自己視角已證有紅的隊   嚴重
+#   藍方贊成已證有紅的隊          藍方投贊成給自己視角已證有紅的隊（非強制、票數與結果對得上的提議）
+#   藍方持湖宣告不符（待查）      梅林以外的藍方持湖，宣告的陣營與目標的真實陣營不同（可能是記錄打錯或刻意）
+#   紅方賽點未出失敗（待查）      紅方已兩紅、隊上紅方人數足以讓任務失敗，任務卻成功（可能是撞牌或記錄錯誤）
+# 梅林持湖說反話是已知的打法，不判；兩個「待查」不算嚴重。
+# 嚴重失誤 = 有任一個「嚴重」的。
+
+MISTAKE_PROVEN_SENT = "已證有紅的隊出任務"
+MISTAKE_BLUE_LEADER = "藍方隊長派已證有紅的隊"
+MISTAKE_LAKE_CLAIM = "藍方持湖宣告不符（待查）"
+MISTAKE_BLUE_APPROVE = "藍方贊成已證有紅的隊"
+MISTAKE_RED_MATCH_POINT = "紅方賽點未出失敗（待查）"
+MISTAKE_SERIOUS = "嚴重失誤"
+MISTAKE_TAGS = (MISTAKE_SERIOUS, MISTAKE_PROVEN_SENT, MISTAKE_BLUE_LEADER, MISTAKE_BLUE_APPROVE,
+                MISTAKE_LAKE_CLAIM, MISTAKE_RED_MATCH_POINT)
+SERIOUS_MISTAKES = frozenset({MISTAKE_PROVEN_SENT, MISTAKE_BLUE_LEADER})
+_FAILS_NEEDED = {1: 1, 2: 1, 3: 1, 4: 2, 5: 1}  # 10 人局
+LEADER_MIN_SHARE = 0.8   # 隊長推算：同 web utils/records deriveLeaders
+LEADER_MIN_MARGIN = 3
+
+
+def derive_leaders(teams: Sequence[str]) -> list[str] | None:
+    """每次提議的隊長座位（跨輪往下一個座位輪替，第一位不知道）：試 10 個起點，取「隊長在隊上」最多的；
+    要至少八成、而且比第二名多 3 次以上才採用，否則 None。與網站 deriveLeaders 相同。"""
+    if not teams:
+        return None
+    cover = [sum(1 for k, team in enumerate(teams) if SEATS[(start + k) % 10] in team) for start in range(10)]
+    best = max(cover)
+    start = cover.index(best)
+    second = max(c for i, c in enumerate(cover) if i != start)
+    if best < len(teams) * LEADER_MIN_SHARE or best - second < LEADER_MIN_MARGIN:
+        return None
+    return [SEATS[(start + k) % 10] for k in range(len(teams))]
+
+
+def _proven_reds(team: set[str], failed: Sequence[tuple[set[str], int]], known_blue: set[str],
+                 known_red: set[str]) -> int:
+    """隊伍 team 裡「一定是紅」的人數下限（見本段開頭）。"""
+    parts: list[tuple[frozenset[str], int]] = []
+    for members, fails in failed:
+        rest = members - known_blue - known_red
+        need = fails - len(members & known_red)
+        if need <= 0:
+            continue
+        inter = team & rest
+        sure = len(inter) - (len(rest) - need)
+        if sure > 0:
+            parts.append((frozenset(inter), sure))
+    best = 0
+    for k in range(1, len(parts) + 1):
+        for combo in itertools.combinations(parts, k):
+            sets = [c[0] for c in combo]
+            if sum(len(x) for x in sets) == len(frozenset().union(*sets)):
+                best = max(best, sum(c[1] for c in combo))
+    return len(team & known_red) + best
+
+
+def detect_mistakes(
+    roles: Mapping[str, str],
+    proposals: Sequence[tuple[int, str, str | None]],
+    missions: Sequence[str],
+    lakes: Sequence[tuple[int, str, str, str]],
+) -> list[tuple[str, int, str]]:
+    """一局可證明的失誤：[(標籤, 回合, 座位字串)]，照發生順序；有嚴重的時最前面加 (嚴重失誤, 0, "")。
+
+    roles: 座位 → 角色；proposals: 依序每次提議 (回合, 隊伍, 贊成座位；強制局或沒有投票紀錄為 None)；
+    missions: 第 1..5 輪任務牌（沒打為 ""）；lakes: (第幾輪任務後, 持湖, 目標, 宣告 x 紅／o 藍／其他)。"""
+    red = {s for s in SEATS if roles.get(s) in RED_ROLES}
+    by_round: dict[int, list[tuple[int, str, str | None]]] = defaultdict(list)
+    for k, (rnd, team, approved) in enumerate(proposals):
+        by_round[rnd].append((k, team, approved))
+    leaders = derive_leaders([team for _, team, _ in proposals])
+    found: list[tuple[str, int, str]] = []
+    failed: list[tuple[set[str], int]] = []
+    red_points = 0
+
+    def knowledge(seat: str, rnd: int) -> tuple[set[str], set[str]]:
+        blue_known, red_known = {seat}, set()
+        for after, holder, target, _ in lakes:
+            if after < rnd and holder == seat and target in SEATS:
+                (red_known if target in red else blue_known).add(target)
+        return blue_known, red_known
+
+    def seats_str(seats: Iterable[str]) -> str:
+        return "".join(s for s in SEATS if s in set(seats))
+
+    for rnd in sorted(by_round):
+        if not 1 <= rnd <= 5:
+            continue
+        need = _FAILS_NEEDED[rnd]
+        cell = missions[rnd - 1] if rnd - 1 < len(missions) else ""
+        props = by_round[rnd]
+        for idx, (k, team, approved) in enumerate(props):
+            members = set(team)
+            went = bool(cell) and idx == len(props) - 1
+            if approved is not None:
+                yes = set(approved)
+                if (len(yes) > 5) == went:  # 票數與結果對得上才看票
+                    wrong = [s for s in SEATS if s not in red and s in yes
+                             and _proven_reds(members, failed, *knowledge(s, rnd)) >= need]
+                    if wrong:
+                        found.append((MISTAKE_BLUE_APPROVE, rnd, seats_str(wrong)))
+            if leaders is not None:
+                leader = leaders[k]
+                if leader not in red and _proven_reds(members, failed, *knowledge(leader, rnd)) >= need:
+                    found.append((MISTAKE_BLUE_LEADER, rnd, leader))
+            if went and _proven_reds(members, failed, set(), set()) >= need:
+                found.append((MISTAKE_PROVEN_SENT, rnd, seats_str(members)))
+        if not cell or not props:
+            continue
+        team = set(props[-1][1])
+        if len(cell) != len(team):
+            continue
+        fails = count_mission_fails(cell)
+        reds_on = team & red
+        if red_points == 2 and len(reds_on) >= need and fails < need:
+            found.append((MISTAKE_RED_MATCH_POINT, rnd, seats_str(reds_on)))
+        if fails >= need:
+            red_points += 1
+            failed.append((team, fails))
+    for after, holder, target, claim in lakes:
+        if (holder in SEATS and target in SEATS and holder not in red and roles.get(holder) != "梅林"
+                and claim in ("x", "o")):
+            if claim != ("x" if target in red else "o"):
+                found.append((MISTAKE_LAKE_CLAIM, after, holder))
+    if any(tag in SERIOUS_MISTAKES for tag, _, _ in found):
+        found.insert(0, (MISTAKE_SERIOUS, 0, ""))
+    return found
+
+
+def game_row_mistakes(g: GameRow) -> list[tuple[str, int, str]]:
+    """detect_mistakes 套在一局 GameRow（games_cache 的局）上。"""
+    proposals = [(int(p[0]), str(p[2]), None if int(p[1]) >= 5 else str(p[3])) for p in g.voting_proposals]
+    claims = {(h, t): c for h, t, c in g.lake_claims}
+    lakes = []
+    for after, lake in zip((2, 3, 4), (g.lake1, g.lake2, g.lake3)):
+        if lake:
+            said = claims.get((lake[0], lake[1]), "")
+            lakes.append((after, lake[0], lake[1], {"紅": "x", "藍": "o"}.get(said, "")))
+    return detect_mistakes(g.seat_roles, proposals, list(g.round_results), lakes)
 
 
 # ---------------------------------------------------------------------------
@@ -4361,13 +4630,15 @@ def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] |
 #   claims    最多三筆持湖、目標及宣告；x 紅、o 藍、- 未宣告。
 #   captains  每個任務的隊長；- 表示缺值，非 ASCII 數字轉 ?。
 #   votes     [回合, 提議次數, 隊伍, 贊成座位]；第 5 次強制派隊沒有票。
+#   lineup    陣容強度（compute_lineups，第 3 版起）：[玩家池人數, S×10, 座位 1..9、0 的 PR, 暫定座位位元]，
+#             位元 i = SEATS[i] 是暫定或沒寫名字；不評分為 []。由對局本身重放得出，解碼不需要它（守門會重算比對）。
 # Python 與 TS 以相同規則解碼；編碼與解碼後的統計若不一致，禁止寫入資料集。
 
 GAMES_DATASET_FORMAT = "avalon-games"
-GAMES_DATASET_VERSION = 2
+GAMES_DATASET_VERSION = 3
 GAMES_DATASET_FIELDS = (
     "id", "src", "date", "cat", "slot", "note", "config", "outcome", "kill",
-    "seats", "missions", "rounds", "state", "firstTeam", "lakes", "claims", "captains", "votes",
+    "seats", "missions", "rounds", "state", "firstTeam", "lakes", "claims", "captains", "votes", "lineup",
 )
 DATASET_OTHER = "其他"
 DATASET_CATEGORIES = ("線瓦", "面瓦", "娛樂", "", DATASET_OTHER)
@@ -4442,6 +4713,14 @@ def games_dataset_key(doc: Mapping[str, Any]) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def encode_lineup(lineup: Mapping[str, Any] | None) -> list:
+    """compute_lineups 的一局 → 資料集的 lineup 欄（不評分 = []）。"""
+    if not lineup:
+        return []
+    mask = sum(1 << i for i, p in enumerate(lineup["prov"]) if p)
+    return [int(lineup["pool"]), int(round(lineup["s"] * 10)), [int(x) for x in lineup["prs"]], mask]
+
+
 def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | None = None) -> dict:
     """將同次合併、日期檢查與名字正規化後的對局編碼為每局資料集。
 
@@ -4456,8 +4735,9 @@ def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | 
         g.game_state for g in games if g.game_state and _DATASET_STATE_RE.fullmatch(g.game_state)
     )) + [DATASET_UNKNOWN]
     state_index = {s: i for i, s in enumerate(states)}
+    lineups = compute_lineups(games)[0]
     rows: list[list[Any]] = []
-    for g in games:
+    for g, lineup in zip(games, lineups):
         kill = g.kill if g.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE) else ""
         lakes = "".join(
             "--" if lake is None else
@@ -4489,6 +4769,7 @@ def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | 
             claims,
             captains,
             [list(proposal) for proposal in g.voting_proposals],
+            encode_lineup(lineup),
         ])
     dated = sum(1 for g in games if g.date)
     doc: dict[str, Any] = {
@@ -4624,6 +4905,7 @@ def games_dataset_privacy_problems(doc: Mapping[str, Any]) -> list[str]:
                 bad[name] += 1
         seats, note = row[idx["seats"]], row[idx["note"]]
         votes = row[idx["votes"]]
+        lineup = row[idx["lineup"]]
         checks = {
             "src": is_int(row[idx["src"]], 0, 2),
             "cat": is_int(row[idx["cat"]], 0, len(DATASET_CATEGORIES)),
@@ -4638,6 +4920,10 @@ def games_dataset_privacy_problems(doc: Mapping[str, Any]) -> list[str]:
                 and len(set(p[2])) == len(p[2])
                 and isinstance(p[3], str) and re.fullmatch(r"[0-9]{0,10}", p[3])
                 and len(set(p[3])) == len(p[3]) and (p[1] < 5 or not p[3]) for p in votes),
+            "lineup": isinstance(lineup, list) and (lineup == [] or (
+                len(lineup) == 4 and is_int(lineup[0], 1, 100_000) and is_int(lineup[1], 0, 1001)
+                and isinstance(lineup[2], list) and len(lineup[2]) == len(SEATS)
+                and all(is_int(x, 0, 101) for x in lineup[2]) and is_int(lineup[3], 0, 1 << len(SEATS)))),
         }
         for name, ok in checks.items():
             if not ok:
@@ -4709,6 +4995,9 @@ def games_dataset_problems(
                  if isinstance(f, Mapping) and f.get("loopId") == "L141"), None)
     if l141 is not None and _canonical(compute_lake_claim_feature(decoded, as_of)) != _canonical(l141):
         paths.append("featureStudies.L141")
+    lineup_at = GAMES_DATASET_FIELDS.index("lineup")
+    if [encode_lineup(x) for x in compute_lineups(decoded)[0]] != [row[lineup_at] for row in doc["games"]]:
+        paths.append("games[].lineup")
     if paths:
         more = "+" if len(paths) >= 20 else ""
         problems.append(f"round trip differs at {len(paths)}{more} path(s): {', '.join(paths)}")
@@ -4768,8 +5057,11 @@ def games_dataset_summary(doc: Mapping[str, Any], problems: Sequence[str]) -> st
     labels = ("線瓦", "面瓦", "娛樂", "未分類", "其他")
     split = " / ".join(f"{label} {cats.get(i, 0)}" for i, label in enumerate(labels))
     verdict = "round-trip 通過" if not problems else f"暫停寫入（{len(problems)} 個問題）"
+    lineups = [row[GAMES_DATASET_FIELDS.index("lineup")] for row in doc["games"]]
+    scored = sum(1 for x in lineups if x)
+    high = sum(1 for x in lineups if x and x[1] >= 650)
     return (f"每局資料集：{len(doc['games'])} 局、{len(doc['players'])} 位、約 {len(text) // 1024} KB"
-            f"（gzip {len(gzip.compress(text, 9)) // 1024} KB）；分類 {split}；{verdict}")
+            f"（gzip {len(gzip.compress(text, 9)) // 1024} KB）；分類 {split}；陣容強度 {scored} 局（S ≥ 65：{high}）；{verdict}")
 
 
 # ---------------------------------------------------------------------------

@@ -48,6 +48,8 @@ import {
 import { useRoleLabel } from '../roleLabels';
 import { OUTCOME_LABEL_KEYS } from '../ui';
 import { useClauseLabel, useMetricLabel } from './filterLabels';
+import LineupFilterEditor from '../../lineup/LineupFilterEditor';
+import { lineupCondition, lineupFilterActive, lineupStateFromCondition } from '../../../utils/lineupFilter';
 import { useFilterResult, useFilterVocab, type FilterStatus } from './useFilterResult';
 
 /**
@@ -480,6 +482,14 @@ function GamesSection({ draft, setDraft, vocab }: SectionProps): JSX.Element {
           {multi('season', vocab.seasons, String)}
         </Row>
       )}
+      <Row label={t('analytics.filter.fields.lineup', { defaultValue: '陣容強度' })}>
+        {/* Edward 2026-10-31：S = 場上 PR 的平均，或 PR X 以上至少 Y 人，兩個可複選（且／或） */}
+        <LineupFilterEditor
+          value={lineupStateFromCondition(clausesOf(draft, 'lineup')[0])}
+          onChange={(state) => setDraft(withClauses(draft, 'lineup', lineupFilterActive(state) ? { kind: 'lineup', ...lineupCondition(state) } : null))}
+          testIdPrefix="filter-lineup"
+        />
+      </Row>
       <Row label="">
         <label className="inline-flex items-center gap-1.5 text-xs text-zinc-300">
           <input type="checkbox" checked={fullNames} onChange={(e) => setDraft(withClauses(draft, 'namedSeats', e.target.checked ? { kind: 'namedSeats', min: 10 } : null))} />

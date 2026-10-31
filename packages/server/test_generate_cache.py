@@ -3826,7 +3826,7 @@ class GamesDatasetTest(unittest.TestCase):
         ds = self.dataset
         self.assertEqual(list(ds), ["format", "version", "key", "cacheSchemaVersion", "config", "constants", "counts",
                                     "vocab", "players", "aliases", "fields", "games"])
-        self.assertEqual((ds["format"], ds["version"], ds["cacheSchemaVersion"]), ("avalon-games", 2, 4))
+        self.assertEqual((ds["format"], ds["version"], ds["cacheSchemaVersion"]), ("avalon-games", 3, 4))
         self.assertEqual(ds["counts"], {"games": 235, "fromSheet": 235, "fromDiscord": 0, "players": 21, "dated": 233, "undated": 2})
         self.assertEqual(ds["config"]["leaderboard"], gc.LEADERBOARD_CONFIG)
         self.assertEqual(ds["config"]["theoryWindows"], [100])
@@ -4226,6 +4226,217 @@ class TheoryBoardTest(unittest.TestCase):
         career = self.theory(mainGames=0)
         self.assertEqual({r["games"] for r in career["rows"]}, {260})
         self.assertEqual(career["period"], "角色理論：各角色近 10 場、忠臣近 40 場；其他：生涯全部場次")
+
+
+# ---------------------------------------------------------------------------
+# lineup: 陣容強度 (compute_lineups) and mistakes (detect_mistakes), Edward 2026-10-31. Invented names only.
+# ---------------------------------------------------------------------------
+
+# Small thresholds so a 36-game log has a pool: >= 5 games, played within 3 days (the window is off by default;
+# on here so the tests cover it), pool >= 12, cap 30.
+LINEUP_CFG = {**gc.RATING_CONFIG, "lineupMinGames": 5, "lineupActiveDays": 3, "lineupMinPool": 12,
+              "lineupProvisionalCap": 30}
+
+
+def hand_lineup(model: Any, day: str, names: list, cfg: dict) -> dict | None:
+    """The rule written out again: mid-rank PR of each seat in the pool of the moment."""
+    convert = model.snapshot()[0]
+    window = cfg["lineupActiveDays"]
+    pool = sorted(convert(p)[0] for p, n in model.games.items() if n >= cfg["lineupMinGames"] and (
+        window is None or (dt.date.fromisoformat(day) - dt.date.fromisoformat(model.last_day[p])).days <= window))
+    if len(pool) < cfg["lineupMinPool"]:
+        return None
+    prs, prov = [], []
+    for name in names:
+        x = convert(name or "\0")[0]
+        pr = 100 * (sum(1 for e in pool if e < x) + 0.5 * sum(1 for e in pool if e == x)) / len(pool)
+        p = not name or model.games[name] < cfg["lineupMinGames"]
+        prs.append(int(math.floor((min(pr, cfg["lineupProvisionalCap"]) if p else pr) + 0.5)))
+        prov.append(p)
+    return {"pool": len(pool), "s": gc.rnd1(sum(prs) / 10), "prs": prs, "prov": prov}
+
+
+class LineupTest(unittest.TestCase):
+    def test_config(self) -> None:
+        cfg = gc.RATING_CONFIG
+        self.assertEqual({k: cfg[k] for k in cfg if k.startswith("lineup")},
+                         {"lineupMinGames": 30, "lineupActiveDays": None, "lineupMinPool": 20,
+                          "lineupMinNamedSeats": 8, "lineupProvisionalCap": 50})
+
+    def test_percentile_rank_is_mid_rank(self) -> None:
+        pool = [1.0, 2.0, 2.0, 3.0]
+        self.assertEqual([gc._percentile_rank(pool, x) for x in (0.5, 1.0, 2.0, 3.0, 4.0)], [0, 12.5, 50, 87.5, 100])
+
+    def test_pre_game_replay(self) -> None:
+        games = run_like_games(elo_log())
+        lineups, _ = gc.compute_lineups(games, LINEUP_CFG)
+        model = gc._RatingModel(LINEUP_CFG)
+        scored = 0
+        for g, lineup in zip(games, lineups):
+            names = [g.seat_players.get(s) for s in gc.SEATS]
+            self.assertEqual(lineup, hand_lineup(model, g.timeline_date, names, LINEUP_CFG), g.id)  # before the game
+            scored += lineup is not None
+            model.play(g, g.timeline_date)
+        # Every player has 5 games after game 6 (10 of the 12 sit each game); from then on all 12 are in the pool.
+        self.assertIsNone(lineups[0])
+        self.assertEqual(scored, 29)
+        last = lineups[-1]
+        self.assertEqual(last["pool"], 12)
+        self.assertEqual(last["s"], gc.rnd1(sum(last["prs"]) / 10))
+        self.assertEqual(last["prov"], [False] * 10)
+        # Two games on one day differ: the second one's ratings include the first.
+        self.assertEqual(games[34].timeline_date, games[35].timeline_date)
+        model = gc._RatingModel(LINEUP_CFG)
+        for g in games[:35]:
+            model.play(g, g.timeline_date)
+        self.assertEqual(lineups[35], hand_lineup(model, games[35].timeline_date,
+                                                  [games[35].seat_players[s] for s in gc.SEATS], LINEUP_CFG))
+        # The default (no window) the same way.
+        no_window = {**LINEUP_CFG, "lineupActiveDays": None}
+        model = gc._RatingModel(no_window)
+        for g, lineup in zip(games, gc.compute_lineups(games, no_window)[0]):
+            self.assertEqual(lineup, hand_lineup(model, g.timeline_date, [g.seat_players.get(s) for s in gc.SEATS], no_window))
+            model.play(g, g.timeline_date)
+
+    def test_provisional_unnamed_inactive_and_not_scored(self) -> None:
+        log = elo_log()
+        late = (dt.date(2026, 3, 18)).isoformat()
+        newcomer = [ELO_POOL[j] for j in range(9)] + ["新面孔"]
+        log += [
+            log_row("N1", "123456", "三紅", newcomer, date=late),                          # a first game: provisional
+            log_row("N2", "123456", "三紅", ELO_POOL[:8] + ["", ""], date=late),           # 8 named: 2 unnamed seats
+            log_row("N3", "123456", "三紅", ELO_POOL[:7] + ["", "", ""], date=late),       # 7 named: not scored
+            log_row("N4", "123456", "三紅", ELO_POOL[:9] + [ELO_POOL[0]], date=late),      # one name twice
+            log_row("N5", "123456", "三紅", ELO_POOL[:10]),                                # undated: takes N4's day
+            log_row("N6", "123456", "三紅", ELO_POOL[:10], date="2026-03-30"),             # 12 days later
+        ]
+        games = run_like_games(log)
+        lineups, _ = gc.compute_lineups(games, LINEUP_CFG)
+        n1, n2, n3, n4, n5, n6 = lineups[36:]
+        self.assertEqual(n1["prov"], [False] * 9 + [True])
+        self.assertLessEqual(n1["prs"][9], 30)
+        self.assertEqual(n2["prov"], [False] * 8 + [True, True])
+        self.assertEqual(n2["prs"][8], n2["prs"][9])  # both seats are "a newcomer now"
+        self.assertIsNone(n3)
+        self.assertIsNone(n4)
+        self.assertIsNotNone(n5)  # an undated game after a dated one uses that day
+        # 12 days later nobody played within 3 days: the pool is empty.
+        self.assertIsNone(n6)
+        wide = {**LINEUP_CFG, "lineupActiveDays": 20, "lineupMinPool": 10}
+        self.assertEqual(gc.compute_lineups(games, wide)[0][-1]["pool"], 12)
+        # No window (the default, Edward 2026-10-31): everyone with enough games counts, however long ago they played.
+        self.assertEqual(gc.compute_lineups(games, {**LINEUP_CFG, "lineupActiveDays": None})[0][-1]["pool"], 12)
+        # Undated games at the very top are not scored (no day for the pool).
+        top = run_like_games([LOG_HEADERS, log_row("U", "123456", "三紅", ELO_POOL[:10])] + elo_log()[1:])
+        self.assertIsNone(gc.compute_lineups(top, LINEUP_CFG)[0][0])
+
+    def test_queries_use_the_start_of_the_day(self) -> None:
+        games = run_like_games(elo_log())
+        names = [games[30].seat_players[s] for s in gc.SEATS]
+        day = games[30].timeline_date
+        lineups, answers = gc.compute_lineups(games, LINEUP_CFG, queries=[(day, names), ("2026-12-01", names),
+                                                                          (day, names[:7] + [None] * 3)])
+        self.assertEqual(answers[0], lineups[30])  # game 30 is the first of its day
+        self.assertIsNone(answers[1])  # long after the last game: nobody is active
+        self.assertIsNone(answers[2])
+
+    def test_dataset_field(self) -> None:
+        self.assertEqual(gc.encode_lineup(None), [])
+        self.assertEqual(gc.encode_lineup({"pool": 21, "s": 55.5, "prs": [50] * 9 + [60], "prov": [True] + [False] * 8 + [True]}),
+                         [21, 555, [50] * 9 + [60], 1 | 1 << 9])
+        games = run_like_games(elo_log())
+        lineups, _ = gc.compute_lineups(games)  # real thresholds: 12 players never make a pool of 20
+        self.assertEqual(lineups, [None] * 36)
+        ds = gc.encode_games_dataset(games)
+        at = gc.GAMES_DATASET_FIELDS.index("lineup")
+        self.assertEqual({json.dumps(r[at]) for r in ds["games"]}, {"[]"})
+        tampered = copy.deepcopy(ds)
+        tampered["games"][0][at] = [21, 555, [50] * 9, 0]
+        tampered["games"][1][at] = [21, 555, [101] * 10, 0]
+        tampered["key"] = gc.games_dataset_key(tampered)
+        self.assertEqual(gc.games_dataset_privacy_problems(tampered), ["games[].lineup: 2 row(s)"])
+
+    def test_round_trip_checks_the_lineup(self) -> None:
+        games = run_like_games(dataset_log())
+        dataset, cache = dataset_and_cache(games)
+        tampered = copy.deepcopy(dataset)
+        tampered["games"][-1][gc.GAMES_DATASET_FIELDS.index("lineup")] = [25, 500, [50] * 10, 0]
+        tampered["key"] = gc.games_dataset_key(tampered)
+        cache = copy.deepcopy(cache)
+        cache["overview"]["gamesKey"] = tampered["key"]
+        problems = gc.games_dataset_problems(tampered, cache, games, TEST_AS_OF)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("games[].lineup", problems[0])
+
+    def test_summary_has_counts_only(self) -> None:
+        self.assertEqual(gc.lineup_summary([None, {"s": 70.0}, {"s": 40.0}]), "2 / 3 局有陣容強度；S ≥ 65 的 1 局")
+
+
+# 配置 123456: 刺 1, 娜 2, 德 3, 奧 4, 派 5, 梅 6; 7, 8, 9, 0 忠臣. Reds = 1, 2, 3, 4.
+MISTAKE_ROLES = gc.decode_config("123456")
+
+
+class MistakeTest(unittest.TestCase):
+    def detect(self, proposals, missions, lakes=()):
+        return gc.detect_mistakes(MISTAKE_ROLES, proposals, missions, list(lakes))
+
+    def test_proven_team_sent_and_approved(self) -> None:
+        # R1 157 fails once (1 is red); R2 1570 holds all of 157: proven by the public record, and it goes.
+        found = self.detect([(1, "157", "157890"), (2, "1570", "125670")], ["oox", "ooox"])
+        self.assertEqual(found, [(gc.MISTAKE_SERIOUS, 0, ""), (gc.MISTAKE_BLUE_APPROVE, 2, "5670"),
+                                 (gc.MISTAKE_PROVEN_SENT, 2, "1570")])
+
+    def test_own_knowledge(self) -> None:
+        # R1 256 fails once. For blue 5 (on that team) red is 2 or 6 -> 6 is Merlin, but 5 only knows "not me":
+        # 2678 holds 2 and 6, the other two of the failed team: proven for 5, not for 6 or for the public.
+        found = self.detect([(1, "256", "256789"), (2, "2678", "25678"), (2, "7890", "789012")], ["oox", "oooo"])
+        self.assertEqual(found, [(gc.MISTAKE_BLUE_APPROVE, 2, "5")])
+
+    def test_round_four_needs_two(self) -> None:
+        one = self.detect([(1, "157", "157890"), (2, "5678", "567890"), (3, "5678", "567890"), (4, "15789", "157890")],
+                          ["oox", "oooo", "oooo", "ooooo"])
+        self.assertEqual(one, [])
+        two = self.detect([(1, "567", "567890"), (2, "1256", "125678"), (3, "5789", "578906"),
+                           (4, "12567", "125670")], ["ooo", "ooxx", "oooo", "ooxxo"])
+        self.assertEqual(two, [(gc.MISTAKE_SERIOUS, 0, ""), (gc.MISTAKE_BLUE_APPROVE, 4, "5670"),
+                               (gc.MISTAKE_PROVEN_SENT, 4, "12567")])
+
+    def test_unreliable_votes_and_forced(self) -> None:
+        # A rejected proposal with 6 approvals (anomalies missing) and the forced 5th (no vote) are not read.
+        found = self.detect([(1, "157", "157890"), (2, "1570", "157089"), (2, "1578", None)], ["oox", ""])
+        self.assertEqual(found, [])
+
+    def test_leader(self) -> None:
+        proposals = [(1, "136", "136"), (1, "246", "246"), (1, "348", "348"), (1, "456", "456"), (1, "125", None),
+                     (2, "1256", "1256"), (2, "7890", "789012")]
+        self.assertEqual(gc.derive_leaders([t for _, t, _ in proposals]), list("1234567"))
+        found = self.detect(proposals, ["oox", "oooo"])
+        self.assertEqual(found, [(gc.MISTAKE_SERIOUS, 0, ""), (gc.MISTAKE_BLUE_APPROVE, 2, "56"),
+                                 (gc.MISTAKE_BLUE_LEADER, 2, "6")])
+        self.assertIsNone(gc.derive_leaders(["123", "456", "789"]))  # too few to tell
+
+    def test_lake(self) -> None:
+        props = [(1, "567", "567890"), (2, "5678", "567890"), (3, "1789", "178906")]
+        # 0 (忠臣) sees 1 red and says blue: 待查, not serious. Merlin (6) saying the opposite is a known play.
+        found = self.detect(props, ["ooo", "oooo", "oooo"], [(2, "0", "1", "o"), (3, "1", "6", "x")])
+        self.assertEqual(found, [(gc.MISTAKE_BLUE_APPROVE, 3, "0"), (gc.MISTAKE_LAKE_CLAIM, 2, "0")])
+        merlin = self.detect(props[:2], ["ooo", "oooo"], [(2, "6", "1", "o")])
+        self.assertEqual(merlin, [])
+
+    def test_red_match_point(self) -> None:
+        found = self.detect([(1, "157", "157890"), (2, "2567", "256789"), (3, "1789", "178906")],
+                            ["oox", "ooox", "oooo"])
+        self.assertEqual(found[-1], (gc.MISTAKE_RED_MATCH_POINT, 3, "1"))
+        self.assertNotIn(gc.MISTAKE_RED_MATCH_POINT, gc.SERIOUS_MISTAKES)
+
+    def test_game_row(self) -> None:
+        text = "157 +8+9+0\noox\n1570 +2+6\nooox\n0>1 o\n3789\noooo"
+        row = log_row("M1", "123456", "三紅", SEAT_NAMES, date="2026-05-01", text=text)
+        for column, cell in (("第一局成功失敗", "oox"), ("第二局成功失敗", "ooox"), ("第三局成功失敗", "oooo"), ("首湖", "0>1")):
+            row[LOG_HEADERS.index(column)] = cell
+        g = run_like_games([LOG_HEADERS, row])[0]
+        self.assertEqual(gc.game_row_mistakes(g)[:3], [(gc.MISTAKE_SERIOUS, 0, ""), (gc.MISTAKE_BLUE_APPROVE, 2, "5670"),
+                                                       (gc.MISTAKE_PROVEN_SENT, 2, "1570")])
 
 
 if __name__ == "__main__":

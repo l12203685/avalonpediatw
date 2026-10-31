@@ -31,7 +31,21 @@ import {
   seatLabel,
   type RecordGame,
   type RecordPost,
+  RECORDS_FILTER_KEY,
+  RECORD_MISTAKE_TAGS,
+  mistakeDetails,
+  mistakeTags,
+  parseRecordsFilter,
+  postLineup,
+  recordsFilterActive,
 } from '../../../web/src/utils/records';
+import {
+  DEFAULT_LINEUP_FILTER,
+  lineupCondition,
+  lineupStateFromCondition,
+  lineupTier,
+  sanitizeLineupState,
+} from '../../../web/src/utils/lineupFilter';
 import { PUBLIC_STATS_STATES, parseStatsHash } from '../../../web/src/utils/statsLinks';
 
 const NAMES = 'ABCDEFGHIJ'.split('').map((c) => `玩家${c}`);
@@ -237,5 +251,70 @@ describe('web records: 文字紀錄 column and leaders', () => {
   it('gives up (null) when no starting seat clearly fits', () => {
     expect(deriveLeaders({ ...GAME, rounds: [{ proposals: [{ team: '123', votes: [] }, { team: '123', votes: [] }], mission: 'ooo' }] })).toBeNull();
     expect(deriveLeaders({ ...GAME, rounds: [] })).toBeNull();
+  });
+});
+
+describe('web records: 陣容強度與失誤標籤', () => {
+  const SCORED: RecordPost = {
+    ...POST,
+    lineup: { pool: 33, s: 67.5, prs: [80, 75, 72, 71, 70, 66, 64, 60, 52, 50], prov: '0' },
+    mistakes: [['嚴重失誤', 0, ''], ['藍方贊成已證有紅的隊', 2, '560'], ['已證有紅的隊出任務', 2, '1570'], ['藍方贊成已證有紅的隊', 3, '7']],
+  };
+  const f = EMPTY_RECORDS_FILTER;
+  const on = (patch: Partial<typeof DEFAULT_LINEUP_FILTER>) => ({ ...f, lineup: { ...DEFAULT_LINEUP_FILTER, ...patch } });
+
+  it('the post lineup: provisional seats from the prov string; no lineup or no game = unscored', () => {
+    expect(postLineup(SCORED)?.prov).toEqual([...Array(9).fill(false), true]);
+    expect(postLineup(POST)).toBeNull();
+    expect(postLineup({ ...BROKEN, lineup: SCORED.lineup })).toBeNull();
+  });
+
+  it('S, PR X with at least Y (provisional seats do not count), and / or, unscored', () => {
+    expect(matchesRecords(SCORED, on({ sOn: true, sMin: 65 }))).toBe(true);
+    expect(matchesRecords(SCORED, on({ sOn: true, sMin: 70 }))).toBe(false);
+    expect(matchesRecords(SCORED, on({ countOn: true, strongPr: 70, strongCount: 5 }))).toBe(true);
+    expect(matchesRecords(SCORED, on({ countOn: true, strongPr: 50, strongCount: 10 }))).toBe(false); // seat 0 is provisional
+    expect(matchesRecords(SCORED, on({ sOn: true, sMin: 70, countOn: true, strongPr: 70, strongCount: 5 }))).toBe(false);
+    expect(matchesRecords(SCORED, on({ sOn: true, sMin: 70, countOn: true, strongPr: 70, strongCount: 5, combine: 'or' }))).toBe(true);
+    expect(matchesRecords(POST, on({ sOn: true, sMin: 0 }))).toBe(false);
+    expect(matchesRecords(POST, on({ sOn: true, sMin: 0, includeUnscored: true }))).toBe(true);
+    expect(matchesRecords(POST, on({ includeUnscored: true }))).toBe(true); // no condition on: no filter
+    expect(recordsFilterActive(on({ includeUnscored: true }))).toBe(false);
+    expect(recordsFilterActive(on({ countOn: true }))).toBe(true);
+  });
+
+  it('mistake tags: any of the chosen tags, details with round and seats only', () => {
+    expect(mistakeTags(SCORED)).toEqual(['嚴重失誤', '已證有紅的隊出任務', '藍方贊成已證有紅的隊']);
+    expect(mistakeDetails(SCORED, '藍方贊成已證有紅的隊')).toEqual(['第 2 輪：5、6、0 號', '第 3 輪：7 號']);
+    expect(mistakeDetails(SCORED, '嚴重失誤')).toEqual([]);
+    expect(matchesRecords(SCORED, { ...f, mistakes: ['嚴重失誤'] })).toBe(true);
+    expect(matchesRecords(SCORED, { ...f, mistakes: ['紅方賽點未出失敗（待查）', '已證有紅的隊出任務'] })).toBe(true);
+    expect(matchesRecords(SCORED, { ...f, mistakes: ['紅方賽點未出失敗（待查）'] })).toBe(false);
+    expect(matchesRecords(POST, { ...f, mistakes: ['嚴重失誤'] })).toBe(false);
+    expect(RECORD_MISTAKE_TAGS.filter((m) => m.serious).map((m) => m.tag)).toEqual(['嚴重失誤', '已證有紅的隊出任務', '藍方隊長派已證有紅的隊']);
+  });
+
+  it('the remembered filter: unknown or malformed values fall back to the defaults', () => {
+    const saved = JSON.stringify({ ...on({ sOn: true, sMin: 62, combine: 'or' }), result: '三紅', mistakes: ['嚴重失誤', '亂寫'] });
+    const back = parseRecordsFilter(saved);
+    expect(back.lineup).toEqual({ ...DEFAULT_LINEUP_FILTER, sOn: true, sMin: 62, combine: 'or' });
+    expect(back.result).toBe('三紅');
+    expect(back.mistakes).toEqual(['嚴重失誤']);
+    expect(parseRecordsFilter(null)).toEqual(EMPTY_RECORDS_FILTER);
+    expect(parseRecordsFilter('{not json')).toEqual(EMPTY_RECORDS_FILTER);
+    expect(parseRecordsFilter(JSON.stringify({ result: 'x', from: '2026/10/01', lineup: { sMin: 300, strongCount: 0, strongPr: '75' } })))
+      .toEqual({ ...EMPTY_RECORDS_FILTER, lineup: { ...DEFAULT_LINEUP_FILTER, sMin: 100, strongCount: 1, strongPr: 75 } });
+    expect(RECORDS_FILTER_KEY).toBe('avalon.records.filter');
+  });
+
+  it('screen state <-> condition (the stats filter clause): only switched-on parts, defaults when off', () => {
+    expect(lineupCondition(DEFAULT_LINEUP_FILTER)).toEqual({});
+    const both = { ...DEFAULT_LINEUP_FILTER, sOn: true, countOn: true, combine: 'or' as const, includeUnscored: true };
+    expect(lineupCondition(both)).toEqual({ sMin: 65, strongPr: 70, strongCount: 6, combine: 'or', includeUnscored: true });
+    expect(lineupCondition({ ...both, countOn: false })).toEqual({ sMin: 65, includeUnscored: true });
+    expect(lineupStateFromCondition(lineupCondition(both))).toEqual(both);
+    expect(lineupStateFromCondition(undefined)).toEqual(DEFAULT_LINEUP_FILTER);
+    expect(sanitizeLineupState({ sOn: 'yes', sMin: -5 })).toEqual({ ...DEFAULT_LINEUP_FILTER, sMin: 0 });
+    expect([lineupTier(65), lineupTier(55), lineupTier(54.9)]).toEqual(['high', 'strong', 'normal']);
   });
 });

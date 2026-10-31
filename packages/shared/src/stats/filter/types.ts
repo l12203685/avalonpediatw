@@ -66,6 +66,13 @@ export interface TrioOrderClause extends Base { kind: 'trioOrder'; in: TrioOrder
 /** 第 round 個任務的隊長陣營（查不到的座位算忠臣 → 藍方，與 Python 相同）。 */
 export interface CaptainClause extends Base { kind: 'captain'; round: number; side: Side }
 export interface GameIdClause extends Base { kind: 'gameId'; in: string[] }
+/**
+ * 陣容強度（Edward 2026-10-31）：S ≥ sMin、PR ≥ strongPr 的座位至少 strongCount 個，兩個條件各自可開關，
+ * combine = 且／或；沒評分的局只有 includeUnscored 才符合（判斷見 ../lineup.ts matchesLineup）。
+ */
+export interface LineupClause extends Base {
+  kind: 'lineup'; sMin?: number; strongPr?: number; strongCount?: number; combine?: 'and' | 'or'; includeUnscored?: boolean;
+}
 
 // ── 玩家在局 ──
 /** 有一個有名字的座位是這位玩家，且角色 / 陣營 / 座位 / 勝負都符合（勝負只在三種結果的局成立）。 */
@@ -126,7 +133,7 @@ export type GameClause =
   | CategoryClause | SourceClause | DateClause | WeekdayClause | SessionIndexClause | SeasonClause | VenueClause
   | NoteFlagClause | NamedSeatsClause | OutcomeClause | FinalWinnerClause | MissionCountClause | MissionClause
   | GameStateClause | FirstTeamClause | LakeCountClause | LakeClause | AssassinationClause | RoleSeatClause
-  | TrioOrderClause | CaptainClause | GameIdClause | WithPlayerClause | WithAnyPlayerClause | WithPlayersClause;
+  | TrioOrderClause | CaptainClause | GameIdClause | LineupClause | WithPlayerClause | WithAnyPlayerClause | WithPlayersClause;
 
 export type Clause = GameClause | ExcludePlayersClause;
 
@@ -173,7 +180,7 @@ export interface GameFilter {
 export const GAME_CLAUSE_KINDS = [
   'category', 'source', 'date', 'weekday', 'sessionIndex', 'season', 'venue', 'noteFlag', 'namedSeats', 'outcome',
   'finalWinner', 'missionCount', 'mission', 'gameState', 'firstTeam', 'lakeCount', 'lake', 'assassination',
-  'roleSeat', 'trioOrder', 'captain', 'gameId', 'withPlayer', 'withAnyPlayer', 'withPlayers',
+  'roleSeat', 'trioOrder', 'captain', 'gameId', 'lineup', 'withPlayer', 'withAnyPlayer', 'withPlayers',
 ] as const;
 
 export const METRIC_IDS: readonly MetricId[] = [

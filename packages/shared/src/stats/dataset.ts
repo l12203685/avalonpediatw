@@ -21,11 +21,13 @@ import {
 } from './constants';
 
 export const GAMES_DATASET_FORMAT = 'avalon-games';
-export const GAMES_DATASET_VERSION = 2;
-export const GAMES_DATASET_FIELDS = [
+/** 第 3 版加了 lineup（陣容強度，Edward 2026-10-31）；第 2 版（沒有 lineup）照樣讀，每局 lineup = null。 */
+export const GAMES_DATASET_VERSION = 3;
+export const GAMES_DATASET_FIELDS_V2 = [
   'id', 'src', 'date', 'cat', 'slot', 'note', 'config', 'outcome', 'kill',
   'seats', 'missions', 'rounds', 'state', 'firstTeam', 'lakes', 'claims', 'captains', 'votes',
 ] as const;
+export const GAMES_DATASET_FIELDS = [...GAMES_DATASET_FIELDS_V2, 'lineup'] as const;
 
 /** generate_cache.LEADERBOARD_CONFIG（引擎不假設任何門檻，一律讀這裡）。 */
 export interface LeaderboardConfig {
@@ -64,7 +66,14 @@ export type GameTuple = [
   id: string, src: number, date: string, cat: number, slot: number, note: number[], config: string,
   outcome: number, kill: string, seats: number[], missions: string, rounds: string, state: number,
   firstTeam: string, lakes: string, claims: string, captains: string, votes: VotingProposal[],
+  lineup?: LineupTuple,
 ];
+
+/**
+ * 陣容強度（generate_cache.compute_lineups）：[玩家池人數, S×10, 座位 1..9、0 的 PR, 暫定座位位元]；不評分 = []。
+ * PR = 開打前在「生涯已 ≥30 場」的玩家池裡的百分等級；暫定（<30 場）與沒寫名字的座位 PR 最高 50。
+ */
+export type LineupTuple = [] | [pool: number, sTenths: number, prs: number[], provMask: number];
 
 /** 回合、提議序號、隊伍、贊成座位；第 5 次強制派隊的贊成座位固定為空。 */
 export type VotingProposal = [round: number, attempt: number, team: string, approved: string];
@@ -105,6 +114,30 @@ export interface LakeClaim {
   holder: string;
   target: string;
   claim: '紅' | '藍' | '';
+}
+
+/** 解碼後的陣容強度。 */
+export interface GameLineup {
+  /** 當時的玩家池人數。 */
+  pool: number;
+  /** S = 10 個座位 PR 的平均（一位小數）。 */
+  s: number;
+  /** SEATS 順序（1..9、0）每個座位的 PR（0–100 整數）。 */
+  prs: number[];
+  /** 暫定（賽前 <30 場）或沒寫名字的座位：PR 最高 50，「PR X 以上有幾人」不算他們。 */
+  prov: boolean[];
+}
+
+/** lineup 欄 → GameLineup（[] 或缺欄 = null）。 */
+export function decodeLineup(raw: LineupTuple | undefined): GameLineup | null {
+  if (!raw || raw.length !== 4) return null;
+  const [pool, sTenths, prs, mask] = raw;
+  return { pool, s: sTenths / 10, prs: [...prs], prov: prs.map((_, i) => ((mask >> i) & 1) === 1) };
+}
+
+/** PR 至少 minPr 的座位數（暫定與沒寫名字的不算）。 */
+export function countStrongSeats(lineup: Pick<GameLineup, 'prs' | 'prov'>, minPr: number): number {
+  return lineup.prs.filter((pr, i) => !lineup.prov[i] && pr >= minPr).length;
 }
 
 export interface MissionResult {
@@ -149,6 +182,8 @@ export interface Game {
   claims: LakeClaim[];
   captains: Array<string | null>;
   votingProposals: VotingProposal[];
+  /** 陣容強度（第 3 版起；不評分或第 2 版資料集 = null）。 */
+  lineup: GameLineup | null;
   /** player_timelines 的排序日期（自己的日期，否則上一個有日期局的日期；全部局上算一次）。 */
   timelineDate: string;
 }
@@ -251,6 +286,7 @@ function decodeGame(row: GameTuple, seq: number, dataset: GamesDataset, idx: Rec
     claims,
     captains: [...get<string>('captains')].map((c) => (c === '-' ? null : c)),
     votingProposals: get<VotingProposal[]>('votes'),
+    lineup: idx.lineup === undefined ? null : decodeLineup(get<LineupTuple>('lineup')),
     timelineDate: '',
   };
 }
@@ -271,13 +307,14 @@ export function assignTimelineDates(games: Game[]): void {
 export function decodeGamesDataset(raw: unknown, expectedKey?: string | null): DecodedDataset {
   const dataset = raw as GamesDataset;
   if (!dataset || typeof dataset !== 'object') throw new GamesDatasetError('not an object');
-  if (dataset.format !== GAMES_DATASET_FORMAT || dataset.version !== GAMES_DATASET_VERSION) {
+  if (dataset.format !== GAMES_DATASET_FORMAT || (dataset.version !== GAMES_DATASET_VERSION && dataset.version !== 2)) {
     throw new GamesDatasetError(`unsupported dataset ${String(dataset.format)} v${String(dataset.version)}`);
   }
   if (expectedKey !== undefined && expectedKey !== null && dataset.key !== expectedKey) {
     throw new GamesDatasetError('dataset key does not match the analysis cache (overview.gamesKey)');
   }
-  if (!sameJson(dataset.fields, GAMES_DATASET_FIELDS)) throw new GamesDatasetError('unexpected fields');
+  const expectedFields = dataset.version === 2 ? GAMES_DATASET_FIELDS_V2 : GAMES_DATASET_FIELDS;
+  if (!sameJson(dataset.fields, expectedFields)) throw new GamesDatasetError('unexpected fields');
   const mismatch = constantsMismatch(dataset);
   if (mismatch) throw new GamesDatasetError(`rule constants differ from the engine's: ${mismatch}`);
   if (!Array.isArray(dataset.games) || !Array.isArray(dataset.players)) throw new GamesDatasetError('games / players missing');

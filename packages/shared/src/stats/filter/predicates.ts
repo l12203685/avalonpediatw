@@ -13,6 +13,7 @@ import {
   roleFactionName,
 } from '../constants';
 import type { Game } from '../dataset';
+import { matchesLineup } from '../lineup';
 import type { GameClause, SeatNo, Side } from './types';
 
 export type GamePredicate = (g: Game) => boolean;
@@ -163,6 +164,8 @@ function rawPredicate(clause: GameClause): GamePredicate {
       };
     case 'gameId':
       return (g) => clause.in.includes(g.id);
+    case 'lineup':
+      return (g) => matchesLineup(g.lineup, clause);
     case 'withPlayer':
       return (g) => namedSeats(g).some(([seat, name, role]) => {
         if (name !== clause.player) return false;

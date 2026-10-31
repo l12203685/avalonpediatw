@@ -14,7 +14,8 @@ export function useMetricLabel(): (id: MetricId) => string {
 }
 
 export function useClauseLabel(): (clause: Clause) => string {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
+  const en = (i18n.language ?? '').startsWith('en');
   const role = useRoleLabel();
   const metric = useMetricLabel();
   return useCallback((clause: Clause): string => {
@@ -87,6 +88,13 @@ export function useClauseLabel(): (clause: Clause) => string {
           return t(`${k}.captain`, { round: clause.round, side: side(clause.side) });
         case 'gameId':
           return t(`${k}.gameId`, { count: clause.in.length });
+        case 'lineup': {
+          const parts: string[] = [];
+          if (clause.sMin !== undefined) parts.push(`S ≥ ${clause.sMin}`);
+          if (clause.strongPr !== undefined && clause.strongCount !== undefined) parts.push(`PR ${clause.strongPr}+ ≥ ${clause.strongCount}`);
+          const glue = clause.combine === 'or' ? (en ? ' or ' : ' 或 ') : (en ? ' and ' : ' 且 ');
+          return t(`${k}.lineup`, { detail: parts.join(glue) + (clause.includeUnscored ? (en ? ' (+ unscored)' : '（含未評分）') : '') });
+        }
         case 'withPlayer': {
           const parts: string[] = [];
           if (clause.role) parts.push(join(clause.role.map(role)));
@@ -119,5 +127,5 @@ export function useClauseLabel(): (clause: Clause) => string {
       }
     })();
     return 'not' in clause && clause.not ? t(`${k}.not`, { text }) : text;
-  }, [t, role, metric]);
+  }, [t, role, metric, en]);
 }
