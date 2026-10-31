@@ -54,7 +54,7 @@
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard, redHideR1Card } from '../RedRound2';
 import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCleanVote';
-import { redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
+import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { bestZoneTeam } from '../belief/ZoneModel';
@@ -742,11 +742,20 @@ export class ForwardAgent implements AvalonAgent {
     // Strong-table gap R1 `redNormalVote` (RedVoteCamouflage.ts): off the team, at rate q a red casts the vote a public-view
     // loyal in this seat would, except when the red camp's win or loss rides on this team.
     if (redNormalVoteNow(this.baseline.tuning, obs)) {
-      const forced = redVoteCritical(obs);
-      if (forced !== null) return this.ruleDecision(obs, { type: 'team_vote', vote: forced }, 'red normal vote (critical team: camp interest)');
+      const forced = obs.myRole === 'oberon' ? null : redVoteCritical(obs);
+      // Round 16 `redKeyWhite` (RedVoteCamouflage.ts): the key-team outer white only when the team can pass (and, mode 2,
+      // only as many reds as the majority needs); otherwise the loyal vote below.
+      if (forced !== null && (forced === false || redKeyWhiteVote(this.baseline.tuning, obs))) {
+        return this.ruleDecision(obs, { type: 'team_vote', vote: forced }, 'red normal vote (critical team: camp interest)');
+      }
       _forwardDecideCalls -= 1;
       const asLoyal = this.decide(loyalViewOf(obs));
-      if (asLoyal.action.type === 'team_vote') return this.ruleDecision(obs, { type: 'team_vote', vote: asLoyal.action.vote }, 'red normal vote (as a loyal)');
+      if (asLoyal.action.type === 'team_vote') {
+        // Round 16 `redCleanWhite` (RedVoteCamouflage.ts): a red's loyal view counts its own seat as blue and reads clean
+        // teams dirtier than a real blue does — at rate q, white a team without a red it sees anyway.
+        if (!asLoyal.action.vote && redCleanWhiteNow(this.baseline.tuning, obs)) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red normal vote (clean-team outer white)');
+        return this.ruleDecision(obs, { type: 'team_vote', vote: asLoyal.action.vote }, 'red normal vote (as a loyal)');
+      }
     }
     if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
       const yes = redCleanApproveVote(this.baseline.tuning, obs);

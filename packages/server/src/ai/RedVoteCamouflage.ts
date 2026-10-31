@@ -10,10 +10,13 @@
  */
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
+import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 
 export function redNormalVoteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   const q = tuning.redNormalVote ?? 0;
-  if (q <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil' || obs.myRole === 'oberon') return false;
+  if (q <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil') return false;
+  // Round 16 `oberonNormalVote`: Oberon too (no critical-team exception: he sees no teammate).
+  if (obs.myRole === 'oberon' && !tuning.oberonNormalVote) return false;
   const round = obs.currentRound ?? 1;
   if (round < 3 || (obs.failCount ?? 0) >= 4) return false;
   if ((obs.proposedTeam ?? []).includes(obs.myPlayerId)) return false;
@@ -31,6 +34,50 @@ export function redVoteCritical(obs: PlayerObservation): boolean | null {
   if (mateOn && fails >= 2) return true;
   if (!mateOn && wins >= 2) return false;
   return null;
+}
+
+/**
+ * 第 16 回合 `redCleanWhite`：照雜魚投票的紅方，隊上沒有它看得到的紅、不是關鍵隊，而公開視角的忠臣會投黑時，以比例 q（依座位、
+ * 回合、第幾次提議雜湊）外白。由 `ForwardAgent.decide` 在算出忠臣那一票之後套用。
+ */
+export function redCleanWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const q = tuning.redCleanWhite ?? 0;
+  if (q <= 0 || obs.myRole === 'oberon') return false;
+  const team = obs.proposedTeam ?? [];
+  if (team.some((id) => obs.knownEvils.includes(id))) return false;
+  let h = 0x811c9dc5;
+  for (const ch of `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|redcleanwhite`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000 < q;
+}
+
+/**
+ * 第 16 回合 `redKeyWhite`：關鍵隊（隊上有隊友、紅方已兩紅）照紅方利益外白之前，先看這隊過不過得了。第 15 回合起藍方的機器人表
+ * 把「不在隊上贊成有紅的隊」讀成很像紅（藍方 4.5%、紅方 32%）；這隊過了、隊友出失敗就三紅，外白被看到也沒差；這隊被否決，
+ * 外白的紅就曝光了。隊上的藍方在關鍵局照 `goodKeyVote` 投：站在每個隊上藍方的位置（同一份公開紀錄，用藍方實際的讀法）估
+ * 「這隊沒有紅」的機率，達到門檻的算贊成；隊上的紅都贊成。加上不在隊上、看得到的紅（都照這條規則）也湊不到過半 → 這一票照忠臣投。
+ * 模式 2 再只派需要的人數外白：需要的票數 = 過半 − 隊上的贊成，加一票餘裕，不在隊上看得到的紅依座位排序，前幾個外白。
+ * 回 true = 外白；false = 不外白（照忠臣投）。奧伯倫不在 `redNormalVote` 的範圍內。
+ */
+export function redKeyWhiteVote(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const mode = tuning.redKeyWhite ?? 0;
+  if (mode <= 0) return true;
+  const me = obs.myPlayerId;
+  const reds = new Set([me, ...obs.knownEvils]);
+  const team = obs.proposedTeam ?? [];
+  const threshold = tuning.goodKeyVote > 0 ? tuning.goodKeyVote : 0.5;
+  const opts = bayesOptionsOf(tuning);
+  let onYes = 0;
+  for (const id of team) {
+    if (reds.has(id)) { onYes++; continue; }
+    const view = { ...obs, myPlayerId: id, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, myLakeResults: [] } as PlayerObservation;
+    if ((bayesTeamClean(view, team, opts) ?? 0) >= threshold) onYes++;
+  }
+  const majority = Math.floor(obs.playerCount / 2) + 1;
+  const offReds = [...reds].filter((id) => !team.includes(id)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (onYes + offReds.length < majority) return false;
+  if (mode === 1) return true;
+  const needed = Math.max(0, majority - onYes) + 1;
+  return offReds.indexOf(me) < needed;
 }
 
 /**

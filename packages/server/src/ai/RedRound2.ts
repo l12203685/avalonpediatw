@@ -47,6 +47,9 @@ export function mordredHideR1Card(tuning: Readonly<AgentTuning>, obs: PlayerObse
  */
 export function redHideR1Card(tuning: Readonly<AgentTuning>, obs: PlayerObservation): 'success' | null {
   if (!(tuning.redHideR1 > 0) || (obs.myRole !== 'assassin' && obs.myRole !== 'morgana') || (obs.currentRound ?? 1) !== 1) return null;
+  // Round 16 `redHideR1Who`: 1 = the assassin only, 2 = Morgana only (0 = both).
+  const who = tuning.redHideR1Who ?? 0;
+  if ((who === 1 && obs.myRole !== 'assassin') || (who === 2 && obs.myRole !== 'morgana')) return null;
   const team = obs.proposedTeam ?? [];
   if (team.some((id) => id !== obs.myPlayerId && obs.knownEvils.includes(id))) return null;
   return tuning.redHideR1 >= 1 || Math.random() < tuning.redHideR1 ? 'success' : null;

@@ -55,7 +55,7 @@ describe('AgentTuning — flags', () => {
     expect(LEGACY_AGENT_TUNING.r3NormalVotePrior).toBe(0);
     expect(LEGACY_AGENT_TUNING.teamPassRank).toBe(0);
     for (const key of AGENT_TUNING_KEYS) {
-      if (!['r3NormalVotePrior', 'teamPassRank', 'goodLeaderWorldPick', 'redHideEarly', 'redCleanApprove', 'merlinCoverRate', 'goodCleanVote', 'goodCleanVoteMaxAttempt', 'redStackRatio', 'redDivisionVote', 'redFavoriteMate', 'goodCleanLead', 'loyalMerlinRead', 'assassinMerlinVotes', 'assassinVoteModel', 'assassinLakeRead', 'assassinLeadRead', 'merlinVoteCover', 'merlinLoyalCover', 'beliefBotTables', 'merlinNormalVote', 'redNormalVote', 'goodTailVote', 'goodKeyVote', 'assassinVoteEps', 'redHideR1', 'goodTailVotePercival'].includes(key)) expect(LEGACY_AGENT_TUNING[key]).toBe(false);
+      if (!['r3NormalVotePrior', 'teamPassRank', 'goodLeaderWorldPick', 'redHideEarly', 'redCleanApprove', 'merlinCoverRate', 'goodCleanVote', 'goodCleanVoteMaxAttempt', 'redStackRatio', 'redDivisionVote', 'redFavoriteMate', 'goodCleanLead', 'loyalMerlinRead', 'assassinMerlinVotes', 'assassinVoteModel', 'assassinLakeRead', 'assassinLeadRead', 'merlinVoteCover', 'merlinLoyalCover', 'beliefBotTables', 'merlinNormalVote', 'redNormalVote', 'goodTailVote', 'goodKeyVote', 'assassinVoteEps', 'redHideR1', 'goodTailVotePercival', 'redHideR1Who', 'redKeyWhite', 'redCleanWhite'].includes(key)) expect(LEGACY_AGENT_TUNING[key]).toBe(false);
     }
     expect(LEGACY_AGENT_TUNING.goodCleanVote).toBe(0);
     expect(describeAgentTuning(LEGACY_AGENT_TUNING)).toBe('legacy');
