@@ -636,6 +636,25 @@ export interface AgentTuning {
    * 沒有關鍵隊的例外——他看不到隊友）。自我對打第 3 局起奧伯倫不在隊上贊成有紅的隊 34.5%、乾淨的隊 45%（藍方 3%／28%）。
    */
   oberonNormalVote: boolean;
+  /**
+   * 第 17 回合藍方（三角色・信念表；`belief/BayesBelief.ts` 的 `keyVoteCells`）：關鍵局（第 3 局起、紅方已兩紅）的票改讀機器人表的
+   * `voteKey` 格子（`fitBeliefLikelihoods.ts --bots` 從第 17 回合起另外統計），其他提議照原本的 `vote` 格子。第 16 回合起紅方
+   * 不在隊上的關鍵隊外白只在這隊過得了時開（`redKeyWhite=1`），關鍵局的票和一般第 3 局起的票的比例不一樣；表裡沒有這些格子時照舊。
+   */
+  beliefKeyVoteCells: boolean;
+  /**
+   * 第 17 回合藍方・梅林（`MerlinLoyalStyle.merlinReuseNormTeam`）：Edward 的裁定「任務成功後照派那一隊是常態」「梅林可以隨局勢
+   * 派拇指，但不能為了躲刺」——第 2 局非強制的提議（注定被否決），上一局任務成功而且那一隊有梅林看得到的紅（第 1 局藏牌的刺客）時，
+   * 梅林照常態照派那一隊（梅林不在那一隊就補自己），而不是避開那個紅。第 15 回合拆解：刺客模型讀「自己派的隊含刺客的比例」，
+   * 忠臣約一半帶藏牌者、梅林從不帶。0 = 關，1 = 開。
+   */
+  merlinReuseNorm: number;
+  /**
+   * 第 17 回合藍方・派西（`belief/BayesBelief.ts` 的 `morganaR1`）：第 16 回合起第 1 局只有刺客（和莫德雷德）藏牌，莫甘娜落單照真人規則
+   * 出失敗。派西的信念裡每個世界都知道哪根拇指是莫甘娜：第 1 局成功的隊上只有一個紅、而那個紅是莫甘娜拇指的世界幾乎不可能
+   * （機器人表是陣營層級的，讀不到角色）。
+   */
+  percivalMorganaR1: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -726,6 +745,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redKeyWhite',
   'redCleanWhite',
   'oberonNormalVote',
+  'beliefKeyVoteCells',
+  'merlinReuseNorm',
+  'percivalMorganaR1',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -815,6 +837,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redKeyWhite: 0,
   redCleanWhite: 0,
   oberonNormalVote: false,
+  beliefKeyVoteCells: false,
+  merlinReuseNorm: 0,
+  percivalMorganaR1: false,
 });
 
 /**
@@ -1052,6 +1077,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redKeyWhite: 1,
   redCleanWhite: 0,
   oberonNormalVote: false,
+  beliefKeyVoteCells: false,
+  merlinReuseNorm: 0,
+  percivalMorganaR1: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1141,6 +1169,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redKeyWhite: 'AVALON_TUNING_RED_KEY_WHITE',
   redCleanWhite: 'AVALON_TUNING_RED_CLEAN_WHITE',
   oberonNormalVote: 'AVALON_TUNING_OBERON_NORMAL_VOTE',
+  beliefKeyVoteCells: 'AVALON_TUNING_BELIEF_KEY_VOTE_CELLS',
+  merlinReuseNorm: 'AVALON_TUNING_MERLIN_REUSE_NORM',
+  percivalMorganaR1: 'AVALON_TUNING_PERCIVAL_MORGANA_R1',
 });
 
 function parseBool(raw: string): boolean | undefined {
