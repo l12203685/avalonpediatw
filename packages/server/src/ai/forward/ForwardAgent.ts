@@ -52,7 +52,7 @@
  */
 
 import { merlinDoomedRedCover } from '../MerlinCover';
-import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard } from '../RedRound2';
+import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard, redHideR1Card } from '../RedRound2';
 import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCleanVote';
 import { redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
@@ -720,6 +720,9 @@ export class ForwardAgent implements AvalonAgent {
       // Round 12 `mordredHideR1` (RedRound2.ts): the lone Mordred hides on R1 (blue reads the cards with the bot tables).
       const mordredHide = mordredHideR1Card(this.baseline.tuning, obs);
       if (mordredHide) return this.ruleDecision(obs, { type: 'quest_vote', vote: mordredHide }, 'mordred hides on R1');
+      // Round 14 `redHideR1` (RedRound2.ts): the lone assassin / Morgana hides on R1 too.
+      const redHide = redHideR1Card(this.baseline.tuning, obs);
+      if (redHide) return this.ruleDecision(obs, { type: 'quest_vote', vote: redHide }, 'lone red hides on R1');
     }
     // 位階法 (Edward 4/24; `redRankOrder`): the recognised reds split the fail cards — it lived only on the
     // baseline fallback path, so the production pipeline had every red fail (two reds on R2/R3: 2 fail cards).
