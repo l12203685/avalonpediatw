@@ -1,9 +1,9 @@
-"""Offline tests for discord_paipu_export.py (the website's 牌譜紀錄 list).
+"""Offline tests for discord_records_export.py (the website's 牌譜紀錄 list).
 
 No network and no Google libraries needed (stdlib unittest; pytest also collects it). Synthetic
 posts with made-up names (玩家A … 玩家J).
 
-    python packages/server/test_discord_paipu_export.py
+    python packages/server/test_discord_records_export.py
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from unittest import mock
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import discord_paipu_export as dpe  # noqa: E402
+import discord_records_export as dpe  # noqa: E402
 import discord_records_import as dri  # noqa: E402
 import generate_cache as gc  # noqa: E402
 
@@ -102,7 +102,7 @@ class FakeDiscord:
 
 def build(discord: FakeDiscord | None = None):
     discord = discord or FakeDiscord()
-    return dpe.build_paipu(discord.posts, lambda p: discord.starter_content(p.id), guild_id=GUILD, forum_id=FORUM)
+    return dpe.build_records(discord.posts, lambda p: discord.starter_content(p.id), guild_id=GUILD, forum_id=FORUM)
 
 
 class BuildTest(unittest.TestCase):
@@ -152,7 +152,7 @@ class BuildTest(unittest.TestCase):
     def test_newest_first_and_no_raw_text(self) -> None:
         doc, _ = build()
         self.assertEqual([p["id"] for p in doc["posts"]], [BROKEN.id, GAME.id, EMPTY_TAGGED.id])
-        text = dpe.dump_paipu(doc)
+        text = dpe.dump_records(doc)
         self.assertNotIn("hello", text)  # the unreadable line itself is never stored
         self.assertNotIn("刺客刺殺", text)
         self.assertNotIn("場地", text)
@@ -169,7 +169,7 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(len(entry["title"]), dpe.TITLE_MAX)
         self.assertEqual(entry["game"]["names"][0], "玩家A")
         self.assertEqual(entry["game"]["outcome"], gc.OUTCOME_BLUE_DEAD)
-        self.assertEqual(dpe.paipu_problems(doc), [])
+        self.assertEqual(dpe.records_problems(doc), [])
 
 
 def has(problems: list[str], name: str) -> bool:
@@ -179,35 +179,35 @@ def has(problems: list[str], name: str) -> bool:
 class ShapeCheckTest(unittest.TestCase):
     def test_built_document_passes(self) -> None:
         doc, _ = build()
-        self.assertEqual(dpe.paipu_problems(doc), [])
+        self.assertEqual(dpe.records_problems(doc), [])
 
     def test_unexpected_fields_and_free_text_fail(self) -> None:
         doc, _ = build()
         doc["posts"][1]["text"] = "the whole starter message"
-        self.assertTrue(has(dpe.paipu_problems(doc), "post keys"))
+        self.assertTrue(has(dpe.records_problems(doc), "post keys"))
         doc, _ = build()
         doc["posts"][0]["problem"] = "第 14 行寫了 hello"
-        self.assertTrue(has(dpe.paipu_problems(doc), "problem text"))
+        self.assertTrue(has(dpe.records_problems(doc), "problem text"))
         doc, _ = build()
         doc["posts"][1]["game"]["names"][2] = "玩家C\n下一行"
-        self.assertTrue(has(dpe.paipu_problems(doc), "names shape"))
+        self.assertTrue(has(dpe.records_problems(doc), "names shape"))
         doc, _ = build()
         doc["posts"][1]["game"]["rounds"][0]["proposals"][0]["votes"] = ["好隊"]
-        self.assertTrue(has(dpe.paipu_problems(doc), "proposal shape"))
+        self.assertTrue(has(dpe.records_problems(doc), "proposal shape"))
         doc, _ = build()
         doc["posts"][1]["game"]["comment"] = "覆盤心得"
-        self.assertTrue(has(dpe.paipu_problems(doc), "game keys"))
+        self.assertTrue(has(dpe.records_problems(doc), "game keys"))
 
     def test_order_counts_and_simulations_fail(self) -> None:
         doc, _ = build()
         doc["posts"].reverse()
-        self.assertTrue(has(dpe.paipu_problems(doc), "post order"))
+        self.assertTrue(has(dpe.records_problems(doc), "post order"))
         doc, _ = build()
         doc["counts"]["games"] = 3
-        self.assertTrue(has(dpe.paipu_problems(doc), "counts"))
+        self.assertTrue(has(dpe.records_problems(doc), "counts"))
         doc, _ = build()
         doc["posts"][1]["tags"].append("模擬")
-        self.assertTrue(has(dpe.paipu_problems(doc), "simulation post"))
+        self.assertTrue(has(dpe.records_problems(doc), "simulation post"))
 
 
 class ShrinkTest(unittest.TestCase):
@@ -226,7 +226,7 @@ class RunTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.out = Path(self.tmp.name) / "paipu_cache.json"
+        self.out = Path(self.tmp.name) / "records_cache.json"
 
     def run_main(self, discord: FakeDiscord | None, *argv: str, env: dict | None = None) -> tuple[int, str]:
         out, err = io.StringIO(), io.StringIO()
@@ -276,10 +276,10 @@ class RunTest(unittest.TestCase):
 class WorkflowTest(unittest.TestCase):
     def test_refresh_workflow_exports_and_commits_the_list(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("python packages/server/test_discord_paipu_export.py", text)
-        self.assertIn("python packages/server/discord_paipu_export.py", text)
-        self.assertIn("PAIPU_PATH: packages/server/paipu_cache.json", text)
-        self.assertIn('git add -- "${PAIPU_PATH}"', text)
+        self.assertIn("python packages/server/test_discord_records_export.py", text)
+        self.assertIn("python packages/server/discord_records_export.py", text)
+        self.assertIn("RECORDS_PATH: packages/server/records_cache.json", text)
+        self.assertIn('git add -- "${RECORDS_PATH}"', text)
         self.assertNotIn("--report", text)
 
 

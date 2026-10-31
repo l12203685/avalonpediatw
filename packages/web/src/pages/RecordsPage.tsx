@@ -1,32 +1,33 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, ExternalLink, RotateCw, ScrollText, Search, X } from 'lucide-react';
-import { fetchPaipuList, isAnalysisNotGenerated, isAnalysisRouteMissing } from '../services/api';
-import PaipuGameView, { OUTCOME_STYLE } from '../components/paipu/PaipuGameView';
-import { clearPaipuHash, closePaipu, openPaipu, useOpenPaipu } from '../components/paipu/paipuLink';
+import { fetchRecordsList, isAnalysisNotGenerated, isAnalysisRouteMissing } from '../services/api';
+import RecordsGameView, { OUTCOME_STYLE } from '../components/records/RecordsGameView';
+import { closeRecords, openRecords, useOpenRecords } from '../components/records/recordsLink';
+import { useRecordsPrefs } from '../components/records/recordsPrefs';
 import {
-  EMPTY_PAIPU_FILTER,
-  PAIPU_SEATS,
+  EMPTY_RECORDS_FILTER,
   RESULT_TAGS,
-  matchesPaipu,
+  matchesRecords,
   matchingSeats,
   outcomeOf,
-  roleOfSeat,
-  type PaipuFilter,
-  type PaipuList,
-  type PaipuPost,
-  type PaipuResultFilter,
-} from '../utils/paipu';
+  seatLabel,
+  type RecordDisplayPrefs,
+  type RecordFilter,
+  type RecordList,
+  type RecordPost,
+  type RecordResultFilter,
+} from '../utils/records';
 
 /**
  * 牌譜紀錄頁籤（Edward 2026-10-30：「百科網站可以直接多一個頁籤是『牌譜紀錄與覆盤』，功能跟現在 DC 相同嗎
  * （或是直接同步現在 DC 的牌譜紀錄與覆盤頻道）」）。
  *
  * 第一階段：唯讀同步 DC 論壇 #牌譜紀錄與覆盤。清單（新到舊、依結果／日期／暱稱篩選）每天凌晨跟戰績快取一起更新；
- * 點一篇看整局（components/paipu/PaipuGameView），討論串回覆由伺服器即時讀 DC。發文、留言仍在 DC。
+ * 點一篇看整局（components/records/RecordsGameView），討論串回覆由伺服器即時讀 DC。發文、留言仍在 DC。
  */
 
 const PAGE_SIZE = 30;
-const RESULT_CHIPS: { id: PaipuResultFilter; label: string }[] = [
+const RESULT_CHIPS: { id: RecordResultFilter; label: string }[] = [
   { id: 'all', label: '全部' },
   { id: '三紅', label: '三紅' },
   { id: '三藍死', label: '三藍被刀' },
@@ -37,14 +38,14 @@ const RESULT_CHIPS: { id: PaipuResultFilter; label: string }[] = [
 type ListState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ok'; data: PaipuList };
+  | { status: 'ok'; data: RecordList };
 
-let listPromise: Promise<PaipuList> | null = null;
+let listPromise: Promise<RecordList> | null = null;
 
 /** 同一次瀏覽只抓一次（切頁籤回來不用重抓）；失敗了下次再抓。 */
-function loadList(force = false): Promise<PaipuList> {
+function loadList(force = false): Promise<RecordList> {
   if (!listPromise || force) {
-    listPromise = fetchPaipuList().catch((err: unknown) => {
+    listPromise = fetchRecordsList().catch((err: unknown) => {
       listPromise = null;
       throw err;
     });
@@ -63,7 +64,9 @@ function shortDate(date: string): string {
   return y && m && d ? `${y}/${m}/${d}` : date;
 }
 
-function PostRow({ post, query, onOpen }: { post: PaipuPost; query: string; onOpen: () => void }): JSX.Element {
+function PostRow({ post, query, prefs, onOpen }: {
+  post: RecordPost; query: string; prefs: RecordDisplayPrefs; onOpen: () => void;
+}): JSX.Element {
   const outcome = outcomeOf(post);
   const seats = matchingSeats(post, query);
   const extraTags = post.tags.filter((t) => !Object.values(RESULT_TAGS).includes(t));
@@ -72,7 +75,7 @@ function PostRow({ post, query, onOpen }: { post: PaipuPost; query: string; onOp
       <button
         type="button"
         onClick={onOpen}
-        data-testid="paipu-row"
+        data-testid="records-row"
         className="flex w-full items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-left transition-colors hover:border-amber-400/70 hover:bg-zinc-800/80"
       >
         <div className="min-w-0 flex-1">
@@ -95,10 +98,7 @@ function PostRow({ post, query, onOpen }: { post: PaipuPost; query: string; onOp
           </div>
           {seats.length > 0 && post.game && (
             <div className="mt-1 truncate text-[11px] text-amber-200">
-              {seats.map((s) => {
-                const name = post.game?.names[PAIPU_SEATS.indexOf(s as (typeof PAIPU_SEATS)[number])] ?? '';
-                return `${s} 號 ${name}（${roleOfSeat(post.game?.config ?? '', s).name}）`;
-              }).join('、')}
+              {seats.map((s) => (post.game ? seatLabel(post.game, s, prefs) : '')).join('、')}
             </div>
           )}
         </div>
@@ -108,11 +108,12 @@ function PostRow({ post, query, onOpen }: { post: PaipuPost; query: string; onOp
   );
 }
 
-export default function PaipuPage(): JSX.Element {
+export default function RecordsPage(): JSX.Element {
   const [state, setState] = useState<ListState>({ status: 'loading' });
-  const [filter, setFilter] = useState<PaipuFilter>(EMPTY_PAIPU_FILTER);
+  const [filter, setFilter] = useState<RecordFilter>(EMPTY_RECORDS_FILTER);
   const [shown, setShown] = useState(PAGE_SIZE);
-  const openId = useOpenPaipu();
+  const openId = useOpenRecords();
+  const [prefs] = useRecordsPrefs();
 
   const fetchList = (force: boolean): void => {
     loadList(force)
@@ -124,20 +125,19 @@ export default function PaipuPage(): JSX.Element {
     fetchList(true);
   };
   /** 換篩選時從頭顯示。 */
-  const updateFilter = (change: (f: PaipuFilter) => PaipuFilter): void => {
+  const updateFilter = (change: (f: RecordFilter) => RecordFilter): void => {
     setFilter(change);
     setShown(PAGE_SIZE);
   };
 
   useEffect(() => {
     fetchList(false);
-    return (): void => clearPaipuHash();
   }, []);
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, [openId]);
 
   const posts = useMemo(() => (state.status === 'ok' ? state.data.posts : []), [state]);
-  const filtered = useMemo(() => posts.filter((p) => matchesPaipu(p, filter)), [posts, filter]);
+  const filtered = useMemo(() => posts.filter((p) => matchesRecords(p, filter)), [posts, filter]);
   const filterActive = filter.result !== 'all' || filter.from || filter.to || filter.query.trim();
   const forumUrl = state.status === 'ok'
     ? `https://discord.com/channels/${state.data.guildId}/${state.data.forumId}`
@@ -146,13 +146,13 @@ export default function PaipuPage(): JSX.Element {
   if (openId && state.status === 'ok') {
     const post = posts.find((p) => p.id === openId);
     return (
-      <div className="mx-auto max-w-4xl px-3 pb-10 pt-3 sm:px-4">
+      <div className="mx-auto max-w-7xl px-3 pb-10 pt-2 sm:px-4 lg:pb-0">
         {post ? (
-          <PaipuGameView post={post} guildId={state.data.guildId} onBack={closePaipu} />
+          <RecordsGameView post={post} guildId={state.data.guildId} onBack={closeRecords} />
         ) : (
           <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/80 p-4 text-sm text-zinc-300">
             <p>找不到這篇牌譜（可能已刪除、標成模擬，或是今天剛發還沒同步）。</p>
-            <button type="button" onClick={closePaipu} className="text-amber-300 underline">回到牌譜列表</button>
+            <button type="button" onClick={closeRecords} className="text-amber-300 underline">回到牌譜列表</button>
           </div>
         )}
       </div>
@@ -160,7 +160,7 @@ export default function PaipuPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-3 pb-10 pt-3 sm:px-4" data-testid="paipu-page">
+    <div className="mx-auto max-w-4xl px-3 pb-10 pt-3 sm:px-4" data-testid="records-page">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="flex items-center gap-1.5">
           <ScrollText size={20} className="text-amber-300" />
@@ -190,7 +190,7 @@ export default function PaipuPage(): JSX.Element {
             value={filter.query}
             onChange={(e) => updateFilter((f) => ({ ...f, query: e.target.value }))}
             placeholder="搜尋玩家暱稱或標題"
-            data-testid="paipu-search"
+            data-testid="records-search"
             className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1.5 pl-8 pr-8 text-sm text-white placeholder-zinc-500 focus:border-amber-400 focus:outline-none"
           />
           {filter.query && (
@@ -243,7 +243,7 @@ export default function PaipuPage(): JSX.Element {
           {filterActive && (
             <button
               type="button"
-              onClick={() => updateFilter(() => EMPTY_PAIPU_FILTER)}
+              onClick={() => updateFilter(() => EMPTY_RECORDS_FILTER)}
               className="ml-auto rounded-md px-1.5 py-1 text-xs text-amber-300 hover:bg-zinc-800"
             >
               清除篩選
@@ -273,9 +273,9 @@ export default function PaipuPage(): JSX.Element {
           {filtered.length === 0 ? (
             <p className="py-8 text-center text-sm text-zinc-400">沒有符合的牌譜</p>
           ) : (
-            <ol className="space-y-1.5" data-testid="paipu-list">
+            <ol className="space-y-1.5" data-testid="records-list">
               {filtered.slice(0, shown).map((post) => (
-                <PostRow key={post.id} post={post} query={filter.query} onOpen={() => openPaipu(post.id)} />
+                <PostRow key={post.id} post={post} query={filter.query} prefs={prefs} onOpen={() => openRecords(post.id)} />
               ))}
             </ol>
           )}

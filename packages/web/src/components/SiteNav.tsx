@@ -11,6 +11,7 @@ import { getStoredToken } from '../services/socket';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import IOSInstallGuide from './IOSInstallGuide';
 import ForceUpdateButton from './ForceUpdateButton';
+import { clearRecordsHash } from './records/recordsLink';
 
 /**
  * 全站頂端導覽列（Edward 2026-10-30：「不要有首頁，一連進來直接看到內容」「頁籤直接分成 戰績排行／數據分析／
@@ -22,15 +23,17 @@ import ForceUpdateButton from './ForceUpdateButton';
  * 「牌譜紀錄」（Edward 2026-10-30：「百科網站可以直接多一個頁籤是『牌譜紀錄與覆盤』」）= DC 論壇 #牌譜紀錄與覆盤 的牌譜。
  */
 
-export type SiteTab = 'analytics' | 'analysis' | 'wiki' | 'streams' | 'paipu';
+export type SiteTab = 'analytics' | 'analysis' | 'wiki' | 'streams' | 'records';
 
-const SITE_TABS: readonly SiteTab[] = ['analytics', 'analysis', 'wiki', 'streams', 'paipu'];
+const SITE_TABS: readonly SiteTab[] = ['analytics', 'analysis', 'wiki', 'streams', 'records'];
 const SITE_TAB_KEY = 'avalon.site.tab';
 
 /** 進站時（gameState 'home'）要開的頁籤：上次選的，沒有就戰績排行。 */
 export function lastSiteTab(): SiteTab {
   try {
-    const v = localStorage.getItem(SITE_TAB_KEY);
+    const stored = localStorage.getItem(SITE_TAB_KEY);
+    // 'paipu' = 2026-10-31 改名為 records 前記住的牌譜紀錄頁籤
+    const v = stored === 'paipu' ? 'records' : stored;
     return SITE_TABS.includes(v as SiteTab) ? (v as SiteTab) : 'analytics';
   } catch {
     return 'analytics';
@@ -79,6 +82,8 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
 
   const go = (tab: SiteTab): void => {
     try { localStorage.setItem(SITE_TAB_KEY, tab); } catch { /* 無痕／封鎖儲存：只是不記住 */ }
+    // 離開牌譜紀錄時清掉 #records=…，免得重新整理又跳回那一局（不放在頁面卸載時做：開發模式的 StrictMode 會先卸載一次）
+    if (tab !== 'records') clearRecordsHash();
     setGameState(tab);
     window.scrollTo({ top: 0 });
   };
@@ -88,7 +93,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
     { id: 'analysis', label: t('nav.siteAnalysis', { defaultValue: '數據分析' }), Icon: BarChart3 },
     { id: 'wiki', label: t('home.wikiAndGuide'), Icon: BookOpen },
     { id: 'streams', label: t('nav.siteStreams', { defaultValue: '直播回放' }), Icon: Tv },
-    { id: 'paipu', label: t('nav.sitePaipu', { defaultValue: '牌譜紀錄' }), Icon: ScrollText },
+    { id: 'records', label: t('nav.siteRecords', { defaultValue: '牌譜紀錄' }), Icon: ScrollText },
   ];
 
   return (

@@ -1,12 +1,12 @@
 /**
- * GET /api/analysis/paipu/:id/replies 的資料：Discord 論壇 #牌譜紀錄與覆盤 某篇貼文討論串裡的回覆
+ * GET /api/analysis/records/:id/replies 的資料：Discord 論壇 #牌譜紀錄與覆盤 某篇貼文討論串裡的回覆
  * （Edward 2026-10-30：「DC 討論串的回覆可以顯示，下面有些是補述或是針對牌譜的覆盤」）。
  *
- * 為什麼是執行期讀、不放進每日快取：回覆是聊天內容，寫進公開 repo 的 paipu_cache.json 就會永久留在 git 歷史裡，
+ * 為什麼是執行期讀、不放進每日快取：回覆是聊天內容，寫進公開 repo 的 records_cache.json 就會永久留在 git 歷史裡，
  * 在 DC 刪掉或改掉的回覆也還在。這裡在有人打開那一局時才用伺服器既有的 DISCORD_BOT_TOKEN 讀，只放在記憶體
  * （每篇 REPLIES_TTL_MS），刪除與修改幾分鐘內就跟著 DC；伺服器 log 只印數量。
  *
- * - 只讀 paipu_cache.json 清單裡的貼文（路由先查）：不能拿來讀機器人看得到的其他頻道，模擬貼文也不在清單裡。
+ * - 只讀 records_cache.json 清單裡的貼文（路由先查）：不能拿來讀機器人看得到的其他頻道，模擬貼文也不在清單裡。
  * - 只留一般訊息與回覆（type 0 / 19），去掉起始訊息本身（牌譜）、機器人與 webhook 發的訊息（例如每日匯入的
  *   「🤖 牌譜格式檢查」）、系統訊息（改標題、釘選…）。
  * - 作者顯示伺服器暱稱（沒有就顯示 Discord 顯示名稱）；<@id> 提及換成 @暱稱，頻道／身分組／自訂表情換成文字。
@@ -23,26 +23,26 @@ const PAGE_SIZE = 100;
 const MESSAGE_TYPES = new Set([0, 19]); // DEFAULT, REPLY
 const TEXT_MAX = 4000;
 
-export interface PaipuReplyAttachment {
+export interface RecordReplyAttachment {
   name: string;
   url: string;
   image: boolean;
 }
 
-export interface PaipuReply {
+export interface RecordReply {
   id: string;
   author: string;
   /** ISO 8601（Discord 的 timestamp）。 */
   time: string;
   edited: boolean;
   text: string;
-  attachments: PaipuReplyAttachment[];
+  attachments: RecordReplyAttachment[];
   /** 回覆的是哪一則（討論串裡的另一則回覆）。 */
   replyTo?: string;
 }
 
 export type RepliesLoad =
-  | { ok: true; replies: PaipuReply[]; fetchedAt: number; stale: boolean }
+  | { ok: true; replies: RecordReply[]; fetchedAt: number; stale: boolean }
   | { ok: false; status: number; error: string };
 
 interface DiscordUser { id?: string; username?: string; global_name?: string | null; bot?: boolean }
@@ -109,7 +109,7 @@ export function isShownReply(message: DiscordMessage, threadId: string): boolean
 export function createRepliesService(options: RepliesServiceOptions) {
   const fetcher: Fetcher = options.fetcher ?? ((url, init) => fetch(url, init));
   const now = options.now ?? Date.now;
-  const threads = new Map<string, { replies: PaipuReply[]; fetchedAt: number }>();
+  const threads = new Map<string, { replies: RecordReply[]; fetchedAt: number }>();
   const members = new Map<string, { name: string | null; fetchedAt: number }>();
   const inflight = new Map<string, Promise<RepliesLoad>>();
   const headers = { Authorization: `Bot ${options.token}`, 'User-Agent': 'DiscordBot (avalonpediatw, 1.0)' };
@@ -137,7 +137,7 @@ export function createRepliesService(options: RepliesServiceOptions) {
     return name;
   }
 
-  async function fetchReplies(threadId: string): Promise<PaipuReply[]> {
+  async function fetchReplies(threadId: string): Promise<RecordReply[]> {
     const messages: DiscordMessage[] = [];
     let after = threadId;
     for (let page = 0; page < MAX_REPLY_PAGES; page += 1) {
@@ -161,7 +161,7 @@ export function createRepliesService(options: RepliesServiceOptions) {
     for (const [id, user] of users) if (!names.has(id)) names.set(id, displayName(user));
     const shownIds = new Set(shown.map((m) => m.id));
     return shown.map((m) => {
-      const reply: PaipuReply = {
+      const reply: RecordReply = {
         id: m.id,
         author: names.get(m.author?.id ?? '') ?? displayName(m.author),
         time: m.timestamp ?? '',
@@ -196,7 +196,7 @@ export function createRepliesService(options: RepliesServiceOptions) {
         threads.set(threadId, { replies, fetchedAt });
         return { ok: true, replies, fetchedAt, stale: false };
       } catch {
-        console.warn('[analysis/paipu replies] 讀取失敗：1');
+        console.warn('[analysis/records replies] 讀取失敗：1');
         if (cached) return { ok: true, replies: cached.replies, fetchedAt: cached.fetchedAt, stale: true };
         return { ok: false, status: 503, error: REPLIES_UNAVAILABLE };
       } finally {

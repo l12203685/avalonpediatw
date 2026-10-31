@@ -12,7 +12,7 @@
 
 網站導覽列的「牌譜紀錄」就是這個論壇的唯讀同步（Edward 2026-10-30）：
 
-- **清單與牌譜**：每天 3:47 戰績分析快取更新時，`packages/server/discord_paipu_export.py` 用同一個 `DISCORD_BOT_TOKEN` 讀論壇每篇貼文的**第一則訊息**，用跟每日匯入相同的解析器解析，寫成 `packages/server/paipu_cache.json`，跟快取一起 commit（網站讀 `/api/analysis/paipu`）。所以今天發的貼文，隔天早上才會出現在網站上。
+- **清單與牌譜**：每天 3:47 戰績分析快取更新時，`packages/server/discord_records_export.py` 用同一個 `DISCORD_BOT_TOKEN` 讀論壇每篇貼文的**第一則訊息**，用跟每日匯入相同的解析器解析，寫成 `packages/server/records_cache.json`，跟快取一起 commit（網站讀 `/api/analysis/records`）。所以今天發的貼文，隔天早上才會出現在網站上。
   - 列出：所有貼文，**模擬**和不是牌譜的討論貼文（沒有牌譜、沒有結果標籤、也沒有 6 碼配置）除外。已收錄的貼文一樣列出。
   - 存的是：標題、標籤、發文時間、牌譜日期，以及解析後的牌譜（配置、座位暱稱、每次提議與投票異常、任務、湖、刺殺、結果）。**不存第一則訊息的原文**。
   - 讀不懂的牌譜也會列出，標「格式待修正」，只寫原因（固定的說明文字），請到 DC 看原文；修好後隔天就會變成完整的牌譜。

@@ -21,9 +21,9 @@ name: Refresh analysis cache
 #       結構化欄位，沒有文字記錄 / note 原文），與快取「同寫或同不寫」、一起 commit；快取的 overview.gamesKey
 #       = 資料集的 key，網站與伺服器靠它確認兩檔同一批。資料集自己的檢查（round-trip、隱私形狀）沒過時只寫快取、
 #       不寫資料集（網站篩選暫停），快取照常推送，最後一步讓 job 亮紅燈。公開紀錄一樣只有數量。
-# 牌譜紀錄清單（網站「牌譜紀錄」頁籤）：同一次執行另跑 discord_paipu_export.py，用 DISCORD_BOT_TOKEN（同
+# 牌譜紀錄清單（網站「牌譜紀錄」頁籤）：同一次執行另跑 discord_records_export.py，用 DISCORD_BOT_TOKEN（同
 #       import-discord-records.yml 的 secret）讀 Discord 論壇 #牌譜紀錄與覆盤 每篇貼文的起始訊息（不讀討論串
-#       裡的回覆），寫 packages/server/paipu_cache.json（只有標題、標籤、發文時間與解析後的牌譜；不存起始訊息
+#       裡的回覆），寫 packages/server/records_cache.json（只有標題、標籤、發文時間與解析後的牌譜；不存起始訊息
 #       原文；略過模擬與非牌譜貼文），跟快取一起 commit。沒設 token → notice 略過；讀取或檢查失敗 → 保留舊檔、
 #       快取照常推送，最後一步讓 job 亮紅燈。allow_shrink 也放寬清單篇數變少的檢查。公開紀錄只有數量。
 
@@ -56,7 +56,7 @@ jobs:
     env:
       CACHE_PATH: packages/server/analysis_cache.json
       GAMES_PATH: packages/server/games_cache.json
-      PAIPU_PATH: packages/server/paipu_cache.json
+      RECORDS_PATH: packages/server/records_cache.json
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Pick the credentials secret
@@ -99,7 +99,7 @@ jobs:
         run: |
           python packages/server/test_generate_cache.py
           python packages/server/test_discord_records_import.py
-          python packages/server/test_discord_paipu_export.py
+          python packages/server/test_discord_records_export.py
 
       - name: Write the service-account key to a temp file
         if: steps.creds.outputs.secret != ''
@@ -176,40 +176,40 @@ jobs:
           fi
           exit "${rc}"
 
-      - name: Export the Discord 牌譜 forum for the site's 牌譜紀錄 tab (paipu_cache.json)
-        id: paipu
+      - name: Export the Discord 牌譜 forum for the site's 牌譜紀錄 tab (records_cache.json)
+        id: records
         if: steps.creds.outputs.secret != ''
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           ALLOW_SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_shrink && '1' || '' }}
         run: |
           # Read-only: the forum's post list and each post's starter message (never the replies in a
-          # thread). A failure keeps the committed paipu_cache.json (the write is atomic) and does not
+          # thread). A failure keeps the committed records_cache.json (the write is atomic) and does not
           # hold back the analysis cache; the last step turns the job red. Counts only in the log.
           if [ -z "${DISCORD_BOT_TOKEN}" ]; then
             msg="Skipped: add the repository secret DISCORD_BOT_TOKEN to keep the site's 牌譜紀錄 tab up to date."
-            echo "::notice title=Paipu list skipped::${msg}"
+            echo "::notice title=Records list skipped::${msg}"
             echo "- 牌譜紀錄清單：略過（未設定 DISCORD_BOT_TOKEN）" >> "$GITHUB_STEP_SUMMARY"
-            echo "paipu=skipped" >> "$GITHUB_OUTPUT"
+            echo "records=skipped" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          args=(--output "${PAIPU_PATH}")
+          args=(--output "${RECORDS_PATH}")
           if [ "${ALLOW_SHRINK}" = "1" ]; then
             args+=(--allow-shrink)
           fi
           set +e
-          python packages/server/discord_paipu_export.py "${args[@]}"
+          python packages/server/discord_records_export.py "${args[@]}"
           rc=$?
           set -e
           if [ "${rc}" -eq 0 ]; then
-            echo "paipu=ok" >> "$GITHUB_OUTPUT"
+            echo "records=ok" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Exit codes 2/4/5 already printed a specific ::error:: (token / shape or shrink guard / Discord).
           if [ "${rc}" -ne 2 ] && [ "${rc}" -ne 4 ] && [ "${rc}" -ne 5 ]; then
-            echo "::error title=Paipu list export crashed::discord_paipu_export.py exited with ${rc}; see the traceback above. The committed list is kept."
+            echo "::error title=Records list export crashed::discord_records_export.py exited with ${rc}; see the traceback above. The committed list is kept."
           fi
-          echo "paipu=failed" >> "$GITHUB_OUTPUT"
+          echo "records=failed" >> "$GITHUB_OUTPUT"
 
       - name: Commit and push if the cache changed
         if: steps.creds.outputs.secret != ''
@@ -217,8 +217,8 @@ jobs:
           GAMES_DATASET: ${{ steps.regen.outputs.games_dataset }}
         run: |
           # 首次產生的資料集／牌譜紀錄清單尚未追蹤，須以 git status 判斷有無變動。
-          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${PAIPU_PATH}")" ]; then
-            echo "analysis_cache.json, games_cache.json and paipu_cache.json are unchanged; nothing to commit."
+          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}")" ]; then
+            echo "analysis_cache.json, games_cache.json and records_cache.json are unchanged; nothing to commit."
             echo "- 結果：快取無變動，未 commit" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -235,10 +235,10 @@ jobs:
           else
             dataset_note="每局資料集無變動"
           fi
-          paipu_note=""
-          if [ -n "$(git status --porcelain -- "${PAIPU_PATH}")" ] && [ -f "${PAIPU_PATH}" ]; then
-            paipu_posts="$(python -c 'import json, sys; print(json.load(sys.stdin)["counts"]["posts"])' < "${PAIPU_PATH}")"
-            paipu_note="；牌譜紀錄清單 ${paipu_posts} 篇"
+          records_note=""
+          if [ -n "$(git status --porcelain -- "${RECORDS_PATH}")" ] && [ -f "${RECORDS_PATH}" ]; then
+            records_posts="$(python -c 'import json, sys; print(json.load(sys.stdin)["counts"]["posts"])' < "${RECORDS_PATH}")"
+            records_note="；牌譜紀錄清單 ${records_posts} 篇"
           fi
 
           git config user.name "github-actions[bot]"
@@ -247,11 +247,11 @@ jobs:
           if [ -f "${GAMES_PATH}" ]; then
             git add -- "${GAMES_PATH}"
           fi
-          if [ -f "${PAIPU_PATH}" ]; then
-            git add -- "${PAIPU_PATH}"
+          if [ -f "${RECORDS_PATH}" ]; then
+            git add -- "${RECORDS_PATH}"
           fi
           git commit -q -m "chore(stats): 每日更新戰績分析快取（${games} 局）" \
-            -m "局數 ${prev_games} → ${games}，玩家 ${prev_players} → ${players}；${dataset_note}${paipu_note}。由 refresh-analysis-cache workflow 從 Google 試算表重算；archetype、playstyle、featureStudies 沿用前次快取。"
+            -m "局數 ${prev_games} → ${games}，玩家 ${prev_players} → ${players}；${dataset_note}${records_note}。由 refresh-analysis-cache workflow 從 Google 試算表重算；archetype、playstyle、featureStudies 沿用前次快取。"
 
           for attempt in 1 2 3; do
             git fetch -q origin main
@@ -279,11 +279,11 @@ jobs:
           echo "- 每局資料集：暫停寫入（網站篩選暫停），請看 regenerate 步驟的錯誤說明" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - name: Fail when the paipu list could not be exported
+      - name: Fail when the records list could not be exported
         # 快取照常推送；牌譜紀錄清單讀取或檢查失敗時保留舊檔，最後讓工作失敗並提示原因。
-        if: steps.creds.outputs.secret != '' && steps.paipu.outputs.paipu == 'failed'
+        if: steps.creds.outputs.secret != '' && steps.records.outputs.records == 'failed'
         run: |
-          echo "::error title=Paipu list not updated::paipu_cache.json was not updated (see the annotation of the export step); the site's 牌譜紀錄 tab shows the previous list."
+          echo "::error title=Records list not updated::records_cache.json was not updated (see the annotation of the export step); the site's 牌譜紀錄 tab shows the previous list."
           echo "- 牌譜紀錄清單：未更新（網站沿用前一版），請看 export 步驟的錯誤說明" >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
