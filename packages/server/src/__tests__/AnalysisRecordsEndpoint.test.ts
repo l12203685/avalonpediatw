@@ -25,7 +25,9 @@ import {
   REPLIES_NOT_CONFIGURED,
   REPLIES_TTL_MS,
   REPLIES_UNAVAILABLE,
+  BATTLE_REPORT_PREFIX,
   createRepliesService,
+  isShownReply,
   setRepliesServiceForTests,
 } from '../services/recordsReplies';
 
@@ -235,6 +237,17 @@ describe('createRepliesService', () => {
     expect(first.attachments).toEqual([{ name: 'board.png', url: 'https://cdn.example.test/board.png', image: true }]);
     expect(second).toMatchObject({ author: 'Alpha', text: '@玩家B 你第三輪那票 :ok:', edited: true, replyTo: '1432000000000000102' });
     expect(urls[0]).toContain(`/channels/${THREAD}/messages?limit=100&after=${THREAD}`);
+  });
+
+  it('shows the site bot\'s 戰報 replies (and only those bot messages), labelled as the site', async () => {
+    const report = msg('1432000000000000107', { author: user('99', 'Importer', true), content: `${BATTLE_REPORT_PREFIX}\n1-5 一句話` });
+    expect(isShownReply(report as never, THREAD)).toBe(true);
+    expect(isShownReply(msg('1432000000000000108', { author: user('99', 'Importer', true), content: '🤖 牌譜格式檢查' }) as never, THREAD)).toBe(false);
+    const fetcher = async (url: string) => (/\/members\//.test(url)
+      ? { ok: false, status: 404, json: async () => null }
+      : { ok: true, status: 200, json: async () => [report] });
+    const load = await createRepliesService({ token: 't', guildId: '1', fetcher }).load(THREAD);
+    expect(load.ok && load.replies.map((r) => r.author)).toEqual(['阿瓦隆百科・戰報']);
   });
 
   it('caches per thread, serves stale replies when Discord fails later, and 503 with nothing cached', async () => {

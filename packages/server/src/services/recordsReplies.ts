@@ -98,11 +98,17 @@ export function readableContent(content: string, names: ReadonlyMap<string, stri
   return text.length > TEXT_MAX ? `${text.slice(0, TEXT_MAX - 1)}…` : text;
 }
 
-/** 會顯示的回覆：一般訊息／回覆，不是起始訊息、機器人或 webhook，且有文字或附件。 */
+/** 本站機器人在討論串貼的戰報（Edward 10/31：戰報寫在討論串回覆）：機器人訊息裡唯一要顯示的。 */
+export const BATTLE_REPORT_PREFIX = '**【戰報】**';
+export function isBattleReport(message: DiscordMessage): boolean {
+  return Boolean(message.author?.bot) && (message.content ?? '').startsWith(BATTLE_REPORT_PREFIX);
+}
+
+/** 會顯示的回覆：一般訊息／回覆，不是起始訊息、機器人或 webhook（戰報例外），且有文字或附件。 */
 export function isShownReply(message: DiscordMessage, threadId: string): boolean {
   if (message.id === threadId) return false;
   if (!MESSAGE_TYPES.has(message.type ?? 0)) return false;
-  if (message.author?.bot || message.webhook_id) return false;
+  if ((message.author?.bot || message.webhook_id) && !isBattleReport(message)) return false;
   return Boolean((message.content ?? '').trim() || (message.attachments ?? []).length);
 }
 
@@ -163,7 +169,7 @@ export function createRepliesService(options: RepliesServiceOptions) {
     return shown.map((m) => {
       const reply: RecordReply = {
         id: m.id,
-        author: names.get(m.author?.id ?? '') ?? displayName(m.author),
+        author: isBattleReport(m) ? '阿瓦隆百科・戰報' : names.get(m.author?.id ?? '') ?? displayName(m.author),
         time: m.timestamp ?? '',
         edited: Boolean(m.edited_timestamp),
         text: readableContent(m.content ?? '', names),
