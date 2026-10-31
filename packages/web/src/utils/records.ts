@@ -12,6 +12,14 @@
  * 純函式放這裡，packages/server/src/__tests__/WebRecords.test.ts 測（web 沒有測試執行器）。
  */
 import { playerNameKey } from '@avalon/shared';
+import { matchesLineup, type GameLineup } from '@avalon/shared/stats';
+import {
+  DEFAULT_LINEUP_FILTER,
+  lineupCondition,
+  lineupFilterActive,
+  sanitizeLineupState,
+  type LineupFilterState,
+} from './lineupFilter';
 
 export const RECORDS_SEATS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'] as const;
 export const DISCORD_GUILD_ID = '1132682489840812113';
@@ -52,6 +60,23 @@ export interface RecordGame {
   category: '' | '線瓦' | '面瓦';
 }
 
+/**
+ * 陣容強度（discord_records_export.py 用 generate_cache.compute_lineups 算，Edward 2026-10-31）：開打前每個座位在
+ * 「生涯已 ≥30 場」的玩家池裡的 PR；S = 10 人 PR 的平均。沒評分（玩家池太小、名字不夠…）就沒有這個欄位。
+ */
+export interface RecordLineup {
+  /** 當時玩家池人數。 */
+  pool: number;
+  s: number;
+  /** 座位 1..9、0 的 PR（0–100）。 */
+  prs: number[];
+  /** 暫定（賽前 <30 場）或對不到人的座位：PR 最高 50，不算進「PR X 以上」的人數。 */
+  prov: string;
+}
+
+/** 可從紀錄直接證明的失誤：[標籤, 第幾輪（嚴重失誤這個總標籤是 0）, 相關座位]。 */
+export type RecordMistake = [tag: string, round: number, seats: string];
+
 export interface RecordPost {
   /** Discord 討論串 id（= 起始訊息 id）。 */
   id: string;
@@ -65,6 +90,8 @@ export interface RecordPost {
   /** 讀不懂時的原因（固定的說明文字）與行號。 */
   problem?: string;
   problemLine?: number;
+  lineup?: RecordLineup;
+  mistakes?: RecordMistake[];
 }
 
 export interface RecordList {
@@ -195,6 +222,37 @@ export function discordThreadUrl(id: string, guildId: string = DISCORD_GUILD_ID)
   return `https://discord.com/channels/${guildId}/${id}`;
 }
 
+/** 失誤標籤（順序與名稱同 generate_cache.MISTAKE_TAGS）與說明。 */
+export const SERIOUS_MISTAKE = '嚴重失誤';
+export const RECORD_MISTAKE_TAGS: ReadonlyArray<{ tag: string; serious: boolean; help: string }> = [
+  { tag: SERIOUS_MISTAKE, serious: true, help: '有「已證有紅的隊出任務」或「藍方隊長派已證有紅的隊」' },
+  { tag: '已證有紅的隊出任務', serious: true, help: '前面失敗任務的隊員組成，已經公開證明這隊裡的紅方足以讓任務失敗，這隊還是出任務了' },
+  { tag: '藍方隊長派已證有紅的隊', serious: true, help: '藍方隊長（隊長照輪替推算）提出了從他自己的視角已證明有紅的隊' },
+  { tag: '藍方贊成已證有紅的隊', serious: false, help: '藍方對自己視角已證明有紅的隊投贊成（非強制、票數與結果對得上的提議）' },
+  { tag: '藍方持湖宣告不符（待查）', serious: false, help: '梅林以外的藍方持湖，宣告的陣營與目標的真實陣營不同（可能是記錄打錯或刻意）' },
+  { tag: '紅方賽點未出失敗（待查）', serious: false, help: '紅方已拿兩次任務、隊上紅方足以讓任務失敗，任務卻成功（可能是撞牌或記錄錯誤）' },
+];
+
+/** 一篇的失誤標籤（不重複，照 RECORD_MISTAKE_TAGS 的順序）。 */
+export function mistakeTags(post: RecordPost): string[] {
+  const own = new Set((post.mistakes ?? []).map((m) => m[0]));
+  return RECORD_MISTAKE_TAGS.map((m) => m.tag).filter((t) => own.has(t));
+}
+
+/** 滑鼠提示：每次發生的輪次與座位（「第 2 輪：5、6、7、0 號」）。 */
+export function mistakeDetails(post: RecordPost, tag: string): string[] {
+  return (post.mistakes ?? [])
+    .filter((m) => m[0] === tag && m[1] > 0)
+    .map(([, round, seats]) => `第 ${round} 輪${seats ? `：${[...seats].join('、')} 號` : ''}`);
+}
+
+/** 貼文的陣容強度 → 共用判斷用的形狀（沒評分 = null）。 */
+export function postLineup(post: RecordPost): GameLineup | null {
+  const l = post.lineup;
+  if (!l || !post.game) return null;
+  return { pool: l.pool, s: l.s, prs: l.prs, prov: RECORDS_SEATS.map((seat) => l.prov.includes(seat)) };
+}
+
 export type RecordResultFilter = 'all' | RecordOutcome | 'unreadable';
 
 export interface RecordFilter {
@@ -204,12 +262,55 @@ export interface RecordFilter {
   to: string;
   /** 暱稱（或標題）關鍵字；不分大小寫、全形半形。 */
   query: string;
+  /** 陣容強度（S、PR X 以上至少 Y 人、且／或、包含未評分）。 */
+  lineup: LineupFilterState;
+  /** 失誤標籤：有選時，有任一個選到的標籤才列出。 */
+  mistakes: string[];
 }
 
-export const EMPTY_RECORDS_FILTER: RecordFilter = { result: 'all', from: '', to: '', query: '' };
+export const EMPTY_RECORDS_FILTER: RecordFilter = {
+  result: 'all', from: '', to: '', query: '', lineup: DEFAULT_LINEUP_FILTER, mistakes: [],
+};
+
+/** 篩選有沒有在作用（清除篩選按鈕、「符合幾局」）。 */
+export function recordsFilterActive(filter: RecordFilter): boolean {
+  return filter.result !== 'all' || Boolean(filter.from || filter.to || filter.query.trim())
+    || lineupFilterActive(filter.lineup) || filter.mistakes.length > 0;
+}
+
+/** 篩選記在瀏覽器（同顯示角色／名稱的開關）：下次打開牌譜紀錄還是同樣的條件。 */
+export const RECORDS_FILTER_KEY = 'avalon.records.filter';
+
+const RESULT_FILTERS: readonly RecordResultFilter[] = ['all', '三紅', '三藍死', '三藍活', 'unreadable'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 儲存的文字 → 篩選（讀不到、格式不對的欄位用預設值）。 */
+export function parseRecordsFilter(text: string | null): RecordFilter {
+  let raw: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = text ? JSON.parse(text) : {};
+    if (parsed && typeof parsed === 'object') raw = parsed as Record<string, unknown>;
+  } catch {
+    raw = {};
+  }
+  const tags = new Set(RECORD_MISTAKE_TAGS.map((m) => m.tag));
+  return {
+    result: RESULT_FILTERS.includes(raw.result as RecordResultFilter) ? (raw.result as RecordResultFilter) : 'all',
+    from: typeof raw.from === 'string' && DATE_RE.test(raw.from) ? raw.from : '',
+    to: typeof raw.to === 'string' && DATE_RE.test(raw.to) ? raw.to : '',
+    query: typeof raw.query === 'string' ? raw.query.slice(0, 100) : '',
+    lineup: sanitizeLineupState(raw.lineup),
+    mistakes: Array.isArray(raw.mistakes) ? raw.mistakes.filter((t): t is string => typeof t === 'string' && tags.has(t)) : [],
+  };
+}
 
 /** 這篇有沒有通過篩選。暱稱比對用 playerNameKey（同戰績的認人規則），也比對標題。 */
 export function matchesRecords(post: RecordPost, filter: RecordFilter): boolean {
+  if (lineupFilterActive(filter.lineup) && !matchesLineup(postLineup(post), lineupCondition(filter.lineup))) return false;
+  if (filter.mistakes.length > 0) {
+    const own = mistakeTags(post);
+    if (!filter.mistakes.some((t) => own.includes(t))) return false;
+  }
   if (filter.result === 'unreadable') {
     if (post.game) return false;
   } else if (filter.result !== 'all' && outcomeOf(post) !== filter.result) {

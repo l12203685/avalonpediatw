@@ -2,7 +2,7 @@
  * 測試用：用幾行描述組出一份 games_cache.json 形狀的資料集（名字都是虛構的）。
  * 預設值：配置 123456（1 刺客、2 莫甘娜、3 莫德雷德、4 奧伯倫、5 派西維爾、6 梅林，7..0 忠臣）、三紅、線瓦。
  */
-import { GAMES_DATASET_FIELDS, GAMES_DATASET_VERSION, type GamesDataset, type GameTuple, type VotingProposal } from '@avalon/shared/stats';
+import { GAMES_DATASET_FIELDS, GAMES_DATASET_VERSION, type GamesDataset, type GameTuple, type LineupTuple, type VotingProposal } from '@avalon/shared/stats';
 
 export const TEST_LEADERBOARD_CONFIG = {
   theoryMinCellGames: 3, activeDays: 90, topN: 10, mainGames: 100, roleWindowGames: 10, loyalWindowGames: 40,
@@ -40,6 +40,8 @@ export interface GameSpec {
   claims?: string;
   captains?: string;
   votes?: VotingProposal[];
+  /** 陣容強度欄（預設 [] = 不評分）。 */
+  lineup?: LineupTuple;
 }
 
 export const TEN = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'].map((c) => `虛構${c}`);
@@ -60,7 +62,7 @@ export function makeDataset(specs: GameSpec[]): GamesDataset {
       s.id ?? String(i + 1), s.src ?? 0, s.date ?? '', CATEGORIES.indexOf(s.cat ?? '線瓦'), s.slot ?? 0,
       (s.note ?? []).map((t) => NOTE_TAGS.indexOf(t)), s.config ?? '123456', OUTCOMES.indexOf(s.outcome ?? '三紅'),
       s.kill ?? '', seats, s.missions ?? 'ooo|oxo|ooo||', s.rounds ?? 'BRB--', state ? states.indexOf(state) : -1,
-      s.firstTeam ?? '157', s.lakes ?? '71----', s.claims ?? '', s.captains ?? '', s.votes ?? [],
+      s.firstTeam ?? '157', s.lakes ?? '71----', s.claims ?? '', s.captains ?? '', s.votes ?? [], s.lineup ?? [],
     ] as GameTuple;
   });
   return {

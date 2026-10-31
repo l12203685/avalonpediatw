@@ -14,7 +14,7 @@ export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 /** 面板有欄位的子句種類 (一種一條；withPlayer、excludePlayers 可以多條)。 */
 export const PANEL_KINDS = [
-  'category', 'source', 'date', 'weekday', 'venue', 'season', 'outcome', 'namedSeats', 'withPlayer', 'excludePlayers',
+  'category', 'source', 'date', 'weekday', 'venue', 'season', 'outcome', 'namedSeats', 'lineup', 'withPlayer', 'excludePlayers',
 ] as const;
 type PanelKind = (typeof PANEL_KINDS)[number];
 

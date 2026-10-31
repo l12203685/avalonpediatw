@@ -4,12 +4,18 @@ import { fetchRecordsList, isAnalysisNotGenerated, isAnalysisRouteMissing } from
 import RecordsGameView, { OUTCOME_STYLE } from '../components/records/RecordsGameView';
 import { closeRecords, openRecords, useOpenRecords } from '../components/records/recordsLink';
 import { useRecordsPrefs } from '../components/records/recordsPrefs';
+import LineupFilterEditor from '../components/lineup/LineupFilterEditor';
+import { LineupBadge, MistakeChips } from '../components/records/RecordsLineup';
 import {
   EMPTY_RECORDS_FILTER,
+  RECORDS_FILTER_KEY,
+  RECORD_MISTAKE_TAGS,
   RESULT_TAGS,
   matchesRecords,
   matchingSeats,
   outcomeOf,
+  parseRecordsFilter,
+  recordsFilterActive,
   seatLabel,
   type RecordDisplayPrefs,
   type RecordFilter,
@@ -59,6 +65,21 @@ function errorMessage(err: unknown): string {
   return '載入失敗，請檢查網路後重試（伺服器剛睡醒時可能要等半分鐘）。';
 }
 
+/** 記住的篩選（localStorage；無痕或封鎖儲存時只是不記住）。 */
+function storedFilter(): RecordFilter {
+  try {
+    return parseRecordsFilter(window.localStorage.getItem(RECORDS_FILTER_KEY));
+  } catch {
+    return EMPTY_RECORDS_FILTER;
+  }
+}
+
+function saveFilter(filter: RecordFilter): void {
+  try {
+    window.localStorage.setItem(RECORDS_FILTER_KEY, JSON.stringify(filter));
+  } catch { /* 無痕／封鎖儲存：只是不記住 */ }
+}
+
 function shortDate(date: string): string {
   const [y, m, d] = date.split('-');
   return y && m && d ? `${y}/${m}/${d}` : date;
@@ -92,6 +113,8 @@ function PostRow({ post, query, prefs, onOpen }: {
             {!post.game && (
               <span className="rounded border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[11px] text-zinc-300">格式待修正</span>
             )}
+            {post.game && <LineupBadge post={post} />}
+            <MistakeChips post={post} />
             {extraTags.map((t) => (
               <span key={t} className="rounded border border-zinc-700 px-1.5 py-px text-[11px] text-zinc-400">{t}</span>
             ))}
@@ -110,7 +133,7 @@ function PostRow({ post, query, prefs, onOpen }: {
 
 export default function RecordsPage(): JSX.Element {
   const [state, setState] = useState<ListState>({ status: 'loading' });
-  const [filter, setFilter] = useState<RecordFilter>(EMPTY_RECORDS_FILTER);
+  const [filter, setFilter] = useState<RecordFilter>(storedFilter);
   const [shown, setShown] = useState(PAGE_SIZE);
   const openId = useOpenRecords();
   const [prefs] = useRecordsPrefs();
@@ -135,10 +158,11 @@ export default function RecordsPage(): JSX.Element {
   }, []);
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, [openId]);
+  useEffect(() => { saveFilter(filter); }, [filter]);
 
   const posts = useMemo(() => (state.status === 'ok' ? state.data.posts : []), [state]);
   const filtered = useMemo(() => posts.filter((p) => matchesRecords(p, filter)), [posts, filter]);
-  const filterActive = filter.result !== 'all' || filter.from || filter.to || filter.query.trim();
+  const filterActive = recordsFilterActive(filter);
   const forumUrl = state.status === 'ok'
     ? `https://discord.com/channels/${state.data.guildId}/${state.data.forumId}`
     : 'https://discord.com/invite/mBqFqM2TXs';
@@ -240,6 +264,36 @@ export default function RecordsPage(): JSX.Element {
             aria-label="到"
             className="w-[8.5rem] rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-white [color-scheme:dark]"
           />
+        </div>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-400" data-testid="records-lineup-row">
+          <span className="mr-0.5" title="開打前每個座位在「生涯已 ≥30 場」的玩家池裡的 PR；S = 10 人平均">陣容強度</span>
+          <LineupFilterEditor
+            value={filter.lineup}
+            onChange={(lineup) => updateFilter((f) => ({ ...f, lineup }))}
+            testIdPrefix="records-lineup"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-1 text-xs text-zinc-400" role="group" aria-label="失誤標籤" data-testid="records-mistake-row">
+          <span className="mr-0.5">失誤</span>
+          {RECORD_MISTAKE_TAGS.map(({ tag, serious, help }) => {
+            const on = filter.mistakes.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                aria-pressed={on}
+                title={help}
+                onClick={() => updateFilter((f) => ({ ...f, mistakes: on ? f.mistakes.filter((t) => t !== tag) : [...f.mistakes, tag] }))}
+                className={`rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
+                  on
+                    ? serious ? 'border-red-400 bg-red-500 font-semibold text-white' : 'border-amber-400 bg-amber-400 font-semibold text-black'
+                    : serious ? 'border-red-500/50 text-red-200 hover:border-red-400' : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'
+                }`}
+              >
+                {tag}
+              </button>
+            );
+          })}
           {filterActive && (
             <button
               type="button"

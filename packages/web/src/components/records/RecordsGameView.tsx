@@ -4,6 +4,7 @@ import { QuestFailMark, QuestSuccessMark, ShieldIcon } from '../ScoresheetIcons'
 import { useGameStore } from '../../store/gameStore';
 import { fetchRecordsReplies, type RecordRepliesData, type RecordReply } from '../../services/api';
 import { useRecordsPrefs } from './recordsPrefs';
+import { LineupSummary } from './RecordsLineup';
 import {
   RECORDS_SEATS,
   RESULT_TAGS,
@@ -25,6 +26,7 @@ import {
   winnerOf,
   type RecordDisplayPrefs,
   type RecordGame,
+  type RecordLineup,
   type RecordOutcome,
   type RecordPost,
 } from '../../utils/records';
@@ -177,7 +179,9 @@ function MissionTrack({ game }: { game: RecordGame }): JSX.Element {
   );
 }
 
-function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDisplayPrefs; fit: boolean }): JSX.Element {
+function Scoresheet({ game, prefs, fit, lineup }: {
+  game: RecordGame; prefs: RecordDisplayPrefs; fit: boolean; lineup?: RecordLineup;
+}): JSX.Element {
   const openPlayerStats = useGameStore((s) => s.openPlayerStats);
   const boxRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLTableSectionElement>(null);
@@ -199,7 +203,7 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
     const observer = new ResizeObserver(update);
     observer.observe(box);
     return (): void => observer.disconnect();
-  }, [fit, rowCount, prefs.names, prefs.roles]);
+  }, [fit, rowCount, prefs.names, prefs.roles, lineup]);
 
   const wide = useWide();
   const leaders = useMemo(() => deriveLeaders(game), [game]);
@@ -327,6 +331,20 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
                   className="max-w-0 bg-zinc-950 px-0 py-0.5 text-center font-semibold leading-tight text-zinc-300"
                 >
                   <div>{seat}</div>
+                  {lineup && ((): JSX.Element => {
+                    const i = RECORDS_SEATS.indexOf(seat);
+                    const pr = lineup.prs[i];
+                    const prov = lineup.prov.includes(seat);
+                    return (
+                      <div
+                        title={`開打前 PR ${pr}${prov ? '（暫定或對不到人，最高算 50）' : ''}`}
+                        data-testid="records-seat-pr"
+                        className={`font-mono text-[8px] font-normal leading-tight sm:text-[9px] ${prov ? 'text-zinc-500' : pr >= 70 ? 'text-amber-300' : 'text-zinc-400'}`}
+                      >
+                        {pr}{prov ? '*' : ''}
+                      </div>
+                    );
+                  })()}
                   {prefs.roles && <div className={`text-[9px] sm:text-[10px] ${roleClass(game, seat)}`}>{roleOfSeat(game.config, seat).short}</div>}
                   {prefs.names && (
                     <button
@@ -354,6 +372,7 @@ function Scoresheet({ game, prefs, fit }: { game: RecordGame; prefs: RecordDispl
         <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 border border-zinc-500 bg-black" />反對</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-3 w-3 border border-zinc-700 bg-zinc-900" />強制局（不投票）</span>
         <span>{leaders ? '隊長依輪替推算（DC 牌譜沒寫隊長）' : '「次」= 第幾輪第幾次提議（隊長推算不出來）'}</span>
+        {lineup && <span>座位號下的數字 = 開打前 PR（* 暫定）</span>}
       </div>
     </div>
   );
@@ -518,6 +537,7 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
           <>
             <ResultBanner post={post} game={game} prefs={prefs} />
             <MissionTrack game={game} />
+            <LineupSummary post={post} />
             <Toggles prefs={prefs} onChange={setPref} />
           </>
         ) : (
@@ -535,7 +555,7 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
       {/* 左欄：投票矩陣（手機：結果下面） */}
       {game && (
         <section className="min-h-0 rounded-lg border border-zinc-800 bg-black/50 p-1 sm:p-1.5 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          <Scoresheet game={game} prefs={prefs} fit={fit} />
+          <Scoresheet game={game} prefs={prefs} fit={fit} lineup={post.lineup} />
         </section>
       )}
 

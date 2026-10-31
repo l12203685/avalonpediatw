@@ -49,6 +49,12 @@ const SCHEMA: Record<string, KindSchema> = {
   trioOrder: { required: { in: { enums: ['派梅娜', '派娜梅', '梅派娜', '梅娜派', '娜派梅', '娜梅派'] } } },
   captain: { required: { round: { range: [1, 5] }, side: SIDE } },
   gameId: { required: { in: 'names' } },
+  lineup: {
+    optional: {
+      sMin: { range: [0, 100] }, strongPr: { range: [0, 100] }, strongCount: { range: [1, 10] },
+      combine: { enum: ['and', 'or'] }, includeUnscored: 'bool',
+    },
+  },
   withPlayer: {
     required: { player: 'name' },
     optional: { role: 'roles', side: SIDE, seat: 'seats', result: { enum: ['win', 'loss'] }, resultRule: { enum: ['final', 'mission'] } },
