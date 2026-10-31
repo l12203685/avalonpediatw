@@ -246,7 +246,7 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier,returnLake,merlinDoomedRed,bayesBelief,assassinIgnoreDoomed,goodCleanVote=0.25,percivalThumbLogic,redCleanLook,redStackRatio=0.8,goodCleanLead=1,loyalMerlinRead=2,assassinMerlinVotes=0.5,assassinLeadRead=1,beliefBotTables=1,merlinNormalVote=1,redNormalVote=1,goodTailVote=0.85,redRankOrder,merlinLoyalStyle,r1ReadPrior,assassinVoteModel=2,mordredHideR1,goodKeyVote=0.5,redHideR1=1',
+        'assassinVisibleRedTier,returnLake,merlinDoomedRed,bayesBelief,assassinIgnoreDoomed,goodCleanVote=0.25,percivalThumbLogic,redCleanLook,redStackRatio=0.8,goodCleanLead=1,loyalMerlinRead=2,assassinMerlinVotes=0.5,assassinLeadRead=1,beliefBotTables=1,merlinNormalVote=1,redNormalVote=1,goodTailVote=0.85,redRankOrder,merlinLoyalStyle,r1ReadPrior,assassinVoteModel=2,mordredHideR1,goodKeyVote=0.5,redHideR1=1,redKeyWhite=1',
     );
     // 隊伍用「會不會過」評分 (2026-10-27): on by default, off in the legacy table.
     // Off by default: single-seat expected win rate −0.05pp (strength_benchmark.md 第 22 節).
@@ -259,7 +259,7 @@ describe('AgentTuning — flags', () => {
     expect(LEGACY_AGENT_TUNING.returnLake).toBe(false);
     expect(AGENT_TUNING_ENV.returnLake).toBe('AVALON_TUNING_RETURN_LAKE');
     expect(tuningFromEnv({ AVALON_TUNING_RETURN_LAKE: '0' })).toEqual({ returnLake: false });
-    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false, teamPassRank: 0, merlinDoomedRed: false, bayesBelief: false, assassinIgnoreDoomed: false, goodCleanVote: 0, percivalThumbLogic: false, redCleanLook: false, redStackRatio: 0, redRankOrder: false, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false, assassinMerlinVotes: 0, assassinLeadRead: 0, beliefBotTables: 0, merlinNormalVote: 0, redNormalVote: 0, assassinVoteModel: 0, mordredHideR1: false, goodTailVote: 0, goodKeyVote: 0, redHideR1: 0 };
+    const before1G = { ...DEFAULT_AGENT_TUNING, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false, returnLake: false, teamPassRank: 0, merlinDoomedRed: false, bayesBelief: false, assassinIgnoreDoomed: false, goodCleanVote: 0, percivalThumbLogic: false, redCleanLook: false, redStackRatio: 0, redRankOrder: false, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false, assassinMerlinVotes: 0, assassinLeadRead: 0, beliefBotTables: 0, merlinNormalVote: 0, redNormalVote: 0, assassinVoteModel: 0, mordredHideR1: false, goodTailVote: 0, goodKeyVote: 0, redHideR1: 0, redKeyWhite: 0 };
     expect(describeAgentTuning(before1G)).toBe(
       'r3NormalVotePrior=0.6,r3NormalVotePriorEvilOnly,goodLakeTargetMostSuspicious,humanQuestCardRules,assassinModel,' +
         'evilLakeHumanStrategy,evilVouchFollowUp,evilLakeFrameHumanRate,goodLakeInfoMax,' +

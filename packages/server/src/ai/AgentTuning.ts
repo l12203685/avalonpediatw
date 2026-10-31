@@ -621,6 +621,7 @@ export interface AgentTuning {
    * 的外白。0 = 照舊一律外白；1 = 只在這隊過得了時外白（公開視角估這隊乾淨的機率 ≥ `goodKeyVote`，隊上的藍方會贊成），
    * 否則照忠臣投；2 = 同 1，而且只派需要的人數外白（依座位排序，多留一票餘裕）。第 15 回合重新擬合的表把「不在隊上贊成有紅的隊」
    * 讀成很像紅（藍方 4.5%、紅方 32%），被否決的關鍵隊的外白只會讓紅方曝光。
+   * 第 16 回合採用 1（對第 15 回合預設三組種子紅方 +3.0／+3.6／+2.4pp，三紅率約 +7pp；2 篩選 +3.2，和 1 差在誤差內）。
    */
   redKeyWhite: number;
   /**
@@ -1047,7 +1048,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodTailVoteLoyalOnly: false,
   goodTailVotePercival: 0,
   redHideR1Who: 0,
-  redKeyWhite: 0,
+  redKeyWhite: 1,
   redCleanWhite: 0,
   oberonNormalVote: false,
 });

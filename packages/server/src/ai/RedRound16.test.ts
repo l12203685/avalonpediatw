@@ -1,6 +1,6 @@
 /**
  * Round 16 (red) candidates, default off: which reds hide on R1 (`redHideR1Who`); the key-team outer white only when the
- * team can pass (`redKeyWhite` 1) and only from as many off-team reds as the majority needs (`redKeyWhite` 2); a clean-team
+ * team can pass (`redKeyWhite` 1, adopted as default in round 16) and only from as many off-team reds as the majority needs (`redKeyWhite` 2); a clean-team
  * outer white at rate q (`redCleanWhite`); Oberon votes as a public-view loyal too (`oberonNormalVote`).
  */
 import { describe, expect, it } from 'vitest';
@@ -64,9 +64,10 @@ describe('redKeyWhite', () => {
     if (d.action.type !== 'team_vote') throw new Error(d.action.type);
     return d.action.vote;
   }
-  it('off: the key-team outer white as before', () => {
+  it('off: the key-team outer white as before; default 1 (adopted in round 16)', () => {
     expect(redKeyWhiteVote(on(0), obs())).toBe(true);
-    expect(decideVote(obs(), {})).toBe(true);
+    expect(decideVote(obs(), { redKeyWhite: 0 })).toBe(true);
+    expect(DEFAULT_AGENT_TUNING.redKeyWhite).toBe(1);
   });
   it('a team the on-team blues will reject (the teammate sat on both failed missions): no outer white', () => {
     expect(redKeyWhiteVote(on(1), obs())).toBe(false);
