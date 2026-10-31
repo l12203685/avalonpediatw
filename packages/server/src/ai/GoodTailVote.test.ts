@@ -33,4 +33,16 @@ describe('goodTailVote', () => {
     expect(goodTailVote(on(0.5), obs({ currentRound: 2 }))).toBeNull();
     expect(goodTailVote(on(0.5), obs({ failCount: 4 }))).toBeNull();
   });
+  it('round 15 (第 1B 節): Percival can be left out or given its own threshold; loyals keep goodTailVote', () => {
+    const percival = obs({ myRole: 'percival', knownWizards: ['P9', 'P10'] } as Partial<PlayerObservation>);
+    expect(goodTailVote({ ...on(0.5), goodTailVoteLoyalOnly: true }, percival)).toBeNull();
+    expect(goodTailVote({ ...on(0.5), goodTailVoteLoyalOnly: true }, obs())).not.toBeNull();
+    // A team below the shared τ = 0.99 but with Percival's own τ = 0.01 and two wins in: Percival approves, a loyal rejects.
+    const twoWins = { questResults: ['success', 'success'] } as Partial<PlayerObservation>;
+    const t = { ...on(0.99), goodTailVotePercival: 0.01 };
+    expect(goodTailVote(t, obs({ ...twoWins, myRole: 'percival', knownWizards: ['P9', 'P10'] } as Partial<PlayerObservation>))).toBe(true);
+    expect(goodTailVote(t, obs(twoWins))).toBe(false);
+    // goodTailVote off: Percival's own threshold does not switch the rule on by itself.
+    expect(goodTailVote({ ...on(0), goodTailVotePercival: 0.5 }, percival)).toBeNull();
+  });
 });

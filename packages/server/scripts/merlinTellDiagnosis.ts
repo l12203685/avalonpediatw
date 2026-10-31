@@ -58,4 +58,5 @@ const add = (k: string, y: boolean): void => { const c = cells.get(k) ?? [0, 0];
   }
   for (const k of [...cells.keys()].sort()) { const [y, n] = cells.get(k)!; console.log(k.padEnd(32), (100 * y / n).toFixed(1).padStart(6), n); }
   console.log('threeRed', threeRed, 'three', three);
+  process.exit(0); // the engine leaves timers behind
 })();

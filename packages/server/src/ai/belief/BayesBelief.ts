@@ -32,6 +32,8 @@ const TB_CURRENT = BOT_TABLE as unknown as Table;
 /** The refit candidate (`BayesOptions.botTablesNext`): fitted on the latest defaults, measured against the current table. */
 const TB_NEXT = BOT_TABLE_NEXT as unknown as Table;
 let TB = TB_CURRENT;
+/** The bot table the mission cells are read from (`TB`, or the refit one alone: `BayesOptions.botMissionNext`). */
+let TBM = TB_CURRENT;
 /**
  * The bot-table weight of the posterior being computed (`BayesOptions.botTables`; 0 = the human tables alone). Set by
  * `posterior()` for the duration of one synchronous computation, so the helpers below read it without threading it.
@@ -49,10 +51,12 @@ const newMemo = (): ProbMemo => ({ vote: new Float64Array(32).fill(NaN), voteLog
 let memo: ProbMemo = newMemo();
 memos.set(0, memo);
 const memosNext = new Map<number, ProbMemo>();
-function useMix(m: number, next = false): void {
+const memosMissionNext = new Map<number, ProbMemo>();
+function useMix(m: number, next = false, missionNext = false): void {
   mix = m;
   TB = next ? TB_NEXT : TB_CURRENT;
-  const store = next ? memosNext : memos;
+  TBM = next || missionNext ? TB_NEXT : TB_CURRENT;
+  const store = next ? memosNext : missionNext ? memosMissionNext : memos;
   let x = store.get(m);
   if (!x) { x = newMemo(); store.set(m, x); }
   memo = x;
@@ -126,7 +130,7 @@ function missionProb(round: number, reds: number, fails: number): number {
   const idx = round >= 1 && round <= 6 && reds >= 0 && reds <= 5 && fails >= 0 && fails <= 5 ? ((round - 1) * 6 + reds) * 6 + fails : -1;
   let p = idx >= 0 ? memo.mission[idx] : NaN;
   if (Number.isNaN(p)) {
-    p = blend(missionProbIn(T, round, reds, fails), missionProbIn(TB, round, reds, fails));
+    p = blend(missionProbIn(T, round, reds, fails), missionProbIn(TBM, round, reds, fails));
     if (idx >= 0) memo.mission[idx] = p;
   }
   return p;
@@ -163,6 +167,12 @@ export interface BayesOptions {
   botTables?: number;
   /** Read with the refit bot table (`likelihoods_bot_next.json`) instead of the current one (`beliefBotTablesNext`). */
   botTablesNext?: boolean;
+  /**
+   * Read only the mission cells (fail cards | round, reds on the team) from the refit bot table, the votes / proposals / lake
+   * from the current one (`beliefBotMissionNext`, round 15: the reds hide on R1 since round 14, which the current table — fitted
+   * before that — reads as all but impossible).
+   */
+  botMissionNext?: boolean;
   /**
    * `bayesThumbRoles` (optimization loop round 3): for Percival, in every world the good thumb is Merlin and
    * the red one Morgana — their actions are read with the role tables (`voteRole`, `proposalRole`), so the
@@ -203,7 +213,7 @@ export interface BayesOptions {
 const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
-  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true);
+  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true);
   try {
     return posteriorWith(obs, opts);
   } finally {
@@ -218,7 +228,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
   const zone = opts.zoneMerlin === true;
   const early = opts.merlinEarlyStrict === true;
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : ''}` : ''}`;
+  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -335,6 +345,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     merlinEarlyStrict: t.merlinLoyalStyle === true,
     botTables: t.beliefBotTables ?? 0,
     botTablesNext: t.beliefBotTablesNext === true,
+    botMissionNext: t.beliefBotMissionNext === true,
   };
 }
 
