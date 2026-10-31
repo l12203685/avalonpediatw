@@ -42,7 +42,8 @@ export function gameToPaipu(game: RecordedGame): string | null {
     const team = new Set(m.ticks_set);
     const whites = new Set(m.white_ball_set);
     attempt += 1;
-    const forced = attempt === 5 || (whites.size === 10 && team.size < 10);
+    // 第 5 次提議才是尾家強制局；10 人全白（全場贊成）是正常的投票結果，要照常標外白
+    const forced = attempt === 5;
     let line = digits(team);
     if (!forced) {
       const blackIn = [...team].filter((s) => !whites.has(s));
