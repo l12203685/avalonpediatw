@@ -1,6 +1,6 @@
 /* eslint-disable no-console -- CLI script: stdout is the interface */
 /**
- * 梅林的票型與湖破綻（優化迴圈第 12 回合・紅方，2026-10-31）：全機器人自我對打 N 局（正式預設；第 12 回合的數字是第 11 回合預設、300 局），第 3 局起非強制提議，
+ * 梅林的票型與湖破綻（優化迴圈第 12 回合・紅方，2026-10-31）：全機器人自我對打 N 局（正式預設；第 12 回合的數字是第 11 回合預設、300 局；第 14 回合加上刺客讀票模型用的兩格 `model|…`），第 3 局起非強制提議，
  * 梅林與其他藍方的贊成率，依「在不在隊上 × 隊上有沒有梅林看得到的紅（seen）／只有莫德雷德（mord）／乾淨 × 紅方是否已兩紅（key）」
  * 分格；另列藍方持湖者湖到紅、湖到梅林看得到的紅的比例。只輸出彙總數字。
  *
@@ -40,6 +40,11 @@ const add = (k: string, y: boolean): void => { const c = cells.get(k) ?? [0, 0];
         const cls = r === 'merlin' ? 'merlin' : 'blue';
         const on = v.team.includes(id);
         add(`${cls}|${on ? 'on' : 'off'}|${seen ? 'seen' : has ? 'mord' : 'clean'}|${fails >= 2 ? 'key' : 'n'}`, v.votes[id]);
+        // The two cells `assassin/MerlinVoteRead.ts` reads (第 14 回合): off-team with a seen red; on-team when the seen reds are fatal.
+        const nSeen = v.team.filter(vis).length;
+        const fatal = nSeen > 0 && (fails >= 2 || (v.round === 4 && nSeen >= 2));
+        if (!on && nSeen > 0) add(`model|${cls}|offSeen|${fails >= 2 ? 'key' : 'n'}`, v.votes[id]);
+        if (on && fatal) add(`model|${cls}|onFatal`, v.votes[id]);
       }
     }
     const succ = o.questHistory.filter((q) => q.result === 'success').length;

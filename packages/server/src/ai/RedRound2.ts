@@ -39,3 +39,15 @@ export function mordredHideR1Card(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if (team.some((id) => id !== obs.myPlayerId && obs.knownEvils.includes(id))) return null;
   return 'success';
 }
+
+/**
+ * 第 14 回合 `redHideR1`：第 1 局刺客或莫甘娜是隊上唯一看得到的紅時，以比例 p 出成功藏身（莫德雷德照 `mordredHideR1`）。
+ * 第 2 回合的 A1（`redHideEarly`，第 1、2 局）在藍方照真人表讀任務牌時 −2.9pp；現在藍方照機器人表讀（第 1 局一個紅的隊幾乎都失敗），
+ * 而且第 13 回合起忠臣／派西不在隊上預設投黑，梅林能擋看得到的紅只剩派隊與關鍵局的內黑。Draws `Math.random` only when it applies.
+ */
+export function redHideR1Card(tuning: Readonly<AgentTuning>, obs: PlayerObservation): 'success' | null {
+  if (!(tuning.redHideR1 > 0) || (obs.myRole !== 'assassin' && obs.myRole !== 'morgana') || (obs.currentRound ?? 1) !== 1) return null;
+  const team = obs.proposedTeam ?? [];
+  if (team.some((id) => id !== obs.myPlayerId && obs.knownEvils.includes(id))) return null;
+  return tuning.redHideR1 >= 1 || Math.random() < tuning.redHideR1 ? 'success' : null;
+}
