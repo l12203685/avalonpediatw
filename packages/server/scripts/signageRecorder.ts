@@ -86,7 +86,7 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
     await page.waitForLoadState('networkidle');
     await page.waitForFunction('window.app && window.app.data_ready === true', undefined, { timeout: 30000 });
     console.log(`${stamp()} 開始旁觀 ${room.name}`);
-    let game: { startedAt: string; timeline: { t: string; s: Snapshot }[] } | null = null;
+    let game: { startedAt: string; timeline: { t: string; s: Snapshot }[]; joinedMidGame?: boolean } | null = null;
     let last = '';
     // 練習台局末顯示「遊戲結束」但 gaming 仍是 true（房主重開才變）；所以「結束」看狀態，
     // 「開局」看 gaming 為 true 且狀態不是遊戲結束。剛進房就是遊戲結束的那局不記。
@@ -99,8 +99,12 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
       if (s) {
         const live = s.gaming && s.status !== ENDED;
         if (live && !inGame) {
-          inGame = true; sawEnd = false; game = { startedAt: stamp(), timeline: [] }; last = '';
-          console.log(`${stamp()} ${room.name} 開局`);
+          // 剛進房時已經在打（已有任務結果或不只一次提議）＝中途加入：照樣記，但標出來、不貼 DC
+          const hist = Array.isArray(s.missionHistorys) ? s.missionHistorys.length : 0;
+          const meets = Array.isArray(s.meetings) ? s.meetings.length : 0;
+          const joinedMidGame = hist > 0 || meets > 1;
+          inGame = true; sawEnd = false; game = { startedAt: stamp(), timeline: [], joinedMidGame }; last = '';
+          console.log(`${stamp()} ${room.name} ${joinedMidGame ? '中途加入（不貼 DC）' : '開局'}`);
         }
         const key = JSON.stringify(s);
         if (game && key !== last) { game.timeline.push({ t: stamp(), s }); last = key; }
@@ -122,7 +126,7 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
           const file = path.join(OUT, `${safe(game.startedAt)}_${safe(room.name)}.json`);
           fs.writeFileSync(file, JSON.stringify({
             source: 'signage-cloud', room: room.name, title: room.description_title ?? '', publicRoom: room.is_publish_room ?? null,
-            startedAt: game.startedAt, endedAt: stamp(), end, endText: text.slice(0, 6000), statsHtml, timeline: game.timeline,
+            startedAt: game.startedAt, endedAt: stamp(), joinedMidGame: Boolean(game.joinedMidGame), end, endText: text.slice(0, 6000), statsHtml, timeline: game.timeline,
           }));
           console.log(`${stamp()} ${room.name} 結束，存檔 ${path.basename(file)}（${game.timeline.length} 張快照）`);
           // Edward 2026-10-30：每局牌譜貼到 DC 牌譜頻道（附座位暱稱）；有設定 DISCORD_BOT_TOKEN 或 DISCORD_PAIPU_WEBHOOK_URL 才貼

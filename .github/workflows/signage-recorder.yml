@@ -10,7 +10,16 @@ name: Signage recorder
 # 有設定 secret RECORDER_ARCHIVE_KEY 時，才加密成 artifact 保留 30 天（openssl aes-256-cbc -pbkdf2，用這把鑰匙解）。
 on:
   schedule:
-    - cron: '40 10 * * *'   # 18:40 台灣時間（GitHub 排程常延後幾分鐘到幾十分鐘，所以提早開）
+    # 18:40 台灣時間起每半小時一個觸發：GitHub 排程可能延後很久（10/31 第一晚 18:40 的觸發晚了 5 小時才跑），
+    # 多排幾個，哪個先開始就跑到 00:15；concurrency 讓其餘的排隊，等前一個結束時已過 00:15 就直接結束。
+    - cron: '40 10 * * *'
+    - cron: '10 11 * * *'
+    - cron: '40 11 * * *'
+    - cron: '10 12 * * *'
+    - cron: '40 12 * * *'
+    - cron: '10 13 * * *'
+    - cron: '40 13 * * *'
+    - cron: '10 14 * * *'
   workflow_dispatch:
     inputs:
       hours:
@@ -49,9 +58,10 @@ jobs:
           if [ -n "$HOURS_INPUT" ]; then
             HOURS="$HOURS_INPUT"
           else
-            # 跑到台灣時間 00:15（UTC 16:15）
-            HOURS=$(python3 -c "import datetime as d;n=d.datetime.utcnow();e=n.replace(hour=16,minute=15,second=0,microsecond=0);e=e if e>n else e+d.timedelta(days=1);print(round(min((e-n).total_seconds()/3600,5.7),2))")
+            # 跑到台灣時間 00:15（UTC 16:15）；排程延後到 00:15 以後（或台灣 18:00 以前）就不跑
+            HOURS=$(python3 -c "import datetime as d;n=d.datetime.utcnow();e=n.replace(hour=16,minute=15,second=0,microsecond=0);print(0 if (n>=e or n.hour<10) else round(min((e-n).total_seconds()/3600,5.7),2))")
           fi
+          if python3 -c "import sys; sys.exit(0 if float('$HOURS') < 0.1 else 1)"; then echo "已過 00:15 或前一個排程已跑完這一晚，略過"; exit 0; fi
           echo "跑 $HOURS 小時"
           [ -n "$DISCORD_BOT_TOKEN" ] || echo "::warning::沒有 DISCORD_BOT_TOKEN，只記錄不貼 DC"
           mkdir -p records
