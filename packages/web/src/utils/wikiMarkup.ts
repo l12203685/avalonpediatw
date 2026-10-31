@@ -25,13 +25,13 @@ export const WIKI_TAGS: Readonly<Record<string, { label: string; hint: string }>
   exp: { label: '經驗', hint: '經驗法則：多數情況成立，但有例外' },
   conv: { label: '慣例', hint: '社群慣例：本站／社群約定的做法' },
   time: { label: '時效', hint: '時效資料：特定時間點的紀錄或數據' },
-  stance: { label: '本站立場', hint: '本站立場：站方的裁定' },
+  stance: { label: '建議', hint: '建議：百科整理後建議的做法' },
 };
 const TAG_BY_LABEL: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(WIKI_TAGS).map(([k, v]) => [v.label, k]));
 
 /** `【規則】` → `[規則](wiki-tag:rule)`（不在行內程式碼或程式碼區塊裡時）。 */
 function layerTags(line: string): string {
-  return line.replace(/【(規則|邏輯|經驗|慣例|時效|本站立場)】/g, (_m, label: string) => ` [${label}](${WIKI_TAG_SCHEME}${TAG_BY_LABEL[label]})`);
+  return line.replace(/【(規則|邏輯|經驗|慣例|時效|建議)】/g, (_m, label: string) => ` [${label}](${WIKI_TAG_SCHEME}${TAG_BY_LABEL[label]})`);
 }
 
 const COLOR_OF: Record<string, WikiColor> = {
