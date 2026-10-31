@@ -1,6 +1,9 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
+import { WIKI_ARTICLES, WIKI_CATEGORIES, WIKI_DATA_ARTICLE_ROLE, WIKI_ROLE_NAMES } from './src/data/wiki';
+import { buildLlmsFiles, buildNoscriptHtml, type LlmsArticle, type LlmsOptions } from './src/utils/llmsTxt';
 
 /**
  * Build-time VERSION.txt emitter (2026-04-24).
@@ -65,8 +68,71 @@ function versionTxtPlugin(): Plugin {
   };
 }
 
+/**
+ * 給 AI／爬蟲讀的純文字版本（2026-10-31，見 src/utils/llmsTxt.ts）：每次 build 從 wiki_data.json 與 data/wiki.ts
+ * 產生 llms.txt、llms-full.txt、wiki-md/<id>.md、sitemap.xml，並在 index.html 放 <noscript> 目錄；dev server 也
+ * 即時提供同樣的檔案。網址：SITE_URL（預設 Firebase 主站）、VITE_SERVER_URL（API；本機網址時改用正式 API）。
+ */
+const DEFAULT_SITE_URL = 'https://avalon-game-platform.web.app';
+const DEFAULT_API_URL = 'https://avalon-server-z6c0-cs0s.onrender.com';
+const REPO_URL = 'https://github.com/l12203685/avalonpediatw';
+const WIKI_DATA = path.resolve(__dirname, '../server/wiki_data.json');
+
+function llmsInputs(): { articles: LlmsArticle[]; opts: LlmsOptions } {
+  const json = JSON.parse(fs.readFileSync(WIKI_DATA, 'utf-8')) as LlmsArticle[];
+  const envApi = process.env.VITE_SERVER_URL ?? '';
+  const apiUrl = /^https:\/\//.test(envApi) && !/localhost|127\.0\.0\.1/.test(envApi) ? envApi : DEFAULT_API_URL;
+  const notes: Record<string, string> = {};
+  for (const [id, role] of Object.entries(WIKI_DATA_ARTICLE_ROLE)) {
+    notes[id] = `網站上本文開頭有「${WIKI_ROLE_NAMES[role] ?? role}實戰數據（即時）」數據卡，純文字版沒有；數字請讀 ${apiUrl.replace(/\/+$/, '')}/api/analysis/overview。`;
+  }
+  return {
+    // 前端寫死的文章（角色數據、新手常見問題）在前，同 data/wiki.ts mergeWikiArticles
+    articles: [...WIKI_ARTICLES.map(({ id, title, category, content, tags, excerpt, status }) => ({ id, title, category, content, tags, excerpt, status })), ...json],
+    opts: {
+      siteUrl: process.env.SITE_URL || DEFAULT_SITE_URL,
+      apiUrl,
+      repoUrl: REPO_URL,
+      categories: WIKI_CATEGORIES,
+      notes,
+      sitePages: ['/', '/wiki', '/analysis', '/leaderboard'],
+    },
+  };
+}
+
+function llmsFilesPlugin(): Plugin {
+  const contentType = (file: string): string =>
+    file.endsWith('.md') ? 'text/markdown; charset=utf-8' : file.endsWith('.xml') ? 'application/xml; charset=utf-8' : 'text/plain; charset=utf-8';
+  return {
+    name: 'avalon-llms-files',
+    generateBundle() {
+      const { articles, opts } = llmsInputs();
+      const files = buildLlmsFiles(articles, opts);
+      for (const [fileName, source] of Object.entries(files)) this.emitFile({ type: 'asset', fileName, source });
+      // eslint-disable-next-line no-console
+      console.log(`[llms] emitted ${Object.keys(files).length} files (llms.txt, llms-full.txt, sitemap.xml, wiki-md/*.md) for ${opts.siteUrl}`);
+    },
+    transformIndexHtml(html) {
+      const { articles, opts } = llmsInputs();
+      return html.replace('<!--llms-noscript-->', buildNoscriptHtml(articles, opts));
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = decodeURIComponent((req.url ?? '').split('?')[0]).replace(/^\//, '');
+        if (!/^(llms(-full)?\.txt|sitemap\.xml|wiki-md\/.+\.md)$/.test(url)) return next();
+        const { articles, opts } = llmsInputs();
+        const files = buildLlmsFiles(articles, { ...opts, siteUrl: `http://${req.headers.host ?? 'localhost'}` });
+        const body = files[url] ?? files[url.replace(/^wiki-md\/(.+)\.md$/, (_m, id: string) => `wiki-md/${encodeURIComponent(id)}.md`)];
+        if (body === undefined) return next();
+        res.setHeader('Content-Type', contentType(url));
+        res.end(body);
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), versionTxtPlugin()],
+  plugins: [react(), versionTxtPlugin(), llmsFilesPlugin()],
   base: process.env.VITE_BASE || '/',
   define: {
     // Injected at build time so the client bundle can read its own build stamp
