@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import { WIKI_COLOR_SCHEME, WIKI_TAG_SCHEME, WIKI_TAGS, normalizeWikiMarkup, wikiArticleId, wikiCardExcerpt, wikiImageSrc, wikiUrlTransform } from '../utils/wikiMarkup';
+import { WIKI_COLOR_SCHEME, WIKI_TAGS, hasWikiLayers, normalizeWikiMarkup, wikiArticleId, wikiBlockLayer, wikiCardExcerpt, wikiImageSrc, wikiLayerOf, wikiUrlTransform } from '../utils/wikiMarkup';
+import type { WikiHastNode } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
 import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_DATA_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
@@ -58,15 +59,6 @@ interface WikiContentProps {
   onPublishedCountChange?: (count: number) => void;
 }
 
-const WIKI_TAG_CLASS: Record<string, string> = {
-  rule: 'bg-sky-900/70 text-sky-200',
-  logic: 'bg-emerald-900/70 text-emerald-200',
-  exp: 'bg-zinc-700 text-zinc-200',
-  conv: 'bg-amber-900/70 text-amber-200',
-  time: 'bg-rose-900/70 text-rose-200',
-  stance: 'bg-yellow-600 text-black',
-};
-
 const WIKI_COLOR_CLASS: Record<string, string> = {
   red: 'text-red-400 font-semibold',
   blue: 'text-sky-400 font-semibold',
@@ -85,113 +77,67 @@ function isWarningQuote(node: unknown): boolean {
   return text(node).trimStart().startsWith('⚠️');
 }
 
-// Markdown renderer — uses react-markdown + remark-gfm for GitHub-Flavored Markdown
-// (tables, strikethrough, task lists, autolinks). Styled via Tailwind utility classes
-// directly on each node to avoid dependency on @tailwindcss/typography plugin.
-const markdownComponents = {
-  h1: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h1 className="text-lg font-bold text-white mt-4 mb-2">{children}</h1>
-  ),
-  h2: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h2 className="text-base font-bold text-yellow-400 mt-3 mb-1.5">{children}</h2>
-  ),
-  h3: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h3 className="text-sm font-semibold text-gray-200 mt-2.5 mb-1">{children}</h3>
-  ),
-  h4: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <h4 className="text-xs font-semibold text-gray-300 mt-2 mb-0.5">{children}</h4>
-  ),
-  p: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <p className="text-sm text-gray-200 leading-snug mb-2">{children}</p>
-  ),
-  ul: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <ul className="list-disc list-outside ml-5 mb-2 text-sm text-gray-200">{children}</ul>
-  ),
-  ol: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <ol className="list-decimal list-outside ml-5 mb-2 text-sm text-gray-200">{children}</ol>
-  ),
-  li: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <li className="leading-snug">{children}</li>
-  ),
-  strong: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <strong className="font-bold text-white">{children}</strong>
-  ),
-  em: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <em className="italic text-gray-100">{children}</em>
-  ),
-  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => href?.startsWith(WIKI_TAG_SCHEME) ? (
-    // 論點層級標記 【規則】【邏輯】… (utils/wikiMarkup.ts)
-    <span
-      title={WIKI_TAGS[href.slice(WIKI_TAG_SCHEME.length)]?.hint}
-      className={`mx-0.5 inline-block rounded px-1 align-middle text-[10px] font-semibold leading-4 ${WIKI_TAG_CLASS[href.slice(WIKI_TAG_SCHEME.length)] ?? WIKI_TAG_CLASS.exp}`}
-    >
+/**
+ * 論點層級（utils/wikiMarkup.ts）：段落、清單項目、表格儲存格、標題裡有【邏輯】／【經驗】標記時整塊變色
+ * （.wiki-layer-logic／.wiki-layer-exp，index.css）；只有標記沒有別的字時，顯示標記名稱本身。
+ */
+function layered(Tag: 'p' | 'li' | 'td' | 'th' | 'h1' | 'h2' | 'h3' | 'h4', children: ReactNode, node: unknown): JSX.Element {
+  const found = wikiBlockLayer(node as WikiHastNode | undefined);
+  if (!found) return <Tag>{children}</Tag>;
+  return (
+    <Tag className={`wiki-layer-${found.layer}`}>
+      {found.alone && WIKI_TAGS[found.layer].label}
       {children}
-    </span>
-  ) : href?.startsWith(WIKI_COLOR_SCHEME) ? (
+    </Tag>
+  );
+}
+
+/** 文章開頭的顏色圖例（文章裡有標記時才顯示）。 */
+function WikiLayerLegend(): JSX.Element {
+  return (
+    <div className="wiki-legend" aria-label="文字顏色說明">
+      {(Object.keys(WIKI_TAGS) as (keyof typeof WIKI_TAGS)[]).map((layer) => (
+        <span key={layer}>
+          <b className={`wiki-layer-${layer}`}>{WIKI_TAGS[layer].color}＝{WIKI_TAGS[layer].label}</b>：{WIKI_TAGS[layer].hint}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Markdown renderer — uses react-markdown + remark-gfm for GitHub-Flavored Markdown
+// (tables, strikethrough, task lists, autolinks). Typography (size, line height, measure, spacing) lives in the
+// `.wiki-prose` stylesheet in index.css, with the readability sources it is based on; the components here only
+// add what CSS can't (link handling, the warning callout, the table scroll wrapper, image base path).
+const markdownComponents = {
+  p: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('p', children, node),
+  h1: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h1', children, node),
+  h2: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h2', children, node),
+  h3: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h3', children, node),
+  h4: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h4', children, node),
+  li: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('li', children, node),
+  td: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('td', children, node),
+  th: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('th', children, node),
+  // 論點層級標記 【邏輯】【經驗】（空連結 wiki-tag:）：標記本身不顯示，所在的段落／清單項目變色（見 layered）。
+  a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element | null => wikiLayerOf(href) ? null : href?.startsWith(WIKI_COLOR_SCHEME) ? (
     // Old HackMD `<font color>` (utils/wikiMarkup.ts): colored emphasis in the site's palette.
     <span className={WIKI_COLOR_CLASS[href.slice(WIKI_COLOR_SCHEME.length)] ?? WIKI_COLOR_CLASS.red}>{children}</span>
   ) : (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-yellow-400 underline hover:text-yellow-300"
-    >
+    <a href={href} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
   ),
   blockquote: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element =>
-    isWarningQuote(node) ? (
-      // A run of whole-line red text in the old article (utils/wikiMarkup.ts): a warning callout.
-      <blockquote className="border-l-4 border-red-500 bg-red-500/10 pl-3 pr-2 py-2 my-2 text-sm text-red-200 not-italic leading-snug rounded-r">
-        {children}
-      </blockquote>
-    ) : (
-      <blockquote className="border-l-4 border-yellow-500 bg-yellow-500/5 pl-3 py-1.5 my-2 text-sm text-gray-300 italic leading-snug">
-        {children}
-      </blockquote>
-    ),
-  code: ({ inline, children }: { inline?: boolean; children?: ReactNode }): JSX.Element =>
-    inline ? (
-      <code className="bg-gray-800 text-yellow-300 px-1 py-0.5 rounded text-xs font-mono">
-        {children}
-      </code>
-    ) : (
-      <code className="font-mono">{children}</code>
-    ),
-  pre: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <pre className="bg-gray-900 border border-gray-700 rounded-md p-2.5 overflow-x-auto my-2 text-xs text-gray-200">
-      {children}
-    </pre>
-  ),
-  hr: (): JSX.Element => <hr className="border-gray-700 my-3" />,
-  // Table renderers — the main fix. Wraps in overflow container for narrow modals.
+    // A run of whole-line red text in the old article (utils/wikiMarkup.ts): a warning callout.
+    <blockquote className={isWarningQuote(node) ? 'wiki-warning' : undefined}>{children}</blockquote>,
+  // Wraps tables in a scroll container for narrow screens.
   table: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <div className="overflow-x-auto my-2">
-      <table className="w-full border-collapse border border-gray-700 text-xs">
-        {children}
-      </table>
+    <div className="wiki-table-wrap">
+      <table>{children}</table>
     </div>
   ),
-  thead: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <thead className="bg-avalon-dark/60">{children}</thead>
-  ),
-  tbody: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <tbody className="divide-y divide-gray-700">{children}</tbody>
-  ),
-  tr: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <tr className="hover:bg-avalon-card/40 transition-colors">{children}</tr>
-  ),
-  th: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <th className="border border-gray-700 px-2 py-1 text-left font-semibold text-yellow-400 bg-avalon-dark/40">
-      {children}
-    </th>
-  ),
-  td: ({ children }: { children?: ReactNode }): JSX.Element => (
-    <td className="border border-gray-700 px-2 py-1 text-gray-200 align-top">{children}</td>
-  ),
   img: ({ src, alt }: { src?: string; alt?: string }): JSX.Element => (
-    <img src={wikiImageSrc(src, import.meta.env.BASE_URL)} alt={alt ?? ''} className="max-w-full rounded-md my-2 border border-gray-700" />
+    <img src={wikiImageSrc(src, import.meta.env.BASE_URL)} alt={alt ?? ''} loading="lazy" />
   ),
 };
 
@@ -295,13 +241,14 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   // 角色文章：文末放即時的實戰數據卡與短片；「X數據解析」：數據卡放在文章開頭（文章在解讀這張卡）。
   const selectedRole = selectedArticle ? WIKI_ARTICLE_ROLE[selectedArticle.id] : undefined;
   const dataRole = selectedArticle ? WIKI_DATA_ARTICLE_ROLE[selectedArticle.id] : undefined;
+  const selectedMarkup = useMemo(() => (selectedArticle ? normalizeWikiMarkup(selectedArticle.content) : ''), [selectedArticle]);
 
   // `[標題](wiki:wiki-57)` links (延伸閱讀 etc.) swap the open article in place; an unknown id is plain text.
   const articleComponents = useMemo(() => {
     const byId = new Map(allArticles.map((a) => [a.id, a]));
     return {
       ...markdownComponents,
-      a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element => {
+      a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element | null => {
         const id = wikiArticleId(href);
         if (id === null) return markdownComponents.a({ children, href });
         const target = byId.get(id);
@@ -309,7 +256,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
           <button
             type="button"
             onClick={() => setSelectedArticle(target)}
-            className="inline text-left text-yellow-400 underline hover:text-yellow-300"
+            className="inline text-left text-yellow-400 underline underline-offset-[0.2em] hover:text-yellow-300"
           >
             {children}
           </button>
@@ -550,10 +497,10 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-avalon-card border border-yellow-500 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto my-auto"
+              className="bg-avalon-card border border-yellow-500 rounded-lg max-w-[42rem] w-full max-h-[90vh] overflow-y-auto my-auto"
             >
               {/* Header (sticky) */}
-              <div className="sticky top-0 z-10 flex items-start justify-between p-3 bg-avalon-card border-b border-gray-700">
+              <div className="sticky top-0 z-10 flex items-start justify-between px-4 py-3 md:px-6 bg-avalon-card border-b border-gray-700">
                 <h2 className="text-base md:text-lg font-bold text-white flex-1 pr-3 leading-snug">{selectedArticle.title}</h2>
                 <button
                   onClick={() => setSelectedArticle(null)}
@@ -564,14 +511,14 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                 </button>
               </div>
 
-              <div className="px-2 py-3 sm:px-3 md:px-4 md:py-4">
+              <div className="px-4 py-4 md:px-6 md:py-5">
                 {isWikiPending(selectedArticle) && (
                   <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md border border-amber-500/50 bg-amber-500/10 text-xs text-amber-200">
                     <PencilLine size={14} className="shrink-0" />
                     {t('wiki.pendingBanner')}
                   </div>
                 )}
-                <div className="flex flex-wrap gap-3 text-[10px] text-gray-400 pb-2 border-b border-gray-700 mb-3">
+                <div className="flex flex-wrap gap-3 text-xs text-gray-400 pb-2 border-b border-gray-700 mb-5">
                   {selectedArticle.updatedAt && (
                     <div className="flex items-center gap-1">
                       <Calendar size={12} />
@@ -586,13 +533,14 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                     <RoleStatsCard role={dataRole} />
                   </div>
                 )}
-                <div className="max-w-none">
+                <div className="wiki-prose">
+                  {hasWikiLayers(selectedMarkup) && <WikiLayerLegend />}
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={articleComponents}
                     urlTransform={(url) => wikiUrlTransform(url, defaultUrlTransform)}
                   >
-                    {normalizeWikiMarkup(selectedArticle.content)}
+                    {selectedMarkup}
                   </ReactMarkdown>
                 </div>
 

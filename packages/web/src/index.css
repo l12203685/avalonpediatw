@@ -117,3 +117,274 @@ body,
     opacity: 0.5;
   }
 }
+
+/* ───────────────────────── 百科文章內文排版（.wiki-prose，WikiContent 的文章視窗） ─────────────────────────
+   Edward 2026-10-31：「文章的文字間距跟排版可以再調整一下，以舒適閱讀的字體為主」。數值依據：
+   - W3C《中文排版需求》(clreq, W3C Group Note)：中文內文行高約字高的 1.5～2 倍，常用 1.7～1.8；中文字為方塊字、
+     行長以字數計；中文強調用著重號而不是斜體（中文字沒有真正的斜體，瀏覽器只會硬斜）。
+   - WCAG 2.2 SC 1.4.8 Visual Presentation (AAA)：行距 ≥ 1.5、段距 ≥ 行距的 1.5 倍、每行 ≤ 80 字元（CJK ≤ 40 字）；
+     SC 1.4.12 Text Spacing (AA)：使用者把行高調到 1.5、段距 2 倍字級、字距 0.12em 時版面不能壞（不寫死高度、可換行）。
+   - Dyson (2004), Rayner et al. (2016) 行長研究：太長的行換行回掃容易跳錯行，太短則眼跳太頻繁 → 桌機約 35 字一行。
+   - Legge & Bigelow (2011) 字級研究：流暢閱讀需要在「臨界字級」以上留餘裕 → 手機 16px、桌機 17px（原本 14px）。
+   - Piepenbrock et al. (2013) 正負極性研究：暗底亮字的辨識較吃力，純白配純黑的光暈（halation）最刺眼 → 用偏灰的白
+     （#e4e4e7）配深灰底，粗體才用更亮的白。系統中文字型只有 Regular／Medium 兩種粗細（450 會跳到 Medium，太粗），
+     所以內文維持 400，靠字級與對比補足。
+   數字：字級 16/17px、行高 1.8、字距 0.03em、行長上限 36em（約 35 個中文字）、段後 1em（段距＝2.8em ≈ 行距 1.56 倍）、
+   清單項目間 0.4em、標題上方空間大於下方（標題靠近它管的那段）。 */
+.wiki-prose {
+  --wp-text: #e4e4e7;
+  --wp-strong: #fafafa;
+  --wp-muted: #a1a1aa;
+  --wp-rule: rgba(255, 255, 255, 0.1);
+  max-width: 36em;
+  margin-inline: auto;
+  color: var(--wp-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang TC',
+    'Noto Sans TC', 'Noto Sans CJK TC', 'Microsoft JhengHei', 'Heiti TC', sans-serif;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.8;
+  letter-spacing: 0.03em;
+  overflow-wrap: anywhere;
+  line-break: strict;
+}
+@media (min-width: 768px) {
+  .wiki-prose {
+    font-size: 17px;
+  }
+}
+.wiki-prose > :first-child {
+  margin-top: 0;
+}
+.wiki-prose > :last-child {
+  margin-bottom: 0;
+}
+.wiki-prose p {
+  margin: 0 0 1em;
+}
+
+/* 標題：上方空間 > 下方空間，靠近它底下的內容 */
+.wiki-prose h1,
+.wiki-prose h2,
+.wiki-prose h3,
+.wiki-prose h4 {
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  font-weight: 700;
+}
+.wiki-prose h1 {
+  font-size: 1.5em;
+  color: var(--wp-strong);
+  margin: 1.6em 0 0.6em;
+}
+.wiki-prose h2 {
+  font-size: 1.3em;
+  color: #facc15;
+  margin: 2em 0 0.65em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--wp-rule);
+}
+.wiki-prose h3 {
+  font-size: 1.12em;
+  color: var(--wp-strong);
+  margin: 1.7em 0 0.5em;
+}
+.wiki-prose h4 {
+  font-size: 1em;
+  color: #d4d4d8;
+  margin: 1.4em 0 0.4em;
+}
+.wiki-prose strong {
+  color: var(--wp-strong);
+  font-weight: 700;
+}
+/* clreq：中文強調用著重號（繁中放字下方），不用斜體 */
+.wiki-prose em {
+  font-style: normal;
+  -webkit-text-emphasis: filled dot;
+  text-emphasis: filled dot;
+  -webkit-text-emphasis-position: under right;
+  text-emphasis-position: under right;
+}
+
+/* 清單：本站文章大多是多層清單；項目間留一點空，手機上每層縮排不要太深 */
+.wiki-prose ul,
+.wiki-prose ol {
+  margin: 0 0 1em;
+  padding-left: 1.3em;
+}
+.wiki-prose ul {
+  list-style: disc outside;
+}
+.wiki-prose ol {
+  list-style: decimal outside;
+}
+.wiki-prose ul ul {
+  list-style-type: circle;
+}
+.wiki-prose ul ul ul {
+  list-style-type: square;
+}
+.wiki-prose li {
+  margin: 0.4em 0 0;
+}
+.wiki-prose li:first-child {
+  margin-top: 0;
+}
+.wiki-prose li > ul,
+.wiki-prose li > ol {
+  margin: 0.4em 0 0;
+  padding-left: 1.1em;
+}
+.wiki-prose li > p {
+  margin-bottom: 0.4em;
+}
+.wiki-prose li::marker {
+  color: var(--wp-muted);
+}
+@media (min-width: 640px) {
+  .wiki-prose ul,
+  .wiki-prose ol {
+    padding-left: 1.5em;
+  }
+  .wiki-prose li > ul,
+  .wiki-prose li > ol {
+    padding-left: 1.3em;
+  }
+}
+
+.wiki-prose a {
+  color: #facc15;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+.wiki-prose a:hover {
+  color: #fde047;
+}
+
+.wiki-prose blockquote {
+  margin: 1.2em 0;
+  padding: 0.7em 1em;
+  border-left: 3px solid rgba(234, 179, 8, 0.7);
+  background: rgba(234, 179, 8, 0.06);
+  border-radius: 0 0.375rem 0.375rem 0;
+  color: #d4d4d8;
+}
+.wiki-prose blockquote.wiki-warning {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fecaca;
+}
+.wiki-prose blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* 程式碼／牌譜：等寬、不加字距（數字對齊），行高略小 */
+.wiki-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  letter-spacing: 0;
+}
+.wiki-prose :not(pre) > code {
+  font-size: 0.88em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fde68a;
+}
+.wiki-prose pre {
+  margin: 1.2em 0;
+  padding: 0.85em 1em;
+  overflow-x: auto;
+  font-size: 0.88em;
+  line-height: 1.6;
+  color: #e4e4e7;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 0.375rem;
+  overflow-wrap: normal;
+}
+
+.wiki-prose hr {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid var(--wp-rule);
+}
+
+/* 表格：字級不低於 15px，儲存格留白；窄螢幕橫向捲動 */
+.wiki-prose .wiki-table-wrap {
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+.wiki-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+.wiki-prose th,
+.wiki-prose td {
+  border: 1px solid #3f3f46;
+  padding: 0.45em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+.wiki-prose th {
+  font-weight: 600;
+  color: #facc15;
+  background: rgba(0, 0, 0, 0.25);
+}
+.wiki-prose tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.wiki-prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.2em auto;
+  border: 1px solid #3f3f46;
+  border-radius: 0.375rem;
+}
+
+/* 論點層級（Edward 2026-10-31：「tag 直接讓文字變色」）：【邏輯】＝柔和琥珀黃、【經驗】＝薄荷綠。紅、藍代表兩個陣營，
+   不用。兩色在 #2d2d2d 底上的對比約 8.7:1、7.9:1（WCAG AAA ≥ 7:1），飽和度壓低，長段落讀起來不刺眼。
+   只有帶標記的那一塊變色；底下的子清單回到內文色（子項目有自己的標記時自己上色）。 */
+.wiki-prose {
+  --wp-logic: #ecc977;
+  --wp-exp: #86d4b4;
+}
+.wiki-prose .wiki-layer-logic {
+  color: var(--wp-logic);
+}
+.wiki-prose .wiki-layer-exp {
+  color: var(--wp-exp);
+}
+.wiki-prose .wiki-layer-logic > ul,
+.wiki-prose .wiki-layer-logic > ol,
+.wiki-prose .wiki-layer-exp > ul,
+.wiki-prose .wiki-layer-exp > ol {
+  color: var(--wp-text);
+}
+.wiki-prose .wiki-layer-logic > strong,
+.wiki-prose .wiki-layer-logic > p > strong,
+.wiki-prose .wiki-layer-exp > strong,
+.wiki-prose .wiki-layer-exp > p > strong {
+  color: inherit;
+}
+.wiki-prose .wiki-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15em 1.2em;
+  margin: 0 0 1.4em;
+  padding: 0.55em 0.85em;
+  font-size: 0.82em;
+  line-height: 1.6;
+  color: var(--wp-muted);
+  border: 1px solid var(--wp-rule);
+  border-radius: 0.375rem;
+}
+.wiki-prose .wiki-legend b {
+  font-weight: 600;
+}

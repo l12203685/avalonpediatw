@@ -15,23 +15,88 @@ export type WikiColor = 'red' | 'blue' | 'orange' | 'teal';
 export const WIKI_COLOR_SCHEME = 'wiki-color:';
 
 /**
- * 論點層級標記（Edward 2026-10-30：文章要恆久正確 — 每個論點標明是規則事實／邏輯必然／經驗法則／社群慣例／時效資料）。
- * 文章裡寫 `【規則】` 等，渲染成小標籤（WikiContent 的 a 元件看 `wiki-tag:` 開頭）。
+ * 論點層級標記（Edward 2026-10-31 定案，取代 10-30 的六種標記）：只剩兩種 —
+ *   - 【邏輯】：規則寫明的事，以及由規則加上陣營目標（勝負條件）一定推得出來的事（舊的【規則】併入）；
+ *   - 【經驗】：多場遊戲歸納出的傾向與建議，多數情況成立但有例外（舊的【建議】【慣例】【本站立場】【百科建議】併入）。
+ * 舊的【時效】不再使用，標記直接拿掉。
+ *
+ * 顯示方式（Edward：「直接把標籤換掉」「tag 直接讓文字變色」）：標記本身不顯示，帶標記的那一行／那個清單項目整段
+ * 變色（WikiContent：邏輯＝琥珀黃、經驗＝薄荷綠；紅、藍代表兩個陣營，不用），文章開頭放一行圖例。
+ * 實作：`【邏輯】` → 空連結 `[](wiki-tag:logic)`，WikiContent 看到段落／清單項目／表格儲存格的直接內容裡有這種
+ * 連結，就幫那一塊加上顏色。
  */
 export const WIKI_TAG_SCHEME = 'wiki-tag:';
-export const WIKI_TAGS: Readonly<Record<string, { label: string; hint: string }>> = {
-  rule: { label: '規則', hint: '規則事實：遊戲規則直接規定的事' },
-  logic: { label: '邏輯', hint: '邏輯必然：從規則與已知資訊一定推得出來' },
-  exp: { label: '經驗', hint: '經驗法則：多數情況成立，但有例外' },
-  conv: { label: '慣例', hint: '社群慣例：本站／社群約定的做法' },
-  time: { label: '時效', hint: '時效資料：特定時間點的紀錄或數據' },
-  stance: { label: '建議', hint: '建議：百科整理後建議的做法' },
+export type WikiLayer = 'logic' | 'exp';
+export const WIKI_TAGS: Readonly<Record<WikiLayer, { label: string; color: string; hint: string }>> = {
+  logic: { label: '邏輯', color: '黃字', hint: '規則寫明，或由規則與陣營目標一定推得出來' },
+  exp: { label: '經驗', color: '綠字', hint: '多場遊戲常見的情況與建議，多數成立但有例外' },
 };
-const TAG_BY_LABEL: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(WIKI_TAGS).map(([k, v]) => [v.label, k]));
+/** 文章裡可能出現的標記文字 → 層級（舊標記過渡期照樣認得）；null = 拿掉不顯示。 */
+const LAYER_OF_LABEL: Readonly<Record<string, WikiLayer | null>> = {
+  邏輯: 'logic',
+  規則: 'logic',
+  經驗: 'exp',
+  建議: 'exp',
+  慣例: 'exp',
+  本站立場: 'exp',
+  百科建議: 'exp',
+  時效: null,
+};
+const LAYER_MARK_RE = new RegExp(`【(${Object.keys(LAYER_OF_LABEL).join('|')})】`, 'g');
 
-/** `【規則】` → `[規則](wiki-tag:rule)`（不在行內程式碼或程式碼區塊裡時）。 */
+/** The layer a `wiki-tag:` href names, or null for any other href. */
+export function wikiLayerOf(href: string | undefined): WikiLayer | null {
+  if (!href?.startsWith(WIKI_TAG_SCHEME)) return null;
+  const key = href.slice(WIKI_TAG_SCHEME.length);
+  return key === 'logic' || key === 'exp' ? key : null;
+}
+
+/** `【邏輯】` → `[](wiki-tag:logic)`，`【時效】` → 拿掉（不在程式碼區塊裡時）。標記前後的空白原樣保留，清單縮排不受影響。 */
 function layerTags(line: string): string {
-  return line.replace(/【(規則|邏輯|經驗|慣例|時效|建議)】/g, (_m, label: string) => ` [${label}](${WIKI_TAG_SCHEME}${TAG_BY_LABEL[label]})`);
+  return line.replace(LAYER_MARK_RE, (_m, label: string) => {
+    const layer = LAYER_OF_LABEL[label];
+    return layer ? `[](${WIKI_TAG_SCHEME}${layer})` : '';
+  });
+}
+
+/** Whether normalized markup carries any layer marker (WikiContent then shows the color legend). */
+export function hasWikiLayers(normalized: string): boolean {
+  return normalized.includes(`](${WIKI_TAG_SCHEME}`);
+}
+
+/** The bits of a hast node (react-markdown's `node` prop) that `wikiBlockLayer` reads. */
+export interface WikiHastNode {
+  type?: string;
+  tagName?: string;
+  value?: string;
+  properties?: { href?: unknown };
+  children?: WikiHastNode[];
+}
+
+/**
+ * The layer a block (段落、清單項目、表格儲存格) carries: a `wiki-tag:` marker among its own content — for a list
+ * item also inside its direct paragraphs (loose lists), never inside its nested lists, which color themselves.
+ * `alone` = the block has nothing but the marker (e.g. a table cell that names the marker): WikiContent then shows
+ * the label itself in the layer's color instead of an empty block.
+ */
+export function wikiBlockLayer(node: WikiHastNode | undefined): { layer: WikiLayer; alone: boolean } | null {
+  if (!node?.children) return null;
+  let layer: WikiLayer | null = null;
+  let otherContent = false;
+  const scan = (children: WikiHastNode[], descendIntoP: boolean): void => {
+    for (const c of children) {
+      if (c.type === 'text') {
+        if (c.value?.trim()) otherContent = true;
+      } else if (c.type === 'element') {
+        const markLayer = c.tagName === 'a' ? wikiLayerOf(typeof c.properties?.href === 'string' ? c.properties.href : undefined) : null;
+        if (markLayer) layer ??= markLayer;
+        else if (descendIntoP && c.tagName === 'p') scan(c.children ?? [], false);
+        else if (c.tagName !== 'ul' && c.tagName !== 'ol') otherContent = true;
+      }
+    }
+  };
+  scan(node.children, node.tagName === 'li');
+  return layer ? { layer, alone: !otherContent } : null;
 }
 
 const COLOR_OF: Record<string, WikiColor> = {

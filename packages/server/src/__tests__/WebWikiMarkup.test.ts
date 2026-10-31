@@ -2,7 +2,7 @@
  * 百科舊式 HTML → 網站樣式（packages/web/src/utils/wikiMarkup.ts，Edward 2026-10-28）。
  */
 import { describe, expect, it } from 'vitest';
-import { normalizeWikiMarkup, wikiArticleId, wikiExcerpt, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
+import { hasWikiLayers, normalizeWikiMarkup, wikiArticleId, wikiBlockLayer, wikiExcerpt, wikiLayerOf, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
 
 describe('normalizeWikiMarkup', () => {
   it('a run of whole-line red text becomes a warning callout (the 點跳夾 notice)', () => {
@@ -47,6 +47,49 @@ describe('normalizeWikiMarkup', () => {
     expect(wikiUrlTransform('wiki-color:red', fallback)).toBe('wiki-color:red');
     expect(wikiUrlTransform('wiki:wiki-57', fallback)).toBe('wiki:wiki-57');
     expect(wikiUrlTransform('javascript:alert(1)', fallback)).toBe('');
+  });
+
+  it('layer markers become empty wiki-tag: links; old labels map to 邏輯／經驗, 時效 disappears, list nesting stays', () => {
+    const src = [
+      '- 【邏輯】壞人總數只有 4：',
+      '  - 三類全部成立 ⇒ 不可能',
+      '- 文字。【經驗】',
+      '- 遊戲認知：【建議】說明',
+      '- 【規則】規則書寫明 【時效】',
+      '- 【慣例】【本站立場】【百科建議】',
+      '```',
+      '【邏輯】程式碼裡不動',
+      '```',
+    ].join('\n');
+    expect(normalizeWikiMarkup(src).split('\n')).toEqual([
+      '- [](wiki-tag:logic)壞人總數只有 4：',
+      '  - 三類全部成立 ⇒ 不可能',
+      '- 文字。[](wiki-tag:exp)',
+      '- 遊戲認知：[](wiki-tag:exp)說明',
+      '- [](wiki-tag:logic)規則書寫明 ',
+      '- [](wiki-tag:exp)[](wiki-tag:exp)[](wiki-tag:exp)',
+      '```',
+      '【邏輯】程式碼裡不動',
+      '```',
+    ]);
+    expect(hasWikiLayers(normalizeWikiMarkup('- 【經驗】x'))).toBe(true);
+    expect(hasWikiLayers(normalizeWikiMarkup('- 【時效】x'))).toBe(false);
+    expect(wikiLayerOf('wiki-tag:logic')).toBe('logic');
+    expect(wikiLayerOf('wiki-tag:rule')).toBeNull();
+    expect(wikiLayerOf('https://x')).toBeNull();
+  });
+
+  it('a block takes the layer of a marker in its own content, not in its nested list', () => {
+    const mark = (layer: string) => ({ type: 'element', tagName: 'a', properties: { href: `wiki-tag:${layer}` }, children: [] });
+    const text = (value: string) => ({ type: 'text', value });
+    const nested = { type: 'element', tagName: 'ul', children: [{ type: 'element', tagName: 'li', children: [mark('exp'), text('子項目')] }] };
+    expect(wikiBlockLayer({ type: 'element', tagName: 'li', children: [mark('logic'), text('壞人總數'), nested] })).toEqual({ layer: 'logic', alone: false });
+    expect(wikiBlockLayer({ type: 'element', tagName: 'li', children: [text('沒有標記'), nested] })).toBeNull();
+    // loose list item: the marker sits inside its paragraph
+    expect(wikiBlockLayer({ type: 'element', tagName: 'li', children: [{ type: 'element', tagName: 'p', children: [text('結尾。'), mark('exp')] }] })).toEqual({ layer: 'exp', alone: false });
+    // a table cell holding only the marker shows the label itself
+    expect(wikiBlockLayer({ type: 'element', tagName: 'td', children: [text(' '), mark('logic'), text(' ')] })).toEqual({ layer: 'logic', alone: true });
+    expect(wikiBlockLayer(undefined)).toBeNull();
   });
 
   it('wiki: links name an article id; other hrefs are not article links', () => {
