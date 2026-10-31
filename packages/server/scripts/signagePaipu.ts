@@ -97,13 +97,11 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
 const twDay = (iso?: string): string => { const t = twTime(iso); return t ? `${t.getUTCFullYear()}${pad2(t.getUTCMonth() + 1)}${pad2(t.getUTCDate())}` : ''; };
 
 /**
- * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_HHMM_第x局_刺娜德奧派梅」（台灣時間、開局時刻＋六碼配置；Edward 10/31）。
+ * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_第x局_刺娜德奧派梅」（台灣日期＋六碼配置；Edward 10/31：省略時間，同過去的貼文）。
  * 配置寫在牌譜裡、結果用論壇標籤（同過去的貼文，內文不另寫結果）。第幾局＝當天第幾個打完的真人 10 人局（見 dayIndex）。
  */
 export function paipuThreadName(game: RecordedGame, index?: number): string {
-  const t = twTime(game.startedAt);
-  const hhmm = t ? `${pad2(t.getUTCHours())}${pad2(t.getUTCMinutes())}` : '';
-  return [twDay(game.startedAt), hhmm, index ? `第${index}局` : '', game.end ? paipuConfig(game) : ''].filter(Boolean).join('_').slice(0, 100);
+  return [twDay(game.startedAt), index ? `第${index}局` : '', game.end ? paipuConfig(game) : ''].filter(Boolean).join('_').slice(0, 100);
 }
 
 /**
