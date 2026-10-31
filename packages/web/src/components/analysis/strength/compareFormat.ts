@@ -14,11 +14,13 @@ export const GROUPING_OPTIONS: { kind: GroupingKind; label: string; help: string
   { kind: 'gap', label: '紅藍平均 PR 差', help: '紅方 4 人平均 PR − 藍方 6 人平均 PR：紅強 ≥10／相差 <10／藍強 ≥10' },
   { kind: 'weakRed', label: '最弱紅方', help: '紅方 PR 最低的那位低於 X vs 每位都至少 X' },
   { kind: 'weakLoyal', label: '最弱忠臣', help: '忠臣 PR 最低的那位低於 X vs 每位都至少 X' },
+  { kind: 'tertile', label: '任一維度三分位', help: '選一個強度維度（紅方／忠臣／角色／座位…），依這批局的 1/3、2/3 分位數分成前、中、後三組' },
 ];
 
 export const LOW_SAMPLE = 30;
 
-export function buildGrouping(kind: GroupingKind, pr: number, count: number, weak: number): StrengthGrouping {
+export function buildGrouping(kind: GroupingKind, pr: number, count: number, weak: number, dim = 's'): StrengthGrouping {
+  if (kind === 'tertile') return { kind, dim };
   if (kind === 'count') return { kind, pr, count };
   if (kind === 'weakRed' || kind === 'weakLoyal') return { kind, pr: weak };
   return { kind } as StrengthGrouping;

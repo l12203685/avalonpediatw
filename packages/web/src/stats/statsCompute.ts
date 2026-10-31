@@ -7,6 +7,7 @@ import {
   computeStats,
   computeStrengthReport,
   decodeGamesDataset,
+  discoverFindings,
   sanitizeFilter,
   type DecodedDataset,
   type GameFilter,
@@ -15,6 +16,7 @@ import {
   type StatsResult,
   type StrengthGrouping,
   type StrengthReport,
+  type DiscoveryResult,
 } from '@avalon/shared/stats';
 
 /** /api/analysis/games 的 context (伺服器 services/gamesDataset.ts GamesContext 的子集)。 */
@@ -110,6 +112,22 @@ export async function computeStrength(serverUrl: string, raw: GameFilter | null,
   const filter = raw ? sanitizeFilter(raw).filter : null;
   const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
   return computeStrengthReport(games, grouping);
+}
+
+const discoveries = new Map<string, DiscoveryResult>();
+
+/** 自動發現：篩選後的局掃描全部維度 × 指標（@avalon/shared discoverFindings）；同一個篩選只算一次。 */
+export async function computeDiscovery(serverUrl: string, raw: GameFilter | null): Promise<DiscoveryResult> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const key = JSON.stringify(filter);
+  const hit = discoveries.get(key);
+  if (hit) return hit;
+  const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+  const result = discoverFindings(games);
+  discoveries.set(key, result);
+  while (discoveries.size > 4) discoveries.delete(discoveries.keys().next().value as string);
+  return result;
 }
 
 /** 篩選後的全部區塊。外來的篩選先過 sanitizeFilter。 */

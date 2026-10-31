@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { METRIC_SECTIONS, type StrengthMetricValue, type StrengthReport } from '@avalon/shared/stats';
+import { METRIC_SECTIONS, STRENGTH_DIMENSIONS, type StrengthMetricValue, type StrengthReport } from '@avalon/shared/stats';
 import { StatTable, Takeaway, type StatColumn } from '../ui';
 import { GROUPING_OPTIONS, LOW_SAMPLE, formatDelta, formatMetric, type GroupingKind } from './compareFormat';
 
@@ -22,12 +22,13 @@ interface Row {
   all: StrengthMetricValue;
 }
 
-export default function StrengthCompare({ report, kind, setKind, pr, setPr, count, setCount, weak, setWeak }: {
+export default function StrengthCompare({ report, kind, setKind, pr, setPr, count, setCount, weak, setWeak, dim, setDim }: {
   report: StrengthReport;
   kind: GroupingKind; setKind: (k: GroupingKind) => void;
   pr: number; setPr: (v: number) => void;
   count: number; setCount: (v: number) => void;
   weak: number; setWeak: (v: number) => void;
+  dim: string; setDim: (d: string) => void;
 }): JSX.Element {
   const [section, setSection] = useState<string>('結果');
   const cmp = report.comparison;
@@ -86,6 +87,17 @@ export default function StrengthCompare({ report, kind, setKind, pr, setPr, coun
             PR <input type="number" className={numberClass} value={pr} min={0} max={100} aria-label="PR 門檻" onChange={(e) => setPr(clamp(Number(e.target.value), 0, 100))} />
             以上至少 <input type="number" className={numberClass} value={count} min={1} max={10} aria-label="人數" onChange={(e) => setCount(clamp(Number(e.target.value), 1, 10))} /> 人
           </span>
+        )}
+        {kind === 'tertile' && (
+          <select
+            value={dim}
+            onChange={(e) => setDim(e.target.value)}
+            aria-label="維度"
+            data-testid="strength-dimension"
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 focus:border-blue-500 focus:outline-none"
+          >
+            {STRENGTH_DIMENSIONS.map((d) => <option key={d.id} value={d.id} title={d.help}>{d.group}：{d.label}</option>)}
+          </select>
         )}
         {(kind === 'weakRed' || kind === 'weakLoyal') && (
           <span className="inline-flex items-center gap-1">
