@@ -234,7 +234,7 @@ class RunTest(unittest.TestCase):
         with redirect_stdout(out), redirect_stderr(err), \
                 mock.patch.object(dpe.dri, "DiscordClient", lambda token: discord):
             with mock.patch.dict("os.environ", environment, clear=True):
-                rc = dpe.main(["--output", str(self.out), *argv])
+                rc = dpe.main(["--output", str(self.out), "--games", str(self.out.parent / "no_games.json"), *argv])
         return rc, out.getvalue() + err.getvalue()
 
     def test_writes_then_unchanged_and_logs_counts_only(self) -> None:
@@ -273,6 +273,126 @@ class RunTest(unittest.TestCase):
         self.assertEqual(len(json.loads(self.out.read_text(encoding="utf-8"))["posts"]), 20)
 
 
+# ---------------------------------------------------------------------------
+# lineup / mistakes annotations (Edward 2026-10-31)
+# ---------------------------------------------------------------------------
+
+import test_generate_cache as tgc  # noqa: E402  (its synthetic 牌譜 helpers)
+
+POOL = NAMES + ["玩家K", "玩家L"]
+SMALL = {**gc.RATING_CONFIG, "lineupMinGames": 5, "lineupActiveDays": 3, "lineupMinPool": 12}
+# 配置 936758 (reds 9, 3, 6, 7): R1 369 fails; R2 3690 holds all of it, three blues (1, 2, 0) approve and it goes.
+MISTAKE_RECORD = """147
+258
+389
+468
+369
+oox
+3690 12+
+ooox
+3678
+ooox"""
+MISTAKE_POST = post(21, 22, "1021一般場1", ("三紅",))
+OTHER_POST = post(19, 22, "1019一般場2", ("三藍躲刺",))
+
+
+def games_doc() -> tuple[dict, list]:
+    """36 games, two a day from 2026-10-02, 12 invented players; the last one is GAME's record (2026-10-20)."""
+    rows = [tgc.LOG_HEADERS] + [
+        tgc.log_row(f"E{i}", tgc.rot_config(i), ("三紅", "三藍活", "三藍死")[i % 3], [POOL[(i + j) % 12] for j in range(10)],
+                    date=(dt.date(2026, 10, 2) + dt.timedelta(days=i // 2)).isoformat())
+        for i in range(35)
+    ]
+    last = tgc.log_row("E35", "936758", "三藍活", NAMES, date="2026-10-20", text=RECORD, kill="3")
+    for column, cell in zip(tgc.ROUND_RESULT_COLS, ("ooo", "ooox", "oooo", "ooooo")):
+        last[tgc.LOG_HEADERS.index(column)] = cell
+    rows.append(last)
+    games = tgc.run_like_games(rows, as_of=dt.date(2026, 10, 31))
+    return gc.encode_games_dataset(games), games
+
+
+class AnnotateTest(unittest.TestCase):
+    def doc(self) -> dict:
+        posts = (GAME, BROKEN, MISTAKE_POST, OTHER_POST)
+        bodies = {**BODIES, MISTAKE_POST.id: body(MISTAKE_RECORD, assassin=""),
+                  OTHER_POST.id: body(RECORD.replace("1458\n", "1459\n"), names=POOL[2:12])}
+        return build(FakeDiscord(posts, bodies))[0]
+
+    def test_lineups_matched_and_by_names(self) -> None:
+        doc = self.doc()
+        dataset, games = games_doc()
+        counts = dpe.annotate_records(doc, dataset, SMALL)
+        by_id = {p["id"]: p for p in doc["posts"]}
+        lineups, _ = gc.compute_lineups(games, SMALL)
+        # GAME is the dataset's last game (same 配置, teams and missions): its pre-game lineup.
+        self.assertEqual(by_id[GAME.id]["lineup"], dpe.lineup_entry(lineups[-1]))
+        # OTHER is not in the dataset: its names at the start of 10/19.
+        names = [x for x in POOL[2:12]]
+        _, answers = gc.compute_lineups(games, SMALL, queries=[("2026-10-19", names)])
+        self.assertEqual(by_id[OTHER_POST.id]["lineup"], dpe.lineup_entry(answers[0]))
+        self.assertNotIn("lineup", by_id[BROKEN.id])
+        self.assertEqual((counts["matched"], counts["by names"]), (1, 2))  # MISTAKE_POST is by names too
+        self.assertEqual(dpe.records_problems(doc), [])
+        lu = by_id[GAME.id]["lineup"]
+        self.assertEqual(list(lu), ["pool", "s", "prs", "prov"])
+        self.assertEqual(lu["s"], gc.rnd1(sum(lu["prs"]) / 10))
+
+    def test_mistakes(self) -> None:
+        doc = self.doc()
+        counts = dpe.annotate_records(doc, None)
+        by_id = {p["id"]: p for p in doc["posts"]}
+        self.assertEqual(by_id[MISTAKE_POST.id]["mistakes"], [
+            [gc.MISTAKE_SERIOUS, 0, ""], [gc.MISTAKE_BLUE_APPROVE, 2, "120"], [gc.MISTAKE_PROVEN_SENT, 2, "3690"]])
+        self.assertNotIn("mistakes", by_id[GAME.id])  # Merlin saying the opposite on the lake is not one
+        self.assertNotIn("lineup", by_id[GAME.id])  # no dataset: no lineups
+        self.assertEqual(counts[gc.MISTAKE_SERIOUS], 1)
+        self.assertEqual(dpe.records_problems(doc), [])
+        self.assertEqual(dpe.annotation_lines(counts),
+                         ["- 陣容強度：0 篇（對到資料集 0、用名字算 0）；失誤標籤：嚴重失誤 1、已證有紅的隊出任務 1、藍方贊成已證有紅的隊 1"])
+        # Annotating again replaces, never stacks.
+        dpe.annotate_records(doc, None)
+        self.assertEqual(len(by_id[MISTAKE_POST.id]["mistakes"]), 3)
+
+    def test_shape_check(self) -> None:
+        doc = self.doc()
+        dpe.annotate_records(doc, games_doc()[0], SMALL)
+        game = next(p for p in doc["posts"] if p["id"] == GAME.id)
+        game["lineup"]["prs"][0] = 101
+        self.assertTrue(has(dpe.records_problems(doc), "lineup shape"))
+        doc = self.doc()
+        dpe.annotate_records(doc, None)
+        mistake = next(p for p in doc["posts"] if p["id"] == MISTAKE_POST.id)
+        mistake["mistakes"][1][0] = "3 號亂投"
+        self.assertTrue(has(dpe.records_problems(doc), "mistakes shape"))
+        doc = self.doc()
+        next(p for p in doc["posts"] if p["id"] == BROKEN.id)["mistakes"] = [[gc.MISTAKE_SERIOUS, 0, ""]]
+        self.assertTrue(has(dpe.records_problems(doc), "annotation on an unreadable post"))
+
+    def test_site_knows_every_tag(self) -> None:
+        site = (ROOT / "packages" / "web" / "src" / "utils" / "records.ts").read_text(encoding="utf-8")
+        for tag in gc.MISTAKE_TAGS:
+            self.assertIn(f"tag: '{tag}'" if tag != gc.MISTAKE_SERIOUS else f"SERIOUS_MISTAKE = '{tag}'", site)
+
+    def test_annotate_only(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out, gpath = Path(tmp.name) / "records_cache.json", Path(tmp.name) / "games_cache.json"
+        doc = self.doc()
+        doc["format"] = dpe.LEGACY_RECORDS_FORMAT  # a file written before the rename
+        out.write_text(dpe.dump_records(doc), encoding="utf-8")
+        gpath.write_text(gc.dump_games_dataset(games_doc()[0]), encoding="utf-8")
+        log = io.StringIO()
+        with redirect_stdout(log), mock.patch.dict(gc.RATING_CONFIG, SMALL), mock.patch.dict("os.environ", {}, clear=True):
+            rc = dpe.main(["--output", str(out), "--games", str(gpath), "--annotate-only"])
+        self.assertEqual(rc, 0, log.getvalue())
+        written = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(written["format"], dpe.RECORDS_FORMAT)
+        self.assertEqual(sum(1 for p in written["posts"] if "lineup" in p), 3)
+        self.assertIn("陣容強度：3 篇", log.getvalue())
+        for secret in ("玩家", "一般場"):
+            self.assertNotIn(secret, log.getvalue())
+
+
 class WorkflowTest(unittest.TestCase):
     def test_refresh_workflow_exports_and_commits_the_list(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -281,6 +401,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("RECORDS_PATH: packages/server/records_cache.json", text)
         self.assertIn('git add -- "${RECORDS_PATH}"', text)
         self.assertNotIn("--report", text)
+        self.assertIn("--annotate-only", text)  # lineups stay fresh when the Discord read is skipped or fails
 
 
 if __name__ == "__main__":

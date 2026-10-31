@@ -23,6 +23,15 @@ What goes into the file, newest post first:
       - problem (+ problemLine): why the record could not be read, as a fixed explanation
         string (SKIP_EXPLANATIONS) -- never the post's text.
   The starter message itself is not stored; only what the parser extracted from it.
+  * per parsed game, two annotations (annotate_records, Edward 2026-10-31):
+      - lineup: 陣容強度 from generate_cache.compute_lineups over games_cache.json (written by
+        generate_cache.py earlier in the same workflow run): the post's game when it is in the dataset
+        (its 流水號 D<post id>, or the same record_fingerprint as a 牌譜 row), otherwise the post's own
+        names (player_identity_key) at the start of its date. {pool, s, prs (seat 1..9, 0), prov (seats
+        that are provisional or unnamed)}; absent when not scored.
+      - mistakes: generate_cache.detect_mistakes on the parsed record: [[tag, round, seats], ...]
+        (tags from MISTAKE_TAGS; the 嚴重失誤 umbrella first, round 0); absent when none.
+    `--annotate-only` recomputes both on the existing file without reading Discord.
 
 Guards (exit 4, the existing file is kept): every string must have the expected shape
 (records_problems), and the number of posts must not drop by more than max(5, 10%) against the
@@ -34,6 +43,7 @@ Usage:
     python discord_records_export.py                      # writes records_cache.json next to this file
     python discord_records_export.py --output PATH
     python discord_records_export.py --allow-shrink       # e.g. after many posts were deleted on purpose
+    python discord_records_export.py --annotate-only      # refresh lineup / mistakes of the existing file
 
 Configuration (environment): DISCORD_BOT_TOKEN (View Channel + Read Message History on the forum,
 Message Content intent), DISCORD_RECORDS_FORUM_ID (default: the forum of discord_records_import).
@@ -45,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -59,7 +70,9 @@ import generate_cache as gc
 
 RECORDS_FORMAT = "avalon-records"
 RECORDS_VERSION = 1
+LEGACY_RECORDS_FORMAT = "avalon-paipu"  # the name before 2026-10-31 (--annotate-only renames it)
 OUTPUT_PATH = Path(__file__).resolve().parent / "records_cache.json"
+GAMES_PATH = OUTPUT_PATH.parent / gc.GAMES_OUTPUT_NAME
 TITLE_MAX = 100
 NAME_MAX = 40
 TAG_MAX = 20
@@ -86,7 +99,9 @@ _SHAPES = {
     "seat": re.compile(r"[0-9]"),
     "claim": re.compile(r"[ox?]?"),
     "kill": re.compile(r"[0-9]?"),
+    "seats": re.compile(r"[0-9]{0,10}"),
 }
+ANNOTATION_KEYS = ("lineup", "mistakes")
 
 
 def clean_text(text: str, limit: int) -> str:
@@ -182,6 +197,131 @@ def build_records(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | N
     return doc, status
 
 
+# ---------------------------------------------------------------------------
+# lineup / mistakes annotations
+# ---------------------------------------------------------------------------
+
+def _approved(team: str, votes: Sequence[str]) -> str:
+    """贊成的座位（照 1..9、0）：隊內預設贊成、隊外預設反對，標記 '57-' / '6+' 覆寫。"""
+    marks: dict[str, bool] = {}
+    for token in votes:
+        for m in re.finditer(r"([0-9]+)([+\-])", token):
+            for seat in m.group(1):
+                marks[seat] = m.group(2) == "+"
+    return "".join(s for s in dri.SEATS if marks.get(s, s in team))
+
+
+def entry_mistakes(game: Mapping[str, Any]) -> list[list[Any]]:
+    """gc.detect_mistakes on a game entry (game_entry's shape) as [[tag, round, seats], ...]."""
+    proposals: list[tuple[int, str, str | None]] = []
+    missions: list[str] = []
+    for r, rnd in enumerate(game["rounds"], start=1):
+        for a, p in enumerate(rnd["proposals"]):
+            forced = a == 4 and not p["votes"]
+            proposals.append((r, p["team"], None if forced else _approved(p["team"], p["votes"])))
+        missions.append(rnd["mission"])
+    lakes = [(int(l["after"]), l["holder"], l["target"], l["claim"]) for l in game["lakes"]]
+    return [[tag, rnd, seats] for tag, rnd, seats in
+            gc.detect_mistakes(gc.decode_config(game["config"]), proposals, missions, lakes)]
+
+
+def entry_fingerprint(game: Mapping[str, Any]) -> str:
+    """gc.record_fingerprint of a game entry (配置, every proposal's team, every mission)."""
+    lines = []
+    for rnd in game["rounds"]:
+        lines += [p["team"] for p in rnd["proposals"]]
+        lines.append(rnd["mission"])
+    return gc.record_fingerprint(game["config"], "\n".join(lines))
+
+
+def row_fingerprint(g: gc.GameRow) -> str:
+    """gc.record_fingerprint of a games_cache game (its proposals' teams and its missions)."""
+    lines = [str(p[2]) for p in g.voting_proposals] + [cell for cell in g.round_results if cell]
+    return gc.record_fingerprint(g.config, "\n".join(lines))
+
+
+def post_dataset_id(post_id: str) -> str:
+    """games_cache id of the Discord匯入 row imported from this post (流水號 D<post id>)."""
+    return "D" + hashlib.sha256(f"D{post_id}".encode("utf-8")).hexdigest()[:10]
+
+
+def lineup_entry(lineup: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if not lineup:
+        return None
+    return {"pool": int(lineup["pool"]), "s": float(lineup["s"]), "prs": [int(x) for x in lineup["prs"]],
+            "prov": "".join(s for s, p in zip(dri.SEATS, lineup["prov"]) if p)}
+
+
+def annotate_records(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
+                     cfg: Mapping[str, Any] | None = None) -> Counter:
+    """Adds lineup / mistakes to every parsed post of `doc` in place (old annotations dropped first) and
+    returns counts (scored, matched, by-names, per tag). games_doc None or unreadable: no lineups."""
+    counts: Counter = Counter()
+    posts = [p for p in doc["posts"] if isinstance(p, dict)]
+    for p in posts:
+        for key in ANNOTATION_KEYS:
+            p.pop(key, None)
+    games: list[gc.GameRow] = []
+    if games_doc is not None:
+        try:
+            games = gc.decode_games_dataset(games_doc)
+        except Exception:  # an odd file: no lineups rather than a crash (counts say so)
+            games = []
+            counts["games dataset unreadable"] += 1
+    by_id = {str(g.id): i for i, g in enumerate(games)}
+    by_fp: dict[str, int] = {}
+    for i, g in enumerate(games):
+        by_fp.setdefault(row_fingerprint(g), i)
+    keys = {gc.player_identity_key(n): n for g in games for n in g.seat_players.values() if n}
+    matched: dict[int, int] = {}
+    queries: list[tuple[str, list[str | None]]] = []
+    query_of: dict[int, int] = {}
+    for n, p in enumerate(posts):
+        game = p.get("game")
+        if not game:
+            continue
+        found = entry_mistakes(game)
+        if found:
+            p["mistakes"] = found
+            for tag in dict.fromkeys(t for t, _, _ in found):
+                counts[tag] += 1
+        if not games:
+            continue
+        i = by_id.get(post_dataset_id(p["id"]))
+        if i is None:
+            i = by_fp.get(entry_fingerprint(game))
+        if i is not None:
+            matched[n] = i
+        else:
+            names = [keys.get(gc.player_identity_key(x)) or (x or None) for x in game["names"]]
+            query_of[n] = len(queries)
+            queries.append((p["date"], names))
+    if games:
+        per_game, answers = gc.compute_lineups(games, cfg, queries=queries)
+        for n, p in enumerate(posts):
+            lineup = per_game[matched[n]] if n in matched else answers[query_of[n]] if n in query_of else None
+            entry = lineup_entry(lineup)
+            if entry:
+                p["lineup"] = entry
+                counts["scored"] += 1
+                counts["matched" if n in matched else "by names"] += 1
+    return counts
+
+
+def load_games_doc(path: Path) -> dict | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("games"), list) else None
+
+
+def annotation_lines(counts: Counter) -> list[str]:
+    tags = "、".join(f"{t} {counts[t]}" for t in gc.MISTAKE_TAGS if counts[t])
+    return [f"- 陣容強度：{counts['scored']} 篇（對到資料集 {counts['matched']}、用名字算 {counts['by names']}）；"
+            f"失誤標籤：{tags or '無'}"]
+
+
 def _full(pattern: str, value: Any) -> bool:
     return isinstance(value, str) and _SHAPES[pattern].fullmatch(value) is not None
 
@@ -236,6 +376,31 @@ def game_problems(game: Any) -> list[str]:
     return out
 
 
+def annotation_problems(post: Mapping[str, Any]) -> list[str]:
+    """Shape problems of a post's lineup / mistakes (fixed strings)."""
+    out: list[str] = []
+
+    def num(x: Any, lo: float, hi: float) -> bool:
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and lo <= x <= hi
+
+    if "lineup" in post:
+        lu = post["lineup"]
+        if not (isinstance(lu, dict) and list(lu) == ["pool", "s", "prs", "prov"]
+                and isinstance(lu["pool"], int) and num(lu["pool"], 1, 100_000) and num(lu["s"], 0, 100)
+                and round(float(lu["s"]), 1) == lu["s"]
+                and isinstance(lu["prs"], list) and len(lu["prs"]) == len(dri.SEATS)
+                and all(isinstance(x, int) and num(x, 0, 100) for x in lu["prs"])
+                and _full("seats", lu["prov"]) and len(set(lu["prov"])) == len(lu["prov"])):
+            out.append("lineup shape")
+    if "mistakes" in post:
+        ms = post["mistakes"]
+        if not (isinstance(ms, list) and ms and all(
+                isinstance(m, list) and len(m) == 3 and m[0] in gc.MISTAKE_TAGS
+                and isinstance(m[1], int) and num(m[1], 0, 5) and _full("seats", m[2]) for m in ms)):
+            out.append("mistakes shape")
+    return out
+
+
 def records_problems(doc: Any) -> list[str]:
     """Everything that is not the expected shape (fixed strings with counts, never a value). The
     write is refused when this is not empty: the file is public, so only the fields above, in
@@ -262,10 +427,14 @@ def records_problems(doc: Any) -> list[str]:
         if not isinstance(post, dict):
             out["post is not an object"] += 1
             continue
-        keys = set(post)
+        keys = set(post) - set(ANNOTATION_KEYS)
         base = {"id", "title", "tags", "created", "date", "game"}
         if not (keys == base or keys == base | {"problem"} or keys == base | {"problem", "problemLine"}):
             out["post keys"] += 1
+        if any(k in post for k in ANNOTATION_KEYS) and not post.get("game"):
+            out["annotation on an unreadable post"] += 1
+        for problem in annotation_problems(post):
+            out[problem] += 1
         pid = post.get("id")
         if not _full("id", pid) or pid in seen:
             out["post id"] += 1
@@ -389,6 +558,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
         doc, status = build_records(posts, fetch, guild_id=client.forum_guild_id(forum_id), forum_id=forum_id)
     except dri.DiscordError as exc:
         raise gc.FatalError(f"{exc} Nothing was written.", dri.EXIT_DISCORD, "Discord API error") from None
+    annotated = annotate_records(doc, load_games_doc(Path(args.games)))
 
     problems = records_problems(doc)
     if problems:
@@ -411,7 +581,32 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
         write_atomically(text, out)
         before = len(previous["posts"]) if previous and isinstance(previous.get("posts"), list) else 0
         result = f"已寫入（{before} → {doc['counts']['posts']} 篇）"
-    lines = summary_lines(status, doc, result)
+    lines = summary_lines(status, doc, result) + annotation_lines(annotated)
+    print("\n".join(lines))
+    gc._append_step_summary(lines)
+    return 0
+
+
+def run_annotate_only(args: argparse.Namespace) -> int:
+    """--annotate-only: recompute lineup / mistakes of the existing file (no Discord read)."""
+    out = Path(args.output)
+    doc = load_previous(out)
+    if doc is not None and doc.get("format") == LEGACY_RECORDS_FORMAT:
+        doc["format"] = RECORDS_FORMAT
+    if doc is None or records_problems(doc):
+        raise gc.FatalError(f"{out.name} is missing or not in the expected shape; nothing was written.",
+                            gc.EXIT_DATA, "Records list not annotated")
+    annotated = annotate_records(doc, load_games_doc(Path(args.games)))
+    problems = records_problems(doc)
+    if problems:
+        raise gc.FatalError("The annotated records list failed its shape check (" + "; ".join(problems[:10])
+                            + "); kept the existing file.", gc.EXIT_DATA, "Records list not annotated")
+    text = dump_records(doc)
+    unchanged = out.read_text(encoding="utf-8") == text
+    if not unchanged:
+        write_atomically(text, out)
+    lines = ["### 網站「牌譜紀錄」清單（只更新陣容強度與失誤標籤）",
+             f"- 結果：{'沒有變動' if unchanged else '已寫入'}（{doc['counts']['posts']} 篇）", *annotation_lines(annotated)]
     print("\n".join(lines))
     gc._append_step_summary(lines)
     return 0
@@ -423,13 +618,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help=f"where to write the list (default {OUTPUT_PATH.name} next to this script)")
     parser.add_argument("--allow-shrink", action="store_true",
                         help="write even if the list has many fewer posts than the existing file")
+    parser.add_argument("--games", default=str(GAMES_PATH), metavar="PATH",
+                        help=f"the game-level dataset for the lineup annotation (default {GAMES_PATH.name} next to this script)")
+    parser.add_argument("--annotate-only", action="store_true",
+                        help="only recompute lineup / mistakes of the existing --output file (no Discord read)")
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        return run(args)
+        return run_annotate_only(args) if args.annotate_only else run(args)
     except gc.FatalError as exc:
         gc.emit_error(str(exc), exc.title)
         return exc.exit_code
