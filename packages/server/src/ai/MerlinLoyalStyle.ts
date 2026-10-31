@@ -41,7 +41,7 @@ export function merlinLoyalStyleTeam(
   if (pool.length < size - 1) return action;
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true };
+  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true };
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
   const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
@@ -94,13 +94,13 @@ export function percivalLoyalStyleTeam(
   const me = obs.myPlayerId;
   const others = obs.allPlayerIds.filter((id) => id !== me);
   const size = action.teamIds.length;
-  const opts = { strictMerlin: tuning.percivalThumbLogic === true, thumbRoles: tuning.bayesThumbRoles === true, botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true };
+  const opts = { strictMerlin: tuning.percivalThumbLogic === true, thumbRoles: tuning.bayesThumbRoles === true, botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true };
   const publicView = { ...obs, myRole: 'loyal', knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(others, size - 1)) {
     const team = [me, ...fill];
     const priv = bayesTeamClean(obs, team, opts) ?? 0;
-    const pub = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true }) ?? 0;
+    const pub = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true }) ?? 0;
     scored.push({ team, score: Math.log(Math.max(priv, 1e-12)) + 0.5 * Math.log(Math.max(pub, 1e-12)) });
   }
   scored.sort((x, y) => y.score - x.score);
@@ -134,7 +134,7 @@ export function merlinVoteCoverApprove(tuning: Readonly<AgentTuning>, obs: Playe
   if (team.length === 0 || !team.some((id) => seen.has(id))) return false;
   if (obs.questResults.filter((r) => r === 'fail').length >= 2) return false;
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const p = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true }) ?? 0;
+  const p = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true }) ?? 0;
   if (p < Math.max(tuning.goodCleanVote || 0.25, 0.25)) return false;
   let h = 0x811c9dc5;
   for (const c of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|${team.join(',')}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;

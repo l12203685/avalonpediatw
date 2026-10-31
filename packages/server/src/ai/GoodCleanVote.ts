@@ -35,9 +35,12 @@ export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerOb
  * 或藍方已兩藍＝這隊過了就三藍）→ 白；否則 → 黑。回傳要投的票；不適用時 null。
  */
 export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean | null {
-  const tau = tuning.goodTailVote ?? 0;
+  // 第 15 回合（第 1B 節拆角色）：派西可以不用這條（`goodTailVoteLoyalOnly`），或用自己的門檻（`goodTailVotePercival`）。
+  const percival = obs.myRole === 'percival';
+  if (percival && tuning.goodTailVoteLoyalOnly) return null;
+  const tau = percival && (tuning.goodTailVotePercival ?? 0) > 0 && (tuning.goodTailVote ?? 0) > 0 ? tuning.goodTailVotePercival : tuning.goodTailVote ?? 0;
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return null;
-  if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return null;
+  if (obs.myRole !== 'loyal' && !percival) return null;
   if ((obs.currentRound ?? 1) < 3 || (obs.failCount ?? 0) >= 4) return null;
   const team = obs.proposedTeam ?? [];
   if (team.length === 0 || team.includes(obs.myPlayerId)) return null;

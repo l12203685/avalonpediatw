@@ -32,8 +32,14 @@ function vote(o: PlayerObservation, tuning: Partial<AgentTuning>): boolean {
 
 describe('merlinNormalVote', () => {
   it('on the team (正常票內白, Edward 10/30): q = 1 approves as a loyal would, even with a seen red', () => {
-    expect(vote(obs(), { merlinNormalVote: 0 })).toBe(false);
-    expect(vote(obs(), { merlinNormalVote: 1 })).toBe(true);
+    // The seen red P4 hid on R2 (the same four succeeded), so the public view reads this team clean. (Round 15: with the bot
+    // table refit after the reds started hiding on R1, the two R1–R2 successes without P4 no longer clear P2 / P3 enough.)
+    const o = obs({ questHistory: [
+      { round: 1, team: ['P1', 'P2', 'P3'], result: 'success', failCount: 0 },
+      { round: 2, team: ['P1', 'P2', 'P3', 'P4'], result: 'success', failCount: 0 },
+    ] } as Partial<PlayerObservation>);
+    expect(vote(o, { merlinNormalVote: 0 })).toBe(false);
+    expect(vote(o, { merlinNormalVote: 1 })).toBe(true);
   });
   it('off the team (外白): a team that must fail in Merlin\'s view stays rejected even at q = 1 (INV-V1)', () => {
     const o = obs({ proposedTeam: ['P2', 'P3', 'P5', 'P4'] });
