@@ -1541,6 +1541,7 @@
         "missionFail": "失敗",
         "missionFails": "失敗 {{min}}～{{max}} 張",
         "gameState": "局勢：{{values}}",
+        "missionSeq": "任務順序以 {{prefix}} 開頭",
         "firstTeam": "1-1 首隊{{detail}}",
         "lakeCount": "{{values}} 個湖",
         "lake": "第 {{index}} 湖{{detail}}",

@@ -1541,6 +1541,7 @@
         "missionFail": " failed",
         "missionFails": " with {{min}}–{{max}} fails",
         "gameState": "Game state: {{values}}",
+        "missionSeq": "Missions start with {{prefix}}",
         "firstTeam": "First team{{detail}}",
         "lakeCount": "{{values}} lakes",
         "lake": "Lake {{index}}{{detail}}",

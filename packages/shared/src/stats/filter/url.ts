@@ -23,6 +23,16 @@ interface KindSchema {
 }
 
 const SIDE = { enum: ['red', 'blue'] } as const;
+/** 任務順序的開頭：藍／紅組成、1–5 個字（62 種）。 */
+const MISSION_SEQ_PREFIXES: readonly string[] = ((): string[] => {
+  const out: string[] = [];
+  let level = [''];
+  for (let i = 0; i < 5; i += 1) {
+    level = level.flatMap((p) => [`${p}藍`, `${p}紅`]);
+    out.push(...level);
+  }
+  return out;
+})();
 const SCHEMA: Record<string, KindSchema> = {
   category: { required: { in: { enums: ['線瓦', '面瓦', '娛樂', '未分類', '其他'] } } },
   source: { required: { in: { enums: ['sheet', 'discord'] } } },
@@ -38,6 +48,7 @@ const SCHEMA: Record<string, KindSchema> = {
   missionCount: { required: { in: 'ints' } },
   mission: { required: { round: { range: [1, 5] } }, optional: { result: { enum: ['pass', 'fail'] }, minFails: 'int', maxFails: 'int' } },
   gameState: { required: { in: 'names' } },
+  missionSeq: { required: { prefix: { enum: MISSION_SEQ_PREFIXES } } },
   firstTeam: { optional: { redCount: 'ints', hasMerlin: 'bool', hasPercival: 'bool' } },
   lakeCount: { required: { in: 'ints' } },
   lake: {
