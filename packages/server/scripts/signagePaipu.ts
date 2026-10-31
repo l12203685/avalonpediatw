@@ -23,6 +23,12 @@ const ROLE_ORDER = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西�
 const d = (seat: number): string => (seat === 10 ? '0' : String(seat));
 const digits = (seats: Iterable<number>): string => [...seats].sort((a, b) => (a === 10 ? 10 : a) - (b === 10 ? 10 : b)).map(d).join('');
 
+/** 六碼配置：刺娜德奧派梅的座位（座位 10 寫成 0）。 */
+export function paipuConfig(game: RecordedGame): string {
+  const users = game.end?.users ?? [];
+  return ROLE_ORDER.map((name) => { const u = users.find((x) => x.role === name); return u ? d(u.set) : '?'; }).join('');
+}
+
 /** 一局 → 牌譜文字（Discord 訊息；未完成的局回傳 null）。 */
 export function gameToPaipu(game: RecordedGame): string | null {
   const end = game.end;
@@ -59,14 +65,13 @@ export function gameToPaipu(game: RecordedGame): string | null {
       }
     }
   }
-  const roleAt = (name: string): string => { const u = users.find((x) => x.role === name); return u ? d(u.set) : '?'; };
   const logs = (end.logs ?? []).map((l) => String(l.msg ?? ''));
   // 刺殺對象：刺中＝「刺客背刺 N家 梅林」；刺錯＝「N家擋刀」；被刺的人在局末畫面標 dead。
   const stabbed = users.find((u) => (u as { dead?: boolean }).dead)?.set
     ?? Number(logs.map((x) => /背刺\s*(\d+)\s*家|(\d+)\s*家擋刀/.exec(x)).find(Boolean)?.slice(1).find(Boolean) ?? NaN);
   // Edward 10/31：牌譜各行 → 刺客刺殺:X（三紅寫 x，照頻道格式）→ 六碼配置（刺娜德奧派梅）→ 依座位「1.暱稱」每人一行
   lines.push(`刺客刺殺:${Number.isFinite(stabbed) ? d(stabbed) : 'x'}`);
-  lines.push(ROLE_ORDER.map(roleAt).join(''));
+  lines.push(paipuConfig(game));
   for (const u of users) lines.push(`${d(u.set)}.${u.name}`);
   return lines.join('\n');
 }
@@ -92,13 +97,13 @@ const pad2 = (n: number): string => String(n).padStart(2, '0');
 const twDay = (iso?: string): string => { const t = twTime(iso); return t ? `${t.getUTCFullYear()}${pad2(t.getUTCMonth() + 1)}${pad2(t.getUTCDate())}` : ''; };
 
 /**
- * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_HHMM_第x局」（台灣時間、開局時刻；Edward 10/31）。
+ * 牌譜頻道是論壇頻道（要帶討論串標題）：一局一個討論串，標題「yyyymmdd_HHMM_第x局_刺娜德奧派梅」（台灣時間、開局時刻＋六碼配置；Edward 10/31）。
  * 配置寫在牌譜裡、結果用論壇標籤（同過去的貼文，內文不另寫結果）。第幾局＝當天第幾個打完的真人 10 人局（見 dayIndex）。
  */
 export function paipuThreadName(game: RecordedGame, index?: number): string {
   const t = twTime(game.startedAt);
   const hhmm = t ? `${pad2(t.getUTCHours())}${pad2(t.getUTCMinutes())}` : '';
-  return [twDay(game.startedAt), hhmm, index ? `第${index}局` : ''].filter(Boolean).join('_').slice(0, 100);
+  return [twDay(game.startedAt), hhmm, index ? `第${index}局` : '', game.end ? paipuConfig(game) : ''].filter(Boolean).join('_').slice(0, 100);
 }
 
 /**
