@@ -21,6 +21,9 @@ import {
   voteMarks,
   winnerOf,
   EMPTY_RECORDS_FILTER,
+  deriveLeaders,
+  lakeLine,
+  proposalLine,
   RECORDS_PREF_KEYS,
   isLegacyRecordsHash,
   readRecordsPrefs,
@@ -201,5 +204,38 @@ describe('web records: old #paipu links', () => {
     expect(parseStatsHash('#paipu')).toEqual({ kind: 'records', id: null });
     expect(isLegacyRecordsHash('#paipu=1432000000000000001')).toBe(true);
     expect(isLegacyRecordsHash('#records=1432000000000000001')).toBe(false);
+  });
+});
+
+describe('web records: 文字紀錄 column and leaders', () => {
+  it('each row\'s DC text: team then marks, and the lake line', () => {
+    expect(proposalLine({ team: '2468', votes: ['48-5+'] }, 0)).toBe('2468 48- 5+');
+    expect(proposalLine({ team: '2579', votes: ['1+', '7-'] }, 1)).toBe('2579 7- 1+'); // 內黑在前
+    expect(proposalLine({ team: '1345', votes: ['26780+'] }, 0)).toBe('1345 26780+');
+    expect(proposalLine({ team: '14670', votes: ['358+', '167-'] }, 2)).toBe('14670 167- 358+');
+    expect(proposalLine({ team: '15678', votes: ['5-', '39+'] }, 0)).toBe('15678 5- 39+');
+    expect(proposalLine({ team: '147', votes: [] }, 0)).toBe('147');
+    expect(proposalLine({ team: '568', votes: [] }, 4)).toBe('568'); // 強制局只有隊伍
+    expect(lakeLine({ after: 2, holder: '0', target: '3', claim: 'x' })).toBe('0>3 x');
+    expect(lakeLine({ after: 2, holder: '0', target: '3', claim: '' })).toBe('0>3');
+  });
+
+  it('derives the leaders when the rotation (1→…→9→0→1, across rounds) clearly fits', () => {
+    // leaders 8,9,0,1 | 2,3,4 …: every team holds its leader
+    const game: RecordGame = {
+      ...GAME,
+      rounds: [
+        { proposals: [{ team: '378', votes: [] }, { team: '139', votes: [] }, { team: '240', votes: [] }, { team: '146', votes: [] }], mission: 'ooo' },
+        { proposals: [{ team: '1256', votes: [] }, { team: '3567', votes: [] }, { team: '1346', votes: [] }], mission: 'ooox' },
+        { proposals: [{ team: '1568', votes: [] }, { team: '2569', votes: [] }], mission: 'oooo' },
+        { proposals: [{ team: '12470', votes: [] }], mission: 'oooxx' },
+      ],
+    };
+    expect(deriveLeaders(game)).toEqual([['8', '9', '0', '1'], ['2', '3', '4'], ['5', '6'], ['7']]);
+  });
+
+  it('gives up (null) when no starting seat clearly fits', () => {
+    expect(deriveLeaders({ ...GAME, rounds: [{ proposals: [{ team: '123', votes: [] }, { team: '123', votes: [] }], mission: 'ooo' }] })).toBeNull();
+    expect(deriveLeaders({ ...GAME, rounds: [] })).toBeNull();
   });
 });
