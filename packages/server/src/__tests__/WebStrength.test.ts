@@ -25,7 +25,7 @@ describe('組成比較：分組與格式', () => {
     expect(buildGrouping('count', 65, 7, 30)).toEqual({ kind: 'count', pr: 65, count: 7 });
     expect(buildGrouping('weakLoyal', 65, 7, 25)).toEqual({ kind: 'weakLoyal', pr: 25 });
     expect(buildGrouping('gap', 65, 7, 25)).toEqual({ kind: 'gap' });
-    expect(GROUPING_OPTIONS.map((o) => o.kind)).toEqual(['tier', 'count', 'merlin', 'percival', 'merlinVsAssassin', 'gap', 'weakRed', 'weakLoyal']);
+    expect(GROUPING_OPTIONS.map((o) => o.kind)).toEqual(['tier', 'count', 'merlin', 'percival', 'merlinVsAssassin', 'gap', 'weakRed', 'weakLoyal', 'tertile']);
   });
 
   it('rates as whole percents (one decimal under 10), averages one decimal, deltas vs 全部', () => {

@@ -15,6 +15,7 @@ export * from './dataset';
 export * from './lineup';
 export * from './mistakes';
 export * from './strength';
+export * from './discovery';
 export * from './theory';
 export * from './players';
 export * from './overview';
