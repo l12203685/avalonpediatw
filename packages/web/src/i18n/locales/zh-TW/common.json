@@ -731,6 +731,7 @@
         "position": "位置",
         "roles": "角色與默契",
         "strength": "陣容強度",
+        "stateTree": "局勢樹",
         "players": "玩家雷達"
       },
       "votesNote": "投票目前只有「改隊後投票翻轉率」一項研究；其他投票相關指標（同意率、否決鏈、跟票）尚未整理進快取，之後補上會放在這一頁。",
@@ -1541,6 +1542,7 @@
         "missionFail": "失敗",
         "missionFails": "失敗 {{min}}～{{max}} 張",
         "gameState": "局勢：{{values}}",
+        "missionSeq": "任務順序以 {{prefix}} 開頭",
         "firstTeam": "1-1 首隊{{detail}}",
         "lakeCount": "{{values}} 個湖",
         "lake": "第 {{index}} 湖{{detail}}",

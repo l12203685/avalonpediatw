@@ -2,12 +2,12 @@
  * 篩選重算的 Worker：全部區塊重算約 0.3 秒 (Node 實測；手機更久)，放在背景不卡畫面。
  * 訊息：{ id, type: 'vocab' | 'compute', serverUrl, filter? } → { id, ok, value } / { id, ok: false, status, error }。
  */
-import { computeDiscovery, computeFiltered, computeStrength, filterVocab, GamesUnavailableError } from './statsCompute';
+import { computeDiscovery, computeFiltered, computeStateGames, computeStrength, filterVocab, GamesUnavailableError } from './statsCompute';
 import type { GameFilter, StrengthGrouping } from '@avalon/shared/stats';
 
 interface StatsRequest {
   id: number;
-  type: 'vocab' | 'compute' | 'strength' | 'discovery';
+  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree';
   serverUrl: string;
   filter?: GameFilter;
   grouping?: StrengthGrouping;
@@ -28,6 +28,8 @@ ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
         ? await computeStrength(serverUrl, filter ?? null, grouping ?? { kind: 'tier' })
         : type === 'discovery'
           ? await computeDiscovery(serverUrl, filter ?? null)
+        : type === 'stateTree'
+          ? await computeStateGames(serverUrl, filter ?? null)
           : await computeFiltered(serverUrl, filter as GameFilter);
     ctx.postMessage({ id, ok: true, value });
   } catch (err) {

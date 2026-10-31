@@ -18,6 +18,7 @@ import {
   type StrengthReport,
   type DiscoveryResult,
 } from '@avalon/shared/stats';
+import { toStateGames, type StateGamesResult } from '../components/analysis/stateTree/stateTree';
 
 /** /api/analysis/games 的 context (伺服器 services/gamesDataset.ts GamesContext 的子集)。 */
 export interface GamesContext {
@@ -128,6 +129,14 @@ export async function computeDiscovery(serverUrl: string, raw: GameFilter | null
   discoveries.set(key, result);
   while (discoveries.size > 4) discoveries.delete(discoveries.keys().next().value as string);
   return result;
+}
+
+/** 數據分析「局勢樹」：篩選後的局縮成樹要的欄位（components/analysis/stateTree/stateTree.ts）。 */
+export async function computeStateGames(serverUrl: string, raw: GameFilter | null): Promise<StateGamesResult> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+  return toStateGames(games);
 }
 
 /** 篩選後的全部區塊。外來的篩選先過 sanitizeFilter。 */

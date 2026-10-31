@@ -60,6 +60,8 @@ export function useClauseLabel(): (clause: Clause) => string {
         }
         case 'gameState':
           return t(`${k}.gameState`, { values: join(clause.in) });
+        case 'missionSeq':
+          return t(`${k}.missionSeq`, { prefix: clause.prefix });
         case 'firstTeam': {
           const parts: string[] = [];
           if (clause.redCount) parts.push(`${join(clause.redCount)}${t('analytics.filter.sideValues.red')}`);

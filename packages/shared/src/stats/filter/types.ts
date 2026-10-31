@@ -47,6 +47,8 @@ export interface MissionClause extends Base {
 }
 /** 局勢（例：紅紅藍藍藍）。 */
 export interface GameStateClause extends Base { kind: 'gameState'; in: string[] }
+/** 任務順序以 prefix 開頭（例：藍紅；10 人標準隊伍人數的局，結果依出牌算，見 predicates missionSequence）。 */
+export interface MissionSeqClause extends Base { kind: 'missionSeq'; prefix: string }
 /** 1-1 首隊：紅方人數、有沒有梅林 / 派西。 */
 export interface FirstTeamClause extends Base {
   kind: 'firstTeam'; redCount?: number[]; hasMerlin?: boolean; hasPercival?: boolean;
@@ -135,7 +137,7 @@ export interface ExcludePlayersClause {
 export type GameClause =
   | CategoryClause | SourceClause | DateClause | WeekdayClause | SessionIndexClause | SeasonClause | VenueClause
   | NoteFlagClause | NamedSeatsClause | OutcomeClause | FinalWinnerClause | MissionCountClause | MissionClause
-  | GameStateClause | FirstTeamClause | LakeCountClause | LakeClause | AssassinationClause | RoleSeatClause
+  | GameStateClause | MissionSeqClause | FirstTeamClause | LakeCountClause | LakeClause | AssassinationClause | RoleSeatClause
   | TrioOrderClause | CaptainClause | GameIdClause | LineupClause | WithPlayerClause | WithAnyPlayerClause | WithPlayersClause;
 
 export type Clause = GameClause | ExcludePlayersClause;
@@ -182,7 +184,7 @@ export interface GameFilter {
 
 export const GAME_CLAUSE_KINDS = [
   'category', 'source', 'date', 'weekday', 'sessionIndex', 'season', 'venue', 'noteFlag', 'namedSeats', 'outcome',
-  'finalWinner', 'missionCount', 'mission', 'gameState', 'firstTeam', 'lakeCount', 'lake', 'assassination',
+  'finalWinner', 'missionCount', 'mission', 'gameState', 'missionSeq', 'firstTeam', 'lakeCount', 'lake', 'assassination',
   'roleSeat', 'trioOrder', 'captain', 'gameId', 'lineup', 'withPlayer', 'withAnyPlayer', 'withPlayers',
 ] as const;
 

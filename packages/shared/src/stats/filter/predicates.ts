@@ -56,6 +56,30 @@ export function trioOrder(g: Pick<Game, 'seatRoles'>): string | null {
   return [...seatOf.entries()].sort((a, b) => a[1] - b[1]).map(([role]) => TRIO_SHORT[role]).join('');
 }
 
+/** 10 人局各任務的出牌張數（第 4 個任務要兩張失敗才算失敗）。 */
+export const TEN_PLAYER_TEAM_SIZES: readonly number[] = [3, 4, 4, 5, 5];
+
+/**
+ * 任務順序（例：藍紅藍藍）：依出牌（missions）判斷每個任務的紅藍，第 4 個任務兩張失敗才算紅。
+ * 只認 10 人標準隊伍人數（3、4、4、5、5）而且中間沒有空掉的任務；其他的局回 null。
+ * 一方拿到 3 個任務之後的格子不看（局已分出勝負）。
+ */
+export function missionSequence(g: Pick<Game, 'missions'>): string | null {
+  let seq = '';
+  let blue = 0;
+  let red = 0;
+  for (let i = 0; i < g.missions.length; i += 1) {
+    if (blue >= 3 || red >= 3) break;
+    const m = g.missions[i];
+    if (m.round !== i + 1 || m.total !== TEN_PLAYER_TEAM_SIZES[i]) return null;
+    const isRed = m.fails >= (i === 3 ? 2 : 1);
+    seq += isRed ? '紅' : '藍';
+    if (isRed) red += 1;
+    else blue += 1;
+  }
+  return seq || null;
+}
+
 function inRange(x: number, min?: number, max?: number): boolean {
   return (min === undefined || x >= min) && (max === undefined || x <= max);
 }
@@ -116,6 +140,8 @@ function rawPredicate(clause: GameClause): GamePredicate {
       };
     case 'gameState':
       return (g) => Boolean(g.gameState) && clause.in.includes(g.gameState);
+    case 'missionSeq':
+      return (g) => (missionSequence(g) ?? '').startsWith(clause.prefix);
     case 'firstTeam':
       return (g) => g.r11Seats.length > 0
         && (clause.redCount === undefined || clause.redCount.includes(g.r11RedCount))

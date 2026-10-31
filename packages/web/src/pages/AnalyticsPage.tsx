@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import {
-  BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar, Gauge,
+  BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar, Gauge, GitBranch,
 } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
@@ -19,6 +19,7 @@ import PlayersTab from '../components/analysis/tabs/PlayersTab';
 import StrengthTab from '../components/analysis/tabs/StrengthTab';
 import { useDiscoveryNav } from '../components/analysis/discovery/discoveryNav';
 import DiscoveryBlock from '../components/analysis/discovery/DiscoveryBlock';
+import StateTreeTab from '../components/analysis/tabs/StateTreeTab';
 import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
 import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
 import StatsFilterBar from '../components/analysis/filter/StatsFilterBar';
@@ -67,7 +68,7 @@ import { useFilterHashSync } from '../stats/sharedFilter';
  */
 type AnalysisTab =
   | 'overview' | 'teams' | 'votes' | 'missions'
-  | 'lake' | 'assassination' | 'position' | 'roles' | 'strength' | 'players';
+  | 'lake' | 'assassination' | 'position' | 'roles' | 'strength' | 'stateTree' | 'players';
 
 interface AnalysisTabDef { id: AnalysisTab; labelKey: string; icon: typeof BarChart3 }
 
@@ -83,6 +84,8 @@ const ANALYSIS_TABS: AnalysisTabDef[] = [
   { id: 'roles',         labelKey: 'analytics.analysis.tabs.roles',         icon: Users },
   // 2026-10-31 Edward：陣容強度（走勢、季 × 強度、分層結果、不同組成的過程比較）
   { id: 'strength',      labelKey: 'analytics.analysis.tabs.strength',      icon: Gauge },
+  // 2026-10-31 Edward：局勢樹（任務順序 × 湖的宣告 → 結果；components/analysis/stateTree/）
+  { id: 'stateTree',     labelKey: 'analytics.analysis.tabs.stateTree',     icon: GitBranch },
   { id: 'players',       labelKey: 'analytics.analysis.tabs.players',       icon: Radar },
 ];
 
@@ -193,6 +196,7 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
           {tab === 'position'      && <PositionTab />}
           {tab === 'roles'         && <RolesTab />}
           {tab === 'strength'      && <StrengthTab />}
+          {tab === 'stateTree'     && <StateTreeTab />}
           {tab === 'players'       && <PlayersTab focus={focus} />}
           {/* 2026-10-31 Edward：每個分析分頁都有「自動發現」（跟這頁指標有關的明顯差異；玩家雷達是個人頁，不放） */}
           {tab !== 'players' && <DiscoveryBlock page={tab} />}

@@ -4,6 +4,7 @@
  */
 import type { DiscoveryResult, GameFilter, StatsResult, StrengthGrouping, StrengthReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
+import type { StateGamesResult } from '../components/analysis/stateTree/stateTree';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 const TIMEOUT_MS = 60_000;
@@ -66,7 +67,7 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery';
+type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree';
 
 async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
   const mod = await import('./statsCompute');
@@ -77,6 +78,8 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
         ? await mod.computeStrength(SERVER_URL, filter ?? null, grouping ?? { kind: 'tier' })
         : type === 'discovery'
           ? await mod.computeDiscovery(SERVER_URL, filter ?? null)
+        : type === 'stateTree'
+          ? await mod.computeStateGames(SERVER_URL, filter ?? null)
           : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
   } catch (err) {
     const status = err instanceof mod.GamesUnavailableError ? err.status : 0;
@@ -166,11 +169,27 @@ export function discoveryResult(filter: GameFilter | null, filterKey: string): P
   return p;
 }
 
+const stateTreeResults = new Map<string, Promise<StateGamesResult>>();
+
+/** 數據分析「局勢樹」：目前篩選（沒有 = 全部局）下樹要的局。失敗不快取。 */
+export function stateTreeGames(filter: GameFilter | null, filterKey: string): Promise<StateGamesResult> {
+  const hit = stateTreeResults.get(filterKey);
+  if (hit) return hit;
+  const p = call<StateGamesResult>('stateTree', filter);
+  stateTreeResults.set(filterKey, p);
+  p.catch(() => {
+    if (stateTreeResults.get(filterKey) === p) stateTreeResults.delete(filterKey);
+  });
+  while (stateTreeResults.size > KEEP_RESULTS) stateTreeResults.delete(stateTreeResults.keys().next().value as string);
+  return p;
+}
+
 /** 測試／重試用：清掉 Worker 錯誤狀態以外的快取。 */
 export function resetFilteredStats(): void {
   results.clear();
   strengthResults.clear();
   discoveryResults.clear();
+  stateTreeResults.clear();
   vocab = null;
   failAll(new FilterUnavailableError(0, 'reset'));
 }
