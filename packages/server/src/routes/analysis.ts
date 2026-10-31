@@ -31,6 +31,8 @@ import {
   playerOutcomeBlocks,
 } from '../services/sheetsAnalysis';
 import { invalidateGamesPayload, loadGamesPayload, pickEncoding } from '../services/gamesDataset';
+import { invalidatePaipuPayload, loadPaipuPayload } from '../services/paipuList';
+import { REPLIES_NOT_CONFIGURED, repliesService } from '../services/paipuReplies';
 import fs from 'fs';
 import path from 'path';
 
@@ -71,6 +73,27 @@ function nameParam(req: Request): string {
   } catch {
     return raw;
   }
+}
+
+/** 預先壓縮好的 JSON 回應：強 ETag、If-None-Match → 304、依 Accept-Encoding 回 br / gzip / 原文。 */
+function sendPrecompressed(
+  req: Request,
+  res: Response,
+  payload: { identity: Buffer; gzip: Buffer; br: Buffer; etag: string },
+): Response | void {
+  res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+  res.setHeader('ETag', payload.etag);
+  res.setHeader('Vary', 'Accept-Encoding');
+  const match = req.headers['if-none-match'];
+  if (typeof match === 'string' && match.split(',').some((tag) => tag.trim().replace(/^W\//, '') === payload.etag)) {
+    return res.status(304).end();
+  }
+  const encoding = pickEncoding(req.headers['accept-encoding']);
+  const body = encoding === 'br' ? payload.br : encoding === 'gzip' ? payload.gzip : payload.identity;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  if (encoding !== 'identity') res.setHeader('Content-Encoding', encoding);
+  res.setHeader('Content-Length', String(body.length));
+  return res.status(200).end(body);
 }
 
 function sheetsGuard(res: Response): boolean {
@@ -421,24 +444,57 @@ router.get('/games', limiter, (req: Request, res: Response) => {
   try {
     const load = loadGamesPayload();
     if (!load.ok) return fail(res, load.status, load.error);
-    const { payload } = load;
-    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
-    res.setHeader('ETag', payload.etag);
-    res.setHeader('Vary', 'Accept-Encoding');
-    const match = req.headers['if-none-match'];
-    if (typeof match === 'string' && match.split(',').some((tag) => tag.trim().replace(/^W\//, '') === payload.etag)) {
-      return res.status(304).end();
-    }
-    const encoding = pickEncoding(req.headers['accept-encoding']);
-    const body = encoding === 'br' ? payload.br : encoding === 'gzip' ? payload.gzip : payload.identity;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    if (encoding !== 'identity') res.setHeader('Content-Encoding', encoding);
-    res.setHeader('Content-Length', String(body.length));
-    return res.status(200).end(body);
+    return sendPrecompressed(req, res, load.payload);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/games]', msg);
     return fail(res, 500, 'Failed to load the games dataset');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/paipu
+// 網站「牌譜紀錄」頁籤（Edward 2026-10-30）：Discord 論壇 #牌譜紀錄與覆盤 的貼文清單（每篇 = 一局：標題、
+// 標籤、發文時間、解析後的牌譜），每天由 refresh-analysis-cache.yml 寫進 paipu_cache.json。不需要試算表金鑰，
+// 執行期也不連 Discord。檔案還沒產生 → 503 'Paipu list not yet generated'。預先壓縮、強 ETag、304。
+// ---------------------------------------------------------------------------
+router.get('/paipu', limiter, (req: Request, res: Response) => {
+  try {
+    const load = loadPaipuPayload();
+    if (!load.ok) return fail(res, load.status, load.error);
+    return sendPrecompressed(req, res, load.payload);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/paipu]', msg);
+    return fail(res, 500, 'Failed to load the paipu list');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/paipu/:id/replies
+// 那篇貼文討論串裡的回覆（Edward 2026-10-30：「DC 討論串的回覆可以顯示」）。只讀 paipu_cache.json 清單裡的貼文；
+// 執行期用 DISCORD_BOT_TOKEN 讀、快取在記憶體（不進 repo），機器人訊息不顯示。見 services/paipuReplies.ts。
+// ---------------------------------------------------------------------------
+router.get('/paipu/:id/replies', limiter, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const load = loadPaipuPayload();
+    if (!load.ok) return fail(res, load.status, load.error);
+    if (!/^\d{15,22}$/.test(id) || !load.payload.ids.has(id)) return fail(res, 404, 'Post not found');
+    const service = repliesService(load.payload.guildId);
+    if (!service) return fail(res, 503, REPLIES_NOT_CONFIGURED);
+    const replies = await service.load(id);
+    if (!replies.ok) return fail(res, replies.status, replies.error);
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    return ok(res, {
+      replies: replies.replies,
+      fetchedAt: new Date(replies.fetchedAt).toISOString(),
+      stale: replies.stale,
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/paipu replies]', msg);
+    return fail(res, 500, 'Failed to load the thread replies');
   }
 });
 
@@ -486,6 +542,7 @@ router.post('/cache/invalidate', limiter, async (req: Request, res: Response) =>
   }
   invalidateCache();
   invalidateGamesPayload();
+  invalidatePaipuPayload();
   return ok(res, { message: 'Cache invalidated' });
 });
 
