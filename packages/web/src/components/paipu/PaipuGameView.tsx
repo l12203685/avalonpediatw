@@ -24,8 +24,8 @@ import {
 } from '../../utils/paipu';
 
 /**
- * 牌譜紀錄的一局：結果、座位與角色、投票矩陣（同對局畫面 LiveScoresheet 的畫法：白格贊成、黑格反對、盾牌 = 上隊、
- * 黃列任務、青列湖）、刺殺、DC 格式的文字，以及討論串的回覆（伺服器即時讀 DC，機器人訊息不顯示）。
+ * 牌譜紀錄的一局：結果、投票矩陣（同對局畫面 LiveScoresheet 的畫法：白格贊成、黑格反對、盾牌 = 上隊、
+ * 黃列任務、青列湖）、刺殺、DC 格式的文字、座位與角色（放最下方），以及討論串的回覆（伺服器即時讀 DC，機器人訊息不顯示）。
  */
 
 export const OUTCOME_STYLE: Readonly<Record<PaipuOutcome, string>> = {
@@ -208,8 +208,8 @@ function Scoresheet({ game }: { game: PaipuGame }): JSX.Element {
         <tr key={`l-${r}`} className="border-b border-cyan-900/50 bg-cyan-800/25">
           <td className="bg-cyan-900/60 px-0 py-1 text-center text-[9px] font-bold text-cyan-200 sm:text-[11px]">湖</td>
           <td colSpan={PAIPU_SEATS.length} className="px-1 py-1 text-center text-[10px] text-cyan-50 sm:text-xs">
-            <span className="font-bold">{lake.holder}</span> 號 {seatName(game, lake.holder)}（<RoleBadge game={game} seat={lake.holder} compact />）
-            驗 <span className="font-bold">{lake.target}</span> 號 {seatName(game, lake.target)}（<RoleBadge game={game} seat={lake.target} compact />）→{' '}
+            <span className="font-bold">{lake.holder}</span> 號 {seatName(game, lake.holder)}{' '}
+            驗 <span className="font-bold">{lake.target}</span> 號 {seatName(game, lake.target)} →{' '}
             <span className={lake.claim === 'o' ? 'font-bold text-blue-200' : lake.claim === 'x' ? 'font-bold text-red-300' : 'text-zinc-300'}>
               {lakeClaimLabel(lake.claim)}
             </span>
@@ -236,7 +236,6 @@ function Scoresheet({ game }: { game: PaipuGame }): JSX.Element {
             {PAIPU_SEATS.map((seat) => (
               <th key={seat} scope="col" title={seatName(game, seat)} className="bg-zinc-950 px-0 py-1 text-center font-semibold text-zinc-300">
                 <div>{seat}</div>
-                <div className="text-[9px] sm:text-[10px]"><RoleBadge game={game} seat={seat} compact /></div>
               </th>
             ))}
             <th scope="col" className="bg-zinc-950 px-1 py-1 text-left font-semibold text-zinc-500">隊伍</th>
@@ -398,10 +397,6 @@ export default function PaipuGameView({ post, guildId, onBack }: { post: PaipuPo
           <ResultBanner post={post} game={game} />
           <MissionTrack game={game} />
           <section className="space-y-1.5">
-            <h3 className="text-sm font-bold text-zinc-200">座位與角色</h3>
-            <Roster game={game} />
-          </section>
-          <section className="space-y-1.5">
             <h3 className="text-sm font-bold text-zinc-200">提議與投票</h3>
             <div className="rounded-lg border border-zinc-800 bg-black/50 p-1 sm:p-2">
               <Scoresheet game={game} />
@@ -412,6 +407,11 @@ export default function PaipuGameView({ post, guildId, onBack }: { post: PaipuPo
             <div className="mt-2 flex justify-end"><CopyText text={paipuText(game)} /></div>
             <pre className="mt-1 overflow-x-auto whitespace-pre font-mono text-xs leading-5 text-zinc-200">{paipuText(game)}</pre>
           </details>
+          {/* Edward 10/31：角色與對應座位放在最下方（同 DC 牌譜：刺殺、配置、名單在最後） */}
+          <section className="space-y-1.5" data-testid="paipu-roster">
+            <h3 className="text-sm font-bold text-zinc-200">座位與角色</h3>
+            <Roster game={game} />
+          </section>
         </>
       ) : (
         <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-3 text-sm text-zinc-200" data-testid="paipu-unreadable">
