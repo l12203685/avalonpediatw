@@ -12,9 +12,13 @@
  *      #study=<loopId> (例 #study=l141)            → 數據分析 + 那項特徵研究的完整研究
  *        (2026-10-14 Edward：「查看完整研究」大多點不開。這個 hash 在研究打開時留在網址列，
  *        可以複製分享；關閉時由 FeatureStudyReport 清掉，App 不會像 #stats 那樣先清掉它)
+ *      #paipu                                     → 牌譜紀錄頁籤
+ *      #paipu=<Discord 貼文 id>                    → 牌譜紀錄，打開那一局（同 #study：打開時留在網址列、
+ *        關閉時由 PaipuPage 清掉）
  */
 import type { GameState } from '../store/gameStore';
 import { parseStatsQuery } from '../stats/statsFilter';
+import { parsePaipuHash } from './paipu';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
@@ -22,12 +26,15 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'home',
   // 直播回放（導覽列的 YouTube；Edward 2026-10-30：直播回放跟 YT 放在一起）
   'streams',
+  // 牌譜紀錄（Discord 論壇 #牌譜紀錄與覆盤 的牌譜；Edward 2026-10-30）
+  'paipu',
 ]);
 
 export type StatsLink =
   | { kind: 'stats'; filter?: string; preset?: string }
   | { kind: 'player'; name: string }
-  | { kind: 'study'; loopId: string };
+  | { kind: 'study'; loopId: string }
+  | { kind: 'paipu'; id: string | null };
 
 const STATS_HASHES = new Set(['stats', 'analytics', 'leaderboard', 'rank']);
 
@@ -54,6 +61,8 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (!raw) return null;
   const study = parseStudyHash(raw);
   if (study) return { kind: 'study', loopId: study };
+  const paipu = parsePaipuHash(raw);
+  if (paipu) return { kind: 'paipu', id: paipu.id };
   const m = /^player[=/](.+)$/i.exec(raw);
   if (m) {
     let name = m[1];

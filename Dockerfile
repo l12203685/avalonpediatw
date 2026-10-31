@@ -54,8 +54,8 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/server/package.json ./packages/server/package.json
 COPY --from=builder /app/packages/server/dist ./packages/server/dist
 # AI 牌譜分析用的預生成 cache（server runtime 需要）
-# 分析快取與每日更新後才產生的每局資料集；首次部署沒有資料集仍可啟動。
-COPY --from=builder /app/packages/server/[ag]*_cache.json ./packages/server/
+# 分析快取、每日更新後才產生的每局資料集與牌譜紀錄清單；首次部署沒有後兩者仍可啟動。
+COPY --from=builder /app/packages/server/[agp]*_cache.json ./packages/server/
 # Web stub（workspace resolution 需要，但不裝 deps）
 RUN mkdir -p packages/web && \
     echo '{"name":"@avalon/web","version":"0.0.1","private":true}' > packages/web/package.json
