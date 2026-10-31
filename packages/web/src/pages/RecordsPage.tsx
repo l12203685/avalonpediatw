@@ -5,6 +5,7 @@ import RecordsGameView, { OUTCOME_STYLE } from '../components/records/RecordsGam
 import { closeRecords, openRecords, useOpenRecords } from '../components/records/recordsLink';
 import { useRecordsPrefs } from '../components/records/recordsPrefs';
 import LineupFilterEditor from '../components/lineup/LineupFilterEditor';
+import { branchLabel } from '../components/analysis/stateTree/recordBranch';
 import { LineupBadge, MistakeChips } from '../components/records/RecordsLineup';
 import {
   EMPTY_RECORDS_FILTER,
@@ -273,6 +274,17 @@ export default function RecordsPage(): JSX.Element {
             testIdPrefix="records-lineup"
           />
         </div>
+        {filter.branch && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+            <span>局勢樹分支</span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-blue-500/60 bg-blue-500/10 px-1.5 py-0.5 text-[11px] text-blue-100">
+              {branchLabel(filter.branch)}
+              <button type="button" aria-label="移除局勢樹分支" onClick={() => updateFilter(({ branch: _drop, ...f }) => f)} className="text-blue-200 hover:text-white">
+                <X size={12} />
+              </button>
+            </span>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-1 text-xs text-zinc-400" role="group" aria-label="失誤標籤" data-testid="records-mistake-row">
           <span className="mr-0.5">失誤</span>
           {RECORD_MISTAKE_TAGS.map(({ tag, serious, help }) => {

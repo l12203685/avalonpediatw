@@ -20,6 +20,7 @@ import {
   sanitizeLineupState,
   type LineupFilterState,
 } from './lineupFilter';
+import { recordMatchesBranch, sanitizeBranch, type RecordBranch } from '../components/analysis/stateTree/recordBranch';
 
 export const RECORDS_SEATS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'] as const;
 export const DISCORD_GUILD_ID = '1132682489840812113';
@@ -283,6 +284,8 @@ export interface RecordFilter {
   lineup: LineupFilterState;
   /** 失誤標籤：有選時，有任一個選到的標籤才列出。 */
   mistakes: string[];
+  /** 數據分析「局勢樹」的分支（任務順序開頭 + 湖的宣告；從局勢樹的節點帶過來）。 */
+  branch?: RecordBranch;
 }
 
 export const EMPTY_RECORDS_FILTER: RecordFilter = {
@@ -292,7 +295,7 @@ export const EMPTY_RECORDS_FILTER: RecordFilter = {
 /** 篩選有沒有在作用（清除篩選按鈕、「符合幾局」）。 */
 export function recordsFilterActive(filter: RecordFilter): boolean {
   return filter.result !== 'all' || Boolean(filter.from || filter.to || filter.query.trim())
-    || lineupFilterActive(filter.lineup) || filter.mistakes.length > 0;
+    || lineupFilterActive(filter.lineup) || filter.mistakes.length > 0 || Boolean(filter.branch);
 }
 
 /** 篩選記在瀏覽器（同顯示角色／名稱的開關）：下次打開牌譜紀錄還是同樣的條件。 */
@@ -311,7 +314,9 @@ export function parseRecordsFilter(text: string | null): RecordFilter {
     raw = {};
   }
   const tags = new Set(RECORD_MISTAKE_TAGS.map((m) => m.tag));
+  const branch = sanitizeBranch(raw.branch);
   return {
+    ...(branch ? { branch } : {}),
     result: RESULT_FILTERS.includes(raw.result as RecordResultFilter) ? (raw.result as RecordResultFilter) : 'all',
     from: typeof raw.from === 'string' && DATE_RE.test(raw.from) ? raw.from : '',
     to: typeof raw.to === 'string' && DATE_RE.test(raw.to) ? raw.to : '',
@@ -326,6 +331,7 @@ export function matchesRecords(post: RecordPost, filter: RecordFilter): boolean 
   if (lineupFilterActive(filter.lineup) && !matchesLineup(postLineup(post), lineupCondition(filter.lineup), postSeats(post))) {
     return false;
   }
+  if (filter.branch && !recordMatchesBranch(post.game, filter.branch)) return false;
   if (filter.mistakes.length > 0) {
     const own = mistakeTags(post);
     if (!filter.mistakes.some((t) => own.includes(t))) return false;
