@@ -824,7 +824,12 @@ export class ForwardAgent implements AvalonAgent {
     // Round 5 (Merlin) candidate `merlinLoyalStyle` (MerlinLoyalStyle.ts): Merlin proposes like a loyal, never with a
     // red it sees — every round, instead of the cover or the zone cut.
     if (this.baseline.tuning.merlinLoyalStyle && obs.myRole === 'merlin' && d.action.type === 'team_select') {
-      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk);
+      // `merlinReuseNorm` ≥ 2 (round 18 candidate): a re-proposed R3+ team is gated from the public loyal seat (Merlin's
+      // own certainty holds every seen red as red, so the must-fail gate would bar any re-proposal with one).
+      const pubObs = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
+      const publicGateOk = (team: readonly string[]): boolean => !anyGate(this.gates)
+        || teamGateBreach(pubObs, certaintyFor(pubObs), team, obs.currentRound ?? 1, this.gates) === null;
+      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk, publicGateOk);
       if (styled !== d.action) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin loyal-style team` } };
       return d;
     }

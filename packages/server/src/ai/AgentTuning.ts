@@ -648,6 +648,8 @@ export interface AgentTuning {
    * 梅林照常態照派那一隊（梅林不在那一隊就補自己），而不是避開那個紅。第 15 回合拆解：刺客模型讀「自己派的隊含刺客的比例」，
    * 忠臣約一半帶藏牌者、梅林從不帶。0 = 關，1 = 開。
    * 第 17 回合採用 1（對第 16 回合預設篩選 +0.7pp，兩組新種子 +1.1／+1.1pp、區間不含 0：刺中率約 −2.5pp，三紅率約 +0.6pp）。
+   * 第 18 回合候選：2 = 第 3 局起非關鍵局（紅方未滿兩紅）、非強制的提議也照派上一局成功的隊（會出任務；用公開視角的邏輯閘門）；
+   * 3 = 同 2，照派最近一次成功的任務（上一局失敗時回到之前成功的隊）。
    */
   merlinReuseNorm: number;
   /**
@@ -1277,7 +1279,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinReuseNorm') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`merlinReuseNorm needs 0 or 1, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinReuseNorm needs 0–3, got "${raw}"`);
     return { merlinReuseNorm: value };
   }
   if (name === 'redHideR1Who' || name === 'redKeyWhite') {

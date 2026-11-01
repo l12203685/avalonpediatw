@@ -19,6 +19,7 @@
  */
 
 import { doomedProposal } from '../MerlinCover';
+import { merlinReuseProposal } from '../MerlinLoyalStyle';
 import { computePyramidScores } from '../baseline/pyramidScorer';
 import {
   analyzeLakeChain,
@@ -59,6 +60,7 @@ const FORCED = 'forced 5th proposal';
 const TWO_FAILS = 'two fails needed (R4)';
 /** Edward 2026-10-30：梅林「正常票內白」（自己在隊上時照忠臣贊成）沒有任何問題 — INV-V1 不算違規。 */
 const MERLIN_ON_TEAM = 'Merlin on-team normal vote (owner 10/30)';
+const MERLIN_REUSE = 'Merlin re-proposes a successful mission team (照派成功的隊, owner 11/01)';
 const L1_EMPTY = 'L1 empty (L0 fallback)';
 /** The 10/26 conventions contradicted the table and were dropped (`enumerateL1`): what they proved is not proved. */
 const CONVENTIONS_DROPPED = 'A1/A2 contradicted (A0 only)';
@@ -274,6 +276,9 @@ export function checkDecision(
       // R1–R2 normal votes always reject (non-forced) — it never goes on a mission.
       if (obs.myRole === 'merlin' && doomedProposal(obs) && view.provablyFailable(team, round)) {
         L.record('INV-T1', { exempt: 'Merlin cover on a doomed R1-R2 proposal (派拇指躲刺)' });
+      } else if (obs.myRole === 'merlin' && view.provablyFailable(team, round) && merlinReuseProposal(obs, team)) {
+        // `merlinReuseNorm` ≥ 2 (round 18): R3+ non-key re-proposal of a successful mission team, seen red and all.
+        L.record('INV-T1', { exempt: MERLIN_REUSE });
       } else L.record('INV-T1', { violated: view.provablyFailable(team, round), unreliable });
       if (view.provablyFailable(team, round)) L.inc(`T1.${rb(round)}.botMustFail`);
       if (human) L.human('INV-T1', view.provablyFailable(human, round));
@@ -305,6 +310,7 @@ export function checkDecision(
       if (obs.myRole === 'merlin') {
         const visible = team.some((id) => obs.knownEvils.includes(id));
         if (visible && doomedProposal(obs)) L.record('INV-M1', { exempt: 'Merlin cover on a doomed R1-R2 proposal (派拇指躲刺)' });
+        else if (visible && merlinReuseProposal(obs, team)) L.record('INV-M1', { exempt: MERLIN_REUSE });
         else L.record('INV-M1', { violated: visible });
         if (visible) L.inc('T.merlin.knownRedOnTeam');
       }

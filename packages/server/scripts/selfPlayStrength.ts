@@ -20,6 +20,13 @@
  *   --json PATH       write the full result as JSON
  *   --md PATH         write the markdown summary
  *   --label TEXT      label for the markdown row (default: the flags)
+ *   --side blue       skip game A (variant red) and copy C into it — only for
+ *                     variants that change blue seats alone, where A plays
+ *                     exactly like C; a third less time. The red numbers then
+ *                     read +0.0pp by construction (round 18)
+ *
+ * The JSON also carries the per-seed blue / red differences (`seedDiffs`), so
+ * runs on different master seeds can be pooled into one interval.
  *
  * Fairness / determinism:
  *   - The engine's seat shuffle and role deal run under a PRNG seeded from
@@ -79,6 +86,7 @@ interface Args {
   json?: string;
   md?: string;
   label?: string;
+  side?: 'blue';
 }
 
 function parseArgs(argv: string[]): Args {
@@ -98,6 +106,12 @@ function parseArgs(argv: string[]): Args {
       case '--json': args.json = next(); break;
       case '--md': args.md = next(); break;
       case '--label': args.label = next(); break;
+      case '--side': {
+        const v = next();
+        if (v !== 'blue') throw new Error(`--side takes "blue", got "${v}"`);
+        args.side = 'blue';
+        break;
+      }
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -299,10 +313,12 @@ async function playPair(
   variantTuning: AgentTuning,
   baseTuning: AgentTuning,
   lakeMix?: { variantRed: RedLakeMix; control: RedLakeMix },
+  side?: 'blue',
 ): Promise<PairOutcome> {
   const out: Partial<PairOutcome> = {};
   const originalRandom = Math.random;
-  for (const arrangement of ['variantRed', 'variantBlue', 'control'] as Arrangement[]) {
+  const arrangements: Arrangement[] = side === 'blue' ? ['variantBlue', 'control'] : ['variantRed', 'variantBlue', 'control'];
+  for (const arrangement of arrangements) {
     const variantTeam = arrangement === 'variantRed' ? 'evil' : 'good';
     // The control game uses the baseline tuning on both sides.
     const tuning = arrangement === 'control' ? baseTuning : variantTuning;
@@ -319,6 +335,8 @@ async function playPair(
       Math.random = originalRandom;
     }
   }
+  // `--side blue`: a blue-only variant on the red seats is the baseline, so A is C.
+  if (side === 'blue') out.variantRed = out.control;
   return out as PairOutcome;
 }
 
@@ -362,6 +380,10 @@ export interface StrengthReport {
   forwardTelemetry?: { totalDecisions: number; fallbacks: number };
   /** Red-held lake mix in A (variant red) and C (baseline red); descriptive. */
   redLakeMix?: { variantRed: RedLakeMix; control: RedLakeMix };
+  /** `--side blue`: game A was not played (copied from C). */
+  side?: 'blue';
+  /** Per-seed paired differences (for pooling runs on different master seeds). */
+  seedDiffs?: { blue: string; red: string };
 }
 
 function summarise(
@@ -422,7 +444,13 @@ function summarise(
       control: stance(hits.control, threeBlue.control),
     },
     avgRounds: n === 0 ? 0 : rounds / (3 * n),
+    seedDiffs: { blue: encodeDiffs(blueDiffs), red: encodeDiffs(redDiffs) },
   };
+}
+
+/** {-1, 0, 1} per seed as one character each ('-', '0', '+'). */
+function encodeDiffs(diffs: readonly number[]): string {
+  return diffs.map((d) => (d < 0 ? '-' : d > 0 ? '+' : '0')).join('');
 }
 
 function pct(x: number): string {
@@ -522,7 +550,7 @@ async function main(): Promise<void> {
   console.log = (): void => undefined;
   try {
     for (let i = 0; i < args.games; i++) {
-      pairs.push(await playPair(engine, i, args.seed, variantTuning, baseTuning, redLakeMix));
+      pairs.push(await playPair(engine, i, args.seed, variantTuning, baseTuning, redLakeMix, args.side));
       if ((i + 1) % 100 === 0 || i + 1 === args.games) {
         const elapsed = (Date.now() - started) / 1000;
         const eta = (elapsed / (i + 1)) * (args.games - i - 1);
@@ -537,6 +565,7 @@ async function main(): Promise<void> {
   const telemetry = getForwardTelemetry();
   report.forwardTelemetry = { totalDecisions: telemetry.totalDecisions, fallbacks: telemetry.fallbacks };
   report.redLakeMix = redLakeMix;
+  if (args.side) report.side = args.side;
   console.log(textReport(report));
   console.log(`forward telemetry: ${telemetry.totalDecisions} decisions via ForwardAgent, ${telemetry.fallbacks} fallbacks`);
   if (telemetry.totalDecisions === 0) {

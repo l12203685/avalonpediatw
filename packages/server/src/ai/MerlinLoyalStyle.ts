@@ -29,12 +29,13 @@ export function merlinLoyalStyleTeam(
   obs: PlayerObservation,
   action: AgentAction,
   allowed: (team: readonly string[]) => boolean = () => true,
+  publicAllowed: (team: readonly string[]) => boolean = allowed,
 ): AgentAction {
   if (!tuning.merlinLoyalStyle || action.type !== 'team_select' || obs.myRole !== 'merlin') return action;
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
   const size = action.teamIds.length;
-  const reuse = merlinReuseNormTeam(tuning, obs, size);
+  const reuse = merlinReuseNormTeam(tuning, obs, size, publicAllowed);
   if (reuse) return { type: 'team_select', teamIds: reuse };
   // `merlinLoyalCover` (round 7 candidate): on a doomed R1–R2 proposal (the normal votes reject it), at rate c the
   // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
@@ -63,19 +64,53 @@ export function merlinLoyalStyleTeam(
 /**
  * `merlinReuseNorm`（第 17 回合・梅林）：第 2 局非強制的提議（注定被否決）、上一局任務成功、那一隊有梅林看得到的紅 → 照派那一隊
  * （梅林不在隊上就補自己；還缺的位置用只看公開紀錄的忠臣挑沒有看得到的紅、最乾淨的人）。不適用時 null。
+ * 第 18 回合候選：2 = 第 3 局起非關鍵局（紅方未滿兩紅）、非強制的提議也照派上一局成功的隊（會出任務，要過公開視角的邏輯閘門 `allowed`——梅林自己的確定性層把看得到的紅當成必紅，
+ * 照派的隊一定被「必定失敗」擋下，所以用坐在梅林位置、只看公開紀錄的忠臣的閘門；
+ * 那一隊人數已滿、梅林不在隊上時照原樣派）；3 = 同 2，但照派的是「最近一次成功的任務」（上一局失敗時回到之前成功的隊）。
  */
-export function merlinReuseNormTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, size: number): string[] | null {
-  if ((tuning.merlinReuseNorm ?? 0) <= 0 || obs.myRole !== 'merlin') return null;
+export function merlinReuseNormTeam(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  size: number,
+  allowed: (team: readonly string[]) => boolean = () => true,
+): string[] | null {
+  const mode = tuning.merlinReuseNorm ?? 0;
+  if (mode <= 0 || obs.myRole !== 'merlin') return null;
   const round = obs.currentRound ?? 1;
-  if (round !== 2 || (obs.failCount ?? 0) >= 4) return null;
-  const last = obs.questHistory.find((q) => q.round === round - 1);
-  if (!last || obs.questResults[round - 2] !== 'success') return null;
+  if (round < 2 || (obs.failCount ?? 0) >= 4) return null;
+  const later = round >= 3;
+  if (later && (mode < 2 || obs.questResults.filter((r) => r === 'fail').length >= 2)) return null;
+  const doneRounds = obs.questHistory.filter((q) => q.round < round && obs.questResults[q.round - 1] === 'success').map((q) => q.round);
+  const target = mode >= 3 && later ? Math.max(0, ...doneRounds) : round - 1;
+  const last = obs.questHistory.find((q) => q.round === target);
+  if (!last || obs.questResults[target - 1] !== 'success') return null;
   const seen = new Set(obs.knownEvils);
   if (!last.team.some((id) => seen.has(id))) return null;
   const me = obs.myPlayerId;
-  const team = last.team.includes(me) ? [...last.team] : [me, ...last.team];
+  const team = last.team.includes(me) || (later && last.team.length === size) ? [...last.team] : [me, ...last.team];
   if (team.length > size) return null;
-  if (team.length === size) return team;
+  if (later) {
+    const full = team.length === size ? team : merlinReuseFill(tuning, obs, team, size, seen);
+    return full && allowed(full) ? full : null;
+  }
+  return team.length === size ? team : merlinReuseFill(tuning, obs, team, size, seen);
+}
+
+/**
+ * Whether `team` is Merlin's R3+ re-proposal of a successful mission team (`merlinReuseNorm` ≥ 2; the invariant
+ * harness exemption — Edward 2026-11-01: 照派成功的隊算順應局勢): round 3+, non-forced, red short of two fails, and every
+ * seen red on the team sat on a successful earlier mission whose whole team is on this one.
+ */
+export function merlinReuseProposal(obs: PlayerObservation, team: readonly string[]): boolean {
+  const round = obs.currentRound ?? 1;
+  if (round < 3 || (obs.failCount ?? 0) >= 4 || obs.questResults.filter((r) => r === 'fail').length >= 2) return false;
+  const seen = team.filter((id) => obs.knownEvils.includes(id));
+  return obs.questHistory.some((q) => q.round < round && obs.questResults[q.round - 1] === 'success'
+    && q.team.every((id) => team.includes(id)) && seen.every((id) => q.team.includes(id)));
+}
+
+/** Fill a re-proposed team with the cleanest public picks that are not seen reds. */
+function merlinReuseFill(tuning: Readonly<AgentTuning>, obs: PlayerObservation, team: string[], size: number, seen: ReadonlySet<string>): string[] | null {
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
   const pool = obs.allPlayerIds.filter((id) => !team.includes(id) && !seen.has(id));
