@@ -34,6 +34,8 @@ export function merlinLoyalStyleTeam(
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
   const size = action.teamIds.length;
+  const reuse = merlinReuseNormTeam(tuning, obs, size);
+  if (reuse) return { type: 'team_select', teamIds: reuse };
   // `merlinLoyalCover` (round 7 candidate): on a doomed R1–R2 proposal (the normal votes reject it), at rate c the
   // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
   const cover = merlinLoyalCoverNow(tuning, obs);
@@ -41,7 +43,7 @@ export function merlinLoyalStyleTeam(
   if (pool.length < size - 1) return action;
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true };
+  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
   const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
@@ -56,6 +58,35 @@ export function merlinLoyalStyleTeam(
   // A cover team holds a seen red by design (doomed, never a mission), as `merlinDoomedRed` does: no gate on it.
   const best = cover ? scored[0] : scored.find((c) => allowed(c.team));
   return best ? { type: 'team_select', teamIds: best.team } : action;
+}
+
+/**
+ * `merlinReuseNorm`（第 17 回合・梅林）：第 2 局非強制的提議（注定被否決）、上一局任務成功、那一隊有梅林看得到的紅 → 照派那一隊
+ * （梅林不在隊上就補自己；還缺的位置用只看公開紀錄的忠臣挑沒有看得到的紅、最乾淨的人）。不適用時 null。
+ */
+export function merlinReuseNormTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, size: number): string[] | null {
+  if ((tuning.merlinReuseNorm ?? 0) <= 0 || obs.myRole !== 'merlin') return null;
+  const round = obs.currentRound ?? 1;
+  if (round !== 2 || (obs.failCount ?? 0) >= 4) return null;
+  const last = obs.questHistory.find((q) => q.round === round - 1);
+  if (!last || obs.questResults[round - 2] !== 'success') return null;
+  const seen = new Set(obs.knownEvils);
+  if (!last.team.some((id) => seen.has(id))) return null;
+  const me = obs.myPlayerId;
+  const team = last.team.includes(me) ? [...last.team] : [me, ...last.team];
+  if (team.length > size) return null;
+  if (team.length === size) return team;
+  const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
+  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
+  const pool = obs.allPlayerIds.filter((id) => !team.includes(id) && !seen.has(id));
+  let best: string[] | null = null;
+  let bestP = -1;
+  for (const fill of combinations(pool, size - team.length)) {
+    const t = [...team, ...fill];
+    const p = bayesTeamClean(publicView, t, pubOpts) ?? 0;
+    if (p > bestP + 1e-12) { bestP = p; best = t; }
+  }
+  return best;
 }
 
 /** `merlinLoyalCover`: this doomed R1–R2 proposal carries one seen red (hashed per seat, round and attempt). */
@@ -94,13 +125,13 @@ export function percivalLoyalStyleTeam(
   const me = obs.myPlayerId;
   const others = obs.allPlayerIds.filter((id) => id !== me);
   const size = action.teamIds.length;
-  const opts = { strictMerlin: tuning.percivalThumbLogic === true, thumbRoles: tuning.bayesThumbRoles === true, botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true };
+  const opts = { strictMerlin: tuning.percivalThumbLogic === true, thumbRoles: tuning.bayesThumbRoles === true, botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
   const publicView = { ...obs, myRole: 'loyal', knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(others, size - 1)) {
     const team = [me, ...fill];
     const priv = bayesTeamClean(obs, team, opts) ?? 0;
-    const pub = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true }) ?? 0;
+    const pub = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true }) ?? 0;
     scored.push({ team, score: Math.log(Math.max(priv, 1e-12)) + 0.5 * Math.log(Math.max(pub, 1e-12)) });
   }
   scored.sort((x, y) => y.score - x.score);
@@ -134,7 +165,7 @@ export function merlinVoteCoverApprove(tuning: Readonly<AgentTuning>, obs: Playe
   if (team.length === 0 || !team.some((id) => seen.has(id))) return false;
   if (obs.questResults.filter((r) => r === 'fail').length >= 2) return false;
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const p = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true }) ?? 0;
+  const p = bayesTeamClean(publicView, team, { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true }) ?? 0;
   if (p < Math.max(tuning.goodCleanVote || 0.25, 0.25)) return false;
   let h = 0x811c9dc5;
   for (const c of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|${team.join(',')}`) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;

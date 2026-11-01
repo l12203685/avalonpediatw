@@ -25,6 +25,8 @@ interface Table {
   proposalRole: Record<string, number>;
   mission: Record<string, number[]>;
   redLake: Record<string, [number, number]>;
+  /** Key-round votes (R3+, red has two wins; `camp|on|red`), bot tables fitted from round 17 on (`BayesOptions.keyVoteCells`). */
+  voteKey?: Record<string, [number, number]>;
 }
 const T = TABLE as unknown as Table;
 /** The same tables fitted on bot self-play (`scripts/fitBeliefLikelihoods.ts --bots`; `BayesOptions.botTables`). */
@@ -47,7 +49,7 @@ const blend = (human: number, bot: number): number => (mix > 0 ? (1 - mix) * hum
  */
 interface ProbMemo { vote: Float64Array; voteLog: Float64Array; proposal: Float64Array; mission: Float64Array }
 const memos = new Map<number, ProbMemo>();
-const newMemo = (): ProbMemo => ({ vote: new Float64Array(32).fill(NaN), voteLog: new Float64Array(64).fill(NaN), proposal: new Float64Array(48).fill(NaN), mission: new Float64Array(216).fill(NaN) });
+const newMemo = (): ProbMemo => ({ vote: new Float64Array(64).fill(NaN), voteLog: new Float64Array(128).fill(NaN), proposal: new Float64Array(48).fill(NaN), mission: new Float64Array(216).fill(NaN) });
 let memo: ProbMemo = newMemo();
 memos.set(0, memo);
 const memosNext = new Map<number, ProbMemo>();
@@ -66,8 +68,15 @@ const CAMP_INDEX: Record<string, number> = { good: 0, evil: 1, merlin: 2, morgan
 const bucket = (round: number): string => (round <= 2 ? 'r12' : 'r3');
 const smooth = (hit: number, n: number): number => (hit + 1) / (n + 2);
 
-/** `camp` = 'good' | 'evil', or a role key 'merlin' | 'morgana' (the role tables, Percival's thumbs). */
-function voteProbIn(t: Table, camp: string, on: boolean, hasRed: boolean, round: number): number {
+/**
+ * `camp` = 'good' | 'evil', or a role key 'merlin' | 'morgana' (the role tables, Percival's thumbs). `keyRound`: a key-round vote
+ * (R3+, red has two wins) read from the table's `voteKey` cells when it has them (`BayesOptions.keyVoteCells`; camps only).
+ */
+function voteProbIn(t: Table, camp: string, on: boolean, hasRed: boolean, round: number, keyRound = false): number {
+  if (keyRound && camp !== 'merlin' && camp !== 'morgana') {
+    const kc = t.voteKey?.[`${camp}|${on ? 'on' : 'off'}|${hasRed ? 'red' : 'clean'}`];
+    if (kc) return smooth(kc[0], kc[1]);
+  }
   const key = `${camp}|${on ? 'on' : 'off'}|${hasRed ? 'red' : 'clean'}|${bucket(round)}`;
   const c = (camp === 'merlin' || camp === 'morgana' ? t.voteRole[key] : t.vote[key]) ?? [1, 2];
   return smooth(c[0], c[1]);
@@ -75,11 +84,11 @@ function voteProbIn(t: Table, camp: string, on: boolean, hasRed: boolean, round:
 
 const CAMP_NAMES = ['good', 'evil', 'merlin', 'morgana'] as const;
 /** log P(vote) by camp index (good 0, evil 1, merlin 2, morgana 3) — the memoized form of `Math.log(voteProb(…))`. */
-function voteLogIx(ci: number, on: boolean, hasRed: boolean, r3: boolean, approve: boolean): number {
-  const idx = (ci << 4) | (on ? 8 : 0) | (hasRed ? 4 : 0) | (r3 ? 2 : 0) | (approve ? 1 : 0);
+function voteLogIx(ci: number, on: boolean, hasRed: boolean, r3: boolean, approve: boolean, keyRound = false): number {
+  const idx = (keyRound ? 64 : 0) | (ci << 4) | (on ? 8 : 0) | (hasRed ? 4 : 0) | (r3 ? 2 : 0) | (approve ? 1 : 0);
   let lp = memo.voteLog[idx];
   if (Number.isNaN(lp)) {
-    lp = Math.log(voteProb(CAMP_NAMES[ci], on, hasRed, r3 ? 3 : 1, approve));
+    lp = Math.log(voteProb(CAMP_NAMES[ci], on, hasRed, r3 ? 3 : 1, approve, keyRound));
     memo.voteLog[idx] = lp;
   }
   return lp;
@@ -89,12 +98,12 @@ function proposalProbIx(ci: number, r3: boolean, k: number): number {
   return proposalProb(CAMP_NAMES[ci], r3 ? 3 : 1, k);
 }
 
-function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, approve: boolean): number {
+function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, approve: boolean, keyRound = false): number {
   const ci = CAMP_INDEX[camp];
-  const idx = ci === undefined ? -1 : (ci << 3) | (on ? 4 : 0) | (hasRed ? 2 : 0) | (round <= 2 ? 0 : 1);
+  const idx = ci === undefined ? -1 : (keyRound ? 32 : 0) | (ci << 3) | (on ? 4 : 0) | (hasRed ? 2 : 0) | (round <= 2 ? 0 : 1);
   let p = idx >= 0 ? memo.vote[idx] : NaN;
   if (Number.isNaN(p)) {
-    p = blend(voteProbIn(T, camp, on, hasRed, round), voteProbIn(TB, camp, on, hasRed, round));
+    p = blend(voteProbIn(T, camp, on, hasRed, round, keyRound), voteProbIn(TB, camp, on, hasRed, round, keyRound));
     if (idx >= 0) memo.vote[idx] = p;
   }
   return approve ? p : 1 - p;
@@ -207,6 +216,16 @@ export interface BayesOptions {
    * uniform over the clean picks), instead of being skipped as 派拇指躲刺.
    */
   merlinEarlyStrict?: boolean;
+  /**
+   * `beliefKeyVoteCells` (round 17): key-round votes (R3+, red has two wins) read from the bot table's `voteKey` cells — since
+   * round 16 the reds white a key team off the team only when it can pass, so key-round votes differ from the other R3+ votes.
+   */
+  keyVoteCells?: boolean;
+  /**
+   * `percivalMorganaR1` (round 17, Percival): since round 16 only the assassin (and Mordred) hide on R1 — a lone Morgana fails. In
+   * Percival's worlds the red thumb is Morgana: an R1 mission whose only red is that thumb all but never succeeds.
+   */
+  morganaR1?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -228,7 +247,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
   const zone = opts.zoneMerlin === true;
   const early = opts.merlinEarlyStrict === true;
-  const key = `${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
+  const keyCells = opts.keyVoteCells === true;
+  const morganaR1 = opts.morganaR1 === true && percival;
+  const key = `${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -243,7 +264,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const all = view.maskOf(ids);
   const thumbMask = view.maskOf(thumbs);
   const strictMask = view.maskOf(strict);
+  const wizardMask = morganaR1 ? view.maskOf(obs.knownWizards ?? []) : 0;
   // Everything that does not depend on the world, computed once (the world loop below runs it for every world).
+  const results = obs.questResults ?? [];
   const pre = obs.voteHistory.map((v) => {
     const teamMask = view.maskOf(v.team);
     return {
@@ -253,6 +276,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       leaderOn: v.team.includes(v.leader),
       doomed: v.round <= 2 && v.attempt < 5 && !early,
       r3: v.round > 2,
+      keyRound: keyCells && v.round > 2 && results.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2,
       voters: v.attempt >= 5 ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
         .map((id) => ({ b: bit(id), on: v.team.includes(id), yes: v.votes[id] === true, raw: v.votes[id] })),
     };
@@ -306,11 +330,17 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
           lp += Math.log(x.raw ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
           continue;
         }
-        lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes);
+        lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound);
       }
     }
     for (const q of quests) {
-      const p = missionProb(q.round, sizeOf(w & q.mask), q.fails);
+      const reds = sizeOf(w & q.mask);
+      if (morganaR1 && q.round === 1 && reds === 1 && (w & q.mask & wizardMask) !== 0) {
+        // The only red on the R1 team is the Morgana thumb (this world): she fails (the human rule; round 16).
+        lp += Math.log(q.fails === 0 ? STRICT_EPS : 1 - STRICT_EPS);
+        continue;
+      }
+      const p = missionProb(q.round, reds, q.fails);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
     if (mixPre) lp += merlinMixtureLog(mixPre, w);
@@ -346,6 +376,8 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     botTables: t.beliefBotTables ?? 0,
     botTablesNext: t.beliefBotTablesNext === true,
     botMissionNext: t.beliefBotMissionNext === true,
+    keyVoteCells: t.beliefKeyVoteCells === true,
+    morganaR1: t.percivalMorganaR1 === true,
   };
 }
 

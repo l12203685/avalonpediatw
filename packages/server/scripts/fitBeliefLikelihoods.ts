@@ -5,6 +5,12 @@
  *
  *   npx tsx scripts/fitBeliefLikelihoods.ts [--out src/ai/belief/likelihoods.json]
  *   USE_FORWARD_REASONING=true npx tsx scripts/fitBeliefLikelihoods.ts --bots 600 [--out src/ai/belief/likelihoods_bot.json]
+ *     [--flag NAME[=V] ...] [--seed-prefix fitbot]
+ *   npx tsx scripts/fitBeliefLikelihoods.ts --merge a.json b.json [...] --out merged.json
+ *
+ * `--flag`（第 17 回合）：自我對打的十個座位都在正式預設上再套這些開關（例如用上一回合的紅方擬合）；`--seed-prefix` 換種子。
+ * `--merge`（第 17 回合）：把幾張用同一個腳本擬合的表的次數加起來（例如幾個最近的紅方策略各擬合一張再合併，
+ * 讓藍方的讀法不只貼著單一個紅方版本）。
  *
  * `--bots N`（優化迴圈，Edward 2026-10-30：「舊的藍方沒有從派票或投票直接分辨出誰是藍誰是紅，所以紅方根本不需要隱藏」）：
  * 改從全機器人自我對打 N 局（正式預設）統計同一組表，給 `AgentTuning.beliefBotTables` 用——藍方照「目前的對手實際怎麼做」
@@ -15,6 +21,8 @@
  *   - proposal：`隊長陣營|回合段|隊上紅數（不含隊長）` → 次數（隊長在自己隊上的提議）。
  *   - mission：`回合|隊上紅數` → 失敗牌張數的分布。
  *   - redLake：`目標陣營` → 紅方持湖者宣告「紅」的次數 / 總數。
+ *   - voteKey（第 17 回合）：同 vote，但只算第 3 局起、紅方已兩紅的提議（關鍵局；`陣營|在隊上|隊上有紅`）——第 16 回合起紅方
+ *     不在隊上的關鍵隊外白只在這隊過得了時開，關鍵局的票和一般第 3 局起的票分開讀（`AgentTuning.beliefKeyVoteCells`）。
  *   - voteRole / proposalRole：同 vote / proposal，但只算梅林與莫甘娜（`角色|…`）——派西分辨兩根拇指用
  *     （第 3 回合，2026-10-28）。proposalRole 的紅數不含隊長自己。
  */
@@ -25,6 +33,7 @@ import { SelfPlayEngine } from '../src/ai/SelfPlayEngine';
 import { seededRandom } from '../src/ai/benchmark/agreement';
 import { campOf, parseReplayGame, rowsFromSheet } from '../src/ai/benchmark/sheetsReplay';
 import type { PlayerObservation, Role } from '../src/ai/types';
+import { parseTuningFlag, type AgentTuning } from '../src/ai/AgentTuning';
 
 /** The fields the tables read (a `ReplayGame` has them; bot games are converted to it). */
 interface FitGame {
@@ -36,9 +45,15 @@ interface FitGame {
 
 const arg = (name: string): string | undefined => { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : undefined; };
 const botGames = Number(arg('--bots') ?? 0);
+const flags: Partial<AgentTuning> = {};
+process.argv.forEach((a, i) => { if (a === '--flag') Object.assign(flags, parseTuningFlag(process.argv[i + 1])); });
+const seedPrefix = arg('--seed-prefix') ?? 'fitbot';
+const mergeAt = process.argv.indexOf('--merge');
+const mergeFiles = mergeAt >= 0 ? process.argv.slice(mergeAt + 1).filter((_, i, xs) => !xs.slice(0, i + 1).some((x) => x.startsWith('--'))) : [];
 const out = arg('--out') ?? path.resolve(__dirname, botGames > 0 ? '../src/ai/belief/likelihoods_bot.json' : '../src/ai/belief/likelihoods.json');
 
 class Rec extends HeuristicAgent {
+  constructor(id: string) { super(id, undefined, undefined, flags); }
   last?: PlayerObservation; role = '';
   onGameStart(o: PlayerObservation): void { this.role = o.myRole; super.onGameStart(o); }
   onGameEnd(o: PlayerObservation, w: boolean): void { this.last = o; super.onGameEnd(o, w); }
@@ -50,7 +65,7 @@ async function loadBotGames(n: number): Promise<FitGame[]> {
   const games: FitGame[] = [];
   for (let i = 0; i < n; i++) {
     const agents = Array.from({ length: 10 }, (_, k) => new Rec(`P${k + 1}`));
-    Math.random = seededRandom(`fitbot|${i}`);
+    Math.random = seededRandom(`${seedPrefix}|${i}`);
     console.log = () => undefined;
     try { await engine.runGame(agents, false); } finally { console.log = log; Math.random = orig; }
     const o = agents[0].last;
@@ -77,7 +92,26 @@ function loadHumanGames(): FitGame[] {
   return games;
 }
 
+/** `--merge`: add up the counts of tables fitted by this script. */
+function mergeTables(files: string[]): void {
+  const sum: Record<string, unknown> & { games: number } = { source: `merged: ${files.map((f) => path.basename(f)).join(' + ')}`, games: 0, fittedAt: new Date().toISOString().slice(0, 10) };
+  for (const f of files) {
+    const t = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>;
+    sum.games += Number(t.games ?? 0);
+    for (const name of ['vote', 'proposal', 'mission', 'redLake', 'voteRole', 'proposalRole', 'voteKey']) {
+      const acc = (sum[name] ??= {}) as Record<string, number | number[]>;
+      for (const [k, v] of Object.entries((t[name] ?? {}) as Record<string, number | number[]>)) {
+        if (typeof v === 'number') acc[k] = ((acc[k] as number | undefined) ?? 0) + v;
+        else { const a = (acc[k] ??= v.map(() => 0)) as number[]; v.forEach((x, j) => { a[j] = (a[j] ?? 0) + x; }); }
+      }
+    }
+  }
+  fs.writeFileSync(out, JSON.stringify(sum, null, 1) + '\n');
+  console.log(`wrote ${out}: ${sum.games} games from ${files.length} tables`);
+}
+
 (async () => {
+if (mergeFiles.length > 0) { mergeTables(mergeFiles); return; }
 const games: FitGame[] = botGames > 0 ? await loadBotGames(botGames) : loadHumanGames();
 
 const vote: Record<string, [number, number]> = {};
@@ -85,12 +119,15 @@ const proposal: Record<string, number> = {};
 const mission: Record<string, number[]> = {};
 const redLake: Record<string, [number, number]> = {};
 const voteRole: Record<string, [number, number]> = {};
+const voteKey: Record<string, [number, number]> = {};
 const proposalRole: Record<string, number> = {};
 const bump = (t: Record<string, [number, number]>, k: string, hit: boolean) => { const v = (t[k] ??= [0, 0]); if (hit) v[0]++; v[1]++; };
 const bucket = (round: number) => (round <= 2 ? 'r12' : 'r3');
 
 for (const g of games) {
   const red = (seat: number) => campOf(g.seatRoles[seat - 1]) === 'evil';
+  // 10 人局：第 4 局要兩張失敗才算失敗。
+  const failsBefore = (round: number) => g.quests.filter((q) => q.round < round && q.failCount >= (q.round === 4 ? 2 : 1)).length;
   for (const p of g.proposals) {
     const reds = p.teamSeats.filter(red).length;
     if (p.teamSeats.includes(p.leaderSeat)) {
@@ -107,6 +144,7 @@ for (const g of games) {
     for (let seat = 1; seat <= 10; seat++) {
       const key = `${red(seat) ? 'evil' : 'good'}|${p.teamSeats.includes(seat) ? 'on' : 'off'}|${reds > 0 ? 'red' : 'clean'}|${bucket(p.round)}`;
       bump(vote, key, p.votes[seat - 1]);
+      if (p.round >= 3 && failsBefore(p.round) >= 2) bump(voteKey, key.split('|').slice(0, 3).join('|'), p.votes[seat - 1]);
       const role = g.seatRoles[seat - 1];
       if (role === 'merlin' || role === 'morgana') bump(voteRole, `${role}|${key.split('|').slice(1).join('|')}`, p.votes[seat - 1]);
     }
@@ -122,11 +160,13 @@ for (const g of games) {
   }
 }
 
-const table = { source: botGames > 0 ? 'self-play (production defaults)' : 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole };
+const flagText = Object.entries(flags).map(([k, v]) => `${k}=${String(v)}`).join(' ');
+const table = { source: botGames > 0 ? `self-play (production defaults${flagText ? ` + ${flagText}` : ''})` : 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole, voteKey };
 fs.writeFileSync(out, JSON.stringify(table, null, 1) + '\n');
 console.log(`wrote ${out}: ${games.length} games`);
 for (const [k, [a, n]] of Object.entries(vote).sort()) console.log(`  vote ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, d] of Object.entries(mission).sort()) console.log(`  mission ${k} fails ${d.join('/')}`);
+for (const [k, [a, n]] of Object.entries(voteKey).sort()) console.log(`  voteKey ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(voteRole).sort()) console.log(`  voteRole ${k.padEnd(26)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(redLake)) console.log(`  redLake target ${k}: declared red ${(100 * a / n).toFixed(1)}% (${n})`);
 // The self-play engine leaves timers behind: exit once the table is written.
