@@ -650,6 +650,8 @@ export interface AgentTuning {
    * 第 17 回合採用 1（對第 16 回合預設篩選 +0.7pp，兩組新種子 +1.1／+1.1pp、區間不含 0：刺中率約 −2.5pp，三紅率約 +0.6pp）。
    * 第 18 回合候選：2 = 第 3 局起非關鍵局（紅方未滿兩紅）、非強制的提議也照派上一局成功的隊（會出任務；用公開視角的邏輯閘門）；
    * 3 = 同 2，照派最近一次成功的任務（上一局失敗時回到之前成功的隊）。
+   * 第 18 回合採用 2（Edward 2026-11-01：「算順應局勢」；對第 17 回合預設篩選 +0.9pp，兩組新種子 +1.1／+1.1pp、區間不含 0：
+   * 刺中率約 −2pp，三紅率不變）。3 篩選 +0.9pp、三紅率 +0.5pp，不採用。
    */
   merlinReuseNorm: number;
   /**
@@ -1081,7 +1083,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanWhite: 0,
   oberonNormalVote: false,
   beliefKeyVoteCells: false,
-  merlinReuseNorm: 1,
+  merlinReuseNorm: 2,
   percivalMorganaR1: false,
 });
 
