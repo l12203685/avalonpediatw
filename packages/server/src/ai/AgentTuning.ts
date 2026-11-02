@@ -421,6 +421,8 @@ export interface AgentTuning {
    * 好人看貝氏後驗投票（第 3 回合，2026-10-28）：第 3 局起、非強制提議，忠臣與派西估「這隊沒有紅」的機率
    * （`BayesBelief.bayesTeamClean`）低於這個門檻就投黑（0 = 關）。對照真人：第 3 局真人好人一路否決到強制
    * 的比例 40%，機器人 2%，紅隊長的隊幾乎都放行。
+   * 第 3 回合採用 0.25；第 18 回合改成 0.45（第 17 回合篩選 +1.4；本回合確認合併：對 `merlinReuseNorm=2`＋關鍵局票格的兩組新種子 4000 組
+   * +1.1 [+0.1, +2.0]pp、對最後的新預設 6000 組 +1.7 [+0.9, +2.5]pp；所有新種子 14000 組 +1.2 [+0.7, +1.8]pp）。
    */
   goodCleanVote: number;
   /**
@@ -640,6 +642,8 @@ export interface AgentTuning {
    * 第 17 回合藍方（三角色・信念表；`belief/BayesBelief.ts` 的 `keyVoteCells`）：關鍵局（第 3 局起、紅方已兩紅）的票改讀機器人表的
    * `voteKey` 格子（`fitBeliefLikelihoods.ts --bots` 從第 17 回合起另外統計），其他提議照原本的 `vote` 格子。第 16 回合起紅方
    * 不在隊上的關鍵隊外白只在這隊過得了時開（`redKeyWhite=1`），關鍵局的票和一般第 3 局起的票的比例不一樣；表裡沒有這些格子時照舊。
+   * 第 18 回合採用（和第 17 回合預設重新擬合、3000 局的表一起換成現行表 `likelihoods_bot.json`）：兩組確認各 6000 組種子（三段合併）
+   * +1.5 [+0.6, +2.4]／+1.3 [+0.3, +2.2]pp；只換表 +0.0。
    */
   beliefKeyVoteCells: boolean;
   /**
@@ -648,6 +652,11 @@ export interface AgentTuning {
    * 梅林照常態照派那一隊（梅林不在那一隊就補自己），而不是避開那個紅。第 15 回合拆解：刺客模型讀「自己派的隊含刺客的比例」，
    * 忠臣約一半帶藏牌者、梅林從不帶。0 = 關，1 = 開。
    * 第 17 回合採用 1（對第 16 回合預設篩選 +0.7pp，兩組新種子 +1.1／+1.1pp、區間不含 0：刺中率約 −2.5pp，三紅率約 +0.6pp）。
+   * 第 18 回合候選：2 = 第 3 局起非關鍵局（紅方未滿兩紅）、非強制的提議也照派上一局成功的隊（會出任務；用公開視角的邏輯閘門）；
+   * 3 = 同 2，照派最近一次成功的任務（上一局失敗時回到之前成功的隊）。
+   * 第 18 回合採用 2（Edward 2026-11-01：「算順應局勢」；對第 17 回合預設篩選 +0.9pp，兩組新種子 +1.1／+1.1pp、區間不含 0：
+   * 刺中率約 −2pp，三紅率不變）。3 對第 17 回合預設篩選 +0.9pp（和 2 一樣多，三紅率 +0.5pp），先不採用；
+   * 在 2 與關鍵局票格之上再量 3：篩選 +0.9 [+0.4, +1.3]pp、兩組新種子 +1.2 [+0.7, +1.7]／+0.8 [+0.3, +1.2]pp（刺中率約 −2pp，三紅率約 +0.2pp），採用 3。
    */
   merlinReuseNorm: number;
   /**
@@ -1034,7 +1043,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanApprove: 0,
   bayesThumbRoles: false,
   merlinCoverRate: 1,
-  goodCleanVote: 0.25,
+  goodCleanVote: 0.45,
   goodCleanVoteLoyalOnly: false,
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
@@ -1078,8 +1087,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redKeyWhite: 1,
   redCleanWhite: 0,
   oberonNormalVote: false,
-  beliefKeyVoteCells: false,
-  merlinReuseNorm: 1,
+  beliefKeyVoteCells: true,
+  merlinReuseNorm: 3,
   percivalMorganaR1: false,
 });
 
@@ -1277,7 +1286,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinReuseNorm') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`merlinReuseNorm needs 0 or 1, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinReuseNorm needs 0–3, got "${raw}"`);
     return { merlinReuseNorm: value };
   }
   if (name === 'redHideR1Who' || name === 'redKeyWhite') {
