@@ -329,19 +329,19 @@ export function missedReuseLeads(obs: PlayerObservation, candidate: string, sigh
 /** ln of the likelihood ratio P(lead | Merlin) / P(lead | loyal) of one passed-over re-proposal (`missedReuseLeads`). */
 export const MISSED_REUSE_LOG_LR = Math.log(0.25);
 
-/** Round 21 `assassinReuseRead` 4–7: the re-proposal-norm leads of one candidate, split by round (R2 vs R3+) and outcome. */
+/** Round 21 `assassinReuseRead` 4–8: the re-proposal-norm leads of one candidate, split by round (R2 vs R3+) and outcome. */
 export interface ReuseLeadCounts {
   missR2: number;
   missR3: number;
   reuseR2: number;
   reuseR3: number;
-  /** The same norm when the team holds no red Merlin sees (mode 7). */
+  /** The same norm when the team holds no red Merlin sees (mode 8). */
   cleanMissR2: number;
   cleanMissR3: number;
 }
 
 /**
- * Round 21 `assassinReuseRead` 4–7: the leads `missedReuseLeads` reads (the team Merlin's re-proposal norm points at —
+ * Round 21 `assassinReuseRead` 4–8: the leads `missedReuseLeads` reads (the team Merlin's re-proposal norm points at —
  * R2 the successful R1, R3+ the latest successful mission while red is short of two fails —, non-forced, the lead has
  * room for that team), counted by round and by whether `candidate` passed the team over (`miss*`) or put the whole team
  * in (`reuse*`); `cleanMiss*` count the passed-over norm teams that hold no red Merlin sees.
@@ -374,15 +374,14 @@ export function reuseLeadCounts(obs: PlayerObservation, candidate: string, sight
 }
 
 /**
- * Round 21 `assassinReuseRead` 4–7: likelihood ratios P(lead | Merlin) / P(lead | other blue captain) measured in
+ * Round 21 `assassinReuseRead` 4–8: likelihood ratios P(lead | Merlin) / P(lead | other blue captain) measured in
  * self-play (`reusediag21`, round-19 default, 2000 games; Merlin re-proposes every time the public gate lets him).
- * Norm team with a seen red — R2: Merlin passed it over 0 / 140 times, loyal / Percival 41 / 520 (≈ 0.05; mode 4 keeps
- * round 19's 0.25 there); R3+: Merlin 63 / 172, others 519 / 913 (≈ 0.65). Re-proposed — R2 1.00 vs 0.92 (≈ 1.1),
- * R3+ 0.63 vs 0.43 (≈ 1.45). Clean norm team passed over — R2 1.2% vs 9.6% (≈ 0.12), R3+ 13.9% vs 19.1% (≈ 0.73).
+ * Norm team with a seen red — R2: Merlin passed it over 0 / 140 times, loyal / Percival 41 / 520 (≈ 0.05);
+ * R3+: Merlin 63 / 172, others 519 / 913 (≈ 0.65). Re-proposed — R2 1.00 vs 0.92 (≈ 1.1), R3+ 0.63 vs 0.43 (≈ 1.45).
+ * Clean norm team passed over — R2 1.2% vs 9.6% (≈ 0.12), R3+ 13.9% vs 19.1% (≈ 0.73).
  */
 export const REUSE_LEAD_LR = {
   missR2: 0.05,
-  missR2Mode4: 0.25,
   missR3: 0.65,
   reuseR2: 1.1,
   reuseR3: 1.45,
@@ -390,16 +389,28 @@ export const REUSE_LEAD_LR = {
   cleanMissR3: 0.73,
 } as const;
 
+/** Round 21 `assassinReuseRead` 4–8: the passed-over factors [R2, R3+] each mode uses (mode 3: 0.25 in both). */
+export const REUSE_MISS_FACTORS: Readonly<Record<number, readonly [number, number]>> = {
+  3: [0.25, 0.25],
+  4: [0.25, REUSE_LEAD_LR.missR3],
+  5: [REUSE_LEAD_LR.missR2, REUSE_LEAD_LR.missR3],
+  6: [REUSE_LEAD_LR.missR2, 0.25],
+  7: [0.25, 0.25],
+  8: [0.25, 0.25],
+};
+
 /**
- * Round 21 `assassinReuseRead` 4–7: the log-likelihood the re-proposal norm adds for `candidate`. 4 = passed-over leads
- * with R2 ×0.25 (as mode 3) and R3+ ×0.65; 5 = R2 ×0.05 and R3+ ×0.65 (both measured); 6 = 5 plus the re-proposals
- * themselves (R2 ×1.1, R3+ ×1.45); 7 = 5 plus passed-over clean norm teams (R2 ×0.12, R3+ ×0.73).
+ * Round 21 `assassinReuseRead` 4–8: the log-likelihood the re-proposal norm adds for `candidate`. Passed-over leads with
+ * a seen red: 4 = R2 ×0.25 (as mode 3), R3+ ×0.65 (measured); 5 = both measured (R2 ×0.05, R3+ ×0.65); 6 = R2 ×0.05,
+ * R3+ ×0.25 (as mode 3). 7 = mode 3 plus the re-proposals themselves (R2 ×1.1, R3+ ×1.45); 8 = mode 3 plus passed-over
+ * clean norm teams (R2 ×0.12, R3+ ×0.73).
  */
 export function reuseLeadLogRatio(obs: PlayerObservation, candidate: string, mode: number, sight: MerlinSight = merlinSightFromAssassin(obs)): number {
   const c = reuseLeadCounts(obs, candidate, sight);
   const L = REUSE_LEAD_LR;
-  let s = c.missR2 * Math.log(mode === 4 ? L.missR2Mode4 : L.missR2) + c.missR3 * Math.log(L.missR3);
-  if (mode === 6) s += c.reuseR2 * Math.log(L.reuseR2) + c.reuseR3 * Math.log(L.reuseR3);
-  if (mode === 7) s += c.cleanMissR2 * Math.log(L.cleanMissR2) + c.cleanMissR3 * Math.log(L.cleanMissR3);
+  const [f2, f3] = REUSE_MISS_FACTORS[mode] ?? REUSE_MISS_FACTORS[3];
+  let s = c.missR2 * Math.log(f2) + c.missR3 * Math.log(f3);
+  if (mode === 7) s += c.reuseR2 * Math.log(L.reuseR2) + c.reuseR3 * Math.log(L.reuseR3);
+  if (mode === 8) s += c.cleanMissR2 * Math.log(L.cleanMissR2) + c.cleanMissR3 * Math.log(L.cleanMissR3);
   return s;
 }

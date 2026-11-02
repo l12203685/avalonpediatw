@@ -1,6 +1,6 @@
 /**
  * 優化迴圈第 21 回合・紅方（刺客）候選，預設關：「該照派而沒照派」的乘數分局數、用自我對打量到的比例（`assassinReuseRead=4`），
- * 兩局都用量到的比例（`=5`）、再讀「照派了」（`=6`）、乾淨的隊沒照派也讀（`=7`）。
+ * 兩局都用量到的比例（`=5`）、只第 2 局用量到的（`=6`）、再讀「照派了」（`=7`）、乾淨的隊沒照派也讀（`=8`）。
  */
 import { describe, expect, it } from 'vitest';
 import type { PlayerObservation, VoteRecord } from './types';
@@ -41,8 +41,8 @@ function assassination(extra: VoteRecord[] = []): PlayerObservation {
 describe('flags', () => {
   it('parse 4 and 5; default stays 3', () => {
     expect(parseTuningFlag('assassinReuseRead=4')).toEqual({ assassinReuseRead: 4 });
-    expect(parseTuningFlag('assassinReuseRead=7')).toEqual({ assassinReuseRead: 7 });
-    expect(() => parseTuningFlag('assassinReuseRead=8')).toThrow();
+    expect(parseTuningFlag('assassinReuseRead=8')).toEqual({ assassinReuseRead: 8 });
+    expect(() => parseTuningFlag('assassinReuseRead=9')).toThrow();
     expect(DEFAULT_AGENT_TUNING.assassinReuseRead).toBe(3);
   });
 });
@@ -70,23 +70,27 @@ describe('reuseLeadCounts', () => {
 describe('reuseLeadLogRatio', () => {
   const obs = assassination();
   const L = REUSE_LEAD_LR;
-  it('mode 4: R2 miss ×0.25 as mode 3, R3+ miss mild; re-proposals neutral', () => {
-    expect(reuseLeadLogRatio(obs, 'P6', 4)).toBeCloseTo(Math.log(L.missR2Mode4));
+  it('mode 3 through the factors equals the round-19 read', () => {
+    for (const id of ['P3', 'P4', 'P5', 'P6', 'P7', 'P10']) expect(reuseLeadLogRatio(obs, id, 3)).toBeCloseTo(Math.log(0.25) * missedReuseLeads(obs, id));
+  });
+  it('mode 4: R2 miss ×0.25 as mode 3, R3+ miss measured; re-proposals neutral', () => {
+    expect(reuseLeadLogRatio(obs, 'P6', 4)).toBeCloseTo(Math.log(0.25));
     expect(reuseLeadLogRatio(obs, 'P7', 4)).toBeCloseTo(Math.log(L.missR3));
     expect(reuseLeadLogRatio(obs, 'P4', 4)).toBeCloseTo(0);
-    expect(L.missR3).toBeLessThan(1);
   });
-  it('mode 5: the measured R2 ratio', () => {
+  it('modes 5 and 6: the measured R2 ratio', () => {
     expect(reuseLeadLogRatio(obs, 'P6', 5)).toBeCloseTo(Math.log(L.missR2));
-    expect(L.missR2).toBeLessThan(L.missR2Mode4);
     expect(reuseLeadLogRatio(obs, 'P7', 5)).toBeCloseTo(Math.log(L.missR3));
+    expect(reuseLeadLogRatio(obs, 'P6', 6)).toBeCloseTo(Math.log(L.missR2));
+    expect(reuseLeadLogRatio(obs, 'P7', 6)).toBeCloseTo(Math.log(0.25));
   });
-  it('mode 6 also credits the re-proposal', () => {
-    expect(reuseLeadLogRatio(obs, 'P4', 6)).toBeCloseTo(Math.log(L.reuseR3));
+  it('mode 7 also credits the re-proposal', () => {
+    expect(reuseLeadLogRatio(obs, 'P4', 7)).toBeCloseTo(Math.log(L.reuseR3));
     expect(L.reuseR3).toBeGreaterThan(1);
-    expect(reuseLeadLogRatio(obs, 'P4', 5)).toBeCloseTo(0);
+    expect(reuseLeadLogRatio(obs, 'P4', 3)).toBeCloseTo(0);
+    expect(reuseLeadLogRatio(obs, 'P7', 7)).toBeCloseTo(Math.log(0.25));
   });
-  it('mode 7 also reads a clean norm team passed over', () => {
+  it('mode 8 also reads a clean norm team passed over', () => {
     // R1 P3 P4 P5 (clean) succeeded; R2 P6 left it out.
     const clean = {
       ...obs,
@@ -98,15 +102,15 @@ describe('reuseLeadLogRatio', () => {
       voteHistory: [vote(1, 1, 'P3', ['P3', 'P4', 'P5'], true), vote(2, 1, 'P6', ['P2', 'P3', 'P6', 'P10'], true)],
     } as unknown as PlayerObservation;
     expect(reuseLeadCounts(clean, 'P6').cleanMissR2).toBe(1);
-    expect(reuseLeadLogRatio(clean, 'P6', 5)).toBeCloseTo(0);
-    expect(reuseLeadLogRatio(clean, 'P6', 7)).toBeCloseTo(Math.log(L.cleanMissR2));
+    expect(reuseLeadLogRatio(clean, 'P6', 3)).toBeCloseTo(0);
+    expect(reuseLeadLogRatio(clean, 'P6', 8)).toBeCloseTo(Math.log(L.cleanMissR2));
     expect(missedReuseLeads(clean, 'P6')).toBe(0);
   });
 });
 
 describe('assassinate with modes 4 and 5', () => {
   it('returns a blue target', () => {
-    for (const mode of [3, 4, 5, 6, 7]) {
+    for (const mode of [3, 4, 5, 6, 7, 8]) {
       const agent = new HeuristicAgent('P1', undefined, undefined, { ...DEFAULT_AGENT_TUNING, assassinReuseRead: mode });
       const a = agent.act(assassination());
       expect(a.type).toBe('assassinate');

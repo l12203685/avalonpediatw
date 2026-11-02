@@ -2696,7 +2696,7 @@ export class HeuristicAgent implements AvalonAgent {
       if (reuseMode === 3) {
         for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + MISSED_REUSE_LOG_LR * missedReuseLeads(obs, id));
       } else if (reuseMode >= 4) {
-        // Round 21 (red) `assassinReuseRead` 4–7: round-dependent ratios measured in self-play (R2 strong, R3+ mild).
+        // Round 21 (red) `assassinReuseRead` 4–8: round-dependent / measured factors, re-proposal credit, clean misses.
         for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + reuseLeadLogRatio(obs, id, reuseMode));
       }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
