@@ -21,6 +21,7 @@ import { verify, JwtPayload } from 'jsonwebtoken';
 import { verifyIdToken, isFirebaseAdminReady, getAdminFirestore } from '../services/firebase';
 import { getSupabaseClient, isSupabaseReady, getSupabaseIdByFirebaseUid } from '../services/supabase';
 import { createHttpRateLimit } from '../middleware/rateLimit';
+import { FEEDBACK_KINDS, FEEDBACK_MESSAGE_MAX, cleanPage, postFeedbackThread, type FeedbackKind } from '../services/feedbackForum';
 
 // 2026-04-24 #supabase-retire Batch 1.1+1.2 (hineko_20260424_1240):
 // Dual-write feedback / error_reports to Firestore alongside Supabase.
@@ -62,7 +63,7 @@ async function sendDiscord(content: string): Promise<void> {
     await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: content.slice(0, 2000) }),
+      body: JSON.stringify({ content: content.slice(0, 2000), allowed_mentions: { parse: [] } }),
     });
   } catch (err) {
     console.error('[discord-webhook] failed:', err);
@@ -98,55 +99,61 @@ async function resolveUser(authHeader: string | undefined): Promise<{ supabaseId
   return null;
 }
 
-// POST /api/feedback — user-submitted bug report or suggestion
+// POST /api/feedback — 網站「問題回報」（錯誤／建議／文章內容）。
+// 2026-11-02 起每則回報在 DC 論壇 #百科問題回報 開一篇（services/feedbackForum.ts）；論壇大家看得到，
+// 所以只貼回報者自己填的暱稱（name，選填），不帶登入帳號名稱。沒有機器人 token 時退回舊的 webhook。
 router.post('/', feedbackLimit, async (req: Request, res: Response) => {
-  const { type, message, gameState } = req.body as {
+  const { type, message, gameState, name, page } = req.body as {
     type?: string;
     message?: string;
     gameState?: string;
+    name?: string;
+    page?: string;
   };
 
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     res.status(400).json({ error: 'message required' });
     return;
   }
-  if (type !== 'bug' && type !== 'suggestion') {
-    res.status(400).json({ error: 'type must be bug or suggestion' });
+  if (!FEEDBACK_KINDS.includes(type as FeedbackKind)) {
+    res.status(400).json({ error: 'type must be bug, suggestion or content' });
     return;
   }
+  const kind = type as FeedbackKind;
 
   const user         = await resolveUser(req.headers.authorization);
   const displayName  = user?.displayName || '匿名玩家';
-  const trimmedMsg   = message.trim().slice(0, 1000);
+  const trimmedMsg   = message.trim().slice(0, FEEDBACK_MESSAGE_MAX);
+  const publicName   = typeof name === 'string' ? name : '';
+  const pagePath     = cleanPage(page) || (typeof gameState === 'string' ? cleanPage(`#${gameState}`) : '');
 
   if (isSupabaseReady()) {
     const sb = getSupabaseClient()!;
     await sb.from('feedback').insert({
-      type,
+      type: kind === 'bug' ? 'bug' : 'suggestion', // 舊表只允許 bug／suggestion
       message: trimmedMsg,
       user_id:      user?.supabaseId || null,
       display_name: displayName,
-      game_state:   gameState || null,
+      game_state:   pagePath || null,
     }).then(({ error }) => { if (error) console.error('[feedback] db error:', error.message); });
   }
 
   // 2026-04-24 #supabase-retire dual-write to Firestore (Batch 1.1)
   await dualWriteFirestore('feedback', {
-    type,
+    type: kind,
     message: trimmedMsg,
     user_id:      user?.supabaseId || null,
     display_name: displayName,
-    game_state:   gameState || null,
+    game_state:   pagePath || null,
   });
 
-  const emoji    = type === 'bug' ? '🐛' : '💡';
-  const label    = type === 'bug' ? 'Bug 回報' : '功能建議';
-  const pageInfo = gameState ? ` (頁面: \`${gameState}\`)` : '';
-  await sendDiscord(
-    `${emoji} **${label}** — ${displayName}${pageInfo}\n>>> ${trimmedMsg.replace(/\n/g, '\n> ')}`
-  );
+  const posted = await postFeedbackThread({ kind, message: trimmedMsg, name: publicName, page: pagePath });
+  if (posted !== 'sent') {
+    const emoji = kind === 'bug' ? '🐛' : kind === 'content' ? '📖' : '💡';
+    await sendDiscord(`${emoji} **網站回報** — ${publicName.trim().slice(0, 32) || '匿名'}\n>>> ${trimmedMsg}`);
+  }
 
-  res.json({ ok: true });
+  res.json({ ok: true, forum: posted === 'sent' });
 });
 
 // POST /api/feedback/errors — auto-captured frontend errors

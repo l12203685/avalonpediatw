@@ -308,16 +308,17 @@ export async function addFriendByShortCode(
 // ── Feedback / Error Reporting ────────────────────────────────
 
 export async function submitFeedback(
-  data: { type: 'bug' | 'suggestion'; message: string; gameState?: string },
+  data: { type: 'bug' | 'suggestion' | 'content'; message: string; name?: string; page?: string },
   token?: string
 ): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  await fetch(`${SERVER_URL}/api/feedback`, {
+  const res = await fetch(`${SERVER_URL}/api/feedback`, {
     method: 'POST',
     headers,
     body: JSON.stringify(data),
   });
+  if (!res.ok) throw new Error(`feedback ${res.status}`);
 }
 
 export async function submitError(data: {
