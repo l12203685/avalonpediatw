@@ -21,12 +21,14 @@ const obs = {
 } as unknown as PlayerObservation;
 
 describe('beliefBotTables', () => {
-  it('the off-team approver reads much redder than with the human tables (round-15 refit: bot blues outer-white a red team 4.5%, reds 32%)', () => {
-    // The table fitted at the round-6 defaults (blues outer-whited 30–69%) read the off-team rejecters red instead.
+  it('the off-team approver reads redder than with the human tables (round-18 table: bot blues outer-white a red team 3.5%, reds 19%)', () => {
+    // The table fitted at the round-6 defaults (blues outer-whited 30–69%) read the off-team rejecters red instead. The round-15
+    // table (reds outer-whited 32%) read the approver redder still (+0.1 over human, 0.25 above the rejecters); since round 16
+    // the reds outer-white only a key team that can pass, so the round-18 table reads it less strongly.
     const human = bayesRedShare(obs);
     const bot = bayesRedShare(obs, { botTables: 1 });
-    expect(bot.get('P6') ?? 0).toBeGreaterThan((human.get('P6') ?? 0) + 0.1);
-    expect(bot.get('P7') ?? 1).toBeLessThan((bot.get('P6') ?? 0) - 0.25);
+    expect(bot.get('P6') ?? 0).toBeGreaterThan((human.get('P6') ?? 0) + 0.05);
+    expect(bot.get('P7') ?? 1).toBeLessThan((bot.get('P6') ?? 0) - 0.15);
     expect(bot.get('P3') ?? 1).toBeLessThan(human.get('P3') ?? 0);
   });
   it('weight 0 is the human posterior', () => {

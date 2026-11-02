@@ -640,6 +640,8 @@ export interface AgentTuning {
    * 第 17 回合藍方（三角色・信念表；`belief/BayesBelief.ts` 的 `keyVoteCells`）：關鍵局（第 3 局起、紅方已兩紅）的票改讀機器人表的
    * `voteKey` 格子（`fitBeliefLikelihoods.ts --bots` 從第 17 回合起另外統計），其他提議照原本的 `vote` 格子。第 16 回合起紅方
    * 不在隊上的關鍵隊外白只在這隊過得了時開（`redKeyWhite=1`），關鍵局的票和一般第 3 局起的票的比例不一樣；表裡沒有這些格子時照舊。
+   * 第 18 回合採用（和第 17 回合預設重新擬合、3000 局的表一起換成現行表 `likelihoods_bot.json`）：兩組確認各 6000 組種子（三段合併）
+   * +1.5 [+0.6, +2.4]／+1.3 [+0.3, +2.2]pp；只換表 +0.0。
    */
   beliefKeyVoteCells: boolean;
   /**
@@ -1082,7 +1084,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redKeyWhite: 1,
   redCleanWhite: 0,
   oberonNormalVote: false,
-  beliefKeyVoteCells: false,
+  beliefKeyVoteCells: true,
   merlinReuseNorm: 2,
   percivalMorganaR1: false,
 });
