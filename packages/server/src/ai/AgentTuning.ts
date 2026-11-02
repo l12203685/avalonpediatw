@@ -676,6 +676,8 @@ export interface AgentTuning {
    * 第 19 回合採用 1（對第 18 回合預設篩選 +1.0 [+0.5, +1.5]pp，兩組新種子 +0.5 [+0.1, +0.9]／+0.7 [+0.2, +1.2]pp、合併 4000 組 +0.6 [+0.3, +0.9]：
    * 刺中率約 +1～+2pp，三紅率不變）；2（篩選 +1.1）不比 1 好。
    * 再採用 3：對第 18 回合預設篩選 +1.8；在 1 之上兩組各 6000 組種子（三段合併）+0.35 [+0.10, +0.60]／+0.27 [+0.05, +0.48]pp（六段都是正的，單段只有一段不含 0）。
+   * 第 21 回合候選（`VisibleRedProposals.reuseLeadLogRatio`）：4 = 同 3，乘數改成分局數、用自我對打量到的比例（第 2 局沒照派 ×0.25、第 3 局起 ×0.65）；
+   * 5 = 同 4，再讀「照派了」（第 2 局 ×1.1、第 3 局起 ×1.4：梅林照派的比例比其他藍方高）。
    */
   assassinReuseRead: number;
   /**
@@ -1343,7 +1345,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'assassinReuseRead') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`assassinReuseRead needs 0–3, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 5) throw new Error(`assassinReuseRead needs 0–5, got "${raw}"`);
     return { assassinReuseRead: value };
   }
   if (name === 'redHideReuse') {

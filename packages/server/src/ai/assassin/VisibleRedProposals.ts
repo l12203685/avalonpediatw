@@ -328,3 +328,61 @@ export function missedReuseLeads(obs: PlayerObservation, candidate: string, sigh
 
 /** ln of the likelihood ratio P(lead | Merlin) / P(lead | loyal) of one passed-over re-proposal (`missedReuseLeads`). */
 export const MISSED_REUSE_LOG_LR = Math.log(0.25);
+
+/** Round 21 `assassinReuseRead` 4–5: the re-proposal-norm leads of one candidate, split by round (R2 vs R3+) and outcome. */
+export interface ReuseLeadCounts {
+  missR2: number;
+  missR3: number;
+  reuseR2: number;
+  reuseR3: number;
+}
+
+/**
+ * Round 21 `assassinReuseRead` 4–5: the same leads `missedReuseLeads` reads (Merlin's re-proposal norm holds a red he
+ * sees, non-forced, the lead has room for that team), counted by round and by whether `candidate` passed the team over
+ * (`miss*`) or put the whole team in (`reuse*`).
+ */
+export function reuseLeadCounts(obs: PlayerObservation, candidate: string, sight: MerlinSight = merlinSightFromAssassin(obs)): ReuseLeadCounts {
+  const out: ReuseLeadCounts = { missR2: 0, missR3: 0, reuseR2: 0, reuseR3: 0 };
+  for (const v of obs.voteHistory) {
+    if (v.leader !== candidate || v.attempt >= 5 || v.round < 2) continue;
+    const before = obs.questResults.slice(0, v.round - 1);
+    if (v.round >= 3 && before.filter((r) => r === 'fail').length >= 2) continue;
+    const done = obs.questHistory.filter((q) => q.round < v.round && before[q.round - 1] === 'success').map((q) => q.round);
+    const target = v.round === 2 ? (before[0] === 'success' ? 1 : 0) : Math.max(0, ...done);
+    const t = obs.questHistory.find((q) => q.round === target);
+    if (!t || !t.team.some((id) => sight.certain.has(id) || sight.ambiguous.includes(id))) continue;
+    if (t.team.length > v.team.length) continue;
+    const reused = t.team.every((id) => v.team.includes(id));
+    if (v.round === 2) {
+      if (reused) out.reuseR2++;
+      else out.missR2++;
+    } else if (reused) out.reuseR3++;
+    else out.missR3++;
+  }
+  return out;
+}
+
+/**
+ * Round 21 `assassinReuseRead` 4–5: likelihood ratios P(lead | Merlin) / P(lead | other blue) measured in round-20 self-play
+ * (`reusediag`, round-19 default, Merlin re-proposes every time the public gate lets him). R2: Merlin never passes the
+ * norm over, loyal / Percival captains about one time in ten; R3+: Merlin passes it over about a third of the time
+ * (the public gate or the team size), other blue captains about half the time — the ×0.25 of mode 3 is too strong there.
+ */
+export const REUSE_LEAD_LR = {
+  missR2: 0.25,
+  missR3: 0.65,
+  reuseR2: 1.1,
+  reuseR3: 1.4,
+} as const;
+
+/**
+ * Round 21 `assassinReuseRead` 4–5: the log-likelihood the re-proposal norm adds for `candidate` — mode 4 reads the
+ * passed-over leads with the round-dependent ratios; mode 5 also credits the re-proposals themselves.
+ */
+export function reuseLeadLogRatio(obs: PlayerObservation, candidate: string, mode: number, sight: MerlinSight = merlinSightFromAssassin(obs)): number {
+  const c = reuseLeadCounts(obs, candidate, sight);
+  let s = c.missR2 * Math.log(REUSE_LEAD_LR.missR2) + c.missR3 * Math.log(REUSE_LEAD_LR.missR3);
+  if (mode >= 5) s += c.reuseR2 * Math.log(REUSE_LEAD_LR.reuseR2) + c.reuseR3 * Math.log(REUSE_LEAD_LR.reuseR3);
+  return s;
+}
