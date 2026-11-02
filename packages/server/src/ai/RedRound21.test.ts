@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation, VoteRecord } from './types';
 import { DEFAULT_AGENT_TUNING, parseTuningFlag } from './AgentTuning';
 import { HeuristicAgent } from './HeuristicAgent';
-import { missedReuseLeads, reuseLeadCounts, reuseLeadLogRatio, REUSE_LEAD_LR } from './assassin/VisibleRedProposals';
+import { missedReuseLeads, reuseLeadCounts, reuseLeadLogRatio, REUSE_LEAD_LR, REUSE_MODE_FACTORS } from './assassin/VisibleRedProposals';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const vote = (round: number, attempt: number, leader: string, team: string[], approved = false): VoteRecord =>
@@ -41,8 +41,8 @@ function assassination(extra: VoteRecord[] = []): PlayerObservation {
 describe('flags', () => {
   it('parse 4 and 5; default stays 3', () => {
     expect(parseTuningFlag('assassinReuseRead=4')).toEqual({ assassinReuseRead: 4 });
-    expect(parseTuningFlag('assassinReuseRead=8')).toEqual({ assassinReuseRead: 8 });
-    expect(() => parseTuningFlag('assassinReuseRead=9')).toThrow();
+    expect(parseTuningFlag('assassinReuseRead=10')).toEqual({ assassinReuseRead: 10 });
+    expect(() => parseTuningFlag('assassinReuseRead=11')).toThrow();
     expect(DEFAULT_AGENT_TUNING.assassinReuseRead).toBe(3);
   });
 });
@@ -90,6 +90,14 @@ describe('reuseLeadLogRatio', () => {
     expect(reuseLeadLogRatio(obs, 'P4', 3)).toBeCloseTo(0);
     expect(reuseLeadLogRatio(obs, 'P7', 7)).toBeCloseTo(Math.log(0.25));
   });
+  it('modes 9 and 10 use the fitted factors', () => {
+    for (const mode of [9, 10]) {
+      const f = REUSE_MODE_FACTORS[mode];
+      expect(reuseLeadLogRatio(obs, 'P4', mode)).toBeCloseTo(Math.log(f.reuse[1]));
+      expect(reuseLeadLogRatio(obs, 'P6', mode)).toBeCloseTo(Math.log(f.miss[0]));
+      expect(reuseLeadLogRatio(obs, 'P7', mode)).toBeCloseTo(Math.log(f.miss[1]));
+    }
+  });
   it('mode 8 also reads a clean norm team passed over', () => {
     // R1 P3 P4 P5 (clean) succeeded; R2 P6 left it out.
     const clean = {
@@ -110,7 +118,7 @@ describe('reuseLeadLogRatio', () => {
 
 describe('assassinate with modes 4 and 5', () => {
   it('returns a blue target', () => {
-    for (const mode of [3, 4, 5, 6, 7, 8]) {
+    for (const mode of [3, 4, 5, 6, 7, 8, 9, 10]) {
       const agent = new HeuristicAgent('P1', undefined, undefined, { ...DEFAULT_AGENT_TUNING, assassinReuseRead: mode });
       const a = agent.act(assassination());
       expect(a.type).toBe('assassinate');

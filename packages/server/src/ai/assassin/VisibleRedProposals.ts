@@ -329,7 +329,7 @@ export function missedReuseLeads(obs: PlayerObservation, candidate: string, sigh
 /** ln of the likelihood ratio P(lead | Merlin) / P(lead | loyal) of one passed-over re-proposal (`missedReuseLeads`). */
 export const MISSED_REUSE_LOG_LR = Math.log(0.25);
 
-/** Round 21 `assassinReuseRead` 4–8: the re-proposal-norm leads of one candidate, split by round (R2 vs R3+) and outcome. */
+/** Round 21 `assassinReuseRead` 4–10: the re-proposal-norm leads of one candidate, split by round (R2 vs R3+) and outcome. */
 export interface ReuseLeadCounts {
   missR2: number;
   missR3: number;
@@ -341,7 +341,7 @@ export interface ReuseLeadCounts {
 }
 
 /**
- * Round 21 `assassinReuseRead` 4–8: the leads `missedReuseLeads` reads (the team Merlin's re-proposal norm points at —
+ * Round 21 `assassinReuseRead` 4–10: the leads `missedReuseLeads` reads (the team Merlin's re-proposal norm points at —
  * R2 the successful R1, R3+ the latest successful mission while red is short of two fails —, non-forced, the lead has
  * room for that team), counted by round and by whether `candidate` passed the team over (`miss*`) or put the whole team
  * in (`reuse*`); `cleanMiss*` count the passed-over norm teams that hold no red Merlin sees.
@@ -374,7 +374,7 @@ export function reuseLeadCounts(obs: PlayerObservation, candidate: string, sight
 }
 
 /**
- * Round 21 `assassinReuseRead` 4–8: likelihood ratios P(lead | Merlin) / P(lead | other blue captain) measured in
+ * Round 21 `assassinReuseRead` 4–10: likelihood ratios P(lead | Merlin) / P(lead | other blue captain) measured in
  * self-play (`reusediag21`, round-19 default, 2000 games; Merlin re-proposes every time the public gate lets him).
  * Norm team with a seen red — R2: Merlin passed it over 0 / 140 times, loyal / Percival 41 / 520 (≈ 0.05);
  * R3+: Merlin 63 / 172, others 519 / 913 (≈ 0.65). Re-proposed — R2 1.00 vs 0.92 (≈ 1.1), R3+ 0.63 vs 0.43 (≈ 1.45).
@@ -389,28 +389,37 @@ export const REUSE_LEAD_LR = {
   cleanMissR3: 0.73,
 } as const;
 
-/** Round 21 `assassinReuseRead` 4–8: the passed-over factors [R2, R3+] each mode uses (mode 3: 0.25 in both). */
-export const REUSE_MISS_FACTORS: Readonly<Record<number, readonly [number, number]>> = {
-  3: [0.25, 0.25],
-  4: [0.25, REUSE_LEAD_LR.missR3],
-  5: [REUSE_LEAD_LR.missR2, REUSE_LEAD_LR.missR3],
-  6: [REUSE_LEAD_LR.missR2, 0.25],
-  7: [0.25, 0.25],
-  8: [0.25, 0.25],
+/**
+ * Round 21 `assassinReuseRead` 4–10: the factors each mode multiplies per lead — passed over with a seen red
+ * [R2, R3+], re-proposed [R2, R3+], passed over a clean norm team [R2, R3+] (1 = no read). 3–8 hand-set from the
+ * measured ratios (`REUSE_LEAD_LR`); 9 and 10 fitted (conditional logit over the tier pool, 1,672 assassinations of
+ * round-19-default self-play, label = the real Merlin): 9 refits these factors only, 10 refits them with the weights of
+ * the model score, the vote read and the lead read (`REUSE_STACK_WEIGHTS`).
+ */
+export const REUSE_MODE_FACTORS: Readonly<Record<number, { miss: readonly [number, number]; reuse: readonly [number, number]; clean: readonly [number, number] }>> = {
+  3: { miss: [0.25, 0.25], reuse: [1, 1], clean: [1, 1] },
+  4: { miss: [0.25, REUSE_LEAD_LR.missR3], reuse: [1, 1], clean: [1, 1] },
+  5: { miss: [REUSE_LEAD_LR.missR2, REUSE_LEAD_LR.missR3], reuse: [1, 1], clean: [1, 1] },
+  6: { miss: [REUSE_LEAD_LR.missR2, 0.25], reuse: [1, 1], clean: [1, 1] },
+  7: { miss: [0.25, 0.25], reuse: [REUSE_LEAD_LR.reuseR2, REUSE_LEAD_LR.reuseR3], clean: [1, 1] },
+  8: { miss: [0.25, 0.25], reuse: [1, 1], clean: [REUSE_LEAD_LR.cleanMissR2, REUSE_LEAD_LR.cleanMissR3] },
+  9: { miss: [0.12, 0.2], reuse: [0.65, 2.3], clean: [0.18, 0.65] },
+  10: { miss: [0.14, 0.33], reuse: [1.3, 2.55], clean: [0.19, 0.8] },
 };
 
+/** Round 21 `assassinReuseRead=10`: the refitted weights of the model score, the vote read and the lead read (default 1 / 0.5 / 1). */
+export const REUSE_STACK_WEIGHTS = { model: 1.4, vote: 0.75, lead: 0.57 } as const;
+
 /**
- * Round 21 `assassinReuseRead` 4–8: the log-likelihood the re-proposal norm adds for `candidate`. Passed-over leads with
- * a seen red: 4 = R2 ×0.25 (as mode 3), R3+ ×0.65 (measured); 5 = both measured (R2 ×0.05, R3+ ×0.65); 6 = R2 ×0.05,
- * R3+ ×0.25 (as mode 3). 7 = mode 3 plus the re-proposals themselves (R2 ×1.1, R3+ ×1.45); 8 = mode 3 plus passed-over
- * clean norm teams (R2 ×0.12, R3+ ×0.73).
+ * Round 21 `assassinReuseRead` 4–10: the log-likelihood the re-proposal norm adds for `candidate` (`REUSE_MODE_FACTORS`):
+ * 4 = passed over with a seen red R2 ×0.25 (as mode 3), R3+ ×0.65 (measured); 5 = both measured (×0.05, ×0.65);
+ * 6 = R2 ×0.05, R3+ ×0.25; 7 = mode 3 plus the re-proposals themselves (×1.1, ×1.45); 8 = mode 3 plus passed-over clean
+ * norm teams (×0.12, ×0.73); 9, 10 = fitted.
  */
 export function reuseLeadLogRatio(obs: PlayerObservation, candidate: string, mode: number, sight: MerlinSight = merlinSightFromAssassin(obs)): number {
   const c = reuseLeadCounts(obs, candidate, sight);
-  const L = REUSE_LEAD_LR;
-  const [f2, f3] = REUSE_MISS_FACTORS[mode] ?? REUSE_MISS_FACTORS[3];
-  let s = c.missR2 * Math.log(f2) + c.missR3 * Math.log(f3);
-  if (mode === 7) s += c.reuseR2 * Math.log(L.reuseR2) + c.reuseR3 * Math.log(L.reuseR3);
-  if (mode === 8) s += c.cleanMissR2 * Math.log(L.cleanMissR2) + c.cleanMissR3 * Math.log(L.cleanMissR3);
-  return s;
+  const f = REUSE_MODE_FACTORS[mode] ?? REUSE_MODE_FACTORS[3];
+  return c.missR2 * Math.log(f.miss[0]) + c.missR3 * Math.log(f.miss[1])
+    + c.reuseR2 * Math.log(f.reuse[0]) + c.reuseR3 * Math.log(f.reuse[1])
+    + c.cleanMissR2 * Math.log(f.clean[0]) + c.cleanMissR3 * Math.log(f.clean[1]);
 }

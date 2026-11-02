@@ -14,7 +14,7 @@ const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 describe('flags', () => {
   it('parse; legacy off, assassinReuseRead=3 by default', () => {
     expect(parseTuningFlag('assassinReuseRead=2')).toEqual({ assassinReuseRead: 2 });
-    expect(() => parseTuningFlag("assassinReuseRead=9")).toThrow();
+    expect(() => parseTuningFlag("assassinReuseRead=11")).toThrow();
     expect(parseTuningFlag('redHideReuse=0.5')).toEqual({ redHideReuse: 0.5 });
     expect(() => parseTuningFlag('redHideReuse=2')).toThrow();
     expect(LEGACY_AGENT_TUNING.assassinReuseRead).toBe(0);

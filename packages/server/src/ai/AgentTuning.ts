@@ -679,6 +679,7 @@ export interface AgentTuning {
    * 第 21 回合候選（`VisibleRedProposals.reuseLeadLogRatio`，比例用第 19 回合預設 2000 局自我對打量：梅林第 2 局沒照派 0／140 次、其他藍方 41／520；第 3 局起 63／172 對 519／913）：
    * 沒照派的乘數 4 = 第 2 局 ×0.25（同 3）、第 3 局起 ×0.65（量到的）；5 = 兩局都用量到的（×0.05、×0.65）；6 = 第 2 局 ×0.05、第 3 局起 ×0.25（同 3）；
    * 7 = 同 3，再讀「照派了」（第 2 局 ×1.1、第 3 局起 ×1.45）；8 = 同 3，那一隊乾淨（沒有看得到的紅）而沒照派也讀（第 2 局 ×0.12、第 3 局起 ×0.73）。
+   * 9 = 三種乘數都用自我對打的刺殺資料擬合（條件 logit，1,672 次刺殺）；10 = 同 9，連模型分數、讀票、讀派隊的權重一起擬合（`REUSE_STACK_WEIGHTS`）。
    */
   assassinReuseRead: number;
   /**
@@ -1346,7 +1347,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'assassinReuseRead') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 8) throw new Error(`assassinReuseRead needs 0–8, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 10) throw new Error(`assassinReuseRead needs 0–10, got "${raw}"`);
     return { assassinReuseRead: value };
   }
   if (name === 'redHideReuse') {
