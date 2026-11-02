@@ -88,11 +88,17 @@ export function gameKind(game: RecordedGame): string {
 
 /** 只貼真人 10 人局（遊玩頁內建機器人的練習局不貼）。 */
 export function isPostable(game: RecordedGame): boolean {
+  return postSkipReason(game) === null;
+}
+
+/** 不貼 DC 的原因（log 用，不含暱稱）；可以貼時 null。 */
+export function postSkipReason(game: RecordedGame): string | null {
   const users = game.end?.users ?? [];
-  if (users.length !== 10 || users.some((u) => (u as { is_robot?: boolean }).is_robot)) return false;
+  if (users.length !== 10) return `${users.length} 人局`;
+  if (users.some((u) => (u as { is_robot?: boolean }).is_robot)) return '有機器人';
   // 記錄員中途才進房的局（開局前的提議與任務沒看到）不貼：10/31 第一晚就貼出一篇缺第 1 局的牌譜
-  if ((game as { joinedMidGame?: boolean }).joinedMidGame) return false;
-  return isCompleteRecord(game);
+  if ((game as { joinedMidGame?: boolean }).joinedMidGame) return '中途加入';
+  return isCompleteRecord(game) ? null : '牌譜不完整（沒打完或提議／任務人數不對）';
 }
 
 /** 牌譜完整：第 1 次提議是 3 人隊、任務人數依序 3-4-4-5-5，而且任務已經分出勝負（三藍或三紅）。 */
