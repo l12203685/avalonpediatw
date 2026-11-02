@@ -29,7 +29,7 @@ import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelW
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
 import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
-import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence, withoutReuseLeaders, missedReuseLeads, MISSED_REUSE_LOG_LR } from './assassin/VisibleRedProposals';
+import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence, withoutReuseLeaders, missedReuseLeads, MISSED_REUSE_LOG_LR, reuseLeadLogRatio, REUSE_STACK_WEIGHTS } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
@@ -2672,13 +2672,18 @@ export class HeuristicAgent implements AvalonAgent {
       // `assassinReuseRead=2`: the model's captain features skip those re-proposals too (blue captains' only).
       const modelObs = this.tuning.assassinReuseRead === 2 ? withoutReuseLeaders(obs, evilSet) : obs;
       const scores = scoreAssassinCandidates(modelObs, goodPlayers, this.assassinModelWeights);
+      // Round 21 (red) `assassinReuseRead=10`: the model score, vote read and lead read re-weighted by the stacked fit.
+      const stacked = this.tuning.assassinReuseRead === 10;
+      if (stacked) for (const id of goodPlayers) scores.set(id, REUSE_STACK_WEIGHTS.model * (scores.get(id) ?? 0));
+      const voteW = stacked ? REUSE_STACK_WEIGHTS.vote : voteWeight;
+      const leadW = stacked ? REUSE_STACK_WEIGHTS.lead : leadWeight;
       // Round 6 (red) candidate `assassinMerlinVotes` (assassin/MerlinVoteRead.ts): read Merlin off the R3+ votes.
       if (voteWeight > 0) {
         const reds = [...evilSet];
         const m = this.tuning.assassinVoteModel;
         const model = m >= 3 ? 'normalFit13' : m === 2 ? 'normalFit' : m ? 'normal' : 'strict';
         const eps = this.tuning.assassinVoteEps ?? 0;
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteWeight * merlinVoteLogRatio(obs, id, reds, model, eps));
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteW * merlinVoteLogRatio(obs, id, reds, model, eps));
       }
       // Round 12 (red) candidate `assassinLakeRead` (assassin/MerlinLakeRead.ts): Merlin never lakes a red he sees.
       if (lakeWeight > 0) {
@@ -2689,11 +2694,15 @@ export class HeuristicAgent implements AvalonAgent {
       if (leadWeight > 0) {
         const reds = [...evilSet];
         const leadOpts = this.tuning.assassinLeadReadBot ? { botTables: this.tuning.beliefBotTables ?? 0 } : {};
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadWeight * merlinLeadLogRatio(obs, id, reds, leadOpts, visibleRed.ignoreReuse));
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadW * merlinLeadLogRatio(obs, id, reds, leadOpts, visibleRed.ignoreReuse));
       }
       // `assassinReuseRead=3`: a captain who passed over Merlin's re-proposal norm is less likely Merlin.
-      if ((this.tuning.assassinReuseRead ?? 0) >= 3) {
+      const reuseMode = this.tuning.assassinReuseRead ?? 0;
+      if (reuseMode === 3) {
         for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + MISSED_REUSE_LOG_LR * missedReuseLeads(obs, id));
+      } else if (reuseMode >= 4) {
+        // Round 21 (red) `assassinReuseRead` 4–10: round-dependent / measured / fitted factors, re-proposal credit, clean misses.
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + reuseLeadLogRatio(obs, id, reuseMode));
       }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }

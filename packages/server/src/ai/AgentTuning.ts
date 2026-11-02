@@ -676,11 +676,18 @@ export interface AgentTuning {
    * 第 19 回合採用 1（對第 18 回合預設篩選 +1.0 [+0.5, +1.5]pp，兩組新種子 +0.5 [+0.1, +0.9]／+0.7 [+0.2, +1.2]pp、合併 4000 組 +0.6 [+0.3, +0.9]：
    * 刺中率約 +1～+2pp，三紅率不變）；2（篩選 +1.1）不比 1 好。
    * 再採用 3：對第 18 回合預設篩選 +1.8；在 1 之上兩組各 6000 組種子（三段合併）+0.35 [+0.10, +0.60]／+0.27 [+0.05, +0.48]pp（六段都是正的，單段只有一段不含 0）。
+   * 第 21 回合候選（`VisibleRedProposals.reuseLeadLogRatio`，比例用第 19 回合預設 2000 局自我對打量：梅林第 2 局沒照派 0／140 次、其他藍方 41／520；第 3 局起 63／172 對 519／913）：
+   * 沒照派的乘數 4 = 第 2 局 ×0.25（同 3）、第 3 局起 ×0.65（量到的）；5 = 兩局都用量到的（×0.05、×0.65）；6 = 第 2 局 ×0.05、第 3 局起 ×0.25（同 3）；
+   * 7 = 同 3，再讀「照派了」（第 2 局 ×1.1、第 3 局起 ×1.45）；8 = 同 3，那一隊乾淨（沒有看得到的紅）而沒照派也讀（第 2 局 ×0.12、第 3 局起 ×0.73）。
+   * 9 = 三種乘數都用自我對打的刺殺資料擬合（條件 logit，1,672 次刺殺）；10 = 同 9，連模型分數、讀票、讀派隊的權重一起擬合（`REUSE_STACK_WEIGHTS`）。
+   * 第 21 回合不採用（維持 3）：4 −0.4 [−0.8, −0.0]pp（把第 3 局起調回量到的比例反而變差）；5／6／7／8 +0.0～+0.2；10 −0.8；
+   * 9 兩組各 6000 組種子 +0.45 [+0.08, +0.82]／+0.33 [−0.06, +0.73]pp（合併 12000 組 +0.39 [+0.12, +0.66]，第二組碰 0，留給第 2 階段）。
    */
   assassinReuseRead: number;
   /**
    * 第 19 回合紅方・刺客（`RedRound2.redHideReuseCard`）：第 1 局藏牌的刺客，所在的成功隊在第 3 局起被照派（之前一次成功任務的隊整隊
    * 都在、刺客在那一隊上、隊上沒有其他看得到的紅）時，以這個比例再出成功藏身（紅方未滿兩紅、藍方未滿兩藍）。0 = 關。
+   * 第 19 回合 1 篩選 −0.2／+0.0；第 21 回合照第 1C 節測 0.5：同種子 0.5 與 1 都是 +0.4（配對 −0.05），50% 不比 100% 好，維持 0。
    */
   redHideReuse: number;
   /**
@@ -1343,7 +1350,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'assassinReuseRead') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`assassinReuseRead needs 0–3, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 10) throw new Error(`assassinReuseRead needs 0–10, got "${raw}"`);
     return { assassinReuseRead: value };
   }
   if (name === 'redHideReuse') {
