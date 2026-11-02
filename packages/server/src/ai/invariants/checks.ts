@@ -61,6 +61,8 @@ const TWO_FAILS = 'two fails needed (R4)';
 /** Edward 2026-10-30：梅林「正常票內白」（自己在隊上時照忠臣贊成）沒有任何問題 — INV-V1 不算違規。 */
 const MERLIN_ON_TEAM = 'Merlin on-team normal vote (owner 10/30)';
 const MERLIN_REUSE = 'Merlin re-proposes a successful mission team (照派成功的隊, owner 11/01)';
+/** Round 19 `assassinReuseRead`: the target's only seen-red leads re-proposed a successful mission team (the norm). */
+const ASSASSIN_REUSE = 'target only re-proposed a successful mission team (照派成功的隊, assassinReuseRead)';
 const L1_EMPTY = 'L1 empty (L0 fallback)';
 /** The 10/26 conventions contradicted the table and were dropped (`enumerateL1`): what they proved is not proved. */
 const CONVENTIONS_DROPPED = 'A1/A2 contradicted (A0 only)';
@@ -194,16 +196,25 @@ function multisetPermutations(items: readonly string[]): string[][] {
  * (Edward 2026-10-26).
  * `null` when the roster does not fit the lobby (counted, not checked).
  */
-function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[], ignoreDoomed = false): Set<string> | null {
+function a2FlaggedIndependently(obs: PlayerObservation, candidates: readonly string[], ignoreDoomed = false, ignoreReuse = false): Set<string> | null {
   // Edward 2026-10-28 (round 2, B): the non-forced R1–R2 proposals the normal votes always reject do not count.
   if (ignoreDoomed) obs = { ...obs, voteHistory: obs.voteHistory.filter((v) => !(v.round <= 2 && v.attempt < 5)) };
   // 刺殺階段紅方開牌相認 (Edward 2026-10-26): with the reds' roles known, a lead certainly holds a red
   // Merlin sees iff it holds a red who is not Mordred.
   if (obs.allEvilRoles) {
     const seen = new Set(Object.entries(obs.allEvilRoles).filter(([, r]) => r !== 'mordred').map(([id]) => id));
+    // Round 19 `assassinReuseRead`: an R3+ non-forced lead, red short of two fails, holding the whole team of an earlier
+    // successful mission with every seen red on it from that mission, is the re-proposal norm (written from the rules here).
+    const reuse = (v: (typeof obs.voteHistory)[number]): boolean => {
+      if (!ignoreReuse || v.round < 3 || v.attempt >= 5) return false;
+      if (obs.questResults.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2) return false;
+      const reds = v.team.filter((id) => seen.has(id));
+      return obs.questHistory.some((q) => q.round < v.round && obs.questResults[q.round - 1] === 'success'
+        && q.team.every((id) => v.team.includes(id)) && reds.every((id) => q.team.includes(id)));
+    };
     const flagged = new Set<string>();
     const cand = new Set(candidates);
-    for (const v of obs.voteHistory) if (cand.has(v.leader) && v.team.some((id) => seen.has(id))) flagged.add(v.leader);
+    for (const v of obs.voteHistory) if (cand.has(v.leader) && v.team.some((id) => seen.has(id)) && !reuse(v)) flagged.add(v.leader);
     return flagged;
   }
   const me = obs.myPlayerId;
@@ -430,8 +441,12 @@ export function checkDecision(
       const flagged = candidates.filter((id) => flaggedSet?.has(id) ?? false);
       const humanTarget = rec.human?.target;
       L.inc(`A.${obs.playerCount}p.${obs.myRole}`);
+      // Round 19 `assassinReuseRead`: a target flagged only by re-proposals of a successful mission team is exempt.
+      const reuseRead = (rec.assassinReuseRead ?? 0) >= 1 && obs.allEvilRoles !== undefined;
+      const strictSet = reuseRead ? a2FlaggedIndependently(obs, candidates, rec.assassinIgnoreDoomed === true, true) : flaggedSet;
       if (flagged.length > 0) {
         if (flagged.length === candidates.length) L.record('INV-A2', { exempt: 'every candidate proposed a seen red' });
+        else if (reuseRead && flagged.includes(target) && !(strictSet?.has(target) ?? false)) L.record('INV-A2', { exempt: ASSASSIN_REUSE });
         else {
           L.record('INV-A2', { violated: flagged.includes(target) });
           if (humanTarget !== undefined) L.human('INV-A2', flagged.includes(humanTarget));

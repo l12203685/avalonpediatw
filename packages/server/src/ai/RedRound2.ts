@@ -54,3 +54,24 @@ export function redHideR1Card(tuning: Readonly<AgentTuning>, obs: PlayerObservat
   if (team.some((id) => id !== obs.myPlayerId && obs.knownEvils.includes(id))) return null;
   return tuning.redHideR1 >= 1 || Math.random() < tuning.redHideR1 ? 'success' : null;
 }
+
+/**
+ * 第 19 回合 `redHideReuse`（紅方・刺客）：第 1 局藏牌的刺客所在的成功隊在第 3 局起被照派（之前一次成功任務的隊整隊都在、刺客在那一隊上、
+ * 隊上沒有其他看得到的紅）時，以比例 p 再出成功藏身——第 18 回合起梅林照派最近一次成功的任務（`merlinReuseNorm=3`），照派的隊出失敗
+ * 等於把那一隊（和照派的隊長）一起洗掉；紅方未滿兩紅、藍方未滿兩藍時才藏（藍方兩藍時藏牌直接送進刺殺）。Draws `Math.random` only when it applies.
+ */
+export function redHideReuseCard(tuning: Readonly<AgentTuning>, obs: PlayerObservation): 'success' | null {
+  const p = tuning.redHideReuse ?? 0;
+  if (!(p > 0) || obs.myRole !== 'assassin') return null;
+  const round = obs.currentRound ?? 1;
+  if (round < 3) return null;
+  const results = obs.questResults ?? [];
+  if (results.filter((r) => r === 'fail').length >= 2 || results.filter((r) => r === 'success').length >= 2) return null;
+  const me = obs.myPlayerId;
+  const team = obs.proposedTeam ?? [];
+  if (team.some((id) => id !== me && obs.knownEvils.includes(id))) return null;
+  const reused = obs.questHistory.some((q) => q.round < round && results[q.round - 1] === 'success'
+    && q.team.includes(me) && q.team.every((id) => team.includes(id)));
+  if (!reused) return null;
+  return p >= 1 || Math.random() < p ? 'success' : null;
+}
