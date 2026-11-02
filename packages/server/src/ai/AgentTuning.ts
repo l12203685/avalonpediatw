@@ -674,7 +674,8 @@ export interface AgentTuning {
    * 3 = 同 1，再讀「該照派而沒照派」：梅林的常態下會照派的那一隊（第 2 局＝成功的第 1 局、第 3 局起＝最近一次成功的任務，隊上有梅林看得到的紅）
    * 候選人當隊長卻沒有整隊放進去，每次乘 0.25（梅林只有公開閘門擋下時才不照派，忠臣常常不照派）。0 = 關。
    * 第 19 回合採用 1（對第 18 回合預設篩選 +1.0 [+0.5, +1.5]pp，兩組新種子 +0.5 [+0.1, +0.9]／+0.7 [+0.2, +1.2]pp、合併 4000 組 +0.6 [+0.3, +0.9]：
-   * 刺中率約 +1～+2pp，三紅率不變）；2（篩選 +1.1）不比 1 好；3 對預設篩選 +1.8，但在 1 之上兩組新種子 +0.1／+0.3（合併 +0.2 [−0.1, +0.5]），不採用。
+   * 刺中率約 +1～+2pp，三紅率不變）；2（篩選 +1.1）不比 1 好。
+   * 再採用 3：對第 18 回合預設篩選 +1.8；在 1 之上兩組各 6000 組種子（三段合併）+0.35 [+0.10, +0.60]／+0.27 [+0.05, +0.48]pp（六段都是正的，單段只有一段不含 0）。
    */
   assassinReuseRead: number;
   /**
@@ -1111,7 +1112,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefKeyVoteCells: true,
   merlinReuseNorm: 3,
   percivalMorganaR1: false,
-  assassinReuseRead: 1,
+  assassinReuseRead: 3,
   redHideReuse: 0,
 });
 
