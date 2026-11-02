@@ -34,6 +34,7 @@ import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
 import AdminImportPage from './pages/AdminImportPage';
 import HelpPage from './pages/HelpPage';
+import FeedbackButton from './components/FeedbackButton';
 import ToastContainer from './components/ToastContainer';
 import { submitError } from './services/api';
 import { PUBLIC_STATS_STATES, parseStatsHash, type StatsLink } from './utils/statsLinks';
@@ -500,6 +501,8 @@ function App(): JSX.Element {
           {gameState === 'resetPassword'    && <ResetPasswordPage />}
         </div>
       )}
+      {/* 問題回報（Edward 2026-11-02）：內容頁右下角，送出後貼到 DC 論壇 #百科問題回報 */}
+      {siteTab && (isAuthenticated || currentPlayer || publicStatsPage) && <FeedbackButton />}
       <ToastContainer />
     </div>
   );
