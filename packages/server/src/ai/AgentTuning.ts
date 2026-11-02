@@ -694,6 +694,11 @@ export interface AgentTuning {
    * （公開視角最乾淨的隊整隊包含要照派的隊）——照派的頻率跟忠臣一樣，照派、沒照派都不再是梅林的特徵。false = 關。
    */
   merlinReusePublic: boolean;
+  /**
+   * 第 20 回合藍方・忠臣／派西（`GoodCleanVote.goodKeyVoteReject`）：關鍵局門檻的一半一半——每一票以 50% 用這個門檻、50% 用 `goodKeyVote`
+   * （照座位、局、提議次數與隊伍雜湊；同一局面每次一樣）。Edward 2026-11-02：結果中性的改法改測 50%。0 = 關。
+   */
+  goodKeyVoteHalf: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -791,6 +796,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redHideReuse',
   'merlinReuseSkip',
   'merlinReusePublic',
+  'goodKeyVoteHalf',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -887,6 +893,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redHideReuse: 0,
   merlinReuseSkip: 0,
   merlinReusePublic: false,
+  goodKeyVoteHalf: 0,
 });
 
 /**
@@ -1131,6 +1138,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redHideReuse: 0,
   merlinReuseSkip: 0,
   merlinReusePublic: false,
+  goodKeyVoteHalf: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1227,6 +1235,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redHideReuse: 'AVALON_TUNING_RED_HIDE_REUSE',
   merlinReuseSkip: 'AVALON_TUNING_MERLIN_REUSE_SKIP',
   merlinReusePublic: 'AVALON_TUNING_MERLIN_REUSE_PUBLIC',
+  goodKeyVoteHalf: 'AVALON_TUNING_GOOD_KEY_VOTE_HALF',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1339,6 +1348,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`redHideReuse needs a number in [0, 1], got "${raw}"`);
     return { redHideReuse: value };
   }
+  if (name === 'goodKeyVoteHalf') {
+    const value = raw === undefined ? 0.65 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`goodKeyVoteHalf needs a number in [0, 1], got "${raw}"`);
+    return { goodKeyVoteHalf: value };
+  }
   if (name === 'merlinReuseSkip') {
     const value = raw === undefined ? 0.5 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`merlinReuseSkip needs a number in [0, 1], got "${raw}"`);
@@ -1431,7 +1445,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

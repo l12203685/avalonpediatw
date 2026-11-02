@@ -59,6 +59,17 @@ export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservati
 }
 
 /**
+ * `goodKeyVoteHalf`（第 20 回合・忠臣／派西）：這一票用另一個門檻嗎（50%，照座位、局、提議次數與隊伍雜湊）。
+ */
+export function goodKeyVoteHalfNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  if (!((tuning.goodKeyVoteHalf ?? 0) > 0)) return false;
+  let h = 0x811c9dc5;
+  const key = `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${(obs.proposedTeam ?? []).join(',')}|${obs.voteHistory.length}|keyHalf`;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return h % 2 === 0;
+}
+
+/**
  * 關鍵局的好人票（優化迴圈第 13 回合・藍方，2026-10-31；`AgentTuning.goodKeyVote` = 門檻）。
  *
  * 第 12 回合刺客（`assassinVoteModel=2`）在「紅方已兩紅、梅林在隊上、隊上有他看得到的紅」這一格讀票：梅林 0% 贊成、其他藍方
@@ -66,7 +77,7 @@ export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservati
  * 第 3 局起、非強制、紅方已兩紅，估「這隊沒有紅」的機率低於門檻就投黑（在不在隊上都一樣）。只會把贊成改成反對。
  */
 export function goodKeyVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  const tau = tuning.goodKeyVote ?? 0;
+  const tau = goodKeyVoteHalfNow(tuning, obs) ? tuning.goodKeyVoteHalf : tuning.goodKeyVote ?? 0;
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
   if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return false;
   if ((obs.currentRound ?? 1) < 3 || (obs.failCount ?? 0) >= 4) return false;

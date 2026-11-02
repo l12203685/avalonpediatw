@@ -83,3 +83,20 @@ describe('merlinReusePublic (round 20, Merlin)', () => {
     expect(parseTuningFlag('merlinReusePublic').merlinReusePublic).toBe(true);
   });
 });
+
+describe('goodKeyVoteHalf (round 20, loyal / Percival)', () => {
+  it('off by default; on, about half the positions use the other threshold', async () => {
+    const { goodKeyVoteHalfNow } = await import('./GoodCleanVote');
+    expect(DEFAULT_AGENT_TUNING.goodKeyVoteHalf).toBe(0);
+    expect(goodKeyVoteHalfNow(DEFAULT_AGENT_TUNING, mobs)).toBe(false);
+    const on = { ...DEFAULT_AGENT_TUNING, goodKeyVoteHalf: 0.65 };
+    let n = 0;
+    for (let i = 0; i < 400; i++) {
+      const o = { ...mobs, myPlayerId: IDS[i % 10], proposedTeam: [IDS[(i * 3) % 10], IDS[(i * 7 + 1) % 10], `X${i}`] } as unknown as PlayerObservation;
+      if (goodKeyVoteHalfNow(on, o)) n++;
+    }
+    expect(n / 400).toBeGreaterThan(0.4);
+    expect(n / 400).toBeLessThan(0.6);
+    expect(parseTuningFlag('goodKeyVoteHalf').goodKeyVoteHalf).toBe(0.65);
+  });
+});
