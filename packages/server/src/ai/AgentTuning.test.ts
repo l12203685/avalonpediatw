@@ -246,7 +246,7 @@ describe('AgentTuning — flags', () => {
         'beliefCertainFacts,rule3PostLakeOnly,beliefChainProjection,forcedVoteZeroBits,' +
         'teamDominanceGate,mustFailGate,' +
         'percivalLoyalVote,percivalCertainExclusion,percivalBlueLake,redPossibleClaimsOnly,' +
-        'assassinVisibleRedTier,returnLake,merlinDoomedRed,bayesBelief,assassinIgnoreDoomed,goodCleanVote=0.25,percivalThumbLogic,redCleanLook,redStackRatio=0.8,goodCleanLead=1,loyalMerlinRead=2,assassinMerlinVotes=0.5,assassinLeadRead=1,beliefBotTables=1,merlinNormalVote=1,redNormalVote=1,goodTailVote=0.85,redRankOrder,merlinLoyalStyle,r1ReadPrior,assassinVoteModel=2,mordredHideR1,goodKeyVote=0.5,redHideR1=1,redHideR1Who=1,redKeyWhite=1,beliefKeyVoteCells,merlinReuseNorm=3',
+        'assassinVisibleRedTier,returnLake,merlinDoomedRed,bayesBelief,assassinIgnoreDoomed,goodCleanVote=0.45,percivalThumbLogic,redCleanLook,redStackRatio=0.8,goodCleanLead=1,loyalMerlinRead=2,assassinMerlinVotes=0.5,assassinLeadRead=1,beliefBotTables=1,merlinNormalVote=1,redNormalVote=1,goodTailVote=0.85,redRankOrder,merlinLoyalStyle,r1ReadPrior,assassinVoteModel=2,mordredHideR1,goodKeyVote=0.5,redHideR1=1,redHideR1Who=1,redKeyWhite=1,beliefKeyVoteCells,merlinReuseNorm=3',
     );
     // 隊伍用「會不會過」評分 (2026-10-27): on by default, off in the legacy table.
     // Off by default: single-seat expected win rate −0.05pp (strength_benchmark.md 第 22 節).

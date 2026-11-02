@@ -421,6 +421,8 @@ export interface AgentTuning {
    * 好人看貝氏後驗投票（第 3 回合，2026-10-28）：第 3 局起、非強制提議，忠臣與派西估「這隊沒有紅」的機率
    * （`BayesBelief.bayesTeamClean`）低於這個門檻就投黑（0 = 關）。對照真人：第 3 局真人好人一路否決到強制
    * 的比例 40%，機器人 2%，紅隊長的隊幾乎都放行。
+   * 第 3 回合採用 0.25；第 18 回合改成 0.45（第 17 回合篩選 +1.4；本回合確認合併：對 `merlinReuseNorm=2`＋關鍵局票格的兩組新種子 4000 組
+   * +1.1 [+0.1, +2.0]pp、對最後的新預設 6000 組 +1.7 [+0.9, +2.5]pp；所有新種子 14000 組 +1.2 [+0.7, +1.8]pp）。
    */
   goodCleanVote: number;
   /**
@@ -1041,7 +1043,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanApprove: 0,
   bayesThumbRoles: false,
   merlinCoverRate: 1,
-  goodCleanVote: 0.25,
+  goodCleanVote: 0.45,
   goodCleanVoteLoyalOnly: false,
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
