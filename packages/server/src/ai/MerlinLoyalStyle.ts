@@ -10,7 +10,7 @@
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
-import { bayesTeamClean } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { merlinSignalScore } from './belief/ZoneModel';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
@@ -35,7 +35,9 @@ export function merlinLoyalStyleTeam(
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
   const size = action.teamIds.length;
-  const reuse = merlinReuseNormTeam(tuning, obs, size, publicAllowed);
+  const normTeam = merlinReuseNormTeam(tuning, obs, size, publicAllowed);
+  // Round 20 `merlinReuseSkip` / `merlinReusePublic`: Merlin does not re-propose every time the norm applies.
+  const reuse = normTeam && !merlinReuseSkipNow(tuning, obs) && merlinReusePublicNow(tuning, obs, size) ? normTeam : null;
   if (reuse) return { type: 'team_select', teamIds: reuse };
   // `merlinLoyalCover` (round 7 candidate): on a doomed R1–R2 proposal (the normal votes reject it), at rate c the
   // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
@@ -107,6 +109,44 @@ export function merlinReuseProposal(obs: PlayerObservation, team: readonly strin
   const seen = team.filter((id) => obs.knownEvils.includes(id));
   return obs.questHistory.some((q) => q.round < round && obs.questResults[q.round - 1] === 'success'
     && q.team.every((id) => team.includes(id)) && seen.every((id) => q.team.includes(id)));
+}
+
+/**
+ * `merlinReuseSkip`（第 20 回合・梅林）：照派適用時，這次以比例 s 不照派（照座位、局、提議次數與到目前為止的派隊雜湊；同一局面每次一樣）。
+ */
+export function merlinReuseSkipNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const s = tuning.merlinReuseSkip ?? 0;
+  if (s <= 0) return false;
+  if (s >= 1) return true;
+  let h = 0x811c9dc5;
+  const key = `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${obs.voteHistory.map((v) => `${v.leader}:${v.team.join(',')}`).join(';')}|reuseSkip`;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000 < s;
+}
+
+/**
+ * `merlinReusePublic`（第 20 回合・梅林）：照派只在「坐在梅林位置、只看公開紀錄的忠臣」當隊長也會派進那一隊時做——那個忠臣派自己＋
+ * 公開視角「這隊沒有紅」機率最高的人（`goodCleanLead` 的派法），派出的隊整隊包含要照派的那一隊才照派。關掉時一律 true。
+ */
+export function merlinReusePublicNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation, size: number): boolean {
+  if (!tuning.merlinReusePublic) return true;
+  const round = obs.currentRound ?? 1;
+  const before = obs.questResults.slice(0, round - 1);
+  const done = obs.questHistory.filter((q) => q.round < round && before[q.round - 1] === 'success').map((q) => q.round);
+  const target = round >= 3 && (tuning.merlinReuseNorm ?? 0) >= 3 ? Math.max(0, ...done) : round - 1;
+  const last = obs.questHistory.find((q) => q.round === target);
+  if (!last) return true;
+  const me = obs.myPlayerId;
+  const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
+  const pubOpts = bayesOptionsOf(tuning);
+  let best: string[] | null = null;
+  let bestP = -1;
+  for (const fill of combinations(obs.allPlayerIds.filter((id) => id !== me), size - 1)) {
+    const team = [me, ...fill];
+    const p = bayesTeamClean(publicView, team, pubOpts) ?? 0;
+    if (p > bestP + 1e-12) { bestP = p; best = team; }
+  }
+  return best !== null && last.team.every((id) => best!.includes(id));
 }
 
 /** Fill a re-proposed team with the cleanest public picks that are not seen reds. */

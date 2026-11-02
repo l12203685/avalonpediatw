@@ -683,6 +683,25 @@ export interface AgentTuning {
    * 都在、刺客在那一隊上、隊上沒有其他看得到的紅）時，以這個比例再出成功藏身（紅方未滿兩紅、藍方未滿兩藍）。0 = 關。
    */
   redHideReuse: number;
+  /**
+   * 第 20 回合藍方・梅林（`MerlinLoyalStyle.merlinReuseSkipNow`）：第 19 回合起刺客讀「該照派而沒照派」（`assassinReuseRead=3`：梅林的常態下
+   * 會照派的那一隊有看得到的紅，候選人當隊長卻沒照派，每次乘 0.25）——讀的是機器人梅林「每次都照派」。梅林照派（`merlinReuseNorm`）適用時，
+   * 以這個比例不照派、改派照忠臣方式的隊（不放看得到的紅），讓「沒照派」不再是非梅林的證據。0 = 關（每次照派）；1 = 等於 `merlinReuseNorm=0`。
+   * 第 20 回合不採用：0.5 篩選 +0.4，6000 組新種子合併 +0.15 [−0.18, +0.48]pp；同種子的 `merlinReuseNorm=0` +0.27 [−0.19, +0.72]、50% 對 0% −0.12（第 1C 節：比 0%／100% 都沒有更好，維持照派 100%）。
+   */
+  merlinReuseSkip: number;
+  /**
+   * 第 20 回合藍方・梅林（`MerlinLoyalStyle.merlinReusePublicNow`）：梅林照派只在「坐在梅林位置、只看公開紀錄的忠臣」自己當隊長也會派進那一隊時做
+   * （公開視角最乾淨的隊整隊包含要照派的隊）——照派的頻率跟忠臣一樣，照派、沒照派都不再是梅林的特徵。false = 關。
+   * 第 20 回合篩選 +0.1 [−0.3, +0.5]pp，不採用（公開視角的忠臣一定派自己，滿員、梅林不在的成功隊永遠不照派）。
+   */
+  merlinReusePublic: boolean;
+  /**
+   * 第 20 回合藍方・忠臣／派西（`GoodCleanVote.goodKeyVoteReject`）：關鍵局門檻的一半一半——每一票以 50% 用這個門檻、50% 用 `goodKeyVote`
+   * （照座位、局、提議次數與隊伍雜湊；同一局面每次一樣）。Edward 2026-11-02：結果中性的改法改測 50%。0 = 關。
+   * 第 20 回合 0.65 篩選 +0.2 [−0.5, +0.9]pp，不比全用 0.65（篩選 +0.5；兩組 6000 組各 +0.47，下界 −0.06／−0.04，也不採用）好，不採用。
+   */
+  goodKeyVoteHalf: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -778,6 +797,9 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'percivalMorganaR1',
   'assassinReuseRead',
   'redHideReuse',
+  'merlinReuseSkip',
+  'merlinReusePublic',
+  'goodKeyVoteHalf',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -872,6 +894,9 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalMorganaR1: false,
   assassinReuseRead: 0,
   redHideReuse: 0,
+  merlinReuseSkip: 0,
+  merlinReusePublic: false,
+  goodKeyVoteHalf: 0,
 });
 
 /**
@@ -1114,6 +1139,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalMorganaR1: false,
   assassinReuseRead: 3,
   redHideReuse: 0,
+  merlinReuseSkip: 0,
+  merlinReusePublic: false,
+  goodKeyVoteHalf: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1208,6 +1236,9 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   percivalMorganaR1: 'AVALON_TUNING_PERCIVAL_MORGANA_R1',
   assassinReuseRead: 'AVALON_TUNING_ASSASSIN_REUSE_READ',
   redHideReuse: 'AVALON_TUNING_RED_HIDE_REUSE',
+  merlinReuseSkip: 'AVALON_TUNING_MERLIN_REUSE_SKIP',
+  merlinReusePublic: 'AVALON_TUNING_MERLIN_REUSE_PUBLIC',
+  goodKeyVoteHalf: 'AVALON_TUNING_GOOD_KEY_VOTE_HALF',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1320,6 +1351,16 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`redHideReuse needs a number in [0, 1], got "${raw}"`);
     return { redHideReuse: value };
   }
+  if (name === 'goodKeyVoteHalf') {
+    const value = raw === undefined ? 0.65 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`goodKeyVoteHalf needs a number in [0, 1], got "${raw}"`);
+    return { goodKeyVoteHalf: value };
+  }
+  if (name === 'merlinReuseSkip') {
+    const value = raw === undefined ? 0.5 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`merlinReuseSkip needs a number in [0, 1], got "${raw}"`);
+    return { merlinReuseSkip: value };
+  }
   if (name === 'merlinReuseNorm') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinReuseNorm needs 0–3, got "${raw}"`);
@@ -1407,7 +1448,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
