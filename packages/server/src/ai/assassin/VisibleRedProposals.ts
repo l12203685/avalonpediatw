@@ -173,6 +173,22 @@ function countsForTier(v: VoteRecord, ignoreDoomed = false): boolean {
   return v.round >= VISIBLE_RED_FIRST_ROUND;
 }
 
+/**
+ * Round 19 (red) `assassinReuseRead`: whether proposal `v` re-proposes a successful mission team — round 3+, non-forced,
+ * red short of two fails at the time, the whole team of an earlier successful mission on it, and a red Merlin may see
+ * on it — every such red sat on that mission (a clean re-proposal is left to the reads as before). The norm after a successful mission (Edward 2026-11-01:
+ * 照派成功的隊算順應局勢; `merlinReuseNorm=3` since round 18): loyal and Merlin captains both do it, so the seen red it
+ * carries says nothing about the captain. The assassinator's mirror of `MerlinLoyalStyle.merlinReuseProposal`.
+ */
+export function successfulTeamReuse(obs: PlayerObservation, v: VoteRecord, sight: MerlinSight = merlinSightFromAssassin(obs)): boolean {
+  if (v.round < 3 || v.attempt >= 5) return false;
+  if (obs.questResults.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2) return false;
+  const seen = v.team.filter((id) => sight.certain.has(id) || sight.ambiguous.includes(id));
+  if (seen.length === 0) return false;
+  return obs.questHistory.some((q) => q.round < v.round && obs.questResults[q.round - 1] === 'success'
+    && q.team.every((id) => v.team.includes(id)) && seen.every((id) => q.team.includes(id)));
+}
+
 /** Leads the soft factor counts: non-forced only (its rates were measured on non-forced leads). */
 function countsForLikelihood(v: VoteRecord, ignoreDoomed = false): boolean {
   return v.attempt < 5 && countsForTier(v, ignoreDoomed);
@@ -183,6 +199,7 @@ export function visibleRedEvidence(
   obs: PlayerObservation,
   candidates: readonly string[],
   ignoreDoomed = false,
+  ignoreReuse = false,
 ): Map<string, VisibleRedEvidence> {
   const sight = merlinSightFromAssassin(obs);
   const out = new Map<string, VisibleRedEvidence>();
@@ -190,6 +207,7 @@ export function visibleRedEvidence(
   for (const v of obs.voteHistory) {
     const e = out.get(v.leader);
     if (!e || !countsForTier(v, ignoreDoomed)) continue;
+    if (ignoreReuse && successfulTeamReuse(obs, v, sight)) continue;
     const k = classifyTeamForAssassin(v.team, sight);
     if (k === 'certain') {
       e.certainRounds.push(v.round);
@@ -210,6 +228,8 @@ export interface VisibleRedOptions {
   likelihood: boolean;
   /** `countsForTier`'s `ignoreDoomed`. */
   ignoreDoomed?: boolean;
+  /** Round 19 `assassinReuseRead`: re-proposals of a successful mission team do not count (`successfulTeamReuse`). */
+  ignoreReuse?: boolean;
 }
 
 /**
@@ -237,7 +257,7 @@ export function pickWithVisibleRed(
   opts: VisibleRedOptions,
 ): string {
   if (candidates.length === 0) throw new Error('pickWithVisibleRed: no candidates');
-  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false);
+  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false, opts.ignoreReuse ?? false);
   const pool = opts.tier ? tierCandidates(candidates, evidence) : [...candidates];
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const score = (id: string): number =>
@@ -265,3 +285,46 @@ export function adjustedProbabilities(
   const z = exps.reduce((a, b) => a + b, 0);
   return new Map(candidates.map((id, i) => [id, exps[i] / z]));
 }
+
+/**
+ * Round 19 `assassinReuseRead=2`: the observation the assassination model reads its captain features from, with every
+ * blue captain's re-proposal of a successful mission team (`successfulTeamReuse`) unattributed (leader `''`), so
+ * `ledWithSelfRate` / `ledWithAllyRate` / `ledCleanCount` stop reading the norm as a tell. Votes, teams and missions
+ * stay as they were.
+ */
+export function withoutReuseLeaders(obs: PlayerObservation, reds: ReadonlySet<string>): PlayerObservation {
+  const sight = merlinSightFromAssassin(obs);
+  let changed = false;
+  const voteHistory = obs.voteHistory.map((v) => {
+    if (reds.has(v.leader) || !successfulTeamReuse(obs, v, sight)) return v;
+    changed = true;
+    return { ...v, leader: '' };
+  });
+  return changed ? { ...obs, voteHistory } : obs;
+}
+
+/**
+ * Round 19 `assassinReuseRead=3`: the leads where `candidate` passed over the re-proposal Merlin's norm makes
+ * (`merlinReuseNorm`: R2 after a successful R1, R3+ the latest successful mission while red is short of two fails;
+ * only when that team holds a red Merlin sees). A non-forced lead that does not hold that whole team is one Merlin
+ * would not have made unless the public gate barred the re-proposal; loyal captains pass it over freely.
+ * Returns the number of such leads.
+ */
+export function missedReuseLeads(obs: PlayerObservation, candidate: string, sight: MerlinSight = merlinSightFromAssassin(obs)): number {
+  let n = 0;
+  for (const v of obs.voteHistory) {
+    if (v.leader !== candidate || v.attempt >= 5 || v.round < 2) continue;
+    const before = obs.questResults.slice(0, v.round - 1);
+    if (v.round >= 3 && before.filter((r) => r === 'fail').length >= 2) continue;
+    const done = obs.questHistory.filter((q) => q.round < v.round && before[q.round - 1] === 'success').map((q) => q.round);
+    const target = v.round === 2 ? (before[0] === 'success' ? 1 : 0) : Math.max(0, ...done);
+    const t = obs.questHistory.find((q) => q.round === target);
+    if (!t || !t.team.some((id) => sight.certain.has(id) || sight.ambiguous.includes(id))) continue;
+    if (t.team.length > v.team.length) continue;
+    if (!t.team.every((id) => v.team.includes(id))) n++;
+  }
+  return n;
+}
+
+/** ln of the likelihood ratio P(lead | Merlin) / P(lead | loyal) of one passed-over re-proposal (`missedReuseLeads`). */
+export const MISSED_REUSE_LOG_LR = Math.log(0.25);

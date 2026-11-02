@@ -13,6 +13,7 @@
  */
 import type { PlayerObservation } from '../types';
 import { bayesTeamClean, type BayesOptions } from '../belief/BayesBelief';
+import { successfulTeamReuse } from './VisibleRedProposals';
 
 const EPS = 0.05;
 const EPS_DOOMED = 0.5;
@@ -56,9 +57,10 @@ function publicClean(obs: PlayerObservation, index: number, opts: Readonly<Bayes
  * log [ mean over Mordred d of P(proposals | Merlin) / P(proposals | loyal) ] for `candidate`. `opts`: the loyal model the public view is read with — the human tables by default; `assassinLeadReadBot` reads it the way
  * the bot blues actually do (`beliefBotTables`), the view Merlin's loyal-style proposals are built from.
  */
-export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], opts: Readonly<BayesOptions> = {}): number {
+export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], opts: Readonly<BayesOptions> = {}, ignoreReuse = false): number {
   const leads: number[] = [];
-  obs.voteHistory.forEach((v, i) => { if (v.leader === candidate && v.attempt < 5) leads.push(i); });
+  // Round 19 `assassinReuseRead`: a re-proposal of a successful mission team is the norm for Merlin and loyal alike — no evidence.
+  obs.voteHistory.forEach((v, i) => { if (v.leader === candidate && v.attempt < 5 && !(ignoreReuse && successfulTeamReuse(obs, v))) leads.push(i); });
   if (leads.length === 0 || reds.length === 0) return 0;
   const roles = obs.allEvilRoles;
   const known = roles ? reds.filter((id) => roles[id] === 'mordred') : [];

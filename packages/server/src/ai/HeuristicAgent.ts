@@ -29,7 +29,7 @@ import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelW
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
 import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
-import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
+import { merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence, withoutReuseLeaders, missedReuseLeads, MISSED_REUSE_LOG_LR } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
@@ -2654,8 +2654,10 @@ export class HeuristicAgent implements AvalonAgent {
       tier: this.tuning.assassinVisibleRedTier,
       likelihood: this.tuning.assassinVisibleRedLikelihood,
       ignoreDoomed: this.tuning.assassinIgnoreDoomed,
+      // Round 19 (red) `assassinReuseRead`: a re-proposal of a successful mission team is the norm, not a tell.
+      ignoreReuse: (this.tuning.assassinReuseRead ?? 0) >= 1,
     };
-    const goodPlayers = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed)) : allGood;
+    const goodPlayers = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse)) : allGood;
 
     // AgentTuning.assassinModel (2026-10-12): conditional-logit model
     // trained on the logged games (`assassin/AssassinModel.ts`), using
@@ -2667,7 +2669,9 @@ export class HeuristicAgent implements AvalonAgent {
       if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0 && lakeWeight <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
-      const scores = scoreAssassinCandidates(obs, goodPlayers, this.assassinModelWeights);
+      // `assassinReuseRead=2`: the model's captain features skip those re-proposals too (blue captains' only).
+      const modelObs = this.tuning.assassinReuseRead === 2 ? withoutReuseLeaders(obs, evilSet) : obs;
+      const scores = scoreAssassinCandidates(modelObs, goodPlayers, this.assassinModelWeights);
       // Round 6 (red) candidate `assassinMerlinVotes` (assassin/MerlinVoteRead.ts): read Merlin off the R3+ votes.
       if (voteWeight > 0) {
         const reds = [...evilSet];
@@ -2685,7 +2689,11 @@ export class HeuristicAgent implements AvalonAgent {
       if (leadWeight > 0) {
         const reds = [...evilSet];
         const leadOpts = this.tuning.assassinLeadReadBot ? { botTables: this.tuning.beliefBotTables ?? 0 } : {};
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadWeight * merlinLeadLogRatio(obs, id, reds, leadOpts));
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadWeight * merlinLeadLogRatio(obs, id, reds, leadOpts, visibleRed.ignoreReuse));
+      }
+      // `assassinReuseRead=3`: a captain who passed over Merlin's re-proposal norm is less likely Merlin.
+      if ((this.tuning.assassinReuseRead ?? 0) >= 3) {
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + MISSED_REUSE_LOG_LR * missedReuseLeads(obs, id));
       }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }

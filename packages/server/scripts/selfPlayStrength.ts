@@ -24,6 +24,9 @@
  *                     variants that change blue seats alone, where A plays
  *                     exactly like C; a third less time. The red numbers then
  *                     read +0.0pp by construction (round 18)
+ *   --side red        the mirror: skip game B (variant blue) and copy C into
+ *                     it — only for variants that change red seats alone
+ *                     (round 19)
  *
  * The JSON also carries the per-seed blue / red differences (`seedDiffs`), so
  * runs on different master seeds can be pooled into one interval.
@@ -86,7 +89,7 @@ interface Args {
   json?: string;
   md?: string;
   label?: string;
-  side?: 'blue';
+  side?: 'blue' | 'red';
 }
 
 function parseArgs(argv: string[]): Args {
@@ -108,8 +111,8 @@ function parseArgs(argv: string[]): Args {
       case '--label': args.label = next(); break;
       case '--side': {
         const v = next();
-        if (v !== 'blue') throw new Error(`--side takes "blue", got "${v}"`);
-        args.side = 'blue';
+        if (v !== 'blue' && v !== 'red') throw new Error(`--side takes "blue" or "red", got "${v}"`);
+        args.side = v;
         break;
       }
       case '--help': case '-h':
@@ -313,11 +316,13 @@ async function playPair(
   variantTuning: AgentTuning,
   baseTuning: AgentTuning,
   lakeMix?: { variantRed: RedLakeMix; control: RedLakeMix },
-  side?: 'blue',
+  side?: 'blue' | 'red',
 ): Promise<PairOutcome> {
   const out: Partial<PairOutcome> = {};
   const originalRandom = Math.random;
-  const arrangements: Arrangement[] = side === 'blue' ? ['variantBlue', 'control'] : ['variantRed', 'variantBlue', 'control'];
+  const arrangements: Arrangement[] = side === 'blue'
+    ? ['variantBlue', 'control']
+    : side === 'red' ? ['variantRed', 'control'] : ['variantRed', 'variantBlue', 'control'];
   for (const arrangement of arrangements) {
     const variantTeam = arrangement === 'variantRed' ? 'evil' : 'good';
     // The control game uses the baseline tuning on both sides.
@@ -337,6 +342,8 @@ async function playPair(
   }
   // `--side blue`: a blue-only variant on the red seats is the baseline, so A is C.
   if (side === 'blue') out.variantRed = out.control;
+  // `--side red`: a red-only variant on the blue seats is the baseline, so B is C.
+  if (side === 'red') out.variantBlue = out.control;
   return out as PairOutcome;
 }
 
@@ -380,8 +387,8 @@ export interface StrengthReport {
   forwardTelemetry?: { totalDecisions: number; fallbacks: number };
   /** Red-held lake mix in A (variant red) and C (baseline red); descriptive. */
   redLakeMix?: { variantRed: RedLakeMix; control: RedLakeMix };
-  /** `--side blue`: game A was not played (copied from C). */
-  side?: 'blue';
+  /** `--side blue`: game A was not played (copied from C); `--side red`: game B. */
+  side?: 'blue' | 'red';
   /** Per-seed paired differences (for pooling runs on different master seeds). */
   seedDiffs?: { blue: string; red: string };
 }

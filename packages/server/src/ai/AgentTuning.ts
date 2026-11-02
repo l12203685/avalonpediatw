@@ -665,6 +665,24 @@ export interface AgentTuning {
    * （機器人表是陣營層級的，讀不到角色）。
    */
   percivalMorganaR1: boolean;
+  /**
+   * 第 19 回合紅方・刺客（`assassin/VisibleRedProposals.ts` 的 `successfulTeamReuse`）：第 18 回合起梅林第 3 局起非關鍵局、非強制的提議
+   * 照派最近一次成功的任務（`merlinReuseNorm=3`），會把第 1 局藏牌的刺客帶上——刺客原本把「派過含看得到的紅的隊」的候選排到最後
+   * （`assassinVisibleRedTier`）、讀派隊時當成強烈的非梅林證據（`assassinLeadRead`）。照派成功的隊是常態（梅林、忠臣都會做），
+   * 這種提議不算證據：1 = 分層與讀派隊都略過照派成功的隊的提議（第 3 局起、非強制、紅方未滿兩紅、之前一次成功任務的隊整隊都在、
+   * 隊上看得到的紅都在那一隊上）；2 = 同 1，刺殺模型的隊長特徵（自己派隊含刺客／隊友的比例等）也不算這些提議；
+   * 3 = 同 1，再讀「該照派而沒照派」：梅林的常態下會照派的那一隊（第 2 局＝成功的第 1 局、第 3 局起＝最近一次成功的任務，隊上有梅林看得到的紅）
+   * 候選人當隊長卻沒有整隊放進去，每次乘 0.25（梅林只有公開閘門擋下時才不照派，忠臣常常不照派）。0 = 關。
+   * 第 19 回合採用 1（對第 18 回合預設篩選 +1.0 [+0.5, +1.5]pp，兩組新種子 +0.5 [+0.1, +0.9]／+0.7 [+0.2, +1.2]pp、合併 4000 組 +0.6 [+0.3, +0.9]：
+   * 刺中率約 +1～+2pp，三紅率不變）；2（篩選 +1.1）不比 1 好。
+   * 再採用 3：對第 18 回合預設篩選 +1.8；在 1 之上兩組各 6000 組種子（三段合併）+0.35 [+0.10, +0.60]／+0.27 [+0.05, +0.48]pp（六段都是正的，單段只有一段不含 0）。
+   */
+  assassinReuseRead: number;
+  /**
+   * 第 19 回合紅方・刺客（`RedRound2.redHideReuseCard`）：第 1 局藏牌的刺客，所在的成功隊在第 3 局起被照派（之前一次成功任務的隊整隊
+   * 都在、刺客在那一隊上、隊上沒有其他看得到的紅）時，以這個比例再出成功藏身（紅方未滿兩紅、藍方未滿兩藍）。0 = 關。
+   */
+  redHideReuse: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -758,6 +776,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'beliefKeyVoteCells',
   'merlinReuseNorm',
   'percivalMorganaR1',
+  'assassinReuseRead',
+  'redHideReuse',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -850,6 +870,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefKeyVoteCells: false,
   merlinReuseNorm: 0,
   percivalMorganaR1: false,
+  assassinReuseRead: 0,
+  redHideReuse: 0,
 });
 
 /**
@@ -1090,6 +1112,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefKeyVoteCells: true,
   merlinReuseNorm: 3,
   percivalMorganaR1: false,
+  assassinReuseRead: 3,
+  redHideReuse: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1182,6 +1206,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   beliefKeyVoteCells: 'AVALON_TUNING_BELIEF_KEY_VOTE_CELLS',
   merlinReuseNorm: 'AVALON_TUNING_MERLIN_REUSE_NORM',
   percivalMorganaR1: 'AVALON_TUNING_PERCIVAL_MORGANA_R1',
+  assassinReuseRead: 'AVALON_TUNING_ASSASSIN_REUSE_READ',
+  redHideReuse: 'AVALON_TUNING_RED_HIDE_REUSE',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1284,6 +1310,16 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`redCleanWhite needs a number in [0, 1], got "${raw}"`);
     return { redCleanWhite: value };
   }
+  if (name === 'assassinReuseRead') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`assassinReuseRead needs 0–3, got "${raw}"`);
+    return { assassinReuseRead: value };
+  }
+  if (name === 'redHideReuse') {
+    const value = raw === undefined ? 1 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`redHideReuse needs a number in [0, 1], got "${raw}"`);
+    return { redHideReuse: value };
+  }
   if (name === 'merlinReuseNorm') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinReuseNorm needs 0–3, got "${raw}"`);
@@ -1371,7 +1407,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }
