@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dayIndex, gameToPaipu, isPostable, paipuTags, paipuThreadName, postPaipu, type RecordedGame } from './signagePaipu';
+import { dayIndex, gameToPaipu, paipuTags, paipuThreadName, postPaipu, postSkipReason, type RecordedGame } from './signagePaipu';
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -132,7 +132,9 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
           // Edward 2026-10-30：每局牌譜貼到 DC 牌譜頻道（附座位暱稱）；有設定 DISCORD_BOT_TOKEN 或 DISCORD_PAIPU_WEBHOOK_URL 才貼
           try {
             const saved = JSON.parse(fs.readFileSync(file, 'utf-8')) as RecordedGame;
-            const text = isPostable(saved) ? gameToPaipu(saved) : null;
+            const skip = postSkipReason(saved);
+            if (skip) console.log(`${stamp()} ${room.name} 不貼 DC：${skip}`);
+            const text = skip ? null : gameToPaipu(saved);
             if (text && (await postPaipu(text, paipuThreadName(saved, dayIndex(file)), paipuTags(saved)))) console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord`);
           } catch (err) {
             console.log(`${stamp()} ${room.name} 牌譜貼到 Discord 失敗：${err instanceof Error ? err.message : String(err)}`);
