@@ -19,12 +19,16 @@
  *   - 視覺化牌譜：練習台自己的「紀錄下載」頁（/Statistics/Index/房號，房內「紀錄下載」按鈕開的也是這頁，
  *     標題「派票與任務統計」：每輪的任務結果＋每次提議的投票格），切到「全部局次」分頁後截圖。
  *   截圖失敗只少那張圖，文字照貼；圖也存在 --out 旁邊（同檔名加 _board.jpg／_stats.jpg）。
+ * Edward 2026-11-03「有百科AI的另外算 我們不會用伺服器內建的強化機器人」：有練習台內建機器人（is_robot）的局照樣存檔，
+ *   但不貼 DC（noPostReason，log 只寫個數）；有百科AI 的局照舊【待檢視】＋「模擬」標籤。
  */
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { TEST_ROOM_PREFIX, buildPaipuPost, dayIndex, postPaipu, unverifiedReason, type PaipuImage, type RecordedGame } from './signagePaipu';
+import {
+  TEST_ROOM_PREFIX, buildPaipuPost, dayIndex, noPostReason, postPaipu, unverifiedReason, type PaipuImage, type RecordedGame,
+} from './signagePaipu';
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -210,11 +214,17 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
           // Edward 2026-11-03：每局都貼——沒通過檢查的標題加【待檢視】、不掛結果標籤（buildPaipuPost）；附兩張圖
           try {
             const saved = JSON.parse(fs.readFileSync(file, 'utf-8')) as RecordedGame;
-            // 第n局（dayIndex）只數通過檢查的局；待檢視的局標題不寫第幾局
-            const post = buildPaipuPost(saved, dayIndex(file));
-            if (!post.verified) console.log(`${stamp()} ${room.name} 待檢視：${unverifiedReason(saved)}`);
-            if (await postPaipu(post.content, post.name, post.tags, images)) {
-              console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord（${post.verified ? '正式' : '待檢視'}，${images.length} 張圖）`);
+            const noPost = noPostReason(saved);
+            if (noPost) {
+              // Edward 2026-11-03：有練習台內建機器人的局不貼（log 只有時間、房號、原因與個數）
+              console.log(`${stamp()} ${room.name} 不貼 DC：${noPost}`);
+            } else {
+              // 第n局（dayIndex）只數通過檢查的局；待檢視的局標題不寫第幾局
+              const post = buildPaipuPost(saved, dayIndex(file));
+              if (!post.verified) console.log(`${stamp()} ${room.name} 待檢視：${unverifiedReason(saved)}`);
+              if (await postPaipu(post.content, post.name, post.tags, images)) {
+                console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord（${post.verified ? '正式' : '待檢視'}，${images.length} 張圖）`);
+              }
             }
           } catch (err) {
             console.log(`${stamp()} ${room.name} 牌譜貼到 Discord 失敗：${err instanceof Error ? err.message : String(err)}`);

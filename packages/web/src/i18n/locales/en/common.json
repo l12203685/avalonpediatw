@@ -1520,7 +1520,8 @@
         "面瓦": "Offline",
         "娛樂": "Casual",
         "未分類": "Uncategorised",
-        "其他": "Other"
+        "其他": "Other",
+        "百科AI": "With 百科AI"
       },
       "clause": {
         "not": "Not: {{text}}",

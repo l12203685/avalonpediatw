@@ -24,6 +24,7 @@
  */
 
 import { AVALON_CONFIG, type Role } from '@avalon/shared';
+import { BOT_GAME_CATEGORY } from '@avalon/shared/stats';
 import {
   __internal as sheetsInternal,
   leaderSeatForProposal,
@@ -114,7 +115,19 @@ export type ReplayParseResult =
 
 export type PaipuRow = Readonly<Record<string, string>>;
 
-/** `[header, ...rows]` sheet table → keyed rows. */
+/** 百科AI 的暱稱（同 generate_cache.is_pedia_bot_name：NFKC、小寫後以「百科AI」或「百科機器人」開頭）。 */
+const PEDIA_BOT_NAME_RE = /^百科(機器人|ai)/;
+
+/**
+ * 百科AI（補位機器人）參與的局：分類「百科AI」，或有座位是百科AI 的暱稱。Edward 2026-11-03「有百科AI的另外算」：
+ * 不進任何機器人訓練、擬合、基準（rowsFromSheet 直接拿掉）。
+ */
+export function isBotPaipuRow(row: PaipuRow): boolean {
+  if ((row['分類'] ?? '').trim() === BOT_GAME_CATEGORY) return true;
+  return PLAYER_NAME_COLUMNS.some((c) => PEDIA_BOT_NAME_RE.test((row[c] ?? '').normalize('NFKC').trim().toLowerCase()));
+}
+
+/** `[header, ...rows]` sheet table → keyed rows（百科AI 局不算：isBotPaipuRow）。 */
 export function rowsFromSheet(table: readonly (readonly string[])[]): PaipuRow[] {
   if (table.length === 0) return [];
   const header = table[0];
@@ -122,7 +135,7 @@ export function rowsFromSheet(table: readonly (readonly string[])[]): PaipuRow[]
     const out: Record<string, string> = {};
     header.forEach((key, i) => { out[key] = row[i] ?? ''; });
     return out;
-  });
+  }).filter((row) => !isBotPaipuRow(row));
 }
 
 export function campOf(role: Role): Camp {

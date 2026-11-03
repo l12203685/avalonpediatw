@@ -3888,6 +3888,55 @@ class GamesDatasetTest(unittest.TestCase):
         tampered["key"] = "0" * 16
         self.assertIn("key does not match the content", gc.games_dataset_privacy_problems(tampered))
 
+    def test_bot_games_are_counted_separately(self) -> None:
+        # Edward 2026-11-03「有百科AI的另外算」：分類「百科AI」，或座位有百科AI 暱稱的局（名字都是虛構的）
+        self.assertTrue(all(gc.is_pedia_bot_name(n) for n in ("百科AI_3", "百科ai_0", "百科ＡＩ_1", " 百科機器人A")))
+        self.assertFalse(any(gc.is_pedia_bot_name(n) for n in ("阿瓦隆百科", "測試3", "", None)))
+        bot_names = ["百科AI_1"] + SEAT_NAMES[1:9] + ["百科ＡＩ_2"]
+        header = DATASET_HEADERS + ["discord_post_id"]
+        extra = [header,
+                 dataset_row("D900", "246802", "三藍死", bot_names, date="2026/07/28") + ["900"],
+                 dataset_row("D901", "864201", "三紅", SEAT_NAMES, date="2026/07/29", **{"分類": gc.BOT_CATEGORY}) + ["901"]]
+        merged = gc.merge_game_logs(dataset_log(), extra)
+        self.assertEqual([(g.id, g.category) for g in merged.bot_games], [("D900", gc.BOT_CATEGORY), ("D901", gc.BOT_CATEGORY)])
+        self.assertEqual((len(merged.games), len(merged.raw_rows)), (235, 236))  # 暫存匯出（機器人訓練）也沒有它們
+        self.assertIn(f"2 of them with 百科AI, counted separately (category {gc.BOT_CATEGORY}", merged.summary())
+        # run 的流程：人類局照舊，百科AI 局用人類局的寫法、別名併成「百科AI」，接在資料集最後
+        aliases = gc.parse_player_aliases({"aliases": {"百科AI_1": "百科AI", "百科AI_2": "百科AI"}})
+        human, _ = gc.drop_dates_after(merged.games, TEST_AS_OF)
+        human, names = gc.canonicalize_player_names(human, aliases)
+        human = gc.assign_timeline_dates(human)
+        bots = gc.canonicalize_bot_games(merged.bot_games, names, aliases)
+        self.assertEqual((bots[0].seat_players["1"], bots[0].seat_players["0"], bots[0].seat_players["2"]), ("百科AI", "百科AI", "乙"))
+        dataset = gc.encode_games_dataset(human, names.aliases, bots)
+        _, cache = dataset_and_cache(human)
+        cache["overview"]["gamesKey"] = dataset["key"]
+        self.assertEqual(gc.games_dataset_problems(dataset, cache, human, TEST_AS_OF), [])
+        # 分析快取 = 沒有百科AI 局時的快取（gamesKey 以外）
+        for section in gc.GAMES_DATASET_SECTIONS:
+            if section != "overview":
+                self.assertEqual(cache[section], self.cache[section], section)
+        self.assertNotIn("百科AI", json.dumps(cache, ensure_ascii=False))
+        cat, lineup = gc.GAMES_DATASET_FIELDS.index("cat"), gc.GAMES_DATASET_FIELDS.index("lineup")
+        rows = dataset["games"]
+        self.assertEqual(len(rows), 237)
+        self.assertEqual([r[cat] for r in rows[-2:]], [gc.DATASET_CATEGORIES.index(gc.BOT_CATEGORY)] * 2)
+        self.assertEqual([r[lineup] for r in rows[-2:]], [[], []])  # 不評陣容強度
+        self.assertEqual([r[lineup] for r in rows[:-2]], [r[lineup] for r in self.dataset["games"]])  # 人類局的 Elo 不受影響
+        self.assertEqual(dataset["players"][:len(self.dataset["players"])], self.dataset["players"])
+        self.assertEqual(dataset["players"][-1], "百科AI")
+        self.assertEqual([g.category for g in gc.decode_games_dataset(dataset)[-2:]], [gc.BOT_CATEGORY] * 2)
+        # 守門：百科AI 局必須在最後、不能有陣容強度
+        moved = copy.deepcopy(dataset)
+        moved["games"].insert(0, moved["games"].pop())
+        moved["key"] = gc.games_dataset_key(moved)
+        self.assertIn("百科AI games are not all after the other games", gc.games_dataset_problems(moved, cache, human, TEST_AS_OF))
+        scored = copy.deepcopy(dataset)
+        scored["games"][-1][lineup] = [12, 500, [50] * 10, 0, [10000] * 10]
+        scored["key"] = gc.games_dataset_key(scored)
+        self.assertIn("1 百科AI game(s) have a lineup", gc.games_dataset_problems(scored, cache, human, TEST_AS_OF))
+        self.assertIn("百科AI 2", gc.games_dataset_summary(dataset, []))
+
     def test_discord_rows(self) -> None:
         header = DATASET_HEADERS + ["discord_post_id", "discord_title"]
         extra = [header, dataset_row("D123456789", "246802", "三藍死", SEAT_NAMES, date="2026/07/28")

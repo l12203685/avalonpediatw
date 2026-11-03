@@ -44,6 +44,8 @@ FAKE_KEY = {
 
 NAMES = ["小米", "阿豪", "Kai", "Momo", "夜貓", "Pin", "棉花", "Zed", "老王", "菜"]  # seats 1..9, 0
 NAMES_B = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"]
+# 有百科AI 的局（虛構）：百科AI 坐 1、10 號，其他人是虛構的名字。
+NAMES_BOT = ["百科AI_1", "虛構乙", "虛構丙", "虛構丁", "虛構戊", "虛構己", "虛構庚", "虛構辛", "虛構壬", "百科AI_2"]
 
 
 def footer(config: str = "936758", names: list[str] = NAMES, assassin: str = "刺客刺殺:") -> str:
@@ -76,6 +78,10 @@ RECENT_CANONICAL = (
     "1458\noooo\n8>4 o\n15678 5- 39+\n14580\nooooo"
 )
 RECENT_BODY = RECENT_RECORD + "\n" + footer()
+# 記錄員的貼文：標題拿掉【待檢視】後的樣子、第一行原因、最後一行備註；三藍沒有結果標籤（刺殺 8 = 梅林）。
+BOT_TITLE = "含百科機器人_20261009_2015_Room-1417_936758"
+BOT_BODY = "待檢視原因：百科機器人參與（坐 1、0 家），不是真人紀錄\n" + RECENT_RECORD + "\n" + \
+    footer(names=NAMES_BOT, assassin="刺客刺殺:8") + "\n（機器人紀錄員尚待檢視）"
 
 # The same game the 2023 way: mission on the team's line, lake "08O", 配置 as the title.
 OLD_RECORD = """147
@@ -315,10 +321,48 @@ class ParserTest(unittest.TestCase):
                 self.assertEqual(skip_reason(post(), RECENT_BODY.replace("0>8 o", lake)), dri.SKIP_BAD_LAKE)
         self.assertEqual(skip_reason(post(), RECENT_BODY.replace("0>8 o\n1458", "1458\n0>8 o")), dri.SKIP_BAD_LAKE)
 
-    def test_empty_missing_and_simulation(self) -> None:
+    def test_empty_and_missing(self) -> None:
         self.assertEqual(skip_reason(post(), None), dri.SKIP_NO_STARTER)
         self.assertEqual(skip_reason(post(), "  \n"), dri.SKIP_EMPTY)
-        self.assertEqual(skip_reason(post(tags=("模擬", "三藍被刀")), RECENT_BODY), dri.SKIP_SIMULATION)
+
+    def test_bot_games_get_their_own_category(self) -> None:
+        # Edward 2026-11-03「有百科AI的另外算」：標「模擬」或有座位是百科AI 的貼文不再整篇略過，分類寫「百科AI」。
+        self.assertEqual(dri.parse_post(post(tags=("模擬", "三藍被刀")), RECENT_BODY).category, gc.BOT_CATEGORY)
+        self.assertEqual(dri.parse_post(post(tags=("三藍被刀", "線瓦")), RECENT_BODY).category, "線瓦")
+        # 記錄員的貼文（標題的【待檢視】已拿掉）：線瓦＋模擬、兩個百科AI 座位（別名都是「百科AI」，但是不同座位，不算名單重複）
+        game = dri.parse_post(post(title=BOT_TITLE, tags=("線瓦", "模擬")), BOT_BODY)
+        self.assertEqual((game.category, game.outcome, game.kill, game.names["1"], game.names["0"]),
+                         (gc.BOT_CATEGORY, "三藍死", "8", "百科AI_1", "百科AI_2"))
+        # 沒有「模擬」標籤，但有座位是百科AI（含舊暱稱「百科機器人…」）：一樣是百科AI 局
+        self.assertEqual(dri.parse_post(post(title=BOT_TITLE, tags=("線瓦",)), BOT_BODY).category, gc.BOT_CATEGORY)
+        old_nick = BOT_BODY.replace("1.百科AI_1", "1.百科機器人A")
+        self.assertEqual(dri.parse_post(post(title=BOT_TITLE, tags=("線瓦",)), old_nick).category, gc.BOT_CATEGORY)
+        # 同一個真人坐兩個座位仍然是名單錯誤
+        self.assertEqual(skip_reason(post(title=BOT_TITLE, tags=("線瓦",)), BOT_BODY.replace("2.虛構乙", "2.虛構丙")),
+                         dri.SKIP_NAMES_MALFORMED)
+        # 待檢視的關卡照舊：標題還有【待檢視】就不收，不管有沒有「模擬」
+        self.assertEqual(skip_reason(post(title="【待檢視】" + BOT_TITLE, tags=("線瓦", "模擬")), BOT_BODY), dri.SKIP_UNVERIFIED)
+        self.assertFalse(hasattr(dri, "SKIP_SIMULATION"))
+
+    def test_bot_games_are_imported_with_their_category(self) -> None:
+        unverified_post = post(title="【待檢視】" + BOT_TITLE, tags=("線瓦", "模擬"), offset=1)
+        reviewed = post(title=BOT_TITLE, tags=("線瓦", "模擬"), offset=2)
+        human = post(title="1009一般場5", tags=("三紅", "線瓦"), offset=3)
+        bodies = {unverified_post.id: BOT_BODY, reviewed.id: BOT_BODY, human.id: RED_BODY}
+        header = sheet_header()
+        report = dri.plan_import([unverified_post, reviewed, human], lambda p: bodies[p.id], [header], None, header)
+        self.assertEqual((len(report.rows), report.bot_games, dict(report.skipped)), (2, 1, {dri.SKIP_UNVERIFIED: 1}))
+        bot_row, human_row = report.rows
+        self.assertEqual((bot_row[header.index("分類")], bot_row[header.index("玩1")]), (gc.BOT_CATEGORY, "百科AI_1"))
+        self.assertEqual(human_row[header.index("分類")], "線瓦")
+        lines = dri.report_lines(report, write=False, written=0, tab_exists=True)
+        self.assertTrue(any(f"新局中有百科AI（分類「{gc.BOT_CATEGORY}」，另外算、不進戰績）：1" in line for line in lines))
+        # 讀不懂的「模擬」貼文：同以前，不回覆、不掛待修正
+        broken = post(title=BOT_TITLE, tags=("線瓦", "模擬"), offset=4)
+        report = dri.plan_import([broken], lambda p: BOT_BODY.replace("389 +7", "389 7"), [header], None, header)
+        [skip] = report.skips
+        self.assertEqual(skip.reason, dri.SKIP_BAD_VOTE)
+        self.assertFalse(dri.fixable(skip))
 
     def test_signage_recorder_posts(self) -> None:
         # Every recorder post ends with this line: plain text after the names, ignored by the parser.
@@ -432,7 +476,6 @@ class LineLocationTest(unittest.TestCase):
             ("今天那局大家覺得怎麼樣？", (), dri.SKIP_NOT_A_RECORD),
             (None, ("三藍被刀",), dri.SKIP_NO_STARTER),
             ("  \n", ("三藍被刀",), dri.SKIP_EMPTY),
-            (RECENT_BODY, ("模擬",), dri.SKIP_SIMULATION),
         ]
         for body, tags, reason in cases:
             with self.subTest(reason=reason):
@@ -934,25 +977,34 @@ class RecheckTest(unittest.TestCase):
 
     def test_left_alone(self) -> None:
         recorded = post(title="1009一般場5", tags=("三紅", dri.TAG_RECORDED), offset=1)
-        simulated = post(title="1009一般場6", tags=("三紅", dri.TAG_SIMULATION), offset=2)
         deleted, emptied = post(offset=3), post(offset=4)
         old = post(when=dt.datetime(2026, 8, 1, 20, tzinfo=dri.TAIPEI))  # more than 90 days before LATER
         not_imported = post(offset=5)
-        posts = [recorded, simulated, deleted, emptied, old, not_imported]
+        posts = [recorded, deleted, emptied, old, not_imported]
         def as_imported(p: dri.Post) -> dri.Post:  # the tags it had when it was imported
-            return dri.Post(p.id, p.title, tuple(t for t in p.tags if t not in (dri.TAG_RECORDED, dri.TAG_SIMULATION)))
+            return dri.Post(p.id, p.title, tuple(t for t in p.tags if t != dri.TAG_RECORDED))
         rows = [self.header] + [self.imported(as_imported(p), RED_BODY if "三紅" in p.tags else RECENT_BODY)
-                                for p in (recorded, simulated, deleted, emptied, old)]
+                                for p in (recorded, deleted, emptied, old)]
         bodies = {p.id: FIXED_BODY for p in posts}
         bodies.update({deleted.id: None, emptied.id: "  "})
         result = self.recheck(posts, bodies, rows, edits={p.id: utc(2026, 11, 20) for p in posts})
-        self.assertEqual((result.recorded, result.simulation, result.candidates, result.gone), (1, 1, 2, 2))
-        self.assertEqual(sorted(self.read), sorted([deleted.id, emptied.id]))  # 已收錄 / 模擬 / old: never read
+        self.assertEqual((result.recorded, result.candidates, result.gone), (1, 2, 2))
+        self.assertEqual(sorted(self.read), sorted([deleted.id, emptied.id]))  # 已收錄 / old: never read
         self.assertEqual(result.updates, [])
         self.assertEqual(self.recheck(posts, bodies, rows, days=0).checked, 0)
         self.assertEqual(self.recheck(posts, bodies, rows, limit=0).checked, 0)
         self.assertEqual(self.recheck(posts, bodies, [self.header]).candidates, 0)
         self.assertEqual(self.recheck(posts, bodies, rows, since=dt.date(2026, 10, 10)).candidates, 0)
+
+    def test_tagged_simulation_since_moves_the_row_to_the_bot_category(self) -> None:
+        # 收錄後才標「模擬」（Edward 2026-11-03：有百科AI 的局另外算）：重讀、那一列的分類改成「百科AI」，不必人工刪
+        tagged = post(tags=("三藍被刀", "線瓦", dri.TAG_SIMULATION))
+        rows = [self.header, self.imported(post(), RECENT_BODY)]
+        result = self.recheck([tagged], {tagged.id: RECENT_BODY}, rows)
+        self.assertEqual((result.candidates, result.corrected, result.rows_updated), (1, 1, 1))
+        [update] = result.updates
+        self.assertEqual(self.cell(update.values, "分類"), gc.BOT_CATEGORY)
+        self.assertEqual(self.cell(update.values, "玩1"), self.cell(rows[1], "玩1"))  # the game itself is the same
 
     def test_a_game_copied_into_the_sheet_since_is_left_to_people(self) -> None:
         rows = [self.header, self.imported(self.post, RECENT_BODY)]
@@ -1080,6 +1132,41 @@ class GenerateCacheUnionTest(unittest.TestCase):
             del tabs["Discord匯入"]  # tab removed again -> fewer games: the guard refuses
             self.assertEqual(gc.main(["--output", str(path)]), gc.EXIT_DATA)
         self.assertIn("2146 from 牌譜 + 2 from Discord匯入 (1 more were games already counted, skipped)", out.getvalue())
+
+    def test_bot_game_end_to_end(self) -> None:
+        # 匯入的百科AI 局（分類 百科AI）：分析快取完全不算，每局資料集附在最後（守門通過、照常寫出）
+        bot = post(title="含百科機器人_20261009_2015_Room-1417", tags=("線瓦", "模擬"), offset=9)
+        body = BOT_BODY.replace("\n936758\n", "\n936058\n")  # 奧伯倫改坐 10 號：和已匯入的那局不同局
+        report = dri.plan_import([bot], lambda p: body, [self.rows[0]], self.import_rows, self.header)
+        self.assertEqual((len(report.rows), report.bot_games), (1, 1))
+        chem = [["", "A"], ["A", ""]]
+        caches = []
+        for import_rows in (self.import_rows, self.import_rows + report.rows):
+            tabs = {"牌譜": self.rows, "Discord匯入": import_rows, **{t: chem for t in ("同贏", "同輸", "贏相關", "同贏-同輸")}}
+            out = io.StringIO()
+            with tempfile.TemporaryDirectory() as tmp, quiet_env(**{gc.ENV_CREDENTIALS_JSON: json.dumps(FAKE_KEY)}), \
+                    mock.patch.object(gc, "open_spreadsheet", lambda source, sheet_id: FakeSheet(tabs)), \
+                    mock.patch.object(gc, "gspread", mock.Mock(exceptions=mock.Mock(WorksheetNotFound=WorksheetNotFound))), \
+                    mock.patch.object(gc, "default_strength_builder", lambda: (lambda players: {"perPlayer": {}})), \
+                    mock.patch.object(gc, "default_placeholder_builders", lambda: {}), \
+                    redirect_stdout(out), redirect_stderr(out):
+                path = Path(tmp) / "analysis_cache.json"
+                self.assertEqual(gc.main(["--output", str(path)]), 0, out.getvalue())
+                cache = json.loads(path.read_text(encoding="utf-8"))
+                dataset = json.loads((Path(tmp) / gc.GAMES_OUTPUT_NAME).read_text(encoding="utf-8"))
+            self.assertNotIn("withheld", out.getvalue())
+            caches.append((cache, dataset))
+        (plain, plain_ds), (cache, dataset) = caches
+        self.assertEqual(cache["overview"]["totalGames"], 2148)
+        self.assertNotIn("百科AI", json.dumps(cache, ensure_ascii=False))
+        for section in gc.GAMES_DATASET_SECTIONS:
+            if section != "overview":
+                self.assertEqual(cache[section], plain[section], section)
+        self.assertEqual(len(dataset["games"]), len(plain_ds["games"]) + 1)
+        last = dataset["games"][-1]
+        self.assertEqual(last[gc.GAMES_DATASET_FIELDS.index("cat")], gc.DATASET_CATEGORIES.index(gc.BOT_CATEGORY))
+        seats = last[gc.GAMES_DATASET_FIELDS.index("seats")]
+        self.assertEqual((dataset["players"][seats[0]], dataset["players"][seats[9]]), ("百科AI", "百科AI"))
 
 
 # ---------------------------------------------------------------------------
@@ -2587,7 +2674,7 @@ class EndToEndTest(unittest.TestCase):
     def test_reply_mode_posts_once_and_logs_counts_only(self) -> None:
         self.posts.append(post(title="1009一般場7", offset=3))  # bad vote on line 3
         self.bodies[self.posts[3].id] = RECENT_BODY.replace("389 +7", "389 7")
-        self.posts.append(post(title="1009一般場8", tags=("模擬",), offset=4))  # never replied to
+        self.posts.append(post(title="1009一般場8", tags=("模擬",), offset=4))  # read now (百科AI 局), never replied to
         self.bodies[self.posts[4].id] = "nonsense"
         self.posts.append(post(title="覆盤", tags=(), offset=5))  # a discussion, not a record: never replied to
         self.bodies[self.posts[5].id] = "今天那局大家覺得怎麼樣？"
@@ -2597,7 +2684,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(self.discord.message_reads, [self.posts[2].id, self.posts[3].id])
         self.assertIn("格式回覆（--reply，dry run：只計數，未貼文）：90 天內因格式無法解析且未標「已收錄」的貼文 2 篇", log)
         self.assertIn("本次可回覆：2", log)
-        self.assertIn(f"| {dri.SKIP_NOT_A_RECORD} | 1 | 0 |", log)
+        self.assertIn(f"| {dri.SKIP_NOT_A_RECORD} | 2 | 0 |", log)  # the 模擬 post and the discussion
         self.assertNotIn("::warning", log)
         self.assertNotIn(dri.REPLY_LOG_TAB, self.tabs)
         self.assert_public_safe(log + self.summary.read_text(encoding="utf-8"))

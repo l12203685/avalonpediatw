@@ -50,7 +50,9 @@ Where each top-level section comes from:
                               copied from the Discord forum, same columns);
                               a Discord匯入 game whose record_fingerprint is
                               already in 牌譜 is dropped (牌譜 wins), see
-                              merge_game_logs.
+                              merge_game_logs. Games with our bot 百科AI
+                              (BOT_CATEGORY) count in none of the sections:
+                              they only go into games_cache.json.
     recomputed here           strength (from players, via
                               scripts/build_archetype_strength.py)
     carried over              archetype, playstyle and any other section this
@@ -188,6 +190,12 @@ PLAYERS_PER_GAME = 10
 # GameRow.source 與資料集 src：記錄合併前的來源分頁。
 GAME_SOURCE_SHEET = 0
 GAME_SOURCE_DISCORD = 1
+# 百科AI（遊玩頁的補位機器人，暱稱「百科AI_{n}」，舊的以「百科機器人」開頭）參與的局：Edward 2026-11-03
+# 「有百科AI的另外算」。分類寫「百科AI」（discord_records_import.py 匯入時寫；分類沒寫但有座位是百科AI 暱稱的局也算），
+# 不算進分析快取的任何數字（戰績、排行、Elo、陣容強度、默契、特徵研究），也不進牌譜暫存匯出（機器人訓練資料）；
+# 只附在每局資料集最後面，網站篩選勾選「百科AI」分類時才看得到。
+BOT_CATEGORY = "百科AI"
+_PEDIA_BOT_NAME_RE = re.compile(r"^百科(?:機器人|ai)")  # 比對 player_name_key（NFKC、小寫）
 
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
@@ -660,6 +668,16 @@ def player_name_key(name: object) -> str:
     return " ".join(text.split()).lower()
 
 
+def is_pedia_bot_name(name: object) -> bool:
+    """百科AI 的暱稱（「百科AI_3」、舊的「百科機器人A」；大小寫、全半形不論）。同 scripts/signagePaipu.ts 的 isPediaBotName。"""
+    return bool(_PEDIA_BOT_NAME_RE.match(player_name_key(name)))
+
+
+def is_bot_game(g: "GameRow") -> bool:
+    """百科AI 參與的局：分類是 BOT_CATEGORY，或有座位是百科AI 的暱稱。"""
+    return g.category == BOT_CATEGORY or any(is_pedia_bot_name(n) for n in g.seat_players.values())
+
+
 # ---------------------------------------------------------------------------
 # Player aliases (player_aliases.json): the owner says two names are one player
 # ---------------------------------------------------------------------------
@@ -907,6 +925,23 @@ def canonicalize_player_names(
     return (out if changed else games), merge
 
 
+def canonicalize_bot_games(
+    bot_games: list[GameRow], names: NameMerge, aliases: PlayerAliases = NO_ALIASES,
+) -> list[GameRow]:
+    """百科AI 局的名字：人類局裡有的玩家用人類局的顯示寫法（`names`：canonicalize_player_names 在人類局上的結果），
+    其他名字（百科AI_3 → 百科AI 這類別名、只在百科AI 局出現的人）在百科AI 局之間照同樣的規則合併。
+    百科AI 局不參與人類局的寫法投票，所以不會改變任何人在戰績上顯示的名字。"""
+    bot_games, _ = canonicalize_player_names(bot_games, aliases)
+    out: list[GameRow] = []
+    for g in bot_games:
+        renamed = {seat: names.display.get(player_name_key(n), n) for seat, n in g.seat_players.items()}
+        if renamed != g.seat_players:
+            g = copy.copy(g)
+            g.seat_players = renamed
+        out.append(g)
+    return out
+
+
 _DATE_RE = re.compile(r"^(\d{4})[/.\-](\d{1,2})[/.\-](\d{1,2})(?!\d)")
 
 
@@ -1105,6 +1140,8 @@ class GameLogMerge:
     extra_log: list[tuple[str, str, bool]] = field(default_factory=list)
     # 只供同一工作流程的暫存匯出；表頭在首列，資料列與 games 一一對應。
     raw_rows: list[list[str]] = field(default_factory=list, repr=False)
+    # 百科AI 局（is_bot_game；分類改成 BOT_CATEGORY）：不在 games、raw_rows 裡，只進每局資料集。
+    bot_games: list[GameRow] = field(default_factory=list)
 
     def rewritten_since(self, day: dt.date | None) -> tuple[int, int]:
         """(Discord匯入 rows rewritten from an edited post on or after `day` -- all of them when `day`
@@ -1121,13 +1158,16 @@ class GameLogMerge:
             text += f" + {self.extra_added} from {DISCORD_IMPORT_TAB}"
             if self.extra_duplicates:
                 text += f" ({self.extra_duplicates} more were games already counted, skipped)"
+        if self.bot_games:
+            text += f"; {len(self.bot_games)} of them with 百科AI, counted separately (category {BOT_CATEGORY}, not in the stats)"
         return text
 
 
 def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | None) -> GameLogMerge:
     """牌譜 games as they are, then each Discord匯入 game whose fingerprint and 流水號 are new.
 
-    牌譜 rows are never deduplicated among themselves (as before this tab existed).
+    牌譜 rows are never deduplicated among themselves (as before this tab existed). The 百科AI games
+    among them (is_bot_game) are moved to bot_games afterwards (split_bot_games).
     """
     main_kept: list[list[str]] = []
     games = parse_game_log(main_rows, kept_rows=main_kept)
@@ -1143,7 +1183,7 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
     merged = GameLogMerge(games=games, main_games=len(games),
                           raw_rows=[headers] + [align(main_rows, row) for row in main_kept])
     if not extra_rows:
-        return merged
+        return split_bot_games(merged)
     header = [(h or "").strip() for h in extra_rows[0]]
     updated: dict[str, str] = {}  # 流水號 -> 更新時間 day of the rows rewritten from an edited post
     if DISCORD_UPDATED_COLUMN in header and "流水號" in header:
@@ -1168,6 +1208,24 @@ def merge_game_logs(main_rows: list[list[str]], extra_rows: list[list[str]] | No
         games.append(g)
         merged.raw_rows.append(align(extra_rows, row))
         merged.extra_added += 1
+    return split_bot_games(merged)
+
+
+def split_bot_games(merged: GameLogMerge) -> GameLogMerge:
+    """百科AI 局（is_bot_game）移出 games 與 raw_rows，分類改成 BOT_CATEGORY 後放進 bot_games（順序不變）。
+    去重照舊在全部局上做；分出來之後，分析快取與暫存匯出只看得到人類局。"""
+    header, rows = merged.raw_rows[:1], merged.raw_rows[1:]
+    games: list[GameRow] = []
+    kept: list[list[str]] = []
+    for g, row in zip(merged.games, rows):
+        if is_bot_game(g):
+            g.category = BOT_CATEGORY
+            merged.bot_games.append(g)
+        else:
+            games.append(g)
+            kept.append(row)
+    if merged.bot_games:
+        merged.games, merged.raw_rows = games, header + kept
     return merged
 
 
@@ -4619,7 +4677,8 @@ def only_the_day_changed(cache: Mapping[str, Any], previous: Mapping[str, Any] |
 #   id        純數字流水號；其他值改成 H／D 前綴與 SHA-256 的前十碼。
 #   src       0 = 牌譜，1 = Discord 匯入。
 #   date      日期檢查後的 YYYY-MM-DD 或空字串。
-#   cat       分類白名單的索引；slot 為當日場次，0 表示缺值。
+#   cat       分類白名單的索引；slot 為當日場次，0 表示缺值。百科AI 局（BOT_CATEGORY）一律附在最後面、lineup 為 []，
+#             預設不算（守門重算時拿掉；引擎解碼時另外放，篩選勾選「百科AI」才併進來）。
 #   note      白名單標籤索引，不能放原文。
 #   config    六字元配置，非數字轉成 ?。
 #   outcome   三種結果、空值或其他的索引。
@@ -4645,7 +4704,8 @@ GAMES_DATASET_FIELDS = (
     "seats", "missions", "rounds", "state", "firstTeam", "lakes", "claims", "captains", "votes", "lineup",
 )
 DATASET_OTHER = "其他"
-DATASET_CATEGORIES = ("線瓦", "面瓦", "娛樂", "", DATASET_OTHER)
+# 百科AI 接在最後：既有分類的索引不變。
+DATASET_CATEGORIES = ("線瓦", "面瓦", "娛樂", "", DATASET_OTHER, BOT_CATEGORY)
 DATASET_OUTCOMES = (OUTCOME_THREE_RED, OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE, "", DATASET_OTHER)
 DATASET_UNKNOWN = "?"
 _DATASET_STATE_RE = re.compile(r"[紅藍]{1,5}")
@@ -4726,10 +4786,15 @@ def encode_lineup(lineup: Mapping[str, Any] | None) -> list:
             [int(round(e * 10)) for e in lineup["elos"]]]
 
 
-def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | None = None) -> dict:
+def encode_games_dataset(
+    games: Sequence[GameRow], aliases: Mapping[str, str] | None = None, bot_games: Sequence[GameRow] = (),
+) -> dict:
     """將同次合併、日期檢查與名字正規化後的對局編碼為每局資料集。
 
-    aliases 沿用快取的舊名對正式名字映射；只使用可 JSON 序列化的陣列與字典。"""
+    aliases 沿用快取的舊名對正式名字映射；只使用可 JSON 序列化的陣列與字典。
+    bot_games（百科AI 局，分類 BOT_CATEGORY）接在人類局後面；陣容強度只在人類局上重放，百科AI 局不評分。"""
+    human = list(games)
+    games = human + list(bot_games)
     players: dict[str, int] = {}
     for g in games:
         for seat in SEATS:
@@ -4740,7 +4805,7 @@ def encode_games_dataset(games: Sequence[GameRow], aliases: Mapping[str, str] | 
         g.game_state for g in games if g.game_state and _DATASET_STATE_RE.fullmatch(g.game_state)
     )) + [DATASET_UNKNOWN]
     state_index = {s: i for i, s in enumerate(states)}
-    lineups = compute_lineups(games)[0]
+    lineups = compute_lineups(human)[0] + [None] * (len(games) - len(human))
     rows: list[list[Any]] = []
     for g, lineup in zip(games, lineups):
         kill = g.kill if g.outcome in (OUTCOME_BLUE_DEAD, OUTCOME_BLUE_ALIVE) else ""
@@ -4975,20 +5040,29 @@ def games_dataset_problems(
 ) -> list[str]:
     """資料集寫檔守門；空清單表示通過，錯誤僅有計數與欄位路徑。
 
-    除隱私形狀外，還驗證解碼後重算的全部區塊、三結果默契矩陣與 L141 都與原快取完全相同。"""
+    除隱私形狀外，還驗證解碼後重算的全部區塊、三結果默契矩陣與 L141 都與原快取完全相同。
+    百科AI 局（分類 BOT_CATEGORY）先拿掉再重算：必須都在人類局後面，且不評陣容強度。"""
     problems = games_dataset_privacy_problems(doc)
     if problems:
         return [f"privacy / shape: {p}" for p in problems]
     overview = cache.get("overview") or {}
-    if len(doc["games"]) != len(games) or len(doc["games"]) != overview.get("totalGames"):
-        problems.append(f"{len(doc['games'])} games in the dataset, {overview.get('totalGames')} in the cache")
+    bot_cat = DATASET_CATEGORIES.index(BOT_CATEGORY)
+    cat_at, lineup_at = GAMES_DATASET_FIELDS.index("cat"), GAMES_DATASET_FIELDS.index("lineup")
+    human_rows = [row for row in doc["games"] if row[cat_at] != bot_cat]
+    bot_rows = doc["games"][len(human_rows):]
+    if any(row[cat_at] != bot_cat for row in bot_rows):
+        problems.append("百科AI games are not all after the other games")
+    if any(row[lineup_at] for row in bot_rows):
+        problems.append(f"{sum(1 for row in bot_rows if row[lineup_at])} 百科AI game(s) have a lineup")
+    if len(human_rows) != len(games) or len(human_rows) != overview.get("totalGames"):
+        problems.append(f"{len(human_rows)} games in the dataset (百科AI aside), {overview.get('totalGames')} in the cache")
     known = set(doc["players"])
     missing = sum(1 for p in (cache.get("players") or {}).get("players") or [] if p.get("name") not in known)
     if missing:
         problems.append(f"{missing} player(s) of the cache are not in the dataset")
     if overview.get("gamesKey") != doc["key"]:
         problems.append("overview.gamesKey is not the dataset's key")
-    decoded = decode_games_dataset(doc)
+    decoded = [g for g in decode_games_dataset(doc) if g.category != BOT_CATEGORY]
     rebuilt = build_cache(decoded, copy.deepcopy(cache.get("chemistry") or {}), as_of,
                           cache_aliases({"players": {"aliases": doc["aliases"]}}), games_key=doc["key"])
     paths: list[str] = []
@@ -5002,8 +5076,7 @@ def games_dataset_problems(
                  if isinstance(f, Mapping) and f.get("loopId") == "L141"), None)
     if l141 is not None and _canonical(compute_lake_claim_feature(decoded, as_of)) != _canonical(l141):
         paths.append("featureStudies.L141")
-    lineup_at = GAMES_DATASET_FIELDS.index("lineup")
-    if [encode_lineup(x) for x in compute_lineups(decoded)[0]] != [row[lineup_at] for row in doc["games"]]:
+    if [encode_lineup(x) for x in compute_lineups(decoded)[0]] != [row[lineup_at] for row in human_rows]:
         paths.append("games[].lineup")
     if paths:
         more = "+" if len(paths) >= 20 else ""
@@ -5061,7 +5134,7 @@ def games_dataset_summary(doc: Mapping[str, Any], problems: Sequence[str]) -> st
     """供日誌與工作摘要使用的一行計數。"""
     text = dump_games_dataset(doc).encode("utf-8")
     cats = Counter(row[GAMES_DATASET_FIELDS.index("cat")] for row in doc["games"])
-    labels = ("線瓦", "面瓦", "娛樂", "未分類", "其他")
+    labels = ("線瓦", "面瓦", "娛樂", "未分類", "其他", BOT_CATEGORY)
     split = " / ".join(f"{label} {cats.get(i, 0)}" for i, label in enumerate(labels))
     verdict = "round-trip 通過" if not problems else f"暫停寫入（{len(problems)} 個問題）"
     lineups = [row[GAMES_DATASET_FIELDS.index("lineup")] for row in doc["games"]]
@@ -5586,7 +5659,9 @@ def run(
         name_lines.append(f"- 同一位玩家同時坐兩個座位的局：{names.doubled_games}（請檢查那幾局的 玩1～玩0）")
     # The game-level dataset (複合篩選): the same games, their timeline order fixed over all of them.
     games = assign_timeline_dates(games)
-    dataset = encode_games_dataset(games, names.aliases)
+    # 百科AI 局（Edward 2026-11-03「有百科AI的另外算」）只附在資料集最後面，分析快取完全不看。
+    bot_games = canonicalize_bot_games(drop_dates_after(merged.bot_games, as_of)[0], names, aliases)
+    dataset = encode_games_dataset(games, names.aliases, bot_games)
 
     print("Computing endpoint responses...")
     cache, carried = assemble_cache(

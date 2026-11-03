@@ -159,6 +159,15 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(json.loads(text), doc)
         self.assertEqual(text.count("\n"), 9 + len(doc["posts"]))  # one post per line
 
+    def test_bot_games_are_left_out(self) -> None:
+        # 有百科AI 的局另外算（Edward 2026-11-03）：沒有「模擬」標籤但座位有百科AI 的貼文，清單同「模擬」一樣不列
+        names = ["百科AI_1"] + NAMES[1:]
+        bot = post(28, 21, "含百科機器人_20261028_2100_Room-1417_936758", ("線瓦",))
+        doc, status = build(FakeDiscord([GAME, bot], {GAME.id: body(), bot.id: body(names=names)}))
+        self.assertEqual([p["id"] for p in doc["posts"]], [GAME.id])
+        self.assertEqual(status["simulation"], 1)
+        self.assertEqual(dpe.records_problems(doc), [])
+
     def test_titles_and_names_are_one_plain_line(self) -> None:
         odd = post(20, 20, "1020​一般場\n3\t" + "長" * 200, ("三藍被刀",))
         names = list(NAMES)
@@ -317,6 +326,20 @@ class AnnotateTest(unittest.TestCase):
         bodies = {**BODIES, MISTAKE_POST.id: body(MISTAKE_RECORD, assassin=""),
                   OTHER_POST.id: body(RECORD.replace("1458\n", "1459\n"), names=POOL[2:12])}
         return build(FakeDiscord(posts, bodies))[0]
+
+    def test_bot_games_take_no_part_in_lineups(self) -> None:
+        # 資料集最後面的百科AI 局（分類 百科AI）不參與陣容強度的重放：結果同沒有那幾局
+        dataset, games = games_doc()
+        bot_rows = [tgc.LOG_HEADERS] + [
+            tgc.log_row(f"B{i}", tgc.rot_config(i), "三紅", ["百科AI_1"] + [POOL[(i + j) % 12] for j in range(1, 10)],
+                        date="2026-10-19", category=gc.BOT_CATEGORY) for i in range(6)]
+        bots = gc.merge_game_logs(bot_rows, None).bot_games
+        self.assertEqual(len(bots), 6)
+        with_bots = gc.encode_games_dataset(games, None, bots)
+        plain, mixed = self.doc(), self.doc()
+        dpe.annotate_records(plain, dataset, SMALL)
+        dpe.annotate_records(mixed, with_bots, SMALL)
+        self.assertEqual(mixed, plain)
 
     def test_lineups_matched_and_by_names(self) -> None:
         doc = self.doc()
