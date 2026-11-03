@@ -720,7 +720,9 @@ export class ForwardAgent implements AvalonAgent {
     // so does a seat on a re-proposal of its own earlier team of the round. A good non-Merlin seat only past the vote gates
     // (INV-V1: in a replay the team is the human leader's and can be must-fail in the bot's view).
     const selfApprove = leaderSelfApproveReason(this.baseline.tuning, obs);
-    if (selfApprove && (obs.myTeam !== 'good' || obs.myRole === 'merlin' || goodVoteGate(obs, this.gates) === null)) {
+    // Merlin is exempt from the must-fail gate only (his on-team normal white, owner 2026-10-30), not from the dominance gate (INV-K1V).
+    const selfGate = obs.myRole === 'merlin' ? { ...this.gates, mustFail: false } : this.gates;
+    if (selfApprove && (obs.myTeam !== 'good' || goodVoteGate(obs, selfGate) === null)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
     }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
