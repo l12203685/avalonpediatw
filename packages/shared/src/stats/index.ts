@@ -35,5 +35,6 @@ export * from './filter/types';
 export * from './filter/predicates';
 export * from './filter/metrics';
 export * from './filter/apply';
+export * from './filter/merge';
 export * from './filter/url';
 export * from './filter/presets';

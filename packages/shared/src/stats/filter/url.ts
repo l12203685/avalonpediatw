@@ -10,6 +10,7 @@ import {
   GAME_CLAUSE_KINDS, LEADERBOARD_OVERRIDE_RANGES, METRIC_IDS,
   type Clause, type FilterOptions, type GameFilter, type LeaderboardOverrideKey, type LeaderboardOverrides,
 } from './types';
+import { sanitizeMergeOptions } from './merge';
 
 export const FILTER_URL_VERSION = '1';
 
@@ -207,6 +208,7 @@ export function sanitizeFilter(raw: unknown): { filter: GameFilter | null; warni
     const lb = sanitizeLeaderboardOverrides(o.leaderboard, warnings);
     if (Object.keys(lb).length) options.leaderboard = lb;
   }
+  Object.assign(options, sanitizeMergeOptions(o, warnings));
   const filter: GameFilter = { v: 1, clauses };
   if (Object.keys(options).length) filter.options = options;
   return { filter, warnings };

@@ -155,7 +155,26 @@ export interface FilterOptions {
    * config.leaderboard 上、只重算排行（玩家的理論視窗不變）。鍵與範圍見 LEADERBOARD_OVERRIDE_RANGES。
    */
   leaderboard?: LeaderboardOverrides;
+  /**
+   * 合併計算（Edward 2026-11-03「把場數未滿30場的人併成同一個人 … 類似把某幾個人戰績合併計算」）：這幾個名字
+   * 當成同一位玩家 `as`（像臨時的別名），在任何子句之前就改名，頁面上每個區塊都看合併後的名字。見 merge.ts。
+   */
+  merge?: MergeGroup[];
+  /** 生涯場數（全部局、有結果的局的座位數）未滿 maxGames 的人併成一位「散客（<N場）」；自訂合併的名字不併。 */
+  mergeSmall?: MergeSmallOption;
 }
+
+export interface MergeGroup {
+  names: string[];
+  as: string;
+}
+
+export interface MergeSmallOption {
+  maxGames: number;
+}
+
+/** 合併計算的上限：組數、每組名字數、合併後名字長度、散客門檻範圍與預設。 */
+export const MERGE_LIMITS = { groups: 20, names: 50, asLength: 40, minGames: 1, maxGames: 5000, defaultGames: 30 } as const;
 
 /** 可以覆寫的排行門檻與整數範圍（含兩端）。 */
 export const LEADERBOARD_OVERRIDE_RANGES = {

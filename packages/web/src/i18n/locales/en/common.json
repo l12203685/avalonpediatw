@@ -1595,6 +1595,22 @@
         "days": "Last {{count}} days",
         "year": "Last 12 months",
         "all": "All"
+      },
+      "merge": {
+        "title": "Merge players",
+        "smallPrefix": "Pool players with fewer than",
+        "smallGames": "Games threshold",
+        "smallSuffix": "career games into one player \"{{name}}\"",
+        "addGroup": "Add merge group",
+        "as": "Merge as",
+        "asPlaceholder": "Display name",
+        "namePlaceholder": "Add a player name",
+        "addName": "Add",
+        "removeName": "Remove {{name}}",
+        "hint": "Merging happens before every condition: all sections then treat these names as one player (typing an original name in a condition finds the merged player). Custom groups are never pooled. When several pooled players are in one game they occupy several seats: games and win rates count each seat (two pooled players in one game = two games), chemistry counts each game once.",
+        "chip": "Merged: {{parts}}",
+        "chipPoolCount": "{{name}} ({{count}} players)",
+        "chipGroups": "{{count}} custom groups"
       }
     },
     "winRates": {
