@@ -18,7 +18,7 @@ describe('flags', () => {
     expect(parseTuningFlag('redHideReuse=0.5')).toEqual({ redHideReuse: 0.5 });
     expect(() => parseTuningFlag('redHideReuse=2')).toThrow();
     expect(LEGACY_AGENT_TUNING.assassinReuseRead).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.assassinReuseRead).toBe(3); // adopted in round 19 (1, then 3)
+    expect(DEFAULT_AGENT_TUNING.assassinReuseRead).toBe(9); // adopted in round 19 (1, then 3); round 23: 9
     expect(DEFAULT_AGENT_TUNING.redHideReuse).toBe(0);
     expect(LEGACY_AGENT_TUNING.redHideReuse).toBe(0);
   });

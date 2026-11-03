@@ -37,7 +37,8 @@ import type { PlayerObservation, QuestRecord, VoteRecord } from './types';
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 const CANDIDATES = ['P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 // Isolated from the round-6 lead read (`assassinLeadRead`): these tests are about the visible-red tier and likelihood.
-const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinMerlinVotes: 0, assassinLeadRead: 0 };
+// `assassinReuseRead: 3`: the fixture's re-proposal norm leads are read the round-19 way (round 23's fitted 9 also credits re-proposals and clean misses, which this fixture is not about).
+const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinMerlinVotes: 0, assassinLeadRead: 0, assassinReuseRead: 3 };
 const TIER_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinMerlinVotes: 0, assassinLeadRead: 0, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
 
 function vote(round: number, attempt: number, leader: string, team: string[], approvers: string[], approved: boolean): VoteRecord {
@@ -258,9 +259,13 @@ describe('batch 1G — the practice report (b) fixture', () => {
       // P7's visible-red lead (Oberon P4 on the team) moved from R3 to R2.
       return { ...o, voteHistory: o.voteHistory.map((v) => (v.leader === 'P7' ? { ...v, round: 2, attempt } : v)) };
     };
-    expect(forwardAssassinate(withLead(2), ON, weights)).toBe('P7'); // doomed proposal: the model decides
-    expect(forwardAssassinate(withLead(2), { ...ON, assassinIgnoreDoomed: false }, weights)).not.toBe('P7'); // the 10/26 rule
-    expect(forwardAssassinate(withLead(5), ON, weights)).not.toBe('P7'); // forced fifth: still counts
+    const R2 = { ...ON, assassinDoomedRead: 0 }; // round 2 alone (round 23 `assassinDoomedRead` brings these leads back as a second tier)
+    expect(forwardAssassinate(withLead(2), R2, weights)).toBe('P7'); // doomed proposal: the model decides
+    expect(forwardAssassinate(withLead(2), { ...R2, assassinIgnoreDoomed: false }, weights)).not.toBe('P7'); // the 10/26 rule
+    expect(forwardAssassinate(withLead(5), R2, weights)).not.toBe('P7'); // forced fifth: still counts
+    // Round 23 (default `assassinDoomedRead=1`): the doomed lead with a seen red ranks P7 below the others again.
+    expect(ON.assassinDoomedRead).toBe(1);
+    expect(forwardAssassinate(withLead(2), ON, weights)).not.toBe('P7');
   });
 
   it('the practice review states the reason when the tier applies', () => {

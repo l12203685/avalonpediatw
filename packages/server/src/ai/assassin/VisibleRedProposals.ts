@@ -423,3 +423,38 @@ export function reuseLeadLogRatio(obs: PlayerObservation, candidate: string, mod
     + c.reuseR2 * Math.log(f.reuse[0]) + c.reuseR3 * Math.log(f.reuse[1])
     + c.cleanMissR2 * Math.log(f.clean[0]) + c.cleanMissR3 * Math.log(f.clean[1]);
 }
+
+/**
+ * Round 23 (red) `assassinDoomedRead`: whether R2 proposal `v` re-proposes the successful R1 team — the whole R1 team on it
+ * and every red Merlin may see on it from that team. Merlin's R2 norm (`merlinReuseNorm`, round 17): it is the only way a
+ * bot Merlin's doomed R1–R2 proposal holds a red he sees (round 22: 9.7% of Merlin's doomed proposals, all of them this).
+ */
+export function r2ReuseOfR1(obs: PlayerObservation, v: VoteRecord, sight: MerlinSight = merlinSightFromAssassin(obs)): boolean {
+  if (v.round !== 2 || obs.questResults[0] !== 'success') return false;
+  const q1 = obs.questHistory.find((q) => q.round === 1);
+  if (!q1 || !q1.team.every((id) => v.team.includes(id))) return false;
+  return v.team.filter((id) => sight.certain.has(id) || sight.ambiguous.includes(id)).every((id) => q1.team.includes(id));
+}
+
+/**
+ * Round 23 (red) `assassinDoomedRead` 1 / 3: the candidates who, as captain on a doomed R1–R2 proposal (non-forced, the
+ * ones `assassinIgnoreDoomed` leaves out of the tier), certainly put a red Merlin sees on the team — the R2 re-proposal of
+ * the successful R1 team excepted (`r2ReuseOfR1`). Round 22 measured bot Merlins never do it otherwise (`merlinLoyalStyle`
+ * since round 5 keeps seen reds off; the round-1 派拇指躲刺 behind it never runs), loyal / Percival captains on ~39% of
+ * those proposals. A second tier under the standard one: among `pool` (already the standard tier) keep the candidates
+ * with no such lead, or all of `pool` when every one has one.
+ */
+export function doomedTierCandidates(obs: PlayerObservation, pool: readonly string[]): string[] {
+  const sight = merlinSightFromAssassin(obs);
+  const flagged = new Set<string>();
+  for (const v of obs.voteHistory) {
+    if (v.round > 2 || v.attempt >= 5 || !pool.includes(v.leader)) continue;
+    if (classifyTeamForAssassin(v.team, sight) !== 'certain' || r2ReuseOfR1(obs, v, sight)) continue;
+    flagged.add(v.leader);
+  }
+  const keep = pool.filter((id) => !flagged.has(id));
+  return keep.length > 0 ? keep : [...pool];
+}
+
+/** Round 23 `assassinDoomedRead` 2 / 3: the lead read's ε for a doomed R1–R2 lead with a seen red (as R3+). */
+export const DOOMED_LEAD_EPS = 0.05;

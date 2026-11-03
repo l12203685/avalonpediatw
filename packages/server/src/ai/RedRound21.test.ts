@@ -39,11 +39,11 @@ function assassination(extra: VoteRecord[] = []): PlayerObservation {
 }
 
 describe('flags', () => {
-  it('parse 4 and 5; default stays 3', () => {
+  it('parse 4 and 5; default 9 since round 23', () => {
     expect(parseTuningFlag('assassinReuseRead=4')).toEqual({ assassinReuseRead: 4 });
     expect(parseTuningFlag('assassinReuseRead=10')).toEqual({ assassinReuseRead: 10 });
     expect(() => parseTuningFlag('assassinReuseRead=11')).toThrow();
-    expect(DEFAULT_AGENT_TUNING.assassinReuseRead).toBe(3);
+    expect(DEFAULT_AGENT_TUNING.assassinReuseRead).toBe(9); // round 23 adopted 9
   });
 });
 
