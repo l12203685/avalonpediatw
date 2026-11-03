@@ -709,6 +709,13 @@ export interface AgentTuning {
    * 第 20 回合 0.65 篩選 +0.2 [−0.5, +0.9]pp，不比全用 0.65（篩選 +0.5；兩組 6000 組各 +0.47，下界 −0.06／−0.04，也不採用）好，不採用。
    */
   goodKeyVoteHalf: number;
+  /**
+   * 第 22 回合藍方・梅林（`MerlinLoyalStyle.merlinLoyalStyleTeam`）：第 1、2 局注定被否決的提議（非強制，不會出任務）照「坐在梅林位置、只看公開紀錄的忠臣」派——
+   * 公開視角「這隊沒有紅」機率最高的隊，同分看延伸前面的派票（不用梅林的視角），看得到的紅也可以在隊上（順應局勢，不刻意放、也不刻意避開）。
+   * 第 22 回合拆刺客的刺中：拿掉第 1、2 局注定被否決的派隊，刺中率 46.8% → 33.5%——梅林這些提議 9.7% 有看得到的紅，忠臣 39%、派西 38%。
+   * 1 = 只改梅林；2 = 同 1，藍方的信念不再用嚴格模型讀「可能是梅林的人」第 1、2 局非強制的提議（`BayesOptions.merlinEarlyStrict` 關掉，梅林那些提議不再沒有看得到的紅）。0 = 關。
+   */
+  merlinDoomedPublic: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -807,6 +814,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinReuseSkip',
   'merlinReusePublic',
   'goodKeyVoteHalf',
+  'merlinDoomedPublic',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -904,6 +912,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinReuseSkip: 0,
   merlinReusePublic: false,
   goodKeyVoteHalf: 0,
+  merlinDoomedPublic: 0,
 });
 
 /**
@@ -1149,6 +1158,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinReuseSkip: 0,
   merlinReusePublic: false,
   goodKeyVoteHalf: 0,
+  merlinDoomedPublic: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1246,6 +1256,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinReuseSkip: 'AVALON_TUNING_MERLIN_REUSE_SKIP',
   merlinReusePublic: 'AVALON_TUNING_MERLIN_REUSE_PUBLIC',
   goodKeyVoteHalf: 'AVALON_TUNING_GOOD_KEY_VOTE_HALF',
+  merlinDoomedPublic: 'AVALON_TUNING_MERLIN_DOOMED_PUBLIC',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1368,6 +1379,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`merlinReuseSkip needs a number in [0, 1], got "${raw}"`);
     return { merlinReuseSkip: value };
   }
+  if (name === 'merlinDoomedPublic') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`merlinDoomedPublic needs 0–2, got "${raw}"`);
+    return { merlinDoomedPublic: value };
+  }
   if (name === 'merlinReuseNorm') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinReuseNorm needs 0–3, got "${raw}"`);
@@ -1455,7 +1471,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

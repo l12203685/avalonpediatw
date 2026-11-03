@@ -372,7 +372,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     strictMerlin: t.percivalThumbLogic === true,
     merlinMixture: t.loyalMerlinRead ?? 0,
     zoneMerlin: t.merlinZoneSignal === true,
-    merlinEarlyStrict: t.merlinLoyalStyle === true,
+    merlinEarlyStrict: t.merlinLoyalStyle === true && (t.merlinDoomedPublic ?? 0) < 2,
     botTables: t.beliefBotTables ?? 0,
     botTablesNext: t.beliefBotTablesNext === true,
     botMissionNext: t.beliefBotMissionNext === true,
