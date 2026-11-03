@@ -231,8 +231,10 @@ function fitFont(text: string, reservePx: number, minPx: number, maxPx: number):
  *     own actual vote for self). VotePanel 按鈕內球(M batch #9 加的)留著,
  *     兩處不衝突 — VotePanel 是即時投票 UI, PlayerCard 球是公開歷史結果.
  *
- * Edward 21:59 corner spill: 4 個 corner indicators 可微出 tile 邊框 (用 negative
- * inset 例如 `-top-1 -left-1`)，視覺上更突顯，只要不擋中央 portrait 即可。
+ * Edward 21:59 corner spill 原本讓 4 個 corner indicators 微出 tile 邊框 (negative
+ * inset)；但牌卡本身 `overflow-hidden`（圓角裁頭像），外凸的部分會被裁掉——手機版
+ * 王冠只剩下半截、盾牌只剩中間（Edward 2026-11-03「隊長標誌跟任務牌標誌中間會
+ * 顯示錯誤」）。改成全部貼在框內側（`top-0.5` / `bottom-0.5` 等）。
  * Edward 21:59 撤回「N家」: 座位號顯示改純數字 (1, 2, ..., 9, 0)，不加「家」suffix。
  *
  * Replaced overlays (carry-over from 20:05 rewrite, still applies):
@@ -431,8 +433,8 @@ export default function PlayerCard({
   // 窄卡圖示收進邊框內，底部圖示另排一列，保留完整名字。
   const topIconStyle: CSSProperties | undefined = compact ? { width: COMPACT.top, height: COMPACT.top } : undefined;
   const tokenStyle: CSSProperties | undefined = compact ? { width: COMPACT.token, height: COMPACT.token } : undefined;
-  const tokenLeftPos = compact ? 'relative shrink-0' : 'absolute -bottom-1 -left-1';
-  const tokenRightPos = compact ? 'relative shrink-0' : 'absolute -bottom-1 -right-1';
+  const tokenLeftPos = compact ? 'relative shrink-0' : 'absolute bottom-0.5 left-0.5';
+  const tokenRightPos = compact ? 'relative shrink-0' : 'absolute bottom-0.5 right-0.5';
   const nameShadow = { textShadow: '0 1px 2px rgba(0,0,0,0.85)' };
 
   /*
@@ -941,7 +943,7 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0, y: -4, x: '-50%' }}
             animate={{ scale: 1, y: 0, x: '-50%' }}
-            className={`absolute ${compact ? 'top-0.5' : '-top-2'} left-1/2 pointer-events-none z-10`}
+            className={`absolute top-0.5 left-1/2 pointer-events-none z-10`}
             aria-label="隊長"
           >
             <img
@@ -977,7 +979,7 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0, rotate: -8 }}
             animate={{ scale: 1, rotate: 0 }}
-            className={`absolute ${compact ? 'top-0.5 right-0.5' : '-top-1 -right-1 w-7 h-7 sm:w-8 sm:h-8'} ${
+            className={`absolute ${compact ? 'top-0.5 right-0.5' : 'top-0.5 right-0.5 w-7 h-7 sm:w-8 sm:h-8'} ${
               selfTrackerHidden
                 ? 'bg-purple-700 border-2 border-purple-300'
                 : 'bg-cyan-500 border-2 border-cyan-200'
@@ -1046,7 +1048,7 @@ export default function PlayerCard({
           <motion.div
             initial={{ scale: 0, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
-            className={`absolute ${compact ? 'top-0.5 right-0.5' : '-top-1 -right-1 w-7 h-7 sm:w-8 sm:h-8'} bg-red-700 border-2 border-red-300 rounded-full flex items-center justify-center pointer-events-none shadow-md z-20`}
+            className={`absolute ${compact ? 'top-0.5 right-0.5' : 'top-0.5 right-0.5 w-7 h-7 sm:w-8 sm:h-8'} bg-red-700 border-2 border-red-300 rounded-full flex items-center justify-center pointer-events-none shadow-md z-20`}
             style={topIconStyle}
             aria-label="被刺殺"
           >
