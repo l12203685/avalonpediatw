@@ -320,6 +320,32 @@ class ParserTest(unittest.TestCase):
         self.assertEqual(skip_reason(post(), "  \n"), dri.SKIP_EMPTY)
         self.assertEqual(skip_reason(post(tags=("模擬", "三藍被刀")), RECENT_BODY), dri.SKIP_SIMULATION)
 
+    def test_signage_recorder_posts(self) -> None:
+        # Every recorder post ends with this line: plain text after the names, ignored by the parser.
+        note = "\n（機器人紀錄員尚待檢視）"
+        verified = post(title="20261009_第4局_936758")
+        game = dri.parse_post(verified, RECENT_BODY + note)
+        self.assertEqual((game.config, game.outcome, game.date, game.game_no), ("936758", "三藍死", "2026/10/09", "4"))
+        # Unverified (title 【待檢視】...): never imported, whatever the body and tags say.
+        body = "待檢視原因：中途加入\n" + RECENT_BODY + note
+        for title in ("【待檢視】20261009_2015_Room-1417_936758", "【待檢視】20261009_2015_Room-1417"):
+            for tags in (("線瓦",), ("三藍被刀", "線瓦"), ()):
+                with self.subTest(title=title, tags=tags):
+                    self.assertEqual(skip_reason(post(title=title, tags=tags), body), dri.SKIP_UNVERIFIED)
+        self.assertEqual(skip_reason(post(title="【待檢視】20261009_2015_Room-1417", tags=("線瓦",)), "待檢視原因：7 人局" + note),
+                         dri.SKIP_UNVERIFIED)
+        self.assertIn(dri.SKIP_UNVERIFIED, dri.REPLY_NOT_FOR)  # no --reply, no 待修正, not on the fix list
+        # Reviewed: the mark taken out of the title -> read like any other post (the reason line is plain text;
+        # no result tag: the recorder writes the assassination target, Merlin = seat 8 here).
+        body = "待檢視原因：中途加入\n" + RECENT_RECORD + "\n" + footer(assassin="刺客刺殺:8") + note
+        reviewed = dri.parse_post(post(title="20261009_2015_Room-1417_936758", tags=("線瓦",)), body)
+        self.assertEqual((reviewed.config, reviewed.outcome, reviewed.kill), ("936758", "三藍死", "8"))
+        # plan_import skips it without fetching the starter.
+        fetched: list[str] = []
+        report = dri.plan_import([post(title="【待檢視】20261009_2015_Room-1417", tags=("線瓦",))],
+                                 lambda p: fetched.append(p.id) or body, [], None, sheet_header())
+        self.assertEqual((fetched, report.parsed, dict(report.skipped)), ([], 0, {dri.SKIP_UNVERIFIED: 1}))
+
     def test_no_record_lines_is_a_record_post_only_when_something_says_so(self) -> None:
         chat = "今天那局大家覺得怎麼樣？\n我覺得第三輪的湖很關鍵。"
         self.assertEqual(skip_reason(post(title="覆盤", tags=()), chat), dri.SKIP_NOT_A_RECORD)  # a discussion

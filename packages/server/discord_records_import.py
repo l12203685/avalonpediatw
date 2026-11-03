@@ -85,7 +85,9 @@ What this script does and does not do:
     again (only re-read for corrections); a game already in 牌譜
     (generate_cache.record_fingerprint, or the same
     配置 + mission results with the same players) or tagged 已收錄 is not imported;
-    posts tagged 模擬 (simulations) are not imported either.
+    posts tagged 模擬 (simulations) are not imported either, nor are the signage recorder's
+    unverified posts (title marked 【待檢視】, TITLE_UNVERIFIED) until someone reviews them and
+    takes the mark out of the title; neither gets a --reply or the 待修正 tag.
   * prints counts and fixed reason strings only (stdout and $GITHUB_STEP_SUMMARY):
     no player names, no record text, no post titles -- the repository is public. The
     line quoted in a reply or the list exists only in that Discord message (markdown,
@@ -160,6 +162,9 @@ TAIPEI = dt.timezone(dt.timedelta(hours=8), "Asia/Taipei")
 
 TAG_RECORDED = "已收錄"  # set by hand on posts already copied into 牌譜
 TAG_SIMULATION = "模擬"
+# 遊玩頁記錄員（scripts/signageRecorder.ts）沒通過自動檢查的局：標題開頭「【待檢視】」（Edward 2026-11-03：都先貼，
+# 錯的或沒意義的他會刪）。標題有這幾個字的貼文不匯入、不回覆、不掛待修正；人工檢視後把標題的「【待檢視】」拿掉才收錄。
+TITLE_UNVERIFIED = "待檢視"
 RESULT_TAGS = {"三紅": gc.OUTCOME_THREE_RED, "三藍被刀": gc.OUTCOME_BLUE_DEAD, "三藍躲刺": gc.OUTCOME_BLUE_ALIVE}
 CATEGORY_TAGS = ("線瓦", "面瓦")  # -> 分類
 EXPECTED_TAGS = (TAG_RECORDED, TAG_SIMULATION, *RESULT_TAGS, *CATEGORY_TAGS)
@@ -213,6 +218,7 @@ REQUIRED_COLUMNS = (
 SKIP_NO_STARTER = "starter message deleted or unreadable"
 SKIP_EMPTY = "starter message has no text (empty or attachments only)"
 SKIP_SIMULATION = "tagged 模擬 (simulation), not imported"
+SKIP_UNVERIFIED = "recorder post not reviewed yet (title marked 待檢視), not imported"
 SKIP_NO_RECORD = "no game record found"
 SKIP_NOT_A_RECORD = "no game record and nothing says it was meant as one (no result tag, no 6-digit 配置)"
 SKIP_UNRECOGNIZED = "unrecognized line inside the record (or record interrupted by footer lines)"
@@ -267,6 +273,7 @@ SKIP_EXPLANATIONS = {
     SKIP_NO_STARTER: "起始訊息已刪除或無法讀取",
     SKIP_EMPTY: "起始訊息沒有文字（空白或只有附件）",
     SKIP_SIMULATION: "標了「模擬」，不收錄",
+    SKIP_UNVERIFIED: "機器人紀錄員的貼文尚待檢視（標題有「待檢視」；確認沒問題後把標題的【待檢視】拿掉才會收錄）",
     SKIP_NO_RECORD: "找不到牌譜（沒有提議、任務結果這些行）",
     SKIP_NOT_A_RECORD: "找不到牌譜，也沒有結果標籤或 6 碼配置（不像牌譜貼文，不回覆）",
     SKIP_UNRECOGNIZED: "這一行看不懂：牌譜裡只能有提議、任務結果（o/x）和湖線，其他文字請放在牌譜前面或後面",
@@ -315,7 +322,7 @@ REPLY_LINE_MAX = 60  # quoted line text is cut here (the poster can see the whol
 REPLY_DEFAULT_DAYS = 14
 REPLY_DEFAULT_LIMIT = 20
 # Skips that are not the poster's formatting (or not a record post at all): no reply for these.
-REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_SIMULATION, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
+REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_SIMULATION, SKIP_UNVERIFIED, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
 # Quoted record text in the bot's messages: markdown, masked links ([..](..)) and <...> forms
 # (mentions, <url>, timestamps) render as plain text. '>' alone is harmless (湖 lines: 0>8 o).
 _MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_~|\[\]<])")
@@ -810,6 +817,11 @@ def meant_as_record(post: Post, lines: Sequence[str]) -> bool:
     return any(_CONFIG_RE.match(normalize_line(s)) for s in (post.title, *lines))
 
 
+def unverified(post: Post) -> bool:
+    """A recorder post not reviewed yet: its title says 待檢視 (see TITLE_UNVERIFIED)."""
+    return TITLE_UNVERIFIED in normalize_line(post.title)
+
+
 def parse_post(post: Post, content: str | None) -> ParsedGame:
     """The validated game of a post, or SkipPost(reason)."""
     if content is None:
@@ -818,6 +830,8 @@ def parse_post(post: Post, content: str | None) -> ParsedGame:
         raise SkipPost(SKIP_EMPTY)
     if TAG_SIMULATION in post.tags:
         raise SkipPost(SKIP_SIMULATION)
+    if unverified(post):
+        raise SkipPost(SKIP_UNVERIFIED)
     lines = content.splitlines()
     try:
         items = [item for item in (classify_line(raw, n) for n, raw in enumerate(lines, 1)) if item is not None]
@@ -1134,6 +1148,9 @@ def plan_import(
             continue
         if TAG_SIMULATION in post.tags:  # no need to fetch it
             report.skip(post, SKIP_SIMULATION)
+            continue
+        if unverified(post):  # neither
+            report.skip(post, SKIP_UNVERIFIED)
             continue
         content = fetch(post)
         report.fetched += 1

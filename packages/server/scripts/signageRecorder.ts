@@ -14,12 +14,17 @@
  * 輸出含玩家暱稱：**不要放進公開 repo**（--out 預設在系統暫存目錄）。
  * 有設定 DISCORD_BOT_TOKEN（或 DISCORD_PAIPU_WEBHOOK_URL）時，每局結束把牌譜貼到 DC 牌譜頻道（scripts/signagePaipu.ts）；
  * 每日匯入（import-discord-records.yml）再把牌譜收進戰績。GitHub Actions 每晚排程：.github/workflows/signage-recorder.yml。
+ * Edward 2026-11-03：每局都貼（沒通過檢查的標題加【待檢視】、不掛結果標籤），並附兩張圖：
+ *   - 開牌後配置：局末（角色公開後）觀眾席畫面截圖，裁成座位＋任務板＋湖的那一塊（找不到就截整個畫面）。
+ *   - 視覺化牌譜：練習台自己的「紀錄下載」頁（/Statistics/Index/房號，房內「紀錄下載」按鈕開的也是這頁，
+ *     標題「派票與任務統計」：每輪的任務結果＋每次提議的投票格），切到「全部局次」分頁後截圖。
+ *   截圖失敗只少那張圖，文字照貼；圖也存在 --out 旁邊（同檔名加 _board.jpg／_stats.jpg）。
  */
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dayIndex, gameToPaipu, paipuTags, paipuThreadName, postPaipu, postSkipReason, type RecordedGame } from './signagePaipu';
+import { buildPaipuPost, dayIndex, postPaipu, unverifiedReason, type PaipuImage, type RecordedGame } from './signagePaipu';
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -73,6 +78,64 @@ async function login(browser: Browser): Promise<Page> {
 }
 
 function stamp(): string { return new Date().toISOString(); }
+
+/** 每張圖的上限（Discord 機器人上限 25MB，這裡留很多餘裕）。 */
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** 截 JPEG；超過 MAX_IMAGE_BYTES 就降畫質再截，還是太大就放棄（回傳 null）。 */
+async function jpeg(shoot: (quality: number) => Promise<Buffer>): Promise<Buffer | null> {
+  for (const quality of [80, 55, 35]) {
+    const buf = await shoot(quality);
+    if (buf.length <= MAX_IMAGE_BYTES) return buf;
+  }
+  return null;
+}
+
+/**
+ * 開牌後配置：局末觀眾席畫面。裁成左邊的座位＋任務板（第一個 .col-7）加上右邊的湖柱（.avalon-stone-pillar），
+ * 不含右側聊天與房間設定；找不到這些區塊時截整個畫面。
+ */
+export async function boardShot(page: Page): Promise<Buffer | null> {
+  const clip: { x: number; y: number; width: number; height: number } | null = await page.evaluate(`(() => {
+    const rects = [document.querySelector('.col-7'), ...document.querySelectorAll('.avalon-stone-pillar')]
+      .filter(Boolean).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 50 && r.height > 50);
+    if (!rects.length) return null;
+    const x = Math.max(0, Math.min(...rects.map((r) => r.left)) + window.scrollX);
+    const y = Math.max(0, Math.min(...rects.map((r) => r.top)) + window.scrollY);
+    const right = Math.max(...rects.map((r) => r.right)) + window.scrollX;
+    const bottom = Math.max(...rects.map((r) => r.bottom)) + window.scrollY;
+    return { x, y, width: Math.min(right, document.documentElement.scrollWidth) - x, height: Math.min(bottom - y, 2400) };
+  })()`).catch(() => null);
+  const ok = clip && clip.width > 200 && clip.height > 200;
+  return jpeg((quality) => page.screenshot({ type: 'jpeg', quality, ...(ok ? { clip, fullPage: true } : {}) }));
+}
+
+/**
+ * 視覺化牌譜：同一個登入的瀏覽器環境另開分頁到 /Statistics/Index/房號（頁面自己用 axios 抓資料畫表），
+ * 等「全部局次」畫好，把它設成顯示中的分頁，截整個 #statistics-app。
+ */
+export async function statsShot(page: Page, room: string): Promise<Buffer | null> {
+  const p = await page.context().newPage();
+  p.on('dialog', (d: { accept(): Promise<void> }) => { void d.accept(); });
+  try {
+    await p.goto(`${BASE}/Statistics/Index/${encodeURIComponent(room)}?count=0`, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await p.waitForSelector('#sg_tab_all section', { state: 'attached', timeout: 20000 });
+    await p.evaluate(`(() => {
+      document.querySelectorAll('.tab-pane').forEach((e) => e.classList.remove('show', 'active'));
+      document.querySelectorAll('.nav-tabs .nav-link').forEach((e) => e.classList.remove('active'));
+      const all = document.querySelector('#sg_tab_all'); if (all) all.classList.add('show', 'active');
+      const btn = document.querySelector('[data-bs-target="#sg_tab_all"]'); if (btn) btn.classList.add('active');
+    })()`);
+    // 任務牌圖片載完再截
+    await p.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => undefined);
+    await sleep(500);
+    const app = p.locator('#statistics-app');
+    return await jpeg((quality) => app.screenshot({ type: 'jpeg', quality, timeout: 15000 }));
+  } finally {
+    await p.close().catch(() => undefined);
+  }
+}
+
 function safe(s: string): string { return s.replace(/[^\w.-]+/g, '_'); }
 
 /** 旁觀一間房直到房間消失；每局存一個檔。 */
@@ -99,12 +162,12 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
       if (s) {
         const live = s.gaming && s.status !== ENDED;
         if (live && !inGame) {
-          // 剛進房時已經在打（已有任務結果或不只一次提議）＝中途加入：照樣記，但標出來、不貼 DC
+          // 剛進房時已經在打（已有任務結果或不只一次提議）＝中途加入：照樣記，但標出來（貼 DC 時標待檢視）
           const hist = Array.isArray(s.missionHistorys) ? s.missionHistorys.length : 0;
           const meets = Array.isArray(s.meetings) ? s.meetings.length : 0;
           const joinedMidGame = hist > 0 || meets > 1;
           inGame = true; sawEnd = false; game = { startedAt: stamp(), timeline: [], joinedMidGame }; last = '';
-          console.log(`${stamp()} ${room.name} ${joinedMidGame ? '中途加入（不貼 DC）' : '開局'}`);
+          console.log(`${stamp()} ${room.name} ${joinedMidGame ? '中途加入（貼 DC 時標待檢視）' : '開局'}`);
         }
         const key = JSON.stringify(s);
         if (game && key !== last) { game.timeline.push({ t: stamp(), s }); last = key; }
@@ -114,6 +177,9 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
           await sleep(3000);
           let end: Snapshot | null = null;
           try { end = await withTimeout(page.evaluate(SNAP_JS), 10000, 'snap'); } catch { end = null; }
+          // Edward 11/03：「開牌後配置」的圖——角色公開後、房主重開前，先截觀眾席畫面
+          let board: Buffer | null = null;
+          try { board = await withTimeout(boardShot(page), 30000, 'board'); } catch { board = null; }
           const text: string = await page.evaluate('document.body.innerText').catch(() => '');
           // 練習台自己的「紀錄下載」頁（整局派票紀錄；中途才進房時補前面漏掉的提議）
           let statsHtml = '';
@@ -123,19 +189,33 @@ async function watchRoom(browser: Browser, room: LobbyRoom, stop: () => boolean)
               `fetch('/Statistics/Index/${encodeURIComponent(room.name)}', { credentials: 'include' }).then((r) => r.ok ? r.text() : 'HTTP ' + r.status)`,
             ), 20000, 'statistics');
           } catch (err) { statsHtml = `ERROR ${err instanceof Error ? err.message : String(err)}`; }
+          // 「視覺化牌譜」的圖：同一頁畫出來的派票與任務統計
+          let stats: Buffer | null = null;
+          try { stats = await withTimeout(statsShot(page, room.name), 60000, 'stats'); } catch { stats = null; }
           const file = path.join(OUT, `${safe(game.startedAt)}_${safe(room.name)}.json`);
           fs.writeFileSync(file, JSON.stringify({
             source: 'signage-cloud', room: room.name, title: room.description_title ?? '', publicRoom: room.is_publish_room ?? null,
             startedAt: game.startedAt, endedAt: stamp(), joinedMidGame: Boolean(game.joinedMidGame), end, endText: text.slice(0, 6000), statsHtml, timeline: game.timeline,
           }));
           console.log(`${stamp()} ${room.name} 結束，存檔 ${path.basename(file)}（${game.timeline.length} 張快照）`);
+          const images: PaipuImage[] = [];
+          const base = file.replace(/\.json$/, '');
+          if (board) images.push({ filename: 'board.jpg', data: board, contentType: 'image/jpeg' });
+          if (stats) images.push({ filename: 'stats.jpg', data: stats, contentType: 'image/jpeg' });
+          for (const [suffix, buf] of [['_board.jpg', board], ['_stats.jpg', stats]] as const) {
+            if (buf) try { fs.writeFileSync(base + suffix, buf); } catch { /* 存不了圖不影響貼文 */ }
+          }
+          console.log(`${stamp()} ${room.name} 截圖：開牌後配置 ${board ? 'ok' : '失敗'}、視覺化牌譜 ${stats ? 'ok' : '失敗'}`);
           // Edward 2026-10-30：每局牌譜貼到 DC 牌譜頻道（附座位暱稱）；有設定 DISCORD_BOT_TOKEN 或 DISCORD_PAIPU_WEBHOOK_URL 才貼
+          // Edward 2026-11-03：每局都貼——沒通過檢查的標題加【待檢視】、不掛結果標籤（buildPaipuPost）；附兩張圖
           try {
             const saved = JSON.parse(fs.readFileSync(file, 'utf-8')) as RecordedGame;
-            const skip = postSkipReason(saved);
-            if (skip) console.log(`${stamp()} ${room.name} 不貼 DC：${skip}`);
-            const text = skip ? null : gameToPaipu(saved);
-            if (text && (await postPaipu(text, paipuThreadName(saved, dayIndex(file)), paipuTags(saved)))) console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord`);
+            // 第n局（dayIndex）只數通過檢查的局；待檢視的局標題不寫第幾局
+            const post = buildPaipuPost(saved, dayIndex(file));
+            if (!post.verified) console.log(`${stamp()} ${room.name} 待檢視：${unverifiedReason(saved)}`);
+            if (await postPaipu(post.content, post.name, post.tags, images)) {
+              console.log(`${stamp()} ${room.name} 牌譜已貼到 Discord（${post.verified ? '正式' : '待檢視'}，${images.length} 張圖）`);
+            }
           } catch (err) {
             console.log(`${stamp()} ${room.name} 牌譜貼到 Discord 失敗：${err instanceof Error ? err.message : String(err)}`);
           }
@@ -186,4 +266,7 @@ async function main(): Promise<void> {
   console.log(`${stamp()} 記錄員結束`);
 }
 
-main().then(() => process.exit(0), (err) => { console.error(err); process.exit(1); });
+// 直接執行才啟動（測試可以 import 截圖函式）
+if (process.argv[1] && path.basename(process.argv[1]).startsWith('signageRecorder')) {
+  main().then(() => process.exit(0), (err) => { console.error(err); process.exit(1); });
+}
