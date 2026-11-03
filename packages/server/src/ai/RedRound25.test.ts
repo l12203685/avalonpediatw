@@ -218,3 +218,12 @@ describe('redReuseExact', () => {
     expect(leaderSelfApproveReason(T(), { ...v, currentLeader: 'P7' } as PlayerObservation)).toBeNull();
   });
 });
+
+describe('assassinReuseRead=11 (refit on the round-24 default)', () => {
+  it('parses and carries the refitted factors', async () => {
+    const { REUSE_MODE_FACTORS } = await import('./assassin/VisibleRedProposals');
+    expect(parseTuningFlag('assassinReuseRead=11')).toEqual({ assassinReuseRead: 11 });
+    expect(REUSE_MODE_FACTORS[11].clean[1]).toBeGreaterThan(1); // passing over a clean norm team R3+ now reads Merlin-ish
+    expect(REUSE_MODE_FACTORS[11].reuse[0]).toBeLessThan(REUSE_MODE_FACTORS[9].reuse[0]);
+  });
+});

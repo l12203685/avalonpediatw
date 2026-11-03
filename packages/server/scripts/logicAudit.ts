@@ -232,6 +232,7 @@ export const RULES: readonly RuleInfo[] = [
   { id: 'h_approve_must_fail', label: '(h) 好人對自己視角確定會失敗的非強制隊投白（含梅林看到的紅、自己湖到的紅）', camps: ['good'] },
   { id: 'h_propose_must_fail', label: '(h) 好人當隊長派出自己視角確定會失敗的隊', camps: ['good'] },
   { id: 'h2_approve_certain_red', label: '(h′) 好人對有自己視角確定紅的非強制隊投白（第 4 局一紅不一定失敗也算）', camps: ['good'] },
+  { id: 'q_red_match_point_inner_black', label: '(q) 紅方已兩紅，自己在非強制的隊上、自己知道的紅夠讓任務失敗，卻投黑（第 25 回合）', camps: ['evil'] },
   { id: 'o_red_forced_leader_no_load', label: '(o) 紅方已兩紅，紅隊長的強制提議沒放夠自己知道的紅', camps: ['evil'] },
   { id: 'p_red_match_point_not_closed', label: '(p) 紅方已兩紅，隊上紅方夠讓任務失敗，任務卻成功（紅方沒收尾）', camps: 'mission' },
 ];
@@ -363,6 +364,14 @@ export function auditTrace(t: GameTrace, tally: Tally): void {
       if (min >= 1) tally.add('h2_approve_certain_red', role(v), r, votes[v] === true);
     }
 
+    // (q) 紅方已兩紅：自己在隊上、自己 + 看得到的隊友夠讓任務失敗，投黑 = 放棄收尾。
+    if (votes && wins.red === 2) {
+      for (const s2 of p.team) {
+        if (camp(s2) !== 'evil') continue;
+        const known = new Set([s2, ...sightOf(t, s2).knownRed]);
+        if (p.team.filter((x) => known.has(x)).length >= need) tally.add('q_red_match_point_inner_black', role(s2), r, votes[s2] === false);
+      }
+    }
     // (o) 紅方已兩紅：紅隊長的強制提議放夠自己知道的紅（自己 + 看得到的隊友）。
     if (p.forced && camp(L) === 'evil' && wins.red === 2) {
       const known = new Set([L, ...sightOf(t, L).knownRed]);
