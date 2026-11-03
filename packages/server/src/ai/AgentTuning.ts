@@ -681,6 +681,7 @@ export interface AgentTuning {
    * 沒照派的乘數 4 = 第 2 局 ×0.25（同 3）、第 3 局起 ×0.65（量到的）；5 = 兩局都用量到的（×0.05、×0.65）；6 = 第 2 局 ×0.05、第 3 局起 ×0.25（同 3）；
    * 7 = 同 3，再讀「照派了」（第 2 局 ×1.1、第 3 局起 ×1.45）；8 = 同 3，那一隊乾淨（沒有看得到的紅）而沒照派也讀（第 2 局 ×0.12、第 3 局起 ×0.73）。
    * 9 = 三種乘數都用自我對打的刺殺資料擬合（條件 logit，1,672 次刺殺）；10 = 同 9，連模型分數、讀票、讀派隊的權重一起擬合（`REUSE_STACK_WEIGHTS`）。
+   * 第 25 回合候選：11 = 9 用第 24 回合預設（藍方照原樣照派成功的隊）的刺殺資料重新擬合（1,295 次刺殺；R3 起沒照派乾淨的照派隊 ×1.38、第 2 局照派 ×0.34）。
    * 第 21 回合不採用（維持 3）：4 −0.4 [−0.8, −0.0]pp（把第 3 局起調回量到的比例反而變差）；5／6／7／8 +0.0～+0.2；10 −0.8；
    * 9 兩組各 6000 組種子 +0.45 [+0.08, +0.82]／+0.33 [−0.06, +0.73]pp（合併 12000 組 +0.39 [+0.12, +0.66]，第二組碰 0，留給第 2 階段）。
    * 第 23 回合採用 9：對第 19 回合預設第三組 6000 組 +0.42 [+0.03, +0.80]；在 `assassinDoomedRead=1` 之上兩組各 6000 組 +0.58 [+0.21, +0.96]／+0.42 [+0.05, +0.79]pp（刺中率約 +1pp，三紅率不變）。
@@ -1556,7 +1557,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'assassinReuseRead') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 10) throw new Error(`assassinReuseRead needs 0–10, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 11) throw new Error(`assassinReuseRead needs 0–11, got "${raw}"`);
     return { assassinReuseRead: value };
   }
   if (name === 'redHideReuse') {
