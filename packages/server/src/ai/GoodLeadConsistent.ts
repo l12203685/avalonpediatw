@@ -9,7 +9,8 @@
  * 硬約束（`AgentTuning.leaderSelfApprove`，預設開；欄位只為了量測與舊表）：
  *   - 投票：隊長在自己派的非強制提議上一律投白；本局自己派過、自己在上面的隊被別人照派（非強制）也投白（S6）。
  *   - 派隊：忠臣／派西隊長最後派出的隊，若自己的投票規則（關鍵局門檻、一般門檻）會投黑，改派自己後驗最乾淨的隊（含自己、過邏輯閘門）——派隊和投票用同一個評估。
- * 開關（`AgentTuning.goodLeadConsistent`，預設關）：1 = 照派加分不再拿「自己在隊上、投了黑」的被否決隊當參考（忠臣／派西／梅林；S5，稽核 (b)）。
+ * 開關（`AgentTuning.goodLeadConsistent`，預設關）：1 = 照派加分不再拿「自己在隊上、投了黑」的被否決隊當參考（忠臣／派西／梅林；S5，稽核 (b)），
+ * 忠臣／派西隊長最後派的隊若正是這一局自己內黑過的隊，改派自己後驗最乾淨、這一局沒有內黑過的隊。
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
@@ -38,6 +39,37 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   };
   pick(0, []);
   return out;
+}
+
+/** The teams (sorted keys) this seat sat on and voted against earlier in the round (內黑). */
+function innerBlacked(obs: PlayerObservation): Set<string> {
+  const me = obs.myPlayerId;
+  const round = obs.currentRound ?? 1;
+  return new Set(obs.voteHistory.filter((v) => v.round === round && v.team.includes(me) && v.votes[me] === false).map((v) => key(v.team)));
+}
+
+/** `goodLeadConsistent` (pick side): a loyal / Percival leader does not re-propose a team it inner-blacked this round. */
+export function goodNoInnerBlackRepeat(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  action: AgentAction,
+  allowed: (team: readonly string[]) => boolean = () => true,
+): AgentAction {
+  if ((tuning.goodLeadConsistent ?? 0) < 1 || action.type !== 'team_select' || !goodLeader(obs)) return action;
+  if ((obs.failCount ?? 0) >= 4) return action;
+  const banned = innerBlacked(obs);
+  if (!banned.has(key(action.teamIds))) return action;
+  const me = obs.myPlayerId;
+  const opts = bayesOptionsOf(tuning);
+  let best: string[] | null = null;
+  let bestP = -1;
+  for (const fill of combinations(obs.allPlayerIds.filter((id) => id !== me), action.teamIds.length - 1)) {
+    const team = [me, ...fill];
+    if (banned.has(key(team)) || !allowed(team)) continue;
+    const p = bayesTeamClean(obs, team, opts) ?? 0;
+    if (p > bestP + 1e-12) { bestP = p; best = team; }
+  }
+  return best ? { type: 'team_select', teamIds: best } : action;
 }
 
 /** The pick side of the constraint: a loyal / Percival leader's final team passes its own vote thresholds (else its cleanest team). */

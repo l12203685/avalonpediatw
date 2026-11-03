@@ -58,7 +58,7 @@ import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteN
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
-import { goodLeadConsistentTeam, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
+import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -830,7 +830,8 @@ export class ForwardAgent implements AvalonAgent {
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
     // proposes a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
     if (d.action.type === 'team_select') {
-      const fixed = goodLeadConsistentTeam(this.baseline.tuning, obs, d.action, gateOk);
+      // `goodLeadConsistent` (knob): not a team it inner-blacked this round either.
+      const fixed = goodNoInnerBlackRepeat(this.baseline.tuning, obs, goodLeadConsistentTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
       if (fixed !== d.action) return { ...d, action: fixed, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → own vote would reject it: cleanest team` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last

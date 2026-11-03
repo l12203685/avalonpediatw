@@ -283,13 +283,19 @@ describe('leaderSelfApprove (round 24 hard constraint) and goodLeadConsistent (r
     expect(goodLeadConsistentTeam(tun(true, 0.0001), r3, bad)).toBe(bad);
     expect(goodLeadConsistentTeam(tun(false, 0.99), r3, bad)).toBe(bad);
   });
-  it('goodLeadConsistent=1: the reuse plan drops the rejected team the leader sat on and voted against', () => {
+  it('goodLeadConsistent=1: the reuse plan drops the rejected team the leader sat on and voted against, and the pick moves off it', async () => {
     const plain = teamReusePlan(r3)!;
     const skip = teamReusePlan(r3, undefined, false, true)!;
     const has = (p: typeof plain) => p.refs.some((x) => [...x.team].sort().join(',') === 'P10,P2,P3,P5');
     expect(has(plain)).toBe(true);
     expect(has(skip)).toBe(false);
     expect(leadConsistentSkip(tun(true, 0.45, 1), r3)).toBe(true);
+    const { goodNoInnerBlackRepeat } = await import('./GoodLeadConsistent');
+    const again: AgentAction = { type: 'team_select', teamIds: ['P3', 'P2', 'P5', 'P10'] };
+    expect(goodNoInnerBlackRepeat(tun(true, 0.45, 0), r3, again)).toBe(again);
+    const moved = goodNoInnerBlackRepeat(tun(true, 0.45, 1), r3, again) as { teamIds: string[] };
+    expect([...moved.teamIds].sort().join(',')).not.toBe('P10,P2,P3,P5');
+    expect(moved.teamIds).toContain('P3');
     expect(parseTuningFlag('goodLeadConsistent').goodLeadConsistent).toBe(1);
     expect(() => parseTuningFlag('goodLeadConsistent=2')).toThrow();
   });
