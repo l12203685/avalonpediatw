@@ -1766,8 +1766,11 @@ class ReplyTest(unittest.TestCase):
 
     def test_candidates_are_recent_format_failures_only(self) -> None:
         self.assertEqual(sum(self.report.skipped.values()), 7)
-        cands = dri.reply_candidates(self.report, self.NOW, dri.REPLY_DEFAULT_DAYS)
+        cands = dri.reply_candidates(self.report, self.NOW, 14)
         self.assertEqual([c.post.id for c in cands], [self.p_vote.id, self.p_names.id])  # oldest first
+        # 預設 90 天＝「待修正」標籤的範圍（Edward 2026-11-03）：較舊的格式問題也有原因回覆
+        self.assertEqual(dri.REPLY_DEFAULT_DAYS, dri.TAG_DEFAULT_DAYS)
+        self.assertIn(self.p_old.id, [c.post.id for c in dri.reply_candidates(self.report, self.NOW, dri.REPLY_DEFAULT_DAYS)])
         self.assertEqual((cands[0].reason, cands[0].line_no, cands[0].line_text), (dri.SKIP_BAD_VOTE, 3, "389 7"))
         self.assertEqual((cands[1].reason, cands[1].line_no, cands[1].line_text), (dri.SKIP_NAMES_MISSING, None, None))
         self.assertEqual([c.post.id for c in dri.reply_candidates(self.report, self.NOW, 60)],
@@ -2592,7 +2595,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(rc, 0, log)
         self.assertEqual(self.discord.posted, [])
         self.assertEqual(self.discord.message_reads, [self.posts[2].id, self.posts[3].id])
-        self.assertIn("格式回覆（--reply，dry run：只計數，未貼文）：14 天內因格式無法解析且未標「已收錄」的貼文 2 篇", log)
+        self.assertIn("格式回覆（--reply，dry run：只計數，未貼文）：90 天內因格式無法解析且未標「已收錄」的貼文 2 篇", log)
         self.assertIn("本次可回覆：2", log)
         self.assertIn(f"| {dri.SKIP_NOT_A_RECORD} | 1 | 0 |", log)
         self.assertNotIn("::warning", log)

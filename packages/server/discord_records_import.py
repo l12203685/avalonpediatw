@@ -43,7 +43,7 @@ What this script does and does not do:
     --reply / 待修正 treatment). An existing Discord匯入 header gets discord_hash and 更新時間
     added after its last column on the first write. All row rewrites go in one request.
   * writes to Discord only with --reply and --fix-list. --reply: one message in the
-    thread of each recent post (--reply-since-days, default 14) that could not be parsed
+    thread of each recent post (--reply-since-days, default 90, the same window as the 待修正 tag) that could not be parsed
     because of its format, saying which line and why (SKIP_EXPLANATIONS) plus the format
     hint, mentioning nobody. Once per post: a post in Discord回覆 is never replied to again (even if that
     message was deleted), and the bot's own marker message (REPLY_MARKER) is looked for
@@ -319,7 +319,7 @@ FORMAT_HINT = "\n".join([
 ])
 REPLY_FOOTER = "修正起始訊息後不用做別的，下次排程（每天凌晨）會自動重新讀取並收錄。"
 REPLY_LINE_MAX = 60  # quoted line text is cut here (the poster can see the whole line anyway)
-REPLY_DEFAULT_DAYS = 14
+REPLY_DEFAULT_DAYS = 90  # 跟「待修正」標籤同一個範圍：有標籤的貼文都有一則原因回覆（Edward 2026-11-03）
 REPLY_DEFAULT_LIMIT = 20
 # Skips that are not the poster's formatting (or not a record post at all): no reply for these.
 REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_SIMULATION, SKIP_UNVERIFIED, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
