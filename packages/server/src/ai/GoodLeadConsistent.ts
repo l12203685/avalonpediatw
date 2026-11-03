@@ -24,6 +24,8 @@ const key = (team: readonly string[]): string => [...team].sort().join(',');
 
 /** Whether the reuse plan skips the rejected teams the leader sat on and voted against (`goodLeadConsistent`, blue leaders). */
 export function leadConsistentSkip(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  // Round 25 `redLeadConsistent`: the red leaders' version (稽核 (b) 紅方 55%、奧伯倫 90%；真人 4.2%).
+  if (obs.myTeam === 'evil') return (tuning.redLeadConsistent ?? 0) >= 1;
   return (tuning.goodLeadConsistent ?? 0) >= 1 && obs.myTeam === 'good';
 }
 

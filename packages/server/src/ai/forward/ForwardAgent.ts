@@ -59,6 +59,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
+import { oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redReuseSelfApprove, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -725,6 +726,21 @@ export class ForwardAgent implements AvalonAgent {
     if (selfApprove && (obs.myTeam !== 'good' || goodVoteGate(obs, selfGate) === null)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
     }
+    // Round 25 (red; RedRound25.ts) — hard constraints `oberonMatchPoint` (G3: no outer white from Oberon at blue's match point
+    // unless his own view puts enough reds on the team) and `redVouchConsistent` (K8: a red lake holder on a team with a seat it
+    // declared red rejects it); knob `oberonBiteReject` (E3: the bitten Oberon does not admit it with a white).
+    if (oberonMatchPointReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'oberon: no outer white at blue match point (hard constraint)');
+    }
+    if (oberonBiteRejectNow(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'oberon bitten (鐵咬): reject the biting team');
+    }
+    if (redVouchOnTeamReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red lake holder: own declared-red seat on the team (hard constraint)');
+    }
+    if (redReuseSelfApprove(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red leader approves its own re-proposal');
+    }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
       const hide = redHideEarlyCard(this.baseline.tuning, obs);
@@ -827,7 +843,8 @@ export class ForwardAgent implements AvalonAgent {
     const gateOk = (team: readonly string[]): boolean => obs.myTeam !== 'good' || !anyGate(this.gates)
       || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null;
     const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action, gateOk);
-    const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
+    // Round 25 hard constraint `redVouchConsistent` (S2): the clean-look swap keeps the red leader's own lake word.
+    const looked = redVouchKeptTeam(this.baseline.tuning, obs, led, redCleanLookTeam(this.baseline.tuning, obs, led));
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
@@ -842,6 +859,9 @@ export class ForwardAgent implements AvalonAgent {
     if (d.action.type === 'team_select') {
       const reused = goodReuseExactTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (reused !== d.action) return { ...d, action: reused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → re-propose the successful team` } };
+      // Round 25 `redReuseExact` (RedRound25.ts): the red analogue — the red leader re-proposes the successful team as it was.
+      const redReused = redReuseExactTeam(this.baseline.tuning, obs, d.action);
+      if (redReused !== d.action) return { ...d, action: redReused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → red re-proposes the successful team` } };
     }
     // Round 5 (Percival) candidate `percivalLoyalStyle` (MerlinLoyalStyle.ts): the loyal-looking team that integrates
     // the two thumbs (Edward's five plans: trust A ± send A, trust B ± send B, or the AB intersection).
