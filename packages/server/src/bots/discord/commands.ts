@@ -4,6 +4,7 @@ import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from 
 import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from '../stats/statsQueries';
 import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
 import { SIM_CONFIG } from '../simulation/config';
+import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -72,6 +73,11 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
           inline: false,
         }]
         : []),
+      {
+        name: '🤖 補位機器人 / Seat filler',
+        value: `\`${SEAT_FILLER_USAGE.discord}\` ${SEAT_FILLER_HELP_TEXT}\n${SEAT_FILLER_LIMITS_TEXT}`,
+        inline: false,
+      },
       {
         name: `/${COMMANDS.RULES}`,
         value: 'Display game rules',

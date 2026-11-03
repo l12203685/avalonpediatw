@@ -70,6 +70,10 @@ export const COMMANDS = {
   SIM_NEXT: '下一步',
   SIM_REVEAL: '公布',
   SIM_END: '結束',
+  // 2026-11-03 補位機器人 (bots/seatFiller, services/signagePlayerDispatch.ts):
+  // puts the signage-cloud seat-filler bot into a room. LINE types /補位 (or
+  // /機器人補位); Discord gets the longer, unambiguous name only.
+  SEAT_FILLER: '機器人補位',
   // 2026-10-13: the admin-only /社群週報 (paid weekly digest) was removed;
   // registerCommands() overwrites the whole command list, so it disappears
   // from Discord on the next deploy (see client.ts).
@@ -96,6 +100,12 @@ export const SIM_OPTIONS = {
   CONTENT: '內容',
   /** /模擬 說明:True → the command list (2026-10-22; the Discord wording uses these option names). */
   HELP: '說明',
+} as const;
+
+/** Option names of /機器人補位 (bots/seatFiller). */
+export const SEAT_FILLER_OPTIONS = {
+  ROOM: '房號',
+  GAMES: '局數',
 } as const;
 
 /** /模擬 角色 choices (value = the LINE alias the parser reads). */

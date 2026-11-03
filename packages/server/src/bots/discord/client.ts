@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SEAT_FILLER_OPTIONS } from './config';
 import {
   handleHelpCommand,
   handleRulesCommand,
@@ -25,6 +25,8 @@ import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
 import { handleSimCommand } from '../simulation/discordCommand';
+import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
+import { SEAT_FILLER_GAMES } from '../../services/signagePlayerDispatch';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -145,6 +147,22 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_END)
       .setDescription('模擬瓦：結束這一題（不公布）/ End the exercise'),
+
+    // 2026-11-03 補位機器人 (bots/seatFiller) — same limits as LINE's /補位.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SEAT_FILLER)
+      .setDescription('叫補位機器人進 signage-cloud 房間測試 / Summon the seat-filler bot')
+      .addStringOption((o) =>
+        o.setName(SEAT_FILLER_OPTIONS.ROOM).setDescription('房號，例如 Room-1460 或 1460 / Room').setRequired(true).setMaxLength(20)
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName(SEAT_FILLER_OPTIONS.GAMES)
+          .setDescription(`局數 ${SEAT_FILLER_GAMES.min}–${SEAT_FILLER_GAMES.max}（預設 ${SEAT_FILLER_GAMES.default}）/ Games`)
+          .setRequired(false)
+          .setMinValue(SEAT_FILLER_GAMES.min)
+          .setMaxValue(SEAT_FILLER_GAMES.max)
+      ),
   ];
 }
 
@@ -284,6 +302,10 @@ export class DiscordBotClient {
         case COMMANDS.SIM_REVEAL:
         case COMMANDS.SIM_END:
           await handleSimCommand(interaction);
+          break;
+
+        case COMMANDS.SEAT_FILLER:
+          await handleSeatFillerCommand(interaction);
           break;
 
         default: {

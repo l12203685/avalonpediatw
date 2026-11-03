@@ -9,6 +9,7 @@ Complete guide for setting up Discord and Line bots for Avalon game platform.
 3. [Environment Variables](#environment-variables)
 4. [Deployment](#deployment)
 5. [Commands](#commands)
+6. [補位機器人（/機器人補位、/補位）](#補位機器人機器人補位補位)
 
 ---
 
@@ -177,6 +178,42 @@ roles          - View role descriptions
 vote approve   - Vote approve
 vote reject    - Vote reject
 ```
+
+---
+
+## 補位機器人（/機器人補位、/補位）
+
+2026-11-03 起，玩家可以叫 signage-cloud 的「補位機器人」進房間補一個位子，方便測試。一間房一次只叫一隻；指令只有房號和局數兩個參數。
+
+| 平台 | 指令 | 範例 |
+|---|---|---|
+| Discord | `/機器人補位 房號 [局數]`（斜線指令，選項「房號」「局數」） | `/機器人補位 房號:Room-1460 局數:2` |
+| LINE | `/補位 房號 [局數]`（也接受 `/機器人補位`、全形 `／`） | `/補位 Room-1460`、`/補位 1460 2` |
+
+- **房號**：`Room-1460`（大小寫不拘）或直接打數字 `1460`（1–6 位數）。
+- **局數**：1–3，不填就是 1 局。
+- 成功時回覆：「已叫補位機器人到 Room-1460（1 局），約 1–2 分鐘後進房；打完會離開。」Discord 成功的回覆大家看得到，格式錯誤、冷卻中等拒絕只有下指令的人看得到（ephemeral）。
+- **限制**（兩個平台共用，存在伺服器記憶體，重啟會歸零）：全站每 3 分鐘最多叫一次；每天（台北時間）最多 10 次；同一間房 15 分鐘內不重複叫。GitHub 回錯誤時不扣次數；連不到 GitHub（逾時）時仍算一次，避免同一房進兩隻。
+- 兩個指令都列在 `/help`（Discord）與 `/指令`（LINE）裡，也不算進意見主題計數與聊天匯出。
+- 運作方式：伺服器呼叫 GitHub Actions 的 workflow_dispatch，跑 `.github/workflows/signage-player.yml`（輸入 `room`、`games`，ref `main`）。程式在 `packages/server/src/services/signagePlayerDispatch.ts`、`packages/server/src/bots/seatFiller/`。Log 只記狀態碼，不記玩家名字、訊息內容或 token。
+
+### 管理者要做的設定：GITHUB_DISPATCH_TOKEN
+
+沒設 token 時，指令會回「補位機器人還沒設定好」。設定步驟：
+
+1. GitHub → 右上頭像 → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**。
+2. **Repository access** 選 **Only select repositories**，只勾這個 repo（`l12203685/avalonpediatw`）。
+3. **Repository permissions** → **Actions** 設成 **Read and write**（其他權限都不用開）。設一個到期日，到期前記得換新。
+4. 產生後複製 token，直接貼到 Render → 這個 server 服務 → **Environment** → 新增 `GITHUB_DISPATCH_TOKEN`，存檔讓服務重啟。**不要把 token 貼到聊天、issue 或任何檔案裡。**
+
+選填（不設就用預設值）：
+
+| 變數 | 預設 | 用途 |
+|---|---|---|
+| `SIGNAGE_PLAYER_WORKFLOW` | `signage-player.yml` | 要觸發的 workflow 檔名 |
+| `GITHUB_DISPATCH_REPO` | `l12203685/avalonpediatw` | workflow 所在的 repo（`owner/repo`） |
+
+workflow 還沒合併進 `main` 之前，叫機器人會回「GitHub 回應 404」之類的錯誤（不扣次數）。
 
 ---
 
