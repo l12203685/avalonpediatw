@@ -717,9 +717,10 @@ export class ForwardAgent implements AvalonAgent {
   decide(obs: PlayerObservation): ForwardDecision {
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; basic_logic_inventory L2 / S6): a leader on its own
     // non-forced proposal votes white — ahead of every vote rule (goodKeyVote / goodCleanVote / merlinNormalVote / the scorer);
-    // so does a seat on a re-proposal of its own earlier team of the round (a good non-Merlin seat only past the vote gates).
+    // so does a seat on a re-proposal of its own earlier team of the round. A good non-Merlin seat only past the vote gates
+    // (INV-V1: in a replay the team is the human leader's and can be must-fail in the bot's view).
     const selfApprove = leaderSelfApproveReason(this.baseline.tuning, obs);
-    if (selfApprove && (obs.currentLeader === obs.myPlayerId || obs.myTeam !== 'good' || obs.myRole === 'merlin' || goodVoteGate(obs, this.gates) === null)) {
+    if (selfApprove && (obs.myTeam !== 'good' || obs.myRole === 'merlin' || goodVoteGate(obs, this.gates) === null)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
     }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.

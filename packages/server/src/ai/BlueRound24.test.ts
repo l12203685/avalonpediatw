@@ -273,7 +273,17 @@ describe('leaderSelfApprove (round 24 hard constraint) and goodLeadConsistent (r
   });
   it('pick: a team the own vote rules reject is replaced by the cleanest own-posterior team', () => {
     const bad: AgentAction = { type: 'team_select', teamIds: ['P3', 'P5', 'P10', 'P2'] };
-    const t = tun(true, 0.99);
+    // A threshold between the bad team and the cleanest one: the bad team is rejected, the cleanest is not.
+    const pBad = bayesTeamClean(r3, bad.teamIds, bayesOptionsOf(tun(true)))!;
+    const best0 = goodLeadConsistentTeam(tun(true, 1), r3, bad);
+    expect(best0).toBe(bad); // nothing passes τ = 1: keep the pick
+    let pBest = 0;
+    for (const a of IDS) for (const b of IDS) for (const c of IDS) {
+      if (new Set(['P3', a, b, c]).size !== 4) continue;
+      pBest = Math.max(pBest, bayesTeamClean(r3, ['P3', a, b, c], bayesOptionsOf(tun(true)))!);
+    }
+    expect(pBest).toBeGreaterThan(pBad);
+    const t = tun(true, (pBad + pBest) / 2);
     expect(ownVoteRejects(t, r3, bad.teamIds)).toBe(true);
     const fixed = goodLeadConsistentTeam(t, r3, bad);
     expect(fixed).not.toBe(bad);
@@ -282,7 +292,8 @@ describe('leaderSelfApprove (round 24 hard constraint) and goodLeadConsistent (r
     expect(team).toContain('P3');
     expect(bayesTeamClean(r3, team, opts)!).toBeGreaterThanOrEqual(bayesTeamClean(r3, bad.teamIds, opts)!);
     expect(goodLeadConsistentTeam(tun(true, 0.0001), r3, bad)).toBe(bad);
-    expect(goodLeadConsistentTeam(tun(false, 0.99), r3, bad)).toBe(bad);
+    expect(goodLeadConsistentTeam(tun(false, (pBad + pBest) / 2), r3, bad)).toBe(bad);
+    expect(goodLeadConsistentTeam({ ...t, bayesBelief: false }, r3, bad)).toBe(bad);
   });
   it('goodLeadConsistent=1: the reuse plan drops the rejected team the leader sat on and voted against, and the pick moves off it', async () => {
     const plain = teamReusePlan(r3)!;

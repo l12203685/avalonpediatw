@@ -8,7 +8,9 @@
  *
  * 硬約束（`AgentTuning.leaderSelfApprove`，預設開；欄位只為了量測與舊表）：
  *   - 投票：隊長在自己派的非強制提議上一律投白；本局自己派過、自己在上面的隊被別人照派（非強制）也投白（S6）。
- *   - 派隊：忠臣／派西隊長最後派出的隊，若自己的投票規則（關鍵局門檻、一般門檻）會投黑，改派自己後驗最乾淨的隊（含自己、過邏輯閘門）——派隊和投票用同一個評估。
+ *   - 派隊：忠臣／派西隊長最後派出的隊，若自己的投票規則（關鍵局門檻、一般門檻）會投黑，改派自己後驗最乾淨的隊（含自己、過邏輯閘門；那一隊也要過自己的投票規則，
+ *     連最乾淨的隊都過不了——例如關鍵局沒有乾淨的隊——就維持原本的隊）——派隊和投票用同一個評估。
+ *   - 好人（梅林除外）的白球仍然不越過好人投票關卡（必定失敗／被支配的隊，INV-V1）：重播真人局時隊伍是真人派的，可能是自己視角的必敗隊。
  * 開關（`AgentTuning.goodLeadConsistent`，預設關）：1 = 照派加分不再拿「自己在隊上、投了黑」的被否決隊當參考（忠臣／派西／梅林；S5，稽核 (b)），
  * 忠臣／派西隊長最後派的隊若正是這一局自己內黑過的隊，改派自己後驗最乾淨、這一局沒有內黑過的隊。
  */
@@ -79,7 +81,8 @@ export function goodLeadConsistentTeam(
   action: AgentAction,
   allowed: (team: readonly string[]) => boolean = () => true,
 ): AgentAction {
-  if (!tuning.leaderSelfApprove || action.type !== 'team_select' || !goodLeader(obs)) return action;
+  // Only where the leader's belief is the posterior its vote rules read (`bayesBelief`; the pyramid pipeline has no such pair).
+  if (!tuning.leaderSelfApprove || !tuning.bayesBelief || action.type !== 'team_select' || !goodLeader(obs)) return action;
   if ((obs.failCount ?? 0) >= 4) return action;
   if (!ownVoteRejects(tuning, obs, action.teamIds)) return action;
   const me = obs.myPlayerId;
@@ -92,7 +95,8 @@ export function goodLeadConsistentTeam(
     const p = bayesTeamClean(obs, team, opts) ?? 0;
     if (p > bestP + 1e-12) { bestP = p; best = team; }
   }
-  return best ? { type: 'team_select', teamIds: best } : action;
+  // Only a team the own vote rules accept (when even the cleanest is rejected — e.g. the key round with nothing clean — keep the pick).
+  return best && !ownVoteRejects(tuning, obs, best) ? { type: 'team_select', teamIds: best } : action;
 }
 
 /**
