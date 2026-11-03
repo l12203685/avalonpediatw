@@ -99,6 +99,13 @@ const BOTS = Math.max(1, Math.min(MODE === 'room' ? MAX_BOTS_ROOM_MODE : MAX_BOT
 const botNick = (i: number, n: number): string => (n <= 1 ? NICK : `百科AI_${i}`);
 /** 開局後的「開眼階段」狀態字串。 */
 const EYES = '開眼階段';
+/**
+ * 輪到自己時等多久再按（毫秒）。Edward 2026-11-03：「百科AI的所有動作速度都可以再快一點 瞬間做完都沒差 因為是AI」
+ * ——原本 1–3 秒，改成 --act-ms（預設 150）上下 50%；POLL_MS 是沒輪到自己時多久看一次畫面。
+ */
+const ACT_MS = Math.max(0, Number(arg('act-ms', '150')) || 0);
+const actDelay = (): number => ACT_MS * (0.5 + Math.random());
+const POLL_MS = 400;
 const HELLO = '我是阿瓦隆百科的測試機器人，人不夠時來補位，打完會離開；有意見請到 DC 百科問題回報';
 
 // ── log ──────────────────────────────────────────────────────────────────────────────
@@ -294,7 +301,7 @@ async function playGame(p: Page, room: string): Promise<GameResult> {
     if (seat.k.mismatch && Date.now() - seat.startedAt < 6000) { await sleep(500); continue; } // 先等標記到齊再做決定
     myLakeFromSnap(s, seat.myLake).forEach((m) => { if (!seat.myLake.some((x) => x.round === m.round)) { seat.myLake.push(m); plog(`${room} 湖結果 ${m.targetId} ${m.result}`); } });
     const d = pendingDecision(s);
-    if (!d) { pendingKey = ''; await sleep(800); continue; }
+    if (!d) { pendingKey = ''; await sleep(POLL_MS); continue; }
     const crown = s.users.find((u) => u.crown)?.set ?? 0;
     const dkey = `${d}|${s.missions.length}|${crown}|${s.lake_result.filter((l) => l.to !== null).length}`;
     if (dkey !== pendingKey) { pendingKey = dkey; pendingSince = Date.now(); }
@@ -305,7 +312,7 @@ async function playGame(p: Page, room: string): Promise<GameResult> {
     const fallback = Date.now() - pendingSince > 45_000;
     try {
       if (!doneAt && d !== 'team') {
-        await sleep(1000 + Math.random() * 2000);
+        await sleep(actDelay());
         const again = await snap(p);
         if (!again || !decisionOpen(again, d)) continue;
         s = again;
@@ -336,7 +343,7 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
     case 'team': {
       if (seat.planKey !== dkey || !seat.plan) {
         await sync();
-        await sleep(1000 + Math.random() * 1500);
+        await sleep(actDelay());
         const need = s.free_ticks + s.users.filter((u) => u.tick).length;
         const dflt = [s.myself.set, ...s.users.map((u) => u.set).filter((x) => x !== s.myself.set)].slice(0, need);
         const a = safe(() => seat.agent.act(seat.obs(s, 'team_select')), { type: 'team_select' as const, teamIds: dflt.map(sid) });
