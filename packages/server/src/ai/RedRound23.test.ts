@@ -100,3 +100,11 @@ describe('assassinate', () => {
     }
   });
 });
+
+describe('practice review', () => {
+  it('states the second tier when it applies', async () => {
+    const { explainAssassination } = await import('./explain');
+    const ex = explainAssassination(assassination(), 'P4', undefined, DEFAULT_AGENT_TUNING);
+    expect(ex.reason).toContain('第 1、2 局注定被否決的提議放了梅林看得到的紅');
+  });
+});

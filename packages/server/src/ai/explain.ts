@@ -34,7 +34,7 @@ import { redR1TeamPlanDraws, replayBothDraws, visibleTeammatesOn } from './RedR1
 import { percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { AVALON_CONFIG } from '@avalon/shared';
 import { scoreAssassinCandidates } from './assassin/AssassinModel';
-import { adjustedProbabilities, visibleRedEvidence } from './assassin/VisibleRedProposals';
+import { adjustedProbabilities, doomedTierCandidates, tierCandidates, visibleRedEvidence } from './assassin/VisibleRedProposals';
 
 export interface ExplainedSuspect {
   seat: number;
@@ -743,6 +743,15 @@ export function explainAssassination(
       rule = '刺殺（像真人的規則）：當隊長時確定把梅林看得到的紅放進自己隊的人排在後面，其餘再看分數';
     } else if (flagged.length === candidates.length) {
       parts.push('每位候選當隊長時都曾把梅林一定看得到的紅放進自己的隊，改照分數');
+    }
+    // Round 23 `assassinDoomedRead` 1 / 3: the second tier (doomed R1–R2 leads with a seen red, R2 re-proposal of R1 excepted).
+    const doomedMode = tuning.assassinDoomedRead ?? 0;
+    if (doomedMode === 1 || doomedMode === 3) {
+      const pool = tierCandidates(candidates, evidence);
+      const kept = doomedTierCandidates(obs, pool);
+      if (kept.length < pool.length) {
+        parts.push(`${seatsTxt(obs, pool.filter((id) => !kept.includes(id)))}在第 1、2 局注定被否決的提議放了梅林看得到的紅（第 2 局照派成功的第 1 局隊不算），排在其餘 ${kept.length} 人之後`);
+      }
     }
   }
   if (model.length > 0) {
