@@ -17,8 +17,10 @@ import {
   type StrengthGrouping,
   type StrengthReport,
   type DiscoveryResult,
+  SEATS,
 } from '@avalon/shared/stats';
 import { toStateGames, type StateGamesResult } from '../components/analysis/stateTree/stateTree';
+import type { ClaimData } from '../components/idClaim/claimIndex';
 
 /** /api/analysis/games 的 context (伺服器 services/gamesDataset.ts GamesContext 的子集)。 */
 export interface GamesContext {
@@ -146,4 +148,25 @@ export async function computeFiltered(serverUrl: string, raw: GameFilter): Promi
   return computeStats(decoded, {
     asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster,
   }, filter);
+}
+
+/**
+ * ID 認領頁（components/idClaim）：全部局（不篩選）縮成每局的日期、當日場次、座位上的名字與角色、哪方贏，
+ * 加上玩家名單與擁有者的別名。名字是正式名字（別名已在產生資料時合併）。
+ */
+export async function computeClaimData(serverUrl: string): Promise<ClaimData> {
+  const { decoded, vocab } = await loaded(serverUrl);
+  return {
+    asOf: vocab.asOf,
+    players: vocab.players,
+    aliases: vocab.aliases,
+    games: decoded.games.map((g) => ({
+      seq: g.seq,
+      date: g.date,
+      slot: g.slot,
+      players: g.seatPlayers,
+      roles: SEATS.map((s) => g.seatRoles.get(s) ?? ''),
+      winner: g.redWin ? 'red' : g.blueWin ? 'blue' : '',
+    })),
+  };
 }

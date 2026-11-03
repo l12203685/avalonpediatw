@@ -17,6 +17,7 @@ import { forceRefresh } from './utils/forceRefresh';
 import SiteNav, { lastSiteTab, siteTabOf } from './components/SiteNav';
 import StreamsPage from './pages/StreamsPage';
 import RecordsPage from './pages/RecordsPage';
+import IdClaimPage from './pages/IdClaimPage';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -57,6 +58,7 @@ function App(): JSX.Element {
       if (!link) return;
       const store = useGameStore.getState();
       if (link.kind === 'player') store.openPlayerStats(link.name);
+      else if (link.kind === 'claim') store.setGameState('idClaim');
       else if (link.kind === 'records') {
         store.setGameState('records');
         // 舊連結 #paipu… 換成 #records…（不留一筆舊網址的歷史紀錄）
@@ -345,6 +347,8 @@ function App(): JSX.Element {
   // Edward 2026-10-30：沒有首頁 — 'home' 直接開上次的分頁（數據排行／百科攻略），內容頁不等登入就顯示。
   const shownState = gameState === 'home' ? lastSiteTab() : gameState;
   const siteTab = siteTabOf(shownState);
+  // ID 認領不是頁籤，但同樣掛導覽列與背景（從導覽列的「ID認領」進來）
+  const withSiteNav = siteTab !== null || shownState === 'idClaim';
 
   if (isLoading && !(statsFirst || publicStatsPage)) {
     return (
@@ -387,7 +391,7 @@ function App(): JSX.Element {
   return (
     <div className={rootClass}>
       {/* Edward 2026-10-30：原本首頁背景那個模糊淡化的阿瓦隆百科 logo 很好 — 沒有首頁之後改成內容頁的共同背景。 */}
-      {siteTab && (
+      {withSiteNav && (
         <div
           aria-hidden="true"
           className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-30 blur-sm"
@@ -467,7 +471,7 @@ function App(): JSX.Element {
         : <LoginPage />
       ) : (
         <div className="relative z-10 h-full">
-          {siteTab && <SiteNav active={siteTab} />}
+          {withSiteNav && <SiteNav active={siteTab} />}
           {/* Edward 2026-04-25 23:39 — Lobby + Game 共用 RoomPage. RoomPage
               internally branches on `room.state` to swap top section + toolbar
               while keeping the rails+chat layout phase-agnostic. */}
@@ -481,6 +485,7 @@ function App(): JSX.Element {
           {(shownState === 'analysis' || shownState === 'analytics' || shownState === 'leaderboard') && <AnalyticsPage />}
           {shownState === 'streams' && <StreamsPage />}
           {shownState === 'records' && <RecordsPage />}
+          {shownState === 'idClaim' && <IdClaimPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage

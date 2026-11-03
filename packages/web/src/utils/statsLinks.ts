@@ -15,6 +15,7 @@
  *      #records                                     → 牌譜紀錄頁籤
  *      #records=<Discord 貼文 id>                    → 牌譜紀錄，打開那一局（同 #study：打開時留在網址列、
  *        關閉時由 RecordsPage 清掉）
+ *      #id-claim (#claim)                           → ID 認領（Edward 2026-11-03；不用登入）
  */
 import type { GameState } from '../store/gameStore';
 import { parseStatsQuery } from '../stats/statsFilter';
@@ -28,13 +29,16 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'streams',
   // 牌譜紀錄（Discord 論壇 #牌譜紀錄與覆盤 的牌譜；Edward 2026-10-30）
   'records',
+  // ID 認領（玩家說「這幾個 ID 是我」，送到 DC 論壇等管理者核准；Edward 2026-11-03：不要登入頁）
+  'idClaim',
 ]);
 
 export type StatsLink =
   | { kind: 'stats'; filter?: string; preset?: string }
   | { kind: 'player'; name: string }
   | { kind: 'study'; loopId: string }
-  | { kind: 'records'; id: string | null };
+  | { kind: 'records'; id: string | null }
+  | { kind: 'claim' };
 
 const STATS_HASHES = new Set(['stats', 'analytics', 'leaderboard', 'rank']);
 
@@ -63,6 +67,7 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (study) return { kind: 'study', loopId: study };
   const records = parseRecordsHash(raw);
   if (records) return { kind: 'records', id: records.id };
+  if (/^(id-?)?claim$/i.test(raw)) return { kind: 'claim' };
   const m = /^player[=/](.+)$/i.exec(raw);
   if (m) {
     let name = m[1];
