@@ -13,7 +13,7 @@
  */
 import type { PlayerObservation } from '../types';
 import { bayesTeamClean, type BayesOptions } from '../belief/BayesBelief';
-import { successfulTeamReuse } from './VisibleRedProposals';
+import { r2ReuseOfR1, successfulTeamReuse } from './VisibleRedProposals';
 
 const EPS = 0.05;
 const EPS_DOOMED = 0.5;
@@ -57,7 +57,7 @@ function publicClean(obs: PlayerObservation, index: number, opts: Readonly<Bayes
  * log [ mean over Mordred d of P(proposals | Merlin) / P(proposals | loyal) ] for `candidate`. `opts`: the loyal model the public view is read with — the human tables by default; `assassinLeadReadBot` reads it the way
  * the bot blues actually do (`beliefBotTables`), the view Merlin's loyal-style proposals are built from.
  */
-export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], opts: Readonly<BayesOptions> = {}, ignoreReuse = false): number {
+export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], opts: Readonly<BayesOptions> = {}, ignoreReuse = false, doomedEps?: number): number {
   const leads: number[] = [];
   // Round 19 `assassinReuseRead`: a re-proposal of a successful mission team is the norm for Merlin and loyal alike — no evidence.
   obs.voteHistory.forEach((v, i) => { if (v.leader === candidate && v.attempt < 5 && !(ignoreReuse && successfulTeamReuse(obs, v))) leads.push(i); });
@@ -72,7 +72,8 @@ export function merlinLeadLogRatio(obs: PlayerObservation, candidate: string, re
       const v = obs.voteHistory[i];
       const seenRed = v.team.some((id) => id !== d && reds.includes(id));
       const p = Math.min(Math.max(publicClean(obs, i, opts), P_FLOOR), 1 - P_FLOOR);
-      const eps = v.round <= 2 ? EPS_DOOMED : EPS;
+      // Round 23 `assassinDoomedRead=2`: a doomed R1–R2 lead with a seen red is read with `doomedEps` (not the R2 re-proposal of the successful R1 team).
+      const eps = v.round > 2 ? EPS : seenRed && doomedEps !== undefined && !r2ReuseOfR1(obs, v) ? doomedEps : EPS_DOOMED;
       lr += seenRed ? Math.log(eps / (1 - p)) : Math.log((1 - eps) / p);
     }
     sum += Math.exp(lr);
