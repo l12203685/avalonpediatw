@@ -9,6 +9,7 @@ import {
 } from '../ui';
 import type { AnalysisOverview, OutcomeCounts } from '../../../services/api';
 import { useAnalysisPlayerRows } from '../seatRoleBlocks';
+import { BenchmarkBadge, BenchmarkToggle, benchmarkName, benchmarkPlayerRow, benchmarkTip, useBenchmarkGroups } from '../BenchmarkRows';
 import {
   hasRawOutcomes, playerOutcomeShares, sumRawOutcomes,
   type PlayerOutcomeShares, type ShareOutcome, type WinPart,
@@ -30,6 +31,8 @@ import {
  *    整體三種結果 (以「局」為單位) 放在圖例那一行。
  *  - 前 10 / 20 / 全部可切 (多的在框內捲，不拉長頁面)；「表格」看同樣的數字。
  *  - 資料：/api/analysis/players 的原始計數 (useAnalysisPlayerRows)，篩選時瀏覽器重算，跟著篩選變。
+ *  - (2026-11-03 Edward) 最上面釘基準列 (散客／全體／PR25–75／PR50+／PR50-，BenchmarkRows)：同一套算法，淡色斜體、
+ *    標「基準」，不算進前 10 / 20。
  */
 
 type View = 'bars' | 'table';
@@ -40,6 +43,8 @@ interface ShareRow {
   name: string;
   overall: boolean;
   shares: PlayerOutcomeShares | null;
+  /** 基準列 (滑鼠提示的說明)。 */
+  benchmarkTip?: string;
 }
 
 /** 贏輸的顏色：綠色 (不跟紅藍陣營、琥珀刺中混)。 */
@@ -207,11 +212,13 @@ function ShareBars({ rows }: { rows: ShareRow[] }): JSX.Element {
           {rows.map(row => (
             <li
               key={row.key}
-              className={`${GRID} border-b border-zinc-900 px-2 py-0.5 ${row.overall ? 'sticky top-0 z-10 bg-zinc-800' : 'odd:bg-zinc-950 even:bg-zinc-900/60'}`}
+              data-pinned={row.benchmarkTip ? 'true' : undefined}
+              className={`${GRID} border-b border-zinc-900 px-2 py-0.5 ${row.overall ? 'sticky top-0 z-10 bg-zinc-800' : row.benchmarkTip ? 'bg-[#1c1f2b] italic' : 'odd:bg-zinc-950 even:bg-zinc-900/60'}`}
             >
               <div className="min-w-0 self-center leading-tight">
-                <p className={`truncate text-[12px] font-semibold leading-[14px] ${row.overall ? 'text-amber-200' : 'text-zinc-100'}`} title={row.name}>{row.name}</p>
-                <p className="truncate text-[10px] leading-3 text-zinc-500 tabular-nums">
+                <p className={`truncate text-[12px] font-semibold leading-[14px] ${row.overall ? 'text-amber-200' : row.benchmarkTip ? 'text-zinc-300' : 'text-zinc-100'}`} title={row.benchmarkTip ?? row.name}>{row.name}</p>
+                <p className="flex items-center gap-1 truncate text-[10px] leading-3 text-zinc-500 tabular-nums">
+                  {row.benchmarkTip && <BenchmarkBadge />}
                   {row.overall ? t(`${k}.overallSub`) : row.shares ? t('analytics.ui.donut.games', { value: formatInt(row.shares.games) }) : '—'}
                 </p>
               </div>
@@ -228,7 +235,7 @@ function ShareBars({ rows }: { rows: ShareRow[] }): JSX.Element {
   );
 }
 
-function ShareTable({ rows }: { rows: ShareRow[] }): JSX.Element {
+function ShareTable({ rows, pinned }: { rows: ShareRow[]; pinned: ShareRow[] }): JSX.Element {
   const { t } = useTranslation('common');
   const k = 'analytics.r7.mix';
   const outcomeShare = (row: ShareRow, o: ShareOutcome): number | null => {
@@ -260,6 +267,10 @@ function ShareTable({ rows }: { rows: ShareRow[] }): JSX.Element {
       rowKey={row => row.key}
       highlightRow={row => row.overall}
       maxHeight="25rem"
+      pinnedRows={pinned}
+      pinnedRowKey={row => row.key}
+      pinnedLabel={row => <span className="inline-flex items-baseline gap-1.5"><BenchmarkBadge />{row.name}</span>}
+      pinnedTitle={row => row.benchmarkTip}
     />
   );
 }
@@ -303,6 +314,14 @@ export default function OutcomeGamesBlock({ overview }: { overview: AnalysisOver
   const k = 'analytics.r7.mix';
   const titleId = useId();
   const { players, loading, error } = useAnalysisPlayerRows();
+  const { section, groups } = useBenchmarkGroups();
+  const pinned = useMemo((): ShareRow[] => (section ? groups.map(g => {
+    const p = benchmarkPlayerRow(g);
+    return {
+      key: `__benchmark-${g.id}`, name: benchmarkName(t, section, g, true), overall: false,
+      shares: hasRawOutcomes(p) ? playerOutcomeShares(p) : null, benchmarkTip: benchmarkTip(t, section, g),
+    };
+  }) : []), [section, groups, t]);
 
   const viewItems: SectionTabItem<View>[] = [
     { id: 'bars', label: t(`${k}.viewBars`), icon: BarChart3 },
@@ -352,6 +371,7 @@ export default function OutcomeGamesBlock({ overview }: { overview: AnalysisOver
           </InfoTip>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <BenchmarkToggle />
           <SectionTabs items={nItems} value={topN} onChange={setTopN} ariaLabel={t(`${k}.nLabel`)} />
           <SectionTabs items={viewItems} value={view} onChange={setView} ariaLabel={t('analytics.r6.overview.outcomes.viewLabel')} />
         </div>
@@ -364,10 +384,10 @@ export default function OutcomeGamesBlock({ overview }: { overview: AnalysisOver
       ) : error ? (
         <p className="py-6 text-center text-xs text-red-400">{error}</p>
       ) : view === 'table' ? (
-        <ShareTable rows={rows} />
+        <ShareTable rows={rows} pinned={pinned} />
       ) : (
         <>
-          <ShareBars rows={rows} />
+          <ShareBars rows={[...pinned, ...rows]} />
           {pending && <p className="mt-1.5 text-[10px] leading-relaxed text-zinc-500">{t('analytics.r6.overview.outcomes.playersPending')}</p>}
         </>
       )}

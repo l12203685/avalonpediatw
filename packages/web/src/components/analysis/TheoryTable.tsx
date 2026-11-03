@@ -4,6 +4,7 @@ import { useGameStore } from '../../store/gameStore';
 import { InfoTip, StatTable, Term, STAT_TERMS, type StatColumn, type StatTermKey } from './ui';
 import BoardInfo from './BoardInfo';
 import { fmtPct, fmtTheoryPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } from '../../services/api';
+import { BenchmarkToggle, benchmarkBoardRow, useBenchmarkPinned } from './BenchmarkRows';
 
 /**
  * 理論勝率：一張表 (Edward 2026-10-28「位置理論跟整體理論還是可以合併吧? 我不知道為什麼要分兩個頁面? 是因為條件不同嗎?
@@ -17,6 +18,9 @@ import { fmtPct, fmtTheoryPct, type AnalysisLeaderboardBoard, type AnalysisLeade
  *
  * (2026-10-30 Edward：「理論勝率的右邊 上綁文字說明有點太過冗長 … 用滑鼠移過去再顯示定義跟算法就好」) 標題旁的期間副標、
  * 表格右邊整欄的上榜條件與定義、表格下方的灰字註腳都收進標題旁的 ⓘ (InfoTip)，完整版在說明頁；表格本身不變。
+ *
+ * (2026-11-03 Edward：基準列「呈現在所有排行跟數據分析的最上列」) 表身最上面釘散客／全體／PR25–75／PR50+／PR50- 五列
+ * (BenchmarkRows)：不排名、不受排序影響；數字看篩選後該組的全部座位 (不是最近 N 場／各角色窗)。
  */
 
 type Row = AnalysisLeaderboardRow;
@@ -97,6 +101,7 @@ export default function TheoryTable({
   const windowGames = isNum(board.windowGames) ? board.windowGames : 0;
   const overallMin = isNum(board.overallMinGames) ? board.overallMinGames : null;
   const rows = useMemo(() => sortTheoryRows(board.rows, sortKey), [board.rows, sortKey]);
+  const pinned = useBenchmarkPinned(benchmarkBoardRow, { indent: 'w-5' }).props;
   const label = (key: string): string => t(`analytics.boards.theory.col.${key}`);
   const short = (r: Row): boolean => windowGames > 0 && r.games < windowGames;
 
@@ -232,7 +237,8 @@ export default function TheoryTable({
             <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
           </BoardInfo>
         </InfoTip>
-        <label className="ml-auto inline-flex items-center gap-1 text-xs text-zinc-400">
+        <BenchmarkToggle className="ml-auto" />
+        <label className="inline-flex items-center gap-1 text-xs text-zinc-400">
           {t('analytics.boards.theory.sortBy')}
           <select
             value={sortKey}
@@ -250,6 +256,7 @@ export default function TheoryTable({
         maxHeight={TABLE_MAX_HEIGHT}
         rowKey={(row) => `theory-${row.name}`}
         onRowClick={(row) => openPlayerStats(row.name)}
+        {...pinned}
       />
     </div>
   );

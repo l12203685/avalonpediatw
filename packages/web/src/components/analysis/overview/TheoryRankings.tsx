@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../../store/gameStore';
 import { fmtPct, fmtTheoryPct, theorySettings, type AnalysisOverview, type AnalysisTheorySettings } from '../../../services/api';
 import { InfoTip, StatTable, Term, THEORY_DIGITS, type StatColumn, type StatTermKey } from '../ui';
+import { BenchmarkToggle, useBenchmarkPinned } from '../BenchmarkRows';
 
 /**
  * 三種理論勝率排行並排 (2026-10-14 Edward：「角色理論勝率旁邊再呈現位置理論勝率（也是要 100 場）&
@@ -20,6 +21,8 @@ import { InfoTip, StatTable, Term, THEORY_DIGITS, type StatColumn, type StatTerm
  *  並註明下次更新後改成各角色視窗。
  *  名次：同分同名次 (例 1、2、3、3、5)。
  *  (2026-10-30 Edward：說明太冗長) 表名旁的期間小字、表下的定義段落、區塊副標收進 ⓘ (InfoTip)；表名本身是名詞說明 (Term)。
+ *  (2026-11-03 Edward) 每個表最上面釘基準列 (散客／全體／PR25–75／PR50+／PR50-，BenchmarkRows，窄表用短名)：該組在
+ *  篩選後全部座位的角色／位置／整體理論，n = 座位數；不排名。
  */
 
 export type TheoryKind = 'role' | 'position' | 'overall';
@@ -218,6 +221,10 @@ function TheoryTable({ ranking, lowSample, topUp, scope, hideCaption = false }: 
   const { t } = useTranslation('common');
   const openPlayerStats = useGameStore(s => s.openPlayerStats);
   const { baseline } = ranking;
+  const field = ranking.kind === 'role' ? 'roleTheory' : ranking.kind === 'position' ? 'positionTheory' : 'overallTheory';
+  const pinned = useBenchmarkPinned((g): RankRow => ({
+    rank: 0, name: g.label, value: g.theory?.[field] ?? 0, n: g.seats, tip: '',
+  }), { short: true, filter: (g) => g.theory !== null }).props;
   const columns: StatColumn<RankRow>[] = [
     {
       key: 'name',
@@ -251,6 +258,7 @@ function TheoryTable({ ranking, lowSample, topUp, scope, hideCaption = false }: 
       rowKey={row => row.name}
       rowTitle={row => row.tip}
       onRowClick={row => openPlayerStats(row.name)}
+      {...(ranking.rows === null ? {} : pinned)}
       empty={ranking.rows === null ? t('analytics.r6.overview.theory.pending') : t('analytics.r6.overview.theory.empty')}
     />
   );
@@ -348,6 +356,7 @@ export default function TheoryRankings({ overview }: { overview: AnalysisOvervie
           ))}
           {info.topUp && <p>{info.topUp}</p>}
         </InfoTip>
+        <BenchmarkToggle className="ml-auto" />
       </div>
       {/* 第一列三個標題、第二列三個表 (格線列高取最高的標題，表頭一定對齊)；缺的排行併成一格跨兩列 */}
       <div className="grid grid-cols-3 gap-x-3">
@@ -371,6 +380,7 @@ export function TheoryRankingPanel({ info, kind }: { info: TheoryRankingsInfo; k
     <section aria-label={ranking.label} className={CARD}>
       <TheoryTable ranking={ranking} lowSample={info.lowSample} topUp={info.topUp} scope={info.scope} />
       {ranking.kind === 'role' && info.roleUpgrade && <p className="mt-1.5 text-[10px] leading-snug text-amber-300/80">{info.roleUpgrade}</p>}
+      <div className="mt-1.5 flex justify-end"><BenchmarkToggle /></div>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { useGameStore } from '../../store/gameStore';
 import { useStatsFilter } from '../../stats/statsFilter';
 import { useAnalysisPlayerRows, type PlayerWithSeatStats } from './seatRoleBlocks';
 import { InfoTip, RATE_DIGITS, StatTable, type StatColumn } from './ui';
+import { BenchmarkToggle, benchmarkPlayerRow, useBenchmarkPinned } from './BenchmarkRows';
 
 /**
  * 勝率表 (2026-10-26，玩家回饋：「我想要看近期的玩家勝率就好，篩掉最近沒出現的，例如這颱風天我就想要看這四天」)。
@@ -14,6 +15,8 @@ import { InfoTip, RATE_DIGITS, StatTable, type StatColumn } from './ui';
  * 紅藍各自的勝率與超額勝率 (扣掉抽到角色的運氣)，最低場數自己選。資料是 /api/analysis/players
  * (有篩選時由瀏覽器端引擎重算)，沒有篩選時就是全部對局。
  * 預設依場數排序、最低 50 場 (Edward 2026-10-28)；篩一段短期間時最低 3 場 (50 場會讓表變空)。
+ * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／PR25–75／PR50+／PR50-，BenchmarkRows)：不受排序、最低場數影響，
+ * 不算進人數。
  */
 type SortKey = 'finalWinRate' | 'excessWinRate' | 'totalGames';
 
@@ -34,6 +37,7 @@ export default function PeriodWinRates(): JSX.Element {
   const [minGames, setMinGames] = useState<number>(filtered ? 3 : 50);
   const [sort, setSort] = useState<SortKey>('totalGames');
   const k = 'analytics.winRates';
+  const pinned = useBenchmarkPinned(benchmarkPlayerRow).props;
 
   const rows = useMemo(() => {
     const list = (players ?? []).filter((p) => p.totalGames >= minGames && num(p.finalWinRate) !== null);
@@ -93,6 +97,7 @@ export default function PeriodWinRates(): JSX.Element {
           {t(filtered ? `${k}.scopeFiltered` : `${k}.scopeAll`, { count: rows.length })}
           <InfoTip title={t(`${k}.tab`)}><p>{t(`${k}.note`)}</p></InfoTip>
         </span>
+        <BenchmarkToggle />
       </div>
       <StatTable
         columns={columns}
@@ -102,6 +107,7 @@ export default function PeriodWinRates(): JSX.Element {
         maxHeight="min(60vh, 32rem)"
         onRowClick={(r) => openPlayerStats(r.name)}
         empty={t(`${k}.empty`)}
+        {...pinned}
       />
     </div>
   );

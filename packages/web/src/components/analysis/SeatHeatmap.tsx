@@ -7,6 +7,7 @@ import {
   useAnalysisPlayerRows, useIsWide, type PlayerWithSeatStats, type SeatMode,
 } from './seatRoleBlocks';
 import { SectionTabs, StatTable, formatRate, type SectionTabItem, type StatColumn } from './ui';
+import { BenchmarkToggle, benchmarkPlayerRow, useBenchmarkPinned } from './BenchmarkRows';
 
 /** 30 場以上的玩家才列 (同舊版)；最多 25 位 (快取 players 依場數排序)。 */
 export const MIN_PLAYER_GAMES = 30;
@@ -41,6 +42,8 @@ function formatDelta(deviation: number): string {
  * 所以表格只放任務結果；滑鼠移到格子上另列「坐這裡的全部對局」的條件比率 (seatOutcomes：
  * 三紅率 n = 全部、三藍局刺中率 n = 三藍局)，取代舊版的三種結果占全部對局的比例。
  * 表格在自己的容器裡上下／左右捲，整頁不拉長。
+ * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／PR25–75／PR50+／PR50-，BenchmarkRows)，同一套算法、顏色同樣是和
+ * 全體在這個位置的差；不算進「最多 25 位」。
  */
 export default function SeatHeatmap(): JSX.Element {
   const { t } = useTranslation('common');
@@ -48,6 +51,7 @@ export default function SeatHeatmap(): JSX.Element {
   const { overview } = useAnalysisOverview();
   // 表格在自己的容器裡捲：桌機留給頁面外框後約 19rem，手機頁面可到 1.5 屏，給 60vh。
   const wide = useIsWide();
+  const pinned = useBenchmarkPinned(benchmarkPlayerRow, { short: true }).props;
 
   if (loading) {
     return (
@@ -194,6 +198,7 @@ export default function SeatHeatmap(): JSX.Element {
         rows={rows}
         rowKey={p => p.name}
         maxHeight={wide ? 'min(19rem, 52vh)' : '60vh'}
+        {...pinned}
         footnote={
           <>
             {t('analytics.r6.tabsb.heatmap.note', { min: MIN_PLAYER_GAMES, max: MAX_ROWS })}
@@ -207,13 +212,16 @@ export default function SeatHeatmap(): JSX.Element {
   };
 
   return (
-    <SectionTabs
-      items={modeItems}
-      persistKey="analysis.position.heatmapMode"
-      ariaLabel={t('analytics.r6.tabsb.heatmap.modeLabel')}
-    >
-      {renderTable}
-    </SectionTabs>
+    <div className="space-y-1.5">
+      <div className="flex justify-end"><BenchmarkToggle /></div>
+      <SectionTabs
+        items={modeItems}
+        persistKey="analysis.position.heatmapMode"
+        ariaLabel={t('analytics.r6.tabsb.heatmap.modeLabel')}
+      >
+        {renderTable}
+      </SectionTabs>
+    </div>
   );
 }
 
