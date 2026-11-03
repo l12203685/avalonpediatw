@@ -1,0 +1,145 @@
+name: Signage player
+# 百科機器人去遊玩頁（avalon.signage-cloud.org）補位——Edward 2026-11-03：
+#「我希望你可以在晚上百科群的人開局的時候 如果人不夠 就加進去玩1-2局試試看 用現有邏輯 我會請玩家反饋」
+# 同日：玩家可以指定房間叫機器人來測試；「目前先限制B只能有一隻進入」（每間房最多 1 個百科機器人）。
+#
+# 程式：packages/server/scripts/signagePlayer.ts（判斷用正式站的 HeuristicAgent，不呼叫任何語言模型，GitHub Actions 上跑）。
+# 暱稱：每晚「百科機器人（測試）」，指定房間「百科機器人（1460房測試）」（練習台以暱稱認人，同時跑的程序不能同名）。
+# 對局中不離開（中途離開整桌會卡住）；程式掛掉就重跑，先回原座位把那局打完。記錄員（signage-recorder.yml）照常記錄這些局，但貼 DC 時標【待檢視】＋「模擬」標籤、
+# 寫明機器人坐哪一家，每日匯入不會當成真人紀錄收錄。
+#
+# 兩種跑法：
+#   - 每晚（排程，和記錄員同一段時間 18:40–00:15 台灣時間）：只補「野團、等待中、9 個真人、標題沒寫不要機器人、
+#     缺人 ≥ 3 分鐘」的房間；整晚最多 2 局（repo variable SIGNAGE_PLAYER_MAX_GAMES 可改）；每局打完就離開。
+#   - 指定房間（Actions → Signage player → Run workflow，手機 GitHub app 也可以）：填 room（例 Room-1460 或 1460），
+#     機器人直接去那間房，有空位就坐（不必等 3 分鐘；人數 15 秒沒變才坐，避免搶到正在進房的人）；打完 games 局離開。
+#     野團才行（私房要密碼，這裡不收密碼）。
+#
+# 關掉：repo Settings → Secrets and variables → Actions → Variables，新增 SIGNAGE_PLAYER_ENABLED = false
+#       （排程和指定房間都不跑；刪掉或改回 true 就恢復）。
+#
+# 給 DC／LINE 指令用的觸發方式（同一個 workflow_dispatch；token 需要這個 repo 的 actions:write 權限）：
+#   curl -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" \
+#     https://api.github.com/repos/l12203685/avalonpediatw/actions/workflows/signage-player.yml/dispatches \
+#     -d '{"ref":"main","inputs":{"room":"Room-1460","games":"1","hours":"1"}}'
+#   回應 204 = 已排入；inputs 都是字串，room 空字串 = 每晚規則。同一間房同時只會有一個在跑（concurrency 依房號），
+#   程式也會先看房裡是不是已經有百科機器人，有就不進。
+#
+# 公開 repo：log 只有時間、房號、狀態與局數，不含玩家暱稱、角色或聊天內容。
+on:
+  schedule:
+    # 同記錄員：GitHub 排程可能延後很久，多排幾個，哪個先開始就跑到 00:15；其餘的在 concurrency 排隊、開始時已過 00:15 就直接結束。
+    - cron: '40 10 * * *'
+    - cron: '10 11 * * *'
+    - cron: '40 11 * * *'
+    - cron: '10 12 * * *'
+    - cron: '40 12 * * *'
+    - cron: '10 13 * * *'
+    - cron: '40 13 * * *'
+    - cron: '10 14 * * *'
+  workflow_dispatch:
+    inputs:
+      room:
+        description: '房號（例 Room-1460 或 1460）；空白 = 每晚自動補位規則'
+        required: false
+        default: ''
+      games:
+        description: '打幾局（指定房間 1–3；每晚規則最多 2）'
+        required: false
+        default: '1'
+      hours:
+        description: '最多跑幾小時（1–3；空白 = 指定房間 1 小時，每晚規則跑到 00:15）'
+        required: false
+        default: '1'
+
+permissions:
+  contents: read
+
+concurrency:
+  # 指定房間：每間房一組（兩次指定同一間房不會同時放兩個機器人進去）；每晚規則一組
+  group: ${{ inputs.room != '' && inputs.room != null && format('signage-player-room-{0}', inputs.room) || 'signage-player-nightly' }}
+  cancel-in-progress: false
+
+jobs:
+  play:
+    if: vars.SIGNAGE_PLAYER_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - name: Check inputs
+        id: cfg
+        env:
+          ROOM: ${{ inputs.room }}
+          GAMES: ${{ inputs.games }}
+          HOURS_INPUT: ${{ inputs.hours }}
+          NIGHT_MAX: ${{ vars.SIGNAGE_PLAYER_MAX_GAMES }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import datetime as d, os, re
+          room = os.environ.get("ROOM", "").strip()
+          if room and not re.fullmatch(r"(?i)(room-?)?\d{1,6}", room):
+              raise SystemExit("room 格式不對（例 Room-1460 或 1460）")
+          if re.fullmatch(r"\d+", room):
+              room = f"Room-{room}"
+          def num(v, dflt):
+              try: return float(v)
+              except (TypeError, ValueError): return dflt
+          if room:
+              mode, games = "room", int(min(3, max(1, num(os.environ.get("GAMES"), 1))))
+              hours = min(3.0, max(0.2, num(os.environ.get("HOURS_INPUT"), 1)))
+          else:
+              mode = "live"
+              night = int(min(2, max(0, num(os.environ.get("NIGHT_MAX"), 2))))
+              games = int(min(night, max(0, num(os.environ.get("GAMES"), night)))) if os.environ.get("EVENT") == "workflow_dispatch" else night
+              # 跑到台灣時間 00:15（UTC 16:15）；台灣 18:00 以前或 00:15 以後不跑（手動觸發可用 hours 指定）
+              n = d.datetime.utcnow(); e = n.replace(hour=16, minute=15, second=0, microsecond=0)
+              auto = 0 if (n >= e or n.hour < 10) else round(min((e - n).total_seconds() / 3600, 5.7), 2)
+              h = os.environ.get("HOURS_INPUT", "").strip()
+              hours = min(5.7, max(0.0, num(h, auto))) if (h and os.environ.get("EVENT") == "workflow_dispatch") else auto
+          run = "true" if games > 0 and hours >= 0.1 else "false"
+          print(f"mode={mode}\nroom={room}\ngames={games}\nhours={hours}\nrun={run}")
+          PY
+          cat "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.run == 'true'
+      - uses: pnpm/action-setup@v3
+        if: steps.cfg.outputs.run == 'true'
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.run == 'true'
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install
+        if: steps.cfg.outputs.run == 'true'
+        run: |
+          pnpm install --frozen-lockfile --filter @avalon/server...
+          pnpm --filter @avalon/shared build
+          npm install -g playwright@1.49.1
+          npx -y playwright@1.49.1 install --with-deps chromium
+      - name: Play
+        if: steps.cfg.outputs.run == 'true'
+        working-directory: packages/server
+        env:
+          MODE: ${{ steps.cfg.outputs.mode }}
+          ROOM: ${{ steps.cfg.outputs.room }}
+          GAMES: ${{ steps.cfg.outputs.games }}
+          HOURS: ${{ steps.cfg.outputs.hours }}
+        run: |
+          export NODE_PATH="$(npm root -g)"
+          # 程式中途掛掉時重跑（最多 3 次）：--state 記著坐進的房間，重跑會先回原座位把那局打完（中途離開會讓整桌卡住）
+          STATE="$RUNNER_TEMP/signage-player-state.json"
+          END=$(python3 -c "import time; print(int(time.time() + float('$HOURS') * 3600))")
+          for attempt in 1 2 3; do
+            LEFT=$(python3 -c "import time; print(round(max(0, $END - time.time()) / 3600, 3))")
+            if python3 -c "import sys; sys.exit(0 if $LEFT < 0.05 else 1)"; then break; fi
+            if [ "$MODE" = room ]; then
+              npx tsx scripts/signagePlayer.ts --mode room --room "$ROOM" --games "$GAMES" --hours "$LEFT" --state "$STATE" && break
+            else
+              npx tsx scripts/signagePlayer.ts --mode live --max-games "$GAMES" --hours "$LEFT" --state "$STATE" && break
+            fi
+            echo "::warning::第 $attempt 次執行異常結束，重新啟動"
+            sleep 5
+          done
