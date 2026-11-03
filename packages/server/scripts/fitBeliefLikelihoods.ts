@@ -23,6 +23,8 @@
  *   - redLake：`目標陣營` → 紅方持湖者宣告「紅」的次數 / 總數。
  *   - voteKey（第 17 回合）：同 vote，但只算第 3 局起、紅方已兩紅的提議（關鍵局；`陣營|在隊上|隊上有紅`）——第 16 回合起紅方
  *     不在隊上的關鍵隊外白只在這隊過得了時開，關鍵局的票和一般第 3 局起的票分開讀（`AgentTuning.beliefKeyVoteCells`）。
+ *   - voteAlone（第 24 回合）：紅方在隊上的票，分「隊上沒有其他紅」（alone）／「有」（ally）：`evil|alone|r3`、`evil|ally|r3`，關鍵局另記 `evil|alone|key`／`evil|ally|key`
+ *     （`AgentTuning.beliefRedAloneCells`；莫德雷德在隊上沒有隊友時多半內黑，刺客／莫甘娜不會——同一格平均起來，內黑被讀成忠臣的票型）。
  *   - voteRole / proposalRole：同 vote / proposal，但只算梅林與莫甘娜（`角色|…`）——派西分辨兩根拇指用
  *     （第 3 回合，2026-10-28）。proposalRole 的紅數不含隊長自己。
  */
@@ -98,7 +100,7 @@ function mergeTables(files: string[]): void {
   for (const f of files) {
     const t = JSON.parse(fs.readFileSync(f, 'utf8')) as Record<string, unknown>;
     sum.games += Number(t.games ?? 0);
-    for (const name of ['vote', 'proposal', 'mission', 'redLake', 'voteRole', 'proposalRole', 'voteKey']) {
+    for (const name of ['vote', 'proposal', 'mission', 'redLake', 'voteRole', 'proposalRole', 'voteKey', 'voteAlone']) {
       const acc = (sum[name] ??= {}) as Record<string, number | number[]>;
       for (const [k, v] of Object.entries((t[name] ?? {}) as Record<string, number | number[]>)) {
         if (typeof v === 'number') acc[k] = ((acc[k] as number | undefined) ?? 0) + v;
@@ -120,6 +122,7 @@ const mission: Record<string, number[]> = {};
 const redLake: Record<string, [number, number]> = {};
 const voteRole: Record<string, [number, number]> = {};
 const voteKey: Record<string, [number, number]> = {};
+const voteAlone: Record<string, [number, number]> = {};
 const proposalRole: Record<string, number> = {};
 const bump = (t: Record<string, [number, number]>, k: string, hit: boolean) => { const v = (t[k] ??= [0, 0]); if (hit) v[0]++; v[1]++; };
 const bucket = (round: number) => (round <= 2 ? 'r12' : 'r3');
@@ -145,6 +148,11 @@ for (const g of games) {
       const key = `${red(seat) ? 'evil' : 'good'}|${p.teamSeats.includes(seat) ? 'on' : 'off'}|${reds > 0 ? 'red' : 'clean'}|${bucket(p.round)}`;
       bump(vote, key, p.votes[seat - 1]);
       if (p.round >= 3 && failsBefore(p.round) >= 2) bump(voteKey, key.split('|').slice(0, 3).join('|'), p.votes[seat - 1]);
+      if (p.round >= 3 && red(seat) && p.teamSeats.includes(seat)) {
+        const cell = `evil|${reds === 1 ? 'alone' : 'ally'}`;
+        bump(voteAlone, `${cell}|r3`, p.votes[seat - 1]);
+        if (failsBefore(p.round) >= 2) bump(voteAlone, `${cell}|key`, p.votes[seat - 1]);
+      }
       const role = g.seatRoles[seat - 1];
       if (role === 'merlin' || role === 'morgana') bump(voteRole, `${role}|${key.split('|').slice(1).join('|')}`, p.votes[seat - 1]);
     }
@@ -161,12 +169,13 @@ for (const g of games) {
 }
 
 const flagText = Object.entries(flags).map(([k, v]) => `${k}=${String(v)}`).join(' ');
-const table = { source: botGames > 0 ? `self-play (production defaults${flagText ? ` + ${flagText}` : ''})` : 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole, voteKey };
+const table = { source: botGames > 0 ? `self-play (production defaults${flagText ? ` + ${flagText}` : ''})` : 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole, voteKey, voteAlone };
 fs.writeFileSync(out, JSON.stringify(table, null, 1) + '\n');
 console.log(`wrote ${out}: ${games.length} games`);
 for (const [k, [a, n]] of Object.entries(vote).sort()) console.log(`  vote ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, d] of Object.entries(mission).sort()) console.log(`  mission ${k} fails ${d.join('/')}`);
 for (const [k, [a, n]] of Object.entries(voteKey).sort()) console.log(`  voteKey ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
+for (const [k, [a, n]] of Object.entries(voteAlone).sort()) console.log(`  voteAlone ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(voteRole).sort()) console.log(`  voteRole ${k.padEnd(26)} ${(100 * a / n).toFixed(1)}% (${n})`);
 for (const [k, [a, n]] of Object.entries(redLake)) console.log(`  redLake target ${k}: declared red ${(100 * a / n).toFixed(1)}% (${n})`);
 // The self-play engine leaves timers behind: exit once the table is written.

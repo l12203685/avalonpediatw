@@ -8,7 +8,22 @@
  */
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
-import { bayesOptionsOf, bayesRedShare, bayesTeamClean } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow } from './belief/BayesBelief';
+
+/** R4 at 7+ players: a mission needs two fail cards (round 24 `goodR4TwoFail`). */
+function twoFailRound(obs: PlayerObservation): boolean {
+  return (obs.currentRound ?? 1) === 4 && (obs.playerCount ?? obs.allPlayerIds.length) >= 7;
+}
+
+/**
+ * The "safe enough" probability a good vote rule compares with its threshold: P(no red on the team), or — round 24
+ * `goodR4TwoFail` at or above `mode`, on R4 at 7+ players — P(fewer than two reds), since one red cannot fail that mission.
+ */
+function teamSafe(tuning: Readonly<AgentTuning>, obs: PlayerObservation, team: readonly string[], mode: number): number | null {
+  const opts = bayesOptionsOf(tuning);
+  if ((tuning.goodR4TwoFail ?? 0) >= mode && twoFailRound(obs)) return bayesTeamRedsBelow(obs, team, 2, opts);
+  return bayesTeamClean(obs, team, opts);
+}
 
 /** true = 這一票改投黑。 */
 export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
@@ -21,7 +36,7 @@ export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerOb
   if ((obs.failCount ?? 0) + 1 > (tuning.goodCleanVoteMaxAttempt ?? 4)) return false;
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
-  const p = bayesTeamClean(obs, team, bayesOptionsOf(tuning));
+  const p = teamSafe(tuning, obs, team, 2);
   return p !== null && p < tau;
 }
 
@@ -47,6 +62,7 @@ export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservati
   const opts = bayesOptionsOf(tuning);
   const p = bayesTeamClean(obs, team, opts);
   if (p === null) return null;
+  if (goodTailCleanR3Now(tuning, obs, team, p)) return true;
   if (p < tau) return false;
   if (obs.questResults.filter((r) => r === 'success').length >= 2) return true;
   const ids = obs.allPlayerIds;
@@ -56,6 +72,20 @@ export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservati
   if (tail === obs.myPlayerId) return false;
   const tailRed = bayesRedShare(obs, opts).get(tail) ?? 0;
   return tailRed >= 0.4;
+}
+
+/**
+ * `goodTailCleanR3`（第 24 回合・忠臣／派西；第 1D 節真人資料探勘第 5 名）：第 3 局、任務順序紅藍、非強制、不在隊上、隊上沒有出過失敗任務的人，
+ * 這隊乾淨的機率不低於門檻 → 外白（`goodTailVote` 的例外；呼叫端仍然過好人投票關卡）。
+ */
+export function goodTailCleanR3Now(tuning: Readonly<AgentTuning>, obs: PlayerObservation, team: readonly string[], p: number): boolean {
+  const tau = tuning.goodTailCleanR3 ?? 0;
+  if (tau <= 0 || (obs.currentRound ?? 1) !== 3 || (obs.failCount ?? 0) >= 4) return false;
+  const res = obs.questResults ?? [];
+  if (res[0] !== 'fail' || res[1] !== 'success') return false;
+  const failed = new Set(obs.questHistory.filter((q) => res[q.round - 1] === 'fail').flatMap((q) => q.team));
+  if (team.some((id) => failed.has(id))) return false;
+  return p >= tau;
 }
 
 /**
@@ -84,6 +114,6 @@ export function goodKeyVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if ((obs.questResults ?? []).filter((r) => r === 'fail').length < 2) return false;
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
-  const p = bayesTeamClean(obs, team, bayesOptionsOf(tuning));
+  const p = teamSafe(tuning, obs, team, 1);
   return p !== null && p < tau;
 }

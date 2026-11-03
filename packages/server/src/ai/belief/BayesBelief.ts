@@ -27,6 +27,8 @@ interface Table {
   redLake: Record<string, [number, number]>;
   /** Key-round votes (R3+, red has two wins; `camp|on|red`), bot tables fitted from round 17 on (`BayesOptions.keyVoteCells`). */
   voteKey?: Record<string, [number, number]>;
+  /** Round 24: a red's R3+ on-team votes split by another red on the team (`evil|alone|r3`, `evil|ally|r3`, `…|key`; `BayesOptions.redAloneCells`). */
+  voteAlone?: Record<string, [number, number]>;
 }
 const T = TABLE as unknown as Table;
 /** The same tables fitted on bot self-play (`scripts/fitBeliefLikelihoods.ts --bots`; `BayesOptions.botTables`). */
@@ -107,6 +109,22 @@ function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, app
     if (idx >= 0) memo.vote[idx] = p;
   }
   return approve ? p : 1 - p;
+}
+
+/** log P(vote) of a red on the team, R3+, from the `voteAlone` cells (bot table only); null when the cell is missing (`redAloneCells`). */
+const aloneMemo = new Map<string, number | null>();
+function redAloneVoteLog(alone: boolean, keyRound: boolean, approve: boolean): number | null {
+  const k = `${TB === TB_NEXT ? 'n' : 'c'}|${mix}|${alone ? 'alone' : 'ally'}|${keyRound ? 'key' : 'r3'}|${approve ? 1 : 0}`;
+  if (aloneMemo.has(k)) return aloneMemo.get(k)!;
+  const c = mix > 0 ? TB.voteAlone?.[`evil|${alone ? 'alone' : 'ally'}|${keyRound ? 'key' : 'r3'}`] ?? (keyRound ? TB.voteAlone?.[`evil|${alone ? 'alone' : 'ally'}|r3`] : undefined) : undefined;
+  let v: number | null = null;
+  if (c) {
+    const pBot = smooth(c[0], c[1]);
+    const p = blend(voteProbIn(T, 'evil', true, true, 3, keyRound), pBot);
+    v = Math.log(approve ? p : 1 - p);
+  }
+  aloneMemo.set(k, v);
+  return v;
 }
 
 function proposalProbIn(t: Table, camp: string, round: number, k: number): number {
@@ -234,6 +252,11 @@ export interface BayesOptions {
    * Percival's worlds the red thumb is Morgana: an R1 mission whose only red is that thumb all but never succeeds.
    */
   morganaR1?: boolean;
+  /**
+   * Round 24 `beliefRedAloneCells`: a red's R3+ on-team vote reads from the bot table's `voteAlone` cells — split by whether another red
+   * is on the team (in this world) — instead of the pooled `evil|on|red` cell (Mordred alone on a team mostly rejects; the others never do).
+   */
+  redAloneCells?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -259,7 +282,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const mixRound = earlyMix < 1 ? opts.merlinEarlyMixRound ?? 0 : 0;
   const keyCells = opts.keyVoteCells === true;
   const morganaR1 = opts.morganaR1 === true && percival;
-  const key = `${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
+  const aloneCells = opts.redAloneCells === true;
+  const key = `${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -350,6 +374,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
           lp += Math.log(x.raw ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
           continue;
         }
+        if (aloneCells && x.on && p.r3 && campIx(x.b) === 1) {
+          const la = redAloneVoteLog(sizeOf(w & teamMask) === 1, p.keyRound, x.yes);
+          if (la !== null) { lp += la; continue; }
+        }
         lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound);
       }
     }
@@ -393,6 +421,9 @@ const shareCache = new WeakMap<Posterior, Map<string, number>>();
 function merlinEarlyOptions(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'merlinEarlyStrict' | 'merlinEarlyMix' | 'merlinEarlyMixRound'> {
   const strict = t.merlinLoyalStyle === true;
   const m = t.merlinDoomedPublic ?? 0;
+  // Round 24 `merlinDoomedAvoidMix`: a share q strict, 1 − q generic (Merlin's `merlinDoomedAvoid` teams sometimes hold a seen red).
+  const q = t.merlinDoomedAvoidMix ?? 0;
+  if (strict && m === 0 && q > 0 && q < 1) return { merlinEarlyStrict: true, merlinEarlyMix: q };
   if (!strict || m < 2) return { merlinEarlyStrict: strict, merlinEarlyMix: 1 };
   if (m >= 3) return { merlinEarlyStrict: true, merlinEarlyMix: t.merlinDoomedPublicHalf === true ? 0.5 : 0, merlinEarlyMixRound: m === 3 ? 1 : 2 };
   if (t.merlinDoomedPublicHalf === true) return { merlinEarlyStrict: true, merlinEarlyMix: 0.5 };
@@ -412,6 +443,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     botMissionNext: t.beliefBotMissionNext === true,
     keyVoteCells: t.beliefKeyVoteCells === true,
     morganaR1: t.percivalMorganaR1 === true,
+    redAloneCells: t.beliefRedAloneCells === true,
   };
 }
 
@@ -443,6 +475,21 @@ export function bayesTeamClean(obs: PlayerObservation, team: readonly string[], 
   const mask = post.maskOf(team);
   let s = 0;
   post.worlds.forEach((w, i) => { if ((w & mask) === 0) s += post.wts[i]; });
+  return s;
+}
+
+/** Posterior P(the team holds fewer than `k` reds) — round 24 `goodR4TwoFail` (R4 at 7+ players needs two fail cards). */
+export function bayesTeamRedsBelow(obs: PlayerObservation, team: readonly string[], k: number, opts: Readonly<BayesOptions> = {}): number | null {
+  const post = posterior(obs, opts);
+  if (post.worlds.length === 0) return null;
+  const mask = post.maskOf(team);
+  let s = 0;
+  post.worlds.forEach((w, i) => {
+    let x = w & mask;
+    let c = 0;
+    while (x) { x &= x - 1; c++; }
+    if (c < k) s += post.wts[i];
+  });
   return s;
 }
 

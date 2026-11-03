@@ -376,5 +376,24 @@
    7464,
    10170
   ]
- }
+ },
+ "voteAlone": {
+  "evil|ally|r3": [
+   4321,
+   4977
+  ],
+  "evil|alone|r3": [
+   1008,
+   2001
+  ],
+  "evil|ally|key": [
+   2511,
+   2900
+  ],
+  "evil|alone|key": [
+   393,
+   756
+  ]
+ },
+ "voteAloneSource": "round 24: self-play 1000 games (round 23 defaults), only these cells"
 }
