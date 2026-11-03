@@ -1725,7 +1725,7 @@
         "10": 30.5
       }
     },
-    "gamesKey": "ba7abefb30eef919"
+    "gamesKey": "226c144e30dc8e78"
   },
   "players": {
     "players": [
@@ -2903,7 +2903,7 @@
         "expectedFinalWinRate": 46.6,
         "excessWinRate": 0.2,
         "firstPlayed": "2023-08-16",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 52,
@@ -2948,7 +2948,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-09-06",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -3001,7 +3001,7 @@
             "positionTheory": 45.3,
             "finalWinRate": 46.0,
             "from": "2025-11-04",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -3012,7 +3012,7 @@
             "positionTheory": 46.7,
             "finalWinRate": 46.8,
             "from": "2023-08-16",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 46.1,
@@ -3617,7 +3617,7 @@
         "expectedFinalWinRate": 45.4,
         "excessWinRate": -1.1,
         "firstPlayed": "2023-08-16",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 33,
@@ -3662,7 +3662,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-08-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -3715,7 +3715,7 @@
             "positionTheory": 38.7,
             "finalWinRate": 40.0,
             "from": "2025-09-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -3726,7 +3726,7 @@
             "positionTheory": 44.3,
             "finalWinRate": 44.3,
             "from": "2023-08-16",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.2,
@@ -5045,7 +5045,7 @@
         "expectedFinalWinRate": 46.8,
         "excessWinRate": 0.4,
         "firstPlayed": "2022-04-13",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 40,
@@ -5090,7 +5090,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-04-12",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -5143,7 +5143,7 @@
             "positionTheory": 48.7,
             "finalWinRate": 47.0,
             "from": "2025-08-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -5154,7 +5154,7 @@
             "positionTheory": 47.4,
             "finalWinRate": 47.2,
             "from": "2022-04-13",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 47.1,
@@ -5759,7 +5759,7 @@
         "expectedFinalWinRate": 47.6,
         "excessWinRate": -1.8,
         "firstPlayed": "2022-01-28",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 37,
@@ -5804,7 +5804,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2024-11-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -5857,7 +5857,7 @@
             "positionTheory": 46.8,
             "finalWinRate": 46.0,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -5868,7 +5868,7 @@
             "positionTheory": 45.9,
             "finalWinRate": 45.8,
             "from": "2022-01-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.1,
@@ -6473,7 +6473,7 @@
         "expectedFinalWinRate": 46.0,
         "excessWinRate": -0.3,
         "firstPlayed": "2022-02-13",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 38,
@@ -6518,7 +6518,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-08-08",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -6571,7 +6571,7 @@
             "positionTheory": 44.9,
             "finalWinRate": 44.0,
             "from": "2025-09-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -6582,7 +6582,7 @@
             "positionTheory": 45.4,
             "finalWinRate": 45.7,
             "from": "2022-02-13",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.2,
@@ -8615,7 +8615,7 @@
         "expectedFinalWinRate": 45.1,
         "excessWinRate": 1.1,
         "firstPlayed": "2022-06-03",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 13,
@@ -8660,7 +8660,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -8713,7 +8713,7 @@
             "positionTheory": 46.1,
             "finalWinRate": 44.0,
             "from": "2025-08-06",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 1,
             "sparseSeats": 1
           },
@@ -8724,7 +8724,7 @@
             "positionTheory": 45.8,
             "finalWinRate": 46.2,
             "from": "2022-06-03",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 46.8,
@@ -10033,7 +10033,7 @@
         "expectedFinalWinRate": 45.4,
         "excessWinRate": 3.9,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 23,
@@ -10078,7 +10078,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -10131,7 +10131,7 @@
             "positionTheory": 47.1,
             "finalWinRate": 48.0,
             "from": "2025-03-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -10142,7 +10142,7 @@
             "positionTheory": 49.5,
             "finalWinRate": 49.3,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 49.9,
@@ -12879,7 +12879,7 @@
         "expectedFinalWinRate": 45.3,
         "excessWinRate": 0.7,
         "firstPlayed": "2023-04-15",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 23,
@@ -12924,7 +12924,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2024-02-24",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -12977,7 +12977,7 @@
             "positionTheory": 53.8,
             "finalWinRate": 52.0,
             "from": "2024-05-10",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -12988,7 +12988,7 @@
             "positionTheory": 45.7,
             "finalWinRate": 46.0,
             "from": "2023-04-15",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.7,
@@ -17128,7 +17128,7 @@
         "expectedFinalWinRate": 46.2,
         "excessWinRate": 2.6,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-27",
         "roleOutcomes": {
           "刺客": {
             "三紅": 7,
@@ -17173,7 +17173,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2023-12-16",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -17226,7 +17226,7 @@
             "positionTheory": 43.7,
             "finalWinRate": 44.0,
             "from": "2024-02-12",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -17237,7 +17237,7 @@
             "positionTheory": 48.7,
             "finalWinRate": 48.8,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 48.4,
@@ -17817,7 +17817,7 @@
         "expectedFinalWinRate": 46.6,
         "excessWinRate": 2.2,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 11,
@@ -17862,7 +17862,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2024-01-20",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -17915,7 +17915,7 @@
             "positionTheory": 46.6,
             "finalWinRate": 45.0,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -17926,7 +17926,7 @@
             "positionTheory": 49.7,
             "finalWinRate": 48.8,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 49.3,
@@ -22625,7 +22625,7 @@
         "expectedFinalWinRate": 45.9,
         "excessWinRate": 2.1,
         "firstPlayed": "2022-10-02",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-27",
         "roleOutcomes": {
           "刺客": {
             "三紅": 14,
@@ -22670,7 +22670,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2023-12-16",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -22723,7 +22723,7 @@
             "positionTheory": 48.5,
             "finalWinRate": 48.0,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -22734,7 +22734,7 @@
             "positionTheory": 47.0,
             "finalWinRate": 48.0,
             "from": "2022-10-02",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 49.6,
@@ -74428,8 +74428,8 @@
         },
         "expectedFinalWinRate": 59.8,
         "excessWinRate": -34.8,
-        "firstPlayed": "2026-10-31",
-        "lastPlayed": "2026-10-31",
+        "firstPlayed": "2026-10-30",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 0,
@@ -74473,8 +74473,8 @@
             "fullWindows": false,
             "games": 4,
             "sparseRoles": 7,
-            "from": "2026-10-31",
-            "to": "2026-10-31",
+            "from": "2026-10-30",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 2,
@@ -74526,8 +74526,8 @@
             "roleTheory": 41.5,
             "positionTheory": 44.6,
             "finalWinRate": 25.0,
-            "from": "2026-10-31",
-            "to": "2026-10-31",
+            "from": "2026-10-30",
+            "to": "2026-10-30",
             "sparseRoles": 7,
             "sparseSeats": 10
           },
@@ -74537,8 +74537,8 @@
             "roleTheory": 41.5,
             "positionTheory": 44.6,
             "finalWinRate": 25.0,
-            "from": "2026-10-31",
-            "to": "2026-10-31",
+            "from": "2026-10-30",
+            "to": "2026-10-30",
             "sparseRoles": 7,
             "sparseSeats": 10,
             "overallTheory": 45.7,
@@ -95549,7 +95549,7 @@
         "expectedFinalWinRate": 46.6,
         "excessWinRate": 0.2,
         "firstPlayed": "2023-08-16",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 52,
@@ -95594,7 +95594,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-09-06",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -95647,7 +95647,7 @@
             "positionTheory": 45.3,
             "finalWinRate": 46.0,
             "from": "2025-11-04",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -95658,7 +95658,7 @@
             "positionTheory": 46.7,
             "finalWinRate": 46.8,
             "from": "2023-08-16",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 46.1,
@@ -96192,7 +96192,7 @@
         "expectedFinalWinRate": 45.4,
         "excessWinRate": -1.1,
         "firstPlayed": "2023-08-16",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 33,
@@ -96237,7 +96237,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-08-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -96290,7 +96290,7 @@
             "positionTheory": 38.7,
             "finalWinRate": 40.0,
             "from": "2025-09-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -96301,7 +96301,7 @@
             "positionTheory": 44.3,
             "finalWinRate": 44.3,
             "from": "2023-08-16",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.2,
@@ -97478,7 +97478,7 @@
         "expectedFinalWinRate": 46.8,
         "excessWinRate": 0.4,
         "firstPlayed": "2022-04-13",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 40,
@@ -97523,7 +97523,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-04-12",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -97576,7 +97576,7 @@
             "positionTheory": 48.7,
             "finalWinRate": 47.0,
             "from": "2025-08-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -97587,7 +97587,7 @@
             "positionTheory": 47.4,
             "finalWinRate": 47.2,
             "from": "2022-04-13",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 47.1,
@@ -98121,7 +98121,7 @@
         "expectedFinalWinRate": 47.6,
         "excessWinRate": -1.8,
         "firstPlayed": "2022-01-28",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 37,
@@ -98166,7 +98166,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2024-11-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -98219,7 +98219,7 @@
             "positionTheory": 46.8,
             "finalWinRate": 46.0,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -98230,7 +98230,7 @@
             "positionTheory": 45.9,
             "finalWinRate": 45.8,
             "from": "2022-01-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.1,
@@ -98764,7 +98764,7 @@
         "expectedFinalWinRate": 46.0,
         "excessWinRate": -0.3,
         "firstPlayed": "2022-02-13",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 38,
@@ -98809,7 +98809,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-08-08",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -98862,7 +98862,7 @@
             "positionTheory": 44.9,
             "finalWinRate": 44.0,
             "from": "2025-09-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -98873,7 +98873,7 @@
             "positionTheory": 45.4,
             "finalWinRate": 45.7,
             "from": "2022-02-13",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.2,
@@ -100693,7 +100693,7 @@
         "expectedFinalWinRate": 45.1,
         "excessWinRate": 1.1,
         "firstPlayed": "2022-06-03",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 13,
@@ -100738,7 +100738,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -100791,7 +100791,7 @@
             "positionTheory": 46.1,
             "finalWinRate": 44.0,
             "from": "2025-08-06",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 1,
             "sparseSeats": 1
           },
@@ -100802,7 +100802,7 @@
             "positionTheory": 45.8,
             "finalWinRate": 46.2,
             "from": "2022-06-03",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 46.8,
@@ -101969,7 +101969,7 @@
         "expectedFinalWinRate": 45.4,
         "excessWinRate": 3.9,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 23,
@@ -102014,7 +102014,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -102067,7 +102067,7 @@
             "positionTheory": 47.1,
             "finalWinRate": 48.0,
             "from": "2025-03-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -102078,7 +102078,7 @@
             "positionTheory": 49.5,
             "finalWinRate": 49.3,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 49.9,
@@ -104531,7 +104531,7 @@
         "expectedFinalWinRate": 45.3,
         "excessWinRate": 0.7,
         "firstPlayed": "2023-04-15",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 23,
@@ -104576,7 +104576,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2024-02-24",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -104629,7 +104629,7 @@
             "positionTheory": 53.8,
             "finalWinRate": 52.0,
             "from": "2024-05-10",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -104640,7 +104640,7 @@
             "positionTheory": 45.7,
             "finalWinRate": 46.0,
             "from": "2023-04-15",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 45.7,
@@ -108354,7 +108354,7 @@
         "expectedFinalWinRate": 46.2,
         "excessWinRate": 2.6,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-27",
         "roleOutcomes": {
           "刺客": {
             "三紅": 7,
@@ -108399,7 +108399,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2023-12-16",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -108452,7 +108452,7 @@
             "positionTheory": 43.7,
             "finalWinRate": 44.0,
             "from": "2024-02-12",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -108463,7 +108463,7 @@
             "positionTheory": 48.7,
             "finalWinRate": 48.8,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 48.4,
@@ -108972,7 +108972,7 @@
         "expectedFinalWinRate": 46.6,
         "excessWinRate": 2.2,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 11,
@@ -109017,7 +109017,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2024-01-20",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -109070,7 +109070,7 @@
             "positionTheory": 46.6,
             "finalWinRate": 45.0,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -109081,7 +109081,7 @@
             "positionTheory": 49.7,
             "finalWinRate": 48.8,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 49.3,
@@ -113283,7 +113283,7 @@
         "expectedFinalWinRate": 45.9,
         "excessWinRate": 2.1,
         "firstPlayed": "2022-10-02",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-27",
         "roleOutcomes": {
           "刺客": {
             "三紅": 14,
@@ -113328,7 +113328,7 @@
             "games": 100,
             "sparseRoles": 0,
             "from": "2023-12-16",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "roles": {
               "刺客": {
                 "games": 10,
@@ -113381,7 +113381,7 @@
             "positionTheory": 48.5,
             "finalWinRate": 48.0,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -113392,7 +113392,7 @@
             "positionTheory": 47.0,
             "finalWinRate": 48.0,
             "from": "2022-10-02",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "overallTheory": 49.6,
@@ -157205,8 +157205,8 @@
         },
         "expectedFinalWinRate": 59.8,
         "excessWinRate": -34.8,
-        "firstPlayed": "2026-10-31",
-        "lastPlayed": "2026-10-31",
+        "firstPlayed": "2026-10-30",
+        "lastPlayed": "2026-10-30",
         "roleOutcomes": {
           "刺客": {
             "三紅": 0,
@@ -157250,8 +157250,8 @@
             "fullWindows": false,
             "games": 4,
             "sparseRoles": 7,
-            "from": "2026-10-31",
-            "to": "2026-10-31",
+            "from": "2026-10-30",
+            "to": "2026-10-30",
             "roles": {
               "刺客": {
                 "games": 2,
@@ -157303,8 +157303,8 @@
             "roleTheory": 41.5,
             "positionTheory": 44.6,
             "finalWinRate": 25.0,
-            "from": "2026-10-31",
-            "to": "2026-10-31",
+            "from": "2026-10-30",
+            "to": "2026-10-30",
             "sparseRoles": 7,
             "sparseSeats": 10
           },
@@ -157314,8 +157314,8 @@
             "roleTheory": 41.5,
             "positionTheory": 44.6,
             "finalWinRate": 25.0,
-            "from": "2026-10-31",
-            "to": "2026-10-31",
+            "from": "2026-10-30",
+            "to": "2026-10-30",
             "sparseRoles": 7,
             "sparseSeats": 10,
             "overallTheory": 45.7,
@@ -201267,7 +201267,7 @@
             "games": 100,
             "careerGames": 775,
             "from": "2025-04-12",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1
           },
@@ -201287,7 +201287,7 @@
             "games": 100,
             "careerGames": 513,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -201327,7 +201327,7 @@
             "games": 100,
             "careerGames": 426,
             "from": "2024-02-24",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0
           },
@@ -201347,7 +201347,7 @@
             "games": 100,
             "careerGames": 283,
             "from": "2024-01-20",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1
           }
@@ -201452,7 +201452,7 @@
             "games": 100,
             "careerGames": 426,
             "from": "2024-05-10",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseSeats": 0
           },
           {
@@ -201524,7 +201524,7 @@
             "games": 100,
             "careerGames": 775,
             "from": "2025-08-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseSeats": 1
           },
           {
@@ -201542,7 +201542,7 @@
             "games": 100,
             "careerGames": 221,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseSeats": 1
           }
         ]
@@ -201618,7 +201618,7 @@
             "games": 513,
             "careerGames": 513,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 25,
@@ -201662,7 +201662,7 @@
             "games": 221,
             "careerGames": 221,
             "from": "2022-10-02",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 57,
@@ -201684,7 +201684,7 @@
             "games": 283,
             "careerGames": 283,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 48,
@@ -201728,7 +201728,7 @@
             "games": 299,
             "careerGames": 299,
             "from": "2022-07-17",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 48,
@@ -201750,7 +201750,7 @@
             "games": 775,
             "careerGames": 775,
             "from": "2022-04-13",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 9,
@@ -201772,7 +201772,7 @@
             "games": 520,
             "careerGames": 520,
             "from": "2022-06-03",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 26,
@@ -201941,7 +201941,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-08-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1,
             "sparseCells": 9,
@@ -201965,7 +201965,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-03-30",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 25,
@@ -202013,7 +202013,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2024-05-10",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 40,
@@ -202037,7 +202037,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1,
             "sparseCells": 48,
@@ -202109,7 +202109,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-08-06",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 1,
             "sparseCells": 26,
@@ -202133,7 +202133,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2024-05-25",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 1,
             "sparseCells": 57,
@@ -202157,7 +202157,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-02-02",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 7,
@@ -202181,7 +202181,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-09-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 7,
@@ -202229,7 +202229,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2024-02-12",
-            "to": "2026-10-31",
+            "to": "2026-10-27",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 48,
@@ -202277,7 +202277,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-11-04",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 0,
@@ -202397,7 +202397,7 @@
             "roleGames": 100,
             "fullWindows": true,
             "from": "2025-09-28",
-            "to": "2026-10-31",
+            "to": "2026-10-30",
             "sparseRoles": 0,
             "sparseSeats": 0,
             "sparseCells": 2,
@@ -202654,7 +202654,7 @@
             "games": 20,
             "careerGames": 1157,
             "from": "2024-09-07",
-            "to": "2026-10-31"
+            "to": "2026-10-27"
           },
           {
             "rank": 2,
@@ -202698,7 +202698,7 @@
             "games": 20,
             "careerGames": 492,
             "from": "2024-11-29",
-            "to": "2026-10-31"
+            "to": "2026-10-27"
           },
           {
             "rank": 6,
@@ -202709,7 +202709,7 @@
             "games": 20,
             "careerGames": 1140,
             "from": "2025-01-11",
-            "to": "2026-10-31"
+            "to": "2026-10-27"
           },
           {
             "rank": 7,
@@ -203653,14 +203653,14 @@
     "from": "2022-02-13",
     "dataThrough": "2026-10-31",
     "averageTheory": 45.7,
-    "blueWinRate": 28.5,
+    "blueWinRate": 28.4,
     "players": [
       {
         "name": "HAO",
-        "elo": 1559.0,
+        "elo": 1558.9,
         "sigma": 6.8,
         "games": 1136,
-        "modelTheory": 54.2,
+        "modelTheory": 54.1,
         "provisional": false,
         "firstPlayed": "2022-11-06",
         "lastPlayed": "2026-10-31",
@@ -203668,13 +203668,13 @@
       },
       {
         "name": "Dean",
-        "elo": 1530.7,
+        "elo": 1530.6,
         "sigma": 8.5,
         "games": 508,
         "modelTheory": 50.1,
         "provisional": false,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 2
       },
       {
@@ -203729,18 +203729,18 @@
         "modelTheory": 48.5,
         "provisional": false,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-27",
         "rank": 7
       },
       {
         "name": "Vash",
-        "elo": 1518.3,
+        "elo": 1518.2,
         "sigma": 9.5,
         "games": 278,
         "modelTheory": 48.3,
         "provisional": false,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 8
       },
       {
@@ -203801,7 +203801,7 @@
       {
         "name": "心地",
         "elo": 1516.9,
-        "sigma": 11.1,
+        "sigma": 11.0,
         "games": 19,
         "modelTheory": 48.1,
         "provisional": true,
@@ -203899,7 +203899,7 @@
       },
       {
         "name": "百態",
-        "elo": 1515.3,
+        "elo": 1515.2,
         "sigma": 11.2,
         "games": 3,
         "modelTheory": 47.9,
@@ -203921,13 +203921,13 @@
       },
       {
         "name": "JOY",
-        "elo": 1514.4,
+        "elo": 1514.3,
         "sigma": 8.6,
         "games": 511,
-        "modelTheory": 47.8,
+        "modelTheory": 47.7,
         "provisional": false,
         "firstPlayed": "2022-10-02",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 25
       },
       {
@@ -203971,7 +203971,7 @@
         "modelTheory": 47.5,
         "provisional": false,
         "firstPlayed": "2022-07-17",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 29
       },
       {
@@ -204009,13 +204009,13 @@
       },
       {
         "name": "雪怪",
-        "elo": 1510.2,
+        "elo": 1510.3,
         "sigma": 8.9,
         "games": 424,
         "modelTheory": 47.2,
         "provisional": false,
         "firstPlayed": "2023-04-15",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 33
       },
       {
@@ -204026,7 +204026,7 @@
         "modelTheory": 47.1,
         "provisional": false,
         "firstPlayed": "2022-10-02",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-27",
         "rank": 34
       },
       {
@@ -204059,7 +204059,7 @@
         "modelTheory": 46.6,
         "provisional": false,
         "firstPlayed": "2022-02-14",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 37
       },
       {
@@ -204074,17 +204074,6 @@
         "rank": 38
       },
       {
-        "name": "sbear",
-        "elo": 1505.5,
-        "sigma": 10.4,
-        "games": 134,
-        "modelTheory": 46.5,
-        "provisional": false,
-        "firstPlayed": "2022-02-13",
-        "lastPlayed": "2025-05-17",
-        "rank": 39
-      },
-      {
         "name": "Toby",
         "elo": 1505.5,
         "sigma": 11.3,
@@ -204093,6 +204082,17 @@
         "provisional": true,
         "firstPlayed": "2023-05-05",
         "lastPlayed": "2023-05-05",
+        "rank": 39
+      },
+      {
+        "name": "sbear",
+        "elo": 1505.4,
+        "sigma": 10.4,
+        "games": 134,
+        "modelTheory": 46.5,
+        "provisional": false,
+        "firstPlayed": "2022-02-13",
+        "lastPlayed": "2025-05-17",
         "rank": 40
       },
       {
@@ -204290,7 +204290,7 @@
         "modelTheory": 45.3,
         "provisional": false,
         "firstPlayed": "2022-02-13",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 58
       },
       {
@@ -204613,25 +204613,25 @@
         "rank": 87
       },
       {
-        "name": "尼克",
-        "elo": 1491.9,
-        "sigma": 7.7,
-        "games": 906,
-        "modelTheory": 44.5,
-        "provisional": false,
-        "firstPlayed": "2023-08-16",
-        "lastPlayed": "2026-10-31",
-        "rank": 88
-      },
-      {
         "name": "Ying瑩",
-        "elo": 1491.8,
+        "elo": 1491.9,
         "sigma": 11.5,
         "games": 1,
         "modelTheory": 44.5,
         "provisional": true,
         "firstPlayed": "2024-01-03",
         "lastPlayed": "2024-01-03",
+        "rank": 88
+      },
+      {
+        "name": "尼克",
+        "elo": 1491.8,
+        "sigma": 7.7,
+        "games": 906,
+        "modelTheory": 44.5,
+        "provisional": false,
+        "firstPlayed": "2023-08-16",
+        "lastPlayed": "2026-10-30",
         "rank": 89
       },
       {
@@ -204686,7 +204686,7 @@
         "modelTheory": 44.4,
         "provisional": false,
         "firstPlayed": "2023-08-16",
-        "lastPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-30",
         "rank": 94
       },
       {
@@ -204912,7 +204912,7 @@
       {
         "name": "滴酒不露",
         "elo": 1489.1,
-        "sigma": 11.5,
+        "sigma": 11.4,
         "games": 15,
         "modelTheory": 44.1,
         "provisional": true,
@@ -205031,6 +205031,17 @@
         "rank": 125
       },
       {
+        "name": "R",
+        "elo": 1488.3,
+        "sigma": 11.5,
+        "games": 2,
+        "modelTheory": 44.0,
+        "provisional": true,
+        "firstPlayed": "2024-03-08",
+        "lastPlayed": "2024-03-08",
+        "rank": 126
+      },
+      {
         "name": "Jim",
         "elo": 1488.2,
         "sigma": 11.5,
@@ -205039,17 +205050,6 @@
         "provisional": true,
         "firstPlayed": "2024-06-06",
         "lastPlayed": "2024-06-06",
-        "rank": 126
-      },
-      {
-        "name": "R",
-        "elo": 1488.2,
-        "sigma": 11.5,
-        "games": 2,
-        "modelTheory": 44.0,
-        "provisional": true,
-        "firstPlayed": "2024-03-08",
-        "lastPlayed": "2024-03-08",
         "rank": 127
       },
       {
@@ -205086,6 +205086,17 @@
         "rank": 130
       },
       {
+        "name": "愛慕織姬",
+        "elo": 1487.9,
+        "sigma": 11.5,
+        "games": 8,
+        "modelTheory": 44.0,
+        "provisional": true,
+        "firstPlayed": "2026-10-31",
+        "lastPlayed": "2026-10-31",
+        "rank": 131
+      },
+      {
         "name": "香菜",
         "elo": 1487.9,
         "sigma": 11.5,
@@ -205094,17 +205105,6 @@
         "provisional": true,
         "firstPlayed": "2025-01-12",
         "lastPlayed": "2025-07-10",
-        "rank": 131
-      },
-      {
-        "name": "愛慕織姬",
-        "elo": 1487.8,
-        "sigma": 11.5,
-        "games": 8,
-        "modelTheory": 44.0,
-        "provisional": true,
-        "firstPlayed": "2026-10-31",
-        "lastPlayed": "2026-10-31",
         "rank": 132
       },
       {
@@ -205141,6 +205141,17 @@
         "rank": 135
       },
       {
+        "name": "祥子",
+        "elo": 1487.6,
+        "sigma": 11.6,
+        "games": 1,
+        "modelTheory": 43.9,
+        "provisional": true,
+        "firstPlayed": "2025-01-17",
+        "lastPlayed": "2025-01-17",
+        "rank": 136
+      },
+      {
         "name": "2Z",
         "elo": 1487.5,
         "sigma": 11.5,
@@ -205149,7 +205160,7 @@
         "provisional": true,
         "firstPlayed": "2025-06-01",
         "lastPlayed": "2025-06-01",
-        "rank": 136
+        "rank": 137
       },
       {
         "name": "test",
@@ -205160,17 +205171,6 @@
         "provisional": true,
         "firstPlayed": "2025-03-18",
         "lastPlayed": "2025-03-18",
-        "rank": 137
-      },
-      {
-        "name": "祥子",
-        "elo": 1487.5,
-        "sigma": 11.6,
-        "games": 1,
-        "modelTheory": 43.9,
-        "provisional": true,
-        "firstPlayed": "2025-01-17",
-        "lastPlayed": "2025-01-17",
         "rank": 138
       },
       {
@@ -205296,7 +205296,7 @@
       },
       {
         "name": "1234",
-        "elo": 1487.0,
+        "elo": 1487.1,
         "sigma": 11.6,
         "games": 1,
         "modelTheory": 43.8,
@@ -205537,6 +205537,17 @@
         "rank": 171
       },
       {
+        "name": "kcn",
+        "elo": 1485.2,
+        "sigma": 11.6,
+        "games": 6,
+        "modelTheory": 43.6,
+        "provisional": true,
+        "firstPlayed": "2025-12-24",
+        "lastPlayed": "2025-12-24",
+        "rank": 172
+      },
+      {
         "name": "新手玩家",
         "elo": 1485.2,
         "sigma": 11.6,
@@ -205545,7 +205556,7 @@
         "provisional": true,
         "firstPlayed": "2025-09-14",
         "lastPlayed": "2025-09-14",
-        "rank": 172
+        "rank": 173
       },
       {
         "name": "大星",
@@ -205556,17 +205567,6 @@
         "provisional": false,
         "firstPlayed": "2023-09-24",
         "lastPlayed": "2026-10-08",
-        "rank": 173
-      },
-      {
-        "name": "kcn",
-        "elo": 1485.1,
-        "sigma": 11.6,
-        "games": 6,
-        "modelTheory": 43.6,
-        "provisional": true,
-        "firstPlayed": "2025-12-24",
-        "lastPlayed": "2025-12-24",
         "rank": 174
       },
       {
@@ -205626,7 +205626,7 @@
       },
       {
         "name": "菜",
-        "elo": 1484.3,
+        "elo": 1484.4,
         "sigma": 9.0,
         "games": 488,
         "modelTheory": 43.5,
@@ -205638,7 +205638,7 @@
       {
         "name": "小米",
         "elo": 1484.2,
-        "sigma": 11.5,
+        "sigma": 11.4,
         "games": 22,
         "modelTheory": 43.4,
         "provisional": true,
@@ -205664,8 +205664,8 @@
         "games": 4,
         "modelTheory": 43.4,
         "provisional": true,
-        "firstPlayed": "2026-10-31",
-        "lastPlayed": "2026-10-31",
+        "firstPlayed": "2026-10-30",
+        "lastPlayed": "2026-10-30",
         "rank": 183
       },
       {
@@ -205706,7 +205706,7 @@
         "elo": 1482.1,
         "sigma": 10.9,
         "games": 95,
-        "modelTheory": 43.2,
+        "modelTheory": 43.1,
         "provisional": false,
         "firstPlayed": "2024-05-29",
         "lastPlayed": "2024-08-16",
@@ -207097,8 +207097,14 @@
           707
         ],
         [
-          "2026-10-31",
-          1497,
+          "2026-10-27",
+          1499,
+          8,
+          715
+        ],
+        [
+          "2026-10-30",
+          1498,
           8,
           719
         ]
@@ -209701,9 +209707,15 @@
           418
         ],
         [
-          "2026-10-31",
-          1507,
-          9,
+          "2026-10-27",
+          1502,
+          8,
+          426
+        ],
+        [
+          "2026-10-30",
+          1506,
+          8,
           434
         ]
       ],
@@ -211323,8 +211335,8 @@
           292
         ],
         [
-          "2026-10-31",
-          1520,
+          "2026-10-27",
+          1519,
           9,
           295
         ]
@@ -212357,9 +212369,15 @@
           755
         ],
         [
-          "2026-10-31",
-          1513,
-          8,
+          "2026-10-27",
+          1514,
+          7,
+          762
+        ],
+        [
+          "2026-10-30",
+          1512,
+          7,
           770
         ]
       ],
@@ -212863,8 +212881,14 @@
           492
         ],
         [
-          "2026-10-31",
-          1531,
+          "2026-10-27",
+          1530,
+          8,
+          500
+        ],
+        [
+          "2026-10-30",
+          1529,
           8,
           508
         ]
@@ -213027,7 +213051,13 @@
           262
         ],
         [
-          "2026-10-31",
+          "2026-10-27",
+          1516,
+          9,
+          270
+        ],
+        [
+          "2026-10-30",
           1518,
           9,
           278
@@ -213533,9 +213563,9 @@
           218
         ],
         [
-          "2026-10-31",
-          1510,
-          10,
+          "2026-10-27",
+          1509,
+          9,
           221
         ]
       ],
@@ -213937,9 +213967,15 @@
           498
         ],
         [
-          "2026-10-31",
+          "2026-10-27",
+          1512,
+          8,
+          505
+        ],
+        [
+          "2026-10-30",
           1514,
-          9,
+          8,
           511
         ]
       ],
@@ -215231,6 +215267,18 @@
           1112
         ],
         [
+          "2026-10-27",
+          1558,
+          7,
+          1120
+        ],
+        [
+          "2026-10-30",
+          1554,
+          7,
+          1128
+        ],
+        [
           "2026-10-31",
           1559,
           7,
@@ -215659,7 +215707,13 @@
           414
         ],
         [
-          "2026-10-31",
+          "2026-10-27",
+          1508,
+          9,
+          419
+        ],
+        [
+          "2026-10-30",
           1510,
           9,
           424
@@ -220619,9 +220673,9 @@
           901
         ],
         [
-          "2026-10-31",
+          "2026-10-30",
           1492,
-          8,
+          7,
           906
         ]
       ],
@@ -222145,7 +222199,13 @@
           1087
         ],
         [
-          "2026-10-31",
+          "2026-10-27",
+          1494,
+          7,
+          1094
+        ],
+        [
+          "2026-10-30",
           1491,
           7,
           1102
@@ -229963,6 +230023,18 @@
           464
         ],
         [
+          "2026-10-27",
+          1483,
+          9,
+          472
+        ],
+        [
+          "2026-10-30",
+          1487,
+          9,
+          480
+        ],
+        [
           "2026-10-31",
           1484,
           9,
@@ -231723,9 +231795,9 @@
       ],
       "訓練用假人1": [
         [
-          "2026-10-31",
+          "2026-10-30",
           1484,
-          12,
+          11,
           4
         ]
       ],
