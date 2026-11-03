@@ -24,7 +24,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildPaipuPost, dayIndex, postPaipu, unverifiedReason, type PaipuImage, type RecordedGame } from './signagePaipu';
+import { TEST_ROOM_PREFIX, buildPaipuPost, dayIndex, postPaipu, unverifiedReason, type PaipuImage, type RecordedGame } from './signagePaipu';
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -254,6 +254,8 @@ async function main(): Promise<void> {
     }
     for (const r of rooms) {
       if (watching.has(r.name) || watching.size >= MAX_ROOMS) continue;
+      // 百科機器人自己的私房測試（signagePlayer --mode private-test，只有練習台內建機器人）不旁觀、不貼
+      if ((r.description_title ?? '').startsWith(TEST_ROOM_PREFIX)) continue;
       const job = watchRoom(browser, r, stop)
         .catch((err) => console.log(`${stamp()} 旁觀 ${r.name} 失敗：${err instanceof Error ? err.message : String(err)}`))
         .finally(() => { watching.delete(r.name); });

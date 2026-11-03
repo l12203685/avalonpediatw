@@ -31,6 +31,25 @@ export const REVIEW_NOTE = '（機器人紀錄員尚待檢視）';
  */
 export const UNVERIFIED_PREFIX = '【待檢視】';
 
+/**
+ * 百科補位機器人的暱稱（scripts/signagePlayer.ts；Edward 2026-11-03「人不夠就加進去玩」）。它是一般帳號（不是練習台內建機器人，
+ * is_robot 是 false），所以記錄員靠暱稱認：有它的局一律待檢視（不當真人紀錄匯入），內文寫它坐哪一家。
+ * 以「百科機器人」開頭的暱稱都算（scripts/signagePlay.ts 的模擬戰用 百科機器人A～I）。
+ */
+export const BOT_NICK = '百科機器人（測試）';
+const BOT_NICK_RE = /^百科機器人/;
+/** 這個暱稱是百科機器人（補位或模擬戰）。 */
+export const isPediaBotName = (name: string): boolean => BOT_NICK_RE.test(name.trim());
+/** 百科機器人私房測試的房間描述開頭（signagePlayer --mode private-test）：記錄員不旁觀這種房間。 */
+export const TEST_ROOM_PREFIX = '百科機器人測試';
+/** 有百科機器人的局另外掛的論壇標籤：每日匯入看到「模擬」標籤也不收（就算有人把標題的【待檢視】拿掉）。 */
+export const BOT_GAME_TAG = '模擬';
+
+/** 百科機器人坐的座位（沒有時空陣列）。 */
+export function botSeats(game: RecordedGame): number[] {
+  return (game.end?.users ?? []).filter((u) => u && BOT_NICK_RE.test(String(u.name ?? ''))).map((u) => u.set).sort((a, b) => a - b);
+}
+
 const ROLE_ORDER = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林'];
 const d = (seat: number): string => (seat === 10 ? '0' : String(seat));
 const digits = (seats: Iterable<number>): string => [...seats].sort((a, b) => (a === 10 ? 10 : a) - (b === 10 ? 10 : b)).map(d).join('');
@@ -131,6 +150,8 @@ export function postSkipReason(game: RecordedGame): string | null {
   const users = game.end?.users ?? [];
   if (users.length !== 10) return `${users.length} 人局`;
   if (users.some((u) => (u as { is_robot?: boolean } | null)?.is_robot)) return '有機器人';
+  const bots = botSeats(game);
+  if (bots.length) return `百科機器人參與（坐 ${bots.map(d).join('、')} 家），不是真人紀錄`;
   // 記錄員中途才進房的局（開局前的提議與任務沒看到）不貼：10/31 第一晚就貼出一篇缺第 1 局的牌譜
   if ((game as { joinedMidGame?: boolean }).joinedMidGame) return '中途加入';
   return isCompleteRecord(game) ? null : '牌譜不完整（沒打完或提議／任務人數不對）';
@@ -206,7 +227,7 @@ export function paipuTags(game: RecordedGame): string[] {
 export function unverifiedThreadName(game: RecordedGame): string {
   const when = game.startedAt ?? game.endedAt;
   const room = String(game.room ?? '').replace(/\s+/g, '');
-  const parts = [twDay(when), twHHMM(when), room, hasValidConfig(game) ? paipuConfig(game) : ''].filter(Boolean);
+  const parts = [botSeats(game).length ? '含百科機器人' : '', twDay(when), twHHMM(when), room, hasValidConfig(game) ? paipuConfig(game) : ''].filter(Boolean);
   return `${UNVERIFIED_PREFIX}${parts.join('_') || '未知局'}`.slice(0, 100);
 }
 
@@ -259,7 +280,7 @@ export function buildPaipuPost(game: RecordedGame, index?: number): PaipuPost {
   const reason = game.end ? skip : unverifiedReason(game);
   const text = gameToPaipuLoose(game);
   const body = [`待檢視原因：${reason}`, text || '（沒有可用的牌譜資料）'].join('\n');
-  return { name: unverifiedThreadName(game), content: withReviewNote(body), tags: ['線瓦'], verified: false };
+  return { name: unverifiedThreadName(game), content: withReviewNote(body), tags: botSeats(game).length ? ['線瓦', BOT_GAME_TAG] : ['線瓦'], verified: false };
 }
 
 /** DC 牌譜頻道（論壇）。頻道 id 不是密鑰。 */

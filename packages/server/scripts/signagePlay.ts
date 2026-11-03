@@ -22,8 +22,14 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
-import type { LakePublicRecord, PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
+import type { PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
 import type { Role } from '@avalon/shared';
+import {
+  buildObservation, evilRolesAtAssassination, historyFromRecord, lobbyRolesLoose, lobbyRolesOf, myLakeFromSnap, readKnowledge, sid,
+  validLakeTargets, type Knowledge, type PlatformRecord, type Snap,
+} from './signageAdapter';
+
+const STD_ROLES = ['梅林', '刺客', '派西維爾', '雜魚1', '莫甘娜', '雜魚2', '莫德雷德', '雜魚3', '雜魚4', '奧伯倫'];
 
 const require = createRequire(import.meta.url);
 // Playwright 裝在容器全域，不是 repo 的相依套件，所以沒有型別；只用到 launch / newContext / page 幾個方法。
@@ -46,28 +52,17 @@ const FILL_ROBOTS = Number(arg('fill-robots', '0'));
 const GAMES = Number(arg('games', '1'));
 /** 每個動作之後等伺服器回應的時間（毫秒）。Edward 10/27：機器人動作可以瞬間完成，不用慢慢點。 */
 const PACE = Number(arg('pace', '300'));
-const PASSWORD = arg('password', `bk${Math.floor(Math.random() * 9000 + 1000)}`);
+/**
+ * --public：開野團（不設密碼）——只用來在本機測 signagePlayer 的每晚補位流程（9 個測試帳號坐好、等補位機器人進來當第 10 人）。
+ * --name-prefix：座位暱稱的開頭（預設「百科機器人」；測補位時要用別的開頭，補位機器人才會把它們當成真人）。
+ */
+const PUBLIC = process.argv.includes('--public');
+const PASSWORD = PUBLIC ? '' : arg('password', `bk${Math.floor(Math.random() * 9000 + 1000)}`);
+const NAME_PREFIX = arg('name-prefix', '百科機器人');
 const LOG_DIR = arg('log', '.');
 const DESC = arg('desc', '百科機器人模擬戰');
 /** --debug PATH：每次決定前把那個座位的觀測寫進 PATH（本機除錯用）。 */
 const DEBUG_FILE = arg('debug', '');
-
-// ── 練習台畫面資料（Vue app 的欄位，見房間頁的 TransformUsers / TransformMySelf）─────────────
-interface SUser {
-  id: string; name: string; master: boolean; role: string; set: number; crown: boolean; tick: boolean;
-  vote_bag: boolean | null; lake: number | null; is_robot: boolean; dead: boolean;
-}
-interface SMyself {
-  id: string; name: string; master: boolean; role: string; is_good: boolean; set: number; vote_bag: boolean | null;
-  can_dispatch_ticks: boolean; can_to_mission: boolean; can_vote: boolean; can_start_vote: boolean;
-  can_lake_to: boolean; can_select_lake_result: boolean; can_assassin_to: boolean; can_verify: boolean;
-  action_tip: string;
-}
-interface SLake { from: number; to: number | null; result: boolean | null }
-interface Snap {
-  gaming: boolean; status: string; myself: SMyself; users: SUser[]; free_ticks: number;
-  missions: boolean[]; mission_result: boolean[]; lake_result: SLake[];
-}
 
 // 送進瀏覽器的程式一律用字串：tsx 會在函式裡插入 __name 輔助函式，瀏覽器端沒有它。
 const SNAP_JS = `(() => {
@@ -75,7 +70,8 @@ const SNAP_JS = `(() => {
   if (!a || !a.data_ready) return null;
   const j = (v) => JSON.parse(JSON.stringify(v ?? null));
   return { gaming: a.gaming, status: a.game_status, myself: j(a.myself), users: j(a.users), free_ticks: a.free_ticks,
-    missions: j(a.missions) ?? [], mission_result: j(a.mission_result) ?? [], lake_result: j(a.lake_result) ?? [] };
+    missions: j(a.missions) ?? [], mission_result: j(a.mission_result) ?? [], lake_result: j(a.lake_result) ?? [],
+    game_roles: j(a.game_roles) ?? [] };
 })()`;
 /** page.evaluate 沒有逾時；連線斷掉或伺服器沒回應時不能讓整個迴圈卡住。 */
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
@@ -93,10 +89,6 @@ const invoke = (p: Page, method: string, ...args: unknown[]): Promise<unknown> =
     .catch((err: unknown) => { console.log(`${method} 沒有回應（${err instanceof Error ? err.message : String(err)}），照房間狀態繼續`); });
 const READY_JS = 'window.app && window.app.data_ready === true';
 
-interface PlatformRecord {
-  [round: string]: { meetings?: { ticks_set: number[]; white_ball_set: number[]; captain_set: number }[];
-    mission_history?: { member: number[]; result: boolean[] } | null } | undefined;
-}
 const RECORD_HOOK_JS = `(() => { if (window.__recHook) return; window.__recHook = true; window.__recN = 0;
   window.connection.on('RecvGameStatistics', (s) => { window.__rec = s; window.__recN++; }); })()`;
 async function fetchRecord(p: Page): Promise<PlatformRecord> {
@@ -107,110 +99,42 @@ async function fetchRecord(p: Page): Promise<PlatformRecord> {
   return p.evaluate('JSON.parse(JSON.stringify(window.__rec))');
 }
 
-// ── 角色字串 ────────────────────────────────────────────────────────────────────────────
-const ROLE_OF: Record<string, Role> = {
-  梅林: 'merlin', 派西維爾: 'percival', 刺客: 'assassin', 莫甘娜: 'morgana', 莫德雷德: 'mordred', 奧伯倫: 'oberon',
-};
-function roleOf(name: string): Role {
-  if (ROLE_OF[name]) return ROLE_OF[name];
-  if (/^雜魚/.test(name)) return 'loyal';
-  if (/^爪牙/.test(name)) return 'minion' as Role;
-  throw new Error(`unknown role ${name}`);
-}
-const sid = (set: number) => `S${set}`;
-const ALL_IDS = Array.from({ length: 10 }, (_, i) => sid(i + 1));
-
 /**
- * 一個座位的追蹤器：只從這個座位自己的畫面更新。
+ * 一個座位的追蹤器：只從這個座位自己的畫面更新（轉接在 scripts/signageAdapter.ts，和 signagePlayer 共用）。
  */
 class SeatTracker {
   role!: Role; team!: 'good' | 'evil'; me!: string;
-  knownEvils: string[] = []; knownWizards: string[] | undefined;
+  k!: Knowledge;
   nightView: Record<string, string> = {};
   votes: VoteRecord[] = []; quests: QuestRecord[] = [];
-  lakeHolders: number[] = []; myLake: PrivateLakeResult[] = [];
+  myLake: PrivateLakeResult[] = [];
   declaredLakes = new Set<number>();
   plan: string[] | null = null; planKey = '';
+  lobbyRoles: Role[] = lobbyRolesOf(STD_ROLES) as Role[];
   agent: HeuristicAgent;
 
   constructor(readonly label: string) { this.agent = new HeuristicAgent(label); }
 
   start(s: Snap): void {
-    this.me = sid(s.myself.set);
-    this.role = roleOf(s.myself.role);
-    this.team = s.myself.is_good ? 'good' : 'evil';
-    this.nightView = Object.fromEntries(s.users.filter((u) => u.set !== s.myself.set && u.role !== 'unknown').map((u) => [sid(u.set), u.role]));
-    const seen = Object.keys(this.nightView);
-    this.knownEvils = []; this.knownWizards = undefined;
-    if (this.role === 'percival') { this.knownWizards = seen; this.knownEvils = []; }
-    else if (this.role === 'merlin' || this.team === 'evil') this.knownEvils = seen;
-    this.votes = []; this.quests = []; this.lakeHolders = []; this.myLake = []; this.declaredLakes.clear();
+    this.lobbyRoles = lobbyRolesLoose(s.game_roles, s.users.length);
+    this.k = readKnowledge(s, this.lobbyRoles);
+    this.me = this.k.me; this.role = this.k.role; this.team = this.k.team; this.nightView = this.k.nightView;
+    this.votes = []; this.quests = []; this.myLake = []; this.declaredLakes.clear();
     this.plan = null;
     this.agent.onGameStart(this.obs(s, 'team_select'));
   }
 
-  round(s: Snap): number { return Math.min(5, s.missions.length + 1); }
-
-  /**
-   * 派隊、黑白球、任務：讀練習台的「派票紀錄」（每個玩家都能打開的公開紀錄，從自己的分頁要）。
-   * 畫面輪詢會漏掉很快的階段（內建機器人一秒內就派完、出任務時兵牌逐一收掉），所以不從畫面拼。
-   */
+  /** 派隊、黑白球、任務：讀練習台的「派票紀錄」（畫面輪詢會漏掉很快的階段）。 */
   applyRecord(rec: PlatformRecord, s: Snap): void {
-    this.votes = []; this.quests = [];
-    for (let r = 1; r <= 5; r++) {
-      const round = rec[`round_${r}`];
-      if (!round) continue;
-      const meetings = round.meetings ?? [];
-      meetings.forEach((m, i) => {
-        const inProgress = i === meetings.length - 1 && r === s.missions.length + 1 && m.white_ball_set.length === 0 && s.status === '投票';
-        if (inProgress) return;
-        const yes = new Set(m.white_ball_set);
-        this.votes.push({
-          round: r, attempt: i + 1, leader: sid(m.captain_set), team: m.ticks_set.map(sid),
-          approved: yes.size * 2 > 10, votes: Object.fromEntries(ALL_IDS.map((id) => [id, yes.has(Number(id.slice(1)))])),
-        });
-      });
-      const mh = round.mission_history;
-      if (mh && s.missions.length >= r) {
-        this.quests.push({ round: r, team: mh.member.map(sid), result: s.missions[r - 1] ? 'success' : 'fail',
-          failCount: mh.result.filter((x) => x === false).length });
-      }
-    }
+    const h = historyFromRecord(rec, s);
+    this.votes = h.votes; this.quests = h.quests;
   }
 
   /** 湖（畫面上的湖紀錄一直都在，不會漏）。 */
-  update(s: Snap): void {
-    // 湖：自己湖到的人，在自己的畫面上會翻成 good / bad。
-    for (const l of s.lake_result) {
-      if (l.from === s.myself.set && l.to !== null) {
-        const u = s.users.find((x) => x.set === l.to);
-        const r = u && /^(good|bad)$/.test(u.role) ? (u.role === 'good' ? 'good' : 'evil') : null;
-        const lakeRound = 2 + s.lake_result.indexOf(l);
-        if (r && !this.myLake.some((m) => m.round === lakeRound)) this.myLake.push({ round: lakeRound, targetId: sid(l.to), result: r });
-      }
-    }
-  }
-
-  lakeHistory(s: Snap): LakePublicRecord[] {
-    return s.lake_result.filter((l) => l.to !== null && l.result !== null)
-      .map((l, i) => ({ round: 2 + i, holderId: sid(l.from), targetId: sid(l.to as number), declaredClaim: l.result ? 'good' : 'evil' }));
-  }
+  update(s: Snap): void { this.myLake = myLakeFromSnap(s, this.myLake); }
 
   obs(s: Snap, phase: PlayerObservation['gamePhase'], extra: Partial<PlayerObservation> = {}): PlayerObservation {
-    const round = this.round(s);
-    const failCount = this.votes.filter((v) => v.round === round && !v.approved).length;
-    const leaderU = s.users.find((u) => u.crown);
-    return {
-      myPlayerId: this.me, myRole: this.role, myTeam: this.team, playerCount: 10, allPlayerIds: ALL_IDS,
-      knownEvils: this.knownEvils, knownWizards: this.knownWizards,
-      currentRound: round, currentLeader: leaderU ? sid(leaderU.set) : this.me, failCount,
-      questResults: this.quests.map((q) => q.result), gamePhase: phase,
-      voteHistory: this.votes, questHistory: this.quests,
-      proposedTeam: s.users.filter((u) => u.tick).map((u) => sid(u.set)),
-      lakeHistory: this.lakeHistory(s), myLakeResults: this.myLake, evilCount: 4,
-      lobbyRoles: ['merlin', 'percival', 'loyal', 'loyal', 'loyal', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'],
-      ...extra,
-    };
+    return buildObservation(this.k, s, { votes: this.votes, quests: this.quests }, this.myLake, phase, this.lobbyRoles, extra);
   }
 }
 
@@ -272,8 +196,7 @@ async function act(bot: Bot, s: Snap, log: (m: string) => void): Promise<void> {
     await invoke(bot.page, 'ExcuteMission', ok); later(); return;
   }
   if (m.can_lake_to) {
-    const used = new Set(s.lake_result.map((l) => l.from));
-    const valid = ALL_IDS.filter((id) => id !== t.me && !used.has(Number(id.slice(1))));
+    const valid = validLakeTargets(s);
     await sync();
     const target = t.agent.pickLakeTarget(t.obs(s, 'team_select'), valid);
     log(`${bot.label} 湖 ${target.slice(1)}`);
@@ -295,9 +218,7 @@ async function act(bot: Bot, s: Snap, log: (m: string) => void): Promise<void> {
   }
   if (m.can_assassin_to) {
     // 刺殺階段紅方開牌：刺客畫面上看得到所有紅方的角色。
-    const reds = s.users.filter((u) => u.set !== m.set && u.role !== 'unknown' && !/^雜魚|^梅林|^派西|^good$/.test(u.role));
-    const allEvilRoles: Record<string, Role> = { [t.me]: t.role };
-    for (const u of reds) { try { allEvilRoles[sid(u.set)] = roleOf(u.role); } catch { allEvilRoles[sid(u.set)] = 'minion' as Role; } }
+    const allEvilRoles = evilRolesAtAssassination(s, t);
     await sync();
     const a = t.agent.act(t.obs(s, 'assassination', { allEvilIds: Object.keys(allEvilRoles), allEvilRoles }));
     if (a.type === 'assassinate') { log(`${bot.label} 刺殺 ${a.targetId.slice(1)}`); await invoke(bot.page, 'Touch', Number(a.targetId.slice(1))); }
@@ -313,7 +234,7 @@ async function main(): Promise<void> {
 
   const bots: Bot[] = [];
   for (let i = 0; i < N_BOTS; i++) {
-    const label = LETTERS[i]; const name = `百科機器人${label}`;
+    const label = LETTERS[i]; const name = `${NAME_PREFIX}${label}`;
     bots.push({ label, name, page: await login(browser, name), seat: new SeatTracker(label), busyUntil: 0 });
   }
   // A 開房
@@ -358,7 +279,8 @@ async function main(): Promise<void> {
       for (const b of bots) {
         const s = await snap(b.page).catch((e: unknown) => { log(`${b.label} 讀畫面失敗：${String(e).slice(0, 120)}`); return null; });
         if (!s) continue;
-        if (s.gaming && !started.has(b.label)) {
+        // 「開眼階段」身分標記可能還沒全到，過了才讀夜晚資訊
+        if (s.gaming && s.status !== '開眼階段' && !started.has(b.label)) {
           b.seat.start(s); started.add(b.label);
           log(`${b.label} 坐 ${s.myself.set} 家（角色只記在本機紀錄）`);
           fs.appendFileSync(logFile, `  [private] ${b.label} ${s.myself.role} night=${JSON.stringify(b.seat.nightView)}\n`);
