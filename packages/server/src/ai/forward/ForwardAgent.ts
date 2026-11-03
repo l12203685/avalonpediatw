@@ -58,7 +58,7 @@ import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteN
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
-import { goodLeadConsistentTeam, goodLeaderSelfApprove, leadConsistentSkip } from '../GoodLeadConsistent';
+import { goodLeadConsistentTeam, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -715,6 +715,13 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; basic_logic_inventory L2 / S6): a leader on its own
+    // non-forced proposal votes white — ahead of every vote rule (goodKeyVote / goodCleanVote / merlinNormalVote / the scorer);
+    // so does a seat on a re-proposal of its own earlier team of the round (a good non-Merlin seat only past the vote gates).
+    const selfApprove = leaderSelfApproveReason(this.baseline.tuning, obs);
+    if (selfApprove && (obs.currentLeader === obs.myPlayerId || obs.myTeam !== 'good' || obs.myRole === 'merlin' || goodVoteGate(obs, this.gates) === null)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
+    }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
       const hide = redHideEarlyCard(this.baseline.tuning, obs);
@@ -770,11 +777,6 @@ export class ForwardAgent implements AvalonAgent {
     if (redDivisionReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
-    // Round 24 `goodLeadConsistent` ≥ 2: a loyal / Percival leader approves its own (non-forced) proposal.
-    // Merlin (3) is on the team: an on-team normal white needs no gate (as `merlinNormalVote`; Edward 2026-10-30).
-    if (goodLeaderSelfApprove(this.baseline.tuning, obs) && (obs.myRole === 'merlin' || goodVoteGate(obs, this.gates) === null)) {
-      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'good leader approves its own team');
-    }
     // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior
     // gives less than the (higher) key-round threshold of being clean, on or off the team.
     if (goodKeyVoteReject(this.baseline.tuning, obs)) {
@@ -825,8 +827,8 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
-    // Round 24 `goodLeadConsistent` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never proposes
-    // a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
+    // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
+    // proposes a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
     if (d.action.type === 'team_select') {
       const fixed = goodLeadConsistentTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (fixed !== d.action) return { ...d, action: fixed, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → own vote would reject it: cleanest team` } };

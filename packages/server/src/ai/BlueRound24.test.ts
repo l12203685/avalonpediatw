@@ -246,8 +246,8 @@ describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice
   });
 });
 
-describe('goodLeadConsistent (round 24, loyal / Percival; Edward 2026-11-03 practice game)', async () => {
-  const { goodLeadConsistentTeam, goodLeaderSelfApprove, ownVoteRejects, leadConsistentSkip } = await import('./GoodLeadConsistent');
+describe('leaderSelfApprove (round 24 hard constraint) and goodLeadConsistent (reuse skip)', async () => {
+  const { goodLeadConsistentTeam, leaderSelfApproveReason, ownVoteRejects, leadConsistentSkip } = await import('./GoodLeadConsistent');
   const { teamReusePlan } = await import('./TeamReuse');
   // R3 after R1 success P3 P5 P10, R2 fail P10 P3 P5 P6; 3-2 P2 P3 P5 P10 was rejected with P3 (the leader now) voting black on it.
   const r3 = {
@@ -263,14 +263,16 @@ describe('goodLeadConsistent (round 24, loyal / Percival; Edward 2026-11-03 prac
     ],
     proposedTeam: [], lakeHistory: [], myLakeResults: [],
   } as unknown as PlayerObservation;
-  const on = (m: number, tau = 0.45) => ({ ...DEFAULT_AGENT_TUNING, goodLeadConsistent: m, goodCleanVote: tau });
-  it('off by default', () => {
+  const tun = (lsa: boolean, tau = 0.45, lc = 0) => ({ ...DEFAULT_AGENT_TUNING, leaderSelfApprove: lsa, goodCleanVote: tau, goodLeadConsistent: lc });
+  it('the constraint is on by default (off only in the legacy table); the reuse skip is off', () => {
+    expect(DEFAULT_AGENT_TUNING.leaderSelfApprove).toBe(true);
+    expect(LEGACY_AGENT_TUNING.leaderSelfApprove).toBe(false);
     expect(DEFAULT_AGENT_TUNING.goodLeadConsistent).toBe(0);
     expect(leadConsistentSkip(DEFAULT_AGENT_TUNING, r3)).toBe(false);
   });
-  it('1: a team the own vote rules reject is replaced by the cleanest own-posterior team (which they accept, or nothing better exists)', () => {
+  it('pick: a team the own vote rules reject is replaced by the cleanest own-posterior team', () => {
     const bad: AgentAction = { type: 'team_select', teamIds: ['P3', 'P5', 'P10', 'P2'] };
-    const t = on(1, 0.99);
+    const t = tun(true, 0.99);
     expect(ownVoteRejects(t, r3, bad.teamIds)).toBe(true);
     const fixed = goodLeadConsistentTeam(t, r3, bad);
     expect(fixed).not.toBe(bad);
@@ -278,29 +280,63 @@ describe('goodLeadConsistent (round 24, loyal / Percival; Edward 2026-11-03 prac
     const team = (fixed as { teamIds: string[] }).teamIds;
     expect(team).toContain('P3');
     expect(bayesTeamClean(r3, team, opts)!).toBeGreaterThanOrEqual(bayesTeamClean(r3, bad.teamIds, opts)!);
-    // A team the own rules accept is left alone.
-    expect(goodLeadConsistentTeam(on(1, 0.0001), r3, bad)).toBe(bad);
+    expect(goodLeadConsistentTeam(tun(true, 0.0001), r3, bad)).toBe(bad);
+    expect(goodLeadConsistentTeam(tun(false, 0.99), r3, bad)).toBe(bad);
   });
-  it('1: the reuse plan drops the rejected team the leader sat on and voted against', () => {
+  it('goodLeadConsistent=1: the reuse plan drops the rejected team the leader sat on and voted against', () => {
     const plain = teamReusePlan(r3)!;
     const skip = teamReusePlan(r3, undefined, false, true)!;
     const has = (p: typeof plain) => p.refs.some((x) => [...x.team].sort().join(',') === 'P10,P2,P3,P5');
     expect(has(plain)).toBe(true);
     expect(has(skip)).toBe(false);
-    expect(leadConsistentSkip(on(1), r3)).toBe(true);
+    expect(leadConsistentSkip(tun(true, 0.45, 1), r3)).toBe(true);
+    expect(parseTuningFlag('goodLeadConsistent').goodLeadConsistent).toBe(1);
+    expect(() => parseTuningFlag('goodLeadConsistent=2')).toThrow();
   });
-  it('2: the leader approves its own non-forced proposal', () => {
+  it('vote: every camp approves its own non-forced proposal and a re-proposal of its own earlier team of the round', () => {
     const vote = { ...r3, gamePhase: 'team_vote', proposedTeam: ['P3', 'P5', 'P10', 'P2'] } as unknown as PlayerObservation;
-    expect(goodLeaderSelfApprove(on(1), vote)).toBe(false);
-    expect(goodLeaderSelfApprove(on(2), vote)).toBe(true);
-    expect(goodLeaderSelfApprove(on(2), { ...vote, failCount: 4 } as unknown as PlayerObservation)).toBe(false);
-    expect(goodLeaderSelfApprove(on(2), { ...vote, currentLeader: 'P2' } as unknown as PlayerObservation)).toBe(false);
-    expect(parseTuningFlag('goodLeadConsistent=2').goodLeadConsistent).toBe(2);
+    expect(leaderSelfApproveReason(tun(true), vote)).not.toBeNull();
+    expect(leaderSelfApproveReason(tun(true), { ...vote, myRole: 'mordred', myTeam: 'evil' } as unknown as PlayerObservation)).not.toBeNull();
+    expect(leaderSelfApproveReason(tun(false), vote)).toBeNull();
+    expect(leaderSelfApproveReason(tun(true), { ...vote, failCount: 4 } as unknown as PlayerObservation)).toBeNull();
+    // Someone else's team: only a re-proposal of a team this seat led earlier this round.
+    const other = { ...vote, currentLeader: 'P5', failCount: 3, proposedTeam: ['P5', 'P3', 'P6', 'P1'] } as unknown as PlayerObservation;
+    expect(leaderSelfApproveReason(tun(true), other)).toBeNull();
+    const mine = { ...other, voteHistory: [...r3.voteHistory, { round: 3, attempt: 3, leader: 'P3', team: ['P3', 'P1', 'P6', 'P5'], votes: {}, approved: false }] } as unknown as PlayerObservation;
+    expect(leaderSelfApproveReason(tun(true), mine)).not.toBeNull();
+    expect(parseTuningFlag('leaderSelfApprove=0').leaderSelfApprove).toBe(false);
   });
-  it('3: Merlin approves its own team too, except when a seen red on it loses the game', () => {
-    const m = { ...r3, myRole: 'merlin', knownEvils: ['P6', 'P7', 'P9'], gamePhase: 'team_vote', proposedTeam: ['P3', 'P5', 'P10', 'P6'] } as unknown as PlayerObservation;
-    expect(goodLeaderSelfApprove(on(2), m)).toBe(false);
-    expect(goodLeaderSelfApprove(on(3), m)).toBe(true);
-    expect(goodLeaderSelfApprove(on(3), { ...m, questResults: ['fail', 'fail'] } as unknown as PlayerObservation)).toBe(false);
+});
+
+describe('beliefBiteCell (round 24, blue belief; 鐵咬)', () => {
+  // R1 P1 P4 P7 success; R2 P3 P5 P6 P10 failed (1 card). 3-1 P2 leads P2 P3 P5 P10 — drops only P6 (鐵咬 6) — and P6 votes white.
+  const obs = (white: boolean) => ({
+    myPlayerId: 'P1', myRole: 'loyal', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: [],
+    currentRound: 3, currentLeader: 'P3', failCount: 1, questResults: ['success', 'fail'], gamePhase: 'team_select',
+    questHistory: [
+      { round: 1, team: ['P1', 'P4', 'P7'], result: 'success', failCount: 0 },
+      { round: 2, team: ['P3', 'P5', 'P6', 'P10'], result: 'fail', failCount: 1 },
+    ],
+    voteHistory: [{ round: 3, attempt: 1, leader: 'P2', team: ['P2', 'P3', 'P5', 'P10'], votes: { ...allVotes(['P2', 'P3', 'P5', 'P10']), P6: white }, approved: false }],
+    proposedTeam: [], lakeHistory: [], myLakeResults: [],
+  } as unknown as PlayerObservation);
+  it('off by default; the human table carries the cells (red approves far more often)', async () => {
+    expect(DEFAULT_AGENT_TUNING.beliefBiteCell).toBe(0);
+    const th = (await import('./belief/likelihoods.json')).default as unknown as { voteBite?: Record<string, [number, number]> };
+    const [ea, en] = th.voteBite!.evil;
+    const [ga, gn] = th.voteBite!.good;
+    expect(ea / en).toBeGreaterThan(2 * (ga / gn));
+  });
+  it('on: a white from the bitten seat makes it redder than a black', async () => {
+    const { bayesRedShare } = await import('./belief/BayesBelief');
+    const off = bayesOptionsOf(DEFAULT_AGENT_TUNING);
+    const on = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefBiteCell: 2 });
+    expect(on.biteCell).toBe(2);
+    const w0 = bayesRedShare(obs(true), off).get('P6')!;
+    const w1 = bayesRedShare(obs(true), on).get('P6')!;
+    const b1 = bayesRedShare(obs(false), on).get('P6')!;
+    expect(w1).toBeGreaterThan(b1);
+    expect(Number.isFinite(w0)).toBe(true);
+    expect(parseTuningFlag('beliefBiteCell=2').beliefBiteCell).toBe(2);
   });
 });

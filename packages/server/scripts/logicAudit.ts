@@ -15,6 +15,7 @@
  *   --dataset PATH  真人資料集（預設 ./games_cache.json）
  *   --merge A B …   把幾個 --out 的 JSON 加總（計數直接相加），再輸出表格
  *   --out PATH      JSON 輸出；同名 .md 寫表格
+ *   --flag NAME[=V] 十個座位都在 DEFAULT_AGENT_TUNING 上再套這個開關（可重複；第 24 回合：量改法前後的違反率）
  *
  * 做法：每局結束後把整局（每次提議的隊長、隊伍、每個人的黑白球、任務失敗張數、湖與宣告、每個座位的角色）
  * 收成一份「局紀錄」，再用同一組檢查函式算每條規則的「機會數」與「違反數」，依違反者的角色分開記。
@@ -496,12 +497,13 @@ interface Args {
   dataset: string;
   merge: string[];
   out?: string;
+  flags: string[];
 }
 
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     games: 1000, seed: 20261103, shard: [0, 1], human: false, why: false,
-    dataset: path.resolve(__dirname, '..', 'games_cache.json'), merge: [],
+    dataset: path.resolve(__dirname, '..', 'games_cache.json'), merge: [], flags: [],
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -526,6 +528,7 @@ function parseArgs(argv: string[]): Args {
         while (argv[i + 1] && !argv[i + 1].startsWith('--')) args.merge.push(path.resolve(argv[++i]));
         break;
       case '--out': args.out = path.resolve(next()); break;
+      case '--flag': args.flags.push(next()); break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -540,7 +543,9 @@ async function runSelfPlay(args: Args, tally: Tally, why: Record<string, number>
   // 延遲載入：測試只用上面的純函式。
   const { HeuristicAgent } = await import('../src/ai/HeuristicAgent');
   const { SelfPlayEngine } = await import('../src/ai/SelfPlayEngine');
-  const { DEFAULT_AGENT_TUNING } = await import('../src/ai/AgentTuning');
+  const { DEFAULT_AGENT_TUNING, parseTuningFlag } = await import('../src/ai/AgentTuning');
+  const tuning = { ...DEFAULT_AGENT_TUNING };
+  for (const f of args.flags) Object.assign(tuning, parseTuningFlag(f));
   const { seededRandom, withSeededRandom } = await import('../src/ai/benchmark/agreement');
   const { getForwardTelemetry, ForwardAgent } = await import('../src/ai/forward/ForwardAgent');
   type Obs = import('../src/ai/types').PlayerObservation;
@@ -554,7 +559,7 @@ async function runSelfPlay(args: Args, tally: Tally, why: Record<string, number>
     cards = new Map<number, 'success' | 'fail'>();
     final: Obs | null = null;
     constructor(readonly agentId: string) {
-      this.inner = new HeuristicAgent(agentId, undefined, undefined, { ...DEFAULT_AGENT_TUNING });
+      this.inner = new HeuristicAgent(agentId, undefined, undefined, { ...tuning });
     }
     private seedFor(obs: Obs, extra = ''): string {
       return [this.gameSeed, obs.myPlayerId, obs.gamePhase, `R${obs.currentRound}`, `A${obs.failCount}`,
@@ -747,7 +752,7 @@ async function main(): Promise<void> {
       human = t.counts;
     }
     out = {
-      meta: { seed: args.seed, shard: args.shard.join('/'), tuning: 'DEFAULT_AGENT_TUNING', selfplay, human: humanMeta },
+      meta: { seed: args.seed, shard: args.shard.join('/'), tuning: args.flags.length > 0 ? `DEFAULT_AGENT_TUNING + ${args.flags.join(' ')}` : 'DEFAULT_AGENT_TUNING', selfplay, human: humanMeta },
       bot: botTally.counts,
       why,
       human,
