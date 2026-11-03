@@ -22,7 +22,7 @@
  *     （藍方第 24 回合 `goodLeadConsistent` 的紅方版；稽核紅方 55%、奧伯倫 90%，真人 4.2%）。
  *   - `redReuseExact`（第 24 回合 `goodReuseExact` 的紅方版；真人紅方隊長多半這樣做）：上一局任務成功、沒有失敗牌、這一局還沒有人派過那一隊，
  *     紅方隊長不在那一隊上：1 = 人數相同照原樣派、多一人派那一隊＋自己；2 = 只有多一人時（自己一定在隊上）。藍方已兩藍時不適用
- *     （紅方隊長不派自己視角沒有紅的隊）；仍守住自己的湖宣告。照原樣派、自己不在隊上的那一手，隊長自己投白（自派不自黑）。
+ *     （紅方隊長不派自己視角沒有紅的隊）；仍守住自己的湖宣告。照原樣派、自己不在隊上的那一手，隊長自己投白是硬約束 `leaderSelfApproveOffTeam`（`GoodLeadConsistent.ts`）。
  */
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { AgentAction, PlayerObservation } from './types';
@@ -146,11 +146,4 @@ export function redReuseExactTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if (obs.voteHistory.some((v) => v.round === round && key(v.team) === k)) return action;
   if (key(action.teamIds) === k || !keepsRedVouch(tuning, obs, team)) return action;
   return { type: 'team_select', teamIds: team };
-}
-
-/** `redReuseExact=1`: the red leader votes white on its own exact re-proposal it is not on (自派不自黑). */
-export function redReuseSelfApprove(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  if ((tuning.redReuseExact ?? 0) !== 1 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil') return false;
-  if ((obs.failCount ?? 0) >= 4 || obs.currentLeader !== obs.myPlayerId) return false;
-  return !(obs.proposedTeam ?? []).includes(obs.myPlayerId);
 }

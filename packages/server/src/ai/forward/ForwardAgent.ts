@@ -59,7 +59,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
-import { oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redReuseSelfApprove, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
+import { oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -737,9 +737,6 @@ export class ForwardAgent implements AvalonAgent {
     }
     if (redVouchOnTeamReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red lake holder: own declared-red seat on the team (hard constraint)');
-    }
-    if (redReuseSelfApprove(this.baseline.tuning, obs)) {
-      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red leader approves its own re-proposal');
     }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {

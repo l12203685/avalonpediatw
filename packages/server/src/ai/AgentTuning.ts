@@ -818,6 +818,12 @@ export interface AgentTuning {
    */
   redVouchConsistent: boolean;
   /**
+   * 第 25 回合硬約束（`GoodLeadConsistent.leaderSelfApproveReason`；稽核 (a″)）：`leaderSelfApprove` 延伸到隊長不在自己派的非強制提議上（第 24 回合 `goodReuseExact`
+   * 照原樣派自己不在上面的成功隊；隊長對那種提議投黑 藍方 32.6%（14／43），真人 5.2%）。每個陣營；好人（梅林除外）仍然不越過好人投票關卡。
+   * 預設開；這個欄位只為了量測與舊表（關）。
+   */
+  leaderSelfApproveOffTeam: boolean;
+  /**
    * 第 25 回合紅方・奧伯倫（`RedRound25.oberonBiteRejectNow`；盤點 E3，稽核 (e)；Edward 2026-11-03「派 2350 就是代表在鐵咬 6 家，6 還開白球就代表 6 是認壞了」）：
    * 被鐵咬（這隊保留一次失敗任務的 |隊伍| − 失敗張數 人、拿掉的人裡有他）的奧伯倫投黑，不再照 `biasForOberon` 出過失敗後的贊成 +1.5。
    * 1 = 一律；2 = 只有那次失敗任務的下一局（真人紅方被鐵咬隔一局贊成 7.4%、更後面 42.4%）；3 = 1 的 50%（第 1C 節）。0 = 關。
@@ -830,7 +836,7 @@ export interface AgentTuning {
   redLeadConsistent: number;
   /**
    * 第 25 回合紅方（`RedRound25.redReuseExactTeam`；第 24 回合 `goodReuseExact` 的紅方版）：上一局任務成功（沒有失敗牌）、這一局還沒有人派過那一隊、
-   * 紅方隊長不在那一隊上、藍方未滿兩藍時，1 = 人數相同照原樣派（自己不在隊上，隊長自己投白）、多一人派那一隊＋自己；2 = 只有多一人時。0 = 關。
+   * 紅方隊長不在那一隊上、藍方未滿兩藍時，1 = 人數相同照原樣派（自己不在隊上；隊長自己投白是 `leaderSelfApproveOffTeam`）、多一人派那一隊＋自己；2 = 只有多一人時。0 = 關。
    */
   redReuseExact: number;
 }
@@ -946,6 +952,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'beliefBiteCell',
   'oberonMatchPoint',
   'redVouchConsistent',
+  'leaderSelfApproveOffTeam',
   'oberonBiteReject',
   'redLeadConsistent',
   'redReuseExact',
@@ -1061,6 +1068,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefBiteCell: 0,
   oberonMatchPoint: false,
   redVouchConsistent: false,
+  leaderSelfApproveOffTeam: false,
   oberonBiteReject: 0,
   redLeadConsistent: 0,
   redReuseExact: 0,
@@ -1324,6 +1332,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefBiteCell: 0,
   oberonMatchPoint: true,
   redVouchConsistent: true,
+  leaderSelfApproveOffTeam: true,
   oberonBiteReject: 0,
   redLeadConsistent: 0,
   redReuseExact: 0,
@@ -1439,6 +1448,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   beliefBiteCell: 'AVALON_TUNING_BELIEF_BITE_CELL',
   oberonMatchPoint: 'AVALON_TUNING_OBERON_MATCH_POINT',
   redVouchConsistent: 'AVALON_TUNING_RED_VOUCH_CONSISTENT',
+  leaderSelfApproveOffTeam: 'AVALON_TUNING_LEADER_SELF_APPROVE_OFF_TEAM',
   oberonBiteReject: 'AVALON_TUNING_OBERON_BITE_REJECT',
   redLeadConsistent: 'AVALON_TUNING_RED_LEAD_CONSISTENT',
   redReuseExact: 'AVALON_TUNING_RED_REUSE_EXACT',

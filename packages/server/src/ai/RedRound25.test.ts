@@ -10,10 +10,10 @@ import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
 import { withSeededRandom } from './benchmark/agreement';
 import {
-  bitingQuests, keepsRedVouch, oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redReuseSelfApprove,
+  bitingQuests, keepsRedVouch, oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam,
   redVouchKeptTeam, redVouchOnTeamReject,
 } from './RedRound25';
-import { leadConsistentSkip } from './GoodLeadConsistent';
+import { leadConsistentSkip, leaderSelfApproveReason } from './GoodLeadConsistent';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const vote = (round: number, attempt: number, leader: string, team: string[], approved = false, votes: Record<string, boolean> = {}): VoteRecord =>
@@ -211,9 +211,10 @@ describe('redReuseExact', () => {
     const lakeObs = lead({ lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P6', declaredClaim: 'evil' }] as never });
     expect(redReuseExactTeam(T({ redReuseExact: 1 }), lakeObs, pick)).toBe(pick);
   });
-  it('the leader whites its own exact re-proposal it is not on', () => {
+  it('the leader whites its own exact re-proposal it is not on (hard constraint `leaderSelfApproveOffTeam`)', () => {
     const v = lead({ gamePhase: 'team_vote', proposedTeam: ['P3', 'P4', 'P5', 'P6'] });
-    expect(redReuseSelfApprove(T({ redReuseExact: 1 }), v)).toBe(true);
-    expect(redReuseSelfApprove(T(), v)).toBe(false);
+    expect(leaderSelfApproveReason(T(), v)).toBe('leader approves its own team (not on it)');
+    expect(leaderSelfApproveReason(T({ leaderSelfApproveOffTeam: false }), v)).toBeNull();
+    expect(leaderSelfApproveReason(T(), { ...v, currentLeader: 'P7' } as PlayerObservation)).toBeNull();
   });
 });
