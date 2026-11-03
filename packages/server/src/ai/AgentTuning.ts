@@ -778,6 +778,8 @@ export interface AgentTuning {
    * 第 24 回合藍方（信念；第 23 回合 `redSelfOnTeam` 的發現）：藍方讀紅方第 3 局起「在隊上」的票時，分「這個世界裡隊上沒有其他紅」（alone）與「有」（ally）兩格
    * （機器人表的 `voteAlone`，`scripts/fitBeliefLikelihoods.ts --bots` 擬合）。原本同一格平均：莫德雷德在隊上沒有隊友時八、九成內黑、刺客／莫甘娜不會，
    * 「在隊上反對」被讀成忠臣的票型，莫德雷德的內黑等於洗白。false = 關。
+   * 第 24 回合採用（第 2 階段）：篩選 +2.1 [+0.7, +3.4]pp，三組各 6000 組種子 +1.88 [+1.15, +2.61]／+2.35 [+1.65, +3.05]／+2.25 [+1.55, +2.95]
+   * （合併 18000 組 +2.16 [+1.75, +2.57]pp；三紅率約 −3.5～−5pp，刺中率不變）。
    */
   beliefRedAloneCells: boolean;
   /**
@@ -1275,7 +1277,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinDoomedAvoidMix: 0,
   goodR4TwoFail: 0,
   goodTailCleanR3: 0,
-  beliefRedAloneCells: false,
+  beliefRedAloneCells: true,
   goodReuseExact: 0,
   goodLeadConsistent: 0,
   leaderSelfApprove: true,

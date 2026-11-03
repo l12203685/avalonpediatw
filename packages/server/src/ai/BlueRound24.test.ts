@@ -186,9 +186,10 @@ describe('beliefRedAloneCells (round 24, blue belief)', () => {
     voteHistory: [{ round: 3, attempt: 1, leader: 'P2', team: ['P2', 'P7', 'P1', 'P3'], votes: { ...allVotes(['P2', 'P1', 'P3']), P7: !reject }, approved: false }],
     proposedTeam: ['P7', 'P2', 'P3', 'P1'], lakeHistory: [], myLakeResults: [],
   } as unknown as PlayerObservation);
-  it('off by default; the bot table carries the split cells', async () => {
-    expect(DEFAULT_AGENT_TUNING.beliefRedAloneCells).toBe(false);
-    expect(bayesOptionsOf(DEFAULT_AGENT_TUNING).redAloneCells).toBe(false);
+  it('on by default since round 24 (off in the legacy table); the bot table carries the split cells', async () => {
+    expect(DEFAULT_AGENT_TUNING.beliefRedAloneCells).toBe(true);
+    expect(LEGACY_AGENT_TUNING.beliefRedAloneCells).toBe(false);
+    expect(bayesOptionsOf(DEFAULT_AGENT_TUNING).redAloneCells).toBe(true);
     expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRedAloneCells: true }).redAloneCells).toBe(true);
     const tb = (await import('./belief/likelihoods_bot.json')).default as unknown as { voteAlone?: Record<string, [number, number]> };
     expect(tb.voteAlone?.['evil|alone|r3']).toBeDefined();
@@ -196,7 +197,7 @@ describe('beliefRedAloneCells (round 24, blue belief)', () => {
   });
   it('on: an on-team reject clears the voter less (a lone red rejects far more often than the pooled cell says)', async () => {
     const { bayesRedShare } = await import('./belief/BayesBelief');
-    const off = bayesOptionsOf(DEFAULT_AGENT_TUNING);
+    const off = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRedAloneCells: false });
     const on = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRedAloneCells: true });
     const redOff = bayesRedShare(obs(true), off).get('P7')!;
     const redOn = bayesRedShare(obs(true), on).get('P7')!;
