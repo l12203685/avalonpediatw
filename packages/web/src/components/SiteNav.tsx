@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  BarChart3, BookOpen, ExternalLink, Instagram, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
+  BarChart3, BookOpen, Bot, ExternalLink, Instagram, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
   UserCheck, Youtube,
 } from 'lucide-react';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
@@ -12,6 +12,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import IOSInstallGuide from './IOSInstallGuide';
 import ForceUpdateButton from './ForceUpdateButton';
 import { clearRecordsHash } from './records/recordsLink';
+import { PRACTICE_NS } from '../i18n/practice';
 
 /**
  * 全站頂端導覽列（Edward 2026-10-30：「不要有首頁，一連進來直接看到內容」「頁籤直接分成 戰績排行／數據分析／
@@ -22,6 +23,8 @@ import { clearRecordsHash } from './records/recordsLink';
  * 1024–1279px 一列時頁籤不顯示圖示、社群連結用短字，1280px 以上才是完整的圖示與文字。
  * 「牌譜紀錄」（Edward 2026-10-30：「百科網站可以直接多一個頁籤是『牌譜紀錄與覆盤』」）= DC 論壇 #牌譜紀錄與覆盤 的牌譜。
  * 「ID認領」（Edward 2026-11-03）不是頁籤：社群連結旁一顆小按鈕，開 ID 認領頁（不用登入）。
+ * 「與機器人練習」（站長 2026-11-03：「我希望自己跟 9 個機器人玩」）同樣是一顆小按鈕（不是首頁大按鈕，那些他 10-28 拿掉了），
+ * 開練習設定頁（#practice，不用登入）；開局仍是最醒目的那顆。
  */
 
 export type SiteTab = 'analytics' | 'analysis' | 'wiki' | 'streams' | 'records';
@@ -57,6 +60,7 @@ const COMMUNITY_LINKS = [
 
 export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Element {
   const { t } = useTranslation();
+  const { t: tp } = useTranslation(PRACTICE_NS);
   const setGameState = useGameStore((s) => s.setGameState);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
   const gameState = useGameStore((s) => s.gameState);
@@ -103,7 +107,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
       data-testid="site-nav"
       className="sticky top-0 z-40 border-b border-zinc-800 bg-black/90 backdrop-blur pt-safe"
     >
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-3 py-2 sm:px-4 lg:flex-row lg:items-center lg:gap-3">
+      <div className="mx-auto flex max-w-6xl flex-col xl:max-w-7xl gap-2 px-3 py-2 sm:px-4 lg:flex-row lg:items-center lg:gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {installable ? (
             <button
@@ -140,14 +144,14 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-1.5 lg:ml-auto">
+        <div className="flex items-center gap-0.5 sm:gap-1.5 lg:ml-auto">
           <a
             href={PLAY_PLATFORM_URL}
             target="_blank"
             rel="noopener noreferrer"
             data-testid="site-play"
             title={t('home.playOnPlatform')}
-            className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-amber-400 px-2 py-1.5 sm:gap-1.5 sm:px-3 text-sm font-bold text-black transition-colors hover:bg-amber-300 lg:flex-none"
+            className="flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg bg-amber-400 px-1.5 py-1.5 min-[400px]:px-2 sm:gap-1.5 sm:px-3 text-sm font-bold text-black transition-colors hover:bg-amber-300 lg:flex-none"
           >
             <Play size={16} className="flex-shrink-0" />
             {t('home.playShort', { defaultValue: '開局' })}
@@ -162,13 +166,35 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
               rel="noopener noreferrer"
               data-testid={`site-link-${key}`}
               title={label}
-              className="flex h-8 flex-shrink-0 items-center justify-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900 px-1.5 text-xs font-semibold sm:gap-1 sm:px-2 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
+              className="flex h-8 flex-shrink-0 items-center justify-center gap-px rounded-lg border border-zinc-700 bg-zinc-900 px-1 text-xs font-semibold min-[420px]:gap-0.5 min-[420px]:px-1.5 sm:gap-1 sm:px-2 text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-white"
             >
               <Icon size={15} className="flex-shrink-0" />
               <span className="xl:hidden">{short}</span>
               <span className="hidden xl:inline">{label}</span>
             </a>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              if (active === 'records') clearRecordsHash();
+              setGameState('practice');
+              window.scrollTo({ top: 0 });
+            }}
+            data-testid="site-practice"
+            title={tp('navLabel')}
+            aria-label={tp('navLabel')}
+            aria-pressed={gameState === 'practice'}
+            className={`flex h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors sm:min-w-8 sm:px-2 ${
+              gameState === 'practice'
+                ? 'border-white bg-white text-black'
+                : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
+            }`}
+          >
+            {/* 同「ID認領」：640px 以下只有圖示；640–1023px 兩列時長字；1024px 以上一列時短字「練習」，1280px 以上只有字 */}
+            <Bot size={15} className="flex-shrink-0 xl:hidden" />
+            <span className="hidden sm:inline lg:hidden">{tp('navLabel')}</span>
+            <span className="hidden lg:inline">{tp('navShort')}</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -180,7 +206,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             title="ID 認領：紀錄裡你用過好幾個 ID？告訴管理者合併"
             aria-label="ID 認領"
             aria-pressed={gameState === 'idClaim'}
-            className={`flex h-8 min-w-8 flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors sm:px-2 ${
+            className={`flex h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors sm:min-w-8 sm:px-2 ${
               gameState === 'idClaim'
                 ? 'border-white bg-white text-black'
                 : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
@@ -194,7 +220,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
           </button>
           <ForceUpdateButton
             compact
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
+            className="flex h-8 w-[30px] flex-shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 sm:w-8 transition-colors hover:bg-zinc-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
           />
           {isAdmin && (
             <button

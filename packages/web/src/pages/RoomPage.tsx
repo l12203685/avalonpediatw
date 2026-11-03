@@ -1244,12 +1244,14 @@ export default function RoomPage(): JSX.Element {
   );
 
   // 網站「與機器人練習」ended view: mission track + review/table toggle +
-  // 「再練一局」/「回首頁」 (no lobby, no rematch — each game is a new room).
+  // 「再練一局」/「回練習設定」 (no lobby, no rematch — each game is a new room).
+  // Leaving lands on the practice setup page (socket.ts 'game:left-room').
   const leavePracticeToHome = (): void => {
     try {
       leaveRoom(room.id);
     } catch {
-      setGameState('home');
+      useGameStore.getState().setRoom(null);
+      setGameState('practice');
     }
   };
   const practiceEndedTopSection = (

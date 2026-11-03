@@ -1,8 +1,8 @@
 /**
- * 網站「與機器人練習」— setup card on the home page (also opened by #practice).
+ * 網站「與機器人練習」— setup card (PracticePage: 導覽列「與機器人練習」按鈕 / #practice).
  * Picks a seat and an optional role, then creates + starts the practice room.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, Loader2, Play } from 'lucide-react';
 import '../../i18n/practice';
@@ -16,9 +16,13 @@ import {
 
 interface Props {
   onBack: () => void;
+  /** False while the server / session is not connected yet: start is disabled. */
+  ready?: boolean;
+  /** Connection state / identity line shown above the start button. */
+  status?: ReactNode;
 }
 
-export default function PracticeSetupPanel({ onBack }: Props): JSX.Element {
+export default function PracticeSetupPanel({ onBack, ready = true, status }: Props): JSX.Element {
   const { t } = useTranslation(PRACTICE_NS);
   const last = usePracticeStore((s) => s.lastOptions);
   const [seat, setSeat] = useState<number | null>(last.seat);
@@ -26,7 +30,7 @@ export default function PracticeSetupPanel({ onBack }: Props): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   const handleStart = async (): Promise<void> => {
-    if (busy) return;
+    if (busy || !ready) return;
     setBusy(true);
     const ok = await startPractice({ seat, role }, (error) => t('createFailed', { error }));
     if (!ok) setBusy(false);
@@ -83,15 +87,16 @@ export default function PracticeSetupPanel({ onBack }: Props): JSX.Element {
       </div>
 
       <div className="space-y-2">
+        {status}
         <button
           type="button"
           onClick={() => { void handleStart(); }}
-          disabled={busy}
+          disabled={busy || !ready}
           data-testid="practice-start"
-          className="w-full inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 text-black font-bold py-2.5 px-4 rounded-lg transition-colors"
+          className="w-full inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-black font-bold py-2.5 px-4 rounded-lg transition-colors"
         >
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-          {busy ? t('starting') : t('start')}
+          {busy ? t('starting') : ready ? t('start') : t('waitingServer')}
         </button>
         <button
           type="button"
