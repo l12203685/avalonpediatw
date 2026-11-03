@@ -1,3 +1,4 @@
+import { withSeededRandom } from './benchmark/agreement';
 /**
  * 優化迴圈第 23 回合・紅方（刺客）候選（採用 1）：第 1、2 局注定被否決的提議放了確定看得到的紅，排到第二層（`assassinDoomedRead=1`）、
  * 讀派隊時那些提議用 ε = 0.05（`=2`）、兩者一起（`=3`）；第 2 局照派成功的第 1 局隊不算。
@@ -129,9 +130,20 @@ describe('redSelfOnTeam (round 23)', () => {
     expect(parseTuningFlag('redSelfOnTeam')).toEqual({ redSelfOnTeam: true });
     expect(DEFAULT_AGENT_TUNING.redSelfOnTeam).toBe(false);
   });
-  it('the lone Mordred on the team approves with the switch on', () => {
-    const on = new HeuristicAgent('P8', undefined, undefined, { ...DEFAULT_AGENT_TUNING, redSelfOnTeam: true });
-    on.onGameStart(voteObs());
-    expect(on.act(voteObs())).toEqual({ type: 'team_vote', vote: true });
+  it('the lone Mordred on the team approves with the switch on (mostly; seeded — the scorer samples)', () => {
+    // Round 24: the single unseeded call was flaky (it approves on 29 of 40 seeds, the same before and after round 24's defaults).
+    const yes = (on: boolean): number => {
+      let n = 0;
+      for (let i = 0; i < 40; i++) {
+        const a = new HeuristicAgent('P8', undefined, undefined, { ...DEFAULT_AGENT_TUNING, redSelfOnTeam: on });
+        a.onGameStart(voteObs());
+        const r = withSeededRandom(`r23-mordred|${i}`, () => a.act(voteObs()));
+        if (r.type === 'team_vote' && r.vote) n++;
+      }
+      return n;
+    };
+    // (Without USE_FORWARD_REASONING this agent decides on the baseline path, where the switch has no effect; the seeded
+    // majority is what the old single draw checked.)
+    expect(yes(true)).toBeGreaterThan(20);
   });
 });

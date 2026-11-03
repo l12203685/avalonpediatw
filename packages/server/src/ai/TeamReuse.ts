@@ -213,10 +213,15 @@ export function teamReusePlan(
   obs: PlayerObservation,
   belief: Readonly<Pick<BeliefOptions, 'certainFacts'>> = defaultBeliefOptions(),
   byVotes = false,
+  skipOwnInnerBlack = false,
 ): TeamReusePlan | null {
   const opts = weightsFor(obs);
   const round = obs.currentRound ?? 1;
-  const earlier = obs.voteHistory.filter((v) => v.round === round && !v.approved);
+  // Round 24 `goodLeadConsistent` (Edward 2026-11-03 practice game): a rejected team the leader sat on and voted against
+  // (內黑 — the leader's own word that it holds a red) is no reference to re-propose.
+  const me = obs.myPlayerId;
+  const earlier = obs.voteHistory.filter((v) => v.round === round && !v.approved
+    && !(skipOwnInnerBlack && v.team.includes(me) && v.votes[me] === false));
   const refs: TeamReuseRef[] = [];
   if (round === 1) {
     if (opts.r1 <= 0 || earlier.length === 0) return null;

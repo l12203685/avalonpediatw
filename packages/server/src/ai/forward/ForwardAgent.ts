@@ -57,6 +57,8 @@ import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCle
 import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
+import { goodReuseExactTeam } from '../GoodReuseExact';
+import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -713,6 +715,16 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; basic_logic_inventory L2 / S6): a leader on its own
+    // non-forced proposal votes white — ahead of every vote rule (goodKeyVote / goodCleanVote / merlinNormalVote / the scorer);
+    // so does a seat on a re-proposal of its own earlier team of the round. A good non-Merlin seat only past the vote gates
+    // (INV-V1: in a replay the team is the human leader's and can be must-fail in the bot's view).
+    const selfApprove = leaderSelfApproveReason(this.baseline.tuning, obs);
+    // Merlin is exempt from the must-fail gate only (his on-team normal white, owner 2026-10-30), not from the dominance gate (INV-K1V).
+    const selfGate = obs.myRole === 'merlin' ? { ...this.gates, mustFail: false } : this.gates;
+    if (selfApprove && (obs.myTeam !== 'good' || goodVoteGate(obs, selfGate) === null)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
+    }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
       const hide = redHideEarlyCard(this.baseline.tuning, obs);
@@ -818,6 +830,19 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
+    // proposes a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
+    if (d.action.type === 'team_select') {
+      // `goodLeadConsistent` (knob): not a team it inner-blacked this round either.
+      const fixed = goodNoInnerBlackRepeat(this.baseline.tuning, obs, goodLeadConsistentTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
+      if (fixed !== d.action) return { ...d, action: fixed, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → own vote would reject it: cleanest team` } };
+    }
+    // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
+    // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
+    if (d.action.type === 'team_select') {
+      const reused = goodReuseExactTeam(this.baseline.tuning, obs, d.action, gateOk);
+      if (reused !== d.action) return { ...d, action: reused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → re-propose the successful team` } };
+    }
     // Round 5 (Percival) candidate `percivalLoyalStyle` (MerlinLoyalStyle.ts): the loyal-looking team that integrates
     // the two thumbs (Edward's five plans: trust A ± send A, trust B ± send B, or the AB intersection).
     if (this.baseline.tuning.percivalLoyalStyle && obs.myRole === 'percival' && d.action.type === 'team_select') {
@@ -1433,7 +1458,7 @@ export class ForwardAgent implements AvalonAgent {
     // Off → no change.
     const reusePlan =
       decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
-        ? teamReusePlan(obs, this.belief, this.baseline.tuning.reuseByVotes === true)
+        ? teamReusePlan(obs, this.belief, this.baseline.tuning.reuseByVotes === true, leadConsistentSkip(this.baseline.tuning, obs))
         : null;
     const reuseGuard = reusePlan ? teamReuseGuard(obs, undefined, this.belief) : null;
     const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;
@@ -1940,7 +1965,7 @@ export class ForwardAgent implements AvalonAgent {
     // them to score; teams the reuse guard refuses are not added. Off → no
     // change.
     if (teamReuseActive(this.baseline.tuning, obs)) {
-      const plan = teamReusePlan(obs, this.belief);
+      const plan = teamReusePlan(obs, this.belief, false, leadConsistentSkip(this.baseline.tuning, obs));
       if (plan && plan.refs.length > 0) {
         const have = new Set(
           candidates.map((c) => (c.action.type === 'team_select' ? [...c.action.teamIds].sort().join(',') : '')),

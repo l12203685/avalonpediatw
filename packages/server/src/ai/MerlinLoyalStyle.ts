@@ -42,6 +42,9 @@ export function merlinLoyalStyleTeam(
   // Round 22 `merlinDoomedPublic`: a doomed R1–R2 proposal (never a mission) follows the public loyal view of this seat, seen reds and all.
   const doomedPublic = merlinDoomedPublicTeam(tuning, obs, size, publicAllowed);
   if (doomedPublic) return { type: 'team_select', teamIds: doomedPublic };
+  // Round 24 `merlinDoomedAvoid` (Edward 2026-11-03): among the publicly reasonable doomed R1–R2 teams, the fewest seen reds.
+  const doomedAvoid = merlinDoomedAvoidTeam(tuning, obs, size, publicAllowed);
+  if (doomedAvoid) return { type: 'team_select', teamIds: doomedAvoid };
   // `merlinLoyalCover` (round 7 candidate): on a doomed R1–R2 proposal (the normal votes reject it), at rate c the
   // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
   const cover = merlinLoyalCoverNow(tuning, obs);
@@ -153,6 +156,47 @@ export function merlinDoomedPublicTeam(
   }
   scored.sort((x, y) => y.score - x.score);
   return scored.find((c) => allowed(c.team))?.team ?? null;
+}
+
+/**
+ * `merlinDoomedAvoid`（第 24 回合・梅林；Edward 2026-11-03：「要從公開資訊中找到符合自己內建資訊、盡可能避開三個可見紅方拇指的隊伍資訊」）：
+ * 第 1、2 局注定被否決的提議（非強制，不會出任務）——先列出公開上合理的隊（「坐在梅林位置、只看公開紀錄的忠臣」的分數，和 `merlinDoomedPublic` 相同：
+ * 公開視角「這隊沒有紅」的 log 機率＋延伸前面派票的訊號＋局面雜湊；不低於最高分 + log r），再在裡面挑看得到的紅最少的隊，同樣多看公開分數。
+ * 公開上有乾淨的合理隊就一定乾淨；只有每一支合理的隊都有看得到的紅時才放最少的那幾個。過公開視角的邏輯閘門 `allowed`。不適用時 null。
+ */
+export function merlinDoomedAvoidTeam(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  size: number,
+  allowed: (team: readonly string[]) => boolean = () => true,
+): string[] | null {
+  const r = tuning.merlinDoomedAvoid ?? 0;
+  if (r <= 0 || obs.myRole !== 'merlin') return null;
+  const round = obs.currentRound ?? 1;
+  if (round > 2 || (obs.failCount ?? 0) >= 4 || size < 1) return null;
+  const me = obs.myPlayerId;
+  const seen = new Set(obs.knownEvils);
+  const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
+  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
+  const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
+  const none = new Set<string>();
+  const salt = `${me}|${round}|${obs.failCount ?? 0}|doomedPublic`;
+  const scored: { team: string[]; score: number; reds: number }[] = [];
+  for (const fill of combinations(obs.allPlayerIds.filter((id) => id !== me), size - 1)) {
+    const team = [me, ...fill];
+    if (!allowed(team)) continue;
+    const p = bayesTeamClean(publicView, team, pubOpts) ?? 0;
+    let h = 0x811c9dc5;
+    for (const ch of `${salt}|${team.join(',')}`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    const score = Math.log(Math.max(p, 1e-12)) + 0.05 * merlinSignalScore(obs.allPlayerIds, team, none, prior, me) + 1e-9 * (h % 1000);
+    scored.push({ team, score, reds: fill.filter((id) => seen.has(id)).length });
+  }
+  if (scored.length === 0) return null;
+  const best = Math.max(...scored.map((c) => c.score));
+  const floor = best + Math.log(Math.min(r, 1)) - 1e-12;
+  const reasonable = scored.filter((c) => c.score >= floor);
+  reasonable.sort((x, y) => x.reds - y.reds || y.score - x.score);
+  return reasonable[0]?.team ?? null;
 }
 
 /**
