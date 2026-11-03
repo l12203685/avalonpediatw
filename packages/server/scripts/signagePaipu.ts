@@ -36,8 +36,9 @@ export const UNVERIFIED_PREFIX = '【待檢視】';
  * is_robot 是 false），所以記錄員靠暱稱認：有它的局一律待檢視（不當真人紀錄匯入），內文寫它坐哪一家。
  * 以「百科機器人」開頭的暱稱都算（scripts/signagePlay.ts 的模擬戰用 百科機器人A～I）。
  */
-export const BOT_NICK = '百科機器人（測試）';
-const BOT_NICK_RE = /^百科機器人/;
+export const BOT_NICK = '百科AI_0';
+/** Edward 2026-11-03：暱稱改「百科AI_{#}」（例 百科AI_1），戰績上全部當同一個人「百科AI」；舊的「百科機器人…」照樣認。 */
+const BOT_NICK_RE = /^百科(機器人|AI)/i;
 /** 這個暱稱是百科機器人（補位或模擬戰）。 */
 export const isPediaBotName = (name: string): boolean => BOT_NICK_RE.test(name.trim());
 /** 百科機器人私房測試的房間描述開頭（signagePlayer --mode private-test）：記錄員不旁觀這種房間。 */
