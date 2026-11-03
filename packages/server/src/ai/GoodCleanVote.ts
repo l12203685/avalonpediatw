@@ -21,8 +21,18 @@ function twoFailRound(obs: PlayerObservation): boolean {
  */
 function teamSafe(tuning: Readonly<AgentTuning>, obs: PlayerObservation, team: readonly string[], mode: number): number | null {
   const opts = bayesOptionsOf(tuning);
-  if ((tuning.goodR4TwoFail ?? 0) >= mode && twoFailRound(obs)) return bayesTeamRedsBelow(obs, team, 2, opts);
+  const m = tuning.goodR4TwoFail ?? 0;
+  // 3 = mode 1 on half the votes (第 1C 節; hashed per seat, round, attempt and team).
+  const on = m === 3 ? mode === 1 && r4TwoFailHalfNow(obs) : m >= mode;
+  if (on && twoFailRound(obs)) return bayesTeamRedsBelow(obs, team, 2, opts);
   return bayesTeamClean(obs, team, opts);
+}
+
+function r4TwoFailHalfNow(obs: PlayerObservation): boolean {
+  let h = 0x811c9dc5;
+  const key = `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${(obs.proposedTeam ?? []).join(',')}|r4TwoFailHalf`;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return h % 2 === 0;
 }
 
 /** true = 這一票改投黑。 */

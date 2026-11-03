@@ -57,6 +57,7 @@ import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCle
 import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
+import { goodReuseExactTeam } from '../GoodReuseExact';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -818,6 +819,12 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
+    // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
+    if (d.action.type === 'team_select') {
+      const reused = goodReuseExactTeam(this.baseline.tuning, obs, d.action, gateOk);
+      if (reused !== d.action) return { ...d, action: reused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → re-propose the successful team` } };
+    }
     // Round 5 (Percival) candidate `percivalLoyalStyle` (MerlinLoyalStyle.ts): the loyal-looking team that integrates
     // the two thumbs (Edward's five plans: trust A ± send A, trust B ± send B, or the AB intersection).
     if (this.baseline.tuning.percivalLoyalStyle && obs.myRole === 'percival' && d.action.type === 'team_select') {

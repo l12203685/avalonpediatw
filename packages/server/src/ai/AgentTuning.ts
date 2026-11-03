@@ -764,7 +764,8 @@ export interface AgentTuning {
   /**
    * 第 24 回合藍方・忠臣／派西（`GoodCleanVote`；第 1D 節真人資料探勘第 3 名）：第 4 局（7 人以上，要兩張失敗）只有一紅的隊過了也不會失敗，
    * 但關鍵局門檻（`goodKeyVote`）看的是「這隊沒有紅」——機器人在隊上反對 52–87%，真人 17–41%（紅紅藍：真人反對 −15.5pp）。
-   * 1 = 第 4 局的 `goodKeyVote` 改看「隊上少於 2 紅」的機率；2 = 1 ＋ 第 4 局的 `goodCleanVote`（在隊上／一般門檻）也改看「少於 2 紅」。0 = 關。
+   * 1 = 第 4 局的 `goodKeyVote` 改看「隊上少於 2 紅」的機率；2 = 1 ＋ 第 4 局的 `goodCleanVote`（在隊上／一般門檻）也改看「少於 2 紅」；
+   * 3 = 1 的 50%（第 1C 節：每一票照座位、局、提議次數與隊伍雜湊，一半用 1、一半照舊）。0 = 關。
    */
   goodR4TwoFail: number;
   /**
@@ -779,6 +780,11 @@ export interface AgentTuning {
    * 「在隊上反對」被讀成忠臣的票型，莫德雷德的內黑等於洗白。false = 關。
    */
   beliefRedAloneCells: boolean;
+  /**
+   * 第 24 回合藍方・忠臣／派西（`GoodReuseExact.ts`；Edward 2026-11-03 練習台標記「為什麼沒有照派 2890」）：上一局任務成功（沒有失敗牌）、這一局還沒有人派過那一隊時，
+   * 1 = 隊長不在那一隊：人數相同照原樣派、多一人派那一隊＋自己（不再把自己換進去）；2 = 1 ＋ 隊長在那一隊上、人數相同也照原樣派。0 = 關。
+   */
+  goodReuseExact: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -886,6 +892,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodR4TwoFail',
   'goodTailCleanR3',
   'beliefRedAloneCells',
+  'goodReuseExact',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -992,6 +999,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodR4TwoFail: 0,
   goodTailCleanR3: 0,
   beliefRedAloneCells: false,
+  goodReuseExact: 0,
 });
 
 /**
@@ -1246,6 +1254,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodR4TwoFail: 0,
   goodTailCleanR3: 0,
   beliefRedAloneCells: false,
+  goodReuseExact: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1352,6 +1361,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodR4TwoFail: 'AVALON_TUNING_GOOD_R4_TWO_FAIL',
   goodTailCleanR3: 'AVALON_TUNING_GOOD_TAIL_CLEAN_R3',
   beliefRedAloneCells: 'AVALON_TUNING_BELIEF_RED_ALONE_CELLS',
+  goodReuseExact: 'AVALON_TUNING_GOOD_REUSE_EXACT',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1484,9 +1494,14 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs a number in [0, 1], got "${raw}"`);
     return { [name]: value } as Partial<AgentTuning>;
   }
+  if (name === 'goodReuseExact') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`goodReuseExact needs 0–2, got "${raw}"`);
+    return { goodReuseExact: value };
+  }
   if (name === 'goodR4TwoFail') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`goodR4TwoFail needs 0–2, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`goodR4TwoFail needs 0–3, got "${raw}"`);
     return { goodR4TwoFail: value };
   }
   if (name === 'assassinDoomedRead') {
@@ -1581,7 +1596,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

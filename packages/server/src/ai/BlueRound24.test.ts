@@ -114,10 +114,29 @@ describe('goodR4TwoFail (round 24, loyal / Percival)', () => {
     const r3 = { ...r4, currentRound: 3, questResults: ['fail', 'fail'], questHistory: r4.questHistory.slice(1).map((q, i) => ({ ...q, round: i + 1 })), proposedTeam: ['P5', 'P1', 'P3', 'P4'] } as unknown as PlayerObservation;
     expect(goodKeyVoteReject({ ...t0, goodKeyVote: 0.99, goodR4TwoFail: 2 }, r3)).toBe(goodKeyVoteReject({ ...t0, goodKeyVote: 0.99 }, r3));
   });
-  it('flag takes 0–2', () => {
+  it('3 = mode 1 on about half the votes (第 1C 節), deterministic', () => {
+    const opts = bayesOptionsOf(DEFAULT_AGENT_TUNING);
+    const pc = bayesTeamClean(r4, r4.proposedTeam, opts)!;
+    const p2 = bayesTeamRedsBelow(r4, r4.proposedTeam, 2, opts)!;
+    const t3 = { ...DEFAULT_AGENT_TUNING, goodKeyVote: (pc + p2) / 2, goodR4TwoFail: 3 };
+    let n = 0;
+    let N = 0;
+    const t = r4.proposedTeam;
+    const orders = [t, [...t].reverse(), [t[1], t[0], ...t.slice(2)], [t[2], t[0], t[1], t[3], t[4]], [t[4], t[3], t[0], t[1], t[2]], [t[3], t[1], t[2], t[0], t[4]]];
+    for (const team of orders) for (const fc of [0, 1, 2, 3]) {
+      const o = { ...r4, proposedTeam: team, failCount: fc } as unknown as PlayerObservation;
+      expect(goodKeyVoteReject(t3, o)).toBe(goodKeyVoteReject(t3, o));
+      N++;
+      if (!goodKeyVoteReject(t3, o)) n++;
+    }
+    expect(n / N).toBeGreaterThan(0.2);
+    expect(n / N).toBeLessThan(0.8);
+  });
+  it('flag takes 0–3', () => {
     expect(parseTuningFlag('goodR4TwoFail').goodR4TwoFail).toBe(1);
     expect(parseTuningFlag('goodR4TwoFail=2').goodR4TwoFail).toBe(2);
-    expect(() => parseTuningFlag('goodR4TwoFail=3')).toThrow();
+    expect(parseTuningFlag('goodR4TwoFail=3').goodR4TwoFail).toBe(3);
+    expect(() => parseTuningFlag('goodR4TwoFail=4')).toThrow();
   });
 });
 
@@ -183,5 +202,46 @@ describe('beliefRedAloneCells (round 24, blue belief)', () => {
     const redOn = bayesRedShare(obs(true), on).get('P7')!;
     expect(redOn).toBeGreaterThan(redOff);
     expect(parseTuningFlag('beliefRedAloneCells').beliefRedAloneCells).toBe(true);
+  });
+});
+
+describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice flag)', async () => {
+  const { goodReuseExactTeam } = await import('./GoodReuseExact');
+  // R2 team P2 P8 P9 P10 succeeded; R3 (size 4) loyal leader P1 — the pipeline swapped itself in for P10.
+  const o = {
+    myPlayerId: 'P1', myRole: 'loyal', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: [],
+    currentRound: 3, currentLeader: 'P1', failCount: 0, questResults: ['fail', 'success'], gamePhase: 'team_select',
+    questHistory: [
+      { round: 1, team: ['P3', 'P4', 'P5'], result: 'fail', failCount: 1 },
+      { round: 2, team: ['P2', 'P8', 'P9', 'P10'], result: 'success', failCount: 0 },
+    ],
+    voteHistory: [], proposedTeam: [], lakeHistory: [], myLakeResults: [],
+  } as unknown as PlayerObservation;
+  const pipe: AgentAction = { type: 'team_select', teamIds: ['P1', 'P2', 'P8', 'P9'] };
+  const on = (m: number) => ({ ...DEFAULT_AGENT_TUNING, goodReuseExact: m });
+  it('off by default', () => {
+    expect(DEFAULT_AGENT_TUNING.goodReuseExact).toBe(0);
+    expect(goodReuseExactTeam(DEFAULT_AGENT_TUNING, o, pipe)).toBe(pipe);
+  });
+  it('1: the leader off the successful team re-proposes it as it was (no self-insertion); grown by one with the leader', () => {
+    expect(goodReuseExactTeam(on(1), o, pipe)).toEqual({ type: 'team_select', teamIds: ['P2', 'P8', 'P9', 'P10'] });
+    const r4 = { ...o, currentRound: 4, questResults: ['fail', 'success', 'success'], questHistory: [...o.questHistory, { round: 3, team: ['P2', 'P8', 'P9', 'P10'], result: 'success', failCount: 0 }] } as unknown as PlayerObservation;
+    const grown = goodReuseExactTeam(on(1), r4, { type: 'team_select', teamIds: ['P1', 'P2', 'P3', 'P8', 'P9'] });
+    expect(grown).toEqual({ type: 'team_select', teamIds: ['P1', 'P2', 'P8', 'P9', 'P10'] });
+  });
+  it('not after a failed mission or one with a fail card, not once that team was rejected this round, not past the gates', () => {
+    expect(goodReuseExactTeam(on(1), { ...o, questResults: ['fail', 'fail'] } as unknown as PlayerObservation, pipe)).toBe(pipe);
+    const rejected = { ...o, failCount: 1, voteHistory: [{ round: 3, attempt: 1, leader: 'P10', team: ['P10', 'P9', 'P8', 'P2'], votes: {}, approved: false }] } as unknown as PlayerObservation;
+    expect(goodReuseExactTeam(on(1), rejected, pipe)).toBe(pipe);
+    expect(goodReuseExactTeam(on(1), o, pipe, () => false)).toBe(pipe);
+    expect(goodReuseExactTeam(on(1), { ...o, myRole: 'merlin' } as unknown as PlayerObservation, pipe)).toBe(pipe);
+  });
+  it('2: also the leader on the team (Percival keeps the thumb that sat on the successful mission)', () => {
+    const p = { ...o, myPlayerId: 'P2', myRole: 'percival', knownWizards: ['P7', 'P10'], currentLeader: 'P2' } as unknown as PlayerObservation;
+    const swap: AgentAction = { type: 'team_select', teamIds: ['P2', 'P7', 'P8', 'P9'] };
+    expect(goodReuseExactTeam(on(1), p, swap)).toBe(swap);
+    expect(goodReuseExactTeam(on(2), p, swap)).toEqual({ type: 'team_select', teamIds: ['P2', 'P8', 'P9', 'P10'] });
+    expect(parseTuningFlag('goodReuseExact=2').goodReuseExact).toBe(2);
+    expect(() => parseTuningFlag('goodReuseExact=3')).toThrow();
   });
 });
