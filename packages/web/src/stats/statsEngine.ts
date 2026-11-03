@@ -4,6 +4,7 @@
  */
 import type { DiscoveryResult, GameFilter, StatsResult, StrengthGrouping, StrengthReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
+import type { ClaimData } from '../components/idClaim/claimIndex';
 import type { StateGamesResult } from '../components/analysis/stateTree/stateTree';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
@@ -67,7 +68,7 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree';
+type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim';
 
 async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
   const mod = await import('./statsCompute');
@@ -80,6 +81,8 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
           ? await mod.computeDiscovery(SERVER_URL, filter ?? null)
         : type === 'stateTree'
           ? await mod.computeStateGames(SERVER_URL, filter ?? null)
+        : type === 'claim'
+          ? await mod.computeClaimData(SERVER_URL)
           : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
   } catch (err) {
     const status = err instanceof mod.GamesUnavailableError ? err.status : 0;
@@ -184,6 +187,19 @@ export function stateTreeGames(filter: GameFilter | null, filterKey: string): Pr
   return p;
 }
 
+let claimData: Promise<ClaimData> | null = null;
+
+/** ID 認領頁：全部局的座位名單（同一份 /api/analysis/games，Worker 裡已載入就不再下載）。失敗不快取。 */
+export function loadClaimData(): Promise<ClaimData> {
+  if (!claimData) {
+    claimData = call<ClaimData>('claim');
+    claimData.catch(() => {
+      claimData = null;
+    });
+  }
+  return claimData;
+}
+
 /** 測試／重試用：清掉 Worker 錯誤狀態以外的快取。 */
 export function resetFilteredStats(): void {
   results.clear();
@@ -191,5 +207,6 @@ export function resetFilteredStats(): void {
   discoveryResults.clear();
   stateTreeResults.clear();
   vocab = null;
+  claimData = null;
   failAll(new FilterUnavailableError(0, 'reset'));
 }

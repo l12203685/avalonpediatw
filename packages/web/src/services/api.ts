@@ -321,6 +321,37 @@ export async function submitFeedback(
   if (!res.ok) throw new Error(`feedback ${res.status}`);
 }
 
+/** ID 認領的一個 ID：名字＋網站算的場數（資訊用）。 */
+export interface IdClaimEntry { name: string; games?: number }
+
+/**
+ * 網站「ID 認領」（不用登入）：POST /api/feedback/claim → 伺服器在 DC 論壇 #百科問題回報 開一篇（標籤 ID認領），
+ * 管理者核准後才改資料。失敗丟出帶狀態碼的錯誤（400 格式不對、429 太頻繁、503 論壇暫時不能用）。
+ */
+export async function submitIdClaim(data: {
+  main: IdClaimEntry;
+  others: IdClaimEntry[];
+  contact?: string;
+  note?: string;
+  page?: string;
+}): Promise<void> {
+  const res = await fetch(`${SERVER_URL}/api/feedback/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new IdClaimError(res.status);
+}
+
+export class IdClaimError extends Error {
+  readonly status: number;
+  constructor(status: number) {
+    super(`claim ${status}`);
+    this.name = 'IdClaimError';
+    this.status = status;
+  }
+}
+
 export async function submitError(data: {
   message: string;
   stack?: string;

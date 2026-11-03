@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bug, BookOpen, ExternalLink, Flag, Lightbulb, Loader, Send, X } from 'lucide-react';
+import { Bug, BookOpen, ExternalLink, Flag, Lightbulb, Loader, Send, UserCheck, X } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { submitFeedback } from '../services/api';
 import { getStoredToken } from '../services/socket';
@@ -23,6 +23,7 @@ const TYPES: { id: FeedbackType; label: string; Icon: typeof Bug; on: string; pl
 
 export default function FeedbackButton(): JSX.Element {
   const addToast = useGameStore((s) => s.addToast);
+  const setGameState = useGameStore((s) => s.setGameState);
   const [isOpen, setIsOpen] = useState(false);
   const [type, setType] = useState<FeedbackType>('bug');
   const [message, setMessage] = useState('');
@@ -94,6 +95,14 @@ export default function FeedbackButton(): JSX.Element {
               maxLength={32}
               className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-sky-500 focus:outline-none"
             />
+            <button
+              type="button"
+              onClick={() => { setIsOpen(false); setGameState('idClaim'); window.scrollTo({ top: 0 }); }}
+              data-testid="feedback-id-claim"
+              className="flex w-full items-center gap-1 text-left text-xs text-emerald-300 hover:text-emerald-200"
+            >
+              <UserCheck size={12} className="flex-shrink-0" /> 紀錄裡你用過好幾個 ID？用「ID 認領」請管理者合併
+            </button>
             <p className="text-xs leading-relaxed text-zinc-500">
               會貼到 DC 的「百科問題回報」（群組成員都看得到），管理者每天處理並在那裡回覆。
               <a href={FEEDBACK_FORUM_URL} target="_blank" rel="noopener noreferrer" className="ml-1 inline-flex items-center gap-0.5 text-sky-400 hover:text-sky-300">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   BarChart3, BookOpen, ExternalLink, Instagram, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
-  Youtube,
+  UserCheck, Youtube,
 } from 'lucide-react';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { useGameStore, type GameState } from '../store/gameStore';
@@ -21,6 +21,7 @@ import { clearRecordsHash } from './records/recordsLink';
  * 寬度不到 1024px 時兩列：上列五個頁籤平分寬度（375px 寬也放得下，不橫向捲動），下列開局＋社群；
  * 1024–1279px 一列時頁籤不顯示圖示、社群連結用短字，1280px 以上才是完整的圖示與文字。
  * 「牌譜紀錄」（Edward 2026-10-30：「百科網站可以直接多一個頁籤是『牌譜紀錄與覆盤』」）= DC 論壇 #牌譜紀錄與覆盤 的牌譜。
+ * 「ID認領」（Edward 2026-11-03）不是頁籤：社群連結旁一顆小按鈕，開 ID 認領頁（不用登入）。
  */
 
 export type SiteTab = 'analytics' | 'analysis' | 'wiki' | 'streams' | 'records';
@@ -58,6 +59,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
   const { t } = useTranslation();
   const setGameState = useGameStore((s) => s.setGameState);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
+  const gameState = useGameStore((s) => s.gameState);
   const [isAdmin, setIsAdmin] = useState(false);
   // 左上角 logo＝加到手機桌面（Edward 2026-10-30）：能安裝時點 logo 彈安裝；iOS 開手動教學；已安裝或不支援時只是 logo。
   const { deferredPrompt, isStandalone, isIOS, promptInstall } = useInstallPrompt();
@@ -149,7 +151,8 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
           >
             <Play size={16} className="flex-shrink-0" />
             {t('home.playShort', { defaultValue: '開局' })}
-            <ExternalLink size={13} className="flex-shrink-0" />
+            {/* 400px 以下省掉外連小圖示，讓出「ID認領」按鈕的位置（375px 不橫向捲動） */}
+            <ExternalLink size={13} className="hidden flex-shrink-0 min-[400px]:block" />
           </a>
           {COMMUNITY_LINKS.map(({ key, label, short, href, Icon }) => (
             <a
@@ -166,6 +169,29 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
               <span className="hidden xl:inline">{label}</span>
             </a>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              if (active === 'records') clearRecordsHash();
+              setGameState('idClaim');
+              window.scrollTo({ top: 0 });
+            }}
+            data-testid="site-id-claim"
+            title="ID 認領：紀錄裡你用過好幾個 ID？告訴管理者合併"
+            aria-label="ID 認領"
+            aria-pressed={gameState === 'idClaim'}
+            className={`flex h-8 min-w-8 flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors sm:px-2 ${
+              gameState === 'idClaim'
+                ? 'border-white bg-white text-black'
+                : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
+            }`}
+          >
+            {/* 640px 以下只有圖示（手機上第二列放不下字）；1024px 以上一列時用短字「認領」，1280px 以上社群連結變長字，
+                這顆改成只有字，免得擠到頁籤 */}
+            <UserCheck size={15} className="flex-shrink-0 xl:hidden" />
+            <span className="hidden sm:inline lg:hidden">ID認領</span>
+            <span className="hidden lg:inline">認領</span>
+          </button>
           <ForceUpdateButton
             compact
             className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white disabled:cursor-wait disabled:opacity-50"

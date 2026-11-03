@@ -21,7 +21,9 @@ import { verify, JwtPayload } from 'jsonwebtoken';
 import { verifyIdToken, isFirebaseAdminReady, getAdminFirestore } from '../services/firebase';
 import { getSupabaseClient, isSupabaseReady, getSupabaseIdByFirebaseUid } from '../services/supabase';
 import { createHttpRateLimit } from '../middleware/rateLimit';
-import { FEEDBACK_KINDS, FEEDBACK_MESSAGE_MAX, cleanPage, postFeedbackThread, type FeedbackKind } from '../services/feedbackForum';
+import {
+  FEEDBACK_KINDS, FEEDBACK_MESSAGE_MAX, cleanPage, parseIdClaim, postClaimThread, postFeedbackThread, type FeedbackKind,
+} from '../services/feedbackForum';
 
 // 2026-04-24 #supabase-retire Batch 1.1+1.2 (hineko_20260424_1240):
 // Dual-write feedback / error_reports to Firestore alongside Supabase.
@@ -52,6 +54,7 @@ const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
 
 const feedbackLimit = createHttpRateLimit(60_000, 10);  // 10 per min per IP
 const errorLimit    = createHttpRateLimit(60_000, 30);  // 30 per min per IP
+const claimLimit    = createHttpRateLimit(10 * 60_000, 5); // ID 認領：5 per 10 min per IP
 
 // Dedup Discord notifications for auto-captured errors (1 hr cooldown per signature)
 const errorNotifyCache = new Map<string, number>();
@@ -154,6 +157,24 @@ router.post('/', feedbackLimit, async (req: Request, res: Response) => {
   }
 
   res.json({ ok: true, forum: posted === 'sent' });
+});
+
+// POST /api/feedback/claim — 網站「ID 認領」（Edward 2026-11-03）：玩家說「這幾個 ID 是我」，不用登入。
+// 在 DC 論壇 #百科問題回報 開一篇（標籤 ID認領），管理者核准（改標籤「已處理」）後由每日例行作業寫進
+// player_aliases.json。這裡只驗證格式與發文，不改任何資料；記錄只寫狀態碼。
+router.post('/claim', claimLimit, async (req: Request, res: Response) => {
+  const parsed = parseIdClaim(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  const posted = await postClaimThread(parsed.claim);
+  if (posted !== 'sent') {
+    // 沒有機器人 token／論壇關掉／DC 失敗：不退回舊 webhook（認領要能在論壇改標籤核准），請網站提示稍後再試。
+    res.status(503).json({ error: 'claim forum unavailable' });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 // POST /api/feedback/errors — auto-captured frontend errors
