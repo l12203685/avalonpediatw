@@ -108,3 +108,30 @@ describe('practice review', () => {
     expect(ex.reason).toContain('第 1、2 局注定被否決的提議放了梅林看得到的紅');
   });
 });
+
+describe('redSelfOnTeam (round 23)', () => {
+  // Mordred P8 on an R3 team with no teammate after two failed missions: his own fail card wins the game.
+  const voteObs = (): PlayerObservation => ({
+    myPlayerId: 'P8', myRole: 'mordred', myTeam: 'evil', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P1', 'P2', 'P8'],
+    currentRound: 3, gamePhase: 'team_vote', failCount: 0, currentLeader: 'P3',
+    questResults: ['fail', 'fail'],
+    questHistory: [
+      { round: 1, team: ['P1', 'P4', 'P6'], result: 'fail', failCount: 1 },
+      { round: 2, team: ['P2', 'P3', 'P6', 'P10'], result: 'fail', failCount: 1 },
+    ],
+    voteHistory: [
+      vote(1, 1, 'P1', ['P1', 'P4', 'P6'], true),
+      vote(2, 1, 'P2', ['P2', 'P3', 'P6', 'P10'], true),
+    ],
+    lakeHistory: [], proposedTeam: ['P3', 'P4', 'P5', 'P8'],
+  }) as unknown as PlayerObservation;
+  it('parses; default off', () => {
+    expect(parseTuningFlag('redSelfOnTeam')).toEqual({ redSelfOnTeam: true });
+    expect(DEFAULT_AGENT_TUNING.redSelfOnTeam).toBe(false);
+  });
+  it('the lone Mordred on the team approves with the switch on', () => {
+    const on = new HeuristicAgent('P8', undefined, undefined, { ...DEFAULT_AGENT_TUNING, redSelfOnTeam: true });
+    on.onGameStart(voteObs());
+    expect(on.act(voteObs())).toEqual({ type: 'team_vote', vote: true });
+  });
+});

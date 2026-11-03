@@ -739,6 +739,13 @@ export interface AgentTuning {
    * 兩組各 6000 組種子（三段合併）+2.02 [+1.66, +2.37]／+2.02 [+1.66, +2.37]pp（刺中率約 +3～+4pp，三紅率不變）。
    */
   assassinDoomedRead: number;
+  /**
+   * 第 23 回合紅方・莫德雷德（`forward/ForwardAgent.generateTeamVoteCandidates`；真人資料探勘第 1 名，2026-11-03）：正式流程的投票評分
+   * 「隊上的紅數」不算自己（`beliefCertainFacts` 起只算確定的紅、扣掉自己），紅方在隊上、隊上沒有隊友時，贊成被當成「這隊沒有紅」扣分——
+   * 莫德雷德第 3 局起在隊上沒有隊友時投反對約八到九成（紅紅時自己一張失敗就三紅；刺客靠 `r3NormalVotePrior` 的正常票加分剛好翻過來、莫甘娜有在隊上必贊成的硬規則）。
+   * true = 第 3 局起投票時，紅方（奧伯倫除外）在隊上就把自己算進隊上的紅。false = 關。
+   */
+  redSelfOnTeam: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -840,6 +847,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinDoomedPublic',
   'merlinDoomedPublicHalf',
   'assassinDoomedRead',
+  'redSelfOnTeam',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -940,6 +948,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinDoomedPublic: 0,
   merlinDoomedPublicHalf: false,
   assassinDoomedRead: 0,
+  redSelfOnTeam: false,
 });
 
 /**
@@ -1188,6 +1197,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinDoomedPublic: 0,
   merlinDoomedPublicHalf: false,
   assassinDoomedRead: 1,
+  redSelfOnTeam: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1288,6 +1298,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinDoomedPublic: 'AVALON_TUNING_MERLIN_DOOMED_PUBLIC',
   merlinDoomedPublicHalf: 'AVALON_TUNING_MERLIN_DOOMED_PUBLIC_HALF',
   assassinDoomedRead: 'AVALON_TUNING_ASSASSIN_DOOMED_READ',
+  redSelfOnTeam: 'AVALON_TUNING_RED_SELF_ON_TEAM',
 });
 
 function parseBool(raw: string): boolean | undefined {
