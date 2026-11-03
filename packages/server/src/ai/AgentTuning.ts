@@ -785,6 +785,8 @@ export interface AgentTuning {
   /**
    * 第 24 回合藍方・忠臣／派西（`GoodReuseExact.ts`；Edward 2026-11-03 練習台標記「為什麼沒有照派 2890」）：上一局任務成功（沒有失敗牌）、這一局還沒有人派過那一隊時，
    * 1 = 隊長不在那一隊：人數相同照原樣派、多一人派那一隊＋自己（不再把自己換進去）；2 = 1 ＋ 隊長在那一隊上、人數相同也照原樣派。0 = 關。
+   * 第 24 回合採用 2（第 2 階段）：篩選 +1.1 [+0.2, +1.9]pp（1：+0.9），三組各 6000 組種子 +1.10 [+0.66, +1.54]／+1.32 [+0.85, +1.78]／+1.47 [+0.99, +1.94]
+   * （合併 18000 組 +1.29 [+1.03, +1.56]pp）；在新預設（`beliefRedAloneCells`＋硬約束）之上兩段 4000 組 +1.07 [+0.50, +1.65]。
    */
   goodReuseExact: number;
   /**
@@ -1278,7 +1280,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodR4TwoFail: 0,
   goodTailCleanR3: 0,
   beliefRedAloneCells: true,
-  goodReuseExact: 0,
+  goodReuseExact: 2,
   goodLeadConsistent: 0,
   leaderSelfApprove: true,
   beliefBiteCell: 0,

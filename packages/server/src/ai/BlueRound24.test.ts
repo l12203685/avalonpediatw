@@ -220,9 +220,10 @@ describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice
   } as unknown as PlayerObservation;
   const pipe: AgentAction = { type: 'team_select', teamIds: ['P1', 'P2', 'P8', 'P9'] };
   const on = (m: number) => ({ ...DEFAULT_AGENT_TUNING, goodReuseExact: m });
-  it('off by default', () => {
-    expect(DEFAULT_AGENT_TUNING.goodReuseExact).toBe(0);
-    expect(goodReuseExactTeam(DEFAULT_AGENT_TUNING, o, pipe)).toBe(pipe);
+  it('2 by default since round 24; off in the legacy table', () => {
+    expect(DEFAULT_AGENT_TUNING.goodReuseExact).toBe(2);
+    expect(LEGACY_AGENT_TUNING.goodReuseExact).toBe(0);
+    expect(goodReuseExactTeam({ ...DEFAULT_AGENT_TUNING, goodReuseExact: 0 }, o, pipe)).toBe(pipe);
   });
   it('1: the leader off the successful team re-proposes it as it was (no self-insertion); grown by one with the leader', () => {
     expect(goodReuseExactTeam(on(1), o, pipe)).toEqual({ type: 'team_select', teamIds: ['P2', 'P8', 'P9', 'P10'] });
