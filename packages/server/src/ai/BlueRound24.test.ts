@@ -245,3 +245,56 @@ describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice
     expect(() => parseTuningFlag('goodReuseExact=3')).toThrow();
   });
 });
+
+describe('goodLeadConsistent (round 24, loyal / Percival; Edward 2026-11-03 practice game)', async () => {
+  const { goodLeadConsistentTeam, goodLeaderSelfApprove, ownVoteRejects, leadConsistentSkip } = await import('./GoodLeadConsistent');
+  const { teamReusePlan } = await import('./TeamReuse');
+  // R3 after R1 success P3 P5 P10, R2 fail P10 P3 P5 P6; 3-2 P2 P3 P5 P10 was rejected with P3 (the leader now) voting black on it.
+  const r3 = {
+    myPlayerId: 'P3', myRole: 'loyal', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: [],
+    currentRound: 3, currentLeader: 'P3', failCount: 2, questResults: ['success', 'fail'], gamePhase: 'team_select',
+    questHistory: [
+      { round: 1, team: ['P3', 'P5', 'P10'], result: 'success', failCount: 0 },
+      { round: 2, team: ['P10', 'P3', 'P5', 'P6'], result: 'fail', failCount: 1 },
+    ],
+    voteHistory: [
+      { round: 3, attempt: 1, leader: 'P1', team: ['P1', 'P2', 'P3', 'P6'], votes: allVotes(['P1', 'P3', 'P9']), approved: false },
+      { round: 3, attempt: 2, leader: 'P2', team: ['P2', 'P3', 'P5', 'P10'], votes: { ...allVotes(['P2', 'P9']), P3: false }, approved: false },
+    ],
+    proposedTeam: [], lakeHistory: [], myLakeResults: [],
+  } as unknown as PlayerObservation;
+  const on = (m: number, tau = 0.45) => ({ ...DEFAULT_AGENT_TUNING, goodLeadConsistent: m, goodCleanVote: tau });
+  it('off by default', () => {
+    expect(DEFAULT_AGENT_TUNING.goodLeadConsistent).toBe(0);
+    expect(leadConsistentSkip(DEFAULT_AGENT_TUNING, r3)).toBe(false);
+  });
+  it('1: a team the own vote rules reject is replaced by the cleanest own-posterior team (which they accept, or nothing better exists)', () => {
+    const bad: AgentAction = { type: 'team_select', teamIds: ['P3', 'P5', 'P10', 'P2'] };
+    const t = on(1, 0.99);
+    expect(ownVoteRejects(t, r3, bad.teamIds)).toBe(true);
+    const fixed = goodLeadConsistentTeam(t, r3, bad);
+    expect(fixed).not.toBe(bad);
+    const opts = bayesOptionsOf(t);
+    const team = (fixed as { teamIds: string[] }).teamIds;
+    expect(team).toContain('P3');
+    expect(bayesTeamClean(r3, team, opts)!).toBeGreaterThanOrEqual(bayesTeamClean(r3, bad.teamIds, opts)!);
+    // A team the own rules accept is left alone.
+    expect(goodLeadConsistentTeam(on(1, 0.0001), r3, bad)).toBe(bad);
+  });
+  it('1: the reuse plan drops the rejected team the leader sat on and voted against', () => {
+    const plain = teamReusePlan(r3)!;
+    const skip = teamReusePlan(r3, undefined, false, true)!;
+    const has = (p: typeof plain) => p.refs.some((x) => [...x.team].sort().join(',') === 'P10,P2,P3,P5');
+    expect(has(plain)).toBe(true);
+    expect(has(skip)).toBe(false);
+    expect(leadConsistentSkip(on(1), r3)).toBe(true);
+  });
+  it('2: the leader approves its own non-forced proposal', () => {
+    const vote = { ...r3, gamePhase: 'team_vote', proposedTeam: ['P3', 'P5', 'P10', 'P2'] } as unknown as PlayerObservation;
+    expect(goodLeaderSelfApprove(on(1), vote)).toBe(false);
+    expect(goodLeaderSelfApprove(on(2), vote)).toBe(true);
+    expect(goodLeaderSelfApprove(on(2), { ...vote, failCount: 4 } as unknown as PlayerObservation)).toBe(false);
+    expect(goodLeaderSelfApprove(on(2), { ...vote, currentLeader: 'P2' } as unknown as PlayerObservation)).toBe(false);
+    expect(parseTuningFlag('goodLeadConsistent=2').goodLeadConsistent).toBe(2);
+  });
+});

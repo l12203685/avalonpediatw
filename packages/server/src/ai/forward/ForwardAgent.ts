@@ -58,6 +58,7 @@ import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteN
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
+import { goodLeadConsistentTeam, goodLeaderSelfApprove, leadConsistentSkip } from '../GoodLeadConsistent';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -769,6 +770,10 @@ export class ForwardAgent implements AvalonAgent {
     if (redDivisionReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
+    // Round 24 `goodLeadConsistent` ≥ 2: a loyal / Percival leader approves its own (non-forced) proposal.
+    if (goodLeaderSelfApprove(this.baseline.tuning, obs) && goodVoteGate(obs, this.gates) === null) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'good leader approves its own team');
+    }
     // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior
     // gives less than the (higher) key-round threshold of being clean, on or off the team.
     if (goodKeyVoteReject(this.baseline.tuning, obs)) {
@@ -819,6 +824,12 @@ export class ForwardAgent implements AvalonAgent {
     const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    // Round 24 `goodLeadConsistent` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never proposes
+    // a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
+    if (d.action.type === 'team_select') {
+      const fixed = goodLeadConsistentTeam(this.baseline.tuning, obs, d.action, gateOk);
+      if (fixed !== d.action) return { ...d, action: fixed, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → own vote would reject it: cleanest team` } };
+    }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
     if (d.action.type === 'team_select') {
@@ -1440,7 +1451,7 @@ export class ForwardAgent implements AvalonAgent {
     // Off → no change.
     const reusePlan =
       decisionType === 'team_select' && teamReuseActive(this.baseline.tuning, obs)
-        ? teamReusePlan(obs, this.belief, this.baseline.tuning.reuseByVotes === true)
+        ? teamReusePlan(obs, this.belief, this.baseline.tuning.reuseByVotes === true, leadConsistentSkip(this.baseline.tuning, obs))
         : null;
     const reuseGuard = reusePlan ? teamReuseGuard(obs, undefined, this.belief) : null;
     const reuseBonus = reusePlan && reuseGuard ? teamReuseScorer(reusePlan, obs, reuseGuard) : null;
@@ -1947,7 +1958,7 @@ export class ForwardAgent implements AvalonAgent {
     // them to score; teams the reuse guard refuses are not added. Off → no
     // change.
     if (teamReuseActive(this.baseline.tuning, obs)) {
-      const plan = teamReusePlan(obs, this.belief);
+      const plan = teamReusePlan(obs, this.belief, false, leadConsistentSkip(this.baseline.tuning, obs));
       if (plan && plan.refs.length > 0) {
         const have = new Set(
           candidates.map((c) => (c.action.type === 'team_select' ? [...c.action.teamIds].sort().join(',') : '')),
