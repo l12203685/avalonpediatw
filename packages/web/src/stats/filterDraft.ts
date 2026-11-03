@@ -3,7 +3,7 @@
  * 子句；面板沒有欄位的子句 (分享連結或進階 JSON 來的：任務、湖、角色座位…) 原樣保留。
  */
 import type {
-  CategoryValue, Clause, ExcludePlayersClause, GameFilter, MetricId, OutcomeValue, PlayerSelector, WithPlayerClause,
+  CategoryValue, Clause, ExcludePlayersClause, FilterOptions, GameFilter, MetricId, OutcomeValue, PlayerSelector, WithPlayerClause,
 } from '@avalon/shared/stats';
 
 export const EMPTY_FILTER: GameFilter = { v: 1, clauses: [] };
@@ -124,7 +124,25 @@ export function completeFilter(filter: GameFilter): GameFilter {
     if ('in' in c && Array.isArray((c as { in: unknown[] }).in)) return (c as { in: unknown[] }).in.length > 0;
     return true;
   });
-  return { ...filter, clauses };
+  const merge = filter.options?.merge;
+  if (!merge) return { ...filter, clauses };
+  // 合併計算：還沒填名字或合併後名字的組先不送出
+  const groups = merge
+    .map((g) => ({ names: splitNames(g.names.join('\n')), as: g.as.trim() }))
+    .filter((g) => g.names.length > 0 && g.as.length > 0);
+  return withOptions({ ...filter, clauses }, { merge: groups.length ? groups : undefined });
+}
+
+/** 改篩選的 options（undefined = 拿掉該鍵；options 空了就整個拿掉）。 */
+export function withOptions(filter: GameFilter, patch: Partial<FilterOptions>): GameFilter {
+  const options: FilterOptions = { ...(filter.options ?? {}) };
+  for (const [k, v] of Object.entries(patch) as Array<[keyof FilterOptions, unknown]>) {
+    if (v === undefined) delete options[k];
+    else (options as Record<string, unknown>)[k] = v;
+  }
+  const next: GameFilter = { ...filter, options };
+  if (!Object.keys(options).length) delete next.options;
+  return next;
 }
 
 /** 兩個篩選是不是同一個 (子句順序不計)。 */

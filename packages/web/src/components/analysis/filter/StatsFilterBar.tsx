@@ -7,6 +7,7 @@ import {
   METRICS,
   PRESETS,
   canonicalFilterKey,
+  pooledPlayerName,
   presetFilter,
   sanitizeFilter,
   type CategoryValue,
@@ -44,6 +45,7 @@ import {
   switchSelector,
   togglePreset,
   withClauses,
+  withOptions,
 } from '../../../stats/filterDraft';
 import { useRoleLabel } from '../roleLabels';
 import { OUTCOME_LABEL_KEYS } from '../ui';
@@ -51,6 +53,7 @@ import { useClauseLabel, useMetricLabel } from './filterLabels';
 import LineupFilterEditor from '../../lineup/LineupFilterEditor';
 import { lineupCondition, lineupFilterActive, lineupStateFromCondition } from '../../../utils/lineupFilter';
 import { useFilterResult, useFilterVocab, type FilterStatus } from './useFilterResult';
+import MergeEditor from './MergeEditor';
 
 /**
  * 數據分析的篩選列 (Edward 2026-10-14「我希望所有數據都有可以複合篩選的功能 最基本的是 比如 線瓦/面瓦、娛樂局、
@@ -177,6 +180,8 @@ export default function StatsFilterBar(): JSX.Element {
         </p>
       )}
 
+      <MergeChip filter={filter} meta={meta} onRemove={(next) => setFilter(next)} />
+
       {filter && filter.clauses.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1.5" data-testid="filter-active">
           {filter.clauses.map((c, i) => (
@@ -193,6 +198,45 @@ export default function StatsFilterBar(): JSX.Element {
 
       {open && <FilterEditor applied={filter} vocab={vocab} onApply={(f) => setFilter(f)} />}
     </section>
+  );
+}
+
+/**
+ * 合併計算有開時的標籤 (例：「合併計算：散客（<30場）併 120 人、自訂 2 組」)；點 × 拿掉合併計算 (其他條件不動)。
+ */
+function MergeChip({ filter, meta, onRemove }: {
+  filter: GameFilter | null; meta: FilterMeta | null; onRemove: (f: GameFilter | null) => void;
+}): JSX.Element | null {
+  const { t } = useTranslation('common');
+  const small = filter?.options?.mergeSmall;
+  const groups = filter?.options?.merge ?? [];
+  if (!filter || (!small && !groups.length)) return null;
+  const k = 'analytics.filter.merge';
+  const parts: string[] = [];
+  if (small) {
+    const pooled = meta?.merge?.pooled;
+    parts.push(pooled
+      ? t(`${k}.chipPoolCount`, { defaultValue: '{{name}}併 {{count}} 人', name: pooled.name, count: pooled.players })
+      : pooledPlayerName(small.maxGames));
+  }
+  if (groups.length) parts.push(t(`${k}.chipGroups`, { defaultValue: '自訂 {{count}} 組', count: groups.length }));
+  const title = groups.map((g) => `${g.as}＝${g.names.join('＋')}`).join('\n');
+  return (
+    <p className="mt-2 inline-flex max-w-full items-center gap-1 rounded-full border border-violet-800 bg-violet-950/50 py-0.5 pl-2.5 pr-1 text-xs text-violet-100" data-testid="filter-merge-chip" title={title || undefined}>
+      <span className="min-w-0 break-words">{t(`${k}.chip`, { defaultValue: '合併計算：{{parts}}', parts: parts.join('、') })}</span>
+      <button
+        type="button"
+        aria-label={t('analytics.filter.remove')}
+        title={t('analytics.filter.remove')}
+        onClick={() => {
+          const next = withOptions(filter, { merge: undefined, mergeSmall: undefined });
+          onRemove(next.clauses.length || next.options ? next : null);
+        }}
+        className="shrink-0 rounded-full p-0.5 hover:bg-violet-800"
+      >
+        <X size={11} />
+      </button>
+    </p>
   );
 }
 
@@ -346,6 +390,9 @@ function FilterEditor({ applied, vocab, onApply }: {
       <GamesSection draft={draft} setDraft={setDraft} vocab={vocab} />
       <PlayersSection draft={draft} setDraft={setDraft} vocab={vocab} />
       <ExcludeSection draft={draft} setDraft={setDraft} vocab={vocab} />
+      <Section title={t('analytics.filter.merge.title', { defaultValue: '合併計算' })}>
+        <MergeEditor draft={draft} setDraft={setDraft} inputClass={inputClass} />
+      </Section>
       <OtherSection draft={draft} setDraft={setDraft} />
       <AdvancedSection draft={draft} setDraft={setDraft} />
       <div className="sticky bottom-0 flex flex-wrap items-center gap-2 bg-zinc-950/95 py-2">

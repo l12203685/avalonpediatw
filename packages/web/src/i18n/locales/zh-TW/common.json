@@ -1595,6 +1595,22 @@
         "days": "近 {{count}} 天",
         "year": "近一年",
         "all": "全部"
+      },
+      "merge": {
+        "title": "合併計算",
+        "smallPrefix": "生涯未滿",
+        "smallGames": "場數門檻",
+        "smallSuffix": "場的人併成一位「{{name}}」",
+        "addGroup": "新增合併組",
+        "as": "合併成",
+        "asPlaceholder": "顯示名字",
+        "namePlaceholder": "加入玩家名字",
+        "addName": "加入",
+        "removeName": "移除 {{name}}",
+        "hint": "合併在所有條件之前：之後每個區塊都把這些人當成同一位玩家（條件裡打原名也會對到合併後的人）。自訂合併的人不會再被併進散客。同一局有好幾位散客時佔好幾個座位：場數與勝率逐座位算（一局兩位散客算兩場），默契每局只算一次。",
+        "chip": "合併計算：{{parts}}",
+        "chipPoolCount": "{{name}}併 {{count}} 人",
+        "chipGroups": "自訂 {{count}} 組"
       }
     },
     "winRates": {

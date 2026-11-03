@@ -20,6 +20,7 @@ import type { PlayerSeat } from '../theory';
 import type { PairRoster } from '../pairs';
 import { compare, evaluateMetric, METRICS, type MetricContext } from './metrics';
 import { clausePredicate } from './predicates';
+import { hasMergeOptions, mergedAliases, mergedDataset, type MergeReport } from './merge';
 import type { Clause, ExcludePlayersClause, GameClause, GameFilter, LeaderboardOverrides, PlayerSelector } from './types';
 
 /** 引擎需要的快取資訊（伺服器 /api/analysis/games 的 context 是它的超集）。 */
@@ -60,6 +61,8 @@ export interface FilterMeta {
   warnings: string[];
   /** 有日期範圍時：排行門檻自動放寬（期間內每人場數的中位數）。 */
   periodLeaderboard?: { medianGames: number };
+  /** 合併計算（options.merge / mergeSmall）有開時：各組對到的名字、散客人數。 */
+  merge?: MergeReport;
 }
 
 export interface FilterApplication {
@@ -72,6 +75,8 @@ export interface FilterApplication {
   asOf: string;
   leaderboard: Omit<LeaderboardOptions, 'hidden'>;
   meta: FilterMeta;
+  /** 合併計算有開時：原始名字 → 合併後的名字、合併後的別名表（computeStats 的玩家名單與默契軸用）。 */
+  merge?: { rename: ReadonlyMap<string, string>; aliases: Record<string, string> };
 }
 
 export interface StatsResult extends Sections {
@@ -216,15 +221,28 @@ function isGameClause(c: Clause): c is GameClause {
 }
 
 /** 管線 ①–③：哪些局、誰被丟、誰被隱藏、as-of、排行的「近期出賽」規則。 */
-export function applyFilter(decoded: DecodedDataset, context: StatsContext, filter?: GameFilter | null): FilterApplication {
+export function applyFilter(source: DecodedDataset, context: StatsContext, filter?: GameFilter | null): FilterApplication {
+  const sourceAliases = { ...(source.dataset.aliases ?? {}), ...(context.aliases ?? {}) };
+  const unresolvedNames: string[] = [];
+  // ⓪ 合併計算：任何子句之前就把名字改掉（之後全部看合併後的名字；沒有合併選項時 = 原資料集）
+  let decoded = source;
+  let aliases = sourceAliases;
+  let merge: FilterApplication['merge'];
+  let mergeReport: MergeReport | undefined;
+  if (filter?.options && hasMergeOptions(filter.options)) {
+    const m = mergedDataset(source, filter.options, (n) => resolvePlayerName(n, source.dataset.players, sourceAliases));
+    decoded = m.decoded;
+    aliases = mergedAliases(sourceAliases, m.rename);
+    merge = { rename: m.rename, aliases };
+    mergeReport = m.report;
+    for (const g of m.report.groups) if (g.unresolved) unresolvedNames.push(...g.unresolved);
+  }
   const all = decoded.games;
   const players = decoded.dataset.players;
-  const aliases = { ...(decoded.dataset.aliases ?? {}), ...(context.aliases ?? {}) };
   const clauses = filter?.clauses ?? [];
   const asOf = effectiveAsOf(filter, context.asOf);
   const activity = filter?.options?.activity ?? 'filtered';
   const reports: ClauseReport[] = [];
-  const unresolvedNames: string[] = [];
   const warnings: string[] = [];
 
   // ① 局子句與玩家在局子句
@@ -312,7 +330,9 @@ export function applyFilter(decoded: DecodedDataset, context: StatsContext, filt
       unresolvedNames,
       warnings: [...new Set(warnings)],
       ...(periodDefaults ? { periodLeaderboard: { medianGames: periodDefaults.medianGames } } : {}),
+      ...(mergeReport ? { merge: mergeReport } : {}),
     },
+    ...(merge ? { merge } : {}),
   };
 }
 
@@ -434,10 +454,14 @@ export function canonicalFilterKey(filter: GameFilter | null | undefined): strin
   };
   const clauses = (filter.clauses ?? []).map((c) => JSON.stringify(norm(c))).sort();
   const lb = filter.options?.leaderboard;
+  const merge = filter.options?.merge;
   const options = norm({
     activity: filter.options?.activity === 'filtered' ? undefined : filter.options?.activity,
     asOf: filter.options?.asOf === 'auto' ? undefined : filter.options?.asOf,
     leaderboard: lb && Object.keys(lb).length ? lb : undefined,
+    // 組的順序保留（同一個名字在兩組時第一組算數）；組內名字排序
+    merge: merge && merge.length ? merge.map((g) => ({ as: g.as, names: g.names })) : undefined,
+    mergeSmall: filter.options?.mergeSmall ? { maxGames: filter.options.mergeSmall.maxGames } : undefined,
   });
   return JSON.stringify({ v: 1, clauses, options });
 }
@@ -445,7 +469,7 @@ export function canonicalFilterKey(filter: GameFilter | null | undefined): strin
 function hasOptions(filter: GameFilter): boolean {
   const o = filter.options;
   return Boolean(o && ((o.activity && o.activity !== 'filtered') || (o.asOf && o.asOf !== 'auto')
-    || (o.leaderboard && Object.keys(o.leaderboard).length)));
+    || (o.leaderboard && Object.keys(o.leaderboard).length) || hasMergeOptions(o)));
 }
 
 /**
@@ -457,10 +481,17 @@ export function computeStats(decoded: DecodedDataset, context: StatsContext, fil
     hidden: app.hidden,
     gamesKey: decoded.dataset.key,
     leaderboard: app.leaderboard,
-    aliases: { ...decoded.dataset.aliases, ...context.aliases },
-    chemistryRoster: context.chemistryRoster,
+    aliases: app.merge ? app.merge.aliases : { ...decoded.dataset.aliases, ...context.aliases },
+    chemistryRoster: app.merge ? mergedRoster(context.chemistryRoster, app.merge.rename) : context.chemistryRoster,
   });
   return { key: decoded.dataset.key, filterKey: canonicalFilterKey(filter), meta: app.meta, ...built.sections };
+}
+
+/** 默契軸在合併計算後：名字換成合併後的名字、去掉重複（順序 = 第一次出現）。 */
+function mergedRoster(roster: PairRoster | undefined, rename: ReadonlyMap<string, string>): PairRoster | undefined {
+  if (!roster) return roster;
+  const map = (list: readonly string[]): string[] => [...new Set(list.map((n) => rename.get(n) ?? n))];
+  return { players: map(roster.players), ...(roster.rowLabels ? { rowLabels: map(roster.rowLabels) } : {}) };
 }
 
 /** 近一年：asOf 往前 364 天到 asOf（預設集 lastYear 用）。 */
