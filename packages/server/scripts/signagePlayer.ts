@@ -72,6 +72,8 @@ const roomNo = (name: string): string => (/(\d+)\s*$/.exec(name)?.[1] ?? '');
 const NICK = arg('nick', MODE === 'room' && roomNo(ROOM) ? BOT_NICK.replace('（測試）', `（${roomNo(ROOM)}房測試）`) : BOT_NICK);
 const watchNick = (room: string): string => `百科機器人看房${roomNo(room)}`;
 const PASSWORD = arg('password', '');
+/** 指定房間也可以用房間描述找（--title 文字：描述含這段文字的房間），玩家開房前不必先知道房號。 */
+const ROOM_TITLE = arg('title', '');
 const WAIT_MIN = Number(arg('wait-min', '3'));
 const REJOIN_MIN = Number(arg('rejoin-min', '1'));
 const START_MIN = Number(arg('start-min', '6'));
@@ -89,7 +91,12 @@ const STATE = arg('state', '');
  * 多個機器人的程式路徑保留（各自獨立的瀏覽器環境），但上限鎖在 MAX_BOTS_PER_ROOM。
  */
 const MAX_BOTS_PER_ROOM = 1;
-const BOTS = Math.max(1, Math.min(MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
+/**
+ * Edward 2026-11-03：「我想開一場在 signage-cloud 上我對上 9 個機器人的局」——只有指定房間＋有密碼的私房才放寬到
+ * 9 個（玩家自己開、自己給密碼的房間，不會有被說作弊的問題）；公開房間、每晚補位照舊最多 1 個。
+ */
+const MAX_BOTS_PRIVATE = 9;
+const BOTS = Math.max(1, Math.min(MODE === 'room' && PASSWORD ? MAX_BOTS_PRIVATE : MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
 /** 第 i 個機器人（1 起算）的暱稱：只有 1 個時就是 NICK；多個時「百科機器人1（測試）」…（目前上限 1，見 MAX_BOTS_PER_ROOM） */
 const botNick = (i: number, n: number): string => (n <= 1 ? NICK : NICK.replace('（', `${i}（`));
 /** 開局後的「開眼階段」狀態字串。 */
@@ -615,11 +622,11 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
   if (alreadyPlayed >= MAX_GAMES) { log('重連的那局已打完，結束'); return; }
   const bots = await loginBots(browser, BOTS);
   const lobby = bots[0].page;
-  log(`指定房間 ${ROOM}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
+  log(`指定房間 ${ROOM || '（依房間描述）'}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
   let lastLen = -1; let stableSince = Date.now();
   while (Date.now() < deadline) {
     const rooms = await lobbyRooms(lobby).catch(() => [] as LobbyRoom[]);
-    const r = rooms.find((x) => sameRoom(x.name, ROOM));
+    const r = rooms.find((x) => (ROOM ? sameRoom(x.name, ROOM) : Boolean(ROOM_TITLE) && (x.description_title ?? '').includes(ROOM_TITLE)));
     if (!r) { lastLen = -1; await sleep(15000); continue; }
     if (!r.is_publish_room && !PASSWORD) { log(`${r.name}：私房需要密碼（--password），不加入`); return; }
     const len = r.length ?? 0;
@@ -632,7 +639,8 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
     if (seen && hasPediaBot(seen.users)) { log(`${r.name}：房裡已經有百科機器人，不加入`); return; }
     // 依序坐下：每個機器人坐之前再看一次大廳，房間滿了或開局了就不再坐
     const seated: { label: string; page: Page }[] = [];
-    for (const b of bots) {
+    // 公開房間最多 1 個（MAX_BOTS_PER_ROOM）；有密碼的私房才照 --bots
+    for (const b of bots.slice(0, r.is_publish_room ? MAX_BOTS_PER_ROOM : bots.length)) {
       const now = (await lobbyRooms(b.page).catch(() => [] as LobbyRoom[])).find((x) => x.name === r.name);
       if (!now || now.gaming || (now.length ?? 10) >= 10) break;
       if (await joinRoom(b.page, r.name, r.is_publish_room ? '' : PASSWORD)) seated.push(b);
@@ -688,7 +696,7 @@ async function main(): Promise<void> {
     if (MODE === 'private-test') await privateTest(browser);
     else {
       const resumed = await resume(browser);
-      if (MODE === 'room') { if (!ROOM) throw new Error('--room 沒有給房號'); await roomMode(browser, deadline, resumed); }
+      if (MODE === 'room') { if (!ROOM && !ROOM_TITLE) throw new Error('--room 沒有給房號（或 --title 房間描述）'); await roomMode(browser, deadline, resumed); }
       else await live(browser, deadline, resumed);
     }
   } finally {
