@@ -6,6 +6,10 @@
  * 文字記錄或 note 原文。解碼規則與 Python 的 decode_games_dataset 完全相同（兩邊都由 round-trip 守門與
  * 一致性測試保證）：衍生欄位（座位→角色、勝負、任務失敗數、首隊、湖的陣營與角色）在這裡算一次，
  * timelineDate（player_timelines 的排序日期）在「全部局」上算一次，篩選不改它。
+ *
+ * 百科AI 局（分類 BOT_GAME_CATEGORY；Edward 2026-11-03「有百科AI的另外算」）：解碼時從 `games` 拿出來放 `botGames`，
+ * 預設的一切（不篩選 = 快取、排行、基準列、陣容強度、自動發現、ID 認領…）都看不到；篩選勾選「百科AI」分類時
+ * applyFilter 才用 withBotGames 併進來。
  */
 import {
   ALL_ROLES,
@@ -59,6 +63,14 @@ export interface GamesDatasetConfig {
   minGamesThreshold: number;
   excessShrinkK: number;
   lakeClaimMinSample: number;
+}
+
+/** 百科AI 參與的局的分類（generate_cache.BOT_CATEGORY；資料集裡都在最後面、不評陣容強度）。 */
+export const BOT_GAME_CATEGORY = '百科AI';
+
+/** 百科AI 參與的局。 */
+export function isBotGame(g: Pick<Game, 'category'>): boolean {
+  return g.category === BOT_GAME_CATEGORY;
 }
 
 /** 一局的位置陣列（順序 = GAMES_DATASET_FIELDS）。 */
@@ -161,7 +173,7 @@ export interface Game {
   id: string;
   source: 0 | 1;
   date: string;
-  /** 分類原文的白名單值（線瓦 / 面瓦 / 娛樂 / "" / 其他）。 */
+  /** 分類原文的白名單值（線瓦 / 面瓦 / 娛樂 / "" / 其他 / 百科AI）。 */
   category: string;
   slot: number;
   noteTags: string[];
@@ -196,9 +208,13 @@ export interface Game {
 }
 
 export interface DecodedDataset {
+  /** 有百科AI 局時，dataset.players 只留人類局裡有的名字（= 沒有百科AI 局時的名單）。 */
   dataset: GamesDataset;
+  /** 預設計算的局（不含百科AI 局）。 */
   games: Game[];
   config: GamesDatasetConfig;
+  /** 百科AI 局（不在 games 裡；篩選勾選「百科AI」分類時才由 withBotGames 併進來）。 */
+  botGames?: Game[];
 }
 
 export class GamesDatasetError extends Error {}
@@ -327,7 +343,37 @@ export function decodeGamesDataset(raw: unknown, expectedKey?: string | null): D
   if (!Array.isArray(dataset.games) || !Array.isArray(dataset.players)) throw new GamesDatasetError('games / players missing');
   const idx: Record<string, number> = {};
   dataset.fields.forEach((f, i) => { idx[f] = i; });
-  const games = dataset.games.map((row, i) => decodeGame(row, i, dataset, idx));
-  assignTimelineDates(games);
-  return { dataset, games, config: dataset.config };
+  const all = dataset.games.map((row, i) => decodeGame(row, i, dataset, idx));
+  assignTimelineDates(all);
+  const games = all.filter((g) => !isBotGame(g));
+  if (games.length === all.length) return { dataset, games, config: dataset.config };
+  const seated = new Set<string>();
+  for (const g of games) for (const n of g.seatPlayers) if (n !== null) seated.add(n);
+  return {
+    dataset: { ...dataset, players: dataset.players.filter((p) => seated.has(p)) },
+    games,
+    config: dataset.config,
+    botGames: all.filter(isBotGame),
+  };
+}
+
+const withBotsCache = new WeakMap<DecodedDataset, DecodedDataset>();
+
+/** 人類局＋百科AI 局（原本的順序；名單 = 資料集的全部名字）。沒有百科AI 局時就是原物件。每份資料集只組一次。 */
+export function withBotGames(decoded: DecodedDataset): DecodedDataset {
+  const bots = decoded.botGames;
+  if (!bots || !bots.length) return decoded;
+  let full = withBotsCache.get(decoded);
+  if (!full) {
+    const players = [...decoded.dataset.players];
+    const known = new Set(players);
+    for (const g of bots) for (const n of g.seatPlayers) if (n !== null && !known.has(n)) { known.add(n); players.push(n); }
+    full = {
+      dataset: { ...decoded.dataset, players },
+      games: [...decoded.games, ...bots].sort((a, b) => a.seq - b.seq),
+      config: decoded.config,
+    };
+    withBotsCache.set(decoded, full);
+  }
+  return full;
 }

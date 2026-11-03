@@ -21,7 +21,7 @@
  *   - room（玩家指定）：直接去 --room 那間房，有空位（人數穩定 15 秒、沒有人正在進房）才坐下；
  *     私房要 --password。打完 --games 局（最多 3）就離開。
  * 共同（開局前）：房間設定是機器人打不了的（王者之劍、蘭斯洛特等角色；角色數和人數不合）就離開；房裡已經有另一個
- * 百科機器人就離開（每間房最多 1 個）；等開局超過 --start-min 分鐘離開；有人離開（不再是滿桌缺一）也離開（live）；
+ * （每間房最多 1 個的限制已拿掉，Edward 11/03）；等開局超過 --start-min 分鐘離開；有人離開（不再是滿桌缺一）也離開（live）；
  * 自己變成房主就離開。
  * 對局中不離開：練習台以暱稱認人，中途離開整桌會卡在等這個座位（2026-11-03 實測）。輪到自己卻 45 秒送不出動作就用保守的
  * 預設動作；被導回大廳就重新加入回原座位；程式掛掉時 workflow 重跑，--state 讓它先回去把那局打完。整局 15 分鐘沒有任何
@@ -37,7 +37,7 @@ import { HeuristicAgent } from '../src/ai/HeuristicAgent';
 import type { PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
 import type { Role } from '@avalon/shared';
 import {
-  ENDED, buildObservation, decisionOpen, hasPediaBot, evilRolesAtAssassination, historyFromRecord, lobbyCandidate, lobbyRolesLoose, missionCard,
+  ENDED, buildObservation, decisionOpen, evilRolesAtAssassination, historyFromRecord, lobbyCandidate, lobbyRolesLoose, missionCard,
   myLakeFromSnap, nextTeamAction, pendingDecision, pendingLakeDeclaration, readKnowledge, seatsCandidate, setOf,
   shortRooms, sid, unsupportedReason, validLakeTargets,
   type Decision, type Knowledge, type LobbyRoom, type PlatformRecord, type SiteAction, type Snap,
@@ -63,15 +63,19 @@ const MAX_GAMES = Math.max(0, Math.min(MODE === 'live' ? 2 : 3, Number(arg('max-
 const ROOM = arg('room', '');
 /**
  * 暱稱。練習台同一個暱稱同時兩個連線會互相干擾（2026-11-03 私房測試：同暱稱兩桌同時打，其中一桌被導回大廳），
- * 所以每個同時在跑的程序用不同暱稱，都以「百科機器人」開頭（記錄員與「每間房最多 1 個」都靠這個前綴認）：
- *   - 每晚補位：百科機器人（測試）
- *   - 指定房間：百科機器人（1460房測試）——每間房一個 workflow（concurrency 依房號），暱稱也依房號，不會撞名
- *   - 看座位用的觀眾席分頁：百科機器人看房1460（只旁觀、不入座；每間房各一個暱稱）
+ * 所以每個同時在跑的程序用不同暱稱，都是「百科AI_{#}」（Edward 2026-11-03；記錄員靠「百科AI」前綴認，戰績合併成「百科AI」）：
+ *   - 每晚補位：百科AI_0
+ *   - 指定房間（1 個）：百科AI_10～19（依房號個位數）——每間房一個 workflow（concurrency 依房號）
+ *   - player_aliases.json 把 百科AI_0～19 都併成「百科AI」（Edward 11/03「百科AI玩的都當成同一個人」）
+ *   - 指定房間多個（私房陪練、本機執行）：百科AI_1 … 百科AI_9
+ *   - 看座位用的觀眾席分頁：百科AI看房1460（只旁觀、不入座；每間房各一個暱稱）
  */
 const roomNo = (name: string): string => (/(\d+)\s*$/.exec(name)?.[1] ?? '');
-const NICK = arg('nick', MODE === 'room' && roomNo(ROOM) ? BOT_NICK.replace('（測試）', `（${roomNo(ROOM)}房測試）`) : BOT_NICK);
-const watchNick = (room: string): string => `百科機器人看房${roomNo(room)}`;
+const NICK = arg('nick', MODE === 'room' ? (roomNo(ROOM) ? `百科AI_${10 + (Number(roomNo(ROOM)) % 10)}` : '百科AI_1') : BOT_NICK);
+const watchNick = (room: string): string => `百科AI看房${roomNo(room)}`;
 const PASSWORD = arg('password', '');
+/** 指定房間也可以用房間描述找（--title 文字：描述含這段文字的房間），玩家開房前不必先知道房號。 */
+const ROOM_TITLE = arg('title', '');
 const WAIT_MIN = Number(arg('wait-min', '3'));
 const REJOIN_MIN = Number(arg('rejoin-min', '1'));
 const START_MIN = Number(arg('start-min', '6'));
@@ -85,15 +89,23 @@ const ONLY_TITLE = arg('only-title', '');
  */
 const STATE = arg('state', '');
 /**
- * Edward 2026-11-03：「避免B被擋或是B被說作弊 目前先限制B只能有一隻進入」——每間房最多 1 個百科機器人（所有模式）。
- * 多個機器人的程式路徑保留（各自獨立的瀏覽器環境），但上限鎖在 MAX_BOTS_PER_ROOM。
+ * 每間房的百科機器人數：Edward 2026-11-03 先說「目前先限制B只能有一隻進入」，同晚改成「把每房最多1個全部拿掉
+ * 不管私房或公開房」。指定房間（--bots）最多 9 個（自己對 9 個機器人）；每晚補位一次只派 1 個（一個程序一個帳號）。
  */
 const MAX_BOTS_PER_ROOM = 1;
-const BOTS = Math.max(1, Math.min(MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
-/** 第 i 個機器人（1 起算）的暱稱：只有 1 個時就是 NICK；多個時「百科機器人1（測試）」…（目前上限 1，見 MAX_BOTS_PER_ROOM） */
-const botNick = (i: number, n: number): string => (n <= 1 ? NICK : NICK.replace('（', `${i}（`));
+const MAX_BOTS_ROOM_MODE = 9;
+const BOTS = Math.max(1, Math.min(MODE === 'room' ? MAX_BOTS_ROOM_MODE : MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
+/** 第 i 個機器人（1 起算）的暱稱：只有 1 個時就是 NICK；多個時 百科AI_1 … 百科AI_9。 */
+const botNick = (i: number, n: number): string => (n <= 1 ? NICK : `百科AI_${i}`);
 /** 開局後的「開眼階段」狀態字串。 */
 const EYES = '開眼階段';
+/**
+ * 輪到自己時等多久再按（毫秒）。Edward 2026-11-03：「百科AI的所有動作速度都可以再快一點 瞬間做完都沒差 因為是AI」
+ * ——原本 1–3 秒，改成 --act-ms（預設 150）上下 50%；POLL_MS 是沒輪到自己時多久看一次畫面。
+ */
+const ACT_MS = Math.max(0, Number(arg('act-ms', '150')) || 0);
+const actDelay = (): number => ACT_MS * (0.5 + Math.random());
+const POLL_MS = 400;
 const HELLO = '我是阿瓦隆百科的測試機器人，人不夠時來補位，打完會離開；有意見請到 DC 百科問題回報';
 
 // ── log ──────────────────────────────────────────────────────────────────────────────
@@ -289,7 +301,7 @@ async function playGame(p: Page, room: string): Promise<GameResult> {
     if (seat.k.mismatch && Date.now() - seat.startedAt < 6000) { await sleep(500); continue; } // 先等標記到齊再做決定
     myLakeFromSnap(s, seat.myLake).forEach((m) => { if (!seat.myLake.some((x) => x.round === m.round)) { seat.myLake.push(m); plog(`${room} 湖結果 ${m.targetId} ${m.result}`); } });
     const d = pendingDecision(s);
-    if (!d) { pendingKey = ''; await sleep(800); continue; }
+    if (!d) { pendingKey = ''; await sleep(POLL_MS); continue; }
     const crown = s.users.find((u) => u.crown)?.set ?? 0;
     const dkey = `${d}|${s.missions.length}|${crown}|${s.lake_result.filter((l) => l.to !== null).length}`;
     if (dkey !== pendingKey) { pendingKey = dkey; pendingSince = Date.now(); }
@@ -300,7 +312,7 @@ async function playGame(p: Page, room: string): Promise<GameResult> {
     const fallback = Date.now() - pendingSince > 45_000;
     try {
       if (!doneAt && d !== 'team') {
-        await sleep(1000 + Math.random() * 2000);
+        await sleep(actDelay());
         const again = await snap(p);
         if (!again || !decisionOpen(again, d)) continue;
         s = again;
@@ -331,7 +343,7 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
     case 'team': {
       if (seat.planKey !== dkey || !seat.plan) {
         await sync();
-        await sleep(1000 + Math.random() * 1500);
+        await sleep(actDelay());
         const need = s.free_ticks + s.users.filter((u) => u.tick).length;
         const dflt = [s.myself.set, ...s.users.map((u) => u.set).filter((x) => x !== s.myself.set)].slice(0, need);
         const a = safe(() => seat.agent.act(seat.obs(s, 'team_select')), { type: 'team_select' as const, teamIds: dflt.map(sid) });
@@ -407,9 +419,7 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
       if (s) {
         if (s.gaming && s.status !== ENDED) { started = true; break; }
         if (!greeted && CHAT && greet && !isHost) { greeted = await chat(p, HELLO); if (greeted) log(`${room}：已在聊天室打招呼`); }
-        if (s.users.some((u) => u.id !== s.myself.id && isPediaBotName(String(u.name ?? '')))) {
-          await leaveRoom(p, '房裡已經有另一個百科機器人（每間房最多 1 個）', room); return played;
-        }
+        // 私房多機器人（--password --bots N）：同房的其他百科機器人是自己人，不算違反「每間房最多 1 個」
         if (!isHost && s.myself.master) { await leaveRoom(p, '變成房主（不佔房主位）', room); return played; }
         if (strictFull && s.users.length < 10) { await leaveRoom(p, `有人離開（剩 ${s.users.length} 人）`, room); return played; }
         // 角色設定跟上人數時才檢查（房主調整中、人還沒到齊時不算）
@@ -615,11 +625,11 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
   if (alreadyPlayed >= MAX_GAMES) { log('重連的那局已打完，結束'); return; }
   const bots = await loginBots(browser, BOTS);
   const lobby = bots[0].page;
-  log(`指定房間 ${ROOM}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
+  log(`指定房間 ${ROOM || '（依房間描述）'}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
   let lastLen = -1; let stableSince = Date.now();
   while (Date.now() < deadline) {
     const rooms = await lobbyRooms(lobby).catch(() => [] as LobbyRoom[]);
-    const r = rooms.find((x) => sameRoom(x.name, ROOM));
+    const r = rooms.find((x) => (ROOM ? sameRoom(x.name, ROOM) : Boolean(ROOM_TITLE) && (x.description_title ?? '').includes(ROOM_TITLE)));
     if (!r) { lastLen = -1; await sleep(15000); continue; }
     if (!r.is_publish_room && !PASSWORD) { log(`${r.name}：私房需要密碼（--password），不加入`); return; }
     const len = r.length ?? 0;
@@ -629,7 +639,6 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
     const watch = await openWatch(browser, r.name);
     const seen = watch ? await snap(watch).catch(() => null) : null;
     if (watch) await watch.context().close().catch(() => undefined);
-    if (seen && hasPediaBot(seen.users)) { log(`${r.name}：房裡已經有百科機器人，不加入`); return; }
     // 依序坐下：每個機器人坐之前再看一次大廳，房間滿了或開局了就不再坐
     const seated: { label: string; page: Page }[] = [];
     for (const b of bots) {
@@ -688,7 +697,7 @@ async function main(): Promise<void> {
     if (MODE === 'private-test') await privateTest(browser);
     else {
       const resumed = await resume(browser);
-      if (MODE === 'room') { if (!ROOM) throw new Error('--room 沒有給房號'); await roomMode(browser, deadline, resumed); }
+      if (MODE === 'room') { if (!ROOM && !ROOM_TITLE) throw new Error('--room 沒有給房號（或 --title 房間描述）'); await roomMode(browser, deadline, resumed); }
       else await live(browser, deadline, resumed);
     }
   } finally {

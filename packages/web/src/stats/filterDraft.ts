@@ -8,7 +8,13 @@ import type {
 
 export const EMPTY_FILTER: GameFilter = { v: 1, clauses: [] };
 
-export const CATEGORY_VALUES: readonly CategoryValue[] = ['線瓦', '面瓦', '娛樂', '未分類', '其他'];
+export const CATEGORY_VALUES: readonly CategoryValue[] = ['線瓦', '面瓦', '娛樂', '未分類', '其他', '百科AI'];
+/**
+ * 百科AI 局預設不算（Edward 2026-11-03「有百科AI的另外算」；引擎 filterIncludesBotGames）：沒有分類子句時
+ * 「百科AI」不勾，要看就勾（寫成列出它的分類子句）。
+ */
+export const BOT_CATEGORY: CategoryValue = '百科AI';
+export const DEFAULT_CATEGORY_VALUES: readonly CategoryValue[] = CATEGORY_VALUES.filter((v) => v !== BOT_CATEGORY);
 export const OUTCOME_VALUES: readonly OutcomeValue[] = ['三紅', '三藍死', '三藍活'];
 export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 
@@ -48,17 +54,21 @@ export function removeClauseAt(filter: GameFilter | null, index: number): GameFi
   return { ...base, clauses: base.clauses.filter((_, i) => i !== index) };
 }
 
-/** 分類欄位：勾選的分類 (反轉的子句換算成勾選的補集)。沒有子句 = 全部勾選。 */
+/** 分類欄位：勾選的分類 (反轉的子句換算成勾選的補集，百科AI 不在補集裡)。沒有子句 = 百科AI 以外全部勾選。 */
 export function selectedCategories(filter: GameFilter | null): CategoryValue[] {
   const c = clausesOf(filter, 'category')[0];
-  if (!c) return [...CATEGORY_VALUES];
-  return c.not ? CATEGORY_VALUES.filter((v) => !c.in.includes(v)) : CATEGORY_VALUES.filter((v) => c.in.includes(v));
+  if (!c) return [...DEFAULT_CATEGORY_VALUES];
+  return c.not ? DEFAULT_CATEGORY_VALUES.filter((v) => !c.in.includes(v)) : CATEGORY_VALUES.filter((v) => c.in.includes(v));
 }
 
-/** 勾選的分類 → 子句：全勾 = 沒有子句；沒勾的比較少時寫成「不是…」(排除娛樂局 = 預設集同一條)。 */
+/**
+ * 勾選的分類 → 子句：預設 (百科AI 以外全勾) = 沒有子句；勾了百科AI 一律列出勾選的分類 (引擎只認列出來的)；
+ * 其他時候沒勾的比較少就寫成「不是…」(排除娛樂局 = 預設集同一條)。
+ */
 export function categoryClause(selected: readonly CategoryValue[]): ClauseOf<'category'> | null {
   const on = CATEGORY_VALUES.filter((v) => selected.includes(v));
-  const off = CATEGORY_VALUES.filter((v) => !selected.includes(v));
+  if (on.includes(BOT_CATEGORY)) return { kind: 'category', in: on };
+  const off = DEFAULT_CATEGORY_VALUES.filter((v) => !selected.includes(v));
   if (!off.length) return null;
   if (!on.length) return { kind: 'category', in: [] as CategoryValue[] };
   return off.length < on.length ? { kind: 'category', in: off, not: true } : { kind: 'category', in: on };

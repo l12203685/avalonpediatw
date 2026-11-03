@@ -11,6 +11,7 @@
  */
 
 import { AVALON_CONFIG, type Role } from '@avalon/shared';
+import { BOT_GAME_CATEGORY } from '@avalon/shared/stats';
 import {
   EVIL_ROLES,
   REPLAY_PLAYER_COUNT,
@@ -28,8 +29,11 @@ export type DatasetTuple = readonly unknown[];
 
 export interface DatasetHeader {
   fields: readonly string[];
-  vocab: { outcome: readonly string[]; noteTags: readonly string[] };
+  vocab: { outcome: readonly string[]; noteTags: readonly string[]; category?: readonly string[] };
 }
+
+/** 跳過原因：百科AI 局（Edward 2026-11-03「有百科AI的另外算」：不進人類量尺）。 */
+export const SKIP_BOT_GAME = 'bot game (百科AI)';
 
 export interface DatasetReplayGame {
   game: ReplayGame;
@@ -261,7 +265,12 @@ export function replayGamesFromDataset(dataset: DatasetHeader & { games: readonl
 } {
   const games: DatasetReplayGame[] = [];
   const skipped: Record<string, number> = {};
+  const catAt = dataset.fields.indexOf('cat');
   for (const row of dataset.games) {
+    if (catAt >= 0 && dataset.vocab.category?.[row[catAt] as number] === BOT_GAME_CATEGORY) {
+      skipped[SKIP_BOT_GAME] = (skipped[SKIP_BOT_GAME] ?? 0) + 1;
+      continue;
+    }
     const res = replayGameFromDataset(row, dataset);
     if (res.ok) games.push(res.value);
     else skipped[res.reason] = (skipped[res.reason] ?? 0) + 1;

@@ -11,7 +11,8 @@ import type { Role } from '../constants';
 export type Side = 'red' | 'blue';
 /** 座號 1..10（10 = 牌譜的 "0"）。 */
 export type SeatNo = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-export type CategoryValue = '線瓦' | '面瓦' | '娛樂' | '未分類' | '其他';
+/** 百科AI = 有百科AI（補位機器人）的局：預設不算，要勾選（明確列在 in、不是 not）才算進來（dataset.ts BOT_GAME_CATEGORY）。 */
+export type CategoryValue = '線瓦' | '面瓦' | '娛樂' | '未分類' | '其他' | '百科AI';
 export type OutcomeValue = '三紅' | '三藍死' | '三藍活' | 'other';
 export type TrioOrder = '派梅娜' | '派娜梅' | '梅派娜' | '梅娜派' | '娜派梅' | '娜梅派';
 

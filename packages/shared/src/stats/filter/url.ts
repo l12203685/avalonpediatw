@@ -36,7 +36,7 @@ const MISSION_SEQ_PREFIXES: readonly string[] = ((): string[] => {
   return out;
 })();
 const SCHEMA: Record<string, KindSchema> = {
-  category: { required: { in: { enums: ['線瓦', '面瓦', '娛樂', '未分類', '其他'] } } },
+  category: { required: { in: { enums: ['線瓦', '面瓦', '娛樂', '未分類', '其他', '百科AI'] } } },
   source: { required: { in: { enums: ['sheet', 'discord'] } } },
   date: { optional: { from: 'date', to: 'date', undated: { enum: ['exclude', 'include'] } } },
   weekday: { required: { in: 'ints' } },

@@ -17,7 +17,7 @@ export const NOTE_TAGS = [
   'flag:notRecorderGame', 'flag:review', 'flag:badGame', 'flag:lakeCorrected', 'flag:substitution', 'flag:incident',
 ];
 
-const CATEGORIES = ['線瓦', '面瓦', '娛樂', '', '其他'];
+const CATEGORIES = ['線瓦', '面瓦', '娛樂', '', '其他', '百科AI'];
 const OUTCOMES = ['三紅', '三藍死', '三藍活', '', '其他'];
 
 export interface GameSpec {

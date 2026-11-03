@@ -12,7 +12,7 @@
  */
 import type { Role } from '../constants';
 import { buildSections, dropDatesAfter, type Sections } from '../build';
-import type { DecodedDataset, Game } from '../dataset';
+import { BOT_GAME_CATEGORY, withBotGames, type DecodedDataset, type Game } from '../dataset';
 import { findTypedPlayerName, playerNameKey } from '../../playerNameMatch';
 import { addDays, windowStart, type LeaderboardOptions } from '../leaderboard';
 import { computePlayerStats, type PlayerRow } from '../players';
@@ -229,8 +229,22 @@ function isGameClause(c: Clause): c is GameClause {
   return c.kind !== 'excludePlayers';
 }
 
+/**
+ * 篩選明確勾選了「百科AI」分類（不是 not 的分類子句列了它）：百科AI 局才算進來。其他情況（不篩選、
+ * 「排除娛樂局」這類 not 子句、沒勾）一律不算（Edward 2026-11-03「有百科AI的另外算」）。
+ */
+export function filterIncludesBotGames(filter: GameFilter | null | undefined): boolean {
+  return (filter?.clauses ?? []).some((c) => c.kind === 'category' && !c.not && c.in.includes(BOT_GAME_CATEGORY));
+}
+
+/** 篩選要用的局：預設只有人類局；勾選「百科AI」分類時併進百科AI 局。 */
+export function filterBase(decoded: DecodedDataset, filter: GameFilter | null | undefined): DecodedDataset {
+  return filterIncludesBotGames(filter) ? withBotGames(decoded) : decoded;
+}
+
 /** 管線 ①–③：哪些局、誰被丟、誰被隱藏、as-of、排行的「近期出賽」規則。 */
-export function applyFilter(source: DecodedDataset, context: StatsContext, filter?: GameFilter | null): FilterApplication {
+export function applyFilter(input: DecodedDataset, context: StatsContext, filter?: GameFilter | null): FilterApplication {
+  const source = filterBase(input, filter);
   const sourceAliases = { ...(source.dataset.aliases ?? {}), ...(context.aliases ?? {}) };
   const unresolvedNames: string[] = [];
   // ⓪ 合併計算：任何子句之前就把名字改掉（之後全部看合併後的名字；沒有合併選項時 = 原資料集）
@@ -491,8 +505,9 @@ function benchmarkCuts(filter: GameFilter): { top: number; bottom: number } | nu
 /**
  * 篩選後的全部區塊（overview、players、playerDetails、leaderboard）。`filter` 為空時 = 快取的區塊。
  */
-export function computeStats(decoded: DecodedDataset, context: StatsContext, filter?: GameFilter | null): StatsResult {
-  const app = applyFilter(decoded, context, filter);
+export function computeStats(input: DecodedDataset, context: StatsContext, filter?: GameFilter | null): StatsResult {
+  const decoded = filterBase(input, filter);
+  const app = applyFilter(input, context, filter);
   const built = buildSections(app.games, decoded.config, app.asOf, {
     hidden: app.hidden,
     gamesKey: decoded.dataset.key,
