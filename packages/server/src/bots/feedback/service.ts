@@ -29,6 +29,7 @@ import { formatFeedbackForward, parseFeedbackCommand } from './commands';
 import { OPINION_TOPIC_ID, TopicCounter, type TopicWeekSnapshot } from './topicCounter';
 import { parseStatsCommand } from '../stats/textCommands';
 import { isSimCommandText } from '../simulation/commands';
+import { isSeatFillerCommandText } from '../seatFiller/commands';
 
 /** What the service hands to Discord: content + no pings, ever. */
 export interface FeedbackForwardPayload {
@@ -143,7 +144,8 @@ export class FeedbackService {
    * Count the topics a human message touches. The text is read once and
    * dropped. Texts the bot answers as commands are usage, not reactions, so
    * they are skipped:
-   *   - a stats command (/戰績 /排行 /默契 /指令) — otherwise every LINE
+   *   - a stats command (/戰績 /排行 /默契 /指令), a 模擬瓦 command or a
+   *     補位機器人 command (/補位 /機器人補位) — otherwise every LINE
    *     lookup would bump its own topic while Discord's slash commands never
    *     reach here, and the two platforms would not be comparable;
    *   - on LINE, "/意見 …" while the command is on: `submit()` counts it
@@ -156,6 +158,8 @@ export class FeedbackService {
       if (parseStatsCommand(text)) return [];
       // 模擬瓦 (2026-10-14) commands are usage, not reactions.
       if (isSimCommandText(text)) return [];
+      // 補位機器人 (2026-11-03): /補位 /機器人補位 are usage too.
+      if (isSeatFillerCommandText(text)) return [];
       if (platform === 'line' && FEEDBACK_CONFIG.commandEnabled && parseFeedbackCommand(text)) return [];
       return this.counter.observe(platform, text);
     } catch (err) {
