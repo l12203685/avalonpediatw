@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
-import type { GameFilter, LeaderboardOverrideKey, LeaderboardOverrides } from '@avalon/shared/stats';
+import { hasDateRange, type GameFilter, type LeaderboardOverrideKey, type LeaderboardOverrides } from '@avalon/shared/stats';
 import { useStatsFilter } from '../../stats/statsFilter';
 
 /**
@@ -33,7 +33,7 @@ let rememberedOpen = false;
 const ACTIVE_DAYS = [30, 60, 90, 180, 365, 0];
 const MAIN_GAMES = [50, 100, 150, 200, 0];
 /** 角色／位置最低場數 (theoryMinGames)；整體理論最低場數 = OVERALL_FACTOR 倍 (Edward 2026-10-30)。 */
-const THEORY_MIN_GAMES = [30, 50, 100, 150];
+const THEORY_MIN_GAMES = [1, 3, 5, 10, 20, 30, 50, 100, 150];
 const OVERALL_FACTOR = 2;
 const ROLE_WINDOWS: Array<[number, number]> = [[5, 20], [10, 40], [15, 60], [20, 80]];
 /** 角色王：'auto' = 預設規則；其他 = 固定場數 (其他角色 / 忠臣)。 */
@@ -61,6 +61,8 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
   const setFilter = useStatsFilter((s) => s.setFilter);
   const overrides: LeaderboardOverrides = filter?.options?.leaderboard ?? {};
   const modified = Object.keys(overrides).length > 0;
+  // 有日期範圍時引擎自動放寬門檻（Edward 2026-11-03：「只想查詢某天的戰績 會被上榜條件太嚴格導致完全找不到戰績」）
+  const periodMode = hasDateRange(filter?.clauses ?? []);
   const [open, setOpenState] = useState(rememberedOpen);
   const setOpen = (next: (o: boolean) => boolean): void => setOpenState((o) => {
     rememberedOpen = next(o);
@@ -134,6 +136,11 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
           {t(`${r}.title`)}
         </span>
         <span className={`min-w-0 ${modified ? 'text-amber-200' : 'text-zinc-400'}`}>{summary}</span>
+        {periodMode && (
+          <span className="rounded bg-sky-950/70 px-1.5 py-0.5 text-[11px] text-sky-200" data-testid="leaderboard-rules-period">
+            {t(`${r}.periodAuto`, { defaultValue: '有日期範圍：門檻已依期間自動放寬（場數門檻 = 期間內每人場數的中位數）' })}
+          </span>
+        )}
         <span className="ml-auto inline-flex items-center gap-1">
           <button
             type="button"

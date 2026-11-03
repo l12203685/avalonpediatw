@@ -20,6 +20,8 @@ import {
   computeStats,
   decodeGamesDataset,
   diffSections,
+  hasDateRange,
+  LEADERBOARD_OVERRIDE_RANGES,
   type DecodedDataset,
   type GameFilter,
   type StatsContext,
@@ -86,7 +88,9 @@ function expectSame(pairs: Array<[label: string, expected: unknown, actual: unkn
 function checkReferences(dir: string, refs: Record<string, RefBody>, decoded: DecodedDataset, context: StatsContext): void {
   for (const ref of Object.values(refs)) {
     it(`${path.basename(dir)} / ${ref.id}`, () => {
-      const result = computeStats(decoded, context, ref.filter);
+      // Python 的參考值是固定門檻；有日期範圍時網站會自動放寬排行門檻（apply.ts periodLeaderboardDefaults），
+      // 比對時把門檻明確設回資料集的預設。
+      const result = computeStats(decoded, context, withDefaultBoardRules(ref.filter, decoded));
       expect({
         totalGames: result.meta.totalGames,
         gamesAfterClauses: result.meta.gamesAfterClauses,
@@ -102,6 +106,13 @@ function checkReferences(dir: string, refs: Record<string, RefBody>, decoded: De
       ]);
     });
   }
+}
+
+function withDefaultBoardRules(filter: GameFilter | null | undefined, decoded: DecodedDataset): GameFilter | null | undefined {
+  if (!filter || !hasDateRange(filter.clauses ?? [])) return filter;
+  const cfg = decoded.config.leaderboard as unknown as Record<string, number>;
+  const defaults = Object.fromEntries(Object.keys(LEADERBOARD_OVERRIDE_RANGES).map((k) => [k, cfg[k]]));
+  return { ...filter, options: { ...(filter.options ?? {}), leaderboard: { ...defaults, ...(filter.options?.leaderboard ?? {}) } } };
 }
 
 function loadFixtureDir(dir: string): { decoded: DecodedDataset; context: StatsContext; refs: Record<string, RefBody> } {

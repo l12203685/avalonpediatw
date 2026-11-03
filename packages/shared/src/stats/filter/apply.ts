@@ -58,6 +58,8 @@ export interface FilterMeta {
   clauses: ClauseReport[];
   unresolvedNames: string[];
   warnings: string[];
+  /** 有日期範圍時：排行門檻自動放寬（期間內每人場數的中位數）。 */
+  periodLeaderboard?: { medianGames: number };
 }
 
 export interface FilterApplication {
@@ -283,16 +285,20 @@ export function applyFilter(decoded: DecodedDataset, context: StatsContext, filt
     : g1;
   if (g2.length < SMALL_SAMPLE_GAMES) warnings.push('smallSample');
 
+  // 有日期範圍時排行門檻自動放寬（Edward 2026-11-03：「只想查詢某天的戰績 會被上榜條件太嚴格導致完全找不到戰績」）；
+  // 使用者自己改的上榜條件蓋在上面。
+  const periodDefaults = hasDateRange(clauses) ? periodLeaderboardDefaults(g2, decoded.config.leaderboard) : null;
+  const userOverrides = filter?.options?.leaderboard ?? {};
+  const overrides: LeaderboardOverrides = { ...(periodDefaults?.overrides ?? {}), ...userOverrides };
+
   return {
     games: g2,
     hidden,
     dropped,
     asOf,
     leaderboard: {
-      ...leaderboardActivity(activity, all, asOf, decoded, filter?.options?.leaderboard),
-      ...(filter?.options?.leaderboard && Object.keys(filter.options.leaderboard).length
-        ? { overrides: { ...filter.options.leaderboard } }
-        : {}),
+      ...leaderboardActivity(activity, all, asOf, decoded, overrides),
+      ...(Object.keys(overrides).length ? { overrides } : {}),
     },
     meta: {
       totalGames: all.length,
@@ -305,6 +311,51 @@ export function applyFilter(decoded: DecodedDataset, context: StatsContext, filt
       clauses: reports,
       unresolvedNames,
       warnings: [...new Set(warnings)],
+      ...(periodDefaults ? { periodLeaderboard: { medianGames: periodDefaults.medianGames } } : {}),
+    },
+  };
+}
+
+/** 篩選裡有（不是「排除」的）日期範圍子句。 */
+export function hasDateRange(clauses: readonly Clause[]): boolean {
+  return clauses.some((c) => c.kind === 'date' && !c.not && Boolean(c.from || c.to));
+}
+
+/**
+ * 期間模式的排行門檻：不看近期出賽、位置理論等看整個期間、不要求角色窗打滿；場數門檻 = 期間內每人場數的中位數
+ * （不超過原本的預設），角色窗與角色王、刺殺次數照比例縮（忠臣 4 成、其他角色與刺殺 1 成，至少 1）。
+ * 查一天時中位數大約就是那晚每人打的場數，只來一兩場的不會排到最前面；查一整年時門檻自然變高。
+ */
+export function periodLeaderboardDefaults(
+  games: readonly Game[],
+  cfg: Readonly<Record<string, number>>,
+): { overrides: LeaderboardOverrides; medianGames: number } {
+  const counts = new Map<string, number>();
+  for (const g of games) {
+    if (g.outcome !== '三紅' && g.outcome !== '三藍死' && g.outcome !== '三藍活') continue;
+    for (const n of g.seatPlayers) if (n) counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+  const sorted = [...counts.values()].sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor((sorted.length - 1) / 2)] : 1;
+  const m = Math.max(1, median);
+  const cap = (key: string, v: number): number => Math.max(1, Math.min(cfg[key] ?? v, Math.round(v)));
+  const role = (key: string): number => cap(key, m * 0.1);
+  const loyal = (key: string): number => cap(key, m * 0.4);
+  return {
+    medianGames: m,
+    overrides: {
+      activeDays: 0,
+      mainGames: 0,
+      requireRoleWindows: 0,
+      theoryMinGames: cap('theoryMinGames', m),
+      overallMinGames: cap('overallMinGames', m),
+      roleWindowGames: role('roleWindowGames'),
+      loyalWindowGames: loyal('loyalWindowGames'),
+      roleTitleGames: role('roleTitleGames'),
+      roleTitleFallbackGames: role('roleTitleFallbackGames'),
+      loyalTitleGames: loyal('loyalTitleGames'),
+      loyalTitleFallbackGames: loyal('loyalTitleFallbackGames'),
+      assassinMinAttempts: role('assassinMinAttempts'),
     },
   };
 }
