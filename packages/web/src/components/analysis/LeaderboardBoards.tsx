@@ -4,7 +4,7 @@ import {
   Loader, AlertCircle, RefreshCw, Clock, Trophy, MapPin, Layers, History, TrendingUp, Crosshair,
   Sparkles, Crown, Calculator, ListOrdered, Percent, Activity, type LucideIcon,
 } from 'lucide-react';
-import { useStatsFilter } from '../../stats/statsFilter';
+import { useStatsFilter, useStatsFiltered } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
 import { InfoTip, SectionTabs, StatTable, type SectionTabItem, type StatColumn } from './ui';
 import BoardInfo from './BoardInfo';
@@ -167,7 +167,7 @@ export interface LeaderboardBoardsProps {
 }
 
 export default function LeaderboardBoards({ precision, winRates }: LeaderboardBoardsProps): JSX.Element {
-  const filtered = useStatsFilter((s) => s.key !== '');
+  const filtered = useStatsFiltered();
   const { t } = useTranslation('common');
   const isEn = useIsEn();
   const [data, setData] = useState<AnalysisLeaderboardData | null>(null);

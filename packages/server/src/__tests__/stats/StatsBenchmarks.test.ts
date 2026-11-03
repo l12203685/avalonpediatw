@@ -1,6 +1,6 @@
 /**
  * 基準列（Edward 2026-11-03「[散客 < 30場] [排除散客後全體] [排除散客後 PR50+] [排除散客後 PR50-]」，同日改成
- * 「前1/3 中間1/3 後1/3」）：@avalon/shared/stats computeBenchmarks 與 computeStats 的 benchmarks。名字全是虛構的。
+ * PR 分組、「切分點可以自己訂? 前 & 後 可選 預設都是20%」）：@avalon/shared/stats computeBenchmarks 與 computeStats 的 benchmarks。名字全是虛構的。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -8,20 +8,28 @@ import {
   benchmarkLabel,
   computeStats,
   decodeGamesDataset,
+  canonicalFilterKey,
+  decodeFilter,
+  encodeFilter,
   pooledPlayerName,
-  prTertile,
+  prGroup,
+  sanitizeFilter,
+  type BenchmarkCuts,
   type BenchmarksSection,
   type GameFilter,
   type LineupTuple,
 } from '@avalon/shared/stats';
 import { TEN, makeDataset, type GameSpec } from './datasetBuilder';
+import { filterChangesNumbers } from '../../../../web/src/stats/statsFilter';
 
 const CTX = { asOf: '2026-10-14' };
 
 /** 座位 PR（SEATS 順序）；provMask 的位元 = 暫定座位。 */
 const lineup = (prs: number[], provMask = 0): LineupTuple => [20, 500, prs, provMask, prs.map(() => 15000)];
-// 邊界：33 → 後、34 → 中、66 → 中、67 → 前；100/3、200/3 剛好在分界上（中、前），比它們小一點的歸下一組。
-const PRS = [0, 10, 33, 34, 100 / 3, 66, 200 / 3, 67, 66.66, 100];
+// 邊界：預設 20／20 → 19 後、20 中、79 中、80 前；前 10%／後 33% → 32 後、33 中、89 中、90 前。
+const PRS = [0, 19, 20, 32, 33, 79, 80, 89, 90, 100];
+const CUSTOM: BenchmarkCuts = { top: 10, bottom: 33 };
+const withCuts = (cuts: BenchmarkCuts, clauses: GameFilter['clauses'] = []): GameFilter => ({ v: 1, clauses, options: { benchmark: cuts } });
 
 // 虛構甲..癸 每人 35 場（生涯 ≥ 30）；「路人A」2 場、「路人B」1 場；最後一局沒有結果（不算任何人的生涯、不算座位）。
 const guest = (a: string, b: string | null): Array<string | null> => [a, b ?? TEN[1], ...TEN.slice(2)];
@@ -41,7 +49,7 @@ const decoded = decodeGamesDataset(makeDataset(SPECS));
 const group = (b: BenchmarksSection, id: (typeof BENCHMARK_IDS)[number]) => b.groups.find((g) => g.id === id)!;
 
 /** 從局直接數：每組的座位數（獨立於引擎的算法）。 */
-function expectedSeats(maxGames: number): Record<string, number> {
+function expectedSeats(maxGames: number, cuts: BenchmarkCuts = { top: 20, bottom: 20 }): Record<string, number> {
   const career = new Map<string, number>();
   for (const s of SPECS) {
     if (!s.outcome && s.outcome !== undefined) continue;
@@ -65,10 +73,9 @@ function expectedSeats(maxGames: number): Record<string, number> {
         return;
       }
       const pr = (l[2] as unknown as number[])[i];
-      // 獨立於引擎的寫法：用分數比較（pr = a / b 時 3a 對 100b）——測試裡的 PR 只有整數、100/3、200/3、66.66
-      const third = pr === 100 / 3 ? 'prMid' : pr === 200 / 3 ? 'prTop'
-        : pr >= 67 ? 'prTop' : pr >= 34 ? 'prMid' : 'prBottom';
-      out[third] += 1;
+      // 後 Y% = PR < Y、前 X% = PR > 100 − X − 1（整數 PR），其他 = 中間
+      const g = pr < cuts.bottom ? 'prBottom' : pr > 99 - cuts.top ? 'prTop' : 'prMid';
+      out[g] += 1;
     });
   }
   return out;
@@ -79,10 +86,13 @@ describe('benchmarks (基準列)', () => {
     const b = computeStats(decoded, CTX, null).benchmarks;
     expect(b.groups.map((g) => g.id)).toEqual(['casual', 'regular', 'prTop', 'prMid', 'prBottom']);
     expect(b.groups.map((g) => g.label)).toEqual([
-      '散客（<30場）', '排除散客後全體', '排除散客後 前1/3', '排除散客後 中間1/3', '排除散客後 後1/3',
+      '散客（<30場）', '排除散客後全體', '排除散客後 前20%', '排除散客後 中間60%', '排除散客後 後20%',
     ]);
     expect(b.maxGames).toBe(30);
-    expect(b.tertileBounds).toEqual([100, 200]);
+    expect(b.cuts).toEqual({ top: 20, bottom: 20 });
+    const c = computeStats(decoded, CTX, withCuts(CUSTOM)).benchmarks;
+    expect(c.cuts).toEqual(CUSTOM);
+    expect(c.groups.slice(2).map((g) => g.label)).toEqual(['排除散客後 前10%', '排除散客後 中間57%', '排除散客後 後33%']);
   });
 
   it('seat counts partition: 散客 + 全體 = all named seats; 前 + 中 + 後 + no PR = 全體', () => {
@@ -105,33 +115,72 @@ describe('benchmarks (基準列)', () => {
     expect(players.reduce((n, p) => n + p.totalGames, 0)).toBe(b.totalSeats);
   });
 
-  it('prTertile uses exact thirds: PR = 100/3 is middle, 200/3 is top; integers 0–33 / 34–66 / 67–100', () => {
-    expect(prTertile(100 / 3)).toBe('prMid');
-    expect(prTertile(200 / 3)).toBe('prTop');
-    expect(prTertile(33.333)).toBe('prBottom');
-    expect(prTertile(66.66)).toBe('prMid');
-    expect(prTertile(66.667)).toBe('prTop');
-    const ints = Array.from({ length: 101 }, (_, pr) => prTertile(pr));
-    expect(ints.filter((x) => x === 'prBottom')).toHaveLength(34); // 0–33
-    expect(ints.filter((x) => x === 'prMid')).toHaveLength(33); // 34–66
-    expect(ints.filter((x) => x === 'prTop')).toHaveLength(34); // 67–100
-    expect([prTertile(33), prTertile(34), prTertile(66), prTertile(67), prTertile(0), prTertile(100)])
-      .toEqual(['prBottom', 'prMid', 'prMid', 'prTop', 'prBottom', 'prTop']);
+  it('custom cuts also partition 全體 and match an independent count', () => {
+    const b = computeStats(decoded, CTX, withCuts(CUSTOM)).benchmarks;
+    const want = expectedSeats(30, CUSTOM);
+    const [, regular, top, mid, bottom] = BENCHMARK_IDS.map((id) => group(b, id));
+    expect(top.seats + mid.seats + bottom.seats + b.noPrSeats).toBe(regular.seats);
+    expect([top.seats, mid.seats, bottom.seats]).toEqual([want.prTop, want.prMid, want.prBottom]);
   });
 
-  it('tertile rows are disjoint and boundary seats land where the rule says', () => {
+  it('prGroup: top X% = PR ≥ 100 − X, bottom Y% = PR < Y, middle = the rest (lower bound in, upper bound out)', () => {
+    expect([19, 20, 79, 80].map((pr) => prGroup(pr))).toEqual(['prBottom', 'prMid', 'prMid', 'prTop']);
+    expect([32, 33, 89, 90].map((pr) => prGroup(pr, CUSTOM))).toEqual(['prBottom', 'prMid', 'prMid', 'prTop']);
+    const ints = Array.from({ length: 101 }, (_, pr) => prGroup(pr));
+    expect(ints.filter((x) => x === 'prBottom')).toHaveLength(20); // 0–19
+    expect(ints.filter((x) => x === 'prMid')).toHaveLength(60); // 20–79
+    expect(ints.filter((x) => x === 'prTop')).toHaveLength(21); // 80–100
+  });
+
+  it('boundary seats land where the rule says (defaults and a custom setting)', () => {
+    const april: GameFilter['clauses'] = [{ kind: 'date', from: '2026-04-01', to: '2026-04-30' }];
     // 只看路人的兩局：每局 10 個 PR 都可用（沒有暫定）
-    const b = computeStats(decoded, CTX, { v: 1, clauses: [{ kind: 'date', from: '2026-04-01', to: '2026-04-30' }] }).benchmarks;
-    // g1：座位 1、2 是散客 → 全體座位 3..10 的 PR = 33 34 100/3 66 200/3 67 66.66 100
-    // g2：座位 1 散客 → 10 33 34 100/3 66 200/3 67 66.66 100
-    expect(group(b, 'casual').seats).toBe(3);
-    expect(group(b, 'regular').seats).toBe(17);
-    expect(group(b, 'prBottom').seats).toBe(1 + 2); // g1：33；g2：10 33
-    expect(group(b, 'prMid').seats).toBe(4 + 4); // 34 100/3 66 66.66
-    expect(group(b, 'prTop').seats).toBe(3 + 3); // 200/3 67 100
-    expect(b.noPrSeats).toBe(0);
-    const sum = ['prTop', 'prMid', 'prBottom'].reduce((n, id) => n + group(b, id as 'prTop').seats, 0);
-    expect(sum).toBe(group(b, 'regular').seats);
+    // g1：座位 1、2 是散客 → 全體座位 3..10 的 PR = 20 32 33 79 80 89 90 100
+    // g2：座位 1 散客 → 19 20 32 33 79 80 89 90 100
+    const d = computeStats(decoded, CTX, { v: 1, clauses: april }).benchmarks;
+    expect(group(d, 'casual').seats).toBe(3);
+    expect(group(d, 'regular').seats).toBe(17);
+    expect(group(d, 'prBottom').seats).toBe(0 + 1); // 19
+    expect(group(d, 'prMid').seats).toBe(4 + 4); // 20 32 33 79
+    expect(group(d, 'prTop').seats).toBe(4 + 4); // 80 89 90 100
+    expect(d.noPrSeats).toBe(0);
+    const c = computeStats(decoded, CTX, withCuts(CUSTOM, april)).benchmarks;
+    expect(group(c, 'prBottom').seats).toBe(2 + 3); // g1：20 32；g2：19 20 32
+    expect(group(c, 'prMid').seats).toBe(4 + 4); // 33 79 80 89
+    expect(group(c, 'prTop').seats).toBe(2 + 2); // 90 100
+    expect(group(c, 'regular').seats).toBe(17);
+  });
+
+  it('options.benchmark: sanitize bounds, defaults drop out, share links carry it, other sections unchanged', () => {
+    const clean = (o: unknown) => sanitizeFilter({ v: 1, clauses: [], options: { benchmark: o } });
+    // 預設 = 不寫：標準鍵與不篩選相同
+    expect(clean({ top: 20, bottom: 20 }).filter?.options).toBeUndefined();
+    expect(canonicalFilterKey(clean({ top: 20, bottom: 20 }).filter)).toBe('');
+    expect(canonicalFilterKey(withCuts({ top: 20, bottom: 20 }))).toBe('');
+    for (const bad of [{ top: 4, bottom: 20 }, { top: 20, bottom: 46 }, { top: 20.5, bottom: 20 }, { top: 20 }, 'x', [10, 10]]) {
+      const r = clean(bad);
+      expect(r.filter?.options?.benchmark).toBeUndefined();
+      expect(r.warnings).toContain('options.benchmark');
+    }
+    expect(clean({ top: 5, bottom: 45 }).filter?.options?.benchmark).toEqual({ top: 5, bottom: 45 });
+    expect(clean({ top: 45, bottom: 45 }).filter?.options?.benchmark).toEqual({ top: 45, bottom: 45 }); // 相加 = 90
+    expect(clean({ top: 10, bottom: 33, extra: 1 }).filter?.options?.benchmark).toEqual(CUSTOM);
+    // 分享連結
+    const f = withCuts(CUSTOM);
+    const key = canonicalFilterKey(f);
+    expect(key).not.toBe('');
+    expect(canonicalFilterKey(withCuts({ top: 33, bottom: 10 }))).not.toBe(key);
+    const decodedLink = decodeFilter(encodeFilter(f));
+    expect(decodedLink.filter?.options?.benchmark).toEqual(CUSTOM);
+    // 其他區塊的數字不變；網站把只改切分點的篩選當成沒有改數字
+    const base = computeStats(decoded, CTX, null);
+    const custom = computeStats(decoded, CTX, f);
+    expect(custom.players).toEqual(base.players);
+    expect(custom.leaderboard).toEqual(base.leaderboard);
+    expect(custom.overview).toEqual(base.overview);
+    expect(filterChangesNumbers(f)).toBe(false);
+    expect(filterChangesNumbers(null)).toBe(false);
+    expect(filterChangesNumbers({ ...f, clauses: [{ kind: 'date', from: '2026-04-01' }] })).toBe(true);
   });
 
   it('threshold follows options.mergeSmall.maxGames; the pooled player itself is a casual', () => {

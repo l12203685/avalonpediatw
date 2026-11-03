@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader, AlertCircle } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
-import { useStatsFilter } from '../../stats/statsFilter';
+import { useStatsFiltered } from '../../stats/statsFilter';
 import { useAnalysisPlayerRows, type PlayerWithSeatStats } from './seatRoleBlocks';
 import { InfoTip, RATE_DIGITS, StatTable, type StatColumn } from './ui';
 import { BenchmarkToggle, benchmarkPlayerRow, useBenchmarkPinned } from './BenchmarkRows';
@@ -15,7 +15,7 @@ import { BenchmarkToggle, benchmarkPlayerRow, useBenchmarkPinned } from './Bench
  * 紅藍各自的勝率與超額勝率 (扣掉抽到角色的運氣)，最低場數自己選。資料是 /api/analysis/players
  * (有篩選時由瀏覽器端引擎重算)，沒有篩選時就是全部對局。
  * 預設依場數排序、最低 50 場 (Edward 2026-10-28)；篩一段短期間時最低 3 場 (50 場會讓表變空)。
- * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／前1/3／中間1/3／後1/3，BenchmarkRows)：不受排序、最低場數影響，
+ * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／前 X%／中間／後 Y% (預設 20／20)，BenchmarkRows)：不受排序、最低場數影響，
  * 不算進人數。
  */
 type SortKey = 'finalWinRate' | 'excessWinRate' | 'totalGames';
@@ -31,7 +31,7 @@ function wins(p: PlayerWithSeatStats): number | null {
 
 export default function PeriodWinRates(): JSX.Element {
   const { t } = useTranslation('common');
-  const filtered = useStatsFilter((s) => s.key !== '');
+  const filtered = useStatsFiltered();
   const openPlayerStats = useGameStore((s) => s.openPlayerStats);
   const { players, loading, error } = useAnalysisPlayerRows();
   const [minGames, setMinGames] = useState<number>(filtered ? 3 : 50);

@@ -1816,24 +1816,31 @@
       "label": {
         "casual": "Casuals (<{{n}} games)",
         "regular": "All excl. casuals",
-        "prTop": "Excl. casuals, top third",
-        "prMid": "Excl. casuals, middle third",
-        "prBottom": "Excl. casuals, bottom third"
+        "prTop": "Excl. casuals, top {{top}}%",
+        "prMid": "Excl. casuals, middle {{mid}}%",
+        "prBottom": "Excl. casuals, bottom {{bottom}}%"
       },
       "short": {
         "casual": "Casuals <{{n}}",
         "regular": "All (excl. casuals)",
-        "prTop": "Top 1/3",
-        "prMid": "Middle 1/3",
-        "prBottom": "Bottom 1/3"
+        "prTop": "Top {{top}}%",
+        "prMid": "Middle {{mid}}%",
+        "prBottom": "Bottom {{bottom}}%"
       },
       "tip": {
         "casual": "Seats of players with fewer than {{n}} career games ({{players}} players, {{seats}} seats).",
         "regular": "Every other seat ({{players}} players, {{seats}} seats).",
-        "prTop": "Non-casual seats whose Elo PR before that game was ≥ 200/3 (66.7), the top third ({{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
-        "prMid": "The \"typical player\" benchmark: non-casual seats whose Elo PR before that game was at least 100/3 (33.3) and below 200/3 (66.7), the middle third ({{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
-        "prBottom": "Non-casual seats whose Elo PR before that game was below 100/3 (33.3), the bottom third ({{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
+        "prTop": "Non-casual seats whose Elo PR before that game was ≥ {{topPr}} (top {{top}}%; {{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
+        "prMid": "The \"typical player\" benchmark: non-casual seats whose Elo PR before that game was at least {{bottom}} and below {{topPr}} (middle {{mid}}%; {{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
+        "prBottom": "Non-casual seats whose Elo PR before that game was below {{bottom}} (bottom {{bottom}}%; {{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
         "common": "Benchmark rows pool seats (two casuals in one game count twice) over every seat of the group in the current filter (theory rates too, not the last N games); not ranked, not sorted, not counted as players."
+      },
+      "cut": {
+        "top": "Top",
+        "bottom": "Bottom",
+        "topLabel": "Benchmark rows: top % (Elo PR at game time)",
+        "bottomLabel": "Benchmark rows: bottom % (Elo PR at game time)",
+        "hint": "Grouped by Elo PR before that game: top X% = PR ≥ 100 − X, bottom Y% = PR < Y, the rest is the middle; saved in the share link."
       }
     }
   },

@@ -1816,24 +1816,31 @@
       "label": {
         "casual": "散客（<{{n}}場）",
         "regular": "排除散客後全體",
-        "prTop": "排除散客後 前1/3",
-        "prMid": "排除散客後 中間1/3",
-        "prBottom": "排除散客後 後1/3"
+        "prTop": "排除散客後 前{{top}}%",
+        "prMid": "排除散客後 中間{{mid}}%",
+        "prBottom": "排除散客後 後{{bottom}}%"
       },
       "short": {
         "casual": "散客 <{{n}}",
         "regular": "全體（排除散客）",
-        "prTop": "前1/3",
-        "prMid": "中間1/3",
-        "prBottom": "後1/3"
+        "prTop": "前{{top}}%",
+        "prMid": "中間{{mid}}%",
+        "prBottom": "後{{bottom}}%"
       },
       "tip": {
         "casual": "生涯未滿 {{n}} 場的玩家的座位（{{players}} 人、{{seats}} 個座位）。",
         "regular": "散客以外的所有座位（{{players}} 人、{{seats}} 個座位）。",
-        "prTop": "散客以外、那一局開打前 Elo PR ≥ 200/3（66.7）的座位，PR 排前三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。",
-        "prMid": "「一般玩家」的基準：散客以外、那一局開打前 Elo PR 在 100/3（33.3）以上、未滿 200/3（66.7）的座位，PR 排中間三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。",
-        "prBottom": "散客以外、那一局開打前 Elo PR 未滿 100/3（33.3）的座位，PR 排後三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。",
+        "prTop": "散客以外、那一局開打前 Elo PR ≥ {{topPr}} 的座位（PR 前 {{top}}%；{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。",
+        "prMid": "「一般玩家」的基準：散客以外、那一局開打前 Elo PR 在 {{bottom}} 以上、未滿 {{topPr}} 的座位（中間 {{mid}}%；{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。",
+        "prBottom": "散客以外、那一局開打前 Elo PR 未滿 {{bottom}} 的座位（PR 後 {{bottom}}%；{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。",
         "common": "基準列：逐座位合併計算（一局有兩位散客就算兩場），看篩選後這組的全部座位（理論勝率也是，不是最近 N 場）；不排名、不受排序影響、不算進人數。"
+      },
+      "cut": {
+        "top": "前",
+        "bottom": "後",
+        "topLabel": "基準列：前幾 %（依當局 Elo PR）",
+        "bottomLabel": "基準列：後幾 %（依當局 Elo PR）",
+        "hint": "依那一局開打前的 Elo PR 分組：前 X% = PR ≥ 100 − X、後 Y% = PR < Y，剩下的是中間；會跟著分享連結。"
       }
     }
   },

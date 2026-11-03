@@ -40,6 +40,22 @@ export const useStatsFilter = create<StatsFilterState>((set) => ({
   retry: (): void => set((s) => ({ nonce: s.nonce + 1 })),
 }));
 
+/**
+ * 篩選會不會改數字：只改基準列切分點 (options.benchmark) 的篩選不算 (2026-11-03：切分點跟著分享連結走，所以放在篩選
+ * 裡；但畫面上「有篩選」的提示、勝率表的預設最低場數等不該因此改變)。
+ */
+export function filterChangesNumbers(filter: GameFilter | null): boolean {
+  if (!filter) return false;
+  const { benchmark: _benchmark, ...rest } = filter.options ?? {};
+  void _benchmark;
+  return canonicalFilterKey({ ...filter, options: rest }) !== '';
+}
+
+/** 有沒有會改數字的篩選 (React)。 */
+export function useStatsFiltered(): boolean {
+  return useStatsFilter((s) => s.key !== '' && filterChangesNumbers(s.filter));
+}
+
 /** 目前的篩選 (非 React 呼叫端用)。 */
 export function currentStatsFilter(): { filter: GameFilter | null; key: string } {
   const { filter, key } = useStatsFilter.getState();
