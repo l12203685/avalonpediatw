@@ -307,7 +307,7 @@ export function parseReplayGame(row: PaipuRow): ReplayParseResult {
  * holder chain starts at seat 10 and each target becomes the next holder,
  * never inspecting a previous holder.
  */
-function isLakeChainValid(lakes: readonly ReplayLake[], quests: readonly ReplayQuest[]): boolean {
+export function isLakeChainValid(lakes: readonly ReplayLake[], quests: readonly ReplayQuest[]): boolean {
   const expectedRounds: number[] = [];
   let fails = 0;
   let successes = 0;
