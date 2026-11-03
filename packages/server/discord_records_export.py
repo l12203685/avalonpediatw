@@ -12,7 +12,8 @@ refresh-analysis-cache.yml next to generate_cache.py, so the file is committed t
 analysis cache.
 
 What goes into the file, newest post first:
-  * every post except those tagged 模擬 and those that are not game records at all (no record,
+  * every post except those tagged 模擬, the games with our bot 百科AI (分類 gc.BOT_CATEGORY: they are
+    counted separately, Edward 2026-11-03) and those that are not game records at all (no record,
     no result tag, no 6-digit 配置: notices, questions);
   * per post: the thread id, the title (control characters dropped, at most TITLE_MAX
     characters), the forum tags, the creation time (Taipei), the record date (from the title's
@@ -84,7 +85,7 @@ CATEGORIES = ("", *dri.CATEGORY_TAGS)
 PROBLEMS = frozenset(dri.short_explanation(reason) for reason in dri.SKIP_EXPLANATIONS)
 # Reasons that say the post is not a game record at all: such posts are left out of the list
 # (unless something says they were meant as one, see post_entry).
-NOT_A_GAME = frozenset({dri.SKIP_NOT_A_RECORD, dri.SKIP_SIMULATION})
+NOT_A_GAME = frozenset({dri.SKIP_NOT_A_RECORD})
 NO_TEXT = frozenset({dri.SKIP_NO_STARTER, dri.SKIP_EMPTY})
 
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f​-‏ -‮⁠-⁤﻿]")
@@ -165,6 +166,8 @@ def post_entry(post: dri.Post, content: str | None) -> tuple[dict[str, Any] | No
         entry["game"] = None
         entry["problem"] = dri.short_explanation(dri.SKIP_INTERNAL)
         return entry, "unreadable"
+    if game.category == gc.BOT_CATEGORY:  # 有百科AI 的局另外算：清單同「模擬」一樣不列
+        return None, "simulation"
     entry["date"] = iso_date(game.date)
     entry["game"] = game_entry(game)
     return entry, "game"
@@ -264,7 +267,8 @@ def annotate_records(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
     games: list[gc.GameRow] = []
     if games_doc is not None:
         try:
-            games = gc.decode_games_dataset(games_doc)
+            # 百科AI 局不參與陣容強度（同 generate_cache：評分只在人類局上重放）
+            games = [g for g in gc.decode_games_dataset(games_doc) if g.category != gc.BOT_CATEGORY]
         except Exception:  # an odd file: no lineups rather than a crash (counts say so)
             games = []
             counts["games dataset unreadable"] += 1

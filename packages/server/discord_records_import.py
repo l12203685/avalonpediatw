@@ -84,10 +84,13 @@ What this script does and does not do:
   * idempotent: a post already in Discord匯入 (by discord_post_id) is not imported
     again (only re-read for corrections); a game already in 牌譜
     (generate_cache.record_fingerprint, or the same
-    配置 + mission results with the same players) or tagged 已收錄 is not imported;
-    posts tagged 模擬 (simulations) are not imported either, nor are the signage recorder's
-    unverified posts (title marked 【待檢視】, TITLE_UNVERIFIED) until someone reviews them and
-    takes the mark out of the title; neither gets a --reply or the 待修正 tag.
+    配置 + mission results with the same players) or tagged 已收錄 is not imported; the signage
+    recorder's unverified posts (title marked 【待檢視】, TITLE_UNVERIFIED) are not imported until
+    someone reviews them and takes the mark out of the title. Posts tagged 模擬 or with a 百科AI
+    seat (our bot, generate_cache.is_pedia_bot_name) are imported like any other post, with 分類
+    百科AI (generate_cache.BOT_CATEGORY, Edward 2026-11-03「有百科AI的另外算」): generate_cache.py
+    keeps that category out of every stat and only the website's filter shows it on request.
+    Neither unverified nor 模擬 posts get a --reply or the 待修正 tag.
   * prints counts and fixed reason strings only (stdout and $GITHUB_STEP_SUMMARY):
     no player names, no record text, no post titles -- the repository is public. The
     line quoted in a reply or the list exists only in that Discord message (markdown,
@@ -161,6 +164,9 @@ EXIT_DISCORD = 5
 TAIPEI = dt.timezone(dt.timedelta(hours=8), "Asia/Taipei")
 
 TAG_RECORDED = "已收錄"  # set by hand on posts already copied into 牌譜
+# 有百科AI（補位機器人）的局：記錄員（scripts/signagePaipu.ts BOT_GAME_TAG）掛的標籤。Edward 2026-11-03「有百科AI的另外算」：
+# 標這個標籤或有座位是百科AI 暱稱的貼文照常匯入，分類寫 gc.BOT_CATEGORY（「百科AI」），戰績、排行、機器人訓練都不算它；
+# 不回覆、不掛待修正（同以前）。
 TAG_SIMULATION = "模擬"
 # 遊玩頁記錄員（scripts/signageRecorder.ts）沒通過自動檢查的局：標題開頭「【待檢視】」（Edward 2026-11-03：都先貼，
 # 錯的或沒意義的他會刪）。標題有這幾個字的貼文不匯入、不回覆、不掛待修正；人工檢視後把標題的「【待檢視】」拿掉才收錄。
@@ -217,7 +223,6 @@ REQUIRED_COLUMNS = (
 # Skip reasons: fixed strings, safe for public logs (never interpolate post content).
 SKIP_NO_STARTER = "starter message deleted or unreadable"
 SKIP_EMPTY = "starter message has no text (empty or attachments only)"
-SKIP_SIMULATION = "tagged 模擬 (simulation), not imported"
 SKIP_UNVERIFIED = "recorder post not reviewed yet (title marked 待檢視), not imported"
 SKIP_NO_RECORD = "no game record found"
 SKIP_NOT_A_RECORD = "no game record and nothing says it was meant as one (no result tag, no 6-digit 配置)"
@@ -272,7 +277,6 @@ class SkipPost(Exception):
 SKIP_EXPLANATIONS = {
     SKIP_NO_STARTER: "起始訊息已刪除或無法讀取",
     SKIP_EMPTY: "起始訊息沒有文字（空白或只有附件）",
-    SKIP_SIMULATION: "標了「模擬」，不收錄",
     SKIP_UNVERIFIED: "機器人紀錄員的貼文尚待檢視（標題有「待檢視」；確認沒問題後把標題的【待檢視】拿掉才會收錄）",
     SKIP_NO_RECORD: "找不到牌譜（沒有提議、任務結果這些行）",
     SKIP_NOT_A_RECORD: "找不到牌譜，也沒有結果標籤或 6 碼配置（不像牌譜貼文，不回覆）",
@@ -322,7 +326,7 @@ REPLY_LINE_MAX = 60  # quoted line text is cut here (the poster can see the whol
 REPLY_DEFAULT_DAYS = 90  # 跟「待修正」標籤同一個範圍：有標籤的貼文都有一則原因回覆（Edward 2026-11-03）
 REPLY_DEFAULT_LIMIT = 20
 # Skips that are not the poster's formatting (or not a record post at all): no reply for these.
-REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_SIMULATION, SKIP_UNVERIFIED, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
+REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_UNVERIFIED, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
 # Quoted record text in the bot's messages: markdown, masked links ([..](..)) and <...> forms
 # (mentions, <url>, timestamps) render as plain text. '>' alone is harmless (湖 lines: 0>8 o).
 _MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_~|\[\]<])")
@@ -768,6 +772,8 @@ def _names(footer: list[Item]) -> dict[str, str]:
     keys: dict[str, str] = {}
     for seat, name in names.items():  # post order
         key = gc.player_identity_key(name)
+        if gc.is_pedia_bot_name(name):  # 百科AI_1、百科AI_2：不同座位的機器人（player_aliases.json 把它們併成「百科AI」）
+            key = gc.player_name_key(name)
         if key in keys:
             raise SkipPost(SKIP_NAMES_MALFORMED, lines[seat])
         keys[key] = seat
@@ -822,14 +828,17 @@ def unverified(post: Post) -> bool:
     return TITLE_UNVERIFIED in normalize_line(post.title)
 
 
+def is_bot_post(post: Post, names: Iterable[str]) -> bool:
+    """A game with our bot (分類 gc.BOT_CATEGORY): tagged 模擬, or a seat is a 百科AI nickname."""
+    return TAG_SIMULATION in post.tags or any(gc.is_pedia_bot_name(n) for n in names)
+
+
 def parse_post(post: Post, content: str | None) -> ParsedGame:
     """The validated game of a post, or SkipPost(reason)."""
     if content is None:
         raise SkipPost(SKIP_NO_STARTER)
     if not content.strip():
         raise SkipPost(SKIP_EMPTY)
-    if TAG_SIMULATION in post.tags:
-        raise SkipPost(SKIP_SIMULATION)
     if unverified(post):
         raise SkipPost(SKIP_UNVERIFIED)
     lines = content.splitlines()
@@ -855,11 +864,14 @@ def parse_post(post: Post, content: str | None) -> ParsedGame:
         exc.locate(lines)
         raise
     categories = [t for t in CATEGORY_TAGS if t in post.tags]
+    if is_bot_post(post, names.values()):
+        category = gc.BOT_CATEGORY
+    else:
+        category = categories[0] if len(categories) == 1 else ""
     date, game_no, from_title = title_date(post.title, post.created)
     return ParsedGame(
         rounds=rounds, lakes=lakes, config=config, names=names, outcome=outcome, kill=kill,
-        category=categories[0] if len(categories) == 1 else "", date=date, game_no=game_no,
-        date_from_title=from_title,
+        category=category, date=date, game_no=game_no, date_from_title=from_title,
     )
 
 
@@ -1095,6 +1107,7 @@ class ImportReport:
     dup_run: int = 0  # same game as another post of this run
     held_by_limit: int = 0
     date_from_post_time: int = 0
+    bot_games: int = 0  # new rows with 分類 百科AI (counted separately, not in the stats)
     new_unknown_names: int = 0  # distinct names in the new rows that neither tab has yet (case / width ignored)
     skipped: Counter = field(default_factory=Counter)
     skipped_recorded: Counter = field(default_factory=Counter)  # ... of which tagged 已收錄
@@ -1146,10 +1159,7 @@ def plan_import(
             report.ok_ids.add(post.id)
             report.note(post, "already imported")
             continue
-        if TAG_SIMULATION in post.tags:  # no need to fetch it
-            report.skip(post, SKIP_SIMULATION)
-            continue
-        if unverified(post):  # neither
+        if unverified(post):  # no need to fetch it
             report.skip(post, SKIP_UNVERIFIED)
             continue
         content = fetch(post)
@@ -1189,6 +1199,7 @@ def plan_import(
                 continue
             report.rows.append(build_row(post, game, header, imported_at, post_signature(post, content or "")))
             report.note(post, "new")
+            report.bot_games += game.category == gc.BOT_CATEGORY
             report.date_from_post_time += not game.date_from_title
             unknown_names.update(key for key in map(gc.player_identity_key, game.names.values())
                                  if key and key not in sheet.names and key not in imported.names)
@@ -1219,7 +1230,7 @@ class RowUpdate:
 class RecheckReport:
     """Counts only (public logs), plus the row rewrites to make (never printed)."""
     days: int = RECHECK_DEFAULT_DAYS
-    candidates: int = 0  # imported posts created within `days` (not tagged 已收錄 / 模擬, game not in 牌譜)
+    candidates: int = 0  # imported posts created within `days` (not tagged 已收錄, game not in 牌譜)
     checked: int = 0  # their starter messages re-read this run
     held: int = 0  # over --recheck-limit: re-read on a later run (the posts take turns)
     unchanged: int = 0  # not edited since the row was written
@@ -1230,7 +1241,6 @@ class RecheckReport:
     gone: int = 0  # starter message deleted or empty: row kept as it was
     recorded: int = 0  # tagged 已收錄 since: the game is in 牌譜, edited there by hand; left alone
     in_sheet: int = 0  # its row's game has been copied into 牌譜 since (not tagged): left alone too
-    simulation: int = 0  # tagged 模擬 since: row kept (delete it by hand)
     error: str = ""  # error_kind of the Discord error that stopped the pass (the rest: a later run)
     moved: int = 0  # rows not written: the post's row was elsewhere by the time of the write (sorted?)
     updates: list[RowUpdate] = field(default_factory=list)
@@ -1342,7 +1352,8 @@ def plan_recheck(
 
     Only the Discord匯入 rows of that post change. Posts tagged 已收錄 are in 牌譜, which people keep
     by hand: never re-read; nor is a post whose row's game is in `sheet_rows` (牌譜) by now, tagged or
-    not (same fingerprint, or SheetIndex.near_duplicate). Tagged 模擬 since, starter deleted or
+    not (same fingerprint, or SheetIndex.near_duplicate). Tagged 模擬 since: its row is rewritten with
+    分類 百科AI (the tag is part of the signature). Starter deleted or
     emptied, or edited into something unreadable: the row stays as it is; an unreadable edit becomes
     a `fixable` skip in `report` (the --reply / 待修正 rules then apply; edited=True words the reply
     for it) and leaves report.ok_ids.
@@ -1371,8 +1382,6 @@ def plan_recheck(
             continue
         if TAG_RECORDED in post.tags:
             result.recorded += 1
-        elif TAG_SIMULATION in post.tags:
-            result.simulation += 1
         elif any(in_sheet(import_rows[i]) for i in imported.rows_of[post.id]):
             result.in_sheet += 1
         else:
@@ -1431,8 +1440,7 @@ def recheck_lines(recheck: RecheckReport, *, write: bool) -> list[str]:
         f"  - 有修改、{done}：{recheck.corrected} 篇（{recheck.rows_updated} 列）；有修改但這局的資料沒變：{recheck.edited_same}；"
         f"沒有修改：{recheck.unchanged}",
         f"  - 改了之後讀不懂（保留原本那列，貼文列入待修正）：{recheck.unreadable}；起始訊息被刪除或清空（保留原本那列）：{recheck.gone}",
-        f"  - 後來標「{TAG_RECORDED}」或這局已抄進 {gc.GAME_LOG_TAB}（由人工修正，不動）：{recheck.recorded + recheck.in_sheet}；"
-        f"後來標「{TAG_SIMULATION}」（保留原本那列，請人工刪除）：{recheck.simulation}",
+        f"  - 後來標「{TAG_RECORDED}」或這局已抄進 {gc.GAME_LOG_TAB}（由人工修正，不動）：{recheck.recorded + recheck.in_sheet}",
     ]
     if recheck.error:
         lines.append(f"  - 重讀途中 Discord API 錯誤（{recheck.error}），本次重讀到此為止，其餘下次再讀；新貼文照常收錄")
@@ -1459,8 +1467,9 @@ class ReplyReport:
 
 def fixable(skip: SkippedPost) -> bool:
     """A skip the poster can fix (who gets a --reply, what --fix-list lists): a format reason, and
-    the post is not tagged 已收錄."""
-    return skip.reason not in REPLY_NOT_FOR and TAG_RECORDED not in skip.post.tags
+    the post is not tagged 已收錄 or 模擬 (the recorder's 百科AI games: no reply, as before)."""
+    return (skip.reason not in REPLY_NOT_FOR and TAG_RECORDED not in skip.post.tags
+            and TAG_SIMULATION not in skip.post.tags)
 
 
 def reply_candidates(report: ImportReport, now: dt.datetime, since_days: int) -> list[SkippedPost]:
@@ -2029,7 +2038,8 @@ def report_lines(report: ImportReport, *, write: bool, written: int, tab_exists:
     ]
     if report.rows:
         lines.append(
-            f"  - 新局中日期取自發文時間（標題無 MMDD）：{report.date_from_post_time}；"
+            f"  - 新局中有百科AI（分類「{gc.BOT_CATEGORY}」，另外算、不進戰績）：{report.bot_games}；"
+            f"日期取自發文時間（標題無 MMDD）：{report.date_from_post_time}；"
             f"兩個分頁都還沒有的玩家名字：{report.new_unknown_names} 個"
         )
     skipped = sum(report.skipped.values())

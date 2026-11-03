@@ -12,6 +12,9 @@
  * Edward 2026-11-03：「都先貼到 DC 並且備註『機器人紀錄員尚待檢視』……我會把錯的或是沒意義的刪掉」「順便貼『視覺化牌譜』的圖 &
  * 『開牌後配置』的圖」。所以每一局都貼（buildPaipuPost）：通過檢查（postSkipReason）的照原本的標題與標籤；沒通過的標題加
  * 「【待檢視】」、不掛結果標籤，內文寫原因。每篇最後一行都是 REVIEW_NOTE。圖由記錄員截好傳給 postPaipu。
+ *
+ * Edward 2026-11-03：「有百科AI的另外算 我們不會用伺服器內建的強化機器人」。有練習台內建機器人（is_robot）的局完全不貼
+ * （noPostReason）；有百科AI 的局照樣【待檢視】＋「模擬」標籤，檢視後匯入成分類「百科AI」，戰績另外算。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,19 +24,23 @@ interface Mission { result: boolean[]; member: number[]; crown_set: number }
 interface Lake { from: number; to: number | null; result: boolean | null }
 interface User { set: number; name: string; role: string }
 interface Snapshot { users: User[]; meetings: Meeting[]; missionHistorys: Mission[]; lake: Lake[] | null; logs?: { msg?: string }[] }
-export interface RecordedGame { room: string; title?: string; startedAt?: string; endedAt?: string; end?: Snapshot | null; incomplete?: boolean }
+export interface RecordedGame {
+  room: string; title?: string; startedAt?: string; endedAt?: string; end?: Snapshot | null; incomplete?: boolean;
+  /** 記錄員存的快照（局末快照沒抓到時，用最後一張的座位認內建機器人）。 */
+  timeline?: { s?: { users?: unknown } | null }[];
+}
 
 /** 每篇貼文的最後一行（Edward 11/03）。全形括號開頭：每日匯入當一般文字略過，不影響讀牌譜。 */
 export const REVIEW_NOTE = '（機器人紀錄員尚待檢視）';
 /**
  * 沒通過檢查的局，討論串標題的開頭。每日匯入（discord_records_import.py）看到標題有「待檢視」就整篇略過、不回覆；
- * 人工檢視後把標題的「【待檢視】」拿掉（或改成正式標題、掛結果標籤），下次匯入才會收錄。
+ * 人工檢視後把標題的「【待檢視】」拿掉（或改成正式標題、掛結果標籤），下次匯入才會收錄（有百科AI 的局收成分類「百科AI」）。
  */
 export const UNVERIFIED_PREFIX = '【待檢視】';
 
 /**
  * 百科補位機器人的暱稱（scripts/signagePlayer.ts；Edward 2026-11-03「人不夠就加進去玩」）。它是一般帳號（不是練習台內建機器人，
- * is_robot 是 false），所以記錄員靠暱稱認：有它的局一律待檢視（不當真人紀錄匯入），內文寫它坐哪一家。
+ * is_robot 是 false），所以記錄員靠暱稱認：有它的局一律待檢視，內文寫它坐哪一家；檢視後匯入成分類「百科AI」（另外算、不進戰績）。
  * 以「百科機器人」開頭的暱稱都算（scripts/signagePlay.ts 的模擬戰用 百科機器人A～I）。
  */
 export const BOT_NICK = '百科AI_0';
@@ -43,7 +50,7 @@ const BOT_NICK_RE = /^百科(機器人|AI)/i;
 export const isPediaBotName = (name: string): boolean => BOT_NICK_RE.test(name.trim());
 /** 百科機器人私房測試的房間描述開頭（signagePlayer --mode private-test）：記錄員不旁觀這種房間。 */
 export const TEST_ROOM_PREFIX = '百科機器人測試';
-/** 有百科機器人的局另外掛的論壇標籤：每日匯入看到「模擬」標籤也不收（就算有人把標題的【待檢視】拿掉）。 */
+/** 有百科機器人的局另外掛的論壇標籤：每日匯入把有這個標籤的局收成分類「百科AI」（另外算，不進戰績、排行、機器人訓練）。 */
 export const BOT_GAME_TAG = '模擬';
 
 /** 百科機器人坐的座位（沒有時空陣列）。 */
@@ -139,6 +146,25 @@ export function gameKind(game: RecordedGame): string {
   const logs = (end.logs ?? []).map((l) => String(l.msg ?? ''));
   const blueRounds = (end.missionHistorys ?? []).filter((ms, i) => (ms?.result ?? []).filter((r) => !r).length < (i === 3 && (ms?.result ?? []).length >= 4 ? 2 : 1)).length;
   return blueRounds < 3 ? '三紅' : logs.some((x) => x.includes('壞人獲勝')) ? '三藍死' : '三藍活';
+}
+
+/**
+ * 練習台內建機器人（is_robot，例：強化人N號）坐的座位數：局末快照，沒有時用最後一張快照。
+ * 百科AI 是一般帳號（is_robot false），不算在這裡。
+ */
+export function siteRobotCount(game: RecordedGame): number {
+  const last = game.timeline?.length ? game.timeline[game.timeline.length - 1]?.s?.users : undefined;
+  const users: unknown = game.end?.users ?? last;
+  return Array.isArray(users) ? users.filter((u) => (u as { is_robot?: boolean } | null)?.is_robot === true).length : 0;
+}
+
+/**
+ * 整局不貼 DC 的原因（log 用：只有個數，不含暱稱）；要貼（正式或待檢視）時 null。
+ * Edward 2026-11-03「我們不會用伺服器內建的強化機器人」：有練習台內建機器人的局不是我們的紀錄，連待檢視都不貼。
+ */
+export function noPostReason(game: RecordedGame): string | null {
+  const robots = siteRobotCount(game);
+  return robots ? `有練習台內建機器人（${robots} 個）` : null;
 }
 
 /** 只貼真人 10 人局（遊玩頁內建機器人的練習局不貼）。 */
@@ -368,6 +394,8 @@ if (process.argv[1] && path.basename(process.argv[1]).startsWith('signagePaipu')
     for (const f of files) {
       const game = JSON.parse(fs.readFileSync(f, 'utf-8')) as RecordedGame;
       if (game.incomplete) { console.log(`# ${path.basename(f)}：未完成檔，略過`); continue; }
+      const noPost = noPostReason(game);
+      if (noPost) { console.log(`# ${path.basename(f)}：不貼 DC：${noPost}`); continue; }
       // Edward 11/03：每局都貼；沒通過檢查的標題加【待檢視】（buildPaipuPost）
       const p = buildPaipuPost(game, isPostable(game) ? dayIndex(f) : undefined);
       if (process.argv.includes('--json')) { console.log(JSON.stringify({ text: p.content, thread: p.name, tags: p.tags, verified: p.verified })); continue; }

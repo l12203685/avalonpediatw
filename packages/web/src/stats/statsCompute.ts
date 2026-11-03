@@ -61,12 +61,14 @@ interface Loaded {
 
 let loading: Promise<Loaded> | null = null;
 
-function vocabOf(dataset: GamesDataset, context: GamesContext): FilterVocab {
+function vocabOf(decoded: DecodedDataset, context: GamesContext): FilterVocab {
+  const { dataset } = decoded;
   const tags: string[] = (dataset.vocab as { noteTags?: string[] }).noteTags ?? [];
   const pick = (prefix: string): string[] => tags.filter((t) => t.startsWith(prefix)).map((t) => t.slice(prefix.length));
   return {
     asOf: context.asOf,
-    totalGames: dataset.games.length,
+    // 百科AI 局與只在百科AI 局出現的名字不算 (decodeGamesDataset 已分開)
+    totalGames: decoded.games.length,
     players: [...dataset.players],
     aliases: { ...(dataset.aliases ?? {}), ...context.aliases },
     seasons: pick('season:'),
@@ -92,7 +94,7 @@ async function load(serverUrl: string): Promise<Loaded> {
   }
   const { dataset, context } = body.data;
   const decoded = decodeGamesDataset(dataset, context.gamesKey);
-  return { decoded, context, vocab: vocabOf(dataset, context) };
+  return { decoded, context, vocab: vocabOf(decoded, context) };
 }
 
 function loaded(serverUrl: string): Promise<Loaded> {

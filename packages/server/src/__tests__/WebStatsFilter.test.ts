@@ -3,8 +3,10 @@
  * (utils/statsLinks.ts 的 #stats?f=…、#stats?preset=…)。純函式。
  */
 import { describe, expect, it } from 'vitest';
-import { PRESETS, canonicalFilterKey, decodeFilter, presetFilter, type GameFilter } from '@avalon/shared/stats';
+import { PRESETS, canonicalFilterKey, decodeFilter, filterIncludesBotGames, presetFilter, type GameFilter } from '@avalon/shared/stats';
 import {
+  CATEGORY_VALUES,
+  DEFAULT_CATEGORY_VALUES,
   EMPTY_FILTER,
   categoryClause,
   clausesOf,
@@ -34,6 +36,27 @@ describe('filter panel draft', () => {
     expect(selectedCategories(f)).toEqual(['線瓦', '面瓦', '未分類', '其他']);
     expect(selectedCategories(preset('online'))).toEqual(['線瓦']);
     expect(selectedCategories(null)).toHaveLength(5);
+  });
+
+  it('category boxes: 百科AI is off by default and ticking it opts its games in (Edward 2026-11-03)', () => {
+    expect(CATEGORY_VALUES).toContain('百科AI');
+    expect(DEFAULT_CATEGORY_VALUES).not.toContain('百科AI');
+    expect(selectedCategories(null)).toEqual([...DEFAULT_CATEGORY_VALUES]);
+    expect(selectedCategories(null)).not.toContain('百科AI');
+    expect(categoryClause(DEFAULT_CATEGORY_VALUES)).toBeNull(); // 預設 = 沒有子句 = 不含百科AI 局
+    expect(filterIncludesBotGames(withClauses(EMPTY_FILTER, 'category', categoryClause(DEFAULT_CATEGORY_VALUES)))).toBe(false);
+    // 勾百科AI：一律列出勾選的分類（引擎只認列出來的），不是「不是…」
+    const all = categoryClause([...DEFAULT_CATEGORY_VALUES, '百科AI']);
+    expect(all).toEqual({ kind: 'category', in: ['線瓦', '面瓦', '娛樂', '未分類', '其他', '百科AI'] });
+    expect(filterIncludesBotGames(withClauses(EMPTY_FILTER, 'category', all))).toBe(true);
+    expect(categoryClause(['百科AI'])).toEqual({ kind: 'category', in: ['百科AI'] });
+    expect(categoryClause(['線瓦', '面瓦', '未分類', '其他', '百科AI'])).toEqual({ kind: 'category', in: ['線瓦', '面瓦', '未分類', '其他', '百科AI'] });
+    expect(selectedCategories(withClauses(EMPTY_FILTER, 'category', all))).toEqual([...CATEGORY_VALUES]);
+    // 「排除娛樂局」不會把百科AI 打勾
+    expect(selectedCategories(preset('noCasual'))).toEqual(['線瓦', '面瓦', '未分類', '其他']);
+    expect(filterIncludesBotGames(preset('noCasual'))).toBe(false);
+    // 再取消勾選 = 回到預設
+    expect(categoryClause(selectedCategories(withClauses(EMPTY_FILTER, 'category', all)).filter((c) => c !== '百科AI'))).toBeNull();
   });
 
   it('presets toggle on and off and replace the same kind of condition', () => {
