@@ -771,7 +771,8 @@ export class ForwardAgent implements AvalonAgent {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
     // Round 24 `goodLeadConsistent` ≥ 2: a loyal / Percival leader approves its own (non-forced) proposal.
-    if (goodLeaderSelfApprove(this.baseline.tuning, obs) && goodVoteGate(obs, this.gates) === null) {
+    // Merlin (3) is on the team: an on-team normal white needs no gate (as `merlinNormalVote`; Edward 2026-10-30).
+    if (goodLeaderSelfApprove(this.baseline.tuning, obs) && (obs.myRole === 'merlin' || goodVoteGate(obs, this.gates) === null)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'good leader approves its own team');
     }
     // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior

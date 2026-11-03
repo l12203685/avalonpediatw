@@ -297,4 +297,10 @@ describe('goodLeadConsistent (round 24, loyal / Percival; Edward 2026-11-03 prac
     expect(goodLeaderSelfApprove(on(2), { ...vote, currentLeader: 'P2' } as unknown as PlayerObservation)).toBe(false);
     expect(parseTuningFlag('goodLeadConsistent=2').goodLeadConsistent).toBe(2);
   });
+  it('3: Merlin approves its own team too, except when a seen red on it loses the game', () => {
+    const m = { ...r3, myRole: 'merlin', knownEvils: ['P6', 'P7', 'P9'], gamePhase: 'team_vote', proposedTeam: ['P3', 'P5', 'P10', 'P6'] } as unknown as PlayerObservation;
+    expect(goodLeaderSelfApprove(on(2), m)).toBe(false);
+    expect(goodLeaderSelfApprove(on(3), m)).toBe(true);
+    expect(goodLeaderSelfApprove(on(3), { ...m, questResults: ['fail', 'fail'] } as unknown as PlayerObservation)).toBe(false);
+  });
 });

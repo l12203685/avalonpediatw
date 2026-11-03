@@ -7,12 +7,14 @@
  *
  *   1 = 派隊：忠臣／派西隊長最後派出的隊，若自己的投票規則（關鍵局門檻、一般門檻）會投黑，改派自己後驗最乾淨的隊（含自己、過邏輯閘門）；
  *       照派加分也不再拿「自己在隊上、投了黑」的被否決隊當參考。
- *   2 = 1 ＋ 投票：忠臣／派西對自己派的隊（非強制）一律投白（仍然不越過好人投票關卡）。
+ *   2 = 1 ＋ 投票：忠臣／派西對自己派的隊（非強制）一律投白（仍然不越過好人投票關卡）；
+ *   3 = 2 ＋ 梅林也對自己派的隊投白（Edward 裁定：梅林在隊上的正常票內白沒有問題；隊上看得到的紅會直接輸掉時照舊投黑，`merlinVoteFatal`）。
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { goodCleanVoteReject, goodKeyVoteReject } from './GoodCleanVote';
+import { merlinVoteFatal } from './MerlinLoyalStyle';
 
 const goodLeader = (obs: PlayerObservation): boolean => obs.myTeam === 'good' && (obs.myRole === 'loyal' || obs.myRole === 'percival');
 
@@ -59,9 +61,11 @@ export function goodLeadConsistentTeam(
   return best ? { type: 'team_select', teamIds: best } : action;
 }
 
-/** `goodLeadConsistent` ≥ 2: a loyal / Percival leader's vote on its own non-forced proposal is white. */
+/** `goodLeadConsistent` ≥ 2: a loyal / Percival leader's vote on its own non-forced proposal is white (3: Merlin too, unless fatal). */
 export function goodLeaderSelfApprove(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  if ((tuning.goodLeadConsistent ?? 0) < 2 || obs.gamePhase !== 'team_vote' || !goodLeader(obs)) return false;
+  const m = tuning.goodLeadConsistent ?? 0;
+  const merlin = m >= 3 && obs.myTeam === 'good' && obs.myRole === 'merlin' && !merlinVoteFatal(obs);
+  if (m < 2 || obs.gamePhase !== 'team_vote' || !(goodLeader(obs) || merlin)) return false;
   if ((obs.failCount ?? 0) >= 4) return false;
   return obs.currentLeader === obs.myPlayerId && (obs.proposedTeam ?? []).includes(obs.myPlayerId);
 }

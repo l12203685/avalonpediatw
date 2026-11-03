@@ -788,7 +788,7 @@ export interface AgentTuning {
   /**
    * 第 24 回合藍方・忠臣／派西（`GoodLeadConsistent.ts`；Edward 2026-11-03 練習台「先內黑過 2350 但又照派一次、又自派自黑」）：
    * 1 = 隊長最後派的隊若自己的投票規則（`goodKeyVote`／`goodCleanVote`）會投黑，改派自己後驗最乾淨的隊；照派加分不再拿自己內黑過的被否決隊當參考；
-   * 2 = 1 ＋ 對自己派的隊（非強制）一律投白。0 = 關。
+   * 2 = 1 ＋ 對自己派的隊（非強制）一律投白；3 = 2 ＋ 梅林也對自己派的隊投白（隊上看得到的紅會直接輸掉時除外）。0 = 關。
    */
   goodLeadConsistent: number;
 }
@@ -1506,7 +1506,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'goodLeadConsistent') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`goodLeadConsistent needs 0–2, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`goodLeadConsistent needs 0–3, got "${raw}"`);
     return { goodLeadConsistent: value };
   }
   if (name === 'goodReuseExact') {
