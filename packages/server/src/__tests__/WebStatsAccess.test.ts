@@ -52,10 +52,14 @@ describe('web: parseStatsHash', () => {
     expect(parseStatsHash('#player=%20')).toEqual({ kind: 'stats' });
   });
 
-  it('ignores other hashes (practice, OAuth leftovers, empty)', () => {
-    for (const h of ['', '#', '#practice', '#settings', '#playerx', undefined, null]) {
+  it('ignores other hashes (OAuth leftovers, empty)', () => {
+    for (const h of ['', '#', '#settings', '#playerx', undefined, null]) {
       expect(parseStatsHash(h)).toBeNull();
     }
+  });
+
+  it('#practice opens 與機器人練習 again (2026-11-03)', () => {
+    expect(parseStatsHash('#practice')).toEqual({ kind: 'practice' });
   });
 
   it('round-trips the bot link for every kind of name', () => {
