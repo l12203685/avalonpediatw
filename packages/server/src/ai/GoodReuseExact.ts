@@ -10,10 +10,13 @@
  * 規則（忠臣、派西當隊長；上一局任務成功而且沒有失敗牌；這一局還沒有人派過、被否決過那一隊）：
  *   1 = 隊長不在那一隊：人數相同 → 照原樣派；多一人 → 那一隊＋自己；
  *   2 = 1 ＋ 隊長在那一隊上、人數相同 → 照原樣派（派西不再拿另一根拇指換掉成功隊上的那一根）。
- * 照派的隊仍然要過好人的邏輯閘門（必定失敗／被支配的隊，`allowed`）。不適用時回傳原本的動作。
+ * 照派的隊仍然要過好人的邏輯閘門（必定失敗／被支配的隊，`allowed`）、照派的守門（`TeamReuse.teamReuseGuard`：湖的硬1／硬2、隊長當成紅的人），
+ * 也要守住隊長自己湖的宣告（`goodVouchFollowUp`：自己宣藍的人要在隊上、宣紅的人不能在）。不適用時回傳原本的動作。
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
+import { teamReuseGuard } from './TeamReuse';
+import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
 
 export function goodReuseExactTeam(
   tuning: Readonly<AgentTuning>,
@@ -39,5 +42,11 @@ export function goodReuseExactTeam(
   const key = [...team].sort().join(',');
   if (obs.voteHistory.some((v) => v.round === round && [...v.team].sort().join(',') === key)) return action;
   if ([...action.teamIds].sort().join(',') === key || !allowed(team)) return action;
+  // The leader keeps its own lake word, and the reuse guard (lake hard rules, seats it treats as red) binds as on any reuse.
+  if (tuning.goodVouchFollowUp) {
+    const c = goodVouchTeamConstraint(obs);
+    if (c && (c.banned.some((id) => team!.includes(id)) || c.required.some((id) => !team!.includes(id)))) return action;
+  }
+  if (!teamReuseGuard(obs)(team)) return action;
   return { type: 'team_select', teamIds: team };
 }

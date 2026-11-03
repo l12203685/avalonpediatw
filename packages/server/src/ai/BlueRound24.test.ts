@@ -238,6 +238,12 @@ describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice
     expect(goodReuseExactTeam(on(1), o, pipe, () => false)).toBe(pipe);
     expect(goodReuseExactTeam(on(1), { ...o, myRole: 'merlin' } as unknown as PlayerObservation, pipe)).toBe(pipe);
   });
+  it('keeps the leader\'s own lake word: no re-proposal with a seat it declared red, or without the one it declared blue', () => {
+    const red = { ...o, lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P9', declaredClaim: 'evil' }] } as unknown as PlayerObservation;
+    expect(goodReuseExactTeam(on(1), red, pipe)).toBe(pipe);
+    const blue = { ...o, lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P5', declaredClaim: 'good' }] } as unknown as PlayerObservation;
+    expect(goodReuseExactTeam(on(1), blue, pipe)).toBe(pipe);
+  });
   it('2: also the leader on the team (Percival keeps the thumb that sat on the successful mission)', () => {
     const p = { ...o, myPlayerId: 'P2', myRole: 'percival', knownWizards: ['P7', 'P10'], currentLeader: 'P2' } as unknown as PlayerObservation;
     const swap: AgentAction = { type: 'team_select', teamIds: ['P2', 'P7', 'P8', 'P9'] };

@@ -243,10 +243,15 @@ describe('TeamReuse — ForwardAgent wiring', () => {
     expect(team).toEqual(['P1', 'P2', 'P3']);
   });
 
-  it('a leader off the successful team swaps itself in and keeps three of the four', () => {
-    const team = pick(obs({}), { teamReuse: true });
+  it('a leader off the successful team swaps itself in and keeps three of the four (round 24 goodReuseExact off)', () => {
+    const team = pick(obs({}), { teamReuse: true, goodReuseExact: 0 });
     expect(team).toContain('P1');
     expect(team.filter((id) => QUESTS[1].team.includes(id))).toHaveLength(3);
+  });
+
+  it('round 24 goodReuseExact (default): the leader off the successful team re-proposes it as it was', () => {
+    const team = pick(obs({}), { teamReuse: true });
+    expect(team).toEqual([...QUESTS[1].team].sort());
   });
 
   it('Merlin never takes a red it sees, even when it sat on the reference team', () => {
