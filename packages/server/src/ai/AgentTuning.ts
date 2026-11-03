@@ -683,6 +683,8 @@ export interface AgentTuning {
    * 9 = 三種乘數都用自我對打的刺殺資料擬合（條件 logit，1,672 次刺殺）；10 = 同 9，連模型分數、讀票、讀派隊的權重一起擬合（`REUSE_STACK_WEIGHTS`）。
    * 第 21 回合不採用（維持 3）：4 −0.4 [−0.8, −0.0]pp（把第 3 局起調回量到的比例反而變差）；5／6／7／8 +0.0～+0.2；10 −0.8；
    * 9 兩組各 6000 組種子 +0.45 [+0.08, +0.82]／+0.33 [−0.06, +0.73]pp（合併 12000 組 +0.39 [+0.12, +0.66]，第二組碰 0，留給第 2 階段）。
+   * 第 23 回合採用 9：對第 19 回合預設第三組 6000 組 +0.42 [+0.03, +0.80]；在 `assassinDoomedRead=1` 之上兩組各 6000 組 +0.58 [+0.21, +0.96]／+0.42 [+0.05, +0.79]pp（刺中率約 +1pp，三紅率不變）。
+   * 9 讀的是梅林「每次都照派」：藍方梅林照派 50%（`merlinReuseSkip=0.5`）對 9 有 +1.5 [+0.8, +2.2]pp（第 22 回合，對 3 只有 +0.15），藍方改照派比例後要重新擬合。
    */
   assassinReuseRead: number;
   /**
@@ -1178,7 +1180,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefKeyVoteCells: true,
   merlinReuseNorm: 3,
   percivalMorganaR1: false,
-  assassinReuseRead: 3,
+  assassinReuseRead: 9,
   redHideReuse: 0,
   merlinReuseSkip: 0,
   merlinReusePublic: false,

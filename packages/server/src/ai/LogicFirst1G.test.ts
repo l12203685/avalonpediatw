@@ -37,7 +37,8 @@ import type { PlayerObservation, QuestRecord, VoteRecord } from './types';
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 const CANDIDATES = ['P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 // Isolated from the round-6 lead read (`assassinLeadRead`): these tests are about the visible-red tier and likelihood.
-const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinMerlinVotes: 0, assassinLeadRead: 0 };
+// `assassinReuseRead: 3`: the fixture's re-proposal norm leads are read the round-19 way (round 23's fitted 9 also credits re-proposals and clean misses, which this fixture is not about).
+const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinMerlinVotes: 0, assassinLeadRead: 0, assassinReuseRead: 3 };
 const TIER_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, assassinMerlinVotes: 0, assassinLeadRead: 0, assassinVisibleRedTier: false, assassinVisibleRedLikelihood: false };
 
 function vote(round: number, attempt: number, leader: string, team: string[], approvers: string[], approved: boolean): VoteRecord {
