@@ -1,17 +1,24 @@
 import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { BenchmarkGroup, BenchmarksSection } from '@avalon/shared/stats';
+import {
+  BENCHMARK_CUT_LIMITS, DEFAULT_BENCHMARK_CUTS, validBenchmarkCuts,
+  type BenchmarkCuts, type BenchmarkGroup, type BenchmarksSection,
+} from '@avalon/shared/stats';
 import { useBenchmarkToggle, useBenchmarks } from '../../stats/benchmarkRows';
+import { useStatsFilter } from '../../stats/statsFilter';
+import { withOptions } from '../../stats/filterDraft';
 import type { AnalysisLeaderboardRow } from '../../services/api';
 import type { PlayerWithSeatStats } from './seatRoleBlocks';
 
 /**
  * 基準列的共用元件（Edward 2026-11-03「[散客 < 30場] [排除散客後全體] [排除散客後 PR50+] [排除散客後 PR50-]」呈現在
- * 所有排行跟數據分析的最上列；同日改成「如果改成 前1/3 中間1/3 後1/3呢」：PR 列換成依當局 Elo PR 三等分）。數字見 @avalon/shared/stats benchmarks.ts、
+ * 所有排行跟數據分析的最上列；同日改成依當局 Elo PR 分組，「切分點可以自己訂? 前 & 後 可選 預設都是20% 剩下的就是中間」）。
+ * 數字見 @avalon/shared/stats benchmarks.ts、
  * 資料與開關見 stats/benchmarkRows.ts。
  *
  *  - BenchmarkName：組名 + 「基準」小標 (表格第一欄、取代名次＋名字)。
- *  - BenchmarkToggle：「顯示基準列」開關 (全站一份)。
+ *  - BenchmarkToggle：「顯示基準列」開關 (全站一份) + 前 X%／後 Y% 兩個小選單 (篩選的 options.benchmark，跟著分享連結走；
+ *    預設 20／20 時不寫進篩選)。
  *  - useBenchmarkGroups()：有座位的組 (沒有座位的組不列)；關掉或還沒算好時 []。
  */
 
@@ -22,30 +29,31 @@ const K = 'analytics.benchmark';
 const DEFAULT_LABEL: Record<BenchmarkGroup['id'], string> = {
   casual: '散客（<{{n}}場）',
   regular: '排除散客後全體',
-  prTop: '排除散客後 前1/3',
-  prMid: '排除散客後 中間1/3',
-  prBottom: '排除散客後 後1/3',
+  prTop: '排除散客後 前{{top}}%',
+  prMid: '排除散客後 中間{{mid}}%',
+  prBottom: '排除散客後 後{{bottom}}%',
 };
 
 const DEFAULT_SHORT: Record<BenchmarkGroup['id'], string> = {
   casual: '散客 <{{n}}',
   regular: '全體（排除散客）',
-  prTop: '前1/3',
-  prMid: '中間1/3',
-  prBottom: '後1/3',
+  prTop: '前{{top}}%',
+  prMid: '中間{{mid}}%',
+  prBottom: '後{{bottom}}%',
 };
 
 const DEFAULT_TIP: Record<BenchmarkGroup['id'], string> = {
   casual: '生涯未滿 {{n}} 場的玩家的座位（{{players}} 人、{{seats}} 個座位）。',
   regular: '散客以外的所有座位（{{players}} 人、{{seats}} 個座位）。',
-  prTop: '散客以外、那一局開打前 Elo PR ≥ 200/3（66.7）的座位，PR 排前三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
-  prMid: '「一般玩家」的基準：散客以外、那一局開打前 Elo PR 在 100/3（33.3）以上、未滿 200/3（66.7）的座位，PR 排中間三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
-  prBottom: '散客以外、那一局開打前 Elo PR 未滿 100/3（33.3）的座位，PR 排後三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
+  prTop: '散客以外、那一局開打前 Elo PR ≥ {{topPr}} 的座位（PR 前 {{top}}%；{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
+  prMid: '「一般玩家」的基準：散客以外、那一局開打前 Elo PR 在 {{bottom}} 以上、未滿 {{topPr}} 的座位（中間 {{mid}}%；{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
+  prBottom: '散客以外、那一局開打前 Elo PR 未滿 {{bottom}} 的座位（PR 後 {{bottom}}%；{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
 };
 
 function labelVars(section: BenchmarksSection, group: BenchmarkGroup): Record<string, unknown> {
+  const cuts = section.cuts ?? DEFAULT_BENCHMARK_CUTS;
   return {
-    n: section.maxGames,
+    n: section.maxGames, top: cuts.top, bottom: cuts.bottom, mid: 100 - cuts.top - cuts.bottom, topPr: 100 - cuts.top,
     players: group.players, seats: group.seats,
   };
 }
@@ -105,22 +113,71 @@ export function BenchmarkName({
   );
 }
 
-/** 「顯示基準列」開關 (全站一份，記在 localStorage)。 */
+/** 前／後的選項 (%)。 */
+export const BENCHMARK_CUT_CHOICES = [5, 10, 15, 20, 25, 30, 33] as const;
+
+/** 目前篩選的切分點 (沒寫 = 預設 20／20)。 */
+export function useBenchmarkCuts(): BenchmarkCuts {
+  const c = useStatsFilter((s) => s.filter?.options?.benchmark);
+  return c && validBenchmarkCuts(c) ? c : DEFAULT_BENCHMARK_CUTS;
+}
+
+/** 「顯示基準列」開關 (全站一份，記在 localStorage) + 開著時的前 X%／後 Y% 選單。 */
 export function BenchmarkToggle({ className = '' }: { className?: string }): JSX.Element {
   const { t } = useTranslation('common');
   const show = useBenchmarkToggle((s) => s.show);
   const setShow = useBenchmarkToggle((s) => s.setShow);
+  const cuts = useBenchmarkCuts();
+  const setFilter = useStatsFilter((s) => s.setFilter);
+  const choose = (patch: Partial<BenchmarkCuts>): void => {
+    const next = { ...cuts, ...patch };
+    if (!validBenchmarkCuts(next)) return;
+    const current = useStatsFilter.getState().filter ?? { v: 1 as const, clauses: [] };
+    const isDefault = next.top === DEFAULT_BENCHMARK_CUTS.top && next.bottom === DEFAULT_BENCHMARK_CUTS.bottom;
+    setFilter(withOptions(current, { benchmark: isDefault ? undefined : next }));
+  };
+  const select = (which: 'top' | 'bottom'): JSX.Element => {
+    const value = cuts[which];
+    const other = cuts[which === 'top' ? 'bottom' : 'top'];
+    const choices = [...new Set([...BENCHMARK_CUT_CHOICES, value])].sort((a, b) => a - b)
+      .filter((n) => n + other <= BENCHMARK_CUT_LIMITS.maxSum);
+    return (
+      <label className="inline-flex items-center gap-0.5">
+        {t(`${K}.cut.${which}`, { defaultValue: which === 'top' ? '前' : '後' })}
+        <select
+          value={value}
+          onChange={(e) => choose({ [which]: Number(e.target.value) })}
+          className="rounded border border-zinc-700 bg-zinc-900 px-0.5 py-0 text-xs text-zinc-200"
+          aria-label={t(`${K}.cut.${which}Label`, { defaultValue: which === 'top' ? '基準列：前幾 %（依當局 Elo PR）' : '基準列：後幾 %（依當局 Elo PR）' })}
+          data-testid={`benchmark-cut-${which}`}
+        >
+          {choices.map((n) => <option key={n} value={n}>{n}%</option>)}
+        </select>
+      </label>
+    );
+  };
   return (
-    <label className={`inline-flex cursor-pointer select-none items-center gap-1 text-xs text-zinc-400 ${className}`}>
-      <input
-        type="checkbox"
-        checked={show}
-        onChange={(e) => setShow(e.target.checked)}
-        className="h-3 w-3 accent-sky-500"
-        data-testid="benchmark-toggle"
-      />
-      {t(`${K}.toggle`, { defaultValue: '顯示基準列' })}
-    </label>
+    <span className={`inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-zinc-400 ${className}`}>
+      <label className="inline-flex cursor-pointer select-none items-center gap-1">
+        <input
+          type="checkbox"
+          checked={show}
+          onChange={(e) => setShow(e.target.checked)}
+          className="h-3 w-3 accent-sky-500"
+          data-testid="benchmark-toggle"
+        />
+        {t(`${K}.toggle`, { defaultValue: '顯示基準列' })}
+      </label>
+      {show && (
+        <span
+          className="inline-flex items-center gap-1"
+          title={t(`${K}.cut.hint`, { defaultValue: '依那一局開打前的 Elo PR 分組：前 X% = PR ≥ 100 − X、後 Y% = PR < Y，剩下的是中間；會跟著分享連結。' })}
+        >
+          {select('top')}
+          {select('bottom')}
+        </span>
+      )}
+    </span>
   );
 }
 

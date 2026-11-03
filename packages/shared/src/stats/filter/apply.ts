@@ -22,7 +22,8 @@ import { compare, evaluateMetric, METRICS, type MetricContext } from './metrics'
 import { clausePredicate } from './predicates';
 import { hasMergeOptions, mergedAliases, mergedDataset, type MergeReport } from './merge';
 import {
-  BENCHMARK_DEFAULT_MAX_GAMES, careerGames, computeBenchmarks, mergedCareerGames, type BenchmarksSection,
+  BENCHMARK_DEFAULT_MAX_GAMES, careerGames, computeBenchmarks, isDefaultBenchmarkCuts, mergedCareerGames,
+  validBenchmarkCuts, type BenchmarksSection,
 } from '../benchmarks';
 import type { Clause, ExcludePlayersClause, GameClause, GameFilter, LeaderboardOverrides, PlayerSelector } from './types';
 
@@ -87,7 +88,7 @@ export interface StatsResult extends Sections {
   filterKey: string;
   meta: FilterMeta;
   /**
-   * 基準列（stats/benchmarks.ts；Edward 2026-11-03）：散客 / 排除散客後全體 / 前1/3 / 中間1/3 / 後1/3（PR 三等分）。不是快取的區塊
+   * 基準列（stats/benchmarks.ts；Edward 2026-11-03）：散客 / 排除散客後全體 / 前 X% / 中間 / 後 Y%（PR 分組，切分點 = options.benchmark，預設 20／20）。不是快取的區塊
    * （analysis_cache.json 沒有，網站在不篩選時也用引擎算）；不影響其他區塊的任何數字。
    */
   benchmarks: BenchmarksSection;
@@ -470,6 +471,7 @@ export function canonicalFilterKey(filter: GameFilter | null | undefined): strin
     // 組的順序保留（同一個名字在兩組時第一組算數）；組內名字排序
     merge: merge && merge.length ? merge.map((g) => ({ as: g.as, names: g.names })) : undefined,
     mergeSmall: filter.options?.mergeSmall ? { maxGames: filter.options.mergeSmall.maxGames } : undefined,
+    benchmark: benchmarkCuts(filter) ? { bottom: filter.options?.benchmark?.bottom, top: filter.options?.benchmark?.top } : undefined,
   });
   return JSON.stringify({ v: 1, clauses, options });
 }
@@ -477,7 +479,13 @@ export function canonicalFilterKey(filter: GameFilter | null | undefined): strin
 function hasOptions(filter: GameFilter): boolean {
   const o = filter.options;
   return Boolean(o && ((o.activity && o.activity !== 'filtered') || (o.asOf && o.asOf !== 'auto')
-    || (o.leaderboard && Object.keys(o.leaderboard).length) || hasMergeOptions(o)));
+    || (o.leaderboard && Object.keys(o.leaderboard).length) || hasMergeOptions(o) || benchmarkCuts(filter)));
+}
+
+/** 篩選裡合法、不是預設的基準列切分點（其他 = null：預設 20／20 不算篩選）。 */
+function benchmarkCuts(filter: GameFilter): { top: number; bottom: number } | null {
+  const c = filter.options?.benchmark;
+  return c && validBenchmarkCuts(c) && !isDefaultBenchmarkCuts(c) ? { top: c.top, bottom: c.bottom } : null;
 }
 
 /**
@@ -512,12 +520,14 @@ function statsBenchmarks(
   built: ReturnType<typeof buildSections>,
 ): BenchmarksSection {
   const maxGames = filter?.options?.mergeSmall?.maxGames ?? BENCHMARK_DEFAULT_MAX_GAMES;
+  const cuts = filter ? benchmarkCuts(filter) : null;
   const careers = careerGames(decoded);
   const { overview } = built.sections;
   return computeBenchmarks(built.games, decoded.config, {
     maxGames,
     careers: app.merge && app.merge.rename.size ? mergedCareerGames(careers, app.merge.rename) : careers,
     pooledName: app.meta.merge?.pooled?.name,
+    ...(cuts ? { cuts } : {}),
     roleFinalWinRates: overview.roleFinalWinRates,
     seatFinalWinRates: overview.seatFinalWinRates,
     roleSeatFinalWinRates: overview.roleSeatFinalWinRates,

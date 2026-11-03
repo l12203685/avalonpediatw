@@ -11,6 +11,7 @@ import {
   type Clause, type FilterOptions, type GameFilter, type LeaderboardOverrideKey, type LeaderboardOverrides,
 } from './types';
 import { sanitizeMergeOptions } from './merge';
+import { sanitizeBenchmarkOption } from '../benchmarks';
 
 export const FILTER_URL_VERSION = '1';
 
@@ -209,6 +210,8 @@ export function sanitizeFilter(raw: unknown): { filter: GameFilter | null; warni
     if (Object.keys(lb).length) options.leaderboard = lb;
   }
   Object.assign(options, sanitizeMergeOptions(o, warnings));
+  const benchmark = sanitizeBenchmarkOption(o.benchmark, warnings);
+  if (benchmark) options.benchmark = benchmark;
   const filter: GameFilter = { v: 1, clauses };
   if (Object.keys(options).length) filter.options = options;
   return { filter, warnings };

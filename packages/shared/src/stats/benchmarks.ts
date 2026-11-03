@@ -1,19 +1,19 @@
 /**
  * 基準列（Edward 2026-11-03「你可以預設讓以下幾個呈現在所有排行跟數據分析的最上列嗎 [散客 < 30場] [排除散客後全體]
- * [排除散客後 PR50+] [排除散客後 PR50-]」；同日改成「如果改成 前1/3 中間1/3 後1/3呢」）：五個虛擬的「玩家」，逐座位把篩選後的局分組，各組照玩家的算法算一列，
+ * [排除散客後 PR50+] [排除散客後 PR50-]」；同日改成 PR 分組、切分點可調）：五個虛擬的「玩家」，逐座位把篩選後的局分組，各組照玩家的算法算一列，
  * 網站把它們釘在每張玩家表的最上面當比較基準（不排名、不算進人數）。
  *
  *  - 散客 < N 場：生涯場數未滿 N 的玩家的座位。生涯場數的定義與合併計算（filter/merge.ts）相同：全部局（不看任何
  *    子句、不看基準日）中有結果（三紅／三藍死／三藍活）的座位數，別名已合併。N = options.mergeSmall.maxGames（有開
  *    「散客」合併時），否則 30。合併計算有開時看合併後的名字：散客（<N場）本身算散客，自訂合併的名字看合併後的總場數。
  *  - 排除散客後全體：其他所有有名字的座位（散客 + 全體 = 篩選後全部有名字的座位）。
- *  - 排除散客後 前1/3／中間1/3／後1/3：全體裡、依那一局開打前這個座位的時間相對 Elo PR（games_cache 的 lineup，
- *    generate_cache.compute_lineups）三等分，三組互不重疊：
- *      前1/3   PR ≥ 200/3（66.66…）
- *      中間1/3 100/3 ≤ PR < 200/3（「一般玩家」的基準）
- *      後1/3   PR < 100/3（33.33…）
- *    分界用精確的三分之一：比較 3 × PR 與 100、200（不用 33.33 之類的小數，沒有浮點邊界問題；PR 剛好 = 100/3 算中間、
- *    = 200/3 算前）。PR 是 0–100 的整數時：0–33 後、34–66 中、67–100 前。
+ *  - 排除散客後 前 X%／中間／後 Y%（Edward 同日再改：「切分點可以自己訂? 前 & 後 可選 預設都是20% 剩下的就是中間」）：
+ *    全體裡、依那一局開打前這個座位的時間相對 Elo PR（games_cache 的 lineup，generate_cache.compute_lineups）切三組，
+ *    互不重疊。X = options.benchmark.top、Y = options.benchmark.bottom（整數 5–45、X + Y ≤ 90，預設都是 20）：
+ *      前 X%            PR ≥ 100 − X        （預設 PR ≥ 80）
+ *      中間（100−X−Y）%  Y ≤ PR < 100 − X    （預設 20 ≤ PR < 80；「一般玩家」的基準）
+ *      後 Y%            PR < Y              （預設 PR < 20）
+ *    下界含、上界不含；PR 是 0–100 的整數、X、Y 也是整數，所以分界沒有浮點問題（預設：0–19 後、20–79 中、80–100 前）。
  *    PR 是在「生涯已 ≥30 場」的玩家池裡的百分等級；暫定座位（當時生涯未滿 30 場，PR 被壓在 50 以下）與沒評分的局
  *    （玩家池太小、舊資料沒有 lineup）沒有可用的 PR，三個 PR 列都不算，但照樣算在「全體」
  *    （前 + 中 + 後 + 沒有 PR = 全體）。
@@ -33,38 +33,68 @@ import type { DecodedDataset, Game, GamesDatasetConfig } from './dataset';
 import { rate } from './pyround';
 import { computeSeatOutcomesPerPlayer, playerTallies, type PlayerRow } from './players';
 import { missionAssassination, playerTheory, playerTimelines, type OutcomeRates, type RoleSeatRates } from './theory';
+import type { BenchmarkCuts } from './filter/types';
 
 /** 沒有開「散客」合併時的門檻。 */
 export const BENCHMARK_DEFAULT_MAX_GAMES = 30;
-/** 顯示順序：散客、全體、前1/3、中間1/3、後1/3。 */
+/** 顯示順序：散客、全體、前 X%、中間、後 Y%。 */
 export const BENCHMARK_IDS = ['casual', 'regular', 'prTop', 'prMid', 'prBottom'] as const;
 export type BenchmarkId = (typeof BENCHMARK_IDS)[number];
-export type BenchmarkTertile = 'prTop' | 'prMid' | 'prBottom';
+export type BenchmarkPrGroup = 'prTop' | 'prMid' | 'prBottom';
 
-/** PR 的三等分（精確：3 × PR 與 100、200 比；PR = 100/3 → 中間、= 200/3 → 前）。 */
-export function prTertile(pr: number): BenchmarkTertile {
-  const x = pr * 3;
-  return x >= 200 ? 'prTop' : x >= 100 ? 'prMid' : 'prBottom';
+/** 前 X%／後 Y% 的範圍與預設（options.benchmark；整數）。 */
+export const BENCHMARK_CUT_LIMITS = { min: 5, max: 45, maxSum: 90, defaultTop: 20, defaultBottom: 20 } as const;
+export const DEFAULT_BENCHMARK_CUTS: BenchmarkCuts = { top: BENCHMARK_CUT_LIMITS.defaultTop, bottom: BENCHMARK_CUT_LIMITS.defaultBottom };
+
+/** 合法的切分點（整數、5–45、相加 ≤ 90）。 */
+export function validBenchmarkCuts(c: unknown): c is BenchmarkCuts {
+  const v = c as Partial<BenchmarkCuts> | null;
+  const ok = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n)
+    && n >= BENCHMARK_CUT_LIMITS.min && n <= BENCHMARK_CUT_LIMITS.max;
+  return Boolean(v && typeof v === 'object' && ok(v.top) && ok(v.bottom) && v.top + v.bottom <= BENCHMARK_CUT_LIMITS.maxSum);
 }
 
-/** 組名（中文，機器人與沒有翻譯時用；網站另有 i18n）。 */
-export function benchmarkLabel(id: BenchmarkId, maxGames: number): string {
+export function isDefaultBenchmarkCuts(c: BenchmarkCuts): boolean {
+  return c.top === DEFAULT_BENCHMARK_CUTS.top && c.bottom === DEFAULT_BENCHMARK_CUTS.bottom;
+}
+
+/**
+ * options.benchmark 的驗證（sanitizeFilter 用）：不合法 → 丟掉並回報；等於預設 → 拿掉（預設不算篩選，
+ * 篩選的標準鍵與不篩選相同）。
+ */
+export function sanitizeBenchmarkOption(raw: unknown, warnings: string[]): BenchmarkCuts | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!validBenchmarkCuts(raw)) {
+    warnings.push('options.benchmark');
+    return undefined;
+  }
+  const cuts = { top: raw.top, bottom: raw.bottom };
+  return isDefaultBenchmarkCuts(cuts) ? undefined : cuts;
+}
+
+/** 這個 PR 屬於哪一組：PR ≥ 100 − top → 前；PR ≥ bottom → 中間；其他 → 後（下界含、上界不含）。 */
+export function prGroup(pr: number, cuts: BenchmarkCuts = DEFAULT_BENCHMARK_CUTS): BenchmarkPrGroup {
+  return pr >= 100 - cuts.top ? 'prTop' : pr >= cuts.bottom ? 'prMid' : 'prBottom';
+}
+
+/** 組名（中文，機器人與沒有翻譯時用；網站另有 i18n）：前 X%、中間 (100−X−Y)%、後 Y%。 */
+export function benchmarkLabel(id: BenchmarkId, maxGames: number, cuts: BenchmarkCuts = DEFAULT_BENCHMARK_CUTS): string {
   switch (id) {
     case 'casual': return `散客（<${maxGames}場）`;
     case 'regular': return '排除散客後全體';
-    case 'prTop': return '排除散客後 前1/3';
-    case 'prMid': return '排除散客後 中間1/3';
-    default: return '排除散客後 後1/3';
+    case 'prTop': return `排除散客後 前${cuts.top}%`;
+    case 'prMid': return `排除散客後 中間${100 - cuts.top - cuts.bottom}%`;
+    default: return `排除散客後 後${cuts.bottom}%`;
   }
 }
 
-export function benchmarkLabelEn(id: BenchmarkId, maxGames: number): string {
+export function benchmarkLabelEn(id: BenchmarkId, maxGames: number, cuts: BenchmarkCuts = DEFAULT_BENCHMARK_CUTS): string {
   switch (id) {
     case 'casual': return `Casuals (<${maxGames} games)`;
     case 'regular': return 'All excl. casuals';
-    case 'prTop': return 'Excl. casuals, top third';
-    case 'prMid': return 'Excl. casuals, middle third';
-    default: return 'Excl. casuals, bottom third';
+    case 'prTop': return `Excl. casuals, top ${cuts.top}%`;
+    case 'prMid': return `Excl. casuals, middle ${100 - cuts.top - cuts.bottom}%`;
+    default: return `Excl. casuals, bottom ${cuts.bottom}%`;
   }
 }
 
@@ -107,8 +137,8 @@ export interface BenchmarkGroup {
 export interface BenchmarksSection {
   /** 散客的門檻（生涯未滿幾場）。 */
   maxGames: number;
-  /** 三等分的分界（PR × 3 與這兩個數比）：[100, 200]。 */
-  tertileBounds: readonly [number, number];
+  /** 前 X%／後 Y%（PR ≥ 100 − top 前、PR < bottom 後）。 */
+  cuts: BenchmarkCuts;
   /** 依 BENCHMARK_IDS 的順序，固定五組。 */
   groups: BenchmarkGroup[];
   /** 有結果的局裡全部有名字的座位（= 散客 + 全體）。 */
@@ -121,6 +151,8 @@ export interface BenchmarkOptions {
   maxGames: number;
   /** 名字（篩選後的局上看到的名字）→ 生涯場數。 */
   careers: ReadonlyMap<string, number>;
+  /** 前 X%／後 Y%（沒給 = 預設 20／20）。 */
+  cuts?: BenchmarkCuts;
   /** 合併計算的散客名字：一律算散客。 */
   pooledName?: string;
   /** 補值用的族群率（篩選後的 overview）。 */
@@ -168,10 +200,11 @@ export function computeBenchmarks(
   options: BenchmarkOptions,
 ): BenchmarksSection {
   const { maxGames, careers, pooledName } = options;
-  const labels = Object.fromEntries(BENCHMARK_IDS.map((id) => [id, benchmarkLabel(id, maxGames)])) as Record<BenchmarkId, string>;
+  const cuts = options.cuts ?? DEFAULT_BENCHMARK_CUTS;
+  const labels = Object.fromEntries(BENCHMARK_IDS.map((id) => [id, benchmarkLabel(id, maxGames, cuts)])) as Record<BenchmarkId, string>;
   const isCasual = (n: string): boolean => n === pooledName || (careers.get(n) ?? 0) < maxGames;
 
-  // 兩份改名的局：A = 散客／全體，B = 前／中間／後 1/3（其他座位當沒寫名字）。局物件只換 seatPlayers。
+  // 兩份改名的局：A = 散客／全體，B = 前 X%／中間／後 Y%（其他座位當沒寫名字）。局物件只換 seatPlayers。
   const names: Record<BenchmarkId, Set<string>> = {
     casual: new Set(), regular: new Set(), prTop: new Set(), prMid: new Set(), prBottom: new Set(),
   };
@@ -196,7 +229,7 @@ export function computeBenchmarks(
           ga = 'regular';
           const pr = seatPr(g, i);
           if (pr === null) noPrSeats += 1;
-          else gb = prTertile(pr);
+          else gb = prGroup(pr, cuts);
         }
         for (const id of [ga, gb]) if (id) names[id].add(n);
       }
@@ -252,7 +285,7 @@ export function computeBenchmarks(
     return {
       id,
       label,
-      labelEn: benchmarkLabelEn(id, maxGames),
+      labelEn: benchmarkLabelEn(id, maxGames, cuts),
       seats: row ? row.totalGames : 0,
       players: names[id].size,
       row,
@@ -260,5 +293,5 @@ export function computeBenchmarks(
       assassin: assassins.get(label) ?? { hits: 0, attempts: 0, hitRate: null },
     };
   });
-  return { maxGames, tertileBounds: [100, 200], groups, totalSeats, noPrSeats };
+  return { maxGames, cuts: { ...cuts }, groups, totalSeats, noPrSeats };
 }

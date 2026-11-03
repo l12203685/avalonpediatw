@@ -4,7 +4,7 @@ import { outcomeBlocks, roleFaction, theorySettings, type OutcomeCounts } from '
 import { useAnalysisOverview } from './analysis/useAnalysisOverview';
 import { blockValues, seatFactionCounts, useIsWide } from './analysis/seatRoleBlocks';
 import { MetricBlocks, type MetricBlockRow } from './analysis/ui';
-import { useStatsFilter } from '../stats/statsFilter';
+import { useStatsFiltered } from '../stats/statsFilter';
 import { WIKI_ROLE_NAMES } from '../data/wiki';
 import { CampDisc } from './CampDisc';
 
@@ -35,7 +35,7 @@ function addCounts(a: OutcomeCounts | undefined, b: OutcomeCounts): OutcomeCount
 export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element | null {
   const { t } = useTranslation('common');
   const { overview, loading, error, reload } = useAnalysisOverview();
-  const filtered = useStatsFilter(s => s.key !== '');
+  const filtered = useStatsFiltered();
   const wide = useIsWide();
   const name = WIKI_ROLE_NAMES[role];
   if (!name) return null;

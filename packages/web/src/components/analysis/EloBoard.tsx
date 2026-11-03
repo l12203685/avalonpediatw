@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Clock, Loader, RefreshCw } from 'lucide-react';
-import { useStatsFilter } from '../../stats/statsFilter';
+import { useStatsFiltered } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
 import { InfoTip, StatTable, type StatColumn } from './ui';
 import {
@@ -41,7 +41,7 @@ function since(asOf: string, days: number): string {
 
 export default function EloBoard(): JSX.Element {
   const { t } = useTranslation('common');
-  const filtered = useStatsFilter((s) => s.key !== '');
+  const filtered = useStatsFiltered();
   const openPlayerStats = useGameStore((s) => s.openPlayerStats);
   const [data, setData] = useState<RatingBoardData | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'notGenerated' | 'error'>('loading');

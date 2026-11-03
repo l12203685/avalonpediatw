@@ -162,6 +162,17 @@ export interface FilterOptions {
   merge?: MergeGroup[];
   /** 生涯場數（全部局、有結果的局的座位數）未滿 maxGames 的人併成一位「散客（<N場）」；自訂合併的名字不併。 */
   mergeSmall?: MergeSmallOption;
+  /**
+   * 基準列的 PR 切分點（Edward 2026-11-03「切分點可以自己訂? 前 & 後 可選 預設都是20% 剩下的就是中間」）：
+   * 前 top%（PR ≥ 100 − top）、後 bottom%（PR < bottom），整數 5–45、相加 ≤ 90；預設 20／20 時不寫（sanitizeFilter
+   * 拿掉）。只影響基準列（benchmarks.ts），其他區塊的數字不變。
+   */
+  benchmark?: BenchmarkCuts;
+}
+
+export interface BenchmarkCuts {
+  top: number;
+  bottom: number;
 }
 
 export interface MergeGroup {
