@@ -395,5 +395,16 @@
    756
   ]
  },
- "voteAloneSource": "round 24: self-play 1000 games (round 23 defaults), only these cells"
+ "voteAloneSource": "round 24: self-play 1000 games (round 23 defaults), only these cells",
+ "voteBite": {
+  "good": [
+   0,
+   655
+  ],
+  "evil": [
+   163,
+   1032
+  ]
+ },
+ "voteBiteSource": "round 24: self-play 600 games (round 23 defaults + leaderSelfApprove), only these cells"
 }
