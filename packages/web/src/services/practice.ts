@@ -122,7 +122,7 @@ export async function flagPracticeDecision(roomId: string, entryId: number, note
 /**
  * Start a practice game with `options` (setup card and 「再練一局」). Shows
  * RoomPage's "連線中…" state until the started room arrives; on failure goes
- * back home with a toast built by `errorText`.
+ * back to the practice setup page with a toast built by `errorText`.
  */
 export async function startPractice(options: PracticeOptions, errorText: (error: string) => string): Promise<boolean> {
   const { setGameState, setRoom, addToast } = useGameStore.getState();
@@ -132,13 +132,13 @@ export async function startPractice(options: PracticeOptions, errorText: (error:
     setRoom(null);
     setGameState('lobby');
     await createPracticeRoom(options);
-    // Leaving the room later should land on the normal home page, not the setup card.
+    // The #practice deep link has done its job (App normally consumes it already).
     if (window.location.hash === '#practice') {
       try { window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`); } catch { /* ignore */ }
     }
     return true;
   } catch (err) {
-    setGameState('home');
+    setGameState('practice');
     addToast(errorText(err instanceof Error ? err.message : String(err)), 'error');
     return false;
   }

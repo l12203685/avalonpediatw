@@ -8,16 +8,16 @@ import {
   extractOAuthTokenFromUrl,
   stashLinkedProviderToken,
   consumeLinkedProviderToken,
-  getGuestToken,
-  resumeGuestFromCookie,
 } from './services/auth';
 import { initializeSocket, disconnectSocket, getStoredToken } from './services/socket';
+import { startGuestSession } from './services/siteSession';
 import { startVersionCheck } from './services/versionCheck';
 import { forceRefresh } from './utils/forceRefresh';
 import SiteNav, { lastSiteTab, siteTabOf } from './components/SiteNav';
 import StreamsPage from './pages/StreamsPage';
 import RecordsPage from './pages/RecordsPage';
 import IdClaimPage from './pages/IdClaimPage';
+import PracticePage from './pages/PracticePage';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -59,6 +59,7 @@ function App(): JSX.Element {
       const store = useGameStore.getState();
       if (link.kind === 'player') store.openPlayerStats(link.name);
       else if (link.kind === 'claim') store.setGameState('idClaim');
+      else if (link.kind === 'practice') store.setGameState('practice');
       else if (link.kind === 'records') {
         store.setGameState('records');
         // 舊連結 #paipu… 換成 #records…（不留一筆舊網址的歷史紀錄）
@@ -225,35 +226,16 @@ function App(): JSX.Element {
     // 大廳對訪客的限制（建立/加入房間 → AuthGateModal）已由 #177 / #196 wired，
     // 此修改只動 routing：從「強制登入」變「lazy 登入」。
     const ensureGuestSession = async (): Promise<void> => {
-      // resumeGuestFromCookie 會打 /auth/guest/resume —— 若 server 還沒實作
-      // (Phase A 砍掉) 會回 404 → null，自動往下 fallback 到 mint 新 token。
-      try {
-        const resumed = await resumeGuestFromCookie();
-        if (resumed) {
-          await initializeSocket(resumed.token);
-          setIsAuthenticated(true);
-          return;
-        }
-      } catch {
-        // network error — keep falling through to fresh mint
-      }
-      // 沒 cookie 或續簽失敗 → mint 新 guest JWT。displayName 沿用上次本機暫存
-      // 的名字（HomePage 在開房/加房時 setItem 'avalon_player_name'）；沒有就
-      // 隨機產生 Guest_<6 位>。
-      try {
-        const savedName = localStorage.getItem('avalon_player_name')?.trim();
-        const displayName = savedName && savedName.length > 0
-          ? savedName
-          : `Guest_${Math.floor(Math.random() * 900000 + 100000)}`;
-        const token = await getGuestToken(displayName);
-        await initializeSocket(token);
+      // services/siteSession.ts：guest_session cookie 續簽（/auth/guest/resume）→ 失敗就 mint 新訪客 JWT
+      // （名字沿用本機暫存的 avalon_player_name，沒有就 Guest_<6 位>）。「與機器人練習」頁的重試也走這裡。
+      if (await startGuestSession()) {
         setIsAuthenticated(true);
-      } catch {
-        // Guest mint failed — server outage. Fall back to LoginPage so the
-        // user has an explicit recovery path; connection banner will surface.
-        setIsAuthenticated(false);
-        disconnectSocket();
+        return;
       }
+      // Guest mint failed — server outage. Fall back to LoginPage so the
+      // user has an explicit recovery path; connection banner will surface.
+      setIsAuthenticated(false);
+      disconnectSocket();
     };
 
     const unsubscribe = onAuthStateChange(async (userWithToken) => {
@@ -347,8 +329,8 @@ function App(): JSX.Element {
   // Edward 2026-10-30：沒有首頁 — 'home' 直接開上次的分頁（數據排行／百科攻略），內容頁不等登入就顯示。
   const shownState = gameState === 'home' ? lastSiteTab() : gameState;
   const siteTab = siteTabOf(shownState);
-  // ID 認領不是頁籤，但同樣掛導覽列與背景（從導覽列的「ID認領」進來）
-  const withSiteNav = siteTab !== null || shownState === 'idClaim';
+  // ID 認領、與機器人練習不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕進來）
+  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice';
 
   if (isLoading && !(statsFirst || publicStatsPage)) {
     return (
@@ -486,6 +468,7 @@ function App(): JSX.Element {
           {shownState === 'streams' && <StreamsPage />}
           {shownState === 'records' && <RecordsPage />}
           {shownState === 'idClaim' && <IdClaimPage />}
+          {shownState === 'practice' && <PracticePage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage

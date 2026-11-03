@@ -316,8 +316,11 @@ export async function initializeSocket(token: string): Promise<void> {
   });
 
   socket.on('game:left-room', () => {
+    // 離開練習房（結束練習／回設定）→ 回「與機器人練習」設定頁；其他房間 → 回網站（上次的頁籤）。
+    // 前綴 = services/practice.ts PRACTICE_ROOM_PREFIX（不從那裡 import：practice.ts 已 import 本檔）
+    const leftPractice = useGameStore.getState().room?.id?.startsWith('PRACTICE-') ?? false;
     store.setRoom(null);
-    store.setGameState('home');
+    store.setGameState(leftPractice ? 'practice' : 'home');
     store.setSpectating(false);
   });
 
