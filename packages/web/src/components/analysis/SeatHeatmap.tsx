@@ -42,7 +42,7 @@ function formatDelta(deviation: number): string {
  * 所以表格只放任務結果；滑鼠移到格子上另列「坐這裡的全部對局」的條件比率 (seatOutcomes：
  * 三紅率 n = 全部、三藍局刺中率 n = 三藍局)，取代舊版的三種結果占全部對局的比例。
  * 表格在自己的容器裡上下／左右捲，整頁不拉長。
- * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／PR25–75／PR50+／PR50-，BenchmarkRows)，同一套算法、顏色同樣是和
+ * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／前1/3／中間1/3／後1/3，BenchmarkRows)，同一套算法、顏色同樣是和
  * 全體在這個位置的差；不算進「最多 25 位」。
  */
 export default function SeatHeatmap(): JSX.Element {

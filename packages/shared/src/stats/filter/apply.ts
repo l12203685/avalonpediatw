@@ -87,7 +87,7 @@ export interface StatsResult extends Sections {
   filterKey: string;
   meta: FilterMeta;
   /**
-   * 基準列（stats/benchmarks.ts；Edward 2026-11-03）：散客 / 排除散客後全體 / PR50+ / PR50-。不是快取的區塊
+   * 基準列（stats/benchmarks.ts；Edward 2026-11-03）：散客 / 排除散客後全體 / 前1/3 / 中間1/3 / 後1/3（PR 三等分）。不是快取的區塊
    * （analysis_cache.json 沒有，網站在不篩選時也用引擎算）；不影響其他區塊的任何數字。
    */
   benchmarks: BenchmarksSection;
@@ -492,10 +492,16 @@ export function computeStats(decoded: DecodedDataset, context: StatsContext, fil
     aliases: app.merge ? app.merge.aliases : { ...decoded.dataset.aliases, ...context.aliases },
     chemistryRoster: app.merge ? mergedRoster(context.chemistryRoster, app.merge.rename) : context.chemistryRoster,
   });
-  return {
-    key: decoded.dataset.key, filterKey: canonicalFilterKey(filter), meta: app.meta, ...built.sections,
-    benchmarks: statsBenchmarks(decoded, app, filter, built),
-  };
+  const result = { key: decoded.dataset.key, filterKey: canonicalFilterKey(filter), meta: app.meta, ...built.sections } as StatsResult;
+  // 基準列第一次讀到時才算（約佔全部區塊的一成；伺服器、機器人與一致性測試不讀就不用付）。可列舉的 getter：
+  // Worker 的 postMessage（structured clone）與展開運算都會讀到它，網站拿到的是算好的值。
+  let benchmarks: BenchmarksSection | undefined;
+  Object.defineProperty(result, 'benchmarks', {
+    enumerable: true,
+    configurable: true,
+    get: (): BenchmarksSection => (benchmarks ??= statsBenchmarks(decoded, app, filter, built)),
+  });
+  return result;
 }
 
 /** 基準列：門檻 = options.mergeSmall.maxGames（沒開散客合併時 30）；生涯場數看全部局（合併後的名字）。 */

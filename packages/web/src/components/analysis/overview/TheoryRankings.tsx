@@ -21,7 +21,7 @@ import { BenchmarkToggle, useBenchmarkPinned } from '../BenchmarkRows';
  *  並註明下次更新後改成各角色視窗。
  *  名次：同分同名次 (例 1、2、3、3、5)。
  *  (2026-10-30 Edward：說明太冗長) 表名旁的期間小字、表下的定義段落、區塊副標收進 ⓘ (InfoTip)；表名本身是名詞說明 (Term)。
- *  (2026-11-03 Edward) 每個表最上面釘基準列 (散客／全體／PR25–75／PR50+／PR50-，BenchmarkRows，窄表用短名)：該組在
+ *  (2026-11-03 Edward) 每個表最上面釘基準列 (散客／全體／前1/3／中間1/3／後1/3，BenchmarkRows，窄表用短名)：該組在
  *  篩選後全部座位的角色／位置／整體理論，n = 座位數；不排名。
  */
 

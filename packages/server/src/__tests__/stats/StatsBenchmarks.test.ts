@@ -1,6 +1,6 @@
 /**
- * 基準列（Edward 2026-11-03「[散客 < 30場] [排除散客後全體] [排除散客後 PR50+] [排除散客後 PR50-]」，同日追加
- * [排除散客後 PR25–75（中間一半）]）：@avalon/shared/stats computeBenchmarks 與 computeStats 的 benchmarks。名字全是虛構的。
+ * 基準列（Edward 2026-11-03「[散客 < 30場] [排除散客後全體] [排除散客後 PR50+] [排除散客後 PR50-]」，同日改成
+ * 「前1/3 中間1/3 後1/3」）：@avalon/shared/stats computeBenchmarks 與 computeStats 的 benchmarks。名字全是虛構的。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -9,6 +9,7 @@ import {
   computeStats,
   decodeGamesDataset,
   pooledPlayerName,
+  prTertile,
   type BenchmarksSection,
   type GameFilter,
   type LineupTuple,
@@ -19,7 +20,8 @@ const CTX = { asOf: '2026-10-14' };
 
 /** 座位 PR（SEATS 順序）；provMask 的位元 = 暫定座位。 */
 const lineup = (prs: number[], provMask = 0): LineupTuple => [20, 500, prs, provMask, prs.map(() => 15000)];
-const PRS = [0, 10, 24, 25, 49, 50, 51, 75, 76, 100];
+// 邊界：33 → 後、34 → 中、66 → 中、67 → 前；100/3、200/3 剛好在分界上（中、前），比它們小一點的歸下一組。
+const PRS = [0, 10, 33, 34, 100 / 3, 66, 200 / 3, 67, 66.66, 100];
 
 // 虛構甲..癸 每人 35 場（生涯 ≥ 30）；「路人A」2 場、「路人B」1 場；最後一局沒有結果（不算任何人的生涯、不算座位）。
 const guest = (a: string, b: string | null): Array<string | null> => [a, b ?? TEN[1], ...TEN.slice(2)];
@@ -45,7 +47,7 @@ function expectedSeats(maxGames: number): Record<string, number> {
     if (!s.outcome && s.outcome !== undefined) continue;
     for (const n of s.names ?? TEN) if (n) career.set(n, (career.get(n) ?? 0) + 1);
   }
-  const out = { all: 0, casual: 0, regular: 0, prMid: 0, prHigh: 0, prLow: 0, noPr: 0 };
+  const out = { all: 0, casual: 0, regular: 0, prTop: 0, prMid: 0, prBottom: 0, noPr: 0 };
   for (const s of SPECS) {
     if (s.outcome === '') continue;
     (s.names ?? TEN).forEach((n, i) => {
@@ -63,9 +65,10 @@ function expectedSeats(maxGames: number): Record<string, number> {
         return;
       }
       const pr = (l[2] as unknown as number[])[i];
-      if (pr >= 50) out.prHigh += 1;
-      else out.prLow += 1;
-      if (pr >= 25 && pr <= 75) out.prMid += 1;
+      // 獨立於引擎的寫法：用分數比較（pr = a / b 時 3a 對 100b）——測試裡的 PR 只有整數、100/3、200/3、66.66
+      const third = pr === 100 / 3 ? 'prMid' : pr === 200 / 3 ? 'prTop'
+        : pr >= 67 ? 'prTop' : pr >= 34 ? 'prMid' : 'prBottom';
+      out[third] += 1;
     });
   }
   return out;
@@ -74,45 +77,61 @@ function expectedSeats(maxGames: number): Record<string, number> {
 describe('benchmarks (基準列)', () => {
   it('five groups in display order with labels', () => {
     const b = computeStats(decoded, CTX, null).benchmarks;
-    expect(b.groups.map((g) => g.id)).toEqual(['casual', 'regular', 'prMid', 'prHigh', 'prLow']);
+    expect(b.groups.map((g) => g.id)).toEqual(['casual', 'regular', 'prTop', 'prMid', 'prBottom']);
     expect(b.groups.map((g) => g.label)).toEqual([
-      '散客 < 30場', '排除散客後全體', '排除散客後 PR25–75（中間一半）', '排除散客後 PR50+', '排除散客後 PR50-',
+      '散客（<30場）', '排除散客後全體', '排除散客後 前1/3', '排除散客後 中間1/3', '排除散客後 後1/3',
     ]);
     expect(b.maxGames).toBe(30);
-    expect(b.prThreshold).toBe(50);
-    expect(b.midPr).toEqual([25, 75]);
+    expect(b.tertileBounds).toEqual([100, 200]);
   });
 
-  it('seat counts partition: 散客 + 全體 = all named seats; PR50+ + PR50- + no PR = 全體; PR25–75 ⊆ 全體', () => {
+  it('seat counts partition: 散客 + 全體 = all named seats; 前 + 中 + 後 + no PR = 全體', () => {
     const b = computeStats(decoded, CTX, null).benchmarks;
     const want = expectedSeats(30);
-    const [casual, regular, mid, high, low] = BENCHMARK_IDS.map((id) => group(b, id));
+    const [casual, regular, top, mid, bottom] = BENCHMARK_IDS.map((id) => group(b, id));
     expect(b.totalSeats).toBe(want.all);
     expect(casual.seats).toBe(want.casual);
     expect(casual.seats).toBe(3); // 路人A 2 + 路人B 1
     expect(casual.players).toBe(2);
     expect(casual.seats + regular.seats).toBe(b.totalSeats);
-    expect(high.seats + low.seats + b.noPrSeats).toBe(regular.seats);
+    expect(top.seats + mid.seats + bottom.seats + b.noPrSeats).toBe(regular.seats);
     expect(b.noPrSeats).toBe(want.noPr);
-    expect(high.seats).toBe(want.prHigh);
-    expect(low.seats).toBe(want.prLow);
+    expect(b.noPrSeats).toBeGreaterThan(0);
+    expect(top.seats).toBe(want.prTop);
     expect(mid.seats).toBe(want.prMid);
-    expect(mid.seats).toBeLessThanOrEqual(regular.seats);
+    expect(bottom.seats).toBe(want.prBottom);
     // 全部玩家的場數加總 = 全部座位（基準列不改任何人的數字）
     const players = computeStats(decoded, CTX, null).players.players;
     expect(players.reduce((n, p) => n + p.totalGames, 0)).toBe(b.totalSeats);
   });
 
-  it('PR25–75 is inclusive at both ends; PR exactly 50 counts as PR50+', () => {
+  it('prTertile uses exact thirds: PR = 100/3 is middle, 200/3 is top; integers 0–33 / 34–66 / 67–100', () => {
+    expect(prTertile(100 / 3)).toBe('prMid');
+    expect(prTertile(200 / 3)).toBe('prTop');
+    expect(prTertile(33.333)).toBe('prBottom');
+    expect(prTertile(66.66)).toBe('prMid');
+    expect(prTertile(66.667)).toBe('prTop');
+    const ints = Array.from({ length: 101 }, (_, pr) => prTertile(pr));
+    expect(ints.filter((x) => x === 'prBottom')).toHaveLength(34); // 0–33
+    expect(ints.filter((x) => x === 'prMid')).toHaveLength(33); // 34–66
+    expect(ints.filter((x) => x === 'prTop')).toHaveLength(34); // 67–100
+    expect([prTertile(33), prTertile(34), prTertile(66), prTertile(67), prTertile(0), prTertile(100)])
+      .toEqual(['prBottom', 'prMid', 'prMid', 'prTop', 'prBottom', 'prTop']);
+  });
+
+  it('tertile rows are disjoint and boundary seats land where the rule says', () => {
     // 只看路人的兩局：每局 10 個 PR 都可用（沒有暫定）
     const b = computeStats(decoded, CTX, { v: 1, clauses: [{ kind: 'date', from: '2026-04-01', to: '2026-04-30' }] }).benchmarks;
-    // g1：座位 1、2 是散客 → 全體座位 3..10 的 PR = 24 25 49 50 51 75 76 100；g2：座位 1 散客 → 10 24 25 49 50 51 75 76 100
+    // g1：座位 1、2 是散客 → 全體座位 3..10 的 PR = 33 34 100/3 66 200/3 67 66.66 100
+    // g2：座位 1 散客 → 10 33 34 100/3 66 200/3 67 66.66 100
     expect(group(b, 'casual').seats).toBe(3);
     expect(group(b, 'regular').seats).toBe(17);
-    expect(group(b, 'prMid').seats).toBe(5 + 5); // 25 49 50 51 75 兩局
-    expect(group(b, 'prHigh').seats).toBe(5 + 5); // 50 51 75 76 100
-    expect(group(b, 'prLow').seats).toBe(3 + 4); // g1：24 25 49；g2：10 24 25 49
+    expect(group(b, 'prBottom').seats).toBe(1 + 2); // g1：33；g2：10 33
+    expect(group(b, 'prMid').seats).toBe(4 + 4); // 34 100/3 66 66.66
+    expect(group(b, 'prTop').seats).toBe(3 + 3); // 200/3 67 100
     expect(b.noPrSeats).toBe(0);
+    const sum = ['prTop', 'prMid', 'prBottom'].reduce((n, id) => n + group(b, id as 'prTop').seats, 0);
+    expect(sum).toBe(group(b, 'regular').seats);
   });
 
   it('threshold follows options.mergeSmall.maxGames; the pooled player itself is a casual', () => {

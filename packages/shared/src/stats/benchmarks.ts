@@ -1,18 +1,22 @@
 /**
  * 基準列（Edward 2026-11-03「你可以預設讓以下幾個呈現在所有排行跟數據分析的最上列嗎 [散客 < 30場] [排除散客後全體]
- * [排除散客後 PR50+] [排除散客後 PR50-]」）：五個虛擬的「玩家」，逐座位把篩選後的局分組，各組照玩家的算法算一列，
+ * [排除散客後 PR50+] [排除散客後 PR50-]」；同日改成「如果改成 前1/3 中間1/3 後1/3呢」）：五個虛擬的「玩家」，逐座位把篩選後的局分組，各組照玩家的算法算一列，
  * 網站把它們釘在每張玩家表的最上面當比較基準（不排名、不算進人數）。
  *
  *  - 散客 < N 場：生涯場數未滿 N 的玩家的座位。生涯場數的定義與合併計算（filter/merge.ts）相同：全部局（不看任何
  *    子句、不看基準日）中有結果（三紅／三藍死／三藍活）的座位數，別名已合併。N = options.mergeSmall.maxGames（有開
  *    「散客」合併時），否則 30。合併計算有開時看合併後的名字：散客（<N場）本身算散客，自訂合併的名字看合併後的總場數。
  *  - 排除散客後全體：其他所有有名字的座位（散客 + 全體 = 篩選後全部有名字的座位）。
- *  - 排除散客後 PR25–75（中間一半；Edward 2026-11-03 追加）：全體裡、那一局開打前的 PR 在 [25, 75]（含兩端）的座位，
- *    「一般玩家」的基準（依當時的 Elo PR 排在中間一半的人）。與 PR50+／PR50- 重疊，沒有 PR 的座位同樣不算。
- *  - 排除散客後 PR50+／PR50-：全體裡、那一局開打前這個座位的時間相對 Elo PR（games_cache 的 lineup，
- *    generate_cache.compute_lineups）≥ 50／< 50。PR 是在「生涯已 ≥30 場」的玩家池裡的百分等級；暫定座位（當時
- *    生涯未滿 30 場，PR 被壓在 50 以下）與沒評分的局（玩家池太小、舊資料沒有 lineup）沒有可用的 PR，兩個 PR 列都
- *    不算，但照樣算在「全體」（PR50+ + PR50- + 沒有 PR = 全體）。
+ *  - 排除散客後 前1/3／中間1/3／後1/3：全體裡、依那一局開打前這個座位的時間相對 Elo PR（games_cache 的 lineup，
+ *    generate_cache.compute_lineups）三等分，三組互不重疊：
+ *      前1/3   PR ≥ 200/3（66.66…）
+ *      中間1/3 100/3 ≤ PR < 200/3（「一般玩家」的基準）
+ *      後1/3   PR < 100/3（33.33…）
+ *    分界用精確的三分之一：比較 3 × PR 與 100、200（不用 33.33 之類的小數，沒有浮點邊界問題；PR 剛好 = 100/3 算中間、
+ *    = 200/3 算前）。PR 是 0–100 的整數時：0–33 後、34–66 中、67–100 前。
+ *    PR 是在「生涯已 ≥30 場」的玩家池裡的百分等級；暫定座位（當時生涯未滿 30 場，PR 被壓在 50 以下）與沒評分的局
+ *    （玩家池太小、舊資料沒有 lineup）沒有可用的 PR，三個 PR 列都不算，但照樣算在「全體」
+ *    （前 + 中 + 後 + 沒有 PR = 全體）。
  *
  * 每組的數字：
  *  - row：players 區塊同一形狀的一列（PlayerTally.toRow + 時間線理論 + 每個座位的三結果），名字 = 組名。勝率都是
@@ -32,34 +36,35 @@ import { missionAssassination, playerTheory, playerTimelines, type OutcomeRates,
 
 /** 沒有開「散客」合併時的門檻。 */
 export const BENCHMARK_DEFAULT_MAX_GAMES = 30;
-/** PR50+／PR50- 的分界。 */
-export const BENCHMARK_PR = 50;
-
-/** 「中間一半」：PR 在這個閉區間（含兩端）。 */
-export const BENCHMARK_MID_PR: readonly [number, number] = [25, 75];
-
-/** 顯示順序：散客、全體、PR25–75、PR50+、PR50-。 */
-export const BENCHMARK_IDS = ['casual', 'regular', 'prMid', 'prHigh', 'prLow'] as const;
+/** 顯示順序：散客、全體、前1/3、中間1/3、後1/3。 */
+export const BENCHMARK_IDS = ['casual', 'regular', 'prTop', 'prMid', 'prBottom'] as const;
 export type BenchmarkId = (typeof BENCHMARK_IDS)[number];
+export type BenchmarkTertile = 'prTop' | 'prMid' | 'prBottom';
+
+/** PR 的三等分（精確：3 × PR 與 100、200 比；PR = 100/3 → 中間、= 200/3 → 前）。 */
+export function prTertile(pr: number): BenchmarkTertile {
+  const x = pr * 3;
+  return x >= 200 ? 'prTop' : x >= 100 ? 'prMid' : 'prBottom';
+}
 
 /** 組名（中文，機器人與沒有翻譯時用；網站另有 i18n）。 */
-export function benchmarkLabel(id: BenchmarkId, maxGames: number, pr = BENCHMARK_PR): string {
+export function benchmarkLabel(id: BenchmarkId, maxGames: number): string {
   switch (id) {
-    case 'casual': return `散客 < ${maxGames}場`;
+    case 'casual': return `散客（<${maxGames}場）`;
     case 'regular': return '排除散客後全體';
-    case 'prMid': return `排除散客後 PR${BENCHMARK_MID_PR[0]}–${BENCHMARK_MID_PR[1]}（中間一半）`;
-    case 'prHigh': return `排除散客後 PR${pr}+`;
-    default: return `排除散客後 PR${pr}-`;
+    case 'prTop': return '排除散客後 前1/3';
+    case 'prMid': return '排除散客後 中間1/3';
+    default: return '排除散客後 後1/3';
   }
 }
 
-export function benchmarkLabelEn(id: BenchmarkId, maxGames: number, pr = BENCHMARK_PR): string {
+export function benchmarkLabelEn(id: BenchmarkId, maxGames: number): string {
   switch (id) {
-    case 'casual': return `Casuals < ${maxGames} games`;
+    case 'casual': return `Casuals (<${maxGames} games)`;
     case 'regular': return 'All excl. casuals';
-    case 'prMid': return `Excl. casuals, PR${BENCHMARK_MID_PR[0]}–${BENCHMARK_MID_PR[1]} (middle half)`;
-    case 'prHigh': return `Excl. casuals, PR${pr}+`;
-    default: return `Excl. casuals, PR${pr}-`;
+    case 'prTop': return 'Excl. casuals, top third';
+    case 'prMid': return 'Excl. casuals, middle third';
+    default: return 'Excl. casuals, bottom third';
   }
 }
 
@@ -102,9 +107,8 @@ export interface BenchmarkGroup {
 export interface BenchmarksSection {
   /** 散客的門檻（生涯未滿幾場）。 */
   maxGames: number;
-  prThreshold: number;
-  /** PR25–75 的區間（含兩端）。 */
-  midPr: readonly [number, number];
+  /** 三等分的分界（PR × 3 與這兩個數比）：[100, 200]。 */
+  tertileBounds: readonly [number, number];
   /** 依 BENCHMARK_IDS 的順序，固定五組。 */
   groups: BenchmarkGroup[];
   /** 有結果的局裡全部有名字的座位（= 散客 + 全體）。 */
@@ -167,15 +171,14 @@ export function computeBenchmarks(
   const labels = Object.fromEntries(BENCHMARK_IDS.map((id) => [id, benchmarkLabel(id, maxGames)])) as Record<BenchmarkId, string>;
   const isCasual = (n: string): boolean => n === pooledName || (careers.get(n) ?? 0) < maxGames;
 
-  // 三份改名的局：A = 散客／全體，B = PR50+／PR50-，C = PR25–75（其他座位當沒寫名字）。局物件只換 seatPlayers。
+  // 兩份改名的局：A = 散客／全體，B = 前／中間／後 1/3（其他座位當沒寫名字）。局物件只換 seatPlayers。
   const names: Record<BenchmarkId, Set<string>> = {
-    casual: new Set(), regular: new Set(), prMid: new Set(), prHigh: new Set(), prLow: new Set(),
+    casual: new Set(), regular: new Set(), prTop: new Set(), prMid: new Set(), prBottom: new Set(),
   };
   let totalSeats = 0;
   let noPrSeats = 0;
   const passA: Game[] = [];
   const passB: Game[] = [];
-  const passC: Game[] = [];
   const renamed = (g: Game, seats: Array<string | null>): Game => ({
     ...g, seatPlayers: seats, namedSeats: seats.filter((x) => x !== null).length,
   });
@@ -183,11 +186,9 @@ export function computeBenchmarks(
     if (!isOutcome(g.outcome)) continue;
     const a: Array<string | null> = [];
     const b: Array<string | null> = [];
-    const c: Array<string | null> = [];
     g.seatPlayers.forEach((n, i) => {
       let ga: BenchmarkId | null = null;
       let gb: BenchmarkId | null = null;
-      let gc: BenchmarkId | null = null;
       if (n !== null) {
         totalSeats += 1;
         if (isCasual(n)) ga = 'casual';
@@ -195,27 +196,22 @@ export function computeBenchmarks(
           ga = 'regular';
           const pr = seatPr(g, i);
           if (pr === null) noPrSeats += 1;
-          else {
-            gb = pr >= BENCHMARK_PR ? 'prHigh' : 'prLow';
-            if (pr >= BENCHMARK_MID_PR[0] && pr <= BENCHMARK_MID_PR[1]) gc = 'prMid';
-          }
+          else gb = prTertile(pr);
         }
-        for (const id of [ga, gb, gc]) if (id) names[id].add(n);
+        for (const id of [ga, gb]) if (id) names[id].add(n);
       }
       a.push(ga && labels[ga]);
       b.push(gb && labels[gb]);
-      c.push(gc && labels[gc]);
     });
     passA.push(renamed(g, a));
     passB.push(renamed(g, b));
-    passC.push(renamed(g, c));
   }
 
   const rows = new Map<string, PlayerRow>();
   const theories = new Map<string, BenchmarkTheory>();
   const assassins = new Map<string, BenchmarkAssassin>();
   const minCell = Number(config.leaderboard.theoryMinCellGames);
-  for (const pass of [passA, passB, passC]) {
+  for (const pass of [passA, passB]) {
     const tallies = playerTallies(pass);
     const timelines = playerTimelines(pass);
     const list: PlayerRow[] = [];
@@ -264,5 +260,5 @@ export function computeBenchmarks(
       assassin: assassins.get(label) ?? { hits: 0, attempts: 0, hitRate: null },
     };
   });
-  return { maxGames, prThreshold: BENCHMARK_PR, midPr: BENCHMARK_MID_PR, groups, totalSeats, noPrSeats };
+  return { maxGames, tertileBounds: [100, 200], groups, totalSeats, noPrSeats };
 }

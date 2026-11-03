@@ -7,7 +7,7 @@ import type { PlayerWithSeatStats } from './seatRoleBlocks';
 
 /**
  * 基準列的共用元件（Edward 2026-11-03「[散客 < 30場] [排除散客後全體] [排除散客後 PR50+] [排除散客後 PR50-]」呈現在
- * 所有排行跟數據分析的最上列；同日追加 [排除散客後 PR25–75（中間一半）]）。數字見 @avalon/shared/stats benchmarks.ts、
+ * 所有排行跟數據分析的最上列；同日改成「如果改成 前1/3 中間1/3 後1/3呢」：PR 列換成依當局 Elo PR 三等分）。數字見 @avalon/shared/stats benchmarks.ts、
  * 資料與開關見 stats/benchmarkRows.ts。
  *
  *  - BenchmarkName：組名 + 「基準」小標 (表格第一欄、取代名次＋名字)。
@@ -20,32 +20,32 @@ type TFn = (key: string, opts?: Record<string, unknown>) => string;
 const K = 'analytics.benchmark';
 
 const DEFAULT_LABEL: Record<BenchmarkGroup['id'], string> = {
-  casual: '散客 < {{n}}場',
+  casual: '散客（<{{n}}場）',
   regular: '排除散客後全體',
-  prMid: '排除散客後 PR{{lo}}–{{hi}}（中間一半）',
-  prHigh: '排除散客後 PR{{pr}}+',
-  prLow: '排除散客後 PR{{pr}}-',
+  prTop: '排除散客後 前1/3',
+  prMid: '排除散客後 中間1/3',
+  prBottom: '排除散客後 後1/3',
 };
 
 const DEFAULT_SHORT: Record<BenchmarkGroup['id'], string> = {
   casual: '散客 <{{n}}',
   regular: '全體（排除散客）',
-  prMid: 'PR{{lo}}–{{hi}}',
-  prHigh: 'PR{{pr}}+',
-  prLow: 'PR{{pr}}-',
+  prTop: '前1/3',
+  prMid: '中間1/3',
+  prBottom: '後1/3',
 };
 
 const DEFAULT_TIP: Record<BenchmarkGroup['id'], string> = {
   casual: '生涯未滿 {{n}} 場的玩家的座位（{{players}} 人、{{seats}} 個座位）。',
   regular: '散客以外的所有座位（{{players}} 人、{{seats}} 個座位）。',
-  prMid: '「一般玩家」的基準：散客以外、那一局開打前 Elo PR 在 {{lo}}–{{hi}}（含，中間一半）的座位（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
-  prHigh: '散客以外、那一局開打前 Elo PR ≥ {{pr}} 的座位（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
-  prLow: '散客以外、那一局開打前 Elo PR < {{pr}} 的座位（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
+  prTop: '散客以外、那一局開打前 Elo PR ≥ 200/3（66.7）的座位，PR 排前三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
+  prMid: '「一般玩家」的基準：散客以外、那一局開打前 Elo PR 在 100/3（33.3）以上、未滿 200/3（66.7）的座位，PR 排中間三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
+  prBottom: '散客以外、那一局開打前 Elo PR 未滿 100/3（33.3）的座位，PR 排後三分之一（{{players}} 人、{{seats}} 個座位）。暫定與沒評分的座位不算。',
 };
 
 function labelVars(section: BenchmarksSection, group: BenchmarkGroup): Record<string, unknown> {
   return {
-    n: section.maxGames, pr: section.prThreshold, lo: section.midPr?.[0] ?? 25, hi: section.midPr?.[1] ?? 75,
+    n: section.maxGames,
     players: group.players, seats: group.seats,
   };
 }
