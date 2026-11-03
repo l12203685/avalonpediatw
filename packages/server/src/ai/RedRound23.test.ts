@@ -1,5 +1,5 @@
 /**
- * 優化迴圈第 23 回合・紅方（刺客）候選，預設關：第 1、2 局注定被否決的提議放了確定看得到的紅，排到第二層（`assassinDoomedRead=1`）、
+ * 優化迴圈第 23 回合・紅方（刺客）候選（採用 1）：第 1、2 局注定被否決的提議放了確定看得到的紅，排到第二層（`assassinDoomedRead=1`）、
  * 讀派隊時那些提議用 ε = 0.05（`=2`）、兩者一起（`=3`）；第 2 局照派成功的第 1 局隊不算。
  */
 import { describe, expect, it } from 'vitest';
@@ -40,11 +40,11 @@ function assassination(extra: VoteRecord[] = []): PlayerObservation {
 }
 
 describe('flags', () => {
-  it('parse 0–3; default off', () => {
+  it('parse 0–3; default 1 since round 23', () => {
     expect(parseTuningFlag('assassinDoomedRead')).toEqual({ assassinDoomedRead: 1 });
     expect(parseTuningFlag('assassinDoomedRead=3')).toEqual({ assassinDoomedRead: 3 });
     expect(() => parseTuningFlag('assassinDoomedRead=4')).toThrow();
-    expect(DEFAULT_AGENT_TUNING.assassinDoomedRead).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.assassinDoomedRead).toBe(1);
   });
 });
 

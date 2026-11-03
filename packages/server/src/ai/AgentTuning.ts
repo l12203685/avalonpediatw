@@ -733,6 +733,8 @@ export interface AgentTuning {
    * （`merlinDoomedRed`）排在 `merlinLoyalStyle` 後面已經不會執行，但刺客的分層照第 2 回合 `assassinIgnoreDoomed` 仍然略過這些提議，讀派隊也只用 ε = 0.5。
    * 1 = 第二層分層：標準分層之後，再把第 1、2 局非強制的提議放了確定看得到的紅的候選人排到後面（第 2 局照派成功的第 1 局隊不算；全部都有就不分）；
    * 2 = 讀派隊時那些提議（同樣不算第 2 局照派）用 ε = 0.05（同第 3 局起）；3 = 1 ＋ 2。0 = 關。
+   * 第 23 回合採用 1：自我對打刺殺資料（1,128 次）重算刺中率 +4.3pp [+3.2, +5.5]（2 +4.2，兩者只差 2 次刺殺）；篩選 +1.5 [+0.9, +2.0]pp（2：+1.4／+2.4，同種子 2 對 1 −0.05）；
+   * 兩組各 6000 組種子（三段合併）+2.02 [+1.66, +2.37]／+2.02 [+1.66, +2.37]pp（刺中率約 +3～+4pp，三紅率不變）。
    */
   assassinDoomedRead: number;
 }
@@ -1183,7 +1185,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodKeyVoteHalf: 0,
   merlinDoomedPublic: 0,
   merlinDoomedPublicHalf: false,
-  assassinDoomedRead: 0,
+  assassinDoomedRead: 1,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
