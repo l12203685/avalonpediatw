@@ -217,6 +217,14 @@ export interface BayesOptions {
    */
   merlinEarlyStrict?: boolean;
   /**
+   * `merlinDoomedPublicHalf` (round 22, with `merlinEarlyStrict`): the share of the Merlin candidate's R1–R2 non-forced proposals that come
+   * from the seen-clean pool (the rest follow the public loyal view, read as a generic blue's): those proposals read with the mixture
+   * q · strict + (1 − q) · generic. Absent / 1 = all strict.
+   */
+  merlinEarlyMix?: number;
+  /** With `merlinEarlyMix`: only this round's doomed proposals are mixed (the other round's stay strict); 0 / absent = both (round 22 `merlinDoomedPublic` 3 / 4). */
+  merlinEarlyMixRound?: number;
+  /**
    * `beliefKeyVoteCells` (round 17): key-round votes (R3+, red has two wins) read from the bot table's `voteKey` cells — since
    * round 16 the reds white a key team off the team only when it can pass, so key-round votes differ from the other R3+ votes.
    */
@@ -247,9 +255,11 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const mixMode = obs.myRole === 'loyal' && obs.myTeam === 'good' ? opts.merlinMixture ?? 0 : 0;
   const zone = opts.zoneMerlin === true;
   const early = opts.merlinEarlyStrict === true;
+  const earlyMix = early ? Math.min(Math.max(opts.merlinEarlyMix ?? 1, 0), 1) : 1;
+  const mixRound = earlyMix < 1 ? opts.merlinEarlyMixRound ?? 0 : 0;
   const keyCells = opts.keyVoteCells === true;
   const morganaR1 = opts.morganaR1 === true && percival;
-  const key = `${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
+  const key = `${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -275,6 +285,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       leaderBit: bit(v.leader),
       leaderOn: v.team.includes(v.leader),
       doomed: v.round <= 2 && v.attempt < 5 && !early,
+      earlyMixed: earlyMix < 1 && v.round <= 2 && v.attempt < 5 && (mixRound === 0 || v.round === mixRound),
       r3: v.round > 2,
       keyRound: keyCells && v.round > 2 && results.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2,
       voters: v.attempt >= 5 ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
@@ -284,7 +295,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
   const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
     .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
-  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early) : null;
+  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound) : null;
   const logW = worlds.map((w) => {
     const red = (id: string): boolean => (w & bit(id)) !== 0;
     // Percival's thumbs: the good one is Merlin, the red one Morgana (in this world). Camp index: good 0, evil 1, merlin 2, morgana 3.
@@ -309,7 +320,16 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
           const n = choose(pool, v.team.length - 1);
           // Probabilities of this exact team: ε spread over every possible team when Merlin could not pick it.
           const any = choose(ids.length - 1, v.team.length - 1);
-          lp += Math.log(k >= 2 || n === 0 ? STRICT_EPS / any : (k === 1 ? 1 / reds : 1) / n);
+          const strictP = k >= 2 || n === 0 ? STRICT_EPS / any : (k === 1 ? 1 / reds : 1) / n;
+          if (p.earlyMixed) {
+            // `merlinEarlyMix`: a share 1 − q of the doomed proposals follow the public view (the generic proposal table).
+            const others = all & ~p.leaderBit;
+            const redsAvail = sizeOf(w & others);
+            const kk = sizeOf(w & teamMask & ~p.leaderBit);
+            const ng = choose(redsAvail, kk) * choose(sizeOf(others) - redsAvail, v.team.length - 1 - kk);
+            const genericP = ng > 0 ? proposalProbIx(campIx(p.leaderBit), p.r3, kk) / ng : 0;
+            lp += Math.log(earlyMix * strictP + (1 - earlyMix) * genericP);
+          } else lp += Math.log(strictP);
         }
       } else if (v.leader !== me && p.leaderOn) {
         // Proposal (the leader on its own team; not the viewer's own).
@@ -365,6 +385,20 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
 
 const shareCache = new WeakMap<Posterior, Map<string, number>>();
 
+/**
+ * How the blues read the Merlin candidate's doomed R1–R2 proposals: strictly (`merlinLoyalStyle`: from the seen-clean pool), or —
+ * round 22 `merlinDoomedPublic` ≥ 2, where Merlin follows the public view there — as a generic blue's (2), half and half
+ * (2 + `merlinDoomedPublicHalf`), or generic in R1 only (3) / R2 only (4).
+ */
+function merlinEarlyOptions(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'merlinEarlyStrict' | 'merlinEarlyMix' | 'merlinEarlyMixRound'> {
+  const strict = t.merlinLoyalStyle === true;
+  const m = t.merlinDoomedPublic ?? 0;
+  if (!strict || m < 2) return { merlinEarlyStrict: strict, merlinEarlyMix: 1 };
+  if (m >= 3) return { merlinEarlyStrict: true, merlinEarlyMix: t.merlinDoomedPublicHalf === true ? 0.5 : 0, merlinEarlyMixRound: m === 3 ? 1 : 2 };
+  if (t.merlinDoomedPublicHalf === true) return { merlinEarlyStrict: true, merlinEarlyMix: 0.5 };
+  return { merlinEarlyStrict: false, merlinEarlyMix: 1 };
+}
+
 /** The posterior options a seat's tuning asks for (one place for every caller). */
 export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions {
   return {
@@ -372,7 +406,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     strictMerlin: t.percivalThumbLogic === true,
     merlinMixture: t.loyalMerlinRead ?? 0,
     zoneMerlin: t.merlinZoneSignal === true,
-    merlinEarlyStrict: t.merlinLoyalStyle === true,
+    ...merlinEarlyOptions(t),
     botTables: t.beliefBotTables ?? 0,
     botTablesNext: t.beliefBotTablesNext === true,
     botMissionNext: t.beliefBotMissionNext === true,
@@ -425,9 +459,11 @@ interface MixPre {
   late: { v: PlayerObservation['voteHistory'][number]; teamMask: number; leaderBit: number; r3: boolean; voted: boolean; votes: Record<string, boolean> }[];
   early: { v: PlayerObservation['voteHistory'][number]; teamMask: number; prior: PriorProposal[] }[];
   anyByLen: Map<number, number>;
+  earlyMix: number;
+  mixRound: number;
 }
 
-function merlinMixturePre(obs: PlayerObservation, view: ReturnType<typeof buildCertainty>, mode: number, zone: boolean, earlyStrict: boolean): MixPre {
+function merlinMixturePre(obs: PlayerObservation, view: ReturnType<typeof buildCertainty>, mode: number, zone: boolean, earlyStrict: boolean, earlyMix = 1, mixRound = 0): MixPre {
   const ids = obs.allPlayerIds;
   const me = obs.myPlayerId;
   // With `merlinEarlyStrict` the R1–R2 proposals of the Merlin candidate read with the strict model as well.
@@ -436,7 +472,7 @@ function merlinMixturePre(obs: PlayerObservation, view: ReturnType<typeof buildC
   const early = zone ? obs.voteHistory.filter((v) => v.round <= 2 && v.attempt < 5).map((v) => ({ v, teamMask: view.maskOf(v.team), prior: priorOf(obs, v) })) : [];
   const anyByLen = new Map<number, number>();
   for (const v of obs.voteHistory) anyByLen.set(v.team.length, choose(ids.length - 1, v.team.length - 1));
-  return { ids, me, all: view.maskOf(ids), mode, bits: ids.map((id) => ({ id, b: view.bitOf(id) })), late, early, anyByLen };
+  return { ids, me, all: view.maskOf(ids), mode, bits: ids.map((id) => ({ id, b: view.bitOf(id) })), late, early, anyByLen, earlyMix, mixRound };
 }
 
 /**
@@ -492,7 +528,9 @@ function merlinMixtureLog(pre: MixPre, w: number): number {
           const generic = proposalProb('good', v.round, k) / n;
           const pool = goodsAvail + 1;
           const strict = seenRed ? STRICT_EPS / (pre.anyByLen.get(v.team.length) ?? choose(ids.length - 1, v.team.length - 1)) : 1 / choose(pool, v.team.length - 1);
-          lr += Math.log(strict / generic);
+          // `merlinEarlyMix`: the doomed R1–R2 proposals mix the strict pick with the generic one.
+          const mixed = pre.earlyMix < 1 && v.round <= 2 && v.attempt < 5 && (pre.mixRound === 0 || v.round === pre.mixRound);
+          lr += Math.log(mixed ? pre.earlyMix * strict / generic + (1 - pre.earlyMix) : strict / generic);
         }
       }
       sum += Math.exp(lr);
