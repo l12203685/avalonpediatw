@@ -126,8 +126,18 @@ export function merlinDoomedPublicTeam(
   allowed: (team: readonly string[]) => boolean = () => true,
 ): string[] | null {
   if ((tuning.merlinDoomedPublic ?? 0) <= 0 || obs.myRole !== 'merlin') return null;
-  if ((obs.currentRound ?? 1) > 2 || (obs.failCount ?? 0) >= 4 || size < 1) return null;
+  const mode = tuning.merlinDoomedPublic ?? 0;
+  const round = obs.currentRound ?? 1;
+  if (round > 2 || (obs.failCount ?? 0) >= 4 || size < 1) return null;
+  // 3 / 4: R1 only / R2 only.
+  if ((mode === 3 && round !== 1) || (mode === 4 && round !== 2)) return null;
   const me = obs.myPlayerId;
+  // `merlinDoomedPublicHalf` (第 1C 節): only half the doomed proposals (hashed per seat, round and attempt).
+  if (tuning.merlinDoomedPublicHalf) {
+    let hh = 0x811c9dc5;
+    for (const ch of `${me}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|doomedPublicHalf`) hh = Math.imul(hh ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    if ((hh % 10000) / 10000 >= 0.5) return null;
+  }
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));

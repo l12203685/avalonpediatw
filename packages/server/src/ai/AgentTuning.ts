@@ -713,9 +713,16 @@ export interface AgentTuning {
    * 第 22 回合藍方・梅林（`MerlinLoyalStyle.merlinLoyalStyleTeam`）：第 1、2 局注定被否決的提議（非強制，不會出任務）照「坐在梅林位置、只看公開紀錄的忠臣」派——
    * 公開視角「這隊沒有紅」機率最高的隊，同分看延伸前面的派票（不用梅林的視角），看得到的紅也可以在隊上（順應局勢，不刻意放、也不刻意避開）。
    * 第 22 回合拆刺客的刺中：拿掉第 1、2 局注定被否決的派隊，刺中率 46.8% → 33.5%——梅林這些提議 9.7% 有看得到的紅，忠臣 39%、派西 38%。
-   * 1 = 只改梅林；2 = 同 1，藍方的信念不再用嚴格模型讀「可能是梅林的人」第 1、2 局非強制的提議（`BayesOptions.merlinEarlyStrict` 關掉，梅林那些提議不再沒有看得到的紅）。0 = 關。
+   * 1 = 只改梅林；2 = 同 1，藍方的信念不再用嚴格模型讀「可能是梅林的人」第 1、2 局非強制的提議（`BayesOptions.merlinEarlyStrict` 關掉，梅林那些提議不再沒有看得到的紅）；
+   * 3 = 同 2 但只有第 1 局（第 2 局照舊）；4 = 同 2 但只有第 2 局。0 = 關。
    */
   merlinDoomedPublic: number;
+  /**
+   * 第 22 回合藍方・梅林（第 1C 節：`merlinDoomedPublic` 結果中性改測 50%）：`merlinDoomedPublic` 開著時，第 1、2 局注定被否決的提議一半照公開視角派、
+   * 一半照舊（照忠臣方式、不放看得到的紅；照座位、局、提議次數雜湊，同一局面每次一樣）。`merlinDoomedPublic=2` 時藍方的信念用 50%／50% 的混合讀那些提議
+   * （`BayesOptions.merlinEarlyMix`）。false = 關。
+   */
+  merlinDoomedPublicHalf: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -815,6 +822,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'merlinReusePublic',
   'goodKeyVoteHalf',
   'merlinDoomedPublic',
+  'merlinDoomedPublicHalf',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -913,6 +921,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinReusePublic: false,
   goodKeyVoteHalf: 0,
   merlinDoomedPublic: 0,
+  merlinDoomedPublicHalf: false,
 });
 
 /**
@@ -1159,6 +1168,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinReusePublic: false,
   goodKeyVoteHalf: 0,
   merlinDoomedPublic: 0,
+  merlinDoomedPublicHalf: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1257,6 +1267,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   merlinReusePublic: 'AVALON_TUNING_MERLIN_REUSE_PUBLIC',
   goodKeyVoteHalf: 'AVALON_TUNING_GOOD_KEY_VOTE_HALF',
   merlinDoomedPublic: 'AVALON_TUNING_MERLIN_DOOMED_PUBLIC',
+  merlinDoomedPublicHalf: 'AVALON_TUNING_MERLIN_DOOMED_PUBLIC_HALF',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1381,7 +1392,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinDoomedPublic') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`merlinDoomedPublic needs 0–2, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`merlinDoomedPublic needs 0–4, got "${raw}"`);
     return { merlinDoomedPublic: value };
   }
   if (name === 'merlinReuseNorm') {
