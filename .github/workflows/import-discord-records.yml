@@ -14,7 +14,7 @@ name: Import Discord records
 #   （牌譜由人工修正）。重讀時 Discord 出錯只停重讀，新貼文照常收錄。
 # 說明文件：docs/DISCORD_RECORDS_IMPORT.md。
 #
-# 格式回覆（reply，預設開；Edward 2026-10-13 決定）：對 14 天內因格式無法解析（非已收錄／模擬／重複／
+# 格式回覆（reply，預設開；Edward 2026-10-13 決定）：對 90 天內（與「待修正」標籤相同）因格式無法解析（非已收錄／模擬／重複／
 #   起始訊息刪除或空白／沒有牌譜也沒有結果標籤或配置的討論貼文）且尚未回覆過的貼文，在該討論串貼一則
 #   「🤖 牌譜格式檢查」：第幾行、原因、格式提示；不 @ 任何人；每次最多 20 則；bot 沒有發言權限時只警告不中斷。
 #   每篇只回一次：已貼的回覆記在「Discord回覆」分頁，回覆被刪也不再貼；送出遇伺服器錯誤或逾時不重送
@@ -52,7 +52,7 @@ on:
         required: false
         default: ''
       reply:
-        description: '在 14 天內因格式無法解析的貼文討論串回覆原因與格式提示（不勾 write 時只計數不貼；repo variable DISCORD_IMPORT_REPLY 為 false 時不回）'
+        description: '在 90 天內因格式無法解析的貼文討論串回覆原因與格式提示（不勾 write 時只計數不貼；repo variable DISCORD_IMPORT_REPLY 為 false 時不回）'
         type: boolean
         default: true
       fix_list:
