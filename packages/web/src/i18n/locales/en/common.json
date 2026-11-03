@@ -1809,6 +1809,32 @@
         "modelTheory": "Model theory",
         "lastPlayed": "Last played"
       }
+    },
+    "benchmark": {
+      "toggle": "Show benchmark rows",
+      "badge": "Ref",
+      "label": {
+        "casual": "Casuals < {{n}} games",
+        "regular": "All excl. casuals",
+        "prMid": "Excl. casuals, PR{{lo}}–{{hi}} (middle half)",
+        "prHigh": "Excl. casuals, PR{{pr}}+",
+        "prLow": "Excl. casuals, PR{{pr}}-"
+      },
+      "short": {
+        "casual": "Casuals <{{n}}",
+        "regular": "All (excl. casuals)",
+        "prMid": "PR{{lo}}–{{hi}}",
+        "prHigh": "PR{{pr}}+",
+        "prLow": "PR{{pr}}-"
+      },
+      "tip": {
+        "casual": "Seats of players with fewer than {{n}} career games ({{players}} players, {{seats}} seats).",
+        "regular": "Every other seat ({{players}} players, {{seats}} seats).",
+        "prMid": "The \"typical player\" benchmark: non-casual seats whose Elo PR before that game was {{lo}}–{{hi}} (inclusive, the middle half) ({{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
+        "prHigh": "Non-casual seats whose Elo PR before that game was ≥ {{pr}} ({{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
+        "prLow": "Non-casual seats whose Elo PR before that game was < {{pr}} ({{players}} players, {{seats}} seats). Provisional and unrated seats are left out.",
+        "common": "Benchmark rows pool seats (two casuals in one game count twice) over every seat of the group in the current filter (theory rates too, not the last N games); not ranked, not sorted, not counted as players."
+      }
     }
   },
   "guest": {

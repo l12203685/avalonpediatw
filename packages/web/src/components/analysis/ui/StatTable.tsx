@@ -21,6 +21,9 @@ import type { StatTermKey } from './statTerms';
  *  - caption (表格上方標題) / footnote (表格說明) / empty (沒有資料時的文字)。
  *    (2026-10-30 Edward：說明太冗長) footnote 不再印在表格下面：有 caption 時是標題旁的 ⓘ，沒有時是表格右下角
  *    一個小「ⓘ 說明」，滑過／點一下才顯示，末尾連到說明頁。
+ *  - pinnedRows (2026-11-03 Edward：基準列「呈現在所有排行跟數據分析的最上列」)：釘在表身最上面的列，不受呼叫端排序
+ *    影響、不能點、沒有斑馬紋 (淡色底 + 斜體)；第一欄可用 pinnedLabel 換掉 (名次欄放「基準」標記)。欄位的 format 收到的
+ *    index 是 -1。呼叫端的 rows 是空的時，基準列照樣顯示，下面一列放 empty 文字。
  */
 
 export type StatFormat<R> =
@@ -86,6 +89,13 @@ export interface StatTableProps<R> {
   rowTitle?: (row: R, index: number) => string | undefined;
   /** 強調某些列 (例：目前查看的玩家)。 */
   highlightRow?: (row: R, index: number) => boolean;
+  /** 釘在最上面的列 (基準列)：不排名、不能點、不算在 rows 裡。 */
+  pinnedRows?: readonly R[];
+  pinnedRowKey?: (row: R, index: number) => string;
+  /** 基準列第一欄的內容 (取代第一欄的 format)。 */
+  pinnedLabel?: (row: R) => ReactNode;
+  /** 基準列的滑鼠提示。 */
+  pinnedTitle?: (row: R) => string | undefined;
   /** 外框 (圓角 + 邊框 + 底色，預設 true)；放進已有外框的卡片時傳 false。 */
   framed?: boolean;
   className?: string;
@@ -144,6 +154,10 @@ export default function StatTable<R>({
   onRowClick,
   rowTitle,
   highlightRow,
+  pinnedRows = [],
+  pinnedRowKey,
+  pinnedLabel,
+  pinnedTitle,
   framed = true,
   className = '',
 }: StatTableProps<R>): JSX.Element {
@@ -168,6 +182,73 @@ export default function StatTable<R>({
     }
   };
 
+  /** pinned：'last' = 最後一列基準列 (下緣較深的分隔線)。 */
+  const renderRow = (row: R, ri: number, key: string, pin: boolean | 'last'): JSX.Element => {
+    const pinned = pin !== false;
+    const highlighted = !pinned && (highlightRow?.(row, ri) ?? false);
+    // 基準列：不透明的淡色底 (固定第一欄 bg-inherit 要蓋得住捲動的格子) + 斜體
+    const zebra = pinned ? 'bg-[#1c1f2b] italic' : highlighted ? 'bg-zinc-800' : ri % 2 === 1 ? 'bg-zinc-900' : 'bg-zinc-950';
+    const clickable = !pinned && Boolean(onRowClick);
+    return (
+      <tr
+        key={key}
+        data-pinned={pinned ? 'true' : undefined}
+        title={pinned ? pinnedTitle?.(row) : rowTitle?.(row, ri)}
+        className={`${zebra} ${clickable ? 'cursor-pointer hover:bg-zinc-800 focus-visible:outline-none focus-visible:bg-zinc-800' : ''}`}
+        onClick={clickable ? (): void => onRowClick?.(row, ri) : undefined}
+        onKeyDown={clickable ? (e): void => onRowKey(e, row, ri) : undefined}
+        tabIndex={clickable ? 0 : undefined}
+      >
+        {columns.map((col, ci) => {
+          const sticky = stickyFirstColumn && ci === 0;
+          const tone = columnTone(col, row);
+          const n = sampleSize(col, row);
+          const low = col.lowSample !== undefined && n !== null && n < col.lowSample;
+          const raw = cellValue(col, row);
+          const width = col.bar ? barWidth(col, raw, col.scale ?? pctScale) : null;
+          const color = col.bar ? barColor(col.bar.color, tone) : undefined;
+          const placement = col.bar?.placement ?? 'behind';
+          const align = defaultAlign(col);
+          const Tag = sticky ? 'th' : 'td';
+          return (
+            <Tag
+              key={col.key}
+              scope={sticky ? 'row' : undefined}
+              title={low ? t('analytics.ui.table.lowSample', { min: col.lowSample }) : undefined}
+              className={`${ALIGN_CLASS[align]} px-2 py-1 first:pl-3 last:pr-3 whitespace-nowrap border-b ${pin === 'last' ? 'border-zinc-600' : 'border-zinc-900'} ${
+                sticky ? 'sticky left-0 z-10 bg-inherit font-semibold shadow-[inset_-1px_0_0_#27272a]' : 'relative'
+              } ${tone ? TONE_TEXT[tone] : pinned ? 'text-zinc-400' : sticky ? 'text-white' : 'text-zinc-300'} ${
+                col.emphasis ? 'font-bold' : ''
+              } ${col.className ?? ''}`}
+            >
+              {width !== null && placement === 'behind' && (
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-1 left-1 rounded-sm opacity-20"
+                  style={{ width: `calc((100% - 0.5rem) * ${width / 100})`, backgroundColor: color }}
+                />
+              )}
+              <span className={`relative inline-flex items-baseline gap-1 ${align === 'right' ? 'justify-end' : ''} ${low ? 'opacity-50' : ''}`}>
+                <span>{pinned && ci === 0 && pinnedLabel ? pinnedLabel(row) : renderValue(col, row, ri)}</span>
+                {low && <span className="sr-only">{t('analytics.ui.table.lowSample', { min: col.lowSample })}</span>}
+                {n !== null && (
+                  <span className="text-[10px] font-normal text-zinc-500" title={t('analytics.ui.table.nTitle', { n })}>
+                    {t('analytics.ui.table.n', { n })}
+                  </span>
+                )}
+                {width !== null && placement === 'after' && (
+                  <span aria-hidden className="ml-1 inline-block h-1.5 w-10 self-center overflow-hidden rounded-full bg-zinc-800">
+                    <span className="block h-full rounded-full" style={{ width: `${width}%`, backgroundColor: color }} />
+                  </span>
+                )}
+              </span>
+            </Tag>
+          );
+        })}
+      </tr>
+    );
+  };
+
   const frame = framed ? 'rounded-xl border border-zinc-800 bg-zinc-950' : '';
 
   return (
@@ -182,7 +263,7 @@ export default function StatTable<R>({
         className={`max-w-full overflow-x-auto overscroll-x-contain ${stickyHeader ? 'overflow-y-auto' : ''} ${frame}`}
         style={stickyHeader ? { maxHeight } : undefined}
       >
-        {rows.length === 0 ? (
+        {rows.length === 0 && pinnedRows.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-zinc-500">{empty ?? t('analytics.ui.table.empty')}</p>
         ) : (
           <table
@@ -209,68 +290,15 @@ export default function StatTable<R>({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, ri) => {
-                const highlighted = highlightRow?.(row, ri) ?? false;
-                const zebra = highlighted ? 'bg-zinc-800' : ri % 2 === 1 ? 'bg-zinc-900' : 'bg-zinc-950';
-                const clickable = Boolean(onRowClick);
-                return (
-                  <tr
-                    key={rowKey ? rowKey(row, ri) : ri}
-                    title={rowTitle?.(row, ri)}
-                    className={`${zebra} ${clickable ? 'cursor-pointer hover:bg-zinc-800 focus-visible:outline-none focus-visible:bg-zinc-800' : ''}`}
-                    onClick={clickable ? (): void => onRowClick?.(row, ri) : undefined}
-                    onKeyDown={clickable ? (e): void => onRowKey(e, row, ri) : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                  >
-                    {columns.map((col, ci) => {
-                      const sticky = stickyFirstColumn && ci === 0;
-                      const tone = columnTone(col, row);
-                      const n = sampleSize(col, row);
-                      const low = col.lowSample !== undefined && n !== null && n < col.lowSample;
-                      const raw = cellValue(col, row);
-                      const width = col.bar ? barWidth(col, raw, col.scale ?? pctScale) : null;
-                      const color = col.bar ? barColor(col.bar.color, tone) : undefined;
-                      const placement = col.bar?.placement ?? 'behind';
-                      const align = defaultAlign(col);
-                      const Tag = sticky ? 'th' : 'td';
-                      return (
-                        <Tag
-                          key={col.key}
-                          scope={sticky ? 'row' : undefined}
-                          title={low ? t('analytics.ui.table.lowSample', { min: col.lowSample }) : undefined}
-                          className={`${ALIGN_CLASS[align]} px-2 py-1 first:pl-3 last:pr-3 whitespace-nowrap border-b border-zinc-900 ${
-                            sticky ? 'sticky left-0 z-10 bg-inherit font-semibold shadow-[inset_-1px_0_0_#27272a]' : 'relative'
-                          } ${tone ? TONE_TEXT[tone] : sticky ? 'text-white' : 'text-zinc-300'} ${
-                            col.emphasis ? 'font-bold' : ''
-                          } ${col.className ?? ''}`}
-                        >
-                          {width !== null && placement === 'behind' && (
-                            <span
-                              aria-hidden
-                              className="pointer-events-none absolute inset-y-1 left-1 rounded-sm opacity-20"
-                              style={{ width: `calc((100% - 0.5rem) * ${width / 100})`, backgroundColor: color }}
-                            />
-                          )}
-                          <span className={`relative inline-flex items-baseline gap-1 ${align === 'right' ? 'justify-end' : ''} ${low ? 'opacity-50' : ''}`}>
-                            <span>{renderValue(col, row, ri)}</span>
-                            {low && <span className="sr-only">{t('analytics.ui.table.lowSample', { min: col.lowSample })}</span>}
-                            {n !== null && (
-                              <span className="text-[10px] font-normal text-zinc-500" title={t('analytics.ui.table.nTitle', { n })}>
-                                {t('analytics.ui.table.n', { n })}
-                              </span>
-                            )}
-                            {width !== null && placement === 'after' && (
-                              <span aria-hidden className="ml-1 inline-block h-1.5 w-10 self-center overflow-hidden rounded-full bg-zinc-800">
-                                <span className="block h-full rounded-full" style={{ width: `${width}%`, backgroundColor: color }} />
-                              </span>
-                            )}
-                          </span>
-                        </Tag>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
+              {pinnedRows.map((row, pi) => renderRow(row, -1, pinnedRowKey ? pinnedRowKey(row, pi) : `__pinned-${pi}`, pi === pinnedRows.length - 1 ? 'last' : true))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={columns.length} className="px-3 py-4 text-center text-xs text-zinc-500">
+                    {empty ?? t('analytics.ui.table.empty')}
+                  </td>
+                </tr>
+              )}
+              {rows.map((row, ri) => renderRow(row, ri, rowKey ? rowKey(row, ri) : String(ri), false))}
             </tbody>
           </table>
         )}

@@ -12,6 +12,7 @@ import TheoryTable from './TheoryTable';
 import LeaderboardRules from './LeaderboardRules';
 import RoleChampions from './RoleChampions';
 import EloBoard from './EloBoard';
+import { BenchmarkToggle, benchmarkBoardRow, useBenchmarkPinned } from './BenchmarkRows';
 import {
   fetchAnalysisLeaderboard,
   getErrorMessage,
@@ -68,6 +69,10 @@ import {
  *
  * (2026-10-30 Edward：「新版把網站上的 ELO 都完全統一成你研發的版本」) 第二個小分頁「Elo」(EloBoard，讀
  * /api/analysis/rating)：網站唯一的 Elo。不是排行快取的榜，排行載入失敗時照樣切得到；不隨篩選重算。
+ *
+ * (2026-11-03 Edward：基準列「呈現在所有排行跟數據分析的最上列」) 理論勝率表 (TheoryTable) 與角色理論／位置理論／
+ * 整體理論榜 (舊快取的小分頁)、刺客榜最上面釘基準列 (BenchmarkRows)。不放的：進步榜 (近期 vs 之前的差，一個組沒有
+ * 「進步」可言)、新人榜 (看的是個人第一次出賽的日子)、角色王 (每個角色的前 10 名稱號)、Elo (個人評分)。
  */
 
 /** 小分頁順序；不在這裡的 id 依快取順序排在後面。 */
@@ -385,6 +390,13 @@ function BoardPanel({
   const openPlayerStats = useGameStore((s) => s.openPlayerStats);
   const rows = board.rows;
   const { columns, sparse } = useMemo(() => boardColumns(board, t, minCell), [board, t, minCell]);
+  const benchmark = benchmarkKind(board);
+  const pinned = useBenchmarkPinned(
+    (g) => (benchmark === 'hitRate'
+      ? { ...benchmarkBoardRow(g), value: g.assassin.hitRate ?? 0, games: g.assassin.attempts }
+      : benchmarkBoardRow(g)),
+    { indent: 'w-5', filter: (g) => benchmark !== null && (benchmark !== 'hitRate' || g.assassin.attempts > 0) },
+  ).props;
 
   return (
     <div className="space-y-2">
@@ -397,6 +409,7 @@ function BoardPanel({
             <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
           </BoardInfo>
         </InfoTip>
+        {benchmark && <BenchmarkToggle className="ml-auto" />}
         {board.allGames && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-800/50 text-amber-300">
             {t('analytics.boards.exception')}
@@ -409,9 +422,17 @@ function BoardPanel({
         rowKey={(row, i) => `${board.id}-${row.rank}-${row.role ?? ''}-${row.name}-${i}`}
         onRowClick={row => openPlayerStats(row.name)}
         rowTitle={row => rowTip(t, row) || undefined}
+        {...pinned}
       />
     </div>
   );
+}
+
+/** 這個榜放不放基準列：刺客榜 (刺中率)、角色／位置／整體理論榜；進步榜、新人榜、角色王不放 (null)。 */
+function benchmarkKind(board: AnalysisLeaderboardBoard): 'hitRate' | 'theory' | null {
+  if (board.id === 'newcomers' || board.id === 'roleTitles' || board.id === 'improved') return null;
+  if (board.metric === 'hitRate') return 'hitRate';
+  return isTheoryField(board.metric) && board.metric !== 'finalWinRate' ? 'theory' : null;
 }
 
 // ── 欄位 ───────────────────────────────────────────────────────────────

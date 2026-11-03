@@ -30,6 +30,7 @@ export * from './pairs';
 export * from './lake';
 export * from './featureL141';
 export * from './build';
+export * from './benchmarks';
 export * from './parity';
 export * from './filter/types';
 export * from './filter/predicates';

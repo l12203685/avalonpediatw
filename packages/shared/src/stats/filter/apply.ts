@@ -21,6 +21,9 @@ import type { PairRoster } from '../pairs';
 import { compare, evaluateMetric, METRICS, type MetricContext } from './metrics';
 import { clausePredicate } from './predicates';
 import { hasMergeOptions, mergedAliases, mergedDataset, type MergeReport } from './merge';
+import {
+  BENCHMARK_DEFAULT_MAX_GAMES, careerGames, computeBenchmarks, mergedCareerGames, type BenchmarksSection,
+} from '../benchmarks';
 import type { Clause, ExcludePlayersClause, GameClause, GameFilter, LeaderboardOverrides, PlayerSelector } from './types';
 
 /** 引擎需要的快取資訊（伺服器 /api/analysis/games 的 context 是它的超集）。 */
@@ -83,6 +86,11 @@ export interface StatsResult extends Sections {
   key: string;
   filterKey: string;
   meta: FilterMeta;
+  /**
+   * 基準列（stats/benchmarks.ts；Edward 2026-11-03）：散客 / 排除散客後全體 / PR50+ / PR50-。不是快取的區塊
+   * （analysis_cache.json 沒有，網站在不篩選時也用引擎算）；不影響其他區塊的任何數字。
+   */
+  benchmarks: BenchmarksSection;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -484,7 +492,30 @@ export function computeStats(decoded: DecodedDataset, context: StatsContext, fil
     aliases: app.merge ? app.merge.aliases : { ...decoded.dataset.aliases, ...context.aliases },
     chemistryRoster: app.merge ? mergedRoster(context.chemistryRoster, app.merge.rename) : context.chemistryRoster,
   });
-  return { key: decoded.dataset.key, filterKey: canonicalFilterKey(filter), meta: app.meta, ...built.sections };
+  return {
+    key: decoded.dataset.key, filterKey: canonicalFilterKey(filter), meta: app.meta, ...built.sections,
+    benchmarks: statsBenchmarks(decoded, app, filter, built),
+  };
+}
+
+/** 基準列：門檻 = options.mergeSmall.maxGames（沒開散客合併時 30）；生涯場數看全部局（合併後的名字）。 */
+function statsBenchmarks(
+  decoded: DecodedDataset,
+  app: FilterApplication,
+  filter: GameFilter | null | undefined,
+  built: ReturnType<typeof buildSections>,
+): BenchmarksSection {
+  const maxGames = filter?.options?.mergeSmall?.maxGames ?? BENCHMARK_DEFAULT_MAX_GAMES;
+  const careers = careerGames(decoded);
+  const { overview } = built.sections;
+  return computeBenchmarks(built.games, decoded.config, {
+    maxGames,
+    careers: app.merge && app.merge.rename.size ? mergedCareerGames(careers, app.merge.rename) : careers,
+    pooledName: app.meta.merge?.pooled?.name,
+    roleFinalWinRates: overview.roleFinalWinRates,
+    seatFinalWinRates: overview.seatFinalWinRates,
+    roleSeatFinalWinRates: overview.roleSeatFinalWinRates,
+  });
 }
 
 /** 默契軸在合併計算後：名字換成合併後的名字、去掉重複（順序 = 第一次出現）。 */
