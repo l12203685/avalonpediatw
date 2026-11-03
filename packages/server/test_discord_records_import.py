@@ -14,6 +14,7 @@ which switches a scheduled or manual run turns on.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import io
 import json
 import os
@@ -3135,3 +3136,23 @@ class EndToEndTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestYmdTitle(unittest.TestCase):
+    """2026-11-03：yyyymmdd_第n局_配置 標題（記錄員／手動補登）讀得到日期與場次，舊貼文的簽名會變、下次重讀。"""
+
+    def test_title_date(self):
+        created = dt.datetime(2026, 11, 1, 12, 0)
+        self.assertEqual(dri.title_date("20261027_第1局_468950", created), ("2026/10/27", "1", True))
+        self.assertEqual(dri.title_date("20261030_第8局_刺娜德奧派梅", created), ("2026/10/30", "8", True))
+        self.assertEqual(dri.title_date("1009一般場4", created), ("2026/10/09", "4", True))
+        self.assertEqual(dri.title_date("468950", created), ("2026/11/01", "", False))
+
+    def test_signature_versioned_only_for_ymd_titles(self):
+        def sig(title):
+            post = dri.Post(id="1", title=title, tags=())
+            return dri.post_signature(post, "body")
+        old = hashlib.sha256(json.dumps(["1009一般場4", [], "body"], ensure_ascii=False).encode()).hexdigest()[:16]
+        self.assertEqual(sig("1009一般場4"), old)
+        new_style = hashlib.sha256(json.dumps(["20261027_第1局_468950", [], "body"], ensure_ascii=False).encode()).hexdigest()[:16]
+        self.assertNotEqual(sig("20261027_第1局_468950"), new_style)

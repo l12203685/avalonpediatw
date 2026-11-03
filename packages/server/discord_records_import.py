@@ -439,6 +439,9 @@ _NAME_LINE_RE = re.compile(r"^\s*([0-9０-９]{1,2})\s*[.．、:：]\s*(.*?)\s*$
 _ANOTHER_NAME_RE = re.compile(r"\s(?:10|[0-9])\s*[.．、:：]\s*\S")
 _GAMEISH_RE = re.compile(r"^(?:[0-9]|[oxOX]{2,}(?![A-Za-z]))")
 _TITLE_DATE_RE = re.compile(r"^([0-9]{2})([0-9]{2})(?![0-9])(.*)$")
+# 2026-10-31 起記錄員／手動補登的標題 yyyymmdd_第n局_配置（例 20261027_第1局_468950）
+_TITLE_YMD_RE = re.compile(r"^(20[0-9]{2})([0-9]{2})([0-9]{2})(?![0-9])(.*)$")
+_GAME_NO_RE = re.compile(r"第 ?([0-9]+) ?局")
 
 
 def normalize_line(raw: str) -> str:
@@ -605,7 +608,8 @@ def _game_block(items: list[Item], title: str) -> tuple[list[Item], list[Item]]:
                 culprit = item if item.kind == "text" else next((items[j] for j in game_idx if j > i), item)
                 raise SkipPost(SKIP_UNRECOGNIZED, culprit.line_no)
         elif item.kind == "text" and _GAMEISH_RE.match(item.text):
-            if not (i < first and (item.text == norm_title or _TITLE_DATE_RE.match(item.text))):
+            if not (i < first and (item.text == norm_title or _TITLE_DATE_RE.match(item.text)
+                                   or _TITLE_YMD_RE.match(item.text))):
                 raise SkipPost(SKIP_UNRECOGNIZED, item.line_no)
     return items[first:last + 1], footer
 
@@ -766,22 +770,33 @@ def _names(footer: list[Item]) -> dict[str, str]:
 def title_date(title: str, created: dt.datetime) -> tuple[str, str, bool]:
     """(日期時間, 場次, from_title). Title 'MMDD...N' (e.g. 1009一般場4): that day in the year of
     the post (the year before if that day would be after the post), 場次 = the last number.
+    Title 'yyyymmdd_第n局_配置' (e.g. 20261027_第1局_468950): that day, 場次 = n.
     Otherwise (e.g. a 配置 as title) the post's own date and no 場次."""
     t = normalize_line(title)
     day: dt.date | None = None
     game_no = ""
+    rest = ""
     is_config = bool(_CONFIG_RE.match(t)) and len(set(t)) == 6
-    m = None if is_config else _TITLE_DATE_RE.match(t)
-    if m:
+    ymd = None if is_config else _TITLE_YMD_RE.match(t)
+    m = None if is_config or ymd else _TITLE_DATE_RE.match(t)
+    if ymd:
+        try:
+            day = dt.date(int(ymd.group(1)), int(ymd.group(2)), int(ymd.group(3)))
+        except ValueError:
+            day = None
+        rest = ymd.group(4)
+    elif m:
         try:
             day = dt.date(created.year, int(m.group(1)), int(m.group(2)))
             if day > created.date() + dt.timedelta(days=1):
                 day = day.replace(year=day.year - 1)
         except ValueError:
             day = None
-        if day is not None:
-            numbers = re.findall(r"[0-9]+", m.group(3))
-            game_no = str(int(numbers[-1])) if numbers else ""
+        rest = m.group(3)
+    if day is not None:
+        numbered = _GAME_NO_RE.search(rest)
+        numbers = re.findall(r"[0-9]+", rest)
+        game_no = str(int(numbered.group(1))) if numbered else (str(int(numbers[-1])) if numbers and not ymd else "")
     from_title = day is not None
     day = day or created.date()
     return f"{day.year:04d}/{day.month:02d}/{day.day:02d}", game_no, from_title
@@ -935,7 +950,11 @@ def post_signature(post: Post, content: str) -> str:
     is imported (EXPECTED_TAGS; not 待修正), and the starter message's text. Kept in discord_hash
     so that an edit of any of them shows up on a later run (plan_recheck). Never printed."""
     tags = sorted(t for t in post.tags if t in EXPECTED_TAGS)
-    payload = json.dumps([post.title, tags, content], ensure_ascii=False)
+    parts: list[object] = [post.title, tags, content]
+    # yyyymmdd 標題 2026-11-03 起才讀得懂日期與場次：這類貼文的簽名加上版本，下一次執行會重讀、改寫舊列
+    if _TITLE_YMD_RE.match(normalize_line(post.title)):
+        parts.append("ymd-title-v1")
+    payload = json.dumps(parts, ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 

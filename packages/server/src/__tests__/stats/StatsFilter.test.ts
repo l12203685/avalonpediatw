@@ -353,6 +353,36 @@ describe('as-of day and who counts as active on the boards', () => {
   });
 });
 
+describe('有日期範圍時排行門檻自動放寬（Edward 2026-11-03：查某天的戰績不會被上榜條件擋光）', () => {
+  const fixture = path.resolve(__dirname, '..', 'fixtures', 'stats_parity', 'invented');
+  const inv = decodeGamesDataset(JSON.parse(fs.readFileSync(path.join(fixture, 'games.json'), 'utf-8')));
+  const ctx = { asOf: '2026-02-28' };
+  const dates = [...new Set(inv.games.map((g) => g.date).filter(Boolean))].sort();
+  // 局最多的那一天
+  const busiest = dates.map((d) => [d, inv.games.filter((g) => g.date === d).length] as const).sort((a, b) => b[1] - a[1])[0][0];
+
+  it('單日：起訖都包含那一天，理論勝率表有人上榜，門檻 = 期間內每人場數的中位數', () => {
+    const day = computeStats(inv, ctx, { v: 1, clauses: [{ kind: 'date', from: busiest, to: busiest }] });
+    expect(day.meta.games).toBe(inv.games.filter((g) => g.date === busiest).length);
+    const m = day.meta.periodLeaderboard?.medianGames ?? 0;
+    expect(m).toBeGreaterThanOrEqual(1);
+    expect(day.leaderboard.config).toMatchObject({ activeDays: 0, mainGames: 0, requireRoleWindows: 0, theoryMinGames: Math.min(50, m) });
+    const theory = day.leaderboard.boards.find((b) => b.id === 'theory');
+    expect(theory?.rows.length).toBeGreaterThan(0);
+    for (const r of theory?.rows ?? []) expect(r.careerGames as number).toBeGreaterThanOrEqual(Math.min(50, m));
+  });
+
+  it('自己改的上榜條件優先；沒有日期範圍時不放寬', () => {
+    const mine = computeStats(inv, ctx, { v: 1, clauses: [{ kind: 'date', from: busiest, to: busiest }], options: { leaderboard: { theoryMinGames: 1 } } });
+    expect(mine.leaderboard.config).toMatchObject({ theoryMinGames: 1, activeDays: 0 });
+    const plain = computeStats(inv, ctx, { v: 1, clauses: [{ kind: 'category', in: ['線瓦', '面瓦'] }] });
+    expect(plain.meta.periodLeaderboard).toBeUndefined();
+    expect(plain.leaderboard.config).toMatchObject({ theoryMinGames: 50 });
+    const excluded = computeStats(inv, ctx, { v: 1, clauses: [{ kind: 'date', from: busiest, to: busiest, not: true }] });
+    expect(excluded.meta.periodLeaderboard).toBeUndefined();
+  });
+});
+
 describe('dataset checks', () => {
   const ok = makeDataset(SPECS);
   it('refuses another format, version, batch or rule set', () => {
