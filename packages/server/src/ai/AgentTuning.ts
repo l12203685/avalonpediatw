@@ -867,6 +867,8 @@ export interface AgentTuning {
    * 第 4 次提議 31%，機器人 4.8%）：只有真的忠臣（不含梅林／派西、不含紅方照忠臣投的票）。第 1–4 次提議、任何一局（第 1、2 局也算），
    * 強制局隊長（尾家）是紅的機率 ≥ τ、這隊乾淨的機率 ≥ λ × max（含尾家、同人數的隊乾淨的機率）→ 投白（在隊上、不在隊上都一樣；不越過好人投票關卡）。
    * 值 = τ；0 = 關。λ = `loyalTailWhiteLambda`（0 = 1）。
+   * 第 26 回合採用 0.7 ＋ `loyalTailWhiteLast`（在校準後的後驗上；第 2 階段）：同一批九段種子對 `beliefTemper` 等新預設逐種子配對 +0.90 [+0.51, +1.29]／+0.67 [+0.29, +1.04]／+0.80 [+0.42, +1.18]pp
+   * （合併 18000 組 +0.79 [+0.57, +1.01]pp）；真人局重播第 4 次提議、尾家 P ≥ 0.7 的隊外外白 47.2%（強者 51.6%，原本約 5%）。舊後驗上 0.8（第 1–4 次）−2.4pp。
    */
   loyalTailWhite: number;
   /** 第 26 回合：`loyalTailWhite` 的 λ（0 = 1）。 */
@@ -1441,9 +1443,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redSelfOnTeamHalf: false,
   goodVoteAlt: 0,
   goodVoteAltLast: false,
-  loyalTailWhite: 0,
+  loyalTailWhite: 0.7,
   loyalTailWhiteLambda: 0,
-  loyalTailWhiteLast: false,
+  loyalTailWhiteLast: true,
   beliefStrongTables: false,
   beliefStrongParts: 0,
   beliefUnified: true,

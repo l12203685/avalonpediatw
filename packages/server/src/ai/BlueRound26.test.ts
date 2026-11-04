@@ -41,10 +41,13 @@ const r4 = {
 
 describe('round 26 tuning fields', () => {
   it('all off by default and in the legacy table; flags parse and describe', () => {
+    expect(LEGACY_AGENT_TUNING.loyalTailWhite).toBe(0);
+    // Round 26 adoption (stage 2, paired over the new default: pooled 18000 seeds +0.79pp): the fourth proposal only.
+    expect(DEFAULT_AGENT_TUNING.loyalTailWhite).toBe(0.7);
+    expect(DEFAULT_AGENT_TUNING.loyalTailWhiteLast).toBe(true);
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.goodVoteAlt).toBe(0);
       expect(t.goodVoteAltLast).toBe(false);
-      expect(t.loyalTailWhite).toBe(0);
       expect(t.merlinReuseExact).toBe(false);
       expect(t.beliefPolicyVotes).toBe(false);
     }
@@ -113,10 +116,13 @@ const r2 = {
 } as unknown as PlayerObservation;
 
 describe('loyalTailWhite (round 26, loyal; D3 stage 1)', () => {
-  const on: AgentTuning = { ...DEFAULT_AGENT_TUNING, loyalTailWhite: 0.7 };
+  const on: AgentTuning = { ...DEFAULT_AGENT_TUNING, loyalTailWhite: 0.7, loyalTailWhiteLast: false };
   it('a certain-red tail: a true loyal approves an earlier team (R2 included), off by default', () => {
-    expect(loyalTailWhiteNow(DEFAULT_AGENT_TUNING, r2)).toBe(false);
+    expect(loyalTailWhiteNow({ ...DEFAULT_AGENT_TUNING, loyalTailWhite: 0 }, r2)).toBe(false);
     expect(loyalTailWhiteNow(on, r2)).toBe(true);
+    // The adopted default fires only on the fourth proposal (failCount 3).
+    expect(loyalTailWhiteNow(DEFAULT_AGENT_TUNING, r2)).toBe(false);
+    expect(loyalTailWhiteNow(DEFAULT_AGENT_TUNING, { ...r2, failCount: 3, currentLeader: 'P9' } as unknown as PlayerObservation)).toBe(true);
     // Off the team: the same rule (an outer white).
     expect(loyalTailWhiteNow(on, { ...r2, proposedTeam: ['P6', 'P5', 'P7', 'P8'] } as unknown as PlayerObservation)).toBe(true);
   });
