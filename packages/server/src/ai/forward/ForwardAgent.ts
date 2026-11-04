@@ -59,6 +59,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
+import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -721,9 +722,28 @@ export class ForwardAgent implements AvalonAgent {
     // (INV-V1: in a replay the team is the human leader's and can be must-fail in the bot's view).
     const selfApprove = leaderSelfApproveReason(this.baseline.tuning, obs);
     // Merlin is exempt from the must-fail gate only (his on-team normal white, owner 2026-10-30), not from the dominance gate (INV-K1V).
-    const selfGate = obs.myRole === 'merlin' ? { ...this.gates, mustFail: false } : this.gates;
-    if (selfApprove && (obs.myTeam !== 'good' || goodVoteGate(obs, selfGate) === null)) {
+    // Round 25 `leaderSelfApproveOffTeam`: off its own team the leader's white is an outer white — a good leader keeps every vote
+    // gate, and Merlin never outer-whites a team with a red he sees (INV-M1 / INV-V1; owner 2026-10-30「異常票外白要幾乎沒有」).
+    const selfOn = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
+    const selfGate = obs.myRole === 'merlin' && selfOn ? { ...this.gates, mustFail: false } : this.gates;
+    const merlinSeenRed = obs.myRole === 'merlin' && !selfOn && (obs.proposedTeam ?? []).some((id) => obs.knownEvils.includes(id));
+    if (selfApprove && (obs.myTeam !== 'good' || (goodVoteGate(obs, selfGate) === null && !merlinSeenRed))) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
+    }
+    // Round 25 (red; RedRound25.ts) — hard constraints `oberonMatchPoint` (G3: no outer white from Oberon at blue's match point
+    // unless his own view puts enough reds on the team) and `redVouchConsistent` (K8: a red lake holder on a team with a seat it
+    // declared red rejects it); knob `oberonBiteReject` (E3: the bitten Oberon does not admit it with a white).
+    if (oberonMatchPointReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'oberon: no outer white at blue match point (hard constraint)');
+    }
+    if (oberonBiteRejectNow(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'oberon bitten (鐵咬): reject the biting team');
+    }
+    if (redMatchPointApprove(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red match point: on the team with enough known reds');
+    }
+    if (redVouchOnTeamReject(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red lake holder: own declared-red seat on the team (hard constraint)');
     }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
@@ -827,7 +847,8 @@ export class ForwardAgent implements AvalonAgent {
     const gateOk = (team: readonly string[]): boolean => obs.myTeam !== 'good' || !anyGate(this.gates)
       || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null;
     const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action, gateOk);
-    const looked = redCleanLookTeam(this.baseline.tuning, obs, led);
+    // Round 25 hard constraint `redVouchConsistent` (S2): the clean-look swap keeps the red leader's own lake word.
+    const looked = redVouchKeptTeam(this.baseline.tuning, obs, led, redCleanLookTeam(this.baseline.tuning, obs, led));
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
@@ -842,6 +863,9 @@ export class ForwardAgent implements AvalonAgent {
     if (d.action.type === 'team_select') {
       const reused = goodReuseExactTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (reused !== d.action) return { ...d, action: reused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → re-propose the successful team` } };
+      // Round 25 `redReuseExact` (RedRound25.ts): the red analogue — the red leader re-proposes the successful team as it was.
+      const redReused = redReuseExactTeam(this.baseline.tuning, obs, d.action);
+      if (redReused !== d.action) return { ...d, action: redReused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → red re-proposes the successful team` } };
     }
     // Round 5 (Percival) candidate `percivalLoyalStyle` (MerlinLoyalStyle.ts): the loyal-looking team that integrates
     // the two thumbs (Edward's five plans: trust A ± send A, trust B ± send B, or the AB intersection).
@@ -2183,7 +2207,9 @@ export class ForwardAgent implements AvalonAgent {
     const base = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs), passRankApplies(this.baseline.tuning.teamPassRank, obs, 'team_vote'));
     // Round 23 (red) `redSelfOnTeam`: a red on the team is a red on the team — the scorer's red count leaves the voter out, so a
     // lone Mordred read his own team as one without a red and rejected it (R3+; Oberon has his own vote rules).
-    const selfRed = this.baseline.tuning.redSelfOnTeam && obs.myTeam === 'evil' && obs.myRole !== 'oberon'
+    // Round 25 `redSelfOnTeamHalf` (第 1C 節): the same for half of the states (seat, round, attempt, team hash).
+    const selfRedOn = this.baseline.tuning.redSelfOnTeam || (this.baseline.tuning.redSelfOnTeamHalf && halfOf(`${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${[...proposedTeam].sort().join(',')}|redselfonteam`));
+    const selfRed = selfRedOn && obs.myTeam === 'evil' && obs.myRole !== 'oberon'
       && proposedTeam.includes(obs.myPlayerId) && (obs.currentRound ?? 1) >= 3;
     const signals = selfRed ? { ...base, includesKnownEvil: true, numKnownEvilOnTeam: base.numKnownEvilOnTeam + 1 } : base;
 

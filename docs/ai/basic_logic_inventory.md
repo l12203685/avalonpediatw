@@ -108,7 +108,7 @@
 | K5 | 宣藍鏈：A→B 宣藍，選 A 必選 B（K1 / K3） | `LogicGates.teamGateBreach`（`dominated`） | `teamDominanceGate`（開） | done（INV-K1 / K1V） |
 | K6 | 被宣紅的藍方：宣我紅的人必紅（P3） | 確定性層 + `mustFailGate` | `mustFailGate`（開） | done（INV-P3） |
 | K7 | 紅方持湖者言行一致：派隊照宣告；隊外投票照宣告 | `RedLakeFollowUp.evilVouchTeamConstraint` / `evilVouchVoteRule` | `evilVouchFollowUp`（開，需 `evilLakeHumanStrategy`） | done（強制局例外） |
-| K8 | 紅方持湖者**在隊上**：不贊成有自己宣紅者的隊、不贊成漏掉自己宣藍者的隊 | `evilVouchVoteRule` 在隊上不適用（真人樣本太小） | — | missing |
+| K8 | 紅方持湖者**在隊上**：不贊成有自己宣紅者的隊、不贊成漏掉自己宣藍者的隊 | 第 25 回合硬約束 `RedRound25.redVouchOnTeamReject`（在隊上、隊上有自己宣紅的人 → 反對，紅方已兩紅例外） | `redVouchConsistent`（開） | done（第 25 回合） |
 | K9 | 紅方不做「好人持湖者不可能為真」的宣告；已公開確定是紅就不宣告 | `LakePolicy.decideLakeClaimForTeam` | `redPossibleClaimsOnly`（開） | done（INV-R1） |
 | K10 | 還湖：被說壞的人把湖交給確定好人，不還 = 認壞（A2） | `LakePolicy.pickLakeTargetForTeam`；`Certainty.admittedReds` | `returnLake`（開） | done |
 | K11 | 不湖持過湖的人、不湖結果已確定的人 | 引擎禁止前者；`GoodLakeInfo`（資訊量）避開後者 | `goodLakeInfoMax`（開） | done |
@@ -120,7 +120,7 @@
 |---|---|---|---|---|
 | G1 | 紅方已兩紅：隊上的紅一定出失敗（收尾） | `HeuristicAgent.voteOnQuest` 的聽牌規則；`ForwardAgent.decide` 先跑藏牌／位階法 | `redRankOrder`（開）、`humanQuestCardRules`（開） | done（稽核 (p)：0 / 428 次任務；真人 5.4%） |
 | G2 | 紅方已兩紅：紅隊長的強制提議放夠自己知道的紅 | 沒有明確規則；評分器 `threeRedWins` 偏好有隊友的隊；`RedRound4.redCleanLookTeam` | `redCleanLook`（開） | done（沒有明文規則，但稽核 (o) 0 / 105；真人 1.6%） |
-| G3 | **藍方已兩藍：不在隊上的紅方不外白全藍的隊**（過了就進刺殺；wiki-21「你知道開這顆白球不會讓任務出去」才可以開擾亂白） | 相認紅：`RedVoteCamouflage.redVoteCritical`（沒有隊友、藍方兩藍 → 反對）；**奧伯倫被排除**（`ForwardAgent.decide`：`obs.myRole === 'oberon' ? null`，`oberonNormalVote` 關），走 `biasForOberon`：出過失敗任務後 R3 起贊成 +1.5 | `redNormalVote`（1）、`oberonNormalVote`（關） | **contradicted**（奧伯倫；稽核 (f)） |
+| G3 | **藍方已兩藍：不在隊上的紅方不外白全藍的隊**（過了就進刺殺；wiki-21「你知道開這顆白球不會讓任務出去」才可以開擾亂白） | 相認紅：`RedVoteCamouflage.redVoteCritical`（沒有隊友、藍方兩藍 → 反對）；**奧伯倫被排除**（`ForwardAgent.decide`：`obs.myRole === 'oberon' ? null`，`oberonNormalVote` 關），走 `biasForOberon`：出過失敗任務後 R3 起贊成 +1.5 | `redNormalVote`（1）、`oberonNormalVote`（關）；第 25 回合硬約束 `oberonMatchPoint`（開） | done（第 25 回合：奧伯倫 (f) 50% → 0%、(f′) 8% → 0%） |
 | G4 | 紅方已兩紅、隊上有隊友：外白衝（只在這隊過得了時） | `redVoteCritical` + `redKeyWhiteVote` | `redKeyWhite`（1） | done |
 | G5 | 紅方已兩紅：好人擋有紅的隊，梅林寧可暴露也擋（wiki-207） | `merlinVoteFatal`、`goodKeyVoteReject` | `goodKeyVote`（0.5） | done |
 | G6 | 第 4 局保護局：一紅不會開紅（D2） | 確定性層 `failsRequired` | — | done |
@@ -254,3 +254,19 @@ npx tsx scripts/logicAudit.ts --merge /tmp/a0.json /tmp/a1.json --out /tmp/audit
 npx tsx scripts/logicAudit.ts --games 300 --why --out /tmp/why.json
 npx vitest run scripts/logicAudit.test.ts
 ```
+
+
+## 14. 第 25 回合（紅方）之後的狀態
+
+`docs/ai/optimization_loop.md` 第 25 回合；稽核 300 局、種子 20261103（括號 = 違反／機會）。
+
+| # | 項目 | 第 25 回合的處理 | 前 → 後 | 真人 |
+|---|---|---|---|---|
+| G3 | 藍方兩藍，奧伯倫外白全藍隊（(f)、(f′)） | 硬約束 `oberonMatchPoint`：自己視角沒有確定夠多的紅能讓這隊失敗就投黑 | (f) 50.0% → 0%、(f′) 8.0% → 0% | 46.8%／4.0% |
+| K8、S2、S3 | 紅方持湖者：自己的隊漏掉自己宣藍的人；在隊上、隊上有自己宣紅的人 | 硬約束 `redVouchConsistent`：`redCleanLook` 換隊守住宣告；在隊上反對（紅方已兩紅例外） | 漏掉 12.0% → 0%；投白 7.3% → 3.7% | 6.2%／20.8% |
+| L2、S4（延伸） | 隊長對自己派、自己**不在**上面的提議投黑（新稽核 (a″)；第 24 回合 `goodReuseExact` 會派這種隊） | 硬約束 `leaderSelfApproveOffTeam`（好人仍過投票關卡；梅林不外白看得到紅的隊） | 藍 32.6%（14／43）→ 9.3%（4／43，只剩梅林照派有看得到的紅的隊） | 5.2%（紅 7.6%） |
+| E3、S9 | 奧伯倫被鐵咬投白（(e)；新稽核 (e″) = 失敗任務的下一局） | 開關 `oberonBiteReject` 1／2／3（50%）都中性，照第 1C 節維持舊規則；藍方兩藍的部分由 G3 擋掉 | 71.2% → 49.6%（下一局 69.3% → 59.7%） | 23.0%（下一局 11.4%） |
+| L7、G1 | 紅方已兩紅、自己在隊上、自己知道的紅夠讓任務失敗卻內黑（新稽核 (q)） | 開關 `redMatchPointApprove`（真人也做，不是純粹的矛盾），中性，沒有採用 | 莫德雷德 13.1%、奧伯倫 9.2%（刺客、莫甘娜 0%） | 17.3% |
+| V2、S5 | 紅方隊長重派自己內黑過的隊（(b)） | 開關 `redLeadConsistent`（1／2）中性，沒有採用 | 52.4%（奧伯倫 90%） | 4.2% |
+
+仍然標 contradicted 的只剩 E3（奧伯倫被鐵咬投白）；要不要當成硬約束待 Edward 裁定。

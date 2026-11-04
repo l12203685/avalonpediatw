@@ -362,8 +362,9 @@ describe('ForwardAgent.decide (full pipeline)', () => {
       ],
       questResults: ['success', 'success'],
     });
-    // Round 13 `goodTailVote` decides an off-the-team vote ahead of the pipeline: off here.
-    const piped = new ForwardAgent('test-fwd', new HeuristicAgent('test-fwd', undefined, undefined, { ...DEFAULT_AGENT_TUNING, goodTailVote: 0 }));
+    // Round 13 `goodTailVote` decides an off-the-team vote ahead of the pipeline: off here. So does the round-25 hard constraint
+    // `leaderSelfApproveOffTeam` (P0 leads this team without being on it): off here too, the test exercises the scorer.
+    const piped = new ForwardAgent('test-fwd', new HeuristicAgent('test-fwd', undefined, undefined, { ...DEFAULT_AGENT_TUNING, goodTailVote: 0, leaderSelfApproveOffTeam: false }));
     piped.onGameStart(makeObs({}));
     const { action, reasoningTrace } = piped.decide(obs);
     expect(action.type).toBe('team_vote');

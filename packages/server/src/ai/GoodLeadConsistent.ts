@@ -11,6 +11,8 @@
  *   - 派隊：忠臣／派西隊長最後派出的隊，若自己的投票規則（關鍵局門檻、一般門檻）會投黑，改派自己後驗最乾淨的隊（含自己、過邏輯閘門；那一隊也要過自己的投票規則，
  *     連最乾淨的隊都過不了——例如關鍵局沒有乾淨的隊——就維持原本的隊）——派隊和投票用同一個評估。
  *   - 好人（梅林除外）的白球仍然不越過好人投票關卡（必定失敗／被支配的隊，INV-V1）：重播真人局時隊伍是真人派的，可能是自己視角的必敗隊。
+ * 第 25 回合把投票那一半延伸到隊長不在自己派的隊上（`AgentTuning.leaderSelfApproveOffTeam`，硬約束；第 24 回合 `goodReuseExact` 會照原樣派自己不在上面的成功隊，
+ * 稽核 (a″)：隊長對那種提議投黑 藍方 32.6%，真人 5.2%）。
  * 開關（`AgentTuning.goodLeadConsistent`，預設關）：1 = 照派加分不再拿「自己在隊上、投了黑」的被否決隊當參考（忠臣／派西／梅林；S5，稽核 (b)），
  * 忠臣／派西隊長最後派的隊若正是這一局自己內黑過的隊，改派自己後驗最乾淨、這一局沒有內黑過的隊。
  */
@@ -24,6 +26,15 @@ const key = (team: readonly string[]): string => [...team].sort().join(',');
 
 /** Whether the reuse plan skips the rejected teams the leader sat on and voted against (`goodLeadConsistent`, blue leaders). */
 export function leadConsistentSkip(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  // Round 25 `redLeadConsistent`: the red leaders' version (稽核 (b) 紅方 55%、奧伯倫 90%；真人 4.2%).
+  if (obs.myTeam === 'evil') {
+    const mode = tuning.redLeadConsistent ?? 0;
+    if (mode !== 2) return mode >= 1;
+    // 2 = 1 的 50%（第 1C 節）：照座位、局、第幾次提議雜湊，同一個局面每次一樣。
+    let h = 0x811c9dc5;
+    for (const ch of `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|redleadconsistent`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    return (h % 10000) / 10000 < 0.5;
+  }
   return (tuning.goodLeadConsistent ?? 0) >= 1 && obs.myTeam === 'good';
 }
 
@@ -107,7 +118,9 @@ export function leaderSelfApproveReason(tuning: Readonly<AgentTuning>, obs: Play
   if (!tuning.leaderSelfApprove || obs.gamePhase !== 'team_vote' || (obs.failCount ?? 0) >= 4) return null;
   const me = obs.myPlayerId;
   const team = obs.proposedTeam ?? [];
-  if (!team.includes(me)) return null;
+  // Round 25 `leaderSelfApproveOffTeam` (稽核 (a″)): the leader's own proposal it is not on (`goodReuseExact` re-proposes the
+  // successful team as it was) — 自派自黑 all the same (bot blue 32.6%, human 5.2%).
+  if (!team.includes(me)) return obs.currentLeader === me && tuning.leaderSelfApproveOffTeam ? 'leader approves its own team (not on it)' : null;
   if (obs.currentLeader === me) return 'leader approves its own team';
   const round = obs.currentRound ?? 1;
   const k = key(team);
