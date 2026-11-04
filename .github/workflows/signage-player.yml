@@ -10,7 +10,7 @@ name: Signage player
 #
 # 兩種跑法：
 #   - 每晚（排程，和記錄員同一段時間 18:40–00:15 台灣時間）：只補「野團、等待中、9 個真人、標題沒寫不要機器人、
-#     缺人 ≥ 3 分鐘」的房間；整晚最多 2 局（repo variable SIGNAGE_PLAYER_MAX_GAMES 可改）；每局打完就離開。
+#     缺人 ≥ 3 分鐘」的房間；不限局數（repo variable SIGNAGE_PLAYER_MAX_GAMES 可設上限）；每局開始前／打完後在聊天室問「需要我離開嗎？」，有人回「離開」就走。
 #   - 指定房間（Actions → Signage player → Run workflow，手機 GitHub app 也可以）：填 room（例 Room-1460 或 1460），
 #     機器人直接去那間房，有空位就坐（不必等 3 分鐘；人數 15 秒沒變才坐，避免搶到正在進房的人）；打完 games 局離開。
 #     野團才行（私房要密碼，這裡不收密碼）。
@@ -44,7 +44,7 @@ on:
         required: false
         default: ''
       games:
-        description: '打幾局（指定房間 1–3，空白 = 1；每晚規則最多 2，空白 = 2）'
+        description: '打幾局（指定房間 1–3，空白 = 1；每晚規則空白 = 不限）'
         required: false
         default: ''
       hours:
@@ -92,7 +92,8 @@ jobs:
               hours = min(3.0, max(0.2, num(os.environ.get("HOURS_INPUT"), 1)))
           else:
               mode = "live"
-              night = int(min(2, max(0, num(os.environ.get("NIGHT_MAX"), 2))))
+              # Edward 2026-11-04：每晚局數上限拿掉（預設 99＝不限，只受時間限制；每局前後在聊天室問要不要離開）
+              night = int(min(99, max(0, num(os.environ.get("NIGHT_MAX"), 99))))
               games = int(min(night, max(0, num(os.environ.get("GAMES"), night)))) if os.environ.get("EVENT") == "workflow_dispatch" else night
               # 跑到台灣時間 00:15（UTC 16:15）；台灣 18:00 以前或 00:15 以後不跑（手動觸發可用 hours 指定）
               n = d.datetime.utcnow(); e = n.replace(hour=16, minute=15, second=0, microsecond=0)
