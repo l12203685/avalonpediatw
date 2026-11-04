@@ -80,6 +80,10 @@ interface Args {
   legacy: boolean;
   shard?: [number, number];
   out?: string;
+  /** 第 28 回合：把每個評分過的決策（局、座位、種類、角色、索引、人類／機器人優勢）寫成 JSON lines，給分項拆解用。 */
+  dump?: string;
+  /** 第 28 回合：`--bot-cache` 不比對 key，直接讀（拆解舊版快取用；預設比對）。 */
+  cacheAny?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -120,6 +124,8 @@ function parseArgs(argv: string[]): Args {
         break;
       }
       case '--out': args.out = next(); break;
+      case '--dump': args.dump = path.resolve(next()); break;
+      case '--cache-any': args.cacheAny = true; break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -172,7 +178,7 @@ async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tun
   const key = `${describeAgentTuning(tuning)}|${games.length}|${games.map((g) => g.game.id).join(',').length}`;
   if (args.botCache && fs.existsSync(args.botCache)) {
     const cached = JSON.parse(fs.readFileSync(args.botCache, 'utf8')) as { key: string; records: BotRecord[]; forward: number };
-    if (cached.key === key) {
+    if (cached.key === key || args.cacheAny) {
       console.error(`bot decisions: read ${cached.records.length} from ${args.botCache}`);
       return { records: cached.records, forward: cached.forward };
     }
@@ -224,6 +230,8 @@ interface Scored {
   human: number;
   bot: number;
   agree: boolean;
+  idx?: number;
+  botAction?: string;
 }
 
 /** 一個決策點的人類與機器人選擇 → 兩組鍵（刺殺另外算）。 */
@@ -459,7 +467,7 @@ async function main(): Promise<void> {
 
   const scored: Scored[] = [];
   for (const rec of records) {
-    const [gi, seat, t, , agent] = rec;
+    const [gi, seat, t, recIdx, agent] = rec;
     const d = games[gi];
     const g = d.game;
     const type = TYPES[t];
@@ -477,8 +485,10 @@ async function main(): Promise<void> {
     const keys = decisionKeys(d, rec);
     if (!keys) continue;
     const tab = tables.get(type)![foldOf(g.id)];
-    scored.push({ gi, seat, type, role, bucket, human: advantage(tab, keys.human), bot: advantage(tab, keys.bot), agree: keys.agree });
+    scored.push({ gi, seat, type, role, bucket, human: advantage(tab, keys.human), bot: advantage(tab, keys.bot), agree: keys.agree, idx: recIdx, botAction: agent });
   }
+
+  if (args.dump) fs.writeFileSync(args.dump, scored.map((x) => JSON.stringify(x)).join('\n') + '\n');
 
   // 一個座位一局的加總（總 PR）。
   const seatSum = new Map<string, Scored>();

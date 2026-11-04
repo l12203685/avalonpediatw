@@ -54,7 +54,7 @@
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard, redHideR1Card, redHideReuseCard } from '../RedRound2';
 import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCleanVote';
-import { loyalTailWhiteNow } from '../GoodVoteAlt';
+import { loyalTailWhiteNow, mpTailWhiteNow } from '../GoodVoteAlt';
 import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
@@ -836,6 +836,17 @@ export class ForwardAgent implements AvalonAgent {
       const gated = goodVoteGate(obs, this.gates) !== null
         || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null);
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'loyal tail white (tail leader likely red; D3 stage 1)');
+    }
+    // Round 28 (Merlin / Percival) `mpTailWhite` (GoodVoteAlt.ts; D3 stage 2, Edward 2026-11-04「忠臣做得到 梅林跟派西維爾才能做」): the same
+    // tail white, only when the public loyal view of this seat casts it — Merlin never on a team with a red he sees, Percival only when his
+    // own posterior agrees. The good vote gates and Merlin's fatal team still bind.
+    if (mpTailWhiteNow(this.baseline.tuning, obs)) {
+      const round = obs.currentRound ?? 1;
+      const team = obs.proposedTeam ?? [];
+      const gated = goodVoteGate(obs, this.gates) !== null
+        || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null)
+        || (obs.myRole === 'merlin' && merlinVoteFatal(obs));
+      if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `${obs.myRole} tail white (as the public loyal view; D3 stage 2)`);
     }
     // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior
     // gives less than the (higher) key-round threshold of being clean, on or off the team.
