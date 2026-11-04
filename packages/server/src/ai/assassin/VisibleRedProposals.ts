@@ -407,7 +407,7 @@ export const REUSE_MODE_FACTORS: Readonly<Record<number, { miss: readonly [numbe
   10: { miss: [0.14, 0.33], reuse: [1.3, 2.55], clean: [0.19, 0.8] },
   // Round 25: 9 refitted on the round-24 default (blue re-proposes the successful team as it was, `goodReuseExact=2`): 1,295
   // assassinations; passing over a clean norm team R3+ is now Merlin-ish (×1.38 — the loyal / Percival re-propose it), the R2
-  // re-proposal less so (×0.34). 5-fold cross-fitted hit +1.2 [+0.2, +2.1]pp over 9 on the same data.
+  // re-proposal less so (×0.34). 5-fold cross-fitted hit +1.2 [+0.2, +2.1]pp over 9 on the same data. Default since round 25.
   11: { miss: [0.12, 0.21], reuse: [0.34, 2.3], clean: [0.27, 1.38] },
 };
 
