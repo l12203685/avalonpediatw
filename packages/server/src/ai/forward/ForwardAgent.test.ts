@@ -533,7 +533,8 @@ describe('ForwardAgent.decide team_vote R1-R2 force normal', () => {
   });
 
   it('R2 on-team good player approves (also force normal)', () => {
-    const baseline = new HeuristicAgent('R2-on');
+    // Round 28 `loyalTailWhiteEarly` (default) casts the same white here on its own rule; this case documents the R1–R2 normal vote.
+    const baseline = new HeuristicAgent('R2-on', undefined, undefined, { ...DEFAULT_AGENT_TUNING, loyalTailWhiteEarly: false });
     baseline.onGameStart(makeObs({}));
     const fa = new ForwardAgent('R2-on', baseline);
     const obs = makeObs({

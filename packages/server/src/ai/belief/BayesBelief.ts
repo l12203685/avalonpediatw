@@ -328,13 +328,19 @@ export interface BayesOptions {
   voteTemper?: number;
   /** Round 26 `beliefTemper`: the power (0, 1] on the proposal terms; absent / 1 = none. */
   proposalTemper?: number;
+  /** Round 28 `beliefLeadTemper`: the vote / proposal powers while the viewer picks a team (`gamePhase` team_select); absent = the ones above. */
+  leadVoteTemper?: number;
+  leadProposalTemper?: number;
+  /** Round 28 `beliefLeadStrong`: while the viewer picks a team, read with the strong tables (`strongTables`) — votes and proposals keep their powers. */
+  leadStrongTables?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
 const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
-  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, opts.strongTables === true, opts.strongParts ?? 15);
+  const strong = opts.strongTables === true || (opts.leadStrongTables === true && obs.gamePhase === 'team_select');
+  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, strong, opts.strongParts ?? 15);
   try {
     return posteriorWith(obs, opts);
   } finally {
@@ -355,8 +361,12 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const morganaR1 = opts.morganaR1 === true && percival;
   const aloneCells = opts.redAloneCells === true;
   const biteMode = opts.biteCell ?? 0;
-  const temperV = opts.voteTemper !== undefined && opts.voteTemper > 0 ? Math.min(opts.voteTemper, 1) : 1;
-  const temperP = opts.proposalTemper !== undefined && opts.proposalTemper > 0 ? Math.min(opts.proposalTemper, 1) : 1;
+  // Round 28 `beliefLeadTemper`: a team pick may read the record with other powers than the votes do.
+  const lead = obs.gamePhase === 'team_select' && (opts.leadVoteTemper !== undefined || opts.leadProposalTemper !== undefined);
+  const vT = lead ? opts.leadVoteTemper : opts.voteTemper;
+  const pT = lead ? opts.leadProposalTemper : opts.proposalTemper;
+  const temperV = vT !== undefined && vT > 0 ? Math.min(vT, 1) : 1;
+  const temperP = pT !== undefined && pT > 0 ? Math.min(pT, 1) : 1;
   const policy = opts.policyVotes === true;
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
   const tempered = temperV < 1 || temperP < 1;
@@ -561,10 +571,19 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     redAloneCells: t.beliefRedAloneCells === true,
     biteCell: t.beliefBiteCell ?? 0,
     strongTables: t.beliefStrongTables === true,
+    ...(t.beliefLeadStrong === true ? { leadStrongTables: true } : {}),
     ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
     policyVotes: t.beliefPolicyVotes === true,
     ...temperOf(t.beliefTemper ?? 0),
+    ...leadTemperOf(t.beliefLeadTemper ?? 0),
   };
+}
+
+/** Round 28 `beliefLeadTemper`: the same encoding as `beliefTemper` (1 = untempered) for team picks; 0 = off (the team pick reads as the votes do). */
+function leadTemperOf(x: number): Pick<BayesOptions, 'leadVoteTemper' | 'leadProposalTemper'> {
+  if (!(x > 0)) return {};
+  const t = temperOf(x);
+  return { leadVoteTemper: t.voteTemper ?? 1, leadProposalTemper: t.proposalTemper ?? 1 };
 }
 
 /** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */

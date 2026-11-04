@@ -52,7 +52,8 @@ describe('merlinReuseNorm (Edward: 任務成功後照派是常態；梅林可以
     questHistory: [{ round: 1, team: ['P2', 'P3', 'P4'], result: 'success', failCount: 0 }],
     voteHistory: [], proposedTeam: [], lakeHistory: [],
   } as unknown as PlayerObservation;
-  const ON = { ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: true, merlinReuseNorm: 1 };
+  // Round 28 default `merlinReuseNoEarly` drops the R2 part; these cases document the round-17 norm itself.
+  const ON = { ...DEFAULT_AGENT_TUNING, merlinLoyalStyle: true, merlinReuseNorm: 1, merlinReuseNoEarly: false };
   const draft = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P4', 'P5'] };
   it('on a doomed R2 proposal Merlin re-proposes the successful R1 team (plus himself), seen red and all', () => {
     const a = merlinLoyalStyleTeam(ON, mobs, draft);

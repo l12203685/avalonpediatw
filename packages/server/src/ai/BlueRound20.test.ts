@@ -58,7 +58,7 @@ describe('merlinReuseSkip (round 20, Merlin)', () => {
 });
 
 describe('merlinReusePublic (round 20, Merlin)', () => {
-  const on = { ...DEFAULT_AGENT_TUNING, merlinReusePublic: true };
+  const on = { ...DEFAULT_AGENT_TUNING, merlinReusePublic: true, merlinReuseNoEarly: false }; // round 28 default drops the R2 re-proposal
   it('off: always true', () => {
     expect(DEFAULT_AGENT_TUNING.merlinReusePublic).toBe(false);
     expect(merlinReusePublicNow(DEFAULT_AGENT_TUNING, mobs, 4)).toBe(true);
