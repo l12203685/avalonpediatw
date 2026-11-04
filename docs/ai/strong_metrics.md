@@ -238,6 +238,11 @@ Brier 0.248，**和只猜紅方比例的常數（0.247）一樣**；log2 損失 
 
 每回合重跑這一節，前 10 名的 n × |Δp| 總和要往下走。
 
+## 5A. 紅方的同局面比較（第 27 回合，`scripts/strongRedGap.ts`）
+
+紅方任務王前 5 的紅方座位（1,093 個）在真人局換成機器人重播，同一批決策點比：投票（角色 × 局 × 在不在隊上 × 隊上有沒有看得到的隊友 × 比分）、任務牌藏牌率（只算可確定的牌）、湖的目標分類與宣告；`--selfplay` 加自我對打同格、`--top 0` = 全體真人的紅方座位。
+第 27 回合的「前／後」與分格數字見 `optimization_loop.md` 第 27 回合第 1、7 節（第 1 局單紅藏牌 強者 26.7%：機器人 58.7% → 26.7%；第 4 局單紅藏牌 強者 51.8%：0% → 48.2%；紅方持湖湖隊友 強者 17%、機器人 75%）。
+
 ## 6. 限制
 
 - 母體只有 10 人；分面前 5 是其中一半。刺中率、存活率的樣本小，前 3／前 5 對門檻（15 次、K = 10）敏感。
@@ -258,5 +263,7 @@ nice npx tsx scripts/strongSelfPlay.ts --games 500 --out /tmp/sp.json
 nice npx tsx scripts/strongLoopMetrics.ts --selfplay /tmp/sp.json --json /tmp/loop.json --replay-votes /tmp/rv.json
 nice npx tsx scripts/strongTailLeader.ts --views 10 --selfplay /tmp/sp.json --json /tmp/tail.json
 nice npx tsx scripts/strongGap.ts --selfplay /tmp/sp.json --replay-votes /tmp/rv.json --json /tmp/gap.json
+nice npx tsx scripts/strongGap.ts --selfplay /tmp/sp.json --replay-votes /tmp/rv.json --camp 紅   # 第 27 回合：只列紅方處境的前 10 名
+USE_FORWARD_REASONING=true nice npx tsx scripts/strongRedGap.ts --selfplay /tmp/sp.json [--top 0]   # 第 27 回合：紅方同局面比較（票、藏牌、湖；約 45 秒）
 npx vitest run src/ai/infl/strong.test.ts
 ```

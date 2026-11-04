@@ -118,7 +118,7 @@
 
 | # | 推理 | 實作位置 | 開關 | 狀態 |
 |---|---|---|---|---|
-| G1 | 紅方已兩紅：隊上的紅一定出失敗（收尾） | `HeuristicAgent.voteOnQuest` 的聽牌規則；`ForwardAgent.decide` 先跑藏牌／位階法 | `redRankOrder`（開）、`humanQuestCardRules`（開） | done（稽核 (p)：0 / 428 次任務；真人 5.4%） |
+| G1 | 紅方已兩紅：隊上的紅一定出失敗（收尾） | `HeuristicAgent.voteOnQuest` 的聽牌規則；`ForwardAgent.decide` 先跑藏牌／位階法 | `redRankOrder`（開）、`humanQuestCardRules`（開）、第 27 回合 `redHideR4Solo=1`（開） | done（稽核 (p)：0 / 428 次任務；真人 5.4%）；**第 27 回合起 partial**：`redHideR4Solo=1` 讓第 4 局、紅方兩紅、自己是隊上唯一看得到的紅時藏牌（一張失敗讓不了任務失敗；強者紅方 85%、全體真人 90% 這樣做），奧伯倫剛好也在隊上時就漏掉收尾：(p) 3.1%（4／127）。自我對打 +0.88pp，策略取捨，請 Edward 確認 G1 是否接受這個例外 |
 | G2 | 紅方已兩紅：紅隊長的強制提議放夠自己知道的紅 | 沒有明確規則；評分器 `threeRedWins` 偏好有隊友的隊；`RedRound4.redCleanLookTeam` | `redCleanLook`（開） | done（沒有明文規則，但稽核 (o) 0 / 105；真人 1.6%） |
 | G3 | **藍方已兩藍：不在隊上的紅方不外白全藍的隊**（過了就進刺殺；wiki-21「你知道開這顆白球不會讓任務出去」才可以開擾亂白） | 相認紅：`RedVoteCamouflage.redVoteCritical`（沒有隊友、藍方兩藍 → 反對）；**奧伯倫被排除**（`ForwardAgent.decide`：`obs.myRole === 'oberon' ? null`，`oberonNormalVote` 關），走 `biasForOberon`：出過失敗任務後 R3 起贊成 +1.5 | `redNormalVote`（1）、`oberonNormalVote`（關）；第 25 回合硬約束 `oberonMatchPoint`（開） | done（第 25 回合：奧伯倫 (f) 50% → 0%、(f′) 8% → 0%） |
 | G4 | 紅方已兩紅、隊上有隊友：外白衝（只在這隊過得了時） | `redVoteCritical` + `redKeyWhiteVote` | `redKeyWhite`（1） | done |

@@ -25,7 +25,8 @@ const base = {
 describe('assassinVoteModel=3 (round-13 generic-blue rates)', () => {
   it('flags parse; default off', () => {
     expect(parseTuningFlag('assassinVoteModel=3')).toEqual({ assassinVoteModel: 3 });
-    expect(() => parseTuningFlag('assassinVoteModel=4')).toThrow();
+    expect(parseTuningFlag('assassinVoteModel=4')).toEqual({ assassinVoteModel: 4 });
+    expect(() => parseTuningFlag('assassinVoteModel=5')).toThrow();
     expect(parseTuningFlag('assassinVoteEps=0.03')).toEqual({ assassinVoteEps: 0.03 });
     expect(LEGACY_AGENT_TUNING.assassinVoteEps).toBe(0);
     expect(LEGACY_AGENT_TUNING.redHideR1).toBe(0);
