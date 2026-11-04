@@ -17,6 +17,9 @@ import { zoneTeamLogProb, type PriorProposal } from './ZoneModel';
 import TABLE from './likelihoods.json';
 import BOT_TABLE from './likelihoods_bot.json';
 import BOT_TABLE_NEXT from './likelihoods_bot_next.json';
+import STRONG_TABLE from './likelihoods_strong.json';
+// Round 26 `beliefPolicyVotes`: the INFL vote reader. A circular import (its vote features call this module's posterior inside methods only).
+import { policyVoteLog } from '../infl/policyRead';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -38,6 +41,25 @@ const TB_CURRENT = BOT_TABLE as unknown as Table;
 /** The refit candidate (`BayesOptions.botTablesNext`): fitted on the latest defaults, measured against the current table. */
 const TB_NEXT = BOT_TABLE_NEXT as unknown as Table;
 let TB = TB_CURRENT;
+/**
+ * Round 26 `beliefStrongTables` (Edward 2026-11-04「一套讀人模型」): the tables fitted on the strong-facet players' actions, backed off to
+ * all humans (`scripts/fitBeliefLikelihoods.ts --strong`). When on it replaces the human table and the bot-table weight is not used.
+ */
+const TS = STRONG_TABLE as unknown as Table;
+/**
+ * The human-side table the posterior being computed reads per component (`T`, or `TS` with `BayesOptions.strongTables`): votes,
+ * proposals, missions, red lake; and the bot-table weight of each (0 where the strong table is read). `BayesOptions.strongParts`
+ * narrows the strong table to some components (a diagnostic of which bot-table reads carry self-play).
+ */
+let TH = T;
+let THP = T;
+let THM = T;
+let THL = T;
+let mixV = 0;
+let mixP = 0;
+let mixM = 0;
+let mixL = 0;
+let partsKey = 0;
 /** The bot table the mission cells are read from (`TB`, or the refit one alone: `BayesOptions.botMissionNext`). */
 let TBM = TB_CURRENT;
 /**
@@ -46,6 +68,7 @@ let TBM = TB_CURRENT;
  */
 let mix = 0;
 const blend = (human: number, bot: number): number => (mix > 0 ? (1 - mix) * human + mix * bot : human);
+const blendW = (m: number, human: number, bot: number): number => (m > 0 ? (1 - m) * human + m * bot : human);
 
 /**
  * Memo of the blended table lookups for the current `mix` (the posterior asks the same few hundred cells millions of
@@ -57,14 +80,22 @@ const newMemo = (): ProbMemo => ({ vote: new Float64Array(64).fill(NaN), voteLog
 let memo: ProbMemo = newMemo();
 memos.set(0, memo);
 const memosNext = new Map<number, ProbMemo>();
+const memosStrong = new Map<number, ProbMemo>();
 const memosMissionNext = new Map<number, ProbMemo>();
-function useMix(m: number, next = false, missionNext = false): void {
-  mix = m;
+function useMix(m: number, next = false, missionNext = false, strong = false, parts = 15): void {
+  const sp = strong ? (parts > 0 ? parts & 15 : 15) : 0;
+  partsKey = sp;
+  mix = sp === 15 ? 0 : m;
+  TH = sp & 1 ? TS : T; mixV = sp & 1 ? 0 : m;
+  THP = sp & 2 ? TS : T; mixP = sp & 2 ? 0 : m;
+  THM = sp & 4 ? TS : T; mixM = sp & 4 ? 0 : m;
+  THL = sp & 8 ? TS : T; mixL = sp & 8 ? 0 : m;
   TB = next ? TB_NEXT : TB_CURRENT;
   TBM = next || missionNext ? TB_NEXT : TB_CURRENT;
-  const store = next ? memosNext : missionNext ? memosMissionNext : memos;
-  let x = store.get(m);
-  if (!x) { x = newMemo(); store.set(m, x); }
+  const store = sp > 0 ? memosStrong : next ? memosNext : missionNext ? memosMissionNext : memos;
+  const mk = sp > 0 ? m * 100 + sp : m;
+  let x = store.get(mk);
+  if (!x) { x = newMemo(); store.set(mk, x); }
   memo = x;
 }
 const CAMP_INDEX: Record<string, number> = { good: 0, evil: 1, merlin: 2, morgana: 3 };
@@ -107,7 +138,7 @@ function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, app
   const idx = ci === undefined ? -1 : (keyRound ? 32 : 0) | (ci << 3) | (on ? 4 : 0) | (hasRed ? 2 : 0) | (round <= 2 ? 0 : 1);
   let p = idx >= 0 ? memo.vote[idx] : NaN;
   if (Number.isNaN(p)) {
-    p = blend(voteProbIn(T, camp, on, hasRed, round, keyRound), voteProbIn(TB, camp, on, hasRed, round, keyRound));
+    p = blendW(mixV, voteProbIn(TH, camp, on, hasRed, round, keyRound), voteProbIn(TB, camp, on, hasRed, round, keyRound));
     if (idx >= 0) memo.vote[idx] = p;
   }
   return approve ? p : 1 - p;
@@ -116,10 +147,10 @@ function voteProb(camp: string, on: boolean, hasRed: boolean, round: number, app
 /** log P(vote) of the bitten seat (`biteCell`): 1 = bot table (human if missing), 2 = human table; null when no cell. */
 const biteMemo = new Map<string, number | null>();
 function biteVoteLog(mode: number, red: boolean, approve: boolean): number | null {
-  const k = `${TB === TB_NEXT ? 'n' : 'c'}|${mode}|${red ? 1 : 0}|${approve ? 1 : 0}`;
+  const k = `${TH === TS ? 'S' : ''}${TB === TB_NEXT ? 'n' : 'c'}|${mode}|${red ? 1 : 0}|${approve ? 1 : 0}`;
   if (biteMemo.has(k)) return biteMemo.get(k)!;
   const cell = red ? 'evil' : 'good';
-  const c = (mode === 1 ? TB.voteBite?.[cell] : undefined) ?? T.voteBite?.[cell];
+  const c = (mode === 1 && TH !== TS ? TB.voteBite?.[cell] : undefined) ?? TH.voteBite?.[cell];
   const v = c ? Math.log(approve ? smooth(c[0], c[1]) : 1 - smooth(c[0], c[1])) : null;
   biteMemo.set(k, v);
   return v;
@@ -128,13 +159,15 @@ function biteVoteLog(mode: number, red: boolean, approve: boolean): number | nul
 /** log P(vote) of a red on the team, R3+, from the `voteAlone` cells (bot table only); null when the cell is missing (`redAloneCells`). */
 const aloneMemo = new Map<string, number | null>();
 function redAloneVoteLog(alone: boolean, keyRound: boolean, approve: boolean): number | null {
-  const k = `${TB === TB_NEXT ? 'n' : 'c'}|${mix}|${alone ? 'alone' : 'ally'}|${keyRound ? 'key' : 'r3'}|${approve ? 1 : 0}`;
+  const k = `${TH === TS ? 'S' : ''}${TB === TB_NEXT ? 'n' : 'c'}|${mixV}|${alone ? 'alone' : 'ally'}|${keyRound ? 'key' : 'r3'}|${approve ? 1 : 0}`;
   if (aloneMemo.has(k)) return aloneMemo.get(k)!;
-  const c = mix > 0 ? TB.voteAlone?.[`evil|${alone ? 'alone' : 'ally'}|${keyRound ? 'key' : 'r3'}`] ?? (keyRound ? TB.voteAlone?.[`evil|${alone ? 'alone' : 'ally'}|r3`] : undefined) : undefined;
+  // The strong table carries its own `voteAlone` cells (round 26); otherwise only the bot table has them.
+  const src = TH === TS ? TS : mixV > 0 ? TB : undefined;
+  const c = src ? src.voteAlone?.[`evil|${alone ? 'alone' : 'ally'}|${keyRound ? 'key' : 'r3'}`] ?? (keyRound ? src.voteAlone?.[`evil|${alone ? 'alone' : 'ally'}|r3`] : undefined) : undefined;
   let v: number | null = null;
   if (c) {
     const pBot = smooth(c[0], c[1]);
-    const p = blend(voteProbIn(T, 'evil', true, true, 3, keyRound), pBot);
+    const p = TH === TS ? pBot : blendW(mixV, voteProbIn(T, 'evil', true, true, 3, keyRound), pBot);
     v = Math.log(approve ? p : 1 - p);
   }
   aloneMemo.set(k, v);
@@ -153,7 +186,7 @@ function proposalProb(camp: string, round: number, k: number): number {
   const idx = ci === undefined || k < 0 || k > 5 ? -1 : ci * 12 + (round <= 2 ? 0 : 6) + k;
   let p = idx >= 0 ? memo.proposal[idx] : NaN;
   if (Number.isNaN(p)) {
-    p = blend(proposalProbIn(T, camp, round, k), proposalProbIn(TB, camp, round, k));
+    p = blendW(mixP, proposalProbIn(THP, camp, round, k), proposalProbIn(TB, camp, round, k));
     if (idx >= 0) memo.proposal[idx] = p;
   }
   return p;
@@ -171,7 +204,7 @@ function missionProb(round: number, reds: number, fails: number): number {
   const idx = round >= 1 && round <= 6 && reds >= 0 && reds <= 5 && fails >= 0 && fails <= 5 ? ((round - 1) * 6 + reds) * 6 + fails : -1;
   let p = idx >= 0 ? memo.mission[idx] : NaN;
   if (Number.isNaN(p)) {
-    p = blend(missionProbIn(T, round, reds, fails), missionProbIn(TBM, round, reds, fails));
+    p = blendW(mixM, missionProbIn(THM, round, reds, fails), missionProbIn(TBM, round, reds, fails));
     if (idx >= 0) memo.mission[idx] = p;
   }
   return p;
@@ -179,7 +212,7 @@ function missionProb(round: number, reds: number, fails: number): number {
 
 function redLakeProb(targetRed: boolean): number {
   const at = (t: Table): number => { const c = t.redLake[targetRed ? 'evil' : 'good'] ?? [1, 2]; return smooth(c[0], c[1]); };
-  return blend(at(T), at(TB));
+  return blendW(mixL, at(THL), at(TB));
 }
 
 function choose(n: number, k: number): number {
@@ -277,13 +310,31 @@ export interface BayesOptions {
    * white = 認壞) instead of the generic off-team cell. 1 = the bot table's cells, 2 = the human table's.
    */
   biteCell?: number;
+  /**
+   * Round 26 `beliefStrongTables`: read every action with the strong-player tables (`likelihoods_strong.json`: strong-facet top-5 seats,
+   * backed off to all humans) instead of the human / bot tables — the one reading model for everyone (Edward 2026-11-04). The bot-table
+   * weight is ignored; the key-round, red-alone and bite cells come from the strong table.
+   */
+  strongTables?: boolean;
+  /** With `strongTables`: which components read the strong table (1 votes, 2 proposals, 4 missions, 8 red lake; the rest the usual tables). Absent = all. */
+  strongParts?: number;
+  /**
+   * Round 26 `beliefPolicyVotes` (Edward 2026-11-04: read each vote as the voter's own function of the INFL he had then): every vote reads
+   * from the strong-fitted INFL policy model (`infl/policyRead.ts`, `policy_strong.json`) — roles decided jointly per world, its own Merlin
+   * layer — instead of the vote cells; the loyal Merlin layer keeps only Merlin's proposals.
+   */
+  policyVotes?: boolean;
+  /** Round 26 `beliefTemper`: the power (0, 1] on the vote terms (incl. the loyal Merlin layer); absent / 1 = none. */
+  voteTemper?: number;
+  /** Round 26 `beliefTemper`: the power (0, 1] on the proposal terms; absent / 1 = none. */
+  proposalTemper?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
 const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
-  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true);
+  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, opts.strongTables === true, opts.strongParts ?? 15);
   try {
     return posteriorWith(obs, opts);
   } finally {
@@ -304,7 +355,12 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const morganaR1 = opts.morganaR1 === true && percival;
   const aloneCells = opts.redAloneCells === true;
   const biteMode = opts.biteCell ?? 0;
-  const key = `${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}`;
+  const temperV = opts.voteTemper !== undefined && opts.voteTemper > 0 ? Math.min(opts.voteTemper, 1) : 1;
+  const temperP = opts.proposalTemper !== undefined && opts.proposalTemper > 0 ? Math.min(opts.proposalTemper, 1) : 1;
+  const policy = opts.policyVotes === true;
+  // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
+  const tempered = temperV < 1 || temperP < 1;
+  const key = `${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -334,19 +390,24 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       r3: v.round > 2,
       keyRound: keyCells && v.round > 2 && results.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2,
       biteBit: biteMode > 0 && v.attempt < 5 ? biteSeatBit(obs, v, bit) : 0,
-      voters: v.attempt >= 5 ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
+      voters: v.attempt >= 5 || policy ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
         .map((id) => ({ b: bit(id), on: v.team.includes(id), yes: v.votes[id] === true, raw: v.votes[id] })),
     };
   });
   const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
   const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
     .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
-  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound) : null;
+  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound, policy) : null;
+  const policyLog = policy ? policyVoteLog(obs) : null;
   const logW = worlds.map((w) => {
     const red = (id: string): boolean => (w & bit(id)) !== 0;
     // Percival's thumbs: the good one is Merlin, the red one Morgana (in this world). Camp index: good 0, evil 1, merlin 2, morgana 3.
     const campIx = (b: number): number => ((thumbMask & b) !== 0 ? ((w & b) !== 0 ? 3 : 2) : (w & b) !== 0 ? 1 : 0);
     let lp = 0;
+    // Round 26 `beliefTemper`: the proposal and vote terms are summed apart and tempered (α ≤ 1) — votes and proposals react to the same
+    // public record, so treating them as independent given the world counts that record many times over (infl_research.md §1.2).
+    let lpp = 0;
+    let lv = 0;
     for (const p of pre) {
       const { v, teamMask } = p;
       const hasRed = (w & teamMask) !== 0;
@@ -358,7 +419,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
           let zs = 0;
           const prior = priorOf(obs, v);
           for (const d of reds) zs += Math.exp(zoneLog(ids, v.leader, v.team, new Set(reds.filter((r) => r !== d)), prior));
-          lp += Math.log(zs / Math.max(1, reds.length));
+          if (tempered) lpp += Math.log(zs / Math.max(1, reds.length)); else lp += Math.log(zs / Math.max(1, reds.length));
         } else if (!p.doomed) {
           const k = sizeOf(w & teamMask);
           const reds = sizeOf(w & all);
@@ -374,7 +435,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
             const kk = sizeOf(w & teamMask & ~p.leaderBit);
             const ng = choose(redsAvail, kk) * choose(sizeOf(others) - redsAvail, v.team.length - 1 - kk);
             const genericP = ng > 0 ? proposalProbIx(campIx(p.leaderBit), p.r3, kk) / ng : 0;
-            lp += Math.log(earlyMix * strictP + (1 - earlyMix) * genericP);
+            if (tempered) lpp += Math.log(earlyMix * strictP + (1 - earlyMix) * genericP); else lp += Math.log(earlyMix * strictP + (1 - earlyMix) * genericP);
+          } else if (tempered) {
+            lpp += Math.log(strictP);
           } else lp += Math.log(strictP);
         }
       } else if (v.leader !== me && p.leaderOn) {
@@ -384,7 +447,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
         const goodsAvail = sizeOf(others) - redsAvail;
         const k = sizeOf(w & teamMask & ~p.leaderBit);
         const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
-        if (n > 0) lp += Math.log(proposalProbIx(campIx(p.leaderBit), p.r3, k) / n);
+        if (n > 0) {
+          if (tempered) lpp += Math.log(proposalProbIx(campIx(p.leaderBit), p.r3, k) / n); else lp += Math.log(proposalProbIx(campIx(p.leaderBit), p.r3, k) / n);
+        }
       }
       // Votes (no vote on the forced fifth proposal: `voters` is empty there).
       for (const x of p.voters) {
@@ -393,18 +458,18 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
           const k = sizeOf(w & teamMask);
           const pClean = voteProb('good', x.on, false, 3, true);
           const pYes = k === 0 ? pClean : k === 1 ? pClean / sizeOf(w & all) + STRICT_EPS : STRICT_EPS;
-          lp += Math.log(x.raw ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
+          if (tempered) lv += Math.log(x.raw ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS)); else lp += Math.log(x.raw ? Math.min(pYes, 1 - STRICT_EPS) : 1 - Math.min(pYes, 1 - STRICT_EPS));
           continue;
         }
         if (p.biteBit !== 0 && x.b === p.biteBit) {
           const lb = biteVoteLog(biteMode, (w & x.b) !== 0, x.yes);
-          if (lb !== null) { lp += lb; continue; }
+          if (lb !== null) { if (tempered) lv += lb; else lp += lb; continue; }
         }
         if (aloneCells && x.on && p.r3 && campIx(x.b) === 1) {
           const la = redAloneVoteLog(sizeOf(w & teamMask) === 1, p.keyRound, x.yes);
-          if (la !== null) { lp += la; continue; }
+          if (la !== null) { if (tempered) lv += la; else lp += la; continue; }
         }
-        lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound);
+        if (tempered) lv += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound); else lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound);
       }
     }
     for (const q of quests) {
@@ -417,7 +482,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       const p = missionProb(q.round, reds, q.fails);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
-    if (mixPre) lp += merlinMixtureLog(mixPre, w);
+    if (mixPre) { if (tempered) lv += merlinMixtureLog(mixPre, w); else lp += merlinMixtureLog(mixPre, w); }
+    if (policyLog) { if (tempered) lv += policyLog(w); else lp += policyLog(w); }
+    if (tempered) lp += temperP * lpp + temperV * lv;
     for (const l of lakes) {
       if ((w & l.hb) === 0) continue;
       const p = redLakeProb((w & l.tb) !== 0);
@@ -466,6 +533,18 @@ function merlinEarlyOptions(t: Readonly<Partial<AgentTuning>>): Pick<BayesOption
   return { merlinEarlyStrict: false, merlinEarlyMix: 1 };
 }
 
+/**
+ * Round 26 `beliefTemper`: α in (0, 1] tempers the vote terms; a value ≥ 10 is two digits — tens = vote α × 10, ones = proposal α × 10
+ * (57 = votes 0.5, proposals 0.7; a 0 digit = 1). 0 = off.
+ */
+function temperOf(x: number): Pick<BayesOptions, 'voteTemper' | 'proposalTemper'> {
+  if (!(x > 0)) return {};
+  if (x <= 1) return { voteTemper: x };
+  const v = Math.floor(x / 10) / 10;
+  const pp = (Math.round(x) % 10) / 10;
+  return { voteTemper: v > 0 ? v : 1, proposalTemper: pp > 0 ? pp : 1 };
+}
+
 /** The posterior options a seat's tuning asks for (one place for every caller). */
 export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions {
   return {
@@ -481,6 +560,10 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     morganaR1: t.percivalMorganaR1 === true,
     redAloneCells: t.beliefRedAloneCells === true,
     biteCell: t.beliefBiteCell ?? 0,
+    strongTables: t.beliefStrongTables === true,
+    ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
+    policyVotes: t.beliefPolicyVotes === true,
+    ...temperOf(t.beliefTemper ?? 0),
   };
 }
 
@@ -547,12 +630,12 @@ interface MixPre {
   mixRound: number;
 }
 
-function merlinMixturePre(obs: PlayerObservation, view: ReturnType<typeof buildCertainty>, mode: number, zone: boolean, earlyStrict: boolean, earlyMix = 1, mixRound = 0): MixPre {
+function merlinMixturePre(obs: PlayerObservation, view: ReturnType<typeof buildCertainty>, mode: number, zone: boolean, earlyStrict: boolean, earlyMix = 1, mixRound = 0, skipVotes = false): MixPre {
   const ids = obs.allPlayerIds;
   const me = obs.myPlayerId;
   // With `merlinEarlyStrict` the R1–R2 proposals of the Merlin candidate read with the strict model as well.
   const late = obs.voteHistory.filter((v) => v.round >= 3 || (earlyStrict && mode >= 2 && v.attempt < 5 && v.leader !== me))
-    .map((v) => ({ v, teamMask: view.maskOf(v.team), leaderBit: view.bitOf(v.leader), r3: v.round > 2, voted: v.round >= 3 && v.attempt < 5, votes: v.votes }));
+    .map((v) => ({ v, teamMask: view.maskOf(v.team), leaderBit: view.bitOf(v.leader), r3: v.round > 2, voted: !skipVotes && v.round >= 3 && v.attempt < 5, votes: v.votes }));
   const early = zone ? obs.voteHistory.filter((v) => v.round <= 2 && v.attempt < 5).map((v) => ({ v, teamMask: view.maskOf(v.team), prior: priorOf(obs, v) })) : [];
   const anyByLen = new Map<number, number>();
   for (const v of obs.voteHistory) anyByLen.set(v.team.length, choose(ids.length - 1, v.team.length - 1));

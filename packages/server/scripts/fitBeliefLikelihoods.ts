@@ -7,6 +7,7 @@
  *   USE_FORWARD_REASONING=true npx tsx scripts/fitBeliefLikelihoods.ts --bots 600 [--out src/ai/belief/likelihoods_bot.json]
  *     [--flag NAME[=V] ...] [--seed-prefix fitbot]
  *   npx tsx scripts/fitBeliefLikelihoods.ts --merge a.json b.json [...] --out merged.json
+ *   npx tsx scripts/fitBeliefLikelihoods.ts --strong [--strong-k 200] [--out src/ai/belief/likelihoods_strong.json]
  *
  * `--flag`（第 17 回合）：自我對打的十個座位都在正式預設上再套這些開關（例如用上一回合的紅方擬合）；`--seed-prefix` 換種子。
  * `--merge`（第 17 回合）：把幾張用同一個腳本擬合的表的次數加起來（例如幾個最近的紅方策略各擬合一張再合併，
@@ -15,6 +16,11 @@
  * `--bots N`（優化迴圈，Edward 2026-10-30：「舊的藍方沒有從派票或投票直接分辨出誰是藍誰是紅，所以紅方根本不需要隱藏」）：
  * 改從全機器人自我對打 N 局（正式預設）統計同一組表，給 `AgentTuning.beliefBotTables` 用——藍方照「目前的對手實際怎麼做」
  * 讀派隊、投票與任務牌；紅方之後得學會偽裝。每個回合採用新預設後重新擬合。
+ *
+ * `--strong`（第 26 回合，Edward 2026-11-04「一套讀人模型，擬合強者」）：資料改用 `games_cache.json`（`datasetReplay` 嚴格重播），
+ * 每個動作只數「那個動作對到的強者分面前 5」的座位（`infl/strongCohort.ts`：藍方角色的派隊／投票／湖 → 藍方任務王、梅林 → 梅林存活王、
+ * 紅方角色 → 紅方任務王），再向全體真人的同一格收縮（後退）：投票格 [強者贊成 + K·p全體, 強者票數 + K]，派隊每個 (陣營, 回合段) 加 K 個依全體分布的虛擬次數，
+ * 湖 K/10；任務牌（隊上紅數 × 失敗張數）用全體真人（一張牌是全隊紅方一起決定的）。K = `--strong-k`（預設 200）。給 `AgentTuning.beliefStrongTables`。
  *
  * 表（key → [次數, 總數] 或分布）：
  *   - vote：`陣營|在隊上|隊上有紅|回合段` → 贊成次數 / 總票數（非強制、票型可信的提議；回合段 r12 / r3）。
@@ -54,7 +60,7 @@ process.argv.forEach((a, i) => { if (a === '--flag') Object.assign(flags, parseT
 const seedPrefix = arg('--seed-prefix') ?? 'fitbot';
 const mergeAt = process.argv.indexOf('--merge');
 const mergeFiles = mergeAt >= 0 ? process.argv.slice(mergeAt + 1).filter((_, i, xs) => !xs.slice(0, i + 1).some((x) => x.startsWith('--'))) : [];
-const out = arg('--out') ?? path.resolve(__dirname, botGames > 0 ? '../src/ai/belief/likelihoods_bot.json' : '../src/ai/belief/likelihoods.json');
+const out = arg('--out') ?? path.resolve(__dirname, botGames > 0 ? '../src/ai/belief/likelihoods_bot.json' : process.argv.includes('--strong') ? '../src/ai/belief/likelihoods_strong.json' : '../src/ai/belief/likelihoods.json');
 
 class Rec extends HeuristicAgent {
   constructor(id: string) { super(id, undefined, undefined, flags); }
@@ -96,6 +102,20 @@ function loadHumanGames(): FitGame[] {
   return games;
 }
 
+/** `--strong`: games_cache.json replayed games with names, and the strong-facet filters (top 5 of the facet each action maps to). */
+interface Selector { vote: (g: number, seat: number) => boolean; lead: (g: number, seat: number) => boolean; lake: (g: number, seat: number) => boolean }
+async function loadStrongGames(): Promise<{ games: FitGame[]; strong: Selector }> {
+  const { loadStrongCohorts } = await import('./strongCohort');
+  const { humanGamesFromDataset } = await import('../src/ai/infl/strongData');
+  const { inFacetTop } = await import('../src/ai/infl/strongCohort');
+  const { cohorts, dataset } = loadStrongCohorts({});
+  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold);
+  const games = hg.map((h) => h.game).filter((g) => g.playerCount === 10);
+  const top = (kind: 'vote' | 'team' | 'lakeClaim') => (g: number, seat: number): boolean =>
+    inFacetTop(cohorts, games[g].seatRoles[seat - 1], kind, games[g].names?.[seat - 1] ?? '', 5);
+  return { games, strong: { vote: top('vote'), lead: top('team'), lake: top('lakeClaim') } };
+}
+
 /** `--merge`: add up the counts of tables fitted by this script. */
 function mergeTables(files: string[]): void {
   const sum: Record<string, unknown> & { games: number } = { source: `merged: ${files.map((f) => path.basename(f)).join(' + ')}`, games: 0, fittedAt: new Date().toISOString().slice(0, 10) };
@@ -114,10 +134,10 @@ function mergeTables(files: string[]): void {
   console.log(`wrote ${out}: ${sum.games} games from ${files.length} tables`);
 }
 
-(async () => {
-if (mergeFiles.length > 0) { mergeTables(mergeFiles); return; }
-const games: FitGame[] = botGames > 0 ? await loadBotGames(botGames) : loadHumanGames();
+type Tables = ReturnType<typeof fitTables>;
+const ALL: Selector = { vote: () => true, lead: () => true, lake: () => true };
 
+function fitTables(games: readonly FitGame[], sel: Selector = ALL) {
 const vote: Record<string, [number, number]> = {};
 const proposal: Record<string, number> = {};
 const mission: Record<string, number[]> = {};
@@ -130,13 +150,13 @@ const proposalRole: Record<string, number> = {};
 const bump = (t: Record<string, [number, number]>, k: string, hit: boolean) => { const v = (t[k] ??= [0, 0]); if (hit) v[0]++; v[1]++; };
 const bucket = (round: number) => (round <= 2 ? 'r12' : 'r3');
 
-for (const g of games) {
+games.forEach((g, gi) => {
   const red = (seat: number) => campOf(g.seatRoles[seat - 1]) === 'evil';
   // 10 人局：第 4 局要兩張失敗才算失敗。
   const failsBefore = (round: number) => g.quests.filter((q) => q.round < round && q.failCount >= (q.round === 4 ? 2 : 1)).length;
   for (const p of g.proposals) {
     const reds = p.teamSeats.filter(red).length;
-    if (p.teamSeats.includes(p.leaderSeat)) {
+    if (p.teamSeats.includes(p.leaderSeat) && sel.lead(gi, p.leaderSeat)) {
       const k = p.teamSeats.filter((s) => s !== p.leaderSeat && red(s)).length;
       const key = `${red(p.leaderSeat) ? 'evil' : 'good'}|${bucket(p.round)}|${k}`;
       proposal[key] = (proposal[key] ?? 0) + 1;
@@ -151,8 +171,9 @@ for (const g of games) {
     const failedBefore = g.quests.filter((q) => q.round < p.round && q.failCount >= (q.round === 4 ? 2 : 1));
     const lastFail = failedBefore[failedBefore.length - 1];
     const bitten = lastFail ? lastFail.teamSeats.filter((s) => !p.teamSeats.includes(s)) : [];
-    if (bitten.length === 1 && bitten[0] !== p.leaderSeat) bump(voteBite, red(bitten[0]) ? 'evil' : 'good', p.votes[bitten[0] - 1]);
+    if (bitten.length === 1 && bitten[0] !== p.leaderSeat && sel.vote(gi, bitten[0])) bump(voteBite, red(bitten[0]) ? 'evil' : 'good', p.votes[bitten[0] - 1]);
     for (let seat = 1; seat <= 10; seat++) {
+      if (!sel.vote(gi, seat)) continue;
       const key = `${red(seat) ? 'evil' : 'good'}|${p.teamSeats.includes(seat) ? 'on' : 'off'}|${reds > 0 ? 'red' : 'clean'}|${bucket(p.round)}`;
       bump(vote, key, p.votes[seat - 1]);
       if (p.round >= 3 && failsBefore(p.round) >= 2) bump(voteKey, key.split('|').slice(0, 3).join('|'), p.votes[seat - 1]);
@@ -171,13 +192,71 @@ for (const g of games) {
     dist[Math.min(5, q.failCount)]++;
   }
   for (const l of g.lakes) {
-    if (!red(l.holderSeat) || l.claim === null) continue;
+    if (!red(l.holderSeat) || l.claim === null || !sel.lake(gi, l.holderSeat)) continue;
     bump(redLake, red(l.targetSeat) ? 'evil' : 'good', l.claim === 'evil');
   }
+});
+return { vote, proposal, mission, redLake, voteRole, proposalRole, voteKey, voteAlone, voteBite };
 }
 
+/**
+ * `--strong`: the strong counts backed off to the all-human cell — [hit + K·p, n + K] for the vote-like cells, K pseudo-proposals per
+ * (camp, bucket) spread by the all-human distribution, K / 10 for the red lake; the mission cells are the all-human ones.
+ */
+function backoff(strong: Tables, all: Tables, k: number): Tables {
+  const cells = (s: Record<string, [number, number]>, a: Record<string, [number, number]>, kk: number): Record<string, [number, number]> => {
+    const out: Record<string, [number, number]> = {};
+    for (const key of new Set([...Object.keys(s), ...Object.keys(a)])) {
+      const [sh, sn] = s[key] ?? [0, 0];
+      const [ah, an] = a[key] ?? [0, 0];
+      const pa = an > 0 ? ah / an : 0.5;
+      out[key] = [Number((sh + kk * pa).toFixed(3)), sn + kk];
+    }
+    return out;
+  };
+  const dist = (s: Record<string, number>, a: Record<string, number>): Record<string, number> => {
+    const tot = new Map<string, number>();
+    for (const [key, c] of Object.entries(a)) { const pre = key.split('|').slice(0, -1).join('|'); tot.set(pre, (tot.get(pre) ?? 0) + c); }
+    const out: Record<string, number> = {};
+    for (const key of new Set([...Object.keys(s), ...Object.keys(a)])) {
+      const pre = key.split('|').slice(0, -1).join('|');
+      const t = tot.get(pre) ?? 0;
+      out[key] = Number(((s[key] ?? 0) + (t > 0 ? k * (a[key] ?? 0) / t : 0)).toFixed(3));
+    }
+    return out;
+  };
+  return {
+    vote: cells(strong.vote, all.vote, k), voteRole: cells(strong.voteRole, all.voteRole, k), voteKey: cells(strong.voteKey, all.voteKey, k),
+    voteAlone: cells(strong.voteAlone, all.voteAlone, k), voteBite: cells(strong.voteBite, all.voteBite, k / 4), redLake: cells(strong.redLake, all.redLake, k / 10),
+    proposal: dist(strong.proposal, all.proposal), proposalRole: dist(strong.proposalRole, all.proposalRole), mission: all.mission,
+  };
+}
+
+(async () => {
+if (mergeFiles.length > 0) { mergeTables(mergeFiles); return; }
+const strongMode = process.argv.includes('--strong');
+let tables: Tables;
+let games: readonly FitGame[];
+let source: string;
+if (strongMode) {
+  const k = Number(arg('--strong-k') ?? 200);
+  const loaded = await loadStrongGames();
+  games = loaded.games;
+  const all = fitTables(games);
+  const strong = fitTables(games, loaded.strong);
+  const n = (t: Record<string, [number, number]>) => Object.values(t).reduce((a, [, x]) => a + x, 0);
+  console.log(`strong votes ${n(strong.vote)} of ${n(all.vote)}; strong proposals ${Object.values(strong.proposal).reduce((a, b) => a + b, 0)} of ${Object.values(all.proposal).reduce((a, b) => a + b, 0)}; K = ${k}`);
+  tables = backoff(strong, all, k);
+  source = `games_cache.json 強者分面前 5（向全體真人收縮，K = ${k}）`;
+} else {
+  games = botGames > 0 ? await loadBotGames(botGames) : loadHumanGames();
+  tables = fitTables(games);
+  source = botGames > 0 ? '' : 'sheets_cache.json 牌譜';
+}
+const { vote, proposal, mission, redLake, voteRole, proposalRole, voteKey, voteAlone, voteBite } = tables;
+
 const flagText = Object.entries(flags).map(([k, v]) => `${k}=${String(v)}`).join(' ');
-const table = { source: botGames > 0 ? `self-play (production defaults${flagText ? ` + ${flagText}` : ''})` : 'sheets_cache.json 牌譜', games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole, voteKey, voteAlone, voteBite };
+const table = { source: botGames > 0 ? `self-play (production defaults${flagText ? ` + ${flagText}` : ''})` : source, games: games.length, fittedAt: new Date().toISOString().slice(0, 10), vote, proposal, mission, redLake, voteRole, proposalRole, voteKey, voteAlone, voteBite };
 fs.writeFileSync(out, JSON.stringify(table, null, 1) + '\n');
 console.log(`wrote ${out}: ${games.length} games`);
 for (const [k, [a, n]] of Object.entries(vote).sort()) console.log(`  vote ${k.padEnd(22)} ${(100 * a / n).toFixed(1)}% (${n})`);

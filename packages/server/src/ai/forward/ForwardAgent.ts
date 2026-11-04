@@ -54,6 +54,7 @@
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard, redHideR1Card, redHideReuseCard } from '../RedRound2';
 import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCleanVote';
+import { loyalTailWhiteNow } from '../GoodVoteAlt';
 import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteNow, redVoteCritical } from '../RedVoteCamouflage';
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
@@ -799,6 +800,16 @@ export class ForwardAgent implements AvalonAgent {
     // Round 4 (red) candidate C2 `redDivisionVote` (RedRound4.ts): the cleanest reds do not push teammates off the team.
     if (redDivisionReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
+    }
+    // Round 26 (loyal) `loyalTailWhite` (GoodVoteAlt.ts; D3 stage 1, Edward 2026-11-04): a true loyal approves an earlier non-forced
+    // proposal — on or off the team, any round — when the forced fifth's leader is likely red and this team is at least as clean as
+    // any team that leader could send. Never past the good vote gates (R1–R2: the certainty must-fail / dominance check too).
+    if (loyalTailWhiteNow(this.baseline.tuning, obs)) {
+      const round = obs.currentRound ?? 1;
+      const team = obs.proposedTeam ?? [];
+      const gated = goodVoteGate(obs, this.gates) !== null
+        || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null);
+      if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'loyal tail white (tail leader likely red; D3 stage 1)');
     }
     // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior
     // gives less than the (higher) key-round threshold of being clean, on or off the team.

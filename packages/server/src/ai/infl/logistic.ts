@@ -48,6 +48,10 @@ export interface LogisticFitOptions {
   iters?: number;
   /** 只用 `cols[i] = 1` 的特徵（其餘係數固定 0）；缺 = 全用。 */
   cols?: ArrayLike<number>;
+  /**
+   * 第 26 回合：L2 收縮的中心（缺 = 0）。給「強者的係數向全體真人的係數收縮」（後退）用；有中心時截距也向中心收縮。
+   */
+  prior?: ArrayLike<number>;
 }
 
 /**
@@ -61,7 +65,9 @@ export function fitLogisticRegression(
 ): Float64Array {
   const d = xs.length > 0 ? xs[0].length : 0;
   const beta = new Float64Array(d);
+  if (opts.prior) for (let i = 0; i < d; i++) beta[i] = opts.prior[i] ?? 0;
   if (xs.length === 0) return beta;
+  const prior = opts.prior;
   const lambda = opts.lambda ?? 1;
   const iters = opts.iters ?? 20;
   const use = opts.cols ? Array.from({ length: d }, (_, i) => opts.cols![i] !== 0) : Array.from({ length: d }, () => true);
@@ -84,7 +90,7 @@ export function fitLogisticRegression(
     for (let i = 0; i < d; i++) {
       for (let j = 0; j < i; j++) h[j * d + i] = h[i * d + j];
       if (!use[i]) { g[i] = 0; h[i * d + i] = 1; continue; }
-      if (i > 0) { g[i] -= lambda * beta[i]; h[i * d + i] += lambda; } else h[0] += 1e-6;
+      if (prior) { g[i] -= lambda * (beta[i] - (prior[i] ?? 0)); h[i * d + i] += lambda; } else if (i > 0) { g[i] -= lambda * beta[i]; h[i * d + i] += lambda; } else h[0] += 1e-6;
     }
     const step = choleskySolve(h, g, d);
     if (!step) break;

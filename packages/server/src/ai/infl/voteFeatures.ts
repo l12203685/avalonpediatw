@@ -83,6 +83,18 @@ export class FlowFeatures {
 
   teamMask(i: number): number { return this.teamMasks[i]; }
 
+  /**
+   * 第 26 回合（線上讀票）：從同一局較短的資訊流的快取接手第 0 … upTo − 1 次提議的特徵（那些特徵只看到那次提議為止的紀錄，
+   * 資訊流變長也不會變）。呼叫端保證兩個資訊流的前 upTo 次提議相同。
+   */
+  adoptFrom(other: FlowFeatures, upTo: number): void {
+    for (const [src, dst] of [[other.views, this.views], [other.bases, this.bases]] as const) {
+      for (const [k, v] of src as Map<string, unknown>) {
+        if (Number(k.slice(0, k.indexOf('|'))) < upTo) (dst as Map<string, unknown>).set(k, v);
+      }
+    }
+  }
+
   /** j 座位在第 i 次提議時的忠臣視角（世界 w 只影響 j 湖到的結果）。 */
   private seatView(i: number, j: string, w: number): SeatView {
     const key = `${i}|${j}|${lakeSig(this.flow, i, j, w)}`;

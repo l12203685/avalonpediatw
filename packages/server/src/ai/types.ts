@@ -88,6 +88,11 @@ export interface PlayerObservation {
    * (assassinator, assassination phase); id → role.
    */
   allEvilRoles?: Record<string, Role>;
+  /**
+   * 第 26 回合：這是 `loyalViewOf` 做出來的「坐在這個位置、只看公開資訊的忠臣」視角（梅林照忠臣投票、紅方照忠臣投票時用），
+   * 不是真的忠臣。只給「只限真的忠臣」的開關分辨（`loyalTailWhite`，D3 第一階段：梅林／派西之後另外開）。
+   */
+  publicLoyalView?: boolean;
 
   // Dynamic game state
   currentRound:  number;

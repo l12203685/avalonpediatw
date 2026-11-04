@@ -9,6 +9,7 @@
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow } from './belief/BayesBelief';
+import { goodVoteAltKeeps } from './GoodVoteAlt';
 
 /** R4 at 7+ players: a mission needs two fail cards (round 24 `goodR4TwoFail`). */
 function twoFailRound(obs: PlayerObservation): boolean {
@@ -47,7 +48,8 @@ export function goodCleanVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerOb
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
   const p = teamSafe(tuning, obs, team, 2);
-  return p !== null && p < tau;
+  // 第 26 回合 `goodVoteAlt`：否決換來的隊（下一任隊長派的）不比這隊乾淨 → 不投黑。
+  return p !== null && p < tau && !goodVoteAltKeeps(tuning, obs, p);
 }
 
 /**
@@ -125,5 +127,5 @@ export function goodKeyVoteReject(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
   const p = teamSafe(tuning, obs, team, 1);
-  return p !== null && p < tau;
+  return p !== null && p < tau && !goodVoteAltKeeps(tuning, obs, p);
 }
