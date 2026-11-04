@@ -19,6 +19,7 @@
  */
 
 import type { AvalonAgent, PlayerObservation } from './types';
+import { redLakeHumanTarget } from './RedRound29';
 import {
   lakeDeclareLiePrior,
   lakeDeclareLieRoleRate,
@@ -275,7 +276,9 @@ export function pickLakeTargetForTeam(
   // flag) when on. Deterministic; no Math.random calls, so the legacy
   // call order is untouched when the switch is off.
   if (tuning.evilLakeHumanStrategy) {
-    return pickEvilLakeTargetHuman(obs, validTargets, evilLakeHumanOptionsFor(tuning), beliefOptionsFrom(tuning));
+    const ruled = pickEvilLakeTargetHuman(obs, validTargets, evilLakeHumanOptionsFor(tuning), beliefOptionsFrom(tuning));
+    // ── AgentTuning.redLakeHuman（第 29 回合紅方：強者紅方挑湖的模型；1、2 和上面的裁定不符，只量）──
+    return redLakeHumanTarget(tuning, obs, validTargets, ruled) ?? ruled;
   }
 
   return pickEvilLakeTargetLegacy(obs, validTargets, beliefOptionsFrom(tuning));

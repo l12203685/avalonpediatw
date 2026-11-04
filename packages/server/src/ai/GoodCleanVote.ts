@@ -7,6 +7,7 @@
  * 梅林看得到紅，不用這條；只會把贊成改成反對，不會反過來。
  */
 import type { AgentTuning } from './AgentTuning';
+import { redTailVoteTau } from './RedRound29';
 import type { PlayerObservation } from './types';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow } from './belief/BayesBelief';
 import { goodVoteAltKeeps } from './GoodVoteAlt';
@@ -65,7 +66,9 @@ export function goodTailVote(tuning: Readonly<AgentTuning>, obs: PlayerObservati
   // 第 15 回合（第 1B 節拆角色）：派西可以不用這條（`goodTailVoteLoyalOnly`），或用自己的門檻（`goodTailVotePercival`）。
   const percival = obs.myRole === 'percival';
   if (percival && tuning.goodTailVoteLoyalOnly) return null;
-  const tau = percival && (tuning.goodTailVotePercival ?? 0) > 0 && (tuning.goodTailVote ?? 0) > 0 ? tuning.goodTailVotePercival : tuning.goodTailVote ?? 0;
+  // 第 29 回合 `redTailVote`：紅方照忠臣投票時用自己的外白門檻。
+  const tau = redTailVoteTau(tuning, obs)
+    ?? (percival && (tuning.goodTailVotePercival ?? 0) > 0 && (tuning.goodTailVote ?? 0) > 0 ? tuning.goodTailVotePercival : tuning.goodTailVote ?? 0);
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return null;
   if (obs.myRole !== 'loyal' && !percival) return null;
   if ((obs.currentRound ?? 1) < 3 || (obs.failCount ?? 0) >= 4) return null;
