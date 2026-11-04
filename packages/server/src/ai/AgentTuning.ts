@@ -826,6 +826,11 @@ export interface AgentTuning {
    */
   leaderSelfApproveOffTeam: boolean;
   /**
+   * 第 25 回合硬約束（`RedRound25.redMatchPointApprove`；盤點 L7、G1，稽核 (q)）：紅方已兩紅、自己在非強制的隊上、自己＋看得到的隊友就夠讓這隊失敗 → 投白
+   * （內黑 = 放棄收尾；稽核莫德雷德 13.1%、奧伯倫 9.2%，刺客／莫甘娜 0%）。預設開；這個欄位只為了量測與舊表（關）。
+   */
+  redMatchPointApprove: boolean;
+  /**
    * 第 25 回合紅方・奧伯倫（`RedRound25.oberonBiteRejectNow`；盤點 E3，稽核 (e)；Edward 2026-11-03「派 2350 就是代表在鐵咬 6 家，6 還開白球就代表 6 是認壞了」）：
    * 被鐵咬（這隊保留一次失敗任務的 |隊伍| − 失敗張數 人、拿掉的人裡有他）的奧伯倫投黑，不再照 `biasForOberon` 出過失敗後的贊成 +1.5。
    * 1 = 一律；2 = 只有那次失敗任務的下一局（真人紅方被鐵咬隔一局贊成 7.4%、更後面 42.4%）；3 = 1 的 50%（第 1C 節）。0 = 關。
@@ -959,6 +964,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'oberonMatchPoint',
   'redVouchConsistent',
   'leaderSelfApproveOffTeam',
+  'redMatchPointApprove',
   'oberonBiteReject',
   'redLeadConsistent',
   'redReuseExact',
@@ -1076,6 +1082,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   oberonMatchPoint: false,
   redVouchConsistent: false,
   leaderSelfApproveOffTeam: false,
+  redMatchPointApprove: false,
   oberonBiteReject: 0,
   redLeadConsistent: 0,
   redReuseExact: 0,
@@ -1341,6 +1348,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   oberonMatchPoint: true,
   redVouchConsistent: true,
   leaderSelfApproveOffTeam: true,
+  redMatchPointApprove: true,
   oberonBiteReject: 0,
   redLeadConsistent: 0,
   redReuseExact: 0,
@@ -1458,6 +1466,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   oberonMatchPoint: 'AVALON_TUNING_OBERON_MATCH_POINT',
   redVouchConsistent: 'AVALON_TUNING_RED_VOUCH_CONSISTENT',
   leaderSelfApproveOffTeam: 'AVALON_TUNING_LEADER_SELF_APPROVE_OFF_TEAM',
+  redMatchPointApprove: 'AVALON_TUNING_RED_MATCH_POINT_APPROVE',
   oberonBiteReject: 'AVALON_TUNING_OBERON_BITE_REJECT',
   redLeadConsistent: 'AVALON_TUNING_RED_LEAD_CONSISTENT',
   redReuseExact: 'AVALON_TUNING_RED_REUSE_EXACT',

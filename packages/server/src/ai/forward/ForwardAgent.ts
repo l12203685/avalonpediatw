@@ -59,7 +59,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
-import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
+import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -738,6 +738,9 @@ export class ForwardAgent implements AvalonAgent {
     }
     if (oberonBiteRejectNow(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'oberon bitten (鐵咬): reject the biting team');
+    }
+    if (redMatchPointApprove(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red match point: on the team with enough known reds (hard constraint)');
     }
     if (redVouchOnTeamReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red lake holder: own declared-red seat on the team (hard constraint)');

@@ -10,7 +10,7 @@ import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
 import { withSeededRandom } from './benchmark/agreement';
 import {
-  bitingQuests, keepsRedVouch, oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam,
+  bitingQuests, keepsRedVouch, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam,
   redVouchKeptTeam, redVouchOnTeamReject,
 } from './RedRound25';
 import { leadConsistentSkip, leaderSelfApproveReason } from './GoodLeadConsistent';
@@ -233,5 +233,29 @@ describe('assassinReuseRead=11 (refit on the round-24 default)', () => {
     expect(parseTuningFlag('assassinReuseRead=11')).toEqual({ assassinReuseRead: 11 });
     expect(REUSE_MODE_FACTORS[11].clean[1]).toBeGreaterThan(1); // passing over a clean norm team R3+ now reads Merlin-ish
     expect(REUSE_MODE_FACTORS[11].reuse[0]).toBeLessThan(REUSE_MODE_FACTORS[9].reuse[0]);
+  });
+});
+
+describe('redMatchPointApprove (hard constraint)', () => {
+  // Mordred P8 on an R3 team after two fails; R3 needs one fail card.
+  const mp = (over: Partial<PlayerObservation> = {}): PlayerObservation => ({
+    myPlayerId: 'P8', myRole: 'mordred', myTeam: 'evil', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P1', 'P2'],
+    currentRound: 3, currentLeader: 'P5', gamePhase: 'team_vote', failCount: 0, questResults: ['fail', 'fail'],
+    questHistory: [], voteHistory: [], proposedTeam: ['P3', 'P5', 'P6', 'P8'], lakeHistory: [], myLakeResults: [],
+    ...over,
+  }) as unknown as PlayerObservation;
+  it('on the team at red match point with enough known reds → white', () => {
+    expect(redMatchPointApprove(T(), mp())).toBe(true);
+    expect(redMatchPointApprove(T({ redMatchPointApprove: false }), mp())).toBe(false);
+    const agent = new ForwardAgent('P8', new HeuristicAgent('P8', undefined, undefined, T()));
+    expect(withSeededRandom('r25-q', () => agent.act(mp()))).toEqual({ type: 'team_vote', vote: true });
+  });
+  it('not before two fails, off the team, forced, or when R4 needs two and it sees only itself', () => {
+    expect(redMatchPointApprove(T(), mp({ questResults: ['fail', 'success'] }))).toBe(false);
+    expect(redMatchPointApprove(T(), mp({ proposedTeam: ['P3', 'P5', 'P6', 'P7'] }))).toBe(false);
+    expect(redMatchPointApprove(T(), mp({ failCount: 4 }))).toBe(false);
+    const r4 = { currentRound: 4, questResults: ['fail', 'success', 'fail'] as const, proposedTeam: ['P3', 'P5', 'P6', 'P7', 'P8'] };
+    expect(redMatchPointApprove(T(), mp(r4 as never))).toBe(false);
+    expect(redMatchPointApprove(T(), mp({ ...r4, proposedTeam: ['P1', 'P5', 'P6', 'P7', 'P8'] } as never))).toBe(true);
   });
 });

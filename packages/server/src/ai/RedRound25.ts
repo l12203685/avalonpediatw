@@ -14,6 +14,9 @@
  *     是在 `evilVouchFollowUp` 的派隊約束之後換隊，換掉了自己宣藍的人；(2) 在隊上、隊上有自己宣紅的人 → 反對
  *     （非強制、紅方未滿兩紅；紅方已兩紅時自己一張失敗就三紅，宣告已經沒有意義）。隊外的那一半早就是 `evilVouchVoteRule`。
  *
+ *   - `redMatchPointApprove`（L7、G1；稽核 (q)）：紅方已兩紅、自己在非強制的隊上、自己＋看得到的隊友就夠讓這隊失敗 → 投白。這隊過了、出失敗就三紅；
+ *     內黑等於放棄收尾（wiki-11「紅方在車上內黑 = 放棄一次出失敗」）。稽核：莫德雷德 13.1%、奧伯倫 9.2%，刺客／莫甘娜 0%（莫德雷德的評分器不把自己算進隊上的紅）。
+ *
  * 開關（預設關，走勝率協定）：
  *   - `oberonBiteReject`（E3）：奧伯倫出過失敗任務後第 3 局起「贊成」一律加 1.5（`RoleStrategy.biasForOberon`，舊的「出過失敗就無限開白」），
  *     被鐵咬（這隊保留那次失敗任務的 |隊伍| − 失敗張數 人、拿掉的人裡有他，他不是隊長、不在隊上）也投白：稽核 71–76%，真人奧伯倫 22.7%、
@@ -152,4 +155,19 @@ export function redReuseExactTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if (obs.voteHistory.some((v) => v.round === round && key(v.team) === k)) return action;
   if (key(action.teamIds) === k || !keepsRedVouch(tuning, obs, team)) return action;
   return { type: 'team_select', teamIds: team };
+}
+
+/**
+ * Hard constraint `redMatchPointApprove` (L7 / G1, audit (q)): red has two fails and this red sits on a non-forced team whose reds
+ * it knows (itself and the teammates it sees) can fail it on their own → white (the team passing ends the game for red).
+ */
+export function redMatchPointApprove(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  if (!tuning.redMatchPointApprove || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil') return false;
+  if ((obs.failCount ?? 0) >= 4) return false;
+  const team = obs.proposedTeam ?? [];
+  const me = obs.myPlayerId;
+  if (!team.includes(me)) return false;
+  if (obs.questResults.filter((r) => r === 'fail').length < 2) return false;
+  const known = new Set([me, ...obs.knownEvils]);
+  return team.filter((id) => known.has(id)).length >= failsRequired(obs, obs.currentRound ?? 1);
 }
