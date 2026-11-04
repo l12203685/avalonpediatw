@@ -59,7 +59,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
-import { oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
+import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
@@ -2200,7 +2200,9 @@ export class ForwardAgent implements AvalonAgent {
     const base = buildTeamSignals(proposedTeam, obs, pyramid, this.lakeRuleCheck(obs), passRankApplies(this.baseline.tuning.teamPassRank, obs, 'team_vote'));
     // Round 23 (red) `redSelfOnTeam`: a red on the team is a red on the team — the scorer's red count leaves the voter out, so a
     // lone Mordred read his own team as one without a red and rejected it (R3+; Oberon has his own vote rules).
-    const selfRed = this.baseline.tuning.redSelfOnTeam && obs.myTeam === 'evil' && obs.myRole !== 'oberon'
+    // Round 25 `redSelfOnTeamHalf` (第 1C 節): the same for half of the states (seat, round, attempt, team hash).
+    const selfRedOn = this.baseline.tuning.redSelfOnTeam || (this.baseline.tuning.redSelfOnTeamHalf && halfOf(`${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${[...proposedTeam].sort().join(',')}|redselfonteam`));
+    const selfRed = selfRedOn && obs.myTeam === 'evil' && obs.myRole !== 'oberon'
       && proposedTeam.includes(obs.myPlayerId) && (obs.currentRound ?? 1) >= 3;
     const signals = selfRed ? { ...base, includesKnownEvil: true, numKnownEvilOnTeam: base.numKnownEvilOnTeam + 1 } : base;
 

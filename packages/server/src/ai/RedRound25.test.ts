@@ -69,7 +69,9 @@ describe('flags', () => {
     expect(() => parseTuningFlag('oberonBiteReject=4')).toThrow();
     expect(parseTuningFlag('redLeadConsistent')).toEqual({ redLeadConsistent: 1 });
     expect(parseTuningFlag('redReuseExact=2')).toEqual({ redReuseExact: 2 });
-    expect(() => parseTuningFlag('redReuseExact=3')).toThrow();
+    expect(parseTuningFlag('redReuseExact=3')).toEqual({ redReuseExact: 3 });
+    expect(() => parseTuningFlag('redReuseExact=4')).toThrow();
+    expect(parseTuningFlag('redSelfOnTeamHalf')).toEqual({ redSelfOnTeamHalf: true });
     expect(parseTuningFlag('oberonMatchPoint=0')).toEqual({ oberonMatchPoint: false });
   });
 });

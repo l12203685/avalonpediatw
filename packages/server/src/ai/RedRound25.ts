@@ -21,7 +21,7 @@
  *   - `redLeadConsistent`（S5、稽核 (b)）：紅方隊長的照派加分（`TeamReuse`）不拿這一局「自己在隊上、投了黑」的被否決隊當參考
  *     （藍方第 24 回合 `goodLeadConsistent` 的紅方版；稽核紅方 55%、奧伯倫 90%，真人 4.2%）。
  *   - `redReuseExact`（第 24 回合 `goodReuseExact` 的紅方版；真人紅方隊長多半這樣做）：上一局任務成功、沒有失敗牌、這一局還沒有人派過那一隊，
- *     紅方隊長不在那一隊上：1 = 人數相同照原樣派、多一人派那一隊＋自己；2 = 只有多一人時（自己一定在隊上）。藍方已兩藍時不適用
+ *     紅方隊長不在那一隊上：1 = 人數相同照原樣派、多一人派那一隊＋自己；2 = 只有多一人時（自己一定在隊上）；3 = 1 的 50%（第 1C 節）。藍方已兩藍時不適用
  *     （紅方隊長不派自己視角沒有紅的隊）；仍守住自己的湖宣告。照原樣派、自己不在隊上的那一手，隊長自己投白是硬約束 `leaderSelfApproveOffTeam`（`GoodLeadConsistent.ts`）。
  */
 import { AVALON_CONFIG } from '@avalon/shared';
@@ -40,6 +40,11 @@ function hash01(text: string): number {
   let h = 0x811c9dc5;
   for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
   return (h % 10000) / 10000;
+}
+
+/** 第 1C 節的 50%：同一個局面（雜湊文字）每次一樣。 */
+export function halfOf(text: string): boolean {
+  return hash01(text) < 0.5;
 }
 
 /**
@@ -139,7 +144,8 @@ export function redReuseExactTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if (last.team.includes(me)) return action;
   const size = action.teamIds.length;
   let team: string[] | null = null;
-  if (mode === 1 && last.team.length === size) team = [...last.team];
+  if (mode === 3 && !halfOf(`${me}|${round}|${obs.failCount ?? 0}|redreuseexact`)) return action;
+  if ((mode === 1 || mode === 3) && last.team.length === size) team = [...last.team];
   else if (last.team.length + 1 === size) team = [me, ...last.team];
   if (!team) return action;
   const k = key(team);

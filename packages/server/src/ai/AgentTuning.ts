@@ -838,9 +838,13 @@ export interface AgentTuning {
   redLeadConsistent: number;
   /**
    * 第 25 回合紅方（`RedRound25.redReuseExactTeam`；第 24 回合 `goodReuseExact` 的紅方版）：上一局任務成功（沒有失敗牌）、這一局還沒有人派過那一隊、
-   * 紅方隊長不在那一隊上、藍方未滿兩藍時，1 = 人數相同照原樣派（自己不在隊上；隊長自己投白是 `leaderSelfApproveOffTeam`）、多一人派那一隊＋自己；2 = 只有多一人時。0 = 關。
+   * 紅方隊長不在那一隊上、藍方未滿兩藍時，1 = 人數相同照原樣派（自己不在隊上；隊長自己投白是 `leaderSelfApproveOffTeam`）、多一人派那一隊＋自己；2 = 只有多一人時；3 = 1 的 50%（第 1C 節）。0 = 關。
    */
   redReuseExact: number;
+  /**
+   * 第 25 回合紅方（第 1C 節）：`redSelfOnTeam` 的 50%——照座位、局、第幾次提議與隊伍雜湊，一半的局面把在隊上的自己算進隊上的紅。false = 關。
+   */
+  redSelfOnTeamHalf: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -958,6 +962,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'oberonBiteReject',
   'redLeadConsistent',
   'redReuseExact',
+  'redSelfOnTeamHalf',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -1074,6 +1079,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   oberonBiteReject: 0,
   redLeadConsistent: 0,
   redReuseExact: 0,
+  redSelfOnTeamHalf: false,
 });
 
 /**
@@ -1338,6 +1344,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   oberonBiteReject: 0,
   redLeadConsistent: 0,
   redReuseExact: 0,
+  redSelfOnTeamHalf: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1454,6 +1461,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   oberonBiteReject: 'AVALON_TUNING_OBERON_BITE_REJECT',
   redLeadConsistent: 'AVALON_TUNING_RED_LEAD_CONSISTENT',
   redReuseExact: 'AVALON_TUNING_RED_REUSE_EXACT',
+  redSelfOnTeamHalf: 'AVALON_TUNING_RED_SELF_ON_TEAM_HALF',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1603,7 +1611,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'redReuseExact') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`redReuseExact needs 0–2, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`redReuseExact needs 0–3, got "${raw}"`);
     return { redReuseExact: value };
   }
   if (name === 'goodLeadConsistent') {
