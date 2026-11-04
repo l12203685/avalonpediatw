@@ -49,8 +49,14 @@ describe('round 26 tuning fields', () => {
       expect(t.beliefPolicyVotes).toBe(false);
     }
     expect(LEGACY_AGENT_TUNING.beliefStrongTables).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.beliefStrongTables).toBe(false);
     expect(LEGACY_AGENT_TUNING.beliefUnified).toBe(false);
     expect(LEGACY_AGENT_TUNING.beliefTemper).toBe(0);
+    // Round 26 adoption (stage 2, pooled 18000 seeds +4.09pp): the calibrated, unified posterior with re-set thresholds.
+    expect(DEFAULT_AGENT_TUNING.beliefUnified).toBe(true);
+    expect(DEFAULT_AGENT_TUNING.beliefTemper).toBe(73);
+    expect(DEFAULT_AGENT_TUNING.goodCleanVote).toBe(0.3);
+    expect(DEFAULT_AGENT_TUNING.goodKeyVote).toBe(0.3);
     expect(parseTuningFlag('goodVoteAlt').goodVoteAlt).toBe(1);
     expect(parseTuningFlag('goodVoteAlt=0.7').goodVoteAlt).toBe(0.7);
     expect(parseTuningFlag('loyalTailWhite').loyalTailWhite).toBe(0.7);

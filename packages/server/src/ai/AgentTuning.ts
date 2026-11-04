@@ -423,6 +423,7 @@ export interface AgentTuning {
    * 的比例 40%，機器人 2%，紅隊長的隊幾乎都放行。
    * 第 3 回合採用 0.25；第 18 回合改成 0.45（第 17 回合篩選 +1.4；本回合確認合併：對 `merlinReuseNorm=2`＋關鍵局票格的兩組新種子 4000 組
    * +1.1 [+0.1, +2.0]pp、對最後的新預設 6000 組 +1.7 [+0.9, +2.5]pp；所有新種子 14000 組 +1.2 [+0.7, +1.8]pp）。
+   * 第 26 回合改成 0.3（和 `beliefTemper=73` 一起：校準後的後驗不再把可疑的隊估成乾淨，同一個門檻會多出很多內黑；見 `beliefTemper`）。
    */
   goodCleanVote: number;
   /**
@@ -580,7 +581,8 @@ export interface AgentTuning {
    * 非強制時，忠臣與派西（在不在隊上都一樣）估「這隊沒有紅」的機率低於這個門檻就投黑——一個紅就輸掉整場，門檻比平常的
    * `goodCleanVote` 高；梅林在關鍵局內黑看得到紅的隊（Edward 10/30 裁定允許）也因此混在藍方的內黑裡。
    * 第 13 回合採用 0.5（和 `goodTailVote=0.85` 一起）。0.65：第 20 回合兩組 6000 組各 +0.47（下界 −0.06／−0.04），第 22 回合第三組 6000 組 +0.12 [−0.44, +0.67]，
-   * 三組合併 18000 組 +0.35 [+0.05, +0.65]——不採用，留給第 2 階段。
+   * 三組合併 18000 組 +0.35 [+0.05, +0.65]——不採用，留給第 2 階段。第 26 回合：0.65 把強者量尺差距第 1 名（在隊上內黑太多）往反方向推，不確認。
+   * 第 26 回合改成 0.3（和 `beliefTemper=73` 一起；見那一欄）。
    */
   goodKeyVote: number;
   /**
@@ -882,10 +884,14 @@ export interface AgentTuning {
   /**
    * 第 26 回合藍方・信念（infl_research.md 第 1.5 節；Edward 2026-11-04「推理畫面的金字塔與決策用同一個後驗」）：金字塔（推理畫面上每人紅的機率、
    * ForwardAgent 候選的嫌疑分數）改用和投票門檻、派隊相同的後驗選項（`bayesOptionsOf(tuning)`），不再是「真人表、沒有關鍵局格與隊友格」的另一個後驗。false = 關。
+   * 第 26 回合採用（和 `beliefTemper=73` 一起；單獨篩選 −0.4 [−1.7, +0.8]pp，中性）。
    */
   beliefUnified: boolean;
   /**
-   * 第 26 回合藍方・信念（校準）：投票、派隊的概似取 α 次方（α ≤ 1）。票與派隊都是對同一份公開紀錄的反應，當成「給定世界彼此獨立」
+   * 第 26 回合藍方・信念（校準）：投票、派隊的概似取 α 次方（α ≤ 1）。
+   * 第 26 回合採用 73（投票 0.7、派隊 0.3），和 `beliefUnified`、`goodCleanVote=0.3`、`goodKeyVote=0.3` 一起（第 2 階段）：篩選 +3.8 [+1.5, +6.1]pp，
+   * 三組各 6000 組種子 +3.53 [+2.21, +4.86]／+3.22 [+1.90, +4.54]／+5.53 [+4.24, +6.82]（合併 18000 組 +4.09 [+3.34, +4.85]pp；三紅率約 39 → 32%、刺中率約 −1pp）；
+   * 真人局 log2 P(W*) −7.88 → −6.91、尾家是紅的 Brier 0.2473（＝常數，沒有鑑別力）→ 0.2308；自我對打 log2 P(W*) −6.22 → −5.47。票與派隊都是對同一份公開紀錄的反應，當成「給定世界彼此獨立」
    * 會把同一份紀錄算很多次（infl_research.md 第 1.2 節「重複計算」），真人局的後驗因此過度自信（log2 P(W*) 比不讀動作還差）。
    * 值 ≤ 1 = 投票的 α；≥ 10 = 兩位數（十位 = 投票 α×10、個位 = 派隊 α×10，57 = 投票 0.5、派隊 0.7；0 = 不調）。0 = 關。
    */
@@ -1360,7 +1366,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redCleanApprove: 0,
   bayesThumbRoles: false,
   merlinCoverRate: 1,
-  goodCleanVote: 0.45,
+  goodCleanVote: 0.3,
   goodCleanVoteLoyalOnly: false,
   goodCleanVotePercivalOnly: false,
   goodCleanVoteMaxAttempt: 4,
@@ -1393,7 +1399,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   assassinLakeRead: 0,
   redCleanLookBot: false,
   mordredHideR1: true,
-  goodKeyVote: 0.5,
+  goodKeyVote: 0.3,
   merlinLakeLoyal: false,
   assassinVoteEps: 0,
   redHideR1: 1,
@@ -1440,8 +1446,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   loyalTailWhiteLast: false,
   beliefStrongTables: false,
   beliefStrongParts: 0,
-  beliefUnified: false,
-  beliefTemper: 0,
+  beliefUnified: true,
+  beliefTemper: 73,
   merlinReuseExact: false,
   merlinReuseNoEarly: false,
   beliefPolicyVotes: false,
