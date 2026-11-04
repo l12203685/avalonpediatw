@@ -740,7 +740,7 @@ export class ForwardAgent implements AvalonAgent {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'oberon bitten (鐵咬): reject the biting team');
     }
     if (redMatchPointApprove(this.baseline.tuning, obs)) {
-      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red match point: on the team with enough known reds (hard constraint)');
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red match point: on the team with enough known reds');
     }
     if (redVouchOnTeamReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red lake holder: own declared-red seat on the team (hard constraint)');

@@ -236,7 +236,7 @@ describe('assassinReuseRead=11 (refit on the round-24 default)', () => {
   });
 });
 
-describe('redMatchPointApprove (hard constraint)', () => {
+describe('redMatchPointApprove (knob)', () => {
   // Mordred P8 on an R3 team after two fails; R3 needs one fail card.
   const mp = (over: Partial<PlayerObservation> = {}): PlayerObservation => ({
     myPlayerId: 'P8', myRole: 'mordred', myTeam: 'evil', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P1', 'P2'],
@@ -245,17 +245,19 @@ describe('redMatchPointApprove (hard constraint)', () => {
     ...over,
   }) as unknown as PlayerObservation;
   it('on the team at red match point with enough known reds → white', () => {
-    expect(redMatchPointApprove(T(), mp())).toBe(true);
-    expect(redMatchPointApprove(T({ redMatchPointApprove: false }), mp())).toBe(false);
-    const agent = new ForwardAgent('P8', new HeuristicAgent('P8', undefined, undefined, T()));
+    expect(redMatchPointApprove(T({ redMatchPointApprove: 1 }), mp())).toBe(true);
+    expect(redMatchPointApprove(T(), mp())).toBe(false);
+    const agent = new ForwardAgent('P8', new HeuristicAgent('P8', undefined, undefined, T({ redMatchPointApprove: 1 })));
     expect(withSeededRandom('r25-q', () => agent.act(mp()))).toEqual({ type: 'team_vote', vote: true });
   });
   it('not before two fails, off the team, forced, or when R4 needs two and it sees only itself', () => {
-    expect(redMatchPointApprove(T(), mp({ questResults: ['fail', 'success'] }))).toBe(false);
-    expect(redMatchPointApprove(T(), mp({ proposedTeam: ['P3', 'P5', 'P6', 'P7'] }))).toBe(false);
-    expect(redMatchPointApprove(T(), mp({ failCount: 4 }))).toBe(false);
+    const on = T({ redMatchPointApprove: 1 });
+    expect(redMatchPointApprove(on, mp({ questResults: ['fail', 'success'] }))).toBe(false);
+    expect(redMatchPointApprove(on, mp({ proposedTeam: ['P3', 'P5', 'P6', 'P7'] }))).toBe(false);
+    expect(redMatchPointApprove(on, mp({ failCount: 4 }))).toBe(false);
     const r4 = { currentRound: 4, questResults: ['fail', 'success', 'fail'] as const, proposedTeam: ['P3', 'P5', 'P6', 'P7', 'P8'] };
-    expect(redMatchPointApprove(T(), mp(r4 as never))).toBe(false);
-    expect(redMatchPointApprove(T(), mp({ ...r4, proposedTeam: ['P1', 'P5', 'P6', 'P7', 'P8'] } as never))).toBe(true);
+    expect(redMatchPointApprove(on, mp(r4 as never))).toBe(false);
+    expect(redMatchPointApprove(on, mp({ ...r4, proposedTeam: ['P1', 'P5', 'P6', 'P7', 'P8'] } as never))).toBe(true);
+    expect(parseTuningFlag('redMatchPointApprove=2')).toEqual({ redMatchPointApprove: 2 });
   });
 });
