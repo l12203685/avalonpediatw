@@ -93,6 +93,10 @@ export interface PlayerObservation {
    * 不是真的忠臣。只給「只限真的忠臣」的開關分辨（`loyalTailWhite`，D3 第一階段：梅林／派西之後另外開）。
    */
   publicLoyalView?: boolean;
+  /**
+   * 第 29 回合：這是紅方照忠臣投票（`redNormalVote`）的視角（`publicLoyalView` 也是 true）。只給紅方自己的外白門檻 `redTailVote` 分辨。
+   */
+  redLoyalView?: boolean;
 
   // Dynamic game state
   currentRound:  number;

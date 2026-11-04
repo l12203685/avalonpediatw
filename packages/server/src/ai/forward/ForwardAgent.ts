@@ -61,6 +61,7 @@ import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
+import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
@@ -766,8 +767,20 @@ export class ForwardAgent implements AvalonAgent {
     if (redVouchOnTeamReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red lake holder: own declared-red seat on the team (hard constraint)');
     }
+    // Round 29 `mordredSoloApprove` (RedRound29.ts; inventory L7): the scorer counts the reds on a team without the voter, and
+    // Mordred's bias only adds approve with a teammate on it — the lone Mordred inner-blacked a team his own card can fail.
+    if (mordredSoloApproveVote(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'mordred on the team without a teammate: approve');
+    }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
+      // Round 29 `redMatchPointFail` (RedRound29.ts; inventory G1): red has two fails and the reds it knows can fail this mission —
+      // every one of them fails (the rank order's hidden card buys nothing once the fail ends the game).
+      const mp = redMatchPointFailCard(this.baseline.tuning, obs);
+      if (mp) return this.ruleDecision(obs, { type: 'quest_vote', vote: mp }, 'red match point: every known red fails');
+      // Round 29 `redStackHide` (RedRound29.ts): two or more recognised reds on an R2–R3 mission all hide at the human rate.
+      const stack = redStackHideCard(this.baseline.tuning, obs);
+      if (stack) return this.ruleDecision(obs, { type: 'quest_vote', vote: stack }, 'recognised reds all hide (human rate)');
       // Round 27 `redHideR4Solo` (RedRound27.ts): one fail cannot fail a two-fail mission — the lone red it sees hides.
       const r4 = redHideR4SoloCard(this.baseline.tuning, obs);
       if (r4) return this.ruleDecision(obs, { type: 'quest_vote', vote: r4 }, 'red hides on a two-fail mission (one fail cannot fail it)');
@@ -811,7 +824,8 @@ export class ForwardAgent implements AvalonAgent {
         return this.ruleDecision(obs, { type: 'team_vote', vote: forced }, 'red normal vote (critical team: camp interest)');
       }
       _forwardDecideCalls -= 1;
-      const asLoyal = this.decide(loyalViewOf(obs));
+      // Round 29 `redLoyalView`: marks the view so the red's own outer-white threshold (`redTailVote`) can apply.
+      const asLoyal = this.decide({ ...loyalViewOf(obs), redLoyalView: true });
       if (asLoyal.action.type === 'team_vote') {
         // Round 16 `redCleanWhite` (RedVoteCamouflage.ts): a red's loyal view counts its own seat as blue and reads clean
         // teams dirtier than a real blue does — at rate q, white a team without a red it sees anyway.

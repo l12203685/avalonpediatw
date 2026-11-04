@@ -687,6 +687,9 @@ export interface AgentTuning {
    * 9 = 三種乘數都用自我對打的刺殺資料擬合（條件 logit，1,672 次刺殺）；10 = 同 9，連模型分數、讀票、讀派隊的權重一起擬合（`REUSE_STACK_WEIGHTS`）。
    * 第 25 回合候選：11 = 9 用第 24 回合預設（藍方照原樣照派成功的隊）的刺殺資料重新擬合（1,295 次刺殺；R3 起沒照派乾淨的照派隊 ×1.38、第 2 局照派 ×0.34）。
    * 第 25 回合採用 11（第 1 階段）：篩選 +0.9 [+0.3, +1.5]pp，兩組各 6000 組種子 +0.63 [+0.34, +0.93]／+1.05 [+0.72, +1.38]（合併 12000 組 +0.84 [+0.62, +1.06]；刺中率約 +1.3pp，三紅率不變）。
+   * 第 29 回合：12 = 11 的第 2 局係數用第 28 回合預設（`merlinReuseNoEarly`：梅林第 2 局不再照派有他看得到的紅的成功隊）的刺殺資料重新擬合
+   * （1,791 次刺殺；第 2 局照派 ×0.34 → ×0.05、沒照派 ×0.12 → ×0.68、沒照派乾淨的 ×0.27 → ×0.3；第 3 局起不變；同一批資料 5 折交叉刺中 +5.4 [+4.3, +6.4]pp）。
+   * 第 29 回合採用 12（第 1 階段）：篩選 +3.4 [+2.6, +4.1]pp，兩組各 6000 組種子 +3.38 [+2.92, +3.84]／+3.13 [+2.68, +3.58]（合併 12000 組 +3.26 [+2.94, +3.58]；刺中率約 +5.3pp，三紅率不變）。
    * 第 21 回合不採用（維持 3）：4 −0.4 [−0.8, −0.0]pp（把第 3 局起調回量到的比例反而變差）；5／6／7／8 +0.0～+0.2；10 −0.8；
    * 9 兩組各 6000 組種子 +0.45 [+0.08, +0.82]／+0.33 [−0.06, +0.73]pp（合併 12000 組 +0.39 [+0.12, +0.66]，第二組碰 0，留給第 2 階段）。
    * 第 23 回合採用 9：對第 19 回合預設第三組 6000 組 +0.42 [+0.03, +0.80]；在 `assassinDoomedRead=1` 之上兩組各 6000 組 +0.58 [+0.21, +0.96]／+0.42 [+0.05, +0.79]pp（刺中率約 +1pp，三紅率不變）。
@@ -970,6 +973,36 @@ export interface AgentTuning {
    * 第 27 回合當成基本一致性修正（第 1E 節第 6 條：硬約束，預設開；這個欄位只為了量測與舊表）：篩選 −0.2 [−0.7, +0.2]pp（中性），稽核 (b) 紅方 53.6% → 12.5%（奧伯倫 100% → 沒有機會）、(q) 奧伯倫 16% → 0%，量尺奧伯倫 +0.02。
    */
   oberonSelfOnTeam: boolean;
+  /**
+   * 第 29 回合紅方（`RedRound29.redMatchPointFailCard`；盤點 G1「紅方已兩紅：隊上的紅一定出失敗」）：紅方已兩紅、自己在隊上、自己＋看得到的隊友就夠讓任務失敗 →
+   * 每一個看得到的紅都出失敗（不照位階法讓一個人藏；真人第 3 局兩個相認紅、紅方兩紅時兩張失敗 75%、三個相認紅三張 100%）。false = 關。
+   * 第 29 回合當成基本一致性修正（第 1E 節第 6 條：硬約束，預設開；這個欄位只為了量測與舊表）：任務一失敗遊戲就結束，自我對打完全相同（+0.0），
+   * LOOP 紅方任務牌一致 76.5／74.2% → 81.4／81.1%（強者點第 3 局藏牌 17.5% → 2.0%，強者 6.1%）。
+   */
+  redMatchPointFail: boolean;
+  /**
+   * 第 29 回合紅方（`RedRound29.redStackHideCard`）：紅方未滿兩紅、第 2、3 局兩個以上相認紅同隊時，照真人「全部出成功」的比例（第 2 局 15%、第 3 局 22%；
+   * 隊伍雜湊，隊上的相認紅抽到同一個結果）藏牌，其他時候照位階法。false = 關。
+   */
+  redStackHide: boolean;
+  /**
+   * 第 29 回合紅方・莫德雷德（`RedRound29.mordredSoloApproveVote`；盤點 L7）：第 3 局起莫德雷德在非強制、不是自己派、沒有看得到的隊友的隊上
+   * （評分器的「隊上的紅」不算投票者自己，莫德雷德的偏好只在有隊友時加贊成：強者點贊成 18.7%，強者 72.4%）。
+   * 1 = 自己一張失敗就能讓任務失敗時投白；2 = 照強者莫德雷德的同局面比例改投白；0 = 關。
+   * 第 29 回合採用 1，當成基本一致性修正（`oberonSelfOnTeam` 的莫德雷德版；第 1E 節第 6 條：硬約束）：篩選 −0.1 [−0.6, +0.4]pp（中性），稽核 (q) 莫德雷德 19.3% → 0%、
+   * 紅方 (b) 6.3% → 0%，量尺莫德雷德 −0.09（2 是 −0.65）；強者點那一格 18.7% → 100%（強者 72.4%）。
+   */
+  mordredSoloApprove: number;
+  /**
+   * 第 29 回合紅方（`RedRound29.redTailVoteTau`）：紅方照忠臣投票（`redNormalVote`）時隊外外白的乾淨門檻；0 = 跟 `goodTailVote`。
+   * 第 28 回合 `goodTailVote` 0.85 → 0.7 之後紅方也跟著多開外白（量尺紅方三角色各 −0.2～−0.3）。
+   */
+  redTailVote: number;
+  /**
+   * 第 29 回合紅方（`RedRound29.redLakeHumanTarget`）：紅方挑湖照強者紅方擬合的條件 logit。1 = 模型最可能的目標；2 = 照模型機率抽；
+   * 3 = 照 Edward 2026-10-13 的裁定先湖隊友，裁定的規則挑藍方時才換成模型在非隊友裡最可能的目標。1、2 和 10/13 的裁定不符，只量。0 = 關。
+   */
+  redLakeHuman: number;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -1110,6 +1143,11 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'redHumanVote',
   'redLakeLoyal',
   'oberonSelfOnTeam',
+  'redMatchPointFail',
+  'redStackHide',
+  'mordredSoloApprove',
+  'redTailVote',
+  'redLakeHuman',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -1249,6 +1287,11 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redHumanVote: 0,
   redLakeLoyal: false,
   oberonSelfOnTeam: false,
+  redMatchPointFail: false,
+  redStackHide: false,
+  mordredSoloApprove: 0,
+  redTailVote: 0,
+  redLakeHuman: 0,
 });
 
 /**
@@ -1489,7 +1532,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefKeyVoteCells: true,
   merlinReuseNorm: 3,
   percivalMorganaR1: false,
-  assassinReuseRead: 11,
+  assassinReuseRead: 12,
   redHideReuse: 0,
   merlinReuseSkip: 0,
   merlinReusePublic: false,
@@ -1536,6 +1579,11 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redHumanVote: 0,
   redLakeLoyal: false,
   oberonSelfOnTeam: true,
+  redMatchPointFail: true,
+  redStackHide: false,
+  mordredSoloApprove: 1,
+  redTailVote: 0,
+  redLakeHuman: 0,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1675,6 +1723,11 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   redHumanVote: 'AVALON_TUNING_RED_HUMAN_VOTE',
   redLakeLoyal: 'AVALON_TUNING_RED_LAKE_LOYAL',
   oberonSelfOnTeam: 'AVALON_TUNING_OBERON_SELF_ON_TEAM',
+  redMatchPointFail: 'AVALON_TUNING_RED_MATCH_POINT_FAIL',
+  redStackHide: 'AVALON_TUNING_RED_STACK_HIDE',
+  mordredSoloApprove: 'AVALON_TUNING_MORDRED_SOLO_APPROVE',
+  redTailVote: 'AVALON_TUNING_RED_TAIL_VOTE',
+  redLakeHuman: 'AVALON_TUNING_RED_LAKE_HUMAN',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1779,7 +1832,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'assassinReuseRead') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 11) throw new Error(`assassinReuseRead needs 0–11, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 12) throw new Error(`assassinReuseRead needs 0–12, got "${raw}"`);
     return { assassinReuseRead: value };
   }
   if (name === 'redHideReuse') {
@@ -1842,7 +1895,12 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 99) throw new Error(`${name} needs a number in [0, 99], got "${raw}"`);
     return { [name]: value } as Partial<AgentTuning>;
   }
-  if (name === 'redHideR4Solo' || name === 'redHumanVote' || name === 'mpTailWhite') {
+  if (name === 'redTailVote') {
+    const value = raw === undefined ? 0.85 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`redTailVote needs a number in [0, 1], got "${raw}"`);
+    return { redTailVote: value };
+  }
+  if (name === 'redHideR4Solo' || name === 'redHumanVote' || name === 'mpTailWhite' || name === 'mordredSoloApprove' || name === 'redLakeHuman') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`${name} needs 0–3, got "${raw}"`);
     return { [name]: value } as Partial<AgentTuning>;
@@ -1964,7 +2022,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

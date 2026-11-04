@@ -409,6 +409,11 @@ export const REUSE_MODE_FACTORS: Readonly<Record<number, { miss: readonly [numbe
   // assassinations; passing over a clean norm team R3+ is now Merlin-ish (×1.38 — the loyal / Percival re-propose it), the R2
   // re-proposal less so (×0.34). 5-fold cross-fitted hit +1.2 [+0.2, +2.1]pp over 9 on the same data. Default since round 25.
   11: { miss: [0.12, 0.21], reuse: [0.34, 2.3], clean: [0.27, 1.38] },
+  // Round 29: 11 with the R2 factors refitted on the round-28 default (`merlinReuseNoEarly`: Merlin no longer re-proposes a successful
+  // R1 team holding a red he sees — 0 of 159, the other blue captains in the tier pool 503 of 512): 1,791 assassinations; the R2
+  // re-proposal is now loyal-ish (×0.05), passing it over neutral-ish (×0.68). R3+ factors kept. 5-fold cross-fitted hit
+  // +5.4 [+4.3, +6.4]pp over 11 on the same data.
+  12: { miss: [0.68, 0.21], reuse: [0.05, 2.3], clean: [0.3, 1.38] },
 };
 
 /** Round 21 `assassinReuseRead=10`: the refitted weights of the model score, the vote read and the lead read (default 1 / 0.5 / 1). */
@@ -418,7 +423,8 @@ export const REUSE_STACK_WEIGHTS = { model: 1.4, vote: 0.75, lead: 0.57 } as con
  * Round 21 `assassinReuseRead` 4–10: the log-likelihood the re-proposal norm adds for `candidate` (`REUSE_MODE_FACTORS`):
  * 4 = passed over with a seen red R2 ×0.25 (as mode 3), R3+ ×0.65 (measured); 5 = both measured (×0.05, ×0.65);
  * 6 = R2 ×0.05, R3+ ×0.25; 7 = mode 3 plus the re-proposals themselves (×1.1, ×1.45); 8 = mode 3 plus passed-over clean
- * norm teams (×0.12, ×0.73); 9, 10 = fitted; 11 = 9 refitted on the round-24 default (round 25).
+ * norm teams (×0.12, ×0.73); 9, 10 = fitted; 11 = 9 refitted on the round-24 default (round 25); 12 = 11 with the R2 factors
+ * refitted on the round-28 default (round 29).
  */
 export function reuseLeadLogRatio(obs: PlayerObservation, candidate: string, mode: number, sight: MerlinSight = merlinSightFromAssassin(obs)): number {
   const c = reuseLeadCounts(obs, candidate, sight);
