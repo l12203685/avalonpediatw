@@ -163,7 +163,8 @@ export function redReuseExactTeam(tuning: Readonly<AgentTuning>, obs: PlayerObse
  */
 export function redMatchPointApprove(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   const mode = tuning.redMatchPointApprove ?? 0;
-  if (mode <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil') return false;
+  // Mode 3 (round 27): only when the white may decide — `RedRound27.redMatchPointDecisiveApprove`.
+  if (mode <= 0 || mode === 3 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil') return false;
   if ((obs.failCount ?? 0) >= 4) return false;
   const team = obs.proposedTeam ?? [];
   const me = obs.myPlayerId;

@@ -60,6 +60,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
+import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
@@ -717,6 +718,25 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    const d = this.decideBase(obs);
+    // Round 27 (red; RedRound27.ts) — the vote after the pipeline: `redMatchPointApprove=3` (Mordred: white at red's match point
+    // only when the white may decide) and `redHumanVote` (the strong-human red rate of the cell; a flip against red's interest only
+    // when this vote cannot decide). The hard constraints keep their vote (own proposal, Oberon at blue's match point, red lake word).
+    if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil' && d.action.type === 'team_vote') {
+      const t = this.baseline.tuning;
+      if (!d.action.vote && redMatchPointDecisiveApprove(t, obs)) {
+        return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red match point: my white may decide');
+      }
+      if ((t.redHumanVote ?? 0) > 0 && !leaderSelfApproveReason(t, obs) && !oberonMatchPointReject(t, obs)
+        && !redVouchOnTeamReject(t, obs) && !redMatchPointApprove(t, obs)) {
+        const v = redHumanVoteFlip(t, obs, d.action.vote);
+        if (v !== d.action.vote) return this.ruleDecision(obs, { type: 'team_vote', vote: v }, `red human vote (strong-red rate: ${v ? 'approve' : 'reject'})`);
+      }
+    }
+    return d;
+  }
+
+  private decideBase(obs: PlayerObservation): ForwardDecision {
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; basic_logic_inventory L2 / S6): a leader on its own
     // non-forced proposal votes white — ahead of every vote rule (goodKeyVote / goodCleanVote / merlinNormalVote / the scorer);
     // so does a seat on a re-proposal of its own earlier team of the round. A good non-Merlin seat only past the vote gates
@@ -748,6 +768,12 @@ export class ForwardAgent implements AvalonAgent {
     }
     // Optimization loop round 2 (red) candidates A1 / A2 (RedRound2.ts): rules ahead of the pipeline.
     if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil') {
+      // Round 27 `redHideR4Solo` (RedRound27.ts): one fail cannot fail a two-fail mission — the lone red it sees hides.
+      const r4 = redHideR4SoloCard(this.baseline.tuning, obs);
+      if (r4) return this.ruleDecision(obs, { type: 'quest_vote', vote: r4 }, 'red hides on a two-fail mission (one fail cannot fail it)');
+      // Round 27 `redHideHuman` (RedRound27.ts): R1–R2 lone red at the strong human rate of its role.
+      const human = redHideHumanCard(this.baseline.tuning, obs);
+      if (human) return this.ruleDecision(obs, { type: 'quest_vote', vote: human }, `red R1–R2 card at the strong human rate (${human})`);
       const hide = redHideEarlyCard(this.baseline.tuning, obs);
       if (hide) return this.ruleDecision(obs, { type: 'quest_vote', vote: hide }, 'red hide early (A1)');
       // Round 12 `mordredHideR1` (RedRound2.ts): the lone Mordred hides on R1 (blue reads the cards with the bot tables).
@@ -2220,8 +2246,10 @@ export class ForwardAgent implements AvalonAgent {
     // lone Mordred read his own team as one without a red and rejected it (R3+; Oberon has his own vote rules).
     // Round 25 `redSelfOnTeamHalf` (第 1C 節): the same for half of the states (seat, round, attempt, team hash).
     const selfRedOn = this.baseline.tuning.redSelfOnTeam || (this.baseline.tuning.redSelfOnTeamHalf && halfOf(`${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${[...proposedTeam].sort().join(',')}|redselfonteam`));
-    const selfRed = selfRedOn && obs.myTeam === 'evil' && obs.myRole !== 'oberon'
-      && proposedTeam.includes(obs.myPlayerId) && (obs.currentRound ?? 1) >= 3;
+    // Round 27 `oberonSelfOnTeam`: Oberon too (audit (b): he inner-blacked his own team, then re-proposed it as leader).
+    const oberonSelf = this.baseline.tuning.oberonSelfOnTeam && obs.myRole === 'oberon';
+    const selfRed = (oberonSelf || (selfRedOn && obs.myRole !== 'oberon')) && obs.myTeam === 'evil'
+      && proposedTeam.includes(obs.myPlayerId) && (obs.currentRound ?? 1) >= 3 && (obs.failCount ?? 0) < 4;
     const signals = selfRed ? { ...base, includesKnownEvil: true, numKnownEvilOnTeam: base.numKnownEvilOnTeam + 1 } : base;
 
     return [

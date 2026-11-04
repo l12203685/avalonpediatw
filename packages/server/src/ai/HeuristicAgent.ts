@@ -2684,7 +2684,7 @@ export class HeuristicAgent implements AvalonAgent {
       if (voteWeight > 0) {
         const reds = [...evilSet];
         const m = this.tuning.assassinVoteModel;
-        const model = m >= 3 ? 'normalFit13' : m === 2 ? 'normalFit' : m ? 'normal' : 'strict';
+        const model = m >= 4 ? 'normalFit26' : m === 3 ? 'normalFit13' : m === 2 ? 'normalFit' : m ? 'normal' : 'strict';
         const eps = this.tuning.assassinVoteEps ?? 0;
         for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteW * merlinVoteLogRatio(obs, id, reds, model, eps));
       }

@@ -19,7 +19,7 @@ const EPS13 = 0.01;
  * 看得到的都乾淨時照忠臣投。舊模型（`'strict'`）把「在隊上贊成有可見紅的隊」當成「不是梅林」的強烈證據，正好讀反了
  * 第 11 回合的梅林。誰是莫德雷德：刺殺階段紅方開牌相認（`allEvilRoles`），有就用，否則對每個紅方取平均。
  */
-export type MerlinVoteModel = 'strict' | 'normal' | 'normalFit' | 'normalFit13';
+export type MerlinVoteModel = 'strict' | 'normal' | 'normalFit' | 'normalFit13' | 'normalFit26';
 
 /**
  * `'normalFit'`：同 `'normal'`，但一般藍方（梅林以外）在兩個有資訊的格子裡的贊成率改用第 11 回合預設自我對打量到的比例
@@ -40,6 +40,15 @@ const FIT13_OFF_SEEN_KEY = 0.043;
 const FIT13_OFF_SEEN = 0.072;
 const FIT13_ON_FATAL = 0.396;
 
+/**
+ * `'normalFit26'`（第 27 回合紅方，`assassinVoteModel=4`）：同 `'normalFit13'`，比例改用第 26 回合預設（信念校準 `beliefTemper=73`、門檻 0.3／0.3、
+ * `loyalTailWhite`）自我對打重新量的（800 局，`scripts/merlinTellDiagnosis.ts`）：不在隊上、隊上有梅林看得到的紅，紅方已兩紅 2.3%、其他 3.8%；
+ * 在隊上、看得到的紅致命 38.1%（梅林三格都是 0%）。
+ */
+const FIT26_OFF_SEEN_KEY = 0.023;
+const FIT26_OFF_SEEN = 0.038;
+const FIT26_ON_FATAL = 0.381;
+
 /** Whether approving `team` could lose the game on the spot in Merlin's view at that vote (`merlinVoteFatal`, then). */
 function fatalThen(obs: PlayerObservation, round: number, seen: number): boolean {
   if (seen === 0) return false;
@@ -53,7 +62,7 @@ function fatalThen(obs: PlayerObservation, round: number, seen: number): boolean
  * `'normalFit13'`, whose generic-blue rates are near 0.05 themselves — the bot Merlin's is 0%).
  */
 export function merlinVoteLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], model: MerlinVoteModel = 'strict', epsIn = 0): number {
-  const eps = epsIn > 0 ? epsIn : model === 'normalFit13' ? EPS13 : EPS;
+  const eps = epsIn > 0 ? epsIn : model === 'normalFit13' || model === 'normalFit26' ? EPS13 : EPS;
   const late = obs.voteHistory.filter((v) => v.round >= 3 && v.attempt < 5 && v.votes[candidate] !== undefined);
   if (late.length === 0 || reds.length === 0) return 0;
   const normal = model !== 'strict';
@@ -77,6 +86,10 @@ export function merlinVoteLogRatio(obs: PlayerObservation, candidate: string, re
         if (model === 'normalFit13') {
           const key = (obs.questResults ?? []).slice(0, Math.max(0, v.round - 1)).filter((r) => r === 'fail').length >= 2;
           pg = on ? FIT13_ON_FATAL : key ? FIT13_OFF_SEEN_KEY : FIT13_OFF_SEEN;
+        }
+        if (model === 'normalFit26') {
+          const key = (obs.questResults ?? []).slice(0, Math.max(0, v.round - 1)).filter((r) => r === 'fail').length >= 2;
+          pg = on ? FIT26_ON_FATAL : key ? FIT26_OFF_SEEN_KEY : FIT26_OFF_SEEN;
         }
         pm = eps;
       } else {

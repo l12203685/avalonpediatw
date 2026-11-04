@@ -2,7 +2,7 @@
 /**
  * 機器人 vs 強者真人的投票差距（Edward 2026-11-04 第 2 點；src/ai/infl/gap.ts、docs/ai/strong_metrics.md）。
  *
- *   cd packages/server && nice npx tsx scripts/strongGap.ts --selfplay sp.json [--replay-votes votes.json] [--top 10]
+ *   cd packages/server && nice npx tsx scripts/strongGap.ts --selfplay sp.json [--replay-votes votes.json] [--top 10] [--camp 紅]
  *
  * 1. 強者的票：每一局、投票分面前 5 的座位（忠臣、派西 → 藍方任務王；梅林 → 梅林存活王；紅方 → 紅方任務王）的每一張可信的票；
  *    機器人的票：自我對打（`strongSelfPlay.ts`）每個座位的每一張票。
@@ -138,6 +138,11 @@ function main(): void {
     botPts.add('全部', ps, pb, s.y === 1);
   }
   const withReplay = replay.size > 0;
+  // `--camp 紅`（第 27 回合）：前 N 名只列那一個陣營（紅／藍／梅林）的處境。
+  const camp = arg('--camp');
+  if (camp) {
+    for (const t of [fine, fineHi]) for (const k of [...t.cells.keys()]) if (!k.includes(`·${camp}·`)) t.cells.delete(k);
+  }
   const coarseKeys = ['全部', '全部·高強度', ...[...coarse.cells.keys()].filter((k) => !k.startsWith('全部')).sort()];
   printTable('粗分類（強者的決策點）', coarse, coarseKeys, withReplay);
   printTable('粗分類（自我對打的決策點；「強者實際」欄 = 機器人實際）', botPts, ['全部', ...[...botPts.cells.keys()].filter((k) => k !== '全部').sort()], false);
