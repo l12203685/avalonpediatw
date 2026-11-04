@@ -39,15 +39,16 @@ function r4(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('flags', () => {
-  it('round 27 adopts redHideHuman + redHideR4Solo=1; the other knobs default off (all off in the legacy table)', () => {
+  it('round 27 adopts redHideHuman + redHideR4Solo=1 and the consistency fix oberonSelfOnTeam; the other knobs default off (all off in the legacy table)', () => {
     expect(DEFAULT_AGENT_TUNING.redHideHuman).toBe(true);
     expect(DEFAULT_AGENT_TUNING.redHideR4Solo).toBe(1);
     expect(LEGACY_AGENT_TUNING.redHideHuman).toBe(false);
     expect(LEGACY_AGENT_TUNING.redHideR4Solo).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.oberonSelfOnTeam).toBe(true);
+    expect(LEGACY_AGENT_TUNING.oberonSelfOnTeam).toBe(false);
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.redHumanVote).toBe(0);
       expect(t.redLakeLoyal).toBe(false);
-      expect(t.oberonSelfOnTeam).toBe(false);
     }
   });
   it('parse the ranges', () => {
@@ -251,7 +252,7 @@ describe('oberonSelfOnTeam', () => {
     const teams = [['P3', 'P4', 'P5', 'P9'], ['P3', 'P6', 'P5', 'P9'], ['P4', 'P6', 'P5', 'P9'], ['P5', 'P6', 'P7', 'P9'], ['P5', 'P7', 'P10', 'P9']];
     const on = teams.map((t) => withSeededRandom('r27-ost', () => agentOf('P9', T({ oberonSelfOnTeam: true })).act(obs(t))));
     expect(on.every((a) => a.type === 'team_vote' && a.vote)).toBe(true);
-    const off = teams.map((t) => withSeededRandom('r27-ost', () => agentOf('P9', T()).act(obs(t))));
+    const off = teams.map((t) => withSeededRandom('r27-ost', () => agentOf('P9', T({ oberonSelfOnTeam: false })).act(obs(t))));
     expect(off.some((a) => a.type === 'team_vote' && !a.vote)).toBe(true);
     expect(parseTuningFlag('oberonSelfOnTeam')).toEqual({ oberonSelfOnTeam: true });
   });

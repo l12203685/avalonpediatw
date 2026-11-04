@@ -941,7 +941,8 @@ export interface AgentTuning {
   redLakeLoyal: boolean;
   /**
    * 第 27 回合紅方・奧伯倫（`ForwardAgent.generateTeamVoteCandidates`；稽核 (b) 奧伯倫 90–100% 的根源、盤點 L7）：第 3 局起奧伯倫在非強制的隊上時，投票評分把自己算進
-   * 隊上的紅（`redSelfOnTeam` 的奧伯倫版；奧伯倫的評分器沒有「在隊上」的票，照忠臣的讀法內黑自己在上面的隊，之後當隊長又照派那一隊）。強者奧伯倫第 3 局起在隊上贊成 83%、機器人 55%。false = 關。
+   * 隊上的紅（`redSelfOnTeam` 的奧伯倫版；奧伯倫的評分器沒有「在隊上」的票，照忠臣的讀法內黑自己在上面的隊，之後當隊長又照派那一隊）。強者奧伯倫第 3 局起在隊上贊成 83%、機器人 55%。
+   * 第 27 回合當成基本一致性修正（第 1E 節第 6 條：硬約束，預設開；這個欄位只為了量測與舊表）：篩選 −0.2 [−0.7, +0.2]pp（中性），稽核 (b) 紅方 53.6% → 12.5%（奧伯倫 100% → 沒有機會）、(q) 奧伯倫 16% → 0%，量尺奧伯倫 +0.02。
    */
   oberonSelfOnTeam: boolean;
 }
@@ -1497,7 +1498,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redHideHuman: true,
   redHumanVote: 0,
   redLakeLoyal: false,
-  oberonSelfOnTeam: false,
+  oberonSelfOnTeam: true,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
