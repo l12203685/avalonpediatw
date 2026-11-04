@@ -59,7 +59,11 @@ function arg(name: string, dflt: string): string {
 }
 const MODE = arg('mode', 'live') as 'live' | 'room' | 'private-test';
 const HOURS = Number(arg('hours', MODE === 'live' ? '5.5' : '1'));
-const MAX_GAMES = Math.max(0, Math.min(MODE === 'live' ? 2 : 3, Number(arg('max-games', arg('games', MODE === 'live' ? '2' : '1')))));
+/**
+ * 局數上限：Edward 2026-11-04「百科AI 一晚局數上限拿掉」——每晚補位不限局數（只受 --hours 限制）；指定房間預設 1 局、最多 99。
+ * 每局開始前／打完後在聊天室問「需要我離開嗎？」，有人回「離開」就走（askLeave）。
+ */
+const MAX_GAMES = Math.max(0, Math.min(99, Number(arg('max-games', arg('games', MODE === 'live' ? '99' : '1')))));
 const ROOM = arg('room', '');
 /**
  * 暱稱。練習台同一個暱稱同時兩個連線會互相干擾（2026-11-03 私房測試：同暱稱兩桌同時打，其中一桌被導回大廳），
@@ -106,7 +110,48 @@ const EYES = '開眼階段';
 const ACT_MS = Math.max(0, Number(arg('act-ms', '150')) || 0);
 const actDelay = (): number => ACT_MS * (0.5 + Math.random());
 const POLL_MS = 400;
-const HELLO = '我是阿瓦隆百科的測試機器人，人不夠時來補位，打完會離開；有意見請到 DC 百科問題回報';
+const HELLO = '我是百科AI（阿瓦隆百科的測試機器人），人不夠時來補位；有意見請到 DC 百科問題回報';
+/** 開局前／每局打完後問一次（Edward 11/04）。ASK_SEC 秒內有人回「離開」就走，沒人回或回「留下」就留著。 */
+const ASK_SEC = Number(arg('ask-sec', '40'));
+const ASK_TEXT = `百科AI：需要我離開嗎？要我走請打「離開」，要我留下請打「留下」；${ASK_SEC} 秒內沒人說離開我就留下`;
+const LEAVE_RE = /離開|走吧|請走|你走|快走|退出|退房|bye|掰/i;
+const STAY_RE = /留下|留著|別走|不要走|不用走|不用離開|不必離開|繼續/;
+/** 一則聊天的意思：留下優先（「不用離開」也含「離開」兩字）。 */
+export function leaveIntent(msg: string): 'leave' | 'stay' | null {
+  const m = msg.trim();
+  if (!m) return null;
+  if (STAY_RE.test(m)) return 'stay';
+  return LEAVE_RE.test(m) ? 'leave' : null;
+}
+interface ChatMsg { set: number; msg: string; name: string }
+/** 送一則聊天並確認自己的聊天室看得到它（最多試 3 次，每次隔 3 秒）。 */
+async function chatConfirmed(p: Page, text: string): Promise<boolean> {
+  for (let i = 0; i < 3; i++) {
+    if (i) await sleep(3000);
+    if (!(await chat(p, text))) return false;
+    for (let k = 0; k < 6; k++) {
+      await sleep(500);
+      if ((await chats(p)).some((c) => String(c.msg ?? '') === text)) return true;
+    }
+  }
+  return false;
+}
+async function chats(p: Page): Promise<ChatMsg[]> {
+  return withTimeout(p.evaluate('JSON.parse(JSON.stringify((window.app && window.app.chats) || []))'), 10000, 'chats').catch(() => []) as Promise<ChatMsg[]>;
+}
+/** 問過之後的新訊息（以問的當下為基準，多重集合相減），排除百科AI自己的訊息。 */
+export function newHumanChats(before: readonly ChatMsg[], now: readonly ChatMsg[]): ChatMsg[] {
+  const seen = new Map<string, number>();
+  for (const c of before) { const k = JSON.stringify([c.set, c.name, c.msg]); seen.set(k, (seen.get(k) ?? 0) + 1); }
+  const out: ChatMsg[] = [];
+  for (const c of now) {
+    const k = JSON.stringify([c.set, c.name, c.msg]);
+    const n = seen.get(k) ?? 0;
+    if (n > 0) { seen.set(k, n - 1); continue; }
+    if (!isPediaBotName(String(c.name ?? ''))) out.push(c);
+  }
+  return out;
+}
 
 // ── log ──────────────────────────────────────────────────────────────────────────────
 const stamp = (): string => new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -412,16 +457,35 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
     // 等開局
     const t0 = Date.now();
     let started = false;
+    // 開局前／上一局打完後問一次「需要我離開嗎？」（只有負責打招呼的那個機器人問；自己當房主的私房測試不問）
+    let asked: { at: number; before: ChatMsg[] } | null = null;
+    let askDone = !(CHAT && greet && !isHost);
     while (Date.now() - t0 < START_MIN * 60_000) {
       if (!inRoom(p)) { log(`${room}：已不在房間`); return played; }
       let s: Snap | null = null;
       try { s = await snap(p); } catch { s = null; }
       if (s) {
         if (s.gaming && s.status !== ENDED) { started = true; break; }
-        if (!greeted && CHAT && greet && !isHost) { greeted = await chat(p, HELLO); if (greeted) log(`${room}：已在聊天室打招呼`); }
+        if (!askDone && !asked) {
+          // 練習台連發兩則時第二則會被吃掉（2026-11-04 實測）：打招呼和提問合成一則，送出後確認聊天室真的有這則
+          const before = await chats(p);
+          const text = !greeted ? `${HELLO}。${ASK_TEXT}` : ASK_TEXT;
+          if (await chatConfirmed(p, text)) {
+            greeted = true;
+            asked = { at: Date.now(), before };
+            log(`${room}：問「需要我離開嗎？」（${played ? `第 ${played} 局打完` : '開局前'}）`);
+          } else askDone = true;
+        } else if (!greeted && CHAT && greet && !isHost) {
+          greeted = await chatConfirmed(p, HELLO); if (greeted) log(`${room}：已在聊天室打招呼`);
+        } else if (!askDone && asked) {
+          const fresh = newHumanChats(asked.before, await chats(p));
+          const intents = fresh.map((c) => leaveIntent(String(c.msg ?? '')));
+          if (intents.includes('leave')) { await chat(p, '好，我先離開，謝謝！'); await leaveRoom(p, '房內有人請百科AI離開', room); return played; }
+          if (intents.includes('stay') || Date.now() - asked.at > ASK_SEC * 1000) { askDone = true; log(`${room}：沒有人要百科AI離開，留下`); }
+        }
         // 私房多機器人（--password --bots N）：同房的其他百科機器人是自己人，不算違反「每間房最多 1 個」
         if (!isHost && s.myself.master) { await leaveRoom(p, '變成房主（不佔房主位）', room); return played; }
-        if (strictFull && s.users.length < 10) { await leaveRoom(p, `有人離開（剩 ${s.users.length} 人）`, room); return played; }
+        if (strictFull && played === 0 && s.users.length < 10) { await leaveRoom(p, `有人離開（剩 ${s.users.length} 人）`, room); return played; }
         // 角色設定跟上人數時才檢查（房主調整中、人還沒到齊時不算）
         const why = s.game_roles?.length === s.users.length ? unsupportedReason(s, s.users.length) : null;
         if (why && !isHost) { await leaveRoom(p, `房間設定機器人打不了（${why}）`, room); return played; }
@@ -558,7 +622,7 @@ async function live(browser: Browser, deadline: number, alreadyPlayed = 0): Prom
   const seen = new Map<string, number>();
   const playedIn = new Map<string, number>(); // 房號 → 上次打完的時間
   let played = alreadyPlayed;
-  log(`補位上線：整晚最多 ${MAX_GAMES} 局，房間要缺人 ≥ ${WAIT_MIN} 分鐘`);
+  log(`補位上線：不限局數（每局前後問要不要離開），房間要缺人 ≥ ${WAIT_MIN} 分鐘`);
   while (Date.now() < deadline && played < MAX_GAMES) {
     let rooms: LobbyRoom[] = [];
     try { rooms = await lobbyRooms(lobby); } catch {
@@ -593,7 +657,7 @@ async function live(browser: Browser, deadline: number, alreadyPlayed = 0): Prom
         log(`${name}：9 個真人等了 ${((Date.now() - (seen.get(name) as number)) / 60000).toFixed(1)} 分鐘，加入`);
         seen.delete(name);
         if (await joinRoom(lobby, name, '')) {
-          const n = await stayAndPlay(lobby, name, Math.min(1, MAX_GAMES - played), true, false);
+          const n = await stayAndPlay(lobby, name, MAX_GAMES - played, true, false);
           played += n;
           if (n) playedIn.set(name, Date.now());
           log(`今晚已打 ${played}/${MAX_GAMES} 局`);
