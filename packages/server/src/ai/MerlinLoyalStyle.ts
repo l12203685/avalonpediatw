@@ -88,6 +88,9 @@ export function merlinReuseNormTeam(
   if (round < 2 || (obs.failCount ?? 0) >= 4) return null;
   const later = round >= 3;
   if (later && (mode < 2 || obs.questResults.filter((r) => r === 'fail').length >= 2)) return null;
+  // Round 26 `merlinReuseNoEarly` (Edward 2026-11-04 ruling 5: Merlin's R1–R2 proposals essentially never hold a red he sees): no R2 reuse
+  // of a successful team holding a seen red — the loyal-style team instead.
+  if (!later && tuning.merlinReuseNoEarly === true) return null;
   const doneRounds = obs.questHistory.filter((q) => q.round < round && obs.questResults[q.round - 1] === 'success').map((q) => q.round);
   const target = mode >= 3 && later ? Math.max(0, ...doneRounds) : round - 1;
   const last = obs.questHistory.find((q) => q.round === target);

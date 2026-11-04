@@ -86,6 +86,9 @@ async function main(): Promise<void> {
   const meta = { games: games.length, rotationMismatch, seed, tuning: describeAgentTuning(tuning), seconds: Math.round((Date.now() - started) / 1000) };
   fs.writeFileSync(out, JSON.stringify({ meta, games }));
   console.log(`wrote ${out}: ${JSON.stringify(meta).slice(0, 300)}`);
+  // The self-play engine leaves timers behind (as in fitBeliefLikelihoods.ts): exit once the file is written, so a chained
+  // strongLoopMetrics run starts.
+  process.exit(0);
 }
 
 void main();

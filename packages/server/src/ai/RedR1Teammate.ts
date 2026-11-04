@@ -182,6 +182,7 @@ export function loyalViewOf(obs: PlayerObservation): PlayerObservation {
     knownEvils: [],
     knownWizards: undefined,
     allEvilIds: undefined,
+    publicLoyalView: true,
   };
 }
 

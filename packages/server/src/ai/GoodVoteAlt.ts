@@ -1,0 +1,106 @@
+/**
+ * 第 26 回合藍方：「否決的價值」——每一個提議都可能出任務（Edward 2026-11-04：「沒有所謂『注定被否決』」）。
+ *
+ * 強者量尺（docs/ai/strong_metrics.md 第 5 節）差距第 1 名：第 3、4 局藍方在隊上、忠臣視角這隊乾淨 10–30% 時，強者贊成約 90%，
+ * 機器人 32–45%；第 3 局起藍方內黑率 強者 25% 對機器人 56%，內黑準度 80% 對 74%。真人局重播（第 26 回合 `r26_gap1`）：機器人在隊上的
+ * 內黑全部來自 `goodKeyVote`（關鍵局後驗 < 0.5）與 `goodCleanVote`（後驗 < 0.45）——兩條都是「和一個固定門檻比」，
+ * 不看否決之後會出什麼隊。否決之後下一個隊長派隊；第 4 次提議被否決，強制局的隊長（尾家）派的隊一定出任務。
+ *
+ * 這裡的比較：P(這隊乾淨) 對上 max_{T ∋ 下一任隊長, |T| = k} P(T 乾淨)（同一個後驗）。含下一任隊長的隊乾淨就表示下一任隊長是藍，
+ * 所以這個值已經乘上「下一任隊長是藍」的機率：下一任隊長很可能是紅時，否決換來的隊幾乎一定有紅。
+ *   - `goodVoteAlt`（λ；忠臣／派西，在隊上、第 3 局起、非強制）：門檻規則要投黑，但這隊 ≥ λ × 下一任隊長能派的最乾淨的隊 → 改投白。
+ *   - `loyalTailWhite`（τ；只有真的忠臣，D3 第一階段）：第 1–4 次提議、任何一局，尾家是紅的機率 ≥ τ、這隊 ≥ λ × 尾家能派的最乾淨的隊 → 投白
+ *     （在隊上、不在隊上都一樣——不在隊上就是外白）。
+ * 兩條都只會把黑改成白，而且不越過好人投票關卡（必敗、被支配的隊；第 1、2 局也檢查確定性層的必敗）。
+ */
+import type { AgentTuning } from './AgentTuning';
+import type { PlayerObservation } from './types';
+import { bayesOptionsOf, bayesRedShare, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
+
+/** 第 a 次提議之後的隊長：offset 1 = 下一任，4 − failCount = 尾家（強制局的隊長）。 */
+export function leaderAhead(obs: PlayerObservation, offset: number): string | null {
+  const ids = obs.allPlayerIds;
+  const lead = ids.indexOf(obs.currentLeader ?? '');
+  if (lead < 0 || ids.length === 0) return null;
+  return ids[(lead + offset) % ids.length];
+}
+
+/** 尾家（第 5 次強制提議的隊長）；已經是強制局時 null。 */
+export function tailLeaderOf(obs: PlayerObservation): string | null {
+  const fc = obs.failCount ?? 0;
+  if (fc >= 4) return null;
+  return leaderAhead(obs, 4 - fc);
+}
+
+/**
+ * max_{T ∋ leader, |T| = k} P(T 乾淨)：`leader` 能派的最乾淨的隊（觀察者的後驗）。含 leader 的隊乾淨 ⇒ leader 是藍，
+ * 所以這個值 ≤ 1 − P(leader 紅)。觀察者自己永遠是確定的藍。
+ */
+export function bestCleanWith(obs: PlayerObservation, leader: string, k: number, opts: Readonly<BayesOptions>): number | null {
+  const ids = obs.allPlayerIds;
+  if (k <= 0 || k > ids.length || !ids.includes(leader)) return null;
+  const share = bayesRedShare(obs, opts);
+  // 候選：leader ＋ 其他人裡挑 k − 1 個。人數不多（10 人局最多 C(9, 4) = 126），全部列舉。
+  const others = ids.filter((id) => id !== leader);
+  let best: number | null = null;
+  const pick: string[] = [];
+  const rec = (start: number): void => {
+    if (pick.length === k - 1) {
+      const p = bayesTeamClean(obs, [leader, ...pick], opts);
+      if (p !== null && (best === null || p > best)) best = p;
+      return;
+    }
+    for (let i = start; i <= others.length - (k - 1 - pick.length); i++) {
+      pick.push(others[i]);
+      rec(i + 1);
+      pick.pop();
+    }
+  };
+  // 依嫌疑排序後只取最乾淨的 min(8, n − 1) 人列舉（C(8, 4) = 70）。
+  others.sort((a, b) => (share.get(a) ?? 0.5) - (share.get(b) ?? 0.5));
+  others.length = Math.min(others.length, 8);
+  rec(0);
+  return best;
+}
+
+/**
+ * `goodVoteAlt`：門檻規則（`goodCleanVote`／`goodKeyVote`）要投黑時，改投白嗎。`p` = 這隊乾淨的機率（同一個後驗）。
+ * 忠臣／派西（梅林照忠臣投票時也走這裡）、在隊上、第 3 局起、非強制。
+ */
+export function goodVoteAltKeeps(tuning: Readonly<AgentTuning>, obs: PlayerObservation, p: number): boolean {
+  const lambda = tuning.goodVoteAlt ?? 0;
+  if (lambda <= 0 || obs.myTeam !== 'good') return false;
+  if ((obs.currentRound ?? 1) < 3 || (obs.failCount ?? 0) >= 4) return false;
+  // `goodVoteAltLast`: only the fourth proposal — rejecting it hands the mission to the forced fifth (the tail's own team).
+  if (tuning.goodVoteAltLast === true && (obs.failCount ?? 0) !== 3) return false;
+  const team = obs.proposedTeam ?? [];
+  if (!team.includes(obs.myPlayerId)) return false;
+  const next = leaderAhead(obs, 1);
+  if (next === null) return false;
+  const alt = bestCleanWith(obs, next, team.length, bayesOptionsOf(tuning));
+  return alt !== null && p >= lambda * alt;
+}
+
+/**
+ * `loyalTailWhite`（D3 第一階段）：只有真的忠臣（`publicLoyalView` 的梅林／紅方照忠臣投票不算），第 1–4 次提議、任何一局：
+ * 尾家是紅的機率 ≥ τ，而且這隊乾淨的機率 ≥ λ × 尾家能派的最乾淨的隊 → 投白。呼叫端負責好人投票關卡。
+ */
+export function loyalTailWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const tau = tuning.loyalTailWhite ?? 0;
+  if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
+  if (obs.myRole !== 'loyal' || obs.publicLoyalView === true) return false;
+  const tail = tailLeaderOf(obs);
+  if (tail === null || tail === obs.myPlayerId) return false;
+  // `loyalTailWhiteLast`: only the fourth proposal — the one whose rejection hands the mission to the tail's forced team.
+  if (tuning.loyalTailWhiteLast === true && (obs.failCount ?? 0) !== 3) return false;
+  const team = obs.proposedTeam ?? [];
+  if (team.length === 0) return false;
+  const opts = bayesOptionsOf(tuning);
+  const tailRed = bayesRedShare(obs, opts).get(tail) ?? 0;
+  if (tailRed < tau) return false;
+  const p = bayesTeamClean(obs, team, opts);
+  if (p === null) return false;
+  const alt = bestCleanWith(obs, tail, team.length, opts);
+  const lambda = (tuning.loyalTailWhiteLambda ?? 0) > 0 ? tuning.loyalTailWhiteLambda : 1;
+  return alt !== null && p >= lambda * alt && p > 0;
+}

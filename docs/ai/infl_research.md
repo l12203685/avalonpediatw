@@ -244,6 +244,8 @@ cd packages/server && npx tsx scripts/inflLoopMetrics.ts --merge /tmp/l0.json /t
 | 4 | 決策端也寫成 f(INFL_t)（例如藍方投票 = 自己座位的乾淨機率＋尾刀＋關鍵局，用角色王擬合的係數當先驗），取代部分手工開關 | 直接對到第 4 節的強者一致度 | 小 |
 | 5 | (b) 只用在讀機器人（自我對打擬合、或線上判斷對手是機器人） | — | 0.7 s／決策點，離線 |
 
+**第 26 回合的進度**（`optimization_loop.md` 第 26 回合）：步驟 0 做了兩半——金字塔與投票門檻用同一個後驗（`beliefUnified`，採用），校準改成投票、派隊概似取次方（`beliefTemper=73`，採用；真人局 log2 P(W*) −7.88 → −6.91，自我對打 −6.22 → −5.47）；讀真人用強者表（`beliefStrongTables`）在真人局最好（−6.28），但自我對打 −7.7～−13.2pp，等 Edward 決定。步驟 1 接進正式後驗（`beliefPolicyVotes`，預設關；`infl/policyRead.ts`、`policy_strong.json`、`scripts/fitPolicyVotes.ts`；強者表＋INFL 讀票＋校準 −6.22，每次後驗約 8 ms）。步驟 2（派隊的條件 logit）還沒做。
+
 **線上成本**（四個 CPU 被另一個優化回合佔滿、`nice` 下量的；40 局、662 個決策點）：現行預設後驗 1.5 ms（p95 3.3）；ForwardAgent 投票 2.8 ms（p95 8.6）、派隊 19.8 ms（p95 38.8）；`interpret()`（ToM × 9）17.6 ms（p95 33.9）；(a) 骨架後驗（含 j 座位貝氏視角、逐局累加）22.9 ms（p95 44.4）。(a) 的成本和現在每個決策只進紀錄的 ToM 差不多；把 ToM 改成需要說明時才跑，就能放進 (a) 而不增加延遲。
 
 ## 6. 限制

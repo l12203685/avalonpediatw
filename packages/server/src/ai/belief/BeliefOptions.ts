@@ -55,12 +55,18 @@ export interface BeliefOptions {
   merlinZoneSignal?: boolean;
   /** `merlinLoyalStyle`: read the Merlin candidate's R1–R2 proposals strictly (`BayesOptions.merlinEarlyStrict`). */
   merlinLoyalStyle?: boolean;
+  /**
+   * Round 26 `beliefUnified` (infl_research.md §1.5; Edward 2026-11-04): the tuning the pyramid's posterior options come from — the same
+   * `bayesOptionsOf(tuning)` the vote thresholds and team picks read (bot / strong tables, key-round and red-alone cells), so the
+   * displayed "P(red) of each seat" and the decisions use one posterior. Absent = the old pyramid options (human table, no cells).
+   */
+  bayesTuning?: Readonly<Partial<AgentTuning>>;
 }
 
 export type BeliefTuning = Pick<
   AgentTuning,
   'beliefCertainFacts' | 'rule3PostLakeOnly' | 'beliefChainProjection' | 'forcedVoteZeroBits' | 'worldShareBelief' | 'bayesBelief' | 'bayesThumbRoles' | 'percivalThumbLogic' | 'loyalMerlinRead' | 'merlinZoneSignal' | 'merlinLoyalStyle'
->;
+> & Partial<AgentTuning>;
 
 /** Every switch off: the belief code before 2026-10-22. */
 export const LEGACY_BELIEF_OPTIONS: Readonly<BeliefOptions> = Object.freeze({
@@ -84,6 +90,7 @@ export function beliefOptionsFrom(tuning: BeliefTuning): BeliefOptions {
     loyalMerlinRead: tuning.loyalMerlinRead,
     merlinZoneSignal: tuning.merlinZoneSignal,
     merlinLoyalStyle: tuning.merlinLoyalStyle,
+    ...(tuning.beliefUnified === true ? { bayesTuning: tuning } : {}),
   };
 }
 

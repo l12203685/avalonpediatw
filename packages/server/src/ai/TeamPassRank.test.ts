@@ -45,7 +45,8 @@ const OBS: PlayerObservation = {
 // Production routes every R3+ decision through ForwardAgent (vitest's HeuristicAgent.act cannot lazy-load
 // it, so it is built directly, as in ForwardAgent.tuning.test.ts).
 function decide(teamPassRank: number): boolean {
-  const agent = new ForwardAgent('S6', new HeuristicAgent('S6', undefined, undefined, { teamPassRank, goodCleanVote: 0, goodTailVote: 0, goodKeyVote: 0 }));
+  // Round 26 `beliefUnified` off: the "scorer of before" these cases document reads the pyramid's own (human-table) posterior.
+  const agent = new ForwardAgent('S6', new HeuristicAgent('S6', undefined, undefined, { teamPassRank, goodCleanVote: 0, goodTailVote: 0, goodKeyVote: 0, beliefUnified: false }));
   agent.onGameStart(OBS);
   const a = agent.act(OBS);
   if (a.type !== 'team_vote') throw new Error(a.type);

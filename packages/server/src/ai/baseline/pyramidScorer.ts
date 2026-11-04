@@ -479,7 +479,8 @@ export function computePyramidScores(
   }
   // worldShareBelief: a good viewer's suspicion is its share of the consistent worlds (see BeliefOptions).
   if (opts.bayes && obs.myTeam === 'good') {
-    const post = bayesRedShare(obs, bayesOptionsOf(opts));
+    // Round 26 `beliefUnified`: the decisions' posterior options (one posterior for the display and the decisions).
+    const post = bayesRedShare(obs, bayesOptionsOf(opts.bayesTuning ?? opts));
     for (const id of obs.allPlayerIds) scores.set(id, id === obs.myPlayerId ? 0 : post.get(id) ?? 0.5);
   } else if (opts.worldShare && obs.myTeam === 'good') {
     const view = buildCertainty(obs);

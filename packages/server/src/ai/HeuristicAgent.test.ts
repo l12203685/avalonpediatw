@@ -2152,7 +2152,9 @@ describe('HeuristicAgent · team-aware vote rewire (Edward 2026-04-30)', () => {
     // reds, so in R3 (one fail decides) it must fail and the gate rejects it.
     // The pyramid thresholds under test are measured with the gates off.
     expect(approveRate(obs, 20)).toBe(0);
-    const rate = approveRate(obs, 500, GATES_OFF);
+    // Round 26 `beliefUnified`: the pyramid now reads the decision posterior (bot tables, cells, tempering), which in this
+    // fixture sees that every 3-seat team holds a red; the pyramid-threshold scorer under test is the one before (human tables).
+    const rate = approveRate(obs, 500, { ...GATES_OFF, beliefUnified: false });
     // Team looks clean (pyramid neutral, no anomalies) → approve dominates.
     expect(rate).toBeGreaterThan(0.85);
   });

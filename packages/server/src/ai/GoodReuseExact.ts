@@ -26,7 +26,10 @@ export function goodReuseExactTeam(
 ): AgentAction {
   const mode = tuning.goodReuseExact ?? 0;
   if (mode <= 0 || action.type !== 'team_select' || obs.myTeam !== 'good') return action;
-  if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return action;
+  // Round 26 `merlinReuseExact`: Merlin re-proposes the successful team the same way when it holds no red he sees — what a loyal with
+  // the same public record does (assassinReuseRead=11 reads "Merlin skipped a clean successful team" as Merlin-like: ×1.38).
+  const merlin = obs.myRole === 'merlin' && tuning.merlinReuseExact === true;
+  if (obs.myRole !== 'loyal' && obs.myRole !== 'percival' && !merlin) return action;
   const round = obs.currentRound ?? 1;
   if (round < 2) return action;
   const last = obs.questHistory.find((q) => q.round === round - 1);
@@ -39,6 +42,7 @@ export function goodReuseExactTeam(
   else if (!on && last.team.length + 1 === size) team = [me, ...last.team];
   else if (on && mode >= 2 && last.team.length === size) team = [...last.team];
   if (!team) return action;
+  if (merlin && team.some((id) => obs.knownEvils.includes(id))) return action;
   const key = [...team].sort().join(',');
   if (obs.voteHistory.some((v) => v.round === round && [...v.team].sort().join(',') === key)) return action;
   if ([...action.teamIds].sort().join(',') === key || !allowed(team)) return action;
