@@ -722,8 +722,12 @@ export class ForwardAgent implements AvalonAgent {
     // (INV-V1: in a replay the team is the human leader's and can be must-fail in the bot's view).
     const selfApprove = leaderSelfApproveReason(this.baseline.tuning, obs);
     // Merlin is exempt from the must-fail gate only (his on-team normal white, owner 2026-10-30), not from the dominance gate (INV-K1V).
-    const selfGate = obs.myRole === 'merlin' ? { ...this.gates, mustFail: false } : this.gates;
-    if (selfApprove && (obs.myTeam !== 'good' || goodVoteGate(obs, selfGate) === null)) {
+    // Round 25 `leaderSelfApproveOffTeam`: off its own team the leader's white is an outer white — a good leader keeps every vote
+    // gate, and Merlin never outer-whites a team with a red he sees (INV-M1 / INV-V1; owner 2026-10-30「異常票外白要幾乎沒有」).
+    const selfOn = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
+    const selfGate = obs.myRole === 'merlin' && selfOn ? { ...this.gates, mustFail: false } : this.gates;
+    const merlinSeenRed = obs.myRole === 'merlin' && !selfOn && (obs.proposedTeam ?? []).some((id) => obs.knownEvils.includes(id));
+    if (selfApprove && (obs.myTeam !== 'good' || (goodVoteGate(obs, selfGate) === null && !merlinSeenRed))) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, selfApprove);
     }
     // Round 25 (red; RedRound25.ts) — hard constraints `oberonMatchPoint` (G3: no outer white from Oberon at blue's match point

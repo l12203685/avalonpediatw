@@ -15,6 +15,7 @@
  */
 import { AVALON_CONFIG, type Role } from '@avalon/shared';
 import { buildCertainty } from '../belief/Certainty';
+import { missionFailed } from '../missionFacts';
 import { bayesRedShare, bayesTeamClean, type BayesOptions } from '../belief/BayesBelief';
 import {
   bitOf,
@@ -132,8 +133,9 @@ export class FlowFeatures {
     const sv = this.seatView(i, j, w);
     const x = new Float64Array(N_BASE);
     const quests = questsBefore(f, v.round);
-    const failed = quests.filter((q) => q.result === 'fail');
-    const succeeded = quests.filter((q) => q.result === 'success');
+    // INV-B3: the outcome read goes through missionFacts (the one sanctioned definition).
+    const failed = quests.filter((q) => missionFailed(q));
+    const succeeded = quests.filter((q) => !missionFailed(q));
     const failedMembers = new Set(failed.flatMap((q) => q.team));
     const teamSet = new Set(v.team);
     const sameSet = (a: readonly string[]): boolean => a.length === v.team.length && a.every((id) => teamSet.has(id));
