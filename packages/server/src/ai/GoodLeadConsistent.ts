@@ -27,7 +27,14 @@ const key = (team: readonly string[]): string => [...team].sort().join(',');
 /** Whether the reuse plan skips the rejected teams the leader sat on and voted against (`goodLeadConsistent`, blue leaders). */
 export function leadConsistentSkip(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   // Round 25 `redLeadConsistent`: the red leaders' version (稽核 (b) 紅方 55%、奧伯倫 90%；真人 4.2%).
-  if (obs.myTeam === 'evil') return (tuning.redLeadConsistent ?? 0) >= 1;
+  if (obs.myTeam === 'evil') {
+    const mode = tuning.redLeadConsistent ?? 0;
+    if (mode !== 2) return mode >= 1;
+    // 2 = 1 的 50%（第 1C 節）：照座位、局、第幾次提議雜湊，同一個局面每次一樣。
+    let h = 0x811c9dc5;
+    for (const ch of `${obs.myPlayerId}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|redleadconsistent`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    return (h % 10000) / 10000 < 0.5;
+  }
   return (tuning.goodLeadConsistent ?? 0) >= 1 && obs.myTeam === 'good';
 }
 

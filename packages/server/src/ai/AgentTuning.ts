@@ -832,7 +832,7 @@ export interface AgentTuning {
   oberonBiteReject: number;
   /**
    * 第 25 回合紅方（`GoodLeadConsistent.leadConsistentSkip` 的紅方版；稽核 (b)、盤點 S5）：1 = 紅方隊長的照派加分（`TeamReuse`）不拿這一局
-   * 「自己在隊上、投了黑」的被否決隊當參考（稽核紅方 55%、奧伯倫 90%；真人 4.2%）。0 = 關。
+   * 「自己在隊上、投了黑」的被否決隊當參考（稽核紅方 55%、奧伯倫 90%；真人 4.2%）；2 = 1 的 50%（第 1C 節）。0 = 關。
    */
   redLeadConsistent: number;
   /**
@@ -1597,7 +1597,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'redLeadConsistent') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`redLeadConsistent needs 0–1, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`redLeadConsistent needs 0–2, got "${raw}"`);
     return { redLeadConsistent: value };
   }
   if (name === 'redReuseExact') {

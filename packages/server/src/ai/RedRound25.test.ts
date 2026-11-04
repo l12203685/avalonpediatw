@@ -179,6 +179,12 @@ describe('redLeadConsistent', () => {
     expect(leadConsistentSkip(T(), obs)).toBe(false);
     expect(leadConsistentSkip(T({ redLeadConsistent: 1 }), obs)).toBe(true);
     expect(leadConsistentSkip(T({ redLeadConsistent: 1 }), { myTeam: 'good', myRole: 'loyal' } as unknown as PlayerObservation)).toBe(false);
+    let on = 0;
+    for (let i = 0; i < 40; i++) {
+      if (leadConsistentSkip(T({ redLeadConsistent: 2 }), { myTeam: 'evil', myPlayerId: `P${(i % 10) + 1}`, currentRound: 2 + (i % 4), failCount: i % 3 } as unknown as PlayerObservation)) on++;
+    }
+    expect(on).toBeGreaterThan(8);
+    expect(on).toBeLessThan(32);
   });
 });
 
