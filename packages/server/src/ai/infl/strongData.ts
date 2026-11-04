@@ -11,6 +11,7 @@ import type { PlayerObservation } from '../types';
 import { replayGamesFromDataset, type DatasetHeader, type DatasetTuple } from '../benchmark/datasetReplay';
 import { EVIL_ROLES, isLakeChainValid, type ReplayGame, type ReplayLake, type ReplayProposal, type ReplayQuest } from '../benchmark/sheetsReplay';
 import { judgeVote, type VoteJudgement } from './abnormalVotes';
+import { missionFailed } from '../missionFacts';
 
 export interface HumanGame {
   game: ReplayGame;
@@ -86,7 +87,7 @@ export function replayGameFromSelfPlay(
     teamSeats: q.team.map((x) => seatOf.get(x)!),
     successCount: q.team.length - q.failCount,
     failCount: q.failCount,
-    failed: q.result === 'fail',
+    failed: missionFailed(q),
   }));
   const lakes: ReplayLake[] = (final.lakeHistory ?? []).map((l) => ({
     round: l.round,

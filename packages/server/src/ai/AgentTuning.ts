@@ -681,6 +681,8 @@ export interface AgentTuning {
    * 沒照派的乘數 4 = 第 2 局 ×0.25（同 3）、第 3 局起 ×0.65（量到的）；5 = 兩局都用量到的（×0.05、×0.65）；6 = 第 2 局 ×0.05、第 3 局起 ×0.25（同 3）；
    * 7 = 同 3，再讀「照派了」（第 2 局 ×1.1、第 3 局起 ×1.45）；8 = 同 3，那一隊乾淨（沒有看得到的紅）而沒照派也讀（第 2 局 ×0.12、第 3 局起 ×0.73）。
    * 9 = 三種乘數都用自我對打的刺殺資料擬合（條件 logit，1,672 次刺殺）；10 = 同 9，連模型分數、讀票、讀派隊的權重一起擬合（`REUSE_STACK_WEIGHTS`）。
+   * 第 25 回合候選：11 = 9 用第 24 回合預設（藍方照原樣照派成功的隊）的刺殺資料重新擬合（1,295 次刺殺；R3 起沒照派乾淨的照派隊 ×1.38、第 2 局照派 ×0.34）。
+   * 第 25 回合採用 11（第 1 階段）：篩選 +0.9 [+0.3, +1.5]pp，兩組各 6000 組種子 +0.63 [+0.34, +0.93]／+1.05 [+0.72, +1.38]（合併 12000 組 +0.84 [+0.62, +1.06]；刺中率約 +1.3pp，三紅率不變）。
    * 第 21 回合不採用（維持 3）：4 −0.4 [−0.8, −0.0]pp（把第 3 局起調回量到的比例反而變差）；5／6／7／8 +0.0～+0.2；10 −0.8；
    * 9 兩組各 6000 組種子 +0.45 [+0.08, +0.82]／+0.33 [−0.06, +0.73]pp（合併 12000 組 +0.39 [+0.12, +0.66]，第二組碰 0，留給第 2 階段）。
    * 第 23 回合採用 9：對第 19 回合預設第三組 6000 組 +0.42 [+0.03, +0.80]；在 `assassinDoomedRead=1` 之上兩組各 6000 組 +0.58 [+0.21, +0.96]／+0.42 [+0.05, +0.79]pp（刺中率約 +1pp，三紅率不變）。
@@ -805,6 +807,50 @@ export interface AgentTuning {
    * 只拿掉一人 X 時，X 的票照「鐵咬」格讀（`voteBite`：真人紅 18.0%、藍 4.5% 贊成），取代一般的隊外格。1 = 機器人表的格，2 = 真人表的格。0 = 關。
    */
   beliefBiteCell: number;
+  /**
+   * 第 25 回合硬約束・奧伯倫（`RedRound25.oberonMatchPointReject`；盤點 G3，稽核 (f′)；Edward 2026-11-03 練習台：已暴露的奧伯倫對第 4 局、藍方已兩藍、
+   * 過了就進刺殺的全藍隊外白）：藍方已兩藍時，不在隊上、不是隊長的奧伯倫，對自己視角（確定性層、自己湖到的紅）沒有確定夠多紅能讓它失敗的非強制隊投黑——
+   * 和相認紅的 `redVoteCritical`（沒有隊友、藍方兩藍 → 反對）同一條。預設開；這個欄位只為了量測（`--flag oberonMatchPoint=0`）與舊表（關）。
+   */
+  oberonMatchPoint: boolean;
+  /**
+   * 第 25 回合硬約束・紅方持湖者（`RedRound25.redVouchKeptTeam`／`redVouchOnTeamReject`；盤點 K8、S2，稽核 (c/d)）：紅方持湖者自己派的隊照自己的宣告
+   * （`redCleanLook` 的換隊不能換掉自己宣藍的人、放進自己宣紅的人），在隊上、隊上有自己宣紅的人時投黑（非強制、紅方未滿兩紅）。
+   * 預設開；這個欄位只為了量測與舊表（關）。需要 `evilVouchFollowUp`。
+   */
+  redVouchConsistent: boolean;
+  /**
+   * 第 25 回合硬約束（`GoodLeadConsistent.leaderSelfApproveReason`；稽核 (a″)）：`leaderSelfApprove` 延伸到隊長不在自己派的非強制提議上（第 24 回合 `goodReuseExact`
+   * 照原樣派自己不在上面的成功隊；隊長對那種提議投黑 藍方 32.6%（14／43），真人 5.2%）。每個陣營；好人（梅林除外）仍然不越過好人投票關卡。
+   * 預設開；這個欄位只為了量測與舊表（關）。
+   */
+  leaderSelfApproveOffTeam: boolean;
+  /**
+   * 第 25 回合紅方（`RedRound25.redMatchPointApprove`；盤點 L7、G1，稽核 (q)）：紅方已兩紅、自己在非強制的隊上、自己＋看得到的隊友就夠讓這隊失敗 → 投白
+   * （稽核莫德雷德 13.1%、奧伯倫 9.2%，刺客／莫甘娜 0%）。真人紅方同一個局面內黑 17.3%（這隊反正會過時，內黑沒有代價），不是純粹的矛盾 → 開關。
+   * 1 = 一律；2 = 1 的 50%（第 1C 節）。0 = 關。第 25 回合篩選 +0.1 [−0.2, +0.3]pp（中性）。
+   */
+  redMatchPointApprove: number;
+  /**
+   * 第 25 回合紅方・奧伯倫（`RedRound25.oberonBiteRejectNow`；盤點 E3，稽核 (e)；Edward 2026-11-03「派 2350 就是代表在鐵咬 6 家，6 還開白球就代表 6 是認壞了」）：
+   * 被鐵咬（這隊保留一次失敗任務的 |隊伍| − 失敗張數 人、拿掉的人裡有他）的奧伯倫投黑，不再照 `biasForOberon` 出過失敗後的贊成 +1.5。
+   * 1 = 一律；2 = 只有那次失敗任務的下一局（真人紅方被鐵咬隔一局贊成 7.4%、更後面 42.4%）；3 = 1 的 50%（第 1C 節）。0 = 關。
+   */
+  oberonBiteReject: number;
+  /**
+   * 第 25 回合紅方（`GoodLeadConsistent.leadConsistentSkip` 的紅方版；稽核 (b)、盤點 S5）：1 = 紅方隊長的照派加分（`TeamReuse`）不拿這一局
+   * 「自己在隊上、投了黑」的被否決隊當參考（稽核紅方 55%、奧伯倫 90%；真人 4.2%）；2 = 1 的 50%（第 1C 節）。0 = 關。
+   */
+  redLeadConsistent: number;
+  /**
+   * 第 25 回合紅方（`RedRound25.redReuseExactTeam`；第 24 回合 `goodReuseExact` 的紅方版）：上一局任務成功（沒有失敗牌）、這一局還沒有人派過那一隊、
+   * 紅方隊長不在那一隊上、藍方未滿兩藍時，1 = 人數相同照原樣派（自己不在隊上；隊長自己投白是 `leaderSelfApproveOffTeam`）、多一人派那一隊＋自己；2 = 只有多一人時；3 = 1 的 50%（第 1C 節）。0 = 關。
+   */
+  redReuseExact: number;
+  /**
+   * 第 25 回合紅方（第 1C 節）：`redSelfOnTeam` 的 50%——照座位、局、第幾次提議與隊伍雜湊，一半的局面把在隊上的自己算進隊上的紅。false = 關。
+   */
+  redSelfOnTeamHalf: boolean;
 }
 
 export type AgentTuningKey = keyof AgentTuning;
@@ -916,6 +962,14 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodLeadConsistent',
   'leaderSelfApprove',
   'beliefBiteCell',
+  'oberonMatchPoint',
+  'redVouchConsistent',
+  'leaderSelfApproveOffTeam',
+  'redMatchPointApprove',
+  'oberonBiteReject',
+  'redLeadConsistent',
+  'redReuseExact',
+  'redSelfOnTeamHalf',
 ];
 
 /** 2026-10-12 之前的行為：所有開關關閉。 */
@@ -1026,6 +1080,14 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLeadConsistent: 0,
   leaderSelfApprove: false,
   beliefBiteCell: 0,
+  oberonMatchPoint: false,
+  redVouchConsistent: false,
+  leaderSelfApproveOffTeam: false,
+  redMatchPointApprove: 0,
+  oberonBiteReject: 0,
+  redLeadConsistent: 0,
+  redReuseExact: 0,
+  redSelfOnTeamHalf: false,
 });
 
 /**
@@ -1266,7 +1328,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefKeyVoteCells: true,
   merlinReuseNorm: 3,
   percivalMorganaR1: false,
-  assassinReuseRead: 9,
+  assassinReuseRead: 11,
   redHideReuse: 0,
   merlinReuseSkip: 0,
   merlinReusePublic: false,
@@ -1284,6 +1346,14 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLeadConsistent: 0,
   leaderSelfApprove: true,
   beliefBiteCell: 0,
+  oberonMatchPoint: true,
+  redVouchConsistent: true,
+  leaderSelfApproveOffTeam: true,
+  redMatchPointApprove: 0,
+  oberonBiteReject: 0,
+  redLeadConsistent: 0,
+  redReuseExact: 0,
+  redSelfOnTeamHalf: false,
 });
 
 /** 環境變數名稱（值：數字開關用數字，布林開關用 1/0/true/false）。 */
@@ -1394,6 +1464,14 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodLeadConsistent: 'AVALON_TUNING_GOOD_LEAD_CONSISTENT',
   leaderSelfApprove: 'AVALON_TUNING_LEADER_SELF_APPROVE',
   beliefBiteCell: 'AVALON_TUNING_BELIEF_BITE_CELL',
+  oberonMatchPoint: 'AVALON_TUNING_OBERON_MATCH_POINT',
+  redVouchConsistent: 'AVALON_TUNING_RED_VOUCH_CONSISTENT',
+  leaderSelfApproveOffTeam: 'AVALON_TUNING_LEADER_SELF_APPROVE_OFF_TEAM',
+  redMatchPointApprove: 'AVALON_TUNING_RED_MATCH_POINT_APPROVE',
+  oberonBiteReject: 'AVALON_TUNING_OBERON_BITE_REJECT',
+  redLeadConsistent: 'AVALON_TUNING_RED_LEAD_CONSISTENT',
+  redReuseExact: 'AVALON_TUNING_RED_REUSE_EXACT',
+  redSelfOnTeamHalf: 'AVALON_TUNING_RED_SELF_ON_TEAM_HALF',
 });
 
 function parseBool(raw: string): boolean | undefined {
@@ -1498,7 +1576,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'assassinReuseRead') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 10) throw new Error(`assassinReuseRead needs 0–10, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 11) throw new Error(`assassinReuseRead needs 0–11, got "${raw}"`);
     return { assassinReuseRead: value };
   }
   if (name === 'redHideReuse') {
@@ -1530,6 +1608,26 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`beliefBiteCell needs 0–2, got "${raw}"`);
     return { beliefBiteCell: value };
+  }
+  if (name === 'oberonBiteReject') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`oberonBiteReject needs 0–3, got "${raw}"`);
+    return { oberonBiteReject: value };
+  }
+  if (name === 'redMatchPointApprove') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`redMatchPointApprove needs 0–2, got "${raw}"`);
+    return { redMatchPointApprove: value };
+  }
+  if (name === 'redLeadConsistent') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`redLeadConsistent needs 0–2, got "${raw}"`);
+    return { redLeadConsistent: value };
+  }
+  if (name === 'redReuseExact') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`redReuseExact needs 0–3, got "${raw}"`);
+    return { redReuseExact: value };
   }
   if (name === 'goodLeadConsistent') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
@@ -1638,7 +1736,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

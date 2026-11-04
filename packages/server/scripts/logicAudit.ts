@@ -211,6 +211,7 @@ export interface RuleInfo {
 
 export const RULES: readonly RuleInfo[] = [
   { id: 'a_leader_rejects_own', label: '(a) 隊長在自己派、自己在隊上的非強制提議投黑（自派自黑）', camps: ['good', 'evil'] },
+  { id: 'a2_leader_rejects_own_off', label: '(a″) 隊長在自己派、自己不在隊上的非強制提議投黑（第 25 回合）', camps: ['good', 'evil'] },
   { id: 'b_repropose_inside_rejected', label: '(b) 隊長在非強制提議重派本局自己內黑過的同一隊', camps: ['good', 'evil'] },
   { id: 'b_forced_repropose_inside_rejected', label: '(b′) 同 (b)，但是第 5 次強制提議', camps: ['good', 'evil'] },
   { id: 'b2_reapprove_inside_rejected', label: '(b2) 本局內黑過的同一隊，之後（不是隊長）改投白', camps: ['good', 'evil'] },
@@ -221,6 +222,7 @@ export const RULES: readonly RuleInfo[] = [
   { id: 'cd_approve_declared_red', label: '(c/d) 持湖者之後對有自己宣紅者的非強制隊投白', camps: ['good', 'evil'] },
   { id: 'cd_propose_omit_declared_blue', label: '(c/d) 持湖者之後派自己在隊上的隊，卻漏掉自己宣藍的人', camps: ['good', 'evil'] },
   { id: 'e_approve_iron_bite_on_me', label: '(e) 失敗任務的隊員，對「鐵咬」自己的非強制隊投白（認壞）', camps: ['good', 'evil'] },
+  { id: 'e_next_round_bite', label: '(e″) 同 (e)，而且是那次失敗任務的下一局（第 25 回合）', camps: ['good', 'evil'] },
   { id: 'e2_propose_iron_bite_self', label: '(e2) 失敗任務的隊員當隊長，派出鐵咬自己的隊', camps: ['good', 'evil'] },
   { id: 'f_red_approves_blue_win', label: '(f) 藍方已兩藍，紅方不在隊上、對全藍的非強制隊投白', camps: ['evil'] },
   { id: 'f2_red_pivotal_blue_win', label: '(f′) 同 (f)，而且這顆白球剛好讓隊伍過半', camps: ['evil'] },
@@ -230,6 +232,7 @@ export const RULES: readonly RuleInfo[] = [
   { id: 'h_approve_must_fail', label: '(h) 好人對自己視角確定會失敗的非強制隊投白（含梅林看到的紅、自己湖到的紅）', camps: ['good'] },
   { id: 'h_propose_must_fail', label: '(h) 好人當隊長派出自己視角確定會失敗的隊', camps: ['good'] },
   { id: 'h2_approve_certain_red', label: '(h′) 好人對有自己視角確定紅的非強制隊投白（第 4 局一紅不一定失敗也算）', camps: ['good'] },
+  { id: 'q_red_match_point_inner_black', label: '(q) 紅方已兩紅，自己在非強制的隊上、自己知道的紅夠讓任務失敗，卻投黑（第 25 回合）', camps: ['evil'] },
   { id: 'o_red_forced_leader_no_load', label: '(o) 紅方已兩紅，紅隊長的強制提議沒放夠自己知道的紅', camps: ['evil'] },
   { id: 'p_red_match_point_not_closed', label: '(p) 紅方已兩紅，隊上紅方夠讓任務失敗，任務卻成功（紅方沒收尾）', camps: 'mission' },
 ];
@@ -265,6 +268,7 @@ export function auditTrace(t: GameTrace, tally: Tally): void {
 
     // (a) 自派自黑。
     if (votes && teamSet.has(L)) tally.add('a_leader_rejects_own', role(L), r, votes[L] === false);
+    if (votes && !teamSet.has(L)) tally.add('a2_leader_rejects_own_off', role(L), r, votes[L] === false);
 
     // (b) 重派自己內黑過的隊（強制提議也算：隊長仍自己選人）。
     const insideRejected = new Set(earlier.filter((e) => e.votes && !e.forced && e.team.includes(L) && e.votes[L] === false).map((e) => teamKey(e.team)));
@@ -302,15 +306,17 @@ export function auditTrace(t: GameTrace, tally: Tally): void {
 
     // (e) 鐵咬：之前有失敗牌的任務 q（f 張），這隊只沿用 q 的 |q| − f 人，被拿掉的人投白 = 認壞。
     const bitten = new Set<number>();
+    const bittenNext = new Set<number>();
     for (const q of t.quests) {
       if (q.round >= r || q.failCount < 1) continue;
       const kept = q.team.filter((s) => teamSet.has(s)).length;
       if (kept !== q.team.length - q.failCount) continue;
-      for (const s of q.team) if (!teamSet.has(s)) bitten.add(s);
+      for (const s of q.team) if (!teamSet.has(s)) { bitten.add(s); if (q.round === r - 1) bittenNext.add(s); }
     }
     for (const s of bitten) {
       if (s === L) continue;
       if (votes) tally.add('e_approve_iron_bite_on_me', role(s), r, votes[s] === true);
+      if (votes && bittenNext.has(s)) tally.add('e_next_round_bite', role(s), r, votes[s] === true);
     }
     // (e2) 失敗任務的隊員當隊長：機會 = 他之前出過有失敗牌的任務，違反 = 這隊鐵咬他自己。
     if (t.quests.some((q) => q.round < r && q.failCount >= 1 && q.team.includes(L) && q.team.length > 1)) {
@@ -358,6 +364,14 @@ export function auditTrace(t: GameTrace, tally: Tally): void {
       if (min >= 1) tally.add('h2_approve_certain_red', role(v), r, votes[v] === true);
     }
 
+    // (q) 紅方已兩紅：自己在隊上、自己 + 看得到的隊友夠讓任務失敗，投黑 = 放棄收尾。
+    if (votes && wins.red === 2) {
+      for (const s2 of p.team) {
+        if (camp(s2) !== 'evil') continue;
+        const known = new Set([s2, ...sightOf(t, s2).knownRed]);
+        if (p.team.filter((x) => known.has(x)).length >= need) tally.add('q_red_match_point_inner_black', role(s2), r, votes[s2] === false);
+      }
+    }
     // (o) 紅方已兩紅：紅隊長的強制提議放夠自己知道的紅（自己 + 看得到的隊友）。
     if (p.forced && camp(L) === 'evil' && wins.red === 2) {
       const known = new Set([L, ...sightOf(t, L).knownRed]);
