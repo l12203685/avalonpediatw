@@ -262,6 +262,13 @@ export function pickLakeTargetForTeam(
     )[0];
   }
 
+  // ── AgentTuning.redLakeLoyal（第 27 回合紅方，只量、不採用：改的是下面 Edward 2026-10-13 的裁定）──
+  // The red holder picks the target a public-view loyal in this seat would (strong red humans lake an ally 17%, the bot 75%).
+  if (tuning.redLakeLoyal) {
+    const view: PlayerObservation = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: true };
+    return pickLakeTargetForTeam('good', view, validTargets, tuning);
+  }
+
   // ── AgentTuning.evilLakeHumanStrategy (Edward 2026-10-13 ruling) ──
   // 「紅方湖中應該是盡量留在隊友身上並說謊」— supersedes the bring-friend
   // heuristic below (and its AVALON_EVIL_LAKE_BRING_FRIEND=0 regression
