@@ -18,3 +18,15 @@ describe('百科AI 問「需要我離開嗎？」（Edward 2026-11-04）', () =>
     expect(newHumanChats(before, now)).toEqual([{ set: 2, name: '乙', msg: '留下' }]);
   });
 });
+
+describe('私房密碼沒給時試今天日期 MMDD（Edward 2026-11-05）', () => {
+  it('台灣日期；凌晨 6 點前也試昨天；有給密碼就只用它', async () => {
+    const { passwordCandidatesAt, taipeiMMDD } = await import('../../scripts/signagePlayer');
+    const noonTW = Date.UTC(2026, 10, 5, 4, 0, 0); // 台灣 11/05 12:00
+    expect(taipeiMMDD(noonTW)).toBe('1105');
+    expect(passwordCandidatesAt(noonTW, '')).toEqual(['1105']);
+    const lateTW = Date.UTC(2026, 10, 5, 17, 30, 0); // 台灣 11/06 01:30
+    expect(passwordCandidatesAt(lateTW, '')).toEqual(['1106', '1105']);
+    expect(passwordCandidatesAt(lateTW, '9999')).toEqual(['9999']);
+  });
+});

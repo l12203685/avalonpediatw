@@ -110,6 +110,21 @@ const START_MIN = Number(arg('start-min', '6'));
  * 記得設定一個時間到就自己退出的機制」——另外只有第 1 個機器人先登入看大廳，其他的要坐下前才登入，不在大廳排排站。
  */
 const FIND_MIN = Number(arg('find-min', '10'));
+/** 台灣日期的 MMDD（shiftDays 可往前推）。 */
+export function taipeiMMDD(at: number, shiftDays = 0): string {
+  const d = new Date(at + 8 * 3600_000 + shiftDays * 86_400_000);
+  return `${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+/**
+ * 私房密碼候選：指令有給就只用它；沒給就試今天的 MMDD，台灣凌晨 6 點前再試昨天的（跨夜的團）。
+ */
+export function passwordCandidatesAt(at: number, given: string): string[] {
+  if (given) return [given];
+  const out = [taipeiMMDD(at)];
+  if (new Date(at + 8 * 3600_000).getUTCHours() < 6) out.push(taipeiMMDD(at, -1));
+  return out;
+}
+const passwordCandidates = (): string[] => passwordCandidatesAt(Date.now(), PASSWORD);
 const PRIVATE_LOG = arg('private-log', '');
 /** 百科AI 對局紀錄貼 DC（見檔頭）：每晚與指定房間預設開，私房測試預設關。 */
 const AI_TRACE = arg('ai-trace', MODE === 'private-test' ? 'off' : 'on') !== 'off';
@@ -135,10 +150,11 @@ const EYES = '開眼階段';
 /**
  * 輪到自己時等多久再按（毫秒）。Edward 2026-11-03：「百科AI的所有動作速度都可以再快一點 瞬間做完都沒差 因為是AI」
  * ——原本 1–3 秒，改成 --act-ms（預設 150）上下 50%；POLL_MS 是沒輪到自己時多久看一次畫面。
+ * 11/05「不用假裝思考 跑完就馬上執行」：--act-ms 預設 0（不等），看畫面 150 毫秒一次，派隊每點一人只隔 0.12 秒。
  */
-const ACT_MS = Math.max(0, Number(arg('act-ms', '150')) || 0);
+const ACT_MS = Math.max(0, Number(arg('act-ms', '0')) || 0);
 const actDelay = (): number => ACT_MS * (0.5 + Math.random());
-const POLL_MS = 400;
+const POLL_MS = 150;
 const HELLO = '我是百科AI（阿瓦隆百科的測試機器人），人不夠時來補位；有意見請到 DC 百科問題回報';
 /** 開局前／每局打完後問一次（Edward 11/04）。ASK_SEC 秒內有人回「離開」就走，沒人回或回「留下」就留著。 */
 const ASK_SEC = Number(arg('ask-sec', '40'));
@@ -458,7 +474,7 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
       return { status: 'ended', missions, winner, actions };
     }
     if (Date.now() - lastChange > 15 * 60_000 || Date.now() - t0 > 90 * 60_000) return { status: 'stalled', missions: '', winner: '', actions };
-    if (!seat.started) { await sleep(800); continue; }
+    if (!seat.started) { await sleep(300); continue; }
 
     // 開局的第一張畫面有時身分標記還沒送到（2026-11-03 實測：梅林第一張看到 0 個紅）：開局 60 秒內、人數和規則
     // 對不上時重讀，夜晚資訊有變就重新開始 AI 的記憶（AI 每次決定都會從完整的公開紀錄重建）。
@@ -477,7 +493,7 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
     const fallback = Date.now() - pendingSince > 45_000;
     try {
       if (!doneAt && d !== 'team') {
-        await sleep(actDelay());
+        if (ACT_MS) await sleep(actDelay());
         const again = await snap(p);
         if (!again || !decisionOpen(again, d)) continue;
         s = again;
@@ -486,7 +502,7 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
       if (a) {
         const r = await press(p, a);
         if (r === 'ok') { count(a.kind); seat.commit(dkey); if (d !== 'team') done.set(dkey, Date.now()); }
-        if (d === 'team') await sleep(400);
+        if (d === 'team') await sleep(120);
       } else if (d === 'lakeDeclare' || d === 'verify') {
         seat.commit(dkey); // 不宣告（不按任何按鈕）也是一個決定
         done.set(dkey, Date.now());
@@ -495,7 +511,7 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
       log(`${room} 動作失敗（${d}）：${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`);
       await sleep(1500);
     }
-    await sleep(300);
+    await sleep(60);
   }
 }
 
@@ -523,7 +539,7 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
     case 'team': {
       if (seat.planKey !== dkey || !seat.plan) {
         await sync();
-        await sleep(actDelay());
+        if (ACT_MS) await sleep(actDelay());
         const need = s.free_ticks + s.users.filter((u) => u.tick).length;
         const dflt = [s.myself.set, ...s.users.map((u) => u.set).filter((x) => x !== s.myself.set)].slice(0, need);
         const a = safe(() => seat.agent.act(look('team_select')), { type: 'team_select' as const, teamIds: dflt.map(sid) });
@@ -842,12 +858,13 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
   log(`指定房間 ${ROOM || '（依房間描述）'}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
   let lastLen = -1; let stableSince = Date.now();
   const findBy = Date.now() + FIND_MIN * 60_000;
+  let roomPw = '';
   while (Date.now() < deadline) {
     if (Date.now() > findBy) { log(`指定房間結束：${FIND_MIN} 分鐘內沒有找到可以坐的房間，登出`); return; }
     const rooms = await lobbyRooms(lobby).catch(() => [] as LobbyRoom[]);
     const r = rooms.find((x) => (ROOM ? sameRoom(x.name, ROOM) : Boolean(ROOM_TITLE) && (x.description_title ?? '').includes(ROOM_TITLE)));
     if (!r) { lastLen = -1; await sleep(15000); continue; }
-    if (!r.is_publish_room && !PASSWORD) { log(`${r.name}：私房需要密碼（--password），不加入`); return; }
+    // 私房沒給密碼：照慣例試今天的日期 MMDD（Edward 2026-11-05「房間密碼 有時候他們會忘記講 通常是會用日期(MMDD)」）
     const len = r.length ?? 0;
     if (len !== lastLen) { lastLen = len; stableSince = Date.now(); }
     if (r.gaming || len >= 10 || Date.now() - stableSince < 15000) { await sleep(5000); continue; }
@@ -871,8 +888,21 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
       if (BOTS > 1 && !b.label) b.label = '#1';
       const now = (await lobbyRooms(b.page).catch(() => [] as LobbyRoom[])).find((x) => x.name === r.name);
       if (!now || now.gaming || (now.length ?? 10) >= 10) break;
-      if (await joinRoom(b.page, r.name, r.is_publish_room ? '' : PASSWORD)) seated.push(b);
-      else { log(`${r.name}${b.label}：沒有坐進去`); break; }
+      let ok = false;
+      if (r.is_publish_room) ok = await joinRoom(b.page, r.name, '');
+      else {
+        // 第一個機器人試出正確的密碼後，後面的直接用那個
+        for (const pw of roomPw ? [roomPw] : passwordCandidates()) {
+          if (await joinRoom(b.page, r.name, pw)) { ok = true; roomPw = pw; break; }
+          if (inRoom(b.page)) break;
+        }
+      }
+      if (ok) seated.push(b);
+      else {
+        log(`${r.name}${b.label}：沒有坐進去${!r.is_publish_room && !roomPw ? `（私房密碼不對：${PASSWORD ? '指令給的密碼' : '試了今天日期'}）` : ''}`);
+        if (!r.is_publish_room && !roomPw && !seated.length) { log('指定房間結束：私房密碼不對，登出'); return; }
+        break;
+      }
       await sleep(1500);
     }
     // 沒坐進去的機器人立刻登出（關掉分頁），不留在大廳
