@@ -34,6 +34,10 @@ export function goodReuseExactTeam(
   if (round < 2) return action;
   const last = obs.questHistory.find((q) => q.round === round - 1);
   if (!last || obs.questResults[round - 2] !== 'success' || (last.failCount ?? 0) > 0) return action;
+  // Round 30 `goodReuseNoMatchPoint` (BlueRound30.ts): red has two fails (R5, or R4 after an R3 success) — the next fail loses, Merlin's
+  // norm and the assassin's re-proposal read stop there, and the exact re-proposal is less clean than the leader's own cleanest team
+  // (self-play R5: 79.7% vs 93.5%; human games 40.9% vs 63.1%) → keep the pipeline's team.
+  if (tuning.goodReuseNoMatchPoint === true && obs.questResults.filter((r) => r === 'fail').length >= 2) return action;
   const me = obs.myPlayerId;
   const size = action.teamIds.length;
   const on = last.team.includes(me);

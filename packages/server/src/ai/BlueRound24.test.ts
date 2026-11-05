@@ -271,7 +271,9 @@ describe('leaderSelfApprove (round 24 hard constraint) and goodLeadConsistent (r
     ],
     proposedTeam: [], lakeHistory: [], myLakeResults: [],
   } as unknown as PlayerObservation;
-  const tun = (lsa: boolean, tau = 0.45, lc = 0) => ({ ...DEFAULT_AGENT_TUNING, leaderSelfApprove: lsa, goodCleanVote: tau, goodLeadConsistent: lc });
+  // Round 30 `beliefLeadStrong` (default) reads a team pick with the strong tables and the vote with the usual ones; these cases pin the
+  // thresholds between two teams of one posterior, so they keep the round-24 single posterior.
+  const tun = (lsa: boolean, tau = 0.45, lc = 0) => ({ ...DEFAULT_AGENT_TUNING, leaderSelfApprove: lsa, goodCleanVote: tau, goodLeadConsistent: lc, beliefLeadStrong: false });
   it('the constraint is on by default (off only in the legacy table); the reuse skip is off', () => {
     expect(DEFAULT_AGENT_TUNING.leaderSelfApprove).toBe(true);
     expect(LEGACY_AGENT_TUNING.leaderSelfApprove).toBe(false);

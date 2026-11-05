@@ -586,6 +586,20 @@ function leadTemperOf(x: number): Pick<BayesOptions, 'leadVoteTemper' | 'leadPro
   return { leadVoteTemper: t.voteTemper ?? 1, leadProposalTemper: t.proposalTemper ?? 1 };
 }
 
+/**
+ * Round 30 `goodLakeEntropy`: the posterior's worlds (red-set bitmasks over the viewer's seats) and their weights, plus the
+ * probability a RED holder declares "evil" about a target (the red-lake cell the posterior reads; a good holder is truthful).
+ */
+export function bayesWorlds(obs: PlayerObservation, opts: Readonly<BayesOptions> = {}): { worlds: readonly number[]; wts: readonly number[]; bitOf: (id: string) => number; redLakeEvil: (targetRed: boolean) => number } {
+  const post = posterior(obs, opts);
+  const strong = opts.strongTables === true;
+  const redLakeEvil = (targetRed: boolean): number => {
+    useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, strong, opts.strongParts ?? 15);
+    try { return redLakeProb(targetRed); } finally { useMix(0); }
+  };
+  return { worlds: post.worlds, wts: post.wts, bitOf: post.bitOf, redLakeEvil };
+}
+
 /** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */
 export function bayesRedShare(obs: PlayerObservation, opts: Readonly<BayesOptions> = {}): Map<string, number> {
   const post = posterior(obs, opts);

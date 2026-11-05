@@ -37,7 +37,7 @@ describe('round 28 tuning fields', () => {
     expect(DEFAULT_AGENT_TUNING.merlinReuseNoEarly).toBe(true);
     expect(DEFAULT_AGENT_TUNING.goodTailVote).toBe(0.7);
     expect(DEFAULT_AGENT_TUNING.beliefLeadTemper).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.beliefLeadStrong).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.beliefLeadStrong).toBe(true); // round 30 adoption (Edward 2026-11-05)
     expect(parseTuningFlag('mpTailWhite=2')).toEqual({ mpTailWhite: 2 });
     expect(parseTuningFlag('loyalTailWhiteEarly')).toEqual({ loyalTailWhiteEarly: true });
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, mpTailWhite: 1 })).toBe('mpTailWhite=1');
@@ -123,7 +123,7 @@ describe('beliefLeadTemper (round 28, team picks)', () => {
     expect(bayesTeamClean(vote, team, bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefLeadTemper: 1 }))).toBeCloseTo(bayesTeamClean(vote, team, bayesOptionsOf(DEFAULT_AGENT_TUNING))!, 12);
   });
   it('beliefLeadStrong: a team pick reads with the strong tables, a vote point does not', () => {
-    expect(DEFAULT_AGENT_TUNING.beliefLeadStrong).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.beliefLeadStrong).toBe(true); // default since round 30
     const team = ['P1', 'P4', 'P6', 'P7', 'P9'];
     const on = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefLeadStrong: true });
     const strong = bayesTeamClean(r3, team, bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefStrongTables: true }))!;
