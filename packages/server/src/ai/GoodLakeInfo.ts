@@ -235,7 +235,7 @@ export interface GoodLakeInfoAnalysis {
 }
 
 /** Another lake follows this one (lakes run after rounds 2 .. last − 1). */
-function anotherLakeFollows(obs: PlayerObservation): boolean {
+export function anotherLakeFollows(obs: PlayerObservation): boolean {
   const rounds = AVALON_CONFIG[obs.playerCount]?.questTeams.length ?? 5;
   return obs.currentRound + 2 <= rounds;
 }

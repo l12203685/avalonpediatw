@@ -59,6 +59,7 @@ import { redCleanWhiteNow, redKeyWhiteVote, redLoyalLeadEarlyNow, redNormalVoteN
 import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
+import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
@@ -924,6 +925,10 @@ export class ForwardAgent implements AvalonAgent {
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
     if (d.action.type === 'team_select') {
       const reused = goodReuseExactTeam(this.baseline.tuning, obs, d.action, gateOk);
+      // Round 30 `loyalR2Reuse` (BlueRound30.ts): at R2 the loyal / Percival leader passes the successful R1 team over for the
+      // cleanest team without it when that one is nearly as clean (strong humans keep it whole 68–83%, the bot ~100%).
+      const r2Alt = loyalR2ReuseTeam(this.baseline.tuning, obs, reused, gateOk);
+      if (r2Alt !== reused) return { ...d, action: r2Alt, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → R2: cleanest team without the whole R1 team` } };
       if (reused !== d.action) return { ...d, action: reused, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → re-propose the successful team` } };
       // Round 25 `redReuseExact` (RedRound25.ts): the red analogue — the red leader re-proposes the successful team as it was.
       const redReused = redReuseExactTeam(this.baseline.tuning, obs, d.action);
@@ -944,6 +949,9 @@ export class ForwardAgent implements AvalonAgent {
       const publicGateOk = (team: readonly string[]): boolean => !anyGate(this.gates)
         || teamGateBreach(pubObs, certaintyFor(pubObs), team, obs.currentRound ?? 1, this.gates) === null;
       const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk, publicGateOk);
+      // Round 30 `merlinR2Public` (BlueRound30.ts): with a clean R1 team, Merlin passes it over at R2 when the public loyal of his seat would.
+      const r2Pub = merlinR2PublicTeam(this.baseline.tuning, obs, styled, publicGateOk);
+      if (r2Pub !== styled) return { ...d, action: r2Pub, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin R2: as the public loyal (cleanest team without the whole R1 team)` } };
       if (styled !== d.action) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin loyal-style team` } };
       return d;
     }
