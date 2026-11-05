@@ -69,13 +69,24 @@ const ROOM = arg('room', '');
  * 暱稱。練習台同一個暱稱同時兩個連線會互相干擾（2026-11-03 私房測試：同暱稱兩桌同時打，其中一桌被導回大廳），
  * 所以每個同時在跑的程序用不同暱稱，都是「百科AI_{#}」（Edward 2026-11-03；記錄員靠「百科AI」前綴認，戰績合併成「百科AI」）：
  *   - 每晚補位：百科AI_0
- *   - 指定房間（1 個）：百科AI_10～19（依房號個位數）——每間房一個 workflow（concurrency 依房號）
- *   - player_aliases.json 把 百科AI_0～19 都併成「百科AI」（Edward 11/03「百科AI玩的都當成同一個人」）
+ *   - 指定房間：百科AI_21… 依房號／房間描述分段（見 nickBase）——每間房一個 workflow（concurrency 依房號）
+ *   - player_aliases.json 把 百科AI_0～99 都併成「百科AI」（Edward 11/03「百科AI玩的都當成同一個人」）
  *   - 指定房間多個（私房陪練、本機執行）：百科AI_1 … 百科AI_9
  *   - 看座位用的觀眾席分頁：百科AI看房1460（只旁觀、不入座；每間房各一個暱稱）
  */
 const roomNo = (name: string): string => (/(\d+)\s*$/.exec(name)?.[1] ?? '');
-const NICK = arg('nick', MODE === 'room' ? (roomNo(ROOM) ? `百科AI_${10 + (Number(roomNo(ROOM)) % 10)}` : '百科AI_1') : BOT_NICK);
+/**
+ * 指定房間的暱稱編號：每間房一段（20–29、30–39 … 90–99，依房號或房間描述），同時派兩間房也不撞名；
+ * 第 i 個機器人 = 段首 + i。player_aliases.json 把 百科AI_0～99 都併成「百科AI」。
+ */
+const ROOM_TITLE_ARG = arg('title', '');
+function nickBase(): number {
+  const n = roomNo(ROOM);
+  if (n) return 20 + (Number(n) % 8) * 10;
+  if (ROOM_TITLE_ARG) { let h = 0; for (const ch of ROOM_TITLE_ARG) h = (h * 31 + ch.codePointAt(0)!) >>> 0; return 20 + (h % 8) * 10; }
+  return 0;
+}
+const NICK = arg('nick', MODE === 'room' ? `百科AI_${nickBase() + 1}` : BOT_NICK);
 const watchNick = (room: string): string => `百科AI看房${roomNo(room)}`;
 const PASSWORD = arg('password', '');
 /** 指定房間也可以用房間描述找（--title 文字：描述含這段文字的房間），玩家開房前不必先知道房號。 */
@@ -100,7 +111,7 @@ const MAX_BOTS_PER_ROOM = 1;
 const MAX_BOTS_ROOM_MODE = 9;
 const BOTS = Math.max(1, Math.min(MODE === 'room' ? MAX_BOTS_ROOM_MODE : MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
 /** 第 i 個機器人（1 起算）的暱稱：只有 1 個時就是 NICK；多個時 百科AI_1 … 百科AI_9。 */
-const botNick = (i: number, n: number): string => (n <= 1 ? NICK : `百科AI_${i}`);
+const botNick = (i: number, n: number): string => (n <= 1 ? NICK : `百科AI_${nickBase() + i}`);
 /** 開局後的「開眼階段」狀態字串。 */
 const EYES = '開眼階段';
 /**
