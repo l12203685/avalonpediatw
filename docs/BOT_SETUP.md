@@ -10,6 +10,7 @@ Complete guide for setting up Discord and Line bots for Avalon game platform.
 4. [Deployment](#deployment)
 5. [Commands](#commands)
 6. [補位機器人（/機器人補位、/補位）](#補位機器人機器人補位補位)
+7. [百科AI 對局紀錄與回饋](#百科ai-對局紀錄與回饋dc-百科問題回報網站-ai-games)
 
 ---
 
@@ -216,6 +217,50 @@ vote reject    - Vote reject
 | `GITHUB_DISPATCH_REPO` | `l12203685/avalonpediatw` | workflow 所在的 repo（`owner/repo`） |
 
 workflow 還沒合併進 `main` 之前，叫機器人會回「GitHub 回應 404」之類的錯誤（不扣次數）。
+
+---
+
+## 百科AI 對局紀錄與回饋（DC #百科問題回報＋網站 #ai-games）
+
+Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」。百科AI（上面的補位機器人，`signage-player.yml`）在遊玩頁打的**每一局**，打完、角色公開之後自動記錄，大家可以針對它的每個派隊、投票、任務、湖、宣告、刺殺給回饋。
+
+### 在 DC 上
+
+- 論壇 **#百科問題回報** 一局開一篇，標籤 **百科AI對局**（論壇沒有這個標籤時，機器人第一次貼文會用 API 加上去；加不了就不掛標籤照貼）。
+- 標題：`百科AI對局 20261105_2105 週四練習團／Room-1460`（台灣時間的開局時刻、房間描述／房號）。
+- 起始訊息：房間、時間、結果、六碼配置、百科AI 坐哪幾家、各自的夜晚資訊、決定數，以及回饋方式；附 `trace.json`（完整紀錄，網站讀這個）與 `trace.txt`（可讀版，含嫌疑分數）。
+- 後面幾則：依局分組，每次提議的公開紀錄（隊長、隊伍、贊成／反對）後面接百科AI 的決定，每個決定有編號 `#n`、動作、理由、規則（理由和網站「與機器人練習」賽後回顧是同一套說明，`src/ai/explain.ts`）。每則 2000 字以內，最多 20 則（9 個百科AI 一桌時其餘看附檔或網站）；最後附網站上這一局的網址。
+- **怎麼回饋**：直接回覆那篇，寫「第幾局第幾次＋哪一家＋哪個動作＋為什麼怪」（例：`第3局第2次 3家 投票反對：隊上明明沒有可疑的人`），或寫決定編號 `#n`。每日處理 #百科問題回報 的例行作業照常讀這些回覆。
+- 同一間房的多個百科AI（`bots` 補滿）合成一篇。程式中途重啟、回到原座位打完的局也會貼，內文註明重啟前的決定沒有記到。沒打到遊戲結束（卡住、出錯）的局不貼。
+
+### 在網站上
+
+- 導覽列「百科AI對局」按鈕（400px 以下的手機放不下，從「與機器人練習」頁下方的連結進），或網址 `#ai-games`；`#ai-games=<DC 討論串 id>` 直接打開那一局。不用登入。
+- 清單＝最近 50 篇百科AI對局；點一局看回顧（同練習模式：開牌後的角色、依局分段的公開紀錄、每個百科AI 決定附理由，可以依座位、動作種類篩選）。網站上不顯示真人暱稱，只有座位與角色（DC 上照房間裡的暱稱）。
+- 每一步有「這步怪怪的」按鈕：寫原因、暱稱選填（不填＝匿名）→ 伺服器在那篇 DC 討論串貼一則回覆：
+
+  ```
+  **【網站回饋】這步怪怪的** — 小明
+  第 1 局第 1 次・2家 刺客 百科AI_22・投票：反對（決定 #2）
+  > 隊上 1、3、4 家都乾淨，第一局反對很怪
+  ```
+
+### 程式與設定
+
+| 項目 | 位置 |
+|---|---|
+| 記每個決定、局末組 trace、合併多個百科AI | `packages/server/scripts/signagePlayer.ts`、`scripts/signageAiTrace.ts` |
+| trace 格式、DC 文字、拆訊息、回饋格式 | `packages/server/src/services/aiGameTrace.ts` |
+| 貼 DC（標籤、討論串、附檔、後續訊息）；伺服器讀論壇 | `packages/server/src/services/aiGameForum.ts` |
+| API：`GET /api/ai-games`、`GET /api/ai-games/:id`、`POST /api/ai-games/:id/flag` | `packages/server/src/routes/aiGames.ts` |
+| 網站頁 | `packages/web/src/pages/AiGamesPage.tsx`、`components/aiGames/` |
+
+- **不用新的設定**：GitHub Actions 的 Play 步驟和 Render 都用既有的 `DISCORD_BOT_TOKEN`（同記錄員、牌譜回覆）。沒有 token 時只打牌不貼（log 寫「沒有 DISCORD_BOT_TOKEN」），網站 API 回 503。
+- 機器人要在 #百科問題回報 有「傳送訊息」「建立公開討論串」「附加檔案」「在討論串傳送訊息」權限；自動加標籤要「管理頻道」（沒有的話請管理者手動在論壇加一個「百科AI對局」標籤）。
+- 選填：`AI_GAME_FORUM_CHANNEL_ID`（換論壇；`off` 關掉貼文與網站頁）、`DISCORD_GUILD_ID`（列出進行中的討論串用，預設阿瓦隆百科群組）。
+- 伺服器讀 DC 的結果在記憶體快取 5 分鐘；附件只從 Discord 的 CDN 讀，只認這個論壇裡標題「百科AI對局」開頭、起始訊息是機器人發的貼文。網站回饋每個 IP 每分鐘 10 則（同網站問題回報），全站每小時最多 120 則。
+- 隱私：公開的 GitHub Actions log 只有時間、房號、狀態與數量（例：`Room-1460：百科AI對局已貼到 DC（42 個決定、6 則後續訊息）`），trace 不印到 log；DC 失敗只記狀態碼。本機跑 `--private-log DIR` 會另存一份 `ai-trace-*.json`。
+- 開關：`signagePlayer.ts --ai-trace off` 不貼；私房測試（`--mode private-test`）預設不貼，加 `--ai-trace on` 才貼。
 
 ---
 

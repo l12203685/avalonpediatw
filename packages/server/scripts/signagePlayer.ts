@@ -29,12 +29,20 @@
  *
  * 公開 log（GitHub Actions）：只有時間、房號、狀態與局數；不寫暱稱、角色、聊天內容。
  * --private-log DIR（本機用）才把角色、夜晚資訊、每個決定寫進 DIR。
+ *
+ * 百科AI 對局紀錄（Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」）：
+ * 每個決定送出後記一筆（理由同網站練習模式的賽後回顧，scripts/signageAiTrace.ts）；局結束、角色公開後組成一份 trace
+ * （同房多個百科AI 合成一份），用 DISCORD_BOT_TOKEN 貼到 DC 論壇 #百科問題回報（標籤「百科AI對局」，src/services/aiGameForum.ts），
+ * 網站「百科AI 對局」頁（#ai-games）從那裡讀。trace 含暱稱與角色，只貼 DC、不印到 log；log 只寫房號、狀態與數量。
+ * 沒有 token 就不貼（不影響打牌）；貼失敗也只記狀態碼。--ai-trace off 關掉（私房測試預設關，--ai-trace on 才貼）；
+ * 有 --private-log 時另存一份 ai-trace-*.json 在本機。
  */
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
-import type { PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
+import type { PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
+import { postAiGameTrace } from '../src/services/aiGameForum';
 import type { Role } from '@avalon/shared';
 import {
   ENDED, buildObservation, decisionOpen, evilRolesAtAssassination, historyFromRecord, lobbyCandidate, lobbyRolesLoose, missionCard,
@@ -43,6 +51,9 @@ import {
   type Decision, type Knowledge, type LobbyRoom, type PlatformRecord, type SiteAction, type Snap,
 } from './signageAdapter';
 import { BOT_NICK, TEST_ROOM_PREFIX, isPediaBotName } from './signagePaipu';
+import {
+  AiTraceHub, draftDecision, type AiGameCollector, type DecisionInput, type EndCapture, type SeatStatus,
+} from './signageAiTrace';
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -100,6 +111,8 @@ const START_MIN = Number(arg('start-min', '6'));
  */
 const FIND_MIN = Number(arg('find-min', '10'));
 const PRIVATE_LOG = arg('private-log', '');
+/** 百科AI 對局紀錄貼 DC（見檔頭）：每晚與指定房間預設開，私房測試預設關。 */
+const AI_TRACE = arg('ai-trace', MODE === 'private-test' ? 'off' : 'on') !== 'off';
 const CHAT = arg('chat', 'on') !== 'off';
 /** 本機測試用：只看標題以這個開頭的房間（測每晚補位流程時，避免碰到真人的房間）。 */
 const ONLY_TITLE = arg('only-title', '');
@@ -181,6 +194,45 @@ function plog(msg: string): void {
   if (!PRIVATE_LOG) return;
   fs.mkdirSync(PRIVATE_LOG, { recursive: true });
   fs.appendFileSync(path.join(PRIVATE_LOG, 'player.log'), `${stamp()} ${msg}\n`);
+}
+
+// ── 百科AI 對局紀錄 ───────────────────────────────────────────────────────────────────────
+/** 房號 → 房間描述（大廳上的標題；討論串標題用）。 */
+const roomTitles = new Map<string, string>();
+/** 座位標籤（Room-1460#2）→ 房號：同一間房的多個百科AI 合成一份 trace。 */
+const roomKey = (label: string): string => label.replace(/#\d+$/, '');
+const traceHub = new AiTraceHub(async (c: AiGameCollector) => {
+  let trace;
+  try { trace = c.build(roomTitles.get(c.room) ?? ''); } catch { log(`${c.room}：百科AI對局紀錄組不出來`); return; }
+  if (!trace) return; // 沒有打到遊戲結束（角色沒公開）的局不貼
+  if (PRIVATE_LOG) {
+    try {
+      fs.mkdirSync(PRIVATE_LOG, { recursive: true });
+      fs.writeFileSync(path.join(PRIVATE_LOG, `ai-trace-${trace.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(trace, null, 1));
+    } catch { /* 本機紀錄寫不了不影響 */ }
+  }
+  if (!AI_TRACE) return;
+  // log 只寫房號、狀態與數量（aiGameForum 自己的訊息也只有狀態碼）
+  const r = await postAiGameTrace(trace, { log: (m) => log(`${c.room}：百科AI對局 DC ${m}`) });
+  if (r.outcome === 'sent') log(`${c.room}：百科AI對局已貼到 DC（${trace.decisions.length} 個決定、${r.followups} 則後續訊息${r.tagged ? '' : '、沒掛標籤'}）`);
+  else if (r.outcome === 'skipped') log(`${c.room}：沒有 DISCORD_BOT_TOKEN，百科AI對局不貼 DC`);
+  else log(`${c.room}：百科AI對局貼 DC 失敗（HTTP ${r.status ?? 0}）`);
+});
+
+/** 局結束時抓的資料（角色公開後）：畫面、派票紀錄、房間頁的平面紀錄、系統訊息。抓不到的部分留空，不丟錯。 */
+const END_JS = `(() => { const a = window.app; if (!a) return null; const j = (v) => JSON.parse(JSON.stringify(v ?? null));
+  return { users: j(a.users) ?? [], missions: j(a.missions) ?? [], lake: j(a.lake_result) ?? [], meetings: j(a.meetings) ?? [],
+    missionHistorys: j(a.mission_historys) ?? [], logs: (a.logs || []).map((l) => String((l && l.msg) || '')) }; })()`;
+async function captureEnd(p: Page): Promise<EndCapture | null> {
+  try {
+    await sleep(3000); // 同記錄員：多等一下讓公開角色、刺殺、勝負的畫面資料進來
+    const raw = await withTimeout(p.evaluate(END_JS), 10000, 'end') as Omit<EndCapture, 'record' | 'endedAt'> | null;
+    if (!raw) return null;
+    const record = await withTimeout(fetchRecord(p), 12000, 'record').catch(() => null);
+    return { ...raw, record, endedAt: new Date().toISOString() };
+  } catch {
+    return null;
+  }
 }
 
 // ── 頁面 ─────────────────────────────────────────────────────────────────────────────
@@ -290,12 +342,42 @@ class Seat {
   planKey = '';
   started = false;
   startedAt = 0;
+  /** 這一局的對局紀錄收集器（同房多個百科AI 共用）。 */
+  collector: AiGameCollector | null = null;
+  /** 決定好、還沒送出的那一筆紀錄（按鈕送出成功才記）。 */
+  pending: { key: string; make: () => void } | null = null;
+  /** 已記過的決定（同一個決定重送時不重複記）。 */
+  traced = new Set<string>();
+
+  /** 記一筆決定（AI 決定當下的觀察先複製一份；理由在送出之後才算，不拖慢動作）。 */
+  draft(key: string, input: DecisionInput, obs: PlayerObservation | null, round: number, attempt: number, source: 'agent' | 'fallback', s: Snap): void {
+    try {
+      let copy: PlayerObservation | null = null;
+      try { copy = obs ? structuredClone(obs) : null; } catch { copy = null; }
+      const at = Date.now();
+      const meta = { seat: s.myself.set, nick: String(s.myself.name ?? ''), role: this.k.role, team: this.k.team };
+      this.pending = {
+        key,
+        make: (): void => this.collector?.add(draftDecision(input, { obs: copy, ...meta, round, attempt, source, agent: this.agent, at })),
+      };
+    } catch { this.pending = null; /* 紀錄失敗不影響打牌 */ }
+  }
+  /** 這個決定（key）的按鈕送出了：記下來（只記一次；不是這個決定的待記紀錄就丟掉）。 */
+  commit(key: string): void {
+    const p = this.pending;
+    this.pending = null;
+    if (!p || p.key !== key || this.traced.has(p.key) || !this.collector) return;
+    this.traced.add(p.key);
+    try { p.make(); } catch { /* 紀錄失敗不影響打牌 */ }
+  }
 
   start(s: Snap): void {
     this.lobbyRoles = lobbyRolesLoose(s.game_roles, s.users.length);
     this.k = readKnowledge(s, this.lobbyRoles);
     this.myLake = []; this.hist = { votes: [], quests: [] }; this.plan = null; this.planKey = ''; this.started = true; this.startedAt = Date.now();
     this.agent.onGameStart(this.obs(s, 'team_select'));
+    this.collector = traceHub.join(roomKey(this.label), this.label);
+    this.collector.setSeat(this.label, { seat: s.myself.set, nick: String(s.myself.name ?? ''), roleName: String(s.myself.role ?? ''), role: this.k.role, team: this.k.team });
     plog(`${this.label} 開局 坐 ${s.myself.set} 家 角色 ${s.myself.role} 夜晚 ${JSON.stringify(this.k.nightView)}${this.k.mismatch ? ` ⚠ ${this.k.mismatch}` : ''}`);
   }
   refresh(s: Snap): void {
@@ -315,9 +397,26 @@ interface GameResult { status: 'ended' | 'stalled' | 'error' | 'left'; missions:
 
 /**
  * 打一局：從開局（或已在局中）打到遊戲結束。每 0.8 秒看一次自己的畫面；輪到自己時等 1–3 秒（像真人）再做。
+ * 不論怎麼結束，都向對局紀錄收集器報這個座位打完了（同房的百科AI 都報完才組 trace 貼 DC）。
+ * `note`：寫進 trace 的補充說明（例：程式中途重啟後回來打完）。
  */
-async function playGame(p: Page, room: string): Promise<GameResult> {
+async function playGame(p: Page, room: string, note = ''): Promise<GameResult> {
   const seat = new Seat(room);
+  let result: GameResult = { status: 'error', missions: '', winner: '', actions: {} };
+  const ended: { capture: EndCapture | null } = { capture: null };
+  try {
+    result = await playGameInner(p, room, seat, ended);
+    return result;
+  } finally {
+    const c = seat.collector;
+    if (c) {
+      if (note) c.notes.add(note);
+      c.finish(seat.label, result.status as SeatStatus, ended.capture);
+    }
+  }
+}
+
+async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture: EndCapture | null }): Promise<GameResult> {
   const actions: Record<string, number> = {};
   const count = (k: string): void => { actions[k] = (actions[k] ?? 0) + 1; };
   let lastChange = Date.now();
@@ -354,6 +453,8 @@ async function playGame(p: Page, room: string): Promise<GameResult> {
       const logs: string[] = await p.evaluate('(window.app.logs || []).slice(0, 12).map((l) => String(l.msg || ""))').catch(() => []);
       const winner = logs.some((x) => /壞人獲勝/.test(x)) ? 'evil' : logs.some((x) => /好人獲勝/.test(x)) ? 'good' : '?';
       plog(`${room} 結束 任務 ${missions} 勝方 ${winner} 我方 ${seat.k.team}`);
+      // 對局紀錄：角色公開後的局末資料（抓不到只少紀錄，不影響這局）
+      if (seat.collector) ended.capture = await captureEnd(p);
       return { status: 'ended', missions, winner, actions };
     }
     if (Date.now() - lastChange > 15 * 60_000 || Date.now() - t0 > 90 * 60_000) return { status: 'stalled', missions: '', winner: '', actions };
@@ -384,9 +485,10 @@ async function playGame(p: Page, room: string): Promise<GameResult> {
       const a = await decide(p, seat, s, d, dkey, fallback);
       if (a) {
         const r = await press(p, a);
-        if (r === 'ok') { count(a.kind); if (d !== 'team') done.set(dkey, Date.now()); }
+        if (r === 'ok') { count(a.kind); seat.commit(dkey); if (d !== 'team') done.set(dkey, Date.now()); }
         if (d === 'team') await sleep(400);
       } else if (d === 'lakeDeclare' || d === 'verify') {
+        seat.commit(dkey); // 不宣告（不按任何按鈕）也是一個決定
         done.set(dkey, Date.now());
       }
     } catch (err) {
@@ -402,7 +504,21 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
   const sync = async (): Promise<void> => {
     try { seat.hist = historyFromRecord(await fetchRecord(p), s); } catch { /* 紀錄抓不到就用上一次的 */ }
   };
-  const safe = <T>(f: () => T, dflt: T): T => { if (fallback) return dflt; try { return f(); } catch (err) { log(`AI 例外，用預設動作：${String(err).slice(0, 80)}`); return dflt; } };
+  // usedFallback：這次用的是預設動作（卡太久或 AI 例外）；obs：AI 決定時看的觀察（對局紀錄算理由用）
+  let usedFallback = false;
+  let obs: PlayerObservation | null = null;
+  const safe = <T>(f: () => T, dflt: T): T => {
+    if (fallback) { usedFallback = true; return dflt; }
+    try { return f(); } catch (err) { log(`AI 例外，用預設動作：${String(err).slice(0, 80)}`); usedFallback = true; return dflt; }
+  };
+  const look = (phase: Parameters<typeof buildObservation>[4], extra = {}): ReturnType<typeof buildObservation> => {
+    const o = seat.obs(s, phase, extra);
+    obs = o;
+    return o;
+  };
+  const round = s.missions.length + 1;
+  const sofar = (): number => seat.hist.votes.filter((v) => v.round === round).length;
+  const src = (): 'agent' | 'fallback' => (usedFallback ? 'fallback' : 'agent');
   switch (d) {
     case 'team': {
       if (seat.planKey !== dkey || !seat.plan) {
@@ -410,31 +526,40 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
         await sleep(actDelay());
         const need = s.free_ticks + s.users.filter((u) => u.tick).length;
         const dflt = [s.myself.set, ...s.users.map((u) => u.set).filter((x) => x !== s.myself.set)].slice(0, need);
-        const a = safe(() => seat.agent.act(seat.obs(s, 'team_select')), { type: 'team_select' as const, teamIds: dflt.map(sid) });
+        const a = safe(() => seat.agent.act(look('team_select')), { type: 'team_select' as const, teamIds: dflt.map(sid) });
+        if (!(a.type === 'team_select' && a.teamIds.length === need)) usedFallback = true;
         seat.plan = a.type === 'team_select' && a.teamIds.length === need ? a.teamIds.map(setOf) : dflt;
         seat.planKey = dkey;
+        seat.draft(dkey, { kind: 'team', teamIds: seat.plan.map(sid) }, obs, round, sofar() + 1, src(), s);
         plog(`${seat.label} 派隊 ${seat.plan.join(',')}（第 ${s.missions.length + 1} 局，第 ${seat.hist.votes.filter((v) => v.round === s.missions.length + 1).length + 1} 次）`);
       }
       return nextTeamAction(s, seat.plan);
     }
     case 'vote': {
       await sync();
-      const a = safe(() => seat.agent.act(seat.obs(s, 'team_vote')), { type: 'team_vote' as const, vote: true });
+      const a = safe(() => seat.agent.act(look('team_vote')), { type: 'team_vote' as const, vote: true });
       const yes = a.type === 'team_vote' ? a.vote : true;
+      seat.draft(dkey, { kind: 'vote', vote: yes, team: s.users.filter((u) => u.tick).map((u) => sid(u.set)) }, obs, round, sofar() + 1, src(), s);
       plog(`${seat.label} 投票 ${s.users.filter((u) => u.tick).map((u) => u.set).join(',')} → ${yes ? '白' : '黑'}`);
       return { kind: 'vote', yes };
     }
     case 'mission': {
       await sync();
-      const a = safe(() => seat.agent.act(seat.obs(s, 'quest_vote')), { type: 'quest_vote' as const, vote: 'success' as const });
+      const a = safe(() => seat.agent.act(look('quest_vote')), { type: 'quest_vote' as const, vote: 'success' as const });
       const ok = missionCard(seat.k.team, a.type === 'quest_vote' ? a.vote : undefined);
+      seat.draft(dkey, { kind: 'mission', card: ok ? 'success' : 'fail' }, obs, round, sofar(), src(), s);
       plog(`${seat.label} 任務 → ${ok ? '成功' : '失敗'}`);
       return { kind: 'mission', success: ok };
     }
     case 'lakeTarget': {
       await sync();
       const valid = validLakeTargets(s);
-      const target = safe(() => seat.agent.pickLakeTarget(seat.obs(s, 'team_select'), valid), valid[0]);
+      const target = safe(() => seat.agent.pickLakeTarget(look('team_select'), valid), valid[0]);
+      const pick = valid.includes(target) ? target : valid[0];
+      // 第 i 次湖（0 起算）在第 i+2 局任務之後
+      const lakeRound = s.lake_result.filter((l) => l.to !== null && l.to !== undefined).length + 2;
+      seat.draft(dkey, { kind: 'lake', targetId: pick, eligible: valid }, obs, lakeRound,
+        seat.hist.votes.filter((v) => v.round === lakeRound).length, valid.includes(target) ? src() : 'fallback', s);
       plog(`${seat.label} 湖 → ${target}`);
       return { kind: 'touch', set: setOf(valid.includes(target) ? target : valid[0]) };
     }
@@ -444,7 +569,9 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
       const seen = seat.myLake.find((x) => x.round === i + 2);
       if (!seen) return null;
       await sync();
-      const claim = safe(() => seat.agent.declareLake(seat.obs(s, 'team_select'), seen.targetId, seen.result), seen.result);
+      const claim = safe(() => seat.agent.declareLake(look('team_select'), seen.targetId, seen.result), seen.result);
+      seat.draft(dkey, { kind: 'declare', targetId: seen.targetId, claim: claim ?? null, actual: seen.result }, obs, i + 2,
+        seat.hist.votes.filter((v) => v.round === i + 2).length, src(), s);
       plog(`${seat.label} 湖宣告 ${seen.targetId} → ${claim ?? '不宣告'}`);
       return claim ? { kind: 'lakeResult', good: claim === 'good' } : null;
     }
@@ -452,9 +579,10 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
       await sync();
       const allEvilRoles = evilRolesAtAssassination(s, seat.k);
       const goods = s.users.map((u) => sid(u.set)).filter((id) => !(id in allEvilRoles));
-      const a = safe(() => seat.agent.act(seat.obs(s, 'assassination', { allEvilIds: Object.keys(allEvilRoles), allEvilRoles })),
+      const a = safe(() => seat.agent.act(look('assassination', { allEvilIds: Object.keys(allEvilRoles), allEvilRoles })),
         { type: 'assassinate' as const, targetId: goods[0] });
       const target = a.type === 'assassinate' ? a.targetId : goods[0];
+      seat.draft(dkey, { kind: 'assassinate', targetId: target }, obs, Math.min(5, s.missions.length), 0, src(), s);
       plog(`${seat.label} 刺殺 → ${target}`);
       return { kind: 'touch', set: setOf(target) };
     }
@@ -602,6 +730,7 @@ async function privateTest(browser: Browser): Promise<void> {
   await host.waitForLoadState('networkidle');
   await host.waitForFunction(READY_JS);
   const room = new URL(host.url()).searchParams.get('RoomName') ?? '';
+  roomTitles.set('private', desc);
   const name = ((await lobbyRooms(bots[1]?.page ?? host).catch(() => [] as LobbyRoom[])).find((r) => r.description_title === desc)?.name) ?? room;
   for (const b of bots.slice(1)) {
     if (!(await joinRoom(b.page, name, password))) log(`私房測試：${b.label} 沒有坐進去`);
@@ -674,6 +803,7 @@ async function live(browser: Browser, deadline: number, alreadyPlayed = 0): Prom
       if (fresh && lobbyCandidate(fresh)) {
         const w = watches.get(name);
         if (w) { await w.page.context().close().catch(() => undefined); watches.delete(name); }
+        roomTitles.set(name, fresh.description_title ?? '');
         log(`${name}：9 個真人等了 ${((Date.now() - (seen.get(name) as number)) / 60000).toFixed(1)} 分鐘，加入`);
         seen.delete(name);
         if (await joinRoom(lobby, name, '')) {
@@ -721,6 +851,7 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
     const len = r.length ?? 0;
     if (len !== lastLen) { lastLen = len; stableSince = Date.now(); }
     if (r.gaming || len >= 10 || Date.now() - stableSince < 15000) { await sleep(5000); continue; }
+    roomTitles.set(r.name, r.description_title ?? '');
     // 房裡已經有百科機器人（例如另一次指定、或每晚補位已經坐進去）就不加入
     const watch = await openWatch(browser, r.name);
     const seen = watch ? await snap(watch).catch(() => null) : null;
@@ -774,11 +905,12 @@ async function resume(browser: Browser): Promise<number> {
     await p.waitForFunction('window.app && Array.isArray(window.app.rooms) && window.app.rooms.length > 0', undefined, { timeout: 15000 }).catch(() => undefined);
     const r = (await lobbyRooms(p).catch(() => [] as LobbyRoom[])).find((x) => x.name === st.room);
     if (!r || !r.gaming) { log(`${st.room}：上次的房間已經沒在打，不用重連`); return playedTotal; }
+    roomTitles.set(st.room, r.description_title ?? '');
     log(`${st.room}：上次中途斷線，回去把那局打完`);
     if (!(await joinRoom(p, st.room, st.password ?? ''))) { log(`${st.room}：連不回座位`); saveState(null); return playedTotal; }
     const sn = await snap(p).catch(() => null);
     if (!sn || !sn.gaming || sn.status === ENDED) { await leaveRoom(p, '那局已經結束', st.room); return playedTotal; }
-    const res = await playGame(p, st.room);
+    const res = await playGame(p, st.room, '程式中途重啟後回到這局打完，重啟前的決定沒有記到');
     log(`${st.room}：${res.status === 'ended' ? `打完，任務 ${res.missions}` : res.status}`);
     if (res.status === 'ended') countGame();
     await leaveRoom(p, '重連的那局結束', st.room);
@@ -800,6 +932,8 @@ async function main(): Promise<void> {
       else await live(browser, deadline, resumed);
     }
   } finally {
+    // 還在貼 DC 的對局紀錄等它貼完（最多 2 分鐘）
+    await traceHub.drain(120_000).catch(() => undefined);
     await browser.close().catch(() => undefined);
   }
 }

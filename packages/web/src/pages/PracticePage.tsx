@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Loader2, RefreshCw, UserRound } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Loader2, RefreshCw, UserRound } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { retrySiteSession, sessionFailed, subscribeSessionFailed } from '../services/siteSession';
 import PracticeSetupPanel from '../components/practice/PracticeSetupPanel';
@@ -119,6 +119,16 @@ export default function PracticePage(): JSX.Element {
           window.scrollTo({ top: 0 });
         }}
       />
+      {/* 百科AI 在遊玩頁打的局（Edward 2026-11-05）：手機上導覽列放不下那顆按鈕，這裡也放一個入口 */}
+      <button
+        type="button"
+        onClick={() => { setGameState('aiGames'); window.scrollTo({ top: 0 }); }}
+        data-testid="practice-ai-games-link"
+        className="mt-4 flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
+      >
+        <span><span className="font-bold text-amber-200">百科AI 對局</span>：百科AI 在遊玩頁打過的局、每一步的理由，覺得怪可以直接回饋</span>
+        <ChevronRight size={14} className="flex-shrink-0 text-zinc-500" />
+      </button>
     </div>
   );
 }
