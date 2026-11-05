@@ -12,6 +12,7 @@ import { authRouter } from './routes/auth';
 import { apiRouter } from './routes/api';
 import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
+import { aiGamesRouter } from './routes/aiGames';
 import { analysisRouter } from './routes/analysis';
 import { statsRouter } from './routes/stats';
 import { claimsRouter } from './routes/claims';
@@ -84,6 +85,8 @@ app.use('/auth', authRouter);
 app.use('/api', apiRouter);
 app.use('/api/friends', friendsRouter);
 app.use('/api/feedback', feedbackRouter);
+// 網站「百科AI 對局」：DC 論壇的百科AI對局紀錄＋「這步怪怪的」回饋（Edward 2026-11-05）
+app.use('/api/ai-games', aiGamesRouter);
 app.use('/api/analysis', analysisRouter);
 // #98 追蹤對戰統計：同贏率 / 同敗率 / 獨立勝率 + 50 場時間序列
 app.use('/api/stats', statsRouter);

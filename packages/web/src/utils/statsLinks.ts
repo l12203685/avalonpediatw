@@ -17,10 +17,13 @@
  *        關閉時由 RecordsPage 清掉）
  *      #id-claim (#claim)                           → ID 認領（Edward 2026-11-03；不用登入）
  *      #practice                                    → 與機器人練習（自己 + 9 個機器人；不用登入，背景自動拿訪客身分）
+ *      #ai-games                                    → 百科AI 對局（Edward 2026-11-05；不用登入）
+ *      #ai-games=<DC 討論串 id>                      → 百科AI 對局，打開那一局（同 #records=：打開時留在網址列）
  */
 import type { GameState } from '../store/gameStore';
 import { parseStatsQuery } from '../stats/statsFilter';
 import { parseRecordsHash } from './records';
+import { parseAiGamesHash } from './aiGames';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
@@ -34,6 +37,8 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'idClaim',
   // 與機器人練習的設定頁（站長 2026-11-03：「我希望自己跟 9 個機器人玩」）。頁面先顯示，訪客身分／伺服器喚醒在頁內等。
   'practice',
+  // 百科AI 對局（遊玩頁上百科AI 打的每一局＋每個決定的理由，可以按「這步怪怪的」；Edward 2026-11-05）
+  'aiGames',
 ]);
 
 export type StatsLink =
@@ -42,7 +47,8 @@ export type StatsLink =
   | { kind: 'study'; loopId: string }
   | { kind: 'records'; id: string | null }
   | { kind: 'claim' }
-  | { kind: 'practice' };
+  | { kind: 'practice' }
+  | { kind: 'aiGames'; id: string | null };
 
 const STATS_HASHES = new Set(['stats', 'analytics', 'leaderboard', 'rank']);
 
@@ -73,6 +79,8 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (records) return { kind: 'records', id: records.id };
   if (/^(id-?)?claim$/i.test(raw)) return { kind: 'claim' };
   if (/^practice$/i.test(raw)) return { kind: 'practice' };
+  const aiGames = parseAiGamesHash(raw);
+  if (aiGames) return { kind: 'aiGames', id: aiGames.id };
   const m = /^player[=/](.+)$/i.exec(raw);
   if (m) {
     let name = m[1];

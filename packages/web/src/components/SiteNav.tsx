@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  BarChart3, BookOpen, Bot, ExternalLink, Instagram, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
+  BarChart3, BookOpen, Bot, ExternalLink, Instagram, ListChecks, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
   UserCheck, Youtube,
 } from 'lucide-react';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
@@ -12,6 +12,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import IOSInstallGuide from './IOSInstallGuide';
 import ForceUpdateButton from './ForceUpdateButton';
 import { clearRecordsHash } from './records/recordsLink';
+import { clearAiGamesHash } from './aiGames/aiGamesLink';
 import { PRACTICE_NS } from '../i18n/practice';
 
 /**
@@ -25,6 +26,8 @@ import { PRACTICE_NS } from '../i18n/practice';
  * 「ID認領」（Edward 2026-11-03）不是頁籤：社群連結旁一顆小按鈕，開 ID 認領頁（不用登入）。
  * 「與機器人練習」（站長 2026-11-03：「我希望自己跟 9 個機器人玩」）同樣是一顆小按鈕（不是首頁大按鈕，那些他 10-28 拿掉了），
  * 開練習設定頁（#practice，不用登入）；開局仍是最醒目的那顆。
+ * 「百科AI 對局」（Edward 2026-11-05：百科AI 打的局自動記錄、可以針對 AI 的動作回饋）也是一顆小按鈕（#ai-games，不用登入）；
+ * 400px 以下手機第二列放不下，那時不顯示（從「與機器人練習」頁的連結或 #ai-games 進來）。
  */
 
 export type SiteTab = 'analytics' | 'analysis' | 'wiki' | 'streams' | 'records';
@@ -90,6 +93,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
     try { localStorage.setItem(SITE_TAB_KEY, tab); } catch { /* 無痕／封鎖儲存：只是不記住 */ }
     // 離開牌譜紀錄時清掉 #records=…，免得重新整理又跳回那一局（不放在頁面卸載時做：開發模式的 StrictMode 會先卸載一次）
     if (tab !== 'records') clearRecordsHash();
+    clearAiGamesHash();
     setGameState(tab);
     window.scrollTo({ top: 0 });
   };
@@ -177,6 +181,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             type="button"
             onClick={() => {
               if (active === 'records') clearRecordsHash();
+              clearAiGamesHash();
               setGameState('practice');
               window.scrollTo({ top: 0 });
             }}
@@ -199,6 +204,29 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             type="button"
             onClick={() => {
               if (active === 'records') clearRecordsHash();
+              setGameState('aiGames');
+              window.scrollTo({ top: 0 });
+            }}
+            data-testid="site-ai-games"
+            title="百科AI 對局：百科AI 打過的局與每一步的理由，可以回饋"
+            aria-label="百科AI 對局"
+            aria-pressed={gameState === 'aiGames'}
+            className={`hidden h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors min-[400px]:flex sm:min-w-8 sm:px-2 ${
+              gameState === 'aiGames'
+                ? 'border-white bg-white text-black'
+                : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
+            }`}
+          >
+            {/* 640px 以下只有圖示；640–1023px（兩列）長字；1024–1279px 一列最擠，只有圖示；1280px 以上短字 */}
+            <ListChecks size={15} className="flex-shrink-0 xl:hidden" />
+            <span className="hidden sm:inline lg:hidden">百科AI對局</span>
+            <span className="hidden xl:inline">AI對局</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (active === 'records') clearRecordsHash();
+              clearAiGamesHash();
               setGameState('idClaim');
               window.scrollTo({ top: 0 });
             }}

@@ -18,6 +18,7 @@ import StreamsPage from './pages/StreamsPage';
 import RecordsPage from './pages/RecordsPage';
 import IdClaimPage from './pages/IdClaimPage';
 import PracticePage from './pages/PracticePage';
+import AiGamesPage from './pages/AiGamesPage';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -60,6 +61,7 @@ function App(): JSX.Element {
       if (link.kind === 'player') store.openPlayerStats(link.name);
       else if (link.kind === 'claim') store.setGameState('idClaim');
       else if (link.kind === 'practice') store.setGameState('practice');
+      else if (link.kind === 'aiGames') store.setGameState('aiGames');
       else if (link.kind === 'records') {
         store.setGameState('records');
         // 舊連結 #paipu… 換成 #records…（不留一筆舊網址的歷史紀錄）
@@ -73,7 +75,8 @@ function App(): JSX.Element {
       setStatsFirst(true);
       // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close);
       // #records=<id> likewise while that game is open (RecordsPage)
-      if (link.kind === 'study' || (link.kind === 'records' && link.id)) return;
+      // #ai-games=<id> 同上（AiGamesPage 讀它、關閉時清掉）
+      if (link.kind === 'study' || (link.kind === 'records' && link.id) || (link.kind === 'aiGames' && link.id)) return;
       // #stats?f=… (a shared filter) stays too: the filter bar keeps it in sync with the filter
       if (link.kind === 'stats' && (link.filter || link.preset)) {
         applySharedFilter(link);
@@ -329,8 +332,8 @@ function App(): JSX.Element {
   // Edward 2026-10-30：沒有首頁 — 'home' 直接開上次的分頁（數據排行／百科攻略），內容頁不等登入就顯示。
   const shownState = gameState === 'home' ? lastSiteTab() : gameState;
   const siteTab = siteTabOf(shownState);
-  // ID 認領、與機器人練習不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕進來）
-  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice';
+  // ID 認領、與機器人練習、百科AI 對局不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕進來）
+  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice' || shownState === 'aiGames';
 
   if (isLoading && !(statsFirst || publicStatsPage)) {
     return (
@@ -469,6 +472,7 @@ function App(): JSX.Element {
           {shownState === 'records' && <RecordsPage />}
           {shownState === 'idClaim' && <IdClaimPage />}
           {shownState === 'practice' && <PracticePage />}
+          {shownState === 'aiGames' && <AiGamesPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage
