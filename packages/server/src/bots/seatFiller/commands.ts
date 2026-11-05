@@ -97,7 +97,7 @@ export function formatSeatFillerParseError(error: SeatFillerParseError, platform
   const example = platform === 'line' ? '/補位 1460、/補位 百科陪練 補滿 密碼:1234' : '/機器人補位 房號或描述:百科陪練 人數:補滿 密碼:1234';
   switch (error) {
     case 'usage':
-      return `用法：${SEAT_FILLER_USAGE[platform]}，例如 ${example}。房號在大廳看得到；在房間裡看不到房號時，用建房時寫的房間描述裡的一段字就行。人數不填就是 1 個，「補滿」= 補到 10 人。`;
+      return `用法：${SEAT_FILLER_USAGE[platform]}，例如 ${example}。房號在大廳看得到；在房間裡看不到房號時，用建房時寫的房間描述裡的一段字就行。人數不填就是 1 個，「補滿」= 補到 10 人。私房沒給密碼時會試今天日期（例如 11 月 5 日 = 1105）。`;
     case 'room':
       return `房號或房間描述不對：房號請輸入 Room-1460 或 1460；房間描述最多 40 個字，不能有引號或換行。例如 ${example}。`;
     case 'bots':
