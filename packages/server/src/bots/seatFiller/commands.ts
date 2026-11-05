@@ -3,8 +3,9 @@
  * LINE text handler and the Discord slash command. The dispatch itself (limits,
  * GitHub workflow_dispatch) lives in services/signagePlayerDispatch.ts.
  *
- *   LINE    /補位 Room-1460 [局數]   (also /機器人補位, full-width ／, a bare 1460)
- *   Discord /機器人補位 房號:Room-1460 [局數:1]
+ *   LINE    /補位 <房號或房間描述> [補滿|N人] [密碼:xxxx]   (also /機器人補位, full-width ／, a bare 1460)
+ *   Discord /機器人補位 房號或描述:… [人數:1–9／補滿] [密碼:…]
+ * (Edward 2026-11-04：房間內看不到房號 → 可以用房間描述；私房要密碼；一次補滿；局數不限、請它離開就好)
  *
  * docs/BOT_SETUP.md「補位機器人」.
  */
@@ -12,7 +13,7 @@
 import {
   getSignagePlayerDispatcher,
   parseSeatFillerArgs,
-  SEAT_FILLER_GAMES,
+  SEAT_FILLER_BOTS,
   SEAT_FILLER_LIMITS,
   type SeatFillerOutcome,
   type SeatFillerParseError,
@@ -22,12 +23,12 @@ export type SeatFillerPlatform = 'line' | 'discord';
 
 /** Command syntax as advertised in the help texts. */
 export const SEAT_FILLER_USAGE: Record<SeatFillerPlatform, string> = {
-  line: '/補位 房號 [局數]',
-  discord: '/機器人補位 房號 [局數]',
+  line: '/補位 房號或房間描述 [補滿｜幾人] [密碼:xxxx]',
+  discord: '/機器人補位 房號或描述 [人數] [密碼]',
 };
 
 /** One-line description for the help texts. */
-export const SEAT_FILLER_HELP_TEXT = `叫補位機器人進 signage-cloud 房間測試（局數 ${SEAT_FILLER_GAMES.min}–${SEAT_FILLER_GAMES.max}，預設 ${SEAT_FILLER_GAMES.default}）`;
+export const SEAT_FILLER_HELP_TEXT = `叫百科AI 進 signage-cloud 房間補位（房號或房間描述都可以；一次 ${SEAT_FILLER_BOTS.min}–${SEAT_FILLER_BOTS.max} 個或「補滿」；私房加密碼；局數不限，房內有人說「離開」它就走）`;
 
 /** The abuse limits in words (Discord /help). */
 export const SEAT_FILLER_LIMITS_TEXT = `全站每 ${SEAT_FILLER_LIMITS.cooldownMs / 60000} 分鐘一次、每天最多 ${SEAT_FILLER_LIMITS.dailyMax} 次、同一房 ${SEAT_FILLER_LIMITS.sameRoomMs / 60000} 分鐘內不重複`;
@@ -36,16 +37,22 @@ export const SEAT_FILLER_LIMITS_TEXT = `全站每 ${SEAT_FILLER_LIMITS.cooldownM
 export const SEAT_FILLER_REDELIVERY_TEXT = '這則補位指令已經處理過了，不會重複叫機器人。';
 
 export interface SeatFillerTextCommand {
-  /** First argument (room) as typed, '' when missing. */
+  /** Room number or description piece as typed ('' when missing). 「…」 may wrap a description with spaces. */
   room: string;
-  /** Second argument (games) as typed, undefined when missing. */
-  games?: string;
-  /** More than two arguments were typed. */
+  /** How many bots as typed ("補滿", "3", "3人"), undefined when missing. */
+  bots?: string;
+  /** Password as typed after 密碼: / pw:, undefined when missing. */
+  password?: string;
+  /** Unrecognised or repeated arguments were typed. */
   extra: boolean;
 }
 
+const PASSWORD_ARG = /^(?:密碼|密码|pw|pass(?:word)?)[:：=]?(.*)$/iu;
+const BOTS_ARG = /^(?:補滿|滿|fill|full|\d+\s*[人個隻位]?)$/iu;
+
 /**
- * "/補位 Room-1460 2" → { room: 'Room-1460', games: '2' }; "/機器人補位" →
+ * "/補位 1460 補滿 密碼:1234" → { room: '1460', bots: '補滿', password: '1234' };
+ * "/補位 「百科 陪練」 3人" → { room: '百科 陪練', bots: '3人' }; "/機器人補位" →
  * { room: '' } (caller shows the usage); anything else → null. The command
  * word must end the text or be followed by a space, a digit or "room", so
  * "/補位置" stays ordinary chatter.
@@ -56,8 +63,20 @@ export function parseSeatFillerText(text: string): SeatFillerTextCommand | null 
   if (!m) return null;
   const rest = m[1];
   if (rest && !/^\s/u.test(rest) && !/^(?:room|\d)/iu.test(rest)) return null;
-  const args = rest.trim() ? rest.trim().split(/\s+/u) : [];
-  return { room: args[0] ?? '', games: args[1], extra: args.length > 2 };
+  let body = rest.trim();
+  let room = '';
+  const quoted = /^「([^」]*)」\s*/u.exec(body);
+  if (quoted) { room = quoted[1].trim(); body = body.slice(quoted[0].length); }
+  const args = body ? body.split(/\s+/u) : [];
+  if (!quoted) room = args.shift() ?? '';
+  const out: SeatFillerTextCommand = { room, extra: false };
+  for (const a of args) {
+    const pw = PASSWORD_ARG.exec(a);
+    if (pw && out.password === undefined) out.password = pw[1];
+    else if (BOTS_ARG.test(a) && out.bots === undefined) out.bots = a;
+    else out.extra = true;
+  }
+  return out;
 }
 
 /** Is this text a 補位 command (feedback topic counting and chat export skip it)? */
@@ -75,21 +94,23 @@ export function formatWait(ms: number): string {
 }
 
 export function formatSeatFillerParseError(error: SeatFillerParseError, platform: SeatFillerPlatform): string {
-  const example = platform === 'line' ? '/補位 Room-1460 或 /補位 1460 2' : '/機器人補位 房號:Room-1460 局數:2';
+  const example = platform === 'line' ? '/補位 1460、/補位 百科陪練 補滿 密碼:1234' : '/機器人補位 房號或描述:百科陪練 人數:補滿 密碼:1234';
   switch (error) {
     case 'usage':
-      return `用法：${SEAT_FILLER_USAGE[platform]}，例如 ${example}（局數 ${SEAT_FILLER_GAMES.min}–${SEAT_FILLER_GAMES.max}，不填就是 ${SEAT_FILLER_GAMES.default} 局）。`;
+      return `用法：${SEAT_FILLER_USAGE[platform]}，例如 ${example}。房號在大廳看得到；在房間裡看不到房號時，用建房時寫的房間描述裡的一段字就行。人數不填就是 1 個，「補滿」= 補到 10 人。`;
     case 'room':
-      return `房號格式不對：請輸入 Room-1460 或 1460（1–6 位數字），例如 ${example}。`;
-    case 'games':
-      return `局數要是 ${SEAT_FILLER_GAMES.min}–${SEAT_FILLER_GAMES.max} 的整數（不填就是 ${SEAT_FILLER_GAMES.default} 局）。`;
+      return `房號或房間描述不對：房號請輸入 Room-1460 或 1460；房間描述最多 40 個字，不能有引號或換行。例如 ${example}。`;
+    case 'bots':
+      return `人數要是 ${SEAT_FILLER_BOTS.min}–${SEAT_FILLER_BOTS.max} 或「補滿」（不填就是 ${SEAT_FILLER_BOTS.default} 個）。`;
+    case 'password':
+      return '密碼最多 32 個字，不能有空白或引號。';
   }
 }
 
 export function formatSeatFillerOutcome(outcome: SeatFillerOutcome): string {
   switch (outcome.kind) {
     case 'dispatched':
-      return `已叫補位機器人到 ${outcome.room}（${outcome.games} 局），約 1–2 分鐘後進房；打完會離開。`;
+      return `已叫百科AI 到「${outcome.room}」（${outcome.bots === SEAT_FILLER_BOTS.max ? '補到 10 人' : `${outcome.bots} 個`}），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。`;
     case 'not_configured':
       return '補位機器人還沒設定好（管理者尚未完成設定），暫時不能叫。';
     case 'cooldown':
@@ -119,7 +140,7 @@ export async function answerSeatFillerTextCommand(
   if (!cmd) return null;
   if (opts.redelivery) return SEAT_FILLER_REDELIVERY_TEXT;
   if (cmd.extra) return formatSeatFillerParseError('usage', platform);
-  const parsed = parseSeatFillerArgs(cmd.room, cmd.games);
+  const parsed = parseSeatFillerArgs(cmd.room, cmd.bots, cmd.password);
   if (!parsed.ok) return formatSeatFillerParseError(parsed.error, platform);
   return formatSeatFillerOutcome(await getSignagePlayerDispatcher().dispatch(parsed.request));
 }

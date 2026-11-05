@@ -4,11 +4,12 @@
  * Players ask the bot (Discord /機器人補位, LINE /補位) to put our signage-cloud
  * seat-filler bot into a game room for testing. The bot itself runs in a GitHub
  * Actions workflow (`.github/workflows/signage-player.yml`, workflow_dispatch
- * inputs `room`, `games` 1–3, `hours` 1–3); this module only validates the
- * request, applies the abuse limits and POSTs the workflow_dispatch:
+ * inputs `room` (房號或房間描述), `password`, `bots` 1–9; 局數不限、房內有人說「離開」
+ * 就走 — Edward 2026-11-04); this module only validates the request, applies the
+ * abuse limits and POSTs the workflow_dispatch:
  *
  *   POST https://api.github.com/repos/{repo}/actions/workflows/{file}/dispatches
- *   { ref: 'main', inputs: { room: 'Room-1460', games: '1' } }
+ *   { ref: 'main', inputs: { room: 'Room-1460', bots: '9', password: '…' } }
  *
  * Env (read on every call, so a Render env change + restart is all it takes):
  *   GITHUB_DISPATCH_TOKEN    fine-grained PAT, this repo only, Actions: Read and write.
@@ -55,22 +56,33 @@ export const SEAT_FILLER_LIMITS: SeatFillerLimits = {
   sameRoomMs: 15 * 60 * 1000,
 };
 
-export const SEAT_FILLER_GAMES = { min: 1, max: 3, default: 1 } as const;
+/** 一次派幾個百科AI（Edward 2026-11-04「一次補滿缺位」：「補滿」= 9，坐到 10 人為止）。 */
+export const SEAT_FILLER_BOTS = { min: 1, max: 9, default: 1 } as const;
 
 /** GitHub request timeout: LINE answers after this call, and its webhook must return promptly. */
 export const SEAT_FILLER_DISPATCH_TIMEOUT_MS = 8000;
 
 const TAIPEI_OFFSET_MS = 8 * 60 * 60 * 1000;
 
+/** Same-room key: room numbers and description pieces, case-folded. */
+function roomKey(room: string): string {
+  return room.normalize('NFKC').trim().toLowerCase();
+}
+
 // ─── Parsing ─────────────────────────────────────────────────────────────
 
 export interface SeatFillerRequest {
-  /** Canonical room name, e.g. "Room-1460". */
+  /** Canonical room name ("Room-1460") or a piece of the room description (房間內看不到房號). */
   room: string;
-  games: number;
+  /** `room` is a description piece, not a room number. */
+  byTitle: boolean;
+  /** How many 百科AI to send (1–9; 9 = fill the room to 10). */
+  bots: number;
+  /** Private-room password ('' = none). Sent to the workflow only; never logged or echoed. */
+  password: string;
 }
 
-export type SeatFillerParseError = 'usage' | 'room' | 'games';
+export type SeatFillerParseError = 'usage' | 'room' | 'bots' | 'password';
 
 export type SeatFillerParse =
   | { ok: true; request: SeatFillerRequest }
@@ -88,32 +100,54 @@ export function normalizeRoom(raw: string | null | undefined): string | null {
 }
 
 /**
- * Number of games: empty → 1; an integer 1–3 (a trailing 局 is fine: "2局")
- * → that number; anything else → null.
+ * A room description piece: 1–40 characters after NFKC, no line breaks or shell/quote characters
+ * (the workflow passes it as one argument). null when unusable.
  */
-export function parseGames(raw: string | number | null | undefined): number | null {
-  if (raw === null || raw === undefined) return SEAT_FILLER_GAMES.default;
-  const t = typeof raw === 'number' ? String(raw) : raw.normalize('NFKC').trim().replace(/局$/u, '').trim();
-  if (t === '') return SEAT_FILLER_GAMES.default;
-  if (!/^\d+$/.test(t)) return null;
-  const n = Number(t);
-  return n >= SEAT_FILLER_GAMES.min && n <= SEAT_FILLER_GAMES.max ? n : null;
+export function normalizeRoomTitle(raw: string | null | undefined): string | null {
+  const t = (raw ?? '').normalize('NFKC').trim();
+  if (!t || t.length > 40 || /[\r\n"`$\\]/u.test(t)) return null;
+  return t;
 }
 
-/** Validate a room + games pair (Discord options, or the LINE text's arguments). */
-export function parseSeatFillerArgs(roomRaw: string | null | undefined, gamesRaw?: string | number | null): SeatFillerParse {
+/** "補滿"／"滿"／"fill" → 9; "3"／"3人"／"3個" → 3 (1–9); empty → 1; anything else → null. */
+export function parseBots(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined) return SEAT_FILLER_BOTS.default;
+  const t = typeof raw === 'number' ? String(raw) : raw.normalize('NFKC').trim().replace(/[人個隻位]$/u, '').trim();
+  if (t === '') return SEAT_FILLER_BOTS.default;
+  if (/^(?:補滿|滿|fill|full)$/iu.test(t)) return SEAT_FILLER_BOTS.max;
+  if (!/^\d+$/.test(t)) return null;
+  const n = Number(t);
+  return n >= SEAT_FILLER_BOTS.min && n <= SEAT_FILLER_BOTS.max ? n : null;
+}
+
+/** A private-room password: 1–32 visible characters, no spaces / quotes / shell characters; empty → ''. */
+export function parsePassword(raw: string | null | undefined): string | null {
+  const t = (raw ?? '').normalize('NFKC').trim();
+  if (!t) return '';
+  return /^[^\s"'`$\\]{1,32}$/u.test(t) ? t : null;
+}
+
+/** Validate room (number or description) + bots + password (Discord options, or the LINE text's arguments). */
+export function parseSeatFillerArgs(
+  roomRaw: string | null | undefined,
+  botsRaw?: string | number | null,
+  passwordRaw?: string | null,
+): SeatFillerParse {
   if (!(roomRaw ?? '').trim()) return { ok: false, error: 'usage' };
   const room = normalizeRoom(roomRaw);
-  if (!room) return { ok: false, error: 'room' };
-  const games = parseGames(gamesRaw);
-  if (games === null) return { ok: false, error: 'games' };
-  return { ok: true, request: { room, games } };
+  const title = room ? null : normalizeRoomTitle(roomRaw);
+  if (!room && !title) return { ok: false, error: 'room' };
+  const bots = parseBots(botsRaw);
+  if (bots === null) return { ok: false, error: 'bots' };
+  const password = parsePassword(passwordRaw);
+  if (password === null) return { ok: false, error: 'password' };
+  return { ok: true, request: { room: room ?? (title as string), byTitle: !room, bots, password } };
 }
 
 // ─── Dispatch ────────────────────────────────────────────────────────────
 
 export type SeatFillerOutcome =
-  | { kind: 'dispatched'; room: string; games: number }
+  | { kind: 'dispatched'; room: string; bots: number }
   | { kind: 'not_configured' }
   | { kind: 'cooldown'; retryAfterMs: number }
   | { kind: 'daily_cap'; max: number }
@@ -191,7 +225,7 @@ export class SignagePlayerDispatcher {
     if (!this.target()) return { kind: 'not_configured' };
     const now = this.now();
     if (this.countToday(now) >= this.limits.dailyMax) return { kind: 'daily_cap', max: this.limits.dailyMax };
-    const roomLast = this.roomAt.get(req.room);
+    const roomLast = this.roomAt.get(roomKey(req.room));
     if (roomLast !== undefined && now - roomLast < this.limits.sameRoomMs) {
       return { kind: 'duplicate_room', room: req.room, retryAfterMs: this.limits.sameRoomMs - (now - roomLast) };
     }
@@ -211,7 +245,7 @@ export class SignagePlayerDispatcher {
     }
     const target = this.target() as DispatchTarget;
     const at = this.now();
-    const undo = this.reserve(req.room, at);
+    const undo = this.reserve(roomKey(req.room), at);
 
     let status: number;
     let ok: boolean;
@@ -225,7 +259,10 @@ export class SignagePlayerDispatcher {
           'Content-Type': 'application/json',
           'User-Agent': 'avalonpediatw-seat-filler',
         },
-        body: JSON.stringify({ ref: SEAT_FILLER_DEFAULTS.ref, inputs: { room: req.room, games: String(req.games) } }),
+        body: JSON.stringify({
+          ref: SEAT_FILLER_DEFAULTS.ref,
+          inputs: { room: req.room, bots: String(req.bots), ...(req.password ? { password: req.password } : {}) },
+        }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       status = res.status;
@@ -241,8 +278,8 @@ export class SignagePlayerDispatcher {
       this.logger.warn(`dispatch failed (status=${status})`);
       return { kind: 'github_error', status };
     }
-    this.logger.info(`dispatched (status=${status}, games=${req.games})`);
-    return { kind: 'dispatched', room: req.room, games: req.games };
+    this.logger.info(`dispatched (status=${status}, bots=${req.bots}${req.password ? ', private' : ''})`);
+    return { kind: 'dispatched', room: req.room, bots: req.bots };
   }
 
   /** Dispatches counted for the Taipei day of `now`. */

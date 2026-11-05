@@ -32,7 +32,7 @@ import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
 import { __resetChatMirrorForTests } from '../bots/ChatMirror';
 
-const SUCCESS = '已叫補位機器人到 Room-1460（1 局），約 1–2 分鐘後進房；打完會離開。';
+const SUCCESS = '已叫百科AI 到「Room-1460」（1 個），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。';
 
 let now = Date.UTC(2026, 10, 3, 4, 0, 0);
 let status = 204;
@@ -60,13 +60,14 @@ afterEach(() => {
 });
 
 describe('LINE text parsing', () => {
-  it('accepts /補位 and /機器人補位, full-width slash, bare numbers, games', () => {
-    expect(parseSeatFillerText('/補位 Room-1460')).toEqual({ room: 'Room-1460', games: undefined, extra: false });
-    expect(parseSeatFillerText('/機器人補位 Room-1460 2')).toEqual({ room: 'Room-1460', games: '2', extra: false });
-    expect(parseSeatFillerText('／補位　1460')).toEqual({ room: '1460', games: undefined, extra: false });
-    expect(parseSeatFillerText('/ 補位 room-5 3')).toEqual({ room: 'room-5', games: '3', extra: false });
-    expect(parseSeatFillerText('/補位1460')).toEqual({ room: '1460', games: undefined, extra: false });
-    expect(parseSeatFillerText('/補位')).toEqual({ room: '', games: undefined, extra: false });
+  it('accepts /補位 and /機器人補位, full-width slash, bare numbers, description, 補滿, 密碼', () => {
+    expect(parseSeatFillerText('/補位 Room-1460')).toEqual({ room: 'Room-1460', extra: false });
+    expect(parseSeatFillerText('/機器人補位 Room-1460 2')).toEqual({ room: 'Room-1460', bots: '2', extra: false });
+    expect(parseSeatFillerText('／補位　1460')).toEqual({ room: '1460', extra: false });
+    expect(parseSeatFillerText('/補位1460')).toEqual({ room: '1460', extra: false });
+    expect(parseSeatFillerText('/補位')).toEqual({ room: '', extra: false });
+    expect(parseSeatFillerText('/補位 百科陪練 補滿 密碼:1234')).toEqual({ room: '百科陪練', bots: '補滿', password: '1234', extra: false });
+    expect(parseSeatFillerText('/補位 「百科 陪練」 3人 pw：99')).toEqual({ room: '百科 陪練', bots: '3人', password: '99', extra: false });
     expect(parseSeatFillerText('/補位 1 2 3')).toMatchObject({ extra: true });
   });
 
@@ -85,9 +86,9 @@ describe('LINE replies', () => {
   });
 
   it('format errors never dispatch', async () => {
-    expect(await answerSeatFillerTextCommand('/補位')).toContain('用法：/補位 房號 [局數]');
-    expect(await answerSeatFillerTextCommand('/補位 Lobby')).toContain('房號格式不對');
-    expect(await answerSeatFillerTextCommand('/補位 1460 4')).toContain('局數要是 1–3 的整數');
+    expect(await answerSeatFillerTextCommand('/補位')).toContain('用法：/補位 房號或房間描述');
+    expect(await answerSeatFillerTextCommand('/補位 a"b')).toContain('房號或房間描述不對');
+    expect(await answerSeatFillerTextCommand('/補位 1460 12')).toContain('人數要是 1–9');
     expect(await answerSeatFillerTextCommand('/補位 1460 1 1')).toContain('用法');
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -171,12 +172,12 @@ describe('LINE webhook (1:1 chat)', () => {
 });
 
 describe('Discord /機器人補位', () => {
-  function interaction(room: string, games: number | null) {
+  function interaction(room: string, bots: string | null, password: string | null = null) {
     const fake = {
       commandName: COMMANDS.SEAT_FILLER,
       options: {
-        getString: (name: string) => (name === SEAT_FILLER_OPTIONS.ROOM ? room : null),
-        getInteger: (name: string) => (name === SEAT_FILLER_OPTIONS.GAMES ? games : null),
+        getString: (name: string) =>
+          name === SEAT_FILLER_OPTIONS.ROOM ? room : name === SEAT_FILLER_OPTIONS.BOTS ? bots : name === SEAT_FILLER_OPTIONS.PASSWORD ? password : null,
       },
       reply: vi.fn(async () => undefined),
       deferReply: vi.fn(async () => undefined),
@@ -185,13 +186,15 @@ describe('Discord /機器人補位', () => {
     return fake;
   }
 
-  it('is registered with a required room and an optional 1–3 games option', () => {
+  it('is registered with a required room-or-description and optional 人數 / 密碼', () => {
     const json = buildSlashCommands().map((c) => c.toJSON());
-    const cmd = json.find((c) => c.name === '機器人補位') as { options: { name: string; required?: boolean; min_value?: number; max_value?: number }[] };
+    const cmd = json.find((c) => c.name === '機器人補位') as { options: { name: string; required?: boolean; choices?: { value: string }[] }[] };
     expect(cmd).toBeDefined();
-    expect(cmd.options.map((o) => o.name)).toEqual(['房號', '局數']);
+    expect(cmd.options.map((o) => o.name)).toEqual(['房號或描述', '人數', '密碼']);
     expect(cmd.options[0].required).toBe(true);
-    expect(cmd.options[1]).toMatchObject({ required: false, min_value: 1, max_value: 3 });
+    expect(cmd.options[1].required).toBe(false);
+    expect(cmd.options[1].choices?.map((c) => c.value)).toEqual(['補滿', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+    expect(cmd.options[2].required).toBe(false);
   });
 
   it('success: public deferred reply with the dispatch result', async () => {
@@ -204,13 +207,13 @@ describe('Discord /機器人補位', () => {
   });
 
   it('format error and limits: ephemeral, no dispatch', async () => {
-    const bad = interaction('Lobby', 1);
+    const bad = interaction('a"b', '1');
     await handleSeatFillerCommand(bad as never);
     expect(bad.reply).toHaveBeenCalledWith(expect.objectContaining({ flags: MessageFlags.Ephemeral }));
-    expect((bad.reply.mock.calls[0] as unknown as [{ content: string }])[0].content).toContain('房號格式不對');
+    expect((bad.reply.mock.calls[0] as unknown as [{ content: string }])[0].content).toContain('房號或房間描述不對');
 
-    await handleSeatFillerCommand(interaction('1460', 2) as never);
-    const again = interaction('1461', 1);
+    await handleSeatFillerCommand(interaction('1460', '2') as never);
+    const again = interaction('1461', '1');
     await handleSeatFillerCommand(again as never);
     expect((again.reply.mock.calls[0] as unknown as [{ content: string; flags: number }])[0]).toMatchObject({
       flags: MessageFlags.Ephemeral,
@@ -231,8 +234,8 @@ describe('Discord /機器人補位', () => {
 
 describe('help, topic counting, chat export', () => {
   it('help texts list the platform syntax', () => {
-    expect(formatStatsHelp('line')).toContain('/補位 房號 [局數]');
-    expect(formatStatsHelp('discord')).toContain('/機器人補位 房號 [局數]');
+    expect(formatStatsHelp('line')).toContain('/補位 房號或房間描述');
+    expect(formatStatsHelp('discord')).toContain('/機器人補位 房號或描述');
   });
 
   it('observe() does not count the command as a topic', () => {

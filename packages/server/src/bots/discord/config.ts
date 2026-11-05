@@ -104,8 +104,9 @@ export const SIM_OPTIONS = {
 
 /** Option names of /機器人補位 (bots/seatFiller). */
 export const SEAT_FILLER_OPTIONS = {
-  ROOM: '房號',
-  GAMES: '局數',
+  ROOM: '房號或描述',
+  BOTS: '人數',
+  PASSWORD: '密碼',
 } as const;
 
 /** /模擬 角色 choices (value = the LINE alias the parser reads). */

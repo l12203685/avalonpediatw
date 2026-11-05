@@ -26,7 +26,7 @@ import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
 import { handleSimCommand } from '../simulation/discordCommand';
 import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
-import { SEAT_FILLER_GAMES } from '../../services/signagePlayerDispatch';
+import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -151,17 +151,26 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
     // 2026-11-03 補位機器人 (bots/seatFiller) — same limits as LINE's /補位.
     new SlashCommandBuilder()
       .setName(COMMANDS.SEAT_FILLER)
-      .setDescription('叫補位機器人進 signage-cloud 房間測試 / Summon the seat-filler bot')
+      .setDescription('叫百科AI 進 signage-cloud 房間補位 / Summon 百科AI seat fillers')
       .addStringOption((o) =>
-        o.setName(SEAT_FILLER_OPTIONS.ROOM).setDescription('房號，例如 Room-1460 或 1460 / Room').setRequired(true).setMaxLength(20)
-      )
-      .addIntegerOption((o) =>
         o
-          .setName(SEAT_FILLER_OPTIONS.GAMES)
-          .setDescription(`局數 ${SEAT_FILLER_GAMES.min}–${SEAT_FILLER_GAMES.max}（預設 ${SEAT_FILLER_GAMES.default}）/ Games`)
+          .setName(SEAT_FILLER_OPTIONS.ROOM)
+          .setDescription('房號（1460）或房間描述裡的一段字（房間內看不到房號時用）/ Room no. or description')
+          .setRequired(true)
+          .setMaxLength(40)
+      )
+      .addStringOption((o) =>
+        o
+          .setName(SEAT_FILLER_OPTIONS.BOTS)
+          .setDescription(`派幾個（預設 ${SEAT_FILLER_BOTS.default}；補滿 = 補到 10 人）/ How many`)
           .setRequired(false)
-          .setMinValue(SEAT_FILLER_GAMES.min)
-          .setMaxValue(SEAT_FILLER_GAMES.max)
+          .addChoices(
+            { name: '補滿（補到 10 人）', value: '補滿' },
+            ...Array.from({ length: SEAT_FILLER_BOTS.max }, (_, i) => ({ name: `${i + 1} 個`, value: String(i + 1) })),
+          )
+      )
+      .addStringOption((o) =>
+        o.setName(SEAT_FILLER_OPTIONS.PASSWORD).setDescription('私房密碼（只用來進房）/ Private-room password').setRequired(false).setMaxLength(32)
       ),
   ];
 }

@@ -1,5 +1,5 @@
 /**
- * Discord slash command `/機器人補位 房號:… [局數:…]` (2026-11-03).
+ * Discord slash command `/機器人補位 房號或描述:… [人數:1–9／補滿] [密碼:…]` (2026-11-03; 11-04 描述／補滿／密碼).
  *
  * Refusals (format, limits, not configured) are ephemeral — only the person
  * who typed it needs them. A request that passes the limits is answered in
@@ -14,8 +14,9 @@ import { formatSeatFillerOutcome, formatSeatFillerParseError } from './commands'
 
 export async function handleSeatFillerCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const room = interaction.options.getString(SEAT_FILLER_OPTIONS.ROOM, true) ?? '';
-  const games = interaction.options.getInteger(SEAT_FILLER_OPTIONS.GAMES, false);
-  const parsed = parseSeatFillerArgs(room, games);
+  const bots = interaction.options.getString(SEAT_FILLER_OPTIONS.BOTS, false);
+  const password = interaction.options.getString(SEAT_FILLER_OPTIONS.PASSWORD, false);
+  const parsed = parseSeatFillerArgs(room, bots, password);
   if (!parsed.ok) {
     await interaction.reply({ content: formatSeatFillerParseError(parsed.error, 'discord'), flags: MessageFlags.Ephemeral });
     return;
