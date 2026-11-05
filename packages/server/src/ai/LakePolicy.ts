@@ -29,6 +29,7 @@ import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
+import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 
 type Camp = 'good' | 'evil';
@@ -237,6 +238,10 @@ export function pickLakeTargetForTeam(
     // precedence over goodLakeTargetMostSuspicious; falls through to it
     // (or to the legacy rule) only when no evil set is consistent with
     // the record. Deterministic; no Math.random.
+    // ── AgentTuning.goodLakeEntropy（第 30 回合；Edward 2026-11-05）── expected gain of the table's public information,
+    // the holder's own trustworthiness included (BlueRound30.publicLakeGain).
+    const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
+    if (entropyPick !== null) return entropyPick;
     if (tuning.goodLakeInfoMax) {
       const pick = pickGoodLakeTargetInfoMax(obs, unknownCandidates);
       if (pick !== null) return pick;
