@@ -94,6 +94,11 @@ const ROOM_TITLE = arg('title', '');
 const WAIT_MIN = Number(arg('wait-min', '3'));
 const REJOIN_MIN = Number(arg('rejoin-min', '1'));
 const START_MIN = Number(arg('start-min', '6'));
+/**
+ * 指定房間：找不到房間（或一直沒有空位）超過 --find-min 分鐘就結束登出。Edward 2026-11-05「網站上還有蠻多個百科AI卡在大廳…
+ * 記得設定一個時間到就自己退出的機制」——另外只有第 1 個機器人先登入看大廳，其他的要坐下前才登入，不在大廳排排站。
+ */
+const FIND_MIN = Number(arg('find-min', '10'));
 const PRIVATE_LOG = arg('private-log', '');
 const CHAT = arg('chat', 'on') !== 'off';
 /** 本機測試用：只看標題以這個開頭的房間（測每晚補位流程時，避免碰到真人的房間）。 */
@@ -135,6 +140,9 @@ export function leaveIntent(msg: string): 'leave' | 'stay' | null {
   return LEAVE_RE.test(m) ? 'leave' : null;
 }
 interface ChatMsg { set: number; msg: string; name: string }
+/** 房內有人請百科AI離開的房間（同一個程序裡同房的百科AI一起走；房間標籤去掉 #N）。 */
+const leaveRequested = new Set<string>();
+const roomBase = (label: string): string => label.replace(/#\d+$/u, '');
 /** 送一則聊天並確認自己的聊天室看得到它（最多試 3 次，每次隔 3 秒）。 */
 async function chatConfirmed(p: Page, text: string): Promise<boolean> {
   for (let i = 0; i < 3; i++) {
@@ -477,6 +485,7 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
       try { s = await snap(p); } catch { s = null; }
       if (s) {
         if (s.gaming && s.status !== ENDED) { started = true; break; }
+        if (leaveRequested.has(roomBase(room))) { await leaveRoom(p, '房內有人請百科AI離開', room); return played; }
         if (!askDone && !asked) {
           // 練習台連發兩則時第二則會被吃掉（2026-11-04 實測）：打招呼和提問合成一則，送出後確認聊天室真的有這則
           const before = await chats(p);
@@ -491,7 +500,7 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
         } else if (!askDone && asked) {
           const fresh = newHumanChats(asked.before, await chats(p));
           const intents = fresh.map((c) => leaveIntent(String(c.msg ?? '')));
-          if (intents.includes('leave')) { await chat(p, '好，我先離開，謝謝！'); await leaveRoom(p, '房內有人請百科AI離開', room); return played; }
+          if (intents.includes('leave')) { leaveRequested.add(roomBase(room)); await chat(p, '好，我們先離開，謝謝！'); await leaveRoom(p, '房內有人請百科AI離開', room); return played; }
           if (intents.includes('stay') || Date.now() - asked.at > ASK_SEC * 1000) { askDone = true; log(`${room}：沒有人要百科AI離開，留下`); }
         }
         // 私房多機器人（--password --bots N）：同房的其他百科機器人是自己人，不算違反「每間房最多 1 個」
@@ -698,11 +707,13 @@ export function sameRoom(a: string, b: string): boolean {
  */
 async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): Promise<void> {
   if (alreadyPlayed >= MAX_GAMES) { log('重連的那局已打完，結束'); return; }
-  const bots = await loginBots(browser, BOTS);
+  const bots = await loginBots(browser, 1);
   const lobby = bots[0].page;
   log(`指定房間 ${ROOM || '（依房間描述）'}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
   let lastLen = -1; let stableSince = Date.now();
+  const findBy = Date.now() + FIND_MIN * 60_000;
   while (Date.now() < deadline) {
+    if (Date.now() > findBy) { log(`指定房間結束：${FIND_MIN} 分鐘內沒有找到可以坐的房間，登出`); return; }
     const rooms = await lobbyRooms(lobby).catch(() => [] as LobbyRoom[]);
     const r = rooms.find((x) => (ROOM ? sameRoom(x.name, ROOM) : Boolean(ROOM_TITLE) && (x.description_title ?? '').includes(ROOM_TITLE)));
     if (!r) { lastLen = -1; await sleep(15000); continue; }
@@ -716,13 +727,26 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
     if (watch) await watch.context().close().catch(() => undefined);
     // 依序坐下：每個機器人坐之前再看一次大廳，房間滿了或開局了就不再坐
     const seated: { label: string; page: Page }[] = [];
-    for (const b of bots) {
+    for (let i = 1; i <= BOTS; i++) {
+      // 第 2 個起坐下前才登入（不在大廳等）
+      if (!bots[i - 1]) {
+        const page = await newPage(browser);
+        await login(page, botNick(i, BOTS));
+        // 剛登入時大廳的房間列表還沒載入（2026-11-05 實測：直接讀會以為房間不見了）
+        await page.waitForFunction('window.app && Array.isArray(window.app.rooms) && window.app.rooms.length > 0', undefined, { timeout: 15000 }).catch(() => undefined);
+        bots.push({ label: `#${i}`, page });
+      }
+      const b = bots[i - 1];
+      if (BOTS > 1 && !b.label) b.label = '#1';
       const now = (await lobbyRooms(b.page).catch(() => [] as LobbyRoom[])).find((x) => x.name === r.name);
       if (!now || now.gaming || (now.length ?? 10) >= 10) break;
       if (await joinRoom(b.page, r.name, r.is_publish_room ? '' : PASSWORD)) seated.push(b);
       else { log(`${r.name}${b.label}：沒有坐進去`); break; }
       await sleep(1500);
     }
+    // 沒坐進去的機器人立刻登出（關掉分頁），不留在大廳
+    for (const b of bots) if (!seated.includes(b) && b !== bots[0]) await b.page.context().close().catch(() => undefined);
+    if (!seated.length) bots.length = 1;
     log(`${r.name}：坐進 ${seated.length}/${BOTS} 個百科機器人`);
     if (!seated.length) { await sleep(10000); continue; }
     const results = await Promise.all(seated.map((b, i) => stayAndPlay(b.page, `${r.name}${b.label}`, MAX_GAMES - alreadyPlayed, false, false, i === 0)));
