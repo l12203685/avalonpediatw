@@ -9,7 +9,8 @@
  *   - 前面每一個提議都看起來錯（每支隊乾淨的機率都很低）→ 從前方派票者排序 G > N > B：把 G 帶進來、不碰 B 與 B 的組合；
  *   - 不派完全反向的隊、不照派這一局的提議（忠臣照派效益低）。
  * 認同＝隊上至少兩個是上一位隊長那一隊的人；尊重＝最多一個；修正＝一個都不留（也不帶他）。在這些條件下挑自己後驗最乾淨的隊；沒有隊符合時依序放寬。
- * 只在第 1 局（第 34 回合：第 2 局套用時量尺變差；第 1 局成功之後第 2 局照派成功的隊＝認同第 1 局的隊伍資訊，已經是現行規則）。
+ * 4 = 只在第 1 局（第 34 回合：第 2 局套用時量尺變差；第 1 局成功之後第 2 局照派成功的隊＝認同第 1 局的隊伍資訊，已經是現行規則）；
+ * 5 = 再加第 1 局失敗之後的第 2 局（這一局前面有別人的提議時）。
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
@@ -44,9 +45,12 @@ export function loyalWikiPickTeam(
   allowed: (team: readonly string[]) => boolean = () => true,
 ): AgentAction {
   if ((tuning.loyalFlowPick ?? 0) < 4 || action.type !== 'team_select' || obs.myRole !== 'loyal' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return action;
-  if ((obs.failCount ?? 0) >= 4 || (obs.currentRound ?? 1) !== 1) return action;
+  const round = obs.currentRound ?? 1;
+  // 4 = 只在第 1 局；5 = 再加第 1 局失敗之後的第 2 局（第 1 局成功之後照派成功的隊＝認同，已經是現行規則）。
+  const r2AfterFail = round === 2 && (obs.questResults ?? [])[0] === 'fail';
+  if ((obs.failCount ?? 0) >= 4 || !(round === 1 || ((tuning.loyalFlowPick ?? 0) >= 5 && r2AfterFail))) return action;
   const me = obs.myPlayerId;
-  const earlier = obs.voteHistory.filter((v) => v.round === 1);
+  const earlier = obs.voteHistory.filter((v) => v.round === round);
   const prevs = earlier.filter((v) => v.leader !== me);
   if (prevs.length === 0) return action;
   const prev = prevs[prevs.length - 1];

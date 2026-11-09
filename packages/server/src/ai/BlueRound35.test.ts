@@ -59,4 +59,20 @@ describe('loyalFlowPick=4 (round 35: the wiki-24 table)', () => {
     expect(loyalWikiPickTeam(t, asObs({ ...(r1 as object), currentRound: 2 }), draft)).toBe(draft);
     expect(loyalWikiPickTeam({ ...t, loyalFlowPick: 2 }, r1, draft)).toBe(draft);
   });
+  it('mode 5 also answers in R2 after an R1 fail (not after an R1 success)', () => {
+    const t = { ...DEFAULT_AGENT_TUNING, loyalFlowPick: 5 };
+    const draft = { type: 'team_select' as const, teamIds: ['P3', 'P2', 'P6', 'P9'] };
+    const r2 = (res: 'fail' | 'success') => asObs({
+      ...(r1 as object), currentRound: 2, failCount: 1, questResults: [res],
+      questHistory: [{ round: 1, team: ['P1', 'P4', 'P7'], result: res, failCount: res === 'fail' ? 1 : 0 }],
+      voteHistory: [vote(1, 1, 'P1', ['P1', 'P4', 'P7'], ['P1', 'P4', 'P7', 'P2', 'P5', 'P6']), vote(2, 1, 'P2', ['P2', 'P5', 'P8', 'P10'], ['P2', 'P5', 'P8', 'P10'])],
+    });
+    const a = loyalWikiPickTeam(t, r2('fail'), draft);
+    if (a.type !== 'team_select') throw new Error(a.type);
+    expect(a.teamIds).toContain('P3');
+    expect(a.teamIds).toHaveLength(4);
+    expect(loyalWikiPickTeam(t, r2('success'), draft)).toBe(draft);
+    expect(loyalWikiPickTeam({ ...t, loyalFlowPick: 4 }, r2('fail'), draft)).toBe(draft);
+    expect(parseTuningFlag('loyalFlowPick=5')).toEqual({ loyalFlowPick: 5 });
+  });
 });
