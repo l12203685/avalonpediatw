@@ -6,7 +6,12 @@
  *      （可以先照你的貝氏信賴）」——見 `bayesVoteCriteria`（`goodBayesVote`；準則表在 `docs/ai/logic_first.md` 第 10C 節）。
  *   3.「我說的資訊流遞迴調整與修正怎麼好像還沒做到?」——遞迴讀人，見 `infl/recursiveRead.ts`（`beliefRecursive`）。
  *   4. 湖中鏈的權重自己選（`goodLakeChain`／`goodLakeChainFuture`），不問。
- * Edward 2026-11-09 另外：「忠臣的派票跟投票還是太弱了 繼續優化 就是因為忠臣這樣 梅林展現能力才會太明顯」。
+ * Edward 2026-11-09 另外：「忠臣的派票跟投票還是太弱了 繼續優化 就是因為忠臣這樣 梅林展現能力才會太明顯」；第 1 局的提議「適時疊票 也要適時做票源分散」
+ * （`loyalR1Spread`）。
+ *
+ * 第 33 回合結果（`docs/ai/optimization_loop.md` 第 33 回合）：採用裁定 1（`merlinReuseNoEarly` 關、`merlinReuseExact` 開）、`goodReuseNoMatchPoint`、
+ * `goodBayesVote=3`（θ 0.8／0.7／0.7／0.9；第 4 局照「隊上有紅」讀；自我對打合併 −0.80pp、逐點一致與量尺變好）；新預設對 main 合併 +1.00pp。
+ * `beliefRecursive`、`beliefLeadRecursive`、`loyalR1Spread` 預設關（量測在同一節）。
  */
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { AgentAction, PlayerObservation } from './types';
@@ -51,6 +56,8 @@ export function failsRequiredNow(obs: PlayerObservation): number {
  *   - 公開邏輯：這隊至少和「到強制局為止之後每一任隊長能派的最乾淨的隊」一樣乾淨（否決換不到更好的隊）→ 外白（`alt`）；
  *   - 其他 → 反對。
  * 外白仍然要過好人投票關卡（呼叫端）。不適用時 null。
+ * 模式（`goodBayesVote`）：1 = 上面全部；2 = 不用「換不到更好的隊」；3 = 2 ＋ 第 4 局（兩張失敗）在隊上照「隊上有紅」讀（採用的預設：照字面讀「至少兩紅」
+ * 自我對打約 −3pp）。
  */
 export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObservation): BayesVoteVerdict | null {
   const mode = tuning.goodBayesVote ?? 0;
