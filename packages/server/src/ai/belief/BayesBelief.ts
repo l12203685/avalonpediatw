@@ -342,7 +342,9 @@ export interface BayesOptions {
   /**
    * Round 33 `beliefRecursive` (Edward 2026-11-09「資訊流遞迴調整與修正」): the level-1 recursive reader (`infl/recursiveRead.ts`) — each vote
    * and proposal of j reads as the output of j's own decision function on j's level-0 posterior at that moment (public prefix + j's private
-   * information in the world). 1 = votes and proposals, 2 = votes only, 3 = proposals only. Replaces the vote / proposal cells it covers.
+   * information in the world). 1 = votes and proposals, 2 = votes only, 3 = proposals only; 4 = the round-34 role mixture (every player's whole
+   * record read under one role — loyal, Percival, Merlin, the reds — decided jointly per world; the loyal Merlin layer is not used). Replaces the
+   * vote / proposal cells it covers.
    */
   recursive?: number;
   /** With `recursive`: the level-0 options j's own posterior is computed with (the same options without `recursive`). */
@@ -390,8 +392,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const picking = obs.gamePhase === 'team_select';
   const rec = opts.recursive !== undefined ? (opts.recursiveNoLead === true && picking ? 0 : opts.recursive)
     : ((opts.leadRecursive ?? 0) > 0 && picking ? opts.leadRecursive! : 0);
-  const recVotes = rec === 1 || rec === 2;
+  const recVotes = rec === 1 || rec === 2 || rec === 4;
   const recProps = rec === 1 || rec === 3;
+  // Round 34 `beliefRecursive=4`: the role mixture reads votes and proposals together (and its own Merlin / Percival roles).
+  const recMix = rec === 4;
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
   const tempered = temperV < 1 || temperP < 1;
   const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
@@ -431,7 +435,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
   const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
     .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
-  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound, policy || recVotes) : null;
+  const mixPre = mixMode > 0 && !recMix ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound, policy || recVotes) : null;
   // Round 33: the recursive reader (Percival's strict-Merlin thumbs keep their own proposal model).
   const recLogs = rec > 0 ? recursiveLogs(obs, opts.recursiveLevel0 ?? {}, rec, (leader) => strict.includes(leader)) : null;
   const policyLog = recVotes ? recLogs?.votes ?? null : policy ? policyVoteLog(obs) : null;
@@ -477,7 +481,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
             lpp += Math.log(strictP);
           } else lp += Math.log(strictP);
         }
-      } else if (v.leader !== me && p.leaderOn && (!recProps || (strictMask & p.leaderBit) !== 0)) {
+      } else if (v.leader !== me && p.leaderOn && (!(recProps || recMix) || (strictMask & p.leaderBit) !== 0)) {
         // Proposal (the leader on its own team; not the viewer's own).
         const others = all & ~p.leaderBit;
         const redsAvail = sizeOf(w & others);

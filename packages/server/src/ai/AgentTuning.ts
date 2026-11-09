@@ -1078,7 +1078,7 @@ export interface AgentTuning {
   /**
    * 第 33 回合（Edward 2026-11-09「資訊流遞迴調整與修正」）：遞迴讀人（第 1 層）。讀 j 的每一票、每一次派隊時，先算 j 在那一刻
    * （公開資訊流的前綴＋j 在假設世界裡的私訊）自己的後驗（第 0 層＝現行後驗），再看 j 的決策函數產生這個動作的機率，當成概似
-   * （`infl/recursiveRead.ts`）。1 = 投票＋派隊；2 = 只有投票；3 = 只有派隊；0 = 關。
+   * （`infl/recursiveRead.ts`）。1 = 投票＋派隊；2 = 只有投票；3 = 只有派隊；4 = 第 34 回合的角色混合（每個人的整段紀錄用同一個角色讀：忠臣、派西、梅林、紅方各自的視角，Edward 11/09）；0 = 關。
    */
   beliefRecursive: number;
   /**
@@ -2091,7 +2091,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'beliefRecursive') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
-    if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`beliefRecursive needs a number in [0, 3], got "${raw}"`);
+    if (!Number.isFinite(value) || value < 0 || value > 4) throw new Error(`beliefRecursive needs a number in [0, 4], got "${raw}"`);
     return { beliefRecursive: value };
   }
   if (name === 'goodBayesVote') {
@@ -2126,7 +2126,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'beliefLeadRecursive') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
-    if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`beliefLeadRecursive needs a number in [0, 3], got "${raw}"`);
+    if (!Number.isFinite(value) || value < 0 || value > 4) throw new Error(`beliefLeadRecursive needs a number in [0, 4], got "${raw}"`);
     return { beliefLeadRecursive: value };
   }
   if (name === 'goodLakeEntropy') {

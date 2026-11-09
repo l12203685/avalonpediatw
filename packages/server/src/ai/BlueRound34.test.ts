@@ -8,6 +8,9 @@ import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
 import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
 import { r1SpreadTeam } from './BlueRound33';
 import { merlinVoteFatal } from './MerlinLoyalStyle';
+import { mixModels, RoleMixtureReader } from './infl/recursiveRead';
+import { FlowFeatures } from './infl/voteFeatures';
+import { flowOfObs } from './infl/flow';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const asObs = (o: object) => o as unknown as PlayerObservation;
@@ -84,5 +87,42 @@ describe('merlinFatalR4 (round 34, basic consistency)', () => {
     // R5 (one fail card) with red on two fails: one seen red stays fatal
     expect(merlinVoteFatal(asObs({ ...(m(['P1', 'P2', 'P3']) as object), currentRound: 5, questResults: ['fail', 'fail', 'success', 'success'] }), { merlinFatalR4: true })).toBe(true);
     expect(LEGACY_AGENT_TUNING.merlinFatalR4).toBe(false);
+  });
+});
+
+describe('beliefRecursive=4 (round 34: the role-mixture reader, Edward 11/09「每個角色的視角分開讀」)', () => {
+  // R2 after an R1 success; P5 has proposed twice, each time leaving P7 P8 P9 off.
+  const obs = (me: string, role: string, extra: object = {}) => asObs({
+    myPlayerId: me, myRole: role, myTeam: role === 'assassin' ? 'evil' : 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: [],
+    currentRound: 2, currentLeader: 'P6', failCount: 2, questResults: ['success'], gamePhase: 'team_vote', evilCount: 4,
+    questHistory: [{ round: 1, team: ['P1', 'P2', 'P5'], result: 'success', failCount: 0 }],
+    voteHistory: [
+      vote(1, 1, 'P5', ['P5', 'P1', 'P2'], ['P5', 'P1', 'P2', 'P3', 'P4', 'P6']),
+      vote(2, 1, 'P5', ['P5', 'P1', 'P2', 'P3'], ['P5', 'P1', 'P2', 'P3', 'P4']),
+      vote(2, 2, 'P10', ['P10', 'P7', 'P8', 'P4'], ['P10', 'P7', 'P8']),
+    ],
+    proposedTeam: ['P6', 'P1', 'P2', 'P3'], lakeHistory: [], myLakeResults: [], ...extra,
+  });
+  it('is a distribution for a loyal, a Merlin and a Percival viewer', () => {
+    for (const o of [obs('P4', 'loyal'), obs('P4', 'merlin', { knownEvils: ['P7', 'P8', 'P9'] }), obs('P4', 'percival', { knownWizards: ['P5', 'P9'] })]) {
+      const share = bayesRedShare(o, bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRecursive: 4 }));
+      let s = 0;
+      for (const id of IDS) { s += share.get(id)!; expect(share.get(id)!).toBeGreaterThanOrEqual(0); }
+      expect(s).toBeCloseTo(4, 6);
+      expect(share.get('P4')).toBe(0);
+    }
+  });
+  it('a leader who keeps leaving the same seats off is read as possibly Merlin: worlds where his teams hold reds lose weight', () => {
+    const o = obs('P4', 'loyal');
+    const ff = new FlowFeatures(flowOfObs(o), { useBayesView: true, bayesViewOptions: bayesOptionsOf(DEFAULT_AGENT_TUNING) });
+    const real = mixModels();
+    const blindMerlin = { ...real, proposal: { ...real.proposal, merlin: Float64Array.from(real.proposal.loyal) } };
+    const viewer = { id: 'P4', role: 'loyal', seesReds: 0, thumbs: 0 };
+    const bit = (ids: string[]) => ids.reduce((m, id) => m | (1 << (Number(id.slice(1)) - 1)), 0);
+    const wOff = bit(['P7', 'P8', 'P9', 'P10']); // P5 left exactly the reds off
+    const wOn = bit(['P1', 'P2', 'P3', 'P10']); // P5's teams were full of reds
+    const n = o.voteHistory.length;
+    const gap = (m: typeof real) => { const r = new RoleMixtureReader(m, ff); return r.worldLog(viewer, n, wOff, () => false) - r.worldLog(viewer, n, wOn, () => false); };
+    expect(gap(real)).toBeGreaterThan(gap(blindMerlin));
   });
 });

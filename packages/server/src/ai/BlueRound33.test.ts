@@ -32,7 +32,7 @@ describe('round 33 tuning fields', () => {
     expect(DEFAULT_AGENT_TUNING.merlinReuseNoEarly).toBe(false);
     expect(parseTuningFlag('beliefRecursive')).toEqual({ beliefRecursive: 1 });
     expect(parseTuningFlag('beliefRecursive=2')).toEqual({ beliefRecursive: 2 });
-    expect(() => parseTuningFlag('beliefRecursive=4')).toThrow();
+    expect(() => parseTuningFlag('beliefRecursive=5')).toThrow();
     expect(parseTuningFlag('goodBayesVote')).toEqual({ goodBayesVote: 1 });
     expect(parseTuningFlag('goodBayesBad')).toEqual({ goodBayesBad: 0.95 });
     expect(parseTuningFlag('goodBayesGoodKey=0.8')).toEqual({ goodBayesGoodKey: 0.8 });
@@ -138,7 +138,11 @@ describe('beliefRecursive (ruling 3: the level-1 recursive reader)', () => {
   });
   it('a blue leader reads the same in every world (only his own information); a red leader depends on the world', () => {
     const ff = new FlowFeatures(flowOfObs(obs), { useBayesView: true, bayesViewOptions: level0 });
-    const beta = { blue: Float64Array.from([2, 0.5, 2, 0, 0, 0]), evil: Float64Array.from([0.5, 1, 2, 1, 1, 1]), oberon: Float64Array.from([0.5, 1, 2, 0, 0, 0]) };
+    const z = [0, 0, 0, 0];
+    const beta = {
+      blue: Float64Array.from([2, 0.5, 2, 0, 0, 0, ...z]), evil: Float64Array.from([0.5, 1, 2, 1, 1, 1, ...z]), oberon: Float64Array.from([0.5, 1, 2, 0, 0, 0, ...z]),
+      loyal: Float64Array.from([2, 0.5, 2, 0, 0, 0, ...z]), percival: Float64Array.from([2, 0.5, 2, 0, 0, 0, 0, 0, -1, -2]), merlin: Float64Array.from([1, 0.5, 2, 0, 0, 0, -2, -3, 0, 0]),
+    };
     const reader = new RecursiveProposalReader({ beta }, ff);
     const w1 = (1 << 0) | (1 << 4) | (1 << 5) | (1 << 8);
     const w2 = (1 << 1) | (1 << 4) | (1 << 7) | (1 << 8);
