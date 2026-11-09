@@ -39,10 +39,10 @@ describe('有練習台內建機器人的局整局不貼 DC', () => {
     expect(noPostReason(g(null, { timeline: [] }))).toBeNull();
     expect(noPostReason(g(undefined))).toBeNull();
   });
-  it('真人局、有百科AI 的局照常貼（百科AI 是一般帳號：待檢視＋模擬）', () => {
+  it('真人局照常貼；有百科AI 的局由百科AI 自己貼，記錄員不重複貼（2026-11-09）', () => {
     expect(noPostReason(g(end(10)))).toBeNull();
     const withPedia = { ...end(10), users: users(10).map((u, i) => ({ ...u, set: i + 1, name: i === 0 ? BOT_NICK : u.name })) };
-    expect(noPostReason(g(withPedia))).toBeNull();
+    expect(noPostReason(g(withPedia))).toBe('有百科AI（1 個，由百科AI 自己貼）');
     const p = buildPaipuPost({ ...g(withPedia), room: 'Room-1' });
     expect(p.verified).toBe(false);
     expect(p.tags).toContain(BOT_GAME_TAG);

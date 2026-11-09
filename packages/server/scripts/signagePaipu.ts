@@ -164,7 +164,10 @@ export function siteRobotCount(game: RecordedGame): number {
  */
 export function noPostReason(game: RecordedGame): string | null {
   const robots = siteRobotCount(game);
-  return robots ? `有練習台內建機器人（${robots} 個）` : null;
+  if (robots) return `有練習台內建機器人（${robots} 個）`;
+  // 2026-11-09：有百科AI 的局由百科AI 自己貼到牌譜區（同格式，附 trace.json），記錄員不重複貼
+  const bots = botSeats(game).length;
+  return bots ? `有百科AI（${bots} 個，由百科AI 自己貼）` : null;
 }
 
 /** 只貼真人 10 人局（遊玩頁內建機器人的練習局不貼）。 */

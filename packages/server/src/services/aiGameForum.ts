@@ -12,10 +12,17 @@
  * 不丟錯：沒有 token／論壇關掉 → skipped；DC 失敗 → failed（只記狀態碼）。log 只寫狀態碼與數量，不寫標題、暱稱或內容。
  */
 import {
-  AI_GAME_TAG_NAME, aiGameFollowups, aiGameSummary, aiGameThreadName, formatFlagReply, parseAiGameTrace,
+  AI_GAME_TAG_NAME, formatFlagReply, paipuPostBody, paipuResultTag, paipuThreadNameOf, parseAiGameTrace,
   type AiGameTrace,
 } from './aiGameTrace';
-import { resolveFeedbackForumId } from './feedbackForum';
+
+/**
+ * 2026-11-09 起（Edward「我要的紀錄格式是跟阿瓦隆百科一樣的 你不要搞那麼複雜 百科AI參與的可以也一起放到牌譜紀錄區裡面」）：
+ * 貼到 #牌譜紀錄與覆盤，格式同記錄員的待檢視貼文（標題「【待檢視】含百科機器人_…」、標籤 模擬＋線瓦＋結果），附 trace.json
+ * （網站「百科AI 對局」頁讀它）；不再另貼依局的決定。每日匯入看到「待檢視」或「模擬」不收進真人戰績。
+ */
+export const PAIPU_FORUM_ID = '1132683080134578276';
+const PAIPU_TAG_NAMES = ['模擬', '線瓦'] as const;
 
 export const DISCORD_API = 'https://discord.com/api/v10';
 /** 阿瓦隆百科 DC 群組（列出進行中的討論串要用）。 */
@@ -26,11 +33,23 @@ export const discordThreadUrl = (guildId: string, threadId: string): string => `
 /** 討論串 7 天沒動才自動封存（封存的照樣列得出來，回覆時會自動解封）。 */
 const AUTO_ARCHIVE_MINUTES = 10080;
 
-/** AI_GAME_FORUM_CHANNEL_ID 可以換論壇（off＝不貼也不讀）；沒設＝問題回報論壇（同 FEEDBACK_FORUM_CHANNEL_ID）。 */
+/** AI_GAME_FORUM_CHANNEL_ID 可以換論壇（off＝不貼也不讀）；沒設＝#牌譜紀錄與覆盤。 */
 export function resolveAiGameForumId(env: NodeJS.ProcessEnv = process.env): string {
   const raw = (env.AI_GAME_FORUM_CHANNEL_ID || '').trim();
   if (['off', 'none', 'false', '0', 'no'].includes(raw.toLowerCase())) return '';
-  return raw || resolveFeedbackForumId(env);
+  return raw || PAIPU_FORUM_ID;
+}
+
+/** 論壇裡這些名字的標籤 id（找不到的略過）。 */
+async function tagIdsByName(opts: { token: string; forumId: string; fetchImpl: Fetch }, names: readonly string[]): Promise<string[]> {
+  try {
+    const res = await opts.fetchImpl(`${DISCORD_API}/channels/${opts.forumId}`, { headers: botHeaders(opts.token) });
+    if (!res.ok) return [];
+    const tags = (((await res.json()) as { available_tags?: { id: string; name: string }[] }).available_tags ?? []);
+    return names.map((n) => tags.find((t) => t.name === n)?.id).filter((x): x is string => Boolean(x));
+  } catch {
+    return [];
+  }
 }
 
 export function resolveAiGameGuildId(env: NodeJS.ProcessEnv = process.env): string {
@@ -101,13 +120,14 @@ export async function ensureAiGameTag(opts: { token: string; forumId: string; fe
 }
 
 /** 開討論串的 multipart 內容：payload_json＋files[0] trace.json（11/05 起不附 trace.txt：DC 只貼對局紀錄）。 */
-export function aiGameThreadBody(trace: AiGameTrace, tagId: string | null): FormData {
+/** 牌譜區的開串內容：標題、標籤、牌譜本文（同記錄員），附 trace.json。 */
+export function paipuThreadBody(trace: AiGameTrace, tags: readonly string[]): FormData {
   const payload = {
-    name: aiGameThreadName(trace),
+    name: paipuThreadNameOf(trace),
     auto_archive_duration: AUTO_ARCHIVE_MINUTES,
-    applied_tags: tagId ? [tagId] : [],
+    applied_tags: [...tags].slice(0, 5),
     message: {
-      content: aiGameSummary(trace),
+      content: paipuPostBody(trace),
       allowed_mentions: { parse: [] },
       attachments: [{ id: 0, filename: 'trace.json' }],
     },
@@ -149,11 +169,11 @@ export async function postAiGameTrace(trace: AiGameTrace, opts: AiGamePostOption
   const sleep = opts.sleep ?? defaultSleep;
   const gap = opts.gapMs ?? 1100;
   if (!token || !forumId) return { outcome: 'skipped', followups: 0, tagged: false };
-  const tagId = await ensureAiGameTag({ token, forumId, fetchImpl: f, log });
+  const tags = await tagIdsByName({ token, forumId, fetchImpl: f }, [...PAIPU_TAG_NAMES, paipuResultTag(trace)].filter(Boolean));
   let threadId = '';
   try {
     const res = await f(`${DISCORD_API}/channels/${forumId}/threads`, {
-      method: 'POST', headers: botHeaders(token), body: aiGameThreadBody(trace, tagId),
+      method: 'POST', headers: botHeaders(token), body: paipuThreadBody(trace, tags),
     });
     if (!res.ok) { log(`開討論串失敗：HTTP ${res.status}`); return { outcome: 'failed', followups: 0, tagged: false, status: res.status }; }
     threadId = String(((await res.json()) as { id?: string }).id ?? '');
@@ -162,15 +182,8 @@ export async function postAiGameTrace(trace: AiGameTrace, opts: AiGamePostOption
     return { outcome: 'failed', followups: 0, tagged: false, status: 0 };
   }
   if (!/^\d+$/.test(threadId)) return { outcome: 'failed', followups: 0, tagged: false, status: 0 };
-  let sent = 0;
-  let failed = 0;
-  for (const content of aiGameFollowups(trace, aiGameSiteUrl(threadId))) {
-    if (gap) await sleep(gap);
-    const status = await sendMessage(f, token, threadId, content, sleep);
-    if (status >= 200 && status < 300) sent += 1; else failed += 1;
-  }
-  if (failed) log(`後續訊息 ${failed} 則沒貼出去`);
-  return { outcome: 'sent', threadId, followups: sent, tagged: Boolean(tagId) };
+  void gap; void sleep;
+  return { outcome: 'sent', threadId, followups: 0, tagged: tags.length > 0 };
 }
 
 // ── 伺服器端：讀論壇、讀 trace、貼回饋 ────────────────────────────────────────────────────
@@ -220,7 +233,7 @@ export function snowflakeTime(id: string): string {
 /** 是不是這個論壇裡的百科AI對局討論串（標題開頭「百科AI對局」）。 */
 export function isAiGameThread(t: DiscordThread, forumId: string): boolean {
   return t.parent_id === forumId && typeof t.id === 'string' && /^\d+$/.test(t.id)
-    && typeof t.name === 'string' && t.name.startsWith(AI_GAME_TAG_NAME);
+    && typeof t.name === 'string' && (t.name.startsWith(AI_GAME_TAG_NAME) || t.name.includes('含百科機器人'));
 }
 
 /** 只讀 Discord 自己 CDN 上的附件（不讓 trace 的網址指到別處）。 */

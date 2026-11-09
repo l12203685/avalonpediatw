@@ -84,38 +84,28 @@ describe('論壇標籤「百科AI對局」', () => {
 });
 
 describe('貼一局', () => {
-  it('開討論串：標題、標籤、摘要、trace.json；後續訊息只有對局紀錄（不含百科AI 的理由）、每則 2000 字內、最後附網站網址', async () => {
-    const dc = mockDiscord({ tags: [{ id: '7', name: '百科AI對局' }] });
+  it('貼到牌譜區：標題【待檢視】含百科機器人、標籤 模擬＋線瓦＋結果、牌譜格式、附 trace.json、不另貼後續訊息', async () => {
+    const dc = mockDiscord({ tags: [{ id: '7', name: '模擬' }, { id: '8', name: '線瓦' }, { id: '9', name: '三紅' }, { id: '10', name: '三藍躲刺' }, { id: '11', name: '三藍被刀' }] });
     const logs: string[] = [];
-    const r = await postAiGameTrace(trace(12), { token: 'secret-token', forumId: FORUM, fetchImpl: dc.fetchImpl, gapMs: 0, log: (m) => logs.push(m) });
-    expect(r).toEqual({ outcome: 'sent', threadId: THREAD, followups: expect.any(Number), tagged: true });
+    const t = trace(12);
+    const r = await postAiGameTrace(t, { token: 'secret-token', forumId: FORUM, fetchImpl: dc.fetchImpl, gapMs: 0, log: (m) => logs.push(m) });
+    expect(r).toEqual({ outcome: 'sent', threadId: THREAD, followups: 0, tagged: true });
     const create = dc.calls.find((c) => c.url.endsWith('/threads'))!;
     expect(create.headers.Authorization).toBe('Bot secret-token');
     const form = create.body as FormData;
     const payload = JSON.parse(String(form.get('payload_json')));
-    expect(payload.name).toBe('百科AI對局 20261105_2105 週四練習團／Room-1460');
-    expect(payload.applied_tags).toEqual(['7']);
+    expect(payload.name).toBe('【待檢視】含百科機器人_20261105_2105_Room-1460');
+    expect(payload.applied_tags.slice(0, 2)).toEqual(['7', '8']);
     expect(payload.message.allowed_mentions).toEqual({ parse: [] });
     expect(payload.message.attachments).toEqual([{ id: 0, filename: 'trace.json' }]);
-    expect(payload.message.content).toMatch(/怎麼回饋/);
-    expect(payload.message.content.length).toBeLessThanOrEqual(2000);
+    expect(payload.message.content).toMatch(/^待檢視原因：百科AI 參與/);
+    expect(payload.message.content).toMatch(/刺客刺殺:/);
+    expect(payload.message.content).toMatch(/（機器人紀錄員尚待檢視）$/);
+    expect(payload.message.content).not.toMatch(/理由：/);
     const json = form.get('files[0]') as File;
-    expect(form.get('files[1]')).toBeNull();
     expect(json.name).toBe('trace.json');
     expect(JSON.parse(await json.text()).decisions).toHaveLength(12);
-
-    const msgs = dc.calls.filter((c) => c.url.endsWith(`/channels/${THREAD}/messages`)).map((c) => JSON.parse(String(c.body)));
-    expect(msgs.length).toBe(r.followups);
-    expect(msgs.length).toBeGreaterThanOrEqual(1);
-    // Edward 11/05「只需要貼紀錄就好 思考內容那些不用」：DC 不貼百科AI 的決定與理由
-    for (const m of msgs) expect(m.content).not.toMatch(/理由：|百科AI_21・/);
-    for (const m of msgs) {
-      expect(m.content.length).toBeLessThanOrEqual(2000);
-      expect(m.allowed_mentions).toEqual({ parse: [] });
-    }
-    expect(msgs[0].content).toMatch(/^\*\*第 1 局\*\*/);
-    expect(msgs[msgs.length - 1].content).toContain(aiGameSiteUrl(THREAD));
-    // log 不含暱稱或內容（這裡什麼都沒失敗，沒有 log）
+    expect(dc.calls.some((c) => c.url.endsWith(`/channels/${THREAD}/messages`))).toBe(false);
     expect(logs).toEqual([]);
   });
 
@@ -140,17 +130,8 @@ describe('貼一局', () => {
     await expect(postAiGameTrace(trace(), { token: 't', forumId: FORUM, fetchImpl: boom, gapMs: 0 })).resolves.toMatchObject({ outcome: 'failed' });
   });
 
-  it('後續訊息被 429：照 retry_after 等一下再送一次', async () => {
-    const dc = mockDiscord({ tags: [{ id: '7', name: '百科AI對局' }], rateLimitOnce: true });
-    const sleep = vi.fn(async () => undefined);
-    const r = await postAiGameTrace(trace(1), { token: 't', forumId: FORUM, fetchImpl: dc.fetchImpl, gapMs: 0, sleep });
-    const msgCalls = dc.calls.filter((c) => c.url.endsWith(`/channels/${THREAD}/messages`));
-    expect(msgCalls.length).toBe(r.followups + 1);
-    expect(sleep).toHaveBeenCalledWith(500);
-  });
-
-  it('論壇 id：預設＝問題回報論壇；AI_GAME_FORUM_CHANNEL_ID 可換、off 關掉', () => {
-    expect(resolveAiGameForumId({})).toBe(FORUM);
+  it('論壇 id：預設＝牌譜紀錄與覆盤；AI_GAME_FORUM_CHANNEL_ID 可換、off 關掉', () => {
+    expect(resolveAiGameForumId({})).toBe('1132683080134578276');
     expect(resolveAiGameForumId({ AI_GAME_FORUM_CHANNEL_ID: '42' })).toBe('42');
     expect(resolveAiGameForumId({ AI_GAME_FORUM_CHANNEL_ID: 'off' })).toBe('');
   });
