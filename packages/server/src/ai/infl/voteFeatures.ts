@@ -16,7 +16,7 @@
 import { AVALON_CONFIG, type Role } from '@avalon/shared';
 import { buildCertainty } from '../belief/Certainty';
 import { missionFailed } from '../missionFacts';
-import { bayesRedShare, bayesTeamClean, bayesWorlds, type BayesOptions } from '../belief/BayesBelief';
+import { bayesRedShare, bayesWorlds, type BayesOptions } from '../belief/BayesBelief';
 import {
   bitOf,
   lakeSig,
@@ -59,6 +59,20 @@ export interface FlowFeatureOptions {
   useBayesView?: boolean;
   /** j 座位貝氏信念用的選項（預設 {}：真人表、不讀梅林層——便宜）。 */
   bayesViewOptions?: BayesOptions;
+  /**
+   * 第 34 回合：共用「不隨第 i 次隊伍變」的座位視角（鍵 = `i|j|湖結果`）。只能在前 i − 1 次提議完全相同的資訊流之間共用
+   * （例：同一個決策點上，各種假想的第 i 次提議）。
+   */
+  sharedViews?: Map<string, SharedSeatView>;
+}
+
+/** 座位視角裡不隨第 i 次隊伍變的部分。 */
+export interface SharedSeatView {
+  view: ReturnType<typeof buildCertainty>;
+  worlds: readonly number[];
+  susp: Float64Array;
+  bSusp: Float64Array | null;
+  bPost: SeatPosterior | null;
 }
 
 /** j 座位的貝氏後驗（`useBayesView`）：世界（紅方座位遮罩，和 `flow.bitOf` 相同的位元）與權重——第 33 回合遞迴讀人的派隊讀法用它算每支候選隊的乾淨機率。 */
@@ -102,40 +116,55 @@ export class FlowFeatures {
     const key = `${i}|${j}|${lakeSig(this.flow, i, j, w)}`;
     const hit = this.views.get(key);
     if (hit) return hit;
-    const obs = seatViewObs(this.flow, i, j, w);
-    const view = buildCertainty(obs);
-    const worlds = view.worlds('L1*');
+    // 不隨第 i 次的隊伍變的部分（確定性層的世界、嫌疑、j 的貝氏後驗）；第 34 回合起可以由 `sharedViews` 在「同一個前綴、不同的假想隊伍」之間共用。
+    const shared = this.sharedView(i, j, w, key);
+    const { view, worlds, susp } = shared;
     const team = this.teamMasks[i];
-    const n = this.flow.ids.length;
-    const susp = new Float64Array(n);
     let clean = 0;
-    for (const x of worlds) {
-      if ((x & team) === 0) clean++;
-      for (let k = 0; k < n; k++) if (x & (1 << k)) susp[k]++;
-    }
+    for (const x of worlds) if ((x & team) === 0) clean++;
     const tot = Math.max(1, worlds.length);
-    for (let k = 0; k < n; k++) susp[k] /= tot;
     let bClean = 0;
-    let bSusp: Float64Array | null = null;
-    let bPost: SeatPosterior | null = null;
-    if (this.opts.useBayesView) {
-      const bo = this.opts.bayesViewOptions ?? {};
-      bClean = bayesTeamClean(obs, this.flow.votes[i].team, bo) ?? 0.5;
-      const share = bayesRedShare(obs, bo);
-      bSusp = new Float64Array(n);
-      this.flow.ids.forEach((id, k) => { bSusp![k] = share.get(id) ?? 0.5; });
-      const bw = bayesWorlds(obs, bo);
-      bPost = { worlds: bw.worlds, wts: bw.wts };
+    if (shared.bPost) {
+      bClean = 0;
+      shared.bPost.worlds.forEach((x, k) => { if ((x & team) === 0) bClean += shared.bPost!.wts[k]; });
+      if (shared.bPost.worlds.length === 0) bClean = 0.5;
     }
     const out: SeatView = {
       pClean: worlds.length > 0 ? clean / tot : 0.5,
       provRed: worlds.length > 0 && view.minReds(this.flow.votes[i].team) >= 1,
       susp,
       bClean,
-      bSusp,
-      bPost,
+      bSusp: shared.bSusp,
+      bPost: shared.bPost,
     };
     this.views.set(key, out);
+    return out;
+  }
+
+  private sharedView(i: number, j: string, w: number, key: string): SharedSeatView {
+    const store = this.opts.sharedViews;
+    const hit = store?.get(key);
+    if (hit) return hit;
+    const obs = seatViewObs(this.flow, i, j, w);
+    const view = buildCertainty(obs);
+    const worlds = view.worlds('L1*');
+    const n = this.flow.ids.length;
+    const susp = new Float64Array(n);
+    for (const x of worlds) for (let k = 0; k < n; k++) if (x & (1 << k)) susp[k]++;
+    const tot = Math.max(1, worlds.length);
+    for (let k = 0; k < n; k++) susp[k] /= tot;
+    let bSusp: Float64Array | null = null;
+    let bPost: SeatPosterior | null = null;
+    if (this.opts.useBayesView) {
+      const bo = this.opts.bayesViewOptions ?? {};
+      const share = bayesRedShare(obs, bo);
+      bSusp = new Float64Array(n);
+      this.flow.ids.forEach((id, k) => { bSusp![k] = share.get(id) ?? 0.5; });
+      const bw = bayesWorlds(obs, bo);
+      bPost = { worlds: bw.worlds, wts: bw.wts };
+    }
+    const out: SharedSeatView = { view, worlds, susp, bSusp, bPost };
+    store?.set(key, out);
     return out;
   }
 

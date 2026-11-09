@@ -1,0 +1,1 @@
+- 15:26 cal_r34/rv_M4/M4/extraction crashed (started while JSON lacked F features); relaunched as cal2 (R1,R4,R5), rv_M4b, M4b, rv_M5, M5; extraction m4 restarted. Edward confirmed wiki-24 as spec (adoption allowed under 1E/stage2).

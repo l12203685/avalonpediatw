@@ -61,6 +61,7 @@ import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
+import { loyalFlowPickTeam } from '../BlueRound34';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
@@ -861,7 +862,7 @@ export class ForwardAgent implements AvalonAgent {
       const team = obs.proposedTeam ?? [];
       const gated = goodVoteGate(obs, this.gates) !== null
         || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null)
-        || (obs.myRole === 'merlin' && merlinVoteFatal(obs));
+        || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning));
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `${obs.myRole} tail white (as the public loyal view; D3 stage 2)`);
     }
     // Round 33 (loyal / Percival) `goodBayesVote` (BlueRound33.ts; Edward 2026-11-09 ruling 2): the strict Bayesian 內黑／外白 criteria —
@@ -903,7 +904,7 @@ export class ForwardAgent implements AvalonAgent {
         const onTeam = team.includes(obs.myPlayerId);
         // 外白（不在隊上贊成）一個有看得到紅的隊 = 異常票外白：不做（INV-M1）；也不越過好人投票關卡（INV-V1）。
         const seenRed = team.some((id) => obs.knownEvils.includes(id));
-        const vote = asLoyal.action.vote && !merlinVoteFatal(obs)
+        const vote = asLoyal.action.vote && !merlinVoteFatal(obs, this.baseline.tuning)
           && (onTeam || (!seenRed && goodVoteGate(obs, this.gates) === null));
         return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; gated team blocked' : ''})`);
       }
@@ -936,6 +937,13 @@ export class ForwardAgent implements AvalonAgent {
     if (d.action.type === 'team_select') {
       const spread = r1SpreadTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (spread !== d.action) return { ...d, action: spread, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → R1: do not stack on the players already proposed` } };
+    }
+    // Round 34 `loyalFlowPick` (BlueRound34.ts; wiki-24, Edward 2026-11-09): a loyal's non-forced proposal answers the round's earlier ones —
+    // correct a leader who looks red, respect one who looks blue; never a fully reversed team or an exact re-proposal of the round.
+    if (d.action.type === 'team_select') {
+      // The leader's own vote rules still bind on the new team (hard constraint `leaderSelfApprove`).
+      const flowPick = goodLeadConsistentTeam(this.baseline.tuning, obs, loyalFlowPickTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
+      if (flowPick !== d.action) return { ...d, action: flowPick, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → answer the earlier proposals (wiki-24)` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
