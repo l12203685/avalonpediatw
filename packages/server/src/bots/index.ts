@@ -34,6 +34,7 @@ import {
   DiscordChannelAdapter,
 } from './ChatMirror';
 import { getKeepAliveState, KeepAliveState } from '../services/keepAlive';
+import { registerSyncLinePusher } from '../services/communityReports';
 import { WeeklyDigestScheduler, DigestDestination } from './stats/weeklyDigest';
 import { weeklyDigestText } from './stats/statsQueries';
 import {
@@ -324,6 +325,10 @@ function initializeLobbyChatMirror(): void {
     lineImageRelay: relayMediaStore && publicBaseUrl ? { store: relayMediaStore, publicBaseUrl } : undefined,
     lineImagesToDiscord: imagesOn,
   });
+
+  // 百科回報／ID 認領 (2026-11-09, services/communityReports.ts): queued on the
+  // reply_token queue like the digest; LINE push (capped per day) only without one.
+  registerSyncLinePusher(() => buildLineAdapter());
 
   if (!lineGroupId) lineOutboundMode = 'disabled';
   else if (listenBot) lineOutboundMode = 'listen-bot';

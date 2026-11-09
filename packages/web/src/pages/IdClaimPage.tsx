@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { loadClaimData } from '../stats/statsEngine';
 import { submitIdClaim, IdClaimError } from '../services/api';
-import { FEEDBACK_FORUM_URL } from '../components/FeedbackButton';
+import { SYNC_CHANNEL_URL } from '../components/FeedbackButton';
 import {
   buildIdIndex, dateRange, gameLabel, idGameRow, mergedInto, nameKey, sameGameConflicts, searchIds,
   type ClaimData, type IdSummary, type SearchHit,
@@ -15,7 +15,8 @@ import {
  * 「這幾個 ID 是我」，不要登入頁，他逐筆核准）。
  *
  * 選主 ID（正式名字）＋其他 ID；每個 ID 顯示場數、日期範圍，可展開看那個 ID 的對局（認得出是不是自己）。
- * 送出 → POST /api/feedback/claim → DC 論壇 #百科問題回報 開一篇（標籤 ID認領，公開）；管理者核准後由每日例行作業
+ * 送出 → POST /api/feedback/claim → 貼到 LINE 群組和 DC #同步閒聊（「【ID認領】#編號 主ID ← 其他ID…」，公開；2026-11-09 起，
+ * 同 LINE／DC 的 /認領 指令）；管理者在 DC 那則按 ✅ 核准後由每日例行作業
  * 寫進 player_aliases.json，下一次每日資料更新生效。資料 = 數據分析已在用的每局資料集（Worker），載入不到時
  * 仍可手打 ID 送出（沒有場數，管理者自己核對）。
  */
@@ -80,7 +81,7 @@ export default function IdClaimPage(): JSX.Element {
       setError(
         status === 429 ? '送出太頻繁了，請過幾分鐘再試。'
           : status === 400 ? '內容格式不對（名字太長或重複？），請檢查後再送。'
-            : '送出失敗，請稍後再試，或直接到 DC 的「百科問題回報」發文。',
+            : '送出失敗，請稍後再試，或在 LINE／DC 打「/認領 主ID 其他ID」。',
       );
     } finally {
       setSending(false);
@@ -98,11 +99,11 @@ export default function IdClaimPage(): JSX.Element {
       </p>
 
       <div className="mt-3 space-y-1 rounded-lg border border-sky-800/70 bg-sky-950/60 p-3 text-xs leading-relaxed text-sky-100" data-testid="id-claim-notice">
-        <p className="flex items-start gap-1.5"><Info size={14} className="mt-0.5 flex-shrink-0" /><span><b>不用登入。</b>送出的內容會<b>公開</b>貼到 DC 論壇「百科問題回報」（群組成員都看得到）。</span></p>
-        <p className="pl-5">管理者核准前不會改任何資料；核准後在<b>下一次每日資料更新</b>生效，不核准會在那篇回覆原因。</p>
+        <p className="flex items-start gap-1.5"><Info size={14} className="mt-0.5 flex-shrink-0" /><span><b>不用登入。</b>送出的內容會<b>公開</b>貼到 LINE 群組和 DC「同步閒聊」（群組成員都看得到）；也可以直接在 LINE／DC 打「/認領 主ID 其他ID」。</span></p>
+        <p className="pl-5">管理者核准前不會改任何資料；核准後在<b>下一次每日資料更新</b>生效，不核准會在那則回覆原因。</p>
         <p className="pl-5">
-          <a href={FEEDBACK_FORUM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-sky-300 underline-offset-2 hover:underline">
-            到 DC 看認領進度 <ExternalLink size={11} />
+          <a href={SYNC_CHANNEL_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-sky-300 underline-offset-2 hover:underline">
+            到 DC 同步閒聊看認領進度 <ExternalLink size={11} />
           </a>
         </p>
       </div>

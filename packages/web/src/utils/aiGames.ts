@@ -1,7 +1,7 @@
 /**
  * 網站「百科AI 對局」頁的型別與純函式（Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」）。
  *
- * 資料：伺服器 GET /api/ai-games（DC 論壇 #百科問題回報 標題「百科AI對局」的討論串）、GET /api/ai-games/:id（那篇附的 trace.json）。
+ * 資料：伺服器 GET /api/ai-games（DC 論壇 #牌譜紀錄與覆盤 裡百科AI 對局的討論串）、GET /api/ai-games/:id（那篇附的 trace.json）。
  * 型別是 packages/server/src/services/aiGameTrace.ts 的結構複本（網站版的 seats 沒有真人暱稱）。
  * 純函式放這裡，packages/server/src/__tests__/WebAiGames.test.ts 測（web 沒有測試執行器）。
  */

@@ -3,17 +3,19 @@ import { AlertTriangle, ArrowLeft, Bot, ChevronRight, Loader2, RefreshCw } from 
 import AiGameReviewPanel from '../components/aiGames/AiGameReviewPanel';
 import { closeAiGame, openAiGame, useOpenAiGame } from '../components/aiGames/aiGamesLink';
 import { aiGamesErrorText, fetchAiGame, fetchAiGames } from '../services/aiGames';
-import { FEEDBACK_FORUM_URL } from '../components/FeedbackButton';
 import { parseAiGameName, type AiGameListItem, type AiGameTrace } from '../utils/aiGames';
 
 /**
  * 百科AI 對局（Edward 2026-11-05：「剛剛玩的那場模擬局有紀錄嗎? 我想對百科AI的一些行動跟投票作回饋 像這樣回饋的功能可不可以寫在網站上
  * 或是只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋?」）。
  *
- * 百科AI 在遊玩頁打的每一局，打完後自動貼到 DC 論壇 #百科問題回報（一局一篇，標籤「百科AI對局」）；這頁從伺服器讀那些貼文：
+ * 百科AI 在遊玩頁打的每一局，打完後自動貼到 DC 論壇 #牌譜紀錄與覆盤（一局一篇，2026-11-09 起；舊的 #百科問題回報 已刪除）；這頁從伺服器讀那些貼文：
  * 清單 → 點一局 → 回顧（每個百科AI 決定附理由，每一步可以按「這步怪怪的」，回饋貼成那篇 DC 討論串的回覆）。不用登入。
  * 網址：#ai-games（清單）、#ai-games=<DC 討論串 id>（直接打開那一局；DC 貼文最後一則附這個網址）。
  */
+
+/** DC 論壇 #牌譜紀錄與覆盤。 */
+const PAIPU_FORUM_URL = 'https://discord.com/channels/1132682489840812113/1132683080134578276';
 
 type ListState = { state: 'loading' } | { state: 'ready'; games: AiGameListItem[]; stale: boolean } | { state: 'failed'; error: string };
 type GameState = { state: 'loading' } | { state: 'ready'; trace: AiGameTrace; url: string } | { state: 'failed'; error: string };
@@ -45,8 +47,8 @@ function ListView(): JSX.Element {
         <h1 className="flex items-center gap-2 text-lg font-bold"><Bot size={20} className="text-amber-300" />百科AI 對局</h1>
         <p className="text-xs leading-relaxed text-zinc-300">
           百科AI 在遊玩頁打的每一局，打完後自動記錄在這裡和 DC
-          <a href={FEEDBACK_FORUM_URL} target="_blank" rel="noopener noreferrer" className="mx-1 text-emerald-300 underline underline-offset-2">#百科問題回報</a>
-          （標籤「百科AI對局」）。點一局可以看百科AI 每個派隊、投票、任務、湖、刺殺的理由；覺得哪一步怪，按「這步怪怪的」寫原因，會貼到那篇 DC 討論串。
+          <a href={PAIPU_FORUM_URL} target="_blank" rel="noopener noreferrer" className="mx-1 text-emerald-300 underline underline-offset-2">#牌譜紀錄與覆盤</a>
+          （標題有「含百科機器人」）。點一局可以看百科AI 每個派隊、投票、任務、湖、刺殺的理由；覺得哪一步怪，按「這步怪怪的」寫原因，會貼到那篇 DC 討論串。
         </p>
       </header>
       {list.state === 'loading' && (

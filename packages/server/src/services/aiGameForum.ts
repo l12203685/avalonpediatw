@@ -1,5 +1,5 @@
 /**
- * 百科AI 對局 ⇄ DC 論壇 #百科問題回報（Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」）。
+ * 百科AI 對局 ⇄ DC 論壇（2026-11-09 起 #牌譜紀錄與覆盤；舊的 #百科問題回報 已刪除）（Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」）。
  *
  * 寫（scripts/signagePlayer.ts，GitHub Actions）：postAiGameTrace —— 一局開一篇討論串，標籤「百科AI對局」（論壇沒有這個標籤時用
  * API 加上去；加不了就不掛標籤照貼），起始訊息＝摘要＋回饋方式，附 trace.json＋trace.txt；後面幾則＝依局分組的決定
@@ -33,10 +33,14 @@ export const discordThreadUrl = (guildId: string, threadId: string): string => `
 /** 討論串 7 天沒動才自動封存（封存的照樣列得出來，回覆時會自動解封）。 */
 const AUTO_ARCHIVE_MINUTES = 10080;
 
-/** AI_GAME_FORUM_CHANNEL_ID 可以換論壇（off＝不貼也不讀）；沒設＝#牌譜紀錄與覆盤。 */
+/** 已刪除的 DC 論壇 #百科問題回報（2026-11-09 Edward「整區刪掉」）；環境變數還指著它時改用 #牌譜紀錄與覆盤。 */
+export const RETIRED_FEEDBACK_FORUM_ID = '1566833113248571514';
+
+/** AI_GAME_FORUM_CHANNEL_ID 可以換論壇（off＝不貼也不讀）；沒設（或還是舊的 #百科問題回報）＝#牌譜紀錄與覆盤。 */
 export function resolveAiGameForumId(env: NodeJS.ProcessEnv = process.env): string {
   const raw = (env.AI_GAME_FORUM_CHANNEL_ID || '').trim();
   if (['off', 'none', 'false', '0', 'no'].includes(raw.toLowerCase())) return '';
+  if (raw === RETIRED_FEEDBACK_FORUM_ID) return PAIPU_FORUM_ID;
   return raw || PAIPU_FORUM_ID;
 }
 

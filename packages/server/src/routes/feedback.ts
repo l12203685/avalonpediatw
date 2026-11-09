@@ -22,8 +22,8 @@ import { verifyIdToken, isFirebaseAdminReady, getAdminFirestore } from '../servi
 import { getSupabaseClient, isSupabaseReady, getSupabaseIdByFirebaseUid } from '../services/supabase';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 import {
-  FEEDBACK_KINDS, FEEDBACK_MESSAGE_MAX, cleanPage, parseIdClaim, postClaimThread, postFeedbackThread, type FeedbackKind,
-} from '../services/feedbackForum';
+  FEEDBACK_KINDS, FEEDBACK_MESSAGE_MAX, cleanPage, parseIdClaim, submitClaim, submitReport, type FeedbackKind,
+} from '../services/communityReports';
 
 // 2026-04-24 #supabase-retire Batch 1.1+1.2 (hineko_20260424_1240):
 // Dual-write feedback / error_reports to Firestore alongside Supabase.
@@ -103,8 +103,9 @@ async function resolveUser(authHeader: string | undefined): Promise<{ supabaseId
 }
 
 // POST /api/feedback — 網站「問題回報」（錯誤／建議／文章內容）。
-// 2026-11-02 起每則回報在 DC 論壇 #百科問題回報 開一篇（services/feedbackForum.ts）；論壇大家看得到，
-// 所以只貼回報者自己填的暱稱（name，選填），不帶登入帳號名稱。沒有機器人 token 時退回舊的 webhook。
+// 2026-11-09 起（Edward「網站上的回報跟ID認領都同步傳到 line群組/dc 同步閒聊頻道」）貼到 DC 同步閒聊＋LINE 群組，
+// 格式「【百科回報・錯誤】#編號 …」（services/communityReports.ts；DC 論壇 #百科問題回報 已刪除）。大家看得到，
+// 所以只貼回報者自己填的暱稱（name，選填），不帶登入帳號名稱。DC 貼不出去時退回舊的 webhook。
 router.post('/', feedbackLimit, async (req: Request, res: Response) => {
   const { type, message, gameState, name, page } = req.body as {
     type?: string;
@@ -150,31 +151,31 @@ router.post('/', feedbackLimit, async (req: Request, res: Response) => {
     game_state:   pagePath || null,
   });
 
-  const posted = await postFeedbackThread({ kind, message: trimmedMsg, name: publicName, page: pagePath });
-  if (posted !== 'sent') {
+  const posted = await submitReport({ kind, message: trimmedMsg, name: publicName, page: pagePath, source: 'web' });
+  if (!posted.ok) {
     const emoji = kind === 'bug' ? '🐛' : kind === 'content' ? '📖' : '💡';
     await sendDiscord(`${emoji} **網站回報** — ${publicName.trim().slice(0, 32) || '匿名'}\n>>> ${trimmedMsg}`);
   }
 
-  res.json({ ok: true, forum: posted === 'sent' });
+  res.json(posted.ok ? { ok: true, posted: true, id: posted.id } : { ok: true, posted: false });
 });
 
 // POST /api/feedback/claim — 網站「ID 認領」（Edward 2026-11-03）：玩家說「這幾個 ID 是我」，不用登入。
-// 在 DC 論壇 #百科問題回報 開一篇（標籤 ID認領），管理者核准（改標籤「已處理」）後由每日例行作業寫進
-// player_aliases.json。這裡只驗證格式與發文，不改任何資料；記錄只寫狀態碼。
+// 2026-11-09 起貼到 DC 同步閒聊＋LINE 群組（「【ID認領】#編號 主ID ← 其他ID…」，同 /認領 指令）；管理者在 DC 那則按 ✅
+// 核准後，每日例行作業寫進 player_aliases.json。這裡只驗證格式與發文，不改任何資料；記錄只寫狀態碼。
 router.post('/claim', claimLimit, async (req: Request, res: Response) => {
   const parsed = parseIdClaim(req.body);
   if (!parsed.ok) {
     res.status(400).json({ error: parsed.error });
     return;
   }
-  const posted = await postClaimThread(parsed.claim);
-  if (posted !== 'sent') {
-    // 沒有機器人 token／論壇關掉／DC 失敗：不退回舊 webhook（認領要能在論壇改標籤核准），請網站提示稍後再試。
-    res.status(503).json({ error: 'claim forum unavailable' });
+  const posted = await submitClaim(parsed.claim, 'web');
+  if (!posted.ok) {
+    // 沒有機器人 token／DC 失敗：不退回舊 webhook（核准要在 DC 那則按 ✅），請網站提示稍後再試。
+    res.status(posted.error === 'rate_limited' ? 429 : 503).json({ error: posted.error === 'rate_limited' ? 'too many claims' : 'claim channel unavailable' });
     return;
   }
-  res.json({ ok: true });
+  res.json({ ok: true, id: posted.id });
 });
 
 // POST /api/feedback/errors — auto-captured frontend errors

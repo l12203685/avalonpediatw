@@ -7,13 +7,15 @@ import { getStoredToken } from '../services/socket';
 
 /**
  * 問題回報（Edward 2026-11-02：「DC + 百科網站上用個類似錯誤或是反映問題回報專區」）。
- * 內容頁右下角的按鈕；送出後伺服器在 DC 論壇 #百科問題回報 開一篇（標籤＝類型），管理者每天收一次、在討論串回覆處理結果。
- * 論壇在 DC 群組裡公開，所以表單上講清楚，暱稱選填（不帶登入帳號名稱）；頁面欄自動帶目前網址的路徑與 #。
+ * 內容頁右下角的按鈕；送出後伺服器貼到 LINE 群組和 DC #同步閒聊（「【百科回報・錯誤】#編號 …」，2026-11-09 起；
+ * 舊的 DC 論壇 #百科問題回報 已刪除），管理者每天處理。也可以直接在 LINE／DC 打 /回報。
+ * 兩邊都公開，所以表單上講清楚，暱稱選填（不帶登入帳號名稱）；頁面欄自動帶目前網址的路徑與 #。
  */
 
 type FeedbackType = 'bug' | 'suggestion' | 'content';
 
-export const FEEDBACK_FORUM_URL = 'https://discord.com/channels/1132682489840812113/1566833113248571514';
+/** DC #同步閒聊（跟 LINE 群組同步的頻道；回報與 ID 認領都貼在這裡）。 */
+export const SYNC_CHANNEL_URL = 'https://discord.com/channels/1132682489840812113/1132901301802504242';
 
 const TYPES: { id: FeedbackType; label: string; Icon: typeof Bug; on: string; placeholder: string }[] = [
   { id: 'bug', label: '錯誤', Icon: Bug, on: 'bg-red-900/50 border-red-600 text-red-200', placeholder: '哪一頁、做了什麼、看到什麼，例如：牌譜紀錄在手機上表格超出畫面' },
@@ -37,11 +39,11 @@ export default function FeedbackButton(): JSX.Element {
     try {
       const page = `${window.location.pathname}${window.location.hash}`;
       await submitFeedback({ type, message: message.trim(), name: name.trim() || undefined, page }, getStoredToken() ?? undefined);
-      addToast('已送出，謝謝！處理結果會回覆在 DC 的百科問題回報', 'success');
+      addToast('已送出，謝謝！已貼到 LINE 群組和 DC 同步閒聊，管理者每天處理', 'success');
       setMessage('');
       setIsOpen(false);
     } catch {
-      addToast('送出失敗，請稍後再試，或直接到 DC 的百科問題回報發文', 'error');
+      addToast('送出失敗，請稍後再試，或在 LINE／DC 打 /回報 內容', 'error');
     } finally {
       setSending(false);
     }
@@ -104,9 +106,9 @@ export default function FeedbackButton(): JSX.Element {
               <UserCheck size={12} className="flex-shrink-0" /> 紀錄裡你用過好幾個 ID？用「ID 認領」請管理者合併
             </button>
             <p className="text-xs leading-relaxed text-zinc-500">
-              會貼到 DC 的「百科問題回報」（群組成員都看得到），管理者每天處理並在那裡回覆。
-              <a href={FEEDBACK_FORUM_URL} target="_blank" rel="noopener noreferrer" className="ml-1 inline-flex items-center gap-0.5 text-sky-400 hover:text-sky-300">
-                到 DC 看回報 <ExternalLink size={10} />
+              會貼到 LINE 群組和 DC 的「同步閒聊」（群組成員都看得到），管理者每天處理。也可以直接在 LINE 或 DC 打 /回報 內容。
+              <a href={SYNC_CHANNEL_URL} target="_blank" rel="noopener noreferrer" className="ml-1 inline-flex items-center gap-0.5 text-sky-400 hover:text-sky-300">
+                到 DC 同步閒聊 <ExternalLink size={10} />
               </a>
             </p>
             <div className="flex items-center justify-between">
