@@ -1036,7 +1036,7 @@ export interface AgentTuning {
   /**
    * 第 34 回合（Edward 11/09，照百科〈解讀前人派票 - 延伸、修正、尊重…〉）：忠臣隊長的非強制提議回應同一局前面的提議。
    * 1 = 不派和前面所有提議完全相反的隊、不照派這一局前面提議過的隊（之後照後驗最乾淨挑）；2 = 1 ＋ 依上一任隊長的分類回應：看起來壞（後驗紅 ≥ 0.5）→ 反對＝修正
-   * （他隊上隊長以外的人一個都不留）；看起來好 → 尊重（最多留一個；3 家忠臣在 1-2 之後沒有資訊直接認同）（`BlueRound34.loyalFlowPickTeam`）。0 = 關。
+   * （他隊上隊長以外的人一個都不留）；看起來好 → 尊重（最多留一個；3 家忠臣在 1-2 之後沒有資訊直接認同）；1、2 只在第 1、2 局，3 = 2 用在每一局（`BlueRound34.loyalFlowPickTeam`）。0 = 關。
    */
   loyalFlowPick: number;
   /**
@@ -2141,7 +2141,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'loyalFlowPick') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
-    if (!Number.isFinite(value) || value < 0 || value > 2) throw new Error(`loyalFlowPick needs a number in [0, 2], got "${raw}"`);
+    if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`loyalFlowPick needs a number in [0, 3], got "${raw}"`);
     return { loyalFlowPick: value };
   }
   if (name === 'goodLakeEntropy') {

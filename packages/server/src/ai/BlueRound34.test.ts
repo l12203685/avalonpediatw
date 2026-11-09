@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
-import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
+import { loyalFlowPickTeam, r1InflCtx, r1InfoValueInfl } from './BlueRound34';
 import { r1SpreadTeam } from './BlueRound33';
 import { merlinVoteFatal } from './MerlinLoyalStyle';
 import { mixModels, RoleMixtureReader } from './infl/recursiveRead';
@@ -124,5 +124,28 @@ describe('beliefRecursive=4 (round 34: the role-mixture reader, Edward 11/09「�
     const n = o.voteHistory.length;
     const gap = (m: typeof real) => { const r = new RoleMixtureReader(m, ff); return r.worldLog(viewer, n, wOff, () => false) - r.worldLog(viewer, n, wOn, () => false); };
     expect(gap(real)).toBeGreaterThan(gap(blindMerlin));
+  });
+});
+
+describe('loyalFlowPick (round 34, wiki-24: 反對／尊重／認同 toward the earlier proposals)', () => {
+  const draft = { type: 'team_select' as const, teamIds: ['P3', 'P2', 'P4'] };
+  it('off by default; mode 2 never re-proposes or fully reverses the round and keeps at most one of a blue-looking previous leader\'s team', () => {
+    expect(loyalFlowPickTeam(DEFAULT_AGENT_TUNING, r1, draft)).toBe(draft);
+    const a = loyalFlowPickTeam({ ...DEFAULT_AGENT_TUNING, loyalFlowPick: 2 }, r1, draft);
+    if (a.type !== 'team_select') throw new Error(a.type);
+    expect(a.teamIds).toContain('P3');
+    const key = (t: readonly string[]) => [...t].sort().join(',');
+    expect(r1.voteHistory.some((v) => key(v.team) === key(a.teamIds))).toBe(false);
+    const seen = new Set(r1.voteHistory.flatMap((v) => v.team));
+    expect(a.teamIds.filter((id) => id !== 'P3').some((id) => seen.has(id))).toBe(true);
+    // previous leader P2 (team P2 P3 P4): respect = at most one of P2 / P4 (P3 is the leader himself)
+    const share = bayesRedShare(r1, bayesOptionsOf(DEFAULT_AGENT_TUNING));
+    if ((share.get('P2') ?? 0) < 0.5) expect(a.teamIds.filter((id) => id === 'P2' || id === 'P4').length).toBeLessThanOrEqual(1);
+  });
+  it('not on the forced fifth, not for a non-loyal, and (mode 2) not from R3', () => {
+    const t = { ...DEFAULT_AGENT_TUNING, loyalFlowPick: 2 };
+    expect(loyalFlowPickTeam(t, asObs({ ...(r1 as object), failCount: 4 }), draft)).toBe(draft);
+    expect(loyalFlowPickTeam(t, asObs({ ...(r1 as object), myRole: 'percival' }), draft)).toBe(draft);
+    expect(loyalFlowPickTeam(t, asObs({ ...(r1 as object), currentRound: 3 }), draft)).toBe(draft);
   });
 });
