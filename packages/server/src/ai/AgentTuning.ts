@@ -1034,6 +1034,10 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
+   * 第 33 回合：只在自己挑隊時（`gamePhase` team_select）用遞迴讀人的後驗（同 `beliefRecursive` 的模式 1–3；投票照現行後驗）。0 = 關。
+   */
+  beliefLeadRecursive: number;
+  /**
    * 第 33 回合（Edward 2026-11-09「強者的忠臣幾乎會刻意避開讓一個人疊太多票」）：第 1 局非強制提議（第 1–4 次），
    * 忠臣隊長（梅林照忠臣派時也一樣）不再一直跟著派前面提議過的人：1 = 隊上（自己以外）最多一個這一局前面提議過的人；
    * 2 = 隊員在這一局前面提議裡出現的次數加總最少；之後照後驗最乾淨挑；3 = 照資訊價值挑（Edward 11/09 更正「適時疊票 也要適時做票源分散」：
@@ -1059,7 +1063,7 @@ export interface AgentTuning {
   /**
    * 第 33 回合（Edward 2026-11-09 裁定 2）：忠臣／派西第 3 局起非強制提議的內黑／外白照嚴格的貝氏準則（`BlueRound33.bayesVoteCriteria`）：
    * 在隊上只在「這隊夠紅到能失敗」的機率 ≥ θ_bad 或公開邏輯理由成立時投黑；不在隊上只在「這隊乾淨」的機率 ≥ θ_good 或公開邏輯理由成立時投白。
-   * 1 = 開（門檻見 `goodBayesBad`／`goodBayesBadKey`／`goodBayesGood`／`goodBayesGoodKey`）；0 = 關。
+   * 1 = 開（門檻見 `goodBayesBad`／`goodBayesBadKey`／`goodBayesGood`／`goodBayesGoodKey`）；2 = 不用「換不到更好的隊」的外白理由；3 = 2 ＋ 第 4 局也照「隊上有紅」讀；0 = 關。
    */
   goodBayesVote: number;
   /**
@@ -1241,6 +1245,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodReuseNoMatchPoint',
   'merlinR2Public',
   'goodLakeEntropy',
+  'beliefLeadRecursive',
   'loyalR1Spread',
   'goodBayesGoodKey',
   'goodBayesGood',
@@ -1400,6 +1405,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: false,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  beliefLeadRecursive: 0,
   loyalR1Spread: 0,
   goodBayesGoodKey: 0,
   goodBayesGood: 0,
@@ -1690,7 +1696,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefTemper: 73,
   beliefLeadTemper: 0,
   beliefLeadStrong: true,
-  merlinReuseExact: false,
+  merlinReuseExact: true,
   merlinReuseNoEarly: false,
   beliefPolicyVotes: false,
   redHideR4Solo: 1,
@@ -1704,15 +1710,16 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redTailVote: 0,
   redLakeHuman: 0,
   loyalR2Reuse: 0,
-  goodReuseNoMatchPoint: false,
+  goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  beliefLeadRecursive: 0,
   loyalR1Spread: 0,
-  goodBayesGoodKey: 0,
-  goodBayesGood: 0,
-  goodBayesBadKey: 0,
-  goodBayesBad: 0,
-  goodBayesVote: 0,
+  goodBayesGoodKey: 0.9,
+  goodBayesGood: 0.7,
+  goodBayesBadKey: 0.7,
+  goodBayesBad: 0.8,
+  goodBayesVote: 3,
   beliefRecursive: 0,
   goodOnTeamSuspectKey: 0,
   goodLakeChainFuture: 0,
@@ -1866,6 +1873,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodReuseNoMatchPoint: 'AVALON_TUNING_GOOD_REUSE_NO_MATCH_POINT',
   merlinR2Public: 'AVALON_TUNING_MERLIN_R2_PUBLIC',
   goodLakeEntropy: 'AVALON_TUNING_GOOD_LAKE_ENTROPY',
+  beliefLeadRecursive: 'AVALON_TUNING_BELIEF_LEAD_RECURSIVE',
   loyalR1Spread: 'AVALON_TUNING_LOYAL_R1_SPREAD',
   goodBayesGoodKey: 'AVALON_TUNING_GOOD_BAYES_GOOD_KEY',
   goodBayesGood: 'AVALON_TUNING_GOOD_BAYES_GOOD',
@@ -2071,7 +2079,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'goodBayesVote') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
-    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`goodBayesVote needs a number in [0, 1], got "${raw}"`);
+    if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`goodBayesVote needs a number in [0, 3], got "${raw}"`);
     return { goodBayesVote: value };
   }
   if (name === 'goodBayesBad') {
@@ -2098,6 +2106,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 3 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`loyalR1Spread needs a number in [0, 3], got "${raw}"`);
     return { loyalR1Spread: value };
+  }
+  if (name === 'beliefLeadRecursive') {
+    const value = raw === undefined ? 1 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`beliefLeadRecursive needs a number in [0, 3], got "${raw}"`);
+    return { beliefLeadRecursive: value };
   }
   if (name === 'goodLakeEntropy') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
@@ -2236,7 +2249,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

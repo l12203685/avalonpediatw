@@ -237,7 +237,7 @@ describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice
     const rejected = { ...o, failCount: 1, voteHistory: [{ round: 3, attempt: 1, leader: 'P10', team: ['P10', 'P9', 'P8', 'P2'], votes: {}, approved: false }] } as unknown as PlayerObservation;
     expect(goodReuseExactTeam(on(1), rejected, pipe)).toBe(pipe);
     expect(goodReuseExactTeam(on(1), o, pipe, () => false)).toBe(pipe);
-    expect(goodReuseExactTeam(on(1), { ...o, myRole: 'merlin' } as unknown as PlayerObservation, pipe)).toBe(pipe);
+    expect(goodReuseExactTeam({ ...on(1), merlinReuseExact: false }, { ...o, myRole: 'merlin' } as unknown as PlayerObservation, pipe)).toBe(pipe);
   });
   it('keeps the leader\'s own lake word: no re-proposal with a seat it declared red, or without the one it declared blue', () => {
     const red = { ...o, lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P9', declaredClaim: 'evil' }] } as unknown as PlayerObservation;

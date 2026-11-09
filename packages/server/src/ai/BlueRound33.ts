@@ -14,11 +14,15 @@ import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow, bayesVoteCell, bayesWorlds } from './belief/BayesBelief';
 import { buildCertainty } from './belief/Certainty';
 import { bestCleanWith, leaderAhead } from './GoodVoteAlt';
+import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
-/** 內建門檻（`_r33_votes` 真人局強者藍方座位、同一個 INFL 點的逐點一致挑的；`docs/ai/logic_first.md` 第 10C 節）。 */
-export const BAYES_VOTE_DEFAULTS = { bad: 0.95, badKey: 0.9, good: 0.6, goodKey: 0.9 } as const;
+/**
+ * 內建門檻＝第 33 回合採用的值（開關值 0 時用；`docs/ai/logic_first.md` 第 10C 節）。真人局強者藍方座位同一個 INFL 點最一致的是
+ * 0.95／0.9／0.6／0.9，但自我對打合併 −2.5～−3.9pp；採用的 0.8／0.7／0.7／0.9（模式 3）合併 −0.80pp、逐點一致與量尺都變好。
+ */
+export const BAYES_VOTE_DEFAULTS = { bad: 0.8, badKey: 0.7, good: 0.7, goodKey: 0.9 } as const;
 
 export interface BayesVoteVerdict {
   vote: boolean;
@@ -42,13 +46,15 @@ export function failsRequiredNow(obs: PlayerObservation): number {
  *   - 其他 → 贊成。
  * 不在隊上（預設反對＝正常票）：
  *   - 公開邏輯：確定性層證明隊上有紅，或隊上有被「看起來是藍的持湖者」（後驗紅 < 0.5）宣紅的人 → 反對（`provRed`／`lakeRed`），不看門檻；
+ *     自己湖的宣告不符（漏掉自己宣藍的人、放了宣紅的人）→ 交給 `goodVouchFollowUp`（反對）；
  *   - P(這隊乾淨) ≥ θ_good（關鍵局 θ_goodKey）→ 外白（`good`）；
  *   - 公開邏輯：這隊至少和「到強制局為止之後每一任隊長能派的最乾淨的隊」一樣乾淨（否決換不到更好的隊）→ 外白（`alt`）；
  *   - 其他 → 反對。
  * 外白仍然要過好人投票關卡（呼叫端）。不適用時 null。
  */
 export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObservation): BayesVoteVerdict | null {
-  if (!((tuning.goodBayesVote ?? 0) > 0) || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return null;
+  const mode = tuning.goodBayesVote ?? 0;
+  if (!(mode > 0) || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return null;
   if (obs.redLoyalView === true) return null;
   if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return null;
   const fc = obs.failCount ?? 0;
@@ -61,12 +67,18 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const opts = bayesOptionsOf(tuning);
   const cert = buildCertainty(obs);
   if (team.includes(me)) {
-    const req = failsRequiredNow(obs);
+    // 3 = 第 4 局也照「隊上有紅」讀（和現行 `goodKeyVote`／`goodCleanVote` 一樣，不分兩張失敗）。
+    const req = mode >= 3 ? 1 : failsRequiredNow(obs);
     if (cert.minReds(team) >= req) return { vote: false, reason: 'provFail' };
     const below = bayesTeamRedsBelow(obs, team, req, opts);
     if (below === null) return null;
     const bad = key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad);
     return 1 - below >= bad ? { vote: false, reason: 'bad' } : { vote: true, reason: 'onDefault' };
+  }
+  // 自己湖的宣告（持湖者言行一致 `goodVouchFollowUp`：隊伍漏掉自己宣藍的人、或放了宣紅的人）也是反對的公開邏輯理由——交給那條規則投（它的推理紀錄寫明原因）。
+  if (tuning.goodVouchFollowUp) {
+    const c = goodVouchTeamConstraint(obs);
+    if (c && (c.banned.some((id) => team.includes(id)) || c.required.some((id) => !team.includes(id)))) return null;
   }
   if (cert.minReds(team) >= 1) return { vote: false, reason: 'provRed' };
   const share = bayesRedShare(obs, opts);
@@ -76,7 +88,7 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if (p === null) return null;
   const good = key ? (tuning.goodBayesGoodKey || BAYES_VOTE_DEFAULTS.goodKey) : (tuning.goodBayesGood || BAYES_VOTE_DEFAULTS.good);
   if (p >= good) return { vote: true, reason: 'good' };
-  if (p > 0) {
+  if (p > 0 && mode < 2) {
     let alt = 0;
     for (let o = 1; o <= 4 - fc; o++) {
       const leader = leaderAhead(obs, o);

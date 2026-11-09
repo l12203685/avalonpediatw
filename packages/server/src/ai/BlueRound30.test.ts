@@ -142,8 +142,8 @@ describe('goodReuseNoMatchPoint (round 30, loyal / Percival)', () => {
   });
   const pipe: AgentAction = { type: 'team_select', teamIds: ['P1', 'P2', 'P3', 'P6', 'P9'] };
   it('goodReuseExact re-proposes the R4 team without the knob; with it the pipeline\'s team stays (red has two fails)', () => {
-    expect(DEFAULT_AGENT_TUNING.goodReuseNoMatchPoint).toBe(false);
-    expect(goodReuseExactTeam(DEFAULT_AGENT_TUNING, r5, pipe)).toEqual({ type: 'team_select', teamIds: ['P2', 'P3', 'P6', 'P8', 'P9'] });
+    expect(DEFAULT_AGENT_TUNING.goodReuseNoMatchPoint).toBe(true); // 第 33 回合改預設開
+    expect(goodReuseExactTeam({ ...DEFAULT_AGENT_TUNING, goodReuseNoMatchPoint: false }, r5, pipe)).toEqual({ type: 'team_select', teamIds: ['P2', 'P3', 'P6', 'P8', 'P9'] });
     expect(goodReuseExactTeam({ ...DEFAULT_AGENT_TUNING, goodReuseNoMatchPoint: true }, r5, pipe)).toBe(pipe);
   });
   it('below two red fails the re-proposal is unchanged', () => {
