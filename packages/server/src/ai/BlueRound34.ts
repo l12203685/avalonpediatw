@@ -11,7 +11,7 @@
  */
 import type { PlayerObservation, VoteRecord } from './types';
 import type { AgentTuning } from './AgentTuning';
-import { bayesOptionsOf, bayesWorlds } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesWorlds } from './belief/BayesBelief';
 import { flowOfObs, type Flow } from './infl/flow';
 import { FlowFeatures, N_BASE, N_EXTRA, RED_CLASSES, ROLE_CLASSES, type SharedSeatView } from './infl/voteFeatures';
 import { P_CLIP } from './infl/policyModel';
@@ -94,4 +94,67 @@ export function r1InfoValueInfl(team: readonly string[], ctx: R1InflCtx): number
     });
   }
   return total;
+}
+
+// ── 忠臣照百科〈解讀前人派票〉回應前面的提議（`loyalFlowPick`；Edward 11/09 確認以這篇為規格）──────────────
+
+/**
+ * 百科〈解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票〉（wiki-24）的忠臣決策，第一版：
+ *   - 反對＝修正：不信任上一任隊長的派票資訊，對組合做出對立的派票——他隊上（隊長以外）的人一個都不留；
+ *   - 尊重：資訊有參考價值，不刻意加強也不刻意對立——他隊上的人最多留一個；
+ *   - 認同＝延伸：加強他的組合人選——3 家忠臣「理論上沒有足夠資訊在 1-2 之後就直接認同 2 家的資訊」，認為 2 是忠臣就更沒有依據，
+ *     所以忠臣這一版不主動認同（看起來好 → 尊重）；
+ *   - 上一任隊長看起來壞（後驗紅 ≥ 0.5）→ 反對；看起來好 → 尊重（「2 偏好、是忠臣 ⇒ 尊重或反對」「2 偏壞、一壞派兩好 ⇒ 尊重」裡較常見的一邊）；
+ *   - 一般不派和前面完全反向的組合（168 之後 279：如果 1、2 真的是兩好，會導致 1、2 雙雙被排除在任務外）；
+ *   - 忠臣不照派（照派的幾乎都是能力者；忠臣派得一模一樣，外置位被派到的次數降低，能替梅林擋刀的人變少）。
+ * 在這些條件下挑自己後驗最乾淨的隊；沒有隊符合時依序放寬（先拿掉分類回應，再拿掉兩條限制）。仍然過好人的邏輯閘門 `allowed`。
+ * 模式 1 = 只有「不完全反向、不照派」；2 = 再加分類回應。不適用（不是忠臣、強制局、這一局前面沒有別人的提議）時回傳原本的動作。
+ */
+export function loyalFlowPickTeam(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  action: import('./types').AgentAction,
+  allowed: (team: readonly string[]) => boolean = () => true,
+): import('./types').AgentAction {
+  const mode = tuning.loyalFlowPick ?? 0;
+  if (!(mode > 0) || action.type !== 'team_select' || obs.myRole !== 'loyal' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return action;
+  if ((obs.failCount ?? 0) >= 4) return action;
+  const round = obs.currentRound ?? 1;
+  const me = obs.myPlayerId;
+  const earlier = obs.voteHistory.filter((v) => v.round === round);
+  const prevs = earlier.filter((v) => v.leader !== me);
+  if (prevs.length === 0) return action;
+  const prev = prevs[prevs.length - 1];
+  const size = action.teamIds.length;
+  const opts = bayesOptionsOf(tuning);
+  const share = bayesRedShare(obs, opts);
+  const prevPicks = new Set(prev.team.filter((id) => id !== me && id !== prev.leader));
+  const seen = new Set(earlier.flatMap((v) => v.team).filter((id) => id !== me));
+  const keys = new Set(earlier.map((v) => [...v.team].sort().join(',')));
+  const respond = mode >= 2 ? ((share.get(prev.leader) ?? 0.5) >= 0.5 ? 'correct' : 'respect') : null;
+  const others = obs.allPlayerIds.filter((id) => id !== me);
+  const cands: { team: string[]; p: number; ok: number }[] = [];
+  const pick = (start: number, acc: string[]): void => {
+    if (acc.length === size - 1) {
+      const team = [me, ...acc];
+      const inPrev = acc.filter((id) => prevPicks.has(id) || id === prev.leader).length;
+      const inPicks = acc.filter((id) => prevPicks.has(id)).length;
+      const reversed = seen.size > 0 && acc.every((id) => !seen.has(id));
+      const same = keys.has([...team].sort().join(','));
+      let ok = 0;
+      if (!reversed && !same) {
+        ok = 1;
+        if (respond === 'correct' && inPicks === 0 && !acc.includes(prev.leader)) ok = 2;
+        if (respond === 'respect' && inPrev <= 1) ok = 2;
+        if (respond === null) ok = 2;
+      }
+      cands.push({ team, p: bayesTeamClean(obs, team, opts) ?? 0, ok });
+      return;
+    }
+    for (let i = start; i <= others.length - (size - 1 - acc.length); i++) { acc.push(others[i]); pick(i + 1, acc); acc.pop(); }
+  };
+  pick(0, []);
+  cands.sort((a, b) => (b.ok - a.ok) || (b.p - a.p > 1e-12 ? 1 : a.p - b.p > 1e-12 ? -1 : 0));
+  const best = cands.find((c) => allowed(c.team));
+  return best ? { type: 'team_select', teamIds: best.team } : action;
 }

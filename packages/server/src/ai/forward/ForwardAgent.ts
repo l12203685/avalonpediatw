@@ -61,6 +61,7 @@ import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
+import { loyalFlowPickTeam } from '../BlueRound34';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
@@ -936,6 +937,13 @@ export class ForwardAgent implements AvalonAgent {
     if (d.action.type === 'team_select') {
       const spread = r1SpreadTeam(this.baseline.tuning, obs, d.action, gateOk);
       if (spread !== d.action) return { ...d, action: spread, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → R1: do not stack on the players already proposed` } };
+    }
+    // Round 34 `loyalFlowPick` (BlueRound34.ts; wiki-24, Edward 2026-11-09): a loyal's non-forced proposal answers the round's earlier ones —
+    // correct a leader who looks red, respect one who looks blue; never a fully reversed team or an exact re-proposal of the round.
+    if (d.action.type === 'team_select') {
+      // The leader's own vote rules still bind on the new team (hard constraint `leaderSelfApprove`).
+      const flowPick = goodLeadConsistentTeam(this.baseline.tuning, obs, loyalFlowPickTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
+      if (flowPick !== d.action) return { ...d, action: flowPick, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → answer the earlier proposals (wiki-24)` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
