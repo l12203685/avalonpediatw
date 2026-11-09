@@ -400,11 +400,13 @@
 | 20261013h 閱讀副本：同樣的列另寫到私人那份、「聊天紀錄」固定第一個分頁 | 實測 AI 管理員的 Drive 連接器讀不到阿瓦隆百科那份的「聊天紀錄」，只能把小試算表的第一個分頁下載成 CSV；副本只為了讓它讀得到 |
 | 20261013h 審查修正：副本只認自己（`copy-`）的「完成」；`CHAT_EXPORT_SHEET_ID=off` 時副本也停；移不動分頁時照寫照刪 | 早期版本留在私人那份的日子不會混進副本；「不要任何試算表」說到做到；分頁位置不擋 7 天保留 |
 
-## 網站「問題回報」→ DC 論壇 #百科問題回報（2026-11-02）
+## 百科回報與 ID 認領 → DC #同步閒聊＋LINE 群組（2026-11-09；取代 2026-11-02 的論壇 #百科問題回報）
 
-- DC：「阿瓦隆百科」分類下的論壇 **百科問題回報**，標籤：錯誤／建議／文章內容／處理中／已處理／不處理。一則回報一篇；也可以直接在 DC 發文。
-- 網站：內容頁右下角「問題回報」按鈕（`packages/web/src/components/FeedbackButton.tsx`）。送出 → `POST /api/feedback`
-  → `services/feedbackForum.ts` 用伺服器的 `DISCORD_BOT_TOKEN` 在論壇開討論串並掛類型標籤。論壇群組成員都看得到，
-  所以只貼回報者自己打的內容、自己填的暱稱（選填，沒填＝匿名）與所在頁面路徑，不帶登入帳號名稱；不會 @ 任何人。
-  沒有 token 時退回 `DISCORD_WEBHOOK_URL`。`FEEDBACK_FORUM_CHANNEL_ID=off` 關掉。
-- 處理：管理端每天收一次論壇裡沒有「已處理／不處理」標籤的貼文，修完在討論串回覆並改標籤。LINE 不另外收（LINE 訊息已同步到 DC，且多為閒聊）。
+- Edward 2026-11-09：「回報跟ID認領都改用DC/LINE指令，然後整區刪掉 網站上的回報跟ID認領都同步傳到 line群組/dc 同步閒聊頻道」。
+  DC 論壇 **百科問題回報** 刪除，程式裡已經沒有任何東西依賴它（`FEEDBACK_FORUM_CHANNEL_ID` 不再讀；`AI_GAME_FORUM_CHANNEL_ID`
+  還設成舊論壇 id 時自動改用 #牌譜紀錄與覆盤）。
+- 來源：LINE／DC 指令 `/回報`、`/認領`，以及網站的「問題回報」按鈕（`POST /api/feedback`）與「ID 認領」頁（`POST /api/feedback/claim`）。
+  都由 `packages/server/src/services/communityReports.ts` 給編號、貼到 DC 同步閒聊和 LINE 群組；詳細格式、核准方式與例行作業的列表腳本見
+  `docs/BOT_SETUP.md`〈百科回報與 ID 認領〉。
+- 公開貼文只有回報者自己打的內容、自己填的暱稱（選填）與所在頁面路徑，不帶登入帳號名稱；不會 @ 任何人。DC 貼不出去時，網站回報退回 `DISCORD_WEBHOOK_URL`。
+- 處理：每日例行作業在本機跑 `scripts/listCommunityReports.ts` 列出還沒處理的【百科回報】與【ID認領】（含 ✅ 核准狀態），處理完用同一個腳本把那則標上「（已處理）」／「（已合併）」。

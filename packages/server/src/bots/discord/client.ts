@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SEAT_FILLER_OPTIONS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS } from './config';
 import {
   handleHelpCommand,
   handleRulesCommand,
@@ -28,6 +28,9 @@ import { handleSimCommand } from '../simulation/discordCommand';
 import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
 import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
 import { handlePaipuFixCommand } from '../paipuFix/discordCommand';
+import { handleClaimCommand, handleReportCommand } from '../reports/discordCommand';
+import { REPORT_KIND_CHOICES } from '../reports/commands';
+import { CLAIM_NAME_MAX, FEEDBACK_MESSAGE_MAX } from '../../services/communityReports';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -178,6 +181,39 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
     new SlashCommandBuilder()
       .setName(COMMANDS.PAIPU_FIX)
       .setDescription('列出牌譜區目前需要修正的牌譜和原因 / Game records that need fixing'),
+
+    // 2026-11-09 百科回報／ID 認領 (bots/reports) — posted to #同步閒聊 and the LINE group.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.REPORT)
+      .setDescription('回報網站或文章的錯誤、建議（貼到同步閒聊＋LINE 群組）/ Report a problem')
+      .addStringOption((o) =>
+        o
+          .setName(REPORT_OPTIONS.CONTENT)
+          .setDescription('哪一頁、哪篇文章、看到什麼 / What is wrong')
+          .setRequired(true)
+          .setMaxLength(FEEDBACK_MESSAGE_MAX)
+      )
+      .addStringOption((o) =>
+        o
+          .setName(REPORT_OPTIONS.KIND)
+          .setDescription('類型（預設錯誤）/ Kind')
+          .setRequired(false)
+          .addChoices(...REPORT_KIND_CHOICES.map((c) => ({ name: c.name, value: c.value })))
+      ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.CLAIM)
+      .setDescription('ID 認領：同一個人用過好幾個 ID，請管理者合併 / Claim your other IDs')
+      .addStringOption((o) =>
+        o.setName(CLAIM_OPTIONS.MAIN).setDescription('要留的主 ID / Main ID').setRequired(true).setMaxLength(CLAIM_NAME_MAX)
+      )
+      .addStringOption((o) =>
+        o
+          .setName(CLAIM_OPTIONS.OTHERS)
+          .setDescription('其他 ID，用空白或 、 隔開；有空白的名字用「」包起來 / Other IDs')
+          .setRequired(true)
+          .setMaxLength(500)
+      ),
   ];
 }
 
@@ -325,6 +361,14 @@ export class DiscordBotClient {
 
         case COMMANDS.PAIPU_FIX:
           await handlePaipuFixCommand(interaction);
+          break;
+
+        case COMMANDS.REPORT:
+          await handleReportCommand(interaction);
+          break;
+
+        case COMMANDS.CLAIM:
+          await handleClaimCommand(interaction);
           break;
 
         default: {

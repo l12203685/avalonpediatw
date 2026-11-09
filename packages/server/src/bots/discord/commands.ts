@@ -6,6 +6,7 @@ import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stat
 import { SIM_CONFIG } from '../simulation/config';
 import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
 import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from '../paipuFix/commands';
+import { CLAIM_HELP_TEXT, CLAIM_USAGE, REPORT_HELP_TEXT, REPORT_USAGE } from '../reports/commands';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -82,6 +83,11 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
       {
         name: '📝 待修正牌譜 / Records to fix',
         value: `\`${PAIPU_FIX_USAGE.discord}\` ${PAIPU_FIX_HELP_TEXT}（每天凌晨匯入讀不懂的貼文）`,
+        inline: false,
+      },
+      {
+        name: '📮 回報與 ID 認領 / Reports & ID claims',
+        value: `\`${REPORT_USAGE.discord}\` ${REPORT_HELP_TEXT}\n\`${CLAIM_USAGE.discord}\` ${CLAIM_HELP_TEXT}（管理者核准後生效）`,
         inline: false,
       },
       {

@@ -102,9 +102,9 @@ afterEach(() => {
 });
 
 describe('registration', () => {
-  it('six 模擬 commands pass discord.js validation; 23 commands in all (incl. /機器人補位, /待修正)', () => {
+  it('six 模擬 commands pass discord.js validation; 25 commands in all (incl. /機器人補位, /待修正, /回報, /認領)', () => {
     const json = buildSlashCommands().map((c) => c.toJSON());
-    expect(json).toHaveLength(23);
+    expect(json).toHaveLength(25);
     const names = json.map((c) => c.name);
     expect(names).toEqual(expect.arrayContaining(['模擬', '派', '區間', '下一步', '公布', '結束', '戰績', '排行', '默契', '意見', 'help']));
     for (const c of json) {

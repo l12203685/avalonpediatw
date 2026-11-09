@@ -77,6 +77,10 @@ export const COMMANDS = {
   // 2026-11-09 待修正牌譜清單 (bots/paipuFix, services/paipuFixList.ts): same word
   // as LINE's /待修正; lists the 牌譜 posts tagged 待修正 with the reason.
   PAIPU_FIX: '待修正',
+  // 2026-11-09 百科回報／ID 認領 (bots/reports, services/communityReports.ts): replaces the
+  // deleted DC forum 百科問題回報; posts to #同步閒聊 and the LINE group.
+  REPORT: '回報',
+  CLAIM: '認領',
   // 2026-10-13: the admin-only /社群週報 (paid weekly digest) was removed;
   // registerCommands() overwrites the whole command list, so it disappears
   // from Discord on the next deploy (see client.ts).
@@ -110,6 +114,18 @@ export const SEAT_FILLER_OPTIONS = {
   ROOM: '房號或描述',
   BOTS: '人數',
   PASSWORD: '密碼',
+} as const;
+
+/** Option names of /回報 (bots/reports). */
+export const REPORT_OPTIONS = {
+  KIND: '類型',
+  CONTENT: '內容',
+} as const;
+
+/** Option names of /認領 (bots/reports). Lowercase: Discord refuses upper-case letters in option names. */
+export const CLAIM_OPTIONS = {
+  MAIN: '主id',
+  OTHERS: '其他id',
 } as const;
 
 /** /模擬 角色 choices (value = the LINE alias the parser reads). */

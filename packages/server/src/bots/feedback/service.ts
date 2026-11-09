@@ -31,6 +31,7 @@ import { parseStatsCommand } from '../stats/textCommands';
 import { isSimCommandText } from '../simulation/commands';
 import { isSeatFillerCommandText } from '../seatFiller/commands';
 import { isPaipuFixCommandText } from '../paipuFix/commands';
+import { isCommunityCommandText } from '../reports/commands';
 
 /** What the service hands to Discord: content + no pings, ever. */
 export interface FeedbackForwardPayload {
@@ -163,6 +164,8 @@ export class FeedbackService {
       if (isSeatFillerCommandText(text)) return [];
       // 待修正牌譜清單 (2026-11-09): /待修正 /牌譜待修正 are usage too.
       if (isPaipuFixCommandText(text)) return [];
+      // 百科回報／ID 認領 (2026-11-09): /回報 /認領 are submissions, not reactions.
+      if (isCommunityCommandText(text)) return [];
       if (platform === 'line' && FEEDBACK_CONFIG.commandEnabled && parseFeedbackCommand(text)) return [];
       return this.counter.observe(platform, text);
     } catch (err) {

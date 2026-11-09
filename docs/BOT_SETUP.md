@@ -10,8 +10,9 @@ Complete guide for setting up Discord and Line bots for Avalon game platform.
 4. [Deployment](#deployment)
 5. [Commands](#commands)
 6. [補位機器人（/機器人補位、/補位）](#補位機器人機器人補位補位)
-7. [百科AI 對局紀錄與回饋](#百科ai-對局紀錄與回饋dc-百科問題回報網站-ai-games)
+7. [百科AI 對局紀錄與回饋](#百科ai-對局紀錄與回饋dc-牌譜紀錄與覆盤網站-ai-games)
 8. [待修正牌譜清單（/待修正）](#待修正牌譜清單待修正)
+9. [百科回報與 ID 認領（/回報、/認領）](#百科回報與-id-認領回報認領)
 
 ---
 
@@ -221,13 +222,13 @@ workflow 還沒合併進 `main` 之前，叫機器人會回「GitHub 回應 404�
 
 ---
 
-## 百科AI 對局紀錄與回饋（DC #百科問題回報＋網站 #ai-games）
+## 百科AI 對局紀錄與回饋（DC #牌譜紀錄與覆盤＋網站 #ai-games）
 
 Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」。百科AI（上面的補位機器人，`signage-player.yml`）在遊玩頁打的**每一局**，打完、角色公開之後自動記錄，大家可以針對它的每個派隊、投票、任務、湖、宣告、刺殺給回饋。
 
 ### 在 DC 上
 
-- 論壇 **#百科問題回報** 一局開一篇，標籤 **百科AI對局**（論壇沒有這個標籤時，機器人第一次貼文會用 API 加上去；加不了就不掛標籤照貼）。
+- 2026-11-09 起貼在論壇 **#牌譜紀錄與覆盤**，格式同記錄員的待檢視貼文（標題「【待檢視】含百科機器人_…」，標籤 模擬＋線瓦＋結果），附 `trace.json`；每日匯入看到「待檢視」或「模擬」不收進真人戰績。原本的論壇 #百科問題回報 已刪除（`AI_GAME_FORUM_CHANNEL_ID` 還設成它的 id 時自動改用 #牌譜紀錄與覆盤）。以下幾點是 11-05～11-08 在舊論壇時的格式，留作紀錄：
 - 標題：`百科AI對局 20261105_2105 週四練習團／Room-1460`（台灣時間的開局時刻、房間描述／房號）。
 - 起始訊息：房間、時間、結果、六碼配置、百科AI 坐哪幾家，以及回饋方式；附 `trace.json`（完整紀錄，網站讀這個）。
 - 後面幾則：依局分組的對局紀錄（每次提議的隊長、隊伍、贊成／反對，任務結果，湖中，刺殺）。2026-11-05 起（Edward「百科AI 的戰局只需要貼紀錄就好 思考內容那些不用」）DC 不貼百科AI 的夜晚資訊與每一步的理由；理由只在網站上看得到。每則 2000 字以內，最多 20 則；最後附網站上這一局的網址。
@@ -251,9 +252,9 @@ Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&
 | 網站頁 | `packages/web/src/pages/AiGamesPage.tsx`、`components/aiGames/` |
 
 - **不用新的設定**：GitHub Actions 的 Play 步驟和 Render 都用既有的 `DISCORD_BOT_TOKEN`（同記錄員、牌譜回覆）。沒有 token 時只打牌不貼（log 寫「沒有 DISCORD_BOT_TOKEN」），網站 API 回 503。
-- 機器人要在 #百科問題回報 有「傳送訊息」「建立公開討論串」「附加檔案」「在討論串傳送訊息」權限；自動加標籤要「管理頻道」（沒有的話請管理者手動在論壇加一個「百科AI對局」標籤）。
+- 機器人要在 #牌譜紀錄與覆盤 有「傳送訊息」「建立公開討論串」「附加檔案」「在討論串傳送訊息」權限。
 - 選填：`AI_GAME_FORUM_CHANNEL_ID`（換論壇；`off` 關掉貼文與網站頁）、`DISCORD_GUILD_ID`（列出進行中的討論串用，預設阿瓦隆百科群組）。
-- 伺服器讀 DC 的結果在記憶體快取 5 分鐘；附件只從 Discord 的 CDN 讀，只認這個論壇裡標題「百科AI對局」開頭、起始訊息是機器人發的貼文。網站回饋每個 IP 每分鐘 10 則（同網站問題回報），全站每小時最多 120 則。
+- 伺服器讀 DC 的結果在記憶體快取 5 分鐘；附件只從 Discord 的 CDN 讀，只認這個論壇裡標題「百科AI對局」開頭、起始訊息是機器人發的貼文。網站回饋每個 IP 每分鐘 10 則，全站每小時最多 120 則。
 - 隱私：公開的 GitHub Actions log 只有時間、房號、狀態與數量（例：`Room-1460：百科AI對局已貼到 DC（42 個決定、6 則後續訊息）`），trace 不印到 log；DC 失敗只記狀態碼。本機跑 `--private-log DIR` 會另存一份 `ai-trace-*.json`。
 - 開關：`signagePlayer.ts --ai-trace off` 不貼；私房測試（`--mode private-test`）預設不貼，加 `--ai-trace on` 才貼。
 
@@ -289,6 +290,59 @@ Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&
 
 - 運作方式：伺服器用既有的 `DISCORD_BOT_TOKEN` 走 Discord REST（不用新設定）讀論壇的標籤、進行中與已封存的討論串、每篇最近 50 則訊息；結果在記憶體快取 5 分鐘，DC 暫時讀不到時回舊的清單並註明幾分鐘前。機器人要能看到 #牌譜紀錄與覆盤 並「讀取訊息歷史」。Log 只記狀態碼，不記標題、暱稱或內容。
 - 程式在 `packages/server/src/services/paipuFixList.ts`、`packages/server/src/bots/paipuFix/`；兩個指令都列在 `/help`（Discord）與 `/指令`（LINE）裡，也不算進意見主題計數與聊天匯出。
+
+---
+
+## 百科回報與 ID 認領（/回報、/認領）
+
+2026-11-09 起（Edward：「回報跟ID認領都改用DC/LINE指令，然後整區刪掉 網站上的回報跟ID認領都同步傳到 line群組/dc 同步閒聊頻道」），回報與 ID 認領都貼到 **DC #同步閒聊** 和 **LINE 群組**。DC 論壇 #百科問題回報 刪除，程式不再用它。
+
+| 平台 | 指令 | 範例 |
+|---|---|---|
+| LINE | `/回報 [錯誤｜建議｜文章內容] 內容`（類型不寫＝錯誤；全形 `／` 也可以） | `/回報 牌譜頁在手機上表格超出畫面`、`/回報 建議 加一個深色模式` |
+| LINE | `/認領 主ID 其他ID…`（名字有空白用「」包起來；也可以用 、 或 , 隔開） | `/認領 星野路 小路 「Kip Lune」` |
+| Discord | `/回報 內容:… [類型:錯誤／建議／文章內容]`（斜線指令） | `/回報 內容:加一個深色模式 類型:建議` |
+| Discord | `/認領 主id:… 其他id:…` | `/認領 主id:星野路 其他id:小路 「Kip Lune」` |
+| 網站 | 右下角「問題回報」按鈕（`POST /api/feedback`）、「ID 認領」頁（`POST /api/feedback/claim`） | — |
+
+- 回覆：`/回報` →「已收到，會在每天的處理裡看（編號 #R…）」；`/認領` →「已送出，等管理者核准（編號 #C…）」。Discord 的回覆只有下指令的人看得到，大家要看的那則由 bot 直接貼到同步閒聊。`/認領` 的檢查同網站 ID 認領頁（至少一個、最多 10 個其他 ID，每個最多 40 字，其他 ID 不能跟主 ID 一樣——只差大小寫或全半形也算一樣）。
+- 貼出去的訊息（名字都是虛構的）：
+
+  ```
+  【百科回報・錯誤】#RNF2HA0G0 牌譜頁在手機上表格超出畫面
+  （來自網站・小明・頁面 https://avalonpediatw.com/#records）
+  ```
+
+  ```
+  【ID認領】#CNF2HBX9K 星野路 ← 小路、Kip Lune
+  （來自網站・聯絡：路路）
+  場數（送出時算的，僅供參考）：星野路 120 場；小路 3 場；Kip Lune 場數未知
+  核准：管理者在這則訊息按 ✅；合併好會在這則加註已合併。
+  CLAIM:{"main":"星野路","others":["小路","Kip Lune"]}
+  ```
+
+  LINE 群組那則沒有最後兩行（核准在 DC 按）。編號＝R（回報）／C（認領）＋送出時間＋2 碼亂數（Crockford base32，沒有 I L O U），寫在訊息裡之後不變。
+- 兩邊都由 bot 直接貼，不靠同步：同步本來就略過 bot 的訊息（DC 的 bot／webhook 訊息不轉 LINE；bot 送到 LINE 的訊息不是 webhook 事件，不會回到 DC），所以不會重複。LINE 群組裡打的 `/回報`、`/認領` 原文也不同步到 DC（同步閒聊裡已經有 bot 貼的那則）。
+- DC：`DISCORD_BOT_TOKEN` 走 REST，頻道 `COMMUNITY_REPORT_DISCORD_CHANNEL_ID` ＞ `LOBBY_MIRROR_DISCORD_CHANNEL_ID` ＞ #同步閒聊（`1132901301802504242`）。DC 貼不出去就算沒送出（指令回「請稍後再試」，網站 ID 認領回 503，網站回報退回舊的 `DISCORD_WEBHOOK_URL`），LINE 也不放。
+- LINE：`LOBBY_MIRROR_LINE_GROUP_ID` 群組。有 reply_token 佇列（Render 上的預設）就排進去，免費；群組裡打的指令跟確認訊息同一個 reply 送出，其他來源的等下一個人說話時送出。沒有佇列時才 push，每天（台北時間）最多 `COMMUNITY_REPORT_LINE_PUSH_MAX_PER_DAY`（預設 20）則。
+- 頻率限制：bot 指令每個人 10 分鐘 5 筆；所有來源加起來每小時 60 筆；網站另有每個 IP 的限制（回報每分鐘 10 則、認領每 10 分鐘 5 則）。都存在記憶體，重啟歸零。
+- 程式：`packages/server/src/services/communityReports.ts`（驗證、編號、格式、貼文）、`packages/server/src/bots/reports/`（指令）、`packages/server/src/routes/feedback.ts`（網站）。log 只記狀態碼，不記內容或名字。
+
+### 每日例行作業：列出與標記
+
+核准＝群組擁有者（`GET /guilds/{id}` 的 `owner_id`）或 `ADMIN_DISCORD_IDS`（逗號或空白隔開的 Discord 使用者 id）在【ID認領】那則按 ✅。只在本機跑（輸出有暱稱，不要放進 GitHub Actions）：
+
+```bash
+cd packages/server
+DISCORD_BOT_TOKEN=… ADMIN_DISCORD_IDS=… npx tsx scripts/listCommunityReports.ts --days 7 > items.json
+DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-merged <訊息 id>      # 【ID認領】那則加註「（已合併）」
+DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <訊息 id>   # 【百科回報】那則加註「（已處理）」
+```
+
+- stdout 是 JSON：`claims[]`（`id`、`messageId`、`url`、`createdAt`、`main`、`others`、`source`、`approved`、`approvedBy`（只寫 owner／admin，不寫名字）、`merged`）與 `reports[]`（`id`、`messageId`、`url`、`createdAt`、`kind`、`text`、`source`、`processed`）；stderr 只有數量與狀態碼。
+- 只列 bot 自己發、開頭「【ID認領】」或「【百科回報」的訊息（別人貼的假訊息不算）。處理完的判斷：那則有一行以「（已合併）」／「（已處理）」結尾，或 bot 回覆那則、內容有「已合併」／「已處理」。
+- 核准的認領：把 `others` 寫進 `packages/server/player_aliases.json`（`{"其他ID": "主ID"}`），下一次每日資料更新生效，再用 `--mark-merged` 標上。
+- 機器人在 #同步閒聊 要有「讀取訊息歷史」；標記是編輯 bot 自己的訊息，不用額外權限。
 
 ---
 
