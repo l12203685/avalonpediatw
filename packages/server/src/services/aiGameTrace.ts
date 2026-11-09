@@ -463,3 +463,68 @@ export function formatFlagReply(d: AiDecision, note: string, name: string): stri
   ];
   return clip(lines.join('\n'), 2000);
 }
+
+// ── 阿瓦隆百科牌譜格式（Edward 2026-11-09「我要的紀錄格式是跟阿瓦隆百科一樣的 你不要搞那麼複雜
+//    百科AI參與的可以也一起放到牌譜紀錄區裡面」）────────────────────────────────────────────
+
+const PAIPU_CONFIG_ROLES = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林'] as const;
+/** 座號寫法：10 號寫 0。 */
+const pd = (seat: number): string => (seat === 10 ? '0' : String(seat));
+/** 隊伍座號連寫（照座號排，0 放最後，同牌譜區）。 */
+const teamDigits = (seats: readonly number[]): string => [...seats].sort((a, b) => a - b).map(pd).join('');
+
+/** 六碼配置（刺、娜、德、奧、派、梅的座號）；角色沒全公開時 ''。 */
+export function paipuConfigOf(seats: readonly AiGameSeat[]): string {
+  const out = PAIPU_CONFIG_ROLES.map((r) => seats.find((s) => s.role === r)?.seat);
+  return out.every((x) => x !== undefined) ? out.map((x) => pd(x as number)).join('') : '';
+}
+
+/** 結果標籤：三紅／三藍被刀／三藍躲刺；不明 ''。 */
+export function paipuResultTag(t: Pick<AiGameTrace, 'missions' | 'assassination'>): string {
+  const blue = t.missions.filter((m) => m.result === 'success').length;
+  const red = t.missions.filter((m) => m.result === 'fail').length;
+  if (red >= 3) return '三紅';
+  if (blue >= 3 && t.assassination?.hit === true) return '三藍被刀';
+  if (blue >= 3 && t.assassination?.hit === false) return '三藍躲刺';
+  return '';
+}
+
+/**
+ * 牌譜本文：每次提議一行「隊伍 內黑- 外白+」、每局任務一行 o/x、湖「持湖>目標 o/x」、刺客刺殺、六碼配置、玩家名單。
+ */
+export function tracePaipu(t: AiGameTrace): string {
+  const lines: string[] = [];
+  const rounds = [...new Set([...t.proposals.map((p) => p.round), ...t.missions.map((m) => m.round)])].sort((a, b) => a - b);
+  for (const r of rounds) {
+    for (const p of t.proposals.filter((x) => x.round === r).sort((a, b) => a.attempt - b.attempt)) {
+      const on = new Set(p.team);
+      const ib = p.reject.filter((s) => on.has(s));
+      const ow = p.approve.filter((s) => !on.has(s));
+      lines.push([teamDigits(p.team), ib.length ? `${teamDigits(ib)}-` : '', ow.length ? `${teamDigits(ow)}+` : ''].filter(Boolean).join(' '));
+    }
+    const m = t.missions.find((x) => x.round === r);
+    if (m) lines.push('o'.repeat(Math.max(0, m.team.length - m.fails)) + 'x'.repeat(m.fails));
+    const l = t.lakes.find((x) => x.round === r);
+    if (l) lines.push(`${pd(l.holder)}>${pd(l.target)} ${l.claim === 'good' ? 'o' : l.claim === 'evil' ? 'x' : '?'}`);
+  }
+  lines.push(`刺客刺殺:${t.assassination?.target ? pd(t.assassination.target) : 'x'}`);
+  const cfg = paipuConfigOf(t.seats);
+  if (cfg) lines.push(cfg);
+  for (const s of [...t.seats].sort((a, b) => a.seat - b.seat)) {
+    lines.push(`${pd(s.seat)}.${oneLine(s.name)}`);
+  }
+  return lines.join('\n');
+}
+
+/** 牌譜區的標題：「【待檢視】含百科機器人_yyyymmdd_HHMM_房號」（同記錄員）。 */
+export function paipuThreadNameOf(t: Pick<AiGameTrace, 'startedAt' | 'endedAt' | 'room'>): string {
+  const stamp = twStamp(t.startedAt || t.endedAt); // yyyymmdd_HHMM
+  const room = String(t.room ?? '').replace(/\s+/g, '');
+  return `【待檢視】${['含百科機器人', stamp, room].filter(Boolean).join('_')}`.slice(0, 100);
+}
+
+/** 牌譜區的起始訊息（同記錄員的待檢視貼文）。 */
+export function paipuPostBody(t: AiGameTrace): string {
+  const ai = t.seats.filter((s) => s.ai).map((s) => pd(s.seat));
+  return clip([`待檢視原因：百科AI 參與（坐 ${ai.join('、')} 家），不是真人紀錄`, tracePaipu(t), '（機器人紀錄員尚待檢視）'].join('\n'), 2000);
+}
