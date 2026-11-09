@@ -353,7 +353,7 @@ export interface BayesOptions {
   leadRecursive?: number;
   /** Round 34 `beliefRecursiveNoLead`: with `recursive`, a team pick (`gamePhase` team_select) still reads with the level-0 posterior. */
   recursiveNoLead?: boolean;
-  /** Round 35 `beliefRecursiveLeadScope`: where a team pick reads the recursive posterior (0 all, 1 none, 2 R2 after an R1 fail, 3 R1–R2, 4 R2, 5 R3+). */
+  /** Round 35 `beliefRecursiveLeadScope`: where a team pick reads the recursive posterior (0 all, 1 none, 2 R2 after an R1 fail, 3 R1–R2, 4 R2, 5 R3+, 6 = 2 for Percival only). */
   recursiveLeadScope?: number;
 }
 
@@ -557,6 +557,8 @@ function recursiveLeadInScope(obs: PlayerObservation, scope: number): boolean {
   if (scope === 2) return round === 2 && (obs.questResults ?? [])[0] === 'fail';
   if (scope === 3) return round <= 2;
   if (scope === 5) return round >= 3;
+  // 6 = 2，只有派西（第 35 回合量尺：第 1 局失敗之後的第 2 局，派西用遞迴後驗挑隊 +0.06、忠臣 −0.25）。
+  if (scope === 6) return obs.myRole === 'percival' && round === 2 && (obs.questResults ?? [])[0] === 'fail';
   return round === 2;
 }
 

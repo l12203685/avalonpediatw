@@ -1039,7 +1039,7 @@ export interface AgentTuning {
   goodBayesR4Mix: boolean;
   /**
    * 第 35 回合：`beliefRecursive`（或只在挑隊時的 `beliefLeadRecursive`）開著時，自己挑隊用遞迴後驗的範圍——只在量尺不掉的局面用新後驗挑隊。
-   * 0 = 每一次挑隊都用（同 `beliefRecursive`）；1 = 都不用（同 `beliefRecursiveNoLead`）；2 = 只有第 1 局失敗之後的第 2 局；3 = 第 1、2 局；4 = 第 2 局；5 = 第 3 局起。
+   * 0 = 每一次挑隊都用（同 `beliefRecursive`）；1 = 都不用（同 `beliefRecursiveNoLead`）；2 = 只有第 1 局失敗之後的第 2 局；3 = 第 1、2 局；4 = 第 2 局；5 = 第 3 局起；6 = 2 只有派西。
    */
   beliefRecursiveLeadScope: number;
   /**
@@ -2163,7 +2163,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'beliefRecursiveLeadScope') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
-    if (!Number.isFinite(value) || value < 0 || value > 5) throw new Error(`beliefRecursiveLeadScope needs a number in [0, 5], got "${raw}"`);
+    if (!Number.isFinite(value) || value < 0 || value > 6) throw new Error(`beliefRecursiveLeadScope needs a number in [0, 6], got "${raw}"`);
     return { beliefRecursiveLeadScope: value };
   }
   if (name === 'goodLakeEntropy') {
