@@ -5,6 +5,7 @@ import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply
 import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
 import { SIM_CONFIG } from '../simulation/config';
 import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
+import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from '../paipuFix/commands';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -76,6 +77,11 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
       {
         name: '🤖 補位機器人 / Seat filler',
         value: `\`${SEAT_FILLER_USAGE.discord}\` ${SEAT_FILLER_HELP_TEXT}\n${SEAT_FILLER_LIMITS_TEXT}`,
+        inline: false,
+      },
+      {
+        name: '📝 待修正牌譜 / Records to fix',
+        value: `\`${PAIPU_FIX_USAGE.discord}\` ${PAIPU_FIX_HELP_TEXT}（每天凌晨匯入讀不懂的貼文）`,
         inline: false,
       },
       {

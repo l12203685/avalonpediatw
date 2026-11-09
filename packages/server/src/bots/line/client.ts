@@ -36,6 +36,7 @@ import {
 } from '../simulation/textCommands';
 import { simLineGroupIds } from '../simulation/config';
 import { answerSeatFillerTextCommand } from '../seatFiller/commands';
+import { answerPaipuFixTextCommand } from '../paipuFix/commands';
 
 /**
  * Map LINE user IDs to the room they're currently in.
@@ -137,6 +138,8 @@ export interface LineWebhookStats {
   simReplies: number;
   /** 補位機器人 replies sent (2026-11-03, bots/seatFiller): /補位 /機器人補位. */
   seatFillerReplies: number;
+  /** 待修正牌譜清單 replies sent (2026-11-09, bots/paipuFix): /待修正 /牌譜待修正. */
+  paipuFixReplies: number;
   /** 2026-10-13 media sync — counts only. LINE pictures uploaded to Discord. */
   imagesToDiscord: number;
   /** LINE pictures sent to Discord as a text note (too large, download or upload failed, too many waiting, or CHAT_MIRROR_IMAGES=false). */
@@ -160,7 +163,7 @@ export interface LineWebhookStats {
  * booked under.
  */
 interface LeadReply {
-  kind: 'stats' | 'feedback' | 'seatFiller' | 'sim';
+  kind: 'stats' | 'feedback' | 'seatFiller' | 'paipuFix' | 'sim';
   text: string;
   /**
    * 模擬瓦 (2026-10-14): applies the step only once the reply went out, so a
@@ -216,6 +219,7 @@ export class LineBotClient {
     feedbackReplies: 0,
     simReplies: 0,
     seatFillerReplies: 0,
+    paipuFixReplies: 0,
     imagesToDiscord: 0,
     imageNotesToDiscord: 0,
     imagesSkipped: 0,
@@ -566,6 +570,19 @@ export class LineBotClient {
   }
 
   /**
+   * 待修正牌譜清單 (2026-11-09, bots/paipuFix), or null (not the command).
+   * Never throws. Read-only, so a redelivery is simply answered again.
+   */
+  private async paipuFixAnswerFor(text: string): Promise<string | null> {
+    try {
+      return await answerPaipuFixTextCommand(text, 'line');
+    } catch (error) {
+      console.error(`[LINE paipu-fix] handling /待修正 failed (${describeError(error)})`);
+      return null;
+    }
+  }
+
+  /**
    * 模擬瓦 answer (2026-10-14, bots/simulation), or null (not a 模擬 command,
    * flag off, rate limited). Never throws; logs a code only (no text, no ids).
    */
@@ -589,7 +606,7 @@ export class LineBotClient {
 
   /**
    * The bot answer a text earns, if any: stats commands first, then /意見, then
-   * /補位 (補位機器人), then 模擬瓦.
+   * /補位 (補位機器人), then /待修正 (待修正牌譜清單), then 模擬瓦.
    * An allow-listed 模擬 practice group gets 模擬 commands and /指令 (模擬 help) only.
    */
   private async leadReplyFor(text: string, ctx: LeadContext): Promise<LeadReply | null> {
@@ -604,6 +621,8 @@ export class LineBotClient {
     if (feedback !== null) return { kind: 'feedback', text: feedback };
     const seatFiller = await this.seatFillerAnswerFor(text, ctx.duplicate);
     if (seatFiller !== null) return { kind: 'seatFiller', text: seatFiller };
+    const paipuFix = await this.paipuFixAnswerFor(text);
+    if (paipuFix !== null) return { kind: 'paipuFix', text: paipuFix };
     return this.simAnswerFor(text, ctx);
   }
 
@@ -623,6 +642,7 @@ export class LineBotClient {
     if (lead.kind === 'stats') this.stats.statsReplies += 1;
     else if (lead.kind === 'feedback') this.stats.feedbackReplies += 1;
     else if (lead.kind === 'seatFiller') this.stats.seatFillerReplies += 1;
+    else if (lead.kind === 'paipuFix') this.stats.paipuFixReplies += 1;
     else this.stats.simReplies += 1;
     try {
       lead.commit?.();

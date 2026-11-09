@@ -74,6 +74,9 @@ export const COMMANDS = {
   // puts the signage-cloud seat-filler bot into a room. LINE types /補位 (or
   // /機器人補位); Discord gets the longer, unambiguous name only.
   SEAT_FILLER: '機器人補位',
+  // 2026-11-09 待修正牌譜清單 (bots/paipuFix, services/paipuFixList.ts): same word
+  // as LINE's /待修正; lists the 牌譜 posts tagged 待修正 with the reason.
+  PAIPU_FIX: '待修正',
   // 2026-10-13: the admin-only /社群週報 (paid weekly digest) was removed;
   // registerCommands() overwrites the whole command list, so it disappears
   // from Discord on the next deploy (see client.ts).

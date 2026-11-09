@@ -38,6 +38,7 @@ import {
 import type { NameMatch, OutcomeBlocks } from '@avalon/shared';
 import { SIM_CONFIG } from '../simulation/config';
 import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
+import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from '../paipuFix/commands';
 
 // Name lookup lives in @avalon/shared (the website's player search and the stats API use the
 // same rules; normalizeName = playerNameKey, the rule generate_cache.py merges players by).
@@ -896,6 +897,8 @@ export function formatStatsHelp(platform: StatsPlatform, scope: string | null = 
   }
   // 補位機器人 (2026-11-03, bots/seatFiller): LINE types /補位, Discord has /機器人補位.
   lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000${SEAT_FILLER_HELP_TEXT}`);
+  // 待修正牌譜清單 (2026-11-09, bots/paipuFix): /待修正 on both platforms.
+  lines.push(`${PAIPU_FIX_USAGE[platform]}\u3000${PAIPU_FIX_HELP_TEXT}`);
   if (platform === 'line') lines.push('/指令\u3000顯示這份說明');
   lines.push('每週一 12:00 會自動貼出本週排行。');
   lines.push(SITE_FOOTER);

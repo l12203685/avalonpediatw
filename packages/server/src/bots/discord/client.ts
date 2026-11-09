@@ -27,6 +27,7 @@ import { handleDiscordMirrorMessage } from './mirrorInbound';
 import { handleSimCommand } from '../simulation/discordCommand';
 import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
 import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
+import { handlePaipuFixCommand } from '../paipuFix/discordCommand';
 
 /**
  * Slash command definitions registered by `registerCommands()`. Exported so
@@ -172,6 +173,11 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
       .addStringOption((o) =>
         o.setName(SEAT_FILLER_OPTIONS.PASSWORD).setDescription('私房密碼（只用來進房）/ Private-room password').setRequired(false).setMaxLength(32)
       ),
+
+    // 2026-11-09 待修正牌譜清單 (bots/paipuFix) — same list as LINE's /待修正, public reply.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.PAIPU_FIX)
+      .setDescription('列出牌譜區目前需要修正的牌譜和原因 / Game records that need fixing'),
   ];
 }
 
@@ -315,6 +321,10 @@ export class DiscordBotClient {
 
         case COMMANDS.SEAT_FILLER:
           await handleSeatFillerCommand(interaction);
+          break;
+
+        case COMMANDS.PAIPU_FIX:
+          await handlePaipuFixCommand(interaction);
           break;
 
         default: {
