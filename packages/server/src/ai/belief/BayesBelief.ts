@@ -353,6 +353,8 @@ export interface BayesOptions {
   leadRecursive?: number;
   /** Round 34 `beliefRecursiveNoLead`: with `recursive`, a team pick (`gamePhase` team_select) still reads with the level-0 posterior. */
   recursiveNoLead?: boolean;
+  /** Round 35 `beliefRecursiveLeadScope`: where a team pick reads the recursive posterior (0 all, 1 none, 2 R2 after an R1 fail, 3 R1–R2, 4 R2). */
+  recursiveLeadScope?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -390,7 +392,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const temperP = pT !== undefined && pT > 0 ? Math.min(pT, 1) : 1;
   const policy = opts.policyVotes === true;
   const picking = obs.gamePhase === 'team_select';
-  const rec = opts.recursive !== undefined ? (opts.recursiveNoLead === true && picking ? 0 : opts.recursive)
+  const leadOff = picking && (opts.recursiveNoLead === true || !recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0));
+  const rec = opts.recursive !== undefined ? (leadOff ? 0 : opts.recursive)
     : ((opts.leadRecursive ?? 0) > 0 && picking ? opts.leadRecursive! : 0);
   const recVotes = rec === 1 || rec === 2 || rec >= 4;
   const recProps = rec === 1 || rec === 3;
@@ -546,6 +549,16 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   return out;
 }
 
+/** Round 35 `beliefRecursiveLeadScope`: does this team pick read the recursive posterior. */
+function recursiveLeadInScope(obs: PlayerObservation, scope: number): boolean {
+  if (scope <= 0) return true;
+  const round = obs.currentRound ?? 1;
+  if (scope === 1) return false;
+  if (scope === 2) return round === 2 && (obs.questResults ?? [])[0] === 'fail';
+  if (scope === 3) return round <= 2;
+  return round === 2;
+}
+
 /** 鐵咬: the bit of the one member of the last failed mission before `v`'s round that `v`'s team drops (off the team, not the leader); 0 = none. */
 function biteSeatBit(obs: PlayerObservation, v: PlayerObservation['voteHistory'][number], bit: (id: string) => number): number {
   const failed = obs.questHistory.filter((q) => q.round < v.round && obs.questResults[q.round - 1] === 'fail');
@@ -606,7 +619,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.beliefLeadStrong === true ? { leadStrongTables: true } : {}),
     ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
     policyVotes: t.beliefPolicyVotes === true,
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
       ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
