@@ -265,12 +265,14 @@ describe('DC 訊息與文字', () => {
     expect(splitMessages(many).every((m) => m.length <= DISCORD_MESSAGE_MAX)).toBe(true);
   });
 
-  it('後續訊息太多時截斷，提示看附檔', () => {
+  it('後續訊息只有對局紀錄；太多時截斷，提示看網站', () => {
     const t = syntheticTrace();
-    const long = { ...t, decisions: Array.from({ length: 400 }, (_, i) => ({ ...t.decisions[0], id: i + 1, reason: '長'.repeat(200) })) };
+    expect(aiGameFollowups(t).join('\n')).not.toMatch(/理由：/);
+    const p0 = t.proposals[0];
+    const long = { ...t, proposals: Array.from({ length: 2000 }, (_, i) => ({ ...p0, round: i + 1, attempt: 1 })) };
     const msgs = aiGameFollowups(long);
     expect(msgs).toHaveLength(AI_GAME_MAX_FOLLOWUPS);
-    expect(msgs[msgs.length - 1]).toMatch(/請看附檔 trace\.txt/);
+    expect(msgs[msgs.length - 1]).toMatch(/請看網站/);
   });
 
   it('網站回饋的回覆格式：第幾局第幾次、哪一家、哪個決定、原因、暱稱', () => {

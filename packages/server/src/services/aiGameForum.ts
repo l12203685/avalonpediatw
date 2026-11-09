@@ -12,7 +12,7 @@
  * 不丟錯：沒有 token／論壇關掉 → skipped；DC 失敗 → failed（只記狀態碼）。log 只寫狀態碼與數量，不寫標題、暱稱或內容。
  */
 import {
-  AI_GAME_TAG_NAME, aiGameFollowups, aiGameSummary, aiGameText, aiGameThreadName, formatFlagReply, parseAiGameTrace,
+  AI_GAME_TAG_NAME, aiGameFollowups, aiGameSummary, aiGameThreadName, formatFlagReply, parseAiGameTrace,
   type AiGameTrace,
 } from './aiGameTrace';
 import { resolveFeedbackForumId } from './feedbackForum';
@@ -100,7 +100,7 @@ export async function ensureAiGameTag(opts: { token: string; forumId: string; fe
   }
 }
 
-/** 開討論串的 multipart 內容：payload_json＋files[0] trace.json＋files[1] trace.txt。 */
+/** 開討論串的 multipart 內容：payload_json＋files[0] trace.json（11/05 起不附 trace.txt：DC 只貼對局紀錄）。 */
 export function aiGameThreadBody(trace: AiGameTrace, tagId: string | null): FormData {
   const payload = {
     name: aiGameThreadName(trace),
@@ -109,13 +109,12 @@ export function aiGameThreadBody(trace: AiGameTrace, tagId: string | null): Form
     message: {
       content: aiGameSummary(trace),
       allowed_mentions: { parse: [] },
-      attachments: [{ id: 0, filename: 'trace.json' }, { id: 1, filename: 'trace.txt' }],
+      attachments: [{ id: 0, filename: 'trace.json' }],
     },
   };
   const form = new FormData();
   form.append('payload_json', JSON.stringify(payload));
   form.append('files[0]', new Blob([JSON.stringify(trace, null, 1)], { type: 'application/json' }), 'trace.json');
-  form.append('files[1]', new Blob([aiGameText(trace)], { type: 'text/plain; charset=utf-8' }), 'trace.txt');
   return form;
 }
 

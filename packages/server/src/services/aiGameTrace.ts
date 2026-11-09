@@ -221,11 +221,8 @@ export const FEEDBACK_HOWTO = '**怎麼回饋**：直接回覆這個討論串，
 
 /** 起始訊息：摘要＋怎麼回饋（2000 字以內）。 */
 export function aiGameSummary(t: AiGameTrace): string {
+  // Edward 2026-11-05「百科AI 的戰局只需要貼紀錄就好 思考內容那些不用」：DC 只貼對局紀錄（不貼夜晚資訊與每一步的理由）
   const ai = t.seats.filter((s) => s.ai);
-  const knowledge = ai.map((s) => {
-    const k = t.decisions.find((d) => d.seat === s.seat && d.knowledge)?.knowledge;
-    return k ? `${seatZh(s.seat)}：${k}` : '';
-  }).filter(Boolean);
   const lines = [
     '**百科AI 對局紀錄**（遊玩頁 avalon.signage-cloud.org）',
     `房間：${[oneLine(t.title), t.room].filter(Boolean).join('／') || '未知'}`,
@@ -233,12 +230,10 @@ export function aiGameSummary(t: AiGameTrace): string {
     `結果：${resultText(t)}`,
     `配置：${configText(t.seats) || '（角色沒有公開）'}`,
     `百科AI：${ai.map((s) => aiSeatText(t, s)).join('、') || '（無）'}`,
-    ...(knowledge.length ? ['夜晚資訊：', ...knowledge.map((k) => `• ${k}`)] : []),
-    `決定：共 ${t.decisions.length} 個${t.decisions.length ? `（${countBy(t)}）` : ''}`,
     ...t.notes.map((n) => `註：${n}`),
     '',
     FEEDBACK_HOWTO,
-    '附檔：trace.json（完整紀錄）、trace.txt（可讀版）',
+    '附檔：trace.json（完整紀錄；網站的「百科AI 對局」頁看得到每一步）',
   ];
   return clip(lines.join('\n'), 2000);
 }
@@ -302,13 +297,13 @@ function lakeLine(l: AiGameLake): string {
  * 依局分組的文字段落（每段＝一局或刺殺）：那一局的公開紀錄（提議、投票、任務、湖）穿插百科AI 的決定。
  * full＝trace.txt 用（含嫌疑與夜晚資訊）。
  */
-export function roundBlocks(t: AiGameTrace, full = false): string[] {
+export function roundBlocks(t: AiGameTrace, full = false, withDecisions = true): string[] {
   const rounds = new Set<number>([...t.proposals.map((p) => p.round), ...t.missions.map((m) => m.round), ...t.lakes.map((l) => l.round),
     ...t.decisions.filter((d) => d.kind !== 'assassinate').map((d) => d.round)]);
   const blocks: string[] = [];
   for (const r of [...rounds].sort((a, b) => a - b)) {
     const lines = [`**第 ${r} 局**`];
-    const ds = t.decisions.filter((d) => d.round === r && d.kind !== 'assassinate');
+    const ds = withDecisions ? t.decisions.filter((d) => d.round === r && d.kind !== 'assassinate') : [];
     const attempts = new Set<number>([...t.proposals.filter((p) => p.round === r).map((p) => p.attempt),
       ...ds.filter((d) => d.kind === 'team' || d.kind === 'vote').map((d) => d.attempt)]);
     for (const a of [...attempts].sort((x, y) => x - y)) {
@@ -324,7 +319,7 @@ export function roundBlocks(t: AiGameTrace, full = false): string[] {
     for (const d of ds.filter((x) => x.kind === 'lake' || x.kind === 'declare')) lines.push(decisionText(d, full));
     blocks.push(lines.join('\n'));
   }
-  const kills = t.decisions.filter((d) => d.kind === 'assassinate');
+  const kills = withDecisions ? t.decisions.filter((d) => d.kind === 'assassinate') : [];
   if (t.assassination || kills.length) {
     const a = t.assassination;
     const lines = ['**刺殺**'];
@@ -369,9 +364,9 @@ export function splitMessages(blocks: readonly string[], max = DISCORD_MESSAGE_M
  * `siteUrl`（網站上這一局的網址）有給時，接在最後一則後面（裝不下就另起一則）。
  */
 export function aiGameFollowups(t: AiGameTrace, siteUrl?: string): string[] {
-  let msgs = splitMessages(roundBlocks(t));
+  let msgs = splitMessages(roundBlocks(t, false, false));
   if (msgs.length > AI_GAME_MAX_FOLLOWUPS) {
-    msgs = [...msgs.slice(0, AI_GAME_MAX_FOLLOWUPS - 1), `（後面還有 ${msgs.length - AI_GAME_MAX_FOLLOWUPS + 1} 則，請看附檔 trace.txt 或網站）`];
+    msgs = [...msgs.slice(0, AI_GAME_MAX_FOLLOWUPS - 1), `（後面還有 ${msgs.length - AI_GAME_MAX_FOLLOWUPS + 1} 則，請看網站）`];
   }
   if (siteUrl) {
     const line = `網站上看這一局（每一步都有「這步怪怪的」按鈕）：${siteUrl}`;
