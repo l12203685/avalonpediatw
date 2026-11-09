@@ -20,6 +20,8 @@ import BOT_TABLE_NEXT from './likelihoods_bot_next.json';
 import STRONG_TABLE from './likelihoods_strong.json';
 // Round 26 `beliefPolicyVotes`: the INFL vote reader. A circular import (its vote features call this module's posterior inside methods only).
 import { policyVoteLog } from '../infl/policyRead';
+// Round 33 `beliefRecursive`: the level-1 recursive reader (its level-0 seat views call this module's posterior: `useMix` restores its state).
+import { recursiveLogs } from '../infl/recursiveRead';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -82,7 +84,11 @@ memos.set(0, memo);
 const memosNext = new Map<number, ProbMemo>();
 const memosStrong = new Map<number, ProbMemo>();
 const memosMissionNext = new Map<number, ProbMemo>();
+/** The arguments of the last `useMix` (round 33: a posterior computed inside another — the recursive reader's level-0 seat views — restores them). */
+type MixArgs = [number, boolean, boolean, boolean, number];
+let mixArgs: MixArgs = [0, false, false, false, 15];
 function useMix(m: number, next = false, missionNext = false, strong = false, parts = 15): void {
+  mixArgs = [m, next, missionNext, strong, parts];
   const sp = strong ? (parts > 0 ? parts & 15 : 15) : 0;
   partsKey = sp;
   mix = sp === 15 ? 0 : m;
@@ -333,6 +339,16 @@ export interface BayesOptions {
   leadProposalTemper?: number;
   /** Round 28 `beliefLeadStrong`: while the viewer picks a team, read with the strong tables (`strongTables`) — votes and proposals keep their powers. */
   leadStrongTables?: boolean;
+  /**
+   * Round 33 `beliefRecursive` (Edward 2026-11-09「資訊流遞迴調整與修正」): the level-1 recursive reader (`infl/recursiveRead.ts`) — each vote
+   * and proposal of j reads as the output of j's own decision function on j's level-0 posterior at that moment (public prefix + j's private
+   * information in the world). 1 = votes and proposals, 2 = votes only, 3 = proposals only. Replaces the vote / proposal cells it covers.
+   */
+  recursive?: number;
+  /** With `recursive`: the level-0 options j's own posterior is computed with (the same options without `recursive`). */
+  recursiveLevel0?: BayesOptions;
+  /** Round 33 `beliefLeadRecursive`: the recursive mode while the viewer picks a team (`gamePhase` team_select) only. */
+  leadRecursive?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -340,11 +356,12 @@ const STRICT_EPS = 0.03;
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
   const strong = opts.strongTables === true || (opts.leadStrongTables === true && obs.gamePhase === 'team_select');
+  const prev = mixArgs;
   useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, strong, opts.strongParts ?? 15);
   try {
     return posteriorWith(obs, opts);
   } finally {
-    useMix(0);
+    useMix(...prev);
   }
 }
 
@@ -368,9 +385,12 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const temperV = vT !== undefined && vT > 0 ? Math.min(vT, 1) : 1;
   const temperP = pT !== undefined && pT > 0 ? Math.min(pT, 1) : 1;
   const policy = opts.policyVotes === true;
+  const rec = opts.recursive ?? ((opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' ? opts.leadRecursive! : 0);
+  const recVotes = rec === 1 || rec === 2;
+  const recProps = rec === 1 || rec === 3;
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
   const tempered = temperV < 1 || temperP < 1;
-  const key = `${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
+  const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
   let store = caches.get(key);
   if (!store) { store = new WeakMap(); caches.set(key, store); }
   const hit = store.get(obs);
@@ -400,15 +420,18 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       r3: v.round > 2,
       keyRound: keyCells && v.round > 2 && results.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2,
       biteBit: biteMode > 0 && v.attempt < 5 ? biteSeatBit(obs, v, bit) : 0,
-      voters: v.attempt >= 5 || policy ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
+      voters: v.attempt >= 5 || policy || recVotes ? [] : ids.filter((id) => id !== me && v.votes[id] !== undefined)
         .map((id) => ({ b: bit(id), on: v.team.includes(id), yes: v.votes[id] === true, raw: v.votes[id] })),
     };
   });
   const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
   const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
     .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
-  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound, policy) : null;
-  const policyLog = policy ? policyVoteLog(obs) : null;
+  const mixPre = mixMode > 0 ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound, policy || recVotes) : null;
+  // Round 33: the recursive reader (Percival's strict-Merlin thumbs keep their own proposal model).
+  const recLogs = rec > 0 ? recursiveLogs(obs, opts.recursiveLevel0 ?? {}, rec, (leader) => strict.includes(leader)) : null;
+  const policyLog = recVotes ? recLogs?.votes ?? null : policy ? policyVoteLog(obs) : null;
+  const recPropLog = recProps ? recLogs?.proposals ?? null : null;
   const logW = worlds.map((w) => {
     const red = (id: string): boolean => (w & bit(id)) !== 0;
     // Percival's thumbs: the good one is Merlin, the red one Morgana (in this world). Camp index: good 0, evil 1, merlin 2, morgana 3.
@@ -450,7 +473,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
             lpp += Math.log(strictP);
           } else lp += Math.log(strictP);
         }
-      } else if (v.leader !== me && p.leaderOn) {
+      } else if (v.leader !== me && p.leaderOn && (!recProps || (strictMask & p.leaderBit) !== 0)) {
         // Proposal (the leader on its own team; not the viewer's own).
         const others = all & ~p.leaderBit;
         const redsAvail = sizeOf(w & others);
@@ -494,6 +517,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     }
     if (mixPre) { if (tempered) lv += merlinMixtureLog(mixPre, w); else lp += merlinMixtureLog(mixPre, w); }
     if (policyLog) { if (tempered) lv += policyLog(w); else lp += policyLog(w); }
+    if (recPropLog) { if (tempered) lpp += recPropLog(w); else lp += recPropLog(w); }
     if (tempered) lp += temperP * lpp + temperV * lv;
     for (const l of lakes) {
       if ((w & l.hb) === 0) continue;
@@ -574,6 +598,9 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.beliefLeadStrong === true ? { leadStrongTables: true } : {}),
     ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
     policyVotes: t.beliefPolicyVotes === true,
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }) } : {}),
+    ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
   };
@@ -594,8 +621,9 @@ export function bayesWorlds(obs: PlayerObservation, opts: Readonly<BayesOptions>
   const post = posterior(obs, opts);
   const strong = opts.strongTables === true;
   const redLakeEvil = (targetRed: boolean): number => {
+    const prev = mixArgs;
     useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, strong, opts.strongParts ?? 15);
-    try { return redLakeProb(targetRed); } finally { useMix(0); }
+    try { return redLakeProb(targetRed); } finally { useMix(...prev); }
   };
   return { worlds: post.worlds, wts: post.wts, bitOf: post.bitOf, redLakeEvil };
 }
@@ -737,6 +765,16 @@ function merlinMixtureLog(pre: MixPre, w: number): number {
     }
   }
   return Math.log(sum / (blues.length * reds.length));
+}
+
+/**
+ * Round 33 `loyalR1Spread=3`: P(approve | camp, on the team, the team holds a red, round) from the vote cells the posterior `opts` reads
+ * (strong tables when on) — the information-value pick of an R1 talk proposal asks how the table's votes would split in each world.
+ */
+export function bayesVoteCell(opts: Readonly<BayesOptions>, camp: 'good' | 'evil', on: boolean, hasRed: boolean, round: number): number {
+  const prev = mixArgs;
+  useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, opts.strongTables === true, opts.strongParts ?? 15);
+  try { return voteProb(camp, on, hasRed, round, true); } finally { useMix(...prev); }
 }
 
 /** P(vote) of a generic blue voter (the human vote table), for callers outside the posterior (the assassin). */

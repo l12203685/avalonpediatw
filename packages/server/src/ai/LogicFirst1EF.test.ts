@@ -25,9 +25,9 @@ import type { LakePublicRecord, PlayerObservation, QuestRecord, VoteRecord } fro
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 // `goodCleanVote` (round 3) rejects ahead of the rules tested here: off.
-const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0 };
+const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, goodBayesVote: 0 }; // round 33: the Bayesian criteria off (they replace the vote rules these cases document)
 /** Percival's batch-1E vote rule off (the 1D production default for votes). */
-const VOTE_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, percivalLoyalVote: false };
+const VOTE_OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, goodBayesVote: 0, percivalLoyalVote: false };
 
 function quest(round: number, team: string[], failCount: number): QuestRecord {
   const need = round === 4 ? 2 : 1;

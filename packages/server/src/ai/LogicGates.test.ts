@@ -22,10 +22,10 @@ import type { LakePublicRecord, PlayerObservation, QuestRecord, VoteRecord } fro
 
 const IDS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
 // `goodCleanVote` (round 3) rejects ahead of the gates tested here: off.
-const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0 };
+const ON: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, goodBayesVote: 0 }; // round 33: the Bayesian criteria off (they replace the vote rules these cases document)
 // Gates off — and Percival's own batch-1E vote rule off, so the old
 // "Percival on the team ⇒ approve" shortcut is what the gate is shown against.
-const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, teamDominanceGate: false, mustFailGate: false, percivalLoyalVote: false, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false };
+const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodCleanVote: 0, goodBayesVote: 0, teamDominanceGate: false, mustFailGate: false, percivalLoyalVote: false, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false };
 const GATES = { teamDominance: true, mustFail: true };
 
 function quest(round: number, team: string[], failCount: number): QuestRecord {

@@ -16,7 +16,7 @@
 import { AVALON_CONFIG, type Role } from '@avalon/shared';
 import { buildCertainty } from '../belief/Certainty';
 import { missionFailed } from '../missionFacts';
-import { bayesRedShare, bayesTeamClean, type BayesOptions } from '../belief/BayesBelief';
+import { bayesRedShare, bayesTeamClean, bayesWorlds, type BayesOptions } from '../belief/BayesBelief';
 import {
   bitOf,
   lakeSig,
@@ -61,7 +61,9 @@ export interface FlowFeatureOptions {
   bayesViewOptions?: BayesOptions;
 }
 
-interface SeatView { pClean: number; provRed: boolean; susp: Float64Array; bClean: number; bSusp: Float64Array | null }
+/** j 座位的貝氏後驗（`useBayesView`）：世界（紅方座位遮罩，和 `flow.bitOf` 相同的位元）與權重——第 33 回合遞迴讀人的派隊讀法用它算每支候選隊的乾淨機率。 */
+export interface SeatPosterior { worlds: readonly number[]; wts: readonly number[] }
+interface SeatView { pClean: number; provRed: boolean; susp: Float64Array; bClean: number; bSusp: Float64Array | null; bPost: SeatPosterior | null }
 
 /**
  * 一局資訊流的特徵快取：同一局的每個觀察者、每個決策點、每個世界都共用（基本特徵只隨 j 的湖結果變）。
@@ -115,12 +117,15 @@ export class FlowFeatures {
     for (let k = 0; k < n; k++) susp[k] /= tot;
     let bClean = 0;
     let bSusp: Float64Array | null = null;
+    let bPost: SeatPosterior | null = null;
     if (this.opts.useBayesView) {
       const bo = this.opts.bayesViewOptions ?? {};
       bClean = bayesTeamClean(obs, this.flow.votes[i].team, bo) ?? 0.5;
       const share = bayesRedShare(obs, bo);
       bSusp = new Float64Array(n);
       this.flow.ids.forEach((id, k) => { bSusp![k] = share.get(id) ?? 0.5; });
+      const bw = bayesWorlds(obs, bo);
+      bPost = { worlds: bw.worlds, wts: bw.wts };
     }
     const out: SeatView = {
       pClean: worlds.length > 0 ? clean / tot : 0.5,
@@ -128,9 +133,18 @@ export class FlowFeatures {
       susp,
       bClean,
       bSusp,
+      bPost,
     };
     this.views.set(key, out);
     return out;
+  }
+
+  /**
+   * 第 33 回合（遞迴讀人）：j 座位在第 i 次提議之前（公開紀錄到第 i − 1 次提議＋j 在世界 w 裡湖到的結果）的貝氏後驗；
+   * 只有 `useBayesView` 開著才有，否則 null。第 i 次提議的隊長派隊時看到的就是這個（後驗不看第 i 次的隊伍）。
+   */
+  seatPosterior(i: number, j: string, w: number): SeatPosterior | null {
+    return this.seatView(i, j, w).bPost;
   }
 
   /** 基本特徵（長度 N_BASE）：j 在第 i 次提議時、世界 w 裡（只看 j 湖到的結果）。 */
@@ -254,6 +268,9 @@ export class FlowFeatures {
 
   /** 擬合用的可信票（重播局：票數和結果相符）。 */
   reliable(i: number): boolean { return this.voted(i) && (this.flow.reliable?.[i] ?? true); }
+
+  /** j 在第 i 次提議之前的湖在世界 w 裡的結果（快取鍵；第 33 回合的派隊讀法用）。 */
+  lakeKey(i: number, j: string, w: number): number { return lakeSig(this.flow, i, j, w); }
 
   /** 只有在 j 座位的湖會改結果時，基本特徵才隨 w 變。 */
   dependsOnWorld(i: number, j: string): boolean {

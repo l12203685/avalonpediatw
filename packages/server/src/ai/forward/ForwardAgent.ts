@@ -60,6 +60,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
+import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
@@ -863,6 +864,15 @@ export class ForwardAgent implements AvalonAgent {
         || (obs.myRole === 'merlin' && merlinVoteFatal(obs));
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `${obs.myRole} tail white (as the public loyal view; D3 stage 2)`);
     }
+    // Round 33 (loyal / Percival) `goodBayesVote` (BlueRound33.ts; Edward 2026-11-09 ruling 2): the strict Bayesian 內黑／外白 criteria —
+    // on the team reject only when P(enough reds to fail) ≥ θ_bad or the certainty proves it; off the team approve only when P(clean) ≥ θ_good
+    // or no later captain up to the forced fifth could send a cleaner team. Replaces goodKeyVote / goodTailVote / goodCleanVote in its scope;
+    // an approval never passes the good vote gates.
+    const bayesVote = bayesVoteCriteria(this.baseline.tuning, obs);
+    if (bayesVote) {
+      const vote = bayesVote.vote && goodVoteGate(obs, this.gates) === null;
+      return this.ruleDecision(obs, { type: 'team_vote', vote }, `good Bayesian vote criteria (${bayesVote.reason}${vote !== bayesVote.vote ? '; blocked by a vote gate' : ''})`);
+    }
     // Round 13 (blue) `goodKeyVote` (GoodCleanVote.ts): red has two wins — a loyal / Percival rejects any team the posterior
     // gives less than the (higher) key-round threshold of being clean, on or off the team.
     if (goodKeyVoteReject(this.baseline.tuning, obs)) {
@@ -920,6 +930,12 @@ export class ForwardAgent implements AvalonAgent {
       // `goodLeadConsistent` (knob): not a team it inner-blacked this round either.
       const fixed = goodNoInnerBlackRepeat(this.baseline.tuning, obs, goodLeadConsistentTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
       if (fixed !== d.action) return { ...d, action: fixed, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → own vote would reject it: cleanest team` } };
+    }
+    // Round 33 `loyalR1Spread` (BlueRound33.ts; Edward 2026-11-09): an R1 talk proposal of a loyal leader does not keep piling on the players
+    // the earlier proposals of the round already hold — the least-stacked teams first, then the cleanest.
+    if (d.action.type === 'team_select') {
+      const spread = r1SpreadTeam(this.baseline.tuning, obs, d.action, gateOk);
+      if (spread !== d.action) return { ...d, action: spread, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → R1: do not stack on the players already proposed` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.

@@ -48,9 +48,10 @@ describe('round 26 tuning fields', () => {
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.goodVoteAlt).toBe(0);
       expect(t.goodVoteAltLast).toBe(false);
-      expect(t.merlinReuseExact).toBe(false);
       expect(t.beliefPolicyVotes).toBe(false);
     }
+    expect(LEGACY_AGENT_TUNING.merlinReuseExact).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.merlinReuseExact).toBe(true); // 第 33 回合改預設開（Edward 2026-11-09 裁定 1：本來就可以照派成功隊）
     expect(LEGACY_AGENT_TUNING.beliefStrongTables).toBe(false);
     expect(DEFAULT_AGENT_TUNING.beliefStrongTables).toBe(true); // 第 32 回合改預設開（Edward 2026-11-05）
     expect(LEGACY_AGENT_TUNING.beliefUnified).toBe(false);
@@ -194,8 +195,8 @@ describe('merlinReuseExact (round 26, Merlin)', () => {
     proposedTeam: [], lakeHistory: [], myLakeResults: [],
   } as unknown as PlayerObservation;
   const pipeline: AgentAction = { type: 'team_select', teamIds: ['P1', 'P2', 'P3', 'P5'] };
-  it('Merlin re-proposes a successful team clean in his sight (plus himself) only with the knob', () => {
-    expect(goodReuseExactTeam(DEFAULT_AGENT_TUNING, m, pipeline)).toBe(pipeline);
+  it('Merlin re-proposes a successful team clean in his sight (plus himself) only with the knob (on by default since round 33)', () => {
+    expect(goodReuseExactTeam({ ...DEFAULT_AGENT_TUNING, merlinReuseExact: false }, m, pipeline)).toBe(pipeline);
     const a = goodReuseExactTeam({ ...DEFAULT_AGENT_TUNING, merlinReuseExact: true }, m, pipeline);
     expect(a.type === 'team_select' && [...a.teamIds].sort()).toEqual(['P1', 'P2', 'P3', 'P4']);
   });
