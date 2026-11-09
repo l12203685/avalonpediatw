@@ -861,7 +861,7 @@ export class ForwardAgent implements AvalonAgent {
       const team = obs.proposedTeam ?? [];
       const gated = goodVoteGate(obs, this.gates) !== null
         || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null)
-        || (obs.myRole === 'merlin' && merlinVoteFatal(obs));
+        || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning));
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `${obs.myRole} tail white (as the public loyal view; D3 stage 2)`);
     }
     // Round 33 (loyal / Percival) `goodBayesVote` (BlueRound33.ts; Edward 2026-11-09 ruling 2): the strict Bayesian 內黑／外白 criteria —
@@ -903,7 +903,7 @@ export class ForwardAgent implements AvalonAgent {
         const onTeam = team.includes(obs.myPlayerId);
         // 外白（不在隊上贊成）一個有看得到紅的隊 = 異常票外白：不做（INV-M1）；也不越過好人投票關卡（INV-V1）。
         const seenRed = team.some((id) => obs.knownEvils.includes(id));
-        const vote = asLoyal.action.vote && !merlinVoteFatal(obs)
+        const vote = asLoyal.action.vote && !merlinVoteFatal(obs, this.baseline.tuning)
           && (onTeam || (!seenRed && goodVoteGate(obs, this.gates) === null));
         return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; gated team blocked' : ''})`);
       }

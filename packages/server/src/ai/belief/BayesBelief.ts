@@ -349,6 +349,8 @@ export interface BayesOptions {
   recursiveLevel0?: BayesOptions;
   /** Round 33 `beliefLeadRecursive`: the recursive mode while the viewer picks a team (`gamePhase` team_select) only. */
   leadRecursive?: number;
+  /** Round 34 `beliefRecursiveNoLead`: with `recursive`, a team pick (`gamePhase` team_select) still reads with the level-0 posterior. */
+  recursiveNoLead?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -385,7 +387,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const temperV = vT !== undefined && vT > 0 ? Math.min(vT, 1) : 1;
   const temperP = pT !== undefined && pT > 0 ? Math.min(pT, 1) : 1;
   const policy = opts.policyVotes === true;
-  const rec = opts.recursive ?? ((opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' ? opts.leadRecursive! : 0);
+  const picking = obs.gamePhase === 'team_select';
+  const rec = opts.recursive !== undefined ? (opts.recursiveNoLead === true && picking ? 0 : opts.recursive)
+    : ((opts.leadRecursive ?? 0) > 0 && picking ? opts.leadRecursive! : 0);
   const recVotes = rec === 1 || rec === 2;
   const recProps = rec === 1 || rec === 3;
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
@@ -598,7 +602,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.beliefLeadStrong === true ? { leadStrongTables: true } : {}),
     ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
     policyVotes: t.beliefPolicyVotes === true,
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
       ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }) } : {}),
     ...temperOf(t.beliefTemper ?? 0),

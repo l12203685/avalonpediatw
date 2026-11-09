@@ -1034,6 +1034,15 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
+   * 第 34 回合（基本一致性修正）：梅林「這一票會不會當場輸」（`merlinVoteFatal`）在第 4 局（7 人以上要兩張失敗）只算隊上有兩個以上他看得到的紅——
+   * 紅方已兩紅時，第 4 局隊上只有一個紅出不了兩張失敗，原本的判斷把它當成致命、梅林在隊上也內黑（和忠臣分開）。
+   */
+  merlinFatalR4: boolean;
+  /**
+   * 第 34 回合：`beliefRecursive` 開著時，自己挑隊（`gamePhase` team_select）仍然用第 0 層（現行）後驗——遞迴讀人只用在投票與其他讀人。
+   */
+  beliefRecursiveNoLead: boolean;
+  /**
    * 第 33 回合：只在自己挑隊時（`gamePhase` team_select）用遞迴讀人的後驗（同 `beliefRecursive` 的模式 1–3；投票照現行後驗）。0 = 關。
    */
   beliefLeadRecursive: number;
@@ -1041,7 +1050,7 @@ export interface AgentTuning {
    * 第 33 回合（Edward 2026-11-09「強者的忠臣幾乎會刻意避開讓一個人疊太多票」）：第 1 局非強制提議（第 1–4 次），
    * 忠臣隊長（梅林照忠臣派時也一樣）不再一直跟著派前面提議過的人：1 = 隊上（自己以外）最多一個這一局前面提議過的人；
    * 2 = 隊員在這一局前面提議裡出現的次數加總最少；之後照後驗最乾淨挑；3 = 照資訊價值挑（Edward 11/09 更正「適時疊票 也要適時做票源分散」：
-   * 這支隊被投票之後，公開視角的不確定性預期減少最多的隊，不算強制局隊長自己那一位；`BlueRound33.r1InfoValue`）（`BlueRound33.r1SpreadTeam`）。0 = 關。
+   * 這支隊被投票之後，公開視角的不確定性預期減少最多的隊，不算強制局隊長自己那一位；`BlueRound33.r1InfoValue`）；4 = 同 3，票的機率改用 INFL 讀票模型（第 34 回合，`BlueRound34.r1InfoValueInfl`）（`BlueRound33.r1SpreadTeam`）。0 = 關。
    */
   loyalR1Spread: number;
   /**
@@ -1245,6 +1254,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodReuseNoMatchPoint',
   'merlinR2Public',
   'goodLakeEntropy',
+  'merlinFatalR4',
+  'beliefRecursiveNoLead',
   'beliefLeadRecursive',
   'loyalR1Spread',
   'goodBayesGoodKey',
@@ -1405,6 +1416,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: false,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  merlinFatalR4: false,
+  beliefRecursiveNoLead: false,
   beliefLeadRecursive: 0,
   loyalR1Spread: 0,
   goodBayesGoodKey: 0,
@@ -1713,6 +1726,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  merlinFatalR4: false,
+  beliefRecursiveNoLead: false,
   beliefLeadRecursive: 0,
   loyalR1Spread: 0,
   goodBayesGoodKey: 0.9,
@@ -1873,6 +1888,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodReuseNoMatchPoint: 'AVALON_TUNING_GOOD_REUSE_NO_MATCH_POINT',
   merlinR2Public: 'AVALON_TUNING_MERLIN_R2_PUBLIC',
   goodLakeEntropy: 'AVALON_TUNING_GOOD_LAKE_ENTROPY',
+  merlinFatalR4: 'AVALON_TUNING_MERLIN_FATAL_R4',
+  beliefRecursiveNoLead: 'AVALON_TUNING_BELIEF_RECURSIVE_NO_LEAD',
   beliefLeadRecursive: 'AVALON_TUNING_BELIEF_LEAD_RECURSIVE',
   loyalR1Spread: 'AVALON_TUNING_LOYAL_R1_SPREAD',
   goodBayesGoodKey: 'AVALON_TUNING_GOOD_BAYES_GOOD_KEY',
@@ -2104,7 +2121,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'loyalR1Spread') {
     const value = raw === undefined ? 3 : Number.parseFloat(raw);
-    if (!Number.isFinite(value) || value < 0 || value > 3) throw new Error(`loyalR1Spread needs a number in [0, 3], got "${raw}"`);
+    if (!Number.isFinite(value) || value < 0 || value > 4) throw new Error(`loyalR1Spread needs a number in [0, 4], got "${raw}"`);
     return { loyalR1Spread: value };
   }
   if (name === 'beliefLeadRecursive') {

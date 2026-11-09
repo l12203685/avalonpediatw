@@ -220,6 +220,11 @@ interface ModelFile {
 
 let voteModel: PolicyModel | null = null;
 let propModel: ProposalModel | null = null;
+/** 遞迴讀人的模型（第 34 回合：第 1 局提議的資訊價值也用它的讀票模型）。 */
+export function recursiveModels(): { vote: PolicyModel; proposal: ProposalModel } {
+  return models();
+}
+
 function models(): { vote: PolicyModel; proposal: ProposalModel } {
   if (voteModel && propModel) return { vote: voteModel, proposal: propModel };
   const m = MODEL as unknown as ModelFile;

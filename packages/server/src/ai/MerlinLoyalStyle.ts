@@ -364,11 +364,17 @@ export function merlinNormalVoteNow(tuning: Readonly<AgentTuning>, obs: PlayerOb
   return (h % 10000) / 10000 < q;
 }
 
-/** Whether approving `obs.proposedTeam` could lose the game on the spot for Merlin's camp (the seen reds alone). */
-export function merlinVoteFatal(obs: PlayerObservation): boolean {
+/**
+ * Whether approving `obs.proposedTeam` could lose the game on the spot for Merlin's camp (the seen reds alone).
+ * Round 34 `merlinFatalR4` (basic consistency): on R4 at 7+ players (two fail cards) only two or more seen reds can fail the mission — with red
+ * on two fails, one seen red there is not fatal (before, Merlin inner-blacked such a team while every loyal approved it).
+ */
+export function merlinVoteFatal(obs: PlayerObservation, tuning?: Readonly<Partial<AgentTuning>>): boolean {
   const seen = new Set(obs.knownEvils);
   const reds = (obs.proposedTeam ?? []).filter((id) => seen.has(id)).length;
   if (reds === 0) return false;
   const fails = obs.questResults.filter((r) => r === 'fail').length;
-  return fails >= 2 || ((obs.currentRound ?? 1) === 4 && obs.playerCount >= 7 && reds >= 2);
+  const twoFail = (obs.currentRound ?? 1) === 4 && obs.playerCount >= 7;
+  if (tuning?.merlinFatalR4 === true && twoFail) return reds >= 2;
+  return fails >= 2 || (twoFail && reds >= 2);
 }

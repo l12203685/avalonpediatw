@@ -20,6 +20,7 @@ import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow, baye
 import { buildCertainty } from './belief/Certainty';
 import { bestCleanWith, leaderAhead } from './GoodVoteAlt';
 import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
+import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
@@ -198,8 +199,13 @@ export function r1InfoCtx(tuning: Readonly<AgentTuning>, obs: PlayerObservation)
   return { worlds: bw.worlds, wts: bw.wts, bit: bw.bitOf, ids: obs.allPlayerIds, me: obs.myPlayerId, tailBit: tail && tail !== obs.myPlayerId ? bw.bitOf(tail) : 0, cells };
 }
 
-/** 第 1 局提議的排序分數（越小越先）：1、2 = 疊人分數（`r1StackScore`），3 = −資訊價值。 */
+/** 第 1 局提議的排序分數（越小越先）：1、2 = 疊人分數（`r1StackScore`），3 = −資訊價值（讀票格子），4 = −資訊價值（INFL 讀票模型，第 34 回合）。 */
 export function r1Scorer(tuning: Readonly<AgentTuning>, obs: PlayerObservation, mode: number): (team: readonly string[]) => number {
+  if (mode >= 4) {
+    // 第 34 回合：用 INFL 讀票模型算資訊價值（`BlueRound34.r1InfoValueInfl`）。
+    const ctx = r1InflCtx(tuning, obs);
+    return (team) => -r1InfoValueInfl(team, ctx);
+  }
   if (mode >= 3) {
     const ctx = r1InfoCtx(tuning, obs);
     return (team) => -r1InfoValue(obs, team, ctx);

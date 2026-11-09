@@ -1,0 +1,88 @@
+/**
+ * 優化迴圈第 34 回合・藍方：遞迴讀人＋重定的策略（`beliefRecursiveNoLead`）、第 1 局提議的資訊價值改用 INFL 讀票模型（`loyalR1Spread=4`）。
+ */
+import { describe, expect, it } from 'vitest';
+import type { PlayerObservation } from './types';
+import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag } from './AgentTuning';
+import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
+import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
+import { r1SpreadTeam } from './BlueRound33';
+import { merlinVoteFatal } from './MerlinLoyalStyle';
+
+const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
+const asObs = (o: object) => o as unknown as PlayerObservation;
+const vote = (round: number, attempt: number, leader: string, team: string[], yes: string[]) => ({
+  round, attempt, leader, team, approved: yes.length > 5, votes: Object.fromEntries(IDS.map((id) => [id, yes.includes(id)])),
+});
+// R1 attempt 3: earlier proposals P1 P2 P3 and P2 P3 P4 (both rejected); leader P3, tail (5 家) P5.
+const r1 = asObs({
+  myPlayerId: 'P3', myRole: 'loyal', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: [],
+  currentRound: 1, currentLeader: 'P3', failCount: 2, questResults: [], gamePhase: 'team_select', evilCount: 4,
+  questHistory: [], lakeHistory: [], myLakeResults: [], proposedTeam: [],
+  voteHistory: [vote(1, 1, 'P1', ['P1', 'P2', 'P3'], ['P1', 'P2', 'P3', 'P7']), vote(1, 2, 'P2', ['P2', 'P3', 'P4'], ['P2', 'P3', 'P4'])],
+});
+
+describe('round 34 tuning fields', () => {
+  it('off in the legacy table and the default; flags parse', () => {
+    expect(LEGACY_AGENT_TUNING.beliefRecursiveNoLead).toBe(false);
+    expect(parseTuningFlag('beliefRecursiveNoLead')).toEqual({ beliefRecursiveNoLead: true });
+    expect(parseTuningFlag('loyalR1Spread=4')).toEqual({ loyalR1Spread: 4 });
+    expect(() => parseTuningFlag('loyalR1Spread=5')).toThrow();
+    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRecursive: 1, beliefRecursiveNoLead: true }).recursiveNoLead).toBe(true);
+    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRecursiveNoLead: true }).recursiveNoLead).toBeUndefined();
+  });
+});
+
+describe('beliefRecursiveNoLead (round 34)', () => {
+  it('a team pick reads the level-0 posterior; a vote reads the recursive one', () => {
+    const lvl0 = bayesOptionsOf(DEFAULT_AGENT_TUNING);
+    const rec = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRecursive: 1, beliefRecursiveNoLead: true });
+    const pick = () => asObs({ ...(r1 as object) });
+    const a = bayesRedShare(pick(), lvl0);
+    const b = bayesRedShare(pick(), rec);
+    for (const id of IDS) expect(b.get(id)).toBeCloseTo(a.get(id)!, 12);
+    const v = () => asObs({ ...(r1 as object), gamePhase: 'team_vote', proposedTeam: ['P3', 'P6', 'P8'] });
+    const c = bayesRedShare(v(), rec);
+    const d = bayesRedShare(v(), bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRecursive: 1 }));
+    for (const id of IDS) expect(c.get(id)).toBeCloseTo(d.get(id)!, 12);
+  });
+});
+
+describe('loyalR1Spread=4 (round 34: R1 information value with the INFL vote model)', () => {
+  it('is a non-negative information value; the tail seat (5 家) is not counted', () => {
+    const ctx = r1InflCtx(DEFAULT_AGENT_TUNING, r1);
+    expect(ctx.tailBit).toBe(1 << 4);
+    expect(ctx.record.attempt).toBe(3);
+    for (const t of [['P3', 'P1', 'P2'], ['P3', 'P8', 'P9'], ['P3', 'P5', 'P9']]) {
+      const v = r1InfoValueInfl(t, ctx);
+      expect(Number.isFinite(v)).toBe(true);
+      expect(v).toBeGreaterThanOrEqual(0);
+    }
+  });
+  it('the loyal leader picks the highest-value team (with the leader on it)', () => {
+    const draft = { type: 'team_select' as const, teamIds: ['P3', 'P2', 'P4'] };
+    const a = r1SpreadTeam({ ...DEFAULT_AGENT_TUNING, loyalR1Spread: 4 }, r1, draft);
+    if (a.type !== 'team_select') throw new Error(a.type);
+    expect(a.teamIds).toContain('P3');
+    const ctx = r1InflCtx(DEFAULT_AGENT_TUNING, r1);
+    const best = r1InfoValueInfl(a.teamIds, ctx);
+    expect(best).toBeGreaterThanOrEqual(r1InfoValueInfl(['P3', 'P2', 'P4'], ctx) - 1e-9);
+  });
+});
+
+describe('merlinFatalR4 (round 34, basic consistency)', () => {
+  // R4 after fail, fail, success: red has two fails. Merlin P1 sees P3 P7 P9; the R4 team (two fail cards needed) holds one seen red.
+  const m = (team: string[]) => asObs({
+    myPlayerId: 'P1', myRole: 'merlin', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P3', 'P7', 'P9'],
+    currentRound: 4, currentLeader: 'P4', failCount: 0, questResults: ['fail', 'fail', 'success'], gamePhase: 'team_vote',
+    questHistory: [], voteHistory: [], proposedTeam: team, lakeHistory: [],
+  });
+  it('one seen red on a two-fail R4 team is not fatal with the fix; two are; the old reading calls one fatal', () => {
+    expect(merlinVoteFatal(m(['P1', 'P2', 'P3', 'P4', 'P5']))).toBe(true);
+    expect(merlinVoteFatal(m(['P1', 'P2', 'P3', 'P4', 'P5']), { merlinFatalR4: true })).toBe(false);
+    expect(merlinVoteFatal(m(['P1', 'P2', 'P3', 'P7', 'P5']), { merlinFatalR4: true })).toBe(true);
+    // R5 (one fail card) with red on two fails: one seen red stays fatal
+    expect(merlinVoteFatal(asObs({ ...(m(['P1', 'P2', 'P3']) as object), currentRound: 5, questResults: ['fail', 'fail', 'success', 'success'] }), { merlinFatalR4: true })).toBe(true);
+    expect(LEGACY_AGENT_TUNING.merlinFatalR4).toBe(false);
+  });
+});
