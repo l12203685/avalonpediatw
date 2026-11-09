@@ -52,7 +52,7 @@ describe('round 26 tuning fields', () => {
       expect(t.beliefPolicyVotes).toBe(false);
     }
     expect(LEGACY_AGENT_TUNING.beliefStrongTables).toBe(false);
-    expect(DEFAULT_AGENT_TUNING.beliefStrongTables).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.beliefStrongTables).toBe(true); // 第 32 回合改預設開（Edward 2026-11-05）
     expect(LEGACY_AGENT_TUNING.beliefUnified).toBe(false);
     expect(LEGACY_AGENT_TUNING.beliefTemper).toBe(0);
     // Round 26 adoption (stage 2, pooled 18000 seeds +4.09pp): the calibrated, unified posterior with re-set thresholds.
@@ -121,8 +121,10 @@ describe('loyalTailWhite (round 26, loyal; D3 stage 1)', () => {
     expect(loyalTailWhiteNow({ ...DEFAULT_AGENT_TUNING, loyalTailWhite: 0 }, r2)).toBe(false);
     expect(loyalTailWhiteNow(on, r2)).toBe(true);
     // The adopted default fires only on the fourth proposal (failCount 3).
-    expect(loyalTailWhiteNow(DEFAULT_AGENT_TUNING, r2)).toBe(false);
-    expect(loyalTailWhiteNow(DEFAULT_AGENT_TUNING, { ...r2, failCount: 3, currentLeader: 'P9' } as unknown as PlayerObservation)).toBe(true);
+    // (round 32: the case is built on the earlier tables; the strong tables read the R1 votes differently)
+    const old: AgentTuning = { ...DEFAULT_AGENT_TUNING, beliefStrongTables: false };
+    expect(loyalTailWhiteNow(old, r2)).toBe(false);
+    expect(loyalTailWhiteNow(old, { ...r2, failCount: 3, currentLeader: 'P9' } as unknown as PlayerObservation)).toBe(true);
     // Off the team: the same rule (an outer white).
     expect(loyalTailWhiteNow(on, { ...r2, proposedTeam: ['P6', 'P5', 'P7', 'P8'] } as unknown as PlayerObservation)).toBe(true);
   });

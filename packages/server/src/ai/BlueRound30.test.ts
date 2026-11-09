@@ -35,10 +35,10 @@ const reuse: AgentAction = { type: 'team_select', teamIds: ['P5', 'P2', 'P3', 'P
 const at = (lambda: number): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, loyalR2Reuse: lambda });
 
 describe('round 30 adoption: beliefLeadStrong (Edward 2026-11-05「強者真人表如果你覺得對優化有幫助就切換」)', () => {
-  it('the team pick reads the strong tables by default; the full strong tables stay off', () => {
+  it('the team pick reads the strong tables by default (round 32: the full strong tables are the default too)', () => {
     expect(DEFAULT_AGENT_TUNING.beliefLeadStrong).toBe(true);
     expect(LEGACY_AGENT_TUNING.beliefLeadStrong).toBe(false);
-    expect(DEFAULT_AGENT_TUNING.beliefStrongTables).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.beliefStrongTables).toBe(true);
     expect(bayesOptionsOf(DEFAULT_AGENT_TUNING).leadStrongTables).toBe(true);
   });
 });
@@ -172,7 +172,7 @@ describe('goodLakeEntropy (round 30, blue lake holder; Edward 2026-11-05)', () =
     ],
     voteHistory: [], proposedTeam: [], lakeHistory: [], myLakeResults: [],
   });
-  const on: AgentTuning = { ...DEFAULT_AGENT_TUNING, goodLakeEntropy: 1 };
+  const on: AgentTuning = { ...DEFAULT_AGENT_TUNING, beliefStrongTables: false, goodLakeEntropy: 1 };
   const cands = ['P2', 'P3', 'P4', 'P5', 'P6', 'P9'];
   it('a truthful-or-mixed declaration never loses information on average (expected entropy drop ≥ 0); the pick is the argmax', () => {
     const gains = cands.map((c) => publicLakeGain(on, lake('P10'), c));

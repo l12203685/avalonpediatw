@@ -111,7 +111,7 @@ export function missionLikelihood(round: number, k: number, f: number): number {
 
 // evilCountFor / combinations / popcount 住在 ./worlds.ts（2026-10-14，模擬瓦共用）；
 // 世界列舉在 ./belief/Certainty.ts（第 1 階段確定性層）。行為不變。
-interface World {
+export interface World {
   /** Bit i set ⇔ allPlayerIds[i] is red. */
   mask: number;
   w: number;
@@ -136,7 +136,7 @@ interface World {
  * the same weights as before, so every pick is unchanged
  * (`GoodLakeInfo.identical.test.ts`, all lake-legal replays).
  */
-function buildWorlds(obs: PlayerObservation, usePrivate: boolean, useLakes: boolean): World[] {
+export function buildWorlds(obs: PlayerObservation, usePrivate: boolean, useLakes: boolean): World[] {
   const ids = obs.allPlayerIds;
   const idx = new Map(ids.map((id, i) => [id, i]));
   if (idx.get(obs.myPlayerId) === undefined || ids.length > 30) return [];
