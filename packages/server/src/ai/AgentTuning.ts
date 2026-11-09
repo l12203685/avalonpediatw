@@ -1034,7 +1034,7 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
-   * 第 35 回合：`beliefRecursive` 開著時，自己挑隊用遞迴後驗的範圍——只在量尺不掉的局面用新後驗挑隊。
+   * 第 35 回合：`beliefRecursive`（或只在挑隊時的 `beliefLeadRecursive`）開著時，自己挑隊用遞迴後驗的範圍——只在量尺不掉的局面用新後驗挑隊。
    * 0 = 每一次挑隊都用（同 `beliefRecursive`）；1 = 都不用（同 `beliefRecursiveNoLead`）；2 = 只有第 1 局失敗之後的第 2 局；3 = 第 1、2 局；4 = 第 2 局；5 = 第 3 局起。
    */
   beliefRecursiveLeadScope: number;

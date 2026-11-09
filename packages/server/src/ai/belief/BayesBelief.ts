@@ -394,7 +394,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const picking = obs.gamePhase === 'team_select';
   const leadOff = picking && (opts.recursiveNoLead === true || !recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0));
   const rec = opts.recursive !== undefined ? (leadOff ? 0 : opts.recursive)
-    : ((opts.leadRecursive ?? 0) > 0 && picking ? opts.leadRecursive! : 0);
+    : ((opts.leadRecursive ?? 0) > 0 && picking && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0) ? opts.leadRecursive! : 0);
   const recVotes = rec === 1 || rec === 2 || rec >= 4;
   const recProps = rec === 1 || rec === 3;
   // Round 34 `beliefRecursive=4`: the role mixture reads votes and proposals together (and its own Merlin / Percival roles).
@@ -622,7 +622,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     policyVotes: t.beliefPolicyVotes === true,
     ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
   };
