@@ -1034,6 +1034,10 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
+   * 第 35 回合 `goodBayesVote` 的第 4 局兩紅格：第 4 局（要兩張失敗）在隊上的票照字面讀「至少兩紅」，P(≥ 2 紅) 用角色混合讀人（`beliefRecursive=5`）算——\n現行後驗在低區間低估（真人局預測 4.5% → 真的 9.7%），角色混合校準到 4.6 → 4.7%。只有這一格用新後驗。
+   */
+  goodBayesR4Mix: boolean;
+  /**
    * 第 35 回合：`beliefRecursive`（或只在挑隊時的 `beliefLeadRecursive`）開著時，自己挑隊用遞迴後驗的範圍——只在量尺不掉的局面用新後驗挑隊。
    * 0 = 每一次挑隊都用（同 `beliefRecursive`）；1 = 都不用（同 `beliefRecursiveNoLead`）；2 = 只有第 1 局失敗之後的第 2 局；3 = 第 1、2 局；4 = 第 2 局；5 = 第 3 局起。
    */
@@ -1265,6 +1269,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodReuseNoMatchPoint',
   'merlinR2Public',
   'goodLakeEntropy',
+  'goodBayesR4Mix',
   'beliefRecursiveLeadScope',
   'loyalFlowPick',
   'merlinFatalR4',
@@ -1429,6 +1434,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: false,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
   loyalFlowPick: 0,
   merlinFatalR4: false,
@@ -1741,6 +1747,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
   loyalFlowPick: 2,
   merlinFatalR4: true,
@@ -1905,6 +1912,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodReuseNoMatchPoint: 'AVALON_TUNING_GOOD_REUSE_NO_MATCH_POINT',
   merlinR2Public: 'AVALON_TUNING_MERLIN_R2_PUBLIC',
   goodLakeEntropy: 'AVALON_TUNING_GOOD_LAKE_ENTROPY',
+  goodBayesR4Mix: 'AVALON_TUNING_GOOD_BAYES_R4_MIX',
   beliefRecursiveLeadScope: 'AVALON_TUNING_BELIEF_RECURSIVE_LEAD_SCOPE',
   loyalFlowPick: 'AVALON_TUNING_LOYAL_FLOW_PICK',
   merlinFatalR4: 'AVALON_TUNING_MERLIN_FATAL_R4',
