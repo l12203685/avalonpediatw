@@ -1734,7 +1734,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
-  loyalFlowPick: 0,
+  loyalFlowPick: 2,
   merlinFatalR4: true,
   beliefRecursiveNoLead: false,
   beliefLeadRecursive: 0,

@@ -130,8 +130,9 @@ describe('beliefRecursive=4 (round 34: the role-mixture reader, Edward 11/09「�
 
 describe('loyalFlowPick (round 34, wiki-24: 反對／尊重／認同 toward the earlier proposals)', () => {
   const draft = { type: 'team_select' as const, teamIds: ['P3', 'P2', 'P4'] };
-  it('off by default; mode 2 never re-proposes or fully reverses the round and keeps at most one of a blue-looking previous leader\'s team', () => {
-    expect(loyalFlowPickTeam(DEFAULT_AGENT_TUNING, r1, draft)).toBe(draft);
+  it('on by default (round 34 adoption: mode 2, R1 only); mode 2 never re-proposes or fully reverses the round and keeps at most one of a blue-looking previous leader\'s team', () => {
+    expect(DEFAULT_AGENT_TUNING.loyalFlowPick).toBe(2);
+    expect(loyalFlowPickTeam({ ...DEFAULT_AGENT_TUNING, loyalFlowPick: 0 }, r1, draft)).toBe(draft);
     const a = loyalFlowPickTeam({ ...DEFAULT_AGENT_TUNING, loyalFlowPick: 2 }, r1, draft);
     if (a.type !== 'team_select') throw new Error(a.type);
     expect(a.teamIds).toContain('P3');
