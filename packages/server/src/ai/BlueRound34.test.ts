@@ -87,6 +87,7 @@ describe('merlinFatalR4 (round 34, basic consistency)', () => {
     // R5 (one fail card) with red on two fails: one seen red stays fatal
     expect(merlinVoteFatal(asObs({ ...(m(['P1', 'P2', 'P3']) as object), currentRound: 5, questResults: ['fail', 'fail', 'success', 'success'] }), { merlinFatalR4: true })).toBe(true);
     expect(LEGACY_AGENT_TUNING.merlinFatalR4).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.merlinFatalR4).toBe(true); // round 34: basic consistency fix, on by default
   });
 });
 
