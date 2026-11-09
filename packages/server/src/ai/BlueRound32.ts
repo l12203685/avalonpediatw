@@ -8,6 +8,10 @@
  * 本檔的開關（預設關，走勝率協定；每個候選都報強者同一個 INFL 點的逐點一致）：
  *   - `goodLakeChain`（藍方持湖）：見 `lakeChainValues`。
  *   - `goodOnTeamSuspect`（忠臣／派西在隊上的票）：見 `onTeamSuspectKeeps`。
+ *
+ * 第 32 回合結果（`docs/ai/optimization_loop.md` 第 32 回合）：四個都**沒有採用**（預設關）。`goodOnTeamSuspect=0.8` 讓強者點逐點一致大幅上升
+ * （在隊上非關鍵 53 → 85%），但自我對打 −0.70（只非關鍵）／−3.15（連關鍵局）——逐點一致和自我對打方向相反，交給 Edward；
+ * `goodLakeChain` 三個版本自我對打都中性，和強者同一點的湖目標一致都不比現行 `goodLakeInfoMax` 高。本回合採用的是 `beliefStrongTables`（Edward 11/05 決定）。
  */
 import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
