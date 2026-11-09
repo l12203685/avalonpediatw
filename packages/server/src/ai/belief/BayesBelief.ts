@@ -392,10 +392,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const picking = obs.gamePhase === 'team_select';
   const rec = opts.recursive !== undefined ? (opts.recursiveNoLead === true && picking ? 0 : opts.recursive)
     : ((opts.leadRecursive ?? 0) > 0 && picking ? opts.leadRecursive! : 0);
-  const recVotes = rec === 1 || rec === 2 || rec === 4;
+  const recVotes = rec === 1 || rec === 2 || rec >= 4;
   const recProps = rec === 1 || rec === 3;
   // Round 34 `beliefRecursive=4`: the role mixture reads votes and proposals together (and its own Merlin / Percival roles).
-  const recMix = rec === 4;
+  const recMix = rec >= 4;
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
   const tempered = temperV < 1 || temperP < 1;
   const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;

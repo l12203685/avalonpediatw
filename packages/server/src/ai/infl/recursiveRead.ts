@@ -39,17 +39,29 @@ import MODEL from './recursive_strong.json';
  * 第 33 回合的三類（藍＝忠臣＋派西、紅、奧伯倫）＋第 34 回合的角色混合（Edward 11/09「每個角色的視角分開讀」）：忠臣、派西、梅林分開
  * （`loyal`、`percival`、`merlin`；紅方仍是 `evil`／`oberon`）。
  */
-export const PROPOSAL_CLASSES = ['blue', 'evil', 'oberon', 'loyal', 'percival', 'merlin'] as const;
+export const PROPOSAL_CLASSES = ['blue', 'evil', 'oberon', 'loyal', 'percival', 'merlin', 'loyalF', 'percivalF', 'merlinF', 'evilF', 'oberonF'] as const;
 export type ProposalClass = (typeof PROPOSAL_CLASSES)[number];
 /**
  * 前 3 個是公開（j 自己後驗）的特徵；allies1／allies2／canFail 是紅方隊長的私訊（w 裡的真相）；seen1／seen2 是梅林看得到的紅（莫德雷德以外、
  * 隊長自己以外）在隊上 1／≥ 2 個；thumb1／thumb2 是派西的拇指（梅林＋莫甘娜）在隊上 1／2 根。不屬於那個類別的欄係數是 0。
  */
-export const PROPOSAL_FEATURES = ['logClean', 'selfOn', 'reuse', 'allies1', 'allies2', 'canFail', 'seen1', 'seen2', 'thumb1', 'thumb2'] as const;
-/** 每個派隊類別用到的欄。 */
+export const PROPOSAL_FEATURES = [
+  'logClean', 'selfOn', 'reuse', 'allies1', 'allies2', 'canFail', 'seen1', 'seen2', 'thumb1', 'thumb2',
+  // 第 34 回合（Edward 11/09「後面的提議讓前面的提議有意義」；定義照百科〈解讀前人派票 - 延伸、修正、尊重…〉）：相對於同一局前面的提議
+  'extendPrev', 'correctPrev', 'oppositeAll', 'sameEarlier', 'tailIn', 'lakeIn',
+] as const;
+/** 每個派隊類別用到的欄（…F = 同一個角色再加資訊流的六欄，`beliefRecursive=5`）。 */
+const FLOW_COLS = [10, 11, 12, 13, 14, 15] as const;
+const N_FLOW = FLOW_COLS.length;
 export const PROPOSAL_COLS: Record<ProposalClass, readonly number[]> = {
   blue: [0, 1, 2], loyal: [0, 1, 2], oberon: [0, 1, 2], evil: [0, 1, 2, 3, 4, 5], merlin: [0, 1, 2, 6, 7], percival: [0, 1, 2, 8, 9],
+  loyalF: [0, 1, 2, ...FLOW_COLS], oberonF: [0, 1, 2, ...FLOW_COLS], evilF: [0, 1, 2, 3, 4, 5, ...FLOW_COLS],
+  merlinF: [0, 1, 2, 6, 7, ...FLOW_COLS], percivalF: [0, 1, 2, 8, 9, ...FLOW_COLS],
 };
+/** 角色混合的派隊類別（`flow` = 用資訊流特徵的那一組）。 */
+export function mixClass(base: 'loyal' | 'percival' | 'merlin' | 'evil' | 'oberon', flow: boolean): ProposalClass {
+  return (flow ? `${base}F` : base) as ProposalClass;
+}
 export const N_PROP = PROPOSAL_FEATURES.length;
 /** log P(乾淨) 的下限（一支隊在 j 的後驗裡不可能乾淨時，條件 logit 仍然有限）。 */
 const LOG_FLOOR = Math.log(1e-4);
@@ -63,11 +75,12 @@ export function proposalClassOf(role: Role): ProposalClass | null {
 }
 
 /** 第 34 回合的角色混合：每個角色各自的派隊類別。 */
-export function mixProposalClassOf(role: Role): ProposalClass | null {
+export function mixProposalClassOf(role: Role): 'loyal' | 'percival' | 'merlin' | 'evil' | 'oberon' | null {
   if (role === 'loyal') return 'loyal';
   if (role === 'percival') return 'percival';
   if (role === 'merlin') return 'merlin';
-  return proposalClassOf(role);
+  const c = proposalClassOf(role);
+  return c === 'evil' || c === 'oberon' ? c : null;
 }
 
 const teamCache = new Map<string, Int32Array>();
@@ -95,6 +108,13 @@ export interface ProposalCandidates {
   logClean: Float64Array;
   selfOn: Uint8Array;
   reuse: Uint8Array;
+  /**
+   * 第 34 回合的資訊流特徵（每支隊；百科〈解讀前人派票〉的定義）：相對於同一局上一個（別人的）提議 P，隊長以外——
+   * 延伸（認同 P 的隊伍資訊：P 裡隊長以外的人留下至少兩個）、修正（反對：P 裡隊長以外的人一個都不留）、其餘＝尊重（基準）；
+   * 和這一局前面所有提議完全相反（前面派過的人一個都不留，例：168 之後 279）；和這一局前面某個提議一模一樣（照派）；
+   * 強制局隊長（尾家）在隊上；現在的持湖者在隊上（旁因：給尾家更多資訊、先不派持湖者）。
+   */
+  flow: Float32Array[];
   leaderBit: number;
   failsRequired: number;
 }
@@ -129,7 +149,37 @@ export function proposalCandidates(ff: FlowFeatures, i: number, w: number): Prop
   }
   if (chosen < 0) return null;
   const req = AVALON_CONFIG[flow.playerCount]?.questFailsRequired?.[v.round - 1] ?? 1;
-  return { teams, chosen, logClean, selfOn, reuse, leaderBit, failsRequired: req };
+  // 資訊流：同一局前面的提議（Edward 11/09：後面的人把前面的提議延伸、修正或尊重；百科〈解讀前人派票〉）。
+  const earlier = flow.votes.slice(0, i).filter((p) => p.round === v.round);
+  const prevs = earlier.filter((p) => p.leader !== v.leader);
+  const prev = prevs[prevs.length - 1];
+  const prevMask = prev ? maskOf(flow, prev.team) & ~leaderBit : 0;
+  let seenMask = 0;
+  for (const p of earlier) seenMask |= maskOf(flow, p.team);
+  seenMask &= ~leaderBit;
+  const earlierMasks = new Set(earlier.map((p) => maskOf(flow, p.team)));
+  const firstLeader = flow.votes.find((p) => p.round === v.round)?.leader ?? v.leader;
+  const ids = flow.ids;
+  const tail = ids[(ids.indexOf(firstLeader) + 4) % ids.length];
+  const tailBit = tail !== v.leader ? bitOf(flow, tail) : 0;
+  // 現在的持湖者：最近一次湖的被湖者（湖交給他），第 2 局起。
+  const lakes = flow.lakes.filter((l) => l.round < v.round);
+  const lakeHolder = lakes.length > 0 ? lakes[lakes.length - 1].targetId : null;
+  const lakeBit = lakeHolder && lakeHolder !== v.leader ? bitOf(flow, lakeHolder) : 0;
+  const fl = Array.from({ length: N_FLOW }, () => new Float32Array(teams.length));
+  for (let t = 0; t < teams.length; t++) {
+    const m = teams[t] & ~leaderBit;
+    if (prev) {
+      const inP = popcount(m & prevMask);
+      fl[0][t] = inP >= 2 ? 1 : 0;
+      fl[1][t] = inP === 0 ? 1 : 0;
+    }
+    if (seenMask !== 0) fl[2][t] = (m & seenMask) === 0 ? 1 : 0;
+    fl[3][t] = earlierMasks.has(teams[t]) ? 1 : 0;
+    fl[4][t] = (teams[t] & tailBit) !== 0 ? 1 : 0;
+    fl[5][t] = (teams[t] & lakeBit) !== 0 ? 1 : 0;
+  }
+  return { teams, chosen, logClean, selfOn, reuse, flow: fl, leaderBit, failsRequired: req };
 }
 
 /**
@@ -141,15 +191,18 @@ export function proposalFeatures(c: ProposalCandidates, t: number, w: number, cl
   out[0] = c.logClean[t];
   out[1] = c.selfOn[t];
   out[2] = c.reuse[t];
-  if (cls === 'merlin') {
+  const flowCls = cls.endsWith('F');
+  if (flowCls) for (let k = 0; k < N_FLOW; k++) out[10 + k] = c.flow[k][t];
+  const base = flowCls ? cls.slice(0, -1) : cls;
+  if (base === 'merlin') {
     const seen = popcount(w & c.teams[t] & ~mordredBit & ~c.leaderBit);
     out[6] = seen === 1 ? 1 : 0;
     out[7] = seen >= 2 ? 1 : 0;
-  } else if (cls === 'percival') {
+  } else if (base === 'percival') {
     const th = popcount(thumbMask & c.teams[t] & ~c.leaderBit);
     out[8] = th === 1 ? 1 : 0;
     out[9] = th >= 2 ? 1 : 0;
-  } else if (cls === 'evil') {
+  } else if (base === 'evil') {
     const m = c.teams[t];
     const allies = popcount(w & m & ~c.leaderBit);
     out[3] = allies === 1 ? 1 : 0;
@@ -301,7 +354,8 @@ export class RoleMixtureReader {
   private scratch = new Float64Array(256);
   private readonly extra: Float64Array<ArrayBuffer> = new Float64Array(N_EXTRA);
 
-  constructor(readonly model: MixModel, readonly features: FlowFeatures) {}
+  /** `flowFeat`：派隊用資訊流特徵的那一組係數（`beliefRecursive=5`）。 */
+  constructor(readonly model: MixModel, readonly features: FlowFeatures, readonly flowFeat = false) {}
 
   private baseDots(i: number, j: string, w: number): Float64Array {
     const key = `${i}|${j}|${this.features.lakeKey(i, j, w)}`;
@@ -351,7 +405,8 @@ export class RoleMixtureReader {
       if (flow.votes[i].leader !== j) continue;
       const c = this.candidates(i, w);
       if (!c) continue;
-      const sub = cls === 'evil' ? w : cls === 'merlin' ? w * 1024 + mordredBit : cls === 'percival' ? thumbMask : this.features.lakeKey(i, j, w);
+      const base = cls.endsWith('F') ? cls.slice(0, -1) : cls;
+      const sub = base === 'evil' ? w : base === 'merlin' ? w * 1024 + mordredBit : base === 'percival' ? thumbMask : this.features.lakeKey(i, j, w);
       const key = `${i}|${cls}|${sub}`;
       let v = this.propCache.get(key);
       if (v === undefined) {
@@ -374,7 +429,7 @@ export class RoleMixtureReader {
       if (id === viewer.id) continue;
       if ((w & bitOf(flow, id)) !== 0) reds.push(id); else blues.push(id);
     }
-    const prop = (j: string, cls: ProposalClass, d = 0, th = 0): number => (skip(j) ? 0 : this.propLog(j, upTo, w, cls, d, th));
+    const prop = (j: string, cls: ProposalClass, d = 0, th = 0): number => (skip(j) ? 0 : this.propLog(j, upTo, w, this.flowFeat ? (`${cls}F` as ProposalClass) : cls, d, th));
     const seat = (j: string, vc: MixVoteClass, pc: ProposalClass, d = 0, th = 0): number => this.voteLog(j, upTo, w, vc, d, th) + prop(j, pc, d, th);
     const lLoyal = new Map(blues.map((b) => [b, seat(b, 'loyal', 'loyal')] as const));
     let base = 0;
@@ -488,7 +543,7 @@ export function mixModels(): MixModel {
   if (mixModel) return mixModel;
   const m = MODEL as unknown as ModelFile;
   const { proposal } = models();
-  if (!m.vote.beta.loyal || !m.vote.beta.percival || !m.proposal.beta.merlin) {
+  if (!m.vote.beta.loyal || !m.vote.beta.percival || !m.proposal.beta.merlin || !m.proposal.beta.merlinF) {
     throw new Error('recursive_strong.json: no role-mixture classes (refit with scripts/fitRecursiveReader.ts)');
   }
   const vote = {} as Record<MixVoteClass, Float64Array>;
@@ -500,6 +555,7 @@ export function mixModels(): MixModel {
 /** 派隊讀法的快取跟著資訊流特徵走（同一局的每個觀察者共用）。 */
 const propReaders = new WeakMap<FlowFeatures, RecursiveProposalReader>();
 const mixReaders = new WeakMap<FlowFeatures, RoleMixtureReader>();
+const mixFlowReaders = new WeakMap<FlowFeatures, RoleMixtureReader>();
 
 interface Entry { key: string; sigs: string[]; ff: FlowFeatures; quests: number; lakes: number }
 const recent: Entry[] = [];
@@ -540,10 +596,11 @@ export function recursiveLogs(
 ): { votes: ((w: number) => number) | null; proposals: ((w: number) => number) | null } {
   if (obs.voteHistory.length === 0) return { votes: null, proposals: null };
   const ff = featuresOf(obs, level0);
-  if (mode === 4) {
-    // 第 34 回合：角色混合（票＋派隊一起讀，整段紀錄每個人一個角色）。
-    let reader = mixReaders.get(ff);
-    if (!reader) { reader = new RoleMixtureReader(mixModels(), ff); mixReaders.set(ff, reader); }
+  if (mode >= 4) {
+    // 第 34 回合：角色混合（票＋派隊一起讀，整段紀錄每個人一個角色）；5 = 派隊再加相對於資訊流的特徵。
+    const store = mode === 5 ? mixFlowReaders : mixReaders;
+    let reader = store.get(ff);
+    if (!reader) { reader = new RoleMixtureReader(mixModels(), ff, mode === 5); store.set(ff, reader); }
     const r = reader;
     const n4 = ff.flow.votes.length;
     const viewer: MixViewer = {

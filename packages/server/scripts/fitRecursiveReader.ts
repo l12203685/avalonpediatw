@@ -23,7 +23,7 @@ import POLICY0 from '../src/ai/infl/policy_strong.json';
 import { fitLogisticRegression } from '../src/ai/infl/logistic';
 import {
   N_PROP, PROPOSAL_CLASSES, PROPOSAL_COLS, PROPOSAL_FEATURES, mixProposalClassOf, mixVoteVector, proposalCandidates, proposalClassOf,
-  proposalFeatures, proposalLogProb, type ProposalCandidates, type ProposalClass,
+  proposalFeatures, proposalLogProb, mixClass, type ProposalCandidates, type ProposalClass,
 } from '../src/ai/infl/recursiveRead';
 import { bitOf } from '../src/ai/infl/flow';
 import { DEFAULT_AGENT_TUNING } from '../src/ai/AgentTuning';
@@ -130,6 +130,7 @@ function main(): void {
           const smp = { c, w: truth.w, game: gi, strong: strongTeam[ls], d: truth.mordredBit, th: thumbs };
           if (pc) props[pc].push(smp);
           if (mc && mc !== pc && (mc === 'loyal' || mc === 'percival' || mc === 'merlin')) props[mc].push(smp);
+          if (mc) props[mixClass(mc, true)].push(smp);
         }
       }
       if (!ff.reliable(i)) return;
@@ -252,6 +253,25 @@ function main(): void {
     let t0 = 0; let t1 = 0; let tn = 0;
     for (const [c, a] of Object.entries(acc)) { console.log(`  派隊（角色分開）強者 ${c} ${a[2]} 次：LL 藍＝看不到 ${(a[0] / a[2]).toFixed(4)} → 照角色 ${(a[1] / a[2]).toFixed(4)}`); t0 += a[0]; t1 += a[1]; tn += a[2]; }
     console.log(`  派隊（角色分開）強者藍方隊長合計 ${tn} 次：${(t0 / tn).toFixed(4)} → ${(t1 / tn).toFixed(4)}`);
+  }
+  // 第 34 回合：相對於資訊流的特徵（同一個角色，加不加那五欄）。
+  {
+    const acc: Record<string, [number, number, number]> = {};
+    const scratch = new Float64Array(256);
+    for (let f = 0; f < 5; f++) {
+      const train = (s: PropSample): boolean => fold[s.game] !== f;
+      const bAll = fitP(train);
+      const bStrong = fitP((s) => train(s) && s.strong, bAll, k);
+      for (const c of ['loyal', 'percival', 'merlin', 'evil', 'oberon'] as const) {
+        const cf = mixClass(c, true);
+        for (const s of props[cf]) {
+          if (fold[s.game] !== f || !s.strong) continue;
+          const a = (acc[c] ??= [0, 0, 0]);
+          a[0] += proposalLogProb(bStrong[c], s.c, s.w, c, scratch, s.d, s.th); a[1] += proposalLogProb(bStrong[cf], s.c, s.w, cf, scratch, s.d, s.th); a[2]++;
+        }
+      }
+    }
+    for (const [c, a] of Object.entries(acc)) console.log(`  派隊（資訊流特徵）強者 ${c} ${a[2]} 次：LL 角色 ${(a[0] / a[2]).toFixed(4)} → 角色＋資訊流 ${(a[1] / a[2]).toFixed(4)}`);
   }
   const bpAll = fitP(() => true);
   const bpStrong = fitP((s) => s.strong, bpAll, k);
