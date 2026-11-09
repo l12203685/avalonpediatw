@@ -30,6 +30,7 @@ import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type Belie
 import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
+import { pickGoodLakeTargetChain } from './BlueRound32';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 
 type Camp = 'good' | 'evil';
@@ -240,6 +241,10 @@ export function pickLakeTargetForTeam(
     // the record. Deterministic; no Math.random.
     // ── AgentTuning.goodLakeEntropy（第 30 回合；Edward 2026-11-05）── expected gain of the table's public information,
     // the holder's own trustworthiness included (BlueRound30.publicLakeGain).
+    // ── AgentTuning.goodLakeChain（第 32 回合；Edward 2026-11-05「好人湖中鏈」）── the table's public information over every
+    // remaining lake (the laked seat holds the next one; each holder's trustworthiness in every declaration; BlueRound32).
+    const chainPick = pickGoodLakeTargetChain(tuning, obs, unknownCandidates);
+    if (chainPick !== null) return chainPick;
     const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
     if (entropyPick !== null) return entropyPick;
     if (tuning.goodLakeInfoMax) {

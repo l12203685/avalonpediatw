@@ -197,8 +197,9 @@ describe('beliefRedAloneCells (round 24, blue belief)', () => {
   });
   it('on: an on-team reject clears the voter less (a lone red rejects far more often than the pooled cell says)', async () => {
     const { bayesRedShare } = await import('./belief/BayesBelief');
-    const off = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRedAloneCells: false });
-    const on = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRedAloneCells: true });
+    // 機器人表的格子（第 32 回合起預設讀強者表；這裡量的是機器人表的隊友格）。
+    const off = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefStrongTables: false, beliefRedAloneCells: false });
+    const on = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefStrongTables: false, beliefRedAloneCells: true });
     const redOff = bayesRedShare(obs(true), off).get('P7')!;
     const redOn = bayesRedShare(obs(true), on).get('P7')!;
     expect(redOn).toBeGreaterThan(redOff);
