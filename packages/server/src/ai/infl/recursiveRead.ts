@@ -442,7 +442,7 @@ export class RoleMixtureReader {
   }
 
   /** 世界 w 的整段紀錄（讀者自己的動作不讀；`skip(j)` 的人的派隊不讀）的 log 概似，角色在世界裡一起決定。 */
-  worldLog(viewer: MixViewer, upTo: number, w: number, skip: (leader: string) => boolean): number {
+  worldLog(viewer: MixViewer, upTo: number, w: number, skip: (leader: string) => boolean, rolesOut?: Float64Array): number {
     const flow = this.features.flow;
     const ids = flow.ids;
     const reds: number[] = [];
@@ -494,6 +494,8 @@ export class RoleMixtureReader {
       return v;
     };
     const terms: number[] = [];
+    // 第 35 回合：每個組合的角色（梅林、派西、奧伯倫的座位），給 `rolesOut`（每個座位 [梅林, 派西, 奧伯倫] 在這個世界裡的機率）。
+    const combo: number[] = [];
     // 紅方角色：莫德雷德 d，其他三人排到刺客／莫甘娜／奧伯倫（RED_ORDER 的 0／1／2 對應 lr 的 0／1／3）。
     const redIdx = [0, 1, 3];
     for (let di = 0; di < 4; di++) {
@@ -502,21 +504,34 @@ export class RoleMixtureReader {
       for (const perm of PERMS3) {
         let lred = lr[di][2];
         let gi = -1;
-        rest.forEach((ri, k) => { const role = perm[k]; lred += lr[ri][redIdx[role]]; if (role === 1) gi = ri; });
+        let oi = -1;
+        rest.forEach((ri, k) => { const role = perm[k]; lred += lr[ri][redIdx[role]]; if (role === 1) gi = ri; if (role === 2) oi = ri; });
         if (percivalViewer && (viewer.thumbs & (1 << reds[gi])) === 0) continue;
         const ms: number[] = merlinViewer ? [nb] : percivalViewer ? blues.map((b, bi) => ((viewer.thumbs & (1 << b)) !== 0 ? bi : -1)).filter((x) => x >= 0) : blues.map((_, bi) => bi);
         for (const mi of ms) {
           const lm = mi === nb ? 0 : LM[mi][di];
-          if (percivalViewer) { terms.push(lred + lm); continue; }
+          if (percivalViewer) { terms.push(lred + lm); if (rolesOut) combo.push(mi, -1, oi); continue; }
           for (let pi = 0; pi < nb; pi++) {
             if (pi === mi) continue;
             terms.push(lred + lm + percTerm(pi, mi, gi));
+            if (rolesOut) combo.push(mi, pi, oi);
           }
         }
       }
     }
     if (terms.length === 0) return base;
-    return base + logSumExpArr(terms) - Math.log(terms.length);
+    const lse = logSumExpArr(terms);
+    if (rolesOut) {
+      rolesOut.fill(0);
+      terms.forEach((t, x) => {
+        const p = Math.exp(t - lse);
+        const mi = combo[3 * x]; const pi = combo[3 * x + 1]; const oi = combo[3 * x + 2];
+        if (mi >= 0 && mi < nb) rolesOut[blues[mi] * 3] += p;
+        if (pi >= 0) rolesOut[blues[pi] * 3 + 1] += p;
+        if (oi >= 0) rolesOut[reds[oi] * 3 + 2] += p;
+      });
+    }
+    return base + lse - Math.log(terms.length);
   }
 }
 
@@ -608,6 +623,42 @@ function featuresOf(obs: PlayerObservation, level0: Readonly<BayesOptions>): Flo
   recent.unshift({ key, sigs, ff, quests: flow.quests.length, lakes: flow.lakes.length });
   if (recent.length > MAX_ENTRIES) recent.length = MAX_ENTRIES;
   return ff;
+}
+
+/** 每個座位的角色後驗（第 35 回合）：梅林、派西、紅、奧伯倫的機率（讀者自己按自己的角色）。 */
+export interface RoleShare { merlin: number; percival: number; red: number; oberon: number }
+
+/**
+ * 第 35 回合：角色混合讀法下每個人的角色後驗——世界的後驗權重（`worlds`、`wts`，同一個讀法算出來的）× 世界裡的角色分配。
+ * 給忠臣照百科〈解讀前人派票〉分類前面的隊長（好／壞 × 有沒有視角）。
+ */
+export function recursiveRoleShares(
+  obs: PlayerObservation, level0: Readonly<BayesOptions>, mode: number, worlds: readonly number[], wts: readonly number[],
+  skipLeader: (leader: string) => boolean = () => false,
+): Map<string, RoleShare> {
+  const ff = featuresOf(obs, level0);
+  const store = mode === 5 ? mixFlowReaders : mixReaders;
+  let reader = store.get(ff);
+  if (!reader) { reader = new RoleMixtureReader(mixModels(), ff, mode === 5); store.set(ff, reader); }
+  const n = ff.flow.ids.length;
+  const viewer: MixViewer = {
+    id: obs.myPlayerId, role: obs.myRole,
+    seesReds: obs.myRole === 'merlin' ? maskOf(ff.flow, obs.knownEvils) : 0,
+    thumbs: obs.myRole === 'percival' ? maskOf(ff.flow, obs.knownWizards ?? []) : 0,
+  };
+  const acc = new Float64Array(n * 3);
+  const red = new Float64Array(n);
+  const roles = new Float64Array(n * 3);
+  worlds.forEach((w, x) => {
+    const p = wts[x];
+    if (!(p > 0)) return;
+    reader!.worldLog(viewer, ff.flow.votes.length, w, skipLeader, roles);
+    for (let k = 0; k < n * 3; k++) acc[k] += p * roles[k];
+    for (let k = 0; k < n; k++) if ((w & (1 << k)) !== 0) red[k] += p;
+  });
+  const out = new Map<string, RoleShare>();
+  ff.flow.ids.forEach((id, k) => out.set(id, { merlin: acc[3 * k], percival: acc[3 * k + 1], red: red[k], oberon: acc[3 * k + 2] }));
+  return out;
 }
 
 /**

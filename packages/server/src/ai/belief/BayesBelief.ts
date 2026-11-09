@@ -21,7 +21,7 @@ import STRONG_TABLE from './likelihoods_strong.json';
 // Round 26 `beliefPolicyVotes`: the INFL vote reader. A circular import (its vote features call this module's posterior inside methods only).
 import { policyVoteLog } from '../infl/policyRead';
 // Round 33 `beliefRecursive`: the level-1 recursive reader (its level-0 seat views call this module's posterior: `useMix` restores its state).
-import { recursiveLogs } from '../infl/recursiveRead';
+import { recursiveLogs, recursiveRoleShares, type RoleShare } from '../infl/recursiveRead';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -634,6 +634,19 @@ export function bayesWorlds(obs: PlayerObservation, opts: Readonly<BayesOptions>
     try { return redLakeProb(targetRed); } finally { useMix(...prev); }
   };
   return { worlds: post.worlds, wts: post.wts, bitOf: post.bitOf, redLakeEvil };
+}
+
+/**
+ * Round 35: every seat's role posterior under the role-mixture reader (`recursive` ≥ 4): P(Merlin), P(Percival), P(red), P(Oberon) — the
+ * posterior's world weights times the role assignments inside each world. null when the options do not use the role mixture.
+ */
+export function bayesRoleShares(obs: PlayerObservation, opts: Readonly<BayesOptions>): Map<string, RoleShare> | null {
+  const rec = opts.recursive ?? 0;
+  if (rec < 4) return null;
+  const post = posterior(obs, opts);
+  const percival = obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2;
+  const strict = opts.strictMerlin && percival ? obs.knownWizards ?? [] : [];
+  return recursiveRoleShares(obs, opts.recursiveLevel0 ?? {}, rec, post.worlds, post.wts, (leader) => strict.includes(leader));
 }
 
 /** Posterior P(red) of every seat (the viewer included: 0 or 1). Uniform over L1* when nothing else is known. */
