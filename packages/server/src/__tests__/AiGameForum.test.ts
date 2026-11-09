@@ -84,7 +84,7 @@ describe('論壇標籤「百科AI對局」', () => {
 });
 
 describe('貼一局', () => {
-  it('開討論串：標題、標籤、摘要、trace.json＋trace.txt；後續訊息依局分組、每則 2000 字內、最後附網站網址', async () => {
+  it('開討論串：標題、標籤、摘要、trace.json；後續訊息只有對局紀錄（不含百科AI 的理由）、每則 2000 字內、最後附網站網址', async () => {
     const dc = mockDiscord({ tags: [{ id: '7', name: '百科AI對局' }] });
     const logs: string[] = [];
     const r = await postAiGameTrace(trace(12), { token: 'secret-token', forumId: FORUM, fetchImpl: dc.fetchImpl, gapMs: 0, log: (m) => logs.push(m) });
@@ -96,19 +96,19 @@ describe('貼一局', () => {
     expect(payload.name).toBe('百科AI對局 20261105_2105 週四練習團／Room-1460');
     expect(payload.applied_tags).toEqual(['7']);
     expect(payload.message.allowed_mentions).toEqual({ parse: [] });
-    expect(payload.message.attachments).toEqual([{ id: 0, filename: 'trace.json' }, { id: 1, filename: 'trace.txt' }]);
+    expect(payload.message.attachments).toEqual([{ id: 0, filename: 'trace.json' }]);
     expect(payload.message.content).toMatch(/怎麼回饋/);
     expect(payload.message.content.length).toBeLessThanOrEqual(2000);
     const json = form.get('files[0]') as File;
-    const txt = form.get('files[1]') as File;
+    expect(form.get('files[1]')).toBeNull();
     expect(json.name).toBe('trace.json');
     expect(JSON.parse(await json.text()).decisions).toHaveLength(12);
-    expect(txt.name).toBe('trace.txt');
-    expect(await txt.text()).toContain('#12 3家 派西維爾 百科AI_21・投票：贊成');
 
     const msgs = dc.calls.filter((c) => c.url.endsWith(`/channels/${THREAD}/messages`)).map((c) => JSON.parse(String(c.body)));
     expect(msgs.length).toBe(r.followups);
-    expect(msgs.length).toBeGreaterThan(1); // 12 個長理由拆成好幾則
+    expect(msgs.length).toBeGreaterThanOrEqual(1);
+    // Edward 11/05「只需要貼紀錄就好 思考內容那些不用」：DC 不貼百科AI 的決定與理由
+    for (const m of msgs) expect(m.content).not.toMatch(/理由：|百科AI_21・/);
     for (const m of msgs) {
       expect(m.content.length).toBeLessThanOrEqual(2000);
       expect(m.allowed_mentions).toEqual({ parse: [] });
