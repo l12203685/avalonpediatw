@@ -1,13 +1,13 @@
 /**
  * 網站「百科AI 對局」頁的 API（Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」）。
  *
- *   GET  /api/ai-games              最近的百科AI對局（DC 論壇 #百科問題回報、標籤／標題「百科AI對局」的討論串）
+ *   GET  /api/ai-games              最近的百科AI對局（DC 論壇 #牌譜紀錄與覆盤、標題「百科AI對局」或「含百科機器人」的討論串）
  *   GET  /api/ai-games/:id          一局的 trace（那篇起始訊息附的 trace.json）
  *   POST /api/ai-games/:id/flag     「這步怪怪的」：{ decisionId, note, name? } → 貼成那篇討論串的回覆（不用登入）
  *
  * 資料都在 DC（scripts/signagePlayer.ts 每局結束後貼），伺服器用 DISCORD_BOT_TOKEN 讀、記憶體快取 5 分鐘（services/aiGameForum.ts）。
  * 沒設 token → 503 'AI games not configured'。網站上不顯示真人暱稱（只有座位與角色；DC 上照房間裡的暱稱）。
- * 回饋的頻率限制同網站問題回報（每個 IP 每分鐘 10 則），另有全站每小時上限。log 只寫狀態碼。
+ * 回饋的頻率限制每個 IP 每分鐘 10 則，另有全站每小時上限。log 只寫狀態碼。
  */
 import { Router, type IRouter, type Request, type Response } from 'express';
 import { createHttpRateLimit } from '../middleware/rateLimit';

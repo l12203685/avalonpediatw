@@ -493,7 +493,7 @@ function App(): JSX.Element {
           {gameState === 'resetPassword'    && <ResetPasswordPage />}
         </div>
       )}
-      {/* 問題回報（Edward 2026-11-02）：內容頁右下角，送出後貼到 DC 論壇 #百科問題回報 */}
+      {/* 問題回報（Edward 2026-11-02）：內容頁右下角，送出後貼到 LINE 群組＋DC #同步閒聊（2026-11-09 起） */}
       {siteTab && (isAuthenticated || currentPlayer || publicStatsPage) && <FeedbackButton />}
       <ToastContainer />
     </div>

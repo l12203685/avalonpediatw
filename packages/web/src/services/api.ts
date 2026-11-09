@@ -325,8 +325,8 @@ export async function submitFeedback(
 export interface IdClaimEntry { name: string; games?: number }
 
 /**
- * 網站「ID 認領」（不用登入）：POST /api/feedback/claim → 伺服器在 DC 論壇 #百科問題回報 開一篇（標籤 ID認領），
- * 管理者核准後才改資料。失敗丟出帶狀態碼的錯誤（400 格式不對、429 太頻繁、503 論壇暫時不能用）。
+ * 網站「ID 認領」（不用登入）：POST /api/feedback/claim → 伺服器貼到 LINE 群組＋DC #同步閒聊（「【ID認領】#編號 …」），
+ * 管理者在 DC 那則按 ✅ 核准後才改資料。失敗丟出帶狀態碼的錯誤（400 格式不對、429 太頻繁、503 DC 暫時連不上）。
  */
 export async function submitIdClaim(data: {
   main: IdClaimEntry;

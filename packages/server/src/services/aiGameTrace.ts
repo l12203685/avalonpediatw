@@ -8,8 +8,7 @@
  *
  * 誰用：
  *   - scripts/signagePlayer.ts（GitHub Actions）在局結束、角色公開之後組 trace，scripts/signageAiTrace.ts 組資料，
- *     services/aiGameForum.ts 貼到 DC 論壇 #百科問題回報（標籤「百科AI對局」）：起始訊息＝摘要＋回饋方式，附 trace.json／trace.txt，
- *     後面幾則＝依局分組的決定（每則 2000 字以內）。
+ *     services/aiGameForum.ts 貼到 DC 論壇 #牌譜紀錄與覆盤（2026-11-09 起；格式同記錄員的待檢視貼文），附 trace.json。
  *   - 伺服器 GET /api/ai-games…（routes/aiGames.ts）從 DC 讀 trace.json 給網站「百科AI 對局」頁。
  *
  * 這個檔只有純函式（不連網路、不 import src/ai），伺服器與腳本共用；網站另有結構相同的型別（packages/web/src/utils/aiGames.ts）。
@@ -428,7 +427,7 @@ export function parseAiGameTrace(raw: unknown): AiGameTrace | null {
 export const FLAG_NOTE_MAX = 500;
 export const FLAG_NAME_MAX = 32;
 
-// 控制字元、雙向文字控制、BOM（同 feedbackForum.ts）。
+// 控制字元、雙向文字控制、BOM（同 communityReports.ts）。
 // eslint-disable-next-line no-control-regex
 const UNSAFE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
 

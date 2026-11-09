@@ -1,5 +1,5 @@
 /**
- * 百科AI 對局 → DC 論壇 #百科問題回報 的貼文內容（mock fetch）：標籤（沒有就加）、起始訊息＋兩個附檔、依局分組的後續訊息、
+ * 百科AI 對局 → DC 論壇 #牌譜紀錄與覆盤 的貼文內容（mock fetch）：標籤（沒有就加）、起始訊息＋兩個附檔、依局分組的後續訊息、
  * 429 重送、沒有 token 不貼、失敗只記狀態碼。名字都是編的。
  */
 import { describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import {
 } from '../services/aiGameForum';
 import { AI_GAME_FORMAT, AI_GAME_VERSION, type AiGameTrace } from '../services/aiGameTrace';
 
-const FORUM = '1566833113248571514';
+const FORUM = '1132683080134578276'; // #牌譜紀錄與覆盤（舊的 #百科問題回報 已刪除）
 const THREAD = '1570000000000000001';
 
 function trace(decisions = 3): AiGameTrace {
@@ -134,5 +134,7 @@ describe('貼一局', () => {
     expect(resolveAiGameForumId({})).toBe('1132683080134578276');
     expect(resolveAiGameForumId({ AI_GAME_FORUM_CHANNEL_ID: '42' })).toBe('42');
     expect(resolveAiGameForumId({ AI_GAME_FORUM_CHANNEL_ID: 'off' })).toBe('');
+    // 已刪除的 #百科問題回報：環境變數還指著它也改用 #牌譜紀錄與覆盤。
+    expect(resolveAiGameForumId({ AI_GAME_FORUM_CHANNEL_ID: '1566833113248571514' })).toBe('1132683080134578276');
   });
 });

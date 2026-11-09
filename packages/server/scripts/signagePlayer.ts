@@ -32,7 +32,7 @@
  *
  * 百科AI 對局紀錄（Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&DC上 我們可以直接針對AI的動作作反饋」）：
  * 每個決定送出後記一筆（理由同網站練習模式的賽後回顧，scripts/signageAiTrace.ts）；局結束、角色公開後組成一份 trace
- * （同房多個百科AI 合成一份），用 DISCORD_BOT_TOKEN 貼到 DC 論壇 #百科問題回報（標籤「百科AI對局」，src/services/aiGameForum.ts），
+ * （同房多個百科AI 合成一份），用 DISCORD_BOT_TOKEN 貼到 DC 論壇 #牌譜紀錄與覆盤（src/services/aiGameForum.ts），
  * 網站「百科AI 對局」頁（#ai-games）從那裡讀。trace 含暱稱與角色，只貼 DC、不印到 log；log 只寫房號、狀態與數量。
  * 沒有 token 就不貼（不影響打牌）；貼失敗也只記狀態碼。--ai-trace off 關掉（私房測試預設關，--ai-trace on 才貼）；
  * 有 --private-log 時另存一份 ai-trace-*.json 在本機。
@@ -155,7 +155,7 @@ const EYES = '開眼階段';
 const ACT_MS = Math.max(0, Number(arg('act-ms', '0')) || 0);
 const actDelay = (): number => ACT_MS * (0.5 + Math.random());
 const POLL_MS = 150;
-const HELLO = '我是百科AI（阿瓦隆百科的測試機器人），人不夠時來補位；有意見請到 DC 百科問題回報';
+const HELLO = '我是百科AI（阿瓦隆百科的測試機器人），人不夠時來補位；有意見請在 LINE 或 DC 打 /回報';
 /** 開局前／每局打完後問一次（Edward 11/04）。ASK_SEC 秒內有人回「離開」就走，沒人回或回「留下」就留著。 */
 const ASK_SEC = Number(arg('ask-sec', '40'));
 const ASK_TEXT = `百科AI：需要我離開嗎？要我走請打「離開」，要我留下請打「留下」；${ASK_SEC} 秒內沒人說離開我就留下`;

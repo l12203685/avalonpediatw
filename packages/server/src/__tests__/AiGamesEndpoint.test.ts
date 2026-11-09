@@ -10,7 +10,7 @@ import { aiGamesRouter } from '../routes/aiGames';
 import { createAiGameService, setAiGameServiceForTests } from '../services/aiGameForum';
 import { AI_GAME_FORMAT, AI_GAME_VERSION, type AiGameTrace } from '../services/aiGameTrace';
 
-const FORUM = '1566833113248571514';
+const FORUM = '1132683080134578276'; // #牌譜紀錄與覆盤（舊的 #百科問題回報 已刪除）
 const GUILD = '1132682489840812113';
 const G1 = '1570000000000000001';
 const G2 = '1570000000000000002';

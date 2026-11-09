@@ -26,7 +26,7 @@ name: Signage player
 #   room 也可以是房間描述裡的一段文字（房間內看不到房號）；password 進私房用（log 遮掉）；bots 1–9 或「補滿」。
 #
 # 百科AI 對局紀錄（Edward 2026-11-05）：每局打完、角色公開後，把那一局（座位角色、提議投票、任務、湖、刺殺）和百科AI 每個決定的
-# 理由貼到 DC 論壇 #百科問題回報（一局一篇，標籤「百科AI對局」，附 trace.json／trace.txt），大家直接回覆那篇給回饋；
+# 理由貼到 DC 論壇 #牌譜紀錄與覆盤（一局一篇，格式同記錄員，附 trace.json），大家直接回覆那篇給回饋；
 # 網站「百科AI 對局」頁（#ai-games）也從那裡讀、可以按「這步怪怪的」。用 secret DISCORD_BOT_TOKEN（同記錄員）。
 #
 # 公開 repo：log 只有時間、房號、狀態與局數，不含玩家暱稱、角色或聊天內容（對局紀錄只貼 DC，不印到 log）。
@@ -154,7 +154,7 @@ jobs:
           GAMES: ${{ steps.cfg.outputs.games }}
           HOURS: ${{ steps.cfg.outputs.hours }}
           PASSWORD: ${{ inputs.password }}
-          # 百科AI 對局紀錄貼 DC 論壇 #百科問題回報（同 signage-recorder.yml 的機器人 token；沒設就只打不貼）
+          # 百科AI 對局紀錄貼 DC 論壇 #牌譜紀錄與覆盤（同 signage-recorder.yml 的機器人 token；沒設就只打不貼）
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
           if [ -n "$PASSWORD" ]; then echo "::add-mask::$PASSWORD"; fi
