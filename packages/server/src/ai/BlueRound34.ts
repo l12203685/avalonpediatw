@@ -108,7 +108,7 @@ export function r1InfoValueInfl(team: readonly string[], ctx: R1InflCtx): number
  *   - 一般不派和前面完全反向的組合（168 之後 279：如果 1、2 真的是兩好，會導致 1、2 雙雙被排除在任務外）；
  *   - 忠臣不照派（照派的幾乎都是能力者；忠臣派得一模一樣，外置位被派到的次數降低，能替梅林擋刀的人變少）。
  * 在這些條件下挑自己後驗最乾淨的隊；沒有隊符合時依序放寬（先拿掉分類回應，再拿掉兩條限制）。仍然過好人的邏輯閘門 `allowed`。
- * 模式 1 = 只有「不完全反向、不照派」；2 = 再加分類回應（兩者都只在第 1 局、以及第 1 局失敗之後的第 2 局）；3 = 2 用在每一局。不適用（不是忠臣、強制局、這一局前面沒有別人的提議）時回傳原本的動作。
+ * 模式 1 = 只有「不完全反向、不照派」；2 = 再加分類回應（兩者都只在第 1 局）；3 = 2 用在每一局。不適用（不是忠臣、強制局、這一局前面沒有別人的提議）時回傳原本的動作。
  */
 export function loyalFlowPickTeam(
   tuning: Readonly<AgentTuning>,
@@ -122,8 +122,9 @@ export function loyalFlowPickTeam(
   const round = obs.currentRound ?? 1;
   // 1、2 = 第 1、2 局（真人局：強者忠臣第 1、2 局的回應是修正 24%／尊重 50%／延伸 26%、照派 6%，機器人延伸 59%、照派 31%；第 3 局起兩邊已經一樣）；3 = 每一局。
   if (round >= 3 && mode < 3) return action;
-  // 第 1 局成功之後的第 2 局：照派成功的隊是常態（Edward：任務成功後照派是常態；量尺上機器人在第 2 局第 2–4 次提議延伸前面的提議得分最多），不在這裡回應。
-  if (round === 2 && (obs.questResults ?? [])[0] === 'success' && mode < 3) return action;
+  // 第 2 局：第 1 局成功之後照派成功的隊是常態；第 1 局失敗之後，前面的提議回應的是那個失敗的任務（量尺：在第 2 局第 2–4 次提議套用這條，
+  // 成功之後 −70、失敗之後 −21 個點的優勢；第 1 局 −3），所以模式 1、2 只在第 1 局。
+  if (round === 2 && mode < 3) return action;
   const me = obs.myPlayerId;
   const earlier = obs.voteHistory.filter((v) => v.round === round);
   const prevs = earlier.filter((v) => v.leader !== me);

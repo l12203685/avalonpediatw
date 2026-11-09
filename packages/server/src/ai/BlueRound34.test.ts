@@ -151,7 +151,7 @@ describe('loyalFlowPick (round 34, wiki-24: 反對／尊重／認同 toward the 
   });
 });
 
-describe('loyalFlowPick mode 2 leaves R2 after an R1 success alone (re-proposing the successful team is the norm)', () => {
+describe('loyalFlowPick mode 2 is R1 only (R2 after an R1 success: re-proposing the successful team is the norm)', () => {
   it('returns the pipeline team', () => {
     const r2 = asObs({ ...(r1 as object), currentRound: 2, questResults: ['success'], questHistory: [{ round: 1, team: ['P1', 'P2', 'P3'], result: 'success', failCount: 0 }],
       voteHistory: [...r1.voteHistory, vote(2, 1, 'P2', ['P1', 'P2', 'P3', 'P4'], ['P1', 'P2'])] });
