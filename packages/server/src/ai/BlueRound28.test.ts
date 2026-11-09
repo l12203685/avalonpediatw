@@ -34,7 +34,7 @@ describe('round 28 tuning fields', () => {
     // Round 28 adoption (stage 2, three sets of 6000 seeds): the package below.
     expect(DEFAULT_AGENT_TUNING.mpTailWhite).toBe(1);
     expect(DEFAULT_AGENT_TUNING.loyalTailWhiteEarly).toBe(true);
-    expect(DEFAULT_AGENT_TUNING.merlinReuseNoEarly).toBe(true);
+    expect(DEFAULT_AGENT_TUNING.merlinReuseNoEarly).toBe(false); // round 33: off (Edward 2026-11-09 ruling 1: 本來就可以照派成功隊)
     expect(DEFAULT_AGENT_TUNING.goodTailVote).toBe(0.7);
     expect(DEFAULT_AGENT_TUNING.beliefLeadTemper).toBe(0);
     expect(DEFAULT_AGENT_TUNING.beliefLeadStrong).toBe(true); // round 30 adoption (Edward 2026-11-05)
@@ -133,7 +133,7 @@ describe('beliefLeadTemper (round 28, team picks)', () => {
   });
 });
 
-describe('merlinReuseNoEarly default (round 28; Edward 11/04 ruling 5)', () => {
+describe('merlinReuseNoEarly (round 28; Edward 11/04 ruling 5 — off by default since round 33, Edward 11/09 ruling 1)', () => {
   // R1 P2 P3 P4 succeeded with P3 (a red Merlin sees) hiding; Merlin P1 leads R2.
   const mobs = asObs({
     myPlayerId: 'P1', myRole: 'merlin', myTeam: 'good', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P3', 'P7', 'P9'],
@@ -142,8 +142,9 @@ describe('merlinReuseNoEarly default (round 28; Edward 11/04 ruling 5)', () => {
     voteHistory: [], proposedTeam: [], lakeHistory: [],
   });
   it('R2: no re-proposal of the successful R1 team holding a seen red; the loyal-style team has no seen red', () => {
-    expect(merlinReuseNormTeam(DEFAULT_AGENT_TUNING, mobs, 4)).toBeNull();
-    const a = merlinLoyalStyleTeam(DEFAULT_AGENT_TUNING, mobs, { type: 'team_select', teamIds: ['P1', 'P2', 'P3', 'P4'] });
+    const ON = { ...DEFAULT_AGENT_TUNING, merlinReuseNoEarly: true };
+    expect(merlinReuseNormTeam(ON, mobs, 4)).toBeNull();
+    const a = merlinLoyalStyleTeam(ON, mobs, { type: 'team_select', teamIds: ['P1', 'P2', 'P3', 'P4'] });
     if (a.type !== 'team_select') throw new Error(a.type);
     expect(a.teamIds.some((id) => ['P3', 'P7', 'P9'].includes(id))).toBe(false);
   });

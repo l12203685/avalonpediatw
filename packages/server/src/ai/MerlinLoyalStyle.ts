@@ -12,6 +12,7 @@ import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { merlinSignalScore } from './belief/ZoneModel';
+import { r1Scorer, r1SpreadActive } from './BlueRound33';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -63,7 +64,13 @@ export function merlinLoyalStyleTeam(
     scored.push({ team, score: Math.log(Math.max(p, 1e-12)) + 0.05 * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me) });
   }
   // Highest first (stable); the logic gates (must-fail / dominated) still bind.
-  scored.sort((x, y) => y.score - x.score);
+  // Round 33 `loyalR1Spread`: as the loyals do, an R1 talk proposal takes the least-stacked teams first (Merlin's own seat view of the record).
+  const spread = r1SpreadActive(tuning, obs);
+  if (spread) {
+    const score = r1Scorer(tuning, obs, spread);
+    const st = new Map(scored.map((c) => [c, score(c.team)] as const));
+    scored.sort((x, y) => (Math.abs(st.get(x)! - st.get(y)!) > 1e-9 ? st.get(x)! - st.get(y)! : y.score - x.score));
+  } else scored.sort((x, y) => y.score - x.score);
   // A cover team holds a seen red by design (doomed, never a mission), as `merlinDoomedRed` does: no gate on it.
   const best = cover ? scored[0] : scored.find((c) => allowed(c.team));
   return best ? { type: 'team_select', teamIds: best.team } : action;
