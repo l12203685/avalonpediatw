@@ -23,6 +23,10 @@ import type { PlayerStats } from '../../services/sheetsAnalysis';
 import type { NameMatch } from './statsReplies';
 import {
   STATS_COMMAND_USAGE,
+  STATS_PAGE_URL,
+  DIGEST_IMPROVED_SIZE,
+  DIGEST_NEWCOMERS_SIZE,
+  boardQualifier,
   chemistryRoster,
   configRoleWindows,
   findBoard,
@@ -40,11 +44,16 @@ import {
   lookupPair,
   matchPlayerName,
   newcomersLine,
+  newcomersQualifier,
   normalizeName,
+  pct,
+  roleTitleGroups,
   roleTitlesLine,
   selectLeaderboard,
+  signed,
 } from './statsReplies';
 import { digestDateLabel } from './weeklyDigest';
+import { renderWeeklyChartPng, stripLeadingEmoji, type WeeklyChartData } from './weeklyChart';
 
 async function safely(label: string, run: () => Promise<string>): Promise<string> {
   try {
@@ -160,6 +169,102 @@ export async function weeklyDigestText(now: number = Date.now()): Promise<string
     footerLines: [`查個人：${STATS_COMMAND_USAGE.player}｜兩人默契：${STATS_COMMAND_USAGE.chemistry}`],
   });
 }
+
+/** "角色理論勝率排行 Top 10（qualifier）" → title without the emoji, and the bracket as the note. */
+function splitViewTitle(title: string): { title: string; note: string | null } {
+  const bare = stripLeadingEmoji(title);
+  const m = /^(.*?)（(.*)）$/u.exec(bare);
+  return m ? { title: m[1].trim(), note: m[2].trim() || null } : { title: bare, note: null };
+}
+
+/**
+ * The Monday digest as chart data (weeklyChart.ts): the same boards and order as
+ * weeklyDigestText — main board Top 10, 進步榜 Top 5, 角色王, 新人榜 (each only
+ * when the cache has it). Throws on cache errors, like the text.
+ */
+export async function weeklyChartData(now: number = Date.now()): Promise<WeeklyChartData> {
+  const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
+  const view = selectLeaderboard(leaderboard, overview);
+  const head = splitViewTitle(view.title);
+  const main: WeeklyChartData['main'] = {
+    ...head,
+    rows: view.rows.map((r) => ({ rank: r.rank, name: r.name, value: r.roleTheory, valueLabel: pct(r.roleTheory) })),
+    ...(view.emptyNote ? { emptyNote: view.emptyNote.replace(/^（(.*)）$/u, '$1') } : {}),
+  };
+
+  const improvedBoard = findBoard(leaderboard, 'improved');
+  const improvedRows = improvedLines(improvedBoard).length > 0 && improvedBoard ? improvedBoard.rows.slice(0, DIGEST_IMPROVED_SIZE) : [];
+  const improved: WeeklyChartData['improved'] =
+    improvedBoard && improvedRows.length > 0
+      ? {
+          title: `${improvedBoard.title} Top ${improvedRows.length}`,
+          note: boardQualifier(improvedBoard) || null,
+          rows: improvedRows.map((r, i) => ({
+            rank: typeof r.rank === 'number' ? r.rank : i + 1,
+            name: r.name,
+            value: typeof r.value === 'number' && Number.isFinite(r.value) ? r.value : null,
+            valueLabel: signed(r.value),
+            detail: `${pct(r.priorRoleTheory)} → ${pct(r.recentRoleTheory)}`,
+          })),
+        }
+      : null;
+
+  const titlesBoard = findBoard(leaderboard, 'roleTitles');
+  const groups = roleTitleGroups(titlesBoard);
+  const roleKings: WeeklyChartData['roleKings'] =
+    titlesBoard && groups.length > 0
+      ? {
+          title: titlesBoard.title,
+          note: titlesBoard.period || null,
+          entries: groups.map((g) => ({
+            role: g.role,
+            names: g.names,
+            valueLabel: pct(g.value),
+          })),
+        }
+      : null;
+
+  const newcomersBoard = findBoard(leaderboard, 'newcomers');
+  const roleWindows = configRoleWindows(leaderboard?.config, overview?.theoryConfig as Record<string, unknown> | undefined);
+  const newcomers: WeeklyChartData['newcomers'] =
+    newcomersBoard && newcomersLine(newcomersBoard, undefined, roleWindows)
+      ? {
+          title: newcomersBoard.title,
+          note: newcomersQualifier(newcomersBoard, roleWindows),
+          rows: newcomersBoard.rows.slice(0, DIGEST_NEWCOMERS_SIZE).map((r, i) => {
+            const value = typeof r.roleTheory === 'number' && Number.isFinite(r.roleTheory) ? r.roleTheory : r.value;
+            const games = typeof r.careerGames === 'number' && Number.isFinite(r.careerGames) ? r.careerGames : r.games;
+            return { rank: typeof r.rank === 'number' ? r.rank : i + 1, name: r.name, value, valueLabel: pct(value), detail: `${games} 場` };
+          }),
+        }
+      : null;
+
+  const subtitle = [
+    leaderboard?.asOf ? `資料至 ${leaderboard.asOf}` : '',
+    overview && typeof overview.totalGames === 'number' ? `總計 ${overview.totalGames} 場・${overview.totalPlayers} 位玩家` : '',
+  ]
+    .filter(Boolean)
+    .join('｜');
+
+  return {
+    dateLabel: digestDateLabel(now),
+    subtitle: subtitle || null,
+    main,
+    improved,
+    roleKings,
+    newcomers,
+    footerLines: [`查個人：${STATS_COMMAND_USAGE.player}｜兩人默契：${STATS_COMMAND_USAGE.chemistry}`, '完整圖表與個人戰績（不用登入）'],
+    url: STATS_PAGE_URL,
+  };
+}
+
+/** The Monday digest as one PNG (weeklyChart.ts). Throws on cache or render errors — callers post the text instead. */
+export async function weeklyDigestPng(now: number = Date.now()): Promise<Buffer> {
+  return renderWeeklyChartPng(await weeklyChartData(now));
+}
+
+/** The one line that goes with the picture (Discord message text, LINE follow-up). */
+export const WEEKLY_CHART_CAPTION = `🔗 完整圖表與個人戰績（不用登入）：${STATS_PAGE_URL}`;
 
 // ─── /默契 ───────────────────────────────────────────────────────────────
 

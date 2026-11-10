@@ -4,7 +4,7 @@
  */
 
 import { Express, Request, Response } from 'express';
-import { TextChannel } from 'discord.js';
+import { AttachmentBuilder, DiscordAPIError, TextChannel } from 'discord.js';
 import { initializeDiscordBot, getDiscordBot } from './discord/client';
 import { initializeLineBot, getLineBot } from './line/client';
 import { LINE_CONFIG } from './line/config';
@@ -35,8 +35,8 @@ import {
 } from './ChatMirror';
 import { getKeepAliveState, KeepAliveState } from '../services/keepAlive';
 import { registerSyncLinePusher } from '../services/communityReports';
-import { WeeklyDigestScheduler, DigestDestination } from './stats/weeklyDigest';
-import { weeklyDigestText } from './stats/statsQueries';
+import { WeeklyDigestScheduler, DigestDestination, digestWeekKey } from './stats/weeklyDigest';
+import { WEEKLY_CHART_CAPTION, weeklyDigestPng, weeklyDigestText } from './stats/statsQueries';
 import {
   FEEDBACK_CONFIG,
   FeedbackDiscordForwarder,
@@ -391,18 +391,38 @@ let statsDigest: WeeklyDigestScheduler | null = null;
  * Discord mirror channel: post directly (the bot's own message is never
  * mirrored back), on ChatMirror's Discord send chain when the mirror runs,
  * so the digest never lands between the parts of a long relayed message.
+ *
+ * With the chart (2026-11-10): one message — the PNG as an attachment and a
+ * one-line caption (the stats page link). If Discord refuses the upload
+ * (DiscordAPIError, e.g. no Attach Files permission: nothing was posted), the
+ * text goes instead in the same tick; other errors (network) reject, and the
+ * scheduler retries within the window.
  */
 function discordDigestDestination(channelId: string): DigestDestination {
   return {
     name: 'discord',
-    send: async (text): Promise<boolean | 'skip'> => {
+    send: async (text, image): Promise<boolean | 'skip'> => {
       if (!channelId) return 'skip';
       const bot = getDiscordBot();
       if (!bot) return 'skip'; // Discord leg not configured
       if (!bot.isClientReady()) return false; // gateway not up yet — retry next tick
       const ch = await bot.getClient().channels.fetch(channelId);
       if (!ch || !(ch instanceof TextChannel)) return false;
-      const post = (): Promise<unknown> => ch.send({ content: text, allowedMentions: { parse: [] } });
+      const postText = (): Promise<unknown> => ch.send({ content: text, allowedMentions: { parse: [] } });
+      const postImage = async (png: Buffer): Promise<unknown> => {
+        const file = new AttachmentBuilder(png, {
+          name: `weekly-ranking-${digestWeekKey(Date.now())}.png`,
+          description: '每週排行圖表',
+        });
+        try {
+          return await ch.send({ content: WEEKLY_CHART_CAPTION, files: [file], allowedMentions: { parse: [] } });
+        } catch (err) {
+          if (!(err instanceof DiscordAPIError)) throw err;
+          console.warn(`[stats-digest] Discord refused the chart (${err.code}) — posting the text instead`);
+          return postText();
+        }
+      };
+      const post = (): Promise<unknown> => (image && image.length > 0 ? postImage(image) : postText());
       const mirror = getChatMirror();
       await (mirror ? mirror.runOnDiscordSendChain(post) : post());
       return true;
@@ -410,14 +430,20 @@ function discordDigestDestination(channelId: string): DigestDestination {
   };
 }
 
-/** LINE mirror group: queue on the ChatMirror reply_token queue (free; sent when someone next speaks). */
+/**
+ * LINE mirror group: queue on the ChatMirror reply_token queue (free; sent when someone next speaks).
+ * With the chart: a LINE image message served from this server (/media/relay/…) plus the caption
+ * line; the text digest is its fallback note. Without the picture relay (no https base,
+ * CHAT_MIRROR_IMAGES=false) or for a PNG over 1 MB, the text is queued as before.
+ */
 function lineDigestDestination(groupId: string): DigestDestination {
   return {
     name: 'line',
-    send: async (text): Promise<boolean | 'skip'> => {
+    send: async (text, image): Promise<boolean | 'skip'> => {
       if (!groupId) return 'skip';
       const mirror = getChatMirror();
       if (!mirror) return false;
+      if (image && mirror.enqueueLineReplyImage(image, text, WEEKLY_CHART_CAPTION)) return true;
       // Never push (monthly quota): without the reply queue, LINE is skipped.
       return mirror.enqueueLineReplyText(text) ? true : 'skip';
     },
@@ -439,6 +465,8 @@ export function startStatsDigest(): void {
   if (!discordChannelId && !lineGroupId) return;
   statsDigest = new WeeklyDigestScheduler({
     buildText: (now) => weeklyDigestText(now),
+    // STATS_DIGEST_CHART=false posts the text digest only (the pre-2026-11-10 format).
+    ...(envFlagOff('STATS_DIGEST_CHART') ? {} : { buildImage: (now: number) => weeklyDigestPng(now) }),
     destinations: [discordDigestDestination(discordChannelId), lineDigestDestination(lineGroupId)],
   });
   statsDigest.start();

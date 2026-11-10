@@ -257,6 +257,11 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
 同時排進 LINE reply 佇列（免費，群裡下一次有人講話時送出；不會 push）。只在 12:00–12:10 的窗口內發，
 同一週只發一次（記在記憶體）；窗口外重啟絕不重發，窗口內 Discord 還沒連上會每分鐘重試到 12:10。
 `STATS_DIGEST_ENABLED=false` 關閉；狀態頁 `statsDigest.lastPostedWeek` 顯示最近一次發送的週一日期（重啟歸零）。
+20261110 起改成**一張圖表**（`bots/stats/weeklyChart.ts`，SVG → `@resvg/resvg-js` 轉 PNG，字型用 repo 內附的
+`packages/server/assets/fonts/NotoSansTC-Medium.ttf`，不靠系統字型）：Discord 貼 PNG 附件＋一行網站連結；
+LINE 排一則圖片訊息（由本 server 的 `/media/relay/…` 提供，跟 Discord → LINE 圖片同一套，需要 https 公開網址且
+`CHAT_MIRROR_IMAGES` 沒關）＋同一行連結，圖過期或 LINE 拒收時改送原本的文字。圖畫不出來（字型或原生模組缺）、
+Discord 拒收附件、或 LINE 圖片送不了時，一律改發原本的文字，週一的貼文不會不見。`STATS_DIGEST_CHART=false` 只發文字。
 
 ## 圖片同步（20261013）
 

@@ -558,8 +558,13 @@ function noteQualifier(note: unknown): string {
   return typeof note === 'string' ? note.split('；')[0].trim() : '';
 }
 
+/** "各人最近 100 場，近 90 天內有出賽、…": the board's period + the note's first clause (the bracket of its title). */
+export function boardQualifier(board: Pick<LeaderboardBoard, 'period' | 'note'>): string {
+  return [board.period, noteQualifier(board.note)].filter((s): s is string => typeof s === 'string' && s.length > 0).join('，');
+}
+
 function boardTitle(board: LeaderboardBoard, size: number | null, emoji: string): string {
-  const qualifier = [board.period, noteQualifier(board.note)].filter((s): s is string => typeof s === 'string' && s.length > 0).join('，');
+  const qualifier = boardQualifier(board);
   return `${emoji} ${board.title}${size === null ? '' : ` Top ${size}`}${qualifier ? `（${qualifier}）` : ''}`;
 }
 
@@ -674,13 +679,12 @@ export function improvedLines(board: LeaderboardBoard | null | undefined, size: 
 }
 
 /**
- * "👑 角色王（各人該角色最近 20 場）：刺客 甲 90.0%、莫甘娜 乙／丙 90.0%、…" from the `roleTitles` board, or
- * null when absent. Since 2026-10-14 (ties 各給) a role can have several rows, all at the same rate:
- * they share one entry, names joined with「／」in the cache's order (at most ROLE_TITLE_NAMES_MAX, then
- * 「等 N 人」). Older caches have one row per role and read as before.
+ * The `roleTitles` board's holders, one entry per role and rate (ties 各給 share an entry, names in
+ * the cache's order); [] when the board is absent or not a theory board. Shared by roleTitlesLine
+ * and the weekly chart.
  */
-export function roleTitlesLine(board: LeaderboardBoard | null | undefined): string | null {
-  if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return null;
+export function roleTitleGroups(board: LeaderboardBoard | null | undefined): Array<{ role: string; value: number; names: string[] }> {
+  if (!board || !isTheoryBoard(board) || !Array.isArray(board.rows) || board.rows.length === 0) return [];
   const groups: Array<{ role: string; value: number; names: string[] }> = [];
   for (const r of board.rows) {
     const role = typeof r.role === 'string' ? r.role : '';
@@ -689,6 +693,18 @@ export function roleTitlesLine(board: LeaderboardBoard | null | undefined): stri
     if (same) same.names.push(r.name);
     else groups.push({ role, value: r.value, names: [r.name] });
   }
+  return groups;
+}
+
+/**
+ * "👑 角色王（各人該角色最近 20 場）：刺客 甲 90.0%、莫甘娜 乙／丙 90.0%、…" from the `roleTitles` board, or
+ * null when absent. Since 2026-10-14 (ties 各給) a role can have several rows, all at the same rate:
+ * they share one entry, names joined with「／」in the cache's order (at most ROLE_TITLE_NAMES_MAX, then
+ * 「等 N 人」). Older caches have one row per role and read as before.
+ */
+export function roleTitlesLine(board: LeaderboardBoard | null | undefined): string | null {
+  const groups = roleTitleGroups(board);
+  if (!board || groups.length === 0) return null;
   const parts = groups.map((g) => {
     const shown = g.names.slice(0, ROLE_TITLE_NAMES_MAX).join('／');
     const more = g.names.length > ROLE_TITLE_NAMES_MAX ? ` 等 ${g.names.length} 人` : '';
@@ -713,10 +729,15 @@ export function newcomersLine(
   const parts = board.rows
     .slice(0, size)
     .map((r) => `${r.name} 角色理論 ${pct(numOrNull(r.roleTheory) ?? r.value)}（${numOrNull(r.careerGames) ?? r.games} 場）`);
+  return `🌱 ${board.title}（${newcomersQualifier(board, roleWindows)}）：${parts.join('、')}`;
+}
+
+/** The bracket of the 新人榜 line: the period and the newcomer exception (with the per-role cap on schemaVersion 4). */
+export function newcomersQualifier(board: Pick<LeaderboardBoard, 'period'>, roleWindows: { special: number; loyal: number } | null = null): string {
   const scope = roleWindows
     ? `新人例外：看全部場次，角色理論每個角色最多算近 ${roleWindows.special} 場、忠臣 ${roleWindows.loyal} 場`
     : '新人例外：看全部場次';
-  return `🌱 ${board.title}（${board.period}，${scope}）：${parts.join('、')}`;
+  return `${board.period}，${scope}`;
 }
 
 /** The overview fields the totals line reads; the two-stage sections are optional (older caches). */

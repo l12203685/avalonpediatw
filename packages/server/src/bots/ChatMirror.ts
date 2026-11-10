@@ -114,7 +114,10 @@ import {
 } from './mirrorSplit';
 import {
   DISCORD_DEFAULT_UPLOAD_BYTES,
+  isLineImageUrl,
+  LINE_PREVIEW_MAX_BYTES,
   MEDIA_RELAY_AFTER_SEND_MS,
+  relayMediaUrl,
   type RelayMediaStore,
 } from './media/relayMedia';
 
@@ -771,6 +774,44 @@ export class ChatMirror {
   public enqueueLineReplyText(text: string): boolean {
     if (!this.lineReplyQueue || !this.isLineReplyQueueEnabled()) return false;
     this.enqueueLineParts(splitMirrorText('', text, LINE_TEXT_MAX_CHARS));
+    return true;
+  }
+
+  /**
+   * Queue a bot-authored PNG (the weekly ranking chart, 2026-11-10) for the
+   * LINE mirror group as an image message, served from this server's relay
+   * store (`<base>/media/relay/<id>.png`, the same path as Discord → LINE
+   * pictures), optionally followed by one short text (`followUp`). Both go
+   * as one group on the reply_token queue — free, sent when someone next
+   * speaks. `fallbackText` is what goes instead if the copy is gone by then
+   * (restart, 72 h) or LINE rejects the image.
+   *
+   * Returns false — nothing queued — when pictures cannot reach LINE for free
+   * (no reply queue, no https base, CHAT_MIRROR_IMAGES=false), when the PNG
+   * is empty or over LINE's 1 MB preview limit (the same file is used as the
+   * preview), or when the store has no room; the caller then queues the text.
+   */
+  public enqueueLineReplyImage(png: Buffer, fallbackText: string, followUp?: string): boolean {
+    const relay = this.lineImageRelay();
+    const queue = this.lineReplyQueue;
+    if (!relay || !queue || !this.isLineReplyQueueEnabled()) return false;
+    if (png.length === 0 || png.length > LINE_PREVIEW_MAX_BYTES) return false;
+    const id = relay.store.put(png, 'png');
+    if (!id) return false;
+    const url = relayMediaUrl(relay.publicBaseUrl, id, 'png');
+    if (!isLineImageUrl(url)) {
+      relay.store.delete(id);
+      return false;
+    }
+    const now = Date.now();
+    const { dropped, releasedMediaIds } = queue.enqueueGroup([
+      { text: clampLineText(fallbackText), enqueuedAt: now, image: { originalUrl: url, previewUrl: url, mediaIds: [id] } },
+      ...(followUp ? [{ text: clampLineText(followUp), enqueuedAt: now }] : []),
+    ]);
+    this.releaseRelayMedia(releasedMediaIds);
+    if (dropped > 0) {
+      this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
+    }
     return true;
   }
 
