@@ -97,6 +97,7 @@ def fake_cache(games: int = 100, players: int = 3, chem_players: int = 2, player
         "playerDetails": {r["name"]: {"player": r, "radar": {}} for r in rows},
         "chemistry": {k: dict(matrix) for k in gc.CHEMISTRY_MATRICES},
         "missions": {}, "lake": {}, "rounds": {}, "seatOrder": {}, "captainAnalysis": {}, "leaderboard": {}, "rating": {},
+        "theoryTrend": {},
         "strength": {"perPlayer": {}},
     }
 
@@ -4556,6 +4557,150 @@ class TheoryBaselinesTest(unittest.TestCase):
         self.assertEqual(set(b["tiers"]), {"pr80plus", "pr20to80", "pr20minus"})
         self.assertEqual(b["all"]["games"], sum(len(v) for v in gc.player_timelines(games).values()))
 
+
+
+# ---------------------------------------------------------------------------
+# theoryTrend: 角色／位置／整體理論的走勢 (compute_theory_trend, Edward 2026-11-10). Invented names only.
+# ---------------------------------------------------------------------------
+
+def mixed_trend_log() -> list[list[str]]:
+    """rotation_log (10 players, rotating roles, three games a day) with two undated games at the top, a 新人
+    taking seat 10 in the last 12 games and one game without a result: windows fill at different times."""
+    rows = rotation_log()
+    rows[1:1] = [dated("U0", "", "三紅", ROT_NAMES), dated("U1", "", "三藍活", ROT_NAMES)]
+    for row in rows[-12:]:
+        row[LOG_HEADERS.index(gc.PLAYER_COLUMNS["0"])] = "新人"
+    rows.insert(100, log_row("X0", rot_config(0), "平手", ROT_NAMES, date="2026-06-01"))
+    return rows
+
+
+class TheoryTrendTest(unittest.TestCase):
+    def trend(self, log: list[list[str]]) -> tuple[list, dict]:
+        games = run_like_games(log)
+        return games, gc.compute_theory_trend(games)
+
+    @staticmethod
+    def leaderboard_values(games: list, day: str) -> dict[str, list]:
+        """The leaderboard pipeline (compute_player_stats → players[].theory) run on the games up to `day` only:
+        name -> [career games, roleTheory, positionTheory, overallTheory, roleFull]."""
+        prefix = [g for g in games if (g.timeline_date or "") <= day]
+        key = gc.theory_key(gc.LEADERBOARD_CONFIG["mainGames"])
+        return {
+            r["name"]: [r["theory"]["career"]["games"], r["theory"]["roleWindows"]["roleTheory"],
+                        r["theory"][key]["positionTheory"], r["theory"]["career"]["overallTheory"],
+                        1 if r["theory"]["roleWindows"]["fullWindows"] else 0]
+            for r in gc.compute_player_stats(prefix)
+        }
+
+    def test_sections(self) -> None:
+        self.assertIn("theoryTrend", gc.SHEET_SECTIONS)
+        # Order-dependent like rating: never part of the filter engine's parity sections.
+        self.assertNotIn("theoryTrend", gc.GAMES_DATASET_SECTIONS)
+        log = mixed_trend_log()
+        a = build_fresh(log, dt.date(2026, 10, 12))["theoryTrend"]
+        b = build_fresh(log, dt.date(2026, 12, 31))["theoryTrend"]
+        self.assertEqual(a, b)  # the as-of day does not matter
+        self.assertEqual(json.loads(json.dumps(a)), a)
+        self.assertEqual(a["fields"], ["date", "games", "roleTheory", "positionTheory", "overallTheory", "roleFull"])
+        self.assertEqual(a["config"], {"theoryMinCellGames": 5, "roleWindowGames": gc.role_window_games(),
+                                       "positionGames": 100, "overallMinGames": 250})
+
+    def test_every_point_is_the_leaderboard_on_the_games_up_to_that_day(self) -> None:
+        games, trend = self.trend(mixed_trend_log())
+        days = sorted({p[0] for points in trend["series"].values() for p in points})
+        self.assertEqual(len(days), 87)
+        checked = 0
+        for day in days:
+            expected = self.leaderboard_values(games, day)
+            for name, points in trend["series"].items():
+                point = next((p for p in points if p[0] == day), None)
+                if point is not None:
+                    self.assertEqual(point[1:], expected[name], (name, day))
+                    checked += 1
+        self.assertEqual(checked, sum(len(v) for v in trend["series"].values()))
+
+    def test_last_point_is_the_current_leaderboard(self) -> None:
+        log = mixed_trend_log()
+        cache = build_fresh(log)
+        trend = cache["theoryTrend"]
+        self.assertEqual(trend["dataThrough"], "2026-07-26")
+        on_last_day = 0
+        for row in cache["players"]["players"]:
+            last = trend["series"][row["name"]][-1]
+            if row["name"] == "酉":  # replaced by 新人 for the last 4 days: the site joins it to the current value
+                self.assertEqual((last[0], last[1]), ("2026-07-22", row["theory"]["career"]["games"]))
+                continue
+            on_last_day += 1
+            self.assertEqual(last[0], trend["dataThrough"])
+            self.assertEqual(last[1:5], [row["theory"]["career"]["games"], row["theory"]["roleWindows"]["roleTheory"],
+                                         row["theory"]["last100"]["positionTheory"],
+                                         row["theory"]["career"]["overallTheory"]], row["name"])
+        self.assertEqual(on_last_day, 10)
+
+    def test_later_games_never_move_earlier_points(self) -> None:
+        log = mixed_trend_log()
+        at = LOG_HEADERS.index("日期時間")
+        _, short = self.trend([log[0]] + [r for r in log[1:] if r[at] < "2026-06-18"])  # whole days only
+        _, full = self.trend(log)
+        self.assertEqual(short["dataThrough"], "2026-06-17")
+        for name, points in short["series"].items():
+            self.assertEqual(full["series"][name][:len(points)], points, name)
+        # ... but they do move the current values (the population rates change): the last points differ
+        self.assertNotEqual(full["series"]["子"][len(short["series"]["子"]) - 1][2:5],
+                            self.leaderboard_values(run_like_games(log), "2026-12-31")["子"][1:4])
+
+    def test_points_days_and_windows(self) -> None:
+        _, trend = self.trend(mixed_trend_log())
+        points = trend["series"]["子"]
+        # The two undated games count but get no point; three games a day = one point a day, after the last.
+        self.assertEqual(points[0][:2], ["2026-05-01", 5])
+        self.assertEqual(points[1][:2], ["2026-05-02", 8])
+        self.assertEqual([p[0] for p in points], sorted({p[0] for p in points}))
+        self.assertEqual(points[-1][1], 262)  # 260 rotation games + 2 undated; the game without a result is not counted
+        # 角色理論's windows: every special role 10 times and 忠臣 40 times (rotating roles: from game 100 + 2).
+        first_full = next(p for p in points if p[5])
+        self.assertTrue(all(p[5] for p in points[points.index(first_full):]))
+        self.assertGreaterEqual(first_full[1], 100)
+        self.assertEqual([p[1] for p in trend["series"]["新人"]], [1, 4, 7, 10, 12])
+        self.assertTrue(all(p[5] == 0 for p in trend["series"]["新人"]))
+        self.assertEqual(set(trend["series"]), set(ROT_NAMES) | {"新人"})
+        # One decimal everywhere.
+        for pts in trend["series"].values():
+            for p in pts:
+                for v in p[2:5]:
+                    self.assertEqual(v, round(v, 1))
+
+    def test_population_rates_match_the_overview(self) -> None:
+        games = run_like_games(mixed_trend_log())
+        population = gc._PopulationRates()
+        for g in games:
+            if g.outcome in gc.OUTCOMES:
+                population.add(g)
+        self.assertEqual(population.rates(), (gc.compute_role_final_win_rates(games),
+                                              gc.compute_seat_final_win_rates(games),
+                                              gc.compute_role_seat_final_win_rates(games)))
+        self.assertEqual(gc._PopulationRates().rates()[0], {r: 0.0 for r in gc.ALL_ROLES})
+
+    def test_weighted_theory_is_exact(self) -> None:
+        # 0.5 × 50 % (2 of 4 topped up to 5 at 50.0) + 0.5 × 1/3 (exactly 33.33…): 41.666… → 41.7.
+        self.assertEqual(gc._weighted_theory([(50, 2, 4, 50.0), (50, 2, 6, 0.0)], 5), 41.7)
+        # Ties go to even like _round_exact: 0.25 × 100 + 0.75 × 0 + … = 25.25 → 25.2.
+        self.assertEqual(gc._weighted_theory([(25, 101, 101, 0.0), (75, 0, 0, 0.0), (1, 25, 100, 0.0)], 0), 25.2)
+        self.assertEqual(gc._weighted_theory([(100, 0, 0, 45.4)], 5), 45.4)
+
+    def test_committed_cache(self) -> None:
+        # Shape only: every series name is a players row; dates rise; the last point has the row's games.
+        if not COMMITTED_CACHE.exists():
+            self.skipTest(f"{COMMITTED_CACHE.name} not found")
+        cache = json.loads(COMMITTED_CACHE.read_text(encoding="utf-8"))
+        if "theoryTrend" not in cache:
+            self.skipTest("the committed cache predates the theoryTrend section")
+        trend = cache["theoryTrend"]
+        rows = {p["name"]: p for p in cache["players"]["players"]}
+        for name, points in trend["series"].items():
+            self.assertIn(name, rows)
+            self.assertEqual([p[0] for p in points], sorted({p[0] for p in points}))
+            self.assertEqual(points[-1][1], rows[name]["theory"]["career"]["games"])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
