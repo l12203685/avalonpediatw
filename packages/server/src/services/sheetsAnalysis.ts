@@ -331,6 +331,8 @@ export interface OverviewData {
   topPlayersByExcess?: Array<{ name: string; excessWinRate: number; finalWinRate: number; games: number }>;
   /** schemaVersion 3: population final win rate per seat, keys "1".."10" (positionTheory's top-up). */
   seatFinalWinRates?: Record<string, number>;
+  /** Population final win rate per role and seat ({role: {"1".."10": %}}; 整體理論's top-up). */
+  roleSeatFinalWinRates?: Record<string, Record<string, number>>;
   /**
    * All-time 角色理論 ranking (active or not). schemaVersion 4: everyone with full role windows,
    * ranked by theory.roleWindows.roleTheory (`games` = games in the role windows, 100;

@@ -3,16 +3,22 @@
  * a text block (owner: 「每週排行能不能做成圖像式結果 不要用文字」「做成一張圖表」).
  *
  * Pure: `buildWeeklyChartSvg()` turns the digest data (statsQueries.weeklyChartData,
- * the same boards the text digest prints) into an SVG string; `renderWeeklyChartPng()`
- * rasterises it with @resvg/resvg-js (prebuilt binaries, no system libraries).
+ * the same boards the text digest prints, plus 位置理論 / 整體理論) into an SVG string;
+ * `renderWeeklyChartPng()` rasterises it with @resvg/resvg-js (prebuilt binaries, no
+ * system libraries). The same image answers /排行 (title 「排行榜」, statsQueries.leaderboardChart).
  *
- * Layout: one tall 1080-px card for a phone screen in Discord / LINE — a dark
- * dated header, three Top 10 boards as horizontal bars (rank, name, bar, %):
- * 角色理論, 位置理論 and 整體理論 (each its own colour; added 2026-11-10 at the
- * owner's request), then panels for 進步榜 Top 5, 角色王 and 新人榜 when the
- * cache has them, and a footer with the stats page link. Bars start at 0 (the
- * number is printed at the end of each bar), with a dashed 50% line. The same
- * image answers /排行 (title 「排行榜」, statsQueries.leaderboardChart).
+ * Layout (owner's third pass, 2026-11-10): one 1080-px card for a phone screen —
+ *   1. a dark dated header;
+ *   2. 角色理論 / 位置理論 / 整體理論 Top 10 side by side, three columns, each its own
+ *      colour: rank badge, name (cut with …), a short bar from 0 and the whole %;
+ *   3. 進步榜 and 新人榜 side by side;
+ *   4. 角色王 at the bottom: Top 3 per role (ties share a line, 「等 N 人」), cards
+ *      tinted red (刺客 莫甘娜 莫德雷德 奧伯倫) or blue (梅林 派西維爾 忠臣);
+ *   5. a footer with the stats page link.
+ * Each bar column draws a dashed baseline at the population average of its metric
+ * (labelled 「平均 46%」; statsQueries.populationTheoryAverages) instead of 50%.
+ * Every percentage is a whole number (roundHalfUp); the order is the cache's.
+ * Smallest text is 22 px at 1080 px wide.
  *
  * Font: the bundled Noto Sans TC Medium (SIL OFL 1.1, assets/fonts/), loaded
  * explicitly — system fonts are never used, so the output is the same on a
@@ -33,28 +39,40 @@ import path from 'path';
 export interface WeeklyChartBarRow {
   rank: number;
   name: string;
-  /** Bar length (main / 新人榜: 角色理論 %, 進步榜: the difference in points); null → no bar, "—". */
+  /** Bar length (theory boards / 新人榜: the rate in %, 進步榜: the difference in points); null → no bar, "—". */
   value: number | null;
-  /** Printed at the end of the bar, e.g. "55.0%" or "+10.4". */
+  /** Printed after the bar, e.g. "55%" or "+10". */
   valueLabel: string;
-  /** Muted text on the right, e.g. "40.0% → 50.0%" or "13 場"; optional. */
+  /** Muted text on the right, e.g. "41% → 53%" or "13 場"; optional. */
   detail?: string;
 }
 
 export interface WeeklyChartBarPanel {
+  /** Column heading, e.g. "角色理論勝率 Top 10". */
   title: string;
-  /** The board's qualifier (period, who qualifies), shown under the title. */
+  /** The board's qualifier (period, who qualifies), a small caption under the heading. */
   note: string | null;
   rows: WeeklyChartBarRow[];
   /** Shown instead of bars when `rows` is empty. */
   emptyNote?: string;
+  /** Population average of the metric (%): the dashed baseline, labelled 「平均 N%」; absent → no line. */
+  average?: number | null;
+}
+
+/** One rank of a role: the holders sharing it (ties 各給) and their rate. */
+export interface WeeklyChartRoleRank {
+  rank: number;
+  /** In the cache's order; the card shows what fits, then 「等 N 人」. */
+  names: string[];
+  valueLabel: string;
 }
 
 export interface WeeklyChartRoleKing {
   role: string;
-  /** Every holder (ties 各給), in the cache's order; the cell shows what fits, then 「等 N 人」. */
-  names: string[];
-  valueLabel: string;
+  /** Card tint: red / blue side; null → neutral. */
+  side: 'red' | 'blue' | null;
+  /** Top 3 (ranks ≤ 3) from roleTitles.roleTop; an older cache: the #1 holders only. */
+  ranks: WeeklyChartRoleRank[];
 }
 
 export interface WeeklyChartData {
@@ -117,10 +135,10 @@ const C = {
   headerMuted: '#c3cad8',
   accent: '#ffc53d',
   card: '#ffffff',
-  cell: '#f3f5f9',
   text: '#0b0b0b',
   muted: '#52514e',
   grid: '#d9dce3',
+  baseline: '#6b6a66',
   main: '#2a78d6',
   position: '#eb6834',
   overall: '#6250d6',
@@ -129,18 +147,26 @@ const C = {
   link: '#1f5fae',
   medal: ['#d99a00', '#8c8f96', '#b0652b'],
   rankText: '#ffffff',
+  redCard: '#fdeceb',
+  redLabel: '#b42318',
+  blueCard: '#e9f1fd',
+  blueLabel: '#1f5fae',
+  neutralCard: '#f3f5f9',
 } as const;
 
 const W = WEEKLY_CHART_WIDTH;
-const PAGE_PAD = 40;
+const PAGE_PAD = 24;
 const CARD_X = PAGE_PAD;
 const CARD_W = W - PAGE_PAD * 2;
-const CARD_PAD = 32;
+const CARD_PAD = 20;
 const INNER_X = CARD_X + CARD_PAD;
 const INNER_R = CARD_X + CARD_W - CARD_PAD;
-const PANEL_GAP = 22;
+const INNER_W = INNER_R - INNER_X;
+const COL_GAP = 18;
+const SECTION_GAP = 18;
 
-const FS = { title: 64, date: 64, subtitle: 26, panelTitle: 40, note: 24, name: 32, value: 32, detail: 26, small: 22, footer: 24 };
+/** Font sizes (px at 1080 wide); nothing below 22. */
+const FS = { title: 56, subtitle: 24, section: 32, colTitle: 27, caption: 22, name: 24, value: 24, detail: 22, badge: 22, footer: 22 };
 
 // ─── Text helpers ────────────────────────────────────────────────────────
 
@@ -169,6 +195,8 @@ function charEm(ch: string): number {
   if (/[0-9]/.test(ch)) return 0.56;
   if (/[A-Z]/.test(ch)) return 0.64;
   if (/[a-z]/.test(ch)) return 0.54;
+  if (ch === '%') return 0.85;
+  if (cp >= 0x2190 && cp <= 0x21ff) return 1; // arrows (→)
   if (cp < 0x80) return 0.36;
   return 0.62;
 }
@@ -244,104 +272,132 @@ function rect(x: number, y: number, w: number, h: number, fill: string, rx = 0):
   return `<rect x="${r(x)}" y="${r(y)}" width="${r(Math.max(0, w))}" height="${r(Math.max(0, h))}" rx="${rx}" fill="${fill}"/>`;
 }
 
-// ─── Panels ──────────────────────────────────────────────────────────────
-
 interface Drawn {
   svg: string;
   height: number;
 }
 
-/** Card background + title + wrapped note; returns the y where the body starts. */
-function panelHead(y: number, title: string, note: string | null): { svg: string[]; bodyY: number } {
-  const svg: string[] = [];
-  let cy = y + CARD_PAD + FS.panelTitle * 0.85;
-  svg.push(text(INNER_X, cy, fitText(title, FS.panelTitle, INNER_R - INNER_X), { size: FS.panelTitle, fill: C.text, bold: true }));
-  if (note) {
-    for (const line of wrapText(note, FS.note, INNER_R - INNER_X, 2)) {
-      cy += FS.note * 1.45;
-      svg.push(text(INNER_X, cy, line, { size: FS.note, fill: C.muted }));
-    }
-  }
-  return { svg, bodyY: cy + 24 };
+// ─── Sections ────────────────────────────────────────────────────────────
+
+function card(y: number, height: number): string {
+  return rect(CARD_X, y, CARD_W, height, C.card, 20);
 }
 
 function rankBadge(cx: number, cy: number, rank: number, medals: boolean): string {
   const medal = medals ? C.medal[rank - 1] : undefined;
+  const label = rank > 99 ? '…' : String(rank);
   if (medal) {
     return (
-      `<circle cx="${r(cx)}" cy="${r(cy)}" r="21" fill="${medal}"/>` +
-      text(cx, cy + 10, String(rank), { size: 28, fill: C.rankText, anchor: 'middle', bold: true })
+      `<circle cx="${r(cx)}" cy="${r(cy)}" r="15" fill="${medal}"/>` +
+      text(cx, cy + 8, label, { size: FS.badge, fill: C.rankText, anchor: 'middle', bold: true })
     );
   }
   return (
-    `<circle cx="${r(cx)}" cy="${r(cy)}" r="20" fill="none" stroke="${C.grid}" stroke-width="2"/>` +
-    text(cx, cy + 10, String(rank), { size: 28, fill: C.muted, anchor: 'middle' })
+    `<circle cx="${r(cx)}" cy="${r(cy)}" r="14" fill="none" stroke="${C.grid}" stroke-width="2"/>` +
+    text(cx, cy + 8, label, { size: FS.badge, fill: C.muted, anchor: 'middle' })
   );
 }
 
-/**
- * A board as horizontal bars from 0: rank badge, name, bar, value label at the
- * bar's end, optional muted detail on the right. `refLine` draws a dashed line
- * at that value (50% for win rates) when it is inside the axis.
- */
-function barPanel(
-  y: number,
-  panel: WeeklyChartBarPanel,
-  opts: { color: string; rowH: number; nameW: number; detailW: number; medals: boolean; refLine?: number; percentAxis?: boolean },
-): Drawn {
-  const head = panelHead(y, panel.title, panel.note);
-  const svg = head.svg;
-  let cy = head.bodyY;
+/** A bar column's look: where things go inside its width, and its colour. */
+interface ColumnSpec {
+  color: string;
+  rowH: number;
+  nameW: number;
+  /** Right-hand muted detail ("41% → 53%", "13 場"); 0 = none. */
+  detailW: number;
+  medals: boolean;
+  /** Bars run from 0 to this value (shared by the columns of a section, so lengths compare). */
+  axisMax: number;
+}
+
+const VALUE_W = 58;
+const CAPTION_LINES = 3;
+
+/** Heading (colour tick + title) and the wrapped caption; returns the svg and its height. */
+function columnHead(x: number, y: number, w: number, panel: WeeklyChartBarPanel, color: string): Drawn {
+  const svg: string[] = [rect(x, y, 40, 6, color, 3)];
+  let cy = y + 6 + FS.colTitle + 6;
+  svg.push(text(x, cy, fitText(panel.title, FS.colTitle, w), { size: FS.colTitle, fill: C.text, bold: true }));
+  if (panel.note) {
+    for (const line of wrapText(panel.note, FS.caption, w, CAPTION_LINES)) {
+      cy += FS.caption * 1.36;
+      svg.push(text(x, cy, line, { size: FS.caption, fill: C.muted }));
+    }
+  }
+  return { svg: svg.join(''), height: cy - y };
+}
+
+/** The rows of a bar column from `top` (already aligned with its neighbours); returns the svg and the bottom y. */
+function columnRows(x: number, top: number, w: number, panel: WeeklyChartBarPanel, spec: ColumnSpec, withAvgLabel: boolean): Drawn {
+  const svg: string[] = [];
+  const right = x + w;
+  const nameX = x + 38;
+  const barX = nameX + spec.nameW + 8;
+  const valueRight = right - spec.detailW;
+  const barSpan = Math.max(24, valueRight - VALUE_W - 6 - barX);
+  const scale = (v: number): number => (Math.max(0, Math.min(v, spec.axisMax)) / spec.axisMax) * barSpan;
+  const rowsTop = top + (withAvgLabel ? 30 : 0);
 
   if (panel.rows.length === 0) {
-    for (const line of wrapText(panel.emptyNote ?? '（目前沒有排行資料）', FS.detail, INNER_R - INNER_X, 3)) {
-      cy += FS.detail * 1.5;
-      svg.push(text(INNER_X, cy, line, { size: FS.detail, fill: C.muted }));
+    let cy = rowsTop;
+    for (const line of wrapText(panel.emptyNote ?? '（目前沒有排行資料）', FS.detail, w, 4)) {
+      cy += FS.detail * 1.45;
+      svg.push(text(x, cy, line, { size: FS.detail, fill: C.muted }));
     }
-    const height = cy + CARD_PAD - y;
-    return { svg: rect(CARD_X, y, CARD_W, height, C.card, 24) + svg.join(''), height };
+    return { svg: svg.join(''), height: cy + 8 - top };
   }
 
-  const badgeX = INNER_X + 24;
-  const nameX = INNER_X + 62;
-  const barX = nameX + opts.nameW + 16;
-  const valueW = 112;
-  const barMaxEnd = INNER_R - opts.detailW - valueW;
-  const barSpan = Math.max(40, barMaxEnd - barX);
-  const values = panel.rows.map((row) => (typeof row.value === 'number' && Number.isFinite(row.value) ? row.value : 0));
-  const maxValue = Math.max(0, ...values);
-  const axisMax = opts.percentAxis ? Math.min(100, Math.max(10, Math.ceil(maxValue / 10) * 10)) : Math.max(maxValue, 1e-9);
-  const scale = (v: number): number => (Math.max(0, Math.min(v, axisMax)) / axisMax) * barSpan;
-
-  const top = cy;
-  const bottom = cy + panel.rows.length * opts.rowH;
-  if (opts.refLine !== undefined && opts.refLine > 0 && opts.refLine <= axisMax) {
-    const rx = barX + scale(opts.refLine);
-    svg.push(`<line x1="${r(rx)}" y1="${r(top - 4)}" x2="${r(rx)}" y2="${r(bottom)}" stroke="${C.grid}" stroke-width="2" stroke-dasharray="6 6"/>`);
-    svg.push(text(rx, top - 10, `${opts.refLine}%`, { size: FS.small, fill: C.muted, anchor: 'middle' }));
-  }
-  // Baseline at 0.
-  svg.push(`<line x1="${r(barX)}" y1="${r(top - 4)}" x2="${r(barX)}" y2="${r(bottom)}" stroke="${C.grid}" stroke-width="2"/>`);
-
+  const bottom = rowsTop + panel.rows.length * spec.rowH;
+  svg.push(`<line x1="${r(barX)}" y1="${r(rowsTop)}" x2="${r(barX)}" y2="${r(bottom)}" stroke="${C.grid}" stroke-width="2"/>`);
   panel.rows.forEach((row, i) => {
-    const rowTop = top + i * opts.rowH;
-    const mid = rowTop + opts.rowH / 2;
-    svg.push(rankBadge(badgeX, mid, row.rank, opts.medals));
-    svg.push(text(nameX, mid + FS.name * 0.36, fitText(row.name, FS.name, opts.nameW), { size: FS.name, fill: C.text }));
-    const barH = Math.min(36, opts.rowH - 28);
-    const w = typeof row.value === 'number' && Number.isFinite(row.value) ? scale(row.value) : 0;
-    if (w > 0) svg.push(rect(barX, mid - barH / 2, Math.max(w, 6), barH, opts.color, 6));
-    svg.push(text(barX + Math.max(w, 0) + 12, mid + FS.value * 0.36, row.valueLabel, { size: FS.value, fill: C.text, bold: true }));
-    if (row.detail) {
-      svg.push(text(INNER_R, mid + FS.detail * 0.36, fitText(row.detail, FS.detail, opts.detailW - 8), { size: FS.detail, fill: C.muted, anchor: 'end' }));
+    const mid = rowsTop + i * spec.rowH + spec.rowH / 2;
+    svg.push(rankBadge(x + 16, mid, row.rank, spec.medals));
+    svg.push(text(nameX, mid + FS.name * 0.36, fitText(row.name, FS.name, spec.nameW), { size: FS.name, fill: C.text }));
+    const bw = typeof row.value === 'number' && Number.isFinite(row.value) ? scale(row.value) : 0;
+    if (bw > 0) svg.push(rect(barX, mid - 11, Math.max(bw, 4), 22, spec.color, 4));
+    svg.push(text(valueRight, mid + FS.value * 0.36, row.valueLabel, { size: FS.value, fill: C.text, anchor: 'end', bold: true }));
+    if (row.detail && spec.detailW > 0) {
+      svg.push(text(right, mid + FS.detail * 0.36, fitText(row.detail, FS.detail, spec.detailW - 10), { size: FS.detail, fill: C.muted, anchor: 'end' }));
     }
   });
 
-  const height = bottom + CARD_PAD - 8 - y;
-  return { svg: rect(CARD_X, y, CARD_W, height, C.card, 24) + svg.join(''), height };
+  // Population average of the metric: a dashed line through the rows, labelled above them.
+  const avg = panel.average;
+  if (typeof avg === 'number' && Number.isFinite(avg) && avg > 0 && avg <= spec.axisMax) {
+    const lx = barX + scale(avg);
+    svg.push(`<line x1="${r(lx)}" y1="${r(rowsTop - 4)}" x2="${r(lx)}" y2="${r(bottom)}" stroke="${C.baseline}" stroke-width="2" stroke-dasharray="5 5"/>`);
+    if (withAvgLabel) {
+      const label = `平均 ${chartPct(avg)}`;
+      const lw = textWidth(label, FS.caption);
+      const cx = Math.min(Math.max(lx, x + lw / 2), right - lw / 2);
+      svg.push(text(cx, rowsTop - 8, label, { size: FS.caption, fill: C.baseline, anchor: 'middle' }));
+    }
+  }
+  return { svg: svg.join(''), height: bottom + 6 - top };
 }
 
-/** Holders shown in a 角色王 cell before 「等 N 人」, however wide the cell. */
+/** Columns side by side in one card: headings aligned, rows aligned. */
+function columnsSection(y: number, cols: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }>): Drawn {
+  const n = cols.length;
+  const w = (INNER_W - COL_GAP * (n - 1)) / n;
+  const top = y + CARD_PAD;
+  const heads = cols.map((c, i) => columnHead(INNER_X + i * (w + COL_GAP), top, w, c.panel, c.spec.color));
+  const headH = Math.max(...heads.map((h) => h.height));
+  const withAvg = cols.some((c) => typeof c.panel.average === 'number' && c.panel.rows.length > 0);
+  const rowsTop = top + headH + 14;
+  const bodies = cols.map((c, i) => columnRows(INNER_X + i * (w + COL_GAP), rowsTop, w, c.panel, c.spec, withAvg));
+  const height = rowsTop + Math.max(...bodies.map((b) => b.height)) + CARD_PAD - 6 - y;
+  return { svg: card(y, height) + heads.map((h) => h.svg).join('') + bodies.map((b) => b.svg).join(''), height };
+}
+
+/** Bars from 0 to a round 10 above the largest value (at most 100). */
+function percentAxis(...panels: Array<WeeklyChartBarPanel | null | undefined>): number {
+  const values = panels.flatMap((p) => (p ? [...p.rows.map((row) => row.value), p.average ?? null] : []));
+  const max = Math.max(0, ...values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v)));
+  return Math.min(100, Math.max(10, Math.ceil(max / 10) * 10));
+}
+
+/** Holders shown on one rank line before 「等 N 人」, however wide the card. */
 export const ROLE_KING_NAMES_MAX = 3;
 
 /**
@@ -359,27 +415,55 @@ export function fitNames(names: readonly string[], size: number, maxWidth: numbe
   return fitText(names[0], size, maxWidth - textWidth(tail, size)) + tail;
 }
 
-/** 角色王: a two-column grid of cells — role (muted), holders, rate. */
-function roleKingsPanel(y: number, panel: NonNullable<WeeklyChartData['roleKings']>): Drawn {
-  const head = panelHead(y, panel.title, panel.note);
-  const svg = head.svg;
-  const cols = 2;
-  const gap = 16;
-  const cellW = (INNER_R - INNER_X - gap * (cols - 1)) / cols;
-  const cellH = 92;
-  const top = head.bodyY - 4;
-  panel.entries.forEach((e, i) => {
-    const x = INNER_X + (i % cols) * (cellW + gap);
-    const cy = top + Math.floor(i / cols) * (cellH + gap);
-    svg.push(rect(x, cy, cellW, cellH, C.cell, 16));
-    svg.push(text(x + 22, cy + 34, fitText(e.role || '—', FS.detail, cellW - 150), { size: FS.detail, fill: C.muted }));
-    svg.push(text(x + cellW - 22, cy + 36, e.valueLabel, { size: FS.value, fill: C.text, anchor: 'end', bold: true }));
-    svg.push(text(x + 22, cy + 76, fitNames(e.names, FS.name, cellW - 44), { size: FS.name, fill: C.text }));
+const ROLE_RANK_LINES = 3;
+const ROLE_CARD_GAP = 12;
+const ROLE_LINE_H = 38;
+const ROLE_LABEL_W = 122;
+
+/** One role card: the role (side colour) on the left, then up to three rank lines. */
+function roleCard(x: number, y: number, w: number, h: number, e: WeeklyChartRoleKing): string {
+  const fill = e.side === 'red' ? C.redCard : e.side === 'blue' ? C.blueCard : C.neutralCard;
+  const label = e.side === 'red' ? C.redLabel : e.side === 'blue' ? C.blueLabel : C.muted;
+  const svg: string[] = [rect(x, y, w, h, fill, 14)];
+  const first = y + 12 + ROLE_LINE_H / 2;
+  svg.push(text(x + 16, first + FS.name * 0.36, fitText(e.role || '—', FS.name, ROLE_LABEL_W - 20), { size: FS.name, fill: label, bold: true }));
+  const badgeX = x + ROLE_LABEL_W + 16;
+  const namesX = badgeX + 24;
+  const valueRight = x + w - 16;
+  e.ranks.slice(0, ROLE_RANK_LINES).forEach((rk, i) => {
+    const mid = first + i * ROLE_LINE_H;
+    svg.push(rankBadge(badgeX, mid, rk.rank, true));
+    svg.push(text(valueRight, mid + FS.value * 0.36, rk.valueLabel, { size: FS.value, fill: C.text, anchor: 'end', bold: true }));
+    svg.push(text(namesX, mid + FS.name * 0.36, fitNames(rk.names, FS.name, valueRight - VALUE_W - 10 - namesX), { size: FS.name, fill: C.text }));
   });
-  const rows = Math.ceil(panel.entries.length / cols);
-  const bottom = top + rows * cellH + Math.max(0, rows - 1) * gap;
-  const height = bottom + CARD_PAD - y;
-  return { svg: rect(CARD_X, y, CARD_W, height, C.card, 24) + svg.join(''), height };
+  return svg.join('');
+}
+
+/**
+ * 角色王: section title, then two columns of role cards — the red side on the left (刺客 莫甘娜
+ * 莫德雷德 奧伯倫), the blue side on the right (梅林 派西維爾 忠臣); any other role joins the shorter column.
+ */
+function roleKingsSection(y: number, panel: NonNullable<WeeklyChartData['roleKings']>): Drawn {
+  const svg: string[] = [];
+  let cy = y + CARD_PAD + FS.section * 0.9;
+  svg.push(text(INNER_X, cy, panel.title, { size: FS.section, fill: C.text, bold: true }));
+  if (panel.note) {
+    const noteX = INNER_X + textWidth(panel.title, FS.section) + 16;
+    svg.push(text(noteX, cy, fitText(panel.note, FS.caption, INNER_R - noteX), { size: FS.caption, fill: C.muted }));
+  }
+  cy += 18;
+  const left = panel.entries.filter((e) => e.side === 'red');
+  const right = panel.entries.filter((e) => e.side === 'blue');
+  for (const e of panel.entries.filter((x) => x.side !== 'red' && x.side !== 'blue')) (left.length <= right.length ? left : right).push(e);
+  const lines = Math.max(1, ...panel.entries.map((e) => Math.min(ROLE_RANK_LINES, e.ranks.length)));
+  const cardH = 24 + lines * ROLE_LINE_H - 6;
+  const cw = (INNER_W - COL_GAP) / 2;
+  [left, right].forEach((col, c) => {
+    col.forEach((e, i) => svg.push(roleCard(INNER_X + c * (cw + COL_GAP), cy + i * (cardH + ROLE_CARD_GAP), cw, cardH, e)));
+  });
+  const rows = Math.max(left.length, right.length);
+  const height = cy + rows * cardH + Math.max(0, rows - 1) * ROLE_CARD_GAP + CARD_PAD - y;
+  return { svg: card(y, height) + svg.join(''), height };
 }
 
 // ─── Whole chart ─────────────────────────────────────────────────────────
@@ -389,47 +473,54 @@ export function buildWeeklyChartSvg(data: WeeklyChartData): string {
   const parts: string[] = [];
 
   // Header band.
-  const headerH = data.subtitle ? 190 : 150;
+  const headerH = data.subtitle ? 140 : 108;
   parts.push(rect(0, 0, W, headerH, C.header));
-  const titleY = 98;
+  const titleY = 74;
   const title = data.title || '每週排行';
   parts.push(text(PAGE_PAD + 8, titleY, title, { size: FS.title, fill: C.headerText, bold: true }));
-  parts.push(
-    text(PAGE_PAD + 8 + textWidth(title, FS.title) + 24, titleY, data.dateLabel, { size: FS.date, fill: C.accent, bold: true }),
-  );
+  parts.push(text(PAGE_PAD + 8 + textWidth(title, FS.title) + 22, titleY, data.dateLabel, { size: FS.title, fill: C.accent, bold: true }));
   if (data.subtitle) {
-    parts.push(text(PAGE_PAD + 8, titleY + 54, fitText(data.subtitle, FS.subtitle, W - PAGE_PAD * 2 - 16), { size: FS.subtitle, fill: C.headerMuted }));
+    parts.push(text(PAGE_PAD + 8, titleY + 44, fitText(data.subtitle, FS.subtitle, W - PAGE_PAD * 2 - 16), { size: FS.subtitle, fill: C.headerMuted }));
   }
 
-  let y = headerH + PAGE_PAD - 8;
+  let y = headerH + SECTION_GAP;
   const add = (d: Drawn): void => {
     parts.push(d.svg);
-    y += d.height + PANEL_GAP;
+    y += d.height + SECTION_GAP;
   };
 
-  // Order (owner 2026-11-10): 角色理論 → 位置理論 → 整體理論 → 進步榜 → 角色王 → 新人榜.
-  const theory = { rowH: 62, nameW: 300, detailW: 0, medals: true, refLine: 50, percentAxis: true } as const;
-  add(barPanel(y, data.main, { ...theory, color: C.main }));
-  if (data.position && data.position.rows.length > 0) add(barPanel(y, data.position, { ...theory, color: C.position }));
-  if (data.overall && data.overall.rows.length > 0) add(barPanel(y, data.overall, { ...theory, color: C.overall }));
+  // 1. The three theory boards side by side (one shared 0–axis so bar lengths compare).
+  const theoryAxis = percentAxis(data.main, data.position, data.overall);
+  const theory = { rowH: 46, nameW: 124, detailW: 0, medals: true, axisMax: theoryAxis };
+  const theoryCols: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }> = [{ panel: data.main, spec: { ...theory, color: C.main } }];
+  if (data.position && data.position.rows.length > 0) theoryCols.push({ panel: data.position, spec: { ...theory, color: C.position } });
+  if (data.overall && data.overall.rows.length > 0) theoryCols.push({ panel: data.overall, spec: { ...theory, color: C.overall } });
+  add(columnsSection(y, theoryCols));
+
+  // 2. 進步榜 and 新人榜 side by side.
+  const pair: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }> = [];
   if (data.improved && data.improved.rows.length > 0) {
-    add(barPanel(y, data.improved, { color: C.improved, rowH: 60, nameW: 260, detailW: 210, medals: false }));
+    const maxDelta = Math.max(1, ...data.improved.rows.map((row) => (typeof row.value === 'number' && Number.isFinite(row.value) ? row.value : 0)));
+    pair.push({ panel: data.improved, spec: { color: C.improved, rowH: 48, nameW: 150, detailW: 150, medals: false, axisMax: maxDelta } });
   }
-  if (data.roleKings && data.roleKings.entries.length > 0) add(roleKingsPanel(y, data.roleKings));
   if (data.newcomers && data.newcomers.rows.length > 0) {
-    add(barPanel(y, data.newcomers, { color: C.newcomers, rowH: 60, nameW: 260, detailW: 130, medals: false, refLine: 50, percentAxis: true }));
+    pair.push({ panel: data.newcomers, spec: { color: C.newcomers, rowH: 48, nameW: 150, detailW: 80, medals: false, axisMax: percentAxis(data.newcomers) } });
   }
+  if (pair.length > 0) add(columnsSection(y, pair));
+
+  // 3. 角色王 at the bottom.
+  if (data.roleKings && data.roleKings.entries.length > 0) add(roleKingsSection(y, data.roleKings));
 
   // Footer.
   y += 4;
   for (const line of data.footerLines) {
-    y += FS.footer * 1.2;
+    y += FS.footer * 1.1;
     parts.push(text(W / 2, y, fitText(line, FS.footer, W - PAGE_PAD * 2), { size: FS.footer, fill: C.muted, anchor: 'middle' }));
-    y += 10;
+    y += 8;
   }
   y += FS.footer * 1.3;
   parts.push(text(W / 2, y, fitText(data.url, FS.footer + 2, W - PAGE_PAD * 2), { size: FS.footer + 2, fill: C.link, anchor: 'middle', bold: true }));
-  const height = Math.ceil(y + PAGE_PAD);
+  const height = Math.ceil(y + PAGE_PAD + 4);
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" font-family="${WEEKLY_CHART_FONT_FAMILY}">` +

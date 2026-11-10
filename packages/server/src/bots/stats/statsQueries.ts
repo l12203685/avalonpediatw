@@ -20,7 +20,7 @@ import {
   getPlayerPlaystyle,
   getPlayerStrength,
 } from '../../services/sheetsAnalysis';
-import type { PlayerStats } from '../../services/sheetsAnalysis';
+import type { LeaderboardBoard, OverviewData, PlayerStats } from '../../services/sheetsAnalysis';
 import type { NameMatch } from './statsReplies';
 import {
   STATS_COMMAND_USAGE,
@@ -60,6 +60,7 @@ import {
   stripLeadingEmoji,
   type WeeklyChartBarPanel,
   type WeeklyChartData,
+  type WeeklyChartRoleKing,
 } from './weeklyChart';
 
 async function safely(label: string, run: () => Promise<string>): Promise<string> {
@@ -181,7 +182,95 @@ export async function weeklyDigestText(now: number = Date.now()): Promise<string
 function splitViewTitle(title: string): { title: string; note: string | null } {
   const bare = stripLeadingEmoji(title);
   const m = /^(.*?)（(.*)）$/u.exec(bare);
-  return m ? { title: m[1].trim(), note: m[2].trim() || null } : { title: bare, note: null };
+  return m ? { title: columnTitle(m[1].trim()), note: m[2].trim() || null } : { title: columnTitle(bare), note: null };
+}
+
+/** A column heading: "角色理論勝率排行 Top 10" → "角色理論勝率 Top 10" (three columns share 1080 px). */
+function columnTitle(title: string): string {
+  return title.replace(/排行(?=\s*Top\b|$)/u, '').trim();
+}
+
+/** P(role) in 10-player Avalon (the generator's legend: 忠臣 4/10, the six special roles 1/10 each). */
+const ROLE_PROBABILITY: Readonly<Record<string, number>> = {
+  刺客: 1 / 10,
+  莫甘娜: 1 / 10,
+  莫德雷德: 1 / 10,
+  奧伯倫: 1 / 10,
+  派西維爾: 1 / 10,
+  梅林: 1 / 10,
+  忠臣: 4 / 10,
+};
+const SEATS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
+
+function finite(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * The chart's baselines (owner 2026-11-10: the average instead of 50%): each theory rate computed for
+ * the whole population — every game of every player — with the same formula the generator applies to
+ * one player, fed the population's own final win rates from the overview (the very rates it tops sparse
+ * cells up with):
+ *   角色理論 = Σ_role P(role) × roleFinalWinRates[role]
+ *   位置理論 = Σ_seat 1/10 × seatFinalWinRates[seat]
+ *   整體理論 = Σ_role Σ_seat P(role) × 1/10 × roleSeatFinalWinRates[role][seat]
+ * i.e. the rate of a player whose every role / seat equals the population's. Each is null when a cell
+ * is missing (older cache) — the chart then draws no baseline.
+ */
+export function populationTheoryAverages(
+  overview: Pick<OverviewData, 'roleFinalWinRates' | 'seatFinalWinRates' | 'roleSeatFinalWinRates'> | null | undefined,
+): { role: number | null; position: number | null; overall: number | null } {
+  const roles = Object.entries(ROLE_PROBABILITY);
+  const roleRates = overview?.roleFinalWinRates;
+  const role = roleRates && roles.every(([r]) => finite(roleRates[r])) ? roles.reduce((sum, [r, p]) => sum + p * roleRates[r], 0) : null;
+  const seatRates = overview?.seatFinalWinRates;
+  const position = seatRates && SEATS.every((st) => finite(seatRates[st])) ? SEATS.reduce((sum, st) => sum + seatRates[st] / 10, 0) : null;
+  const cells = overview?.roleSeatFinalWinRates;
+  const overall =
+    cells && roles.every(([r]) => SEATS.every((st) => finite(cells[r]?.[st])))
+      ? roles.reduce((sum, [r, p]) => sum + SEATS.reduce((acc, st) => acc + (p * cells[r][st]) / 10, 0), 0)
+      : null;
+  return { role, position, overall };
+}
+
+/** Sides for the 角色王 card tint, and the order the cards are laid out in. */
+const RED_ROLES = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫'];
+const BLUE_ROLES = ['梅林', '派西維爾', '忠臣'];
+/** 角色王 ranks shown per role (owner 2026-11-10: Top 3). */
+const ROLE_KING_TOP = 3;
+/** 新人榜 rows on the chart (it sits beside 進步榜 Top 5; the text digest keeps DIGEST_NEWCOMERS_SIZE). */
+const CHART_NEWCOMERS_SIZE = 5;
+
+/**
+ * 角色王 cards: per role the ranks ≤ 3 of `roleTop` (the cache's per-role Top 10 by the same rule as the
+ * title — rank = 1 + players with a higher rate, ties share it), holders of a rank on one line. A cache
+ * without `roleTop` (before 2026-10-30), or a role missing from it, falls back to the title holders (#1).
+ * Red roles first, then blue, then anything else, each in the usual order.
+ */
+function roleKingEntries(board: LeaderboardBoard | null): WeeklyChartRoleKing[] {
+  const holders = roleTitleGroups(board);
+  if (!board || holders.length === 0) return [];
+  const byRole = new Map<string, WeeklyChartRoleKing>();
+  const sideOf = (role: string): WeeklyChartRoleKing['side'] => (RED_ROLES.includes(role) ? 'red' : BLUE_ROLES.includes(role) ? 'blue' : null);
+  for (const g of holders) {
+    if (byRole.has(g.role)) continue; // a role's holders share one rate: one group
+    byRole.set(g.role, { role: g.role, side: sideOf(g.role), ranks: [{ rank: 1, names: g.names, valueLabel: chartPct(g.value) }] });
+  }
+  for (const [role, rows] of Object.entries(board.roleTop ?? {})) {
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    const ranks: WeeklyChartRoleKing['ranks'] = [];
+    rows.forEach((row, i) => {
+      const rank = typeof row.rank === 'number' ? row.rank : i + 1;
+      if (rank > ROLE_KING_TOP) return;
+      const same = ranks.find((x) => x.rank === rank);
+      if (same) same.names.push(row.name);
+      else ranks.push({ rank, names: [row.name], valueLabel: chartPct(row.value) });
+    });
+    if (ranks.length > 0) byRole.set(role, { role, side: sideOf(role), ranks });
+  }
+  const order = [...RED_ROLES, ...BLUE_ROLES];
+  const pos = (role: string): number => (order.includes(role) ? order.indexOf(role) : order.length);
+  return [...byRole.values()].sort((a, b) => pos(a.role) - pos(b.role));
 }
 
 /**
@@ -201,7 +290,11 @@ function theoryBoardPanel(
     const value = typeof own === 'number' && Number.isFinite(own) ? own : typeof r.value === 'number' && Number.isFinite(r.value) ? r.value : null;
     return { rank: typeof r.rank === 'number' ? r.rank : i + 1, name: r.name, value, valueLabel: chartPct(value) };
   });
-  return { title: `${board.title} Top ${rows.length}`, note: boardQualifier(board) || null, rows };
+  return { title: columnTitle(`${board.title} Top ${rows.length}`), note: boardQualifier(board) || null, rows };
+}
+
+function withAverage(panel: WeeklyChartBarPanel | null, average: number | null): WeeklyChartBarPanel | null {
+  return panel ? { ...panel, average } : null;
 }
 
 /** "2026-11-09" → "11/9"; null for anything else. */
@@ -228,8 +321,10 @@ async function rankingChartData(opts: { title: string; dateLabel: (asOf: string 
   const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
   const view = selectLeaderboard(leaderboard, overview);
   const head = splitViewTitle(view.title);
+  const averages = populationTheoryAverages(overview);
   const main: WeeklyChartData['main'] = {
     ...head,
+    average: averages.role,
     rows: view.rows.map((r) => ({ rank: r.rank, name: r.name, value: r.roleTheory, valueLabel: chartPct(r.roleTheory) })),
     ...(view.emptyNote ? { emptyNote: view.emptyNote.replace(/^（(.*)）$/u, '$1') } : {}),
   };
@@ -251,18 +346,14 @@ async function rankingChartData(opts: { title: string; dateLabel: (asOf: string 
         }
       : null;
 
-  const titlesBoard = findBoard(leaderboard, 'roleTitles');
-  const groups = roleTitleGroups(titlesBoard);
+  const titlesBoard = findTheoryBoard(leaderboard, 'roleTitles');
+  const kings = roleKingEntries(titlesBoard);
   const roleKings: WeeklyChartData['roleKings'] =
-    titlesBoard && groups.length > 0
+    titlesBoard && kings.length > 0
       ? {
-          title: titlesBoard.title,
+          title: kings.some((k) => k.ranks.some((x) => x.rank > 1)) ? `${titlesBoard.title} Top ${ROLE_KING_TOP}` : titlesBoard.title,
           note: titlesBoard.period || null,
-          entries: groups.map((g) => ({
-            role: g.role,
-            names: g.names,
-            valueLabel: chartPct(g.value),
-          })),
+          entries: kings,
         }
       : null;
 
@@ -273,7 +364,9 @@ async function rankingChartData(opts: { title: string; dateLabel: (asOf: string 
       ? {
           title: newcomersBoard.title,
           note: newcomersQualifier(newcomersBoard, roleWindows),
-          rows: newcomersBoard.rows.slice(0, DIGEST_NEWCOMERS_SIZE).map((r, i) => {
+          // Newcomers are ranked by 角色理論: the same population baseline.
+          average: averages.role,
+          rows: newcomersBoard.rows.slice(0, CHART_NEWCOMERS_SIZE).map((r, i) => {
             const value = typeof r.roleTheory === 'number' && Number.isFinite(r.roleTheory) ? r.roleTheory : r.value;
             const games = typeof r.careerGames === 'number' && Number.isFinite(r.careerGames) ? r.careerGames : r.games;
             return { rank: typeof r.rank === 'number' ? r.rank : i + 1, name: r.name, value, valueLabel: chartPct(value), detail: `${games} 場` };
@@ -293,8 +386,8 @@ async function rankingChartData(opts: { title: string; dateLabel: (asOf: string 
     dateLabel: opts.dateLabel(leaderboard?.asOf ?? null),
     subtitle: subtitle || null,
     main,
-    position: theoryBoardPanel(leaderboard, 'position', 'positionTheory'),
-    overall: theoryBoardPanel(leaderboard, 'overall', 'overallTheory'),
+    position: withAverage(theoryBoardPanel(leaderboard, 'position', 'positionTheory'), averages.position),
+    overall: withAverage(theoryBoardPanel(leaderboard, 'overall', 'overallTheory'), averages.overall),
     improved,
     roleKings,
     newcomers,
