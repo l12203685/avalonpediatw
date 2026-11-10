@@ -12,6 +12,8 @@ import {
   chartPct,
   chartSigned,
   escapeXml,
+  tierLine,
+  TIER_LEGEND,
   fitNames,
   fitText,
   renderWeeklyChartPng,
@@ -25,6 +27,7 @@ import {
 import {
   WEEKLY_CHART_CAPTION,
   __resetLeaderboardChartCacheForTests,
+  chartBaselines,
   populationTheoryAverages,
   leaderboardChart,
   leaderboardChartData,
@@ -90,6 +93,7 @@ const cache = vi.hoisted(() => {
     } as Record<string, unknown>,
     leaderboard: { asOf: '2026-11-08', boards: boards() } as { asOf: string; boards: LeaderboardBoard[] } | null,
     boards,
+    rating: null as { theoryBaselines?: unknown } | null,
   };
 });
 
@@ -97,6 +101,7 @@ vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/sheetsAnalysis')>()),
   getOverview: async () => cache.overview,
   getLeaderboard: async () => cache.leaderboard,
+  getRatingBoard: async () => cache.rating,
 }));
 
 function minimal(overrides: Partial<WeeklyChartData> = {}): WeeklyChartData {
@@ -183,7 +188,7 @@ describe('buildWeeklyChartSvg', () => {
     expect(svg).not.toContain('角色王');
     expect(svg).not.toContain('新人榜');
     const full = buildWeeklyChartSvg(sampleWeeklyChartData());
-    for (const s of ['位置理論勝率 Top 10', '整體理論勝率 Top 10', '進步榜 Top 5', '角色王 Top 3', '新人榜', '奧伯倫', '18 場', '41% → 53%', '平均 46%']) {
+    for (const s of ['位置理論勝率 Top 10', '整體理論勝率 Top 10', '進步榜 Top 5', '角色王 Top 3', '新人榜', '奧伯倫', '18 場', '41% → 53%', '全體 46%', '高 50%・中 45%・低 41%', TIER_LEGEND]) {
       expect(full).toContain(s);
     }
     // Order (third pass): the three theory columns, then 進步榜 | 新人榜, then 角色王 at the bottom.
@@ -197,13 +202,29 @@ describe('buildWeeklyChartSvg', () => {
     expect(height(full)).toBeGreaterThan(height(svg));
   });
 
-  it('the dashed baseline sits at the population average, labelled 「平均 N%」 (no line without one)', () => {
+  it('the dashed baseline sits at the 全體 value, labelled 「全體 N%」 (no line without one)', () => {
     const withAvg = buildWeeklyChartSvg(minimal({ main: { title: 'T', note: null, rows: [{ rank: 1, name: '甲', value: 60, valueLabel: '60%' }], average: 46.1 } }));
-    expect(withAvg).toContain('>平均 46%</text>');
+    expect(withAvg).toContain('>全體 46%</text>');
     expect(withAvg).toContain('stroke-dasharray');
     const without = buildWeeklyChartSvg(minimal());
-    expect(without).not.toContain('平均');
+    expect(without).not.toContain('全體');
+    expect(without).not.toContain(TIER_LEGEND);
     expect(without).not.toContain('stroke-dasharray');
+  });
+
+  it('Elo-PR tiers: one line per column, aligned, and the legend under the theory section', () => {
+    expect(tierLine({ high: 50.2, mid: 45.4, low: 41.2 })).toBe('高 50%・中 45%・低 41%');
+    expect(tierLine({ high: 50.2, mid: null, low: 41.2 })).toBe('高 50%・低 41%');
+    expect(tierLine({ high: null, mid: null, low: null })).toBeNull();
+    expect(tierLine(null)).toBeNull();
+    const data = sampleWeeklyChartData();
+    const svg = buildWeeklyChartSvg(data);
+    const ys = [...svg.matchAll(/y="([\d.]+)"[^>]*>高 \d+%/g)].map((m) => m[1]);
+    expect(ys.length).toBe(4); // three theory columns + 新人榜
+    expect(new Set(ys.slice(0, 3)).size).toBe(1); // the theory columns' lines share one height
+    expect(svg.split(TIER_LEGEND)).toHaveLength(2);
+    const noTiers = buildWeeklyChartSvg({ ...data, main: { ...data.main, tiers: null }, position: { ...data.position!, tiers: null }, overall: { ...data.overall!, tiers: null } });
+    expect(noTiers).not.toContain(TIER_LEGEND);
   });
 
   it('角色王 cards: red side tinted red, blue side tinted blue, up to three rank lines, ties on one line', () => {
@@ -222,7 +243,7 @@ describe('buildWeeklyChartSvg', () => {
   it('an empty main board prints its note instead of bars', () => {
     const svg = buildWeeklyChartSvg(minimal({ main: { title: '角色理論勝率排行', note: null, rows: [], emptyNote: '目前沒有符合條件的玩家' } }));
     expect(svg).toContain('目前沒有符合條件的玩家');
-    expect(svg).not.toContain('平均');
+    expect(svg).not.toContain('全體');
   });
 
   it('a missing value draws no bar and prints the dash', () => {
@@ -324,6 +345,33 @@ describe('weeklyChartData (mocked cache)', () => {
       { role: '梅林', side: 'blue', ranks: [{ rank: 1, names: ['丁3'], valueLabel: '55%' }, { rank: 2, names: ['庚1', '庚2'], valueLabel: '52%' }] },
     ]);
     cache.leaderboard = { asOf: '2026-11-08', boards: cache.boards() };
+  });
+
+  it('全體 and the tiers from rating.theoryBaselines; without it 全體 = the population formula and no tiers', async () => {
+    const group = (role: number, position: number, overall: number, players: number, games: number) => ({ role, position, overall, players, games });
+    cache.rating = {
+      theoryBaselines: {
+        all: group(46.1, 46.2, 46.3, 194, 19273),
+        tiers: { pr80plus: group(50.2, 50.4, 50.3, 14, 5296), pr20to80: group(45.2, 45.4, 45.3, 39, 10448), pr20minus: group(41.4, 41.2, 41.6, 13, 2457) },
+        rule: { poolMinGames: 30, bounds: [20, 80] },
+      },
+    };
+    try {
+      const data = await weeklyChartData(Date.UTC(2026, 10, 9, 4, 0));
+      expect(data.main.average).toBe(46.1);
+      expect(data.main.tiers).toEqual({ high: 50.2, mid: 45.2, low: 41.4 });
+      expect(data.position?.average).toBe(46.2);
+      expect(data.position?.tiers).toEqual({ high: 50.4, mid: 45.4, low: 41.2 });
+      expect(data.overall?.average).toBe(46.3);
+      expect(data.overall?.tiers).toEqual({ high: 50.3, mid: 45.3, low: 41.6 });
+      expect(data.newcomers?.tiers).toEqual(data.main.tiers); // 新人榜 uses the 角色理論 values
+    } finally {
+      cache.rating = null;
+    }
+    const data = await weeklyChartData(Date.UTC(2026, 10, 9, 4, 0));
+    expect(data.main.average).toBeCloseTo(46, 6);
+    expect(data.main.tiers).toBeNull();
+    expect(chartBaselines(undefined, null)).toEqual({ all: { role: null, position: null, overall: null }, tiers: null });
   });
 
   it('population averages: the theory formulas fed the population\'s own final win rates; null when a cell is missing', () => {

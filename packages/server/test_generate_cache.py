@@ -4491,5 +4491,71 @@ class MistakeTest(unittest.TestCase):
                                                        (gc.MISTAKE_PROVEN_SENT, 2, "1570")])
 
 
+
+class TheoryBaselinesTest(unittest.TestCase):
+    """rating.theoryBaselines (Edward 2026-11-10): 全體 and the three Elo-PR tiers, each pooled as one player."""
+
+    FLAT_ROLE = {r: 50.0 for r in ROLE_ORDER}
+    FLAT_SEAT = {str(i): 50.0 for i in range(1, 11)}
+    FLAT_CELLS = {r: {str(i): 50.0 for i in range(1, 11)} for r in ROLE_ORDER}
+
+    # Five pool players (>= 30 rated games): PR = 100 x (rank below + 0.5) / 5 -> 90, 70, 50, 30, 10.
+    RATING = [
+        {"name": "P1", "elo": 1600.0, "games": 40},  # PR 90 -> pr80plus
+        {"name": "P2", "elo": 1550.0, "games": 40},  # PR 70 -> pr20to80
+        {"name": "P3", "elo": 1500.0, "games": 40},  # PR 50 -> pr20to80
+        {"name": "P4", "elo": 1450.0, "games": 40},  # PR 30 -> pr20to80
+        {"name": "P5", "elo": 1400.0, "games": 40},  # PR 10 -> pr20minus
+        {"name": "P6", "elo": 1700.0, "games": 5},   # provisional: no tier, outside the pool
+    ]
+
+    def baselines(self, timelines: dict) -> dict:
+        # Top-up off (a cell with no game is the population rate, any game counts as is), flat 50% population.
+        return gc.theory_baselines(timelines, self.RATING, self.FLAT_ROLE, self.FLAT_SEAT, self.FLAT_CELLS,
+                                   min_cell=0, pool_min_games=30)
+
+    def test_player_prs_follow_the_site_rule(self) -> None:
+        self.assertEqual(gc.player_prs(self.RATING, 30), {"P1": 90, "P2": 70, "P3": 50, "P4": 30, "P5": 10})
+
+    def test_hand_computed_tiers(self) -> None:
+        timelines = {
+            "P1": [seat("刺客", "1", "三紅")],                            # win
+            "P2": [seat("忠臣", "2", "三紅")],                            # loss
+            "P3": [seat("忠臣", "2", "三藍活")],                          # win
+            "P4": [],
+            "P5": [seat("梅林", "3", "三藍活"), seat("梅林", "3", "三藍活")],  # two wins
+            "P6": [seat("莫甘娜", "4", "三藍活")],                        # loss
+        }
+        b = self.baselines(timelines)
+        # pr80plus = P1 alone: 刺客 100, seat 1 100, cell (刺客, 1) 100, everything else 50:
+        #   role 0.1 x 100 + 0.1 x 50 x 5 + 0.4 x 50 = 55; position 0.1 x 100 + 0.9 x 50 = 55; overall 0.01 x 100 + 0.99 x 50 = 50.5
+        self.assertEqual(b["tiers"]["pr80plus"], {"role": 55.0, "position": 55.0, "overall": 50.5, "players": 1, "games": 1})
+        # pr20to80 = P2 + P3 + P4 pooled: 忠臣 1 win in 2 games in seat 2 = 50 -> every cell 50.
+        self.assertEqual(b["tiers"]["pr20to80"], {"role": 50.0, "position": 50.0, "overall": 50.0, "players": 3, "games": 2})
+        # pr20minus = P5: 梅林 2/2 = 100 in seat 3 -> 55 / 55 / 50.5 like P1.
+        self.assertEqual(b["tiers"]["pr20minus"], {"role": 55.0, "position": 55.0, "overall": 50.5, "players": 1, "games": 2})
+        # all = every seat, P6 included: 刺客 100, 莫甘娜 0, 梅林 100, 忠臣 50, the rest 50:
+        #   role 0.1 x (100 + 0 + 50 + 50 + 50 + 100) + 0.4 x 50 = 55
+        #   position seats 1 100, 2 50, 3 100, 4 0, six more at 50 -> 550 / 10 = 55
+        #   overall 50 + 0.01 x (100 - 50) + 0.01 x (100 - 50) + 0.01 x (0 - 50) = 50.5
+        self.assertEqual(b["all"], {"role": 55.0, "position": 55.0, "overall": 50.5, "players": 5, "games": 6})
+        self.assertEqual(b["rule"], {"poolMinGames": 30, "bounds": [20, 80]})
+
+    def test_a_tier_without_games(self) -> None:
+        b = self.baselines({"P1": [seat("刺客", "1", "三紅")]})
+        self.assertEqual(b["tiers"]["pr20minus"], {"role": None, "position": None, "overall": None, "players": 1, "games": 0})
+
+    def test_build_cache_puts_it_in_the_rating_section(self) -> None:
+        games = gc.parse_game_log(rotation_log())
+        overview = {"roleFinalWinRates": gc.compute_role_final_win_rates(games),
+                    "seatFinalWinRates": gc.compute_seat_final_win_rates(games),
+                    "roleSeatFinalWinRates": gc.compute_role_seat_final_win_rates(games)}
+        rating = gc.with_theory_baselines(gc.compute_rating(games), games, overview)
+        b = rating["theoryBaselines"]
+        self.assertEqual(set(b), {"all", "tiers", "rule"})
+        self.assertEqual(set(b["tiers"]), {"pr80plus", "pr20to80", "pr20minus"})
+        self.assertEqual(b["all"]["games"], sum(len(v) for v in gc.player_timelines(games).values()))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

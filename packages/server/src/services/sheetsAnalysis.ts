@@ -598,6 +598,28 @@ export interface RatingSection {
   blueWinRate: number;
   players: RatingPlayerRow[];
   series: Record<string, RatingSeriesPoint[]>;
+  /** 2026-11-10 (generate_cache.py theory_baselines): the weekly chart's reference values. Older caches: absent. */
+  theoryBaselines?: TheoryBaselines;
+}
+
+/** One pooled group scored as a single player (career): 角色理論 / 位置理論 / 整體理論 in %. */
+export interface TheoryBaselineGroup {
+  role: number | null;
+  position: number | null;
+  overall: number | null;
+  players: number;
+  /** Player-games pooled. */
+  games: number;
+}
+
+/**
+ * all = every seat of every player (the population); tiers = the players of each current Elo-PR tier
+ * (PR among players with ≥ rule.poolMinGames rated games; provisional players are in no tier).
+ */
+export interface TheoryBaselines {
+  all: TheoryBaselineGroup;
+  tiers: { pr80plus: TheoryBaselineGroup; pr20to80: TheoryBaselineGroup; pr20minus: TheoryBaselineGroup };
+  rule?: { poolMinGames?: number; bounds?: number[] };
 }
 
 /** /api/analysis/rating: the section without the per-player series, plus the leaderboard's asOf. */

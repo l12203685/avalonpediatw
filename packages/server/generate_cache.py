@@ -3887,6 +3887,69 @@ def compute_rating(games: list[GameRow], cfg: Mapping[str, Any] | None = None) -
     }
 
 
+# ---------------------------------------------------------------------------
+# rating.theoryBaselines (Edward 2026-11-10): the weekly chart's reference lines
+# ---------------------------------------------------------------------------
+# 「整體平均就用全樣本當一個人」+ 依 Elo PR 分三層的長期參考值。Each group's career seats are pooled and
+# scored as ONE player with theory_window (same formulas and top-ups as a player's career: 角色理論 /
+# 位置理論 / 整體理論, cells under theoryMinCellGames games topped up at the population rate):
+#   all        every seat of every player (= the population formula: Σ P(role) × the population's role
+#              rate, and so on)
+#   tiers      by each player's CURRENT PR, the site's PR (lineup rule): the percentile rank of their Elo
+#              among the players with >= lineupMinGames (30) rated games, rounded to an integer;
+#              pr80plus = PR >= 80, pr20to80 = 20 <= PR < 80, pr20minus = PR < 20. Provisional players
+#              (< 30 rated games, whose PR the site only shows capped at 50) are in no tier, only in `all`.
+# Kept in the rating section (PR is an Elo notion), which the stats-engine parity and the leaderboard
+# replay leave alone; like the rest of rating it does not depend on asOf.
+
+PR_TIERS = (("pr80plus", 80.0, None), ("pr20to80", 20.0, 80.0), ("pr20minus", None, 20.0))
+
+
+def player_prs(rating_players: Sequence[Mapping[str, Any]], min_games: int) -> dict[str, int]:
+    """name -> current PR (integer) of every rated player with >= min_games games."""
+    pool_rows = [r for r in rating_players if int(r.get("games") or 0) >= min_games]
+    pool = sorted(float(r["elo"]) for r in pool_rows)
+    return {r["name"]: int(math.floor(_percentile_rank(pool, float(r["elo"])) + 0.5)) for r in pool_rows} if pool else {}
+
+
+def theory_baselines(
+    timelines: Mapping[str, Sequence[PlayerSeat]], rating_players: Sequence[Mapping[str, Any]],
+    role_rates: Mapping[str, float], seat_rates: Mapping[str, float],
+    role_seat_rates: Mapping[str, Mapping[str, float]], min_cell: int | None = None, pool_min_games: int | None = None,
+) -> dict:
+    """{all, tiers: {pr80plus, pr20to80, pr20minus}, rule}: each group {role, position, overall, players, games}
+    (rates None for a group without games)."""
+    if pool_min_games is None:
+        pool_min_games = int(RATING_CONFIG["lineupMinGames"])
+    prs = player_prs(rating_players, pool_min_games)
+
+    def pooled(names: Sequence[str]) -> dict:
+        seats = [s for n in names for s in timelines.get(n, [])]
+        if not seats:
+            return {"role": None, "position": None, "overall": None, "players": len(names), "games": 0}
+        w = theory_window(seats, role_rates, seat_rates, min_cell, window=0, role_seat_rates=role_seat_rates)
+        return {"role": w["roleTheory"], "position": w["positionTheory"], "overall": w["overallTheory"],
+                "players": len(names), "games": len(seats)}
+
+    def in_tier(pr: int, lo: float | None, hi: float | None) -> bool:
+        return (lo is None or pr >= lo) and (hi is None or pr < hi)
+
+    return {
+        "all": pooled([n for n, seats in timelines.items() if seats]),
+        "tiers": {key: pooled([n for n, pr in prs.items() if in_tier(pr, lo, hi)]) for key, lo, hi in PR_TIERS},
+        "rule": {"poolMinGames": pool_min_games, "bounds": [20, 80]},
+    }
+
+
+def with_theory_baselines(rating: dict, games: list[GameRow], overview: Mapping[str, Any]) -> dict:
+    """The rating section with theoryBaselines added (build_cache)."""
+    rating["theoryBaselines"] = theory_baselines(
+        player_timelines(games), rating.get("players") or [], overview["roleFinalWinRates"],
+        overview["seatFinalWinRates"], overview["roleSeatFinalWinRates"],
+    )
+    return rating
+
+
 def rating_summary(rating: Mapping[str, Any] | None) -> str:
     """One line for logs: counts only, no names."""
     if not isinstance(rating, Mapping):
@@ -4504,7 +4567,7 @@ def build_cache(
         "leaderboard": compute_leaderboard(games, as_of, overview["roleFinalWinRates"], overview["seatFinalWinRates"],
                                            overview["roleSeatFinalWinRates"]),
         # Elo（compute_rating）：依對局順序重放，跟 as_of 無關；複合篩選不重算。
-        "rating": compute_rating(games),
+        "rating": with_theory_baselines(compute_rating(games), games, overview),
     }
 
 

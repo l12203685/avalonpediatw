@@ -50,8 +50,10 @@ const bars = (list: Array<[string, number]>) =>
 const ranks = (...list: Array<[number, string[], number]>): WeeklyChartRoleRank[] =>
   list.map(([rank, names, v]) => ({ rank, names, valueLabel: chartPct(v) }));
 
-/** Population averages like the real cache's (≈ 46%: red wins about 69% of games finally). */
+/** 全體 like the real cache's (≈ 46%: red wins about 69% of games finally). */
 export const SAMPLE_AVERAGE = 46.1;
+/** Elo-PR tiers like the real cache's long-term values (2026-11-10). */
+const TIERS_ROLE = { high: 50.2, mid: 45.2, low: 41.4 };
 
 export function sampleWeeklyChartData(): WeeklyChartData {
   return {
@@ -63,9 +65,10 @@ export function sampleWeeklyChartData(): WeeklyChartData {
       note: '各角色近 10 場、忠臣近 40 場，近 90 天內有出賽、六個特殊角色各至少 10 場、忠臣至少 40 場',
       rows: bars(MAIN),
       average: SAMPLE_AVERAGE,
+      tiers: TIERS_ROLE,
     },
-    position: { title: '位置理論勝率 Top 10', note: '各人最近 100 場，近 90 天內有出賽、生涯至少 100 場', rows: bars(POSITION), average: 46.2 },
-    overall: { title: '整體理論勝率 Top 10', note: '各人生涯全部場次，近 90 天內有出賽、生涯至少 100 場', rows: bars(OVERALL), average: 46.0 },
+    position: { title: '位置理論勝率 Top 10', note: '各人最近 100 場，近 90 天內有出賽、生涯至少 100 場', rows: bars(POSITION), average: 46.1, tiers: { high: 50.2, mid: 45.4, low: 41.2 } },
+    overall: { title: '整體理論勝率 Top 10', note: '各人生涯全部場次，近 90 天內有出賽、生涯至少 100 場', rows: bars(OVERALL), average: 46.1, tiers: { high: 50.3, mid: 45.3, low: 41.4 } },
     improved: {
       title: '進步榜 Top 5',
       note: '各角色近 10 場、忠臣近 40 場 vs 再之前同樣場數，近 90 天內有出賽',
@@ -87,6 +90,7 @@ export function sampleWeeklyChartData(): WeeklyChartData {
       title: '新人榜',
       note: '2026-08-11 ～ 2026-11-08 打滿 10 場，新人例外：看全部場次，角色理論每個角色最多算近 10 場、忠臣 40 場',
       average: SAMPLE_AVERAGE,
+      tiers: TIERS_ROLE,
       rows: [
         ['晨光', 54.3, 18],
         ['Pip Hollow', 52.5, 12],

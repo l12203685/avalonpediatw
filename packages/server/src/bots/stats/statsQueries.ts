@@ -19,8 +19,9 @@ import {
   getPlayerByName,
   getPlayerPlaystyle,
   getPlayerStrength,
+  getRatingBoard,
 } from '../../services/sheetsAnalysis';
-import type { LeaderboardBoard, OverviewData, PlayerStats } from '../../services/sheetsAnalysis';
+import type { LeaderboardBoard, OverviewData, PlayerStats, TheoryBaselines } from '../../services/sheetsAnalysis';
 import type { NameMatch } from './statsReplies';
 import {
   STATS_COMMAND_USAGE,
@@ -207,7 +208,7 @@ function finite(v: unknown): v is number {
 }
 
 /**
- * The chart's baselines (owner 2026-11-10: the average instead of 50%): each theory rate computed for
+ * 全體 when the cache has no rating.theoryBaselines (owner 2026-11-10: the average instead of 50%): each theory rate computed for
  * the whole population — every game of every player — with the same formula the generator applies to
  * one player, fed the population's own final win rates from the overview (the very rates it tops sparse
  * cells up with):
@@ -293,8 +294,33 @@ function theoryBoardPanel(
   return { title: columnTitle(`${board.title} Top ${rows.length}`), note: boardQualifier(board) || null, rows };
 }
 
-function withAverage(panel: WeeklyChartBarPanel | null, average: number | null): WeeklyChartBarPanel | null {
-  return panel ? { ...panel, average } : null;
+type Metric = 'role' | 'position' | 'overall';
+type Tiers = NonNullable<WeeklyChartBarPanel['tiers']>;
+
+/**
+ * The chart's reference values (Edward 2026-11-10): 全體 = the whole sample scored as one player and the
+ * three Elo-PR tiers' long-term values, both from the cache's rating.theoryBaselines; without it (older
+ * cache) 全體 comes from the population formula and there are no tiers.
+ */
+export function chartBaselines(
+  baselines: TheoryBaselines | null | undefined,
+  overview: Parameters<typeof populationTheoryAverages>[0],
+): { all: Record<Metric, number | null>; tiers: Record<Metric, Tiers> | null } {
+  const fallback = populationTheoryAverages(overview);
+  const metrics: Metric[] = ['role', 'position', 'overall'];
+  const val = (v: unknown): number | null => (finite(v) ? v : null);
+  const all = Object.fromEntries(metrics.map((m) => [m, val(baselines?.all?.[m]) ?? fallback[m]])) as Record<Metric, number | null>;
+  const t = baselines?.tiers;
+  const tiers = t
+    ? (Object.fromEntries(
+        metrics.map((m) => [m, { high: val(t.pr80plus?.[m]), mid: val(t.pr20to80?.[m]), low: val(t.pr20minus?.[m]) }]),
+      ) as Record<Metric, Tiers>)
+    : null;
+  return { all, tiers };
+}
+
+function withBaseline(panel: WeeklyChartBarPanel | null, base: ReturnType<typeof chartBaselines>, metric: Metric): WeeklyChartBarPanel | null {
+  return panel ? { ...panel, average: base.all[metric], tiers: base.tiers?.[metric] ?? null } : null;
 }
 
 /** "2026-11-09" → "11/9"; null for anything else. */
@@ -318,13 +344,14 @@ export async function leaderboardChartData(now: number = Date.now()): Promise<We
 }
 
 async function rankingChartData(opts: { title: string; dateLabel: (asOf: string | null) => string }): Promise<WeeklyChartData> {
-  const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
+  const [overview, leaderboard, rating] = await Promise.all([getOverview(), getLeaderboard(), getRatingBoard().catch(() => null)]);
   const view = selectLeaderboard(leaderboard, overview);
   const head = splitViewTitle(view.title);
-  const averages = populationTheoryAverages(overview);
+  const base = chartBaselines(rating?.theoryBaselines, overview);
   const main: WeeklyChartData['main'] = {
     ...head,
-    average: averages.role,
+    average: base.all.role,
+    tiers: base.tiers?.role ?? null,
     rows: view.rows.map((r) => ({ rank: r.rank, name: r.name, value: r.roleTheory, valueLabel: chartPct(r.roleTheory) })),
     ...(view.emptyNote ? { emptyNote: view.emptyNote.replace(/^（(.*)）$/u, '$1') } : {}),
   };
@@ -364,8 +391,9 @@ async function rankingChartData(opts: { title: string; dateLabel: (asOf: string 
       ? {
           title: newcomersBoard.title,
           note: newcomersQualifier(newcomersBoard, roleWindows),
-          // Newcomers are ranked by 角色理論: the same population baseline.
-          average: averages.role,
+          // Newcomers are ranked by 角色理論: the same baselines.
+          average: base.all.role,
+          tiers: base.tiers?.role ?? null,
           rows: newcomersBoard.rows.slice(0, CHART_NEWCOMERS_SIZE).map((r, i) => {
             const value = typeof r.roleTheory === 'number' && Number.isFinite(r.roleTheory) ? r.roleTheory : r.value;
             const games = typeof r.careerGames === 'number' && Number.isFinite(r.careerGames) ? r.careerGames : r.games;
@@ -386,8 +414,8 @@ async function rankingChartData(opts: { title: string; dateLabel: (asOf: string 
     dateLabel: opts.dateLabel(leaderboard?.asOf ?? null),
     subtitle: subtitle || null,
     main,
-    position: withAverage(theoryBoardPanel(leaderboard, 'position', 'positionTheory'), averages.position),
-    overall: withAverage(theoryBoardPanel(leaderboard, 'overall', 'overallTheory'), averages.overall),
+    position: withBaseline(theoryBoardPanel(leaderboard, 'position', 'positionTheory'), base, 'position'),
+    overall: withBaseline(theoryBoardPanel(leaderboard, 'overall', 'overallTheory'), base, 'overall'),
     improved,
     roleKings,
     newcomers,

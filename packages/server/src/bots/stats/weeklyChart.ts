@@ -15,8 +15,11 @@
  *   4. 角色王 at the bottom: Top 3 per role (ties share a line, 「等 N 人」), cards
  *      tinted red (刺客 莫甘娜 莫德雷德 奧伯倫) or blue (梅林 派西維爾 忠臣);
  *   5. a footer with the stats page link.
- * Each bar column draws a dashed baseline at the population average of its metric
- * (labelled 「平均 46%」; statsQueries.populationTheoryAverages) instead of 50%.
+ * Each bar column draws a dashed baseline at the 全體 value of its metric (the whole sample
+ * scored as one player, labelled 「全體 46%」) and, under its caption, the long-term values of
+ * the three Elo-PR tiers (「高 50%・中 45%・低 41%」; cache rating.theoryBaselines, see
+ * statsQueries.chartBaselines). Tick marks for the tiers were dropped: on a ~90-px bar from 0
+ * they would sit 1–5 px apart.
  * Every percentage is a whole number (roundHalfUp); the order is the cache's.
  * Smallest text is 22 px at 1080 px wide.
  *
@@ -55,8 +58,10 @@ export interface WeeklyChartBarPanel {
   rows: WeeklyChartBarRow[];
   /** Shown instead of bars when `rows` is empty. */
   emptyNote?: string;
-  /** Population average of the metric (%): the dashed baseline, labelled 「平均 N%」; absent → no line. */
+  /** 全體 value of the metric (%): the dashed baseline, labelled 「全體 N%」; absent → no line. */
   average?: number | null;
+  /** Long-term values of the Elo-PR tiers (高 PR80+ / 中 PR20~80 / 低 PR20−), one line under the caption. */
+  tiers?: { high: number | null; mid: number | null; low: number | null } | null;
 }
 
 /** One rank of a role: the holders sharing it (ties 各給) and their rate. */
@@ -327,6 +332,18 @@ function columnHead(x: number, y: number, w: number, panel: WeeklyChartBarPanel,
   return { svg: svg.join(''), height: cy - y };
 }
 
+/** 「高 50%・中 45%・低 41%」 — the Elo-PR tiers' long-term values (a tier without games is left out). */
+export function tierLine(tiers: WeeklyChartBarPanel['tiers']): string | null {
+  if (!tiers) return null;
+  const parts = ([['高', tiers.high], ['中', tiers.mid], ['低', tiers.low]] as const)
+    .filter(([, v]) => typeof v === 'number' && Number.isFinite(v))
+    .map(([label, v]) => `${label} ${chartPct(v)}`);
+  return parts.length > 0 ? parts.join('・') : null;
+}
+
+/** Under the theory columns when they show tiers. */
+export const TIER_LEGEND = '虛線 = 全體；高／中／低 = 目前 Elo PR80+／PR20~80／PR20− 的玩家合成一人的長期值';
+
 /** The rows of a bar column from `top` (already aligned with its neighbours); returns the svg and the bottom y. */
 function columnRows(x: number, top: number, w: number, panel: WeeklyChartBarPanel, spec: ColumnSpec, withAvgLabel: boolean): Drawn {
   const svg: string[] = [];
@@ -361,13 +378,13 @@ function columnRows(x: number, top: number, w: number, panel: WeeklyChartBarPane
     }
   });
 
-  // Population average of the metric: a dashed line through the rows, labelled above them.
+  // 全體 value of the metric: a dashed line through the rows, labelled above them.
   const avg = panel.average;
   if (typeof avg === 'number' && Number.isFinite(avg) && avg > 0 && avg <= spec.axisMax) {
     const lx = barX + scale(avg);
     svg.push(`<line x1="${r(lx)}" y1="${r(rowsTop - 4)}" x2="${r(lx)}" y2="${r(bottom)}" stroke="${C.baseline}" stroke-width="2" stroke-dasharray="5 5"/>`);
     if (withAvgLabel) {
-      const label = `平均 ${chartPct(avg)}`;
+      const label = `全體 ${chartPct(avg)}`;
       const lw = textWidth(label, FS.caption);
       const cx = Math.min(Math.max(lx, x + lw / 2), right - lw / 2);
       svg.push(text(cx, rowsTop - 8, label, { size: FS.caption, fill: C.baseline, anchor: 'middle' }));
@@ -376,18 +393,35 @@ function columnRows(x: number, top: number, w: number, panel: WeeklyChartBarPane
   return { svg: svg.join(''), height: bottom + 6 - top };
 }
 
-/** Columns side by side in one card: headings aligned, rows aligned. */
-function columnsSection(y: number, cols: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }>): Drawn {
+/** Columns side by side in one card: headings aligned, rows aligned; `legend` = one muted line at the bottom. */
+function columnsSection(y: number, cols: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }>, legend?: string | null): Drawn {
   const n = cols.length;
   const w = (INNER_W - COL_GAP * (n - 1)) / n;
   const top = y + CARD_PAD;
   const heads = cols.map((c, i) => columnHead(INNER_X + i * (w + COL_GAP), top, w, c.panel, c.spec.color));
   const headH = Math.max(...heads.map((h) => h.height));
   const withAvg = cols.some((c) => typeof c.panel.average === 'number' && c.panel.rows.length > 0);
-  const rowsTop = top + headH + 14;
+  // The tiers' line sits at the same height in every column, under the tallest caption.
+  const tiers = cols.map((c) => tierLine(c.panel.tiers));
+  let below = top + headH;
+  const tierSvg: string[] = [];
+  if (tiers.some(Boolean)) {
+    below += FS.caption * 1.55;
+    tiers.forEach((line, i) => {
+      if (line) tierSvg.push(text(INNER_X + i * (w + COL_GAP), below, fitText(line, FS.caption, w), { size: FS.caption, fill: C.baseline }));
+    });
+  }
+  const rowsTop = below + 14;
   const bodies = cols.map((c, i) => columnRows(INNER_X + i * (w + COL_GAP), rowsTop, w, c.panel, c.spec, withAvg));
-  const height = rowsTop + Math.max(...bodies.map((b) => b.height)) + CARD_PAD - 6 - y;
-  return { svg: card(y, height) + heads.map((h) => h.svg).join('') + bodies.map((b) => b.svg).join(''), height };
+  let bottom = rowsTop + Math.max(...bodies.map((b) => b.height));
+  let legendSvg = '';
+  if (legend) {
+    bottom += FS.caption * 1.3;
+    legendSvg = text(INNER_X, bottom, fitText(legend, FS.caption, INNER_W), { size: FS.caption, fill: C.muted });
+    bottom += 6;
+  }
+  const height = bottom + CARD_PAD - 6 - y;
+  return { svg: card(y, height) + heads.map((h) => h.svg).join('') + tierSvg.join('') + bodies.map((b) => b.svg).join('') + legendSvg, height };
 }
 
 /** Bars from 0 to a round 10 above the largest value (at most 100). */
@@ -495,7 +529,7 @@ export function buildWeeklyChartSvg(data: WeeklyChartData): string {
   const theoryCols: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }> = [{ panel: data.main, spec: { ...theory, color: C.main } }];
   if (data.position && data.position.rows.length > 0) theoryCols.push({ panel: data.position, spec: { ...theory, color: C.position } });
   if (data.overall && data.overall.rows.length > 0) theoryCols.push({ panel: data.overall, spec: { ...theory, color: C.overall } });
-  add(columnsSection(y, theoryCols));
+  add(columnsSection(y, theoryCols, theoryCols.some((c) => tierLine(c.panel.tiers)) ? TIER_LEGEND : null));
 
   // 2. 進步榜 and 新人榜 side by side.
   const pair: Array<{ panel: WeeklyChartBarPanel; spec: ColumnSpec }> = [];
