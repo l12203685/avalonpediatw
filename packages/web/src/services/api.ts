@@ -1327,9 +1327,24 @@ export interface TheoryTrendConfig {
   overallMinGames: number;
 }
 
+/** 每一場的走勢（快取 theoryTrend 第 2 版起；X 軸切成場次用）：days = [日期, 那天幾場]，其餘每場一個值。 */
+export interface TheoryTrendGames {
+  days: Array<[string, number]>;
+  role: number[];
+  position: number[];
+  overall: number[];
+  /** 那一場之後的 Elo／±1σ（整數）；還沒有計入 Elo 的局為 null。 */
+  elo: Array<number | null>;
+  sigma: Array<number | null>;
+  /** 角色視窗第一次全滿的生涯場數（null = 還沒滿）。 */
+  roleFullFrom: number | null;
+}
+
 export interface PlayerTheoryTrendData {
   name: string;
   series: TheoryTrendPoint[];
+  /** 舊快取（第 1 版）或舊伺服器沒有：網站就不提供場次軸。 */
+  games?: TheoryTrendGames | null;
   /** 目前的三個值（players[].theory）；之後別人的局讓全體勝率動了，所以可能跟最後一點不同。 */
   current: { games: number; roleTheory: number; roleFull: boolean; positionTheory: number; overallTheory: number } | null;
   config: TheoryTrendConfig;

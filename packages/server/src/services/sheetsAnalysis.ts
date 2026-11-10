@@ -636,10 +636,14 @@ export interface PlayerRating {
 }
 
 /**
- * theoryTrend: 角色／位置／整體理論的走勢 (generate_cache.py compute_theory_trend, Edward 2026-11-10). One point per
- * day a player played, after that day's last game: [date, career games, 角色理論, 位置理論, 整體理論, roleFull 1/0],
- * each the leaderboard's number computed from the games up to that day only (the population rates too).
- * Windows not yet full: roleFull 0 (角色理論), games < positionGames (位置理論), games < overallMinGames (整體理論).
+ * theoryTrend: 角色／位置／整體理論的走勢 (generate_cache.py compute_theory_trend, Edward 2026-11-10).
+ * schemaVersion 1 (one day): `series` = one point per day a player played, after that day's last game:
+ * [date, career games, 角色理論, 位置理論, 整體理論, roleFull 1/0], each the leaderboard's number computed from the games
+ * up to that day only (the population rates too).
+ * schemaVersion 2 (Edward 11/10「可以切換X軸是場次」): `players` = one point per career game, as comma-separated
+ * strings (TheoryTrendEntry); the day's last game is schemaVersion 1's point, so the route still serves `series`.
+ * Windows not yet full: roleFull 0 / game < roleFullFrom (角色理論), games < positionGames (位置理論),
+ * games < overallMinGames (整體理論).
  */
 export type TheoryTrendPoint = [string, number, number, number, number, number];
 
@@ -653,12 +657,41 @@ export interface TheoryTrendConfig {
   overallMinGames: number;
 }
 
+/** schemaVersion 2: one player's per-game points, stored compactly (see generate_cache.py theoryTrend). */
+export interface TheoryTrendEntry {
+  /** "YYYY-MM-DD:games,…" the player's games per day in order (":n" = undated games at the top of 牌譜). */
+  days: string;
+  /** One number per career game, comma-separated. */
+  role: string;
+  position: string;
+  overall: string;
+  /** Elo / ±1σ after each career game (integers; empty = before the first rated game). */
+  elo: string;
+  sigma: string;
+  /** The career game from which every role window is full (null = not yet). */
+  roleFullFrom: number | null;
+}
+
 export interface TheoryTrendSection {
   schemaVersion: number;
   config: TheoryTrendConfig;
-  fields: string[];
   dataThrough: string | null;
-  series: Record<string, TheoryTrendPoint[]>;
+  /** schemaVersion 1. */
+  fields?: string[];
+  series?: Record<string, TheoryTrendPoint[]>;
+  /** schemaVersion 2. */
+  players?: Record<string, TheoryTrendEntry>;
+}
+
+/** Per-game curves as served: days as [date, games that day], then one value per career game. */
+export interface TheoryTrendGames {
+  days: Array<[string, number]>;
+  role: number[];
+  position: number[];
+  overall: number[];
+  elo: Array<number | null>;
+  sigma: Array<number | null>;
+  roleFullFrom: number | null;
 }
 
 /** The player's current theory rates (players[].theory): where the curve ends today. */
@@ -674,6 +707,8 @@ export interface TheoryTrendCurrent {
 export interface PlayerTheoryTrend {
   name: string;
   series: TheoryTrendPoint[];
+  /** Per career game (the site's 場次 axis); null on a schemaVersion-1 cache. */
+  games: TheoryTrendGames | null;
   current: TheoryTrendCurrent | null;
   config: TheoryTrendConfig;
   dataThrough: string | null;
@@ -1468,19 +1503,59 @@ export async function getPlayerTheoryTrend(name: string): Promise<PlayerTheoryTr
   const c = loadCache();
   const trend = c.theoryTrend;
   if (!trend) return undefined;
-  const key = findPlayerKey(trend.series, playerDetailsKey(c, name) ?? name, (k) => trend.series[k]?.length ?? 0,
-    cachePlayerAliases(c.players));
-  const series = key === undefined ? undefined : byName(trend.series, key);
-  if (key === undefined || !series) return null;
+  const byPlayer: Record<string, unknown> = trend.players ?? trend.series ?? {};
+  const key = findPlayerKey(byPlayer, playerDetailsKey(c, name) ?? name, undefined, cachePlayerAliases(c.players));
+  if (key === undefined) return null;
+  const entry = trend.players ? byName(trend.players, key) : undefined;
+  const games = entry ? decodeTheoryTrendEntry(entry) : null;
+  const series = games ? theoryTrendDays(games) : trend.series ? byName(trend.series, key) : undefined;
+  if (!series) return null;
   const detail = byName(c.playerDetails, key);
   return {
     name: key,
     series,
+    games,
     current: currentTheory(detail?.player?.theory, trend.config.positionGames),
     config: trend.config,
     dataThrough: trend.dataThrough,
     asOf: c.leaderboard?.asOf ?? null,
   };
+}
+
+/** A schemaVersion-2 entry's strings as arrays (generate_cache.py theory_trend_games). Pure. */
+export function decodeTheoryTrendEntry(entry: TheoryTrendEntry): TheoryTrendGames {
+  const days: Array<[string, number]> = entry.days
+    ? entry.days.split(',').map((run) => {
+      const at = run.lastIndexOf(':');
+      return [run.slice(0, at), Number(run.slice(at + 1))];
+    })
+    : [];
+  const total = days.reduce((sum, [, n]) => sum + n, 0);
+  const numbers = (text: string): number[] => (total ? text.split(',').map(Number) : []);
+  const maybe = (text: string): Array<number | null> => (total ? text.split(',').map((v) => (v === '' ? null : Number(v))) : []);
+  return {
+    days,
+    role: numbers(entry.role),
+    position: numbers(entry.position),
+    overall: numbers(entry.overall),
+    elo: maybe(entry.elo),
+    sigma: maybe(entry.sigma),
+    roleFullFrom: entry.roleFullFrom ?? null,
+  };
+}
+
+/** schemaVersion 1's per-day series from the per-game curves: the last game of each dated day. Pure. */
+export function theoryTrendDays(games: TheoryTrendGames): TheoryTrendPoint[] {
+  const out: TheoryTrendPoint[] = [];
+  let k = 0;
+  for (const [date, n] of games.days) {
+    k += n;
+    if (!date) continue;
+    const i = k - 1;
+    const full = games.roleFullFrom !== null && k >= games.roleFullFrom ? 1 : 0;
+    out.push([date, k, games.role[i], games.position[i], games.overall[i], full]);
+  }
+  return out;
 }
 
 export async function getChemistry(): Promise<ChemistryData> {

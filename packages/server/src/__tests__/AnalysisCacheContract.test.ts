@@ -647,7 +647,9 @@ describe('analysis_cache.json → web contract', () => {
   });
 
   it('GET /theory-trend/:name — 玩家雷達的理論勝率走勢 (503 until the cache carries the section)', async () => {
-    const section = (committedCache as { theoryTrend?: { series: Record<string, unknown[][]>; config: Json } }).theoryTrend;
+    const section = (committedCache as {
+      theoryTrend?: { schemaVersion: number; series?: Record<string, unknown[][]>; players?: Record<string, Json>; config: Json };
+    }).theoryTrend;
     const first = await request(server).get(`/api/analysis/theory-trend/${encodeURIComponent(playerNames[0])}`);
     if (!section) {
       expect(first.status).toBe(503);
@@ -661,9 +663,21 @@ describe('analysis_cache.json → web contract', () => {
     for (const name of playerNames.slice(0, 40)) {
       const one = await request(server).get(`/api/analysis/theory-trend/${encodeURIComponent(name.toUpperCase())}`);
       expect(one.status, name).toBe(200);
-      const body = one.body.data as { name: string; series: unknown[][]; current: Json | null };
+      const body = one.body.data as { name: string; series: unknown[][]; current: Json | null; games: Json | null };
       expect(body.name).toBe(name);
-      expect(body.series).toEqual(section.series[name]);
+      if (section.series) expect(body.series).toEqual(section.series[name]);
+      if (section.players) {
+        // schemaVersion 2: one value per career game; the per-day series is each dated day's last game.
+        const g = obj(p, body.games, `${name}.games`);
+        const days = arr(p, g.days, `${name}.games.days`) as unknown as Array<[string, number]>;
+        const total = days.reduce((sum, d) => sum + d[1], 0);
+        for (const k of ['role', 'position', 'overall', 'elo', 'sigma']) {
+          if ((g[k] as unknown[]).length !== total) p.push(`${name}.games.${k}: ${(g[k] as unknown[]).length} values for ${total} games`);
+        }
+        expect(body.series.length).toBe(days.filter((d) => d[0]).length);
+      } else {
+        expect(body.games).toBeNull();
+      }
       body.series.forEach((pt, i) => {
         const at = `${name}.series[${i}]`;
         expect(pt, at).toHaveLength(6);

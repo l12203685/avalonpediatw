@@ -13,7 +13,13 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analysisRouter } from '../routes/analysis';
-import { ENV_ANALYSIS_CACHE, getPlayerTheoryTrend, invalidateCache } from '../services/sheetsAnalysis';
+import {
+  ENV_ANALYSIS_CACHE,
+  decodeTheoryTrendEntry,
+  getPlayerTheoryTrend,
+  invalidateCache,
+  theoryTrendDays,
+} from '../services/sheetsAnalysis';
 
 const CONFIG = {
   theoryMinCellGames: 5,
@@ -42,16 +48,41 @@ const SERIES = {
   Nova: [['2026-05-03', 3, 40.0, 41.0, 42.0, 0]],
 };
 
-function cache(withTrend: boolean): Record<string, unknown> {
+// schemaVersion 2 (per career game): Ilse Marr has 2 undated games, then 3 games on 05-01, 125 on 05-03 (130 in all);
+// Nova 3 games on 05-03 and no rated game before the third.
+function perGame(n: number, f: (k: number) => string): string {
+  return Array.from({ length: n }, (_, k) => f(k + 1)).join(',');
+}
+const ENTRIES = {
+  'Ilse Marr': {
+    days: ':2,2026-05-01:3,2026-05-03:125',
+    role: perGame(130, (k) => (k === 5 ? '44.1' : k === 130 ? '47' : '45')),
+    position: perGame(130, (k) => (k === 5 ? '45.2' : k === 130 ? '48.6' : '46')),
+    overall: perGame(130, (k) => (k === 5 ? '46.3' : k === 130 ? '45' : '44')),
+    elo: perGame(130, (k) => (k < 3 ? '' : String(1480 + (k % 7)))),
+    sigma: perGame(130, (k) => (k < 3 ? '' : '12')),
+    roleFullFrom: 101,
+  },
+  Nova: { days: '2026-05-03:3', role: '40,40,40', position: '41,41,41', overall: '42,42,42', elo: ',,1490', sigma: ',,30', roleFullFrom: null },
+};
+const SERIES_FROM_GAMES = {
+  'Ilse Marr': [['2026-05-01', 5, 44.1, 45.2, 46.3, 0], ['2026-05-03', 130, 47, 48.6, 45, 1]],
+  Nova: [['2026-05-03', 3, 40, 41, 42, 0]],
+};
+
+function cache(withTrend: boolean, version: 1 | 2 = 1): Record<string, unknown> {
   return {
     overview: { totalGames: 133, totalPlayers: 2 },
     players: { players: PLAYERS, total: 2, seatOutcomesSource: 'games', aliases: { 'Tovo Wren': 'Ilse Marr' } },
     playerDetails: Object.fromEntries(PLAYERS.map((p) => [p.name, { player: p, radar: {} }])),
     chemistry: { coWin: { players: [], values: [] } },
     leaderboard: { asOf: '2026-05-04', boards: [] },
-    ...(withTrend
+    ...(withTrend && version === 1
       ? { theoryTrend: { schemaVersion: 1, config: CONFIG, fields: ['date', 'games', 'roleTheory', 'positionTheory',
         'overallTheory', 'roleFull'], dataThrough: '2026-05-03', series: SERIES } }
+      : {}),
+    ...(withTrend && version === 2
+      ? { theoryTrend: { schemaVersion: 2, config: CONFIG, dataThrough: '2026-05-03', players: ENTRIES } }
       : {}),
   };
 }
@@ -61,8 +92,8 @@ let file = '';
 let previous: string | undefined;
 let server: http.Server;
 
-function serve(withTrend: boolean): void {
-  fs.writeFileSync(file, JSON.stringify(cache(withTrend)), 'utf-8');
+function serve(withTrend: boolean, version: 1 | 2 = 1): void {
+  fs.writeFileSync(file, JSON.stringify(cache(withTrend, version)), 'utf-8');
   invalidateCache();
 }
 
@@ -92,6 +123,7 @@ describe('GET /api/analysis/theory-trend/:name', () => {
     expect(res.body.data).toEqual({
       name: 'Ilse Marr',
       series: SERIES['Ilse Marr'],
+      games: null,
       current: { games: 130, roleTheory: 47.3, roleFull: true, positionTheory: 48.8, overallTheory: 45.1 },
       config: CONFIG,
       dataThrough: '2026-05-03',
@@ -130,5 +162,36 @@ describe('GET /api/analysis/theory-trend/:name', () => {
     } finally {
       serve(true);
     }
+  });
+
+  it('schemaVersion 2: per-game curves, and the per-day series is each dated day\'s last game', async () => {
+    serve(true, 2);
+    try {
+      const res = await request(server).get(`/api/analysis/theory-trend/${encodeURIComponent('tovo wren')}`);
+      expect(res.status).toBe(200);
+      const d = res.body.data;
+      expect(d.name).toBe('Ilse Marr');
+      expect(d.series).toEqual(SERIES_FROM_GAMES['Ilse Marr']);
+      expect(d.games.days).toEqual([['', 2], ['2026-05-01', 3], ['2026-05-03', 125]]);
+      expect(d.games.role).toHaveLength(130);
+      expect(d.games.elo.slice(0, 4)).toEqual([null, null, 1483, 1484]);
+      expect(d.games.roleFullFrom).toBe(101);
+      expect(d.current.games).toBe(130);
+      const nova = (await getPlayerTheoryTrend('NOVA'))!;
+      expect(nova.series).toEqual(SERIES_FROM_GAMES.Nova);
+      expect(nova.games?.elo).toEqual([null, null, 1490]);
+      expect((await request(server).get('/api/analysis/theory-trend/__proto__')).status).toBe(404);
+    } finally {
+      serve(true);
+    }
+  });
+
+  it('decodeTheoryTrendEntry / theoryTrendDays are pure and handle an empty entry', () => {
+    const empty = decodeTheoryTrendEntry({ days: '', role: '', position: '', overall: '', elo: '', sigma: '', roleFullFrom: null });
+    expect(empty).toEqual({ days: [], role: [], position: [], overall: [], elo: [], sigma: [], roleFullFrom: null });
+    expect(theoryTrendDays(empty)).toEqual([]);
+    const undatedOnly = decodeTheoryTrendEntry({ days: ':2', role: '1,2', position: '3,4', overall: '5,6', elo: ',', sigma: ',', roleFullFrom: null });
+    expect(theoryTrendDays(undatedOnly)).toEqual([]);
+    expect(undatedOnly.elo).toEqual([null, null]);
   });
 });

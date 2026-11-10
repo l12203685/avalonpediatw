@@ -3964,18 +3964,30 @@ def rating_summary(rating: Mapping[str, Any] | None) -> str:
 
 
 # ---------------------------------------------------------------------------
-# theoryTrend: 理論勝率走勢（Edward 2026-11-10「除了歷史ELO 走勢 可以也建立每個玩家的 角色 位置 整體 理論勝率 的走勢圖嗎」）
+# theoryTrend: 理論勝率走勢（Edward 2026-11-10「除了歷史ELO 走勢 可以也建立每個玩家的 角色 位置 整體 理論勝率 的走勢圖嗎」；
+# 同日「我希望除了照日期以外 可以切換X軸是場次 (因為有時候一天玩20場 隔很久才玩) 然後可以取rolling 平均之類的」）
 # ---------------------------------------------------------------------------
 #
-# 每位玩家每個出賽日（最後一局之後）一點：[日期, 生涯場數, 角色理論, 位置理論, 整體理論, 角色視窗全滿 1/0]。
-# 三個值與排行榜同一套算法（role_window_theory、theory_window 的最近 mainGames 場、overall_theory 的生涯），
-# 只用到那一天為止的局：玩家自己的場次，以及補不足格子用的全體最終勝率（角色／座位／角色 × 座位）也只算到
-# 那一天。所以最後一點跟目前 players[].theory 只差在那之後別人的局讓全體勝率動了多少（網站畫一段虛線接到目前值）。
-# 視窗沒滿：角色理論看第 6 欄；位置理論 = 生涯 < positionGames 場；整體理論 = 生涯 < overallMinGames 場
-# （排行榜不列或標 —）。網站把這些點畫成虛線。排序與 player_timelines 相同；開頭沒有日期的局計入但沒有點。
+# schemaVersion 2：每位玩家「每一場」一點（生涯第 1、2、3… 場，網站的 X 軸可以切成場次）。每一點是那一場之後：
+#   角色理論／位置理論／整體理論 = 排行榜同一套算法（role_window_theory、theory_window 的最近 mainGames 場、
+#     overall_theory 的生涯），玩家自己的場次算到這一場，補不足格子用的全體最終勝率算到這一場那一天的最後一局
+#     （同一天的先後只是牌譜的順序，量尺跟排行榜在那天結束時一樣）；
+#   Elo／±1σ = compute_rating 重放到這一場時這位玩家的 R，用那天最後一局之後的換算（同 rating.series）；
+#     沒計入 Elo 的局（有座位沒名字、同名兩個座位）R 不動，還沒有計入過的場次為空。
+# 所以每個出賽日最後一場的那一點 = schemaVersion 1 的每日一點（theory_trend_days 取出來，伺服器也這樣給 series），
+# Elo 那一點 = rating.series 的那一天。
+# 視窗沒滿：角色理論 = 生涯場數 < roleFullFrom（null = 還沒滿）；位置理論 = 生涯 < positionGames 場；整體理論 =
+# 生涯 < overallMinGames 場（排行榜不列或標 —）。網站把這些點畫成虛線。排序與 player_timelines 相同；開頭沒有日期的局
+# 也算場次（days 裡日期是空的那一段）。
+# 存法（不讓 indent=2 把幾萬個數字各拆一行）：每位玩家一個物件，數列都是逗號分隔的字串：
+#   days     "YYYY-MM-DD:場數,…" 每個出賽日的場數（依序加總 = 生涯場數；開頭沒日期的局寫成 ":場數"）
+#   role / position / overall  每場一個數（一位小數，整數不寫 .0）
+#   elo / sigma  每場一個整數，空 = 還沒有計入 Elo 的局
+#   roleFullFrom  角色視窗第一次全滿的生涯場數（null = 還沒滿）
 # 依對局順序而定，跟 as_of 無關；複合篩選不重算（不在 GAMES_DATASET_SECTIONS）。
 
-THEORY_TREND_SCHEMA_VERSION = 1
+THEORY_TREND_SCHEMA_VERSION = 2
+THEORY_TREND_DAY_FIELDS = ["date", "games", "roleTheory", "positionTheory", "overallTheory", "roleFull"]
 
 
 class _PopulationRates:
@@ -4042,12 +4054,41 @@ class _TrendPlayer:
         self.cell_games[s.role, s.seat] += 1
         self.cell_wins[s.role, s.seat] += w
 
+    def theory_at(
+        self, k: int, role_counts: Mapping[str, int], rates: tuple[Mapping[str, float], Mapping[str, float],
+                                                                    Mapping[str, Mapping[str, float]]],
+        windows: Mapping[str, int], n: int, cell: int,
+    ) -> tuple[float, float, float, bool]:
+        """(角色理論, 位置理論, 整體理論, full role windows) of the first k games (role_counts = the games per role
+        among them) with these population rates; theory_trend_point over seats[:k], faster."""
+        role_rates, seat_rates, role_seat_rates = rates
+        picked = {r: self.by_role[r][:role_counts[r]][-windows[r]:] for r in ALL_ROLES}
+        role = _weighted_theory(
+            ((10 * ROLE_DEAL_TENTHS[r], sum(picked[r]), len(picked[r]), role_rates[r]) for r in ALL_ROLES), cell)
+        last_games: Counter = Counter()
+        last_wins: Counter = Counter()
+        start = max(k - n, 0) if n > 0 else 0
+        for s, w in zip(self.seats[start:k], self.won[start:k]):
+            last_games[s.seat] += 1
+            last_wins[s.seat] += w
+        position = _weighted_theory(
+            ((10 * SEAT_DEAL_TENTHS[s], last_wins[s], last_games[s], seat_rates[SEAT_LABELS[s]]) for s in SEATS), cell)
+        cell_games, cell_wins = self.cell_games, self.cell_wins
+        if k < len(self.seats):  # later games of the same day: take them out of the career cells
+            cell_games, cell_wins = cell_games.copy(), cell_wins.copy()
+            for s, w in zip(self.seats[k:], self.won[k:]):
+                cell_games[s.role, s.seat] -= 1
+                cell_wins[s.role, s.seat] -= w
+        overall = _weighted_theory(
+            ((ROLE_DEAL_TENTHS[r] * SEAT_DEAL_TENTHS[s], cell_wins[r, s], cell_games[r, s],
+              role_seat_rates[r][SEAT_LABELS[s]]) for r in ALL_ROLES for s in SEATS), cell)
+        return role, position, overall, all(len(picked[r]) >= windows[r] for r in ALL_ROLES)
+
 
 def _weighted_theory(cells: Iterable[tuple[int, int, int, float]], min_cell: int) -> float:
     """Σ (weight / 100) × _cell_rate(wins, games, population, min_cell) over (weight, wins, games, population),
-    exactly (the populations have one decimal, as _rate writes them), rounded like _round_exact. The same
-    number as the Fraction sums of theory_window / role_window_theory / overall_theory, with one Fraction per
-    distinct denominator instead of one per cell."""
+    exactly (the populations have one decimal, as _rate writes them), rounded like _round_exact (ties to even).
+    The same number as the Fraction sums of theory_window / role_window_theory / overall_theory, in integers."""
     m = max(min_cell, 1)
     acc: Counter = Counter()  # denominator -> integer numerator
     for weight, wins, games, population in cells:
@@ -4055,19 +4096,32 @@ def _weighted_theory(cells: Iterable[tuple[int, int, int, float]], min_cell: int
             acc[games] += weight * wins
         else:  # weight/100 × (100·wins + (m − games)·P/10) / m, P = population × 10
             acc[1000 * m] += weight * (1000 * wins + (m - games) * round(population * 10))
-    return _round_exact(sum((Fraction(v, d) for d, v in acc.items()), Fraction(0)))
+    den = math.lcm(*acc) if acc else 1
+    num = sum(v * (den // d) for d, v in acc.items())
+    q, r = divmod(10 * num, den)
+    if 2 * r > den or (2 * r == den and q % 2):
+        q += 1
+    return q / 10
 
 
-def compute_theory_trend(games: list[GameRow], cfg: Mapping[str, Any] | None = None) -> dict:
-    """The theoryTrend section (see the block comment): {schemaVersion, config, fields, dataThrough,
-    series: {name: [[date, games, roleTheory, positionTheory, overallTheory, roleFull], ...]}}. Pure.
-    Each point equals theory_trend_point (the leaderboard's functions) over the same games (tested)."""
+def _trend_number(v: float) -> str:
+    """One decimal, no trailing .0 (45.3 -> "45.3", 50.0 -> "50")."""
+    return f"{v:.1f}".removesuffix(".0")
+
+
+def compute_theory_trend(games: list[GameRow], cfg: Mapping[str, Any] | None = None,
+                         rating_cfg: Mapping[str, Any] | None = None) -> dict:
+    """The theoryTrend section (see the block comment): {schemaVersion, config, dataThrough, players: {name: {days,
+    role, position, overall, roleFullFrom, elo, sigma}}}. Pure. Every point equals theory_trend_point (the
+    leaderboard's functions) over the player's games so far with the population rates at the end of that day, and
+    the Elo of the day's last game equals rating.series (tested)."""
     cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    rating_cfg = RATING_CONFIG if rating_cfg is None else rating_cfg
     cell, n = int(cfg["theoryMinCellGames"]), int(cfg["mainGames"])
     windows = role_window_games(cfg)
     keyed: list[tuple[tuple[str, int], GameRow]] = []
     last_date = ""
-    for i, g in enumerate(games):  # player_timelines' order
+    for i, g in enumerate(games):  # player_timelines' order (rating_games keeps the complete ones of the same order)
         if g.date:
             last_date = g.date
         if g.outcome in OUTCOMES:
@@ -4075,42 +4129,62 @@ def compute_theory_trend(games: list[GameRow], cfg: Mapping[str, Any] | None = N
             keyed.append(((fixed if fixed is not None else (g.date or last_date), i), g))
     keyed.sort(key=lambda kg: kg[0])
     population = _PopulationRates()
+    model = _RatingModel(rating_cfg)
     players: dict[str, _TrendPlayer] = {}
-    series: dict[str, list[list[Any]]] = {}
-    today: list[str] = []
+    out: dict[str, dict[str, list]] = {}
+    # this day's games: (name, games so far, games per role so far, (R, information) or None)
+    pending: list[tuple[str, int, dict[str, int], tuple[float, float] | None]] = []
     data_through: str | None = None
     for i, ((day, _), g) in enumerate(keyed):
         population.add(g)
+        names = [g.seat_players.get(s) or "" for s in SEATS]
+        if all(names) and len(set(names)) == PLAYERS_PER_GAME and all(g.seat_roles.get(s) for s in SEATS):
+            model.play(g, day)  # rating_games' rule
         for seat in SEATS:
             name = g.seat_players.get(seat)
             if name:
-                players.setdefault(name, _TrendPlayer()).add(PlayerSeat(g.seat_roles[seat], seat, g.outcome, g.date))
-                today.append(name)
+                p = players.setdefault(name, _TrendPlayer())
+                p.add(PlayerSeat(g.seat_roles[seat], seat, g.outcome, g.date))
+                pending.append((name, len(p.seats), {r: len(p.by_role[r]) for r in ALL_ROLES}, None))
+        for j in range(len(pending) - sum(1 for s in SEATS if g.seat_players.get(s)), len(pending)):
+            name, k, counts, _ = pending[j]
+            if name in model.r:
+                pending[j] = (name, k, counts, (model.r[name], model.info[name]))
         if i + 1 < len(keyed) and keyed[i + 1][0][0] == day:
             continue
         if day:
             data_through = day
-            role_rates, seat_rates, role_seat_rates = population.rates()
-            for name in dict.fromkeys(today):
-                p = players[name]
-                picked = {r: p.by_role[r][-windows[r]:] for r in ALL_ROLES}
-                role = _weighted_theory(
-                    ((10 * ROLE_DEAL_TENTHS[r], sum(picked[r]), len(picked[r]), role_rates[r]) for r in ALL_ROLES), cell)
-                last_games: Counter = Counter()
-                last_wins: Counter = Counter()
-                start = max(len(p.seats) - n, 0) if n > 0 else 0
-                for s, w in zip(p.seats[start:], p.won[start:]):
-                    last_games[s.seat] += 1
-                    last_wins[s.seat] += w
-                position = _weighted_theory(
-                    ((10 * SEAT_DEAL_TENTHS[s], last_wins[s], last_games[s], seat_rates[SEAT_LABELS[s]]) for s in SEATS),
-                    cell)
-                overall = _weighted_theory(
-                    ((ROLE_DEAL_TENTHS[r] * SEAT_DEAL_TENTHS[s], p.cell_wins[r, s], p.cell_games[r, s],
-                      role_seat_rates[r][SEAT_LABELS[s]]) for r in ALL_ROLES for s in SEATS), cell)
-                full = all(len(picked[r]) >= windows[r] for r in ALL_ROLES)
-                series.setdefault(name, []).append([day, len(p.seats), role, position, overall, 1 if full else 0])
-        today = []
+        rates = population.rates()
+        convert = model.snapshot()[0]
+        for name, k, counts, state in pending:
+            p = players[name]
+            role, position, overall, full = p.theory_at(k, counts, rates, windows, n, cell)
+            row = out.setdefault(name, {"days": [], "role": [], "position": [], "overall": [], "elo": [], "sigma": [],
+                                        "roleFullFrom": [None]})
+            if row["days"] and row["days"][-1][0] == day:
+                row["days"][-1][1] += 1
+            else:
+                row["days"].append([day, 1])
+            row["role"].append(role)
+            row["position"].append(position)
+            row["overall"].append(overall)
+            if full and row["roleFullFrom"][0] is None:
+                row["roleFullFrom"][0] = k
+            if state is None:
+                row["elo"].append(None)
+                row["sigma"].append(None)
+            else:
+                now = model.r[name], model.info[name]
+                model.r[name], model.info[name] = state  # convert reads them: the player as of that game
+                elo, sigma, _ = convert(name)
+                model.r[name], model.info[name] = now
+                row["elo"].append(round(elo))
+                row["sigma"].append(round(sigma))
+        pending = []
+
+    def join(values: Iterable[Any], fmt: Callable[[Any], str]) -> str:
+        return ",".join("" if v is None else fmt(v) for v in values)
+
     return {
         "schemaVersion": THEORY_TREND_SCHEMA_VERSION,
         "config": {
@@ -4119,18 +4193,57 @@ def compute_theory_trend(games: list[GameRow], cfg: Mapping[str, Any] | None = N
             "positionGames": n,
             "overallMinGames": int(cfg["overallMinGames"]),
         },
-        "fields": ["date", "games", "roleTheory", "positionTheory", "overallTheory", "roleFull"],
         "dataThrough": data_through,
-        "series": series,
+        "dayFields": THEORY_TREND_DAY_FIELDS,
+        "players": {
+            name: {
+                "days": ",".join(f"{d}:{c}" for d, c in row["days"]),
+                "role": join(row["role"], _trend_number),
+                "position": join(row["position"], _trend_number),
+                "overall": join(row["overall"], _trend_number),
+                "roleFullFrom": row["roleFullFrom"][0],
+                "elo": join(row["elo"], str),
+                "sigma": join(row["sigma"], str),
+            }
+            for name, row in out.items()
+        },
     }
+
+
+def theory_trend_games(entry: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """One players entry of theoryTrend decoded: per career game {game, date, role, position, overall, roleFull, elo,
+    sigma} (date '' for the undated games at the top of 牌譜; elo / sigma None before the first rated game)."""
+    dates = [d for run in entry["days"].split(",") if run for d, _, c in [run.rpartition(":")] for _ in range(int(c))]
+
+    def numbers(key: str, cast: Callable[[str], Any]) -> list[Any]:
+        return [cast(v) if v != "" else None for v in entry[key].split(",")] if dates else []
+
+    role, position, overall = numbers("role", float), numbers("position", float), numbers("overall", float)
+    elo, sigma = numbers("elo", int), numbers("sigma", int)
+    full_from = entry.get("roleFullFrom")
+    return [
+        {"game": k + 1, "date": dates[k], "role": role[k], "position": position[k], "overall": overall[k],
+         "roleFull": full_from is not None and k + 1 >= full_from, "elo": elo[k], "sigma": sigma[k]}
+        for k in range(len(dates))
+    ]
+
+
+def theory_trend_days(entry: Mapping[str, Any]) -> list[list[Any]]:
+    """schemaVersion 1's series of one player (THEORY_TREND_DAY_FIELDS): the last game of each dated day."""
+    points = theory_trend_games(entry)
+    return [
+        [p["date"], p["game"], p["role"], p["position"], p["overall"], 1 if p["roleFull"] else 0]
+        for i, p in enumerate(points) if p["date"] and (i + 1 == len(points) or points[i + 1]["date"] != p["date"])
+    ]
 
 
 def theory_trend_summary(trend: Mapping[str, Any] | None) -> str:
     """One line for logs: counts only, no names."""
     if not isinstance(trend, Mapping):
         return "無"
-    series = trend.get("series") or {}
-    return f"{len(series)} 位玩家、{sum(len(v) for v in series.values())} 點；資料到 {trend.get('dataThrough')}"
+    players = trend.get("players") or {}
+    points = sum(len(theory_trend_games(e)) for e in players.values() if isinstance(e, Mapping))
+    return f"{len(players)} 位玩家、{points} 場次點；資料到 {trend.get('dataThrough')}"
 
 
 # ---------------------------------------------------------------------------
