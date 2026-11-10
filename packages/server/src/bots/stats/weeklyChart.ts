@@ -7,10 +7,12 @@
  * rasterises it with @resvg/resvg-js (prebuilt binaries, no system libraries).
  *
  * Layout: one tall 1080-px card for a phone screen in Discord / LINE — a dark
- * dated header, the main board Top 10 as horizontal bars (rank, name, bar,
- * 角色理論 %), then panels for 進步榜 Top 5, 角色王 and 新人榜 when the cache
- * has them, and a footer with the stats page link. Bars start at 0 (the
- * number is printed at the end of each bar), with a dashed 50% line.
+ * dated header, three Top 10 boards as horizontal bars (rank, name, bar, %):
+ * 角色理論, 位置理論 and 整體理論 (each its own colour; added 2026-11-10 at the
+ * owner's request), then panels for 進步榜 Top 5, 角色王 and 新人榜 when the
+ * cache has them, and a footer with the stats page link. Bars start at 0 (the
+ * number is printed at the end of each bar), with a dashed 50% line. The same
+ * image answers /排行 (title 「排行榜」, statsQueries.leaderboardChart).
  *
  * Font: the bundled Noto Sans TC Medium (SIL OFL 1.1, assets/fonts/), loaded
  * explicitly — system fonts are never used, so the output is the same on a
@@ -56,11 +58,17 @@ export interface WeeklyChartRoleKing {
 }
 
 export interface WeeklyChartData {
-  /** "11/9" — the +08 date of the post. */
+  /** Header title; default 「每週排行」 (the /排行 command uses 「排行榜」). */
+  title?: string;
+  /** "11/9" — the +08 date of the post (/排行: the date the boards were computed for). */
   dateLabel: string;
   /** One muted line under the title, e.g. "資料至 2026-11-08｜總計 2228 場・221 位玩家". */
   subtitle: string | null;
   main: WeeklyChartBarPanel;
+  /** 位置理論勝率 Top 10 (the cache's `position` board); null when absent. */
+  position?: WeeklyChartBarPanel | null;
+  /** 整體理論勝率 Top 10 (the cache's `overall` board, career); null when absent. */
+  overall?: WeeklyChartBarPanel | null;
   improved: WeeklyChartBarPanel | null;
   roleKings: { title: string; note: string | null; entries: WeeklyChartRoleKing[] } | null;
   newcomers: WeeklyChartBarPanel | null;
@@ -68,6 +76,31 @@ export interface WeeklyChartData {
   footerLines: string[];
   /** The stats page, printed last (accent colour). */
   url: string;
+}
+
+// ─── Numbers ─────────────────────────────────────────────────────────────
+//
+// Owner 2026-11-10: no decimal points anywhere on the image — the windows are 10 / 40 / 100 games,
+// so the rates are whole percents anyway (角色理論 = 4/10 × k/40 + 1/10 × Σ j/10 = an integer / 100).
+// Rounded half up for display only; the order stays the cache's (never re-sorted after rounding).
+// The text replies keep statsReplies.pct (one decimal).
+
+/** Half up (x.5 → x+1, −2.5 → −2), with a little slack for binary floats (62.49999999999999, i.e. 62.5, → 63). */
+export function roundHalfUp(value: number): number {
+  return Math.floor(value + 0.5 + 1e-9);
+}
+
+/** 63.4 → "63%"; null / non-finite → "—". */
+export function chartPct(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  return `${roundHalfUp(value)}%`;
+}
+
+/** Whole-point delta: 12.4 → "+12", -2.6 → "-3", 0.3 → "0"; null / non-finite → "—". */
+export function chartSigned(value: number | null | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
+  const n = roundHalfUp(value);
+  return n > 0 ? `+${n}` : String(n === 0 ? 0 : n);
 }
 
 // ─── Look ────────────────────────────────────────────────────────────────
@@ -89,8 +122,10 @@ const C = {
   muted: '#52514e',
   grid: '#d9dce3',
   main: '#2a78d6',
+  position: '#eb6834',
+  overall: '#6250d6',
   improved: '#0f8f62',
-  newcomers: '#6250d6',
+  newcomers: '#c2477a',
   link: '#1f5fae',
   medal: ['#d99a00', '#8c8f96', '#b0652b'],
   rankText: '#ffffff',
@@ -100,10 +135,10 @@ const W = WEEKLY_CHART_WIDTH;
 const PAGE_PAD = 40;
 const CARD_X = PAGE_PAD;
 const CARD_W = W - PAGE_PAD * 2;
-const CARD_PAD = 36;
+const CARD_PAD = 32;
 const INNER_X = CARD_X + CARD_PAD;
 const INNER_R = CARD_X + CARD_W - CARD_PAD;
-const PANEL_GAP = 28;
+const PANEL_GAP = 22;
 
 const FS = { title: 64, date: 64, subtitle: 26, panelTitle: 40, note: 24, name: 32, value: 32, detail: 26, small: 22, footer: 24 };
 
@@ -112,7 +147,8 @@ const FS = { title: 64, date: 64, subtitle: 26, panelTitle: 40, note: 24, name: 
 /** XML-escape text content / attribute values; drops characters XML 1.0 forbids. */
 export function escapeXml(text: string): string {
   return String(text)
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '')
+    // eslint-disable-next-line no-control-regex -- removing the control characters XML 1.0 forbids is the point
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -122,7 +158,7 @@ export function escapeXml(text: string): string {
 
 /** Drop a leading emoji (🏆 / 🚀 …) — the bundled font has none; titles read the same without it. */
 export function stripLeadingEmoji(text: string): string {
-  return text.replace(/^[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}️‍\s]+/u, '').trim();
+  return text.replace(/^(?:\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|\uFE0F|\u200D|\s)+/u, '').trim();
 }
 
 /** Approximate advance of one character in em (Noto Sans TC): CJK / full-width 1, Latin narrower. */
@@ -233,12 +269,12 @@ function rankBadge(cx: number, cy: number, rank: number, medals: boolean): strin
   const medal = medals ? C.medal[rank - 1] : undefined;
   if (medal) {
     return (
-      `<circle cx="${r(cx)}" cy="${r(cy)}" r="23" fill="${medal}"/>` +
+      `<circle cx="${r(cx)}" cy="${r(cy)}" r="21" fill="${medal}"/>` +
       text(cx, cy + 10, String(rank), { size: 28, fill: C.rankText, anchor: 'middle', bold: true })
     );
   }
   return (
-    `<circle cx="${r(cx)}" cy="${r(cy)}" r="22" fill="none" stroke="${C.grid}" stroke-width="2"/>` +
+    `<circle cx="${r(cx)}" cy="${r(cy)}" r="20" fill="none" stroke="${C.grid}" stroke-width="2"/>` +
     text(cx, cy + 10, String(rank), { size: 28, fill: C.muted, anchor: 'middle' })
   );
 }
@@ -292,7 +328,7 @@ function barPanel(
     const mid = rowTop + opts.rowH / 2;
     svg.push(rankBadge(badgeX, mid, row.rank, opts.medals));
     svg.push(text(nameX, mid + FS.name * 0.36, fitText(row.name, FS.name, opts.nameW), { size: FS.name, fill: C.text }));
-    const barH = Math.min(38, opts.rowH - 26);
+    const barH = Math.min(36, opts.rowH - 28);
     const w = typeof row.value === 'number' && Number.isFinite(row.value) ? scale(row.value) : 0;
     if (w > 0) svg.push(rect(barX, mid - barH / 2, Math.max(w, 6), barH, opts.color, 6));
     svg.push(text(barX + Math.max(w, 0) + 12, mid + FS.value * 0.36, row.valueLabel, { size: FS.value, fill: C.text, bold: true }));
@@ -330,15 +366,15 @@ function roleKingsPanel(y: number, panel: NonNullable<WeeklyChartData['roleKings
   const cols = 2;
   const gap = 16;
   const cellW = (INNER_R - INNER_X - gap * (cols - 1)) / cols;
-  const cellH = 104;
+  const cellH = 92;
   const top = head.bodyY - 4;
   panel.entries.forEach((e, i) => {
     const x = INNER_X + (i % cols) * (cellW + gap);
     const cy = top + Math.floor(i / cols) * (cellH + gap);
     svg.push(rect(x, cy, cellW, cellH, C.cell, 16));
-    svg.push(text(x + 22, cy + 38, fitText(e.role || '—', FS.detail, cellW - 150), { size: FS.detail, fill: C.muted }));
-    svg.push(text(x + cellW - 22, cy + 40, e.valueLabel, { size: FS.value, fill: C.text, anchor: 'end', bold: true }));
-    svg.push(text(x + 22, cy + 84, fitNames(e.names, FS.name, cellW - 44), { size: FS.name, fill: C.text }));
+    svg.push(text(x + 22, cy + 34, fitText(e.role || '—', FS.detail, cellW - 150), { size: FS.detail, fill: C.muted }));
+    svg.push(text(x + cellW - 22, cy + 36, e.valueLabel, { size: FS.value, fill: C.text, anchor: 'end', bold: true }));
+    svg.push(text(x + 22, cy + 76, fitNames(e.names, FS.name, cellW - 44), { size: FS.name, fill: C.text }));
   });
   const rows = Math.ceil(panel.entries.length / cols);
   const bottom = top + rows * cellH + Math.max(0, rows - 1) * gap;
@@ -356,7 +392,7 @@ export function buildWeeklyChartSvg(data: WeeklyChartData): string {
   const headerH = data.subtitle ? 190 : 150;
   parts.push(rect(0, 0, W, headerH, C.header));
   const titleY = 98;
-  const title = '每週排行';
+  const title = data.title || '每週排行';
   parts.push(text(PAGE_PAD + 8, titleY, title, { size: FS.title, fill: C.headerText, bold: true }));
   parts.push(
     text(PAGE_PAD + 8 + textWidth(title, FS.title) + 24, titleY, data.dateLabel, { size: FS.date, fill: C.accent, bold: true }),
@@ -371,13 +407,17 @@ export function buildWeeklyChartSvg(data: WeeklyChartData): string {
     y += d.height + PANEL_GAP;
   };
 
-  add(barPanel(y, data.main, { color: C.main, rowH: 74, nameW: 300, detailW: 0, medals: true, refLine: 50, percentAxis: true }));
+  // Order (owner 2026-11-10): 角色理論 → 位置理論 → 整體理論 → 進步榜 → 角色王 → 新人榜.
+  const theory = { rowH: 62, nameW: 300, detailW: 0, medals: true, refLine: 50, percentAxis: true } as const;
+  add(barPanel(y, data.main, { ...theory, color: C.main }));
+  if (data.position && data.position.rows.length > 0) add(barPanel(y, data.position, { ...theory, color: C.position }));
+  if (data.overall && data.overall.rows.length > 0) add(barPanel(y, data.overall, { ...theory, color: C.overall }));
   if (data.improved && data.improved.rows.length > 0) {
-    add(barPanel(y, data.improved, { color: C.improved, rowH: 70, nameW: 260, detailW: 210, medals: false }));
+    add(barPanel(y, data.improved, { color: C.improved, rowH: 60, nameW: 260, detailW: 210, medals: false }));
   }
   if (data.roleKings && data.roleKings.entries.length > 0) add(roleKingsPanel(y, data.roleKings));
   if (data.newcomers && data.newcomers.rows.length > 0) {
-    add(barPanel(y, data.newcomers, { color: C.newcomers, rowH: 70, nameW: 260, detailW: 130, medals: false, refLine: 50, percentAxis: true }));
+    add(barPanel(y, data.newcomers, { color: C.newcomers, rowH: 60, nameW: 260, detailW: 130, medals: false, refLine: 50, percentAxis: true }));
   }
 
   // Footer.

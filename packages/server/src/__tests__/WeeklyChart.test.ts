@@ -9,17 +9,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildWeeklyChartSvg,
+  chartPct,
+  chartSigned,
   escapeXml,
   fitNames,
   fitText,
   renderWeeklyChartPng,
+  roundHalfUp,
   stripLeadingEmoji,
   textWidth,
   wrapText,
   WEEKLY_CHART_WIDTH,
   type WeeklyChartData,
 } from '../bots/stats/weeklyChart';
-import { WEEKLY_CHART_CAPTION, weeklyChartData, weeklyDigestPng } from '../bots/stats/statsQueries';
+import {
+  WEEKLY_CHART_CAPTION,
+  __resetLeaderboardChartCacheForTests,
+  leaderboardChart,
+  leaderboardChartData,
+  weeklyChartData,
+  weeklyDigestPng,
+} from '../bots/stats/statsQueries';
 import { WeeklyDigestScheduler } from '../bots/stats/weeklyDigest';
 import { ChatMirror } from '../bots/ChatMirror';
 import { LineReplyQueue } from '../bots/line/replyQueue';
@@ -37,6 +47,14 @@ const cache = vi.hoisted(() => {
     {
       id: 'main', metric: 'roleTheory', title: '角色理論勝率排行', period: '各人最近 100 場', windowGames: 100, minGames: 100,
       note: '近 90 天內有出賽、生涯至少 100 場；角色理論 = 說明文字', rows: Array.from({ length: 12 }, (_, i) => theoryRow(i + 1, `甲${i + 1}`, 60 - i)),
+    },
+    {
+      id: 'position', metric: 'positionTheory', title: '位置理論勝率排行', period: '各人最近 100 場', windowGames: 100, minGames: 100,
+      note: '近 90 天內有出賽、生涯至少 100 場；說明', rows: Array.from({ length: 11 }, (_, i) => ({ ...theoryRow(i + 1, `戊${i + 1}`, 50), positionTheory: 61.5 - i, value: 61.5 - i })),
+    },
+    {
+      id: 'overall', metric: 'overallTheory', title: '整體理論勝率排行', period: '各人生涯全部場次', minGames: 100,
+      note: '近 90 天內有出賽、生涯至少 100 場；說明', rows: Array.from({ length: 10 }, (_, i) => ({ ...theoryRow(i + 1, `己${i + 1}`, 50), overallTheory: 54.4 - i, value: 54.4 - i })),
     },
     {
       id: 'improved', metric: 'roleTheoryDelta', title: '進步榜', period: '各人最近 50 場 vs 再之前 50 場', windowGames: 50, minGames: 100,
@@ -109,6 +127,20 @@ describe('weekly chart text helpers', () => {
     expect(wrapText('一二三', 10, 40, 2)).toEqual(['一二三']);
   });
 
+  it('whole percents, rounded half up (owner 2026-11-10: no decimal points on the image)', () => {
+    expect(roundHalfUp(62.5)).toBe(63);
+    expect(roundHalfUp(62.49999999999999)).toBe(63); // float noise for 62.5
+    expect(roundHalfUp(62.49)).toBe(62);
+    expect(roundHalfUp(-2.5)).toBe(-2);
+    expect(chartPct(63.4)).toBe('63%');
+    expect(chartPct(45.5)).toBe('46%');
+    expect(chartPct(null)).toBe('—');
+    expect(chartSigned(12.4)).toBe('+12');
+    expect(chartSigned(0.3)).toBe('0');
+    expect(chartSigned(-2.6)).toBe('-3');
+    expect(chartSigned(undefined)).toBe('—');
+  });
+
   it('role-king holders: whole names that fit, then 「等 N 人」', () => {
     expect(fitNames(['甲', '乙'], 10, 200)).toBe('甲／乙');
     expect(fitNames(['甲', '乙', '丙', '丁'], 10, 200)).toBe('甲／乙／丙 等 4 人');
@@ -136,7 +168,16 @@ describe('buildWeeklyChartSvg', () => {
     expect(svg).not.toContain('角色王');
     expect(svg).not.toContain('新人榜');
     const full = buildWeeklyChartSvg(sampleWeeklyChartData());
-    for (const s of ['進步榜 Top 5', '角色王', '新人榜', '奧伯倫', '18 場', '41.2% → 53.6%']) expect(full).toContain(s);
+    for (const s of ['位置理論勝率排行 Top 10', '整體理論勝率排行 Top 10', '進步榜 Top 5', '角色王', '新人榜', '奧伯倫', '18 場', '41% → 53%']) {
+      expect(full).toContain(s);
+    }
+    // Order: 角色理論 → 位置理論 → 整體理論 → 進步榜 → 角色王 → 新人榜.
+    const at = (t: string): number => full.indexOf(t);
+    const order = ['角色理論勝率排行', '位置理論勝率排行', '整體理論勝率排行', '進步榜', '角色王', '新人榜'].map(at);
+    expect(order.every((v) => v > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // No decimal point in any label of the sample (the URL and dates have none either).
+    expect(full.replace(/<[^>]*>/g, ' ')).not.toMatch(/\d\.\d/);
     const height = (doc: string): number => Number(/height="(\d+)"/.exec(doc)?.[1]);
     expect(height(full)).toBeGreaterThan(height(svg));
   });
@@ -187,17 +228,28 @@ describe('weeklyChartData (mocked cache)', () => {
     expect(data.main.title).toBe('角色理論勝率排行 Top 10');
     expect(data.main.note).toBe('各人最近 100 場，近 90 天內有出賽、生涯至少 100 場');
     expect(data.main.rows).toHaveLength(10);
-    expect(data.main.rows[0]).toEqual({ rank: 1, name: '甲1', value: 60, valueLabel: '60.0%' });
+    expect(data.title).toBe('每週排行');
+    expect(data.main.rows[0]).toEqual({ rank: 1, name: '甲1', value: 60, valueLabel: '60%' });
+    // 位置理論 / 整體理論: Top 10 from their own boards, title + qualifier from the cache, whole percents
+    // (half up), the cache's order kept.
+    expect(data.position?.title).toBe('位置理論勝率排行 Top 10');
+    expect(data.position?.note).toBe('各人最近 100 場，近 90 天內有出賽、生涯至少 100 場');
+    expect(data.position?.rows).toHaveLength(10);
+    expect(data.position?.rows[0]).toEqual({ rank: 1, name: '戊1', value: 61.5, valueLabel: '62%' });
+    expect(data.position?.rows.map((r) => r.name)).toEqual(Array.from({ length: 10 }, (_, i) => `戊${i + 1}`));
+    expect(data.overall?.title).toBe('整體理論勝率排行 Top 10');
+    expect(data.overall?.note).toBe('各人生涯全部場次，近 90 天內有出賽、生涯至少 100 場');
+    expect(data.overall?.rows[0]).toEqual({ rank: 1, name: '己1', value: 54.4, valueLabel: '54%' });
     expect(data.improved?.title).toBe('進步榜 Top 5');
     expect(data.improved?.rows).toHaveLength(5);
-    expect(data.improved?.rows[0]).toMatchObject({ name: '乙1', value: 10, valueLabel: '+10.0', detail: '40.0% → 50.0%' });
+    expect(data.improved?.rows[0]).toMatchObject({ name: '乙1', value: 10, valueLabel: '+10', detail: '40% → 50%' });
     expect(data.roleKings?.entries).toEqual([
-      { role: '刺客', names: ['丁1', '丁2'], valueLabel: '90.0%' },
-      { role: '梅林', names: ['丁3'], valueLabel: '55.0%' },
+      { role: '刺客', names: ['丁1', '丁2'], valueLabel: '90%' },
+      { role: '梅林', names: ['丁3'], valueLabel: '55%' },
     ]);
     expect(data.newcomers?.rows).toEqual([
-      { rank: 1, name: '丙1', value: 47, valueLabel: '47.0%', detail: '41 場' },
-      { rank: 2, name: '丙2', value: 45.5, valueLabel: '45.5%', detail: '11 場' },
+      { rank: 1, name: '丙1', value: 47, valueLabel: '47%', detail: '41 場' },
+      { rank: 2, name: '丙2', value: 45.5, valueLabel: '46%', detail: '11 場' },
     ]);
     expect(data.url).toContain('#stats');
     const png = await weeklyDigestPng(MONDAY);
@@ -208,6 +260,8 @@ describe('weeklyChartData (mocked cache)', () => {
     cache.leaderboard = { asOf: '2026-11-08', boards: cache.boards().filter((b) => b.id === 'main') };
     let data = await weeklyChartData(MONDAY);
     expect(data.main.rows).toHaveLength(10);
+    expect(data.position).toBeNull();
+    expect(data.overall).toBeNull();
     expect(data.improved).toBeNull();
     expect(data.roleKings).toBeNull();
     expect(data.newcomers).toBeNull();
@@ -217,6 +271,27 @@ describe('weeklyChartData (mocked cache)', () => {
     expect(data.main.rows).toEqual([]);
     expect(data.main.emptyNote).toContain('排行改版中');
     expect(data.improved).toBeNull();
+    cache.leaderboard = { asOf: '2026-11-08', boards: cache.boards() };
+  });
+});
+
+describe('/排行 chart (leaderboardChart)', () => {
+  it('titled 「排行榜」, dated by the cache, the PNG rendered once per data version', async () => {
+    __resetLeaderboardChartCacheForTests();
+    cache.leaderboard = { asOf: '2026-11-08', boards: cache.boards() };
+    const data = await leaderboardChartData();
+    expect(data.title).toBe('排行榜');
+    expect(data.dateLabel).toBe('11/8');
+    const first = await leaderboardChart();
+    expect(first.png.subarray(0, 8).equals(PNG_SIGNATURE)).toBe(true);
+    const again = await leaderboardChart();
+    expect(again.png).toBe(first.png); // same Buffer: not rendered again
+    expect(again.key).toBe(first.key);
+
+    cache.leaderboard = { asOf: '2026-11-09', boards: cache.boards() };
+    const next = await leaderboardChart();
+    expect(next.key).not.toBe(first.key);
+    expect(next.png).not.toBe(first.png);
     cache.leaderboard = { asOf: '2026-11-08', boards: cache.boards() };
   });
 });
@@ -292,6 +367,22 @@ describe('ChatMirror.enqueueLineReplyImage', () => {
     const batch = m.drainLineReplies();
     for (const id of batch[0].image!.mediaIds) store.delete(id);
     expect(m.lineMessagesFor(batch).messages).toEqual([{ type: 'text', text: 'TEXT DIGEST' }]);
+  });
+
+  it('relayReplyPngUrl: one live copy per key, reused; a new key stores a new copy', () => {
+    const { m, store } = mirror();
+    const a = m.relayReplyPngUrl(png, 'k1');
+    expect(a).toMatch(/\/media\/relay\/[A-Za-z0-9_-]{32}\.png$/);
+    expect(m.relayReplyPngUrl(png, 'k1')).toBe(a);
+    expect(store.stats().entries).toBe(1);
+    const b = m.relayReplyPngUrl(png, 'k2');
+    expect(b).not.toBe(a);
+    expect(store.stats().entries).toBe(2);
+    // The copy gone (restart / expiry): stored again under the same key.
+    store.delete(/relay\/(.{32})\.png$/.exec(a!)![1]);
+    const c = m.relayReplyPngUrl(png, 'k1');
+    expect(c).not.toBe(a);
+    expect(mirror({ relay: false }).m.relayReplyPngUrl(png, 'k1')).toBeNull();
   });
 
   it('refuses (caller queues the text) without the relay or for a PNG over 1 MB', () => {

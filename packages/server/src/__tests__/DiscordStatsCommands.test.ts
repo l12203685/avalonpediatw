@@ -5,7 +5,7 @@
  * depend on the real sheet (which is regenerated independently). The
  * interaction is a hand-rolled mock — no discord.js runtime.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fixture = vi.hoisted(() => {
   const base = {
@@ -116,6 +116,8 @@ import {
 } from '../bots/discord/commands';
 import { buildSlashCommands } from '../bots/discord/client';
 import { STATS_REPLY_MAX_CHARS, STATS_SITE_URL } from '../bots/stats/statsReplies';
+import { WEEKLY_CHART_CAPTION, __resetLeaderboardChartCacheForTests } from '../bots/stats/statsQueries';
+import { DiscordAPIError } from 'discord.js';
 
 function makeInteraction(commandName: string, options: Record<string, string> = {}) {
   const fake = {
@@ -244,7 +246,44 @@ describe('/戰績', () => {
 });
 
 describe('/排行', () => {
-  it('replies publicly with the cache main board (角色理論 of each player\'s last 100 games) and final-outcome totals', async () => {
+  afterEach(() => {
+    delete process.env.STATS_LEADERBOARD_CHART;
+  });
+
+  it('replies publicly with the ranking chart: one PNG attachment + the one-line caption (2026-11-10)', async () => {
+    __resetLeaderboardChartCacheForTests();
+    const it1 = makeInteraction(COMMANDS.LEADERBOARD);
+    await handleLeaderboardCommand(it1 as never);
+    const payload = publicReply(it1) as { content: string; files?: Array<{ attachment: Buffer; name?: string }> };
+    expect(payload.content).toBe(WEEKLY_CHART_CAPTION);
+    expect(payload.files).toHaveLength(1);
+    const file = payload.files![0];
+    expect(file.name).toBe('ranking.png');
+    expect(Buffer.isBuffer(file.attachment)).toBe(true);
+    expect((file.attachment as Buffer).subarray(0, 4).toString('hex')).toBe('89504e47');
+
+    // The same data again: the same rendered PNG (cached per data version).
+    const it2 = makeInteraction(COMMANDS.LEADERBOARD);
+    await handleLeaderboardCommand(it2 as never);
+    const again = publicReply(it2) as { files?: Array<{ attachment: Buffer }> };
+    expect(again.files![0].attachment).toBe(file.attachment);
+  });
+
+  it('Discord refusing the upload → the text answer instead', async () => {
+    const it1 = makeInteraction(COMMANDS.LEADERBOARD);
+    it1.editReply.mockImplementationOnce(async () => {
+      throw new DiscordAPIError({ code: 50013, message: 'Missing Permissions' }, 50013, 403, 'PATCH', '/x', { files: [] });
+    });
+    await handleLeaderboardCommand(it1 as never);
+    expect(it1.editReply).toHaveBeenCalledTimes(2);
+    const last = it1.editReply.mock.calls[1][0] as { content: string; files?: unknown; allowedMentions?: unknown };
+    expect(last.files).toBeUndefined();
+    expect(last.allowedMentions).toEqual({ parse: [] });
+    expect(last.content.split('\n')[0]).toContain('角色理論勝率排行 Top 10');
+  });
+
+  it('STATS_LEADERBOARD_CHART=false: the cache main board as text (角色理論 of each player\'s last 100 games) and final-outcome totals', async () => {
+    process.env.STATS_LEADERBOARD_CHART = 'false';
     const it1 = makeInteraction(COMMANDS.LEADERBOARD);
     await handleLeaderboardCommand(it1 as never);
     const { content } = publicReply(it1);

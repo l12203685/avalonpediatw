@@ -80,6 +80,8 @@ import {
 import { LineReplyQueue } from '../bots/line/replyQueue';
 import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
+import { RelayMediaStore } from '../bots/media/relayMedia';
+import { WEEKLY_CHART_CAPTION, __resetLeaderboardChartCacheForTests } from '../bots/stats/statsQueries';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
 
 const GROUP = 'Cmirror-group';
@@ -90,19 +92,31 @@ interface Harness {
   mirror: ChatMirror;
   bot: LineBotClient;
   replies: { token: string; texts: string[] }[];
+  /** The message objects of each reply (same order as `replies`). */
+  sent: Array<Array<Record<string, unknown>>>;
+  store: RelayMediaStore | null;
+  /** Fail the next N replies with LINE's "invalid image URL" 400. */
+  rejectImagesOnce: () => void;
   discordSent: string[];
   lobby: LobbyChatMessage[];
   setReplyFails: (fails: boolean) => void;
 }
 
-function setup(): Harness {
-  const replies: { token: string; texts: string[] }[] = [];
+function setup(opts: { relay?: boolean } = {}): Harness {
+  const replies: Harness['replies'] = [];
+  const sent: Harness['sent'] = [];
   const discordSent: string[] = [];
   let replyFails = false;
+  let rejectImages = false;
   const client = {
-    replyMessage: async (token: string, messages: { type: string; text: string }[]) => {
+    replyMessage: async (token: string, messages: Array<{ type: string; text: string }>) => {
       if (replyFails) throw new Error('reply_token expired');
+      if (rejectImages && messages.some((m) => m.type === 'image')) {
+        rejectImages = false;
+        throw Object.assign(new Error('400'), { statusCode: 400, body: JSON.stringify({ details: [{ property: 'messages[0].originalContentUrl' }] }) });
+      }
       replies.push({ token, texts: messages.map((m) => m.text) });
+      sent.push(messages as unknown as Array<Record<string, unknown>>);
       return {};
     },
     pushMessage: async () => {
@@ -118,18 +132,24 @@ function setup(): Harness {
       },
     }),
   };
+  const store = opts.relay ? new RelayMediaStore() : null;
   const mirror = initializeChatMirror({
     lineGroupId: GROUP,
     discordChannelId: 'D1',
     discord,
     lineReplyQueue: new LineReplyQueue(),
+    lineImageRelay: store ? { store, publicBaseUrl: 'https://example.invalid' } : undefined,
     logger: silentLogger,
     inboundRateLimit: { windowMs: 60_000, maxRequests: 100 },
   });
   const lobby: LobbyChatMessage[] = [];
   mirror.setLobbyIngest((m) => lobby.push(m));
   const bot = new LineBotClient({ channelSecret: SECRET, channelAccessToken: 'tok', client });
-  return { mirror, bot, replies, discordSent, lobby, setReplyFails: (f) => (replyFails = f) };
+  return {
+    mirror, bot, replies, sent, discordSent, lobby, store,
+    setReplyFails: (f) => (replyFails = f),
+    rejectImagesOnce: () => (rejectImages = true),
+  };
 }
 
 function signed(events: unknown[]): { req: Request; res: Response & { statusCode: number } } {
@@ -293,6 +313,71 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     await deliver(h, groupText('/排行', 'd1', 'rtD'));
     expect(h.replies[0].texts).toHaveLength(2);
     expect(h.replies[0].texts[1]).toBe('📅 每週排行（10/12）…');
+  });
+});
+
+describe('/排行 as the ranking chart (2026-11-10, picture relay on)', () => {
+  const RELAY_URL = /^https:\/\/example\.invalid\/media\/relay\/[A-Za-z0-9_-]{32}\.png$/;
+
+  afterEach(() => {
+    delete process.env.STATS_LEADERBOARD_CHART;
+  });
+
+  it('mirror group: image + caption take the first two slots, 3 queued follow; the next /排行 reuses the same copy', async () => {
+    __resetLeaderboardChartCacheForTests();
+    const h = setup({ relay: true });
+    await queueMirrorMessages(h.mirror, 5);
+    await deliver(h, groupText('/排行', 'c1', 'rtC1'));
+    expect(h.replies).toHaveLength(1);
+    const [image, caption, ...queued] = h.sent[0];
+    expect(image.type).toBe('image');
+    expect(image.originalContentUrl).toMatch(RELAY_URL);
+    expect(image.previewImageUrl).toBe(image.originalContentUrl);
+    expect(caption).toEqual({ type: 'text', text: WEEKLY_CHART_CAPTION });
+    expect(queued).toHaveLength(3);
+    expect(h.mirror.lineReplyQueueSize()).toBe(2);
+
+    await deliver(h, groupText('/排行', 'c2', 'rtC2'));
+    expect(h.sent[1][0].originalContentUrl).toBe(image.originalContentUrl);
+    expect(h.store!.stats().entries).toBe(1);
+  });
+
+  it('1:1: image + caption on the reply_token', async () => {
+    const h = setup({ relay: true });
+    await deliver(h, userText('/排行', 'c3', 'rtC3'));
+    expect(h.replies).toHaveLength(1);
+    expect(h.sent[0].map((m) => m.type)).toEqual(['image', 'text']);
+    expect(h.replies[0].texts[1]).toBe(WEEKLY_CHART_CAPTION);
+  });
+
+  it('LINE refusing the image → the text answer on the same token', async () => {
+    const h = setup({ relay: true });
+    h.rejectImagesOnce();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await deliver(h, userText('/排行', 'c4', 'rtC4'));
+    err.mockRestore();
+    expect(h.replies).toHaveLength(1);
+    expect(h.sent[0].map((m) => m.type)).toEqual(['text']);
+    expect(h.replies[0].texts[0]).toContain('🏆 角色理論勝率排行 Top 10');
+  });
+
+  it('STATS_LEADERBOARD_CHART=false, or no picture relay → the text, as before', async () => {
+    process.env.STATS_LEADERBOARD_CHART = 'false';
+    const h = setup({ relay: true });
+    await deliver(h, userText('/排行', 'c5', 'rtC5'));
+    expect(h.sent[0].map((m) => m.type)).toEqual(['text']);
+    delete process.env.STATS_LEADERBOARD_CHART;
+    __resetChatMirrorForTests(); // the mirror is a singleton: the next setup() replaces it
+    const plain = setup();
+    await deliver(plain, userText('/排行', 'c6', 'rtC6'));
+    expect(plain.sent[0].map((m) => m.type)).toEqual(['text']);
+    expect(plain.replies[0].texts[0]).toContain('🏆 角色理論勝率排行 Top 10');
+  });
+
+  it('other stats commands stay text even with the relay on', async () => {
+    const h = setup({ relay: true });
+    await deliver(h, userText('/戰績 SIN', 'c7', 'rtC7'));
+    expect(h.sent[0].map((m) => m.type)).toEqual(['text']);
   });
 });
 

@@ -8,6 +8,7 @@
  * missing / unreadable cache becomes a short "暫時讀不到" reply.
  */
 
+import crypto from 'crypto';
 import {
   getAllPlayerStats,
   getChemistry,
@@ -39,6 +40,7 @@ import {
   formatPlayerCard,
   formatStatsUnavailable,
   findTheoryBoard,
+  LEADERBOARD_SIZE,
   improvedLines,
   leaderboardScope,
   lookupPair,
@@ -46,14 +48,19 @@ import {
   newcomersLine,
   newcomersQualifier,
   normalizeName,
-  pct,
   roleTitleGroups,
   roleTitlesLine,
   selectLeaderboard,
-  signed,
 } from './statsReplies';
 import { digestDateLabel } from './weeklyDigest';
-import { renderWeeklyChartPng, stripLeadingEmoji, type WeeklyChartData } from './weeklyChart';
+import {
+  chartPct,
+  chartSigned,
+  renderWeeklyChartPng,
+  stripLeadingEmoji,
+  type WeeklyChartBarPanel,
+  type WeeklyChartData,
+} from './weeklyChart';
 
 async function safely(label: string, run: () => Promise<string>): Promise<string> {
   try {
@@ -178,17 +185,52 @@ function splitViewTitle(title: string): { title: string; note: string | null } {
 }
 
 /**
- * The Monday digest as chart data (weeklyChart.ts): the same boards and order as
- * weeklyDigestText — main board Top 10, 進步榜 Top 5, 角色王, 新人榜 (each only
- * when the cache has it). Throws on cache errors, like the text.
+ * A theory board (位置理論 / 整體理論) as a Top 10 bar panel: bar = the row's `key` rate (else the board's
+ * sort value), title = the cache's title + 「Top N」, qualifier = boardQualifier (period + the note's first
+ * clause). null when the cache has no such theory board.
+ */
+function theoryBoardPanel(
+  leaderboard: Parameters<typeof findTheoryBoard>[0],
+  id: 'position' | 'overall',
+  key: 'positionTheory' | 'overallTheory',
+): WeeklyChartBarPanel | null {
+  const board = findTheoryBoard(leaderboard, id);
+  if (!board) return null;
+  const rows = board.rows.slice(0, LEADERBOARD_SIZE).map((r, i) => {
+    const own = r[key];
+    const value = typeof own === 'number' && Number.isFinite(own) ? own : typeof r.value === 'number' && Number.isFinite(r.value) ? r.value : null;
+    return { rank: typeof r.rank === 'number' ? r.rank : i + 1, name: r.name, value, valueLabel: chartPct(value) };
+  });
+  return { title: `${board.title} Top ${rows.length}`, note: boardQualifier(board) || null, rows };
+}
+
+/** "2026-11-09" → "11/9"; null for anything else. */
+function shortDate(isoDate: string | null | undefined): string | null {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(isoDate ?? '');
+  return m ? `${Number(m[1])}/${Number(m[2])}` : null;
+}
+
+/**
+ * The Monday digest as chart data (weeklyChart.ts): the text digest's boards — main board Top 10,
+ * 進步榜 Top 5, 角色王, 新人榜 — plus 位置理論 and 整體理論 Top 10 (owner 2026-11-10), each only
+ * when the cache has it. Throws on cache errors, like the text.
  */
 export async function weeklyChartData(now: number = Date.now()): Promise<WeeklyChartData> {
+  return rankingChartData({ title: '每週排行', dateLabel: () => digestDateLabel(now) });
+}
+
+/** The same chart for /排行: titled 「排行榜」 and dated by the day the boards were computed for. */
+export async function leaderboardChartData(now: number = Date.now()): Promise<WeeklyChartData> {
+  return rankingChartData({ title: '排行榜', dateLabel: (asOf) => shortDate(asOf) ?? digestDateLabel(now) });
+}
+
+async function rankingChartData(opts: { title: string; dateLabel: (asOf: string | null) => string }): Promise<WeeklyChartData> {
   const [overview, leaderboard] = await Promise.all([getOverview(), getLeaderboard()]);
   const view = selectLeaderboard(leaderboard, overview);
   const head = splitViewTitle(view.title);
   const main: WeeklyChartData['main'] = {
     ...head,
-    rows: view.rows.map((r) => ({ rank: r.rank, name: r.name, value: r.roleTheory, valueLabel: pct(r.roleTheory) })),
+    rows: view.rows.map((r) => ({ rank: r.rank, name: r.name, value: r.roleTheory, valueLabel: chartPct(r.roleTheory) })),
     ...(view.emptyNote ? { emptyNote: view.emptyNote.replace(/^（(.*)）$/u, '$1') } : {}),
   };
 
@@ -203,8 +245,8 @@ export async function weeklyChartData(now: number = Date.now()): Promise<WeeklyC
             rank: typeof r.rank === 'number' ? r.rank : i + 1,
             name: r.name,
             value: typeof r.value === 'number' && Number.isFinite(r.value) ? r.value : null,
-            valueLabel: signed(r.value),
-            detail: `${pct(r.priorRoleTheory)} → ${pct(r.recentRoleTheory)}`,
+            valueLabel: chartSigned(r.value),
+            detail: `${chartPct(r.priorRoleTheory)} → ${chartPct(r.recentRoleTheory)}`,
           })),
         }
       : null;
@@ -219,7 +261,7 @@ export async function weeklyChartData(now: number = Date.now()): Promise<WeeklyC
           entries: groups.map((g) => ({
             role: g.role,
             names: g.names,
-            valueLabel: pct(g.value),
+            valueLabel: chartPct(g.value),
           })),
         }
       : null;
@@ -234,7 +276,7 @@ export async function weeklyChartData(now: number = Date.now()): Promise<WeeklyC
           rows: newcomersBoard.rows.slice(0, DIGEST_NEWCOMERS_SIZE).map((r, i) => {
             const value = typeof r.roleTheory === 'number' && Number.isFinite(r.roleTheory) ? r.roleTheory : r.value;
             const games = typeof r.careerGames === 'number' && Number.isFinite(r.careerGames) ? r.careerGames : r.games;
-            return { rank: typeof r.rank === 'number' ? r.rank : i + 1, name: r.name, value, valueLabel: pct(value), detail: `${games} 場` };
+            return { rank: typeof r.rank === 'number' ? r.rank : i + 1, name: r.name, value, valueLabel: chartPct(value), detail: `${games} 場` };
           }),
         }
       : null;
@@ -247,9 +289,12 @@ export async function weeklyChartData(now: number = Date.now()): Promise<WeeklyC
     .join('｜');
 
   return {
-    dateLabel: digestDateLabel(now),
+    title: opts.title,
+    dateLabel: opts.dateLabel(leaderboard?.asOf ?? null),
     subtitle: subtitle || null,
     main,
+    position: theoryBoardPanel(leaderboard, 'position', 'positionTheory'),
+    overall: theoryBoardPanel(leaderboard, 'overall', 'overallTheory'),
     improved,
     roleKings,
     newcomers,
@@ -265,6 +310,38 @@ export async function weeklyDigestPng(now: number = Date.now()): Promise<Buffer>
 
 /** The one line that goes with the picture (Discord message text, LINE follow-up). */
 export const WEEKLY_CHART_CAPTION = `🔗 完整圖表與個人戰績（不用登入）：${STATS_PAGE_URL}`;
+
+/** The /排行 chart: `key` identifies its content (same data → same key), so a relay copy can be reused. */
+export interface LeaderboardChart {
+  key: string;
+  png: Buffer;
+}
+
+let leaderboardChartCache: LeaderboardChart | null = null;
+
+/**
+ * The /排行 chart (leaderboardChartData → PNG), rendered once per distinct data: the key is a
+ * hash of the chart data, so a new cache (another asOf, other rows) renders again and repeated
+ * /排行 calls in between reuse the PNG (the render is synchronous, so concurrent calls for the
+ * same data never render twice). Throws on cache or render errors — callers answer with the text.
+ */
+export async function leaderboardChart(now: number = Date.now()): Promise<LeaderboardChart> {
+  const data = await leaderboardChartData(now);
+  const key = crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex').slice(0, 32);
+  if (leaderboardChartCache?.key !== key) leaderboardChartCache = { key, png: renderWeeklyChartPng(data) };
+  return leaderboardChartCache;
+}
+
+/** /排行 answers with the chart unless STATS_LEADERBOARD_CHART is false / 0 / off / no (then the text, as before). */
+export function leaderboardChartEnabled(): boolean {
+  const raw = (process.env.STATS_LEADERBOARD_CHART || '').trim().toLowerCase();
+  return !['false', '0', 'off', 'no'].includes(raw);
+}
+
+/** Test hook: forget the cached /排行 chart. */
+export function __resetLeaderboardChartCacheForTests(): void {
+  leaderboardChartCache = null;
+}
 
 // ─── /默契 ───────────────────────────────────────────────────────────────
 

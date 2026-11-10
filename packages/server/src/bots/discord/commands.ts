@@ -1,7 +1,15 @@
-import { ChatInputCommandInteraction, CommandInteraction, EmbedBuilder, MessageFlags } from 'discord.js';
+import { AttachmentBuilder, ChatInputCommandInteraction, CommandInteraction, DiscordAPIError, EmbedBuilder, MessageFlags } from 'discord.js';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
-import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from '../stats/statsQueries';
+import {
+  WEEKLY_CHART_CAPTION,
+  chemistryReply,
+  leaderboardChart,
+  leaderboardChartEnabled,
+  leaderboardReply,
+  leaderboardScopeText,
+  playerCardReply,
+} from '../stats/statsQueries';
 import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
 import { SIM_CONFIG } from '../simulation/config';
 import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
@@ -124,8 +132,34 @@ export async function handleStatsCommand(interaction: ChatInputCommandInteractio
   await replyStats(interaction, () => playerCardReply(name));
 }
 
+/**
+ * /排行 (2026-11-10): the ranking chart (same image as the Monday post, titled 「排行榜」) as an
+ * attachment plus the one-line caption. The PNG is rendered once per data version
+ * (statsQueries.leaderboardChart). Falls back to the text when the chart is off
+ * (STATS_LEADERBOARD_CHART=false), cannot be rendered, or Discord refuses the upload.
+ */
 export async function handleLeaderboardCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-  await replyStats(interaction, () => leaderboardReply());
+  await interaction.deferReply();
+  if (leaderboardChartEnabled()) {
+    let png: Buffer | null = null;
+    try {
+      png = (await leaderboardChart()).png;
+    } catch (err) {
+      console.error('[stats] /排行 chart failed, answering with text:', err);
+    }
+    if (png) {
+      try {
+        const file = new AttachmentBuilder(png, { name: 'ranking.png', description: '排行榜圖表' });
+        await interaction.editReply({ content: WEEKLY_CHART_CAPTION, files: [file], allowedMentions: { parse: [] } });
+        return;
+      } catch (err) {
+        if (!(err instanceof DiscordAPIError)) throw err;
+        console.warn(`[stats] Discord refused the /排行 chart (${err.code}) — answering with text`);
+      }
+    }
+  }
+  const content = await leaderboardReply();
+  await interaction.editReply({ content, allowedMentions: { parse: [] } });
 }
 
 export async function handleChemistryCommand(interaction: ChatInputCommandInteraction): Promise<void> {
