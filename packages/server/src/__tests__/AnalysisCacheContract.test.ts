@@ -646,6 +646,41 @@ describe('analysis_cache.json → web contract', () => {
     expect((await request(server).get('/api/analysis/rating/%E6%B2%92%E6%9C%89%E9%80%99%E5%80%8B%E4%BA%BA')).status).toBe(404);
   });
 
+  it('GET /theory-trend/:name — 玩家雷達的理論勝率走勢 (503 until the cache carries the section)', async () => {
+    const section = (committedCache as { theoryTrend?: { series: Record<string, unknown[][]>; config: Json } }).theoryTrend;
+    const first = await request(server).get(`/api/analysis/theory-trend/${encodeURIComponent(playerNames[0])}`);
+    if (!section) {
+      expect(first.status).toBe(503);
+      expect(first.body).toEqual({ success: false, error: 'Theory trend not yet generated' });
+      return;
+    }
+    const p: Problems = [];
+    const cfg = obj(p, section.config, 'theoryTrend.config');
+    for (const k of ['theoryMinCellGames', 'positionGames', 'overallMinGames']) num(p, cfg[k], `theoryTrend.config.${k}`);
+    expect(p).toEqual([]);
+    for (const name of playerNames.slice(0, 40)) {
+      const one = await request(server).get(`/api/analysis/theory-trend/${encodeURIComponent(name.toUpperCase())}`);
+      expect(one.status, name).toBe(200);
+      const body = one.body.data as { name: string; series: unknown[][]; current: Json | null };
+      expect(body.name).toBe(name);
+      expect(body.series).toEqual(section.series[name]);
+      body.series.forEach((pt, i) => {
+        const at = `${name}.series[${i}]`;
+        expect(pt, at).toHaveLength(6);
+        str(p, pt[0], `${at}[0]`);
+        for (const k of [1, 2, 3, 4, 5]) num(p, pt[k], `${at}[${k}]`);
+        if (i > 0 && String(pt[0]) <= String(body.series[i - 1][0])) p.push(`${at}: dates not rising`);
+      });
+      if (body.current) {
+        for (const k of ['games', 'roleTheory', 'positionTheory', 'overallTheory']) num(p, body.current[k], `${name}.current.${k}`);
+        bool(p, body.current.roleFull, `${name}.current.roleFull`);
+        expect(body.series[body.series.length - 1][1], name).toBe(body.current.games);
+      }
+    }
+    expect(p).toEqual([]);
+    expect((await request(server).get('/api/analysis/theory-trend/__proto__')).status).toBe(404);
+  });
+
   it('GET /players + /chemistry — seat / pair outcome splits are never one split for everyone', async () => {
     const splits = (o: Json): string => `${o.threeRedPct}/${o.threeBlueDeadPct}/${o.threeBlueAlivePct}`;
     const players = (await analysis('/players')).players as Json[];
