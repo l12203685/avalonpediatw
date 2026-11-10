@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean } from './belief/BayesBelief';
-import { loyalR2ViewTeam, percivalThumbSureTeam, r2AfterR1Fail } from './BlueRound37';
+import { loyalR2ViewTeam, percivalThumbSureTeam, r2AfterR1Fail, r2ViewCandidates } from './BlueRound37';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const asObs = (o: object) => o as unknown as PlayerObservation;
@@ -40,7 +40,12 @@ describe('round 37 tuning fields', () => {
     expect(parseTuningFlag('percivalThumbSure')).toEqual({ percivalThumbSure: 0.7 });
     expect(parseTuningFlag('percivalThumbSure=0.6')).toEqual({ percivalThumbSure: 0.6 });
     expect(() => parseTuningFlag('percivalThumbSure=2')).toThrow();
-    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, loyalR2View: 3, percivalThumbSure: 0.7 })).toBe('loyalR2View=3,percivalThumbSure=0.7');
+    expect(LEGACY_AGENT_TUNING.loyalR2ViewKeep).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.loyalR2ViewKeep).toBe(0);
+    expect(parseTuningFlag('loyalR2ViewKeep')).toEqual({ loyalR2ViewKeep: 0.9 });
+    expect(parseTuningFlag('loyalR2ViewKeep=0.85')).toEqual({ loyalR2ViewKeep: 0.85 });
+    expect(() => parseTuningFlag('loyalR2ViewKeep=1.5')).toThrow();
+    expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, loyalR2View: 3, loyalR2ViewKeep: 0.9, percivalThumbSure: 0.7 })).toBe('loyalR2View=3,loyalR2ViewKeep=0.9,percivalThumbSure=0.7');
   });
 });
 
@@ -77,6 +82,28 @@ describe('loyalR2View (round 37: R2 after an R1 fail, the proposal answers the p
     if (pa.type !== 'team_select') throw new Error(pa.type);
     expect(pa).not.toBe(copy);
     expect(loyalR2ViewTeam(on(1), r2, copy, () => false)).toBe(copy);
+  });
+});
+
+describe('loyalR2ViewKeep (round 37: the soft answer — every kept member of the previous team costs a factor γ of the own-view clean probability)', () => {
+  it('picks the candidate with the highest p × γ^kept; γ near 0 keeps nobody, γ = 1 is the cleanest team that is not a re-proposal', () => {
+    const got = r2ViewCandidates(DEFAULT_AGENT_TUNING, r2, 4)!;
+    expect(got.prevLeader).toBe('P6');
+    expect(got.cands.length).toBe(84);
+    for (const gamma of [0.9, 0.5]) {
+      const a = loyalR2ViewTeam({ ...on(1), loyalR2ViewKeep: gamma }, r2, copy);
+      if (a.type !== 'team_select') throw new Error(a.type);
+      const key = [...a.teamIds].sort().join(',');
+      const open = got.cands.filter((c) => !c.barred);
+      const best = Math.max(...open.map((c) => c.p * Math.pow(gamma, c.kept)));
+      const mine = open.find((c) => [...c.team].sort().join(',') === key)!;
+      expect(mine.p * Math.pow(gamma, mine.kept)).toBeCloseTo(best, 9);
+    }
+    const none = loyalR2ViewTeam({ ...on(1), loyalR2ViewKeep: 0.01 }, r2, copy);
+    if (none.type !== 'team_select') throw new Error(none.type);
+    expect(kept(none.teamIds)).toBe(1); // keeping nobody of the only earlier R2 team would be the fully reversed team (barred)
+    // without loyalR2View the soft knob alone does nothing
+    expect(loyalR2ViewTeam({ ...DEFAULT_AGENT_TUNING, loyalR2ViewKeep: 0.9 }, r2, copy)).toBe(copy);
   });
 });
 

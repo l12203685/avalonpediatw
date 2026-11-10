@@ -8,6 +8,7 @@
  *   - `loyalR2View`：第 1 局失敗之後的第 2 局，忠臣（2、4 加派西）非強制的提議照 wiki-24 回應上一任隊長，派「自己的視角」：
  *     上一任看起來紅（自己後驗 ≥ 0.5）→ 修正，他隊上的人（含他）一個都不留；否則尊重，他隊上的人（含他）最多留 1 人（3、4 = 最多 2 人）；
  *     不照派這一局出現過的隊、不派和這一局前面完全反向的隊；在這些條件裡挑自己後驗最乾淨的隊。沒有符合的隊時依序放寬。
+ *     `loyalR2ViewKeep=γ`（和 `loyalR2View` 一起）：不用固定人數，改成每多留一人乾淨機率打 γ 折。
  *   - `percivalThumbSure=θ`：派西第 2 局起只放自己後驗裡「是梅林」的機率 ≥ θ 的拇指；隊上有分不出來的拇指時改派不含它、自己後驗最乾淨的隊
  *     （整支照派成功任務的隊不動）。
  * 兩個都預設關。
@@ -33,6 +34,32 @@ export function r2AfterR1Fail(obs: PlayerObservation): boolean {
   return (obs.currentRound ?? 1) === 2 && (obs.questResults ?? [])[0] === 'fail' && (obs.failCount ?? 0) < 4;
 }
 
+export interface R2ViewCand { team: string[]; p: number; /** 上一任隊上（含他）留下幾人 */ kept: number; leaderIn: boolean; /** 照派這一局出現過的隊、或和前面完全反向 */ barred: boolean }
+
+/** 第 2 局這一次提議的候選隊（含自己）：自己後驗的乾淨機率、相對上一任隊長的隊留了幾人。沒有上一任（別人的）提議時 null。 */
+export function r2ViewCandidates(tuning: Readonly<AgentTuning>, obs: PlayerObservation, size: number): { cands: R2ViewCand[]; prevLeader: string } | null {
+  const me = obs.myPlayerId;
+  const earlier = obs.voteHistory.filter((v) => v.round === 2);
+  const prevs = earlier.filter((v) => v.leader !== me);
+  if (prevs.length === 0) return null;
+  const prev = prevs[prevs.length - 1];
+  const opts = bayesOptionsOf(tuning);
+  const prevTeam = new Set(prev.team.filter((id) => id !== me));
+  const seen = new Set(earlier.flatMap((v) => v.team).filter((id) => id !== me));
+  const keys = new Set(earlier.map((v) => [...v.team].sort().join(',')));
+  const others = obs.allPlayerIds.filter((id) => id !== me);
+  const cands: R2ViewCand[] = [];
+  for (const fill of combos(others, size - 1)) {
+    const team = [me, ...fill];
+    const p = bayesTeamClean(obs, team, opts);
+    if (p === null) return null;
+    const reversed = seen.size > 0 && fill.every((id) => !seen.has(id));
+    const same = keys.has([...team].sort().join(','));
+    cands.push({ team, p, kept: fill.filter((id) => prevTeam.has(id)).length, leaderIn: fill.includes(prev.leader), barred: reversed || same });
+  }
+  return { cands, prevLeader: prev.leader };
+}
+
 /** `loyalR2View`：見檔頭。不適用時回傳原本的動作（同一個物件）。 */
 export function loyalR2ViewTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction, allowed: Allowed = () => true): AgentAction {
   const mode = tuning.loyalR2View ?? 0;
@@ -40,34 +67,24 @@ export function loyalR2ViewTeam(tuning: Readonly<AgentTuning>, obs: PlayerObserv
   const withPercival = mode === 2 || mode === 4;
   if (!(obs.myRole === 'loyal' || (withPercival && obs.myRole === 'percival'))) return action;
   if (!r2AfterR1Fail(obs)) return action;
-  const me = obs.myPlayerId;
-  const earlier = obs.voteHistory.filter((v) => v.round === 2);
-  const prevs = earlier.filter((v) => v.leader !== me);
-  if (prevs.length === 0) return action;
-  const prev = prevs[prevs.length - 1];
-  const keep = mode >= 3 ? 2 : 1;
-  const size = action.teamIds.length;
-  const opts = bayesOptionsOf(tuning);
-  const share = bayesRedShare(obs, opts);
-  const correct = (share.get(prev.leader) ?? 0.5) >= 0.5;
-  const prevTeam = new Set(prev.team.filter((id) => id !== me));
-  const seen = new Set(earlier.flatMap((v) => v.team).filter((id) => id !== me));
-  const keys = new Set(earlier.map((v) => [...v.team].sort().join(',')));
-  const others = obs.allPlayerIds.filter((id) => id !== me);
-  const cands: { team: string[]; p: number; ok: number }[] = [];
-  for (const fill of combos(others, size - 1)) {
-    const team = [me, ...fill];
-    const inPrev = fill.filter((id) => prevTeam.has(id)).length;
-    const reversed = seen.size > 0 && fill.every((id) => !seen.has(id));
-    const same = keys.has([...team].sort().join(','));
-    let ok = 0;
-    if (!reversed && !same) ok = (correct ? inPrev === 0 : inPrev <= keep) ? 2 : 1;
-    const p = bayesTeamClean(obs, team, opts);
-    if (p === null) return action;
-    cands.push({ team, p, ok });
+  const got = r2ViewCandidates(tuning, obs, action.teamIds.length);
+  if (!got) return action;
+  const gamma = tuning.loyalR2ViewKeep ?? 0;
+  let best: R2ViewCand | undefined;
+  if (gamma > 0) {
+    // 軟性：每多留上一任隊上的一個人（含他自己），自己後驗的乾淨機率打 γ 折——只有他在自己的視角裡明顯比新的人乾淨才重複派他。
+    // 真人局同一點（忠臣 1,530 點）：γ = 0.9 留 0／1／2／3 人 15／43／32／11%、留上一任隊長 25%；真人 11／40／37／12%、30%。
+    const score = (c: R2ViewCand): number => c.p * Math.pow(gamma, c.kept);
+    const sorted = got.cands.map((c) => ({ c, s: score(c) })).sort((a, b) => (Number(a.c.barred) - Number(b.c.barred)) || (b.s - a.s > 1e-12 ? 1 : a.s - b.s > 1e-12 ? -1 : 0));
+    best = sorted.find((x) => allowed(x.c.team))?.c;
+  } else {
+    const keep = mode >= 3 ? 2 : 1;
+    const share = bayesRedShare(obs, bayesOptionsOf(tuning));
+    const correct = (share.get(got.prevLeader) ?? 0.5) >= 0.5;
+    const rank = (c: R2ViewCand): number => (c.barred ? 0 : (correct ? c.kept === 0 : c.kept <= keep) ? 2 : 1);
+    const sorted = got.cands.map((c) => ({ c, ok: rank(c) })).sort((a, b) => (b.ok - a.ok) || (b.c.p - a.c.p > 1e-12 ? 1 : a.c.p - b.c.p > 1e-12 ? -1 : 0));
+    best = sorted.find((x) => allowed(x.c.team))?.c;
   }
-  cands.sort((a, b) => (b.ok - a.ok) || (b.p - a.p > 1e-12 ? 1 : a.p - b.p > 1e-12 ? -1 : 0));
-  const best = cands.find((c) => allowed(c.team));
   if (!best) return action;
   const cur = [...action.teamIds].sort().join(',');
   return [...best.team].sort().join(',') === cur ? action : { type: 'team_select', teamIds: best.team };
