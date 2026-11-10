@@ -33,6 +33,7 @@ import { P_CLIP, PolicyVoteReader, type PolicyModel } from './policyModel';
 import { sigmoid } from './logistic';
 import MODEL from './recursive_strong.json';
 
+
 // ── 派隊的條件 logit ─────────────────────────────────────────────
 
 /**
@@ -350,20 +351,40 @@ export interface MixViewer { id: string; role: Role | string; seesReds: number; 
 export class RoleMixtureReader {
   private readonly cands = new Map<string, ProposalCandidates | null>();
   private readonly propCache = new Map<string, number>();
-  private readonly dots = new Map<string, Float64Array>();
+  private readonly dots = new Map<number, Float64Array>();
   private scratch = new Float64Array(256);
   private readonly extra: Float64Array<ArrayBuffer> = new Float64Array(N_EXTRA);
+
+  /** 第 35 回合：整段概似的快取（同一個前綴的所有觀察者共用；數字鍵含 upTo）。 */
+  private readonly seatNum = new Map<number, number>();
 
   /** `flowFeat`：派隊用資訊流特徵的那一組係數（`beliefRecursive=5`）。 */
   constructor(readonly model: MixModel, readonly features: FlowFeatures, readonly flowFeat = false) {}
 
-  private baseDots(i: number, j: string, w: number): Float64Array {
-    const key = `${i}|${j}|${this.features.lakeKey(i, j, w)}`;
+  /**
+   * 第 35 回合（增量快取）：從同一局較短資訊流的讀法接手第 0 … upTo − 1 次提議的快取（候選隊、派隊概似、投票內積的鍵都以提議序號開頭；
+   * 那些值只看到那次提議為止的紀錄，資訊流變長也不會變）。
+   */
+  adoptFrom(other: RoleMixtureReader, upTo: number): void {
+    for (const [src, dst] of [[other.cands, this.cands], [other.propCache, this.propCache]] as const) {
+      for (const [k, v] of src as Map<string, unknown>) {
+        if (Number(k.slice(0, k.indexOf('|'))) < upTo) (dst as Map<string, unknown>).set(k, v);
+      }
+    }
+    for (const [k, v] of other.dots) if (Math.floor(k / 16384) < upTo) this.dots.set(k, v);
+  }
+
+  private baseDots(i: number, j: string, jIdx: number, w: number): Float64Array {
+    // 熱迴圈裡用的常數取成區域常數（匯出的常數經過模組的 getter，每次讀都要一次函數呼叫）；不放在模組最上層：
+    // voteFeatures → BayesBelief → recursiveRead → voteFeatures 是循環匯入，從 voteFeatures 先載入時模組層級讀它的常數還沒初始化。
+    const NB = N_BASE;
+    // 數字鍵：(提議, 座位, j 的湖結果)；lakeSig < 1024。
+    const key = (i * 16 + jIdx) * 1024 + this.features.lakeKey(i, j, w);
     let d = this.dots.get(key);
     if (!d) {
       const x = this.features.base(i, j, w);
       d = new Float64Array(MIX_VOTE_CLASSES.length);
-      MIX_VOTE_CLASSES.forEach((c, ci) => { const b = this.model.vote[c]; let z = 0; for (let k = 0; k < N_BASE; k++) z += b[k] * x[k]; d![ci] = z; });
+      for (let ci = 0; ci < MIX_VOTE_CLASSES.length; ci++) { const b = this.model.vote[MIX_VOTE_CLASSES[ci]]; let z = 0; for (let k = 0; k < NB; k++) z += b[k] * x[k]; d[ci] = z; }
       this.dots.set(key, d);
     }
     return d;
@@ -371,17 +392,20 @@ export class RoleMixtureReader {
 
   /** log P(j 的每一票 | 角色, w)。 */
   voteLog(j: string, upTo: number, w: number, cls: MixVoteClass, mordredBit = 0, thumbMask = 0): number {
+    const NB = N_BASE;
+    const NX = N_EXTRA;
     const f = this.features;
     const ci = MIX_VOTE_CLASSES.indexOf(cls);
     const b = this.model.vote[cls];
+    const jIdx = f.flow.ids.indexOf(j);
     let lp = 0;
     for (let i = 0; i < upTo; i++) {
       if (!f.voted(i)) continue;
       const vote = f.flow.votes[i].votes[j];
       if (vote === undefined) continue;
-      let z = this.baseDots(i, j, w)[ci];
+      let z = this.baseDots(i, j, jIdx, w)[ci];
       const ex = mixVoteExtras(f, i, j, w, cls, mordredBit, thumbMask, this.extra);
-      for (let k = 0; k < N_EXTRA; k++) if (ex[k] !== 0) z += b[N_BASE + k] * ex[k];
+      for (let k = 0; k < NX; k++) if (ex[k] !== 0) z += b[NB + k] * ex[k];
       const p = Math.min(1 - P_CLIP, Math.max(P_CLIP, sigmoid(z)));
       lp += Math.log(vote ? p : 1 - p);
     }
@@ -420,79 +444,96 @@ export class RoleMixtureReader {
   }
 
   /** 世界 w 的整段紀錄（讀者自己的動作不讀；`skip(j)` 的人的派隊不讀）的 log 概似，角色在世界裡一起決定。 */
-  worldLog(viewer: MixViewer, upTo: number, w: number, skip: (leader: string) => boolean): number {
+  worldLog(viewer: MixViewer, upTo: number, w: number, skip: (leader: string) => boolean, rolesOut?: Float64Array): number {
     const flow = this.features.flow;
     const ids = flow.ids;
-    const reds: string[] = [];
-    const blues: string[] = [];
-    for (const id of ids) {
-      if (id === viewer.id) continue;
-      if ((w & bitOf(flow, id)) !== 0) reds.push(id); else blues.push(id);
-    }
-    const prop = (j: string, cls: ProposalClass, d = 0, th = 0): number => (skip(j) ? 0 : this.propLog(j, upTo, w, this.flowFeat ? (`${cls}F` as ProposalClass) : cls, d, th));
-    const seat = (j: string, vc: MixVoteClass, pc: ProposalClass, d = 0, th = 0): number => this.voteLog(j, upTo, w, vc, d, th) + prop(j, pc, d, th);
-    const lLoyal = new Map(blues.map((b) => [b, seat(b, 'loyal', 'loyal')] as const));
+    const reds: number[] = [];
+    const blues: number[] = [];
+    ids.forEach((id, k) => { if (id === viewer.id) return; if ((w & (1 << k)) !== 0) reds.push(k); else blues.push(k); });
+    // 第 35 回合：數字鍵的整段概似快取（同一個前綴的所有觀察者共用；只有梅林的項看 d、派西的項看拇指）。
+    const seat = (k: number, vci: number, d = 0, th = 0): number => {
+      const j = ids[k];
+      const sk = skip(j) ? 1 : 0;
+      const key = ((((upTo * 1024 + w) * 16 + k) * 8 + vci) * 2 + sk) * 1048576 + (vci === 2 ? d : 0) * 1024 + (vci === 1 ? th : 0);
+      let v = this.seatNum.get(key);
+      if (v === undefined) {
+        const vc = MIX_VOTE_CLASSES[vci];
+        const pc: ProposalClass = vci === 0 ? 'loyal' : vci === 1 ? 'percival' : vci === 2 ? 'merlin' : vci === 6 ? 'oberon' : 'evil';
+        v = this.voteLog(j, upTo, w, vc, d, th) + (sk ? 0 : this.propLog(j, upTo, w, this.flowFeat ? (`${pc}F` as ProposalClass) : pc, d, th));
+        this.seatNum.set(key, v);
+      }
+      return v;
+    };
+    const lLoyal = blues.map((b) => seat(b, 0));
     let base = 0;
-    for (const b of blues) base += lLoyal.get(b)!;
+    for (const x of lLoyal) base += x;
     if (reds.length !== 4) {
       // 非標準配置：紅方角色平均，沒有梅林、派西層。
       for (const r of reds) {
-        const ls = (['assassin', 'morgana', 'mordred', 'oberon'] as MixVoteClass[]).map((c) => seat(r, c, c === 'oberon' ? 'oberon' : 'evil'));
+        const ls = [3, 4, 5, 6].map((c) => seat(r, c));
         base += logSumExpArr(ls) - Math.log(ls.length);
       }
       return base;
     }
-    const viewerBit = bitOf(flow, viewer.id);
     const merlinViewer = viewer.role === 'merlin';
     const percivalViewer = viewer.role === 'percival' && popcount(viewer.thumbs) === 2;
-    // 紅方：每個人在四個角色下的整段概似。
-    const lr = new Map<string, Record<string, number>>();
-    for (const r of reds) {
-      lr.set(r, {
-        assassin: seat(r, 'assassin', 'evil'), morgana: seat(r, 'morgana', 'evil'), mordred: seat(r, 'mordred', 'evil'), oberon: seat(r, 'oberon', 'oberon'),
-      });
-    }
-    const merlinTerm = new Map<string, number>();
-    const percTerm = new Map<string, number>();
+    const viewerBit = bitOf(flow, viewer.id);
+    // 紅方：每個人在刺客、莫甘娜、莫德雷德、奧伯倫下的整段概似（MIX_VOTE_CLASSES 的 3、4、5、6）。
+    const lr = reds.map((r) => [seat(r, 3), seat(r, 4), seat(r, 5), seat(r, 6)]);
+    const nb = blues.length;
+    // 梅林項：LM[b][di] = 梅林是 b、莫德雷德是 reds[di]。
+    const LM = blues.map((b, bi) => reds.map((d) => seat(b, 2, 1 << d) - lLoyal[bi]));
+    // 派西項（延遲算）：LP[p][m][g]，m = 梅林（藍方序號；讀者是梅林時 = nb），g = 莫甘娜（紅方序號）。
+    const LP = new Float64Array(nb * (nb + 1) * 4).fill(NaN);
+    const percTerm = (pi: number, mi: number, gi: number): number => {
+      const idx = (pi * (nb + 1) + mi) * 4 + gi;
+      let v = LP[idx];
+      if (Number.isNaN(v)) {
+        const mBit = mi === nb ? viewerBit : 1 << blues[mi];
+        v = seat(blues[pi], 1, 0, mBit | (1 << reds[gi])) - lLoyal[pi];
+        LP[idx] = v;
+      }
+      return v;
+    };
     const terms: number[] = [];
-    for (const d of reds) {
-      const dBit = bitOf(flow, d);
-      if (merlinViewer && (viewer.seesReds & dBit) !== 0) continue;
-      const rest = reds.filter((r) => r !== d);
+    // 第 35 回合：每個組合的角色（梅林、派西、奧伯倫的座位），給 `rolesOut`（每個座位 [梅林, 派西, 奧伯倫] 在這個世界裡的機率）。
+    const combo: number[] = [];
+    // 紅方角色：莫德雷德 d，其他三人排到刺客／莫甘娜／奧伯倫（RED_ORDER 的 0／1／2 對應 lr 的 0／1／3）。
+    const redIdx = [0, 1, 3];
+    for (let di = 0; di < 4; di++) {
+      if (merlinViewer && (viewer.seesReds & (1 << reds[di])) !== 0) continue;
+      const rest = [0, 1, 2, 3].filter((x) => x !== di);
       for (const perm of PERMS3) {
-        let lred = lr.get(d)!.mordred;
-        let g = '';
-        rest.forEach((r, k) => { const role = RED_ORDER[perm[k]]; lred += lr.get(r)![role]; if (role === 'morgana') g = r; });
-        const gBit = bitOf(flow, g);
-        if (percivalViewer && (viewer.thumbs & gBit) === 0) continue;
-        // 梅林候選人：讀者是梅林 → 讀者自己（沒有項）；讀者是派西 → 拇指裡藍的那根；否則每個藍方。
-        const ms: (string | null)[] = merlinViewer ? [null] : percivalViewer ? blues.filter((b) => (viewer.thumbs & bitOf(flow, b)) !== 0) : blues;
-        for (const m of ms) {
-          let lm = 0;
-          if (m !== null) {
-            const key = `${m}|${d}`;
-            let t = merlinTerm.get(key);
-            if (t === undefined) { t = seat(m, 'merlin', 'merlin', dBit) - lLoyal.get(m)!; merlinTerm.set(key, t); }
-            lm = t;
-          }
-          const mBit = m === null ? viewerBit : bitOf(flow, m);
-          const thumbs = mBit | gBit;
-          const ps: (string | null)[] = percivalViewer ? [null] : blues.filter((b) => b !== m);
-          for (const p of ps) {
-            let lpv = 0;
-            if (p !== null) {
-              const key = `${p}|${thumbs}`;
-              let t = percTerm.get(key);
-              if (t === undefined) { t = seat(p, 'percival', 'percival', 0, thumbs) - lLoyal.get(p)!; percTerm.set(key, t); }
-              lpv = t;
-            }
-            terms.push(lred + lm + lpv);
+        let lred = lr[di][2];
+        let gi = -1;
+        let oi = -1;
+        rest.forEach((ri, k) => { const role = perm[k]; lred += lr[ri][redIdx[role]]; if (role === 1) gi = ri; if (role === 2) oi = ri; });
+        if (percivalViewer && (viewer.thumbs & (1 << reds[gi])) === 0) continue;
+        const ms: number[] = merlinViewer ? [nb] : percivalViewer ? blues.map((b, bi) => ((viewer.thumbs & (1 << b)) !== 0 ? bi : -1)).filter((x) => x >= 0) : blues.map((_, bi) => bi);
+        for (const mi of ms) {
+          const lm = mi === nb ? 0 : LM[mi][di];
+          if (percivalViewer) { terms.push(lred + lm); if (rolesOut) combo.push(mi, -1, oi); continue; }
+          for (let pi = 0; pi < nb; pi++) {
+            if (pi === mi) continue;
+            terms.push(lred + lm + percTerm(pi, mi, gi));
+            if (rolesOut) combo.push(mi, pi, oi);
           }
         }
       }
     }
     if (terms.length === 0) return base;
-    return base + logSumExpArr(terms) - Math.log(terms.length);
+    const lse = logSumExpArr(terms);
+    if (rolesOut) {
+      rolesOut.fill(0);
+      terms.forEach((t, x) => {
+        const p = Math.exp(t - lse);
+        const mi = combo[3 * x]; const pi = combo[3 * x + 1]; const oi = combo[3 * x + 2];
+        if (mi >= 0 && mi < nb) rolesOut[blues[mi] * 3] += p;
+        if (pi >= 0) rolesOut[blues[pi] * 3 + 1] += p;
+        if (oi >= 0) rolesOut[reds[oi] * 3 + 2] += p;
+      });
+    }
+    return base + lse - Math.log(terms.length);
   }
 }
 
@@ -555,6 +596,8 @@ export function mixModels(): MixModel {
 /** 派隊讀法的快取跟著資訊流特徵走（同一局的每個觀察者共用）。 */
 const propReaders = new WeakMap<FlowFeatures, RecursiveProposalReader>();
 const mixReaders = new WeakMap<FlowFeatures, RoleMixtureReader>();
+/** 第 35 回合：每份資訊流特徵是從哪一份較短的接手的（角色混合讀法的增量快取跟著接手）。 */
+const ffParent = new WeakMap<FlowFeatures, { parent: FlowFeatures; upTo: number }>();
 const mixFlowReaders = new WeakMap<FlowFeatures, RoleMixtureReader>();
 
 interface Entry { key: string; sigs: string[]; ff: FlowFeatures; quests: number; lakes: number }
@@ -578,10 +621,46 @@ function featuresOf(obs: PlayerObservation, level0: Readonly<BayesOptions>): Flo
   }
   if (best && bestLen === sigs.length && best.sigs.length === sigs.length && best.quests === flow.quests.length && best.lakes === flow.lakes.length) return best.ff;
   const ff = new FlowFeatures(flow, { useBayesView: true, bayesViewOptions: level0 });
-  if (best && bestLen > 0) ff.adoptFrom(best.ff, bestLen);
+  if (best && bestLen > 0) { ff.adoptFrom(best.ff, bestLen); ffParent.set(ff, { parent: best.ff, upTo: bestLen }); }
   recent.unshift({ key, sigs, ff, quests: flow.quests.length, lakes: flow.lakes.length });
   if (recent.length > MAX_ENTRIES) recent.length = MAX_ENTRIES;
   return ff;
+}
+
+/** 每個座位的角色後驗（第 35 回合）：梅林、派西、紅、奧伯倫的機率（讀者自己按自己的角色）。 */
+export interface RoleShare { merlin: number; percival: number; red: number; oberon: number }
+
+/**
+ * 第 35 回合：角色混合讀法下每個人的角色後驗——世界的後驗權重（`worlds`、`wts`，同一個讀法算出來的）× 世界裡的角色分配。
+ * 給忠臣照百科〈解讀前人派票〉分類前面的隊長（好／壞 × 有沒有視角）。
+ */
+export function recursiveRoleShares(
+  obs: PlayerObservation, level0: Readonly<BayesOptions>, mode: number, worlds: readonly number[], wts: readonly number[],
+  skipLeader: (leader: string) => boolean = () => false,
+): Map<string, RoleShare> {
+  const ff = featuresOf(obs, level0);
+  const store = mode === 5 ? mixFlowReaders : mixReaders;
+  let reader = store.get(ff);
+  if (!reader) { reader = new RoleMixtureReader(mixModels(), ff, mode === 5); store.set(ff, reader); }
+  const n = ff.flow.ids.length;
+  const viewer: MixViewer = {
+    id: obs.myPlayerId, role: obs.myRole,
+    seesReds: obs.myRole === 'merlin' ? maskOf(ff.flow, obs.knownEvils) : 0,
+    thumbs: obs.myRole === 'percival' ? maskOf(ff.flow, obs.knownWizards ?? []) : 0,
+  };
+  const acc = new Float64Array(n * 3);
+  const red = new Float64Array(n);
+  const roles = new Float64Array(n * 3);
+  worlds.forEach((w, x) => {
+    const p = wts[x];
+    if (!(p > 0)) return;
+    reader!.worldLog(viewer, ff.flow.votes.length, w, skipLeader, roles);
+    for (let k = 0; k < n * 3; k++) acc[k] += p * roles[k];
+    for (let k = 0; k < n; k++) if ((w & (1 << k)) !== 0) red[k] += p;
+  });
+  const out = new Map<string, RoleShare>();
+  ff.flow.ids.forEach((id, k) => out.set(id, { merlin: acc[3 * k], percival: acc[3 * k + 1], red: red[k], oberon: acc[3 * k + 2] }));
+  return out;
 }
 
 /**
@@ -600,7 +679,13 @@ export function recursiveLogs(
     // 第 34 回合：角色混合（票＋派隊一起讀，整段紀錄每個人一個角色）；5 = 派隊再加相對於資訊流的特徵。
     const store = mode === 5 ? mixFlowReaders : mixReaders;
     let reader = store.get(ff);
-    if (!reader) { reader = new RoleMixtureReader(mixModels(), ff, mode === 5); store.set(ff, reader); }
+    if (!reader) {
+      reader = new RoleMixtureReader(mixModels(), ff, mode === 5);
+      const par = ffParent.get(ff);
+      const prevReader = par ? store.get(par.parent) : undefined;
+      if (par && prevReader) reader.adoptFrom(prevReader, par.upTo);
+      store.set(ff, reader);
+    }
     const r = reader;
     const n4 = ff.flow.votes.length;
     const viewer: MixViewer = {

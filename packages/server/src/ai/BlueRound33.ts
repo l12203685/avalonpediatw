@@ -76,9 +76,11 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const cert = buildCertainty(obs);
   if (team.includes(me)) {
     // 3 = 第 4 局也照「隊上有紅」讀（和現行 `goodKeyVote`／`goodCleanVote` 一樣，不分兩張失敗）。
-    const req = mode >= 3 ? 1 : failsRequiredNow(obs);
+    // 第 35 回合 `goodBayesR4Mix`：第 4 局（要兩張失敗）照字面讀，P(≥ 2 紅) 用角色混合讀人（只有這一格）。
+    const r4Mix = tuning.goodBayesR4Mix === true && mode >= 3 && failsRequiredNow(obs) >= 2;
+    const req = mode >= 3 && !r4Mix ? 1 : failsRequiredNow(obs);
     if (cert.minReds(team) >= req) return { vote: false, reason: 'provFail' };
-    const below = bayesTeamRedsBelow(obs, team, req, opts);
+    const below = bayesTeamRedsBelow(obs, team, req, r4Mix ? bayesOptionsOf({ ...tuning, beliefRecursive: 5 }) : opts);
     if (below === null) return null;
     const bad = key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad);
     return 1 - below >= bad ? { vote: false, reason: 'bad' } : { vote: true, reason: 'onDefault' };

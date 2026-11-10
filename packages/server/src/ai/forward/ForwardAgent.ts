@@ -62,6 +62,7 @@ import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
 import { loyalFlowPickTeam } from '../BlueRound34';
+import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
@@ -942,7 +943,9 @@ export class ForwardAgent implements AvalonAgent {
     // correct a leader who looks red, respect one who looks blue; never a fully reversed team or an exact re-proposal of the round.
     if (d.action.type === 'team_select') {
       // The leader's own vote rules still bind on the new team (hard constraint `leaderSelfApprove`).
-      const flowPick = goodLeadConsistentTeam(this.baseline.tuning, obs, loyalFlowPickTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
+      // Round 35 `loyalFlowPick=4` (BlueRound35.ts): the full wiki-24 answer, the previous leader classified by the role-mixture reader.
+      const fp = (this.baseline.tuning.loyalFlowPick ?? 0) >= 4 ? loyalWikiPickTeam(this.baseline.tuning, obs, d.action, gateOk) : loyalFlowPickTeam(this.baseline.tuning, obs, d.action, gateOk);
+      const flowPick = goodLeadConsistentTeam(this.baseline.tuning, obs, fp, gateOk);
       if (flowPick !== d.action) return { ...d, action: flowPick, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → answer the earlier proposals (wiki-24)` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
