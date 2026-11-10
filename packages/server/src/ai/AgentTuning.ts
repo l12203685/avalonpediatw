@@ -1034,6 +1034,10 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
+   * 第 36 回合：同 `percivalCleanNoThumbs`，只在第 1、2 局（第 3 局起派西可以放他讀出來的梅林）。
+   */
+  percivalCleanNoThumbsEarly: boolean;
+  /**
    * 第 36 回合：派西用最乾淨的隊（`goodCleanLead` 含派西）時兩根拇指都不放——不把梅林指出來、也不賭莫甘娜（第 35 回合自我對打：派西第 2 局的隊 29% 放了莫甘娜）。
    */
   percivalCleanNoThumbs: boolean;
@@ -1279,6 +1283,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodReuseNoMatchPoint',
   'merlinR2Public',
   'goodLakeEntropy',
+  'percivalCleanNoThumbsEarly',
   'percivalCleanNoThumbs',
   'beliefLeadBlend',
   'goodBayesR4Mix',
@@ -1446,6 +1451,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: false,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  percivalCleanNoThumbsEarly: false,
   percivalCleanNoThumbs: false,
   beliefLeadBlend: 0,
   goodBayesR4Mix: false,
@@ -1761,6 +1767,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  percivalCleanNoThumbsEarly: false,
   percivalCleanNoThumbs: false,
   beliefLeadBlend: 0.5,
   goodBayesR4Mix: false,
@@ -1928,6 +1935,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodReuseNoMatchPoint: 'AVALON_TUNING_GOOD_REUSE_NO_MATCH_POINT',
   merlinR2Public: 'AVALON_TUNING_MERLIN_R2_PUBLIC',
   goodLakeEntropy: 'AVALON_TUNING_GOOD_LAKE_ENTROPY',
+  percivalCleanNoThumbsEarly: 'AVALON_TUNING_PERCIVAL_CLEAN_NO_THUMBS_EARLY',
   percivalCleanNoThumbs: 'AVALON_TUNING_PERCIVAL_CLEAN_NO_THUMBS',
   beliefLeadBlend: 'AVALON_TUNING_BELIEF_LEAD_BLEND',
   goodBayesR4Mix: 'AVALON_TUNING_GOOD_BAYES_R4_MIX',
