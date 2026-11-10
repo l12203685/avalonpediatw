@@ -1046,6 +1046,7 @@ export interface AgentTuning {
    * 不再一路接著上一支第 2 局的提議派（自我對打：兩位忠臣第 2 局的隊平均重疊 2.32 人、真人強者 1.17 人＝和隨機一樣；兩人都派到梅林看得到的紅 51.8%、
    * 獨立時 32.5%，同一個紅 98%——梅林是唯一沒跟著派的人）。照 wiki-24 回應上一任隊長：他看起來紅 → 修正（他隊上的人一個都不留）；否則尊重
    * （1、2 = 他隊上含他自己最多留 1 人；3、4 = 最多留 2 人；5、6 = 1、2 只在第 2、3 次提議），不照派、不派完全反向的隊；在這些條件下挑自己後驗最乾淨的隊（`BlueRound37.ts`）。0 = 關。
+   * **第 37 回合預設 6**（忠臣＋派西、第 2、3 次提議）：三組 6000 組合併 +0.88 [+0.51, +1.24]；強者點的派隊量尺 −0.053 [−0.161, +0.049]、逐點一致 12.54 → 12.56%。
    */
   loyalR2View: number;
   /**
@@ -1806,7 +1807,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodLakeEntropy: 0,
   percivalCleanNoThumbsEarly: false,
   percivalCleanNoThumbs: false,
-  loyalR2View: 0,
+  loyalR2View: 6,
   goodLakeTieSpread: false,
   loyalSetPick: 0,
   loyalR2ViewKeep: 0,

@@ -32,7 +32,7 @@ const kept = (team: readonly string[]) => team.filter((id) => ['P6', 'P2', 'P3',
 describe('round 37 tuning fields', () => {
   it('off in the legacy table and the default; flags parse', () => {
     expect(LEGACY_AGENT_TUNING.loyalR2View).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.loyalR2View).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.loyalR2View).toBe(6); // adopted in round 37
     expect(LEGACY_AGENT_TUNING.percivalThumbSure).toBe(0);
     expect(DEFAULT_AGENT_TUNING.percivalThumbSure).toBe(0);
     expect(parseTuningFlag('loyalR2View')).toEqual({ loyalR2View: 1 });
@@ -54,7 +54,7 @@ describe('round 37 tuning fields', () => {
 describe('loyalR2View (round 37: R2 after an R1 fail, the proposal answers the previous one with the leader\'s own view)', () => {
   it('off: the pipeline team; on: no near-copy of the previous R2 team, never the same team, the leader on it', () => {
     expect(r2AfterR1Fail(r2)).toBe(true);
-    expect(loyalR2ViewTeam(DEFAULT_AGENT_TUNING, r2, copy)).toBe(copy);
+    expect(loyalR2ViewTeam(on(0), r2, copy)).toBe(copy);
     const share = bayesRedShare(r2, bayesOptionsOf(DEFAULT_AGENT_TUNING));
     const correct = (share.get('P6') ?? 0) >= 0.5;
     for (const mode of [1, 3]) {
@@ -110,7 +110,7 @@ describe('loyalR2ViewKeep (round 37: the soft answer — every kept member of th
     if (none.type !== 'team_select') throw new Error(none.type);
     expect(kept(none.teamIds)).toBe(1); // keeping nobody of the only earlier R2 team would be the fully reversed team (barred)
     // without loyalR2View the soft knob alone does nothing
-    expect(loyalR2ViewTeam({ ...DEFAULT_AGENT_TUNING, loyalR2ViewKeep: 0.9 }, r2, copy)).toBe(copy);
+    expect(loyalR2ViewTeam({ ...on(0), loyalR2ViewKeep: 0.9 }, r2, copy)).toBe(copy);
   });
 });
 
@@ -143,7 +143,7 @@ describe('percivalThumbSure (round 37: Percival sends a thumb only when his post
 });
 
 describe('loyalSetPick (round 37, Edward 11/10: pick among the reasonable teams of the own view, not the single best one)', () => {
-  const t = (lambda: number) => ({ ...DEFAULT_AGENT_TUNING, loyalSetPick: lambda });
+  const t = (lambda: number) => ({ ...DEFAULT_AGENT_TUNING, loyalR2View: 0, loyalSetPick: lambda });
   const opts = bayesOptionsOf(DEFAULT_AGENT_TUNING);
   it('off in the legacy table and the default; the flag parses', () => {
     expect(LEGACY_AGENT_TUNING.loyalSetPick).toBe(0);
@@ -153,6 +153,7 @@ describe('loyalSetPick (round 37, Edward 11/10: pick among the reasonable teams 
     expect(() => parseTuningFlag('loyalSetPick=2')).toThrow();
     expect(loyalSetPickTeam(DEFAULT_AGENT_TUNING, r2, copy)).toBe(copy);
     expect(loyalReasonableSet(DEFAULT_AGENT_TUNING, r2, copy)).toBeNull();
+    expect(loyalSetPickTeam({ ...DEFAULT_AGENT_TUNING, loyalSetPick: 0.5 }, r2, copy)).toBe(copy); // the default loyalR2View answers this point
   });
   it('the set: the leader on every team, the pipeline team in it, no re-proposal of the round, every member near the cleanest; tighter with λ', () => {
     const wide = loyalReasonableSet(t(0.5), r2, copy)!;
