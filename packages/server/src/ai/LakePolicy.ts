@@ -248,7 +248,7 @@ export function pickLakeTargetForTeam(
     const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
     if (entropyPick !== null) return entropyPick;
     if (tuning.goodLakeInfoMax) {
-      const pick = pickGoodLakeTargetInfoMax(obs, unknownCandidates);
+      const pick = pickGoodLakeTargetInfoMax(obs, unknownCandidates, undefined, tuning.goodLakeTieSpread ? Math.random : undefined);
       if (pick !== null) return pick;
     }
     // ── AgentTuning.goodLakeTargetMostSuspicious (2026-10-12) ──

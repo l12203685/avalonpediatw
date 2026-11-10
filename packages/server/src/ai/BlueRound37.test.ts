@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean } from './belief/BayesBelief';
+import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { loyalR2ViewTeam, loyalReasonableSet, loyalSetPickTeam, percivalThumbSureTeam, PROPOSAL_GO_RATE, r2AfterR1Fail, r2ViewCandidates } from './BlueRound37';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
@@ -179,5 +180,22 @@ describe('loyalSetPick (round 37, Edward 11/10: pick among the reasonable teams 
     // the logic gate / own vote filter binds on every other member
     const only = loyalReasonableSet(t(0.5), r2, copy, () => false)!;
     expect(only.length).toBe(1);
+  });
+});
+
+describe('goodLakeTieSpread (round 37, Edward 11/10: the lake target does not depend on seat adjacency)', () => {
+  it('off by default; with a random number the tied best candidates are all reachable, without it the lowest seat', () => {
+    expect(LEGACY_AGENT_TUNING.goodLakeTieSpread).toBe(false);
+    expect(DEFAULT_AGENT_TUNING.goodLakeTieSpread).toBe(false);
+    expect(parseTuningFlag('goodLakeTieSpread')).toEqual({ goodLakeTieSpread: true });
+    // First lake after R2 with nobody but the R1 / R2 teams on record: the never-on-mission seats tie.
+    const lake = asObs({ ...(r2 as object), myPlayerId: 'P10', myRole: 'loyal', currentRound: 2, gamePhase: 'lake', questResults: ['fail', 'success'],
+      questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }, { round: 2, team: ['P10', 'P2', 'P3', 'P4'], result: 'success', failCount: 0 }] });
+    const cands = ['P6', 'P7', 'P8', 'P9'];
+    const first = pickGoodLakeTargetInfoMax(lake, cands);
+    expect(first).toBe('P6');
+    const picks = new Set([0, 0.26, 0.51, 0.76, 0.999].map((u) => pickGoodLakeTargetInfoMax(lake, cands, undefined, () => u)));
+    expect(picks.size).toBeGreaterThan(1);
+    for (const id of picks) expect(cands).toContain(id);
   });
 });

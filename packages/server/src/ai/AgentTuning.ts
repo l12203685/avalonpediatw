@@ -1049,6 +1049,11 @@ export interface AgentTuning {
    */
   loyalR2View: number;
   /**
+   * 第 37 回合（Edward 11/10「湖誰和上下家無關」）：`goodLakeInfoMax` 同分時不再照座位序挑（首湖持湖者是 0 號，座位序第一個是 1 號＝下家：
+   * 機器人首湖湖鄰座 28%、1 號 22%，真人 11%／7%），改成同分的人裡等機率挑。
+   */
+  goodLakeTieSpread: boolean;
+  /**
    * 第 37 回合（Edward 11/10「從少數幾支合理的隊裡挑，不是唯一一支最好的」；`BlueRound37.loyalSetPickTeam`）：忠臣／派西非強制的提議，
    * 從「自己後驗的乾淨機率 ≥ 門檻 × 最高」的合理集合裡等機率挑一支；門檻 = λ + (1 − λ) × 這一次提議出任務的機率。值 = λ；0 = 關。
    */
@@ -1308,6 +1313,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'percivalCleanNoThumbsEarly',
   'percivalCleanNoThumbs',
   'loyalR2View',
+  'goodLakeTieSpread',
   'loyalSetPick',
   'loyalR2ViewKeep',
   'percivalThumbSure',
@@ -1480,6 +1486,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalCleanNoThumbsEarly: false,
   percivalCleanNoThumbs: false,
   loyalR2View: 0,
+  goodLakeTieSpread: false,
   loyalSetPick: 0,
   loyalR2ViewKeep: 0,
   percivalThumbSure: 0,
@@ -1800,6 +1807,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   percivalCleanNoThumbsEarly: false,
   percivalCleanNoThumbs: false,
   loyalR2View: 0,
+  goodLakeTieSpread: false,
   loyalSetPick: 0,
   loyalR2ViewKeep: 0,
   percivalThumbSure: 0,
@@ -1972,6 +1980,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   percivalCleanNoThumbsEarly: 'AVALON_TUNING_PERCIVAL_CLEAN_NO_THUMBS_EARLY',
   percivalCleanNoThumbs: 'AVALON_TUNING_PERCIVAL_CLEAN_NO_THUMBS',
   loyalR2View: 'AVALON_TUNING_LOYAL_R2_VIEW',
+  goodLakeTieSpread: 'AVALON_TUNING_GOOD_LAKE_TIE_SPREAD',
   loyalSetPick: 'AVALON_TUNING_LOYAL_SET_PICK',
   loyalR2ViewKeep: 'AVALON_TUNING_LOYAL_R2_VIEW_KEEP',
   percivalThumbSure: 'AVALON_TUNING_PERCIVAL_THUMB_SURE',
