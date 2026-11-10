@@ -1829,6 +1829,24 @@
       "chartNote": "The leaderboard's numbers at the end of each day played, using only the games up to that day (the population rates used for top-ups too). Dashed = the window is not full yet: role theory needs each role's last {{role}} games (Loyal Servant {{loyal}}); position theory {{position}} career games; overall theory {{overall}} career games (not ranked before). The thin final dashes: while the player sat out, other players' games moved the population rates and so the current value.",
       "chartAria": "{{name}}'s role, position and overall theory win rates from {{from}} to {{to}}"
     },
+    "trendView": {
+      "label": "Trend display",
+      "axis": "X axis",
+      "byDate": "Date",
+      "byGames": "Games",
+      "gamesUnavailable": "The games axis comes with the next daily refresh",
+      "smooth": "Rolling average",
+      "window": "Window",
+      "unitDays": "days",
+      "unitGames": "games",
+      "windowAria": "Rolling-average window ({{unit}})",
+      "note": "Rolling average = the mean of the points in the last {{window}} {{unit}} (this one included); fewer points while the window is not filled yet. The faint line is the raw value.",
+      "noteGames": "The x axis is the career game number: a day with many games spreads out, long breaks take no space.",
+      "raw": "raw",
+      "smoothed": "avg",
+      "gameN": "game {{count}}",
+      "undated": "undated"
+    },
     "benchmark": {
       "toggle": "Show benchmark rows",
       "badge": "Ref",

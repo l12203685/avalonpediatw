@@ -10,7 +10,9 @@ import {
   isAnalysisNotGenerated,
   isAnalysisRouteMissing,
   type PlayerRatingData,
+  type TheoryTrendGames,
 } from '../../../services/api';
+import { DEFAULT_TREND_VIEW, dayNumber, gamePoints, niceTicks, rollingMean, trendWindow, type TrendView } from './trendSeries';
 
 /**
  * 玩家雷達 > Elo 走勢 (Edward 2026-10-30「ELO 曲線不錯，可以放在玩家頁面」)。
@@ -20,6 +22,11 @@ import {
  * 走勢 (SVG，不用圖表套件)：線 = Elo、淺色帶 = ±1σ、灰色虛線 = 1500 (平均老手)。最後出賽之後其他人的變動
  * 仍會移動目前的 Elo，所以最後一點到資料日期之間畫一段虛線接到目前的 Elo。滑過 (或點) 圖看那一天的數字。
  * Elo 不隨複合篩選變動 (依對局順序而定)。
+ *
+ * (Edward 2026-11-10「可以切換X軸是場次 … 可以取rolling 平均」) TrendsPanel 傳進共用的 view：
+ *  - 場次軸：每一場之後的 Elo (perGame，/theory-trend/:name 的 games.elo；X = 生涯第幾場，還沒計入 Elo 的場次沒有點)；
+ *    X 不會隨時間前進，所以不畫接到目前 Elo 的虛線。
+ *  - 移動平均：粗線 = 平均 (trendSeries.rollingMean)、淡色細線 = 原始 Elo，±1σ 帶照原始值；開著時也不畫尾巴的虛線。
  */
 
 const HEIGHT = 220;
@@ -29,17 +36,6 @@ const BAND = 'rgba(96, 165, 250, 0.18)';
 
 function dayValue(date: string): number {
   return Date.parse(`${date}T00:00:00Z`);
-}
-
-/** 約 count 個「好看」的刻度 (1、2、5 × 10^n)。 */
-function niceTicks(min: number, max: number, count: number): number[] {
-  const span = Math.max(max - min, 1);
-  const raw = span / Math.max(count, 1);
-  const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 5, 10].map(m => m * mag).find(s => s >= raw) ?? 10 * mag;
-  const out: number[] = [];
-  for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(v);
-  return out;
 }
 
 /** 時間軸刻度：跨幾年就標年份，不然標月份；最多約 maxTicks 個。 */
@@ -77,7 +73,9 @@ function useWidth(): [RefObject<HTMLDivElement>, number] {
   return [ref, width];
 }
 
-export default function EloPanel({ name }: { name: string }): JSX.Element {
+export default function EloPanel({
+  name, view = DEFAULT_TREND_VIEW, perGame = null,
+}: { name: string; view?: TrendView; perGame?: TheoryTrendGames | null }): JSX.Element {
   const { t } = useTranslation('common');
   const [data, setData] = useState<PlayerRatingData | null>(null);
   const [state, setState] = useState<'loading' | 'ok' | 'notRated' | 'notGenerated' | 'error'>('loading');
@@ -140,31 +138,40 @@ export default function EloPanel({ name }: { name: string }): JSX.Element {
         {data.dataThrough && <span className="whitespace-nowrap text-zinc-500">{t('analytics.elo.dataThrough', { date: data.dataThrough })}</span>}
       </div>
       <div className="rounded-xl border border-gray-700 bg-zinc-950/70 px-1 py-2">
-        <EloChart data={data} />
+        <EloChart data={data} view={view} perGame={perGame} />
       </div>
       <p className="mt-1.5 text-[11px] text-zinc-500">{t('analytics.elo.chartNote')}</p>
     </div>
   );
 }
 
-interface Pt { t: number; date: string; elo: number; sigma: number; games: number; current?: boolean }
+/** t = X 的值：日期軸是毫秒、場次軸是生涯第幾場；avg = 移動平均 (沒開為 undefined)。 */
+interface Pt { t: number; date: string; elo: number; sigma: number; games: number; current?: boolean; avg?: number }
 
-function EloChart({ data }: { data: PlayerRatingData }): JSX.Element {
+function EloChart({ data, view, perGame }: { data: PlayerRatingData; view: TrendView; perGame: TheoryTrendGames | null }): JSX.Element {
   const { t } = useTranslation('common');
   const [ref, width] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
+  const byGames = view.axis === 'games' && perGame !== null;
 
   const points = useMemo((): Pt[] => {
-    const pts: Pt[] = data.series.map(([date, elo, sigma, games]) => ({ t: dayValue(date), date, elo, sigma, games }));
+    const pts: Pt[] = byGames
+      ? gamePoints(perGame).flatMap((p) => (p.elo === null || p.sigma === null ? []
+        : [{ t: p.game, date: p.date, elo: p.elo, sigma: p.sigma, games: p.game }]))
+      : data.series.map(([date, elo, sigma, games]) => ({ t: dayValue(date), date, elo, sigma, games }));
+    if (view.smooth && pts.length) {
+      const avg = rollingMean(pts.map((p) => (byGames ? p.t : dayNumber(p.date))), pts.map((p) => p.elo), trendWindow(view));
+      pts.forEach((p, i) => { p.avg = avg[i].mean ?? p.elo; });
+    }
     const last = pts[pts.length - 1];
-    if (last && data.dataThrough && data.dataThrough > last.date) {
+    if (!byGames && !view.smooth && last && data.dataThrough && data.dataThrough > last.date) {
       pts.push({
         t: dayValue(data.dataThrough), date: data.dataThrough, elo: Math.round(data.player.elo),
         sigma: Math.round(data.player.sigma), games: data.player.games, current: true,
       });
     }
     return pts;
-  }, [data]);
+  }, [data, perGame, byGames, view]);
 
   if (points.length === 0) {
     return <p className="text-sm text-zinc-500 py-6">{t('analytics.elo.noPoints')}</p>;
@@ -174,13 +181,16 @@ function EloChart({ data }: { data: PlayerRatingData }): JSX.Element {
   const innerW = w - PAD.left - PAD.right;
   const innerH = HEIGHT - PAD.top - PAD.bottom;
   const t0 = points[0].t;
-  const t1 = Math.max(points[points.length - 1].t, t0 + 86_400_000);
+  const t1 = Math.max(points[points.length - 1].t, t0 + (byGames ? 1 : 86_400_000));
   const lo = Math.min(1500, ...points.map(p => p.elo - p.sigma)) - 4;
   const hi = Math.max(1500, ...points.map(p => p.elo + p.sigma)) + 4;
   const x = (v: number): number => PAD.left + ((v - t0) / (t1 - t0)) * innerW;
   const y = (v: number): number => PAD.top + (1 - (v - lo) / (hi - lo)) * innerH;
   const played = points.filter(p => !p.current);
   const line = played.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.elo).toFixed(1)}`).join('');
+  const smoothLine = view.smooth
+    ? played.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.avg ?? p.elo).toFixed(1)}`).join('')
+    : null;
   const band = [
     ...points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.elo + p.sigma).toFixed(1)}`),
     ...[...points].reverse().map(p => `L${x(p.t).toFixed(1)},${y(p.elo - p.sigma).toFixed(1)}`),
@@ -188,7 +198,9 @@ function EloChart({ data }: { data: PlayerRatingData }): JSX.Element {
   ].join('');
   const tail = points[points.length - 1].current ? points.slice(-2) : null;
   const yTicks = niceTicks(lo, hi, 5);
-  const xTicks = timeTicks(t0, t1, w < 480 ? 4 : 7);
+  const xTicks = byGames
+    ? niceTicks(t0, t1, w < 480 ? 4 : 7).filter(v => v >= t0).map(v => ({ t: v, label: String(v) }))
+    : timeTicks(t0, t1, w < 480 ? 4 : 7);
 
   const onMove = (e: ReactPointerEvent<SVGRectElement>): void => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -224,7 +236,11 @@ function EloChart({ data }: { data: PlayerRatingData }): JSX.Element {
         ))}
         <line x1={PAD.left} x2={w - PAD.right} y1={y(1500)} y2={y(1500)} stroke="#a1a1aa" strokeWidth={1} strokeDasharray="4 4" />
         <path d={band} fill={BAND} stroke="none" />
-        <path d={line} fill="none" stroke={LINE} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <path
+          d={line} fill="none" stroke={LINE} strokeWidth={smoothLine ? 1 : 2} strokeOpacity={smoothLine ? 0.35 : 1}
+          strokeLinejoin="round" strokeLinecap="round"
+        />
+        {smoothLine && <path d={smoothLine} fill="none" stroke={LINE} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
         {tail && (
           <path
             d={`M${x(tail[0].t)},${y(tail[0].elo)}L${x(tail[1].t)},${y(tail[1].elo)}`}
@@ -235,7 +251,7 @@ function EloChart({ data }: { data: PlayerRatingData }): JSX.Element {
         {hp && (
           <g pointerEvents="none">
             <line x1={x(hp.t)} x2={x(hp.t)} y1={PAD.top} y2={HEIGHT - PAD.bottom} stroke="#71717a" strokeWidth={1} />
-            <circle cx={x(hp.t)} cy={y(hp.elo)} r={4.5} fill={LINE} stroke="#18181b" strokeWidth={2} />
+            <circle cx={x(hp.t)} cy={y(hp.avg ?? hp.elo)} r={4.5} fill={LINE} stroke="#18181b" strokeWidth={2} />
           </g>
         )}
         <rect
@@ -249,8 +265,17 @@ function EloChart({ data }: { data: PlayerRatingData }): JSX.Element {
           className="pointer-events-none absolute top-1 z-10 w-[140px] rounded-md border border-zinc-700 bg-zinc-900/95 px-2 py-1 text-[11px] text-zinc-300 shadow"
           style={{ left: tipLeft }}
         >
-          <div className="text-zinc-400">{hp.date}{hp.current ? ` · ${t('analytics.elo.current')}` : ''}</div>
-          <div><b className="text-white tabular-nums">{hp.elo}</b> <span className="tabular-nums">±{hp.sigma}</span></div>
+          <div className="text-zinc-400">
+            {hp.date || t('analytics.trendView.undated')}{hp.current ? ` · ${t('analytics.elo.current')}` : ''}
+          </div>
+          {hp.avg !== undefined && (
+            <div><span className="text-zinc-400">{t('analytics.trendView.smoothed')}</span> <b className="text-white tabular-nums">{Math.round(hp.avg)}</b></div>
+          )}
+          <div>
+            {hp.avg !== undefined && <span className="text-zinc-400">{t('analytics.trendView.raw')} </span>}
+            <b className={hp.avg !== undefined ? 'tabular-nums text-zinc-200' : 'text-white tabular-nums'}>{hp.elo}</b>{' '}
+            <span className="tabular-nums">±{hp.sigma}</span>
+          </div>
           <div className="text-zinc-500">{t('analytics.elo.gamesSoFar', { count: hp.games })}</div>
         </div>
       )}

@@ -1829,6 +1829,24 @@
       "chartNote": "每個出賽日結束時、只用到那天為止的局算的排行榜數字（補不足場次用的全體勝率也只算到那天）。虛線＝視窗還沒滿：角色理論要各角色近 {{role}} 場、忠臣近 {{loyal}} 場；位置理論要生涯 {{position}} 場；整體理論要生涯 {{overall}} 場（排行榜不列）。最後一段細虛線：沒出賽的期間，其他人的局讓全體勝率變動，目前的值跟著移動。",
       "chartAria": "{{name}} 的角色、位置、整體理論勝率走勢，{{from}} 到 {{to}}"
     },
+    "trendView": {
+      "label": "走勢的顯示方式",
+      "axis": "X 軸",
+      "byDate": "日期",
+      "byGames": "場次",
+      "gamesUnavailable": "場次軸在下次每日更新後提供",
+      "smooth": "移動平均",
+      "window": "視窗",
+      "unitDays": "天",
+      "unitGames": "場",
+      "windowAria": "移動平均的視窗（{{unit}}）",
+      "note": "移動平均＝往回 {{window}} {{unit}}內（含這一點）各點的平均；不足一個視窗時用現有的點。淡色線是原始值。",
+      "noteGames": "X 軸是生涯第幾場：一天玩很多場會攤開、很久沒玩不佔空間。",
+      "raw": "原始",
+      "smoothed": "平均",
+      "gameN": "第 {{count}} 場",
+      "undated": "未記日期"
+    },
     "benchmark": {
       "toggle": "顯示基準列",
       "badge": "基準",
