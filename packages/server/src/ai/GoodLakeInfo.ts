@@ -308,9 +308,16 @@ export function pickGoodLakeTargetInfoMax(
   obs: PlayerObservation,
   candidates: readonly string[],
   options: Readonly<GoodLakeInfoOptions> = DEFAULT_GOOD_LAKE_INFO_OPTIONS,
+  /** Round 37 `goodLakeTieSpread` (Edward 2026-11-10: whom to lake has nothing to do with seat adjacency): ties are broken by this random number instead of seat order. */
+  tieRandom?: () => number,
 ): string | null {
   const analysis = analyzeGoodLake(obs, candidates, options);
   if (!analysis) return null;
+  if (tieRandom && analysis.candidates.length > 0) {
+    const best = Math.max(...analysis.candidates.map((c) => c.score));
+    const tied = analysis.candidates.filter((c) => best - c.score <= 1e-9);
+    return tied[Math.min(tied.length - 1, Math.floor(tieRandom() * tied.length))].id;
+  }
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const ranked = [...analysis.candidates].sort((a, b) => {
     const diff = b.score - a.score;

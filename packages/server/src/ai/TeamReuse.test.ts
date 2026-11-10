@@ -212,7 +212,11 @@ describe('TeamReuse — ForwardAgent wiring', () => {
     expect(pick(o, { ...LEGACY_AGENT_TUNING })).not.toEqual([...rejected].sort());
     // Isolated from `teamPassRank` (2026-10-27): ranked by pass chance, this rejected team keeps P1 of the
     // failed R1 mission and loses to cleaner teams — the switch under test here is the reuse bonus alone.
-    expect(pick(o, { teamReuse: true, teamPassRank: 0 })).toEqual([...rejected].sort());
+    // Round 37 `loyalR2View` (default 6) answers the previous R2 proposal after an R1 fail instead: isolated here too.
+    expect(pick(o, { teamReuse: true, teamPassRank: 0, loyalR2View: 0 })).toEqual([...rejected].sort());
+    const answered = pick(o, { teamReuse: true, teamPassRank: 0 });
+    expect(answered).toContain('P1');
+    expect(answered.filter((id) => id !== 'P1' && rejected.includes(id)).length).toBeLessThanOrEqual(1);
   });
 
   it('red leaders use the red weights (3× the good ones by default)', () => {
