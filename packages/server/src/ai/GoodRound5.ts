@@ -42,7 +42,12 @@ export function goodCleanLeadTeam(
   const size = action.teamIds.length;
   const opts = bayesOptionsOf(tuning);
   const scored: { team: string[]; p: number }[] = [];
-  for (const fill of combinations(others, size - 1)) {
+  // 第 36 回合 `percivalCleanNoThumbs`：派西挑最乾淨的隊時兩根拇指都不放（不把梅林指出來、也不賭莫甘娜）；沒有這樣的隊時照原本的候選。
+  // `percivalCleanNoThumbsEarly`：只在第 1、2 局（梅林破綻「只有梅林沒派過看得到的紅」看的是第 1、2 局的提議）。
+  const noThumbs = tuning.percivalCleanNoThumbs === true || (tuning.percivalCleanNoThumbsEarly === true && round <= 2);
+  const thumbs = percival && noThumbs && (obs.knownWizards ?? []).length === 2 ? obs.knownWizards ?? [] : [];
+  const pool = thumbs.length > 0 && others.filter((id) => !thumbs.includes(id)).length >= size - 1 ? others.filter((id) => !thumbs.includes(id)) : others;
+  for (const fill of combinations(pool, size - 1)) {
     const team = [me, ...fill];
     const p = bayesTeamClean(obs, team, opts);
     if (p === null) return action;
