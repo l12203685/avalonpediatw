@@ -24,7 +24,8 @@ import {
 } from '../ChatMirror';
 import type { LobbyChatMessage } from '../../socket/LobbyChatBuffer';
 import { describeError, raceTimeout, readStreamCapped } from '../media/bytes';
-import { answerStatsTextCommand } from '../stats/textCommands';
+import { answerStatsTextCommand, parseStatsCommand } from '../stats/textCommands';
+import { leaderboardChart, leaderboardChartEnabled, WEEKLY_CHART_CAPTION } from '../stats/statsQueries';
 import { answerFeedbackTextCommand, getFeedbackService } from '../feedback/service';
 import {
   answerSimTextCommand,
@@ -177,6 +178,11 @@ interface LeadReply {
   quoteToken?: string;
   /** 1:1 only: 模擬瓦 quick-reply buttons while the exercise is open. */
   quickReply?: boolean;
+  /**
+   * /排行 (2026-11-10): the ranking chart — an image message (relay URL) and the caption text, two
+   * slots of the reply_token. `text` stays the fallback, sent instead when LINE rejects the image.
+   */
+  image?: { url: string; caption: string };
 }
 
 /** Where a text came from, for the 模擬瓦 session key and LINE redelivery. */
@@ -509,7 +515,7 @@ export class LineBotClient {
   private async drainQueuedReplies(replyToken: string, leadReply: LeadReply | null = null): Promise<void> {
     const mirror = getChatMirror();
     const queue = mirror && mirror.isLineReplyQueueEnabled() ? mirror : null;
-    const lead: Message[] = leadReply ? [this.leadMessage(leadReply, false)] : [];
+    const lead: Message[] = leadReply ? this.leadMessages(leadReply, false) : [];
     const batch = queue ? queue.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN - lead.length) : [];
     if (lead.length === 0 && batch.length === 0) return;
     // Queued Discord pictures become image messages while their relay copy
@@ -531,6 +537,10 @@ export class LineBotClient {
         `[LINE reply-drain] replyMessage failed (${describeError(error)}), re-queued ${batch.length}` +
           (imageRejected ? ' (image URL rejected — those go as a text note)' : ''),
       );
+      // /排行's chart refused: answer with the text on the same token (the queue was put back above).
+      if (leadReply?.image && lineErrorMentionsImage(error)) {
+        delivered = await this.replyTextInstead(replyToken, leadReply, false);
+      }
     }
     // Outside the try (2026-10-14 review fix): a throwing commit must never
     // re-queue mirror messages that were already delivered.
@@ -635,7 +645,11 @@ export class LineBotClient {
       return this.simAnswerFor(text, ctx);
     }
     const stats = await this.statsAnswerFor(text);
-    if (stats !== null) return { kind: 'stats', text: stats };
+    if (stats !== null) {
+      // /排行 (2026-11-10): the ranking chart, with the text as its fallback.
+      const image = parseStatsCommand(text)?.kind === 'leaderboard' ? await this.leaderboardChartImage() : null;
+      return image ? { kind: 'stats', text: stats, image } : { kind: 'stats', text: stats };
+    }
     const feedback = await this.feedbackAnswerFor(text, ctx.duplicate);
     if (feedback !== null) return { kind: 'feedback', text: feedback };
     const seatFiller = await this.seatFillerAnswerFor(text, ctx.duplicate);
@@ -645,6 +659,48 @@ export class LineBotClient {
     const report = await this.reportAnswerFor(text, ctx.userId, ctx.duplicate);
     if (report !== null) return { kind: 'report', text: report, quoteToken: ctx.quoteToken };
     return this.simAnswerFor(text, ctx);
+  }
+
+  /** The lead's message objects: the chart image + its caption (quoting the command), else leadMessage. */
+  private leadMessages(lead: LeadReply, oneToOne: boolean): Message[] {
+    if (!lead.image) return [this.leadMessage(lead, oneToOne)];
+    const caption: Record<string, unknown> = { type: 'text', text: lead.image.caption };
+    if (lead.quoteToken) caption.quoteToken = lead.quoteToken;
+    return [
+      { type: 'image', originalContentUrl: lead.image.url, previewImageUrl: lead.image.url } as Message,
+      caption as unknown as Message,
+    ];
+  }
+
+  /** After LINE refused the chart image: the text answer alone on the same token. True when it went out. */
+  private async replyTextInstead(replyToken: string, lead: LeadReply, oneToOne: boolean): Promise<boolean> {
+    try {
+      await this.client.replyMessage(replyToken, [this.leadMessage(lead, oneToOne)]);
+      return true;
+    } catch (error) {
+      this.stats.replyFailures += 1;
+      console.error(`[LINE ${lead.kind}] text after a refused chart failed too (${describeError(error)})`);
+      return false;
+    }
+  }
+
+  /**
+   * /排行's chart as a relay URL (the PNG is rendered once per data version, statsQueries.leaderboardChart,
+   * and the relay copy is reused for the same version), or null — chart off, no free picture path
+   * (ChatMirror.lineImageRelay), or a render error; the answer is then the text. Never throws.
+   */
+  private async leaderboardChartImage(): Promise<LeadReply['image'] | null> {
+    if (!leaderboardChartEnabled()) return null;
+    const mirror = getChatMirror();
+    if (!mirror || !mirror.lineImageRelay()) return null;
+    try {
+      const chart = await leaderboardChart();
+      const url = mirror.relayReplyPngUrl(chart.png, `leaderboard:${chart.key}`);
+      return url ? { url, caption: WEEKLY_CHART_CAPTION } : null;
+    } catch (error) {
+      console.error(`[LINE stats] ranking chart failed, answering with text (${describeError(error)})`);
+      return null;
+    }
   }
 
   /** The lead message object: quotes the command in groups; 1:1 模擬 replies carry quick-reply buttons. */
@@ -676,11 +732,12 @@ export class LineBotClient {
   /** 1:1 chat (or SIM_LINE_GROUP_IDS group) reply — no mirror queue there. Failures are logged, never thrown. */
   private async replyLead(replyToken: string, lead: LeadReply, oneToOne: boolean): Promise<void> {
     try {
-      await this.client.replyMessage(replyToken, [this.leadMessage(lead, oneToOne)]);
+      await this.client.replyMessage(replyToken, this.leadMessages(lead, oneToOne));
     } catch (error) {
       this.stats.replyFailures += 1;
       console.error(`[LINE ${lead.kind}] replyMessage failed (${describeError(error)})`);
-      return;
+      // /排行's chart refused: the text answer instead, on the same token.
+      if (!(lead.image && lineErrorMentionsImage(error) && (await this.replyTextInstead(replyToken, lead, oneToOne)))) return;
     }
     this.leadDelivered(lead);
   }

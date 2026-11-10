@@ -121,6 +121,9 @@ import {
   type RelayMediaStore,
 } from './media/relayMedia';
 
+/** relayReplyPngUrl remembers the copies of this many distinct charts. */
+const RELAY_KEYED_MAX = 4;
+
 // ─── Adapter contracts ───────────────────────────────────────────────────
 
 /** Minimal surface of a LINE push client — matches @line/bot-sdk's Client. */
@@ -515,6 +518,8 @@ export class ChatMirror {
   private readonly lineReplyQueue?: LineReplyQueue;
   private readonly imageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
   private readonly imagesToDiscord: boolean;
+  /** relayReplyPngUrl: content key → relay id of the copy already stored for it (newest last). */
+  private readonly keyedRelayIds = new Map<string, string>();
   /** Discord → LINE steps in arrival order while pictures are copied (relayDiscordToLine). */
   private discordToLineChain: Promise<void> = Promise.resolve();
   private discordToLineWaiting = 0;
@@ -792,20 +797,13 @@ export class ChatMirror {
    * preview), or when the store has no room; the caller then queues the text.
    */
   public enqueueLineReplyImage(png: Buffer, fallbackText: string, followUp?: string): boolean {
-    const relay = this.lineImageRelay();
     const queue = this.lineReplyQueue;
-    if (!relay || !queue || !this.isLineReplyQueueEnabled()) return false;
-    if (png.length === 0 || png.length > LINE_PREVIEW_MAX_BYTES) return false;
-    const id = relay.store.put(png, 'png');
-    if (!id) return false;
-    const url = relayMediaUrl(relay.publicBaseUrl, id, 'png');
-    if (!isLineImageUrl(url)) {
-      relay.store.delete(id);
-      return false;
-    }
+    if (!queue || !this.isLineReplyQueueEnabled()) return false;
+    const ref = this.relayPng(png);
+    if (!ref) return false;
     const now = Date.now();
     const { dropped, releasedMediaIds } = queue.enqueueGroup([
-      { text: clampLineText(fallbackText), enqueuedAt: now, image: { originalUrl: url, previewUrl: url, mediaIds: [id] } },
+      { text: clampLineText(fallbackText), enqueuedAt: now, image: { originalUrl: ref.url, previewUrl: ref.url, mediaIds: [ref.id] } },
       ...(followUp ? [{ text: clampLineText(followUp), enqueuedAt: now }] : []),
     ]);
     this.releaseRelayMedia(releasedMediaIds);
@@ -813,6 +811,54 @@ export class ChatMirror {
       this.logger.warn(`LINE reply queue full — dropped ${dropped} oldest message(s)`);
     }
     return true;
+  }
+
+  /**
+   * A bot-authored PNG answering a command right now (/排行's chart, 2026-11-10): its https URL on the
+   * relay store, marked sent (the reply carries it at once, so it lives ≥ 24 h). With `key`, the
+   * copy stored for the same key earlier is reused while it is live, so repeated /排行 calls on
+   * the same data keep ONE copy (the last RELAY_KEYED_MAX keys are remembered). null when pictures
+   * cannot reach LINE for free (no reply queue / https base / CHAT_MIRROR_IMAGES=false), the PNG
+   * is empty or over 1 MB, or the store has no room — the caller answers with the text.
+   */
+  public relayReplyPngUrl(png: Buffer, key?: string): string | null {
+    const store = this.lineImageRelay()?.store;
+    if (!store) return null;
+    const known = key ? this.keyedRelayIds.get(key) : undefined;
+    if (known && store.keepAlive(known)) return this.relayUrl(known);
+    const ref = this.relayPng(png);
+    if (!ref) return null;
+    store.keepAlive(ref.id);
+    if (key) {
+      this.keyedRelayIds.delete(key);
+      this.keyedRelayIds.set(key, ref.id);
+      while (this.keyedRelayIds.size > RELAY_KEYED_MAX) {
+        const oldest = this.keyedRelayIds.keys().next().value;
+        if (oldest === undefined) break;
+        this.keyedRelayIds.delete(oldest);
+      }
+    }
+    return ref.url;
+  }
+
+  /** Store a PNG (≤ LINE's 1 MB preview limit; the same file serves as the preview) on the relay; null when it cannot. */
+  private relayPng(png: Buffer): { id: string; url: string } | null {
+    const relay = this.lineImageRelay();
+    if (!relay) return null;
+    if (png.length === 0 || png.length > LINE_PREVIEW_MAX_BYTES) return null;
+    const id = relay.store.put(png, 'png');
+    if (!id) return null;
+    const url = relayMediaUrl(relay.publicBaseUrl, id, 'png');
+    if (!isLineImageUrl(url)) {
+      relay.store.delete(id);
+      return null;
+    }
+    return { id, url };
+  }
+
+  private relayUrl(id: string): string | null {
+    const relay = this.lineImageRelay();
+    return relay ? relayMediaUrl(relay.publicBaseUrl, id, 'png') : null;
   }
 
   /**
