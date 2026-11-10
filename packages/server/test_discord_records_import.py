@@ -390,6 +390,23 @@ class ParserTest(unittest.TestCase):
                                  lambda p: fetched.append(p.id) or body, [], None, sheet_header())
         self.assertEqual((fetched, report.parsed, dict(report.skipped)), ([], 0, {dri.SKIP_UNVERIFIED: 1}))
 
+    def test_not_ten_player_stays_on_discord(self) -> None:
+        # Edward 2026-11-10: 5-9 player games stay on Discord, are not imported, and are not asked to be fixed.
+        for title in ("1107休閒場8人局", "1107休閒場 8 人局", "７人局_1107"):
+            with self.subTest(title=title):
+                self.assertTrue(dri.not_ten_player(post(title=title)))
+                self.assertEqual(skip_reason(post(title=title), RECENT_BODY), dri.SKIP_NOT_TEN)
+        for title in ("1107一般場5", "20261009_第4局_936758", "10人局_1107", "1107一般場8"):
+            with self.subTest(title=title):
+                self.assertFalse(dri.not_ten_player(post(title=title)))
+        self.assertIn(dri.SKIP_NOT_TEN, dri.REPLY_NOT_FOR)
+        small = post(title="1107休閒場8人局", tags=("待修正", "線瓦"))
+        fetched: list[str] = []
+        report = dri.plan_import([small], lambda p: fetched.append(p.id) or RECENT_BODY, [], None, sheet_header())
+        self.assertEqual((fetched, report.parsed, dict(report.skipped)), ([], 0, {dri.SKIP_NOT_TEN: 1}))
+        plan = dri.plan_fix_tags([small], report, small.created + dt.timedelta(days=1), dri.TAG_DEFAULT_DAYS)
+        self.assertEqual(([p.id for p in plan.add], [p.id for p in plan.remove]), ([], [small.id]))
+
     def test_no_record_lines_is_a_record_post_only_when_something_says_so(self) -> None:
         chat = "今天那局大家覺得怎麼樣？\n我覺得第三輪的湖很關鍵。"
         self.assertEqual(skip_reason(post(title="覆盤", tags=()), chat), dri.SKIP_NOT_A_RECORD)  # a discussion
