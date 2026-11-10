@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean } from './belief/BayesBelief';
-import { loyalR2ViewTeam, percivalThumbSureTeam, r2AfterR1Fail, r2ViewCandidates } from './BlueRound37';
+import { loyalR2ViewTeam, loyalReasonableSet, loyalSetPickTeam, percivalThumbSureTeam, PROPOSAL_GO_RATE, r2AfterR1Fail, r2ViewCandidates } from './BlueRound37';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const asObs = (o: object) => o as unknown as PlayerObservation;
@@ -132,5 +132,52 @@ describe('percivalThumbSure (round 37: Percival sends a thumb only when his post
       questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }, { round: 2, team: ['P7', 'P2', 'P3', 'P4'], result: 'success', failCount: 0 }] });
     expect(percivalThumbSureTeam(t, r3, withThumb)).toBe(withThumb);
     expect(percivalThumbSureTeam(t, perc, withThumb, () => false)).toBe(withThumb);
+  });
+});
+
+describe('loyalSetPick (round 37, Edward 11/10: pick among the reasonable teams of the own view, not the single best one)', () => {
+  const t = (lambda: number) => ({ ...DEFAULT_AGENT_TUNING, loyalSetPick: lambda });
+  const opts = bayesOptionsOf(DEFAULT_AGENT_TUNING);
+  it('off in the legacy table and the default; the flag parses', () => {
+    expect(LEGACY_AGENT_TUNING.loyalSetPick).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.loyalSetPick).toBe(0);
+    expect(parseTuningFlag('loyalSetPick')).toEqual({ loyalSetPick: 0.7 });
+    expect(parseTuningFlag('loyalSetPick=0.9')).toEqual({ loyalSetPick: 0.9 });
+    expect(() => parseTuningFlag('loyalSetPick=2')).toThrow();
+    expect(loyalSetPickTeam(DEFAULT_AGENT_TUNING, r2, copy)).toBe(copy);
+    expect(loyalReasonableSet(DEFAULT_AGENT_TUNING, r2, copy)).toBeNull();
+  });
+  it('the set: the leader on every team, the pipeline team in it, no re-proposal of the round, every member near the cleanest; tighter with λ', () => {
+    const wide = loyalReasonableSet(t(0.5), r2, copy)!;
+    const tight = loyalReasonableSet(t(0.95), r2, copy)!;
+    expect(tight.length).toBeGreaterThanOrEqual(1);
+    expect(wide.length).toBeGreaterThanOrEqual(tight.length);
+    const key = (x: readonly string[]) => [...x].sort().join(',');
+    expect(wide.some((x) => key(x) === key(copy.teamIds))).toBe(true);
+    expect(wide.every((x) => x.includes('P7') && x.length === 4)).toBe(true);
+    expect(wide.some((x) => key(x) === key(['P6', 'P2', 'P3', 'P4']))).toBe(false);
+    const ps = wide.filter((x) => key(x) !== key(copy.teamIds)).map((x) => bayesTeamClean(r2, x, opts)!);
+    const thr = 0.5 + 0.5 * PROPOSAL_GO_RATE[2][1];
+    const all = r2ViewCandidates(DEFAULT_AGENT_TUNING, r2, 4)!.cands.filter((c) => !c.barred).map((c) => c.p);
+    expect(Math.min(...ps)).toBeGreaterThanOrEqual(thr * Math.max(...all) - 1e-9);
+  });
+  it('picks a member of the set with the given random number; not on the forced fifth, not for Merlin / red, not a re-proposed successful team, and not where loyalR2View answers', () => {
+    const set = loyalReasonableSet(t(0.5), r2, copy)!;
+    const key = (x: readonly string[]) => [...x].sort().join(',');
+    for (const u of [0, 0.37, 0.999]) {
+      const a = loyalSetPickTeam(t(0.5), r2, copy, () => true, () => u);
+      if (a.type !== 'team_select') throw new Error(a.type);
+      expect(key(a.teamIds)).toBe(key(set[Math.min(set.length - 1, Math.floor(u * set.length))]));
+    }
+    expect(loyalSetPickTeam(t(0.5), asObs({ ...(r2 as object), failCount: 4 }), copy)).toBe(copy);
+    expect(loyalSetPickTeam(t(0.5), asObs({ ...(r2 as object), myRole: 'merlin', knownEvils: ['P1', 'P8', 'P9'] }), copy)).toBe(copy);
+    expect(loyalSetPickTeam(t(0.5), asObs({ ...(r2 as object), myRole: 'assassin', myTeam: 'evil' }), copy)).toBe(copy);
+    expect(loyalSetPickTeam({ ...t(0.5), loyalR2View: 1 }, r2, copy)).toBe(copy);
+    const r3 = asObs({ ...(r2 as object), currentRound: 3, failCount: 0, questResults: ['fail', 'success'],
+      questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }, { round: 2, team: ['P7', 'P2', 'P3', 'P4'], result: 'success', failCount: 0 }] });
+    expect(loyalSetPickTeam(t(0.5), r3, copy)).toBe(copy);
+    // the logic gate / own vote filter binds on every other member
+    const only = loyalReasonableSet(t(0.5), r2, copy, () => false)!;
+    expect(only.length).toBe(1);
   });
 });

@@ -62,9 +62,9 @@ import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
 import { loyalFlowPickTeam } from '../BlueRound34';
-import { loyalR2ViewTeam, percivalThumbSureTeam } from '../BlueRound37';
+import { loyalR2ViewTeam, loyalSetPickTeam, percivalThumbSureTeam } from '../BlueRound37';
 import { loyalWikiPickTeam } from '../BlueRound35';
-import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
+import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -724,7 +724,17 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
-    const d = this.decideBase(obs);
+    const d0 = this.decideBase(obs);
+    // Round 37 `loyalSetPick` (BlueRound37.ts; Edward 2026-11-10): a loyal / Percival leader picks among the reasonable teams of his own
+    // view (near the cleanest, tighter the likelier the proposal goes on mission), not the single best one. Gates and own vote rules bind.
+    const d = ((): ForwardDecision => {
+      if (d0.action.type !== 'team_select' || !((this.baseline.tuning.loyalSetPick ?? 0) > 0)) return d0;
+      const t = this.baseline.tuning;
+      const ok = (team: readonly string[]): boolean => (!anyGate(this.gates) || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null)
+        && !ownVoteRejects(t, obs, team);
+      const picked = loyalSetPickTeam(t, obs, d0.action, ok);
+      return picked === d0.action ? d0 : { ...d0, action: picked, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → one of the reasonable teams of my own view` } };
+    })();
     // Round 27 (red; RedRound27.ts) — the vote after the pipeline: `redMatchPointApprove=3` (Mordred: white at red's match point
     // only when the white may decide) and `redHumanVote` (the strong-human red rate of the cell; a flip against red's interest only
     // when this vote cannot decide). The hard constraints keep their vote (own proposal, Oberon at blue's match point, red lake word).

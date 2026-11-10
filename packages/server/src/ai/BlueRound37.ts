@@ -118,3 +118,67 @@ export function percivalThumbSureTeam(tuning: Readonly<AgentTuning>, obs: Player
   }
   return best ? { type: 'team_select', teamIds: best.team } : action;
 }
+
+// ── 合理的隊的集合裡挑（`loyalSetPick`；Edward 2026-11-10）──────────────
+
+/**
+ * 一次提議出任務的機率（真人局，局次 × 第 1–4 次提議；第 5 次是強制局）。Edward 11/10：第 1、2 局前幾次提議不是「注定被否決」，
+ * 只是出任務的機率低（隊長很少不放自己、異常票少），後面的提議機率較高——新的規則照這個機率加權，不用「注定」當前提。
+ */
+export const PROPOSAL_GO_RATE: Readonly<Record<number, readonly number[]>> = {
+  1: [0.005, 0.005, 0.005, 0.005], 2: [0.015, 0.018, 0.036, 0.082], 3: [0.25, 0.06, 0.11, 0.36], 4: [0.55, 0.21, 0.31, 0.53], 5: [0.43, 0.29, 0.32, 0.53],
+};
+
+/**
+ * Edward 11/10：「忠臣在一個局面有很多支可能的隊，從少數幾支合理的裡面挑——不是唯一一支最好的、也不是照比例」。
+ * 合理的集合（第一版）：含自己、不是這一局已經出現過的提議（照派成功任務的隊除外）、不和這一局前面的提議完全反向、過邏輯閘門與自己的投票規則，
+ * 而且自己後驗的乾淨機率 ≥ 門檻 × 集合裡最高的；門檻 = λ + (1 − λ) × 這一次提議出任務的機率（越可能出任務，集合越緊）。
+ * 正式流程挑的隊一定在集合裡。集合裡等機率挑一支（決策的亂數由對局種子決定）。強制局、照派成功任務的隊不動。
+ * 重播比對（真人局同一點）：機器人只在自己隊上的人自己估 25% 紅、只在真人隊上的人估 49% 紅，實際 37%／39%——集合裡的差距不是真的。
+ * `set` 回傳集合本身（量涵蓋率用）。
+ */
+export function loyalReasonableSet(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction, allowed: Allowed = () => true): string[][] | null {
+  const lambda = tuning.loyalSetPick ?? 0;
+  if (!(lambda > 0) || action.type !== 'team_select' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return null;
+  if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return null;
+  const fc = obs.failCount ?? 0;
+  if (fc >= 4) return null;
+  const round = obs.currentRound ?? 1;
+  // `loyalR2View` 管的那一點（第 1 局失敗之後第 2 局回應上一支提議）由它決定。
+  if ((tuning.loyalR2View ?? 0) > 0 && r2AfterR1Fail(obs) && obs.voteHistory.some((v) => v.round === 2 && v.leader !== obs.myPlayerId)) return null;
+  const results = obs.questResults ?? [];
+  const succ = obs.questHistory.filter((q) => q.round < round && results[q.round - 1] === 'success').map((q) => q.team);
+  if (succ.some((t) => t.every((id) => action.teamIds.includes(id)))) return null;
+  const me = obs.myPlayerId;
+  if (!action.teamIds.includes(me)) return null;
+  const size = action.teamIds.length;
+  const opts = bayesOptionsOf(tuning);
+  const earlier = obs.voteHistory.filter((v) => v.round === round);
+  const seen = new Set(earlier.flatMap((v) => v.team).filter((id) => id !== me));
+  const keys = new Set(earlier.map((v) => [...v.team].sort().join(',')));
+  const curKey = [...action.teamIds].sort().join(',');
+  const cands: { team: string[]; p: number }[] = [];
+  for (const fill of combos(obs.allPlayerIds.filter((id) => id !== me), size - 1)) {
+    const team = [me, ...fill];
+    const key = [...team].sort().join(',');
+    if (key !== curKey) {
+      if (keys.has(key) || (seen.size > 0 && fill.every((id) => !seen.has(id)))) continue;
+      if (!allowed(team)) continue;
+    }
+    const p = bayesTeamClean(obs, team, opts);
+    if (p === null) return null;
+    cands.push({ team, p });
+  }
+  const max = Math.max(...cands.map((c) => c.p));
+  const go = PROPOSAL_GO_RATE[round]?.[fc] ?? 0.3;
+  const thr = (lambda + (1 - lambda) * go) * max;
+  return cands.filter((c) => c.p >= thr - 1e-12 || [...c.team].sort().join(',') === curKey).map((c) => c.team);
+}
+
+/** `loyalSetPick`：合理集合裡等機率挑一支；不適用時回傳原本的動作（同一個物件）。 */
+export function loyalSetPickTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction, allowed: Allowed = () => true, rand: () => number = Math.random): AgentAction {
+  const set = loyalReasonableSet(tuning, obs, action, allowed);
+  if (!set || set.length <= 1 || action.type !== 'team_select') return action;
+  const pick = set[Math.min(set.length - 1, Math.floor(rand() * set.length))];
+  return [...pick].sort().join(',') === [...action.teamIds].sort().join(',') ? action : { type: 'team_select', teamIds: pick };
+}
