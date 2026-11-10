@@ -25,6 +25,7 @@ import {
   getLeaderboard,
   getRatingBoard,
   getPlayerRating,
+  getPlayerTheoryTrend,
   invalidateCache,
   isSheetsReady,
   assassinationWinRates,
@@ -430,6 +431,30 @@ router.get('/rating/:name', limiter, async (req: Request, res: Response) => {
     const msg = err instanceof Error ? err.message : 'Unknown error';
     console.error('[analysis/rating/:name]', msg);
     return fail(res, 500, 'Failed to load rating');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/analysis/theory-trend/:name
+// 一位玩家的理論勝率走勢（generate_cache.py compute_theory_trend，Edward 2026-11-10）：每個出賽日最後一局後的
+// [日期, 生涯場數, 角色理論, 位置理論, 整體理論, 角色視窗全滿]，加上目前的三個值（players[].theory）。名字比對同其他
+// 玩家路由。沒有這個玩家 → 404；快取還沒有這一段 → 503。依對局順序而定，不隨複合篩選重算。
+// ---------------------------------------------------------------------------
+router.get('/theory-trend/:name', limiter, async (req: Request, res: Response) => {
+  if (!sheetsGuard(res)) return;
+  try {
+    const data = await getPlayerTheoryTrend(nameParam(req));
+    if (data === undefined) {
+      return fail(res, 503, 'Theory trend not yet generated');
+    }
+    if (!data) {
+      return fail(res, 404, 'Player not found');
+    }
+    return ok(res, data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[analysis/theory-trend/:name]', msg);
+    return fail(res, 500, 'Failed to load theory trend');
   }
 });
 

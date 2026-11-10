@@ -101,6 +101,7 @@ vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
   getPlayerByName: async (name: string) => fixture.players.find((pl) => pl.name === name) ?? null,
   getOverview: async () => fixture.overview,
   getLeaderboard: async () => fixture.leaderboard,
+  getRatingBoard: async () => null,
   getChemistry: async () => fixture.chemistry,
   getPlayerArchetype: async () => null,
   getPlayerStrength: async () => null,

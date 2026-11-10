@@ -41,7 +41,9 @@ Where each top-level section comes from:
                               player's last N games, constants in
                               LEADERBOARD_CONFIG; rating = the 團隊 Elo replayed
                               over every complete game in timeline order,
-                              compute_rating / RATING_CONFIG) and chemistry (同贏 / 同輸 /
+                              compute_rating / RATING_CONFIG; theoryTrend = each
+                              player's 角色／位置／整體理論 after each day played,
+                              compute_theory_trend) and chemistry (同贏 / 同輸 /
                               贏相關 / 同贏-同輸 tabs, labels renamed to the
                               players' spellings: canonicalize_chemistry).
                               生涯報表 is not read.
@@ -201,6 +203,7 @@ _PEDIA_BOT_NAME_RE = re.compile(r"^百科(?:機器人|ai)")  # 比對 player_nam
 SHEET_SECTIONS = (
     "overview", "players", "playerDetails", "chemistry", "missions",
     "lake", "rounds", "seatOrder", "captainAnalysis", "leaderboard", "rating",
+    "theoryTrend",
 )
 # Sections recomputed here from the refreshed players.
 DERIVED_SECTIONS = ("strength",)
@@ -3887,6 +3890,69 @@ def compute_rating(games: list[GameRow], cfg: Mapping[str, Any] | None = None) -
     }
 
 
+# ---------------------------------------------------------------------------
+# rating.theoryBaselines (Edward 2026-11-10): the weekly chart's reference lines
+# ---------------------------------------------------------------------------
+# 「整體平均就用全樣本當一個人」+ 依 Elo PR 分三層的長期參考值。Each group's career seats are pooled and
+# scored as ONE player with theory_window (same formulas and top-ups as a player's career: 角色理論 /
+# 位置理論 / 整體理論, cells under theoryMinCellGames games topped up at the population rate):
+#   all        every seat of every player (= the population formula: Σ P(role) × the population's role
+#              rate, and so on)
+#   tiers      by each player's CURRENT PR, the site's PR (lineup rule): the percentile rank of their Elo
+#              among the players with >= lineupMinGames (30) rated games, rounded to an integer;
+#              pr80plus = PR >= 80, pr20to80 = 20 <= PR < 80, pr20minus = PR < 20. Provisional players
+#              (< 30 rated games, whose PR the site only shows capped at 50) are in no tier, only in `all`.
+# Kept in the rating section (PR is an Elo notion), which the stats-engine parity and the leaderboard
+# replay leave alone; like the rest of rating it does not depend on asOf.
+
+PR_TIERS = (("pr80plus", 80.0, None), ("pr20to80", 20.0, 80.0), ("pr20minus", None, 20.0))
+
+
+def player_prs(rating_players: Sequence[Mapping[str, Any]], min_games: int) -> dict[str, int]:
+    """name -> current PR (integer) of every rated player with >= min_games games."""
+    pool_rows = [r for r in rating_players if int(r.get("games") or 0) >= min_games]
+    pool = sorted(float(r["elo"]) for r in pool_rows)
+    return {r["name"]: int(math.floor(_percentile_rank(pool, float(r["elo"])) + 0.5)) for r in pool_rows} if pool else {}
+
+
+def theory_baselines(
+    timelines: Mapping[str, Sequence[PlayerSeat]], rating_players: Sequence[Mapping[str, Any]],
+    role_rates: Mapping[str, float], seat_rates: Mapping[str, float],
+    role_seat_rates: Mapping[str, Mapping[str, float]], min_cell: int | None = None, pool_min_games: int | None = None,
+) -> dict:
+    """{all, tiers: {pr80plus, pr20to80, pr20minus}, rule}: each group {role, position, overall, players, games}
+    (rates None for a group without games)."""
+    if pool_min_games is None:
+        pool_min_games = int(RATING_CONFIG["lineupMinGames"])
+    prs = player_prs(rating_players, pool_min_games)
+
+    def pooled(names: Sequence[str]) -> dict:
+        seats = [s for n in names for s in timelines.get(n, [])]
+        if not seats:
+            return {"role": None, "position": None, "overall": None, "players": len(names), "games": 0}
+        w = theory_window(seats, role_rates, seat_rates, min_cell, window=0, role_seat_rates=role_seat_rates)
+        return {"role": w["roleTheory"], "position": w["positionTheory"], "overall": w["overallTheory"],
+                "players": len(names), "games": len(seats)}
+
+    def in_tier(pr: int, lo: float | None, hi: float | None) -> bool:
+        return (lo is None or pr >= lo) and (hi is None or pr < hi)
+
+    return {
+        "all": pooled([n for n, seats in timelines.items() if seats]),
+        "tiers": {key: pooled([n for n, pr in prs.items() if in_tier(pr, lo, hi)]) for key, lo, hi in PR_TIERS},
+        "rule": {"poolMinGames": pool_min_games, "bounds": [20, 80]},
+    }
+
+
+def with_theory_baselines(rating: dict, games: list[GameRow], overview: Mapping[str, Any]) -> dict:
+    """The rating section with theoryBaselines added (build_cache)."""
+    rating["theoryBaselines"] = theory_baselines(
+        player_timelines(games), rating.get("players") or [], overview["roleFinalWinRates"],
+        overview["seatFinalWinRates"], overview["roleSeatFinalWinRates"],
+    )
+    return rating
+
+
 def rating_summary(rating: Mapping[str, Any] | None) -> str:
     """One line for logs: counts only, no names."""
     if not isinstance(rating, Mapping):
@@ -3895,6 +3961,176 @@ def rating_summary(rating: Mapping[str, Any] | None) -> str:
     listed = sum(1 for r in players if isinstance(r, Mapping) and not r.get("provisional"))
     return (f"{rating.get('games')} 局計入（{rating.get('skippedGames')} 局缺名字不計）；{len(players)} 位玩家，"
             f"{listed} 位 ≥ {(rating.get('config') or {}).get('provisionalGames')} 場；資料到 {rating.get('dataThrough')}")
+
+
+# ---------------------------------------------------------------------------
+# theoryTrend: 理論勝率走勢（Edward 2026-11-10「除了歷史ELO 走勢 可以也建立每個玩家的 角色 位置 整體 理論勝率 的走勢圖嗎」）
+# ---------------------------------------------------------------------------
+#
+# 每位玩家每個出賽日（最後一局之後）一點：[日期, 生涯場數, 角色理論, 位置理論, 整體理論, 角色視窗全滿 1/0]。
+# 三個值與排行榜同一套算法（role_window_theory、theory_window 的最近 mainGames 場、overall_theory 的生涯），
+# 只用到那一天為止的局：玩家自己的場次，以及補不足格子用的全體最終勝率（角色／座位／角色 × 座位）也只算到
+# 那一天。所以最後一點跟目前 players[].theory 只差在那之後別人的局讓全體勝率動了多少（網站畫一段虛線接到目前值）。
+# 視窗沒滿：角色理論看第 6 欄；位置理論 = 生涯 < positionGames 場；整體理論 = 生涯 < overallMinGames 場
+# （排行榜不列或標 —）。網站把這些點畫成虛線。排序與 player_timelines 相同；開頭沒有日期的局計入但沒有點。
+# 依對局順序而定，跟 as_of 無關；複合篩選不重算（不在 GAMES_DATASET_SECTIONS）。
+
+THEORY_TREND_SCHEMA_VERSION = 1
+
+
+class _PopulationRates:
+    """compute_role_final_win_rates / compute_seat_final_win_rates / compute_role_seat_final_win_rates,
+    counted one game at a time (theoryTrend: the population rates as of a day)."""
+
+    def __init__(self) -> None:
+        self.games: Counter = Counter()  # (role, seat) -> named seats
+        self.wins: Counter = Counter()
+
+    def add(self, g: GameRow) -> None:
+        for seat in g.seat_players:
+            role = g.seat_roles[seat]
+            self.games[role, seat] += 1
+            self.wins[role, seat] += 1 if is_final_win(role, g.outcome) else 0
+
+    def rates(self) -> tuple[dict[str, float], dict[str, float], dict[str, dict[str, float]]]:
+        def total(counter: Counter, roles: Iterable[str], seats: Iterable[str]) -> int:
+            return sum(counter[r, s] for r in roles for s in seats)
+
+        role_rates = {r: _rate(total(self.wins, [r], SEATS), total(self.games, [r], SEATS)) for r in ALL_ROLES}
+        seat_rates = {SEAT_LABELS[s]: _rate(total(self.wins, ALL_ROLES, [s]), total(self.games, ALL_ROLES, [s]))
+                      for s in SEATS}
+        role_seat = {
+            r: {SEAT_LABELS[s]: _rate(self.wins[r, s], self.games[r, s]) if self.games[r, s] else role_rates[r]
+                for s in SEATS}
+            for r in ALL_ROLES
+        }
+        return role_rates, seat_rates, role_seat
+
+
+def theory_trend_point(
+    day: str, seats: Sequence[PlayerSeat], role_rates: Mapping[str, float], seat_rates: Mapping[str, float],
+    role_seat_rates: Mapping[str, Mapping[str, float]], cfg: Mapping[str, Any] | None = None,
+) -> list[Any]:
+    """One theoryTrend point of these seats (the player's games so far, oldest first): the leaderboard's
+    角色理論 / 位置理論 (last mainGames) / 整體理論 (career) with these population rates."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    cell, n = cfg["theoryMinCellGames"], int(cfg["mainGames"])
+    rw = role_window_theory(seats, role_rates, cell, cfg=cfg)
+    last = theory_window(seats[-n:] if n > 0 else seats, role_rates, seat_rates, cell, window=n)
+    overall = overall_theory(seats, role_seat_rates, cell)
+    return [day, len(seats), rw["roleTheory"], last["positionTheory"], overall["overallTheory"],
+            1 if rw["fullWindows"] else 0]
+
+
+class _TrendPlayer:
+    """One player's games so far, kept so that a theoryTrend point costs O(window), not O(career)."""
+
+    __slots__ = ("seats", "won", "by_role", "cell_games", "cell_wins")
+
+    def __init__(self) -> None:
+        self.seats: list[PlayerSeat] = []
+        self.won: list[int] = []  # final win 1/0, parallel to seats
+        self.by_role: dict[str, list[int]] = {r: [] for r in ALL_ROLES}  # final win 1/0 per game in the role
+        self.cell_games: Counter = Counter()  # (role, seat) over the career
+        self.cell_wins: Counter = Counter()
+
+    def add(self, s: PlayerSeat) -> None:
+        w = 1 if is_final_win(s.role, s.outcome) else 0
+        self.seats.append(s)
+        self.won.append(w)
+        self.by_role[s.role].append(w)
+        self.cell_games[s.role, s.seat] += 1
+        self.cell_wins[s.role, s.seat] += w
+
+
+def _weighted_theory(cells: Iterable[tuple[int, int, int, float]], min_cell: int) -> float:
+    """Σ (weight / 100) × _cell_rate(wins, games, population, min_cell) over (weight, wins, games, population),
+    exactly (the populations have one decimal, as _rate writes them), rounded like _round_exact. The same
+    number as the Fraction sums of theory_window / role_window_theory / overall_theory, with one Fraction per
+    distinct denominator instead of one per cell."""
+    m = max(min_cell, 1)
+    acc: Counter = Counter()  # denominator -> integer numerator
+    for weight, wins, games, population in cells:
+        if games >= m:  # weight/100 × 100·wins/games
+            acc[games] += weight * wins
+        else:  # weight/100 × (100·wins + (m − games)·P/10) / m, P = population × 10
+            acc[1000 * m] += weight * (1000 * wins + (m - games) * round(population * 10))
+    return _round_exact(sum((Fraction(v, d) for d, v in acc.items()), Fraction(0)))
+
+
+def compute_theory_trend(games: list[GameRow], cfg: Mapping[str, Any] | None = None) -> dict:
+    """The theoryTrend section (see the block comment): {schemaVersion, config, fields, dataThrough,
+    series: {name: [[date, games, roleTheory, positionTheory, overallTheory, roleFull], ...]}}. Pure.
+    Each point equals theory_trend_point (the leaderboard's functions) over the same games (tested)."""
+    cfg = LEADERBOARD_CONFIG if cfg is None else cfg
+    cell, n = int(cfg["theoryMinCellGames"]), int(cfg["mainGames"])
+    windows = role_window_games(cfg)
+    keyed: list[tuple[tuple[str, int], GameRow]] = []
+    last_date = ""
+    for i, g in enumerate(games):  # player_timelines' order
+        if g.date:
+            last_date = g.date
+        if g.outcome in OUTCOMES:
+            fixed = getattr(g, "timeline_date", None)
+            keyed.append(((fixed if fixed is not None else (g.date or last_date), i), g))
+    keyed.sort(key=lambda kg: kg[0])
+    population = _PopulationRates()
+    players: dict[str, _TrendPlayer] = {}
+    series: dict[str, list[list[Any]]] = {}
+    today: list[str] = []
+    data_through: str | None = None
+    for i, ((day, _), g) in enumerate(keyed):
+        population.add(g)
+        for seat in SEATS:
+            name = g.seat_players.get(seat)
+            if name:
+                players.setdefault(name, _TrendPlayer()).add(PlayerSeat(g.seat_roles[seat], seat, g.outcome, g.date))
+                today.append(name)
+        if i + 1 < len(keyed) and keyed[i + 1][0][0] == day:
+            continue
+        if day:
+            data_through = day
+            role_rates, seat_rates, role_seat_rates = population.rates()
+            for name in dict.fromkeys(today):
+                p = players[name]
+                picked = {r: p.by_role[r][-windows[r]:] for r in ALL_ROLES}
+                role = _weighted_theory(
+                    ((10 * ROLE_DEAL_TENTHS[r], sum(picked[r]), len(picked[r]), role_rates[r]) for r in ALL_ROLES), cell)
+                last_games: Counter = Counter()
+                last_wins: Counter = Counter()
+                start = max(len(p.seats) - n, 0) if n > 0 else 0
+                for s, w in zip(p.seats[start:], p.won[start:]):
+                    last_games[s.seat] += 1
+                    last_wins[s.seat] += w
+                position = _weighted_theory(
+                    ((10 * SEAT_DEAL_TENTHS[s], last_wins[s], last_games[s], seat_rates[SEAT_LABELS[s]]) for s in SEATS),
+                    cell)
+                overall = _weighted_theory(
+                    ((ROLE_DEAL_TENTHS[r] * SEAT_DEAL_TENTHS[s], p.cell_wins[r, s], p.cell_games[r, s],
+                      role_seat_rates[r][SEAT_LABELS[s]]) for r in ALL_ROLES for s in SEATS), cell)
+                full = all(len(picked[r]) >= windows[r] for r in ALL_ROLES)
+                series.setdefault(name, []).append([day, len(p.seats), role, position, overall, 1 if full else 0])
+        today = []
+    return {
+        "schemaVersion": THEORY_TREND_SCHEMA_VERSION,
+        "config": {
+            "theoryMinCellGames": cell,
+            "roleWindowGames": windows,
+            "positionGames": n,
+            "overallMinGames": int(cfg["overallMinGames"]),
+        },
+        "fields": ["date", "games", "roleTheory", "positionTheory", "overallTheory", "roleFull"],
+        "dataThrough": data_through,
+        "series": series,
+    }
+
+
+def theory_trend_summary(trend: Mapping[str, Any] | None) -> str:
+    """One line for logs: counts only, no names."""
+    if not isinstance(trend, Mapping):
+        return "無"
+    series = trend.get("series") or {}
+    return f"{len(series)} 位玩家、{sum(len(v) for v in series.values())} 點；資料到 {trend.get('dataThrough')}"
 
 
 # ---------------------------------------------------------------------------
@@ -4504,7 +4740,9 @@ def build_cache(
         "leaderboard": compute_leaderboard(games, as_of, overview["roleFinalWinRates"], overview["seatFinalWinRates"],
                                            overview["roleSeatFinalWinRates"]),
         # Elo（compute_rating）：依對局順序重放，跟 as_of 無關；複合篩選不重算。
-        "rating": compute_rating(games),
+        "rating": with_theory_baselines(compute_rating(games), games, overview),
+                # 理論勝率走勢（compute_theory_trend）：同 rating，依對局順序、跟 as_of 無關；複合篩選不重算。
+        "theoryTrend": compute_theory_trend(games),
     }
 
 
@@ -5746,6 +5984,7 @@ def run(
     print(f"  chemistry: {len(cache['chemistry'])} matrices")
     print(f"  leaderboard: {leaderboard_summary(cache.get('leaderboard'))}")
     print(f"  rating: {rating_summary(cache.get('rating'))}")
+    print(f"  theoryTrend: {theory_trend_summary(cache.get('theoryTrend'))}")
     print(f"  refreshed from the Sheet: {', '.join(SHEET_SECTIONS)}")
     print(f"  recomputed from players: {', '.join(DERIVED_SECTIONS)}")
     print(f"  carried over from the existing cache: {carried_desc}")
@@ -5757,6 +5996,7 @@ def run(
         f"- 局數：{prev_games} → {cache['overview']['totalGames']}；玩家：{prev_players} → {cache['overview']['totalPlayers']}",
         f"- 排行榜：{leaderboard_summary(cache.get('leaderboard'))}",
         f"- Elo：{rating_summary(cache.get('rating'))}",
+        f"- 理論勝率走勢：{theory_trend_summary(cache.get('theoryTrend'))}",
         f"- 由試算表重算：{', '.join(SHEET_SECTIONS)}；由 players 重算：{', '.join(DERIVED_SECTIONS)}",
         f"- 沿用現有快取（需在擁有者電腦重建）：{carried_desc}；featureStudies 的 L141 由牌譜重算、其餘沿用並改寫結論",
         *dataset_lines,

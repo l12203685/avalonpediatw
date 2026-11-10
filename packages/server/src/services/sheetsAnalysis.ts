@@ -598,6 +598,28 @@ export interface RatingSection {
   blueWinRate: number;
   players: RatingPlayerRow[];
   series: Record<string, RatingSeriesPoint[]>;
+  /** 2026-11-10 (generate_cache.py theory_baselines): the weekly chart's reference values. Older caches: absent. */
+  theoryBaselines?: TheoryBaselines;
+}
+
+/** One pooled group scored as a single player (career): 角色理論 / 位置理論 / 整體理論 in %. */
+export interface TheoryBaselineGroup {
+  role: number | null;
+  position: number | null;
+  overall: number | null;
+  players: number;
+  /** Player-games pooled. */
+  games: number;
+}
+
+/**
+ * all = every seat of every player (the population); tiers = the players of each current Elo-PR tier
+ * (PR among players with ≥ rule.poolMinGames rated games; provisional players are in no tier).
+ */
+export interface TheoryBaselines {
+  all: TheoryBaselineGroup;
+  tiers: { pr80plus: TheoryBaselineGroup; pr20to80: TheoryBaselineGroup; pr20minus: TheoryBaselineGroup };
+  rule?: { poolMinGames?: number; bounds?: number[] };
 }
 
 /** /api/analysis/rating: the section without the per-player series, plus the leaderboard's asOf. */
@@ -610,6 +632,51 @@ export interface PlayerRating {
   config: Record<string, unknown>;
   dataThrough: string | null;
   averageTheory: number;
+  asOf: string | null;
+}
+
+/**
+ * theoryTrend: 角色／位置／整體理論的走勢 (generate_cache.py compute_theory_trend, Edward 2026-11-10). One point per
+ * day a player played, after that day's last game: [date, career games, 角色理論, 位置理論, 整體理論, roleFull 1/0],
+ * each the leaderboard's number computed from the games up to that day only (the population rates too).
+ * Windows not yet full: roleFull 0 (角色理論), games < positionGames (位置理論), games < overallMinGames (整體理論).
+ */
+export type TheoryTrendPoint = [string, number, number, number, number, number];
+
+export interface TheoryTrendConfig {
+  theoryMinCellGames: number;
+  /** K_r per role (忠臣 40, the others 10). */
+  roleWindowGames: Record<string, number>;
+  /** 位置理論: the last N games. */
+  positionGames: number;
+  /** 整體理論: listed from N career games. */
+  overallMinGames: number;
+}
+
+export interface TheoryTrendSection {
+  schemaVersion: number;
+  config: TheoryTrendConfig;
+  fields: string[];
+  dataThrough: string | null;
+  series: Record<string, TheoryTrendPoint[]>;
+}
+
+/** The player's current theory rates (players[].theory): where the curve ends today. */
+export interface TheoryTrendCurrent {
+  games: number;
+  roleTheory: number;
+  roleFull: boolean;
+  positionTheory: number;
+  overallTheory: number;
+}
+
+/** /api/analysis/theory-trend/:name: one player's theory curves. */
+export interface PlayerTheoryTrend {
+  name: string;
+  series: TheoryTrendPoint[];
+  current: TheoryTrendCurrent | null;
+  config: TheoryTrendConfig;
+  dataThrough: string | null;
   asOf: string | null;
 }
 
@@ -961,6 +1028,8 @@ export interface AnalysisCache {
   leaderboard?: LeaderboardSection;
   /** 團隊 Elo, written by generate_cache.py since 2026-10-30; absent in older caches. */
   rating?: RatingSection;
+  /** 理論勝率走勢, written by generate_cache.py since 2026-11-10; absent in older caches. */
+  theoryTrend?: TheoryTrendSection;
 }
 
 // ---------------------------------------------------------------------------
@@ -1374,6 +1443,44 @@ function findRatingRow(c: AnalysisCache, rating: RatingSection, name: string): R
 export async function getEloOf(name: string): Promise<RatingPlayerRow | null> {
   const c = loadCache();
   return c.rating ? findRatingRow(c, c.rating, name) ?? null : null;
+}
+
+/** players[].theory → where the theory curves end today (null without a schemaVersion-4 theory block). */
+function currentTheory(theory: PlayerTheory | undefined, positionGames: number): TheoryTrendCurrent | null {
+  const rw = theory?.roleWindows;
+  const last = (theory?.[`last${positionGames}`] as PlayerTheoryWindow | undefined) ?? theoryLastWindows(theory)[0];
+  const career = theory?.career;
+  if (!rw || !last || !career || typeof career.overallTheory !== 'number') return null;
+  return {
+    games: career.games,
+    roleTheory: rw.roleTheory,
+    roleFull: rw.fullWindows,
+    positionTheory: last.positionTheory,
+    overallTheory: career.overallTheory,
+  };
+}
+
+/**
+ * One player's 角色／位置／整體理論 curves, `name` matched like the other per-player routes (case / width,
+ * players.aliases). undefined when the cache predates the section, null when the name has no games.
+ */
+export async function getPlayerTheoryTrend(name: string): Promise<PlayerTheoryTrend | null | undefined> {
+  const c = loadCache();
+  const trend = c.theoryTrend;
+  if (!trend) return undefined;
+  const key = findPlayerKey(trend.series, playerDetailsKey(c, name) ?? name, (k) => trend.series[k]?.length ?? 0,
+    cachePlayerAliases(c.players));
+  const series = key === undefined ? undefined : byName(trend.series, key);
+  if (key === undefined || !series) return null;
+  const detail = byName(c.playerDetails, key);
+  return {
+    name: key,
+    series,
+    current: currentTheory(detail?.player?.theory, trend.config.positionGames),
+    config: trend.config,
+    dataThrough: trend.dataThrough,
+    asOf: c.leaderboard?.asOf ?? null,
+  };
 }
 
 export async function getChemistry(): Promise<ChemistryData> {
