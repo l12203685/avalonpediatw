@@ -1034,6 +1034,10 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
+   * 第 36 回合：派西用最乾淨的隊（`goodCleanLead` 含派西）時兩根拇指都不放——不把梅林指出來、也不賭莫甘娜（第 35 回合自我對打：派西第 2 局的隊 29% 放了莫甘娜）。
+   */
+  percivalCleanNoThumbs: boolean;
+  /**
    * 第 36 回合：`beliefLeadRecursive` 適用的挑隊，遞迴後驗和第 0 層後驗的世界權重混合（λ·遞迴 ＋ (1 − λ)·第 0 層）；0 = 關（只用遞迴後驗）。\n挑出來的隊留在現行的附近，只往遞迴讀法傾斜（第 35 回合 `LR1s2`：強者點的全藍上升、但逐點一致掉）。
    */
   beliefLeadBlend: number;
@@ -1273,6 +1277,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodReuseNoMatchPoint',
   'merlinR2Public',
   'goodLakeEntropy',
+  'percivalCleanNoThumbs',
   'beliefLeadBlend',
   'goodBayesR4Mix',
   'beliefRecursiveLeadScope',
@@ -1439,6 +1444,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: false,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  percivalCleanNoThumbs: false,
   beliefLeadBlend: 0,
   goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
@@ -1753,6 +1759,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  percivalCleanNoThumbs: false,
   beliefLeadBlend: 0,
   goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
@@ -1919,6 +1926,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodReuseNoMatchPoint: 'AVALON_TUNING_GOOD_REUSE_NO_MATCH_POINT',
   merlinR2Public: 'AVALON_TUNING_MERLIN_R2_PUBLIC',
   goodLakeEntropy: 'AVALON_TUNING_GOOD_LAKE_ENTROPY',
+  percivalCleanNoThumbs: 'AVALON_TUNING_PERCIVAL_CLEAN_NO_THUMBS',
   beliefLeadBlend: 'AVALON_TUNING_BELIEF_LEAD_BLEND',
   goodBayesR4Mix: 'AVALON_TUNING_GOOD_BAYES_R4_MIX',
   beliefRecursiveLeadScope: 'AVALON_TUNING_BELIEF_RECURSIVE_LEAD_SCOPE',
