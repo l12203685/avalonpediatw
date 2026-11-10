@@ -250,6 +250,7 @@ SKIP_NO_RESULT = "three blue missions but neither a result tag nor an assassinat
 SKIP_NAMES_MISSING = "player names missing or incomplete (need seats 1..9 and 0)"
 SKIP_NAMES_MALFORMED = "player name list malformed (seat listed twice, same name twice, or several per line)"
 SKIP_INTERNAL = "internal parser error"
+SKIP_NOT_TEN = "not a 10-player game (title says 5-9 人), stays on Discord but is not imported"
 
 
 class SkipPost(Exception):
@@ -280,6 +281,7 @@ SKIP_EXPLANATIONS = {
     SKIP_UNVERIFIED: "機器人紀錄員的貼文尚待檢視（標題有「待檢視」；確認沒問題後把標題的【待檢視】拿掉才會收錄）",
     SKIP_NO_RECORD: "找不到牌譜（沒有提議、任務結果這些行）",
     SKIP_NOT_A_RECORD: "找不到牌譜，也沒有結果標籤或 6 碼配置（不像牌譜貼文，不回覆）",
+    SKIP_NOT_TEN: "不是 10 人局（標題寫 5～9 人），貼文留在 Discord，戰績只收 10 人局（不回覆、不標待修正）",
     SKIP_UNRECOGNIZED: "這一行看不懂：牌譜裡只能有提議、任務結果（o/x）和湖線，其他文字請放在牌譜前面或後面",
     SKIP_BAD_VOTE: "投票異常標記看不懂：每個標記是座號加 + 或 -（例如 7+、5-、+39）",
     SKIP_MISSION_NO_TEAM: "這個任務結果前面沒有提議",
@@ -326,7 +328,7 @@ REPLY_LINE_MAX = 60  # quoted line text is cut here (the poster can see the whol
 REPLY_DEFAULT_DAYS = 90  # 跟「待修正」標籤同一個範圍：有標籤的貼文都有一則原因回覆（Edward 2026-11-03）
 REPLY_DEFAULT_LIMIT = 20
 # Skips that are not the poster's formatting (or not a record post at all): no reply for these.
-REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_UNVERIFIED, SKIP_INTERNAL, SKIP_NOT_A_RECORD})
+REPLY_NOT_FOR = frozenset({SKIP_NO_STARTER, SKIP_EMPTY, SKIP_UNVERIFIED, SKIP_INTERNAL, SKIP_NOT_A_RECORD, SKIP_NOT_TEN})
 # Quoted record text in the bot's messages: markdown, masked links ([..](..)) and <...> forms
 # (mentions, <url>, timestamps) render as plain text. '>' alone is harmless (湖 lines: 0>8 o).
 _MARKDOWN_ESCAPE_RE = re.compile(r"([\\`*_~|\[\]<])")
@@ -828,6 +830,15 @@ def unverified(post: Post) -> bool:
     return TITLE_UNVERIFIED in normalize_line(post.title)
 
 
+_NOT_TEN_RE = re.compile(r"(?<![0-9])[5-9] ?人")
+
+
+def not_ten_player(post: Post) -> bool:
+    """A 5-9 player game by its title (e.g. 1107休閒場8人局). Edward 2026-11-10: such games stay
+    on Discord but are not imported (戰績 is 10-player only), and are not asked to be fixed."""
+    return bool(_NOT_TEN_RE.search(normalize_line(post.title)))
+
+
 def is_bot_post(post: Post, names: Iterable[str]) -> bool:
     """A game with our bot (分類 gc.BOT_CATEGORY): tagged 模擬, or a seat is a 百科AI nickname."""
     return TAG_SIMULATION in post.tags or any(gc.is_pedia_bot_name(n) for n in names)
@@ -841,6 +852,8 @@ def parse_post(post: Post, content: str | None) -> ParsedGame:
         raise SkipPost(SKIP_EMPTY)
     if unverified(post):
         raise SkipPost(SKIP_UNVERIFIED)
+    if not_ten_player(post):
+        raise SkipPost(SKIP_NOT_TEN)
     lines = content.splitlines()
     try:
         items = [item for item in (classify_line(raw, n) for n, raw in enumerate(lines, 1)) if item is not None]
@@ -1161,6 +1174,10 @@ def plan_import(
             continue
         if unverified(post):  # no need to fetch it
             report.skip(post, SKIP_UNVERIFIED)
+            continue
+        if not_ten_player(post):  # stays on Discord; needs no fixing (drops a 待修正 tag)
+            report.skip(post, SKIP_NOT_TEN)
+            report.ok_ids.add(post.id)
             continue
         content = fetch(post)
         report.fetched += 1
