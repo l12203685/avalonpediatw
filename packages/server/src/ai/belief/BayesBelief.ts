@@ -357,6 +357,23 @@ export interface BayesOptions {
   recursiveLeadScope?: number;
   /** Round 36 `beliefLeadBlend`: with `leadRecursive`, the weight of the recursive posterior in a team pick (0 = off: the recursive posterior alone). */
   leadBlend?: number;
+  /**
+   * Round 38 `ownView` (Edward 2026-11-10: a loyal picks among the few teams consistent with his own earlier thinking and the information flow):
+   * while the viewer picks a non-forced team, his posterior starts from his own prior — a per-seat, per-game log-odds offset on each other
+   * player (`sigma`), lower for the players he proposed earlier (`keep`) — instead of the same flat prior every loyal shares. The record then
+   * updates it as usual, so the offsets decide only where the record says little. `scope`: 1 loyal, 2 + Percival, 3 + Merlin's public-view pick.
+   */
+  ownView?: { sigma: number; keep: number; scope: number };
+  /**
+   * Round 38 `beliefPendingProposal` (checklist BL-01): while the viewer votes, the proposal on the table is read as a proposal too (it enters
+   * `voteHistory` only after the vote, so the vote rules scored the team on a posterior that had not read it).
+   */
+  pendingProposal?: boolean;
+  /**
+   * Round 38 `beliefThumbNoStain`: for Percival, a failed R1–R3 mission with exactly one thumb on it says nothing about which thumb is Merlin
+   * (human records: that thumb is Merlin 43–52%; self-play 44–52%) — the mission term is averaged over the two thumb assignments.
+   */
+  thumbNoStain?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -364,7 +381,103 @@ const STRICT_EPS = 0.03;
 
 const blendCaches = new Map<number, WeakMap<PlayerObservation, Posterior>>();
 
+const ownViewCache = new WeakMap<PlayerObservation, Map<string, Posterior>>();
+
+/** Round 38 `ownView`: does the viewer's own prior apply to this team pick, and how strongly (0 = not at all). */
+export function ownViewStrength(obs: PlayerObservation, scope: number): number {
+  if (obs.gamePhase !== 'team_select' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return 0;
+  if (!(obs.myRole === 'loyal' || (scope >= 2 && obs.myRole === 'percival'))) return 0;
+  const fc = obs.failCount ?? 0;
+  if (fc >= 4) return 0;
+  // The likelier this proposal goes on a mission (human records, `PROPOSAL_GO_RATE`), the less the own prior counts: full weight on the R1–R2
+  // proposals (0.5–8%), none from 30% up (R3 first 25%, fourth 36%; R4 first 55%).
+  const go = OWN_VIEW_GO_RATE[obs.currentRound ?? 1]?.[fc] ?? 0.3;
+  return Math.max(0, 1 - go / 0.3);
+}
+
+/** Share of proposals that went on a mission (human records; the same table as `BlueRound37.PROPOSAL_GO_RATE`). */
+const OWN_VIEW_GO_RATE: Readonly<Record<number, readonly number[]>> = {
+  1: [0.005, 0.005, 0.005, 0.005], 2: [0.015, 0.018, 0.036, 0.082], 3: [0.25, 0.06, 0.11, 0.36], 4: [0.55, 0.21, 0.31, 0.53], 5: [0.43, 0.29, 0.32, 0.53],
+};
+
+function hash01(input: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) h = Math.imul(h ^ input.charCodeAt(i), 0x01000193) >>> 0;
+  // one more avalanche round: FNV alone leaves the low bits of near-identical strings correlated
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b) >>> 0; h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35) >>> 0; h ^= h >>> 16;
+  return ((h >>> 0) + 0.5) / 4294967296;
+}
+
+/**
+ * Round 38 `ownView`: the viewer's own log-odds offsets (positive = more suspicious) on the other players for this pick, or null when it does
+ * not apply. Fixed for the seat and the game — drawn from the game's first proposal (public), so every later pick of the seat starts from the
+ * same view; on the very first proposal of the game (no record yet) from the decision's random numbers. The players the viewer proposed
+ * earlier in the game count `keep` less suspicious: his later picks stay with his earlier ones until the record speaks against them.
+ */
+export function ownViewOffsets(obs: PlayerObservation, cfg: { sigma: number; keep: number; scope: number }): Map<string, number> | null {
+  const f = ownViewStrength(obs, cfg.scope);
+  if (!(f > 0) || !(cfg.sigma > 0 || cfg.keep > 0)) return null;
+  // One draw per observation (the first proposal of a game draws from the decision's random numbers).
+  const ck = `${cfg.sigma}|${cfg.keep}|${cfg.scope}`;
+  let memo = ownViewOffsetCache.get(obs);
+  if (!memo) { memo = new Map(); ownViewOffsetCache.set(obs, memo); }
+  const had = memo.get(ck);
+  if (had) return had;
+  const made = ownViewOffsetsOf(obs, cfg, f);
+  memo.set(ck, made);
+  return made;
+}
+
+const ownViewOffsetCache = new WeakMap<PlayerObservation, Map<string, Map<string, number>>>();
+
+function ownViewOffsetsOf(obs: PlayerObservation, cfg: { sigma: number; keep: number; scope: number }, f: number): Map<string, number> {
+  const me = obs.myPlayerId;
+  const first = obs.voteHistory[0];
+  const seedStr = first ? `${first.leader}:${first.team.join(',')}` : null;
+  const mine = new Set(obs.voteHistory.filter((v) => v.leader === me).flatMap((v) => v.team));
+  const out = new Map<string, number>();
+  for (const id of obs.allPlayerIds) {
+    if (id === me) continue;
+    const u1 = seedStr ? hash01(`ov1|${seedStr}|${me}|${id}`) : Math.max(1e-9, Math.random());
+    const u2 = seedStr ? hash01(`ov2|${seedStr}|${me}|${id}`) : Math.random();
+    const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    out.set(id, f * (cfg.sigma * z - (mine.has(id) ? cfg.keep : 0)));
+  }
+  return out;
+}
+
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
+  // Round 38 `ownView`: the pick's posterior from the viewer's own prior — the world weights times exp(Σ offsets of the reds in the world).
+  const ov = opts.ownView;
+  if (ov && ownViewStrength(obs, ov.scope) > 0) {
+    const key = `${ov.sigma}|${ov.keep}|${ov.scope}|${opts.thumbNoStain === true ? 1 : 0}|${opts.leadBlend ?? 0}|${opts.leadRecursive ?? 0}|${opts.recursive ?? 0}|${opts.strongTables === true ? 1 : 0}|${opts.leadStrongTables === true ? 1 : 0}|${opts.voteTemper ?? 1}|${opts.proposalTemper ?? 1}`;
+    let store = ownViewCache.get(obs);
+    if (!store) { store = new Map(); ownViewCache.set(obs, store); }
+    const hit = store.get(key);
+    if (hit) return hit;
+    const base = posterior(obs, { ...opts, ownView: undefined });
+    const off = ownViewOffsets(obs, ov);
+    let out = base;
+    if (off && base.worlds.length > 0) {
+      const bits = [...off].map(([id, d]) => ({ b: base.bitOf(id), d }));
+      const raw = base.worlds.map((w, i) => { let s = 0; for (const x of bits) if ((w & x.b) !== 0) s += x.d; return base.wts[i] * Math.exp(s); });
+      const tot = raw.reduce((a, b) => a + b, 0);
+      if (tot > 0) out = { ...base, wts: raw.map((x) => x / tot) };
+    }
+    store.set(key, out);
+    return out;
+  }
+  // Round 38 `beliefThumbNoStain` (Percival): see `thumbNoStainPosterior`.
+  if (opts.thumbNoStain === true && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2) {
+    const key = `ns|${opts.leadBlend ?? 0}|${opts.leadRecursive ?? 0}|${opts.recursive ?? 0}|${opts.strongTables === true ? 1 : 0}|${opts.leadStrongTables === true ? 1 : 0}|${opts.voteTemper ?? 1}|${opts.proposalTemper ?? 1}|${obs.gamePhase === 'team_select' ? 1 : 0}`;
+    let store = ownViewCache.get(obs);
+    if (!store) { store = new Map(); ownViewCache.set(obs, store); }
+    const hit = store.get(key);
+    if (hit) return hit;
+    const out = thumbNoStainPosterior(obs, opts);
+    store.set(key, out);
+    return out;
+  }
   // Round 36 `beliefLeadBlend`: where the lead-only recursive reader applies, mix its world weights with the level-0 posterior's
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
@@ -387,6 +500,32 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   } finally {
     useMix(...prev);
   }
+}
+
+/**
+ * Round 38 `beliefThumbNoStain`: Percival's posterior with the fail of an R1–R3 mission that held exactly one of his thumbs made silent about
+ * which thumb is Merlin. The share of "thumb A is the red one" is taken from the same record without those missions (as if their result were
+ * unknown); within each thumb assignment the worlds keep their weights, so every other read still uses the missions.
+ */
+function thumbNoStainPosterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
+  const base = posterior(obs, { ...opts, thumbNoStain: false });
+  const thumbs = obs.knownWizards ?? [];
+  if (base.worlds.length === 0 || thumbs.length !== 2) return base;
+  const results = obs.questResults ?? [];
+  const stained = (q: PlayerObservation['questHistory'][number]): boolean => q.round <= 3 && results[q.round - 1] === 'fail' && (q.team.includes(thumbs[0]) !== q.team.includes(thumbs[1]));
+  if (!obs.questHistory.some(stained)) return base;
+  const without = posterior({ ...obs, questHistory: obs.questHistory.filter((q) => !stained(q)) }, { ...opts, thumbNoStain: false });
+  if (without.worlds.length === 0) return base;
+  const ta = base.bitOf(thumbs[0]);
+  const share = (p: Posterior, bit: number): number => p.worlds.reduce((acc, w, i) => acc + ((w & bit) !== 0 ? p.wts[i] : 0), 0);
+  const pa = share(base, ta);
+  const qa = share(without, without.bitOf(thumbs[0]));
+  if (!(pa > 0 && pa < 1)) return base;
+  const fa = qa / pa;
+  const fb = (1 - qa) / (1 - pa);
+  const raw = base.worlds.map((w, i) => base.wts[i] * ((w & ta) !== 0 ? fa : fb));
+  const tot = raw.reduce((x, y) => x + y, 0);
+  return tot > 0 ? { ...base, wts: raw.map((x) => x / tot) } : base;
 }
 
 function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
@@ -420,8 +559,11 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
   const tempered = temperV < 1 || temperP < 1;
   const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
-  let store = caches.get(key);
-  if (!store) { store = new WeakMap(); caches.set(key, store); }
+  // Round 38 `beliefPendingProposal`: the proposal being voted on, as one more proposal record without votes.
+  const pending = opts.pendingProposal === true && obs.gamePhase === 'team_vote' && (obs.proposedTeam ?? []).length > 0
+    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4;
+  let store = caches.get(pending ? `${key}|pend` : key);
+  if (!store) { store = new WeakMap(); caches.set(pending ? `${key}|pend` : key, store); }
   const hit = store.get(obs);
   if (hit) return hit;
   const view = buildCertainty(obs);
@@ -437,7 +579,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const wizardMask = morganaR1 ? view.maskOf(obs.knownWizards ?? []) : 0;
   // Everything that does not depend on the world, computed once (the world loop below runs it for every world).
   const results = obs.questResults ?? [];
-  const pre = obs.voteHistory.map((v) => {
+  const records: PlayerObservation['voteHistory'] = pending
+    ? [...obs.voteHistory, { round: obs.currentRound ?? 1, attempt: (obs.failCount ?? 0) + 1, leader: obs.currentLeader, team: [...(obs.proposedTeam ?? [])], approved: false, votes: {} } as PlayerObservation['voteHistory'][number]]
+    : obs.voteHistory;
+  const pre = records.map((v) => {
     const teamMask = view.maskOf(v.team);
     return {
       v,
@@ -640,11 +785,14 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.beliefLeadStrong === true ? { leadStrongTables: true } : {}),
     ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
     policyVotes: t.beliefPolicyVotes === true,
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
+    ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0) } } : {}),
+    ...(t.beliefThumbNoStain === true ? { thumbNoStain: true } : {}),
+    ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
   };
 }
 

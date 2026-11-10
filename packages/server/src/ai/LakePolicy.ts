@@ -31,6 +31,7 @@ import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
+import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 
 type Camp = 'good' | 'evil';
@@ -248,7 +249,9 @@ export function pickLakeTargetForTeam(
     const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
     if (entropyPick !== null) return entropyPick;
     if (tuning.goodLakeInfoMax) {
-      const pick = pickGoodLakeTargetInfoMax(obs, unknownCandidates, undefined, tuning.goodLakeTieSpread ? Math.random : undefined);
+      // Round 38 `goodLakeHuman` / `percivalLakeNoMorgana` (BlueRound38.ts): the holder's candidates, then the same common-information pick.
+      const humanPool = goodLakeHumanPool(tuning, obs, unknownCandidates);
+      const pick = pickGoodLakeTargetInfoMax(obs, humanPool, undefined, tuning.goodLakeTieSpread || (tuning.goodLakeHuman ?? 0) > 0 ? Math.random : undefined);
       if (pick !== null) return pick;
     }
     // ── AgentTuning.goodLakeTargetMostSuspicious (2026-10-12) ──

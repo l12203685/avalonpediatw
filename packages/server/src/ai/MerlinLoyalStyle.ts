@@ -10,7 +10,7 @@
  */
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
-import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
 import { merlinSignalScore } from './belief/ZoneModel';
 import { r1Scorer, r1SpreadActive } from './BlueRound33';
 
@@ -49,19 +49,29 @@ export function merlinLoyalStyleTeam(
   // `merlinLoyalCover` (round 7 candidate): on a doomed R1–R2 proposal (the normal votes reject it), at rate c the
   // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
   const cover = merlinLoyalCoverNow(tuning, obs);
-  const pool = obs.allPlayerIds.filter((id) => id !== me && (cover || !seen.has(id)));
+  // Round 38 `merlinFlowFollow` (Edward 2026-11-10): the round's earlier proposals all carry one red he sees — Merlin goes with the flow.
+  const flowRed = merlinFlowRed(tuning, obs);
+  const pool = obs.allPlayerIds.filter((id) => id !== me && (cover || !seen.has(id) || id === flowRed));
   if (pool.length < size - 1) return action;
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
+  // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3 } } : {};
+  // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
+  const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
+    ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
+    : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
+  // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
+  const zoneWeight = tuning.merlinPublicTieBreak === true ? 0 : 0.05;
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
   const scored: { team: string[]; score: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
     if (cover && fill.filter((id) => seen.has(id)).length !== 1) continue;
+    if (flowRed && !fill.includes(flowRed)) continue;
     const team = [me, ...fill];
     const p = bayesTeamClean(publicView, team, pubOpts) ?? 0;
     // Loyal plausibility first; the extension / correction / zone signal only breaks near-ties.
-    scored.push({ team, score: Math.log(Math.max(p, 1e-12)) + 0.05 * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me) });
+    scored.push({ team, score: Math.log(Math.max(p, 1e-12)) + (zoneWeight > 0 ? zoneWeight * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me) : 0) });
   }
   // Highest first (stable); the logic gates (must-fail / dominated) still bind.
   // Round 33 `loyalR1Spread`: as the loyals do, an R1 talk proposal takes the least-stacked teams first (Merlin's own seat view of the record).
@@ -72,8 +82,37 @@ export function merlinLoyalStyleTeam(
     scored.sort((x, y) => (Math.abs(st.get(x)! - st.get(y)!) > 1e-9 ? st.get(x)! - st.get(y)! : y.score - x.score));
   } else scored.sort((x, y) => y.score - x.score);
   // A cover team holds a seen red by design (doomed, never a mission), as `merlinDoomedRed` does: no gate on it.
-  const best = cover ? scored[0] : scored.find((c) => allowed(c.team));
+  // The flow team holds a red he sees by design: his own certainty would call it must-fail, so the public loyal's gate binds instead.
+  const best = cover ? scored[0] : scored.find((c) => (flowRed ? publicAllowed(c.team) : allowed(c.team)));
   return best ? { type: 'team_select', teamIds: best.team } : action;
+}
+
+/** Share of proposals that went on a mission in human records (round × earlier rejections); the same table as `BlueRound37.PROPOSAL_GO_RATE`. */
+const FLOW_GO_RATE: Readonly<Record<number, readonly number[]>> = {
+  1: [0.005, 0.005, 0.005, 0.005], 2: [0.015, 0.018, 0.036, 0.082], 3: [0.25, 0.06, 0.11, 0.36], 4: [0.55, 0.21, 0.31, 0.53], 5: [0.43, 0.29, 0.32, 0.53],
+};
+
+/**
+ * 第 38 回合 `merlinFlowFollow=m`（Edward 2026-11-10：梅林不是刻意帶看得到的紅，是局勢順勢只能帶時才帶——「全場都派 7、7 是梅林可見紅 → 梅林也只能派 7」）。
+ * 這一局前面別人的提議，最近連續 m 次都帶了同一個梅林看得到的紅（他自己當隊長的那一次也算帶），而且這一次提議出任務的機率低於一成（真人局的比例；
+ * 不用「注定被否決」當前提）→ 回傳那個紅：梅林的隊帶他，其餘照公開視角挑、不帶別的看得到的紅。不適用時 null。
+ */
+export function merlinFlowRed(tuning: Readonly<AgentTuning>, obs: PlayerObservation): string | null {
+  const m = tuning.merlinFlowFollow ?? 0;
+  if (!(m >= 2) || obs.myRole !== 'merlin') return null;
+  const round = obs.currentRound ?? 1;
+  const fc = obs.failCount ?? 0;
+  // Rounds 1–2 only: from R3 on a team with a red he sees is a real mission risk (and the must-fail gate of his own view binds).
+  if (round > 2 || fc >= 4 || (FLOW_GO_RATE[round]?.[fc] ?? 1) >= 0.1) return null;
+  const me = obs.myPlayerId;
+  const earlier = obs.voteHistory.filter((v) => v.round === round && v.leader !== me);
+  if (earlier.length < m) return null;
+  const last = earlier.slice(-m);
+  const carried = obs.knownEvils.filter((id) => last.every((v) => v.team.includes(id)));
+  if (carried.length === 0) return null;
+  // More than one: the one the whole round carried most.
+  const count = (id: string): number => earlier.filter((v) => v.team.includes(id)).length;
+  return [...carried].sort((a, b) => count(b) - count(a))[0];
 }
 
 /**
@@ -152,7 +191,14 @@ export function merlinDoomedPublicTeam(
     if ((hh % 10000) / 10000 >= 0.5) return null;
   }
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
+  // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3 } } : {};
+  // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
+  const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
+    ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
+    : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
+  // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
+  const zoneWeight = tuning.merlinPublicTieBreak === true ? 0 : 0.05;
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
   const none = new Set<string>();
   const salt = `${me}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|doomedPublic`;
@@ -187,7 +233,14 @@ export function merlinDoomedAvoidTeam(
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };
+  // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3 } } : {};
+  // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
+  const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
+    ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
+    : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
+  // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
+  const zoneWeight = tuning.merlinPublicTieBreak === true ? 0 : 0.05;
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
   const none = new Set<string>();
   const salt = `${me}|${round}|${obs.failCount ?? 0}|doomedPublic`;
