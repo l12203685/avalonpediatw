@@ -10,6 +10,12 @@
  * window a destination that failed (e.g. Discord gateway not ready yet) is
  * retried on the next tick until the window closes.
  *
+ * Since 2026-11-10 the post is ONE chart image (stats/weeklyChart.ts; owner:
+ * 「每週排行能不能做成圖像式結果 不要用文字」): `buildImage` renders it and each
+ * destination gets the PNG next to the text. The text is always built first
+ * and is the fallback — a failed render (or no `buildImage`) posts the text
+ * as before, so the Monday post never goes missing.
+ *
  * Time math is done on epoch milliseconds + a fixed +08 offset and read back
  * with getUTC*(), so the result never depends on the host TZ (Render runs UTC).
  */
@@ -62,17 +68,21 @@ export function digestDateLabel(epochMs: number): string {
 export interface DigestDestination {
   name: string;
   /**
-   * Deliver the text. Resolve `false` when the destination is not available
-   * right now (retry next tick); resolve `true`/void when delivered; resolve
-   * `'skip'` when it is not configured (counts as done for this week).
+   * Deliver the digest: the chart `image` (PNG) when there is one, else the
+   * text; `text` is always given, as the fallback. Resolve `false` when the
+   * destination is not available right now (retry next tick); resolve
+   * `true`/void when delivered; resolve `'skip'` when it is not configured
+   * (counts as done for this week).
    */
-  send(text: string): Promise<boolean | 'skip' | void>;
+  send(text: string, image?: Buffer | null): Promise<boolean | 'skip' | void>;
 }
 
 export type DigestTickResult = 'disabled' | 'outside-window' | 'already-posted' | 'busy' | 'posted' | 'partial' | 'failed';
 
 export interface WeeklyDigestOptions {
   buildText: (now: number) => Promise<string>;
+  /** The chart PNG (optional). A rejection only costs the picture: the text goes instead. */
+  buildImage?: (now: number) => Promise<Buffer>;
   destinations: DigestDestination[];
   enabled?: boolean;
   logger?: { info: (m: string) => void; warn: (m: string, err?: unknown) => void };
@@ -108,10 +118,18 @@ export class WeeklyDigestScheduler {
         this.logger.warn('building digest text failed', err);
         return 'failed';
       }
+      let image: Buffer | null = null;
+      if (this.opts.buildImage) {
+        try {
+          image = await this.opts.buildImage(now);
+        } catch (err) {
+          this.logger.warn('rendering the digest chart failed — posting the text instead', err);
+        }
+      }
       let done = 0;
       for (const dest of pending) {
         try {
-          const result = await dest.send(text);
+          const result = await dest.send(text, image);
           if (result === false) {
             this.logger.warn(`${dest.name} not available, will retry within the window`);
             continue;

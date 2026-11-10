@@ -18,6 +18,7 @@
   "dependencies": {
     "@avalon/shared": "workspace:*",
     "@line/bot-sdk": "^10.6.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@supabase/supabase-js": "^2.100.1",
     "cors": "^2.8.5",
     "discord.js": "^14.25.1",
