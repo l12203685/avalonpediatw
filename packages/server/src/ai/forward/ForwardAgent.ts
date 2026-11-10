@@ -62,6 +62,7 @@ import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
 import { loyalFlowPickTeam } from '../BlueRound34';
+import { loyalR2ViewTeam, percivalThumbSureTeam } from '../BlueRound37';
 import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
@@ -925,7 +926,10 @@ export class ForwardAgent implements AvalonAgent {
     // Round 25 hard constraint `redVouchConsistent` (S2): the clean-look swap keeps the red leader's own lake word.
     const looked = redVouchKeptTeam(this.baseline.tuning, obs, led, redCleanLookTeam(this.baseline.tuning, obs, led));
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
-    const d = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    const d0 = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
+    // Round 37 `percivalThumbSure` (BlueRound37.ts): Percival keeps a thumb on the team only when his own posterior tells it is Merlin.
+    const sure = percivalThumbSureTeam(this.baseline.tuning, obs, d0.action, gateOk);
+    const d = sure === d0.action ? d0 : { ...d0, action: sure, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → percival: no thumb he cannot tell apart` } };
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
     // proposes a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
     if (d.action.type === 'team_select') {
@@ -947,6 +951,12 @@ export class ForwardAgent implements AvalonAgent {
       const fp = (this.baseline.tuning.loyalFlowPick ?? 0) >= 4 ? loyalWikiPickTeam(this.baseline.tuning, obs, d.action, gateOk) : loyalFlowPickTeam(this.baseline.tuning, obs, d.action, gateOk);
       const flowPick = goodLeadConsistentTeam(this.baseline.tuning, obs, fp, gateOk);
       if (flowPick !== d.action) return { ...d, action: flowPick, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → answer the earlier proposals (wiki-24)` } };
+    }
+    // Round 37 `loyalR2View` (BlueRound37.ts; Edward 2026-11-10): at R2 after an R1 fail the loyal's proposal carries his own view —
+    // it answers the previous R2 leader (correct / respect) instead of re-proposing nearly the same team.
+    if (d.action.type === 'team_select') {
+      const view = goodLeadConsistentTeam(this.baseline.tuning, obs, loyalR2ViewTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
+      if (view !== d.action) return { ...d, action: view, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → R2 after an R1 fail: own-view answer to the previous proposal` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.
