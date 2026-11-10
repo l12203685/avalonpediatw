@@ -33,9 +33,6 @@ import { P_CLIP, PolicyVoteReader, type PolicyModel } from './policyModel';
 import { sigmoid } from './logistic';
 import MODEL from './recursive_strong.json';
 
-// 熱迴圈裡用的常數取成區域常數（匯出的常數經過模組的 getter，每次讀都要一次函數呼叫）。
-const NB = N_BASE;
-const NX = N_EXTRA;
 
 // ── 派隊的條件 logit ─────────────────────────────────────────────
 
@@ -378,6 +375,9 @@ export class RoleMixtureReader {
   }
 
   private baseDots(i: number, j: string, jIdx: number, w: number): Float64Array {
+    // 熱迴圈裡用的常數取成區域常數（匯出的常數經過模組的 getter，每次讀都要一次函數呼叫）；不放在模組最上層：
+    // voteFeatures → BayesBelief → recursiveRead → voteFeatures 是循環匯入，從 voteFeatures 先載入時模組層級讀它的常數還沒初始化。
+    const NB = N_BASE;
     // 數字鍵：(提議, 座位, j 的湖結果)；lakeSig < 1024。
     const key = (i * 16 + jIdx) * 1024 + this.features.lakeKey(i, j, w);
     let d = this.dots.get(key);
@@ -392,6 +392,8 @@ export class RoleMixtureReader {
 
   /** log P(j 的每一票 | 角色, w)。 */
   voteLog(j: string, upTo: number, w: number, cls: MixVoteClass, mordredBit = 0, thumbMask = 0): number {
+    const NB = N_BASE;
+    const NX = N_EXTRA;
     const f = this.features;
     const ci = MIX_VOTE_CLASSES.indexOf(cls);
     const b = this.model.vote[cls];
