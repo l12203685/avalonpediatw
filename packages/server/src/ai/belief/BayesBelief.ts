@@ -355,12 +355,30 @@ export interface BayesOptions {
   recursiveNoLead?: boolean;
   /** Round 35 `beliefRecursiveLeadScope`: where a team pick reads the recursive posterior (0 all, 1 none, 2 R2 after an R1 fail, 3 R1–R2, 4 R2, 5 R3+, 6 = 2 for Percival only). */
   recursiveLeadScope?: number;
+  /** Round 36 `beliefLeadBlend`: with `leadRecursive`, the weight of the recursive posterior in a team pick (0 = off: the recursive posterior alone). */
+  leadBlend?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
 const STRICT_EPS = 0.03;
 
+const blendCaches = new Map<number, WeakMap<PlayerObservation, Posterior>>();
+
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
+  // Round 36 `beliefLeadBlend`: where the lead-only recursive reader applies, mix its world weights with the level-0 posterior's
+  // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
+  const blend = opts.leadBlend ?? 0;
+  if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
+    let store = blendCaches.get(blend);
+    if (!store) { store = new WeakMap(); blendCaches.set(blend, store); }
+    const hit = store.get(obs);
+    if (hit) return hit;
+    const p1 = posterior(obs, { ...opts, leadBlend: 0 });
+    const p0 = posterior(obs, { ...opts, leadBlend: 0, leadRecursive: 0 });
+    const out = p0.wts.length === p1.wts.length ? { ...p1, wts: p1.wts.map((w, i) => blend * w + (1 - blend) * p0.wts[i]) } : p1;
+    store.set(obs, out);
+    return out;
+  }
   const strong = opts.strongTables === true || (opts.leadStrongTables === true && obs.gamePhase === 'team_select');
   const prev = mixArgs;
   useMix(Math.min(Math.max(opts.botTables ?? 0, 0), 1), opts.botTablesNext === true, opts.botMissionNext === true, strong, opts.strongParts ?? 15);
@@ -624,7 +642,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     policyVotes: t.beliefPolicyVotes === true,
     ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
   };

@@ -1034,6 +1034,10 @@ export interface AgentTuning {
    */
   goodLakeEntropy: number;
   /**
+   * 第 36 回合：`beliefLeadRecursive` 適用的挑隊，遞迴後驗和第 0 層後驗的世界權重混合（λ·遞迴 ＋ (1 − λ)·第 0 層）；0 = 關（只用遞迴後驗）。\n挑出來的隊留在現行的附近，只往遞迴讀法傾斜（第 35 回合 `LR1s2`：強者點的全藍上升、但逐點一致掉）。
+   */
+  beliefLeadBlend: number;
+  /**
    * 第 35 回合 `goodBayesVote` 的第 4 局兩紅格：第 4 局（要兩張失敗）在隊上的票照字面讀「至少兩紅」，P(≥ 2 紅) 用角色混合讀人（`beliefRecursive=5`）算——\n現行後驗在低區間低估（真人局預測 4.5% → 真的 9.7%），角色混合校準到 4.6 → 4.7%。只有這一格用新後驗。
    */
   goodBayesR4Mix: boolean;
@@ -1269,6 +1273,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodReuseNoMatchPoint',
   'merlinR2Public',
   'goodLakeEntropy',
+  'beliefLeadBlend',
   'goodBayesR4Mix',
   'beliefRecursiveLeadScope',
   'loyalFlowPick',
@@ -1434,6 +1439,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: false,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  beliefLeadBlend: 0,
   goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
   loyalFlowPick: 0,
@@ -1747,6 +1753,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodReuseNoMatchPoint: true,
   merlinR2Public: false,
   goodLakeEntropy: 0,
+  beliefLeadBlend: 0,
   goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
   loyalFlowPick: 2,
@@ -1912,6 +1919,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodReuseNoMatchPoint: 'AVALON_TUNING_GOOD_REUSE_NO_MATCH_POINT',
   merlinR2Public: 'AVALON_TUNING_MERLIN_R2_PUBLIC',
   goodLakeEntropy: 'AVALON_TUNING_GOOD_LAKE_ENTROPY',
+  beliefLeadBlend: 'AVALON_TUNING_BELIEF_LEAD_BLEND',
   goodBayesR4Mix: 'AVALON_TUNING_GOOD_BAYES_R4_MIX',
   beliefRecursiveLeadScope: 'AVALON_TUNING_BELIEF_RECURSIVE_LEAD_SCOPE',
   loyalFlowPick: 'AVALON_TUNING_LOYAL_FLOW_PICK',
@@ -2165,6 +2173,11 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 6) throw new Error(`beliefRecursiveLeadScope needs a number in [0, 6], got "${raw}"`);
     return { beliefRecursiveLeadScope: value };
+  }
+  if (name === 'beliefLeadBlend') {
+    const value = raw === undefined ? 0.5 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`beliefLeadBlend needs a number in [0, 1], got "${raw}"`);
+    return { beliefLeadBlend: value };
   }
   if (name === 'goodLakeEntropy') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
