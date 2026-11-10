@@ -52,7 +52,7 @@ import { useFilterHashSync } from '../stats/sharedFilter';
  *   (各人最近 100 場) + 近 50 場 / 進步 / 刺客 / 新人 (例外：全部場次) / 角色王小卡；
  *   超額勝率不再顯示。總覽與玩家雷達同步改用角色理論／位置理論。
  * (2026-10-30 Edward：「新版把網站上的 ELO 都完全統一成你研發的版本」) 舊 LeaderboardPage (含「傳統 ELO 分層」) 刪除，
- * 'leaderboard' route 改開戰績排行；網站唯一的 Elo 是戰績排行的「Elo」小分頁與玩家雷達的「Elo 走勢」。
+ * 'leaderboard' route 改開戰績排行；網站唯一的 Elo 是戰績排行的「Elo」小分頁與玩家雷達的「Elo／理論走勢」。
  *
  * (2026-10-14 第六輪分工前置) 各分頁內容拆到 components/analysis/tabs/ 下各自一個檔案
  *   (BoardsTab、OverviewTab、TeamsTab … PlayersTab)，一個分頁只有一個負責的檔案；

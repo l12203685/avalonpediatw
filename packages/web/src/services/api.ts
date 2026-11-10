@@ -1314,6 +1314,34 @@ export async function fetchPlayerRating(name: string): Promise<PlayerRatingData>
   return analysisApiFetch<PlayerRatingData>(`/rating/${encodeURIComponent(name)}`);
 }
 
+/**
+ * 理論勝率走勢（generate_cache.py compute_theory_trend，Edward 2026-11-10）：每個出賽日最後一局後的
+ * [日期, 生涯場數, 角色理論, 位置理論, 整體理論, 角色視窗全滿 1/0]，都是只用到那天為止的局算出的排行榜數字。
+ */
+export type TheoryTrendPoint = [string, number, number, number, number, number];
+
+export interface TheoryTrendConfig {
+  theoryMinCellGames: number;
+  roleWindowGames: Record<string, number>;
+  positionGames: number;
+  overallMinGames: number;
+}
+
+export interface PlayerTheoryTrendData {
+  name: string;
+  series: TheoryTrendPoint[];
+  /** 目前的三個值（players[].theory）；之後別人的局讓全體勝率動了，所以可能跟最後一點不同。 */
+  current: { games: number; roleTheory: number; roleFull: boolean; positionTheory: number; overallTheory: number } | null;
+  config: TheoryTrendConfig;
+  dataThrough: string | null;
+  asOf: string | null;
+}
+
+/** 一位玩家的理論勝率走勢；沒有這個玩家 → 404，快取還沒有這一段 → 503（AnalysisApiError）。 */
+export async function fetchPlayerTheoryTrend(name: string): Promise<PlayerTheoryTrendData> {
+  return analysisApiFetch<PlayerTheoryTrendData>(`/theory-trend/${encodeURIComponent(name)}`);
+}
+
 /** Elo 顯示成整數；±σ 也整數。 */
 export function fmtElo(v: number | null | undefined): string {
   return isFiniteNum(v) ? String(Math.round(v)) : '—';

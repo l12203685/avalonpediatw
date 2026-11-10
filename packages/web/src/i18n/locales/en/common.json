@@ -1773,7 +1773,7 @@
     },
     "elo": {
       "tab": "Elo",
-      "radarTab": "Elo trend",
+      "radarTab": "Elo / theory trend",
       "boardTitle": "Elo ranking",
       "loading": "Loading Elo…",
       "loadFailed": "Could not load Elo.",
@@ -1810,6 +1810,24 @@
         "modelTheory": "Model theory",
         "lastPlayed": "Last played"
       }
+    },
+    "theoryTrend": {
+      "title": "Theory win-rate trend",
+      "loading": "Loading the theory trend…",
+      "loadFailed": "Could not load the theory trend.",
+      "notGenerated": "The theory trend is not generated yet; it comes with the next daily refresh.",
+      "notFound": "This player has no counted game yet.",
+      "noPoints": "No dated game yet, so there is no trend to draw.",
+      "role": "Role theory",
+      "position": "Position theory",
+      "overall": "Overall theory",
+      "full": "Window full",
+      "partial": "Window not full (dashed)",
+      "current": "now",
+      "gamesSoFar": "{{count}} career games",
+      "notFull": "not full",
+      "chartNote": "The leaderboard's numbers at the end of each day played, using only the games up to that day (the population rates used for top-ups too). Dashed = the window is not full yet: role theory needs each role's last {{role}} games (Loyal Servant {{loyal}}); position theory {{position}} career games; overall theory {{overall}} career games (not ranked before). The thin final dashes: while the player sat out, other players' games moved the population rates and so the current value.",
+      "chartAria": "{{name}}'s role, position and overall theory win rates from {{from}} to {{to}}"
     },
     "benchmark": {
       "toggle": "Show benchmark rows",

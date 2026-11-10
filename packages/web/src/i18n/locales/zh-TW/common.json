@@ -1773,7 +1773,7 @@
     },
     "elo": {
       "tab": "Elo",
-      "radarTab": "Elo 走勢",
+      "radarTab": "Elo／理論走勢",
       "boardTitle": "Elo 排行",
       "loading": "載入 Elo…",
       "loadFailed": "Elo 載入失敗。",
@@ -1810,6 +1810,24 @@
         "modelTheory": "模型理論勝率",
         "lastPlayed": "最後出賽"
       }
+    },
+    "theoryTrend": {
+      "title": "理論勝率走勢",
+      "loading": "載入理論勝率走勢…",
+      "loadFailed": "理論勝率走勢載入失敗。",
+      "notGenerated": "理論勝率走勢尚未產生，下次每日更新後提供。",
+      "notFound": "這位玩家還沒有計入的局。",
+      "noPoints": "還沒有有日期的局，畫不出走勢。",
+      "role": "角色理論",
+      "position": "位置理論",
+      "overall": "整體理論",
+      "full": "視窗已滿",
+      "partial": "視窗未滿（虛線）",
+      "current": "目前",
+      "gamesSoFar": "生涯 {{count}} 場",
+      "notFull": "未滿",
+      "chartNote": "每個出賽日結束時、只用到那天為止的局算的排行榜數字（補不足場次用的全體勝率也只算到那天）。虛線＝視窗還沒滿：角色理論要各角色近 {{role}} 場、忠臣近 {{loyal}} 場；位置理論要生涯 {{position}} 場；整體理論要生涯 {{overall}} 場（排行榜不列）。最後一段細虛線：沒出賽的期間，其他人的局讓全體勝率變動，目前的值跟著移動。",
+      "chartAria": "{{name}} 的角色、位置、整體理論勝率走勢，{{from}} 到 {{to}}"
     },
     "benchmark": {
       "toggle": "顯示基準列",

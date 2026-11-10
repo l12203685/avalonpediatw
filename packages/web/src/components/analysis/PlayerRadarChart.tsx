@@ -17,6 +17,7 @@ import RadarPanel from './radar/RadarPanel';
 import BlocksPanel from './radar/BlocksPanel';
 import TheoryPanel from './radar/TheoryPanel';
 import EloPanel from './radar/EloPanel';
+import TheoryTrendPanel from './radar/TheoryTrendPanel';
 import { buildRadarModel } from './radar/radarModel';
 
 /**
@@ -39,6 +40,8 @@ import { buildRadarModel } from './radar/radarModel';
  *
  * (2026-10-30 Edward：「ELO 曲線不錯，可以放在玩家頁面」) 第四個小分頁「Elo 走勢」(radar/EloPanel)：目前的 Elo、±1σ
  *  與依時間的走勢 (/api/analysis/rating/:name)，自己拿資料，不等雷達資料。
+ * (2026-11-10 Edward：「除了歷史ELO 走勢 可以也建立每個玩家的 角色 位置 整體 理論勝率 的走勢圖嗎」) 同一個小分頁加上
+ *  理論勝率走勢 (radar/TheoryTrendPanel，/api/analysis/theory-trend/:name)：寬螢幕跟 Elo 並排，手機在 Elo 下面。
  */
 type RadarSection = 'radar' | 'blocks' | 'theory' | 'elo';
 
@@ -195,8 +198,15 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
         ariaLabel={t('analytics.r6.radar.tabs.label')}
       >
         {active => {
-          // Elo 走勢有自己的資料 (/rating/:name)，雷達資料失敗或還在載入時照樣顯示。
-          if (active === 'elo') return selectedName ? <EloPanel name={selectedName} /> : null;
+          // Elo／理論走勢有自己的資料 (/rating/:name、/theory-trend/:name)，雷達資料失敗或還在載入時照樣顯示。
+          if (active === 'elo') {
+            return selectedName ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <EloPanel name={selectedName} />
+                <TheoryTrendPanel name={selectedName} />
+              </div>
+            ) : null;
+          }
           if (radarError) {
             return (
               <div className="flex items-center justify-center py-16 text-red-400 gap-3">
