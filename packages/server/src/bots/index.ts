@@ -4,6 +4,7 @@
  */
 
 import { Express, Request, Response } from 'express';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { AttachmentBuilder, DiscordAPIError, TextChannel } from 'discord.js';
 import { initializeDiscordBot, getDiscordBot } from './discord/client';
 import { initializeLineBot, getLineBot } from './line/client';
@@ -573,6 +574,17 @@ export function buildBotStatus(): BotStatus {
   };
 }
 
+/** True when `header` is "<seconds>.<hex HMAC-SHA256(secret, 'stats-digest-send:<seconds>')>" within 5 minutes of `now`. */
+export function verifyDigestSignature(header: string | undefined, secret: string | undefined, now: number): boolean {
+  if (!header || !secret) return false;
+  const m = /^(\d{9,11})\.([0-9a-f]{64})$/.exec(header.trim());
+  if (!m) return false;
+  if (Math.abs(now / 1000 - Number(m[1])) > 300) return false;
+  const want = createHmac('sha256', secret).update(`stats-digest-send:${m[1]}`).digest();
+  const got = Buffer.from(m[2], 'hex');
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
 export function registerBotRoutes(app: Express): void {
   // Line Bot webhook
   const lineBot = getLineBot();
@@ -611,6 +623,26 @@ export function registerBotRoutes(app: Express): void {
     });
     console.log('📍 Line Bot status endpoint at /api/bots/line/status');
   }
+
+  // Manual weekly-digest send (Edward 2026-11-10: test the chart on DC & LINE now).
+  // Signed with the Discord bot token, which only the server and its operators hold:
+  // header x-digest-signature: <unix seconds>.<hex HMAC-SHA256(token, "stats-digest-send:<seconds>")>,
+  // within 5 minutes. At most once per 10 minutes. Monday's scheduled post is unaffected.
+  let lastManualDigest = 0;
+  app.post('/api/bots/stats-digest/send', async (req: Request, res: Response) => {
+    if (!statsDigest) return res.status(503).json({ error: 'digest not running' });
+    if (!verifyDigestSignature(req.header('x-digest-signature'), process.env.DISCORD_BOT_TOKEN, Date.now())) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+    if (Date.now() - lastManualDigest < 10 * 60_000) return res.status(429).json({ error: 'too soon' });
+    lastManualDigest = Date.now();
+    try {
+      return res.json({ ok: true, result: await statsDigest.sendNow() });
+    } catch (err) {
+      console.warn('[stats-digest] manual send failed', err);
+      return res.status(500).json({ error: 'send failed' });
+    }
+  });
 
   // General bot status endpoint — always registered, even when both bots are
   // off, so the CI probe can tell "disabled" from "server down".

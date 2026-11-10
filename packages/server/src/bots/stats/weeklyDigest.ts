@@ -148,6 +148,39 @@ export class WeeklyDigestScheduler {
     }
   }
 
+  /**
+   * Post the digest to every destination right now, outside the Monday window
+   * (a manual test, Edward 2026-11-10). Does not touch the weekly state, so
+   * Monday's post still goes out. Returns destination → outcome.
+   */
+  async sendNow(now: number = Date.now()): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    const text = await this.opts.buildText(now);
+    let image: Buffer | null = null;
+    if (this.opts.buildImage) {
+      try {
+        image = await this.opts.buildImage(now);
+        out.chart = `png ${image.length} bytes`;
+      } catch (err) {
+        this.logger.warn('rendering the digest chart failed (manual send) — text instead', err);
+        out.chart = 'failed (text instead)';
+      }
+    } else {
+      out.chart = 'off (text only)';
+    }
+    for (const dest of this.opts.destinations) {
+      try {
+        const result = await dest.send(text, image);
+        out[dest.name] = result === false ? 'not available' : result === 'skip' ? 'not configured' : 'sent';
+      } catch (err) {
+        this.logger.warn(`manual send to ${dest.name} failed`, err);
+        out[dest.name] = 'error';
+      }
+    }
+    this.logger.info(`manual send: ${JSON.stringify(out)}`);
+    return out;
+  }
+
   /** For /api/bots/status: destination → last +08 Monday it was posted for. */
   getState(): { running: boolean; lastPostedWeek: Record<string, string> } {
     return { running: this.timer !== null, lastPostedWeek: Object.fromEntries(this.lastPostedWeek) };
