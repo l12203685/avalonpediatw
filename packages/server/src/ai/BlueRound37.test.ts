@@ -37,7 +37,8 @@ describe('round 37 tuning fields', () => {
     expect(DEFAULT_AGENT_TUNING.percivalThumbSure).toBe(0);
     expect(parseTuningFlag('loyalR2View')).toEqual({ loyalR2View: 1 });
     expect(parseTuningFlag('loyalR2View=4')).toEqual({ loyalR2View: 4 });
-    expect(() => parseTuningFlag('loyalR2View=5')).toThrow();
+    expect(parseTuningFlag('loyalR2View=6')).toEqual({ loyalR2View: 6 });
+    expect(() => parseTuningFlag('loyalR2View=7')).toThrow();
     expect(parseTuningFlag('percivalThumbSure')).toEqual({ percivalThumbSure: 0.7 });
     expect(parseTuningFlag('percivalThumbSure=0.6')).toEqual({ percivalThumbSure: 0.6 });
     expect(() => parseTuningFlag('percivalThumbSure=2')).toThrow();
@@ -83,6 +84,11 @@ describe('loyalR2View (round 37: R2 after an R1 fail, the proposal answers the p
     if (pa.type !== 'team_select') throw new Error(pa.type);
     expect(pa).not.toBe(copy);
     expect(loyalR2ViewTeam(on(1), r2, copy, () => false)).toBe(copy);
+    // modes 5 / 6: the second and third proposals only (the fourth is likelier to go on mission)
+    expect(loyalR2ViewTeam(on(5), r2, copy)).toEqual(loyalR2ViewTeam(on(1), r2, copy));
+    expect(loyalR2ViewTeam(on(6), perc, copy)).toEqual(loyalR2ViewTeam(on(2), perc, copy));
+    expect(loyalR2ViewTeam(on(5), asObs({ ...(r2 as object), failCount: 3 }), copy)).toBe(copy);
+    expect(loyalR2ViewTeam(on(1), asObs({ ...(r2 as object), failCount: 3 }), copy)).not.toBe(copy);
   });
 });
 

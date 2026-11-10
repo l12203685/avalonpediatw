@@ -1045,7 +1045,7 @@ export interface AgentTuning {
    * 第 37 回合（Edward 11/10：梅林太好抓的根因＝忠臣釋放自己視角的能力太弱）：第 1 局失敗之後的第 2 局，忠臣（2、4 = 加派西）非強制的提議
    * 不再一路接著上一支第 2 局的提議派（自我對打：兩位忠臣第 2 局的隊平均重疊 2.32 人、真人強者 1.17 人＝和隨機一樣；兩人都派到梅林看得到的紅 51.8%、
    * 獨立時 32.5%，同一個紅 98%——梅林是唯一沒跟著派的人）。照 wiki-24 回應上一任隊長：他看起來紅 → 修正（他隊上的人一個都不留）；否則尊重
-   * （1、2 = 他隊上含他自己最多留 1 人；3、4 = 最多留 2 人），不照派、不派完全反向的隊；在這些條件下挑自己後驗最乾淨的隊（`BlueRound37.ts`）。0 = 關。
+   * （1、2 = 他隊上含他自己最多留 1 人；3、4 = 最多留 2 人；5、6 = 1、2 只在第 2、3 次提議），不照派、不派完全反向的隊；在這些條件下挑自己後驗最乾淨的隊（`BlueRound37.ts`）。0 = 關。
    */
   loyalR2View: number;
   /**
@@ -2241,7 +2241,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'loyalR2View') {
     const value = raw === undefined ? 1 : Number.parseFloat(raw);
-    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`loyalR2View needs 0–4, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 6) throw new Error(`loyalR2View needs 0–6, got "${raw}"`);
     return { loyalR2View: value };
   }
   if (name === 'loyalR2ViewKeep') {

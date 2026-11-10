@@ -8,6 +8,7 @@
  *   - `loyalR2View`：第 1 局失敗之後的第 2 局，忠臣（2、4 加派西）非強制的提議照 wiki-24 回應上一任隊長，派「自己的視角」：
  *     上一任看起來紅（自己後驗 ≥ 0.5）→ 修正，他隊上的人（含他）一個都不留；否則尊重，他隊上的人（含他）最多留 1 人（3、4 = 最多 2 人）；
  *     不照派這一局出現過的隊、不派和這一局前面完全反向的隊；在這些條件裡挑自己後驗最乾淨的隊。沒有符合的隊時依序放寬。
+ *     5、6 = 1、2 只用在第 2、3 次提議（第 4 次出任務的機率較高，照原本的流程）。
  *     `loyalR2ViewKeep=γ`（和 `loyalR2View` 一起）：不用固定人數，改成每多留一人乾淨機率打 γ 折。
  *   - `percivalThumbSure=θ`：派西第 2 局起只放自己後驗裡「是梅林」的機率 ≥ θ 的拇指；隊上有分不出來的拇指時改派不含它、自己後驗最乾淨的隊
  *     （整支照派成功任務的隊不動）。
@@ -64,9 +65,12 @@ export function r2ViewCandidates(tuning: Readonly<AgentTuning>, obs: PlayerObser
 export function loyalR2ViewTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction, allowed: Allowed = () => true): AgentAction {
   const mode = tuning.loyalR2View ?? 0;
   if (!(mode > 0) || action.type !== 'team_select' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return action;
-  const withPercival = mode === 2 || mode === 4;
+  const withPercival = mode === 2 || mode === 4 || mode === 6;
   if (!(obs.myRole === 'loyal' || (withPercival && obs.myRole === 'percival'))) return action;
   if (!r2AfterR1Fail(obs)) return action;
+  // 5、6 = 1、2 只在第 2、3 次提議：第 4 次提議出任務的機率較高（真人局 8.2%，第 1–3 次 1.5–3.6%），真人強者在那一次留得比較多
+  // （同一點重播：第 4 次用固定最多留 1 人，Jaccard −0.103 ± 0.079；第 2、3 次 −0.008／−0.020）。
+  if (mode >= 5 && (obs.failCount ?? 0) >= 3) return action;
   const got = r2ViewCandidates(tuning, obs, action.teamIds.length);
   if (!got) return action;
   const gamma = tuning.loyalR2ViewKeep ?? 0;
@@ -78,7 +82,7 @@ export function loyalR2ViewTeam(tuning: Readonly<AgentTuning>, obs: PlayerObserv
     const sorted = got.cands.map((c) => ({ c, s: score(c) })).sort((a, b) => (Number(a.c.barred) - Number(b.c.barred)) || (b.s - a.s > 1e-12 ? 1 : a.s - b.s > 1e-12 ? -1 : 0));
     best = sorted.find((x) => allowed(x.c.team))?.c;
   } else {
-    const keep = mode >= 3 ? 2 : 1;
+    const keep = mode === 3 || mode === 4 ? 2 : 1;
     const share = bayesRedShare(obs, bayesOptionsOf(tuning));
     const correct = (share.get(got.prevLeader) ?? 0.5) >= 0.5;
     const rank = (c: R2ViewCand): number => (c.barred ? 0 : (correct ? c.kept === 0 : c.kept <= keep) ? 2 : 1);
