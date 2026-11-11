@@ -388,6 +388,8 @@ export interface BayesOptions {
   pendingProposal?: boolean;
   /** Round 40 `beliefLakeCal40`: power on another holder's lake declaration term (blue seats only; 1 = as before). */
   lakeCal?: number;
+  /** Round 41 `beliefLakeIso41` (BL-cal): per-lake isotonic recalibration of P(another holder is red) (loyal / Percival seats only). */
+  lakeIso?: boolean;
   /**
    * Round 38 `beliefThumbNoStain`: for Percival, a failed R1–R3 mission with exactly one thumb on it says nothing about which thumb is Merlin
    * (human records: that thumb is Merlin 43–52%; self-play 44–52%) — the mission term is averaged over the two thumb assignments.
@@ -528,7 +530,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${blend}|${opts.lakeCal ?? 1}|${opts.pendingProposal === true ? 1 : 0}`;
+    const blendKey = `${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -630,7 +632,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   // Round 40 `beliefLakeCal40` (BL-cal): blue seats only, like the pending proposal (red frozen).
   const lakeCal = opts.lakeCal !== undefined && opts.lakeCal > 0 && opts.lakeCal !== 1 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true ? opts.lakeCal : 1;
   // The level-0 options of the recursive reader are part of the key too (two settings that differ only there must not share an entry).
-  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}`;
+  // Round 41 `beliefLakeIso41` (BL-cal): loyal / Percival seats only (the fitted population), blue seats only (red frozen).
+  const lakeIso = opts.lakeIso === true && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true && (obs.myRole === 'loyal' || obs.myRole === 'percival');
+  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -775,9 +779,51 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     const raw = logW.map((x) => Math.exp(x - max));
     const tot = raw.reduce((a, b) => a + b, 0);
     wts = raw.map((x) => x / tot);
+    if (lakeIso) wts = lakeIsoReweight(obs, worlds, wts, bit);
   }
   const out: Posterior = { worlds, wts, bitOf: bit, maskOf: (t) => view.maskOf(t) };
   store.set(obs, out);
+  return out;
+}
+
+/**
+ * Round 41 `beliefLakeIso41` (lp39 BL-cal): the posterior's P(another holder is red) recalibrated per lake by an isotonic map fitted on the
+ * human records (loyal / Percival viewers at every team vote after that lake, 69,452 points; lakes 1–2 out of sample: four-band mean gap
+ * 1.6–2.5pp, every band within 4pp; lake 3 mean gap about 7pp — few games). The map moves the holder's marginal; the worlds where the holder is red are scaled by one odds factor, so
+ * every other seat's share moves with it through the joint. Lakes in record order; a certain holder (0 or 1) stays certain.
+ */
+export const LAKE_ISO_41: Readonly<Record<number, ReadonlyArray<readonly [number, number]>>> = {
+  1: [[0.000, 0.000], [0.010, 0.071], [0.065, 0.166], [0.125, 0.211], [0.181, 0.244], [0.232, 0.295], [0.282, 0.332], [0.331, 0.376], [0.378, 0.401], [0.425, 0.442], [0.468, 0.474], [0.512, 0.480], [0.556, 0.511], [0.603, 0.537], [0.654, 0.566], [0.706, 0.622], [0.759, 0.668], [0.813, 0.724], [0.889, 0.777], [0.978, 0.850], [1.000, 1.000]],
+  2: [[0.000, 0.000], [0.001, 0.034], [0.005, 0.072], [0.011, 0.084], [0.030, 0.160], [0.061, 0.232], [0.085, 0.267], [0.117, 0.298], [0.166, 0.366], [0.229, 0.432], [0.312, 0.508], [0.416, 0.559], [0.544, 0.620], [0.672, 0.660], [0.783, 0.707], [0.877, 0.752], [0.948, 0.852], [0.992, 0.935], [1.000, 1.000]],
+  3: [[0.000, 0.000], [0.001, 0.028], [0.013, 0.091], [0.063, 0.174], [0.217, 0.310], [0.519, 0.659], [0.803, 0.749], [0.956, 0.829], [0.996, 0.930], [1.000, 1.000]],
+};
+
+export function lakeIso41Map(lake: number, p: number): number {
+  const K = LAKE_ISO_41[Math.min(Math.max(lake, 1), 3)];
+  if (p <= K[0][0]) return K[0][1];
+  for (let i = 1; i < K.length; i++) {
+    const [x0, y0] = K[i - 1];
+    const [x1, y1] = K[i];
+    if (p <= x1) return y0 + ((y1 - y0) * (p - x0)) / Math.max(1e-9, x1 - x0);
+  }
+  return K[K.length - 1][1];
+}
+
+function lakeIsoReweight(obs: PlayerObservation, worlds: readonly number[], wts: number[], bit: (id: string) => number): number[] {
+  let out = wts;
+  (obs.lakeHistory ?? []).forEach((l, li) => {
+    if (l.declaredClaim === 'none' || l.holderId === obs.myPlayerId) return;
+    const hb = bit(l.holderId);
+    if (hb === 0) return;
+    let p = 0;
+    for (let i = 0; i < worlds.length; i++) if ((worlds[i] & hb) !== 0) p += out[i];
+    if (p <= 1e-9 || p >= 1 - 1e-9) return;
+    const q = Math.min(Math.max(lakeIso41Map(li + 1, p), 1e-6), 1 - 1e-6);
+    const m = (q / (1 - q)) / (p / (1 - p));
+    let tot = 0;
+    const nw = out.map((w, i) => { const x = (worlds[i] & hb) !== 0 ? w * m : w; tot += x; return x; });
+    out = nw.map((x) => x / tot);
+  });
   return out;
 }
 
@@ -857,9 +903,9 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
     // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
     // recursive vote model was fitted on level-0 features without it.
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
@@ -868,6 +914,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.percivalRead39 === 1 ? { thumbRead39: true } : {}),
     ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
     ...((t.beliefLakeCal40 ?? 0) > 0 && t.beliefLakeCal40 !== 1 ? { lakeCal: t.beliefLakeCal40 } : {}),
+    ...((t.beliefLakeIso41 ?? 0) > 0 ? { lakeIso: true } : {}),
   };
 }
 

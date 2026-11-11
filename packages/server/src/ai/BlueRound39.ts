@@ -68,8 +68,8 @@ export function lake39Candidates(obs: PlayerObservation, candidates: readonly st
   });
 }
 
-/** 持湖者在隊上、失敗張數等於其他隊員人數的失敗任務：其他隊員一定是紅，湖他們是浪費。 */
-function certainReds(obs: PlayerObservation): Set<string> {
+/** 持湖者在隊上、失敗張數等於其他隊員人數的失敗任務：其他隊員一定是紅，湖他們是浪費（第 41 回合的湖規則也用這一個）。 */
+export function certainReds(obs: PlayerObservation): Set<string> {
   const me = obs.myPlayerId;
   const out = new Set<string>();
   for (const q of obs.questHistory ?? []) {

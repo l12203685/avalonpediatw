@@ -74,6 +74,7 @@ import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDec
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
+import { merlinKeyApprove41Now } from '../BlueRound41';
 import { merlinLoyalStyleTeam, merlinPublicPipelineOn, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
@@ -1027,7 +1028,13 @@ export class ForwardAgent implements AvalonAgent {
         const onTeam = team.includes(obs.myPlayerId);
         // 外白（不在隊上贊成）一個有看得到紅的隊 = 異常票外白：不做（INV-M1）；也不越過好人投票關卡（INV-V1）。
         const seenRed = team.some((id) => obs.knownEvils.includes(id));
-        const vote = asLoyal.action.vote && !merlinVoteFatal(obs, this.baseline.tuning)
+        // Round 41 `merlinKeyApprove41` (measured only; owner item, 10/30 ruling): on the team in a key round, at rate q the loyal-view approve
+        // stands even though his seen reds could lose on the spot (human Merlins approve 41% there); the public must-fail gate still binds.
+        // Merlin's own sight makes the team must-fail (his seen reds); like his on-team normal white (owner 2026-10-30) only the public must-fail
+        // gate and the dominance gate bind.
+        const keyApprove = onTeam && merlinKeyApprove41Now(this.baseline.tuning, obs) && goodVoteGate(obs, { ...this.gates, mustFail: false }) === null
+          && goodVoteGate(loyalViewOf(obs), this.gates) === null;
+        const vote = asLoyal.action.vote && (!merlinVoteFatal(obs, this.baseline.tuning) || keyApprove)
           && (onTeam || (!seenRed && goodVoteGate(obs, this.gates) === null));
         // Round 38 `merlinOnTeamOwn` (BlueRound38.ts; checklist AV-11): on the team, the public loyal threshold says reject and his seen reds
         // cannot lose on the spot — Merlin votes from his own view (human Merlins inner-black a team without a seen red 15%, the bot 41%).
