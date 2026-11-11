@@ -2,7 +2,7 @@
  * 篩選重算的呼叫端：預設在 Worker 裡算 (stats.worker.ts)，瀏覽器不支援或 Worker 起不來時改在主執行緒算
  * (同一份 statsCompute.ts)。同一個篩選只算一次 (最近幾個篩選的結果留著，切回來不用重算)。
  */
-import type { DiscoveryResult, GameFilter, StatsResult, StrengthGrouping, StrengthReport } from '@avalon/shared/stats';
+import type { DiscoveryResult, GameFilter, StatsResult, StrengthGrouping, StrengthReport, TwoRedReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
 import type { ClaimData } from '../components/idClaim/claimIndex';
 import type { StateGamesResult } from '../components/analysis/stateTree/stateTree';
@@ -68,9 +68,9 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim';
+type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed';
 
-async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
+async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string): Promise<T> {
   const mod = await import('./statsCompute');
   try {
     return (type === 'vocab'
@@ -83,6 +83,8 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
           ? await mod.computeStateGames(SERVER_URL, filter ?? null)
         : type === 'claim'
           ? await mod.computeClaimData(SERVER_URL)
+        : type === 'twoRed'
+          ? await mod.computeTwoRed(SERVER_URL, filter ?? null, name ?? '')
           : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
   } catch (err) {
     const status = err instanceof mod.GamesUnavailableError ? err.status : 0;
@@ -90,9 +92,9 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
   }
 }
 
-function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping): Promise<T> {
+function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string): Promise<T> {
   const w = getWorker();
-  if (!w) return onMainThread<T>(type, filter, grouping);
+  if (!w) return onMainThread<T>(type, filter, grouping, name);
   const id = nextId;
   nextId += 1;
   return new Promise<T>((resolve, reject) => {
@@ -101,10 +103,10 @@ function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: Stren
       reject(new FilterUnavailableError(0, 'timeout'));
     }, TIMEOUT_MS);
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-    w.postMessage({ id, type, serverUrl: SERVER_URL, filter: filter ?? undefined, grouping });
+    w.postMessage({ id, type, serverUrl: SERVER_URL, filter: filter ?? undefined, grouping, name });
   }).catch((err: unknown) => {
     // Worker 壞掉 (不是資料集拿不到) → 主執行緒再試一次
-    if (err instanceof FilterUnavailableError && err.message === 'worker failed') return onMainThread<T>(type, filter, grouping);
+    if (err instanceof FilterUnavailableError && err.message === 'worker failed') return onMainThread<T>(type, filter, grouping, name);
     throw err;
   });
 }
@@ -187,6 +189,22 @@ export function stateTreeGames(filter: GameFilter | null, filterKey: string): Pr
   return p;
 }
 
+const twoRedResults = new Map<string, Promise<TwoRedReport>>();
+
+/** 玩家雷達「兩紅之後的派隊」：目前篩選（沒有 = 全部局）下這位玩家的表＋全體。失敗不快取。 */
+export function twoRedReport(filter: GameFilter | null, filterKey: string, name: string): Promise<TwoRedReport> {
+  const key = `${filterKey}|${name}`;
+  const hit = twoRedResults.get(key);
+  if (hit) return hit;
+  const p = call<TwoRedReport>('twoRed', filter, undefined, name);
+  twoRedResults.set(key, p);
+  p.catch(() => {
+    if (twoRedResults.get(key) === p) twoRedResults.delete(key);
+  });
+  while (twoRedResults.size > 12) twoRedResults.delete(twoRedResults.keys().next().value as string);
+  return p;
+}
+
 let claimData: Promise<ClaimData> | null = null;
 
 /** ID 認領頁：全部局的座位名單（同一份 /api/analysis/games，Worker 裡已載入就不再下載）。失敗不快取。 */
@@ -206,6 +224,7 @@ export function resetFilteredStats(): void {
   strengthResults.clear();
   discoveryResults.clear();
   stateTreeResults.clear();
+  twoRedResults.clear();
   vocab = null;
   claimData = null;
   failAll(new FilterUnavailableError(0, 'reset'));

@@ -2,15 +2,17 @@
  * 篩選重算的 Worker：全部區塊重算約 0.3 秒 (Node 實測；手機更久)，放在背景不卡畫面。
  * 訊息：{ id, type: 'vocab' | 'compute', serverUrl, filter? } → { id, ok, value } / { id, ok: false, status, error }。
  */
-import { computeClaimData, computeDiscovery, computeFiltered, computeStateGames, computeStrength, filterVocab, GamesUnavailableError } from './statsCompute';
+import { computeClaimData, computeDiscovery, computeFiltered, computeStateGames, computeStrength, computeTwoRed, filterVocab, GamesUnavailableError } from './statsCompute';
 import type { GameFilter, StrengthGrouping } from '@avalon/shared/stats';
 
 interface StatsRequest {
   id: number;
-  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim';
+  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed';
   serverUrl: string;
   filter?: GameFilter;
   grouping?: StrengthGrouping;
+  /** twoRed：玩家名字。 */
+  name?: string;
 }
 
 /** Worker 的全域 (web 的 tsconfig 只有 DOM lib；不引 webworker lib，避免兩套全域型別衝突)。 */
@@ -20,7 +22,7 @@ const ctx = self as unknown as {
 };
 
 ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
-  const { id, type, serverUrl, filter, grouping } = event.data;
+  const { id, type, serverUrl, filter, grouping, name } = event.data;
   try {
     const value = type === 'vocab'
       ? await filterVocab(serverUrl)
@@ -32,6 +34,8 @@ ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
           ? await computeStateGames(serverUrl, filter ?? null)
         : type === 'claim'
           ? await computeClaimData(serverUrl)
+        : type === 'twoRed'
+          ? await computeTwoRed(serverUrl, filter ?? null, name ?? '')
           : await computeFiltered(serverUrl, filter as GameFilter);
     ctx.postMessage({ id, ok: true, value });
   } catch (err) {

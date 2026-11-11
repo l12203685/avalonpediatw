@@ -6,6 +6,7 @@ import {
   applyFilter,
   computeStats,
   computeStrengthReport,
+  computeTwoRedReport,
   decodeGamesDataset,
   discoverFindings,
   sanitizeFilter,
@@ -17,7 +18,12 @@ import {
   type StrengthGrouping,
   type StrengthReport,
   type DiscoveryResult,
+  type TwoRedProposals,
+  type TwoRedReport,
+  type TwoRedTable,
   SEATS,
+  twoRedProposals,
+  twoRedTable,
 } from '@avalon/shared/stats';
 import { toStateGames, type StateGamesResult } from '../components/analysis/stateTree/stateTree';
 import type { ClaimData } from '../components/idClaim/claimIndex';
@@ -133,6 +139,27 @@ export async function computeDiscovery(serverUrl: string, raw: GameFilter | null
   discoveries.set(key, result);
   while (discoveries.size > 4) discoveries.delete(discoveries.keys().next().value as string);
   return result;
+}
+
+const twoRedPrepared = new Map<string, { data: TwoRedProposals; all: TwoRedTable }>();
+
+/**
+ * 玩家雷達「兩紅之後的派隊」：篩選後的局裡這位玩家當藍方隊長、紅方已經兩勝時派出的隊（@avalon/shared computeTwoRedReport），
+ * 加上全體的同一張表。每個篩選的提議與全體表只算一次，換人只重數那位玩家的。
+ */
+export async function computeTwoRed(serverUrl: string, raw: GameFilter | null, name: string): Promise<TwoRedReport> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const key = JSON.stringify(filter);
+  let prepared = twoRedPrepared.get(key);
+  if (!prepared) {
+    const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+    const data = twoRedProposals(games);
+    prepared = { data, all: twoRedTable(data.proposals) };
+    twoRedPrepared.set(key, prepared);
+    while (twoRedPrepared.size > 4) twoRedPrepared.delete(twoRedPrepared.keys().next().value as string);
+  }
+  return computeTwoRedReport([], name, prepared);
 }
 
 /** 數據分析「局勢樹」：篩選後的局縮成樹要的欄位（components/analysis/stateTree/stateTree.ts）。 */

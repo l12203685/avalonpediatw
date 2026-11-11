@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Loader, AlertCircle, Radar, Table2, Sigma, TrendingUp } from 'lucide-react';
+import { Loader, AlertCircle, Radar, Table2, Sigma, TrendingUp, Flag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   fetchAnalysisPlayers,
@@ -17,6 +17,7 @@ import RadarPanel from './radar/RadarPanel';
 import BlocksPanel from './radar/BlocksPanel';
 import TheoryPanel from './radar/TheoryPanel';
 import TrendsPanel from './radar/TrendsPanel';
+import TwoRedPanel from './radar/TwoRedPanel';
 import { buildRadarModel } from './radar/radarModel';
 
 /**
@@ -42,8 +43,10 @@ import { buildRadarModel } from './radar/radarModel';
  * (2026-11-10 Edward：「除了歷史ELO 走勢 可以也建立每個玩家的 角色 位置 整體 理論勝率 的走勢圖嗎」) 同一個小分頁加上
  *  理論勝率走勢 (radar/TheoryTrendPanel，/api/analysis/theory-trend/:name)：寬螢幕跟 Elo 並排，手機在 Elo 下面。
  *  同日「可以切換X軸是場次 … 可以取rolling 平均」：兩張圖包在 radar/TrendsPanel，上方共用 X 軸與移動平均的設定。
+ * (2026-11-11 Edward：兩紅之後梅林／派西維爾／忠臣派出的組合) 第五個小分頁「兩紅之後」(radar/TwoRedPanel)：
+ *  跟著篩選在統計 Worker 裡從每局資料算，不等雷達資料。
  */
-type RadarSection = 'radar' | 'blocks' | 'theory' | 'elo';
+type RadarSection = 'radar' | 'blocks' | 'theory' | 'elo' | 'twoRed';
 
 export default function PlayerRadarChart({ focus = null }: { focus?: { name: string; seq: number } | null } = {}): JSX.Element {
   const { t } = useTranslation('common');
@@ -140,6 +143,7 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
     { id: 'blocks', label: t('analytics.r6.radar.tabs.blocks'), icon: Table2 },
     { id: 'theory', label: t('analytics.r6.radar.tabs.theory'), icon: Sigma },
     { id: 'elo', label: t('analytics.elo.radarTab'), icon: TrendingUp },
+    { id: 'twoRed', label: t('analytics.r6.radar.tabs.twoRed'), icon: Flag },
   ], [t]);
 
   if (loading) {
@@ -201,6 +205,9 @@ export default function PlayerRadarChart({ focus = null }: { focus?: { name: str
           // Elo／理論走勢有自己的資料 (/rating/:name、/theory-trend/:name)，雷達資料失敗或還在載入時照樣顯示。
           if (active === 'elo') {
             return selectedName ? <TrendsPanel name={selectedName} /> : null;
+          }
+          if (active === 'twoRed') {
+            return selectedName ? <TwoRedPanel name={selectedName} /> : null;
           }
           if (radarError) {
             return (
