@@ -158,9 +158,12 @@ export default function TwoRedPanel({ name }: { name: string }): JSX.Element {
   const cohortData = cohort.status === 'ok' ? cohort.data : null;
   const myPr = cohortData ? cohortData.playerPr[name] ?? null : null;
   const tier: PlayerTierKey = playerTier(myPr, cuts);
+  // 組的參考值不含這位玩家自己的提議（常當隊長的人在小組裡會占掉一大塊，等於跟自己比）；每次提議照當局的 PR 分組
   const tierTables = useMemo(
-    () => (cohortData && tier !== 'unrated' ? twoRedTierTables(cohortData.proposals, cuts) : null),
-    [cohortData, cuts, tier],
+    () => (cohortData && tier !== 'unrated'
+      ? twoRedTierTables(cohortData.proposals.filter((p) => p.player !== name), cuts)
+      : null),
+    [cohortData, cuts, tier, name],
   );
   const compareItems: SectionTabItem<CompareMode>[] = useMemo(() => [
     { id: 'group', label: t('analytics.r6.radar.twoRed.compare.group', { tier: t(`analytics.cohort.player.${tier}`) }), disabled: !tierTables },

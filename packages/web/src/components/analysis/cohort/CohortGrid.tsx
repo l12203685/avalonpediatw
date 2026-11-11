@@ -5,13 +5,14 @@ import {
   type CohortCell, type CohortGrid as CohortGridData, type PlayerTierKey,
 } from '@avalon/shared/stats';
 import { InfoTip } from '../ui';
-import { COHORT_MIN_N, K, cohortPct, playerTierKey, tableTierKey } from './cohortFormat';
+import { COHORT_MIN_N, K, SHADE_FULL, SHADE_PRIOR, cohortPct, cohortShade, playerTierKey, tableTierKey } from './cohortFormat';
 
 /**
  * 九宮格（玩家分層 × 桌分層）的共用元件（Edward 2026-11-11：「每一個討論的情境，只要樣本太小就合併成組；或切成
  * S × PR =（強者／一般人／新手）×（高端／普通／歡樂）的九宮格」）。資料是 @avalon/shared cohortGrid 的結果，
  * 這裡只負責畫：一個指標（呼叫端給的 measures 之一，可以切換）在 3×3 格、右邊一欄依玩家分層合計、下面一列依桌分層合計、
- * 右下角全體；每格是比率（只四捨五入一次）＋樣本數＋人數，樣本不到 minN 的格變淡。未評分的玩家／局不在格子裡，
+ * 右下角全體；每格是比率（只四捨五入一次）＋樣本數＋人數，樣本不到 minN 的格變淡；3×3 格依「跟全體差幾個百分點」上色
+ * （固定刻度、樣本少的先往全體收縮，見 cohortShade）。未評分的玩家／局不在格子裡，
  * 只算在合計與全體，下面一行寫出有多少。
  *
  * 之後新的統計要分組：在 shared 把事件變成 CohortRecord 丟給 cohortGrid，這裡給 measures（比率的分子、分母）就好。
@@ -58,7 +59,9 @@ function Cell({
   return (
     <div
       className={`flex flex-col items-end justify-center rounded px-1.5 py-1 leading-tight tabular-nums ${low ? 'opacity-45' : ''}`}
-      style={shade !== null && !low ? { backgroundColor: `rgba(251, 191, 36, ${0.06 + 0.26 * shade})` } : undefined}
+      style={shade !== null && !low && shade !== 0
+        ? { backgroundColor: shade > 0 ? `rgba(251, 191, 36, ${(0.3 * shade).toFixed(3)})` : `rgba(56, 189, 248, ${(-0.3 * shade).toFixed(3)})` }
+        : undefined}
       title={title}
       data-n={n}
     >
@@ -74,21 +77,8 @@ export default function CohortGrid({
 }: CohortGridProps): JSX.Element {
   const { t } = useTranslation('common');
   const m = measures.find((x) => x.id === measure) ?? measures[0];
-  // 3×3 格依比率上淡色（同一張表裡相對的高低；樣本不足的格不上色）
-  const values: number[] = [];
-  for (const p of PLAYER_TIERS) {
-    for (const tt of TABLE_TIERS) {
-      const { k, n } = m.ratio(grid.cells[p][tt]);
-      if (n >= minN) values.push(k / n);
-    }
-  }
-  const lo = values.length ? Math.min(...values) : 0;
-  const hi = values.length ? Math.max(...values) : 0;
-  const shadeOf = (cell: CohortCell): number | null => {
-    const { k, n } = m.ratio(cell);
-    if (n < minN || hi <= lo) return null;
-    return (k / n - lo) / (hi - lo);
-  };
+  const all = m.ratio(grid.all);
+  const shadeOf = (cell: CohortCell): number | null => cohortShade(m.ratio(cell), all, minN);
   const unratedPlayers = grid.rows.unrated;
   const unratedGames = grid.cols.unrated;
   const head = 'px-1.5 py-1 text-[11px] font-semibold text-zinc-400';
@@ -159,10 +149,11 @@ export default function CohortGrid({
           </div>
         </div>
       </div>
+      <p className="text-[11px] text-zinc-500" data-testid={`${testId}-shade`}>
+        {t(`${K}.shadeNote`, { full: Math.round(SHADE_FULL * 100), prior: SHADE_PRIOR, unit })}
+      </p>
       <p className="text-[11px] text-zinc-500" data-testid={`${testId}-unrated`}>
-        {t(`${K}.unratedNote`, {
-          pn: m.ratio(unratedPlayers).n, pp: unratedPlayers.players, gn: m.ratio(unratedGames).n, unit,
-        })}
+        {t(`${K}.unratedNote`, { pn: m.ratio(unratedPlayers).n, gn: m.ratio(unratedGames).n, unit })}
       </p>
     </section>
   );

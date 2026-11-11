@@ -17,7 +17,7 @@ import { useDecisiveCohort } from './useCohortData';
 /**
  * 數據排行「關鍵外白／內黑」的分組（Edward 2026-11-11：個人的關鍵票太少，改看 PR 分組／S × PR 九宮格），放在個人排行上面：
  *  - 票：關鍵票（決定了提議過不過的那一票）或全部投票（每一張藍方票，同樣的八格與對率）。全部投票的樣本大得多，
- *    個人的正確率也比較穩（每人的局分兩半，兩半的相關：全部投票約 0.3–0.5、關鍵票約 0），所以兩種都給。
+ *    個人的正確率也比較穩（每人的局隨機分兩半，200 種分法平均的兩半相關：全部投票約 0.2–0.4、關鍵票約 0；看分法與門檻會跳），所以兩種都給。
  *  - 表：強者／一般人／新手／全體 各一列：人數、票數、正確率、四組（場內白／場內黑／場外白／場外黑）的對率與對／錯張數（= 八格）。
  *  - 角色：全部／忠臣／派西維爾／梅林。
  *  - 九宮格：選一個對率，看（玩家分層 × 桌分層）。
@@ -91,7 +91,7 @@ function Body({ data }: { data: DecisiveCohortData }): JSX.Element {
     },
     {
       key: 'acc',
-      label: <Term term="decisiveAccuracy">{t(`${K}.decisive.colAcc`)}</Term>,
+      label: <Term term={kind === 'all' ? 'allVoteAccuracy' : 'decisiveAccuracy'}>{t(`${K}.decisive.colAcc`)}</Term>,
       align: 'right',
       emphasis: true,
       tone: 'amber',
@@ -149,7 +149,7 @@ function Body({ data }: { data: DecisiveCohortData }): JSX.Element {
       <CohortCutsControl histogram={data.histogram} />
       <StatTable columns={columns} rows={rows} rowKey={(r) => r.tier} highlightRow={(r) => r.tier === 'all'} />
       <p className="text-[11px] text-zinc-500">
-        {t(`${K}.decisive.unrated`, { n: nonNeutral(sumDecisive(decisiveGridOf(grid.rows.unrated))), players: grid.rows.unrated.players })}
+        {t(`${K}.decisive.unrated`, { n: nonNeutral(sumDecisive(decisiveGridOf(grid.rows.unrated))) })}
       </p>
       <CohortGrid
         grid={grid}

@@ -93,7 +93,7 @@ export default function CohortCutsControl({ histogram = null }: { histogram?: Co
       inputMode="decimal"
       min={COHORT_CUT_LIMITS.min}
       max={COHORT_CUT_LIMITS.max}
-      step={f.startsWith('pr') ? 1 : 0.5}
+      step={f.startsWith('pr') ? 1 : 0.1}
       value={draft[f]}
       onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
       onBlur={commit}

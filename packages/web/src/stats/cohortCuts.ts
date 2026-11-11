@@ -4,7 +4,9 @@
  *
  * - 全站一份 (zustand)：每個九宮格、分組表、玩家雷達「跟自己的組比」都讀這裡，改一個地方全部跟著換。
  * - 每位訪客自己記住 (localStorage，讀寫失敗 = 只在這次有效、回到預設)。
- * - 跟著分享連結：不是預設時網址列的 #stats?…&c=80-20-55-38 (stats/sharedFilter.ts)；打開帶 c= 的連結就套用。
+ * - 跟著分享連結：不是預設時網址列的 #stats?…&c=80-20-55-38 (stats/sharedFilter.ts)。打開分享連結 = 看到分享的人的切點
+ *   (沒有 c= 的連結 = 分享的人用預設)，但只在這次有效 (applyLinkCuts，不寫 localStorage)，不會蓋掉訪客自己記住的切點；
+ *   訪客自己改切點或按回預設才記住。
  * - 切點不是篩選：只影響分組怎麼切，不改任何人的數字，不進篩選的標準鍵 (換切點不重算其他區塊)。
  */
 import { create } from 'zustand';
@@ -33,6 +35,8 @@ export interface CohortCutsState {
   /** 不合法的切點 (上 ≤ 下、超出 1–99…) 不會套用，回傳 false。 */
   setCuts: (cuts: CohortCuts) => boolean;
   reset: () => void;
+  /** 分享連結的切點 (null = 連結沒帶 c=、分享的人用預設)：只在這次有效，不記住。 */
+  applyLinkCuts: (cuts: CohortCuts | null) => boolean;
 }
 
 export const useCohortCuts = create<CohortCutsState>((set) => ({
@@ -47,6 +51,12 @@ export const useCohortCuts = create<CohortCutsState>((set) => ({
   reset: (): void => {
     writeCuts({ ...DEFAULT_COHORT_CUTS });
     set({ cuts: { ...DEFAULT_COHORT_CUTS } });
+  },
+  applyLinkCuts: (cuts: CohortCuts | null): boolean => {
+    const next = cuts ?? DEFAULT_COHORT_CUTS;
+    if (!validCohortCuts(next)) return false;
+    set({ cuts: { prHi: next.prHi, prLo: next.prLo, sHi: next.sHi, sLo: next.sLo } });
+    return true;
   },
 }));
 

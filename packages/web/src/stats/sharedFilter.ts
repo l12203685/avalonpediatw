@@ -15,9 +15,14 @@ function today(): string {
 
 /** 套用連結裡的篩選 (preset 的「近一年」依資料集的基準日展開；拿不到時用今天)。 */
 export function applySharedFilter(params: StatsHashParams): void {
-  // 分組的切點 (c=…)：合法就套用 (也記成這位訪客的切點)
-  const cuts = params.cuts ? decodeCohortCuts(params.cuts) : null;
-  if (cuts) useCohortCuts.getState().setCuts(cuts);
+  // 分組的切點：連結帶 c= (合法) 就用它、沒帶 = 分享的人用預設 → 預設；只在這次有效，不蓋掉訪客自己記住的切點
+  // (壞掉的 c= 不動目前的切點)
+  if (params.cuts) {
+    const cuts = decodeCohortCuts(params.cuts);
+    if (cuts) useCohortCuts.getState().applyLinkCuts(cuts);
+  } else if (params.filter || params.preset) {
+    useCohortCuts.getState().applyLinkCuts(null);
+  }
   const set = (asOf: string): void => {
     const { filter, warnings } = filterFromParams(params, asOf);
     useStatsFilter.getState().setFilter(filter, warnings);

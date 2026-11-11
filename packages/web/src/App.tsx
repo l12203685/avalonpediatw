@@ -78,9 +78,14 @@ function App(): JSX.Element {
   // The store only switches pages in the effect below (after the first commit); until then show the linked page,
   // not lastSiteTab(), so a visitor from a share link (#wiki=<id>) does not mount the stats page first.
   const [bootState, setBootState] = useState<GameState | null>(() => stateOfLink(parseStatsHash(window.location.hash)));
+  // The link as opened, read during the first render: the stats page's hash sync (useFilterHashSync) runs its effect
+  // before this component's effect and rewrites the hash to the current filter/cuts, which would drop a shared
+  // #stats?f=…&c=… link before it is applied.
+  const [initialHash] = useState<string>(() => window.location.hash);
 
   useEffect(() => {
-    const open = (link: StatsLink | null): void => {
+    const open = (hash: string): void => {
+      const link: StatsLink | null = parseStatsHash(hash);
       if (!link) return;
       setBootState(null); // the store now holds the linked page
       const store = useGameStore.getState();
@@ -109,16 +114,27 @@ function App(): JSX.Element {
         applySharedFilter(link);
         return;
       }
-      // consumed: a later reload starts where the user is, not back on this link
+      // consumed: a later reload starts where the user is, not back on this link — unless the stats page has
+      // already replaced it with the current filter/cuts (#stats?…), which should stay in the address bar
+      if (link.kind === 'stats' && window.location.hash !== hash) return;
       try {
         window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
       } catch { /* ignore */ }
     };
-    open(parseStatsHash(window.location.hash));
-    const onHash = (): void => open(parseStatsHash(window.location.hash));
+    open(initialHash);
+    // newURL = the hash that was navigated to (the hash sync may already have rewritten location.hash)
+    const onHash = (e: HashChangeEvent): void => {
+      let hash = window.location.hash;
+      try {
+        hash = new URL(e.newURL).hash;
+      } catch {
+        // keep location.hash
+      }
+      open(hash);
+    };
     window.addEventListener('hashchange', onHash);
     return (): void => window.removeEventListener('hashchange', onHash);
-  }, []);
+  }, [initialHash]);
 
   // Version check poller — detects a fresh server deploy and prompts the
   // user to refresh so they don't keep running against a stale JS bundle
