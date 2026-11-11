@@ -14,7 +14,8 @@
  *     我在隊上、失敗張數等於其他隊員人數的任務，其他隊員確定是紅。讀法取代舊的計分決定 A／B（拇指上過一張失敗的任務不再自動換邊）。
  *   - `percivalCarry39`：派西當隊長、第 2 局起：絕不同時帶兩根；比較不像梅林的那一根在讀法信心 ≥ 0.7 時不帶；
  *     比較像梅林的那一根只上過成功的任務就帶，否則照信心決定：1＝門檻（第 2 局前 4 次 0.63、第 2 局第 5 次 0.53、第 3–5 局 0.64），
- *     2＝照真人的比例抽（信心 < 0.65 約 38%、0.65–0.8 約 70%、≥ 0.8 約 82%；第 2 局第 5 次：乾淨或被另一根拇指派過才帶，否則信心 ≥ 0.8）。
+ *     2＝照真人的比例抽（信心 < 0.65 約 38%、0.65–0.8 約 70%、≥ 0.8 約 82%；第 2 局第 5 次：乾淨或被另一根拇指派過才帶，否則信心 ≥ 0.8）；
+ *     第 3 局第 1 次提議另一格（門檻 0.55、信心 < 0.65 時 50%）。
  *     完全分不出來時不帶拇指。檢查接在每一個重新挑隊的步驟（候選人、隊長自己的票、重派成功的隊、第 2 局帶自己的視角等）；
  *     只有「整隊照派上一次成功的隊、那根拇指本來就在上面」可以例外。第 1 局不變（不帶拇指）。
  */
@@ -185,15 +186,17 @@ export function percivalThumbPlan39(tuning: Readonly<AgentTuning>, obs: PlayerOb
   const [a, b] = read.thumbs;
   if (!read.fav || !read.unfav) return { read, carryFav: false, barred: new Set([a, b]) };
   const forced = (obs.failCount ?? 0) >= 4;
+  const r3First = r === 3 && (obs.failCount ?? 0) === 0;
   const conf = read.conf;
   let carryFav: boolean;
   if (conf >= 0.999 || succOnly(obs, read.fav)) carryFav = true;
   else if (r === 2 && forced) {
     carryFav = thumbOnThumb(obs, read.fav, read.unfav) || conf >= (mode === 1 ? 0.53 : 0.8);
   } else if (mode === 1) {
-    carryFav = conf >= (r === 2 ? 0.63 : 0.64);
+    // 第 3 局第 1 次提議另一格：真人在這裡信心 < 0.65 時還是帶比較像梅林的那一根 42–54%（lp39 PA-08）。
+    carryFav = conf >= (r === 2 ? 0.63 : r3First ? 0.55 : 0.64);
   } else {
-    const q = conf < 0.65 ? 0.375 : conf < 0.8 ? 0.7 : 0.82;
+    const q = conf < 0.65 ? (r3First ? 0.5 : 0.375) : conf < 0.8 ? 0.7 : 0.82;
     carryFav = rnd() < q;
   }
   const barred = new Set<string>();
