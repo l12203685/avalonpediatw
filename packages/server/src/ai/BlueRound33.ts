@@ -226,7 +226,8 @@ export interface R1InfoCtx {
 /** 公開視角的資訊價值情境（梅林＝坐在他位置、只看公開紀錄的忠臣）。 */
 export function r1InfoCtx(tuning: Readonly<AgentTuning>, obs: PlayerObservation): R1InfoCtx {
   const pub = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, myLakeResults: [] } as PlayerObservation;
-  const opts = bayesOptionsOf(tuning);
+  // A public view: no leader's own prior (round 38 `ownView`) in it.
+  const opts = bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 });
   const bw = bayesWorlds(pub, opts);
   const round = obs.currentRound ?? 1;
   const cells = new Float64Array(8);

@@ -37,7 +37,8 @@ export interface R1InflCtx {
 /** 公開視角的情境（梅林＝坐在他位置、只看公開紀錄的忠臣）；假想的提議接在現在的紀錄後面（第 failCount + 1 次）。 */
 export function r1InflCtx(tuning: Readonly<AgentTuning>, obs: PlayerObservation): R1InflCtx {
   const pub = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, myLakeResults: [] } as PlayerObservation;
-  const level0 = bayesOptionsOf({ ...tuning, beliefRecursive: 0, beliefLeadRecursive: 0 });
+  // A public view: no leader's own prior (round 38 `ownView`) in it.
+  const level0 = bayesOptionsOf({ ...tuning, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0 });
   const bw = bayesWorlds(pub, level0);
   const tail = leaderAhead(obs, 4 - (obs.failCount ?? 0));
   return {

@@ -289,7 +289,9 @@ export function merlinReusePublicNow(tuning: Readonly<AgentTuning>, obs: PlayerO
   if (!last) return true;
   const me = obs.myPlayerId;
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  const pubOpts = bayesOptionsOf(tuning);
+  // Round 38 `ownView`: the public view carries no own prior unless scope 3 asks for one (as `merlinLoyalStyleTeam`'s public options).
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
+  const pubOpts: BayesOptions = { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView };
   let best: string[] | null = null;
   let bestP = -1;
   for (const fill of combinations(obs.allPlayerIds.filter((id) => id !== me), size - 1)) {

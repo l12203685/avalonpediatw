@@ -3,14 +3,18 @@
  * 異常票照局面（`goodOnTeamState`、`goodReuseWhite`、`goodFourthWhite`、`goodR5NoWhite`、`merlinOnTeamOwn`、`merlinOwnWhite`、`percivalMerlinWhite`）、
  * 梅林順著場上都在派的紅（`merlinFlowFollow`）。
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, ownViewOffsets, ownViewStrength } from './belief/BayesBelief';
-import { bayesVoteCriteria } from './BlueRound33';
-import { earlyOwnTeamWhite, fourthWhiteNow, fullReuseOfLastSuccess, goodLakeHumanPool, leadsLaterThisRound, merlinOnTeamOwnApprove, onTeamStateApprove, ownViewFirstPickTeam, percivalMerlinWhiteNow, percivalThumbReadTeam, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
+import { bayesVoteCriteria, r1InfoCtx } from './BlueRound33';
+import { earlyOwnTeamWhite, fourthWhiteNow, ownViewOn, fullReuseOfLastSuccess, goodLakeHumanPool, leadsLaterThisRound, merlinOnTeamOwnApprove, onTeamStateApprove, ownViewFirstPickTeam, percivalMerlinWhiteNow, percivalThumbReadTeam, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 import { tailWhiteCore } from './GoodVoteAlt';
-import { merlinFlowRed, merlinLoyalStyleTeam } from './MerlinLoyalStyle';
+import { merlinFlowRed, merlinLoyalStyleTeam, merlinReusePublicNow } from './MerlinLoyalStyle';
+import { ForwardAgent } from './forward/ForwardAgent';
+import { HeuristicAgent } from './HeuristicAgent';
+import { redCleanLookTeam } from './RedRound4';
+import { r1InflCtx } from './BlueRound34';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const asObs = (o: object) => o as unknown as PlayerObservation;
@@ -74,7 +78,7 @@ describe('ownView (round 38: the leader picks from his own prior; the record sti
     expect(ownViewStrength(asObs({ ...(r2 as object), currentRound: 4, failCount: 0 }), 1)).toBe(0);
     expect(ownViewStrength(asObs({ ...(r2 as object), currentRound: 3, failCount: 1 }), 1)).toBeCloseTo(0.8, 5);
   });
-  it('the offsets are fixed for the seat and the game, differ between seats, and count the leader\'s own earlier picks less suspicious', () => {
+  it('from the game\'s first proposal on the offsets are fixed for the seat (the first proposal itself is a separate random draw), differ between seats, and count the leader\'s own earlier picks less suspicious', () => {
     const a = ownViewOffsets(r2, cfg)!;
     const again = ownViewOffsets(asObs({ ...(r2 as object) }), cfg)!;
     expect([...a]).toEqual([...again]);
@@ -338,5 +342,104 @@ describe('checklist rules built in round 38 (bundles A–D, BL-01)', () => {
     expect(goodLakeHumanPool(OFF, o, cands)).toBe(cands);
     const failedLast = asObs({ ...(o as object), questResults: ['success', 'fail'], questHistory: [q(1, ['P5', 'P1', 'P10'], 'success'), q(2, ['P2', 'P3', 'P1', 'P6'], 'fail')] });
     expect(goodLakeHumanPool(T({ goodLakeHuman: 1 }), failedLast, cands)).toBe(cands);
+  });
+});
+
+describe('ownView: the first proposal of the game keeps the fixed seat-combination ban (round 38 review)', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+  // a seeded stand-in for the decision's random numbers, so the draws are the same on every run
+  const seeded = (seed: number) => { let x = seed >>> 0; return () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return (x + 0.5) / 4294967296; }; };
+  const seats = (t: readonly string[], ids: readonly string[]) => t.map((id) => ids.indexOf(id) + 1).sort((a, b) => a - b).map((n) => (n === 10 ? '0' : String(n))).join('');
+  for (const [n, banned, runs] of [[5, ['12', '34', '45', '15'], 30], [10, ['123', '150', '234', '678'], 60]] as const) {
+    it(`${n} players: the loyal first leader's own-prior pick is never a banned combination`, () => {
+      vi.spyOn(Math, 'random').mockImplementation(seeded(38000 + n));
+      const ids = IDS.slice(0, n);
+      const picks = new Set<string>();
+      for (let k = 0; k < runs; k++) {
+        const o = asObs({ myPlayerId: 'P1', myRole: 'loyal', myTeam: 'good', playerCount: n, allPlayerIds: ids, knownEvils: [], currentRound: 1, currentLeader: 'P1', failCount: 0, questResults: [], gamePhase: 'team_select', voteHistory: [], questHistory: [], proposedTeam: [], lakeHistory: [] });
+        const agent = new ForwardAgent('P1', new HeuristicAgent('P1', undefined, undefined, { ...DEFAULT_AGENT_TUNING }));
+        agent.onGameStart(o);
+        const d = agent.decide(o);
+        if (d.action.type !== 'team_select') throw new Error(d.action.type);
+        const s = seats(d.action.teamIds, ids);
+        expect(d.action.teamIds).toContain('P1');
+        expect((banned as readonly string[]).includes(s)).toBe(false);
+        picks.add(s);
+      }
+      // still the leader's own pick: not one fixed team
+      expect(picks.size).toBeGreaterThan(1);
+    });
+  }
+});
+
+describe('public views carry no leader\'s own prior (round 38 review)', () => {
+  const big = { ownView: 3 };
+  it('RedRound4.redCleanLookTeam with redCleanLookBot reads the blue seats the same with ownView 0 and on (red unchanged)', () => {
+    const red = asObs({
+      myPlayerId: 'P1', myRole: 'assassin', myTeam: 'evil', playerCount: 10, allPlayerIds: IDS, knownEvils: ['P2', 'P3'], evilCount: 4,
+      currentRound: 3, currentLeader: 'P1', failCount: 1, questResults: ['fail', 'success'], gamePhase: 'team_select', lakeHistory: [], proposedTeam: [],
+      questHistory: [{ round: 1, team: ['P5', 'P6', 'P7'], result: 'fail', failCount: 1 }, { round: 2, team: ['P4', 'P8', 'P9', 'P10'], result: 'success', failCount: 0 }],
+      voteHistory: [vote(3, 1, 'P10', ['P10', 'P4', 'P8', 'P9'], ['P10', 'P4', 'P8', 'P9'])],
+    });
+    const act = { type: 'team_select' as const, teamIds: ['P1', 'P2', 'P5', 'P6'] };
+    for (const extra of [{}, { redStackRatio: 0.01 }]) {
+      const off = redCleanLookTeam({ ...DEFAULT_AGENT_TUNING, redCleanLook: true, redCleanLookBot: true, ownView: 0, ...extra }, red, act);
+      for (const ov of [0.3, 3]) {
+        expect(redCleanLookTeam({ ...DEFAULT_AGENT_TUNING, redCleanLook: true, redCleanLookBot: true, ownView: ov, ...extra }, red, act)).toEqual(off);
+      }
+    }
+  });
+  it('Merlin\'s public re-proposal check and the R1 information-value contexts read the same record with ownView 0 and on', () => {
+    const merlin = asObs({ ...(r2 as object), myRole: 'merlin', knownEvils: ['P2', 'P8', 'P9'], currentRound: 3, failCount: 0, questResults: ['fail', 'success'],
+      questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }, { round: 2, team: ['P6', 'P3', 'P4', 'P7'], result: 'success', failCount: 0 }] });
+    for (const size of [3, 4]) {
+      expect(merlinReusePublicNow(T({ merlinReusePublic: true, ...big }), merlin, size)).toBe(merlinReusePublicNow(T({ merlinReusePublic: true }), merlin, size));
+    }
+    const lead = asObs({ ...base, myPlayerId: 'P3', currentRound: 1, currentLeader: 'P3', failCount: 2, questResults: [], gamePhase: 'team_select', questHistory: [], voteHistory: R1.slice(0, 2) });
+    expect(ownViewOn(T(big), lead)).toBe(true);
+    expect([...r1InfoCtx(T(big), lead).wts]).toEqual([...r1InfoCtx(OFF, lead).wts]);
+    expect([...r1InflCtx(T(big), lead).wts]).toEqual([...r1InflCtx(OFF, lead).wts]);
+  });
+});
+
+describe('round 38 knobs without an earlier behaviour test (review)', () => {
+  const quests = (results: ('success' | 'fail')[]) => results.map((r, i) => ({ round: i + 1, team: [['P5', 'P1', 'P10'], ['P2', 'P3', 'P4', 'P6'], ['P2', 'P3', 'P4', 'P8']][i], result: r, failCount: r === 'fail' ? 1 : 0 }));
+  const at = (round: number, results: ('success' | 'fail')[], over: object = {}) => asObs({
+    ...base, currentRound: round, currentLeader: 'P1', failCount: 0, questResults: results, gamePhase: 'team_vote', questHistory: quests(results),
+    voteHistory: R1, proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P6'], ...over,
+  });
+  it('goodBayesFsReuse: R3 first proposal after fail-then-success, the R2 team as it was, off the team — the bar decides; other orders and teams untouched', () => {
+    const fs = at(3, ['fail', 'success'], { currentLeader: 'P2', proposedTeam: ['P2', 'P3', 'P4', 'P6'] });
+    expect(bayesVoteCriteria(T({ goodBayesFsReuse: 0.01 }), fs)).toEqual({ vote: true, reason: 'reuse' });
+    expect(bayesVoteCriteria(T({ goodBayesFsReuse: 1 }), fs)?.reason).not.toBe('reuse');
+    expect(bayesVoteCriteria(OFF, fs)?.reason).not.toBe('reuse');
+    // a grown team is not the R2 team as it was; a later proposal of the round is not the first
+    expect(bayesVoteCriteria(T({ goodBayesFsReuse: 0.01 }), asObs({ ...(fs as object), proposedTeam: ['P2', 'P3', 'P4', 'P9'] }))?.reason).not.toBe('reuse');
+    expect(bayesVoteCriteria(T({ goodBayesFsReuse: 0.01 }), asObs({ ...(fs as object), failCount: 1 }))?.reason).not.toBe('reuse');
+  });
+  it('goodR4White: off the team in a round that needs two fails, P(fewer than two reds) over the bar → approve; never in a one-fail round', () => {
+    const r4 = at(4, ['fail', 'success', 'success'], { currentLeader: 'P9', proposedTeam: ['P9', 'P2', 'P3', 'P5', 'P10'] });
+    expect(bayesVoteCriteria(T({ goodR4White: 0.01 }), r4)).toEqual({ vote: true, reason: 'r4' });
+    expect(bayesVoteCriteria(T({ goodR4White: 1.01 }), r4)?.reason).not.toBe('r4');
+    expect(bayesVoteCriteria(OFF, r4)?.reason).not.toBe('r4');
+    const r3 = at(3, ['fail', 'success'], { currentLeader: 'P9', proposedTeam: ['P9', 'P2', 'P5', 'P10'] });
+    expect(bayesVoteCriteria(T({ goodR4White: 0.01 }), r3)?.reason).not.toBe('r4');
+  });
+  it('percivalLakeNoMorgana: Percival leaves out the thumb his posterior reads as Morgana; a loyal holder\'s list is untouched', () => {
+    const perc = asObs({ ...(r2 as object), myRole: 'percival', knownWizards: ['P1', 'P2'], gamePhase: 'lake' });
+    const share = bayesRedShare(perc, bayesOptionsOf(OFF));
+    const morgana = (share.get('P1') ?? 0) > (share.get('P2') ?? 0) ? 'P1' : 'P2';
+    const cands = ['P1', 'P2', 'P3', 'P8'];
+    const pool = goodLakeHumanPool(T({ percivalLakeNoMorgana: true }), perc, cands);
+    expect(pool).not.toContain(morgana);
+    expect(pool).toContain(morgana === 'P1' ? 'P2' : 'P1');
+    expect(goodLakeHumanPool(OFF, perc, cands)).toBe(cands);
+    expect(goodLakeHumanPool(T({ percivalLakeNoMorgana: true }), asObs({ ...(r2 as object), gamePhase: 'lake' }), cands)).toBe(cands);
+  });
+  it('ownViewRounds: the own prior only up to that round', () => {
+    expect(ownViewStrength(r2, 1, 1)).toBe(0);
+    expect(ownViewStrength(r2, 1, 2)).toBeGreaterThan(0);
+    expect(ownViewOn(T({ ownView: 0.3, ownViewRounds: 1 }), r2)).toBe(false);
+    expect(ownViewOn(T({ ownView: 0.3, ownViewRounds: 2 }), r2)).toBe(true);
   });
 });

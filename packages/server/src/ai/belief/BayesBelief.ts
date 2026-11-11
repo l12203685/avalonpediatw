@@ -359,8 +359,9 @@ export interface BayesOptions {
   leadBlend?: number;
   /**
    * Round 38 `ownView` (Edward 2026-11-10: a loyal picks among the few teams consistent with his own earlier thinking and the information flow):
-   * while the viewer picks a non-forced team, his posterior starts from his own prior — a per-seat, per-game log-odds offset on each other
-   * player (`sigma`), lower for the players he proposed earlier (`keep`) — instead of the same flat prior every loyal shares. The record then
+   * while the viewer picks a non-forced team, his posterior starts from his own prior — a per-seat log-odds offset on each other player
+   * (`sigma`; fixed from the game's first proposal on, and a separate random draw on that first proposal itself, see `ownViewOffsets`),
+   * lower for the players he proposed earlier (`keep`) — instead of the same flat prior every loyal shares. The record then
    * updates it as usual, so the offsets decide only where the record says little. `scope`: 1 loyal, 2 + Percival, 3 + Merlin's public-view pick.
    */
   ownView?: { sigma: number; keep: number; scope: number; maxRound?: number };
@@ -392,8 +393,9 @@ export function ownViewStrength(obs: PlayerObservation, scope: number, maxRound 
   if (!(obs.myRole === 'loyal' || (scope >= 2 && obs.myRole === 'percival'))) return 0;
   const fc = obs.failCount ?? 0;
   if (fc >= 4) return 0;
-  // The likelier this proposal goes on a mission (human records, `PROPOSAL_GO_RATE`), the less the own prior counts: full weight on the R1–R2
-  // proposals (0.5–8%), none from 30% up (R3 first 25%, fourth 36%; R4 first 55%).
+  // The likelier this proposal goes on a mission (human records, `PROPOSAL_GO_RATE`), the less the own prior counts: weight 1 − go/0.3, so
+  // about 0.7–1 on the R1–R2 proposals (0.5–8%), part weight on the R3–R5 proposals below 30% (R3 second 0.80, third 0.63; R3 first 25% → 0.17),
+  // none from 30% up (R3 fourth 36%, R4 first 55%) and none on the forced fifth.
   const go = OWN_VIEW_GO_RATE[obs.currentRound ?? 1]?.[fc] ?? 0.3;
   return Math.max(0, 1 - go / 0.3);
 }
@@ -413,8 +415,9 @@ function hash01(input: string): number {
 
 /**
  * Round 38 `ownView`: the viewer's own log-odds offsets (positive = more suspicious) on the other players for this pick, or null when it does
- * not apply. Fixed for the seat and the game — drawn from the game's first proposal (public), so every later pick of the seat starts from the
- * same view; on the very first proposal of the game (no record yet) from the decision's random numbers. The players the viewer proposed
+ * not apply. From the game's first proposal on they are a hash of that (public) proposal and the seat, so every later pick of the seat starts
+ * from the same view. The very first proposal of the game (no record yet) draws them from the decision's random numbers instead: a separate
+ * draw, unrelated to the later offsets and not reproducible without a seeded random source (one draw per observation object). The players the viewer proposed
  * earlier in the game count `keep` less suspicious: his later picks stay with his earlier ones until the record speaks against them.
  */
 export function ownViewOffsets(obs: PlayerObservation, cfg: { sigma: number; keep: number; scope: number; maxRound?: number }): Map<string, number> | null {

@@ -931,6 +931,10 @@ export class ForwardAgent implements AvalonAgent {
         // Round 38 `merlinOnTeamOwn` (BlueRound38.ts; checklist AV-11): on the team, the public loyal threshold says reject and his seen reds
         // cannot lose on the spot — Merlin votes from his own view (human Merlins inner-black a team without a seen red 15%, the bot 41%).
         // A team the public logic proves must fail keeps its reject; so does one holding a seat his own lake showed red.
+        // The trigger is the loyal view's threshold rule saying 'bad'; it does not ask which rule made the loyal pipeline reject, so a reject the
+        // loyal view also reached another way (e.g. another holder's red declaration on a member) is overridden too. Kept as measured in the
+        // round-38 confirmation: in mode 1 it fires only where two fails are needed (never R5) — with no red he sees on the team at most one red
+        // (the one he cannot see) is on it and the mission cannot fail; with one he sees, only when his own P(the unseen red is on it) is low.
         const ownMode = this.baseline.tuning.merlinOnTeamOwn ?? 0;
         if (!vote && onTeam && ownMode > 0 && !merlinVoteFatal(obs, this.baseline.tuning) && goodVoteGate(obs, { ...this.gates, mustFail: false }) === null
           && !(obs.myLakeResults ?? []).some((l) => l.result === 'evil' && team.includes(l.targetId))
@@ -973,7 +977,10 @@ export class ForwardAgent implements AvalonAgent {
     // Round 37 `percivalThumbSure` (BlueRound37.ts): Percival keeps a thumb on the team only when his own posterior tells it is Merlin.
     const sure0 = percivalThumbSureTeam(this.baseline.tuning, obs, d0.action, gateOk);
     // Round 38 `ownView` (BlueRound38.ts): the first proposal of the game has no record to read — the leader's own prior picks it.
-    const sure = ownViewFirstPickTeam(this.baseline.tuning, obs, sure0, gateOk);
+    // The owner's fixed first-proposal ban (5p 12/34/45/15, 10p 123/150/234/678) binds here as it does in the candidate scorer.
+    const firstBan = (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0 ? bannedComboSetFor5p(obs.playerCount) : new Set<string>();
+    const firstPickOk = (team: readonly string[]): boolean => gateOk(team) && !firstBan.has(canonicalSeatStringForward(team, obs.allPlayerIds));
+    const sure = ownViewFirstPickTeam(this.baseline.tuning, obs, sure0, firstPickOk);
     const d = sure === d0.action ? d0 : { ...d0, action: sure, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → ${sure !== sure0 ? 'own view: first proposal of the game' : 'percival: no thumb he cannot tell apart'}` } };
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
     // proposes a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
