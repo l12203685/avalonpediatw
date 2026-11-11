@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MERLIN_VISIBLE_REDS, TWO_RED_CATEGORIES, TWO_RED_ROLES, TWO_RED_ROUNDS, TWO_RED_TOTAL_INDEX,
-  computeTwoRedReport, decodeConfig, decodeGamesDataset, deriveLeaderSeats, redWinsBefore, teamReds, twoRedCategory,
+  computeTwoRedReport, contiguousProposals, decodeConfig, decodeGamesDataset, deriveLeaderSeats, redWinsBefore, teamReds, twoRedCategory,
   twoRedProposals, twoRedShare, twoRedTable, type VotingProposal,
 } from '@avalon/shared/stats';
 import { makeDataset, type GameSpec } from './datasetBuilder';
@@ -55,6 +55,13 @@ const GAME_D: VotingProposal[] = [
   v(5, 2, '90568'), // 忠臣：全好
 ];
 
+// I：紀錄裡沒有第 2 局。照紀錄的順序輪替會推出 1、2、3、4、5、6、7 號（每隊都含那位，過得了門檻），
+// 但第 3 局真正的隊長是缺口之後錯開兩位的人，所以這局不能算。
+const GAME_I: VotingProposal[] = [
+  v(1, 1, '156'), v(1, 2, '257'),
+  v(3, 1, '3410'), v(3, 2, '4310'), v(3, 3, '5340'), v(3, 4, '6340'), v(3, 5, '7340'),
+];
+
 const SPECS: GameSpec[] = [
   { id: 'A', names: NAMES, rounds: 'RRR--', missions: 'oox|ooox|ooox||', votes: GAME_A },
   { id: 'B', names: NAMES, rounds: 'RBRR-', missions: 'oox|oooo|ooox|oooxx|', votes: GAME_B },
@@ -64,6 +71,8 @@ const SPECS: GameSpec[] = [
   { id: 'F', names: NAMES, rounds: 'R?R--', votes: [v(1, 1, '156'), v(2, 1, '2567'), v(3, 1, '3567'), v(4, 1, '45678'), v(4, 2, '56789')] },
   // G：兩紅但隊長推不出來（隊長不在隊上）→ 記為略過
   { id: 'G', names: NAMES, rounds: 'RR---', votes: [v(1, 1, '789'), v(2, 1, '7890'), v(3, 1, '7890'), v(3, 2, '1234')] },
+  // I：兩紅、但提議紀錄缺了整個第 2 局 → 輪替在缺口之後錯位（照輪替推得出隊長，但不可信）→ 記為略過
+  { id: 'I', names: NAMES, rounds: 'RR---', votes: GAME_I },
   // H：配置不完整（有重複的數字）→ 不算
   { id: 'H', names: NAMES, config: '123455', rounds: 'RR---', votes: GAME_A },
 ];
@@ -141,9 +150,18 @@ describe('two reds: which proposals count', () => {
       ['D', 5, 1, '忠臣', 'P8', 'thumb'],
       ['D', 5, 2, '忠臣', 'P9', 'allGood'],
     ]);
-    // A、B、C、D 與推不出隊長的 G 有兩紅局面；F（比分不知道）、H（配置不完整）沒有
-    expect(data.twoRedGames).toBe(5);
-    expect(data.skippedGames).toBe(1);
+    // A、B、C、D、推不出隊長的 G 與提議紀錄有缺的 I 有兩紅局面；F（比分不知道）、H（配置不完整）沒有
+    expect(data.twoRedGames).toBe(6);
+    expect(data.skippedGames).toBe(2);
+  });
+
+  it('a game whose proposal record has a gap is skipped even when the rotation would pass', () => {
+    expect(deriveLeaderSeats(GAME_I.map((p) => p[2]))).toEqual([...'1234567']);
+    expect(contiguousProposals(GAME_I)).toBe(false);
+    for (const g of [GAME_A, GAME_B, GAME_C, GAME_D]) expect(contiguousProposals(g)).toBe(true);
+    expect(contiguousProposals([v(1, 2, '156'), v(1, 3, '257')])).toBe(false); // 不是從第 1 次開始
+    expect(contiguousProposals([v(1, 1, '156'), v(1, 3, '257')])).toBe(false); // 次數跳號
+    expect(contiguousProposals([])).toBe(false);
   });
 });
 
@@ -179,8 +197,8 @@ describe('two reds: tables', () => {
     expect(r.player['忠臣'][5][0]).toEqual({ n: 1, allGood: 0, mordred: 0, thumb: 1, oneThumb: 0, twoPlusRed: 0 });
     expect(r.player['梅林'][3][TWO_RED_TOTAL_INDEX].n).toBe(0);
     expect(r.all).toEqual(all);
-    expect(r.twoRedGames).toBe(5);
-    expect(r.skippedGames).toBe(1);
+    expect(r.twoRedGames).toBe(6);
+    expect(r.skippedGames).toBe(2);
     expect(computeTwoRedReport([], 'P8', { data, all })).toEqual(r);
   });
 

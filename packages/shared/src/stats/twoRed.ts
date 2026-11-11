@@ -6,6 +6,8 @@
  *   時機   提議當下紅方剛好已經贏兩個任務（之前的任務都有結果、三紅還沒出現）：第 3 局（前兩局都紅）、
  *          第 4 局（前三局兩紅一藍）、第 5 局（二比二）。
  *   隊長   每次提議的隊長由跨輪輪替推出來（deriveLeaderSeats，與失誤偵測、自動發現同一套）；推不出來的局整局不算。
+ *          輪替假設提議紀錄完整、依序：提議紀錄有缺（不是從第 1 局第 1 次開始、某局整局沒有、某局的次數跳號）的局，
+ *          缺口之後的隊長會推錯，所以也整局不算（記在略過的局數裡）。
  *   次序   該局的第幾次提議（資料集的 attempt）：第 1～4 次、第 5 次 = 尾派（強制派出）。
  *   分類   紅方 = 刺客、莫甘娜、莫德雷德、奧伯倫；「拇指」= 梅林夜裡看得到的紅方（刺客、莫甘娜、奧伯倫；遊戲的角色
  *          定義 types/game.ts：梅林看得到莫德雷德以外的所有紅方，所以奧伯倫也是拇指，莫德雷德不是）。
@@ -87,7 +89,7 @@ export interface TwoRedProposals {
   proposals: TwoRedProposal[];
   /** 有兩紅局面的局數（不論隊長能不能推出來）。 */
   twoRedGames: number;
-  /** 其中隊長推不出來、整局不算的局數。 */
+  /** 其中隊長推不出來（或提議紀錄有缺）、整局不算的局數。 */
   skippedGames: number;
 }
 
@@ -133,7 +135,22 @@ export function redWinsBefore(g: Pick<Game, 'rounds'>, round: number): number | 
 /** 配置是 6 個不同的數字（六個特殊角色都有座位）。 */
 const fullConfig = (config: string): boolean => /^[0-9]{6}$/.test(config) && new Set(config).size === 6;
 
-/** 一局裡符合條件的提議；隊長推不出來 → null（有兩紅局面時呼叫端記為略過）。 */
+/**
+ * 提議紀錄完整、依序：從第 1 局第 1 次開始，同一局的次數 1, 2, 3…連號，下一局從第 1 次開始、局數連號。
+ * 有缺口時跨輪輪替會在缺口之後錯位，推出來的隊長不可信。
+ */
+export function contiguousProposals(proposals: Game['votingProposals']): boolean {
+  let round = 1;
+  let attempt = 0;
+  for (const [r, a] of proposals) {
+    if (r === round && a === attempt + 1) attempt = a;
+    else if (r === round + 1 && a === 1) { round = r; attempt = 1; }
+    else return false;
+  }
+  return proposals.length > 0;
+}
+
+/** 一局裡符合條件的提議；隊長推不出來（或提議紀錄有缺）→ null（有兩紅局面時呼叫端記為略過）。 */
 function gameTwoRedProposals(g: Game): { hasTwoRed: boolean; proposals: TwoRedProposal[] | null } {
   if (!fullConfig(g.config)) return { hasTwoRed: false, proposals: [] };
   const indexes: number[] = [];
@@ -142,7 +159,7 @@ function gameTwoRedProposals(g: Game): { hasTwoRed: boolean; proposals: TwoRedPr
     if ((round === 3 || round === 4 || round === 5) && redWinsBefore(g, round) === 2) indexes.push(k);
   });
   if (!indexes.length) return { hasTwoRed: false, proposals: [] };
-  const leaders = deriveLeaderSeats(g.votingProposals.map((p) => p[2]));
+  const leaders = contiguousProposals(g.votingProposals) ? deriveLeaderSeats(g.votingProposals.map((p) => p[2])) : null;
   if (!leaders) return { hasTwoRed: true, proposals: null };
   const out: TwoRedProposal[] = [];
   for (const k of indexes) {
@@ -224,7 +241,7 @@ export function computeTwoRedReport(games: readonly Game[], player: string, prep
   };
 }
 
-/** 比率（%，一位小數）；n = 0 → null。 */
+/** 比率（%，一位小數）；n = 0 → null。顯示整數時直接用 hits / n 四捨五入，不要再把這個值取整（會四捨五入兩次）。 */
 export function twoRedShare(hits: number, n: number): number | null {
   return n > 0 ? Math.round((hits / n) * 1000) / 10 : null;
 }

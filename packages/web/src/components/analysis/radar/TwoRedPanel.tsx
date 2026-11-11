@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader, AlertCircle } from 'lucide-react';
 import {
-  TWO_RED_CATEGORIES, TWO_RED_ROLES, TWO_RED_ROUNDS, TWO_RED_TOTAL_INDEX, twoRedShare,
+  TWO_RED_CATEGORIES, TWO_RED_ROLES, TWO_RED_ROUNDS, TWO_RED_TOTAL_INDEX,
   type TwoRedCategory, type TwoRedCounts, type TwoRedReport, type TwoRedRole, type TwoRedRound,
 } from '@avalon/shared/stats';
 import { twoRedReport } from '../../../stats/statsEngine';
@@ -50,7 +50,8 @@ function useTwoRedReport(name: string): State {
   return result && result.key === key ? result.state : { status: 'loading' };
 }
 
-const pct = (v: number | null): string => (v === null ? '—' : `${Math.round(v)}%`);
+/** k / n 的百分比，直接四捨五入到整數（只取整一次）；n = 0 → —。 */
+const pct = (k: number, n: number): string => (n > 0 ? `${Math.round((100 * k) / n)}%` : '—');
 
 function RoundTable({ round, mine, all }: { round: TwoRedRound; mine: TwoRedCounts[]; all: TwoRedCounts[] }): JSX.Element {
   const { t } = useTranslation('common');
@@ -61,8 +62,6 @@ function RoundTable({ round, mine, all }: { round: TwoRedRound; mine: TwoRedCoun
 
   const shareCell = (key: TwoRedCategory) => (_v: unknown, row: Row): ReactNode => {
     const low = row.mine.n < TWO_RED_MIN_N;
-    const mineShare = twoRedShare(row.mine[key], row.mine.n);
-    const allShare = twoRedShare(row.all[key], row.all.n);
     return (
       <span
         className={`inline-flex flex-col items-end leading-tight ${low ? 'opacity-50' : ''}`}
@@ -71,10 +70,10 @@ function RoundTable({ round, mine, all }: { round: TwoRedRound; mine: TwoRedCoun
         }) + (low && row.mine.n > 0 ? ` · ${t('analytics.ui.table.lowSample', { min: TWO_RED_MIN_N })}` : '')}
       >
         <span>
-          <span className={row.index === TWO_RED_TOTAL_INDEX ? 'font-bold' : 'font-semibold'}>{pct(mineShare)}</span>
+          <span className={row.index === TWO_RED_TOTAL_INDEX ? 'font-bold' : 'font-semibold'}>{pct(row.mine[key], row.mine.n)}</span>
           {row.mine.n > 0 && <span className="ml-1 text-[10px] font-normal text-zinc-500">{row.mine[key]}</span>}
         </span>
-        <span className="text-[10px] font-normal text-zinc-500">{t('analytics.r6.radar.twoRed.allShort', { pct: pct(allShare) })}</span>
+        <span className="text-[10px] font-normal text-zinc-500">{t('analytics.r6.radar.twoRed.allShort', { pct: pct(row.all[key], row.all.n) })}</span>
       </span>
     );
   };
