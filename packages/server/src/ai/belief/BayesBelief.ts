@@ -22,6 +22,7 @@ import STRONG_TABLE from './likelihoods_strong.json';
 import { policyVoteLog } from '../infl/policyRead';
 // Round 33 `beliefRecursive`: the level-1 recursive reader (its level-0 seat views call this module's posterior: `useMix` restores its state).
 import { recursiveLogs, recursiveRoleShares, type RoleShare } from '../infl/recursiveRead';
+import { percivalRead39 } from '../BlueRound39Percival';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -385,17 +386,27 @@ export interface BayesOptions {
    * `voteHistory` only after the vote, so the vote rules scored the team on a posterior that had not read it).
    */
   pendingProposal?: boolean;
+  /** Round 40 `beliefLakeCal40`: power on another holder's lake declaration term (blue seats only; 1 = as before). */
+  lakeCal?: number;
   /**
    * Round 38 `beliefThumbNoStain`: for Percival, a failed R1–R3 mission with exactly one thumb on it says nothing about which thumb is Merlin
    * (human records: that thumb is Merlin 43–52%; self-play 44–52%) — the mission term is averaged over the two thumb assignments.
    */
   thumbNoStain?: boolean;
+  /**
+   * Round 40 `percivalRead39=1`: Percival's posterior takes its thumb split from the round-39 fitted read (`percivalRead39`). The split is set
+   * before the round-38 `ownView` offsets; at his own team picks where `ownView` applies, those offsets act on top of it, so there the thumb
+   * split is the read's only before Percival's own prior (at votes it is the read's exactly).
+   */
+  thumbRead39?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
 const STRICT_EPS = 0.03;
 
-const blendCaches = new Map<number, WeakMap<PlayerObservation, Posterior>>();
+// Keyed by the blend value plus every option that changes the team_select posterior below this branch and is not otherwise in the observation
+// (`lakeCal`, the pending-proposal flag), so a candidate and the default evaluated on one observation object never share an entry.
+const blendCaches = new Map<string, WeakMap<PlayerObservation, Posterior>>();
 
 // Keyed by the base posterior (itself cached per observation and per every option that changes it), so a cached result is reused only for the
 // same base: the round-38 readers that sit on top of it (`ownView`, `beliefThumbNoStain`) cannot hand one option set's result to another.
@@ -499,12 +510,27 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
     store.set('ns', out);
     return out;
   }
+  // Round 40 `percivalRead39=1` (Percival): the share of "thumb A is the red one" is set to the fitted read's 1 − P(A is Merlin); within each thumb
+  // assignment the worlds keep their weights, so every Percival decision that reads the posterior (the cleanest team, his votes) uses the read.
+  // This runs below the `ownView` branch: at team picks where `ownView` applies, its offsets multiply on top of the tilted weights.
+  if (opts.thumbRead39 === true && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2 && (obs.seatTeam ?? obs.myTeam) === 'good'
+    && obs.publicLoyalView !== true) {
+    const base = posterior(obs, { ...opts, thumbRead39: false });
+    let store = ownViewCache.get(base);
+    if (!store) { store = new Map(); ownViewCache.set(base, store); }
+    const hit = store.get('r40');
+    if (hit) return hit;
+    const out = thumbRead39Posterior(obs, base);
+    store.set('r40', out);
+    return out;
+  }
   // Round 36 `beliefLeadBlend`: where the lead-only recursive reader applies, mix its world weights with the level-0 posterior's
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    let store = blendCaches.get(blend);
-    if (!store) { store = new WeakMap(); blendCaches.set(blend, store); }
+    const blendKey = `${blend}|${opts.lakeCal ?? 1}|${opts.pendingProposal === true ? 1 : 0}`;
+    let store = blendCaches.get(blendKey);
+    if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
     if (hit) return hit;
     const p1 = posterior(obs, { ...opts, leadBlend: 0 });
@@ -549,6 +575,21 @@ function thumbNoStainPosterior(obs: PlayerObservation, opts: Readonly<BayesOptio
   return tot > 0 ? { ...base, wts: raw.map((x) => x / tot) } : base;
 }
 
+/** Round 40: `base` tilted so that P(thumb A is red) = 1 − the fitted read's P(A is Merlin) (`percivalRead39`), before any `ownView` offsets. */
+function thumbRead39Posterior(obs: PlayerObservation, base: Posterior): Posterior {
+  const read = percivalRead39(obs);
+  if (!read || base.worlds.length === 0) return base;
+  const ta = base.bitOf(read.thumbs[0]);
+  const pa = base.worlds.reduce((acc, w, i) => acc + ((w & ta) !== 0 ? base.wts[i] : 0), 0);
+  if (!(pa > 0 && pa < 1)) return base;
+  const qa = Math.min(Math.max(1 - read.pFirst, 0), 1);
+  const fa = qa / pa;
+  const fb = (1 - qa) / (1 - pa);
+  const raw = base.worlds.map((w, i) => base.wts[i] * ((w & ta) !== 0 ? fa : fb));
+  const tot = raw.reduce((x, y) => x + y, 0);
+  return tot > 0 ? { ...base, wts: raw.map((x) => x / tot) } : base;
+}
+
 function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
   const percival = obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2;
   const thumbs = opts.thumbRoles && percival ? obs.knownWizards ?? [] : [];
@@ -586,8 +627,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   // own camp; every decision enters through `HeuristicAgent.act` / `ForwardAgent.decide`, which set it.)
   const pending = opts.pendingProposal === true && obs.gamePhase === 'team_vote' && (obs.proposedTeam ?? []).length > 0
     && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true;
+  // Round 40 `beliefLakeCal40` (BL-cal): blue seats only, like the pending proposal (red frozen).
+  const lakeCal = opts.lakeCal !== undefined && opts.lakeCal > 0 && opts.lakeCal !== 1 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true ? opts.lakeCal : 1;
   // The level-0 options of the recursive reader are part of the key too (two settings that differ only there must not share an entry).
-  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}`;
+  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -722,7 +765,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     for (const l of lakes) {
       if ((w & l.hb) === 0) continue;
       const p = redLakeProb((w & l.tb) !== 0);
-      lp += Math.log(l.evil ? p : 1 - p);
+      lp += lakeCal * Math.log(l.evil ? p : 1 - p);
     }
     return lp;
   });
@@ -814,15 +857,17 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
     // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
     // recursive vote model was fitted on level-0 features without it.
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
     // Retired in round 39: not combined with `percivalRead39` (the round-39 read keeps the two-fail-card evidence it erased).
     ...(t.beliefThumbNoStain === true && !((t.percivalRead39 ?? 0) > 0) ? { thumbNoStain: true } : {}),
+    ...(t.percivalRead39 === 1 ? { thumbRead39: true } : {}),
     ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
+    ...((t.beliefLakeCal40 ?? 0) > 0 && t.beliefLakeCal40 !== 1 ? { lakeCal: t.beliefLakeCal40 } : {}),
   };
 }
 

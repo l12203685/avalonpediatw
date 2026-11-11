@@ -1158,6 +1158,7 @@ export interface AgentTuning {
    * 第 38 回合（檢查表 ML-01）：梅林照公開視角挑隊時，讀公開紀錄用的設定和忠臣挑隊用的同一套（`bayesOptionsOf`：強者表、取次方、遞迴後驗各半…），
    * 原本用的是另一組較舊的設定，所以他派隊和投票讀紀錄的方式不一樣。1 = 換成同一套。0 = 關。
    * 2 = 第 39 回合（檢查表 ML-01 值 2）：再加上「他這個座位的忠臣在公開紀錄上整條流程會派的隊」——沒有他看得到的紅、過得了他的關卡就照派，否則照原本不帶看得到的紅的挑法。
+   * 3 = 第 40 回合：值 2 只從第 2 局起（第 1 局照原本的梅林挑法；第 39 回合值 2 輸掉的藍方勝場在第一個分歧是第 1 局梅林提議的那些局）。
    */
   merlinPublicPipeline: number;
   /** 第 38 回合（檢查表 ML-03）：梅林在沒有看得到的紅的隊裡挑的時候，不再加上「看得到的紅坐在哪裡」的切區間分數（只照公開視角的乾淨機率）；沒有任何藍方讀這個分數。 */
@@ -1182,13 +1183,59 @@ export interface AgentTuning {
    * （真人首湖在第 2 局成功之後湖只上過成功任務的人 84%，機器人 66%），同分不照座位序；其餘情況照原本的共同資訊規則。0 = 關。
    */
   goodLakeHuman: number;
+  /** 第 40 回合（藍方座位的讀法；lp39 BL-cal）：別人的湖的宣告在後驗裡的份量取這個次方（持湖者是紅的世界要付的宣告概似 log 乘上這個值；< 1 = 持湖者不會因為持湖、宣告而被讀得那麼藍）。真人局持湖者的後驗偏藍：第 1 湖說 0.11／0.27／0.42／0.73 時實際是紅 16／35／47／65%。0 = 1（原本）。只給藍方座位（紅方座位、紅方推想別人的視角、遞迴讀人第 0 層不用）。 */
+  beliefLakeCal40: number;
+  /** 第 40 回合（派西在隊上、隊上只有一根拇指，第 3–5 局；lp39 PV-V2／PV-V3）：1 = 只有比較像梅林的那一根在隊上 → 贊成（第 3–4 局；公開邏輯證明一定會失敗時除外；比較不像梅林的那一根當隊長時照原本的準則；第 5 局照原本的準則：真人在第 5 局內黑 45%，第 1 關在這一格變差）；2 = 只有比較不像梅林的那一根在隊上 → 讀法信心 ≥ 0.9 而且不是整隊照派上一次成功的隊才內黑，否則贊成；3 = 兩條都開。0 = 關。 */
+  percivalThumbVote40: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：第 3–5 局的尾家外白門檻（自己估強制局隊長是紅的機率；第 4 次提議與第 1–3 次都用這個值）；0 = 用原本的門檻。 */
+  vote40TailM: number;
+  /** 第 40 回合（派西）：第 3–5 局的尾家外白門檻（自己估強制局隊長是紅的機率；第 4 次提議與第 1–3 次都用這個值）；0 = 用原本的門檻。 */
+  vote40TailP: number;
+  /** 第 40 回合（忠臣）：第 3–5 局的尾家外白門檻（自己估強制局隊長是紅的機率；第 4 次提議與第 1–3 次都用這個值）；0 = 用原本的門檻。 */
+  vote40TailL: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：不在隊上、第 5 局的外白門檻；0 = 用原本的門檻。 */
+  vote40R5OffM: number;
+  /** 第 40 回合（派西）：不在隊上、第 5 局的外白門檻；0 = 用原本的門檻。 */
+  vote40R5OffP: number;
+  /** 第 40 回合（忠臣）：不在隊上、第 5 局的外白門檻；0 = 用原本的門檻。 */
+  vote40R5OffL: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：在隊上、第 5 局的內黑門檻；0 = 用原本的門檻。 */
+  vote40R5OnM: number;
+  /** 第 40 回合（派西）：在隊上、第 5 局的內黑門檻；0 = 用原本的門檻。 */
+  vote40R5OnP: number;
+  /** 第 40 回合（忠臣）：在隊上、第 5 局的內黑門檻；0 = 用原本的門檻。 */
+  vote40R5OnL: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：不在隊上、紅方已兩勝的第 3–4 局的外白門檻；0 = 用原本的門檻。 */
+  vote40KeyOffM: number;
+  /** 第 40 回合（派西）：不在隊上、紅方已兩勝的第 3–4 局的外白門檻；0 = 用原本的門檻。 */
+  vote40KeyOffP: number;
+  /** 第 40 回合（忠臣）：不在隊上、紅方已兩勝的第 3–4 局的外白門檻；0 = 用原本的門檻。 */
+  vote40KeyOffL: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：在隊上、紅方已兩勝的第 3–4 局的內黑門檻；0 = 用原本的門檻。 */
+  vote40KeyOnM: number;
+  /** 第 40 回合（派西）：在隊上、紅方已兩勝的第 3–4 局的內黑門檻；0 = 用原本的門檻。 */
+  vote40KeyOnP: number;
+  /** 第 40 回合（忠臣）：在隊上、紅方已兩勝的第 3–4 局的內黑門檻；0 = 用原本的門檻。 */
+  vote40KeyOnL: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：不在隊上、紅方未兩勝的第 3–4 局：P(這隊乾淨) 到這個門檻才外白；0 = 用原本的門檻。 */
+  vote40OffM: number;
+  /** 第 40 回合（派西）：不在隊上、紅方未兩勝的第 3–4 局：P(這隊乾淨) 到這個門檻才外白；0 = 用原本的門檻。 */
+  vote40OffP: number;
+  /** 第 40 回合（忠臣）：不在隊上、紅方未兩勝的第 3–4 局：P(這隊乾淨) 到這個門檻才外白；0 = 用原本的門檻。 */
+  vote40OffL: number;
+  /** 第 40 回合（梅林（照忠臣投票時的公開視角））：在隊上、紅方未兩勝的第 3–4 局：P(隊上的紅夠讓任務失敗) 到這個門檻才內黑；0 = 用原本的門檻。 */
+  vote40OnM: number;
+  /** 第 40 回合（派西）：在隊上、紅方未兩勝的第 3–4 局：P(隊上的紅夠讓任務失敗) 到這個門檻才內黑；0 = 用原本的門檻。 */
+  vote40OnP: number;
+  /** 第 40 回合（忠臣）：在隊上、紅方未兩勝的第 3–4 局：P(隊上的紅夠讓任務失敗) 到這個門檻才內黑；0 = 用原本的門檻。 */
+  vote40OnL: number;
   /** 第 39 回合（派西持湖，lp39 LH-11／PL-01；Edward 待裁定的項目 4，只量）：用 percivalRead39 的讀法，信心 ≥ 0.7 時不湖比較像莫甘娜的那一根（縮小 10/14 裁定的候選人一個座位）。0 = 關。 */
   percivalLakeGuard39: number;
-  /** 第 39 回合（BlueRound39.ts，檢查表 LP-12／LK-09＋ML-05 第 3 部分）：位元 1 = 上一局的湖被別人宣告紅的人，這一局非強制的提議不帶（忠臣當隊長；梅林照派成功的隊也一樣），除非自己估持湖者是紅 ≥ 0.5；位元 2 沒有做；位元 4 = 不看持湖者的後驗、一律不帶（只量）。0 = 關。 */
+  /** 第 39 回合（BlueRound39.ts，檢查表 LP-12／LK-09＋ML-05 第 3 部分）：位元 1 = 上一局的湖被別人宣告紅的人，這一局非強制的提議不帶（忠臣當隊長；梅林照派成功的隊也一樣），除非自己估持湖者是紅 ≥ 0.5；位元 4 = 不看持湖者的後驗、一律不帶（只量）。0 = 關。；第 40 回合位元 2／8（檢查表 LP-12 第 2 部分，忠臣當隊長、第 3 局第 1–3 次提議）：那一次宣告紅的持湖者也不帶——2 = 持湖者上過失敗的任務，8 = 自己估被湖的人是紅 < 0.5（自己的讀法不同意這個宣告）。 */
   loyalLakePair: number;
   /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽（1、2 都硬擋拇指，和邏輯優先 1E／不變量 INV-Pe2 衝突）；3 = 同 1 的門檻（第 2 局第 5 次例外：用 2 的 0.8），只改 A／B 的加減分、不硬擋。0 = 關；只寫開關名稱不給值＝3。**第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3` 一起確認：審查修正後三組 6000 組合併 18000 組 +0.77 [+0.45, +1.09]；連同表決中的提議與投票門檻的組合是 +1.41，但投票的部分在真人決策點和強者的一致度變差，沒有採用）。 */
   percivalCarry39: number;
-  /** 第 39 回合（派西；BlueRound39Percival.ts）：拇指讀法換成真人牌譜擬合的模型（2；1 沒有做）。0 = 關（舊的計分決定 A／B）。**第 39 回合預設 2**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3` 一起確認：審查修正後三組 6000 組合併 18000 組 +0.77 [+0.45, +1.09]；連同表決中的提議與投票門檻的組合是 +1.41，但投票的部分在真人決策點和強者的一致度變差，沒有採用）。 */
+  /** 第 39 回合（派西；BlueRound39Percival.ts）：拇指讀法換成真人牌譜擬合的模型（2；第 40 回合的 1 = 2 再把同一個讀法放進派西自己的後驗：兩根拇指誰是紅的比例照讀法，其他照原本，所以挑最乾淨的隊、投票都用到讀法）。0 = 關（舊的計分決定 A／B）。**第 39 回合預設 2**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3` 一起確認：審查修正後三組 6000 組合併 18000 組 +0.77 [+0.45, +1.09]；連同表決中的提議與投票門檻的組合是 +1.41，但投票的部分在真人決策點和強者的一致度變差，沒有採用）。 */
   percivalRead39: number;
   /** 第 39 回合（藍方持湖，BlueRound39.ts）：位元 1 不湖出過兩張失敗的隊（第 1、2 湖）、2 照比分順序分類、4 同分不照座位序、8 同一類裡挑持湖者後驗比較藍的（紅方未兩勝）、64 紅方兩勝也照比較藍的（只量，待裁定）、128 梅林也用、256 第 1 湖 FS 先湖兩局都上過的人（百科 wiki-208 §2，只量，待裁定）。0 = 關。 */
   goodLake39: number;
@@ -1469,6 +1516,29 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodEarlyVote',
   'goodR4White',
   'goodLakeHuman',
+  'beliefLakeCal40',
+  'percivalThumbVote40',
+  'vote40TailM',
+  'vote40TailP',
+  'vote40TailL',
+  'vote40R5OffM',
+  'vote40R5OffP',
+  'vote40R5OffL',
+  'vote40R5OnM',
+  'vote40R5OnP',
+  'vote40R5OnL',
+  'vote40KeyOffM',
+  'vote40KeyOffP',
+  'vote40KeyOffL',
+  'vote40KeyOnM',
+  'vote40KeyOnP',
+  'vote40KeyOnL',
+  'vote40OffM',
+  'vote40OffP',
+  'vote40OffL',
+  'vote40OnM',
+  'vote40OnP',
+  'vote40OnL',
   'percivalLakeGuard39',
   'loyalLakePair',
   'percivalCarry39',
@@ -1671,6 +1741,29 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodEarlyVote: 0,
   goodR4White: 0,
   goodLakeHuman: 0,
+  beliefLakeCal40: 0,
+  percivalThumbVote40: 0,
+  vote40TailM: 0,
+  vote40TailP: 0,
+  vote40TailL: 0,
+  vote40R5OffM: 0,
+  vote40R5OffP: 0,
+  vote40R5OffL: 0,
+  vote40R5OnM: 0,
+  vote40R5OnP: 0,
+  vote40R5OnL: 0,
+  vote40KeyOffM: 0,
+  vote40KeyOffP: 0,
+  vote40KeyOffL: 0,
+  vote40KeyOnM: 0,
+  vote40KeyOnP: 0,
+  vote40KeyOnL: 0,
+  vote40OffM: 0,
+  vote40OffP: 0,
+  vote40OffL: 0,
+  vote40OnM: 0,
+  vote40OnP: 0,
+  vote40OnL: 0,
   percivalLakeGuard39: 0,
   loyalLakePair: 0,
   percivalCarry39: 0,
@@ -2021,6 +2114,29 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodEarlyVote: 0,
   goodR4White: 0,
   goodLakeHuman: 0,
+  beliefLakeCal40: 0,
+  percivalThumbVote40: 0,
+  vote40TailM: 0,
+  vote40TailP: 0,
+  vote40TailL: 0,
+  vote40R5OffM: 0,
+  vote40R5OffP: 0,
+  vote40R5OffL: 0,
+  vote40R5OnM: 0,
+  vote40R5OnP: 0,
+  vote40R5OnL: 0,
+  vote40KeyOffM: 0,
+  vote40KeyOffP: 0,
+  vote40KeyOffL: 0,
+  vote40KeyOnM: 0,
+  vote40KeyOnP: 0,
+  vote40KeyOnL: 0,
+  vote40OffM: 0,
+  vote40OffP: 0,
+  vote40OffL: 0,
+  vote40OnM: 0,
+  vote40OnP: 0,
+  vote40OnL: 0,
   percivalLakeGuard39: 0,
   loyalLakePair: 0,
   percivalCarry39: 3,
@@ -2223,6 +2339,29 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodEarlyVote: 'AVALON_TUNING_GOOD_EARLY_VOTE',
   goodR4White: 'AVALON_TUNING_GOOD_R4_WHITE',
   goodLakeHuman: 'AVALON_TUNING_GOOD_LAKE_HUMAN',
+  beliefLakeCal40: 'AVALON_TUNING_BELIEF_LAKE_CAL_40',
+  percivalThumbVote40: 'AVALON_TUNING_PERCIVAL_THUMB_VOTE_40',
+  vote40TailM: 'AVALON_TUNING_VOTE40_TAIL_M',
+  vote40TailP: 'AVALON_TUNING_VOTE40_TAIL_P',
+  vote40TailL: 'AVALON_TUNING_VOTE40_TAIL_L',
+  vote40R5OffM: 'AVALON_TUNING_VOTE40_R5_OFF_M',
+  vote40R5OffP: 'AVALON_TUNING_VOTE40_R5_OFF_P',
+  vote40R5OffL: 'AVALON_TUNING_VOTE40_R5_OFF_L',
+  vote40R5OnM: 'AVALON_TUNING_VOTE40_R5_ON_M',
+  vote40R5OnP: 'AVALON_TUNING_VOTE40_R5_ON_P',
+  vote40R5OnL: 'AVALON_TUNING_VOTE40_R5_ON_L',
+  vote40KeyOffM: 'AVALON_TUNING_VOTE40_KEY_OFF_M',
+  vote40KeyOffP: 'AVALON_TUNING_VOTE40_KEY_OFF_P',
+  vote40KeyOffL: 'AVALON_TUNING_VOTE40_KEY_OFF_L',
+  vote40KeyOnM: 'AVALON_TUNING_VOTE40_KEY_ON_M',
+  vote40KeyOnP: 'AVALON_TUNING_VOTE40_KEY_ON_P',
+  vote40KeyOnL: 'AVALON_TUNING_VOTE40_KEY_ON_L',
+  vote40OffM: 'AVALON_TUNING_VOTE40_OFF_M',
+  vote40OffP: 'AVALON_TUNING_VOTE40_OFF_P',
+  vote40OffL: 'AVALON_TUNING_VOTE40_OFF_L',
+  vote40OnM: 'AVALON_TUNING_VOTE40_ON_M',
+  vote40OnP: 'AVALON_TUNING_VOTE40_ON_P',
+  vote40OnL: 'AVALON_TUNING_VOTE40_ON_L',
   percivalLakeGuard39: 'AVALON_TUNING_PERCIVAL_LAKE_GUARD_39',
   loyalLakePair: 'AVALON_TUNING_LOYAL_LAKE_PAIR',
   percivalCarry39: 'AVALON_TUNING_PERCIVAL_CARRY_39',
@@ -2542,13 +2681,128 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'loyalLakePair') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 7) throw new Error(`loyalLakePair needs 0–7, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 15) throw new Error(`loyalLakePair needs 0–15, got "${raw}"`);
     return { loyalLakePair: value };
   }
   if (name === 'percivalLakeGuard39') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`percivalLakeGuard39 needs 0–1, got "${raw}"`);
     return { percivalLakeGuard39: value };
+  }
+  if (name === 'vote40OnL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40OnL needs a number in [0, 1], got "${raw}"`);
+    return { vote40OnL: value };
+  }
+  if (name === 'vote40OnP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40OnP needs a number in [0, 1], got "${raw}"`);
+    return { vote40OnP: value };
+  }
+  if (name === 'vote40OnM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40OnM needs a number in [0, 1], got "${raw}"`);
+    return { vote40OnM: value };
+  }
+  if (name === 'vote40OffL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40OffL needs a number in [0, 1], got "${raw}"`);
+    return { vote40OffL: value };
+  }
+  if (name === 'vote40OffP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40OffP needs a number in [0, 1], got "${raw}"`);
+    return { vote40OffP: value };
+  }
+  if (name === 'vote40OffM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40OffM needs a number in [0, 1], got "${raw}"`);
+    return { vote40OffM: value };
+  }
+  if (name === 'vote40KeyOnL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40KeyOnL needs a number in [0, 1], got "${raw}"`);
+    return { vote40KeyOnL: value };
+  }
+  if (name === 'vote40KeyOnP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40KeyOnP needs a number in [0, 1], got "${raw}"`);
+    return { vote40KeyOnP: value };
+  }
+  if (name === 'vote40KeyOnM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40KeyOnM needs a number in [0, 1], got "${raw}"`);
+    return { vote40KeyOnM: value };
+  }
+  if (name === 'vote40KeyOffL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40KeyOffL needs a number in [0, 1], got "${raw}"`);
+    return { vote40KeyOffL: value };
+  }
+  if (name === 'vote40KeyOffP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40KeyOffP needs a number in [0, 1], got "${raw}"`);
+    return { vote40KeyOffP: value };
+  }
+  if (name === 'vote40KeyOffM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40KeyOffM needs a number in [0, 1], got "${raw}"`);
+    return { vote40KeyOffM: value };
+  }
+  if (name === 'vote40R5OnL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40R5OnL needs a number in [0, 1], got "${raw}"`);
+    return { vote40R5OnL: value };
+  }
+  if (name === 'vote40R5OnP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40R5OnP needs a number in [0, 1], got "${raw}"`);
+    return { vote40R5OnP: value };
+  }
+  if (name === 'vote40R5OnM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40R5OnM needs a number in [0, 1], got "${raw}"`);
+    return { vote40R5OnM: value };
+  }
+  if (name === 'vote40R5OffL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40R5OffL needs a number in [0, 1], got "${raw}"`);
+    return { vote40R5OffL: value };
+  }
+  if (name === 'vote40R5OffP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40R5OffP needs a number in [0, 1], got "${raw}"`);
+    return { vote40R5OffP: value };
+  }
+  if (name === 'vote40R5OffM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40R5OffM needs a number in [0, 1], got "${raw}"`);
+    return { vote40R5OffM: value };
+  }
+  if (name === 'vote40TailL') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40TailL needs a number in [0, 1], got "${raw}"`);
+    return { vote40TailL: value };
+  }
+  if (name === 'vote40TailP') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40TailP needs a number in [0, 1], got "${raw}"`);
+    return { vote40TailP: value };
+  }
+  if (name === 'vote40TailM') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`vote40TailM needs a number in [0, 1], got "${raw}"`);
+    return { vote40TailM: value };
+  }
+  if (name === 'percivalThumbVote40') {
+    const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`percivalThumbVote40 needs 0–3, got "${raw}"`);
+    return { percivalThumbVote40: value };
+  }
+  if (name === 'beliefLakeCal40') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`beliefLakeCal40 needs a number in [0, 1], got "${raw}"`);
+    return { beliefLakeCal40: value };
   }
   if (name === 'goodFourthWhite' || name === 'goodLakeHuman' || name === 'goodEarlyVote') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
@@ -2577,7 +2831,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinPublicPipeline') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`merlinPublicPipeline needs 0–2, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinPublicPipeline needs 0–3, got "${raw}"`);
     return { merlinPublicPipeline: value };
   }
   if (name === 'loyalTailWhiteLastTau' || name === 'goodBayesFsReuse') {
@@ -2732,7 +2986,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive' || key === 'loyalFlowPick' || key === 'beliefRecursiveLeadScope' || key === 'beliefLeadBlend' || key === 'loyalR2View' || key === 'loyalSetPick' || key === 'loyalR2ViewKeep' || key === 'percivalThumbSure' || key === 'ownView' || key === 'ownViewScope' || key === 'ownViewKeep' || key === 'ownViewRounds' || key === 'percivalThumbRead' || key === 'goodOnTeamState' || key === 'goodReuseWhite' || key === 'goodFourthWhite' || key === 'merlinOwnWhite' || key === 'percivalMerlinWhite' || key === 'merlinFlowFollow' || key === 'goodLakeHuman' || key === 'percivalLakeGuard39' || key === 'loyalLakePair' || key === 'percivalCarry39' || key === 'percivalRead39' || key === 'goodLake39' || key === 'goodEarlyVote' || key === 'goodR4White' || key === 'merlinOnTeamOwn' || key === 'loyalTailWhiteLastTau' || key === 'goodBayesR4Kept' || key === 'goodBayesFsReuse' || key === 'merlinPublicPipeline') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive' || key === 'loyalFlowPick' || key === 'beliefRecursiveLeadScope' || key === 'beliefLeadBlend' || key === 'loyalR2View' || key === 'loyalSetPick' || key === 'loyalR2ViewKeep' || key === 'percivalThumbSure' || key === 'ownView' || key === 'ownViewScope' || key === 'ownViewKeep' || key === 'ownViewRounds' || key === 'percivalThumbRead' || key === 'goodOnTeamState' || key === 'goodReuseWhite' || key === 'goodFourthWhite' || key === 'merlinOwnWhite' || key === 'percivalMerlinWhite' || key === 'merlinFlowFollow' || key === 'goodLakeHuman' || key === 'beliefLakeCal40' || key === 'percivalThumbVote40' || key === 'vote40TailM' || key === 'vote40TailP' || key === 'vote40TailL' || key === 'vote40R5OffM' || key === 'vote40R5OffP' || key === 'vote40R5OffL' || key === 'vote40R5OnM' || key === 'vote40R5OnP' || key === 'vote40R5OnL' || key === 'vote40KeyOffM' || key === 'vote40KeyOffP' || key === 'vote40KeyOffL' || key === 'vote40KeyOnM' || key === 'vote40KeyOnP' || key === 'vote40KeyOnL' || key === 'vote40OffM' || key === 'vote40OffP' || key === 'vote40OffL' || key === 'vote40OnM' || key === 'vote40OnP' || key === 'vote40OnL' || key === 'percivalLakeGuard39' || key === 'loyalLakePair' || key === 'percivalCarry39' || key === 'percivalRead39' || key === 'goodLake39' || key === 'goodEarlyVote' || key === 'goodR4White' || key === 'merlinOnTeamOwn' || key === 'loyalTailWhiteLastTau' || key === 'goodBayesR4Kept' || key === 'goodBayesFsReuse' || key === 'merlinPublicPipeline') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

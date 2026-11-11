@@ -16,6 +16,7 @@
  */
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
+import { vote40TailBar } from './BlueRound40';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
 
 /** 第 a 次提議之後的隊長：offset 1 = 下一任，4 − failCount = 尾家（強制局的隊長）。 */
@@ -88,7 +89,7 @@ export function goodVoteAltKeeps(tuning: Readonly<AgentTuning>, obs: PlayerObser
  */
 export function loyalTailWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   if (obs.myRole !== 'loyal' || obs.publicLoyalView === true) return false;
-  return tailWhiteCore(tuning, obs);
+  return tailWhiteCore(tuning, obs, vote40TailBar(tuning, obs, 'L'));
 }
 
 /**
@@ -96,7 +97,7 @@ export function loyalTailWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObse
  * `loyalTailWhiteEarly`（第 28 回合）：`loyalTailWhiteLast` 開著時，第 1–3 次提議也開，但比較的對象換成「之後每一任隊長（到尾家為止）能派的最乾淨的隊」的最大值——
  * 前面還有別的隊長時，否決換來的不只是尾家的隊。
  */
-export function tailWhiteCore(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+export function tailWhiteCore(tuning: Readonly<AgentTuning>, obs: PlayerObservation, bar40 = 0): boolean {
   const tau = tuning.loyalTailWhite ?? 0;
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
   const tail = tailLeaderOf(obs);
@@ -112,7 +113,8 @@ export function tailWhiteCore(tuning: Readonly<AgentTuning>, obs: PlayerObservat
   const tailRed = bayesRedShare(obs, opts).get(tail) ?? 0;
   // Round 38 `loyalTailWhiteLastTau` (checklist AV-09 / AV-02): the fourth proposal of rounds 3–5 has its own threshold.
   const tau4 = tuning.loyalTailWhiteLastTau ?? 0;
-  const bar = tau4 > 0 && fc === 3 && (obs.currentRound ?? 1) >= 3 ? tau4 : tau;
+  // Round 40 `vote40Tail*`: rounds 3–5, one threshold per role for the fourth and the earlier proposals (0 = the thresholds above).
+  const bar = bar40 > 0 && (obs.currentRound ?? 1) >= 3 ? bar40 : tau4 > 0 && fc === 3 && (obs.currentRound ?? 1) >= 3 ? tau4 : tau;
   if (tailRed < bar) return false;
   const p = bayesTeamClean(obs, team, opts);
   if (p === null) return false;
@@ -145,7 +147,8 @@ export function mpTailWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObserva
   const publicView = {
     ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: false,
   } as PlayerObservation;
-  if (!tailWhiteCore(tuning, publicView)) return false;
+  const bar40 = vote40TailBar(tuning, obs, role === 'merlin' ? 'M' : 'P');
+  if (!tailWhiteCore(tuning, publicView, bar40)) return false;
   if (role === 'merlin') return !(obs.proposedTeam ?? []).some((id) => obs.knownEvils.includes(id));
-  return tailWhiteCore(tuning, obs);
+  return tailWhiteCore(tuning, obs, bar40);
 }

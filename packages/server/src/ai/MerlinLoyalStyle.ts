@@ -25,6 +25,16 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
 }
 
 /** Merlin's loyal-style team, or the action unchanged. */
+
+/**
+ * `merlinPublicPipeline` applies to this decision: 1／2 every round; 3 (round 40) = 2 from round 2 on only — round 1 keeps the current Merlin
+ * pick (the round-39 value 2 lost its blue wins in games whose first divergence was a round-1 Merlin proposal).
+ */
+export function merlinPublicPipelineOn(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const v = tuning.merlinPublicPipeline ?? 0;
+  return v > 0 && !(v === 3 && (obs.currentRound ?? 1) <= 1);
+}
+
 export function merlinLoyalStyleTeam(
   tuning: Readonly<AgentTuning>,
   obs: PlayerObservation,
@@ -58,7 +68,7 @@ export function merlinLoyalStyleTeam(
   // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
   const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
   // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
-  const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
+  const pubOpts: BayesOptions = merlinPublicPipelineOn(tuning, obs)
     ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
     : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
   // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
@@ -194,7 +204,7 @@ export function merlinDoomedPublicTeam(
   // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
   const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
   // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
-  const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
+  const pubOpts: BayesOptions = merlinPublicPipelineOn(tuning, obs)
     ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
     : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
   // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
@@ -236,7 +246,7 @@ export function merlinDoomedAvoidTeam(
   // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
   const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
   // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
-  const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
+  const pubOpts: BayesOptions = merlinPublicPipelineOn(tuning, obs)
     ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
     : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
   // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
