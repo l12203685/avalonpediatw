@@ -20,8 +20,8 @@ const MAP_CATEGORY_ORDER = ['beginner', 'rules', 'roles', 'strategies', 'voting'
 const DESKTOP_QUERY = '(min-width: 1024px)';
 
 /**
- * 每個分類的文章由上而下是一條閱讀線（wiki_data.json 的順序，2026-10-30 晚全站整併）；寫死在前端的文章
- * （新手常見問題、角色數據）排在同分類的 JSON 文章後面，不插到閱讀線前面。
+ * 每個分類的文章由上而下是一條閱讀線（wiki_data.json 的順序，2026-10-30 晚全站整併；2026-11-11 再併成 40 篇）；寫死在
+ * 前端的文章排在同分類的 JSON 文章後面，不插到閱讀線前面（2026-11-11 起新手常見問題、角色數據都併進 JSON 的主文，目前沒有）。
  */
 const HARDCODED_IDS = new Set(WIKI_ARTICLES.map((a) => a.id));
 

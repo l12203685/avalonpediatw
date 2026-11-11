@@ -5,7 +5,8 @@
  *
  *   /llms.txt          llms.txt 慣例（https://llmstxt.org）：網站說明、內容怎麼分、每篇文章的 Markdown 連結、資料端點
  *   /llms-full.txt     全部文章接成一份乾淨的 Markdown
- *   /wiki-md/<id>.md   每篇文章一個 Markdown 檔
+ *   /wiki-md/<id>.md   每篇文章一個 Markdown 檔；被併入別篇的舊 id（data/wikiRedirects.ts）留一個短的轉址說明檔，指到主文的
+ *                      .md 與那一節（2026-11-11：舊網址曾列在 sitemap.xml 與 llms.txt，不要變成 404），不列進 sitemap、llms.txt
  *   /sitemap.xml       網站頁面 + 上面這些檔案。每篇文章的分享頁 /w/<id>/（wikiSharePages.ts）不列進去：它們只給社群網站
  *                      的連結預覽用，打開就用 script 轉到 /#wiki=<id>，搜尋引擎會當成轉址或首頁的重複頁
  *
@@ -13,7 +14,8 @@
  * 完整網址；圖片換成完整網址；論點標記統一成【邏輯】【經驗】（舊標記照 utils/wikiMarkup.ts 的對照換掉）。
  * 這裡不碰 node API（vite.config.ts 讀檔後把資料傳進來），伺服器端的 vitest 直接測這個模組。
  */
-import { WIKI_SHARE_DIR } from './wikiHash';
+import { WIKI_SHARE_DIR, wikiHash } from './wikiHash';
+import { wikiHeadings } from './wikiSections';
 import { WIKI_TAGS, canonicalLayerMarks, stripHackmdArtifacts, stripHtmlComments, stripLayerMarks, wikiCardExcerpt } from './wikiMarkup';
 
 export interface LlmsArticle {
@@ -44,6 +46,8 @@ export interface LlmsOptions {
   notes?: Readonly<Record<string, string>>;
   /** Extra site pages for sitemap.xml (paths starting with /). */
   sitePages?: readonly string[];
+  /** Old merged-away ids → the article (and section anchor) that now carries their text: each gets a short stub .md. */
+  redirects?: Readonly<Record<string, { id: string; section?: string }>>;
 }
 
 export const WIKI_MD_DIR = 'wiki-md';
@@ -96,8 +100,8 @@ export function cleanWikiMarkdown(content: string, opts: { siteUrl: string; know
       .replace(/<font\b[^>]*>([\s\S]*?)<\/font>/gi, '$1')
       .replace(/<\/?(?:font|span|center|u)\b[^>]*>/gi, '');
     line = canonicalLayerMarks(line);
-    // [標題](wiki:wiki-57) → the article's .md; an unknown id keeps only the text
-    line = line.replace(/\[([^\]]*)\]\(wiki:([^)\s]*)\)/g, (_m, text: string, id: string) =>
+    // [標題](wiki:wiki-57) → the article's .md (a #section anchor is dropped); an unknown id keeps only the text
+    line = line.replace(/\[([^\]]*)\]\(wiki:([^)\s#]*)(?:#[^)\s]*)?\)/g, (_m, text: string, id: string) =>
       opts.knownIds.has(id.trim()) ? `[${text}](${site}/${wikiMdPath(id.trim())})` : text);
     // site-relative images and links (/wiki-images/…) → absolute
     line = line.replace(/\]\((\/(?!\/)[^)\s]*)\)/g, (_m, p: string) => `](${site}${p})`);
@@ -143,6 +147,27 @@ export function buildLlmsFiles(articles: readonly LlmsArticle[], opts: LlmsOptio
     files[wikiMdPath(a.id)] = doc;
     return doc;
   });
+
+  // 被併入別篇的舊 id：短的轉址說明（不列進 sitemap.xml、llms.txt）
+  const byId = new Map(ordered.map((a) => [a.id, a]));
+  for (const [oldId, to] of Object.entries(opts.redirects ?? {})) {
+    const target = byId.get(to.id);
+    if (!target || knownIds.has(oldId)) continue;
+    const heading = to.section ? wikiHeadings(target.content).find((h) => h.slug === to.section) : undefined;
+    const where = heading ? `〈${target.title}〉的〈${stripLayerMarks(heading.text).trim()}〉一節` : `〈${target.title}〉`;
+    const page = `${site}/${wikiHash(target.id, heading?.slug)}`;
+    files[wikiMdPath(oldId)] = [
+      `# 本文已併入〈${target.title}〉`,
+      '',
+      `> 文章 id：${oldId}（已併入 ${target.id}）`,
+      '',
+      `這篇文章的內容已經整合進${where}，請改讀：`,
+      '',
+      `- Markdown：${site}/${wikiMdPath(target.id)}`,
+      `- 網站：${page}`,
+      '',
+    ].join('\n');
+  }
 
   const layerLegend = (Object.keys(WIKI_TAGS) as (keyof typeof WIKI_TAGS)[])
     .map((k) => `【${WIKI_TAGS[k].label}】＝${WIKI_TAGS[k].hint}`)

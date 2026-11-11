@@ -9,6 +9,8 @@
  *    不用 <meta http-equiv="refresh">：Meta（Threads／Facebook）的預覽爬蟲會跟著 meta refresh 走到首頁，預覽就變回
  *    首頁的；爬蟲不跑 script，所以停在這頁讀到文章自己的預覽。
  * 文章清單與 /wiki-md、llms.txt 同一份（orderLlmsArticles：寫死的文章在前，同名的 JSON 文章不重複）。
+ * 2026-11-11 文章合併：被併入別篇的舊 id（data/wikiRedirects.ts）照樣有 /w/<舊 id>/，帶主文的預覽、canonical 指主文的
+ * 分享頁，打開後轉到主文併入的那一節（/#wiki=<主文>&sec=<章節>）；這些舊頁和現存文章的分享頁一樣不列進 sitemap。
  * 這裡不碰 node API，packages/server/src/__tests__/WebWikiShare.test.ts 直接測。
  */
 import { orderLlmsArticles, type LlmsArticle, type LlmsCategory } from './llmsTxt';
@@ -32,6 +34,8 @@ export interface WikiShareOptions {
   basePath?: string;
   categories: readonly LlmsCategory[];
   image: ShareImage;
+  /** Old (merged-away) ids → the article and section they became; each gets a page that forwards there. */
+  redirects?: Readonly<Record<string, { id: string; section?: string }>>;
 }
 
 /** 640×640 的站標（public/logo.png）：正方形，用 Twitter 的 summary 卡。 */
@@ -65,17 +69,20 @@ export function shareDescription(article: Pick<LlmsArticle, 'excerpt' | 'content
   return `${chars.slice(0, Math.min(chars.length, max - 1)).join('').trimEnd()}…`;
 }
 
-/** 分享頁打開後要去的網址（站內深連結）。 */
-export function wikiShareRedirect(id: string, basePath = '/'): string {
+/** 分享頁打開後要去的網址（站內深連結；給了章節時捲到那一節）。 */
+export function wikiShareRedirect(id: string, basePath = '/', section?: string): string {
   const base = basePath.endsWith('/') ? basePath : `${basePath}/`;
-  return `${base}${wikiHash(id)}`;
+  return `${base}${wikiHash(id, section)}`;
 }
 
-/** 一篇文章的分享頁 HTML。 */
-export function buildWikiSharePage(article: LlmsArticle, opts: WikiShareOptions): string {
+/**
+ * 一篇文章的分享頁 HTML。`moved` 給了時是舊 id 的轉址頁：網址是 /w/<舊 id>/，預覽與 canonical 用主文的，
+ * 打開後轉到主文併入的那一節，並加上 noindex。
+ */
+export function buildWikiSharePage(article: LlmsArticle, opts: WikiShareOptions, moved?: { oldId: string; section?: string }): string {
   const site = trimSlash(opts.siteUrl);
   const url = wikiShareUrl(site, article.id);
-  const target = wikiShareRedirect(article.id, opts.basePath);
+  const target = wikiShareRedirect(article.id, opts.basePath, moved?.section);
   const description = shareDescription(article);
   const image = `${site}${opts.image.path.startsWith('/') ? '' : '/'}${opts.image.path}`;
   const card = opts.image.width >= opts.image.height * 1.5 ? 'summary_large_image' : 'summary';
@@ -91,6 +98,7 @@ export function buildWikiSharePage(article: LlmsArticle, opts: WikiShareOptions)
     `<title>${e(article.title)}｜${WIKI_SITE_NAME}</title>`,
     `<meta name="description" content="${e(description)}">`,
     `<link rel="canonical" href="${e(url)}">`,
+    moved ? '<meta name="robots" content="noindex">' : '',
     `<meta property="og:site_name" content="${WIKI_SITE_NAME}">`,
     '<meta property="og:type" content="article">',
     '<meta property="og:locale" content="zh_TW">',
@@ -113,6 +121,7 @@ export function buildWikiSharePage(article: LlmsArticle, opts: WikiShareOptions)
     `<p>${WIKI_SITE_NAME}</p>`,
     `<h1>${e(article.title)}</h1>`,
     description ? `<p>${e(description)}</p>` : '',
+    moved ? `<p>這篇文章已經併入〈${e(article.title)}〉。</p>` : '',
     `<p><a href="${e(target)}">到${WIKI_SITE_NAME}閱讀全文</a></p>`,
     '</main>',
     '</body>',
@@ -121,9 +130,16 @@ export function buildWikiSharePage(article: LlmsArticle, opts: WikiShareOptions)
   ].filter((line, i, all) => line !== '' || i === all.length - 1).join('\n');
 }
 
-/** 每篇文章一頁，key = build 輸出裡的路徑（w/<id>/index.html）。 */
+/** 每篇文章一頁，key = build 輸出裡的路徑（w/<id>/index.html）；再加上 opts.redirects 裡每個舊 id 的轉址頁。 */
 export function buildWikiSharePages(articles: readonly LlmsArticle[], opts: WikiShareOptions): Record<string, string> {
   const pages: Record<string, string> = {};
-  for (const a of orderLlmsArticles(articles, opts.categories)) pages[wikiSharePath(a.id)] = buildWikiSharePage(a, opts);
+  const ordered = orderLlmsArticles(articles, opts.categories);
+  for (const a of ordered) pages[wikiSharePath(a.id)] = buildWikiSharePage(a, opts);
+  const byId = new Map(ordered.map((a) => [a.id, a]));
+  for (const [oldId, to] of Object.entries(opts.redirects ?? {})) {
+    const main = byId.get(to.id);
+    if (!main || byId.has(oldId)) continue; // a live article keeps its own page
+    pages[wikiSharePath(oldId)] = buildWikiSharePage(main, opts, { oldId, section: to.section });
+  }
   return pages;
 }

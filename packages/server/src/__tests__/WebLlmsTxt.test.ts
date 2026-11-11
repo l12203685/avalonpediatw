@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { buildLlmsFiles, buildNoscriptHtml, cleanWikiMarkdown, wikiMdPath } from '../../../web/src/utils/llmsTxt';
 import type { LlmsArticle } from '../../../web/src/utils/llmsTxt';
 import { WIKI_ARTICLES, WIKI_CATEGORIES } from '../../../web/src/data/wiki';
+import { WIKI_REDIRECTS } from '../../../web/src/data/wikiRedirects';
 
 const SITE = 'https://example.test';
 const WEB = path.resolve(__dirname, '..', '..', '..', 'web');
@@ -24,7 +25,9 @@ const files = buildLlmsFiles(allArticles, {
 describe('buildLlmsFiles (real wiki data)', () => {
   it('every article gets its own markdown file, listed in llms.txt, llms-full.txt and sitemap.xml', () => {
     const ids = [...new Set(allArticles.map((a) => a.id))];
-    expect(ids.length).toBeGreaterThan(40);
+    // 2026-11-11 文章合併：57 → 40 篇；被併入的舊 id 不列在這裡（只有轉址說明的 .md，要傳 redirects，見下一個測試；分享頁見 WebWikiShare.test.ts）
+    expect(ids.length).toBeGreaterThanOrEqual(40);
+    for (const old of ['wiki-62', 'wiki-208', 'faq-basic', 'strategy-merlin-data']) expect(files[wikiMdPath(old)], old).toBeUndefined();
     for (const a of allArticles) {
       const md = files[wikiMdPath(a.id)];
       expect(md, a.id).toBeDefined();
@@ -34,6 +37,24 @@ describe('buildLlmsFiles (real wiki data)', () => {
       expect(files['sitemap.xml'], a.id).toContain(`<loc>${SITE}/${wikiMdPath(a.id)}</loc>`);
     }
     expect(Object.keys(files).filter((f) => f.startsWith('wiki-md/'))).toHaveLength(ids.length);
+  });
+
+  it('old merged-away ids keep a short stub .md pointing at the main article and section, kept out of sitemap.xml and llms.txt (2026-11-11)', () => {
+    const withStubs = buildLlmsFiles(allArticles, {
+      siteUrl: SITE, apiUrl: 'https://api.example.test', repoUrl: 'https://github.com/x/y', categories: WIKI_CATEGORIES, redirects: WIKI_REDIRECTS,
+    });
+    const ids = new Set(allArticles.map((a) => a.id));
+    for (const [old, to] of Object.entries(WIKI_REDIRECTS)) {
+      const stub = withStubs[wikiMdPath(old)];
+      expect(stub, old).toBeDefined();
+      expect(ids.has(old), old).toBe(false);
+      expect(stub, old).toContain(`${SITE}/${wikiMdPath(to.id)}`);
+      expect(stub, old).toContain(`#wiki=${encodeURIComponent(to.id)}${to.section ? `&sec=${encodeURIComponent(to.section)}` : ''}`);
+      expect(withStubs['sitemap.xml'], old).not.toContain(`/${wikiMdPath(old)}<`);
+      expect(withStubs['llms.txt'], old).not.toContain(`/${wikiMdPath(old)})`);
+    }
+    expect(withStubs[wikiMdPath('wiki-62')]).toContain('〈乙、大局觀〉一節');
+    for (const a of allArticles) expect(withStubs[wikiMdPath(a.id)], a.id).toBe(files[wikiMdPath(a.id)]);
   });
 
   it('llms.txt follows the convention: H1, blockquote summary, H2 sections of links, the full-text and data links', () => {
@@ -77,6 +98,7 @@ describe('cleanWikiMarkdown', () => {
     const src = [
       '---', 'title: 測試', 'tags: a', '---', '[TOC]', '# 測試', '',
       '見 [視角](wiki:wiki-57) 與 [不存在](wiki:wiki-999)。<!-- 草稿 -->',
+      '一節：[視角](wiki:wiki-57#點夾跳)〈點夾跳〉',
       '![圖](/wiki-images/a.png) <font color=#ff0000>紅字</font><br>下一行',
       '- 【規則】規則書寫明 【時效】',
       '- 【建議】經驗談',
@@ -84,6 +106,8 @@ describe('cleanWikiMarkdown', () => {
     ].join('\n');
     expect(cleanWikiMarkdown(src, { siteUrl: `${SITE}/`, knownIds }).split('\n')).toEqual([
       `見 [視角](${SITE}/wiki-md/wiki-57.md) 與 不存在。`,
+      // 2026-11-11：章節錨點（#slug）只在網站上有用，純文字版連到整篇
+      `一節：[視角](${SITE}/wiki-md/wiki-57.md)〈點夾跳〉`,
       `![圖](${SITE}/wiki-images/a.png) 紅字  `,
       '下一行',
       '- 【邏輯】規則書寫明 ',

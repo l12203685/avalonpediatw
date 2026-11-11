@@ -2,7 +2,7 @@
  * 百科舊式 HTML → 網站樣式（packages/web/src/utils/wikiMarkup.ts，Edward 2026-10-28）。
  */
 import { describe, expect, it } from 'vitest';
-import { hasWikiLayers, normalizeWikiMarkup, wikiArticleId, wikiBlockLayer, wikiExcerpt, wikiLayerOf, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
+import { hasWikiLayers, normalizeWikiMarkup, wikiArticleId, wikiArticleRef, wikiBlockLayer, wikiExcerpt, wikiLayerOf, wikiUrlTransform } from '../../../web/src/utils/wikiMarkup';
 
 describe('normalizeWikiMarkup', () => {
   it('a run of whole-line red text becomes a warning callout (the 點跳夾 notice)', () => {
@@ -98,6 +98,17 @@ describe('normalizeWikiMarkup', () => {
     expect(wikiArticleId('https://hackmd.io/x')).toBeNull();
     expect(wikiArticleId('wiki:')).toBeNull();
     expect(wikiArticleId(undefined)).toBeNull();
+  });
+
+  it('wiki: links may name a section (2026-11-11); react-markdown hands it over percent-encoded', () => {
+    const sec = '四、內黑的用途';
+    expect(wikiArticleRef('wiki:wiki-148')).toEqual({ id: 'wiki-148' });
+    expect(wikiArticleRef(`wiki:wiki-148#${sec}`)).toEqual({ id: 'wiki-148', section: sec });
+    expect(wikiArticleRef(`wiki:wiki-148#${encodeURIComponent(sec)}`)).toEqual({ id: 'wiki-148', section: sec });
+    expect(wikiArticleRef('wiki:wiki-148#')).toEqual({ id: 'wiki-148' });
+    expect(wikiArticleId(`wiki:wiki-148#${sec}`)).toBe('wiki-148');
+    expect(wikiArticleRef('wiki:#x')).toBeNull();
+    expect(wikiArticleRef('https://example.com/#wiki')).toBeNull();
   });
 
   it('site-relative image paths get the deploy base; external and empty srcs are left alone', async () => {

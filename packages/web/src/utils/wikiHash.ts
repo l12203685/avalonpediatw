@@ -4,6 +4,8 @@
  *   #wiki                 → 百科攻略頁籤
  *   #wiki=<文章 id>        → 百科攻略，打開那篇文章（也接受 #wiki/<id>；同 #records=：打開時留在網址列、
  *                            換文章時跟著換、關閉時清掉，見 components/wikiLink.ts）
+ *   #wiki=<id>&sec=<章節>  → 打開那篇並捲到那一節（章節＝標題的 slug，見 wikiSections.ts；2026-11-11 文章合併後，
+ *                            舊文章 id 由 data/wikiRedirects.ts 轉到主文的那一節）
  *
  * 分享用的網址是 /w/<id>/（build 時產生的靜態頁，帶那篇文章自己的 Open Graph 預覽，見 wikiSharePages.ts），
  * 打開後立刻轉到這裡的 #wiki=<id>。
@@ -17,25 +19,48 @@ export function isWikiArticleId(id: string | null | undefined): boolean {
   return WIKI_ID_RE.test(id ?? '');
 }
 
-/** #wiki → { id: null }；#wiki=<id>、#wiki/<id> → { id }；id 不像文章 id 時當成 #wiki；其他 hash → null。 */
-export function parseWikiHash(hash: string | null | undefined): { id: string | null } | null {
+/** 章節錨點：標題的 slug，不含空白與控制字元，最長 200 字。 */
+function cleanSection(raw: string): string | undefined {
+  let s = raw;
+  try {
+    s = decodeURIComponent(s);
+  } catch {
+    return undefined;
+  }
+  s = s.trim();
+  return s && s.length <= 200 && !/[\s\u0000-\u001f<>"]/.test(s) ? s : undefined;
+}
+
+export interface WikiHashTarget {
+  id: string | null;
+  /** Heading anchor to scroll to (`&sec=`); absent when the link opens the article at the top. */
+  section?: string;
+}
+
+/** #wiki → { id: null }；#wiki=<id>、#wiki/<id> → { id }；#wiki=<id>&sec=<章節> → { id, section }；id 不像文章 id 時當成 #wiki；其他 hash → null。 */
+export function parseWikiHash(hash: string | null | undefined): WikiHashTarget | null {
   const raw = (hash ?? '').replace(/^#/, '').trim();
   if (/^wiki\/?$/i.test(raw)) return { id: null };
   const m = /^wiki[=/](.*)$/i.exec(raw);
   if (!m) return null;
-  let id = m[1];
+  const [rawId, ...rest] = m[1].split('&');
+  let id = rawId;
   try {
     id = decodeURIComponent(id);
   } catch {
     // a lone "%" — not an article id
   }
   id = id.trim().replace(/\/+$/, '');
-  return { id: isWikiArticleId(id) ? id : null };
+  if (!isWikiArticleId(id)) return { id: null };
+  const sec = rest.find((p) => p.startsWith('sec='));
+  const section = sec ? cleanSection(sec.slice(4)) : undefined;
+  return section ? { id, section } : { id };
 }
 
-/** 文章的 hash（#wiki=<id>）；沒有 id 時 #wiki。 */
-export function wikiHash(id?: string | null): string {
-  return id ? `#wiki=${encodeURIComponent(id)}` : '#wiki';
+/** 文章的 hash（#wiki=<id>，有章節時 #wiki=<id>&sec=<章節>）；沒有 id 時 #wiki。 */
+export function wikiHash(id?: string | null, section?: string | null): string {
+  if (!id) return '#wiki';
+  return `#wiki=${encodeURIComponent(id)}${section ? `&sec=${encodeURIComponent(section)}` : ''}`;
 }
 
 /** 分享頁的目錄（/w/<id>/），build 時產生，見 wikiSharePages.ts。 */

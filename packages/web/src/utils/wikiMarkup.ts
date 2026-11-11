@@ -187,11 +187,31 @@ export function normalizeWikiMarkup(content: string): string {
  */
 export const WIKI_ARTICLE_SCHEME = 'wiki:';
 
-/** The article id of a `wiki:` link, or null for any other href. */
-export function wikiArticleId(href: string | undefined): string | null {
+const decode = (s: string): string => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+
+/**
+ * The target of a `wiki:` link — `wiki:wiki-148` or, for a section, `wiki:wiki-148#四、內黑的用途` (the heading slug,
+ * utils/wikiSections.ts; react-markdown hands the href over percent-encoded) — or null for any other href.
+ */
+export function wikiArticleRef(href: string | undefined): { id: string; section?: string } | null {
   if (!href?.startsWith(WIKI_ARTICLE_SCHEME)) return null;
-  const id = href.slice(WIKI_ARTICLE_SCHEME.length).trim();
-  return id || null;
+  const rest = href.slice(WIKI_ARTICLE_SCHEME.length).trim();
+  const hash = rest.indexOf('#');
+  const id = decode(hash < 0 ? rest : rest.slice(0, hash)).trim();
+  if (!id) return null;
+  const section = hash < 0 ? '' : decode(rest.slice(hash + 1)).trim();
+  return section ? { id, section } : { id };
+}
+
+/** The article id of a `wiki:` link (without its section), or null for any other href. */
+export function wikiArticleId(href: string | undefined): string | null {
+  return wikiArticleRef(href)?.id ?? null;
 }
 
 /** react-markdown `urlTransform`: keep our color pseudo-links and article links, sanitize everything else the default way. */

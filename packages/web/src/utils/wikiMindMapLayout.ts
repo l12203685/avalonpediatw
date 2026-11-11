@@ -418,6 +418,8 @@ export function fitMindMapToViewport(
       tried.push({ maxRows: rows, maxLeafLabel: cap, scale: Math.min(maxScale, fitScale(layout.bounds, width, height)) });
     }
   }
+  // no articles yet (2026-11-11: nothing is hard-coded any more, so the map can render before the list arrives)
+  if (!tried.length) return { maxRows: Infinity, maxLeafLabel: DEFAULT_MIND_MAP_METRICS.maxLeafLabel, scale: 1 };
   const top = Math.max(...tried.map((t) => t.scale));
   return tried
     .filter((t) => t.scale >= top - 0.005)

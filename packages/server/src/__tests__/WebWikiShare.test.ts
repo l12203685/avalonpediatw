@@ -20,6 +20,7 @@ import {
 } from '../../../web/src/utils/wikiSharePages';
 import { buildLlmsFiles, orderLlmsArticles, wikiMdPath, type LlmsArticle } from '../../../web/src/utils/llmsTxt';
 import { WIKI_ARTICLES, WIKI_CATEGORIES } from '../../../web/src/data/wiki';
+import { WIKI_MERGED_INTO_1111, WIKI_REDIRECTS } from '../../../web/src/data/wikiRedirects';
 
 const SITE = 'https://example.test';
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
@@ -44,6 +45,19 @@ describe('wiki deep link: parseWikiHash / wikiHash', () => {
     expect(parseWikiHash('#wiki/wiki-24/')).toEqual({ id: 'wiki-24' });
     expect(parseWikiHash('#Wiki=strategy-merlin-data')).toEqual({ id: 'strategy-merlin-data' });
     expect(parseWikiHash(`#wiki=${encodeURIComponent('faq-basic')}`)).toEqual({ id: 'faq-basic' });
+  });
+
+  it('#wiki=<id>&sec=<章節> also carries the section to scroll to (2026-11-11 merged articles)', () => {
+    const sec = '四、內黑的用途';
+    expect(wikiHash('wiki-148', sec)).toBe(`#wiki=wiki-148&sec=${encodeURIComponent(sec)}`);
+    expect(parseWikiHash(wikiHash('wiki-148', sec))).toEqual({ id: 'wiki-148', section: sec });
+    expect(parseWikiHash(`#wiki=wiki-148&sec=${sec}`)).toEqual({ id: 'wiki-148', section: sec });
+    // a broken or empty section is dropped, the article still opens
+    for (const h of ['#wiki=wiki-148&sec=', '#wiki=wiki-148&sec=%', '#wiki=wiki-148&sec=a%20b', '#wiki=wiki-148&x=1']) {
+      expect(parseWikiHash(h), h).toEqual({ id: 'wiki-148' });
+    }
+    expect(parseWikiHash('#wiki=%&sec=x')).toEqual({ id: null });
+    expect(wikiShareRedirect('wiki-148', '/', sec)).toBe(`/#wiki=wiki-148&sec=${encodeURIComponent(sec)}`);
   });
 
   it('an id that cannot be an article id falls back to the wiki tab (no crash)', () => {
@@ -78,7 +92,8 @@ describe('share pages: every article (real wiki data)', () => {
   const ordered = orderLlmsArticles(allArticles, WIKI_CATEGORIES);
 
   it('every article the site lists gets exactly one page, same list as /wiki-md', () => {
-    expect(ordered.length).toBeGreaterThan(40);
+    // 2026-11-11 文章合併：57 → 40 篇
+    expect(ordered.length).toBeGreaterThanOrEqual(40);
     expect(Object.keys(pages)).toHaveLength(ordered.length);
     const md = buildLlmsFiles(allArticles, { siteUrl: SITE, apiUrl: 'https://api.example.test', repoUrl: 'https://github.com/x/y', categories: WIKI_CATEGORIES });
     for (const a of ordered) {
@@ -120,6 +135,45 @@ describe('share pages: every article (real wiki data)', () => {
 
   it('the logo used as og:image exists in public/', () => {
     expect(fs.existsSync(path.join(ROOT, 'packages', 'web', 'public', DEFAULT_SHARE_IMAGE.path))).toBe(true);
+  });
+});
+
+describe('share pages: old merged-away ids (2026-11-11)', () => {
+  const pages = buildWikiSharePages(allArticles, { ...opts, redirects: WIKI_REDIRECTS });
+  const live = new Set(orderLlmsArticles(allArticles, WIKI_CATEGORIES).map((a) => a.id));
+  const byId = new Map(allArticles.map((a) => [a.id, a]));
+
+  it('every old id keeps its /w/<old id>/ page, forwarding to the main article and section with the main article\'s preview', () => {
+    expect(Object.keys(pages)).toHaveLength(live.size + Object.keys(WIKI_REDIRECTS).length);
+    for (const [old, to] of Object.entries(WIKI_REDIRECTS)) {
+      expect(live.has(old), old).toBe(false);
+      const html = pages[wikiSharePath(old)];
+      expect(html, old).toBeDefined();
+      const main = byId.get(to.id)!;
+      const target = wikiShareRedirect(to.id, '/', to.section);
+      expect(html, old).toContain(`<script>location.replace(${JSON.stringify(target)});</script>`);
+      expect(attr(html, /<link rel="canonical" href="([^"]*)">/), old).toBe(`${SITE}/w/${to.id}/`);
+      expect(meta(html, 'og:url'), old).toBe(`${SITE}/w/${to.id}/`);
+      expect(unescape(meta(html, 'og:title') ?? ''), old).toBe(main.title);
+      expect(meta(html, 'robots'), old).toBe('noindex');
+      expect(html, old).not.toMatch(/http-equiv="refresh"/i);
+    }
+    // a live article's page has no noindex
+    expect(meta(pages[wikiSharePath('wiki-148')], 'robots')).toBeUndefined();
+  });
+
+  it('the Threads posts\' old links still land in the right place', () => {
+    expect(pages[wikiSharePath('wiki-2')]).toContain(`location.replace(${JSON.stringify(wikiShareRedirect('wiki-205', '/', WIKI_MERGED_INTO_1111['wiki-2'].section))})`);
+    expect(pages[wikiSharePath('wiki-11')]).toContain('location.replace("/#wiki=wiki-148&sec=');
+  });
+
+  it('old share pages stay out of sitemap.xml and llms.txt lists only live articles', () => {
+    const md = buildLlmsFiles(allArticles, { siteUrl: SITE, apiUrl: 'https://api.example.test', repoUrl: 'https://github.com/x/y', categories: WIKI_CATEGORIES });
+    for (const old of Object.keys(WIKI_REDIRECTS)) {
+      expect(md['sitemap.xml'], old).not.toContain(`/w/${old}/`);
+      expect(md['sitemap.xml'], old).not.toContain(`/wiki-md/${old}.md`);
+      expect(md['llms.txt'], old).not.toContain(`/wiki-md/${old}.md`);
+    }
   });
 });
 

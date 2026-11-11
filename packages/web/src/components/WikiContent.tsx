@@ -4,18 +4,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
-import { WIKI_COLOR_SCHEME, WIKI_TAGS, hasWikiLayers, normalizeWikiMarkup, wikiArticleId, wikiBlockLayer, wikiCardExcerpt, wikiImageSrc, wikiLayerOf, wikiUrlTransform } from '../utils/wikiMarkup';
+import { WIKI_COLOR_SCHEME, WIKI_TAGS, hasWikiLayers, normalizeWikiMarkup, wikiArticleRef, wikiBlockLayer, wikiCardExcerpt, wikiImageSrc, wikiLayerOf, wikiUrlTransform } from '../utils/wikiMarkup';
 import type { WikiHastNode } from '../utils/wikiMarkup';
 import remarkGfm from 'remark-gfm';
-import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_DATA_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
+import { WikiArticle, WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, isWikiPending, mergeWikiArticles } from '../data/wiki';
 import { fetchWikiArticles } from '../services/api';
 import type { WikiArticleApi } from '../services/api';
 import { VIDEO_BY_ROLE } from '../data/roleVideos';
+import { resolveWikiRedirect } from '../data/wikiRedirects';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
 import WikiMindMap from './wikiMap/WikiMindMap';
-import { parseWikiHash } from '../utils/wikiHash';
-import { clearWikiHash, closeWikiArticle, openWikiArticle, useOpenWikiId } from './wikiLink';
+import { rehypeWikiHeadingIds } from '../utils/wikiSections';
+import { clearWikiHash, closeWikiArticle, currentWikiTarget, openWikiArticle, useOpenWiki } from './wikiLink';
 
 /** 舊資料的標籤常是分類代號（roles、strategies…），和現在的分類對不上，不顯示。 */
 const CATEGORY_IDS = new Set(WIKI_CATEGORIES.map(c => c.id.toLowerCase()));
@@ -83,11 +84,11 @@ function isWarningQuote(node: unknown): boolean {
  * 論點層級（utils/wikiMarkup.ts）：段落、清單項目、表格儲存格、標題裡有【邏輯】／【經驗】標記時整塊變色
  * （.wiki-layer-logic／.wiki-layer-exp，index.css）；只有標記沒有別的字時，顯示標記名稱本身。
  */
-function layered(Tag: 'p' | 'li' | 'td' | 'th' | 'h1' | 'h2' | 'h3' | 'h4', children: ReactNode, node: unknown): JSX.Element {
+function layered(Tag: 'p' | 'li' | 'td' | 'th' | 'h1' | 'h2' | 'h3' | 'h4', children: ReactNode, node: unknown, id?: string): JSX.Element {
   const found = wikiBlockLayer(node as WikiHastNode | undefined);
-  if (!found) return <Tag>{children}</Tag>;
+  if (!found) return <Tag id={id}>{children}</Tag>;
   return (
-    <Tag className={`wiki-layer-${found.layer}`}>
+    <Tag id={id} className={`wiki-layer-${found.layer}`}>
       {found.alone && WIKI_TAGS[found.layer].label}
       {children}
     </Tag>
@@ -107,16 +108,38 @@ function WikiLayerLegend(): JSX.Element {
   );
 }
 
+/** The heading the role articles' live stats card follows (2026-11-11). */
+const STATS_SECTION = '實戰數據怎麼讀';
+
+/**
+ * Splits normalized markup right after the `## <heading>` section (at the next heading of the same or a higher level,
+ * fenced code skipped). Without that heading everything goes before the split.
+ */
+function splitAfterSection(markup: string, heading: string): [string, string] {
+  const lines = markup.split('\n');
+  let fence = false;
+  let level = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) fence = !fence;
+    if (fence) continue;
+    const m = /^(#{1,6})\s+(.*?)\s*$/.exec(lines[i]);
+    if (!m) continue;
+    if (!level && m[2] === heading) level = m[1].length;
+    else if (level && m[1].length <= level) return [lines.slice(0, i).join('\n'), lines.slice(i).join('\n')];
+  }
+  return [markup, ''];
+}
+
 // Markdown renderer — uses react-markdown + remark-gfm for GitHub-Flavored Markdown
 // (tables, strikethrough, task lists, autolinks). Typography (size, line height, measure, spacing) lives in the
 // `.wiki-prose` stylesheet in index.css, with the readability sources it is based on; the components here only
 // add what CSS can't (link handling, the warning callout, the table scroll wrapper, image base path).
 const markdownComponents = {
   p: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('p', children, node),
-  h1: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h1', children, node),
-  h2: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h2', children, node),
-  h3: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h3', children, node),
-  h4: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('h4', children, node),
+  h1: ({ children, node, id }: { children?: ReactNode; node?: unknown; id?: string }): JSX.Element => layered('h1', children, node, id),
+  h2: ({ children, node, id }: { children?: ReactNode; node?: unknown; id?: string }): JSX.Element => layered('h2', children, node, id),
+  h3: ({ children, node, id }: { children?: ReactNode; node?: unknown; id?: string }): JSX.Element => layered('h3', children, node, id),
+  h4: ({ children, node, id }: { children?: ReactNode; node?: unknown; id?: string }): JSX.Element => layered('h4', children, node, id),
   li: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('li', children, node),
   td: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('td', children, node),
   th: ({ children, node }: { children?: ReactNode; node?: unknown }): JSX.Element => layered('th', children, node),
@@ -149,8 +172,10 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   const [showPending, setShowPending] = useState(false);
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
   const [allArticles, setAllArticles] = useState<WikiArticle[]>(WIKI_ARTICLES);
-  // 打開的文章 = 網址的 #wiki=<id>（components/wikiLink.ts；Threads 的分享連結直接打開那篇）
-  const openWikiId = useOpenWikiId();
+  // 打開的文章 = 網址的 #wiki=<id>（components/wikiLink.ts；Threads 的分享連結直接打開那篇；&sec= 捲到那一節；
+  // 2026-11-11 被併入別篇的舊 id 打開主文的那一節）
+  const openWiki = useOpenWiki();
+  const openWikiId = openWiki?.id ?? null;
   const selectedArticle = useMemo(
     () => (openWikiId ? allArticles.find((a) => a.id === openWikiId) ?? null : null),
     [openWikiId, allArticles],
@@ -179,9 +204,9 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         // bundle chunk failed to load too: hardcoded articles only
       }
     };
-    // 從分享連結（#wiki=<id>）進來、那篇不是寫死的文章：先用打包的備份打開，不等可能還在睡的 API（喚醒要 30～60 秒）
-    const wanted = parseWikiHash(window.location.hash)?.id;
-    if (wanted && !WIKI_ARTICLES.some((a) => a.id === wanted)) void loadBundle();
+    // 一進來就先用打包的備份（心智圖、清單、分享連結 #wiki=<id> 打開的文章），不等可能還在睡的 API（喚醒要 30～60 秒）；
+    // 寫死的文章已經全部搬進 wiki_data.json（WIKI_ARTICLES 是空的），不先載備份的話這段時間百科會是空的。API 回來後換成 API 的版本。
+    void loadBundle();
     const run = async (): Promise<void> => {
       let articles: WikiArticleApi[] = [];
       try {
@@ -195,7 +220,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         let merged = mergeWikiArticles(WIKI_ARTICLES, articles.map(apiToWikiArticle));
         // 網站剛部署、伺服器（另外部署）還是舊的 wiki_data.json：打開的那篇 API 還沒有時，從打包的備份補上，
         // 不要讓讀到一半的文章自己關掉（下面的 effect 會清掉真的找不到的文章）
-        const openId = parseWikiHash(window.location.hash)?.id;
+        const openId = currentWikiTarget()?.id;
         if (openId && !merged.some((a) => a.id === openId)) {
           try {
             const fromBundle = (await import('@wiki-bundle')).default.find((a) => a.id === openId);
@@ -278,10 +303,14 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   );
   const filteredArticles = useMemo(() => publishedArticles.filter(matchesFilters), [publishedArticles, matchesFilters]);
   const filteredPending = useMemo(() => pendingArticles.filter(matchesFilters), [pendingArticles, matchesFilters]);
-  // 角色文章：文末放即時的實戰數據卡與短片；「X數據解析」：數據卡放在文章開頭（文章在解讀這張卡）。
+  // 角色文章：即時的實戰數據卡緊接在〈實戰數據怎麼讀〉一節後面（那一節在解讀這張卡；2026-11-11 角色數據併進角色文章），
+  // 沒有這一節時放文末；短片放文末。
   const selectedRole = selectedArticle ? WIKI_ARTICLE_ROLE[selectedArticle.id] : undefined;
-  const dataRole = selectedArticle ? WIKI_DATA_ARTICLE_ROLE[selectedArticle.id] : undefined;
   const selectedMarkup = useMemo(() => (selectedArticle ? normalizeWikiMarkup(selectedArticle.content) : ''), [selectedArticle]);
+  const [markupBeforeCard, markupAfterCard] = useMemo(
+    () => (selectedRole ? splitAfterSection(selectedMarkup, STATS_SECTION) : [selectedMarkup, '']),
+    [selectedMarkup, selectedRole],
+  );
 
   // `[標題](wiki:wiki-57)` links (延伸閱讀 etc.) swap the open article in place; an unknown id is plain text.
   const articleComponents = useMemo(() => {
@@ -289,13 +318,13 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
     return {
       ...markdownComponents,
       a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element | null => {
-        const id = wikiArticleId(href);
-        if (id === null) return markdownComponents.a({ children, href });
-        const target = byId.get(id);
+        const ref = wikiArticleRef(href);
+        if (ref === null) return markdownComponents.a({ children, href });
+        const target = byId.get(resolveWikiRedirect(ref.id)?.id ?? ref.id);
         return target ? (
           <button
             type="button"
-            onClick={() => openArticle(target)}
+            onClick={() => openWikiArticle(ref.id, ref.section)}
             className="inline text-left text-yellow-400 underline underline-offset-[0.2em] hover:text-yellow-300"
           >
             {children}
@@ -305,13 +334,50 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         );
       },
     };
-  }, [allArticles, openArticle]);
+  }, [allArticles]);
 
-  // Opening a linked article starts it from the top.
+  // Opening a linked article starts it from the top; a link with a section (#wiki=<id>&sec=…, or an old merged-away id)
+  // scrolls to that heading once the article has rendered.
   const modalRef = useRef<HTMLDivElement>(null);
+  const openSection = openWiki?.section;
+  const openNonce = openWiki?.nonce;
   useEffect(() => {
-    modalRef.current?.scrollTo?.({ top: 0 });
-  }, [selectedArticle?.id]);
+    const box = modalRef.current;
+    if (!box || !selectedArticle) return;
+    if (!openSection) {
+      box.scrollTo?.({ top: 0 });
+      return;
+    }
+    let tries = 0;
+    let timer = 0;
+    let settled = 0;
+    let placedAt = -1;
+    const place = (el: HTMLElement): void => {
+      const header = box.querySelector<HTMLElement>('[data-wiki-modal-header]');
+      // the modal scales in (framer-motion): measured distances are scaled, layout distances are not
+      const scale = box.offsetWidth ? box.getBoundingClientRect().width / box.offsetWidth : 1;
+      const delta = (el.getBoundingClientRect().top - box.getBoundingClientRect().top) / (scale || 1);
+      box.scrollTo?.({ top: delta + box.scrollTop - (header?.offsetHeight ?? 0) - 8 });
+      placedAt = box.scrollTop;
+    };
+    const go = (): void => {
+      const el = Array.from(box.querySelectorAll<HTMLElement>('[id]')).find((x) => x.id === openSection);
+      if (el) {
+        place(el);
+        // once the opening animation and late layout (images) settle, place it again unless the reader has scrolled
+        settled = window.setTimeout(() => {
+          if (Math.abs(box.scrollTop - placedAt) < 2) place(el);
+        }, 450);
+      } else if (tries++ < 20) {
+        timer = window.setTimeout(go, 50);
+      }
+    };
+    timer = window.setTimeout(go, 0);
+    return (): void => {
+      window.clearTimeout(timer);
+      window.clearTimeout(settled);
+    };
+  }, [selectedArticle?.id, selectedArticle, openSection, openNonce]);
 
   const viewToggle = (
     <div className="flex items-center gap-2">
@@ -540,7 +606,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
               className="bg-avalon-card border border-yellow-500 rounded-lg max-w-[42rem] w-full max-h-[90vh] overflow-y-auto my-auto"
             >
               {/* Header (sticky) */}
-              <div className="sticky top-0 z-10 flex items-start justify-between px-4 py-3 md:px-6 bg-avalon-card border-b border-gray-700">
+              <div data-wiki-modal-header className="sticky top-0 z-10 flex items-start justify-between px-4 py-3 md:px-6 bg-avalon-card border-b border-gray-700">
                 <h2 className="text-base md:text-lg font-bold text-white flex-1 pr-3 leading-snug">{selectedArticle.title}</h2>
                 <button
                   onClick={() => closeWikiArticle()}
@@ -568,26 +634,34 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   <span>{selectedArticle.author}</span>
                 </div>
 
-                {dataRole && (
-                  <div className="mb-4">
-                    <RoleStatsCard role={dataRole} />
-                  </div>
-                )}
                 <div className="wiki-prose">
                   {hasWikiLayers(selectedMarkup) && <WikiLayerLegend />}
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeWikiHeadingIds]}
                     components={articleComponents}
                     urlTransform={(url) => wikiUrlTransform(url, defaultUrlTransform)}
                   >
-                    {selectedMarkup}
+                    {markupBeforeCard}
                   </ReactMarkdown>
                 </div>
 
-                {/* Live role stats for character articles (same source as the analytics page) */}
+                {/* Live role stats for character articles (same source as the analytics page), right after 〈實戰數據怎麼讀〉 */}
                 {selectedRole && (
-                  <div className="mt-4">
+                  <div className="my-4">
                     <RoleStatsCard role={selectedRole} />
+                  </div>
+                )}
+                {markupAfterCard && (
+                  <div className="wiki-prose">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[[rehypeWikiHeadingIds, { after: markupBeforeCard }]]}
+                      components={articleComponents}
+                      urlTransform={(url) => wikiUrlTransform(url, defaultUrlTransform)}
+                    >
+                      {markupAfterCard}
+                    </ReactMarkdown>
                   </div>
                 )}
                 {/* Role short video */}
