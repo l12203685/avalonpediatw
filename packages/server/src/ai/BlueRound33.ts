@@ -21,6 +21,7 @@ import { buildCertainty } from './belief/Certainty';
 import { bestCleanWith, leaderAhead } from './GoodVoteAlt';
 import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
 import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
+import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
@@ -33,7 +34,7 @@ export const BAYES_VOTE_DEFAULTS = { bad: 0.8, badKey: 0.7, good: 0.7, goodKey: 
 export interface BayesVoteVerdict {
   vote: boolean;
   /** 哪一條準則決定的（推理紀錄與測試用）。 */
-  reason: 'bad' | 'provFail' | 'onDefault' | 'provRed' | 'lakeRed' | 'good' | 'alt' | 'offDefault';
+  reason: 'bad' | 'provFail' | 'onDefault' | 'onState' | 'provRed' | 'lakeRed' | 'good' | 'alt' | 'reuse' | 'fourth' | 'merlinLead' | 'r4' | 'offDefault';
 }
 
 /** 這一局要幾張失敗牌任務才失敗（10 人局第 4 局 2 張）。 */
@@ -80,10 +81,16 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     const r4Mix = tuning.goodBayesR4Mix === true && mode >= 3 && failsRequiredNow(obs) >= 2;
     const req = mode >= 3 && !r4Mix ? 1 : failsRequiredNow(obs);
     if (cert.minReds(team) >= req) return { vote: false, reason: 'provFail' };
+    // 第 38 回合 `goodBayesR4Kept`（1、3；檢查表 AV-03）：第 4 局第 1 次提議、隊長留下第 3 局成功的整支隊，公開邏輯沒有指出隊上有紅、也沒有人被湖宣告紅 → 贊成。
+    if (((tuning.goodBayesR4Kept ?? 0) & 1) !== 0 && r3TeamKeptAtR4(obs, team) && cert.minReds(team) === 0
+      && !(obs.lakeHistory ?? []).some((l) => l.declaredClaim === 'evil' && team.includes(l.targetId))) return { vote: true, reason: 'onDefault' };
     const below = bayesTeamRedsBelow(obs, team, req, r4Mix ? bayesOptionsOf({ ...tuning, beliefRecursive: 5 }) : opts);
     if (below === null) return null;
     const bad = key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad);
-    return 1 - below >= bad ? { vote: false, reason: 'bad' } : { vote: true, reason: 'onDefault' };
+    if (!(1 - below >= bad)) return { vote: true, reason: 'onDefault' };
+    // 第 38 回合 `goodOnTeamState`：內黑照局面（比分、整隊照派、自己還會不會派、被宣告紅的人），不是只看門檻。
+    if (onTeamStateApprove(tuning, obs, 1 - below, key)) return { vote: true, reason: 'onState' };
+    return { vote: false, reason: 'bad' };
   }
   // 自己湖的宣告（持湖者言行一致 `goodVouchFollowUp`：隊伍漏掉自己宣藍的人、或放了宣紅的人）也是反對的公開邏輯理由——交給那條規則投（它的推理紀錄寫明原因）。
   if (tuning.goodVouchFollowUp) {
@@ -94,6 +101,33 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
   const share = bayesRedShare(obs, opts);
   const lakeRed = (obs.lakeHistory ?? []).some((l) => l.holderId !== me && l.declaredClaim === 'evil' && team.includes(l.targetId) && (share.get(l.holderId) ?? 1) < 0.5);
   if (lakeRed) return { vote: false, reason: 'lakeRed' };
+  // 第 38 回合 `goodReuseWhite`：這一局第 1 次提議、隊長整隊照派最近成功任務的隊（第 4 局 2:1、第 3 局 1:1）→ 外白。
+  if (reuseWhiteNow(tuning, obs)) return { vote: true, reason: 'reuse' };
+  // `goodBayesR4Kept`（2、3；檢查表 AV-07）：第 4 局第 1 次提議、隊長留下第 3 局成功的整支隊，P(隊上不到兩個紅) ≥ 0.7（紅方兩勝 ≥ 0.8）→ 外白。
+  if (((tuning.goodBayesR4Kept ?? 0) & 2) !== 0 && r3TeamKeptAtR4(obs, team) && cert.minReds(team) < 2) {
+    const b2 = bayesTeamRedsBelow(obs, team, 2, opts);
+    if (b2 !== null && b2 >= (key ? 0.8 : 0.7)) return { vote: true, reason: 'reuse' };
+  }
+  // `goodBayesFsReuse`（檢查表 AV-08）：第 3 局第 1 次提議、第 1 局失敗第 2 局成功、原封不動派第 2 局的隊 → 外白門檻改用開關的值。
+  const fsBar = tuning.goodBayesFsReuse ?? 0;
+  if (fsBar > 0 && (obs.currentRound ?? 1) === 3 && fc === 0 && (obs.questResults ?? [])[0] === 'fail' && (obs.questResults ?? [])[1] === 'success') {
+    const q2 = obs.questHistory.find((q) => q.round === 2);
+    if (q2 && q2.team.length === team.length && q2.team.every((id) => team.includes(id))) {
+      const pc = bayesTeamClean(obs, team, opts);
+      if (pc !== null && pc >= fsBar) return { vote: true, reason: 'reuse' };
+    }
+  }
+  // `goodFourthWhite`：第 3 局第 4 次提議、1:1，強制局的隊長不在這支隊上而且上過失敗的任務 → 外白。
+  if (fourthWhiteNow(tuning, obs)) return { vote: true, reason: 'fourth' };
+  // `percivalMerlinWhite`：派西讀得出來是梅林的那一根拇指當隊長、另一根不在隊上 → 外白。
+  if (percivalMerlinWhiteNow(tuning, obs)) return { vote: true, reason: 'merlinLead' };
+  // `goodR4White`：第 4 局（兩張失敗才失敗）不在隊上，P(隊上不到兩個紅) 過門檻 → 外白。
+  if ((tuning.goodR4White ?? 0) > 0 && failsRequiredNow(obs) >= 2) {
+    const below2 = bayesTeamRedsBelow(obs, team, 2, opts);
+    if (below2 !== null && below2 >= (tuning.goodR4White ?? 0)) return { vote: true, reason: 'r4' };
+  }
+  // `goodR5NoWhite`：第 5 局不在隊上不用後驗門檻外白。
+  if (tuning.goodR5NoWhite === true && (obs.currentRound ?? 1) === 5) return { vote: false, reason: 'offDefault' };
   const p = bayesTeamClean(obs, team, opts);
   if (p === null) return null;
   const good = key ? (tuning.goodBayesGoodKey || BAYES_VOTE_DEFAULTS.goodKey) : (tuning.goodBayesGood || BAYES_VOTE_DEFAULTS.good);
@@ -192,7 +226,8 @@ export interface R1InfoCtx {
 /** 公開視角的資訊價值情境（梅林＝坐在他位置、只看公開紀錄的忠臣）。 */
 export function r1InfoCtx(tuning: Readonly<AgentTuning>, obs: PlayerObservation): R1InfoCtx {
   const pub = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, myLakeResults: [] } as PlayerObservation;
-  const opts = bayesOptionsOf(tuning);
+  // A public view: no leader's own prior (round 38 `ownView`) in it.
+  const opts = bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 });
   const bw = bayesWorlds(pub, opts);
   const round = obs.currentRound ?? 1;
   const cells = new Float64Array(8);

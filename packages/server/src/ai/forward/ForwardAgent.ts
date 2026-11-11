@@ -63,6 +63,8 @@ import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
 import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
 import { loyalFlowPickTeam } from '../BlueRound34';
 import { loyalR2ViewTeam, loyalSetPickTeam, percivalThumbSureTeam } from '../BlueRound37';
+import { bayesOptionsOf, bayesTeamClean } from '../belief/BayesBelief';
+import { earlyOwnTeamWhite, merlinOnTeamOwnApprove, merlinOwnWhiteNow, ownViewFirstPickTeam, percivalThumbReadTeam } from '../BlueRound38';
 import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
@@ -856,6 +858,14 @@ export class ForwardAgent implements AvalonAgent {
     if (redDivisionReject(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red division vote (stay clean)');
     }
+    // Round 38 `goodEarlyVote` (BlueRound38.ts): R1–R2, off the team, the proposal keeps every player of the voter's own earlier proposal of the
+    // round — a loyal approves it ("this is the team I sent"). Never past the certainty gates.
+    if (earlyOwnTeamWhite(this.baseline.tuning, obs)) {
+      const team = obs.proposedTeam ?? [];
+      if (!anyGate(this.gates) || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null) {
+        return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'R1–R2: the team keeps every player of my own proposal of this round');
+      }
+    }
     // Round 26 (loyal) `loyalTailWhite` (GoodVoteAlt.ts; D3 stage 1, Edward 2026-11-04): a true loyal approves an earlier non-forced
     // proposal — on or off the team, any round — when the forced fifth's leader is likely red and this team is at least as clean as
     // any team that leader could send. Never past the good vote gates (R1–R2: the certainty must-fail / dominance check too).
@@ -918,6 +928,33 @@ export class ForwardAgent implements AvalonAgent {
         const seenRed = team.some((id) => obs.knownEvils.includes(id));
         const vote = asLoyal.action.vote && !merlinVoteFatal(obs, this.baseline.tuning)
           && (onTeam || (!seenRed && goodVoteGate(obs, this.gates) === null));
+        // Round 38 `merlinOnTeamOwn` (BlueRound38.ts; checklist AV-11): on the team, the public loyal threshold says reject and his seen reds
+        // cannot lose on the spot — Merlin votes from his own view (human Merlins inner-black a team without a seen red 15%, the bot 41%).
+        // A team the public logic proves must fail keeps its reject; so does one holding a seat his own lake showed red.
+        // The trigger is the loyal view's threshold rule saying 'bad'; it does not ask which rule made the loyal pipeline reject, so a reject the
+        // loyal view also reached another way (e.g. another holder's red declaration on a member) is overridden too. Kept as measured in the
+        // round-38 confirmation: in mode 1 it fires only where two fails are needed (never R5) — with no red he sees on the team at most one red
+        // (the one he cannot see) is on it and the mission cannot fail; with one he sees, only when his own P(the unseen red is on it) is low.
+        const ownMode = this.baseline.tuning.merlinOnTeamOwn ?? 0;
+        if (!vote && onTeam && ownMode > 0 && !merlinVoteFatal(obs, this.baseline.tuning) && goodVoteGate(obs, { ...this.gates, mustFail: false }) === null
+          && !(obs.myLakeResults ?? []).some((l) => l.result === 'evil' && team.includes(l.targetId))
+          && bayesVoteCriteria(this.baseline.tuning, loyalViewOf(obs))?.reason === 'bad') {
+          const seenOn = team.filter((id) => obs.knownEvils.includes(id)).length;
+          const ownOpts = bayesOptionsOf(this.baseline.tuning);
+          const unseen = team.filter((id) => !obs.knownEvils.includes(id));
+          const ownClean = seenOn === 0 ? bayesTeamClean(obs, team, ownOpts) : null;
+          // his own P(the red he cannot see sits on the team) = 1 − P(the members he does not see as red are all blue)
+          const cleanUnseen = bayesTeamClean(obs, unseen, ownOpts);
+          const ownMordred = cleanUnseen === null ? null : 1 - cleanUnseen;
+          if (merlinOnTeamOwnApprove(ownMode, obs, seenOn, ownClean, ownMordred)) {
+            return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'merlin on the team: his own view instead of the public-threshold inner black');
+          }
+        }
+        // Round 38 `merlinOwnWhite` (BlueRound38.ts): off a team with no red he sees that his own posterior holds clean (≥ 0.9) and the public
+        // view of his seat finds plausible — an outer white a loyal with the same public record could also cast.
+        if (!vote && !onTeam && !seenRed && goodVoteGate(obs, this.gates) === null && merlinOwnWhiteNow(this.baseline.tuning, obs, loyalViewOf(obs))) {
+          return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'merlin: outer white on a team he holds clean and the public view finds plausible');
+        }
         return this.ruleDecision(obs, { type: 'team_vote', vote }, `merlin normal vote (as a loyal${vote !== asLoyal.action.vote ? '; gated team blocked' : ''})`);
       }
     }
@@ -938,8 +975,13 @@ export class ForwardAgent implements AvalonAgent {
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
     const d0 = looked === core.action ? core : { ...core, action: looked, reasoningTrace: { ...core.reasoningTrace, summary: `${core.reasoningTrace.summary}${swapLabel}` } };
     // Round 37 `percivalThumbSure` (BlueRound37.ts): Percival keeps a thumb on the team only when his own posterior tells it is Merlin.
-    const sure = percivalThumbSureTeam(this.baseline.tuning, obs, d0.action, gateOk);
-    const d = sure === d0.action ? d0 : { ...d0, action: sure, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → percival: no thumb he cannot tell apart` } };
+    const sure0 = percivalThumbSureTeam(this.baseline.tuning, obs, d0.action, gateOk);
+    // Round 38 `ownView` (BlueRound38.ts): the first proposal of the game has no record to read — the leader's own prior picks it.
+    // The owner's fixed first-proposal ban (5p 12/34/45/15, 10p 123/150/234/678) binds here as it does in the candidate scorer.
+    const firstBan = (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0 ? bannedComboSetFor5p(obs.playerCount) : new Set<string>();
+    const firstPickOk = (team: readonly string[]): boolean => gateOk(team) && !firstBan.has(canonicalSeatStringForward(team, obs.allPlayerIds));
+    const sure = ownViewFirstPickTeam(this.baseline.tuning, obs, sure0, firstPickOk);
+    const d = sure === d0.action ? d0 : { ...d0, action: sure, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → ${sure !== sure0 ? 'own view: first proposal of the game' : 'percival: no thumb he cannot tell apart'}` } };
     // Round 24 hard constraint `leaderSelfApprove` (GoodLeadConsistent.ts; Edward's practice game): a loyal / Percival leader never
     // proposes a team its own vote rules (goodKeyVote / goodCleanVote) would reject — the cleanest team in its own posterior instead.
     if (d.action.type === 'team_select') {
@@ -965,8 +1007,10 @@ export class ForwardAgent implements AvalonAgent {
     // Round 37 `loyalR2View` (BlueRound37.ts; Edward 2026-11-10): at R2 after an R1 fail the loyal's proposal carries his own view —
     // it answers the previous R2 leader (correct / respect) instead of re-proposing nearly the same team.
     if (d.action.type === 'team_select') {
-      const view = goodLeadConsistentTeam(this.baseline.tuning, obs, loyalR2ViewTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
-      if (view !== d.action) return { ...d, action: view, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → R2 after an R1 fail: own-view answer to the previous proposal` } };
+      const view0 = goodLeadConsistentTeam(this.baseline.tuning, obs, loyalR2ViewTeam(this.baseline.tuning, obs, d.action, gateOk), gateOk);
+      // Round 38 `percivalThumbRead` (BlueRound38.ts): Percival keeps a thumb on the team only when he can tell it is Merlin; never the other one.
+      const view = goodLeadConsistentTeam(this.baseline.tuning, obs, percivalThumbReadTeam(this.baseline.tuning, obs, view0, gateOk), gateOk);
+      if (view !== d.action) return { ...d, action: view, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → ${view !== view0 ? 'percival: only the thumb he reads as Merlin' : 'R2 after an R1 fail: own-view answer to the previous proposal'}` } };
     }
     // Round 24 `goodReuseExact` (GoodReuseExact.ts; Edward's practice-game flag): a loyal / Percival leader re-proposes the last
     // successful mission team as it was (or grown by one with the leader), instead of swapping itself in.

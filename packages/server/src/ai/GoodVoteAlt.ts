@@ -110,7 +110,10 @@ export function tailWhiteCore(tuning: Readonly<AgentTuning>, obs: PlayerObservat
   if (team.length === 0) return false;
   const opts = bayesOptionsOf(tuning);
   const tailRed = bayesRedShare(obs, opts).get(tail) ?? 0;
-  if (tailRed < tau) return false;
+  // Round 38 `loyalTailWhiteLastTau` (checklist AV-09 / AV-02): the fourth proposal of rounds 3–5 has its own threshold.
+  const tau4 = tuning.loyalTailWhiteLastTau ?? 0;
+  const bar = tau4 > 0 && fc === 3 && (obs.currentRound ?? 1) >= 3 ? tau4 : tau;
+  if (tailRed < bar) return false;
   const p = bayesTeamClean(obs, team, opts);
   if (p === null) return false;
   let alt: number | null = null;

@@ -26,7 +26,9 @@ const r2 = asObs({
   voteHistory: [...R1, vote(2, 1, 'P6', ['P6', 'P2', 'P3', 'P4'], ['P6', 'P2', 'P3', 'P4'])],
 });
 const copy = { type: 'team_select' as const, teamIds: ['P7', 'P2', 'P3', 'P4'] };
-const on = (mode: number) => ({ ...DEFAULT_AGENT_TUNING, loyalR2View: mode });
+// ownView 0 (round 38 default 0.3): the fixture is built on the shared prior; with this seat's own prior P6 crosses 0.5 and every kept-0 answer
+// is a reversed team (barred), so the "correct → keep none" case has nothing to pick.
+const on = (mode: number) => ({ ...DEFAULT_AGENT_TUNING, ownView: 0, loyalR2View: mode });
 const kept = (team: readonly string[]) => team.filter((id) => ['P6', 'P2', 'P3', 'P4'].includes(id)).length;
 
 describe('round 37 tuning fields', () => {
@@ -55,7 +57,7 @@ describe('loyalR2View (round 37: R2 after an R1 fail, the proposal answers the p
   it('off: the pipeline team; on: no near-copy of the previous R2 team, never the same team, the leader on it', () => {
     expect(r2AfterR1Fail(r2)).toBe(true);
     expect(loyalR2ViewTeam(on(0), r2, copy)).toBe(copy);
-    const share = bayesRedShare(r2, bayesOptionsOf(DEFAULT_AGENT_TUNING));
+    const share = bayesRedShare(r2, bayesOptionsOf(on(6)));
     const correct = (share.get('P6') ?? 0) >= 0.5;
     for (const mode of [1, 3]) {
       const a = loyalR2ViewTeam(on(mode), r2, copy);
@@ -94,7 +96,7 @@ describe('loyalR2View (round 37: R2 after an R1 fail, the proposal answers the p
 
 describe('loyalR2ViewKeep (round 37: the soft answer — every kept member of the previous team costs a factor γ of the own-view clean probability)', () => {
   it('picks the candidate with the highest p × γ^kept; γ near 0 keeps nobody, γ = 1 is the cleanest team that is not a re-proposal', () => {
-    const got = r2ViewCandidates(DEFAULT_AGENT_TUNING, r2, 4)!;
+    const got = r2ViewCandidates(on(1), r2, 4)!;
     expect(got.prevLeader).toBe('P6');
     expect(got.cands.length).toBe(84);
     for (const gamma of [0.9, 0.5]) {

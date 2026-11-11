@@ -1070,6 +1070,117 @@ export interface AgentTuning {
    */
   percivalThumbSure: number;
   /**
+   * 第 38 回合（Edward 11/10：忠臣從少數幾支「和自己前面的想法一致、和資訊流一致」的隊裡挑；`belief/BayesBelief.ts` 的 `ownView`）：忠臣（`ownViewScope` 2 加派西、3 再加梅林照公開視角挑的那一支）
+   * 挑非強制的隊時，後驗從「自己的」先驗出發——對其他每個人各有一個偏好（對數勝算，標準差 = 這個值），不是每個忠臣都一樣的平的先驗；
+   * 偏好由這一局第一個提議的公開紀錄和自己的座位決定，之後整局不變；只有整場第一個提議（還沒有紀錄）是另外用那一次決定的亂數抽的，和之後的偏好沒有關係。
+   * 公開紀錄照常更新，所以偏好只在紀錄分不出來的地方決定挑誰。權重 = 1 − (這種提議出任務的比例)／0.3：第 1、2 局約 0.7–1，第 3–5 局不是第一次的提議只用一部分，
+   * 出任務比例 30% 以上和強制局不用。0 = 關。
+   * **第 38 回合預設 0.3**（只有忠臣；和四條投票規則一起確認：三組 6000 組合併 +2.38 [+1.61, +3.15]，單獨第一組 +1.50 [+0.18, +2.82]；第 1 局失敗後第 2 局的隊重疊 1.45 → 1.17＝真人）。
+   */
+  ownView: number;
+  /** 第 38 回合：`ownView` 給誰用——1（或 0）= 忠臣；2 = 加派西；3 = 再加梅林（照公開視角、沒有看得到的紅的那一支）。 */
+  ownViewScope: number;
+  /** 第 38 回合：`ownView` 的一致性——自己這一場前面派過的人，在自己的先驗裡少算這麼多的可疑（對數勝算）；之後的紀錄對他不利時照樣會換掉。0 = 關。 */
+  ownViewKeep: number;
+  /** 第 38 回合：`ownView` 只用到第幾局為止（1 = 只有第 1 局；2 = 第 1、2 局）；0 = 不限（照出任務的機率遞減）。 */
+  ownViewRounds: number;
+  /**
+   * 第 38 回合（派西）：第 1–3 局失敗的任務隊上剛好有一根拇指時，這次失敗不拿來分辨哪一根是梅林（真人局那根是梅林 43–52%、自我對打 44–52%：沒有資訊；
+   * 現行後驗把它讀成偏莫甘娜，真梅林沾了失敗時派西改帶莫甘娜 30–46%，真人 15–23%）。其他人的讀法照舊。
+   */
+  beliefThumbNoStain: boolean;
+  /**
+   * 第 38 回合（派西）：第 2 局起非照派的提議，只帶自己後驗裡「是梅林」的機率 ≥ 這個值的那一根拇指，另一根一定不帶；兩根都不到就都不帶；
+   * 其餘的人挑自己後驗最乾淨的（`BlueRound38.percivalThumbReadTeam`）。0 = 關。
+   */
+  percivalThumbRead: number;
+  /**
+   * 第 38 回合（異常票的時機，內黑；`BlueRound38.onTeamStateApprove`）：第 3、4 局在隊上，紅方還沒有兩勝時，只有公開邏輯證明隊上的紅足以讓任務失敗、
+   * 或後驗幾乎確定（≥ 0.99）才內黑；2 = 紅方已經兩勝時再加真人實際用的條件（隊長沒有整隊照派成功的隊，而且自己這一局還會派、或隊上有被宣告紅的人、或後驗 ≥ 0.9）。
+   * 第 5 局不變。梅林照忠臣投票時用同一條。0 = 關。
+   */
+  goodOnTeamState: number;
+  /**
+   * 第 38 回合（梅林，檢查表 AV-11）：在隊上、公開視角的門檻要他內黑、而且他看得到的紅不會讓任務當場輸掉時，用他自己的視角決定（真人梅林在沒有看得到的紅的隊上內黑 15%，機器人 41%）：
+   * 1 = 只有第 4 局（要兩張失敗）：隊上沒有看得到的紅 → 贊成；剛好一個 → 他自己估「莫德雷德也在隊上」的機率夠低（紅方兩勝 < 0.3，否則 < 0.5）才贊成；
+   * 2 = 再加紅方還沒有兩勝的第 3 局、隊上沒有看得到的紅：他自己估隊上有紅的機率 < 0.8 → 贊成；3 = 再加 0:2 的第 3 局：自己估莫德雷德在隊上 < 0.3 才贊成；
+   * 4 = 第一版：第 3–5 局、隊上沒有看得到的紅就贊成（不看自己的機率）。第 1–3 種第 5 局都不適用。公開邏輯證明必敗時一律照舊。0 = 關。
+   * **第 38 回合預設 1**（和 `goodBayesR4Kept=1` 一起篩選 +0.80 [+0.30, +1.30]；組合確認見 `ownView`）。
+   */
+  merlinOnTeamOwn: number;
+  /**
+   * 第 38 回合（異常票的時機，外白；`BlueRound38.reuseWhiteNow`）：不在隊上、隊長整隊照派成功任務的隊時贊成——第 4 局第 1 次提議、藍 2:紅 1（真人 59%，通過後任務失敗 10%）
+   * 與第 3 局第 1 次提議、1:1 而且成功的是第 2 局（真人這種提議 99% 出任務、失敗 19–23%；第 1 局成功第 2 局失敗之後不適用：第一版連那種也放行，自我對打 −1.70 [−2.80, −0.60]）。2 = 再加第 4 局第 1 次、藍 1:紅 2（真人 35%，失敗 0%）。公開邏輯指出隊上有紅、自己湖的宣告不符時不適用。0 = 關。
+   * **第 38 回合預設 1**（篩選 +0.30 [−0.29, +0.89]；組合確認見 `ownView`）。
+   */
+  goodReuseWhite: number;
+  /**
+   * 第 38 回合（異常票的時機，外白；`BlueRound38.fourthWhiteNow`）：第 3 局第 4 次提議、1:1、自己不在隊上也不是強制局的隊長，強制局的隊長不在這支隊上而且上過失敗的任務 → 贊成
+   * （真人：強制局隊長不在隊上時外白 27%，在隊上 3%）。0:2 時不學（真人外白通過的任務 76–79% 失敗，比打到強制局的 64% 差）。0 = 關。
+   */
+  goodFourthWhite: number;
+  /** 第 38 回合（異常票的時機）：第 5 局不在隊上不用後驗門檻外白（真人強者 7%、機器人 12–18%；機器人估 0.91 的隊實際全藍 63%）。 */
+  goodR5NoWhite: boolean;
+  /**
+   * 第 38 回合（梅林）：不在隊上、隊上沒有他看得到的紅、他自己的後驗 P(全藍) ≥ 0.9、而且公開視角的 P(全藍) ≥ 這個值（公開上也說得過去）→ 外白
+   * （真人梅林對沒有看得到的紅的隊外白 24%、機器人 7%；他自己很有把握的那些隊 95% 全藍）。0 = 關。
+   */
+  merlinOwnWhite: number;
+  /**
+   * 第 38 回合（派西）：不在隊上、隊長是自己後驗裡「是梅林」的機率 ≥ 這個值的那一根拇指、另一根拇指不在隊上 → 外白（真人派西：梅林當隊長、不在隊上外白 24%，機器人 8%）。0 = 關。
+   */
+  percivalMerlinWhite: number;
+  /**
+   * 第 38 回合（梅林；Edward 11/10 對裁定 5 的細化：「不是刻意帶可見紅；是局勢順勢只能帶時才帶（例：全場都派 7、7 是梅林可見紅 → 梅林也只能派 7）」）：
+   * 這一局前面別人連續 m 次（這個值，2 或 3）提議都帶了同一個他看得到的紅，而且這一次提議出任務的機率低於一成（真人局的比例）→ 梅林順著帶他，
+   * 其餘的人照公開視角挑、不再帶別的看得到的紅（`MerlinLoyalStyle.merlinFlowRed`）。0 = 關。
+   */
+  merlinFlowFollow: number;
+  /**
+   * 第 38 回合（檢查表 AV-09／AV-02，第 4 次提議與尾家）：第 3–5 局第 4 次提議的尾家外白改用這個門檻（自己估強制局隊長是紅的機率），第 1–3 次照 `loyalTailWhite`。
+   * 真人在第 4 次提議的外白瞄得準（0:2 尾家是紅 51%、是藍 22%），機器人 13／3%；損益兩平約 0.30–0.38。0 = 用 `loyalTailWhite`。
+   * **第 38 回合預設 0.5**（篩選 +0.30 [−0.01, +0.61]；組合確認見 `ownView`）。
+   */
+  loyalTailWhiteLastTau: number;
+  /**
+   * 第 38 回合（檢查表 AV-03／AV-07）：第 4 局第 1 次提議、第 3 局成功、隊長把第 3 局的整支隊留下。1 = 在隊上：公開邏輯沒有指出隊上有紅、也沒有人被湖宣告紅 → 贊成
+   * （真人內黑 16%、任務失敗 0%；機器人 38%）；2 = 不在隊上：後驗 P(隊上不到兩個紅) ≥ 0.7（紅方兩勝 ≥ 0.8）→ 贊成（真人 59%／35%，機器人 6%／9%）；3 = 兩個都開。0 = 關。
+   * **第 38 回合預設 1**（在隊上的部分；組合確認見 `ownView`）。
+   */
+  goodBayesR4Kept: number;
+  /**
+   * 第 38 回合（檢查表 AV-08）：第 3 局第 1 次提議、第 1 局失敗第 2 局成功、隊長原封不動派第 2 局成功的隊，不在隊上的外白門檻改用這個值（原本 0.7；真人 86% 贊成、任務失敗 24%；機器人 40%）。0 = 關。
+   */
+  goodBayesFsReuse: number;
+  /**
+   * 第 38 回合（檢查表 ML-01）：梅林照公開視角挑隊時，讀公開紀錄用的設定和忠臣挑隊用的同一套（`bayesOptionsOf`：強者表、取次方、遞迴後驗各半…），
+   * 原本用的是另一組較舊的設定，所以他派隊和投票讀紀錄的方式不一樣。1 = 換成同一套。0 = 關。
+   */
+  merlinPublicPipeline: number;
+  /** 第 38 回合（檢查表 ML-03）：梅林在沒有看得到的紅的隊裡挑的時候，不再加上「看得到的紅坐在哪裡」的切區間分數（只照公開視角的乾淨機率）；沒有任何藍方讀這個分數。 */
+  merlinPublicTieBreak: boolean;
+  /**
+   * 第 38 回合（檢查表 BL-01）：投票時，後驗把「正在表決的這一支提議」也當成一次派隊讀進去（原本只讀已經進紀錄的提議，所以投票當下少算這一支，下一個決定才算進去）。
+   */
+  beliefPendingProposal: boolean;
+  /**
+   * 第 38 回合（第 1、2 局的異常票；`BlueRound38.earlyOwnTeamWhite`）：忠臣不在隊上、這一局自己先前派過隊，現在這支非強制的隊把自己那一次派的人（自己以外）全部留下 → 贊成
+   * （真人忠臣這種局面外白 12%，其他局面 2%：用票說「這就是我派的隊」）。1 = 忠臣。0 = 關。
+   */
+  goodEarlyVote: number;
+  /**
+   * 第 38 回合（異常票的時機，外白；真人牌譜：第 4 局要兩張失敗，真人 2:1 時第 1 次提議 82% 通過、機器人 8%，而藍方隊長派的隊 84–89% 其實會成功）：
+   * 第 4 局不在隊上，後驗 P(隊上不到兩個紅) ≥ 這個值 → 贊成（原本用 P(全藍) ≥ 0.7／0.9）。0 = 關。
+   */
+  goodR4White: number;
+  /**
+   * 第 38 回合（藍方持湖的目標；`BlueRound38.goodLakeHumanPool`；Edward 11/10：湖誰和上下家無關）：最近一次任務成功時，從「上過那一次任務、而且沒上過失敗任務」的人裡挑
+   * （真人首湖在第 2 局成功之後湖只上過成功任務的人 84%，機器人 66%），同分不照座位序；其餘情況照原本的共同資訊規則。0 = 關。
+   */
+  goodLakeHuman: number;
+  /** 第 38 回合（派西持湖）：不湖自己後驗裡比較像莫甘娜的那一根拇指（真人派西湖梅林 17–26%、湖莫甘娜 3–5%；機器人 9%／8%）。 */
+  percivalLakeNoMorgana: boolean;
+  /**
    * 第 36 回合：`beliefLeadRecursive` 適用的挑隊，遞迴後驗和第 0 層後驗的世界權重混合（λ·遞迴 ＋ (1 − λ)·第 0 層）；0 = 關（只用遞迴後驗）。\n挑出來的隊留在現行的附近，只往遞迴讀法傾斜（第 35 回合 `LR1s2`：強者點的全藍上升、但逐點一致掉）。
    * **第 36 回合預設 0.5**，和 `beliefLeadRecursive=1`、`beliefRecursiveLeadScope=2` 一起（只在第 1 局失敗之後的第 2 局；三組 6000 組合併 +0.98 [+0.70, +1.27]，
    * 強者點的量尺 −0.010 [−0.071, +0.046]、逐點一致 12.51 → 12.54%）。
@@ -1318,6 +1429,30 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'loyalSetPick',
   'loyalR2ViewKeep',
   'percivalThumbSure',
+  'ownView',
+  'ownViewScope',
+  'ownViewKeep',
+  'ownViewRounds',
+  'beliefThumbNoStain',
+  'percivalThumbRead',
+  'goodOnTeamState',
+  'merlinOnTeamOwn',
+  'goodReuseWhite',
+  'goodFourthWhite',
+  'goodR5NoWhite',
+  'merlinOwnWhite',
+  'percivalMerlinWhite',
+  'merlinFlowFollow',
+  'loyalTailWhiteLastTau',
+  'goodBayesR4Kept',
+  'goodBayesFsReuse',
+  'merlinPublicPipeline',
+  'merlinPublicTieBreak',
+  'beliefPendingProposal',
+  'goodEarlyVote',
+  'goodR4White',
+  'goodLakeHuman',
+  'percivalLakeNoMorgana',
   'beliefLeadBlend',
   'goodBayesR4Mix',
   'beliefRecursiveLeadScope',
@@ -1491,6 +1626,30 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   loyalSetPick: 0,
   loyalR2ViewKeep: 0,
   percivalThumbSure: 0,
+  ownView: 0,
+  ownViewScope: 0,
+  ownViewKeep: 0,
+  ownViewRounds: 0,
+  beliefThumbNoStain: false,
+  percivalThumbRead: 0,
+  goodOnTeamState: 0,
+  merlinOnTeamOwn: 0,
+  goodReuseWhite: 0,
+  goodFourthWhite: 0,
+  goodR5NoWhite: false,
+  merlinOwnWhite: 0,
+  percivalMerlinWhite: 0,
+  merlinFlowFollow: 0,
+  loyalTailWhiteLastTau: 0,
+  goodBayesR4Kept: 0,
+  goodBayesFsReuse: 0,
+  merlinPublicPipeline: 0,
+  merlinPublicTieBreak: false,
+  beliefPendingProposal: false,
+  goodEarlyVote: 0,
+  goodR4White: 0,
+  goodLakeHuman: 0,
+  percivalLakeNoMorgana: false,
   beliefLeadBlend: 0,
   goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 0,
@@ -1812,6 +1971,30 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   loyalSetPick: 0,
   loyalR2ViewKeep: 0,
   percivalThumbSure: 0,
+  ownView: 0.3,
+  ownViewScope: 0,
+  ownViewKeep: 0,
+  ownViewRounds: 0,
+  beliefThumbNoStain: false,
+  percivalThumbRead: 0,
+  goodOnTeamState: 0,
+  merlinOnTeamOwn: 1,
+  goodReuseWhite: 1,
+  goodFourthWhite: 0,
+  goodR5NoWhite: false,
+  merlinOwnWhite: 0,
+  percivalMerlinWhite: 0,
+  merlinFlowFollow: 0,
+  loyalTailWhiteLastTau: 0.5,
+  goodBayesR4Kept: 1,
+  goodBayesFsReuse: 0,
+  merlinPublicPipeline: 0,
+  merlinPublicTieBreak: false,
+  beliefPendingProposal: false,
+  goodEarlyVote: 0,
+  goodR4White: 0,
+  goodLakeHuman: 0,
+  percivalLakeNoMorgana: false,
   beliefLeadBlend: 0.5,
   goodBayesR4Mix: false,
   beliefRecursiveLeadScope: 2,
@@ -1985,6 +2168,30 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   loyalSetPick: 'AVALON_TUNING_LOYAL_SET_PICK',
   loyalR2ViewKeep: 'AVALON_TUNING_LOYAL_R2_VIEW_KEEP',
   percivalThumbSure: 'AVALON_TUNING_PERCIVAL_THUMB_SURE',
+  ownView: 'AVALON_TUNING_OWN_VIEW',
+  ownViewScope: 'AVALON_TUNING_OWN_VIEW_SCOPE',
+  ownViewKeep: 'AVALON_TUNING_OWN_VIEW_KEEP',
+  ownViewRounds: 'AVALON_TUNING_OWN_VIEW_ROUNDS',
+  beliefThumbNoStain: 'AVALON_TUNING_BELIEF_THUMB_NO_STAIN',
+  percivalThumbRead: 'AVALON_TUNING_PERCIVAL_THUMB_READ',
+  goodOnTeamState: 'AVALON_TUNING_GOOD_ON_TEAM_STATE',
+  merlinOnTeamOwn: 'AVALON_TUNING_MERLIN_ON_TEAM_OWN',
+  goodReuseWhite: 'AVALON_TUNING_GOOD_REUSE_WHITE',
+  goodFourthWhite: 'AVALON_TUNING_GOOD_FOURTH_WHITE',
+  goodR5NoWhite: 'AVALON_TUNING_GOOD_R5_NO_WHITE',
+  merlinOwnWhite: 'AVALON_TUNING_MERLIN_OWN_WHITE',
+  percivalMerlinWhite: 'AVALON_TUNING_PERCIVAL_MERLIN_WHITE',
+  merlinFlowFollow: 'AVALON_TUNING_MERLIN_FLOW_FOLLOW',
+  loyalTailWhiteLastTau: 'AVALON_TUNING_LOYAL_TAIL_WHITE_LAST_TAU',
+  goodBayesR4Kept: 'AVALON_TUNING_GOOD_BAYES_R4_KEPT',
+  goodBayesFsReuse: 'AVALON_TUNING_GOOD_BAYES_FS_REUSE',
+  merlinPublicPipeline: 'AVALON_TUNING_MERLIN_PUBLIC_PIPELINE',
+  merlinPublicTieBreak: 'AVALON_TUNING_MERLIN_PUBLIC_TIE_BREAK',
+  beliefPendingProposal: 'AVALON_TUNING_BELIEF_PENDING_PROPOSAL',
+  goodEarlyVote: 'AVALON_TUNING_GOOD_EARLY_VOTE',
+  goodR4White: 'AVALON_TUNING_GOOD_R4_WHITE',
+  goodLakeHuman: 'AVALON_TUNING_GOOD_LAKE_HUMAN',
+  percivalLakeNoMorgana: 'AVALON_TUNING_PERCIVAL_LAKE_NO_MORGANA',
   beliefLeadBlend: 'AVALON_TUNING_BELIEF_LEAD_BLEND',
   goodBayesR4Mix: 'AVALON_TUNING_GOOD_BAYES_R4_MIX',
   beliefRecursiveLeadScope: 'AVALON_TUNING_BELIEF_RECURSIVE_LEAD_SCOPE',
@@ -2255,6 +2462,66 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`loyalSetPick needs a number in [0, 1], got "${raw}"`);
     return { loyalSetPick: value };
   }
+  if (name === 'ownView' || name === 'ownViewKeep') {
+    const value = raw === undefined ? 0.3 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 5) throw new Error(`${name} needs a number in [0, 5], got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
+  }
+  if (name === 'ownViewRounds') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 5) throw new Error(`ownViewRounds needs 0–5, got "${raw}"`);
+    return { ownViewRounds: value };
+  }
+  if (name === 'ownViewScope') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`ownViewScope needs 0–3, got "${raw}"`);
+    return { ownViewScope: value };
+  }
+  if (name === 'percivalThumbRead') {
+    const value = raw === undefined ? 0.6 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`percivalThumbRead needs a number in [0, 1], got "${raw}"`);
+    return { percivalThumbRead: value };
+  }
+  if (name === 'goodOnTeamState' || name === 'goodReuseWhite') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`${name} needs 0–2, got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
+  }
+  if (name === 'goodFourthWhite' || name === 'goodLakeHuman' || name === 'goodEarlyVote') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`${name} needs 0–1, got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
+  }
+  if (name === 'merlinOwnWhite' || name === 'percivalMerlinWhite' || name === 'goodR4White') {
+    const value = raw === undefined ? (name === 'merlinOwnWhite' ? 0.5 : name === 'goodR4White' ? 0.9 : 0.7) : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs a number in [0, 1], got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
+  }
+  if (name === 'merlinFlowFollow') {
+    const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || (value !== 0 && (value < 2 || value > 4))) throw new Error(`merlinFlowFollow needs 0 or 2–4, got "${raw}"`);
+    return { merlinFlowFollow: value };
+  }
+  if (name === 'merlinOnTeamOwn') {
+    const value = raw === undefined ? 4 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`merlinOnTeamOwn needs 0–4, got "${raw}"`);
+    return { merlinOnTeamOwn: value };
+  }
+  if (name === 'goodBayesR4Kept') {
+    const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`goodBayesR4Kept needs 0–3, got "${raw}"`);
+    return { goodBayesR4Kept: value };
+  }
+  if (name === 'merlinPublicPipeline') {
+    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`merlinPublicPipeline needs 0–1, got "${raw}"`);
+    return { merlinPublicPipeline: value };
+  }
+  if (name === 'loyalTailWhiteLastTau' || name === 'goodBayesFsReuse') {
+    const value = raw === undefined ? (name === 'goodBayesFsReuse' ? 0.6 : 0.5) : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs a number in [0, 1], got "${raw}"`);
+    return { [name]: value } as Partial<AgentTuning>;
+  }
   if (name === 'percivalThumbSure') {
     const value = raw === undefined ? 0.7 : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`percivalThumbSure needs a number in [0, 1], got "${raw}"`);
@@ -2402,7 +2669,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive' || key === 'loyalFlowPick' || key === 'beliefRecursiveLeadScope' || key === 'beliefLeadBlend' || key === 'loyalR2View' || key === 'loyalSetPick' || key === 'loyalR2ViewKeep' || key === 'percivalThumbSure') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive' || key === 'loyalFlowPick' || key === 'beliefRecursiveLeadScope' || key === 'beliefLeadBlend' || key === 'loyalR2View' || key === 'loyalSetPick' || key === 'loyalR2ViewKeep' || key === 'percivalThumbSure' || key === 'ownView' || key === 'ownViewScope' || key === 'ownViewKeep' || key === 'ownViewRounds' || key === 'percivalThumbRead' || key === 'goodOnTeamState' || key === 'goodReuseWhite' || key === 'goodFourthWhite' || key === 'merlinOwnWhite' || key === 'percivalMerlinWhite' || key === 'merlinFlowFollow' || key === 'goodLakeHuman' || key === 'goodEarlyVote' || key === 'goodR4White' || key === 'merlinOnTeamOwn' || key === 'loyalTailWhiteLastTau' || key === 'goodBayesR4Kept' || key === 'goodBayesFsReuse' || key === 'merlinPublicPipeline') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

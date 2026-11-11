@@ -60,7 +60,8 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
   if (mates.length < failsNeeded - 1 || viewers.length < size - failsNeeded) return action;
   const views = viewers.map((v) => blueView(obs, v));
   // Round 12 `redCleanLookBot`: read each seat's posterior the way the blue bots actually do (bot tables, Merlin layer).
-  const blueOpts: Readonly<BayesOptions> = tuning.redCleanLookBot ? bayesOptionsOf(tuning) : {};
+  // The public views carry no blue leader's own prior (round 38 `ownView`): the red read stays as it was before that knob.
+  const blueOpts: Readonly<BayesOptions> = tuning.redCleanLookBot ? bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }) : {};
   const bestOf = (redCount: number): { team: string[] | null; score: number } => {
     let team: string[] | null = null;
     let score = -1;

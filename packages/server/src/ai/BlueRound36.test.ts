@@ -21,7 +21,8 @@ const base = {
 describe('beliefLeadBlend (round 36)', () => {
   it('mixes the recursive and level-0 world weights in a team pick; off outside the pick', () => {
     const pick = asObs({ ...base, gamePhase: 'team_select' });
-    const t0 = { ...DEFAULT_AGENT_TUNING, beliefLeadRecursive: 0, beliefLeadBlend: 0, beliefRecursiveLeadScope: 0 };
+    // ownView 0: the blend is linear in the world weights only on the shared prior (round 38's own prior re-weights after the mix).
+    const t0 = { ...DEFAULT_AGENT_TUNING, beliefLeadRecursive: 0, beliefLeadBlend: 0, beliefRecursiveLeadScope: 0, ownView: 0 };
     const t1 = { ...t0, beliefLeadRecursive: 1 };
     const tb = { ...t1, beliefLeadBlend: 0.5 };
     const s0 = bayesRedShare(pick, bayesOptionsOf(t0));
@@ -40,7 +41,7 @@ describe('beliefLeadBlend (round 36)', () => {
     for (const id of IDS) expect(vb.get(id)!).toBeCloseTo(v0.get(id)!, 12);
     expect(parseTuningFlag('beliefLeadBlend=0.3')).toEqual({ beliefLeadBlend: 0.3 });
     // The default (round 36): blend 0.5, only in R2 after an R1 fail — an R1 pick reads the level-0 posterior.
-    const d = bayesRedShare(pick, bayesOptionsOf(DEFAULT_AGENT_TUNING));
+    const d = bayesRedShare(pick, bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, ownView: 0 }));
     for (const id of IDS) expect(d.get(id)!).toBeCloseTo(s0.get(id)!, 12);
   });
 });

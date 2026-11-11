@@ -23,6 +23,7 @@
 import type { AgentAction, AvalonAgent, PlayerObservation } from './types';
 import { HeuristicAgent } from './HeuristicAgent';
 import { computePyramidScores } from './baseline';
+import { defaultBeliefOptions } from './belief/BeliefOptions';
 import { missionFailed } from './missionFacts';
 import { ForwardAgent, USE_FORWARD_REASONING, interpret } from './forward';
 import { estimateMerlinLikenessFromHistory, estimateSuspicionFromHistory, goodLakeAvoidSet } from './LakePolicy';
@@ -126,9 +127,18 @@ interface Ranked {
   score: number;
 }
 
+/**
+ * The pyramid on the public record only. Round 38 `ownView`: a loyal's own team-pick prior (a fixed per-game preference, drawn at random on
+ * the game's first proposal) is not a reading of the record, so the shown red-suspicion leaves it out.
+ */
+function publicPyramid(obs: PlayerObservation): ReturnType<typeof computePyramidScores> {
+  const opts = defaultBeliefOptions();
+  return computePyramidScores(obs, opts.bayesTuning ? { ...opts, bayesTuning: { ...opts.bayesTuning, ownView: 0, ownViewKeep: 0 } } : opts);
+}
+
 /** Other seats ranked by public pyramid red-suspicion (high first). */
 function rankRedSuspicion(obs: PlayerObservation, among?: readonly string[]): Ranked[] {
-  const pyramid = computePyramidScores(obs);
+  const pyramid = publicPyramid(obs);
   const ids = (among ?? obs.allPlayerIds).filter((id) => id !== obs.myPlayerId);
   return ids
     .map((id) => ({ id, score: pyramid.scores.get(id) ?? 0.5 }))
