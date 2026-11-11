@@ -1146,8 +1146,19 @@ export class ForwardAgent implements AvalonAgent {
       // Round 40 value 3: the same from round 2 on only (`merlinPublicPipelineOn`).
       if ((this.baseline.tuning.merlinPublicPipeline ?? 0) >= 2 && merlinPublicPipelineOn(this.baseline.tuning, obs)) {
         const pubView = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: false } as PlayerObservation;
-        const pub = this.decideMain(pubView);
+        // The loyal of his seat applies his own lake bars (rounds 39–40 `loyalLakePair`, holder bar included), so the public pipeline runs
+        // with the bars computed for that loyal view, and a team holding a barred seat falls back to the loyal-style pick below.
+        const pubBar = [lakePairBarred(this.baseline.tuning, pubView), lakeHolderBarred40(this.baseline.tuning, pubView)].filter((x): x is string => x !== null);
+        const outerBar = this.lakeBar39;
+        this.lakeBar39 = pubBar;
+        let pub: ForwardDecision;
+        try {
+          pub = this.decideMain(pubView);
+        } finally {
+          this.lakeBar39 = outerBar;
+        }
         if (pub.action.type === 'team_select' && !pub.action.teamIds.some((id) => obs.knownEvils.includes(id))
+          && !pub.action.teamIds.some((id) => pubBar.includes(id))
           && gateOk(pub.action.teamIds) && publicGateOk(pub.action.teamIds)) {
           return { ...d, action: pub.action, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: the public loyal team of his seat (no red he sees)` } };
         }

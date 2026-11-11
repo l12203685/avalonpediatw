@@ -393,14 +393,20 @@ export interface BayesOptions {
    * (human records: that thumb is Merlin 43–52%; self-play 44–52%) — the mission term is averaged over the two thumb assignments.
    */
   thumbNoStain?: boolean;
-  /** Round 40 `percivalRead39=1`: Percival's posterior takes its thumb split from the round-39 fitted read (`percivalRead39`). */
+  /**
+   * Round 40 `percivalRead39=1`: Percival's posterior takes its thumb split from the round-39 fitted read (`percivalRead39`). The split is set
+   * before the round-38 `ownView` offsets; at his own team picks where `ownView` applies, those offsets act on top of it, so there the thumb
+   * split is the read's only before Percival's own prior (at votes it is the read's exactly).
+   */
   thumbRead39?: boolean;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
 const STRICT_EPS = 0.03;
 
-const blendCaches = new Map<number, WeakMap<PlayerObservation, Posterior>>();
+// Keyed by the blend value plus every option that changes the team_select posterior below this branch and is not otherwise in the observation
+// (`lakeCal`, the pending-proposal flag), so a candidate and the default evaluated on one observation object never share an entry.
+const blendCaches = new Map<string, WeakMap<PlayerObservation, Posterior>>();
 
 // Keyed by the base posterior (itself cached per observation and per every option that changes it), so a cached result is reused only for the
 // same base: the round-38 readers that sit on top of it (`ownView`, `beliefThumbNoStain`) cannot hand one option set's result to another.
@@ -506,6 +512,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   }
   // Round 40 `percivalRead39=1` (Percival): the share of "thumb A is the red one" is set to the fitted read's 1 − P(A is Merlin); within each thumb
   // assignment the worlds keep their weights, so every Percival decision that reads the posterior (the cleanest team, his votes) uses the read.
+  // This runs below the `ownView` branch: at team picks where `ownView` applies, its offsets multiply on top of the tilted weights.
   if (opts.thumbRead39 === true && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2 && (obs.seatTeam ?? obs.myTeam) === 'good'
     && obs.publicLoyalView !== true) {
     const base = posterior(obs, { ...opts, thumbRead39: false });
@@ -521,8 +528,9 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    let store = blendCaches.get(blend);
-    if (!store) { store = new WeakMap(); blendCaches.set(blend, store); }
+    const blendKey = `${blend}|${opts.lakeCal ?? 1}|${opts.pendingProposal === true ? 1 : 0}`;
+    let store = blendCaches.get(blendKey);
+    if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
     if (hit) return hit;
     const p1 = posterior(obs, { ...opts, leadBlend: 0 });
@@ -567,7 +575,7 @@ function thumbNoStainPosterior(obs: PlayerObservation, opts: Readonly<BayesOptio
   return tot > 0 ? { ...base, wts: raw.map((x) => x / tot) } : base;
 }
 
-/** Round 40: `base` tilted so that P(thumb A is red) = 1 − the fitted read's P(A is Merlin) (`percivalRead39`). */
+/** Round 40: `base` tilted so that P(thumb A is red) = 1 − the fitted read's P(A is Merlin) (`percivalRead39`), before any `ownView` offsets. */
 function thumbRead39Posterior(obs: PlayerObservation, base: Posterior): Posterior {
   const read = percivalRead39(obs);
   if (!read || base.worlds.length === 0) return base;

@@ -58,7 +58,8 @@ export function vote40TailBar(tuning: Readonly<AgentTuning>, obs: PlayerObservat
  */
 export function percivalThumbVote40(tuning: Readonly<AgentTuning>, obs: PlayerObservation, team: readonly string[]): boolean | null {
   const mode = tuning.percivalThumbVote40 ?? 0;
-  if (mode <= 0 || obs.myRole !== 'percival' || (obs.currentRound ?? 1) < 3 || !team.includes(obs.myPlayerId)) return null;
+  // Only with the fitted read switched on for his team picks too (`percivalRead39`), so his team rule and his vote rule read the thumbs the same way.
+  if (mode <= 0 || !((tuning.percivalRead39 ?? 0) > 0) || obs.myRole !== 'percival' || (obs.currentRound ?? 1) < 3 || !team.includes(obs.myPlayerId)) return null;
   const read = percivalRead39(obs);
   if (!read || !read.fav || !read.unfav) return null;
   const favOn = team.includes(read.fav);

@@ -89,6 +89,8 @@ describe('percivalThumbVote40 (Percival on a team with one thumb)', () => {
     expect(percivalThumbVote40(T({ percivalThumbVote40: 1 }), asObs({ ...(perc as object), currentLeader: read.unfav }), team)).toBeNull();
     expect(percivalThumbVote40(T({ percivalThumbVote40: 1 }), asObs({ ...(perc as object), currentRound: 5 }), team)).toBeNull();
     expect(percivalThumbVote40(T({}), perc, team)).toBeNull();
+    // only together with the fitted read on his team picks (otherwise team rule and vote rule would read the thumbs differently)
+    expect(percivalThumbVote40(T({ percivalThumbVote40: 1, percivalRead39: 0 }), perc, team)).toBeNull();
     // both thumbs or none on the team: not this rule
     expect(percivalThumbVote40(T({ percivalThumbVote40: 3 }), perc, ['P1', 'P10', 'P7', 'P8'])).toBeNull();
     expect(percivalThumbVote40(T({ percivalThumbVote40: 3 }), perc, ['P1', 'P10', 'P2'])).toBeNull();
@@ -130,6 +132,19 @@ describe('beliefLakeCal40 (another holder\'s claim term, blue seats only)', () =
     expect(b).toBeGreaterThan(a);
     const red = asObs({ ...(obs as object), seatTeam: 'evil' });
     expect(bayesRedShare(red, bayesOptionsOf(T({ beliefLakeCal40: 0.3 }))).get('P10')).toBeCloseTo(bayesRedShare(red, bayesOptionsOf(T({}))).get('P10')!, 12);
+  });
+  it('the lead-blend cache keeps the claim power apart (same observation object at a team pick, with and without it)', () => {
+    const blend = { beliefLeadRecursive: 1, beliefLeadBlend: 0.5, beliefRecursiveLeadScope: 5 };
+    const mk = () => asObs({
+      ...base, myPlayerId: 'P2', currentRound: 3, gamePhase: 'team_select', questResults: ['success', 'fail'], voteHistory: [...R1, ...R2], questHistory: QH,
+      lakeHistory: [{ round: 2, holderId: 'P10', targetId: 'P5', declaredClaim: 'evil' }], currentLeader: 'P2', seatTeam: 'good',
+    });
+    const shared = mk();
+    const withCal = bayesRedShare(shared, bayesOptionsOf(T({ ...blend, beliefLakeCal40: 0.3 }))).get('P10')!;
+    const plainShared = bayesRedShare(shared, bayesOptionsOf(T(blend))).get('P10')!;
+    const plainFresh = bayesRedShare(mk(), bayesOptionsOf(T(blend))).get('P10')!;
+    expect(plainShared).toBeCloseTo(plainFresh, 12);
+    expect(withCal).not.toBeCloseTo(plainFresh, 6);
   });
 });
 
