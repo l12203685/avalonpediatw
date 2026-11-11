@@ -39,6 +39,12 @@ export const STAT_TERMS = [
   'r3Reject',
   'flipRate',
   'signedEv',
+  // 2026-11-11 玩家雷達「兩紅之後」：兩紅之後藍方隊長派出的隊（@avalon/shared stats/twoRed.ts）
+  'twoRedAllGood',
+  'twoRedMordred',
+  'twoRedThumb',
+  'twoRedOneThumb',
+  'twoRedTwoPlus',
 ] as const;
 
 export type StatTermKey = (typeof STAT_TERMS)[number];

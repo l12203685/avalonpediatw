@@ -1312,7 +1312,8 @@
           "label": "Player radar sections",
           "radar": "Radar",
           "blocks": "Three blocks",
-          "theory": "Theory WR"
+          "theory": "Theory WR",
+          "twoRed": "After two reds"
         },
         "pending": "Available after the next daily refresh",
         "axes": {
@@ -1386,6 +1387,39 @@
           },
           "rolesNote": "Role-theory rankings only list players whose every role window is full.",
           "rolesPending": "Per-role windows: available after the next daily refresh"
+        },
+        "twoRed": {
+          "title": "Teams proposed after two reds",
+          "roleTabs": "Leader's role",
+          "role": {
+            "梅林": "Merlin",
+            "派西維爾": "Percival",
+            "忠臣": "Loyal"
+          },
+          "badge": "{{count}}",
+          "summary": "This player led as Blue after Red had two wins in {{games}} games · {{twoRed}} games in the current filter reached two reds ({{skipped}} of them skipped: the leaders could not be worked out or the proposal record has gaps)",
+          "loading": "Computing teams after two reds…",
+          "error": "Could not compute: {{message}}",
+          "roundCaption": "Mission {{round}}",
+          "colSlot": "Proposal",
+          "colN": "Count",
+          "colNHint": "This player's proposals as leader in this row; the small figure is everyone's count",
+          "attempt": "No. {{n}}",
+          "forced": "Last (5th, forced)",
+          "total": "Total",
+          "r4Safe": "Round 4 at most one red (all good + Mordred only + one thumb; the mission is sure to pass): {{pct}} ({{k}}/{{n}}), all {{all}}",
+          "allShort": "all {{pct}}",
+          "allN": "all {{n}}",
+          "cellTitle": "This player {{k}} / {{n}}; everyone {{allK}} / {{allN}}",
+          "round35Note": "Mission {{round}} (one fail makes it Red), teams Blue leaders proposed after Red had two wins, in three categories (mutually exclusive; each row adds up to 100%): all good = no Red on the team; no thumb, but Mordred = no Red Merlin can see (Assassin, Morgana, Oberon), but Mordred is on the team; at least one thumb = at least one Assassin, Morgana or Oberon on the team (with or without Mordred). The large figure is the share, the small one next to it the count, and the one below everyone's share for the same cell; rows with fewer than 5 proposals are faded.",
+          "round4Note": "Mission 4 (two fails make it Red), four categories (mutually exclusive; each row adds up to 100%): all good = no Red; no thumb, but Mordred = Mordred is the only Red; exactly one thumb = exactly one Red and it is the Assassin, Morgana or Oberon; two+ Reds = two or more Reds (Mordred counted). The large figure is the share, the small one next to it the count, and the one below everyone's share for the same cell; rows with fewer than 5 proposals are faded.",
+          "help": {
+            "when": "When: at the time of the proposal Red has exactly two mission wins and the game is not over — mission 3 (Red won 1 and 2), mission 4 (two Reds and one Blue so far), mission 5 (2–2). By then everyone has proposed at least once and the Lady of the Lake has been used at least once.",
+            "leader": "Who proposed: the leader of each proposal is worked out from the rotation across missions (as in the mistake checks); games where it cannot be worked out, or whose proposal record has gaps (the rotation would be off after a gap), are left out. Only proposals this player made as Merlin / Percival / Loyal count; rows are the proposal number within the mission: 1st–4th, last (5th, forced) and total.",
+            "categories": "Categories: Red = Assassin, Morgana, Mordred, Oberon; thumb = a Red Merlin sees at night (Assassin, Morgana, Oberon; Merlin cannot see Mordred). Missions 3 and 5 have three: all good (no Red), no thumb but Mordred (no thumb, Mordred on the team), at least one thumb. Mission 4 has four: all good, no thumb but Mordred (Mordred is the only Red), exactly one thumb (one Red and it is a thumb), two+ Reds (two or more, Mordred counted). The categories are mutually exclusive and each row adds up to 100% (rounded to whole numbers, so it can be off by 1).",
+            "compare": "The large figure is this player's share and the small one next to it the count; the small \"all\" figure below is the pooled share of every leader in the current filter for the same cell (same role, mission and proposal number). Rows where this player has fewer than {{min}} proposals are faded: with 4 or fewer, one proposal moves the share by 25 points or more. Hover a cell for everyone's counts.",
+            "scope": "The data has 10-player games only (4 Reds: Assassin, Morgana, Mordred, Oberon); follows the filter above."
+          }
         }
       }
     },
@@ -2102,6 +2136,36 @@
       "def": "The difference between a role's two flip-rate columns.",
       "calc": "Flip rate (Blue) − flip rate (Red), in percentage points.",
       "meaning": "The study read positive values as a 'Blue signal', but roles differ by only about ±2 points — too small to notice at the table."
+    },
+    "twoRedAllGood": {
+      "name": "All good",
+      "def": "After Red has two wins, a team proposed by a Blue leader with no Red at all (no Mordred either). A column in missions 3, 4 and 5.",
+      "calc": "All-good proposals ÷ proposals in the same cell (leader role, mission, proposal number). The columns of a row are mutually exclusive and add up to 100%.",
+      "meaning": "Higher = better at sending a clean team at this point; in missions 3 and 5 only an all-good team is sure to pass (mission 4 needs two fails, so a team with a single Red also passes)."
+    },
+    "twoRedMordred": {
+      "name": "No thumb, but Mordred",
+      "def": "After Red has two wins, a team proposed by a Blue leader with no Red that Merlin can see (Assassin, Morgana, Oberon) but with Mordred on it. In mission 4 this means Mordred is the only Red on the team.",
+      "calc": "These proposals ÷ proposals in the same cell. The columns of a row are mutually exclusive and add up to 100%.",
+      "meaning": "Merlin cannot see Mordred, so Merlin's teams often land here; in missions 3 and 5 Mordred alone can fail the mission."
+    },
+    "twoRedThumb": {
+      "name": "At least one thumb",
+      "def": "Missions 3 and 5: after Red has two wins, a team proposed by a Blue leader with at least one Red that Merlin can see (Assassin, Morgana, Oberon), with or without Mordred.",
+      "calc": "These proposals ÷ proposals in the same cell. The columns of a row are mutually exclusive and add up to 100%.",
+      "meaning": "Merlin knows the thumbs, so this should be lowest for Merlin; the gap between Percival / Loyal and Merlin shows how well they read Merlin. Lower is better."
+    },
+    "twoRedOneThumb": {
+      "name": "Exactly one thumb",
+      "def": "Mission 4: after Red has two wins, a team proposed by a Blue leader with exactly one Red, and that Red is one Merlin can see (Assassin, Morgana, Oberon).",
+      "calc": "These proposals ÷ proposals in the same cell. The columns of a row are mutually exclusive and add up to 100%.",
+      "meaning": "Mission 4 needs two fails, so a one-Red team always passes — but that Red is on the team."
+    },
+    "twoRedTwoPlus": {
+      "name": "Two+ Reds",
+      "def": "Mission 4: after Red has two wins, a team proposed by a Blue leader with two or more Reds (Mordred counted).",
+      "calc": "These proposals ÷ proposals in the same cell. The columns of a row are mutually exclusive and add up to 100%.",
+      "meaning": "If such a team goes, Red can play two fails and win the game with a third mission. Lower is better."
     }
   }
 }

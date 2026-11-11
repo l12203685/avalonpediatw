@@ -29,6 +29,7 @@ export * from './voting';
 export * from './pairs';
 export * from './lake';
 export * from './featureL141';
+export * from './twoRed';
 export * from './build';
 export * from './benchmarks';
 export * from './parity';
