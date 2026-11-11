@@ -21,6 +21,7 @@ import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
 import { analyzeGoodLake } from './GoodLakeInfo';
+import { missionFailed } from './missionFacts';
 
 /** 候選人的任務類別：F2＝上過出兩張以上失敗的任務；FS＝失敗、成功的任務都上過；F＝只上過失敗的；S＝只上過成功的；N＝沒上過任務。 */
 export type LakeClass = 'F2' | 'FS' | 'F' | 'S' | 'N';
@@ -54,8 +55,8 @@ export function lake39State(obs: PlayerObservation): Lake39State {
 /** 持湖者看得到的每個候選人的特徵。 */
 export function lake39Candidates(obs: PlayerObservation, candidates: readonly string[], tuning: Readonly<AgentTuning>): Lake39Candidate[] {
   const quests = obs.questHistory ?? [];
-  const failed = quests.filter((q) => q.result === 'fail');
-  const passed = quests.filter((q) => q.result !== 'fail');
+  const failed = quests.filter((q) => missionFailed(q));
+  const passed = quests.filter((q) => !missionFailed(q));
   const two = new Set(failed.filter((q) => (q.failCount ?? 0) >= 2).flatMap((q) => q.team));
   const onF = new Set(failed.flatMap((q) => q.team));
   const onS = new Set(passed.flatMap((q) => q.team));
@@ -78,7 +79,7 @@ function certainReds(obs: PlayerObservation): Set<string> {
   const me = obs.myPlayerId;
   const out = new Set<string>();
   for (const q of obs.questHistory ?? []) {
-    if (q.result !== 'fail' || !q.team.includes(me)) continue;
+    if (!missionFailed(q) || !q.team.includes(me)) continue;
     if ((q.failCount ?? 0) >= q.team.length - 1) for (const id of q.team) if (id !== me) out.add(id);
   }
   return out;
