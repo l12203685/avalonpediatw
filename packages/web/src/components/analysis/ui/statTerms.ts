@@ -48,6 +48,8 @@ export const STAT_TERMS = [
   // 2026-11-11 數據排行「關鍵外白／內黑」：真的決定了提議過不過的藍方投票（@avalon/shared stats/decisiveVotes.ts）
   'decisiveVote',
   'decisiveAccuracy',
+  // 分組的「全部投票」：同樣的對錯算法套在每一張藍方票（DecisiveCohortView）
+  'allVoteAccuracy',
   'decisiveShrunk',
   'decisiveOnYes',
   'decisiveOnNo',

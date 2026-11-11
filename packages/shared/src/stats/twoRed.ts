@@ -28,6 +28,10 @@
 import { RED_ROLES, SEATS } from './constants';
 import type { Game } from './dataset';
 import { deriveLeaderSeats } from './mistakes';
+import {
+  PLAYER_TIER_KEYS, cohortGrid, cohortHistogram, latestPlayerPr, playerTier, seatCohort,
+  type CohortCell, type CohortCuts, type CohortGrid, type CohortHistogram, type CohortRecord, type PlayerTierKey,
+} from './cohort';
 
 export const TWO_RED_ROLES = ['梅林', '派西維爾', '忠臣'] as const;
 export type TwoRedRole = (typeof TWO_RED_ROLES)[number];
@@ -83,6 +87,10 @@ export interface TwoRedProposal {
   reds: number;
   thumbs: number;
   category: TwoRedCategory;
+  /** 隊長那一局開打前的 PR（benchmarks.ts seatPr；暫定、沒寫名字、沒評分 = null）。分組（cohort.ts）用。 */
+  pr: number | null;
+  /** 那一局的 S（沒評分 = null）。 */
+  s: number | null;
 }
 
 export interface TwoRedProposals {
@@ -169,6 +177,7 @@ function gameTwoRedProposals(g: Game): { hasTwoRed: boolean; proposals: TwoRedPr
     if (!isTwoRedRole(role)) continue;
     const i = (SEATS as readonly string[]).indexOf(seat);
     const { reds, thumbs } = teamReds(team, g.seatRoles);
+    const cohort = i >= 0 ? seatCohort(g, i) : { pr: null, s: g.lineup ? g.lineup.s : null };
     out.push({
       seq: g.seq,
       player: i >= 0 ? g.seatPlayers[i] : null,
@@ -179,6 +188,8 @@ function gameTwoRedProposals(g: Game): { hasTwoRed: boolean; proposals: TwoRedPr
       reds,
       thumbs,
       category: twoRedCategory(round as TwoRedRound, reds, thumbs),
+      pr: cohort.pr,
+      s: cohort.s,
     });
   }
   return { hasTwoRed: true, proposals: out };
@@ -244,4 +255,115 @@ export function computeTwoRedReport(games: readonly Game[], player: string, prep
 /** 比率（%，一位小數）；n = 0 → null。顯示整數時直接用 hits / n 四捨五入，不要再把這個值取整（會四捨五入兩次）。 */
 export function twoRedShare(hits: number, n: number): number | null {
   return n > 0 ? Math.round((hits / n) * 1000) / 10 : null;
+}
+
+// ── 分組：強者／一般人／新手 × 高端／普通／歡樂（cohort.ts 的慣例：個人樣本太小，看合併的組）──────────
+
+/** 九宮格的 counts 依這個順序（cohortGrid 的 width = 5）。 */
+export const TWO_RED_CATEGORY_ORDER: readonly TwoRedCategory[] = ['allGood', 'mordred', 'thumb', 'oneThumb', 'twoPlusRed'];
+/** 第 4 局「最多一個紅方」= 全好 + 只有莫德雷德 + 只含一拇指（兩張失敗才紅，這支隊出任務一定成功）。 */
+export const TWO_RED_R4_SAFE: readonly TwoRedCategory[] = ['allGood', 'mordred', 'oneThumb'];
+
+/** 分組用的提議（給網站的精簡版：沒有隊伍與人數）。 */
+export type TwoRedCohortProposal = Pick<TwoRedProposal, 'seq' | 'player' | 'role' | 'round' | 'slot' | 'category' | 'pr' | 's'>;
+
+export interface TwoRedCohortData {
+  proposals: TwoRedCohortProposal[];
+  /** 每位玩家在這些局裡最近一局有 PR 的 PR（玩家雷達「跟自己的組比」用）。 */
+  playerPr: Record<string, number>;
+  /** 這些局的 PR 與 S 分布（切點的說明用）。 */
+  histogram: CohortHistogram;
+  twoRedGames: number;
+  skippedGames: number;
+}
+
+/** 局 → 分組要的資料（統計 Worker 裡算一次，切點在網站上換，不用重算）。 */
+export function twoRedCohortData(games: readonly Game[], prepared?: TwoRedProposals): TwoRedCohortData {
+  const data = prepared ?? twoRedProposals(games);
+  return {
+    proposals: data.proposals.map(({ seq, player, role, round, slot, category, pr, s }) => ({ seq, player, role, round, slot, category, pr, s })),
+    playerPr: Object.fromEntries(latestPlayerPr(games)),
+    histogram: cohortHistogram(games),
+    twoRedGames: data.twoRedGames,
+    skippedGames: data.skippedGames,
+  };
+}
+
+/** 一次提議 → 九宮格的一筆（counts = TWO_RED_CATEGORY_ORDER 的 one-hot）。 */
+export function twoRedCohortRecord(p: TwoRedCohortProposal): CohortRecord {
+  return {
+    player: p.player,
+    game: p.seq,
+    pr: p.pr,
+    s: p.s,
+    n: 1,
+    counts: TWO_RED_CATEGORY_ORDER.map((c) => (c === p.category ? 1 : 0)),
+  };
+}
+
+/** 選哪一格：角色、第幾局、哪一列（1..5 = 第 1～4 次、尾派；'total' = 合計）。 */
+export interface TwoRedSelection {
+  role: TwoRedRole;
+  round: TwoRedRound;
+  slot: number | 'total';
+}
+
+const inSelection = (p: TwoRedCohortProposal, sel: TwoRedSelection): boolean =>
+  p.role === sel.role && p.round === sel.round && (sel.slot === 'total' || p.slot === sel.slot);
+
+/** 選定的角色／局／列 → 九宮格（玩家分層 × 桌分層；counts = TWO_RED_CATEGORY_ORDER）。 */
+export function twoRedCohortGrid(proposals: readonly TwoRedCohortProposal[], cuts: CohortCuts, sel: TwoRedSelection): CohortGrid {
+  return cohortGrid(proposals.filter((p) => inSelection(p, sel)).map(twoRedCohortRecord), cuts, TWO_RED_CATEGORY_ORDER.length);
+}
+
+/** 一格的分類次數＋人數（分組的表）。 */
+export type TwoRedCohortCounts = TwoRedCounts & { players: number };
+
+/** 九宮格的一格 → 表的一格。 */
+export function twoRedCountsOf(cell: CohortCell): TwoRedCohortCounts {
+  const out = { n: cell.n, players: cell.players } as TwoRedCohortCounts;
+  TWO_RED_CATEGORY_ORDER.forEach((c, k) => { out[c] = cell.counts[k] ?? 0; });
+  return out;
+}
+
+export type TwoRedTierKey = PlayerTierKey | 'all';
+export const TWO_RED_TIER_KEYS: readonly TwoRedTierKey[] = [...PLAYER_TIER_KEYS, 'all'];
+
+/** 依玩家分層的表（每組一張跟玩家雷達同形狀的表）＋每組的人數與提議數（全部角色、局合計）。 */
+export interface TwoRedTierTables {
+  tables: Record<TwoRedTierKey, Record<TwoRedRole, Record<TwoRedRound, TwoRedCohortCounts[]>>>;
+  players: Record<TwoRedTierKey, number>;
+  proposals: Record<TwoRedTierKey, number>;
+}
+
+/**
+ * 提議 → 每個玩家分層（強者／一般人／新手／未評分）與全體各一張表。每一列都由同一個 cohortGrid 的列合計來，
+ * 所以表與九宮格的合計一定對得上。
+ */
+export function twoRedTierTables(proposals: readonly TwoRedCohortProposal[], cuts: CohortCuts): TwoRedTierTables {
+  const tables = {} as TwoRedTierTables['tables'];
+  for (const tier of TWO_RED_TIER_KEYS) {
+    tables[tier] = {} as Record<TwoRedRole, Record<TwoRedRound, TwoRedCohortCounts[]>>;
+    for (const role of TWO_RED_ROLES) tables[tier][role] = {} as Record<TwoRedRound, TwoRedCohortCounts[]>;
+  }
+  for (const role of TWO_RED_ROLES) {
+    for (const round of TWO_RED_ROUNDS) {
+      const slots: Array<number | 'total'> = [...TWO_RED_SLOTS, 'total'];
+      const grids = slots.map((slot) => twoRedCohortGrid(proposals, cuts, { role, round, slot }));
+      for (const tier of TWO_RED_TIER_KEYS) {
+        tables[tier][role][round] = grids.map((g) => twoRedCountsOf(tier === 'all' ? g.all : g.rows[tier]));
+      }
+    }
+  }
+  const people = {} as Record<TwoRedTierKey, Set<string>>;
+  const proposalsN = {} as Record<TwoRedTierKey, number>;
+  for (const tier of TWO_RED_TIER_KEYS) { people[tier] = new Set(); proposalsN[tier] = 0; }
+  for (const p of proposals) {
+    for (const tier of [playerTier(p.pr, cuts), 'all'] as const) {
+      proposalsN[tier] += 1;
+      if (p.player !== null) people[tier].add(p.player);
+    }
+  }
+  const players = Object.fromEntries(TWO_RED_TIER_KEYS.map((k) => [k, people[k].size])) as Record<TwoRedTierKey, number>;
+  return { tables, players, proposals: proposalsN };
 }

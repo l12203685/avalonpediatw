@@ -1,11 +1,13 @@
 /**
- * 篩選的分享連結 (#stats?f=1.<base64url>、#stats?preset=online)：開連結 = 套用那個篩選；在數據分析頁時，
+ * 篩選的分享連結 (#stats?f=1.<base64url>、#stats?preset=online；分組的切點另外是 &c=80-20-55-38)：開連結 = 套用那個篩選；在數據分析頁時，
  * 網址列的 hash 跟著篩選更新，直接複製網址就能分享 (#study=… 打開研究時不動它)。
  */
 import { useEffect } from 'react';
 import { loadFilterVocab } from './statsEngine';
 import { STUDY_EVENT } from '../components/analytics/studyLink';
 import { filterFromParams, filterHash, useStatsFilter, type StatsHashParams } from './statsFilter';
+import { decodeCohortCuts } from '@avalon/shared/stats';
+import { cohortCutsParam, useCohortCuts } from './cohortCuts';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -13,6 +15,14 @@ function today(): string {
 
 /** 套用連結裡的篩選 (preset 的「近一年」依資料集的基準日展開；拿不到時用今天)。 */
 export function applySharedFilter(params: StatsHashParams): void {
+  // 分組的切點：連結帶 c= (合法) 就用它、沒帶 = 分享的人用預設 → 預設；只在這次有效，不蓋掉訪客自己記住的切點
+  // (壞掉的 c= 不動目前的切點)
+  if (params.cuts) {
+    const cuts = decodeCohortCuts(params.cuts);
+    if (cuts) useCohortCuts.getState().applyLinkCuts(cuts);
+  } else if (params.filter || params.preset) {
+    useCohortCuts.getState().applyLinkCuts(null);
+  }
   const set = (asOf: string): void => {
     const { filter, warnings } = filterFromParams(params, asOf);
     useStatsFilter.getState().setFilter(filter, warnings);
@@ -40,8 +50,9 @@ function writeHash(hash: string): void {
 export function useFilterHashSync(): void {
   const filter = useStatsFilter((s) => s.filter);
   const key = useStatsFilter((s) => s.key);
+  const cuts = cohortCutsParam(useCohortCuts((s) => s.cuts));
   useEffect(() => {
-    const sync = (): void => writeHash(filterHash(key ? filter : null));
+    const sync = (): void => writeHash(filterHash(key ? filter : null, cuts));
     sync();
     // App 處理 #stats 連結、關掉從外部連結開的研究時會清掉 hash：再寫回去
     window.addEventListener('hashchange', sync);
@@ -50,12 +61,13 @@ export function useFilterHashSync(): void {
       window.removeEventListener('hashchange', sync);
       window.removeEventListener(STUDY_EVENT, sync);
     };
-  }, [filter, key]);
+  }, [filter, key, cuts]);
   useEffect(() => (): void => writeHash('#stats'), []);
 }
 
 /** 分享用的完整網址。 */
 export function shareUrl(): string {
   const { filter, key } = useStatsFilter.getState();
-  return `${window.location.origin}${window.location.pathname}${filterHash(key ? filter : null)}`;
+  const cuts = cohortCutsParam(useCohortCuts.getState().cuts);
+  return `${window.location.origin}${window.location.pathname}${filterHash(key ? filter : null, cuts)}`;
 }

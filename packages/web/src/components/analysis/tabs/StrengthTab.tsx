@@ -9,20 +9,23 @@ import { useStrengthReport } from '../strength/useStrengthReport';
 import DiscoveryList from '../discovery/DiscoveryList';
 import { useDiscoveryNav } from '../discovery/discoveryNav';
 import { SectionTabs, useSectionTab } from '../ui';
+import TwoRedCohortView from '../cohort/TwoRedCohortView';
 
-type StrengthView = 'trend' | 'outcome' | 'tiers' | 'compare' | 'discovery';
+type StrengthView = 'trend' | 'outcome' | 'tiers' | 'compare' | 'twoRedCohort' | 'discovery';
 
 const ITEMS: { id: StrengthView; label: string }[] = [
   { id: 'trend', label: '走勢' },
   { id: 'outcome', label: '強度與結果' },
   { id: 'tiers', label: '分層結果' },
   { id: 'compare', label: '組成比較' },
+  // 2026-11-11 Edward：兩紅之後的派隊依 PR 分組（強者／一般人／新手）與 S × PR 九宮格
+  { id: 'twoRedCohort', label: '兩紅派隊分組' },
   { id: 'discovery', label: '自動發現' },
 ];
 
 /**
  * 陣容強度（Edward 2026-10-31）：走勢（河流圖）、強度與結果（結果 vs S 曲線＋收縮後的半年 × S 熱度圖）、分層結果、
- * 組成比較、自動發現（全部分析分頁的發現清單）。全部跟著上方的篩選，在瀏覽器的統計 Worker 裡算。
+ * 組成比較、兩紅派隊分組（兩紅之後的派隊依 PR 分組與 S × PR 九宮格；cohort/TwoRedCohortView）、自動發現（全部分析分頁的發現清單）。全部跟著上方的篩選，在瀏覽器的統計 Worker 裡算。
  * 其他分頁的自動發現「看全部」「在組成比較打開」經 discoveryNav 切到這裡的小分頁。
  */
 export default function StrengthTab(): JSX.Element {
@@ -56,6 +59,7 @@ export default function StrengthTab(): JSX.Element {
   const clearCustom = <T,>(f: (v: T) => void) => (v: T): void => { setCustom(null); f(v); };
   const body = (v: StrengthView): JSX.Element => {
     if (v === 'discovery') return <DiscoveryList />;
+    if (v === 'twoRedCohort') return <TwoRedCohortView />;
     if (state.status === 'loading') {
       return <div className="flex items-center justify-center gap-3 py-12 text-gray-400"><Loader size={20} className="animate-spin" />載入陣容強度…</div>;
     }

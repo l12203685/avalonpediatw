@@ -25,7 +25,12 @@ import {
   type TwoRedProposals,
   type TwoRedReport,
   type TwoRedTable,
+  type TwoRedCohortData,
+  type DecisiveCohortData,
+  type Game,
   SEATS,
+  decisiveCohortData,
+  twoRedCohortData,
   scanDecisiveVotes,
   twoRedProposals,
   twoRedTable,
@@ -146,13 +151,9 @@ export async function computeDiscovery(serverUrl: string, raw: GameFilter | null
   return result;
 }
 
-const twoRedPrepared = new Map<string, { data: TwoRedProposals; all: TwoRedTable }>();
+const twoRedPrepared = new Map<string, { data: TwoRedProposals; all: TwoRedTable; games: Game[] }>();
 
-/**
- * 玩家雷達「兩紅之後的派隊」：篩選後的局裡這位玩家當藍方隊長、紅方已經兩勝時派出的隊（@avalon/shared computeTwoRedReport），
- * 加上全體的同一張表。每個篩選的提議與全體表只算一次，換人只重數那位玩家的。
- */
-export async function computeTwoRed(serverUrl: string, raw: GameFilter | null, name: string): Promise<TwoRedReport> {
+async function preparedTwoRed(serverUrl: string, raw: GameFilter | null): Promise<{ data: TwoRedProposals; all: TwoRedTable; games: Game[] }> {
   const { decoded, context } = await loaded(serverUrl);
   const filter = raw ? sanitizeFilter(raw).filter : null;
   const key = JSON.stringify(filter);
@@ -160,31 +161,61 @@ export async function computeTwoRed(serverUrl: string, raw: GameFilter | null, n
   if (!prepared) {
     const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
     const data = twoRedProposals(games);
-    prepared = { data, all: twoRedTable(data.proposals) };
+    prepared = { data, all: twoRedTable(data.proposals), games };
     twoRedPrepared.set(key, prepared);
     while (twoRedPrepared.size > 4) twoRedPrepared.delete(twoRedPrepared.keys().next().value as string);
   }
+  return prepared;
+}
+
+/**
+ * 玩家雷達「兩紅之後的派隊」：篩選後的局裡這位玩家當藍方隊長、紅方已經兩勝時派出的隊（@avalon/shared computeTwoRedReport），
+ * 加上全體的同一張表。每個篩選的提議與全體表只算一次，換人只重數那位玩家的。
+ */
+export async function computeTwoRed(serverUrl: string, raw: GameFilter | null, name: string): Promise<TwoRedReport> {
+  const prepared = await preparedTwoRed(serverUrl, raw);
   return computeTwoRedReport([], name, prepared);
 }
 
-const decisiveScans = new Map<string, DecisiveScan>();
+/**
+ * 「兩紅之後的派隊」分組（強者／一般人／新手 × 高端／普通／歡樂，@avalon/shared cohort.ts）：篩選後的提議（精簡版）、
+ * 每位玩家最近的 PR、PR／S 分布。切點在網站上換（主執行緒用 cohortGrid 重數），不用回來重算。
+ */
+export async function computeTwoRedCohort(serverUrl: string, raw: GameFilter | null): Promise<TwoRedCohortData> {
+  const prepared = await preparedTwoRed(serverUrl, raw);
+  return twoRedCohortData(prepared.games, prepared.data);
+}
+
+const decisiveScans = new Map<string, { scan: DecisiveScan; games: Game[] }>();
+
+async function preparedDecisive(serverUrl: string, raw: GameFilter | null): Promise<{ scan: DecisiveScan; games: Game[] }> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const key = JSON.stringify(filter);
+  let hit = decisiveScans.get(key);
+  if (!hit) {
+    const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+    // allVotes：分組的「全部投票」要每一張藍方票（依局、座位合起來，約幾萬筆）
+    hit = { scan: scanDecisiveVotes(games, { allVotes: true }), games };
+    decisiveScans.set(key, hit);
+    while (decisiveScans.size > 4) decisiveScans.delete(decisiveScans.keys().next().value as string);
+  }
+  return hit;
+}
 
 /**
  * 排行「關鍵外白／內黑」與玩家雷達「兩紅之後」的關鍵票那一行：篩選後的局裡藍方的關鍵票（@avalon/shared decisiveVotes.ts），
  * 一個範圍的報表（每位玩家＋全體依角色）。每個篩選只掃一次局（三個範圍一起），換範圍只重新加總。
  */
 export async function computeDecisive(serverUrl: string, raw: GameFilter | null, scope: DecisiveScope): Promise<DecisiveReport> {
-  const { decoded, context } = await loaded(serverUrl);
-  const filter = raw ? sanitizeFilter(raw).filter : null;
-  const key = JSON.stringify(filter);
-  let scan = decisiveScans.get(key);
-  if (!scan) {
-    const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
-    scan = scanDecisiveVotes(games);
-    decisiveScans.set(key, scan);
-    while (decisiveScans.size > 4) decisiveScans.delete(decisiveScans.keys().next().value as string);
-  }
+  const { scan } = await preparedDecisive(serverUrl, raw);
   return decisiveReport(scan, scope);
+}
+
+/** 「關鍵外白／內黑」分組：一個範圍的關鍵票與全部投票（依局、座位合起來的筆）＋PR／S 分布；切點在網站上換。 */
+export async function computeDecisiveCohort(serverUrl: string, raw: GameFilter | null, scope: DecisiveScope): Promise<DecisiveCohortData> {
+  const { scan, games } = await preparedDecisive(serverUrl, raw);
+  return decisiveCohortData(scan, scope, games);
 }
 
 /** 數據分析「局勢樹」：篩選後的局縮成樹要的欄位（components/analysis/stateTree/stateTree.ts）。 */

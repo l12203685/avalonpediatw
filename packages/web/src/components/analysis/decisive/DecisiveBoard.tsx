@@ -15,6 +15,7 @@ import {
   DECISIVE_GROUP_TERMS, DECISIVE_MIN_FILTERED, DECISIVE_MIN_OPTIONS, DECISIVE_ROLE_COLORS, DECISIVE_SCOPE_KEY,
 } from './decisiveLayout';
 import { useDecisiveReport } from './useDecisiveReport';
+import DecisiveCohortView from '../cohort/DecisiveCohortView';
 
 /**
  * 數據排行「關鍵外白／內黑」（社群點子「最佳第六人」，Edward 2026-11-11 擴大成「關鍵 場外／場內 × 白／黑 × 對／錯」）：
@@ -28,6 +29,8 @@ import { useDecisiveReport } from './useDecisiveReport';
  *  - 門檻與收縮的理由（說明裡寫給玩家看）：每人的局隨機分兩半，30 張以上的常客兩半對不起來（差距大多是運氣），算進 15～29 張
  *    的人才有小幅正相關；門檻 30 是為了涵蓋率，k = 150 是選定的收縮強度、不是估計值（decisiveVotes.ts 檔頭有數字）。
  *  - 一律白／一律黑／照常投的正確率即時算（report.all.baselines），篩選後不一定都低於平均，說明跟著換句子。
+ *  - (2026-11-11 Edward) 個人排行上面加分組（cohort/DecisiveCohortView）：強者／一般人／新手與 S × PR 九宮格，關鍵票與全部投票；
+ *    分組的數字才可靠，個人名次大多是運氣。
  */
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string;
@@ -493,6 +496,8 @@ export default function DecisiveBoard(): JSX.Element {
         ))}
       </ul>
       <RoleBreakdown report={report} />
+      {/* 2026-11-11 Edward：個人的關鍵票太少，分組（強者／一般人／新手、S × PR 九宮格）放在個人排行上面 */}
+      <DecisiveCohortView scope={scope} />
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <h4 className="text-xs font-bold text-zinc-300">{t(`${K}.tableTitle`)}</h4>

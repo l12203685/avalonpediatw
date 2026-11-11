@@ -2,18 +2,18 @@
  * 篩選重算的 Worker：全部區塊重算約 0.3 秒 (Node 實測；手機更久)，放在背景不卡畫面。
  * 訊息：{ id, type: 'vocab' | 'compute', serverUrl, filter? } → { id, ok, value } / { id, ok: false, status, error }。
  */
-import { computeClaimData, computeDecisive, computeDiscovery, computeFiltered, computeStateGames, computeStrength, computeTwoRed, filterVocab, GamesUnavailableError } from './statsCompute';
+import { computeClaimData, computeDecisive, computeDecisiveCohort, computeDiscovery, computeFiltered, computeStateGames, computeStrength, computeTwoRed, computeTwoRedCohort, filterVocab, GamesUnavailableError } from './statsCompute';
 import type { DecisiveScope, GameFilter, StrengthGrouping } from '@avalon/shared/stats';
 
 interface StatsRequest {
   id: number;
-  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed' | 'decisive';
+  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed' | 'decisive' | 'twoRedCohort' | 'decisiveCohort';
   serverUrl: string;
   filter?: GameFilter;
   grouping?: StrengthGrouping;
   /** twoRed：玩家名字。 */
   name?: string;
-  /** decisive：範圍。 */
+  /** decisive／decisiveCohort：範圍。 */
   scope?: DecisiveScope;
 }
 
@@ -40,6 +40,10 @@ ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
           ? await computeTwoRed(serverUrl, filter ?? null, name ?? '')
         : type === 'decisive'
           ? await computeDecisive(serverUrl, filter ?? null, scope ?? 'twoRed')
+        : type === 'twoRedCohort'
+          ? await computeTwoRedCohort(serverUrl, filter ?? null)
+        : type === 'decisiveCohort'
+          ? await computeDecisiveCohort(serverUrl, filter ?? null, scope ?? 'twoRed')
           : await computeFiltered(serverUrl, filter as GameFilter);
     ctx.postMessage({ id, ok: true, value });
   } catch (err) {

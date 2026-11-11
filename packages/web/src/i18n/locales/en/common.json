@@ -1418,7 +1418,21 @@
             "leader": "Who proposed: the leader of each proposal is worked out from the rotation across missions (as in the mistake checks); games where it cannot be worked out, or whose proposal record has gaps (the rotation would be off after a gap), are left out. Only proposals this player made as Merlin / Percival / Loyal count; rows are the proposal number within the mission: 1st–4th, last (5th, forced) and total.",
             "categories": "Categories: Red = Assassin, Morgana, Mordred, Oberon; thumb = a Red Merlin sees at night (Assassin, Morgana, Oberon; Merlin cannot see Mordred). Missions 3 and 5 have three: all good (no Red), no thumb but Mordred (no thumb, Mordred on the team), at least one thumb. Mission 4 has four: all good, no thumb but Mordred (Mordred is the only Red), exactly one thumb (one Red and it is a thumb), two+ Reds (two or more, Mordred counted). The categories are mutually exclusive and each row adds up to 100% (rounded to whole numbers, so it can be off by 1).",
             "compare": "The large figure is this player's share and the small one next to it the count; the small \"all\" figure below is the pooled share of every leader in the current filter for the same cell (same role, mission and proposal number). Rows where this player has fewer than {{min}} proposals are faded: with 4 or fewer, one proposal moves the share by 25 points or more. Hover a cell for everyone's counts.",
-            "scope": "The data has 10-player games only (4 Reds: Assassin, Morgana, Mordred, Oberon); follows the filter above."
+            "scope": "The data has 10-player games only (4 Reds: Assassin, Morgana, Mordred, Oberon); follows the filter above.",
+            "group": "My group: the small line under each cell is the combined share of every leader in this player's group (strong / regular / newer by the pre-game PR of their latest game in the filter; the cut points can be changed in \"Two-red teams by group\") for the same cell, excluding this player's own proposals (each proposal is grouped by the PR at that game, so a player who rose from newer is compared with how players were leading while they were in his current group). You can switch back to everyone. Most players have only a few proposals per cell, so the group is the fairer comparison; the full group tables and the S × PR grid are under Lineup strength > \"Two-red teams by group\"."
+          },
+          "cellTitleRef": "This player {{k}} / {{n}}; {{label}} {{allK}} / {{allN}}",
+          "refShort": "{{label}} {{pct}}",
+          "refN": "{{label}} {{n}}",
+          "r4SafeRef": "Round 4 with at most one red (all good + Mordred only + exactly one thumb; the mission cannot fail): {{pct}} ({{k}}/{{n}}), {{label}} {{all}}",
+          "compare": {
+            "label": "Compare with",
+            "group": "My group ({{tier}})",
+            "all": "Everyone",
+            "allShort": "All",
+            "mine": "Latest PR in the filter {{pr}} → {{tier}} ({{range}})",
+            "noPr": "This player has no PR (provisional or unrated), so only the overall comparison is available",
+            "link": "See the groups →"
           }
         }
       }
@@ -2042,6 +2056,119 @@
         "none": "No decisive votes after red's 2 wins.",
         "link": "Open the decisive-votes board"
       }
+    },
+    "cohort": {
+      "player": {
+        "strong": "Strong",
+        "regular": "Regular",
+        "novice": "Newer",
+        "unrated": "Unrated",
+        "all": "All"
+      },
+      "table": {
+        "high": "High-end",
+        "normal": "Normal",
+        "casual": "Casual",
+        "unrated": "Unrated",
+        "all": "All"
+      },
+      "playerRange": {
+        "strong": "PR ≥ {{hi}}",
+        "regular": "PR {{lo}}–{{top}}",
+        "novice": "PR < {{lo}}",
+        "unrated": "No PR"
+      },
+      "tableRange": {
+        "high": "S ≥ {{hi}}",
+        "normal": "S {{lo}}–{{hi}}",
+        "casual": "S < {{lo}}",
+        "unrated": "No S"
+      },
+      "cellTitle": "{{k}} / {{n}} {{unit}} ({{pct}}) · {{players}} players · {{games}} games",
+      "lowSample": "fewer than {{min}}, indicative only",
+      "cellN": "{{n}} {{unit}}",
+      "cellPlayers_one": "{{count}} player",
+      "cellPlayers_other": "{{count}} players",
+      "measure": "Measure",
+      "gridLabel": "Grid",
+      "axis": "Player \\ table",
+      "rowTotal": "Total",
+      "colTotal": "Total",
+      "mine": "(me)",
+      "unratedNote": "Unrated is outside the grid and only counted in the totals: {{pn}} {{unit}} from seats with no PR at the time (provisional, unnamed or unrated games; every player is provisional for their first 30 games, so nearly everyone has some here, it is not a separate group of people), and {{gn}} {{unit}} from games without S.",
+      "shadeNote": "Background: compared with the overall corner, higher is yellow, lower is blue, on a fixed scale (darkest at {{full}}+ points away; a 1-2 point gap barely shows). Small cells are first pulled toward the overall rate ({{prior}} pseudo-{{unit}} at the overall rate), so a cell of a few dozen cannot turn darkest by luck.",
+      "loading": "Computing groups…",
+      "note": "Each player's sample is too small (the median player has only a few per cell), so players are pooled by group here: the group numbers are the stable ones.",
+      "help": {
+        "grid": "Grid: rows are players (the seat's pre-game PR in that game: strong / regular / newer), columns are tables (the game's S = mean pre-game PR of the 10 seats: high-end / normal / casual). Each cell shows the share (rounded once), then the sample size and number of players (a player may fall in different groups at different times). The right column totals by player group, the bottom row by table group, the corner is everyone. Cells with fewer than 5 are faded; the background shows the gap from the overall rate on a fixed scale (darkest at 10+ points, small cells pulled toward the overall first), so the grid stays almost uncoloured when the groups barely differ.",
+        "causality": "PR is partly determined by results (winning raises it), so group differences show what stronger players do; they do not prove the habit causes the strength."
+      },
+      "dist": {
+        "seats": "Named seats in the current filter ({{rated}} with a PR; {{unrated}} = {{unratedPct}} without, mostly provisional players under 30 career games): strong / regular / newer = {{cur}} (cuts {{hi}}/{{lo}}; default 80/20 gives {{def}}).",
+        "players": "By each player's latest PR ({{rated}} players with a PR, {{unrated}} without): {{cur}}.",
+        "games": "Games ({{rated}} with S, {{unrated}} unrated): high-end / normal / casual = {{cur}} (cuts {{hi}}/{{lo}}; default 55/38 gives {{def}}).",
+        "terciles": "For reference, the tercile cuts are PR {{prHi}}/{{prLo}} and S {{sHi}}/{{sLo}}."
+      },
+      "cuts": {
+        "title": "Group cut points",
+        "player": "Player PR:",
+        "table": "Table S:",
+        "prHi": "Lowest PR of the strong group (inclusive)",
+        "prLo": "PR below which a player is newer (exclusive)",
+        "sHi": "Lowest S of a high-end table (inclusive)",
+        "sLo": "S below which a table is casual (exclusive)",
+        "reset": "Default",
+        "invalid": "Cut points must be 1–99 with the upper above the lower (PR whole numbers, S at most one decimal)",
+        "help": {
+          "player": "Player groups use the seat's pre-game PR in that game (the same PR as the benchmark rows and Lineup strength: the Elo percentile among players with 30+ career games, computed daily on all games and not affected by the filter). Strong = PR ≥ upper cut, newer = PR < lower cut, regular in between; the default 80/20 matches the benchmark rows' default top 20% / bottom 20%. Provisional seats (under 30 career games at the time), unnamed seats and unrated games have no PR and count as unrated (totals only).",
+          "table": "Table groups use the game's S (mean pre-game PR of the 10 seats; provisional and unnamed seats count at most 50). High-end = S ≥ upper cut, casual = S < lower cut, normal in between.",
+          "why": "Why 55 and 38 by default: they are the existing Lineup strength boundaries (S ≥ 65 very strong, 55–65 strong, 38–55 normal, < 38 weak); high-end = very strong + strong, casual = weak. That split resembles the players' 80/20: across all games roughly a fifth are high-end, a little under a quarter casual and over half normal, close to the 22% / 56% / 22% of seats with a PR. For three equal groups, use the tercile cuts below.",
+          "adjust": "Changing the cuts only changes how groups are split, never anyone's numbers; each viewer's choice is remembered and written into the share link (&c=… in the address). Opening someone's link uses their cuts (none written = the defaults) for that visit only; your remembered cuts are kept."
+        }
+      },
+      "twoRed": {
+        "title": "Teams after two reds: by PR group",
+        "colTier": "Group",
+        "colN": "Count",
+        "unit": "",
+        "r4Safe": "At most one red",
+        "r4SafeHint": "All good + Mordred only + exactly one thumb: round 4 needs two fails, so this team cannot fail",
+        "tableCellTitle": "{{k}} / {{n}} ({{pct}}) · {{players}} players",
+        "tierSummary": "{{tier}} {{players}} players, {{n}} proposals",
+        "scope": "{{games}} games in the filter reached two reds ({{skipped}} skipped: leader not derivable or record gap); {{n}} proposals by blue leaders",
+        "slot": "Proposal",
+        "round": "Grid round",
+        "roundN": "Round {{round}}",
+        "gridCaption": "Grid: round {{round}} · {{role}} leader · {{slot}}",
+        "help": {
+          "what": "The same proposals as the radar's \"After two reds\": teams proposed by a Merlin / Percival / loyal leader when red had exactly two missions. Instead of individuals, leaders are pooled by their pre-game PR in that game.",
+          "tiers": "Each table row is a group: strong / regular / newer (adjustable cuts) and everyone (including leaders without a PR). Large text is the share, small text the count; cells with fewer than 5 are faded. The Proposal menu picks the attempt (default: total).",
+          "radar": "The radar's \"After two reds\" compares each cell with the player's own group by default."
+        }
+      },
+      "decisive": {
+        "title": "Groups (strong / regular / newer)",
+        "kind": {
+          "decisive": "Decisive votes",
+          "all": "All votes"
+        },
+        "kindLabel": "Which votes",
+        "role": "Role",
+        "unit": "votes",
+        "colPlayers": "Players",
+        "colVotes": "Votes",
+        "colAcc": "Accuracy",
+        "votesTitle": "{{n}} non-neutral, {{neutral}} neutral (round-4 single-red teams) · {{games}} games",
+        "reliableNote": "Read the group numbers: groups have large samples and are stable; the individual ranks below are mostly luck.",
+        "unrated": "{{n}} votes from seats with no PR at the time (provisional, unnamed, unrated games) are counted only in All; every player is provisional for their first 30 games, so nearly everyone has some votes here.",
+        "gridCaption": "Grid: {{kind}} · {{role}}",
+        "help": {
+          "what": "The same eight cells (on/off team × approve/reject × right/wrong) and four group rates, pooled by the voter's pre-game PR instead of per person: one row per group with players, votes, accuracy, the four rates and right/wrong counts.",
+          "all": "\"All votes\" = every blue vote, not only decisive ones, scored the same way (approving an all-good team or rejecting a failing team is right; round-4 single-red is neutral). All votes are far more reliable than decisive votes: splitting each player's games at random into two halves, the halves' accuracy correlates (mean over 200 splits) about 0.2–0.4 for all votes (similar for rounds 3–5 and after two reds; lower when only frequent players are counted, and single splits range from 0 to 0.5) and about 0 for decisive votes. The exact figure moves with the split and the threshold; what is clear is that all votes are much steadier than decisive votes.",
+          "tiers": "Strong = PR ≥ upper cut, newer = PR < lower cut, regular in between (adjustable, default 80/20); All includes voters without a PR. The role menu narrows to loyal, Percival or Merlin.",
+          "gridN": "Grid sample sizes are non-neutral votes (neutral votes are neither right nor wrong)."
+        }
+      }
     }
   },
   "guest": {
@@ -2307,6 +2434,12 @@
       "def": "Share of decisive votes that were right: approving an all-good team or rejecting a failing team.",
       "calc": "(approve right + reject right) ÷ (right + wrong); neutral round-4 one-red votes excluded.",
       "meaning": "Higher = votes right when it matters. Noisy with few votes; the ranking uses the shrunk value."
+    },
+    "allVoteAccuracy": {
+      "name": "All-vote accuracy",
+      "def": "Share of all blue votes (not only decisive ones) that were right: approving an all-good team or rejecting a failing team.",
+      "calc": "(approve right + reject right) ÷ (right + wrong); neutral round-4 one-red votes excluded. Same rule as decisive accuracy, applied to every vote.",
+      "meaning": "Higher = votes right in general. Far more votes, so much steadier than decisive accuracy."
     },
     "decisiveShrunk": {
       "name": "Accuracy (shrunk)",
