@@ -84,8 +84,8 @@ describe('share pages: every article (real wiki data)', () => {
     for (const a of ordered) {
       expect(pages[wikiSharePath(a.id)], a.id).toBeDefined();
       expect(md[wikiMdPath(a.id)], a.id).toBeDefined();
-      // sitemap.xml lists the share URL too
-      expect(md['sitemap.xml']).toContain(`<loc>${SITE}/w/${a.id}/</loc>`);
+      // share pages are for link previews only (they redirect by script): kept out of sitemap.xml
+      expect(md['sitemap.xml']).not.toContain(`${SITE}/w/${a.id}/`);
     }
     expect(md['llms.txt']).toContain(`${SITE}/w/<文章 id>/`);
   });
@@ -104,7 +104,10 @@ describe('share pages: every article (real wiki data)', () => {
       expect(meta(html, 'og:image')).toBe(`${SITE}/logo.png`);
       expect(meta(html, 'twitter:card')).toBe('summary'); // the logo is square
       const desc = unescape(meta(html, 'description') ?? '');
-      expect(desc.length, a.id).toBeGreaterThan(5);
+      // a real sentence, not a fragment: some stored excerpts used to be the marker legend line
+      // (「規則書寫明，必定成立」) or the first line of the body (「遊戲開始，上帝會請所有人閉眼」)
+      expect(Array.from(desc).length, a.id).toBeGreaterThanOrEqual(25);
+      expect(desc, a.id).not.toMatch(/^.{0,30}(必定|必然)成立。?$/);
       expect(Array.from(desc).length, a.id).toBeLessThanOrEqual(SHARE_DESCRIPTION_MAX);
       expect(desc, a.id).not.toMatch(/[<*`]|\]\(|【(邏輯|經驗)】/);
       expect(unescape(meta(html, 'og:description') ?? '')).toBe(desc);

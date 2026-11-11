@@ -192,7 +192,20 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
       if (cancelled) return;
       if (articles.length > 0) {
         fromApi = true;
-        setAllArticles(mergeWikiArticles(WIKI_ARTICLES, articles.map(apiToWikiArticle)));
+        let merged = mergeWikiArticles(WIKI_ARTICLES, articles.map(apiToWikiArticle));
+        // 網站剛部署、伺服器（另外部署）還是舊的 wiki_data.json：打開的那篇 API 還沒有時，從打包的備份補上，
+        // 不要讓讀到一半的文章自己關掉（下面的 effect 會清掉真的找不到的文章）
+        const openId = parseWikiHash(window.location.hash)?.id;
+        if (openId && !merged.some((a) => a.id === openId)) {
+          try {
+            const fromBundle = (await import('@wiki-bundle')).default.find((a) => a.id === openId);
+            if (fromBundle) merged = [...merged, apiToWikiArticle(fromBundle)];
+          } catch {
+            // bundle chunk failed to load: the article really is unavailable
+          }
+          if (cancelled) return;
+        }
+        setAllArticles(merged);
       } else {
         await loadBundle();
       }

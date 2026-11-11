@@ -79,6 +79,8 @@ function versionTxtPlugin(): Plugin {
  * avalon-game-platform.web.app（workflow 註解：玩家主入口；avalonpediatw.com 還沒接上）。
  */
 const DEFAULT_SITE_URL = 'https://avalon-game-platform.web.app';
+/** The site origin written in index.html; replaced by SITE_URL at build time (transformIndexHtml). */
+const INDEX_HTML_SITE = 'https://avalonpediatw.com/';
 const DEFAULT_API_URL = 'https://avalon-server-z6c0-cs0s.onrender.com';
 const REPO_URL = 'https://github.com/l12203685/avalonpediatw';
 const BASE_PATH = process.env.VITE_BASE || '/';
@@ -122,7 +124,10 @@ function llmsFilesPlugin(): Plugin {
     },
     transformIndexHtml(html) {
       const { articles, opts } = llmsInputs();
-      return html.replace('<!--llms-noscript-->', buildNoscriptHtml(articles, opts));
+      // index.html 的 canonical／og:url／og:image／JSON-LD 寫 avalonpediatw.com，但那個網域還沒接上（查不到 DNS），
+      // 連結預覽會抓不到圖：build 時換成 SITE_URL（預設 Firebase 主站）；網域接上後在部署 workflow 設 SITE_URL 即可
+      const site = opts.siteUrl.replace(/\/+$/, '');
+      return html.replace('<!--llms-noscript-->', buildNoscriptHtml(articles, opts)).split(INDEX_HTML_SITE).join(`${site}/`);
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
