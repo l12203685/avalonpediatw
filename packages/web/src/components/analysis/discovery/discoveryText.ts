@@ -3,7 +3,7 @@
  * 區間的寫法、跟哪些分析分頁有關、可以套用的篩選子句或組成比較的分組。
  */
 import {
-  findingPages, type Clause, type DiscoveryFinding, type DiscoveryPage, type StrengthGrouping,
+  findingPages, strategyLine, type Clause, type DiscoveryFinding, type DiscoveryLink, type DecisiveRankScope, type DiscoveryPage, type StrengthGrouping,
 } from '@avalon/shared/stats';
 
 export const PAGE_LABELS: Record<DiscoveryPage, string> = {
@@ -32,16 +32,61 @@ export function formatCi(f: Pick<DiscoveryFinding, 'lo' | 'hi' | 'metric'>): str
 export function findingSentence(f: DiscoveryFinding): string {
   const k = f.metric.kind;
   const dim = f.dimension.kind === 'category' ? `${f.dimension.label}是「${f.a.label}」` : `${f.dimension.label} ${f.a.label}`;
-  const other = f.dimension.kind === 'category' ? '其他情況' : `${f.b.label}`;
+  // 兩組直接比（強者 vs 新手、高端 vs 歡樂）時寫出另一組的名字
+  const other = f.dimension.kind !== 'category' ? `${f.b.label}` : f.dimension.pair ? `「${f.b.label}」` : '其他情況';
   return `${dim}時，${f.metric.label} ${formatValue(f.a.value, k)}；${other}時 ${formatValue(f.b.value, k)}`;
 }
 
-/** 補充說明：跟 S 高度相關、控制 S 後的差。 */
+/** 補充說明：跟 S 高度相關、控制 S 後的差；事件單位：同一個角色裡比的差。 */
 export function findingNotes(f: DiscoveryFinding): string[] {
   const notes: string[] = [];
   if (typeof f.corrWithS === 'number' && Math.abs(f.corrWithS) >= 0.6) notes.push(`這個維度跟桌上 S 高度相關（r = ${f.corrWithS.toFixed(2)}）`);
   if (typeof f.withinS === 'number') notes.push(`在 S 三分層裡各自比，平均差 ${formatDiff(f.withinS, f.metric.kind)}`);
+  if (typeof f.withinRole === 'number') notes.push(`在同一個角色裡比，平均差 ${formatDiff(f.withinRole, f.metric.kind)}`);
   return notes;
+}
+
+/** 事件單位的樣本：幾局、幾位有寫名字的玩家（檢定已算進同一局、同一位玩家的相關）。 */
+export function findingClusters(f: DiscoveryFinding): string | null {
+  if (!f.clustered) return null;
+  const side = (g: DiscoveryFinding['a']): string => `${g.label} ${g.games ?? 0} 局 ${g.players ?? 0} 人`;
+  return `${side(f.a)}、${side(f.b)}（同一局、同一人的相關已算進檢定）`;
+}
+
+/** 可能的策略那一行（沒有或不給 = null）。 */
+export function findingStrategy(f: DiscoveryFinding): string | null {
+  return f.strategy ? strategyLine(f.strategy) : null;
+}
+
+/** 數字所在的分頁：哪一頁、按鈕的字、數據排行要切的範圍（兩紅之後／第 3～5 局）。 */
+export interface FindingLink {
+  kind: DiscoveryLink;
+  label: string;
+  scope?: DecisiveRankScope;
+  /** 那一頁沒有這個維度的拆法（例：關鍵外白／內黑沒有依第幾局拆）：只能看整體的數字。 */
+  contextOnly?: boolean;
+}
+
+/**
+ * 目的地有拆的維度：兩紅派隊分組有隊長分組（表）、桌的分組（九宮格）、角色、第幾局、第幾次提議；關鍵外白／內黑的分組
+ * 只有做事的人的分組與桌的分組（九宮格）。其他維度（座位、局勢、紅方已兩勝…）的按鈕寫「看整體數字」。
+ */
+const LINK_DIMS: Record<DiscoveryLink, ReadonlySet<string>> = {
+  twoRedCohort: new Set(['playerTier', 'tableTier', 'role', 'round', 'slot']),
+  decisiveBoard: new Set(['playerTier', 'tableTier']),
+  decisiveBoardAll: new Set(['playerTier', 'tableTier']),
+};
+
+export function findingLink(f: DiscoveryFinding): FindingLink | null {
+  const kind = f.metric.link;
+  if (!kind) return null;
+  const contextOnly = !LINK_DIMS[kind].has(f.dimension.id);
+  const verb = contextOnly ? '看整體數字' : '看數字';
+  const extra = contextOnly ? { contextOnly } : {};
+  if (kind === 'twoRedCohort') return { kind, label: `${verb}：陣容強度 › 兩紅派隊分組`, ...extra };
+  const scope: DecisiveRankScope = f.dimension.id === 'twoRedState' && f.a.label === '紅方已兩勝' ? 'twoRed' : 'r35';
+  const which = kind === 'decisiveBoard' ? '關鍵票' : '全部投票';
+  return { kind, scope, label: `${verb}：數據排行 › 關鍵外白／內黑（${which}、${scope === 'twoRed' ? '兩紅之後' : '第 3～5 局'}）`, ...extra };
 }
 
 /** 可以直接套用的篩選子句（分類、年份、梅林座位）；沒有 = null。 */
@@ -76,7 +121,7 @@ export function queryFindings(findings: readonly DiscoveryFinding[], q: Discover
   const out = findings.filter((f) => (q.structural || !f.dimension.structural)
     && (q.page === 'all' || findingPages(f).includes(q.page))
     && (q.unit === 'all' || f.unit === q.unit)
-    && (!text || `${f.dimension.label} ${f.a.label} ${f.metric.label} ${f.metric.help}`.toLowerCase().includes(text)));
+    && (!text || `${f.dimension.label} ${f.a.label} ${f.b.label} ${f.metric.label} ${f.metric.help} ${f.strategy?.text ?? ''}`.toLowerCase().includes(text)));
   const key = (f: DiscoveryFinding): number => (q.sort === 'q' ? f.q : q.sort === 'diff' ? -Math.abs(f.diff) : -Math.abs(f.effect));
   return out.sort((x, y) => key(x) - key(y));
 }

@@ -79,6 +79,8 @@ export interface TwoRedProposal {
   seq: number;
   /** 隊長座位上的名字（沒寫名字 = null）。 */
   player: string | null;
+  /** 隊長的座位字元（SEATS 的一個；自動發現的「隊長座位」與叢集用）。 */
+  seat: string;
   role: TwoRedRole;
   round: TwoRedRound;
   /** 1..5（5 = 尾派）。 */
@@ -181,6 +183,7 @@ function gameTwoRedProposals(g: Game): { hasTwoRed: boolean; proposals: TwoRedPr
     out.push({
       seq: g.seq,
       player: i >= 0 ? g.seatPlayers[i] : null,
+      seat,
       role,
       round: round as TwoRedRound,
       slot: Math.min(Math.max(attempt, 1), 5),

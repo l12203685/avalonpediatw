@@ -10,7 +10,13 @@ import {
   decisiveReport,
   decodeGamesDataset,
   discoverFindings,
+  discoveryBase,
+  type DiscoveryBase,
   sanitizeFilter,
+  DEFAULT_COHORT_CUTS,
+  encodeCohortCuts,
+  validCohortCuts,
+  type CohortCuts,
   type DecodedDataset,
   type GameFilter,
   type GamesDataset,
@@ -136,16 +142,27 @@ export async function computeStrength(serverUrl: string, raw: GameFilter | null,
 }
 
 const discoveries = new Map<string, DiscoveryResult>();
+/** 非事件單位的候選（不靠切點）：依篩選快取，切點一換只重算三種事件單位。 */
+const discoveryBases = new Map<string, DiscoveryBase>();
 
-/** 自動發現：篩選後的局掃描全部維度 × 指標（@avalon/shared discoverFindings）；同一個篩選只算一次。 */
-export async function computeDiscovery(serverUrl: string, raw: GameFilter | null): Promise<DiscoveryResult> {
+/** 自動發現：篩選後的局掃描全部維度 × 指標（@avalon/shared discoverFindings）；同一個篩選＋分組切點只算一次。 */
+export async function computeDiscovery(serverUrl: string, raw: GameFilter | null, rawCuts?: CohortCuts | null): Promise<DiscoveryResult> {
   const { decoded, context } = await loaded(serverUrl);
   const filter = raw ? sanitizeFilter(raw).filter : null;
-  const key = JSON.stringify(filter);
+  // 分組的切點（強者／新手、高端／歡樂；網站上可調）：不合法就用預設
+  const cuts = rawCuts && validCohortCuts(rawCuts) ? rawCuts : DEFAULT_COHORT_CUTS;
+  const filterKey = JSON.stringify(filter);
+  const key = `${filterKey}|${encodeCohortCuts(cuts)}`;
   const hit = discoveries.get(key);
   if (hit) return hit;
   const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
-  const result = discoverFindings(games);
+  let base = discoveryBases.get(filterKey);
+  if (!base) {
+    base = discoveryBase(games);
+    discoveryBases.set(filterKey, base);
+    while (discoveryBases.size > 4) discoveryBases.delete(discoveryBases.keys().next().value as string);
+  }
+  const result = discoverFindings(games, { cuts, base });
   discoveries.set(key, result);
   while (discoveries.size > 4) discoveries.delete(discoveries.keys().next().value as string);
   return result;

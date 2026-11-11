@@ -129,6 +129,10 @@ export interface DecisiveSeatRecord extends CohortRecord {
   role: DecisiveRole;
   scope: Exclude<DecisiveScope, 'twoRed'>;
   twoRed: boolean;
+  /** scanDecisiveVotes(games, { allVotes: true, byRound: true }) 時才有：再依第幾局分開（自動發現的「第幾局」「局勢」用）。 */
+  round?: number;
+  /** 座位字元（byRound 時才有）。 */
+  seat?: string;
 }
 
 const ROLE_SET: ReadonlySet<string> = new Set(DECISIVE_ROLES);
@@ -164,7 +168,7 @@ function approvals(approved: string): Set<string> {
 }
 
 /** 全部局裡的關鍵藍方票（三個範圍一起掃）。 */
-export function scanDecisiveVotes(games: readonly Game[], options: { allVotes?: boolean } = {}): DecisiveScan {
+export function scanDecisiveVotes(games: readonly Game[], options: { allVotes?: boolean; byRound?: boolean } = {}): DecisiveScan {
   const votes: DecisiveVote[] = [];
   const allVotes: DecisiveSeatRecord[] = [];
   const opportunities = { twoRed: zeroRoles(), r35: zeroRoles(), r12: zeroRoles() };
@@ -212,10 +216,11 @@ export function scanDecisiveVotes(games: readonly Game[], options: { allVotes?: 
         const on = team.includes(seat);
         const { pr, s } = seatCohort(g, i);
         if (options.allVotes) {
-          const rk = `${seat}|${scope}|${twoRed ? 1 : 0}`;
+          const rk = options.byRound ? `${seat}|${round}` : `${seat}|${scope}|${twoRed ? 1 : 0}`;
           let rec = seatRecords.get(rk);
           if (!rec) {
             rec = { player: g.seatPlayers[i] ?? null, game: g.seq, pr, s, n: 0, counts: new Array<number>(12).fill(0), role, scope, twoRed };
+            if (options.byRound) { rec.round = round; rec.seat = seat; }
             seatRecords.set(rk, rec);
             allVotes.push(rec);
           }
