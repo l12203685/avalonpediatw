@@ -36,6 +36,7 @@
 import { RED_ROLES, SEATS } from './constants';
 import type { Game } from './dataset';
 import { MORDRED, TWO_RED_ROLES, fullConfig, redWinsBefore, type TwoRedRole } from './twoRed';
+import { cohortGrid, cohortHistogram, seatCohort, type CohortCell, type CohortCuts, type CohortGrid, type CohortHistogram, type CohortRecord } from './cohort';
 
 export const DECISIVE_ROLES = TWO_RED_ROLES;
 export type DecisiveRole = TwoRedRole;
@@ -89,6 +90,12 @@ export interface DecisiveVote {
   scope: Exclude<DecisiveScope, 'twoRed'>;
   /** 提議當下紅方剛好已經兩勝。 */
   twoRed: boolean;
+  /** 投票的座位字元。 */
+  seat: string;
+  /** 投票的人那一局開打前的 PR（benchmarks.ts seatPr；暫定、沒寫名字、沒評分 = null）。分組（cohort.ts）用。 */
+  pr: number | null;
+  /** 那一局的 S（沒評分 = null）。 */
+  s: number | null;
 }
 
 type ScopeCounts = Record<DecisiveScope, number>;
@@ -104,6 +111,24 @@ export interface DecisiveScan {
   inconsistent: ScopeCounts;
   /** 範圍 → 有算進來的提議的局數。 */
   games: ScopeCounts;
+  /**
+   * scanDecisiveVotes(games, { allVotes: true }) 時才有：每一張藍方票（不只關鍵的）依局、座位、範圍合起來
+   * （分組的「全部投票」；counts = DECISIVE_COHORT_ORDER）。
+   */
+  allVotes?: DecisiveSeatRecord[];
+}
+
+/** 九宮格的 counts 依這個順序：四組 × 對、錯、中性（索引 = 組 × 3 + 對錯）。 */
+export const DECISIVE_COHORT_ORDER: ReadonlyArray<{ group: DecisiveGroup; outcome: keyof DecisiveCell }> = DECISIVE_GROUPS.flatMap((group) =>
+  (['right', 'wrong', 'neutral'] as const).map((outcome) => ({ group, outcome })));
+const cohortIndex = (group: DecisiveGroup, outcome: keyof DecisiveCell): number =>
+  DECISIVE_GROUPS.indexOf(group) * 3 + (outcome === 'right' ? 0 : outcome === 'wrong' ? 1 : 2);
+
+/** 同一局、同一座位、同一個範圍（第 1～2 局／第 3～5 局，且分兩紅之後與否）的藍方票合起來：九宮格的一筆。 */
+export interface DecisiveSeatRecord extends CohortRecord {
+  role: DecisiveRole;
+  scope: Exclude<DecisiveScope, 'twoRed'>;
+  twoRed: boolean;
 }
 
 const ROLE_SET: ReadonlySet<string> = new Set(DECISIVE_ROLES);
@@ -139,8 +164,9 @@ function approvals(approved: string): Set<string> {
 }
 
 /** 全部局裡的關鍵藍方票（三個範圍一起掃）。 */
-export function scanDecisiveVotes(games: readonly Game[]): DecisiveScan {
+export function scanDecisiveVotes(games: readonly Game[], options: { allVotes?: boolean } = {}): DecisiveScan {
   const votes: DecisiveVote[] = [];
+  const allVotes: DecisiveSeatRecord[] = [];
   const opportunities = { twoRed: zeroRoles(), r35: zeroRoles(), r12: zeroRoles() };
   const proposals = zeroScopes();
   const inconsistent = zeroScopes();
@@ -151,6 +177,8 @@ export function scanDecisiveVotes(games: readonly Game[]): DecisiveScan {
     const lastIndex = new Map<number, number>();
     g.votingProposals.forEach(([round], k) => lastIndex.set(round, k));
     const seen = zeroScopes();
+    // 全部投票：這一局每個座位、每個範圍一筆
+    const seatRecords = new Map<string, DecisiveSeatRecord>();
     g.votingProposals.forEach(([round, attempt, team, approved], k) => {
       if (round < 1 || round > 5 || attempt < 1 || attempt > 4) return;
       const scope = round <= 2 ? 'r12' : 'r35';
@@ -181,6 +209,19 @@ export function scanDecisiveVotes(games: readonly Game[]): DecisiveScan {
         opportunities[scope][role] += 1;
         if (twoRed) opportunities.twoRed[role] += 1;
         const approve = yes.has(seat);
+        const on = team.includes(seat);
+        const { pr, s } = seatCohort(g, i);
+        if (options.allVotes) {
+          const rk = `${seat}|${scope}|${twoRed ? 1 : 0}`;
+          let rec = seatRecords.get(rk);
+          if (!rec) {
+            rec = { player: g.seatPlayers[i] ?? null, game: g.seq, pr, s, n: 0, counts: new Array<number>(12).fill(0), role, scope, twoRed };
+            seatRecords.set(rk, rec);
+            allVotes.push(rec);
+          }
+          rec.n += 1;
+          (rec.counts as number[])[cohortIndex(decisiveGroup(on, approve), decisiveOutcome(approve, quality))] += 1;
+        }
         // 關鍵：剛好 6 票過關而他投白，或剛好 5 票沒過而他投黑（⇔ 其他 9 票裡剛好 5 票贊成）
         const decisive = passed ? yes.size === 6 && approve : yes.size === 5 && !approve;
         if (!decisive) return;
@@ -190,18 +231,21 @@ export function scanDecisiveVotes(games: readonly Game[]): DecisiveScan {
           role,
           round,
           attempt,
-          on: team.includes(seat),
+          on,
           approve,
           quality,
           mordredOnly,
           scope,
           twoRed,
+          seat,
+          pr,
+          s,
         });
       });
     });
     for (const s of DECISIVE_SCOPES) gameCounts[s] += seen[s];
   }
-  return { votes, opportunities, proposals, inconsistent, games: gameCounts };
+  return { votes, opportunities, proposals, inconsistent, games: gameCounts, ...(options.allVotes ? { allVotes } : {}) };
 }
 
 /** 這張票在不在範圍裡。 */
@@ -408,4 +452,53 @@ export function sortDecisiveRows(rows: readonly DecisivePlayerRow[], key: Decisi
 /** 一步到位：局 → 一個範圍的報表。 */
 export function computeDecisiveReport(games: readonly Game[], scope: DecisiveScope = 'twoRed'): DecisiveReport {
   return decisiveReport(scanDecisiveVotes(games), scope);
+}
+
+// ── 分組：強者／一般人／新手 × 高端／普通／歡樂（cohort.ts 的慣例：個人的關鍵票太少，看合併的組）──────────
+
+/** 關鍵票 → 依局、座位、範圍合起來的筆（counts = DECISIVE_COHORT_ORDER）。 */
+export function decisiveSeatRecords(votes: readonly DecisiveVote[]): DecisiveSeatRecord[] {
+  const out = new Map<string, DecisiveSeatRecord>();
+  for (const v of votes) {
+    const key = `${v.seq}|${v.seat}|${v.scope}|${v.twoRed ? 1 : 0}`;
+    let rec = out.get(key);
+    if (!rec) {
+      rec = { player: v.player, game: v.seq, pr: v.pr, s: v.s, n: 0, counts: new Array<number>(12).fill(0), role: v.role, scope: v.scope, twoRed: v.twoRed };
+      out.set(key, rec);
+    }
+    rec.n += 1;
+    (rec.counts as number[])[cohortIndex(decisiveGroup(v.on, v.approve), decisiveOutcome(v.approve, v.quality))] += 1;
+  }
+  return [...out.values()];
+}
+
+/** 給網站的分組資料（一個範圍）：關鍵票與全部投票各自的筆、PR／S 分布。切點在網站上換，不用重算。 */
+export interface DecisiveCohortData {
+  scope: DecisiveScope;
+  decisive: DecisiveSeatRecord[];
+  all: DecisiveSeatRecord[];
+  histogram: CohortHistogram;
+}
+
+/** 掃描結果（要有 allVotes）＋局 → 一個範圍的分組資料。 */
+export function decisiveCohortData(scan: DecisiveScan, scope: DecisiveScope, games: readonly Game[]): DecisiveCohortData {
+  const inScope = (r: Pick<DecisiveSeatRecord, 'scope' | 'twoRed'>): boolean => inDecisiveScope(r, scope);
+  return {
+    scope,
+    decisive: decisiveSeatRecords(scan.votes.filter((v) => inDecisiveScope(v, scope))),
+    all: (scan.allVotes ?? []).filter(inScope),
+    histogram: cohortHistogram(games),
+  };
+}
+
+/** 筆 → 九宮格（role 給了就只算那個角色）。 */
+export function decisiveCohortGrid(records: readonly DecisiveSeatRecord[], cuts: CohortCuts, role?: DecisiveRole | null): CohortGrid {
+  return cohortGrid(role ? records.filter((r) => r.role === role) : records, cuts, DECISIVE_COHORT_ORDER.length);
+}
+
+/** 九宮格的一格 → 八格（＋中性）。 */
+export function decisiveGridOf(cell: Pick<CohortCell, 'counts'>): DecisiveGrid {
+  const grid = emptyDecisiveGrid();
+  DECISIVE_COHORT_ORDER.forEach(({ group, outcome }, k) => { grid[group][outcome] += cell.counts[k] ?? 0; });
+  return grid;
 }
