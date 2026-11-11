@@ -104,11 +104,11 @@ export const WIKI_CATEGORIES: WikiCategory[] = [
     description: '怎麼讀數據、牌譜數據紀錄與各角色的即時數據',
   },
   {
-    // Edward 2026-10-30 裁定（E17）：〈關於阿瓦隆百科〉（含社群金句）放獨立的「關於本站」。
+    // Edward 2026-10-30 裁定（E17）：〈關於阿瓦隆百科〉放獨立的「關於本站」。
     id: 'about',
     name: '關於本站',
     icon: 'ℹ️',
-    description: '百科介紹、建議閱讀順序、學習地圖、社群連結與社群金句',
+    description: '百科介紹、建議閱讀順序、學習地圖與社群連結',
   },
 ];
 
