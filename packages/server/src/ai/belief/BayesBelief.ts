@@ -566,8 +566,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const tempered = temperV < 1 || temperP < 1;
   const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
   // Round 38 `beliefPendingProposal`: the proposal being voted on, as one more proposal record without votes.
+  // Round 39: blue seats only (a red seat's own reading and its loyal-view vote, `redLoyalView`, stay as they were: red frozen).
   const pending = opts.pendingProposal === true && obs.gamePhase === 'team_vote' && (obs.proposedTeam ?? []).length > 0
-    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4;
+    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4 && obs.myTeam === 'good' && obs.redLoyalView !== true;
   let store = caches.get(pending ? `${key}|pend` : key);
   if (!store) { store = new WeakMap(); caches.set(pending ? `${key}|pend` : key, store); }
   const hit = store.get(obs);
