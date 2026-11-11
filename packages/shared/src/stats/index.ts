@@ -16,6 +16,8 @@ export * from './lineup';
 export * from './mistakes';
 export * from './strength';
 export * from './discovery';
+export * from './discoveryEvents';
+export * from './discoveryStrategy';
 export * from './theory';
 export * from './players';
 export * from './overview';
