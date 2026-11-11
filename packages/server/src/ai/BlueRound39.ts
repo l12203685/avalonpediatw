@@ -21,7 +21,7 @@ import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
 import { analyzeGoodLake } from './GoodLakeInfo';
-import { missionFailed } from './missionFacts';
+import { failCards, missionFailed } from './missionFacts';
 
 /** 候選人的任務類別：F2＝上過出兩張以上失敗的任務；FS＝失敗、成功的任務都上過；F＝只上過失敗的；S＝只上過成功的；N＝沒上過任務。 */
 export type LakeClass = 'F2' | 'FS' | 'F' | 'S' | 'N';
@@ -57,7 +57,7 @@ export function lake39Candidates(obs: PlayerObservation, candidates: readonly st
   const quests = obs.questHistory ?? [];
   const failed = quests.filter((q) => missionFailed(q));
   const passed = quests.filter((q) => !missionFailed(q));
-  const two = new Set(failed.filter((q) => (q.failCount ?? 0) >= 2).flatMap((q) => q.team));
+  const two = new Set(failed.filter((q) => failCards(q) >= 2).flatMap((q) => q.team));
   const onF = new Set(failed.flatMap((q) => q.team));
   const onS = new Set(passed.flatMap((q) => q.team));
   const last = [...quests].sort((a, b) => b.round - a.round)[0];
@@ -80,7 +80,7 @@ function certainReds(obs: PlayerObservation): Set<string> {
   const out = new Set<string>();
   for (const q of obs.questHistory ?? []) {
     if (!missionFailed(q) || !q.team.includes(me)) continue;
-    if ((q.failCount ?? 0) >= q.team.length - 1) for (const id of q.team) if (id !== me) out.add(id);
+    if (failCards(q) >= q.team.length - 1) for (const id of q.team) if (id !== me) out.add(id);
   }
   return out;
 }
@@ -124,7 +124,7 @@ function breakTie(st: Lake39State, tied: readonly Lake39Candidate[], rnd: () => 
 
 /** 這個持湖者適用 `goodLake39`（梅林要位元 128）。 */
 export function goodLake39On(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  return (tuning.goodLake39 ?? 0) > 0 && obs.myTeam === 'good';
+  return (tuning.goodLake39 ?? 0) > 0 && (obs.seatTeam ?? obs.myTeam) === 'good';
 }
 
 /** 這個持湖者實際用到的位元：梅林沒有位元 128 時只用 1（兩張失敗的隊，所有藍方都適用）與 4（同分不照座位序）。 */
@@ -204,7 +204,7 @@ export function goodLake39Pick(
  * 位元 4（只量）：不看持湖者的後驗，一律不帶 X。回傳要擋掉的 X，不適用時回傳 null。
  */
 export function lakePairBarred(tuning: Readonly<AgentTuning>, obs: PlayerObservation): string | null {
-  if (!((tuning.loyalLakePair ?? 0) & 1) || obs.myTeam !== 'good' || obs.gamePhase !== 'team_select') return null;
+  if (!((tuning.loyalLakePair ?? 0) & 1) || (obs.seatTeam ?? obs.myTeam) !== 'good' || obs.gamePhase !== 'team_select') return null;
   if (obs.myRole !== 'loyal' && obs.myRole !== 'merlin') return null;
   if ((obs.failCount ?? 0) >= 4) return null;
   const lakes = obs.lakeHistory ?? [];

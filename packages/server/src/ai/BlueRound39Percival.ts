@@ -15,7 +15,7 @@
  *   - `percivalCarry39`：派西當隊長、第 2 局起：絕不同時帶兩根；比較不像梅林的那一根在讀法信心 ≥ 0.7 時不帶；
  *     比較像梅林的那一根只上過成功的任務就帶，否則照信心決定：1＝門檻（第 2 局前 4 次 0.63、第 2 局第 5 次 0.53、第 3–5 局 0.64），
  *     2＝照真人的比例抽（信心 < 0.65 約 38%、0.65–0.8 約 70%、≥ 0.8 約 82%；第 2 局第 5 次：乾淨或被另一根拇指派過才帶，否則信心 ≥ 0.8）；
- *     第 3 局第 1 次提議另一格（門檻 0.55、信心 < 0.65 時 50%）。3＝同 1 的門檻，但只改 A／B 的加減分、不硬擋拇指（邏輯優先 1E、不變量 INV-Pe2：
+ *     第 3 局第 1 次提議另一格（門檻 0.55、信心 < 0.65 時 50%）。3＝同 1 的門檻（只有第 2 局第 5 次例外：用 2 的 0.8，不是 1 的 0.53；確認的數字就是這樣量的），但只改 A／B 的加減分、不硬擋拇指（邏輯優先 1E、不變量 INV-Pe2：
  *     除非確定是紅，派西不硬排除拇指）。
  *     完全分不出來時不帶拇指。檢查接在每一個重新挑隊的步驟（候選人、隊長自己的票、重派成功的隊、第 2 局帶自己的視角等）；
  *     只有「整隊照派上一次成功的隊、那根拇指本來就在上面」可以例外。第 1 局不變（不帶拇指）。
@@ -194,6 +194,7 @@ export function percivalThumbPlan39(tuning: Readonly<AgentTuning>, obs: PlayerOb
   let carryFav: boolean;
   if (conf >= 0.999 || succOnly(obs, read.fav)) carryFav = true;
   else if (r === 2 && forced) {
+    // Mode 3 uses mode 2's 0.8 here (not mode 1's 0.53): the gate-1 trace and the confirmation were measured this way.
     carryFav = thumbOnThumb(obs, read.fav, read.unfav) || conf >= (mode === 1 ? 0.53 : 0.8);
   } else if (mode === 1 || mode === 3) {
     // 第 3 局第 1 次提議另一格：真人在這裡信心 < 0.65 時還是帶比較像梅林的那一根 42–54%（lp39 PA-08）。

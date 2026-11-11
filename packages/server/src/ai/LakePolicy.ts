@@ -131,7 +131,7 @@ export function goodLakeAvoidSet(
   }
   // Round 39 `percivalLakeGuard39` (lp39 LH-11 / PL-01; owner item, measured only): Percival does not lake the thumb his
   // round-39 read gives as Morgana at confidence >= 0.7 (below that both thumbs stay ordinary candidates).
-  if ((tuning.percivalLakeGuard39 ?? 0) > 0 && obs.myRole === 'percival') {
+  if ((tuning.percivalLakeGuard39 ?? 0) > 0 && obs.myRole === 'percival' && (obs.seatTeam ?? obs.myTeam) === 'good') {
     const rd = percivalRead39(obs);
     if (rd?.unfav && rd.conf >= 0.7) avoidSet.add(rd.unfav);
   }

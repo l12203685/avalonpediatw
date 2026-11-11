@@ -743,33 +743,50 @@ export class ForwardAgent implements AvalonAgent {
     const plan39 = percivalThumbPlan39(this.baseline.tuning, obs);
     // Round 39 `loyalLakePair` (BlueRound39.ts): the seat another holder declared evil last round stays off this round's team.
     const lakeBar = lakePairBarred(this.baseline.tuning, obs);
-    if (lakeBar !== null) {
-      const prevBar = this.lakeBar39;
-      this.lakeBar39 = lakeBar;
-      try {
-        const d = this.decideMain(obs);
-        if (d.action.type !== 'team_select' || !d.action.teamIds.includes(lakeBar)) return d;
-        const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
-        const kept = d.action.teamIds.filter((id) => id !== lakeBar);
-        const fill = obs.allPlayerIds.filter((id) => !kept.includes(id) && id !== lakeBar && !obs.knownEvils.includes(id))
-          .sort((x, y) => (share.get(x) ?? 0.5) - (share.get(y) ?? 0.5) || obs.allPlayerIds.indexOf(x) - obs.allPlayerIds.indexOf(y))[0];
-        if (!fill) return d;
-        return { ...d, action: { type: 'team_select', teamIds: [...kept, fill] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the seat declared evil last round (round 39)` } };
-      } finally {
-        this.lakeBar39 = prevBar;
-      }
-    }
-    if (!plan39) return this.decideMain(obs);
-    const prev = this.thumbPlan39;
+    // Each decide call carries its own plan / bar: a nested decide (a red seat's loyal view, Merlin's normal vote) never inherits
+    // the outer call's, and the outer call gets its own back afterwards.
+    const prevPlan = this.thumbPlan39;
+    const prevBar = this.lakeBar39;
     this.thumbPlan39 = plan39;
+    this.lakeBar39 = lakeBar;
     try {
       const d = this.decideMain(obs);
-      if (d.action.type !== 'team_select' || percivalThumbPlanAllows(plan39, obs, d.action.teamIds)) return d;
+      if (d.action.type !== 'team_select') return d;
+      if (lakeBar !== null && d.action.teamIds.includes(lakeBar)) {
+        const kept = d.action.teamIds.filter((id) => id !== lakeBar);
+        const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
+        const pool = obs.allPlayerIds.filter((id) => !kept.includes(id) && id !== lakeBar && !obs.knownEvils.includes(id));
+        for (const fill of this.cleanestFirst39(pool, share)) {
+          const team = [...kept, fill];
+          if (!this.repairGateOk39(obs, team)) continue;
+          return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the seat declared evil last round (round 39)` } };
+        }
+        return d;
+      }
+      if (!plan39 || percivalThumbPlanAllows(plan39, obs, d.action.teamIds)) return d;
       const fixed = this.repairThumbTeam39(obs, plan39, d.action.teamIds);
+      if (fixed === null) return d;
       return { ...d, action: { type: 'team_select', teamIds: fixed }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → percival thumb plan (round 39)` } };
     } finally {
-      this.thumbPlan39 = prev;
+      this.thumbPlan39 = prevPlan;
+      this.lakeBar39 = prevBar;
     }
+  }
+
+  /**
+   * Round 39 repair steps (`loyalLakePair`, `percivalCarry39` 1/2): the leader's gates on a repaired team — must-fail / dominated
+   * (`LogicGates.ts`), the leader's own vote rules, and the plan / bar itself. A repair that fails them is not sent.
+   */
+  private repairGateOk39(obs: PlayerObservation, team: readonly string[]): boolean {
+    if (!this.thumbOk39(obs, team)) return false;
+    if (anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) !== null) return false;
+    return !ownVoteRejects(this.baseline.tuning, obs, team);
+  }
+
+  /** Seats from the cleanest of the leader's own posterior; equal shares in a random order (never seat order: 11/10 ruling). */
+  private cleanestFirst39(pool: readonly string[], share: ReadonlyMap<string, number>): string[] {
+    const key = new Map(pool.map((id) => [id, Math.random()] as const));
+    return [...pool].sort((x, y) => (share.get(x) ?? 0.5) - (share.get(y) ?? 0.5) || key.get(x)! - key.get(y)!);
   }
 
   /** Round 39 `loyalLakePair`: the seat barred from the team_select being decided (null otherwise). */
@@ -784,22 +801,25 @@ export class ForwardAgent implements AvalonAgent {
     return percivalThumbPlanAllows(this.thumbPlan39, obs, team);
   }
 
-  /** A team that keeps the plan: drop the barred / doubled thumb(s), fill with the cleanest allowed seats of Percival's own posterior. */
-  private repairThumbTeam39(obs: PlayerObservation, plan: PercivalThumbPlan39, team: readonly string[]): string[] {
+  /**
+   * A team that keeps the plan: drop the barred / doubled thumb(s), fill with the cleanest allowed seats of Percival's own posterior
+   * (equal shares in a random order). The repaired team must pass the leader's gates; null when no such team is found.
+   */
+  private repairThumbTeam39(obs: PlayerObservation, plan: PercivalThumbPlan39, team: readonly string[]): string[] | null {
     const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
     const [a, b] = plan.read.thumbs;
     const drop = new Set(plan.barred);
     if (team.includes(a) && team.includes(b)) drop.add(plan.read.unfav ?? b);
     const kept = team.filter((id) => !drop.has(id));
-    const pool = obs.allPlayerIds.filter((id) => !kept.includes(id) && !plan.barred.has(id) && !(id === a && kept.includes(b)) && !(id === b && kept.includes(a)))
-      .sort((x, y) => (share.get(x) ?? 0.5) - (share.get(y) ?? 0.5) || obs.allPlayerIds.indexOf(x) - obs.allPlayerIds.indexOf(y));
+    const pool = this.cleanestFirst39(obs.allPlayerIds.filter((id) => !kept.includes(id) && !plan.barred.has(id)
+      && !(id === a && kept.includes(b)) && !(id === b && kept.includes(a))), share);
     const out = [...kept];
     for (const id of pool) {
       if (out.length >= team.length) break;
       if ((id === a && out.includes(b)) || (id === b && out.includes(a))) continue;
       out.push(id);
     }
-    return out.length === team.length ? out : [...team];
+    return out.length === team.length && this.repairGateOk39(obs, out) ? out : null;
   }
 
   private decideMain(obs: PlayerObservation): ForwardDecision {

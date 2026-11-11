@@ -1186,7 +1186,7 @@ export interface AgentTuning {
   percivalLakeGuard39: number;
   /** 第 39 回合（BlueRound39.ts，檢查表 LP-12／LK-09＋ML-05 第 3 部分）：位元 1 = 上一局的湖被別人宣告紅的人，這一局非強制的提議不帶（忠臣當隊長；梅林照派成功的隊也一樣），除非自己估持湖者是紅 ≥ 0.5；位元 2 沒有做；位元 4 = 不看持湖者的後驗、一律不帶（只量）。0 = 關。 */
   loyalLakePair: number;
-  /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽（1、2 都硬擋拇指，和邏輯優先 1E／不變量 INV-Pe2 衝突）；3 = 同 1 的門檻，只改 A／B 的加減分、不硬擋。0 = 關。**第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。 */
+  /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽（1、2 都硬擋拇指，和邏輯優先 1E／不變量 INV-Pe2 衝突）；3 = 同 1 的門檻（第 2 局第 5 次例外：用 2 的 0.8），只改 A／B 的加減分、不硬擋。0 = 關；只寫開關名稱不給值＝3。**第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。 */
   percivalCarry39: number;
   /** 第 39 回合（派西；BlueRound39Percival.ts）：拇指讀法換成真人牌譜擬合的模型（2；1 沒有做）。0 = 關（舊的計分決定 A／B）。**第 39 回合預設 2**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。 */
   percivalRead39: number;
@@ -2535,7 +2535,8 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     return { percivalRead39: value };
   }
   if (name === 'percivalCarry39') {
-    const value = raw === undefined ? 2 : Number.parseInt(raw, 10);
+    // A bare flag means the adopted mode 3 (soft plan); modes 1 and 2 hard-bar thumbs (INV-Pe2) and need an explicit value.
+    const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`percivalCarry39 needs 0–3, got "${raw}"`);
     return { percivalCarry39: value };
   }

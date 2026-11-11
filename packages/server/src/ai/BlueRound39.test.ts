@@ -8,6 +8,7 @@ import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag } from './Ag
 import { goodLake39Bits, goodLake39Pick, lake39Candidates, lake39Prefs, lake39State, lakePairBarred } from './BlueRound39';
 import { percivalRead39, percivalThumbFeatures, percivalThumbPlan39, percivalThumbPlanAllows } from './BlueRound39Percival';
 import { pickLakeTarget } from './LakePolicy';
+import { bayesOptionsOf } from './belief/BayesBelief';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const asObs = (o: object) => o as unknown as PlayerObservation;
@@ -139,5 +140,20 @@ describe('loyalLakePair (the seat another holder declared evil last round stays 
     expect(lakePairBarred(T({ loyalLakePair: 1 }), asObs({ ...(obs as object), failCount: 4 }))).toBeNull();
     expect(lakePairBarred(T({ loyalLakePair: 1 }), asObs({ ...(obs as object), currentRound: 4 }))).toBeNull();
     expect(lakePairBarred(T({ loyalLakePair: 1 }), asObs({ ...(obs as object), myRole: 'percival' }))).toBeNull();
+    // a red seat's loyal view (myTeam 'good', the deciding seat's camp 'evil') is not barred: red frozen
+    expect(lakePairBarred(T({ loyalLakePair: 1 }), asObs({ ...(obs as object), seatTeam: 'evil' }))).toBeNull();
+  });
+});
+
+describe('round 39 review fixes', () => {
+  it('a bare percivalCarry39 flag means the adopted mode 3 (no hard bar)', () => {
+    expect(parseTuningFlag('percivalCarry39')).toEqual({ percivalCarry39: 3 });
+  });
+  it('the recursive reader\'s level 0 never reads the pending proposal (its voter views carry no seat camp)', () => {
+    const t = { ...DEFAULT_AGENT_TUNING, beliefPendingProposal: true, beliefLeadRecursive: Math.max(1, DEFAULT_AGENT_TUNING.beliefLeadRecursive ?? 0) };
+    const o = bayesOptionsOf(t);
+    expect(o.pendingProposal).toBe(true);
+    expect(o.recursiveLevel0).toBeDefined();
+    expect(o.recursiveLevel0!.pendingProposal).toBeUndefined();
   });
 });
