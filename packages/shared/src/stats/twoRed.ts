@@ -133,7 +133,7 @@ export function redWinsBefore(g: Pick<Game, 'rounds'>, round: number): number | 
 }
 
 /** 配置是 6 個不同的數字（六個特殊角色都有座位）。 */
-const fullConfig = (config: string): boolean => /^[0-9]{6}$/.test(config) && new Set(config).size === 6;
+export const fullConfig = (config: string): boolean => /^[0-9]{6}$/.test(config) && new Set(config).size === 6;
 
 /**
  * 提議紀錄完整、依序：從第 1 局第 1 次開始，同一局的次數 1, 2, 3…連號，下一局從第 1 次開始、局數連號。

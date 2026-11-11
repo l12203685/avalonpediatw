@@ -7,6 +7,7 @@ import {
   computeStats,
   computeStrengthReport,
   computeTwoRedReport,
+  decisiveReport,
   decodeGamesDataset,
   discoverFindings,
   sanitizeFilter,
@@ -18,10 +19,14 @@ import {
   type StrengthGrouping,
   type StrengthReport,
   type DiscoveryResult,
+  type DecisiveReport,
+  type DecisiveScan,
+  type DecisiveScope,
   type TwoRedProposals,
   type TwoRedReport,
   type TwoRedTable,
   SEATS,
+  scanDecisiveVotes,
   twoRedProposals,
   twoRedTable,
 } from '@avalon/shared/stats';
@@ -160,6 +165,26 @@ export async function computeTwoRed(serverUrl: string, raw: GameFilter | null, n
     while (twoRedPrepared.size > 4) twoRedPrepared.delete(twoRedPrepared.keys().next().value as string);
   }
   return computeTwoRedReport([], name, prepared);
+}
+
+const decisiveScans = new Map<string, DecisiveScan>();
+
+/**
+ * 排行「關鍵外白／內黑」與玩家雷達「兩紅之後」的關鍵票那一行：篩選後的局裡藍方的關鍵票（@avalon/shared decisiveVotes.ts），
+ * 一個範圍的報表（每位玩家＋全體依角色）。每個篩選只掃一次局（三個範圍一起），換範圍只重新加總。
+ */
+export async function computeDecisive(serverUrl: string, raw: GameFilter | null, scope: DecisiveScope): Promise<DecisiveReport> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const key = JSON.stringify(filter);
+  let scan = decisiveScans.get(key);
+  if (!scan) {
+    const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+    scan = scanDecisiveVotes(games);
+    decisiveScans.set(key, scan);
+    while (decisiveScans.size > 4) decisiveScans.delete(decisiveScans.keys().next().value as string);
+  }
+  return decisiveReport(scan, scope);
 }
 
 /** 數據分析「局勢樹」：篩選後的局縮成樹要的欄位（components/analysis/stateTree/stateTree.ts）。 */

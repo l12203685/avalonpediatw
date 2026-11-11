@@ -9,6 +9,7 @@ import { twoRedReport } from '../../../stats/statsEngine';
 import { useStatsFilter } from '../../../stats/statsFilter';
 import { InfoTip, SectionTabs, StatTable, type SectionTabItem, type StatColumn } from '../ui';
 import { TWO_RED_MIN_N, TWO_RED_TERMS, TWO_RED_TONES } from './twoRedLayout';
+import DecisivePlayerLine from '../decisive/DecisivePlayerLine';
 
 /**
  * 玩家雷達 >「兩紅之後」小分頁（Edward 2026-11-11：「兩紅代表所有玩家都至少給過一次任務組合，並且湖中也至少使用過
@@ -18,6 +19,7 @@ import { TWO_RED_MIN_N, TWO_RED_TERMS, TWO_RED_TONES } from './twoRedLayout';
  * 全沒拇指但派到莫德雷德／只含一拇指／含兩壞以上（2026-11-11 Edward 定案）。
  * 分類的定義與算法在 @avalon/shared stats/twoRed.ts；名詞與門檻在 twoRedLayout.ts（次數不到 TWO_RED_MIN_N 的列變淡）。
  * 跟著上方的篩選（統計 Worker 裡算，stats/statsEngine twoRedReport），不等雷達資料。
+ * (2026-11-11) 標題下一行是這位玩家兩紅之後的關鍵票（decisive/DecisivePlayerLine），連到數據排行「關鍵外白／內黑」。
  */
 
 interface Row {
@@ -187,6 +189,7 @@ export default function TwoRedPanel({ name }: { name: string }): JSX.Element {
           })}
         </span>
       </div>
+      <DecisivePlayerLine name={name} />
       <SectionTabs items={tabs} persistKey="analysis.players.twoRed" ariaLabel={t('analytics.r6.radar.twoRed.roleTabs')} size="sm">
         {(role) => (
           <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)_minmax(0,5fr)]">
