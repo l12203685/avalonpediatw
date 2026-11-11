@@ -170,7 +170,11 @@ describe('the real wiki_data.json', () => {
       // 〈賽事回顧可以學到的原理〉併進 wiki-156、〈無奈區間〉併進 wiki-57，不另成篇（文章總篇數不要過多）
       // 2026-10-30 晚 Edward：全站章節重新整併（心智圖、知識關聯與閱讀方向更直觀精簡）：100 → 49 篇，分類照學習路徑重排
       // （名詞解釋、常見問題、賽事與戰績拆進規則與名詞、任務派票、投票與湖中、覆盤與賽事、數據；新增投票與湖中、進階思考、數據）
-      ['beginner', 7], ['rules', 4], ['roles', 9], ['strategies', 8], ['voting', 5], ['advanced', 5], ['replays', 8], ['data', 2], ['about', 1],
+      // 2026-11-11 站長「文章數量有點多」：49（＋寫死的 8 篇）→ 40 篇。beginner：標記說明併進邏輯與經驗（wiki-66）；
+      // strategies：開藍後三加一併進開局（wiki-205）；voting：內黑的用途併進黑白球（wiki-148）、湖中進階併進湖中女神（wiki-147）；
+      // advanced：大局觀併進思考原理（wiki-26）、社群問答併進心法語錄（wiki-72，beginner）；replays：三篇第一局模擬題合成 wiki-32、
+      // 1 家外灑的覆盤併進外灑（wiki-18，strategies）
+      ['beginner', 6], ['rules', 4], ['roles', 9], ['strategies', 7], ['voting', 3], ['advanced', 3], ['replays', 5], ['data', 2], ['about', 1],
     ]);
     // 2026-10-30：部分文章連到寫死的〈角色數據〉（strategy-*-data），它們不在 wiki_data.json，這張圖只算 JSON 裡的文章。
     const ids = new Set(data.map((a) => a.id));
@@ -179,25 +183,29 @@ describe('the real wiki_data.json', () => {
     expect(graph.edges.length).toBeGreaterThan(150);
   });
 
-  it('starts the beginner branch with 關於阿瓦隆百科 and its 20-article reading order', () => {
+  it('starts the beginner branch with 關於阿瓦隆百科 and its 19-article reading order', () => {
     // 2026-10-30 Edward 裁定（E18 a+c）：規則說明書第 1、術語速查第 2，鐵邏輯排在規則之後，常見錯誤（湖中、黑白球）排在任務派票之後。
     // Edward 2026-10-30：〈標記說明〉（wiki-211）排第 3，閱讀順序 22 → 23 篇；新手入門分類 15 → 17 篇。
     // 〈關於阿瓦隆百科〉改放 about 分類，在新手分支是捷徑葉子。
     // 2026-10-30 晚：照新的學習路徑重寫（規則 → 基礎觀念 → 角色 → 派票 → 投票（異常票）與湖中 → 刺殺 → 進階思考 → 覆盤與賽事 → 數據），
     // 23 → 20 篇；規則說明書、術語速查、標記說明仍是前三篇，常見錯誤仍排在派票、黑白球與湖中之後。
+    // 2026-11-11 文章合併：〈標記說明〉併進〈邏輯與經驗〉（wiki-66），20 → 19 篇；基礎觀念照分類的閱讀線排（71 → 66 → 106 → 50），
+    // 文章結尾的系列導覽和這裡一致。
     const leaves = graph.branches[0].leaves;
     expect(leaves[0].articleId).toBe('wiki-153');
     expect(leaves[0].guide).toBe(true);
-    expect(graph.readingOrder).toHaveLength(20);
-    expect(graph.readingOrder.slice(0, 6)).toEqual(['wiki-203', 'wiki-204', 'wiki-211', 'wiki-71', 'wiki-106', 'wiki-66']);
-    expect(graph.readingOrder.slice(12, 16)).toEqual(['wiki-148', 'wiki-38', 'wiki-147', 'wiki-90']);
-    expect(graph.readingOrder.slice(16)).toEqual(['wiki-12', 'wiki-26', 'wiki-156', 'wiki-209']);
-    expect(leaves.slice(1, 21).map((l) => l.articleId)).toEqual(graph.readingOrder);
-    expect(leaves.slice(1, 21).map((l) => l.readingStep)).toEqual(Array.from({ length: 20 }, (_, i) => i + 1));
+    expect(graph.readingOrder).toEqual([
+      'wiki-203', 'wiki-204', 'wiki-71', 'wiki-66', 'wiki-106', 'wiki-50', 'wiki-165', 'wiki-177', 'wiki-150', 'wiki-57', 'wiki-24',
+      'wiki-148', 'wiki-38', 'wiki-147', 'wiki-90', 'wiki-12', 'wiki-26', 'wiki-156', 'wiki-209',
+    ]);
+    const beginnerLine = data.filter((a) => a.category === 'beginner').map((a) => a.id);
+    expect(graph.readingOrder.filter((id) => beginnerLine.includes(id))).toEqual(beginnerLine.filter((id) => graph.readingOrder.includes(id)));
+    expect(leaves.slice(1, 20).map((l) => l.articleId)).toEqual(graph.readingOrder);
+    expect(leaves.slice(1, 20).map((l) => l.readingStep)).toEqual(Array.from({ length: 19 }, (_, i) => i + 1));
     // every category is on the path: each branch has at least one article in the reading order
     const onPath = new Set(graph.readingOrder.map((id) => graph.articles[id].category));
     expect([...onPath].sort()).toEqual(['advanced', 'beginner', 'data', 'replays', 'roles', 'rules', 'strategies', 'voting']);
-    expect(leaves).toHaveLength(1 + 20 + (7 - 6)); // guide + reading order + beginner articles not in it
+    expect(leaves).toHaveLength(1 + 19 + (6 - 5)); // guide + reading order + beginner articles not in it (wiki-72)
   });
 
   /** No two article rows (dot + label) overlap, every row sits inside its branch box. */
@@ -247,7 +255,7 @@ describe('the real wiki_data.json', () => {
     expectNoOverlap(layout);
     expect(layout.maxRows).toBeLessThanOrEqual(6);
     const strategies = layout.leaves.filter((l) => l.branchKey === 'branch/strategies');
-    // N articles → ceil(N / 6) columns, filled top to bottom (8 → 2 × 4)
+    // N articles → ceil(N / 6) columns, filled top to bottom (7 → 2 columns, 4 + 3)
     const columns = Math.ceil(strategies.length / 6);
     expect(columns).toBeGreaterThan(1);
     expect(new Set(strategies.map((l) => l.column)).size).toBe(columns);
@@ -303,6 +311,13 @@ describe('layoutWikiMindMap', () => {
     expect((shut.byKey['branch/rules'] as { collapsed: boolean }).collapsed).toBe(true);
     // sides don't move when collapsing
     expect(shut.byKey['branch/rules'].side).toBe(open.byKey['branch/rules'].side);
+  });
+
+  it('an empty wiki (the list not loaded yet; nothing is hard-coded since 2026-11-11) still fits and lays out', () => {
+    const empty = buildWikiGraph([], CATS);
+    const fit = fitMindMapToViewport(empty, 1254, 730);
+    expect(fit).toBeDefined();
+    expect(() => layoutWikiMindMap(empty, new Set(), { maxLeafLabel: fit.maxLeafLabel }, fit.maxRows)).not.toThrow();
   });
 
   it('connects root → branches → article boxes', () => {

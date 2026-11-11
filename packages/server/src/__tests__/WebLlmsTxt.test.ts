@@ -24,7 +24,9 @@ const files = buildLlmsFiles(allArticles, {
 describe('buildLlmsFiles (real wiki data)', () => {
   it('every article gets its own markdown file, listed in llms.txt, llms-full.txt and sitemap.xml', () => {
     const ids = [...new Set(allArticles.map((a) => a.id))];
-    expect(ids.length).toBeGreaterThan(40);
+    // 2026-11-11 文章合併：57 → 40 篇；被併入的舊 id 沒有自己的 .md（只有轉址的分享頁，見 WebWikiShare.test.ts）
+    expect(ids.length).toBeGreaterThanOrEqual(40);
+    for (const old of ['wiki-62', 'wiki-208', 'faq-basic', 'strategy-merlin-data']) expect(files[wikiMdPath(old)], old).toBeUndefined();
     for (const a of allArticles) {
       const md = files[wikiMdPath(a.id)];
       expect(md, a.id).toBeDefined();
@@ -77,6 +79,7 @@ describe('cleanWikiMarkdown', () => {
     const src = [
       '---', 'title: 測試', 'tags: a', '---', '[TOC]', '# 測試', '',
       '見 [視角](wiki:wiki-57) 與 [不存在](wiki:wiki-999)。<!-- 草稿 -->',
+      '一節：[視角](wiki:wiki-57#點夾跳)〈點夾跳〉',
       '![圖](/wiki-images/a.png) <font color=#ff0000>紅字</font><br>下一行',
       '- 【規則】規則書寫明 【時效】',
       '- 【建議】經驗談',
@@ -84,6 +87,8 @@ describe('cleanWikiMarkdown', () => {
     ].join('\n');
     expect(cleanWikiMarkdown(src, { siteUrl: `${SITE}/`, knownIds }).split('\n')).toEqual([
       `見 [視角](${SITE}/wiki-md/wiki-57.md) 與 不存在。`,
+      // 2026-11-11：章節錨點（#slug）只在網站上有用，純文字版連到整篇
+      `一節：[視角](${SITE}/wiki-md/wiki-57.md)〈點夾跳〉`,
       `![圖](${SITE}/wiki-images/a.png) 紅字  `,
       '下一行',
       '- 【邏輯】規則書寫明 ',

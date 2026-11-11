@@ -96,8 +96,8 @@ export function cleanWikiMarkdown(content: string, opts: { siteUrl: string; know
       .replace(/<font\b[^>]*>([\s\S]*?)<\/font>/gi, '$1')
       .replace(/<\/?(?:font|span|center|u)\b[^>]*>/gi, '');
     line = canonicalLayerMarks(line);
-    // [標題](wiki:wiki-57) → the article's .md; an unknown id keeps only the text
-    line = line.replace(/\[([^\]]*)\]\(wiki:([^)\s]*)\)/g, (_m, text: string, id: string) =>
+    // [標題](wiki:wiki-57) → the article's .md (a #section anchor is dropped); an unknown id keeps only the text
+    line = line.replace(/\[([^\]]*)\]\(wiki:([^)\s#]*)(?:#[^)\s]*)?\)/g, (_m, text: string, id: string) =>
       opts.knownIds.has(id.trim()) ? `[${text}](${site}/${wikiMdPath(id.trim())})` : text);
     // site-relative images and links (/wiki-images/…) → absolute
     line = line.replace(/\]\((\/(?!\/)[^)\s]*)\)/g, (_m, p: string) => `](${site}${p})`);

@@ -2,7 +2,8 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
-import { WIKI_ARTICLES, WIKI_CATEGORIES, WIKI_DATA_ARTICLE_ROLE, WIKI_ROLE_NAMES } from './src/data/wiki';
+import { WIKI_ARTICLES, WIKI_ARTICLE_ROLE, WIKI_CATEGORIES, WIKI_ROLE_NAMES } from './src/data/wiki';
+import { WIKI_REDIRECTS } from './src/data/wikiRedirects';
 import { buildLlmsFiles, buildNoscriptHtml, type LlmsArticle, type LlmsOptions } from './src/utils/llmsTxt';
 import { DEFAULT_SHARE_IMAGE, buildWikiSharePages } from './src/utils/wikiSharePages';
 
@@ -91,11 +92,12 @@ function llmsInputs(): { articles: LlmsArticle[]; opts: LlmsOptions } {
   const envApi = process.env.VITE_SERVER_URL ?? '';
   const apiUrl = /^https:\/\//.test(envApi) && !/localhost|127\.0\.0\.1/.test(envApi) ? envApi : DEFAULT_API_URL;
   const notes: Record<string, string> = {};
-  for (const [id, role] of Object.entries(WIKI_DATA_ARTICLE_ROLE)) {
-    notes[id] = `網站上本文開頭有「${WIKI_ROLE_NAMES[role] ?? role}實戰數據（即時）」數據卡，純文字版沒有；數字請讀 ${apiUrl.replace(/\/+$/, '')}/api/analysis/overview。`;
+  // 2026-11-11：角色數據併進各角色文章，數據卡在〈實戰數據怎麼讀〉一節後面
+  for (const [id, role] of Object.entries(WIKI_ARTICLE_ROLE)) {
+    notes[id] = `網站上本文〈實戰數據怎麼讀〉一節後面有「${WIKI_ROLE_NAMES[role] ?? role}實戰數據（即時）」數據卡，純文字版沒有；數字請讀 ${apiUrl.replace(/\/+$/, '')}/api/analysis/overview。`;
   }
   return {
-    // 前端寫死的文章（角色數據、新手常見問題）在前，同 data/wiki.ts mergeWikiArticles
+    // 前端寫死的文章在前，同 data/wiki.ts mergeWikiArticles（2026-11-11 起沒有寫死的文章，全部在 wiki_data.json）
     articles: [...WIKI_ARTICLES.map(({ id, title, category, content, tags, excerpt, status }) => ({ id, title, category, content, tags, excerpt, status })), ...json],
     opts: {
       siteUrl: process.env.SITE_URL || DEFAULT_SITE_URL,
@@ -117,10 +119,10 @@ function llmsFilesPlugin(): Plugin {
       const { articles, opts } = llmsInputs();
       const files = buildLlmsFiles(articles, opts);
       for (const [fileName, source] of Object.entries(files)) this.emitFile({ type: 'asset', fileName, source });
-      const pages = buildWikiSharePages(articles, { siteUrl: opts.siteUrl, basePath: BASE_PATH, categories: opts.categories, image: DEFAULT_SHARE_IMAGE });
+      const pages = buildWikiSharePages(articles, { siteUrl: opts.siteUrl, basePath: BASE_PATH, categories: opts.categories, image: DEFAULT_SHARE_IMAGE, redirects: WIKI_REDIRECTS });
       for (const [fileName, source] of Object.entries(pages)) this.emitFile({ type: 'asset', fileName, source });
       // eslint-disable-next-line no-console
-      console.log(`[llms] emitted ${Object.keys(files).length} files (llms.txt, llms-full.txt, sitemap.xml, wiki-md/*.md) and ${Object.keys(pages).length} share pages (w/<id>/index.html) for ${opts.siteUrl}`);
+      console.log(`[llms] emitted ${Object.keys(files).length} files (llms.txt, llms-full.txt, sitemap.xml, wiki-md/*.md) and ${Object.keys(pages).length} share pages (w/<id>/index.html, including old merged-away ids) for ${opts.siteUrl}`);
     },
     transformIndexHtml(html) {
       const { articles, opts } = llmsInputs();
@@ -135,7 +137,7 @@ function llmsFilesPlugin(): Plugin {
         const share = /^w\/([^/]+)\/?(?:index\.html)?$/.exec(url);
         if (share) {
           const { articles, opts } = llmsInputs();
-          const pages = buildWikiSharePages(articles, { siteUrl: `http://${req.headers.host ?? 'localhost'}`, basePath: BASE_PATH, categories: opts.categories, image: DEFAULT_SHARE_IMAGE });
+          const pages = buildWikiSharePages(articles, { siteUrl: `http://${req.headers.host ?? 'localhost'}`, basePath: BASE_PATH, categories: opts.categories, image: DEFAULT_SHARE_IMAGE, redirects: WIKI_REDIRECTS });
           const page = pages[`w/${encodeURIComponent(share[1])}/index.html`];
           if (page === undefined) return next();
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
