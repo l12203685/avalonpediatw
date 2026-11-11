@@ -98,6 +98,11 @@ export interface PlayerObservation {
    * 第 29 回合：這是紅方照忠臣投票（`redNormalVote`）的視角（`publicLoyalView` 也是 true）。只給紅方自己的外白門檻 `redTailVote` 分辨。
    */
   redLoyalView?: boolean;
+  /**
+   * 第 39 回合：做這個決定的座位真正的陣營（`HeuristicAgent.act` 進來時設好；之後換成忠臣視角、推想別的座位的視角都照抄）。
+   * 只給「只給藍方座位」的讀法分辨（`beliefPendingProposal`），紅方座位的決策不受藍方開關影響。
+   */
+  seatTeam?: 'good' | 'evil';
 
   // Dynamic game state
   currentRound:  number;
