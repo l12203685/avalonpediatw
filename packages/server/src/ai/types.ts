@@ -91,6 +91,7 @@ export interface PlayerObservation {
   /**
    * 第 26 回合：這是 `loyalViewOf` 做出來的「坐在這個位置、只看公開資訊的忠臣」視角（梅林照忠臣投票、紅方照忠臣投票時用），
    * 不是真的忠臣。只給「只限真的忠臣」的開關分辨（`loyalTailWhite`，D3 第一階段：梅林／派西之後另外開）。
+   * 第 38 回合：推想別的座位的視角（`ToMReverseEngine.projectObsFromSeat`）也標成 true——忠臣挑隊時自己的先驗（`ownView`）只給替自己做決定的座位。
    */
   publicLoyalView?: boolean;
   /**

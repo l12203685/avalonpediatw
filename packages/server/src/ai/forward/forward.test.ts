@@ -203,6 +203,8 @@ describe('projectObsFromSeat (symmetric assumption)', () => {
     expect(targetObs.knownEvils).toEqual([]); // stripped
     expect(targetObs.knownWizards).toBeUndefined(); // stripped
     expect(targetObs.allEvilIds).toBeUndefined(); // stripped
+    // Round 38: the projection is the public-view loyal of that seat, so a loyal's own team-pick prior (`ownView`) never applies to it.
+    expect(targetObs.publicLoyalView).toBe(true);
   });
 
   it('preserves all PUBLIC history fields across the projection', () => {

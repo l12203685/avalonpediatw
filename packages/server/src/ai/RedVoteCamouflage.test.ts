@@ -32,7 +32,9 @@ function decideVote(o: PlayerObservation, tuning: Partial<AgentTuning>, id = 'P1
 
 describe('redNormalVote', () => {
   it('q = 1: the vote a loyal in the seat would cast', () => {
-    expect(decideVote(obs(), { redNormalVote: 1 })).toBe(decideVote(loyalViewOf(obs()), {}));
+    // The red's loyal-view vote does not use the Bayes vote rules (`BlueRound33.bayesVoteCriteria` returns null on `redLoyalView`: red frozen);
+    // round 38's `goodReuseWhite` (on by default) is one of them and fires here (R3 1:1 after a fail then a success, the R2 team re-proposed).
+    expect(decideVote(obs(), { redNormalVote: 1 })).toBe(decideVote(loyalViewOf(obs()), { goodReuseWhite: 0 }));
   });
   it('critical teams: a teammate with two fails in → approve; no teammate with two wins in → reject', () => {
     expect(redVoteCritical(obs({ questResults: ['fail', 'fail'] }))).toBe(true);

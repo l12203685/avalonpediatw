@@ -36,7 +36,7 @@ const keyOf = (team: readonly string[]): string => [...team].sort().join(',');
 /** `ownView` 開著、而且這個座位這一次挑隊適用（忠臣；範圍 2 起加派西）。 */
 export function ownViewOn(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   if (!((tuning.ownView ?? 0) > 0)) return false;
-  return ownViewStrength(obs, Math.max(1, tuning.ownViewScope ?? 0)) > 0;
+  return ownViewStrength(obs, Math.max(1, tuning.ownViewScope ?? 0), tuning.ownViewRounds ?? 0) > 0;
 }
 
 /**

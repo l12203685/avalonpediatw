@@ -56,7 +56,7 @@ export function merlinLoyalStyleTeam(
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
-  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3 } } : {};
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
   // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
   const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
     ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
@@ -192,7 +192,7 @@ export function merlinDoomedPublicTeam(
   }
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
-  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3 } } : {};
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
   // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
   const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
     ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
@@ -234,7 +234,7 @@ export function merlinDoomedAvoidTeam(
   const seen = new Set(obs.knownEvils);
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
-  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3 } } : {};
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
   // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
   const pubOpts: BayesOptions = (tuning.merlinPublicPipeline ?? 0) > 0
     ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }

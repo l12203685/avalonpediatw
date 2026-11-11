@@ -32,13 +32,17 @@ const r2 = asObs({
   questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }],
   voteHistory: [...R1, vote(2, 1, 'P6', ['P6', 'P2', 'P3', 'P4'], ['P6', 'P2', 'P3', 'P4'])],
 });
-const T = (over: object) => ({ ...DEFAULT_AGENT_TUNING, ...over });
+const OFF = { ...DEFAULT_AGENT_TUNING, ownView: 0, merlinOnTeamOwn: 0, goodBayesR4Kept: 0, loyalTailWhiteLastTau: 0, goodReuseWhite: 0 };
+const T = (over: object) => ({ ...OFF, ...over });
 
 describe('round 38 tuning fields', () => {
   it('off in the legacy table and the default; flags parse', () => {
     for (const k of ['ownView', 'ownViewScope', 'ownViewKeep', 'percivalThumbRead', 'goodOnTeamState', 'goodReuseWhite', 'goodFourthWhite', 'merlinOwnWhite', 'percivalMerlinWhite', 'merlinFlowFollow', 'merlinOnTeamOwn', 'loyalTailWhiteLastTau', 'goodBayesR4Kept', 'goodBayesFsReuse', 'merlinPublicPipeline', 'goodR4White', 'goodEarlyVote', 'goodLakeHuman'] as const) {
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
     }
+    // adopted in round 38 (default on): ownView 0.3, merlinOnTeamOwn 1, goodBayesR4Kept 1, loyalTailWhiteLastTau 0.5, goodReuseWhite 1
+    expect([DEFAULT_AGENT_TUNING.ownView, DEFAULT_AGENT_TUNING.merlinOnTeamOwn, DEFAULT_AGENT_TUNING.goodBayesR4Kept, DEFAULT_AGENT_TUNING.loyalTailWhiteLastTau, DEFAULT_AGENT_TUNING.goodReuseWhite]).toEqual([0.3, 1, 1, 0.5, 1]);
+    for (const k of ['ownViewScope', 'ownViewKeep', 'ownViewRounds', 'percivalThumbRead', 'goodOnTeamState', 'goodFourthWhite', 'merlinOwnWhite', 'percivalMerlinWhite', 'merlinFlowFollow', 'goodBayesFsReuse', 'merlinPublicPipeline', 'goodR4White', 'goodEarlyVote', 'goodLakeHuman'] as const) expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
     for (const k of ['beliefThumbNoStain', 'goodR5NoWhite', 'merlinPublicTieBreak', 'beliefPendingProposal', 'percivalLakeNoMorgana'] as const) expect(LEGACY_AGENT_TUNING[k]).toBe(false);
     expect(parseTuningFlag('ownView')).toEqual({ ownView: 0.3 });
     expect(parseTuningFlag('ownView=0.6')).toEqual({ ownView: 0.6 });
@@ -89,17 +93,17 @@ describe('ownView (round 38: the leader picks from his own prior; the record sti
     const t = T({ ownView: 0.3 });
     const team = ['P7', 'P2', 'P8', 'P9'];
     const pick = bayesTeamClean(r2, team, bayesOptionsOf(t))!;
-    const plain = bayesTeamClean(r2, team, bayesOptionsOf(DEFAULT_AGENT_TUNING))!;
+    const plain = bayesTeamClean(r2, team, bayesOptionsOf(OFF))!;
     expect(Math.abs(pick - plain)).toBeGreaterThan(1e-6);
     const asVote = asObs({ ...(r2 as object), gamePhase: 'team_vote', proposedTeam: team });
-    expect(bayesTeamClean(asVote, team, bayesOptionsOf(t))).toBeCloseTo(bayesTeamClean(asVote, team, bayesOptionsOf(DEFAULT_AGENT_TUNING))!, 12);
+    expect(bayesTeamClean(asVote, team, bayesOptionsOf(t))).toBeCloseTo(bayesTeamClean(asVote, team, bayesOptionsOf(OFF))!, 12);
     // certain facts stay certain: the whole failed R1 team can never be clean in any view
     expect(bayesTeamClean(asObs({ ...(r2 as object), myPlayerId: 'P5', currentLeader: 'P5' }), ['P5', 'P1', 'P10', 'P2'], bayesOptionsOf(t))).toBe(0);
   });
   it('the first proposal of the game is the cleanest team of the own prior (two leaders with different draws differ); off: untouched', () => {
     const first = asObs({ ...base, myPlayerId: 'P1', currentRound: 1, currentLeader: 'P1', failCount: 0, questResults: [], gamePhase: 'team_select', questHistory: [], voteHistory: [] });
     const fixed = { type: 'team_select' as const, teamIds: ['P1', 'P6', 'P9'] };
-    expect(ownViewFirstPickTeam(DEFAULT_AGENT_TUNING, first, fixed)).toBe(fixed);
+    expect(ownViewFirstPickTeam(OFF, first, fixed)).toBe(fixed);
     const seen = new Set<string>();
     for (let i = 0; i < 12; i++) {
       const a = ownViewFirstPickTeam(T({ ownView: 0.3 }), asObs({ ...(first as object) }), fixed);
@@ -114,7 +118,7 @@ describe('ownView (round 38: the leader picks from his own prior; the record sti
   });
   it('Merlin (scope 3): still never a red he sees', () => {
     const merlin = asObs({ ...(r2 as object), myRole: 'merlin', knownEvils: ['P2', 'P8', 'P9'] });
-    for (const t of [T({ ownView: 0.6, ownViewScope: 3 }), DEFAULT_AGENT_TUNING]) {
+    for (const t of [T({ ownView: 0.6, ownViewScope: 3 }), OFF]) {
       const a = merlinLoyalStyleTeam(t, merlin, { type: 'team_select', teamIds: ['P7', 'P2', 'P3', 'P4'] });
       if (a.type !== 'team_select') throw new Error(a.type);
       expect(a.teamIds.some((id) => ['P2', 'P8', 'P9'].includes(id))).toBe(false);
@@ -126,7 +130,7 @@ describe('Percival thumbs (round 38)', () => {
   // P7 = Percival, thumbs P1 (on the failed R1 team) and P2 (not).
   const perc = asObs({ ...(r2 as object), myRole: 'percival', knownWizards: ['P1', 'P2'] });
   it('beliefThumbNoStain: the failed R1 mission with one thumb on it no longer tells the thumbs apart', () => {
-    const stained = bayesRedShare(perc, bayesOptionsOf(DEFAULT_AGENT_TUNING));
+    const stained = bayesRedShare(perc, bayesOptionsOf(OFF));
     const fixed = bayesRedShare(perc, bayesOptionsOf(T({ beliefThumbNoStain: true })));
     expect(stained.get('P1')! + stained.get('P2')!).toBeCloseTo(1, 6);
     expect(fixed.get('P1')! + fixed.get('P2')!).toBeCloseTo(1, 6);
@@ -134,7 +138,7 @@ describe('Percival thumbs (round 38)', () => {
     // the other evidence (proposals, votes) still counts: not forced to one half exactly, but nearer to it
     expect(Math.abs(fixed.get('P1')! - 0.5)).toBeLessThan(Math.abs(stained.get('P1')! - 0.5));
     // a loyal's posterior is untouched
-    expect(bayesRedShare(r2, bayesOptionsOf(T({ beliefThumbNoStain: true }))).get('P1')).toBeCloseTo(bayesRedShare(r2, bayesOptionsOf(DEFAULT_AGENT_TUNING)).get('P1')!, 12);
+    expect(bayesRedShare(r2, bayesOptionsOf(T({ beliefThumbNoStain: true }))).get('P1')).toBeCloseTo(bayesRedShare(r2, bayesOptionsOf(OFF)).get('P1')!, 12);
   });
   it('percivalThumbRead: a thumb he cannot read as Merlin leaves the team; one he can stays; a team without a barred thumb is untouched', () => {
     const t = T({ beliefThumbNoStain: true, percivalThumbRead: 0.95 });
@@ -145,7 +149,7 @@ describe('Percival thumbs (round 38)', () => {
     expect(a.teamIds.some((id) => id === 'P1' || id === 'P2')).toBe(false);
     const clean = { type: 'team_select' as const, teamIds: ['P7', 'P3', 'P8', 'P9'] };
     expect(percivalThumbReadTeam(t, perc, clean)).toBe(clean);
-    expect(percivalThumbReadTeam(DEFAULT_AGENT_TUNING, perc, both)).toBe(both);
+    expect(percivalThumbReadTeam(OFF, perc, both)).toBe(both);
     expect(percivalThumbReadTeam(t, asObs({ ...(perc as object), currentRound: 1 }), both)).toBe(both);
     // a low bar keeps the thumb he reads as the likelier Merlin and still drops the other
     const share = bayesRedShare(perc, bayesOptionsOf(t));
@@ -161,7 +165,7 @@ describe('Percival thumbs (round 38)', () => {
       questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }, { round: 2, team: ['P2', 'P3', 'P4', 'P6'], result: 'success', failCount: 0 }] });
     expect(percivalMerlinWhiteNow(T({ percivalMerlinWhite: 0.01 }), v)).toBe(true);
     expect(percivalMerlinWhiteNow(T({ percivalMerlinWhite: 1 }), v)).toBe(false);
-    expect(percivalMerlinWhiteNow(DEFAULT_AGENT_TUNING, v)).toBe(false);
+    expect(percivalMerlinWhiteNow(OFF, v)).toBe(false);
     expect(percivalMerlinWhiteNow(T({ percivalMerlinWhite: 0.01 }), asObs({ ...(v as object), proposedTeam: ['P2', 'P1', 'P8', 'P9'] }))).toBe(false);
     expect(percivalMerlinWhiteNow(T({ percivalMerlinWhite: 0.01 }), asObs({ ...(v as object), proposedTeam: ['P2', 'P7', 'P8', 'P9'] }))).toBe(false);
     expect(percivalMerlinWhiteNow(T({ percivalMerlinWhite: 0.01 }), asObs({ ...(v as object), currentLeader: 'P3' }))).toBe(false);
@@ -185,7 +189,7 @@ describe('situational abnormal votes (round 38)', () => {
   it('goodReuseWhite: first proposal, the leader re-proposes the whole latest successful team — R4 at 2:1, R3 at 1:1; mode 2 adds R4 at 1:2', () => {
     const r4 = at(4, ['fail', 'success', 'success'], { proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P8'] });
     expect(reuseWhiteNow(T({ goodReuseWhite: 1 }), r4)).toBe(true);
-    expect(reuseWhiteNow(DEFAULT_AGENT_TUNING, r4)).toBe(false);
+    expect(reuseWhiteNow(OFF, r4)).toBe(false);
     expect(reuseWhiteNow(T({ goodReuseWhite: 1 }), asObs({ ...(r4 as object), failCount: 1 }))).toBe(false);
     expect(reuseWhiteNow(T({ goodReuseWhite: 1 }), asObs({ ...(r4 as object), proposedTeam: ['P1', 'P2', 'P3', 'P9', 'P8'] }))).toBe(false);
     expect(reuseWhiteNow(T({ goodReuseWhite: 1 }), asObs({ ...(r4 as object), proposedTeam: ['P7', 'P2', 'P3', 'P4', 'P8'] }))).toBe(false); // on the team: not an outer white
@@ -194,7 +198,7 @@ describe('situational abnormal votes (round 38)', () => {
     // R1 success then R2 fail: the R1 team has been on a failed mission since — not approved
     expect(reuseWhiteNow(T({ goodReuseWhite: 1 }), at(3, ['success', 'fail'], { proposedTeam: ['P5', 'P1', 'P10', 'P2'] }))).toBe(false);
     expect(bayesVoteCriteria(T({ goodReuseWhite: 1 }), r3)).toEqual({ vote: true, reason: 'reuse' });
-    expect(bayesVoteCriteria(DEFAULT_AGENT_TUNING, r3)?.reason).not.toBe('reuse');
+    expect(bayesVoteCriteria(OFF, r3)?.reason).not.toBe('reuse');
     const r3ff = at(3, ['fail', 'fail'], { proposedTeam: ['P2', 'P3', 'P4', 'P6'] });
     expect(reuseWhiteNow(T({ goodReuseWhite: 2 }), r3ff)).toBe(false);
     const r4key = at(4, ['fail', 'fail', 'success'], { proposedTeam: ['P1', 'P2', 'P3', 'P4', 'P8'] });
@@ -205,7 +209,7 @@ describe('situational abnormal votes (round 38)', () => {
     // leader P4 on the fourth proposal -> forced fifth = P5 (on the failed R1 team)
     const o = at(3, ['fail', 'success'], { currentLeader: 'P4', failCount: 3, proposedTeam: ['P4', 'P2', 'P3', 'P6'] });
     expect(fourthWhiteNow(T({ goodFourthWhite: 1 }), o)).toBe(true);
-    expect(fourthWhiteNow(DEFAULT_AGENT_TUNING, o)).toBe(false);
+    expect(fourthWhiteNow(OFF, o)).toBe(false);
     expect(fourthWhiteNow(T({ goodFourthWhite: 1 }), asObs({ ...(o as object), proposedTeam: ['P4', 'P5', 'P3', 'P6'] }))).toBe(false); // tail on the team
     expect(fourthWhiteNow(T({ goodFourthWhite: 1 }), asObs({ ...(o as object), failCount: 2 }))).toBe(false);
     expect(fourthWhiteNow(T({ goodFourthWhite: 1 }), asObs({ ...(o as object), questResults: ['fail', 'fail'] }))).toBe(false); // 0:2 is not copied
@@ -217,7 +221,7 @@ describe('situational abnormal votes (round 38)', () => {
     const on = at(3, ['fail', 'success'], { proposedTeam: ['P7', 'P5', 'P1', 'P9'] });
     expect(onTeamStateApprove(T({ goodOnTeamState: 1 }), on, 0.9, false)).toBe(true);
     expect(onTeamStateApprove(T({ goodOnTeamState: 1 }), on, 0.995, false)).toBe(false);
-    expect(onTeamStateApprove(DEFAULT_AGENT_TUNING, on, 0.9, false)).toBe(false);
+    expect(onTeamStateApprove(OFF, on, 0.9, false)).toBe(false);
     expect(onTeamStateApprove(T({ goodOnTeamState: 1 }), asObs({ ...(on as object), currentRound: 5 }), 0.9, false)).toBe(false);
     const key = at(3, ['fail', 'fail'], { currentLeader: 'P8', proposedTeam: ['P7', 'P8', 'P2', 'P9'] });
     expect(onTeamStateApprove(T({ goodOnTeamState: 1 }), key, 0.75, true)).toBe(false);
@@ -240,7 +244,7 @@ describe('merlinFlowFollow (round 38: Merlin carries a red he sees only when the
   it('the carried red, only at R1–R2 non-forced proposals with enough earlier proposals; off by default', () => {
     expect(merlinFlowRed(T({ merlinFlowFollow: 3 }), merlin)).toBe('P8');
     expect(merlinFlowRed(T({ merlinFlowFollow: 2 }), merlin)).toBe('P8');
-    expect(merlinFlowRed(DEFAULT_AGENT_TUNING, merlin)).toBe(null);
+    expect(merlinFlowRed(OFF, merlin)).toBe(null);
     expect(merlinFlowRed(T({ merlinFlowFollow: 4 }), merlin)).toBe(null);
     expect(merlinFlowRed(T({ merlinFlowFollow: 3 }), asObs({ ...(merlin as object), failCount: 4 }))).toBe(null);
     expect(merlinFlowRed(T({ merlinFlowFollow: 3 }), asObs({ ...(merlin as object), currentRound: 3 }))).toBe(null);
@@ -253,7 +257,7 @@ describe('merlinFlowFollow (round 38: Merlin carries a red he sees only when the
     expect(a.teamIds).toContain('P8');
     expect(a.teamIds).toContain('P4');
     expect(a.teamIds.filter((id) => ['P8', 'P9', 'P10'].includes(id))).toEqual(['P8']);
-    const b = merlinLoyalStyleTeam(DEFAULT_AGENT_TUNING, merlin, { type: 'team_select', teamIds: ['P4', 'P1', 'P2'] });
+    const b = merlinLoyalStyleTeam(OFF, merlin, { type: 'team_select', teamIds: ['P4', 'P1', 'P2'] });
     expect(b.type === 'team_select' && b.teamIds.some((id) => ['P8', 'P9', 'P10'].includes(id))).toBe(false);
   });
 });
@@ -273,10 +277,10 @@ describe('checklist rules built in round 38 (bundles A–D, BL-01)', () => {
     const v = bayesVoteCriteria(T({ goodBayesR4Kept: 1 }), r4);
     expect(v).toEqual({ vote: true, reason: 'onDefault' });
     const declared = asObs({ ...(r4 as object), lakeHistory: [{ round: 3, holderId: 'P10', targetId: 'P8', declaredClaim: 'evil' }] });
-    const d0 = bayesVoteCriteria(DEFAULT_AGENT_TUNING, declared);
+    const d0 = bayesVoteCriteria(OFF, declared);
     expect(bayesVoteCriteria(T({ goodBayesR4Kept: 1 }), declared)).toEqual(d0);
     // value 2 is the off-team part only: the on-team vote is the default one
-    expect(bayesVoteCriteria(T({ goodBayesR4Kept: 2 }), r4)).toEqual(bayesVoteCriteria(DEFAULT_AGENT_TUNING, r4));
+    expect(bayesVoteCriteria(T({ goodBayesR4Kept: 2 }), r4)).toEqual(bayesVoteCriteria(OFF, r4));
   });
   it('merlinOnTeamOwnApprove: R4 without a seen red always; one seen red only with a low own P(Mordred on the team); 0:2 only in mode 3; never R5 (modes 1–3)', () => {
     expect(merlinOnTeamOwnApprove(1, r4, 0, 0.5, 0.5)).toBe(true);
@@ -298,20 +302,20 @@ describe('checklist rules built in round 38 (bundles A–D, BL-01)', () => {
   });
   it('loyalTailWhiteLastTau: a lower bar can only add tail whites, and only on the fourth proposal of rounds 3–5', () => {
     const fourth = asObs({ ...(r4 as object), currentRound: 3, failCount: 3, currentLeader: 'P4', questResults: ['fail', 'success'], questHistory: [q(1, ['P5', 'P1', 'P10'], 'fail'), q(2, ['P2', 'P3', 'P4', 'P6'], 'success')], proposedTeam: ['P4', 'P2', 'P3', 'P6'] });
-    const def = tailWhiteCore(DEFAULT_AGENT_TUNING, fourth);
+    const def = tailWhiteCore(OFF, fourth);
     const low = tailWhiteCore(T({ loyalTailWhiteLastTau: 0.01 }), fourth);
     expect(!def || low).toBe(true);
     const third = asObs({ ...(fourth as object), failCount: 2, currentLeader: 'P3' });
-    expect(tailWhiteCore(T({ loyalTailWhiteLastTau: 0.01 }), third)).toBe(tailWhiteCore(DEFAULT_AGENT_TUNING, third));
+    expect(tailWhiteCore(T({ loyalTailWhiteLastTau: 0.01 }), third)).toBe(tailWhiteCore(OFF, third));
   });
   it('beliefPendingProposal: only the vote-time posterior of a non-leader changes; a pick is untouched', () => {
     const vt = asObs({ ...(r2 as object), gamePhase: 'team_vote', currentLeader: 'P8', proposedTeam: ['P8', 'P2', 'P3', 'P9'] });
-    const a = bayesTeamClean(vt, ['P8', 'P2', 'P3', 'P9'], bayesOptionsOf(DEFAULT_AGENT_TUNING))!;
+    const a = bayesTeamClean(vt, ['P8', 'P2', 'P3', 'P9'], bayesOptionsOf(OFF))!;
     const b = bayesTeamClean(vt, ['P8', 'P2', 'P3', 'P9'], bayesOptionsOf(T({ beliefPendingProposal: true })))!;
     expect(Math.abs(a - b)).toBeGreaterThan(1e-9);
-    expect(bayesTeamClean(r2, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(T({ beliefPendingProposal: true })))).toBeCloseTo(bayesTeamClean(r2, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(DEFAULT_AGENT_TUNING))!, 12);
+    expect(bayesTeamClean(r2, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(T({ beliefPendingProposal: true })))).toBeCloseTo(bayesTeamClean(r2, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(OFF))!, 12);
     const own = asObs({ ...(vt as object), currentLeader: 'P7', proposedTeam: ['P7', 'P2', 'P3', 'P9'] });
-    expect(bayesTeamClean(own, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(T({ beliefPendingProposal: true })))).toBeCloseTo(bayesTeamClean(own, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(DEFAULT_AGENT_TUNING))!, 12);
+    expect(bayesTeamClean(own, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(T({ beliefPendingProposal: true })))).toBeCloseTo(bayesTeamClean(own, ['P7', 'P2', 'P3', 'P9'], bayesOptionsOf(OFF))!, 12);
   });
   it('merlinPublicPipeline / merlinPublicTieBreak: still a team without a red he sees', () => {
     const merlin = asObs({ ...(r2 as object), myRole: 'merlin', knownEvils: ['P2', 'P8', 'P9'] });
@@ -322,7 +326,7 @@ describe('checklist rules built in round 38 (bundles A–D, BL-01)', () => {
     // P2 led R1-2 with P4 and P6; now P3 proposes P3 + P4 + P6
     const o = asObs({ ...base, myPlayerId: 'P2', currentRound: 1, currentLeader: 'P3', failCount: 2, gamePhase: 'team_vote', questResults: [], questHistory: [], voteHistory: R1.slice(0, 2), proposedTeam: ['P3', 'P4', 'P6'] });
     expect(earlyOwnTeamWhite(T({ goodEarlyVote: 1 }), o)).toBe(true);
-    expect(earlyOwnTeamWhite(DEFAULT_AGENT_TUNING, o)).toBe(false);
+    expect(earlyOwnTeamWhite(OFF, o)).toBe(false);
     expect(earlyOwnTeamWhite(T({ goodEarlyVote: 1 }), asObs({ ...(o as object), proposedTeam: ['P3', 'P4', 'P9'] }))).toBe(false);
     expect(earlyOwnTeamWhite(T({ goodEarlyVote: 1 }), asObs({ ...(o as object), myPlayerId: 'P8' }))).toBe(false); // never led this round
     expect(earlyOwnTeamWhite(T({ goodEarlyVote: 1 }), asObs({ ...(o as object), currentRound: 3 }))).toBe(false);
@@ -331,7 +335,7 @@ describe('checklist rules built in round 38 (bundles A–D, BL-01)', () => {
     const o = asObs({ ...base, currentRound: 3, questResults: ['fail', 'success'], questHistory: [q(1, ['P5', 'P1', 'P10'], 'fail'), q(2, ['P2', 'P3', 'P1', 'P6'], 'success')], voteHistory: R1 });
     const cands = ['P1', 'P2', 'P3', 'P4', 'P8'];
     expect(goodLakeHumanPool(T({ goodLakeHuman: 1 }), o, cands)).toEqual(['P2', 'P3']);
-    expect(goodLakeHumanPool(DEFAULT_AGENT_TUNING, o, cands)).toBe(cands);
+    expect(goodLakeHumanPool(OFF, o, cands)).toBe(cands);
     const failedLast = asObs({ ...(o as object), questResults: ['success', 'fail'], questHistory: [q(1, ['P5', 'P1', 'P10'], 'success'), q(2, ['P2', 'P3', 'P1', 'P6'], 'fail')] });
     expect(goodLakeHumanPool(T({ goodLakeHuman: 1 }), failedLast, cands)).toBe(cands);
   });

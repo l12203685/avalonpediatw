@@ -146,6 +146,9 @@ function projectObsFromSeat(
     // Public substrate: no private lake results; the lobby's red count is public.
     myLakeResults: undefined,
     evilCount: obs.evilCount,
+    // Round 38: a projected seat is the public-view loyal of that seat, not a seat deciding for itself — the own prior
+    // (`ownView`, a loyal's own team pick) does not apply, so every seat's projection reads the same public substrate.
+    publicLoyalView: true,
   };
 }
 
