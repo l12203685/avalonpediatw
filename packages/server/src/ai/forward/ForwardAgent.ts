@@ -1030,7 +1030,10 @@ export class ForwardAgent implements AvalonAgent {
         const seenRed = team.some((id) => obs.knownEvils.includes(id));
         // Round 41 `merlinKeyApprove41` (measured only; owner item, 10/30 ruling): on the team in a key round, at rate q the loyal-view approve
         // stands even though his seen reds could lose on the spot (human Merlins approve 41% there); the public must-fail gate still binds.
-        const keyApprove = onTeam && merlinKeyApprove41Now(this.baseline.tuning, obs) && goodVoteGate(obs, this.gates) === null;
+        // Merlin's own sight makes the team must-fail (his seen reds); like his on-team normal white (owner 2026-10-30) only the public must-fail
+        // gate and the dominance gate bind.
+        const keyApprove = onTeam && merlinKeyApprove41Now(this.baseline.tuning, obs) && goodVoteGate(obs, { ...this.gates, mustFail: false }) === null
+          && goodVoteGate(loyalViewOf(obs), this.gates) === null;
         const vote = asLoyal.action.vote && (!merlinVoteFatal(obs, this.baseline.tuning) || keyApprove)
           && (onTeam || (!seenRed && goodVoteGate(obs, this.gates) === null));
         // Round 38 `merlinOnTeamOwn` (BlueRound38.ts; checklist AV-11): on the team, the public loyal threshold says reject and his seen reds

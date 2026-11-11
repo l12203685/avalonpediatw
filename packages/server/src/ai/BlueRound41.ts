@@ -6,7 +6,7 @@
  *   P(紅) 是持湖者自己的後驗（派西含拇指的限制；梅林用忠臣看得到的公開視角排序，見下）。
  *   權重：紅方未兩勝、後面還有湖 = 2；紅方已兩勝（含最後一湖）= 0，只看資訊（11/12 更正：紅方聽牌時第三局過了就有四個確定的好人，
  *   湖的價值在資訊，不在把湖留在藍方）。紅方已兩勝時「只看資訊」有兩種做法（`goodLake41` 的低兩位）：1 = 最不確定的人（h 最大）、
- *   2 = 最可能是紅的人（推演在第 1 湖 FF 偏向這一種）。
+ *   2 = 最可能是紅的人（推演在第 1 湖 FF 偏向這一種）、3 = 第 1 湖最可能是紅、第 2、3 湖最不確定（推演在第 2 湖偏向最不確定）。
  *
  * 第 0 步（先拿掉不該湖的人）：持湖者自己出過的失敗任務已經確定是紅的人；派西讀法信心 ≥ 0.7 的莫甘娜（11/11 晚裁定 (4)）；
  * 第 1、2 湖上過出兩張以上失敗的隊的人（LH-01）——每一條都是「還有別人可以湖時」。梅林看得到的紅由呼叫端的避開名單拿掉。
@@ -35,9 +35,14 @@ export function goodLake41On(tuning: Readonly<AgentTuning>, obs: PlayerObservati
   return ((tuning.goodLake41 ?? 0) & 3) !== 0 && (obs.seatTeam ?? obs.myTeam) === 'good';
 }
 
-/** 紅方已兩勝時的資訊做法：1 = 最不確定（h 最大）、2 = 最可能是紅。 */
-export function goodLake41RedTwoMode(tuning: Readonly<AgentTuning>): 1 | 2 {
-  return ((tuning.goodLake41 ?? 0) & 3) === 2 ? 2 : 1;
+/**
+ * 紅方已兩勝時的資訊做法：1 = 最不確定（h 最大）、2 = 最可能是紅、3 = 第 1 湖（FF）最可能是紅、第 2、3 湖最不確定
+ * （第 41 回合的推演：第 1 湖 FF 130–160 個決策點湖最可能是紅的人勝率較高，第 2 湖紅方已兩勝 160 個決策點湖最不確定的人較高）。
+ */
+export function goodLake41RedTwoMode(tuning: Readonly<AgentTuning>, obs?: PlayerObservation): 1 | 2 {
+  const m = (tuning.goodLake41 ?? 0) & 3;
+  if (m === 3) return (obs?.lakeHistory ?? []).length === 0 ? 2 : 1;
+  return m === 2 ? 2 : 1;
 }
 
 function h2(p: number): number {
@@ -153,7 +158,7 @@ export function goodLake41Pick(
   }
   const weight = lake41Weight(obs);
   const redTwoInfo = weight === 0;
-  const mode = goodLake41RedTwoMode(tuning);
+  const mode = goodLake41RedTwoMode(tuning, obs);
   // c.pRed 是 `view` 的後驗（梅林照公開視角時就是忠臣的公開視角）。
   const scored = cs.map((c) => ({ c, pRed: c.pRed, score: lake41Score(c.pRed, weight, redTwoInfo, mode), ...historyKeys(obs, c.id) }));
   const best = Math.max(...scored.map((x) => x.score));
