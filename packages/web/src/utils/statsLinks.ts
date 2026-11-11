@@ -19,11 +19,15 @@
  *      #practice                                    → 與機器人練習（自己 + 9 個機器人；不用登入，背景自動拿訪客身分）
  *      #ai-games                                    → 百科AI 對局（Edward 2026-11-05；不用登入）
  *      #ai-games=<DC 討論串 id>                      → 百科AI 對局，打開那一局（同 #records=：打開時留在網址列）
+ *      #wiki                                        → 百科攻略（Edward 2026-11-11：文章要發到 Threads）
+ *      #wiki=<文章 id> (#wiki/<id>)                   → 百科攻略，打開那篇文章（同 #records=：打開時留在網址列、
+ *        換文章時跟著換、關閉時由 WikiContent 清掉；不認得的 id 只開百科攻略。見 utils/wikiHash.ts）
  */
 import type { GameState } from '../store/gameStore';
 import { parseStatsQuery } from '../stats/statsFilter';
 import { parseRecordsHash } from './records';
 import { parseAiGamesHash } from './aiGames';
+import { parseWikiHash } from './wikiHash';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
@@ -48,7 +52,8 @@ export type StatsLink =
   | { kind: 'records'; id: string | null }
   | { kind: 'claim' }
   | { kind: 'practice' }
-  | { kind: 'aiGames'; id: string | null };
+  | { kind: 'aiGames'; id: string | null }
+  | { kind: 'wiki'; id: string | null };
 
 const STATS_HASHES = new Set(['stats', 'analytics', 'leaderboard', 'rank']);
 
@@ -81,6 +86,8 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (/^practice$/i.test(raw)) return { kind: 'practice' };
   const aiGames = parseAiGamesHash(raw);
   if (aiGames) return { kind: 'aiGames', id: aiGames.id };
+  const wiki = parseWikiHash(raw);
+  if (wiki) return { kind: 'wiki', id: wiki.id };
   const m = /^player[=/](.+)$/i.exec(raw);
   if (m) {
     let name = m[1];

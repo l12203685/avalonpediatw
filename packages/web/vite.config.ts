@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { WIKI_ARTICLES, WIKI_CATEGORIES, WIKI_DATA_ARTICLE_ROLE, WIKI_ROLE_NAMES } from './src/data/wiki';
 import { buildLlmsFiles, buildNoscriptHtml, type LlmsArticle, type LlmsOptions } from './src/utils/llmsTxt';
+import { DEFAULT_SHARE_IMAGE, buildWikiSharePages } from './src/utils/wikiSharePages';
 
 /**
  * Build-time VERSION.txt emitter (2026-04-24).
@@ -72,10 +73,15 @@ function versionTxtPlugin(): Plugin {
  * 給 AI／爬蟲讀的純文字版本（2026-10-31，見 src/utils/llmsTxt.ts）：每次 build 從 wiki_data.json 與 data/wiki.ts
  * 產生 llms.txt、llms-full.txt、wiki-md/<id>.md、sitemap.xml，並在 index.html 放 <noscript> 目錄；dev server 也
  * 即時提供同樣的檔案。網址：SITE_URL（預設 Firebase 主站）、VITE_SERVER_URL（API；本機網址時改用正式 API）。
+ * 2026-11-11（Edward：百科文章要發到 Threads）：同一份文章清單再產生每篇的分享頁 w/<id>/index.html（那篇文章自己的
+ * Open Graph 預覽，打開後轉到 /#wiki=<id>；src/utils/wikiSharePages.ts）。分享網址同樣用 SITE_URL：兩個部署
+ * workflow（deploy-firebase.yml、deploy-cloudflare-pages.yml）都沒設 SITE_URL，所以是 Firebase 主站
+ * avalon-game-platform.web.app（workflow 註解：玩家主入口；avalonpediatw.com 還沒接上）。
  */
 const DEFAULT_SITE_URL = 'https://avalon-game-platform.web.app';
 const DEFAULT_API_URL = 'https://avalon-server-z6c0-cs0s.onrender.com';
 const REPO_URL = 'https://github.com/l12203685/avalonpediatw';
+const BASE_PATH = process.env.VITE_BASE || '/';
 const WIKI_DATA = path.resolve(__dirname, '../server/wiki_data.json');
 
 function llmsInputs(): { articles: LlmsArticle[]; opts: LlmsOptions } {
@@ -109,8 +115,10 @@ function llmsFilesPlugin(): Plugin {
       const { articles, opts } = llmsInputs();
       const files = buildLlmsFiles(articles, opts);
       for (const [fileName, source] of Object.entries(files)) this.emitFile({ type: 'asset', fileName, source });
+      const pages = buildWikiSharePages(articles, { siteUrl: opts.siteUrl, basePath: BASE_PATH, categories: opts.categories, image: DEFAULT_SHARE_IMAGE });
+      for (const [fileName, source] of Object.entries(pages)) this.emitFile({ type: 'asset', fileName, source });
       // eslint-disable-next-line no-console
-      console.log(`[llms] emitted ${Object.keys(files).length} files (llms.txt, llms-full.txt, sitemap.xml, wiki-md/*.md) for ${opts.siteUrl}`);
+      console.log(`[llms] emitted ${Object.keys(files).length} files (llms.txt, llms-full.txt, sitemap.xml, wiki-md/*.md) and ${Object.keys(pages).length} share pages (w/<id>/index.html) for ${opts.siteUrl}`);
     },
     transformIndexHtml(html) {
       const { articles, opts } = llmsInputs();
@@ -119,6 +127,16 @@ function llmsFilesPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = decodeURIComponent((req.url ?? '').split('?')[0]).replace(/^\//, '');
+        const share = /^w\/([^/]+)\/?(?:index\.html)?$/.exec(url);
+        if (share) {
+          const { articles, opts } = llmsInputs();
+          const pages = buildWikiSharePages(articles, { siteUrl: `http://${req.headers.host ?? 'localhost'}`, basePath: BASE_PATH, categories: opts.categories, image: DEFAULT_SHARE_IMAGE });
+          const page = pages[`w/${encodeURIComponent(share[1])}/index.html`];
+          if (page === undefined) return next();
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.end(page);
+          return;
+        }
         if (!/^(llms(-full)?\.txt|sitemap\.xml|wiki-md\/.+\.md)$/.test(url)) return next();
         const { articles, opts } = llmsInputs();
         const files = buildLlmsFiles(articles, { ...opts, siteUrl: `http://${req.headers.host ?? 'localhost'}` });
@@ -133,7 +151,7 @@ function llmsFilesPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), versionTxtPlugin(), llmsFilesPlugin()],
-  base: process.env.VITE_BASE || '/',
+  base: BASE_PATH,
   define: {
     // Injected at build time so the client bundle can read its own build stamp
     // (e.g. for a version banner or diagnostic tooltip).

@@ -58,6 +58,14 @@ describe('web: parseStatsHash', () => {
     }
   });
 
+  it('#wiki opens 百科攻略; #wiki=<id> (or #wiki/<id>) also opens that article (2026-11-11)', () => {
+    expect(parseStatsHash('#wiki')).toEqual({ kind: 'wiki', id: null });
+    expect(parseStatsHash('#wiki=wiki-24')).toEqual({ kind: 'wiki', id: 'wiki-24' });
+    expect(parseStatsHash('#wiki/faq-basic')).toEqual({ kind: 'wiki', id: 'faq-basic' });
+    expect(parseStatsHash('#wiki=<script>')).toEqual({ kind: 'wiki', id: null });
+    expect(parseStatsHash('#wikipedia')).toBeNull();
+  });
+
   it('#practice opens 與機器人練習 again (2026-11-03)', () => {
     expect(parseStatsHash('#practice')).toEqual({ kind: 'practice' });
   });

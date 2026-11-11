@@ -13,6 +13,7 @@ import IOSInstallGuide from './IOSInstallGuide';
 import ForceUpdateButton from './ForceUpdateButton';
 import { clearRecordsHash } from './records/recordsLink';
 import { clearAiGamesHash } from './aiGames/aiGamesLink';
+import { clearWikiHash } from './wikiLink';
 import { PRACTICE_NS } from '../i18n/practice';
 
 /**
@@ -94,6 +95,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
     // 離開牌譜紀錄時清掉 #records=…，免得重新整理又跳回那一局（不放在頁面卸載時做：開發模式的 StrictMode 會先卸載一次）
     if (tab !== 'records') clearRecordsHash();
     clearAiGamesHash();
+    if (tab !== 'wiki') clearWikiHash();
     setGameState(tab);
     window.scrollTo({ top: 0 });
   };
@@ -181,6 +183,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             type="button"
             onClick={() => {
               if (active === 'records') clearRecordsHash();
+              clearWikiHash();
               clearAiGamesHash();
               setGameState('practice');
               window.scrollTo({ top: 0 });
@@ -204,6 +207,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             type="button"
             onClick={() => {
               if (active === 'records') clearRecordsHash();
+              clearWikiHash();
               setGameState('aiGames');
               window.scrollTo({ top: 0 });
             }}
@@ -226,6 +230,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             type="button"
             onClick={() => {
               if (active === 'records') clearRecordsHash();
+              clearWikiHash();
               clearAiGamesHash();
               setGameState('idClaim');
               window.scrollTo({ top: 0 });

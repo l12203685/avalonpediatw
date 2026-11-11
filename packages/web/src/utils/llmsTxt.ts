@@ -6,12 +6,13 @@
  *   /llms.txt          llms.txt 慣例（https://llmstxt.org）：網站說明、內容怎麼分、每篇文章的 Markdown 連結、資料端點
  *   /llms-full.txt     全部文章接成一份乾淨的 Markdown
  *   /wiki-md/<id>.md   每篇文章一個 Markdown 檔
- *   /sitemap.xml       網站頁面 + 上面這些檔案
+ *   /sitemap.xml       網站頁面 + 上面這些檔案 + 每篇文章的分享頁 /w/<id>/（分享頁本身由 wikiSharePages.ts 產生）
  *
  * 「乾淨」= 拿掉 HackMD 資料區塊與 [TOC]、HTML 註解與舊式 <font>/<br>；站內連結 `wiki:wiki-57` 換成那篇 .md 的
  * 完整網址；圖片換成完整網址；論點標記統一成【邏輯】【經驗】（舊標記照 utils/wikiMarkup.ts 的對照換掉）。
  * 這裡不碰 node API（vite.config.ts 讀檔後把資料傳進來），伺服器端的 vitest 直接測這個模組。
  */
+import { WIKI_SHARE_DIR, wikiShareUrl } from './wikiHash';
 import { WIKI_TAGS, canonicalLayerMarks, stripHackmdArtifacts, stripHtmlComments, stripLayerMarks, wikiCardExcerpt } from './wikiMarkup';
 
 export interface LlmsArticle {
@@ -155,6 +156,7 @@ export function buildLlmsFiles(articles: readonly LlmsArticle[], opts: LlmsOptio
     `- 語言：繁體中文（zh-Hant）。文章 ${ordered.length} 篇。`,
     `- 論點標記：文章裡的【邏輯】【經驗】標出每條論點的可信度 — ${layerLegend}。網站上以文字顏色呈現（邏輯＝黃字、經驗＝綠字）。`,
     '- 牌譜記號（座位數字、o／x、> 等）與常用術語見「牌譜記錄格式與常用術語」一文；座位 0 家＝10 號。',
+    `- 分享連結：每篇文章都有 ${site}/${WIKI_SHARE_DIR}/<文章 id>/（帶那篇文章自己的標題與摘要預覽，打開後轉到網站上的文章 ${site}/#wiki=<文章 id>），完整清單見 sitemap.xml。`,
   ].join('\n');
 
   const sections: string[] = [];
@@ -206,6 +208,7 @@ export function buildLlmsFiles(articles: readonly LlmsArticle[], opts: LlmsOptio
     `${site}/llms.txt`,
     `${site}/llms-full.txt`,
     ...ordered.map((a) => `${site}/${wikiMdPath(a.id)}`),
+    ...ordered.map((a) => wikiShareUrl(site, a.id)),
   ];
   files['sitemap.xml'] = [
     '<?xml version="1.0" encoding="UTF-8"?>',
