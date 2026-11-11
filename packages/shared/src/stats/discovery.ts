@@ -381,6 +381,71 @@ export function normalCdf(z: number): number {
 
 const twoSided = (z: number): number => 2 * (1 - normalCdf(Math.abs(z)));
 
+/** ln Γ(x)（Lanczos，x > 0）。 */
+function lnGamma(x: number): number {
+  const c = [76.18009172947146, -86.50532032941678, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let y = x;
+  const tmp = x + 5.5 - (x + 0.5) * Math.log(x + 5.5);
+  let ser = 1.000000000190015;
+  for (const ci of c) { y += 1; ser += ci / y; }
+  return -tmp + Math.log((2.5066282746310007 * ser) / x);
+}
+
+/** 正規化不完全 Beta 函數 I_x(a, b)（連分數，Numerical Recipes betacf）。 */
+function incompleteBeta(x: number, a: number, b: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const front = Math.exp(lnGamma(a + b) - lnGamma(a) - lnGamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+  const cf = (xx: number, aa: number, bb: number): number => {
+    const tiny = 1e-300;
+    let c = 1;
+    let d = 1 - ((aa + bb) * xx) / (aa + 1);
+    if (Math.abs(d) < tiny) d = tiny;
+    d = 1 / d;
+    let h = d;
+    for (let m = 1; m <= 300; m++) {
+      const m2 = 2 * m;
+      let num = (m * (bb - m) * xx) / ((aa + m2 - 1) * (aa + m2));
+      d = 1 + num * d; if (Math.abs(d) < tiny) d = tiny; d = 1 / d;
+      c = 1 + num / c; if (Math.abs(c) < tiny) c = tiny;
+      h *= d * c;
+      num = (-(aa + m) * (aa + bb + m) * xx) / ((aa + m2) * (aa + m2 + 1));
+      d = 1 + num * d; if (Math.abs(d) < tiny) d = tiny; d = 1 / d;
+      c = 1 + num / c; if (Math.abs(c) < tiny) c = tiny;
+      const del = d * c;
+      h *= del;
+      if (Math.abs(del - 1) < 1e-12) break;
+    }
+    return h;
+  };
+  return x < (a + 1) / (a + b + 2) ? (front * cf(x, a, b)) / a : 1 - (front * cf(1 - x, b, a)) / b;
+}
+
+/** Student t 的雙尾 p（df 自由度；df 很大時等於常態）。 */
+export function studentTwoSided(t: number, df: number): number {
+  if (!Number.isFinite(t)) return 0;
+  if (!(df > 0) || df > 1e6) return twoSided(t);
+  return incompleteBeta(df / (df + t * t), df / 2, 0.5);
+}
+
+const tCritCache = new Map<number, number>();
+/** Student t 的 97.5% 分位數（95% CI 用；二分法）。 */
+export function tCritical95(df: number): number {
+  if (!(df > 0) || df > 1e6) return 1.96;
+  const key = Math.round(df);
+  const hit = tCritCache.get(key);
+  if (hit !== undefined) return hit;
+  let lo = 1.9;
+  let hi = 20;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (studentTwoSided(mid, key) > 0.05) lo = mid; else hi = mid;
+  }
+  const v = (lo + hi) / 2;
+  tCritCache.set(key, v);
+  return v;
+}
+
 /** 兩比例 z 檢定：[差（百分點）, 95% CI 下、上, p]。 */
 export function twoProportion(k1: number, n1: number, k2: number, n2: number): { diff: number; lo: number; hi: number; p: number } {
   const p1 = k1 / n1;
@@ -496,6 +561,8 @@ export interface DiscoveryOptions {
   minPlayers?: number;
   /** 分組（強者／新手、高端／歡樂）的切點；預設 DEFAULT_COHORT_CUTS。 */
   cuts?: CohortCuts;
+  /** 同一批局先算好的非事件單位候選（discoveryBase）；切點換了只重算事件單位。 */
+  base?: DiscoveryBase;
 }
 
 export interface DiscoveryResult {
@@ -599,7 +666,8 @@ function welchFromSums(a: Acc, b: Acc): { diff: number; lo: number; hi: number; 
  * 同一局的幾次提議、同一位玩家在很多局的票彼此相關，所以變異數用叢集穩健（sandwich）的寫法：
  *   差 d = pA − pB，每個叢集 c 的影響量 u_c =（kA_c − pA·nA_c）/ NA −（kB_c − pB·nB_c）/ NB，
  *   V_叢集 = G /（G − 1）· Σ u_c²（G = 叢集數；同一個叢集同時在兩組也照算，兩組的共變數自動扣掉）。
- * 兩個方向（Cameron–Gelbach–Miller）：V = V_局 + V_玩家 − V_局×玩家，再取 V、V_局、V_玩家 裡最大的（保守）。
+ * 兩個方向（Cameron–Gelbach–Miller）：V = V_局 + V_玩家 − V_局×玩家，再取 V、V_局、V_玩家、V_獨立（不管叢集）裡最大的
+ * （保守），p 與 CI 用自由度 = 最少叢集數 − 1 的 t 分布（叢集少時 sandwich 偏小）。
  * 等於用局與玩家當重抽單位的 bootstrap 的大樣本近似；每組至少 minGames 局、minPlayers 位有寫名字的玩家才比
  * （沒寫名字的座位各自當一個叢集，但不算進玩家數）。
  */
@@ -708,24 +776,32 @@ function clusterVariance(
   return g > 1 ? (g / (g - 1)) * sum : sum;
 }
 
-interface ClusterTest { diff: number; lo: number; hi: number; p: number; se: number; naiveP: number }
+interface ClusterTest { diff: number; lo: number; hi: number; p: number; se: number; naiveP: number; df: number }
 
-function clusterTest(a: ClusterAcc, other: ClusterAcc, rest: boolean, b: SideSummary): ClusterTest {
+/**
+ * 叢集穩健的兩比例檢定。變異數取 V_局 + V_玩家 − V_局×玩家、V_局、V_玩家、不管叢集的 V_獨立 裡最大的（叢集內負相關或
+ * 同一局在兩組時，叢集變異數可能比獨立的還小；取最大才真的是保守）。叢集少時 sandwich 估計偏小，p 與 CI 改用自由度
+ * df = 最少的叢集數 − 1 的 t 分布（兩組各自的局數與玩家數裡最小的）。
+ */
+function clusterTest(a: ClusterAcc, other: ClusterAcc, rest: boolean, b: SideSummary, df: number): ClusterTest {
   const pA = a.k / a.n;
   const pB = b.k / b.n;
   const vg = clusterVariance(a.byGame, other.byGame, rest, pA, a.n, pB, b.n);
   const vp = clusterVariance(a.byPlayer, other.byPlayer, rest, pA, a.n, pB, b.n);
   const vi = clusterVariance(a.byInter, other.byInter, rest, pA, a.n, pB, b.n);
-  const v = Math.max(vg + vp - vi, vg, vp);
+  const vIid = (pA * (1 - pA)) / a.n + (pB * (1 - pB)) / b.n;
+  const v = Math.max(vg + vp - vi, vg, vp, vIid);
   const se = Math.sqrt(v);
   const d = pA - pB;
-  const p = se > 0 ? twoSided(d / se) : d === 0 ? 1 : 0;
-  return { diff: 100 * d, lo: 100 * (d - 1.96 * se), hi: 100 * (d + 1.96 * se), p, se: 100 * se, naiveP: twoProportion(a.k, a.n, b.k, b.n).p };
+  const p = se > 0 ? studentTwoSided(d / se, df) : d === 0 ? 1 : 0;
+  const crit = tCritical95(df);
+  return { diff: 100 * d, lo: 100 * (d - crit * se), hi: 100 * (d + crit * se), p, se: 100 * se, naiveP: twoProportion(a.k, a.n, b.k, b.n).p, df };
 }
 
 /** 叢集穩健的兩比例檢定（兩組各自的列）：差（百分點）、95% CI、p，以及不管叢集的一般兩比例 z 檢定的 p（比較用）。 */
 export function clusteredTwoProportion(a: ClusterAcc, b: ClusterAcc): ClusterTest {
-  return clusterTest(a, b, false, summaryOf(b));
+  const df = Math.min(a.byGame.size, b.byGame.size, a.byPlayer.size, b.byPlayer.size) - 1;
+  return clusterTest(a, b, false, summaryOf(b), df);
 }
 
 /** 依角色分層、各自比，再依樣本（兩組列數較小的那個）加權平均的差（百分點）；每層每組至少 10 列才算。 */
@@ -816,7 +892,8 @@ function clusteredCandidates(
       const sa = summaryOf(a, named);
       const sb = dim.pair ? summaryOf(other, named) : restSummary(other, a, named);
       if (!enough(sa) || !enough(sb)) continue;
-      const t = clusterTest(a, other, !dim.pair, sb);
+      // 自由度：兩組的局數、有名字的玩家數裡最少的 − 1（沒名字的座位各自一個叢集，不算進來：偏保守）
+      const t = clusterTest(a, other, !dim.pair, sb, Math.min(sa.games, sb.games, sa.players, sb.players) - 1);
       out.push({
         id: `${dim.unit}|${dim.id}|${split.aLabel}|${metric.id}`,
         unit: dim.unit, dimension: dim, metric,
@@ -842,19 +919,28 @@ function cachedEventUnits(g: Game, cuts: CohortCuts): Record<EventUnit, Row[]> {
   return rows;
 }
 
-/** 掃描全部維度 × 指標，回傳 FDR 顯著、依效果量排序的發現。 */
-export function discoverFindings(games: readonly Game[], options: DiscoveryOptions = {}): DiscoveryResult {
+type Candidate = Omit<DiscoveryFinding, 'q'>;
+
+/**
+ * 不靠分組切點的那一半（局、提議、任務、湖、座位五種單位）的候選檢定（還沒做 BH）。切點一換只要重算事件單位：
+ * 網站的 Worker 依篩選快取這一份，傳進 discoverFindings 的 options.base，BH 再對合起來的全部檢定做一次。
+ */
+export interface DiscoveryBase {
+  readonly minUnits: number;
+  readonly minDen: number;
+  /** 算的時候用的局（傳進 discoverFindings 時逐局比對是不是同一批物件，不符就重算）。 */
+  readonly games: readonly Game[];
+  readonly candidates: readonly Candidate[];
+  readonly units: Record<GameUnit, number>;
+}
+
+export function discoveryBase(games: readonly Game[], options: Pick<DiscoveryOptions, 'minUnits' | 'minDen'> = {}): DiscoveryBase {
   const minUnits = options.minUnits ?? 30;
   const minDen = options.minDen ?? 30;
-  const fdr = options.fdr ?? 0.05;
-  const limits: EventLimits = { minUnits, minDen, minGames: options.minGames ?? 20, minPlayers: options.minPlayers ?? 10 };
-  const cuts = options.cuts ?? DEFAULT_COHORT_CUTS;
-  const rows: Record<DiscoveryUnit, Row[]> = { game: [], proposal: [], mission: [], lake: [], seat: [], twoRed: [], decisive: [], blueVote: [] };
+  const rows: Record<GameUnit, Row[]> = { game: [], proposal: [], mission: [], lake: [], seat: [] };
   for (const g of games) {
     const u = gameUnits(g);
-    for (const key of Object.keys(u) as Array<keyof typeof u>) for (const r of u[key]) rows[key].push(r);
-    const e = cachedEventUnits(g, cuts);
-    for (const key of EVENT_UNITS) for (const r of e[key]) rows[key].push(r);
+    for (const key of Object.keys(u) as GameUnit[]) for (const r of u[key]) rows[key].push(r);
   }
   // 陣容維度的 S 三分層（控制 S 用）
   const sValues = rows.game.map((r) => r.dims.s).filter((v): v is number => typeof v === 'number').sort((a, b) => a - b);
@@ -865,16 +951,13 @@ export function discoverFindings(games: readonly Game[], options: DiscoveryOptio
     return s < sCuts[0] ? 0 : s < sCuts[1] ? 1 : 2;
   };
 
-  const candidates: Array<Omit<DiscoveryFinding, 'q'>> = [];
+  const candidates: Candidate[] = [];
   for (const dim of DISCOVERY_DIMENSIONS) {
+    if (isEventUnit(dim.unit)) continue;
     const unitRows = rows[dim.unit];
     const splits = splitsFor(dim, unitRows, minUnits);
     if (splits.length === 0) continue;
     const metrics = DISCOVERY_METRICS.filter((m) => m.unit === dim.unit && !EXCLUDED_PAIRS.has(`${dim.unit}|${dim.id}|${m.id}`));
-    if (isEventUnit(dim.unit)) {
-      candidates.push(...clusteredCandidates(dim, unitRows, splits, metrics, limits));
-      continue;
-    }
     let corrWithS: number | null | undefined;
     if (dim.unit === 'game' && dim.kind === 'numeric' && dim.id !== 's') {
       const pairs = unitRows.filter((r) => typeof r.dims[dim.id] === 'number' && typeof r.dims.s === 'number');
@@ -952,6 +1035,37 @@ export function discoverFindings(games: readonly Game[], options: DiscoveryOptio
       }
     }
   }
+  return {
+    minUnits, minDen, games: games.slice(), candidates,
+    units: Object.fromEntries((Object.keys(rows) as GameUnit[]).map((k) => [k, rows[k].length])) as Record<GameUnit, number>,
+  };
+}
+
+/** 掃描全部維度 × 指標，回傳 FDR 顯著、依效果量排序的發現。options.base = 同一批局先算好的 discoveryBase（可省略）。 */
+export function discoverFindings(games: readonly Game[], options: DiscoveryOptions = {}): DiscoveryResult {
+  const minUnits = options.minUnits ?? 30;
+  const minDen = options.minDen ?? 30;
+  const fdr = options.fdr ?? 0.05;
+  const limits: EventLimits = { minUnits, minDen, minGames: options.minGames ?? 20, minPlayers: options.minPlayers ?? 10 };
+  const cuts = options.cuts ?? DEFAULT_COHORT_CUTS;
+  const given = options.base;
+  const sameGames = (x: readonly Game[]): boolean => x.length === games.length && x.every((g, i) => g === games[i]);
+  const base = given && given.minUnits === minUnits && given.minDen === minDen && sameGames(given.games)
+    ? given : discoveryBase(games, { minUnits, minDen });
+  const rows: Record<EventUnit, Row[]> = { twoRed: [], decisive: [], blueVote: [] };
+  for (const g of games) {
+    const e = cachedEventUnits(g, cuts);
+    for (const key of EVENT_UNITS) for (const r of e[key]) rows[key].push(r);
+  }
+  const candidates: Candidate[] = [...base.candidates];
+  for (const dim of DISCOVERY_DIMENSIONS) {
+    if (!isEventUnit(dim.unit)) continue;
+    const unitRows = rows[dim.unit];
+    const splits = splitsFor(dim, unitRows, minUnits);
+    if (splits.length === 0) continue;
+    const metrics = DISCOVERY_METRICS.filter((m) => m.unit === dim.unit && !EXCLUDED_PAIRS.has(`${dim.unit}|${dim.id}|${m.id}`));
+    candidates.push(...clusteredCandidates(dim, unitRows, splits, metrics, limits));
+  }
   const qs = benjaminiHochberg(candidates.map((c) => c.p));
   // 兩個維度切出完全一樣的組（例：第 5 輪 = 比分 2：2）只留第一個
   const seen = new Set<string>();
@@ -967,7 +1081,10 @@ export function discoverFindings(games: readonly Game[], options: DiscoveryOptio
     });
   // 比分跟局勢（任務順序）都有差異時，只留局勢那一層的（同一個單位、同一個指標、比分相同的順序）
   const seqScores = new Set(findings.filter((f) => f.dimension.id === 'sequence').map((f) => `${f.unit}|${f.metric.id}|${scoreOfSequence(f.a.label)}`));
-  const kept = findings.filter((f) => f.dimension.id !== 'score' || !seqScores.has(`${f.unit}|${f.metric.id}|${f.a.label}`));
+  // 事件單位的角色只有梅林／派西維爾／忠臣三類：「忠臣 vs 其他」幾乎是「梅林 vs 其他」的鏡像，梅林那一項有列就不重複
+  const merlinRole = new Set(findings.filter((f) => isEventUnit(f.unit) && f.dimension.role && f.a.label === '梅林').map((f) => `${f.unit}|${f.metric.id}`));
+  const kept = findings.filter((f) => (f.dimension.id !== 'score' || !seqScores.has(`${f.unit}|${f.metric.id}|${f.a.label}`))
+    && !(isEventUnit(f.unit) && f.dimension.role && f.a.label === '忠臣' && merlinRole.has(`${f.unit}|${f.metric.id}`)));
   for (const f of kept) {
     if (!isEventUnit(f.unit)) continue;
     const strategy = buildStrategy(f);
@@ -975,7 +1092,7 @@ export function discoverFindings(games: readonly Game[], options: DiscoveryOptio
   }
   return {
     tests: candidates.length,
-    units: Object.fromEntries((Object.keys(rows) as DiscoveryUnit[]).map((k) => [k, rows[k].length])) as Record<DiscoveryUnit, number>,
+    units: { ...base.units, ...Object.fromEntries(EVENT_UNITS.map((k) => [k, rows[k].length])) } as Record<DiscoveryUnit, number>,
     findings: kept,
   };
 }

@@ -55,7 +55,13 @@ export default function DiscoveryCard({ finding: f }: { finding: DiscoveryFindin
       {(clause || grouping || link) && (
         <div className="mt-1 flex flex-wrap gap-2">
           {link && (
-            <button type="button" onClick={() => openDiscoveryLink(link)} className="inline-flex items-center gap-1 text-[11px] text-blue-300 hover:text-blue-200" data-testid="discovery-open-link">
+            <button
+              type="button"
+              onClick={() => openDiscoveryLink(link)}
+              title={link.contextOnly ? `那一頁沒有依「${f.dimension.label}」拆，看到的是整體的數字` : undefined}
+              className="inline-flex items-center gap-1 text-[11px] text-blue-300 hover:text-blue-200"
+              data-testid="discovery-open-link"
+            >
               {link.label}<ArrowRight size={11} />
             </button>
           )}

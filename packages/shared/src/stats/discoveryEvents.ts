@@ -11,6 +11,8 @@
  *
  * 維度：做事的人的分組（強者 vs 新手，cohort.ts 的 PR 切點）、桌的分組（高端 vs 歡樂，S 切點）、角色、座位、第幾局、
  * 第幾次提議（兩紅派隊）、局勢（之前任務的順序，例：紅藍紅）、紅方是否已兩勝（投票）。切點跟著網站上調的值。
+ * 角色、座位、第幾局、第幾次、局勢、紅方已兩勝都標成 structural：預設不列（角色是定義上的資訊差，其他是規則與局勢），
+ * 也不給策略（discoveryStrategy.ts）。
  *
  * 一局有好幾列、同一位玩家出現在很多局，列彼此不獨立：每列帶 cluster（局、玩家），discovery.ts 用叢集穩健的變異數
  * （局與玩家兩個方向）做檢定，不會把差異說得太確定。每列也帶 stratum = 做事的人的角色，用來檢查差異是不是角色本身造成的
@@ -67,7 +69,8 @@ export interface EventMetricDef {
 const dimsFor = (unit: EventUnit, actor: string): EventDimensionDef[] => [
   { id: 'playerTier', unit, label: `${actor}分組`, help: `${actor}那一局開打前的 PR：強者（PR ≥ 上切點）對新手（PR < 下切點），切點同分組九宮格`, pair: PLAYER_TIER_PAIR, skill: true },
   { id: 'tableTier', unit, label: '桌的分組', help: '那一局的 S：高端（S ≥ 上切點）對歡樂（S < 下切點），切點同分組九宮格', pair: TABLE_TIER_PAIR },
-  { id: 'role', unit, label: `${actor}角色`, help: `${actor}的角色（梅林／派西維爾／忠臣）`, role: true },
+  // 角色的差異多半是定義上的資訊差（梅林看得到拇指），預設跟結構性維度一起收起來，可以打開
+  { id: 'role', unit, label: `${actor}角色`, help: `${actor}的角色（梅林／派西維爾／忠臣）；角色本身的資訊差，預設不列`, role: true, structural: true },
   { id: 'seat', unit, label: `${actor}座位`, help: `${actor}坐幾號位`, structural: true },
   { id: 'round', unit, label: '第幾局', help: '第幾個任務', structural: true },
   { id: 'sequence', unit, label: '局勢（任務順序）', help: '這一局開始前各任務的結果，照順序（例：紅藍紅）', structural: true },

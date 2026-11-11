@@ -3,17 +3,20 @@
  * 維度綁在一起的範本寫一句白話的策略。
  *
  *   一律標成假設：觀察資料，相關不是因果（STRATEGY_HYPOTHESIS）；只寫組名（強者／新手、高端桌…），不寫任何玩家。
- *   不給策略的情況（suppressed，畫面上寫原因）：
+ *   不給策略的情況（suppressed，畫面上寫原因；卡片照樣列）：
  *     small      差距的絕對值不到 STRATEGY_MIN_DIFF 個百分點（顯著但太小，照做也看不出差別）
  *     role       維度就是角色（梅林看得到拇指、派西看得到梅林／莫甘娜：角色本身的資訊差，不是策略），或在同一個角色
- *                裡比（依角色分層、樣本加權平均的差 withinRole）時差距不到門檻或方向相反 → 差異是角色組成造成的
+ *                裡比（依角色分層、樣本加權平均的差 withinRole）時差距不到門檻或方向相反 → 差異是角色組成造成的；
+ *                withinRole 算不出來（沒有一個角色兩邊都有 10 列）也不給：沒辦法排除是角色造成的
+ *     structure  遊戲結構的維度（座位、第幾局、第幾次提議、局勢、紅方已兩勝）：差異多半來自規則與資訊狀態（隊長座位跟著
+ *                輪替走、各局隊伍人數不同；第 4 局單紅的票是中性、不算對錯，跟第 3、5 局的對率不是同一把尺），不是可以照做的線索
  *     direction  強者 vs 新手，但強者在不好的方向（例：強者的關鍵外白對率反而比較低）：沒有可以照做的方向
  *     neutral    這個分類本身沒有好壞（第 4 局只含一拇指：一張失敗不會紅）
- *     context    八格（四組 × 對／錯）各佔關鍵票的比例在不同情境（桌、局、座位、局勢）之間的差，主要是那種情境裡各種隊伍
- *                出現的多寡不同，沒有可以讀的方向；八格只在強者 vs 新手時給策略（四組的對率照樣給情境的讀法）
- *   範本：
+ *     context    八格（四組 × 對／錯）各佔關鍵票的比例：任何維度都不給。佔比跟那一組人多常在隊上、各種隊伍出現的多寡
+ *                一起變（例：強者比較常被派上隊，「在隊上放行全好」的佔比自然比較高），不是做法的差；做法看四組的對率
+ *   範本（只剩兩種維度會給）：
  *     做事的人的分組（強者 vs 新手）→「強者在兩紅後第 4 局比較常派最多一紅的隊（80% vs 新手 56%）→ 第 4 局可以優先找…」
- *     其他維度（桌、第幾局、第幾次、座位、局勢、紅方已兩勝）→ 情境的讀法：「在高端桌，… → 在高端桌，…可以多相信…」
+ *     桌的分組（高端 vs 歡樂）→ 描述性的讀法：「在高端桌，… → 在高端桌，隊上比較常有拇指，投票前多檢查一次」
  */
 import type { DiscoveryFinding } from './discovery';
 import type { EventUnit } from './discoveryEvents';
@@ -23,7 +26,7 @@ export const STRATEGY_MIN_DIFF = 5;
 /** 策略一律附上的標示。 */
 export const STRATEGY_HYPOTHESIS = '假設：來自觀察資料，相關不是因果';
 
-export type StrategySuppressed = 'small' | 'role' | 'direction' | 'neutral' | 'context';
+export type StrategySuppressed = 'small' | 'role' | 'structure' | 'direction' | 'neutral' | 'context';
 
 export interface DiscoveryStrategy {
   /** 策略那一句（不給 = null）。 */
@@ -44,9 +47,11 @@ interface Template {
   better: 'higher' | 'lower' | null;
   /** 照做的建議（往好的方向）。 */
   act: string;
-  /** 情境的讀法：這個情境下數字比較高／比較低時。 */
+  /** 情境（桌的分組）的讀法：這個情境下數字比較高／比較低時（描述性，不宣稱沒量到的事）。 */
   readHigh?: string;
   readLow?: string;
+  /** 八格的佔比：任何維度都不給策略。 */
+  cell?: boolean;
 }
 
 const DECISIVE_ACT = {
@@ -56,49 +61,46 @@ const DECISIVE_ACT = {
   offNo: '不在隊上時，看到可疑的隊就投反對擋下',
 } as const;
 const DECISIVE_READ = {
-  onYes: ['在隊上的藍方投贊成比較可信', '在隊上的贊成票比較不可信，別只看他們有沒有贊成'],
-  onNo: ['內黑比較常是對的：看到藍方內黑，這隊可能有紅', '內黑比較常擋錯：內黑不一定代表隊上有紅'],
-  offYes: ['外白比較常是對的：場外有人贊成，這隊比較可能全好', '外白比較常放錯：場外有人贊成不代表這隊安全'],
-  offNo: ['場外的反對票比較常擋對', '場外的反對票比較常擋到全好的隊'],
+  onYes: ['藍方在隊上投贊成時，隊伍比較常全好', '藍方在隊上投贊成時，隊伍比較常其實有紅，投票前多檢查一次'],
+  onNo: ['藍方內黑時，隊上比較常真的有紅', '藍方內黑時，比較常擋到全好的隊'],
+  offYes: ['藍方外白時，隊伍比較常全好', '藍方外白時，比較常放行會失敗的隊，投票前多檢查一次'],
+  offNo: ['藍方在場外投反對時，比較常擋對', '藍方在場外投反對時，比較常擋到全好的隊'],
 } as const;
 const GROUP_NOUN = { onYes: '場內白', onNo: '內黑', offYes: '外白', offNo: '場外黑' } as const;
 
-const CELL: Record<string, Pick<Template, 'phrase' | 'better' | 'act'>> = {
-  onYesRight: { phrase: '在關鍵時在隊上放行全好的隊', better: 'higher', act: '在隊上、確認全好時就投贊成' },
-  onYesWrong: { phrase: '在關鍵時在隊上放行會失敗的隊', better: 'lower', act: '在隊上也要看同隊的人：同隊有可疑的人就別急著贊成' },
-  onNoRight: { phrase: '在關鍵時內黑擋下會失敗的隊', better: 'higher', act: '在隊上發現同隊有紅時，敢投反對（內黑）擋下' },
-  onNoWrong: { phrase: '在關鍵時內黑擋下全好的隊', better: 'lower', act: '不確定時不要內黑：擋下全好的隊會白白浪費一次提議' },
-  offYesRight: { phrase: '在關鍵時外白放行全好的隊（最佳第六人）', better: 'higher', act: '看到全好的隊，不在隊上也可以投贊成讓它過（最佳第六人）' },
-  offYesWrong: { phrase: '在關鍵時外白放行會失敗的隊', better: 'lower', act: '外白前多想：放行會失敗的隊是最貴的錯' },
-  offNoRight: { phrase: '在關鍵時在場外擋下會失敗的隊', better: 'higher', act: '不在隊上時，看到會失敗的隊就投反對' },
-  offNoWrong: { phrase: '在關鍵時在場外擋下全好的隊', better: 'lower', act: '不在隊上不代表要反對：全好的隊就讓它過' },
+/** 八格的名詞（只用在 cell 範本；八格不給策略）。 */
+const CELL_PHRASE: Record<string, string> = {
+  onYesRight: '在關鍵時在隊上放行全好的隊', onYesWrong: '在關鍵時在隊上放行會失敗的隊',
+  onNoRight: '在關鍵時內黑擋下會失敗的隊', onNoWrong: '在關鍵時內黑擋下全好的隊',
+  offYesRight: '在關鍵時外白放行全好的隊', offYesWrong: '在關鍵時外白放行會失敗的隊',
+  offNoRight: '在關鍵時在場外擋下會失敗的隊', offNoWrong: '在關鍵時在場外擋下全好的隊',
 };
 
 const TEMPLATES: Record<string, Template> = {
   'twoRed|allGood': {
     kind: 'share', phrase: '派全好的隊', better: 'higher', act: '兩紅之後當隊長，優先派全好（沒有紅方）的隊',
-    readHigh: '兩紅後藍方隊長派的隊比較常全好，可以多相信隊長的隊', readLow: '兩紅後藍方隊長派的隊比較常混到紅方，投票前多檢查一次',
+    readHigh: '藍方隊長兩紅後的隊比較常全好', readLow: '藍方隊長兩紅後的隊比較常混到紅方，投票前多檢查一次',
   },
   'twoRed|mordred': {
-    kind: 'share', phrase: '派到莫德雷德（隊上沒有拇指）', better: 'lower', act: '沒有拇指的隊也可能藏著莫德雷德：派隊時把莫德雷德的可能也排除',
-    readHigh: '沒有拇指的隊比較常藏著莫德雷德，梅林沒反應不代表安全', readLow: '沒有拇指的隊比較少藏著莫德雷德',
+    kind: 'share', phrase: '派到莫德雷德（隊上沒有拇指）', better: 'lower', act: '隊上沒有拇指時仍可能有莫德雷德（梅林看不到他），派隊時別只看有沒有拇指',
+    readHigh: '沒有拇指的隊比較常有莫德雷德，投票前多檢查一次', readLow: '沒有拇指的隊比較少有莫德雷德',
   },
   'twoRed|thumb': {
-    kind: 'share', scope: '第 3、5 局', phrase: '派到拇指', better: 'lower', act: '第 3、5 局一張失敗就輸：派隊時先排除梅林看得到的紅方（拇指）',
-    readHigh: '隊上比較常有拇指，梅林的提示更值得聽', readLow: '隊上比較少有拇指',
+    kind: 'share', scope: '第 3、5 局', phrase: '派到拇指', better: 'lower', act: '第 3、5 局一張失敗就輸：派隊時多留意誰可能是拇指（刺客、莫甘娜、奧伯倫）',
+    readHigh: '隊上比較常有拇指，投票前多檢查一次', readLow: '隊上比較少有拇指',
   },
   'twoRed|oneThumb': { kind: 'share', scope: '第 4 局', phrase: '派只含一拇指的隊', better: null, act: '' },
   'twoRed|r4Safe': {
     kind: 'share', scope: '第 4 局', phrase: '派最多一紅的隊', better: 'higher', act: '第 4 局可以優先找最多一紅、出任務一定成功的隊',
-    readHigh: '第 4 局的隊比較常最多一紅（一定成功），可以放心放行', readLow: '第 4 局的隊比較常有兩個以上紅方，放行前多想',
+    readHigh: '第 4 局的隊比較常最多一紅（一張失敗不會紅）', readLow: '第 4 局的隊比較常有兩個以上紅方，放行前多想',
   },
   'decisive|acc': {
     kind: 'accuracy', phrase: '關鍵票正確率', better: 'higher', act: '剛好差一票的時候，先確認隊伍全好才放行、有紅才擋',
-    readHigh: '藍方的關鍵票比較準，可以參考藍方的票型', readLow: '藍方的關鍵票比較常錯，自己的判斷更重要',
+    readHigh: '藍方的關鍵票比較常投對', readLow: '藍方的關鍵票比較常投錯，投票前多想一次',
   },
   'blueVote|acc': {
     kind: 'accuracy', phrase: '投票正確率', better: 'higher', act: '每一票都照「全好就放行、有紅就擋」投，不要照習慣投',
-    readHigh: '藍方的票比較準，可以參考藍方的票型', readLow: '藍方的票比較常錯，自己的判斷更重要',
+    readHigh: '藍方的票比較常投對', readLow: '藍方的票比較常投錯，投票前多想一次',
   },
 };
 for (const g of ['onYes', 'onNo', 'offYes', 'offNo'] as const) {
@@ -109,7 +111,7 @@ for (const g of ['onYes', 'onNo', 'offYes', 'offNo'] as const) {
     kind: 'accuracy', phrase: `${GROUP_NOUN[g]}對率`, better: 'higher', act: DECISIVE_ACT[g], readHigh: DECISIVE_READ[g][0], readLow: DECISIVE_READ[g][1],
   };
 }
-for (const [id, c] of Object.entries(CELL)) TEMPLATES[`decisive|${id}`] = { kind: 'share', ...c };
+for (const [id, phrase] of Object.entries(CELL_PHRASE)) TEMPLATES[`decisive|${id}`] = { kind: 'share', phrase, better: null, act: '', cell: true };
 
 /** 這個指標有沒有策略範本。 */
 export function hasStrategyTemplate(unit: string, metricId: string): boolean {
@@ -125,18 +127,9 @@ function groupName(dimId: string, label: string): string {
   return label;
 }
 
-/** 情境的前綴（在高端桌、在第 4 局、尾派時…）。 */
-function context(unit: EventUnit, dimId: string, label: string): string {
-  const leader = unit === 'twoRed' ? '隊長' : '';
-  switch (dimId) {
-    case 'tableTier': return `在${label}桌`;
-    case 'round': return `在${label}`;
-    case 'slot': return label === '尾派' ? '尾派時' : `${label}提議時`;
-    case 'seat': return `${leader}坐 ${label}時`;
-    case 'sequence': return `局勢「${label}」時`;
-    case 'twoRedState': return `${label}時`;
-    default: return `${label}時`;
-  }
+/** 情境的前綴（在高端桌…）；結構性的維度不會走到這裡。 */
+function context(dimId: string, label: string): string {
+  return dimId === 'tableTier' ? `在${label}桌` : `${label}時`;
 }
 
 /**
@@ -147,11 +140,18 @@ export function buildStrategy(f: Pick<DiscoveryFinding, 'unit' | 'dimension' | '
   if (!t) return undefined;
   const unit = f.unit as EventUnit;
   const dim = f.dimension;
+  if (t.cell) {
+    return { text: null, suppressed: 'context', reason: '八格的佔比跟這組人多常在隊上、各種隊伍出現的多寡一起變，不是做法的差（做法看四組的對率）' };
+  }
   if (t.better === null) return { text: null, suppressed: 'neutral', reason: '這個分類本身沒有好壞（第 4 局只含一拇指：一張失敗不會紅）' };
   if (Math.abs(f.diff) < STRATEGY_MIN_DIFF) return { text: null, suppressed: 'small', reason: `差距不到 ${STRATEGY_MIN_DIFF} 個百分點` };
   if (dim.role) return { text: null, suppressed: 'role', reason: '角色本身的資訊差（梅林看得到拇指、派西看得到梅林／莫甘娜），不是可以照做的策略' };
+  if (dim.structural) {
+    return { text: null, suppressed: 'structure', reason: '遊戲結構造成的差異（座位跟著隊長輪替、各局隊伍人數不同、第 4 局單紅的票不算對錯），不是可以照做的線索' };
+  }
   const w = f.withinRole;
-  if (typeof w === 'number' && (Math.abs(w) < STRATEGY_MIN_DIFF || Math.sign(w) !== Math.sign(f.diff))) {
+  if (typeof w !== 'number') return { text: null, suppressed: 'role', reason: '樣本不夠在同一個角色裡比，沒辦法排除差異是角色組成造成的' };
+  if (Math.abs(w) < STRATEGY_MIN_DIFF || Math.sign(w) !== Math.sign(f.diff)) {
     return { text: null, suppressed: 'role', reason: `在同一個角色裡比，差距只剩 ${w > 0 ? '+' : w < 0 ? '−' : '±'}${Math.abs(w).toFixed(0)} 個百分點：差異多半是角色組成造成的` };
   }
   const higher = f.diff > 0;
@@ -168,18 +168,13 @@ export function buildStrategy(f: Pick<DiscoveryFinding, 'unit' | 'dimension' | '
       : `${aName}${where}的${t.phrase}比較${higher ? '高' : '低'}`;
     return { text: `${what}${nums} → ${t.act}` };
   }
-  if (!t.readHigh || !t.readLow) {
-    return { text: null, suppressed: 'context', reason: '八格的佔比隨情境裡各種隊伍出現的多寡改變，沒有可以讀的方向（只在強者 vs 新手時給策略）' };
-  }
-  const ctx = context(unit, dim.id, f.a.label);
-  // 維度就是第幾局時，指標名稱裡的局（第 3、5 局）不用再寫一次
-  const scoped = dim.id === 'round' ? '' : scope;
-  const subject = unit === 'twoRed' ? `藍方隊長兩紅後${scoped}` : scoped;
+  const ctx = context(dim.id, f.a.label);
+  const subject = unit === 'twoRed' ? `藍方隊長兩紅後${scope}` : scope;
   const what = t.kind === 'share'
     ? `${ctx}，${subject}${higher ? '比較常' : '比較少'}${t.phrase}`
     : `${ctx}，藍方${subject}的${t.phrase}比較${higher ? '高' : '低'}`;
   const read = higher ? t.readHigh : t.readLow;
-  return { text: `${what}${nums} → ${ctx}，${read}` };
+  return { text: read ? `${what}${nums} → ${ctx}，${read}` : `${what}${nums}` };
 }
 
 /** 畫面上的一整行：「可能的策略（假設：…）：…」。 */

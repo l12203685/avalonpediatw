@@ -63,15 +63,30 @@ export interface FindingLink {
   kind: DiscoveryLink;
   label: string;
   scope?: DecisiveRankScope;
+  /** 那一頁沒有這個維度的拆法（例：關鍵外白／內黑沒有依第幾局拆）：只能看整體的數字。 */
+  contextOnly?: boolean;
 }
+
+/**
+ * 目的地有拆的維度：兩紅派隊分組有隊長分組（表）、桌的分組（九宮格）、角色、第幾局、第幾次提議；關鍵外白／內黑的分組
+ * 只有做事的人的分組與桌的分組（九宮格）。其他維度（座位、局勢、紅方已兩勝…）的按鈕寫「看整體數字」。
+ */
+const LINK_DIMS: Record<DiscoveryLink, ReadonlySet<string>> = {
+  twoRedCohort: new Set(['playerTier', 'tableTier', 'role', 'round', 'slot']),
+  decisiveBoard: new Set(['playerTier', 'tableTier']),
+  decisiveBoardAll: new Set(['playerTier', 'tableTier']),
+};
 
 export function findingLink(f: DiscoveryFinding): FindingLink | null {
   const kind = f.metric.link;
   if (!kind) return null;
-  if (kind === 'twoRedCohort') return { kind, label: '看數字：陣容強度 › 兩紅派隊分組' };
+  const contextOnly = !LINK_DIMS[kind].has(f.dimension.id);
+  const verb = contextOnly ? '看整體數字' : '看數字';
+  const extra = contextOnly ? { contextOnly } : {};
+  if (kind === 'twoRedCohort') return { kind, label: `${verb}：陣容強度 › 兩紅派隊分組`, ...extra };
   const scope: DecisiveRankScope = f.dimension.id === 'twoRedState' && f.a.label === '紅方已兩勝' ? 'twoRed' : 'r35';
   const which = kind === 'decisiveBoard' ? '關鍵票' : '全部投票';
-  return { kind, scope, label: `看數字：數據排行 › 關鍵外白／內黑（${which}、${scope === 'twoRed' ? '兩紅之後' : '第 3～5 局'}）` };
+  return { kind, scope, label: `${verb}：數據排行 › 關鍵外白／內黑（${which}、${scope === 'twoRed' ? '兩紅之後' : '第 3～5 局'}）`, ...extra };
 }
 
 /** 可以直接套用的篩選子句（分類、年份、梅林座位）；沒有 = null。 */

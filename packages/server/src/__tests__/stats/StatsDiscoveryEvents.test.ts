@@ -8,7 +8,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   ClusterAcc, DEFAULT_COHORT_CUTS, DISCOVERY_DIMENSIONS, DISCOVERY_METRICS, STRATEGY_HYPOTHESIS, STRATEGY_MIN_DIFF,
-  buildStrategy, clusteredTwoProportion, decodeGamesDataset, discoverFindings, eventUnits, isEventUnit, sequenceBefore, strategyLine,
+  buildStrategy, clusteredTwoProportion, decodeGamesDataset, discoverFindings, discoveryBase, eventUnits, isEventUnit, sequenceBefore, strategyLine,
+  studentTwoSided, tCritical95,
   type DiscoveryFinding, type LineupTuple, type VotingProposal,
 } from '@avalon/shared/stats';
 import { makeDataset, type GameSpec } from './datasetBuilder';
@@ -150,6 +151,34 @@ describe('cluster-robust test', () => {
   });
 });
 
+describe('cluster-robust test: floor and small-cluster correction', () => {
+  it('never smaller than the unclustered variance (negative intraclass correlation: every player exactly 50% vs exactly 30%)', () => {
+    const a = new ClusterAcc();
+    const b = new ClusterAcc();
+    let game = 0;
+    for (let p = 0; p < 30; p += 1) {
+      const acc = p < 15 ? a : b;
+      const ones = p < 15 ? 5 : 3;
+      for (let k = 0; k < 10; k += 1) { acc.add(k < ones ? 1 : 0, 1, game, p, game); game += 1; }
+    }
+    // 每位玩家都剛好 50%／30%：玩家叢集的殘差全是 0，以前的 V_玩家 = 0 會比不管叢集的檢定還顯著
+    const t = clusteredTwoProportion(a, b);
+    const iidSe = 100 * Math.sqrt((0.5 * 0.5) / 150 + (0.3 * 0.7) / 150);
+    expect(t.se).toBeGreaterThanOrEqual(iidSe - 1e-9);
+    expect(t.p).toBeGreaterThanOrEqual(t.naiveP * 0.5); // 不會比不管叢集的檢定更顯著（兩個 p 的算法略有不同）
+    expect(t.df).toBe(14); // 每組 15 位玩家
+  });
+
+  it('t distribution for few clusters: matches the table and tends to the normal', () => {
+    expect(studentTwoSided(2.228, 10)).toBeCloseTo(0.05, 3);
+    expect(studentTwoSided(3.25, 9)).toBeCloseTo(0.01, 3);
+    expect(tCritical95(10)).toBeCloseTo(2.228, 2);
+    expect(tCritical95(13)).toBeCloseTo(2.160, 2);
+    expect(tCritical95(100000)).toBeCloseTo(1.96, 2);
+    expect(studentTwoSided(1.96, 1e7)).toBeCloseTo(0.05, 3);
+  });
+});
+
 describe('discoverFindings on the new data', () => {
   const planted = discoverFindings(plantedGames);
   const nul = discoverFindings(nullGames);
@@ -204,6 +233,25 @@ describe('discoverFindings on the new data', () => {
     }
   });
 
+  it('the non-event half can be computed once and reused when the cut points change', () => {
+    const base = discoveryBase(plantedGames);
+    expect(base.candidates.every((c) => !isEventUnit(c.unit))).toBe(true);
+    const withBase = discoverFindings(plantedGames, { base });
+    expect(withBase.tests).toBe(planted.tests);
+    expect(withBase.findings.map((f) => `${f.id}|${f.q}`)).toEqual(planted.findings.map((f) => `${f.id}|${f.q}`));
+    expect(withBase.units).toEqual(planted.units);
+    // 局數不符（不是同一批局）就不用它
+    const stale = discoverFindings(nullGames, { base });
+    expect(stale.findings.map((f) => f.id)).toEqual(nul.findings.map((f) => f.id));
+  });
+
+  it('role findings are hidden by default and 忠臣 vs 其他 is not repeated after 梅林 vs 其他', () => {
+    expect(DISCOVERY_DIMENSIONS.filter((d) => isEventUnit(d.unit) && d.id === 'role').every((d) => d.structural && d.role)).toBe(true);
+    const roles = planted.findings.filter((f) => isEventUnit(f.unit) && f.dimension.role);
+    const merlin = new Set(roles.filter((f) => f.a.label === '梅林').map((f) => `${f.unit}|${f.metric.id}`));
+    for (const f of roles.filter((x) => x.a.label === '忠臣')) expect(merlin.has(`${f.unit}|${f.metric.id}`)).toBe(false);
+  });
+
   it('cut points move the groups: with prHi 95 nobody is strong', () => {
     const moved = discoverFindings(plantedGames, { cuts: { ...DEFAULT_COHORT_CUTS, prHi: 95 } });
     expect(strongVsNovice(moved)).toBeUndefined();
@@ -240,13 +288,45 @@ describe('strategy templates', () => {
     expect(buildStrategy(f({ unit: 'proposal', dimension: dim('proposal', 'leaderCamp'), metric: met('proposal', 'passed') }))).toBeUndefined(); // 舊指標沒有範本
   });
 
-  it('situational dimensions give a reading, not an instruction', () => {
+  it('the table tier gives a descriptive reading, not an instruction', () => {
     const s = buildStrategy(f({
       unit: 'decisive', dimension: dim('decisive', 'tableTier'), metric: met('decisive', 'offYes'),
       a: { label: '高端', value: 62, n: 300, units: 300 }, b: { label: '歡樂', value: 48, n: 300, units: 300 }, diff: 14, withinRole: 13,
     }));
-    expect(s?.text).toBe('在高端桌，藍方的關鍵外白對率比較高（62% vs 歡樂桌 48%） → 在高端桌，外白比較常是對的：場外有人贊成，這隊比較可能全好');
-    const r = buildStrategy(f({ dimension: dim('twoRed', 'round'), metric: met('twoRed', 'thumb'), a: { label: '第 3 局', value: 43, n: 900, units: 900 }, b: { label: '其他', value: 21, n: 900, units: 900 }, diff: 22, withinRole: 21 }));
-    expect(r?.text).toBe('在第 3 局，藍方隊長兩紅後比較常派到拇指（43% vs 其他情況 21%） → 在第 3 局，隊上比較常有拇指，梅林的提示更值得聽');
+    expect(s?.text).toBe('在高端桌，藍方的關鍵外白對率比較高（62% vs 歡樂桌 48%） → 在高端桌，藍方外白時，隊伍比較常全好');
+    const t = buildStrategy(f({ dimension: dim('twoRed', 'tableTier'), metric: met('twoRed', 'thumb'), a: { label: '高端', value: 43, n: 900, units: 900 }, b: { label: '歡樂', value: 21, n: 900, units: 900 }, diff: 22, withinRole: 21 }));
+    expect(t?.text).toBe('在高端桌，藍方隊長兩紅後第 3、5 局比較常派到拇指（43% vs 歡樂桌 21%） → 在高端桌，隊上比較常有拇指，投票前多檢查一次');
+  });
+
+  it('structural dimensions (seat, round, proposal number, sequence, two-red state) get no strategy', () => {
+    const big = { diff: 40, withinRole: 39, a: { label: 'x', value: 90, n: 900, units: 900 }, b: { label: '其他', value: 50, n: 900, units: 900 } };
+    for (const [unit, id, m] of [['twoRed', 'seat', 'thumb'], ['twoRed', 'round', 'thumb'], ['twoRed', 'slot', 'allGood'], ['twoRed', 'sequence', 'allGood'],
+      ['blueVote', 'sequence', 'onYes'], ['blueVote', 'round', 'onYes'], ['decisive', 'twoRedState', 'acc']] as const) {
+      const s = buildStrategy(f({ unit, dimension: dim(unit, id), metric: met(unit, m), ...big }));
+      expect(s).toMatchObject({ text: null, suppressed: 'structure' });
+    }
+  });
+
+  it('cell shares get no strategy on any dimension, including strong vs novice', () => {
+    expect(buildStrategy(f({ unit: 'decisive', dimension: dim('decisive', 'playerTier'), metric: met('decisive', 'onYesRight'), diff: 9, withinRole: 8 }))?.suppressed).toBe('context');
+    // 四組的對率照樣給
+    expect(buildStrategy(f({ unit: 'decisive', dimension: dim('decisive', 'playerTier'), metric: met('decisive', 'onYes'), diff: 9, withinRole: 8 }))?.text).toMatch(/^強者的關鍵場內白對率比較高/);
+  });
+
+  it('withheld when the within-role check cannot be made', () => {
+    expect(buildStrategy(f({ withinRole: null }))).toMatchObject({ text: null, suppressed: 'role' });
+    expect(buildStrategy(f({ withinRole: undefined }))).toMatchObject({ text: null, suppressed: 'role' });
+  });
+
+  it('no template claims what was not measured', () => {
+    const lines: string[] = [];
+    for (const m of DISCOVERY_METRICS.filter((x) => isEventUnit(x.unit))) {
+      for (const [diff, a, b] of [[20, 70, 50], [-20, 50, 70]] as const) {
+        const s = buildStrategy(f({ unit: m.unit, metric: m, dimension: dim(m.unit, 'tableTier'), diff, withinRole: diff, a: { label: '高端', value: a, n: 300, units: 300 }, b: { label: '歡樂', value: b, n: 300, units: 300 } }));
+        if (s?.text) lines.push(s.text);
+      }
+    }
+    expect(lines.length).toBeGreaterThan(10);
+    for (const l of lines) expect(l).not.toMatch(/梅林的提示|放心|可以參考藍方的票型/);
   });
 });
