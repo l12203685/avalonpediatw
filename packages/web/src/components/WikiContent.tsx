@@ -14,6 +14,8 @@ import { VIDEO_BY_ROLE } from '../data/roleVideos';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
 import WikiMindMap from './wikiMap/WikiMindMap';
+import { parseWikiHash } from '../utils/wikiHash';
+import { clearWikiHash, closeWikiArticle, openWikiArticle, useOpenWikiId } from './wikiLink';
 
 /** 舊資料的標籤常是分類代號（roles、strategies…），和現在的分類對不上，不顯示。 */
 const CATEGORY_IDS = new Set(WIKI_CATEGORIES.map(c => c.id.toLowerCase()));
@@ -146,8 +148,16 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   const [searchQuery, setSearchQuery] = useState('');
   const [showPending, setShowPending] = useState(false);
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
-  const [selectedArticle, setSelectedArticle] = useState<WikiArticle | null>(null);
   const [allArticles, setAllArticles] = useState<WikiArticle[]>(WIKI_ARTICLES);
+  // 打開的文章 = 網址的 #wiki=<id>（components/wikiLink.ts；Threads 的分享連結直接打開那篇）
+  const openWikiId = useOpenWikiId();
+  const selectedArticle = useMemo(
+    () => (openWikiId ? allArticles.find((a) => a.id === openWikiId) ?? null : null),
+    [openWikiId, allArticles],
+  );
+  const openArticle = useCallback((article: WikiArticle): void => openWikiArticle(article.id), []);
+  // 文章清單已經是最後的版本（API 回來了，或 API 失敗後用了打包的備份）
+  const [articlesSettled, setArticlesSettled] = useState(false);
   // A category asked for by the page (「新手指南」) needs the list.
   const [view, setViewState] = useState<WikiView>(() => (selectedCategory ? 'list' : readStoredView()));
   const setView = (next: WikiView): void => {
@@ -158,6 +168,20 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   // Fetch wiki articles from API, merge with hardcoded
   useEffect(() => {
     let cancelled = false;
+    let fromApi = false;
+    const loadBundle = async (): Promise<void> => {
+      try {
+        const bundled = (await import('@wiki-bundle')).default;
+        if (!cancelled && !fromApi && bundled.length > 0) {
+          setAllArticles(mergeWikiArticles(WIKI_ARTICLES, bundled.map(apiToWikiArticle)));
+        }
+      } catch {
+        // bundle chunk failed to load too: hardcoded articles only
+      }
+    };
+    // 從分享連結（#wiki=<id>）進來、那篇不是寫死的文章：先用打包的備份打開，不等可能還在睡的 API（喚醒要 30～60 秒）
+    const wanted = parseWikiHash(window.location.hash)?.id;
+    if (wanted && !WIKI_ARTICLES.some((a) => a.id === wanted)) void loadBundle();
     const run = async (): Promise<void> => {
       let articles: WikiArticleApi[] = [];
       try {
@@ -165,20 +189,36 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
       } catch {
         // API not available (server asleep / offline): fall back to the bundled copy below
       }
-      if (articles.length === 0) {
-        try {
-          articles = (await import('@wiki-bundle')).default;
-        } catch {
-          // bundle chunk failed to load too: hardcoded articles only
+      if (cancelled) return;
+      if (articles.length > 0) {
+        fromApi = true;
+        let merged = mergeWikiArticles(WIKI_ARTICLES, articles.map(apiToWikiArticle));
+        // 網站剛部署、伺服器（另外部署）還是舊的 wiki_data.json：打開的那篇 API 還沒有時，從打包的備份補上，
+        // 不要讓讀到一半的文章自己關掉（下面的 effect 會清掉真的找不到的文章）
+        const openId = parseWikiHash(window.location.hash)?.id;
+        if (openId && !merged.some((a) => a.id === openId)) {
+          try {
+            const fromBundle = (await import('@wiki-bundle')).default.find((a) => a.id === openId);
+            if (fromBundle) merged = [...merged, apiToWikiArticle(fromBundle)];
+          } catch {
+            // bundle chunk failed to load: the article really is unavailable
+          }
+          if (cancelled) return;
         }
+        setAllArticles(merged);
+      } else {
+        await loadBundle();
       }
-      if (!cancelled && articles.length > 0) {
-        setAllArticles(mergeWikiArticles(WIKI_ARTICLES, articles.map(apiToWikiArticle)));
-      }
+      if (!cancelled) setArticlesSettled(true);
     };
     void run();
     return (): void => { cancelled = true; };
   }, []);
+
+  // 連結的文章不存在（打錯、改名刪掉）：只留在百科，清掉 hash
+  useEffect(() => {
+    if (articlesSettled && openWikiId && !selectedArticle) clearWikiHash();
+  }, [articlesSettled, openWikiId, selectedArticle]);
 
   // Note: parent WikiPage uses `key={selectedCategory}` on this component, so a
   // new category prop remounts us and the useState(selectedCategory || '')
@@ -188,7 +228,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   useEffect(() => {
     if (!selectedArticle) return;
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setSelectedArticle(null);
+      if (e.key === 'Escape') closeWikiArticle();
     };
     window.addEventListener('keydown', onKey);
     return (): void => window.removeEventListener('keydown', onKey);
@@ -255,7 +295,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         return target ? (
           <button
             type="button"
-            onClick={() => setSelectedArticle(target)}
+            onClick={() => openArticle(target)}
             className="inline text-left text-yellow-400 underline underline-offset-[0.2em] hover:text-yellow-300"
           >
             {children}
@@ -265,7 +305,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         );
       },
     };
-  }, [allArticles]);
+  }, [allArticles, openArticle]);
 
   // Opening a linked article starts it from the top.
   const modalRef = useRef<HTMLDivElement>(null);
@@ -306,7 +346,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
       {view === 'map' ? (
         <div className="max-w-[1600px] mx-auto space-y-3">
           {viewToggle}
-          <WikiMindMap articles={allArticles} onOpen={setSelectedArticle} />
+          <WikiMindMap articles={allArticles} onOpen={openArticle} />
         </div>
       ) : (
       <div className="max-w-6xl mx-auto space-y-3">
@@ -407,7 +447,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                 transition={{ delay: Math.min(index * 0.03, 0.3) }}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => setSelectedArticle(article)}
+                onClick={() => openArticle(article)}
                 className="text-left p-3 rounded-lg border-2 transition-all bg-avalon-card/30 border-gray-600 hover:border-yellow-400 hover:bg-avalon-card/50"
               >
                 <div className="flex items-start justify-between">
@@ -459,7 +499,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   <button
                     key={article.id}
                     type="button"
-                    onClick={() => setSelectedArticle(article)}
+                    onClick={() => openArticle(article)}
                     className="text-left px-3 py-2 rounded-md border border-gray-700 bg-avalon-card/20 hover:border-amber-400 transition-colors"
                   >
                     <div className="flex items-start gap-2">
@@ -486,7 +526,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/80 flex items-start md:items-center justify-center p-2 sm:p-3 md:p-6 overflow-y-auto"
-            onClick={() => setSelectedArticle(null)}
+            onClick={() => closeWikiArticle()}
             role="dialog"
             aria-modal="true"
             aria-label={selectedArticle.title}
@@ -503,7 +543,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
               <div className="sticky top-0 z-10 flex items-start justify-between px-4 py-3 md:px-6 bg-avalon-card border-b border-gray-700">
                 <h2 className="text-base md:text-lg font-bold text-white flex-1 pr-3 leading-snug">{selectedArticle.title}</h2>
                 <button
-                  onClick={() => setSelectedArticle(null)}
+                  onClick={() => closeWikiArticle()}
                   className="text-gray-400 hover:text-white shrink-0"
                   aria-label="Close article"
                 >

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { useGameStore } from './store/gameStore';
+import { useGameStore, type GameState } from './store/gameStore';
 import {
   initializeAuth,
   onAuthStateChange,
@@ -43,6 +43,28 @@ import { PUBLIC_STATS_STATES, parseStatsHash, type StatsLink } from './utils/sta
 import { applySharedFilter } from './stats/sharedFilter';
 import { isLegacyRecordsHash, recordsHash } from './utils/records';
 
+/** The page a public link (#wiki=…, #records=…, #stats …) opens; mirrors `open` in App's hash effect. */
+function stateOfLink(link: StatsLink | null): GameState | null {
+  if (!link) return null;
+  switch (link.kind) {
+    case 'player':
+    case 'study':
+      return 'analysis';
+    case 'claim':
+      return 'idClaim';
+    case 'practice':
+      return 'practice';
+    case 'aiGames':
+      return 'aiGames';
+    case 'wiki':
+      return 'wiki';
+    case 'records':
+      return 'records';
+    default:
+      return 'analytics';
+  }
+}
+
 function App(): JSX.Element {
   const { t } = useTranslation();
   const { gameState, currentPlayer, socketStatus } = useGameStore();
@@ -53,15 +75,20 @@ function App(): JSX.Element {
   // the session. A #stats / #player=名字 link, or the button on the loading screen,
   // shows them right away; they also stay reachable when the guest session fails.
   const [statsFirst, setStatsFirst] = useState<boolean>(() => parseStatsHash(window.location.hash) !== null);
+  // The store only switches pages in the effect below (after the first commit); until then show the linked page,
+  // not lastSiteTab(), so a visitor from a share link (#wiki=<id>) does not mount the stats page first.
+  const [bootState, setBootState] = useState<GameState | null>(() => stateOfLink(parseStatsHash(window.location.hash)));
 
   useEffect(() => {
     const open = (link: StatsLink | null): void => {
       if (!link) return;
+      setBootState(null); // the store now holds the linked page
       const store = useGameStore.getState();
       if (link.kind === 'player') store.openPlayerStats(link.name);
       else if (link.kind === 'claim') store.setGameState('idClaim');
       else if (link.kind === 'practice') store.setGameState('practice');
       else if (link.kind === 'aiGames') store.setGameState('aiGames');
+      else if (link.kind === 'wiki') store.setGameState('wiki');
       else if (link.kind === 'records') {
         store.setGameState('records');
         // 舊連結 #paipu… 換成 #records…（不留一筆舊網址的歷史紀錄）
@@ -75,8 +102,8 @@ function App(): JSX.Element {
       setStatsFirst(true);
       // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close);
       // #records=<id> likewise while that game is open (RecordsPage)
-      // #ai-games=<id> 同上（AiGamesPage 讀它、關閉時清掉）
-      if (link.kind === 'study' || (link.kind === 'records' && link.id) || (link.kind === 'aiGames' && link.id)) return;
+      // #ai-games=<id> 同上（AiGamesPage 讀它、關閉時清掉）；#wiki=<id> 同上（WikiContent 讀它、關閉時清掉）
+      if (link.kind === 'study' || (link.kind === 'records' && link.id) || (link.kind === 'aiGames' && link.id) || (link.kind === 'wiki' && link.id)) return;
       // #stats?f=… (a shared filter) stays too: the filter bar keeps it in sync with the filter
       if (link.kind === 'stats' && (link.filter || link.preset)) {
         applySharedFilter(link);
@@ -330,7 +357,7 @@ function App(): JSX.Element {
   const publicStatsPage = PUBLIC_STATS_STATES.has(gameState);
 
   // Edward 2026-10-30：沒有首頁 — 'home' 直接開上次的分頁（數據排行／百科攻略），內容頁不等登入就顯示。
-  const shownState = gameState === 'home' ? lastSiteTab() : gameState;
+  const shownState = gameState === 'home' ? (bootState ?? lastSiteTab()) : gameState;
   const siteTab = siteTabOf(shownState);
   // ID 認領、與機器人練習、百科AI 對局不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕進來）
   const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice' || shownState === 'aiGames';
