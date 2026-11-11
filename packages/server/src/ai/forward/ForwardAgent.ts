@@ -65,6 +65,9 @@ import { loyalFlowPickTeam } from '../BlueRound34';
 import { loyalR2ViewTeam, loyalSetPickTeam, percivalThumbSureTeam } from '../BlueRound37';
 import { bayesOptionsOf, bayesTeamClean } from '../belief/BayesBelief';
 import { earlyOwnTeamWhite, merlinOnTeamOwnApprove, merlinOwnWhiteNow, ownViewFirstPickTeam, percivalThumbReadTeam } from '../BlueRound38';
+import { lakePairBarred } from '../BlueRound39';
+import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type PercivalThumbPlan39 } from '../BlueRound39Percival';
+import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
@@ -726,6 +729,70 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    // Round 39 `percivalCarry39` (BlueRound39Percival.ts): Percival's thumb plan for this team_select, drawn once and checked by every re-pick step.
+    const plan39 = percivalThumbPlan39(this.baseline.tuning, obs);
+    // Round 39 `loyalLakePair` (BlueRound39.ts): the seat another holder declared evil last round stays off this round's team.
+    const lakeBar = lakePairBarred(this.baseline.tuning, obs);
+    if (lakeBar !== null) {
+      const prevBar = this.lakeBar39;
+      this.lakeBar39 = lakeBar;
+      try {
+        const d = this.decideMain(obs);
+        if (d.action.type !== 'team_select' || !d.action.teamIds.includes(lakeBar)) return d;
+        const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
+        const kept = d.action.teamIds.filter((id) => id !== lakeBar);
+        const fill = obs.allPlayerIds.filter((id) => !kept.includes(id) && id !== lakeBar && !obs.knownEvils.includes(id))
+          .sort((x, y) => (share.get(x) ?? 0.5) - (share.get(y) ?? 0.5) || obs.allPlayerIds.indexOf(x) - obs.allPlayerIds.indexOf(y))[0];
+        if (!fill) return d;
+        return { ...d, action: { type: 'team_select', teamIds: [...kept, fill] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the seat declared evil last round (round 39)` } };
+      } finally {
+        this.lakeBar39 = prevBar;
+      }
+    }
+    if (!plan39) return this.decideMain(obs);
+    const prev = this.thumbPlan39;
+    this.thumbPlan39 = plan39;
+    try {
+      const d = this.decideMain(obs);
+      if (d.action.type !== 'team_select' || percivalThumbPlanAllows(plan39, obs, d.action.teamIds)) return d;
+      const fixed = this.repairThumbTeam39(obs, plan39, d.action.teamIds);
+      return { ...d, action: { type: 'team_select', teamIds: fixed }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → percival thumb plan (round 39)` } };
+    } finally {
+      this.thumbPlan39 = prev;
+    }
+  }
+
+  /** Round 39 `loyalLakePair`: the seat barred from the team_select being decided (null otherwise). */
+  private lakeBar39: string | null = null;
+
+  /** Round 39 `percivalCarry39`: the thumb plan of the team_select being decided (null otherwise). */
+  private thumbPlan39: PercivalThumbPlan39 | null = null;
+
+  /** The thumb plan test, AND-ed into the leader's gates so no re-pick step can bring a barred thumb back. */
+  private thumbOk39(obs: PlayerObservation, team: readonly string[]): boolean {
+    if (this.lakeBar39 !== null && team.includes(this.lakeBar39)) return false;
+    return percivalThumbPlanAllows(this.thumbPlan39, obs, team);
+  }
+
+  /** A team that keeps the plan: drop the barred / doubled thumb(s), fill with the cleanest allowed seats of Percival's own posterior. */
+  private repairThumbTeam39(obs: PlayerObservation, plan: PercivalThumbPlan39, team: readonly string[]): string[] {
+    const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
+    const [a, b] = plan.read.thumbs;
+    const drop = new Set(plan.barred);
+    if (team.includes(a) && team.includes(b)) drop.add(plan.read.unfav ?? b);
+    const kept = team.filter((id) => !drop.has(id));
+    const pool = obs.allPlayerIds.filter((id) => !kept.includes(id) && !plan.barred.has(id) && !(id === a && kept.includes(b)) && !(id === b && kept.includes(a)))
+      .sort((x, y) => (share.get(x) ?? 0.5) - (share.get(y) ?? 0.5) || obs.allPlayerIds.indexOf(x) - obs.allPlayerIds.indexOf(y));
+    const out = [...kept];
+    for (const id of pool) {
+      if (out.length >= team.length) break;
+      if ((id === a && out.includes(b)) || (id === b && out.includes(a))) continue;
+      out.push(id);
+    }
+    return out.length === team.length ? out : [...team];
+  }
+
+  private decideMain(obs: PlayerObservation): ForwardDecision {
     const d0 = this.decideBase(obs);
     // Round 37 `loyalSetPick` (BlueRound37.ts; Edward 2026-11-10): a loyal / Percival leader picks among the reasonable teams of his own
     // view (near the cleanest, tighter the likelier the proposal goes on mission), not the single best one. Gates and own vote rules bind.
@@ -733,7 +800,7 @@ export class ForwardAgent implements AvalonAgent {
       if (d0.action.type !== 'team_select' || !((this.baseline.tuning.loyalSetPick ?? 0) > 0)) return d0;
       const t = this.baseline.tuning;
       const ok = (team: readonly string[]): boolean => (!anyGate(this.gates) || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null)
-        && !ownVoteRejects(t, obs, team);
+        && !ownVoteRejects(t, obs, team) && this.thumbOk39(obs, team);
       const picked = loyalSetPickTeam(t, obs, d0.action, ok);
       return picked === d0.action ? d0 : { ...d0, action: picked, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → one of the reasonable teams of my own view` } };
     })();
@@ -967,8 +1034,8 @@ export class ForwardAgent implements AvalonAgent {
     // Round 4 (red) candidate `redCleanLook` (RedRound4.ts): the red leader's team blue rates cleanest.
     // Round 5 (blue) candidate `goodCleanLead` (GoodRound5.ts): the blue leader's cleanest team.
     // The new good-leader team rules keep the logic gates (must-fail / dominated, `LogicGates.ts`; INV-T1).
-    const gateOk = (team: readonly string[]): boolean => obs.myTeam !== 'good' || !anyGate(this.gates)
-      || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null;
+    const gateOk = (team: readonly string[]): boolean => this.thumbOk39(obs, team) && (obs.myTeam !== 'good' || !anyGate(this.gates)
+      || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null);
     const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action, gateOk);
     // Round 25 hard constraint `redVouchConsistent` (S2): the clean-look swap keeps the red leader's own lake word.
     const looked = redVouchKeptTeam(this.baseline.tuning, obs, led, redCleanLookTeam(this.baseline.tuning, obs, led));
@@ -1037,8 +1104,19 @@ export class ForwardAgent implements AvalonAgent {
       // `merlinReuseNorm` ≥ 2 (round 18 candidate): a re-proposed R3+ team is gated from the public loyal seat (Merlin's
       // own certainty holds every seen red as red, so the must-fail gate would bar any re-proposal with one).
       const pubObs = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-      const publicGateOk = (team: readonly string[]): boolean => !anyGate(this.gates)
-        || teamGateBreach(pubObs, certaintyFor(pubObs), team, obs.currentRound ?? 1, this.gates) === null;
+      const publicGateOk = (team: readonly string[]): boolean => this.thumbOk39(obs, team) && (!anyGate(this.gates)
+        || teamGateBreach(pubObs, certaintyFor(pubObs), team, obs.currentRound ?? 1, this.gates) === null);
+      // Round 39 `merlinPublicPipeline=2` (checklist ML-01 value 2): the team the full loyal pipeline of his seat would send on the
+      // public record (every loyal step runs: own prior, flow answer, R2 own view, reuse, the reasonable set). Merlin sends exactly that
+      // team when it holds no red he sees and passes his gates; otherwise his red-free loyal-style pick as before.
+      if ((this.baseline.tuning.merlinPublicPipeline ?? 0) >= 2) {
+        const pubView = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: false } as PlayerObservation;
+        const pub = this.decideMain(pubView);
+        if (pub.action.type === 'team_select' && !pub.action.teamIds.some((id) => obs.knownEvils.includes(id))
+          && gateOk(pub.action.teamIds) && publicGateOk(pub.action.teamIds)) {
+          return { ...d, action: pub.action, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: the public loyal team of his seat (no red he sees)` } };
+        }
+      }
       const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk, publicGateOk);
       // Round 30 `merlinR2Public` (BlueRound30.ts): with a clean R1 team, Merlin passes it over at R2 when the public loyal of his seat would.
       const r2Pub = merlinR2PublicTeam(this.baseline.tuning, obs, styled, publicGateOk);
@@ -1568,6 +1646,25 @@ export class ForwardAgent implements AvalonAgent {
     if (this.baseline.tuning.percivalCertainExclusion) {
       roleSignals = percivalSignalsWithoutTie(roleSignals);
     }
+    // ── AgentTuning.percivalRead39 / percivalCarry39 (round 39; BlueRound39Percival.ts) ──
+    // From R2 the A/B split comes from Percival's read fitted on the human records, not from the old per-fail −1 score
+    // (a thumb stained by a one-fail mission no longer flips the split by itself). As leader with a plan: A only when the
+    // plan carries him; B only when he is barred (below 0.7 he is an ordinary candidate).
+    if ((this.baseline.tuning.percivalRead39 ?? 0) > 0 && obs.myRole === 'percival' && (obs.currentRound ?? 1) >= 2) {
+      const read = percivalRead39(obs);
+      if (read) {
+        const plan = decisionType === 'team_select' ? this.thumbPlan39 : null;
+        const scores = new Map<string, number>([[read.thumbs[0], read.pFirst], [read.thumbs[1], 1 - read.pFirst]]);
+        roleSignals = {
+          ...roleSignals,
+          wizardMerlinScores: scores,
+          percivalA: read.fav && (!plan || plan.carryFav) ? read.fav : undefined,
+          percivalB: read.unfav && (!plan || plan.barred.has(read.unfav)) ? read.unfav : undefined,
+          merlinHidingFromAssassin: false,
+          morganaBetrayal: false,
+        };
+      }
+    }
     // ── AgentTuning.percivalNoThumbsR1 (2026-10-14) ──
     // R1 Percival leader: no bonus for a team with thumb A only (the
     // candidate pool below already leaves both thumbs out). Off → no change.
@@ -1924,6 +2021,11 @@ export class ForwardAgent implements AvalonAgent {
     } else if (role === 'percival') {
       // Edward 2026-05-06 16:09 — HARD-exclude wizard B (predicted Morgana).
       const wizards = obs.knownWizards ?? [];
+      // Round 39 `percivalCarry39`: the thumbs the plan bars leave the pool (the plan is also AND-ed into every re-pick gate).
+      for (const id of this.thumbPlan39?.barred ?? []) {
+        markExcluded(id, 2);
+        ranked = ranked.filter((x) => x !== id);
+      }
       if (percivalNoThumbsR1Active(this.baseline.tuning, obs)) {
         // ── AgentTuning.percivalNoThumbsR1 (2026-10-14) ──
         // Edward 2026-10-14「一開始在沒任何資訊時先預設不派」: in R1 (no

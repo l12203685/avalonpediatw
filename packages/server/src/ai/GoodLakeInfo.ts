@@ -248,6 +248,8 @@ export function analyzeGoodLake(
   obs: PlayerObservation,
   candidates: readonly string[],
   options: Readonly<GoodLakeInfoOptions> = DEFAULT_GOOD_LAKE_INFO_OPTIONS,
+  /** Round 39 `goodLake39` bit 64 (owner item, measured only): keep the trust term when red has two wins but another lake follows. */
+  trustAtRedTwo = false,
 ): GoodLakeInfoAnalysis | null {
   if (candidates.length === 0) return null;
   let droppedLakes = false;
@@ -290,7 +292,7 @@ export function analyzeGoodLake(
   });
 
   const redHasTwo = obs.questResults.filter((r) => r === 'fail').length >= 2;
-  const trustWeight = anotherLakeFollows(obs) && !redHasTwo ? options.trustWeight : 0;
+  const trustWeight = anotherLakeFollows(obs) && (!redHasTwo || trustAtRedTwo) ? options.trustWeight : 0;
   const best = Math.max(...raw.map((c) => c.infoGain));
   const value = Math.max(0, best);
   const scored: GoodLakeCandidateScore[] = raw.map((c) => {

@@ -31,6 +31,7 @@ import { beliefFailCards, missionFailed } from './missionFacts';
 import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
+import { goodLake39Pick } from './BlueRound39';
 import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 
@@ -248,6 +249,9 @@ export function pickLakeTargetForTeam(
     if (chainPick !== null) return chainPick;
     const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
     if (entropyPick !== null) return entropyPick;
+    // ── AgentTuning.goodLake39（第 39 回合；BlueRound39.ts）── 第 1、2 湖照比分順序的分類、不湖出過兩張失敗的隊、同分不照座位序。
+    const lake39 = goodLake39Pick(tuning, obs, unknownCandidates);
+    if (lake39 !== null) return lake39;
     if (tuning.goodLakeInfoMax) {
       // Round 38 `goodLakeHuman` / `percivalLakeNoMorgana` (BlueRound38.ts): the holder's candidates, then the same common-information pick.
       const humanPool = goodLakeHumanPool(tuning, obs, unknownCandidates);
