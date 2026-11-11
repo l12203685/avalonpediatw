@@ -874,7 +874,7 @@ export interface AgentTuning {
    * 值 = τ；0 = 關。λ = `loyalTailWhiteLambda`（0 = 1）。
    * 第 26 回合採用 0.7 ＋ `loyalTailWhiteLast`（在校準後的後驗上；第 2 階段）：同一批九段種子對 `beliefTemper` 等新預設逐種子配對 +0.90 [+0.51, +1.29]／+0.67 [+0.29, +1.04]／+0.80 [+0.42, +1.18]pp
    * （合併 18000 組 +0.79 [+0.57, +1.01]pp）；真人局重播第 4 次提議、尾家 P ≥ 0.7 的隊外外白 47.2%（強者 51.6%，原本約 5%）。舊後驗上 0.8（第 1–4 次）−2.4pp。
-   * **第 39 回合預設 0.75**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。
+   * 第 39 回合曾改成 0.75（和表決中的提議、其他投票門檻一起），審查後改回 0.7：在真人決策點和強者的一致度變差（紅方未兩勝的第 3–4 局隊上內黑 67.2 → 63.3%，十個座位都下降），不合 11/10、11/09 的採用條件。
    */
   loyalTailWhite: number;
   /** 第 26 回合：`loyalTailWhite` 的 λ（0 = 1）。 */
@@ -1135,7 +1135,7 @@ export interface AgentTuning {
    * 第 38 回合（梅林；Edward 11/10 對裁定 5 的細化：「不是刻意帶可見紅；是局勢順勢只能帶時才帶（例：全場都派 7、7 是梅林可見紅 → 梅林也只能派 7）」）：
    * 這一局前面別人連續 m 次（這個值，2 或 3）提議都帶了同一個他看得到的紅，而且這一次提議出任務的機率低於一成（真人局的比例）→ 梅林順著帶他，
    * 其餘的人照公開視角挑、不再帶別的看得到的紅（`MerlinLoyalStyle.merlinFlowRed`）。0 = 關。
-   * **第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。
+   * **第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3` 一起確認：審查修正後三組 6000 組合併 18000 組 +0.77 [+0.45, +1.09]；連同表決中的提議與投票門檻的組合是 +1.41，但投票的部分在真人決策點和強者的一致度變差，沒有採用）。
    */
   merlinFlowFollow: number;
   /**
@@ -1164,7 +1164,7 @@ export interface AgentTuning {
   merlinPublicTieBreak: boolean;
   /**
    * 第 38 回合（檢查表 BL-01）：投票時，後驗把「正在表決的這一支提議」也當成一次派隊讀進去（原本只讀已經進紀錄的提議，所以投票當下少算這一支，下一個決定才算進去）。
-   * 第 39 回合：只給藍方座位（`seatTeam`），紅方座位的讀法不變。**第 39 回合預設 開**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。
+   * 第 39 回合：只給藍方座位（`seatTeam`），紅方座位的讀法不變；遞迴讀人的第 0 層（每個投票者的視角）一律不讀（審查修正）。第 39 回合曾改成 開（和投票門檻一起），審查後改回 關：在真人決策點和強者的一致度變差（紅方未兩勝的第 3–4 局隊上內黑 67.2 → 63.3%，十個座位都下降），不合 11/10、11/09 的採用條件。
    */
   beliefPendingProposal: boolean;
   /**
@@ -1186,9 +1186,9 @@ export interface AgentTuning {
   percivalLakeGuard39: number;
   /** 第 39 回合（BlueRound39.ts，檢查表 LP-12／LK-09＋ML-05 第 3 部分）：位元 1 = 上一局的湖被別人宣告紅的人，這一局非強制的提議不帶（忠臣當隊長；梅林照派成功的隊也一樣），除非自己估持湖者是紅 ≥ 0.5；位元 2 沒有做；位元 4 = 不看持湖者的後驗、一律不帶（只量）。0 = 關。 */
   loyalLakePair: number;
-  /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽（1、2 都硬擋拇指，和邏輯優先 1E／不變量 INV-Pe2 衝突）；3 = 同 1 的門檻（第 2 局第 5 次例外：用 2 的 0.8），只改 A／B 的加減分、不硬擋。0 = 關；只寫開關名稱不給值＝3。**第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。 */
+  /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽（1、2 都硬擋拇指，和邏輯優先 1E／不變量 INV-Pe2 衝突）；3 = 同 1 的門檻（第 2 局第 5 次例外：用 2 的 0.8），只改 A／B 的加減分、不硬擋。0 = 關；只寫開關名稱不給值＝3。**第 39 回合預設 3**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3` 一起確認：審查修正後三組 6000 組合併 18000 組 +0.77 [+0.45, +1.09]；連同表決中的提議與投票門檻的組合是 +1.41，但投票的部分在真人決策點和強者的一致度變差，沒有採用）。 */
   percivalCarry39: number;
-  /** 第 39 回合（派西；BlueRound39Percival.ts）：拇指讀法換成真人牌譜擬合的模型（2；1 沒有做）。0 = 關（舊的計分決定 A／B）。**第 39 回合預設 2**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。 */
+  /** 第 39 回合（派西；BlueRound39Percival.ts）：拇指讀法換成真人牌譜擬合的模型（2；1 沒有做）。0 = 關（舊的計分決定 A／B）。**第 39 回合預設 2**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3` 一起確認：審查修正後三組 6000 組合併 18000 組 +0.77 [+0.45, +1.09]；連同表決中的提議與投票門檻的組合是 +1.41，但投票的部分在真人決策點和強者的一致度變差，沒有採用）。 */
   percivalRead39: number;
   /** 第 39 回合（藍方持湖，BlueRound39.ts）：位元 1 不湖出過兩張失敗的隊（第 1、2 湖）、2 照比分順序分類、4 同分不照座位序、8 同一類裡挑持湖者後驗比較藍的（紅方未兩勝）、64 紅方兩勝也照比較藍的（只量，待裁定）、128 梅林也用、256 第 1 湖 FS 先湖兩局都上過的人（百科 wiki-208 §2，只量，待裁定）。0 = 關。 */
   goodLake39: number;
@@ -1241,17 +1241,17 @@ export interface AgentTuning {
   goodBayesGoodKey: number;
   /**
    * 第 33 回合 `goodBayesVote`：非關鍵局不在隊上的 θ_good（0 = 內建 0.6）。
-   * **第 39 回合預設 0.8**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。
+   * 第 39 回合曾改成 0.8（和表決中的提議、其他投票門檻一起），審查後改回 0.7：在真人決策點和強者的一致度變差（紅方未兩勝的第 3–4 局隊上內黑 67.2 → 63.3%，十個座位都下降），不合 11/10、11/09 的採用條件。
    */
   goodBayesGood: number;
   /**
    * 第 33 回合 `goodBayesVote`：關鍵局（紅方已兩紅）在隊上的 θ_bad（0 = 內建 0.9）。
-   * **第 39 回合預設 0.6**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。
+   * 第 39 回合曾改成 0.6（和表決中的提議、其他投票門檻一起），審查後改回 0.7：在真人決策點和強者的一致度變差（紅方未兩勝的第 3–4 局隊上內黑 67.2 → 63.3%，十個座位都下降），不合 11/10、11/09 的採用條件。
    */
   goodBayesBadKey: number;
   /**
    * 第 33 回合 `goodBayesVote`：非關鍵局在隊上的 θ_bad（0 = 內建 0.95）。
-   * **第 39 回合預設 0.7**（和 `percivalRead39=2`、`percivalCarry39=3`、`merlinFlowFollow=3`、`beliefPendingProposal`、`goodBayesBad=0.7`、`goodBayesBadKey=0.6`、`goodBayesGood=0.8`、`loyalTailWhite=0.75` 一起確認：三組 6000 組合併 18000 組 +1.39 [+0.98, +1.81]）。
+   * 第 39 回合曾改成 0.7（和表決中的提議、其他投票門檻一起），審查後改回 0.8：在真人決策點和強者的一致度變差（紅方未兩勝的第 3–4 局隊上內黑 67.2 → 63.3%，十個座位都下降），不合 11/10、11/09 的採用條件。
    */
   goodBayesBad: number;
   /**
@@ -1963,7 +1963,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redSelfOnTeamHalf: false,
   goodVoteAlt: 0,
   goodVoteAltLast: false,
-  loyalTailWhite: 0.75,
+  loyalTailWhite: 0.7,
   loyalTailWhiteLambda: 0,
   loyalTailWhiteLast: true,
   loyalTailWhiteEarly: true,
@@ -2017,7 +2017,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodBayesFsReuse: 0,
   merlinPublicPipeline: 0,
   merlinPublicTieBreak: false,
-  beliefPendingProposal: true,
+  beliefPendingProposal: false,
   goodEarlyVote: 0,
   goodR4White: 0,
   goodLakeHuman: 0,
@@ -2036,9 +2036,9 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   beliefLeadRecursive: 1,
   loyalR1Spread: 0,
   goodBayesGoodKey: 0.9,
-  goodBayesGood: 0.8,
-  goodBayesBadKey: 0.6,
-  goodBayesBad: 0.7,
+  goodBayesGood: 0.7,
+  goodBayesBadKey: 0.7,
+  goodBayesBad: 0.8,
   goodBayesVote: 3,
   beliefRecursive: 0,
   goodOnTeamSuspectKey: 0,

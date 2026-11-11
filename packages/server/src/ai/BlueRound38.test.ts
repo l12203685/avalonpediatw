@@ -49,9 +49,9 @@ describe('round 38 tuning fields', () => {
     // adopted in round 38 (default on): ownView 0.3, merlinOnTeamOwn 1, goodBayesR4Kept 1, loyalTailWhiteLastTau 0.5, goodReuseWhite 1
     expect([DEFAULT_AGENT_TUNING.ownView, DEFAULT_AGENT_TUNING.merlinOnTeamOwn, DEFAULT_AGENT_TUNING.goodBayesR4Kept, DEFAULT_AGENT_TUNING.loyalTailWhiteLastTau, DEFAULT_AGENT_TUNING.goodReuseWhite]).toEqual([0.3, 1, 1, 0.5, 1]);
     for (const k of ['ownViewScope', 'ownViewKeep', 'ownViewRounds', 'percivalThumbRead', 'goodOnTeamState', 'goodFourthWhite', 'merlinOwnWhite', 'percivalMerlinWhite', 'goodBayesFsReuse', 'merlinPublicPipeline', 'goodR4White', 'goodEarlyVote', 'goodLakeHuman'] as const) expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
-    // round 39 adopted `merlinFlowFollow=3` (and `beliefPendingProposal`)
+    // round 39 adopted `merlinFlowFollow=3`; `beliefPendingProposal` was tried and reverted after review (gate 1)
     expect(DEFAULT_AGENT_TUNING.merlinFlowFollow).toBe(3);
-    expect(DEFAULT_AGENT_TUNING.beliefPendingProposal).toBe(true);
+    expect(DEFAULT_AGENT_TUNING.beliefPendingProposal).toBe(false);
     for (const k of ['beliefThumbNoStain', 'goodR5NoWhite', 'merlinPublicTieBreak', 'beliefPendingProposal', 'percivalLakeNoMorgana'] as const) expect(LEGACY_AGENT_TUNING[k]).toBe(false);
     expect(parseTuningFlag('ownView')).toEqual({ ownView: 0.3 });
     expect(parseTuningFlag('ownView=0.6')).toEqual({ ownView: 0.6 });

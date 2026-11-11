@@ -43,8 +43,8 @@ describe('round 26 tuning fields', () => {
   it('all off by default and in the legacy table; flags parse and describe', () => {
     expect(LEGACY_AGENT_TUNING.loyalTailWhite).toBe(0);
     // Round 26 adoption (stage 2, paired over the new default: pooled 18000 seeds +0.79pp): the fourth proposal only.
-    // round 39: 0.75 (with the pending-proposal reading and the re-fitted vote thresholds)
-    expect(DEFAULT_AGENT_TUNING.loyalTailWhite).toBe(0.75);
+    // round 39 tried 0.75 (with the pending-proposal reading and re-fitted vote thresholds); reverted after review (gate 1)
+    expect(DEFAULT_AGENT_TUNING.loyalTailWhite).toBe(0.7);
     expect(DEFAULT_AGENT_TUNING.loyalTailWhiteLast).toBe(true);
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.goodVoteAlt).toBe(0);

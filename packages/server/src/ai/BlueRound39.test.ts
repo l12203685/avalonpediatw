@@ -43,7 +43,9 @@ describe('round 39 tuning fields', () => {
     for (const k of ['goodLake39', 'loyalLakePair', 'percivalLakeGuard39'] as const) expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
     // round 39 adoption: the Percival read and the plan that does not hard-bar a thumb (mode 3)
     expect([DEFAULT_AGENT_TUNING.percivalRead39, DEFAULT_AGENT_TUNING.percivalCarry39]).toEqual([2, 3]);
-    expect([DEFAULT_AGENT_TUNING.goodBayesBad, DEFAULT_AGENT_TUNING.goodBayesBadKey, DEFAULT_AGENT_TUNING.goodBayesGood, DEFAULT_AGENT_TUNING.loyalTailWhite]).toEqual([0.7, 0.6, 0.8, 0.75]);
+    // the vote part (pending proposal + thresholds 0.7/0.6/0.8/0.75) was reverted after review: it lowered agreement with strong players
+    expect(DEFAULT_AGENT_TUNING.beliefPendingProposal).toBe(false);
+    expect([DEFAULT_AGENT_TUNING.goodBayesBad, DEFAULT_AGENT_TUNING.goodBayesBadKey, DEFAULT_AGENT_TUNING.goodBayesGood, DEFAULT_AGENT_TUNING.loyalTailWhite]).toEqual([0.8, 0.7, 0.7, 0.7]);
     expect(DEFAULT_AGENT_TUNING.merlinPublicPipeline).toBe(0);
     expect(parseTuningFlag('goodLake39')).toEqual({ goodLake39: 15 });
     expect(parseTuningFlag('percivalCarry39=1')).toEqual({ percivalCarry39: 1 });
