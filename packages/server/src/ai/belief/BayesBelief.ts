@@ -237,6 +237,21 @@ interface Posterior {
 }
 
 const caches = new Map<string, WeakMap<PlayerObservation, Posterior>>();
+/** Round 39 review: a stable signature of the recursive reader's level-0 options (memoized per options object). */
+const level0Sigs = new WeakMap<BayesOptions, string>();
+const level0SigIds = new Map<string, string>();
+function level0Signature(o: BayesOptions | undefined): string {
+  if (!o) return '-';
+  let sig = level0Sigs.get(o);
+  if (sig === undefined) {
+    const json = JSON.stringify(o, (_k, v: unknown) => (v instanceof Map ? [...v.entries()] : v instanceof Set ? [...v] : v));
+    let id = level0SigIds.get(json);
+    if (id === undefined) { id = String(level0SigIds.size); level0SigIds.set(json, id); }
+    sig = id;
+    level0Sigs.set(o, sig);
+  }
+  return sig;
+}
 
 export interface BayesOptions {
   /**
@@ -566,10 +581,15 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const tempered = temperV < 1 || temperP < 1;
   const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
   // Round 38 `beliefPendingProposal`: the proposal being voted on, as one more proposal record without votes.
+  // Round 39: blue seats only — a red seat's own reading, its loyal-view vote (`redLoyalView`) and the views it projects for other
+  // seats (`seatTeam` stays the deciding seat's camp) stay as they were: red frozen. (An observation without `seatTeam` falls back to its
+  // own camp; every decision enters through `HeuristicAgent.act` / `ForwardAgent.decide`, which set it.)
   const pending = opts.pendingProposal === true && obs.gamePhase === 'team_vote' && (obs.proposedTeam ?? []).length > 0
-    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4;
-  let store = caches.get(pending ? `${key}|pend` : key);
-  if (!store) { store = new WeakMap(); caches.set(pending ? `${key}|pend` : key, store); }
+    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true;
+  // The level-0 options of the recursive reader are part of the key too (two settings that differ only there must not share an entry).
+  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}`;
+  let store = caches.get(fullKey);
+  if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
   if (hit) return hit;
   const view = buildCertainty(obs);
@@ -791,13 +811,17 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.beliefLeadStrong === true ? { leadStrongTables: true } : {}),
     ...((t.beliefStrongParts ?? 0) > 0 ? { strongParts: t.beliefStrongParts } : {}),
     policyVotes: t.beliefPolicyVotes === true,
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
+    // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
+    // recursive vote model was fitted on level-0 features without it.
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
-    ...(t.beliefThumbNoStain === true ? { thumbNoStain: true } : {}),
+    // Retired in round 39: not combined with `percivalRead39` (the round-39 read keeps the two-fail-card evidence it erased).
+    ...(t.beliefThumbNoStain === true && !((t.percivalRead39 ?? 0) > 0) ? { thumbNoStain: true } : {}),
     ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
   };
 }

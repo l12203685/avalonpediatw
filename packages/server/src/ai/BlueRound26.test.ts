@@ -43,6 +43,7 @@ describe('round 26 tuning fields', () => {
   it('all off by default and in the legacy table; flags parse and describe', () => {
     expect(LEGACY_AGENT_TUNING.loyalTailWhite).toBe(0);
     // Round 26 adoption (stage 2, paired over the new default: pooled 18000 seeds +0.79pp): the fourth proposal only.
+    // round 39 tried 0.75 (with the pending-proposal reading and re-fitted vote thresholds); reverted after review (gate 1)
     expect(DEFAULT_AGENT_TUNING.loyalTailWhite).toBe(0.7);
     expect(DEFAULT_AGENT_TUNING.loyalTailWhiteLast).toBe(true);
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
@@ -123,7 +124,8 @@ describe('loyalTailWhite (round 26, loyal; D3 stage 1)', () => {
     expect(loyalTailWhiteNow(on, r2)).toBe(true);
     // The adopted default fires only on the fourth proposal (failCount 3).
     // (round 32: the case is built on the earlier tables; the strong tables read the R1 votes differently)
-    const old: AgentTuning = { ...DEFAULT_AGENT_TUNING, beliefStrongTables: false };
+    // (round 39: also without the pending-proposal reading and with the round-26 threshold 0.7)
+    const old: AgentTuning = { ...DEFAULT_AGENT_TUNING, beliefStrongTables: false, beliefPendingProposal: false, loyalTailWhite: 0.7 };
     expect(loyalTailWhiteNow(old, r2)).toBe(false);
     expect(loyalTailWhiteNow(old, { ...r2, failCount: 3, currentLeader: 'P9' } as unknown as PlayerObservation)).toBe(true);
     // Off the team: the same rule (an outer white).

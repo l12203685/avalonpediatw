@@ -36,7 +36,9 @@ const r2 = asObs({
   questHistory: [{ round: 1, team: ['P5', 'P1', 'P10'], result: 'fail', failCount: 1 }],
   voteHistory: [...R1, vote(2, 1, 'P6', ['P6', 'P2', 'P3', 'P4'], ['P6', 'P2', 'P3', 'P4'])],
 });
-const OFF = { ...DEFAULT_AGENT_TUNING, ownView: 0, merlinOnTeamOwn: 0, goodBayesR4Kept: 0, loyalTailWhiteLastTau: 0, goodReuseWhite: 0 };
+// The round-38 cases are written on the round-37 default: the round-38 and round-39 adoptions are switched off here.
+const OFF = { ...DEFAULT_AGENT_TUNING, ownView: 0, merlinOnTeamOwn: 0, goodBayesR4Kept: 0, loyalTailWhiteLastTau: 0, goodReuseWhite: 0,
+  percivalRead39: 0, percivalCarry39: 0, merlinFlowFollow: 0, beliefPendingProposal: false, goodBayesBad: 0.8, goodBayesBadKey: 0.7, goodBayesGood: 0.7, loyalTailWhite: 0.7 };
 const T = (over: object) => ({ ...OFF, ...over });
 
 describe('round 38 tuning fields', () => {
@@ -46,7 +48,10 @@ describe('round 38 tuning fields', () => {
     }
     // adopted in round 38 (default on): ownView 0.3, merlinOnTeamOwn 1, goodBayesR4Kept 1, loyalTailWhiteLastTau 0.5, goodReuseWhite 1
     expect([DEFAULT_AGENT_TUNING.ownView, DEFAULT_AGENT_TUNING.merlinOnTeamOwn, DEFAULT_AGENT_TUNING.goodBayesR4Kept, DEFAULT_AGENT_TUNING.loyalTailWhiteLastTau, DEFAULT_AGENT_TUNING.goodReuseWhite]).toEqual([0.3, 1, 1, 0.5, 1]);
-    for (const k of ['ownViewScope', 'ownViewKeep', 'ownViewRounds', 'percivalThumbRead', 'goodOnTeamState', 'goodFourthWhite', 'merlinOwnWhite', 'percivalMerlinWhite', 'merlinFlowFollow', 'goodBayesFsReuse', 'merlinPublicPipeline', 'goodR4White', 'goodEarlyVote', 'goodLakeHuman'] as const) expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
+    for (const k of ['ownViewScope', 'ownViewKeep', 'ownViewRounds', 'percivalThumbRead', 'goodOnTeamState', 'goodFourthWhite', 'merlinOwnWhite', 'percivalMerlinWhite', 'goodBayesFsReuse', 'merlinPublicPipeline', 'goodR4White', 'goodEarlyVote', 'goodLakeHuman'] as const) expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
+    // round 39 adopted `merlinFlowFollow=3`; `beliefPendingProposal` was tried and reverted after review (gate 1)
+    expect(DEFAULT_AGENT_TUNING.merlinFlowFollow).toBe(3);
+    expect(DEFAULT_AGENT_TUNING.beliefPendingProposal).toBe(false);
     for (const k of ['beliefThumbNoStain', 'goodR5NoWhite', 'merlinPublicTieBreak', 'beliefPendingProposal', 'percivalLakeNoMorgana'] as const) expect(LEGACY_AGENT_TUNING[k]).toBe(false);
     expect(parseTuningFlag('ownView')).toEqual({ ownView: 0.3 });
     expect(parseTuningFlag('ownView=0.6')).toEqual({ ownView: 0.6 });

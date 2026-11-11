@@ -114,8 +114,10 @@ function evalGame(game: ReplayGame, variants: readonly Variant[], st: Store, all
           brier += (x - y) ** 2;
           if (y) sr += x; else sb += x;
         }
-        add(st, `${v.name}|全部|red`, sr / Math.max(1, reds.size));
-        add(st, `${v.name}|全部|blue`, sb / Math.max(1, others.length - reds.size));
+        for (const scope of ['全部', `R${p.round}`]) {
+          add(st, `${v.name}|${scope}|red`, sr / Math.max(1, reds.size));
+          add(st, `${v.name}|${scope}|blue`, sb / Math.max(1, others.length - reds.size));
+        }
         add(st, `${v.name}|全部|brier`, brier / others.length);
         const top = [...others].sort((a, b) => (share.get(b) ?? 0) - (share.get(a) ?? 0)).slice(0, reds.size);
         add(st, `${v.name}|全部|top4`, top.every((id) => reds.has(id)) ? 1 : 0);
@@ -147,6 +149,10 @@ function report(st: Store, names: readonly string[], meta: Record<string, unknow
     const r = mean(st, `${v}|全部|red`); const b = mean(st, `${v}|全部|blue`);
     const base = mean(st, `${v}|tail|base`);
     console.log(`| ${v} | ${pw}% | ${lg} | ${fmt(r)} / ${fmt(b)}%（${(r - b).toFixed(3)}） | ${fmt(mean(st, `${v}|全部|top4`))}%（${fmt(mean(st, `${v}|R5|top4`))}%） | ${mean(st, `${v}|全部|brier`).toFixed(4)} | ${mean(st, `${v}|tail|brier`).toFixed(4)} / ${mean(st, `${v}|tail|lg`).toFixed(3)}（${(base * (1 - base)).toFixed(4)}） |`);
+  }
+  console.log('\n分局的分離（真紅 − 真藍 平均紅機率；R1 / R2 / R3 / R4 / R5）');
+  for (const v of names) {
+    console.log(`- ${v}：${['R1', 'R2', 'R3', 'R4', 'R5'].map((s) => (mean(st, `${v}|${s}|red`) - mean(st, `${v}|${s}|blue`)).toFixed(3)).join(' / ')}`);
   }
   console.log('\n尾家校準（P 格：平均 P → 真的是紅，n）');
   for (const v of names) {

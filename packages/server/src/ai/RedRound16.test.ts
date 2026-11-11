@@ -55,6 +55,8 @@ describe('redKeyWhite', () => {
       { round: 2, team: ['P3', 'P5', 'P6', 'P7'], result: 'success', failCount: 0 },
       { round: 3, team: ['P2', 'P5', 'P9', 'P10'], result: 'fail', failCount: 1 },
     ],
+    // round 39: a red seat's observation carries its own camp (`seatTeam`, set where every decision enters)
+    seatTeam: 'evil',
     voteHistory: [], proposedTeam: ['P2', 'P3', 'P5', 'P6', 'P7'], lakeHistory: [], ...partial,
   } as unknown as PlayerObservation);
   const on = (mode: number): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, redKeyWhite: mode });

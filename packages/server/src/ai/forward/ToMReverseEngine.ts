@@ -149,6 +149,8 @@ function projectObsFromSeat(
     // Round 38: a projected seat is the public-view loyal of that seat, not a seat deciding for itself — the own prior
     // (`ownView`, a loyal's own team pick) does not apply, so every seat's projection reads the same public substrate.
     publicLoyalView: true,
+    // Round 39: the projecting seat's own camp (blue-only readings such as `beliefPendingProposal` stay off for a red seat's projections).
+    seatTeam: obs.seatTeam ?? obs.myTeam,
   };
 }
 

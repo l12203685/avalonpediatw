@@ -832,6 +832,8 @@ export class HeuristicAgent implements AvalonAgent {
   }
 
   act(obs: PlayerObservation): AgentAction {
+    // Round 39: the deciding seat's own camp travels with every view built from this observation (`seatTeam`).
+    if (obs.seatTeam === undefined) obs = { ...obs, seatTeam: obs.myTeam };
     // Idempotent ingestion: update cross-round memory from public history.
     this.ingestVoteHistory(obs);
     this.ingestQuestHistory(obs);
