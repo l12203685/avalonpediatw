@@ -80,4 +80,19 @@ describe('rehypeWikiHeadingIds', () => {
     expect(ids).toEqual(wikiHeadings(md).map((h) => h.slug));
     expect((tree.children[1].properties as { id?: string }).id).toBeUndefined();
   });
+
+  it('a tree rendered after another part of the same article continues its numbering (role articles split around the stats card)', () => {
+    const before = '## 結論\n內文\n## 實戰數據怎麼讀\n';
+    const tree = {
+      type: 'root',
+      children: [
+        { type: 'element', tagName: 'h2', properties: {}, children: [{ type: 'text', value: '結論' }] },
+        { type: 'element', tagName: 'h2', properties: {}, children: [{ type: 'text', value: '延伸閱讀' }] },
+      ],
+    };
+    rehypeWikiHeadingIds({ after: before })(tree as never);
+    const ids = tree.children.map((c) => (c.properties as { id?: string }).id);
+    expect(ids).toEqual(wikiHeadings(`${before}## 結論\n## 延伸閱讀\n`).slice(2).map((h) => h.slug));
+    expect(ids).toEqual(['結論-2', '延伸閱讀']);
+  });
 });

@@ -63,9 +63,8 @@ export function createSlugger(): (base: string) => string {
 }
 
 /** Every ATX heading of an article (front matter and fenced code skipped), with its anchor. */
-export function wikiHeadings(content: string): WikiHeading[] {
+export function wikiHeadings(content: string, unique: (base: string) => string = createSlugger()): WikiHeading[] {
   const out: WikiHeading[] = [];
-  const unique = createSlugger();
   let fence = false;
   for (const line of content.replace(FRONT_MATTER, '').split('\n')) {
     if (/^\s*(```|~~~)/.test(line)) {
@@ -122,13 +121,24 @@ function hastText(node: HastNode): string {
   return (node.children ?? []).map(hastText).join('');
 }
 
+export interface WikiHeadingIdOptions {
+  /**
+   * Markdown rendered earlier in the same article as a separate tree (the role articles are split around the live
+   * stats card): its headings count as already used, so a repeated heading after the split still gets the
+   * -2 / -3 anchor wikiHeadings gives it for the whole article.
+   */
+  after?: string;
+}
+
 /**
  * rehype plugin: gives every rendered h1–h6 the same id wikiHeadings computes from the Markdown, so
  * `#wiki=<id>&sec=<slug>` can scroll to it.
  */
-export function rehypeWikiHeadingIds(): (tree: HastNode) => void {
+export function rehypeWikiHeadingIds(options?: WikiHeadingIdOptions): (tree: HastNode) => void {
+  const after = options?.after ?? '';
   return (tree: HastNode): void => {
     const unique = createSlugger();
+    if (after) wikiHeadings(after, unique);
     const walk = (node: HastNode): void => {
       if (node.type === 'element' && /^h[1-6]$/.test(node.tagName ?? '')) {
         node.properties = { ...(node.properties ?? {}), id: unique(wikiSlugify(hastText(node).trim()) || 'section') };

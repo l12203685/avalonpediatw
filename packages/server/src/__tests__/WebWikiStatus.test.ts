@@ -514,6 +514,22 @@ describe('wiki restructure (Edward 2026-10-29: 讀完全部文章後整併、分
     expect(anchored).toBeGreaterThan(100);
   });
 
+  it('every bare 本文／本篇〈章節〉 self-citation (not a link) resolves to a heading of the same article (2026-11-11)', () => {
+    // 2026-10-30 以前就有、本次沒動的：wiki-109 的〈條件機率〉指前半篇（原〈條件機率〉一文），那裡沒有同名標題。
+    const KNOWN_UNRESOLVED = new Set(['wiki-109 → 本文〈條件機率〉']);
+    const unresolved: string[] = [];
+    let checked = 0;
+    for (const a of jsonArticles) {
+      for (const m of a.content.matchAll(/(?<!\[)(本文|本篇)〈([^〉]+)〉/g)) {
+        checked++;
+        const key = `${a.id} → ${m[1]}〈${m[2]}〉`;
+        if (resolveWikiSection(a.content, m[2]) === null && !KNOWN_UNRESOLVED.has(key)) unresolved.push(key);
+      }
+    }
+    expect(unresolved).toEqual([]);
+    expect(checked).toBeGreaterThan(10);
+  });
+
   it('articles do not depend on HackMD: no hackmd.io links, every /wiki-images/ picture is in the web public folder', () => {
     // 2026-10-29：網站是百科唯一的家，不再用 HackMD；圖片放 packages/web/public/wiki-images/。
     const publicDir = path.resolve(__dirname, '..', '..', '..', 'web', 'public');

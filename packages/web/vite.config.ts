@@ -106,6 +106,7 @@ function llmsInputs(): { articles: LlmsArticle[]; opts: LlmsOptions } {
       categories: WIKI_CATEGORIES,
       notes,
       sitePages: ['/', '/wiki', '/analysis', '/leaderboard'],
+      redirects: WIKI_REDIRECTS,
     },
   };
 }

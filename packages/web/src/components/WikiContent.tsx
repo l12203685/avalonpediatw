@@ -204,9 +204,9 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         // bundle chunk failed to load too: hardcoded articles only
       }
     };
-    // 從分享連結（#wiki=<id>）進來、那篇不是寫死的文章：先用打包的備份打開，不等可能還在睡的 API（喚醒要 30～60 秒）
-    const wanted = currentWikiTarget()?.id;
-    if (wanted && !WIKI_ARTICLES.some((a) => a.id === wanted)) void loadBundle();
+    // 一進來就先用打包的備份（心智圖、清單、分享連結 #wiki=<id> 打開的文章），不等可能還在睡的 API（喚醒要 30～60 秒）；
+    // 寫死的文章已經全部搬進 wiki_data.json（WIKI_ARTICLES 是空的），不先載備份的話這段時間百科會是空的。API 回來後換成 API 的版本。
+    void loadBundle();
     const run = async (): Promise<void> => {
       let articles: WikiArticleApi[] = [];
       try {
@@ -656,7 +656,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   <div className="wiki-prose">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeWikiHeadingIds]}
+                      rehypePlugins={[[rehypeWikiHeadingIds, { after: markupBeforeCard }]]}
                       components={articleComponents}
                       urlTransform={(url) => wikiUrlTransform(url, defaultUrlTransform)}
                     >
