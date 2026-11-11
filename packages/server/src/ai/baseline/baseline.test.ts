@@ -558,7 +558,9 @@ describe('pyramidScorer', () => {
   });
 
   it('failed-mission members nudged toward red but not pinned', () => {
+    // At a vote, not the loyal's own team pick: the round-38 own-view offsets draw Math.random on the game's first pick, which made this flaky.
     const obs = makeObs({
+      gamePhase: 'team_vote',
       questHistory: [
         { round: 1, team: ['P1', 'P2'], result: 'fail', failCount: 1 },
       ],

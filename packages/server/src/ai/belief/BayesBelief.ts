@@ -788,8 +788,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
 
 /**
  * Round 41 `beliefLakeIso41` (lp39 BL-cal): the posterior's P(another holder is red) recalibrated per lake by an isotonic map fitted on the
- * human records (loyal / Percival viewers at every team vote after that lake, 69,452 points; lakes 1–2 within 2.5pp per band out of sample,
- * lake 3 about 7pp — few games). The map moves the holder's marginal; the worlds where the holder is red are scaled by one odds factor, so
+ * human records (loyal / Percival viewers at every team vote after that lake, 69,452 points; lakes 1–2 out of sample: four-band mean gap
+ * 1.6–2.5pp, every band within 4pp; lake 3 mean gap about 7pp — few games). The map moves the holder's marginal; the worlds where the holder is red are scaled by one odds factor, so
  * every other seat's share moves with it through the joint. Lakes in record order; a certain holder (0 or 1) stays certain.
  */
 export const LAKE_ISO_41: Readonly<Record<number, ReadonlyArray<readonly [number, number]>>> = {
