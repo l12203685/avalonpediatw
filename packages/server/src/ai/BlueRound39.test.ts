@@ -51,7 +51,7 @@ describe('round 39 tuning fields', () => {
     expect(parseTuningFlag('percivalCarry39=1')).toEqual({ percivalCarry39: 1 });
     expect(parseTuningFlag('merlinPublicPipeline=2')).toEqual({ merlinPublicPipeline: 2 });
     expect(() => parseTuningFlag('percivalCarry39=4')).toThrow();
-    expect(() => parseTuningFlag('merlinPublicPipeline=3')).toThrow();
+    expect(() => parseTuningFlag('merlinPublicPipeline=4')).toThrow();
   });
 });
 

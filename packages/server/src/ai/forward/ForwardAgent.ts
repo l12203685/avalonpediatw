@@ -65,7 +65,7 @@ import { loyalFlowPickTeam } from '../BlueRound34';
 import { loyalR2ViewTeam, loyalSetPickTeam, percivalThumbSureTeam } from '../BlueRound37';
 import { bayesOptionsOf, bayesTeamClean } from '../belief/BayesBelief';
 import { earlyOwnTeamWhite, merlinOnTeamOwnApprove, merlinOwnWhiteNow, ownViewFirstPickTeam, percivalThumbReadTeam } from '../BlueRound38';
-import { lakePairBarred } from '../BlueRound39';
+import { lakeHolderBarred40, lakePairBarred } from '../BlueRound39';
 import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type PercivalThumbPlan39 } from '../BlueRound39Percival';
 import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
@@ -74,7 +74,7 @@ import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDec
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
-import { merlinLoyalStyleTeam, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
+import { merlinLoyalStyleTeam, merlinPublicPipelineOn, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -742,7 +742,8 @@ export class ForwardAgent implements AvalonAgent {
     // Round 39 `percivalCarry39` (BlueRound39Percival.ts): Percival's thumb plan for this team_select, drawn once and checked by every re-pick step.
     const plan39 = percivalThumbPlan39(this.baseline.tuning, obs);
     // Round 39 `loyalLakePair` (BlueRound39.ts): the seat another holder declared evil last round stays off this round's team.
-    const lakeBar = lakePairBarred(this.baseline.tuning, obs);
+    // Round 40 `loyalLakePair` bits 2 / 8: the holder of that declaration stays off proposals 1–3 too.
+    const lakeBar = [lakePairBarred(this.baseline.tuning, obs), lakeHolderBarred40(this.baseline.tuning, obs)].filter((x): x is string => x !== null);
     // Each decide call carries its own plan / bar: a nested decide (a red seat's loyal view, Merlin's normal vote) never inherits
     // the outer call's, and the outer call gets its own back afterwards.
     const prevPlan = this.thumbPlan39;
@@ -752,14 +753,17 @@ export class ForwardAgent implements AvalonAgent {
     try {
       const d = this.decideMain(obs);
       if (d.action.type !== 'team_select') return d;
-      if (lakeBar !== null && d.action.teamIds.includes(lakeBar)) {
-        const kept = d.action.teamIds.filter((id) => id !== lakeBar);
+      if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
+        const kept = d.action.teamIds.filter((id) => !lakeBar.includes(id));
+        const need = d.action.teamIds.length - kept.length;
         const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
-        const pool = obs.allPlayerIds.filter((id) => !kept.includes(id) && id !== lakeBar && !obs.knownEvils.includes(id));
-        for (const fill of this.cleanestFirst39(pool, share)) {
-          const team = [...kept, fill];
+        const pool = this.cleanestFirst39(obs.allPlayerIds.filter((id) => !kept.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
+        // the cleanest fills first (one seat: in order; two seats: pairs in order of the worse seat's rank)
+        const fills: string[][] = need === 1 ? pool.map((x) => [x]) : need === 2 ? pool.flatMap((y, j) => pool.slice(0, j).map((x) => [x, y])) : [];
+        for (const fill of fills) {
+          const team = [...kept, ...fill];
           if (!this.repairGateOk39(obs, team)) continue;
-          return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the seat declared evil last round (round 39)` } };
+          return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the lake pair barred this round (rounds 39–40)` } };
         }
         return d;
       }
@@ -789,15 +793,15 @@ export class ForwardAgent implements AvalonAgent {
     return [...pool].sort((x, y) => (share.get(x) ?? 0.5) - (share.get(y) ?? 0.5) || key.get(x)! - key.get(y)!);
   }
 
-  /** Round 39 `loyalLakePair`: the seat barred from the team_select being decided (null otherwise). */
-  private lakeBar39: string | null = null;
+  /** Rounds 39–40 `loyalLakePair`: the seats barred from the team_select being decided (empty otherwise). */
+  private lakeBar39: readonly string[] = [];
 
   /** Round 39 `percivalCarry39`: the thumb plan of the team_select being decided (null otherwise). */
   private thumbPlan39: PercivalThumbPlan39 | null = null;
 
   /** The thumb plan test, AND-ed into the leader's gates so no re-pick step can bring a barred thumb back. */
   private thumbOk39(obs: PlayerObservation, team: readonly string[]): boolean {
-    if (this.lakeBar39 !== null && team.includes(this.lakeBar39)) return false;
+    if (this.lakeBar39.some((id) => team.includes(id))) return false;
     return percivalThumbPlanAllows(this.thumbPlan39, obs, team);
   }
 
@@ -1139,7 +1143,8 @@ export class ForwardAgent implements AvalonAgent {
       // Round 39 `merlinPublicPipeline=2` (checklist ML-01 value 2): the team the full loyal pipeline of his seat would send on the
       // public record (every loyal step runs: own prior, flow answer, R2 own view, reuse, the reasonable set). Merlin sends exactly that
       // team when it holds no red he sees and passes his gates; otherwise his red-free loyal-style pick as before.
-      if ((this.baseline.tuning.merlinPublicPipeline ?? 0) >= 2) {
+      // Round 40 value 3: the same from round 2 on only (`merlinPublicPipelineOn`).
+      if ((this.baseline.tuning.merlinPublicPipeline ?? 0) >= 2 && merlinPublicPipelineOn(this.baseline.tuning, obs)) {
         const pubView = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: false } as PlayerObservation;
         const pub = this.decideMain(pubView);
         if (pub.action.type === 'team_select' && !pub.action.teamIds.some((id) => obs.knownEvils.includes(id))

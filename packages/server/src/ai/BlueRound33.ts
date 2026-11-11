@@ -21,6 +21,7 @@ import { buildCertainty } from './belief/Certainty';
 import { bestCleanWith, leaderAhead } from './GoodVoteAlt';
 import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
 import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
+import { percivalThumbVote40, vote40Bar } from './BlueRound40';
 import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
@@ -81,12 +82,16 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     const r4Mix = tuning.goodBayesR4Mix === true && mode >= 3 && failsRequiredNow(obs) >= 2;
     const req = mode >= 3 && !r4Mix ? 1 : failsRequiredNow(obs);
     if (cert.minReds(team) >= req) return { vote: false, reason: 'provFail' };
+    // 第 40 回合 `percivalThumbVote40`（PV-V2／PV-V3）：派西在隊上、隊上只有一根拇指。
+    const thumbVote = percivalThumbVote40(tuning, obs, team);
+    if (thumbVote !== null) return { vote: thumbVote, reason: thumbVote ? 'onDefault' : 'bad' };
     // 第 38 回合 `goodBayesR4Kept`（1、3；檢查表 AV-03）：第 4 局第 1 次提議、隊長留下第 3 局成功的整支隊，公開邏輯沒有指出隊上有紅、也沒有人被湖宣告紅 → 贊成。
     if (((tuning.goodBayesR4Kept ?? 0) & 1) !== 0 && r3TeamKeptAtR4(obs, team) && cert.minReds(team) === 0
       && !(obs.lakeHistory ?? []).some((l) => l.declaredClaim === 'evil' && team.includes(l.targetId))) return { vote: true, reason: 'onDefault' };
     const below = bayesTeamRedsBelow(obs, team, req, r4Mix ? bayesOptionsOf({ ...tuning, beliefRecursive: 5 }) : opts);
     if (below === null) return null;
-    const bad = key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad);
+    // 第 40 回合 `vote40*`：分局面、分角色的門檻（沒有設時用原本的）。
+    const bad = vote40Bar(tuning, obs, true) || (key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad));
     if (!(1 - below >= bad)) return { vote: true, reason: 'onDefault' };
     // 第 38 回合 `goodOnTeamState`：內黑照局面（比分、整隊照派、自己還會不會派、被宣告紅的人），不是只看門檻。
     if (onTeamStateApprove(tuning, obs, 1 - below, key)) return { vote: true, reason: 'onState' };
@@ -130,7 +135,7 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
   if (tuning.goodR5NoWhite === true && (obs.currentRound ?? 1) === 5) return { vote: false, reason: 'offDefault' };
   const p = bayesTeamClean(obs, team, opts);
   if (p === null) return null;
-  const good = key ? (tuning.goodBayesGoodKey || BAYES_VOTE_DEFAULTS.goodKey) : (tuning.goodBayesGood || BAYES_VOTE_DEFAULTS.good);
+  const good = vote40Bar(tuning, obs, false) || (key ? (tuning.goodBayesGoodKey || BAYES_VOTE_DEFAULTS.goodKey) : (tuning.goodBayesGood || BAYES_VOTE_DEFAULTS.good));
   if (p >= good) return { vote: true, reason: 'good' };
   if (p > 0 && mode < 2) {
     let alt = 0;

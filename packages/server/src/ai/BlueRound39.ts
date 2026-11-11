@@ -10,7 +10,7 @@
  *   - 1：第 1、2 湖不湖上過「出兩張以上失敗」的任務的人（還有別人可以湖時）。第 3 湖不管。
  *   - 2：照比分順序（FS 和 SF 不同）的優先類別（見 `lake39Prefs`）：只在真人集中在某一類的格子用；真人分散的格子不加類別規則
  *        （第 38 回合在分散的格子硬挑一類，和強者的一致反而下降）。
- *   - 4：同分不照座位序：先比持湖者的後驗（比較藍的；紅方已兩勝時不比），再亂數；下一局第 3–5 位派隊只在第 1 湖 FS、第 2 湖 SFF／FSF 當很弱的同分排序。
+ *   - 4：同分不照座位序：先比持湖者的後驗（比較藍的；紅方已兩勝時不比），再亂數（第 40 回合拿掉了原本「下一局第 3–5 位派隊」的同分排序，它在第 1 湖等於照座位）。
  *   - 8：同一類裡照持湖者的後驗挑比較藍的那一個（紅方未兩勝的格子；第 1 湖 SS 先挑自己派的隊出過任務的人）。
  *   - 64：紅方已兩勝、之後還有湖時也照比較藍的挑（＝信任項；牽涉 10/13 的裁定「兩紅時湖中不一定要湖好人」，Edward 還沒裁定，只量）。
  *   - 256：第 1 湖 FS 改成先湖兩局都上過的人（百科 wiki-208 §2；Edward 待裁定，只量）。
@@ -33,8 +33,6 @@ export interface Lake39Candidate {
   onLast: boolean;
   /** 自己當隊長派的隊出過任務。 */
   ledWent: boolean;
-  /** 下一局派隊的順位（1＝第一個派）。 */
-  npos: number;
   /** 持湖者的後驗：紅的機率。 */
   pRed: number;
 }
@@ -63,14 +61,10 @@ export function lake39Candidates(obs: PlayerObservation, candidates: readonly st
   const last = [...quests].sort((a, b) => b.round - a.round)[0];
   const ledWent = new Set<string>();
   for (const v of obs.voteHistory) if (v.approved) ledWent.add(v.leader);
-  const ids = obs.allPlayerIds;
-  const lastVote = obs.voteHistory[obs.voteHistory.length - 1];
-  const nextFirst = lastVote ? (ids.indexOf(lastVote.leader) + 1) % ids.length : 0;
   const share = bayesRedShare(obs, bayesOptionsOf(tuning));
   return candidates.map((id) => {
     const cls: LakeClass = two.has(id) ? 'F2' : onF.has(id) && onS.has(id) ? 'FS' : onF.has(id) ? 'F' : onS.has(id) ? 'S' : 'N';
-    const npos = ((ids.indexOf(id) - nextFirst + ids.length) % ids.length) + 1;
-    return { id, cls, onLast: !!last && last.team.includes(id), ledWent: ledWent.has(id), npos, pRed: share.get(id) ?? 0.5 };
+    return { id, cls, onLast: !!last && last.team.includes(id), ledWent: ledWent.has(id), pRed: share.get(id) ?? 0.5 };
   });
 }
 
@@ -111,15 +105,12 @@ const near = (a: number, b: number, eps: number): boolean => Math.abs(a - b) <= 
 /** 後驗差在這個範圍內算同分（持湖者分不出誰比較藍）。 */
 const TIE_BAND = 0.05;
 
-/** 同分的排序（位元 4）：下一局第 3–5 位只在第 1 湖 FS、第 2 湖 SFF／FSF 當很弱的同分排序，其餘直接亂數。 */
-function breakTie(st: Lake39State, tied: readonly Lake39Candidate[], rnd: () => number): Lake39Candidate {
-  let pool = tied;
-  const weakNpos = (st.lake === 0 && st.score === 'FS') || (st.lake === 1 && (st.score === 'SFF' || st.score === 'FSF'));
-  if (weakNpos) {
-    const mid = pool.filter((c) => c.npos >= 3 && c.npos <= 5);
-    if (mid.length > 0) pool = mid;
-  }
-  return pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))];
+/**
+ * 同分的排序（位元 4）：亂數。第 40 回合拿掉原本在第 1 湖 FS、第 2 湖 SFF／FSF 的「下一局第 3–5 位派隊的人」很弱的同分排序：
+ * 第 1 湖時它等於照座位（0 號持湖、湖 3–5 號），和 Edward 11/10「湖誰和上下家無關」的裁定衝突。
+ */
+function breakTie(_st: Lake39State, tied: readonly Lake39Candidate[], rnd: () => number): Lake39Candidate {
+  return tied[Math.min(tied.length - 1, Math.floor(rnd() * tied.length))];
 }
 
 /** 這個持湖者適用 `goodLake39`（梅林要位元 128）。 */
@@ -218,4 +209,25 @@ export function lakePairBarred(tuning: Readonly<AgentTuning>, obs: PlayerObserva
   if ((tuning.loyalLakePair ?? 0) & 4) return last.targetId;
   const pH = bayesRedShare(view, bayesOptionsOf(tuning)).get(last.holderId) ?? 0.5;
   return pH >= 0.5 ? null : last.targetId;
+}
+
+/**
+ * 第 40 回合 `loyalLakePair` 位元 2／8（檢查表 LP-12 第 2 部分）：最近一次湖（上一局結束時）持湖者 H 宣告別人是紅、我是忠臣隊長而且不是 H 也不是被湖的人，
+ * 第 3 局（第 1 湖之後）第 1–3 次提議不帶 H。真人第 3 局只帶持湖者（不帶被湖的人）21%，機器人 55–56%；強者帶持湖者比其他人多（44% 對 34%）。
+ * 位元 2＝照檢查表：H 上過失敗的任務才不帶；位元 8＝我自己的讀法不同意這個宣告（我估被湖的人是紅的機率 < 0.5）才不帶。
+ * 座位只當持湖者／被湖的人，沒有鄰座。回傳要擋掉的 H，不適用時 null。
+ */
+export function lakeHolderBarred40(tuning: Readonly<AgentTuning>, obs: PlayerObservation): string | null {
+  const bits = tuning.loyalLakePair ?? 0;
+  if ((bits & 10) === 0 || (obs.seatTeam ?? obs.myTeam) !== 'good' || obs.gamePhase !== 'team_select' || obs.myRole !== 'loyal') return null;
+  // 只在第 3 局（第 1 湖之後）：第 4、5 局真人帶持湖者 63–68%，第 1 關在那裡明顯變差（第 4 局類別一致 70 → 42%）。
+  if ((obs.failCount ?? 0) >= 3 || (obs.currentRound ?? 1) !== 3) return null;
+  const lakes = obs.lakeHistory ?? [];
+  const last = lakes[lakes.length - 1];
+  if (!last || last.declaredClaim !== 'evil' || last.round !== (obs.currentRound ?? 1) - 1) return null;
+  const me = obs.myPlayerId;
+  if (last.holderId === me || last.targetId === me) return null;
+  if ((bits & 2) !== 0 && (obs.questHistory ?? []).some((q) => missionFailed(q) && q.team.includes(last.holderId))) return last.holderId;
+  if ((bits & 8) !== 0 && (bayesRedShare(obs, bayesOptionsOf(tuning)).get(last.targetId) ?? 0.5) < 0.5) return last.holderId;
+  return null;
 }
