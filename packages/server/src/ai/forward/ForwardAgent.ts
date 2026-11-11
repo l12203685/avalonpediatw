@@ -269,6 +269,14 @@ export function inferRedsFromTaskFails(
  * on a tie, i.e. the split falls back to seat order. Other roles and strict
  * orders pass through unchanged.
  */
+/** Round 39: the observation with the deciding seat's camp (`seatTeam`); the same object for the same input, so per-observation caches still hit. */
+const SEAT_TEAM_VIEWS = new WeakMap<PlayerObservation, PlayerObservation>();
+function withSeatTeam(obs: PlayerObservation): PlayerObservation {
+  let v = SEAT_TEAM_VIEWS.get(obs);
+  if (!v) { v = { ...obs, seatTeam: obs.myTeam }; SEAT_TEAM_VIEWS.set(obs, v); }
+  return v;
+}
+
 export function percivalSignalsWithoutTie(signals: RoleSignals): RoleSignals {
   const { percivalA: a, percivalB: b, wizardMerlinScores } = signals;
   if (!a || !b) return signals;
@@ -729,6 +737,8 @@ export class ForwardAgent implements AvalonAgent {
    * On any internal error → fallback to baseline.act(obs).
    */
   decide(obs: PlayerObservation): ForwardDecision {
+    // Round 39: the deciding seat's own camp travels with every view built from this observation (`seatTeam`; set by HeuristicAgent.act too).
+    if (obs.seatTeam === undefined) obs = withSeatTeam(obs);
     // Round 39 `percivalCarry39` (BlueRound39Percival.ts): Percival's thumb plan for this team_select, drawn once and checked by every re-pick step.
     const plan39 = percivalThumbPlan39(this.baseline.tuning, obs);
     // Round 39 `loyalLakePair` (BlueRound39.ts): the seat another holder declared evil last round stays off this round's team.

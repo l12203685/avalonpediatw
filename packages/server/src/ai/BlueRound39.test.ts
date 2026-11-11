@@ -38,10 +38,11 @@ const T = (over: object) => ({ ...DEFAULT_AGENT_TUNING, ...over });
 
 describe('round 39 tuning fields', () => {
   it('off in the legacy table and the default; flags parse', () => {
-    for (const k of ['goodLake39', 'percivalRead39', 'percivalCarry39', 'loyalLakePair'] as const) {
-      expect(LEGACY_AGENT_TUNING[k]).toBe(0);
-      expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
-    }
+    for (const k of ['goodLake39', 'percivalRead39', 'percivalCarry39', 'loyalLakePair', 'percivalLakeGuard39'] as const) expect(LEGACY_AGENT_TUNING[k]).toBe(0);
+    for (const k of ['goodLake39', 'loyalLakePair', 'percivalLakeGuard39'] as const) expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
+    // round 39 adoption: the Percival read and the plan that does not hard-bar a thumb (mode 3)
+    expect([DEFAULT_AGENT_TUNING.percivalRead39, DEFAULT_AGENT_TUNING.percivalCarry39]).toEqual([2, 3]);
+    expect([DEFAULT_AGENT_TUNING.goodBayesBad, DEFAULT_AGENT_TUNING.goodBayesBadKey, DEFAULT_AGENT_TUNING.goodBayesGood, DEFAULT_AGENT_TUNING.loyalTailWhite]).toEqual([0.7, 0.6, 0.8, 0.75]);
     expect(DEFAULT_AGENT_TUNING.merlinPublicPipeline).toBe(0);
     expect(parseTuningFlag('goodLake39')).toEqual({ goodLake39: 15 });
     expect(parseTuningFlag('percivalCarry39=1')).toEqual({ percivalCarry39: 1 });

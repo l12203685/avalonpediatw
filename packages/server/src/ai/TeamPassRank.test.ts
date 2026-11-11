@@ -46,7 +46,7 @@ const OBS: PlayerObservation = {
 // it, so it is built directly, as in ForwardAgent.tuning.test.ts).
 function decide(teamPassRank: number): boolean {
   // Round 26 `beliefUnified` off: the "scorer of before" these cases document reads the pyramid's own (human-table) posterior.
-  const agent = new ForwardAgent('S6', new HeuristicAgent('S6', undefined, undefined, { teamPassRank, goodCleanVote: 0, goodTailVote: 0, goodKeyVote: 0, goodBayesVote: 0, beliefUnified: false }));
+  const agent = new ForwardAgent('S6', new HeuristicAgent('S6', undefined, undefined, { teamPassRank, goodCleanVote: 0, goodTailVote: 0, goodKeyVote: 0, goodBayesVote: 0, beliefUnified: false, percivalRead39: 0, percivalCarry39: 0 }));
   agent.onGameStart(OBS);
   const a = agent.act(OBS);
   if (a.type !== 'team_vote') throw new Error(a.type);
