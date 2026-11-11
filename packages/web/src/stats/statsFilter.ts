@@ -62,18 +62,23 @@ export function currentStatsFilter(): { filter: GameFilter | null; key: string }
   return { filter, key };
 }
 
-/** 篩選的分享 hash；不篩選時 '#stats'。 */
-export function filterHash(filter: GameFilter | null): string {
-  return filter && canonicalFilterKey(filter) ? `#stats?f=${encodeFilter(filter)}` : '#stats';
+/** 篩選的分享 hash；不篩選時 '#stats'。cuts = 分組切點的參數 (stats/cohortCuts.ts cohortCutsParam；預設 = null 不寫)。 */
+export function filterHash(filter: GameFilter | null, cuts: string | null = null): string {
+  const parts: string[] = [];
+  if (filter && canonicalFilterKey(filter)) parts.push(`f=${encodeFilter(filter)}`);
+  if (cuts) parts.push(`c=${cuts}`);
+  return parts.length ? `#stats?${parts.join('&')}` : '#stats';
 }
 
 /** #stats?f=… 的參數 (StatsLink 的 filter / preset)。 */
 export interface StatsHashParams {
   filter?: string;
   preset?: string;
+  /** 分組的切點 (stats/cohortCuts.ts；「80-20-55-38」)。 */
+  cuts?: string;
 }
 
-/** 'f=1.xxx&preset=online' → 參數。 */
+/** 'f=1.xxx&preset=online&c=80-20-55-38' → 參數。 */
 export function parseStatsQuery(query: string): StatsHashParams {
   const out: StatsHashParams = {};
   for (const part of query.split('&')) {
@@ -88,6 +93,7 @@ export function parseStatsQuery(query: string): StatsHashParams {
     }
     if (k === 'f' && v) out.filter = v;
     if (k === 'preset' && v) out.preset = v;
+    if (k === 'c' && v) out.cuts = v;
   }
   return out;
 }

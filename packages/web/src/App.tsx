@@ -105,7 +105,7 @@ function App(): JSX.Element {
       // #ai-games=<id> 同上（AiGamesPage 讀它、關閉時清掉）；#wiki=<id> 同上（WikiContent 讀它、關閉時清掉）
       if (link.kind === 'study' || (link.kind === 'records' && link.id) || (link.kind === 'aiGames' && link.id) || (link.kind === 'wiki' && link.id)) return;
       // #stats?f=… (a shared filter) stays too: the filter bar keeps it in sync with the filter
-      if (link.kind === 'stats' && (link.filter || link.preset)) {
+      if (link.kind === 'stats' && (link.filter || link.preset || link.cuts)) {
         applySharedFilter(link);
         return;
       }
