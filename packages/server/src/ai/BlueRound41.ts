@@ -17,7 +17,8 @@
  *   第 1 湖 FF：上過失敗任務、但不是兩張失敗那一隊的人（LH-02），其次沒上過任務的人；
  *   第 2 湖 SFS、FSS：第 3 局的隊員（LH-07）；第 2 湖 SSF、SFF、FSF、FFS：不限（兩張失敗的隊已拿掉；LH-08／LH-09 的偏好已經在分數裡）；
  *   第 3 湖（最後一湖）：第 4 局成功、比分 SFFS／FSFS 時湖第 4 局的隊員（LH-10），其他不限。
- * 同分（分數差 < 1e-9）：照強者的排序，不用亂數、不用座位號碼（裁定 (1)）——第 1 湖 SS 先挑自己派的隊出過任務的人，再挑比較藍的，
+ * 同分（分數差 < 1e-9）：照強者的排序，不用亂數、不用座位號碼（裁定 (1)）——第 1 湖 SS 先挑自己派的隊出過任務的人，再挑比較藍的（只在權重大於 0 時；
+ * 紅方已兩勝與最後一湖只看資訊，不用顏色排），
  * 再挑被別人的提議選進隊伍比較多次的人（被越多人選的人越可能是好人），再挑在提議紀錄裡比較早出現的人；都一樣才照座位序（並計數，應該幾乎不會發生）。
  * 梅林（11/11 晚、lp39 LH-12）：先用忠臣看得到的公開範圍（他看得到的紅已被拿掉，除非只剩他們），範圍內用忠臣的公開視角排序，
  * 不讓刺客從湖法看出梅林；位元 16 = 改用梅林自己的後驗排序（只量）。
@@ -26,8 +27,7 @@
 import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { percivalRead39 } from './BlueRound39Percival';
-import { lake39Candidates, lake39State, type Lake39Candidate, type LakeClass } from './BlueRound39';
-import { failCards, missionFailed } from './missionFacts';
+import { certainReds, lake39Candidates, lake39State, type Lake39Candidate, type LakeClass } from './BlueRound39';
 import { anotherLakeFollows } from './GoodLakeInfo';
 
 /** 這個持湖者適用 `goodLake41`：開關開、藍方座位。 */
@@ -62,17 +62,6 @@ export function lake41Score(pRed: number, weight: number, redTwoInfo: boolean, m
   return h2(pRed) + weight * (1 - pRed);
 }
 
-/** 持湖者在隊上、失敗張數等於其他隊員人數的失敗任務：其他隊員一定是紅，湖他們是浪費。 */
-function certainReds(obs: PlayerObservation): Set<string> {
-  const me = obs.myPlayerId;
-  const out = new Set<string>();
-  for (const q of obs.questHistory ?? []) {
-    if (!missionFailed(q) || !q.team.includes(me)) continue;
-    if (failCards(q) >= q.team.length - 1) for (const id of q.team) if (id !== me) out.add(id);
-  }
-  return out;
-}
-
 /** 第 1 步的人選範圍（依序；'L' = 上過最近一次任務）。 */
 export function lake41Prefs(obs: PlayerObservation, bits: number): Array<LakeClass | 'L'> {
   const st = lake39State(obs);
@@ -93,8 +82,8 @@ export function lake41Prefs(obs: PlayerObservation, bits: number): Array<LakeCla
   return [];
 }
 
-/** 診斷用：同分一路比到座位序的次數（裁定 (1) 不用座位；應該幾乎是 0）。 */
-export const lake41Diag = { seatTie: 0, picks: 0 };
+/** 診斷用：同分一路比到座位序的次數（裁定 (1) 不用座位；應該幾乎是 0）；紅方已兩勝時同分但 P(紅) 不同、沒有用顏色排的次數。 */
+export const lake41Diag = { seatTie: 0, picks: 0, colourTieSkipped: 0 };
 
 /** 候選人被別人的提議選進隊伍的次數，和第一次出現在提議紀錄裡的位置（沒出現過 = 很大）。 */
 function historyKeys(obs: PlayerObservation, id: string): { picked: number; first: number } {
@@ -147,8 +136,9 @@ export function goodLake41Pick(
   // 梅林：公開視角（範圍與排序）；位元 16 = 用自己的後驗排序。
   const merlinPublic = obs.myRole === 'merlin' && (bits & 16) === 0;
   const view: PlayerObservation = merlinPublic
-    ? { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, myLakeResults: [], publicLoyalView: true }
+    ? { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: true }
     : obs;
+  // 自己之前湖的結果留著（忠臣坐在這個座位也知道；照規則湖過的人不能再拿湖，所以持湖時這一項其實一定是空的）。
   let cs = lake39Candidates(view, ids, tuning);
   if (st.lake <= 1) cs = keep(cs, (c) => c.cls !== 'F2');
   // 第 1 步
@@ -168,7 +158,13 @@ export function goodLake41Pick(
     return xs.filter((x) => key(x) - m <= 1e-9);
   };
   if (tied.length > 1 && st.lake === 0 && st.score === 'SS') tied = narrow(tied, (x) => (x.c.ledWent ? 0 : 1));
-  if (tied.length > 1) tied = narrow(tied, (x) => x.pRed);
+  // 比較藍的優先只用在權重大於 0 的局面；紅方已兩勝與最後一湖（權重 0、只看資訊）不用顏色當同分的排序
+  // （最不確定的做法下 h(p) = h(1−p)，派西兩根拇指常常剛好互補，用 P(紅) 排會把「把湖留在藍方」帶回來）。
+  if (tied.length > 1 && redTwoInfo) {
+    const ps = tied.map((x) => x.pRed);
+    if (Math.max(...ps) - Math.min(...ps) > 1e-9) lake41Diag.colourTieSkipped++;
+  }
+  if (tied.length > 1 && !redTwoInfo) tied = narrow(tied, (x) => x.pRed);
   if (tied.length > 1) tied = narrow(tied, (x) => -x.picked);
   if (tied.length > 1) tied = narrow(tied, (x) => x.first);
   lake41Diag.picks++;
@@ -185,8 +181,8 @@ export function goodLake41Pick(
 /**
  * 真人梅林在這一格（第 3–4 局、紅方已兩勝、在隊上、隊上的紅夠讓任務失敗；非強制、不是自己當隊長）贊成 40%（770 票；強者 40%，83 票），
  * 忠臣同一格 65%；機器人梅林幾乎都反對（自我對打約 85% 反對），忠臣照真人變寬時兩者的差被凍結的刺客讀到（第 40 回合）。
- * 這裡讓梅林在「他這個座位的忠臣公開視角會贊成」時，以比例 q 贊成（每一票用座位、局、第幾次提議算出固定的雜湊，不用 Math.random，
- * 重播與自我對打都一樣）；公開邏輯證明一定會失敗的隊照舊反對（呼叫端的投票關卡）。0 = 關。
+ * 這裡讓梅林在「他這個座位的忠臣公開視角會贊成」時，以比例 q 贊成（每一票用座位、局、第幾次提議、提議的隊、提議次數與任務結果算出固定的雜湊，
+ * 不用 Math.random，重播與自我對打都一樣，而且不同的局會不一樣）；公開邏輯證明一定會失敗的隊照舊反對（呼叫端的投票關卡）。0 = 關。
  */
 export function merlinKeyApprove41Now(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   const q = tuning.merlinKeyApprove41 ?? 0;
@@ -194,8 +190,11 @@ export function merlinKeyApprove41Now(tuning: Readonly<AgentTuning>, obs: Player
   const round = obs.currentRound ?? 1;
   if (round < 3 || round > 4 || (obs.failCount ?? 0) >= 4) return false;
   if ((obs.questResults ?? []).filter((r) => r === 'fail').length < 2) return false;
-  if (!(obs.proposedTeam ?? []).includes(obs.myPlayerId)) return false;
+  if (!(obs.proposedTeam ?? []).includes(obs.myPlayerId) || obs.currentLeader === obs.myPlayerId) return false;
+  // 雜湊鍵放進每一局都不一樣的公開狀態（提議的隊、到目前的提議次數、任務結果），不然同一個座位、同一局、同一次提議在每一局都是同一個答案。
+  const team = [...(obs.proposedTeam ?? [])].sort().join(',');
+  const key = `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|${team}|${(obs.voteHistory ?? []).length}|${(obs.questResults ?? []).join('')}|key41`;
   let h = 0x811c9dc5;
-  for (const ch of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|key41`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
   return (h % 10000) / 10000 < q;
 }

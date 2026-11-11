@@ -138,5 +138,15 @@ describe('merlinKeyApprove41 (measured only)', () => {
     expect(merlinKeyApprove41Now(T({ merlinKeyApprove41: 1 }), asObs({ ...(key as object), seatTeam: 'evil' }))).toBe(false);
     const a = merlinKeyApprove41Now(T({ merlinKeyApprove41: 0.5 }), key);
     expect(merlinKeyApprove41Now(T({ merlinKeyApprove41: 0.5 }), key)).toBe(a);
+    // not on his own proposal (the human cell excludes it)
+    expect(merlinKeyApprove41Now(T({ merlinKeyApprove41: 1 }), asObs({ ...(key as object), currentLeader: 'P3' }))).toBe(false);
+  });
+  it('the rate varies with the public game state, not only seat / round / attempt', () => {
+    const others = ['P1', 'P2', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10'];
+    const outs = new Set<boolean>();
+    for (let i = 0; i < others.length; i++) for (let j = i + 1; j < others.length; j++) for (let k = j + 1; k < others.length; k++) {
+      outs.add(merlinKeyApprove41Now(T({ merlinKeyApprove41: 0.5 }), asObs({ ...(key as object), proposedTeam: ['P3', others[i], others[j], others[k]] })));
+    }
+    expect(outs.size).toBe(2);
   });
 });
