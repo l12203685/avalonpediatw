@@ -32,6 +32,7 @@ import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
 import { goodLake39Pick } from './BlueRound39';
+import { goodLake41Pick } from './BlueRound41';
 import { percivalRead39 } from './BlueRound39Percival';
 import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
@@ -256,6 +257,9 @@ export function pickLakeTargetForTeam(
     if (chainPick !== null) return chainPick;
     const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
     if (entropyPick !== null) return entropyPick;
+    // ── AgentTuning.goodLake41（第 41 回合；BlueRound41.ts）── 湖中分數（資訊 ＋ 權重 × 好人機率）照局勢的人選範圍；同分不用亂數、不用座位。
+    const lake41 = goodLake41Pick(tuning, obs, unknownCandidates);
+    if (lake41 !== null) return lake41;
     // ── AgentTuning.goodLake39（第 39 回合；BlueRound39.ts）── 第 1、2 湖照比分順序的分類、不湖出過兩張失敗的隊、同分不照座位序。
     const lake39 = goodLake39Pick(tuning, obs, unknownCandidates);
     if (lake39 !== null) return lake39;
