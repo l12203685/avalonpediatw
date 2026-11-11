@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import LeaderboardBoards from '../LeaderboardBoards';
 import PeriodWinRates from '../PeriodWinRates';
+import DecisiveBoard from '../decisive/DecisiveBoard';
 
 /**
  * 排行：角色理論勝率排行等各榜 (LeaderboardBoards)。
@@ -12,8 +13,14 @@ import PeriodWinRates from '../PeriodWinRates';
  *   倒是可以加 任務勝率 … 刺殺勝率」) 精算榜不再是排行的小分頁：期望勝與最終勝率重複、精準勝率是舊的任務口徑
  *   (三藍死算藍勝) 又不隨每日重算的口徑更新；任務勝率／刺殺勝率併進「理論勝率」表。LeaderboardV3Table 與
  *   /api/leaderboard/v3 保留，要恢復把 precision 傳回 LeaderboardBoards 即可。
+ * (2026-11-11 Edward) 加「關鍵外白／內黑」(DecisiveBoard)：真的決定了提議過不過的藍方投票。
  */
 export default function BoardsTab(): JSX.Element {
   const { t } = useTranslation('common');
-  return <LeaderboardBoards winRates={{ label: t('analytics.winRates.tab'), content: <PeriodWinRates /> }} />;
+  return (
+    <LeaderboardBoards
+      winRates={{ label: t('analytics.winRates.tab'), content: <PeriodWinRates /> }}
+      decisive={{ label: t('analytics.decisive.tab'), content: <DecisiveBoard /> }}
+    />
+  );
 }

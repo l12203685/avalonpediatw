@@ -45,6 +45,19 @@ export const STAT_TERMS = [
   'twoRedThumb',
   'twoRedOneThumb',
   'twoRedTwoPlus',
+  // 2026-11-11 數據排行「關鍵外白／內黑」：真的決定了提議過不過的藍方投票（@avalon/shared stats/decisiveVotes.ts）
+  'decisiveVote',
+  'decisiveAccuracy',
+  'decisiveShrunk',
+  'decisiveOnYes',
+  'decisiveOnNo',
+  'decisiveOffYes',
+  'decisiveOffNo',
+  'decisiveNeutral',
+  'decisiveYesRate',
+  'decisiveNoRate',
+  'decisivePerChance',
+  'decisiveOnShare',
 ] as const;
 
 export type StatTermKey = (typeof STAT_TERMS)[number];

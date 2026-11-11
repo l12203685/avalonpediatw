@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Loader, AlertCircle, RefreshCw, Clock, Trophy, MapPin, Layers, History, TrendingUp, Crosshair,
-  Sparkles, Crown, Calculator, ListOrdered, Percent, Activity, type LucideIcon,
+  Sparkles, Crown, Calculator, ListOrdered, Percent, Activity, Vote, type LucideIcon,
 } from 'lucide-react';
 import { useStatsFilter, useStatsFiltered } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
@@ -12,6 +12,7 @@ import TheoryTable from './TheoryTable';
 import LeaderboardRules from './LeaderboardRules';
 import RoleChampions from './RoleChampions';
 import EloBoard from './EloBoard';
+import { BOARDS_PERSIST_KEY, DECISIVE_TAB } from './decisive/decisiveLayout';
 import { BenchmarkToggle, benchmarkBoardRow, useBenchmarkPinned } from './BenchmarkRows';
 import {
   fetchAnalysisLeaderboard,
@@ -73,6 +74,10 @@ import {
  * (2026-11-03 Edward：基準列「呈現在所有排行跟數據分析的最上列」) 理論勝率表 (TheoryTable) 與角色理論／位置理論／
  * 整體理論榜 (舊快取的小分頁)、刺客榜最上面釘基準列 (BenchmarkRows)。不放的：進步榜 (近期 vs 之前的差，一個組沒有
  * 「進步」可言)、新人榜 (看的是個人第一次出賽的日子)、角色王 (每個角色的前 10 名稱號)、Elo (個人評分)。
+ *
+ * (2026-11-11 Edward：「最佳第六人」擴大成「關鍵 場外／場內 × 白／黑 × 對／錯」) 快取的各榜後面加「關鍵外白／內黑」
+ * (decisive/DecisiveBoard，BoardsTab 傳進來)：統計 Worker 從每局資料算、跟著篩選；上榜門檻是自己的「最低關鍵票」，
+ * 不用上方的上榜條件 (那些是場數／近 N 場的門檻，這個榜看的是關鍵票張數)。
  */
 
 /** 小分頁順序；不在這裡的 id 依快取順序排在後面。 */
@@ -164,9 +169,13 @@ export interface LeaderboardBoardsProps {
    * 勝率表 (2026-10-26 玩家回饋：只看某段期間的玩家勝率)：放在第一個榜後面；篩選很窄、各榜都空時照樣切得到。
    */
   winRates?: { label: string; content: ReactNode };
+  /**
+   * 關鍵外白／內黑 (2026-11-11 Edward)：放在快取的各榜後面；瀏覽器端從每局資料算，排行快取載入失敗時照樣切得到。
+   */
+  decisive?: { label: string; content: ReactNode };
 }
 
-export default function LeaderboardBoards({ precision, winRates }: LeaderboardBoardsProps): JSX.Element {
+export default function LeaderboardBoards({ precision, winRates, decisive }: LeaderboardBoardsProps): JSX.Element {
   const filtered = useStatsFiltered();
   const { t } = useTranslation('common');
   const isEn = useIsEn();
@@ -244,6 +253,7 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
     { id: ELO_TAB, label: t('analytics.elo.tab'), icon: Activity },
     ...(winRates ? [{ id: WIN_RATES_TAB, label: winRates.label, icon: Percent }] : []),
     ...boardItems.slice(1),
+    ...(decisive ? [{ id: DECISIVE_TAB, label: decisive.label, icon: Vote }] : []),
     ...(precision ? [{ id: PRECISION_TAB, label: precision.label, icon: Calculator }] : []),
   ];
 
@@ -304,12 +314,13 @@ export default function LeaderboardBoards({ precision, winRates }: LeaderboardBo
       {showRules && <LeaderboardRules config={data?.config} />}
       <SectionTabs
         items={items}
-        persistKey="boards"
+        persistKey={BOARDS_PERSIST_KEY}
         ariaLabel={t('analytics.r6.boards.tabsLabel')}
       >
         {active => {
           if (active === WIN_RATES_TAB) return winRates?.content;
           if (active === ELO_TAB) return <EloBoard />;
+          if (active === DECISIVE_TAB) return decisive?.content;
           if (active === PRECISION_TAB) {
             return (
               <div>

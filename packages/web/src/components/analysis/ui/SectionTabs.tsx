@@ -52,22 +52,34 @@ export interface SectionTabsProps<T extends string = string> {
 
 const STORAGE_PREFIX = 'avalonpediatw-section-tab:';
 
+/** 儲存不可用時的備援 (同一次瀏覽有效)。 */
+const memoryTabs = new Map<string, string>();
+
 function readStoredTab(key: string | undefined): string | null {
   if (!key) return null;
   try {
-    return window.localStorage.getItem(STORAGE_PREFIX + key);
+    return window.localStorage.getItem(STORAGE_PREFIX + key) ?? memoryTabs.get(key) ?? null;
   } catch {
-    return null;
+    return memoryTabs.get(key) ?? null;
   }
 }
 
 function writeStoredTab(key: string | undefined, id: string): void {
   if (!key) return;
+  memoryTabs.set(key, id);
   try {
     window.localStorage.setItem(STORAGE_PREFIX + key, id);
   } catch {
     // 儲存不可用 (私密模式、封鎖網站資料) — 只記在記憶體
   }
+}
+
+/**
+ * 從別的地方指定某組小分頁下次打開哪一頁 (例：玩家雷達的「看排行」打開數據排行的某個榜)；
+ * 那組小分頁下次掛載時讀到。
+ */
+export function rememberSectionTab(persistKey: string, id: string): void {
+  writeStoredTab(persistKey, id);
 }
 
 function isSelectable<T extends string>(items: readonly SectionTabItem<T>[], id: unknown): id is T {

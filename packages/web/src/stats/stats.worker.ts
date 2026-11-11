@@ -2,17 +2,19 @@
  * 篩選重算的 Worker：全部區塊重算約 0.3 秒 (Node 實測；手機更久)，放在背景不卡畫面。
  * 訊息：{ id, type: 'vocab' | 'compute', serverUrl, filter? } → { id, ok, value } / { id, ok: false, status, error }。
  */
-import { computeClaimData, computeDiscovery, computeFiltered, computeStateGames, computeStrength, computeTwoRed, filterVocab, GamesUnavailableError } from './statsCompute';
-import type { GameFilter, StrengthGrouping } from '@avalon/shared/stats';
+import { computeClaimData, computeDecisive, computeDiscovery, computeFiltered, computeStateGames, computeStrength, computeTwoRed, filterVocab, GamesUnavailableError } from './statsCompute';
+import type { DecisiveScope, GameFilter, StrengthGrouping } from '@avalon/shared/stats';
 
 interface StatsRequest {
   id: number;
-  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed';
+  type: 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed' | 'decisive';
   serverUrl: string;
   filter?: GameFilter;
   grouping?: StrengthGrouping;
   /** twoRed：玩家名字。 */
   name?: string;
+  /** decisive：範圍。 */
+  scope?: DecisiveScope;
 }
 
 /** Worker 的全域 (web 的 tsconfig 只有 DOM lib；不引 webworker lib，避免兩套全域型別衝突)。 */
@@ -22,7 +24,7 @@ const ctx = self as unknown as {
 };
 
 ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
-  const { id, type, serverUrl, filter, grouping, name } = event.data;
+  const { id, type, serverUrl, filter, grouping, name, scope } = event.data;
   try {
     const value = type === 'vocab'
       ? await filterVocab(serverUrl)
@@ -36,6 +38,8 @@ ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
           ? await computeClaimData(serverUrl)
         : type === 'twoRed'
           ? await computeTwoRed(serverUrl, filter ?? null, name ?? '')
+        : type === 'decisive'
+          ? await computeDecisive(serverUrl, filter ?? null, scope ?? 'twoRed')
           : await computeFiltered(serverUrl, filter as GameFilter);
     ctx.postMessage({ id, ok: true, value });
   } catch (err) {

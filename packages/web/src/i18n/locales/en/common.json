@@ -1913,6 +1913,135 @@
         "bottomLabel": "Benchmark rows: bottom % (Elo PR at game time)",
         "hint": "Grouped by Elo PR before that game: top X% = PR ≥ 100 − X, bottom Y% = PR < Y, the rest is the middle; saved in the share link."
       }
+    },
+    "decisive": {
+      "tab": "Decisive votes",
+      "title": "Decisive outside-approve / inside-reject",
+      "loading": "Computing decisive votes…",
+      "error": "Could not compute: {{message}}",
+      "scopeLabel": "Scope",
+      "scope": {
+        "twoRed": "After red's 2 wins",
+        "r35": "Rounds 3–5"
+      },
+      "minN": "Min decisive votes",
+      "minNOption": "{{count}} votes",
+      "sortBy": "Sort by",
+      "sortByCol": "Sort by \"{{col}}\"",
+      "sort": {
+        "score": "Decisive accuracy (shrunk)",
+        "raw": "Raw accuracy",
+        "n": "Decisive votes",
+        "yes": "Approve accuracy",
+        "no": "Reject accuracy",
+        "onYes": "On-team approve",
+        "onNo": "On-team reject",
+        "offYes": "Off-team approve",
+        "offNo": "Off-team reject"
+      },
+      "abnormal": "unusual",
+      "cellTitle": "{{right}} right, {{wrong}} wrong, {{neutral}} neutral (rate = right ÷ (right + wrong); neutral excluded)",
+      "groupLow": "fewer than {{min}} votes in this group; sorted after players with enough",
+      "rightWrong": "{{right}}✓ {{wrong}}✗",
+      "roleSplitTitle": "Non-neutral decisive votes: Loyal {{loyal}}, Percival {{percival}}, Merlin {{merlin}}",
+      "scoreTitle": "{{right}} / {{n}} = raw {{raw}}; shrunk toward the overall {{p0}} (k = {{k}}) = {{score}}",
+      "nTitle": "{{n}} non-neutral decisive votes (plus {{neutral}} neutral round-4 one-red votes); in {{games}} games",
+      "onShareTitle": "{{on}} cast on the team, {{off}} off the team",
+      "summary": "{{proposals}} proposals (attempts 1–4) in the filter · {{votes}} decisive blue votes ({{neutral}} neutral round-4 one-red; {{unnamed}} from unnamed seats, counted only in totals) · overall accuracy {{p0}}",
+      "legend": {
+        "onYes": "on the team, approve. The usual vote.",
+        "onNo": "= inside reject: on the team but rejects. Unusual.",
+        "offYes": "= outside approve: off the team but approves. Unusual.",
+        "offNo": "off the team, reject. The usual vote."
+      },
+      "legendRate": "overall {{rate}} ({{right}}✓ {{wrong}}✗)",
+      "tableTitle": "Players",
+      "minNote": "Listed: at least {{min}} non-neutral decisive votes — {{count}} players, {{coverage}} of named players' decisive votes. Default here: {{def}} (30 without a filter, 10 with one). 30 is chosen for coverage, not because 30 votes are reliable: splitting each player's games into two random halves, regulars with 30+ votes do not agree with themselves (their differences are mostly luck); a small agreement (correlation about 0.3) appears only when players with 15–29 votes are included. Noise is handled by shrinking toward the overall average; k = {{k}} is a chosen strength, not an estimate.",
+      "empty": "No player has {{min}} decisive votes; lower the minimum or widen the filter.",
+      "col": {
+        "accuracy": "Decisive accuracy",
+        "score": "Accuracy (shrunk)",
+        "raw": "Raw",
+        "n": "Decisive",
+        "onYes": "On approve",
+        "onNo": "On reject",
+        "offYes": "Off approve",
+        "offNo": "Off reject",
+        "yes": "Approve acc.",
+        "no": "Reject acc.",
+        "onShare": "On-team share",
+        "roles": "Roles (L/P/M)"
+      },
+      "cells": {
+        "onYes": {
+          "right": "On approve ✓",
+          "wrong": "On approve ✗"
+        },
+        "onNo": {
+          "right": "On reject ✓ (decisive inside reject)",
+          "wrong": "On reject ✗"
+        },
+        "offYes": {
+          "right": "Off approve ✓ (decisive outside approve)",
+          "wrong": "Off approve ✗"
+        },
+        "offNo": {
+          "right": "Off reject ✓ (decisive outside reject)",
+          "wrong": "Off reject ✗"
+        }
+      },
+      "roles": {
+        "title": "All players by role",
+        "viewLabel": "View",
+        "view": {
+          "rate": "Accuracy",
+          "share": "Share",
+          "chance": "Per chance"
+        },
+        "viewNote": {
+          "rate": "Each role's decisive accuracy and the four group rates (unnamed seats included); hover a cell for counts and role shares.",
+          "share": "Who cast each cell's votes. Loyal servants are four seats and have two thirds of the chances; compare with the first row.",
+          "chance": "Per voting chance (one blue player × one proposal). Being decisive depends on the others' votes, so it is about equal for all roles; the difference is right vs wrong."
+        },
+        "role": {
+          "忠臣": "Loyal",
+          "派西維爾": "Percival",
+          "梅林": "Merlin",
+          "all": "All"
+        },
+        "colRole": "Role",
+        "colCell": "Cell",
+        "colTotal": "Total",
+        "chances": "Voting chances",
+        "countTitle": "{{count}} votes",
+        "rightShareTitle": "Right votes in this group: Loyal {{loyal}}, Percival {{percival}}, Merlin {{merlin}}",
+        "perChanceTitle": "{{k}} / {{n}} chances",
+        "colDecisive": "Decisive",
+        "colRightPer": "Decisive right",
+        "colWrongPer": "Decisive wrong",
+        "help": {
+          "rate": "Accuracy: share of a role's decisive votes that were right (let an all-good team go, stopped a failing team).",
+          "share": "Share: how many of each cell's votes each role cast. Loyal servants are more numerous; compare with their share of chances.",
+          "chance": "Per chance: every blue player's vote on every proposal is one chance; rates of decisive right / wrong votes are comparable across roles."
+        },
+        "merlinNote": "Merlin sees every red except Mordred: decisive accuracy {{merlin}} (Loyal {{loyal}}). When the only red on the team is Mordred (invisible to him) Merlin gets {{mo}} ({{moN}} votes), Loyal {{lo}} ({{loN}}). Very accurate off-team and inside rejects may also expose Merlin to the assassin."
+      },
+      "help": {
+        "what": "A decisive vote is one that changed the result: the proposal passed with exactly 6 approvals and this player approved, or failed with exactly 5 and this player rejected (the other nine split 5–4). Votes are revealed at once, so nobody knows in advance. Only blue players (Loyal, Percival, Merlin) on attempts 1–4; the 5th attempt is forced.",
+        "cells": "Eight cells: on/off the team × approve/reject × right/wrong. All-good teams (no red; Mordred counts as red) should go; failing teams (round 4: two or more reds; other rounds: one or more) should be stopped. Round-4 teams with exactly one red cannot fail and are neutral.",
+        "abnormal": "Usual votes are on-team approve and off-team reject; unusual ones are on-team reject (inside reject) and off-team approve (outside approve), shaded in the table. Decisive outside approve = off-team approve that let an all-good team go (the community's \"sixth man\"); decisive inside reject = on-team reject that stopped a bad team one vote from going.",
+        "scope": "Scope: \"after red's 2 wins\" = red has exactly two missions (rounds 3–5), the original idea; \"rounds 3–5\" = any score. Rounds 1–2 are not ranked: always rejecting beats the average there.",
+        "rank": "Ranking: decisive accuracy = right ÷ non-neutral decisive votes, shrunk toward the overall average: (right + {{k}} × average) ÷ (votes + {{k}}).",
+        "baselineBelow": "On the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}} — all below the overall {{p0}}, so the score does not reward one-sided or habitual voting.",
+        "baselineNotBelow": "Caution: on the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}}, overall {{p0}}. At least one fixed strategy is not below average here, so the score may reward one-sided or habitual voting; read the ranking cautiously.",
+        "honest": "Honestly: whether a vote is decisive depends on the others, so decisive votes are a random ~13% slice of a player's votes. Split-half checks (all games, no filter): regulars with 30+ votes do not agree with themselves, so differences between them are mostly luck; a small agreement appears only when players with 15–29 votes are included. Treat the table as counts and stories, not a stable skill measure.",
+        "data": "10-player games, following the filter. Proposals whose votes contradict the result are record errors and excluded. No leader needed; gaps in the proposal record do not matter. Unnamed seats count in totals and roles only."
+      },
+      "player": {
+        "line": "Decisive votes after red's 2 wins: {{n}}, accuracy {{raw}} (all {{p0}}) · outside approve {{oyR}}✓ {{oyW}}✗ · inside reject {{onR}}✓ {{onW}}✗",
+        "none": "No decisive votes after red's 2 wins.",
+        "link": "Open the decisive-votes board"
+      }
     }
   },
   "guest": {
@@ -2166,6 +2295,78 @@
       "def": "Mission 4: after Red has two wins, a team proposed by a Blue leader with two or more Reds (Mordred counted).",
       "calc": "These proposals ÷ proposals in the same cell. The columns of a row are mutually exclusive and add up to 100%.",
       "meaning": "If such a team goes, Red can play two fails and win the game with a third mission. Lower is better."
+    },
+    "decisiveVote": {
+      "name": "Decisive vote",
+      "def": "A blue vote that changed whether the proposal passed: approving a 6–4 pass or rejecting a 5–5 failure.",
+      "calc": "Attempts 1–4 only, proposals whose votes match the result; the other nine split exactly 5 approve. Loyal, Percival and Merlin only.",
+      "meaning": "These votes decided whether the mission went. Nobody knows in advance, so they are a random ~13% slice of all votes."
+    },
+    "decisiveAccuracy": {
+      "name": "Decisive accuracy",
+      "def": "Share of decisive votes that were right: approving an all-good team or rejecting a failing team.",
+      "calc": "(approve right + reject right) ÷ (right + wrong); neutral round-4 one-red votes excluded.",
+      "meaning": "Higher = votes right when it matters. Noisy with few votes; the ranking uses the shrunk value."
+    },
+    "decisiveShrunk": {
+      "name": "Accuracy (shrunk)",
+      "def": "Decisive accuracy pulled toward the overall average, more so with fewer votes.",
+      "calc": "(right + k × average) ÷ (non-neutral votes + k), k = 150 (a chosen strength, not an estimate).",
+      "meaning": "The ranking score; a few lucky votes cannot top the table. Everyone close to average is expected."
+    },
+    "decisiveOnYes": {
+      "name": "On-team approve",
+      "def": "Decisive approve while on the team (the usual vote).",
+      "calc": "Right = all-good team; wrong = failing team.",
+      "meaning": "High = does not let a bad team through with their own vote."
+    },
+    "decisiveOnNo": {
+      "name": "On-team reject (inside reject)",
+      "def": "Decisive reject while on the team (unusual). Right = decisive inside reject: stopped a failing team one vote from going.",
+      "calc": "Right = failing team; wrong = all-good team.",
+      "meaning": "Giving up one's own seat; high = spots reds among teammates."
+    },
+    "decisiveOffYes": {
+      "name": "Off-team approve (outside approve)",
+      "def": "Decisive approve while off the team (unusual). Right = decisive outside approve, the \"sixth man\": let an all-good team go.",
+      "calc": "Right = all-good team; wrong = failing team.",
+      "meaning": "Trusting a clean team from outside. Most teams off-team voters face at decisive spots fail, so ~50% already beats guessing."
+    },
+    "decisiveOffNo": {
+      "name": "Off-team reject",
+      "def": "Decisive reject while off the team (the usual vote). Right = decisive outside reject.",
+      "calc": "Right = failing team; wrong = all-good team.",
+      "meaning": "The most common decisive vote; high = does not block good teams."
+    },
+    "decisiveNeutral": {
+      "name": "Neutral (round-4 one red)",
+      "def": "Round-4 teams with exactly one red cannot fail (two fails needed); neither approve nor reject is right or wrong.",
+      "calc": "Counted separately, excluded from every rate.",
+      "meaning": "The +number next to the decisive-vote count."
+    },
+    "decisiveYesRate": {
+      "name": "Approve accuracy",
+      "def": "Share of decisive approves (on + off team) that were right.",
+      "calc": "approve right ÷ non-neutral decisive approves.",
+      "meaning": "Read together with reject accuracy."
+    },
+    "decisiveNoRate": {
+      "name": "Reject accuracy",
+      "def": "Share of decisive rejects (on + off team) that were right.",
+      "calc": "reject right ÷ non-neutral decisive rejects.",
+      "meaning": "Usually higher than approve accuracy because most decisive teams fail."
+    },
+    "decisivePerChance": {
+      "name": "Per chance",
+      "def": "Each blue player's vote on each proposal is one chance; probability of a decisive right (or wrong) vote per chance.",
+      "calc": "decisive right (wrong) votes ÷ voting chances (blue seats × proposals).",
+      "meaning": "Being decisive depends on others and is about equal for all roles; this compares roles of different sizes."
+    },
+    "decisiveOnShare": {
+      "name": "On-team share",
+      "def": "Share of a player's decisive votes cast while on the team.",
+      "calc": "(on approve + on reject) ÷ non-neutral decisive votes.",
+      "meaning": "Descriptive, not good or bad."
     }
   }
 }
