@@ -5,7 +5,8 @@
 import { describe, expect, it } from 'vitest';
 import { DISCOVERY_DIMENSIONS, DISCOVERY_METRICS, type DiscoveryFinding } from '@avalon/shared/stats';
 import {
-  EMPTY_DISCOVERY_QUERY, findingClause, findingNotes, findingSentence, formatCi, formatDiff, queryFindings, topForPage,
+  EMPTY_DISCOVERY_QUERY, findingClause, findingClusters, findingLink, findingNotes, findingSentence, findingStrategy, formatCi, formatDiff,
+  queryFindings, topForPage,
 } from '../../../web/src/components/analysis/discovery/discoveryText';
 import { buildGrouping } from '../../../web/src/components/analysis/strength/compareFormat';
 
@@ -55,5 +56,43 @@ describe('discovery text', () => {
     expect(queryFindings(all, { ...EMPTY_DISCOVERY_QUERY, sort: 'q' }).map((f) => f.id)).toEqual(['l', 'x']);
     expect(topForPage(all, 'assassination', 3).map((f) => f.id)).toEqual(['x']);
     expect(buildGrouping('tertile', 70, 6, 30, 'redMin')).toEqual({ kind: 'tertile', dim: 'redMin' });
+  });
+});
+
+describe('discovery text for the new data (two reds, decisive votes, all votes)', () => {
+  const twoRed = finding({
+    id: 't', unit: 'twoRed', dimension: dim('twoRed', 'playerTier'), metric: met('twoRed', 'r4Safe'),
+    a: { label: '強者', value: 83.3, n: 162, units: 162, games: 145, players: 14 },
+    b: { label: '新手', value: 67.0, n: 191, units: 191, games: 170, players: 24 },
+    diff: 16.3, lo: 7.8, hi: 24.8, q: 0.001, effect: 0.38, clustered: true, withinRole: 15.4,
+    strategy: { text: '強者在兩紅後第 4 局比較常派最多一紅的隊（83% vs 新手 67%） → 第 4 局可以優先找最多一紅、出任務一定成功的隊' },
+  });
+
+  it('a pair is written with both names; clusters and the within-role difference are noted', () => {
+    expect(findingSentence(twoRed)).toBe('隊長分組是「強者」時，兩紅後第 4 局最多一紅 83%；「新手」時 67%');
+    expect(findingClusters(twoRed)).toBe('強者 145 局 14 人、新手 170 局 24 人（同一局、同一人的相關已算進檢定）');
+    expect(findingNotes(twoRed)).toEqual(['在同一個角色裡比，平均差 +15pp']);
+    expect(findingClusters(finding({}))).toBeNull();
+  });
+
+  it('the strategy line is labelled as a hypothesis; suppressed ones have no line', () => {
+    expect(findingStrategy(twoRed)).toBe('可能的策略（假設：來自觀察資料，相關不是因果）：強者在兩紅後第 4 局比較常派最多一紅的隊（83% vs 新手 67%） → 第 4 局可以優先找最多一紅、出任務一定成功的隊');
+    expect(findingStrategy(finding({ strategy: { text: null, suppressed: 'small', reason: '差距不到 5 個百分點' } }))).toBeNull();
+    expect(findingStrategy(finding({}))).toBeNull();
+  });
+
+  it('links to where the numbers live: two-red groups, the decisive board (decisive or all votes, scope)', () => {
+    expect(findingLink(twoRed)).toEqual({ kind: 'twoRedCohort', label: '看數字：陣容強度 › 兩紅派隊分組' });
+    const dv = finding({ unit: 'decisive', dimension: dim('decisive', 'twoRedState'), metric: met('decisive', 'offYes'), a: { label: '紅方已兩勝', value: 53, n: 432, units: 400 } });
+    expect(findingLink(dv)).toEqual({ kind: 'decisiveBoard', scope: 'twoRed', label: '看數字：數據排行 › 關鍵外白／內黑（關鍵票、兩紅之後）' });
+    const av = finding({ unit: 'blueVote', dimension: dim('blueVote', 'tableTier'), metric: met('blueVote', 'acc'), a: { label: '高端', value: 65, n: 7000, units: 3000 } });
+    expect(findingLink(av)).toMatchObject({ kind: 'decisiveBoardAll', scope: 'r35' });
+    expect(findingLink(finding({}))).toBeNull();
+  });
+
+  it('the list searches the strategy text and the other group', () => {
+    expect(queryFindings([twoRed, finding({})], { ...EMPTY_DISCOVERY_QUERY, text: '出任務一定成功' }).map((f) => f.id)).toEqual(['t']);
+    expect(queryFindings([twoRed, finding({})], { ...EMPTY_DISCOVERY_QUERY, text: '新手' }).map((f) => f.id)).toEqual(['t']);
+    expect(topForPage([twoRed], 'teams', 3).map((f) => f.id)).toEqual(['t']);
   });
 });

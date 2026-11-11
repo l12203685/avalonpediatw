@@ -11,6 +11,8 @@ export const DECISIVE_TAB = '__decisive';
 export const BOARDS_PERSIST_KEY = 'boards';
 /** 範圍切換的記憶鍵。 */
 export const DECISIVE_SCOPE_KEY = 'boards.decisive.scope';
+/** 分組那一塊（cohort/DecisiveCohortView）「關鍵票／全部投票」的記憶鍵（自動發現的「看數字」也會設）。 */
+export const DECISIVE_COHORT_KIND_KEY = 'boards.decisive.cohortKind';
 
 /** 上榜門檻的選項（非中性的關鍵票張數）；預設 DECISIVE_MIN_N = 30。 */
 export const DECISIVE_MIN_OPTIONS = [5, 10, 20, DECISIVE_MIN_N, 60, 100] as const;

@@ -8,7 +8,7 @@ import {
 } from '@avalon/shared/stats';
 import { useCohortCuts } from '../../../stats/cohortCuts';
 import { InfoTip, SectionTabs, StatTable, Term, useSectionTab, type SectionTabItem, type StatColumn } from '../ui';
-import { DECISIVE_GROUP_TERMS, DECISIVE_ROLE_COLORS } from '../decisive/decisiveLayout';
+import { DECISIVE_COHORT_KIND_KEY, DECISIVE_GROUP_TERMS, DECISIVE_ROLE_COLORS } from '../decisive/decisiveLayout';
 import CohortGrid, { type CohortMeasure } from './CohortGrid';
 import CohortCutsControl from './CohortCutsControl';
 import { COHORT_MIN_N, K, cohortPct, playerTierKey } from './cohortFormat';
@@ -55,7 +55,7 @@ function Body({ data }: { data: DecisiveCohortData }): JSX.Element {
   const kindItems: SectionTabItem<VoteKind>[] = useMemo(() => (['decisive', 'all'] as const).map((id) => ({
     id, label: t(`${K}.decisive.kind.${id}`),
   })), [t]);
-  const [kind = 'decisive', setKind] = useSectionTab(kindItems, { persistKey: 'boards.decisive.cohortKind' });
+  const [kind = 'decisive', setKind] = useSectionTab(kindItems, { persistKey: DECISIVE_COHORT_KIND_KEY });
   const [role, setRole] = useState<RoleChoice>('all');
   const [measure, setMeasure] = useState<string>('acc');
   const records = kind === 'all' ? data.all : data.decisive;

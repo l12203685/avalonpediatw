@@ -2,7 +2,7 @@
  * 篩選重算的呼叫端：預設在 Worker 裡算 (stats.worker.ts)，瀏覽器不支援或 Worker 起不來時改在主執行緒算
  * (同一份 statsCompute.ts)。同一個篩選只算一次 (最近幾個篩選的結果留著，切回來不用重算)。
  */
-import type { DecisiveCohortData, DecisiveReport, DecisiveScope, DiscoveryResult, TwoRedCohortData, GameFilter, StatsResult, StrengthGrouping, StrengthReport, TwoRedReport } from '@avalon/shared/stats';
+import type { CohortCuts, DecisiveCohortData, DecisiveReport, DecisiveScope, DiscoveryResult, TwoRedCohortData, GameFilter, StatsResult, StrengthGrouping, StrengthReport, TwoRedReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
 import type { ClaimData } from '../components/idClaim/claimIndex';
 import type { StateGamesResult } from '../components/analysis/stateTree/stateTree';
@@ -70,7 +70,7 @@ function getWorker(): Worker | null {
 
 type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed' | 'decisive' | 'twoRedCohort' | 'decisiveCohort';
 
-async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string, scope?: DecisiveScope): Promise<T> {
+async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string, scope?: DecisiveScope, cuts?: CohortCuts): Promise<T> {
   const mod = await import('./statsCompute');
   try {
     return (type === 'vocab'
@@ -78,7 +78,7 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
       : type === 'strength'
         ? await mod.computeStrength(SERVER_URL, filter ?? null, grouping ?? { kind: 'tier' })
         : type === 'discovery'
-          ? await mod.computeDiscovery(SERVER_URL, filter ?? null)
+          ? await mod.computeDiscovery(SERVER_URL, filter ?? null, cuts ?? null)
         : type === 'stateTree'
           ? await mod.computeStateGames(SERVER_URL, filter ?? null)
         : type === 'claim'
@@ -98,9 +98,9 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
   }
 }
 
-function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string, scope?: DecisiveScope): Promise<T> {
+function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string, scope?: DecisiveScope, cuts?: CohortCuts): Promise<T> {
   const w = getWorker();
-  if (!w) return onMainThread<T>(type, filter, grouping, name, scope);
+  if (!w) return onMainThread<T>(type, filter, grouping, name, scope, cuts);
   const id = nextId;
   nextId += 1;
   return new Promise<T>((resolve, reject) => {
@@ -109,10 +109,10 @@ function call<T>(type: RequestType, filter?: GameFilter | null, grouping?: Stren
       reject(new FilterUnavailableError(0, 'timeout'));
     }, TIMEOUT_MS);
     pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
-    w.postMessage({ id, type, serverUrl: SERVER_URL, filter: filter ?? undefined, grouping, name, scope });
+    w.postMessage({ id, type, serverUrl: SERVER_URL, filter: filter ?? undefined, grouping, name, scope, cuts });
   }).catch((err: unknown) => {
     // Worker 壞掉 (不是資料集拿不到) → 主執行緒再試一次
-    if (err instanceof FilterUnavailableError && err.message === 'worker failed') return onMainThread<T>(type, filter, grouping, name, scope);
+    if (err instanceof FilterUnavailableError && err.message === 'worker failed') return onMainThread<T>(type, filter, grouping, name, scope, cuts);
     throw err;
   });
 }
@@ -167,14 +167,15 @@ export function strengthReport(filter: GameFilter | null, filterKey: string, gro
 
 const discoveryResults = new Map<string, Promise<DiscoveryResult>>();
 
-/** 自動發現：目前篩選下的全部發現（Worker 裡掃描，同一個篩選只算一次）。失敗不快取。 */
-export function discoveryResult(filter: GameFilter | null, filterKey: string): Promise<DiscoveryResult> {
-  const hit = discoveryResults.get(filterKey);
+/** 自動發現：目前篩選與分組切點下的全部發現（Worker 裡掃描，同一個篩選＋切點只算一次）。失敗不快取。 */
+export function discoveryResult(filter: GameFilter | null, filterKey: string, cuts: CohortCuts): Promise<DiscoveryResult> {
+  const key = `${filterKey}|${cuts.prHi}-${cuts.prLo}-${cuts.sHi}-${cuts.sLo}`;
+  const hit = discoveryResults.get(key);
   if (hit) return hit;
-  const p = call<DiscoveryResult>('discovery', filter);
-  discoveryResults.set(filterKey, p);
+  const p = call<DiscoveryResult>('discovery', filter, undefined, undefined, undefined, cuts);
+  discoveryResults.set(key, p);
   p.catch(() => {
-    if (discoveryResults.get(filterKey) === p) discoveryResults.delete(filterKey);
+    if (discoveryResults.get(key) === p) discoveryResults.delete(key);
   });
   while (discoveryResults.size > KEEP_RESULTS) discoveryResults.delete(discoveryResults.keys().next().value as string);
   return p;

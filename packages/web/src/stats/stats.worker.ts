@@ -3,7 +3,7 @@
  * 訊息：{ id, type: 'vocab' | 'compute', serverUrl, filter? } → { id, ok, value } / { id, ok: false, status, error }。
  */
 import { computeClaimData, computeDecisive, computeDecisiveCohort, computeDiscovery, computeFiltered, computeStateGames, computeStrength, computeTwoRed, computeTwoRedCohort, filterVocab, GamesUnavailableError } from './statsCompute';
-import type { DecisiveScope, GameFilter, StrengthGrouping } from '@avalon/shared/stats';
+import type { CohortCuts, DecisiveScope, GameFilter, StrengthGrouping } from '@avalon/shared/stats';
 
 interface StatsRequest {
   id: number;
@@ -15,6 +15,8 @@ interface StatsRequest {
   name?: string;
   /** decisive／decisiveCohort：範圍。 */
   scope?: DecisiveScope;
+  /** discovery：分組的切點（強者／新手、高端／歡樂）。 */
+  cuts?: CohortCuts;
 }
 
 /** Worker 的全域 (web 的 tsconfig 只有 DOM lib；不引 webworker lib，避免兩套全域型別衝突)。 */
@@ -24,14 +26,14 @@ const ctx = self as unknown as {
 };
 
 ctx.onmessage = async (event: MessageEvent<StatsRequest>): Promise<void> => {
-  const { id, type, serverUrl, filter, grouping, name, scope } = event.data;
+  const { id, type, serverUrl, filter, grouping, name, scope, cuts } = event.data;
   try {
     const value = type === 'vocab'
       ? await filterVocab(serverUrl)
       : type === 'strength'
         ? await computeStrength(serverUrl, filter ?? null, grouping ?? { kind: 'tier' })
         : type === 'discovery'
-          ? await computeDiscovery(serverUrl, filter ?? null)
+          ? await computeDiscovery(serverUrl, filter ?? null, cuts ?? null)
         : type === 'stateTree'
           ? await computeStateGames(serverUrl, filter ?? null)
         : type === 'claim'
