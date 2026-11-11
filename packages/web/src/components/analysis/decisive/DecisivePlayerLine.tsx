@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { decisiveRate, sumDecisive } from '@avalon/shared/stats';
 import { useGameStore } from '../../../store/gameStore';
 import { rememberDecisiveBoard } from './decisiveLayout';
 import { useDecisiveReport } from './useDecisiveReport';
@@ -34,7 +33,6 @@ export default function DecisivePlayerLine({ name }: { name: string }): JSX.Elem
             p0: pct(report.all.p0),
             oyR: row.grid.offYes.right, oyW: row.grid.offYes.wrong,
             onR: row.grid.onNo.right, onW: row.grid.onNo.wrong,
-            rate: pct(decisiveRate(sumDecisive(row.grid, ['offYes', 'onNo']))),
           })
           : t(`${k}.none`)}
       </span>

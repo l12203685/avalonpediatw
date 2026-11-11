@@ -23,8 +23,13 @@
  *            （只給分析用：這時「一律投黑」的正確率比平均還高，正確率會獎勵單邊投票，不拿來排名）。
  *   排名     關鍵票正確率 =（白對 + 黑對）÷（對 + 錯）；中性不算。收縮值 =（對 + k·p0）÷（n + k），p0 = 同範圍全體（含沒寫名字的
  *            座位）的正確率、k = DECISIVE_SHRINK_K：一位玩家 n 張關鍵票時只保留 n ÷（n + k）的自己的偏差。
- *            在同一批關鍵位置上「一律白」「一律黑」「照常投（場內白、場外黑）」的正確率都低於平均，所以這個分數不會獎勵單邊投票
- *            （第 3～5 局；第 1～2 局不是這樣，不排名）。
+ *            k 是選定的收縮強度，不是從資料估出來的：用「每人的局隨機分兩半」檢查（全部局、無篩選，2026-11），30 張以上的常客
+ *            兩半對不起來（相關約 0、玩家間的真實差異估出來 ≤ 0，k 等於無限大），只有算進 15～29 張的人才有小幅正相關
+ *            （約 0.3～0.4，估出的 k 約 50～250）。所以 k = 150 取在這個範圍中間；門檻 30 張是為了涵蓋率（兩紅之後涵蓋有名字
+ *            玩家關鍵票的 84%），不是信度。
+ *            三種固定投法（一律白、一律黑、照常投 = 場內白、場外黑）在同一批關鍵位置上的正確率由 decisiveBaselines 即時算：
+ *            全部局時兩紅之後 45% / 55% / 66%、第 3～5 局 40% / 60% / 67%，都低於平均（68%）；篩選後可能不同，表上顯示即時的數字。
+ *            第 1～2 局一律黑就比平均準，不排名。
  *
  * 資料集只有 10 人局（4 紅），配置不是 6 個不同數字的局不算（同 twoRed.ts）。
  */
@@ -51,9 +56,9 @@ export const DECISIVE_ABNORMAL: ReadonlySet<DecisiveGroup> = new Set<DecisiveGro
 /** 全好 = 該放行；會失敗 = 該擋；中性 = 第 4 局單紅（放不放都不算對錯）。 */
 export type DecisiveQuality = 'good' | 'bad' | 'neutral';
 
-/** 收縮的強度 k（樣本 n 張時保留 n ÷（n + k）的自己的偏差）。 */
+/** 收縮的強度 k（樣本 n 張時保留 n ÷（n + k）的自己的偏差）。選定的值，不是估計值（見檔頭「排名」）。 */
 export const DECISIVE_SHRINK_K = 150;
-/** 上榜的預設門檻：至少這麼多張非中性的關鍵票。 */
+/** 上榜的預設門檻：至少這麼多張非中性的關鍵票（為了涵蓋率；見檔頭「排名」）。 */
 export const DECISIVE_MIN_N = 30;
 /** 四組（與白票、黑票）對率：不到這麼多張只能參考，依這組排序時排在夠張數的人後面（4 張以下差一張就差 25 個百分點以上）。 */
 export const DECISIVE_GROUP_MIN = 5;
@@ -237,6 +242,27 @@ export function decisiveShrunk(cell: Pick<DecisiveCell, 'right' | 'wrong'>, p0: 
   return (cell.right + k * p0) / (n + k);
 }
 
+/** 同一批關鍵位置（非中性）上三種固定投法的正確率：一律白、一律黑、照常投（場內白、場外黑）。 */
+export interface DecisiveBaselines {
+  approve: number | null;
+  reject: number | null;
+  usual: number | null;
+}
+
+/**
+ * 三種固定投法在這些關鍵位置上的正確率（從八格倒推：位置是全好還是會失敗、投的人在不在隊上，與實際投白投黑無關）。
+ * 拿來檢查分數會不會獎勵單邊投票：三者都低於全體平均才不會。
+ */
+export function decisiveBaselines(grid: DecisiveGrid): DecisiveBaselines {
+  const onGood = grid.onYes.right + grid.onNo.wrong;
+  const onBad = grid.onYes.wrong + grid.onNo.right;
+  const offGood = grid.offYes.right + grid.offNo.wrong;
+  const offBad = grid.offYes.wrong + grid.offNo.right;
+  const n = onGood + onBad + offGood + offBad;
+  if (n === 0) return { approve: null, reject: null, usual: null };
+  return { approve: (onGood + offGood) / n, reject: (onBad + offBad) / n, usual: (onGood + offBad) / n };
+}
+
 /** 一位玩家在一個範圍裡的關鍵票。 */
 export interface DecisivePlayerRow {
   name: string;
@@ -280,6 +306,8 @@ export interface DecisiveReport {
     games: number;
     /** 全體的關鍵票正確率（收縮的目標）。 */
     p0: number | null;
+    /** 同一批關鍵位置上一律白／一律黑／照常投的正確率（跟 p0 比：都低才不獎勵單邊投票）。 */
+    baselines: DecisiveBaselines;
   };
   k: number;
 }
@@ -342,6 +370,7 @@ export function decisiveReport(scan: DecisiveScan, scope: DecisiveScope, k = DEC
       inconsistent: scan.inconsistent[scope],
       games: scan.games[scope],
       p0,
+      baselines: decisiveBaselines(allGrid),
     },
     k,
   };

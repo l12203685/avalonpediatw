@@ -1956,7 +1956,7 @@
       },
       "legendRate": "overall {{rate}} ({{right}}✓ {{wrong}}✗)",
       "tableTitle": "Players",
-      "minNote": "Listed: at least {{min}} non-neutral decisive votes — {{count}} players, {{coverage}} of named players' decisive votes. Default 30: split-half checks show rankings barely replicate at any threshold (differences are mostly luck), so the threshold only aims for coverage and noise is handled by shrinking toward the overall average (k = {{k}}).",
+      "minNote": "Listed: at least {{min}} non-neutral decisive votes — {{count}} players, {{coverage}} of named players' decisive votes. Default here: {{def}} (30 without a filter, 10 with one). 30 is chosen for coverage, not because 30 votes are reliable: splitting each player's games into two random halves, regulars with 30+ votes do not agree with themselves (their differences are mostly luck); a small agreement (correlation about 0.3) appears only when players with 15–29 votes are included. Noise is handled by shrinking toward the overall average; k = {{k}} is a chosen strength, not an estimate.",
       "empty": "No player has {{min}} decisive votes; lower the minimum or widen the filter.",
       "col": {
         "accuracy": "Decisive accuracy",
@@ -2031,8 +2031,10 @@
         "cells": "Eight cells: on/off the team × approve/reject × right/wrong. All-good teams (no red; Mordred counts as red) should go; failing teams (round 4: two or more reds; other rounds: one or more) should be stopped. Round-4 teams with exactly one red cannot fail and are neutral.",
         "abnormal": "Usual votes are on-team approve and off-team reject; unusual ones are on-team reject (inside reject) and off-team approve (outside approve), shaded in the table. Decisive outside approve = off-team approve that let an all-good team go (the community's \"sixth man\"); decisive inside reject = on-team reject that stopped a bad team one vote from going.",
         "scope": "Scope: \"after red's 2 wins\" = red has exactly two missions (rounds 3–5), the original idea; \"rounds 3–5\" = any score. Rounds 1–2 are not ranked: always rejecting beats the average there.",
-        "rank": "Ranking: decisive accuracy = right ÷ non-neutral decisive votes, shrunk toward the overall average: (right + {{k}} × average) ÷ (votes + {{k}}). Always-approve, always-reject and usual voting all score below average on the same decisive spots, so the score does not reward one-sided voting.",
-        "honest": "Honestly: whether a vote is decisive depends on the others, so decisive votes are a random ~13% slice of a player's votes. Split-half checks show the ranking barely replicates; treat it as counts and stories, not a stable skill measure.",
+        "rank": "Ranking: decisive accuracy = right ÷ non-neutral decisive votes, shrunk toward the overall average: (right + {{k}} × average) ÷ (votes + {{k}}).",
+        "baselineBelow": "On the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}} — all below the overall {{p0}}, so the score does not reward one-sided or habitual voting.",
+        "baselineNotBelow": "Caution: on the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}}, overall {{p0}}. At least one fixed strategy is not below average here, so the score may reward one-sided or habitual voting; read the ranking cautiously.",
+        "honest": "Honestly: whether a vote is decisive depends on the others, so decisive votes are a random ~13% slice of a player's votes. Split-half checks (all games, no filter): regulars with 30+ votes do not agree with themselves, so differences between them are mostly luck; a small agreement appears only when players with 15–29 votes are included. Treat the table as counts and stories, not a stable skill measure.",
         "data": "10-player games, following the filter. Proposals whose votes contradict the result are record errors and excluded. No leader needed; gaps in the proposal record do not matter. Unnamed seats count in totals and roles only."
       },
       "player": {
@@ -2309,7 +2311,7 @@
     "decisiveShrunk": {
       "name": "Accuracy (shrunk)",
       "def": "Decisive accuracy pulled toward the overall average, more so with fewer votes.",
-      "calc": "(right + k × average) ÷ (non-neutral votes + k), k = 150.",
+      "calc": "(right + k × average) ÷ (non-neutral votes + k), k = 150 (a chosen strength, not an estimate).",
       "meaning": "The ranking score; a few lucky votes cannot top the table. Everyone close to average is expected."
     },
     "decisiveOnYes": {

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DECISIVE_GROUPS, DECISIVE_SHRINK_K,
-  decisiveGroup, decisiveOutcome, decisiveQuality, decisiveRate, decisiveReport, decisiveShrunk, decodeGamesDataset,
+  decisiveBaselines, decisiveGroup, decisiveOutcome, decisiveQuality, decisiveRate, decisiveReport, decisiveShrunk, decodeGamesDataset,
   scanDecisiveVotes, sortDecisiveRows, sumDecisive,
   type DecisiveCell, type DecisiveGrid, type DecisivePlayerRow, type VotingProposal,
 } from '@avalon/shared/stats';
@@ -171,6 +171,17 @@ describe('decisive votes: the eight cells (after red has two wins)', () => {
     }));
     expect(twoRed.all.p0).toBeCloseTo(9 / 19, 12);
     expect(twoRed.all.unnamed).toBe(0);
+  });
+
+  it('fixed-strategy baselines on the same decisive spots (always approve / always reject / usual)', () => {
+    // 全好的位置：場內 3 + 3、場外 1 + 3；會失敗的位置：場內 3 + 2、場外 1 + 3（中性不算）。
+    expect(twoRed.all.baselines.approve).toBeCloseTo(10 / 19, 12);
+    expect(twoRed.all.baselines.reject).toBeCloseTo(9 / 19, 12);
+    expect(twoRed.all.baselines.usual).toBeCloseTo(10 / 19, 12); // 場內全好 6 + 場外會失敗 4
+    expect(decisiveBaselines(grid({ onYes: cell(2, 0), offNo: cell(0, 1), onNo: cell(0, 0, 5) }))).toEqual({
+      approve: 1, reject: 0, usual: 2 / 3,
+    });
+    expect(decisiveBaselines(grid({}))).toEqual({ approve: null, reject: null, usual: null });
   });
 
   it('each of the eight cells comes from the hand-built proposals', () => {

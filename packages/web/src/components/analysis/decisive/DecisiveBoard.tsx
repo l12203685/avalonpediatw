@@ -2,7 +2,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader, AlertCircle } from 'lucide-react';
 import {
-  DECISIVE_ABNORMAL, DECISIVE_GROUP_MIN, DECISIVE_GROUPS, DECISIVE_MIN_N, DECISIVE_RANK_SCOPES, DECISIVE_ROLES, DECISIVE_SORT_KEYS,
+  DECISIVE_ABNORMAL, DECISIVE_GROUP_MIN, DECISIVE_GROUPS, DECISIVE_MIN_N, DECISIVE_RANK_SCOPES, DECISIVE_ROLES, DECISIVE_SHRINK_K,
+  DECISIVE_SORT_KEYS,
   decisiveRate, decisiveSlice, sortDecisiveRows, sumDecisive,
   type DecisiveCell, type DecisiveGrid, type DecisiveGroup, type DecisivePlayerRow, type DecisiveRankScope,
   type DecisiveReport, type DecisiveRole, type DecisiveSortKey,
@@ -24,7 +25,9 @@ import { useDecisiveReport } from './useDecisiveReport';
  *  - 上方：全體（含沒寫名字的座位）依角色的對率／份額／每次機會，與四組的一行說明；梅林另外一行（莫德雷德他看不到）。
  *  - 表：名次、玩家、關鍵票正確率（收縮後＋原始）、關鍵票張數、白票／黑票對率、四組對率（異常的內黑、外白加底色）、
  *    場內比例、角色組成。預設依收縮後的正確率排序、至少 DECISIVE_MIN_N 張（有篩選時 DECISIVE_MIN_FILTERED）；點表頭換排序。
- *  - 門檻與收縮的理由：分半信度在任何門檻都接近 0（常客之間的差距大多是運氣），門檻看涵蓋率，雜訊交給收縮（k = 150）。
+ *  - 門檻與收縮的理由（說明裡寫給玩家看）：每人的局隨機分兩半，30 張以上的常客兩半對不起來（差距大多是運氣），算進 15～29 張
+ *    的人才有小幅正相關；門檻 30 是為了涵蓋率，k = 150 是選定的收縮強度、不是估計值（decisiveVotes.ts 檔頭有數字）。
+ *  - 一律白／一律黑／照常投的正確率即時算（report.all.baselines），篩選後不一定都低於平均，說明跟著換句子。
  */
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string;
@@ -306,6 +309,18 @@ export default function DecisiveBoard(): JSX.Element {
     [report, minN, sortKey],
   );
 
+  // 三種固定投法在同一批關鍵位置上的正確率（即時算，跟著篩選與範圍）：都低於全體平均才能說分數不獎勵單邊投票。
+  const baselineNote = useMemo(() => {
+    if (!report) return null;
+    const { approve, reject, usual } = report.all.baselines;
+    const p0 = report.all.p0;
+    if (approve === null || reject === null || usual === null || p0 === null) return null;
+    const below = approve < p0 && reject < p0 && usual < p0;
+    return t(`${K}.help.${below ? 'baselineBelow' : 'baselineNotBelow'}`, {
+      approve: pct(approve), reject: pct(reject), usual: pct(usual), p0: pct(p0),
+    });
+  }, [report, t]);
+
   const header = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
       <h3 className="text-sm font-bold text-white">{t(`${K}.title`)}</h3>
@@ -314,7 +329,8 @@ export default function DecisiveBoard(): JSX.Element {
         <p>{t(`${K}.help.cells`)}</p>
         <p>{t(`${K}.help.abnormal`)}</p>
         <p>{t(`${K}.help.scope`)}</p>
-        <p>{t(`${K}.help.rank`, { k: report?.k ?? 150 })}</p>
+        <p>{t(`${K}.help.rank`, { k: report?.k ?? DECISIVE_SHRINK_K })}</p>
+        {baselineNote && <p data-testid="decisive-baselines">{baselineNote}</p>}
         <p>{t(`${K}.help.honest`)}</p>
         <p>{t(`${K}.help.data`)}</p>
         <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
@@ -482,7 +498,8 @@ export default function DecisiveBoard(): JSX.Element {
           <h4 className="text-xs font-bold text-zinc-300">{t(`${K}.tableTitle`)}</h4>
           <span className="text-[11px] text-zinc-500" data-testid="decisive-min-note">
             {t(`${K}.minNote`, {
-              min: minN, count: rows.length, coverage: share(listedN, namedN), k: report.k,
+              min: minN, def: filtered ? DECISIVE_MIN_FILTERED : DECISIVE_MIN_N,
+              count: rows.length, coverage: share(listedN, namedN), k: report.k,
             })}
           </span>
         </div>
