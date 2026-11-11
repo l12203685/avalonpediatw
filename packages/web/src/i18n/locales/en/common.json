@@ -1407,6 +1407,7 @@
           "attempt": "No. {{n}}",
           "forced": "Last (5th, forced)",
           "total": "Total",
+          "r4Safe": "Round 4 at most one red (all good + Mordred only + one thumb; the mission is sure to pass): {{pct}} ({{k}}/{{n}}), all {{all}}",
           "allShort": "all {{pct}}",
           "allN": "all {{n}}",
           "cellTitle": "This player {{k}} / {{n}}; everyone {{allK}} / {{allN}}",

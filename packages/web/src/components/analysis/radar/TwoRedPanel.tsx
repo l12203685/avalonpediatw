@@ -55,7 +55,9 @@ const pct = (k: number, n: number): string => (n > 0 ? `${Math.round((100 * k) /
 
 function RoundTable({ round, mine, all }: { round: TwoRedRound; mine: TwoRedCounts[]; all: TwoRedCounts[] }): JSX.Element {
   const { t } = useTranslation('common');
-  const rows: Row[] = mine.map((m, index) => ({ index, mine: m, all: all[index] }));
+  // 合計列放最上面（樣本最多、最值得看），下面才是第 1～4 次與尾派。
+  const byIndex: Row[] = mine.map((m, index) => ({ index, mine: m, all: all[index] }));
+  const rows: Row[] = [byIndex[TWO_RED_TOTAL_INDEX], ...byIndex.filter((r) => r.index !== TWO_RED_TOTAL_INDEX)];
   const label = (index: number): string => (index === TWO_RED_TOTAL_INDEX
     ? t('analytics.r6.radar.twoRed.total')
     : index === 4 ? t('analytics.r6.radar.twoRed.forced') : t('analytics.r6.radar.twoRed.attempt', { n: index + 1 }));
@@ -110,7 +112,11 @@ function RoundTable({ round, mine, all }: { round: TwoRedRound; mine: TwoRedCoun
     })),
   ];
 
+  // 第 4 局要兩張失敗：全好＋只有莫德雷德＋只含一拇指 = 最多一個紅方 = 這支隊出任務一定成功。
+  const tot = byIndex[TWO_RED_TOTAL_INDEX];
+  const atMostOne = (c: TwoRedCounts): number => c.allGood + c.mordred + c.oneThumb;
   return (
+    <div className="space-y-1">
     <StatTable
       caption={t('analytics.r6.radar.twoRed.roundCaption', { round })}
       columns={columns}
@@ -119,6 +125,14 @@ function RoundTable({ round, mine, all }: { round: TwoRedRound; mine: TwoRedCoun
       highlightRow={(row) => row.index === TWO_RED_TOTAL_INDEX}
       footnote={t(round === 4 ? 'analytics.r6.radar.twoRed.round4Note' : 'analytics.r6.radar.twoRed.round35Note', { round })}
     />
+    {round === 4 && (
+      <p className={`px-1 text-xs text-zinc-400 ${tot.mine.n < TWO_RED_MIN_N ? 'opacity-50' : ''}`} data-testid="two-red-r4-safe">
+        {t('analytics.r6.radar.twoRed.r4Safe', {
+          pct: pct(atMostOne(tot.mine), tot.mine.n), k: atMostOne(tot.mine), n: tot.mine.n, all: pct(atMostOne(tot.all), tot.all.n),
+        })}
+      </p>
+    )}
+    </div>
   );
 }
 
