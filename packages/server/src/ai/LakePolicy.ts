@@ -32,6 +32,7 @@ import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
 import { goodLake39Pick } from './BlueRound39';
+import { percivalRead39 } from './BlueRound39Percival';
 import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 
@@ -122,11 +123,17 @@ export function deriveValidLakeTargets(
  */
 export function goodLakeAvoidSet(
   obs: PlayerObservation,
-  tuning: Pick<AgentTuning, 'percivalBlueLake'> = getDefaultAgentTuning(),
+  tuning: Pick<AgentTuning, 'percivalBlueLake'> & Partial<Pick<AgentTuning, 'percivalLakeGuard39'>> = getDefaultAgentTuning(),
 ): Set<string> {
   const avoidSet = new Set<string>(obs.knownEvils);
   if (!tuning.percivalBlueLake) {
     for (const wizardId of obs.knownWizards ?? []) avoidSet.add(wizardId);
+  }
+  // Round 39 `percivalLakeGuard39` (lp39 LH-11 / PL-01; owner item, measured only): Percival does not lake the thumb his
+  // round-39 read gives as Morgana at confidence >= 0.7 (below that both thumbs stay ordinary candidates).
+  if ((tuning.percivalLakeGuard39 ?? 0) > 0 && obs.myRole === 'percival') {
+    const rd = percivalRead39(obs);
+    if (rd?.unfav && rd.conf >= 0.7) avoidSet.add(rd.unfav);
   }
   return avoidSet;
 }

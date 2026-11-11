@@ -797,7 +797,8 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
-    ...(t.beliefThumbNoStain === true ? { thumbNoStain: true } : {}),
+    // Retired in round 39: not combined with `percivalRead39` (the round-39 read keeps the two-fail-card evidence it erased).
+    ...(t.beliefThumbNoStain === true && !((t.percivalRead39 ?? 0) > 0) ? { thumbNoStain: true } : {}),
     ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
   };
 }

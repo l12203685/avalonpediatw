@@ -74,7 +74,8 @@ export function ownViewFirstPickTeam(tuning: Readonly<AgentTuning>, obs: PlayerO
  * 原本的隊已經符合時不動；不符合時改派符合的隊裡自己後驗最乾淨的一支。不適用時回傳原本的動作（同一個物件）。
  */
 export function percivalThumbReadTeam(tuning: Readonly<AgentTuning>, obs: PlayerObservation, action: AgentAction, allowed: Allowed = () => true): AgentAction {
-  const theta = tuning.percivalThumbRead ?? 0;
+  // Retired in round 39: with `percivalRead39` on, Percival's thumbs follow the round-39 read and plan only (never combined).
+  const theta = (tuning.percivalRead39 ?? 0) > 0 ? 0 : tuning.percivalThumbRead ?? 0;
   if (!(theta > 0) || action.type !== 'team_select' || obs.myRole !== 'percival' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return action;
   const thumbs = obs.knownWizards ?? [];
   const round = obs.currentRound ?? 1;

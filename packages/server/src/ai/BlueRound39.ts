@@ -13,6 +13,7 @@
  *   - 4：同分不照座位序：先比持湖者的後驗（比較藍的；紅方已兩勝時不比），再亂數；下一局第 3–5 位派隊只在第 1 湖 FS、第 2 湖 SFF／FSF 當很弱的同分排序。
  *   - 8：同一類裡照持湖者的後驗挑比較藍的那一個（紅方未兩勝的格子；第 1 湖 SS 先挑自己派的隊出過任務的人）。
  *   - 64：紅方已兩勝、之後還有湖時也照比較藍的挑（＝信任項；牽涉 10/13 的裁定「兩紅時湖中不一定要湖好人」，Edward 還沒裁定，只量）。
+ *   - 256：第 1 湖 FS 改成先湖兩局都上過的人（百科 wiki-208 §2；Edward 待裁定，只量）。
  *   - 128：梅林持湖也用位元 2／8（公開的分類＋自己的後驗，等於在同一類裡先挑他知道不是紅的人）；沒有 128 時梅林只用位元 1、4。
  * 第 3 湖照原本的共同資訊規則（第 39 回合沒有做）。
  */
@@ -156,7 +157,9 @@ export function goodLake39Pick(
     if (kept.length > 0) cs = kept;
   }
   if ((bits & 2) && st.lake <= 1) {
-    for (const k of lake39Prefs(st)) {
+    // 位元 256（Edward 待裁定的項目 1，只量）：第 1 湖 FS 照百科 wiki-208 §2 先湖兩局都上過的人（強者真人相反：只上過第 2 局的 71%、重疊 24%）。
+    const prefs = (bits & 256) && st.lake === 0 && st.score === 'FS' ? (['FS', 'S'] as Array<LakeClass | 'L'>) : lake39Prefs(st);
+    for (const k of prefs) {
       const sel = cs.filter((c) => (k === 'L' ? c.onLast : c.cls === k));
       if (sel.length > 0) { cs = sel; break; }
     }
