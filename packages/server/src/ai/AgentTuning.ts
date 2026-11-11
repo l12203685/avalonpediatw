@@ -1183,7 +1183,7 @@ export interface AgentTuning {
   percivalLakeGuard39: number;
   /** 第 39 回合（BlueRound39.ts，檢查表 LP-12／LK-09＋ML-05 第 3 部分）：位元 1 = 上一局的湖被別人宣告紅的人，這一局非強制的提議不帶（忠臣當隊長；梅林照派成功的隊也一樣），除非自己估持湖者是紅 ≥ 0.5；位元 2 沒有做；位元 4 = 不看持湖者的後驗、一律不帶（只量）。0 = 關。 */
   loyalLakePair: number;
-  /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽；每個重新挑隊的步驟都檢查。0 = 關。 */
+  /** 第 39 回合（派西當隊長，第 2 局起；要 percivalRead39）：帶拇指的計畫：1 = 照信心門檻、2 = 照真人比例抽（1、2 都硬擋拇指，和邏輯優先 1E／不變量 INV-Pe2 衝突）；3 = 同 1 的門檻，只改 A／B 的加減分、不硬擋。0 = 關。 */
   percivalCarry39: number;
   /** 第 39 回合（派西；BlueRound39Percival.ts）：拇指讀法換成真人牌譜擬合的模型（2；1 沒有做）。0 = 關（舊的計分決定 A／B）。 */
   percivalRead39: number;
@@ -2530,7 +2530,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'percivalCarry39') {
     const value = raw === undefined ? 2 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 2) throw new Error(`percivalCarry39 needs 0–2, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`percivalCarry39 needs 0–3, got "${raw}"`);
     return { percivalCarry39: value };
   }
   if (name === 'loyalLakePair') {

@@ -15,7 +15,8 @@
  *   - `percivalCarry39`：派西當隊長、第 2 局起：絕不同時帶兩根；比較不像梅林的那一根在讀法信心 ≥ 0.7 時不帶；
  *     比較像梅林的那一根只上過成功的任務就帶，否則照信心決定：1＝門檻（第 2 局前 4 次 0.63、第 2 局第 5 次 0.53、第 3–5 局 0.64），
  *     2＝照真人的比例抽（信心 < 0.65 約 38%、0.65–0.8 約 70%、≥ 0.8 約 82%；第 2 局第 5 次：乾淨或被另一根拇指派過才帶，否則信心 ≥ 0.8）；
- *     第 3 局第 1 次提議另一格（門檻 0.55、信心 < 0.65 時 50%）。
+ *     第 3 局第 1 次提議另一格（門檻 0.55、信心 < 0.65 時 50%）。3＝同 1 的門檻，但只改 A／B 的加減分、不硬擋拇指（邏輯優先 1E、不變量 INV-Pe2：
+ *     除非確定是紅，派西不硬排除拇指）。
  *     完全分不出來時不帶拇指。檢查接在每一個重新挑隊的步驟（候選人、隊長自己的票、重派成功的隊、第 2 局帶自己的視角等）；
  *     只有「整隊照派上一次成功的隊、那根拇指本來就在上面」可以例外。第 1 局不變（不帶拇指）。
  */
@@ -157,8 +158,10 @@ export interface PercivalThumbPlan39 {
   read: PercivalRead39;
   /** 這一次帶比較像梅林的那一根。 */
   carryFav: boolean;
-  /** 不能上隊的拇指。 */
+  /** 不能上隊的拇指（`soft` 時只是不給「帶 A」的加分／給「不帶 B」的扣分，不硬擋）。 */
   barred: ReadonlySet<string>;
+  /** 模式 3：只改 A／B 的加減分，不硬擋任何拇指（邏輯優先 1E：除非確定是紅，派西不硬排除拇指，不變量 INV-Pe2）。 */
+  soft?: boolean;
 }
 
 /** fav 只上過成功的任務（從沒上過失敗的任務）。 */
@@ -184,7 +187,7 @@ export function percivalThumbPlan39(tuning: Readonly<AgentTuning>, obs: PlayerOb
   const read = percivalRead39(obs);
   if (!read) return null;
   const [a, b] = read.thumbs;
-  if (!read.fav || !read.unfav) return { read, carryFav: false, barred: new Set([a, b]) };
+  if (!read.fav || !read.unfav) return { read, carryFav: false, barred: new Set([a, b]), ...(mode === 3 ? { soft: true } : {}) };
   const forced = (obs.failCount ?? 0) >= 4;
   const r3First = r === 3 && (obs.failCount ?? 0) === 0;
   const conf = read.conf;
@@ -192,7 +195,7 @@ export function percivalThumbPlan39(tuning: Readonly<AgentTuning>, obs: PlayerOb
   if (conf >= 0.999 || succOnly(obs, read.fav)) carryFav = true;
   else if (r === 2 && forced) {
     carryFav = thumbOnThumb(obs, read.fav, read.unfav) || conf >= (mode === 1 ? 0.53 : 0.8);
-  } else if (mode === 1) {
+  } else if (mode === 1 || mode === 3) {
     // 第 3 局第 1 次提議另一格：真人在這裡信心 < 0.65 時還是帶比較像梅林的那一根 42–54%（lp39 PA-08）。
     carryFav = conf >= (r === 2 ? 0.63 : r3First ? 0.55 : 0.64);
   } else {
@@ -202,14 +205,14 @@ export function percivalThumbPlan39(tuning: Readonly<AgentTuning>, obs: PlayerOb
   const barred = new Set<string>();
   if (!carryFav) barred.add(read.fav);
   if (conf >= 0.7 || (r === 2 && forced)) barred.add(read.unfav);
-  return { read, carryFav, barred };
+  return mode === 3 ? { read, carryFav, barred, soft: true } : { read, carryFav, barred };
 }
 
 /**
  * 隊伍符不符合計畫：不同時帶兩根拇指、不帶被擋掉的那一根。例外：整隊照派上一次成功的隊、那根拇指本來就在上面。
  */
 export function percivalThumbPlanAllows(plan: PercivalThumbPlan39 | null, obs: PlayerObservation, team: readonly string[]): boolean {
-  if (!plan) return true;
+  if (!plan || plan.soft) return true;
   const [a, b] = plan.read.thumbs;
   const lastS = [...(obs.questHistory ?? [])].filter((q) => !missionFailed(q)).sort((x, y) => y.round - x.round)[0];
   const reuse = !!lastS && lastS.team.every((id) => team.includes(id));

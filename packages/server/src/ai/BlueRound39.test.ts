@@ -46,7 +46,7 @@ describe('round 39 tuning fields', () => {
     expect(parseTuningFlag('goodLake39')).toEqual({ goodLake39: 15 });
     expect(parseTuningFlag('percivalCarry39=1')).toEqual({ percivalCarry39: 1 });
     expect(parseTuningFlag('merlinPublicPipeline=2')).toEqual({ merlinPublicPipeline: 2 });
-    expect(() => parseTuningFlag('percivalCarry39=3')).toThrow();
+    expect(() => parseTuningFlag('percivalCarry39=4')).toThrow();
     expect(() => parseTuningFlag('merlinPublicPipeline=3')).toThrow();
   });
 });
@@ -117,6 +117,11 @@ describe('percivalRead39 (Percival thumb read fitted on the human records)', () 
     expect(percivalThumbPlanAllows(plan, perc, ['P7', 'P5', 'P3', 'P8'])).toBe(true);
     expect(percivalThumbPlan39(T({ percivalRead39: 2, percivalCarry39: 2 }), asObs({ ...(perc as object), currentRound: 1 }))).toBeNull();
     expect(percivalThumbPlan39(T({ percivalRead39: 0, percivalCarry39: 2 }), perc)).toBeNull();
+    // mode 3: same plan, but nothing is hard-barred (logic-first 1E / INV-Pe2): only the A / B weights change
+    const soft = percivalThumbPlan39(T({ percivalRead39: 2, percivalCarry39: 3 }), perc)!;
+    expect(soft.soft).toBe(true);
+    expect(soft.carryFav).toBe(true);
+    expect(percivalThumbPlanAllows(soft, perc, ['P7', 'P3', 'P6', 'P4'])).toBe(true);
   });
 });
 

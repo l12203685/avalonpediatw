@@ -2022,7 +2022,7 @@ export class ForwardAgent implements AvalonAgent {
       // Edward 2026-05-06 16:09 — HARD-exclude wizard B (predicted Morgana).
       const wizards = obs.knownWizards ?? [];
       // Round 39 `percivalCarry39`: the thumbs the plan bars leave the pool (the plan is also AND-ed into every re-pick gate).
-      for (const id of this.thumbPlan39?.barred ?? []) {
+      for (const id of this.thumbPlan39 && !this.thumbPlan39.soft ? this.thumbPlan39.barred : []) {
         markExcluded(id, 2);
         ranked = ranked.filter((x) => x !== id);
       }
