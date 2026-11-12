@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader } from 'lucide-react';
 import {
   ABNORMAL_MEASURES, ABNORMAL_MODES, ABNORMAL_ROLES, ABNORMAL_SITUATIONS,
-  abnormalCohortGrid, abnormalCounts, abnormalRatio, abnormalRecords, cohortGrid, sumAbnormal, ABNORMAL_WIDTH,
+  abnormalCohortGrid, abnormalCounts, abnormalRatio, abnormalRecords, sumAbnormal,
   type AbnormalCohortData, type AbnormalCounts, type AbnormalMeasure, type AbnormalMode, type AbnormalRole, type AbnormalSituation,
   type CohortCell,
 } from '@avalon/shared/stats';
@@ -62,19 +62,17 @@ function Body({ data, viewTabs }: { data: AbnormalCohortData; viewTabs: ReactNod
   const rows: Row[] = useMemo(() => ABNORMAL_SITUATIONS.map((s) => ({
     situation: s, counts: sumAbnormal(abnormalRecords(data.records, s, roleKey)),
   })), [data.records, roleKey]);
-  // 座位當時沒有 PR 的票（只算在全體）：選的情境
-  const unrated = useMemo(
-    () => cohortGrid(abnormalRecords(data.records, situation, roleKey), cuts, ABNORMAL_WIDTH).rows.unrated.n,
-    [data.records, situation, roleKey, cuts],
-  );
   const grid = useMemo(
     () => abnormalCohortGrid(data.records, cuts, situation, measure, mode, roleKey),
     [data.records, cuts, situation, measure, mode, roleKey],
   );
+  // 座位當時沒有 PR 的票（只算在全體）：選的情境與指標，跟九宮格一樣數這個指標的分母
+  const unrated = abnormalRatio(abnormalCounts(grid.rows.unrated), measure, mode).n;
 
   const pctColumn = (m: AbnormalMeasure): StatColumn<Row> => ({
     key: m,
-    label: measureLabel(m),
+    // 表頭可以換行：手機上四個指標欄才擠得進來
+    label: <span className="inline-block max-w-[4.5rem] whitespace-normal leading-tight">{measureLabel(m)}</span>,
     align: 'right',
     emphasis: m === 'inBlack' || m === 'outWhite',
     tone: m === 'inBlack' || m === 'outWhite' ? 'amber' : undefined,
@@ -86,7 +84,7 @@ function Body({ data, viewTabs }: { data: AbnormalCohortData; viewTabs: ReactNod
       key: 'situation',
       label: t(`${C}.colSituation`),
       format: (_v, r) => (
-        <span className={r.situation === 'twoRed' ? 'font-bold text-amber-200' : 'pl-2 font-semibold text-zinc-200'}>
+        <span className={`inline-block max-w-[6.5rem] whitespace-normal leading-tight ${r.situation === 'twoRed' ? 'font-bold text-amber-200' : 'pl-2 font-semibold text-zinc-200'}`}>
           {situationLabel(r.situation)}
         </span>
       ),
@@ -95,6 +93,8 @@ function Body({ data, viewTabs }: { data: AbnormalCohortData; viewTabs: ReactNod
       key: 'proposals',
       label: t(`${C}.colProposals`),
       align: 'right',
+      // 手機隱藏：讓四個指標欄擠得進 390 px
+      className: 'hidden sm:table-cell',
       format: (_v, r) => <span className="text-zinc-400">{data.proposals[r.situation]}</span>,
     },
     ...ABNORMAL_MEASURES.map(pctColumn),
@@ -146,6 +146,7 @@ function Body({ data, viewTabs }: { data: AbnormalCohortData; viewTabs: ReactNod
           <p>{t(`${C}.help.key`)}</p>
           <p>{t(`${C}.help.right`)}</p>
           <p>{t(`${C}.help.notFlip`)}</p>
+          <p>{t(`${C}.help.data`)}</p>
           <p>{t(`${K}.decisive.help.tiers`)}</p>
           <p>{t(`${K}.help.causality`)}</p>
         </InfoTip>
@@ -165,7 +166,11 @@ function Body({ data, viewTabs }: { data: AbnormalCohortData; viewTabs: ReactNod
         onRowClick={(r) => setSituation(r.situation)}
         caption={<span className="text-[11px] text-zinc-500">{t(`${C}.tableCaption`, { mode: t(`${C}.mode.${mode}`), role: roleLabel(role) })}</span>}
       />
-      <p className="text-[11px] text-zinc-500">{t(`${C}.unrated`, { n: unrated, situation: situationLabel(situation) })}</p>
+      <p className="text-[11px] text-zinc-500" data-testid="abnormal-cohort-unrated">
+        {t(`${C}.unrated`, { n: unrated, situation: situationLabel(situation), measure: measureLabel(measure) })}
+        {' '}
+        {t(`${C}.dropped`, { n: data.inconsistent[situation], situation: situationLabel(situation) })}
+      </p>
       <CohortGrid
         grid={grid}
         measures={measures}

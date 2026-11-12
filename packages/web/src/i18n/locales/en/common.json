@@ -2052,7 +2052,7 @@
         "data": "10-player games, following the filter. Proposals whose votes contradict the result are record errors and excluded. No leader needed; gaps in the proposal record do not matter. Unnamed seats count in totals and roles only."
       },
       "player": {
-        "line": "Decisive votes after red's 2 wins: {{n}}, accuracy {{raw}} (all {{p0}}) · outside approve {{oyR}}✓ {{oyW}}✗ · inside reject {{onR}}✓ {{onW}}✗",
+        "line": "Decisive votes after red's 2 wins: {{n}}, accuracy {{raw}} (all {{p0}}) · decisive outside approve {{oyR}}✓ {{oyW}}✗ · decisive inside reject {{onR}}✓ {{onW}}✗",
         "none": "No decisive votes after red's 2 wins.",
         "link": "Open the decisive-votes board"
       }
@@ -2261,7 +2261,8 @@
           "key": "Key outside approve = the proposal went early (passed on attempts 1–4) and he approved while off the team — every such blue vote counts, however many approvals. Key inside reject = the proposal was one approval short of going early (exactly 5) and he rejected while on the team — every such blue vote counts. Key rates are per chance (key outside approves ÷ blue off-team votes on proposals that went early; key inside rejects ÷ blue on-team votes on proposals with exactly 5 approvals)."
         },
         "tableCaption": "{{mode}} · {{role}} · click a row for its grid",
-        "unrated": "{{situation}}: {{n}} votes from seats without a PR at the time (provisional, unnamed, unrated games) count only in All.",
+        "unrated": "{{situation}} · {{measure}}: {{n}} votes from seats without a PR at the time (provisional, unnamed, unrated games) count only in All, not in the grid (counted like the grid: the measure's denominator).",
+        "dropped": "{{situation}}: {{n}} proposals whose votes and result disagree are not counted (e.g. exactly 5 approvals yet the mission went; almost always only the team's approvals were recorded).",
         "gridCaption": "Grid: {{situation}} · {{mode}} · {{role}}",
         "help": {
           "what": "Unusual votes: blue votes against the usual habit. Players usually approve when on the team and reject when off it; the reverse — inside reject and outside approve — shows judgement best. Blue votes (Loyal, Percival, Merlin) on proposals 1–4 only.",
@@ -2270,6 +2271,7 @@
           "key": "Key: key outside approve (\"the sixth white\") = the proposal went early and he approved while off the team; every one counts (7 approvals, 3 of them off-team — one red, blues A and B → A and B are both key). Key inside reject (\"the fifth black\") = the proposal had exactly 5 approvals, one short of going early, and he rejected while on the team; every one counts (5 approvals = 3 on-team + 2 off-team, the two on-team rejects by blues C and D → C and D are both key). Key rate = key votes ÷ chances.",
           "right": "Correct uses the real roles known after the game: outside approve ✓ = the team was all good (no red, Mordred included); inside reject ✓ = at least one red on the team (Mordred counts). The same in every round: a round-4 team with one red counts as having a red.",
           "notFlip": "Not the same as the decisive votes in the eight cells, off-team tab and ranking below: a decisive vote is one whose flip changes the result (approve when it passed with exactly 6, reject when it failed with exactly 5). An off-team approve when the team passed with 7 is a key outside approve but not a decisive vote.",
+          "data": "Proposals whose votes and result disagree are record errors and are not counted (in All and Key): e.g. exactly 5 approvals yet the mission went, or a 4-player team with 4 approvals that went. Almost all of them list exactly the team as approving, i.e. only the team's votes were recorded; counting them would treat every off-team vote as a reject and a mission that went as \"one short\". The count per situation is under the table.",
           "gridN": "The grid's sample is the measure's denominator (inside-reject rate = on-team votes, inside-reject accuracy = inside rejects, key inside-reject rate = on-team votes on proposals with exactly 5 approvals, and so on); players = people with votes in that denominator."
         },
         "player": {
