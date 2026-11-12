@@ -33,6 +33,7 @@ export * from './lake';
 export * from './featureL141';
 export * from './twoRed';
 export * from './decisiveVotes';
+export * from './abnormalVotes';
 export * from './cohort';
 export * from './build';
 export * from './benchmarks';

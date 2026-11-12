@@ -1992,15 +1992,15 @@
           "wrong": "On approve ✗"
         },
         "onNo": {
-          "right": "On reject ✓ (decisive inside reject)",
+          "right": "On reject ✓",
           "wrong": "On reject ✗"
         },
         "offYes": {
-          "right": "Off approve ✓ (decisive outside approve)",
+          "right": "Off approve ✓",
           "wrong": "Off approve ✗"
         },
         "offNo": {
-          "right": "Off reject ✓ (decisive outside reject)",
+          "right": "Off reject ✓",
           "wrong": "Off reject ✗"
         }
       },
@@ -2043,7 +2043,7 @@
       "help": {
         "what": "A decisive vote is one that changed the result: the proposal passed with exactly 6 approvals and this player approved, or failed with exactly 5 and this player rejected (the other nine split 5–4). Votes are revealed at once, so nobody knows in advance. Only blue players (Loyal, Percival, Merlin) on attempts 1–4; the 5th attempt is forced.",
         "cells": "Eight cells: on/off the team × approve/reject × right/wrong. All-good teams (no red; Mordred counts as red) should go; failing teams (round 4: two or more reds; other rounds: one or more) should be stopped. Round-4 teams with exactly one red cannot fail and are neutral.",
-        "abnormal": "Usual votes are on-team approve and off-team reject; unusual ones are on-team reject (inside reject) and off-team approve (outside approve), shaded in the table. Decisive outside approve = off-team approve that let an all-good team go (the community's \"sixth man\"); decisive inside reject = on-team reject that stopped a bad team one vote from going.",
+        "abnormal": "Usual votes are on-team approve and off-team reject; unusual ones are on-team reject (inside reject) and off-team approve (outside approve), shaded in the table. Here the off approve ✓ and on reject ✓ cells count decisive votes only (e.g. an off-team approve when the team passed with exactly 6). The \"key outside approve\" (every blue off-team approve on a proposal that went early, even with 7 approvals) and \"key inside reject\" (every blue on-team reject on a proposal one approval short) are in the group block's \"Unusual votes\" tab.",
         "scope": "Scope: \"after red's 2 wins\" = red has exactly two missions (rounds 3–5), the original idea; \"rounds 3–5\" = any score. Rounds 1–2 are not ranked: always rejecting beats the average there.",
         "rank": "Ranking: decisive accuracy = right ÷ non-neutral decisive votes, shrunk toward the overall average: (right + {{k}} × average) ÷ (votes + {{k}}).",
         "baselineBelow": "On the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}} — all below the overall {{p0}}, so the score does not reward one-sided or habitual voting.",
@@ -2052,7 +2052,7 @@
         "data": "10-player games, following the filter. Proposals whose votes contradict the result are record errors and excluded. No leader needed; gaps in the proposal record do not matter. Unnamed seats count in totals and roles only."
       },
       "player": {
-        "line": "Decisive votes after red's 2 wins: {{n}}, accuracy {{raw}} (all {{p0}}) · outside approve {{oyR}}✓ {{oyW}}✗ · inside reject {{onR}}✓ {{onW}}✗",
+        "line": "Decisive votes after red's 2 wins: {{n}}, accuracy {{raw}} (all {{p0}}) · decisive outside approve {{oyR}}✓ {{oyW}}✗ · decisive inside reject {{onR}}✓ {{onW}}✗",
         "none": "No decisive votes after red's 2 wins.",
         "link": "Open the decisive-votes board"
       }
@@ -2170,7 +2170,8 @@
         },
         "view": {
           "cells": "Eight cells",
-          "offTeam": "Off-team blue votes"
+          "offTeam": "Off-team blue votes",
+          "abnormal": "Unusual votes (inside reject / outside approve)"
         },
         "viewLabel": "View"
       },
@@ -2208,6 +2209,76 @@
           "right": "Approve accuracy = the share of off-team approvals that went to all-good teams = approve good ÷ (approve good + approve failing); reject accuracy = the share of off-team rejections that hit failing teams = reject failing ÷ (reject failing + reject good). The round-4 one-red class is left out. These equal the off-team approve / reject cells of the eight-cell view.",
           "decisive": "Decisive vote = flipping it would change whether the proposal passed (approving at exactly 6 yes, rejecting at exactly 5 yes). Among decisive votes the approve rate mostly reflects which side happened to sit at 5-5, not a habit; use 'All votes' for habits.",
           "gridN": "The grid's sample size is the measure's denominator (e.g. for 'Approve rate (all-good teams)', the off-team votes on all-good teams); players = those with votes in that denominator."
+        }
+      },
+      "abnormal": {
+        "title": "Unusual votes (inside reject / outside approve)",
+        "mode": {
+          "all": "All",
+          "key": "Key (key inside reject / key outside approve)"
+        },
+        "modeLabel": "All or key",
+        "situation": {
+          "twoRed": "After red's 2 wins",
+          "r3TwoRed": "Round 3, red 2 (0:2)",
+          "r3Even": "Round 3, 1:1",
+          "r4TwoRed": "Round 4, red 2 (1:2)",
+          "r5": "Round 5 (2:2)"
+        },
+        "colSituation": "Situation",
+        "colProposals": "Proposals",
+        "measure": {
+          "all": {
+            "inBlack": "Inside-reject rate",
+            "inBlackRight": "Inside-reject accuracy",
+            "outWhite": "Outside-approve rate",
+            "outWhiteRight": "Outside-approve accuracy"
+          },
+          "key": {
+            "inBlack": "Key inside-reject rate",
+            "inBlackRight": "Key inside-reject accuracy",
+            "outWhite": "Key outside-approve rate",
+            "outWhiteRight": "Key outside-approve accuracy"
+          }
+        },
+        "cellTitle": {
+          "all": {
+            "inBlack": "On-team rejects {{k}} ÷ on-team votes {{n}}",
+            "inBlackRight": "Inside rejects of a team with a red {{k}} ÷ inside rejects {{n}}",
+            "outWhite": "Off-team approves {{k}} ÷ off-team votes {{n}}",
+            "outWhiteRight": "Outside approves of an all-good team {{k}} ÷ outside approves {{n}}"
+          },
+          "key": {
+            "inBlack": "Key inside rejects {{k}} ÷ on-team votes on proposals with exactly 5 approvals {{n}}",
+            "inBlackRight": "Key inside rejects of a team with a red {{k}} ÷ key inside rejects {{n}}",
+            "outWhite": "Key outside approves {{k}} ÷ off-team votes on proposals that went early {{n}}",
+            "outWhiteRight": "Key outside approves of an all-good team {{k}} ÷ key outside approves {{n}}"
+          }
+        },
+        "kOfN": "{{k}}/{{n}}",
+        "note": {
+          "all": "Blue votes (Loyal, Percival, Merlin) on proposals 1–4 only (the forced 5th and red votes are not counted). Inside reject = rejecting while on the team; outside approve = approving while off the team. Correct uses the real roles after the game: an outside approve must back an all-good team (no Mordred), an inside reject must hit a team with at least one red (Mordred counts).",
+          "key": "Key outside approve = the proposal went early (passed on attempts 1–4) and he approved while off the team — every such blue vote counts, however many approvals. Key inside reject = the proposal was one approval short of going early (exactly 5) and he rejected while on the team — every such blue vote counts. Key rates are per chance (key outside approves ÷ blue off-team votes on proposals that went early; key inside rejects ÷ blue on-team votes on proposals with exactly 5 approvals)."
+        },
+        "tableCaption": "{{mode}} · {{role}} · click a row for its grid",
+        "unrated": "{{situation}} · {{measure}}: {{n}} votes from seats without a PR at the time (provisional, unnamed, unrated games) count only in All, not in the grid (counted like the grid: the measure's denominator).",
+        "dropped": "{{situation}}: {{n}} proposals whose votes and result disagree are not counted (e.g. exactly 5 approvals yet the mission went; almost always only the team's approvals were recorded).",
+        "gridCaption": "Grid: {{situation}} · {{mode}} · {{role}}",
+        "help": {
+          "what": "Unusual votes: blue votes against the usual habit. Players usually approve when on the team and reject when off it; the reverse — inside reject and outside approve — shows judgement best. Blue votes (Loyal, Percival, Merlin) on proposals 1–4 only.",
+          "situation": "Situation (score before the proposal, blue:red): after red's 2 wins = red already has two (round 3 at 0:2, round 4 at 1:2, round 5 at 2:2 together); round 3 is split into 0:2 and 1:1, 2:0 is not counted; round 4 only at 1:2 (2:1 is not counted); round 5 is always 2:2.",
+          "all": "All: inside-reject rate = on-team rejects ÷ on-team votes; inside-reject accuracy = share of inside rejects whose team really had a red. Outside-approve rate = off-team approves ÷ off-team votes; outside-approve accuracy = share of outside approves whose team was really all good.",
+          "key": "Key: key outside approve (\"the sixth white\") = the proposal went early and he approved while off the team; every one counts (7 approvals, 3 of them off-team — one red, blues A and B → A and B are both key). Key inside reject (\"the fifth black\") = the proposal had exactly 5 approvals, one short of going early, and he rejected while on the team; every one counts (5 approvals = 3 on-team + 2 off-team, the two on-team rejects by blues C and D → C and D are both key). Key rate = key votes ÷ chances.",
+          "right": "Correct uses the real roles known after the game: outside approve ✓ = the team was all good (no red, Mordred included); inside reject ✓ = at least one red on the team (Mordred counts). The same in every round: a round-4 team with one red counts as having a red.",
+          "notFlip": "Not the same as the decisive votes in the eight cells, off-team tab and ranking below: a decisive vote is one whose flip changes the result (approve when it passed with exactly 6, reject when it failed with exactly 5). An off-team approve when the team passed with 7 is a key outside approve but not a decisive vote.",
+          "data": "Proposals whose votes and result disagree are record errors and are not counted (in All and Key): e.g. exactly 5 approvals yet the mission went, or a 4-player team with 4 approvals that went. Almost all of them list exactly the team as approving, i.e. only the team's votes were recorded; counting them would treat every off-team vote as a reject and a mission that went as \"one short\". The count per situation is under the table.",
+          "gridN": "The grid's sample is the measure's denominator (inside-reject rate = on-team votes, inside-reject accuracy = inside rejects, key inside-reject rate = on-team votes on proposals with exactly 5 approvals, and so on); players = people with votes in that denominator."
+        },
+        "player": {
+          "title": "Unusual votes after red's 2 wins",
+          "kOfN": " ({{k}}/{{n}})",
+          "ref": " · {{label}} {{pct}}",
+          "help": "Each number is followed by the comparison group's (the same as the team table below: your PR group or everyone); the group excludes your own votes, and each vote is grouped by that game's PR. Measures with fewer than {{min}} votes in your denominator are faded. The per-situation, grouped and key versions are on the leaderboard's decisive-votes board, \"Unusual votes\" tab."
         }
       }
     }

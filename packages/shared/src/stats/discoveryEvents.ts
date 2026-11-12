@@ -97,14 +97,14 @@ export const EVENT_METRICS: readonly EventMetricDef[] = [
   { id: 'oneThumb', unit: 'twoRed', label: '兩紅後第 4 局只含一拇指', help: '第 4 局隊上剛好一個紅方、而且是拇指的比例' },
   // 含兩壞以上 = 100% − 最多一紅：同一個檢定，只列最多一紅（說明裡寫兩個數字的關係）
   { id: 'r4Safe', unit: 'twoRed', label: '兩紅後第 4 局最多一紅', help: '第 4 局隊上最多一個紅方（= 全好 + 只有莫德雷德 + 只含一拇指；兩張失敗才紅，出任務一定成功）的比例；含兩壞以上 = 100% − 這個' },
-  { id: 'acc', unit: 'decisive', label: '關鍵票正確率', help: '關鍵的藍方票（翻過來結果就不同）裡，放行全好、擋下會失敗的比例（第 4 局單紅的中性票不算）' },
+  { id: 'acc', unit: 'decisive', label: '決定性票正確率', help: '決定性的藍方票（翻過來結果就改變）裡，放行全好、擋下會失敗的比例（第 4 局單紅的中性票不算）' },
   ...DECISIVE_GROUPS.map((g): EventMetricDef => ({
-    id: g, unit: 'decisive', label: `關鍵${GROUP_LABEL[g]}對率`, help: `關鍵票裡${GROUP_HELP[g]}的那些，做對的比例`,
+    id: g, unit: 'decisive', label: `決定性${GROUP_LABEL[g]}對率`, help: `決定性票裡${GROUP_HELP[g]}的那些，做對的比例`,
   })),
   ...DECISIVE_GROUPS.flatMap((g) => (['right', 'wrong'] as const).map((o): EventMetricDef => ({
     id: `${g}${o === 'right' ? 'Right' : 'Wrong'}`, unit: 'decisive',
-    label: `關鍵${GROUP_LABEL[g]}${o === 'right' ? '對' : '錯'}（佔關鍵票）`,
-    help: `非中性的關鍵票裡，${GROUP_HELP[g]}而且${o === 'right' ? '做對' : '做錯'}的比例（八格之一）`,
+    label: `決定性${GROUP_LABEL[g]}${o === 'right' ? '對' : '錯'}（佔決定性票）`,
+    help: `非中性的決定性票裡，${GROUP_HELP[g]}而且${o === 'right' ? '做對' : '做錯'}的比例（八格之一）`,
   }))),
   { id: 'acc', unit: 'blueVote', label: '全部投票正確率', help: '每一張藍方票（第 1～4 次提議）裡，放行全好、擋下會失敗的比例（中性不算）' },
   ...DECISIVE_GROUPS.map((g): EventMetricDef => ({

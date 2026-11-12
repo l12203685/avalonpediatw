@@ -39,7 +39,7 @@ export type DiscoveryPage = 'overview' | 'teams' | 'votes' | 'missions' | 'lake'
 
 export const UNIT_LABELS: Record<DiscoveryUnit, string> = {
   game: '局', proposal: '提議', mission: '任務', lake: '湖中女神', seat: '座位',
-  twoRed: '兩紅後的提議', decisive: '關鍵票（座位 × 局）', blueVote: '藍方投票（座位 × 局）',
+  twoRed: '兩紅後的提議', decisive: '決定性票（座位 × 局）', blueVote: '藍方投票（座位 × 局）',
 };
 
 /** 事件單位（discoveryEvents.ts）：列帶叢集鍵，用叢集穩健的檢定。 */

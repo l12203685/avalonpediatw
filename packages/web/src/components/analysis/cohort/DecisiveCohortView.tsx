@@ -12,6 +12,7 @@ import { DECISIVE_COHORT_KIND_KEY, DECISIVE_COHORT_VIEW_KEY, DECISIVE_GROUP_TERM
 import CohortGrid, { type CohortMeasure } from './CohortGrid';
 import CohortCutsControl from './CohortCutsControl';
 import OffTeamCohortPanel from './OffTeamCohortPanel';
+import AbnormalCohortView from './AbnormalCohortView';
 import { COHORT_MIN_N, K, cohortPct, playerTierKey } from './cohortFormat';
 import { useDecisiveCohort } from './useCohortData';
 
@@ -24,13 +25,17 @@ import { useDecisiveCohort } from './useCohortData';
  *  - 九宮格：選一個對率，看（玩家分層 × 桌分層）。
  *  - (2026-11-12 Edward) 第二個小分頁「場外藍票」：不在隊上的藍方票的外白率／外黑率（依隊伍品質拆）與外白／外黑對率
  *    （OffTeamCohortPanel）；票的種類、角色、範圍、切點兩個小分頁共用。範圍的切換跟排行上面的範圍是同一個。
+ *  - (2026-11-12 站長) 第三個小分頁「異常票（內黑／外白）」（AbnormalCohortView）：站長定義的情境、關鍵外白／關鍵內黑與正確與否，
+ *    自己的資料（@avalon/shared abnormalVotes.ts）與自己的「全部／關鍵」切換；前兩個小分頁的「決定性票」（翻過來結果就改變）是另一種票。
  * 筆（依局、座位合起來）在 Worker 裡算好（@avalon/shared decisiveCohortData），切點換了只在這裡重數。
  */
 
 type VoteKind = 'decisive' | 'all';
 type RoleChoice = 'all' | DecisiveRole;
-/** 小分頁：cells 八格對率（原本的）、offTeam 場外藍票的外白率／外黑率。 */
-type CohortView = 'cells' | 'offTeam';
+/** 小分頁：cells 八格對率（原本的）、offTeam 場外藍票的外白率／外黑率、abnormal 異常票（內黑／外白，站長的定義）。 */
+type CohortView = 'cells' | 'offTeam' | 'abnormal';
+const COHORT_VIEWS: readonly CohortView[] = ['cells', 'offTeam', 'abnormal'];
+type DecisiveView = Exclude<CohortView, 'abnormal'>;
 
 interface ScopeProps {
   scope: DecisiveRankScope;
@@ -59,13 +64,14 @@ function RateCell({ cell, low }: { cell: DecisiveCell; low?: boolean }): JSX.Ele
   );
 }
 
-function Body({ data, scope, onScope }: { data: DecisiveCohortData } & ScopeProps): JSX.Element {
+interface ViewProps {
+  view: DecisiveView;
+  viewTabs: ReactNode;
+}
+
+function Body({ data, scope, onScope, view, viewTabs }: { data: DecisiveCohortData } & ScopeProps & ViewProps): JSX.Element {
   const { t } = useTranslation('common');
   const cuts = useCohortCuts((s) => s.cuts);
-  const viewItems: SectionTabItem<CohortView>[] = useMemo(() => (['cells', 'offTeam'] as const).map((id) => ({
-    id, label: t(`${K}.decisive.view.${id}`),
-  })), [t]);
-  const [view = 'cells', setView] = useSectionTab(viewItems, { persistKey: DECISIVE_COHORT_VIEW_KEY });
   const scopeItems: SectionTabItem<DecisiveRankScope>[] = useMemo(() => DECISIVE_RANK_SCOPES.map((id) => ({
     id, label: t(`analytics.decisive.scope.${id}`),
   })), [t]);
@@ -171,7 +177,7 @@ function Body({ data, scope, onScope }: { data: DecisiveCohortData } & ScopeProp
           <p>{t(`${K}.decisive.help.tiers`)}</p>
           <p>{t(`${K}.help.causality`)}</p>
         </InfoTip>
-        <SectionTabs items={viewItems} value={view} onChange={setView} size="sm" ariaLabel={t(`${K}.decisive.viewLabel`)} />
+        {viewTabs}
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {/* 範圍小分頁只放在場外藍票：八格對率維持原樣，用排行上面的範圍 */}
@@ -220,8 +226,8 @@ function Body({ data, scope, onScope }: { data: DecisiveCohortData } & ScopeProp
   );
 }
 
-/** 個人排行上面的分組區塊（跟著排行的範圍）。算不出來時不顯示（不擋排行）。 */
-export default function DecisiveCohortView({ scope, onScope }: ScopeProps): JSX.Element | null {
+/** 八格對率／場外藍票（決定性票與全部投票）：跟著排行的範圍。算不出來時不顯示（不擋排行）。 */
+function DecisiveCohortSection({ scope, onScope, view, viewTabs }: ScopeProps & ViewProps): JSX.Element | null {
   const { t } = useTranslation('common');
   const state = useDecisiveCohort(scope);
   if (state.status === 'error') return null;
@@ -232,5 +238,17 @@ export default function DecisiveCohortView({ scope, onScope }: ScopeProps): JSX.
       </div>
     );
   }
-  return <Body data={state.data} scope={scope} onScope={onScope} />;
+  return <Body data={state.data} scope={scope} onScope={onScope} view={view} viewTabs={viewTabs} />;
+}
+
+/** 個人排行上面的分組區塊：三個小分頁（八格對率、場外藍票、異常票）。 */
+export default function DecisiveCohortView({ scope, onScope }: ScopeProps): JSX.Element | null {
+  const { t } = useTranslation('common');
+  const viewItems: SectionTabItem<CohortView>[] = useMemo(() => COHORT_VIEWS.map((id) => ({
+    id, label: t(`${K}.decisive.view.${id}`),
+  })), [t]);
+  const [view = 'cells', setView] = useSectionTab(viewItems, { persistKey: DECISIVE_COHORT_VIEW_KEY });
+  const viewTabs = <SectionTabs items={viewItems} value={view} onChange={setView} size="sm" ariaLabel={t(`${K}.decisive.viewLabel`)} />;
+  if (view === 'abnormal') return <AbnormalCohortView viewTabs={viewTabs} />;
+  return <DecisiveCohortSection scope={scope} onScope={onScope} view={view} viewTabs={viewTabs} />;
 }

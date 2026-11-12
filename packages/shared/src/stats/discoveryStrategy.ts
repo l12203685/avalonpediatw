@@ -41,7 +41,7 @@ interface Template {
   kind: 'share' | 'accuracy';
   /** 範圍的前綴（例：第 4 局）。 */
   scope?: string;
-  /** share：做法（「派最多一紅的隊」）；accuracy：名詞（「關鍵外白對率」）。 */
+  /** share：做法（「派最多一紅的隊」）；accuracy：名詞（「決定性外白對率」）。 */
   phrase: string;
   /** 哪個方向對藍方比較好；null = 本身沒有好壞。 */
   better: 'higher' | 'lower' | null;
@@ -70,10 +70,10 @@ const GROUP_NOUN = { onYes: '場內白', onNo: '內黑', offYes: '外白', offNo
 
 /** 八格的名詞（只用在 cell 範本；八格不給策略）。 */
 const CELL_PHRASE: Record<string, string> = {
-  onYesRight: '在關鍵時在隊上放行全好的隊', onYesWrong: '在關鍵時在隊上放行會失敗的隊',
-  onNoRight: '在關鍵時內黑擋下會失敗的隊', onNoWrong: '在關鍵時內黑擋下全好的隊',
-  offYesRight: '在關鍵時外白放行全好的隊', offYesWrong: '在關鍵時外白放行會失敗的隊',
-  offNoRight: '在關鍵時在場外擋下會失敗的隊', offNoWrong: '在關鍵時在場外擋下全好的隊',
+  onYesRight: '投決定性票時在隊上放行全好的隊', onYesWrong: '投決定性票時在隊上放行會失敗的隊',
+  onNoRight: '投決定性票時內黑擋下會失敗的隊', onNoWrong: '投決定性票時內黑擋下全好的隊',
+  offYesRight: '投決定性票時外白放行全好的隊', offYesWrong: '投決定性票時外白放行會失敗的隊',
+  offNoRight: '投決定性票時在場外擋下會失敗的隊', offNoWrong: '投決定性票時在場外擋下全好的隊',
 };
 
 const TEMPLATES: Record<string, Template> = {
@@ -95,8 +95,8 @@ const TEMPLATES: Record<string, Template> = {
     readHigh: '第 4 局的隊比較常最多一紅（一張失敗不會紅）', readLow: '第 4 局的隊比較常有兩個以上紅方，放行前多想',
   },
   'decisive|acc': {
-    kind: 'accuracy', phrase: '關鍵票正確率', better: 'higher', act: '剛好差一票的時候，先確認隊伍全好才放行、有紅才擋',
-    readHigh: '藍方的關鍵票比較常投對', readLow: '藍方的關鍵票比較常投錯，投票前多想一次',
+    kind: 'accuracy', phrase: '決定性票正確率', better: 'higher', act: '剛好差一票的時候，先確認隊伍全好才放行、有紅才擋',
+    readHigh: '藍方的決定性票比較常投對', readLow: '藍方的決定性票比較常投錯，投票前多想一次',
   },
   'blueVote|acc': {
     kind: 'accuracy', phrase: '投票正確率', better: 'higher', act: '每一票都照「全好就放行、有紅就擋」投，不要照習慣投',
@@ -105,7 +105,7 @@ const TEMPLATES: Record<string, Template> = {
 };
 for (const g of ['onYes', 'onNo', 'offYes', 'offNo'] as const) {
   TEMPLATES[`decisive|${g}`] = {
-    kind: 'accuracy', phrase: `關鍵${GROUP_NOUN[g]}對率`, better: 'higher', act: DECISIVE_ACT[g], readHigh: DECISIVE_READ[g][0], readLow: DECISIVE_READ[g][1],
+    kind: 'accuracy', phrase: `決定性${GROUP_NOUN[g]}對率`, better: 'higher', act: DECISIVE_ACT[g], readHigh: DECISIVE_READ[g][0], readLow: DECISIVE_READ[g][1],
   };
   TEMPLATES[`blueVote|${g}`] = {
     kind: 'accuracy', phrase: `${GROUP_NOUN[g]}對率`, better: 'higher', act: DECISIVE_ACT[g], readHigh: DECISIVE_READ[g][0], readLow: DECISIVE_READ[g][1],

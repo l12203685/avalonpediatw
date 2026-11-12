@@ -33,9 +33,12 @@ import {
   type TwoRedTable,
   type TwoRedCohortData,
   type DecisiveCohortData,
+  type AbnormalCohortData,
   type Game,
   SEATS,
   decisiveCohortData,
+  abnormalCohortData,
+  scanAbnormalVotes,
   twoRedCohortData,
   scanDecisiveVotes,
   twoRedProposals,
@@ -233,6 +236,27 @@ export async function computeDecisive(serverUrl: string, raw: GameFilter | null,
 export async function computeDecisiveCohort(serverUrl: string, raw: GameFilter | null, scope: DecisiveScope): Promise<DecisiveCohortData> {
   const { scan, games } = await preparedDecisive(serverUrl, raw);
   return decisiveCohortData(scan, scope, games);
+}
+
+const abnormalScans = new Map<string, AbnormalCohortData>();
+
+/**
+ * 「關鍵外白／內黑」分組的小分頁「異常票（內黑／外白）」與玩家雷達「兩紅之後」的異常票那一行：篩選後的局裡，情境（兩紅之後、
+ * 第三局・兩紅／一藍一紅、第四局・兩紅、第五局）內的藍方票依局、座位、情境合起來的筆（@avalon/shared abnormalVotes.ts）
+ * ＋PR／S 分布。每個篩選只掃一次；情境、全部／關鍵、角色、切點都在網站上切。
+ */
+export async function computeAbnormalCohort(serverUrl: string, raw: GameFilter | null): Promise<AbnormalCohortData> {
+  const { decoded, context } = await loaded(serverUrl);
+  const filter = raw ? sanitizeFilter(raw).filter : null;
+  const key = JSON.stringify(filter);
+  let hit = abnormalScans.get(key);
+  if (!hit) {
+    const { games } = applyFilter(decoded, { asOf: context.asOf, aliases: context.aliases, chemistryRoster: context.chemistryRoster }, filter);
+    hit = abnormalCohortData(scanAbnormalVotes(games), games);
+    abnormalScans.set(key, hit);
+    while (abnormalScans.size > 4) abnormalScans.delete(abnormalScans.keys().next().value as string);
+  }
+  return hit;
 }
 
 /** 數據分析「局勢樹」：篩選後的局縮成樹要的欄位（components/analysis/stateTree/stateTree.ts）。 */

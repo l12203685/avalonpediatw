@@ -13,8 +13,10 @@ export const BOARDS_PERSIST_KEY = 'boards';
 export const DECISIVE_SCOPE_KEY = 'boards.decisive.scope';
 /** 分組那一塊（cohort/DecisiveCohortView）「關鍵票／全部投票」的記憶鍵（自動發現的「看數字」也會設）。 */
 export const DECISIVE_COHORT_KIND_KEY = 'boards.decisive.cohortKind';
-/** 分組那一塊「八格對率／場外藍票」小分頁的記憶鍵。 */
+/** 分組那一塊「八格對率／場外藍票／異常票」小分頁的記憶鍵。 */
 export const DECISIVE_COHORT_VIEW_KEY = 'boards.decisive.cohortView';
+/** 「異常票（內黑／外白）」小分頁「全部／關鍵」的記憶鍵（預設全部）。 */
+export const ABNORMAL_MODE_KEY = 'boards.decisive.abnormalMode';
 
 /** 上榜門檻的選項（非中性的關鍵票張數）；預設 DECISIVE_MIN_N = 30。 */
 export const DECISIVE_MIN_OPTIONS = [5, 10, 20, DECISIVE_MIN_N, 60, 100] as const;

@@ -88,9 +88,9 @@ describe('discovery text for the new data (two reds, decisive votes, all votes)'
     expect(findingLink(twoRed)).toEqual({ kind: 'twoRedCohort', label: '看數字：陣容強度 › 兩紅派隊分組' });
     const dv = finding({ unit: 'decisive', dimension: dim('decisive', 'twoRedState'), metric: met('decisive', 'offYes'), a: { label: '紅方已兩勝', value: 53, n: 432, units: 400 } });
     // 那一頁沒有依「紅方已兩勝」拆：只能看整體的數字
-    expect(findingLink(dv)).toEqual({ kind: 'decisiveBoard', scope: 'twoRed', contextOnly: true, label: '看整體數字：數據排行 › 關鍵外白／內黑（關鍵票、兩紅之後）' });
+    expect(findingLink(dv)).toEqual({ kind: 'decisiveBoard', scope: 'twoRed', contextOnly: true, label: '看整體數字：數據排行 › 決定性票／關鍵外白內黑（決定性票、兩紅之後）' });
     const av = finding({ unit: 'blueVote', dimension: dim('blueVote', 'tableTier'), metric: met('blueVote', 'acc'), a: { label: '高端', value: 65, n: 7000, units: 3000 } });
-    expect(findingLink(av)).toEqual({ kind: 'decisiveBoardAll', scope: 'r35', label: '看數字：數據排行 › 關鍵外白／內黑（全部投票、第 3～5 局）' });
+    expect(findingLink(av)).toEqual({ kind: 'decisiveBoardAll', scope: 'r35', label: '看數字：數據排行 › 決定性票／關鍵外白內黑（全部投票、第 3～5 局）' });
     const round = finding({ unit: 'blueVote', dimension: dim('blueVote', 'round'), metric: met('blueVote', 'offYes'), a: { label: '第 5 局', value: 75, n: 85, units: 85 } });
     expect(findingLink(round)?.label).toMatch(/^看整體數字/);
     // 兩紅派隊分組有依角色、第幾局拆；沒有依座位拆
