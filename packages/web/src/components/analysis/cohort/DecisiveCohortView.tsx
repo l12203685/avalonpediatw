@@ -174,7 +174,10 @@ function Body({ data, scope, onScope }: { data: DecisiveCohortData } & ScopeProp
         <SectionTabs items={viewItems} value={view} onChange={setView} size="sm" ariaLabel={t(`${K}.decisive.viewLabel`)} />
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <SectionTabs items={scopeItems} value={scope} onChange={onScope} size="sm" ariaLabel={t('analytics.decisive.scopeLabel')} />
+        {/* 範圍小分頁只放在場外藍票：八格對率維持原樣，用排行上面的範圍 */}
+        {view === 'offTeam' && (
+          <SectionTabs items={scopeItems} value={scope} onChange={onScope} size="sm" ariaLabel={t('analytics.decisive.scopeLabel')} />
+        )}
         <SectionTabs items={kindItems} value={kind} onChange={setKind} size="sm" ariaLabel={t(`${K}.decisive.kindLabel`)} />
         {roleSelect}
       </div>
