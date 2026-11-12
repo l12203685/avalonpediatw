@@ -15,7 +15,14 @@ import {
   isWikiPending,
   mergeWikiArticles,
 } from '../../../web/src/data/wiki';
-import { WIKI_MERGED_INTO_1030N, WIKI_MERGED_INTO_1111, WIKI_REDIRECTS, resolveWikiRedirect } from '../../../web/src/data/wikiRedirects';
+import {
+  WIKI_MERGED_INTO_1030N,
+  WIKI_MERGED_INTO_1111,
+  WIKI_REDIRECTS,
+  WIKI_SECTION_ALIASES,
+  resolveWikiRedirect,
+  resolveWikiSectionAlias,
+} from '../../../web/src/data/wikiRedirects';
 import { hasWikiSection, resolveWikiSection, wikiHeadings } from '../../../web/src/utils/wikiSections';
 
 interface JsonArticle {
@@ -281,7 +288,7 @@ describe('wiki categories and status', () => {
     expect(sectionOf(jsonById.get('wiki-25')!.content, '實戰數據怎麼讀')).toMatch(/十分之四/);
     // the shared reading notes moved to 〈如何正確解讀阿瓦隆數據〉
     const guide = jsonById.get('wiki-209')!.content;
-    for (const s of ['「0 家」＝10 號', '本站說的前置位是 1–4 號', '比率在 30%～70% 之間時', '全部對局、1–10 號位，每日更新']) expect(guide).toContain(s);
+    for (const s of ['「0 家」＝10 號', '本站說的前半區是 1–5 號、後半區是 6–10 號', '比率在 30%～70% 之間時', '全部對局、1–10 號位，每日更新']) expect(guide).toContain(s);
   });
 
   it('every category that is offered has at least one finished article', () => {
@@ -672,5 +679,59 @@ describe('wiki consolidation (2026-11-11 站長: 文章數量有點多，值得�
     for (const link of ['wiki:wiki-217#新手常見問題（規則篇）', 'wiki:wiki-72#三、社群問答集（進階，初學可先跳過）', 'wiki:wiki-205#四、第一局開藍後：三加一還是拆車', 'wiki:wiki-175#實戰數據怎麼讀']) {
       expect(about, link).toContain(link);
     }
+  });
+});
+
+describe('前半區／後半區 (2026-11-12 站長：「前置位」改成「前半區（1-5）」)', () => {
+  const docsFile = (f: string): string => fs.readFileSync(path.join(DOCS, f), 'utf-8');
+
+  it('the articles say 前半區（1–5）／後半區（6–10）; the old words stay only where they name something else', () => {
+    const left: string[] = [];
+    for (const a of jsonArticles) {
+      for (const line of a.content.split('\n')) if (/[前後]置位/.test(line)) left.push(`${a.id}: ${line.slice(0, 40)}`);
+    }
+    expect(left).toEqual([
+      // 名詞表留一個舊稱，搜尋舊說法的人找得到
+      'wiki-204: | 前半區、後半區（舊稱前置位、後置位） | 前半區＝1～5 家、後半區＝6～0',
+      // 〈與狼人殺比較〉表格裡狼人殺那一欄（狼人殺的發言順序用語）
+      'wiki-71: | 回應資訊的管道 | 後半區派票、**黑白球** | 後置位絕對發言、**投票',
+      // 「本文整合自」列的是被併入的舊文章原本的標題
+      'wiki-32: > 本文整合自〈覆盤 - 5 家奧伯倫在 1-5 要不要炸車〉、〈覆盤 - 3 ',
+    ]);
+    expect(jsonById.get('wiki-204')!.content).toMatch(/前半區＝1～5 家、後半區＝6～0 家/);
+    expect(jsonById.get('wiki-175')!.content).toContain('**前半區與後半區的責任不同**：前半區（1–5 號）');
+    // the passages whose reasoning is about seats 1–4 / 6–9 keep their seat lists under the new words
+    expect(jsonById.get('wiki-175')!.content).toContain('- 前半區的 1～4 家梅林（不含 1-5 的尾家 5 家）的派票：三張票');
+    expect(jsonById.get('wiki-175')!.content).toContain('- 後半區的 6～9 家梅林（不含 2-5 的尾家 0 家）的派票：四張票');
+    expect(jsonById.get('wiki-176')!.content).toContain('- 在前半區的 1～4 家（不含 1-5 的尾家 5 家，另外看）還沒分出梅林時');
+    // the articles that cite wiki-176's Percival rule use the same seats (1–4, seat 5 read separately)
+    expect(jsonById.get('wiki-205')!.content).toContain('前半區的 1～4 家（5 家另外看）還沒分出梅林時盡量不踩拇指');
+    expect(jsonById.get('wiki-12')!.content).toContain('wiki-176「前半區的 1～4 家還沒分出梅林時，盡量不要踩拇指（梅娜）」');
+    expect(jsonById.get('wiki-147')!.content).toContain('文中的 1～4、6～9 是前半區、後半區各自扣掉尾家（5、0）');
+    expect(jsonById.get('wiki-57')!.content).toContain('  - 前半區的 1～4\n  - 後半區的 6～9\n  - 5、0（兩區的尾家）獨立看');
+    // the docs copies follow the site text
+    expect(docsFile('角色/刺殺梅林.md').trim()).toBe(jsonById.get('wiki-12')!.content.trim());
+    expect(docsFile('進階思考/換位思考.md').trim()).toBe(jsonById.get('wiki-27')!.content.trim());
+  });
+
+  it('old anchors of the renamed headings still land on their sections', () => {
+    expect(Object.keys(WIKI_SECTION_ALIASES).length).toBeGreaterThan(0);
+    for (const [id, aliases] of Object.entries(WIKI_SECTION_ALIASES)) {
+      const content = jsonById.get(id)!.content;
+      for (const [oldSlug, slug] of Object.entries(aliases)) {
+        expect(hasWikiSection(content, oldSlug), `${id}#${oldSlug}`).toBe(false);
+        expect(hasWikiSection(content, slug), `${id}#${slug}`).toBe(true);
+        expect(resolveWikiSectionAlias(id, oldSlug)).toBe(slug);
+      }
+    }
+    expect(resolveWikiSectionAlias('wiki-32', '一、3-家：梅林被前置位夾住、雜魚積極還是保守')).toBe('一、3-家：梅林被前半區的派票夾住、雜魚積極還是保守');
+    expect(resolveWikiSectionAlias('wiki-175', '後置位梅林：給資訊，還是派雜魚認得下的組合？')).toBe('後半區梅林：給資訊，還是派雜魚認得下的組合？');
+    // anchors that did not change, other articles and no section pass through
+    expect(resolveWikiSectionAlias('wiki-32', '視角分析-2')).toBe('視角分析-2');
+    expect(resolveWikiSectionAlias('wiki-12', '一、3-家：梅林被前置位夾住、雜魚積極還是保守')).toBe('一、3-家：梅林被前置位夾住、雜魚積極還是保守');
+    expect(resolveWikiSectionAlias('wiki-32', undefined)).toBeUndefined();
+    expect(resolveWikiSectionAlias('wiki-32', 'toString')).toBe('toString');
+    // the merged-away wiki-35 goes straight to the renamed section
+    expect(WIKI_REDIRECTS['wiki-35']).toEqual({ id: 'wiki-32', section: '一、3-家：梅林被前半區的派票夾住、雜魚積極還是保守' });
   });
 });

@@ -25,7 +25,7 @@ export const WIKI_MERGED_INTO_1111: Readonly<Record<string, WikiRedirect>> = {
   'wiki-11': { id: 'wiki-148', section: '四、內黑的用途' },
   'wiki-208': { id: 'wiki-147', section: '下篇：各比分的湖法' },
   'wiki-62': { id: 'wiki-26', section: '乙、大局觀' },
-  'wiki-35': { id: 'wiki-32', section: '一、3-家：梅林被前置位夾住、雜魚積極還是保守' },
+  'wiki-35': { id: 'wiki-32', section: '一、3-家：梅林被前半區的派票夾住、雜魚積極還是保守' },
   'wiki-52': { id: 'wiki-32', section: '三、5-家雜魚怎麼讀前四家的派票：連續能力派、247-被打成壞人' },
   'strategy-merlin-data': { id: 'wiki-175', section: '實戰數據怎麼讀' },
   'strategy-percival-data': { id: 'wiki-176', section: '實戰數據怎麼讀' },
@@ -97,4 +97,28 @@ export const WIKI_REDIRECTS: Readonly<Record<string, WikiRedirect>> = { ...WIKI_
 export function resolveWikiRedirect(id: string | null | undefined): WikiRedirect | null {
   if (!id || !Object.prototype.hasOwnProperty.call(WIKI_REDIRECTS, id)) return null;
   return WIKI_REDIRECTS[id];
+}
+
+/**
+ * 標題改了字的章節：文章 id → { 舊錨點: 新錨點 }。分享出去的 #wiki=<id>&sec=<舊錨點> 照樣捲到那一節（wikiLink.ts）。
+ * 新錨點必須是那篇現有的標題、舊錨點不能再是標題（packages/server/src/__tests__/WebWikiStatus.test.ts 測）。
+ *
+ *  - 2026-11-12 站長：「前置位」改成「前半區（1–5）」，「後置位」跟著改成「後半區（6–10）」。
+ */
+export const WIKI_SECTION_ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'wiki-32': {
+    '一、3-家：梅林被前置位夾住、雜魚積極還是保守': '一、3-家：梅林被前半區的派票夾住、雜魚積極還是保守',
+    '第一場：3-家梅林被前置位夾住時怎麼派': '第一場：3-家梅林被前半區的派票夾住時怎麼派',
+    '先盤盤看前置位的派票': '先盤盤看前半區-1～4-家的派票',
+  },
+  'wiki-175': {
+    '後置位梅林：給資訊，還是派雜魚認得下的組合？': '後半區梅林：給資訊，還是派雜魚認得下的組合？',
+  },
+};
+
+/** The current anchor for a section of an article (an old anchor of a renamed heading → the new one; others unchanged). */
+export function resolveWikiSectionAlias(id: string, section: string | undefined): string | undefined {
+  if (!section || !Object.prototype.hasOwnProperty.call(WIKI_SECTION_ALIASES, id)) return section;
+  const aliases = WIKI_SECTION_ALIASES[id];
+  return Object.prototype.hasOwnProperty.call(aliases, section) ? aliases[section] : section;
 }

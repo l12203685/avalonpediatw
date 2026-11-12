@@ -497,7 +497,7 @@ export default function DecisiveBoard(): JSX.Element {
       </ul>
       <RoleBreakdown report={report} />
       {/* 2026-11-11 Edward：個人的關鍵票太少，分組（強者／一般人／新手、S × PR 九宮格）放在個人排行上面 */}
-      <DecisiveCohortView scope={scope} />
+      <DecisiveCohortView scope={scope} onScope={setScope} />
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <h4 className="text-xs font-bold text-zinc-300">{t(`${K}.tableTitle`)}</h4>
