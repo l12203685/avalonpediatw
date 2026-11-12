@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { resolveWikiRedirect } from '../data/wikiRedirects';
+import { resolveWikiRedirect, resolveWikiSectionAlias } from '../data/wikiRedirects';
 import { parseWikiHash, wikiHash } from '../utils/wikiHash';
 
 /**
@@ -8,6 +8,7 @@ import { parseWikiHash, wikiHash } from '../utils/wikiHash';
  *    文章裡點「延伸閱讀」換到另一篇（或同一篇的另一節）時只換掉網址（replaceState），關閉時一樣回到打開前的百科；
  *  - closeWikiArticle：是自己 push 的就 history.back()，從外部連結（Threads 的分享頁）直接進來的就 replaceState 清掉 hash。
  *  - 2026-11-11 文章合併：#wiki=<被併入的舊 id> 打開主文、捲到併入的那一節（data/wikiRedirects.ts），網址列換成主文的網址。
+ *  - 2026-11-12 標題改字：&sec=<舊錨點> 換成新錨點（data/wikiRedirects.ts 的 WIKI_SECTION_ALIASES），網址列一起換掉。
  */
 
 const EVENT = 'avalon:wiki-hash';
@@ -21,14 +22,14 @@ export interface OpenWikiTarget {
   section?: string;
 }
 
-/** The article (and section) the hash asks for, old merged-away ids already resolved to their main article. */
+/** The article (and section) the hash asks for, old merged-away ids and old section anchors already resolved. */
 export function currentWikiTarget(): OpenWikiTarget | null {
   if (typeof window === 'undefined') return null;
   const parsed = parseWikiHash(window.location.hash);
   if (!parsed?.id) return null;
   const moved = resolveWikiRedirect(parsed.id);
-  const section = parsed.section ?? moved?.section;
   const id = moved ? moved.id : parsed.id;
+  const section = resolveWikiSectionAlias(id, parsed.section ?? moved?.section);
   return section ? { id, section } : { id };
 }
 
@@ -44,11 +45,16 @@ function replaceHash(hash: string, state: unknown = null): void {
   }
 }
 
-/** An old id in the address bar (#wiki=wiki-62) becomes the main article's address (#wiki=wiki-26&sec=…), same history entry. */
+/**
+ * An old id in the address bar (#wiki=wiki-62) becomes the main article's address (#wiki=wiki-26&sec=…), and an old
+ * section anchor the current one, same history entry.
+ */
 export function canonicalizeWikiHash(): void {
   if (typeof window === 'undefined') return;
   const parsed = parseWikiHash(window.location.hash);
-  if (!parsed?.id || !resolveWikiRedirect(parsed.id)) return;
+  if (!parsed?.id) return;
+  const renamed = parsed.section !== undefined && resolveWikiSectionAlias(parsed.id, parsed.section) !== parsed.section;
+  if (!resolveWikiRedirect(parsed.id) && !renamed) return;
   const target = currentWikiTarget();
   if (!target) return;
   const state = window.history.state as WikiHistoryState | null;
@@ -60,7 +66,7 @@ export function canonicalizeWikiHash(): void {
 export function openWikiArticle(id: string, section?: string): void {
   const moved = resolveWikiRedirect(id);
   const targetId = moved ? moved.id : id;
-  const hash = wikiHash(targetId, section ?? moved?.section);
+  const hash = wikiHash(targetId, resolveWikiSectionAlias(targetId, section ?? moved?.section));
   if (window.location.hash === hash) {
     // same address (e.g. the same section clicked twice): still scroll there
     notify();
