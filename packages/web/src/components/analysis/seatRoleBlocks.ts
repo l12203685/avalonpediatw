@@ -31,13 +31,19 @@ import { filterScopedLoader } from '../../stats/filterScopedLoader';
 /** 角色固定順序：紅方四個 → 藍方三個 (與 RoleFinalWinRates 舊版相同)。 */
 export const ROLE_ORDER: readonly string[] = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林', '忠臣'];
 
-/** players[] 的座位鍵 ('0' = 10 號)，顯示順序 1..10。 */
+/** players[] 的座位鍵 ('0' = 0 家，第十個座位)，顯示順序 1..9、0。 */
 export const PLAYER_SEAT_KEYS: readonly string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
-/** 座位顯示號碼：players[] 的 '0' 是 10 號；overview / roleSeatStats 已經寫成 '10'。 */
+/**
+ * players[] 的座位鍵 → overview / roleSeatStats 的資料鍵：players[] 的 '0'（0 家）在那兩份資料裡寫成 '10'。
+ * 只拿來查資料；畫面上的座位號用 seatDisplay（0 家顯示 0）。
+ */
 export function seatNumber(seat: string): string {
   return seat === '0' ? '10' : seat;
 }
+
+/** 畫面上的座位號：第十個座位一律顯示 0（站長 2026-11-12：座位寫「0 家」，不寫 10）；資料鍵不變。 */
+export { displaySeatKey as seatDisplay } from '../../utils/seatDisplay';
 
 type BreakdownLike = { threeRed?: number; threeBlueDead?: number; threeBlueAlive?: number } | null | undefined;
 
@@ -71,7 +77,7 @@ export function blockValues(b: OutcomeBlocks | null | undefined): MetricBlockVal
 // ── 位置：全體 ────────────────────────────────────────────────────────────────
 
 export interface SeatFactionCounts {
-  /** overview 的座位鍵 "1".."10"。 */
+  /** overview 的座位鍵 "1".."10"（"10" = 0 家；顯示用 seatDisplay）。 */
   seat: string;
   red: OutcomeCounts;
   blue: OutcomeCounts;
@@ -142,7 +148,7 @@ export function rolePopulation(players: readonly AnalysisPlayerStats[] | null | 
 
 // ── 玩家 × 位置 ───────────────────────────────────────────────────────────────
 
-/** players[].roleSeatStats ("角色|座號"，座號 1..10)；services/api 的型別沒列，這裡補上。 */
+/** players[].roleSeatStats ("角色|座號"，座號 1..10，10 = 0 家)；services/api 的型別沒列，這裡補上。 */
 export type RoleSeatStats = Record<string, { games: number; wins: number; winRate?: number }>;
 export type PlayerWithSeatStats = AnalysisPlayerStats & { roleSeatStats?: RoleSeatStats };
 

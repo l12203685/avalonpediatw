@@ -41,7 +41,10 @@ describe('discovery text', () => {
   it('filters that can be applied: 分類, 年份, 梅林座位', () => {
     expect(findingClause(finding({ dimension: dim('game', 'category'), a: { label: '面瓦', value: 1, n: 1, units: 1 } }))).toEqual({ kind: 'category', in: ['面瓦'] });
     expect(findingClause(finding({ dimension: dim('game', 'year'), a: { label: '2024', value: 1, n: 1, units: 1 } }))).toEqual({ kind: 'date', from: '2024-01-01', to: '2024-12-31' });
-    expect(findingClause(finding({ dimension: dim('game', 'merlinSeat'), a: { label: '10 號', value: 1, n: 1, units: 1 } }))).toEqual({ kind: 'roleSeat', role: '梅林', seats: [10] });
+    expect(findingClause(finding({ dimension: dim('game', 'merlinSeat'), a: { label: '0 家', value: 1, n: 1, units: 1 } }))).toEqual({ kind: 'roleSeat', role: '梅林', seats: [10] });
+    expect(findingClause(finding({ dimension: dim('game', 'merlinSeat'), a: { label: '5 家', value: 1, n: 1, units: 1 } }))).toEqual({ kind: 'roleSeat', role: '梅林', seats: [5] });
+    // 座位只寫「N 家」：舊的「10 號」不再出現（站長 2026-11-12）
+    expect(findingClause(finding({ dimension: dim('game', 'merlinSeat'), a: { label: '10 號', value: 1, n: 1, units: 1 } }))).toBeNull();
     expect(findingClause(finding({}))).toBeNull();
   });
 

@@ -101,14 +101,14 @@ export const DISCOVERY_DIMENSIONS: readonly DiscoveryDimension[] = [
   ...STRENGTH_DIMENSIONS.map((d) => ({ id: d.id, unit: 'game' as const, label: d.label, help: d.help, kind: NUM, lineup: true })),
   { id: 'category', unit: 'game', label: '分類', help: '線瓦／面瓦／娛樂', kind: CAT },
   { id: 'year', unit: 'game', label: '年份', help: '對局日期的年份', kind: CAT },
-  { id: 'merlinSeat', unit: 'game', label: '梅林座位', help: '梅林坐幾號位', kind: CAT },
+  { id: 'merlinSeat', unit: 'game', label: '梅林座位', help: '梅林坐幾家', kind: CAT },
   { id: 'assassinAfterMerlin', unit: 'game', label: '刺客在梅林後第幾位', help: '從梅林順時針數到刺客是第幾個座位', kind: CAT },
   { id: 'firstTeamRed', unit: 'game', label: '首隊紅方人數', help: '第 1 輪第 1 次提議的隊伍裡有幾個紅方', kind: CAT },
   { id: 'round', unit: 'proposal', label: '第幾輪', help: '提議在第幾個任務輪', kind: CAT, structural: true },
   { id: 'attempt', unit: 'proposal', label: '第幾次提議', help: '這一輪的第幾次提議（第 5 次是強制局，不投票，不列）', kind: CAT, structural: true },
   { id: 'leaderCamp', unit: 'proposal', label: '隊長陣營', help: '提議的隊長（依輪替推算）是紅方還是藍方', kind: CAT },
   { id: 'leaderRole', unit: 'proposal', label: '隊長角色', help: '提議的隊長（依輪替推算）的角色', kind: CAT },
-  { id: 'leaderSeat', unit: 'proposal', label: '隊長座位', help: '提議的隊長坐幾號位', kind: CAT, structural: true },
+  { id: 'leaderSeat', unit: 'proposal', label: '隊長座位', help: '提議的隊長坐幾家', kind: CAT, structural: true },
   { id: 'sequence', unit: 'proposal', label: '局勢（任務順序）', help: '這一輪開始前各任務的結果，照順序（例：藍紅紅）。同樣 2：2，紅藍藍紅跟藍紅紅藍是不同的局勢', kind: CAT, structural: true },
   { id: 'seqLake', unit: 'proposal', label: '局勢＋湖中宣告', help: '任務順序再加上目前為止湖中女神的宣告（例：藍紅｜湖宣告紅）', kind: CAT, structural: true },
   { id: 'score', unit: 'proposal', label: '比分', help: '這一輪開始前的任務比分（藍：紅；不看順序）', kind: CAT, structural: true },
@@ -130,7 +130,7 @@ export const DISCOVERY_DIMENSIONS: readonly DiscoveryDimension[] = [
   { id: 'score', unit: 'lake', label: '比分', help: '用湖時的任務比分（藍：紅；不看順序）', kind: CAT, structural: true },
   { id: 'holderPr', unit: 'lake', label: '持湖 PR', help: '拿湖的人的開打前 PR', kind: NUM, lineup: true },
   { id: 'sTable', unit: 'lake', label: '桌上 S', help: '這局的桌上 S', kind: NUM, lineup: true },
-  { id: 'seat', unit: 'seat', label: '座位', help: '幾號位', kind: CAT },
+  { id: 'seat', unit: 'seat', label: '座位', help: '坐幾家', kind: CAT },
   { id: 'role', unit: 'seat', label: '角色', help: '這個座位的角色', kind: CAT },
   { id: 'firstLeader', unit: 'seat', label: '首家', help: '這個座位是不是第一次提議的隊長（依輪替推算）', kind: CAT },
   { id: 'r1Tail', unit: 'seat', label: '第 1 輪尾家', help: '這個座位是不是第 1 輪第 5 次提議（強制局）的隊長', kind: CAT },
@@ -176,7 +176,7 @@ export const EXCLUDED_PAIRS: ReadonlySet<string> = new Set([
   'mission|leaderCamp|failed',
   'seat|role|finalWin', 'seat|role|missionWin',
   'lake|holderCamp|claimTrue', 'lake|holderRole|claimTrue', 'lake|holderRole|targetMerlin',
-  // 10 號先拿湖，拿過湖的人不能再被驗：梅林坐 10 號就驗不到梅林
+  // 0 家先拿湖，拿過湖的人不能再被驗：梅林坐 0 家就驗不到梅林
   'game|merlinSeat|lakeMerlin',
 ]);
 
@@ -212,7 +212,7 @@ export function gameUnits(g: Game): Record<GameUnit, Row[]> {
     const i = (SEATS as readonly string[]).indexOf(s);
     return i >= 0 && g.seatPlayers[i] ? g.lineup.prs[i] : null;
   };
-  const seatName = (s: string): string => `${s === '0' ? 10 : s} 號`;
+  const seatName = (s: string): string => `${s} 家`; // 座位一律寫「N 家」，第十個座位是「0 家」（站長 2026-11-12）
   const sTable = g.lineup?.s ?? null;
   const leaders = deriveLeaderSeats(g.votingProposals.map((p) => p[2]));
   const out: Record<GameUnit, Row[]> = { game: [], proposal: [], mission: [], lake: [], seat: [] };

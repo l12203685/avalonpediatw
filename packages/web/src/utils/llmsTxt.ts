@@ -181,7 +181,7 @@ export function buildLlmsFiles(articles: readonly LlmsArticle[], opts: LlmsOptio
     `- 網站：${site}/（百科在「百科攻略」頁籤）`,
     `- 語言：繁體中文（zh-Hant）。文章 ${ordered.length} 篇。`,
     `- 論點標記：文章裡的【邏輯】【經驗】標出每條論點的可信度 — ${layerLegend}。網站上以文字顏色呈現（邏輯＝黃字、經驗＝綠字）。`,
-    '- 牌譜記號（座位數字、o／x、> 等）與常用術語見「牌譜記錄格式與常用術語」一文；座位 0 家＝10 號。',
+    '- 牌譜記號（座位數字、o／x、> 等）與常用術語見「牌譜記錄格式與常用術語」一文；座位寫 1～9、0，0 家是第十個座位。',
     `- 分享連結：每篇文章都有 ${site}/${WIKI_SHARE_DIR}/<文章 id>/（帶那篇文章自己的標題與摘要預覽，打開後轉到網站上的文章 ${site}/#wiki=<文章 id>），文章 id 和上面每篇 .md 的檔名相同。`,
   ].join('\n');
 

@@ -117,7 +117,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
           .addChoices(...SIM_ROLE_CHOICES.map((name) => ({ name, value: name })))
       )
       .addIntegerOption((o) =>
-        o.setName(SIM_OPTIONS.SEAT).setDescription('座位 1–10（10 = 0 家）/ Seat').setRequired(false).setMinValue(1).setMaxValue(10)
+        o.setName(SIM_OPTIONS.SEAT).setDescription('座位 1～9、0 家（0 家寫 0）/ Seat').setRequired(false).setMinValue(0).setMaxValue(10)
       )
       .addStringOption((o) =>
         o.setName(SIM_OPTIONS.ID).setDescription('題號，例如 K7Q2M-4（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(12)
@@ -128,7 +128,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_PROPOSE)
-      .setDescription('模擬瓦作答：你的派票，例如 469（0 = 10 家）/ Your team')
+      .setDescription('模擬瓦作答：你的派票，例如 469（0 家寫 0）/ Your team')
       .addStringOption((o) =>
         o.setName(SIM_OPTIONS.TEAM).setDescription('座位，例如 469、4 6 9 / Seats').setRequired(true).setMaxLength(30)
       ),

@@ -265,7 +265,7 @@ function playstyleLine(ps: PlayerCardInput['playstyle'], voting: PlayerStats['vo
   }
   const { data, labels } = ps ?? {};
   if (Array.isArray(data?.assassinTopSeats) && data.assassinTopSeats.length > 0) {
-    parts.push(`${labels?.assassinTargetLabel || '刺客目標座位偏好'} ${data.assassinTopSeats.join('、')} 號`);
+    parts.push(`${labels?.assassinTargetLabel || '刺客目標座位偏好'} ${data.assassinTopSeats.map((s: number) => (s === 10 ? '0' : String(s))).join('、')} 家`); // 第十個座位寫 0 家
   }
   if (typeof data?.captainStickiness === 'number') {
     parts.push(`${labels?.captainStickinessLabel || '隊長 stickiness'} ${pct(data.captainStickiness)}`);

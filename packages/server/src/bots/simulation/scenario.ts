@@ -102,7 +102,7 @@ export function nextDecision(game: SimGame, seat: number, after: number): number
 
 // ─── 題號 ─────────────────────────────────────────────────────────────────
 
-/** 題號 = 題庫代號-座位字元（第 10 家寫 0），例如 K7Q2M-4。 */
+/** 題號 = 題庫代號-座位字元（0 家寫 0），例如 K7Q2M-4。 */
 export function exerciseIdOf(gameId: string, seat: number): string {
   return `${gameId}-${seatChar(seat)}`;
 }

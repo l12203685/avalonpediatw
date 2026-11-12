@@ -29,7 +29,9 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
       // /模擬 說明:True → 指令說明（Discord 版：照 slash 的選項名寫，見 replies.ts simHelpText）。
       if (opts.getBoolean?.(SIM_OPTIONS.HELP, false)) return { kind: 'help' };
       const roleRaw = opts.getString(SIM_OPTIONS.ROLE, false);
-      const seat = opts.getInteger(SIM_OPTIONS.SEAT, false);
+      // 0 家寫 0（舊的 10 也照收）；內部的座位號照舊是 1..10
+      const seatRaw = opts.getInteger(SIM_OPTIONS.SEAT, false);
+      const seat = seatRaw === 0 ? 10 : seatRaw;
       const idRaw = opts.getString(SIM_OPTIONS.ID, false);
       if (idRaw) {
         const id = normalizeExerciseId(idRaw);

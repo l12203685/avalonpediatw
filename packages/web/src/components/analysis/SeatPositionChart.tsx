@@ -2,7 +2,7 @@ import { Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { outcomeBlocks, theorySettings } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
-import { blockValues, seatFactionCounts, useIsWide } from './seatRoleBlocks';
+import { blockValues, seatDisplay, seatFactionCounts, useIsWide } from './seatRoleBlocks';
 import { MetricBlocks, type MetricBlockRow } from './ui';
 
 /**
@@ -44,7 +44,7 @@ export default function SeatPositionChart(): JSX.Element {
 
   const rowsFor = (faction: 'red' | 'blue'): MetricBlockRow[] => seats.map(s => ({
     key: `${faction}-${s.seat}`,
-    label: t('analytics.r6.tabsb.seats.seatLabel', { n: s.seat }),
+    label: t('analytics.r6.tabsb.seats.seatLabel', { n: seatDisplay(s.seat) }),
     tone: faction,
     ...blockValues(outcomeBlocks(s[faction], faction)),
   }));

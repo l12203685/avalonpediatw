@@ -7,7 +7,7 @@
  */
 import { BLUE_ROLES, RED_ROLES } from '@avalon/shared/stats';
 
-/** 一局：日期、當日第幾場（0 = 不明）、SEATS 順序（1..9、10 號）的名字與角色、哪方贏（'' = 不明）。 */
+/** 一局：日期、當日第幾場（0 = 不明）、SEATS 順序（1..9、0 家）的名字與角色、哪方贏（'' = 不明）。 */
 export interface ClaimGame {
   seq: number;
   date: string;
@@ -39,7 +39,7 @@ export function nameKey(name: string): string {
   return name.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** 座位索引（SEATS 順序）→ 幾號位（"0" = 10 號）。 */
+/** 座位索引（SEATS 順序）→ 1-based 座位號（10 = 0 家；顯示用 displaySeatNumber 寫成 0）。 */
 export function seatNumber(index: number): number {
   return index + 1;
 }

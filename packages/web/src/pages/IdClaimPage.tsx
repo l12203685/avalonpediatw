@@ -9,6 +9,7 @@ import {
   buildIdIndex, dateRange, gameLabel, idGameRow, mergedInto, nameKey, sameGameConflicts, searchIds,
   type ClaimData, type IdSummary, type SearchHit,
 } from '../components/idClaim/claimIndex';
+import { displaySeatNumber } from '../utils/seatDisplay';
 
 /**
  * ID 認領（Edward 2026-11-03：紀錄裡同一個人有時用好幾個 ID — 慣用暱稱、一次性的玩笑名字；讓玩家在網站上說
@@ -160,7 +161,7 @@ export default function IdClaimPage(): JSX.Element {
             </p>
             <ul className="mt-1 space-y-0.5 pl-5">
               {conflicts.slice(0, 5).map((c) => (
-                <li key={c.game.seq}>{gameLabel(c.game)}：{c.seats.map((s) => `${s.name}（${s.seat} 號）`).join('、')}</li>
+                <li key={c.game.seq}>{gameLabel(c.game)}：{c.seats.map((s) => `${s.name}（${displaySeatNumber(s.seat)} 家）`).join('、')}</li>
               ))}
               {conflicts.length > 5 && <li>…還有 {conflicts.length - 5} 局</li>}
             </ul>
@@ -361,7 +362,7 @@ function IdCard({ name, load, onRemove, role }: { name: string; load: Load; onRe
             <li key={r.game.seq} className="px-2 py-1.5 text-xs">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="font-mono text-zinc-300">{gameLabel(r.game)}</span>
-                <span className="text-zinc-400">{r.seat} 號</span>
+                <span className="text-zinc-400">{displaySeatNumber(r.seat)} 家</span>
                 <span className="text-white">{r.role || '角色不明'}</span>
                 {r.result && <span className={r.result === '勝' ? 'text-emerald-400' : 'text-red-400'}>{r.result}</span>}
               </div>

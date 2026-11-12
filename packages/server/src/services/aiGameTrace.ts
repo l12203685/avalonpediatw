@@ -467,7 +467,7 @@ export function formatFlagReply(d: AiDecision, note: string, name: string): stri
 //    百科AI參與的可以也一起放到牌譜紀錄區裡面」）────────────────────────────────────────────
 
 const PAIPU_CONFIG_ROLES = ['刺客', '莫甘娜', '莫德雷德', '奧伯倫', '派西維爾', '梅林'] as const;
-/** 座號寫法：10 號寫 0。 */
+/** 座號寫法：第十個座位（0 家）寫 0。 */
 const pd = (seat: number): string => (seat === 10 ? '0' : String(seat));
 /** 隊伍座號連寫（照座號排，0 放最後，同牌譜區）。 */
 const teamDigits = (seats: readonly number[]): string => [...seats].sort((a, b) => a - b).map(pd).join('');

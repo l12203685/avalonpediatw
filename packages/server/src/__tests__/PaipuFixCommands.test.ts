@@ -47,7 +47,7 @@ function botReply(where: string): string {
     where,
     '',
     '格式提示（照牌譜順序，每行一項）：',
-    '・每次提議一行：隊伍座號連寫（0 = 10 號）',
+    '・每次提議一行：隊伍座號連寫（0 家寫 0）',
     '',
     '修正起始訊息後不用做別的，下次排程（每天凌晨）會自動重新讀取並收錄。',
   ].join('\n');
@@ -82,7 +82,7 @@ function fakeDiscord(opts: FakeOpts = {}) {
       { id: '2', author: { bot: true }, content: botReply('第 22 行「刺客刺殺: 4」：刺殺目標和結果標籤對不起來（三藍被刀的刺殺目標要是梅林的座號）') },
       { id: '1', author: { bot: true }, content: botReply('原因：舊的原因') },
     ],
-    [ID_MID]: [{ id: '1', author: { bot: true }, content: botReply('原因：玩家名單不完整（要有 1～9 號和 10 號，每個座位一行：1.名字）') }],
+    [ID_MID]: [{ id: '1', author: { bot: true }, content: botReply('原因：玩家名單不完整（要有 1～9 家和 0 家，每個座位一行：1.名字）') }],
     [ID_OLD]: [{ id: '1', author: { bot: false }, content: `${PAIPU_FIX_REPLY_MARKER}\n有人假冒` }],
   };
   const fetchImpl = vi.fn(async (url: string) => {
@@ -185,7 +185,7 @@ describe('篩選', () => {
       url: `https://discord.com/channels/${GUILD}/${ID_NEW}`,
       createdAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
     });
-    expect(load.items[1].reason).toBe('玩家名單不完整（要有 1～9 號和 10 號，每個座位一行：1.名字）');
+    expect(load.items[1].reason).toBe('玩家名單不完整（要有 1～9 家和 0 家，每個座位一行：1.名字）');
     // 不是機器人發的「原因回覆」不算。
     expect(load.items[2].reason).toBe('');
     expect(fake.calls.some((c) => c.includes('before=2026-10-31'))).toBe(true);

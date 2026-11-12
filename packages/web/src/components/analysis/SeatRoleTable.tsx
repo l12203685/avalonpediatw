@@ -2,7 +2,7 @@ import { Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { outcomeBlocks, roleFaction, theorySettings, type OutcomeCounts } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
-import { ROLE_ORDER, seatFactionCounts } from './seatRoleBlocks';
+import { ROLE_ORDER, seatDisplay, seatFactionCounts } from './seatRoleBlocks';
 import {
   SectionTabs, StatTable, formatRate, type MetricBlockKey, type SectionTabItem, type StatColumn,
 } from './ui';
@@ -59,7 +59,7 @@ export default function SeatRoleTable(): JSX.Element {
     ...Object.keys(allSeats).filter(r => !ROLE_ORDER.includes(r)),
   ];
   const rows: SeatRoleRow[] = [
-    ...seats.map(s => ({ key: s.seat, label: t('analytics.r6.tabsb.seats.seatLabel', { n: s.seat }), total: false, roles: s.roles })),
+    ...seats.map(s => ({ key: s.seat, label: t('analytics.r6.tabsb.seats.seatLabel', { n: seatDisplay(s.seat) }), total: false, roles: s.roles })),
     { key: 'all', label: t('analytics.r6.tabsb.seatRoles.allSeats'), total: true, roles: allSeats },
   ];
 

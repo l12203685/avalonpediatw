@@ -7,7 +7,7 @@
  *   /模擬                 隨機一題（第 1 局 2～5 家，任何角色）
  *   /模擬 派西 2          指定角色／座位（順序不拘，也可以只給其中一個；紅、藍 = 隨機紅方／藍方角色）
  *   /模擬 題 K7Q2M-4      指定題號（整群可以做同一題）
- *   /派 469               作答（0 = 第 10 家；`4 6 9`、`4,6,9`、`4 6 10` 都可以）
+ *   /派 469               作答（0 = 0 家；`4 6 9`、`4,6,9`、`4 6 10` 都可以）
  *   /區間 789=2 460=1     區間（選填；百科寫法 `7 8 9 *2 4 6 0 *1`、`12=1-2`、`3=紅`、`3 壞`、`5=好`、
  *                         `1 5 9 *1+` 也可以；各組可以重疊，跟百科「1 2 *1-2」「2 3 7 *2」一樣）
  *   /下一步  /公布（/解答）  /結束
@@ -118,7 +118,7 @@ function seatOfToken(tok: string): number | null {
 
 /**
  * 座位字串 → 座位。`469`、`4 6 9`、`4,6,9`、`4、6、9`、`4 6 10`：用分隔符號分開的
- * 一段剛好是 `10` 就是第 10 家，其他每個數字一個座位（0 = 第 10 家）。
+ * 一段剛好是 `10` 也當成 0 家（第十個座位），其他每個數字一個座位（0 = 0 家）。
  * 有數字以外的字 → null。重複座位照樣回傳（呼叫端檢查）。
  */
 export function parseSeatDigits(raw: string): number[] | null {
@@ -135,7 +135,7 @@ export function parseSeatDigits(raw: string): number[] | null {
 /** /派 的內容 → 隊伍，或看不懂的原因。人數由呼叫端依局數檢查。 */
 export function parseTeam(raw: string): { team: number[] } | { problem: string } {
   const seats = parseSeatDigits(raw);
-  if (!seats || seats.length === 0) return { problem: '請在 /派 後面寫座位，例如 /派 123（0 = 第 10 家）' };
+  if (!seats || seats.length === 0) return { problem: '請在 /派 後面寫座位，例如 /派 123（0 家寫 0）' };
   if (new Set(seats).size !== seats.length) return { problem: '同一個座位寫了兩次' };
   return { team: [...seats].sort((a, b) => a - b) };
 }
