@@ -214,8 +214,8 @@ export const STRENGTH_DIMENSIONS: readonly StrengthDimensionDef[] = [
   { id: 'oberon', group: '角色', label: '奧伯倫 PR', help: '奧伯倫的開打前 PR', value: rolePr('奧伯倫') },
   { id: 'firstLeader', group: '座位', label: '首家 PR', help: '第一次提議的隊長（依輪替推算）的開打前 PR', value: (c) => seatPr(c, c.leaders?.[0]) },
   { id: 'r1Tail', group: '座位', label: '第 1 輪尾家 PR', help: '第 1 輪第 5 次提議（強制局）的隊長的開打前 PR', value: (c) => seatPr(c, c.leaders?.[4]) },
-  { id: 'seat1', group: '座位', label: '1 號位 PR', help: '坐 1 號位的玩家的開打前 PR', value: (c) => seatPr(c, '1') },
-  { id: 'seat10', group: '座位', label: '10 號位 PR', help: '坐 10 號位（牌譜的 0）的玩家的開打前 PR', value: (c) => seatPr(c, '0') },
+  { id: 'seat1', group: '座位', label: '1 家 PR', help: '坐 1 家的玩家的開打前 PR', value: (c) => seatPr(c, '1') },
+  { id: 'seat10', group: '座位', label: '0 家 PR', help: '坐 0 家（第十個座位，牌譜寫 0）的玩家的開打前 PR', value: (c) => seatPr(c, '0') },
   {
     id: 'sentLeaders', group: '座位', label: '出任務隊長平均 PR', help: '每輪實際出任務那一隊的隊長（依輪替推算）PR 的平均',
     value: (c) => {

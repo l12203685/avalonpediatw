@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { theorySettings, outcomeBlocks } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import {
-  PLAYER_SEAT_KEYS, playerSeatGameBlocks, playerSeatGames, playerSeatRate, seatFactionCounts, seatNumber,
+  PLAYER_SEAT_KEYS, playerSeatGameBlocks, playerSeatGames, playerSeatRate, seatDisplay, seatFactionCounts, seatNumber,
   useAnalysisPlayerRows, useIsWide, type PlayerWithSeatStats, type SeatMode,
 } from './seatRoleBlocks';
 import { SectionTabs, StatTable, formatRate, type SectionTabItem, type StatColumn } from './ui';
@@ -122,7 +122,7 @@ export default function SeatHeatmap(): JSX.Element {
 
     const seatColumn = (seat: string): StatColumn<PlayerWithSeatStats> => {
       const ref = reference(seat, mode);
-      const seatLabel = t('analytics.r6.tabsb.seats.seatLabel', { n: seatNumber(seat) });
+      const seatLabel = t('analytics.r6.tabsb.seats.seatLabel', { n: seatDisplay(seat) });
       return {
         key: `seat-${seat}`,
         label: seatLabel,

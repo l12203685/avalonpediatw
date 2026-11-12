@@ -45,7 +45,7 @@
       "retry": "Retry",
       "allRow": "All",
       "seatCol": "Seat",
-      "note": "The first row (All) is {{role}} across all seats; the rows below are seats 1–10. All seven roles are in every game, so that row is the whole team's result and roles on the same team match; differences between roles show up by seat and on the player radar.",
+      "note": "The first row (All) is {{role}} across all seats; the rows below are seats 1–9 and 0. All seven roles are in every game, so that row is the whole team's result and roles on the same team match; differences between roles show up by seat and on the player radar.",
       "loyalNote": "There are several Loyal Servants per game, so n counts each one.",
       "source": "Same statistics as the Analytics page (all games), updated daily.",
       "sourceFiltered": "Same statistics as the Analytics page, with the Analytics page's filter applied.",
@@ -529,7 +529,7 @@
         "modeRed": "Red Win Rate",
         "modeBlue": "Blue Win Rate",
         "guideTitle": "Seat analysis notes:",
-        "guide1": "Avalon seat order affects info flow and vote order. Seat numbers are fixed positions (1-10).",
+        "guide1": "Avalon seat order affects info flow and vote order. Seat numbers are fixed positions (1-9, then 0).",
         "guide2": "Different seats have different strategic value: seats near the captain are picked more often, speaking order affects information weight.",
         "guide3Overall": "Value = player's overall win rate (%) at that seat. Color = deviation from seat average across all players. Green = above seat avg, red = below.",
         "guide3Red": "Value = player's red-side win rate (%) at that seat. Color = deviation from seat average across all players. Green = above seat avg, red = below.",
@@ -994,7 +994,7 @@
             "question": "When the lake holder announces that the target is evil or good, how often is the target really on that side? Split by first / second / third lake and by the holder's own side.",
             "method": [
               "Recomputed every day by generate_cache.py (compute_lake_claim_feature) from every game log in the spreadsheet: this time {{games}} games and {{links}} lake checks, data as of {{date}}.",
-              "A lake check is a line \"H>T x\" in the text record: H is the holder's seat, T the target's seat (0 means seat 10), a trailing x = announced evil, o = announced good, nothing (or ?) = no announcement. Only the first three lake lines of a game count, as the first, second and third lake.",
+              "A lake check is a line \"H>T x\" in the text record: H is the holder's seat, T the target's seat (seats are written 1-9 and 0), a trailing x = announced evil, o = announced good, nothing (or ?) = no announcement. Only the first three lake lines of a game count, as the first, second and third lake.",
               "Sides come from the game's role sheet: Assassin, Morgana, Mordred and Oberon are evil, every other role is good.",
               "Reliability = announcements that match the target's real side ÷ announcements in the cell (n).",
               "\"By holder\" pools the three lakes and splits them by the holder's own side into four cells.",
@@ -1742,9 +1742,9 @@
         "merlinRest": ". Seat {{hiSeat}} is hit most often ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}})",
         "assassinLead": "Assassin's seat: ",
         "assassinRest": ". Seat {{hiSeat}} hits most ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}}).",
-        "groups": "; Merlin in seats 1–5 is hit {{front}} (n={{frontN}}), in seats 6–10 {{back}} (n={{backN}}).",
+        "groups": "; Merlin in seats 1–5 is hit {{front}} (n={{frontN}}), in seats 6–0 {{back}} (n={{backN}}).",
         "front": "Seats 1–5",
-        "back": "Seats 6–10",
+        "back": "Seats 6–0",
         "rateLabel": "Hit rate",
         "note": "Hit rate = Merlin hit ÷ three-success games; n = three-success games with that role in that seat; the white line = the hit rate over all three-success games. \"Real / could be luck\" comes from a chi-square test over the hit / miss counts of all 10 seats."
       },
@@ -2269,7 +2269,7 @@
     "positionTheory": {
       "name": "Position-theory win rate",
       "def": "Your expected win rate if every seat came up equally often.",
-      "calc": "Σ 1/10 × your final win rate in seat 1–10. A seat with too few games uses the population average.",
+      "calc": "Σ 1/10 × your final win rate in each seat (1–9 and 0). A seat with too few games uses the population average.",
       "meaning": "Removes seat luck: how well you play from each seat."
     },
     "overallTheory": {

@@ -19,6 +19,17 @@ export function displaySeatNumber(seat: number): string {
 }
 
 /**
+ * 統計／牌譜的座位鍵 → 顯示用的座位號：第十個座位一律顯示 0（站長 2026-11-12：座位只寫「0 家」，不寫 10）。
+ * 統計快取的鍵寫 "10"（overview / roleSeatStats）、牌譜與 players[] 寫 "0"，兩種都顯示成 "0"；資料鍵本身不變。
+ *
+ * @param seat 座位鍵或 1-based 座位號（"1".."10"、"0" 或 1..10）
+ */
+export function displaySeatKey(seat: string | number): string {
+  const s = String(seat);
+  return s === '10' || s === '0' ? '0' : s;
+}
+
+/**
  * Resolves a player's 1-based seat number from a `Room.players` map.
  * Returns 0 when the id is unknown (callers should guard against that or accept
  * the placeholder; seat 0 itself is never assigned in canonical Avalon).

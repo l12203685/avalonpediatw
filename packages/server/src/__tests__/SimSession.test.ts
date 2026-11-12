@@ -70,7 +70,7 @@ describe('selection', () => {
       '1家 460 1+',
       '2家 279',
       '3家 370',
-      '怎麼讀：「1家 460」= 1家派 4、6、0家（0 = 10家）；座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對',
+      '怎麼讀：「1家 460」= 1家派 4、6、0家；座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對',
       '輪到你派 3 人（第 1 局第 4 次）。',
       '作答：/派 加座位，例：/派 469 = 派 4、6、9家',
       '選填：先寫區間（你覺得哪幾個座位裡有幾個紅），例：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅',
@@ -510,7 +510,7 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect(start).toContain('第 1 局第一個隊長，前面沒有派票');
     expect(start).not.toContain('怎麼讀');
     const next = (await say(e, '/下一步')) ?? '';
-    expect(next).toContain('怎麼讀：「1家 460」= 1家派 4、6、0家（0 = 10家）；座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對；任務的 o = 成功牌、x = 失敗牌');
+    expect(next).toContain('怎麼讀：「1家 460」= 1家派 4、6、0家；座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對；任務的 o = 成功牌、x = 失敗牌');
     expect(next.indexOf('怎麼讀')).toBeGreaterThan(next.indexOf('1家 460'));
     expect(await say(e, '/下一步')).not.toContain('怎麼讀');
     // An exercise that starts after proposals already had it in the start reply: /下一步 does not repeat it.

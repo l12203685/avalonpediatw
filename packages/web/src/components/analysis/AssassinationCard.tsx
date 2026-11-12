@@ -9,6 +9,7 @@ import {
   type MetricBlockRow, type StatColumn,
 } from './ui';
 import { useMinCellGames } from './OutcomeBlocksTable';
+import { seatDisplay } from './seatRoleBlocks';
 
 /**
  * 刺殺結算卡 (docs/stats/two_stage_outcome.md)：只算三藍局 —
@@ -143,7 +144,7 @@ interface KillCell {
 interface SeatKillRow {
   key: string;
   label: string;
-  /** 'all' = 全部三藍局；'group' = 1–5 號／6–10 號合計。 */
+  /** 'all' = 全部三藍局；'group' = 1～5 家／6～0 家合計。 */
   kind?: 'all' | 'group';
   seat?: string;
   merlin: KillCell | null;
@@ -204,8 +205,8 @@ function KillBar({ cell, refRate, min }: { cell: KillCell | null; refRate: numbe
 /**
  * 刺殺 › 座位與刺殺 (Edward 2026-10-28：「刺客座位有影響嗎? 梅林座位影響比較大吧」)。
  *  - 最上面一句話：梅林坐的位置、刺客坐的位置各做一次卡方檢定 (10 個座位 × 刺中／沒刺中，只算三藍局)
- *    →「差異明顯」或「差異可能只是運氣」附 p，再寫最高／最低的座位與 1–5 號、6–10 號合計 (全部當下從資料算)。
- *  - 表：梅林欄在前；每格一條刺中率長條，白線 = 全部三藍局的刺中率；最後兩列 = 1–5 號、6–10 號合計。
+ *    →「差異明顯」或「差異可能只是運氣」附 p，再寫最高／最低的座位與 1～5 家、6～0 家合計 (全部當下從資料算)。
+ *  - 表：梅林欄在前；每格一條刺中率長條，白線 = 全部三藍局的刺中率；最後兩列 = 1～5 家、6～0 家合計（座位資料鍵 "10" 顯示成 0）。
  *  資料：overview.seatPositionWinRates[].roles[].outcomes (跟著篩選)；舊快取沒有時顯示「下次每日更新後提供」。
  */
 export function AssassinationSeatTable(): JSX.Element {
@@ -234,7 +235,7 @@ export function AssassinationSeatTable(): JSX.Element {
   const seatRows: SeatKillRow[] = seats.map(s => ({
     key: s.seat,
     seat: s.seat,
-    label: t(`${k}.seatLabel`, { seat: s.seat }),
+    label: t(`${k}.seatLabel`, { seat: seatDisplay(s.seat) }),
     merlin: killCell(s.roles?.find(r => r.role === SEAT_ROLE_NAME.merlin)?.outcomes),
     assassin: killCell(s.roles?.find(r => r.role === SEAT_ROLE_NAME.assassin)?.outcomes),
   }));
@@ -267,8 +268,8 @@ export function AssassinationSeatTable(): JSX.Element {
         <span className="font-semibold text-white">{t(`${k7}.${role}Lead`)}</span>
         <VerdictText result={test(role)} />
         {ex && t(`${k7}.${role}Rest`, {
-          hiSeat: ex.hi.seat, hi: formatRate(ex.hi[role]?.rate), hiN: ex.hi[role]?.n,
-          loSeat: ex.lo.seat, lo: formatRate(ex.lo[role]?.rate), loN: ex.lo[role]?.n,
+          hiSeat: seatDisplay(ex.hi.seat ?? ''), hi: formatRate(ex.hi[role]?.rate), hiN: ex.hi[role]?.n,
+          loSeat: seatDisplay(ex.lo.seat ?? ''), lo: formatRate(ex.lo[role]?.rate), loN: ex.lo[role]?.n,
         })}
         {role === 'merlin' && groups[0].merlin && groups[1].merlin && t(`${k7}.groups`, {
           front: formatRate(groups[0].merlin.rate), frontN: groups[0].merlin.n,

@@ -2,7 +2,7 @@ import { BarChart3, Loader, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { outcomeBlocks, roleFaction, theorySettings, type OutcomeCounts } from '../services/api';
 import { useAnalysisOverview } from './analysis/useAnalysisOverview';
-import { blockValues, seatFactionCounts, useIsWide } from './analysis/seatRoleBlocks';
+import { blockValues, seatDisplay, seatFactionCounts, useIsWide } from './analysis/seatRoleBlocks';
 import { MetricBlocks, type MetricBlockRow } from './analysis/ui';
 import { useStatsFiltered } from '../stats/statsFilter';
 import { WIKI_ROLE_NAMES } from '../data/wiki';
@@ -15,7 +15,7 @@ import { CampDisc } from './CampDisc';
  * 現在跟數據分析頁同一個來源、同一個口徑：/api/analysis/overview 的 seatPositionWinRates
  * (每個位置 × 角色的 三紅／三藍死／三藍活 局數，全部對局)，三塊結果一律由 @avalon/shared 的 outcomeBlocks 算：
  *   任務結果 (n = 全部局)、刺殺結果 (n = 打到三藍的局)、遊戲結果 = 最終勝率 (三藍活才算藍方贏)。
- * 第一列 = 全部位置 (同數據分析頁「位置 × 角色」表的「全部位置」列)，下面是 1–10 號各位置。
+ * 第一列 = 全部位置 (同數據分析頁「位置 × 角色」表的「全部位置」列)，下面是 1～9、0 家各位置（第十個座位顯示 0）。
  * 讀取中顯示讀取中，讀不到顯示稍後再試；不退回任何寫死的數字。篩選跟著數據分析頁 (useStatsFilter)。
  */
 
@@ -103,7 +103,7 @@ export default function RoleStatsCard({ role }: RoleStatsCardProps): JSX.Element
     all = addCounts(all, c);
     seatRows.push({
       key: s.seat,
-      label: t('analytics.r6.tabsb.seats.seatLabel', { n: s.seat }),
+      label: t('analytics.r6.tabsb.seats.seatLabel', { n: seatDisplay(s.seat) }),
       tone: faction,
       ...blockValues(outcomeBlocks(c, faction)),
     });

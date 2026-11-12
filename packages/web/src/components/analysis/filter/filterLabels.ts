@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { METRICS, type Clause, type MetricId } from '@avalon/shared/stats';
 import { useRoleLabel } from '../roleLabels';
+import { displaySeatKey } from '../../../utils/seatDisplay';
 import { OUTCOME_LABEL_KEYS, type OutcomeKey } from '../ui';
 
 /**
@@ -83,7 +84,7 @@ export function useClauseLabel(): (clause: Clause) => string {
         case 'assassination':
           return t(`${k}.assassination`, { values: join(clause.target.map((r) => (r === 'none' ? '—' : role(r)))) });
         case 'roleSeat':
-          return t(`${k}.roleSeat`, { role: role(clause.role), seats: join(clause.seats) });
+          return t(`${k}.roleSeat`, { role: role(clause.role), seats: join(clause.seats.map(displaySeatKey)) });
         case 'trioOrder':
           return t(`${k}.trioOrder`, { values: join(clause.in) });
         case 'captain':

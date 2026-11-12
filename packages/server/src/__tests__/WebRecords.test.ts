@@ -195,16 +195,16 @@ describe('web records: 顯示角色／顯示名稱', () => {
   });
 
   it('seat labels show only what is switched on', () => {
-    expect(seatLabel(GAME, '8', off)).toBe('8 號');
-    expect(seatLabel(GAME, '8', { roles: false, names: true })).toBe('8 號 玩家H');
-    expect(seatLabel(GAME, '8', { roles: true, names: false })).toBe('8 號（梅林）');
-    expect(seatLabel(GAME, '8', both)).toBe('8 號 玩家H（梅林）');
+    expect(seatLabel(GAME, '8', off)).toBe('8 家');
+    expect(seatLabel(GAME, '8', { roles: false, names: true })).toBe('8 家 玩家H');
+    expect(seatLabel(GAME, '8', { roles: true, names: false })).toBe('8 家（梅林）');
+    expect(seatLabel(GAME, '8', both)).toBe('8 家 玩家H（梅林）');
   });
 
   it('the result sentence hides roles (who the assassin was, Merlin hit or not) and names when off', () => {
-    expect(resultSentence(GAME, off)).toBe('藍方拿下三次任務；刺殺 3 號');
-    expect(resultSentence(GAME, { roles: false, names: true })).toBe('藍方拿下三次任務；刺殺 3 號 玩家C');
-    expect(resultSentence(GAME, both)).toBe('藍方拿下三次任務；刺客 9 號 玩家I 刺殺 3 號 玩家C（莫甘娜），沒刺中');
+    expect(resultSentence(GAME, off)).toBe('藍方拿下三次任務；刺殺 3 家');
+    expect(resultSentence(GAME, { roles: false, names: true })).toBe('藍方拿下三次任務；刺殺 3 家 玩家C');
+    expect(resultSentence(GAME, both)).toBe('藍方拿下三次任務；刺客 9 家 玩家I 刺殺 3 家 玩家C（莫甘娜），沒刺中');
     const dead = { ...GAME, outcome: '三藍死' as const, assassination: '8' };
     expect(resultSentence(dead, off)).not.toMatch(/梅林|刺客/);
     expect(resultSentence(dead, both)).toContain('刺中梅林');
@@ -285,7 +285,7 @@ describe('web records: 陣容強度與失誤標籤', () => {
 
   it('mistake tags: any of the chosen tags, details with round and seats only', () => {
     expect(mistakeTags(SCORED)).toEqual(['嚴重失誤', '已證有紅的隊出任務', '藍方贊成已證有紅的隊']);
-    expect(mistakeDetails(SCORED, '藍方贊成已證有紅的隊')).toEqual(['第 2 輪：5、6、0 號', '第 3 輪：7 號']);
+    expect(mistakeDetails(SCORED, '藍方贊成已證有紅的隊')).toEqual(['第 2 輪：5、6、0 家', '第 3 輪：7 家']);
     expect(mistakeDetails(SCORED, '嚴重失誤')).toEqual([]);
     expect(matchesRecords(SCORED, { ...f, mistakes: ['嚴重失誤'] })).toBe(true);
     expect(matchesRecords(SCORED, { ...f, mistakes: ['紅方賽點未出失敗（待查）', '已證有紅的隊出任務'] })).toBe(true);

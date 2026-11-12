@@ -5,7 +5,7 @@
  * #牌譜紀錄與覆盤 產生）。每篇貼文 = 一局：標題、標籤、發文時間，以及解析後的牌譜（或讀不懂的原因）。
  * 只有牌譜本身；討論串的回覆不在網站上，「到 DC 討論」連到那篇貼文。
  *
- * 牌譜慣例（同 DC）：座位 1–9 與 0（= 10 號）；提議一行一隊，後面的投票異常標記「57-」= 隊內 5、7 投反對（內黑），
+ * 牌譜慣例（同 DC）：座位 1–9 與 0（0 家）；提議一行一隊，後面的投票異常標記「57-」= 隊內 5、7 投反對（內黑），
  * 「6+」= 隊外 6 投贊成（外白），沒標的人照常（隊內贊成、隊外反對）；第 5 次提議是尾家強制局，沒有投票。
  * 配置六碼 = 刺客、莫甘娜、莫德雷德、奧伯倫、派西維爾、梅林的座位，其餘是忠臣。
  *
@@ -28,7 +28,7 @@ export const DISCORD_GUILD_ID = '1132682489840812113';
 export type RecordOutcome = '三紅' | '三藍死' | '三藍活';
 
 export interface RecordProposal {
-  /** 隊伍座位，照貼文寫的順序（0 = 10 號）。 */
+  /** 隊伍座位，照貼文寫的順序（0 = 0 家）。 */
   team: string;
   /** 投票異常標記，統一成符號在後：'7+'、'5-'、'57-6+'。 */
   votes: string[];
@@ -240,11 +240,11 @@ export function mistakeTags(post: RecordPost): string[] {
   return RECORD_MISTAKE_TAGS.map((m) => m.tag).filter((t) => own.has(t));
 }
 
-/** 滑鼠提示：每次發生的輪次與座位（「第 2 輪：5、6、7、0 號」）。 */
+/** 滑鼠提示：每次發生的輪次與座位（「第 2 輪：5、6、7、0 家」）。 */
 export function mistakeDetails(post: RecordPost, tag: string): string[] {
   return (post.mistakes ?? [])
     .filter((m) => m[0] === tag && m[1] > 0)
-    .map(([, round, seats]) => `第 ${round} 輪${seats ? `：${[...seats].join('、')} 號` : ''}`);
+    .map(([, round, seats]) => `第 ${round} 輪${seats ? `：${[...seats].join('、')} 家` : ''}`);
 }
 
 /** 貼文的陣容強度 → 共用判斷用的形狀（沒評分 = null）。 */
@@ -402,12 +402,12 @@ export function readRecordsPrefs(getItem: (key: string) => string | null): Recor
   return { roles: read(RECORDS_PREF_KEYS.roles), names: read(RECORDS_PREF_KEYS.names) };
 }
 
-/** 一個座位在畫面上的寫法：「3 號」，開了名稱加暱稱、開了角色加（角色）。 */
+/** 一個座位在畫面上的寫法：「3 家」（第十個座位是「0 家」），開了名稱加暱稱、開了角色加（角色）。 */
 export function seatLabel(game: RecordGame, seat: string, prefs: RecordDisplayPrefs): string {
   const i = RECORDS_SEATS.indexOf(seat as (typeof RECORDS_SEATS)[number]);
   const name = prefs.names ? game.names[i] ?? '' : '';
   const role = prefs.roles ? `（${roleOfSeat(game.config, seat).name}）` : '';
-  return `${seat} 號${name ? ` ${name}` : ''}${role}`;
+  return `${seat} 家${name ? ` ${name}` : ''}${role}`;
 }
 
 /** 結果的說明句；關掉角色時不寫刺殺對象的角色、也不寫刺中梅林與否（結果標籤本身就說了）。 */
@@ -419,7 +419,7 @@ export function resultSentence(game: RecordGame, prefs: RecordDisplayPrefs): str
   }
   const assassin = game.config[0];
   const target = game.assassination;
-  // 刺客是誰也是角色資訊：關掉角色時只寫刺殺了幾號
+  // 刺客是誰也是角色資訊：關掉角色時只寫刺殺了幾家
   if (!prefs.roles) return `藍方拿下三次任務；刺殺 ${seatLabel(game, target, prefs)}`;
   const base = `藍方拿下三次任務；刺客 ${seatLabel(game, assassin, { ...prefs, roles: false })} 刺殺 ${seatLabel(game, target, prefs)}`;
   return `${base}${target === game.config[5] ? '，刺中梅林' : '，沒刺中'}`;

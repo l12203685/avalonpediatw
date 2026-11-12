@@ -2,7 +2,7 @@
  * 模擬瓦（2026-10-14）— 回覆文字，純函式（不讀檔、不看時鐘、不連網）。
  *
  * 一則回覆最多 SIM_REPLY_MAX_CHARS（1800）字，跟戰績一樣；超過就從最不重要的段落開始省略。
- * 純文字繁體中文；第 10 家寫 `0`（`0家`）；沒有任何名字。
+ * 純文字繁體中文；第十個座位寫 `0`（`0家`）；沒有任何名字。
  * 只有 Discord 把派票那一段包在 code block 裡（LINE 不支援 markdown）。
  *
  * Edward 2026-10-14 審查修正（手機上讀得完、講社群的話）：
@@ -301,12 +301,12 @@ export function eventLines(events: readonly PublicEvent[], viewerSeat: number, g
 
 /**
  * 牌譜怎麼讀（用看得到的第一次派票當例子）。
- * 「1家 460 1+」= 1家派 4、6、0家（0 = 10家）；+ 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對。
+ * 「1家 460 1+」= 1家派 4、6、0家；+ 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對。
  */
 export function notationNote(first: ProposalEvent, opts: { quests: boolean }): string {
   const seats = sortSeats(first.teamSeats).map(seatChar).join('、');
   const quest = opts.quests ? '；任務的 o = 成功牌、x = 失敗牌' : '';
-  return `怎麼讀：「${seatLabel(first.leaderSeat)} ${teamDigits(first.teamSeats)}」= ${seatLabel(first.leaderSeat)}派 ${seats}家（0 = 10家）；`
+  return `怎麼讀：「${seatLabel(first.leaderSeat)} ${teamDigits(first.teamSeats)}」= ${seatLabel(first.leaderSeat)}派 ${seats}家；`
     + `座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對${quest}`;
 }
 
@@ -325,7 +325,7 @@ const PROPOSE_EXAMPLES: Readonly<Record<number, string>> = { 3: '469', 4: '2469'
 export function proposeExample(size: number): string {
   const digits = PROPOSE_EXAMPLES[size] ?? '12345'.slice(0, size);
   const seats = [...digits].join('、');
-  return `/派 ${digits} = 派 ${seats}家${digits.includes('0') ? '（0 = 10家）' : ''}`;
+  return `/派 ${digits} = 派 ${seats}家`;
 }
 
 export const INTERVAL_EXAMPLE = '/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅';
@@ -1064,12 +1064,12 @@ export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（太久沒動
 export const BANK_NOT_READY_TEXT = '模擬瓦題庫還沒準備好，請稍後再試。';
 export const RATE_LIMITED_TEXT = '模擬指令太頻繁了，10 分鐘後再試。';
 export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 題 題號｜/模擬 說明';
-export const PROPOSE_USAGE = '用法：/派 加座位，例如 /派 469 = 派 4、6、9家（0 = 10家；4 6 9、4,6,9 也可以）';
+export const PROPOSE_USAGE = '用法：/派 加座位，例如 /派 469 = 派 4、6、9家（0 家寫 0；4 6 9、4,6,9 也可以）';
 export const INTERVAL_USAGE = '用法：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅（也可以 7 8 9 *2、12=1-2、1 5 9 *1+、3 紅、5=好；各組可以重疊）';
 
 /** 說明的第一行（兩個平台一樣）。 */
 const HELP_TITLE = '🧩 模擬瓦指令（真人對局停在某一家要派票的當下，換你來派，看你的派票放出什麼資訊）';
-const HELP_PROPOSE_WORDS = '作答：派 4、6、9家（0 = 10家；人數要對，可以派好幾次比較）';
+const HELP_PROPOSE_WORDS = '作答：派 4、6、9家（0 家寫 0；人數要對，可以派好幾次比較）';
 const HELP_INTERVAL_WORDS = '（選填）寫你覺得哪幾個座位裡有幾個紅：7 8 9 裡 2 紅、4 6 0 裡 1 紅';
 const HELP_NEXT = '/下一步\u3000照實際對局走到你下一次派票（還沒作答也可以跳過）';
 const HELP_END = '/結束\u3000不公布，直接結束';

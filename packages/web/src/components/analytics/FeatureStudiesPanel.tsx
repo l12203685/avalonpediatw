@@ -16,6 +16,7 @@ import { isFilterableStudy } from '../../stats/filteredRoutes';
 import NotFilteredNote from '../analysis/filter/NotFilteredNote';
 import { StatTable, type StatColumn, type Tone } from '../analysis/ui';
 import { useRoleLabel } from '../analysis/roleLabels';
+import { displaySeatKey } from '../../utils/seatDisplay';
 import { studyHash } from '../../utils/statsLinks';
 import { openStudy } from './studyLink';
 
@@ -629,7 +630,7 @@ function AssassinTargetVisual({ feature, full }: { feature: FeatureStudyEntry; f
     );
   }
   const seatColumns: StatColumn<SeatRow>[] = [
-    { key: 'seat', label: t('analytics.featureStudies.seat'), value: r => t(`${k}.seatLabel`, { seat: r.seat }) },
+    { key: 'seat', label: t('analytics.featureStudies.seat'), value: r => t(`${k}.seatLabel`, { seat: displaySeatKey(r.seat) }) },
     {
       key: 'hitRate', label: t('analytics.featureStudies.hitRate'), title: t(`${k}.hitRateTitle`),
       format: 'pct', n: 'n', lowSample: min, tone: 'amber',

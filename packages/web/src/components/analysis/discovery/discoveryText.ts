@@ -95,8 +95,9 @@ export function findingClause(f: DiscoveryFinding): Clause | null {
   const v = f.a.label;
   if (f.dimension.id === 'category' && ['線瓦', '面瓦', '娛樂'].includes(v)) return { kind: 'category', in: [v as '線瓦'] };
   if (f.dimension.id === 'year' && /^\d{4}$/.test(v)) return { kind: 'date', from: `${v}-01-01`, to: `${v}-12-31` };
-  const seat = /^(\d+) 號$/.exec(v);
-  if (f.dimension.id === 'merlinSeat' && seat) return { kind: 'roleSeat', role: '梅林', seats: [Number(seat[1]) as 1] };
+  // 座位標籤是「N 家」（0 家 = 第十個座位，篩選子句的座位號是 10）
+  const seat = /^(\d) 家$/.exec(v);
+  if (f.dimension.id === 'merlinSeat' && seat) return { kind: 'roleSeat', role: '梅林', seats: [(seat[1] === '0' ? 10 : Number(seat[1])) as 1] };
   return null;
 }
 

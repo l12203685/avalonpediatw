@@ -116,7 +116,7 @@ describe('registration', () => {
     const role = sim?.options?.[0] as { choices?: { name: string; value: string }[] };
     expect(role.choices?.map((c) => c.value)).toEqual([...SIM_ROLE_CHOICES]);
     const seat = sim?.options?.[1] as { min_value?: number; max_value?: number };
-    expect([seat.min_value, seat.max_value]).toEqual([1, 10]);
+    expect([seat.min_value, seat.max_value]).toEqual([0, 10]); // 0 家寫 0（10 也照收）
     expect(json.find((c) => c.name === COMMANDS.SIM_PROPOSE)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.TEAM, required: true })]);
     expect(json.find((c) => c.name === COMMANDS.SIM_INTERVAL)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.CONTENT, required: true })]);
   });
@@ -152,6 +152,8 @@ describe('options → command', () => {
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '派西維爾', [SIM_OPTIONS.SEAT]: 2 })).toEqual({ kind: 'start', role: 'percival', seat: 2 });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '紅' })).toEqual({ kind: 'start', role: 'red' });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.SEAT]: 10 })).toEqual({ kind: 'start', seat: 10 });
+    // 0 家寫 0（站長 2026-11-12：座位只寫 0 家）
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.SEAT]: 0 })).toEqual({ kind: 'start', seat: 10 });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'w0001-4' })).toEqual({ kind: 'start', exerciseId: 'W0001-4' });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: true })).toEqual({ kind: 'help' });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.HELP]: false, [SIM_OPTIONS.SEAT]: 4 })).toEqual({ kind: 'start', seat: 4 });
