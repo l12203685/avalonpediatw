@@ -12,6 +12,7 @@ import { useGameStore } from '../../../store/gameStore';
 import { InfoTip, SectionTabs, StatTable, useSectionTab, type SectionTabItem, type StatColumn } from '../ui';
 import { TWO_RED_MIN_N, TWO_RED_TERMS, TWO_RED_TONES } from './twoRedLayout';
 import DecisivePlayerLine from '../decisive/DecisivePlayerLine';
+import AbnormalPlayerLine from './AbnormalPlayerLine';
 import { useTwoRedCohort } from '../cohort/useCohortData';
 import { useDiscoveryNav } from '../discovery/discoveryNav';
 
@@ -23,7 +24,9 @@ import { useDiscoveryNav } from '../discovery/discoveryNav';
  * 全沒拇指但派到莫德雷德／只含一拇指／含兩壞以上（2026-11-11 Edward 定案）。
  * 分類的定義與算法在 @avalon/shared stats/twoRed.ts；名詞與門檻在 twoRedLayout.ts（次數不到 TWO_RED_MIN_N 的列變淡）。
  * 跟著上方的篩選（統計 Worker 裡算，stats/statsEngine twoRedReport），不等雷達資料。
- * (2026-11-11) 標題下一行是這位玩家兩紅之後的關鍵票（decisive/DecisivePlayerLine），連到數據排行「關鍵外白／內黑」。
+ * (2026-11-11) 標題下一行是這位玩家兩紅之後的決定性票（翻過來結果就改變；decisive/DecisivePlayerLine），連到數據排行「關鍵外白／內黑」。
+ * (2026-11-12 站長) 對照組那一行下面是兩紅之後的異常票：內黑率／內黑正確率／外白率／外白正確率，跟同一個對照組比
+ * （radar/AbnormalPlayerLine，@avalon/shared abnormalVotes.ts）。
  * (2026-11-11 Edward：個人的樣本太小，看 PR 分組) 每格下面的小字預設改成「跟自己的組比」：這位玩家篩選範圍內最近一局的
  * PR 落在哪一組（強者／一般人／新手，切點 stats/cohortCuts.ts），那一組所有隊長同一格的比率；可以切回全體。沒有 PR 的玩家
  * （暫定、沒評分）只能比全體。「看各組」打開陣容強度 >「兩紅派隊分組」（cohort/TwoRedCohortView）。
@@ -239,6 +242,7 @@ export default function TwoRedPanel({ name }: { name: string }): JSX.Element {
           {t('analytics.r6.radar.twoRed.compare.link')}
         </button>
       </div>
+      <AbnormalPlayerLine name={name} tier={mode === 'group' && tier !== 'unrated' ? tier : null} />
       <SectionTabs items={tabs} persistKey="analysis.players.twoRed" ariaLabel={t('analytics.r6.radar.twoRed.roleTabs')} size="sm">
         {(role) => (
           <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)_minmax(0,5fr)]">

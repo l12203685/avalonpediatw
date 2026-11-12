@@ -85,7 +85,7 @@ export function findingLink(f: DiscoveryFinding): FindingLink | null {
   const extra = contextOnly ? { contextOnly } : {};
   if (kind === 'twoRedCohort') return { kind, label: `${verb}：陣容強度 › 兩紅派隊分組`, ...extra };
   const scope: DecisiveRankScope = f.dimension.id === 'twoRedState' && f.a.label === '紅方已兩勝' ? 'twoRed' : 'r35';
-  const which = kind === 'decisiveBoard' ? '關鍵票' : '全部投票';
+  const which = kind === 'decisiveBoard' ? '決定性票' : '全部投票';
   return { kind, scope, label: `${verb}：數據排行 › 關鍵外白／內黑（${which}、${scope === 'twoRed' ? '兩紅之後' : '第 3～5 局'}）`, ...extra };
 }
 

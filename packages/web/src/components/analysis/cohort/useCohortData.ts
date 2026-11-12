@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { DecisiveCohortData, DecisiveScope, TwoRedCohortData } from '@avalon/shared/stats';
-import { decisiveCohort, twoRedCohort } from '../../../stats/statsEngine';
+import type { AbnormalCohortData, DecisiveCohortData, DecisiveScope, TwoRedCohortData } from '@avalon/shared/stats';
+import { abnormalCohort, decisiveCohort, twoRedCohort } from '../../../stats/statsEngine';
 import { useStatsFilter } from '../../../stats/statsFilter';
 
 export type LoadState<T> =
@@ -34,4 +34,9 @@ export function useTwoRedCohort(): LoadState<TwoRedCohortData> {
 /** 「關鍵外白／內黑」分組的資料（一個範圍；stats/statsEngine decisiveCohort）。 */
 export function useDecisiveCohort(scope: DecisiveScope): LoadState<DecisiveCohortData> {
   return useFilterScoped(`decisiveCohort|${scope}`, (filter, filterKey) => decisiveCohort(filter, filterKey, scope));
+}
+
+/** 「異常票（內黑／外白）」的資料（所有情境一起；stats/statsEngine abnormalCohort）。 */
+export function useAbnormalCohort(): LoadState<AbnormalCohortData> {
+  return useFilterScoped('abnormalCohort', (filter, filterKey) => abnormalCohort(filter, filterKey));
 }

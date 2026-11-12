@@ -293,7 +293,7 @@ describe('strategy templates', () => {
       unit: 'decisive', dimension: dim('decisive', 'tableTier'), metric: met('decisive', 'offYes'),
       a: { label: '高端', value: 62, n: 300, units: 300 }, b: { label: '歡樂', value: 48, n: 300, units: 300 }, diff: 14, withinRole: 13,
     }));
-    expect(s?.text).toBe('在高端桌，藍方的關鍵外白對率比較高（62% vs 歡樂桌 48%） → 在高端桌，藍方外白時，隊伍比較常全好');
+    expect(s?.text).toBe('在高端桌，藍方的決定性外白對率比較高（62% vs 歡樂桌 48%） → 在高端桌，藍方外白時，隊伍比較常全好');
     const t = buildStrategy(f({ dimension: dim('twoRed', 'tableTier'), metric: met('twoRed', 'thumb'), a: { label: '高端', value: 43, n: 900, units: 900 }, b: { label: '歡樂', value: 21, n: 900, units: 900 }, diff: 22, withinRole: 21 }));
     expect(t?.text).toBe('在高端桌，藍方隊長兩紅後第 3、5 局比較常派到拇指（43% vs 歡樂桌 21%） → 在高端桌，隊上比較常有拇指，投票前多檢查一次');
   });
@@ -310,7 +310,7 @@ describe('strategy templates', () => {
   it('cell shares get no strategy on any dimension, including strong vs novice', () => {
     expect(buildStrategy(f({ unit: 'decisive', dimension: dim('decisive', 'playerTier'), metric: met('decisive', 'onYesRight'), diff: 9, withinRole: 8 }))?.suppressed).toBe('context');
     // 四組的對率照樣給
-    expect(buildStrategy(f({ unit: 'decisive', dimension: dim('decisive', 'playerTier'), metric: met('decisive', 'onYes'), diff: 9, withinRole: 8 }))?.text).toMatch(/^強者的關鍵場內白對率比較高/);
+    expect(buildStrategy(f({ unit: 'decisive', dimension: dim('decisive', 'playerTier'), metric: met('decisive', 'onYes'), diff: 9, withinRole: 8 }))?.text).toMatch(/^強者的決定性場內白對率比較高/);
   });
 
   it('withheld when the within-role check cannot be made', () => {

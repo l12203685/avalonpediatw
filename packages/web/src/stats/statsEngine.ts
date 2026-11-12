@@ -2,7 +2,7 @@
  * 篩選重算的呼叫端：預設在 Worker 裡算 (stats.worker.ts)，瀏覽器不支援或 Worker 起不來時改在主執行緒算
  * (同一份 statsCompute.ts)。同一個篩選只算一次 (最近幾個篩選的結果留著，切回來不用重算)。
  */
-import type { CohortCuts, DecisiveCohortData, DecisiveReport, DecisiveScope, DiscoveryResult, TwoRedCohortData, GameFilter, StatsResult, StrengthGrouping, StrengthReport, TwoRedReport } from '@avalon/shared/stats';
+import type { AbnormalCohortData, CohortCuts, DecisiveCohortData, DecisiveReport, DecisiveScope, DiscoveryResult, TwoRedCohortData, GameFilter, StatsResult, StrengthGrouping, StrengthReport, TwoRedReport } from '@avalon/shared/stats';
 import type { FilterVocab } from './statsCompute';
 import type { ClaimData } from '../components/idClaim/claimIndex';
 import type { StateGamesResult } from '../components/analysis/stateTree/stateTree';
@@ -68,7 +68,7 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed' | 'decisive' | 'twoRedCohort' | 'decisiveCohort';
+type RequestType = 'vocab' | 'compute' | 'strength' | 'discovery' | 'stateTree' | 'claim' | 'twoRed' | 'decisive' | 'twoRedCohort' | 'decisiveCohort' | 'abnormalCohort';
 
 async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, grouping?: StrengthGrouping, name?: string, scope?: DecisiveScope, cuts?: CohortCuts): Promise<T> {
   const mod = await import('./statsCompute');
@@ -91,6 +91,8 @@ async function onMainThread<T>(type: RequestType, filter?: GameFilter | null, gr
           ? await mod.computeTwoRedCohort(SERVER_URL, filter ?? null)
         : type === 'decisiveCohort'
           ? await mod.computeDecisiveCohort(SERVER_URL, filter ?? null, scope ?? 'twoRed')
+        : type === 'abnormalCohort'
+          ? await mod.computeAbnormalCohort(SERVER_URL, filter ?? null)
           : await mod.computeFiltered(SERVER_URL, filter as GameFilter)) as T;
   } catch (err) {
     const status = err instanceof mod.GamesUnavailableError ? err.status : 0;
@@ -259,6 +261,21 @@ export function decisiveCohort(filter: GameFilter | null, filterKey: string, sco
   return p;
 }
 
+const abnormalCohortResults = new Map<string, Promise<AbnormalCohortData>>();
+
+/** 「異常票（內黑／外白）」：目前篩選下情境內的藍方票（依局、座位、情境合起來）＋分布。失敗不快取。 */
+export function abnormalCohort(filter: GameFilter | null, filterKey: string): Promise<AbnormalCohortData> {
+  const hit = abnormalCohortResults.get(filterKey);
+  if (hit) return hit;
+  const p = call<AbnormalCohortData>('abnormalCohort', filter);
+  abnormalCohortResults.set(filterKey, p);
+  p.catch(() => {
+    if (abnormalCohortResults.get(filterKey) === p) abnormalCohortResults.delete(filterKey);
+  });
+  while (abnormalCohortResults.size > 4) abnormalCohortResults.delete(abnormalCohortResults.keys().next().value as string);
+  return p;
+}
+
 let claimData: Promise<ClaimData> | null = null;
 
 /** ID 認領頁：全部局的座位名單（同一份 /api/analysis/games，Worker 裡已載入就不再下載）。失敗不快取。 */
@@ -282,6 +299,7 @@ export function resetFilteredStats(): void {
   decisiveResults.clear();
   twoRedCohortResults.clear();
   decisiveCohortResults.clear();
+  abnormalCohortResults.clear();
   vocab = null;
   claimData = null;
   failAll(new FilterUnavailableError(0, 'reset'));
