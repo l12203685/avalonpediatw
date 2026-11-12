@@ -288,7 +288,7 @@ describe('wiki categories and status', () => {
     expect(sectionOf(jsonById.get('wiki-25')!.content, '實戰數據怎麼讀')).toMatch(/十分之四/);
     // the shared reading notes moved to 〈如何正確解讀阿瓦隆數據〉
     const guide = jsonById.get('wiki-209')!.content;
-    for (const s of ['「0 家」＝10 號', '本站說的前半區是 1–5 號、後半區是 6–10 號', '比率在 30%～70% 之間時', '全部對局、1–10 號位，每日更新']) expect(guide).toContain(s);
+    for (const s of ['0 家是第十個座位', '本站說的前半區是 1～5 家、後半區是 6～0 家', '比率在 30%～70% 之間時', '全部對局、每個座位，每日更新']) expect(guide).toContain(s);
   });
 
   it('every category that is offered has at least one finished article', () => {
@@ -685,7 +685,7 @@ describe('wiki consolidation (2026-11-11 站長: 文章數量有點多，值得�
 describe('前半區／後半區 (2026-11-12 站長：「前置位」改成「前半區（1-5）」)', () => {
   const docsFile = (f: string): string => fs.readFileSync(path.join(DOCS, f), 'utf-8');
 
-  it('the articles say 前半區（1–5）／後半區（6–10）; the old words stay only where they name something else', () => {
+  it('the articles say 前半區（1～5 家）／後半區（6～0 家）; the old words stay only where they name something else', () => {
     const left: string[] = [];
     for (const a of jsonArticles) {
       for (const line of a.content.split('\n')) if (/[前後]置位/.test(line)) left.push(`${a.id}: ${line.slice(0, 40)}`);
@@ -699,7 +699,7 @@ describe('前半區／後半區 (2026-11-12 站長：「前置位」改成「前
       'wiki-32: > 本文整合自〈覆盤 - 5 家奧伯倫在 1-5 要不要炸車〉、〈覆盤 - 3 ',
     ]);
     expect(jsonById.get('wiki-204')!.content).toMatch(/前半區＝1～5 家、後半區＝6～0 家/);
-    expect(jsonById.get('wiki-175')!.content).toContain('**前半區與後半區的責任不同**：前半區（1–5 號）');
+    expect(jsonById.get('wiki-175')!.content).toContain('**前半區與後半區的責任不同**：前半區（1～5 家）在第一個任務派票，主要是給出區間；後半區（6～0 家）');
     // the passages whose reasoning is about seats 1–4 / 6–9 keep their seat lists under the new words
     expect(jsonById.get('wiki-175')!.content).toContain('- 前半區的 1～4 家梅林（不含 1-5 的尾家 5 家）的派票：三張票');
     expect(jsonById.get('wiki-175')!.content).toContain('- 後半區的 6～9 家梅林（不含 2-5 的尾家 0 家）的派票：四張票');
