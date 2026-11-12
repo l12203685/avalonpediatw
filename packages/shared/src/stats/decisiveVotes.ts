@@ -507,3 +507,70 @@ export function decisiveGridOf(cell: Pick<CohortCell, 'counts'>): DecisiveGrid {
   DECISIVE_COHORT_ORDER.forEach(({ group, outcome }, k) => { grid[group][outcome] += cell.counts[k] ?? 0; });
   return grid;
 }
+
+// ── 場外藍票：外白率／外黑率（Edward 2026-11-12）────────────────────────────
+//
+// 只看不在提議的隊上的藍方票（場外；第 1～4 次提議、藍方投票的人，同上面的掃描），依（贊成／反對）×（隊伍品質）分六類：
+//   外白率 = 場外贊成 ÷ 場外票、外黑率 = 場外反對 ÷ 場外票（兩者加起來 100%）。
+//   只看外白率會把好隊與壞隊混在一起（壞隊多的範圍外白率自然低），所以再依隊伍品質拆：
+//     全好的隊上的外白率 = 贊成全好 ÷（贊成全好 + 反對全好）；會失敗的隊、第 4 局單紅（中性）同理；外黑率 = 100% − 外白率。
+//   外白對率 = 贊成全好 ÷ 場外贊成（不含中性）＝ 八格的「場外白」對率；外黑對率 = 反對會失敗 ÷ 場外反對（不含中性）＝「場外黑」對率。
+// 資料就是分組用的 DecisiveSeatRecord（counts = DECISIVE_COHORT_ORDER）裡的場外兩組：場外白的 對／錯／中性 = 贊成 全好／會失敗／中性，
+// 場外黑的 對／錯／中性 = 反對 會失敗／全好／中性；不用另外掃。
+
+/** 場外藍票的六類：贊成／反對 × 全好／會失敗／中性（第 4 局單紅）。 */
+export interface OffTeamCounts {
+  yesGood: number;
+  yesBad: number;
+  yesNeutral: number;
+  noGood: number;
+  noBad: number;
+  noNeutral: number;
+}
+
+/** 指標：yes 外白率、no 外黑率；yesGood／yesBad／yesNeutral = 全好／會失敗／中性的隊上的外白率（no… 同理是外黑率）；yesRight 外白對率、noRight 外黑對率。 */
+export const OFF_TEAM_MEASURES = ['yes', 'no', 'yesGood', 'yesBad', 'yesNeutral', 'noGood', 'noBad', 'noNeutral', 'yesRight', 'noRight'] as const;
+export type OffTeamMeasure = (typeof OFF_TEAM_MEASURES)[number];
+
+/** 一筆（或一格）的 counts → 場外的六類。 */
+export function offTeamCounts(cell: { counts: readonly number[] }): OffTeamCounts {
+  const at = (group: DecisiveGroup, outcome: keyof DecisiveCell): number => cell.counts[cohortIndex(group, outcome)] ?? 0;
+  return {
+    yesGood: at('offYes', 'right'),
+    yesBad: at('offYes', 'wrong'),
+    yesNeutral: at('offYes', 'neutral'),
+    noGood: at('offNo', 'wrong'),
+    noBad: at('offNo', 'right'),
+    noNeutral: at('offNo', 'neutral'),
+  };
+}
+
+/** 指標的分子 k 與分母 n（比率 = k ÷ n；n = 0 時沒有比率）。 */
+export function offTeamRatio(c: OffTeamCounts, measure: OffTeamMeasure): { k: number; n: number } {
+  const yes = c.yesGood + c.yesBad + c.yesNeutral;
+  const no = c.noGood + c.noBad + c.noNeutral;
+  switch (measure) {
+    case 'yes': return { k: yes, n: yes + no };
+    case 'no': return { k: no, n: yes + no };
+    case 'yesGood': return { k: c.yesGood, n: c.yesGood + c.noGood };
+    case 'noGood': return { k: c.noGood, n: c.yesGood + c.noGood };
+    case 'yesBad': return { k: c.yesBad, n: c.yesBad + c.noBad };
+    case 'noBad': return { k: c.noBad, n: c.yesBad + c.noBad };
+    case 'yesNeutral': return { k: c.yesNeutral, n: c.yesNeutral + c.noNeutral };
+    case 'noNeutral': return { k: c.noNeutral, n: c.yesNeutral + c.noNeutral };
+    case 'yesRight': return { k: c.yesGood, n: c.yesGood + c.yesBad };
+    case 'noRight': return { k: c.noBad, n: c.noBad + c.noGood };
+    default: return { k: 0, n: 0 };
+  }
+}
+
+/**
+ * 筆 → 這個指標的九宮格：只留這個指標分母 > 0 的筆（格子的人數 = 真的有票算進這個比率的人；在隊上的票不算），
+ * role 給了就只算那個角色。比率用 offTeamRatio(offTeamCounts(cell), measure)。
+ */
+export function offTeamCohortGrid(
+  records: readonly DecisiveSeatRecord[], cuts: CohortCuts, measure: OffTeamMeasure, role?: DecisiveRole | null,
+): CohortGrid {
+  const kept = records.filter((r) => (!role || r.role === role) && offTeamRatio(offTeamCounts(r), measure).n > 0);
+  return cohortGrid(kept, cuts, DECISIVE_COHORT_ORDER.length);
+}

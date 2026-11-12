@@ -2167,6 +2167,47 @@
           "all": "\"All votes\" = every blue vote, not only decisive ones, scored the same way (approving an all-good team or rejecting a failing team is right; round-4 single-red is neutral). All votes are far more reliable than decisive votes: splitting each player's games at random into two halves, the halves' accuracy correlates (mean over 200 splits) about 0.2–0.4 for all votes (similar for rounds 3–5 and after two reds; lower when only frequent players are counted, and single splits range from 0 to 0.5) and about 0 for decisive votes. The exact figure moves with the split and the threshold; what is clear is that all votes are much steadier than decisive votes.",
           "tiers": "Strong = PR ≥ upper cut, newer = PR < lower cut, regular in between (adjustable, default 80/20); All includes voters without a PR. The role menu narrows to loyal, Percival or Merlin.",
           "gridN": "Grid sample sizes are non-neutral votes (neutral votes are neither right nor wrong)."
+        },
+        "view": {
+          "cells": "Eight cells",
+          "offTeam": "Off-team blue votes"
+        },
+        "viewLabel": "View"
+      },
+      "offTeam": {
+        "note": "Only blue votes from players not on the proposed team (off-team votes; proposals 1-4, the forced 5th does not count; red votes do not count). For each team type the reject rate = 100% − the approve rate, so the table shows approvals only; the grid measure can switch to rejections.",
+        "colVotes": "Off-team",
+        "col": {
+          "yes": "Approve",
+          "yesGood": "Approve good",
+          "yesBad": "Approve failing",
+          "yesNeutral": "Approve 1-red R4",
+          "yesRight": "Approve right",
+          "noRight": "Reject right"
+        },
+        "measure": {
+          "yes": "Approve rate",
+          "no": "Reject rate",
+          "yesGood": "Approve rate (all-good teams)",
+          "yesBad": "Approve rate (failing teams)",
+          "yesNeutral": "Approve rate (round 4, one red)",
+          "noGood": "Reject rate (all-good teams)",
+          "noBad": "Reject rate (failing teams)",
+          "noNeutral": "Reject rate (round 4, one red)",
+          "yesRight": "Approve accuracy",
+          "noRight": "Reject accuracy"
+        },
+        "cellTitle": "{{k}} / {{n}} votes",
+        "kOfN": "{{k}}/{{n}}",
+        "tableNote": "{{n}} off-team votes from seats with no PR at the time (provisional, unnamed, unrated games) are only in the overall row.",
+        "gridCaption": "Grid: {{scope}} · {{kind}} · {{role}}",
+        "help": {
+          "what": "Off-team blue votes: the blue voter (loyal servant, Percival, Merlin) is not on the proposed team. Proposals 1-4 only (the 5th is forced, the vote does not matter); on-team votes and red votes are excluded. Scope: after two reds = proposals made when red already has exactly two wins; rounds 3-5 = every proposal in rounds 3, 4 and 5.",
+          "rate": "Approve rate = off-team approvals ÷ off-team votes; reject rate = off-team rejections ÷ off-team votes. The two add up to 100%.",
+          "quality": "The approve rate alone mixes good and bad teams (it is low wherever bad teams are common), so it is also split by team: all-good = no red on the team; failing = enough reds to fail the mission (two or more in round 4, one or more otherwise); round 4 one red = exactly one red in round 4 (one fail does not fail it, neither choice counts as right or wrong). E.g. 'Approve rate (all-good teams)' = the share of off-team blue voters approving an all-good team; the reject rate on the same teams = 100% minus it.",
+          "right": "Approve accuracy = the share of off-team approvals that went to all-good teams = approve good ÷ (approve good + approve failing); reject accuracy = the share of off-team rejections that hit failing teams = reject failing ÷ (reject failing + reject good). The round-4 one-red class is left out. These equal the off-team approve / reject cells of the eight-cell view.",
+          "decisive": "Decisive vote = flipping it would change whether the proposal passed (approving at exactly 6 yes, rejecting at exactly 5 yes). Among decisive votes the approve rate mostly reflects which side happened to sit at 5-5, not a habit; use 'All votes' for habits.",
+          "gridN": "The grid's sample size is the measure's denominator (e.g. for 'Approve rate (all-good teams)', the off-team votes on all-good teams); players = those with votes in that denominator."
         }
       }
     }

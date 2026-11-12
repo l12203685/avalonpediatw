@@ -2,15 +2,16 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader } from 'lucide-react';
 import {
-  DECISIVE_ABNORMAL, DECISIVE_GROUPS, DECISIVE_ROLES, PLAYER_TIERS,
+  DECISIVE_ABNORMAL, DECISIVE_GROUPS, DECISIVE_RANK_SCOPES, DECISIVE_ROLES, PLAYER_TIERS,
   decisiveCohortGrid, decisiveGridOf, sumDecisive,
-  type CohortCell, type DecisiveCell, type DecisiveCohortData, type DecisiveGroup, type DecisiveRole, type DecisiveScope,
+  type CohortCell, type DecisiveCell, type DecisiveCohortData, type DecisiveGroup, type DecisiveRankScope, type DecisiveRole,
 } from '@avalon/shared/stats';
 import { useCohortCuts } from '../../../stats/cohortCuts';
 import { InfoTip, SectionTabs, StatTable, Term, useSectionTab, type SectionTabItem, type StatColumn } from '../ui';
-import { DECISIVE_COHORT_KIND_KEY, DECISIVE_GROUP_TERMS, DECISIVE_ROLE_COLORS } from '../decisive/decisiveLayout';
+import { DECISIVE_COHORT_KIND_KEY, DECISIVE_COHORT_VIEW_KEY, DECISIVE_GROUP_TERMS, DECISIVE_ROLE_COLORS } from '../decisive/decisiveLayout';
 import CohortGrid, { type CohortMeasure } from './CohortGrid';
 import CohortCutsControl from './CohortCutsControl';
+import OffTeamCohortPanel from './OffTeamCohortPanel';
 import { COHORT_MIN_N, K, cohortPct, playerTierKey } from './cohortFormat';
 import { useDecisiveCohort } from './useCohortData';
 
@@ -21,11 +22,20 @@ import { useDecisiveCohort } from './useCohortData';
  *  - 表：強者／一般人／新手／全體 各一列：人數、票數、正確率、四組（場內白／場內黑／場外白／場外黑）的對率與對／錯張數（= 八格）。
  *  - 角色：全部／忠臣／派西維爾／梅林。
  *  - 九宮格：選一個對率，看（玩家分層 × 桌分層）。
+ *  - (2026-11-12 Edward) 第二個小分頁「場外藍票」：不在隊上的藍方票的外白率／外黑率（依隊伍品質拆）與外白／外黑對率
+ *    （OffTeamCohortPanel）；票的種類、角色、範圍、切點兩個小分頁共用。範圍的切換跟排行上面的範圍是同一個。
  * 筆（依局、座位合起來）在 Worker 裡算好（@avalon/shared decisiveCohortData），切點換了只在這裡重數。
  */
 
 type VoteKind = 'decisive' | 'all';
 type RoleChoice = 'all' | DecisiveRole;
+/** 小分頁：cells 八格對率（原本的）、offTeam 場外藍票的外白率／外黑率。 */
+type CohortView = 'cells' | 'offTeam';
+
+interface ScopeProps {
+  scope: DecisiveRankScope;
+  onScope: (scope: DecisiveRankScope) => void;
+}
 
 interface TierRow {
   tier: (typeof PLAYER_TIERS)[number] | 'all';
@@ -49,9 +59,16 @@ function RateCell({ cell, low }: { cell: DecisiveCell; low?: boolean }): JSX.Ele
   );
 }
 
-function Body({ data }: { data: DecisiveCohortData }): JSX.Element {
+function Body({ data, scope, onScope }: { data: DecisiveCohortData } & ScopeProps): JSX.Element {
   const { t } = useTranslation('common');
   const cuts = useCohortCuts((s) => s.cuts);
+  const viewItems: SectionTabItem<CohortView>[] = useMemo(() => (['cells', 'offTeam'] as const).map((id) => ({
+    id, label: t(`${K}.decisive.view.${id}`),
+  })), [t]);
+  const [view = 'cells', setView] = useSectionTab(viewItems, { persistKey: DECISIVE_COHORT_VIEW_KEY });
+  const scopeItems: SectionTabItem<DecisiveRankScope>[] = useMemo(() => DECISIVE_RANK_SCOPES.map((id) => ({
+    id, label: t(`analytics.decisive.scope.${id}`),
+  })), [t]);
   const kindItems: SectionTabItem<VoteKind>[] = useMemo(() => (['decisive', 'all'] as const).map((id) => ({
     id, label: t(`${K}.decisive.kind.${id}`),
   })), [t]);
@@ -137,42 +154,71 @@ function Body({ data }: { data: DecisiveCohortData }): JSX.Element {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <h4 className="text-xs font-bold text-zinc-200">{t(`${K}.decisive.title`)}</h4>
         <InfoTip title={t(`${K}.decisive.title`)} testId="decisive-cohort-info">
-          <p>{t(`${K}.decisive.help.what`)}</p>
-          <p>{t(`${K}.decisive.help.all`)}</p>
+          {view === 'offTeam' ? (
+            <>
+              <p>{t(`${K}.offTeam.help.what`)}</p>
+              <p>{t(`${K}.offTeam.help.rate`)}</p>
+              <p>{t(`${K}.offTeam.help.quality`)}</p>
+              <p>{t(`${K}.offTeam.help.right`)}</p>
+              <p>{t(`${K}.offTeam.help.decisive`)}</p>
+            </>
+          ) : (
+            <>
+              <p>{t(`${K}.decisive.help.what`)}</p>
+              <p>{t(`${K}.decisive.help.all`)}</p>
+            </>
+          )}
           <p>{t(`${K}.decisive.help.tiers`)}</p>
           <p>{t(`${K}.help.causality`)}</p>
         </InfoTip>
+        <SectionTabs items={viewItems} value={view} onChange={setView} size="sm" ariaLabel={t(`${K}.decisive.viewLabel`)} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <SectionTabs items={scopeItems} value={scope} onChange={onScope} size="sm" ariaLabel={t('analytics.decisive.scopeLabel')} />
         <SectionTabs items={kindItems} value={kind} onChange={setKind} size="sm" ariaLabel={t(`${K}.decisive.kindLabel`)} />
         {roleSelect}
       </div>
       <p className="text-[11px] font-semibold text-amber-200/90" data-testid="decisive-cohort-note">{t(`${K}.decisive.reliableNote`)}</p>
       <CohortCutsControl histogram={data.histogram} />
-      <StatTable columns={columns} rows={rows} rowKey={(r) => r.tier} highlightRow={(r) => r.tier === 'all'} />
-      <p className="text-[11px] text-zinc-500">
-        {t(`${K}.decisive.unrated`, { n: nonNeutral(sumDecisive(decisiveGridOf(grid.rows.unrated))) })}
-      </p>
-      <CohortGrid
-        grid={grid}
-        measures={measures}
-        measure={measure}
-        onMeasure={setMeasure}
-        unit={unit}
-        caption={t(`${K}.decisive.gridCaption`, { kind: t(`${K}.decisive.kind.${kind}`), role: roleLabel(role) })}
-        help={(
-          <>
-            <p>{t(`${K}.help.grid`)}</p>
-            <p>{t(`${K}.decisive.help.gridN`)}</p>
-            <p>{t(`${K}.help.causality`)}</p>
-          </>
-        )}
-        testId="decisive-cohort-grid"
-      />
+      {view === 'offTeam' ? (
+        <OffTeamCohortPanel
+          records={records}
+          cuts={cuts}
+          role={role === 'all' ? null : role}
+          kindLabel={t(`${K}.decisive.kind.${kind}`)}
+          scopeLabel={t(`analytics.decisive.scope.${scope}`)}
+          roleLabel={roleLabel(role)}
+        />
+      ) : (
+        <>
+          <StatTable columns={columns} rows={rows} rowKey={(r) => r.tier} highlightRow={(r) => r.tier === 'all'} />
+          <p className="text-[11px] text-zinc-500">
+            {t(`${K}.decisive.unrated`, { n: nonNeutral(sumDecisive(decisiveGridOf(grid.rows.unrated))) })}
+          </p>
+          <CohortGrid
+            grid={grid}
+            measures={measures}
+            measure={measure}
+            onMeasure={setMeasure}
+            unit={unit}
+            caption={t(`${K}.decisive.gridCaption`, { kind: t(`${K}.decisive.kind.${kind}`), role: roleLabel(role) })}
+            help={(
+              <>
+                <p>{t(`${K}.help.grid`)}</p>
+                <p>{t(`${K}.decisive.help.gridN`)}</p>
+                <p>{t(`${K}.help.causality`)}</p>
+              </>
+            )}
+            testId="decisive-cohort-grid"
+          />
+        </>
+      )}
     </section>
   );
 }
 
 /** 個人排行上面的分組區塊（跟著排行的範圍）。算不出來時不顯示（不擋排行）。 */
-export default function DecisiveCohortView({ scope }: { scope: DecisiveScope }): JSX.Element | null {
+export default function DecisiveCohortView({ scope, onScope }: ScopeProps): JSX.Element | null {
   const { t } = useTranslation('common');
   const state = useDecisiveCohort(scope);
   if (state.status === 'error') return null;
@@ -183,5 +229,5 @@ export default function DecisiveCohortView({ scope }: { scope: DecisiveScope }):
       </div>
     );
   }
-  return <Body data={state.data} />;
+  return <Body data={state.data} scope={scope} onScope={onScope} />;
 }
