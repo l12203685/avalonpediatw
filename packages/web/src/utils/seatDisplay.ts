@@ -30,6 +30,24 @@ export function displaySeatKey(seat: string | number): string {
 }
 
 /**
+ * 刺客偏好座位的區間（由小到大，第十個座位排最後、顯示 0）：「6～0 家」「3～7 家」；
+ * 跨前後兩區直到 0 家時寫「1～9、0 家」這種，避免「1～0」難讀（站長 2026-11-12：座位只寫 0 家）。
+ */
+export function seatRangeLabel(seats: number[]): string {
+  const sortedAsc = [...seats].sort((a, b) => a - b);
+  const min = sortedAsc[0];
+  const max = sortedAsc[sortedAsc.length - 1];
+  if (min === max) return `${displaySeatNumber(min)} 家`;
+  if (max === 10 && min <= 5) return `${min}～9、0 家`;
+  return `${displaySeatNumber(min)}～${displaySeatNumber(max)} 家`;
+}
+
+/** 刺客最常刺的座位（依次數排序）：「5、0、2 家」，跟機器人查戰績的寫法一樣。 */
+export function seatListLabel(seats: number[]): string {
+  return `${seats.map(displaySeatNumber).join('、')} 家`;
+}
+
+/**
  * Resolves a player's 1-based seat number from a `Room.players` map.
  * Returns 0 when the id is unknown (callers should guard against that or accept
  * the placeholder; seat 0 itself is never assigned in canonical Avalon).

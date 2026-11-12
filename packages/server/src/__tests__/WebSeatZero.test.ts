@@ -7,7 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import { displaySeatKey } from '../../../web/src/utils/seatDisplay';
+import { displaySeatKey, seatListLabel, seatRangeLabel } from '../../../web/src/utils/seatDisplay';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const read = (rel: string): string => fs.readFileSync(path.join(ROOT, rel), 'utf-8');
@@ -84,5 +84,19 @@ describe('seat 0 (站長 2026-11-12：座位寫 0 家，不寫 10 號／10 家)'
   it('stats tables show the tenth seat as 0 and keep the data keys', () => {
     // overview / roleSeatStats key the tenth seat "10", players[] and records key it "0": both display 0
     expect(['1', '5', '9', '10', '0', 10, 3].map(displaySeatKey)).toEqual(['1', '5', '9', '0', '0', '0', '3']);
+  });
+
+  it('playstyle assassin seats read as 家 lists and ranges, never 1–0 or 5-0-2', () => {
+    expect(seatListLabel([5, 10, 2])).toBe('5、0、2 家');
+    expect(seatRangeLabel([10, 6, 8])).toBe('6～0 家');
+    expect(seatRangeLabel([1, 10, 4])).toBe('1～9、0 家');
+    expect(seatRangeLabel([7, 3])).toBe('3～7 家');
+    expect(seatRangeLabel([10])).toBe('0 家');
+  });
+
+  it('the wiki defines the tenth seat one way: 第十個座位', () => {
+    const wiki = read('packages/server/wiki_data.json');
+    expect(wiki).not.toMatch(/第\s*10\s*位/);
+    expect(wiki).toContain('第十個座位稱為 **0 家**');
   });
 });

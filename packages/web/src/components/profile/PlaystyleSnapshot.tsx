@@ -6,18 +6,10 @@ import {
   getErrorMessage,
   type PlaystylePlayerResponse,
 } from '../../services/api';
-import { displaySeatNumber } from '../../utils/seatDisplay';
+import { seatListLabel, seatRangeLabel } from '../../utils/seatDisplay';
 
 interface PlaystyleSnapshotProps {
   playerName: string;
-}
-
-function seatRangeLabel(seats: number[]): string {
-  // Seats sorted by count desc; we group into front/mid/back if applicable.
-  const sortedAsc = [...seats].sort((a, b) => a - b);
-  const min = sortedAsc[0];
-  const max = sortedAsc[sortedAsc.length - 1];
-  return `${displaySeatNumber(min)}–${displaySeatNumber(max)}`;
 }
 
 export default function PlaystyleSnapshot({ playerName }: PlaystyleSnapshotProps): JSX.Element {
@@ -85,9 +77,9 @@ export default function PlaystyleSnapshot({ playerName }: PlaystyleSnapshotProps
     const range = seatRangeLabel(d.assassinTopSeats);
     rows.push({
       label: labels.assassinTargetLabel,
-      value: `座 ${d.assassinTopSeats.map(displaySeatNumber).join('-')}`,
+      value: seatListLabel(d.assassinTopSeats),
       pctile: null,
-      sub: `刺 ${d.assassinAttempts} 次, 偏好區間 座 ${range}`,
+      sub: `刺 ${d.assassinAttempts} 次，偏好區間 ${range}`,
     });
   }
   if (d.captainStickiness !== null) {
