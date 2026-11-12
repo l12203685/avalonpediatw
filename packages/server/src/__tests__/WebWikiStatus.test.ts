@@ -704,6 +704,10 @@ describe('前半區／後半區 (2026-11-12 站長：「前置位」改成「前
     expect(jsonById.get('wiki-175')!.content).toContain('- 前半區的 1～4 家梅林（不含 1-5 的尾家 5 家）的派票：三張票');
     expect(jsonById.get('wiki-175')!.content).toContain('- 後半區的 6～9 家梅林（不含 2-5 的尾家 0 家）的派票：四張票');
     expect(jsonById.get('wiki-176')!.content).toContain('- 在前半區的 1～4 家（不含 1-5 的尾家 5 家，另外看）還沒分出梅林時');
+    // the articles that cite wiki-176's Percival rule use the same seats (1–4, seat 5 read separately)
+    expect(jsonById.get('wiki-205')!.content).toContain('前半區的 1～4 家（5 家另外看）還沒分出梅林時盡量不踩拇指');
+    expect(jsonById.get('wiki-12')!.content).toContain('wiki-176「前半區的 1～4 家還沒分出梅林時，盡量不要踩拇指（梅娜）」');
+    expect(jsonById.get('wiki-147')!.content).toContain('文中的 1～4、6～9 是前半區、後半區各自扣掉尾家（5、0）');
     expect(jsonById.get('wiki-57')!.content).toContain('  - 前半區的 1～4\n  - 後半區的 6～9\n  - 5、0（兩區的尾家）獨立看');
     // the docs copies follow the site text
     expect(docsFile('角色/刺殺梅林.md').trim()).toBe(jsonById.get('wiki-12')!.content.trim());
