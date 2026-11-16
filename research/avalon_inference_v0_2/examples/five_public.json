@@ -1,0 +1,9 @@
+{
+  "player_count": 5,
+  "observer": null,
+  "missions": [],
+  "soft_signals": [],
+  "sabotage_probability": 1,
+  "evaluate_round": 1,
+  "top_n": 5
+}

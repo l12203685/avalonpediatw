@@ -1,0 +1,9 @@
+{
+  "player_count": 10,
+  "observer": {"seat": 0, "own_role": "Servant"},
+  "missions": [{"round_no": 1, "team": [3, 5, 7], "fail_cards": 1}],
+  "soft_signals": [],
+  "sabotage_probability": 0.8,
+  "evaluate_round": 2,
+  "top_n": 5
+}

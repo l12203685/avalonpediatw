@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>阿瓦隆資訊熵研究台｜十人局 357 案例 v0.1</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1020;--panel:#151f32;--panel2:#1c2940;--text:#e9f0fa;--muted:#9eaec2;--teal:#63d4c3;--orange:#e8ab6d;--outline:#30435a;--blue:#84adfa}
+*{box-sizing:border-box}body{background:radial-gradient(circle at 20% 0%,#182947,#0a1020 54%);color:var(--text);margin:0;font:15px/1.6 system-ui,-apple-system,'Noto Sans TC','Microsoft JhengHei',sans-serif}
+main{max-width:1150px;margin:auto;padding:28px 22px 50px}h1{font-size:clamp(23px,4vw,34px);margin:3px 0 6px;letter-spacing:-.02em}h2{font-size:18px;margin:0 0 15px}p{margin:7px 0 14px}small,.muted{color:var(--muted)}.eyebrow{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);font-weight:700}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:16px}.panel{background:var(--panel);border:1px solid var(--outline);border-radius:14px;padding:22px;margin-top:16px;box-shadow:0 7px 25px #0002}.full{grid-column:1/-1}
+.controls{display:flex;align-items:center;flex-wrap:wrap;gap:14px;justify-content:space-between}.controls label{font-weight:600}input[type=range]{accent-color:var(--teal);width:min(340px,52vw)}select{background:var(--panel2);color:var(--text);border:1px solid var(--outline);padding:7px 12px;border-radius:7px}.metricrow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.metric{padding:13px;background:var(--panel2);border-radius:9px}.metric strong{display:block;font-size:25px;line-height:1.25;font-weight:750;color:var(--teal)}.metric span{font-size:12px;color:var(--muted)}
+.bars{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:15px}.person{border:1px solid var(--outline);background:var(--panel2);border-radius:10px;text-align:center;padding:11px 6px}.person .num{font-size:13px;color:var(--muted)}.person .prob{font-size:20px;font-weight:750;font-variant-numeric:tabular-nums}.track{height:7px;background:#31435a;border-radius:10px;margin:8px 0;overflow:hidden}.fill{height:100%;background:linear-gradient(90deg,var(--teal),#64a8fc);transition:width .2s}.on-team{border-color:#e8ab6d88}.on-team .prob{color:var(--orange)}
+.seat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.seat{cursor:pointer;border:1px solid var(--outline);background:var(--panel2);padding:9px 2px;text-align:center;border-radius:8px;user-select:none}.seat.selected{background:#1c4d51;border-color:var(--teal)}.seat input{display:none}.seat.disabled{opacity:.45;cursor:not-allowed}.statlabel{font-size:12px;color:var(--muted)}.statvalue{font-size:27px;font-weight:700;font-variant-numeric:tabular-nums;margin:3px 0 10px}
+table{width:100%;border-collapse:collapse}td,th{padding:11px 8px;border-bottom:1px solid #304056;text-align:left}th{color:var(--muted);font-size:12px;font-weight:500}tbody tr{cursor:pointer}tbody tr:hover{background:#27354b}.right{text-align:right;font-variant-numeric:tabular-nums}.pill{background:#34435e;color:#d4e6ff;display:inline-block;padding:1px 8px;border-radius:20px;font-size:12px}.status{color:var(--orange)}.note{border-left:3px solid var(--orange);padding:8px 12px;color:#d9d8d2;background:#241d1b;border-radius:0 6px 6px 0}
+footer{margin-top:25px;color:var(--muted);font-size:12px}@media(max-width:770px){.layout{grid-template-columns:1fr}.metricrow{grid-template-columns:repeat(2,1fr)}.bars{grid-template-columns:repeat(5,1fr)}main{padding:19px 12px}.panel{padding:16px}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Avalon Research Lab / Local Proof of Concept v0.1</div>
+<h1>阿瓦隆・資訊熵探索台</h1>
+<p class="muted">十人局假設案例：<strong>0 號是忠臣</strong>，第一任務 <strong>3、5、7 號上車</strong>，公布失敗票張數。模型只根據該情報推算，不讀取其他隱藏身份。</p>
+<div class="panel">
+  <div class="controls">
+    <label for="q">壞人每次選擇炸車的假設機率 q：<strong id="qLabel" style="color:var(--teal)">80%</strong></label>
+    <input id="q" type="range" min="5" max="100" value="80" step="5" aria-label="破壞機率">
+    <label for="failCards">第一車失敗票數</label>
+    <select id="failCards"><option value="0">0 張（藍車）</option><option value="1" selected>1 張（紅車）</option><option value="2">2 張（紅車）</option><option value="3">3 張（紅車）</option></select>
+  </div>
+  <p class="muted" style="font-size:13px">此為參數敏感度展示。對每一種合法 4 壞人座位配置，使用 Binomial(k, q) 計算觀察到失敗票張數的似然，再由貝葉斯定理更新信念。</p>
+  <div class="metricrow">
+    <div class="metric"><span>身份配置後驗熵</span><strong id="entropy">--</strong><span>bits（含個別角色的不確定性）</span></div>
+    <div class="metric"><span>保留合法身份配置</span><strong id="worldCount">--</strong><span>不同角色排列</span></div>
+    <div class="metric"><span>本案例有效觀察</span><strong>1 筆</strong><span>第一車失敗票張數</span></div>
+  </div>
+</div>
+<div class="layout">
+<div class="panel full"><h2>各座位壞人機率（後驗）</h2><div id="players" class="bars"></div><small>橘色：第一車 357；0 號忠臣身份僅為示範假設。圖上數字不是實際玩家身份的確認結果。</small></div>
+<div class="panel"><h2>試選第二任務隊伍（選 4 人）</h2><div id="seats" class="seat-grid"></div><p class="muted">選滿四位後可取消、換選其他人。模型會立即更新該組合的估計。</p><div class="statlabel">本隊伍任務成功率</div><div id="selectedSuccess" class="statvalue">--</div><div class="statlabel">預期資訊增益（看到失敗票張數）</div><div id="selectedIG" class="statvalue">--</div><p class="note">成功率與資訊增益是不同目標；真正最終勝率還需要把比分、提案／投票程序、刺殺與未來策略加進模型。</p></div>
+<div class="panel"><h2>候選隊伍比較</h2><p class="muted">以下均為第二任務四人隊伍。點選某列可套用到左側。</p><h3 style="font-size:14px">依成功機率排序</h3><table><thead><tr><th>隊伍</th><th class="right">成功率</th><th class="right">資訊增益</th></tr></thead><tbody id="topSuccess"></tbody></table><h3 style="font-size:14px;margin-top:18px">依資訊增益排序</h3><table><thead><tr><th>隊伍</th><th class="right">成功率</th><th class="right">資訊增益</th></tr></thead><tbody id="topIG"></tbody></table></div>
+</div>
+<div class="panel"><h2>研究方法與限制</h2>
+<p>用 4/9 的可能紅方座位集合建立先驗（0 號已知是忠臣），不區分同一陣營中的個別角色時共有 <strong>126</strong> 個紅方座位集合；每個集合對應 <strong>480</strong> 個角色排列（4!×5×4）。</p>
+<p>實作對紅方座位集合逐一求似然、後驗與任務結果分布；角色排列在此簡化模型中具有相同似然，所以可以由組合計數轉換成完整身份熵。</p>
+<p><strong>未包含：</strong>提案順位、黑白球投票、發言、玩家心理、湖中、梅林刺殺、角色依存的 q、真實案例標註。請勿把這個視覺化頁面當作已訓練好的阿瓦隆勝率模型。</p>
+</div>
+<footer>2026/11/16 · 本頁可離線開啟，所有計算在瀏覽器本機完成。配套測試與 Python 版本：avalon_core.py、tests/、README.md。</footer>
+</main>
+<script>
+'use strict';
+const players=Array.from({length:10},(_,i)=>i),missionTeam=[3,5,7];
+const $=id=>document.getElementById(id);
+const qControl=$('q'),failControl=$('failCards');
+let selected=[0,1,2,7];
+const masks=[];
+function enumerate(prefix,next){if(prefix.length===4){let mask=0;for(const x of prefix)mask|=(1<<x);masks.push(mask);return;}for(let i=next;i<=9;i++)enumerate([...prefix,i],i+1)}
+enumerate([],1);
+function bc(n){let a=0;for(;n;n&=n-1)a++;return a}
+function binom(n,k){if(k<0||k>n)return 0;let r=1;for(let i=1;i<=k;i++)r=r*(n-i+1)/i;return r}
+function likelihood(k,f,q){return f>k?0:binom(k,f)*(q**f)*((1-q)**(k-f))}
+function entropy(ps){return ps.reduce((s,p)=>p>0?s-p*Math.log2(p):s,0)}
+function getPosterior(){const q=Number(qControl.value)/100,f=Number(failControl.value),teamMask=missionTeam.reduce((a,b)=>a|(1<<b),0);
+ const weights=masks.map(mask=>likelihood(bc(mask&teamMask),f,q));const total=weights.reduce((a,b)=>a+b,0);
+ if(total<=0)return null;const p=weights.map(v=>v/total);return {q,p,valid:weights.filter(x=>x>1e-14).length};}
+function metrics(team,posterior){const teamMask=team.reduce((a,b)=>a|(1<<b),0),q=posterior.q;
+ const py=Array(team.length+1).fill(0);let conditionalH=0;
+ for(let i=0;i<masks.length;i++){const mass=posterior.p[i];if(mass<1e-16)continue;const k=bc(masks[i]&teamMask),by=Array.from({length:k+1},(_,f)=>likelihood(k,f,q));conditionalH+=mass*entropy(by);for(let f=0;f<by.length;f++)py[f]+=mass*by[f];}
+ return {team:[...team],success:py[0],ig:Math.max(0,entropy(py)-conditionalH)};}
+function allTeams(){const result=[];for(let a=0;a<10;a++)for(let b=a+1;b<10;b++)for(let c=b+1;c<10;c++)for(let d=c+1;d<10;d++)result.push([a,b,c,d]);return result}
+const teams=allTeams();const fmtP=p=>(100*p).toFixed(1)+'%',fmtIG=v=>v.toFixed(3)+' bits';
+function render(){const posterior=getPosterior();$('qLabel').textContent=qControl.value+'%';
+ if(!posterior){$('worldCount').textContent='0';$('entropy').textContent='無合法觀測';$('players').innerHTML='<p>無法在此 q 下觀測到指定的失敗張數。</p>';return}
+ const probs=players.map(seat=>seat===0?0:posterior.p.reduce((a,b,i)=>a+(((masks[i]>>seat)&1)?b:0),0));
+ const H=entropy(posterior.p)+Math.log2(480);
+ $('entropy').textContent=H.toFixed(3);$('worldCount').textContent=(posterior.valid*480).toLocaleString('zh-TW');
+ $('players').innerHTML=players.map(seat=>`<div class="person ${missionTeam.includes(seat)?'on-team':''}"><div class="num">${seat} 號</div><div class="prob">${fmtP(probs[seat])}</div><div class="track"><div class="fill" style="width:${100*probs[seat]}%"></div></div></div>`).join('');
+ $('seats').innerHTML=players.map(seat=>`<label class="seat ${selected.includes(seat)?'selected':''} ${selected.length>=4&&!selected.includes(seat)?'disabled':''}"><input type="checkbox" data-seat="${seat}" ${selected.includes(seat)?'checked':''} ${selected.length>=4&&!selected.includes(seat)?'disabled':''}>${seat} 號</label>`).join('');
+ $('seats').querySelectorAll('input').forEach(input=>input.addEventListener('change',()=>{let seat=Number(input.dataset.seat);selected=input.checked?[...selected,seat]:selected.filter(s=>s!==seat);selected.sort((a,b)=>a-b);render()}));
+ if(selected.length===4){let v=metrics(selected,posterior);$('selectedSuccess').textContent=fmtP(v.success);$('selectedIG').textContent=fmtIG(v.ig)}else{$('selectedSuccess').textContent='尚未選滿 4 人';$('selectedIG').textContent='--';}
+ const scores=teams.map(t=>metrics(t,posterior));
+ const bestS=[...scores].sort((a,b)=>b.success-a.success||b.ig-a.ig).slice(0,5);
+ const bestI=[...scores].sort((a,b)=>b.ig-a.ig||b.success-a.success).slice(0,5);
+ function tableData(v){return v.map(x=>`<tr data-team="${x.team.join(',')}"><td><span class="pill">${x.team.join(' · ')}</span></td><td class="right">${fmtP(x.success)}</td><td class="right">${x.ig.toFixed(3)}</td></tr>`).join('')}
+ $('topSuccess').innerHTML=tableData(bestS);$('topIG').innerHTML=tableData(bestI);
+ for(const id of ['topSuccess','topIG'])$(id).querySelectorAll('tr').forEach(el=>el.addEventListener('click',()=>{selected=el.dataset.team.split(',').map(Number);render()}));
+}
+qControl.addEventListener('input',render);failControl.addEventListener('change',render);render();
+</script>
+</body></html>

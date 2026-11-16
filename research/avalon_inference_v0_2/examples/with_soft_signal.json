@@ -1,0 +1,9 @@
+{
+  "player_count": 5,
+  "observer": {"seat": 0, "own_role": "Servant"},
+  "missions": [{"round_no": 1, "team": [0, 2], "fail_cards": 1}],
+  "soft_signals": [{"target": 3, "says_evil": true, "sensitivity": 0.7, "specificity": 0.7}],
+  "sabotage_probability": 0.65,
+  "evaluate_round": 2,
+  "top_n": 5
+}

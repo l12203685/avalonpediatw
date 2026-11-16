@@ -1,0 +1,287 @@
+{
+  "model_version": "0.1.0",
+  "player_count": 5,
+  "observation_count": 0,
+  "soft_signal_count": 0,
+  "sabotage_probability": 1.0,
+  "posterior_hypotheses": 120,
+  "entropy_bits": 6.906890595608519,
+  "evil_marginals": {
+    "0": 0.39999999999999997,
+    "1": 0.39999999999999997,
+    "2": 0.39999999999999997,
+    "3": 0.39999999999999997,
+    "4": 0.39999999999999997
+  },
+  "role_marginals": {
+    "0": {
+      "Assassin": 0.19999999999999998,
+      "Merlin": 0.19999999999999998,
+      "Morgana": 0.19999999999999998,
+      "Percival": 0.19999999999999998,
+      "Servant": 0.19999999999999998
+    },
+    "1": {
+      "Assassin": 0.19999999999999998,
+      "Merlin": 0.19999999999999998,
+      "Morgana": 0.19999999999999998,
+      "Percival": 0.19999999999999998,
+      "Servant": 0.19999999999999998
+    },
+    "2": {
+      "Assassin": 0.19999999999999998,
+      "Merlin": 0.19999999999999998,
+      "Morgana": 0.19999999999999998,
+      "Percival": 0.19999999999999998,
+      "Servant": 0.19999999999999998
+    },
+    "3": {
+      "Assassin": 0.19999999999999998,
+      "Merlin": 0.19999999999999998,
+      "Morgana": 0.19999999999999998,
+      "Percival": 0.19999999999999998,
+      "Servant": 0.19999999999999998
+    },
+    "4": {
+      "Assassin": 0.19999999999999998,
+      "Merlin": 0.19999999999999998,
+      "Morgana": 0.19999999999999998,
+      "Percival": 0.19999999999999998,
+      "Servant": 0.19999999999999998
+    }
+  },
+  "rankings": {
+    "top_success": [
+      {
+        "team": [
+          0,
+          1
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          0,
+          2
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          0,
+          3
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          0,
+          4
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          1,
+          2
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      }
+    ],
+    "top_information_gain": [
+      {
+        "team": [
+          0,
+          1
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          0,
+          2
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          0,
+          3
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          0,
+          4
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      },
+      {
+        "team": [
+          1,
+          2
+        ],
+        "round_no": 1,
+        "fail_threshold": 1,
+        "p_mission_success": 0.3,
+        "p_mission_failure": 0.7,
+        "expected_information_gain_bits": 1.295461844238322,
+        "expected_posterior_entropy_bits": 5.611428751370196,
+        "p_fail_cards": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ],
+        "p_evil_count_on_team": [
+          0.3,
+          0.6,
+          0.09999999999999999
+        ]
+      }
+    ],
+    "candidate_count": 10
+  },
+  "disclaimers": [
+    "All likelihoods are conditional on independent sabotage probability q.",
+    "Proposals, public voting, and language are not modeled unless explicitly supplied as soft signals.",
+    "Soft signals are assumed conditionally independent; correlated cues must not be entered separately without calibration.",
+    "Ranking by p(success) or expected information gain is not a complete win-rate optimum.",
+    "Private observer data must originate from a trusted server in real use."
+  ]
+}

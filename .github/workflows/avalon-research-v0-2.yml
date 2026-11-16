@@ -1,0 +1,29 @@
+name: Avalon independent inference regression
+
+on:
+  pull_request:
+    paths:
+      - 'research/avalon_inference_v0_2/**'
+      - '.github/workflows/avalon-research-v0-2.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'research/avalon_inference_v0_2/**'
+      - '.github/workflows/avalon-research-v0-2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  independent-inference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run offline stdlib regression (no secrets or external data)
+        working-directory: research/avalon_inference_v0_2
+        run: python -m unittest discover -s tests -v

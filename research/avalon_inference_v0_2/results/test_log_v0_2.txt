@@ -1,0 +1,40 @@
+test_10p_mission4_two_fail_regression (test_core.TestAvalon.test_10p_mission4_two_fail_regression) ... ok
+test_entropy_reduction_on_observed_data (test_core.TestAvalon.test_entropy_reduction_on_observed_data) ... ok
+test_exact_count_information_gain (test_core.TestAvalon.test_exact_count_information_gain) ... ok
+test_inconsistency_detected (test_core.TestAvalon.test_inconsistency_detected) ... ok
+test_oberon_is_unseen_by_evil (test_core.TestAvalon.test_oberon_is_unseen_by_evil) ... ok
+test_one_fail_means_one_evil_at_q1 (test_core.TestAvalon.test_one_fail_means_one_evil_at_q1) ... ok
+test_reject_invalid_inputs (test_core.TestAvalon.test_reject_invalid_inputs) ... ok
+test_soft_signal_and_no_reveal (test_core.TestAvalon.test_soft_signal_and_no_reveal) ... ok
+test_two_fail_threshold (test_core.TestAvalon.test_two_fail_threshold) ... ok
+test_uniform_priors (test_core.TestAvalon.test_uniform_priors) ... ok
+test_view_merlin_mordred_exception (test_core.TestAvalon.test_view_merlin_mordred_exception) ... ok
+test_view_percival_no_distinction (test_core.TestAvalon.test_view_percival_no_distinction) ... ok
+test_world_counts (test_core.TestAvalon.test_world_counts) ... ok
+test_zero_fail_at_q1_proves_good_team (test_core.TestAvalon.test_zero_fail_at_q1_proves_good_team) ... ok
+test_zero_sabotage_means_zero_mission_ig (test_core.TestAvalon.test_zero_sabotage_means_zero_mission_ig) ... ok
+test_5_consecutive_rejections_evil_wins (test_replay.TestReplay.test_5_consecutive_rejections_evil_wins) ... ok
+test_assassin_role_required_even_if_other_evil_attacks (test_replay.TestReplay.test_assassin_role_required_even_if_other_evil_attacks) ... ok
+test_assassination_hit_and_terminal_guard (test_replay.TestReplay.test_assassination_hit_and_terminal_guard) ... ok
+test_bad_ballots_are_rejected (test_replay.TestReplay.test_bad_ballots_are_rejected) ... ok
+test_exported_config_is_versioned_and_public (test_replay.TestReplay.test_exported_config_is_versioned_and_public) ... ok
+test_fourth_quest_two_fail_cards (test_replay.TestReplay.test_fourth_quest_two_fail_cards) ... ok
+test_full_lifecycle_good_wins_after_missed_assassination (test_replay.TestReplay.test_full_lifecycle_good_wins_after_missed_assassination) ... ok
+test_history_cutoff_changes_belief_only_when_evidence_is_visible (test_replay.TestReplay.test_history_cutoff_changes_belief_only_when_evidence_is_visible) ... ok
+test_inference_refuses_nonstandard_quest_sizes (test_replay.TestReplay.test_inference_refuses_nonstandard_quest_sizes) ... ok
+test_lady_may_decline_to_declare (test_replay.TestReplay.test_lady_may_decline_to_declare) ... ok
+test_lady_next_holder_and_no_repeat_targets (test_replay.TestReplay.test_lady_next_holder_and_no_repeat_targets) ... ok
+test_lady_public_claim_private_truth_and_historical_cutoff (test_replay.TestReplay.test_lady_public_claim_private_truth_and_historical_cutoff) ... ok
+test_nine_player_inverted_protection (test_replay.TestReplay.test_nine_player_inverted_protection) ... ok
+test_no_hidden_fields_and_atomic_rejection (test_replay.TestReplay.test_no_hidden_fields_and_atomic_rejection) ... ok
+test_platform_defaults (test_replay.TestReplay.test_platform_defaults) ... ok
+test_platform_fifth_forced_and_no_ballots (test_replay.TestReplay.test_platform_fifth_forced_and_no_ballots) ... ok
+test_published_log_does_not_alias_mutable_records (test_replay.TestReplay.test_published_log_does_not_alias_mutable_records) ... ok
+test_quest_failure_not_exceed_evil_seats (test_replay.TestReplay.test_quest_failure_not_exceed_evil_seats) ... ok
+test_rules_version_and_variants (test_replay.TestReplay.test_rules_version_and_variants) ... ok
+test_vote_majority_not_tie (test_replay.TestReplay.test_vote_majority_not_tie) ... ok
+
+----------------------------------------------------------------------
+Ran 35 tests in 1.127s
+
+OK
