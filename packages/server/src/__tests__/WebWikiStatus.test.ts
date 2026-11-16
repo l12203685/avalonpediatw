@@ -703,10 +703,15 @@ describe('前半區／後半區 (2026-11-12 站長：「前置位」改成「前
     // the passages whose reasoning is about seats 1–4 / 6–9 keep their seat lists under the new words
     expect(jsonById.get('wiki-175')!.content).toContain('- 前半區的 1～4 家梅林（不含 1-5 的尾家 5 家）的派票：三張票');
     expect(jsonById.get('wiki-175')!.content).toContain('- 後半區的 6～9 家梅林（不含 2-5 的尾家 0 家）的派票：四張票');
-    expect(jsonById.get('wiki-176')!.content).toContain('- 在前半區的 1～4 家（不含 1-5 的尾家 5 家，另外看）還沒分出梅林時');
+    expect(jsonById.get('wiki-176')!.content).toContain('- 在前半區的 1～5 家還沒分出梅林時');
     // the articles that cite wiki-176's Percival rule use the same seats (1–4, seat 5 read separately)
-    expect(jsonById.get('wiki-205')!.content).toContain('前半區的 1～4 家（5 家另外看）還沒分出梅林時盡量不踩拇指');
-    expect(jsonById.get('wiki-12')!.content).toContain('wiki-176「前半區的 1～4 家還沒分出梅林時，盡量不要踩拇指（梅娜）」');
+    expect(jsonById.get('wiki-205')!.content).toContain('前半區的 1～5 家還沒分出梅林時盡量不踩拇指');
+    expect(jsonById.get('wiki-12')!.content).toContain('wiki-176「前半區的 1～5 家還沒分出梅林時，盡量不要踩拇指（梅娜）」');
+    // 站長 11/16：派西「還沒分出梅林時不踩拇指」包含 5 家；〈湖中女神〉原組合那一行照數據放寬（梅林那句保留）
+    expect(jsonById.get('wiki-147')!.content).not.toContain('湖中幾乎不能湖給原組合');
+    expect(jsonById.get('wiki-147')!.content).toContain('- 【經驗】原組合可以湖：');
+    expect(jsonById.get('wiki-147')!.content).toContain('所以梅林看到原組合沒拇指時，仍然不往任務內湖。');
+    expect(jsonById.get('wiki-12')!.content).not.toContain('湖中幾乎不能湖給原組合');
     expect(jsonById.get('wiki-147')!.content).toContain('文中的 1～4、6～9 是前半區、後半區各自扣掉尾家（5、0）');
     expect(jsonById.get('wiki-57')!.content).toContain('  - 前半區的 1～4\n  - 後半區的 6～9\n  - 5、0（兩區的尾家）獨立看');
     // the docs copies follow the site text
