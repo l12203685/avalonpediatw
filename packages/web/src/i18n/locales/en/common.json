@@ -732,7 +732,8 @@
         "roles": "Roles & chemistry",
         "strength": "Lineup strength",
         "stateTree": "State tree",
-        "players": "Player radar"
+        "players": "Player radar",
+        "findings": "Findings"
       },
       "votesNote": "Votes currently has a single study (vote flip rate after a team change); other vote metrics (approval rate, reject chains, follow votes) are not in the cache yet and will land here when they are.",
       "section": {
@@ -742,6 +743,61 @@
         "seatHeatmap": "Seat win-rate heatmap",
         "seatOrder": "P/M/M seat order",
         "chemistry": "Chemistry matrix"
+      },
+      "findings": {
+        "discovery": "Auto findings",
+        "twoRedCohort": "Teams after two reds, by group"
+      },
+      "overviewTheoryLink": "Per-player role / seat / overall theory rankings are under Leaderboards › Theory win rate (with adjustable listing rules)",
+      "more": {
+        "tab": "More details",
+        "intro": "Less-used views, small samples or very narrow questions live here. Click a title to open it."
+      },
+      "howTo": {
+        "overview": "Start with the big picture: how often each side wins and how many games reach the assassination. Numbers on the other tabs compare against this.",
+        "findings": "The site compares many groupings and lists clear, unlikely-to-be-chance differences, each with what you could do about it. Start here for things to try; small samples are marked.",
+        "teams": "For proposing teams: who leads, how the first team is picked, how missions go, and who wins in the end.",
+        "votes": "For deciding approve or reject: how often teams with a red get rejected and all-good teams get approved.",
+        "missions": "Pass rate of each mission and the chance of each ending after a mission passes or fails, to judge how dangerous the current spot is.",
+        "lake": "For picking a Lady of the Lake target and reading announcements: holder and target sides, and how trustworthy announcements are.",
+        "assassination": "For the assassin's pick and how Merlin hides: hit rate versus Merlin's and the assassin's seats.",
+        "position": "Results of each role from seat 1 to seat 9 and seat 0, to judge what a seat gives or costs you.",
+        "roles": "Win rate of each role, and whom you win with most often.",
+        "strength": "How table strength changes results; when comparing your own games, check you compare tables of similar strength.",
+        "stateTree": "Find the current spot by mission order and lake announcements and see who usually wins from there, to decide how careful the next step should be.",
+        "players": "Pick your name and compare with your PR group: the items clearly below your group are the ones most worth practising."
+      },
+      "startHere": {
+        "title": "Start here: what do you want to know?",
+        "hide": "Hide",
+        "show": "Show",
+        "q": {
+          "improve": {
+            "q": "Where can I improve?",
+            "how": "Pick yourself in Player radar and compare with your PR group; items below the group are the most worth practising. The After two reds block shows how your teams and votes differ from the group."
+          },
+          "situation": {
+            "q": "What works best in a given spot (teams, votes, lake, after two reds)?",
+            "how": "State tree finds the current spot by mission order and lake announcements and shows which paths blue wins more often; teams after two reds show how strong players pick; Lady of the Lake covers whom to check and how to read announcements."
+          },
+          "role": {
+            "q": "How do I win more with this role?",
+            "how": "Look at each role's win rate, then how much the same role's results change by seat."
+          },
+          "strategy": {
+            "q": "Which strategies has the site found in the data?",
+            "how": "Auto findings lists clear, unlikely-to-be-chance differences, each with what you could do. Start with the large samples; See the numbers takes you back to the source table."
+          }
+        },
+        "go": {
+          "players": "Player radar",
+          "stateTree": "State tree",
+          "findings_twoRedCohort": "Teams after two reds",
+          "lake": "Lady of the Lake",
+          "roles": "Roles & chemistry",
+          "position": "Seats",
+          "findings_discovery": "Auto findings"
+        }
       }
     },
     "r6": {

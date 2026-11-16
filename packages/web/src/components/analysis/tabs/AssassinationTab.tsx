@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import AssassinationCard, { AssassinationSeatTable } from '../AssassinationCard';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
-import { SectionTabs } from '../ui';
+import { MoreDetails, SectionTabs } from '../ui';
 
-type AssassinationView = 'summary' | 'seat' | 'target';
+// 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
+type AssassinationView = 'summary' | 'seat' | 'more';
 
 /**
  * 刺殺：刺殺結算卡 + L143 (刺客目標座位偏好)。
@@ -17,13 +18,13 @@ export default function AssassinationTab(): JSX.Element {
   const items: { id: AssassinationView; label: string }[] = [
     { id: 'summary', label: t(`${k}.summary`) },
     { id: 'seat', label: t(`${k}.seat`) },
-    { id: 'target', label: t(`${k}.target`) },
+    { id: 'more', label: t('analytics.analysis.more.tab') },
   ];
   return (
     <SectionTabs items={items} persistKey="analysis.assassination" ariaLabel={t('analytics.analysis.tabs.assassination')}>
       {(view) => {
         if (view === 'seat') return <AssassinationSeatTable />;
-        if (view === 'target') return <FeatureStudyCard loopId="L143" defaultOpen />;
+        if (view === 'more') return <MoreDetails items={[{ id: 'l143', title: t(`${k}.target`), render: () => <FeatureStudyCard loopId="L143" defaultOpen /> }]} />;
         return <AssassinationCard />;
       }}
     </SectionTabs>

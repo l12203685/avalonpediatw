@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
 import VotingOverview from '../VotingOverview';
-import { SectionTabs } from '../ui';
+import { MoreDetails, SectionTabs } from '../ui';
 
-type VotesView = 'overview' | 'flip';
+// 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
+type VotesView = 'overview' | 'more';
 
 /**
  * 投票。
@@ -17,11 +18,13 @@ export default function VotesTab(): JSX.Element {
   const { t } = useTranslation('common');
   const items: { id: VotesView; label: string }[] = [
     { id: 'overview', label: t('analytics.r7.votes.tabs.overview') },
-    { id: 'flip', label: t('analytics.r7.votes.tabs.flip') },
+    { id: 'more', label: t('analytics.analysis.more.tab') },
   ];
   return (
     <SectionTabs items={items} persistKey="analysis.votes" ariaLabel={t('analytics.analysis.tabs.votes')}>
-      {(view) => (view === 'flip' ? <FeatureStudyCard loopId="L136" defaultOpen /> : <VotingOverview />)}
+      {(view) => (view === 'more'
+        ? <MoreDetails items={[{ id: 'l136', title: t('analytics.r7.votes.tabs.flip'), render: () => <FeatureStudyCard loopId="L136" defaultOpen /> }]} />
+        : <VotingOverview />)}
     </SectionTabs>
   );
 }

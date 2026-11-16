@@ -85,7 +85,7 @@ describe('discovery text for the new data (two reds, decisive votes, all votes)'
   });
 
   it('links to where the numbers live: two-red groups, the decisive board (decisive or all votes, scope)', () => {
-    expect(findingLink(twoRed)).toEqual({ kind: 'twoRedCohort', label: '看數字：陣容強度 › 兩紅派隊分組' });
+    expect(findingLink(twoRed)).toEqual({ kind: 'twoRedCohort', label: '看數字：發現與策略 › 兩紅派隊分組' });
     const dv = finding({ unit: 'decisive', dimension: dim('decisive', 'twoRedState'), metric: met('decisive', 'offYes'), a: { label: '紅方已兩勝', value: 53, n: 432, units: 400 } });
     // 那一頁沒有依「紅方已兩勝」拆：只能看整體的數字
     expect(findingLink(dv)).toEqual({ kind: 'decisiveBoard', scope: 'twoRed', contextOnly: true, label: '看整體數字：數據排行 › 決定性票／關鍵外白內黑（決定性票、兩紅之後）' });

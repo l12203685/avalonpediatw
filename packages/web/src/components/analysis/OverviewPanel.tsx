@@ -1,12 +1,36 @@
-import { Loader, AlertCircle } from 'lucide-react';
+import { Loader, AlertCircle, ArrowRight, Trophy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { AnalysisOverview } from '../../services/api';
 import { useAnalysisOverview, deriveStages } from './useAnalysisOverview';
-import { SectionTabs, type SectionTabItem } from './ui';
 import SummaryStrip from './overview/SummaryStrip';
 import OutcomeGamesBlock from './overview/OutcomeGamesBlock';
-import TheoryRankings, { TheoryRankingPanel, useTheoryRankings, type TheoryKind } from './overview/TheoryRankings';
-import { useMediaQuery } from './overview/useMediaQuery';
+import { rememberSectionTab } from './ui/SectionTabs';
+import { BOARDS_PERSIST_KEY } from './decisive/decisiveLayout';
+import { useGameStore } from '../../store/gameStore';
+
+/**
+ * 總覽右邊原本的理論勝率排行（overview/TheoryRankings，檔案保留）跟戰績排行 › 理論勝率幾乎一樣，2026-11-16
+ * （Edward「數據分析太多太亂」）改成一張連到戰績排行 › 理論勝率的卡片（那裡可以調上榜條件）。
+ */
+function TheoryBoardLink(): JSX.Element {
+  const { t } = useTranslation('common');
+  const go = (): void => {
+    rememberSectionTab(BOARDS_PERSIST_KEY, 'theory');
+    useGameStore.setState({ gameState: 'analytics', statsFocus: null });
+    window.scrollTo({ top: 0 });
+  };
+  return (
+    <button
+      type="button"
+      onClick={go}
+      className="flex w-full items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/50 px-3 py-2.5 text-left hover:border-blue-700"
+      data-testid="overview-theory-link"
+    >
+      <Trophy size={16} className="shrink-0 text-amber-300" />
+      <span className="min-w-0 text-sm text-zinc-300">{t('analytics.analysis.overviewTheoryLink')}</span>
+      <ArrowRight size={14} className="ml-auto shrink-0 text-blue-300" />
+    </button>
+  );
+}
 
 /**
  * 總覽 (2026-10-12 兩段結算改版, docs/stats/two_stage_outcome.md)：
@@ -21,16 +45,13 @@ import { useMediaQuery } from './overview/useMediaQuery';
  *  一屏放得下：
  *  - SummaryStrip：總場次、玩家數、三段結算收成一列 (每段附分母 n，刺殺結算的分母是三藍局)
  *  - OutcomeGamesBlock：(2026-10-28 改) 每位玩家一列四條比例 (遊戲結果切贏輸、任務、刺殺、最終)；可切「表格」
- *  - TheoryRankings：角色理論 (各角色近 10 場、忠臣近 40 場) / 位置理論 (近 100 場) / 整體理論 (生涯 ≥ 250 場)
- *    三個數字表並排；視窗與門檻讀 theoryConfig
- *  手機／平板 (< lg) 改成四個小分頁 (結果與場次、角色理論、位置理論、整體理論)，每頁約一屏。
+ *  - TheoryRankings：角色理論 / 位置理論 / 整體理論三個數字表並排 —— 2026-11-16 拿掉，改成連到戰績排行 › 理論勝率的
+ *    卡片 (TheoryBoardLink；手機原本的四個小分頁一起拿掉)。
  *  schemaVersion 3 的快取 (沒有每人三種結果、位置／整體理論榜) 顯示「下次每日更新後提供」，不畫成 0%。
  */
 export default function OverviewPanel(): JSX.Element {
   const { t } = useTranslation('common');
   const { overview, loading, error } = useAnalysisOverview();
-  // 桌機 (≥ lg，Tailwind 的 1024px) 左右兩塊一屏放完；更窄改成小分頁。
-  const desktop = useMediaQuery('(min-width: 1024px)');
 
   if (loading) {
     return (
@@ -51,45 +72,8 @@ export default function OverviewPanel(): JSX.Element {
   return (
     <div className="space-y-3">
       <SummaryStrip totalGames={overview.totalGames} totalPlayers={overview.totalPlayers} stages={deriveStages(overview)} />
-      {desktop ? (
-        <div className="grid grid-cols-12 gap-3">
-          <div className="col-span-5 min-w-0">
-            <OutcomeGamesBlock overview={overview} />
-          </div>
-          <div className="col-span-7 min-w-0">
-            <TheoryRankings overview={overview} />
-          </div>
-        </div>
-      ) : (
-        <OverviewSubPages overview={overview} />
-      )}
+      <OutcomeGamesBlock overview={overview} />
+      <TheoryBoardLink />
     </div>
-  );
-}
-
-type SubPage = 'outcomes' | TheoryKind;
-
-/**
- * 手機／平板 (< lg)：結果與場次、角色理論、位置理論、整體理論 四個小分頁，一次一個 (每頁約一屏)；
- * 三段結算那一列留在小分頁上面。
- */
-function OverviewSubPages({ overview }: { overview: AnalysisOverview }): JSX.Element {
-  const { t } = useTranslation('common');
-  const info = useTheoryRankings(overview);
-  const items: SectionTabItem<SubPage>[] = [
-    { id: 'outcomes', label: t('analytics.r6.overview.tabs.outcomes') },
-    ...info.rankings.map(r => ({ id: r.kind, label: r.label })),
-  ];
-  return (
-    <SectionTabs
-      items={items}
-      persistKey="analysis.overview.sub"
-      ariaLabel={t('analytics.r6.overview.tabs.label')}
-      stretch
-    >
-      {id => (id === 'outcomes'
-        ? <OutcomeGamesBlock overview={overview} />
-        : <TheoryRankingPanel info={info} kind={id} />)}
-    </SectionTabs>
   );
 }

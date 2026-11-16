@@ -8,7 +8,7 @@ import { PAGE_LABELS, queryFindings, topForPage, EMPTY_DISCOVERY_QUERY } from '.
 
 /**
  * 每個分析分頁下方的「自動發現」（Edward 2026-10-31：「所有數據分析頁面…對上不同維度，都應該要有辦法做到自動發現」）：
- * 跟這頁指標有關、最明顯的幾項差異，「看全部」打開陣容強度的完整清單（已篩這一頁）。
+ * 跟這頁指標有關、最明顯的幾項差異，「看全部」打開「發現與策略」的完整清單（已篩這一頁）。
  */
 export default function DiscoveryBlock({ page, count = 3 }: { page: DiscoveryPage; count?: number }): JSX.Element {
   const state = useDiscovery();

@@ -3,7 +3,7 @@ import { Crown, FlaskConical, Route, Vote } from 'lucide-react';
 import CaptainAnalysis from '../CaptainAnalysis';
 import RoundsAnalysis from '../RoundsAnalysis';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
-import { SectionTabs, type SectionTabItem } from '../ui';
+import { MoreDetails, SectionTabs, type SectionTabItem } from '../ui';
 import { useAnalysisOverview } from '../useAnalysisOverview';
 import { theorySettings } from '../../../services/api';
 
@@ -19,7 +19,8 @@ import { theorySettings } from '../../../services/api';
  * 結果比率一律是三塊條件結果並附 n (teams/OutcomeBlocksTable)；樣本少變淡的門檻讀快取的
  * theoryMinCellGames (overview.theoryConfig，舊快取用產生器預設值)，不寫死。
  */
-type TeamsSection = 'captain' | 'firstVote' | 'progression' | 'study';
+// 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
+type TeamsSection = 'captain' | 'firstVote' | 'progression' | 'more';
 
 export default function TeamsTab(): JSX.Element {
   const { t } = useTranslation('common');
@@ -30,7 +31,7 @@ export default function TeamsTab(): JSX.Element {
     { id: 'captain', label: t('analytics.r6.teams.tabs.captain'), icon: Crown },
     { id: 'firstVote', label: t('analytics.r6.teams.tabs.firstVote'), icon: Vote },
     { id: 'progression', label: t('analytics.r6.teams.tabs.progression'), icon: Route },
-    { id: 'study', label: t('analytics.r6.teams.tabs.study'), icon: FlaskConical },
+    { id: 'more', label: t('analytics.analysis.more.tab'), icon: FlaskConical },
   ];
 
   return (
@@ -44,7 +45,7 @@ export default function TeamsTab(): JSX.Element {
           case 'captain':     return <CaptainAnalysis lowSample={lowSample} />;
           case 'firstVote':   return <RoundsAnalysis section="firstVote" lowSample={lowSample} />;
           case 'progression': return <RoundsAnalysis section="progression" lowSample={lowSample} />;
-          case 'study':       return <FeatureStudyCard loopId="L139" defaultOpen />;
+          case 'more':        return <MoreDetails items={[{ id: 'l139', title: t('analytics.r6.teams.tabs.study'), render: () => <FeatureStudyCard loopId="L139" defaultOpen /> }]} />;
         }
       }}
     </SectionTabs>

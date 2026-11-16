@@ -15,7 +15,7 @@ import { COHORT_MIN_N, K, cohortPct, playerTierKey } from './cohortFormat';
 import { useTwoRedCohort } from './useCohortData';
 
 /**
- * 數據分析 > 陣容強度 >「兩紅派隊分組」（Edward 2026-11-11：每位玩家的提議太少，改看 PR 分組；樣本太小就合併成組，
+ * 數據分析 > 發現與策略 >「兩紅派隊分組」（2026-11-16 從陣容強度搬過來）（Edward 2026-11-11：每位玩家的提議太少，改看 PR 分組；樣本太小就合併成組，
  * 或切 S × PR 九宮格）：玩家雷達「兩紅之後的派隊」同一批提議（@avalon/shared twoRed.ts），依隊長那一局開打前的 PR 分
  * 強者／一般人／新手（＋全體），每一局一張表；下面是選定的分類在（玩家分層 × 桌分層）九宮格裡的比率。
  * 切點（cohortCuts）換了只在主執行緒重數，不用回 Worker。分組的算法在 twoRedTierTables / twoRedCohortGrid（同一個

@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import LakeAnalysis from '../LakeAnalysis';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
-import { SectionTabs } from '../ui';
+import { MoreDetails, SectionTabs } from '../ui';
 
-type LakeTabView = 'faction' | 'holderRole' | 'targetRole' | 'claim' | 'consistency';
+// 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
+type LakeTabView = 'faction' | 'holderRole' | 'targetRole' | 'claim' | 'more';
 
 /**
  * 湖中女神：LakeAnalysis + L141 (宣告可信度) + L142 (言行一致度)。
@@ -22,13 +23,13 @@ export default function LakeTab(): JSX.Element {
     { id: 'holderRole', label: t(`${k}.holderRole`) },
     { id: 'targetRole', label: t(`${k}.targetRole`) },
     { id: 'claim', label: t(`${k}.claim`) },
-    { id: 'consistency', label: t(`${k}.consistency`) },
+    { id: 'more', label: t('analytics.analysis.more.tab') },
   ];
   return (
     <SectionTabs items={items} persistKey="analysis.lake" ariaLabel={t('analytics.analysis.tabs.lake')}>
       {(view) => {
         if (view === 'claim') return <FeatureStudyCard loopId="L141" defaultOpen />;
-        if (view === 'consistency') return <FeatureStudyCard loopId="L142" defaultOpen />;
+        if (view === 'more') return <MoreDetails items={[{ id: 'l142', title: t(`${k}.consistency`), render: () => <FeatureStudyCard loopId="L142" defaultOpen /> }]} />;
         return <LakeAnalysis view={view} lake={lake} onLakeChange={setLake} />;
       }}
     </SectionTabs>

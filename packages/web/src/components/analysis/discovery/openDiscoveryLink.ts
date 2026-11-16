@@ -5,7 +5,7 @@ import { useDiscoveryNav } from './discoveryNav';
 import type { FindingLink } from './discoveryText';
 
 /**
- * 自動發現的卡片「看數字」：兩紅派隊 → 數據分析 › 陣容強度 › 兩紅派隊分組（強者／一般人／新手的表與九宮格）；
+ * 自動發現的卡片「看數字」：兩紅派隊 → 數據分析 › 發現與策略 › 兩紅派隊分組（強者／一般人／新手的表與九宮格）；
  * 關鍵票／全部投票 → 戰績排行 › 關鍵外白／內黑（範圍、「關鍵票／全部投票」與八格對率小分頁先記住，那一頁掛載時讀到；最上面就是分組九宮格）。
  */
 export function openDiscoveryLink(link: FindingLink): void {

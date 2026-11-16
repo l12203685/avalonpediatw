@@ -3,9 +3,10 @@ import SeatHeatmap from '../SeatHeatmap';
 import SeatPositionChart from '../SeatPositionChart';
 import SeatRoleTable from '../SeatRoleTable';
 import SeatOrderAnalysis from '../SeatOrderAnalysis';
-import { SectionTabs, type SectionTabItem } from '../ui';
+import { MoreDetails, SectionTabs, type SectionTabItem } from '../ui';
 
-type PositionPage = 'seats' | 'seatRoles' | 'players' | 'order';
+// 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
+type PositionPage = 'seats' | 'seatRoles' | 'more';
 
 /**
  * 位置：各位置三塊結果 / 位置 × 角色 / 玩家 × 位置 / 派梅娜順序。
@@ -19,8 +20,7 @@ export default function PositionTab(): JSX.Element {
   const items: SectionTabItem<PositionPage>[] = [
     { id: 'seats', label: t('analytics.r6.tabsb.position.tabs.seats') },
     { id: 'seatRoles', label: t('analytics.r6.tabsb.position.tabs.seatRoles') },
-    { id: 'players', label: t('analytics.r6.tabsb.position.tabs.players') },
-    { id: 'order', label: t('analytics.r6.tabsb.position.tabs.order') },
+    { id: 'more', label: t('analytics.analysis.more.tab') },
   ];
   return (
     <SectionTabs
@@ -33,8 +33,12 @@ export default function PositionTab(): JSX.Element {
         switch (page) {
           case 'seats': return <SeatPositionChart />;
           case 'seatRoles': return <SeatRoleTable />;
-          case 'players': return <SeatHeatmap />;
-          default: return <SeatOrderAnalysis />;
+          default: return (
+            <MoreDetails items={[
+              { id: 'players', title: t('analytics.r6.tabsb.position.tabs.players'), render: () => <SeatHeatmap /> },
+              { id: 'order', title: t('analytics.r6.tabsb.position.tabs.order'), render: () => <SeatOrderAnalysis /> },
+            ]} />
+          );
         }
       }}
     </SectionTabs>

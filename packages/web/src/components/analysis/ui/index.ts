@@ -27,3 +27,5 @@ export type { TermProps } from './Term';
 export { STAT_TERMS } from './statTerms';
 export { Takeaway, VerdictText } from './Takeaway';
 export type { StatTermKey } from './statTerms';
+export { default as MoreDetails } from './MoreDetails';
+export type { MoreDetailsItem } from './MoreDetails';

@@ -29,7 +29,7 @@ import { useDiscoveryNav } from '../discovery/discoveryNav';
  * （radar/AbnormalPlayerLine，@avalon/shared abnormalVotes.ts）。
  * (2026-11-11 Edward：個人的樣本太小，看 PR 分組) 每格下面的小字預設改成「跟自己的組比」：這位玩家篩選範圍內最近一局的
  * PR 落在哪一組（強者／一般人／新手，切點 stats/cohortCuts.ts），那一組所有隊長同一格的比率；可以切回全體。沒有 PR 的玩家
- * （暫定、沒評分）只能比全體。「看各組」打開陣容強度 >「兩紅派隊分組」（cohort/TwoRedCohortView）。
+ * （暫定、沒評分）只能比全體。「看各組」打開發現與策略 >「兩紅派隊分組」（cohort/TwoRedCohortView）。
  */
 
 interface Row {
