@@ -1,5 +1,24 @@
 {
   "permissions": {
-    "allow": ["Bash", "Edit", "Write", "WebFetch", "mcp__github"]
+    "allow": [
+      "Bash",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "mcp__github"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/owner_chatlog.sh",
+            "timeout": 150
+          }
+        ]
+      }
+    ]
   }
 }
