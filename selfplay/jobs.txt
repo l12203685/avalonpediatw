@@ -1,0 +1,5 @@
+# 標籤|開關|種子|起始局號|局數
+BASE||423001|0|200
+VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|0|200
+BASE||423101|0|200
+VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|0|200
