@@ -231,7 +231,7 @@ const LINK_RE = /\]\(wiki:([^)\s#]+)(?:#([^)\s]*))?\)(?:〈([^〉]*)〉)?/g;
 
 /** 2026-10-30 全站重寫（內容維持、標點統一全形、論點加層級標記）：比對原文時忽略空白、標點與層級標記。 */
 const loose = (t: string): string =>
-  t.replace(/【[^】]*】/g, '').replace(/[\s,，、。.:：;；!！?？"'「」『』()（）\[\]*`/／＝=＞>]/g, '');
+  t.replace(/【[^】]*】/g, '').replace(/[\s,，、。.:：;；!！?？"'「」『』()（）[\]*`/／＝=＞>]/g, '');
 
 describe('wiki categories and status', () => {
   const all = [...jsonArticles, ...WIKI_ARTICLES];

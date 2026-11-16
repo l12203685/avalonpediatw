@@ -99,7 +99,7 @@ export type IdClaimParse = { ok: true; claim: IdClaim } | { ok: false; error: st
 
 // 控制字元、雙向文字控制（可把顯示順序倒過來）、BOM。
 // eslint-disable-next-line no-control-regex
-const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f‎‏‪-‮⁦-⁩﻿]/g;
+const UNSAFE_CHARS = /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
 
 /** 名字：去掉控制字元、空白縮成一個、頭尾去空白；空的或太長 → ''（不截斷，截斷會變成另一個名字）。 */
 export function cleanClaimName(raw: unknown): string {

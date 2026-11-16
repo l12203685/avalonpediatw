@@ -28,6 +28,8 @@ function cleanSection(raw: string): string | undefined {
     return undefined;
   }
   s = s.trim();
+  // 刻意擋控制字元（網址片段裡不該有）
+  // eslint-disable-next-line no-control-regex
   return s && s.length <= 200 && !/[\s\u0000-\u001f<>"]/.test(s) ? s : undefined;
 }
 

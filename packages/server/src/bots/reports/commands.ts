@@ -63,8 +63,8 @@ export function kindOf(word: string | null | undefined): FeedbackKind | null {
   return KIND_WORDS[w] ?? null;
 }
 
-const REPORT_RE = /^[/／][\s　]*(?:回報|回报)(?=[\s　]|$)([\s\S]*)$/u;
-const CLAIM_RE = /^[/／][\s　]*(?:認領|认领|ID認領|id認領)(?=[\s　]|$)([\s\S]*)$/iu;
+const REPORT_RE = /^[/／][\s\u3000]*(?:回報|回报)(?=[\s\u3000]|$)([\s\S]*)$/u;
+const CLAIM_RE = /^[/／][\s\u3000]*(?:認領|认领|ID認領|id認領)(?=[\s\u3000]|$)([\s\S]*)$/iu;
 
 export interface ReportTextCommand {
   kind: FeedbackKind;
@@ -77,7 +77,7 @@ export function parseReportText(text: string): ReportTextCommand | null {
   const m = REPORT_RE.exec((text ?? '').trim());
   if (!m) return null;
   const body = m[1].trim();
-  const first = /^(\S+)(?:[\s　]+([\s\S]*))?$/u.exec(body);
+  const first = /^(\S+)(?:[\s\u3000]+([\s\S]*))?$/u.exec(body);
   const kind = first ? kindOf(first[1]) : null;
   if (first && kind) return { kind, message: (first[2] ?? '').trim() };
   return { kind: 'bug', message: body };
@@ -91,7 +91,7 @@ export interface ClaimTextCommand {
 /** 名字清單：「…」包住的算一個（可以有空白），其他用空白、、、, 隔開；← < - 之類的箭頭略過。 */
 export function splitClaimNames(body: string): string[] {
   const names: string[] = [];
-  const re = /「([^」]*)」|『([^』]*)』|([^\s　、,，;；]+)/gu;
+  const re = /「([^」]*)」|『([^』]*)』|([^\s\u3000、,，;；]+)/gu;
   let m: RegExpExecArray | null;
   while ((m = re.exec(body)) !== null) {
     const name = (m[1] ?? m[2] ?? m[3] ?? '').trim();
