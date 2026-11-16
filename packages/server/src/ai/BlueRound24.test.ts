@@ -241,7 +241,14 @@ describe('goodReuseExact (round 24, loyal / Percival; Edward 2026-11-03 practice
   });
   it('keeps the leader\'s own lake word: no re-proposal with a seat it declared red, or without the one it declared blue', () => {
     const red = { ...o, lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P9', declaredClaim: 'evil' }] } as unknown as PlayerObservation;
-    expect(goodReuseExactTeam(on(1), red, pipe)).toBe(pipe);
+    expect(goodReuseExactTeam({ ...on(1), goodProvenRedBar: false }, red, pipe)).toBe(pipe);
+    // Owner ruling 2026-11-16 (`goodProvenRedBar`, default on): the seat the leader declared red is proven red for him — the successful
+    // team is re-proposed without it, the rest kept and the open seat refilled (never the declared-red seat).
+    const refilled = goodReuseExactTeam(on(1), red, pipe);
+    if (refilled.type !== 'team_select') throw new Error(refilled.type);
+    expect(refilled.teamIds).toHaveLength(4);
+    expect(refilled.teamIds).toEqual(expect.arrayContaining(['P2', 'P8', 'P10']));
+    expect(refilled.teamIds).not.toContain('P9');
     const blue = { ...o, lakeHistory: [{ round: 2, holderId: 'P1', targetId: 'P5', declaredClaim: 'good' }] } as unknown as PlayerObservation;
     expect(goodReuseExactTeam(on(1), blue, pipe)).toBe(pipe);
   });

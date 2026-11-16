@@ -13,6 +13,21 @@ import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
 import { merlinSignalScore } from './belief/ZoneModel';
 import { r1Scorer, r1SpreadActive } from './BlueRound33';
+import { certaintyFor } from './LogicGates';
+import { provenRedBar, provenReds, provenRedStats } from './ProvenRed';
+
+/**
+ * Every red Merlin knows (Issue #17, Edward 2026-11-16「A>B o，B 有拇指、A 沒拇指，梅林派 A，A 其實就是莫德雷德」): the reds he sees
+ * plus the seats his own certainty layer proves red — e.g. a holder who declared a red he sees as good is red under A0 (a good holder
+ * declares the truth), and with every other red visible that holder is Mordred. The L1* level falls back to L0 (sight only) when A0
+ * leaves no world, so a lying good human never turns a good seat red here.
+ */
+export function merlinKnownReds(obs: PlayerObservation): Set<string> {
+  const known = new Set(obs.knownEvils);
+  if (obs.myRole !== 'merlin') return known;
+  for (const id of certaintyFor(obs).certRed('L1*')) if (id !== obs.myPlayerId) known.add(id);
+  return known;
+}
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -154,13 +169,21 @@ export function merlinReuseNormTeam(
   const seen = new Set(obs.knownEvils);
   if (!last.team.some((id) => seen.has(id))) return null;
   const me = obs.myPlayerId;
-  const team = last.team.includes(me) || (later && last.team.length === size) ? [...last.team] : [me, ...last.team];
-  if (team.length > size) return null;
+  const team0 = last.team.includes(me) || (later && last.team.length === size) ? [...last.team] : [me, ...last.team];
+  if (team0.length > size) return null;
+  // `goodProvenRedBar` (owner ruling 2026-11-16): a player proven red by lake + missions leaves the re-proposed team; the open seat is
+  // refilled the same way as any open seat of the re-proposal.
+  const proven = provenRedBar(tuning, obs);
+  const team = team0.filter((id) => !proven.includes(id));
+  if (team.length < team0.length) provenRedStats.reuseRefill++;
+  // The open seats never take a red Merlin knows — the ones he sees, nor one his own certainty proves (Issue #17: the public gate below
+  // cannot see a lake-proven Mordred, so the fill must not add him).
+  const known = merlinKnownReds(obs);
   if (later) {
-    const full = team.length === size ? team : merlinReuseFill(tuning, obs, team, size, seen);
+    const full = team.length === size ? team : merlinReuseFill(tuning, obs, team, size, known);
     return full && allowed(full) ? full : null;
   }
-  return team.length === size ? team : merlinReuseFill(tuning, obs, team, size, seen);
+  return team.length === size ? team : merlinReuseFill(tuning, obs, team, size, known);
 }
 
 /**
@@ -171,9 +194,14 @@ export function merlinReuseNormTeam(
 export function merlinReuseProposal(obs: PlayerObservation, team: readonly string[]): boolean {
   const round = obs.currentRound ?? 1;
   if (round < 3 || (obs.failCount ?? 0) >= 4 || obs.questResults.filter((r) => r === 'fail').length >= 2) return false;
-  const seen = team.filter((id) => obs.knownEvils.includes(id));
+  // Every red Merlin knows on the team (seen or proven, Issue #17) sat on that successful mission.
+  const known = merlinKnownReds(obs);
+  const seen = team.filter((id) => known.has(id));
+  // Owner ruling 2026-11-16: a player proven red by lake + missions leaves the re-proposal (`goodProvenRedBar`), so the "whole team" is
+  // the successful team without its proven reds.
+  const proven = provenReds(obs);
   return obs.questHistory.some((q) => q.round < round && obs.questResults[q.round - 1] === 'success'
-    && q.team.every((id) => team.includes(id)) && seen.every((id) => q.team.includes(id)));
+    && q.team.every((id) => team.includes(id) || proven.includes(id)) && seen.every((id) => q.team.includes(id)));
 }
 
 /**
@@ -312,7 +340,7 @@ export function merlinReusePublicNow(tuning: Readonly<AgentTuning>, obs: PlayerO
   return best !== null && last.team.every((id) => best!.includes(id));
 }
 
-/** Fill a re-proposed team with the cleanest public picks that are not seen reds. */
+/** Fill a re-proposed team with the cleanest public picks that are not reds Merlin knows (`merlinKnownReds`). */
 function merlinReuseFill(tuning: Readonly<AgentTuning>, obs: PlayerObservation, team: string[], size: number, seen: ReadonlySet<string>): string[] | null {
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
   const pubOpts = { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true };

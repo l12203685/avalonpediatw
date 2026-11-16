@@ -17,6 +17,7 @@ import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { teamReuseGuard } from './TeamReuse';
 import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
+import { provenRedBar, provenRedStats, refillWithoutProven } from './ProvenRed';
 
 export function goodReuseExactTeam(
   tuning: Readonly<AgentTuning>,
@@ -47,6 +48,14 @@ export function goodReuseExactTeam(
   else if (on && mode >= 2 && last.team.length === size) team = [...last.team];
   if (!team) return action;
   if (merlin && team.some((id) => obs.knownEvils.includes(id))) return action;
+  // `goodProvenRedBar` (owner ruling 2026-11-16): a successful team that held a now-proven red is not re-proposed whole — the rest stays,
+  // the open seats take the cleanest seats of the leader's own posterior.
+  const proven = provenRedBar(tuning, obs);
+  if (team.some((id) => proven.includes(id))) {
+    provenRedStats.reuseRefill++;
+    team = refillWithoutProven(tuning, obs, team, proven, allowed);
+    if (!team) return action;
+  }
   const key = [...team].sort().join(',');
   if (obs.voteHistory.some((v) => v.round === round && [...v.team].sort().join(',') === key)) return action;
   if ([...action.teamIds].sort().join(',') === key || !allowed(team)) return action;

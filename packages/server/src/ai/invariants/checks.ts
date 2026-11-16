@@ -20,6 +20,7 @@
 
 import { doomedProposal } from '../MerlinCover';
 import { merlinReuseProposal } from '../MerlinLoyalStyle';
+import { provenReds } from '../ProvenRed';
 import { computePyramidScores } from '../baseline/pyramidScorer';
 import {
   analyzeLakeChain,
@@ -315,6 +316,15 @@ export function checkDecision(
         else if (both(team) && view.l1Empty) L.record('INV-K2', { exempt: L1_EMPTY });
         else L.record('INV-K2', { violated: both(team), unreliable });
         if (human) L.human('INV-K2', both(human) && view.failsRequired(round) === 1);
+      }
+
+      // INV-PR1 (owner ruling 2026-11-16): no player this seat proves red from lakes + missions; no exemption.
+      {
+        const proven = provenReds(obs);
+        if (proven.length > 0) {
+          L.record('INV-PR1', { violated: team.some((id) => proven.includes(id)), unreliable });
+          if (human) L.human('INV-PR1', human.some((id) => proven.includes(id)));
+        }
       }
 
       // INV-M1 (proposals)

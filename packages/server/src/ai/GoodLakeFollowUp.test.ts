@@ -78,6 +78,7 @@ const LANE_BASE: AgentTuning = {
   ...DEFAULT_AGENT_TUNING, teamReuse: false, redR1Teammate: false, beliefCertainFacts: false,
   teamDominanceGate: false, mustFailGate: false, bayesBelief: false, goodCleanVote: 0, goodCleanLead: 0, loyalMerlinRead: 0, merlinLoyalStyle: false, r1ReadPrior: false,
   goodTailVote: 0, goodKeyVote: 0, // round 13: the off-team / key-round posterior votes fire first
+  goodProvenRedBar: false, // owner ruling 2026-11-16 (ProvenRed.ts): bars a seat the holder declared red on its own; off to measure the lane alone
 };
 const PROD_OFF: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: false };
 const PROD_ON: AgentTuning = { ...LANE_BASE, goodVouchFollowUp: true };

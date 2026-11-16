@@ -51,6 +51,7 @@
  *   flag in the reasoning trace.
  */
 
+import { provenRedBar, provenRedStats } from '../ProvenRed';
 import { merlinDoomedRedCover } from '../MerlinCover';
 import { mordredHideR1Card, redCleanApproveVote, redHideEarlyCard, redHideR1Card, redHideReuseCard } from '../RedRound2';
 import { goodCleanVoteReject, goodKeyVoteReject, goodTailVote } from '../GoodCleanVote';
@@ -668,6 +669,18 @@ export interface ForwardDecision {
  * `agentType` reports `'heuristic'` for harness compatibility — forward
  * reasoning is a thinking-mode wrapper, not a new agent class.
  */
+/** Fills of `need` seats from `pool` (cleanest first), combinations in order of their worst seat's rank; capped. */
+function rankedFills39(pool: readonly string[], need: number, cap = 4000): string[][] {
+  const out: string[][] = [];
+  const rec = (start: number, acc: string[]): void => {
+    if (out.length >= cap) return;
+    if (acc.length === need) { out.push([...acc]); return; }
+    for (let i = start; i < pool.length; i++) { acc.push(pool[i]); rec(i + 1, acc); acc.pop(); }
+  };
+  rec(0, []);
+  return out.sort((a, b) => Math.max(...a.map((x) => pool.indexOf(x))) - Math.max(...b.map((x) => pool.indexOf(x))));
+}
+
 export class ForwardAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
@@ -744,7 +757,11 @@ export class ForwardAgent implements AvalonAgent {
     const plan39 = percivalThumbPlan39(this.baseline.tuning, obs);
     // Round 39 `loyalLakePair` (BlueRound39.ts): the seat another holder declared evil last round stays off this round's team.
     // Round 40 `loyalLakePair` bits 2 / 8: the holder of that declaration stays off proposals 1–3 too.
-    const lakeBar = [lakePairBarred(this.baseline.tuning, obs), lakeHolderBarred40(this.baseline.tuning, obs)].filter((x): x is string => x !== null);
+    const lakeBar0 = [lakePairBarred(this.baseline.tuning, obs), lakeHolderBarred40(this.baseline.tuning, obs)].filter((x): x is string => x !== null);
+    // `goodProvenRedBar` (ProvenRed.ts; owner ruling 2026-11-16, Issue #17): a blue seat never sends a player its own certainty proves red
+    // from lakes + missions — every round (R4 included) and every re-pick step (the bar is AND-ed into the leader's gates via `thumbOk39`).
+    const proven = obs.gamePhase === 'team_select' ? provenRedBar(this.baseline.tuning, obs) : [];
+    const lakeBar = [...new Set([...lakeBar0, ...proven])];
     // Each decide call carries its own plan / bar: a nested decide (a red seat's loyal view, Merlin's normal vote) never inherits
     // the outer call's, and the outer call gets its own back afterwards.
     const prevPlan = this.thumbPlan39;
@@ -754,17 +771,32 @@ export class ForwardAgent implements AvalonAgent {
     try {
       const d = this.decideMain(obs);
       if (d.action.type !== 'team_select') return d;
+      if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
+        const hasProven = d.action.teamIds.some((id) => proven.includes(id));
+        if (hasProven) provenRedStats.fired++;
         const kept = d.action.teamIds.filter((id) => !lakeBar.includes(id));
         const need = d.action.teamIds.length - kept.length;
         const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
         const pool = this.cleanestFirst39(obs.allPlayerIds.filter((id) => !kept.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
-        // the cleanest fills first (one seat: in order; two seats: pairs in order of the worse seat's rank)
-        const fills: string[][] = need === 1 ? pool.map((x) => [x]) : need === 2 ? pool.flatMap((y, j) => pool.slice(0, j).map((x) => [x, y])) : [];
+        // The cleanest fills first (one seat: in order; two seats: pairs in order of the worse seat's rank; more: combinations in rank order).
+        const fills: string[][] = need === 1 ? pool.map((x) => [x]) : need === 2 ? pool.flatMap((y, j) => pool.slice(0, j).map((x) => [x, y])) : rankedFills39(pool, need);
+        const label = hasProven ? 'not a player proven red by lake + missions (owner ruling 11/16)' : 'not the lake pair barred this round (rounds 39–40)';
         for (const fill of fills) {
           const team = [...kept, ...fill];
           if (!this.repairGateOk39(obs, team)) continue;
-          return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the lake pair barred this round (rounds 39–40)` } };
+          return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → ${label}` } };
+        }
+        // A proven red stays off even when the leader's own vote rules reject every repaired team: the must-fail / dominated gates still bind.
+        if (hasProven) {
+          for (const fill of fills) {
+            const team = [...kept, ...fill];
+            if (!this.thumbOk39(obs, team)) continue;
+            if (anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) !== null) continue;
+            return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → ${label}` } };
+          }
+          // Too few candidates (rare): the existing choice, counted.
+          provenRedStats.fallback++;
         }
         return d;
       }

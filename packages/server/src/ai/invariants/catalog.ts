@@ -120,6 +120,8 @@ export const INVARIANTS: readonly InvariantSpec[] = [
     rule: 'Percival lakes the seat the same lake policy picks for a loyal holding Percival\'s built-in fact (same observation, role loyal, the thumbs kept as "exactly one is red"; same draws) — the behavioural check of INV-PL (2026-10-26 review)' },
   { id: 'INV-M1', refs: ['M1'], kind: 'hard', status: 'enforced', side: 'good',
     rule: 'Merlin never proposes, and from R3 never approves, a team holding a visible red (R1-R2 votes = policy; a doomed non-forced R1-R2 proposal is exempt: 派拇指躲刺, Edward 2026-10-28; on the team the loyal-style approve is 正常票內白 — exempt, Edward 2026-10-30; an R3+ non-key re-proposal of a successful mission team is exempt: 照派成功的隊算順應局勢, Edward 2026-11-01)' },
+  { id: 'INV-PR1', refs: ['owner 2026-11-16', 'Issue #17'], kind: 'hard', status: 'enforced', side: 'good',
+    rule: 'a blue leader (Merlin, Percival, loyal) never proposes a team holding a player its own certainty layer proves red from lake declarations + mission results (+ its legal view; Merlin\'s sight-only reds excluded; L1* = L0 when the lakes leave no world) — every round, R4 and the forced fifth included, no re-proposal exemption (「任何已經被湖中女神+任務證明的壞人 都不該派」)' },
   { id: 'INV-A1', refs: ['A1'], kind: 'hard', status: 'enforced', side: 'red',
     rule: 'the assassin never targets a known red' },
   { id: 'INV-A2', refs: ['player report (b)', 'human data 第 9.1 節'], kind: 'policy', status: 'enforced', side: 'red', tier: 2,

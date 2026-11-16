@@ -1161,6 +1161,13 @@ export interface AgentTuning {
    * 3 = 第 40 回合：值 2 只從第 2 局起（第 1 局照原本的梅林挑法；第 39 回合值 2 輸掉的藍方勝場在第一個分歧是第 1 局梅林提議的那些局）。
    */
   merlinPublicPipeline: number;
+  /**
+   * 站長 2026-11-16 裁定（Issue #17）：「第4局被湖證明的莫德雷德也不要派 應該說 任何已經被湖中女神+任務證明的壞人 都不該派」。
+   * 藍方（梅林、派西、忠臣）的每一次派隊、每一局（含第 4 局一個紅出不了失敗、含照派成功的隊），隊上都不放「這個座位自己的確定性層
+   * 用湖中宣告＋任務結果（＋自己合法的視野：梅林的視野、派西的拇指）證明是紅」的人（`ProvenRed.ts`）。梅林只靠視野看到、沒有被湖／任務
+   * 證明的紅照原本的規則。湖的宣告沒有一致的世界時（真人好人說謊）退回 L0，不從湖推。排除後湊不滿一隊時照原本的選擇（計數）。true = 開（預設）。
+   */
+  goodProvenRedBar: boolean;
   /** 第 38 回合（檢查表 ML-03）：梅林在沒有看得到的紅的隊裡挑的時候，不再加上「看得到的紅坐在哪裡」的切區間分數（只照公開視角的乾淨機率）；沒有任何藍方讀這個分數。 */
   merlinPublicTieBreak: boolean;
   /**
@@ -1517,6 +1524,7 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodBayesR4Kept',
   'goodBayesFsReuse',
   'merlinPublicPipeline',
+  'goodProvenRedBar',
   'merlinPublicTieBreak',
   'beliefPendingProposal',
   'goodEarlyVote',
@@ -1745,6 +1753,7 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodBayesR4Kept: 0,
   goodBayesFsReuse: 0,
   merlinPublicPipeline: 0,
+  goodProvenRedBar: false,
   merlinPublicTieBreak: false,
   beliefPendingProposal: false,
   goodEarlyVote: 0,
@@ -2121,6 +2130,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodBayesR4Kept: 1,
   goodBayesFsReuse: 0,
   merlinPublicPipeline: 0,
+  goodProvenRedBar: true,
   merlinPublicTieBreak: false,
   beliefPendingProposal: false,
   goodEarlyVote: 0,
@@ -2349,6 +2359,7 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodBayesR4Kept: 'AVALON_TUNING_GOOD_BAYES_R4_KEPT',
   goodBayesFsReuse: 'AVALON_TUNING_GOOD_BAYES_FS_REUSE',
   merlinPublicPipeline: 'AVALON_TUNING_MERLIN_PUBLIC_PIPELINE',
+  goodProvenRedBar: 'AVALON_TUNING_GOOD_PROVEN_RED_BAR',
   merlinPublicTieBreak: 'AVALON_TUNING_MERLIN_PUBLIC_TIE_BREAK',
   beliefPendingProposal: 'AVALON_TUNING_BELIEF_PENDING_PROPOSAL',
   goodEarlyVote: 'AVALON_TUNING_GOOD_EARLY_VOTE',
