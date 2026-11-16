@@ -1,5 +1,7 @@
 # AvalonPediaTW — ChatGPT × Claude 協作交接／排程執行 Prompt
 
+> **2026-11-16 起由 `docs/ai/collaboration.md`（Claude × ChatGPT × Gemini 三方）取代**；本文保留作歷史與 ChatGPT 排程的詳細版，衝突時以 collaboration.md 為準。
+
 > 2026-11-16 (Asia/Taipei)。此文件是跨 AI 協作的作業規範，不是某一次執行的最新狀態；每輪先讀 GitHub。  
 > Repository: https://github.com/l12203685/avalonpediatw  
 > Website: https://avalon-game-platform.web.app/  
