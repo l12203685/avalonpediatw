@@ -57,7 +57,8 @@ import {
 
 const require = createRequire(import.meta.url);
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const { chromium } = require('playwright') as { chromium: { launch(): Promise<any> } };
+// playwright 只在真的開瀏覽器時才載入：測試只 import 這個檔的純函式（CI 的 server 測試沒有裝 playwright）
+const chromium = (): { launch(): Promise<any> } => (require('playwright') as { chromium: { launch(): Promise<any> } }).chromium;
 type Page = any;
 type Browser = any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -952,7 +953,7 @@ async function resume(browser: Browser): Promise<number> {
 
 async function main(): Promise<void> {
   if (MAX_GAMES <= 0) { log('局數 0，不打'); return; }
-  const browser = await chromium.launch();
+  const browser = await chromium().launch();
   const deadline = Date.now() + HOURS * 3600_000;
   try {
     if (MODE === 'private-test') await privateTest(browser);
