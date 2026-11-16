@@ -192,11 +192,9 @@ describe('M1 smoke: 7 concurrent socket clients complete a full Avalon game', ()
       clients[i].socket.emit('game:join-room', roomId);
     }
 
+    // 等到每個人都收到最後一位加入的廣播（只看房主會跟其他人收到的時間差打架）
     await waitFor(
-      () => {
-        const r = host.latestState;
-        return r && Object.keys(r.players).length === PLAYER_COUNT ? r : null;
-      },
+      () => clients.every((c) => c.latestState && Object.keys(c.latestState.players).length === PLAYER_COUNT) || null,
       { label: 'all 7 players in lobby', timeoutMs: 6000 }
     );
 

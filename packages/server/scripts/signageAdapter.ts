@@ -214,12 +214,27 @@ export function lakeHistoryFromSnap(s: Snap): LakePublicRecord[] {
 }
 
 /** 自己湖到的結果：被湖的人在自己的畫面上翻成 good／bad。 */
+/**
+ * 湖到的人在自己畫面上的標記 → 陣營。一般翻成 'good'／'bad'；但本來就看得到身分的人（紅方湖隊友時隊友顯示
+ * 「莫甘娜」「刺客」等角色名、梅林看到的紅）畫面不一定改成 good／bad，所以角色名也照陣營認
+ * （Issue #16：紅方湖隊友時讀不到結果，宣告那一步一直開著，擋住後面的投票，整桌卡住）。
+ * 看不出陣營的標記（'unknown'、派西的「梅莫」）回傳 null。
+ */
+export function lakeSideOf(mark: string | undefined): 'good' | 'evil' | null {
+  if (!mark) return null;
+  if (mark === 'good') return 'good';
+  if (mark === 'bad') return 'evil';
+  const r = roleOf(mark);
+  if (!r) return null;
+  return EVIL_ROLES.has(r) ? 'evil' : 'good';
+}
+
 export function myLakeFromSnap(s: Snap, prev: readonly PrivateLakeResult[] = []): PrivateLakeResult[] {
   const out = [...prev];
   s.lake_result.forEach((l, i) => {
     if (l.from !== s.myself.set || l.to === null || l.to === undefined) return;
     const u = s.users.find((x) => x.set === l.to);
-    const r = u?.role === 'good' ? 'good' : u?.role === 'bad' ? 'evil' : null;
+    const r = lakeSideOf(u?.role);
     if (r && !out.some((m) => m.round === lakeRound(i))) out.push({ round: lakeRound(i), targetId: sid(l.to), result: r });
   });
   return out;
@@ -267,13 +282,25 @@ export function buildObservation(
 export type Decision = 'team' | 'vote' | 'mission' | 'lakeTarget' | 'lakeDeclare' | 'assassinate' | 'verify';
 
 /** 依 myself 的開關判斷現在要做的決定；沒有要做的事時 null。 */
-export function pendingDecision(s: Snap): Decision | null {
+export function pendingDecision(s: Snap, skip: ReadonlySet<Decision> = NO_SKIP): Decision | null {
   if (!s.gaming || s.status === ENDED) return null;
   // 湖的宣告不擋遊戲進行（練習台在下一輪派票、投票時也能按），內建機器人動作很快，所以排在前面先做
   for (const d of ['lakeTarget', 'assassinate', 'lakeDeclare', 'team', 'vote', 'mission', 'verify'] as const) {
-    if (decisionOpen(s, d)) return d;
+    if (!skip.has(d) && decisionOpen(s, d)) return d;
   }
   return null;
+}
+const NO_SKIP: ReadonlySet<Decision> = new Set();
+
+/**
+ * 這個座位現在要做的決定。湖的宣告排在最前面，但「已經決定不宣告」或「還讀不到自己湖到的結果」時不能擋住後面的
+ * 派隊、投票、出任務：練習台的宣告按鈕會一直開著（Issue #16：紅方湖隊友讀不到結果，一直停在宣告，沒有投票，整桌卡住）。
+ * `declined`：已經決定不宣告的湖（lake_result 的 index）；`myLake`：自己湖到的結果。
+ */
+export function seatDecision(s: Snap, myLake: readonly PrivateLakeResult[], declined: ReadonlySet<number>): Decision | null {
+  const i = pendingLakeDeclaration(s);
+  const blocked = i !== null && (declined.has(i) || !myLake.some((m) => m.round === lakeRound(i)));
+  return pendingDecision(s, blocked ? new Set<Decision>(['lakeDeclare']) : NO_SKIP);
 }
 
 /** 這個決定現在還能做嗎（等 1–3 秒再按之前重新確認用）。 */

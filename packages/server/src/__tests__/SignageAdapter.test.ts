@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   NO_BOT_RE, buildObservation, lobbyRolesLoose, evilRolesAtAssassination, historyFromRecord, lakeHistoryFromSnap, lobbyCandidate,
-  lobbyRolesOf, missionCard, myLakeFromSnap, nextTeamAction, pendingDecision, pendingLakeDeclaration, readKnowledge,
-  roleOf, seatsCandidate, shortRooms, unsupportedReason, validLakeTargets,
+  lakeSideOf, lobbyRolesOf, missionCard, myLakeFromSnap, nextTeamAction, pendingDecision, pendingLakeDeclaration, readKnowledge,
+  roleOf, seatDecision, seatsCandidate, shortRooms, unsupportedReason, validLakeTargets,
   type SMyself, type SUser, type Snap,
 } from '../../scripts/signageAdapter';
 
@@ -221,5 +221,43 @@ describe('中途重連時的夜晚資訊', () => {
   });
   it('派西維爾只取大拇指', () => {
     expect(readKnowledge(snap(3, '派西維爾', true, { 4: '梅莫', 8: '梅莫', 6: 'bad' }), LOBBY).knownWizards).toEqual(['S4', 'S8']);
+  });
+});
+
+describe('Issue #16：湖的宣告不能擋住投票', () => {
+  // 11/13 指定房間第 3 局：一個百科AI 少投一次票、整桌停 15 分鐘。紅方湖隊友時，隊友在自己畫面上顯示角色名（莫甘娜），
+  // 不是 good／bad，讀不到湖的結果；宣告那一步排在投票前面而且按鈕一直開著，所以一直停在宣告、沒有投票。
+  const lakeOpen = (my: Partial<SMyself>) =>
+    snap(2, '刺客', false, { 5: '莫甘娜', 7: '莫德雷德' }, { missions: [true, false], lake_result: [{ from: 2, to: 5, result: null }] },
+      { can_select_lake_result: true, ...my });
+
+  it('紅方湖隊友：隊友顯示角色名也讀得到結果（紅）', () => {
+    expect(myLakeFromSnap(lakeOpen({}))).toEqual([{ round: 2, targetId: 'S5', result: 'evil' }]);
+    expect(lakeSideOf('莫甘娜')).toBe('evil');
+    expect(lakeSideOf('梅林')).toBe('good');
+    expect(lakeSideOf('雜魚2')).toBe('good');
+    expect(lakeSideOf('bad')).toBe('evil');
+    expect(lakeSideOf('梅莫')).toBeNull();
+    expect(lakeSideOf('unknown')).toBeNull();
+  });
+
+  it('讀不到結果時不停在宣告：輪到投票就投票', () => {
+    const s = lakeOpen({ can_vote: true });
+    expect(pendingDecision(s)).toBe('lakeDeclare'); // 不看座位狀態時宣告排最前面
+    expect(seatDecision(s, [], new Set())).toBe('vote');
+  });
+
+  it('讀得到結果時照常先宣告；決定不宣告之後換投票', () => {
+    const s = lakeOpen({ can_vote: true });
+    const seen = myLakeFromSnap(s);
+    expect(seatDecision(s, seen, new Set())).toBe('lakeDeclare');
+    expect(seatDecision(s, seen, new Set([0]))).toBe('vote');
+    expect(seatDecision(lakeOpen({ can_to_mission: true }), seen, new Set([0]))).toBe('mission');
+  });
+
+  it('沒有待宣告的湖時和原本一樣', () => {
+    const s = snap(1, '雜魚1', true, {}, {}, { can_vote: true });
+    expect(seatDecision(s, [], new Set())).toBe('vote');
+    expect(seatDecision(snap(1, '雜魚1', true, {}, {}, { can_vote: true, vote_bag: true }), [], new Set())).toBeNull();
   });
 });

@@ -46,7 +46,7 @@ import { postAiGameTrace } from '../src/services/aiGameForum';
 import type { Role } from '@avalon/shared';
 import {
   ENDED, buildObservation, decisionOpen, evilRolesAtAssassination, historyFromRecord, lobbyCandidate, lobbyRolesLoose, missionCard,
-  myLakeFromSnap, nextTeamAction, pendingDecision, pendingLakeDeclaration, readKnowledge, seatsCandidate, setOf,
+  myLakeFromSnap, nextTeamAction, pendingLakeDeclaration, readKnowledge, seatDecision, seatsCandidate, setOf,
   shortRooms, sid, unsupportedReason, validLakeTargets,
   type Decision, type Knowledge, type LobbyRoom, type PlatformRecord, type SiteAction, type Snap,
 } from './signageAdapter';
@@ -354,6 +354,8 @@ class Seat {
   k!: Knowledge;
   lobbyRoles!: Role[];
   myLake: PrivateLakeResult[] = [];
+  /** 已經決定不宣告的湖（lake_result 的 index）：不再擋住後面的決定（Issue #16）。 */
+  declinedLakes = new Set<number>();
   hist: { votes: VoteRecord[]; quests: QuestRecord[] } = { votes: [], quests: [] };
   plan: number[] | null = null;
   planKey = '';
@@ -391,7 +393,7 @@ class Seat {
   start(s: Snap): void {
     this.lobbyRoles = lobbyRolesLoose(s.game_roles, s.users.length);
     this.k = readKnowledge(s, this.lobbyRoles);
-    this.myLake = []; this.hist = { votes: [], quests: [] }; this.plan = null; this.planKey = ''; this.started = true; this.startedAt = Date.now();
+    this.myLake = []; this.declinedLakes.clear(); this.hist = { votes: [], quests: [] }; this.plan = null; this.planKey = ''; this.started = true; this.startedAt = Date.now();
     this.agent.onGameStart(this.obs(s, 'team_select'));
     this.collector = traceHub.join(roomKey(this.label), this.label);
     this.collector.setSeat(this.label, { seat: s.myself.set, nick: String(s.myself.name ?? ''), roleName: String(s.myself.role ?? ''), role: this.k.role, team: this.k.team });
@@ -440,6 +442,11 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
   let lastKey = '';
   let lastFlags = '';
   let pendingSince = 0; let pendingKey = '';
+  const lakeUnseenLogged = new Set<number>();
+  const lakeUnseenSince = new Map<number, number>();
+  const lakeRawLogged = new Set<number>();
+  let stuckLogged = '';
+  let lastPress = '';
   const done = new Map<string, number>(); // 決定的 key → 做完的時間
   let failures = 0;
   const t0 = Date.now();
@@ -455,7 +462,7 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
     if (key !== lastKey) { lastKey = key; lastChange = Date.now(); }
     if (PRIVATE_LOG) {
       const m = s.myself;
-      const flags = `${s.status} tip=${m.action_tip} tick=${m.tick ?? ''} ${['can_dispatch_ticks', 'can_start_vote', 'can_vote', 'can_to_mission', 'can_lake_to', 'can_select_lake_result', 'can_assassin_to', 'can_verify'].filter((f) => (m as unknown as Record<string, boolean>)[f]).join(',')} free=${s.free_ticks} lake=${JSON.stringify(s.lake_result)} d=${pendingDecision(s) ?? '-'}`;
+      const flags = `${s.status} tip=${m.action_tip} tick=${m.tick ?? ''} ${['can_dispatch_ticks', 'can_start_vote', 'can_vote', 'can_to_mission', 'can_lake_to', 'can_select_lake_result', 'can_assassin_to', 'can_verify'].filter((f) => (m as unknown as Record<string, boolean>)[f]).join(',')} free=${s.free_ticks} lake=${JSON.stringify(s.lake_result)} d=${seatDecision(s, seat.myLake, seat.declinedLakes) ?? '-'}`;
       if (flags !== lastFlags) { lastFlags = flags; plog(`${room} 畫面 ${flags}`); }
     }
     // 「開眼階段」（約 10 秒）身分標記可能還沒全到，過了才讀夜晚資訊
@@ -482,7 +489,22 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
     if (seat.k.mismatch && Date.now() - seat.startedAt < 60_000) seat.refresh(s);
     if (seat.k.mismatch && Date.now() - seat.startedAt < 6000) { await sleep(500); continue; } // 先等標記到齊再做決定
     myLakeFromSnap(s, seat.myLake).forEach((m) => { if (!seat.myLake.some((x) => x.round === m.round)) { seat.myLake.push(m); plog(`${room} 湖結果 ${m.targetId} ${m.result}`); } });
-    const d = pendingDecision(s);
+    const d = seatDecision(s, seat.myLake, seat.declinedLakes);
+    // 讀不到自己湖到的結果時不宣告、也不擋後面的決定（Issue #16）；公開 log 只寫狀態，不寫座位與身分
+    const unseen = pendingLakeDeclaration(s);
+    if (unseen !== null && !seat.declinedLakes.has(unseen) && !seat.myLake.some((m) => m.round === unseen + 2)) {
+      const since = lakeUnseenSince.get(unseen) ?? Date.now();
+      lakeUnseenSince.set(unseen, since);
+      if (!lakeRawLogged.has(unseen)) {
+        lakeRawLogged.add(unseen);
+        const to = s.lake_result[unseen]?.to;
+        plog(`${room} 湖結果還讀不到：對象 ${to ?? '-'} 標記 ${s.users.find((u) => u.set === to)?.role ?? '-'}`);
+      }
+      if (Date.now() - since > 20_000 && !lakeUnseenLogged.has(unseen)) {
+        lakeUnseenLogged.add(unseen);
+        log(`${room} 20 秒讀不到自己湖到的結果，先不宣告（不擋後面的投票）`);
+      }
+    }
     if (!d) { pendingKey = ''; await sleep(POLL_MS); continue; }
     const crown = s.users.find((u) => u.crown)?.set ?? 0;
     const dkey = `${d}|${s.missions.length}|${crown}|${s.lake_result.filter((l) => l.to !== null).length}`;
@@ -502,11 +524,21 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
       const a = await decide(p, seat, s, d, dkey, fallback);
       if (a) {
         const r = await press(p, a);
+        lastPress = r;
+        if (r !== 'ok') plog(`${room} 按鈕 ${a.kind} 回 ${r}`);
         if (r === 'ok') { count(a.kind); seat.commit(dkey); if (d !== 'team') done.set(dkey, Date.now()); }
         if (d === 'team') await sleep(120);
       } else if (d === 'lakeDeclare' || d === 'verify') {
         seat.commit(dkey); // 不宣告（不按任何按鈕）也是一個決定
         done.set(dkey, Date.now());
+        // 不宣告之後宣告按鈕還是開著：記下來，下一輪起不再停在這裡，後面的投票照常做（Issue #16）
+        const i = d === 'lakeDeclare' ? pendingLakeDeclaration(s) : null;
+        if (i !== null) seat.declinedLakes.add(i);
+      }
+      // 同一個決定 60 秒還沒做成：公開 log 記一次狀態（不寫座位、身分），方便下次查卡住的原因
+      if (Date.now() - pendingSince > 60_000 && stuckLogged !== dkey) {
+        stuckLogged = dkey;
+        log(`${room} 同一個決定 60 秒還沒完成（${d}，上一次按鈕結果 ${lastPress || '無'}）`);
       }
     } catch (err) {
       log(`${room} 動作失敗（${d}）：${(err instanceof Error ? err.message : String(err)).slice(0, 120)}`);
