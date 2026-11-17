@@ -129,29 +129,6 @@ export const THREADS_START_DATE = '2026-11-17';
  */
 export const THREADS_POSTED: Readonly<Record<string, string>> = { '2026-11-17': '36AKW-2-5' };
 
-/**
- * 站長自己選局時，這一天可以選的池子（照主題）：週三、週五先列能連著打的（選了隔天自動接同一局），
- * 再列不能連著的；週四、週六列的是不接前一天時的獨立題（選了就不延續前一天）。
- */
-export function poolsForWeekday(weekday: number): readonly PoolName[] {
-  switch (((weekday % 7) + 7) % 7) {
-    case 1:
-      return ['assassin'];
-    case 2:
-      return ['percival'];
-    case 3:
-      return ['wedThu', 'wed'];
-    case 4:
-      return ['thu'];
-    case 5:
-      return ['friSat', 'fri'];
-    case 6:
-      return ['sat'];
-    default:
-      return ['final'];
-  }
-}
-
 /** 今天的台北日期。 */
 export function taipeiToday(now: number = Date.now()): string {
   return new Date(now + 8 * 3_600_000).toISOString().slice(0, 10);

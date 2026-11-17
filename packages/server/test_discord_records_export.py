@@ -9,6 +9,7 @@ posts with made-up names (玩家A … 玩家J).
 from __future__ import annotations
 
 import datetime as dt
+from collections import Counter
 import io
 import json
 import tempfile
@@ -132,8 +133,9 @@ class BuildTest(unittest.TestCase):
         discord = FakeDiscord()
         doc, status = build(discord)
         ids = [p["id"] for p in doc["posts"]]
-        self.assertNotIn(SIM.id, ids)  # 模擬
+        self.assertNotIn(SIM.id, ids)  # forum 模擬 = 百科AI games: counted separately, not listed
         self.assertNotIn(SIM.id, discord.fetched)  # ... not even read
+        self.assertEqual(status["simulation"], 1)
         self.assertNotIn(CHAT.id, ids)  # a discussion post, not a record
         self.assertNotIn(EMPTY_PLAIN.id, ids)  # empty and nothing says it is a record
         broken = next(p for p in doc["posts"] if p["id"] == BROKEN.id)
@@ -145,7 +147,6 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(empty["problem"], dri.short_explanation(dri.SKIP_EMPTY))
         self.assertNotIn("problemLine", empty)
         self.assertEqual(empty["date"], "2026-10-23")
-        self.assertEqual(status["simulation"], 1)
         self.assertEqual(status["not a record"], 2)
         self.assertEqual(doc["counts"], {"posts": 3, "games": 1, "unreadable": 2})
 
@@ -195,16 +196,16 @@ class ShapeCheckTest(unittest.TestCase):
         doc["posts"][1]["text"] = "the whole starter message"
         self.assertTrue(has(dpe.records_problems(doc), "post keys"))
         doc, _ = build()
-        doc["posts"][0]["problem"] = "第 14 行寫了 hello"
+        next(p for p in doc["posts"] if p["id"] == BROKEN.id)["problem"] = "第 14 行寫了 hello"
         self.assertTrue(has(dpe.records_problems(doc), "problem text"))
         doc, _ = build()
-        doc["posts"][1]["game"]["names"][2] = "玩家C\n下一行"
+        next(p for p in doc["posts"] if p["id"] == GAME.id)["game"]["names"][2] = "玩家C\n下一行"
         self.assertTrue(has(dpe.records_problems(doc), "names shape"))
         doc, _ = build()
-        doc["posts"][1]["game"]["rounds"][0]["proposals"][0]["votes"] = ["好隊"]
+        next(p for p in doc["posts"] if p["id"] == GAME.id)["game"]["rounds"][0]["proposals"][0]["votes"] = ["好隊"]
         self.assertTrue(has(dpe.records_problems(doc), "proposal shape"))
         doc, _ = build()
-        doc["posts"][1]["game"]["comment"] = "覆盤心得"
+        next(p for p in doc["posts"] if p["id"] == GAME.id)["game"]["comment"] = "覆盤心得"
         self.assertTrue(has(dpe.records_problems(doc), "game keys"))
 
     def test_order_counts_and_simulations_fail(self) -> None:
@@ -215,7 +216,10 @@ class ShapeCheckTest(unittest.TestCase):
         doc["counts"]["games"] = 3
         self.assertTrue(has(dpe.records_problems(doc), "counts"))
         doc, _ = build()
-        doc["posts"][1]["tags"].append("模擬")
+        next(p for p in doc["posts"] if p["id"] == GAME.id)["tags"].append("模擬")
+        self.assertTrue(has(dpe.records_problems(doc), "simulation post"))
+        doc, _ = build()
+        next(p for p in doc["posts"] if p["id"] == GAME.id)["sim"] = True  # a Discord post is never a 模擬 entry
         self.assertTrue(has(dpe.records_problems(doc), "simulation post"))
 
 
@@ -251,7 +255,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(rc, 0, log)
         doc = json.loads(self.out.read_text(encoding="utf-8"))
         self.assertEqual(doc["counts"]["posts"], 3)
-        self.assertIn("已寫入（0 → 3 篇）", log)
+        self.assertIn("已寫入（0 → 3 局）", log)
         for secret in ("玩家", "一般場", "直播局", "token-marker", "hello"):
             self.assertNotIn(secret, log)
         rc, log = self.run_main(FakeDiscord())
@@ -389,7 +393,7 @@ class AnnotateTest(unittest.TestCase):
         self.assertTrue(has(dpe.records_problems(doc), "mistakes shape"))
         doc = self.doc()
         next(p for p in doc["posts"] if p["id"] == BROKEN.id)["mistakes"] = [[gc.MISTAKE_SERIOUS, 0, ""]]
-        self.assertTrue(has(dpe.records_problems(doc), "annotation on an unreadable post"))
+        self.assertTrue(has(dpe.records_problems(doc), "annotation on an unreadable or 模擬 post"))
 
     def test_site_knows_every_tag(self) -> None:
         site = (ROOT / "packages" / "web" / "src" / "utils" / "records.ts").read_text(encoding="utf-8")
@@ -416,6 +420,157 @@ class AnnotateTest(unittest.TestCase):
             self.assertNotIn(secret, log.getvalue())
 
 
+# ---------------------------------------------------------------------------
+# one database: Discord + the sheet's 牌譜 and 模擬瓦 tabs (Edward 2026-11-16)
+# ---------------------------------------------------------------------------
+
+import records_merge as rm  # noqa: E402
+
+SHEET_ONLY_RECORD = RECORD.replace("147\n260", "148\n260")  # a different game (first team differs)
+
+
+def sheet_doc() -> dict:
+    """Three 牌譜-tab games: 101 = GAME's record (same fingerprint), 102 = another game, 103 = broken."""
+    def row(gid: str, text: str, missions=("ooo", "ooox", "oooo", "ooooo"), date: str = "2026-10-20") -> list[str]:
+        r = tgc.log_row(gid, "936758", "三藍活", NAMES, date=date, text=text, kill="3", category="線瓦")
+        for column, cell in zip(tgc.ROUND_RESULT_COLS, list(missions) + [""] * 5):
+            r[tgc.LOG_HEADERS.index(column)] = cell
+        r[tgc.LOG_HEADERS.index("首湖")], r[tgc.LOG_HEADERS.index("二湖")] = "0>8", "8>4"
+        return r
+
+    rows = [tgc.LOG_HEADERS, row("101", RECORD), row("102", SHEET_ONLY_RECORD, date="2026-10-24"),
+            row("103", RECORD.replace("ooox\n", "oooxo\n"), missions=("ooo", "oooxo", "oooo", "ooooo"))]
+    return gc.encode_games_dataset(tgc.run_like_games(rows, as_of=dt.date(2026, 10, 31)))
+
+
+SIM_ROWS = [
+    {"流水號": "1", "文字記錄": "158\n458 2+\n130\n467\n359\nooo", "配置": "840216", "刺殺": "",
+     "日期時間": "2023-06-27T00:00:00", **{f"玩{s}": n for s, n in zip("12345", NAMES)}},
+    {"流水號": "2", "文字記錄": "147\n280\n134\n469\n456\nooo\n1357\n2468", "配置": "718942",
+     "日期時間": "2023/6/28"},  # stops mid-round 2
+    {"流水號": "3", "文字記錄": "168\n578 2+\n369\n569\n156\n589\noox", "配置": "801467"},  # 6 proposals
+    {"流水號": "", "文字記錄": ""},  # an empty row at the bottom of the tab
+]
+
+
+class MergeTest(unittest.TestCase):
+    def merged(self) -> tuple[dict, Counter]:
+        doc, _ = build()
+        return doc, dpe.merge_sheet(doc, sheet_doc(), SIM_ROWS)
+
+    def test_sheet_game_converts_like_the_discord_parse(self) -> None:
+        doc, _ = build()
+        dc_game = next(p for p in doc["posts"] if p["id"] == GAME.id)["game"]
+        entries, counts = rm.sheet_entries(sheet_doc())
+        s101 = next(e for e in entries if e["id"] == "S101")
+        self.assertEqual(s101["game"]["rounds"], dc_game["rounds"])  # 7+, 5- 39+ marks from the approvers
+        self.assertEqual(s101["game"]["lakes"], dc_game["lakes"])
+        self.assertEqual((s101["game"]["outcome"], s101["game"]["assassination"]), (gc.OUTCOME_BLUE_ALIVE, "3"))
+        self.assertEqual(s101["game"]["names"], NAMES)
+        self.assertEqual(rm.game_fingerprint(s101["game"]), dpe.entry_fingerprint(dc_game))
+        s103 = next(e for e in entries if e["id"] == "S103")
+        self.assertIsNone(s103["game"])
+        self.assertEqual(s103["problem"], rm.SHEET_PROBLEM)
+        self.assertEqual(counts["sheet"], 2)
+
+    def test_same_game_is_listed_once_and_ids_are_stable(self) -> None:
+        doc, counts = self.merged()
+        ids = [p["id"] for p in doc["posts"]]
+        self.assertNotIn("S101", ids)  # = GAME: one entry, the Discord post
+        self.assertEqual(next(p for p in doc["posts"] if p["id"] == GAME.id)["src"], rm.SRC_BOTH)
+        self.assertEqual(counts["merged with a Discord post"], 1)
+        s102 = next(p for p in doc["posts"] if p["id"] == "S102")
+        self.assertEqual((s102["src"], s102["created"], s102["date"], s102["tags"]), (rm.SRC_SHEET, "", "2026-10-24", ["線瓦"]))
+        self.assertIn("S103", ids)  # broken sheet rows still get an entry
+        self.assertEqual(dpe.records_problems(doc), [])
+        again, _ = self.merged()
+        self.assertEqual(dpe.dump_records(again), dpe.dump_records(doc))  # same ids and order on a re-run
+        # newest first by record date, Discord and sheet together
+        self.assertEqual(ids[:3], [BROKEN.id, GAME.id, "S102"])
+
+    def test_simulation_rows(self) -> None:
+        doc, counts = self.merged()
+        m1 = next(p for p in doc["posts"] if p["id"] == "M1")
+        self.assertEqual((m1["sim"], m1["tags"], m1["date"], m1["game"]["outcome"]), (True, ["模擬"], "2023-06-27", ""))
+        self.assertEqual(m1["game"]["names"][:6], NAMES[:5] + [""])
+        self.assertEqual(m1["game"]["rounds"][0]["proposals"][1], {"team": "458", "votes": ["2+"]})
+        m2 = next(p for p in doc["posts"] if p["id"] == "M2")
+        self.assertEqual(m2["game"]["rounds"][1], {"proposals": [{"team": "1357", "votes": []}, {"team": "2468", "votes": []}], "mission": ""})
+        m3 = next(p for p in doc["posts"] if p["id"] == "M3")
+        self.assertEqual(m3["problem"], rm.SIM_PROBLEM)
+        self.assertEqual((counts["sim"], counts["sim unreadable"]), (2, 1))
+        self.assertNotIn("lineup", m1)
+        self.assertEqual(dpe.records_problems(doc), [])
+        m1["game"]["outcome"] = ""
+        doc_bad = json.loads(json.dumps(doc))
+        next(p for p in doc_bad["posts"] if p["id"] == "S102")["game"]["outcome"] = ""  # only 模擬 may be unfinished
+        self.assertTrue(has(dpe.records_problems(doc_bad), "outcome value"))
+
+    def test_simulation_never_merges_into_a_real_game(self) -> None:
+        # 模擬畢竟只是模擬 (Edward 2026-11-16): same fingerprint, different type -> two entries
+        real = post(25, 23, "1025一般場6", ("三藍躲刺", "線瓦"))
+        doc, _ = build(FakeDiscord([real], {real.id: body()}))
+        sims = [{"流水號": "9", "文字記錄": RECORD, "配置": "936758", "刺殺": "3", "日期時間": "2026-10-25"}]
+        counts = dpe.merge_sheet(doc, None, sims)
+        self.assertEqual(counts["merged with a Discord post"], 0)
+        dc, m9 = (next(p for p in doc["posts"] if p["id"] == i) for i in (real.id, "M9"))
+        self.assertNotIn("src", dc)
+        self.assertNotIn("sim", dc)
+        self.assertIs(m9["sim"], True)
+        self.assertEqual(m9["game"]["outcome"], gc.OUTCOME_BLUE_ALIVE)  # a finished 模擬 is still 模擬
+        # a 模擬瓦 row with a 牌譜-tab game's fingerprint stays a separate 模擬 entry too, without 陣容強度 / 失誤標籤
+        doc, _ = build(FakeDiscord([], {}))
+        counts = dpe.merge_sheet(doc, sheet_doc(), sims)
+        ids = [p["id"] for p in doc["posts"]]
+        self.assertIn("S101", ids)
+        self.assertIn("M9", ids)
+        dpe.annotate_records(doc, sheet_doc())
+        m9 = next(p for p in doc["posts"] if p["id"] == "M9")
+        self.assertFalse({"lineup", "mistakes"} & set(m9))
+        self.assertEqual(dpe.records_problems(doc), [])
+
+    def test_unavailable_sources_keep_the_previous_entries(self) -> None:
+        previous, _ = self.merged()
+        doc, _ = build()
+        counts = dpe.merge_sheet(doc, None, None, previous)
+        self.assertEqual([p["id"] for p in doc["posts"]], [p["id"] for p in previous["posts"]])
+        self.assertEqual(counts["sheet kept from the previous file"], 2)
+        self.assertEqual(counts["模擬 kept from the previous file"], 3)
+        self.assertEqual(dpe.records_problems(doc), [])
+
+    def test_shape_rules_for_sheet_entries(self) -> None:
+        doc, _ = self.merged()
+        s102 = next(p for p in doc["posts"] if p["id"] == "S102")
+        s102["src"] = "dc"
+        self.assertTrue(has(dpe.records_problems(doc), "src value"))
+        doc, _ = self.merged()
+        next(p for p in doc["posts"] if p["id"] == GAME.id)["created"] = ""  # only sheet entries have no time
+        self.assertTrue(has(dpe.records_problems(doc), "created shape"))
+        doc, _ = self.merged()
+        next(p for p in doc["posts"] if p["id"] == "M1")["sim"] = False
+        self.assertTrue(has(dpe.records_problems(doc), "sim flag"))
+        doc, _ = self.merged()
+        next(p for p in doc["posts"] if p["id"] == "S102")["id"] = "X102"
+        self.assertTrue(has(dpe.records_problems(doc), "post id"))
+
+    def test_merge_only_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out, games, sims = Path(tmp) / "records_cache.json", Path(tmp) / "games.json", Path(tmp) / "sim.json"
+            doc, _ = build()
+            out.write_text(dpe.dump_records(doc), encoding="utf-8")
+            games.write_text(json.dumps(sheet_doc(), ensure_ascii=False), encoding="utf-8")
+            sims.write_text(json.dumps(SIM_ROWS, ensure_ascii=False), encoding="utf-8")
+            log = io.StringIO()
+            with redirect_stdout(log), redirect_stderr(log):
+                rc = dpe.main(["--output", str(out), "--games", str(games), "--merge-only", "--sim-rows", str(sims)])
+            self.assertEqual(rc, 0, log.getvalue())
+            written = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(written["counts"]["posts"], 3 + 2 + 3)
+            self.assertIn("跟 DC 貼文同一局合併 1", log.getvalue())
+            for secret in ("玩家", "一般場"):
+                self.assertNotIn(secret, log.getvalue())
+
+
 class WorkflowTest(unittest.TestCase):
     def test_refresh_workflow_exports_and_commits_the_list(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -424,7 +579,8 @@ class WorkflowTest(unittest.TestCase):
         self.assertIn("RECORDS_PATH: packages/server/records_cache.json", text)
         self.assertIn('git add -- "${RECORDS_PATH}"', text)
         self.assertNotIn("--report", text)
-        self.assertIn("--annotate-only", text)  # lineups stay fresh when the Discord read is skipped or fails
+        self.assertIn("--merge-only --sim-sheet", text)  # sheet games and lineups stay fresh when the Discord read is skipped or fails
+        self.assertIn('args=(--output "${RECORDS_PATH}" --sim-sheet)', text)
 
 
 if __name__ == "__main__":
