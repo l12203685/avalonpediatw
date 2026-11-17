@@ -6,7 +6,7 @@
  *   pnpm --filter @avalon/server threads:draft -- --week             # 從 --date（預設今天）起連續 7 天
  *   選項：--out <資料夾>（預設 packages/server/threads_drafts/，不進 git）、--no-image、--days N、
  *         --start YYYY-MM-DD（第一篇貼文的日期，預設 2026-11-17：那一天的 A 沒有昨天的答案）、
- *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；只用今天之後的日子；存下來的草稿優先）
+ *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；每一天都用，存下來的草稿優先）
  *
  * 每天寫三個檔：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位）、<日期>.png（題目圖）。
  * 已經有 <日期>.json 的日子沿用裡面的題目和第一則留言（重跑不會換題）。
@@ -17,9 +17,10 @@ import fs from 'fs';
 import path from 'path';
 import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
-import { draftMarkdown, type ThreadsDraft } from '../src/bots/threads/draft';
+import { draftMarkdown } from '../src/bots/threads/draft';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
-import { futurePicks, parsePicks, pickOverrideOf } from '../src/bots/threads/picksFile';
+import { readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
+import { pickOverrideOf } from '../src/bots/threads/picksFile';
 import { renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 
@@ -38,8 +39,9 @@ const withImage = !flag('--no-image');
 const startDate = arg('--start', THREADS_START_DATE);
 const defaultPicks = path.join(root, 'threads_picks.json');
 const picksPath = arg('--picks', fs.existsSync(defaultPicks) ? defaultPicks : '');
-// 今天的題目可能已經照草稿貼出去了：站長的選擇只用在今天之後（今天的要換，先刪掉今天的草稿檔）。
-const overrides = picksPath ? futurePicks(parsePicks(JSON.parse(fs.readFileSync(picksPath, 'utf8'))), taipeiToday()) : new Map<string, string>();
+// 站長選的每一天都用（前一天選的今天的題目、昨天的答案都要對上）；已經貼出去的以存下來的草稿為準
+// （pickFor 存下來的優先：今天的要換，先刪掉今天的草稿檔）。
+const overrides = readPicksFile(picksPath);
 
 const bankFile = readSimBankFile([path.join(root, 'sim_bank.json')]);
 if (!bankFile) {
@@ -52,15 +54,7 @@ const wiki = JSON.parse(fs.readFileSync(path.join(root, 'wiki_data.json'), 'utf8
 const titles = new Map(wiki.map((a) => [a.id, a.title] as [string, string]));
 
 fs.mkdirSync(outDir, { recursive: true });
-const readSaved = (date: string): ThreadsDraft | null => {
-  const file = path.join(outDir, `${date}.json`);
-  if (!fs.existsSync(file)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as ThreadsDraft;
-  } catch {
-    return null;
-  }
-};
+const readSaved = savedDraftReader(outDir);
 
 const gen = new ThreadsGenerator({ bank, titles, readSaved, startDate, pickOverride: pickOverrideOf(overrides) });
 console.log(`bank: ${bank.games.length} games (${bank.records.size} with a records page); out: ${outDir}`);

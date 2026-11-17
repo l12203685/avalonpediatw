@@ -112,12 +112,14 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 - **選擇的正本：** commit 進 repo 的 `packages/server/threads_picks.json`（自動發佈 #48 的格式）：`{ "version": 1, "picks": { "YYYY-MM-DD": "<題號>" } }`。
   產生器只有一條選題的路：`pickOverride`（存下來＝已經發出去的那一天優先；選的題不是那天主題能出的就照計畫，原因寫進 `warnings`）。
   選局頁列出來的題號（`optionsFor`）跟 `pickOverride` 用同一套池子，一定接受。
-- **腳本：** `threads:candidates`（`--picks` 預設 `threads_picks.json`；輸出 `candidates.json`、`games.json`，不進 git）、`threads:draft -- --picks <檔>`（只用今天之後的日子）。
+- **腳本：** `threads:candidates`（`--picks` 預設 `threads_picks.json`；輸出 `candidates.json`、`games.json`，不進 git）、`threads:draft -- --picks <檔>`。
+  兩個腳本讀同一份輸入（`src/bots/threads/inputs.ts`）：選的每一天都用（含今天和過去的日子：前一天選的今天的題目、昨天的答案都要對上），
+  已經發出去的以存下來的草稿（`threads_drafts/<日期>.json`；`threads:candidates` 用 `--drafts` 指定）為準。
   `--picks` 也接受選局頁資料庫匯出的 `[{ "date": …, "exerciseId": … }]`。
 
 ### 每天早上 8 點（台北）的工作
 
-1. 讀選局頁資料庫的 `picks` 集合（ArtifactData `list`，collection `picks`），只留今天之後的日子，
-   同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好）；有變動就 commit（選擇的正本在 repo）。
+1. 讀選局頁資料庫的 `picks` 集合（ArtifactData `list`，collection `picks`），今天之後的日子
+   同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好；今天和過去的日子保留檔案裡原本的，不刪）；有變動就 commit（選擇的正本在 repo）。
 2. 產生今天的草稿（或由自動發佈 #48 讀 `threads_picks.json` 發文）。
 3. 重跑 `threads:candidates -- --today <今天>`，把新的 `candidates.json`、`games.json` 更新到選局頁（今天鎖住、後面的日子照選擇重排）。
