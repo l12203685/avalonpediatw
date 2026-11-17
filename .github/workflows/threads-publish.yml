@@ -153,8 +153,10 @@ jobs:
             echo "權杖已續期並寫回 secrets"
           fi
 
+      # IG 續期或寫回 secrets 失敗都不擋住後面 Threads 的產生與發文（只出警告）。
       - name: IG 權杖續期（每週一；要 secrets.THREADS_SECRETS_PAT 才寫得回去）
         if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.ig == 'live'
+        continue-on-error: true
         working-directory: packages/server
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
@@ -166,10 +168,13 @@ jobs:
           npx tsx scripts/threadsPublish.ts token-ig --token-out "$NEW" || echo "IG 續期沒成功，照舊權杖發文"
           if [ -s "$NEW" ]; then
             echo "::add-mask::$(cat "$NEW")"
-            GH_TOKEN="$SECRETS_PAT" gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$REPO" < "$NEW"
+            if GH_TOKEN="$SECRETS_PAT" gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$REPO" < "$NEW"; then
+              echo "IG 權杖已續期並寫回 secrets"
+            else
+              echo "::warning::IG 權杖續期了但寫不回 secrets（THREADS_SECRETS_PAT 要有這個 repo 的 Secrets 讀寫權限）；這次照樣用新權杖"
+            fi
             echo "INSTAGRAM_ACCESS_TOKEN=$(cat "$NEW")" >> "$GITHUB_ENV"
             rm -f "$NEW"
-            echo "IG 權杖已續期並寫回 secrets"
           fi
 
       - name: 產生今天的貼文並檢查
@@ -204,8 +209,10 @@ jobs:
           echo "::warning::IG 用的 JPEG 沒轉成功，今天不同步 IG；Threads 照常發"
           rm -f "$OUT_DIR"/*.jpg
 
+      # Threads 或 IG 任一邊試跑就上傳（例如 Threads 正式發、IG 只試跑時要看 JPEG 和 IG 說明）。
+      # 內容檢查沒過時 plan.json 不含貼文和留言（rejectedPlan），附件裡也就沒有被擋下的內容。
       - name: 試跑：把要發的內容存成附件
-        if: always() && steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'dry-run'
+        if: always() && steps.gate.outputs.run == '1' && (steps.gate.outputs.mode == 'dry-run' || steps.gate.outputs.ig == 'dry-run')
         uses: actions/upload-artifact@v4
         with:
           name: threads-dry-run-${{ steps.gate.outputs.date }}

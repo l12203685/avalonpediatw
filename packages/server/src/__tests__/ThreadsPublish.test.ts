@@ -508,4 +508,20 @@ describe('workflow', () => {
     expect(image?.body).toContain("IG_JPEG_OK: ${{ steps.ig_jpeg.outcome == 'success' && '1' || '0' }}");
     expect(image?.body.match(/IG_JPEG_OK" = 1/g)?.length).toBe(2);
   });
+
+  it('an IG token refresh whose secret write fails only warns and does not stop Threads', () => {
+    const all = steps();
+    const refresh = all.find((s) => s.body.includes('token-ig --token-out'));
+    expect(refresh?.continueOnError).toBe(true);
+    expect(refresh?.body).toContain('if GH_TOKEN="$SECRETS_PAT" gh secret set INSTAGRAM_ACCESS_TOKEN');
+    expect(refresh?.body).toContain('::warning::');
+    // Threads 的產生不看 IG 續期的結果
+    expect(all.find((s) => s.id === 'prepare')?.cond).not.toMatch(/ig/i);
+  });
+
+  it('uploads the dry-run artifact when either Threads or IG is a dry run (IG JPEG previews with Threads live)', () => {
+    const upload = steps().find((s) => s.name.startsWith('試跑：把要發的內容存成附件'));
+    expect(upload?.cond).toContain("steps.gate.outputs.mode == 'dry-run'");
+    expect(upload?.cond).toContain("steps.gate.outputs.ig == 'dry-run'");
+  });
 });
