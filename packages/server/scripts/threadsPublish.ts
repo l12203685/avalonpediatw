@@ -203,7 +203,7 @@ async function main(): Promise<number> {
     if (!postId && process.env.THREADS_ACCESS_TOKEN) {
       const draft = readState(stateDir, date)?.draft ?? gen.draftFor(date);
       if (draft) {
-        const found = findByExercise(await (await apiWithUser()).recentPosts(), draft.exerciseId);
+        const found = findByExercise(await (await apiWithUser()).recentPosts(), draft.exerciseId, date);
         if (found) {
           postId = found.id;
           permalink = found.permalink;

@@ -28,6 +28,7 @@ import {
   readPicks,
   readState,
   recordManual,
+  taipeiDateOf,
   savedFromState,
   validatePost,
   writeState,
@@ -62,14 +63,19 @@ function gen(stateDir: string, picks: Map<string, string> = new Map()): ThreadsG
 /** 假的 Threads 伺服器的狀態（跨好幾次執行共用：已經發出去的貼文和回覆）。 */
 interface FakeServer {
   containers: Map<string, URLSearchParams>;
-  posts: { id: string; text: string; permalink?: string }[];
+  posts: { id: string; text: string; permalink?: string; timestamp?: string }[];
   replies: { id: string; text: string; replied_to: { id: string } }[];
   publishCalls: string[];
+  /** 發出去的貼文的時間（預設台北 11/18 中午）。 */
+  now: string;
 }
 
 function fakeServer(): FakeServer {
-  return { containers: new Map(), posts: [], replies: [], publishCalls: [] };
+  return { containers: new Map(), posts: [], replies: [], publishCalls: [], now: '2026-11-18T04:00:00+0000' };
 }
+
+const ON_17 = '2026-11-17T04:10:00+0000';
+const ON_18 = '2026-11-18T04:10:00+0000';
 
 /**
  * 假的 Threads API：記下每一次呼叫，照路徑回答；容器發佈後真的出現在最近的貼文／自己的回覆裡。
@@ -77,7 +83,7 @@ function fakeServer(): FakeServer {
  */
 function fakeApi(
   opts: {
-    recent?: { id: string; text: string; permalink?: string }[];
+    recent?: { id: string; text: string; permalink?: string; timestamp?: string }[];
     failFirst?: number;
     failReply?: boolean;
     onPermalink?: () => void;
@@ -117,7 +123,7 @@ function fakeApi(
       const id = `p${cid}`;
       if (server.posts.some((p) => p.id === id) || server.replies.some((r) => r.id === id)) return reply(400, { error: { message: 'already published' } });
       if (kind === 'reply') server.replies.unshift({ id, text: c?.get('text') ?? '', replied_to: { id: c?.get('reply_to_id') ?? '' } });
-      else server.posts.unshift({ id, text: c?.get('text') ?? '', permalink: `https://www.threads.net/@x/post/${id}` });
+      else server.posts.unshift({ id, text: c?.get('text') ?? '', permalink: `https://www.threads.net/@x/post/${id}`, timestamp: server.now });
       if (lose[kind] > 0) {
         lose[kind]--;
         return reply(503, { error: { message: 'gateway timeout' } });
@@ -244,7 +250,7 @@ describe('prepare + post', () => {
     const { plan, stateDir } = prepared();
     expect(plan.quote?.exerciseId).toBe('36AKW-2-5');
     expect(plan.errors).toEqual([]);
-    const { api, calls } = fakeApi({ recent: [{ id: 'y17', text: `…\n題號 36AKW-2-5｜實戰牌譜\n#阿瓦隆`, permalink: 'https://www.threads.net/@x/post/y17' }] });
+    const { api, calls } = fakeApi({ recent: [{ id: 'y17', text: `…\n題號 36AKW-2-5｜實戰牌譜\n#阿瓦隆`, permalink: 'https://www.threads.net/@x/post/y17', timestamp: ON_17 }] });
     const res = await postDaily(plan, { api, stateDir, imageUrl: 'https://raw.githubusercontent.com/o/r/sha/images/2026-11-18.png' });
     expect(res.status).toBe('published');
     expect(res.quotePostId).toBe('y17');
@@ -264,7 +270,7 @@ describe('prepare + post', () => {
 
   it('never posts twice: a recorded id skips; a recent post with today’s 題號 is recorded instead of reposting', async () => {
     const { plan, stateDir } = prepared();
-    const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜` }] });
+    const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜`, timestamp: ON_18 }] });
     first.server.replies.push({ id: 'r-dup', text: plan.comment, replied_to: { id: 'dup' } });
     const r1 = await postDaily(plan, { api: first.api, stateDir });
     expect(r1.status).toBe('found-existing');
@@ -318,7 +324,7 @@ describe('prepare + post', () => {
 
   it('a post found in recent posts without our reply gets exactly one comment; a day posted by hand is not touched', async () => {
     const { plan, stateDir } = prepared();
-    const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜` }] });
+    const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜`, timestamp: ON_18 }] });
     const r1 = await postDaily(plan, { api: first.api, stateDir });
     expect(r1.status).toBe('found-existing');
     const creates = first.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
@@ -358,6 +364,26 @@ describe('prepare + post', () => {
     expect(ok.errors).toEqual([]);
     expect(planSummary(ok, 'dry-run').join('\n').includes(ok.comment)).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(outDir, 'plan.json'), 'utf8')).text).toBe(ok.text);
+  });
+
+  it('an older post of the same exercise (picked again) is not taken for today or as yesterday: today still publishes', async () => {
+    expect(taipeiDateOf('2026-11-17T17:30:00+0000')).toBe('2026-11-18'); // 台北已經過午夜
+    expect(taipeiDateOf(undefined)).toBeNull();
+    const { plan, stateDir } = prepared();
+    const old = [
+      { id: 'old-today', text: `題號 ${plan.exerciseId}｜實戰牌譜`, timestamp: '2026-11-10T04:00:00+0000' },
+      { id: 'old-yesterday', text: '題號 36AKW-2-5｜實戰牌譜', timestamp: '2026-11-03T04:00:00+0000' },
+    ];
+    const { api, calls, server } = fakeApi({ recent: old, losePublish: { post: 1 } });
+    const res = await postDaily(plan, { api, stateDir });
+    expect(res.status).toBe('published');
+    expect(res.postId).not.toBe('old-today');
+    expect(res.postId).toBe(server.posts[0].id); // 回應丟了也認得出今天發的那篇，不是舊的
+    expect(res.quotePostId).toBeNull(); // 舊的那篇不是昨天的
+    const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads') && !c.params.get('reply_to_id'));
+    expect(creates).toHaveLength(1);
+    expect(creates[0].params.get('text')).toBe(plan.text);
+    expect(server.posts).toHaveLength(1);
   });
 
   it('server published but the response was lost: adopts that post and that reply instead of publishing again', async () => {
@@ -401,7 +427,7 @@ describe('prepare + post', () => {
     };
     const { plan, stateDir: seedDir } = prepared();
     const server = fakeServer();
-    server.posts.push({ id: 'y17', text: '題號 36AKW-2-5' });
+    server.posts.push({ id: 'y17', text: '題號 36AKW-2-5', timestamp: ON_17 });
 
     // 第一次：A 發出、推上去；留言發出後「當機」（留言的狀態沒推上去），整個工作目錄丟掉
     const run1 = clone('run1');
