@@ -36,7 +36,7 @@ import {
   type DailyPlan,
 } from '../bots/threads/publish/daily';
 import { extraRenderers } from '../bots/threads/publish/extraImages';
-import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, renderPuzzlePng, sheetRows } from '../bots/threads/image';
+import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, recapRounds, renderPuzzlePng, sheetRows } from '../bots/threads/image';
 import { SEE_IMAGE_LINE } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
@@ -613,8 +613,8 @@ describe('threads carousel', () => {
     expect(readState(stateDir, '2026-11-18')?.postId).toBe(res.postId);
   });
 
-  it('a long record: the Threads carousel is question card → continuation → answer card; without the continuation it is not published live', async () => {
-    // 找一天：題目卡放不下牌譜（要續圖），而且那天公布昨天的完整答案（有答案卡）
+  it('the Threads carousel is question card → one recap image per earlier round → answer card; a missing recap is not published live', async () => {
+    // 找一天：前面有出完的局（要回顧圖），而且那天公布昨天的完整答案（有答案卡）
     const stateDir = tmp();
     const g = gen(stateDir);
     let date: string | null = null;
@@ -622,17 +622,20 @@ describe('threads carousel', () => {
       const d = addDays('2026-11-17', i);
       const pick = g.pickFor(d);
       const pv = pick ? g.viewOf(pick) : null;
-      const draft = pv && gridOverflowStart(pv) !== null ? g.draftFor(d) : null;
+      const draft = pv && recapRounds(sheetRows(pv)).length >= 2 ? g.draftFor(d) : null;
       if (draft?.answerToYesterday && !draft.continuesYesterday) date = d;
     }
     expect(date).not.toBeNull();
     const d = date as string;
     const pv = g.viewOf(g.pickFor(d)!)!;
-    // 跟腳本同一個檢查：續圖要一張不少
+    // 跟腳本同一個檢查：續圖、回顧圖都要一張不少
+    const rounds = recapRounds(sheetRows(pv));
     const incomplete = (_d: string, images: readonly string[]): string | null => {
       const need = gridPages(pv).length;
       const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
-      return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
+      if (have < need) return `牌譜要 ${need} 張續圖，只產生了 ${have} 張`;
+      const haveRounds = images.filter((n) => /-round-\d+\.png$/.test(n)).length;
+      return haveRounds < rounds.length ? `前面 ${rounds.length} 局要各一張回顧圖，只產生了 ${haveRounds} 張` : null;
     };
     const plan = prepareDaily(d, {
       gen: g,
@@ -644,17 +647,18 @@ describe('threads carousel', () => {
       renderExtraImages: extraRenderers(g),
       imageIncomplete: incomplete,
     }) as DailyPlan;
-    expect(plan.images).toEqual([`${d}.png`, `${d}-grid-1.png`, `${d}-answer.png`]);
+    expect(plan.images).toEqual([`${d}.png`, ...rounds.map((r) => `${d}-round-${r}.png`), `${d}-answer.png`]);
     expect(plan.liveBlock).toBeNull();
     const urls = plan.images.map((n) => `https://raw.githubusercontent.com/o/r/sha/images/${n}`);
     const { api, calls } = fakeApi();
     await postDaily(plan, { api, stateDir, imageUrls: urls });
     const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
-    expect(creates.slice(0, 3).map((c) => c.params.get('image_url'))).toEqual(urls); // 題目卡 → 續圖 → 答案卡
-    expect(creates[3].params.get('media_type')).toBe('CAROUSEL');
-    expect(creates[3].params.get('children')).toBe('c1,c2,c3');
+    const n = urls.length;
+    expect(creates.slice(0, n).map((c) => c.params.get('image_url'))).toEqual(urls); // 題目卡 → 第 1…k-1 局 → 答案卡
+    expect(creates[n].params.get('media_type')).toBe('CAROUSEL');
+    expect(creates[n].params.get('children')?.split(',')).toHaveLength(n);
 
-    // 續圖沒產生：試跑警告、正式發佈不發；續圖有產生但少了公開網址也不發
+    // 回顧圖沒產生：試跑警告、正式發佈不發；有產生但少了公開網址也不發
     const s2 = tmp();
     const noGrid = prepareDaily(d, {
       gen: gen(s2),
@@ -666,7 +670,7 @@ describe('threads carousel', () => {
       renderExtraImages: () => [{ suffix: 'answer', png: Buffer.from('a') }],
       imageIncomplete: incomplete,
     }) as DailyPlan;
-    expect(noGrid.liveBlock).toContain('只產生了 0 張');
+    expect(noGrid.liveBlock).toContain('回顧圖，只產生了 0 張');
     await expect(postDaily(noGrid, { api: fakeApi().api, stateDir: s2, imageUrls: ['u1', 'u2'] })).rejects.toThrow('這天不自動發');
     await expect(postDaily(plan, { api: fakeApi().api, stateDir: tmp(), imageUrls: urls.slice(0, 1) })).rejects.toThrow('公開網址');
   }, 60_000); // 畫三張圖＋排程找日子：CI 整套平行跑時會超過預設 5 秒

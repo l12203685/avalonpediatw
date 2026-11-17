@@ -139,7 +139,11 @@ async function main(): Promise<number> {
         const pv = pick ? gen.viewOf(pick) : null;
         const need = pv ? threadsImage.gridPages(pv).length : 0;
         const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
-        return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
+        if (have < need) return `牌譜要 ${need} 張續圖，只產生了 ${have} 張`;
+        // 前面幾局的回顧圖也要一張不少（題目卡只畫出題那一局）
+        const rounds = pv ? threadsImage.recapRounds(threadsImage.sheetRows(pv)).length : 0;
+        const haveRounds = images.filter((n) => /-round-\d+\.png$/.test(n)).length;
+        return haveRounds < rounds ? `前面 ${rounds} 局要各一張回顧圖，只產生了 ${haveRounds} 張` : null;
       },
     });
     if (!plan) {

@@ -311,6 +311,23 @@ export function seatPosition(seat: number, cx: number, cy: number): { x: number;
  * 「改成在右邊 任務的部分 直接顯示每局參與的人&結果吧 (就是目前顯示的下方 加入參與任務的座位號碼就可以了)」）。
  * 從 (x0, y0) 往右排，寬度不夠就換行；回傳 SVG 與佔的高度。
  */
+/** 一局的任務格：站長 11/18 的格式 [任務N]（結果）{出任務的座位}；還沒出的任務只寫 任務N（灰）。 */
+function missionChip(rows: readonly SheetRow[], r: number, x: number, y: number, bw: number, bh: number): string {
+  const parts: string[] = [];
+  const q = rows.find((e): e is Extract<SheetRow, { kind: 'quest' }> => e.kind === 'quest' && e.round === r);
+  const fill = q ? (q.failed ? C.redFill : C.blueFill) : C.seat;
+  const stroke = q ? (q.failed ? C.red : C.blue) : C.line;
+  parts.push(rect(x, y, bw, bh, fill, ` rx="10" stroke="${stroke}" stroke-width="2"`));
+  parts.push(text(x + bw / 2, y + 27, `任務${r}`, { size: 18, fill: q ? C.ink : C.faint, anchor: 'middle', weight: !!q }));
+  if (q) {
+    parts.push(text(x + bw / 2, y + 55, q.mission, { size: q.mission.length > 4 ? 17 : 20, fill: C.yellow, anchor: 'middle', weight: true }));
+    // 出這次任務的座位（那一局過了的提議；第 10 家寫 0）
+    const team = missionTeam(rows, r);
+    if (team.length) parts.push(text(x + bw / 2, y + 82, seatsText(team), { size: 18, fill: C.ink, anchor: 'middle', weight: true }));
+  }
+  return parts.join('');
+}
+
 export function missionChips(rows: readonly SheetRow[], x0: number, y0: number, maxW: number): { svg: string; height: number; xs: number[]; ys: number[]; bw: number } {
   const parts: string[] = [];
   const bw = 78;
@@ -325,18 +342,7 @@ export function missionChips(rows: readonly SheetRow[], x0: number, y0: number, 
     const y = y0 + Math.floor(i / perRow) * (bh + gap);
     xs.push(x);
     ys.push(y);
-    const q = rows.find((e): e is Extract<SheetRow, { kind: 'quest' }> => e.kind === 'quest' && e.round === r);
-    const fill = q ? (q.failed ? C.redFill : C.blueFill) : C.seat;
-    const stroke = q ? (q.failed ? C.red : C.blue) : C.line;
-    parts.push(rect(x, y, bw, bh, fill, ` rx="10" stroke="${stroke}" stroke-width="2"`));
-    // 站長 11/18 的格式：[任務N]（結果）{出任務的座位}；還沒出的任務只寫 任務N（灰）
-    parts.push(text(x + bw / 2, y + 27, `任務${r}`, { size: 18, fill: q ? C.ink : C.faint, anchor: 'middle', weight: !!q }));
-    if (q) {
-      parts.push(text(x + bw / 2, y + 55, q.mission, { size: q.mission.length > 4 ? 17 : 20, fill: C.yellow, anchor: 'middle', weight: true }));
-      // 出這次任務的座位（那一局過了的提議；第 10 家寫 0）
-      const team = missionTeam(rows, r);
-      if (team.length) parts.push(text(x + bw / 2, y + 82, seatsText(team), { size: 18, fill: C.ink, anchor: 'middle', weight: true }));
-    }
+    parts.push(missionChip(rows, r, x, y, bw, bh));
   }
   const lines = Math.ceil(5 / perRow);
   return { svg: parts.join(''), height: lines * bh + (lines - 1) * gap, xs, ys, bw };
@@ -375,32 +381,38 @@ export function logoRimPoint(seat: number, cx: number, cy: number): { x: number;
   return { x: cx + TABLE_LOGO_R * ux, y: cy + TABLE_LOGO_R * uy };
 }
 
-/** 每局一個顏色，第 1 局最淡、越後面越深（同一個紫色系：不跟紅／藍／綠／金的標記搶）。 */
-const PROPOSAL_LINE_COLORS = ['#ddd6fe', '#c4b5fd', '#a78bfa', '#8b5cf6', '#7c3aed'] as const;
-const PROPOSAL_LINE_OPACITY = [0.22, 0.3, 0.4, 0.5, 0.6] as const;
+const LINE_YELLOW = '#facc15';
+/** 箭頭（盾牌）的大小。 */
+const ARROW_SHIELD = 18;
+
+/** 盾牌形狀的箭頭：尖端在 (x, y)、指向 angle（弧度）。形狀跟牌譜格子的盾牌一樣。 */
+function shieldArrow(x: number, y: number, angle: number, fill: string): string {
+  const k = ARROW_SHIELD / 24;
+  const deg = (angle * 180) / Math.PI - 90; // 盾牌原本尖端朝下（+y）
+  return `<path transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg.toFixed(1)}) scale(${k.toFixed(3)}) translate(-12 -22)" d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" fill="${fill}" stroke="#1c1917" stroke-width="1.5" class="lane-arrow"/>`;
+}
 
 /**
- * 圓桌上把隊長選的隊伍用虛線連起來（站長 11/18：「用極淺的顏色 在圓桌上把隊長選擇的隊伍用線連起來 …
- * 我希望第一/二/三/四局 的線 顏色不同 並且越來越深」）：每次提議從隊長的座位拉到每個隊員（隊長自己在隊上不畫）。
- * 只用出題前看得到的提議（rows 來自 sheetRows）；currentRound 只畫出題那一局（刺殺題＝最後一局有提議的那一局）。
+ * 圓桌上一局的提議連線（站長 11/18：「每一局都只呈現該局的表格 & 湖中 然後只呈現該局的 線顏色用黃色 最後真的出任務用實線
+ * 其他用虛線 並且帶有箭頭 (盾牌形狀指向)」；端點在座位與標誌的切點：「虛線我希望都從座位跟Logo 的切點處連接」）：
+ * 每次提議從隊長拉到每個隊員（隊長自己在隊上不畫），真的出任務的那一隊實線、其他虛線，尾端是盾牌形狀的箭頭。
+ * rows 只給那一局的列。
  */
-export function proposalLines(rows: readonly SheetRow[], cx: number, cy: number, mode: ProposalLines): string {
-  if (mode === 'off') return '';
-  const props = rows.filter((r): r is Extract<SheetRow, { kind: 'proposal' }> => r.kind === 'proposal');
-  if (props.length === 0) return '';
-  const last = rows[rows.length - 1];
-  const cur = last.kind === 'decision' && last.round !== null ? last.round : props[props.length - 1].round;
+export function roundLines(rows: readonly SheetRow[], cx: number, cy: number): string {
   const out: string[] = [];
-  for (const p of props) {
-    if (mode === 'currentRound' && p.round !== cur) continue;
-    // 站長 11/18：「虛線我希望都從座位跟Logo 的切點處連接」→ 端點在圓心到座位那條線上、標誌圓的邊上（弦橫過標誌）
+  for (const p of rows) {
+    if (p.kind !== 'proposal') continue;
     const a = logoRimPoint(p.leaderSeat, cx, cy);
-    const color = PROPOSAL_LINE_COLORS[Math.min(4, p.round - 1)];
-    const op = PROPOSAL_LINE_OPACITY[Math.min(4, p.round - 1)];
     for (const seat of p.team) {
       if (seat === p.leaderSeat) continue;
       const b = logoRimPoint(seat, cx, cy);
-      out.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${color}" stroke-opacity="${op}" stroke-width="2.5" stroke-dasharray="7 6" class="prop-line r${p.round}"/>`);
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      // 線停在盾牌的底邊，盾牌尖端碰到被選的座位那一側的切點
+      const ex = b.x - Math.cos(ang) * ARROW_SHIELD * 0.75;
+      const ey = b.y - Math.sin(ang) * ARROW_SHIELD * 0.75;
+      const dash = p.approved ? '' : ' stroke-dasharray="8 6"';
+      out.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="${LINE_YELLOW}" stroke-opacity="${p.approved ? 0.95 : 0.7}" stroke-width="${p.approved ? 3.5 : 2.5}"${dash} class="lane ${p.approved ? 'lane-mission' : 'lane-proposal'}"/>`);
+      out.push(shieldArrow(b.x, b.y, ang, p.approved ? LINE_YELLOW : '#a16207'));
     }
   }
   return out.join('');
@@ -410,7 +422,7 @@ export function proposalLines(rows: readonly SheetRow[], cx: number, cy: number,
  * 小圓桌：十個座位排成正圓、圍著中間放大的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「座位不要橢圓 直接圍繞 logo」）。
  * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。每局出任務的座位寫在右邊的任務格裡，湖也寫在右邊。
  */
-function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: number, lines: ProposalLines = 'off'): string {
+function roundTable(pv: PickView, lineRows: readonly SheetRow[], cx: number, cy: number): string {
   const uri = logoDataUri();
   const r = TABLE_LOGO_R;
   const logo = uri
@@ -418,8 +430,8 @@ function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: num
       `<image href="${uri}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" opacity="${TABLE_LOGO_OPACITY}" clip-path="url(#tl)" preserveAspectRatio="xMidYMid slice"/>` +
       `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.gold}" stroke-opacity="0.3" stroke-width="2"/>`
     : '';
-  // 隊長→隊員的虛線畫在最下面（標誌和座位蓋在上面）
-  const parts: string[] = [proposalLines(rows, cx, cy, lines), logo];
+  // 那一局的提議連線畫在標誌上面、座位下面
+  const parts: string[] = [logo, roundLines(lineRows, cx, cy)];
   const marks = seatMarks(pv);
   for (let seat = 1; seat <= 10; seat++) {
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
@@ -568,7 +580,7 @@ export function cardLayout(rowCount: number): CardLayout {
 
 /** 牌譜放不下題目卡時，第二張圖要畫的列（從第幾列開始）；放得下回傳 null。 */
 export function gridOverflowStart(pv: PickView): number | null {
-  const layout = cardLayout(sheetRows(pv).length);
+  const layout = cardLayout(cardSheetRows(pv).length);
   return layout.overflow ? layout.cardRows : null;
 }
 
@@ -578,7 +590,7 @@ export const GRID_PAGE_ROWS = Math.floor(GRID_PAGE_FREE / GRID_ROW_MIN);
 
 /** 題目卡放不下的列分成幾張續圖（每張平均分、都 ≤ GRID_PAGE_ROWS 列）：每張的 [start, end)。放得下回傳 []。 */
 export function gridPages(pv: PickView): { start: number; end: number }[] {
-  const rows = sheetRows(pv);
+  const rows = cardSheetRows(pv);
   const layout = cardLayout(rows.length);
   if (!layout.overflow) return [];
   const rest = rows.length - layout.cardRows;
@@ -620,25 +632,44 @@ export function identityLines(identity: string, max: number): { line: string; si
 }
 
 /** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、到目前的牌譜格子、題目。 */
-/** 圓桌上隊長→隊員的虛線：off 不畫、all 出題前每次提議都畫、currentRound 只畫出題那一局的提議。 */
-export type ProposalLines = 'off' | 'all' | 'currentRound';
-
-export interface PuzzleOptions {
-  /** 預設 off（站長 11/18：「先嘗試看看效果 或是看能不能用開關呈現?」）。 */
-  proposalLines?: ProposalLines;
+/** 出題那一局（刺殺題 null）。 */
+export function questionRound(rows: readonly SheetRow[]): number | null {
+  const last = rows[rows.length - 1];
+  return last && last.kind === 'decision' ? last.round : null;
 }
 
-export function buildPuzzleSvg(pv: PickView, weekday: number, opts: PuzzleOptions = {}): string {
+/** 一局的列：那一局的提議、任務結果、那一局之後用的湖。 */
+export function roundRows(rows: readonly SheetRow[], round: number): SheetRow[] {
+  return rows.filter((r) => r.kind !== 'decision' && r.round === round);
+}
+
+/** 題目卡的格子：只有出題那一局到目前的提議＋輪到你（刺殺題只有輪到你）。前面幾局各自一張回顧圖。 */
+export function cardSheetRows(pv: PickView): SheetRow[] {
+  const rows = sheetRows(pv);
+  const q = questionRound(rows);
+  return [...(q === null ? [] : roundRows(rows, q)), rows[rows.length - 1]];
+}
+
+/** 要畫回顧圖的局：出題那一局以前出完任務的每一局（刺殺題＝全部）。 */
+export function recapRounds(rows: readonly SheetRow[]): number[] {
+  const q = questionRound(rows);
+  return [...new Set(rows.filter((r) => r.kind === 'quest' && (q === null || r.round < q)).map((r) => r.round as number))].sort((a, b) => a - b);
+}
+
+export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const role = pv.game.seatRoles[pv.pick.seat - 1];
   const rows = sheetRows(pv);
-  const layout = cardLayout(rows.length);
+  // 站長 11/18：「每一局都只呈現該局的表格 & 湖中」→ 題目卡只畫出題那一局；前面幾局在後面的回顧圖
+  const cardRows = cardSheetRows(pv);
+  const recaps = recapRounds(rows);
+  const layout = cardLayout(cardRows.length);
   const parts: string[] = [headerBand(labelFor(weekday, pv.pick), pv.exerciseId)];
 
   // 左：小圓桌；右：你的視角
   const top = 150;
   const cx = 40 + TABLE_BOX_W / 2;
   const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-  parts.push(roundTable(pv, rows, cx, cy, opts.proposalLines ?? 'off'));
+  parts.push(roundTable(pv, cardRows, cx, cy));
   const rx = 40 + TABLE_BOX_W + 24;
   const rmax = W - 40 - rx;
   // 你的視角：一行寫完（站長 11/18：「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」），太長才換行
@@ -667,7 +698,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number, opts: PuzzleOption
   let y = CARD_TOP_H;
   parts.push(gridHead(pv, y));
   y += GRID_HEAD_H;
-  for (const r of rows.slice(0, layout.cardRows)) {
+  for (const r of cardRows.slice(0, layout.cardRows)) {
     parts.push(gridRow(r, y, layout.rowH));
     y += layout.rowH;
   }
@@ -680,7 +711,10 @@ export function buildPuzzleSvg(pv: PickView, weekday: number, opts: PuzzleOption
     : '三藍：輪到你刺殺。誰是梅林？';
   parts.push(text(40, y, prompt, { size: 36, fill: C.blue, weight: true }));
   y += 36;
-  parts.push(text(40, y, layout.overflow ? nextHint(1, gridPages(pv).length + 1) : voteLegend(rows), { size: 21, fill: C.faint }));
+  const hint = layout.overflow ? nextHint(1, gridPages(pv).length + 1)
+    : recaps.length ? `前面 ${recaps.length} 局的牌譜在後面的圖（往右滑）｜${voteLegend(cardRows).split('｜')[0]}`
+      : voteLegend(cardRows);
+  parts.push(text(40, y, hint, { size: 21, fill: C.faint }));
   y += 36;
   parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
   y += 20;
@@ -693,7 +727,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number, opts: PuzzleOption
  * 標題寫第幾張／共幾張；不是最後一張的寫「牌譜接下一張（往右滑）」，最後一張寫記號說明。
  */
 export function buildGridSvgs(pv: PickView, weekday: number): string[] {
-  const rows = sheetRows(pv);
+  const rows = cardSheetRows(pv);
   const pages = gridPages(pv);
   const total = pages.length + 1;
   return pages.map(({ start, end }, i) => {
@@ -715,6 +749,55 @@ export function buildGridSvgs(pv: PickView, weekday: number): string[] {
     y += 24;
     return svgDoc(Math.max(y, 600), parts.join(''));
   });
+}
+
+/**
+ * 前面幾局的回顧圖（站長 11/18：「每一局都只呈現該局的表格 & 湖中」）：一局一張——小圓桌只畫那一局的提議連線、
+ * 右邊是那一局的任務格與湖、下面是那一局的牌譜格子（提議、任務結果、湖）。輪播放在題目卡後面。
+ */
+export function buildRoundSvgs(pv: PickView, weekday: number): { round: number; svg: string }[] {
+  const rows = sheetRows(pv);
+  const recaps = recapRounds(rows);
+  const pages = gridPages(pv).length;
+  const total = 1 + pages + recaps.length;
+  return recaps.map((round, i) => {
+    const part = roundRows(rows, round);
+    const k = 2 + pages + i;
+    const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・第 ${round} 局（${k}/${total}）`, pv.exerciseId)];
+    const top = 150;
+    const cx = 40 + TABLE_BOX_W / 2;
+    const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
+    parts.push(roundTable(pv, part, cx, cy));
+    const rx = 40 + TABLE_BOX_W + 24;
+    let ty = top + 80;
+    parts.push(text(rx, ty, `第 ${round} 局`, { size: 40, weight: true }));
+    ty += 26;
+    parts.push(missionChip(rows, round, rx, ty, 78, 94));
+    ty += 94 + 44;
+    const lake = lakeLine(part);
+    if (lake.length) parts.push(segs(rx, ty, [{ t: '湖 ', fill: '#a5f3fc', weight: true }, ...lake], 26));
+    ty += 48;
+    parts.push(segs(rx, ty, [{ t: '━', fill: LINE_YELLOW }, { t: ' 出任務的隊伍　', fill: C.soft }, { t: '┅', fill: LINE_YELLOW }, { t: ' 其他提議', fill: C.soft }], 20));
+    const layout = cardLayout(part.length);
+    let y = CARD_TOP_H;
+    parts.push(gridHead(pv, y));
+    y += GRID_HEAD_H;
+    for (const r of part) {
+      parts.push(gridRow(r, y, layout.rowH));
+      y += layout.rowH;
+    }
+    y += 50;
+    parts.push(text(40, y, voteLegend(part), { size: 21, fill: C.faint }));
+    y += 36;
+    parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
+    y += 24;
+    return { round, svg: svgDoc(y, parts.join(''), { watermark: false }) };
+  });
+}
+
+/** 前面幾局的回顧圖 PNG，照局數順序。 */
+export function renderRoundPngs(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): { round: number; png: Buffer }[] {
+  return buildRoundSvgs(pv, weekday).map(({ round, svg }) => ({ round, png: svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE) }));
 }
 
 /** 第一張續圖（放得下時 null）；要全部的續圖用 buildGridSvgs。 */
@@ -763,8 +846,8 @@ function svgToPng(svg: string, fontFile: string): Buffer {
 }
 
 /** 題目圖 PNG。 */
-export function renderPuzzlePng(pv: PickView, weekday: number, opts: { fontFile?: string } & PuzzleOptions = {}): Buffer {
-  return svgToPng(buildPuzzleSvg(pv, weekday, opts), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
+export function renderPuzzlePng(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer {
+  return svgToPng(buildPuzzleSvg(pv, weekday), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
 }
 
 /** 牌譜續圖 PNG，照順序（要幾張就幾張）；牌譜放得進題目卡時回傳 []。 */

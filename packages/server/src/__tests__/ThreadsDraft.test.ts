@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, proposalLines, logoRimPoint } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, roundLines, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -35,6 +35,11 @@ beforeAll(() => {
 });
 
 const gameOf = (pick: ThreadsPick) => bank.games[bank.byId.get(pick.gameId) as number];
+
+/** 題目卡加上前面幾局的回顧圖（一整組輪播的 SVG）：每一列都在其中一張。 */
+function allSvg(pv: ReturnType<typeof pickView>, weekday: number): string {
+  return [buildPuzzleSvg(pv, weekday), ...buildRoundSvgs(pv, weekday).map((x) => x.svg)].join('\n');
+}
 
 describe('dates', () => {
   it('weekday, week index and day arithmetic follow the Taipei calendar date', () => {
@@ -329,43 +334,42 @@ describe('image', () => {
     for (const x of d) expect(x).toBeCloseTo(d[0], 6);
   });
 
-  it('table, scoresheet and question share one image ≤ 1350; only overflow rows go to a second image', () => {
-    let overflowed = 0;
+  it('the question card shows only the question round; every earlier round gets its own recap image; every row is drawn exactly once, all ≤ 1350', () => {
+    let withRecaps = 0;
+    // 牌譜格子的盾牌（stroke-width 1.2）；圓桌上箭頭的盾牌另外算
+    const shields = (svg: string): number => (svg.match(/<path [^>]*d="M12 2 [^>]*stroke-width="1\.2"\/>/g) ?? []).length;
     for (let w = 0; w < 4; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
         const rows = sheetRows(pv);
+        const teamCount = (rs: readonly (typeof rows)[number][]): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0);
         const card = buildPuzzleSvg(pv, 3);
-        const h = Number(/height="(\d+)"/.exec(card)?.[1]);
-        expect(h).toBeLessThanOrEqual(GRID_TARGET_H);
-        const layout = cardLayout(rows.length);
-        const start = gridOverflowStart(pv);
-        const grid = buildGridSvg(pv, 3);
-        // 盾牌的路徑（湖的箭頭也是 path，不算）
-        const shields = (svg: string): number => (svg.match(/<path [^>]*d="M12 2 /g) ?? []).length;
-        const teamCount = (rs: typeof rows): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0);
-        if (start === null) {
-          expect(grid).toBeNull();
-          expect(layout.rowH).toBeGreaterThanOrEqual(GRID_ROW_MIN);
-          expect(shields(card)).toBe(teamCount(rows)); // 每支盾牌都在題目卡上
-          for (const r of rows) if (r.kind === 'proposal') expect(card).toContain(`>${r.line.split(' ')[0]}<`);
-        } else {
-          overflowed++;
-          expect(grid).not.toBeNull();
-          // 題目卡畫前 start 列、續圖畫剩下的，合起來剛好是全部的列（列只來自 sheetRows，截斷由上面的測試鎖住）
-          expect(shields(card)).toBe(teamCount(rows.slice(0, start)));
-          expect(shields(grid as string)).toBe(teamCount(rows.slice(start)));
-          expect(Number(/height="(\d+)"/.exec(grid as string)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+        expect(Number(/height="(\d+)"/.exec(card)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+        const cardRows = cardSheetRows(pv);
+        const q = questionRound(rows);
+        for (const r of cardRows) if (r.kind !== 'decision') expect(r.round).toBe(q); // 題目卡只有出題那一局
+        expect(gridOverflowStart(pv)).toBeNull(); // 一局的列放得下題目卡
+        expect(shields(card)).toBe(teamCount(cardRows));
+        const recaps = buildRoundSvgs(pv, 3);
+        expect(recaps.map((x) => x.round)).toEqual(recapRounds(rows));
+        if (recaps.length) withRecaps++;
+        let drawn = cardRows.filter((r) => r.kind !== 'decision').length;
+        for (const { round, svg } of recaps) {
+          const part = roundRows(rows, round);
+          drawn += part.length;
+          expect(shields(svg)).toBe(teamCount(part));
+          expect(Number(/height="(\d+)"/.exec(svg)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+          expect(svg).toContain(`第 ${round} 局`);
+          expect(svg).not.toMatch(/10\s*家/);
         }
+        expect(drawn).toBe(rows.filter((r) => r.kind !== 'decision').length); // 每一列剛好畫一次
+        if (recaps.length) expect(card).toContain(`前面 ${recaps.length} 局的牌譜在後面的圖（往右滑）`);
         expect(card).not.toMatch(/10\s*家/);
       }
     }
-    expect(overflowed).toBeGreaterThan(0); // 長的局真的會用到第二張
+    expect(withRecaps).toBeGreaterThan(0);
     expect(cardLayout(5)).toMatchObject({ overflow: false, cardRows: 5 });
     expect(cardLayout(60).overflow).toBe(true);
-    const [, , wed] = planWeek(bank, 0) as ThreadsPick[];
-    const wedPv = pickView(gameOf(wed), wed);
-    expect(renderGridPng(wedPv, 3)).toBeNull(); // 1-5 的牌譜短，一張就夠
   });
 
   it('the 阿瓦隆百科 logo sits subdued in the middle of the small round table; the question card drops the big watermark', () => {
@@ -440,46 +444,35 @@ describe('image', () => {
     }
   });
 
-  it('proposal lines on the table are an option (off by default): leader → each other team member, dashed, one color per round getting darker', () => {
-    const [, , wed] = planWeek(bank, 0) as ThreadsPick[];
-    const pv = pickView(gameOf(wed), wed);
-    const rows = sheetRows(pv);
-    const props = rows.filter((r) => r.kind === 'proposal');
-    expect(props.length).toBeGreaterThan(0);
-    const expected = props.reduce((n, p) => n + (p.kind === 'proposal' ? p.team.filter((x) => x !== p.leaderSeat).length : 0), 0);
-    const count = (svg: string): number => (svg.match(/class="prop-line/g) ?? []).length;
-    expect(count(buildPuzzleSvg(pv, 3))).toBe(0); // 預設不畫
-    expect(count(buildPuzzleSvg(pv, 3, { proposalLines: 'off' }))).toBe(0);
-    const all = buildPuzzleSvg(pv, 3, { proposalLines: 'all' });
-    expect(count(all)).toBe(expected);
-    expect(all).toContain('stroke-dasharray');
-    // 只畫這一局：出題那一局的提議
-    const last = rows[rows.length - 1];
-    const cur = last.kind === 'decision' && last.round !== null ? last.round : 0;
-    const curExpected = props.reduce((n, p) => n + (p.kind === 'proposal' && p.round === cur ? p.team.filter((x) => x !== p.leaderSeat).length : 0), 0);
-    expect(count(buildPuzzleSvg(pv, 3, { proposalLines: 'currentRound' }))).toBe(curExpected);
-    // 越後面的局越深（不透明度遞增）
+  it('round lines: only that round, yellow, solid for the team that went on the mission and dashed for other proposals, each with a shield arrowhead at the seat/logo touch point', () => {
     const fake = [
-      { kind: 'proposal' as const, index: 0, round: 1, attempt: 1, leaderSeat: 1, team: [1, 3, 5], votes: [], approves: null, forced: false, approved: false, reliable: true, line: '135' },
-      { kind: 'proposal' as const, index: 1, round: 4, attempt: 1, leaderSeat: 2, team: [4, 6, 8, 9, 10], votes: [], approves: null, forced: false, approved: false, reliable: true, line: '46890' },
+      { kind: 'proposal' as const, index: 0, round: 2, attempt: 1, leaderSeat: 1, team: [1, 3, 5, 7], votes: [], approves: null, forced: false, approved: false, reliable: true, line: '1357' },
+      { kind: 'proposal' as const, index: 1, round: 2, attempt: 2, leaderSeat: 2, team: [4, 6, 8, 10], votes: [], approves: null, forced: false, approved: true, reliable: true, line: '4680' },
     ];
-    const svg = proposalLines(fake as never, 300, 400, 'all');
-    expect((svg.match(/class="prop-line r1"/g) ?? []).length).toBe(2); // 隊長自己不畫
-    expect((svg.match(/class="prop-line r4"/g) ?? []).length).toBe(5);
-    const op = (r: number): number => Number(new RegExp(`stroke-opacity="([\\d.]+)"[^>]*class="prop-line r${r}"`).exec(svg)?.[1]);
-    expect(op(4)).toBeGreaterThan(op(1));
-    // 線畫在座位和標誌下面
-    expect(all.indexOf('prop-line')).toBeLessThan(all.indexOf('url(#tl)'));
-    // 端點在標誌圓的邊上（座位和標誌的切點），不是座位中心
-    const m = /<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"/.exec(svg)!;
-    const r1 = Math.hypot(Number(m[1]) - 300, Number(m[2]) - 400);
-    const r2 = Math.hypot(Number(m[3]) - 300, Number(m[4]) - 400);
-    const seat = Math.hypot(seatPosition(1, 300, 400).x - 300, seatPosition(1, 300, 400).y - 400);
-    expect(r1).toBeCloseTo(r2, 0);
-    expect(r1).toBeLessThan(seat - 30); // 在座位圈內側
+    const svg = roundLines(fake as never, 300, 400);
+    expect((svg.match(/class="lane lane-proposal"/g) ?? []).length).toBe(3); // 隊長自己不畫
+    expect((svg.match(/class="lane lane-mission"/g) ?? []).length).toBe(4);
+    expect((svg.match(/class="lane-arrow"/g) ?? []).length).toBe(7); // 每條線一個盾牌箭頭
+    const mission = /<line [^>]*class="lane lane-mission"\/>/.exec(svg)![0];
+    const other = /<line [^>]*class="lane lane-proposal"\/>/.exec(svg)![0];
+    expect(mission).not.toContain('stroke-dasharray'); // 出任務的實線
+    expect(other).toContain('stroke-dasharray'); // 其他虛線
+    expect(mission).toContain('#facc15'); // 黃色
+    // 起點在隊長座位與標誌的切點
+    const m1 = /x1="([\d.]+)" y1="([\d.]+)"/.exec(other)!;
     const rim = logoRimPoint(1, 300, 400);
-    expect(Number(m[1])).toBeCloseTo(rim.x, 0);
-    expect(Number(m[2])).toBeCloseTo(rim.y, 0);
+    expect(Number(m1[1])).toBeCloseTo(rim.x, 0);
+    expect(Number(m1[2])).toBeCloseTo(rim.y, 0);
+    // 題目卡只畫出題那一局的提議；回顧圖只畫那一局的
+    for (let w = 0; w < 2; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const rows = sheetRows(pv);
+        const lanes = (rs: readonly (typeof rows)[number][]): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.filter((x) => x !== r.leaderSeat).length : 0), 0);
+        expect((buildPuzzleSvg(pv, 3).match(/class="lane /g) ?? []).length).toBe(lanes(cardSheetRows(pv)));
+        for (const { round, svg: rs } of buildRoundSvgs(pv, 3)) expect((rs.match(/class="lane /g) ?? []).length).toBe(lanes(roundRows(rows, round)));
+      }
+    }
   });
 
   it('identity is one line without the gray subtitle: 忠臣 / 派西（夜間看到 X、Y 兩根拇指）/ 梅林（看到紅…，莫德雷德看不到）/ 紅方（隊友…）', () => {
@@ -548,7 +541,7 @@ describe('image', () => {
     const pv = pickView(gameOf(tue), tue);
     const i = pv.shown.findIndex((e) => e.kind === 'proposal' && !e.forced);
     expect(i).toBeGreaterThanOrEqual(0);
-    const plain = buildPuzzleSvg(pv, 2);
+    const plain = allSvg(pv, 2);
     expect(plain).not.toContain('票沒記錄');
     expect(plain).toContain('灰 = 強制局不投票');
     // 同一題，把一次非強制的提議改成票沒記錄
@@ -557,7 +550,7 @@ describe('image', () => {
     expect(row?.kind === 'proposal' && row.votes.every((v) => v === 'unknown')).toBe(true);
     expect(voteLegend(sheetRows(unreliable))).toContain('？ = 票沒記錄');
     expect(voteLegend(sheetRows(pv))).not.toContain('票沒記錄');
-    const svg = buildPuzzleSvg(unreliable, 2);
+    const svg = allSvg(unreliable, 2);
     expect(svg).toContain('票沒記錄');
     expect(svg).toContain('#52525b'); // 跟強制局的灰（#18181b）不同色
     expect(svg).toContain('>？<');
@@ -601,12 +594,12 @@ describe('image', () => {
       };
       const row = sheetRows(mine).find((r) => r.kind === 'lake' && r.targetSeat === target);
       expect(row?.kind === 'lake' && row.seen).toBe(evil ? 'red' : 'good');
-      const svg = buildPuzzleSvg(mine, 2);
+      const svg = allSvg(mine, 2);
       expect(svg).toContain(`你看到：${evil ? '紅' : '好人'}`);
       expect(svg).toContain('拇指');
       expect(recordLines(sheetRows(mine)).map((l) => l.map((x) => x.t).join('')).join('\n')).toContain(`（你看到的：${evil ? '紅' : '好人'}）`);
       // 別人的湖不畫結果
-      if (!pv.shown.some((e) => e.kind === 'lake' && e.holderSeat === pv.pick.seat)) expect(buildPuzzleSvg(pv, 2).includes('你看到：')).toBe(false);
+      if (!pv.shown.some((e) => e.kind === 'lake' && e.holderSeat === pv.pick.seat)) expect(allSvg(pv, 2).includes('你看到：')).toBe(false);
     }
     expect(found).not.toBeNull();
     expect(textWidth('0 家 驗 0 家 → 宣告藍（你看到：好人）', 22)).toBeLessThanOrEqual(10 * 63);

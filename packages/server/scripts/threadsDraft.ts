@@ -22,7 +22,7 @@ import { draftMarkdown } from '../src/bots/threads/draft';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
 import { pickOverrideOf } from '../src/bots/threads/picksFile';
-import { renderAnswerPng, renderGridPngs, renderPuzzlePng } from '../src/bots/threads/image';
+import { renderAnswerPng, renderGridPngs, renderPuzzlePng, renderRoundPngs } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 
 const root = path.resolve(__dirname, '..');
@@ -87,6 +87,13 @@ for (let i = 0; i < days; i++) {
         return name;
       });
       if (grids.length) draft.post.gridImages = grids;
+      // 前面幾局的回顧圖（一局一張，跟自動發佈一樣 <日期>-round-<局>.png）
+      const rounds = renderRoundPngs(pv, weekdayOf(date)).map(({ round, png }) => {
+        const name = `${date}-round-${round}.png`;
+        fs.writeFileSync(path.join(outDir, name), png);
+        return name;
+      });
+      if (rounds.length) draft.post.roundImages = rounds;
     } catch (err) {
       console.warn(`${date}: grid images skipped (${(err as Error).message})`);
     }

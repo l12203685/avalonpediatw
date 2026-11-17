@@ -1,13 +1,14 @@
 /**
  * 題目卡之後的圖（輪播第二、三張），照發文順序：
- *   1. 牌譜續圖 renderGridPngs：牌譜放不進題目卡時才有，要幾張就幾張（`grid-1`、`grid-2`…，每張寫第幾張／共幾張）；
- *   2. 答案卡 renderAnswerPng：公布完整答案的那天（昨天不是同一局接著打）才有，延續的兩天一起公布。
+ *   1. 牌譜續圖 renderGridPngs：題目那一局的牌譜放不進題目卡時才有（`grid-1`、`grid-2`…）；
+ *   2. 前面幾局的回顧圖 renderRoundPngs：一局一張（`round-1`、`round-2`…；站長 11/18「每一局都只呈現該局的表格 & 湖中」）；
+ *   3. 答案卡 renderAnswerPng：公布完整答案的那天（昨天不是同一局接著打）才有，延續的兩天一起公布。
  * prepareDaily 的 renderExtraImages 用它；題目卡本身由 renderImage 畫。
  */
 
 import type { ThreadsDraft } from '../draft';
 import type { ThreadsGenerator } from '../generate';
-import { renderAnswerPng, renderGridPngs } from '../image';
+import { renderAnswerPng, renderGridPngs, renderRoundPngs } from '../image';
 import { addDays, weekdayOf } from '../plan';
 
 export function extraRenderers(gen: ThreadsGenerator): (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[] {
@@ -16,6 +17,7 @@ export function extraRenderers(gen: ThreadsGenerator): (date: string, draft: Thr
     const pick = gen.pickFor(date);
     const pv = pick ? gen.viewOf(pick) : null;
     if (pv) renderGridPngs(pv, weekdayOf(date)).forEach((png, i) => out.push({ suffix: `grid-${i + 1}`, png }));
+    if (pv) for (const { round, png } of renderRoundPngs(pv, weekdayOf(date))) out.push({ suffix: `round-${round}`, png });
     if (draft.answerToYesterday && !draft.continuesYesterday) {
       const yPick = gen.pickFor(addDays(date, -1));
       const yPv = yPick ? gen.viewOf(yPick) : null;
