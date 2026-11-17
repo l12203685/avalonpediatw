@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, proposalLines } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, proposalLines, logoRimPoint } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -470,6 +470,16 @@ describe('image', () => {
     expect(op(4)).toBeGreaterThan(op(1));
     // 線畫在座位和標誌下面
     expect(all.indexOf('prop-line')).toBeLessThan(all.indexOf('url(#tl)'));
+    // 端點在標誌圓的邊上（座位和標誌的切點），不是座位中心
+    const m = /<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"/.exec(svg)!;
+    const r1 = Math.hypot(Number(m[1]) - 300, Number(m[2]) - 400);
+    const r2 = Math.hypot(Number(m[3]) - 300, Number(m[4]) - 400);
+    const seat = Math.hypot(seatPosition(1, 300, 400).x - 300, seatPosition(1, 300, 400).y - 400);
+    expect(r1).toBeCloseTo(r2, 0);
+    expect(r1).toBeLessThan(seat - 30); // 在座位圈內側
+    const rim = logoRimPoint(1, 300, 400);
+    expect(Number(m[1])).toBeCloseTo(rim.x, 0);
+    expect(Number(m[2])).toBeCloseTo(rim.y, 0);
   });
 
   it('identity is one line without the gray subtitle: 忠臣 / 派西（夜間看到 X、Y 兩根拇指）/ 梅林（看到紅…，莫德雷德看不到）/ 紅方（隊友…）', () => {

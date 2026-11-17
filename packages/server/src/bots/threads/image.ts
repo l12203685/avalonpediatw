@@ -366,6 +366,15 @@ export function missionTeam(rows: readonly SheetRow[], round: number): number[] 
   return team ? [...team.team] : [];
 }
 
+/** 圓桌中間標誌的半徑（座位圈內側再留一點空隙）。 */
+const TABLE_LOGO_R = RING_R - SEAT_R - 10;
+
+/** 座位 seat 對著圓心那一側、在標誌圓邊上的點（座位和標誌的切點）。 */
+export function logoRimPoint(seat: number, cx: number, cy: number): { x: number; y: number } {
+  const { ux, uy } = seatPosition(seat, cx, cy);
+  return { x: cx + TABLE_LOGO_R * ux, y: cy + TABLE_LOGO_R * uy };
+}
+
 /** 每局一個顏色，第 1 局最淡、越後面越深（同一個紫色系：不跟紅／藍／綠／金的標記搶）。 */
 const PROPOSAL_LINE_COLORS = ['#ddd6fe', '#c4b5fd', '#a78bfa', '#8b5cf6', '#7c3aed'] as const;
 const PROPOSAL_LINE_OPACITY = [0.22, 0.3, 0.4, 0.5, 0.6] as const;
@@ -384,12 +393,13 @@ export function proposalLines(rows: readonly SheetRow[], cx: number, cy: number,
   const out: string[] = [];
   for (const p of props) {
     if (mode === 'currentRound' && p.round !== cur) continue;
-    const a = seatPosition(p.leaderSeat, cx, cy);
+    // 站長 11/18：「虛線我希望都從座位跟Logo 的切點處連接」→ 端點在圓心到座位那條線上、標誌圓的邊上（弦橫過標誌）
+    const a = logoRimPoint(p.leaderSeat, cx, cy);
     const color = PROPOSAL_LINE_COLORS[Math.min(4, p.round - 1)];
     const op = PROPOSAL_LINE_OPACITY[Math.min(4, p.round - 1)];
     for (const seat of p.team) {
       if (seat === p.leaderSeat) continue;
-      const b = seatPosition(seat, cx, cy);
+      const b = logoRimPoint(seat, cx, cy);
       out.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${color}" stroke-opacity="${op}" stroke-width="2.5" stroke-dasharray="7 6" class="prop-line r${p.round}"/>`);
     }
   }
@@ -402,7 +412,7 @@ export function proposalLines(rows: readonly SheetRow[], cx: number, cy: number,
  */
 function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: number, lines: ProposalLines = 'off'): string {
   const uri = logoDataUri();
-  const r = RING_R - SEAT_R - 10;
+  const r = TABLE_LOGO_R;
   const logo = uri
     ? `<defs><clipPath id="tl"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath></defs>` +
       `<image href="${uri}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" opacity="${TABLE_LOGO_OPACITY}" clip-path="url(#tl)" preserveAspectRatio="xMidYMid slice"/>` +
