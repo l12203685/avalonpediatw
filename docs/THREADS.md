@@ -220,7 +220,9 @@ repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，
    - 權杖不要貼在對話、Issue 或程式裡。
 6. **先手動試跑一次**：Actions → Threads 每日發文 → Run workflow，mode 選 `dry-run`，看摘要。
 7. **打開正式發佈**：Variables 新增 `THREADS_PUBLISH`＝`1`（一次就好）。之後在主控台「Threads／IG 上線」填正式發的第一天；Claude 下一次 08:00 的同步寫進 `threads_live.json`，從那天起每天中午自動發。主控台空白＝一律只試跑。（舊做法：設 repo 變數 `THREADS_LIVE_FROM`，有設就蓋過主控台的值。）
-8. **要停**：主控台勾「暫停」（等 08:00 同步），或要馬上停就把 repo 變數 `THREADS_PUBLISH` 改成 `0` 或刪掉。
+8. **要停**：
+   - 一般：主控台「Threads／IG 上線」勾「暫停」按儲存。要等下一次台北 08:00 Claude 同步進 `threads_live.json` 才生效（08:00 前存的當天 12:07 就不發，08:00 後存的從隔天起）；Threads 和 IG 都停。
+   - 要馬上停、不等同步：repo 變數 `THREADS_PUBLISH` **和** `INSTAGRAM_PUBLISH` 都改成 `0` 或刪掉。只關 `THREADS_PUBLISH` 的話 IG 照樣會發。
 
 ### 權杖到期
 

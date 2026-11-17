@@ -1222,6 +1222,17 @@ describe('workflow', () => {
       expect(runGate(auto, { liveFrom: '2024-02-29', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2024-02-29' });
     });
 
+    it.skipIf(!hasBash || !hasJq)('a liveFrom with trailing / leading whitespace or a newline (file or repo variable) counts as unset', () => {
+      for (const d of ['2026-01-01\n', '2026-01-01\n\n', ' 2026-01-01', '2026-01-01 ', '2026-01-01\t', '\n2026-01-01', '2026-01-01\r']) {
+        expect(runGate(auto, { liveFrom: d, paused: false }), JSON.stringify(d)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+        expect(runGate({ ...auto, LIVE_FROM: d }, { liveFrom: '2026-01-01', paused: false }), JSON.stringify(d)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+      }
+      // 非字串的 liveFrom 也不算
+      expect(runGate(auto, { liveFrom: 20260101, paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+      // 乾淨的同一天照常
+      expect(runGate(auto, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2026-01-01' });
+    });
+
     it('the calendar check does not depend on GNU date (portable: jq only)', () => {
       const script = gateScript();
       expect(script).not.toMatch(/\bdate\s+(?:-u\s+)?-d\b/);
@@ -1236,7 +1247,7 @@ describe('workflow', () => {
         try { execFileSync('bash', ['-c', `${fn}\nreal_date "$1"`, 'x', d], { env: { PATH: process.env.PATH ?? '' }, stdio: 'ignore' }); return true; } catch { return false; }
       };
       for (const d of ['2024-02-29', '2000-02-29', '2026-01-31', '2026-04-30', '2026-12-31', '2026-11-18']) expect(ok(d), d).toBe(true);
-      for (const d of ['2025-02-29', '1900-02-29', '2026-02-30', '2026-04-31', '2026-13-01', '2026-00-10', '2026-01-00', '2026-1-01', '20260101', '', 'x2026-01-01']) expect(ok(d), d).toBe(false);
+      for (const d of ['2025-02-29', '1900-02-29', '2026-02-30', '2026-04-31', '2026-13-01', '2026-00-10', '2026-01-00', '2026-1-01', '20260101', '', 'x2026-01-01', '2026-01-01\n', ' 2026-01-01', '2026-01-01 ', '2026-01-01\t']) expect(ok(d), JSON.stringify(d)).toBe(false);
     });
 
     it('reads threads_live.json before the gate and passes the gate\'s effective date to every script (not the raw variable)', () => {
