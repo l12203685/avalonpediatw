@@ -80,6 +80,10 @@ MIN_APPROVE = 6  # of 10 votes
 LEADER_MIN_SHARE = 0.8  # = packages/shared/src/stats/mistakes.ts
 LEADER_MIN_MARGIN = 3
 EARLIEST_DATE = "2015-01-01"
+VENUES = ("線瓦", "面瓦")  # 線上／面對面: the only category kept as data (Edward 2026-11-17)
+# 陣容強度 S tiers = packages/shared/src/stats/strength.ts S_TIERS (high = 高強度, S >= 65)
+S_TIERS = (("high", 65.0), ("strong", 55.0), ("normal", 38.0), ("weak", float("-inf")))
+INFER_ALL_WHITE = "all_white_after_success"
 
 ERROR, WARN, INFO = "error", "warn", "info"
 
@@ -105,6 +109,7 @@ RULES: dict[str, tuple[str, str]] = {
     "DUP_SAME_SOURCE": (WARN, "同一個來源登錄了兩次"),
     "CONFLICT": (WARN, "不同來源記的不一樣"),
     "NEAR_DUP": (WARN, "疑似同一局（同一天、同配置，但派隊或任務不同）"),
+    "INFERRED_VOTES": (INFO, "順著上一局成功的隊伍派、紀錄沒寫投票：推定全部投白（不是原始紀錄）"),
     "OWNER_FLAG": (INFO, "試算表 note 標了要注意（review／badGame 等）"),
     "LAKE_CLAIM": (INFO, "湖的宣告沒有記"),
     "NO_DATE": (INFO, "沒有日期"),
@@ -148,12 +153,16 @@ def dataset_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
         game, reason = rm.sheet_game(row, doc)
         notes = row[idx["note"]] if isinstance(row[idx["note"]], list) else []
         flags = sorted(note_vocab[i] for i in notes if 0 <= i < len(note_vocab) and note_vocab[i] in OWNER_FLAGS)
+        lineup = row[idx["lineup"]] if "lineup" in idx else []
         out.append({
             "src": src,
             "id": str(row[idx["id"]]),
             "kind": KIND_BOT if category == gc.BOT_CATEGORY else KIND_REAL,
             "date": rm.iso_date(row[idx["date"]]),
-            "category": category if category in rm.GAME_CATEGORIES[1:] else "",
+            "venue": category if category in VENUES else "",
+            # the sheet's 分類 mixes 線瓦/面瓦 with subjective labels (娛樂 ...): kept only as provenance
+            "legacy": category if category and category not in VENUES and category != gc.BOT_CATEGORY else "",
+            "s": round(lineup[1] / 10, 1) if isinstance(lineup, list) and len(lineup) > 1 and isinstance(lineup[1], (int, float)) else None,
             "game": game,
             "problem": "" if game else f"試算表這局的紀錄讀不懂（{reason}）",
             "flags": flags,
@@ -181,14 +190,16 @@ def records_sources(doc: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]]
         else:
             continue
         tags = [t for t in post.get("tags", []) if isinstance(t, str)]
-        category = next((t for t in tags if t in rm.GAME_CATEGORIES[1:]), "")
         game = post.get("game")
+        lineup = post.get("lineup") if isinstance(post.get("lineup"), dict) else {}
         out.append({
             "src": src,
             "id": sid,
             "kind": KIND_SIM if (post.get("sim") or src == SRC_SIM) else KIND_REAL,
             "date": post.get("date") or "",
-            "category": category,
+            "venue": next((t for t in tags if t in VENUES), ""),
+            "legacy": next((t for t in tags if t in rm.GAME_CATEGORIES[1:] and t not in VENUES), ""),
+            "s": lineup.get("s") if isinstance(lineup.get("s"), (int, float)) else None,
             "game": game,
             "problem": "" if game else (post.get("problem") or "讀不懂"),
             "flags": [],
@@ -252,7 +263,8 @@ def derive_leaders(teams: Sequence[str]) -> list[str] | None:
     return [SEATS[(start + k) % 10] for k in range(len(teams))]
 
 
-def validate(game: Mapping[str, Any], partial: bool = False) -> list[dict[str, str]]:
+def validate(game: Mapping[str, Any], partial: bool = False, inferred: list[dict[str, Any]] | None = None,
+             infer: bool = True) -> list[dict[str, str]]:
     """Every broken rule of one parsed game (the site's game object). partial = a 模擬 record, which may
     stop anywhere: the end-of-game rules (decided, result, assassination, leader rotation) are skipped."""
     checks: list[dict[str, str]] = []
@@ -267,6 +279,7 @@ def validate(game: Mapping[str, Any], partial: bool = False) -> list[dict[str, s
     blue = red = 0
     decided_at = 0
     all_teams: list[str] = []
+    prev_success_team = ""  # the team of the previous round's mission when it succeeded
     for r, rnd in enumerate(rounds, 1):
         size = TEAM_SIZES[r - 1] if r <= len(TEAM_SIZES) else 0
         props = list(rnd.get("proposals", []))
@@ -288,10 +301,19 @@ def validate(game: Mapping[str, Any], partial: bool = False) -> list[dict[str, s
             if k >= FORCED_ATTEMPT:
                 continue
             last = k == len(props) and bool(mission)
+            if (infer and last and k == 1 and len(yes) < MIN_APPROVE and not (p.get("votes") or [])
+                    and prev_success_team and set(prev_success_team) <= set(team)):
+                # Edward 2026-11-17: after a mission succeeds the next leader often re-sends that team and
+                # everyone simply approves; recorders then skip the votes. Inferred, never silent.
+                checks.append(_check("INFERRED_VOTES", f"第 {r} 局第 1 次提議 {team} 順著上一局成功的隊伍 {prev_success_team}，沒記投票，推定全部投白"))
+                if inferred is not None:
+                    inferred.append({"round": r, "attempt": 1, "kind": INFER_ALL_WHITE})
+                continue
             if last and len(yes) < MIN_APPROVE:
                 checks.append(_check("VOTE_RESULT", f"第 {r} 局第 {k} 次提議出了任務，但紀錄的贊成票只有 {len(yes)} 張（要 {MIN_APPROVE} 張）"))
             elif not last and len(yes) >= MIN_APPROVE:
                 checks.append(_check("VOTE_RESULT", f"第 {r} 局第 {k} 次提議有 {len(yes)} 張贊成（過半），卻沒有出任務"))
+        prev_success_team = ""
         if not mission:
             continue
         if not re.fullmatch(r"[ox]+", mission):
@@ -308,6 +330,7 @@ def validate(game: Mapping[str, Any], partial: bool = False) -> list[dict[str, s
                 checks.append(_check("FAILS_GT_RED", f"第 {r} 局出了 {mission.count('x')} 張失敗，隊伍 {team} 上只有 {on_red} 個紅方"))
         if mission_success(r, mission):
             blue += 1
+            prev_success_team = team
         else:
             red += 1
         if not decided_at and (blue == 3 or red == 3):
@@ -412,8 +435,8 @@ def conflicts(main: Mapping[str, Any], other: Mapping[str, Any]) -> list[str]:
             out.append("投票（" + "、".join(diff[:3]) + ("…" if len(diff) > 3 else "") + "）")
     if main["date"] and other["date"] and main["date"] != other["date"]:
         out.append(f"日期（{main['date']} / {other['date']}）")
-    if main["category"] and other["category"] and main["category"] != other["category"]:
-        out.append(f"分類（{main['category']} / {other['category']}）")
+    if main["venue"] and other["venue"] and main["venue"] != other["venue"]:
+        out.append(f"線上／面對面（{main['venue']} / {other['venue']}）")
     return out
 
 
@@ -445,10 +468,13 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         cid = (by_src.get(SRC_DISCORD) or by_src.get(SRC_SHEET) or by_src.get(SRC_IMPORT) or main)
         kind = KIND_SIM if main["kind"] == KIND_SIM else (KIND_BOT if any(s["kind"] == KIND_BOT for s in members) else KIND_REAL)
         date = next((s["date"] for s in members if s["date"]), "")
-        category = next((s["category"] for s in members if s["category"]), "")
+        venue = next((s["venue"] for s in members if s["venue"]), "")
+        legacy = sorted({s["legacy"] for s in members if s["legacy"]})
+        s_value = next((s["s"] for s in members if s["s"] is not None), None)
         checks: list[dict[str, str]] = []
+        inferred: list[dict[str, Any]] = []
         if main["game"]:
-            checks += validate(main["game"], partial=kind == KIND_SIM)
+            checks += validate(main["game"], partial=kind == KIND_SIM, inferred=inferred)
             counts = Counter(s["src"] for s in members)
             for src, n in sorted(counts.items()):
                 if n > 1:
@@ -472,12 +498,16 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             "id": public_id(cid),
             "kind": kind,
             "date": date,
-            "category": category,
+            "venue": venue,
+            **({"legacyCategory": legacy} if legacy else {}),
+            "s": s_value,
+            "strength": strength_tier(s_value),
             "status": status,
             "sources": [{"src": s["src"], "id": public_id(s)} for s in members],
             "fp": main["fp"],
             "game": strip_names(main["game"]),
             **({"problem": main["problem"]} if not main["game"] else {}),
+            **({"inferred_votes": inferred} if inferred else {}),
             "checks": checks,
         })
     near_dups(rows)
@@ -486,6 +516,13 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             row["status"] = WARN
     rows.sort(key=lambda r: ({KIND_REAL: 0, KIND_BOT: 1, KIND_SIM: 2}[r["kind"]], r["date"] == "", _neg(r["date"]), r["id"]))
     return rows
+
+
+def strength_tier(s: float | None) -> str:
+    """Objective table strength from the lineup S (instead of subjective 娛樂／新手 labels)."""
+    if s is None:
+        return ""
+    return next(tier for tier, floor in S_TIERS if s >= floor)
 
 
 def _neg(date: str) -> str:
@@ -616,6 +653,40 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append("")
     L.append(f"多個來源合成一局的：{counts['merged']} 局。")
     L.append("")
+    real_ok = [r for r in rows if r["kind"] != KIND_SIM and r["game"]]
+    L.append("## 線上／面對面與陣容強度")
+    L.append("")
+    L.append("站長 2026-11-17：分類只留「線瓦／面瓦」；「娛樂」「新手局」這類主觀標籤不再當分析篩選，改看成績與當下組成。"
+             "總庫的 `venue` 是線瓦／面瓦，`strength` 由陣容強度 S（場上 10 人開局前 PR 的平均）分層："
+             "高強度 S ≥ 65、偏強 55–65、一般 38–55、偏弱 < 38（同網站 strength.ts）。試算表舊的「娛樂」只留在 `legacyCategory` 當來源紀錄。")
+    L.append("")
+    venue_n = Counter(r["venue"] or "（沒記）" for r in real_ok)
+    tier_name = {"high": "高強度", "strong": "偏強", "normal": "一般", "weak": "偏弱", "": "（算不出 S）"}
+    tier_n = Counter(tier_name[r["strength"]] for r in real_ok)
+    L.append("| 線上／面對面 | 局數 |")
+    L.append("|---|---|")
+    for k, n in venue_n.most_common():
+        L.append(f"| {k} | {n} |")
+    L.append("")
+    L.append("| 陣容強度 | 局數 |")
+    L.append("|---|---|")
+    for k in ("高強度", "偏強", "一般", "偏弱", "（算不出 S）"):
+        if tier_n.get(k):
+            L.append(f"| {k} | {tier_n[k]} |")
+    L.append("")
+    orig = [r for r in real_ok if any(c["rule"] == "VOTE_RESULT" for c in validate(r["game"], infer=False))]
+    full = [r for r in orig if not any(c["rule"] == "VOTE_RESULT" for c in r["checks"])]
+    part = [r for r in orig if r.get("inferred_votes") and r not in full]
+    L.append("## 投票紀錄不完整")
+    L.append("")
+    L.append(f"出任務的提議贊成不到 6 張、或過半卻沒出任務的實戰局：{len(orig)} 局。站長 2026-11-17 指出常見原因是「順著前一局開藍出去 "
+             f"所以下一派 直接全開白」：上一局任務成功、這一局第 1 次提議包含上一局出任務的隊伍、而且紀錄沒寫任何投票記號時，"
+             f"推定 10 人全部投白，標成 `inferred_votes: {INFER_ALL_WHITE}`（不是原始紀錄，`INFERRED_VOTES` 一條條列在每局的檢查裡）。")
+    L.append("")
+    L.append(f"- 這樣推定之後完全對得上：{len(full)} 局")
+    L.append(f"- 推定了一部分、還有別的提議對不上：{len(part)} 局")
+    L.append(f"- 剩下要站長判斷的：{len(orig) - len(full)} 局（編號在下面「`VOTE_RESULT`」一節）")
+    L.append("")
     L.append("## 每個來源進了哪裡")
     L.append("")
     L.append("| 類型 | 來源組合 | 讀得懂 | 局數 |")
@@ -698,6 +769,7 @@ PLAN = """## 下一步（第 2 步：其他檔案改從總庫產生）
 3. **records_cache.json（牌譜紀錄頁）**：每一筆對應總庫的一局，頁面上顯示檢查結果（例如「這局的投票紀錄不完整」）。
 4. **sim_bank.json（模擬瓦、Threads 題庫）**：從總庫挑「沒有錯、有牌譜頁」的實戰局，取代目前從牌譜快照另外建。
 5. **機器人重播與量尺**：一律讀總庫的同一批局，報告裡寫總庫版本。
+6. **強者的定義**：全站統一用 PR（站長 2026-11-17「強者定義 = PR」）。分析的篩選用陣容強度 S 與 PR，不用「娛樂／新手局」這類主觀分類。
 """
 
 

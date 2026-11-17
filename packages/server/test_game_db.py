@@ -37,8 +37,8 @@ def rules(game, partial=False):
     return [c["rule"] for c in gd.validate(game, partial) if c["level"] != gd.INFO]
 
 
-def source(src, sid, game, kind=gd.KIND_REAL, date="2026-01-02", category="線瓦"):
-    return {"src": src, "id": sid, "kind": kind, "date": date, "category": category, "game": game,
+def source(src, sid, game, kind=gd.KIND_REAL, date="2026-01-02", venue="線瓦", legacy="", s=None):
+    return {"src": src, "id": sid, "kind": kind, "date": date, "venue": venue, "legacy": legacy, "s": s, "game": game,
             "problem": "" if game else "讀不懂", "flags": [], "fp": rm.game_fingerprint(game) if game else ""}
 
 
@@ -123,7 +123,45 @@ class ValidateTest(unittest.TestCase):
         self.assertIn("UNDECIDED", rules(g))
 
 
+class InferenceTest(unittest.TestCase):
+    def after_success(self, votes):
+        g = copy.deepcopy(GOOD)
+        g["rounds"][1] = {"proposals": [{"team": "5678", "votes": votes}], "mission": "oooo"}  # R1 567 succeeded
+        return g
+
+    def test_resend_after_success_without_votes_is_inferred_all_white(self):
+        inferred = []
+        checks = gd.validate(self.after_success([]), inferred=inferred)
+        self.assertNotIn("VOTE_RESULT", [c["rule"] for c in checks])
+        self.assertIn("INFERRED_VOTES", [c["rule"] for c in checks])
+        self.assertEqual(inferred, [{"round": 2, "attempt": 1, "kind": gd.INFER_ALL_WHITE}])
+        self.assertIn("VOTE_RESULT", [c["rule"] for c in gd.validate(self.after_success([]), infer=False)])
+
+    def test_no_inference_when_votes_were_recorded_or_team_differs(self):
+        self.assertIn("VOTE_RESULT", rules(self.after_success(["9+"])))
+        g = self.after_success([])
+        g["rounds"][1]["proposals"][0]["team"] = "1578"  # does not contain 567
+        self.assertIn("VOTE_RESULT", rules(g))
+
+    def test_build_marks_inferred_votes(self):
+        rows = gd.build([source(gd.SRC_SHEET, "12", self.after_success([]))])
+        self.assertEqual(rows[0]["inferred_votes"][0]["kind"], gd.INFER_ALL_WHITE)
+
+
 class BuildTest(unittest.TestCase):
+    def test_venue_and_legacy_category_are_separate(self):
+        rows = gd.build([source(gd.SRC_SHEET, "12", GOOD, venue="", legacy="娛樂", s=66.2),
+                         source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD), venue="線瓦")])
+        row = rows[0]
+        self.assertEqual((row["venue"], row["legacyCategory"], row["strength"]), ("線瓦", ["娛樂"], "high"))
+        self.assertNotIn("CONFLICT", [c["rule"] for c in row["checks"]])
+        rows = gd.build([source(gd.SRC_SHEET, "12", GOOD, venue="面瓦"), source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD))])
+        self.assertIn("CONFLICT", [c["rule"] for c in rows[0]["checks"]])
+
+    def test_strength_tiers(self):
+        self.assertEqual([gd.strength_tier(x) for x in (65, 64.9, 55, 38, 37.9, None)],
+                         ["high", "strong", "strong", "normal", "weak", ""])
+
     def test_merge_by_fingerprint_uses_the_records_page_id(self):
         rows = gd.build([source(gd.SRC_SHEET, "12", GOOD), source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD))])
         self.assertEqual(len(rows), 1)
