@@ -494,7 +494,7 @@ describe('threads carousel', () => {
     expect(plan.images).toEqual(['2026-11-18.png', '2026-11-18-grid.png', '2026-11-18-answer.png']);
     expect(fs.existsSync(path.join(outDir, '2026-11-18-grid.png'))).toBe(true);
     const urls = plan.images.map((n) => `https://raw.githubusercontent.com/o/r/sha/images/${n}`);
-    const { api, calls } = fakeApi({ recent: [{ id: 'y17', text: '題號 36AKW-2-5' }] });
+    const { api, calls } = fakeApi({ recent: [{ id: 'y17', text: '題號 36AKW-2-5', timestamp: ON_17 }] });
     const res = await postDaily(plan, { api, stateDir, imageUrls: urls });
     const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
     // 3 張子項、1 個輪播容器、1 則留言。
@@ -567,10 +567,10 @@ describe('api', () => {
  * 假的 Instagram API：發佈後真的出現在最近的貼文裡。
  * losePublish：發佈其實成功但回應丟了（回 503）幾次；noLimit：查不到發文額度（權限不夠）；noMe：查不到帳號。
  */
-function fakeIg(opts: { recent?: { id: string; caption: string }[]; losePublish?: number; noLimit?: boolean; noMe?: boolean } = {}) {
+function fakeIg(opts: { recent?: { id: string; caption: string; timestamp?: string }[]; losePublish?: number; noLimit?: boolean; noMe?: boolean } = {}) {
   const calls: { method: string; path: string; params: URLSearchParams }[] = [];
   const containers = new Map<string, string>();
-  const published: { id: string; caption: string }[] = [];
+  const published: { id: string; caption: string; timestamp?: string }[] = [];
   const publishCalls: string[] = [];
   let n = 0;
   let lose = opts.losePublish ?? 0;
@@ -588,7 +588,7 @@ function fakeIg(opts: { recent?: { id: string; caption: string }[]; losePublish?
       publishCalls.push(cid);
       const id = `im${cid}`;
       if (published.some((p) => p.id === id)) return reply(400, { error: { message: 'already published' } });
-      published.unshift({ id, caption: containers.get(cid) ?? '' });
+      published.unshift({ id, caption: containers.get(cid) ?? '', timestamp: '2026-11-18T04:00:00+0000' });
       if (lose > 0) {
         lose--;
         return reply(503, { error: { message: 'gateway timeout' } });
@@ -656,7 +656,7 @@ describe('instagram', () => {
     expect(posts[2].params.get('children')).toBe('ic1,ic2');
 
     const s2 = prepared();
-    const dup = fakeIg({ recent: [{ id: 'old', caption: `題號 ${s2.plan.exerciseId}｜實戰牌譜` }] });
+    const dup = fakeIg({ recent: [{ id: 'old', caption: `題號 ${s2.plan.exerciseId}｜實戰牌譜`, timestamp: ON_18 }] });
     expect((await postInstagram(s2.plan, { api: dup.api, stateDir: s2.stateDir, imageUrls: ['x'] })).status).toBe('found-existing');
     expect(dup.calls.some((c) => c.method === 'POST')).toBe(false);
     expect(readState(s2.stateDir, s2.plan.date)?.postId).toBeNull(); // Threads 那邊之後照樣能發
@@ -676,6 +676,16 @@ describe('instagram', () => {
     expect(r.mediaId).toBe(ig.published[0].id);
     expect(readState(stateDir, plan.date)?.ig?.mediaId).toBe(r.mediaId);
     expect(labels).toEqual(['IG']);
+  });
+
+  it('an older IG post of the same exercise (another day) is not taken for today: IG still publishes one post', async () => {
+    const { plan, stateDir } = prepared();
+    const ig = fakeIg({ recent: [{ id: 'old', caption: `題號 ${plan.exerciseId}｜實戰牌譜`, timestamp: '2026-11-10T04:00:00+0000' }], losePublish: 1 });
+    const r = await postInstagram(plan, { api: ig.api, stateDir, imageUrls: ['https://x/a.jpg'] });
+    expect(r.status).toBe('published');
+    expect(r.mediaId).not.toBe('old');
+    expect(ig.published).toHaveLength(1);
+    expect(r.mediaId).toBe(ig.published[0].id);
   });
 
   it('IG publishing is checked first: an unconfirmable token or missing publish permission is reported (IG skipped, Threads untouched)', async () => {

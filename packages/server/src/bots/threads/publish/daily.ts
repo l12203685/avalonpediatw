@@ -498,9 +498,10 @@ export function igCaption(plan: Pick<DailyPlan, 'text' | 'comment'>): string {
 }
 
 /** 自己最近的 IG 貼文裡找「題號 <題號>」那一篇。 */
-export function findMediaByExercise(media: readonly RecentMedia[], exerciseId: string): RecentMedia | null {
+/** IG 最近的貼文裡找「題號 <題號>」那一篇；給 date 時只認那一天（台北）發的（同一題之前發過的舊貼文不算）。 */
+export function findMediaByExercise(media: readonly RecentMedia[], exerciseId: string, date?: string): RecentMedia | null {
   const needle = `題號 ${exerciseId}`;
-  return media.find((m) => (m.caption ?? '').includes(needle)) ?? null;
+  return media.find((m) => (m.caption ?? '').includes(needle) && (date === undefined || taipeiDateOf(m.timestamp) === date)) ?? null;
 }
 
 export interface IgResult {
@@ -525,7 +526,7 @@ export async function postInstagram(
   if (existing?.ig?.mediaId) return { status: 'already-published', mediaId: existing.ig.mediaId, permalink: existing.ig.permalink, notes: ['狀態檔已經有這一天的 IG 貼文'] };
   if (deps.imageUrls.length === 0) return { status: 'skipped', notes: ['沒有圖：IG 不能只發文字，這天不同步'] };
 
-  const dup = findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId);
+  const dup = findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date);
   if (dup) {
     writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp } });
     return { status: 'found-existing', mediaId: dup.id, permalink: dup.permalink, notes: ['IG 最近的貼文裡已經有今天的題號，補記、不再發'] };
@@ -535,7 +536,7 @@ export async function postInstagram(
     imageUrls: deps.imageUrls,
     caption: igCaption(plan),
     // 回應不明時：IG 最近的貼文裡有今天的題號就是已經發了
-    find: async () => findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId)?.id ?? null,
+    find: async () => findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date)?.id ?? null,
   });
   // 發出去就記下並馬上推上去（跟 Threads 的 checkpoint 一樣）：中斷也不會再發一次。
   writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId, publishedAt: now().toISOString() } });
