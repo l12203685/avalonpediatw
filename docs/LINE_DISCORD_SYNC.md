@@ -168,6 +168,7 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | `SIM_DISCORD_PUBLIC_CHANNEL_IDS` | 空 = 到處公開 | 有設 = 只有這些頻道公開回覆，其他地方只有本人看得到 |
 | `SIM_LINE_GROUP_IDS` | 空 | 鏡像群以外可以玩模擬的 LINE 群（只回模擬指令和 `/指令`、用自己的 reply_token） |
 | `SIM_MIRROR_FOLLOWUPS` | 關 | 鏡像群裡開著題目的人打的 `/派` `/區間` `/下一步` `/公布` `/結束` 要不要同步到 Discord／大廳（預設不同步；`/模擬` 開題那句照常同步） |
+| `MIRROR_BOT_REPLIES` | 開 | （20261117）機器人指令的回覆也同步到另一邊（見〈機器人指令回覆同步〉）；`false` 關掉 |
 | `SIM_BELIEF_MODEL` | `logic` | v1 只有純邏輯 |
 
 ## 一次性設定（Edward 動手）
@@ -246,7 +247,7 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
   一次 `replyMessage`、最多 5 則 = 答案 1 則 + 佇列 4 則，其餘留到下一次；回覆失敗只把取出的佇列訊息放回佇列頭（答案不重送）。
 - 開關：`LINE_STATS_COMMANDS_ENABLED`（預設開，`false` 關），與舊的 `LINE_BOT_COMMANDS_ENABLED`（遊戲指令，預設關）分開；
   狀態頁 `line.statsCommandsEnabled`、`line.stats.statsReplies`。
-- 模擬瓦（20261014）在鏡像群：開題的 `/模擬` 跟 `/戰績` 一樣同步一行、答案只回 LINE、答案佔 reply_token 第 1 則；
+- 模擬瓦（20261014）在鏡像群：開題的 `/模擬` 跟 `/戰績` 一樣同步一行、答案只回 LINE（20261117 起答案送出後也貼到 Discord，見〈機器人指令回覆同步〉）、答案佔 reply_token 第 1 則；
   開著題目的人之後打的 `/派` `/區間` `/下一步` `/公布` `/結束` **預設不同步**（答案本來就不同步，只剩指令行會洗版；
   `SIM_MIRROR_FOLLOWUPS=true` 恢復同步）。答案**送出成功才算數**（回覆失敗不會跳過一步）；同一個人的模擬指令排隊處理
   （算回覆 → 送出 → 才處理下一個）；LINE 重送一個已經回過的事件不再回第二次（只照常清佇列）。
@@ -389,6 +390,32 @@ Discord 同步頻道貼一張 JPG／PNG → 回 LINE 群講一句 → 群裡先�
 
 **驗證**：Discord 同步頻道貼一則 300～500 字、好幾行的訊息 → 回 LINE 群講一句 → 群裡出現完整的一則（換行都在）；
 LINE 群貼一則超過 2000 字的訊息 → Discord 出現 2～3 則，第一則有名字、後面的以 `（續）` 開頭。
+
+## 機器人指令回覆同步（20261117）
+
+Edward 2026-11-17：「在dc/line 輸入機器人指令, line/dc 不會同步另一邊的機器人指令回覆」。以前只有指令那句（打字的人）會同步，
+機器人的回覆只留在打指令的那一邊。現在回覆也送到另一邊（`ChatMirror.relayBotReply`），說話人寫 `百科機器人`：
+
+| 方向 | 怎麼送 | 送什麼 |
+|---|---|---|
+| LINE 鏡像群 → Discord | 回覆真的用 reply_token 送出**之後**才貼到 Discord 同步頻道（Discord 送出鏈；不花 LINE 額度） | `[LINE][百科機器人] <回覆>`。指令那句沒同步過去時（模擬後續指令，`SIM_MIRROR_FOLLOWUPS` 關）回覆前面加一行 `（/派 469）` |
+| Discord 同步頻道 → LINE 群 | 排進 LINE 回覆佇列，下一次有人在 LINE 群說話時用 reply_token 一起送（或交給 listen-bot）；**沒有免費的路就不送**，不會 push | 先一行 `[DC][名字] /指令 選項`（slash 指令本身不是訊息，以前沒同步過），再一行 `[DC][百科機器人] <回覆>`；code block 圍欄、粗體記號拿掉 |
+
+- 同步的指令：戰績、排行、默契、模擬瓦（/模擬 /派 /分析 /區間 /公布 /刺 /結束；`/下一步` 已在 #55 拿掉，不在清單上）、補位、待修正。
+  不同步：`/意見`（匿名）、`/回報` `/認領`（機器人本來就會貼到 Discord）、`/help`（embed）、只有本人看得到的回覆（ephemeral）、同步頻道以外的頻道。
+- 不進網站大廳。
+- 不會重複：LINE 回覆失敗（reply_token 過期）不同步；LINE 重送同一個事件（`isRedelivery`）不再同步一次。
+- 不會繞圈：Discord 那邊作者是機器人的貼文本來就不轉回（`mirrorInbound` 的 bot 檢查）；LINE 回覆佇列送出的訊息不會產生 webhook 事件。
+  兩邊的機器人都不會把同步過來的文字當指令。
+- 圖片：只同步文字。Discord 的回覆有附圖（`/排行` 的圖表、模擬瓦 `/公布` 的牌譜圖）時，LINE 那邊多一行 `（附圖在 Discord）`；
+  LINE 的圖片回覆（`/排行` 圖表、牌譜圖）到 Discord 只有文字（回覆本身的文字版）。
+- 開關：`MIRROR_BOT_REPLIES`（預設開；設 `false` 關掉，回到只同步指令那句）。狀態計數 `botRepliesRelayedCount()`。
+- 額度：LINE → Discord 不花任何 LINE 額度；Discord → LINE 只走回覆佇列（reply 不計額度）或 listen-bot，
+  `LINE_REPLY_DRAIN=false` 又沒有 listen-bot 時直接不送；有設 listen-bot 但它當下失敗時也直接丟，不會像一般同步那樣退回 push。代價是回覆佇列多了訊息：一次回覆最多 5 則，Discord 指令多的時候 LINE 那邊會分好幾次送完。
+
+**驗證**：LINE 群打 `/戰績 某人` → Discord 同步頻道先看到指令那句、再看到 `[LINE][百科機器人] 📊 …`；
+Discord 同步頻道用 `/戰績` → 回 LINE 群講一句 → 群裡出現 `[DC][名字] /戰績 …` 和 `[DC][百科機器人] 📊 …`。
+測試：`src/__tests__/BotReplyMirror.test.ts`。
 
 ## 配額
 

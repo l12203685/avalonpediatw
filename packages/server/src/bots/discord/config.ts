@@ -68,6 +68,10 @@ export const COMMANDS = {
   SIM_PROPOSE: '派',
   SIM_INTERVAL: '區間',
   SIM_NEXT: '下一步',
+  // 2026-11-16: /派 only answers 幾好幾壞; the full reading moved here.
+  SIM_ANALYSIS: '分析',
+  // 2026-11-16: the answer of a 刺殺 exercise (/模擬 刺殺). The game-flow ASSASSINATE above is the English 'assassinate'.
+  SIM_ASSASSINATE: '刺',
   SIM_REVEAL: '公布',
   SIM_END: '結束',
   // 2026-11-03 補位機器人 (bots/seatFiller, services/signagePlayerDispatch.ts):
@@ -107,6 +111,8 @@ export const SIM_OPTIONS = {
   CONTENT: '內容',
   /** /模擬 說明:True → the command list (2026-10-22; the Discord wording uses these option names). */
   HELP: '說明',
+  /** /模擬 局面:1-5…4-5｜5局｜刺殺｜今天 (2026-11-16; same words as LINE's /模擬 3-5 etc.). */
+  STAGE: '局面',
 } as const;
 
 /** Option names of /機器人補位 (bots/seatFiller). */
@@ -130,6 +136,9 @@ export const CLAIM_OPTIONS = {
 
 /** /模擬 角色 choices (value = the LINE alias the parser reads). */
 export const SIM_ROLE_CHOICES: readonly string[] = ['梅林', '派西維爾', '忠臣', '刺客', '莫甘娜', '莫德雷德', '奧伯倫', '紅', '藍'];
+
+/** /模擬 局面 choices (value = the LINE spelling). */
+export const SIM_STAGE_CHOICES: readonly string[] = ['1-5', '2-5', '3-5', '4-5', '5局', '刺殺', '今天'];
 
 /**
  * Game-flow commands that used to drive the self-hosted game. Since the

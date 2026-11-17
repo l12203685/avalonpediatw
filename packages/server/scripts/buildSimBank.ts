@@ -40,5 +40,5 @@ fs.writeFileSync(
 );
 
 console.log(`rows ${counts.rows}, with a record ${counts.recorded}, strict replay ok ${counts.replayable}`);
-console.log(`dropped: lake chain ${counts.lakeChainInvalid}, 娛樂 ${counts.entertainment}, duplicate records ${counts.duplicates}`);
+console.log(`dropped: lake chain ${counts.lakeChainInvalid}, 娛樂 ${counts.entertainment}, 模擬 ${counts.simulated}, duplicate records ${counts.duplicates}`);
 console.log(`bank games ${counts.games} (ids longer than 5: ${counts.idCollisions}), ${fs.statSync(outPath).size} bytes`);

@@ -138,6 +138,8 @@ export interface SimBankBuildCounts {
   replayable: number;
   lakeChainInvalid: number;
   entertainment: number;
+  /** 分類寫「模擬」的局（不是真人實戰，Edward 11/16：「模擬畢竟只是模擬」）。 */
+  simulated: number;
   duplicates: number;
   games: number;
   idCollisions: number;
@@ -145,11 +147,11 @@ export interface SimBankBuildCounts {
 
 /**
  * 牌譜各列 → 題庫。條件（設計 §2、owner D6 預設）：嚴格解析成功、湖的順序合理、
- * 分類不是「娛樂」。同一個 fingerprint 只留一局。輸出照題號排序。只回傳計數，不回傳任何列的內容。
+ * 分類不是「娛樂」，也不是「模擬」（只出真人實戰；Edward 2026-11-16：「模擬畢竟只是模擬」）。同一個 fingerprint 只留一局。輸出照題號排序。只回傳計數，不回傳任何列的內容。
  */
 export function buildBankFile(rows: readonly PaipuRow[], builtFrom = 'sheets_cache.json'): { file: SimBankFile; counts: SimBankBuildCounts } {
   const counts: SimBankBuildCounts = {
-    rows: rows.length, recorded: 0, replayable: 0, lakeChainInvalid: 0, entertainment: 0, duplicates: 0, games: 0, idCollisions: 0,
+    rows: rows.length, recorded: 0, replayable: 0, lakeChainInvalid: 0, entertainment: 0, simulated: 0, duplicates: 0, games: 0, idCollisions: 0,
   };
   const byFingerprint = new Map<string, ReplayGame>();
   for (const row of rows) {
@@ -160,6 +162,7 @@ export function buildBankFile(rows: readonly PaipuRow[], builtFrom = 'sheets_cac
     counts.replayable++;
     if (!parsed.game.lakeChainValid) { counts.lakeChainInvalid++; continue; }
     if ((row['分類'] ?? '').trim() === '娛樂') { counts.entertainment++; continue; }
+    if ((row['分類'] ?? '').includes('模擬')) { counts.simulated++; continue; }
     const fp = recordFingerprint(parsed.game);
     const prev = byFingerprint.get(fp);
     if (prev) {

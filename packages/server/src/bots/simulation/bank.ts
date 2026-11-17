@@ -20,7 +20,8 @@ import * as path from 'path';
 import { describeError } from '../media/bytes';
 import { parseBankEntry, SIM_BANK_VERSION, type SimBankFile } from './bankCodec';
 import { addGameToAggregates, buildHumanAggregates, type HumanAgg } from './human';
-import { buildDecisionPool, type DecisionRef, type SimGame } from './scenario';
+import { linkRecords, readRecordPosts, fingerprintIndex } from './recordsIndex';
+import { buildAssassinPool, buildDecisionPool, buildMidPool, type DecisionRef, type SimGame } from './scenario';
 
 export interface SimBank {
   games: SimGame[];
@@ -28,6 +29,15 @@ export interface SimBank {
   byId: Map<string, number>;
   /** `角色:座位` → 那一家第一個決定。 */
   pool: Map<string, DecisionRef[]>;
+  /** 局面池：`局:角色` → 尾派（1-5～4-5）、第 5 局的派票；派西維爾的派票（scenario.buildMidPool）。 */
+  midPool: Map<string, DecisionRef[]>;
+  /** 刺殺題的局（三藍、有刺殺）。 */
+  assassinPool: number[];
+  /**
+   * games[] 的索引 → 網站牌譜紀錄的貼文 id（recordsIndex.ts）。/公布 附連結；有對照時隨機選題只出有連結的局。
+   * 讀不到牌譜紀錄清單時是空的。
+   */
+  records: Map<number, string>;
   /** 同位置真人（human.ts）。 */
   humans: Map<string, HumanAgg>;
   /** 解析失敗而丟掉的列數。 */
@@ -48,26 +58,29 @@ function addEntry(entry: SimBankFile['games'][number], games: SimGame[], byId: M
   return true;
 }
 
-function finish(games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number): SimBank {
+function finish(games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number, posts?: readonly unknown[] | null): SimBank {
   return {
     games,
     byId,
     pool: buildDecisionPool(games),
+    midPool: buildMidPool(games),
+    assassinPool: buildAssassinPool(games),
+    records: posts ? linkRecords(games, fingerprintIndex(posts)) : new Map(),
     humans,
     dropped,
     decisionPoints: games.reduce((n, g) => n + g.proposals.length, 0),
   };
 }
 
-/** 檔案內容 → 題庫（一次做完；測試與工具用）。 */
-export function buildSimBank(file: SimBankFile): SimBank {
+/** 檔案內容 → 題庫（一次做完；測試與工具用）。`posts` = 網站牌譜紀錄的貼文（對連結用，沒給就沒有連結）。 */
+export function buildSimBank(file: SimBankFile, posts?: readonly unknown[] | null): SimBank {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
   let dropped = 0;
   for (const entry of Array.isArray(file?.games) ? file.games : []) {
     if (!addEntry(entry, games, byId)) dropped++;
   }
-  return finish(games, byId, buildHumanAggregates(games), dropped);
+  return finish(games, byId, buildHumanAggregates(games), dropped, posts);
 }
 
 /** 開機讀題庫時每幾局讓出一次 CPU。 */
@@ -76,7 +89,12 @@ export const SIM_BANK_CHUNK = 25;
 const yieldToLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /** 跟 buildSimBank 一樣的結果，但每 `chunk` 局讓出一次（開機時不擋 webhook）。 */
-export async function buildSimBankAsync(file: SimBankFile, chunk = SIM_BANK_CHUNK, pause: () => Promise<void> = yieldToLoop): Promise<SimBank> {
+export async function buildSimBankAsync(
+  file: SimBankFile,
+  chunk = SIM_BANK_CHUNK,
+  pause: () => Promise<void> = yieldToLoop,
+  posts?: readonly unknown[] | null,
+): Promise<SimBank> {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
   let dropped = 0;
@@ -90,7 +108,8 @@ export async function buildSimBankAsync(file: SimBankFile, chunk = SIM_BANK_CHUN
     addGameToAggregates(humans, games[i]);
     if ((i + 1) % chunk === 0) await pause();
   }
-  return finish(games, byId, humans, dropped);
+  await pause();
+  return finish(games, byId, humans, dropped, posts);
 }
 
 export const SIM_BANK_FILE = 'sim_bank.json';
@@ -131,6 +150,8 @@ export interface SimBankStatus {
   games: number;
   dropped: number;
   decisionPoints: number;
+  /** 對得到網站牌譜紀錄的局數。 */
+  linked: number;
 }
 
 /** 題庫只讀一次；`get()` 在讀完之前等它。 */
@@ -140,7 +161,8 @@ export class SimBankLoader {
 
   constructor(private readonly load: () => SimBank | null | Promise<SimBank | null> = async () => {
     const file = readSimBankFile();
-    return file ? buildSimBankAsync(file) : null;
+    // 網站牌譜紀錄清單（/公布 的連結）：讀不到也照樣出題，只是沒有連結。
+    return file ? buildSimBankAsync(file, SIM_BANK_CHUNK, yieldToLoop, readRecordPosts()) : null;
   }) {}
 
   /** 開機後在背景開始讀（不擋開機）。 */
@@ -167,6 +189,6 @@ export class SimBankLoader {
 
   status(): SimBankStatus {
     const b = this.bank;
-    return { loaded: !!b, games: b?.games.length ?? 0, dropped: b?.dropped ?? 0, decisionPoints: b?.decisionPoints ?? 0 };
+    return { loaded: !!b, games: b?.games.length ?? 0, dropped: b?.dropped ?? 0, decisionPoints: b?.decisionPoints ?? 0, linked: b?.records.size ?? 0 };
   }
 }

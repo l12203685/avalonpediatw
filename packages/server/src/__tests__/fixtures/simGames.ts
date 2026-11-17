@@ -45,6 +45,25 @@ export const GAME_SHORT_TEXT = [
 ].join('\n');
 export const GAME_SHORT_CFG = '128064';
 
+/**
+ * 3-5、刺殺、5局 用（2026-11-16）：同一個配置（紅 3 5 7 9）。第 1 局成功、第 2 局失敗（0家 1450），
+ * 第 3 局派滿 5 次（5家 1458 強制出發、失敗），第 4、5 局成功，刺中梅林 → 三藍死。
+ */
+export const GAME_MID_TEXT = [
+  '460 1+', '279', '370', '469', '157', 'ooo',
+  '1246', '3579', '2468', '4689', '1450', 'ooox',
+  '0>4 o',
+  '1246', '1257', '3579', '1468', '1458', 'ooox',
+  '4>3 x',
+  '12468 0+', 'ooooo',
+  '3>8 o',
+  '12460 8+', 'ooooo',
+].join('\n');
+
+export function midRow(id = 'T-0008'): PaipuRow {
+  return simRow(id, GAME_MID_TEXT, GAME_WIKI_CFG, '1', '三藍死');
+}
+
 export function wikiRow(id = 'T-0001'): PaipuRow {
   return simRow(id, GAME_WIKI_TEXT, GAME_WIKI_CFG, '1', '三藍死');
 }
@@ -81,5 +100,18 @@ export function fixtureBank(copies = 25): SimBank {
   const short = bankEntryFor(parsedGame(shortRow()), 'X');
   const games = Array.from({ length: copies }, (_, i) => ({ ...wiki, id: `W${String(i).padStart(4, '0')}` }));
   games.push({ ...short, id: 'S0000' });
+  return buildSimBank({ version: 1, builtFrom: 'test', games });
+}
+
+/** fixtureBank ＋ 有 3-5 的那局 `mids` 份（代號 M0000…）。 */
+export function fixtureBankWithMid(mids = 3): SimBank {
+  const wiki = bankEntryFor(parsedGame(wikiRow()), 'X');
+  const short = bankEntryFor(parsedGame(shortRow()), 'X');
+  const mid = bankEntryFor(parsedGame(midRow()), 'X');
+  const games = [
+    ...Array.from({ length: 25 }, (_, i) => ({ ...wiki, id: `W${String(i).padStart(4, '0')}` })),
+    { ...short, id: 'S0000' },
+    ...Array.from({ length: mids }, (_, i) => ({ ...mid, id: `M${String(i).padStart(4, '0')}` })),
+  ];
   return buildSimBank({ version: 1, builtFrom: 'test', games });
 }

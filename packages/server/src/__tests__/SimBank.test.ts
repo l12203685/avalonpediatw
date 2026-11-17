@@ -20,9 +20,10 @@ import {
   serialiseRecord,
   type SimBankFile,
 } from '../bots/simulation/bankCodec';
-import { SIM_PROPOSE_SOFT_MAX_CHARS, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
+import { SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
 import { analyze, logicModel } from '../bots/simulation/logic';
 import { claimMaskOf, logicPanel, overlapLabel, releasePanel } from '../bots/simulation/reading';
+import { buildRecordSvg, renderRecordPng } from '../bots/simulation/recordImage';
 import { SimEngine } from '../bots/simulation/session';
 import {
   decisionsOf,
@@ -36,7 +37,7 @@ import {
 } from '../bots/simulation/scenario';
 import { maskOf, seatBit, teamDigits } from '../bots/simulation/seats';
 import { popcount } from '../ai/worlds';
-import { builderRows, FAKE_DATE, FAKE_NAMES, FAKE_NOTE, shortRow, wikiRow } from './fixtures/simGames';
+import { builderRows, FAKE_DATE, FAKE_NAMES, FAKE_NOTE, GAME_MID_TEXT, GAME_WIKI_CFG, midRow, parsedGame, shortRow, simRow, wikiRow } from './fixtures/simGames';
 
 const BANK_PATH = path.resolve(__dirname, '..', '..', 'sim_bank.json');
 
@@ -100,8 +101,15 @@ describe('buildBankFile', () => {
   const { file, counts } = buildBankFile(builderRows());
 
   it('keeps strict-replay, valid-lake, non-娛樂 games once', () => {
-    expect(counts).toEqual({ rows: 7, recorded: 6, replayable: 5, lakeChainInvalid: 1, entertainment: 1, duplicates: 1, games: 2, idCollisions: 0 });
+    expect(counts).toEqual({ rows: 7, recorded: 6, replayable: 5, lakeChainInvalid: 1, entertainment: 1, simulated: 0, duplicates: 1, games: 2, idCollisions: 0 });
     expect(file.games.map((g) => g.cfg).sort()).toEqual(['128064', '753921']);
+  });
+
+  it('only real games: a row whose 分類 says 模擬 never enters the bank (Edward 2026-11-16：「模擬畢竟只是模擬」)', () => {
+    const r = buildBankFile([...builderRows(), simRow('T-0009', GAME_MID_TEXT, GAME_WIKI_CFG, '1', '三藍死', '模擬'), simRow('T-0010', GAME_MID_TEXT, GAME_WIKI_CFG, '1', '三藍死', '模擬局')]);
+    expect(r.counts).toMatchObject({ simulated: 2, games: 2 });
+    // The committed bank came from the sheet's 牌譜 tab, which has no 模擬 rows (checked 2026-11-16; this guard keeps it so).
+    expect(r.file.games.some((g) => g.rec === bankEntryFor(parsedGame(midRow()), 'X').rec)).toBe(false);
   });
 
   it('no names, dates, notes or sheet ids anywhere in the bank', () => {
@@ -158,13 +166,13 @@ describe('loader', () => {
     expect(warns).toEqual(['[sim] sim_bank.json not found; /模擬 answers 題庫還沒準備好']);
     const loader = new SimBankLoader(() => null);
     expect(await loader.get()).toBeNull();
-    expect(loader.status()).toEqual({ loaded: false, games: 0, dropped: 0, decisionPoints: 0 });
+    expect(loader.status()).toEqual({ loaded: false, games: 0, dropped: 0, decisionPoints: 0, linked: 0 });
   });
 });
 
 // ─── The committed bank ────────────────────────────────────────────────────
 
-const ALLOWED = /^[\p{Script=Han}0-9A-Za-z \u3000\n①②③④—・｜、，。：；（）「」【】＋＞＝→✓✗…*%/／\-+.<>=`]+$/u;
+const ALLOWED = /^[\p{Script=Han}0-9A-Za-z :\u3000\n①②③④—・｜、，。：；（）()「」【】＋＞＝→✓✗…*%/／\-+.<>=`?]+$/u;
 
 describe('committed sim_bank.json (property test over the real bank)', () => {
   const file = JSON.parse(fs.readFileSync(BANK_PATH, 'utf8')) as SimBankFile;
@@ -240,6 +248,74 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     expect(checked).toBe(bank.decisionPoints);
   }, 300_000);
 
+  it('Edward 2026-11-17: the opening of QRSZY-3-5 in a group is exactly his compact shape', async () => {
+    const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const r = await engine.handleText('/模擬 題 QRSZY-3-5', { platform: 'line', chatId: 'G', userId: 'U', shared: true });
+    expect(r?.text).toBe([
+      '【模擬瓦 QRSZY-3-5】你是 5家・忠臣',
+      '257 1+', '239', '367', '237 49+', '159', 'ooo',
+      '1459 6+', '1359 7+', '1359 8+', '1590', '1590', 'ooox',
+      '0>9 x',
+      '1237', '1267 6-', '1356', '1456 3+',
+      '',
+      '/派 座位 作答 (沒開題的人也能作答)',
+      '/區間 (百科AI 怎麼讀)',
+      '/help 模擬',
+      '/公布 (結束這題)',
+    ].join('\n'));
+  });
+
+  it('Edward 2026-11-17: /區間 without content shows how 百科AI reads QRSZY-3-5 and the team it would send', async () => {
+    let now = 1;
+    const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const req = { platform: 'line' as const, chatId: 'G', userId: 'U', shared: true };
+    const open = await engine.handleText('/模擬 題 QRSZY-3-5', req);
+    open?.commit();
+    now += 1000;
+    const r = await engine.handleText('/區間', req);
+    r?.commit();
+    const text = r?.text ?? '';
+    const lines = text.split('\n');
+    expect(lines[0]).toBe('【QRSZY-3-5 百科AI 怎麼讀】');
+    // 紅機率列出另外 9 家（不含 5家），由高到低。
+    const reds = /^紅機率：(.*)$/u.exec(lines[1])?.[1].split('・') ?? [];
+    expect(reds).toHaveLength(9);
+    expect(reds.some((x) => x.startsWith('5 '))).toBe(false);
+    const ps = reds.map((x) => Number(/ (\d+(?:\.\d)?)%$/u.exec(x)?.[1]));
+    expect([...ps].sort((a, b) => b - a)).toEqual(ps);
+    expect(lines[2]).toMatch(/^最可能的紅方：\d{4} \d+%/u);
+    expect(lines[3]).toMatch(/^百科AI 會派：(?=\d*5)\d{4}（全好 \d+(?:\.\d)?%）$/u);
+    expect(lines.at(-1)).toBe('/派｜/公布');
+    // 同一題每次讀法一樣（固定種子）。
+    const again = await engine.handleText('/區間', req);
+    expect(again?.text).toBe(text);
+  });
+
+  it('Edward 2026-11-17: /公布 of QRSZY-3-5 is three lines (配置, 原始結果, 完整牌譜) and carries the full record image', async () => {
+    const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const req = { platform: 'line' as const, chatId: 'R', userId: 'U' };
+    (await engine.handleText('/模擬 題 QRSZY-3-5', req))?.commit();
+    const r = await engine.handleText('/公布', req);
+    const lines = (r?.text ?? '').split('\n');
+    expect(lines.slice(0, 2)).toEqual(['【QRSZY-3-5 公布】配置: 刺娜莫奧派梅 893270', '原始結果: 三藍活']);
+    expect(lines[2]).toMatch(/^完整牌譜(: https:\/\/avalon-game-platform\.web\.app\/#records=\S+|（網站上沒有這一局）:)$/u);
+    expect(r?.text).not.toContain('/模擬 再來一題');
+    expect(r?.image?.title).toBe('QRSZY-3-5');
+    const png = renderRecordPng(r!.image!.game, r!.image!.title);
+    expect(png.subarray(1, 4).toString('latin1')).toBe('PNG');
+    // 整局（沒有截斷）、有角色、沒有名字。
+    const svg = buildRecordSvg(r!.image!.game, 'QRSZY-3-5');
+    expect(svg).toContain('第 4 輪任務');
+    expect(svg).toContain('刺殺：刺 7 家（沒刺中）');
+    expect(svg).toContain('>梅<');
+  });
+
+  it('/下一步 was removed: one line pointing to /派 /區間 /公布', async () => {
+    const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const r = await engine.handleText('/下一步', { platform: 'line', chatId: 'C', userId: 'U' });
+    expect(r?.text).toBe('/下一步 已經拿掉了。直接 /派 作答；想看百科AI 怎麼讀打 /區間，看答案打 /公布');
+  });
+
   it('the reviewers\' cases: 回選 is 延伸, the 對照 drops the earlier leader too, a 6-seat reading is 7 good with you', async () => {
     let now = 1;
     const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
@@ -251,20 +327,20 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       return r?.text ?? '';
     };
     await say('/模擬 題 01RH8-3');
-    expect(await say('/派 140')).toMatch(/・跟 1家 367 比：延伸（(有 2 人以上一樣：)?1 3），回選 1（把前面的隊長派進隊裡）→ 兩次都對（兩次派票的人全是好人）時只剩紅 2589（紅方就只能是這幾個）/u);
+    await say('/派 140');
+    expect(await say('/分析')).toMatch(/・跟 1家 367：延伸（1 3），回選 1 → 都對時只剩紅 2589/u);
     await say('/模擬 題 046Z5-6');
-    const fb = await say('/派 2569');
-    expect(fb).toMatch(/・跟 2家 139 比：延伸（(有 2 人以上一樣：)?2 9），回選 2/u);
-    expect(fb).not.toMatch(/派 2560 會跟 2家 139 打對邊/);
-    await say('/模擬 題 046Z5-2');
-    await say('/下一步');
-    await say('/下一步');
-    expect(await say('/派 23678')).toMatch(/0家 13689 的全好讀法(（[^）]*）)?不成立：連你在內會有 7 個好人，超過 6 個/u);
-    await say('/模擬 題 00VG7-2');
-    expect(await say('/下一步')).toContain('1家 2480（票沒記全） → 出發');
+    await say('/派 2569');
+    const fb = await say('/分析');
+    expect(fb).toMatch(/・跟 2家 139：延伸（2 9），回選 2/u);
+    expect(fb).not.toMatch(/派 2560 跟 2家 139 打對邊/);
+    // 同一個決定點（2家 第 5 局第 4 次）用局面題開（/下一步 2026-11-17 拿掉）。
+    await say('/模擬 題 046Z5-5-4');
+    await say('/派 23678');
+    expect(await say('/分析')).toMatch(/0家 13689 不可能全好：連你在內會有 7 個好人，超過 6 個/u);
   });
 
-  it('every reply of every exercise (each seat of each game, all its decisions) fits 1800 characters and uses only expected characters', async () => {
+  it('every reply of every exercise (each seat of each game, its decision) fits 1800 characters and uses only expected characters', async () => {
     let now = 1_000_000;
     const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
     let replies = 0;
@@ -286,8 +362,8 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
             replies++;
             longest = Math.max(longest, r.text.length);
             expect(r.text.length).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
-            // /派 stays short enough for a phone (SIM_PROPOSE_SOFT_MAX_CHARS).
-            if (r.kind === 'propose') expect(r.text.length).toBeLessThanOrEqual(SIM_PROPOSE_SOFT_MAX_CHARS);
+            // /派 is the two-line result since 2026-11-16 (the full reading is /分析).
+            if (r.kind === 'propose') expect(r.text).toMatch(/^(（代答：[^\n]*\n)?【[^】]+】你派 \d+：\d 好 \d 壞\n\/分析 看完整解讀｜\/區間 百科AI 怎麼讀｜\/公布$/u);
             if (!ALLOWED.test(r.text)) {
               const bad = [...r.text].filter((ch) => !ALLOWED.test(ch)).map((ch) => `U+${ch.codePointAt(0)?.toString(16)}`);
               throw new Error(`unexpected character ${bad.join(',')} in a reply for ${g.id}-${seat}`);
@@ -296,19 +372,63 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
           };
           if ((await run(`/模擬 題 ${exerciseIdOf(g.id, seat)}`)) !== 'start') continue;
           starts++;
-          for (const d of decisionsOf(g, seat)) {
-            if (d < (firstDecision(g, seat) ?? 0)) continue;
+          // 一題一個決定點（/下一步 2026-11-17 拿掉）；百科AI 怎麼讀（/區間）比較慢，每 25 局跑一次。
+          const d = firstDecision(g, seat);
+          if (d !== null && d !== undefined) {
             await run(`/派 ${teamDigits(g.proposals[d].teamSeats)}`);
+            await run('/分析');
             await run('/區間 789=2 460=1');
-            await run('/下一步');
+            if (gi % 25 === 0 && platform === 'line') await run('/區間');
           }
           await run('/公布');
         }
       }
     }
     expect(starts).toBeGreaterThan(15_000);
-    expect(replies).toBeGreaterThan(100_000);
+    expect(replies).toBeGreaterThan(70_000);
     expect(longest).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+  }, 300_000);
+
+  it('every 局面 / 刺殺 exercise of the real bank (1-5…4-5, 5局, -A) fits 1800 characters with expected characters only', async () => {
+    let now = 5_000_000;
+    const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const req = { platform: 'line' as const, chatId: 'ST', userId: 'U', shared: true };
+    let starts = 0;
+    let kills = 0;
+    const run = async (cmd: string): Promise<string> => {
+      now += 1000;
+      const r = await engine.handleText(cmd, req);
+      r?.commit();
+      const text = r?.text ?? '';
+      expect(text.length, cmd).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+      if (text && !ALLOWED.test(text)) throw new Error(`unexpected character in a reply to ${cmd}`);
+      return text;
+    };
+    for (const [key, refs] of bank.midPool) {
+      for (const ref of refs.filter((_, i) => i % 7 === 0)) {
+        const g = bank.games[ref.game];
+        const p = g.proposals[ref.proposal];
+        const start = await run(`/模擬 題 ${g.id}-${p.round}-${p.attempt}`);
+        // 精簡牌譜：前面 round-1 行任務牌、這一局前面 attempt-1 次派票，接著是指令列。
+        const lines = start.split('\n');
+        expect(lines.filter((l) => /^[ox]+$/u.test(l)), key).toHaveLength(p.round - 1);
+        expect(start, key).toContain('\n\n/派 座位 作答');
+        starts++;
+        await run(`/派 ${teamDigits(p.teamSeats)}`);
+        await run('/分析');
+        await run('/公布');
+      }
+    }
+    for (const gi of bank.assassinPool) {
+      const g = bank.games[gi];
+      expect(await run(`/模擬 題 ${g.id}-A`)).toContain('三藍，輪到你刺');
+      const blue = g.seatRoles.findIndex((r) => r === 'loyal') + 1;
+      await run(`/刺 ${blue === 10 ? 0 : blue}`);
+      expect(await run('/公布')).toMatch(/你刺 \d家：(刺中梅林 ✓|沒刺中 ✗)/u);
+      kills++;
+    }
+    expect(starts).toBeGreaterThan(800);
+    expect(kills).toBeGreaterThan(900);
   }, 300_000);
 
   it('no reply before /公布 depends on a role the viewer cannot see: shuffling those roles changes nothing, byte for byte (non-interference, every 5th game)', async () => {
@@ -353,11 +473,14 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
           return a?.kind;
         };
         if ((await both(`/模擬 題 ${exerciseIdOf(g.id, seat)}`)) === 'start') {
-          for (const d of decisionsOf(g, seat)) {
-            if (d < (firstDecision(g, seat) ?? 0)) continue;
+          const d = firstDecision(g, seat);
+          if (d !== null && d !== undefined) {
+            // /派 itself tells 幾好幾壞 (Edward 2026-11-16) — that is red/good, which this shuffle keeps; /分析 must
+            // still not depend on which hidden role sits where. 百科AI 怎麼讀（/區間）也不能（每 10 局查一次，比較慢）。
             await both(`/派 ${teamDigits(g.proposals[d].teamSeats)}`);
+            await both('/分析');
             await both('/區間 789=2 460=1');
-            await both('/下一步');
+            if (gi % 10 === 0) await both('/區間');
           }
           await both('/結束');
         }
@@ -365,6 +488,6 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       }
     }
     expect(variants).toBeGreaterThan(2_000);
-    expect(compared).toBeGreaterThan(20_000);
+    expect(compared).toBeGreaterThan(15_000);
   }, 300_000);
 });

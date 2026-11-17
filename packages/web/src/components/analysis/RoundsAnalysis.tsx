@@ -5,6 +5,7 @@ import { outcomeChiSquare, redFinalRate } from './outcomeTest';
 import type { RoundsAnalysisData } from '../../services/api';
 import { useRoundsData } from './teams/useTeamsData';
 import TeamsLoadState from './teams/TeamsLoadState';
+import { topPathShare } from './roundsPaths';
 import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 import OutcomeBlocksTable, {
   BlockHeader, OutcomeBlocksNote, lacksOutcomes,
@@ -29,7 +30,7 @@ import OutcomeBlocksTable, {
  *   任務進程：任務 1 成功／失敗之後紅方最終勝率、最難成功的任務、最常見的路徑。表頭可點開看定義 (Term)。
  */
 
-export type RoundsSection = 'firstVote' | 'progression';
+export type RoundsSection = 'firstVote' | 'progression' | 'paths';
 
 /** roundProgression 的鍵 (generate_cache.py round_labels)；不認得的鍵照原樣顯示。 */
 const ROUND_KEYS = ['第一局', '第二局', '第三局', '第四局', '第五局'];
@@ -222,8 +223,7 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
   const passedBranch = branchRows.find(r => r.key === 'passed');
   const failedBranch = branchRows.find(r => r.key === 'failed');
   const hardest = roundRows.length > 0 ? roundRows.reduce((a, b) => (b.pass < a.pass ? b : a)) : null;
-  const totalGames = branchRows.reduce((sum, r) => sum + r.n, 0);
-  const topPath = pathRows[0];
+  const topPath = topPathShare(data);
   const k7 = 'analytics.r7.progression';
 
   return (
@@ -236,7 +236,7 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
               passed: formatRate(redFinalRate(passedBranch.outcomes)), passedN: passedBranch.n,
             })}
             {hardest && t(`${k7}.hardest`, { label: hardest.label, rate: formatRate(hardest.pass), n: hardest.total })}
-            {topPath && totalGames > 0 && t(`${k7}.topPath`, { path: topPath.path, share: formatRate((topPath.n / totalGames) * 100), n: topPath.n })}
+            {topPath && t(`${k7}.topPath`, { path: topPath.path, share: formatRate(topPath.share), n: topPath.n })}
           </p>
         </Takeaway>
       ) : null}
@@ -272,6 +272,47 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
   );
 }
 
+/**
+ * 完整任務路徑（2026-11-17 數據頁改版：舊「派隊 › 任務進程」的各任務成功率、任務 1 成功／失敗之後跟「任務結果 › 任務」
+ * 重複，併掉；只剩這張表是別處沒有的，放到任務結果的一個小分頁）。
+ */
+function PathsSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
+  const { t } = useTranslation('common');
+  const pathRows = useMemo<(OutcomeGroupRow & { path: string })[]>(
+    () => (data.gameStates ?? []).map(s => ({
+      key: s.state,
+      label: s.state,
+      path: s.state,
+      n: s.games,
+      outcomes: s.outcomes ?? null,
+      missionRedRate: finite(s.redWinRate),
+      title: s.state,
+    })),
+    [data],
+  );
+  // 分母 = 全部有路徑的局（任務 1 分支），不是表上前 20 種路徑的加總（roundsPaths.ts）
+  const topPath = topPathShare(data);
+  return (
+    <div className="space-y-3">
+      {topPath && (
+        <Takeaway>
+          <p>{t('analytics.r7.progression.topPath', { path: topPath.path, share: formatRate(topPath.share), n: topPath.n })}</p>
+        </Takeaway>
+      )}
+      <OutcomeBlocksTable
+        caption={t(`${PG}.pathCaption`)}
+        groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
+        rows={pathRows}
+        renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
+        lowSample={lowSample}
+        maxHeight={420}
+        footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
+      />
+      <OutcomeBlocksNote pending={lacksOutcomes(pathRows)} />
+    </div>
+  );
+}
+
 export default function RoundsAnalysis({ section, lowSample }: { section: RoundsSection; lowSample?: number }): JSX.Element {
   const { data, loading, error, notGenerated } = useRoundsData();
   return (
@@ -279,7 +320,9 @@ export default function RoundsAnalysis({ section, lowSample }: { section: Rounds
       {() => (data
         ? section === 'firstVote'
           ? <FirstVoteSection data={data} lowSample={lowSample} />
-          : <ProgressionSection data={data} lowSample={lowSample} />
+          : section === 'paths'
+            ? <PathsSection data={data} lowSample={lowSample} />
+            : <ProgressionSection data={data} lowSample={lowSample} />
         : null)}
     </TeamsLoadState>
   );

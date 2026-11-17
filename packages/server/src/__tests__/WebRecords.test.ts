@@ -24,6 +24,8 @@ import {
   deriveLeaders,
   lakeLine,
   proposalLine,
+  recordLineParts,
+  isMissionTextLine,
   RECORDS_PREF_KEYS,
   isLegacyRecordsHash,
   readRecordsPrefs,
@@ -38,6 +40,9 @@ import {
   parseRecordsFilter,
   postLineup,
   recordsFilterActive,
+  isDiscordPost,
+  kindLabel,
+  sourceLabel,
 } from '../../../web/src/utils/records';
 import {
   DEFAULT_LINEUP_FILTER,
@@ -316,5 +321,78 @@ describe('web records: 陣容強度與失誤標籤', () => {
     expect(lineupStateFromCondition(undefined)).toEqual(DEFAULT_LINEUP_FILTER);
     expect(sanitizeLineupState({ sOn: 'yes', sMin: -5 })).toEqual({ ...DEFAULT_LINEUP_FILTER, sMin: 0 });
     expect([lineupTier(65), lineupTier(55), lineupTier(54.9)]).toEqual(['high', 'strong', 'normal']);
+  });
+});
+
+describe('web records: one database (DC + 試算表 牌譜 + 模擬瓦, Edward 2026-11-16)', () => {
+  const SHEET: RecordPost = { ...POST, id: 'S102', title: '試算表牌譜 #102', tags: ['線瓦'], created: '', src: 'sheet' };
+  const SIM_GAME: RecordGame = {
+    ...GAME,
+    rounds: [GAME.rounds[0], { proposals: [{ team: '1357', votes: [] }], mission: '' }],
+    lakes: [],
+    assassination: '',
+    outcome: '',
+    category: '',
+  };
+  const SIM: RecordPost = {
+    id: 'M7', title: '試算表模擬 #7', tags: ['模擬'], created: '', date: '', game: SIM_GAME, src: 'sheet', sim: true,
+  };
+
+  it('模擬 is only a simulation: never in the default (實戰) list, only under 模擬 or 全部', () => {
+    const f = EMPTY_RECORDS_FILTER;
+    expect(f.kind).toBe('real');
+    expect(matchesRecords(SIM, f)).toBe(false);
+    expect(matchesRecords(POST, f)).toBe(true);
+    expect(matchesRecords(SHEET, f)).toBe(true);
+    expect(matchesRecords(SIM, { ...f, kind: 'sim' })).toBe(true);
+    expect(matchesRecords(POST, { ...f, kind: 'sim' })).toBe(false);
+    expect(matchesRecords(SIM, { ...f, kind: 'all' })).toBe(true);
+    expect(recordsFilterActive({ ...f, kind: 'sim' })).toBe(false);  // a tab, not a filter
+    expect(parseRecordsFilter(JSON.stringify({ kind: 'sim' })).kind).toBe('sim');
+    expect(parseRecordsFilter(JSON.stringify({ kind: 'bogus' })).kind).toBe('real');
+    expect(parseRecordsFilter(null).kind).toBe('real');
+  });
+
+  it('source and type labels; only Discord posts have a thread', () => {
+    expect(sourceLabel(POST)).toBe('DC');
+    expect(sourceLabel({ ...POST, src: 'dc+sheet' })).toBe('DC＋試算表');
+    expect(sourceLabel(SHEET)).toBe('試算表');
+    expect([kindLabel(POST), kindLabel(SIM)]).toEqual(['實戰', '模擬']);
+    expect(isDiscordPost(POST)).toBe(true);
+    expect([isDiscordPost(SHEET), isDiscordPost(SIM)]).toEqual([false, false]);
+  });
+
+  it('#records=S…／M… open sheet games', () => {
+    expect(parseRecordsHash('#records=S102')).toEqual({ id: 'S102' });
+    expect(parseRecordsHash('#records=m7')).toEqual({ id: 'M7' });
+    expect(parseRecordsHash('#records=X7')).toBeNull();
+    expect(parseStatsHash('#records=S102')).toEqual({ kind: 'records', id: 'S102' });
+  });
+
+  it('an unfinished 模擬: no result, no empty mission line', () => {
+    expect(outcomeOf(SIM)).toBeNull();
+    expect(resultSentence(SIM_GAME, { roles: true, names: true })).toBe('模擬：打完 1 輪任務，還沒分出勝負');
+    const text = recordsText(SIM_GAME).split('\n');
+    expect(text.slice(0, 7)).toEqual(['147', '260', '389 7+', '469', '568', 'ooo', '1357']);
+    expect(text[7]).toBe('936758');
+  });
+});
+
+describe('文字牌譜上色（站長 2026-11-17：異常票變色）', () => {
+  it('隊伍白、值得注意的票綠、任務紅藍、湖青色＋宣告', () => {
+    expect(recordLineParts('4789 8- 36+')).toEqual([
+      { text: '4789', kind: 'team' },
+      { text: ' 8-', kind: 'mark' },
+      { text: ' 36+', kind: 'mark' },
+    ]);
+    expect(recordLineParts('1590')).toEqual([{ text: '1590', kind: 'plain' }]);
+    expect(recordLineParts('ooox', 1)).toEqual([{ text: 'ooox', kind: 'missionRed' }]);
+    expect(recordLineParts('ooxoo', 3)).toEqual([{ text: 'ooxoo', kind: 'missionBlue' }]); // 第 4 輪要兩張失敗
+    expect(recordLineParts('ooo')).toEqual([{ text: 'ooo', kind: 'missionBlue' }]);
+    expect(recordLineParts('0>9 x')).toEqual([{ text: '0>9', kind: 'lake' }, { text: ' x', kind: 'claimEvil' }]);
+    expect(recordLineParts('9>3 o')).toEqual([{ text: '9>3', kind: 'lake' }, { text: ' o', kind: 'claimGood' }]);
+    expect(recordLineParts('刺客刺殺:5')).toEqual([{ text: '刺客刺殺:5', kind: 'plain' }]);
+    expect(isMissionTextLine('oox')).toBe(true);
+    expect(isMissionTextLine('1590')).toBe(false);
   });
 });

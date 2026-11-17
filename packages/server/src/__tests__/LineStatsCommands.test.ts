@@ -240,14 +240,14 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     expect(h.mirror.lineReplyQueueSize()).toBe(0);
   });
 
-  it('the command text is still mirrored to Discord + lobby; the answer is not', async () => {
+  it('the command text is mirrored to Discord + lobby; the answer follows to Discord only, after delivery (2026-11-17)', async () => {
     const h = setup();
     await deliver(h, groupText('/戰績 HAO', 'm3', 'rt3'));
 
-    expect(h.lobby.map((m) => m.message)).toEqual(['/戰績 HAO']);
-    expect(h.discordSent).toHaveLength(1);
+    expect(h.lobby.map((m) => m.message)).toEqual(['/戰績 HAO']); // the answer never reaches the lobby
+    await vi.waitFor(() => expect(h.discordSent).toHaveLength(2));
     expect(h.discordSent[0]).toMatch(/\[LINE\]\[LineUser-U1\] \/戰績 HAO$/);
-    expect(h.discordSent.join('\n')).not.toContain('的戰績');
+    expect(h.discordSent[1]).toMatch(/\[LINE\]\[百科機器人\] 📊 HAO 的戰績/);
 
     expect(h.replies).toEqual([{ token: 'rt3', texts: [expect.stringContaining('📊 HAO 的戰績')] }]);
     expect(h.replies[0].texts[0]).toContain('場次 1013｜最終勝率 38.5%');
@@ -284,7 +284,7 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
 
   it('non-command chatter with an empty queue sends no reply at all', async () => {
     const h = setup();
-    await deliver(h, groupText('/help', 'm7', 'rt7'), groupText('hello', 'm8', 'rt8'));
+    await deliver(h, groupText('/create', 'm7', 'rt7'), groupText('hello', 'm8', 'rt8'));
     expect(h.replies).toEqual([]);
   });
 
@@ -396,7 +396,7 @@ describe('1:1 chat and other groups', () => {
   it('1:1 legacy commands stay silent while LINE_BOT_COMMANDS_ENABLED is off', async () => {
     const h = setup();
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await deliver(h, userText('/help', 'u2', 'rtH'), userText('hi', 'u3', 'rtI'));
+    await deliver(h, userText('/create', 'u2', 'rtH'), userText('hi', 'u3', 'rtI'));
     log.mockRestore();
     expect(h.replies).toEqual([]);
   });

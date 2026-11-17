@@ -41,7 +41,8 @@ export type RecordLoad = { ok: true; payload: RecordPayload } | { ok: false; sta
 
 let loaded: RecordLoad | null = null;
 
-function recordsPaths(): string[] {
+/** 牌譜紀錄清單的檔案路徑（模擬瓦 bots/simulation/recordsIndex.ts 也讀同一份）。 */
+export function recordsPaths(): string[] {
   const override = process.env[ENV_RECORDS_CACHE]?.trim();
   return override ? [path.resolve(override)] : RECORDS_PATHS;
 }

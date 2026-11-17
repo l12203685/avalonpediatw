@@ -1192,7 +1192,7 @@ export interface AgentTuning {
   goodLakeHuman: number;
   /** 第 43 回合 loyalFresh43：「後驗不差」的門檻（紅的機率 < 這個值）；0 = 內建 0.5。 */
   loyalFresh43Tau: number;
-  /** 第 43 回合（百科 B27／B19／B7：替梅林擋刀，忠臣／派西第 1、2 局的提議去相關；BlueRound43.ts）：非強制提議時，隊上（自己以外）至少放一個前面的提議還沒派過、自己後驗不差（紅的機率 < loyalFresh43Tau）的人；沒有的話把隊上最髒的一個（不是照派成功任務的隊）換成這樣的人裡最乾淨的。位元 1 = 忠臣、2 = 派西、4 = 第 1 局、8 = 第 2 局、16 = 「還沒派過」算整場（不設只算這一局）、32 = 也不和這一局前面看起來偏藍的隊長（紅的機率 < 0.5）的提議重疊超過 1 人（自己以外）、64 = 第 2 局只在第 1 局失敗之後。0 = 關。 */
+  /** 第 43 回合（百科 B27／B19／B7：替梅林擋刀，忠臣／派西第 1、2 局的提議去相關；BlueRound43.ts）：非強制提議時，隊上（自己以外）至少放一個前面的提議還沒派過、自己後驗不差（紅的機率 < loyalFresh43Tau）的人；沒有的話把隊上最髒的一個（不是照派成功任務的隊）換成這樣的人裡最乾淨的。位元 1 = 忠臣、2 = 派西、4 = 第 1 局、8 = 第 2 局、16 = 「還沒派過」算整場（不設只算這一局）、32 = 也不和這一局前面看起來偏藍的隊長（紅的機率 < 0.5）的提議重疊超過 1 人（自己以外）、64 = 第 2 局只在第 1 局失敗之後；第 43b 回合（只在第 1 局）128 = 第 2 家不套用、256 = 第 2 家延伸第 1 家、512 = 第 2 家不和第 1 家重複、1024 = 第 3 家起尊重前面的提議（見 BlueRound43.ts）。0 = 關。 */
   loyalFresh43: number;
   /** 第 42 回合（梅林，專案負責人 11/12 裁定：場內可以偶爾投白、不能開外白）：`merlinKeyApprove41` 的條件，位元 1 = 只在第 3 局；2 = 隊上剛好一個他看得到的紅；4 = 只在這一局的第 1 次提議；8 = 不需要他這個座位的忠臣公開視角也贊成（比例照 `merlinKeyApprove41`）。都只在他在隊上時；不在隊上的隊有他看得到的紅一律反對。0 = 關（照第 41 回合）。 */
   merlinKeyApprove42: number;
@@ -2899,7 +2899,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'loyalFresh43') {
     const value = raw === undefined ? 15 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 127) throw new Error(`loyalFresh43 needs 0–127, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 2047) throw new Error(`loyalFresh43 needs 0–2047, got "${raw}"`);
     return { loyalFresh43: value };
   }
   if (name === 'loyalFresh43Tau') {

@@ -10,7 +10,13 @@
  *   /派 469               作答（0 = 0 家；`4 6 9`、`4,6,9`、`4 6 10` 都可以）
  *   /區間 789=2 460=1     區間（選填；百科寫法 `7 8 9 *2 4 6 0 *1`、`12=1-2`、`3=紅`、`3 壞`、`5=好`、
  *                         `1 5 9 *1+` 也可以；各組可以重疊，跟百科「1 2 *1-2」「2 3 7 *2」一樣）
- *   /下一步  /公布（/解答）  /結束
+ *   /分析                 剛剛那次 /派 的完整解讀（2026-11-16：/派 只回幾好幾壞，解讀改用這個指令看）
+ *   /模擬 1-5～4-5、5局   從那一局第 5 次派票（尾派）／第 5 局開始（可以加角色、座位：/模擬 3-5 梅林）
+ *   /模擬 刺殺            刺殺題（你是刺客），/刺 座位 作答
+ *   /模擬 今天            照 Threads 的每週主題出題（2026-11-16）
+ *   /區間                 （不帶內容）百科AI 怎麼讀這個局面：各家紅機率、最可能的紅方、百科AI 會派的隊（Edward 2026-11-17）
+ *   /公布（/解答）  /結束
+ *   （/下一步 2026-11-17 拿掉：打了只回一行說明）
  *   /模擬 說明            全部指令，每個一行白話（/模擬 幫助、/模擬 指令、/模擬 ? 也可以；2026-10-22）
  *
  * 斜線可以是全形「／」，指令和內容之間的空白可有可無（跟 /戰績 一樣），全形數字照收。
@@ -36,13 +42,20 @@ export interface IntervalGroup {
   max: number;
 }
 
-export type SimUsageCommand = 'start' | 'propose' | 'interval';
+export type SimUsageCommand = 'start' | 'propose' | 'interval' | 'assassinate';
 
 export type SimCommand =
-  | { kind: 'start'; role?: SimRoleChoice; seat?: number; exerciseId?: string }
+  | { kind: 'start'; role?: SimRoleChoice; seat?: number; exerciseId?: string; midRound?: number; special?: 'assassin' | 'today' }
+  /** /刺 座位：刺殺題的答案。 */
+  | { kind: 'assassinate'; seat: number }
   | { kind: 'propose'; team: number[] }
+  /** /分析：這個決定點最後一次 /派 的完整解讀。 */
+  | { kind: 'analyze' }
   | { kind: 'interval'; groups: IntervalGroup[] }
-  | { kind: 'next' }
+  /** /區間（不帶內容）：百科AI 怎麼讀這個局面。 */
+  | { kind: 'read' }
+  /** 拿掉的指令（/下一步）：回一行說明。 */
+  | { kind: 'removed'; command: string }
   | { kind: 'reveal' }
   | { kind: 'end' }
   /** /模擬 說明：全部指令的白話說明。 */
@@ -50,26 +63,26 @@ export type SimCommand =
   /** 是模擬指令，但內容看不懂；`problem` 是給使用者看的一句話。 */
   | { kind: 'usage'; command: SimUsageCommand; problem?: string };
 
-/** 對開著的題目做的事（/派 /區間 /下一步 /公布 /結束，以及看不懂的 /派、/區間）。 */
+/** 對開著的題目做的事（/派 /分析 /區間 /公布 /結束，以及看不懂的 /派、/區間）。 */
 export function isFollowUpCommand(cmd: SimCommand): boolean {
-  return isCoAnswerable(cmd) || (cmd.kind === 'usage' && cmd.command !== 'start');
+  return isCoAnswerable(cmd) || cmd.kind === 'removed' || (cmd.kind === 'usage' && cmd.command !== 'start');
 }
 
 /**
- * 可以幫別人的題目代答的指令：只有**寫對的** /派 /區間 /下一步 /公布 /結束（2026-10-22 審查修正）。
+ * 可以幫別人的題目代答的指令：只有**寫對的** /派 /區間 /公布 /結束（2026-10-22 審查修正）。
  * 看不懂的 /派、/區間（像聊天的斜線句子）不代答：自己沒開題的人打的照舊不回、照舊同步、不延長別人的題目。
  */
 export function isCoAnswerable(cmd: SimCommand): boolean {
-  return cmd.kind === 'propose' || cmd.kind === 'interval' || cmd.kind === 'next' || cmd.kind === 'reveal' || cmd.kind === 'end';
+  return cmd.kind === 'propose' || cmd.kind === 'assassinate' || cmd.kind === 'analyze' || cmd.kind === 'interval' || cmd.kind === 'read' || cmd.kind === 'reveal' || cmd.kind === 'end';
 }
 
 /** /模擬 後面的「說明」字：說明、幫助、指令、?（全形也可以）。 */
 const HELP_WORDS = new Set(['說明', '说明', '幫助', '帮助', '指令', '?', '？', 'help']);
 
 /** 指令字（長的在前：模擬瓦 先於 模擬）。chatExport/rows.ts 也用它認出打字的指令。 */
-export const SIM_COMMAND_RE = /^[/／]\s*(模擬瓦|模拟瓦|模擬|模拟|區間|区间|下一步|公布|解答|結束|结束|派)/u;
+export const SIM_COMMAND_RE = /^[/／]\s*(模擬瓦|模拟瓦|模擬|模拟|區間|区间|下一步|公布|解答|結束|结束|分析|刺殺|刺杀|刺|派)/u;
 
-const FULL_RE = /^\/\s*(模擬瓦|模拟瓦|模擬|模拟|區間|区间|下一步|公布|解答|結束|结束|派)(.*)$/su;
+const FULL_RE = /^\/\s*(模擬瓦|模拟瓦|模擬|模拟|區間|区间|下一步|公布|解答|結束|结束|分析|刺殺|刺杀|刺|派)(.*)$/su;
 
 /** 角色別名 → 角色（長的先比）。 */
 const ROLE_ALIASES: ReadonlyArray<readonly [string, SimRoleChoice]> = ([
@@ -103,11 +116,23 @@ export function parseRoleChoice(raw: string): SimRoleChoice | null {
   return null;
 }
 
-/** Crockford base32：題號裡 I/L 當 1、O 當 0，不分大小寫。 */
+/**
+ * Crockford base32：題號裡 I/L 當 1、O 當 0，不分大小寫。
+ * `K7Q2M-4`（4 家的第一個決定）或 `K7Q2M-3-5`（第 3 局第 5 次開始，2026-11-16）。
+ */
 export function normalizeExerciseId(raw: string): string | null {
   const t = (raw ?? '').normalize('NFKC').trim().toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
-  return /^[0-9A-HJKMNP-TV-Z]{5,8}-[0-9]$/.test(t) ? t : null;
+  return /^[0-9A-HJKMNP-TV-Z]{5,8}-(?:[0-9]|[1-5]-[1-5]|A)$/.test(t) ? t : null;
 }
+
+/** `/模擬 1-5`～`4-5`（尾派）、`5局`（第 5 局）的局面字（-、－、~ 都可以）。 */
+const MID_RE = /(?:^|\s)(?:([1-4])\s*[-－~～]\s*5|(?:第\s*)?(5|五)\s*局)(?=\s|$)/u;
+
+/** `/模擬 刺殺`、`/模擬 今天`（只能單獨用）。 */
+const SPECIAL_WORDS: ReadonlyMap<string, 'assassin' | 'today'> = new Map([
+  ['刺殺', 'assassin'], ['刺杀', 'assassin'], ['刺殺題', 'assassin'],
+  ['今天', 'today'], ['今日', 'today'], ['本日', 'today'],
+]);
 
 /** 座位字：1–9、0 或 10 → 1–10。 */
 function seatOfToken(tok: string): number | null {
@@ -200,6 +225,20 @@ function parseStartArgs(rest: string): SimCommand | null {
   const bareId = normalizeExerciseId(t);
   if (bareId && /-/.test(t)) return { kind: 'start', exerciseId: bareId };
 
+  const special = SPECIAL_WORDS.get(t);
+  if (special) return { kind: 'start', special };
+  if ([...SPECIAL_WORDS.keys()].some((w) => t.split(/\s+/u).includes(w))) return { kind: 'usage', command: 'start' };
+
+  // 局面（1-5～4-5、5局）：先拿掉局面字，剩下的照角色、座位讀（`/模擬 3-5 梅林`）。
+  const mid = MID_RE.exec(t);
+  if (mid) {
+    const others = t.replace(MID_RE, ' ').trim();
+    const parsed = others ? parseStartArgs(others) : { kind: 'start' as const };
+    if (!parsed) return { kind: 'usage', command: 'start' };
+    if (parsed.kind !== 'start' || parsed.exerciseId || parsed.midRound !== undefined || parsed.special) return { kind: 'usage', command: 'start' };
+    return { ...parsed, midRound: mid[1] ? Number(mid[1]) : 5 };
+  }
+
   let role: SimRoleChoice | undefined;
   let seat: number | undefined;
   let recognized = false;
@@ -245,11 +284,23 @@ export function parseSimCommand(text: string): SimCommand | null {
     case '區間':
     case '区间': {
       if (chatty) return null;
+      if (rest.trim() === '') return { kind: 'read' };
       const r = parseInterval(rest);
       return 'groups' in r ? { kind: 'interval', groups: r.groups } : { kind: 'usage', command: 'interval', problem: r.problem };
     }
+    case '分析':
+      return rest.trim() ? null : { kind: 'analyze' };
+    case '刺':
+    case '刺殺':
+    case '刺杀': {
+      // `/刺客`、`/刺殺梅林吧`：後面沒有數字 → 聊天。
+      if (rest.trim() === '' || chatty) return null;
+      const seats = parseSeatDigits(rest);
+      if (!seats || seats.length !== 1) return { kind: 'usage', command: 'assassinate', problem: '只能刺一個座位，例如 /刺 3' };
+      return { kind: 'assassinate', seat: seats[0] };
+    }
     case '下一步':
-      return rest.trim() ? null : { kind: 'next' };
+      return rest.trim() ? null : { kind: 'removed', command: '下一步' };
     case '公布':
     case '解答':
       return rest.trim() ? null : { kind: 'reveal' };

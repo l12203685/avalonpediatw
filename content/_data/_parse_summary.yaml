@@ -205,13 +205,6 @@ sheets:
   skipped: 0
   header_cols: 9
   bytes: 3973
-- sheet: 個人資料卡
-  status: ok
-  file: 個人資料卡.yaml
-  rows: 12
-  skipped: 0
-  header_cols: 5
-  bytes: 2807
 - sheet: 沒票的
   status: ok
   file: 沒票的.yaml

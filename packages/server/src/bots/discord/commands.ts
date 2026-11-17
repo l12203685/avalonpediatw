@@ -15,6 +15,10 @@ import { SIM_CONFIG } from '../simulation/config';
 import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
 import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from '../paipuFix/commands';
 import { CLAIM_HELP_TEXT, CLAIM_USAGE, REPORT_HELP_TEXT, REPORT_USAGE } from '../reports/commands';
+import { helpTopicOf, topicHelpText } from '../help';
+
+/** Option name of /help (2026-11-17: /help 主題:模擬 → that topic's details). */
+export const HELP_TOPIC_OPTION = '主題';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -44,6 +48,15 @@ export async function handlePlayPlatformCommand(interaction: CommandInteraction)
 
 export async function handleHelpCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
+  // /help 主題:模擬 (2026-11-17, bots/help.ts): just that topic's details, plain text.
+  const options = (interaction as unknown as Partial<ChatInputCommandInteraction>).options;
+  const raw = typeof options?.getString === 'function' ? options.getString(HELP_TOPIC_OPTION) : null;
+  const topic = raw ? helpTopicOf(raw) : null;
+  if (topic) {
+    const scope = topic === '戰績' ? await leaderboardScopeText() : null;
+    await interaction.editReply({ content: topicHelpText(topic, 'discord', scope), allowedMentions: { parse: [] } });
+    return;
+  }
   // The window /排行 ranks by, from the cache (a schemaVersion-3 cache still ranks by 各人最近 100 場).
   const scope = await leaderboardScopeText();
 
@@ -79,7 +92,7 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
           value:
             `\`${STATS_COMMAND_USAGE.simulation}\` 真人對局停在你派票的當下：看前面的派票、寫區間、自己派，看你的派票放出什麼資訊\n` +
             `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束；回覆公開的頻道裡，沒開題的人也可以幫忙答最新的一題）\n` +
-            `\`/模擬 說明:True\` 全部指令的白話說明`,
+            `\`/help 主題:模擬\` 全部指令的白話說明`,
           inline: false,
         }]
         : []),
@@ -109,7 +122,7 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
         inline: false,
       }
     )
-    .setFooter({ text: 'Use /help to see all commands' });
+    .setFooter({ text: '/help 主題:模擬（或 戰績、補位、待修正、回報、意見）看細節' });
 
   await interaction.editReply({ embeds: [embed] });
 }
