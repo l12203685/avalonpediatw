@@ -16,7 +16,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.setConfig({ testTimeout: 60_000 });
 import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/bank';
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
-import { midDecision, publicEvents } from '../bots/simulation/scenario';
+import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
 import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine } from '../bots/threads/image';
@@ -420,6 +420,54 @@ describe('image', () => {
     expect(svg).toContain('#52525b'); // 跟強制局的灰（#18181b）不同色
     expect(svg).toContain('>？<');
     expect(textWidth(voteLegend(sheetRows(unreliable)), 21)).toBeLessThanOrEqual(1080 - 80);
+  });
+
+  it('the viewer’s own lake result shows in the lake row even on a marked seat; nobody else’s lake result is shown', () => {
+    // 實際的題目：有 seen 的只會是出題的人自己湖的那一列，而且跟那個座位的陣營一致
+    for (let w = 0; w < 8; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        for (const r of sheetRows(pv)) {
+          if (r.kind !== 'lake') continue;
+          if (r.holderSeat !== pick.seat) expect(r.seen).toBeUndefined();
+          else {
+            expect(r.seen).toBe(isRed(pv.game.seatRoles[r.targetSeat - 1]) ? 'red' : 'good');
+          }
+        }
+      }
+    }
+    // 派西湖到拇指（座位已經有「拇指」標記）：湖的那一列照樣寫出私下看到的結果
+    let found: { pv: ReturnType<typeof pickView>; target: number } | null = null;
+    for (let w = 0; w < 8 && !found; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const lake = pv.shown.find((e) => e.kind === 'lake');
+        if (lake && lake.kind === 'lake' && pv.view.sight.kind === 'percival') {
+          found = { pv, target: lake.targetSeat };
+          break;
+        }
+      }
+    }
+    if (found) {
+      const { pv, target } = found;
+      const sight = pv.view.sight as Extract<typeof pv.view.sight, { kind: 'percival' }>;
+      const evil = isRed(pv.game.seatRoles[target - 1]);
+      const mine = {
+        ...pv,
+        shown: pv.shown.map((e) => (e.kind === 'lake' && e.targetSeat === target ? { ...e, holderSeat: pv.pick.seat } : e)),
+        view: { ...pv.view, sight: { ...sight, thumbs: [target, ...sight.thumbs.filter((t) => t !== target)].slice(0, 2) }, ownLakes: [{ targetSeat: target, evil }] },
+      };
+      const row = sheetRows(mine).find((r) => r.kind === 'lake' && r.targetSeat === target);
+      expect(row?.kind === 'lake' && row.seen).toBe(evil ? 'red' : 'good');
+      const svg = buildPuzzleSvg(mine, 2);
+      expect(svg).toContain(`你看到：${evil ? '紅' : '好人'}`);
+      expect(svg).toContain('拇指');
+      expect(recordLines(sheetRows(mine)).map((l) => l.map((x) => x.t).join('')).join('\n')).toContain(`（你看到的：${evil ? '紅' : '好人'}）`);
+      // 別人的湖不畫結果
+      if (!pv.shown.some((e) => e.kind === 'lake' && e.holderSeat === pv.pick.seat)) expect(buildPuzzleSvg(pv, 2).includes('你看到：')).toBe(false);
+    }
+    expect(found).not.toBeNull();
+    expect(textWidth('0 家 驗 0 家 → 宣告藍（你看到：好人）', 22)).toBeLessThanOrEqual(10 * 63);
   });
 
   it('the post text keeps theme, record, question, yesterday’s answer, 題號 and the tag only', () => {

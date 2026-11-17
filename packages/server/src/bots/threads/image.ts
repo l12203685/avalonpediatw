@@ -173,7 +173,8 @@ export type SheetRow =
   }
   | { kind: 'quest'; round: number; mission: string; failCount: number; failed: boolean }
   /** claim：o = 宣告藍、x = 宣告紅、空字串 = 沒寫宣告（同 DC 牌譜的 0>3 x）。 */
-  | { kind: 'lake'; round: number; holderSeat: number; targetSeat: number; claim: 'o' | 'x' | '' }
+  /** seen：只有出題的人自己拿湖時才有，是他私下看到的結果（紅／好人）；別人的湖不放。 */
+  | { kind: 'lake'; round: number; holderSeat: number; targetSeat: number; claim: 'o' | 'x' | ''; seen?: 'red' | 'good' }
   | { kind: 'decision'; round: number | null; attempt: number | null; leaderSeat: number; size: number | null; forced: boolean };
 
 function seatsText(seats: readonly number[]): string {
@@ -206,7 +207,12 @@ export function sheetRows(pv: PickView): SheetRow[] {
   for (const e of pv.shown) {
     if (e.kind === 'proposal') rows.push(proposalRow(e));
     else if (e.kind === 'quest') rows.push({ kind: 'quest', round: e.round, mission: `${'o'.repeat(e.successCount)}${'x'.repeat(e.failCount)}`, failCount: e.failCount, failed: e.failed });
-    else rows.push({ kind: 'lake', round: e.round, holderSeat: e.holderSeat, targetSeat: e.targetSeat, claim: e.claim === 'good' ? 'o' : e.claim === 'evil' ? 'x' : '' });
+    else {
+      const claim = e.claim === 'good' ? 'o' : e.claim === 'evil' ? 'x' : '';
+      // 你自己湖的：你私下看到的結果照畫（不管那個座位有沒有拇指、隊友、看到的紅的標記）。
+      const own = e.holderSeat === pv.pick.seat ? pv.view.ownLakes.find((l) => l.targetSeat === e.targetSeat) : undefined;
+      rows.push({ kind: 'lake', round: e.round, holderSeat: e.holderSeat, targetSeat: e.targetSeat, claim, ...(own ? { seen: own.evil ? 'red' : 'good' } : {}) });
+    }
   }
   if (pv.pick.proposal === null) rows.push({ kind: 'decision', round: null, attempt: null, leaderSeat: pv.pick.seat, size: null, forced: false });
   else {
@@ -234,6 +240,7 @@ function seatMarks(pv: PickView): Map<number, { label: string; color: string }> 
 }
 
 const CLAIM_LINE: Record<string, string> = { o: '說好人（o）', x: '說壞人（x）', '': '沒說' };
+const SEEN_ZH = { red: '紅', good: '好人' } as const;
 
 /** 牌譜的一行（跟文字貼文同一種寫法），一段一個顏色：隊長＋隊伍白、記號綠、任務結果黃、湖綠。 */
 export function recordLines(rows: readonly SheetRow[]): Seg[][] {
@@ -258,7 +265,7 @@ export function recordLines(rows: readonly SheetRow[]): Seg[][] {
         { t: r.failed ? `，${r.failCount} 張失敗 → 任務失敗` : r.failCount ? `，${r.failCount} 張失敗 → 任務成功` : ' → 任務成功', fill: r.failed ? C.red : C.green },
       ]);
     } else {
-      out.push([{ t: `湖：${seatChar(r.holderSeat)}家 湖 ${seatChar(r.targetSeat)}家，${CLAIM_LINE[r.claim]}`, fill: C.green }]);
+      out.push([{ t: `湖：${seatChar(r.holderSeat)}家 湖 ${seatChar(r.targetSeat)}家，${CLAIM_LINE[r.claim]}${r.seen ? `（你看到的：${SEEN_ZH[r.seen]}）` : ''}`, fill: C.green }]);
     }
   }
   return out;
@@ -412,7 +419,8 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
     parts.push(rect(GX0, y, LEAD_W, rh, '#164e63'));
     parts.push(text(GX0 + LEAD_W / 2, mid, '湖中', { size: fs - 4, fill: '#a5f3fc', anchor: 'middle', weight: true }));
     const claim = r.claim === 'o' ? { t: '宣告藍', fill: '#bfdbfe' } : r.claim === 'x' ? { t: '宣告紅', fill: '#fca5a5' } : { t: '沒說', fill: C.soft };
-    parts.push(segs(seatX(1) + SEAT_W * 5, mid, [{ t: `${seatChar(r.holderSeat)} 家 驗 ${seatChar(r.targetSeat)} 家 → `, fill: '#ecfeff' }, { ...claim, weight: true }], fs - 2, 'middle'));
+    const seen: Seg[] = r.seen ? [{ t: `（你看到：${SEEN_ZH[r.seen]}）`, fill: r.seen === 'red' ? C.red : C.green, weight: true }] : [];
+    parts.push(segs(seatX(1) + SEAT_W * 5, mid, [{ t: `${seatChar(r.holderSeat)} 家 驗 ${seatChar(r.targetSeat)} 家 → `, fill: '#ecfeff' }, { ...claim, weight: true }, ...seen], fs - 2, 'middle'));
     const ll = `${seatChar(r.holderSeat)}>${seatChar(r.targetSeat)}${r.claim ? ` ${r.claim}` : ''}`;
     parts.push(rect(RES_X + 6, y + 4, RES_W - 12, rh - 8, '#0891b2', ' rx="6"'));
     parts.push(text(RES_X + RES_W / 2, mid, ll, { size: fs - 2, fill: '#ffffff', anchor: 'middle', weight: true }));
