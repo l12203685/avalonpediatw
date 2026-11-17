@@ -49,7 +49,7 @@ function TheoryBoardLink(): JSX.Element {
  *    卡片 (TheoryBoardLink；手機原本的四個小分頁一起拿掉)。
  *  schemaVersion 3 的快取 (沒有每人三種結果、位置／整體理論榜) 顯示「下次每日更新後提供」，不畫成 0%。
  */
-export default function OverviewPanel(): JSX.Element {
+export default function OverviewPanel({ onOpenAssassination }: { onOpenAssassination: () => void }): JSX.Element {
   const { t } = useTranslation('common');
   const { overview, loading, error } = useAnalysisOverview();
 
@@ -72,6 +72,15 @@ export default function OverviewPanel(): JSX.Element {
   return (
     <div className="space-y-3">
       <SummaryStrip totalGames={overview.totalGames} totalPlayers={overview.totalPlayers} stages={deriveStages(overview)} />
+      <button
+        type="button"
+        onClick={onOpenAssassination}
+        data-testid="analytics-open-assassination"
+        className="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-800/70 bg-blue-950/30 px-3 py-2 text-sm font-semibold text-blue-200 hover:border-blue-500 hover:text-white"
+      >
+        {t('analytics.analysis.tabs.assassination')}
+        <ArrowRight size={15} aria-hidden />
+      </button>
       <OutcomeGamesBlock overview={overview} />
       <TheoryBoardLink />
     </div>
