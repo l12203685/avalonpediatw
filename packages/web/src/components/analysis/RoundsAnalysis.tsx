@@ -29,7 +29,7 @@ import OutcomeBlocksTable, {
  *   任務進程：任務 1 成功／失敗之後紅方最終勝率、最難成功的任務、最常見的路徑。表頭可點開看定義 (Term)。
  */
 
-export type RoundsSection = 'firstVote' | 'progression';
+export type RoundsSection = 'firstVote' | 'progression' | 'paths';
 
 /** roundProgression 的鍵 (generate_cache.py round_labels)；不認得的鍵照原樣顯示。 */
 const ROUND_KEYS = ['第一局', '第二局', '第三局', '第四局', '第五局'];
@@ -272,6 +272,47 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
   );
 }
 
+/**
+ * 完整任務路徑（2026-11-17 數據頁改版：舊「派隊 › 任務進程」的各任務成功率、任務 1 成功／失敗之後跟「任務結果 › 任務」
+ * 重複，併掉；只剩這張表是別處沒有的，放到任務結果的一個小分頁）。
+ */
+function PathsSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
+  const { t } = useTranslation('common');
+  const pathRows = useMemo<(OutcomeGroupRow & { path: string })[]>(
+    () => (data.gameStates ?? []).map(s => ({
+      key: s.state,
+      label: s.state,
+      path: s.state,
+      n: s.games,
+      outcomes: s.outcomes ?? null,
+      missionRedRate: finite(s.redWinRate),
+      title: s.state,
+    })),
+    [data],
+  );
+  const totalGames = pathRows.reduce((sum, r) => sum + r.n, 0);
+  const topPath = pathRows[0];
+  return (
+    <div className="space-y-3">
+      {topPath && totalGames > 0 && (
+        <Takeaway>
+          <p>{t('analytics.r7.progression.topPath', { path: topPath.path, share: formatRate((topPath.n / totalGames) * 100), n: topPath.n })}</p>
+        </Takeaway>
+      )}
+      <OutcomeBlocksTable
+        caption={t(`${PG}.pathCaption`)}
+        groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
+        rows={pathRows}
+        renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
+        lowSample={lowSample}
+        maxHeight={420}
+        footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
+      />
+      <OutcomeBlocksNote pending={lacksOutcomes(pathRows)} />
+    </div>
+  );
+}
+
 export default function RoundsAnalysis({ section, lowSample }: { section: RoundsSection; lowSample?: number }): JSX.Element {
   const { data, loading, error, notGenerated } = useRoundsData();
   return (
@@ -279,7 +320,9 @@ export default function RoundsAnalysis({ section, lowSample }: { section: Rounds
       {() => (data
         ? section === 'firstVote'
           ? <FirstVoteSection data={data} lowSample={lowSample} />
-          : <ProgressionSection data={data} lowSample={lowSample} />
+          : section === 'paths'
+            ? <PathsSection data={data} lowSample={lowSample} />
+            : <ProgressionSection data={data} lowSample={lowSample} />
         : null)}
     </TeamsLoadState>
   );
