@@ -14,7 +14,7 @@
  * 一起出現」→ 題目卡 = 標題列＋左上小圓桌（0 在十二點、順時針、5 在六點；桌面中間五局任務格）＋右上你的視角＋網站牌譜頁的格子
  * （列 = 每次提議、欄 = 座位 1～0、金色盾牌 = 上隊、白／黑格 = 贊成／反對、任務列、湖中列、右邊結果與文字紀錄，文字裡值得注意的票
  * 綠色）＋題目那一行，同一張，一般局 ≤ 1080×1350（Threads 手機 4:5）。牌譜太長時先縮列高（最小 30），還放不下才把後面的列畫在
- * 後面的續圖（草稿 `gridImages`，只有這時候才有；站長 11/18：「發文如果圖會太長/太大, 就分成多張圖啊」→ 要幾張就分幾張，
+ * 後面的續圖（後來改成把最早的幾局移到續圖，見 cardSplit；草稿 `gridImages`，只有這時候才有；站長 11/18：「發文如果圖會太長/太大, 就分成多張圖啊」→ 要幾張就分幾張，
  * 每張都在 1350 以內，每張寫「牌譜接下一張（往右滑）｜第幾張／共幾張」）。答案卡紅方在上、藍方在下。
  * 站長 11/18：「小圓桌能不能和阿瓦隆百科的logo結合?」看過樣張選 A（標誌含字、不透明度 0.3），並且「1~5 & 6~0 改成 只圍繞 logo
  * 剩下的資訊呈現在旁邊, 還有湖中女神以箭頭 (0 > 9 + 宣告結果) 呈現」→ 小圓桌只剩十個座位圍著中間的標誌，五局任務格移到右邊
@@ -306,7 +306,7 @@ export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<numb
   return null;
 }
 
-/** 每個座位的標記；known＝到那一局為止看得到的列（回顧圖只算到那一局，題目卡算到出題那一刻）。 */
+/** 每個座位的標記；known＝到那一刻為止看得到的列（題目卡算到出題那一刻）。 */
 export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string; side?: 'good' | 'evil' }> {
   const marks = new Map<number, { label: string; color: string; side?: 'good' | 'evil' }>();
   const s = pv.view.sight;
@@ -376,8 +376,8 @@ const SEAT_R = 30;
 /** 座位排成正圓（站長 11/18：「座位不要橢圓 直接圍繞 logo 就好 logo 太小的話可以放大」）。 */
 const RING_R = 160;
 /** 座位上方與下方（標記字）留的空間。 */
-const TABLE_TOP_PAD = 34;
-const TABLE_BOTTOM_PAD = 40;
+const TABLE_TOP_PAD = 28;
+const TABLE_BOTTOM_PAD = 36;
 /** 小圓桌那一塊的寬高（含座位外側的標記字、座位下方出過的任務）。 */
 const TABLE_BOX_W = 2 * (RING_R + SEAT_R + 64);
 const TABLE_BOX_H = 2 * (RING_R + SEAT_R) + TABLE_TOP_PAD + TABLE_BOTTOM_PAD;
@@ -550,7 +550,7 @@ function arrowHead(x: number, y: number, angle: number, fill: string, size: numb
 /**
  * 圓桌上的湖中線（站長 11/18：「覺得派票的實虛線其實沒有很清楚 直接改成湖中線就好 宣告也可以寫在線上」）：
  * 拿湖的人 → 被驗的人，端點在座位與標誌的切點，線中間寫宣告（o 藍、x 紅、沒說 ?）。最新的一次湖畫粗一點。
- * lakes 是到那一刻為止的湖（題目卡＝出題那一刻、回顧圖＝到那張圖最後一局）。
+ * lakes 是到那一刻為止的湖（題目卡＝出題那一刻）。
  */
 export function lakeLines(known: readonly SheetRow[], cx: number, cy: number): string {
   const lakes = known.filter((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
@@ -635,7 +635,7 @@ export const GRID_TARGET_H = 1350;
  * 縮到最小還放不下才把後面的列移到第二張圖。
  */
 export const GRID_ROW_MAX = 26;
-export const GRID_ROW_MIN = 22;
+export const GRID_ROW_MIN = 19;
 
 const GX0 = 40;
 const LEAD_W = 60;
@@ -645,13 +645,13 @@ const SEAT_W = (W - 80 - LEAD_W - RES_W - TEXT_W) / 10;
 const seatX = (seat: number): number => GX0 + LEAD_W + SEAT_W * (seat - 1);
 const RES_X = GX0 + LEAD_W + SEAT_W * 10;
 const TEXT_X = RES_X + RES_W;
-const GRID_HEAD_H = 50;
+const GRID_HEAD_H = 42;
 
 /** 格子的欄名：隊長、1～0（你藍、拇指金、看到的紅／隊友紅）、結果、文字紀錄。 */
 function gridHead(pv: PickView, y: number, known: readonly SheetRow[] = sheetRows(pv)): string {
   const parts: string[] = [];
   const marks = seatMarks(pv, known);
-  const hy = y + 32;
+  const hy = y + 28;
   parts.push(text(GX0 + LEAD_W / 2, hy, '隊長', { size: 20, fill: C.faint, anchor: 'middle' }));
   for (let seat = 1; seat <= 10; seat++) {
     const m = marks.get(seat);
@@ -721,7 +721,8 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
 /** 題目卡上方那一塊（標題列＋小圓桌與你的視角）的高度。 */
 const CARD_TOP_H = 150 + TABLE_BOX_H + 10;
 /** 題目卡下方（題目那一行＋說明＋網址）的高度。 */
-const CARD_FOOT_H = 30 + 56 + 36 + 36 + 20;
+// 題目那一行（56）＋說明（36）＋網址（36）＋下緣（20）：跟 buildPuzzleSvg 底下實際用的一樣，不多留空
+const CARD_FOOT_H = 56 + 36 + 36 + 20;
 
 export interface CardLayout {
   /** 題目卡上的格子列數（sheetRows 的前幾列）。 */
@@ -750,27 +751,51 @@ export function cardLayout(rowCount: number): CardLayout {
   return { cardRows: fit, rowH: GRID_ROW_MIN, overflow: true, height: CARD_TOP_H + GRID_HEAD_H + GRID_ROW_MIN * fit + CARD_FOOT_H };
 }
 
-/** 牌譜放不下題目卡時，第二張圖要畫的列（從第幾列開始）；放得下回傳 null。 */
+/** 牌譜放不下題目卡時，題目卡從第幾列開始畫（前面的列——最早的幾局——在續圖）；放得下回傳 null。 */
 export function gridOverflowStart(pv: PickView): number | null {
-  const layout = cardLayout(cardSheetRows(pv).length);
-  return layout.overflow ? layout.cardRows : null;
+  const start = cardSplit(pv).cardStart;
+  return start > 0 ? start : null;
 }
 
 /** 續圖一張最多幾列（列高用最小值，整張 ≤ GRID_TARGET_H）。 */
 const GRID_PAGE_FREE = GRID_TARGET_H - 150 - 20 - GRID_HEAD_H - 110;
 export const GRID_PAGE_ROWS = Math.floor(GRID_PAGE_FREE / GRID_ROW_MIN);
 
-/** 題目卡放不下的列分成幾張續圖（每張平均分、都 ≤ GRID_PAGE_ROWS 列）：每張的 [start, end)。放得下回傳 []。 */
-export function gridPages(pv: PickView): { start: number; end: number }[] {
-  const rows = cardSheetRows(pv);
-  const layout = cardLayout(rows.length);
-  if (!layout.overflow) return [];
-  const rest = rows.length - layout.cardRows;
-  const n = Math.ceil(rest / GRID_PAGE_ROWS);
-  const per = Math.ceil(rest / n);
+/** 每一列是第幾局（輪到你那一列算出題那一局；刺殺題算最後一局之後）。 */
+export function rowRound(r: SheetRow): number {
+  return r.kind === 'decision' ? r.round ?? 6 : r.round;
+}
+
+/**
+ * 題目卡和續圖怎麼分（站長 11/18：「那個精簡版 是不是就可以把全部的牌譜+所有任務結果+湖中資訊全部一次呈現?」）：
+ * 放得下（列高最小 GRID_ROW_MIN）就整份牌譜都在題目卡；放不下時把最早的幾局（整局，不拆開）移到續圖，
+ * 題目卡留後面的局到「輪到你」。續圖一張最多 GRID_PAGE_ROWS 列，也是整局整局放（一局本身太長才拆）。
+ */
+export function cardSplit(pv: PickView): { cardStart: number; pages: { start: number; end: number }[] } {
+  const rows = sheetRows(pv);
+  const n = rows.length;
+  if (!cardLayout(n).overflow) return { cardStart: 0, pages: [] };
+  const bounds = rows.map((r, i) => (i === 0 || rowRound(r) !== rowRound(rows[i - 1]) ? i : -1)).filter((i) => i >= 0);
+  let cardStart = bounds.find((i) => i > 0 && !cardLayout(n - i).overflow) ?? -1;
+  if (cardStart < 0) cardStart = n - cardLayout(n).cardRows; // 出題那一局本身就放不下：只好拆
   const pages: { start: number; end: number }[] = [];
-  for (let start = layout.cardRows; start < rows.length; start += per) pages.push({ start, end: Math.min(rows.length, start + per) });
-  return pages;
+  let start = 0;
+  while (start < cardStart) {
+    let end = start;
+    for (const b of [...bounds.filter((i) => i > start && i <= cardStart), cardStart]) {
+      if (b - start <= GRID_PAGE_ROWS) end = b;
+      else break;
+    }
+    if (end === start) end = Math.min(cardStart, start + GRID_PAGE_ROWS);
+    pages.push({ start, end });
+    start = end;
+  }
+  return { cardStart, pages };
+}
+
+/** 續圖（最早的幾局）：每張的 [start, end)。放得下回傳 []。 */
+export function gridPages(pv: PickView): { start: number; end: number }[] {
+  return cardSplit(pv).pages;
 }
 
 /** 「牌譜接下一張」的提示：k = 這是第幾張圖（題目卡是第 1 張），total = 牌譜一共幾張圖。 */
@@ -803,37 +828,18 @@ export function identityLines(identity: string, max: number): { line: string; si
   ];
 }
 
-/** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、到目前的牌譜格子、題目。 */
-/** 出題那一局（刺殺題 null）。 */
-export function questionRound(rows: readonly SheetRow[]): number | null {
-  const last = rows[rows.length - 1];
-  return last && last.kind === 'decision' ? last.round : null;
-}
-
-/** 一局的列：那一局的提議、任務結果、那一局之後用的湖。 */
-export function roundRows(rows: readonly SheetRow[], round: number): SheetRow[] {
-  return rows.filter((r) => r.kind !== 'decision' && r.round === round);
-}
-
-/** 題目卡的格子：只有出題那一局到目前的提議＋輪到你（刺殺題只有輪到你）。前面幾局各自一張回顧圖。 */
+/** 題目卡的格子：整份牌譜到「輪到你」（放不下時從 cardSplit 的 cardStart 開始，前面的局在續圖）。 */
 export function cardSheetRows(pv: PickView): SheetRow[] {
-  const rows = sheetRows(pv);
-  const q = questionRound(rows);
-  return [...(q === null ? [] : roundRows(rows, q)), rows[rows.length - 1]];
+  return sheetRows(pv).slice(cardSplit(pv).cardStart);
 }
 
-/** 要畫回顧圖的局：出題那一局以前出完任務的每一局（刺殺題＝全部）。 */
-export function recapRounds(rows: readonly SheetRow[]): number[] {
-  const q = questionRound(rows);
-  return [...new Set(rows.filter((r) => r.kind === 'quest' && (q === null || r.round < q)).map((r) => r.round as number))].sort((a, b) => a - b);
-}
-
+/** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、整份牌譜（精簡表格）、題目。 */
 export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const role = pv.game.seatRoles[pv.pick.seat - 1];
   const rows = sheetRows(pv);
-  // 站長 11/18：「每一局都只呈現該局的表格 & 湖中」→ 題目卡只畫出題那一局；前面幾局在後面的回顧圖
+  // 站長 11/18：精縮版的派票紀錄表——整份牌譜、任務結果、湖一次放在題目卡；放不下才把最早的幾局移到續圖
   const cardRows = cardSheetRows(pv);
-  const recaps = recapRounds(rows);
+  const pagesN = gridPages(pv).length;
   const layout = cardLayout(cardRows.length);
   const parts: string[] = [headerBand(labelFor(weekday, pv.pick), pv.exerciseId)];
 
@@ -868,7 +874,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     parts.push(lakeBlock(entries, lx, ty, size).svg);
   }
 
-  // 牌譜格子（只到出題那一刻；太長的話後面的列在第二張）
+  // 牌譜格子（只到出題那一刻；太長的話最早的幾局在後面的續圖）
   let y = CARD_TOP_H;
   parts.push(gridHead(pv, y, rows));
   y += GRID_HEAD_H;
@@ -885,9 +891,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     : '三藍：輪到你刺殺。誰是梅林？';
   parts.push(text(40, y, prompt, { size: 36, fill: C.blue, weight: true }));
   y += 36;
-  const hint = layout.overflow ? nextHint(1, gridPages(pv).length + 1)
-    : recaps.length ? `前面 ${recaps.length} 局的牌譜在後面的圖（往右滑）｜${voteLegend(cardRows).split('｜')[0]}`
-      : voteLegend(cardRows);
+  const hint = pagesN ? `前面幾局的牌譜在後面的圖（往右滑）｜1/${pagesN + 1}` : voteLegend(cardRows);
   parts.push(text(40, y, hint, { size: 21, fill: C.faint }));
   y += 36;
   parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
@@ -897,11 +901,11 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
 }
 
 /**
- * 牌譜續圖：題目卡放不下的列，要幾張就分幾張（gridPages），同樣的格子（欄名照畫）。放得下時回傳 []。
- * 標題寫第幾張／共幾張；不是最後一張的寫「牌譜接下一張（往右滑）」，最後一張寫記號說明。
+ * 牌譜續圖：題目卡放不下時最早的幾局（整局），要幾張就分幾張（gridPages），同樣的格子（欄名照畫）。放得下時回傳 []。
+ * 標題寫第幾張／共幾張（題目卡是第 1 張）；不是最後一張的寫「牌譜接下一張（往右滑）」，最後一張寫記號說明。
  */
 export function buildGridSvgs(pv: PickView, weekday: number): string[] {
-  const rows = cardSheetRows(pv);
+  const rows = sheetRows(pv);
   const pages = gridPages(pv);
   const total = pages.length + 1;
   return pages.map(({ start, end }, i) => {
@@ -925,82 +929,6 @@ export function buildGridSvgs(pv: PickView, weekday: number): string[] {
   });
 }
 
-/** 回顧圖底下的列能用的高度（標題、圓桌之下，留給註記與網址）。 */
-const RECAP_FREE = GRID_TARGET_H - CARD_TOP_H - GRID_HEAD_H - 110;
-
-/**
- * 回顧圖怎麼分組（站長 11/18：「然後一張圖最多顯示兩局的派票紀錄 這樣呈現看看」）：前面的局兩局一張（1–2、3–4），
- * 單數的最後一張一局；兩局的列放不下（列高小於最小值）就拆成一局一張。
- */
-export function recapGroups(pv: PickView): number[][] {
-  const rows = sheetRows(pv);
-  const rounds = recapRounds(rows);
-  const groups: number[][] = [];
-  for (let i = 0; i < rounds.length; i += 2) {
-    const pair = rounds.slice(i, i + 2);
-    const n = pair.reduce((k, r) => k + roundRows(rows, r).length, 0);
-    if (pair.length === 2 && Math.floor(RECAP_FREE / n) < GRID_ROW_MIN) groups.push([pair[0]], [pair[1]]);
-    else groups.push(pair);
-  }
-  return groups;
-}
-
-/** 回顧圖的檔名後綴：rounds-1-2、rounds-3（單局）。 */
-export function recapSuffix(group: readonly number[]): string {
-  return `rounds-${group.join('-')}`;
-}
-
-/**
- * 前面幾局的回顧圖：最多兩局一張——小圓桌畫到那張最後一局為止的湖中線與座位（到那時候知道的），
- * 右邊是這幾局的任務格與湖、下面是這幾局的牌譜格子（提議、任務結果、湖）。輪播放在題目卡後面。
- */
-export function buildRoundSvgs(pv: PickView, weekday: number): { rounds: number[]; svg: string }[] {
-  const rows = sheetRows(pv);
-  const groups = recapGroups(pv);
-  const pages = gridPages(pv).length;
-  const total = 1 + pages + groups.length;
-  return groups.map((group, i) => {
-    const part = group.flatMap((r) => roundRows(rows, r));
-    const last = group[group.length - 1];
-    const k = 2 + pages + i;
-    const name = group.length === 1 ? `第 ${group[0]} 局` : `第 ${group[0]}–${last} 局`;
-    const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・${name}（${k}/${total}）`, pv.exerciseId)];
-    const top = 150;
-    const cx = 40 + TABLE_BOX_W / 2;
-    const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-    // 到這張最後一局為止知道的事（之後的湖不算）
-    const known = rows.filter((r) => r.kind !== 'decision' && r.round <= last);
-    parts.push(roundTable(pv, cx, cy, known));
-    const rx = 40 + TABLE_BOX_W + 24;
-    let ty = top + 80;
-    parts.push(text(rx, ty, name, { size: 40, weight: true }));
-    ty += 26;
-    group.forEach((r, j) => parts.push(missionChip(rows, r, rx + j * 86, ty, 78, 94)));
-    ty += 94 + 44;
-    const thumbs = pv.view.sight.kind === 'percival' ? pv.view.sight.thumbs : undefined;
-    const lake = lakeBlock(lakeEntries(part, lakeKnowledge(pv, known).chain, { thumbs, known }), rx, ty, 24, [{ t: '湖 ', fill: '#a5f3fc', weight: true }]);
-    parts.push(lake.svg);
-    const rh = Math.max(GRID_ROW_MIN, Math.min(GRID_ROW_MAX, Math.floor(RECAP_FREE / Math.max(1, part.length))));
-    let y = CARD_TOP_H;
-    parts.push(gridHead(pv, y, known));
-    y += GRID_HEAD_H;
-    for (const r of part) {
-      parts.push(gridRow(r, y, rh));
-      y += rh;
-    }
-    y += 50;
-    parts.push(text(40, y, voteLegend(part), { size: 21, fill: C.faint }));
-    y += 36;
-    parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
-    y += 24;
-    return { rounds: group, svg: svgDoc(y, parts.join(''), { watermark: false }) };
-  });
-}
-
-/** 前面幾局的回顧圖 PNG，照順序。 */
-export function renderRoundPngs(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): { rounds: number[]; png: Buffer }[] {
-  return buildRoundSvgs(pv, weekday).map(({ rounds, svg }) => ({ rounds, png: svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE) }));
-}
 
 /** 第一張續圖（放得下時 null）；要全部的續圖用 buildGridSvgs。 */
 export function buildGridSvg(pv: PickView, weekday: number): string | null {

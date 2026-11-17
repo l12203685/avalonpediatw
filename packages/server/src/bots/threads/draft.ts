@@ -293,7 +293,7 @@ export interface ThreadsDraft {
    * 輪播的圖，依序：image = 題目卡（只能發一張時發它）；gridImage = 牌譜圖（網站牌譜頁的格子，只到出題那一刻）；
    * answerImage = 公布完整答案的日子另附的答案卡（昨天那一局的角色，紅方在上）。
    */
-  post: { text: string; chars: number; image?: string; gridImages?: string[]; /** 前面幾局的回顧圖，最多兩局一張。 */ roundImages?: string[]; /** 舊的草稿（只有一張續圖）。 */ gridImage?: string; answerImage?: string };
+  post: { text: string; chars: number; image?: string; gridImages?: string[]; /** 舊的草稿（只有一張續圖）。 */ gridImage?: string; answerImage?: string };
   /** A 要引用昨天的貼文 B 發（有昨天的題目就是 true）。 */
   quoteYesterday: boolean;
   /** 今天延續昨天同一局（週四、週六）：A 裡的昨天答案不公布幾好幾壞和角色。 */
@@ -373,11 +373,9 @@ export function draftMarkdown(d: ThreadsDraft): string {
   out.push(`## ① 新貼文 A：今天的題目＋昨天的答案（${d.post.chars} 字）`, '', `${how}，附圖。`, '', '```', d.post.text, '```', '');
   if (d.post.image) {
     const grids = d.post.gridImages ?? (d.post.gridImage ? [d.post.gridImage] : []);
-    const rounds = d.post.roundImages ?? [];
     const imgs = [
       `${d.post.image}（題目）`,
       ...grids.map((g, i) => `${g}（牌譜 ${i + 2}/${grids.length + 1}）`),
-      ...rounds.map((g) => `${g}（第 ${(/-rounds?-([\d-]+)\.png$/.exec(g)?.[1] ?? '?').replace('-', '–')} 局回顧）`),
       ...(d.post.answerImage ? [`${d.post.answerImage}（昨天的答案）`] : []),
     ];
     out.push(`圖（依序發成輪播）：${imgs.join('、')}`, '');

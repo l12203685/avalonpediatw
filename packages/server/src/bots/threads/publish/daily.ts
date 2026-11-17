@@ -351,7 +351,7 @@ export function planSummary(plan: DailyPlan, mode: string): string[] {
 export function imageProblem(plan: Pick<DailyPlan, 'liveBlock' | 'images' | 'image' | 'text'>, imageUrls: readonly string[]): string | null {
   if (plan.liveBlock) return plan.liveBlock;
   const images = plan.images ?? (plan.image ? [plan.image] : []);
-  if (images.some((n) => /-(grid|rounds?)(-\d+)+\.png$/.test(n)) && imageUrls.length < images.length) return `題目要續圖或回顧圖，但只有 ${imageUrls.length}／${images.length} 張圖有公開網址`;
+  if (images.some((n) => /-grid(-\d+)?\.png$/.test(n)) && imageUrls.length < images.length) return `題目要續圖，但只有 ${imageUrls.length}／${images.length} 張圖有公開網址`;
   if (plan.text.includes(SEE_IMAGE_LINE) && imageUrls.length === 0) return '貼文的牌譜寫「完整局面看圖」，但圖沒有公開網址';
   return null;
 }

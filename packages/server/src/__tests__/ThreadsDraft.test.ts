@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, recapGroups, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -36,9 +36,9 @@ beforeAll(() => {
 
 const gameOf = (pick: ThreadsPick) => bank.games[bank.byId.get(pick.gameId) as number];
 
-/** 題目卡加上前面幾局的回顧圖（一整組輪播的 SVG）：每一列都在其中一張。 */
+/** 題目卡加上續圖（一整組輪播的牌譜 SVG）：每一列都在其中一張。 */
 function allSvg(pv: ReturnType<typeof pickView>, weekday: number): string {
-  return [buildPuzzleSvg(pv, weekday), ...buildRoundSvgs(pv, weekday).map((x) => x.svg)].join('\n');
+  return [buildPuzzleSvg(pv, weekday), ...buildGridSvgs(pv, weekday)].join('\n');
 }
 
 describe('dates', () => {
@@ -334,44 +334,49 @@ describe('image', () => {
     for (const x of d) expect(x).toBeCloseTo(d[0], 6);
   });
 
-  it('the question card shows only the question round; every earlier round gets its own recap image; every row is drawn exactly once, all ≤ 1350', () => {
-    let withRecaps = 0;
-    // 牌譜格子的盾牌（stroke-width 1.2）；圓桌上箭頭的盾牌另外算
+  it('the question card shows the whole record (proposals, missions, lakes) up to the question; only a record too tall moves its earliest whole rounds to continuation images; every row drawn once, all ≤ 1350', () => {
+    let whole = 0;
+    let total = 0;
     const shields = (svg: string): number => (svg.match(/class="team-shield"/g) ?? []).length;
     for (let w = 0; w < 4; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        total++;
         const pv = pickView(gameOf(pick), pick);
         const rows = sheetRows(pv);
         const teamCount = (rs: readonly (typeof rows)[number][]): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0);
         const card = buildPuzzleSvg(pv, 3);
         expect(Number(/height="(\d+)"/.exec(card)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
         const cardRows = cardSheetRows(pv);
-        const q = questionRound(rows);
-        for (const r of cardRows) if (r.kind !== 'decision') expect(r.round).toBe(q); // 題目卡只有出題那一局
-        expect(gridOverflowStart(pv)).toBeNull(); // 一局的列放得下題目卡
+        const pages = gridPages(pv);
+        const start = rows.length - cardRows.length;
+        expect(cardRows).toEqual(rows.slice(start)); // 題目卡一路畫到「輪到你」
         expect(shields(card)).toBe(teamCount(cardRows));
-        const recaps = buildRoundSvgs(pv, 3);
-        // 兩局一張（站長 11/18「一張圖最多顯示兩局的派票紀錄」）：1–2、3–4，單數最後一張一局
-        expect(recaps.map((x) => x.rounds)).toEqual(recapGroups(pv));
-        expect(recaps.flatMap((x) => x.rounds)).toEqual(recapRounds(rows));
-        for (const x of recaps) expect(x.rounds.length).toBeLessThanOrEqual(2);
-        if (recapRounds(rows).length >= 2) expect(recaps[0].rounds).toHaveLength(2);
-        if (recaps.length) withRecaps++;
-        let drawn = cardRows.filter((r) => r.kind !== 'decision').length;
-        for (const { rounds, svg } of recaps) {
-          const part = rounds.flatMap((r) => roundRows(rows, r));
-          drawn += part.length;
-          expect(shields(svg)).toBe(teamCount(part));
-          expect(Number(/height="(\d+)"/.exec(svg)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
-          expect(svg).toContain(rounds.length === 2 ? `第 ${rounds[0]}–${rounds[1]} 局` : `第 ${rounds[0]} 局`);
-          expect(svg).not.toMatch(/10\s*家/);
+        if (!pages.length) {
+          whole++;
+          expect(start).toBe(0); // 整份牌譜都在題目卡
+          expect(gridOverflowStart(pv)).toBeNull();
+          expect(card).not.toContain('在後面的圖');
+        } else {
+          // 放不下：最早的幾局在續圖，從第 1 列接到題目卡第 1 列；不把一局拆開
+          expect(gridOverflowStart(pv)).toBe(start);
+          expect(rowRound(rows[start])).not.toBe(rowRound(rows[start - 1]));
+          expect(pages[0].start).toBe(0);
+          for (let i = 1; i < pages.length; i++) expect(pages[i].start).toBe(pages[i - 1].end);
+          expect(pages.at(-1)?.end).toBe(start);
+          const svgs = buildGridSvgs(pv, 3);
+          expect(svgs).toHaveLength(pages.length);
+          svgs.forEach((svg, i) => {
+            expect(shields(svg)).toBe(teamCount(rows.slice(pages[i].start, pages[i].end)));
+            expect(Number(/height="(\d+)"/.exec(svg)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+          });
+          expect(card).toContain(`前面幾局的牌譜在後面的圖（往右滑）｜1/${pages.length + 1}`);
         }
-        expect(drawn).toBe(rows.filter((r) => r.kind !== 'decision').length); // 每一列剛好畫一次
-        if (recaps.length) expect(card).toContain(`前面 ${recapRounds(rows).length} 局的牌譜在後面的圖（往右滑）`);
+        // 任務結果、湖中都在同一份表格裡
+        expect((card.match(/class="lake-line"/g) ?? []).length).toBe(rows.filter((r) => r.kind === 'lake').length);
         expect(card).not.toMatch(/10\s*家/);
       }
     }
-    expect(withRecaps).toBeGreaterThan(0);
+    expect(whole).toBeGreaterThan(total * 0.9); // 絕大多數一張就放得下
     expect(cardLayout(5)).toMatchObject({ overflow: false, cardRows: 5 });
     expect(cardLayout(60).overflow).toBe(true);
   });
@@ -586,7 +591,7 @@ describe('image', () => {
     expect(resolveThumbs([4, 6], new Map())).toBeNull();
   });
 
-  it('each recap shows only what was known by that round (that round’s lake in, later lakes out)', () => {
+  it('the question card shows every lake known at the question moment; earlier rows alone did not know it yet', () => {
     // 找一張有兩次湖以上的題目，把後面那次湖改成「你」拿湖
     let found: ReturnType<typeof pickView> | null = null;
     for (let w = 0; w < 8 && !found; w++) {
@@ -613,11 +618,6 @@ describe('image', () => {
     const rows = sheetRows(mine);
     const lakeRound = later.round;
     expect(buildPuzzleSvg(mine, 3)).toContain(label); // 題目卡：出題那一刻知道了
-    for (const { rounds, svg } of buildRoundSvgs(mine, 3)) {
-      const last = rounds[rounds.length - 1]; // 一張圖算到它最後一局
-      if (last < lakeRound) expect(svg.includes(label)).toBe(false); // 之前的局還不知道
-      else expect(svg).toContain(label);
-    }
     expect(lakeKnowledge(mine, rows.filter((r) => r.kind !== 'decision' && r.round < lakeRound)).seats.has(target)).toBe(false);
   });
 
