@@ -18,7 +18,8 @@ import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 import { loadPlayerNames, planSummary, postDaily, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
-import { REQUIRED_SCOPES, ThreadsApi } from '../src/bots/threads/publish/threadsApi';
+import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
+import { ThreadsApi, tokenProblem } from '../src/bots/threads/publish/threadsApi';
 
 const serverRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(serverRoot, '..', '..');
@@ -68,16 +69,12 @@ async function apiWithUser(): Promise<ThreadsApi> {
   return apiFromEnv(me.id);
 }
 
-/** 發文前確認權杖：有效、權限夠、是同一個帳號。查不到權限時只警告（發文時 API 會再擋一次）。 */
+/** 發文前確認權杖：有效、權限夠、是同一個帳號。查不到權限也不發（fail closed）；只有正式發佈會呼叫。 */
 async function checkToken(api: ThreadsApi): Promise<void> {
   const info = await api.tokenInfo();
-  if (!info) say('- ⚠️ 查不到權杖的權限清單（debug_token 沒回應），直接試發；權限不夠時 Threads 會回錯誤');
-  else {
-    if (!info.valid) throw new Error('權杖已失效：請照 docs/THREADS.md〈自動發佈〉重新產生並更新 secrets');
-    const missing = REQUIRED_SCOPES.filter((s) => !info.scopes.includes(s));
-    if (info.scopes.length > 0 && missing.length > 0) throw new Error(`權杖少了權限：${missing.join('、')}`);
-    if (info.expiresAt > 0) say(`- 權杖還有 ${Math.floor((info.expiresAt * 1000 - Date.now()) / 86_400_000)} 天到期`);
-  }
+  const problem = tokenProblem(info);
+  if (problem) throw new Error(problem);
+  if (info && info.expiresAt > 0) say(`- 權杖還有 ${Math.floor((info.expiresAt * 1000 - Date.now()) / 86_400_000)} 天到期`);
   const me = await api.me();
   const want = process.env.THREADS_USER_ID;
   if (want && me.id !== want) throw new Error('THREADS_USER_ID 和權杖的帳號不一樣');
@@ -129,7 +126,9 @@ async function main(): Promise<number> {
     }
     const api = await apiWithUser();
     await checkToken(api);
-    const result = await postDaily(plan, { api, stateDir, imageUrl: process.env.IMAGE_URL || undefined });
+    // --checkpoint-push（CI）：每次真的發出東西就把狀態檔推上 threads-state，中斷也不會丟掉紀錄。
+    const checkpoint = flag('--checkpoint-push') ? (label: string): Promise<void> => gitCheckpoint(stateDir, `threads: ${plan.date} ${label}`) : undefined;
+    const result = await postDaily(plan, { api, stateDir, imageUrl: process.env.IMAGE_URL || undefined, checkpoint });
     fs.writeFileSync(path.join(outDir, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
     say(`- 結果：${result.status}，貼文 ${result.permalink ?? result.postId}${result.commentId ? '，第一則留言已發' : ''}`);
     for (const n of result.notes) say(`- ${n}`);

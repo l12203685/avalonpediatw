@@ -118,6 +118,9 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 
 不會重複發：狀態檔有這一天的貼文 id 就跳過；沒有的話先看自己最近的貼文裡有沒有「題號 今天的題號」，有就補記、不再發。
 A 發了、第一則留言沒成功時（狀態檔 `commentId` 是 `null`），之後每小時的執行不再發 A，只補發留言。
+發佈的回應不明（網路斷線、429、5xx）時不盲目重發：先看自己最近的貼文（或自己的回覆）和容器狀態，已經發出去就沿用那一篇。
+每次真的發出東西（A、留言）就馬上把狀態檔推上 `threads-state`；發留言前也先查自己的回覆裡有沒有回這一篇的，有就沿用。
+正式發佈前查不到權杖的權限（`debug_token` 沒回應或沒列權限）就不發，直接讓那次執行失敗；試跑不受影響。
 
 內容檢查沒過（例如疑似玩家名字）時，執行紀錄、摘要和試跑附件都不放貼文和留言的內容，只放檢查訊息（這個 repo 的 Actions 紀錄是公開的）。
 
@@ -130,7 +133,7 @@ repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，
 ### 站長要做的（一次）
 
 1. **建 Meta 開發者應用程式**：到 developers.facebook.com → 我的應用程式 → 建立應用程式 → 使用案例選「存取 Threads API」。
-2. **權限**：在使用案例裡加上 `threads_basic`、`threads_content_publish`、`threads_manage_replies`。
+2. **權限**：在使用案例裡加上 `threads_basic`、`threads_content_publish`、`threads_manage_replies`、`threads_read_replies`（發留言前先查自己回過了沒，避免重複留言）。
 3. **把自己加成測試人員**：應用程式角色 → 新增 Threads 測試人員（填自己的 Threads 帳號），再到 Threads App 的「設定 → 帳號 → 網站權限 → 邀請」接受。
 4. **產生權杖**：用 Meta 的「Threads API 測試工具」或授權網址登入取得短效權杖，再換成長效權杖（60 天）。拿到兩樣東西：長效權杖、自己的 Threads 使用者 id（數字）。
 5. **放進 GitHub**（repo → Settings → Secrets and variables → Actions）：

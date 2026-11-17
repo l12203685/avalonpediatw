@@ -7,6 +7,7 @@
  *   - 權杖不會出現在錯誤訊息；暫時性錯誤重試。
  */
 
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -30,7 +31,8 @@ import {
   writeState,
   type DailyPlan,
 } from '../bots/threads/publish/daily';
-import { ThreadsApi, redact, type FetchLike } from '../bots/threads/publish/threadsApi';
+import { gitCheckpoint } from '../bots/threads/publish/stateGit';
+import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
 let bank: SimBank;
@@ -54,11 +56,38 @@ function gen(stateDir: string, picks: Map<string, string> = new Map()): ThreadsG
   return new ThreadsGenerator({ bank, titles, readSaved: savedFromState(stateDir), pickOverride: (d) => picks.get(d) ?? null });
 }
 
-/** 假的 Threads API：記下每一次呼叫，照路徑回答。 */
-function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string }[]; failFirst?: number; failReply?: boolean; onPermalink?: () => void } = {}) {
+/** 假的 Threads 伺服器的狀態（跨好幾次執行共用：已經發出去的貼文和回覆）。 */
+interface FakeServer {
+  containers: Map<string, URLSearchParams>;
+  posts: { id: string; text: string; permalink?: string }[];
+  replies: { id: string; text: string; replied_to: { id: string } }[];
+  publishCalls: string[];
+}
+
+function fakeServer(): FakeServer {
+  return { containers: new Map(), posts: [], replies: [], publishCalls: [] };
+}
+
+/**
+ * 假的 Threads API：記下每一次呼叫，照路徑回答；容器發佈後真的出現在最近的貼文／自己的回覆裡。
+ * losePublish：發佈「其實成功了」但回應丟了（回 503）幾次；failPublish：發佈真的失敗（503、沒發）幾次。
+ */
+function fakeApi(
+  opts: {
+    recent?: { id: string; text: string; permalink?: string }[];
+    failFirst?: number;
+    failReply?: boolean;
+    onPermalink?: () => void;
+    losePublish?: { post?: number; reply?: number };
+    failPublish?: { post?: number; reply?: number };
+  } = {},
+  server: FakeServer = fakeServer(),
+) {
   const calls: { method: string; path: string; params: URLSearchParams }[] = [];
-  let n = 0;
+  let n = server.containers.size;
   let failLeft = opts.failFirst ?? 0;
+  const lose = { post: opts.losePublish?.post ?? 0, reply: opts.losePublish?.reply ?? 0 };
+  const fail = { post: opts.failPublish?.post ?? 0, reply: opts.failPublish?.reply ?? 0 };
   const fetch: FetchLike = async (url, init) => {
     const u = new URL(url);
     calls.push({ method: init?.method ?? 'GET', path: u.pathname, params: u.searchParams });
@@ -68,16 +97,42 @@ function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string
       return reply(503, { error: { message: 'busy' } });
     }
     if (opts.failReply && u.pathname.endsWith('/threads') && init?.method === 'POST' && u.searchParams.get('reply_to_id')) return reply(400, { error: { message: 'reply rejected' } });
-    if (u.pathname.endsWith('/threads') && init?.method === 'POST') return reply(200, { id: `c${++n}` });
-    if (u.pathname.endsWith('/threads_publish')) return reply(200, { id: `p${u.searchParams.get('creation_id')}` });
-    if (u.pathname.endsWith('/threads')) return reply(200, { data: opts.recent ?? [] });
-    if (u.searchParams.get('fields') === 'status,error_message') return reply(200, { status: 'FINISHED' });
+    if (u.pathname.endsWith('/threads') && init?.method === 'POST') {
+      const id = `c${++n}`;
+      server.containers.set(id, new URLSearchParams(u.searchParams));
+      return reply(200, { id });
+    }
+    if (u.pathname.endsWith('/threads_publish')) {
+      const cid = u.searchParams.get('creation_id') ?? '';
+      const c = server.containers.get(cid);
+      const kind = c?.get('reply_to_id') ? 'reply' : 'post';
+      server.publishCalls.push(cid);
+      if (fail[kind] > 0) {
+        fail[kind]--;
+        return reply(503, { error: { message: 'busy' } });
+      }
+      const id = `p${cid}`;
+      if (server.posts.some((p) => p.id === id) || server.replies.some((r) => r.id === id)) return reply(400, { error: { message: 'already published' } });
+      if (kind === 'reply') server.replies.unshift({ id, text: c?.get('text') ?? '', replied_to: { id: c?.get('reply_to_id') ?? '' } });
+      else server.posts.unshift({ id, text: c?.get('text') ?? '', permalink: `https://www.threads.net/@x/post/${id}` });
+      if (lose[kind] > 0) {
+        lose[kind]--;
+        return reply(503, { error: { message: 'gateway timeout' } });
+      }
+      return reply(200, { id });
+    }
+    if (u.pathname.endsWith('/42/threads')) return reply(200, { data: [...server.posts, ...(opts.recent ?? [])] });
+    if (u.pathname.endsWith('/42/replies')) return reply(200, { data: server.replies });
+    if (u.searchParams.get('fields') === 'status,error_message') {
+      const cid = u.pathname.split('/').pop() ?? '';
+      return reply(200, { status: server.publishCalls.includes(cid) && [...server.posts, ...server.replies].some((x) => x.id === `p${cid}`) ? 'PUBLISHED' : 'FINISHED' });
+    }
     if (u.searchParams.get('fields') === 'permalink') opts.onPermalink?.();
     if (u.searchParams.get('fields') === 'permalink') return reply(200, { permalink: `https://www.threads.net/@x/post/${u.pathname.split('/').pop()}` });
     return reply(404, {});
   };
   const api = new ThreadsApi({ token: 'SECRET-TOKEN', userId: '42', fetch, sleep: async () => {}, backoff: [1, 1, 1, 1] });
-  return { api, calls };
+  return { api, calls, server };
 }
 
 describe('picks', () => {
@@ -207,8 +262,10 @@ describe('prepare + post', () => {
   it('never posts twice: a recorded id skips; a recent post with today’s 題號 is recorded instead of reposting', async () => {
     const { plan, stateDir } = prepared();
     const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜` }] });
+    first.server.replies.push({ id: 'r-dup', text: plan.comment, replied_to: { id: 'dup' } });
     const r1 = await postDaily(plan, { api: first.api, stateDir });
     expect(r1.status).toBe('found-existing');
+    expect(r1.commentId).toBe('r-dup'); // 留言也已經有了：沿用
     expect(first.calls.some((c) => c.method === 'POST')).toBe(false);
     const second = fakeApi();
     const r2 = await postDaily(plan, { api: second.api, stateDir });
@@ -256,10 +313,15 @@ describe('prepare + post', () => {
     expect(third.calls).toHaveLength(0);
   });
 
-  it('does not resume comments for posts found in recent posts or posted by hand (unknown whether a comment exists)', async () => {
+  it('a post found in recent posts without our reply gets exactly one comment; a day posted by hand is not touched', async () => {
     const { plan, stateDir } = prepared();
     const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜` }] });
-    expect((await postDaily(plan, { api: first.api, stateDir })).status).toBe('found-existing');
+    const r1 = await postDaily(plan, { api: first.api, stateDir });
+    expect(r1.status).toBe('found-existing');
+    const creates = first.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
+    expect(creates).toHaveLength(1);
+    expect(creates[0].params.get('reply_to_id')).toBe('dup');
+    expect(readState(stateDir, '2026-11-18')).toMatchObject({ postId: 'dup', commentId: r1.commentId });
     const again = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
     expect(again).toMatchObject({ alreadyPublished: true, resumeComment: false });
     const manual = prepareDaily('2026-11-17', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
@@ -295,6 +357,81 @@ describe('prepare + post', () => {
     expect(JSON.parse(fs.readFileSync(path.join(outDir, 'plan.json'), 'utf8')).text).toBe(ok.text);
   });
 
+  it('server published but the response was lost: adopts that post and that reply instead of publishing again', async () => {
+    const { plan, stateDir } = prepared();
+    const { api, server } = fakeApi({ losePublish: { post: 1, reply: 1 } });
+    const res = await postDaily(plan, { api, stateDir });
+    expect(res.status).toBe('published');
+    expect(server.posts).toHaveLength(1); // A 只有一篇
+    expect(server.replies).toHaveLength(1); // 留言只有一則
+    expect(server.publishCalls).toHaveLength(2); // 每個容器只發佈一次，沒有重發
+    expect(res.postId).toBe(server.posts[0].id);
+    expect(res.commentId).toBe(server.replies[0].id);
+    expect(readState(stateDir, plan.date)).toMatchObject({ postId: res.postId, commentId: res.commentId });
+  });
+
+  it('publish really failed (not published): checks first, then publishes once more', async () => {
+    const { plan, stateDir } = prepared();
+    const { api, server } = fakeApi({ failPublish: { post: 1 } });
+    const res = await postDaily(plan, { api, stateDir });
+    expect(res.status).toBe('published');
+    expect(server.posts).toHaveLength(1);
+    expect(server.publishCalls.filter((c) => !server.containers.get(c)?.get('reply_to_id'))).toHaveLength(2);
+  });
+
+  it('a container that shows PUBLISHED but cannot be found is not published again', async () => {
+    const { api, server } = fakeApi({ losePublish: { post: 1 } });
+    await expect(api.publishPost({ text: 'x', find: async () => null })).rejects.toThrow('不再重發');
+    expect(server.publishCalls).toHaveLength(1);
+    expect(server.posts).toHaveLength(1);
+  });
+
+  it('checkpoints the state after A and after the comment (pushed to a real git remote); a rerun after a crash posts nothing new', async () => {
+    const git = (args: string[], cwd: string): string => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const base = tmp();
+    const bare = path.join(base, 'state.git');
+    git(['init', '-q', '--bare', '-b', 'threads-state', bare], base);
+    const clone = (name: string): string => {
+      const dir = path.join(base, name);
+      git(['clone', '-q', bare, dir], base);
+      return dir;
+    };
+    const { plan, stateDir: seedDir } = prepared();
+    const server = fakeServer();
+    server.posts.push({ id: 'y17', text: '題號 36AKW-2-5' });
+
+    // 第一次：A 發出、推上去；留言發出後「當機」（留言的狀態沒推上去），整個工作目錄丟掉
+    const run1 = clone('run1');
+    fs.cpSync(path.join(seedDir, 'state'), path.join(run1, 'state'), { recursive: true });
+    const labels: string[] = [];
+    const r1 = await postDaily(plan, {
+      api: fakeApi({}, server).api,
+      stateDir: run1,
+      checkpoint: async (label) => {
+        labels.push(label);
+        if (label === 'A') await gitCheckpoint(run1, `threads: ${plan.date} ${label}`, { sleep: async () => {} });
+      },
+    });
+    expect(labels).toEqual(['A', '第一則留言']);
+    expect(server.replies).toHaveLength(1);
+
+    // 重跑：新的 clone 只看得到推上去的（A 有 id、留言是 null）→ 先查自己的回覆，沿用，不再發
+    const run2 = clone('run2');
+    expect(readState(run2, plan.date)).toMatchObject({ postId: r1.postId, commentId: null });
+    const plan2 = prepareDaily(plan.date, { gen: gen(run2), stateDir: run2, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(plan2.resumeComment).toBe(true);
+    const second = fakeApi({}, server);
+    const r2 = await postDaily(plan2, { api: second.api, stateDir: run2, checkpoint: (label) => gitCheckpoint(run2, `threads: ${plan.date} ${label}`, { sleep: async () => {} }) });
+    expect(r2).toMatchObject({ status: 'comment-resumed', commentId: r1.commentId });
+    expect(second.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    expect(server.posts.filter((p) => p.id !== 'y17')).toHaveLength(1);
+    expect(server.replies).toHaveLength(1);
+
+    // 再一次：推上去的狀態已經有留言 id → 什麼都不做
+    const run3 = clone('run3');
+    expect(readState(run3, plan.date)).toMatchObject({ postId: r1.postId, commentId: r1.commentId });
+  });
+
   it('posts without a quote when yesterday cannot be found, and refuses content that failed validation', async () => {
     const { plan, stateDir } = prepared('2026-11-18', false);
     const { api, calls } = fakeApi();
@@ -303,6 +440,16 @@ describe('prepare + post', () => {
     expect(res.notes.join()).toContain('這篇不引用');
     expect(calls.find((c) => c.method === 'POST')?.params.get('media_type')).toBe('TEXT');
     await expect(postDaily({ ...plan, errors: ['x'] }, { api, stateDir: tmp() })).rejects.toThrow('內容檢查沒過');
+  });
+});
+
+describe('token check', () => {
+  it('fails closed when permissions cannot be confirmed; passes only a valid token with every scope', () => {
+    expect(tokenProblem(null)).toContain('確認不了權限');
+    expect(tokenProblem({ valid: true, scopes: [], expiresAt: 0 })).toContain('確認不了權限');
+    expect(tokenProblem({ valid: false, scopes: [...REQUIRED_SCOPES], expiresAt: 0 })).toContain('失效');
+    expect(tokenProblem({ valid: true, scopes: ['threads_basic', 'threads_content_publish'], expiresAt: 0 })).toContain('threads_manage_replies');
+    expect(tokenProblem({ valid: true, scopes: [...REQUIRED_SCOPES], expiresAt: 0 })).toBeNull();
   });
 });
 
@@ -351,5 +498,10 @@ describe('workflow', () => {
     expect(after.indexOf('fi\n')).toBeLessThan(after.indexOf('echo "THREADS_ACCESS_TOKEN='));
     const post = all.find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
     expect(post?.body).toContain('THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}');
+  });
+
+  it('the live post step pushes the state right after each side effect (--checkpoint-push)', () => {
+    const post = steps().find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
+    expect(post?.body).toMatch(/threadsPublish\.ts post --state-dir "\$STATE_DIR" --out "\$OUT_DIR" --checkpoint-push/);
   });
 });

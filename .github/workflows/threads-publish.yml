@@ -185,7 +185,9 @@ jobs:
           THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           IMAGE_URL: ${{ steps.image.outputs.url }}
-        run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR"
+        # --checkpoint-push：發出 A、發出留言後馬上把狀態檔推上 threads-state（不等最後一步）。
+        # 權杖查不到權限、失效或少權限時這一步直接失敗、不發文（fail closed）。
+        run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR" --checkpoint-push
 
       - name: 補記手動發的那一天
         if: steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'record-manual'
