@@ -386,6 +386,8 @@ export interface BayesOptions {
    * `voteHistory` only after the vote, so the vote rules scored the team on a posterior that had not read it).
    */
   pendingProposal?: boolean;
+  /** Round 42 follow-up `beliefPendingSkip43`: situations where the pending proposal is not read (bit 1: on the team, R3, red under two wins; bit 2: on the team, R3; bit 4: loyal seats only). */
+  pendingSkip?: number;
   /** Round 40 `beliefLakeCal40`: power on another holder's lake declaration term (blue seats only; 1 = as before). */
   lakeCal?: number;
   /** Round 41 `beliefLakeIso41` (BL-cal): per-lake isotonic recalibration of P(another holder is red) (loyal / Percival seats only). */
@@ -628,7 +630,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   // seats (`seatTeam` stays the deciding seat's camp) stay as they were: red frozen. (An observation without `seatTeam` falls back to its
   // own camp; every decision enters through `HeuristicAgent.act` / `ForwardAgent.decide`, which set it.)
   const pending = opts.pendingProposal === true && obs.gamePhase === 'team_vote' && (obs.proposedTeam ?? []).length > 0
-    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true;
+    && obs.currentLeader !== obs.myPlayerId && (obs.failCount ?? 0) < 4 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true
+    && !pendingSkipped(obs, opts.pendingSkip ?? 0);
   // Round 40 `beliefLakeCal40` (BL-cal): blue seats only, like the pending proposal (red frozen).
   const lakeCal = opts.lakeCal !== undefined && opts.lakeCal > 0 && opts.lakeCal !== 1 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true ? opts.lakeCal : 1;
   // The level-0 options of the recursive reader are part of the key too (two settings that differ only there must not share an entry).
@@ -913,9 +916,23 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...(t.beliefThumbNoStain === true && !((t.percivalRead39 ?? 0) > 0) ? { thumbNoStain: true } : {}),
     ...(t.percivalRead39 === 1 ? { thumbRead39: true } : {}),
     ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
+    ...(t.beliefPendingProposal === true && (t.beliefPendingSkip43 ?? 0) > 0 ? { pendingSkip: t.beliefPendingSkip43 } : {}),
     ...((t.beliefLakeCal40 ?? 0) > 0 && t.beliefLakeCal40 !== 1 ? { lakeCal: t.beliefLakeCal40 } : {}),
     ...((t.beliefLakeIso41 ?? 0) > 0 ? { lakeIso: true } : {}),
   };
+}
+
+/**
+ * Round 42 follow-up `beliefPendingSkip43` (PR #46 section 9): the human PR yardstick fell most where an on-team voter read the pending
+ * proposal in round 3 (red leaders putting the blue voter on the team read as blue-leaning). Bit 1: on the team, round 3, red under two
+ * wins; bit 2: on the team, round 3, any score; bit 4: real loyal seats only (not Merlin's or a red seat's public-loyal view).
+ */
+function pendingSkipped(obs: PlayerObservation, skip: number): boolean {
+  if (!(skip > 0) || (obs.currentRound ?? 1) !== 3 || !(obs.proposedTeam ?? []).includes(obs.myPlayerId)) return false;
+  if ((skip & 4) !== 0 && (obs.myRole !== 'loyal' || obs.publicLoyalView === true)) return false;
+  if ((skip & 2) !== 0) return true;
+  const redWins = (obs.questResults ?? []).filter((r) => r === 'fail').length;
+  return (skip & 1) !== 0 && redWins < 2;
 }
 
 /** Round 28 `beliefLeadTemper`: the same encoding as `beliefTemper` (1 = untempered) for team picks; 0 = off (the team pick reads as the votes do). */
