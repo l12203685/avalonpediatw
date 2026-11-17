@@ -156,10 +156,12 @@ def strip_names(game: Mapping[str, Any] | None) -> dict[str, Any] | None:
 
 
 def raw_forced_rounds(text: str) -> list[int]:
-    """Rounds with more than 5 proposals in a sheet row's raw 文字記錄 (only used for rows the dataset could not
-    convert: voting_stats drops such a round, so the parsed row cannot show it). Trusted only when every round
-    ends in a mission line of the right size; nothing of the text is kept."""
+    """Rounds whose forced 5th proposal did not go in a sheet row's raw 文字記錄 (only used for rows the dataset
+    could not convert: voting_stats drops such a round, so the parsed row cannot show it): more than 5 proposals
+    before a mission, or a last round that stops after 5+ proposals with no mission while no side has 3 yet.
+    Trusted only when every earlier round ends in a mission line of the right size; nothing of the text is kept."""
     sizes: list[int] = []
+    wins = Counter()
     pending = 0
     for raw in (text or "").splitlines():
         line = " ".join(unicodedata.normalize("NFKC", raw).translate(vs._SYMBOLS).strip().strip("`*_~|").split())
@@ -176,9 +178,11 @@ def raw_forced_rounds(text: str) -> list[int]:
                 return []
             sizes.append(pending)
             pending = 0
-    if pending:
-        return []
-    return [r for r, n in enumerate(sizes, 1) if n > FORCED_ATTEMPT]
+            wins[mission_success(len(sizes), mission.lower())] += 1
+    forced = [r for r, n in enumerate(sizes, 1) if n > FORCED_ATTEMPT]
+    if pending >= FORCED_ATTEMPT and len(sizes) < len(TEAM_SIZES) and max(wins.values(), default=0) < 3:
+        return forced + [len(sizes) + 1]  # 尾派沒有出任務: the record stops after the forced proposal
+    return forced if not pending else []
 
 
 def dataset_sources(doc: Mapping[str, Any] | None, raw_text: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
@@ -955,8 +959,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     games_doc = load_json(Path(args.games))
     records_doc = load_json(Path(args.records))
-    if not games_doc and not records_doc:
-        print("game_db: neither games_cache.json nor records_cache.json found; nothing written", file=sys.stderr)
+    missing = [name for name, doc in (("games_cache.json", games_doc), ("records_cache.json", records_doc)) if not doc]
+    if missing:  # a partial build would silently drop every game of the missing source
+        print(f"game_db: {'、'.join(missing)} missing or empty; game_db.json and its report left untouched", file=sys.stderr)
         return 1
     snapshot = load_json(Path(args.snapshot))
     sources = dataset_sources(games_doc, snapshot_texts(snapshot))

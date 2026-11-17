@@ -277,9 +277,33 @@ class ExcludeTest(unittest.TestCase):
         text = "\n".join("\n".join(teams) + "\n" + "o" * len(teams[0]) for teams in rounds)
         self.assertEqual(gd.raw_forced_rounds(text), [2])
         self.assertEqual(gd.raw_forced_rounds(text.replace("oooo\n", "ooo\n", 1)), [])  # misaligned: not trusted
+        tail = "\n".join("\n".join(teams) + "\n" + "o" * len(teams[0]) for teams in rounds[:2]) + "\n" + "\n".join(["5679"] * 5)
+        self.assertEqual(gd.raw_forced_rounds(tail.replace("5678\n", "", 1)), [3])  # stops after the 5th, no mission
+        self.assertEqual(gd.raw_forced_rounds(tail.replace("5678\n", "", 1).rsplit("\n", 1)[0]), [])  # 4: truncated
+        self.assertEqual(gd.raw_forced_rounds(tail.replace("ooo\n", "oo\n", 1)), [])  # misaligned earlier round
+        decided = "\n".join(f"{t}\n{'o' * len(t)}" for t in ("567", "5678", "5679")) + "\n" + "\n".join(["56789"] * 5)
+        self.assertEqual(gd.raw_forced_rounds(decided), [])  # already 3 blue: not a live forced round
         src = dict(source(gd.SRC_SHEET, "12", None), forced_rounds=[2])
         rows, excluded = self.build(src)
         self.assertEqual((rows, excluded[0]["rules"]), ([], ["FORCED_NOT_RUN"]))
+
+
+class MainTest(unittest.TestCase):
+    def test_missing_primary_cache_leaves_outputs_untouched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            games = d / "games.json"
+            games.write_text(json.dumps({"fields": [], "vocab": {}, "games": []}), encoding="utf-8")
+            out, report = d / "db.json", d / "r.md"
+            out.write_text("old", encoding="utf-8")
+            report.write_text("old", encoding="utf-8")
+            args = ["--games", str(games), "--records", str(d / "none.json"), "--snapshot", str(d / "x.json"),
+                    "--sim-bank", str(d / "x.json"), "--proavalon", str(d / "x.json"),
+                    "--output", str(out), "--check-report", str(report)]
+            self.assertEqual(gd.main(args), 1)
+            self.assertEqual((out.read_text(encoding="utf-8"), report.read_text(encoding="utf-8")), ("old", "old"))
+            self.assertEqual(gd.main(["--games", str(d / "none.json")] + args[2:]), 1)
+            self.assertEqual(out.read_text(encoding="utf-8"), "old")
 
 
 class WorkflowTest(unittest.TestCase):
