@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeArrows } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -338,7 +338,8 @@ describe('image', () => {
         const layout = cardLayout(rows.length);
         const start = gridOverflowStart(pv);
         const grid = buildGridSvg(pv, 3);
-        const shields = (svg: string): number => (svg.match(/<path /g) ?? []).length;
+        // 盾牌的路徑（湖的箭頭也是 path，不算）
+        const shields = (svg: string): number => (svg.match(/<path [^>]*d="M12 2 /g) ?? []).length;
         const teamCount = (rs: typeof rows): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0);
         if (start === null) {
           expect(grid).toBeNull();
@@ -374,6 +375,47 @@ describe('image', () => {
     expect(svg.indexOf('url(#tl)')).toBeLessThan(svg.indexOf('1・'));
     // 答案卡照舊有浮水印
     expect(buildAnswerSvg(pickView(gameOf(tue), tue))).toContain('clip-path="url(#wm)"');
+  });
+
+  it('the round table is only the ten seats around the logo; mission chips sit in the right block, wrapping when narrow', () => {
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const pv = pickView(gameOf(tue), tue);
+    const svg = buildPuzzleSvg(pv, 2);
+    // 任務格在右邊（「你的視角」那一欄，x ≥ 600），不在圓桌裡
+    const chip = /<text x="([\d.]+)" y="[\d.]+"[^>]*>(?:<tspan[^>]*>)?1・3/.exec(svg);
+    expect(chip).not.toBeNull();
+    expect(Number(chip![1])).toBeGreaterThan(600);
+    const one = missionChips(sheetRows(pv), 0, 0, 500);
+    const two = missionChips(sheetRows(pv), 0, 0, 200);
+    expect(two.height).toBeGreaterThan(one.height); // 寬度不夠就換行
+    for (let r = 1; r <= 5; r++) expect(one.svg).toContain(`${r}・`);
+  });
+
+  it('the Lady of the Lake is drawn as numbered arrows holder → target with the declared result; the viewer’s own lake also shows what they saw', () => {
+    const rows = [
+      { kind: 'lake' as const, round: 2, holderSeat: 10, targetSeat: 9, claim: 'o' as const },
+      { kind: 'lake' as const, round: 3, holderSeat: 9, targetSeat: 4, claim: 'x' as const, seen: 'red' as const },
+      { kind: 'lake' as const, round: 4, holderSeat: 4, targetSeat: 1, claim: '' as const },
+    ];
+    const svg = lakeArrows(rows, 300, 400);
+    expect((svg.match(/class="lake-arrow"/g) ?? []).length).toBe(3);
+    expect((svg.match(/marker-end="url\(#la\)"/g) ?? []).length).toBe(3);
+    for (const n of ['①', '②', '③']) expect(svg).toContain(n);
+    expect(svg).toContain('>o<');
+    expect(svg).toContain('>x<');
+    expect(svg).toContain('沒說');
+    expect(svg).toContain('（看到紅）');
+    // 只有一次湖：不編號
+    expect(lakeArrows(rows.slice(0, 1), 300, 400)).not.toContain('①');
+    expect(lakeArrows([], 300, 400)).toBe('');
+    // 實際的題目：圖上的箭頭數 = 出題當下看得到的湖
+    for (let w = 0; w < 4; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const n = sheetRows(pv).filter((r) => r.kind === 'lake').length;
+        expect((buildPuzzleSvg(pv, 3).match(/class="lake-arrow"/g) ?? []).length).toBe(n);
+      }
+    }
   });
 
   it('the draft markdown lists every continuation image in order', () => {
