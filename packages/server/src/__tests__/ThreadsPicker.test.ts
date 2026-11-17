@@ -8,6 +8,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -18,6 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { byStrength, planDays } from '../bots/threads/candidates';
 import type { ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
+import { readPicksFile, savedDraftReader } from '../bots/threads/inputs';
 import { futurePicks, parsePicks, pickOverrideOf, picksFileBody } from '../bots/threads/picksFile';
 import { THREADS_POSTED, exerciseIdOfPick } from '../bots/threads/plan';
 import { HIGH_LINEUP_S, cacheGameFingerprint, lineupIndex, lineupOf } from '../bots/threads/strength';
@@ -132,6 +134,44 @@ describe('picks file', () => {
     const b = parsePicks([{ date: '2026-11-18', exerciseId: 'ABCDE-1-5' }, { id: '2026-11-23', data: { exerciseId: 'ABCDE-A' } }]);
     expect([...b]).toEqual([['2026-11-18', 'ABCDE-1-5'], ['2026-11-23', 'ABCDE-A']]);
     expect([...futurePicks(b, '2026-11-18')]).toEqual([['2026-11-23', 'ABCDE-A']]);
+  });
+});
+
+describe('script inputs (threads:draft and threads:candidates read the same picks and saved drafts)', () => {
+  const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'threads-inputs-'));
+  const genFrom = (picksFile: string, drafts: string) =>
+    new ThreadsGenerator({ bank, titles: new Map(), readSaved: savedDraftReader(drafts), pickOverride: pickOverrideOf(readPicksFile(picksFile)) });
+
+  it("keeps a pick for today (made the day before) when there is no saved draft; a saved draft still protects what was posted", () => {
+    const date = '2026-11-24';
+    const base = gen();
+    const auto = idOn(base, date);
+    const choice = base.optionsFor(date).find((o) => o.exerciseId !== auto)!;
+    const dir = tmp();
+    const picksFile = path.join(dir, 'threads_picks.json');
+    fs.writeFileSync(picksFile, picksFileBody(new Map([[date, choice.exerciseId]])));
+    const drafts = path.join(dir, 'drafts');
+    fs.mkdirSync(drafts);
+    // 不論今天是哪一天（含 11/24 當天和之後），站長選的都用
+    expect(readPicksFile(picksFile).get(date)).toBe(choice.exerciseId);
+    expect(idOn(genFrom(picksFile, drafts), date)).toBe(choice.exerciseId);
+    // 已經照自動的題目發出去（存下來了）：選擇不蓋過它
+    fs.writeFileSync(path.join(drafts, `${date}.json`), JSON.stringify({ pick: base.pickFor(date) }));
+    expect(idOn(genFrom(picksFile, drafts), date)).toBe(auto);
+    expect(readPicksFile('')).toEqual(new Map());
+  });
+
+  it('the candidates calendar continues Thursday from the saved (published) Wednesday game, not the automatic one', () => {
+    const base = gen();
+    const auto = idOn(base, '2026-11-25');
+    const chained = base.optionsFor('2026-11-25').find((o) => o.chained && o.exerciseId !== auto)!;
+    expect(chained).toBeDefined();
+    const dir = tmp();
+    fs.writeFileSync(path.join(dir, '2026-11-25.json'), JSON.stringify({ pick: chained.pick }));
+    const g = genFrom('', dir);
+    const plan = planDays({ gen: g, lineup, today: '2026-11-25' }, '2026-11-25', 2);
+    expect(plan[0].current?.exerciseId).toBe(chained.exerciseId);
+    expect(plan[1]).toMatchObject({ source: 'chain', current: { exerciseId: chained.nextExerciseId } });
   });
 });
 
