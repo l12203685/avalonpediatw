@@ -176,7 +176,13 @@ export function __resetRecordLookupForTests(): void {
 export function normaliseRecordId(raw: string): string {
   let t = (raw ?? '').normalize('NFKC').trim();
   const m = /records=([^\s&#]+)/u.exec(t);
-  if (m) t = decodeURIComponent(m[1]);
+  if (m) {
+    try {
+      t = decodeURIComponent(m[1]);
+    } catch {
+      return ''; // 壞掉的 %（#records=%）：當看不懂的局號，照常回「找不到局號」
+    }
+  }
   t = t.replace(/^#/, '').trim();
   if (/^[smp][0-9a-z]+$/iu.test(t)) t = t[0].toUpperCase() + t.slice(1);
   return /^[0-9A-Za-z_-]{1,40}$/u.test(t) ? t : '';

@@ -154,6 +154,16 @@ describe('parseCorrectionText', () => {
     expect(normaliseRecordId('Ｍ５３６')).toBe('M536');
     expect(normaliseRecordId('https://avalon-game-platform.web.app/#records=S1794')).toBe('S1794');
     expect(normaliseRecordId('<script>')).toBe('');
+    expect(normaliseRecordId('https://avalon-game-platform.web.app/#records=%')).toBe('');
+    expect(normaliseRecordId('#records=%E0%A4%A')).toBe('');
+  });
+
+  it('a malformed escape in the site link is an unknown id (the normal reply, never a throw)', async () => {
+    const raw = 'https://avalon-game-platform.web.app/#records=%';
+    expect(lookupRecord(raw)).toBeNull();
+    const text = await answerCorrectionTextCommand(`/更正 ${raw}`, { platform: 'line' });
+    expect(text).toMatch(/^找不到局號「/);
+    expect(await answerCorrection({ id: raw, content: '第一局是 158' }, { platform: 'discord' })).toMatch(/^找不到局號「/);
   });
 });
 
