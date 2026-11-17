@@ -774,19 +774,19 @@
         "q": {
           "improve": {
             "q": "Where can I improve?",
-            "how": "Pick yourself in Player radar and compare with your PR group; items below the group are the most worth practising. The After two reds block shows how your teams and votes differ from the group."
+            "how": "Pick yourself in Advanced › Player radar and compare with your PR group; items below the group are the most worth practising. The After two reds block shows how your teams and votes differ from the group."
           },
           "situation": {
             "q": "What works best in a given spot (teams, votes, lake, after two reds)?",
-            "how": "State tree finds the current spot by mission order and lake announcements and shows which paths blue wins more often; teams after two reds show how strong players pick; Lady of the Lake covers whom to check and how to read announcements."
+            "how": "Mission results › Missions × lake (state tree) finds the current spot by mission order and lake announcements and shows which paths blue wins more often; Teams & votes shows how strong players pick after two reds; Lady of the Lake covers whom to check and how to read announcements."
           },
           "role": {
             "q": "How do I win more with this role?",
-            "how": "Look at each role's win rate, then how much the same role's results change by seat."
+            "how": "In Advanced, look at each role's win rate, then how much the same role's results change by seat."
           },
           "strategy": {
             "q": "Which strategies has the site found in the data?",
-            "how": "Auto findings lists clear, unlikely-to-be-chance differences, each with what you could do. Start with the large samples; See the numbers takes you back to the source table."
+            "how": "Advanced › Auto findings lists clear, unlikely-to-be-chance differences, each with what you could do. Start with the large samples; See the numbers takes you back to the source table."
           }
         },
         "go": {
@@ -797,6 +797,53 @@
           "roles": "Roles & chemistry",
           "position": "Seats",
           "findings_discovery": "Auto findings"
+        }
+      },
+      "core": {
+        "tabs": {
+          "overview": "Overview",
+          "missions": "Mission results",
+          "lake": "Lady of the Lake",
+          "teamsVotes": "Teams & votes",
+          "advanced": "Advanced"
+        },
+        "howTo": {
+          "overview": "The big picture first: three layers in order (mission results → Lady of the Lake → teams & votes), each with a line of data and what to do about it. Open a layer when you want the details.",
+          "missions": "Mission results are the most important information: how often each mission passes, who wins after a mission passes or fails, where a mission order plus lake announcements leads (state tree), and how often the assassin hits after three blue missions. Use it to judge how dangerous the current spot is.",
+          "lake": "For picking a Lady of the Lake target and reading announcements: lake in blue or red hands, holder and target roles, and how trustworthy announcements are.",
+          "teamsVotes": "For proposing and for approve/reject: how often teams with a red get rejected, how often all-good teams get approved, how leaders pick, and how strong players pick after two reds.",
+          "advanced": "Details and cross-cuts: the full auto-findings list, player radar, seats, roles & chemistry, lineup strength. Not needed day to day; come here to dig into a question."
+        },
+        "sub": {
+          "missions": "Missions",
+          "stateTree": "Missions × lake (state tree)",
+          "paths": "Mission paths",
+          "assassination": "Assassination",
+          "votes": "Votes",
+          "teams": "Team picks",
+          "twoRed": "Teams after two reds"
+        },
+        "actionLabel": "What to do: ",
+        "details": "See details",
+        "overviewMore": "Overall and per-player results (the previous overview)",
+        "advancedIntro": "Details and cross-cuts live here; seats, roles and lineup strength can also be sliced with the filter above.",
+        "missions": {
+          "title": "Mission results",
+          "m1": "When mission 1 passes, blue wins {{passed}} of games ({{passedN}} games); when it fails, only {{failed}} ({{failedN}} games).",
+          "kill": "In games that reach three blue missions, the assassin hits Merlin {{rate}} of the time ({{n}} games).",
+          "action": "Treat mission 1 as a key mission and send the safest team; three blue missions are not a win yet, so Merlin must hide and loyal servants and Percival should draw the assassin's attention."
+        },
+        "lake": {
+          "title": "Lady of the Lake",
+          "holder": "With the first lake in blue hands, blue wins {{blue}} ({{blueN}} games); in red hands only {{red}} ({{redN}} games).",
+          "action": "Give the lake to the player you are surest is blue; discount the announcement of a suspicious holder (see announcement trust).",
+          "stateTreeLink": "Mission results and lake announcements together: Missions × lake (state tree)"
+        },
+        "teamsVotes": {
+          "title": "Teams & votes",
+          "votes": "On teams with a red, {{evil}} of votes are rejects; on all-blue teams, {{good}} are approves.",
+          "r3": "From mission 3 on, teams with a red are rejected {{evil}} of the time ({{n}} votes).",
+          "action": "Reject when a suspicious player is on the team; don't block a team that looks all good just to make a point. After two reds, pick like strong players do."
         }
       }
     },

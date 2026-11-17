@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronUp, Compass } from 'lucide-react';
 
-/** 「從這裡開始」的按鈕要去的地方：分析分頁，或「發現與策略」的某個小分頁。 */
+/** 「從這裡開始」的按鈕要去的地方（舊分頁 id，AnalyticsPage 經 core/coreTabs 導到新分頁的小分頁）。 */
 export type StartHereTarget =
   | 'players' | 'stateTree' | 'lake' | 'roles' | 'position'
   | 'findings:twoRedCohort' | 'findings:discovery';
 
 const COLLAPSE_KEY = 'avalon.analysis.startHere.collapsed';
 
+// 2026-11-17 數據頁改版：總覽的四層大方向已經是第一眼的導讀，這塊預設收起（按過「打開」的瀏覽器照記憶）
 function readCollapsed(): boolean {
-  try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; }
+  try { return localStorage.getItem(COLLAPSE_KEY) !== '0'; } catch { return true; }
 }
 function writeCollapsed(v: boolean): void {
   try { localStorage.setItem(COLLAPSE_KEY, v ? '1' : '0'); } catch { /* 無痕／封鎖儲存：只是不記住 */ }

@@ -204,6 +204,9 @@ def build_logger(verbose: bool) -> logging.Logger:
     return log
 
 
+# 不轉出、也不放進公開 repo 的分頁（站長 2026-11-17：個人資料卡刪掉）。
+EXCLUDED_SHEETS = {"個人資料卡"}
+
 SPECIAL_SHEETS = {
     "角色": "roles",
     "陣容": "team_composition",
@@ -297,6 +300,9 @@ def main(argv: list[str] | None = None) -> int:
     summary: list[dict[str, Any]] = []
 
     for sheet_name in xl.sheet_names:
+        if sheet_name in EXCLUDED_SHEETS:
+            log.info("  [%s] skipped (excluded)", sheet_name)
+            continue
         entry: dict[str, Any] = {"sheet": sheet_name, "status": "ok"}
         try:
             df = xl.parse(sheet_name, header=None, dtype=object)
