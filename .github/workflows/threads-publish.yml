@@ -187,8 +187,9 @@ jobs:
           DATE: ${{ steps.gate.outputs.date }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          for f in "$OUT_DIR/$DATE".png "$OUT_DIR/$DATE"-*.png; do
+          # plan.json 的 images：題目卡、牌譜圖、答案卡（照發文順序）。
+          for name in $(jq -r '.images[]' "$OUT_DIR/plan.json"); do
+            f="$OUT_DIR/$name"
             convert "$f" -background '#f7f5f0' -flatten -resize 1080x1350 -gravity center -extent 1080x1350 -quality 92 "${f%.png}.jpg"
           done
           ls -l "$OUT_DIR"
@@ -209,19 +210,25 @@ jobs:
           DATE: ${{ steps.gate.outputs.date }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
           mkdir -p "$STATE_DIR/images"
-          FILES=("$OUT_DIR/$DATE".png "$OUT_DIR/$DATE"-*.png "$OUT_DIR/$DATE".jpg "$OUT_DIR/$DATE"-*.jpg)
-          [ "${#FILES[@]}" -gt 0 ] || exit 0
-          cp "${FILES[@]}" "$STATE_DIR/images/"
+          # 照 plan.json 的 images 順序（題目卡、牌譜圖、答案卡）：兩張以上發成輪播。
+          NAMES=$(jq -r '.images[]' "$OUT_DIR/plan.json")
+          [ -n "$NAMES" ] || exit 0
+          for name in $NAMES; do
+            cp "$OUT_DIR/$name" "$STATE_DIR/images/"
+            [ -f "$OUT_DIR/${name%.png}.jpg" ] && cp "$OUT_DIR/${name%.png}.jpg" "$STATE_DIR/images/"
+          done
           git -C "$STATE_DIR" add -A
           git -C "$STATE_DIR" commit -q -m "threads: $DATE 的題目圖" || true
           for d in 2 4 8 16 0; do git -C "$STATE_DIR" push -q origin threads-state && break; [ "$d" = 0 ] && exit 1; sleep "$d"; done
           SHA=$(git -C "$STATE_DIR" rev-parse HEAD)
           BASE="https://raw.githubusercontent.com/${REPO}/${SHA}/images"
-          [ -f "$OUT_DIR/$DATE.png" ] && echo "url=$BASE/$DATE.png" >> "$GITHUB_OUTPUT"
-          JPGS=""
-          for f in "$OUT_DIR/$DATE".jpg "$OUT_DIR/$DATE"-*.jpg; do JPGS="${JPGS:+$JPGS,}$BASE/$(basename "$f")"; done
+          PNGS=""; JPGS=""
+          for name in $NAMES; do
+            PNGS="${PNGS:+$PNGS,}$BASE/$name"
+            if [ -f "$OUT_DIR/${name%.png}.jpg" ]; then JPGS="${JPGS:+$JPGS,}$BASE/${name%.png}.jpg"; fi
+          done
+          echo "urls=$PNGS" >> "$GITHUB_OUTPUT"
           echo "ig_urls=$JPGS" >> "$GITHUB_OUTPUT"
 
       - name: 正式發：發 A（引用昨天）與第一則留言
@@ -230,7 +237,7 @@ jobs:
         env:
           THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
-          IMAGE_URL: ${{ steps.image.outputs.url }}
+          IMAGE_URLS: ${{ steps.image.outputs.urls }}
         run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR"
 
       - name: Instagram 同步

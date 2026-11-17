@@ -112,6 +112,8 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
    - 貼文和留言都不含玩家名字。
 2. 找昨天那篇的貼文 id（自動發的記在狀態檔；手動發的去自己最近的貼文裡找「題號 昨天的題號」）。
 3. 發 A：附圖、引用昨天那篇。第一天或找不到昨天那篇時不引用。
+   - 圖照順序：題目卡、牌譜圖、公布完整答案那天的答案卡。兩張以上發成輪播（Threads 的 CAROUSEL：每張先建子項，再建一個帶文字和引用的輪播容器）；只有一張就發單張圖文。
+   - 牌譜圖和答案卡的畫圖函式在出圖的 PR（`claude/threads-image`）；還沒合進來時只發題目卡。
 4. 先把 A 的 id 記下來，再把第一則留言回在 A 底下。
 5. 把貼文網址記進 `threads-state` 分支的 `state/<日期>.json`。
 
@@ -168,7 +170,7 @@ ChatGPT 寫在 `docs/threads/comments/<日期>.md`，格式見那個資料夾的
 
 ### 圖放哪裡
 
-Threads API 只收公開網址的圖。圖推到這個 repo 的 `threads-state` 分支（`images/<日期>.png`），用 `raw.githubusercontent.com/<repo>/<commit>/images/<日期>.png` 給 Threads 抓。
+Threads API 只收公開網址的圖。圖推到這個 repo 的 `threads-state` 分支（`images/<日期>.png`、`<日期>-grid.png`、`<日期>-answer.png`），用 `raw.githubusercontent.com/<repo>/<commit>/images/<日期>.png` 給 Threads 抓。
 - repo 本來就公開，不用另外開服務或碰正式網站的部署。
 - 圖只有座位和牌譜記號，跟貼文一樣是公開內容。
 - 網址綁 commit，不會被之後的檔案蓋掉。
@@ -183,7 +185,7 @@ Threads App 裡「同時分享到 IG」的按鈕沒有 API 可以用，所以另
 ### 它做什麼
 
 每天 Threads 那篇發完後（或同一次執行裡），把同一篇發到 IG：
-- **圖**：同一張題目圖，轉成 1080×1350 的 JPEG（IG 只收 JPEG，長寬比要在 4:5 到 1.91:1 之間），放在 `threads-state` 分支的 `images/<日期>.jpg`。以後一天有兩張以上的圖，會自動改發輪播。
+- **圖**：跟 Threads 同一組、同樣順序（題目卡、牌譜圖、答案卡），每張轉成 1080×1350 的 JPEG（IG 只收 JPEG，長寬比要在 4:5 到 1.91:1 之間），放在 `threads-state` 分支的 `images/<日期>*.jpg`。兩張以上發成輪播。
 - **說明**：Threads 那篇的文字，後面接第一則留言（觀念加文章網址），最後一行 `#阿瓦隆`。
   - IG 沒有「引用貼文」，昨天的答案照樣寫在說明裡。
   - IG 說明裡的網址不能點，牌譜和文章網址照純文字放。

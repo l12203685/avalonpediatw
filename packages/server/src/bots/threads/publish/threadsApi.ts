@@ -12,6 +12,8 @@
 export const THREADS_GRAPH = 'https://graph.threads.net';
 export const THREADS_API_VERSION = 'v1.0';
 /** 發文需要的權限。threads_manage_replies：用 reply_to_id 回覆自己的貼文。 */
+/** 輪播最多幾張（Threads 的上限是 20；我們一天最多 3 張）。 */
+export const THREADS_CAROUSEL_MAX = 20;
 export const REQUIRED_SCOPES = ['threads_basic', 'threads_content_publish', 'threads_manage_replies'] as const;
 
 export type FetchLike = (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => Promise<{
@@ -157,14 +159,27 @@ export class ThreadsApi {
     return p.id;
   }
 
-  /** 新貼文：有圖就是圖文；quotePostId＝引用昨天的貼文。 */
-  async publishPost(input: { text: string; imageUrl?: string; quotePostId?: string }): Promise<string> {
-    return this.createAndPublish({
-      media_type: input.imageUrl ? 'IMAGE' : 'TEXT',
-      text: input.text,
-      image_url: input.imageUrl,
-      quote_post_id: input.quotePostId,
-    });
+  /**
+   * 新貼文：沒有圖＝純文字；一張＝圖文；兩張以上＝輪播（每張先建 is_carousel_item 容器，
+   * 再建 CAROUSEL 容器帶文字與引用）。quotePostId＝引用昨天的貼文。
+   */
+  async publishPost(input: { text: string; imageUrl?: string; imageUrls?: readonly string[]; quotePostId?: string }): Promise<string> {
+    const urls = (input.imageUrls?.length ? input.imageUrls : input.imageUrl ? [input.imageUrl] : []).slice(0, THREADS_CAROUSEL_MAX);
+    if (urls.length <= 1) {
+      return this.createAndPublish({
+        media_type: urls.length === 1 ? 'IMAGE' : 'TEXT',
+        text: input.text,
+        image_url: urls[0],
+        quote_post_id: input.quotePostId,
+      });
+    }
+    const children: string[] = [];
+    for (const url of urls) {
+      const c = await this.call<{ id: string }>('POST', this.v(`/${this.opts.userId}/threads`), { media_type: 'IMAGE', image_url: url, is_carousel_item: 'true' });
+      await this.waitContainer(c.id);
+      children.push(c.id);
+    }
+    return this.createAndPublish({ media_type: 'CAROUSEL', children: children.join(','), text: input.text, quote_post_id: input.quotePostId });
   }
 
   /** 回覆（第一則留言）。 */

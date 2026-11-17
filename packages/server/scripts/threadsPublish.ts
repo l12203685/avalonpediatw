@@ -17,8 +17,9 @@ import path from 'path';
 import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
-import { renderPuzzlePng } from '../src/bots/threads/image';
-import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
+import * as threadsImage from '../src/bots/threads/image';
+import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
+import type { PickView, ThreadsDraft } from '../src/bots/threads/draft';
 import { igCaption, loadPlayerNames, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { REQUIRED_SCOPES, ThreadsApi } from '../src/bots/threads/publish/threadsApi';
 import { InstagramApi } from '../src/bots/threads/publish/instagramApi';
@@ -40,6 +41,35 @@ function say(line = ''): void {
 function flushSummary(): void {
   const f = process.env.GITHUB_STEP_SUMMARY;
   if (f) fs.appendFileSync(f, `${summaryLines.join('\n')}\n`);
+}
+
+/**
+ * 題目卡之後的圖（輪播第二、三張）：牌譜圖 renderGridPng、公布完整答案那天的答案卡 renderAnswerPng。
+ * 這兩個畫圖函式在出圖的 PR（claude/threads-image）裡；還沒合進來時查不到就只發題目卡。
+ */
+type GridRenderer = (pv: PickView, weekday: number) => Buffer;
+type AnswerRenderer = (pv: PickView, ids?: readonly string[]) => Buffer;
+function extraRenderers(gen: ThreadsGenerator): (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer }[] {
+  const mod = threadsImage as unknown as Record<string, unknown>;
+  const grid = typeof mod.renderGridPng === 'function' ? (mod.renderGridPng as GridRenderer) : null;
+  const answer = typeof mod.renderAnswerPng === 'function' ? (mod.renderAnswerPng as AnswerRenderer) : null;
+  return (date, draft) => {
+    const out: { suffix: string; png: Buffer }[] = [];
+    const pick = gen.pickFor(date);
+    const pv = pick ? gen.viewOf(pick) : null;
+    if (grid && pv) out.push({ suffix: 'grid', png: grid(pv, weekdayOf(date)) });
+    // 公布完整答案的日子（昨天不是同一局接著打）：昨天那一局的答案卡；延續的兩天一起公布。
+    if (answer && draft.answerToYesterday && !draft.continuesYesterday) {
+      const yPick = gen.pickFor(addDays(date, -1));
+      const yPv = yPick ? gen.viewOf(yPick) : null;
+      if (yPv) {
+        const before = yPick?.continues ? gen.pickFor(addDays(date, -2)) : null;
+        const ids = before && before.gameId === yPv.pick.gameId ? [gen.viewOf(before)?.exerciseId, yPv.exerciseId].filter((x): x is string => !!x) : [yPv.exerciseId];
+        out.push({ suffix: 'answer', png: answer(yPv, ids) });
+      }
+    }
+    return out;
+  };
 }
 
 function makeGenerator(stateDir: string, warnings: string[]): ThreadsGenerator {
@@ -89,7 +119,7 @@ async function checkToken(api: ThreadsApi): Promise<void> {
 function printPlan(plan: DailyPlan, mode: string): void {
   say(`## Threads ${plan.date}（${plan.draft.theme}）— ${mode}`);
   say('');
-  say(`- 題號 ${plan.exerciseId}，貼文 ${plan.chars} 字，圖：${plan.image ? '有' : '沒有'}，第一則留言：${plan.commentSource === 'chatgpt' ? 'ChatGPT' : '備案'}`);
+  say(`- 題號 ${plan.exerciseId}，貼文 ${plan.chars} 字，圖：${plan.images.length === 0 ? '沒有' : plan.images.length === 1 ? '1 張' : `${plan.images.length} 張（輪播：${plan.images.join('、')}）`}，第一則留言：${plan.commentSource === 'chatgpt' ? 'ChatGPT' : '備案'}`);
   say(`- 引用：${plan.quote ? `${plan.quote.date}（題號 ${plan.quote.exerciseId}，貼文 id ${plan.quote.postId ?? '還沒記到，發文時去最近的貼文找'}）` : '不引用（第一天）'}`);
   if (plan.alreadyPublished) say('- 這一天已經發過了：不會再發');
   for (const w of plan.warnings) say(`- ⚠️ ${w}`);
@@ -145,8 +175,9 @@ async function main(): Promise<number> {
         : (d): Buffer | null => {
             const pick = gen.pickFor(d);
             const pv = pick ? gen.viewOf(pick) : null;
-            return pv ? renderPuzzlePng(pv, weekdayOf(d)) : null;
+            return pv ? threadsImage.renderPuzzlePng(pv, weekdayOf(d)) : null;
           },
+      renderExtraImages: flag('--no-image') ? undefined : extraRenderers(gen),
     });
     if (!plan) {
       say(`## Threads ${date}：這天的主題選不到題目`);
@@ -167,7 +198,11 @@ async function main(): Promise<number> {
     }
     const api = await apiWithUser();
     await checkToken(api);
-    const result = await postDaily(plan, { api, stateDir, imageUrl: process.env.IMAGE_URL || undefined });
+    const imageUrls = (process.env.IMAGE_URLS ?? '')
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
+    const result = await postDaily(plan, { api, stateDir, imageUrls, imageUrl: process.env.IMAGE_URL || undefined });
     fs.writeFileSync(path.join(outDir, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
     say(`- 結果：${result.status}，貼文 ${result.permalink ?? result.postId}${result.commentId ? '，第一則留言已發' : ''}`);
     for (const n of result.notes) say(`- ${n}`);

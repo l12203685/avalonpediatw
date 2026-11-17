@@ -227,6 +227,69 @@ describe('prepare + post', () => {
   });
 });
 
+describe('threads carousel', () => {
+  it('question card, grid and answer card are kept in order and posted as one carousel with the text and the quote', async () => {
+    const stateDir = tmp();
+    const g = gen(stateDir);
+    recordManual('2026-11-17', null, { gen: g, stateDir });
+    const outDir = tmp();
+    const plan = prepareDaily('2026-11-18', {
+      gen: g,
+      stateDir,
+      commentsDir: tmp(),
+      outDir,
+      names,
+      renderImage: () => Buffer.from('q'),
+      renderExtraImages: () => [
+        { suffix: 'grid', png: Buffer.from('g') },
+        { suffix: 'answer', png: Buffer.from('a') },
+      ],
+    });
+    if (!plan) throw new Error('no plan');
+    expect(plan.images).toEqual(['2026-11-18.png', '2026-11-18-grid.png', '2026-11-18-answer.png']);
+    expect(fs.existsSync(path.join(outDir, '2026-11-18-grid.png'))).toBe(true);
+    const urls = plan.images.map((n) => `https://raw.githubusercontent.com/o/r/sha/images/${n}`);
+    const { api, calls } = fakeApi({ recent: [{ id: 'y17', text: '題號 36AKW-2-5' }] });
+    const res = await postDaily(plan, { api, stateDir, imageUrls: urls });
+    const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
+    // 3 張子項、1 個輪播容器、1 則留言。
+    expect(creates.map((c) => c.params.get('media_type'))).toEqual(['IMAGE', 'IMAGE', 'IMAGE', 'CAROUSEL', 'TEXT']);
+    expect(creates.slice(0, 3).map((c) => c.params.get('image_url'))).toEqual(urls);
+    expect(creates.slice(0, 3).every((c) => c.params.get('is_carousel_item') === 'true')).toBe(true);
+    const carousel = creates[3];
+    expect(carousel.params.get('children')).toBe('c1,c2,c3');
+    expect(carousel.params.get('text')).toBe(plan.text);
+    expect(carousel.params.get('quote_post_id')).toBe('y17');
+    expect(creates[4].params.get('reply_to_id')).toBe(res.postId);
+    expect(res.notes).toContain('輪播 3 張');
+    expect(readState(stateDir, '2026-11-18')?.postId).toBe(res.postId);
+  });
+
+  it('one image stays a single image post; a failing extra renderer keeps the question card', async () => {
+    const stateDir = tmp();
+    const g = gen(stateDir);
+    const plan = prepareDaily('2026-11-18', {
+      gen: g,
+      stateDir,
+      commentsDir: tmp(),
+      outDir: tmp(),
+      names,
+      renderImage: () => Buffer.from('q'),
+      renderExtraImages: () => {
+        throw new Error('font missing');
+      },
+    });
+    if (!plan) throw new Error('no plan');
+    expect(plan.images).toEqual(['2026-11-18.png']);
+    expect(plan.warnings.join()).toContain('font missing');
+    const { api, calls } = fakeApi();
+    await postDaily(plan, { api, stateDir, imageUrls: ['https://x/2026-11-18.png'] });
+    const first = calls.find((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
+    expect(first?.params.get('media_type')).toBe('IMAGE');
+    expect(first?.params.get('is_carousel_item')).toBeNull();
+  });
+});
+
 describe('api', () => {
   it('retries transient errors and keeps the token out of error messages', async () => {
     const { api, calls } = fakeApi({ failFirst: 2 });

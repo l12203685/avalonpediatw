@@ -186,8 +186,10 @@ export interface DailyPlan {
   chars: number;
   comment: string;
   commentSource: 'chatgpt' | 'fallback';
-  /** 圖檔（out 資料夾裡的檔名）；沒有圖是 null。 */
+  /** 第一張圖（題目卡，out 資料夾裡的檔名）；沒有圖是 null。 */
   image: string | null;
+  /** 全部的圖，照發文順序：題目卡、牌譜圖、答案卡（有幾張放幾張）。兩張以上發成輪播。 */
+  images: string[];
   /** 要引用的昨天貼文；第一天是 null。postId 沒記到的話 post 段會去自己最近的貼文裡找。 */
   quote: { date: string; exerciseId: string; postId: string | null } | null;
   /** 已經發過了（狀態檔有貼文 id）：post 段什麼都不做。 */
@@ -203,8 +205,10 @@ export interface PrepareDeps {
   commentsDir: string;
   outDir: string;
   names?: readonly string[];
-  /** 畫圖（pv → PNG）；不給就不附圖。 */
+  /** 畫題目卡（PNG）；不給就不附圖。 */
   renderImage?: (date: string) => Buffer | null;
+  /** 題目卡之後的圖（照順序：牌譜圖、答案卡），檔名是 `<日期>-<suffix>.png`；沒有題目卡就不畫。 */
+  renderExtraImages?: (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer }[];
   warnings?: string[];
 }
 
@@ -227,6 +231,18 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
   const draft = deps.gen.draftFor(date, image ? { image } : {});
   if (!draft) return null;
   warnings.push(...deps.gen.warnings);
+  const images = image ? [image] : [];
+  if (image && deps.renderExtraImages) {
+    try {
+      for (const extra of deps.renderExtraImages(date, draft)) {
+        const name = `${date}-${extra.suffix}.png`;
+        fs.writeFileSync(path.join(deps.outDir, name), extra.png);
+        images.push(name);
+      }
+    } catch (err) {
+      warnings.push(`其他的圖沒有全部產生（${(err as Error).message}）`);
+    }
+  }
 
   const chatgpt = readComment(deps.commentsDir, date);
   if (!chatgpt) warnings.push(`沒有 ChatGPT 寫的留言（${path.basename(deps.commentsDir)}/${date}.md），用備案`);
@@ -250,6 +266,7 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     comment,
     commentSource: chatgpt ? 'chatgpt' : 'fallback',
     image,
+    images,
     quote,
     alreadyPublished: !!existing?.postId,
     errors: validatePost({ text: draft.post.text, comment, names: deps.names }),
@@ -278,7 +295,10 @@ export interface PostResult {
   notes: string[];
 }
 
-export async function postDaily(plan: DailyPlan, deps: { api: ThreadsApi; stateDir: string; imageUrl?: string; now?: () => Date }): Promise<PostResult> {
+export async function postDaily(
+  plan: DailyPlan,
+  deps: { api: ThreadsApi; stateDir: string; imageUrl?: string; imageUrls?: readonly string[]; now?: () => Date },
+): Promise<PostResult> {
   const notes: string[] = [];
   const now = deps.now ?? ((): Date => new Date());
   if (plan.errors.length > 0) throw new Error(`內容檢查沒過：${plan.errors.join('；')}`);
@@ -305,8 +325,12 @@ export async function postDaily(plan: DailyPlan, deps: { api: ThreadsApi; stateD
     }
   }
 
-  if (plan.image && !deps.imageUrl) notes.push('有圖但沒有公開網址：只發文字');
-  const postId = await deps.api.publishPost({ text: plan.text, ...(plan.image && deps.imageUrl ? { imageUrl: deps.imageUrl } : {}), ...(quotePostId ? { quotePostId } : {}) });
+  const imageUrls = deps.imageUrls?.length ? [...deps.imageUrls] : deps.imageUrl ? [deps.imageUrl] : [];
+  const wanted = plan.images?.length ?? (plan.image ? 1 : 0);
+  if (wanted > 0 && imageUrls.length === 0) notes.push('有圖但沒有公開網址：只發文字');
+  else if (imageUrls.length > 0 && imageUrls.length < wanted) notes.push(`只有 ${imageUrls.length}／${wanted} 張圖有公開網址`);
+  if (imageUrls.length > 1) notes.push(`輪播 ${imageUrls.length} 張`);
+  const postId = await deps.api.publishPost({ text: plan.text, imageUrls, ...(quotePostId ? { quotePostId } : {}) });
   // 先記下 A：留言失敗時重跑不會再發一次 A。
   // 同一天 IG 可能先發了（只開 IG 的時候）：保留狀態檔裡已有的欄位。
   const rec: ThreadsStateRecord = { ...existing, date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId, quotePostId, commentId: null, publishedAt: now().toISOString() };
