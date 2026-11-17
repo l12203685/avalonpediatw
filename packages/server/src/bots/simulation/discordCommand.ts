@@ -1,5 +1,5 @@
 /**
- * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /分析 /刺 /區間 /下一步 /公布 /結束。
+ * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /分析 /刺 /區間 /公布 /結束（/下一步 2026-11-17 拿掉）。
  *
  * 跟 LINE 同一個引擎、同一套文字（/模擬 說明 有 Discord 版）。session key = discord:頻道:使用者。
  * 每個指令先 defer，再 editReply（allowedMentions 全關；回覆不回顯使用者打的字）。
@@ -10,12 +10,13 @@
  * 只有固定文字和錯誤代碼會進 log。
  */
 
-import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { AttachmentBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { COMMANDS, SIM_OPTIONS } from '../discord/config';
 import { describeError } from '../media/bytes';
 import { normalizeExerciseId, parseInterval, parseRoleChoice, parseTeam, type SimCommand } from './commands';
 import { SIM_CONFIG, simDiscordPublicChannelIds } from './config';
 import { getSimEngine } from './index';
+import { renderRecordPng } from './recordImage';
 
 export const SIM_DISABLED_TEXT = '模擬瓦目前停用。';
 
@@ -56,11 +57,14 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
       return 'team' in r ? { kind: 'propose', team: r.team } : { kind: 'usage', command: 'propose', problem: r.problem };
     }
     case COMMANDS.SIM_INTERVAL: {
-      const r = parseInterval(opts.getString(SIM_OPTIONS.CONTENT, true) ?? '');
+      const content = (opts.getString(SIM_OPTIONS.CONTENT, false) ?? '').trim();
+      if (!content) return { kind: 'read' };
+      const r = parseInterval(content);
       return 'groups' in r ? { kind: 'interval', groups: r.groups } : { kind: 'usage', command: 'interval', problem: r.problem };
     }
+    // 2026-11-17 拿掉；舊的 slash 指令在重新註冊前還可能被按到。
     case COMMANDS.SIM_NEXT:
-      return { kind: 'next' };
+      return { kind: 'removed', command: '下一步' };
     case COMMANDS.SIM_ANALYSIS:
       return { kind: 'analyze' };
     case COMMANDS.SIM_ASSASSINATE: {
@@ -141,7 +145,16 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
       await interaction.deleteReply();
       return;
     }
-    await interaction.editReply({ content: reply.text, allowedMentions: { parse: [] } });
+    // /公布（2026-11-17）：附整局牌譜圖；畫不出來就只送文字。
+    let files: AttachmentBuilder[] | undefined;
+    if (reply.image) {
+      try {
+        files = [new AttachmentBuilder(renderRecordPng(reply.image.game, reply.image.title), { name: 'record.png', description: '完整牌譜' })];
+      } catch (err) {
+        console.error(`[sim] record image failed, answering with text (${describeError(err)})`);
+      }
+    }
+    await interaction.editReply({ content: reply.text, allowedMentions: { parse: [] }, ...(files ? { files } : {}) });
     // 回覆已經送出：commit 出錯也不能把已經貼出去的答案改成錯誤訊息。
     try {
       reply.commit();

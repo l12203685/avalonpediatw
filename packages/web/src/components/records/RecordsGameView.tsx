@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { ArrowLeft, Check, Copy, ExternalLink, MessageSquare, Paperclip } from 'lucide-react';
 import { QuestFailMark, QuestSuccessMark, ShieldIcon } from '../ScoresheetIcons';
+import { RecordTextBlock, RecordTextLine } from './RecordTextLine';
 import { useGameStore } from '../../store/gameStore';
 import { fetchRecordsReplies, type RecordRepliesData, type RecordReply } from '../../services/api';
 import { useRecordsPrefs } from './recordsPrefs';
@@ -260,7 +261,7 @@ function Scoresheet({ game, prefs, fit, lineup }: {
           )}
           {lead2 && <td className="p-0 text-center font-mono font-bold leading-none text-yellow-400">{leaders?.[r][a]}</td>}
           <td className="max-w-0 truncate px-1 py-0 font-mono leading-none text-zinc-100" title={proposalLine(p, a)} data-testid="records-text-line">
-            {proposalLine(p, a)}
+            <RecordTextLine line={proposalLine(p, a)} />
           </td>
         </tr>,
       );
@@ -310,7 +311,7 @@ function Scoresheet({ game, prefs, fit, lineup }: {
           </td>
           {wide && <td className="bg-cyan-600/70 p-0 text-center font-mono font-bold leading-none text-white">{lakeLine(lake)}</td>}
           {lead2 && <td className="p-0" />}
-          <td className="px-1 py-0 font-mono leading-none text-cyan-100" data-testid="records-text-line">{lakeLine(lake)}</td>
+          <td className="px-1 py-0 font-mono leading-none text-cyan-100" data-testid="records-text-line"><RecordTextLine line={lakeLine(lake)} /></td>
         </tr>,
       );
     }
@@ -587,7 +588,7 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
           <details className="flex-shrink-0 rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
             <summary className="cursor-pointer text-xs font-semibold text-zinc-300">DC 牌譜格式（文字）</summary>
             <div className="mt-1 flex justify-end"><CopyText text={text} /></div>
-            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre font-mono text-xs leading-5 text-zinc-200">{text}</pre>
+            <pre className="mt-1 max-h-48 overflow-auto whitespace-pre font-mono text-xs leading-5 text-zinc-200"><RecordTextBlock text={text} /></pre>
           </details>
         )}
         {discord && <Replies key={post.id} id={post.id} url={url} fit={fit} />}
