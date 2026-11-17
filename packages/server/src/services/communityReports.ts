@@ -244,10 +244,11 @@ function clip(text: string, max: number): string {
  * 回報的訊息：「【百科回報・錯誤】#R8X3KQ2A 內容…」＋「（來自網站・暱稱・頁面 …）」。
  * DC 版內容跳脫 markdown；兩邊都不超過一則的上限。
  */
-export function formatReportMessage(id: string, r: FeedbackReport, platform: SyncPlatform): string {
+function reportParts(id: string, r: FeedbackReport, platform: SyncPlatform): { head: string; body: string; tail: string; room: number; cleaned: string } {
   const label = FEEDBACK_KIND_LABEL[r.kind];
   const show = platform === 'discord' ? escapeDiscordMarkdown : (s: string): string => s;
-  const message = r.message.replace(UNSAFE_CHARS, (c) => (c === '\n' ? c : ' ')).trim().slice(0, FEEDBACK_MESSAGE_MAX);
+  const cleaned = r.message.replace(UNSAFE_CHARS, (c) => (c === '\n' ? c : ' ')).trim();
+  const message = cleaned.slice(0, FEEDBACK_MESSAGE_MAX);
   const name = oneLine((r.name ?? '').replace(UNSAFE_CHARS, ' ')).slice(0, FEEDBACK_NAME_MAX);
   const page = cleanPage(r.page);
   const from = [`來自${REPORT_SOURCE_LABEL[r.source]}`];
@@ -256,7 +257,23 @@ export function formatReportMessage(id: string, r: FeedbackReport, platform: Syn
   const head = `${REPORT_PREFIX}・${label}】#${id} `;
   const tail = `\n（${from.join('・')}）`;
   const room = (platform === 'discord' ? DISCORD_MAX : LINE_MAX) - head.length - tail.length;
-  return `${head}${clip(show(message), room)}${tail}`;
+  return { head, body: show(message), tail, room, cleaned };
+}
+
+export function formatReportMessage(id: string, r: FeedbackReport, platform: SyncPlatform): string {
+  const { head, body, tail, room } = reportParts(id, r, platform);
+  return `${head}${clip(body, room)}${tail}`;
+}
+
+/**
+ * 這筆會不會被截掉（超過 FEEDBACK_MESSAGE_MAX，或 DC 版跳脫 markdown 後放不進一則）。/更正 送出前檢查，不默默截斷。
+ */
+export function reportMessageFits(r: FeedbackReport): boolean {
+  const id = makeItemId('R', 0, () => 0); // 編號長度固定
+  return (['discord', 'line'] as const).every((platform) => {
+    const p = reportParts(id, r, platform);
+    return p.cleaned.length <= FEEDBACK_MESSAGE_MAX && p.body.length <= p.room;
+  });
 }
 
 function gamesText(games: number | undefined): string {

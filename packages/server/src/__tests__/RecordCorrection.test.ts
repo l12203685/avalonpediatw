@@ -17,7 +17,9 @@ import {
   __resetCorrectionLimitsForTests,
   answerCorrection,
   answerCorrectionTextCommand,
+  correctionContentMax,
   correctionMessage,
+  correctionTooLongText,
   formatRecordReply,
   parseCorrectionText,
   recordLines,
@@ -287,8 +289,35 @@ describe('submitting a correction (the /回報 path, kind correction)', () => {
     expect(d.posts[0].body.content).toMatch(/（來自DC）$/);
   });
 
-  it('the long content is clipped to the /回報 limit; the website form still does not accept correction', () => {
-    expect(correctionMessage('S0001', '長'.repeat(5000)).length).toBe(1000);
+  it('content up to the limit (1000 minus the 「[更正] 局號」 line) is sent whole; one more character is refused, never truncated', async () => {
+    const max = correctionContentMax('S0001');
+    expect(max).toBe(1000 - '[更正] S0001\n'.length);
+    const d = fakeDc();
+    const m = fakeMirror();
+    const deps = { env: ENV, fetchImpl: d.fetchImpl, mirror: m.mirror };
+    const exact = '長'.repeat(max - 1) + '尾';
+    expect(await answerCorrection({ id: 'S0001', content: exact }, { platform: 'line', submitterName: async () => '送出者', deps })).toContain(CORRECTION_RECEIVED_TEXT);
+    expect(d.posts).toHaveLength(1);
+    expect(parseReportMessage(d.posts[0].body.content)?.text).toBe(`[更正] S0001\n${exact}`); // nothing cut
+    expect(m.queued[0]).toContain(`${exact}\n（來自LINE・送出者）`);
+
+    const tooLong = `${exact}多`;
+    expect(await answerCorrection({ id: 'S0001', content: tooLong }, { platform: 'line', deps }))
+      .toBe(`更正內容太長（${max + 1} 字），這一局最多 ${max} 字。請縮短，或分成幾次送（每次寫明是哪一局的哪裡）。`);
+    expect(correctionTooLongText('S0001', max + 1)).toContain(`最多 ${max} 字`);
+    expect(d.posts).toHaveLength(1); // the refused one was not posted
+    expect(correctionMessage('S0001', tooLong).length).toBe(1001); // the message itself is never sliced
+  });
+
+  it('content that fits the count but not one Discord post once its markdown is escaped is refused too', async () => {
+    const d = fakeDc();
+    const content = '\\'.repeat(correctionContentMax('S0001')); // every \\ doubles in the DC post
+    expect(await answerCorrection({ id: 'S0001', content }, { platform: 'discord', deps: { env: ENV, fetchImpl: d.fetchImpl, mirror: fakeMirror().mirror } }))
+      .toMatch(/^更正內容太長/);
+    expect(d.posts).toEqual([]);
+  });
+
+  it('the website form still does not accept correction', () => {
     expect(FEEDBACK_KINDS).not.toContain('correction');
   });
 

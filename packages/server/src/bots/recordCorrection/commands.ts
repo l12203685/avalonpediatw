@@ -13,7 +13,7 @@
  */
 
 import { lookupRecord, normaliseRecordId, type LookupGame, type RecordLookup } from '../../services/recordLookup';
-import { FEEDBACK_MESSAGE_MAX, submitReport, type ReportSource, type SyncDeps } from '../../services/communityReports';
+import { FEEDBACK_MESSAGE_MAX, reportMessageFits, submitReport, type FeedbackReport, type ReportSource, type SyncDeps } from '../../services/communityReports';
 import { recordUrl } from '../simulation/recordsIndex';
 import { SUBMIT_REDELIVERY_TEXT, submitResultText, type ReportPlatform } from '../reports/commands';
 import { parseCorrectionText, type CorrectionCommand } from './parse';
@@ -161,9 +161,23 @@ export interface CorrectionContext {
   now?: () => number;
 }
 
-/** 送出更正的訊息內容：「[更正] 局號」一行，接著原樣的內容。 */
+/** 送出更正的訊息內容：「[更正] 局號」一行，接著原樣的內容（不截斷；太長在送出前就擋下）。 */
 export function correctionMessage(id: string, content: string): string {
-  return `[更正] ${id}\n${content}`.slice(0, CORRECTION_MAX);
+  return `${correctionHeader(id)}${content}`;
+}
+
+function correctionHeader(id: string): string {
+  return `[更正] ${id}\n`;
+}
+
+/** 這個局號的更正內容最多幾字（/回報 的上限扣掉「[更正] 局號」那一行）。 */
+export function correctionContentMax(id: string): number {
+  return CORRECTION_MAX - correctionHeader(id).length;
+}
+
+/** 太長的回覆：說上限，請縮短或分次送（從不默默截斷）。 */
+export function correctionTooLongText(id: string, length: number): string {
+  return `更正內容太長（${length} 字），這一局最多 ${correctionContentMax(id)} 字。請縮短，或分成幾次送（每次寫明是哪一局的哪裡）。`;
 }
 
 /** /更正 的回覆。 */
@@ -182,10 +196,11 @@ export async function answerCorrection(cmd: CorrectionCommand, ctx: CorrectionCo
     name = '';
   }
   const source: ReportSource = ctx.platform;
-  const result = await submitReport(
-    { kind: 'correction', message: correctionMessage(record.id, cmd.content), source, ...(name ? { name } : {}) },
-    { ...ctx.deps, userKey },
-  );
+  const report: FeedbackReport = { kind: 'correction', message: correctionMessage(record.id, cmd.content), source, ...(name ? { name } : {}) };
+  if (cmd.content.length > correctionContentMax(record.id) || !reportMessageFits(report)) {
+    return correctionTooLongText(record.id, cmd.content.length);
+  }
+  const result = await submitReport(report, { ...ctx.deps, userKey });
   return submitResultText(result, `${CORRECTION_RECEIVED_TEXT}（${record.id}）`);
 }
 
