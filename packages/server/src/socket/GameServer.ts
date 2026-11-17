@@ -1996,6 +1996,10 @@ export class GameServer {
    * blocked. We tightened all three delays to keep the human-feel cue but
    * cap per-attempt latency well under 5 s.
    */
+  // Bounded recovery per proposal; do not create an unbounded timer loop if
+  // GameEngine consistently rejects a bot ballot (#20).
+  private readonly botVoteRecovery = new Map<string, { round: number; proposal: number; attempts: number }>();
+
   private scheduleBotActions(roomId: string): void {
     const room = this.roomManager.getRoom(roomId);
     if (!room || room.state === 'lobby' || room.state === 'ended') return;
@@ -2104,40 +2108,68 @@ export class GameServer {
             const stagger = offset;
             offset += this.botDelay(150 + Math.random() * 200);
             setTimeout(() => {
-              const snapshot = this.roomManager.getRoom(roomId);
-              if (!snapshot || snapshot.state !== 'voting' || pid in snapshot.votes) return;
-              if (snapshot.questTeam.length === 0 || snapshot.voteHistory.length !== proposalKey) return;
-              const eng = this.gameEngines.get(roomId);
-              if (!eng) return;
-              const agent = this.botAgents.get(pid);
-              let voteObs: PlayerObservation | null = null;
-              let voteSource: 'agent' | 'fallback' = 'fallback';
-              const vote = agent
-                ? (() => {
+              // Each bot callback runs in a fresh timer stack: the outer
+              // scheduleBotActions try/catch cannot protect it (#20).
+              try {
+                const snapshot = this.roomManager.getRoom(roomId);
+                if (!snapshot || snapshot.state !== 'voting' || pid in snapshot.votes) return;
+                if (snapshot.questTeam.length === 0 || snapshot.voteHistory.length !== proposalKey) return;
+                const eng = this.gameEngines.get(roomId);
+                if (!eng) return;
+                const agent = this.botAgents.get(pid);
+                let voteObs: PlayerObservation | null = null;
+                let voteSource: 'agent' | 'fallback' = 'fallback';
+                // Normal ballot is the station's R1/R2 rule: approve when
+                // included in the proposed team, reject otherwise.
+                let vote = snapshot.questTeam.includes(pid);
+                try {
+                  if (agent) {
                     const obs = this.buildBotObservation(snapshot, pid, eng, 'team_vote');
                     voteObs = obs;
                     const action = agent.act(obs);
-                    if (action.type === 'team_vote') {
+                    if (action.type === 'team_vote' && typeof action.vote === 'boolean') {
+                      vote = action.vote;
                       voteSource = 'agent';
-                      return action.vote;
                     }
-                    return Math.random() > 0.3;
-                  })()
-                : Math.random() > 0.3;
-              const voteTrace = this.isPracticeRoom(roomId)
-                ? this.preparePracticeTrace(snapshot, pid, voteObs ?? this.buildBotObservation(snapshot, pid, eng, 'team_vote'), {
-                    kind: 'team_vote', vote, source: voteSource, agent,
-                  })
-                : null;
-              eng.submitVote(pid, vote);
-              this.commitPracticeTrace(roomId, voteTrace);
-              const updated = this.roomManager.getRoom(roomId)!;
-              if (updated.state === 'ended') {
-                this.broadcastRoomState(roomId, updated);
-                this.onGameEnded(roomId, updated);
-                return;
-              }
-              this.broadcastRoomState(roomId, updated);
+                  }
+                } catch (agentError) {
+                  console.error(`[bot] Vote agent failed for ${pid} in room ${roomId}; using normal ballot:`, agentError);
+                }
+                // Trace is optional; it must never prevent the fallback vote.
+                let voteTrace: Omit<PracticeTraceEntry, 'id' | 'at'> | null = null;
+                try {
+                  voteTrace = this.isPracticeRoom(roomId)
+                    ? this.preparePracticeTrace(snapshot, pid, voteObs ?? this.buildBotObservation(snapshot, pid, eng, 'team_vote'), {
+                        kind: 'team_vote', vote, source: voteSource, agent,
+                      })
+                    : null;
+                } catch (traceError) {
+                  console.error(`[bot] Vote trace failed for ${pid} in room ${roomId}:`, traceError);
+                }
+                eng.submitVote(pid, vote);
+                // The ballot is now committed. Optional trace / broadcast
+                // failures must not suppress scheduling the next phase or
+                // cause this accepted vote to be submitted a second time.
+                try {
+                  this.commitPracticeTrace(roomId, voteTrace);
+                } catch (traceCommitError) {
+                  console.error(`[bot] Vote trace commit failed for ${pid} in room ${roomId}:`, traceCommitError);
+                }
+                const updated = this.roomManager.getRoom(roomId);
+                if (!updated) return;
+                try {
+                  this.broadcastRoomState(roomId, updated);
+                } catch (broadcastError) {
+                  console.error(`[bot] Vote state broadcast failed for ${pid} in room ${roomId}:`, broadcastError);
+                }
+                if (updated.state === 'ended') {
+                  try {
+                    this.onGameEnded(roomId, updated);
+                  } catch (endError) {
+                    console.error(`[bot] Vote game-end hook failed for ${pid} in room ${roomId}:`, endError);
+                  }
+                  return;
+                }
               // Edward 2026-04-25 P0「輪到我投任務成功 就斷線」 — bot-as-last-
               // team-voter stuck-quest fix.
               //
@@ -2162,12 +2194,46 @@ export class GameServer {
               // (bot) leader waited for the 90 s AFK timer — forever in rooms
               // without timers. A resolved proposal is detected by the vote
               // history growing.
-              if (updated.state !== 'voting'
-                  || updated.voteHistory.length !== proposalKey
-                  || Object.keys(updated.votes).length === Object.keys(updated.players).length) {
-                this.scheduleBotActions(roomId);
+                if (updated.state !== 'voting'
+                    || updated.voteHistory.length !== proposalKey
+                    || Object.keys(updated.votes).length === Object.keys(updated.players).length) {
+                  this.scheduleBotActions(roomId);
+                }
+              } catch (voteError) {
+                // Do not crash Node.js or strand all other bot timers.
+                console.error(`[bot] Vote timer failed for ${pid} in room ${roomId}:`, voteError);
               }
             }, stagger);
+          }
+          // Recheck after the last staggered callback: a transient exception
+          // must not strand a practice room with no AFK timer. Bound retries
+          // to two per proposal so a broken engine cannot spin forever.
+          if (botVoters.length > 0) {
+            setTimeout(() => {
+              const current = this.roomManager.getRoom(roomId);
+              if (!current || current.state !== 'voting' || current.questTeam.length === 0
+                  || current.voteHistory.length !== proposalKey) {
+                this.botVoteRecovery.delete(roomId);
+                return;
+              }
+              const missing = Object.entries(current.players).some(
+                ([id, player]) => player.isBot && !(id in current.votes)
+              );
+              if (!missing) {
+                this.botVoteRecovery.delete(roomId);
+                return;
+              }
+              const prior = this.botVoteRecovery.get(roomId);
+              const attempts = prior?.round === current.currentRound && prior.proposal === proposalKey
+                ? prior.attempts : 0;
+              if (attempts >= 2) {
+                console.error(`[bot] Vote recovery exhausted for room ${roomId}, proposal ${proposalKey}`);
+                return;
+              }
+              this.botVoteRecovery.set(roomId, { round: current.currentRound, proposal: proposalKey, attempts: attempts + 1 });
+              console.warn(`[bot] Retrying missing bot votes in room ${roomId}, attempt ${attempts + 1}`);
+              this.scheduleBotActions(roomId);
+            }, offset + this.botDelay(100));
           }
         } else if (r.state === 'quest') {
           // Quest vote — stagger each bot member vote by 200–450 ms (was

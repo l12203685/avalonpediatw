@@ -4,7 +4,7 @@
 
 | ID | 研究／資料 | 現有可稽核狀態 | 需補的證據 | AI 負責 |
 |---|---|---|---|---|
-| P001 | CSP4SDG: Constraint and Information-Theory Based Role Identification in Social Deduction Games with LLM-Enhanced Inference | `indexed_only` | 核對 URL、作者、出版與授權；必要時取得全文 | 待指派 |
+| P001 | CSP4SDG: Constraint and Information-Theory Based Role Identification in Social Deduction Games with LLM-Enhanced Inference | `metadata_only`（2026-11-17 ChatGPT，原始 arXiv 頁與作者 GitHub README；**未讀全文**） | 已核對題名、四位作者、arXiv v1 日期與 arXiv DOI；AAAI 出版頁受存取限制，正式會議書目／授權／實驗表格及全文仍待查；見 [P001_METADATA.md](P001_METADATA.md) | ChatGPT（文獻核對）；Claude（後續 AI 實作） |
 | P002 | Bayesian Social Deduction with Graph-Informed Language Models | `legacy_abstract_review` | 舊報告摘要層；需核對出版書目、全文方法及實驗表格 | 待指派 |
 | P003 | AVCORP: Identifying and Resisting Deception via Communication Theory and Theory of Mind | `indexed_only` | 核對 URL、作者、出版與授權；必要時取得全文 | 待指派 |
 | P004 | Hidden-Role Games: Equilibrium Concepts and Computation | `legacy_abstract_review` | 舊報告摘要層；需核對出版書目、全文方法及實驗表格 | 待指派 |
