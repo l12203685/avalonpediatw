@@ -47,7 +47,8 @@ jobs:
       STATE_DIR: /tmp/threads-state
       OUT_DIR: /tmp/threads-out
     steps:
-      # 讀這次執行那個 commit 的 threads_live.json（還沒 checkout，所以用 API 讀單一檔）。
+      # 執行當下讀 main 上最新的 threads_live.json（還沒 checkout，所以用 API 讀單一檔）。不用這次執行的 commit：
+      # 排隊或重跑的執行 commit 是舊的，會漏掉後來同步進 main 的 paused=true。發文的程式照舊用這次執行的 commit。
       # 讀不到就不留檔：閘門看不到合法的檔＝自動的執行只試跑（有設 repo 變數也一樣）。
       - name: 讀正式發的設定（packages/server/threads_live.json）
         env:
@@ -55,7 +56,7 @@ jobs:
           LIVE_FILE: ${{ runner.temp }}/threads_live.json
         run: |
           set -euo pipefail
-          if ! gh api -H 'Accept: application/vnd.github.raw+json' "repos/${REPO}/contents/packages/server/threads_live.json?ref=${GITHUB_SHA}" > "$LIVE_FILE" 2>/dev/null; then
+          if ! gh api -H 'Accept: application/vnd.github.raw+json' "repos/${REPO}/contents/packages/server/threads_live.json?ref=main" > "$LIVE_FILE" 2>/dev/null; then
             rm -f "$LIVE_FILE"
             echo "::warning::讀不到 packages/server/threads_live.json，自動的執行只試跑"
             exit 0
@@ -94,7 +95,13 @@ jobs:
           # 沒有起始日（或不是真的日期，例如 2026-02-30）、今天／要發的日期早於那天，也只試跑。
           # 自動＝排程，或 mode=auto 的手動觸發（伺服器每天觸發用的就是這個，services/threadsDispatch.ts）。
           # 手動選 dry-run、record-manual 本來就不會正式發，照常可以用。
-          real_date() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [ "$(date -u -d "$1" +%F 2>/dev/null || true)" = "$1" ]; }
+          # 真的日期才算（2026-02-30、2025-02-29 不算）：用 jq 算每個月有幾天，不靠 GNU date，macOS 上跑測試也一樣。
+          real_date() {
+            [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+            jq -en --arg d "$1" '$d | capture("^(?<y>[0-9]{4})-(?<m>[0-9]{2})-(?<d>[0-9]{2})$") | (.y | tonumber) as $y | (.m | tonumber) as $m | (.d | tonumber) as $n
+              | (($y % 4 == 0) and (($y % 100 != 0) or ($y % 400 == 0))) as $leap
+              | $m >= 1 and $m <= 12 and $n >= 1 and $n <= ([31, (if $leap then 29 else 28 end), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][$m - 1])' >/dev/null 2>&1
+          }
           FILE_OK=0; FILE_LIVE_FROM=""; PAUSED=unknown
           if [ -s "${LIVE_FILE:-}" ] && P=$(jq -rs 'if length == 1 and (.[0] | type) == "object" and (.[0].paused | type) == "boolean" then (.[0].paused | tostring) else error("bad") end' "$LIVE_FILE" 2>/dev/null); then
             FILE_OK=1; PAUSED="$P"

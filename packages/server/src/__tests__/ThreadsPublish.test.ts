@@ -1222,12 +1222,31 @@ describe('workflow', () => {
       expect(runGate(auto, { liveFrom: '2024-02-29', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2024-02-29' });
     });
 
+    it('the calendar check does not depend on GNU date (portable: jq only)', () => {
+      const script = gateScript();
+      expect(script).not.toMatch(/\bdate\s+(?:-u\s+)?-d\b/);
+      expect(script).not.toContain('--date');
+      expect(script).toMatch(/real_date\(\) \{[\s\S]*jq -en --arg d "\$1"/);
+    });
+
+    it.skipIf(!hasBash || !hasJq)('real_date accepts real dates and rejects impossible ones (leap years, month lengths)', () => {
+      const fn = /\n( *)real_date\(\) \{[\s\S]*?\n\1\}/.exec(gateScript())?.[0] ?? '';
+      expect(fn).not.toBe('');
+      const ok = (d: string): boolean => {
+        try { execFileSync('bash', ['-c', `${fn}\nreal_date "$1"`, 'x', d], { env: { PATH: process.env.PATH ?? '' }, stdio: 'ignore' }); return true; } catch { return false; }
+      };
+      for (const d of ['2024-02-29', '2000-02-29', '2026-01-31', '2026-04-30', '2026-12-31', '2026-11-18']) expect(ok(d), d).toBe(true);
+      for (const d of ['2025-02-29', '1900-02-29', '2026-02-30', '2026-04-31', '2026-13-01', '2026-00-10', '2026-01-00', '2026-1-01', '20260101', '', 'x2026-01-01']) expect(ok(d), d).toBe(false);
+    });
+
     it('reads threads_live.json before the gate and passes the gate\'s effective date to every script (not the raw variable)', () => {
       const all = steps();
       const gateIdx = all.findIndex((s) => s.id === 'gate');
-      const read = all.findIndex((s) => s.body.includes('contents/packages/server/threads_live.json?ref=${GITHUB_SHA}'));
+      // 執行當下讀 main 上最新的（排隊、重跑的執行也看得到後來同步的 paused），不是這次執行的舊 commit
+      const read = all.findIndex((s) => s.body.includes('contents/packages/server/threads_live.json?ref=main"'));
       expect(read).toBeGreaterThanOrEqual(0);
       expect(read).toBeLessThan(gateIdx);
+      expect(all[read].body).not.toContain('GITHUB_SHA');
       expect(all[read].body).toContain('rm -f "$LIVE_FILE"'); // 讀不到＝不留檔（閘門只試跑）
       expect(gateScript()).toContain('{ [ "$FILE_OK" != 1 ] || [ "$PAUSED" != false ] ||');
       expect(all[read].body).toContain('LIVE_FILE: ${{ runner.temp }}/threads_live.json');
