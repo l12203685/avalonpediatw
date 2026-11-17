@@ -20,7 +20,7 @@ import {
   serialiseRecord,
   type SimBankFile,
 } from '../bots/simulation/bankCodec';
-import { SIM_PROPOSE_SOFT_MAX_CHARS, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
+import { SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
 import { analyze, logicModel } from '../bots/simulation/logic';
 import { claimMaskOf, logicPanel, overlapLabel, releasePanel } from '../bots/simulation/reading';
 import { SimEngine } from '../bots/simulation/session';
@@ -36,7 +36,7 @@ import {
 } from '../bots/simulation/scenario';
 import { maskOf, seatBit, teamDigits } from '../bots/simulation/seats';
 import { popcount } from '../ai/worlds';
-import { builderRows, FAKE_DATE, FAKE_NAMES, FAKE_NOTE, shortRow, wikiRow } from './fixtures/simGames';
+import { builderRows, FAKE_DATE, FAKE_NAMES, FAKE_NOTE, GAME_MID_TEXT, GAME_WIKI_CFG, midRow, parsedGame, shortRow, simRow, wikiRow } from './fixtures/simGames';
 
 const BANK_PATH = path.resolve(__dirname, '..', '..', 'sim_bank.json');
 
@@ -100,8 +100,15 @@ describe('buildBankFile', () => {
   const { file, counts } = buildBankFile(builderRows());
 
   it('keeps strict-replay, valid-lake, non-娛樂 games once', () => {
-    expect(counts).toEqual({ rows: 7, recorded: 6, replayable: 5, lakeChainInvalid: 1, entertainment: 1, duplicates: 1, games: 2, idCollisions: 0 });
+    expect(counts).toEqual({ rows: 7, recorded: 6, replayable: 5, lakeChainInvalid: 1, entertainment: 1, simulated: 0, duplicates: 1, games: 2, idCollisions: 0 });
     expect(file.games.map((g) => g.cfg).sort()).toEqual(['128064', '753921']);
+  });
+
+  it('only real games: a row whose 分類 says 模擬 never enters the bank (Edward 2026-11-16：「模擬畢竟只是模擬」)', () => {
+    const r = buildBankFile([...builderRows(), simRow('T-0009', GAME_MID_TEXT, GAME_WIKI_CFG, '1', '三藍死', '模擬'), simRow('T-0010', GAME_MID_TEXT, GAME_WIKI_CFG, '1', '三藍死', '模擬局')]);
+    expect(r.counts).toMatchObject({ simulated: 2, games: 2 });
+    // The committed bank came from the sheet's 牌譜 tab, which has no 模擬 rows (checked 2026-11-16; this guard keeps it so).
+    expect(r.file.games.some((g) => g.rec === bankEntryFor(parsedGame(midRow()), 'X').rec)).toBe(false);
   });
 
   it('no names, dates, notes or sheet ids anywhere in the bank', () => {
@@ -158,7 +165,7 @@ describe('loader', () => {
     expect(warns).toEqual(['[sim] sim_bank.json not found; /模擬 answers 題庫還沒準備好']);
     const loader = new SimBankLoader(() => null);
     expect(await loader.get()).toBeNull();
-    expect(loader.status()).toEqual({ loaded: false, games: 0, dropped: 0, decisionPoints: 0 });
+    expect(loader.status()).toEqual({ loaded: false, games: 0, dropped: 0, decisionPoints: 0, linked: 0 });
   });
 });
 
@@ -251,15 +258,18 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       return r?.text ?? '';
     };
     await say('/模擬 題 01RH8-3');
-    expect(await say('/派 140')).toMatch(/・跟 1家 367 比：延伸（(有 2 人以上一樣：)?1 3），回選 1（把前面的隊長派進隊裡）→ 兩次都對（兩次派票的人全是好人）時只剩紅 2589（紅方就只能是這幾個）/u);
+    await say('/派 140');
+    expect(await say('/分析')).toMatch(/・跟 1家 367：延伸（1 3），回選 1 → 都對時只剩紅 2589/u);
     await say('/模擬 題 046Z5-6');
-    const fb = await say('/派 2569');
-    expect(fb).toMatch(/・跟 2家 139 比：延伸（(有 2 人以上一樣：)?2 9），回選 2/u);
-    expect(fb).not.toMatch(/派 2560 會跟 2家 139 打對邊/);
+    await say('/派 2569');
+    const fb = await say('/分析');
+    expect(fb).toMatch(/・跟 2家 139：延伸（2 9），回選 2/u);
+    expect(fb).not.toMatch(/派 2560 跟 2家 139 打對邊/);
     await say('/模擬 題 046Z5-2');
     await say('/下一步');
     await say('/下一步');
-    expect(await say('/派 23678')).toMatch(/0家 13689 的全好讀法(（[^）]*）)?不成立：連你在內會有 7 個好人，超過 6 個/u);
+    await say('/派 23678');
+    expect(await say('/分析')).toMatch(/0家 13689 不可能全好：連你在內會有 7 個好人，超過 6 個/u);
     await say('/模擬 題 00VG7-2');
     expect(await say('/下一步')).toContain('1家 2480（票沒記全） → 出發');
   });
@@ -286,8 +296,8 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
             replies++;
             longest = Math.max(longest, r.text.length);
             expect(r.text.length).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
-            // /派 stays short enough for a phone (SIM_PROPOSE_SOFT_MAX_CHARS).
-            if (r.kind === 'propose') expect(r.text.length).toBeLessThanOrEqual(SIM_PROPOSE_SOFT_MAX_CHARS);
+            // /派 is the two-line result since 2026-11-16 (the full reading is /分析).
+            if (r.kind === 'propose') expect(r.text).toMatch(/^(（代答：[^\n]*\n)?【[^】]+】你派 \d+：\d 好 \d 壞\n\/分析 看完整解讀｜\/下一步｜\/公布$/u);
             if (!ALLOWED.test(r.text)) {
               const bad = [...r.text].filter((ch) => !ALLOWED.test(ch)).map((ch) => `U+${ch.codePointAt(0)?.toString(16)}`);
               throw new Error(`unexpected character ${bad.join(',')} in a reply for ${g.id}-${seat}`);
@@ -299,6 +309,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
           for (const d of decisionsOf(g, seat)) {
             if (d < (firstDecision(g, seat) ?? 0)) continue;
             await run(`/派 ${teamDigits(g.proposals[d].teamSeats)}`);
+            await run('/分析');
             await run('/區間 789=2 460=1');
             await run('/下一步');
           }
@@ -309,6 +320,45 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     expect(starts).toBeGreaterThan(15_000);
     expect(replies).toBeGreaterThan(100_000);
     expect(longest).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+  }, 300_000);
+
+  it('every 局面 / 刺殺 exercise of the real bank (1-5…4-5, 5局, -A) fits 1800 characters with expected characters only', async () => {
+    let now = 5_000_000;
+    const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const req = { platform: 'line' as const, chatId: 'ST', userId: 'U', shared: true };
+    let starts = 0;
+    let kills = 0;
+    const run = async (cmd: string): Promise<string> => {
+      now += 1000;
+      const r = await engine.handleText(cmd, req);
+      r?.commit();
+      const text = r?.text ?? '';
+      expect(text.length, cmd).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
+      if (text && !ALLOWED.test(text)) throw new Error(`unexpected character in a reply to ${cmd}`);
+      return text;
+    };
+    for (const [key, refs] of bank.midPool) {
+      for (const ref of refs.filter((_, i) => i % 7 === 0)) {
+        const g = bank.games[ref.game];
+        const p = g.proposals[ref.proposal];
+        const start = await run(`/模擬 題 ${g.id}-${p.round}-${p.attempt}`);
+        expect(start, key).toContain(`輪到你派 ${[3, 4, 4, 5, 5][p.round - 1]} 人（第 ${p.round} 局第 ${p.attempt} 次`);
+        starts++;
+        await run(`/派 ${teamDigits(p.teamSeats)}`);
+        await run('/分析');
+        await run('/公布');
+      }
+    }
+    for (const gi of bank.assassinPool) {
+      const g = bank.games[gi];
+      expect(await run(`/模擬 題 ${g.id}-A`)).toContain('三藍：輪到你刺殺');
+      const blue = g.seatRoles.findIndex((r) => r === 'loyal') + 1;
+      await run(`/刺 ${blue === 10 ? 0 : blue}`);
+      expect(await run('/公布')).toMatch(/你刺 \d家：(刺中梅林 ✓|沒刺中 ✗（梅林 \d家）)/u);
+      kills++;
+    }
+    expect(starts).toBeGreaterThan(800);
+    expect(kills).toBeGreaterThan(900);
   }, 300_000);
 
   it('no reply before /公布 depends on a role the viewer cannot see: shuffling those roles changes nothing, byte for byte (non-interference, every 5th game)', async () => {
@@ -355,7 +405,10 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
         if ((await both(`/模擬 題 ${exerciseIdOf(g.id, seat)}`)) === 'start') {
           for (const d of decisionsOf(g, seat)) {
             if (d < (firstDecision(g, seat) ?? 0)) continue;
+            // /派 itself tells 幾好幾壞 (Edward 2026-11-16) — that is red/good, which this shuffle keeps; /分析 must
+            // still not depend on which hidden role sits where.
             await both(`/派 ${teamDigits(g.proposals[d].teamSeats)}`);
+            await both('/分析');
             await both('/區間 789=2 460=1');
             await both('/下一步');
           }

@@ -1,5 +1,5 @@
 /**
- * 模擬瓦（2026-10-14）— LINE 打字指令：/模擬 /派 /區間 /下一步 /公布（/解答）/結束。
+ * 模擬瓦（2026-10-14）— LINE 打字指令：/模擬 /派 /分析 /區間 /下一步 /公布（/解答）/結束。
  *
  * 跟 /戰績 一樣：只回這幾個指令，一般聊天一律不回；回覆在送出成功後才 commit()（見 session.ts）。
  *
@@ -57,7 +57,7 @@ export function simHelpFor(text: string): string | null {
 }
 
 /** LINE 1 對 1 的快速按鈕（群組裡不放：按鈕要放在最後一則，鏡像群的最後一則是同步訊息）。 */
-export const SIM_QUICK_REPLY_TEXTS: readonly string[] = ['/下一步', '/公布', '/結束'];
+export const SIM_QUICK_REPLY_TEXTS: readonly string[] = ['/分析', '/下一步', '/公布', '/結束'];
 
 export function simQuickReply(): { items: { type: 'action'; action: { type: 'message'; label: string; text: string } }[] } {
   return {

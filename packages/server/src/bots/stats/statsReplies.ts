@@ -109,7 +109,7 @@ export const STATS_COMMAND_USAGE = {
 } as const;
 
 /** The 模擬瓦 follow-up commands, for the help texts (bots/simulation, docs/SIMULATION.md). */
-export const SIM_HELP_FOLLOW_UP = '/派 /區間 /下一步 /公布 /結束';
+export const SIM_HELP_FOLLOW_UP = '/派 /分析 /區間 /下一步 /公布 /結束';
 
 const SITE_FOOTER = `🔗 完整圖表（不用登入）：${STATS_PAGE_URL}`;
 

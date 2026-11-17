@@ -28,12 +28,21 @@
  *   - /模擬 說明 分 LINE 版和 Discord 版（Discord 照 slash 的選項名寫）；
  *   - ④「兩次不能都對」沒有超過 6 人時寫原因（跟任務結果矛盾）；開題時還沒有派票（第 1 局第一個隊長）的題目，
  *     /下一步 第一次印出派票時附「怎麼讀」；② 寫「第 1 局」（有空格）；「只剩紅」兩組以上時解釋成「這幾組之一」。
+ *
+ * 2026-11-16 精簡（Edward：「/派 之後直接顯示結果就好（派到幾好幾壞這樣）」「完整區間解讀可以用另一個指令來呼叫，
+ * 只是很多重複的說明跟廢話類型的就不用打了（比如什麼派了 258 代表 1346790 有四壞這種），開題、/下一步、/公布」
+ * 「給牌局連結就好」）：
+ *   - /派 只回「你派 469：2 好 1 壞」；完整解讀（①④③②）改成 /分析；
+ *   - 解讀裡不再寫全好讀法的補集（「4 6 9 是好人，其他 7 人有 4 紅」），兩兩合讀只留「只剩紅」和「不能都對」；
+ *     術語不再在回覆裡括號解釋（解釋放在 /模擬 說明）；
+ *   - 開題、/下一步、/區間 拿掉「怎麼讀」、例子和重複的提醒（群組代答提醒只在開題時講一次）；
+ *   - /公布：角色代碼、你的答案、結果，加網站上這一局牌譜的連結（沒有那一篇就附文字牌譜）。
  */
 
 import type { Role } from '@avalon/shared';
 import { COMMANDS, SIM_OPTIONS } from '../discord/config';
 import { ROLE_ZH, formatIntervalGroup, type IntervalGroup } from './commands';
-import { SIM_HUMAN_SMALL_SAMPLE, SIM_PROPOSE_SOFT_MAX_CHARS, SIM_REPLY_MAX_CHARS } from './config';
+import { SIM_HUMAN_SMALL_SAMPLE, SIM_REPLY_MAX_CHARS } from './config';
 import { hasHits, type Camp, type CampShare, type HumanAgg, type ProposalFeatures } from './human';
 import { RED_COUNT, type SimBeliefModel } from './logic';
 import {
@@ -49,6 +58,8 @@ import {
   type SightReason,
   type WorldSummary,
 } from './reading';
+import { serialiseRecord } from './bankCodec';
+import type { ReplayGame } from '../../ai/benchmark/sheetsReplay';
 import { FAILS_REQUIRED, TEAM_SIZES, isRed, type PublicEvent, type Sight, type SimGame } from './scenario';
 import { maskDigits, maskOf, seatChar, seatList, seatsOfMask, sortSeats, teamDigits } from './seats';
 import type { EndedReason } from './session';
@@ -127,31 +138,23 @@ const G1 = String.fromCharCode(0xe001);
 const G2 = String.fromCharCode(0xe002);
 const GLOSS_RE = new RegExp(`${G0}([^${G1}]*)${G1}([^${G2}]*)${G2}`, 'gu');
 
-/** 術語（＋細節）的記號；拼回覆時 resolveGlosses() 才決定要不要附解釋（每則回覆第一次才附）。 */
+/** 術語（＋細節）的記號；拼回覆時 resolveGlosses() 換成文字。 */
 export function gloss(term: GlossTerm, detail = ''): string {
   return `${G0}${term}${G1}${detail}${G2}`;
 }
 
 /**
- * 把 gloss() 的記號換成文字：同一個術語第一次附白話解釋，之後只寫術語（＋細節）。
- * 解釋的括號後面接箭頭時不留空白（`延伸（4 6）→`，跟中文排版一樣）；其他地方的文字不動。
+ * 把 gloss() 的記號換成文字：術語（＋細節）。2026-11-16 起回覆裡不再括號解釋術語（Edward：重複的說明不用打），
+ * 白話解釋只在 /模擬 說明（HELP_GLOSSARY）。`after` 的術語把細節接在後面（`只剩紅 1258`、`回選 1`），
+ * 其他的放括號（`延伸（4 6）`）；括號後面接箭頭時不留空白（`延伸（4 6）→`）。
  */
 export function resolveGlosses(text: string): string {
-  const said = new Set<string>();
   const closed = String.fromCharCode(0xe003);
   return text
     .replace(GLOSS_RE, (_m, term: string, detail: string) => {
       const g = (GLOSSES as Record<string, GlossSpec>)[term];
-      const first = !said.has(term);
-      said.add(term);
-      const say = first && g ? (g.sayMany && detail.includes('、') ? g.sayMany : g.say) : '';
-      let out: string;
-      if (g?.after) out = `${term}${detail ? ` ${detail}` : ''}${say ? `（${say}）` : ''}`;
-      else {
-        const inner = [say, detail].filter(Boolean).join('：');
-        out = inner ? `${term}（${inner}）` : term;
-      }
-      return out.endsWith('）') ? `${out}${closed}` : out;
+      if (g?.after) return `${term}${detail ? ` ${detail}` : ''}`;
+      return detail ? `${term}（${detail}）${closed}` : term;
     })
     .replace(new RegExp(`${closed} →`, 'gu'), '→')
     .replace(new RegExp(closed, 'gu'), '');
@@ -219,22 +222,20 @@ export function withCoAnswerMark(text: string, coAnswer: boolean | undefined): s
 
 // ─── 身分與事件 ────────────────────────────────────────────────────────────
 
-/** 「你是 4家・忠臣（沒有額外資訊）」等。 */
+/** 「你是 4家・忠臣」「你是 2家・派西維爾，拇指 1 5」等（角色規則本身的說明在 /模擬 說明）。 */
 export function identityLine(seat: number, role: Role, sight: Sight): string {
   const who = `你是 ${seatLabel(seat)}・${ROLE_ZH[role]}`;
   switch (sight.kind) {
     case 'loyal':
-      return `${who}（沒有額外資訊）`;
+      return who;
     case 'percival':
-      return `${who}。拇指：${seatList(sight.thumbs)}（一個是梅林、一個是莫甘娜，不知道誰是誰）`;
+      return `${who}，拇指 ${seatList(sight.thumbs)}`;
     case 'merlin':
-      return `${who}。你看到的紅：${seatList(sight.seen)}；莫德雷德看不到，所以還有 ${RED_COUNT - sight.seen.length} 紅在其他人裡`;
+      return `${who}，看到的紅 ${seatList(sight.seen)}`;
     case 'evil':
-      return role === 'mordred'
-        ? `${who}。隊友：${seatList(sight.mates)}（奧伯倫不認隊友；梅林看不到你）`
-        : `${who}。隊友：${seatList(sight.mates)}（奧伯倫不認隊友）`;
+      return `${who}，隊友 ${seatList(sight.mates)}`;
     case 'oberon':
-      return `${who}。你不知道隊友，隊友也不知道你；梅林看得到你`;
+      return `${who}（不知道隊友）`;
   }
 }
 
@@ -299,54 +300,29 @@ export function eventLines(events: readonly PublicEvent[], viewerSeat: number, g
   return lines;
 }
 
-/**
- * 牌譜怎麼讀（用看得到的第一次派票當例子）。
- * 「1家 460 1+」= 1家派 4、6、0家；+ 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對。
- */
-export function notationNote(first: ProposalEvent, opts: { quests: boolean }): string {
-  const seats = sortSeats(first.teamSeats).map(seatChar).join('、');
-  const quest = opts.quests ? '；任務的 o = 成功牌、x = 失敗牌' : '';
-  return `怎麼讀：「${seatLabel(first.leaderSeat)} ${teamDigits(first.teamSeats)}」= ${seatLabel(first.leaderSeat)}派 ${seats}家；`
-    + `座位後面的 + 是隊外的人投贊成、- 是隊內的人投反對，其他人都是隊內贊成、隊外反對${quest}`;
-}
-
-/** 開題時，前面有票沒記全的派票才多講一句。 */
-const UNRELIABLE_NOTE = `${VOTES_UNRELIABLE_MARK} = 記號跟結果對不上，那一次的票不能照上面的規則讀`;
-
 function decisionPrompt(p: ProposalEvent): string {
   const size = TEAM_SIZES[p.round - 1];
-  const forced = p.attempt === 5 ? '，這次強制出發' : '';
-  return `輪到你派 ${size} 人（第 ${p.round} 局第 ${p.attempt} 次${forced}）。`;
+  const forced = p.attempt === 5 ? '，強制出發' : '';
+  return `輪到你派 ${size} 人（第 ${p.round} 局第 ${p.attempt} 次${forced}）`;
 }
 
-/** /派 的例子（照這次的人數）：`/派 469 = 派 4、6、9家`。 */
-const PROPOSE_EXAMPLES: Readonly<Record<number, string>> = { 3: '469', 4: '2469', 5: '24690' };
-
-export function proposeExample(size: number): string {
-  const digits = PROPOSE_EXAMPLES[size] ?? '12345'.slice(0, size);
-  const seats = [...digits].join('、');
-  return `/派 ${digits} = 派 ${seats}家`;
-}
-
-export const INTERVAL_EXAMPLE = '/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅';
-
-function answerHint(p: ProposalEvent): string[] {
-  return [
-    `作答：/派 加座位，例：${proposeExample(TEAM_SIZES[p.round - 1])}`,
-    `選填：先寫區間（你覺得哪幾個座位裡有幾個紅），例：${INTERVAL_EXAMPLE}`,
-  ];
-}
-
-export const HELP_HINT = '/模擬 說明 看全部指令';
+export const HELP_HINT = '/模擬 說明';
 
 /**
- * 大家都看得到回覆的聊天室（LINE 群組、公開的 Discord 頻道）：開題回覆和 /派 的最後一行
- * （題主知道別人可以代答、/公布 /結束 是對整題的）。
+ * 大家都看得到回覆的聊天室（LINE 群組、公開的 Discord 頻道）：開題回覆的最後一行
+ * （題主知道別人可以代答、/公布 /結束 是對整題的）。2026-11-16 起只在開題講一次。
  */
 export function sharedNote(platform: SimPlatform): string {
-  return `${platform === 'discord' ? '頻道' : '群組'}裡沒開題的人也能幫忙答（標「代答」）；誰打 /公布 或 /結束 都會結束這題`;
+  return `${platform === 'discord' ? '頻道' : '群組'}裡沒開題的人也能幫忙答；誰打 /公布 或 /結束 都會結束這題`;
 }
-export const ANSWER_FOOTER = `/下一步 跳過這次｜/公布 看角色｜/結束｜${HELP_HINT}`;
+/** 輪到你派票時的指令列（開題、/下一步）。 */
+export const ANSWER_FOOTER = `/派 座位 作答｜/區間｜/下一步｜/公布｜/結束｜${HELP_HINT}`;
+
+/** 一行「確定的事」：出過失敗牌的任務（成功不代表全好）；沒有就是空字串。 */
+function factsLine(shown: readonly PublicEvent[]): string {
+  const facts = shown.filter((e): e is Extract<PublicEvent, { kind: 'quest' }> => e.kind === 'quest' && e.failCount > 0);
+  return facts.length > 0 ? `・確定的事：${facts.map(missionFact).join('；')}` : '';
+}
 
 /** 一句「確定資訊」的任務事實（只有出過失敗牌的任務有資訊：成功不代表全好）。 */
 export function missionFact(e: Extract<PublicEvent, { kind: 'quest' }>): string {
@@ -368,38 +344,65 @@ export interface StartInput {
   replacedId?: string;
   /** 大家都看得到回覆的聊天室（最後加一行 sharedNote）。 */
   shared?: boolean;
+  /** 今天的主題（/模擬 今天）。 */
+  theme?: string;
 }
 
-export const START_TASK_LINE = '這題要做的事：看完前面的派票，想想紅方可能在哪，然後換你派一次隊，看你的派票會放出什麼資訊。';
-const START_TASK_FIRST = '你是第 1 局第一個隊長，前面沒有派票：這題練「釋放」（你的派票會放出什麼資訊給後面的人）。';
+const START_FIRST = '第 1 局第一個隊長，前面沒有派票';
 
 export function formatStart(input: StartInput): string {
   const { game, seat, sight, shown, decision, platform } = input;
   const role = game.seatRoles[seat - 1];
-  const onlyR1 = shown.every((e) => e.kind === 'proposal' && e.round === 1);
   const parts: ReplyPart[] = [];
   if (input.replacedId) parts.push({ text: `（上一題 ${input.replacedId} 已結束，換這一題）` });
   parts.push({ text: `【模擬瓦 ${input.exerciseId}】${identityLine(seat, role, sight)}` });
-  const firstProposal = shown.find((e): e is ProposalEvent => e.kind === 'proposal');
-  if (shown.length === 0 || !firstProposal) {
-    parts.push({ text: START_TASK_FIRST });
-  } else {
-    parts.push({ text: START_TASK_LINE });
-    if (onlyR1) {
-      parts.push({ text: '第 1 局到目前的派票（照隊長順序）：' });
-      parts.push({ text: codeBlock(shown.map((e) => proposalLine(e as ProposalEvent, { showOutcome: false })), platform) });
-    } else {
-      parts.push({ text: '目前為止（照隊長順序）：' });
-      parts.push({ text: codeBlock(eventLines(shown, seat, game), platform) });
-    }
-    parts.push({ text: notationNote(firstProposal, { quests: shown.some((e) => e.kind === 'quest') }) });
-  }
-  if (shown.some((e) => e.kind === 'proposal' && !e.votesReliable)) parts.push({ text: UNRELIABLE_NOTE, optional: true, priority: 1 });
+  if (input.theme) parts.push({ text: `（今天${input.theme}）` });
+  if (!shown.some((e) => e.kind === 'proposal')) parts.push({ text: START_FIRST });
+  else parts.push({ text: codeBlock(eventLines(shown, seat, game), platform) });
   parts.push({ text: decisionPrompt(decision) });
-  for (const line of answerHint(decision)) parts.push({ text: line });
+  const facts = factsLine(shown);
+  if (facts) parts.push({ text: facts, optional: true, priority: 1 });
   parts.push({ text: ANSWER_FOOTER });
   if (input.shared) parts.push({ text: sharedNote(platform) });
   return assembleReply(parts);
+}
+
+// ─── 刺殺題 ───────────────────────────────────────────────────────────────
+
+/** 刺殺題的指令列。 */
+export const ASSASSIN_FOOTER = `/刺 座位 作答｜/公布｜/結束｜${HELP_HINT}`;
+
+/**
+ * 刺殺題的開題（Threads 週一「刺殺梅林」）：你是刺客，看得到紅方隊友（奧伯倫除外）和整局的公開紀錄，三藍之後輪到你刺。
+ */
+export function formatAssassinStart(input: Omit<StartInput, 'decision'>): string {
+  const { game, seat, sight, shown, platform } = input;
+  const parts: ReplyPart[] = [];
+  if (input.replacedId) parts.push({ text: `（上一題 ${input.replacedId} 已結束，換這一題）` });
+  parts.push({ text: `【模擬瓦 ${input.exerciseId}】${identityLine(seat, game.seatRoles[seat - 1], sight)}` });
+  if (input.theme) parts.push({ text: `（今天${input.theme}）` });
+  parts.push({ text: codeBlock(eventLines(shown, seat, game), platform) });
+  parts.push({ text: '三藍：輪到你刺殺（刺中梅林紅方獲勝）' });
+  parts.push({ text: ASSASSIN_FOOTER });
+  if (input.shared) parts.push({ text: sharedNote(platform) });
+  return assembleReply(parts);
+}
+
+/** /刺 的回覆：記下答案（結果在 /公布）。 */
+export function formatKillAnswer(exerciseId: string, target: number, coAnswer?: boolean): string {
+  return withCoAnswerMark(`【${exerciseId}】你刺 ${seatLabel(target)}（可以再刺一次改答案）\n/公布 看結果｜/結束`, coAnswer);
+}
+
+export function assassinOnlyText(exerciseId: string): string {
+  return `${exerciseId} 是刺殺題：用 /刺 座位 作答，/公布 看結果`;
+}
+
+export function notAssassinText(exerciseId: string): string {
+  return `${exerciseId} 不是刺殺題：用 /派 座位 作答（刺殺題：/模擬 刺殺）`;
+}
+
+export function killTeammateText(target: number, self: boolean): string {
+  return self ? '你就是刺客，換一個座位。' : `${seatLabel(target)} 是你的隊友，換一個座位。`;
 }
 
 // ─── /派 之後 ─────────────────────────────────────────────────────────────
@@ -416,8 +419,6 @@ export interface ProposeInput {
   logic: LogicPanel;
   release: ReleasePanel;
   platform: SimPlatform;
-  /** 這個決定點第一次 /派：③ 完整印；之後一行帶過。 */
-  showLogic?: boolean;
   /**
    * 這題有 /區間：照區間留下幾種、你的隊伍全好的有幾種。`yours` = 你自己寫的（寫「你寫的區間」）；
    * 代答寫的、或這次是代答，寫「這題目前的區間」。
@@ -425,8 +426,6 @@ export interface ProposeInput {
   ownInterval?: { worlds: number; clean: number; yours?: boolean };
   /** 幫別人開的題目作答：第一行標代答（算在長度裡）。 */
   coAnswer?: boolean;
-  /** 大家都看得到回覆的聊天室（最後加一行 sharedNote）。 */
-  shared?: boolean;
 }
 
 function sameTeam(a: readonly number[], b: readonly number[]): boolean {
@@ -443,7 +442,7 @@ function realPlayerLine(input: ProposeInput): string {
   else outcome = d.approved ? '通過出發' : '被否決';
   if (input.realQuest) outcome += `，任務牌 ${'o'.repeat(input.realQuest.successCount)}${'x'.repeat(input.realQuest.failCount)}`;
   const unreliable = d.votesReliable ? '' : VOTES_UNRELIABLE_MARK;
-  return `① 當時真人怎麼派：${seatLabel(d.leaderSeat)} 派 ${teamDigits(d.teamSeats)}${anomalyWords(d)}${unreliable}（${compare}）→ ${outcome}`;
+  return `① 真人：${seatLabel(d.leaderSeat)} 派 ${teamDigits(d.teamSeats)}${anomalyWords(d)}${unreliable}（${compare}）→ ${outcome}`;
 }
 
 /** 分布：只印出現過的格子和你那一格。 */
@@ -488,10 +487,10 @@ export function campLine(shape: string, camps: readonly CampShare[]): string | n
     const most = shares[0];
     const least = shares[shares.length - 1];
     const ratio = most.s / least.s;
-    if (ratio < LEAK_RATIO) verdict = ' → 三方差不多，看不出你是哪一方（不太漏角色）';
-    else verdict = ` → ${CAMP_LABEL[most.c.camp]}最常這樣派（${CAMP_LABEL[least.c.camp]}的 ${ratio.toFixed(1)} 倍），容易被當成${CAMP_LABEL[most.c.camp]}`;
+    if (ratio < LEAK_RATIO) verdict = ' → 看不出你是哪一方';
+    else verdict = ` → 容易被當成${CAMP_LABEL[most.c.camp]}（${CAMP_LABEL[least.c.camp]}的 ${ratio.toFixed(1)} 倍）`;
   }
-  return `${LEAK_PREFIX}（${shapeText(shape)}）的比例：${cells.join('｜')}${verdict}`;
+  return `${LEAK_PREFIX}（${shapeText(shape)}）：${cells.join('｜')}${verdict}`;
 }
 
 export function humanLines(input: ProposeInput): string[] {
@@ -499,9 +498,9 @@ export function humanLines(input: ProposeInput): string[] {
   const d = input.decision;
   const role = input.game.seatRoles[d.leaderSeat - 1];
   const where = d.round <= 2 ? `第 ${d.round} 局 ${seatLabel(d.leaderSeat)}${roleShort(role)}` : `第 ${d.round} 局 ${roleShort(role)}`;
-  if (agg.n <= 0) return [`② 同位置的真人怎麼派（${where}）：題庫裡沒有其他同樣處境的局`];
+  if (agg.n <= 0) return [`② 同位置真人（${where}）：題庫裡沒有同樣處境的局`];
   const small = agg.n < SIM_HUMAN_SMALL_SAMPLE ? '，樣本少' : '';
-  const lines = [`② 同位置的真人怎麼派（題庫裡${where}，${agg.n} 次${small}）：有派自己的佔 ${pct(agg.self / agg.n)}（你：${mine.self ? '有' : '沒有'}）`];
+  const lines = [`② 同位置真人（${where}，${agg.n} 次${small}）：派自己 ${pct(agg.self / agg.n)}（你：${mine.self ? '有' : '沒有'}）`];
   if (hasHits(role) && agg.hitsN > 0 && mine.hits !== null) {
     const [label, unit] = role === 'merlin' ? ['派到看到的紅 ', '個'] : role === 'percival' ? ['派到拇指 ', '根'] : ['派到隊友 ', '個'];
     lines.push(distLine(`\u3000${label}`, agg.hits, agg.hitsN, unit, mine.hits));
@@ -518,18 +517,6 @@ export function humanLines(input: ProposeInput): string[] {
   const leak = camps ? campLine(mine.shape, camps) : null;
   if (leak) lines.push(leak);
   return lines;
-}
-
-/** ③ 第一行的白話結論：你知道什麼、紅方可能的組合有幾種。 */
-function campIntro(sight: Sight, seat: number, count: number): string {
-  const n = `（${count} 種組合）`;
-  switch (sight.kind) {
-    case 'loyal': return `你是好人，${RED_COUNT} 紅在其他 9 人裡${n}`;
-    case 'percival': return `你是好人；拇指 ${seatList(sight.thumbs)} 裡剛好 1 紅，就是莫甘娜${n}`;
-    case 'merlin': return `你看到 ${seatList(sight.seen)} 是紅，還有 ${RED_COUNT - sight.seen.length} 紅（莫德雷德）在其他人裡${n}`;
-    case 'evil': return `你和隊友 ${seatList(sight.mates)} 是紅，奧伯倫在其他人裡${n}`;
-    case 'oberon': return `你（${seatLabel(seat)}）是紅，另外 ${RED_COUNT - 1} 紅在其他 9 人裡${n}`;
-  }
 }
 
 function groupText(g: SeatGroup): string {
@@ -640,28 +627,25 @@ function onlyReds(sets: readonly string[]): string {
 export function logicLines(panel: LogicPanel, sight: Sight, seat: number, shown: readonly PublicEvent[], role: Role, round: number): ReplyPart[] {
   const a = panel.analysis;
   const parts: ReplyPart[] = [];
-  const behaviour = panel.model.weighsBehaviour ? '' : '，還沒算派票行為';
-  const quests = shown.filter((e) => e.kind === 'quest');
   const trivial = !groupsWorthShowing(panel.groups);
-  const blind = quests.length === 0 && trivial && (sight.kind === 'loyal' || sight.kind === 'oberon');
-  const blindNote = blind ? `。任務前純邏輯分不出誰是紅，${gloss('區間')}要靠讀派票` : '';
-  parts.push({ text: `③ 邏輯上確定的（${panel.model.label}：只用確定資訊${behaviour}）：${campIntro(sight, seat, a.count)}${blindNote}` });
+  // 2026-11-16：第一行只講還剩幾種（你的身分、看到的人開題時已經講過）。
+  parts.push({ text: `③ 邏輯（只用確定資訊）：紅方剩 ${a.count} 種組合` });
   if (!trivial) parts.push({ text: `・${gloss('區間')}：${panel.groups.map(groupText).join('｜')}` });
 
   // 全好讀法：每個都一樣多種時沒有資訊（第 1 局常見），只印不一樣的和不成立的。
   const possible = panel.claims.filter((c) => c.weight > 0);
   if (possible.length > 1 && !possible.every((c) => c.weight === possible[0].weight)) {
-    parts.push({ text: `・${gloss('全好讀法')}各剩幾種：${possible.map((c) => `${claimLabel(c)} ${c.weight} 種`).join('｜')}`, optional: true, priority: 5 });
+    parts.push({ text: `・各自全好時剩幾種：${possible.map((c) => `${claimLabel(c)} ${c.weight} 種`).join('｜')}`, optional: true, priority: 5 });
   }
   const impossible = panel.claims.filter((x) => x.weight === 0);
   if (impossible.length === 1) {
     const c = impossible[0];
     const why = c.impossible === 'sight' ? reasonText(c.reason, seat) : '跟任務結果矛盾';
-    parts.push({ text: `・${claimLabel(c)} 的${gloss('全好讀法')}不成立：${why}` });
+    parts.push({ text: `・${claimLabel(c)} 不可能全好：${why}` });
   } else if (impossible.length > 1) {
     // 紅方視角時常常好幾次都含隊友：併成一行。
     const items = impossible.map((c) => `${claimLabel(c)}（${c.impossible === 'sight' ? shortReason(c.reason) : '跟任務矛盾'}）`);
-    parts.push({ text: `・${gloss('全好讀法')}不成立的：${items.join('、')}` });
+    parts.push({ text: `・不可能全好的：${items.join('、')}` });
   }
 
   const tags = tagItems(panel.tags, seat, round);
@@ -727,19 +711,6 @@ export function logicLines(panel: LogicPanel, sight: Sight, seat: number, shown:
   return parts;
 }
 
-/**
- * 「都好」的人是 `union` 時，其他人的寫法：`2 3 5 7 8 有 4 紅`；剛好 4 人 → 只剩紅；
- * 任務結果讓組合變少時加「（N 種）」，剩 3 種以內列出來。
- */
-export function restText(union: number, weight: number, worlds?: readonly number[]): string {
-  if (weight === 0) return '不可能';
-  const rest = seatsOfMask(~union & 0x3ff);
-  if (rest.length === RED_COUNT) return onlyReds([teamDigits(rest)]);
-  const free = freeCount(union);
-  if (worlds && worlds.length === weight && weight <= 3 && weight < free) return onlyReds(worlds.map(maskDigits));
-  return `${seatList(rest)} 有 ${RED_COUNT} 紅${weight < free ? `（${weight} 種）` : ''}`;
-}
-
 function oddsText(p: number): string {
   if (Math.abs(p - 0.5) < 1e-9) return '一半機率是莫甘娜';
   if (p >= 1) return '依目前邏輯一定是莫甘娜';
@@ -747,21 +718,33 @@ function oddsText(p: number): string {
   return `依目前邏輯 ${pct(p)} 是莫甘娜`;
 }
 
-/** ④ 你的派票放出的資訊：第一行是白話結論（後面的人會讀成什麼），細節在後面。 */
+/**
+ * 兩次（或你和隊員）都是好人時，紅方「只剩」哪幾組；剩很多種時是 null（2026-11-16：補集的說法
+ * 「其他 7 人有 4 紅」是廢話，不再寫，只留真的縮到幾組的）。
+ */
+export function onlyRedSets(union: number, weight: number, worlds?: readonly number[]): string[] | null {
+  if (weight === 0) return null;
+  const rest = seatsOfMask(~union & 0x3ff);
+  if (rest.length === RED_COUNT) return [teamDigits(rest)];
+  if (worlds && worlds.length === weight && weight <= 3 && weight < freeCount(union)) return worlds.map(maskDigits);
+  return null;
+}
+
+/** ④ 你的派票放出的資訊：第一行是結論（你等於在否定誰），細節在後面。 */
 export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worlds: number; clean: number; yours?: boolean }): ReplyPart[] {
   const parts: ReplyPart[] = [];
   const claim = seatList(seatsOfMask(r.claimMask));
   const who = (p: ProposalEvent): string => (p.leaderSeat === seat ? `你上一次的 ${teamDigits(p.teamSeats)}` : `${seatLabel(p.leaderSeat)} ${teamDigits(p.teamSeats)}`);
   const pair = (x: { a: ProposalEvent; b: ProposalEvent }): string => `${seatLabel(x.a.leaderSeat)}、${seatLabel(x.b.leaderSeat)}`;
   if (r.weight === 0) {
-    parts.push({ text: `④ 你這樣派放出的資訊：後面的人沒辦法把 ${claim}（你和隊員）全當好人，因為跟任務結果矛盾；跟前面的派票也合不起來` });
+    parts.push({ text: `④ 你放出的資訊：${claim}（你和隊員）不可能全是好人，跟任務結果矛盾` });
   } else {
-    let verdict = '';
-    if (r.rejectCommon !== undefined) verdict = `；你等於在說 ${seatLabel(r.rejectCommon)} 的派票不是好人派的`;
-    else if (r.rejects.length) verdict = `；你等於在說 ${r.rejects.slice(0, 3).map(pair).join('／')} 至少一個錯`;
-    parts.push({
-      text: `④ 你這樣派放出的資訊：後面的人用${gloss('全好讀法')}看你的派票 → ${claim} 是好人，${restText(r.claimMask, r.weight)}${verdict}`,
-    });
+    let verdict: string;
+    if (r.rejectCommon !== undefined) verdict = `等於在說 ${seatLabel(r.rejectCommon)} 的派票不是好人派的`;
+    else if (r.rejects.length) verdict = `等於在說 ${r.rejects.slice(0, 3).map(pair).join('／')} 至少一個錯`;
+    else verdict = '沒有否定前面任何一次派票';
+    const own = onlyRedSets(r.claimMask, r.weight);
+    parts.push({ text: `④ 你放出的資訊：${verdict}${own ? `；你和隊員全好時${sp(onlyReds(own))}` : ''}` });
     // 都對不可能的有兩次以上（後面幾局五人隊伍很常見）就併成一行，不然一次一行。
     const impossible = r.vs.filter((v) => v.weight === 0);
     const lines = impossible.length >= 2 ? r.vs.filter((v) => v.weight > 0) : r.vs;
@@ -769,11 +752,14 @@ export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worl
       const label = gloss(v.label, v.shared.length ? seatList(v.shared) : '');
       const recall = v.recall ? `，${gloss('回選', seatChar(v.proposal.leaderSeat))}` : '';
       const n = popcountMask(v.union);
-      // 不能都對：超過 6 人，或（後面的人只看公開資訊）跟任務結果矛盾。
-      const tail = v.weight === 0
-        ? `兩次${gloss('不能都對', n > 6 ? `加起來 ${n} 人＞6` : '跟任務結果矛盾')}`
-        : `兩次${gloss('都對')}時${sp(restText(v.union, v.weight, v.worlds))}`;
-      parts.push({ text: `・跟 ${who(v.proposal)} 比：${label}${recall} → ${tail}`, optional: true, priority: 2 });
+      // 不能都對：超過 6 人，或（後面的人只看公開資訊）跟任務結果矛盾。都對時只寫「只剩紅」（真的縮到幾組時）。
+      let tail = '';
+      if (v.weight === 0) tail = ` → ${gloss('不能都對', n > 6 ? `加起來 ${n} 人＞6` : '跟任務結果矛盾')}`;
+      else {
+        const sets = onlyRedSets(v.union, v.weight, v.worlds);
+        if (sets) tail = ` → 都對時${sp(onlyReds(sets))}`;
+      }
+      parts.push({ text: `・跟 ${who(v.proposal)}：${label}${recall}${tail}`, optional: true, priority: 2 });
     }
     if (impossible.length >= 2) {
       const opposite = impossible.filter((v) => v.label === '打對邊').map((v) => seatLabel(v.proposal.leaderSeat));
@@ -783,18 +769,13 @@ export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worl
         priority: 2,
       });
     }
-    if (r.rejects.length) {
-      const items = r.rejects.slice(0, 3).map((x) => `${pair(x)} 至少一個錯`);
-      const common = r.rejectCommon !== undefined ? ` → 共同點是 ${seatLabel(r.rejectCommon)}，等於在說 ${seatLabel(r.rejectCommon)} 的派票不是好人派的` : '';
-      parts.push({ text: `・你在說：${items.join('；')}${common}`, optional: true, priority: 3 });
-    }
   }
   if (ownInterval) {
     const whose = intervalOwnerWords(ownInterval.yours !== false);
     parts.push({
       text: ownInterval.worlds === 0
         ? `・最後檢查：${whose}合起來不可能，先改 /區間`
-        : `・最後檢查（照${whose}，剩 ${ownInterval.worlds} 種）：${teamDigits(r.team)} 全好的有 ${ownInterval.clean} 種（${pct(ownInterval.clean / ownInterval.worlds)}）`,
+        : `・照${whose}（${ownInterval.worlds} 種）：${teamDigits(r.team)} 全好 ${ownInterval.clean} 種（${pct(ownInterval.clean / ownInterval.worlds)}）`,
     });
   }
   for (const st of r.thumbStances) {
@@ -816,10 +797,11 @@ export function releaseLines(r: ReleasePanel, seat: number, ownInterval?: { worl
     if (pc.matesOnTeam.length) parts.push({ text: `・你派了隊友 ${seatList(pc.matesOnTeam)}：讀你全好的人會把 ${seatList(pc.matesOnTeam)} 當好人（包隊友）` });
     else parts.push({ text: '・沒有派隊友' });
   }
-  if (r.contrast && r.weight > 0) {
+  const contrastSets = r.contrast && r.weight > 0 ? onlyRedSets(r.contrast.union, r.contrast.weight, r.contrast.worlds) : null;
+  if (r.contrast && contrastSets) {
     const c = r.contrast;
     parts.push({
-      text: `・對照：改派 ${teamDigits(c.alternative)} 會跟 ${seatLabel(c.proposal.leaderSeat)} ${teamDigits(c.proposal.teamSeats)} ${gloss('打對邊')} → 兩次${gloss('都對')}時${sp(restText(c.union, c.weight, c.worlds))}（派 ${teamDigits(r.team)} 則是${sp(restText(c.yourUnion, c.yourWeight))}）`,
+      text: `・對照：改派 ${teamDigits(c.alternative)} 跟 ${seatLabel(c.proposal.leaderSeat)} ${teamDigits(c.proposal.teamSeats)} ${gloss('打對邊')} → 都對時${sp(onlyReds(contrastSets))}`,
       optional: true,
       priority: 4,
     });
@@ -836,30 +818,52 @@ function popcountMask(m: number): number {
   return seatsOfMask(m).length;
 }
 
-export const PROPOSE_FOOTER = '/區間 寫你的區間｜/下一步｜/公布｜/結束｜/模擬 說明';
-export const LOGIC_SEEN_LINE = '③ 邏輯與派票解讀跟這一題第一次 /派 的回覆一樣（還是同一個決定點）';
+/** /派 之後的指令列。 */
+export const PROPOSE_FOOTER = '/分析 看完整解讀｜/下一步｜/公布';
+/** /分析 之後的指令列。 */
+export const ANALYSIS_FOOTER = '/派 再派一次比較｜/下一步｜/公布';
 
-export function formatProposeFeedback(input: ProposeInput, extras: { sight: Sight; shown: PublicEvent[]; ownLakes?: { targetSeat: number; evil: boolean }[] }): string {
+export interface ProposeResultInput {
+  exerciseId: string;
+  team: number[];
+  /** 隊上的好人、紅數（真相）。 */
+  goods: number;
+  reds: number;
+  coAnswer?: boolean;
+}
+
+/** /派 的回覆（Edward 2026-11-16：「/派 之後直接顯示結果就好（派到幾好幾壞這樣）」）。 */
+export function formatProposeResult(input: ProposeResultInput): string {
+  const parts: ReplyPart[] = [];
+  if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
+  parts.push({ text: `【${input.exerciseId}】你派 ${teamDigits(input.team)}：${input.goods} 好 ${input.reds} 壞` });
+  parts.push({ text: PROPOSE_FOOTER });
+  return assembleReply(parts);
+}
+
+/** /分析 還沒有 /派 可以分析時。 */
+export function noAnalysisText(exerciseId: string): string {
+  return `${exerciseId}：這一次還沒 /派，先派再 /分析`;
+}
+
+/** /分析：這個決定點最後一次 /派 的完整解讀（①④③②，2026-11-16 以前是 /派 的回覆）。 */
+export function formatAnalysis(input: ProposeInput, extras: { sight: Sight; shown: PublicEvent[]; ownLakes?: { targetSeat: number; evil: boolean }[] }): string {
   const role = input.game.seatRoles[input.seat - 1];
   const parts: ReplyPart[] = [];
   if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
-  parts.push({ text: `【${input.exerciseId}・${seatLabel(input.seat)}${roleShort(role)}】你派 ${teamDigits(input.team)}` });
+  parts.push({ text: `【${input.exerciseId} 分析】你派 ${teamDigits(input.team)}` });
   parts.push({ text: realPlayerLine(input) });
   parts.push(...releaseLines(input.release, input.seat, input.ownInterval));
-  if (input.showLogic === false) parts.push({ text: LOGIC_SEEN_LINE });
-  else parts.push(...logicLines(input.logic, extras.sight, input.seat, extras.shown, role, input.decision.round));
+  parts.push(...logicLines(input.logic, extras.sight, input.seat, extras.shown, role, input.decision.round));
   // ② 的分布先省略（priority 7）；「跟你同樣派法」三方比較留久一點（priority 3）。
   humanLines(input).forEach((t, i) => parts.push({ text: t, optional: i > 0, priority: t.startsWith(LEAK_PREFIX) ? 3 : 7 }));
-  parts.push({ text: PROPOSE_FOOTER });
-  if (input.shared) parts.push({ text: sharedNote(input.platform) });
-  return assembleReply(parts, SIM_REPLY_MAX_CHARS, SIM_PROPOSE_SOFT_MAX_CHARS);
+  parts.push({ text: ANALYSIS_FOOTER });
+  return assembleReply(parts);
 }
 
 // ─── /區間 ────────────────────────────────────────────────────────────────
 
-export const INTERVAL_HEAD_NOTE = '這裡只用確定的資訊檢查有沒有矛盾，不判斷像不像（像不像要靠你讀派票，/公布 對答案）';
-
-/** 一組區間的白話：`7 8 9 裡有 2 紅`、`4 6 都是好人`。 */
+/** 一組區間的白話：`7 8 9 裡有 2 紅`、`4 6 都是好人`（/模擬 說明、測試用）。 */
 export function intervalGroupWords(g: IntervalGroup): string {
   const seats = seatList(g.seats);
   if (g.min === 0 && g.max === 0) return `${seats} 都是好人`;
@@ -867,54 +871,42 @@ export function intervalGroupWords(g: IntervalGroup): string {
   return `${seats} 裡有 ${redCount(g.min, g.max)}`;
 }
 
+/**
+ * /區間 的回覆（2026-11-16 精簡：拿掉「怎麼讀」和每組的白話重述）。純邏輯只檢查有沒有矛盾、留下幾種，
+ * 不判斷像不像（說明在 /模擬 說明）。
+ */
 export function formatInterval(exerciseId: string, ev: IntervalEval, model: SimBeliefModel, seat: number, coAnswer = false): string {
-  const lines: string[] = [];
-  let single = '';
-  for (const g of ev.groups) {
-    const name = formatIntervalGroup(g.group);
-    const head = `${name}（${intervalGroupWords(g.group)}）`;
-    let verdict: string;
+  void model;
+  const verdictOf = (g: IntervalEval['groups'][number]): string => {
     if (g.self && g.seats.length === 0) {
-      const you = g.self === 'good' ? '你是好人' : '你是紅';
-      verdict = `只寫了你自己（${seatLabel(seat)}，${you}）→ ${g.contradiction ? '跟你的身分矛盾' : '一定成立，沒有縮小範圍'}`;
-    } else {
-      let self = '';
-      if (g.self === 'good') self = `你是好人，所以等於 ${seatList(g.seats)} 裡有 ${redCount(g.min, g.max)} → `;
-      if (g.self === 'red') self = `你是紅，所以等於 ${seatList(g.seats)} 裡有 ${redCount(g.min, g.max)} → `;
-      if (g.contradiction === 'self') verdict = '跟你自己的身分矛盾';
-      else if (g.contradiction === 'sight') verdict = `${self}不可能（跟你看到的資訊矛盾）`;
-      else if (g.contradiction === 'mission') verdict = `${self}不可能（跟任務結果矛盾）`;
-      else verdict = `${self}可能，${ev.total} 種裡有 ${g.weight} 種符合`;
+      return `只寫了你自己（${seatLabel(seat)}）→ ${g.contradiction ? '跟你的身分矛盾' : '一定成立'}`;
     }
-    lines.push(`・${head}：${verdict}`);
-    single = `${name} ${verdict.replace(/^.*→ /u, '')}`;
-  }
-  let conclusion: string;
-  if (ev.groups.length >= 2) {
-    const anyBad = ev.groups.some((g) => g.contradiction);
-    if (ev.jointWeight > 0) {
-      const list = ev.jointWorlds.length <= 3 ? `（紅方只能是 ${ev.jointWorlds.map(maskDigits).join('、')}）` : '';
-      conclusion = `你寫的區間沒有矛盾，紅方可能的組合從 ${ev.total} 種縮到 ${ev.jointWeight} 種${list}`;
-      lines.push(`・全部一起：${ev.total} 種縮到 ${ev.jointWeight} 種${list}`);
-    } else {
-      conclusion = anyBad ? '有一組不可能，先改那一組' : '每一組單看都可能，但合起來互相矛盾';
-      lines.push(`・全部一起：不可能${anyBad ? '' : '（各組合起來互相矛盾）'}`);
-    }
-  } else {
-    conclusion = single;
-  }
+    const self = g.self ? `扣掉你等於 ${formatIntervalGroup({ seats: g.seats, min: g.min, max: g.max })}，` : '';
+    if (g.contradiction === 'self') return '跟你自己的身分矛盾';
+    if (g.contradiction === 'sight') return `${self}不可能（跟你看到的矛盾）`;
+    if (g.contradiction === 'mission') return `${self}不可能（跟任務結果矛盾）`;
+    return `${self}可能（${g.weight}/${ev.total} 種）`;
+  };
   const parts: ReplyPart[] = [];
   if (coAnswer) parts.push({ text: CO_ANSWER_MARK });
-  parts.push({ text: `【${exerciseId} 區間】結論：${conclusion}` });
-  parts.push({ text: `怎麼讀：${gloss('區間')}是你自己的判斷。${model.weighsBehaviour ? model.label : INTERVAL_HEAD_NOTE}` });
-  for (const l of lines) parts.push({ text: l });
-  parts.push({ text: '/派 作答（會照你的區間做最後檢查）｜/下一步｜/公布' });
+  if (ev.groups.length >= 2) {
+    let conclusion: string;
+    if (ev.jointWeight > 0) {
+      const list = ev.jointWorlds.length <= 3 ? `（紅方只能是 ${ev.jointWorlds.map(maskDigits).join('、')}）` : '';
+      conclusion = `沒有矛盾，${ev.total} 種縮到 ${ev.jointWeight} 種${list}`;
+    } else {
+      conclusion = ev.groups.some((g) => g.contradiction) ? '有一組不可能，先改那一組' : '每一組單看都可能，但合起來互相矛盾';
+    }
+    parts.push({ text: `【${exerciseId} 區間】${conclusion}` });
+    for (const g of ev.groups) parts.push({ text: `・${formatIntervalGroup(g.group)}：${verdictOf(g)}` });
+  } else if (ev.groups.length === 1) {
+    parts.push({ text: `【${exerciseId} 區間】${formatIntervalGroup(ev.groups[0].group)}：${verdictOf(ev.groups[0])}` });
+  }
+  parts.push({ text: '/派｜/下一步｜/公布' });
   return assembleReply(parts);
 }
 
 // ─── /下一步 ──────────────────────────────────────────────────────────────
-
-export const REPLAY_NOTE = '（之後照實際對局進行，你的答案不改變後面發生的事）';
 
 export interface NextInput {
   exerciseId: string;
@@ -926,34 +918,25 @@ export interface NextInput {
   next: ProposalEvent | null;
   /** 到下一次為止看得到的全部事件（算事實用）。 */
   shownAll: PublicEvent[];
-  showNote: boolean;
   platform: SimPlatform;
   coAnswer?: boolean;
 }
 
+/** /下一步（2026-11-16 精簡：拿掉「之後照實際對局進行」「怎麼讀」和作答的例子）。 */
 export function formatNext(input: NextInput): string {
   const parts: ReplyPart[] = [];
   if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
-  parts.push({ text: `【${input.exerciseId} 下一步】${input.showNote ? REPLAY_NOTE : ''}` });
+  parts.push({ text: `【${input.exerciseId} 下一步】` });
   parts.push({ text: codeBlock(eventLines(input.events, input.seat, input.game), input.platform) });
-  // 開題時還沒有派票（第 1 局第一個隊長）：第一次印出派票時講怎麼讀（+ -、任務的 o x）。
-  const before = input.shownAll.slice(0, input.shownAll.length - input.events.length);
-  const firstShown = input.events.find((e): e is ProposalEvent => e.kind === 'proposal');
-  if (firstShown && !before.some((e) => e.kind === 'proposal')) {
-    parts.push({ text: notationNote(firstShown, { quests: input.events.some((e) => e.kind === 'quest') }) });
-  }
-  if (input.events.some((e) => e.kind === 'proposal' && !e.votesReliable)) parts.push({ text: UNRELIABLE_NOTE, optional: true, priority: 2 });
   if (input.next) {
     parts.push({ text: decisionPrompt(input.next) });
-    // 只有出過失敗牌的任務有確定資訊（成功不代表全好）。
-    const facts = input.shownAll.filter((e): e is Extract<PublicEvent, { kind: 'quest' }> => e.kind === 'quest' && e.failCount > 0);
-    if (facts.length > 0) parts.push({ text: `・確定的事：${facts.map(missionFact).join('；')}`, optional: true, priority: 1 });
-    for (const line of answerHint(input.next)) parts.push({ text: line });
+    const facts = factsLine(input.shownAll);
+    if (facts) parts.push({ text: facts, optional: true, priority: 1 });
     parts.push({ text: ANSWER_FOOTER });
   } else {
     const fails = input.shownAll.filter((e) => e.kind === 'quest' && e.failed).length;
-    parts.push({ text: fails >= 3 ? '三紅：任務失敗三次，對局結束。' : '三藍：任務成功三次，接著是刺殺（誰被刺、結果在 /公布；v1 還不能練刺殺）。' });
-    parts.push({ text: '你在這局沒有下一次派票了。/公布 看角色和你的答案｜/結束' });
+    parts.push({ text: fails >= 3 ? '三紅，對局結束。' : '三藍，接著刺殺（結果看 /公布）。' });
+    parts.push({ text: '你這局沒有下一次派票了：/公布｜/結束' });
   }
   return assembleReply(parts);
 }
@@ -973,12 +956,14 @@ export interface RevealInput {
   intervalYours?: boolean;
   /** 區間是代答寫的：區間那一行標「（代答）」（跟上面分開：題主看代答寫的要標，代答者看題主寫的不標）。 */
   intervalByCoAnswer?: boolean;
-  /** 從開局到你最後一個決定點，看過的每一次派票。 */
-  proposals: ProposalEvent[];
+  /** 網站上這一局牌譜的連結（recordsIndex.ts）；沒有就附文字牌譜。 */
+  recordUrl?: string;
+  /** 刺殺題：你刺的座位（沒刺就是 null）。 */
+  kill?: { target: number | null; coAnswer?: boolean };
+  platform: SimPlatform;
   coAnswer?: boolean;
 }
 
-const ROLE_ORDER: Role[] = ['merlin', 'percival', 'mordred', 'morgana', 'assassin', 'oberon'];
 /** 百科的代碼順序：刺 娜 莫 奧 派 梅。 */
 const CODE_ORDER: Role[] = ['assassin', 'morgana', 'mordred', 'oberon', 'percival', 'merlin'];
 
@@ -989,37 +974,43 @@ export function roleCode(game: Pick<SimGame, 'seatRoles'>): string {
   }).join('');
 }
 
-function proposalVerdict(p: ProposalEvent, g: SimGame): string {
-  const role = g.seatRoles[p.leaderSeat - 1];
-  const reds = p.teamSeats.filter((s) => isRed(g.seatRoles[s - 1]));
-  const leaderRed = isRed(role);
-  let note: string;
-  if (reds.length === 0) note = leaderRed ? '0紅（隊長紅）' : '全好';
-  else note = `${reds.length}紅${leaderRed && p.teamSeats.includes(p.leaderSeat) ? '（含自己）' : ''}`;
-  return `${seatChar(p.leaderSeat)}${ROLE_CODE[role]} ${teamDigits(p.teamSeats)} ${note}`;
+/** 這局結果：三紅／三藍死（刺 N家，刺中梅林）／三藍活（刺 N家，沒刺中）。 */
+export function resultText(g: SimGame): string {
+  const fails = g.quests.filter((q) => q.failed).length;
+  if (fails >= 3) return '三紅';
+  if (g.winner === 'evil') return g.assassinTargetSeat ? `三藍死（刺 ${seatLabel(g.assassinTargetSeat)}，刺中梅林）` : '三藍死';
+  return g.assassinTargetSeat ? `三藍活（刺 ${seatLabel(g.assassinTargetSeat)}，沒刺中）` : '三藍活';
 }
 
+/**
+ * /公布（Edward 2026-11-16：「給牌局連結就好」）：角色代碼、你的答案（幾好幾壞）、區間對答案、結果，
+ * 加網站上這一局牌譜的連結；網站上沒有這一局（試算表裡比 DC 論壇早、或沒貼到論壇）就附文字牌譜。
+ */
 export function formatReveal(input: RevealInput): string {
   const g = input.game;
   const redMask = maskOf(g.seatRoles.map((r, i) => (isRed(r) ? i + 1 : 0)).filter(Boolean));
-  const roleSeat = (r: Role): number => g.seatRoles.indexOf(r) + 1;
   const parts: ReplyPart[] = [];
   if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
   parts.push({ text: `【${input.exerciseId} 公布】你是 ${seatLabel(input.seat)}・${ROLE_ZH[g.seatRoles[input.seat - 1]]}` });
-  const loyal = g.seatRoles.map((r, i) => (r === 'loyal' ? i + 1 : 0)).filter(Boolean);
-  parts.push({ text: `角色：${ROLE_ORDER.map((r) => `${ROLE_ZH[r]}${seatChar(roleSeat(r))}`).join(' ')}；忠臣 ${seatList(loyal)}（${roleCode(g)}）` });
-  parts.push({ text: `紅：${seatList(seatsOfMask(redMask))}` });
+  parts.push({ text: `${roleCode(g)}（紅 ${seatList(seatsOfMask(redMask))}）` });
 
   const viewerRed = isRed(g.seatRoles[input.seat - 1]);
   // 有代答派的（或這次是代答）就寫「這題的派票」：不全是看這則回覆的人派的。
   const mixed = input.coAnswer || input.answers.some((a) => a.teams.some((t) => t.coAnswer));
-  if (input.answers.length > 0) {
+  const merlin = g.seatRoles.indexOf('merlin') + 1;
+  if (input.kill) {
+    const t = input.kill.target;
+    const who = input.coAnswer || input.kill.coAnswer ? '這題' : '你';
+    if (t === null) parts.push({ text: `${who}沒有刺（梅林 ${seatLabel(merlin)}）` });
+    else parts.push({ text: `${who}刺 ${seatLabel(t)}${input.kill.coAnswer ? CO_ANSWER_TAG : ''}：${t === merlin ? '刺中梅林 ✓' : `沒刺中 ✗（梅林 ${seatLabel(merlin)}）`}` });
+    if (g.assassinTargetSeat) parts.push({ text: `當時真人刺 ${seatLabel(g.assassinTargetSeat)}（${g.assassinTargetSeat === merlin ? '刺中' : '沒刺中'}）` });
+  } else if (input.answers.length > 0) {
     const items = input.answers.map(({ decision, teams }) => {
       const label = input.answers.length > 1 ? `第 ${decision.round} 局 ` : '';
       const each = teams.map(({ team, coAnswer }) => {
         const reds = team.filter((s) => isRed(g.seatRoles[s - 1]));
         const mark = viewerRed ? '' : reds.length === 0 ? '✓' : '✗';
-        return `${teamDigits(team)}${coAnswer ? CO_ANSWER_TAG : ''}：${reds.length} 紅${reds.length ? `（${seatList(reds)}）` : ''}${mark}`;
+        return `${teamDigits(team)}${coAnswer ? CO_ANSWER_TAG : ''} ${team.length - reds.length} 好 ${reds.length} 壞${mark}`;
       });
       return `${label}${each.join('、')}`;
     });
@@ -1029,32 +1020,23 @@ export function formatReveal(input: RevealInput): string {
   }
   if (input.interval && input.interval.length > 0) {
     const yours = input.intervalYours !== false;
-    const items = input.interval.map((grp) => {
-      const reds = grp.seats.filter((s) => isRed(g.seatRoles[s - 1]));
-      return `${formatIntervalGroup(grp)} ${intervalGroupTrue(grp, redMask) ? '✓' : '✗'}（${reds.length ? `紅 ${seatList(reds)}` : '0 紅'}）`;
-    });
-    parts.push({ text: `區間${input.intervalByCoAnswer ? CO_ANSWER_TAG : ''}：${items.join('、')}` });
+    const items = input.interval.map((grp) => `${formatIntervalGroup(grp)} ${intervalGroupTrue(grp, redMask) ? '✓' : '✗'}`);
+    let tail = '';
     if (input.intervalWorlds) {
       const kept = input.intervalWorlds.includes(redMask);
       const whose = yours ? '你的區間' : intervalOwnerWords(false);
-      parts.push({ text: kept ? `・真正的紅方在${whose}留下的 ${input.intervalWorlds.length} 種裡 ✓` : `・真正的紅方不在${whose}留下的組合裡 ✗` });
+      tail = kept ? `；真正的紅方在${whose}留下的 ${input.intervalWorlds.length} 種裡 ✓` : `；真正的紅方不在${whose}留下的組合裡 ✗`;
     }
+    parts.push({ text: `區間${input.intervalByCoAnswer ? CO_ANSWER_TAG : ''}：${items.join('、')}${tail}` });
   }
-  if (input.proposals.length > 0) {
-    parts.push({ text: '派票對答案（座位＋角色、隊伍、隊上幾紅）：', optional: true, priority: 1 });
-    const rounds = [...new Set(input.proposals.map((p) => p.round))];
-    for (const r of rounds) {
-      const items = input.proposals.filter((p) => p.round === r).map((p) => proposalVerdict(p, g));
-      parts.push({ text: `第 ${r} 局：${items.join('、')}`, optional: true, priority: 1 });
-    }
+  if (!input.kill) parts.push({ text: `結果：${resultText(g)}` });
+  if (input.recordUrl) {
+    parts.push({ text: `完整牌譜：${input.recordUrl}` });
+  } else {
+    parts.push({ text: '完整牌譜（網站上沒有這一局）：' });
+    parts.push({ text: codeBlock(serialiseRecord(g as ReplayGame).split('\n'), input.platform) });
   }
-  const fails = g.quests.filter((q) => q.failed).length;
-  let result: string;
-  if (fails >= 3) result = '三紅';
-  else if (g.winner === 'evil') result = g.assassinTargetSeat ? `三藍死（刺 ${seatLabel(g.assassinTargetSeat)}，刺中梅林）` : '三藍死';
-  else result = g.assassinTargetSeat ? `三藍活（刺 ${seatLabel(g.assassinTargetSeat)}，沒刺中）` : '三藍活';
-  parts.push({ text: `這局結果：${result}` });
-  parts.push({ text: '再來一題：/模擬' });
+  parts.push({ text: '/模擬 再來一題' });
   return assembleReply(parts);
 }
 
@@ -1063,16 +1045,30 @@ export function formatReveal(input: RevealInput): string {
 export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（太久沒動作、開了別的題或伺服器重新啟動都會結束）。輸入 /模擬 開一題，/模擬 說明 看全部指令';
 export const BANK_NOT_READY_TEXT = '模擬瓦題庫還沒準備好，請稍後再試。';
 export const RATE_LIMITED_TEXT = '模擬指令太頻繁了，10 分鐘後再試。';
-export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 題 題號｜/模擬 說明';
+export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題 題號｜/模擬 說明';
 export const PROPOSE_USAGE = '用法：/派 加座位，例如 /派 469 = 派 4、6、9家（0 家寫 0；4 6 9、4,6,9 也可以）';
+export const ASSASSINATE_USAGE = '用法：/刺 座位，例如 /刺 3（0 家寫 0）';
 export const INTERVAL_USAGE = '用法：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅（也可以 7 8 9 *2、12=1-2、1 5 9 *1+、3 紅、5=好；各組可以重疊）';
 
 /** 說明的第一行（兩個平台一樣）。 */
 const HELP_TITLE = '🧩 模擬瓦指令（真人對局停在某一家要派票的當下，換你來派，看你的派票放出什麼資訊）';
 const HELP_PROPOSE_WORDS = '作答：派 4、6、9家（0 家寫 0；人數要對，可以派好幾次比較）';
 const HELP_INTERVAL_WORDS = '（選填）寫你覺得哪幾個座位裡有幾個紅：7 8 9 裡 2 紅、4 6 0 裡 1 紅';
-const HELP_NEXT = '/下一步\u3000照實際對局走到你下一次派票（還沒作答也可以跳過）';
+const HELP_NEXT = '/下一步\u3000照實際對局走到你下一次派票（可以跳過；不改變後面發生的事）';
 const HELP_END = '/結束\u3000不公布，直接結束';
+const HELP_ANALYSIS_WORDS = '剛剛那次 /派 的完整解讀（真人怎麼派、你放出的資訊、邏輯、同位置真人）';
+const HELP_MID_WORDS = '從那一局第 5 次（尾派）或第 5 局開始，坐那次的隊長（3-5 只出第 2 局失敗的；可以加角色、座位）';
+const HELP_KILL_WORDS = '刺殺題：你是刺客，看完整局後 /刺 座位';
+const HELP_TODAY_WORDS = '每週主題：一刺殺 二派西 三1-5 四1-5接3-5 五2-5 六2-5接4-5 日第5局';
+
+/** 牌譜怎麼讀和術語（2026-11-16 起回覆裡不再重複解釋，集中在說明）。 */
+const HELP_GLOSSARY = [
+  '牌譜：「1家 460 1+」= 1家派 4、6、0家；+ 隊外投贊成、- 隊內投反對，其他照隊內贊成隊外反對；任務 o 成功 x 失敗；（票沒記全）= 票記號跟結果對不上',
+  '術語：區間＝哪幾個座位裡有幾個紅｜都對＝兩次派票的人全是好人｜不能都對＝兩次不可能同時全好｜只剩紅＝紅方只能是這幾個'
+    + '｜延伸＝有 2 人以上一樣｜部分＝只有 1 人一樣｜打對邊＝完全沒有一樣｜騎牆＝兩邊各挑人｜回選＝把前面的隊長派進隊'
+    + '｜拆車＝上一局任務隊只留一部分｜全換＝全部換掉｜外撒＝上一局任務隊加別人｜原隊＝照上一局任務隊再派',
+  '/區間 只用確定的資訊檢查有沒有矛盾、留下幾種，不判斷像不像（像不像靠你讀派票，/公布 對答案）',
+];
 
 /**
  * LINE 的 /模擬 說明（/模擬 幫助、/模擬 指令、/模擬 ?）和只回模擬的 LINE 練習群（SIM_LINE_GROUP_IDS）裡的 /指令：
@@ -1080,33 +1076,41 @@ const HELP_END = '/結束\u3000不公布，直接結束';
  */
 export const SIM_HELP_TEXT = [
   HELP_TITLE,
-  '/模擬\u3000隨機開一題（第 1 局、2～5 家、任何角色）',
+  '/模擬\u3000隨機開一題（第 1 局 2～5 家、任何角色；偶爾 2-5、3-5）',
   '/模擬 角色 座位\u3000指定角色或座位，例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅',
+  `/模擬 1-5～4-5、/模擬 5局\u3000${HELP_MID_WORDS}`,
+  `/模擬 刺殺\u3000${HELP_KILL_WORDS}（/刺 3）`,
+  `/模擬 今天\u3000${HELP_TODAY_WORDS}`,
   '/模擬 題 題號\u3000做指定的題目，例：/模擬 題 K7Q2M-4（大家可以做同一題）',
-  `/派 469\u3000${HELP_PROPOSE_WORDS}`,
+  `/派 469\u3000${HELP_PROPOSE_WORDS}；回幾好幾壞`,
+  `/分析\u3000${HELP_ANALYSIS_WORDS}`,
   `/區間 789=2 460=1\u3000${HELP_INTERVAL_WORDS}`,
   HELP_NEXT,
-  '/公布\u3000公布角色、對答案，這題結束（也可以打 /解答）',
+  '/公布\u3000公布角色、對答案、附這一局的完整牌譜，這題結束（也可以打 /解答）',
   HELP_END,
   '/模擬 說明\u3000這份說明（/模擬 幫助、/模擬 指令、/模擬 ? 也可以）',
-  '群組裡自己沒開題的人也可以幫忙答群組裡最新開的一題（/派 /區間 /下一步 /公布 /結束），回覆會標「代答」；'
+  '群組裡自己沒開題的人也可以幫忙答群組裡最新開的一題（/派 /分析 /區間 /下一步 /公布 /結束），回覆會標「代答」；'
     + '誰打 /公布 或 /結束 都會結束那一題。1 對 1 聊天沒有代答。',
+  ...HELP_GLOSSARY,
 ].join('\n');
 
 /** Discord 的 /模擬 說明:True：跟 slash 指令的選項名一樣（角色、座位、題號、隊伍、內容）；Discord 沒有 /解答。 */
 export const SIM_HELP_TEXT_DISCORD = [
   HELP_TITLE,
-  `/${COMMANDS.SIM}\u3000隨機開一題（第 1 局、2～5 家、任何角色）`,
+  `/${COMMANDS.SIM}\u3000隨機開一題（第 1 局 2～5 家、任何角色；偶爾 2-5、3-5）`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2\u3000指定角色或座位（可以只選一個；${SIM_OPTIONS.ROLE}選 紅／藍 = 隨機紅方／藍方角色）`,
+  `/${COMMANDS.SIM} ${SIM_OPTIONS.STAGE}:3-5\u3000${HELP_MID_WORDS}；局面:刺殺 = ${HELP_KILL_WORDS}（/${COMMANDS.SIM_ASSASSINATE} ${SIM_OPTIONS.SEAT}:3）；局面:今天 = ${HELP_TODAY_WORDS}`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4\u3000做指定的題目（大家可以做同一題）`,
-  `/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469\u3000${HELP_PROPOSE_WORDS}`,
+  `/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469\u3000${HELP_PROPOSE_WORDS}；回幾好幾壞`,
+  `/${COMMANDS.SIM_ANALYSIS}\u3000${HELP_ANALYSIS_WORDS}`,
   `/${COMMANDS.SIM_INTERVAL} ${SIM_OPTIONS.CONTENT}:789=2 460=1\u3000${HELP_INTERVAL_WORDS}`,
   HELP_NEXT,
-  `/${COMMANDS.SIM_REVEAL}\u3000公布角色、對答案，這題結束`,
+  `/${COMMANDS.SIM_REVEAL}\u3000公布角色、對答案、附這一局的完整牌譜，這題結束`,
   HELP_END,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True\u3000這份說明`,
-  '回覆公開的頻道裡，自己沒開題的人也可以幫忙答頻道裡最新開的一題（/派 /區間 /下一步 /公布 /結束），回覆會標「代答」；'
+  '回覆公開的頻道裡，自己沒開題的人也可以幫忙答頻道裡最新開的一題（/派 /分析 /區間 /下一步 /公布 /結束），回覆會標「代答」；'
     + '誰打 /公布 或 /結束 都會結束那一題。只有自己看得到回覆的頻道沒有代答。',
+  ...HELP_GLOSSARY,
 ].join('\n');
 
 /** 這個平台的 /模擬 說明。 */
@@ -1114,8 +1118,8 @@ export function simHelpText(platform: SimPlatform): string {
   return platform === 'discord' ? SIM_HELP_TEXT_DISCORD : SIM_HELP_TEXT;
 }
 
-export function usageText(command: 'start' | 'propose' | 'interval', problem?: string): string {
-  const usage = command === 'start' ? START_USAGE : command === 'propose' ? PROPOSE_USAGE : INTERVAL_USAGE;
+export function usageText(command: 'start' | 'propose' | 'interval' | 'assassinate', problem?: string): string {
+  const usage = command === 'start' ? START_USAGE : command === 'propose' ? PROPOSE_USAGE : command === 'assassinate' ? ASSASSINATE_USAGE : INTERVAL_USAGE;
   return problem ? `${problem}\n${usage}` : usage;
 }
 
@@ -1143,7 +1147,22 @@ export function thinPoolText(role: Role, seat: number, n: number, available: rea
 }
 
 export function unknownIdText(): string {
-  return '找不到這個題號。題號長得像 K7Q2M-4（題庫代號-座位）。';
+  return '找不到這個題號。題號長得像 K7Q2M-4（題庫代號-座位）或 K7Q2M-3-5（題庫代號-局-次）。';
+}
+
+/** 指定的題號（局-次）那一局沒有那一次派票。 */
+export function noStageText(round: number, attempt: number): string {
+  return `這一局沒有第 ${round} 局第 ${attempt} 次派票，換一題吧。`;
+}
+
+/** /模擬 1-5～4-5、5局 找不到符合的題目。 */
+export function noMidText(round: number): string {
+  const what = round === 5 ? '第 5 局' : `${round}-5`;
+  return `題庫裡沒有符合的${what}題目${round === 3 ? '（3-5 只出第 2 局任務失敗的局）' : ''}，換個角色或座位試試。`;
+}
+
+export function noAssassinText(): string {
+  return '這一局沒有刺殺（不是三藍、或沒記刺殺），換一題吧。';
 }
 
 export function noDecisionText(seat: number): string {

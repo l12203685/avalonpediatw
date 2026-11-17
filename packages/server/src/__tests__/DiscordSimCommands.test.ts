@@ -1,5 +1,5 @@
 /**
- * 模擬瓦 on Discord (2026-10-14): the six slash commands /模擬 /派 /區間 /下一步 /公布 /結束.
+ * 模擬瓦 on Discord (2026-10-14): the seven slash commands /模擬 /派 /分析 /區間 /下一步 /公布 /結束.
  *
  *   - registered next to the stats commands, discord.js builder validation offline (21 commands);
  *   - every handler defers, then edits the reply with mentions off; the step is applied only after
@@ -102,17 +102,21 @@ afterEach(() => {
 });
 
 describe('registration', () => {
-  it('six 模擬 commands pass discord.js validation; 25 commands in all (incl. /機器人補位, /待修正, /回報, /認領)', () => {
+  it('eight 模擬 commands (incl. /分析 and /刺, 2026-11-16) pass discord.js validation; 27 commands in all (incl. /機器人補位, /待修正, /回報, /認領)', () => {
     const json = buildSlashCommands().map((c) => c.toJSON());
-    expect(json).toHaveLength(25);
+    expect(json).toHaveLength(27);
     const names = json.map((c) => c.name);
-    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '區間', '下一步', '公布', '結束', '戰績', '排行', '默契', '意見', 'help']));
+    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '分析', '刺', 'assassinate', '區間', '下一步', '公布', '結束', '戰績', '排行', '默契', '意見', 'help']));
+    expect(new Set(names).size).toBe(names.length);
     for (const c of json) {
       expect(c.name.length).toBeLessThanOrEqual(32);
       expect(c.description.length).toBeLessThanOrEqual(100);
     }
     const sim = json.find((c) => c.name === COMMANDS.SIM);
-    expect(sim?.options?.map((o) => [o.name, o.required ?? false])).toEqual([[SIM_OPTIONS.ROLE, false], [SIM_OPTIONS.SEAT, false], [SIM_OPTIONS.ID, false], [SIM_OPTIONS.HELP, false]]);
+    expect(sim?.options?.map((o) => [o.name, o.required ?? false])).toEqual([[SIM_OPTIONS.ROLE, false], [SIM_OPTIONS.SEAT, false], [SIM_OPTIONS.STAGE, false], [SIM_OPTIONS.ID, false], [SIM_OPTIONS.HELP, false]]);
+    const stage = sim?.options?.[2] as { choices?: { name: string; value: string }[] };
+    expect(stage.choices?.map((c) => c.value)).toEqual(['1-5', '2-5', '3-5', '4-5', '5局', '刺殺', '今天']);
+    expect(json.find((c) => c.name === COMMANDS.SIM_ASSASSINATE)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.SEAT, required: true })]);
     const role = sim?.options?.[0] as { choices?: { name: string; value: string }[] };
     expect(role.choices?.map((c) => c.value)).toEqual([...SIM_ROLE_CHOICES]);
     const seat = sim?.options?.[1] as { min_value?: number; max_value?: number };
@@ -129,7 +133,7 @@ describe('registration', () => {
     };
     const field = (await helpFields()).find((f) => f.name.includes('模擬瓦'));
     expect(field?.value).toContain('/模擬 [角色] [座位]');
-    expect(field?.value).toContain('/派 /區間 /下一步 /公布 /結束');
+    expect(field?.value).toContain('/派 /分析 /區間 /下一步 /公布 /結束');
     expect(field?.value).toContain('/模擬 說明:True');
     expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]\u3000模擬瓦：練派票資訊的釋放與解讀');
     expect(formatStatsHelp('line')).toContain('/模擬 說明 看全部指令');
@@ -160,6 +164,17 @@ describe('options → command', () => {
     expect(m(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '４ ６ ０' })).toEqual({ kind: 'propose', team: [4, 6, 10] });
     expect(m(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '7 8 9 *2' })).toEqual({ kind: 'interval', groups: [{ seats: [7, 8, 9], min: 2, max: 2 }] });
     expect(m(COMMANDS.SIM_NEXT)).toEqual({ kind: 'next' });
+    expect(m(COMMANDS.SIM_ANALYSIS)).toEqual({ kind: 'analyze' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '3-5', [SIM_OPTIONS.ROLE]: '梅林' })).toEqual({ kind: 'start', role: 'merlin', midRound: 3 });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '4-5' })).toEqual({ kind: 'start', midRound: 4 });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '5局', [SIM_OPTIONS.SEAT]: 7 })).toEqual({ kind: 'start', seat: 7, midRound: 5 });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '刺殺' })).toEqual({ kind: 'start', special: 'assassin' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '今天' })).toEqual({ kind: 'start', special: 'today' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '今天', [SIM_OPTIONS.ROLE]: '梅林' })).toEqual({ kind: 'usage', command: 'start' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.STAGE]: '6-5' })).toEqual({ kind: 'usage', command: 'start' });
+    expect(m(COMMANDS.SIM_ASSASSINATE, { [SIM_OPTIONS.SEAT]: 0 })).toEqual({ kind: 'assassinate', seat: 10 });
+    expect(m(COMMANDS.SIM_ASSASSINATE, { [SIM_OPTIONS.SEAT]: 3 })).toEqual({ kind: 'assassinate', seat: 3 });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'w0001-2-5' })).toEqual({ kind: 'start', exerciseId: 'W0001-2-5' });
     expect(m(COMMANDS.SIM_REVEAL)).toEqual({ kind: 'reveal' });
     expect(m(COMMANDS.SIM_END)).toEqual({ kind: 'end' });
   });
@@ -171,13 +186,17 @@ describe('handlers', () => {
     await handleSimCommand(it1 as never);
     expect(it1.deferReply.mock.calls[0][0]).toBeUndefined(); // public, like /戰績
     const start = content(it1).content;
-    expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣（沒有額外資訊）');
-    expect(start).toContain('```\n1家 460 1+\n2家 279\n3家 370\n```');
+    expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣\n');
+    expect(start).toContain('```\n第 1 局：\n1家 460 1+\n2家 279\n3家 370\n```');
 
-    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toContain('① 當時真人怎麼派：4家 派 469（跟你一樣）→ 被否決');
-    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('・789=2（7 8 9 裡有 2 紅）：可能，126 種裡有 45 種符合');
-    expect(await run(COMMANDS.SIM_NEXT)).toContain('輪到你派 4 人（第 3 局第 4 次）。');
-    expect(await run(COMMANDS.SIM_REVEAL)).toContain('角色：梅林1 派西維爾2 莫德雷德3 莫甘娜5 刺客7 奧伯倫9；忠臣 4 6 8 0');
+    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toBe('【W0000-4】你派 469：2 好 1 壞\n/分析 看完整解讀｜/下一步｜/公布');
+    expect(await run(COMMANDS.SIM_ANALYSIS)).toContain('① 真人：4家 派 469（跟你一樣）→ 被否決');
+    expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('【W0000-4 區間】789=2：可能（45/126 種）');
+    expect(await run(COMMANDS.SIM_NEXT)).toContain('輪到你派 4 人（第 3 局第 4 次）');
+    const reveal = await run(COMMANDS.SIM_REVEAL);
+    expect(reveal).toContain('刺7娜5莫3奧9派2梅1（紅 3 5 7 9）');
+    // 網站上沒有這一局：文字牌譜放在 code block。
+    expect(reveal).toContain('完整牌譜（網站上沒有這一局）：\n```\n460 1+\n');
     expect(await run(COMMANDS.SIM_END)).toBe(NO_SESSION_TEXT);
     expect(engine.counts.started.discord).toBe(1);
   });
@@ -197,10 +216,8 @@ describe('handlers', () => {
     expect(start.split('\n').at(-1)).toBe(sharedNote('discord'));
     expect(sharedNote('discord')).toContain('頻道裡');
     const co = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-1', 'b');
-    expect(co.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4・4家忠臣】你派 469']);
-    expect(co.split('\n').at(-1)).toBe(sharedNote('discord'));
+    expect(co.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞', '/分析 看完整解讀｜/下一步｜/公布']);
     expect(co).not.toContain('u-1');
-    expect(co.length).toBeLessThanOrEqual(900);
     // A malformed /派 from someone without an exercise is answered with the usage only (never a co-answer).
     const bad = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' }, 'CH-1', 'b');
     expect(bad).toContain('用法：/派');
@@ -322,7 +339,7 @@ describe('handlers', () => {
     const mirror = { ingestInbound: (m: unknown) => { ingested.push(m); return null; } };
     const outcome = await handleDiscordMirrorMessage(
       {
-        id: 'b1', channelId: 'SYNC', content: '【模擬瓦 W0000-4】你是 4家・忠臣（沒有額外資訊）', webhookId: null,
+        id: 'b1', channelId: 'SYNC', content: '【模擬瓦 W0000-4】你是 4家・忠臣', webhookId: null,
         author: { id: 'bot', bot: true, username: 'avalon-bot' }, member: null, attachments: null, stickers: null,
       },
       { targetChannelId: 'SYNC', mirror: mirror as never },

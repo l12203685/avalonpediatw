@@ -174,6 +174,8 @@ describe('/區間', () => {
 describe('the other commands and plain chat', () => {
   it.each([
     ['/下一步', { kind: 'next' }],
+    ['/分析', { kind: 'analyze' }],
+    ['／ 分析', { kind: 'analyze' }],
     ['/公布', { kind: 'reveal' }],
     ['/解答', { kind: 'reveal' }],
     ['/結束', { kind: 'end' }],
@@ -182,7 +184,7 @@ describe('the other commands and plain chat', () => {
     expect(parseSimCommand(text)).toEqual(expected);
   });
 
-  it.each(['/結束了嗎', '/公布欄', '/下一步吧', 'hello', '派 469', '模擬', '469', '/戰績 某人', '/意見 想要模擬', '/help', ''])(
+  it.each(['/結束了嗎', '/公布欄', '/下一步吧', '/分析一下', '/分析師', '/刺客', '/刺殺梅林吧', '/刺', 'hello', '派 469', '模擬', '469', '/戰績 某人', '/意見 想要模擬', '/help', ''])(
     'not a 模擬 command: %j',
     (text) => {
       expect(parseSimCommand(text)).toBeNull();
@@ -194,6 +196,7 @@ describe('the other commands and plain chat', () => {
     expect(isTypedCommand('/ 派 469')).toBe(true);
     expect(isTypedCommand('／ 模擬')).toBe(true);
     expect(SIM_COMMAND_RE.test('/ 區間 789=2')).toBe(true);
+    expect(isTypedCommand('/分析')).toBe(true);
   });
 
   it('role words and exercise ids', () => {
@@ -202,6 +205,41 @@ describe('the other commands and plain chat', () => {
     expect(parseRoleChoice('路人')).toBeNull();
     expect(normalizeExerciseId('n35hj-0')).toBe('N35HJ-0');
     expect(normalizeExerciseId('N35HJ')).toBeNull();
+    // 2026-11-16：題庫代號-局-次（從那一局那一次開始）。
+    expect(normalizeExerciseId('n35hj-3-5')).toBe('N35HJ-3-5');
+    expect(normalizeExerciseId('N35HJ-6-5')).toBeNull();
+    expect(normalizeExerciseId('N35HJ-3-5-1')).toBeNull();
+    expect(parseSimCommand('/刺 3 5')).toMatchObject({ kind: 'usage', command: 'assassinate' });
+  });
+
+  it.each([
+    ['/模擬 3-5', { kind: 'start', midRound: 3 }],
+    ['/模擬 2-5', { kind: 'start', midRound: 2 }],
+    ['/模擬 3－5', { kind: 'start', midRound: 3 }],
+    ['/模擬 3 - 5 梅林', { kind: 'start', midRound: 3, role: 'merlin' }],
+    ['/模擬 梅林 3-5', { kind: 'start', midRound: 3, role: 'merlin' }],
+    ['/模擬 2-5 忠臣 0', { kind: 'start', midRound: 2, role: 'loyal', seat: 10 }],
+    ['/模擬 題 K7Q2M-3-5', { kind: 'start', exerciseId: 'K7Q2M-3-5' }],
+    ['/模擬 K7Q2M-2-5', { kind: 'start', exerciseId: 'K7Q2M-2-5' }],
+    ['/模擬 1-5', { kind: 'start', midRound: 1 }],
+    ['/模擬 4-5 派西', { kind: 'start', midRound: 4, role: 'percival' }],
+    ['/模擬 5局', { kind: 'start', midRound: 5 }],
+    ['/模擬 第五局 梅林', { kind: 'start', midRound: 5, role: 'merlin' }],
+    ['/模擬 第 5 局', { kind: 'start', midRound: 5 }],
+    ['/模擬 刺殺', { kind: 'start', special: 'assassin' }],
+    ['/模擬 今天', { kind: 'start', special: 'today' }],
+    ['/模擬 題 k7q2m-a', { kind: 'start', exerciseId: 'K7Q2M-A' }],
+    ['/模擬 刺', { kind: 'start', role: 'assassin' }],
+    ['/刺 3', { kind: 'assassinate', seat: 3 }],
+    ['/刺0', { kind: 'assassinate', seat: 10 }],
+    ['／刺 １０', { kind: 'assassinate', seat: 10 }],
+    ['/刺殺 4', { kind: 'assassinate', seat: 4 }],
+  ])('局面、刺殺、今天: %s', (text, expected) => {
+    expect(parseSimCommand(text)).toEqual(expected);
+  });
+
+  it.each(['/模擬 6-5', '/模擬 3-5 3-5', '/模擬 3-5 梅林 派西', '/模擬 刺殺 7', '/模擬 今天 梅林', '/模擬 3-5 刺殺'])('局面 usage: %s', (text) => {
+    expect(parseSimCommand(text)).toMatchObject({ kind: 'usage', command: 'start' });
   });
 
   it('the reply budget is the stats one (1800, under Discord 2000 and LINE 5000)', () => {

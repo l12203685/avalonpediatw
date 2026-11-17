@@ -1,5 +1,5 @@
 /**
- * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /區間 /下一步 /公布 /結束。
+ * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /分析 /刺 /區間 /下一步 /公布 /結束。
  *
  * 跟 LINE 同一個引擎、同一套文字（/模擬 說明 有 Discord 版）。session key = discord:頻道:使用者。
  * 每個指令先 defer，再 editReply（allowedMentions 全關；回覆不回顯使用者打的字）。
@@ -40,7 +40,16 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
       const role = roleRaw ? parseRoleChoice(roleRaw) : null;
       if (roleRaw && !role) return { kind: 'usage', command: 'start' };
       if (seat !== null && seat !== undefined && (seat < 1 || seat > 10)) return { kind: 'usage', command: 'start' };
-      return { kind: 'start', ...(role ? { role } : {}), ...(seat ? { seat } : {}) };
+      // 局面:2-5／3-5（2026-11-16）：從那一局第 5 次派票開始。
+      const stageRaw = opts.getString(SIM_OPTIONS.STAGE, false)?.normalize('NFKC').trim();
+      if (stageRaw === '刺殺' || stageRaw === '今天') {
+        if (role || seat) return { kind: 'usage', command: 'start' };
+        return { kind: 'start', special: stageRaw === '刺殺' ? 'assassin' : 'today' };
+      }
+      const stage = stageRaw ? /^(?:([1-4])-5|(5)局)$/.exec(stageRaw) : null;
+      if (stageRaw && !stage) return { kind: 'usage', command: 'start' };
+      const midRound = stage ? Number(stage[1] ?? stage[2]) : undefined;
+      return { kind: 'start', ...(role ? { role } : {}), ...(seat ? { seat } : {}), ...(midRound ? { midRound } : {}) };
     }
     case COMMANDS.SIM_PROPOSE: {
       const r = parseTeam(opts.getString(SIM_OPTIONS.TEAM, true) ?? '');
@@ -52,6 +61,15 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
     }
     case COMMANDS.SIM_NEXT:
       return { kind: 'next' };
+    case COMMANDS.SIM_ANALYSIS:
+      return { kind: 'analyze' };
+    case COMMANDS.SIM_ASSASSINATE: {
+      const raw = opts.getInteger(SIM_OPTIONS.SEAT, true);
+      const target = raw === 0 ? 10 : raw;
+      return target !== null && target !== undefined && target >= 1 && target <= 10
+        ? { kind: 'assassinate', seat: target }
+        : { kind: 'usage', command: 'assassinate' };
+    }
     case COMMANDS.SIM_REVEAL:
       return { kind: 'reveal' };
     case COMMANDS.SIM_END:

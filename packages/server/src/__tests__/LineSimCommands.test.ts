@@ -1,5 +1,5 @@
 /**
- * 模擬瓦 on LINE (2026-10-14): /模擬 /派 /區間 /下一步 /公布 /結束, wired like /戰績.
+ * 模擬瓦 on LINE (2026-10-14): /模擬 /派 /分析 /區間 /下一步 /公布 /結束, wired like /戰績.
  *
  *   - mirror group: the command text is mirrored (Discord + lobby) like any text, the answer is not;
  *     the answer takes slot 1 of the reply_token (quoting the command) and 4 slots drain the queue;
@@ -185,7 +185,7 @@ describe('mirror group', () => {
 
     expect(h.replies).toHaveLength(1);
     const [lead, ...rest] = h.replies[0].messages;
-    expect(lead.text.split('\n')[0]).toBe('【模擬瓦 W0000-4】你是 4家・忠臣（沒有額外資訊）');
+    expect(lead.text.split('\n')[0]).toBe('【模擬瓦 W0000-4】你是 4家・忠臣');
     expect(lead.quoteToken).toBe('q-m1');
     expect(lead.quickReply).toBeUndefined(); // never in groups (the last slot is a mirror line)
     expect(rest.map((m) => bodyOf(m.text))).toEqual(['msg0', 'msg1', 'msg2', 'msg3']);
@@ -227,7 +227,7 @@ describe('mirror group', () => {
     expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
     // Still at the R3 decision: the next step goes to the end of the game.
     await deliver(h, groupText('/下一步', 'm3', 'rt3'));
-    expect(h.replies.at(-1)?.messages[0].text).toContain('三藍：任務成功三次');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('三藍，接著刺殺');
   });
 
   it('a redelivery still drains the mirror queue on its reply_token (no 模擬 answer in slot 1)', async () => {
@@ -340,14 +340,14 @@ describe('mirror group', () => {
     const fromU2 = { ...groupText(typed('/派 469'), 'k2', 'rk2'), source: { type: 'group', groupId: GROUP, userId: 'U2' } };
     await deliver(h, fromU2);
     const answer = h.replies.at(-1)?.messages[0].text ?? '';
-    expect(answer.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4・4家忠臣】你派 469']);
+    expect(answer.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞']);
     expect(answer).not.toMatch(/U1|U2|LineUser/u); // nobody is named
     expect(h.replies.at(-1)?.messages[0].quoteToken).toBe('q-k2');
     // A co-answer is a follow-up of an open exercise: not mirrored (SIM_MIRROR_FOLLOWUPS off).
     expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
     // The owner continues on the same exercise (now answered); the co-answered /派 is marked in the listing.
     await deliver(h, groupText('/公布', 'k3', 'rk3'));
-    expect(h.replies.at(-1)?.messages[0].text).toContain('這題的派票：469（代答）：1 紅（9）✗');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('這題的派票：469（代答） 2 好 1 壞✗');
 
     await deliver(h, groupText('/模擬 說明', 'k4', 'rk4'));
     expect(h.replies.at(-1)?.messages[0].text).toBe(SIM_HELP_TEXT);
@@ -377,7 +377,7 @@ describe('1:1 and other groups', () => {
     const msg = h.replies[0].messages;
     expect(msg).toHaveLength(1);
     expect(msg[0].text).toContain('你是 2家・派西維爾');
-    expect(msg[0].quickReply?.items.map((i) => i.action.text)).toEqual(['/下一步', '/公布', '/結束']);
+    expect(msg[0].quickReply?.items.map((i) => i.action.text)).toEqual(['/分析', '/下一步', '/公布', '/結束']);
     expect(h.mirror.lineReplyQueueSize()).toBe(3);
     expect(h.lobby).toEqual([]);
 

@@ -24,10 +24,12 @@ name: Refresh analysis cache
 # 牌譜紀錄清單（網站「牌譜紀錄」頁籤）：同一次執行另跑 discord_records_export.py，用 DISCORD_BOT_TOKEN（同
 #       import-discord-records.yml 的 secret）讀 Discord 論壇 #牌譜紀錄與覆盤 每篇貼文的起始訊息（不讀討論串
 #       裡的回覆），寫 packages/server/records_cache.json（只有標題、標籤、發文時間與解析後的牌譜；不存起始訊息
-#       原文；略過模擬與非牌譜貼文），跟快取一起 commit。沒設 token → notice 略過；讀取或檢查失敗 → 保留舊檔、
+#       原文；略過非牌譜貼文與百科AI 局），跟快取一起 commit。清單是所有來源的牌譜合成一個資料庫（Edward
+#       2026-11-16）：DC 貼文（模擬標起來）＋試算表「牌譜」分頁的每一局（從 games_cache.json）＋「模擬瓦」分頁，
+#       同一局（配置＋每次派的隊＋每局任務相同）只列一次。沒設 token → notice 略過；讀取或檢查失敗 → 保留舊檔、
 #       快取照常推送，最後一步讓 job 亮紅燈。allow_shrink 也放寬清單篇數變少的檢查。公開紀錄只有數量。
 #       每篇讀得懂的牌譜另附陣容強度（S、每個座位的時點 PR，從同一次寫出的 games_cache.json 算）與可證明的失誤
-#       標籤（Edward 2026-10-31）；沒有 token 或讀 Discord 失敗時用 --annotate-only 只更新這兩項。
+#       標籤（Edward 2026-10-31）；沒有 token 或讀 Discord 失敗時用 --merge-only 只重新合併試算表的局並更新這兩項。
 
 on:
   schedule:
@@ -184,15 +186,19 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           ALLOW_SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_shrink && '1' || '' }}
+          AVALON_STATS_SHEET_ID: ${{ vars.AVALON_STATS_SHEET_ID }}
         run: |
           # Read-only: the forum's post list and each post's starter message (never the replies in a
-          # thread). A failure keeps the committed records_cache.json (the write is atomic) and does not
-          # hold back the analysis cache; the last step turns the job red. Counts only in the log.
-          # Without the token (or when the read fails) the committed list still gets today's 陣容強度 and
-          # 失誤標籤 from the games_cache.json written above (--annotate-only reads no Discord).
+          # thread), plus the stats sheet's 模擬瓦 tab (--sim-sheet, same service account as above). The
+          # list is ONE database of every game (Edward 2026-11-16): Discord posts (模擬 flagged) + the
+          # sheet's 牌譜 games from games_cache.json + the 模擬瓦 tab, merged by fingerprint
+          # (records_merge.py). A failure keeps the committed records_cache.json (the write is atomic)
+          # and does not hold back the analysis cache; the last step turns the job red. Counts only in
+          # the log. Without the token (or when the read fails) the committed list still gets today's
+          # sheet games, 陣容強度 and 失誤標籤 (--merge-only reads no Discord).
           annotate() {
-            python packages/server/discord_records_export.py --output "${RECORDS_PATH}" --annotate-only || \
-              echo "::warning title=Records annotations not refreshed::discord_records_export.py --annotate-only failed; the list keeps its previous 陣容強度 / 失誤標籤."
+            python packages/server/discord_records_export.py --output "${RECORDS_PATH}" --merge-only --sim-sheet || \
+              echo "::warning title=Records list not re-merged::discord_records_export.py --merge-only failed; the list keeps its previous sheet games / 陣容強度 / 失誤標籤."
           }
           if [ -z "${DISCORD_BOT_TOKEN}" ]; then
             msg="Skipped: add the repository secret DISCORD_BOT_TOKEN to keep the site's 牌譜紀錄 tab up to date."
@@ -202,7 +208,7 @@ jobs:
             annotate
             exit 0
           fi
-          args=(--output "${RECORDS_PATH}")
+          args=(--output "${RECORDS_PATH}" --sim-sheet)
           if [ "${ALLOW_SHRINK}" = "1" ]; then
             args+=(--allow-shrink)
           fi

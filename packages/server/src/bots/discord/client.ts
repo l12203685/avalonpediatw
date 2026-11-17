@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SIM_STAGE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS } from './config';
 import {
   handleHelpCommand,
   handleRulesCommand,
@@ -120,7 +120,14 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
         o.setName(SIM_OPTIONS.SEAT).setDescription('座位 1～9、0 家（0 家寫 0）/ Seat').setRequired(false).setMinValue(0).setMaxValue(10)
       )
       .addStringOption((o) =>
-        o.setName(SIM_OPTIONS.ID).setDescription('題號，例如 K7Q2M-4（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(12)
+        o
+          .setName(SIM_OPTIONS.STAGE)
+          .setDescription('尾派 1-5～4-5、第 5 局、刺殺題、今天的主題 / Start position or theme')
+          .setRequired(false)
+          .addChoices(...SIM_STAGE_CHOICES.map((name) => ({ name, value: name })))
+      )
+      .addStringOption((o) =>
+        o.setName(SIM_OPTIONS.ID).setDescription('題號，例如 K7Q2M-4、K7Q2M-3-5（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(12)
       )
       .addBooleanOption((o) =>
         o.setName(SIM_OPTIONS.HELP).setDescription('看全部指令的說明（不開題）/ Show the command list').setRequired(false)
@@ -131,6 +138,17 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
       .setDescription('模擬瓦作答：你的派票，例如 469（0 家寫 0）/ Your team')
       .addStringOption((o) =>
         o.setName(SIM_OPTIONS.TEAM).setDescription('座位，例如 469、4 6 9 / Seats').setRequired(true).setMaxLength(30)
+      ),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_ANALYSIS)
+      .setDescription('模擬瓦：剛剛那次派票的完整解讀 / Full reading of your last team'),
+
+    new SlashCommandBuilder()
+      .setName(COMMANDS.SIM_ASSASSINATE)
+      .setDescription('模擬瓦刺殺題：刺一個座位 / Assassinate (刺殺題)')
+      .addIntegerOption((o) =>
+        o.setName(SIM_OPTIONS.SEAT).setDescription('座位 1～9、0 家（0 家寫 0）/ Seat').setRequired(true).setMinValue(0).setMaxValue(10)
       ),
 
     new SlashCommandBuilder()
@@ -350,6 +368,8 @@ export class DiscordBotClient {
         case COMMANDS.SIM_PROPOSE:
         case COMMANDS.SIM_INTERVAL:
         case COMMANDS.SIM_NEXT:
+        case COMMANDS.SIM_ANALYSIS:
+        case COMMANDS.SIM_ASSASSINATE:
         case COMMANDS.SIM_REVEAL:
         case COMMANDS.SIM_END:
           await handleSimCommand(interaction);
