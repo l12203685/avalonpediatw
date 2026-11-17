@@ -60,6 +60,7 @@ jobs:
         run: |
           python packages/server/test_generate_cache.py
           python packages/server/test_discord_records_import.py
+          python packages/server/test_game_db.py
 
       - name: Stats engine parity references from the 牌譜 snapshot
         run: |
