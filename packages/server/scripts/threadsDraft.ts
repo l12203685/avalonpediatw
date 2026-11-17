@@ -1,5 +1,6 @@
 /**
- * Threads 每日出題草稿（2026-11-17）。Edward 自己發文；ChatGPT 寫第一則留言（Issue #37）。
+ * Threads 每日出題草稿（2026-11-17）。站長設好權杖與 THREADS_PUBLISH 後由 threads-publish 工作流程自動發（也可以照草稿手動發）；
+ * ChatGPT 寫第一則留言（Issue #37）。
  *
  *   pnpm --filter @avalon/server threads:draft                       # 今天（台北日期）
  *   pnpm --filter @avalon/server threads:draft -- --date 2026-11-18
