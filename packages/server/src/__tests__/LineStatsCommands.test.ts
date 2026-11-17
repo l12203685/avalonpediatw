@@ -284,7 +284,7 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
 
   it('non-command chatter with an empty queue sends no reply at all', async () => {
     const h = setup();
-    await deliver(h, groupText('/help', 'm7', 'rt7'), groupText('hello', 'm8', 'rt8'));
+    await deliver(h, groupText('/create', 'm7', 'rt7'), groupText('hello', 'm8', 'rt8'));
     expect(h.replies).toEqual([]);
   });
 
@@ -396,7 +396,7 @@ describe('1:1 chat and other groups', () => {
   it('1:1 legacy commands stay silent while LINE_BOT_COMMANDS_ENABLED is off', async () => {
     const h = setup();
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await deliver(h, userText('/help', 'u2', 'rtH'), userText('hi', 'u3', 'rtI'));
+    await deliver(h, userText('/create', 'u2', 'rtH'), userText('hi', 'u3', 'rtI'));
     log.mockRestore();
     expect(h.replies).toEqual([]);
   });

@@ -23,7 +23,8 @@ export interface SimCounts {
   kills: number;
   intervalGroupsRight: number;
   intervalGroupsTotal: number;
-  steps: number;
+  /** /區間 不帶內容（百科AI 怎麼讀）的次數（2026-11-17；取代拿掉的 /下一步）。 */
+  aiReads: number;
   reveals: number;
   ended: number;
   expired: number;
@@ -52,7 +53,7 @@ export function emptySimCounts(): SimCounts {
     kills: 0,
     intervalGroupsRight: 0,
     intervalGroupsTotal: 0,
-    steps: 0,
+    aiReads: 0,
     reveals: 0,
     ended: 0,
     expired: 0,

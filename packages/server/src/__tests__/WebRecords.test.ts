@@ -24,6 +24,8 @@ import {
   deriveLeaders,
   lakeLine,
   proposalLine,
+  recordLineParts,
+  isMissionTextLine,
   RECORDS_PREF_KEYS,
   isLegacyRecordsHash,
   readRecordsPrefs,
@@ -373,5 +375,24 @@ describe('web records: one database (DC + 試算表 牌譜 + 模擬瓦, Edward 2
     const text = recordsText(SIM_GAME).split('\n');
     expect(text.slice(0, 7)).toEqual(['147', '260', '389 7+', '469', '568', 'ooo', '1357']);
     expect(text[7]).toBe('936758');
+  });
+});
+
+describe('文字牌譜上色（站長 2026-11-17：異常票變色）', () => {
+  it('隊伍白、值得注意的票綠、任務紅藍、湖青色＋宣告', () => {
+    expect(recordLineParts('4789 8- 36+')).toEqual([
+      { text: '4789', kind: 'team' },
+      { text: ' 8-', kind: 'mark' },
+      { text: ' 36+', kind: 'mark' },
+    ]);
+    expect(recordLineParts('1590')).toEqual([{ text: '1590', kind: 'plain' }]);
+    expect(recordLineParts('ooox', 1)).toEqual([{ text: 'ooox', kind: 'missionRed' }]);
+    expect(recordLineParts('ooxoo', 3)).toEqual([{ text: 'ooxoo', kind: 'missionBlue' }]); // 第 4 輪要兩張失敗
+    expect(recordLineParts('ooo')).toEqual([{ text: 'ooo', kind: 'missionBlue' }]);
+    expect(recordLineParts('0>9 x')).toEqual([{ text: '0>9', kind: 'lake' }, { text: ' x', kind: 'claimEvil' }]);
+    expect(recordLineParts('9>3 o')).toEqual([{ text: '9>3', kind: 'lake' }, { text: ' o', kind: 'claimGood' }]);
+    expect(recordLineParts('刺客刺殺:5')).toEqual([{ text: '刺客刺殺:5', kind: 'plain' }]);
+    expect(isMissionTextLine('oox')).toBe(true);
+    expect(isMissionTextLine('1590')).toBe(false);
   });
 });
