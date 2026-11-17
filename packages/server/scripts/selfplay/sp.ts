@@ -8,6 +8,8 @@
  *
  * Output (compact, no game logs): {meta, cols, rows} with one row per game:
  *   [i, blueWon 0/1, threeBlue 0/1, merlinKilled 0/1/-1(n/a), firstMissionFailed 0/1, missionsFailed, h]
+ * (round 44 adds: 1-1 leader's role, the 1-1 team relative to its leader (0 = the seat before), 1-1 approved, the leader+4 seat
+ *  (5家) red, the seat before the leader (0家) red, first lake holder relative seat, first lake holder red)
  * where h = first 12 hex of sha1 over the game's proposals/quests/lakes/assassination (identity checks).
  * Logs print only progress counts (Actions logs are public).
  */
@@ -31,7 +33,45 @@ async function main(): Promise<void> {
   const out = arg('--out');
   if (!out) throw new Error('--out PATH');
   const variant = { ...DEFAULT_AGENT_TUNING };
-  argv.forEach((a, i) => { if (a === '--flag') Object.assign(variant, parseTuningFlag(argv[i + 1])); });
+  // Round 44 (analysis only): pseudo-flag force11=<c1|c2|c3|c23|c4|c5|tXYZ> forces a loyal 1-1 leader's first proposal
+  // (seats relative to the 1-1 leader = P1; 0 = P10): c1 = leader + two of 4..0, c2 = leader + 2 + one of 4..0,
+  // c3 = leader + 3 + one of 4..0, c23 = 1,2,3, c4 = leader out, three of 4..0, c5 = leader out, three of 2..0 holding 2 or 3;
+  // tXYZ = that exact team. Uniform within the category under the decision's seeded random. Everything else is the default.
+  let force11 = '';
+  argv.forEach((a, i) => {
+    if (a !== '--flag') return;
+    const f = argv[i + 1];
+    if (f.startsWith('force11=')) { force11 = f.slice('force11='.length); return; }
+    Object.assign(variant, parseTuningFlag(f));
+  });
+  // seats are relative to the 1-1 leader (the engine's first leader is not always P1): rel k -> the k-th seat from the leader
+  // Seating = obs.allPlayerIds order (the engine shuffles seats; agent ids are not seat numbers).
+  const relSeat = (seats: readonly string[], leader: string, c: string): string => {
+    const L = seats.indexOf(leader); const k = c === '0' ? 10 : Number(c); return seats[(L + k - 1) % seats.length];
+  };
+  const relOf = (seats: readonly string[], leader: string, id: string): string => {
+    const k = ((seats.indexOf(id) - seats.indexOf(leader) + seats.length) % seats.length) + 1; return k === 10 ? '0' : String(k);
+  };
+  const pickK = (pool: string[], k: number): string[] => {
+    const a = [...pool];
+    for (let j = a.length - 1; j > 0; j--) { const r = Math.floor(Math.random() * (j + 1)); [a[j], a[r]] = [a[r], a[j]]; }
+    return a.slice(0, k);
+  };
+  const forcedTeam = (seats: readonly string[], leader: string, size: number): string[] | null => {
+    const seatId = (c: string): string => relSeat(seats, leader, c);
+    if (!force11 || size !== 3) return null;
+    const rest = ['4', '5', '6', '7', '8', '9', '0'];
+    if (force11.startsWith('t')) return force11.slice(1).split('').map(seatId);
+    if (force11 === 'c1') return ['1', ...pickK(rest, 2)].map(seatId);
+    if (force11 === 'c2') return ['1', '2', ...pickK(rest, 1)].map(seatId);
+    if (force11 === 'c3') return ['1', '3', ...pickK(rest, 1)].map(seatId);
+    if (force11 === 'c23') return ['1', '2', '3'].map(seatId);
+    if (force11 === 'c4') return pickK(rest, 3).map(seatId);
+    if (force11 === 'c5') {
+      for (;;) { const t = pickK(['2', '3', ...rest], 3); if (t.includes('2') || t.includes('3')) return t.map(seatId); }
+    }
+    throw new Error(`force11=${force11}?`);
+  };
   const redTuning = { ...DEFAULT_AGENT_TUNING };
 
   class Seat {
@@ -57,7 +97,11 @@ async function main(): Promise<void> {
       this.inner = obs.myTeam === 'good' ? this.blue : this.red; this.inner.onGameStart(obs);
     }
     act(obs: PlayerObservation): AgentAction {
-      const a = withSeededRandom(this.seedFor(obs), () => this.inner.act(obs));
+      let a = withSeededRandom(this.seedFor(obs), () => this.inner.act(obs));
+      if (force11 && a.type === 'team_select' && obs.myRole === 'loyal' && (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0) {
+        const t = withSeededRandom(this.seedFor(obs, 'force11'), () => forcedTeam(obs.allPlayerIds, obs.myPlayerId, a.type === 'team_select' ? a.teamIds.length : 0));
+        if (t) a = { type: 'team_select', teamIds: t };
+      }
       if (a.type === 'assassinate') this.killed = a.targetId;
       return a;
     }
@@ -98,12 +142,21 @@ async function main(): Promise<void> {
         ? createHash('sha1').update(JSON.stringify([g.seatRoles, g.proposals.map((p) => [p.leaderSeat, p.teamSeats, p.votes]),
           quests.map((q) => [q.teamSeats, q.failCount]), g.lakes, g.assassinTargetSeat])).digest('hex').slice(0, 12)
         : 'bad';
-      rows.push([i, res.winner === 'good' ? 1 : 0, tb, mk, quests.length && quests[0].failed ? 1 : 0, quests.filter((q) => q.failed).length, h]);
+      // round 44 columns: 1-1 leader (P1) role, first proposal (seats, 0 = P10) and whether it was approved, P5 / P10 red
+      const red = (id: string): number => (['assassin', 'morgana', 'mordred', 'oberon', 'minion'].includes(byId.get(id)!.role) ? 1 : 0);
+      const v0 = final.voteHistory[0];
+      const L = v0 ? v0.leader : 'P1';
+      const seats = final.allPlayerIds;
+      const order = (c: string): number => (c === '0' ? 10 : Number(c));
+      const t11 = v0 ? v0.team.map((id) => relOf(seats, L, id)).sort((x, y) => order(x) - order(y)).join('') : '';
+      const lake0 = final.lakeHistory && final.lakeHistory[0] ? relOf(seats, L, final.lakeHistory[0].holderId) : '';
+      rows.push([i, res.winner === 'good' ? 1 : 0, tb, mk, quests.length && quests[0].failed ? 1 : 0, quests.filter((q) => q.failed).length, h,
+        byId.get(L)!.role, t11, v0 && v0.approved ? 1 : 0, red(relSeat(seats, L, '5')), red(relSeat(seats, L, '0')), lake0, final.lakeHistory && final.lakeHistory[0] ? red(final.lakeHistory[0].holderId) : -1]);
       if ((i + 1 - from) % 250 === 0) process.stderr.write(`[sp ${tag}] ${i + 1 - from}/${n} ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     }
   } finally { console.log = originalLog; }
-  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), seconds: Math.round((Date.now() - started) / 1000) };
-  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h'], rows }));
+  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, seconds: Math.round((Date.now() - started) / 1000) };
+  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake'], rows }));
   fs.renameSync(out + '.tmp', out);
   process.stderr.write(`[sp ${tag}] done ${rows.length} games ${meta.seconds}s\n`);
   process.exit(0);
