@@ -118,16 +118,12 @@ export function weekIndexOf(date: string): number {
 }
 
 /**
- * 第一篇貼文的日期（站長 2026-11-17 貼出第一題 36AKW-2-5）：這一天的 A 沒有昨天的答案，
- * 之前的日子不算（不會出現在任何 A 的「昨天的答案」裡）。
+ * 系列最早的日期（預設值）：這一天以前的日子不算，不會出現在任何 A 的「昨天的答案」裡。
+ * 11/17 的題目其實沒有發出去（站長 11/18 確認），所以不再寫死「11/17 已經貼出」。
+ * 腳本用 repo 變數／環境變數 THREADS_LIVE_FROM（正式發的第一天）蓋過這個值；
+ * 自動發佈另外只在昨天真的有貼文（threads-state 有記錄）時才引用昨天、附昨天的答案（generate.ts 的 hasPost）。
  */
-export const THREADS_START_DATE = '2026-11-17';
-
-/**
- * 已經貼出去的題目（日期 → 題號）：不能再換，選局頁也鎖住。
- * 站長 2026-11-17 貼出第一題 36AKW-2-5。
- */
-export const THREADS_POSTED: Readonly<Record<string, string>> = { '2026-11-17': '36AKW-2-5' };
+export const THREADS_START_DATE = '2026-11-18';
 
 /** 今天的台北日期。 */
 export function taipeiToday(now: number = Date.now()): string {

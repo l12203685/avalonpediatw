@@ -23,6 +23,11 @@ export interface GenerateDeps {
   /** 第一篇貼文的日期（預設 THREADS_START_DATE）：這一天沒有昨天的答案，之前的日子不產生。 */
   startDate?: string;
   /**
+   * 這一天真的有貼文嗎（自動發佈：threads-state 有這一天的貼文記錄）。給了的話，只有昨天真的有貼文，
+   * 今天才引用昨天、附昨天的答案、週四／週六才接昨天那一局；昨天沒有貼文，今天就是獨立的第一篇。不給＝起始日以後都當作有。
+   */
+  hasPost?: (date: string) => boolean;
+  /**
    * 站長自己選的題（日期 → 題號，例如 `Y39DE-1-5`；來源是 commit 進 repo 的 threads_picks.json）。
    * 存下來（已經發出去）的那一天不受影響；選的題不是那天主題能出的就忽略、照計畫，原因寫進 `warnings`。
    */
@@ -98,7 +103,13 @@ export class ThreadsGenerator {
     return this.optionsFor(date).find((o) => o.exerciseId === exerciseId) ?? null;
   }
 
-  /** 這一天的題目：存下來的優先；延續的日子跟著前一天實際的那一局；其他照計畫。 */
+  /** 這一天有沒有一篇真的貼文可以接（起始日以後，而且 hasPost 說有）。 */
+  private posted(date: string): boolean {
+    if (dayNumber(date) < dayNumber(this.deps.startDate ?? THREADS_START_DATE)) return false;
+    return this.deps.hasPost ? this.deps.hasPost(date) : true;
+  }
+
+  /** 這一天的題目：存下來的優先；延續的日子跟著前一天實際的那一局（前一天真的有貼文才接）；其他照計畫。 */
   pickFor(date: string): ThreadsPick | null {
     if (this.picks.has(date)) return this.picks.get(date) ?? null;
     let pick: ThreadsPick | null = null;
@@ -114,14 +125,15 @@ export class ThreadsGenerator {
     if (!pick) {
       const theme = themeOf(weekdayOf(date));
       let prev: ThreadsPick | null = null;
-      if (theme.continues && theme.round !== undefined) {
+      const canContinue = !!theme.continues && theme.round !== undefined && this.posted(addDays(date, -1));
+      if (canContinue && theme.round !== undefined) {
         prev = this.pickFor(addDays(date, -1));
         const prevGame = prev && prev.kind === 'tail' ? this.gameOf(prev.gameId) : null;
         if (prevGame) pick = continuationOf(prevGame.game, theme.round);
       }
       if (!pick) pick = pickForDate(this.deps.bank, date, this.candidates);
-      // 計畫裡延續的是另一局（前一天實際貼的不是計畫那一局）：改出獨立的題目。
-      if (pick?.continues && prev && pick.gameId !== prev.gameId) pick = aloneFor(this.deps.bank, date, this.candidates);
+      // 計畫裡延續的是另一局（前一天實際貼的不是計畫那一局），或前一天沒有貼文可接：改出獨立的題目。
+      if (pick?.continues && (!canContinue || (prev && pick.gameId !== prev.gameId))) pick = aloneFor(this.deps.bank, date, this.candidates);
     }
     this.picks.set(date, pick);
     return pick;
@@ -134,7 +146,7 @@ export class ThreadsGenerator {
     const gameId = exerciseId.split('-')[0];
     const g = this.gameOf(gameId);
     if (!g) return null;
-    if (theme.continues && theme.round !== undefined) {
+    if (theme.continues && theme.round !== undefined && this.posted(addDays(date, -1))) {
       const prev = this.pickFor(addDays(date, -1));
       if (prev && prev.gameId === gameId) {
         const c = continuationOf(g.game, theme.round);
@@ -163,12 +175,12 @@ export class ThreadsGenerator {
     if (!pick || !today) return null;
 
     const yDate = addDays(date, -1);
-    // 第一天（和之前）沒有昨天的貼文：A 只有今天的題目。
-    const first = dayNumber(date) <= dayNumber(this.deps.startDate ?? THREADS_START_DATE);
+    // 第一天（和之前），或昨天沒有真的貼文：A 只有今天的題目（獨立的一篇，不引用、不附昨天的答案）。
+    const first = dayNumber(date) <= dayNumber(this.deps.startDate ?? THREADS_START_DATE) || !this.posted(yDate);
     const yPick = first ? null : this.pickFor(yDate);
     const yView = yPick ? this.viewOf(yPick) : null;
     let earlier: PickView | undefined;
-    if (yPick?.continues && dayNumber(yDate) > dayNumber(this.deps.startDate ?? THREADS_START_DATE)) {
+    if (yPick?.continues && dayNumber(yDate) > dayNumber(this.deps.startDate ?? THREADS_START_DATE) && this.posted(addDays(date, -2))) {
       const ePick = this.pickFor(addDays(date, -2));
       if (ePick && ePick.gameId === yPick.gameId) earlier = this.viewOf(ePick) ?? undefined;
     }

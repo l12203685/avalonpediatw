@@ -144,13 +144,18 @@ describe('draft texts', () => {
     }
   }, 60_000); // 8 週 56 天的草稿：單獨跑不到 1 秒，整套測試平行跑時 CI 上超過預設的 5 秒
 
-  it('the 11/17 first post stays 36AKW-2-5 and 11/18’s A carries its answer', () => {
-    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
-    expect(gen.draftFor('2026-11-17')?.exerciseId).toBe('36AKW-2-5');
-    const d = gen.draftFor('2026-11-18') as ThreadsDraft;
-    expect(d.answerToYesterday?.exerciseId).toBe('36AKW-2-5');
-    expect(d.post.text).toContain('── 昨天 36AKW-2-5 的答案 ──');
-    expect(gen.draftFor('2026-11-16')?.answerToYesterday).toBeNull();
+  it('the first day of the series is standalone; the next day carries its answer; nothing is hardcoded as posted on 11/17', () => {
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, startDate: '2026-11-18' });
+    const first = gen.draftFor('2026-11-18') as ThreadsDraft;
+    expect(first.answerToYesterday).toBeFalsy();
+    expect(first.quoteYesterday).toBeFalsy();
+    const next = gen.draftFor('2026-11-19') as ThreadsDraft;
+    expect(next.answerToYesterday?.exerciseId).toBe(first.exerciseId);
+    expect(next.post.text).toContain(`── 昨天 ${first.exerciseId} 的答案 ──`);
+    // 昨天沒有真的貼文（hasPost）：今天也是獨立的一篇
+    const noPost = new ThreadsGenerator({ bank, titles, readSaved: () => null, startDate: '2026-11-18', hasPost: () => false });
+    expect(noPost.draftFor('2026-11-20')?.answerToYesterday).toBeFalsy();
+    expect(THREADS_START_DATE).not.toBe('2026-11-17');
   });
 
   it('a continued answer reveals nothing; the next day reveals both answers', () => {

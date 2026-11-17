@@ -102,6 +102,18 @@ export function writeState(stateDir: string, rec: ThreadsStateRecord): void {
 }
 
 /** 給 ThreadsGenerator 的 readSaved：已經發過（或補記過）的日子沿用當天的草稿。 */
+/**
+ * 給 ThreadsGenerator 的 hasPost：這一天真的有貼文——狀態檔有貼文 id，或是站長手動發、補記過的那一天
+ * （手動補記時可能還沒有 id，隔天去最近的貼文找）。沒有記錄（例如只試跑過、或根本沒發）就不算，
+ * 隔天那篇就是獨立的一篇，不引用、不附昨天的答案。
+ */
+export function postedFromState(stateDir: string): (date: string) => boolean {
+  return (date) => {
+    const rec = readState(stateDir, date);
+    return !!rec && (!!rec.postId || rec.source === 'manual');
+  };
+}
+
 export function savedFromState(stateDir: string): (date: string) => ThreadsDraft | null {
   return (date) => readState(stateDir, date)?.draft ?? null;
 }

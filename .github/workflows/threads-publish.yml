@@ -195,6 +195,8 @@ jobs:
         env:
           THREADS_MODE: ${{ steps.gate.outputs.mode }}
           DATE: ${{ steps.gate.outputs.date }}
+          # 系列起點（正式發的第一天）；昨天有沒有真的貼文看 threads-state
+          THREADS_LIVE_FROM: ${{ vars.THREADS_LIVE_FROM }}
           IG_PREVIEW: ${{ steps.gate.outputs.ig != 'off' && '1' || '0' }}
         run: npx tsx scripts/threadsPublish.ts prepare --date "$DATE" --state-dir "$STATE_DIR" --out "$OUT_DIR"
 
@@ -289,6 +291,7 @@ jobs:
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           DATE: ${{ steps.gate.outputs.date }}
           POST_ID: ${{ inputs.post_id }}
+          THREADS_LIVE_FROM: ${{ vars.THREADS_LIVE_FROM }}
         run: npx tsx scripts/threadsPublish.ts record-manual --date "$DATE" --state-dir "$STATE_DIR" ${POST_ID:+--post-id "$POST_ID"}
 
       - name: 記下發文狀態

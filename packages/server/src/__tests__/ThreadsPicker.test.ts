@@ -21,7 +21,7 @@ import type { ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
 import { readPicksFile, savedDraftReader } from '../bots/threads/inputs';
 import { futurePicks, parsePicks, pickOverrideOf, picksFileBody } from '../bots/threads/picksFile';
-import { THREADS_POSTED, exerciseIdOfPick } from '../bots/threads/plan';
+import { exerciseIdOfPick } from '../bots/threads/plan';
 import { HIGH_LINEUP_S, cacheGameFingerprint, lineupIndex, lineupOf } from '../bots/threads/strength';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -59,13 +59,6 @@ describe('strength (S)', () => {
 });
 
 describe('overrides', () => {
-  it('the posted first puzzle stays locked even when a pick or a saved draft says otherwise', () => {
-    const other = gen().optionsFor('2026-11-17').find((o) => o.exerciseId !== THREADS_POSTED['2026-11-17']);
-    expect(other).toBeDefined();
-    const g = gen(new Map([['2026-11-17', other!.exerciseId]]));
-    expect(idOn(g, '2026-11-17')).toBe('36AKW-2-5');
-  });
-
   it('a chosen Wednesday game that chains makes Thursday continue the same game', () => {
     const opt = gen().optionsFor('2026-11-25').find((o) => o.chained);
     expect(opt).toBeDefined();
@@ -98,11 +91,11 @@ describe('overrides', () => {
 });
 
 describe('candidates', () => {
-  it('each day lists blue viewpoints sorted by S (high first), locks today and the posted day, and labels the source', () => {
+  it('each day lists blue viewpoints sorted by S (high first), locks today and earlier days, and labels the source', () => {
     const picked = new Map([['2026-11-24', gen().optionsFor('2026-11-24')[3].exerciseId]]);
     const plan = planDays({ gen: gen(picked), lineup, today: '2026-11-18', picked }, '2026-11-17', 14);
     expect(plan).toHaveLength(14);
-    expect(plan[0]).toMatchObject({ date: '2026-11-17', source: 'posted', locked: true });
+    expect(plan[0]).toMatchObject({ date: '2026-11-17', source: 'auto', locked: true }); // 11/17 沒有寫死成「已經貼出」
     expect(plan[1].locked).toBe(true); // 11/18 = today
     expect(plan[2].locked).toBe(false);
     expect(plan[2].source).toBe('chain'); // Thursday continues Wednesday
@@ -125,7 +118,7 @@ describe('picks file', () => {
     const m = parsePicks({ version: 1, picks: { '2026-11-19': 'K7Q2M-3-5', '2026-11-18': 'ABCDE-1-5' } });
     expect([...m]).toEqual([['2026-11-19', 'K7Q2M-3-5'], ['2026-11-18', 'ABCDE-1-5']]);
     expect(JSON.parse(picksFileBody(m))).toEqual({ version: 1, picks: { '2026-11-18': 'ABCDE-1-5', '2026-11-19': 'K7Q2M-3-5' } });
-    expect(pickOverrideOf(m)('2026-11-17')).toBe('36AKW-2-5');
+    expect(pickOverrideOf(m)('2026-11-17')).toBeNull(); // 不再寫死 11/17 的題目
   });
 
   it('reads both shapes, drops junk, keeps only days after today', () => {

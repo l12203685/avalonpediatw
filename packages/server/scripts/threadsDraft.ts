@@ -6,7 +6,7 @@
  *   pnpm --filter @avalon/server threads:draft -- --date 2026-11-18
  *   pnpm --filter @avalon/server threads:draft -- --week             # 從 --date（預設今天）起連續 7 天
  *   選項：--out <資料夾>（預設 packages/server/threads_drafts/，不進 git）、--no-image、--days N、
- *         --start YYYY-MM-DD（第一篇貼文的日期，預設 2026-11-17：那一天的 A 沒有昨天的答案）、
+ *         --start YYYY-MM-DD（第一篇貼文的日期：那一天的 A 沒有昨天的答案；預設 THREADS_LIVE_FROM，再沒有就 2026-11-18）、
  *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；每一天都用，存下來的草稿優先）
  *
  * 每天寫三個檔：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位）、<日期>.png（題目圖）。
@@ -37,7 +37,8 @@ const start = arg('--date', taipeiToday());
 const days = flag('--week') ? 7 : Number(arg('--days', '1'));
 const outDir = path.resolve(arg('--out', path.join(root, 'threads_drafts')));
 const withImage = !flag('--no-image');
-const startDate = arg('--start', THREADS_START_DATE);
+// 系列起點：--start，沒給就用 THREADS_LIVE_FROM（正式發的第一天），再沒有就用預設值。
+const startDate = arg('--start', process.env.THREADS_LIVE_FROM || THREADS_START_DATE);
 const defaultPicks = path.join(root, 'threads_picks.json');
 const picksPath = arg('--picks', fs.existsSync(defaultPicks) ? defaultPicks : '');
 // 站長選的每一天都用（前一天選的今天的題目、昨天的答案都要對上）；已經貼出去的以存下來的草稿為準
