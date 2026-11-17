@@ -20,7 +20,7 @@ import path from 'path';
 import type { ThreadsDraft } from '../draft';
 import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
-import { addDays, exerciseIdOfPick } from '../plan';
+import { addDays, exerciseIdOfPick, taipeiToday } from '../plan';
 import type { OwnReply, ThreadsApi, RecentPost } from './threadsApi';
 
 // ─── 站長選的題（threads_picks.json） ───────────────────────────────────────
@@ -308,10 +308,20 @@ export function planSummary(plan: DailyPlan, mode: string): string[] {
 
 // ─── post ───────────────────────────────────────────────────────────────────
 
-/** 自己最近的貼文裡找「題號 <題號>」那一篇。 */
-export function findByExercise(posts: readonly RecentPost[], exerciseId: string): RecentPost | null {
+/** API 的時間（例如 2026-11-18T04:00:00+0000）→ 台北日期；讀不懂回 null。 */
+export function taipeiDateOf(timestamp: string | undefined): string | null {
+  if (!timestamp) return null;
+  const ms = Date.parse(timestamp.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
+  return Number.isNaN(ms) ? null : taipeiToday(ms);
+}
+
+/**
+ * 自己最近的貼文裡找「題號 <題號>」那一篇。給 date 時只認那一天（台北）發的：
+ * 站長可能選了之前某天發過的同一題，舊的那篇不能當成今天的（也不能當成昨天的引用）。
+ */
+export function findByExercise(posts: readonly RecentPost[], exerciseId: string, date?: string): RecentPost | null {
   const needle = `題號 ${exerciseId}`;
-  return posts.find((p) => (p.text ?? '').includes(needle)) ?? null;
+  return posts.find((p) => (p.text ?? '').includes(needle) && (date === undefined || taipeiDateOf(p.timestamp) === date)) ?? null;
 }
 
 export interface PostResult {
@@ -391,7 +401,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
   if (existing?.postId) return { status: 'already-published', postId: existing.postId, permalink: existing.permalink, notes: ['狀態檔已經有這一天的貼文 id'] };
 
   const recent = await deps.api.recentPosts();
-  const dup = findByExercise(recent, plan.exerciseId);
+  const dup = findByExercise(recent, plan.exerciseId, plan.date);
   if (dup) {
     // 上次發了卻沒記下來（例如狀態檔沒推上去就中斷）：補記 A，留言也先查再補。
     const rec: ThreadsStateRecord = { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: dup.id, permalink: dup.permalink, commentId: null, publishedAt: dup.timestamp };
@@ -403,7 +413,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
 
   let quotePostId: string | null = plan.quote?.postId ?? null;
   if (plan.quote && !quotePostId) {
-    const y = findByExercise(recent, plan.quote.exerciseId);
+    const y = findByExercise(recent, plan.quote.exerciseId, plan.quote.date);
     if (y) {
       quotePostId = y.id;
       const yState = readState(deps.stateDir, plan.quote.date);
@@ -420,7 +430,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
     ...(plan.image && deps.imageUrl ? { imageUrl: deps.imageUrl } : {}),
     ...(quotePostId ? { quotePostId } : {}),
     // 回應不明時：自己最近的貼文裡有今天的題號就是已經發了
-    find: async () => findByExercise(await deps.api.recentPosts(), plan.exerciseId)?.id ?? null,
+    find: async () => findByExercise(await deps.api.recentPosts(), plan.exerciseId, plan.date)?.id ?? null,
   });
   // 先記下 A（並推上去）：留言失敗或中斷時重跑不會再發一次 A。
   const rec: ThreadsStateRecord = { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId, quotePostId, commentId: null, publishedAt: now().toISOString() };
