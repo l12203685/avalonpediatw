@@ -1,32 +1,21 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import {
-  BarChart3, Crown, Vote, Swords, Droplets, Crosshair, Map, Users, Radar, Gauge, GitBranch, Lightbulb,
-} from 'lucide-react';
+import { BarChart3, Swords, Droplets, Vote, SlidersHorizontal } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
 import BoardsTab from '../components/analysis/tabs/BoardsTab';
-import OverviewTab from '../components/analysis/tabs/OverviewTab';
-import TeamsTab from '../components/analysis/tabs/TeamsTab';
-import VotesTab from '../components/analysis/tabs/VotesTab';
-import MissionsTab from '../components/analysis/tabs/MissionsTab';
-import LakeTab from '../components/analysis/tabs/LakeTab';
-import AssassinationTab from '../components/analysis/tabs/AssassinationTab';
-import PositionTab from '../components/analysis/tabs/PositionTab';
-import RolesTab from '../components/analysis/tabs/RolesTab';
-import PlayersTab from '../components/analysis/tabs/PlayersTab';
-import StrengthTab from '../components/analysis/tabs/StrengthTab';
-import FindingsTab from '../components/analysis/tabs/FindingsTab';
 import StartHere, { type StartHereTarget } from '../components/analysis/StartHere';
 import { useDiscoveryNav } from '../components/analysis/discovery/discoveryNav';
-import DiscoveryBlock from '../components/analysis/discovery/DiscoveryBlock';
-import StateTreeTab from '../components/analysis/tabs/StateTreeTab';
 import FeatureStudyReportHost from '../components/analytics/FeatureStudyReport';
 import { STUDY_HOME_TAB, studyInLocation } from '../components/analytics/studyLink';
 import StatsFilterBar from '../components/analysis/filter/StatsFilterBar';
 import { useStatsFilter } from '../stats/statsFilter';
 import { useFilterHashSync } from '../stats/sharedFilter';
+import { rememberTarget, resolveTab, type CoreTab, type CoreTarget } from '../components/analysis/core/coreTabs';
+import {
+  AdvancedCoreTab, LakeCoreTab, MissionsCoreTab, OverviewCoreTab, TeamsVotesCoreTab,
+} from '../components/analysis/core/CoreTabViews';
 
 /**
  * #98 (2026-04-23) IA 重整：數據排行頁拆成兩大區 —
@@ -68,29 +57,22 @@ import { useFilterHashSync } from '../stats/sharedFilter';
  *   都跟著篩選 (stats/statsFilter.ts；資料請求在 services/api.ts 改用瀏覽器端引擎的結果)。分頁內容以篩選的 key
  *   重新掛載，各元件照原本的方式再拿一次資料；網址列跟著篩選 (#stats?f=…，可直接分享)。
  */
-type AnalysisTab =
-  | 'overview' | 'findings' | 'teams' | 'votes' | 'missions'
-  | 'lake' | 'assassination' | 'position' | 'roles' | 'strength' | 'stateTree' | 'players';
+/*
+ * (2026-11-17 Edward：「現在的網站數據有多過於發散了…應用比較重要 先看大方向就好 真的要看細節才深入去看 要符合我們的核心:
+ *  任務結果 > 湖中女神 > 隊伍派票組合 & 黑白球投票 > 發言資訊 & 狀態」) 12 個分頁改成照核心優先序的 5 個（coreTabs.ts）：
+ *  總覽（三層大方向＋可以怎麼做）→ 任務結果 → 湖中女神 → 派隊與投票 → 進階。同日「發言與狀態不是屬於數據的一環吧…局勢樹
+ *  比較像 任務結果 x 湖中女神」：沒有發言與狀態分頁，局勢樹是任務結果的小分頁「任務 × 湖中（局勢樹）」。舊分頁的內容都搬進新分頁的小分頁，
+ *  舊 id（研究連結、從這裡開始、自動發現跳轉、排行點名字）經 coreTabs.LEGACY_TABS 導到對的小分頁。
+ */
+interface AnalysisTabDef { id: CoreTab; labelKey: string; icon: typeof BarChart3 }
 
-interface AnalysisTabDef { id: AnalysisTab; labelKey: string; icon: typeof BarChart3 }
-
-// Tab labels are sourced from i18n so the bilingual switch covers them.
+// Tab labels are sourced from i18n so the bilingual switch covers them. 順序 = 核心優先序。
 const ANALYSIS_TABS: AnalysisTabDef[] = [
-  { id: 'overview',      labelKey: 'analytics.analysis.tabs.overview',      icon: BarChart3 },
-  // 2026-11-16 Edward「數據分析太多太亂、不知道怎麼從數據得到策略」：自動發現清單與兩紅派隊分組從陣容強度搬過來
-  { id: 'findings',      labelKey: 'analytics.analysis.tabs.findings',      icon: Lightbulb },
-  { id: 'teams',         labelKey: 'analytics.analysis.tabs.teams',         icon: Crown },
-  { id: 'votes',         labelKey: 'analytics.analysis.tabs.votes',         icon: Vote },
-  { id: 'missions',      labelKey: 'analytics.analysis.tabs.missions',      icon: Swords },
-  { id: 'lake',          labelKey: 'analytics.analysis.tabs.lake',          icon: Droplets },
-  { id: 'assassination', labelKey: 'analytics.analysis.tabs.assassination', icon: Crosshair },
-  { id: 'position',      labelKey: 'analytics.analysis.tabs.position',      icon: Map },
-  { id: 'roles',         labelKey: 'analytics.analysis.tabs.roles',         icon: Users },
-  // 2026-10-31 Edward：陣容強度（走勢、季 × 強度、分層結果、不同組成的過程比較）
-  { id: 'strength',      labelKey: 'analytics.analysis.tabs.strength',      icon: Gauge },
-  // 2026-10-31 Edward：局勢樹（任務順序 × 湖的宣告 → 結果；components/analysis/stateTree/）
-  { id: 'stateTree',     labelKey: 'analytics.analysis.tabs.stateTree',     icon: GitBranch },
-  { id: 'players',       labelKey: 'analytics.analysis.tabs.players',       icon: Radar },
+  { id: 'overview',   labelKey: 'analytics.analysis.core.tabs.overview',   icon: BarChart3 },
+  { id: 'missions',   labelKey: 'analytics.analysis.core.tabs.missions',   icon: Swords },
+  { id: 'lake',       labelKey: 'analytics.analysis.core.tabs.lake',       icon: Droplets },
+  { id: 'teamsVotes', labelKey: 'analytics.analysis.core.tabs.teamsVotes', icon: Vote },
+  { id: 'advanced',   labelKey: 'analytics.analysis.core.tabs.advanced',   icon: SlidersHorizontal },
 ];
 
 export default function AnalyticsPage(): JSX.Element {
@@ -134,20 +116,34 @@ export default function AnalyticsPage(): JSX.Element {
 // 分析：子分頁依玩家決策分區 (各分頁內容見 components/analysis/tabs/)
 // ──────────────────────────────────────────────────────────────
 
+/** 初始分頁：排行點名字 → 進階 › 玩家雷達；#study= → 那項研究所在的舊分頁對應的新分頁；其他 → 總覽。 */
+function initialTarget(focus: { name: string; seq: number } | null): CoreTarget {
+  if (focus) return resolveTab('players') as CoreTarget;
+  const study = studyInLocation();
+  return resolveTab(study ? STUDY_HOME_TAB[study] : null) ?? { tab: 'overview' };
+}
+
 function AnalysisSection({ focus }: { focus: { name: string; seq: number } | null }): JSX.Element {
   const { t } = useTranslation('common');
-  const [tab, setTab] = useState<AnalysisTab>(() => {
-    if (focus) return 'players';
-    const study = studyInLocation();
-    const home = study ? STUDY_HOME_TAB[study] : undefined;
-    return ANALYSIS_TABS.some(d => d.id === home) ? (home as AnalysisTab) : 'overview';
+  const [tab, setTab] = useState<CoreTab>(() => {
+    const target = initialTarget(focus);
+    rememberTarget(target);
+    return target.tab;
   });
+  // 同一個分頁內換小分頁時，要重新掛載才會讀到記下的小分頁
+  const [jump, setJump] = useState(0);
+  const goTo = (target: CoreTarget | null): void => {
+    if (!target) return;
+    rememberTarget(target);
+    setTab(target.tab);
+    setJump((n) => n + 1);
+  };
   const [seenFocus, setSeenFocus] = useState(focus);
   if (focus !== seenFocus) {
     setSeenFocus(focus);
-    if (focus) setTab('players');
+    if (focus) goTo(resolveTab('players'));
   }
-  // 自動發現的「看全部」「在組成比較打開」：切到陣容強度分頁
+  // 自動發現的「看全部」「在組成比較打開」、玩家雷達的「看各組」：切到對的分頁（小分頁由那一頁看 discoveryNav 切）
   const navTab = useDiscoveryNav((s) => s.tab);
   const navNonce = useDiscoveryNav((s) => s.nonce);
   const [seenNav, setSeenNav] = useState(navNonce);
@@ -158,12 +154,13 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
   const { overview } = useAnalysisOverview();
   const totalGames = overview?.totalGames;
   const filterKey = useStatsFilter((s) => `${s.key}|${s.nonce}`);
-  // 「從這裡開始」的按鈕：一般分頁直接切；發現與策略的小分頁經 discoveryNav（FindingsTab 掛載時切過去）
+  // 「從這裡開始」的按鈕（舊分頁 id）：經 coreTabs 導到新分頁；兩紅派隊分組、自動發現經 discoveryNav
   const goStartHere = (target: StartHereTarget): void => {
     if (target === 'findings:twoRedCohort') useDiscoveryNav.getState().openView('twoRedCohort');
     else if (target === 'findings:discovery') useDiscoveryNav.getState().openList(null);
-    else setTab(target);
+    else goTo(resolveTab(target));
   };
+  const goTab = (id: CoreTab): void => goTo({ tab: id });
 
   return (
     <div>
@@ -174,15 +171,20 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
         {t('analytics.deep.subtitleSource')}
       </p>
       <StartHere onGo={goStartHere} />
-      <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+      <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide" role="tablist">
         {ANALYSIS_TABS.map(({ id, labelKey, icon: Icon }) => (
           <button
             key={id}
-            onClick={() => setTab(id)}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => goTab(id)}
+            data-testid={`analysis-tab-${id}`}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
               tab === id
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                : 'bg-avalon-card/40 text-gray-400 hover:text-white hover:bg-avalon-card/60 border border-gray-700'
+                : id === 'advanced'
+                  ? 'bg-transparent text-zinc-500 hover:text-white border border-dashed border-zinc-700'
+                  : 'bg-avalon-card/40 text-gray-400 hover:text-white hover:bg-avalon-card/60 border border-gray-700'
             }`}
           >
             <Icon size={14} />
@@ -192,29 +194,19 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
       </div>
       <AnimatePresence mode="wait">
         <motion.div
-          key={`${tab}|${filterKey}`}
+          key={`${tab}|${filterKey}|${jump}`}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.18 }}
         >
-          {/* 每個分頁一句「怎麼用」：這一頁幫你做哪一種決定（2026-11-16） */}
-          <p className="mb-3 text-xs leading-relaxed text-zinc-400" data-testid="analysis-howto">{t(`analytics.analysis.howTo.${tab}`)}</p>
-          {tab === 'overview'      && <OverviewTab />}
-          {tab === 'findings'      && <FindingsTab />}
-          {tab === 'teams'         && <TeamsTab />}
-          {tab === 'votes'         && <VotesTab />}
-          {tab === 'missions'      && <MissionsTab />}
-          {tab === 'lake'          && <LakeTab />}
-          {tab === 'assassination' && <AssassinationTab />}
-          {tab === 'position'      && <PositionTab />}
-          {tab === 'roles'         && <RolesTab />}
-          {tab === 'strength'      && <StrengthTab />}
-          {tab === 'stateTree'     && <StateTreeTab />}
-          {tab === 'players'       && <PlayersTab focus={focus} />}
-          {/* 2026-10-31 Edward：每個分析分頁都有「自動發現」（跟這頁指標有關的明顯差異；玩家雷達是個人頁、局勢樹本身就是分支比較，不放） */}
-          {/* 「發現與策略」本身就是完整清單，不再放 */}
-          {tab !== 'players' && tab !== 'stateTree' && tab !== 'findings' && <DiscoveryBlock page={tab} />}
+          {/* 每個分頁一句「怎麼用」：這一頁幫你做哪一種決定 */}
+          <p className="mb-3 text-xs leading-relaxed text-zinc-400" data-testid="analysis-howto">{t(`analytics.analysis.core.howTo.${tab}`)}</p>
+          {tab === 'overview'   && <OverviewCoreTab onGo={goTab} />}
+          {tab === 'missions'   && <MissionsCoreTab />}
+          {tab === 'lake'       && <LakeCoreTab onJump={goTo} />}
+          {tab === 'teamsVotes' && <TeamsVotesCoreTab />}
+          {tab === 'advanced'   && <AdvancedCoreTab focus={focus} />}
         </motion.div>
       </AnimatePresence>
     </div>

@@ -44,7 +44,7 @@ export type LakeView = 'faction' | 'holderRole' | 'targetRole';
 
 const lakeLoader = filterScopedLoader(fetchAnalysisLake);
 
-function useLakeData(): { data: LakeAnalysisData | null; loading: boolean; error: string | null } {
+export function useLakeData(): { data: LakeAnalysisData | null; loading: boolean; error: string | null } {
   const [data, setData] = useState<LakeAnalysisData | null>(lakeLoader.peek);
   const [loading, setLoading] = useState(() => lakeLoader.peek() === null);
   const [error, setError] = useState<string | null>(null);

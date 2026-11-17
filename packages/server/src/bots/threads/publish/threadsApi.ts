@@ -167,13 +167,30 @@ export class ThreadsApi {
     return r.data ?? [];
   }
 
-  /** 自己最近的回覆（找上次發了卻沒記下來的第一則留言）；要 threads_read_replies。 */
-  async ownReplies(limit = 25): Promise<OwnReply[]> {
-    const r = await this.call<{ data?: { id: string; text?: string; replied_to?: { id?: string } }[] }>('GET', this.v(`/${this.opts.userId}/replies`), {
-      fields: 'id,text,replied_to',
-      limit: String(limit),
-    });
-    return (r.data ?? []).map((x) => ({ id: x.id, text: x.text, repliedToId: x.replied_to?.id }));
+  /**
+   * 這一篇底下自己帳號的回覆（找上次發了卻沒記下來的第一則留言）；要 threads_read_replies。
+   * 照分頁一路往下翻（最多 maxPages 頁）；翻到上限還沒翻完就丟錯（確認不了＝不發，呼叫端寧可少一則也不重複留言）。
+   */
+  async findOwnReplyTo(postId: string, maxPages = 20): Promise<OwnReply | null> {
+    let username: string | undefined;
+    let after: string | undefined;
+    for (let page = 0; page < maxPages; page++) {
+      const r = await this.call<{
+        data?: { id: string; text?: string; username?: string; is_reply_owned_by_me?: boolean }[];
+        paging?: { cursors?: { after?: string }; next?: string };
+      }>('GET', this.v(`/${postId}/replies`), { fields: 'id,text,username,is_reply_owned_by_me', limit: '50', after });
+      for (const x of r.data ?? []) {
+        let mine = x.is_reply_owned_by_me === true;
+        if (!mine && x.is_reply_owned_by_me === undefined && x.username) {
+          username ??= (await this.me()).username ?? '';
+          mine = !!username && x.username === username;
+        }
+        if (mine) return { id: x.id, text: x.text, repliedToId: postId };
+      }
+      after = r.paging?.cursors?.after;
+      if (!r.paging?.next || !after) return null;
+    }
+    throw new ThreadsApiError(`回覆超過 ${maxPages} 頁還沒翻完：確認不了第一則留言發了沒，這次不發`, 0, false);
   }
 
   private async containerStatus(id: string): Promise<string | undefined> {

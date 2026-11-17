@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Crown, FlaskConical, Route, Vote } from 'lucide-react';
+import { Crown, FlaskConical, Vote } from 'lucide-react';
 import CaptainAnalysis from '../CaptainAnalysis';
 import RoundsAnalysis from '../RoundsAnalysis';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
@@ -20,7 +20,8 @@ import { theorySettings } from '../../../services/api';
  * theoryMinCellGames (overview.theoryConfig，舊快取用產生器預設值)，不寫死。
  */
 // 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
-type TeamsSection = 'captain' | 'firstVote' | 'progression' | 'more';
+// 2026-11-17 數據頁改版：「任務進程」跟任務結果 › 任務重複，拿掉（完整任務路徑搬到任務結果 › 任務路徑）
+type TeamsSection = 'captain' | 'firstVote' | 'more';
 
 export default function TeamsTab(): JSX.Element {
   const { t } = useTranslation('common');
@@ -30,7 +31,6 @@ export default function TeamsTab(): JSX.Element {
   const items: SectionTabItem<TeamsSection>[] = [
     { id: 'captain', label: t('analytics.r6.teams.tabs.captain'), icon: Crown },
     { id: 'firstVote', label: t('analytics.r6.teams.tabs.firstVote'), icon: Vote },
-    { id: 'progression', label: t('analytics.r6.teams.tabs.progression'), icon: Route },
     { id: 'more', label: t('analytics.analysis.more.tab'), icon: FlaskConical },
   ];
 
@@ -44,7 +44,6 @@ export default function TeamsTab(): JSX.Element {
         switch (active) {
           case 'captain':     return <CaptainAnalysis lowSample={lowSample} />;
           case 'firstVote':   return <RoundsAnalysis section="firstVote" lowSample={lowSample} />;
-          case 'progression': return <RoundsAnalysis section="progression" lowSample={lowSample} />;
           case 'more':        return <MoreDetails items={[{ id: 'l139', title: t('analytics.r6.teams.tabs.study'), render: () => <FeatureStudyCard loopId="L139" defaultOpen /> }]} />;
         }
       }}

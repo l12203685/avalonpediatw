@@ -4,7 +4,7 @@
  *   - draft.ts：新貼文 A＝今天的題目＋昨天的答案（≤ 500 字、引用昨天的貼文、沒有另外串的答案）、延續的日子不公布幾好幾壞和角色、
  *     完整公布附角色與牌譜連結、0 家寫 0、第一天（11/17）沒有昨天的答案；週六沒有連著的局改出第四局忠臣派 5 人；
  *   - generate.ts：存下來的草稿優先（題目、ChatGPT 填的第一則留言保留）、延續跟著前一天實際的那一局；
- *   - image.ts：SVG／PNG、長行斷開。
+ *   - image.ts：深色題目卡與答案卡的 SVG／PNG（題目只畫到出題那一刻）、長行斷開。
  * 用 commit 進 repo 的題庫 sim_bank.json（實戰的局，沒有名字）。
  */
 
@@ -16,10 +16,10 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.setConfig({ testTimeout: 60_000 });
 import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/bank';
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
-import { midDecision } from '../bots/simulation/scenario';
+import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { buildPuzzleSvg, renderPuzzlePng, textWidth, wrapLine } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -269,6 +269,215 @@ describe('image', () => {
     expect(svg).toContain('週三・1-5 尾派');
     const png = renderPuzzlePng(pickView(gameOf(mon), mon), 1);
     expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+  });
+
+  it('draws the record only up to the decision: no later vote, mission or lake reaches the renderer', () => {
+    let truncated = 0;
+    for (let w = 0; w < 8; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const game = gameOf(pick);
+        const pv = pickView(game, pick);
+        const rows = sheetRows(pv);
+        expect(rows.length).toBe(pv.shown.length + 1);
+        const last = rows[rows.length - 1];
+        expect(last.kind).toBe('decision');
+        if (pick.proposal === null) continue; // 刺殺題：整局都公開，只有角色不公開
+        const p = game.proposals[pick.proposal];
+        for (const r of rows.slice(0, -1)) {
+          if (r.kind === 'proposal') expect(r.index).toBeLessThan(pick.proposal);
+          else expect(r.round).toBeLessThan(p.round);
+        }
+        if (last.kind === 'decision') expect([last.round, last.attempt, last.leaderSeat]).toEqual([p.round, p.attempt, pick.seat]);
+        if (publicEvents(game).length > pv.shown.length) truncated++;
+      }
+    }
+    expect(truncated).toBeGreaterThan(30); // 檢查真的有東西被截掉
+  });
+
+  it('the card’s record lines use the site notation and only the rows the renderer got', () => {
+    const [, , wed, thu] = planWeek(bank, 0) as ThreadsPick[];
+    for (const pick of [wed, thu]) {
+      const pv = pickView(gameOf(pick), pick);
+      const rows = sheetRows(pv);
+      const lines = recordLines(rows).map((l) => l.map((p) => p.t).join(''));
+      const proposals = rows.filter((r) => r.kind === 'proposal');
+      // 每次提議一行（隊長＋DC 格式），任務一行，湖一行，每局一個標題
+      for (const r of proposals) if (r.kind === 'proposal') expect(lines.some((l) => l.startsWith(`${r.leaderSeat === 10 ? '0' : r.leaderSeat}家 ${r.line}`))).toBe(true);
+      expect(lines.filter((l) => l.startsWith('任務：')).length).toBe(rows.filter((r) => r.kind === 'quest').length);
+      expect(lines.filter((l) => l.startsWith('湖：')).length).toBe(rows.filter((r) => r.kind === 'lake').length);
+      expect(lines.join('\n')).not.toMatch(/10\s*[家號]/);
+    }
+  });
+
+  it('seats sit around a small round table: 0 at twelve o’clock, clockwise, 5 at six o’clock', () => {
+    const top = seatPosition(10, 300, 400);
+    expect(top.x).toBeCloseTo(300);
+    expect(top.y).toBeLessThan(400);
+    const bottom = seatPosition(5, 300, 400);
+    expect(bottom.x).toBeCloseTo(300);
+    expect(bottom.y).toBeGreaterThan(400);
+    for (const seat of [1, 2, 3, 4]) expect(seatPosition(seat, 300, 400).x).toBeGreaterThan(300); // 右邊往下
+    for (const seat of [6, 7, 8, 9]) expect(seatPosition(seat, 300, 400).x).toBeLessThan(300); // 左邊往上
+    expect(seatPosition(1, 300, 400).y).toBeLessThan(seatPosition(4, 300, 400).y);
+    expect(seatPosition(9, 300, 400).y).toBeLessThan(seatPosition(6, 300, 400).y);
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
+    expect(svg).toContain('<ellipse'); // 圓桌
+    expect(svg).toContain('拇指');
+  });
+
+  it('table, scoresheet and question share one image ≤ 1350; only overflow rows go to a second image', () => {
+    let overflowed = 0;
+    for (let w = 0; w < 4; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const rows = sheetRows(pv);
+        const card = buildPuzzleSvg(pv, 3);
+        const h = Number(/height="(\d+)"/.exec(card)?.[1]);
+        expect(h).toBeLessThanOrEqual(GRID_TARGET_H);
+        const layout = cardLayout(rows.length);
+        const start = gridOverflowStart(pv);
+        const grid = buildGridSvg(pv, 3);
+        const shields = (svg: string): number => (svg.match(/<path /g) ?? []).length;
+        const teamCount = (rs: typeof rows): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0);
+        if (start === null) {
+          expect(grid).toBeNull();
+          expect(layout.rowH).toBeGreaterThanOrEqual(GRID_ROW_MIN);
+          expect(shields(card)).toBe(teamCount(rows)); // 每支盾牌都在題目卡上
+          for (const r of rows) if (r.kind === 'proposal') expect(card).toContain(`>${r.line.split(' ')[0]}<`);
+        } else {
+          overflowed++;
+          expect(grid).not.toBeNull();
+          // 題目卡畫前 start 列、續圖畫剩下的，合起來剛好是全部的列（列只來自 sheetRows，截斷由上面的測試鎖住）
+          expect(shields(card)).toBe(teamCount(rows.slice(0, start)));
+          expect(shields(grid as string)).toBe(teamCount(rows.slice(start)));
+          expect(Number(/height="(\d+)"/.exec(grid as string)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+        }
+        expect(card).not.toMatch(/10\s*家/);
+      }
+    }
+    expect(overflowed).toBeGreaterThan(0); // 長的局真的會用到第二張
+    expect(cardLayout(5)).toMatchObject({ overflow: false, cardRows: 5 });
+    expect(cardLayout(60).overflow).toBe(true);
+    const [, , wed] = planWeek(bank, 0) as ThreadsPick[];
+    const wedPv = pickView(gameOf(wed), wed);
+    expect(renderGridPng(wedPv, 3)).toBeNull(); // 1-5 的牌譜短，一張就夠
+  });
+
+  it('the answer card lists yesterday’s blue and red roles and the result', () => {
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const pv = pickView(gameOf(tue), tue);
+    const svg = buildAnswerSvg(pv);
+    for (const role of ['派西維爾', '梅林', '刺客', '莫甘娜']) expect(svg).toContain(role);
+    // 站長 11/17「刺娜德奧派梅」：紅方在上、藍方在下
+    expect(svg.indexOf('紅方')).toBeLessThan(svg.indexOf('藍方'));
+    expect(svg.indexOf('刺客')).toBeLessThan(svg.indexOf('莫甘娜'));
+    expect(svg.indexOf('莫甘娜')).toBeLessThan(svg.indexOf('派西維爾'));
+    expect(svg).toContain('結果：');
+    expect(svg).toContain(pv.exerciseId);
+    expect(svg).not.toMatch(/10\s*家/);
+    expect(renderAnswerPng(pv).subarray(1, 4).toString('ascii')).toBe('PNG');
+  });
+
+  it('rows follow the site notation: votes, approve counts, 強制, DC text line, lake o/x', () => {
+    for (let w = 0; w < 4; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        for (const r of sheetRows(pv)) {
+          if (r.kind === 'proposal') {
+            expect(r.votes).toHaveLength(10);
+            if (r.forced || !r.reliable) {
+              expect(r.votes.every((v) => v === (r.forced ? 'none' : 'unknown'))).toBe(true);
+              expect(r.approves).toBeNull();
+            } else {
+              expect(r.approves).toBe(r.votes.filter((v) => v === 'approve').length);
+              if (r.approved) expect(r.approves as number).toBeGreaterThanOrEqual(6);
+            }
+            expect(r.line.split(' ')[0]).toBe(r.team.map((x) => (x === 10 ? '0' : String(x))).join(''));
+          }
+          if (r.kind === 'lake') expect(['o', 'x', '']).toContain(r.claim);
+        }
+      }
+    }
+  });
+
+  it('missing vote records look different from forced proposals and get their own legend entry', () => {
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const pv = pickView(gameOf(tue), tue);
+    const i = pv.shown.findIndex((e) => e.kind === 'proposal' && !e.forced);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const plain = buildPuzzleSvg(pv, 2);
+    expect(plain).not.toContain('票沒記錄');
+    expect(plain).toContain('灰 = 強制局不投票');
+    // 同一題，把一次非強制的提議改成票沒記錄
+    const unreliable = { ...pv, shown: pv.shown.map((e, j) => (j === i && e.kind === 'proposal' ? { ...e, votesReliable: false } : e)) };
+    const row = sheetRows(unreliable).find((r) => r.kind === 'proposal' && !r.reliable);
+    expect(row?.kind === 'proposal' && row.votes.every((v) => v === 'unknown')).toBe(true);
+    expect(voteLegend(sheetRows(unreliable))).toContain('？ = 票沒記錄');
+    expect(voteLegend(sheetRows(pv))).not.toContain('票沒記錄');
+    const svg = buildPuzzleSvg(unreliable, 2);
+    expect(svg).toContain('票沒記錄');
+    expect(svg).toContain('#52525b'); // 跟強制局的灰（#18181b）不同色
+    expect(svg).toContain('>？<');
+    expect(textWidth(voteLegend(sheetRows(unreliable)), 21)).toBeLessThanOrEqual(1080 - 80);
+  });
+
+  it('the viewer’s own lake result shows in the lake row even on a marked seat; nobody else’s lake result is shown', () => {
+    // 實際的題目：有 seen 的只會是出題的人自己湖的那一列，而且跟那個座位的陣營一致
+    for (let w = 0; w < 8; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        for (const r of sheetRows(pv)) {
+          if (r.kind !== 'lake') continue;
+          if (r.holderSeat !== pick.seat) expect(r.seen).toBeUndefined();
+          else {
+            expect(r.seen).toBe(isRed(pv.game.seatRoles[r.targetSeat - 1]) ? 'red' : 'good');
+          }
+        }
+      }
+    }
+    // 派西湖到拇指（座位已經有「拇指」標記）：湖的那一列照樣寫出私下看到的結果
+    let found: { pv: ReturnType<typeof pickView>; target: number } | null = null;
+    for (let w = 0; w < 8 && !found; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const lake = pv.shown.find((e) => e.kind === 'lake');
+        if (lake && lake.kind === 'lake' && pv.view.sight.kind === 'percival') {
+          found = { pv, target: lake.targetSeat };
+          break;
+        }
+      }
+    }
+    if (found) {
+      const { pv, target } = found;
+      const sight = pv.view.sight as Extract<typeof pv.view.sight, { kind: 'percival' }>;
+      const evil = isRed(pv.game.seatRoles[target - 1]);
+      const mine = {
+        ...pv,
+        shown: pv.shown.map((e) => (e.kind === 'lake' && e.targetSeat === target ? { ...e, holderSeat: pv.pick.seat } : e)),
+        view: { ...pv.view, sight: { ...sight, thumbs: [target, ...sight.thumbs.filter((t) => t !== target)].slice(0, 2) }, ownLakes: [{ targetSeat: target, evil }] },
+      };
+      const row = sheetRows(mine).find((r) => r.kind === 'lake' && r.targetSeat === target);
+      expect(row?.kind === 'lake' && row.seen).toBe(evil ? 'red' : 'good');
+      const svg = buildPuzzleSvg(mine, 2);
+      expect(svg).toContain(`你看到：${evil ? '紅' : '好人'}`);
+      expect(svg).toContain('拇指');
+      expect(recordLines(sheetRows(mine)).map((l) => l.map((x) => x.t).join('')).join('\n')).toContain(`（你看到的：${evil ? '紅' : '好人'}）`);
+      // 別人的湖不畫結果
+      if (!pv.shown.some((e) => e.kind === 'lake' && e.holderSeat === pv.pick.seat)) expect(buildPuzzleSvg(pv, 2).includes('你看到：')).toBe(false);
+    }
+    expect(found).not.toBeNull();
+    expect(textWidth('0 家 驗 0 家 → 宣告藍（你看到：好人）', 22)).toBeLessThanOrEqual(10 * 63);
+  });
+
+  it('the post text keeps theme, record, question, yesterday’s answer, 題號 and the tag only', () => {
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const d = gen.draftFor('2026-11-18') as ThreadsDraft;
+    const lines = d.post.text.split('\n');
+    expect(lines[0]).toContain('週三・1-5 尾派');
+    expect(lines.at(-2)).toBe(`題號 ${d.exerciseId}`);
+    expect(lines.at(-1)).toBe(THREADS_TOPIC_TAG);
+    expect(d.post.text).not.toContain('留言寫');
   });
 
   it('wraps long lines at a comma or bracket', () => {

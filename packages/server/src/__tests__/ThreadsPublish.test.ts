@@ -64,14 +64,17 @@ function gen(stateDir: string, picks: Map<string, string> = new Map()): ThreadsG
 interface FakeServer {
   containers: Map<string, URLSearchParams>;
   posts: { id: string; text: string; permalink?: string; timestamp?: string }[];
-  replies: { id: string; text: string; replied_to: { id: string } }[];
+  /** 回覆（mine = false 是別人的）。 */
+  replies: { id: string; text: string; replied_to: { id: string }; mine?: boolean }[];
+  /** 回覆列表一頁幾則（測分頁用）。 */
+  pageSize: number;
   publishCalls: string[];
   /** 發出去的貼文的時間（預設台北 11/18 中午）。 */
   now: string;
 }
 
 function fakeServer(): FakeServer {
-  return { containers: new Map(), posts: [], replies: [], publishCalls: [], now: '2026-11-18T04:00:00+0000' };
+  return { containers: new Map(), posts: [], replies: [], publishCalls: [], now: '2026-11-18T04:00:00+0000', pageSize: 50 };
 }
 
 const ON_17 = '2026-11-17T04:10:00+0000';
@@ -131,7 +134,15 @@ function fakeApi(
       return reply(200, { id });
     }
     if (u.pathname.endsWith('/42/threads')) return reply(200, { data: [...server.posts, ...(opts.recent ?? [])] });
-    if (u.pathname.endsWith('/42/replies')) return reply(200, { data: server.replies });
+    const repliesOf = /\/v1\.0\/([^/]+)\/replies$/.exec(u.pathname);
+    if (repliesOf) {
+      // 某一篇底下的回覆，照分頁（after＝從第幾則開始）
+      const all = server.replies.filter((r) => r.replied_to.id === repliesOf[1]);
+      const start = Number(u.searchParams.get('after') ?? 0);
+      const page = all.slice(start, start + server.pageSize).map((r) => ({ id: r.id, text: r.text, username: r.mine === false ? 'someone' : 'me', is_reply_owned_by_me: r.mine !== false }));
+      const more = start + server.pageSize < all.length;
+      return reply(200, { data: page, paging: { cursors: { after: String(start + server.pageSize) }, ...(more ? { next: 'https://next' } : {}) } });
+    }
     if (u.searchParams.get('fields') === 'status,error_message') {
       const cid = u.pathname.split('/').pop() ?? '';
       return reply(200, { status: server.publishCalls.includes(cid) && [...server.posts, ...server.replies].some((x) => x.id === `p${cid}`) ? 'PUBLISHED' : 'FINISHED' });
@@ -384,6 +395,35 @@ describe('prepare + post', () => {
     expect(creates).toHaveLength(1);
     expect(creates[0].params.get('text')).toBe(plan.text);
     expect(server.posts).toHaveLength(1);
+  });
+
+  it('our earlier comment on page 2 of the replies is found (pagination followed): no new comment', async () => {
+    const { plan, stateDir } = prepared();
+    const server = fakeServer();
+    server.pageSize = 2;
+    server.posts.push({ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜`, timestamp: ON_18 });
+    for (let i = 0; i < 3; i++) server.replies.push({ id: `o${i}`, text: '別人的回覆', replied_to: { id: 'dup' }, mine: false });
+    server.replies.push({ id: 'mine', text: plan.comment, replied_to: { id: 'dup' } });
+    const { api, calls } = fakeApi({}, server);
+    const res = await postDaily(plan, { api, stateDir });
+    expect(res).toMatchObject({ status: 'found-existing', commentId: 'mine' });
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    expect(calls.filter((c) => c.path.endsWith('/dup/replies')).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('too many pages of replies to be sure: fails closed and does not post a comment', async () => {
+    const { plan, stateDir } = prepared();
+    const server = fakeServer();
+    server.pageSize = 1;
+    server.posts.push({ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜`, timestamp: ON_18 });
+    for (let i = 0; i < 25; i++) server.replies.push({ id: `o${i}`, text: '別人的回覆', replied_to: { id: 'dup' }, mine: false });
+    const { api, calls } = fakeApi({}, server);
+    await expect(api.findOwnReplyTo('dup', 3)).rejects.toThrow('確認不了');
+    const res = await postDaily(plan, { api, stateDir });
+    expect(res.commentId).toBeNull();
+    expect(res.notes.join()).toContain('第一則留言這次不發');
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    expect(server.replies.filter((r) => r.mine !== false)).toHaveLength(0);
   });
 
   it('server published but the response was lost: adopts that post and that reply instead of publishing again', async () => {

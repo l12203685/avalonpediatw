@@ -22,7 +22,7 @@ import { draftMarkdown } from '../src/bots/threads/draft';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
 import { pickOverrideOf } from '../src/bots/threads/picksFile';
-import { renderPuzzlePng } from '../src/bots/threads/image';
+import { renderAnswerPng, renderGridPng, renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 
 const root = path.resolve(__dirname, '..');
@@ -77,6 +77,33 @@ for (let i = 0; i < days; i++) {
   if (!draft) {
     console.warn(`${date}: no puzzle for this theme`);
     continue;
+  }
+  // 輪播第二張：牌譜放不進題目卡時才有的牌譜續圖（後面的列）。
+  if (pv && image) {
+    try {
+      const grid = renderGridPng(pv, weekdayOf(date));
+      if (grid) {
+        fs.writeFileSync(path.join(outDir, `${date}-grid.png`), grid);
+        draft.post.gridImage = `${date}-grid.png`;
+      }
+    } catch (err) {
+      console.warn(`${date}: grid image skipped (${(err as Error).message})`);
+    }
+  }
+  // 公布完整答案的日子（昨天不是同一局接著打）另附答案圖：昨天那一局的角色。
+  if (withImage && draft.answerToYesterday && !draft.continuesYesterday) {
+    const yPick = gen.pickFor(addDays(date, -1));
+    const yPv = yPick ? gen.viewOf(yPick) : null;
+    if (yPv) {
+      const before = yPick?.continues ? gen.pickFor(addDays(date, -2)) : null;
+      const ids = before && before.gameId === yPv.pick.gameId ? [gen.viewOf(before)?.exerciseId, yPv.exerciseId].filter((x): x is string => !!x) : [yPv.exerciseId];
+      try {
+        fs.writeFileSync(path.join(outDir, `${date}-answer.png`), renderAnswerPng(yPv, ids));
+        draft.post.answerImage = `${date}-answer.png`;
+      } catch (err) {
+        console.warn(`${date}: answer image skipped (${(err as Error).message})`);
+      }
+    }
   }
   fs.writeFileSync(path.join(outDir, `${date}.json`), `${JSON.stringify(draft, null, 2)}\n`);
   fs.writeFileSync(path.join(outDir, `${date}.md`), draftMarkdown(draft));
