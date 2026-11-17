@@ -92,4 +92,17 @@ describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
     nav.openGrouping({ kind: 'tier' } as never);
     expect(useDiscoveryNav.getState()).toMatchObject({ tab: 'advanced', view: 'compare' });
   });
+
+  // PR #54 review：排行點名字之後 focus 一直不是 null；進階分頁之後每次掛載都強制切玩家雷達，
+  // 會蓋掉記下的小分頁（從這裡開始 → 角色／位置）與自動發現「看全部」的跳轉。
+  it('排行點名字只在點的那一下切到玩家雷達（由頁面記下小分頁），進階分頁掛載時不看 focus 切小分頁', () => {
+    const views = fs.readFileSync(path.join(web, 'components', 'analysis', 'core', 'CoreTabViews.tsx'), 'utf-8');
+    const advanced = views.slice(views.indexOf('export function AdvancedCoreTab'));
+    expect(advanced).not.toMatch(/if \(focus\)/);
+    expect(advanced).not.toMatch(/setView\('players'\)/);
+    // 頁面：一進來就有 focus → 進階 › 玩家雷達；focus 換了 → goTo（記下小分頁再重新掛載）
+    expect(resolveTab('players')).toEqual({ tab: 'advanced', sub: 'players' });
+    expect(page).toMatch(/if \(focus\) return resolveTab\('players'\)/);
+    expect(page).toMatch(/if \(focus !== seenFocus\) \{\s*setSeenFocus\(focus\);\s*if \(focus\) goTo\(resolveTab\('players'\)\);/);
+  });
 });

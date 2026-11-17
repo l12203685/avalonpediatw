@@ -141,8 +141,8 @@ export function AdvancedCoreTab({ focus }: { focus: { name: string; seq: number 
     if (nav.view === 'discovery') { setView('discovery'); nav.consumeView(); }
     else if (nav.view === 'compare') setView('strength');
   }, [nav.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
-  // 排行點名字（focus）→ 玩家雷達
-  useEffect(() => { if (focus) setView('players'); }, [focus?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+  // 排行點名字（focus）→ 玩家雷達：由 AnalyticsPage 在「點名字的那一下」記下 players 小分頁再重新掛載（initialTarget／goTo），
+  // 這裡不看 focus 切小分頁——focus 點過之後一直不是 null，掛載時強制切到玩家雷達會蓋掉記下的小分頁與上面自動發現的跳轉。
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500">{t(`${K}.advancedIntro`)}</p>
