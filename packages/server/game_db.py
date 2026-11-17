@@ -28,6 +28,11 @@ Level ``error`` = the record contradicts the rules of the game (a wrong seat, a 
 target, two sources that disagree, a likely duplicate); ``info`` = worth knowing, not wrong. Nothing is fixed
 automatically: the list is for a person to correct the source.
 
+Excluded games (Edward 2026-11-17「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」): a game that breaks an
+EXCLUDE_RULES rule in any of its sources -- the assassin shot a teammate (every red flips at the assassination,
+Oberon included) or a forced 5th proposal that did not go on the mission -- is left out of ``games`` and every
+count; the report lists those games by id and date only. The sources themselves are never changed.
+
 Privacy: no player names, no titles, no free text -- seats, the parsed record, ids and dates only (the same
 level as the public dataset). The repo is public.
 
@@ -44,6 +49,7 @@ import os
 import re
 import sys
 import tempfile
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -51,6 +57,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import discord_records_import as dri
 import generate_cache as gc
 import records_merge as rm
+import voting_stats as vs
 
 HERE = Path(__file__).resolve().parent
 FORMAT = "avalon-game-db"
@@ -95,17 +102,17 @@ RULES: dict[str, tuple[str, str]] = {
     "CONFIG": (ERROR, "配置不是 6 個不同的座位"),
     "TEAM_SEATS": (ERROR, "隊伍裡有重複或不存在的座位"),
     "TEAM_SIZE": (ERROR, "隊伍人數不合 10 人局（3、4、4、5、5）"),
-    "PROPOSALS": (ERROR, "一局的提議數不在 1～5 次"),
+    "PROPOSALS": (ERROR, "一局沒有提議"),
+    "FORCED_NOT_RUN": (ERROR, "第 5 次提議（尾派）沒有出任務（有第 6 次提議、或第 5 次提議後沒有任務）"),
     "MISSION_SIZE": (ERROR, "任務張數跟隊伍人數不一樣"),
     "FAILS_GT_RED": (ERROR, "失敗張數比隊上的紅方多"),
     "AFTER_DECIDED": (ERROR, "已經有一方拿到 3 局，後面還有局"),
     "UNDECIDED": (ERROR, "紀錄在任何一方拿到 3 局之前就結束"),
     "OUTCOME": (ERROR, "結果欄跟任務結果或刺殺對不上"),
-    "ASSASSIN_RED": (ERROR, "刺殺目標是刺客認得的紅方（莫甘娜、莫德雷德、自己）"),
+    "ASSASSIN_TEAMMATE": (ERROR, "刺客刺到隊友（紅方刺殺時全部開牌，奧伯倫也開）"),
     "LAKE": (ERROR, "湖中女神不合規則（同一人、斷鏈、驗過的人又被驗、不在第 2～4 局後）"),
     "VOTE_MARKS": (WARN, "投票記號跟隊伍對不上（場內才會有 -、場外才會有 +；多半是座位寫錯）"),
     "VOTE_RESULT": (WARN, "投票張數跟提議過不過對不上（多半是漏記了場外白／場內黑）"),
-    "ASSASSIN_OBERON": (WARN, "刺客刺了奧伯倫（刺客不認得奧伯倫，可能發生，但值得確認）"),
     "ASSASSIN_MISSING": (WARN, "三藍卻沒有刺殺目標"),
     "ASSASSIN_EXTRA": (WARN, "三紅卻有刺殺目標"),
     "OUTCOME_MISSING": (WARN, "沒有結果"),
@@ -121,6 +128,9 @@ RULES: dict[str, tuple[str, str]] = {
     "LEADER": (INFO, "推不出隊長輪替（隊長多半會派自己，這局對不起來）"),
 }
 LEVEL_ORDER = {ERROR: 0, WARN: 1, INFO: 2}
+# 錯誤局：不用記錄（Edward 2026-11-17）-- the game is left out of the database, not just flagged
+EXCLUDE_RULES = ("ASSASSIN_TEAMMATE", "FORCED_NOT_RUN")
+RED_ROLES = ("刺客", "莫甘娜", "莫德雷德", "奧伯倫")  # 配置 order: config[0..3]
 OWNER_FLAGS = ("flag:review", "flag:badGame", "flag:incident", "flag:substitution", "flag:lakeCorrected")
 
 
@@ -145,8 +155,34 @@ def strip_names(game: Mapping[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-def dataset_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
-    """games_cache.json rows -> sources (sheet / dc_import)."""
+def raw_forced_rounds(text: str) -> list[int]:
+    """Rounds with more than 5 proposals in a sheet row's raw 文字記錄 (only used for rows the dataset could not
+    convert: voting_stats drops such a round, so the parsed row cannot show it). Trusted only when every round
+    ends in a mission line of the right size; nothing of the text is kept."""
+    sizes: list[int] = []
+    pending = 0
+    for raw in (text or "").splitlines():
+        line = " ".join(unicodedata.normalize("NFKC", raw).translate(vs._SYMBOLS).strip().strip("`*_~|").split())
+        if re.fullmatch(r"[oxOX](?: ?[oxOX]){0,4}", line):
+            mission = line.replace(" ", "")
+        else:
+            m = vs._PROPOSAL.fullmatch(line)
+            if not m:
+                continue
+            pending += 1
+            mission = m.group(4) or ""
+        if mission:
+            if len(sizes) >= len(TEAM_SIZES) or len(mission) != TEAM_SIZES[len(sizes)] or not pending:
+                return []
+            sizes.append(pending)
+            pending = 0
+    if pending:
+        return []
+    return [r for r, n in enumerate(sizes, 1) if n > FORCED_ATTEMPT]
+
+
+def dataset_sources(doc: Mapping[str, Any] | None, raw_text: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
+    """games_cache.json rows -> sources (sheet / dc_import). raw_text = 流水號 -> 文字記錄 of the 牌譜 snapshot."""
     out: list[dict[str, Any]] = []
     if not doc:
         return out
@@ -156,6 +192,7 @@ def dataset_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
         src = SRC_IMPORT if row[idx["src"]] == gc.GAME_SOURCE_DISCORD else SRC_SHEET
         category = doc["vocab"]["category"][row[idx["cat"]]]
         game, reason = rm.sheet_game(row, doc)
+        forced = raw_forced_rounds((raw_text or {}).get(str(row[idx["id"]]), "")) if src == SRC_SHEET and not game else []
         notes = row[idx["note"]] if isinstance(row[idx["note"]], list) else []
         flags = sorted(note_vocab[i] for i in notes if 0 <= i < len(note_vocab) and note_vocab[i] in OWNER_FLAGS)
         lineup = row[idx["lineup"]] if "lineup" in idx else []
@@ -173,6 +210,7 @@ def dataset_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
             "flags": flags,
             # the fingerprint records_merge uses for this row (also when the row does not convert)
             "fp": rm.row_fingerprint(row, idx),
+            **({"forced_rounds": forced} if forced else {}),
         })
     return out
 
@@ -313,8 +351,12 @@ def validate(game: Mapping[str, Any], partial: bool = False, inferred: list[dict
         mission = str(rnd.get("mission") or "")
         if decided_at:
             checks.append(_check("AFTER_DECIDED", f"第 {decided_at} 局已經分出勝負，後面還有第 {r} 局"))
-        if not 1 <= len(props) <= 5:
-            checks.append(_check("PROPOSALS", f"第 {r} 局有 {len(props)} 次提議"))
+        if not props:
+            checks.append(_check("PROPOSALS", f"第 {r} 局沒有提議"))
+        elif len(props) > FORCED_ATTEMPT:
+            checks.append(_check("FORCED_NOT_RUN", f"第 {r} 局有 {len(props)} 次提議（第 5 次提議沒有出任務）"))
+        elif len(props) == FORCED_ATTEMPT and not mission and not (partial and r == len(rounds)):
+            checks.append(_check("FORCED_NOT_RUN", f"第 {r} 局第 5 次提議後沒有任務結果"))
         for k, p in enumerate(props, 1):
             team = str(p.get("team", ""))
             all_teams.append(team)
@@ -369,10 +411,8 @@ def validate(game: Mapping[str, Any], partial: bool = False, inferred: list[dict
         return checks + lake_checks(game, rounds, partial)
     if rounds and not decided_at:
         checks.append(_check("UNDECIDED", f"紀錄停在第 {len(rounds)} 局（藍 {blue}、紅 {red}），沒有一方拿到 3 局"))
-    if config_ok and kill and kill == config[3]:
-        checks.append(_check("ASSASSIN_OBERON", f"刺殺目標 {seat_label(kill)} 是奧伯倫"))
-    elif config_ok and kill and kill in reds:
-        checks.append(_check("ASSASSIN_RED", f"刺殺目標 {seat_label(kill)} 是刺客認得的紅方"))
+    if config_ok and kill and kill in reds:
+        checks.append(_check("ASSASSIN_TEAMMATE", f"刺殺目標 {seat_label(kill)} 是{RED_ROLES[config.index(kill)]}（隊友）"))
     if red == 3:
         expected = gc.OUTCOME_THREE_RED
         if kill:
@@ -480,8 +520,17 @@ def public_id(src: dict[str, Any]) -> str:
     return src["id"]  # Discord post id / D<hash>
 
 
-def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Merge sources by fingerprint (per type), validate, and return the database rows."""
+def excluded_by(src: Mapping[str, Any], partial: bool) -> list[str]:
+    """The EXCLUDE_RULES one source breaks (its own record, so a clean second source does not hide it)."""
+    hit = {c["rule"] for c in validate(src["game"], partial=partial) if c["rule"] in EXCLUDE_RULES} if src["game"] else set()
+    if src.get("forced_rounds"):
+        hit.add("FORCED_NOT_RUN")
+    return [r for r in EXCLUDE_RULES if r in hit]
+
+
+def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """Merge sources by fingerprint (per type), validate, and return the database rows. Games that break an
+    EXCLUDE_RULES rule in any source are not returned; they go to ``excluded`` (id, date, rules) when given."""
     clusters: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     singles: list[list[dict[str, Any]]] = []
     for s in sources:
@@ -502,6 +551,18 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         venue = next((s["venue"] for s in members if s["venue"]), "")
         legacy = sorted({s["legacy"] for s in members if s["legacy"]})
         s_value = next((s["s"] for s in members if s["s"] is not None), None)
+        external = any(s["src"] == SRC_PROAVALON for s in members)
+        hits = {id(s): excluded_by(s, kind == KIND_SIM) for s in members}
+        bad = sorted({r for v in hits.values() for r in v}, key=EXCLUDE_RULES.index)
+        if bad:
+            if excluded is not None:
+                excluded.append({
+                    "id": public_id(cid), "kind": kind, **({"external": True} if external else {}), "date": date,
+                    "rules": bad, "sources": [public_id(s) for s in members],
+                    # 來源不一致：another source of the same game is readable and breaks none of them
+                    "inconsistent": any(s["game"] and not hits[id(s)] for s in members),
+                })
+            continue
         checks: list[dict[str, str]] = []
         inferred: list[dict[str, Any]] = []
         if main["game"]:
@@ -526,7 +587,6 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             checks.append(_check("OWNER_FLAG", "、".join(owner)))
         if notes:
             checks.append(_check("SOURCE_NOTE", "、".join(SOURCE_NOTES.get(f, f) for f in notes)))
-        external = any(s["src"] == SRC_PROAVALON for s in members)
         if "proavalon:shotLoyalSeatUnknown" in flags:  # the source never says which loyal servant was shot
             checks = [c for c in checks if c["rule"] != "ASSASSIN_MISSING"]
         checks.sort(key=lambda c: (LEVEL_ORDER[c["level"]], c["rule"], c["msg"]))
@@ -553,7 +613,10 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     for row in rows:
         if any(c["rule"] == "NEAR_DUP" for c in row["checks"]) and row["status"] == "ok":
             row["status"] = WARN
-    rows.sort(key=lambda r: ({KIND_REAL: 0, KIND_BOT: 1, KIND_SIM: 2}[r["kind"]], r["date"] == "", _neg(r["date"]), r["id"]))
+    order = lambda r: ({KIND_REAL: 0, KIND_BOT: 1, KIND_SIM: 2}[r["kind"]], r["date"] == "", _neg(r["date"]), r["id"])  # noqa: E731
+    rows.sort(key=order)
+    if excluded is not None:
+        excluded.sort(key=order)
     return rows
 
 
@@ -594,7 +657,7 @@ def group(r: Mapping[str, Any]) -> str:
     return GROUP_EXTERNAL if r.get("external") else r["kind"]
 
 
-def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def summarize(rows: Sequence[Mapping[str, Any]], excluded: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     by_kind = Counter(group(r) for r in rows)
     by_status: dict[str, Counter] = defaultdict(Counter)
     rules: dict[str, Counter] = defaultdict(Counter)
@@ -616,6 +679,9 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "external": sum(1 for r in rows if r.get("external")),
         "rules": {k: dict(sorted(v.items())) for k, v in sorted(rules.items())},
         "combos": [{"kind": k, "sources": s, "readable": ok, "games": n} for (k, s, ok), n in sorted(combos.items())],
+        # 錯誤局 left out of ``games`` (not counted above): rule -> group -> games
+        "excluded": {rule: dict(sorted(Counter(group(e) for e in excluded if rule in e["rules"]).items()))
+                     for rule in EXCLUDE_RULES},
     }
 
 
@@ -651,6 +717,18 @@ def load_json(path: Path) -> Any:
         return None
 
 
+def snapshot_texts(snapshot: Any) -> dict[str, str]:
+    """流水號 -> 文字記錄 of the 牌譜 snapshot (read only to spot rounds with a 6th proposal; never written out)."""
+    if not snapshot or not isinstance(snapshot.get("牌譜"), list) or not snapshot["牌譜"]:
+        return {}
+    header, *data = snapshot["牌譜"]
+    col = {h: i for i, h in enumerate(header)}
+    if "流水號" not in col or "文字記錄" not in col:
+        return {}
+    n = max(col["流水號"], col["文字記錄"])
+    return {r[col["流水號"]].strip(): r[col["文字記錄"]] for r in data if len(r) > n and r[col["流水號"]].strip()}
+
+
 def coverage(rows: Sequence[Mapping[str, Any]], snapshot: Any, sim_bank: Any, records_sheet_ids: set[str],
              dataset_sheet_ids: set[str]) -> dict[str, Any]:
     """How the derived files line up with the database (report only)."""
@@ -675,7 +753,8 @@ def coverage(rows: Sequence[Mapping[str, Any]], snapshot: Any, sim_bank: Any, re
     return out
 
 
-def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], cov: Mapping[str, Any], path: Path) -> None:
+def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], cov: Mapping[str, Any], path: Path,
+                 excluded: Sequence[Mapping[str, Any]] = (), hammer: int = 0) -> None:
     """docs/data/game_db_report.md: counts by rule and the list of games to look at (ids only)."""
     L: list[str] = []
     L.append("# 牌譜總庫：檢查報告")
@@ -696,6 +775,33 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         L.append(f"| {kind_name[k]} | {total} | {st.get('ok', 0)} | {st.get(WARN, 0)} | {st.get(ERROR, 0)} | {st.get('unreadable', 0)} |")
     L.append("")
     L.append(f"多個來源合成一局的：{counts['merged']} 局。")
+    L.append("")
+    L.append(f"## 錯誤局：不記錄（{len(excluded)}）")
+    L.append("")
+    L.append("站長 2026-11-17：「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」。這些局不進總庫（不在 `games`、"
+             "上面和下面的數字都不算），來源本身不動。任何一個來源有這種錯就排除；同一局另一個來源沒有這種錯的，另列「來源不一致，已排除」。")
+    L.append("")
+    L.append("| 規則 | 說明 | 實戰 | 外部 | 模擬 |")
+    L.append("|---|---|---|---|---|")
+    for rule in EXCLUDE_RULES:
+        n = counts["excluded"].get(rule, {})
+        L.append(f"| `{rule}` | {RULES[rule][1]} | {n.get(KIND_REAL, 0) + n.get(KIND_BOT, 0)} | {n.get(GROUP_EXTERNAL, 0)} | {n.get(KIND_SIM, 0)} |")
+    if hammer:
+        L.append("")
+        L.append(f"另外 ProAvalon 第 5 次提議被否決而輸的 {hammer} 局，匯入時就沒有轉進來（同屬尾派沒有出任務）。")
+    if excluded:
+        L.append("")
+    for title, part in (("", [e for e in excluded if not e["inconsistent"]]), ("來源不一致，已排除", [e for e in excluded if e["inconsistent"]])):
+        if not part:
+            continue
+        if title:
+            L.append("")
+            L.append(f"{title}（{len(part)}）：")
+            L.append("")
+        for rule in EXCLUDE_RULES:
+            ids = [f"{e['id']}（{e['date'] or '沒有日期'}）" for e in part if rule in e["rules"]]
+            if ids:
+                L.append(f"- `{rule}`：" + "、".join(ids))
     ext_rows = [r for r in rows if r.get("external")]
     if ext_rows:
         L.append("")
@@ -772,6 +878,8 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append("|---|---|---|---|---|---|")
     level_name = {ERROR: "錯", WARN: "提醒", INFO: "參考"}
     for rule, (level, name) in RULES.items():
+        if rule in EXCLUDE_RULES:
+            continue  # counted in 錯誤局：不記錄
         real = counts["rules"].get(KIND_REAL, {}).get(rule, 0) + counts["rules"].get(KIND_BOT, {}).get(rule, 0)
         sim = counts["rules"].get(KIND_SIM, {}).get(rule, 0)
         ext = counts["rules"].get(GROUP_EXTERNAL, {}).get(rule, 0)
@@ -850,18 +958,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not games_doc and not records_doc:
         print("game_db: neither games_cache.json nor records_cache.json found; nothing written", file=sys.stderr)
         return 1
-    sources = dataset_sources(games_doc)
+    snapshot = load_json(Path(args.snapshot))
+    sources = dataset_sources(games_doc, snapshot_texts(snapshot))
     rec_sources, records_sheet_ids = records_sources(records_doc)
     sources += rec_sources
-    sources += proavalon_sources(load_json(Path(args.proavalon)))
-    rows = build(sources)
-    counts = summarize(rows)
+    proavalon_doc = load_json(Path(args.proavalon))
+    sources += proavalon_sources(proavalon_doc)
+    excluded: list[dict[str, Any]] = []
+    rows = build(sources, excluded)
+    counts = summarize(rows, excluded)
     dataset_sheet_ids = {s["id"] for s in sources if s["src"] == SRC_SHEET}
-    cov = coverage(rows, load_json(Path(args.snapshot)), load_json(Path(args.sim_bank)), records_sheet_ids, dataset_sheet_ids)
+    cov = coverage(rows, snapshot, load_json(Path(args.sim_bank)), records_sheet_ids, dataset_sheet_ids)
+    hammer = sum(n for why, n in ((proavalon_doc or {}).get("skipped") or {}).items() if "5th proposal" in why)
     write_db(rows, counts, Path(args.output))
     if args.report:
-        write_report(rows, counts, cov, Path(args.report))
-    print(f"game_db: {counts['games']} games {counts['byKind']}; merged {counts['merged']}; status {counts['byStatus']}")
+        write_report(rows, counts, cov, Path(args.report), excluded, hammer)
+    print(f"game_db: {counts['games']} games {counts['byKind']}; merged {counts['merged']}; status {counts['byStatus']}; "
+          f"excluded {len(excluded)} {counts['excluded']}")
     return 0
 
 

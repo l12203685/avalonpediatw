@@ -63,12 +63,24 @@ class ValidateTest(unittest.TestCase):
         g["outcome"] = "三藍死"
         self.assertNotIn("OUTCOME", rules(g))
 
-    def test_assassin_target_cannot_be_red(self):
+    def test_assassin_target_cannot_be_a_teammate(self):
+        for seat in "1234":  # 刺客 itself, 莫甘娜, 莫德雷德 and 奧伯倫 (every red flips at the assassination)
+            g = copy.deepcopy(GOOD)
+            g["assassination"] = seat
+            self.assertIn("ASSASSIN_TEAMMATE", rules(g))
+        self.assertIn("奧伯倫", next(c["msg"] for c in gd.validate(g) if c["rule"] == "ASSASSIN_TEAMMATE"))
+
+    def test_forced_fifth_proposal_must_go(self):
         g = copy.deepcopy(GOOD)
-        g["assassination"] = "2"
-        self.assertIn("ASSASSIN_RED", rules(g))
-        g["assassination"] = "4"  # Oberon: possible (the assassin does not know him), only a warning
-        self.assertEqual([c for c in gd.validate(g) if c["rule"] == "ASSASSIN_OBERON"][0]["level"], gd.WARN)
+        g["rounds"][1]["proposals"] = [{"team": t, "votes": []} for t in ("1578", "1579", "1570", "1678", "1679")]
+        self.assertNotIn("FORCED_NOT_RUN", rules(g))  # the 5th went
+        g["rounds"][1]["proposals"].append({"team": "5678", "votes": ["90+"]})  # a 6th: the 5th did not go
+        self.assertIn("FORCED_NOT_RUN", rules(g))
+        g = copy.deepcopy(GOOD)
+        g["rounds"].append({"proposals": [{"team": t, "votes": []} for t in ("12345", "12346", "12347", "12348", "12349")],
+                            "mission": ""})  # 5th proposal, then no mission
+        self.assertIn("FORCED_NOT_RUN", rules(g))
+        self.assertNotIn("FORCED_NOT_RUN", rules(g, partial=True))  # a 模擬 record may stop right there
 
     def test_vote_result_needs_six_approvals(self):
         g = copy.deepcopy(GOOD)
@@ -207,6 +219,67 @@ class BuildTest(unittest.TestCase):
             doc = json.loads(a.read_text(encoding="utf-8"))
             self.assertEqual(doc["format"], gd.FORMAT)
             self.assertEqual(doc["games"][0]["id"], "S12")
+
+
+class ExcludeTest(unittest.TestCase):
+    """Edward 2026-11-17「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」: left out of the database."""
+
+    def build(self, *sources):
+        excluded = []
+        rows = gd.build(list(sources), excluded)
+        return rows, excluded
+
+    def stabbed(self, seat):
+        g = copy.deepcopy(GOOD)
+        g["assassination"] = seat
+        return g
+
+    def test_oberon_stab_is_excluded(self):
+        rows, excluded = self.build(source(gd.SRC_SHEET, "12", self.stabbed("4")))
+        self.assertEqual(rows, [])
+        self.assertEqual([(e["id"], e["date"], e["rules"], e["inconsistent"]) for e in excluded],
+                         [("S12", "2026-01-02", ["ASSASSIN_TEAMMATE"], False)])
+
+    def test_morgana_stab_is_excluded(self):
+        rows, excluded = self.build(source(gd.SRC_DISCORD, "999", self.stabbed("2")))
+        self.assertEqual((rows, [e["id"] for e in excluded]), ([], ["999"]))
+
+    def test_fifth_proposal_not_run_is_excluded(self):
+        g = copy.deepcopy(GOOD)
+        g["rounds"][1]["proposals"] = [{"team": t, "votes": []} for t in ("1578", "1579", "1570", "1678", "1679", "5678")]
+        rows, excluded = self.build(source(gd.SRC_SHEET, "12", g))
+        self.assertEqual((rows, excluded[0]["rules"]), ([], ["FORCED_NOT_RUN"]))
+
+    def test_clean_game_is_kept_and_counts_leave_excluded_out(self):
+        other = self.stabbed("3")
+        other["rounds"][1]["proposals"][0]["team"] = "1579"  # another game (does not merge with S12)
+        rows, excluded = self.build(source(gd.SRC_SHEET, "12", GOOD),
+                                    source(gd.SRC_PROAVALON, "ab", other, date="2021-01-01"))
+        self.assertEqual([r["id"] for r in rows], ["S12"])
+        counts = gd.summarize(rows, excluded)
+        self.assertEqual(counts["games"], 1)
+        self.assertEqual(counts["excluded"]["ASSASSIN_TEAMMATE"], {gd.GROUP_EXTERNAL: 1})
+
+    def test_error_in_one_source_only_is_excluded_as_inconsistent(self):
+        rows, excluded = self.build(source(gd.SRC_SHEET, "12", self.stabbed("4")),
+                                    source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD)))  # same fingerprint, clean
+        self.assertEqual(rows, [])
+        self.assertEqual((excluded[0]["id"], excluded[0]["inconsistent"]), ("999", True))
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "r.md"
+            gd.write_report(rows, gd.summarize(rows, excluded), {}, report, excluded)
+            text = report.read_text(encoding="utf-8")
+            self.assertIn("來源不一致，已排除（1）", text)
+            self.assertIn("999（2026-01-02）", text)
+
+    def test_sixth_proposal_in_the_raw_sheet_text(self):
+        rounds = [["567"] * 5, ["5678"] * 6, ["5679"]]
+        text = "\n".join("\n".join(teams) + "\n" + "o" * len(teams[0]) for teams in rounds)
+        self.assertEqual(gd.raw_forced_rounds(text), [2])
+        self.assertEqual(gd.raw_forced_rounds(text.replace("oooo\n", "ooo\n", 1)), [])  # misaligned: not trusted
+        src = dict(source(gd.SRC_SHEET, "12", None), forced_rounds=[2])
+        rows, excluded = self.build(src)
+        self.assertEqual((rows, excluded[0]["rules"]), ([], ["FORCED_NOT_RUN"]))
 
 
 class WorkflowTest(unittest.TestCase):
