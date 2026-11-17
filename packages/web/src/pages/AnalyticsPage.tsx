@@ -200,9 +200,9 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
         >
           {/* 每個分頁一句「怎麼用」：這一頁幫你做哪一種決定（2026-11-16） */}
           <p className="mb-3 text-xs leading-relaxed text-zinc-400" data-testid="analysis-howto">{t(`analytics.analysis.howTo.${tab}`)}</p>
-          {tab === 'overview'      && <OverviewTab />}
+          {tab === 'overview'      && <OverviewTab onOpenAssassination={() => setTab('assassination')} />}
           {tab === 'findings'      && <FindingsTab />}
-          {tab === 'teams'         && <TeamsTab />}
+          {tab === 'teams'         && <TeamsTab onOpenStateTree={() => setTab('stateTree')} />}
           {tab === 'votes'         && <VotesTab />}
           {tab === 'missions'      && <MissionsTab />}
           {tab === 'lake'          && <LakeTab />}
