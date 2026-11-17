@@ -32,7 +32,7 @@ import path from 'path';
 import { WEEKLY_CHART_FONT_FAMILY, WEEKLY_CHART_FONT_FILE, escapeXml } from '../stats/weeklyChart';
 import { ROLE_ZH } from '../simulation/commands';
 import { resultText } from '../simulation/replies';
-import { FAILS_REQUIRED, TEAM_SIZES, type PublicEvent } from '../simulation/scenario';
+import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, type PublicEvent } from '../simulation/scenario';
 import { seatChar } from '../simulation/seats';
 import type { PickView } from './draft';
 import { labelFor } from './plan';
@@ -233,15 +233,50 @@ export function sheetRows(pv: PickView): SheetRow[] {
 // ─── 題目卡 ──────────────────────────────────────────────────────────────
 
 /** 每個座位的標記：你、拇指、看到的紅、隊友、自己湖到的。 */
-function seatMarks(pv: PickView): Map<number, { label: string; color: string }> {
+/**
+ * 從你的視角，湖中女神讓你知道的事（站長 11/18：「湖中呈現到該局狀況下的已知資訊就好 (而且根據湖中鏈還有好人湖中不說謊原則
+ * 1湖9好 9湖中資訊1也會同步知道)」）：只看 known 裡的湖（到那一局為止）。
+ * - 你自己湖到的（看到好／紅）。
+ * - 湖中鏈：你是好人時，你確定是好人的人（你湖到好、或經由湖中鏈確定是好人）宣告的湖一定是真的，所以他湖到的人你也知道；
+ *   一直推到沒有新資訊為止。你是紅方時不推。
+ * 回傳每個知道的座位（via = 誰的湖讓你知道；null＝你自己湖的）與湖中鏈推出的每一步。
+ */
+export function lakeKnowledge(pv: PickView, known: readonly SheetRow[]): {
+  seats: Map<number, { evil: boolean; via: number | null }>;
+  chain: { holder: number; target: number; evil: boolean }[];
+} {
+  const seats = new Map<number, { evil: boolean; via: number | null }>();
+  const chain: { holder: number; target: number; evil: boolean }[] = [];
+  const lakes = known.filter((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
+  for (const l of lakes) if (l.seen && !seats.has(l.targetSeat)) seats.set(l.targetSeat, { evil: l.seen === 'red', via: null });
+  const viewerGood = BLUE_ROLES.includes(pv.game.seatRoles[pv.pick.seat - 1]);
+  if (!viewerGood) return { seats, chain };
+  const isGood = (seat: number): boolean => seat === pv.pick.seat || seats.get(seat)?.evil === false;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const l of lakes) {
+      if (l.holderSeat === pv.pick.seat || !isGood(l.holderSeat) || !l.claim || seats.has(l.targetSeat) || l.targetSeat === pv.pick.seat) continue;
+      const evil = l.claim === 'x';
+      seats.set(l.targetSeat, { evil, via: l.holderSeat });
+      chain.push({ holder: l.holderSeat, target: l.targetSeat, evil });
+      changed = true;
+    }
+  }
+  return { seats, chain };
+}
+
+/** 每個座位的標記；known＝到那一局為止看得到的列（回顧圖只算到那一局，題目卡算到出題那一刻）。 */
+export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string }> {
   const marks = new Map<number, { label: string; color: string }>();
   const s = pv.view.sight;
   if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指', color: C.gold }));
   if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red }));
   if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red }));
-  // 自己湖到的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉。
-  for (const l of pv.view.ownLakes) {
-    if (!marks.has(l.targetSeat)) marks.set(l.targetSeat, { label: l.evil ? '湖到紅' : '湖到好', color: l.evil ? C.red : C.green });
+  // 自己湖到的、湖中鏈推出的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉（夜裡已經知道的不重複）。
+  for (const [seat, k] of lakeKnowledge(pv, known).seats) {
+    if (marks.has(seat)) continue;
+    const label = k.via === null ? (k.evil ? '湖到紅' : '湖到好') : k.evil ? '湖鏈：紅' : '湖鏈：好';
+    marks.set(seat, { label, color: k.evil ? C.red : C.green });
   }
   marks.set(pv.pick.seat, { label: '你', color: C.blue });
   return marks;
@@ -355,14 +390,60 @@ export function missionChips(rows: readonly SheetRow[], x0: number, y0: number, 
  */
 export function lakeLine(rows: readonly SheetRow[]): Seg[] {
   const out: Seg[] = [];
-  rows.forEach((r) => {
-    if (r.kind !== 'lake') return;
+  for (const e of lakeEntries(rows)) {
     if (out.length) out.push({ t: ' | ', fill: C.faint });
-    out.push({ t: `${seatChar(r.holderSeat)} > ${seatChar(r.targetSeat)} `, fill: C.ink });
-    out.push(r.claim === 'o' ? { t: 'o', fill: '#93c5fd', weight: true } : r.claim === 'x' ? { t: 'x', fill: C.red, weight: true } : { t: '沒說', fill: C.soft });
-    if (r.seen) out.push({ t: `（看到${r.seen === 'red' ? '紅' : '好'}）`, fill: r.seen === 'red' ? C.red : C.green });
-  });
+    out.push(...e.segs);
+  }
   return out;
+}
+
+/**
+ * 湖的每一筆：「0 > 1 o」（o 藍、x 紅、沒說）與它下面的註記（站長 11/18：「(看到好) 放湖中下方 不要放旁邊」）：
+ * 你自己湖的寫（看到好／紅）；湖中鏈讓你知道的寫「9 是好人 → 4 是紅」。chain 來自 lakeKnowledge。
+ */
+export function lakeEntries(rows: readonly SheetRow[], chain: readonly { holder: number; target: number; evil: boolean }[] = []): { segs: Seg[]; note?: Seg }[] {
+  const out: { segs: Seg[]; note?: Seg }[] = [];
+  for (const r of rows) {
+    if (r.kind !== 'lake') continue;
+    const segsL: Seg[] = [
+      { t: `${seatChar(r.holderSeat)} > ${seatChar(r.targetSeat)} `, fill: C.ink },
+      r.claim === 'o' ? { t: 'o', fill: '#93c5fd', weight: true } : r.claim === 'x' ? { t: 'x', fill: C.red, weight: true } : { t: '沒說', fill: C.soft },
+    ];
+    const c = chain.find((x) => x.holder === r.holderSeat && x.target === r.targetSeat);
+    const note: Seg | undefined = r.seen
+      ? { t: `（看到${r.seen === 'red' ? '紅' : '好'}）`, fill: r.seen === 'red' ? C.red : C.green }
+      : c ? { t: `${seatChar(c.holder)} 是好人 → ${seatChar(c.target)} 是${c.evil ? '紅' : '好人'}`, fill: c.evil ? C.red : C.green } : undefined;
+    out.push(note ? { segs: segsL, note } : { segs: segsL });
+  }
+  return out;
+}
+
+/** 湖那一段：第一行是每一筆（用 | 隔開），註記放在各自那一筆的正下方（疊到就往下一行）。回傳 SVG 與高度。 */
+export function lakeBlock(entries: readonly { segs: Seg[]; note?: Seg }[], x: number, y: number, size: number, prefix: Seg[] = []): { svg: string; height: number } {
+  if (entries.length === 0) return { svg: '', height: 0 };
+  const line: Seg[] = [...prefix];
+  const starts: number[] = [];
+  const width = (gs: readonly Seg[]): number => textWidth(gs.map((g) => g.t).join(''), size);
+  entries.forEach((e, i) => {
+    if (i > 0) line.push({ t: ' | ', fill: C.faint });
+    starts.push(x + width(line));
+    line.push(...e.segs);
+  });
+  const parts = [segs(x, y, line, size)];
+  const noteSize = Math.max(16, size - 4);
+  const rows: number[] = []; // 每一行註記目前的右邊界
+  entries.forEach((e, i) => {
+    if (!e.note) return;
+    const nx = Math.min(starts[i], W - 40 - textWidth(e.note.t, noteSize));
+    let k = rows.findIndex((right) => nx > right + 10);
+    if (k < 0) {
+      rows.push(-Infinity);
+      k = rows.length - 1;
+    }
+    rows[k] = nx + textWidth(e.note.t, noteSize);
+    parts.push(segs(nx, y + (k + 1) * (noteSize + 10), [e.note], noteSize));
+  });
+  return { svg: parts.join(''), height: rows.length * (noteSize + 10) };
 }
 
 /** 第 round 局出任務的座位（那一局過了的提議的隊伍）；還沒出任務是 []。 */
@@ -422,7 +503,7 @@ export function roundLines(rows: readonly SheetRow[], cx: number, cy: number): s
  * 小圓桌：十個座位排成正圓、圍著中間放大的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「座位不要橢圓 直接圍繞 logo」）。
  * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。每局出任務的座位寫在右邊的任務格裡，湖也寫在右邊。
  */
-function roundTable(pv: PickView, lineRows: readonly SheetRow[], cx: number, cy: number): string {
+function roundTable(pv: PickView, lineRows: readonly SheetRow[], cx: number, cy: number, known: readonly SheetRow[]): string {
   const uri = logoDataUri();
   const r = TABLE_LOGO_R;
   const logo = uri
@@ -432,7 +513,7 @@ function roundTable(pv: PickView, lineRows: readonly SheetRow[], cx: number, cy:
     : '';
   // 那一局的提議連線畫在標誌上面、座位下面
   const parts: string[] = [logo, roundLines(lineRows, cx, cy)];
-  const marks = seatMarks(pv);
+  const marks = seatMarks(pv, known);
   for (let seat = 1; seat <= 10; seat++) {
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
     const m = marks.get(seat);
@@ -477,9 +558,9 @@ const TEXT_X = RES_X + RES_W;
 const GRID_HEAD_H = 50;
 
 /** 格子的欄名：隊長、1～0（你藍、拇指金、看到的紅／隊友紅）、結果、文字紀錄。 */
-function gridHead(pv: PickView, y: number): string {
+function gridHead(pv: PickView, y: number, known: readonly SheetRow[] = sheetRows(pv)): string {
   const parts: string[] = [];
-  const marks = seatMarks(pv);
+  const marks = seatMarks(pv, known);
   const hy = y + 32;
   parts.push(text(GX0 + LEAD_W / 2, hy, '隊長', { size: 20, fill: C.faint, anchor: 'middle' }));
   for (let seat = 1; seat <= 10; seat++) {
@@ -669,7 +750,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const top = 150;
   const cx = 40 + TABLE_BOX_W / 2;
   const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-  parts.push(roundTable(pv, cardRows, cx, cy));
+  parts.push(roundTable(pv, cardRows, cx, cy, rows));
   const rx = 40 + TABLE_BOX_W + 24;
   const rmax = W - 40 - rx;
   // 你的視角：一行寫完（站長 11/18：「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」），太長才換行
@@ -682,21 +763,22 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const chips = missionChips(rows, rx, ty - 10, rmax);
   parts.push(chips.svg);
   ty += chips.height + 30;
-  // 湖：任務格下面一行，從第一次湖的那一局（第 2 局）的任務格下面開始（0 > 5 o | 5 > 9 o | 9 > 8 o）
-  const lake = lakeLine(rows);
-  if (lake.length) {
+  // 湖：任務格下面一行，從第一次湖的那一局（第 2 局）的任務格下面開始（0 > 5 o | 5 > 9 o | 9 > 8 o）；
+  // 註記（看到好、湖中鏈）放在各自那一筆的下面
+  const entries = lakeEntries(rows, lakeKnowledge(pv, rows).chain);
+  if (entries.length) {
     const firstLake = rows.find((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
     const i = Math.max(0, Math.min(4, (firstLake?.round ?? 2) - 1));
     const lx = chips.ys[i] === chips.ys[0] ? chips.xs[i] : rx;
-    const label = lake.map((g) => g.t).join('');
+    const label = lakeLine(rows).map((g) => g.t).join('');
     const avail = W - 40 - lx;
-    const size = Math.max(16, Math.min(24, Math.floor((24 * avail) / Math.max(1, textWidth(label, 24)))));
-    parts.push(segs(lx, ty, lake, size));
+    const size = Math.max(18, Math.min(24, Math.floor((24 * avail) / Math.max(1, textWidth(label, 24)))));
+    parts.push(lakeBlock(entries, lx, ty, size).svg);
   }
 
   // 牌譜格子（只到出題那一刻；太長的話後面的列在第二張）
   let y = CARD_TOP_H;
-  parts.push(gridHead(pv, y));
+  parts.push(gridHead(pv, y, rows));
   y += GRID_HEAD_H;
   for (const r of cardRows.slice(0, layout.cardRows)) {
     parts.push(gridRow(r, y, layout.rowH));
@@ -767,20 +849,22 @@ export function buildRoundSvgs(pv: PickView, weekday: number): { round: number; 
     const top = 150;
     const cx = 40 + TABLE_BOX_W / 2;
     const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-    parts.push(roundTable(pv, part, cx, cy));
+    // 到這一局為止知道的事（這一局的湖算進去，之後的湖不算）
+    const known = rows.filter((r) => r.kind !== 'decision' && r.round <= round);
+    parts.push(roundTable(pv, part, cx, cy, known));
     const rx = 40 + TABLE_BOX_W + 24;
     let ty = top + 80;
     parts.push(text(rx, ty, `第 ${round} 局`, { size: 40, weight: true }));
     ty += 26;
     parts.push(missionChip(rows, round, rx, ty, 78, 94));
     ty += 94 + 44;
-    const lake = lakeLine(part);
-    if (lake.length) parts.push(segs(rx, ty, [{ t: '湖 ', fill: '#a5f3fc', weight: true }, ...lake], 26));
-    ty += 48;
+    const lake = lakeBlock(lakeEntries(part, lakeKnowledge(pv, known).chain), rx, ty, 26, [{ t: '湖 ', fill: '#a5f3fc', weight: true }]);
+    parts.push(lake.svg);
+    ty += 48 + lake.height;
     parts.push(segs(rx, ty, [{ t: '━', fill: LINE_YELLOW }, { t: ' 出任務的隊伍　', fill: C.soft }, { t: '┅', fill: LINE_YELLOW }, { t: ' 其他提議', fill: C.soft }], 20));
     const layout = cardLayout(part.length);
     let y = CARD_TOP_H;
-    parts.push(gridHead(pv, y));
+    parts.push(gridHead(pv, y, known));
     y += GRID_HEAD_H;
     for (const r of part) {
       parts.push(gridRow(r, y, layout.rowH));

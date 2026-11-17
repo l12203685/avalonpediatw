@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, roundLines, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, roundLines, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -407,7 +407,13 @@ describe('image', () => {
       { kind: 'lake' as const, round: 4, holderSeat: 4, targetSeat: 2, claim: '' as const },
     ];
     const line = lakeLine(rows).map((g) => g.t).join('');
-    expect(line).toBe('0 > 1 o | 1 > 9 o（看到好） | 9 > 4 x | 4 > 2 沒說');
+    expect(line).toBe('0 > 1 o | 1 > 9 o | 9 > 4 x | 4 > 2 沒說'); // 看到的結果不放旁邊
+    // （看到好）放在那一筆的正下方
+    const block = lakeBlock(lakeEntries(rows), 100, 500, 24).svg;
+    const note = /<text x="([\d.]+)" y="([\d.]+)"[^>]*>(?:<tspan[^>]*>)?（看到好）/.exec(block)!;
+    expect(Number(note[2])).toBeGreaterThan(500);
+    const entryX = 100 + textWidth('0 > 1 o | ', 24);
+    expect(Number(note[1])).toBeCloseTo(entryX, 0);
     const segsOf = lakeLine(rows);
     expect(segsOf.find((g) => g.t === 'o')?.fill).not.toBe(segsOf.find((g) => g.t === 'x')?.fill); // o 藍、x 紅
     expect(lakeLine([])).toEqual([]);
@@ -473,6 +479,67 @@ describe('image', () => {
         for (const { round, svg: rs } of buildRoundSvgs(pv, 3)) expect((rs.match(/class="lane /g) ?? []).length).toBe(lanes(roundRows(rows, round)));
       }
     }
+  });
+
+  it('lake chain: a player you know is good reports truthfully, so their lake becomes your info (direct and two-hop); red viewers get none; night info is not duplicated', () => {
+    const lake = (round: number, holderSeat: number, targetSeat: number, claim: 'o' | 'x' | '', seen?: 'good' | 'red') => ({ kind: 'lake' as const, round, holderSeat, targetSeat, claim, ...(seen ? { seen } : {}) });
+    const roles = ['loyal', 'merlin', 'percival', 'assassin', 'morgana', 'loyal', 'mordred', 'loyal', 'loyal', 'oberon'];
+    const fakePv = (seat: number, sight: object, rs = roles) => ({ game: { seatRoles: rs }, pick: { seat }, view: { sight } }) as never;
+    // 你是 1家（忠臣）：1 湖 9 看到好，9 湖 4 說紅 → 4 是紅；9 湖 5 說好、5 湖 3 說紅 → 3 是紅（兩步）
+    const rows = [lake(2, 1, 9, 'o', 'good'), lake(3, 9, 4, 'x'), lake(3, 9, 5, 'o'), lake(4, 5, 3, 'x')];
+    const k = lakeKnowledge(fakePv(1, { kind: 'loyal' }), rows);
+    expect(k.seats.get(9)).toEqual({ evil: false, via: null });
+    expect(k.seats.get(4)).toEqual({ evil: true, via: 9 });
+    expect(k.seats.get(5)).toEqual({ evil: false, via: 9 });
+    expect(k.seats.get(3)).toEqual({ evil: true, via: 5 });
+    const notes = lakeEntries(rows, k.chain).map((e) => e.note?.t);
+    expect(notes).toEqual(['（看到好）', '9 是好人 → 4 是紅', '9 是好人 → 5 是好人', '5 是好人 → 3 是紅']);
+    // 不知道是好人的人宣告的湖不算
+    expect(lakeKnowledge(fakePv(1, { kind: 'loyal' }), [lake(2, 6, 4, 'x')]).seats.size).toBe(0);
+    // 紅方看的：自己湖到的照算，湖中鏈不推
+    const red = lakeKnowledge(fakePv(4, { kind: 'evil', mates: [5, 7] }), [lake(2, 4, 9, 'o', 'good'), lake(3, 9, 1, 'x')]);
+    expect(red.chain).toEqual([]);
+    expect([...red.seats.keys()]).toEqual([9]);
+    // 梅林：夜裡已經看到的紅不重複標，湖中鏈揭露的莫德雷德要標
+    const merlinRows = [lake(2, 2, 9, 'o', 'good'), lake(3, 9, 4, 'x'), lake(4, 9, 7, 'x')];
+    const marks = seatMarks(fakePv(2, { kind: 'merlin', seen: [4, 5, 10] }), merlinRows);
+    expect(marks.get(4)?.label).toBe('紅');
+    expect(marks.get(7)?.label).toBe('湖鏈：紅');
+    expect(marks.get(9)?.label).toBe('湖到好');
+  });
+
+  it('each recap shows only what was known by that round (that round’s lake in, later lakes out)', () => {
+    // 找一張有兩次湖以上的題目，把後面那次湖改成「你」拿湖
+    let found: ReturnType<typeof pickView> | null = null;
+    for (let w = 0; w < 8 && !found; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        if (pv.shown.filter((e) => e.kind === 'lake').length >= 2) {
+          found = pv;
+          break;
+        }
+      }
+    }
+    expect(found).not.toBeNull();
+    const pv = found!;
+    const lakesShown = pv.shown.filter((e): e is Extract<typeof e, { kind: 'lake' }> => e.kind === 'lake');
+    const later = lakesShown[lakesShown.length - 1];
+    const target = later.targetSeat === pv.pick.seat ? lakesShown[0].targetSeat : later.targetSeat;
+    const evil = ['assassin', 'morgana', 'mordred', 'oberon', 'minion'].includes(pv.game.seatRoles[target - 1]);
+    const mine = {
+      ...pv,
+      shown: pv.shown.map((e) => (e === later ? { ...e, holderSeat: pv.pick.seat, targetSeat: target } : e)),
+      view: { ...pv.view, sight: { kind: 'loyal' as const }, ownLakes: [{ targetSeat: target, evil }] },
+    } as typeof pv;
+    const label = evil ? '湖到紅' : '湖到好';
+    const rows = sheetRows(mine);
+    const lakeRound = later.round;
+    expect(buildPuzzleSvg(mine, 3)).toContain(label); // 題目卡：出題那一刻知道了
+    for (const { round, svg } of buildRoundSvgs(mine, 3)) {
+      if (round < lakeRound) expect(svg.includes(label)).toBe(false); // 之前的局還不知道
+      else expect(svg).toContain(label);
+    }
+    expect(lakeKnowledge(mine, rows.filter((r) => r.kind !== 'decision' && r.round < lakeRound)).seats.has(target)).toBe(false);
   });
 
   it('identity is one line without the gray subtitle: 忠臣 / 派西（夜間看到 X、Y 兩根拇指）/ 梅林（看到紅…，莫德雷德看不到）/ 紅方（隊友…）', () => {
