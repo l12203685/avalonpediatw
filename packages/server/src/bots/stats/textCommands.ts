@@ -4,7 +4,8 @@
  *   /戰績 名字      → player card
  *   /排行（/排行榜） → leaderboard
  *   /默契 A B       → pair chemistry
- *   /指令           → help
+ *   /指令           → help（完整的指令清單）
+ *   /help［主題］    → botHelp（最基本的說明；/help 模擬 等主題，見 bots/help.ts）
  *
  * A full-width slash (／) works too, and the space after the command word is
  * optional (/戰績HAO). Anything else — including the legacy English game
@@ -14,17 +15,21 @@
  */
 
 import { formatStatsHelp, StatsPlatform } from './statsReplies';
+import { helpText, parseHelpCommand, type HelpTopic } from '../help';
 import { chemistryReply, leaderboardReply, leaderboardScopeText, playerCardReply } from './statsQueries';
 
 export type StatsTextCommand =
   | { kind: 'player'; query: string }
   | { kind: 'leaderboard' }
   | { kind: 'chemistry'; args: string[] }
-  | { kind: 'help' };
+  | { kind: 'help' }
+  | { kind: 'botHelp'; topic: HelpTopic | null };
 
 const COMMAND_RE = /^[/／]\s*(戰績|战绩|排行榜|排行|默契|指令)(.*)$/su;
 
 export function parseStatsCommand(text: string): StatsTextCommand | null {
+  const help = parseHelpCommand(text);
+  if (help) return { kind: 'botHelp', topic: help.topic };
   const m = COMMAND_RE.exec((text ?? '').trim());
   if (!m) return null;
   const rest = m[2].trim();
@@ -60,5 +65,7 @@ export async function answerStatsTextCommand(
       return chemistryReply(cmd.args[0] ?? '', cmd.args[1] ?? '');
     case 'help':
       return formatStatsHelp(platform, await leaderboardScopeText());
+    case 'botHelp':
+      return helpText(cmd.topic, platform, cmd.topic === '戰績' ? await leaderboardScopeText() : null);
   }
 }

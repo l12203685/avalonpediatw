@@ -20,6 +20,7 @@ import {
   postInstagram,
   fallbackComment,
   loadPlayerNames,
+  planSummary,
   postDaily,
   prepareDaily,
   readComment,
@@ -57,7 +58,7 @@ function gen(stateDir: string, picks: Map<string, string> = new Map()): ThreadsG
 }
 
 /** 假的 Threads API：記下每一次呼叫，照路徑回答。 */
-function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string }[]; failFirst?: number } = {}) {
+function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string }[]; failFirst?: number; failReply?: boolean } = {}) {
   const calls: { method: string; path: string; params: URLSearchParams }[] = [];
   let n = 0;
   let failLeft = opts.failFirst ?? 0;
@@ -69,6 +70,7 @@ function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string
       failLeft--;
       return reply(503, { error: { message: 'busy' } });
     }
+    if (opts.failReply && u.pathname.endsWith('/threads') && init?.method === 'POST' && u.searchParams.get('reply_to_id')) return reply(400, { error: { message: 'reply rejected' } });
     if (u.pathname.endsWith('/threads') && init?.method === 'POST') return reply(200, { id: `c${++n}` });
     if (u.pathname.endsWith('/threads_publish')) return reply(200, { id: `p${u.searchParams.get('creation_id')}` });
     if (u.pathname.endsWith('/threads')) return reply(200, { data: opts.recent ?? [] });
@@ -214,6 +216,73 @@ describe('prepare + post', () => {
     const r2 = await postDaily(plan, { api: second.api, stateDir });
     expect(r2.status).toBe('already-published');
     expect(second.calls).toHaveLength(0);
+  });
+
+  it('a failed first comment is resumed by a later run without posting A again', async () => {
+    const { plan, stateDir } = prepared();
+    const first = fakeApi({ failReply: true });
+    const r1 = await postDaily(plan, { api: first.api, stateDir });
+    expect(r1.status).toBe('published');
+    expect(r1.commentId).toBeNull();
+    expect(readState(stateDir, '2026-11-18')).toMatchObject({ postId: r1.postId, commentId: null });
+
+    // 下一次執行：A 不再發，只補留言
+    const again = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names });
+    expect(again).toMatchObject({ alreadyPublished: true, resumeComment: true });
+    const second = fakeApi();
+    const r2 = await postDaily(again as DailyPlan, { api: second.api, stateDir });
+    expect(r2.status).toBe('comment-resumed');
+    const creates = second.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
+    expect(creates).toHaveLength(1);
+    expect(creates[0].params.get('reply_to_id')).toBe(r1.postId);
+    expect(readState(stateDir, '2026-11-18')).toMatchObject({ postId: r1.postId, commentId: r2.commentId });
+    expect(r2.commentId).toBeTruthy();
+
+    // 留言補上之後：什麼都不做
+    const third = fakeApi();
+    const plan3 = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(plan3.resumeComment).toBe(false);
+    expect((await postDaily(plan3, { api: third.api, stateDir })).status).toBe('already-published');
+    expect(third.calls).toHaveLength(0);
+  });
+
+  it('does not resume comments for posts found in recent posts or posted by hand (unknown whether a comment exists)', async () => {
+    const { plan, stateDir } = prepared();
+    const first = fakeApi({ recent: [{ id: 'dup', text: `題號 ${plan.exerciseId}｜實戰牌譜` }] });
+    expect((await postDaily(plan, { api: first.api, stateDir })).status).toBe('found-existing');
+    const again = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(again).toMatchObject({ alreadyPublished: true, resumeComment: false });
+    const manual = prepareDaily('2026-11-17', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(readState(stateDir, '2026-11-17')?.source).toBe('manual');
+    expect(manual.resumeComment).toBe(false);
+  });
+
+  it('content rejected by validation is not printed and not written to plan.json (public CI logs and artifacts)', () => {
+    // 從資料讀一個會被擋下的玩家名字（程式和測試裡不寫名字）
+    const name = names.find((n) => validatePost({ text: '題號 X\n#阿瓦隆', comment: `看這裡 ${n} 好`, names: [n] }).length > 0);
+    expect(name).toBeDefined();
+    const stateDir = tmp();
+    const commentsDir = tmp();
+    const outDir = tmp();
+    const secretComment = `看這裡 ${name} 好`;
+    fs.writeFileSync(path.join(commentsDir, '2026-11-18.md'), secretComment);
+    const plan = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir, outDir, names }) as DailyPlan;
+    expect(plan.errors.join()).toContain('第一則留言含疑似玩家名字');
+    const written = fs.readFileSync(path.join(outDir, 'plan.json'), 'utf8');
+    // 用 true/false 比，測試失敗時 CI 紀錄也不會印出名字
+    expect(written.includes(name as string)).toBe(false);
+    expect(written.includes(plan.text.split('\n')[0])).toBe(false);
+    expect(JSON.parse(written)).toMatchObject({ rejected: true, errors: plan.errors });
+    const summary = planSummary(plan, 'dry-run').join('\n');
+    expect(summary.includes(name as string)).toBe(false);
+    expect(summary).not.toContain('### 貼文 A');
+    expect(summary).toContain('第一則留言含疑似玩家名字');
+
+    // 檢查過了才印內容、plan.json 才有內容（post 段要讀）
+    const ok = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir, names }) as DailyPlan;
+    expect(ok.errors).toEqual([]);
+    expect(planSummary(ok, 'dry-run').join('\n').includes(ok.comment)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(path.join(outDir, 'plan.json'), 'utf8')).text).toBe(ok.text);
   });
 
   it('posts without a quote when yesterday cannot be found, and refuses content that failed validation', async () => {

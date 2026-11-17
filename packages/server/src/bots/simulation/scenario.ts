@@ -5,7 +5,7 @@
  * 看到目前為止的派票，自己派一次，再看你的派票放出了什麼資訊，最後公布角色。
  *   - 1～5 家的第一個決定是第 1 局自己那一次派票（1-5 強制那次也算，就是「5 家怎麼派」）；
  *   - 6～0 家的第一個決定是第 2 局自己那一次（第 1 局任務結果已經出來）；
- *   - 之後 /下一步 走到同一家下一次當隊長。
+ *   - （/下一步 2026-11-17 拿掉：一題只作答這一個決定點。）
  * 1 家第 1 局前面沒有別人的派票，是純「釋放」練習，只有指定 1 家時才出。
  *
  * 2026-11-16（Edward：「我希望你模擬偶爾可以玩 2-5 或 3-5（藍紅或紅紅的 3-5）」「目前出題應該要可以像我本來 Threads 上
@@ -317,7 +317,7 @@ export const SIM_MID_SHARE = 0.15;
 
 /**
  * Threads 的每週主題（Edward 2026-11-11 規劃、11/16「出題應該要可以像我本來 Threads 上想要出題的模式」）。
- * 星期照台北日期（0 = 週日）。週四、週六從尾派開始，優先出「這一家下一次就是下一個尾派」的局，/下一步 直接走到那裡。
+ * 星期照台北日期（0 = 週日）。週四、週六直接出後面那一題（3-5、4-5）：/下一步 2026-11-17 拿掉之後，模擬瓦不再從 1-5 走到 3-5。
  */
 export type TodayTheme =
   | { day: number; label: string; kind: 'assassin' }
@@ -330,9 +330,9 @@ export const TODAY_THEMES: readonly TodayTheme[] = [
   { day: 1, label: '週一：刺殺梅林', kind: 'assassin' },
   { day: 2, label: '週二：派西維爾思考', kind: 'percival' },
   { day: 3, label: '週三：1-5 尾派（派 3 人）', kind: 'tail', round: 1 },
-  { day: 4, label: '週四：1-5 接到 3-5 尾派（/下一步 會走到 3-5，派 4 人）', kind: 'tail', round: 1, thenRound: 3, fallback: { round: 3, label: '週四：3-5 尾派（第二局開紅，派 4 人）' } },
+  { day: 4, label: '週四：3-5 尾派（第二局開紅，派 4 人）', kind: 'tail', round: 3 },
   { day: 5, label: '週五：2-5 尾派', kind: 'tail', round: 2 },
-  { day: 6, label: '週六：2-5 接 4-5 同一局連著玩（/下一步 會走到 4-5）', kind: 'tail', round: 2, thenRound: 4, fallback: { round: 2, label: '週六：2-5 尾派' } },
+  { day: 6, label: '週六：4-5 尾派（派 5 人，要 2 張失敗）', kind: 'tail', round: 4, fallback: { round: 2, label: '週六：2-5 尾派' } },
 ];
 
 /** 台北日期的星期（0 = 週日）。 */
@@ -454,8 +454,12 @@ export function selectExercise(
     let list: readonly DecisionRef[] = midFrom(theme.round);
     let label = theme.label;
     let round = theme.round;
-    if (theme.thenRound !== undefined) {
-      // 這一家下一次當隊長就是下一個尾派（/下一步 直接走到那裡）；沒有這種局就改出 fallback 的尾派。
+    if (list.length === 0 && theme.fallback) {
+      round = theme.fallback.round;
+      label = theme.fallback.label;
+      list = midFrom(round);
+    } else if (theme.thenRound !== undefined) {
+      // 這一家下一次當隊長就是下一個尾派；沒有這種局就改出 fallback 的尾派（目前沒有主題用 thenRound）。
       const then = theme.thenRound;
       const chained = list.filter((r) => {
         const g = bank.games[r.game];
