@@ -10,7 +10,9 @@ import {
   RESULT_TAGS,
   approveCount,
   discordThreadUrl,
+  isDiscordPost,
   isForcedProposal,
+  kindLabel,
   lakeClaimLabel,
   missionFails,
   missionIsRed,
@@ -20,6 +22,7 @@ import {
   resultSentence,
   roleOfSeat,
   seatLabel,
+  sourceLabel,
   deriveLeaders,
   lakeLine,
   proposalLine,
@@ -141,6 +144,15 @@ function Toggles({ prefs, onChange }: { prefs: RecordDisplayPrefs; onChange: (ke
 }
 
 function ResultBanner({ post, game, prefs }: { post: RecordPost; game: RecordGame; prefs: RecordDisplayPrefs }): JSX.Element {
+  if (game.outcome === '') {
+    // 模擬局沒打完：沒有勝負
+    return (
+      <div className="rounded-lg border border-zinc-600 bg-zinc-800/70 px-3 py-1.5 text-zinc-100" data-testid="records-result">
+        <span className="text-base font-bold">模擬</span>
+        <p className="text-xs text-zinc-300">{resultSentence(game, prefs)}</p>
+      </div>
+    );
+  }
   const winner = winnerOf(game.outcome);
   return (
     <div className={`rounded-lg border px-3 py-1.5 ${OUTCOME_STYLE[game.outcome]}`} data-testid="records-result">
@@ -162,7 +174,7 @@ function MissionTrack({ game }: { game: RecordGame }): JSX.Element {
     <div className="grid grid-cols-5 gap-1" aria-label="任務結果">
       {[0, 1, 2, 3, 4].map((i) => {
         const round = game.rounds[i];
-        const red = round ? missionIsRed(round.mission, i) : null;
+        const red = round?.mission ? missionIsRed(round.mission, i) : null;
         return (
           <div
             key={i}
@@ -171,7 +183,7 @@ function MissionTrack({ game }: { game: RecordGame }): JSX.Element {
             }`}
           >
             <span className="text-[10px] text-zinc-400">第 {i + 1} 輪</span>
-            <span className="font-mono text-sm font-bold tracking-wider">{round ? round.mission : '—'}</span>
+            <span className="font-mono text-sm font-bold tracking-wider">{round?.mission || '—'}</span>
           </div>
         );
       })}
@@ -187,7 +199,7 @@ function Scoresheet({ game, prefs, fit, lineup }: {
   const headRef = useRef<HTMLTableSectionElement>(null);
   const legendRef = useRef<HTMLDivElement>(null);
   const lakes = new Map(game.lakes.map((l) => [l.after, l]));
-  const rowCount = game.rounds.reduce((n, r, i) => n + r.proposals.length + 1 + (lakes.has(i + 1) ? 1 : 0), 0);
+  const rowCount = game.rounds.reduce((n, r, i) => n + r.proposals.length + (r.mission ? 1 : 0) + (lakes.has(i + 1) ? 1 : 0), 0);
   const [fitRowPx, setRowPx] = useState(MOBILE_ROW_PX);
   const rowPx = fit ? fitRowPx : MOBILE_ROW_PX;
 
@@ -255,7 +267,8 @@ function Scoresheet({ game, prefs, fit, lineup }: {
     });
     const red = missionIsRed(round.mission, r);
     const fails = missionFails(round.mission);
-    rows.push(
+    // 模擬局最後一輪可能還沒出任務：沒有任務列
+    if (round.mission) rows.push(
       <tr key={`m-${r}`} style={rowStyle} className="border-b border-yellow-900/50 bg-yellow-800/25">
         <td title={`第 ${r + 1} 輪任務`} className="bg-yellow-900/60 p-0 text-center font-bold leading-none text-yellow-200">任務</td>
         <td colSpan={RECORDS_SEATS.length} className="px-1 py-0">
@@ -486,6 +499,8 @@ function Replies({ id, url, fit }: { id: string; url: string; fit: boolean }): J
 }
 
 export default function RecordsGameView({ post, guildId, onBack }: { post: RecordPost; guildId: string; onBack: () => void }): JSX.Element {
+  // 只在試算表的局（S…／M…）沒有 DC 貼文：不放「到 DC 討論」、不讀回覆
+  const discord = isDiscordPost(post);
   const url = discordThreadUrl(post.id, guildId);
   const game = post.game;
   const outcome = outcomeOf(post);
@@ -516,20 +531,23 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
           >
             <ArrowLeft size={16} />牌譜列表
           </button>
-          <a
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            data-testid="records-discord"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1 text-sm font-bold text-white transition-colors hover:bg-indigo-400"
-          >
-            <MessageSquare size={15} />到 DC 討論<ExternalLink size={13} />
-          </a>
+          {discord && (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              data-testid="records-discord"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-1 text-sm font-bold text-white transition-colors hover:bg-indigo-400"
+            >
+              <MessageSquare size={15} />到 DC 討論<ExternalLink size={13} />
+            </a>
+          )}
         </div>
         <header>
           <h2 className="break-words text-lg font-bold leading-snug text-white">{post.title || '（沒有標題）'}</h2>
-          <p className="text-[11px] text-zinc-400">
-            牌譜日期 {post.date} · 發文 {formatTaipei(post.created)}
+          <p className="text-[11px] text-zinc-400" data-testid="records-source">
+            牌譜日期 {post.date || '沒寫'}{post.created ? <> · 發文 {formatTaipei(post.created)}</> : null}
+            {' '}· 來源 {sourceLabel(post)} · {kindLabel(post)}
             {post.tags.length > 0 && <> · {post.tags.join('、')}</>}
           </p>
         </header>
@@ -543,11 +561,15 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
         ) : (
           <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-3 text-sm text-zinc-200" data-testid="records-unreadable">
             {outcome && <p className="mb-1 font-bold">{RESULT_TAGS[outcome]}</p>}
-            <p>
-              這篇的牌譜格式目前讀不懂
-              {post.problem ? `（${post.problemLine ? `第 ${post.problemLine} 行：` : ''}${post.problem}）` : ''}
-              ，請到 DC 看原文。修好後隔天就會出現在這裡。
-            </p>
+            {discord ? (
+              <p>
+                這篇的牌譜格式目前讀不懂
+                {post.problem ? `（${post.problemLine ? `第 ${post.problemLine} 行：` : ''}${post.problem}）` : ''}
+                ，請到 DC 看原文。修好後隔天就會出現在這裡。
+              </p>
+            ) : (
+              <p>{post.problem || '試算表裡這局的紀錄讀不懂'}，請到試算表修正。修好後隔天就會出現在這裡。</p>
+            )}
           </div>
         )}
       </div>
@@ -568,7 +590,7 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
             <pre className="mt-1 max-h-48 overflow-auto whitespace-pre font-mono text-xs leading-5 text-zinc-200">{text}</pre>
           </details>
         )}
-        <Replies key={post.id} id={post.id} url={url} fit={fit} />
+        {discord && <Replies key={post.id} id={post.id} url={url} fit={fit} />}
       </div>
     </article>
   );

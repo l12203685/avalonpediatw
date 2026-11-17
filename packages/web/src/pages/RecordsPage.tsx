@@ -12,14 +12,17 @@ import {
   RECORDS_FILTER_KEY,
   RECORD_MISTAKE_TAGS,
   RESULT_TAGS,
+  isDiscordPost,
   matchesRecords,
   matchingSeats,
   outcomeOf,
   parseRecordsFilter,
   recordsFilterActive,
   seatLabel,
+  sourceLabel,
   type RecordDisplayPrefs,
   type RecordFilter,
+  type RecordKindFilter,
   type RecordList,
   type RecordPost,
   type RecordResultFilter,
@@ -31,6 +34,8 @@ import {
  *
  * 第一階段：唯讀同步 DC 論壇 #牌譜紀錄與覆盤。清單（新到舊、依結果／日期／暱稱篩選）每天凌晨跟戰績快取一起更新；
  * 點一篇看整局（components/records/RecordsGameView），討論串回覆由伺服器即時讀 DC。發文、留言仍在 DC。
+ * 2026-11-16 起所有來源合成一個資料庫（Edward：「把所有來源的牌譜都整併到自己的資料庫，包括 Discord + Googlesheet
+ * （實戰 & 模擬）」）：試算表的「牌譜」與「模擬瓦」分頁也列進來、同一局只列一次；預設看實戰，模擬一鍵切換。
  */
 
 const PAGE_SIZE = 30;
@@ -83,8 +88,15 @@ function saveFilter(filter: RecordFilter): void {
 
 function shortDate(date: string): string {
   const [y, m, d] = date.split('-');
-  return y && m && d ? `${y}/${m}/${d}` : date;
+  return y && m && d ? `${y}/${m}/${d}` : date || '沒寫日期';
 }
+
+/** 實戰／模擬分頁（Edward 2026-11-16：所有來源的牌譜合成一個資料庫，實戰與模擬都列）。 */
+const KIND_CHIPS: { id: RecordKindFilter; label: string }[] = [
+  { id: 'real', label: '實戰' },
+  { id: 'sim', label: '模擬' },
+  { id: 'all', label: '全部' },
+];
 
 function PostRow({ post, query, prefs, onOpen }: {
   post: RecordPost; query: string; prefs: RecordDisplayPrefs; onOpen: () => void;
@@ -113,6 +125,14 @@ function PostRow({ post, query, prefs, onOpen }: {
             )}
             {!post.game && (
               <span className="rounded border border-zinc-600 bg-zinc-800 px-1.5 py-px text-[11px] text-zinc-300">格式待修正</span>
+            )}
+            {post.sim && (
+              <span className="rounded border border-violet-500/60 bg-violet-500/15 px-1.5 py-px text-[11px] text-violet-200">模擬</span>
+            )}
+            {(post.src || !isDiscordPost(post)) && (
+              <span className="rounded border border-emerald-600/60 px-1.5 py-px text-[11px] text-emerald-200" data-testid="records-source-chip">
+                {sourceLabel(post)}
+              </span>
             )}
             {post.game && <LineupBadge post={post} />}
             <MistakeChips post={post} />
@@ -176,7 +196,7 @@ export default function RecordsPage(): JSX.Element {
           <RecordsGameView post={post} guildId={state.data.guildId} onBack={closeRecords} />
         ) : (
           <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/80 p-4 text-sm text-zinc-300">
-            <p>找不到這篇牌譜（可能已刪除、標成模擬，或是今天剛發還沒同步）。</p>
+            <p>找不到這篇牌譜（可能已刪除，或是今天剛發、剛加進試算表還沒同步）。</p>
             <button type="button" onClick={closeRecords} className="text-amber-300 underline">回到牌譜列表</button>
           </div>
         )}
@@ -202,10 +222,28 @@ export default function RecordsPage(): JSX.Element {
         </a>
       </div>
       <p className="mb-3 text-xs leading-relaxed text-zinc-400">
-        同步自 Discord 論壇 #牌譜紀錄與覆盤（每天凌晨更新，模擬局不列）。點一局看座位、角色、每次提議的投票與湖；發牌譜、留言請到 DC。
+        所有來源的牌譜合在一起：Discord 論壇 #牌譜紀錄與覆盤＋Google 試算表的「牌譜」與「模擬瓦」分頁，同一局只列一次（每天凌晨更新）。
+        點一局看座位、角色、每次提議的投票與湖；發牌譜、留言請到 DC。
       </p>
 
       <div className="mb-3 space-y-2 rounded-lg border border-zinc-800 bg-zinc-950/80 p-2">
+        <div className="flex flex-wrap gap-1" role="group" aria-label="實戰或模擬" data-testid="records-kind">
+          {KIND_CHIPS.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              aria-pressed={filter.kind === chip.id}
+              onClick={() => updateFilter((f) => ({ ...f, kind: chip.id }))}
+              className={`rounded-md border px-2.5 py-1 text-xs font-bold transition-colors ${
+                filter.kind === chip.id
+                  ? 'border-violet-400 bg-violet-500 text-white'
+                  : 'border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
         <div className="relative">
           <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
           <input
@@ -309,7 +347,7 @@ export default function RecordsPage(): JSX.Element {
           {filterActive && (
             <button
               type="button"
-              onClick={() => updateFilter(() => EMPTY_RECORDS_FILTER)}
+              onClick={() => updateFilter((f) => ({ ...EMPTY_RECORDS_FILTER, kind: f.kind }))}
               className="ml-auto rounded-md px-1.5 py-1 text-xs text-amber-300 hover:bg-zinc-800"
             >
               清除篩選
@@ -334,7 +372,9 @@ export default function RecordsPage(): JSX.Element {
       {state.status === 'ok' && (
         <>
           <p className="mb-1.5 text-xs text-zinc-500">
-            {filterActive ? `符合 ${filtered.length} 局（共 ${posts.length} 局）` : `共 ${posts.length} 局，新的在上面`}
+            {filterActive
+              ? `符合 ${filtered.length} 局（共 ${posts.length} 局）`
+              : `${KIND_CHIPS.find((c) => c.id === filter.kind)?.label ?? ''} ${filtered.length} 局（全部 ${posts.length} 局），新的在上面`}
           </p>
           {filtered.length === 0 ? (
             <p className="py-8 text-center text-sm text-zinc-400">沒有符合的牌譜</p>

@@ -68,6 +68,7 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import discord_records_import as dri
 import generate_cache as gc
+import records_merge as rm
 
 RECORDS_FORMAT = "avalon-records"
 RECORDS_VERSION = 1
@@ -81,8 +82,8 @@ SHRINK_MIN = 5
 SHRINK_FRACTION = 0.10
 
 OUTCOMES = (gc.OUTCOME_THREE_RED, gc.OUTCOME_BLUE_DEAD, gc.OUTCOME_BLUE_ALIVE)
-CATEGORIES = ("", *dri.CATEGORY_TAGS)
-PROBLEMS = frozenset(dri.short_explanation(reason) for reason in dri.SKIP_EXPLANATIONS)
+CATEGORIES = rm.GAME_CATEGORIES
+PROBLEMS = frozenset(dri.short_explanation(reason) for reason in dri.SKIP_EXPLANATIONS) | frozenset(rm.PROBLEMS)
 # Reasons that say the post is not a game record at all: such posts are left out of the list
 # (unless something says they were meant as one, see post_entry).
 NOT_A_GAME = frozenset({dri.SKIP_NOT_A_RECORD})
@@ -91,6 +92,7 @@ NO_TEXT = frozenset({dri.SKIP_NO_STARTER, dri.SKIP_EMPTY})
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f​-‏ -‮⁠-⁤﻿]")
 _SHAPES = {
     "id": re.compile(r"[0-9]{15,22}"),
+    "sheet id": re.compile(r"[SM][0-9]{1,6}"),
     "created": re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\+08:00"),
     "date": re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}"),
     "config": re.compile(r"[0-9]{6}"),
@@ -141,7 +143,10 @@ def game_entry(game: dri.ParsedGame) -> dict[str, Any]:
 
 
 def post_entry(post: dri.Post, content: str | None) -> tuple[dict[str, Any] | None, str]:
-    """(the post's entry or None when it is left out, a fixed status for the counts)."""
+    """(the post's entry or None when it is left out, a fixed status for the counts). On the forum the
+    模擬 tag marks the games with our bot 百科AI (dri.is_bot_post, the recorder's BOT_GAME_TAG): they are
+    counted separately (Edward 2026-11-03) and shown on the site's 百科AI 對局 page, not here. The list's
+    模擬 games are the stats sheet's 模擬瓦 tab (records_merge)."""
     if dri.TAG_SIMULATION in post.tags:
         return None, "simulation"
     entry: dict[str, Any] = {
@@ -166,7 +171,7 @@ def post_entry(post: dri.Post, content: str | None) -> tuple[dict[str, Any] | No
         entry["game"] = None
         entry["problem"] = dri.short_explanation(dri.SKIP_INTERNAL)
         return entry, "unreadable"
-    if game.category == gc.BOT_CATEGORY:  # 有百科AI 的局另外算：清單同「模擬」一樣不列
+    if game.category == gc.BOT_CATEGORY:  # 有百科AI 的局另外算：清單不列
         return None, "simulation"
     entry["date"] = iso_date(game.date)
     entry["game"] = game_entry(game)
@@ -175,8 +180,8 @@ def post_entry(post: dri.Post, content: str | None) -> tuple[dict[str, Any] | No
 
 def build_records(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | None], *,
                 guild_id: str, forum_id: str) -> tuple[dict[str, Any], Counter]:
-    """The file's document (posts newest first) and the counts per status. Pure apart from `fetch`;
-    posts tagged 模擬 are not fetched."""
+    """The file's document (Discord posts only, newest first) and the counts per status. Pure apart
+    from `fetch`; posts tagged 模擬 (百科AI games) are not fetched. merge_sheet() then adds the sheet's games."""
     entries: list[dict[str, Any]] = []
     status: Counter = Counter()
     for post in sorted(posts, key=lambda p: int(p.id), reverse=True):
@@ -185,19 +190,65 @@ def build_records(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | N
         status[kind] += 1
         if entry is not None:
             entries.append(entry)
+    entries.sort(key=rm.sort_key, reverse=True)
     doc = {
         "format": RECORDS_FORMAT,
         "version": RECORDS_VERSION,
         "guildId": guild_id,
         "forumId": forum_id,
-        "counts": {
-            "posts": len(entries),
-            "games": status["game"],
-            "unreadable": status["unreadable"],
-        },
+        "counts": {},
         "posts": entries,
     }
+    set_counts(doc)
     return doc, status
+
+
+def sort_posts(doc: dict[str, Any] | None) -> None:
+    """Newest first by record date (records_merge.sort_key); a file written before 2026-11-16 was in
+    Discord post order."""
+    if doc and isinstance(doc.get("posts"), list) and all(isinstance(p, dict) and "id" in p for p in doc["posts"]):
+        try:
+            doc["posts"].sort(key=rm.sort_key, reverse=True)
+        except (TypeError, ValueError):
+            pass  # an odd id: the shape check reports it
+
+
+def set_counts(doc: dict[str, Any]) -> None:
+    posts = doc["posts"]
+    games = sum(1 for p in posts if p.get("game"))
+    doc["counts"] = {"posts": len(posts), "games": games, "unreadable": len(posts) - games}
+
+
+def is_discord_id(pid: Any) -> bool:
+    return isinstance(pid, str) and _SHAPES["id"].fullmatch(pid) is not None
+
+
+def merge_sheet(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
+                sim_rows: Sequence[Mapping[str, Any]] | None,
+                previous: Mapping[str, Any] | None = None) -> Counter:
+    """Adds the Google Sheet's games (牌譜 tab from games_doc, 模擬瓦 tab from sim_rows) to `doc`'s
+    Discord posts, merged by fingerprint and sorted newest first (records_merge). A source that is not
+    available this run (games_doc None, sim_rows None) keeps the previous file's entries of it."""
+    dc = [p for p in doc["posts"] if is_discord_id(p.get("id"))]
+    old = [p for p in (previous or {}).get("posts", []) if isinstance(p, dict) and not is_discord_id(p.get("id"))]
+    counts: Counter = Counter()
+    if games_doc is not None:
+        sheet, c = rm.sheet_entries(games_doc)
+        counts.update(c)
+    else:
+        sheet = [dict(p) for p in old if str(p.get("id", "")).startswith(rm.SHEET_PREFIX)]
+        counts["sheet kept from the previous file"] = len(sheet)
+    if sim_rows is not None:
+        sims, c = rm.sim_entries(sim_rows)
+        counts.update(c)
+    else:
+        sims = [dict(p) for p in old if str(p.get("id", "")).startswith(rm.SIM_PREFIX)]
+        counts["模擬 kept from the previous file"] = len(sims)
+    posts, c = rm.merge_posts(dc, sheet, sims)
+    counts.update(c)
+    doc["posts"] = posts
+    set_counts(doc)
+    return counts
 
 
 # ---------------------------------------------------------------------------
@@ -282,7 +333,7 @@ def annotate_records(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
     query_of: dict[int, int] = {}
     for n, p in enumerate(posts):
         game = p.get("game")
-        if not game:
+        if not game or p.get("sim"):  # 模擬 (often one round): no lineup / mistakes
             continue
         found = entry_mistakes(game)
         if found:
@@ -335,8 +386,9 @@ def _plain(value: Any, limit: int, allow_empty: bool = False) -> bool:
             and clean_text(value, limit) == value)
 
 
-def game_problems(game: Any) -> list[str]:
-    """Shape problems of one parsed game (fixed strings, no values)."""
+def game_problems(game: Any, sim: bool = False, sheet: bool = False) -> list[str]:
+    """Shape problems of one parsed game (fixed strings, no values). A 模擬 game may stop early:
+    1-5 rounds, the last one possibly without its mission, no result. A sheet game may have unnamed seats."""
     if not isinstance(game, dict):
         return ["game is not an object"]
     out: list[str] = []
@@ -345,15 +397,18 @@ def game_problems(game: Any) -> list[str]:
     if not _full("config", game.get("config")):
         out.append("config shape")
     names = game.get("names")
-    if not (isinstance(names, list) and len(names) == len(dri.SEATS) and all(_plain(n, NAME_MAX) for n in names)):
+    # the sheet leaves seats without a name (old games, 模擬 with five people)
+    if not (isinstance(names, list) and len(names) == len(dri.SEATS) and all(_plain(n, NAME_MAX, allow_empty=sheet) for n in names)):
         out.append("names shape")
     rounds = game.get("rounds")
-    if not (isinstance(rounds, list) and 3 <= len(rounds) <= 5):
+    if not (isinstance(rounds, list) and (1 if sim else 3) <= len(rounds) <= 5):
         out.append("rounds count")
         rounds = []
-    for rnd in rounds:
+    for r, rnd in enumerate(rounds):
         proposals = rnd.get("proposals") if isinstance(rnd, dict) else None
-        if not (isinstance(rnd, dict) and set(rnd) == {"proposals", "mission"} and _full("mission", rnd.get("mission"))
+        open_last = sim and r == len(rounds) - 1 and isinstance(rnd, dict) and rnd.get("mission") == ""
+        if not (isinstance(rnd, dict) and set(rnd) == {"proposals", "mission"}
+                and (open_last or _full("mission", rnd.get("mission")))
                 and isinstance(proposals, list) and 1 <= len(proposals) <= 5):
             out.append("round shape")
             continue
@@ -373,7 +428,7 @@ def game_problems(game: Any) -> list[str]:
             out.append("lake shape")
     if not _full("kill", game.get("assassination")):
         out.append("assassination shape")
-    if game.get("outcome") not in OUTCOMES:
+    if game.get("outcome") not in OUTCOMES and not (sim and game.get("outcome") == ""):
         out.append("outcome value")
     if game.get("category") not in CATEGORIES:
         out.append("category value")
@@ -431,32 +486,44 @@ def records_problems(doc: Any) -> list[str]:
         if not isinstance(post, dict):
             out["post is not an object"] += 1
             continue
-        keys = set(post) - set(ANNOTATION_KEYS)
+        keys = set(post) - set(ANNOTATION_KEYS) - {"src", "sim"}
         base = {"id", "title", "tags", "created", "date", "game"}
         if not (keys == base or keys == base | {"problem"} or keys == base | {"problem", "problemLine"}):
             out["post keys"] += 1
-        if any(k in post for k in ANNOTATION_KEYS) and not post.get("game"):
-            out["annotation on an unreadable post"] += 1
+        if any(k in post for k in ANNOTATION_KEYS) and (not post.get("game") or post.get("sim")):
+            out["annotation on an unreadable or 模擬 post"] += 1
         for problem in annotation_problems(post):
             out[problem] += 1
         pid = post.get("id")
-        if not _full("id", pid) or pid in seen:
+        discord = _full("id", pid)
+        sim = post.get("sim", False)
+        if "sim" in post and sim is not True:
+            out["sim flag"] += 1
+        src = post.get("src")
+        if not (discord or _full("sheet id", pid)) or pid in seen:
             out["post id"] += 1
         else:
             seen.add(pid)
-            if last is not None and int(pid) >= last:
+            key = rm.sort_key(post)
+            if last is not None and key > last:
                 out["post order"] += 1
-            last = int(pid)
+            last = key
+            # src: absent = Discord only; "dc+sheet" a Discord post also in the sheet; "sheet" (S/M ids) sheet only
+            if (discord and src not in (None, rm.SRC_BOTH)) or (not discord and src != rm.SRC_SHEET):
+                out["src value"] += 1
+            if not discord and str(pid).startswith(rm.SIM_PREFIX) != bool(sim):
+                out["sim flag"] += 1
         if not _plain(post.get("title"), TITLE_MAX, allow_empty=True):
             out["title shape"] += 1
         tags = post.get("tags")
         if not (isinstance(tags, list) and len(tags) <= dri.MAX_APPLIED_TAGS and all(_plain(t, TAG_MAX) for t in tags)):
             out["tags shape"] += 1
-        elif dri.TAG_SIMULATION in tags:
-            out["simulation post"] += 1
-        if not _full("created", post.get("created")):
+        elif (dri.TAG_SIMULATION in tags) != bool(sim) or (discord and sim):
+            out["simulation post"] += 1  # forum 模擬 = 百科AI games (not listed); 模擬 entries are the sheet's 模擬瓦 rows
+        # sheet entries have no posting time and may be undated
+        if not (_full("created", post.get("created")) or (not discord and post.get("created") == "")):
             out["created shape"] += 1
-        if not _full("date", post.get("date")):
+        if not (_full("date", post.get("date")) or (not discord and post.get("date") == "")):
             out["date shape"] += 1
         if post.get("game") is None:
             if post.get("problem") not in PROBLEMS:
@@ -467,7 +534,7 @@ def records_problems(doc: Any) -> list[str]:
         else:
             if "problem" in post:
                 out["problem on a parsed game"] += 1
-            for problem in game_problems(post.get("game")):
+            for problem in game_problems(post.get("game"), sim=bool(sim), sheet=not discord):
                 out[problem] += 1
     return [f"{name} ({n})" if n > 1 else name for name, n in out.items()]
 
@@ -528,14 +595,54 @@ def write_atomically(text: str, path: Path) -> None:
         raise
 
 
-def summary_lines(status: Counter, doc: Mapping[str, Any], result: str) -> list[str]:
+def summary_lines(status: Counter, doc: Mapping[str, Any], result: str, merged: Counter | None = None) -> list[str]:
     counts = doc["counts"]
-    return [
+    lines = [
         "### 網站「牌譜紀錄」清單（records_cache.json）",
-        f"- 論壇貼文 {sum(status.values())} 篇：列出 {counts['posts']} 篇（讀得懂 {counts['games']}、"
-        f"格式待修正 {counts['unreadable']}）；略過 模擬 {status['simulation']}、非牌譜貼文 {status['not a record']}",
-        f"- 結果：{result}",
+        f"- 論壇貼文 {sum(status.values())} 篇；略過 百科AI／模擬 {status['simulation']}、非牌譜貼文 {status['not a record']}",
+        f"- 清單共 {counts['posts']} 局（讀得懂 {counts['games']}、格式待修正 {counts['unreadable']}）",
     ]
+    if merged is not None:
+        lines.append(merge_line(merged))
+    lines.append(f"- 結果：{result}")
+    return lines
+
+
+def merge_line(merged: Counter) -> str:
+    """Counts of the sheet merge (numbers only)."""
+    sheet = merged["sheet"] + sum(n for k, n in merged.items() if k.startswith("sheet unreadable"))
+    sim = merged["sim"] + merged["sim unreadable"]
+    return (f"- 試算表：牌譜 {sheet} 局（讀不懂 {sheet - merged['sheet']}）、模擬瓦 {sim} 局（讀不懂 {merged['sim unreadable']}）；"
+            f"跟 DC 貼文同一局合併 {merged['merged with a Discord post']}；沿用前一版 牌譜 {merged['sheet kept from the previous file']}、"
+            f"模擬 {merged['模擬 kept from the previous file']}")
+
+
+def read_sim_rows(args: argparse.Namespace) -> tuple[list[dict[str, Any]] | None, str]:
+    """The 模擬瓦 tab's rows (--sim-rows file, or the live tab with --sim-sheet), or None (then the previous
+    file's 模擬 entries are kept) with a fixed note."""
+    if args.sim_rows:
+        path = Path(args.sim_rows)
+        text = path.read_text(encoding="utf-8")
+        if path.suffix in (".yaml", ".yml"):
+            import yaml  # only for a local snapshot (content/_data/模擬瓦.yaml)
+            data = yaml.safe_load(text)
+        else:
+            data = json.loads(text)
+        if isinstance(data, list) and data and isinstance(data[0], list):
+            return rm.sim_rows_from_values(data), "file"
+        return [r for r in data if isinstance(r, dict)], "file"
+    if not args.sim_sheet:
+        return None, "not read"
+    try:
+        sh = gc.open_spreadsheet(gc.resolve_credentials_source(), gc.resolve_sheet_id())
+        values = gc.read_optional_worksheet(sh, rm.SIM_TAB)
+    except Exception as exc:  # the Discord list still goes out; 模擬 entries stay as they were
+        print(f"::warning title=模擬瓦 tab not read::{type(exc).__name__}; kept the previous 模擬 entries.")
+        return None, "error"
+    if values is None:
+        print(f"::warning title=模擬瓦 tab not found::the stats sheet has no tab named {rm.SIM_TAB}; kept the previous 模擬 entries.")
+        return None, "missing"
+    return rm.sim_rows_from_values(values), "sheet"
 
 
 def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
@@ -562,17 +669,20 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
         doc, status = build_records(posts, fetch, guild_id=client.forum_guild_id(forum_id), forum_id=forum_id)
     except dri.DiscordError as exc:
         raise gc.FatalError(f"{exc} Nothing was written.", dri.EXIT_DISCORD, "Discord API error") from None
-    annotated = annotate_records(doc, load_games_doc(Path(args.games)))
+    previous = load_previous(out)
+    games_doc = load_games_doc(Path(args.games))
+    sim_rows, _ = read_sim_rows(args)
+    merged = merge_sheet(doc, games_doc, sim_rows, previous)
+    annotated = annotate_records(doc, games_doc)
 
     problems = records_problems(doc)
     if problems:
-        gc._append_step_summary(summary_lines(status, doc, f"格式檢查沒過，未寫入（{len(problems)} 個問題）"))
+        gc._append_step_summary(summary_lines(status, doc, f"格式檢查沒過，未寫入（{len(problems)} 個問題）", merged))
         raise gc.FatalError("The records list failed its shape check (" + "; ".join(problems[:10])
                             + "); kept the existing file.", gc.EXIT_DATA, "Records list not written")
-    previous = load_previous(out)
     shrink = None if args.allow_shrink else shrink_problem(previous, doc)
     if shrink:
-        gc._append_step_summary(summary_lines(status, doc, "篇數變少太多，未寫入"))
+        gc._append_step_summary(summary_lines(status, doc, "篇數變少太多，未寫入", merged))
         raise gc.FatalError(shrink, gc.EXIT_DATA, "Records list not written")
     text = dump_records(doc)
     try:
@@ -584,8 +694,8 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
     else:
         write_atomically(text, out)
         before = len(previous["posts"]) if previous and isinstance(previous.get("posts"), list) else 0
-        result = f"已寫入（{before} → {doc['counts']['posts']} 篇）"
-    lines = summary_lines(status, doc, result) + annotation_lines(annotated)
+        result = f"已寫入（{before} → {doc['counts']['posts']} 局）"
+    lines = summary_lines(status, doc, result, merged) + annotation_lines(annotated)
     print("\n".join(lines))
     gc._append_step_summary(lines)
     return 0
@@ -597,6 +707,7 @@ def run_annotate_only(args: argparse.Namespace) -> int:
     doc = load_previous(out)
     if doc is not None and doc.get("format") == LEGACY_RECORDS_FORMAT:
         doc["format"] = RECORDS_FORMAT
+    sort_posts(doc)
     if doc is None or records_problems(doc):
         raise gc.FatalError(f"{out.name} is missing or not in the expected shape; nothing was written.",
                             gc.EXIT_DATA, "Records list not annotated")
@@ -616,6 +727,41 @@ def run_annotate_only(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_merge_only(args: argparse.Namespace) -> int:
+    """--merge-only: rebuild the sheet part (games_cache.json, --sim-rows / --sim-sheet) on the existing
+    file's Discord posts (no Discord read), then annotate and write under the same guards."""
+    out = Path(args.output)
+    previous = load_previous(out)
+    if previous is not None and previous.get("format") == LEGACY_RECORDS_FORMAT:
+        previous["format"] = RECORDS_FORMAT
+    sort_posts(previous)
+    if previous is None or records_problems(previous):
+        raise gc.FatalError(f"{out.name} is missing or not in the expected shape; nothing was written.",
+                            gc.EXIT_DATA, "Records list not merged")
+    doc = json.loads(json.dumps(previous))
+    games_doc = load_games_doc(Path(args.games))
+    sim_rows, _ = read_sim_rows(args)
+    merged = merge_sheet(doc, games_doc, sim_rows, previous)
+    annotated = annotate_records(doc, games_doc)
+    problems = records_problems(doc)
+    if problems:
+        raise gc.FatalError("The merged records list failed its shape check (" + "; ".join(problems[:10])
+                            + "); kept the existing file.", gc.EXIT_DATA, "Records list not merged")
+    shrink = None if args.allow_shrink else shrink_problem(previous, doc)
+    if shrink:
+        raise gc.FatalError(shrink, gc.EXIT_DATA, "Records list not merged")
+    text = dump_records(doc)
+    unchanged = out.read_text(encoding="utf-8") == text
+    if not unchanged:
+        write_atomically(text, out)
+    lines = ["### 網站「牌譜紀錄」清單（只重新合併試算表的局）",
+             f"- 結果：{'沒有變動' if unchanged else '已寫入'}（{len(previous['posts'])} → {doc['counts']['posts']} 局）",
+             merge_line(merged), *annotation_lines(annotated)]
+    print("\n".join(lines))
+    gc._append_step_summary(lines)
+    return 0
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export the Discord 牌譜 forum as the website's records list.")
     parser.add_argument("--output", default=str(OUTPUT_PATH), metavar="PATH",
@@ -626,13 +772,21 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help=f"the game-level dataset for the lineup annotation (default {GAMES_PATH.name} next to this script)")
     parser.add_argument("--annotate-only", action="store_true",
                         help="only recompute lineup / mistakes of the existing --output file (no Discord read)")
+    parser.add_argument("--merge-only", action="store_true",
+                        help="only re-merge the sheet's games into the existing --output file (no Discord read)")
+    parser.add_argument("--sim-sheet", action="store_true",
+                        help=f"read the stats sheet's {rm.SIM_TAB} tab (same credentials as generate_cache.py)")
+    parser.add_argument("--sim-rows", metavar="PATH",
+                        help=f"the {rm.SIM_TAB} rows from a file instead (.json values / list of dicts, or a .yaml snapshot)")
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
-        return run_annotate_only(args) if args.annotate_only else run(args)
+        if args.annotate_only:
+            return run_annotate_only(args)
+        return run_merge_only(args) if args.merge_only else run(args)
     except gc.FatalError as exc:
         gc.emit_error(str(exc), exc.title)
         return exc.exit_code
