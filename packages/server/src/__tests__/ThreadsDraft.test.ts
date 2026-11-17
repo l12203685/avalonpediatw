@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, proposalLines } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -375,7 +375,7 @@ describe('image', () => {
     expect(svg).toMatch(/<image href="data:image\/png;base64,[^"]+" [^>]*opacity="0\.3" clip-path="url\(#tl\)"/);
     expect(svg).not.toContain('clip-path="url(#wm)"'); // 題目卡不再鋪大浮水印
     // 標誌在任務格和座位之前畫（在它們下面）
-    expect(svg.indexOf('url(#tl)')).toBeLessThan(svg.indexOf('1・'));
+    expect(svg.indexOf('url(#tl)')).toBeLessThan(svg.indexOf('任務1'));
     // 答案卡照舊有浮水印
     expect(buildAnswerSvg(pickView(gameOf(tue), tue))).toContain('clip-path="url(#wm)"');
   });
@@ -385,16 +385,17 @@ describe('image', () => {
     const pv = pickView(gameOf(tue), tue);
     const svg = buildPuzzleSvg(pv, 2);
     // 任務格在右邊（「你的視角」那一欄，x ≥ 600），不在圓桌裡
-    const chip = /<text x="([\d.]+)" y="[\d.]+"[^>]*>(?:<tspan[^>]*>)?1・3/.exec(svg);
+    const chip = /<text x="([\d.]+)" y="[\d.]+"[^>]*>(?:<tspan[^>]*>)?任務1/.exec(svg);
     expect(chip).not.toBeNull();
     expect(Number(chip![1])).toBeGreaterThan(600);
     const one = missionChips(sheetRows(pv), 0, 0, 500);
     const two = missionChips(sheetRows(pv), 0, 0, 200);
     expect(two.height).toBeGreaterThan(one.height); // 寬度不夠就換行
-    for (let r = 1; r <= 5; r++) expect(one.svg).toContain(`${r}・`);
+    for (let r = 1; r <= 5; r++) expect(one.svg).toContain(`>任務${r}<`); // 站長的格式：[任務N]（結果）{座位}
+    expect(one.svg).not.toContain('・'); // 不再寫 1・3
   });
 
-  it('the Lady of the Lake is one line on the right (0>1 o　1>9 o（看到好）　9>4 x); no arrows on the table', () => {
+  it('the Lady of the Lake is one line under the mission chips (0 > 1 o | 1 > 9 o（看到好） | 9 > 4 x); no arrows on the table', () => {
     const rows = [
       { kind: 'lake' as const, round: 2, holderSeat: 10, targetSeat: 1, claim: 'o' as const },
       { kind: 'lake' as const, round: 3, holderSeat: 1, targetSeat: 9, claim: 'o' as const, seen: 'good' as const },
@@ -402,7 +403,7 @@ describe('image', () => {
       { kind: 'lake' as const, round: 4, holderSeat: 4, targetSeat: 2, claim: '' as const },
     ];
     const line = lakeLine(rows).map((g) => g.t).join('');
-    expect(line).toBe('0>1 o　1>9 o（看到好）　9>4 x　4>2 沒說');
+    expect(line).toBe('0 > 1 o | 1 > 9 o（看到好） | 9 > 4 x | 4 > 2 沒說');
     const segsOf = lakeLine(rows);
     expect(segsOf.find((g) => g.t === 'o')?.fill).not.toBe(segsOf.find((g) => g.t === 'x')?.fill); // o 藍、x 紅
     expect(lakeLine([])).toEqual([]);
@@ -411,7 +412,7 @@ describe('image', () => {
         const pv = pickView(gameOf(pick), pick);
         const svg = buildPuzzleSvg(pv, 3);
         expect(svg).not.toContain('lake-arrow');
-        for (const r of sheetRows(pv)) if (r.kind === 'lake') expect(svg).toContain(`${r.holderSeat === 10 ? '0' : r.holderSeat}&gt;${r.targetSeat === 10 ? '0' : r.targetSeat} `);
+        for (const r of sheetRows(pv)) if (r.kind === 'lake') expect(svg).toContain(`${r.holderSeat === 10 ? '0' : r.holderSeat} &gt; ${r.targetSeat === 10 ? '0' : r.targetSeat} `);
       }
     }
   });
@@ -437,6 +438,38 @@ describe('image', () => {
         expect(buildPuzzleSvg(pv, 3)).not.toMatch(/>m[1-5](×\d)?</); // 座位下方不再有 m1 標籤
       }
     }
+  });
+
+  it('proposal lines on the table are an option (off by default): leader → each other team member, dashed, one color per round getting darker', () => {
+    const [, , wed] = planWeek(bank, 0) as ThreadsPick[];
+    const pv = pickView(gameOf(wed), wed);
+    const rows = sheetRows(pv);
+    const props = rows.filter((r) => r.kind === 'proposal');
+    expect(props.length).toBeGreaterThan(0);
+    const expected = props.reduce((n, p) => n + (p.kind === 'proposal' ? p.team.filter((x) => x !== p.leaderSeat).length : 0), 0);
+    const count = (svg: string): number => (svg.match(/class="prop-line/g) ?? []).length;
+    expect(count(buildPuzzleSvg(pv, 3))).toBe(0); // 預設不畫
+    expect(count(buildPuzzleSvg(pv, 3, { proposalLines: 'off' }))).toBe(0);
+    const all = buildPuzzleSvg(pv, 3, { proposalLines: 'all' });
+    expect(count(all)).toBe(expected);
+    expect(all).toContain('stroke-dasharray');
+    // 只畫這一局：出題那一局的提議
+    const last = rows[rows.length - 1];
+    const cur = last.kind === 'decision' && last.round !== null ? last.round : 0;
+    const curExpected = props.reduce((n, p) => n + (p.kind === 'proposal' && p.round === cur ? p.team.filter((x) => x !== p.leaderSeat).length : 0), 0);
+    expect(count(buildPuzzleSvg(pv, 3, { proposalLines: 'currentRound' }))).toBe(curExpected);
+    // 越後面的局越深（不透明度遞增）
+    const fake = [
+      { kind: 'proposal' as const, index: 0, round: 1, attempt: 1, leaderSeat: 1, team: [1, 3, 5], votes: [], approves: null, forced: false, approved: false, reliable: true, line: '135' },
+      { kind: 'proposal' as const, index: 1, round: 4, attempt: 1, leaderSeat: 2, team: [4, 6, 8, 9, 10], votes: [], approves: null, forced: false, approved: false, reliable: true, line: '46890' },
+    ];
+    const svg = proposalLines(fake as never, 300, 400, 'all');
+    expect((svg.match(/class="prop-line r1"/g) ?? []).length).toBe(2); // 隊長自己不畫
+    expect((svg.match(/class="prop-line r4"/g) ?? []).length).toBe(5);
+    const op = (r: number): number => Number(new RegExp(`stroke-opacity="([\\d.]+)"[^>]*class="prop-line r${r}"`).exec(svg)?.[1]);
+    expect(op(4)).toBeGreaterThan(op(1));
+    // 線畫在座位和標誌下面
+    expect(all.indexOf('prop-line')).toBeLessThan(all.indexOf('url(#tl)'));
   });
 
   it('identity is one line without the gray subtitle: 忠臣 / 派西（夜間看到 X、Y 兩根拇指）/ 梅林（看到紅…，莫德雷德看不到）/ 紅方（隊友…）', () => {
