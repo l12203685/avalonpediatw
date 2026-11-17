@@ -218,7 +218,7 @@ describe('mirror group', () => {
     await deliver(h, groupText('/模擬 忠臣 4', 'm1', 'rt1', GROUP, { webhookEventId: 'E1', deliveryContext: { isRedelivery: false } }));
     await deliver(h, groupText('/下一步', 'm2', 'rt2', GROUP, { webhookEventId: 'E2', deliveryContext: { isRedelivery: false } }));
     expect(h.replies).toHaveLength(2);
-    expect(h.replies[1].messages[0].text).toContain('第 3 局第 4 次');
+    expect(h.replies[1].messages[0].text).toContain('\n1246\n1257\n3579\n\n/派 座位 作答');
     await deliver(h, groupText('/下一步', 'm2', 'rt2b', GROUP, { webhookEventId: 'E2', deliveryContext: { isRedelivery: true } }));
     expect(h.replies).toHaveLength(2); // nothing queued, nothing to say: no reply at all
     await deliver(h, groupText('/模擬 忠臣 4', 'm1', 'rt1b', GROUP, { webhookEventId: 'E1', deliveryContext: { isRedelivery: true } }));
@@ -248,7 +248,7 @@ describe('mirror group', () => {
     await Promise.all([first, second]);
     h.setReplyDelay(0);
     expect(h.replies.map((r) => r.token)).toEqual(['rt1', 'rt2', 'rt3']);
-    expect(h.replies[2].messages[0].text).toContain('第 3 局第 4 次');
+    expect(h.replies[2].messages[0].text).toContain('\n1246\n1257\n3579\n\n/派 座位 作答');
     // The step really happened: the R3 decision takes 4 seats.
     await deliver(h, groupText('/派 1468', 'm4', 'rt4'));
     expect(h.replies.at(-1)?.messages[0].text).toContain('你派 1468');
@@ -336,7 +336,8 @@ describe('mirror group', () => {
     const h = setup();
     await deliver(h, groupText('/模擬 忠臣 4', 'k1', 'rk1'));
     // The group start reply tells the owner others may help and /公布 or /結束 ends it for everyone.
-    expect(h.replies.at(-1)?.messages[0].text.split('\n').at(-1)).toBe(sharedNote('line'));
+    expect(h.replies.at(-1)?.messages[0].text.split('\n').at(-1)).toBe('/公布 (結束這題)');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('/派 座位 作答 (沒開題的人也能作答)');
     const fromU2 = { ...groupText(typed('/派 469'), 'k2', 'rk2'), source: { type: 'group', groupId: GROUP, userId: 'U2' } };
     await deliver(h, fromU2);
     const answer = h.replies.at(-1)?.messages[0].text ?? '';

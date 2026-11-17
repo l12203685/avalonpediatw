@@ -16,7 +16,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageFlags } from 'discord.js';
 import { buildSlashCommands } from '../bots/discord/client';
 import { COMMANDS, SIM_OPTIONS, SIM_ROLE_CHOICES } from '../bots/discord/config';
-import { handleHelpCommand } from '../bots/discord/commands';
+import { handleHelpCommand, HELP_TOPIC_OPTION } from '../bots/discord/commands';
+import { HELP_TOPICS } from '../bots/help';
 import { handleDiscordMirrorMessage } from '../bots/discord/mirrorInbound';
 import { SimBankLoader } from '../bots/simulation/bank';
 import { SIM_CONFIG, SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
@@ -125,6 +126,15 @@ describe('registration', () => {
     expect(json.find((c) => c.name === COMMANDS.SIM_INTERVAL)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.CONTENT, required: true })]);
   });
 
+  it('/help 主題:模擬 answers just the 模擬瓦 list (plain text); the slash /help has the 主題 choices', async () => {
+    const it1 = makeInteraction(COMMANDS.HELP, { [HELP_TOPIC_OPTION]: '模擬' });
+    await handleHelpCommand(it1 as never);
+    expect((it1.editReply.mock.calls[0][0] as { content: string }).content).toBe(SIM_HELP_TEXT_DISCORD);
+    const help = buildSlashCommands().map((c) => c.toJSON() as { name: string; options?: { name: string; choices?: { value: string }[] }[] }).find((c) => c.name === COMMANDS.HELP);
+    expect(help?.options?.[0]?.name).toBe(HELP_TOPIC_OPTION);
+    expect(help?.options?.[0]?.choices?.map((c) => c.value)).toEqual([...HELP_TOPICS]);
+  });
+
   it('/help and the LINE /指令 advertise /模擬 (only while it is on)', async () => {
     const helpFields = async (): Promise<{ name: string; value: string }[]> => {
       const it1 = makeInteraction(COMMANDS.HELP);
@@ -134,9 +144,9 @@ describe('registration', () => {
     const field = (await helpFields()).find((f) => f.name.includes('模擬瓦'));
     expect(field?.value).toContain('/模擬 [角色] [座位]');
     expect(field?.value).toContain('/派 /分析 /區間 /下一步 /公布 /結束');
-    expect(field?.value).toContain('/模擬 說明:True');
+    expect(field?.value).toContain('/help 主題:模擬');
     expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]\u3000模擬瓦：練派票資訊的釋放與解讀');
-    expect(formatStatsHelp('line')).toContain('/模擬 說明 看全部指令');
+    expect(formatStatsHelp('line')).toContain('/help 模擬 看全部指令');
     expect(formatStatsHelp('discord')).toContain('/模擬 [角色] [座位]');
 
     SIM_CONFIG.commandsEnabled = false;
@@ -187,12 +197,15 @@ describe('handlers', () => {
     expect(it1.deferReply.mock.calls[0][0]).toBeUndefined(); // public, like /戰績
     const start = content(it1).content;
     expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣\n');
-    expect(start).toContain('```\n第 1 局：\n1家 460 1+\n2家 279\n3家 370\n```');
+    expect(start).toContain('```\n460 1+\n279\n370\n```');
+    expect(start).toContain('\n\n/派 座位 作答 (沒開題的人也能作答)\n/區間\n/下一步\n/help 模擬\n/公布 (結束這題)');
 
     expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toBe('【W0000-4】你派 469：2 好 1 壞\n/分析 看完整解讀｜/下一步｜/公布');
     expect(await run(COMMANDS.SIM_ANALYSIS)).toContain('① 真人：4家 派 469（跟你一樣）→ 被否決');
     expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('【W0000-4 區間】789=2：可能（45/126 種）');
-    expect(await run(COMMANDS.SIM_NEXT)).toContain('輪到你派 4 人（第 3 局第 4 次）');
+    const next = await run(COMMANDS.SIM_NEXT);
+    expect(next).toContain('W0000-4 下一步】');
+    expect(next).toContain('/派 座位 作答\n/區間\n/下一步\n/help 模擬\n/公布 (結束這題)');
     const reveal = await run(COMMANDS.SIM_REVEAL);
     expect(reveal).toContain('刺7娜5莫3奧9派2梅1（紅 3 5 7 9）');
     // 網站上沒有這一局：文字牌譜放在 code block。
@@ -213,7 +226,8 @@ describe('handlers', () => {
   it('each user in each channel has their own exercise; a user without one co-answers the newest in the channel (marked 代答)', async () => {
     const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
     // Public channel: the owner is told others may help and that /公布 or /結束 ends it for everyone.
-    expect(start.split('\n').at(-1)).toBe(sharedNote('discord'));
+    expect(start.split('\n').at(-1)).toBe('/公布 (結束這題)');
+    expect(start).toContain('/派 座位 作答 (沒開題的人也能作答)');
     expect(sharedNote('discord')).toContain('頻道裡');
     const co = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-1', 'b');
     expect(co.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞', '/分析 看完整解讀｜/下一步｜/公布']);

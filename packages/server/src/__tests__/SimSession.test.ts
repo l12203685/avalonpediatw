@@ -14,6 +14,7 @@ import { __setSimForTests, simulationStatus } from '../bots/simulation';
 import { parseSimCommand, type SimCommand } from '../bots/simulation/commands';
 import {
   ANSWER_FOOTER,
+  answerFooter,
   CO_ANSWER_MARK,
   NO_SESSION_TEXT,
   PROPOSE_USAGE,
@@ -25,6 +26,7 @@ import {
   simHelpText,
 } from '../bots/simulation/replies';
 import { SimEngine, type SimRequest } from '../bots/simulation/session';
+import { TEAM_SIZES } from '../bots/simulation/scenario';
 import { FAKE_NAMES, fixtureBank, fixtureBankWithMid } from './fixtures/simGames';
 
 const BANK = fixtureBank();
@@ -65,12 +67,15 @@ describe('selection', () => {
     // 2026-11-16 精簡（Edward：重複的說明、例子不用打）：身分、牌譜、輪到你、一行指令。
     expect(text?.split('\n')).toEqual([
       '【模擬瓦 W0000-4】你是 4家・忠臣',
-      '第 1 局：',
-      '1家 460 1+',
-      '2家 279',
-      '3家 370',
-      '輪到你派 3 人（第 1 局第 4 次）',
-      '/派 座位 作答｜/區間｜/下一步｜/公布｜/結束｜/模擬 說明',
+      '460 1+',
+      '279',
+      '370',
+      '',
+      '/派 座位 作答',
+      '/區間',
+      '/下一步',
+      '/help 模擬',
+      '/公布 (結束這題)',
     ]);
   });
   it('identity lines per role', async () => {
@@ -92,9 +97,9 @@ describe('selection', () => {
 
   it('seats 6–0 start at their first R2 proposal, after the R1 mission', async () => {
     const text = (await say(engine(), '/模擬 6')) ?? '';
-    expect(text).toContain('任務 157：oox，1 張失敗 → 任務失敗');
-    expect(text).toContain('輪到你派 4 人（第 2 局第 1 次）');
-    expect(text).toContain('・確定的事：第 1 局任務隊 1 5 7 裡至少 1 紅');
+    // 精簡牌譜（Edward 2026-11-17）：出發的那次後面單獨一行任務牌。
+    expect(text).toContain('\n469\n157\noox\n\n/派 座位 作答');
+    expect(text).not.toContain('確定的事');
   });
 
   it('紅 / 藍 pick a role of that camp', async () => {
@@ -130,10 +135,10 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     const e = engine({ bank: async () => MID });
     const text = (await say(e, '/模擬 3-5')) ?? '';
     expect(text.split('\n')[0]).toBe('【模擬瓦 M0000-3-5】你是 5家・莫甘娜，隊友 3 7');
-    expect(text).toContain('第 2 局：\n6家 1246');
-    expect(text).toContain('0家 1450（第 5 次，強制出發）\n任務 1450：ooox，1 張失敗 → 任務失敗\n湖：0家 湖 4家，說好人（o）\n第 3 局：\n1家 1246');
-    expect(text).toContain('輪到你派 4 人（第 3 局第 5 次，強制出發）');
-    expect(text).toContain('・確定的事：第 2 局任務隊 1 4 5 0 裡至少 1 紅');
+    expect(text).toContain('\n157\nooo\n1246\n');
+    expect(text).toContain('\n1450\nooox\n0>4 o\n1246');
+    expect(text).not.toContain('第 2 局');
+    expect(text).not.toContain('確定的事');
     expect(await say(e, '/派 1458')).toBe('【M0000-3-5】你派 1458：3 好 1 壞\n/分析 看完整解讀｜/下一步｜/公布');
     expect(await say(e, '/下一步')).toContain('三藍，接著刺殺');
     expect(await say(e, '/公布')).toContain('【M0000-3-5 公布】你是 5家・莫甘娜');
@@ -147,12 +152,12 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect([...MID.midPool.keys()].filter((k) => k.startsWith('3:'))).toEqual(['3:morgana']);
     expect(await say(e, '/模擬 3-5 梅林')).toBe('題庫裡沒有符合的3-5題目（3-5 只出第 2 局任務失敗的局），換個角色或座位試試。');
     expect(await say(e, '/模擬 2-5')).toContain('【模擬瓦 W0000-2-5】你是 0家・忠臣');
-    expect(await say(e, '/模擬 2-5 忠臣 0')).toContain('輪到你派 4 人（第 2 局第 5 次，強制出發）');
+    expect(await say(e, '/模擬 2-5 忠臣 0')).toContain('【模擬瓦 W0000-2-5】你是 0家・忠臣\n460 1+');
     expect(await say(e, '/模擬 2-5 3')).toContain('沒有符合的2-5題目');
     expect(await say(e, '/模擬 題 m0002-3-5')).toContain('【模擬瓦 M0002-3-5】');
     expect(await say(e, '/模擬 題 S0000-2-5')).toBe('這一局沒有第 2 局第 5 次派票，換一題吧。');
     // An old id keeps meaning the seat's first decision.
-    expect(await say(e, '/模擬 題 M0000-4')).toContain('輪到你派 3 人（第 1 局第 4 次）');
+    expect(await say(e, '/模擬 題 M0000-4')).toMatch(/【模擬瓦 M0000-4】你是 4家・[^\n]*\n460 1\+\n279\n370\n\n/u);
   });
 
   it('a random /模擬 (no seat) is occasionally a 2-5 or 3-5 (the high end of the roll); with a seat never', async () => {
@@ -169,12 +174,12 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     const e = engine({ bank: async () => MID });
     const one = (await say(e, '/模擬 1-5')) ?? '';
     expect(one.split('\n')[0]).toBe('【模擬瓦 W0000-1-5】你是 5家・莫甘娜，隊友 3 7');
-    expect(one).toContain('輪到你派 3 人（第 1 局第 5 次，強制出發）');
+    expect(one).toContain('\n460 1+\n279\n370\n469\n\n/派 座位 作答');
     expect(await say(e, '/模擬 4-5')).toBe('題庫裡沒有符合的4-5題目，換個角色或座位試試。');
     const five = (await say(e, '/模擬 5局')) ?? '';
     expect(five).toContain('【模擬瓦 M0000-5-1】你是 7家・刺客，隊友 3 5');
-    expect(five).toContain('輪到你派 5 人（第 5 局第 1 次）');
-    expect(five).toContain('・確定的事：第 2 局任務隊 1 4 5 0 裡至少 1 紅；第 3 局任務隊 1 4 5 8 裡至少 1 紅');
+    expect(five).not.toContain('確定的事');
+    expect(five.split('\n').filter((l) => /^[ox]+$/u.test(l))).toHaveLength(4); // four missions before round 5
     expect(await say(e, '/派 12468')).toBe('【M0000-5-1】你派 12468：5 好 0 壞\n/分析 看完整解讀｜/下一步｜/公布');
   });
 
@@ -182,8 +187,8 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     const e = engine({ bank: async () => MID });
     const start = (await say(e, '/模擬 刺殺')) ?? '';
     expect(start.split('\n')[0]).toBe('【模擬瓦 W0000-A】你是 7家・刺客，隊友 3 5');
-    expect(start).toContain('第 4 局：\n5家 13579\n6家 12468 0+ → 出發\n任務 12468：ooooo，任務成功');
-    expect(start.split('\n').slice(-2)).toEqual(['三藍：輪到你刺殺（刺中梅林紅方獲勝）', '/刺 座位 作答｜/公布｜/結束｜/模擬 說明']);
+    expect(start).toContain('\n13579\n12468 0+\nooooo\n');
+    expect(start.split('\n').slice(-5)).toEqual(['三藍，輪到你刺', '', '/刺 座位 作答', '/help 模擬', '/公布 (結束這題)']);
     for (const t of ['/派 123', '/分析', '/下一步', '/區間 12=1']) expect(await say(e, t)).toBe('W0000-A 是刺殺題：用 /刺 座位 作答，/公布 看結果');
     expect(await say(e, '/刺 3')).toBe('3家 是你的隊友，換一個座位。');
     expect(await say(e, '/刺 7')).toBe('你就是刺客，換一個座位。');
@@ -234,7 +239,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     // 週四: the next /下一步 lands on that seat's 3-5.
     const thu = at('2026-11-19T04:00:00Z');
     await say(thu, '/模擬 今天');
-    expect(await say(thu, '/下一步')).toContain('輪到你派 4 人（第 3 局第 5 次，強制出發）');
+    expect(await say(thu, '/下一步')).toContain('\n0>4 o\n1246\n1257\n3579\n1468\n\n/派 座位 作答');
   });
 
   it('with a records index, random picks prefer games that have a site page; an explicit id still works for any game', async () => {
@@ -295,14 +300,12 @@ describe('a whole exercise', () => {
 
     const next = (await say(e, '/下一步')) ?? '';
     expect(next).not.toContain('（之後照實際對局進行');
-    expect(next).toContain('4家 469\n5家 157（第 5 次，強制出發）\n任務 157：oox，1 張失敗 → 任務失敗');
-    expect(next).toContain('0家 1460（第 5 次，強制出發）');
-    expect(next).toContain('湖：0家 湖 4家，說好人（o）');
-    expect(next).toContain('輪到你派 4 人（第 3 局第 4 次）');
-    // 只有出過失敗牌的任務有確定資訊（成功不代表全好），一行。
-    expect(next).toContain('・確定的事：第 1 局任務隊 1 5 7 裡至少 1 紅');
+    expect(next).toContain('\n469\n157\noox\n');
+    expect(next).toContain('\n1460\n');
+    expect(next).toContain('\n0>4 o\n');
+    expect(next).not.toContain('確定的事');
     expect(next).not.toContain('例：');
-    expect(next.split('\n').at(-1)).toBe(ANSWER_FOOTER);
+    expect(next.endsWith(`\n\n${ANSWER_FOOTER}`)).toBe(true);
     expect(e.activeSessions()).toBe(1);
 
     expect(await say(e, '/派 1468')).toContain('你派 1468：4 好 0 壞');
@@ -317,7 +320,7 @@ describe('a whole exercise', () => {
     expect(fb2).not.toContain('湖讀法');
 
     const end = (await say(e, '/下一步')) ?? '';
-    expect(end).toContain('湖：4家 湖 3家，說紅（x）（你看到的：紅）');
+    expect(end).toContain('\n4>3 x（你看到：紅）');
     expect(end).toContain('三藍，接著刺殺（結果看 /公布）。');
     expect(await say(e, '/派 123')).toContain('你在這局已經沒有下一次派票了');
 
@@ -373,11 +376,14 @@ describe('a whole exercise', () => {
       for (let seat = 1; seat <= 10; seat++) {
         const start = (await sayN(`/模擬 題 ${id}-${seat}`)) ?? '';
         if (!start.includes('【模擬瓦')) continue; // a seat without a decision in that game
-        expect(start.split('\n').slice(-2)).toEqual([ANSWER_FOOTER, sharedNote('line')]); // the group line last, only here
+        expect(start.endsWith(`\n\n${answerFooter(true)}`)).toBe(true); // the group note only on start
         expect(start).not.toMatch(/例：|怎麼讀/u);
         let prompt = start;
-        while (/輪到你派 (\d) 人/u.test(prompt)) {
-          const size = Number(/輪到你派 (\d) 人/u.exec(prompt)?.[1]);
+        // 精簡牌譜沒有「輪到你派 N 人」：人數照目前第幾局（前面有幾行任務牌）算。
+        let missions = 0;
+        while (prompt.includes('/派 座位 作答')) {
+          missions += prompt.split('\n').filter((l) => /^[ox]+$/u.test(l)).length;
+          const size = TEAM_SIZES[missions];
           const team = [1, 2, 3, 4, 5].slice(0, size).map((s) => (s === seat ? 6 : s)).join('');
           const fb = (await sayN(`/派 ${team}`)) ?? '';
           proposals++;
@@ -470,8 +476,8 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     const [A, B, C] = [G('A'), G('B'), G('C')];
     const start = (await say(e, '/模擬 忠臣 4', A)) ?? '';
     // (2) one line: others may help, and /公布 or /結束 ends the exercise for everyone.
-    expect(start.split('\n').at(-1)).toBe(sharedNote('line'));
-    expect(sharedNote('line')).toBe('群組裡沒開題的人也能幫忙答；誰打 /公布 或 /結束 都會結束這題');
+    expect(start.split('\n').at(-1)).toBe('/公布 (結束這題)');
+    expect(start).toContain('/派 座位 作答 (沒開題的人也能作答)');
     // 2026-11-16：群組代答的提醒只在開題講一次；/派 只回幾好幾壞。
     const fb = (await say(e, '/派 468', B)) ?? '';
     expect(fb.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 468：3 好 0 壞', '/分析 看完整解讀｜/下一步｜/公布']);
@@ -646,7 +652,7 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     const start = (await say(e, '/模擬 梅林 1')) ?? '';
     expect(start).toContain('第 1 局第一個隊長，前面沒有派票');
     const next = (await say(e, '/下一步')) ?? '';
-    expect(next).toContain('1家 460');
+    expect(next).toContain('\n460 1+\n');
     for (const t of [start, next]) expect(t).not.toContain('怎麼讀');
     expect(SIM_HELP_TEXT).toContain('牌譜：「1家 460 1+」= 1家派 4、6、0家');
   });
@@ -726,7 +732,7 @@ describe('commit after delivery, LINE redelivery', () => {
     const lost = await e.handleText('/派 469', LINE_USER); // reply failed → no commit
     expect(lost?.text).toContain('你派 469');
     const lostStep = await e.handleText('/下一步', LINE_USER);
-    expect(lostStep?.text).toContain('第 3 局第 4 次');
+    expect(lostStep?.text).toContain('\n1246\n1257\n3579\n\n/派 座位 作答');
     expect(await say(e, '/公布')).toContain('你這題沒有作答。');
     expect(e.counts.answers).toBe(0);
     expect(e.counts.steps).toBe(0);
@@ -756,7 +762,7 @@ describe('commit after delivery, LINE redelivery', () => {
     });
     const [propose, next] = await Promise.all([sendSlowly('/派 469', 30), sendSlowly('/下一步', 0)]);
     expect(propose).toContain('你派 469');
-    expect(next).toContain('第 3 局第 4 次');
+    expect(next).toContain('\n1246\n1257\n3579\n\n/派 座位 作答');
     expect(order).toEqual(['【W0000-4】你派 469：2 好 1 壞', '【W0000-4 下一步】']);
     // 兩步都算數：現在在第 3 局的決定點。
     expect(await say(e, '/派 1468')).toContain('你派 1468');

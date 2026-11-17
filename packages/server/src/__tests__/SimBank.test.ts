@@ -171,7 +171,7 @@ describe('loader', () => {
 
 // ─── The committed bank ────────────────────────────────────────────────────
 
-const ALLOWED = /^[\p{Script=Han}0-9A-Za-z \u3000\n①②③④—・｜、，。：；（）「」【】＋＞＝→✓✗…*%/／\-+.<>=`]+$/u;
+const ALLOWED = /^[\p{Script=Han}0-9A-Za-z \u3000\n①②③④—・｜、，。：；（）()「」【】＋＞＝→✓✗…*%/／\-+.<>=`?]+$/u;
 
 describe('committed sim_bank.json (property test over the real bank)', () => {
   const file = JSON.parse(fs.readFileSync(BANK_PATH, 'utf8')) as SimBankFile;
@@ -247,6 +247,24 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     expect(checked).toBe(bank.decisionPoints);
   }, 300_000);
 
+  it('Edward 2026-11-17: the opening of QRSZY-3-5 in a group is exactly his compact shape', async () => {
+    const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const r = await engine.handleText('/模擬 題 QRSZY-3-5', { platform: 'line', chatId: 'G', userId: 'U', shared: true });
+    expect(r?.text).toBe([
+      '【模擬瓦 QRSZY-3-5】你是 5家・忠臣',
+      '257 1+', '239', '367', '237 49+', '159', 'ooo',
+      '1459 6+', '1359 7+', '1359 8+', '1590', '1590', 'ooox',
+      '0>9 x',
+      '1237', '1267 6-', '1356', '1456 3+',
+      '',
+      '/派 座位 作答 (沒開題的人也能作答)',
+      '/區間',
+      '/下一步',
+      '/help 模擬',
+      '/公布 (結束這題)',
+    ].join('\n'));
+  });
+
   it('the reviewers\' cases: 回選 is 延伸, the 對照 drops the earlier leader too, a 6-seat reading is 7 good with you', async () => {
     let now = 1;
     const engine = new SimEngine({ bank: async () => bank, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
@@ -271,7 +289,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     await say('/派 23678');
     expect(await say('/分析')).toMatch(/0家 13689 不可能全好：連你在內會有 7 個好人，超過 6 個/u);
     await say('/模擬 題 00VG7-2');
-    expect(await say('/下一步')).toContain('1家 2480（票沒記全） → 出發');
+    expect(await say('/下一步')).toContain('\n2480（票沒記全）\noooo\n');
   });
 
   it('every reply of every exercise (each seat of each game, all its decisions) fits 1800 characters and uses only expected characters', async () => {
@@ -342,7 +360,10 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
         const g = bank.games[ref.game];
         const p = g.proposals[ref.proposal];
         const start = await run(`/模擬 題 ${g.id}-${p.round}-${p.attempt}`);
-        expect(start, key).toContain(`輪到你派 ${[3, 4, 4, 5, 5][p.round - 1]} 人（第 ${p.round} 局第 ${p.attempt} 次`);
+        // 精簡牌譜：前面 round-1 行任務牌、這一局前面 attempt-1 次派票，接著是指令列。
+        const lines = start.split('\n');
+        expect(lines.filter((l) => /^[ox]+$/u.test(l)), key).toHaveLength(p.round - 1);
+        expect(start, key).toContain('\n\n/派 座位 作答');
         starts++;
         await run(`/派 ${teamDigits(p.teamSeats)}`);
         await run('/分析');
@@ -351,7 +372,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     }
     for (const gi of bank.assassinPool) {
       const g = bank.games[gi];
-      expect(await run(`/模擬 題 ${g.id}-A`)).toContain('三藍：輪到你刺殺');
+      expect(await run(`/模擬 題 ${g.id}-A`)).toContain('三藍，輪到你刺');
       const blue = g.seatRoles.findIndex((r) => r === 'loyal') + 1;
       await run(`/刺 ${blue === 10 ? 0 : blue}`);
       expect(await run('/公布')).toMatch(/你刺 \d家：(刺中梅林 ✓|沒刺中 ✗（梅林 \d家）)/u);
