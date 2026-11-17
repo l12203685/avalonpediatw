@@ -121,6 +121,9 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 
 不會重複發：狀態檔有這一天的貼文 id 就跳過；沒有的話先看自己最近的貼文裡有沒有「題號 今天的題號」，有就補記、不再發。
 A 發了、第一則留言沒成功時（狀態檔 `commentId` 是 `null`），之後每小時的執行不再發 A，只補發留言。
+發佈的回應不明（網路斷線、429、5xx）時不盲目重發：先看自己最近的貼文（或自己的回覆）和容器狀態，已經發出去就沿用那一篇。
+每次真的發出東西（A、留言）就馬上把狀態檔推上 `threads-state`；發留言前也先查自己的回覆裡有沒有回這一篇的，有就沿用。
+正式發佈前查不到權杖的權限（`debug_token` 沒回應或沒列權限）就不發，直接讓那次執行失敗；試跑不受影響。
 
 內容檢查沒過（例如疑似玩家名字）時，執行紀錄、摘要和試跑附件都不放貼文和留言的內容，只放檢查訊息（這個 repo 的 Actions 紀錄是公開的）。
 
@@ -133,7 +136,7 @@ repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，
 ### 站長要做的（一次）
 
 1. **建 Meta 開發者應用程式**：到 developers.facebook.com → 我的應用程式 → 建立應用程式 → 使用案例選「存取 Threads API」。
-2. **權限**：在使用案例裡加上 `threads_basic`、`threads_content_publish`、`threads_manage_replies`。
+2. **權限**：在使用案例裡加上 `threads_basic`、`threads_content_publish`、`threads_manage_replies`、`threads_read_replies`（發留言前先查自己回過了沒，避免重複留言）。
 3. **把自己加成測試人員**：應用程式角色 → 新增 Threads 測試人員（填自己的 Threads 帳號），再到 Threads App 的「設定 → 帳號 → 網站權限 → 邀請」接受。
 4. **產生權杖**：用 Meta 的「Threads API 測試工具」或授權網址登入取得短效權杖，再換成長效權杖（60 天）。拿到兩樣東西：長效權杖、自己的 Threads 使用者 id（數字）。
 5. **放進 GitHub**（repo → Settings → Secrets and variables → Actions）：
@@ -246,12 +249,14 @@ IG 長效權杖也是 60 天。有 secret `THREADS_SECRETS_PAT` 時（同一把�
 - **選擇的正本：** commit 進 repo 的 `packages/server/threads_picks.json`（自動發佈 #48 的格式）：`{ "version": 1, "picks": { "YYYY-MM-DD": "<題號>" } }`。
   產生器只有一條選題的路：`pickOverride`（存下來＝已經發出去的那一天優先；選的題不是那天主題能出的就照計畫，原因寫進 `warnings`）。
   選局頁列出來的題號（`optionsFor`）跟 `pickOverride` 用同一套池子，一定接受。
-- **腳本：** `threads:candidates`（`--picks` 預設 `threads_picks.json`；輸出 `candidates.json`、`games.json`，不進 git）、`threads:draft -- --picks <檔>`（只用今天之後的日子）。
+- **腳本：** `threads:candidates`（`--picks` 預設 `threads_picks.json`；輸出 `candidates.json`、`games.json`，不進 git）、`threads:draft -- --picks <檔>`。
+  兩個腳本讀同一份輸入（`src/bots/threads/inputs.ts`）：選的每一天都用（含今天和過去的日子：前一天選的今天的題目、昨天的答案都要對上），
+  已經發出去的以存下來的草稿（`threads_drafts/<日期>.json`；`threads:candidates` 用 `--drafts` 指定）為準。
   `--picks` 也接受選局頁資料庫匯出的 `[{ "date": …, "exerciseId": … }]`。
 
 ### 每天早上 8 點（台北）的工作
 
-1. 讀選局頁資料庫的 `picks` 集合（ArtifactData `list`，collection `picks`），只留今天之後的日子，
-   同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好）；有變動就 commit（選擇的正本在 repo）。
+1. 讀選局頁資料庫的 `picks` 集合（ArtifactData `list`，collection `picks`），今天之後的日子
+   同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好；今天和過去的日子保留檔案裡原本的，不刪）；有變動就 commit（選擇的正本在 repo）。
 2. 產生今天的草稿（或由自動發佈 #48 讀 `threads_picks.json` 發文）。
 3. 重跑 `threads:candidates -- --today <今天>`，把新的 `candidates.json`、`games.json` 更新到選局頁（今天鎖住、後面的日子照選擇重排）。

@@ -130,8 +130,10 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --filter @avalon/shared build
 
+      # 續期或寫回 secrets 失敗都不擋住後面的產生與發文（只出警告）。
       - name: 權杖快到期就續期（要 secrets.THREADS_SECRETS_PAT 才寫得回去）
         if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        continue-on-error: true
         working-directory: packages/server
         env:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
@@ -147,10 +149,13 @@ jobs:
           fi
           if [ -s "$NEW" ]; then
             echo "::add-mask::$(cat "$NEW")"
-            GH_TOKEN="$SECRETS_PAT" gh secret set THREADS_ACCESS_TOKEN --repo "$REPO" < "$NEW"
+            if GH_TOKEN="$SECRETS_PAT" gh secret set THREADS_ACCESS_TOKEN --repo "$REPO" < "$NEW"; then
+              echo "權杖已續期並寫回 secrets"
+            else
+              echo "::warning::Threads 權杖續期了但寫不回 secrets（THREADS_SECRETS_PAT 要有這個 repo 的 Secrets 讀寫權限）；這次照樣用新權杖發文"
+            fi
             echo "THREADS_ACCESS_TOKEN=$(cat "$NEW")" >> "$GITHUB_ENV"
             rm -f "$NEW"
-            echo "權杖已續期並寫回 secrets"
           fi
 
       # IG 續期或寫回 secrets 失敗都不擋住後面 Threads 的產生與發文（只出警告）。
@@ -256,7 +261,9 @@ jobs:
           THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           IMAGE_URLS: ${{ steps.image.outputs.urls }}
-        run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR"
+        # --checkpoint-push：發出 A、發出留言後馬上把狀態檔推上 threads-state（不等最後一步）。
+        # 權杖查不到權限、失效或少權限時這一步直接失敗、不發文（fail closed）。
+        run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR" --checkpoint-push
 
       - name: Instagram 同步
         if: always() && steps.prepare.outcome == 'success' && steps.ig_jpeg.outcome == 'success' && steps.image.outcome == 'success' && steps.gate.outputs.ig == 'live'

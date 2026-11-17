@@ -9,6 +9,8 @@
  * 不會重複發：狀態檔（threads-state 分支的 state/<日期>.json）有貼文 id 就不再發 A；
  * 沒有的話再查自己最近的貼文裡有沒有「題號 <今天的題號>」（上次發了卻沒記下來）。
  * A 發了、第一則留言沒成功（狀態檔 commentId 是 null）的話，之後的執行只補發留言。
+ * 每次真的發出東西就馬上把狀態檔推上去（checkpoint）；發佈的回應不明時先查是不是已經發了（threadsApi）；
+ * 發留言前先查自己的回覆裡有沒有回這一篇的，有就沿用。
  * 內容檢查沒過時，plan.json 不放貼文、留言的內容（CI 的附件是公開的），只放檢查訊息。
  * 權杖只在 post 段用，不寫進任何檔案。
  */
@@ -19,7 +21,7 @@ import type { ThreadsDraft } from '../draft';
 import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick } from '../plan';
-import type { ThreadsApi, RecentPost } from './threadsApi';
+import type { OwnReply, ThreadsApi, RecentPost } from './threadsApi';
 import { INSTAGRAM_CAPTION_MAX, type InstagramApi, type RecentMedia } from './instagramApi';
 
 // ─── 站長選的題（threads_picks.json） ───────────────────────────────────────
@@ -86,8 +88,8 @@ export function readState(stateDir: string, date: string): ThreadsStateRecord | 
 }
 
 /**
- * 這條管線發的 A 已經記下、第一則留言卻沒成功（commentId 明確記成 null）：之後的執行要補發留言。
- * 站長手動發的、或從最近的貼文補記的（不知道留言發了沒，commentId 沒有記）不補，避免重複留言。
+ * 這條管線發的（或從最近的貼文補記的）A 已經記下、第一則留言卻沒成功（commentId 明確記成 null）：之後的執行要補留言
+ * （補之前先查自己的回覆，已經發了就沿用）。站長手動發的（commentId 沒有記）不補。
  */
 export function needsCommentResume(rec: ThreadsStateRecord | null): boolean {
   return !!rec?.postId && rec.source === 'auto' && rec.commentId === null;
@@ -341,32 +343,84 @@ export interface PostResult {
   notes: string[];
 }
 
-export async function postDaily(
-  plan: DailyPlan,
-  deps: { api: ThreadsApi; stateDir: string; imageUrl?: string; imageUrls?: readonly string[]; now?: () => Date },
-): Promise<PostResult> {
+/** 自己對這一篇的回覆（第一則留言）：上次發了卻沒記下來時沿用。 */
+export function findOwnReply(replies: readonly OwnReply[], postId: string): OwnReply | null {
+  return replies.find((r) => r.repliedToId === postId) ?? null;
+}
+
+export interface PostDeps {
+  api: ThreadsApi;
+  stateDir: string;
+  imageUrl?: string;
+  imageUrls?: readonly string[];
+  now?: () => Date;
+  /**
+   * 每次真的發出東西（A、第一則留言）、寫好狀態檔之後馬上呼叫：CI 用它把狀態檔 commit＋push 上 threads-state，
+   * 中途中斷也不會丟掉「已經發了」的紀錄。失敗只記進 notes（下一次靠最近的貼文和自己的回覆補記，不會重發）。
+   */
+  checkpoint?: (label: string) => Promise<void> | void;
+}
+
+async function saveCheckpoint(deps: PostDeps, rec: ThreadsStateRecord, label: string, notes: string[]): Promise<void> {
+  writeState(deps.stateDir, rec);
+  if (!deps.checkpoint) return;
+  try {
+    await deps.checkpoint(label);
+  } catch (err) {
+    notes.push(`狀態檔沒推上去（${label}）：${(err as Error).message}`);
+  }
+}
+
+/**
+ * 第一則留言：先查自己的回覆裡有沒有回這一篇的（上次發了卻沒記下來），有就沿用；沒有才發。
+ * 查不到自己的回覆（例如權限不夠）就不發：寧可少一則留言，也不重複留言。
+ */
+async function ensureComment(plan: DailyPlan, postId: string, deps: PostDeps, notes: string[]): Promise<string | null> {
+  const findMine = async (): Promise<string | null> => findOwnReply(await deps.api.ownReplies(), postId)?.id ?? null;
+  let existing: string | null;
+  try {
+    existing = await findMine();
+  } catch (err) {
+    notes.push(`查不到自己的回覆，第一則留言這次不發（下次再補）：${(err as Error).message}`);
+    return null;
+  }
+  if (existing) {
+    notes.push('第一則留言之前已經發了（自己的回覆裡找到），補記、不再發');
+    return existing;
+  }
+  try {
+    return await deps.api.publishReply({ text: plan.comment, replyToId: postId, find: findMine });
+  } catch (err) {
+    notes.push(`第一則留言沒發成功：${(err as Error).message}`);
+    return null;
+  }
+}
+
+export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostResult> {
   const notes: string[] = [];
   const now = deps.now ?? ((): Date => new Date());
   if (plan.errors.length > 0) throw new Error(`內容檢查沒過：${plan.errors.join('；')}`);
   const existing = readState(deps.stateDir, plan.date);
   if (existing?.postId && needsCommentResume(existing)) {
-    // A 已經發了（不再發），上次第一則留言沒成功：只補留言。
+    // A 已經發了（不再發），上次第一則留言沒成功：只補留言（先查是不是其實已經發了）。
     const base = { postId: existing.postId, permalink: existing.permalink, quotePostId: existing.quotePostId ?? null };
-    try {
-      const commentId = await deps.api.publishReply({ text: plan.comment, replyToId: existing.postId });
-      writeState(deps.stateDir, { ...existing, commentId });
-      return { status: 'comment-resumed', ...base, commentId, notes: ['A 之前已經發了，這次補發第一則留言'] };
-    } catch (err) {
-      return { status: 'already-published', ...base, commentId: null, notes: [`第一則留言還是沒發成功（下次再補）：${(err as Error).message}`] };
-    }
+    const commentId = await ensureComment(plan, existing.postId, deps, notes);
+    if (!commentId) return { status: 'already-published', ...base, commentId: null, notes: [...notes, '第一則留言還是沒有（下次再補）'] };
+    await saveCheckpoint(deps, { ...existing, commentId }, '第一則留言', notes);
+    return { status: 'comment-resumed', ...base, commentId, notes: ['A 之前已經發了，這次補上第一則留言', ...notes] };
   }
   if (existing?.postId) return { status: 'already-published', postId: existing.postId, permalink: existing.permalink, notes: ['狀態檔已經有這一天的貼文 id'] };
 
   const recent = await deps.api.recentPosts();
   const dup = findByExercise(recent, plan.exerciseId);
   if (dup) {
-    writeState(deps.stateDir, { ...existing, date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp });
-    return { status: 'found-existing', postId: dup.id, permalink: dup.permalink, notes: ['自己最近的貼文裡已經有今天的題號，補記、不再發'] };
+    // 上次發了卻沒記下來（例如狀態檔沒推上去就中斷）：補記 A，留言也先查再補。
+    // 同一天 IG 可能先發了：保留狀態檔裡已有的欄位。
+    const rec: ThreadsStateRecord = { ...existing, date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: dup.id, permalink: dup.permalink, commentId: null, publishedAt: dup.timestamp };
+    await saveCheckpoint(deps, rec, 'A（補記）', notes);
+    const commentId = await ensureComment(plan, dup.id, deps, notes);
+    if (commentId) await saveCheckpoint(deps, { ...rec, commentId }, '第一則留言', notes);
+    return { status: 'found-existing', postId: dup.id, permalink: dup.permalink, commentId, notes: ['自己最近的貼文裡已經有今天的題號，補記、不再發', ...notes] };
   }
 
   let quotePostId: string | null = plan.quote?.postId ?? null;
@@ -387,20 +441,21 @@ export async function postDaily(
   if (wanted > 0 && imageUrls.length === 0) notes.push('有圖但沒有公開網址：只發文字');
   else if (imageUrls.length > 0 && imageUrls.length < wanted) notes.push(`只有 ${imageUrls.length}／${wanted} 張圖有公開網址`);
   if (imageUrls.length > 1) notes.push(`輪播 ${imageUrls.length} 張`);
-  const postId = await deps.api.publishPost({ text: plan.text, imageUrls, ...(quotePostId ? { quotePostId } : {}) });
-  // 先記下 A：留言失敗時重跑不會再發一次 A。
+  const postId = await deps.api.publishPost({
+    text: plan.text,
+    imageUrls,
+    ...(quotePostId ? { quotePostId } : {}),
+    // 回應不明時：自己最近的貼文裡有今天的題號就是已經發了
+    find: async () => findByExercise(await deps.api.recentPosts(), plan.exerciseId)?.id ?? null,
+  });
+  // 先記下 A（並推上去）：留言失敗或中斷時重跑不會再發一次 A。
   // 同一天 IG 可能先發了（只開 IG 的時候）：保留狀態檔裡已有的欄位。
   const rec: ThreadsStateRecord = { ...existing, date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId, quotePostId, commentId: null, publishedAt: now().toISOString() };
-  writeState(deps.stateDir, rec);
+  await saveCheckpoint(deps, rec, 'A', notes);
 
-  let commentId: string | null = null;
-  try {
-    commentId = await deps.api.publishReply({ text: plan.comment, replyToId: postId });
-    // 留言一發成功就記下：之後查網址失敗或中斷，下一次也不會以為留言沒發、再留一次。
-    writeState(deps.stateDir, { ...rec, commentId });
-  } catch (err) {
-    notes.push(`第一則留言沒發成功：${(err as Error).message}`);
-  }
+  // 留言一發成功就記下（並推上去）：之後查網址失敗或中斷，下一次也不會以為留言沒發、再留一次。
+  const commentId = await ensureComment(plan, postId, deps, notes);
+  if (commentId) await saveCheckpoint(deps, { ...rec, commentId }, '第一則留言', notes);
   const permalink = await deps.api.permalink(postId);
   writeState(deps.stateDir, { ...rec, commentId, ...(permalink ? { permalink } : {}) });
   return { status: 'published', postId, permalink, commentId, quotePostId, notes };

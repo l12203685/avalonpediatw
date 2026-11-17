@@ -3,6 +3,8 @@
  *
  * - 權杖只從呼叫端傳進來（CI 的 secrets），這裡不印、不存；錯誤訊息裡的網址會把 access_token 換成 ***。
  * - 暫時性的錯誤（網路、HTTP 429、5xx）照 2／4／8／16 秒重試；其他錯誤直接丟出。
+ * - 例外：發佈（threads_publish）不盲目重試。回應不明（可能其實已經發出去了）時，先查容器狀態和呼叫端給的 `find`
+ *   （例如自己最近的貼文、自己的回覆）：已經發出去就沿用那一篇，確定沒發才再發一次，避免同一篇發兩次。
  * - `fetch` 與 `sleep` 可以換掉（測試用假的 HTTP）。
  *
  * 官方流程：先建一個「容器」（/{user-id}/threads），等容器處理好（status = FINISHED），
@@ -11,10 +13,13 @@
 
 export const THREADS_GRAPH = 'https://graph.threads.net';
 export const THREADS_API_VERSION = 'v1.0';
-/** 發文需要的權限。threads_manage_replies：用 reply_to_id 回覆自己的貼文。 */
+/**
+ * 發文需要的權限。threads_manage_replies：用 reply_to_id 回覆自己的貼文；
+ * threads_read_replies：發留言前先查自己已經回過的（上次發了卻沒記下來就沿用，不重複留言）。
+ */
+export const REQUIRED_SCOPES = ['threads_basic', 'threads_content_publish', 'threads_manage_replies', 'threads_read_replies'] as const;
 /** 輪播最多幾張（Threads 的上限是 20；我們一天最多 3 張）。 */
 export const THREADS_CAROUSEL_MAX = 20;
-export const REQUIRED_SCOPES = ['threads_basic', 'threads_content_publish', 'threads_manage_replies'] as const;
 
 export type FetchLike = (url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) => Promise<{
   ok: boolean;
@@ -52,11 +57,32 @@ export interface RecentPost {
   permalink?: string;
 }
 
+/** 自己的一則回覆（第一則留言）。 */
+export interface OwnReply {
+  id: string;
+  text?: string;
+  /** 回覆的是哪一篇。 */
+  repliedToId?: string;
+}
+
 export interface TokenInfo {
   valid: boolean;
   scopes: string[];
   /** 到期的 Unix 秒數；0 或沒有＝查不到。 */
   expiresAt: number;
+}
+
+/**
+ * 正式發文前的權杖檢查：查不到權限（debug_token 沒回應、或沒列出權限）就不發（fail closed），
+ * 權杖失效或少了權限也不發。回傳問題（null＝可以發）。試跑不呼叫這個。
+ */
+export function tokenProblem(info: TokenInfo | null): string | null {
+  if (!info) return '查不到權杖的權限（debug_token 沒回應）：確認不了權限，這次不發文';
+  if (!info.valid) return '權杖已失效：請照 docs/THREADS.md〈自動發佈〉重新產生並更新 secrets';
+  if (info.scopes.length === 0) return '查不到權杖的權限清單：確認不了權限，這次不發文';
+  const missing = REQUIRED_SCOPES.filter((s) => !info.scopes.includes(s));
+  if (missing.length > 0) return `權杖少了權限：${missing.join('、')}`;
+  return null;
 }
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -87,9 +113,10 @@ export class ThreadsApi {
   }
 
   /** 一次 HTTP 呼叫＋重試；回 JSON。 */
-  private async call<T>(method: 'GET' | 'POST', path: string, params: Record<string, string | undefined> = {}): Promise<T> {
+  private async call<T>(method: 'GET' | 'POST', path: string, params: Record<string, string | undefined> = {}, opts: { retry?: boolean } = {}): Promise<T> {
     let last: ThreadsApiError | null = null;
-    for (let attempt = 0; attempt <= this.backoff.length; attempt++) {
+    const tries = opts.retry === false ? 0 : this.backoff.length;
+    for (let attempt = 0; attempt <= tries; attempt++) {
       if (attempt > 0) await this.sleep(this.backoff[attempt - 1]);
       try {
         const res = await this.fetchImpl(this.url(path, params), { method });
@@ -140,6 +167,41 @@ export class ThreadsApi {
     return r.data ?? [];
   }
 
+  /** 自己最近的回覆（找上次發了卻沒記下來的第一則留言）；要 threads_read_replies。 */
+  async ownReplies(limit = 25): Promise<OwnReply[]> {
+    const r = await this.call<{ data?: { id: string; text?: string; replied_to?: { id?: string } }[] }>('GET', this.v(`/${this.opts.userId}/replies`), {
+      fields: 'id,text,replied_to',
+      limit: String(limit),
+    });
+    return (r.data ?? []).map((x) => ({ id: x.id, text: x.text, repliedToId: x.replied_to?.id }));
+  }
+
+  private async containerStatus(id: string): Promise<string | undefined> {
+    const r = await this.call<{ status?: string }>('GET', this.v(`/${id}`), { fields: 'status,error_message' });
+    return r.status;
+  }
+
+  /**
+   * 發佈容器。回應不明（網路、429、5xx）時不盲目重發：等一下，先問 `find`（呼叫端找已經發出去的那一篇），
+   * 找到就沿用；容器狀態已經是 PUBLISHED 卻找不到 id 就停下來（不重發）；確定還沒發才再發一次。
+   */
+  private async publishContainer(id: string, find?: () => Promise<string | null>): Promise<string> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const p = await this.call<{ id: string }>('POST', this.v(`/${this.opts.userId}/threads_publish`), { creation_id: id }, { retry: false });
+        return p.id;
+      } catch (err) {
+        if (!(err instanceof ThreadsApiError) || !err.transient || attempt >= this.backoff.length) throw err;
+        await this.sleep(this.backoff[attempt]);
+        const found = find ? await find() : null;
+        if (found) return found;
+        if ((await this.containerStatus(id)) === 'PUBLISHED') {
+          throw new ThreadsApiError('容器已經發佈了，但找不到發出去的那一篇：不再重發（避免重複）', 0, false);
+        }
+      }
+    }
+  }
+
   private async waitContainer(id: string): Promise<void> {
     const tries = this.opts.pollTries ?? 12;
     for (let i = 0; i < tries; i++) {
@@ -151,27 +213,29 @@ export class ThreadsApi {
     throw new ThreadsApiError('容器一直沒有處理好（超過等待時間）', 0, true);
   }
 
-  /** 建容器 → 等 → 發佈；回貼文 id。 */
-  private async createAndPublish(params: Record<string, string | undefined>): Promise<string> {
+  /** 建容器 → 等 → 發佈；回貼文 id。建容器可以重試（沒發佈的容器不會出現）；發佈見 publishContainer。 */
+  private async createAndPublish(params: Record<string, string | undefined>, find?: () => Promise<string | null>): Promise<string> {
     const c = await this.call<{ id: string }>('POST', this.v(`/${this.opts.userId}/threads`), params);
     await this.waitContainer(c.id);
-    const p = await this.call<{ id: string }>('POST', this.v(`/${this.opts.userId}/threads_publish`), { creation_id: c.id });
-    return p.id;
+    return this.publishContainer(c.id, find);
   }
 
   /**
    * 新貼文：沒有圖＝純文字；一張＝圖文；兩張以上＝輪播（每張先建 is_carousel_item 容器，
-   * 再建 CAROUSEL 容器帶文字與引用）。quotePostId＝引用昨天的貼文。
+   * 再建 CAROUSEL 容器帶文字與引用）。quotePostId＝引用昨天的貼文。find：回應不明時找已經發出去的那一篇。
    */
-  async publishPost(input: { text: string; imageUrl?: string; imageUrls?: readonly string[]; quotePostId?: string }): Promise<string> {
+  async publishPost(input: { text: string; imageUrl?: string; imageUrls?: readonly string[]; quotePostId?: string; find?: () => Promise<string | null> }): Promise<string> {
     const urls = (input.imageUrls?.length ? input.imageUrls : input.imageUrl ? [input.imageUrl] : []).slice(0, THREADS_CAROUSEL_MAX);
     if (urls.length <= 1) {
-      return this.createAndPublish({
-        media_type: urls.length === 1 ? 'IMAGE' : 'TEXT',
-        text: input.text,
-        image_url: urls[0],
-        quote_post_id: input.quotePostId,
-      });
+      return this.createAndPublish(
+        {
+          media_type: urls.length === 1 ? 'IMAGE' : 'TEXT',
+          text: input.text,
+          image_url: urls[0],
+          quote_post_id: input.quotePostId,
+        },
+        input.find,
+      );
     }
     const children: string[] = [];
     for (const url of urls) {
@@ -179,12 +243,12 @@ export class ThreadsApi {
       await this.waitContainer(c.id);
       children.push(c.id);
     }
-    return this.createAndPublish({ media_type: 'CAROUSEL', children: children.join(','), text: input.text, quote_post_id: input.quotePostId });
+    return this.createAndPublish({ media_type: 'CAROUSEL', children: children.join(','), text: input.text, quote_post_id: input.quotePostId }, input.find);
   }
 
-  /** 回覆（第一則留言）。 */
-  async publishReply(input: { text: string; replyToId: string }): Promise<string> {
-    return this.createAndPublish({ media_type: 'TEXT', text: input.text, reply_to_id: input.replyToId });
+  /** 回覆（第一則留言）。find：回應不明時找已經發出去的那一則。 */
+  async publishReply(input: { text: string; replyToId: string; find?: () => Promise<string | null> }): Promise<string> {
+    return this.createAndPublish({ media_type: 'TEXT', text: input.text, reply_to_id: input.replyToId }, input.find);
   }
 
   async permalink(id: string): Promise<string | undefined> {
