@@ -34,19 +34,20 @@ import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
 import { SimBankLoader } from '../bots/simulation/bank';
 import { SIM_CONFIG } from '../bots/simulation/config';
-import { __setSimForTests } from '../bots/simulation';
+import { __setSimForTests, getSimEngine } from '../bots/simulation';
 import { SimEngine } from '../bots/simulation/session';
 import { CO_ANSWER_MARK, NO_SESSION_TEXT, RATE_LIMITED_TEXT, SIM_HELP_TEXT, sharedNote } from '../bots/simulation/replies';
 import { __resetFeedbackForTests, getFeedbackService } from '../bots/feedback/service';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
 import { fixtureBank } from './fixtures/simGames';
+import { RelayMediaStore } from '../bots/media/relayMedia';
 
 const GROUP = 'Cmirror-group';
 const SECRET = 'test-channel-secret';
 const silentLogger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
 const BANK = fixtureBank();
 
-interface SentMessage { type: string; text: string; quoteToken?: string; quickReply?: { items: { action: { text: string } }[] } }
+interface SentMessage { type: string; text: string; originalContentUrl?: string; quoteToken?: string; quickReply?: { items: { action: { text: string } }[] } }
 
 interface Harness {
   mirror: ChatMirror;
@@ -58,7 +59,7 @@ interface Harness {
   setReplyDelay: (ms: number) => void;
 }
 
-function setup(): Harness {
+function setup(opts: { relay?: boolean } = {}): Harness {
   const replies: Harness['replies'] = [];
   const discordSent: string[] = [];
   let replyFails = false;
@@ -88,6 +89,7 @@ function setup(): Harness {
     discordChannelId: 'D1',
     discord,
     lineReplyQueue: new LineReplyQueue(),
+    ...(opts.relay ? { lineImageRelay: { store: new RelayMediaStore(), publicBaseUrl: 'https://example.invalid' } } : {}),
     logger: silentLogger,
     inboundRateLimit: { windowMs: 60_000, maxRequests: 100 },
   });
@@ -209,8 +211,9 @@ describe('mirror group', () => {
     expect(h.bot.getWebhookStats()).toMatchObject({ replyFailures: 1, simReplies: 1 });
 
     h.setReplyFails(false);
+    expect(getSimEngine().counts.answers).toBe(0); // the failed reply applied nothing
     await deliver(h, groupText('/公布', 'm3', 'rt3'));
-    expect(h.replies.at(-1)?.messages[0].text).toContain('你這題沒有作答。');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
   });
 
   it('a redelivery of an event whose answer already went out gets no second copy and advances nothing', async () => {
@@ -225,6 +228,23 @@ describe('mirror group', () => {
     expect(h.replies).toHaveLength(2);
     // /區間 of an open exercise is a follow-up: not mirrored (SIM_MIRROR_FOLLOWUPS off).
     expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
+  });
+
+  it('/公布 (2026-11-17): the three lines, then the full record image via the relay', async () => {
+    const h = setup({ relay: true });
+    await deliver(h, groupText('/模擬 忠臣 4', 'r1', 'rr1'));
+    await deliver(h, groupText('/公布', 'r2', 'rr2'));
+    const [text, image] = h.replies.at(-1)?.messages ?? [];
+    expect(text.type).toBe('text');
+    expect(text.text.split('\n')[0]).toBe('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
+    expect(image.type).toBe('image');
+    expect(image.originalContentUrl).toMatch(/^https:\/\/example\.invalid\//u);
+  });
+  it('/公布 without an image relay: the three lines only (no picture path, no push)', async () => {
+    const plain = setup();
+    await deliver(plain, groupText('/模擬 忠臣 4', 'p1', 'rp1'));
+    await deliver(plain, groupText('/公布', 'p2', 'rp2'));
+    expect(plain.replies.at(-1)?.messages.map((m) => m.type)).toEqual(['text']);
   });
 
   it('a redelivery still drains the mirror queue on its reply_token (no 模擬 answer in slot 1)', async () => {
@@ -247,8 +267,8 @@ describe('mirror group', () => {
     expect(h.replies.map((r) => r.token)).toEqual(['rt1', 'rt2', 'rt3']);
     expect(h.replies[2].messages[0].text).toContain('百科AI 怎麼讀】');
     // Both commands landed: /公布 lists the answer.
-    await deliver(h, groupText('/公布', 'm4', 'rt4'));
-    expect(h.replies.at(-1)?.messages[0].text).toContain('469 2 好 1 壞');
+    expect(getSimEngine().counts.answers).toBe(1);
+    expect(getSimEngine().counts.aiReads).toBe(1);
   });
 
   it('follow-ups are mirrored again with SIM_MIRROR_FOLLOWUPS=true; a /派 with no exercise is plain text (mirrored)', async () => {
@@ -345,7 +365,7 @@ describe('mirror group', () => {
     expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
     // The owner continues on the same exercise (now answered); the co-answered /派 is marked in the listing.
     await deliver(h, groupText('/公布', 'k3', 'rk3'));
-    expect(h.replies.at(-1)?.messages[0].text).toContain('這題的派票：469（代答） 2 好 1 壞✗');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
 
     await deliver(h, groupText('/模擬 說明', 'k4', 'rk4'));
     expect(h.replies.at(-1)?.messages[0].text).toBe(SIM_HELP_TEXT);

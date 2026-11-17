@@ -36,6 +36,8 @@ import {
   withSimLock,
 } from '../simulation/textCommands';
 import { simLineGroupIds } from '../simulation/config';
+import { renderRecordPng } from '../simulation/recordImage';
+import type { SimGame } from '../simulation/scenario';
 import { answerSeatFillerTextCommand } from '../seatFiller/commands';
 import { answerPaipuFixTextCommand } from '../paipuFix/commands';
 import { answerCommunityTextCommand, isCommunityCommandText } from '../reports/commands';
@@ -626,9 +628,30 @@ export class LineBotClient {
         shared: ctx.shared,
       });
       if (!reply) return null;
-      return { kind: 'sim', text: reply.text, commit: reply.commit, quoteToken: ctx.quoteToken, quickReply: reply.sessionOpen };
+      const lead: LeadReply = { kind: 'sim', text: reply.text, commit: reply.commit, quoteToken: ctx.quoteToken, quickReply: reply.sessionOpen };
+      if (reply.image) {
+        const image = this.simRecordImage(reply.image.game, reply.image.title, reply.text);
+        if (image) lead.image = image;
+      }
+      return lead;
     } catch (error) {
       console.error(`[LINE sim] building answer failed (${describeError(error)})`);
+      return null;
+    }
+  }
+
+  /**
+   * /公布 的整局牌譜圖（2026-11-17）：畫成 PNG、放進同步的圖片中繼拿公開網址（跟 /排行 的圖表同一條路）。
+   * 中繼沒開（沒有免費的圖片路）或畫圖失敗就回 null，只送文字。從不丟錯。
+   */
+  private simRecordImage(game: SimGame, title: string, caption: string): LeadReply['image'] | null {
+    const mirror = getChatMirror();
+    if (!mirror || !mirror.lineImageRelay()) return null;
+    try {
+      const url = mirror.relayReplyPngUrl(renderRecordPng(game, title), `simrecord:${game.id}`);
+      return url ? { url, caption } : null;
+    } catch (error) {
+      console.error(`[LINE sim] record image failed, answering with text (${describeError(error)})`);
       return null;
     }
   }
@@ -666,10 +689,10 @@ export class LineBotClient {
     if (!lead.image) return [this.leadMessage(lead, oneToOne)];
     const caption: Record<string, unknown> = { type: 'text', text: lead.image.caption };
     if (lead.quoteToken) caption.quoteToken = lead.quoteToken;
-    return [
-      { type: 'image', originalContentUrl: lead.image.url, previewImageUrl: lead.image.url } as Message,
-      caption as unknown as Message,
-    ];
+    const image = { type: 'image', originalContentUrl: lead.image.url, previewImageUrl: lead.image.url } as Message;
+    // 模擬瓦 /公布（2026-11-17）：先三行文字、再附整局牌譜圖；/排行 照舊圖在前。
+    if (lead.kind === 'sim') return [caption as unknown as Message, image];
+    return [image, caption as unknown as Message];
   }
 
   /** After LINE refused the chart image: the text answer alone on the same token. True when it went out. */

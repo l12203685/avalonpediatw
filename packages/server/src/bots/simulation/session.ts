@@ -179,6 +179,11 @@ export interface SimReply {
   commit: () => void;
   /** 回覆之後這一題還開著（LINE 1 對 1 加快速按鈕用）。 */
   sessionOpen: boolean;
+  /**
+   * /公布（Edward 2026-11-17）：附整局牌譜圖（recordImage.ts）。平台各自決定怎麼附：Discord 直接附檔；
+   * LINE 要公開網址，借用同步的圖片中繼（ChatMirror.relayReplyPngUrl），沒有就只送文字。
+   */
+  image?: { game: SimGame; title: string };
 }
 
 export function sessionKeyFor(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>): string {
@@ -831,6 +836,7 @@ export class SimEngine {
       text,
       kind: 'reveal',
       sessionOpen: false,
+      image: { game, title: session.exerciseId },
       commit: (): void => {
         const current = this.store.get(session.key, this.now());
         if (!current || current.version !== session.version) return;

@@ -47,7 +47,6 @@ import { hasHits, type Camp, type CampShare, type HumanAgg, type ProposalFeature
 import { RED_COUNT, type SimBeliefModel } from './logic';
 import {
   freeCount,
-  intervalGroupTrue,
   type ClaimReading,
   type IntervalEval,
   type LogicPanel,
@@ -61,9 +60,10 @@ import {
 import { serialiseRecord } from './bankCodec';
 import type { ReplayGame } from '../../ai/benchmark/sheetsReplay';
 import { FAILS_REQUIRED, isRed, type PublicEvent, type Sight, type SimGame } from './scenario';
-import { maskDigits, maskOf, seatChar, seatList, seatsOfMask, sortSeats, teamDigits } from './seats';
+import { maskDigits, seatChar, seatList, seatsOfMask, sortSeats, teamDigits } from './seats';
 import type { EndedReason } from './session';
 import type { AiReading } from './aiRead';
+import { originalResult } from './recordImage';
 
 export type SimPlatform = 'line' | 'discord';
 
@@ -1005,56 +1005,29 @@ export function resultText(g: SimGame): string {
  * 加網站上這一局牌譜的連結；網站上沒有這一局（試算表裡比 DC 論壇早、或沒貼到論壇）就附文字牌譜。
  */
 export function formatReveal(input: RevealInput): string {
+  // Edward 2026-11-17：公布只要三行（配置、原始結果、完整牌譜），整局牌譜圖另外附（recordImage.ts）。
   const g = input.game;
-  const redMask = maskOf(g.seatRoles.map((r, i) => (isRed(r) ? i + 1 : 0)).filter(Boolean));
   const parts: ReplyPart[] = [];
   if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
-  parts.push({ text: `【${input.exerciseId} 公布】你是 ${seatLabel(input.seat)}・${ROLE_ZH[g.seatRoles[input.seat - 1]]}` });
-  parts.push({ text: `${roleCode(g)}（紅 ${seatList(seatsOfMask(redMask))}）` });
-
-  const viewerRed = isRed(g.seatRoles[input.seat - 1]);
-  // 有代答派的（或這次是代答）就寫「這題的派票」：不全是看這則回覆的人派的。
-  const mixed = input.coAnswer || input.answers.some((a) => a.teams.some((t) => t.coAnswer));
-  const merlin = g.seatRoles.indexOf('merlin') + 1;
+  const seats = CODE_ORDER.map((r) => {
+    const i = g.seatRoles.indexOf(r);
+    return i < 0 ? '?' : seatChar(i + 1);
+  }).join('');
+  parts.push({ text: `【${input.exerciseId} 公布】配置: 刺娜莫奧派梅 ${seats}` });
   if (input.kill) {
+    // 刺殺題：只多這一行（不然看不出刺中沒有）。
+    const merlin = g.seatRoles.indexOf('merlin') + 1;
     const t = input.kill.target;
     const who = input.coAnswer || input.kill.coAnswer ? '這題' : '你';
-    if (t === null) parts.push({ text: `${who}沒有刺（梅林 ${seatLabel(merlin)}）` });
-    else parts.push({ text: `${who}刺 ${seatLabel(t)}${input.kill.coAnswer ? CO_ANSWER_TAG : ''}：${t === merlin ? '刺中梅林 ✓' : `沒刺中 ✗（梅林 ${seatLabel(merlin)}）`}` });
-    if (g.assassinTargetSeat) parts.push({ text: `當時真人刺 ${seatLabel(g.assassinTargetSeat)}（${g.assassinTargetSeat === merlin ? '刺中' : '沒刺中'}）` });
-  } else if (input.answers.length > 0) {
-    const items = input.answers.map(({ decision, teams }) => {
-      const label = input.answers.length > 1 ? `第 ${decision.round} 局 ` : '';
-      const each = teams.map(({ team, coAnswer }) => {
-        const reds = team.filter((s) => isRed(g.seatRoles[s - 1]));
-        const mark = viewerRed ? '' : reds.length === 0 ? '✓' : '✗';
-        return `${teamDigits(team)}${coAnswer ? CO_ANSWER_TAG : ''} ${team.length - reds.length} 好 ${reds.length} 壞${mark}`;
-      });
-      return `${label}${each.join('、')}`;
-    });
-    parts.push({ text: `${mixed ? '這題的派票' : '你的派票'}：${items.join('；')}` });
-  } else {
-    parts.push({ text: input.coAnswer ? '這題沒有人作答。' : '你這題沒有作答。' });
+    parts.push({ text: t === null ? `${who}沒有刺` : `${who}刺 ${seatLabel(t)}${input.kill.coAnswer ? CO_ANSWER_TAG : ''}：${t === merlin ? '刺中梅林 ✓' : '沒刺中 ✗'}` });
   }
-  if (input.interval && input.interval.length > 0) {
-    const yours = input.intervalYours !== false;
-    const items = input.interval.map((grp) => `${formatIntervalGroup(grp)} ${intervalGroupTrue(grp, redMask) ? '✓' : '✗'}`);
-    let tail = '';
-    if (input.intervalWorlds) {
-      const kept = input.intervalWorlds.includes(redMask);
-      const whose = yours ? '你的區間' : intervalOwnerWords(false);
-      tail = kept ? `；真正的紅方在${whose}留下的 ${input.intervalWorlds.length} 種裡 ✓` : `；真正的紅方不在${whose}留下的組合裡 ✗`;
-    }
-    parts.push({ text: `區間${input.intervalByCoAnswer ? CO_ANSWER_TAG : ''}：${items.join('、')}${tail}` });
-  }
-  if (!input.kill) parts.push({ text: `結果：${resultText(g)}` });
+  parts.push({ text: `原始結果: ${originalResult(g)}` });
   if (input.recordUrl) {
-    parts.push({ text: `完整牌譜：${input.recordUrl}` });
+    parts.push({ text: `完整牌譜: ${input.recordUrl}` });
   } else {
-    parts.push({ text: '完整牌譜（網站上沒有這一局）：' });
+    parts.push({ text: '完整牌譜（網站上沒有這一局）:' });
     parts.push({ text: codeBlock(serialiseRecord(g as ReplayGame).split('\n'), input.platform) });
   }
-  parts.push({ text: '/模擬 再來一題' });
   return assembleReply(parts);
 }
 

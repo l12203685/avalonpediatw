@@ -209,10 +209,14 @@ describe('handlers', () => {
     const read = await run(COMMANDS.SIM_INTERVAL);
     expect(read).toContain('【W0000-4 百科AI 怎麼讀】');
     expect(read).toContain('百科AI 會派：');
-    const reveal = await run(COMMANDS.SIM_REVEAL);
-    expect(reveal).toContain('刺7娜5莫3奧9派2梅1（紅 3 5 7 9）');
-    // 網站上沒有這一局：文字牌譜放在 code block。
-    expect(reveal).toContain('完整牌譜（網站上沒有這一局）：\n```\n460 1+\n');
+    const revealIt = makeInteraction(COMMANDS.SIM_REVEAL);
+    await handleSimCommand(revealIt as never);
+    const revealArg = revealIt.editReply.mock.calls.at(-1)?.[0] as { content: string; files?: unknown[] };
+    const reveal = revealArg.content;
+    expect(reveal.split('\n').slice(0, 2)).toEqual(['【W0000-4 公布】配置: 刺娜莫奧派梅 753921', '原始結果: 三藍死']);
+    // 網站上沒有這一局：文字牌譜放在 code block；整局牌譜圖附檔（Edward 2026-11-17）。
+    expect(reveal).toContain('完整牌譜（網站上沒有這一局）:\n```\n460 1+\n');
+    expect(revealArg.files).toHaveLength(1);
     expect(await run(COMMANDS.SIM_END)).toBe(NO_SESSION_TEXT);
     expect(engine.counts.started.discord).toBe(1);
   });
@@ -254,7 +258,8 @@ describe('handlers', () => {
       expect(await run(name, opts, 'CH-1', 'b')).toBe(NO_SESSION_TEXT);
     }
     expect(engine.activeSessions()).toBe(1);
-    expect(await run(COMMANDS.SIM_REVEAL, {}, 'CH-1', 'a')).toContain('你這題沒有作答。');
+    expect(await run(COMMANDS.SIM_REVEAL, {}, 'CH-1', 'a')).toContain('【W0000-4 公布】');
+    expect(engine.counts.answers).toBe(0);
     // The public channel still co-answers.
     await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-SIM', 'a');
     expect((await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-SIM', 'b')).split('\n')[0]).toBe(CO_ANSWER_MARK);
@@ -331,7 +336,7 @@ describe('handlers', () => {
     errors.mockRestore();
     expect(failing.editReply).toHaveBeenLastCalledWith({ content: SIM_ERROR_TEXT, allowedMentions: { parse: [] } });
     expect(engine.counts.answers).toBe(0);
-    expect(await run(COMMANDS.SIM_REVEAL)).toContain('你這題沒有作答。');
+    expect(await run(COMMANDS.SIM_REVEAL)).toContain('【W0000-4 公布】');
   });
 
   it('flag off → a fixed "停用" reply', async () => {

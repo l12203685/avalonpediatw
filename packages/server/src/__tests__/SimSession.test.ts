@@ -139,7 +139,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect(text).not.toContain('第 2 局');
     expect(text).not.toContain('確定的事');
     expect(await say(e, '/派 1458')).toBe('【M0000-3-5】你派 1458：3 好 1 壞\n/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布');
-    expect(await say(e, '/公布')).toContain('【M0000-3-5 公布】你是 5家・莫甘娜');
+    expect(await say(e, '/公布')).toContain('【M0000-3-5 公布】配置: 刺娜莫奧派梅 ');
     expect(e.counts.midStarts).toBe(1);
   });
 
@@ -192,15 +192,14 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect(await say(e, '/刺 7')).toBe('你就是刺客，換一個座位。');
     expect(await say(e, '/刺 2')).toBe('【W0000-A】你刺 2家（可以再刺一次改答案）\n/公布 看結果｜/結束');
     const miss = (await say(e, '/公布')) ?? '';
-    expect(miss).toContain('你刺 2家：沒刺中 ✗（梅林 1家）');
-    expect(miss).toContain('當時真人刺 1家（刺中）');
-    expect(miss).not.toContain('結果：');
+    // Edward 2026-11-17：公布＝配置、（刺殺題多一行刺中沒有）、原始結果、完整牌譜。
+    expect(miss.split('\n').slice(0, 3)).toEqual(['【W0000-A 公布】配置: 刺娜莫奧派梅 753921', '你刺 2家：沒刺中 ✗', '原始結果: 三藍死']);
     await say(e, '/模擬 題 W0001-A');
     await say(e, '/刺 2');
     await say(e, '/刺 1'); // the last one counts
     expect(await say(e, '/公布')).toContain('你刺 1家：刺中梅林 ✓');
     await say(e, '/模擬 題 W0002-A');
-    expect(await say(e, '/公布')).toContain('你沒有刺（梅林 1家）');
+    expect(await say(e, '/公布')).toContain('你沒有刺');
     // /刺 on a proposal exercise; a game without an assassination.
     await say(e, '/模擬 忠臣 4');
     expect(await say(e, '/刺 1')).toBe('W0000-4 不是刺殺題：用 /派 座位 作答（刺殺題：/模擬 刺殺）');
@@ -212,7 +211,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     const e = engine({ bank: async () => MID });
     await say(e, '/模擬 刺殺', G('A'));
     expect(await say(e, '/刺 2', G('B'))).toBe(`${CO_ANSWER_MARK}\n【W0000-A】你刺 2家（可以再刺一次改答案）\n/公布 看結果｜/結束`);
-    expect(await say(e, '/公布', G('A'))).toContain('這題刺 2家（代答）：沒刺中 ✗（梅林 1家）');
+    expect(await say(e, '/公布', G('A'))).toContain('這題刺 2家（代答）：沒刺中 ✗');
   });
 
   it('/模擬 今天 follows the Threads week (Taipei date): 日 第五局、一 刺殺、二 派西（第 2 局起）、三 1-5、四 3-5、五 2-5、六 4-5（沒有就 2-5）', async () => {
@@ -244,7 +243,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect(await say(e, '/模擬 題 W0001-4')).toContain('【模擬瓦 W0001-4】');
     // Ids are opaque (a sheet-only game may get a non-numeric id): the link carries it as-is.
     await say(e, '/模擬 題 W0003-4');
-    expect(await say(e, '/公布')).toContain('完整牌譜：https://avalon-game-platform.web.app/#records=S9ABC');
+    expect(await say(e, '/公布')).toContain('完整牌譜: https://avalon-game-platform.web.app/#records=S9ABC');
   });
 });
 
@@ -299,19 +298,15 @@ describe('a whole exercise', () => {
     expect(e.activeSessions()).toBe(1);
 
     const reveal = (await say(e, '/公布')) ?? '';
-    // 每一次 /派 都留著（幾好幾壞）；角色是百科的代碼；fixture 的局在網站上沒有那一篇 → 附文字牌譜。
+    // Edward 2026-11-17：只有三行（配置、原始結果、完整牌譜）；fixture 的局在網站上沒有那一篇 → 附文字牌譜。整局牌譜圖另外附（reply.image）。
     expect(reveal.split('\n')).toEqual([
-      '【W0000-4 公布】你是 4家・忠臣',
-      '刺7娜5莫3奧9派2梅1（紅 3 5 7 9）',
-      '你的派票：469 2 好 1 壞✗、468 3 好 0 壞✓、469 2 好 1 壞✗',
-      '區間：789=2 ✓、460=1 ✗；真正的紅方不在你的區間留下的組合裡 ✗',
-      '結果：三藍死（刺 1家，刺中梅林）',
-      '完整牌譜（網站上沒有這一局）：',
+      '【W0000-4 公布】配置: 刺娜莫奧派梅 753921',
+      '原始結果: 三藍死',
+      '完整牌譜（網站上沒有這一局）:',
       '460 1+', '279', '370', '469', '157', 'oox',
       '1246', '3579', '2468', '4689', '1460', 'oooo', '0>4 o',
       '1246', '1257', '3579', '1468 20+', 'oooo', '4>3 x',
       '13579', '12468 0+', 'ooooo',
-      '/模擬 再來一題',
     ]);
     expect(e.activeSessions()).toBe(0);
     expect(await say(e, '/公布')).toBe(NO_SESSION_TEXT);
@@ -327,7 +322,7 @@ describe('a whole exercise', () => {
     const e = engine({ bank: async () => linked });
     await say(e, '/模擬 忠臣 4');
     const reveal = (await say(e, '/公布')) ?? '';
-    expect(reveal).toContain('完整牌譜：https://avalon-game-platform.web.app/#records=1397438863340998720');
+    expect(reveal).toContain('完整牌譜: https://avalon-game-platform.web.app/#records=1397438863340998720');
     expect(reveal).not.toContain('網站上沒有這一局');
     expect(reveal).not.toContain('460 1+');
   });
@@ -405,7 +400,7 @@ describe('a whole exercise', () => {
     await say(e, '/模擬 忠臣 4', { platform: 'discord', chatId: 'G1', userId: 'U1' });
     expect(e.activeSessions()).toBe(4);
     await say(e, '/派 469', { platform: 'line', chatId: 'G1', userId: 'U1' });
-    expect(await say(e, '/公布', { platform: 'line', chatId: 'G1', userId: 'U2' })).toContain('你這題沒有作答。');
+    expect(await say(e, '/公布', { platform: 'line', chatId: 'G1', userId: 'U2' })).toContain('公布】配置: 刺娜莫奧派梅 ');
     await say(e, '/模擬 忠臣 4', { platform: 'line', chatId: 'G3' });
     expect(await say(e, '/區間', { platform: 'line', chatId: 'G3' })).toContain('百科AI 怎麼讀】');
   });
@@ -470,8 +465,7 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     // (3) /公布 by a co-answerer ends the exercise; answers given by co-answerers are marked 「（代答）」, the 區間 too.
     const reveal = (await say(e, '/公布', C)) ?? '';
     expect(reveal.split('\n')[0]).toBe(CO_ANSWER_MARK);
-    expect(reveal).toContain('這題的派票：468（代答） 3 好 0 壞✓、469 2 好 1 壞✗');
-    expect(reveal).toContain('區間（代答）：789=2 ✓；真正的紅方在這題目前的區間留下的 45 種裡 ✓');
+    expect(reveal.split('\n')[1]).toBe('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
     expect(e.activeSessions()).toBe(0);
     expect(await say(e, '/派 469', A)).toBe(NO_SESSION_TEXT);
     expect(e.counts).toMatchObject({ coAnswers: 6, answers: 2, analyses: 2, intervals: 1, aiReads: 1, reveals: 1, usage: 1 });
@@ -485,19 +479,18 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect(await say(e, '/分析', G('B'))).toMatch(/・照這題目前的區間（24 種）/u);
     await say(e, '/派 468', G('A'));
     expect(await say(e, '/分析', G('A'))).toMatch(/・照你寫的區間（24 種）/u);
+    // The owner's own /公布 carries no 代答 mark.
     const reveal = (await say(e, '/公布', G('A'))) ?? '';
-    expect(reveal).toContain('這題的派票：469（代答） 2 好 1 壞✗、468 3 好 0 壞✓');
-    expect(reveal).toContain('區間：789=2 ✓、460=1 ✗；真正的紅方不在你的區間留下的組合裡 ✗');
+    expect(reveal.split('\n')[0]).toBe('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
   });
 
-  it('a co-answerer\'s /公布 does not tag the owner\'s own 區間 as 代答, but words it 「這題目前的區間」', async () => {
+  it('a co-answerer\'s /公布 is marked 代答 and reveals the owner\'s exercise', async () => {
     const e = engine();
     await say(e, '/模擬 忠臣 4', G('A'));
     await say(e, '/區間 789=2 460=1', G('A'));
     const reveal = (await say(e, '/公布', G('B'))) ?? '';
     expect(reveal.split('\n')[0]).toBe(CO_ANSWER_MARK);
-    expect(reveal).toContain('區間：789=2 ✓、460=1 ✗；真正的紅方不在這題目前的區間留下的組合裡 ✗');
-    expect(reveal).not.toContain('區間（代答）');
+    expect(reveal.split('\n')[1]).toBe('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
   });
 
   it('co-answering only where everyone sees the replies: never without `shared` (1:1 chats, Discord channels whose replies are only-you)', async () => {
@@ -508,7 +501,7 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
       expect(e.answersFollowUp({ platform: 'line', chatId: 'G', userId: 'B' }, parseSimCommand(t) as SimCommand)).toBe(false);
     }
     expect(e.activeSessions()).toBe(1);
-    expect(await say(e, '/公布', G('A'))).toContain('你這題沒有作答。');
+    expect(await say(e, '/公布', G('A'))).toContain('公布】配置: 刺娜莫奧派梅 ');
     // A start outside a group says nothing about co-answering.
     expect(await say(e, '/模擬 忠臣 4', LINE_USER)).not.toContain('幫忙答');
     expect(await say(e, '/派 469', LINE_USER)).not.toContain('幫忙答');
@@ -539,7 +532,7 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect((await say(e, '/派 279', B)) ?? '').toMatch(/^【W0000-2】你派 279/u);
     // C has none: the newest (B's) is answered. A's is untouched.
     expect((await say(e, '/派 279', C)) ?? '').toMatch(/^（代答：[^\n]*\n【W0000-2】你派 279/u);
-    expect(await say(e, '/公布', C)).toContain('這題的派票：279 1 好 2 壞✗、279（代答） 1 好 2 壞✗');
+    expect(await say(e, '/公布', C)).toContain('【W0000-2 公布】');
     expect((await say(e, '/區間', C)) ?? '').toMatch(/^（代答：[^\n]*\n【W0000-4 百科AI 怎麼讀】/u); // now A's is the newest
     expect(await say(e, '/區間', G('C', { chatId: 'other' }))).toBe(NO_SESSION_TEXT);
     expect(await say(e, '/結束', C)).toBe(`${CO_ANSWER_MARK}\n已結束 W0000-4（沒有公布）。再來一題：/模擬`);
@@ -617,7 +610,7 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect(order).toEqual(['B:end', 'C:propose', 'A:interval', 'C:read']);
     expect(co).toMatch(/^（代答：[^\n]*\n【W0000-4】你派 469/u); // B's was gone by then: A's is the newest
     expect(e.counts).toMatchObject({ ended: 1, answers: 1, intervals: 1, aiReads: 1, coAnswers: 2 });
-    expect(await say(e, '/公布', A)).toContain('這題的派票：469（代答） 2 好 1 壞✗');
+    expect(await say(e, '/公布', A)).toContain('【W0000-4 公布】');
   });
 
   it('an exercise that starts before any proposal: no notation note anywhere (it lives in /模擬 說明 since 2026-11-16)', async () => {
@@ -704,7 +697,7 @@ describe('commit after delivery, LINE redelivery', () => {
     expect(lost?.text).toContain('你派 469');
     const lostRead = await e.handleText('/區間', LINE_USER);
     expect(lostRead?.text).toContain('百科AI 怎麼讀】');
-    expect(await say(e, '/公布')).toContain('你這題沒有作答。');
+    expect(await say(e, '/公布')).toContain('公布】配置: 刺娜莫奧派梅 ');
     expect(e.counts.answers).toBe(0);
     expect(e.counts.aiReads).toBe(0);
   });
@@ -735,8 +728,7 @@ describe('commit after delivery, LINE redelivery', () => {
     expect(propose).toContain('你派 469');
     expect(again).toContain('你派 468');
     expect(order).toEqual(['【W0000-4】你派 469：2 好 1 壞', '【W0000-4】你派 468：3 好 0 壞']);
-    // 兩次都算數：/公布 兩個都列。
-    expect(await say(e, '/公布')).toContain('469 2 好 1 壞✗、468 3 好 0 壞✓');
+    // 兩次都算數（answers 2）。
     expect(e.counts).toMatchObject({ answers: 2 });
   });
 

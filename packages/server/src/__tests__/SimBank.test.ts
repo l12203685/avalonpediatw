@@ -23,6 +23,7 @@ import {
 import { SIM_REPLY_MAX_CHARS } from '../bots/simulation/config';
 import { analyze, logicModel } from '../bots/simulation/logic';
 import { claimMaskOf, logicPanel, overlapLabel, releasePanel } from '../bots/simulation/reading';
+import { buildRecordSvg, renderRecordPng } from '../bots/simulation/recordImage';
 import { SimEngine } from '../bots/simulation/session';
 import {
   decisionsOf,
@@ -171,7 +172,7 @@ describe('loader', () => {
 
 // ─── The committed bank ────────────────────────────────────────────────────
 
-const ALLOWED = /^[\p{Script=Han}0-9A-Za-z \u3000\n①②③④—・｜、，。：；（）()「」【】＋＞＝→✓✗…*%/／\-+.<>=`?]+$/u;
+const ALLOWED = /^[\p{Script=Han}0-9A-Za-z :\u3000\n①②③④—・｜、，。：；（）()「」【】＋＞＝→✓✗…*%/／\-+.<>=`?]+$/u;
 
 describe('committed sim_bank.json (property test over the real bank)', () => {
   const file = JSON.parse(fs.readFileSync(BANK_PATH, 'utf8')) as SimBankFile;
@@ -290,6 +291,25 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     expect(again?.text).toBe(text);
   });
 
+  it('Edward 2026-11-17: /公布 of QRSZY-3-5 is three lines (配置, 原始結果, 完整牌譜) and carries the full record image', async () => {
+    const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
+    const req = { platform: 'line' as const, chatId: 'R', userId: 'U' };
+    (await engine.handleText('/模擬 題 QRSZY-3-5', req))?.commit();
+    const r = await engine.handleText('/公布', req);
+    const lines = (r?.text ?? '').split('\n');
+    expect(lines.slice(0, 2)).toEqual(['【QRSZY-3-5 公布】配置: 刺娜莫奧派梅 893270', '原始結果: 三藍活']);
+    expect(lines[2]).toMatch(/^完整牌譜(: https:\/\/avalon-game-platform\.web\.app\/#records=\S+|（網站上沒有這一局）:)$/u);
+    expect(r?.text).not.toContain('/模擬 再來一題');
+    expect(r?.image?.title).toBe('QRSZY-3-5');
+    const png = renderRecordPng(r!.image!.game, r!.image!.title);
+    expect(png.subarray(1, 4).toString('latin1')).toBe('PNG');
+    // 整局（沒有截斷）、有角色、沒有名字。
+    const svg = buildRecordSvg(r!.image!.game, 'QRSZY-3-5');
+    expect(svg).toContain('第 4 輪任務');
+    expect(svg).toContain('刺殺：刺 7 家（沒刺中）');
+    expect(svg).toContain('>梅<');
+  });
+
   it('/下一步 was removed: one line pointing to /派 /區間 /公布', async () => {
     const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
     const r = await engine.handleText('/下一步', { platform: 'line', chatId: 'C', userId: 'U' });
@@ -404,7 +424,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       expect(await run(`/模擬 題 ${g.id}-A`)).toContain('三藍，輪到你刺');
       const blue = g.seatRoles.findIndex((r) => r === 'loyal') + 1;
       await run(`/刺 ${blue === 10 ? 0 : blue}`);
-      expect(await run('/公布')).toMatch(/你刺 \d家：(刺中梅林 ✓|沒刺中 ✗（梅林 \d家）)/u);
+      expect(await run('/公布')).toMatch(/你刺 \d家：(刺中梅林 ✓|沒刺中 ✗)/u);
       kills++;
     }
     expect(starts).toBeGreaterThan(800);

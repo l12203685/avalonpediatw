@@ -10,12 +10,13 @@
  * 只有固定文字和錯誤代碼會進 log。
  */
 
-import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { AttachmentBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { COMMANDS, SIM_OPTIONS } from '../discord/config';
 import { describeError } from '../media/bytes';
 import { normalizeExerciseId, parseInterval, parseRoleChoice, parseTeam, type SimCommand } from './commands';
 import { SIM_CONFIG, simDiscordPublicChannelIds } from './config';
 import { getSimEngine } from './index';
+import { renderRecordPng } from './recordImage';
 
 export const SIM_DISABLED_TEXT = '模擬瓦目前停用。';
 
@@ -144,7 +145,16 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
       await interaction.deleteReply();
       return;
     }
-    await interaction.editReply({ content: reply.text, allowedMentions: { parse: [] } });
+    // /公布（2026-11-17）：附整局牌譜圖；畫不出來就只送文字。
+    let files: AttachmentBuilder[] | undefined;
+    if (reply.image) {
+      try {
+        files = [new AttachmentBuilder(renderRecordPng(reply.image.game, reply.image.title), { name: 'record.png', description: '完整牌譜' })];
+      } catch (err) {
+        console.error(`[sim] record image failed, answering with text (${describeError(err)})`);
+      }
+    }
+    await interaction.editReply({ content: reply.text, allowedMentions: { parse: [] }, ...(files ? { files } : {}) });
     // 回覆已經送出：commit 出錯也不能把已經貼出去的答案改成錯誤訊息。
     try {
       reply.commit();
