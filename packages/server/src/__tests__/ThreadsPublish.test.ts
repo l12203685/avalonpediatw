@@ -30,6 +30,8 @@ import {
   readState,
   recordManual,
   taipeiDateOf,
+  titleOf,
+  findByExercise,
   savedFromState,
   postedFromState,
   validatePost,
@@ -38,7 +40,7 @@ import {
 } from '../bots/threads/publish/daily';
 import { extraRenderers } from '../bots/threads/publish/extraImages';
 import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, renderPuzzlePng, sheetRows } from '../bots/threads/image';
-import { SEE_IMAGE_LINE } from '../bots/threads/draft';
+import { SEE_IMAGE_LINE, THREADS_TOPIC_TAG } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
 import { InstagramApi } from '../bots/threads/publish/instagramApi';
@@ -216,15 +218,17 @@ describe('picks', () => {
 });
 
 describe('validation', () => {
-  const ok = '題目\n題號 AAAAA-1-5｜實戰牌譜\n#阿瓦隆';
+  const ok = '題目\n輪到你 5家 忠臣 派 3 人，你會派誰？\n\n#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣';
+  const TAG = '#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣';
   it('passes a well-formed post and comment', () => {
     expect(validatePost({ text: ok, comment: '觀念\nhttps://avalon-game-platform.web.app/w/wiki-176/', names: [] })).toEqual([]);
   });
   it('catches length, tag position, 10家 and player names (without printing the name)', () => {
-    expect(validatePost({ text: `${'字'.repeat(501)}\n#阿瓦隆`, comment: 'x' })[0]).toContain('超過');
-    expect(validatePost({ text: '#阿瓦隆\n題目', comment: 'x' }).some((e) => e.includes('最後一行'))).toBe(true);
-    expect(validatePost({ text: '題目\n#阿瓦隆\n#阿瓦隆', comment: 'x' }).some((e) => e.includes('剛好一行'))).toBe(true);
-    expect(validatePost({ text: '10家 派\n#阿瓦隆', comment: 'x' }).some((e) => e.includes('0 家'))).toBe(true);
+    expect(validatePost({ text: `${'字'.repeat(501)}\n${TAG}`, comment: 'x' })[0]).toContain('超過');
+    expect(validatePost({ text: `${TAG}\n題目`, comment: 'x' }).some((e) => e.includes('最後一行'))).toBe(true);
+    expect(validatePost({ text: `題目\n${TAG}\n${TAG}`, comment: 'x' }).some((e) => e.includes('剛好一行'))).toBe(true);
+    expect(validatePost({ text: '題目\n#阿瓦隆', comment: 'x' }).some((e) => e.includes('最後一行'))).toBe(true); // 舊的單一標籤不算
+    expect(validatePost({ text: `10家 派\n${TAG}`, comment: 'x' }).some((e) => e.includes('0 家'))).toBe(true);
     const errs = validatePost({ text: ok, comment: '今天測試者小明很強', names: ['測試者小明', 'ED'] });
     expect(errs).toEqual(['第一則留言含疑似玩家名字（不列出名字）']);
     expect(validatePost({ text: ok, comment: 'RED team', names: ['ED'] })).toEqual([]);
@@ -315,6 +319,29 @@ describe('prepare + post', () => {
     expect(st?.commentId).toBe(res.commentId);
     expect(st?.permalink).toContain(res.postId);
     expect(readState(stateDir, '2026-11-17')?.postId).toBe('y17'); // 昨天補記
+  });
+
+  it('posts no longer carry 題號 (站長 11/17): today’s and yesterday’s posts are recognised by title + Taipei date', async () => {
+    const { plan, stateDir } = prepared();
+    expect(plan.text).not.toContain('題號');
+    const title = titleOf(plan.text);
+    expect(title).toBe('【阿瓦隆每日一題｜週三・1-5 尾派】');
+    expect(plan.quote?.title).toMatch(/^【阿瓦隆每日一題｜週二・/);
+    // 昨天那篇（只有標題、沒有題號）：拿來引用；同一個標題但不是那一天的不算
+    const y = { id: 'y17', text: `${plan.quote?.title}\n…\n\n${THREADS_TOPIC_TAG}`, timestamp: ON_17 };
+    expect(findByExercise([y], '36AKW-2-5', '2026-11-17', plan.quote?.title)?.id).toBe('y17');
+    expect(findByExercise([y], '36AKW-2-5', '2026-11-16', plan.quote?.title)).toBeNull();
+    expect(findByExercise([y], '36AKW-2-5', '2026-11-17', title)).toBeNull(); // 今天的標題不是昨天那篇
+    const { api } = fakeApi({ recent: [y] });
+    const res = await postDaily(plan, { api, stateDir, imageUrl: 'https://raw.githubusercontent.com/o/r/sha/images/2026-11-18.png' });
+    expect(res.quotePostId).toBe('y17');
+    // 今天那篇已經發了（標題＋日期）：補記、不再發
+    const s2 = tmp();
+    const p2 = prepareDaily('2026-11-18', { gen: gen(s2), stateDir: s2, commentsDir: tmp(), outDir: tmp(), names, renderImage: () => Buffer.from('png') }) as DailyPlan;
+    const again = fakeApi({ recent: [{ id: 'dup', text: p2.text, timestamp: ON_18 }] });
+    const r2 = await postDaily(p2, { api: again.api, stateDir: s2 });
+    expect(r2.status).toBe('found-existing');
+    expect(again.calls.some((c) => c.method === 'POST' && c.path.endsWith('/42/threads') && !c.params.get('reply_to_id'))).toBe(false); // A 沒有再發
   });
 
   it('never posts twice: a recorded id skips; a recent post with today’s 題號 is recorded instead of reposting', async () => {
@@ -647,8 +674,8 @@ describe('threads carousel', () => {
     expect(readState(stateDir, '2026-11-18')?.postId).toBe(res.postId);
   });
 
-  it('a long record: the Threads carousel is question card → continuation → answer card; without the continuation it is not published live', async () => {
-    // 找一天：題目卡放不下牌譜（要續圖），而且那天公布昨天的完整答案（有答案卡）
+  it('the Threads carousel is question card (→ continuation only when needed) → answer card; no recap images are required', async () => {
+    // 找一天：前面有出完的局，而且那天公布昨天的完整答案（有答案卡）
     const stateDir = tmp();
     const g = gen(stateDir);
     let date: string | null = null;
@@ -656,15 +683,15 @@ describe('threads carousel', () => {
       const d = addDays('2026-11-17', i);
       const pick = g.pickFor(d);
       const pv = pick ? g.viewOf(pick) : null;
-      const draft = pv && gridOverflowStart(pv) !== null ? g.draftFor(d) : null;
+      const draft = pv && sheetRows(pv).some((r) => r.kind === 'quest') ? g.draftFor(d) : null;
       if (draft?.answerToYesterday && !draft.continuesYesterday) date = d;
     }
     expect(date).not.toBeNull();
     const d = date as string;
     const pv = g.viewOf(g.pickFor(d)!)!;
-    // 跟腳本同一個檢查：續圖要一張不少
+    // 跟腳本同一個檢查：只看續圖
+    const need = gridPages(pv).length;
     const incomplete = (_d: string, images: readonly string[]): string | null => {
-      const need = gridPages(pv).length;
       const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
       return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
     };
@@ -678,32 +705,19 @@ describe('threads carousel', () => {
       renderExtraImages: extraRenderers(g),
       imageIncomplete: incomplete,
     }) as DailyPlan;
-    expect(plan.images).toEqual([`${d}.png`, `${d}-grid-1.png`, `${d}-answer.png`]);
+    const grids = Array.from({ length: need }, (_, i) => `${d}-grid-${i + 1}.png`);
+    expect(plan.images).toEqual([`${d}.png`, ...grids, `${d}-answer.png`]);
+    expect(plan.images.some((n) => /-rounds?-/.test(n))).toBe(false); // 沒有回顧圖
     expect(plan.liveBlock).toBeNull();
     const urls = plan.images.map((n) => `https://raw.githubusercontent.com/o/r/sha/images/${n}`);
     const { api, calls } = fakeApi();
     await postDaily(plan, { api, stateDir, imageUrls: urls });
     const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
-    expect(creates.slice(0, 3).map((c) => c.params.get('image_url'))).toEqual(urls); // 題目卡 → 續圖 → 答案卡
-    expect(creates[3].params.get('media_type')).toBe('CAROUSEL');
-    expect(creates[3].params.get('children')).toBe('c1,c2,c3');
-
-    // 續圖沒產生：試跑警告、正式發佈不發；續圖有產生但少了公開網址也不發
-    const s2 = tmp();
-    const noGrid = prepareDaily(d, {
-      gen: gen(s2),
-      stateDir: s2,
-      commentsDir: tmp(),
-      outDir: tmp(),
-      names,
-      renderImage: () => Buffer.from('q'),
-      renderExtraImages: () => [{ suffix: 'answer', png: Buffer.from('a') }],
-      imageIncomplete: incomplete,
-    }) as DailyPlan;
-    expect(noGrid.liveBlock).toContain('只產生了 0 張');
-    await expect(postDaily(noGrid, { api: fakeApi().api, stateDir: s2, imageUrls: ['u1', 'u2'] })).rejects.toThrow('這天不自動發');
-    await expect(postDaily(plan, { api: fakeApi().api, stateDir: tmp(), imageUrls: urls.slice(0, 1) })).rejects.toThrow('公開網址');
-  }, 60_000); // 畫三張圖＋排程找日子：CI 整套平行跑時會超過預設 5 秒
+    const n = urls.length;
+    expect(creates.slice(0, n).map((c) => c.params.get('image_url'))).toEqual(urls); // 題目卡 →（續圖）→ 答案卡
+    expect(creates[n].params.get('media_type')).toBe('CAROUSEL');
+    expect(creates[n].params.get('children')?.split(',')).toHaveLength(n);
+  }, 60_000); // 畫圖＋排程找日子：CI 整套平行跑時會超過預設 5 秒
 
   it('a very long record is split into as many continuation images as needed: question card → 2/N … N/N → answer card; IG over 10 images is skipped', async () => {
     const stateDir = tmp();
@@ -712,19 +726,20 @@ describe('threads carousel', () => {
     const base = g.viewOf(g.pickFor(d)!)!;
     // 很長的牌譜：把看得到的事件重複好幾次（只測切張，內容不重要）
     expect(base.shown.length).toBeGreaterThan(0);
-    const copies = Math.ceil(110 / base.shown.length); // 大約 110 列：題目卡放不下，要三張以上的續圖
+    const copies = Math.ceil(240 / base.shown.length); // 大約 240 列：題目卡放不下，要三張以上的續圖
     const long = { ...base, shown: Array.from({ length: copies }, () => base.shown).flat() };
     const rows = sheetRows(long);
     const pages = gridPages(long);
     expect(pages.length).toBeGreaterThanOrEqual(3);
-    // 每列剛好畫一次、照順序、每張 ≤ GRID_PAGE_ROWS 列
-    expect(pages[0].start).toBe(gridOverflowStart(long));
+    // 最早的列在續圖：從第 1 列開始、照順序、接到題目卡的第 1 列；每列剛好畫一次、每張 ≤ GRID_PAGE_ROWS 列
+    expect(pages[0].start).toBe(0);
     for (let i = 1; i < pages.length; i++) expect(pages[i].start).toBe(pages[i - 1].end);
-    expect(pages.at(-1)?.end).toBe(rows.length);
+    expect(pages.at(-1)?.end).toBe(gridOverflowStart(long));
+    expect(gridOverflowStart(long)).toBeLessThan(rows.length);
     for (const pg of pages) expect(pg.end - pg.start).toBeLessThanOrEqual(GRID_PAGE_ROWS);
     const total = pages.length + 1;
     const card = buildPuzzleSvg(long, weekdayOf(d));
-    expect(card).toContain(`牌譜接下一張（往右滑）｜1/${total}`);
+    expect(card).toContain(`前面幾局的牌譜在後面的圖（往右滑）｜1/${total}`);
     const svgs = buildGridSvgs(long, weekdayOf(d));
     expect(svgs).toHaveLength(pages.length);
     svgs.forEach((svg, i) => {
@@ -756,6 +771,22 @@ describe('threads carousel', () => {
     expect(items.map((c) => c.params.get('image_url'))).toEqual(urls);
     const carousel = creates.find((c) => c.params.get('media_type') === 'CAROUSEL');
     expect(carousel?.params.get('children')?.split(',')).toHaveLength(urls.length);
+
+    // 續圖沒產生：試跑警告、正式發佈不發；有產生但少了公開網址也不發
+    const s2 = tmp();
+    const noGrid = prepareDaily(d, {
+      gen: gen(s2),
+      stateDir: s2,
+      commentsDir: tmp(),
+      outDir: tmp(),
+      names,
+      renderImage: () => Buffer.from('q'),
+      renderExtraImages: () => [{ suffix: 'answer', png: Buffer.from('a') }],
+      imageIncomplete: (_d, images) => (images.filter((n) => /-grid-\d+\.png$/.test(n)).length < pages.length ? '牌譜續圖不齊' : null),
+    }) as DailyPlan;
+    expect(noGrid.liveBlock).toContain('牌譜續圖不齊');
+    await expect(postDaily(noGrid, { api: fakeApi().api, stateDir: s2, imageUrls: ['u1', 'u2'] })).rejects.toThrow('這天不自動發');
+    await expect(postDaily(plan, { api: fakeApi().api, stateDir: tmp(), imageUrls: urls.slice(0, 1) })).rejects.toThrow('公開網址');
 
     // IG：超過 10 張就這天不同步（不截掉），不建容器
     const many = { ...plan, images: Array.from({ length: 11 }, (_, i) => `${d}-${i}.png`) };
@@ -897,8 +928,9 @@ describe('instagram', () => {
     const c = igCaption(plan);
     expect(c.startsWith(plan.text.split('\n')[0])).toBe(true);
     expect(c).toContain(plan.comment);
-    expect(c.split('\n').filter((l) => l === '#阿瓦隆')).toHaveLength(1);
-    expect(c.endsWith('#阿瓦隆')).toBe(true);
+    expect(c.split('\n').filter((l) => l === THREADS_TOPIC_TAG)).toHaveLength(1);
+    expect(c.endsWith(THREADS_TOPIC_TAG)).toBe(true);
+    expect(c).not.toContain('題號');
     expect(c).toContain('#records=');
   });
 

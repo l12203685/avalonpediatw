@@ -1,6 +1,6 @@
 /**
  * 題目卡之後的圖（輪播第二、三張），照發文順序：
- *   1. 牌譜續圖 renderGridPngs：牌譜放不進題目卡時才有，要幾張就幾張（`grid-1`、`grid-2`…，每張寫第幾張／共幾張）；
+ *   1. 牌譜續圖 renderGridPngs：整份牌譜放不進題目卡時才有，放最早的幾局（`grid-1`、`grid-2`…）；
  *   2. 答案卡 renderAnswerPng：公布完整答案的那天（昨天不是同一局接著打）才有，延續的兩天一起公布。
  * prepareDaily 的 renderExtraImages 用它；題目卡本身由 renderImage 畫。
  */

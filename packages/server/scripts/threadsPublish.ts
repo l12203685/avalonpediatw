@@ -19,7 +19,7 @@ import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import * as threadsImage from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
-import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, postedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
+import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, postedFromState, findByExercise, titleOf, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { extraRenderers } from '../src/bots/threads/publish/extraImages';
 import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
 import { ThreadsApi, tokenProblem } from '../src/bots/threads/publish/threadsApi';
@@ -185,7 +185,7 @@ async function main(): Promise<number> {
     if (!postId && process.env.THREADS_ACCESS_TOKEN) {
       const draft = readState(stateDir, date)?.draft ?? gen.draftFor(date);
       if (draft) {
-        const found = findByExercise(await (await apiWithUser()).recentPosts(), draft.exerciseId, date);
+        const found = findByExercise(await (await apiWithUser()).recentPosts(), draft.exerciseId, date, titleOf(draft.post.text));
         if (found) {
           postId = found.id;
           permalink = found.permalink;

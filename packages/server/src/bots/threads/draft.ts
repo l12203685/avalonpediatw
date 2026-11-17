@@ -26,8 +26,26 @@ import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsPick } from './plan'
 
 /** Threads 一則貼文的字數上限。 */
 export const THREADS_MAX_CHARS = 500;
-/** 每篇新貼文最後一行的主題標籤（Edward 2026-11-17「加 #阿瓦隆」）。 */
-export const THREADS_TOPIC_TAG = '#阿瓦隆';
+/** 每篇新貼文最後一行的主題標籤（Edward 2026-11-17「加 #阿瓦隆」；同日站長改 11/18 的草稿時換成這四個）。 */
+export const THREADS_TOPIC_TAG = '#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣';
+
+/** 貼文第一行（標題）：自動發佈也用它在最近的貼文裡認出這一天的那一篇（貼文裡沒有題號）。 */
+export function postTitle(weekday: number, pick: Pick<ThreadsPick, 'kind' | 'round' | 'continues'>): string {
+  return `【阿瓦隆每日一題｜${labelFor(weekday, pick)}】`;
+}
+
+/** 牌譜裡每一局的開頭（站長 11/17 改的草稿：「[第 1 局]」）。 */
+export function roundHeader(round: number): string {
+  return `[第 ${round} 局]`;
+}
+
+/** 共用的事件行（「第 N 局：」開頭）換成貼文的寫法「[第 N 局]」。 */
+function bracketRounds(lines: readonly string[]): string[] {
+  return lines.map((l) => {
+    const m = /^第 (\d+) 局：$/.exec(l);
+    return m ? roundHeader(Number(m[1])) : l;
+  });
+}
 
 /** 每個主題建議的百科文章（第一則留言附網址；ChatGPT 可以換）。id 對 wiki_data.json。 */
 export const THREADS_ARTICLES: Readonly<Record<string, readonly string[]>> = {
@@ -70,12 +88,15 @@ export function pickView(game: SimGame, pick: ThreadsPick): PickView {
   return { game, pick, exerciseId: exerciseIdOfPick(pick, game), view, shown: view.events };
 }
 
+/**
+ * 結尾那一行（站長 11/17 改的草稿：「輪到你 5家 忠臣 派 3 人，你會派誰？」）：座位、角色、要做的事，一行；
+ * 第幾局第幾次、強制出發不另外寫（標題和牌譜看得出來）。
+ */
 function decisionWords(game: SimGame, pick: ThreadsPick): string {
-  if (pick.proposal === null) return '三藍：輪到你刺殺。誰是梅林？';
-  const p = game.proposals[pick.proposal];
-  const size = TEAM_SIZES[p.round - 1];
-  const forced = p.attempt === 5 ? '，強制出發' : '';
-  return `輪到你派 ${size} 人（第 ${p.round} 局第 ${p.attempt} 次${forced}）。你會派誰？`;
+  const who = `${seatLabel(pick.seat)} ${ROLE_ZH[game.seatRoles[pick.seat - 1]]}`;
+  if (pick.proposal === null) return `三藍，輪到你 ${who} 刺殺，誰是梅林？`;
+  const size = TEAM_SIZES[game.proposals[pick.proposal].round - 1];
+  return `輪到你 ${who} 派 ${size} 人，你會派誰？`;
 }
 
 /** 事件行太長時的縮短版：前面幾局只留任務結果和湖，當下這一局的派票全留。 */
@@ -85,9 +106,9 @@ function compactLines(pv: PickView): string[] {
   for (const e of pv.shown) {
     if (e.kind === 'proposal') {
       if (e.round < round) continue;
-      if (!lines.includes(`第 ${e.round} 局：`)) lines.push(`第 ${e.round} 局：`);
+      if (!lines.includes(roundHeader(e.round))) lines.push(roundHeader(e.round));
       lines.push(eventLines([e], pv.pick.seat, pv.game, { startRound: e.round })[0]);
-    } else if (e.kind === 'quest') lines.push(`第 ${e.round} 局 ${questLine(e)}`);
+    } else if (e.kind === 'quest') lines.push(`${roundHeader(e.round)} ${questLine(e)}`);
     else lines.push(eventLines([e], pv.pick.seat, pv.game, { startRound: e.round })[0]);
   }
   return lines;
@@ -111,29 +132,27 @@ export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId
   ];
   const noPrior = !pv.shown.some((e) => e.kind === 'proposal');
   const bodies: string[][] = noPrior
-    ? [['第 1 局第一個隊長，前面沒有派票']]
-    : [eventLines(pv.shown, pv.pick.seat, pv.game), compactLines(pv), [SEE_IMAGE_LINE]];
+    ? [[`${roundHeader(1)} 第一個隊長，前面沒有派票`]]
+    : [bracketRounds(eventLines(pv.shown, pv.pick.seat, pv.game)), compactLines(pv), [SEE_IMAGE_LINE]];
   // 站長 11/17：「文字部分則是主題 & 牌譜」——題目只留身分、牌譜、輪到你；作答方式不另寫一行（完整局面在圖裡）。
   return { head, bodies, tail: [decisionWords(pv.game, pv.pick)] };
 }
 
-/** A 的最後兩行：題號與主題標籤。 */
-function footerLines(pv: PickView): string[] {
-  return [`題號 ${pv.exerciseId}`, THREADS_TOPIC_TAG];
-}
+/** A 的結尾：空一行、主題標籤（站長 11/17 改的草稿拿掉了「題號 …」那一行；題號在圖上和狀態檔）。 */
+const FOOTER_LINES: readonly string[] = ['', THREADS_TOPIC_TAG];
 
 /**
- * 新貼文 A：標題、今天的題目、昨天的答案、題號、主題標籤（≤ 500 字）。
+ * 新貼文 A：標題、今天的題目、昨天的答案、空一行、主題標籤（≤ 500 字）。
  * 答案先用完整版、題目從完整牌譜縮到看圖；都放不下再換短的答案。
  */
 export function postText(pv: PickView, opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number }; answers?: string[][] }): string {
-  const title = `【阿瓦隆每日一題｜${labelFor(opts.weekday, pv.pick)}】`;
+  const title = postTitle(opts.weekday, pv.pick);
   const q = questionParts(pv, opts);
   const answers = opts.answers && opts.answers.length > 0 ? opts.answers : [[]];
   let last = '';
   for (const ans of answers) {
     for (const body of q.bodies) {
-      last = [title, ...q.head, ...body, ...q.tail, ...ans, ...footerLines(pv)].join('\n');
+      last = [title, ...q.head, ...body, ...q.tail, ...(ans.length ? ['', ...ans] : []), ...FOOTER_LINES].join('\n');
       if ([...last].length <= THREADS_MAX_CHARS) return last;
     }
   }
@@ -243,7 +262,7 @@ export interface AnswerInput {
  */
 export function answerVariants(input: AnswerInput): string[][] {
   const y = input.yesterday;
-  const head = `── 昨天 ${y.exerciseId} 的答案 ──`;
+  const head = `[昨天 ${y.exerciseId} 的答案]`;
   if (y.pick.kind === 'assassin') {
     const merlin = y.game.seatRoles.indexOf('merlin') + 1;
     const target = y.game.assassinTargetSeat;
@@ -373,7 +392,11 @@ export function draftMarkdown(d: ThreadsDraft): string {
   out.push(`## ① 新貼文 A：今天的題目＋昨天的答案（${d.post.chars} 字）`, '', `${how}，附圖。`, '', '```', d.post.text, '```', '');
   if (d.post.image) {
     const grids = d.post.gridImages ?? (d.post.gridImage ? [d.post.gridImage] : []);
-    const imgs = [`${d.post.image}（題目）`, ...grids.map((g, i) => `${g}（牌譜 ${i + 2}/${grids.length + 1}）`), ...(d.post.answerImage ? [`${d.post.answerImage}（昨天的答案）`] : [])];
+    const imgs = [
+      `${d.post.image}（題目）`,
+      ...grids.map((g, i) => `${g}（牌譜 ${i + 2}/${grids.length + 1}）`),
+      ...(d.post.answerImage ? [`${d.post.answerImage}（昨天的答案）`] : []),
+    ];
     out.push(`圖（依序發成輪播）：${imgs.join('、')}`, '');
   }
   out.push('## ② A 的第一則留言（ChatGPT 填）', '');
