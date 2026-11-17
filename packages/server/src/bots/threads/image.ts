@@ -270,21 +270,33 @@ export function sheetRows(pv: PickView): SheetRow[] {
  * - 你自己湖到的（看到好／紅）。
  * - 湖中鏈：你是好人時，你確定是好人的人（你湖到好、或經由湖中鏈確定是好人）宣告的湖一定是真的，所以他湖到的人你也知道；
  *   一直推到沒有新資訊為止。你是紅方時不推。
- * 回傳每個知道的座位（via = 誰的湖讓你知道；null＝你自己湖的）與湖中鏈推出的每一步。
+ * - 派西：一根拇指的陣營知道了，另一根也就知道（一梅一娜）；這也放進推論裡，所以分出來的梅林宣告的湖照樣往下推。
+ * 回傳每個知道的座位（via = 誰的湖讓你知道；null＝你自己湖的；thumb＝由另一根拇指推出來的，via 是那根拇指）與湖中鏈推出的每一步。
  */
 export function lakeKnowledge(pv: PickView, known: readonly SheetRow[]): {
-  seats: Map<number, { evil: boolean; via: number | null }>;
+  seats: Map<number, { evil: boolean; via: number | null; thumb?: true }>;
   chain: { holder: number; target: number; evil: boolean }[];
 } {
-  const seats = new Map<number, { evil: boolean; via: number | null }>();
+  const seats = new Map<number, { evil: boolean; via: number | null; thumb?: true }>();
   const chain: { holder: number; target: number; evil: boolean }[] = [];
   const lakes = known.filter((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
   for (const l of lakes) if (l.seen && !seats.has(l.targetSeat)) seats.set(l.targetSeat, { evil: l.seen === 'red', via: null });
   const viewerGood = BLUE_ROLES.includes(pv.game.seatRoles[pv.pick.seat - 1]);
   if (!viewerGood) return { seats, chain };
   const isGood = (seat: number): boolean => seat === pv.pick.seat || seats.get(seat)?.evil === false;
+  const thumbs = pv.view.sight.kind === 'percival' ? pv.view.sight.thumbs : [];
   for (let changed = true; changed; ) {
     changed = false;
+    // 派西：拇指一根知道了 → 另一根是相反陣營（紅的那根是莫甘娜 → 另一根是梅林、好人；反過來也一樣）
+    if (thumbs.length === 2) {
+      for (const [i, t] of thumbs.entries()) {
+        const k = seats.get(t);
+        const other = thumbs[1 - i];
+        if (!k || seats.has(other) || other === pv.pick.seat) continue;
+        seats.set(other, { evil: !k.evil, via: t, thumb: true });
+        changed = true;
+      }
+    }
     for (const l of lakes) {
       if (l.holderSeat === pv.pick.seat || !isGood(l.holderSeat) || !l.claim || seats.has(l.targetSeat) || l.targetSeat === pv.pick.seat) continue;
       const evil = l.claim === 'x';

@@ -604,6 +604,29 @@ describe('image', () => {
     expect(resolveThumbs([4, 6], new Map())).toBeNull();
   });
 
+  it('Percival: a thumb resolved as Merlin is known good, so their lake declarations propagate through the chain (and the other thumb is known evil)', () => {
+    const lake = (round: number, holderSeat: number, targetSeat: number, claim: 'o' | 'x' | '', seen?: 'good' | 'red') => ({ kind: 'lake' as const, round, holderSeat, targetSeat, claim, ...(seen ? { seen } : {}) });
+    const roles = ['loyal', 'percival', 'loyal', 'merlin', 'assassin', 'morgana', 'mordred', 'loyal', 'loyal', 'oberon'];
+    const pv = { game: { seatRoles: roles }, pick: { seat: 2 }, view: { sight: { kind: 'percival', thumbs: [4, 6] } } } as never;
+    // 拇指 4、6；2 湖 6 私下看到紅 → 6 莫甘娜、4 梅林（好人）；6 湖 4（紅方的宣告不算）；4 湖 9 說紅 → 9 是紅
+    const rows = [lake(2, 2, 6, 'x', 'red'), lake(3, 6, 4, 'o'), lake(4, 4, 9, 'x')];
+    const k = lakeKnowledge(pv, rows);
+    expect(k.seats.get(4)).toEqual({ evil: false, via: 6, thumb: true });
+    expect(k.seats.get(9)).toEqual({ evil: true, via: 4 });
+    expect(k.chain).toEqual([{ holder: 4, target: 9, evil: true }]);
+    const marks = seatMarks(pv, rows);
+    expect(marks.get(4)?.label).toBe('梅林');
+    expect(marks.get(9)).toMatchObject({ label: '湖鏈：紅', side: 'evil' });
+    expect(lakeEntries(rows, k.chain, { thumbs: [4, 6] }).map((e) => e.notes.map((n) => n.t))[2]).toEqual(['4 是好人 → 9 是紅']);
+    // 反過來：湖到拇指 4 是好人 → 6 是莫甘娜（紅），6 的宣告照樣不算
+    const sym = [lake(2, 2, 4, 'o', 'good'), lake(3, 4, 1, 'o'), lake(4, 6, 8, 'x')];
+    const k2 = lakeKnowledge(pv, sym);
+    expect(k2.seats.get(6)).toEqual({ evil: true, via: 4, thumb: true });
+    expect(k2.seats.get(1)).toEqual({ evil: false, via: 4 });
+    expect(k2.seats.has(8)).toBe(false);
+    expect(seatMarks(pv, sym).get(6)?.label).toBe('莫甘娜');
+  });
+
   it('your own seat is a yellow ring whatever your side (a red viewer is not blue); red viewers see teammates red; unresolved thumbs are split rings on the card', () => {
     const roles = ['loyal', 'percival', 'loyal', 'merlin', 'assassin', 'morgana', 'mordred', 'loyal', 'loyal', 'oberon'];
     const fakePv = (seat: number, sight: object) => ({ game: { seatRoles: roles }, pick: { seat }, view: { sight } }) as never;
