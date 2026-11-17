@@ -11,6 +11,7 @@
  * 規則：忠臣（位元 1）／派西（位元 2）在第 1 局（位元 4）／第 2 局（位元 8）非強制的提議，隊上（自己以外）至少要有一個
  * 「前面的提議還沒派過」而且自己後驗紅的機率 < τ 的人（位元 16：「前面」算整場；不設只算這一局）。已經有就不動；
  * 沒有的話，把隊上自己以外紅的機率最高的一個換成這樣的人，挑換完自己後驗最乾淨、過好人的閘門與自己的投票規則的那一支。
+ * 同分（換出的人紅的機率同分、換完一樣乾淨）時在所有同分的（換出, 換進）組合裡用亂數挑，不照座位或隊伍名單的順序。
  * 位元 32：換的時候也不和這一局前面看起來偏藍（紅的機率 < 0.5）的隊長的提議重疊超過 1 人（自己以外）。
  * 位元 64：第 2 局只在第 1 局失敗之後。
  * 不碰梅林（梅林照原本的規則）；照派成功任務的隊不動；這一局（或整場）前面沒有提議時不適用。
@@ -76,18 +77,20 @@ export function loyalFresh43Team(tuning: Readonly<AgentTuning>, obs: PlayerObser
   // 換掉隊上（自己以外）紅的機率最高的一個；同分時每一個都試。
   const worst = Math.max(...mates.map(red));
   const outs = mates.filter((id) => red(id) >= worst - 1e-12);
-  // 同分不照座位序（11/10 裁定）：候選人先用這一次決策的亂數排好。
-  const order = new Map(obs.allPlayerIds.map((id) => [id, Math.random()] as const));
-  const pool = obs.allPlayerIds.filter(fresh).filter((id) => !action.teamIds.includes(id)).sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
-  let best: { team: string[]; p: number } | null = null;
+  const pool = obs.allPlayerIds.filter(fresh).filter((id) => !action.teamIds.includes(id));
+  // 同分不照座位序（11/10 裁定）：所有同分的（換出, 換進）組合收齊，再用這一次決策的亂數（Math.random，自我對打照種子固定）挑一個。
+  let bestP = -Infinity;
+  let ties: string[][] = [];
   for (const out of outs) {
     for (const inn of pool) {
       const team = action.teamIds.map((id) => (id === out ? inn : id));
       if (!ok(team) || !allowed(team)) continue;
       const p = bayesTeamClean(obs, team, opts);
       if (p === null) return action;
-      if (!best || p - best.p > 1e-12) best = { team, p };
+      if (p - bestP > 1e-12) { bestP = p; ties = [team]; }
+      else if (Math.abs(p - bestP) <= 1e-12) ties.push(team);
     }
   }
-  return best ? { type: 'team_select', teamIds: best.team } : action;
+  const best = ties.length > 0 ? ties[Math.min(ties.length - 1, Math.floor(Math.random() * ties.length))] : null;
+  return best ? { type: 'team_select', teamIds: best } : action;
 }
