@@ -501,3 +501,39 @@ export function proposalLine(proposal: RecordProposal, attemptIndex: number): st
 export function lakeLine(lake: RecordLake): string {
   return `${lake.holder}>${lake.target}${lake.claim ? ` ${lake.claim}` : ''}`;
 }
+
+/** 文字牌譜一行裡的一段，kind 決定顏色（RecordTextLine）。 */
+export type RecordTextPart = { text: string; kind: 'team' | 'mark' | 'missionRed' | 'missionBlue' | 'lake' | 'claimGood' | 'claimEvil' | 'plain' };
+
+const TEXT_MISSION_RE = /^[ox]{3,5}$/;
+const TEXT_LAKE_RE = /^([0-9])>([0-9])(?: ([ox]))?$/;
+const TEXT_MARK_RE = /^[0-9]+[+-]$/;
+
+/** 這行是任務結果（ooox 這種）。 */
+export function isMissionTextLine(line: string): boolean {
+  return TEXT_MISSION_RE.test(line.trim());
+}
+
+/**
+ * 文字牌譜一行切成上色的段（站長 2026-11-17「異常票有變色不錯 百科網站上的文字紀錄呈現也可以調整」）：
+ * 隊伍白、值得注意的票（1- 36+）綠、任務結果紅方拿下紅／藍方拿下藍（roundIndex 0～4，第 4 輪要兩張失敗）、湖青色＋宣告藍／紅。
+ * 其他行（六碼、刺客刺殺、暱稱）整行 plain。
+ */
+export function recordLineParts(line: string, roundIndex?: number): RecordTextPart[] {
+  const t = line.trim();
+  if (TEXT_MISSION_RE.test(t)) {
+    const red = missionIsRed(t, roundIndex ?? (t.length === 5 ? 3 : 0));
+    return [{ text: line, kind: red ? 'missionRed' : 'missionBlue' }];
+  }
+  const lake = TEXT_LAKE_RE.exec(t);
+  if (lake) {
+    const parts: RecordTextPart[] = [{ text: `${lake[1]}>${lake[2]}`, kind: 'lake' }];
+    if (lake[3]) parts.push({ text: ` ${lake[3]}`, kind: lake[3] === 'o' ? 'claimGood' : 'claimEvil' });
+    return parts;
+  }
+  const words = t.split(' ');
+  if (words.length > 1 && /^[0-9]+$/.test(words[0]) && words.slice(1).every((w) => TEXT_MARK_RE.test(w))) {
+    return [{ text: words[0], kind: 'team' }, ...words.slice(1).map((w) => ({ text: ` ${w}`, kind: 'mark' as const }))];
+  }
+  return [{ text: line, kind: 'plain' }];
+}

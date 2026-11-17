@@ -21,7 +21,7 @@
  *     （2026-10-22 審查修正）；重送也一律不代答。
  *   - 打的字、答案、區間只在這裡的記憶體；log 只有固定文字（這個檔案沒有 log）。
  *   - **代答**（2026-10-22，第一批真人的問題「要本人回答還是別人也可以答」）：自己在這個聊天室沒有開著的題目
- *     的人，打寫對的 /派 /區間 /下一步 /公布 /結束 會作用在這個聊天室**最新開的那一題**上，回覆第一行標「代答」
+ *     的人，打寫對的 /派 /區間 /公布 /結束 會作用在這個聊天室**最新開的那一題**上，回覆第一行標「代答」
  *     （不寫名字）；自己有題目的人還是只動自己的。每人的限流、每題的閒置期限都不變。審查修正：
  *       - 只在大家都看得到回覆的地方（LINE 群組、模擬回覆公開的 Discord 頻道：`shared`）；1 對 1 和只有
  *         本人看得到回覆的 Discord 頻道不代答；
@@ -68,7 +68,8 @@ import {
   noAssassinText,
   notAssassinText,
   formatInterval,
-  formatNext,
+  formatAiRead,
+  removedCommandText,
   formatProposeResult,
   formatReveal,
   formatStart,
@@ -90,7 +91,6 @@ import {
   eventIndexOfProposal,
   exerciseIdOf,
   isRed,
-  nextDecision,
   publicEvents,
   selectExercise,
   taipeiWeekday,
@@ -99,6 +99,7 @@ import {
   type SimGame,
 } from './scenario';
 import { recordUrl } from './recordsIndex';
+import { aiReading } from './aiRead';
 import { maskOf } from './seats';
 
 export type SimPhase = 'answering' | 'answered' | 'no-more-decisions';
@@ -168,7 +169,7 @@ export interface SimRequest {
 }
 
 export type SimReplyKind =
-  | 'start' | 'propose' | 'analyze' | 'assassinate' | 'interval' | 'next' | 'reveal' | 'end'
+  | 'start' | 'propose' | 'analyze' | 'assassinate' | 'interval' | 'read' | 'removed' | 'reveal' | 'end'
   | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more' | 'help';
 
 export interface SimReply {
@@ -178,6 +179,11 @@ export interface SimReply {
   commit: () => void;
   /** 回覆之後這一題還開著（LINE 1 對 1 加快速按鈕用）。 */
   sessionOpen: boolean;
+  /**
+   * /公布（Edward 2026-11-17）：附整局牌譜圖（recordImage.ts）。平台各自決定怎麼附：Discord 直接附檔；
+   * LINE 要公開網址，借用同步的圖片中繼（ChatMirror.relayReplyPngUrl），沒有就只送文字。
+   */
+  image?: { game: SimGame; title: string };
 }
 
 export function sessionKeyFor(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>): string {
@@ -421,7 +427,7 @@ export class SimEngine {
   }
 
   /**
-   * 這個後續指令（/派 /區間 /下一步 /公布 /結束，含看不懂的 /派、/區間）會有題目接：自己的，或代答
+   * 這個後續指令（/派 /區間 /公布 /結束，含看不懂的 /派、/區間）會有題目接：自己的，或代答
    * 這個聊天室最新開的一題（只有寫對的指令、只在 `shared` 的聊天室）。鏡像群不同步就看這個。
    */
   answersFollowUp(req: TargetRequest, cmd: SimCommand): boolean {
@@ -538,6 +544,9 @@ export class SimEngine {
     }
     // 開題和 /模擬 的用法只看自己的題目（targetFor 對非後續指令回的就是自己的）。
     if (cmd.kind === 'start') return this.start(cmd, req, ownKey, session, now);
+    if (cmd.kind === 'removed') {
+      return this.reply(removedCommandText(cmd.command), 'removed', t, now, () => { this.counts.usage += 1; });
+    }
     if (cmd.kind === 'usage' && (cmd.command === 'start' || !session)) {
       return this.reply(usageText(cmd.command, cmd.problem), 'usage', t, now, () => { this.counts.usage += 1; });
     }
@@ -561,7 +570,7 @@ export class SimEngine {
     const game = bank.games[session.game];
     const target: SimTarget & { session: SimSession } = { key: session.key, session, coAnswer };
     // 刺殺題只收 /刺 /公布 /結束（2026-11-16）；派票題不收 /刺。
-    const pickOnly = ['propose', 'analyze', 'interval', 'next'].includes(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'assassinate');
+    const pickOnly = ['propose', 'analyze', 'interval', 'read'].includes(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'assassinate');
     if (session.assassin && pickOnly) {
       return this.reply(withCoAnswerMark(assassinOnlyText(session.exerciseId), coAnswer), 'usage', target, now, () => { this.counts.usage += 1; });
     }
@@ -579,8 +588,8 @@ export class SimEngine {
         return this.assassinate(cmd.seat, game, target, now);
       case 'interval':
         return this.interval(cmd.groups, game, target, now);
-      case 'next':
-        return this.next(game, target, req, now);
+      case 'read':
+        return this.read(game, target, now);
       case 'reveal':
         return this.reveal(game, target, bank.records.get(session.game), req);
       case 'end':
@@ -795,29 +804,10 @@ export class SimEngine {
     }));
   }
 
-  private next(game: SimGame, t: SimTarget & { session: SimSession }, req: SimRequest, now: number): SimReply {
+  private read(game: SimGame, t: SimTarget & { session: SimSession }, now: number): SimReply {
     const { session } = t;
-    if (session.phase === 'no-more-decisions') {
-      return this.reply(noMoreDecisionsText(session.exerciseId), 'no-more', t, now, NOOP);
-    }
-    const events = publicEvents(game);
-    const nextIndex = nextDecision(game, session.seat, session.decision);
-    const nextCursor = nextIndex === null ? events.length : eventIndexOfProposal(events, nextIndex);
-    const text = formatNext({
-      exerciseId: session.exerciseId,
-      game,
-      seat: session.seat,
-      events: events.slice(session.cursor, nextCursor),
-      next: nextIndex === null ? null : (events[nextCursor] as ProposalEvent),
-      shownAll: events.slice(0, nextCursor),
-      platform: req.platform,
-      coAnswer: t.coAnswer,
-    });
-    return this.reply(text, 'next', t, now, () => { this.counts.steps += 1; }, () => (
-      nextIndex === null
-        ? { cursor: events.length, phase: 'no-more-decisions' }
-        : { cursor: nextCursor, decision: nextIndex, phase: 'answering' }
-    ));
+    const text = formatAiRead(session.exerciseId, session.seat, aiReading(game, session.seat, session.decision), t.coAnswer);
+    return this.reply(text, 'read', t, now, () => { this.counts.aiReads += 1; });
   }
 
   private reveal(game: SimGame, t: SimTarget & { session: SimSession }, postId: string | undefined, req: SimRequest): SimReply {
@@ -846,6 +836,7 @@ export class SimEngine {
       text,
       kind: 'reveal',
       sessionOpen: false,
+      image: { game, title: session.exerciseId },
       commit: (): void => {
         const current = this.store.get(session.key, this.now());
         if (!current || current.version !== session.version) return;

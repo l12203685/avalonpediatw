@@ -109,9 +109,11 @@ export const STATS_COMMAND_USAGE = {
 } as const;
 
 /** The 模擬瓦 follow-up commands, for the help texts (bots/simulation, docs/SIMULATION.md). */
-export const SIM_HELP_FOLLOW_UP = '/派 /分析 /區間 /下一步 /公布 /結束';
+export const SIM_HELP_FOLLOW_UP = '/派 /分析 /區間 /公布 /結束';
 
 const SITE_FOOTER = `🔗 完整圖表（不用登入）：${STATS_PAGE_URL}`;
+/** 網站圖表那一行（/help 戰績 用）。 */
+export const STATS_PAGE_URL_TEXT = SITE_FOOTER;
 
 // ─── Small helpers ───────────────────────────────────────────────────────
 
@@ -915,7 +917,7 @@ export function formatStatsHelp(platform: StatsPlatform, scope: string | null = 
   ];
   // 模擬瓦 (2026-10-14 review fix): advertised only while SIM_COMMANDS_ENABLED is on.
   if (SIM_CONFIG.commandsEnabled) {
-    lines.push(`${STATS_COMMAND_USAGE.simulation}\u3000模擬瓦：練派票資訊的釋放與解讀（接著用 ${SIM_HELP_FOLLOW_UP}；/模擬 說明 看全部指令）`);
+    lines.push(`${STATS_COMMAND_USAGE.simulation}\u3000模擬瓦：練派票資訊的釋放與解讀（接著用 ${SIM_HELP_FOLLOW_UP}；/help 模擬 看全部指令）`);
   }
   // 補位機器人 (2026-11-03, bots/seatFiller): LINE types /補位, Discord has /機器人補位.
   lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000${SEAT_FILLER_HELP_TEXT}`);
@@ -924,7 +926,7 @@ export function formatStatsHelp(platform: StatsPlatform, scope: string | null = 
   // 百科回報／ID 認領 (2026-11-09, bots/reports): replaces the deleted DC forum 百科問題回報.
   lines.push(`${REPORT_USAGE[platform]}\u3000${REPORT_HELP_TEXT}`);
   lines.push(`${CLAIM_USAGE[platform]}\u3000${CLAIM_HELP_TEXT}`);
-  if (platform === 'line') lines.push('/指令\u3000顯示這份說明');
+  if (platform === 'line') lines.push('/指令\u3000顯示這份說明（/help 主題 看單一功能的細節）');
   lines.push('每週一 12:00 會自動貼出本週排行。');
   lines.push(SITE_FOOTER);
   return clampReply(lines.join('\n'));

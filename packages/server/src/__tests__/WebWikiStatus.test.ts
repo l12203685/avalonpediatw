@@ -740,3 +740,25 @@ describe('前半區／後半區 (2026-11-12 站長：「前置位」改成「前
     expect(WIKI_REDIRECTS['wiki-35']).toEqual({ id: 'wiki-32', section: '一、3-家：梅林被前半區的派票夾住、雜魚積極還是保守' });
   });
 });
+
+
+describe('百科證據分級：紅方聽牌湖中（Issue #36 L-W01 / L-W02）', () => {
+  const lake = jsonById.get('wiki-147')!.content;
+
+  it('鐵邏輯只寫無條件推論，紅方可選擇出成功牌的反例保留為待驗證', () => {
+    expect(lake).toContain('【邏輯】0:2 時第 3 局是四人任務，一張失敗就開紅');
+    expect(lake).toContain('不能反推隊上四人必定全好');
+    expect(lake).toContain('紅方即使在隊上仍可選擇成功牌');
+    expect(lake).toContain('額外行為假設');
+  });
+
+  it('兩紅優先資訊的策略判斷在入門、進階和總表一致，原章節錨點不變', () => {
+    expect(lake).toContain('## 二、湖中拿來做什麼（藍方）');
+    expect(lake).toContain('## 十二、兩紅（紅方聽牌）時湖誰');
+    expect(lake).toContain('紅方已兩勝時改以決策資訊優先');
+    expect(lake).toContain('不必為了留湖犧牲當前決策價值');
+    expect(lake).toContain('| 0:2、1:2（紅方聽牌） |');
+    expect(lake).not.toContain('要（之後的湖中一定會用到）');
+    expect(lake).toContain('後續宣告不保證為真，但也不能由此斷言必定是假話');
+  });
+});
