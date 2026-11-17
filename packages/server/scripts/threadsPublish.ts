@@ -18,9 +18,9 @@ import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import * as threadsImage from '../src/bots/threads/image';
-import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
-import type { PickView, ThreadsDraft } from '../src/bots/threads/draft';
+import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
+import { extraRenderers } from '../src/bots/threads/publish/extraImages';
 import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
 import { ThreadsApi, tokenProblem } from '../src/bots/threads/publish/threadsApi';
 import { InstagramApi } from '../src/bots/threads/publish/instagramApi';
@@ -42,35 +42,6 @@ function say(line = ''): void {
 function flushSummary(): void {
   const f = process.env.GITHUB_STEP_SUMMARY;
   if (f) fs.appendFileSync(f, `${summaryLines.join('\n')}\n`);
-}
-
-/**
- * 題目卡之後的圖（輪播第二、三張）：牌譜續圖 renderGridPng（牌譜放不進題目卡時才有，否則回 null）、
- * 公布完整答案那天的答案卡 renderAnswerPng（#52 已合進 main）。查不到函式就只發題目卡。
- */
-type GridRenderer = (pv: PickView, weekday: number) => Buffer | null;
-type AnswerRenderer = (pv: PickView, ids?: readonly string[]) => Buffer;
-function extraRenderers(gen: ThreadsGenerator): (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[] {
-  const mod = threadsImage as unknown as Record<string, unknown>;
-  const grid = typeof mod.renderGridPng === 'function' ? (mod.renderGridPng as GridRenderer) : null;
-  const answer = typeof mod.renderAnswerPng === 'function' ? (mod.renderAnswerPng as AnswerRenderer) : null;
-  return (date, draft) => {
-    const out: { suffix: string; png: Buffer | null }[] = [];
-    const pick = gen.pickFor(date);
-    const pv = pick ? gen.viewOf(pick) : null;
-    if (grid && pv) out.push({ suffix: 'grid', png: grid(pv, weekdayOf(date)) });
-    // 公布完整答案的日子（昨天不是同一局接著打）：昨天那一局的答案卡；延續的兩天一起公布。
-    if (answer && draft.answerToYesterday && !draft.continuesYesterday) {
-      const yPick = gen.pickFor(addDays(date, -1));
-      const yPv = yPick ? gen.viewOf(yPick) : null;
-      if (yPv) {
-        const before = yPick?.continues ? gen.pickFor(addDays(date, -2)) : null;
-        const ids = before && before.gameId === yPv.pick.gameId ? [gen.viewOf(before)?.exerciseId, yPv.exerciseId].filter((x): x is string => !!x) : [yPv.exerciseId];
-        out.push({ suffix: 'answer', png: answer(yPv, ids) });
-      }
-    }
-    return out;
-  };
 }
 
 function makeGenerator(stateDir: string, warnings: string[]): ThreadsGenerator {
