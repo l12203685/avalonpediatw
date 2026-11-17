@@ -67,6 +67,11 @@ export interface CandidatesDeps {
   picked?: ReadonlyMap<string, string>;
 }
 
+function idOf(deps: CandidatesDeps, pick: ThreadsPick): string | null {
+  const g = deps.gen.gameOf(pick.gameId);
+  return g ? exerciseIdOfPick(pick, g.game) : null;
+}
+
 function rowOf(deps: CandidatesDeps, pick: ThreadsPick, extra: Partial<ThreadsOption> = {}): CandidateRow | null {
   const g = deps.gen.gameOf(pick.gameId);
   if (!g) return null;
@@ -108,7 +113,7 @@ export function planDays(deps: CandidatesDeps, start: string, days: number, top 
     let source: DayPlan['source'] = 'none';
     if (pick) {
       if (THREADS_POSTED[date]) source = 'posted';
-      else if (deps.picked?.get(date) && !deps.gen.rejectedOverrides.has(date)) source = 'picked';
+      else if (deps.picked?.get(date) && deps.picked.get(date) === idOf(deps, pick)) source = 'picked';
       else if (pick.continues) source = 'chain';
       else source = 'auto';
     }
