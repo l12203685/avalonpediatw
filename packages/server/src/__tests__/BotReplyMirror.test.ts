@@ -175,6 +175,57 @@ describe('ChatMirror.relayBotReply', () => {
     expect(h.mirror.botRepliesRelayedCount()).toBe(0);
   });
 
+  it('listen-bot configured but failing, no reply queue → the relay is dropped: never pushMessage (Codex P1)', async () => {
+    const pushes: unknown[] = [];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('{"ok":false}', { status: 500 }));
+    try {
+      for (const failure of ['status', 'throw'] as const) {
+        if (failure === 'throw') fetchSpy.mockImplementation(async () => { throw new Error('ECONNREFUSED'); });
+        const mirror = new ChatMirror({
+          lineGroupId: GROUP,
+          line: { pushMessage: async (to: string, m: unknown) => { pushes.push({ to, m }); return {}; } },
+          listenBot: { url: 'http://listen.invalid/enqueue/line' },
+          logger: silentLogger,
+        });
+        // The guard lets it through (a listen-bot is configured) …
+        await mirror.relayBotReply({ origin: 'discord', reply: '📊 戰績', command: '/戰績', asker: 'Amy' });
+        // … but neither the asker line nor the reply falls back to paid push.
+        expect(pushes).toEqual([]);
+      }
+      expect(fetchSpy).toHaveBeenCalledTimes(4); // 2 failure modes × (asker line + reply)
+      // Ordinary sync keeps its documented push fallback (unchanged behaviour).
+      const mirror = new ChatMirror({
+        lineGroupId: GROUP,
+        line: { pushMessage: async (to: string, m: unknown) => { pushes.push({ to, m }); return {}; } },
+        listenBot: { url: 'http://listen.invalid/enqueue/line' },
+        logger: silentLogger,
+      });
+      await mirror.crossFanout({ id: 'x', playerId: 'discord:1', playerName: 'P', message: 'hi', timestamp: Date.now(), source: 'discord' });
+      expect(pushes).toHaveLength(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('listen-bot failing but a reply queue exists → the relay falls back to the free queue, still no push', async () => {
+    const pushes: unknown[] = [];
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response('', { status: 503 }));
+    try {
+      const mirror = new ChatMirror({
+        lineGroupId: GROUP,
+        line: { pushMessage: async (to: string, m: unknown) => { pushes.push({ to, m }); return {}; } },
+        listenBot: { url: 'http://listen.invalid/enqueue/line' },
+        lineReplyQueue: new LineReplyQueue(),
+        logger: silentLogger,
+      });
+      expect(await mirror.relayBotReply({ origin: 'discord', reply: '📊 戰績' })).toBe(true);
+      expect(mirror.lineReplyQueueSize()).toBe(1);
+      expect(pushes).toEqual([]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('LINE origin without Discord configured is skipped', async () => {
     const h = setup({ discord: false });
     expect(await h.mirror.relayBotReply({ origin: 'line', reply: 'x' })).toBe(false);

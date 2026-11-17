@@ -247,7 +247,7 @@ LINE 第一發 webhook 逾時。server 每 10 分鐘打一次自己的公開網�
   一次 `replyMessage`、最多 5 則 = 答案 1 則 + 佇列 4 則，其餘留到下一次；回覆失敗只把取出的佇列訊息放回佇列頭（答案不重送）。
 - 開關：`LINE_STATS_COMMANDS_ENABLED`（預設開，`false` 關），與舊的 `LINE_BOT_COMMANDS_ENABLED`（遊戲指令，預設關）分開；
   狀態頁 `line.statsCommandsEnabled`、`line.stats.statsReplies`。
-- 模擬瓦（20261014）在鏡像群：開題的 `/模擬` 跟 `/戰績` 一樣同步一行、答案只回 LINE、答案佔 reply_token 第 1 則；
+- 模擬瓦（20261014）在鏡像群：開題的 `/模擬` 跟 `/戰績` 一樣同步一行、答案只回 LINE（20261117 起答案送出後也貼到 Discord，見〈機器人指令回覆同步〉）、答案佔 reply_token 第 1 則；
   開著題目的人之後打的 `/派` `/區間` `/下一步` `/公布` `/結束` **預設不同步**（答案本來就不同步，只剩指令行會洗版；
   `SIM_MIRROR_FOLLOWUPS=true` 恢復同步）。答案**送出成功才算數**（回覆失敗不會跳過一步）；同一個人的模擬指令排隊處理
   （算回覆 → 送出 → 才處理下一個）；LINE 重送一個已經回過的事件不再回第二次（只照常清佇列）。
@@ -401,7 +401,7 @@ Edward 2026-11-17：「在dc/line 輸入機器人指令, line/dc 不會同步另
 | LINE 鏡像群 → Discord | 回覆真的用 reply_token 送出**之後**才貼到 Discord 同步頻道（Discord 送出鏈；不花 LINE 額度） | `[LINE][百科機器人] <回覆>`。指令那句沒同步過去時（模擬後續指令，`SIM_MIRROR_FOLLOWUPS` 關）回覆前面加一行 `（/派 469）` |
 | Discord 同步頻道 → LINE 群 | 排進 LINE 回覆佇列，下一次有人在 LINE 群說話時用 reply_token 一起送（或交給 listen-bot）；**沒有免費的路就不送**，不會 push | 先一行 `[DC][名字] /指令 選項`（slash 指令本身不是訊息，以前沒同步過），再一行 `[DC][百科機器人] <回覆>`；code block 圍欄、粗體記號拿掉 |
 
-- 同步的指令：戰績、排行、默契、模擬瓦（/模擬 /派 /分析 /區間 /下一步 /公布 /結束 等）、補位、待修正。
+- 同步的指令：戰績、排行、默契、模擬瓦（/模擬 /派 /分析 /區間 /公布 /刺 /結束；`/下一步` 已在 #55 拿掉，不在清單上）、補位、待修正。
   不同步：`/意見`（匿名）、`/回報` `/認領`（機器人本來就會貼到 Discord）、`/help`（embed）、只有本人看得到的回覆（ephemeral）、同步頻道以外的頻道。
 - 不進網站大廳。
 - 不會重複：LINE 回覆失敗（reply_token 過期）不同步；LINE 重送同一個事件（`isRedelivery`）不再同步一次。
@@ -411,7 +411,7 @@ Edward 2026-11-17：「在dc/line 輸入機器人指令, line/dc 不會同步另
   LINE 的圖片回覆（`/排行` 圖表、牌譜圖）到 Discord 只有文字（回覆本身的文字版）。
 - 開關：`MIRROR_BOT_REPLIES`（預設開；設 `false` 關掉，回到只同步指令那句）。狀態計數 `botRepliesRelayedCount()`。
 - 額度：LINE → Discord 不花任何 LINE 額度；Discord → LINE 只走回覆佇列（reply 不計額度）或 listen-bot，
-  `LINE_REPLY_DRAIN=false` 又沒有 listen-bot 時直接不送。代價是回覆佇列多了訊息：一次回覆最多 5 則，Discord 指令多的時候 LINE 那邊會分好幾次送完。
+  `LINE_REPLY_DRAIN=false` 又沒有 listen-bot 時直接不送；有設 listen-bot 但它當下失敗時也直接丟，不會像一般同步那樣退回 push。代價是回覆佇列多了訊息：一次回覆最多 5 則，Discord 指令多的時候 LINE 那邊會分好幾次送完。
 
 **驗證**：LINE 群打 `/戰績 某人` → Discord 同步頻道先看到指令那句、再看到 `[LINE][百科機器人] 📊 …`；
 Discord 同步頻道用 `/戰績` → 回 LINE 群講一句 → 群裡出現 `[DC][名字] /戰績 …` 和 `[DC][百科機器人] 📊 …`。
