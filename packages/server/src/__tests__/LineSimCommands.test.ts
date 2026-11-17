@@ -1,7 +1,8 @@
 /**
  * 模擬瓦 on LINE (2026-10-14): /模擬 /派 /分析 /區間 /公布 /結束, wired like /戰績 (/下一步 removed 2026-11-17).
  *
- *   - mirror group: the command text is mirrored (Discord + lobby) like any text, the answer is not;
+ *   - mirror group: the command text is mirrored (Discord + lobby) like any text; the answer goes to Discord only
+ *     after delivery (2026-11-17, BotReplyMirror.test.ts), never to the lobby or the LINE queue;
  *     the answer takes slot 1 of the reply_token (quoting the command) and 4 slots drain the queue;
  *     a failed reply re-queues only the mirror items and does NOT apply the step (commit after delivery);
  *   - a redelivery of an event whose answer already went out gets nothing more; nothing advances or is mirrored twice;
@@ -180,7 +181,7 @@ afterEach(() => {
 const typed = (t: string): string => { TYPED.push(t); return t; };
 
 describe('mirror group', () => {
-  it('/模擬 with 7 queued → ONE replyMessage: answer (quoting the command) + 4 queued; text mirrored, answer not', async () => {
+  it('/模擬 with 7 queued → ONE replyMessage: answer (quoting the command) + 4 queued; text mirrored, answer relayed to Discord after delivery', async () => {
     const h = setup();
     await queueMirrorMessages(h.mirror, 7);
     expect(await deliver(h, groupText(typed('/模擬 忠臣 4'), 'm1', 'rt1'))).toBe(200);
@@ -195,10 +196,13 @@ describe('mirror group', () => {
     expect(h.bot.getWebhookStats()).toMatchObject({ simReplies: 1, statsReplies: 0, repliesDrained: 4 });
 
     expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
+    // 2026-11-17: the answer follows to Discord (never to the lobby, never into the LINE queue).
+    await vi.waitFor(() => expect(h.discordSent.filter((m) => m.includes('[LINE]'))).toHaveLength(2));
     const fromLine = h.discordSent.filter((m) => m.includes('[LINE]'));
-    expect(fromLine).toHaveLength(1);
     expect(fromLine[0]).toMatch(/\[LINE\]\[LineUser-U1\] \/模擬 忠臣 4$/);
-    expect(h.discordSent.join('\n')).not.toContain('模擬瓦 W0000');
+    expect(fromLine[1]).toMatch(/\[LINE\]\[百科機器人\] 【模擬瓦 W0000-4】你是 4家・忠臣/);
+    expect(h.lobby.map((m) => m.message)).toEqual(['/模擬 忠臣 4']);
+    expect(h.mirror.lineReplyQueueSize()).toBe(3);
   });
 
   it('a failed reply re-queues only the mirror items and does not apply the step', async () => {

@@ -25,6 +25,7 @@ import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
 import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
+import { relayInteractionReply } from './replyRelay';
 import { handleSimCommand } from '../simulation/discordCommand';
 import { HELP_TOPICS } from '../help';
 import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
@@ -405,6 +406,11 @@ export class DiscordBotClient {
           }
         }
       }
+      // 2026-11-17：同步頻道裡的公開回覆也排進 LINE 群（replyRelay.ts；不花 push 額度，從不丟錯）。
+      await relayInteractionReply(interaction, {
+        mirror: getChatMirror(),
+        channelId: (process.env.LOBBY_MIRROR_DISCORD_CHANNEL_ID ?? '').trim(),
+      });
     } catch (error) {
       console.error(`Error handling command ${commandName}:`, error);
       // Safe fallback that works whether the handler deferred, replied, or neither

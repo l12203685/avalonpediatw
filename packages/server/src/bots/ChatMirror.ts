@@ -151,6 +151,14 @@ export interface DiscordFile {
   data: Buffer;
 }
 
+/** 同步到另一邊的機器人回覆用的說話人名字。 */
+export const MIRROR_BOT_NAME = '百科機器人';
+
+/** MIRROR_BOT_REPLIES：機器人指令的回覆要不要同步到另一邊（預設開，`false` 關）。 */
+export function mirrorBotRepliesEnabled(): boolean {
+  return (process.env.MIRROR_BOT_REPLIES ?? '').trim().toLowerCase() !== 'false';
+}
+
 export interface DiscordAdapter {
   /** Resolve a channel by id; return null if not found / not a text channel. */
   fetchChannel(channelId: string): Promise<DiscordChannelAdapter | null>;
@@ -514,6 +522,7 @@ export class ChatMirror {
   private readonly discordChannelId: string;
   private readonly line?: LineAdapter;
   private readonly discord?: DiscordAdapter;
+  private botRepliesRelayed = 0;
   private readonly listenBot?: ListenBotEnqueueConfig;
   private readonly lineReplyQueue?: LineReplyQueue;
   private readonly imageRelay?: { store: RelayMediaStore; publicBaseUrl: string };
@@ -704,6 +713,49 @@ export class ChatMirror {
   // ─── LINE reply-token drain (2026-10-08) ──────────────────────────────
 
   /** True when outbound LINE goes through the in-process reply queue. */
+  /**
+   * 機器人指令的回覆也同步到另一邊（Edward 2026-11-17：「在dc/line 輸入機器人指令, line/dc 不會同步另一邊的機器人指令回覆」）。
+   *
+   *   origin='line'    → 只貼到 Discord 同步頻道（Discord 送出鏈，不花 LINE 額度）。
+   *   origin='discord' → 只排進 LINE 回覆佇列（下一次有人在 LINE 群說話時用 reply_token 一起送，不用 push）；
+   *                      沒有免費的路（沒開回覆佇列、也沒有 listen-bot）時不送，避免花 push 額度。
+   * 不用 crossFanout（它的 LINE 那條在 listen-bot 失敗時會退回 push）：LINE 這條是 pushLine(freeOnly)，任何失敗都不 push、直接丟。
+   * 不進網站大廳。`asker`＋`command`：先送一行「名字 打的指令」（Discord 的 slash 指令本身不是訊息，沒有同步過）；
+   * 只有 `command`：回覆前面加一行「（指令）」（LINE 沒同步的模擬後續指令）。回覆的說話人是 MIRROR_BOT_NAME、
+   * playerId `<origin>:bot`；兩邊的機器人都不會把同步過來的文字當指令（Discord 忽略機器人的貼文，LINE 沒有 webhook 事件）。
+   * 開關 MIRROR_BOT_REPLIES（預設開，`false` 關）。Fire-and-forget，從不丟錯。
+   */
+  public async relayBotReply(params: { origin: 'line' | 'discord'; reply: string; command?: string; asker?: string }): Promise<boolean> {
+    if (!mirrorBotRepliesEnabled()) return false;
+    const reply = (params.reply ?? '').trim();
+    if (!reply) return false;
+    if (params.origin === 'line' && !this.discord) return false;
+    if (params.origin === 'discord' && !(this.isLineReplyQueueEnabled() || this.listenBot?.url)) return false;
+    const now = Date.now();
+    const command = (params.command ?? '').trim();
+    const asker = (params.asker ?? '').trim();
+    // Never crossFanout here: its LINE leg falls back to paid push when the listen-bot is down (Codex P1, 2026-11-17).
+    const send = (msg: LobbyChatMessage): Promise<void> =>
+      params.origin === 'line' ? this.pushDiscord(msg) : this.pushLine(msg, { freeOnly: true });
+    try {
+      if (command && asker) {
+        await send({ id: `bot-cmd-${now}`, playerId: `${params.origin}:asker`, playerName: asker, message: command, timestamp: now, source: params.origin });
+      }
+      const body = command && !asker ? `（${command}）\n${reply}` : reply;
+      await send({ id: `bot-reply-${now}`, playerId: `${params.origin}:bot`, playerName: MIRROR_BOT_NAME, message: body, timestamp: now, source: params.origin });
+      this.botRepliesRelayed += 1;
+      return true;
+    } catch (err) {
+      this.logger.error(`bot reply relay failed (${describeError(err)})`);
+      return false;
+    }
+  }
+
+  /** 已同步到另一邊的機器人回覆數（狀態頁）。 */
+  public botRepliesRelayedCount(): number {
+    return this.botRepliesRelayed;
+  }
+
   public isLineReplyQueueEnabled(): boolean {
     return !!this.lineReplyQueue && !!this.lineGroupId;
   }
@@ -1127,13 +1179,18 @@ export class ChatMirror {
    * characters, else parts (formatOutgoingParts). A push carries up to 5
    * message objects per call, so a split message is still one push.
    */
-  private async pushLine(msg: LobbyChatMessage): Promise<void> {
+  private async pushLine(msg: LobbyChatMessage, opts: { freeOnly?: boolean } = {}): Promise<void> {
     if (!this.lineGroupId) return;
 
     // Prefer listen-bot enqueue (free, uses reply_token drain)
     if (this.listenBot?.url) {
       const ok = await this.enqueueViaListenBot(msg);
       if (ok) return;
+      // freeOnly (relayed bot replies): never spend push quota — the reply queue if there is one, else drop.
+      if (opts.freeOnly && !this.lineReplyQueue) {
+        this.logger.warn('listen-bot enqueue failed, bot reply relay dropped (no free LINE path)');
+        return;
+      }
       // Fall through to legacy push only if enqueue failed — belt + braces
       // during rollout so a listen-bot outage doesn't silently drop messages.
       this.logger.warn(
@@ -1147,7 +1204,7 @@ export class ChatMirror {
       return;
     }
 
-    if (!this.line) return;
+    if (!this.line || opts.freeOnly) return;
     for (let i = 0; i < parts.length; i += LINE_REPLY_MAX_PER_DRAIN) {
       const batch = parts.slice(i, i + LINE_REPLY_MAX_PER_DRAIN).map((text) => ({ type: 'text', text }));
       try {

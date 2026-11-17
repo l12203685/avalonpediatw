@@ -61,6 +61,8 @@ jobs:
       CACHE_PATH: packages/server/analysis_cache.json
       GAMES_PATH: packages/server/games_cache.json
       RECORDS_PATH: packages/server/records_cache.json
+      GAME_DB_PATH: packages/server/game_db.json
+      GAME_DB_REPORT: docs/data/game_db_report.md
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Pick the credentials secret
@@ -104,6 +106,8 @@ jobs:
           python packages/server/test_generate_cache.py
           python packages/server/test_discord_records_import.py
           python packages/server/test_discord_records_export.py
+          python packages/server/test_game_db.py
+          python packages/server/test_proavalon_import.py
 
       - name: Write the service-account key to a temp file
         if: steps.creds.outputs.secret != ''
@@ -227,13 +231,22 @@ jobs:
           echo "records=failed" >> "$GITHUB_OUTPUT"
           annotate
 
+      - name: Rebuild the 牌譜總庫 (game_db.json) and its check report
+        if: steps.creds.outputs.secret != ''
+        run: |
+          # 牌譜總庫（Edward 2026-11-17）：讀上面兩步寫好的 games_cache.json 與 records_cache.json（不另外讀 Google /
+          # Discord），把每個來源的同一局合成一筆、逐局檢查規則，寫 game_db.json 與 docs/data/game_db_report.md。
+          # 只有座位、牌譜、編號與日期，沒有名字。失敗時保留舊檔（寫入是 atomic），不擋快取推送。
+          python packages/server/game_db.py --output "${GAME_DB_PATH}" --check-report "${GAME_DB_REPORT}" || \
+            echo "::warning title=Game database not rebuilt::game_db.py failed; game_db.json and its report keep the previous version."
+
       - name: Commit and push if the cache changed
         if: steps.creds.outputs.secret != ''
         env:
           GAMES_DATASET: ${{ steps.regen.outputs.games_dataset }}
         run: |
           # 首次產生的資料集／牌譜紀錄清單尚未追蹤，須以 git status 判斷有無變動。
-          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}")" ]; then
+          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}" "${GAME_DB_PATH}" "${GAME_DB_REPORT}")" ]; then
             echo "analysis_cache.json, games_cache.json and records_cache.json are unchanged; nothing to commit."
             echo "- 結果：快取無變動，未 commit" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -266,6 +279,11 @@ jobs:
           if [ -f "${RECORDS_PATH}" ]; then
             git add -- "${RECORDS_PATH}"
           fi
+          for f in "${GAME_DB_PATH}" "${GAME_DB_REPORT}"; do
+            if [ -f "${f}" ]; then
+              git add -- "${f}"
+            fi
+          done
           git commit -q -m "chore(stats): 每日更新戰績分析快取（${games} 局）" \
             -m "局數 ${prev_games} → ${games}，玩家 ${prev_players} → ${players}；${dataset_note}${records_note}。由 refresh-analysis-cache workflow 從 Google 試算表重算；archetype、playstyle、featureStudies 沿用前次快取。"
 

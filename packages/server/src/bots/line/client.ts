@@ -185,7 +185,15 @@ interface LeadReply {
    * slots of the reply_token. `text` stays the fallback, sent instead when LINE rejects the image.
    */
   image?: { url: string; caption: string };
+  /**
+   * 鏡像群裡的指令回覆也同步到 Discord（2026-11-17，ChatMirror.relayBotReply）；`command` = 指令那句沒同步過去時
+   * （模擬後續指令）附在回覆前面。只在回覆真的送出之後才送。
+   */
+  relay?: { command?: string };
 }
+
+/** 回覆會同步到 Discord 的種類（/意見 是匿名的、/回報 /認領 機器人自己會貼到 DC，都不同步）。 */
+const RELAYED_LEAD_KINDS: ReadonlySet<LeadReply['kind']> = new Set(['stats', 'sim', 'seatFiller', 'paipuFix']);
 
 /** Where a text came from, for the 模擬瓦 session key and LINE redelivery. */
 interface LeadContext {
@@ -350,7 +358,8 @@ export class LineBotClient {
               // exercise) are not mirrored unless SIM_MIRROR_FOLLOWUPS=true.
               // /回報 /認領 (2026-11-09) are not mirrored either: the bot posts
               // the formatted 【百科回報…】／【ID認領】 to DC itself.
-              if (!duplicate && !hideSimFollowUp(textMessage.text, sim) && !isCommunityCommandText(textMessage.text)) {
+              const mirrored = !duplicate && !hideSimFollowUp(textMessage.text, sim) && !isCommunityCommandText(textMessage.text);
+              if (mirrored) {
                 await this.handleGroupMessage(groupId, userId, textMessage.text, textMessage.id);
               }
               const lead = await this.leadReplyFor(textMessage.text, {
@@ -361,6 +370,10 @@ export class LineBotClient {
                 eventKey: eventKeyOf(event),
                 shared: true,
               });
+              // 2026-11-17：回覆也同步到 Discord；指令那句沒同步時（模擬後續指令）附在回覆前面。重送的事件不再同步一次。
+              if (lead && !duplicate && RELAYED_LEAD_KINDS.has(lead.kind)) {
+                lead.relay = mirrored ? {} : { command: textMessage.text.trim() };
+              }
               if (replyToken) await this.drainQueuedReplies(replyToken, lead);
             });
             continue;
@@ -547,6 +560,10 @@ export class LineBotClient {
     // Outside the try (2026-10-14 review fix): a throwing commit must never
     // re-queue mirror messages that were already delivered.
     if (delivered && leadReply) this.leadDelivered(leadReply);
+    if (delivered && leadReply?.relay) {
+      const mirror2 = getChatMirror();
+      if (mirror2) void mirror2.relayBotReply({ origin: 'line', reply: leadReply.text, command: leadReply.relay.command });
+    }
   }
 
   /** Stats answer for a typed command, or null (not a command / flag off). Never throws. */
