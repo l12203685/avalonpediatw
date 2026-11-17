@@ -21,7 +21,7 @@ import type { ThreadsDraft } from '../draft';
 import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday } from '../plan';
-import type { OwnReply, ThreadsApi, RecentPost } from './threadsApi';
+import type { ThreadsApi, RecentPost } from './threadsApi';
 
 // ─── 站長選的題（threads_picks.json） ───────────────────────────────────────
 
@@ -333,11 +333,6 @@ export interface PostResult {
   notes: string[];
 }
 
-/** 自己對這一篇的回覆（第一則留言）：上次發了卻沒記下來時沿用。 */
-export function findOwnReply(replies: readonly OwnReply[], postId: string): OwnReply | null {
-  return replies.find((r) => r.repliedToId === postId) ?? null;
-}
-
 export interface PostDeps {
   api: ThreadsApi;
   stateDir: string;
@@ -365,7 +360,8 @@ async function saveCheckpoint(deps: PostDeps, rec: ThreadsStateRecord, label: st
  * 查不到自己的回覆（例如權限不夠）就不發：寧可少一則留言，也不重複留言。
  */
 async function ensureComment(plan: DailyPlan, postId: string, deps: PostDeps, notes: string[]): Promise<string | null> {
-  const findMine = async (): Promise<string | null> => findOwnReply(await deps.api.ownReplies(), postId)?.id ?? null;
+  // 這一篇底下自己帳號的回覆（照分頁翻完；翻不完會丟錯＝不發）
+  const findMine = async (): Promise<string | null> => (await deps.api.findOwnReplyTo(postId))?.id ?? null;
   let existing: string | null;
   try {
     existing = await findMine();
