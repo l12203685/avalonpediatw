@@ -19,6 +19,9 @@
  * 站長 11/18：「小圓桌能不能和阿瓦隆百科的logo結合?」看過樣張選 A（標誌含字、不透明度 0.3），並且「1~5 & 6~0 改成 只圍繞 logo
  * 剩下的資訊呈現在旁邊, 還有湖中女神以箭頭 (0 > 9 + 宣告結果) 呈現」→ 小圓桌只剩十個座位圍著中間的標誌，五局任務格移到右邊
  * 「你的視角」下面，湖中女神畫成座位之間的箭頭（拿湖的 → 被驗的，旁邊寫宣告；自己湖的另外寫看到的）。題目卡不另外鋪大浮水印。
+ * 同日第三輪：「湖中線我覺得直接跟著任務結果呈現在右邊 0>1 o, 1>9 o, 9>4 x 這樣就好」「座位不要橢圓 直接圍繞 logo 就好 logo 太小的話可以放大」
+ * 「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」，以及每個座位下面標出過的任務（m1、m3×1）→ 座位排正圓、標誌放大；
+ * 湖改成任務格下面一行；你的視角一行寫完；座位下方是出過的任務（只算出題那一刻以前出完的）。
  *
  * SVG 用字型檔（和每週排行圖同一個 Noto Sans TC，assets/fonts/）在 @resvg/resvg-js 轉 PNG，不用瀏覽器也不用系統字型，
  * GitHub Actions 上也能跑。圖裡只有座位和牌譜記號，沒有玩家名字。
@@ -133,7 +136,8 @@ export function wrapLine(line: string, size: number, max: number): string[] {
   if (textWidth(line, size) <= max) return [line];
   const chars = [...line];
   let cut = -1;
-  for (let i = 1; i < chars.length; i++) {
+  // 斷點前面要有字（第二段開頭的縮排不算），不然會一直斷出空行
+  for (let i = chars[0] === INDENT ? 2 : 1; i < chars.length; i++) {
     if ((chars[i] === '，' || chars[i] === '（') && textWidth(chars.slice(0, i + (chars[i] === '，' ? 1 : 0)).join(''), size) <= max) cut = chars[i] === '，' ? i + 1 : i;
   }
   if (cut <= 0) {
@@ -281,16 +285,17 @@ export function recordLines(rows: readonly SheetRow[]): Seg[][] {
  * 座位圍著圓桌（站長 11/17「像圍著圈圈 (圓桌武士) 的方式呈現 座位」；第二輪「我希望 5/0 在六點鐘跟十二點鐘方向 然後縮小一點
  * 跟題目在同一張圖一起出現」）：0 在正上方（十二點）、順時針 1 2 3 4 沿右邊往下、5 在正下方（六點）、6 7 8 9 沿左邊往上。
  */
-const TABLE_RX = 178;
-/** 圓桌中間標誌的不透明度（站長 11/18 選 A：0.3）：看得出是阿瓦隆百科，但不搶湖的箭頭和座位標記。 */
+/** 圓桌中間標誌的不透明度（站長 11/18 選 A：0.3）：看得出是阿瓦隆百科，但不搶座位標記。 */
 const TABLE_LOGO_OPACITY = 0.3;
-const TABLE_RY = 98;
 const SEAT_R = 30;
-const RING_RX = TABLE_RX + 54;
-const RING_RY = TABLE_RY + 50;
-/** 小圓桌那一塊的寬高（含座位外側的標記字）。 */
-const TABLE_BOX_W = 2 * (RING_RX + SEAT_R) + 20;
-const TABLE_BOX_H = 2 * (RING_RY + SEAT_R) + 52;
+/** 座位排成正圓（站長 11/18：「座位不要橢圓 直接圍繞 logo 就好 logo 太小的話可以放大」）。 */
+const RING_R = 160;
+/** 座位上方（十二點那一圈的標記字）與下方（出過的任務、標記字）留的空間。 */
+const TABLE_TOP_PAD = 34;
+const TABLE_BOTTOM_PAD = 66;
+/** 小圓桌那一塊的寬高（含座位外側的標記字、座位下方出過的任務）。 */
+const TABLE_BOX_W = 2 * (RING_R + SEAT_R + 64);
+const TABLE_BOX_H = 2 * (RING_R + SEAT_R) + TABLE_TOP_PAD + TABLE_BOTTOM_PAD;
 
 /** 座位 seat（1～10，10 = 0 家）在圓桌上的位置：0 在正上方、順時針，5 在正下方。 */
 export function seatPosition(seat: number, cx: number, cy: number): { x: number; y: number; ux: number; uy: number } {
@@ -298,7 +303,7 @@ export function seatPosition(seat: number, cx: number, cy: number): { x: number;
   const a = -Math.PI / 2 + (k * 2 * Math.PI) / 10;
   const ux = Math.cos(a);
   const uy = Math.sin(a);
-  return { x: cx + RING_RX * ux, y: cy + RING_RY * uy, ux, uy };
+  return { x: cx + RING_R * ux, y: cy + RING_R * uy, ux, uy };
 }
 
 /**
@@ -327,99 +332,80 @@ export function missionChips(rows: readonly SheetRow[], x0: number, y0: number, 
   return { svg: parts.join(''), height: lines * bh + (lines - 1) * gap };
 }
 
-const LAKE_COLOR = '#22d3ee';
-const CIRCLED = ['①', '②', '③', '④', '⑤'];
-
 /**
- * 湖中女神畫成座位之間的箭頭（站長 11/18：「湖中女神以箭頭 (0 > 9 + 宣告結果) 呈現」）：拿湖的人 → 被驗的人，
- * 往圓心彎的弧線（不壓到座位外側的標記字），箭頭旁寫宣告（o 藍、x 紅、沒說）；你自己湖的另外寫你看到的。
- * 好幾次湖就好幾支箭頭，彎的程度錯開、標上 ① ② ③。只畫出題那一刻以前的湖（rows 來自 sheetRows）。
+ * 湖中女神寫成一行，放在任務格下面（站長 11/18：「湖中線我覺得直接跟著任務結果呈現在右邊 0>1 o, 1>9 o, 9>4 x 這樣就好」）：
+ * 拿湖的>被驗的＋宣告（o 藍、x 紅、沒說），你自己湖的另外寫你看到的。只到出題那一刻（rows 來自 sheetRows）。
  */
-export function lakeArrows(rows: readonly SheetRow[], cx: number, cy: number): string {
-  const lakes = rows.filter((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
-  if (lakes.length === 0) return '';
-  const parts: string[] = [
-    `<defs><marker id="la" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="${LAKE_COLOR}"/></marker></defs>`,
-  ];
-  const norm = (dx: number, dy: number): [number, number] => {
-    const l = Math.hypot(dx, dy) || 1;
-    return [dx / l, dy / l];
-  };
-  const placed: { x: number; y: number; w: number }[] = [];
-  lakes.forEach((l, i) => {
-    const a = seatPosition(l.holderSeat, cx, cy);
-    const b = seatPosition(l.targetSeat, cx, cy);
-    const mx = (a.x + b.x) / 2;
-    const my = (a.y + b.y) / 2;
-    // 控制點往圓心拉；幾乎對穿圓心的就往旁邊推，好幾支箭頭錯開
-    // 相鄰的座位弦很短：往圓心拉深一點，弧線才看得出來
-    const pull = Math.min(0.95, (Math.hypot(b.x - a.x, b.y - a.y) < 220 ? 0.85 : 0.6) + 0.08 * i);
-    let qx = mx + (cx - mx) * pull;
-    let qy = my + (cy - my) * pull;
-    const [px, py] = norm(-(b.y - a.y), b.x - a.x);
-    const side = Math.hypot(cx - mx, cy - my) < 30 ? 40 + 26 * i : 14 * i;
-    qx += px * side;
-    qy += py * side;
-    const [sx, sy] = norm(qx - a.x, qy - a.y);
-    const [ex, ey] = norm(qx - b.x, qy - b.y);
-    const x1 = a.x + sx * (SEAT_R + 4);
-    const y1 = a.y + sy * (SEAT_R + 4);
-    const x2 = b.x + ex * (SEAT_R + 9);
-    const y2 = b.y + ey * (SEAT_R + 9);
-    parts.push(`<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} Q${qx.toFixed(1)} ${qy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}" fill="none" stroke="${LAKE_COLOR}" stroke-width="3" stroke-opacity="0.9" marker-end="url(#la)" class="lake-arrow"/>`);
-    const claim: Seg = l.claim === 'o' ? { t: 'o', fill: '#93c5fd', weight: true } : l.claim === 'x' ? { t: 'x', fill: C.red, weight: true } : { t: '沒說', fill: C.soft };
-    const segsL: Seg[] = [...(lakes.length > 1 ? [{ t: CIRCLED[i] ?? `${i + 1}.`, fill: LAKE_COLOR }] : []), claim];
-    if (l.seen) segsL.push({ t: `（看到${l.seen === 'red' ? '紅' : '好'}）`, fill: l.seen === 'red' ? C.red : C.green });
-    const label = segsL.map((g) => g.t).join('');
-    const w = textWidth(label, 20) + 12;
-    // 標籤放在弧線上靠箭頭那一端（宣告結果寫在箭頭旁），跟前面的標籤疊到就沿著弧線挪
-    const at = (t: number): [number, number] => [(1 - t) * (1 - t) * x1 + 2 * (1 - t) * t * qx + t * t * x2, (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * qy + t * t * y2];
-    const overlaps = (x: number, y: number): boolean => placed.some((p) => Math.abs(p.x - x) < (p.w + w) / 2 + 4 && Math.abs(p.y - y) < 32);
-    let [lx, ly] = at(0.78);
-    for (const t of [0.78, 0.62, 0.5, 0.88, 0.38]) {
-      const [x, y] = at(t);
-      if (!overlaps(x, y)) {
-        [lx, ly] = [x, y];
-        break;
-      }
-    }
-    placed.push({ x: lx, y: ly, w });
-    parts.push(rect(lx - w / 2, ly - 15, w, 28, C.page, ' rx="8" fill-opacity="0.85"'));
-    parts.push(segs(lx, ly + 7, segsL, 20, 'middle'));
+export function lakeLine(rows: readonly SheetRow[]): Seg[] {
+  const out: Seg[] = [];
+  rows.forEach((r) => {
+    if (r.kind !== 'lake') return;
+    if (out.length) out.push({ t: '　', fill: C.soft });
+    out.push({ t: `${seatChar(r.holderSeat)}>${seatChar(r.targetSeat)} `, fill: C.ink });
+    out.push(r.claim === 'o' ? { t: 'o', fill: '#93c5fd', weight: true } : r.claim === 'x' ? { t: 'x', fill: C.red, weight: true } : { t: '沒說', fill: C.soft });
+    if (r.seen) out.push({ t: `（看到${r.seen === 'red' ? '紅' : '好'}）`, fill: r.seen === 'red' ? C.red : C.green });
   });
-  return parts.join('');
+  return out;
 }
 
 /**
- * 小圓桌：十個座位圍著中間的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「1~5 & 6~0 改成 只圍繞 logo」），
- * 湖中女神的箭頭畫在座位之間，座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。任務格在右邊。
+ * 每個座位出過的任務（站長 11/18：「1號 出過第一/三局 可能數字下方就顯示 "[m1], [m3]"」）：只算出題那一刻以前出完的任務，
+ * 那一局出任務的隊伍＝那一局過了的提議。回傳 座位 → [{ 第幾局, 失敗張數, 任務失敗 }]。
+ */
+export function seatMissions(rows: readonly SheetRow[]): Map<number, { round: number; failCount: number; failed: boolean }[]> {
+  const out = new Map<number, { round: number; failCount: number; failed: boolean }[]>();
+  for (const q of rows) {
+    if (q.kind !== 'quest') continue;
+    const team = rows.find((p): p is Extract<SheetRow, { kind: 'proposal' }> => p.kind === 'proposal' && p.round === q.round && p.approved);
+    for (const seat of team?.team ?? []) {
+      const list = out.get(seat) ?? [];
+      list.push({ round: q.round, failCount: q.failCount, failed: q.failed });
+      out.set(seat, list);
+    }
+  }
+  return out;
+}
+
+/** 座位下方的任務標籤：m1、m3×1（×後面是失敗張數），任務成功藍、失敗紅；超過兩個換行。 */
+function missionTags(list: readonly { round: number; failCount: number; failed: boolean }[], x: number, y: number): { svg: string; lines: number } {
+  const lines: Seg[][] = [];
+  list.forEach((m, i) => {
+    if (i % 2 === 0) lines.push([]);
+    const line = lines[lines.length - 1];
+    if (line.length) line.push({ t: ' ' });
+    line.push({ t: `m${m.round}${m.failCount > 0 ? `×${m.failCount}` : ''}`, fill: m.failed ? C.red : C.blue, weight: true });
+  });
+  return { svg: lines.map((l, i) => segs(x, y + i * 18, l, 16, 'middle')).join(''), lines: lines.length };
+}
+
+/**
+ * 小圓桌：十個座位排成正圓、圍著中間放大的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「座位不要橢圓 直接圍繞 logo」）。
+ * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側，數字下方是這個座位出過的任務（m1、m3×1）。湖寫在右邊。
  */
 function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: number): string {
   const uri = logoDataUri();
-  const r = RING_RY - SEAT_R - 14;
+  const r = RING_R - SEAT_R - 10;
   const logo = uri
     ? `<defs><clipPath id="tl"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath></defs>` +
       `<image href="${uri}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" opacity="${TABLE_LOGO_OPACITY}" clip-path="url(#tl)" preserveAspectRatio="xMidYMid slice"/>` +
       `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.gold}" stroke-opacity="0.3" stroke-width="2"/>`
     : '';
-  const parts: string[] = [
-    // 座位排成的圈（淡淡的導引線）
-    `<ellipse cx="${cx}" cy="${cy}" rx="${RING_RX}" ry="${RING_RY}" fill="none" stroke="${C.gold}" stroke-opacity="0.18" stroke-width="2"/>`,
-    logo,
-    lakeArrows(rows, cx, cy),
-  ];
+  const parts: string[] = [logo];
   const marks = seatMarks(pv);
+  const missions = seatMissions(rows);
   for (let seat = 1; seat <= 10; seat++) {
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
     const m = marks.get(seat);
     const me = seat === pv.pick.seat;
     parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.blueFill : C.seat}" stroke="${m ? m.color : C.line}" stroke-width="${m ? 5 : 2}"/>`);
     parts.push(text(x, y + 10, seatChar(seat), { size: 28, anchor: 'middle', weight: true }));
+    const tags = missionTags(missions.get(seat) ?? [], x, y + SEAT_R + 19);
+    parts.push(tags.svg);
     if (m) {
-      // 標記字放在座位外側：上半圈在上面、下半圈在下面、左右兩邊在外側。
+      // 標記字放在座位外側：上半圈在上面、左右兩邊在外側、下半圈在出過的任務下面。
       const side = Math.abs(uy) < 0.45;
       const lx = side ? x + ux * (SEAT_R + 30) : x;
-      const ly = side ? y + 7 : uy < 0 ? y - SEAT_R - 8 : y + SEAT_R + 22;
+      const ly = side ? y + 7 : uy < 0 ? y - SEAT_R - 8 : y + SEAT_R + 22 + tags.lines * 18;
       parts.push(text(lx, ly, m.label, { size: 18, fill: m.color, anchor: 'middle' }));
     }
   }
@@ -582,6 +568,31 @@ function nextHint(k: number, total: number): string {
   return `牌譜接下一張（往右滑）｜${k}/${total}`;
 }
 
+/**
+ * 你的視角，一行：忠臣「你是 4家 忠臣」、派西「你是 5家 派西維爾（夜間看到 1、3 兩根拇指）」、
+ * 梅林「你是 1家 梅林（看到紅 4、5、7，莫德雷德看不到）」、紅方「你是 3家 刺客（隊友 6、8）」、奧伯倫「（不知道隊友）」。
+ */
+export function identityText(seat: number, role: keyof typeof ROLE_ZH, sight: PickView['view']['sight']): string {
+  const list = (xs: readonly number[]): string => xs.map(seatChar).join('、');
+  const extra = sight.kind === 'percival' ? `（夜間看到 ${list(sight.thumbs)} 兩根拇指）`
+    : sight.kind === 'merlin' ? `（看到紅 ${list(sight.seen)}，莫德雷德看不到）`
+      : sight.kind === 'evil' ? `（隊友 ${list(sight.mates)}）`
+        : sight.kind === 'oberon' ? '（不知道隊友）' : '';
+  return `你是 ${seatChar(seat)}家 ${ROLE_ZH[role]}${extra}`;
+}
+
+/** 你的視角排成一行（字級 34 → 最小 26）；還是放不下才把括號裡的資訊換到第二行（不縮排）。 */
+export function identityLines(identity: string, max: number): { line: string; size: number }[] {
+  for (let size = 34; size >= 26; size -= 2) if (textWidth(identity, size) <= max) return [{ line: identity, size }];
+  const i = identity.indexOf('（');
+  if (i < 0) return [{ line: identity, size: fitSize(identity, 34, max, 20) }];
+  const [head, tail] = [identity.slice(0, i), identity.slice(i)];
+  return [
+    { line: head, size: 34 },
+    { line: tail, size: fitSize(tail, 30, max, 20) },
+  ];
+}
+
 /** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、到目前的牌譜格子、題目。 */
 export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const role = pv.game.seatRoles[pv.pick.seat - 1];
@@ -592,24 +603,27 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   // 左：小圓桌；右：你的視角
   const top = 150;
   const cx = 40 + TABLE_BOX_W / 2;
-  const cy = top + TABLE_BOX_H / 2 + 6;
+  const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
   parts.push(roundTable(pv, rows, cx, cy));
   const rx = 40 + TABLE_BOX_W + 24;
   const rmax = W - 40 - rx;
-  const s = pv.view.sight;
-  const info = s.kind === 'percival' ? `拇指 ${s.thumbs.map(seatChar).join(' ')}（梅林、莫甘娜各一）`
-    : s.kind === 'merlin' ? `看到的紅 ${s.seen.map(seatChar).join(' ')}（莫德雷德看不到）`
-      : s.kind === 'evil' ? `隊友 ${s.mates.map(seatChar).join(' ')}` : s.kind === 'oberon' ? '不知道隊友' : '沒有額外資訊';
-  let ty = top + 90;
-  parts.push(text(rx, ty, `你是 ${seatChar(pv.pick.seat)}家`, { size: 40, weight: true }));
-  ty += 54;
-  parts.push(text(rx, ty, ROLE_ZH[role], { size: 40, weight: true }));
-  for (const line of wrapLine(info, 26, rmax)) {
-    ty += 44;
-    parts.push(text(rx, ty, line, { size: 26, fill: C.soft }));
+  // 你的視角：一行寫完（站長 11/18：「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」），太長才換行
+  let ty = top + 70;
+  for (const { line, size } of identityLines(identityText(pv.pick.seat, role, pv.view.sight), rmax)) {
+    parts.push(text(rx, ty, line, { size, weight: true }));
+    ty += size + 14;
   }
   // 任務格：你的視角下面（站長 11/18：從圓桌移到旁邊），寬度不夠就換行
-  parts.push(missionChips(rows, rx, ty + 30, rmax).svg);
+  const chips = missionChips(rows, rx, ty - 10, rmax);
+  parts.push(chips.svg);
+  ty += chips.height + 30;
+  // 湖：任務格下面一行（0>1 o，1>9 o，9>4 x）
+  const lake = lakeLine(rows);
+  if (lake.length) {
+    const label = lake.map((g) => g.t).join('');
+    const size = Math.max(18, Math.min(26, Math.floor((26 * (rmax - 56)) / Math.max(1, textWidth(label, 26)))));
+    parts.push(segs(rx, ty, [{ t: '湖 ', fill: '#a5f3fc', weight: true }, ...lake], size));
+  }
 
   // 牌譜格子（只到出題那一刻；太長的話後面的列在第二張）
   let y = CARD_TOP_H;

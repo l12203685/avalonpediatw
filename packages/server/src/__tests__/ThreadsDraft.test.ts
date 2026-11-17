@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeArrows } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, seatMissions, identityText, identityLines } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -322,8 +322,11 @@ describe('image', () => {
     expect(seatPosition(9, 300, 400).y).toBeLessThan(seatPosition(6, 300, 400).y);
     const [, tue] = planWeek(bank, 0) as ThreadsPick[];
     const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
-    expect(svg).toContain('<ellipse'); // 圓桌
+    expect(svg).not.toContain('<ellipse'); // 不是橢圓
     expect(svg).toContain('拇指');
+    // 正圓：每個座位離圓心一樣遠（站長 11/18「座位不要橢圓 直接圍繞 logo」）
+    const d = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((seat) => Math.hypot(seatPosition(seat, 300, 400).x - 300, seatPosition(seat, 300, 400).y - 400));
+    for (const x of d) expect(x).toBeCloseTo(d[0], 6);
   });
 
   it('table, scoresheet and question share one image ≤ 1350; only overflow rows go to a second image', () => {
@@ -391,31 +394,62 @@ describe('image', () => {
     for (let r = 1; r <= 5; r++) expect(one.svg).toContain(`${r}・`);
   });
 
-  it('the Lady of the Lake is drawn as numbered arrows holder → target with the declared result; the viewer’s own lake also shows what they saw', () => {
+  it('the Lady of the Lake is one line on the right (0>1 o　1>9 o（看到好）　9>4 x); no arrows on the table', () => {
     const rows = [
-      { kind: 'lake' as const, round: 2, holderSeat: 10, targetSeat: 9, claim: 'o' as const },
-      { kind: 'lake' as const, round: 3, holderSeat: 9, targetSeat: 4, claim: 'x' as const, seen: 'red' as const },
-      { kind: 'lake' as const, round: 4, holderSeat: 4, targetSeat: 1, claim: '' as const },
+      { kind: 'lake' as const, round: 2, holderSeat: 10, targetSeat: 1, claim: 'o' as const },
+      { kind: 'lake' as const, round: 3, holderSeat: 1, targetSeat: 9, claim: 'o' as const, seen: 'good' as const },
+      { kind: 'lake' as const, round: 4, holderSeat: 9, targetSeat: 4, claim: 'x' as const },
+      { kind: 'lake' as const, round: 4, holderSeat: 4, targetSeat: 2, claim: '' as const },
     ];
-    const svg = lakeArrows(rows, 300, 400);
-    expect((svg.match(/class="lake-arrow"/g) ?? []).length).toBe(3);
-    expect((svg.match(/marker-end="url\(#la\)"/g) ?? []).length).toBe(3);
-    for (const n of ['①', '②', '③']) expect(svg).toContain(n);
-    expect(svg).toContain('>o<');
-    expect(svg).toContain('>x<');
-    expect(svg).toContain('沒說');
-    expect(svg).toContain('（看到紅）');
-    // 只有一次湖：不編號
-    expect(lakeArrows(rows.slice(0, 1), 300, 400)).not.toContain('①');
-    expect(lakeArrows([], 300, 400)).toBe('');
-    // 實際的題目：圖上的箭頭數 = 出題當下看得到的湖
+    const line = lakeLine(rows).map((g) => g.t).join('');
+    expect(line).toBe('0>1 o　1>9 o（看到好）　9>4 x　4>2 沒說');
+    const segsOf = lakeLine(rows);
+    expect(segsOf.find((g) => g.t === 'o')?.fill).not.toBe(segsOf.find((g) => g.t === 'x')?.fill); // o 藍、x 紅
+    expect(lakeLine([])).toEqual([]);
     for (let w = 0; w < 4; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
-        const n = sheetRows(pv).filter((r) => r.kind === 'lake').length;
-        expect((buildPuzzleSvg(pv, 3).match(/class="lake-arrow"/g) ?? []).length).toBe(n);
+        const svg = buildPuzzleSvg(pv, 3);
+        expect(svg).not.toContain('lake-arrow');
+        for (const r of sheetRows(pv)) if (r.kind === 'lake') expect(svg).toContain(`${r.holderSeat === 10 ? '0' : r.holderSeat}&gt;${r.targetSeat === 10 ? '0' : r.targetSeat} `);
       }
     }
+  });
+
+  it('under each seat: the missions that seat went on before the question (m1, m3×1), success blue / fail red', () => {
+    for (let w = 0; w < 4; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const rows = sheetRows(pv);
+        const missions = seatMissions(rows);
+        const quests = rows.filter((r) => r.kind === 'quest');
+        // 每次任務的人數＝那一局要的人數，而且都是那一局過了的隊伍
+        for (const q of quests) {
+          if (q.kind !== 'quest') continue;
+          const on = [...missions].filter(([, list]) => list.some((m) => m.round === q.round)).map(([seat]) => seat).sort((a, b) => a - b);
+          const team = rows.find((r) => r.kind === 'proposal' && r.round === q.round && r.approved);
+          expect(team && team.kind === 'proposal' ? [...team.team].sort((a, b) => a - b) : []).toEqual(on);
+        }
+        const svg = buildPuzzleSvg(pv, 3);
+        for (const [, list] of missions) for (const m of list) expect(svg).toContain(`m${m.round}${m.failCount > 0 ? `×${m.failCount}` : ''}`);
+        if (quests.length === 0) expect(missions.size).toBe(0);
+      }
+    }
+  });
+
+  it('identity is one line without the gray subtitle: 忠臣 / 派西（夜間看到 X、Y 兩根拇指）/ 梅林（看到紅…，莫德雷德看不到）/ 紅方（隊友…）', () => {
+    expect(identityText(4, 'loyal', { kind: 'loyal' } as never)).toBe('你是 4家 忠臣');
+    expect(identityText(5, 'percival', { kind: 'percival', thumbs: [1, 3] } as never)).toBe('你是 5家 派西維爾（夜間看到 1、3 兩根拇指）');
+    expect(identityText(1, 'merlin', { kind: 'merlin', seen: [4, 5, 7] } as never)).toBe('你是 1家 梅林（看到紅 4、5、7，莫德雷德看不到）');
+    expect(identityText(3, 'assassin', { kind: 'evil', mates: [6, 10] } as never)).toBe('你是 3家 刺客（隊友 6、0）');
+    // 放不下才把括號換到第二行（不縮排）
+    const lines = identityLines('你是 1家 梅林（看到紅 4、5、7，莫德雷德看不到）', 460);
+    expect(lines.map((l) => l.line)).toEqual(['你是 1家 梅林', '（看到紅 4、5、7，莫德雷德看不到）']);
+    expect(identityLines('你是 4家 忠臣', 460)).toHaveLength(1);
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
+    expect(svg).toContain('兩根拇指');
+    expect(svg).not.toContain('梅林、莫甘娜各一'); // 舊的灰色小字
   });
 
   it('the draft markdown lists every continuation image in order', () => {
