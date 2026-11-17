@@ -38,10 +38,14 @@ async function main(): Promise<void> {
   // c3 = leader + 3 + one of 4..0, c23 = 1,2,3, c4 = leader out, three of 4..0, c5 = leader out, three of 2..0 holding 2 or 3;
   // tXYZ = that exact team. Uniform within the category under the decision's seeded random. Everything else is the default.
   let force11 = '';
+  // round 44b: onlyLoyal11=1 stops a game at the 1-1 when its leader is not a loyal (no row); loyal-leader games run in full, unchanged
+  let onlyLoyal11 = false;
+  class SkipGame extends Error {}
   argv.forEach((a, i) => {
     if (a !== '--flag') return;
     const f = argv[i + 1];
     if (f.startsWith('force11=')) { force11 = f.slice('force11='.length); return; }
+    if (f === 'onlyLoyal11=1') { onlyLoyal11 = true; return; }
     Object.assign(variant, parseTuningFlag(f));
   });
   // seats are relative to the 1-1 leader (the engine's first leader is not always P1): rel k -> the k-th seat from the leader
@@ -67,6 +71,7 @@ async function main(): Promise<void> {
     if (force11 === 'c3') return ['1', '3', ...pickK(rest, 1)].map(seatId);
     if (force11 === 'c23') return ['1', '2', '3'].map(seatId);
     if (force11 === 'c4') return pickK(rest, 3).map(seatId);
+    if (force11 === 'rand') return pickK(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'], 3).map(seatId); // round 44b: any of the 120
     if (force11 === 'c5') {
       for (;;) { const t = pickK(['2', '3', ...rest], 3); if (t.includes('2') || t.includes('3')) return t.map(seatId); }
     }
@@ -97,6 +102,7 @@ async function main(): Promise<void> {
       this.inner = obs.myTeam === 'good' ? this.blue : this.red; this.inner.onGameStart(obs);
     }
     act(obs: PlayerObservation): AgentAction {
+      if (onlyLoyal11 && obs.gamePhase === 'team_select' && (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0 && obs.myRole !== 'loyal') throw new SkipGame();
       let a = withSeededRandom(this.seedFor(obs), () => this.inner.act(obs));
       if (force11 && a.type === 'team_select' && obs.myRole === 'loyal' && (obs.currentRound ?? 1) === 1 && obs.voteHistory.length === 0) {
         const t = withSeededRandom(this.seedFor(obs, 'force11'), () => forcedTeam(obs.allPlayerIds, obs.myPlayerId, a.type === 'team_select' ? a.teamIds.length : 0));
@@ -129,7 +135,7 @@ async function main(): Promise<void> {
       Math.random = seededRandom(`${gameSeed}|setup`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let res: any;
-      try { res = await engine.runGame(agents, false); } finally { Math.random = originalRandom; }
+      try { res = await engine.runGame(agents, false); } catch (e) { if (e instanceof SkipGame) continue; throw e; } finally { Math.random = originalRandom; }
       const final = agents[0].final;
       if (!final) throw new Error('game did not end');
       const byId = new Map(agents.map((a) => [a.agentId, a]));
@@ -155,7 +161,7 @@ async function main(): Promise<void> {
       if ((i + 1 - from) % 250 === 0) process.stderr.write(`[sp ${tag}] ${i + 1 - from}/${n} ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     }
   } finally { console.log = originalLog; }
-  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, seconds: Math.round((Date.now() - started) / 1000) };
+  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, seconds: Math.round((Date.now() - started) / 1000) };
   fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake'], rows }));
   fs.renameSync(out + '.tmp', out);
   process.stderr.write(`[sp ${tag}] done ${rows.length} games ${meta.seconds}s\n`);
