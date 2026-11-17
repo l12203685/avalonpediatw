@@ -38,8 +38,8 @@ jobs:
     timeout-minutes: 20
     env:
       REPO: ${{ github.repository }}
-      STATE_DIR: ${{ runner.temp }}/threads-state
-      OUT_DIR: ${{ runner.temp }}/threads-out
+      STATE_DIR: /tmp/threads-state
+      OUT_DIR: /tmp/threads-out
     steps:
       - name: 決定日期與模式
         id: gate
@@ -157,7 +157,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: threads-dry-run-${{ steps.gate.outputs.date }}
-          path: ${{ runner.temp }}/threads-out
+          path: /tmp/threads-out
           if-no-files-found: ignore
           retention-days: 14
 

@@ -613,6 +613,13 @@ describe('workflow', () => {
       }));
   };
 
+  it('job-level env does not use the runner context (GitHub rejects the whole workflow if it does)', () => {
+    const yml = fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+    // `runner.*` 只能用在 steps 裡；在 workflow／job 的 env 用了，整個 workflow 會解析失敗、排程也不會跑。
+    const beforeSteps = yml.split(/\n {4}steps:\n/)[0];
+    expect(beforeSteps).not.toMatch(/\$\{\{\s*runner\./);
+  });
+
   it('a Threads token refresh whose secret write fails only warns and still publishes with the refreshed token', () => {
     const all = steps();
     const refresh = all.find((s) => s.body.includes('threadsPublish.ts token --token-out'));
