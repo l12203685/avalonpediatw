@@ -368,6 +368,8 @@ export async function postDaily(plan: DailyPlan, deps: { api: ThreadsApi; stateD
   let commentId: string | null = null;
   try {
     commentId = await deps.api.publishReply({ text: plan.comment, replyToId: postId });
+    // 留言一發成功就記下：之後查網址失敗或中斷，下一次也不會以為留言沒發、再留一次。
+    writeState(deps.stateDir, { ...rec, commentId });
   } catch (err) {
     notes.push(`第一則留言沒發成功：${(err as Error).message}`);
   }

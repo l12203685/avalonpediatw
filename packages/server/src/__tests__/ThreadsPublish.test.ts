@@ -55,7 +55,7 @@ function gen(stateDir: string, picks: Map<string, string> = new Map()): ThreadsG
 }
 
 /** 假的 Threads API：記下每一次呼叫，照路徑回答。 */
-function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string }[]; failFirst?: number; failReply?: boolean } = {}) {
+function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string }[]; failFirst?: number; failReply?: boolean; onPermalink?: () => void } = {}) {
   const calls: { method: string; path: string; params: URLSearchParams }[] = [];
   let n = 0;
   let failLeft = opts.failFirst ?? 0;
@@ -72,6 +72,7 @@ function fakeApi(opts: { recent?: { id: string; text: string; permalink?: string
     if (u.pathname.endsWith('/threads_publish')) return reply(200, { id: `p${u.searchParams.get('creation_id')}` });
     if (u.pathname.endsWith('/threads')) return reply(200, { data: opts.recent ?? [] });
     if (u.searchParams.get('fields') === 'status,error_message') return reply(200, { status: 'FINISHED' });
+    if (u.searchParams.get('fields') === 'permalink') opts.onPermalink?.();
     if (u.searchParams.get('fields') === 'permalink') return reply(200, { permalink: `https://www.threads.net/@x/post/${u.pathname.split('/').pop()}` });
     return reply(404, {});
   };
@@ -213,6 +214,18 @@ describe('prepare + post', () => {
     const r2 = await postDaily(plan, { api: second.api, stateDir });
     expect(r2.status).toBe('already-published');
     expect(second.calls).toHaveLength(0);
+  });
+
+  it('records the comment id as soon as the reply succeeds, before looking up the permalink (an interruption there cannot cause a second comment)', async () => {
+    const { plan, stateDir } = prepared();
+    let atPermalink: unknown;
+    const { api } = fakeApi({ onPermalink: () => (atPermalink = readState(stateDir, '2026-11-18')?.commentId) });
+    const res = await postDaily(plan, { api, stateDir });
+    expect(res.commentId).toBeTruthy();
+    expect(atPermalink).toBe(res.commentId);
+    // 在查網址的時候中斷：狀態檔已經有留言 id，下一次不補留言
+    const again = prepareDaily('2026-11-18', { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(again.resumeComment).toBe(false);
   });
 
   it('a failed first comment is resumed by a later run without posting A again', async () => {
