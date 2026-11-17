@@ -210,6 +210,11 @@ export interface DailyPlan {
   resumeComment: boolean;
   errors: string[];
   warnings: string[];
+  /**
+   * 正式發佈不能發的原因（null＝可以）：例如題目卡的牌譜太長、要第二張續圖，但這條管線只發一張圖，
+   * 發出去會是不完整的題目、還叫人往右滑。試跑照常產生（摘要有警告），正式發時 post 段直接失敗、不發。
+   */
+  liveBlock?: string | null;
   draft: ThreadsDraft;
 }
 
@@ -224,6 +229,8 @@ export interface PrepareDeps {
   /** 題目卡之後的圖（照順序：牌譜圖、答案卡），檔名是 `<日期>-<suffix>.png`；沒有題目卡就不畫。 */
   /** png 是 null＝這張今天不用（例如牌譜放得進題目卡，就沒有續圖）。 */
   renderExtraImages?: (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[];
+  /** 有圖的時候檢查：這張圖單獨發會不會不完整（回傳原因；null＝沒問題）。 */
+  imageIncomplete?: (date: string) => string | null;
   warnings?: string[];
 }
 
@@ -260,6 +267,11 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     }
   }
 
+  // 要續圖、續圖也產生了（輪播裡有 -grid）就沒問題；續圖沒產生才擋。
+  const incomplete = image && deps.imageIncomplete ? deps.imageIncomplete(date) : null;
+  const liveBlock = incomplete && !images.some((n) => n.endsWith('-grid.png')) ? incomplete : null;
+  if (liveBlock) warnings.push(`${liveBlock}（試跑照常；正式發佈這天不發）`);
+
   const chatgpt = readComment(deps.commentsDir, date);
   if (!chatgpt) warnings.push(`沒有 ChatGPT 寫的留言（${path.basename(deps.commentsDir)}/${date}.md），用備案`);
   const comment = chatgpt ?? fallbackComment(draft);
@@ -285,6 +297,7 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     images,
     quote,
     alreadyPublished: !!existing?.postId,
+    liveBlock,
     resumeComment: needsCommentResume(existing),
     errors: validatePost({ text: draft.post.text, comment, names: deps.names }),
     warnings,
@@ -449,6 +462,11 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
   if (wanted > 0 && imageUrls.length === 0) notes.push('有圖但沒有公開網址：只發文字');
   else if (imageUrls.length > 0 && imageUrls.length < wanted) notes.push(`只有 ${imageUrls.length}／${wanted} 張圖有公開網址`);
   if (imageUrls.length > 1) notes.push(`輪播 ${imageUrls.length} 張`);
+  // 題目卡要續圖時，續圖一定要跟著發，否則就是不完整的題目（fail closed）。補留言、補記不受影響。
+  if (plan.liveBlock) throw new Error(`這天不自動發：${plan.liveBlock}`);
+  if (plan.images?.some((n) => n.endsWith('-grid.png')) && imageUrls.length < plan.images.length) {
+    throw new Error(`這天不自動發：題目要續圖，但只有 ${imageUrls.length}／${plan.images.length} 張圖有公開網址`);
+  }
   const postId = await deps.api.publishPost({
     text: plan.text,
     imageUrls,

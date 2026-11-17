@@ -161,6 +161,12 @@ async function main(): Promise<number> {
             return pv ? threadsImage.renderPuzzlePng(pv, weekdayOf(d)) : null;
           },
       renderExtraImages: flag('--no-image') ? undefined : extraRenderers(gen),
+      // 牌譜太長時題目卡只畫前半、寫「往右滑」：續圖（renderExtraImages 的 grid）沒產生就正式發佈這天不發。
+      imageIncomplete: (d): string | null => {
+        const pick = gen.pickFor(d);
+        const pv = pick ? gen.viewOf(pick) : null;
+        return pv && threadsImage.gridOverflowStart(pv) !== null ? '牌譜太長，題目卡要第二張續圖，但續圖沒有產生' : null;
+      },
     });
     if (!plan) {
       say(`## Threads ${date}：這天的主題選不到題目`);
