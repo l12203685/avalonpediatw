@@ -7,7 +7,23 @@
 
 import type { SimGame } from '../simulation/scenario';
 import { buildDraft, pickView, type PickView, type ThreadsDraft } from './draft';
-import { THREADS_START_DATE, addDays, aloneFor, dayNumber, buildCandidates, continuationOf, pickForDate, themeOf, weekdayOf, type ThreadsBank, type ThreadsPick } from './plan';
+import {
+  THREADS_POSTED,
+  THREADS_START_DATE,
+  addDays,
+  aloneFor,
+  buildCandidates,
+  continuationOf,
+  dayNumber,
+  exerciseIdOfPick,
+  pickForDate,
+  poolsForWeekday,
+  themeOf,
+  weekdayOf,
+  type PoolName,
+  type ThreadsBank,
+  type ThreadsPick,
+} from './plan';
 
 export interface GenerateBank extends ThreadsBank {
   byId: ReadonlyMap<string, number>;
@@ -21,6 +37,26 @@ export interface GenerateDeps {
   readSaved: (date: string) => ThreadsDraft | null;
   /** 第一篇貼文的日期（預設 THREADS_START_DATE）：這一天沒有昨天的答案，之前的日子不產生。 */
   startDate?: string;
+  /**
+   * 站長在選局頁選的題目（日期 → 題號）。比存下來的草稿優先（還沒貼出去的日子可以改），
+   * 但 THREADS_POSTED 裡已經貼出去的日子不能改。呼叫端只傳還沒貼出去的日子。
+   */
+  overrides?: ReadonlyMap<string, string>;
+}
+
+/** 站長可以選的一個選項：這一天的題目，週三、週五能連著打時附上隔天的。 */
+export interface ThreadsOption {
+  exerciseId: string;
+  pick: ThreadsPick;
+  pool: PoolName;
+  /** 選了這一局，隔天（週四 3-5、週六 4-5）自動接同一局。 */
+  chained: boolean;
+  /** 隔天接著的題號（chained 才有）。 */
+  nextExerciseId?: string;
+  /** 有網站牌譜頁。 */
+  linked: boolean;
+  /** 視角：0 忠臣／派西、1 梅林、2 紅方（刺殺題一律 0）。 */
+  tier: number;
 }
 
 export class ThreadsGenerator {
@@ -41,11 +77,57 @@ export class ThreadsGenerator {
     return g ? this.deps.bank.records?.get(g.index) : undefined;
   }
 
-  /** 這一天的題目：存下來的優先；延續的日子跟著前一天實際的那一局；其他照計畫。 */
+  /** 這一天可以選的題目（照主題的池子，同一局只列一次：能連著打的優先）。 */
+  optionsFor(date: string): ThreadsOption[] {
+    const out: ThreadsOption[] = [];
+    const seen = new Set<string>();
+    for (const pool of poolsForWeekday(weekdayOf(date))) {
+      for (const c of this.candidates[pool]) {
+        const first = c.picks[0];
+        const g = this.gameOf(first.gameId);
+        if (!g || seen.has(first.gameId)) continue;
+        seen.add(first.gameId);
+        const next = c.picks[1];
+        out.push({
+          exerciseId: exerciseIdOfPick(first, g.game),
+          pick: first,
+          pool,
+          chained: !!next,
+          ...(next ? { nextExerciseId: exerciseIdOfPick(next, g.game) } : {}),
+          linked: c.linked,
+          tier: c.tier,
+        });
+      }
+    }
+    return out;
+  }
+
+  /** 題號 → 這一天的選項；不在這一天的池子裡（主題不合）就 null。 */
+  optionFor(date: string, exerciseId: string): ThreadsOption | null {
+    return this.optionsFor(date).find((o) => o.exerciseId === exerciseId) ?? null;
+  }
+
+  /** 站長選的題號沒有用上的日子（主題不合或題庫裡沒有）：呼叫端拿來警告。 */
+  readonly rejectedOverrides = new Map<string, string>();
+
+  private chosenFor(date: string): ThreadsPick | null {
+    const id = THREADS_POSTED[date] ?? this.deps.overrides?.get(date);
+    if (!id) return null;
+    const opt = this.optionFor(date, id);
+    if (opt) return opt.pick;
+    // 已經貼出去的題目也可能是照計畫選的（池子規則之後改了）：從當天的計畫找。
+    const planned = pickForDate(this.deps.bank, date, this.candidates);
+    const pg = planned ? this.gameOf(planned.gameId) : null;
+    if (planned && pg && exerciseIdOfPick(planned, pg.game) === id) return planned;
+    this.rejectedOverrides.set(date, id);
+    return null;
+  }
+
+  /** 這一天的題目：已經貼出去的、站長選的、存下來的依序優先；延續的日子跟著前一天實際的那一局；其他照計畫。 */
   pickFor(date: string): ThreadsPick | null {
     if (this.picks.has(date)) return this.picks.get(date) ?? null;
-    let pick: ThreadsPick | null = null;
-    const saved = this.deps.readSaved(date);
+    let pick: ThreadsPick | null = this.chosenFor(date);
+    const saved = pick ? null : this.deps.readSaved(date);
     if (saved?.pick && this.gameOf(saved.pick.gameId)) pick = saved.pick;
     if (!pick) {
       const theme = themeOf(weekdayOf(date));

@@ -123,6 +123,35 @@ export function weekIndexOf(date: string): number {
  */
 export const THREADS_START_DATE = '2026-11-17';
 
+/**
+ * 已經貼出去的題目（日期 → 題號）：不能再換，選局頁也鎖住。
+ * 站長 2026-11-17 貼出第一題 36AKW-2-5。
+ */
+export const THREADS_POSTED: Readonly<Record<string, string>> = { '2026-11-17': '36AKW-2-5' };
+
+/**
+ * 站長自己選局時，這一天可以選的池子（照主題）：週三、週五先列能連著打的（選了隔天自動接同一局），
+ * 再列不能連著的；週四、週六列的是不接前一天時的獨立題（選了就不延續前一天）。
+ */
+export function poolsForWeekday(weekday: number): readonly PoolName[] {
+  switch (((weekday % 7) + 7) % 7) {
+    case 1:
+      return ['assassin'];
+    case 2:
+      return ['percival'];
+    case 3:
+      return ['wedThu', 'wed'];
+    case 4:
+      return ['thu'];
+    case 5:
+      return ['friSat', 'fri'];
+    case 6:
+      return ['sat'];
+    default:
+      return ['final'];
+  }
+}
+
 /** 今天的台北日期。 */
 export function taipeiToday(now: number = Date.now()): string {
   return new Date(now + 8 * 3_600_000).toISOString().slice(0, 10);
@@ -142,7 +171,7 @@ function hash32(text: string): number {
   return parseInt(createHash('sha1').update(text).digest('hex').slice(0, 8), 16);
 }
 
-interface Candidate {
+export interface Candidate {
   picks: ThreadsPick[];
   /** 視角的偏好（小的好）。 */
   tier: number;
@@ -172,7 +201,9 @@ function tailPick(game: SimGame, round: number, continues = false): ThreadsPick 
 }
 
 /** 每一個池子的候選（每一局最多一個）。 */
-export function buildCandidates(bank: ThreadsBank): Record<'assassin' | 'percival' | 'wedThu' | 'wed' | 'thu' | 'friSat' | 'fri' | 'sat' | 'final', Candidate[]> {
+export type PoolName = 'assassin' | 'percival' | 'wedThu' | 'wed' | 'thu' | 'friSat' | 'fri' | 'sat' | 'final';
+
+export function buildCandidates(bank: ThreadsBank): Record<PoolName, Candidate[]> {
   const out = { assassin: [], percival: [], wedThu: [], wed: [], thu: [], friSat: [], fri: [], sat: [], final: [] } as Record<
     'assassin' | 'percival' | 'wedThu' | 'wed' | 'thu' | 'friSat' | 'fri' | 'sat' | 'final',
     Candidate[]

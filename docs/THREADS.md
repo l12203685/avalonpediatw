@@ -93,3 +93,26 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 - `generate.ts`：把存檔和題庫接起來
 
 測試在 `src/__tests__/ThreadsDraft.test.ts`。
+
+## 站長選局（2026-11-17）
+
+站長 11/17：「我如果需要 看到未來一週 甚至一個月的文章安排 並且我可以自己選擇牌譜(從候選名單中挑 盡量是S高一點的優先)」。
+
+- **S 是什麼：** 網站的「陣容強度」（站長 10/31）：每局賽前十個座位在當時玩家池裡的 PR 平均，S ≥ 65 是網站的高強度局。
+  來源是 `games_cache.json` 每局的 `lineup[1]`（S×10），用 `generate_cache.py record_fingerprint` 同一個指紋對上題庫的局（`src/bots/threads/strength.ts`）。
+  題庫 1,778 局有 1,218 局對得上 S；對不上或不評分的局 S 顯示「—」，排在最後。
+- **候選名單：** `pnpm --filter @avalon/server threads:candidates`（`scripts/threadsCandidates.ts`）。從第一篇（11/17）起 28 天，
+  每天列目前的題目和照 S 由高到低的前 15 個候選，再補 5 個有網站牌譜頁、S 最高的（答案才附得上牌譜連結）。
+  候選只列藍方視角（忠臣、派西、梅林；刺殺題是刺客），題庫本來就不含模擬的局。輸出 `threads_drafts/candidates.json`（不進 git）。
+- **選局頁：** 站長私人的 claude.ai 頁面（不在公開網站上）。候選名單是頁面附帶的 `candidates.json`；
+  站長按「選這局」寫進頁面資料庫的 `picks/<日期>`（`{ date, exerciseId, nextExerciseId, chosenAt, … }`），只有擁有者能寫。
+  週三、週五選了能連著打的局，隔天自動接同一局；週四、週六另選就改出獨立的題目。已經貼出去的日子（`THREADS_POSTED`，11/17 36AKW-2-5）和今天以前的日子鎖住。
+- **產生器怎麼用選擇：** `threads:draft -- --picks <檔>`、`threads:candidates -- --picks <檔>`。
+  選擇比存下來的草稿優先，但只用今天之後的日子（今天的可能已經照草稿貼出去了）；不符合那天主題的題號不用，會印警告。
+  檔案接受 `{ "2026-11-19": "K7Q2M-3-5" }` 或資料庫匯出的 `[{ "date": …, "exerciseId": … }]`。
+
+### 每天早上 8 點（台北）的草稿工作
+
+1. 讀選局頁資料庫的 `picks` 集合（ArtifactData `list`，collection `picks`），存成一個 JSON 檔。
+2. `threads:draft -- --date <今天> --picks <檔>` 產生今天的 A（今天的題目＋昨天的答案）和第一則留言欄位，傳給站長。
+3. 重跑 `threads:candidates -- --today <今天> --picks <檔>`，把新的 `candidates.json` 更新到選局頁（今天鎖住、後面的日子照選擇重排）。
