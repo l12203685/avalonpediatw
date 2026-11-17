@@ -804,7 +804,7 @@ describe('parseStatsCommand (LINE)', () => {
     expect(parseStatsCommand(text)).toEqual(expected);
   });
 
-  it.each(['hello', '/help', '/create', '戰績 HAO', 'HAO /戰績', ''])('ignores %j', (text) => {
+  it.each(['hello', '/create', '/helpme', '戰績 HAO', 'HAO /戰績', ''])('ignores %j', (text) => {
     expect(parseStatsCommand(text)).toBeNull();
   });
 

@@ -14,7 +14,9 @@
  *   /模擬 1-5～4-5、5局   從那一局第 5 次派票（尾派）／第 5 局開始（可以加角色、座位：/模擬 3-5 梅林）
  *   /模擬 刺殺            刺殺題（你是刺客），/刺 座位 作答
  *   /模擬 今天            照 Threads 的每週主題出題（2026-11-16）
- *   /下一步  /公布（/解答）  /結束
+ *   /區間                 （不帶內容）百科AI 怎麼讀這個局面：各家紅機率、最可能的紅方、百科AI 會派的隊（Edward 2026-11-17）
+ *   /公布（/解答）  /結束
+ *   （/下一步 2026-11-17 拿掉：打了只回一行說明）
  *   /模擬 說明            全部指令，每個一行白話（/模擬 幫助、/模擬 指令、/模擬 ? 也可以；2026-10-22）
  *
  * 斜線可以是全形「／」，指令和內容之間的空白可有可無（跟 /戰績 一樣），全形數字照收。
@@ -50,7 +52,10 @@ export type SimCommand =
   /** /分析：這個決定點最後一次 /派 的完整解讀。 */
   | { kind: 'analyze' }
   | { kind: 'interval'; groups: IntervalGroup[] }
-  | { kind: 'next' }
+  /** /區間（不帶內容）：百科AI 怎麼讀這個局面。 */
+  | { kind: 'read' }
+  /** 拿掉的指令（/下一步）：回一行說明。 */
+  | { kind: 'removed'; command: string }
   | { kind: 'reveal' }
   | { kind: 'end' }
   /** /模擬 說明：全部指令的白話說明。 */
@@ -58,17 +63,17 @@ export type SimCommand =
   /** 是模擬指令，但內容看不懂；`problem` 是給使用者看的一句話。 */
   | { kind: 'usage'; command: SimUsageCommand; problem?: string };
 
-/** 對開著的題目做的事（/派 /分析 /區間 /下一步 /公布 /結束，以及看不懂的 /派、/區間）。 */
+/** 對開著的題目做的事（/派 /分析 /區間 /公布 /結束，以及看不懂的 /派、/區間）。 */
 export function isFollowUpCommand(cmd: SimCommand): boolean {
-  return isCoAnswerable(cmd) || (cmd.kind === 'usage' && cmd.command !== 'start');
+  return isCoAnswerable(cmd) || cmd.kind === 'removed' || (cmd.kind === 'usage' && cmd.command !== 'start');
 }
 
 /**
- * 可以幫別人的題目代答的指令：只有**寫對的** /派 /區間 /下一步 /公布 /結束（2026-10-22 審查修正）。
+ * 可以幫別人的題目代答的指令：只有**寫對的** /派 /區間 /公布 /結束（2026-10-22 審查修正）。
  * 看不懂的 /派、/區間（像聊天的斜線句子）不代答：自己沒開題的人打的照舊不回、照舊同步、不延長別人的題目。
  */
 export function isCoAnswerable(cmd: SimCommand): boolean {
-  return cmd.kind === 'propose' || cmd.kind === 'assassinate' || cmd.kind === 'analyze' || cmd.kind === 'interval' || cmd.kind === 'next' || cmd.kind === 'reveal' || cmd.kind === 'end';
+  return cmd.kind === 'propose' || cmd.kind === 'assassinate' || cmd.kind === 'analyze' || cmd.kind === 'interval' || cmd.kind === 'read' || cmd.kind === 'reveal' || cmd.kind === 'end';
 }
 
 /** /模擬 後面的「說明」字：說明、幫助、指令、?（全形也可以）。 */
@@ -279,6 +284,7 @@ export function parseSimCommand(text: string): SimCommand | null {
     case '區間':
     case '区间': {
       if (chatty) return null;
+      if (rest.trim() === '') return { kind: 'read' };
       const r = parseInterval(rest);
       return 'groups' in r ? { kind: 'interval', groups: r.groups } : { kind: 'usage', command: 'interval', problem: r.problem };
     }
@@ -294,7 +300,7 @@ export function parseSimCommand(text: string): SimCommand | null {
       return { kind: 'assassinate', seat: seats[0] };
     }
     case '下一步':
-      return rest.trim() ? null : { kind: 'next' };
+      return rest.trim() ? null : { kind: 'removed', command: '下一步' };
     case '公布':
     case '解答':
       return rest.trim() ? null : { kind: 'reveal' };

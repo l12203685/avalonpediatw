@@ -6,6 +6,7 @@
  */
 
 import type { SimGame } from '../simulation/scenario';
+import type { PoolName } from './plan';
 import { buildDraft, pickView, type PickView, type ThreadsDraft } from './draft';
 import { THREADS_START_DATE, addDays, aloneFor, dayNumber, buildCandidates, continuationOf, exerciseIdOfPick, pickForDate, themeOf, weekdayOf, type ThreadsBank, type ThreadsPick } from './plan';
 
@@ -57,6 +58,44 @@ export class ThreadsGenerator {
   recordIdOf(gameId: string): string | undefined {
     const g = this.gameOf(gameId);
     return g ? this.deps.bank.records?.get(g.index) : undefined;
+  }
+
+  /** 題庫的局（題庫代號 → games[] 的索引）：選局頁的牌譜表一局一列。 */
+  gameIndex(): ReadonlyMap<string, number> {
+    return this.deps.bank.byId;
+  }
+
+  /**
+   * 站長選局頁：這一天可以選的題目（跟 pickOverride 同一套池子，同一局只列一次：能連著打的優先）。
+   * 列出來的題號交給 pickOverride 一定接受。
+   */
+  optionsFor(date: string): ThreadsOption[] {
+    const out: ThreadsOption[] = [];
+    const seen = new Set<string>();
+    for (const pool of OVERRIDE_POOLS[weekdayOf(date)] ?? []) {
+      for (const c of this.candidates[pool]) {
+        const first = c.picks[0];
+        const g = this.gameOf(first.gameId);
+        if (!g || seen.has(first.gameId)) continue;
+        seen.add(first.gameId);
+        const next = c.picks[1];
+        out.push({
+          exerciseId: exerciseIdOfPick(first, g.game),
+          pick: first,
+          pool,
+          chained: !!next,
+          ...(next ? { nextExerciseId: exerciseIdOfPick(next, g.game) } : {}),
+          linked: c.linked,
+          tier: c.tier,
+        });
+      }
+    }
+    return out;
+  }
+
+  /** 題號 → 這一天的選項；不在這一天的池子裡（主題不合）就 null。 */
+  optionFor(date: string, exerciseId: string): ThreadsOption | null {
+    return this.optionsFor(date).find((o) => o.exerciseId === exerciseId) ?? null;
   }
 
   /** 這一天的題目：存下來的優先；延續的日子跟著前一天實際的那一局；其他照計畫。 */
@@ -146,4 +185,19 @@ export class ThreadsGenerator {
     if (saved?.firstComment?.text && saved.pick?.gameId === pick.gameId) draft.firstComment.text = saved.firstComment.text;
     return draft;
   }
+}
+
+/** 站長選局頁的一個選項：這一天的題目，週三、週五能連著打時附上隔天的。 */
+export interface ThreadsOption {
+  exerciseId: string;
+  pick: ThreadsPick;
+  pool: PoolName;
+  /** 選了這一局，隔天（週四 3-5、週六 4-5）自動接同一局。 */
+  chained: boolean;
+  /** 隔天接著的題號（chained 才有）。 */
+  nextExerciseId?: string;
+  /** 有網站牌譜頁。 */
+  linked: boolean;
+  /** 視角：0 忠臣／派西、1 梅林、2 紅方（刺殺題一律 0）。 */
+  tier: number;
 }

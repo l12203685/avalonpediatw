@@ -99,7 +99,8 @@ describe('/派', () => {
   it('text with no digit after /派 or /區間 is chat (/派對 今晚)', () => {
     expect(parseSimCommand('/派對 今晚')).toBeNull();
     expect(parseSimCommand('/區間 我覺得都很難')).toBeNull();
-    expect(parseSimCommand('/區間')).toMatchObject({ kind: 'usage', command: 'interval' });
+    // 不帶內容 = 百科AI 怎麼讀（2026-11-17）。
+    expect(parseSimCommand('/區間')).toEqual({ kind: 'read' });
   });
 
   it('parseTeam sorts, seat 10 last', () => {
@@ -173,7 +174,8 @@ describe('/區間', () => {
 
 describe('the other commands and plain chat', () => {
   it.each([
-    ['/下一步', { kind: 'next' }],
+    ['/下一步', { kind: 'removed', command: '下一步' }],
+    ['/區間', { kind: 'read' }],
     ['/分析', { kind: 'analyze' }],
     ['／ 分析', { kind: 'analyze' }],
     ['/公布', { kind: 'reveal' }],
