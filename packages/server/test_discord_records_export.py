@@ -571,6 +571,115 @@ class MergeTest(unittest.TestCase):
                 self.assertNotIn(secret, log.getvalue())
 
 
+# 2026-11-17: a record cut off after round 3 (no side has 3 yet) and corrected by a reply in the thread.
+HEAD = RECORD.split("8>4 x")[0].rstrip("\n")  # rounds 1-3 and the first lake
+TAIL = "8>4 x\n15678 -5 +39\n14580\nooooo"  # the missing round 4 (and the lake before it)
+KILL = "刺客刺殺:1"  # a loyal servant (the fixture's 3 is 莫甘娜, which game_db.validate rejects)
+POSTER, CORRECTOR, STRANGER, BOT = "100000000000000001", "100000000000000002", "100000000000000003", "100000000000000004"
+
+
+def thread_post(day: int, title: str = "1020一般場3", replied: bool = True, tags=("三藍躲刺", "線瓦")) -> dri.Post:
+    base = post(day, 20, title, tags)
+    last = str(int(base.id) + (5 << 22)) if replied else base.id
+    return dri.Post(id=base.id, title=base.title, tags=base.tags, owner_id=POSTER, last_message_id=last)
+
+
+def reply(n: int, author: str, content: str, bot: bool = False) -> dict:
+    return {"id": str(200000000000000000 + n), "author": author, "bot": bot, "content": content}
+
+
+class ReplyCorrectionTest(unittest.TestCase):
+    def build(self, posts, bodies, threads, correctors=frozenset()):
+        asked = []
+
+        def replies(p):
+            asked.append(p.id)
+            return threads.get(p.id, [])
+        doc, status = dpe.build_records(posts, lambda p: bodies[p.id], guild_id=GUILD, forum_id=FORUM,
+                                        replies=replies, correctors=correctors)
+        return {e["id"]: e for e in doc["posts"]}, status, asked, doc
+
+    def test_cut_off_record_fixed_by_a_reply_of_record_lines(self) -> None:
+        cut = thread_post(20)
+        entries, status, asked, doc = self.build([cut], {cut.id: body(HEAD, assassin=KILL)}, {cut.id: [
+            reply(1, BOT, "🤖 牌譜格式檢查：牌譜結束時還沒有一方滿三次任務", bot=True),
+            reply(2, STRANGER, "第四局\n" + TAIL),
+        ]})
+        entry = entries[cut.id]
+        self.assertEqual(entry["fixedByReply"], reply(2, STRANGER, "")["id"])
+        self.assertNotIn("problem", entry)
+        self.assertEqual([r["mission"] for r in entry["game"]["rounds"]], ["ooo", "ooox", "oooo", "ooooo"])
+        self.assertEqual(entry["game"]["names"], NAMES)  # the names still come from the starter
+        self.assertEqual((status["fixed by reply"], status["game"]), (1, 1))
+        self.assertEqual(dpe.records_problems(doc), [])
+        self.assertNotIn("第四局", json.dumps(doc, ensure_ascii=False))  # nothing of the reply's text is stored
+
+    def test_replies_only_read_for_a_post_that_needs_a_correction_and_has_replies(self) -> None:
+        good, quiet = thread_post(21, "1021一般場1"), thread_post(22, "1022一般場1", replied=False)
+        _, _, asked, _ = self.build([good, quiet], {good.id: body(assassin=KILL), quiet.id: body(HEAD, assassin=KILL)}, {})
+        self.assertEqual(asked, [])
+
+    def test_chat_bot_and_rule_breaking_replies_are_not_applied(self) -> None:
+        cut = thread_post(20)
+        wrong = TAIL.replace("ooooo", "oooox")  # round 4 failed with 1 fail: 2 blue, 2 red, still undecided
+        entries, status, _, _ = self.build([cut], {cut.id: body(HEAD, assassin=KILL)}, {cut.id: [
+            reply(1, STRANGER, "第四局少打了，應該是\n" + TAIL),  # prose around the lines: left to a person
+            reply(2, BOT, TAIL, bot=True),
+            reply(3, STRANGER, wrong),
+        ]})
+        self.assertIsNone(entries[cut.id]["game"])
+        self.assertNotIn("fixedByReply", entries[cut.id])
+        self.assertEqual(status["fixed by reply"], 0)
+
+    def test_corrector_allow_list(self) -> None:
+        cut = thread_post(20)
+        threads = {cut.id: [reply(1, STRANGER, TAIL)]}
+        entries, _, _, _ = self.build([cut], {cut.id: body(HEAD, assassin=KILL)}, threads, correctors=frozenset({CORRECTOR}))
+        self.assertIsNone(entries[cut.id]["game"])  # only the poster and the correctors count once the list is set
+        threads = {cut.id: [reply(1, CORRECTOR, TAIL)]}
+        entries, _, _, _ = self.build([cut], {cut.id: body(HEAD, assassin=KILL)}, threads, correctors=frozenset({CORRECTOR}))
+        self.assertEqual(entries[cut.id]["fixedByReply"], reply(1, CORRECTOR, "")["id"])
+
+    def test_poster_may_repost_the_whole_record(self) -> None:
+        cut = thread_post(20)
+        entries, _, _, _ = self.build([cut], {cut.id: body(HEAD, assassin=KILL)}, {cut.id: [
+            reply(1, STRANGER, body(assassin=KILL)),  # a whole record from someone else: not taken
+        ]})
+        self.assertIsNone(entries[cut.id]["game"])
+        entries, _, _, _ = self.build([cut], {cut.id: body(HEAD, assassin=KILL)}, {cut.id: [reply(1, POSTER, body(assassin=KILL))]})
+        self.assertEqual(len(entries[cut.id]["game"]["rounds"]), 4)
+
+    def test_parse_correctors_and_shape_check(self) -> None:
+        self.assertEqual(dpe.parse_correctors(f" {CORRECTOR}, {STRANGER}\nnot-an-id "), frozenset({CORRECTOR, STRANGER}))
+        self.assertEqual(dpe.parse_correctors(None), frozenset())
+        doc, _ = build()
+        entry = next(p for p in doc["posts"] if p["id"] == GAME.id)
+        entry["fixedByReply"] = "not an id"
+        self.assertIn("fixedByReply shape", dpe.records_problems(doc))
+        broken = next(p for p in doc["posts"] if p["id"] == BROKEN.id)
+        entry["fixedByReply"] = "200000000000000001"
+        broken["fixedByReply"] = "200000000000000001"
+        self.assertIn("post keys", dpe.records_problems(doc))  # only on a parsed game
+
+    def test_run_reads_the_corrector_list_from_the_environment(self) -> None:
+        cut = thread_post(20)
+
+        class Client(FakeDiscord):
+            def thread_replies(self, thread_id):
+                return [reply(1, CORRECTOR, TAIL)]
+        client = Client(posts=[cut], bodies={cut.id: body(HEAD, assassin=KILL)})
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "records_cache.json"
+            env = {"DISCORD_BOT_TOKEN": "token-marker", dpe.ENV_CORRECTORS: CORRECTOR}
+            with redirect_stdout(io.StringIO()) as log, mock.patch.object(dpe.dri, "DiscordClient", lambda token: client), \
+                    mock.patch.dict("os.environ", env, clear=True):
+                self.assertEqual(dpe.main(["--output", str(out), "--games", str(Path(tmp) / "none.json")]), 0)
+            doc = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(doc["posts"][0]["fixedByReply"], reply(1, CORRECTOR, "")["id"])
+            self.assertIn("討論串回覆更正後讀得懂：1 篇", log.getvalue())
+            self.assertNotIn(CORRECTOR, log.getvalue())
+
+
 class WorkflowTest(unittest.TestCase):
     def test_refresh_workflow_exports_and_commits_the_list(self) -> None:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -581,6 +690,7 @@ class WorkflowTest(unittest.TestCase):
         self.assertNotIn("--report", text)
         self.assertIn("--merge-only --sim-sheet", text)  # sheet games and lineups stay fresh when the Discord read is skipped or fails
         self.assertIn('args=(--output "${RECORDS_PATH}" --sim-sheet)', text)
+        self.assertIn("DISCORD_RECORD_CORRECTORS: ${{ vars.DISCORD_RECORD_CORRECTORS }}", text)  # ids stay out of the repo
 
 
 if __name__ == "__main__":

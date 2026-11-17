@@ -411,6 +411,13 @@ class Post:
     tag_ids: tuple[str, ...] = field(default=(), compare=False)
     archived: bool = field(default=False, compare=False)
     locked: bool = field(default=False, compare=False)
+    # As listed: who started the post, and the thread's newest message (= id when nobody replied).
+    owner_id: str = field(default="", compare=False)
+    last_message_id: str = field(default="", compare=False)
+
+    @property
+    def has_replies(self) -> bool:
+        return bool(self.last_message_id) and self.last_message_id.isdigit() and int(self.last_message_id) > int(self.id)
 
     @property
     def created(self) -> dt.datetime:
@@ -2264,7 +2271,8 @@ class DiscordClient:
                  tags=tuple(tags[x] for x in t.get("applied_tags") or [] if x in tags),
                  tag_ids=tuple(str(x) for x in t.get("applied_tags") or []),
                  archived=bool((t.get("thread_metadata") or {}).get("archived")),
-                 locked=bool((t.get("thread_metadata") or {}).get("locked")))
+                 locked=bool((t.get("thread_metadata") or {}).get("locked")),
+                 owner_id=str(t.get("owner_id") or ""), last_message_id=str(t.get("last_message_id") or ""))
             for t in unique.values()
         ]
         posts.sort(key=lambda p: int(p.id))
@@ -2326,6 +2334,26 @@ class DiscordClient:
         if message is None:
             return None
         return StarterMessage(message.get("content") or "", discord_time(message.get("edited_timestamp")))
+
+    def thread_replies(self, thread_id: str, max_pages: int = 5) -> list[dict]:
+        """The replies in a post's thread, oldest first: [{id, author, bot, content}] (the starter left out).
+        Read-only; at most max_pages * 100 messages."""
+        out: dict[str, dict] = {}
+        after = thread_id
+        for _ in range(max_pages):
+            page = self.get(f"/channels/{thread_id}/messages?limit=100&after={after}",
+                            "/channels/{thread}/messages", allow_404=True) or []
+            for m in page:
+                if not isinstance(m, dict) or str(m.get("id")) == thread_id or m.get("type") not in (0, 19):
+                    continue
+                author = m.get("author") or {}
+                out[str(m["id"])] = {"id": str(m["id"]), "author": str(author.get("id") or ""),
+                                     "bot": bool(author.get("bot") or m.get("webhook_id")),
+                                     "content": m.get("content") or ""}
+            if len(page) < 100:
+                break
+            after = max((str(m.get("id")) for m in page if isinstance(m, dict)), key=int)
+        return [out[k] for k in sorted(out, key=int)]
 
     def starter_content(self, thread_id: str) -> str | None:
         """The text of a post's starter message, None if it was deleted."""

@@ -22,6 +22,13 @@ game's content comes from the first source in SOURCE_PRIORITY (the sheet: what t
 id the website's 牌譜紀錄 page uses (the Discord post id when there is one, else ``S<流水號>`` / ``D<hash>`` /
 ``M<流水號>``), so the id stays the same when a record is corrected.
 
+A source that breaks a rule never hides a clean one (2026-11-17: players corrected the rule errors on Discord, yet
+the list kept showing the sheet's copy): every source of a merged game is checked; when the preferred source has an
+error and another source of the same game has none, the clean one is shown (CONFLICT names the source that is wrong).
+A sheet-only game with an error whose corrected Discord copy no longer has the same fingerprint (one round missing,
+配置 off by one seat) is folded into that copy (``superseded`` on the sheet source, rule SUPERSEDED), so the game is
+listed once and without the sheet's error. The sheet itself still has to be fixed; the report lists those ids.
+
 Every merged game gets ``checks``: one entry per broken rule (RULES below), with a plain-language message.
 Level ``error`` = the record contradicts the rules of the game (a wrong seat, a wrong count, a wrong result);
 ``warn`` = the record is probably incomplete (votes that do not add up to the outcome, a missing assassination
@@ -36,7 +43,9 @@ count; the report lists those games by id and date only. The sources themselves 
 Corrections: game_db_corrections.json (committed) overrides fields of one source's record when the site owner has
 checked the original (e.g. his handwritten scoresheet), before merging and the rule checks; the source caches are
 never edited. Each entry is keyed by the source's public id (``S572`` ...) and carries ``set`` (field -> value),
-``by``, ``date`` and ``note``; the report lists them as 「站長更正」 (id, field, old -> new).
+``by``, ``date`` and ``note``; the report lists them as 「站長更正」 (id, field, old -> new). An entry may instead (or
+also) carry ``exclude``: EXCLUDE_RULES ids the site owner ruled the game breaks although no source shows it in record
+syntax (e.g. a Discord post that ends the game before the forced 5th team went); the game is then excluded.
 
 Privacy: no player names, no titles, no free text -- seats, the parsed record, ids and dates only (the same
 level as the public dataset). The repo is public.
@@ -126,6 +135,7 @@ RULES: dict[str, tuple[str, str]] = {
     "DUP_SAME_SOURCE": (WARN, "同一個來源登錄了兩次"),
     "CONFLICT": (WARN, "不同來源記的不一樣"),
     "NEAR_DUP": (WARN, "疑似同一局（同一天、同配置，但派隊或任務不同）"),
+    "SUPERSEDED": (WARN, "同一局另一個來源記錯，總庫用了對的那一筆（例如試算表少記一局、配置寫錯）；記錯的來源要改"),
     "INFERRED_VOTES": (INFO, "順著上一局成功的隊伍派、紀錄沒寫投票：推定全部投白（不是原始紀錄）"),
     "SOURCE_NOTE": (INFO, "外部來源少記的東西（ProAvalon：湖的宣告、刺中哪個忠臣、舊紀錄的失敗張數）"),
     "OWNER_FLAG": (INFO, "試算表 note 標了要注意（review／badGame 等）"),
@@ -257,6 +267,7 @@ def records_sources(doc: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]]
             "problem": "" if game else (post.get("problem") or "讀不懂"),
             "flags": [],
             "fp": rm.game_fingerprint(game) if game else "",
+            **({"fixedByReply": str(post["fixedByReply"])} if post.get("fixedByReply") and game else {}),
         })
     return out, sheet_ids
 
@@ -299,8 +310,17 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
         unknown = sorted(set(fields) - set(CORRECTABLE))
         if unknown:
             raise ValueError(f"game_db_corrections.json {gid}: cannot correct {unknown} (only {CORRECTABLE})")
+        exclude = list(entry.get("exclude") or [])
+        bad_rules = sorted(set(exclude) - set(EXCLUDE_RULES))
+        if bad_rules:
+            raise ValueError(f"game_db_corrections.json {gid}: cannot exclude by {bad_rules} (only {EXCLUDE_RULES})")
         meta = {"by": entry.get("by", ""), "date": entry.get("date", "")}
         src = by_id.get(gid)
+        if src is not None and exclude:  # 站長裁定：錯誤局（不用記錄）
+            src["owner_exclude"] = sorted(set(src.get("owner_exclude", [])) | set(exclude), key=EXCLUDE_RULES.index)
+            applied += [{"id": gid, "field": "exclude", "old": "", "new": rule, **meta} for rule in exclude]
+            if not fields:
+                continue
         whole = set(fields) == set(CORRECTABLE)
         if src is None or (not src["game"] and not whole):
             applied.append({"id": gid, "missing": True, **meta})
@@ -579,25 +599,112 @@ def excluded_by(src: Mapping[str, Any], partial: bool) -> list[str]:
     hit = {c["rule"] for c in validate(src["game"], partial=partial) if c["rule"] in EXCLUDE_RULES} if src["game"] else set()
     if src.get("forced_rounds"):
         hit.add("FORCED_NOT_RUN")
+    hit |= set(src.get("owner_exclude", []))
     return [r for r in EXCLUDE_RULES if r in hit]
+
+
+def _fp_parts(fp: str) -> tuple[str, list[str], list[str]]:
+    """(配置, proposal teams, missions) of a record_fingerprint."""
+    cfg, teams, missions = (fp.split("|") + ["", ""])[:3]
+    return cfg, [t for t in teams.split(",") if t], [m for m in missions.split(",") if m]
+
+
+def _round_span(first: int, last: int) -> str:
+    return f"第 {first} 局" if first == last else f"第 {first}～{last} 局"
+
+
+def twin_reason(bad_fp: str, good_fp: str) -> str:
+    """Why a sheet record with an error and a clean record of another source are the same game, as the sheet's
+    mistake (plain words), or "" when they are not: the same 配置 and one record is the other with whole rounds
+    missing at the end (teams and missions a prefix), or the same teams and missions with the 配置 off by one seat."""
+    bc, bt, bm = _fp_parts(bad_fp)
+    gcfg, gt, gm = _fp_parts(good_fp)
+    if not bt or not gt:
+        return ""
+    if bc == gcfg:
+        if len(bm) < len(gm) and gt[:len(bt)] == bt and gm[:len(bm)] == bm:
+            return f"試算表少記{_round_span(len(bm) + 1, len(gm))}"
+        if len(gm) < len(bm) and bt[:len(gt)] == gt and bm[:len(gm)] == gm:
+            return f"試算表多記{_round_span(len(gm) + 1, len(bm))}"
+        return ""
+    if (len(bc) == len(gcfg) == 6 and sum(a != b for a, b in zip(bc, gcfg)) == 1 and bt == gt and bm == gm):
+        return f"配置不同（試算表 {bc}，正確的是 {gcfg}）"
+    return ""
+
+
+def _errors(src: Mapping[str, Any], partial: bool) -> list[str]:
+    """The ERROR rules one source's own record breaks (EXCLUDE_RULES aside: those exclude the game)."""
+    if not src["game"]:
+        return []
+    return list(dict.fromkeys(c["rule"] for c in validate(src["game"], partial=partial)
+                              if c["level"] == ERROR and c["rule"] not in EXCLUDE_RULES))
+
+
+def _rule_names(rules: Iterable[str]) -> str:
+    return "、".join(RULES[r][1].split("（")[0] for r in rules)
+
+
+def fold_sheet_twins(clusters: dict[tuple[str, str], list[dict[str, Any]]]) -> None:
+    """Fold each sheet-only game with an error into the one clean game of another source that is the same game
+    with the sheet's mistake fixed (twin_reason), same type and date. The sheet sources get ``superseded``."""
+    groups = list(clusters.items())
+    candidates: dict[tuple[str, str], list[tuple[tuple[str, str], dict[str, Any]]]] = defaultdict(list)
+    for key, members in groups:
+        partial = key[0] == KIND_SIM
+        if any(s["src"] in (SRC_DISCORD, SRC_IMPORT) for s in members) and not any(excluded_by(s, partial) for s in members):
+            for s in members:
+                if s["src"] in (SRC_DISCORD, SRC_IMPORT) and s["date"] and not _errors(s, partial):
+                    candidates[(key[0], s["date"])].append((key, s))
+    for key, members in groups:
+        partial = key[0] == KIND_SIM
+        if (not all(s["src"] == SRC_SHEET for s in members) or not members[0]["date"]
+                or any(excluded_by(s, partial) for s in members) or not all(_errors(s, partial) for s in members)):
+            continue
+        hits = {}
+        for tkey, twin in candidates.get((key[0], members[0]["date"]), []):
+            reason = twin_reason(key[1], twin["fp"])
+            if reason and tkey in clusters:
+                hits.setdefault(tkey, reason)
+        if len(hits) != 1:  # none, or ambiguous: leave both as they are
+            continue
+        (tkey, reason), = hits.items()
+        for s in members:
+            s["superseded"] = reason
+        clusters[tkey].extend(members)
+        del clusters[key]
 
 
 def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Merge sources by fingerprint (per type), validate, and return the database rows. Games that break an
-    EXCLUDE_RULES rule in any source are not returned; they go to ``excluded`` (id, date, rules) when given."""
+    EXCLUDE_RULES rule in any source are not returned; they go to ``excluded`` (id, date, rules) when given.
+    The game's content comes from the first source in SOURCE_PRIORITY whose own record has no error (the first
+    source when none is clean); a sheet-only game with an error is folded into its corrected copy (fold_sheet_twins)."""
     clusters: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     singles: list[list[dict[str, Any]]] = []
     for s in sources:
+        s.pop("superseded", None)
         group = KIND_SIM if s["kind"] == KIND_SIM else KIND_REAL
         if s["game"] and s["fp"]:
             clusters[(group, s["fp"])].append(s)
         else:
             singles.append([s])
+    fold_sheet_twins(clusters)
     rank = {src: i for i, src in enumerate(SOURCE_PRIORITY)}
     rows: list[dict[str, Any]] = []
     for members in [*clusters.values(), *singles]:
         members.sort(key=lambda s: (rank[s["src"]], s["id"]))
-        main = members[0]
+        partial = members[0]["kind"] == KIND_SIM
+        errs = {id(s): _errors(s, partial) for s in members}
+        folded = [s for s in members if s.get("superseded")]
+        live = [s for s in members if not s.get("superseded")] or members
+        main = live[0]
+        replaced: set[int] = set()
+        if errs[id(main)]:
+            clean = next((s for s in live if s["game"] and not errs[id(s)]), None)
+            if clean is not None:  # a wrong source never hides a clean one (CONFLICT names the wrong one)
+                replaced = {id(s) for s in live if s is not clean and errs[id(s)]}
+                main = clean
+        members = [main] + [s for s in members if s is not main]
         by_src = {s["src"]: s for s in reversed(members)}
         cid = (by_src.get(SRC_DISCORD) or by_src.get(SRC_SHEET) or by_src.get(SRC_IMPORT) or main)
         kind = KIND_SIM if main["kind"] == KIND_SIM else (KIND_BOT if any(s["kind"] == KIND_BOT for s in members) else KIND_REAL)
@@ -627,7 +734,15 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
                     ids = "、".join(public_id(s) for s in members if s["src"] == src)
                     checks.append(_check("DUP_SAME_SOURCE", f"{SOURCE_LABELS[src]}有 {n} 筆是同一局：{ids}"))
             for other in members[1:]:
-                diff = conflicts(main, other)
+                if other.get("superseded"):
+                    checks.append(_check("SUPERSEDED", f"{SOURCE_LABELS[other['src']]}（{public_id(other)}）記錯"
+                                                       f"（{_rule_names(errs[id(other)])}）：{other['superseded']}；這局用 "
+                                                       f"{SOURCE_LABELS[main['src']]}（{public_id(main)}）的紀錄"))
+                    continue
+                diff = conflicts(main, other) if other["game"] else []
+                if id(other) in replaced:
+                    diff = [f"{SOURCE_LABELS[other['src']]}那筆有錯（{_rule_names(errs[id(other)])}），這局用 "
+                            f"{SOURCE_LABELS[main['src']]}（{public_id(main)}）的紀錄", *diff]
                 if diff:
                     checks.append(_check("CONFLICT", f"{SOURCE_LABELS[main['src']]} 跟 {SOURCE_LABELS[other['src']]}（{public_id(other)}）不一樣：" + "、".join(diff)))
             if not date:
@@ -656,7 +771,10 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
             "s": s_value,
             "strength": strength_tier(s_value),
             "status": status,
-            "sources": [{"src": s["src"], "id": public_id(s)} for s in members],
+            "sources": [{"src": s["src"], "id": public_id(s),
+                         **({"superseded": s["superseded"]} if s.get("superseded") else {}),
+                         **({"wrong": True} if id(s) in replaced else {}),
+                         **({"fixedByReply": s["fixedByReply"]} if s.get("fixedByReply") else {})} for s in members],
             "fp": main["fp"],
             "game": strip_names(main["game"]),
             **({"problem": main["problem"]} if not main["game"] else {}),
@@ -841,6 +959,8 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         for c in corrections:
             if c.get("missing"):
                 L.append(f"- {c['id']}：找不到這一局、或這局讀不懂而更正不是整局紀錄（{c['by']} {c['date']}），更正沒有套用")
+            elif c["field"] == "exclude":
+                L.append(f"- {c['id']}：錯誤局，不記錄（`{c['new']}`，{c['by']} {c['date']}）")
             else:
                 same = "（來源已經是這個值，這筆更正可以刪掉）" if c["old"] == c["new"] else ""
                 L.append(f"- {c['id']} `{c['field']}`：{c['old']} → {c['new']}（{c['by']} {c['date']}）{same}")
@@ -962,7 +1082,7 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
              "D = Discord匯入分頁、純數字 = Discord 貼文、M = 模擬瓦分頁。")
     L.append("")
     real_rows = [r for r in rows if r["kind"] != KIND_SIM and r["game"] and not r.get("external")]
-    detail_rules = {"DUP_SAME_SOURCE", "CONFLICT", "NEAR_DUP"}
+    detail_rules = {"DUP_SAME_SOURCE", "CONFLICT", "NEAR_DUP", "SUPERSEDED"}
     for rule, (level, name) in RULES.items():
         hits = [(r, c) for r in real_rows for c in r["checks"] if c["rule"] == rule]
         if not hits or level == INFO:

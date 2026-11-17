@@ -3,9 +3,10 @@ Export the Discord forum #牌譜紀錄與覆盤 (one post = one game) as the lis
 「牌譜紀錄」tab shows: packages/server/records_cache.json, served by GET /api/analysis/records.
 
 Read-only: it lists the forum's posts and reads each post's starter message (the record) with the
-same bot token, client and parser as discord_records_import.py. It never reads the replies in a
-post's thread: they are chat, and this file is committed to a public repository, where a reply
-deleted or edited on Discord would stay in the git history. The site's server reads the replies
+same bot token, client and parser as discord_records_import.py. A post's thread replies are read
+only to find a correction of a record that does not parse or breaks a rule (below); nothing of a
+reply's text is written: replies are chat, and this file is committed to a public repository, where a
+reply deleted or edited on Discord would stay in the git history. The site's server reads the replies
 live when someone opens a game (GET /api/analysis/records/:id/replies, services/recordsReplies.ts,
 memory cache only). It never writes to Discord or the stats Sheet, and runs in
 refresh-analysis-cache.yml next to generate_cache.py, so the file is committed together with the
@@ -24,6 +25,13 @@ What goes into the file, newest post first:
       - problem (+ problemLine): why the record could not be read, as a fixed explanation
         string (SKIP_EXPLANATIONS) -- never the post's text.
   The starter message itself is not stored; only what the parser extracted from it.
+  Correction replies (2026-11-17: players fix a record by replying in the thread when they cannot edit someone
+  else's post): for a post that does not parse, or parses with a rule error, and has replies, the replies are read
+  (read-only) and the newest reply that fixes it is applied -- record lines that continue the record (e.g. the
+  missing rounds 4-5), or a whole new record from the poster / a corrector. Only from the poster or the ids in
+  DISCORD_RECORD_CORRECTORS (comma-separated; when it is empty, any non-bot reply that is nothing but record
+  lines), and only when the result parses and breaks no rule of game_db.validate. The entry then carries
+  ``fixedByReply`` (the reply's message id); the reply's text is not stored either.
   * per parsed game, two annotations (annotate_records, Edward 2026-10-31):
       - lineup: 陣容強度 from generate_cache.compute_lineups over games_cache.json (written by
         generate_cache.py earlier in the same workflow run): the post's game when it is in the dataset
@@ -67,6 +75,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import discord_records_import as dri
+import game_db as gdb
 import generate_cache as gc
 import records_merge as rm
 
@@ -105,6 +114,9 @@ _SHAPES = {
     "seats": re.compile(r"[0-9]{0,10}"),
 }
 ANNOTATION_KEYS = ("lineup", "mistakes")
+ENV_CORRECTORS = "DISCORD_RECORD_CORRECTORS"  # Discord user ids whose replies may correct anyone's record
+FIXED_BY_REPLY = "fixedByReply"
+_ROUND_HEADER_RE = re.compile(r"^第 ?[一二三四五1-5] ?局[:：]?$")
 
 
 def clean_text(text: str, limit: int) -> str:
@@ -178,15 +190,97 @@ def post_entry(post: dri.Post, content: str | None) -> tuple[dict[str, Any] | No
     return entry, "game"
 
 
+def parse_correctors(value: str | None) -> frozenset[str]:
+    """DISCORD_RECORD_CORRECTORS: comma / whitespace separated Discord user ids (anything else ignored)."""
+    return frozenset(x for x in re.split(r"[\s,]+", value or "") if _SHAPES["id"].fullmatch(x))
+
+
+def needs_correction(entry: Mapping[str, Any] | None) -> bool:
+    """A listed post whose record does not parse, or parses but breaks a rule of the game database."""
+    if entry is None:
+        return False
+    game = entry.get("game")
+    if not game:
+        return True
+    return any(c["level"] == gdb.ERROR for c in gdb.validate(game))
+
+
+def continuation_lines(text: str) -> list[str] | None:
+    """A reply that is nothing but record lines (proposals, missions, lakes; a 「第四局」 header is dropped):
+    those lines, else None."""
+    out: list[str] = []
+    for n, raw in enumerate((text or "").splitlines(), 1):
+        line = dri.normalize_line(raw)
+        if not line or _ROUND_HEADER_RE.fullmatch(line):
+            continue
+        try:
+            item = dri.classify_line(raw, n)
+        except dri.SkipPost:
+            return None
+        if item is None or item.kind not in dri.GAME_KINDS:
+            return None
+        out.append(raw.strip())
+    return out or None
+
+
+def with_continuation(content: str, extra: Sequence[str]) -> str:
+    """The starter with `extra` record lines inserted right after its last record line (before the footer)."""
+    lines = (content or "").splitlines()
+    last = -1
+    for n, raw in enumerate(lines, 1):
+        try:
+            item = dri.classify_line(raw, n)
+        except dri.SkipPost:
+            item = None
+        if item is not None and item.kind in dri.GAME_KINDS:
+            last = n - 1
+    if last < 0:
+        return content
+    return "\n".join(lines[:last + 1] + list(extra) + lines[last + 1:])
+
+
+def reply_fix(post: dri.Post, content: str | None, replies: Sequence[Mapping[str, Any]],
+              correctors: frozenset[str]) -> tuple[dict[str, Any], str] | None:
+    """The post's entry corrected by the newest reply that fixes it, or None. See the module docstring."""
+    trusted = ({post.owner_id} if post.owner_id else set()) | set(correctors)
+    for reply in reversed(list(replies)):
+        if reply.get("bot") or not reply.get("content"):
+            continue
+        author = str(reply.get("author") or "")
+        if correctors and author not in trusted:
+            continue
+        texts = []
+        extra = continuation_lines(reply["content"])
+        if extra and content:
+            texts.append(with_continuation(content, extra))
+        if author in trusted:  # a whole record retyped by the poster or a corrector
+            texts.append(reply["content"])
+        for text in texts:
+            entry, kind = post_entry(post, text)
+            if kind == "game" and entry is not None and not needs_correction(entry):
+                entry[FIXED_BY_REPLY] = str(reply["id"])
+                return entry, kind
+    return None
+
+
 def build_records(posts: Iterable[dri.Post], fetch: Callable[[dri.Post], str | None], *,
-                guild_id: str, forum_id: str) -> tuple[dict[str, Any], Counter]:
+                  guild_id: str, forum_id: str,
+                  replies: Callable[[dri.Post], Sequence[Mapping[str, Any]]] | None = None,
+                  correctors: frozenset[str] = frozenset()) -> tuple[dict[str, Any], Counter]:
     """The file's document (Discord posts only, newest first) and the counts per status. Pure apart
-    from `fetch`; posts tagged 模擬 (百科AI games) are not fetched. merge_sheet() then adds the sheet's games."""
+    from `fetch` / `replies`; posts tagged 模擬 (百科AI games) are not fetched. merge_sheet() then adds the
+    sheet's games. `replies` (a post's thread replies, oldest first) is only called for a post that needs a
+    correction and has replies (reply_fix)."""
     entries: list[dict[str, Any]] = []
     status: Counter = Counter()
     for post in sorted(posts, key=lambda p: int(p.id), reverse=True):
         content = None if dri.TAG_SIMULATION in post.tags else fetch(post)
         entry, kind = post_entry(post, content)
+        if replies is not None and post.has_replies and needs_correction(entry):
+            fixed = reply_fix(post, content, replies(post), correctors)
+            if fixed is not None:
+                entry, kind = fixed
+                status["fixed by reply"] += 1
         status[kind] += 1
         if entry is not None:
             entries.append(entry)
@@ -488,8 +582,11 @@ def records_problems(doc: Any) -> list[str]:
             continue
         keys = set(post) - set(ANNOTATION_KEYS) - {"src", "sim"}
         base = {"id", "title", "tags", "created", "date", "game"}
-        if not (keys == base or keys == base | {"problem"} or keys == base | {"problem", "problemLine"}):
+        if not (keys == base or keys == base | {"problem"} or keys == base | {"problem", "problemLine"}
+                or (keys == base | {FIXED_BY_REPLY} and post.get("game"))):
             out["post keys"] += 1
+        if FIXED_BY_REPLY in post and not _full("id", post[FIXED_BY_REPLY]):
+            out["fixedByReply shape"] += 1
         if any(k in post for k in ANNOTATION_KEYS) and (not post.get("game") or post.get("sim")):
             out["annotation on an unreadable or 模擬 post"] += 1
         for problem in annotation_problems(post):
@@ -599,9 +696,11 @@ def summary_lines(status: Counter, doc: Mapping[str, Any], result: str, merged: 
     counts = doc["counts"]
     lines = [
         "### 網站「牌譜紀錄」清單（records_cache.json）",
-        f"- 論壇貼文 {sum(status.values())} 篇；略過 百科AI／模擬 {status['simulation']}、非牌譜貼文 {status['not a record']}",
+        f"- 論壇貼文 {sum(n for k, n in status.items() if k != 'fixed by reply')} 篇；略過 百科AI／模擬 {status['simulation']}、非牌譜貼文 {status['not a record']}",
         f"- 清單共 {counts['posts']} 局（讀得懂 {counts['games']}、格式待修正 {counts['unreadable']}）",
     ]
+    if status.get("fixed by reply"):
+        lines.append(f"- 討論串回覆更正後讀得懂：{status['fixed by reply']} 篇")
     if merged is not None:
         lines.append(merge_line(merged))
     lines.append(f"- 結果：{result}")
@@ -666,7 +765,10 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
                 print(f"  fetched {fetched} starter messages...", flush=True)
             return client.starter_content(post.id)
 
-        doc, status = build_records(posts, fetch, guild_id=client.forum_guild_id(forum_id), forum_id=forum_id)
+        replies = getattr(client, "thread_replies", None)
+        doc, status = build_records(posts, fetch, guild_id=client.forum_guild_id(forum_id), forum_id=forum_id,
+                                    replies=(lambda p: replies(p.id)) if replies else None,
+                                    correctors=parse_correctors(env.get(ENV_CORRECTORS)))
     except dri.DiscordError as exc:
         raise gc.FatalError(f"{exc} Nothing was written.", dri.EXIT_DISCORD, "Discord API error") from None
     previous = load_previous(out)

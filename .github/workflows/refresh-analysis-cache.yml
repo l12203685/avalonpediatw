@@ -22,8 +22,9 @@ name: Refresh analysis cache
 #       = 資料集的 key，網站與伺服器靠它確認兩檔同一批。資料集自己的檢查（round-trip、隱私形狀）沒過時只寫快取、
 #       不寫資料集（網站篩選暫停），快取照常推送，最後一步讓 job 亮紅燈。公開紀錄一樣只有數量。
 # 牌譜紀錄清單（網站「牌譜紀錄」頁籤）：同一次執行另跑 discord_records_export.py，用 DISCORD_BOT_TOKEN（同
-#       import-discord-records.yml 的 secret）讀 Discord 論壇 #牌譜紀錄與覆盤 每篇貼文的起始訊息（不讀討論串
-#       裡的回覆），寫 packages/server/records_cache.json（只有標題、標籤、發文時間與解析後的牌譜；不存起始訊息
+#       import-discord-records.yml 的 secret）讀 Discord 論壇 #牌譜紀錄與覆盤 每篇貼文的起始訊息（讀不懂或違反規則、
+#       又有回覆的貼文，另讀討論串回覆找更正：發文者／DISCORD_RECORD_CORRECTORS 的人，或整則都是牌譜行的回覆；
+#       套上去要通過所有規則，只存解析後的牌譜與回覆的訊息 id），寫 packages/server/records_cache.json（只有標題、標籤、發文時間與解析後的牌譜；不存起始訊息
 #       原文；略過非牌譜貼文與百科AI 局），跟快取一起 commit。清單是所有來源的牌譜合成一個資料庫（Edward
 #       2026-11-16）：DC 貼文（模擬標起來）＋試算表「牌譜」分頁的每一局（從 games_cache.json）＋「模擬瓦」分頁，
 #       同一局（配置＋每次派的隊＋每局任務相同）只列一次。沒設 token → notice 略過；讀取或檢查失敗 → 保留舊檔、
@@ -189,11 +190,15 @@ jobs:
         if: steps.creds.outputs.secret != ''
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # 誰的回覆可以更正別人的牌譜（逗號分隔的 Discord 使用者 id；repo variable，不寫進 repo）。沒設：只收
+          # 整則都是牌譜行、套上去後通過所有規則的回覆（發文者另可整局重貼）。
+          DISCORD_RECORD_CORRECTORS: ${{ vars.DISCORD_RECORD_CORRECTORS }}
           ALLOW_SHRINK: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_shrink && '1' || '' }}
           AVALON_STATS_SHEET_ID: ${{ vars.AVALON_STATS_SHEET_ID }}
         run: |
-          # Read-only: the forum's post list and each post's starter message (never the replies in a
-          # thread), plus the stats sheet's 模擬瓦 tab (--sim-sheet, same service account as above). The
+          # Read-only: the forum's post list and each post's starter message; a thread's replies only for a post
+          # that does not parse or breaks a rule and has replies (correction replies, see the script),
+          # plus the stats sheet's 模擬瓦 tab (--sim-sheet, same service account as above). The
           # list is ONE database of every game (Edward 2026-11-16): Discord posts (模擬 flagged) + the
           # sheet's 牌譜 games from games_cache.json + the 模擬瓦 tab, merged by fingerprint
           # (records_merge.py). A failure keeps the committed records_cache.json (the write is atomic)

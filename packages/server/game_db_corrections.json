@@ -1,5 +1,5 @@
 {
-  "about": "站長更正：對照原始紀錄後，覆寫某個來源記錯的欄位（建庫時先套用再檢查，來源檔不動）。鍵是來源的編號（S<流水號>、D<hash>、Discord 貼文 id、M<流水號>、P<_id>）；set 只能改 config、rounds、lakes、assassination、outcome。",
+  "about": "站長更正：對照原始紀錄後，覆寫某個來源記錯的欄位（建庫時先套用再檢查，來源檔不動）。鍵是來源的編號（S<流水號>、D<hash>、Discord 貼文 id、M<流水號>、P<_id>）；set 只能改 config、rounds、lakes、assassination、outcome；exclude 列站長裁定這局違反的錯誤局規則（ASSASSIN_TEAMMATE、FORCED_NOT_RUN），這一局不記錄。",
   "corrections": {
     "S572": {
       "set": {
@@ -56,6 +56,12 @@
       "by": "站長",
       "date": "2026-11-17",
       "note": "主控台更正"
+    },
+    "S673": {
+      "exclude": ["FORCED_NOT_RUN"],
+      "by": "站長",
+      "date": "2026-11-17",
+      "note": "站長 2026-11-17 規則「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」。同一局的 Discord 貼文（1173281700634181672）記到第 3 局第 3 次提議就結束（尾派輪到紅方、沒有出任務）；試算表把結局記成一個 4 張失敗的任務（第 3 局失敗張數比隊上紅方多）。"
     }
   }
 }

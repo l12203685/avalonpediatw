@@ -221,6 +221,84 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(doc["games"][0]["id"], "S12")
 
 
+class CleanSourceTest(unittest.TestCase):
+    """2026-11-17: rule errors corrected on Discord must not stay listed because the sheet's copy is wrong."""
+
+    def test_clean_source_is_shown_when_the_sheet_breaks_a_rule(self):
+        wrong = copy.deepcopy(GOOD)
+        wrong["lakes"] = [{"after": 2, "holder": "0", "target": "0", "claim": "o"}]  # holder checks himself
+        rows = gd.build([source(gd.SRC_SHEET, "12", wrong), source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD))])
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual((row["id"], row["status"], row["game"]["lakes"]), ("999", gd.WARN, GOOD["lakes"]))
+        self.assertEqual([s["id"] for s in row["sources"]], ["999", "S12"])
+        self.assertTrue(next(s for s in row["sources"] if s["id"] == "S12")["wrong"])
+        msg = next(c["msg"] for c in row["checks"] if c["rule"] == "CONFLICT")
+        self.assertIn("試算表 牌譜 分頁那筆有錯（湖中女神不合規則）", msg)
+        self.assertNotIn(gd.ERROR, [c["level"] for c in row["checks"]])
+
+    def test_sheet_stays_main_when_every_source_is_wrong(self):
+        wrong = copy.deepcopy(GOOD)
+        wrong["lakes"] = [{"after": 2, "holder": "0", "target": "0", "claim": "o"}]
+        rows = gd.build([source(gd.SRC_SHEET, "12", wrong), source(gd.SRC_DISCORD, "999", copy.deepcopy(wrong))])
+        self.assertEqual((rows[0]["status"], [s["id"] for s in rows[0]["sources"]]), (gd.ERROR, ["S12", "999"]))
+
+    def test_sheet_missing_the_last_round_folds_into_the_discord_copy(self):
+        cut = copy.deepcopy(GOOD)
+        cut["rounds"] = cut["rounds"][:2]  # stops at 2 blue: UNDECIDED (and the lake after round 2 ends the game)
+        cut["lakes"] = []
+        self.assertIn("UNDECIDED", rules(cut))
+        rows = gd.build([source(gd.SRC_SHEET, "12", cut), source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD)),
+                         source(gd.SRC_IMPORT, "Dabc", copy.deepcopy(GOOD))])
+        self.assertEqual(len(rows), 1)  # listed once
+        row = rows[0]
+        self.assertEqual((row["id"], row["status"], len(row["game"]["rounds"])), ("999", gd.WARN, 3))
+        self.assertEqual(next(s for s in row["sources"] if s["id"] == "S12")["superseded"], "試算表少記第 3 局")
+        sup = next(c["msg"] for c in row["checks"] if c["rule"] == "SUPERSEDED")
+        self.assertIn("S12）記錯（紀錄在任何一方拿到 3 局之前就結束）：試算表少記第 3 局", sup)
+        self.assertNotIn("NEAR_DUP", [c["rule"] for c in row["checks"]])
+
+    def test_config_off_by_one_seat_folds(self):
+        right = dict(copy.deepcopy(GOOD), config="123457", assassination="6")  # 梅林 is 7: stabbing 6 misses
+        wrong = dict(copy.deepcopy(GOOD), assassination="6")  # 123456: 6 is 梅林, yet 三藍活
+        self.assertIn("OUTCOME", rules(wrong))
+        rows = gd.build([source(gd.SRC_SHEET, "12", wrong), source(gd.SRC_DISCORD, "999", right)])
+        self.assertEqual([r["id"] for r in rows], ["999"])
+        self.assertEqual(rows[0]["sources"][1]["superseded"], "配置不同（試算表 123456，正確的是 123457）")
+
+    def test_no_fold_across_dates_when_ambiguous_or_when_the_sheet_is_clean(self):
+        cut = copy.deepcopy(GOOD)
+        cut["rounds"] = cut["rounds"][:2]
+        cut["lakes"] = []
+        other_day = gd.build([source(gd.SRC_SHEET, "12", cut), source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD), date="2026-01-03")])
+        self.assertEqual(sorted(r["id"] for r in other_day), ["999", "S12"])
+        twin = copy.deepcopy(GOOD)
+        twin["rounds"][2]["proposals"][0]["team"] = "5670"  # another full game starting the same way
+        twin["rounds"][2]["proposals"][0]["votes"] = ["89+"]
+        ambiguous = gd.build([source(gd.SRC_SHEET, "12", cut), source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD)),
+                              source(gd.SRC_DISCORD, "998", twin)])
+        self.assertEqual(len(ambiguous), 3)
+        clean = copy.deepcopy(GOOD)
+        clean["rounds"].append({"proposals": [{"team": "56789", "votes": ["0+"]}], "mission": "ooooo"})
+        rows = gd.build([source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD)), source(gd.SRC_DISCORD, "999", clean)])
+        self.assertEqual(len(rows), 2)  # the sheet is not wrong here (the Discord copy is): nothing folds
+
+    def test_twin_reason(self):
+        fp = rm.game_fingerprint(GOOD)
+        cut = copy.deepcopy(GOOD)
+        cut["rounds"] = cut["rounds"][:1]
+        self.assertEqual(gd.twin_reason(rm.game_fingerprint(cut), fp), "試算表少記第 2～3 局")
+        self.assertEqual(gd.twin_reason(fp, rm.game_fingerprint(cut)), "試算表多記第 2～3 局")
+        self.assertEqual(gd.twin_reason(fp, fp.replace("123456", "124356", 1)), "")  # two seats differ
+
+    def test_records_sources_keep_the_reply_correction_id(self):
+        doc = {"posts": [{"id": "1234567890123456789", "tags": [], "date": "2026-01-02", "game": copy.deepcopy(GOOD),
+                          "fixedByReply": "1234567890123456790"}]}
+        srcs, _ = gd.records_sources(doc)
+        rows = gd.build(srcs)
+        self.assertEqual(rows[0]["sources"], [{"src": "discord", "id": "1234567890123456789", "fixedByReply": "1234567890123456790"}])
+
+
 class ExcludeTest(unittest.TestCase):
     """Edward 2026-11-17「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」: left out of the database."""
 
@@ -311,6 +389,22 @@ class CorrectionTest(unittest.TestCase):
             self.assertIn("S12 `assassination`：4 → 7（站長 2026-11-17）", text)
             self.assertIn("S99：找不到這一局", text)
 
+    def test_owner_exclusion(self):
+        """站長裁定的錯誤局（例如 Discord 版本顯示尾派沒有出任務）：exclude 列規則，這局不記錄。"""
+        sources = [source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD))]
+        applied = gd.apply_corrections(sources, {"corrections": {"S12": {
+            "exclude": ["FORCED_NOT_RUN"], "by": "站長", "date": "2026-11-17", "note": "x"}}})
+        self.assertEqual([(a["field"], a["new"]) for a in applied], [("exclude", "FORCED_NOT_RUN")])
+        excluded = []
+        self.assertEqual(gd.build(sources, excluded), [])
+        self.assertEqual((excluded[0]["id"], excluded[0]["rules"]), ("S12", ["FORCED_NOT_RUN"]))
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "r.md"
+            gd.write_report([], gd.summarize([], excluded), {}, report, excluded, corrections=applied)
+            self.assertIn("S12：錯誤局，不記錄（`FORCED_NOT_RUN`，站長 2026-11-17）", report.read_text(encoding="utf-8"))
+        with self.assertRaises(ValueError):
+            gd.apply_corrections(sources, {"corrections": {"S12": {"exclude": ["LAKE"]}}})
+
     def test_only_record_fields_can_be_corrected(self):
         with self.assertRaises(ValueError):
             gd.apply_corrections([source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD))],
@@ -324,6 +418,9 @@ class CorrectionTest(unittest.TestCase):
             entry = doc["corrections"][gid]
             self.assertEqual((set(entry["set"]), entry["note"]), (set(gd.CORRECTABLE), "主控台更正"))
             self.assertEqual([c["rule"] for c in gd.validate(entry["set"]) if c["level"] != gd.INFO], [], gid)
+        s673 = doc["corrections"]["S673"]  # 站長 2026-11-17「尾派沒有出任務 … 不用記錄」
+        self.assertEqual((s673["exclude"], s673["by"], s673["date"], "set" in s673), (["FORCED_NOT_RUN"], "站長", "2026-11-17", False))
+        self.assertIn("尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄", s673["note"])
 
     def test_whole_record_correction_makes_an_unreadable_source_readable(self):
         unreadable = dict(source(gd.SRC_SHEET, "12", None), forced_rounds=[2], problem="試算表這局的紀錄讀不懂（proposals）")
