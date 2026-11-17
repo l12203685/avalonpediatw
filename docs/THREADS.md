@@ -9,7 +9,7 @@
 - B 的內容是問題 1＋解答 0；A 的內容是問題 2＋解答 1。
 - A 的第一則留言放跟這題有關的數據冷知識或觀念，加上文章網址。
 - 不另外在昨天的貼文底下串答案，不用私訊對答案，也不當天公布。
-- 11/17 的題目其實沒有發出去（站長 11/18 確認），程式不再寫死「11/17 已經貼出」。系列起點用 repo 變數 `THREADS_LIVE_FROM`（正式發的第一天），沒設時預設 2026-11-17（`THREADS_START_DATE`；站長 11/17：「我想從11/17開始」）。
+- 11/17 的題目其實沒有發出去（站長 11/18 確認），程式不再寫死「11/17 已經貼出」。系列起點用正式發的第一天（主控台設定、同步進 `packages/server/threads_live.json` 的 `liveFrom`；repo 變數 `THREADS_LIVE_FROM` 有設就蓋過），都沒設時預設 2026-11-17（`THREADS_START_DATE`；站長 11/17：「我想從11/17開始」）。
 - 自動發佈只在**昨天真的有貼文**（`threads-state` 的 `state/<昨天>.json` 有貼文 id，或是站長手動發、補記過的那一天）時，才引用昨天、附昨天的答案，週四／週六才接昨天那一局；昨天沒有貼文（只試跑過、或根本沒發），今天就是獨立的第一篇。
 
 ## 怎麼跑
@@ -179,9 +179,23 @@ GitHub 自己的排程對這個 repo 很不準：每日排程常晚 7–8 小時
   - `THREADS_POST_HOUR`（選填，0–22，預設 `12`）：幾點觸發。跟 repo 變數 `THREADS_POST_HOUR` 是兩個地方，要改時兩邊一起改（手動觸發不看 repo 變數的時間，伺服器幾點觸發就幾點發）。
   - `THREADS_DISPATCH=off`（選填）：停掉伺服器觸發（只剩 GitHub 排程）。
 
-**起始日的閘門一樣管伺服器觸發**：沒設 repo 變數 `THREADS_LIVE_FROM`，或今天（或要發的日期）早於那一天時，「自動」的執行一律只試跑，Threads 和 IG 都是。自動＝排程，或手動觸發選 `mode=auto`（伺服器觸發用的就是這個）。
+### 正式發的開關（站長在主控台設，不用動 GitHub 變數）
 
-| 觸發方式 | 起始日之前（或沒設 `THREADS_LIVE_FROM`） | 起始日當天起 |
+正式發的起始日與暫停由站長在**主控台**的「Threads／IG 上線」設定。主控台 GitHub 讀不到，所以 Claude 每天台北 08:00 的同步把主控台的值寫進 `packages/server/threads_live.json`（commit 到 main）：
+
+```json
+{ "liveFrom": "2026-11-20", "paused": false, "note": "…" }
+```
+
+- `liveFrom`：正式發的第一天（YYYY-MM-DD，台北）；`null`＝只試跑不發。
+- `paused`：`true` 時自動的執行一律只試跑（不管起始日）。
+- 改了主控台要等下一次台北 08:00 的同步寫進檔案才生效；發文在 12:07，所以 08:00 前改的當天就算數，08:00 後改的從隔天算。
+- repo 變數 `THREADS_LIVE_FROM`（選用，相容舊設定）：有設就蓋過檔案的 `liveFrom`；`paused` 照樣有效。
+- 工作流程第一步用 API 讀**這次執行那個 commit** 的檔；讀不到或格式不對就當作沒設＝只試跑。閘門算出來的起始日也傳給產生貼文、補記手動發的那兩步當系列起點。
+
+**起始日的閘門一樣管伺服器觸發**：沒有起始日（檔案 `liveFrom` 是 `null`、也沒設 repo 變數）、今天（或要發的日期）早於那一天，或 `paused` 是 `true` 時，「自動」的執行一律只試跑，Threads 和 IG 都是。自動＝排程，或手動觸發選 `mode=auto`（伺服器觸發用的就是這個）。
+
+| 觸發方式 | 起始日之前（或沒有起始日、暫停中） | 起始日當天起 |
 |---|---|---|
 | GitHub 排程 | 只試跑 | 照 `THREADS_PUBLISH`／`INSTAGRAM_PUBLISH` |
 | 伺服器觸發、手動選 `auto` | 只試跑 | 照 `THREADS_PUBLISH`／`INSTAGRAM_PUBLISH` |
@@ -204,8 +218,8 @@ repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，
    - Secrets：`THREADS_ACCESS_TOKEN`＝長效權杖；`THREADS_USER_ID`＝使用者 id（可以不填，會用權杖查）。
    - 權杖不要貼在對話、Issue 或程式裡。
 6. **先手動試跑一次**：Actions → Threads 每日發文 → Run workflow，mode 選 `dry-run`，看摘要。
-7. **打開正式發佈**：Variables 新增 `THREADS_PUBLISH`＝`1`，再設 `THREADS_LIVE_FROM`＝正式發的第一天（YYYY-MM-DD）。從那天起每天中午自動發；沒設 `THREADS_LIVE_FROM` 時一律只試跑。
-8. **要停**：把 `THREADS_PUBLISH` 改成 `0` 或刪掉，馬上回到只試跑。
+7. **打開正式發佈**：Variables 新增 `THREADS_PUBLISH`＝`1`（一次就好）。之後在主控台「Threads／IG 上線」填正式發的第一天；Claude 下一次 08:00 的同步寫進 `threads_live.json`，從那天起每天中午自動發。主控台空白＝一律只試跑。（舊做法：設 repo 變數 `THREADS_LIVE_FROM`，有設就蓋過主控台的值。）
+8. **要停**：主控台勾「暫停」（等 08:00 同步），或要馬上停就把 repo 變數 `THREADS_PUBLISH` 改成 `0` 或刪掉。
 
 ### 權杖到期
 

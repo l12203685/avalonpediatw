@@ -12,7 +12,8 @@
  * 那一天已經發過就跳過（daily.ts／workflow「取出 threads-state 分支」那一步）。
  *
  * 正式發的起始日照樣擋：workflow 的閘門對 mode=auto 的手動觸發也有效，
- * 沒設 repo 變數 THREADS_LIVE_FROM 或還沒到那一天，這次觸發只會試跑（docs/THREADS.md〈自動發佈〉）。
+ * 沒有起始日（主控台設、Claude 同步進 threads_live.json 的 liveFrom；repo 變數 THREADS_LIVE_FROM 有設就蓋過）、
+ * 還沒到那一天或 paused，這次觸發只會試跑（docs/THREADS.md〈正式發的開關〉）。
  *
  * GitHub 的 schedule 保留當備援（發過就跳過）。
  *
