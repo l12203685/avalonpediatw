@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, Swords, Droplets, Vote, GitBranch, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, Swords, Droplets, Vote, SlidersHorizontal } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import { useAnalysisOverview } from '../components/analysis/useAnalysisOverview';
 import BoardsTab from '../components/analysis/tabs/BoardsTab';
@@ -14,7 +14,7 @@ import { useStatsFilter } from '../stats/statsFilter';
 import { useFilterHashSync } from '../stats/sharedFilter';
 import { rememberTarget, resolveTab, type CoreTab, type CoreTarget } from '../components/analysis/core/coreTabs';
 import {
-  AdvancedCoreTab, LakeCoreTab, MissionsCoreTab, OverviewCoreTab, StateCoreTab, TeamsVotesCoreTab,
+  AdvancedCoreTab, LakeCoreTab, MissionsCoreTab, OverviewCoreTab, TeamsVotesCoreTab,
 } from '../components/analysis/core/CoreTabViews';
 
 /**
@@ -59,8 +59,9 @@ import {
  */
 /*
  * (2026-11-17 Edward：「現在的網站數據有多過於發散了…應用比較重要 先看大方向就好 真的要看細節才深入去看 要符合我們的核心:
- *  任務結果 > 湖中女神 > 隊伍派票組合 & 黑白球投票 > 發言資訊 & 狀態」) 12 個分頁改成照核心優先序的 6 個（coreTabs.ts）：
- *  總覽（四層大方向＋可以怎麼做）→ 任務結果 → 湖中女神 → 派隊與投票 → 發言與狀態 → 進階。舊分頁的內容都搬進新分頁的小分頁，
+ *  任務結果 > 湖中女神 > 隊伍派票組合 & 黑白球投票 > 發言資訊 & 狀態」) 12 個分頁改成照核心優先序的 5 個（coreTabs.ts）：
+ *  總覽（三層大方向＋可以怎麼做）→ 任務結果 → 湖中女神 → 派隊與投票 → 進階。同日「發言與狀態不是屬於數據的一環吧…局勢樹
+ *  比較像 任務結果 x 湖中女神」：沒有發言與狀態分頁，局勢樹是任務結果的小分頁「任務 × 湖中（局勢樹）」。舊分頁的內容都搬進新分頁的小分頁，
  *  舊 id（研究連結、從這裡開始、自動發現跳轉、排行點名字）經 coreTabs.LEGACY_TABS 導到對的小分頁。
  */
 interface AnalysisTabDef { id: CoreTab; labelKey: string; icon: typeof BarChart3 }
@@ -71,7 +72,6 @@ const ANALYSIS_TABS: AnalysisTabDef[] = [
   { id: 'missions',   labelKey: 'analytics.analysis.core.tabs.missions',   icon: Swords },
   { id: 'lake',       labelKey: 'analytics.analysis.core.tabs.lake',       icon: Droplets },
   { id: 'teamsVotes', labelKey: 'analytics.analysis.core.tabs.teamsVotes', icon: Vote },
-  { id: 'state',      labelKey: 'analytics.analysis.core.tabs.state',      icon: GitBranch },
   { id: 'advanced',   labelKey: 'analytics.analysis.core.tabs.advanced',   icon: SlidersHorizontal },
 ];
 
@@ -204,9 +204,8 @@ function AnalysisSection({ focus }: { focus: { name: string; seq: number } | nul
           <p className="mb-3 text-xs leading-relaxed text-zinc-400" data-testid="analysis-howto">{t(`analytics.analysis.core.howTo.${tab}`)}</p>
           {tab === 'overview'   && <OverviewCoreTab onGo={goTab} />}
           {tab === 'missions'   && <MissionsCoreTab />}
-          {tab === 'lake'       && <LakeCoreTab />}
+          {tab === 'lake'       && <LakeCoreTab onJump={goTo} />}
           {tab === 'teamsVotes' && <TeamsVotesCoreTab />}
-          {tab === 'state'      && <StateCoreTab />}
           {tab === 'advanced'   && <AdvancedCoreTab focus={focus} />}
         </motion.div>
       </AnimatePresence>

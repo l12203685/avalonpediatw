@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ArrowRight, GitBranch } from 'lucide-react';
 import MissionAnalysis from '../MissionAnalysis';
 import RoundsAnalysis from '../RoundsAnalysis';
 import OverviewPanel from '../OverviewPanel';
@@ -18,8 +19,8 @@ import { useDiscoveryNav } from '../discovery/discoveryNav';
 import TwoRedCohortView from '../cohort/TwoRedCohortView';
 import { MoreDetails, SectionTabs, useSectionTab } from '../ui';
 import { useMinCellGames } from '../OutcomeBlocksTable';
-import CoreHeadlines, { LakeHeadline, MissionsHeadline, StateHeadline, TeamsVotesHeadline } from './CoreHeadlines';
-import { CORE_PERSIST, type AdvancedSub, type CoreTab, type MissionsSub, type TeamsVotesSub } from './coreTabs';
+import CoreHeadlines, { LakeHeadline, MissionsHeadline, TeamsVotesHeadline } from './CoreHeadlines';
+import { CORE_PERSIST, type AdvancedSub, type CoreTab, type CoreTarget, type MissionsSub, type TeamsVotesSub } from './coreTabs';
 
 /**
  * 新的數據分析分頁內容（2026-11-17 數據頁改版，coreTabs.ts）：每一層先放那一層的大方向卡（同總覽那張），再用小分頁切細節。
@@ -28,7 +29,7 @@ import { CORE_PERSIST, type AdvancedSub, type CoreTab, type MissionsSub, type Te
 
 const K = 'analytics.analysis.core';
 
-/** 總覽：四層大方向；原本的總覽（三段結算、每人結果、理論勝率連結）收進「看細節」。 */
+/** 總覽：三層大方向；原本的總覽（三段結算、每人結果、理論勝率連結）收進「看細節」。 */
 export function OverviewCoreTab({ onGo }: { onGo: (tab: CoreTab) => void }): JSX.Element {
   const { t } = useTranslation('common');
   return (
@@ -40,12 +41,16 @@ export function OverviewCoreTab({ onGo }: { onGo: (tab: CoreTab) => void }): JSX
   );
 }
 
-/** ① 任務結果：任務（通過率、任務 → 結局）／完整任務路徑／刺殺（遊戲怎麼結束的另一半）。 */
+/**
+ * ① 任務結果：任務（通過率、任務 → 結局）／任務 × 湖中（局勢樹：任務順序 × 湖的宣告 → 結果）／完整任務路徑／刺殺（遊戲怎麼結束的另一半）。
+ * 局勢樹 2026-11-17 搬進來（Edward：「局勢樹比較像 任務結果 x 湖中女神」）；湖中女神那頁有連過來的按鈕。
+ */
 export function MissionsCoreTab(): JSX.Element {
   const { t } = useTranslation('common');
   const min = useMinCellGames();
   const items: { id: MissionsSub; label: string }[] = [
     { id: 'missions', label: t(`${K}.sub.missions`) },
+    { id: 'stateTree', label: t(`${K}.sub.stateTree`) },
     { id: 'paths', label: t(`${K}.sub.paths`) },
     { id: 'assassination', label: t(`${K}.sub.assassination`) },
   ];
@@ -54,6 +59,7 @@ export function MissionsCoreTab(): JSX.Element {
       <MissionsHeadline />
       <SectionTabs items={items} persistKey={CORE_PERSIST.missions} ariaLabel={t('analytics.analysis.tabs.missions')}>
         {(view) => {
+          if (view === 'stateTree') return <StateTreeTab />;
           if (view === 'paths') return <RoundsAnalysis section="paths" lowSample={min} />;
           if (view === 'assassination') return <><AssassinationTab /><DiscoveryBlock page="assassination" /></>;
           return <><MissionAnalysis /><DiscoveryBlock page="missions" /></>;
@@ -63,11 +69,24 @@ export function MissionsCoreTab(): JSX.Element {
   );
 }
 
-/** ② 湖中女神。 */
-export function LakeCoreTab(): JSX.Element {
+/** ② 湖中女神；任務 × 湖的組合（局勢樹）在任務結果，這裡放連過去的按鈕。 */
+export function LakeCoreTab({ onJump }: { onJump?: (target: CoreTarget) => void }): JSX.Element {
+  const { t } = useTranslation('common');
   return (
     <div className="space-y-3">
       <LakeHeadline />
+      {onJump && (
+        <button
+          type="button"
+          onClick={() => onJump({ tab: 'missions', sub: 'stateTree' })}
+          className="inline-flex items-center gap-1.5 rounded-md border border-blue-800 bg-blue-900/30 px-2 py-1 text-xs font-semibold text-blue-200 hover:bg-blue-800/50"
+          data-testid="lake-statetree-link"
+        >
+          <GitBranch size={12} />
+          {t(`${K}.lake.stateTreeLink`)}
+          <ArrowRight size={12} />
+        </button>
+      )}
       <LakeTab />
       <DiscoveryBlock page="lake" />
     </div>
@@ -100,16 +119,6 @@ export function TeamsVotesCoreTab(): JSX.Element {
           return <><VotesTab /><DiscoveryBlock page="votes" /></>;
         }}
       </SectionTabs>
-    </div>
-  );
-}
-
-/** ④ 發言與狀態：發言資訊還沒收集；狀態 = 局勢樹。 */
-export function StateCoreTab(): JSX.Element {
-  return (
-    <div className="space-y-3">
-      <StateHeadline />
-      <StateTreeTab />
     </div>
   );
 }

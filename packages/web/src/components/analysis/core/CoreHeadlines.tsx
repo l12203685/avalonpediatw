@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Droplets, MessageSquare, Swords, Vote } from 'lucide-react';
+import { ArrowRight, Droplets, Swords, Vote } from 'lucide-react';
 import { useAnalysisOverview, deriveStages } from '../useAnalysisOverview';
 import { useRoundsData } from '../teams/useTeamsData';
 import { useLakeData } from '../LakeAnalysis';
@@ -11,8 +11,9 @@ import { formatRate } from '../ui';
 import type { CoreTab } from './coreTabs';
 
 /**
- * 總覽的四層大方向（2026-11-17 Edward：「先看大方向就好 真的要看細節才深入去看 要符合我們的核心: 任務結果 > 湖中女神 >
- * 隊伍派票組合 & 黑白球投票 > 發言資訊 & 狀態」「應用比較重要」）。每層一兩句：數字從資料當下算（跟著上方篩選），後面接
+ * 總覽的三層大方向（2026-11-17 Edward：「先看大方向就好 真的要看細節才深入去看 要符合我們的核心: 任務結果 > 湖中女神 >
+ * 隊伍派票組合 & 黑白球投票 > 發言資訊 & 狀態」「應用比較重要」；同日「發言與狀態不是屬於數據的一環…局勢樹比較像 任務結果 x 湖中女神」
+ * → 只列三層）。每層一兩句：數字從資料當下算（跟著上方篩選），後面接
  * 「可以怎麼做」，按鈕切到那一層的分頁看細節。數字算不出來（舊快取、篩選後太少）就只留可以怎麼做，不寫 0%。
  */
 
@@ -28,7 +29,7 @@ function gamesOf(o: Parameters<typeof outcomeRow>[0] | null | undefined): number
 }
 
 interface CardProps {
-  layer: 1 | 2 | 3 | 4;
+  layer: 1 | 2 | 3;
   icon: typeof Swords;
   title: string;
   findings: (string | null)[];
@@ -147,39 +148,15 @@ export function TeamsVotesHeadline({ onGo }: { onGo?: (tab: CoreTab) => void }):
   );
 }
 
-export function StateHeadline({ onGo }: { onGo?: (tab: CoreTab) => void }): JSX.Element {
-  const { t } = useTranslation('common');
-  const { data: rounds, loading } = useRoundsData();
-  const states = rounds?.gameStates ?? [];
-  const total = states.reduce((s, x) => s + x.games, 0);
-  const top = states[0];
-  return (
-    <HeadlineCard
-      layer={4}
-      icon={MessageSquare}
-      title={t(`${K}.state.title`)}
-      loading={loading}
-      findings={[
-        t(`${K}.state.speech`),
-        top && total > 0 ? t(`${K}.state.path`, { path: top.state, share: formatRate((top.games / total) * 100), n: top.games }) : null,
-      ]}
-      action={t(`${K}.state.action`)}
-      target="state"
-      onGo={onGo}
-    />
-  );
-}
-
-/** 總覽最上面：四層各一張卡，照核心優先序排。 */
+/** 總覽最上面：三層各一張卡，照核心優先序排（發言不是數據，不另外列；局勢樹在任務結果裡）。 */
 export default function CoreHeadlines({ onGo, intro }: { onGo: (tab: CoreTab) => void; intro?: ReactNode }): JSX.Element {
   return (
     <div className="space-y-2" data-testid="core-headlines">
       {intro}
-      <div className="grid gap-2 md:grid-cols-2">
+      <div className="grid gap-2 lg:grid-cols-3">
         <MissionsHeadline onGo={onGo} />
         <LakeHeadline onGo={onGo} />
         <TeamsVotesHeadline onGo={onGo} />
-        <StateHeadline onGo={onGo} />
       </div>
     </div>
   );

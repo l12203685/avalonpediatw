@@ -5,9 +5,10 @@
  *  - 自動發現清單與兩紅派隊分組的跳轉改到「發現與策略」，組成比較照舊在陣容強度；
  *  - 座位寫 N 家／0 家，不寫 10 號／10 家。
  * 2026-11-17 改版（Edward：「要符合我們的核心: 任務結果 > 湖中女神 > 隊伍派票組合 & 黑白球投票 > 發言資訊 & 狀態」「先看大方向」）：
- *  - 分頁照核心優先序：總覽、任務結果、湖中女神、派隊與投票、發言與狀態、進階；
+ *  - 分頁照核心優先序：總覽、任務結果、湖中女神、派隊與投票、進階（同日：「發言與狀態不是屬於數據的一環吧…局勢樹比較像
+ *    任務結果 x 湖中女神」→ 沒有發言與狀態分頁，局勢樹是任務結果的小分頁）；
  *  - 舊的 12 個分頁 id 都導得到新分頁的小分頁（研究連結、從這裡開始、自動發現跳轉、排行點名字）；
- *  - 總覽四層大方向的文字（數據＋可以怎麼做）兩種語言都有。
+ *  - 總覽三層大方向的文字（數據＋可以怎麼做）兩種語言都有。
  */
 import fs from 'fs';
 import path from 'path';
@@ -24,8 +25,8 @@ const tabIds = [...page.matchAll(/\{ id: '(\w+)',\s+labelKey: 'analytics\.analys
 const LEGACY_IDS = ['overview', 'findings', 'teams', 'votes', 'missions', 'lake', 'assassination', 'position', 'roles', 'strength', 'stateTree', 'players'];
 
 describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
-  it('分頁清單照核心優先序：總覽 → 任務結果 → 湖中女神 → 派隊與投票 → 發言與狀態 → 進階', () => {
-    expect(tabIds).toEqual(['overview', 'missions', 'lake', 'teamsVotes', 'state', 'advanced']);
+  it('分頁清單照核心優先序：總覽 → 任務結果 → 湖中女神 → 派隊與投票 → 進階（沒有發言與狀態）', () => {
+    expect(tabIds).toEqual(['overview', 'missions', 'lake', 'teamsVotes', 'advanced']);
     expect([...CORE_TABS]).toEqual(tabIds);
   });
 
@@ -35,7 +36,9 @@ describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
     expect(resolveTab('assassination')).toEqual({ tab: 'missions', sub: 'assassination' });
     expect(resolveTab('votes')).toEqual({ tab: 'teamsVotes', sub: 'votes' });
     expect(resolveTab('teams')).toEqual({ tab: 'teamsVotes', sub: 'teams' });
-    expect(resolveTab('stateTree')).toEqual({ tab: 'state' });
+    // 局勢樹 = 任務結果 × 湖中女神：任務結果的小分頁；改版初稿的 'state' 也導過去
+    expect(resolveTab('stateTree')).toEqual({ tab: 'missions', sub: 'stateTree' });
+    expect(resolveTab('state')).toEqual({ tab: 'missions', sub: 'stateTree' });
     expect(resolveTab('findings')).toEqual({ tab: 'advanced', sub: 'discovery' });
     expect(resolveTab('players')).toEqual({ tab: 'advanced', sub: 'players' });
     expect(resolveTab('teamsVotes')).toEqual({ tab: 'teamsVotes' });
@@ -53,11 +56,13 @@ describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
       }
       // 小分頁標籤沿用舊分頁的標籤
       for (const id of ['players', 'position', 'roles', 'strength', 'missions']) expect(typeof a.tabs[id]).toBe('string');
-      for (const layer of ['missions', 'lake', 'teamsVotes', 'state']) {
+      expect(a.core.tabs.state).toBeUndefined();
+      expect(a.core.lake.stateTreeLink).toBeTruthy();
+      for (const layer of ['missions', 'lake', 'teamsVotes']) {
         expect(a.core[layer].title, `${layer}.title`).toBeTruthy();
         expect(a.core[layer].action, `${layer}.action`).toMatch(/\S{6}/);
       }
-      for (const sub of ['missions', 'paths', 'assassination', 'votes', 'teams', 'twoRed']) expect(a.core.sub[sub]).toBeTruthy();
+      for (const sub of ['missions', 'stateTree', 'paths', 'assassination', 'votes', 'teams', 'twoRed']) expect(a.core.sub[sub]).toBeTruthy();
       expect(a.core.actionLabel).toBeTruthy();
       expect(a.core.details).toBeTruthy();
       for (const q of ['improve', 'situation', 'role', 'strategy']) {
