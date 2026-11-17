@@ -136,7 +136,7 @@ export interface LineWebhookStats {
   statsReplies: number;
   /** /意見 acknowledgements sent (2026-10-12, bots/feedback). */
   feedbackReplies: number;
-  /** 模擬瓦 replies sent (2026-10-14, bots/simulation): /模擬 /派 /區間 /下一步 /公布 /結束. */
+  /** 模擬瓦 replies sent (2026-10-14, bots/simulation): /模擬 /派 /區間 /公布 /結束（/下一步 2026-11-17 拿掉）. */
   simReplies: number;
   /** 補位機器人 replies sent (2026-11-03, bots/seatFiller): /補位 /機器人補位. */
   seatFillerReplies: number;
@@ -344,7 +344,7 @@ export class LineBotClient {
             await withSimLock(sim, textMessage.text, async () => {
               // A stats / 意見 command is still mirrored like any other text;
               // its answer goes back to LINE only, sharing this reply_token.
-              // 模擬 follow-ups (/派 /區間 /下一步 /公布 /結束 of an open
+              // 模擬 follow-ups (/派 /區間 /公布 /結束 of an open
               // exercise) are not mirrored unless SIM_MIRROR_FOLLOWUPS=true.
               // /回報 /認領 (2026-11-09) are not mirrored either: the bot posts
               // the formatted 【百科回報…】／【ID認領】 to DC itself.

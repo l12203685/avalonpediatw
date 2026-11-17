@@ -1,5 +1,5 @@
 /**
- * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /分析 /刺 /區間 /下一步 /公布 /結束。
+ * 模擬瓦（2026-10-14）— Discord slash 指令：/模擬 /派 /分析 /刺 /區間 /公布 /結束（/下一步 2026-11-17 拿掉）。
  *
  * 跟 LINE 同一個引擎、同一套文字（/模擬 說明 有 Discord 版）。session key = discord:頻道:使用者。
  * 每個指令先 defer，再 editReply（allowedMentions 全關；回覆不回顯使用者打的字）。
@@ -56,11 +56,14 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
       return 'team' in r ? { kind: 'propose', team: r.team } : { kind: 'usage', command: 'propose', problem: r.problem };
     }
     case COMMANDS.SIM_INTERVAL: {
-      const r = parseInterval(opts.getString(SIM_OPTIONS.CONTENT, true) ?? '');
+      const content = (opts.getString(SIM_OPTIONS.CONTENT, false) ?? '').trim();
+      if (!content) return { kind: 'read' };
+      const r = parseInterval(content);
       return 'groups' in r ? { kind: 'interval', groups: r.groups } : { kind: 'usage', command: 'interval', problem: r.problem };
     }
+    // 2026-11-17 拿掉；舊的 slash 指令在重新註冊前還可能被按到。
     case COMMANDS.SIM_NEXT:
-      return { kind: 'next' };
+      return { kind: 'removed', command: '下一步' };
     case COMMANDS.SIM_ANALYSIS:
       return { kind: 'analyze' };
     case COMMANDS.SIM_ASSASSINATE: {

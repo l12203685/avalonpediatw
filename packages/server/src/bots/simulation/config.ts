@@ -81,7 +81,7 @@ export function simLineGroupIds(env: NodeJS.ProcessEnv = process.env): Set<strin
 }
 
 /**
- * LINE 鏡像群裡、已經開著一題的人打的後續指令（/派 /區間 /下一步 /公布 /結束）要不要同步到
+ * LINE 鏡像群裡、已經開著一題的人打的後續指令（/派 /區間 /公布 /結束）要不要同步到
  * Discord／大廳（SIM_MIRROR_FOLLOWUPS）。預設不同步：機器人的回答本來就不同步，只剩一串
  * 沒有上下文的指令行在 Discord 洗版（一題 5–10 個指令）。開題的 /模擬 照 /戰績 同步一行。
  * 設 true 就跟一般文字一樣全部同步（docs/SIMULATION.md D2）。

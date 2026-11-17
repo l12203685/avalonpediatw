@@ -45,12 +45,13 @@ describe('texts', () => {
     expect(lines.length).toBeLessThanOrEqual(9);
     expect(basicHelpText('discord').split('\n').at(-1)).toBe('/help 主題 看細節（例：/help 主題:模擬）');
   });
-  it('/help 模擬 is the 模擬瓦 command list (same as /模擬 說明); /區間 and /下一步 are told apart', () => {
+  it('/help 模擬 is the 模擬瓦 command list (same as /模擬 說明); /區間 shows how 百科AI reads, /區間 789=2 checks your own; no /下一步', () => {
     expect(topicHelpText('模擬', 'line')).toBe(SIM_HELP_TEXT);
     expect(topicHelpText('模擬', 'discord')).toBe(SIM_HELP_TEXT_DISCORD);
-    expect(SIM_HELP_TEXT).toContain('寫出你對紅方分布的判斷');
+    expect(SIM_HELP_TEXT).toContain('/區間　百科AI 怎麼讀這個局面');
+    expect(SIM_HELP_TEXT).toContain('檢查你自己的區間');
     expect(SIM_HELP_TEXT).toContain('還剩幾種可能');
-    expect(SIM_HELP_TEXT).toContain('/下一步　不作答也可以：看真人當時怎麼派');
+    expect(SIM_HELP_TEXT).not.toContain('/下一步');
     expect(SIM_HELP_TEXT).toContain('/help 模擬　這份說明（/模擬 說明 也可以）');
     expect(SIM_HELP_TEXT).toContain('「0>9 x」= 0家湖 9家、說紅');
   });

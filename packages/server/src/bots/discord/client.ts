@@ -162,14 +162,10 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_INTERVAL)
-      .setDescription('模擬瓦：寫下你的區間，例如 789=2 460=1 / Your interval reading')
+      .setDescription('模擬瓦：百科AI 怎麼讀這個局面（填內容 = 檢查你的區間）/ How the bot reads it')
       .addStringOption((o) =>
-        o.setName(SIM_OPTIONS.CONTENT).setDescription('例如 789=2 460=1、7 8 9 *2、12=1-2 / Groups').setRequired(true).setMaxLength(100)
+        o.setName(SIM_OPTIONS.CONTENT).setDescription('選填：例如 789=2 460=1 = 7 8 9 裡 2 紅 / Optional: your groups').setRequired(false).setMaxLength(100)
       ),
-
-    new SlashCommandBuilder()
-      .setName(COMMANDS.SIM_NEXT)
-      .setDescription('模擬瓦：照實際對局往下走到你下一次派票 / Next decision'),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_REVEAL)
