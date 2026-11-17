@@ -12,6 +12,7 @@ import {
 import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SIM_STAGE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS } from './config';
 import {
   handleHelpCommand,
+  HELP_TOPIC_OPTION,
   handleRulesCommand,
   handleRolesCommand,
   handlePlayPlatformCommand,
@@ -25,6 +26,7 @@ import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
 import { handleSimCommand } from '../simulation/discordCommand';
+import { HELP_TOPICS } from '../help';
 import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
 import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
 import { handlePaipuFixCommand } from '../paipuFix/discordCommand';
@@ -44,7 +46,14 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
   return [
     new SlashCommandBuilder()
       .setName(COMMANDS.HELP)
-      .setDescription('Show help for all Avalon Bot commands'),
+      .setDescription('Show help for all Avalon Bot commands（加主題看細節）')
+      .addStringOption((o) =>
+        o
+          .setName(HELP_TOPIC_OPTION)
+          .setDescription('看某個功能的細節 / Details of one feature')
+          .setRequired(false)
+          .addChoices(...HELP_TOPICS.map((t) => ({ name: t, value: t })))
+      ),
 
     // 2026-10-09: kept registered (no options) so users get a pointer to
     // signage-cloud instead of "unknown command".
@@ -153,14 +162,10 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_INTERVAL)
-      .setDescription('模擬瓦：寫下你的區間，例如 789=2 460=1 / Your interval reading')
+      .setDescription('模擬瓦：百科AI 怎麼讀這個局面（填內容 = 檢查你的區間）/ How the bot reads it')
       .addStringOption((o) =>
-        o.setName(SIM_OPTIONS.CONTENT).setDescription('例如 789=2 460=1、7 8 9 *2、12=1-2 / Groups').setRequired(true).setMaxLength(100)
+        o.setName(SIM_OPTIONS.CONTENT).setDescription('選填：例如 789=2 460=1 = 7 8 9 裡 2 紅 / Optional: your groups').setRequired(false).setMaxLength(100)
       ),
-
-    new SlashCommandBuilder()
-      .setName(COMMANDS.SIM_NEXT)
-      .setDescription('模擬瓦：照實際對局往下走到你下一次派票 / Next decision'),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_REVEAL)

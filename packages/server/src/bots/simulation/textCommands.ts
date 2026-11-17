@@ -1,5 +1,5 @@
 /**
- * 模擬瓦（2026-10-14）— LINE 打字指令：/模擬 /派 /分析 /區間 /下一步 /公布（/解答）/結束。
+ * 模擬瓦（2026-10-14）— LINE 打字指令：/模擬 /派 /分析 /區間 /公布（/解答）/結束（/下一步 2026-11-17 拿掉）。
  *
  * 跟 /戰績 一樣：只回這幾個指令，一般聊天一律不回；回覆在送出成功後才 commit()（見 session.ts）。
  *
@@ -10,7 +10,7 @@
  *   - hideSimFollowUp()：鏡像群裡開著題目的人打的後續指令預設不同步到 Discord／大廳；
  *   - simHelpFor()：只回模擬的練習群（SIM_LINE_GROUP_IDS）也回 /指令。
  *
- * 2026-10-22 代答：群組裡自己沒開題的人打的寫對的後續指令（/派 /區間 /下一步 /公布 /結束）會作用在
+ * 2026-10-22 代答：群組裡自己沒開題的人打的寫對的後續指令（/派 /區間 /公布 /結束）會作用在
  * 這個聊天室最新開的一題上，所以不同步（hideSimFollowUp）照那一題算；看不懂的 /派、/區間 不代答，
  * 沒有自己的題目時照舊同步。排隊（withSimLock）是整個聊天室一條（代答要動哪一題，輪到它時才決定）。
  */
@@ -40,7 +40,7 @@ export function withSimLock<T>(req: Pick<SimRequest, 'platform' | 'chatId'>, tex
 }
 
 /**
- * 鏡像群：這段文字是後續指令（/派 /區間 /下一步 /公布 /結束，含看不懂的 /派、/區間），會作用在打的人
+ * 鏡像群：這段文字是後續指令（/派 /區間 /公布 /結束，含看不懂的 /派、/區間），會作用在打的人
  * 自己開著的題目、或（寫對的指令）代答這個聊天室裡別人的題目，而且 SIM_MIRROR_FOLLOWUPS 沒開
  * → 不同步到 Discord／大廳（答案本來就不同步，只剩指令行會洗版）。
  */
@@ -50,14 +50,14 @@ export function hideSimFollowUp(text: string, req: Pick<SimRequest, 'platform' |
   return !!cmd && getSimEngine().answersFollowUp(req, cmd);
 }
 
-/** 只回模擬的練習群裡的 /指令、/help → 模擬瓦的指令說明（LINE 版）；其他 null。 */
+/** 只回模擬的練習群裡的 /指令、/help（後面可以接 模擬）→ 模擬瓦的指令說明（LINE 版）；其他 null。 */
 export function simHelpFor(text: string): string | null {
   if (!SIM_CONFIG.commandsEnabled) return null;
-  return /^[/／]\s*(指令|help)\s*$/iu.test((text ?? '').normalize('NFKC').trim()) ? SIM_HELP_TEXT : null;
+  return /^[/／]\s*(指令|help)\s*(模擬瓦?|模拟瓦?|sim)?\s*$/iu.test((text ?? '').normalize('NFKC').trim()) ? SIM_HELP_TEXT : null;
 }
 
 /** LINE 1 對 1 的快速按鈕（群組裡不放：按鈕要放在最後一則，鏡像群的最後一則是同步訊息）。 */
-export const SIM_QUICK_REPLY_TEXTS: readonly string[] = ['/分析', '/下一步', '/公布', '/結束'];
+export const SIM_QUICK_REPLY_TEXTS: readonly string[] = ['/分析', '/區間', '/公布', '/結束'];
 
 export function simQuickReply(): { items: { type: 'action'; action: { type: 'message'; label: string; text: string } }[] } {
   return {
