@@ -36,7 +36,7 @@ import {
   type DailyPlan,
 } from '../bots/threads/publish/daily';
 import { extraRenderers } from '../bots/threads/publish/extraImages';
-import { gridOverflowStart, renderPuzzlePng } from '../bots/threads/image';
+import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, renderPuzzlePng, sheetRows } from '../bots/threads/image';
 import { SEE_IMAGE_LINE } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
@@ -628,7 +628,12 @@ describe('threads carousel', () => {
     expect(date).not.toBeNull();
     const d = date as string;
     const pv = g.viewOf(g.pickFor(d)!)!;
-    const incomplete = (): string | null => (gridOverflowStart(pv) !== null ? '牌譜太長，題目卡要第二張續圖，但續圖沒有產生' : null);
+    // 跟腳本同一個檢查：續圖要一張不少
+    const incomplete = (_d: string, images: readonly string[]): string | null => {
+      const need = gridPages(pv).length;
+      const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
+      return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
+    };
     const plan = prepareDaily(d, {
       gen: g,
       stateDir,
@@ -639,7 +644,7 @@ describe('threads carousel', () => {
       renderExtraImages: extraRenderers(g),
       imageIncomplete: incomplete,
     }) as DailyPlan;
-    expect(plan.images).toEqual([`${d}.png`, `${d}-grid.png`, `${d}-answer.png`]);
+    expect(plan.images).toEqual([`${d}.png`, `${d}-grid-1.png`, `${d}-answer.png`]);
     expect(plan.liveBlock).toBeNull();
     const urls = plan.images.map((n) => `https://raw.githubusercontent.com/o/r/sha/images/${n}`);
     const { api, calls } = fakeApi();
@@ -661,10 +666,71 @@ describe('threads carousel', () => {
       renderExtraImages: () => [{ suffix: 'answer', png: Buffer.from('a') }],
       imageIncomplete: incomplete,
     }) as DailyPlan;
-    expect(noGrid.liveBlock).toContain('續圖沒有產生');
+    expect(noGrid.liveBlock).toContain('只產生了 0 張');
     await expect(postDaily(noGrid, { api: fakeApi().api, stateDir: s2, imageUrls: ['u1', 'u2'] })).rejects.toThrow('這天不自動發');
     await expect(postDaily(plan, { api: fakeApi().api, stateDir: tmp(), imageUrls: urls.slice(0, 1) })).rejects.toThrow('公開網址');
   }, 60_000); // 畫三張圖＋排程找日子：CI 整套平行跑時會超過預設 5 秒
+
+  it('a very long record is split into as many continuation images as needed: question card → 2/N … N/N → answer card; IG over 10 images is skipped', async () => {
+    const stateDir = tmp();
+    const g = gen(stateDir);
+    const d = '2026-11-18';
+    const base = g.viewOf(g.pickFor(d)!)!;
+    // 很長的牌譜：把看得到的事件重複好幾次（只測切張，內容不重要）
+    expect(base.shown.length).toBeGreaterThan(0);
+    const copies = Math.ceil(110 / base.shown.length); // 大約 110 列：題目卡放不下，要三張以上的續圖
+    const long = { ...base, shown: Array.from({ length: copies }, () => base.shown).flat() };
+    const rows = sheetRows(long);
+    const pages = gridPages(long);
+    expect(pages.length).toBeGreaterThanOrEqual(3);
+    // 每列剛好畫一次、照順序、每張 ≤ GRID_PAGE_ROWS 列
+    expect(pages[0].start).toBe(gridOverflowStart(long));
+    for (let i = 1; i < pages.length; i++) expect(pages[i].start).toBe(pages[i - 1].end);
+    expect(pages.at(-1)?.end).toBe(rows.length);
+    for (const pg of pages) expect(pg.end - pg.start).toBeLessThanOrEqual(GRID_PAGE_ROWS);
+    const total = pages.length + 1;
+    const card = buildPuzzleSvg(long, weekdayOf(d));
+    expect(card).toContain(`牌譜接下一張（往右滑）｜1/${total}`);
+    const svgs = buildGridSvgs(long, weekdayOf(d));
+    expect(svgs).toHaveLength(pages.length);
+    svgs.forEach((svg, i) => {
+      expect(svg).toContain(`牌譜 ${i + 2}/${total}`);
+      expect(Number(/height="(\d+)"/.exec(svg)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+      if (i < svgs.length - 1) expect(svg).toContain(`牌譜接下一張（往右滑）｜${i + 2}/${total}`);
+      else expect(svg).toContain('盾牌 = 上隊');
+    });
+
+    // 發文：輪播照順序；子項數 = 題目卡＋續圖＋答案卡
+    const extras = svgs.map((_, i) => ({ suffix: `grid-${i + 1}`, png: Buffer.from(`g${i + 1}`) }));
+    const plan = prepareDaily(d, {
+      gen: g,
+      stateDir,
+      commentsDir: tmp(),
+      outDir: tmp(),
+      names,
+      renderImage: () => Buffer.from('q'),
+      renderExtraImages: () => [...extras, { suffix: 'answer', png: Buffer.from('a') }],
+      imageIncomplete: (_d, images) => (images.filter((n) => /-grid-\d+\.png$/.test(n)).length < pages.length ? 'missing' : null),
+    }) as DailyPlan;
+    expect(plan.liveBlock).toBeNull();
+    expect(plan.images).toEqual([`${d}.png`, ...extras.map((e) => `${d}-${e.suffix}.png`), `${d}-answer.png`]);
+    const urls = plan.images.map((n) => `https://x/${n}`);
+    const { api, calls } = fakeApi();
+    await postDaily(plan, { api, stateDir, imageUrls: urls });
+    const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
+    const items = creates.filter((c) => c.params.get('is_carousel_item') === 'true');
+    expect(items.map((c) => c.params.get('image_url'))).toEqual(urls);
+    const carousel = creates.find((c) => c.params.get('media_type') === 'CAROUSEL');
+    expect(carousel?.params.get('children')?.split(',')).toHaveLength(urls.length);
+
+    // IG：超過 10 張就這天不同步（不截掉），不建容器
+    const many = { ...plan, images: Array.from({ length: 11 }, (_, i) => `${d}-${i}.png`) };
+    const ig = fakeIg();
+    const r = await postInstagram(many, { api: ig.api, stateDir: tmp(), imageUrls: many.images.map((n) => `https://x/${n}.jpg`) });
+    expect(r.status).toBe('skipped');
+    expect(r.notes.join()).toContain('IG 輪播最多 10 張');
+    expect(ig.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+  }, 60_000);
 
   it('an extra image that is not needed today (grid fits on the card → null) is skipped without dropping the answer card', () => {
     const stateDir = tmp();
@@ -867,7 +933,7 @@ describe('instagram', () => {
     const { plan, stateDir } = prepared();
     const cases: { p: DailyPlan; urls: string[] }[] = [
       { p: { ...plan, liveBlock: '牌譜太長，題目卡要第二張續圖，但續圖沒有產生' }, urls: ['https://x/a.jpg'] },
-      { p: { ...plan, liveBlock: null, images: [`${plan.date}.png`, `${plan.date}-grid.png`, `${plan.date}-answer.png`] }, urls: ['https://x/a.jpg', 'https://x/c.jpg'] },
+      { p: { ...plan, liveBlock: null, images: [`${plan.date}.png`, `${plan.date}-grid-1.png`, `${plan.date}-answer.png`] }, urls: ['https://x/a.jpg', 'https://x/c.jpg'] },
     ];
     for (const { p, urls } of cases) {
       const ig = fakeIg();
@@ -880,7 +946,7 @@ describe('instagram', () => {
     expect(imageProblem({ ...plan, liveBlock: null, images: [], image: null, text: `x\n${SEE_IMAGE_LINE}` }, [])).toContain('完整局面看圖');
     // 完整的：照發
     const ok = fakeIg();
-    expect((await postInstagram({ ...plan, liveBlock: null, images: [`${plan.date}.png`, `${plan.date}-grid.png`] }, { api: ok.api, stateDir, imageUrls: ['https://x/a.jpg', 'https://x/b.jpg'] })).status).toBe('published');
+    expect((await postInstagram({ ...plan, liveBlock: null, images: [`${plan.date}.png`, `${plan.date}-grid-1.png`] }, { api: ok.api, stateDir, imageUrls: ['https://x/a.jpg', 'https://x/b.jpg'] })).status).toBe('published');
   });
 
   it('IG publishing is checked first: an unconfirmable token or missing publish permission is reported (IG skipped, Threads untouched)', async () => {

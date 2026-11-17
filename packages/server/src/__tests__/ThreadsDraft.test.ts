@@ -364,6 +364,27 @@ describe('image', () => {
     expect(renderGridPng(wedPv, 3)).toBeNull(); // 1-5 的牌譜短，一張就夠
   });
 
+  it('the 阿瓦隆百科 logo sits subdued in the middle of the small round table; the question card drops the big watermark', () => {
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
+    expect(svg).toContain('<clipPath id="tl"><circle'); // 標誌裁成圓形徽章、放在桌面正中
+    expect(svg).toMatch(/<image href="data:image\/png;base64,[^"]+" [^>]*opacity="0\.3" clip-path="url\(#tl\)"/);
+    expect(svg).not.toContain('clip-path="url(#wm)"'); // 題目卡不再鋪大浮水印
+    // 標誌在任務格和座位之前畫（在它們下面）
+    expect(svg.indexOf('url(#tl)')).toBeLessThan(svg.indexOf('1・'));
+    // 答案卡照舊有浮水印
+    expect(buildAnswerSvg(pickView(gameOf(tue), tue))).toContain('clip-path="url(#wm)"');
+  });
+
+  it('the draft markdown lists every continuation image in order', () => {
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const d = gen.draftFor('2026-11-18', { image: '2026-11-18.png' }) as ThreadsDraft;
+    d.post.gridImages = ['2026-11-18-grid-1.png', '2026-11-18-grid-2.png'];
+    const md = draftMarkdown(d);
+    expect(md.indexOf('2026-11-18-grid-1.png（牌譜 2/3）')).toBeGreaterThan(-1);
+    expect(md.indexOf('2026-11-18-grid-2.png（牌譜 3/3）')).toBeGreaterThan(md.indexOf('2026-11-18-grid-1.png'));
+  });
+
   it('the answer card lists yesterday’s blue and red roles and the result', () => {
     const [, tue] = planWeek(bank, 0) as ThreadsPick[];
     const pv = pickView(gameOf(tue), tue);

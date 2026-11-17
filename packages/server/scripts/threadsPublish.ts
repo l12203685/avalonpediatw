@@ -133,10 +133,13 @@ async function main(): Promise<number> {
           },
       renderExtraImages: flag('--no-image') ? undefined : extraRenderers(gen),
       // 牌譜太長時題目卡只畫前半、寫「往右滑」：續圖（renderExtraImages 的 grid）沒產生就正式發佈這天不發。
-      imageIncomplete: (d): string | null => {
+      // 牌譜太長時分成幾張續圖（要幾張就幾張）：一張不少地產生了才發；畫圖失敗、少了幾張，正式發佈這天不發。
+      imageIncomplete: (d, images): string | null => {
         const pick = gen.pickFor(d);
         const pv = pick ? gen.viewOf(pick) : null;
-        return pv && threadsImage.gridOverflowStart(pv) !== null ? '牌譜太長，題目卡要第二張續圖，但續圖沒有產生' : null;
+        const need = pv ? threadsImage.gridPages(pv).length : 0;
+        const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
+        return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
       },
     });
     if (!plan) {

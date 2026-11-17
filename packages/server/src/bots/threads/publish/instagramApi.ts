@@ -16,6 +16,8 @@ export const INSTAGRAM_GRAPH = 'https://graph.instagram.com';
 export const INSTAGRAM_API_VERSION = 'v21.0';
 /** IG 貼文說明的上限（字元）。 */
 export const INSTAGRAM_CAPTION_MAX = 2200;
+/** IG 輪播最多幾張。 */
+export const INSTAGRAM_CAROUSEL_MAX = 10;
 
 export interface InstagramApiOptions {
   token: string;
@@ -154,7 +156,7 @@ export class InstagramApi {
       creationId = (await this.call<{ id: string }>('POST', this.v(`/${user}/media`), { image_url: input.imageUrls[0], caption: input.caption })).id;
     } else {
       const children: string[] = [];
-      for (const url of input.imageUrls.slice(0, 10)) {
+      for (const url of input.imageUrls.slice(0, INSTAGRAM_CAROUSEL_MAX)) {
         const c = await this.call<{ id: string }>('POST', this.v(`/${user}/media`), { image_url: url, is_carousel_item: 'true' });
         await this.waitContainer(c.id);
         children.push(c.id);

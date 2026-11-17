@@ -22,7 +22,7 @@ import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday } from '../plan';
 import type { ThreadsApi, RecentPost } from './threadsApi';
-import { INSTAGRAM_CAPTION_MAX, type InstagramApi, type RecentMedia } from './instagramApi';
+import { INSTAGRAM_CAPTION_MAX, INSTAGRAM_CAROUSEL_MAX, type InstagramApi, type RecentMedia } from './instagramApi';
 
 // ─── 站長選的題（threads_picks.json） ───────────────────────────────────────
 
@@ -230,7 +230,7 @@ export interface PrepareDeps {
   /** png 是 null＝這張今天不用（例如牌譜放得進題目卡，就沒有續圖）。 */
   renderExtraImages?: (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[];
   /** 有圖的時候檢查：這張圖單獨發會不會不完整（回傳原因；null＝沒問題）。 */
-  imageIncomplete?: (date: string) => string | null;
+  imageIncomplete?: (date: string, images: readonly string[]) => string | null;
   warnings?: string[];
 }
 
@@ -267,9 +267,8 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     }
   }
 
-  // 要續圖、續圖也產生了（輪播裡有 -grid）就沒問題；續圖沒產生才擋。
-  const incomplete = image && deps.imageIncomplete ? deps.imageIncomplete(date) : null;
-  let liveBlock = incomplete && !images.some((n) => n.endsWith('-grid.png')) ? incomplete : null;
+  // 要續圖時，續圖要一張不少地產生（images 裡的 -grid-<n>）；畫圖失敗、少了幾張才擋。
+  let liveBlock = image && deps.imageIncomplete ? deps.imageIncomplete(date, images) : null;
   // 貼文的牌譜縮成「完整局面看圖」卻沒有圖：只發文字會是不完整的題目。
   if (!liveBlock && !image && draft.post.text.includes(SEE_IMAGE_LINE)) liveBlock = '貼文的牌譜寫「完整局面看圖」，但圖沒有產生';
   if (liveBlock) warnings.push(`${liveBlock}（試跑照常；正式發佈這天不發）`);
@@ -352,7 +351,7 @@ export function planSummary(plan: DailyPlan, mode: string): string[] {
 export function imageProblem(plan: Pick<DailyPlan, 'liveBlock' | 'images' | 'image' | 'text'>, imageUrls: readonly string[]): string | null {
   if (plan.liveBlock) return plan.liveBlock;
   const images = plan.images ?? (plan.image ? [plan.image] : []);
-  if (images.some((n) => n.endsWith('-grid.png')) && imageUrls.length < images.length) return `題目要續圖，但只有 ${imageUrls.length}／${images.length} 張圖有公開網址`;
+  if (images.some((n) => /-grid(-\d+)?\.png$/.test(n)) && imageUrls.length < images.length) return `題目要續圖，但只有 ${imageUrls.length}／${images.length} 張圖有公開網址`;
   if (plan.text.includes(SEE_IMAGE_LINE) && imageUrls.length === 0) return '貼文的牌譜寫「完整局面看圖」，但圖沒有公開網址';
   return null;
 }
@@ -553,6 +552,9 @@ export async function postInstagram(
   const existing = readState(deps.stateDir, plan.date);
   if (existing?.ig?.mediaId) return { status: 'already-published', mediaId: existing.ig.mediaId, permalink: existing.ig.permalink, notes: ['狀態檔已經有這一天的 IG 貼文'] };
   if (deps.imageUrls.length === 0) return { status: 'skipped', notes: ['沒有圖：IG 不能只發文字，這天不同步'] };
+  // IG 輪播最多 10 張：牌譜分太多張時 IG 這天不同步（不截掉，免得少了續圖或答案卡；Threads 照發）。
+  const igCount = Math.max(deps.imageUrls.length, plan.images?.length ?? 0);
+  if (igCount > INSTAGRAM_CAROUSEL_MAX) return { status: 'skipped', notes: [`IG 這天不同步：圖有 ${igCount} 張，IG 輪播最多 ${INSTAGRAM_CAROUSEL_MAX} 張`] };
   // 題目不完整（prepare 擋下的、少了續圖的網址）：IG 這天不同步（只記原因，不影響 Threads）。
   const missing = imageProblem(plan, deps.imageUrls);
   if (missing) return { status: 'skipped', notes: [`IG 這天不同步：${missing}`] };

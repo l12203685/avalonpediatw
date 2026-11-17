@@ -14,7 +14,9 @@
  * 一起出現」→ 題目卡 = 標題列＋左上小圓桌（0 在十二點、順時針、5 在六點；桌面中間五局任務格）＋右上你的視角＋網站牌譜頁的格子
  * （列 = 每次提議、欄 = 座位 1～0、金色盾牌 = 上隊、白／黑格 = 贊成／反對、任務列、湖中列、右邊結果與文字紀錄，文字裡值得注意的票
  * 綠色）＋題目那一行，同一張，一般局 ≤ 1080×1350（Threads 手機 4:5）。牌譜太長時先縮列高（最小 30），還放不下才把後面的列畫在
- * 第二張「牌譜（續）」（草稿 `gridImage`，只有這時候才有）。答案卡紅方在上、藍方在下。
+ * 後面的續圖（草稿 `gridImages`，只有這時候才有；站長 11/18：「發文如果圖會太長/太大, 就分成多張圖啊」→ 要幾張就分幾張，
+ * 每張都在 1350 以內，每張寫「牌譜接下一張（往右滑）｜第幾張／共幾張」）。答案卡紅方在上、藍方在下。
+ * 站長 11/18：「小圓桌能不能和阿瓦隆百科的logo結合?」→ 標誌淡淡地放在小圓桌的桌面中間（任務格在上面），題目卡就不另外鋪大浮水印。
  *
  * SVG 用字型檔（和每週排行圖同一個 Noto Sans TC，assets/fonts/）在 @resvg/resvg-js 轉 PNG，不用瀏覽器也不用系統字型，
  * GitHub Actions 上也能跑。圖裡只有座位和牌譜記號，沒有玩家名字。
@@ -84,8 +86,8 @@ function logoDataUri(): string | null {
   return logoUri;
 }
 
-function svgDoc(height: number, body: string): string {
-  const uri = logoDataUri();
+function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}): string {
+  const uri = opts.watermark === false ? null : logoDataUri();
   // 浮水印：大尺寸、置中在標題列以下的區域、圓角裁切，放在所有內容後面（站長 11/17：「我是希望背景帶有我們的"阿瓦隆百科"logo」）。
   const size = Math.min(W - 80, height - 150 - 80);
   const wx = (W - size) / 2;
@@ -278,6 +280,8 @@ export function recordLines(rows: readonly SheetRow[]): Seg[][] {
  * 跟題目在同一張圖一起出現」）：0 在正上方（十二點）、順時針 1 2 3 4 沿右邊往下、5 在正下方（六點）、6 7 8 9 沿左邊往上。
  */
 const TABLE_RX = 178;
+/** 桌面中間標誌的不透明度：看得出是阿瓦隆百科，但不搶任務格和座位標記。 */
+const TABLE_LOGO_OPACITY = 0.3;
 const TABLE_RY = 98;
 const SEAT_R = 30;
 const RING_RX = TABLE_RX + 54;
@@ -307,7 +311,7 @@ function tableMissions(rows: readonly SheetRow[], cx: number, cy: number): strin
     const q = rows.find((e): e is Extract<SheetRow, { kind: 'quest' }> => e.kind === 'quest' && e.round === r);
     const fill = q ? (q.failed ? C.redFill : C.blueFill) : C.seat;
     const stroke = q ? (q.failed ? C.red : C.blue) : C.line;
-    parts.push(rect(x, y0, bw, 64, fill, ` rx="10" stroke="${stroke}" stroke-width="2"`));
+    parts.push(rect(x, y0, bw, 64, fill, ` rx="10" fill-opacity="0.82" stroke="${stroke}" stroke-width="2"`));
     parts.push(text(x + bw / 2, y0 + 24, `${r}・${TEAM_SIZES[r - 1]}`, { size: 17, fill: q ? C.ink : C.soft, anchor: 'middle' }));
     if (q) parts.push(text(x + bw / 2, y0 + 52, q.mission, { size: q.mission.length > 4 ? 15 : 18, fill: C.yellow, anchor: 'middle', weight: true }));
     else if (FAILS_REQUIRED[r - 1] > 1) parts.push(text(x + bw / 2, y0 + 50, '2失敗', { size: 14, fill: C.faint, anchor: 'middle' }));
@@ -317,8 +321,17 @@ function tableMissions(rows: readonly SheetRow[], cx: number, cy: number): strin
 
 /** 小圓桌：桌面（任務格）＋十個座位（你藍色、拇指金圈、看到的紅／隊友紅圈、湖到的），標記字在座位外側。 */
 function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: number): string {
+  const uri = logoDataUri();
+  // 桌面中間的阿瓦隆百科標誌：裁成圓形徽章放在桌面正中、調淡，任務格和座位標記都在它上面（站長 11/18 小圓桌和 logo 結合）。
+  const r = TABLE_RY - 8;
+  const logo = uri
+    ? `<defs><clipPath id="tl"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath></defs>` +
+      `<image href="${uri}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" opacity="${TABLE_LOGO_OPACITY}" clip-path="url(#tl)" preserveAspectRatio="xMidYMid slice"/>` +
+      `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.gold}" stroke-opacity="0.25" stroke-width="2"/>`
+    : '';
   const parts: string[] = [
     `<ellipse cx="${cx}" cy="${cy}" rx="${TABLE_RX}" ry="${TABLE_RY}" fill="${C.card}" fill-opacity="0.92" stroke="${C.gold}" stroke-opacity="0.35" stroke-width="3"/>`,
+    logo,
     tableMissions(rows, cx, cy),
   ];
   const marks = seatMarks(pv);
@@ -473,6 +486,28 @@ export function gridOverflowStart(pv: PickView): number | null {
   return layout.overflow ? layout.cardRows : null;
 }
 
+/** 續圖一張最多幾列（列高用最小值，整張 ≤ GRID_TARGET_H）。 */
+const GRID_PAGE_FREE = GRID_TARGET_H - 150 - 20 - GRID_HEAD_H - 110;
+export const GRID_PAGE_ROWS = Math.floor(GRID_PAGE_FREE / GRID_ROW_MIN);
+
+/** 題目卡放不下的列分成幾張續圖（每張平均分、都 ≤ GRID_PAGE_ROWS 列）：每張的 [start, end)。放得下回傳 []。 */
+export function gridPages(pv: PickView): { start: number; end: number }[] {
+  const rows = sheetRows(pv);
+  const layout = cardLayout(rows.length);
+  if (!layout.overflow) return [];
+  const rest = rows.length - layout.cardRows;
+  const n = Math.ceil(rest / GRID_PAGE_ROWS);
+  const per = Math.ceil(rest / n);
+  const pages: { start: number; end: number }[] = [];
+  for (let start = layout.cardRows; start < rows.length; start += per) pages.push({ start, end: Math.min(rows.length, start + per) });
+  return pages;
+}
+
+/** 「牌譜接下一張」的提示：k = 這是第幾張圖（題目卡是第 1 張），total = 牌譜一共幾張圖。 */
+function nextHint(k: number, total: number): string {
+  return `牌譜接下一張（往右滑）｜${k}/${total}`;
+}
+
 /** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、到目前的牌譜格子、題目。 */
 export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const role = pv.game.seatRoles[pv.pick.seat - 1];
@@ -517,36 +552,46 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     : '三藍：輪到你刺殺。誰是梅林？';
   parts.push(text(40, y, prompt, { size: 36, fill: C.blue, weight: true }));
   y += 36;
-  parts.push(text(40, y, layout.overflow ? '牌譜太長：後面的列在下一張圖（往右滑）' : voteLegend(rows), { size: 21, fill: C.faint }));
+  parts.push(text(40, y, layout.overflow ? nextHint(1, gridPages(pv).length + 1) : voteLegend(rows), { size: 21, fill: C.faint }));
   y += 36;
   parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
   y += 20;
-  return svgDoc(y, parts.join(''));
+  // 標誌已經在小圓桌中間：題目卡不再鋪大浮水印。
+  return svgDoc(y, parts.join(''), { watermark: false });
 }
 
 /**
- * 牌譜續圖（輪播第二張）：題目卡放不下的後面幾列，同樣的格子（欄名照畫）。放得下時不產生這張（回傳 null）。
+ * 牌譜續圖：題目卡放不下的列，要幾張就分幾張（gridPages），同樣的格子（欄名照畫）。放得下時回傳 []。
+ * 標題寫第幾張／共幾張；不是最後一張的寫「牌譜接下一張（往右滑）」，最後一張寫記號說明。
  */
-export function buildGridSvg(pv: PickView, weekday: number): string | null {
+export function buildGridSvgs(pv: PickView, weekday: number): string[] {
   const rows = sheetRows(pv);
-  const start = gridOverflowStart(pv);
-  if (start === null) return null;
-  const rest = rows.slice(start);
-  const rh = Math.max(GRID_ROW_MIN, Math.min(GRID_ROW_MAX, Math.floor((GRID_TARGET_H - 150 - 20 - GRID_HEAD_H - 110) / Math.max(1, rest.length))));
-  const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・牌譜（續）`, pv.exerciseId)];
-  let y = 150 + 20;
-  parts.push(gridHead(pv, y));
-  y += GRID_HEAD_H;
-  for (const r of rest) {
-    parts.push(gridRow(r, y, rh));
-    y += rh;
-  }
-  y += 50;
-  parts.push(text(40, y, voteLegend(rows), { size: 21, fill: C.faint }));
-  y += 36;
-  parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
-  y += 24;
-  return svgDoc(Math.max(y, 600), parts.join(''));
+  const pages = gridPages(pv);
+  const total = pages.length + 1;
+  return pages.map(({ start, end }, i) => {
+    const part = rows.slice(start, end);
+    const k = i + 2;
+    const rh = Math.max(GRID_ROW_MIN, Math.min(GRID_ROW_MAX, Math.floor(GRID_PAGE_FREE / Math.max(1, part.length))));
+    const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・牌譜 ${k}/${total}`, pv.exerciseId)];
+    let y = 150 + 20;
+    parts.push(gridHead(pv, y));
+    y += GRID_HEAD_H;
+    for (const r of part) {
+      parts.push(gridRow(r, y, rh));
+      y += rh;
+    }
+    y += 50;
+    parts.push(text(40, y, k < total ? nextHint(k, total) : voteLegend(rows), { size: 21, fill: C.faint }));
+    y += 36;
+    parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
+    y += 24;
+    return svgDoc(Math.max(y, 600), parts.join(''));
+  });
+}
+
+/** 第一張續圖（放得下時 null）；要全部的續圖用 buildGridSvgs。 */
+export function buildGridSvg(pv: PickView, weekday: number): string | null {
+  return buildGridSvgs(pv, weekday)[0] ?? null;
 }
 
 // ─── 答案卡 ──────────────────────────────────────────────────────────────
@@ -594,10 +639,14 @@ export function renderPuzzlePng(pv: PickView, weekday: number, opts: { fontFile?
   return svgToPng(buildPuzzleSvg(pv, weekday), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
 }
 
-/** 牌譜續圖 PNG（輪播第二張）；牌譜放得進題目卡時回傳 null（不附這張）。 */
+/** 牌譜續圖 PNG，照順序（要幾張就幾張）；牌譜放得進題目卡時回傳 []。 */
+export function renderGridPngs(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer[] {
+  return buildGridSvgs(pv, weekday).map((svg) => svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE));
+}
+
+/** 第一張續圖 PNG（放得下時 null）；要全部的續圖用 renderGridPngs。 */
 export function renderGridPng(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer | null {
-  const svg = buildGridSvg(pv, weekday);
-  return svg === null ? null : svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
+  return renderGridPngs(pv, weekday, opts)[0] ?? null;
 }
 
 /** 答案圖 PNG（公布完整答案的日子才附）。 */
