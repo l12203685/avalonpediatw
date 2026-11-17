@@ -15,6 +15,7 @@ import { SIM_CONFIG } from '../simulation/config';
 import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
 import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from '../paipuFix/commands';
 import { CLAIM_HELP_TEXT, CLAIM_USAGE, REPORT_HELP_TEXT, REPORT_USAGE } from '../reports/commands';
+import { CORRECTION_HELP_TEXT, CORRECTION_USAGE } from '../recordCorrection/commands';
 import { helpTopicOf, topicHelpText } from '../help';
 
 /** Option name of /help (2026-11-17: /help 主題:模擬 → that topic's details). */
@@ -108,7 +109,7 @@ export async function handleHelpCommand(interaction: CommandInteraction): Promis
       },
       {
         name: '📮 回報與 ID 認領 / Reports & ID claims',
-        value: `\`${REPORT_USAGE.discord}\` ${REPORT_HELP_TEXT}\n\`${CLAIM_USAGE.discord}\` ${CLAIM_HELP_TEXT}（管理者核准後生效）`,
+        value: `\`${REPORT_USAGE.discord}\` ${REPORT_HELP_TEXT}\n\`${CLAIM_USAGE.discord}\` ${CLAIM_HELP_TEXT}（管理者核准後生效）\n\`${CORRECTION_USAGE.discord}\` ${CORRECTION_HELP_TEXT}`,
         inline: false,
       },
       {

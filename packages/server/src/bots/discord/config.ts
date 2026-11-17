@@ -85,6 +85,8 @@ export const COMMANDS = {
   // deleted DC forum 百科問題回報; posts to #同步閒聊 and the LINE group.
   REPORT: '回報',
   CLAIM: '認領',
+  // 2026-11-17 牌譜更正 (bots/recordCorrection): look up a record, or send a correction (posted like /回報).
+  CORRECTION: '更正',
   // 2026-10-13: the admin-only /社群週報 (paid weekly digest) was removed;
   // registerCommands() overwrites the whole command list, so it disappears
   // from Discord on the next deploy (see client.ts).
@@ -125,6 +127,12 @@ export const SEAT_FILLER_OPTIONS = {
 /** Option names of /回報 (bots/reports). */
 export const REPORT_OPTIONS = {
   KIND: '類型',
+  CONTENT: '內容',
+} as const;
+
+/** Option names of /更正 (bots/recordCorrection). */
+export const CORRECTION_OPTIONS = {
+  ID: '局號',
   CONTENT: '內容',
 } as const;
 

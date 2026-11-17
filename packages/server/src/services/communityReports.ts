@@ -24,14 +24,17 @@ import { getChatMirror } from '../bots/ChatMirror';
 
 // ─── 回報的類型與欄位（原 feedbackForum.ts） ────────────────────────────────────────
 
-export type FeedbackKind = 'bug' | 'suggestion' | 'content';
+/** correction（2026-11-17）＝ bot 指令 /更正 的牌譜更正；網站的問題回報表單不收（FEEDBACK_KINDS 沒有它）。 */
+export type FeedbackKind = 'bug' | 'suggestion' | 'content' | 'correction';
 
+/** 網站 POST /api/feedback 收的類型（不含 correction）。 */
 export const FEEDBACK_KINDS: readonly FeedbackKind[] = ['bug', 'suggestion', 'content'];
 
 export const FEEDBACK_KIND_LABEL: Record<FeedbackKind, string> = {
   bug: '錯誤',
   suggestion: '建議',
   content: '文章內容',
+  correction: '牌譜更正',
 };
 
 export const FEEDBACK_MESSAGE_MAX = 1000;
