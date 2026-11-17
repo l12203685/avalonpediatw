@@ -489,9 +489,9 @@ describe('image', () => {
     }
   });
 
-  it('official art: known-alignment seats get the faded team medallion center, the vote grid uses the mission shield; each image is embedded once', () => {
-    for (const f of ['seat-good.png', 'seat-evil.png', 'mission-shield.png']) expect(fs.existsSync(path.join(THREADS_ASSET_DIR, f))).toBe(true);
-    // 梅林看到的紅：紅色陣營圖；格子：任務盾牌圖
+  it('official art: known-alignment seats get the faded team medallion center (embedded once); the vote grid keeps the drawn yellow shield', () => {
+    for (const f of ['seat-good.png', 'seat-evil.png']) expect(fs.existsSync(path.join(THREADS_ASSET_DIR, f))).toBe(true);
+    // 梅林看到的紅：紅色陣營圖；格子：畫的黃色盾牌（站長 11/17「盾牌原本的好像比較好」）
     let pv: ReturnType<typeof pickView> | null = null;
     for (let w = 0; w < 8 && !pv; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
@@ -510,7 +510,11 @@ describe('image', () => {
     const card = buildPuzzleSvg(pv!, 3);
     expect((card.match(/class="seat-side seat-evil"/g) ?? []).length).toBe(seen.length);
     expect(card.match(/<symbol id="seat-evil"/g)?.length).toBe(1); // 只放一次
-    expect(svg).toContain('href="#mission-shield"');
+    expect(svg).not.toContain('mission-shield');
+    expect(svg).toMatch(/<path [^>]*d="M12 2 [^>]*fill="#facc15"[^>]*class="team-shield"\/>/);
+    // 盾牌放到列高允許的最大：精縮列高 19 時看得到的高度（24 格裡佔 20）至少 15px
+    const k = Number(/scale\(([\d.]+)\)" d="M12 2 /.exec(svg)?.[1]);
+    expect(k * 20).toBeGreaterThanOrEqual(15);
     expect(card).toMatch(/class="seat-side seat-evil"[^>]*/);
     expect(/<use href="#seat-evil"[^>]*opacity="0\.(\d+)"/.exec(card)).not.toBeNull(); // 淡化
     // 湖中鏈推出的好人：藍色陣營圖
@@ -527,8 +531,10 @@ describe('image', () => {
     const roles = ['loyal', 'merlin', 'percival', 'assassin', 'morgana', 'loyal', 'mordred', 'loyal', 'loyal', 'oberon'];
     const pv = { game: { seatRoles: roles }, pick: { seat: 1 }, view: { sight: { kind: 'loyal' } } } as never;
     const marks = seatMarks(pv, [lake(2, 1, 9, 'o', 'good'), lake(3, 9, 4, 'x'), lake(3, 9, 6, 'o')]);
-    const blue = marks.get(1)?.color; // 你
-    expect(marks.get(9)).toMatchObject({ label: '湖到好', color: blue });
+    const blue = marks.get(9)?.color;
+    expect(marks.get(9)).toMatchObject({ label: '湖到好', side: 'good' });
+    expect(marks.get(1)?.label).toBe('你');
+    expect(marks.get(1)?.color).not.toBe(blue); // 你是黃圈
     expect(marks.get(6)).toMatchObject({ label: '湖鏈：好', color: blue });
     expect(marks.get(4)?.label).toBe('湖鏈：紅');
     expect(marks.get(4)?.color).not.toBe(blue);
@@ -572,7 +578,8 @@ describe('image', () => {
     expect(good.get(4)).toMatchObject({ label: '梅林' });
     expect(good.get(6)).toMatchObject({ label: '莫甘娜' });
     expect(good.get(4)?.color).not.toBe(good.get(6)?.color);
-    expect(good.get(4)?.color).toBe(good.get(2)?.color); // 藍（跟「你」同色）
+    expect(good.get(4)).toMatchObject({ side: 'good', color: seatMarks(pv, [lake(2, 2, 1, 'o', 'good')]).get(1)?.color }); // 藍（跟湖到好同色）
+    expect(good.get(4)?.split).toBeFalsy();
     // 自己湖到拇指 6 是紅 → 6 莫甘娜、4 梅林
     const red = seatMarks(pv, [lake(2, 2, 6, 'x', 'red')]);
     expect(red.get(6)?.label).toBe('莫甘娜');
@@ -584,11 +591,48 @@ describe('image', () => {
     expect(viaChain.get(6)?.label).toBe('莫甘娜');
     const notes = lakeEntries(chainRows, lakeKnowledge(pv, chainRows).chain, { thumbs: [4, 6] }).map((e) => e.notes.map((n) => n.t));
     expect(notes[1]).toEqual(['1 是好人 → 4 是好人', '4 是好人 → 4 是梅林、6 是莫甘娜']); // 疊在鏈的註記下面
-    // 還沒湖到拇指：照舊「拇指」
+    // 還沒湖到拇指：「拇指?」半圈藍半圈紅（站長 11/17「派西維爾看到的姆指可以是半圈藍半圈紅 然後打問號」），沒有陣營圖
     const before = seatMarks(pv, [lake(2, 2, 1, 'o', 'good')]);
-    expect(before.get(4)?.label).toBe('拇指');
-    expect(before.get(6)?.label).toBe('拇指');
+    expect(before.get(4)).toMatchObject({ label: '拇指?', split: true });
+    expect(before.get(6)).toMatchObject({ label: '拇指?', split: true });
+    expect(before.get(4)?.side).toBeUndefined();
     expect(resolveThumbs([4, 6], new Map())).toBeNull();
+  });
+
+  it('your own seat is a yellow ring whatever your side (a red viewer is not blue); red viewers see teammates red; unresolved thumbs are split rings on the card', () => {
+    const roles = ['loyal', 'percival', 'loyal', 'merlin', 'assassin', 'morgana', 'mordred', 'loyal', 'loyal', 'oberon'];
+    const fakePv = (seat: number, sight: object) => ({ game: { seatRoles: roles }, pick: { seat }, view: { sight } }) as never;
+    const loyal = seatMarks(fakePv(1, { kind: 'loyal' }), []).get(1);
+    const assassin = seatMarks(fakePv(5, { kind: 'evil', mates: [6, 7] }), []);
+    const merlin = seatMarks(fakePv(4, { kind: 'merlin', seen: [5, 6, 10] }), []);
+    expect(assassin.get(5)).toEqual(loyal); // 刺客自己：跟忠臣一樣的黃圈「你」
+    expect(merlin.get(4)).toEqual(loyal);
+    expect(assassin.get(6)).toMatchObject({ label: '隊友', side: 'evil', color: merlin.get(5)?.color });
+    expect(assassin.get(7)?.color).toBe(merlin.get(5)?.color);
+    expect([loyal?.color, assassin.get(6)?.color]).not.toContain(seatMarks(fakePv(1, { kind: 'loyal' }), [{ kind: 'lake', round: 2, holderSeat: 1, targetSeat: 9, claim: 'o', seen: 'good' }] as never).get(9)?.color);
+
+    // 畫在卡上：紅方的題目，自己的座位是黃圈；派西沒分出來的兩根拇指各兩段半圈（圓桌＋格子欄名）
+    let red: ReturnType<typeof pickView> | null = null;
+    for (let w = 0; w < 8 && !red; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const v = pickView(gameOf(pick), pick);
+        if (!sheetRows(v).some((r) => r.kind === 'lake')) {
+          red = v;
+          break;
+        }
+      }
+    }
+    expect(red).not.toBeNull();
+    const others = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== red!.pick.seat);
+    const asRed = { ...red!, view: { ...red!.view, sight: { kind: 'evil', mates: others.slice(0, 2) } } } as typeof red;
+    const card = buildPuzzleSvg(asRed!, 3);
+    expect(card).toContain(`r="30" fill="none" stroke="${loyal?.color}"`);
+    expect((card.match(/class="seat-side seat-evil"/g) ?? []).length).toBe(2);
+    const asPercival = { ...red!, view: { ...red!.view, sight: { kind: 'percival', thumbs: others.slice(0, 2) } } } as typeof red;
+    const pcard = buildPuzzleSvg(asPercival!, 3);
+    expect((pcard.match(/class="thumb-ring"/g) ?? []).length).toBe(8);
+    expect(pcard).toContain('拇指?');
+    expect(pcard).not.toContain('class="seat-side');
   });
 
   it('the question card shows every lake known at the question moment; earlier rows alone did not know it yet', () => {

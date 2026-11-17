@@ -54,7 +54,9 @@ const C = {
   green: '#4ade80', // 記號 +／-、湖、任務成功
   greenFill: '#14402a',
   yellow: '#facc15', // 任務結果 ooox
-  gold: '#fbbf24', // 拇指
+  gold: '#fbbf24', // 標誌外框
+  me: '#facc15', // 你的座位（站長 11/17：「自己的位置可以是黃色圈圈」，不管你是哪一方）
+  meFill: '#3a300a',
   seat: '#1f1f24',
   line: '#3f3f46',
   card: '#1c1c21',
@@ -93,8 +95,9 @@ function logoDataUri(): string | null {
 
 /**
  * 官方配件圖（站長 11/18：「直接用官方圖 只是可以淡化 像湖中湖到好可以用湖中陣營的圖 中間的圓圈 淡化 盾牌也是」）：
- * 網站 packages/web/public/avalon-assets 的 team-good.jpg／team-evil.jpg 中間的圓、mission-shield.jpg（去掉黑底），
- * 複本放在 assets/threads/（seat-good.png、seat-evil.png、mission-shield.png）。每張圖只放一次（symbol），用的地方 <use>。
+ * 網站 packages/web/public/avalon-assets 的 team-good.jpg／team-evil.jpg 中間的圓，複本放在 assets/threads/
+ * （seat-good.png、seat-evil.png）。每張圖只放一次（symbol），用的地方 <use>。格子的盾牌試過官方任務盾牌圖，
+ * 站長 11/17「盾牌原本的好像比較好」→ 畫回黃色盾牌。
  */
 export const THREADS_ASSET_DIR = path.resolve(__dirname, '..', '..', '..', 'assets', 'threads');
 const assetUris = new Map<string, string | null>();
@@ -106,7 +109,7 @@ function assetUri(file: string): string | null {
   return assetUris.get(file) ?? null;
 }
 
-/** 文件裡用到的配件圖 symbol（seat-good、seat-evil、mission-shield）。 */
+/** 文件裡用到的配件圖 symbol（seat-good、seat-evil）。 */
 function assetSymbols(body: string): string {
   const defs: string[] = [];
   const add = (id: string, file: string, w: number, h: number): void => {
@@ -116,7 +119,6 @@ function assetSymbols(body: string): string {
   };
   add('seat-good', 'seat-good.png', 160, 160);
   add('seat-evil', 'seat-evil.png', 160, 160);
-  add('mission-shield', 'mission-shield.png', 74, 99);
   return defs.length ? `<defs>${defs.join('')}</defs>` : '';
 }
 
@@ -307,11 +309,13 @@ export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<numb
 }
 
 /** 每個座位的標記；known＝到那一刻為止看得到的列（題目卡算到出題那一刻）。 */
-export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string; side?: 'good' | 'evil' }> {
-  const marks = new Map<number, { label: string; color: string; side?: 'good' | 'evil' }>();
+export type SeatMark = { label: string; color: string; side?: 'good' | 'evil'; /** 還分不出來的拇指：半圈藍半圈紅 */ split?: boolean };
+export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, SeatMark> {
+  const marks = new Map<number, SeatMark>();
   const s = pv.view.sight;
-  // 圈的顏色：知道陣營的座位一律好人藍、壞人紅（站長 11/18：「湖中鏈可知的陣營也全都一起改座位圈圈顏色」）；分不出來的拇指金色。
-  if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指', color: C.gold }));
+  // 圈的顏色：知道陣營的座位一律好人藍、壞人紅（站長 11/18：「湖中鏈可知的陣營也全都一起改座位圈圈顏色」）；
+  // 分不出來的拇指半圈藍半圈紅、打問號（站長 11/17：「派西維爾看到的姆指可以是半圈藍半圈紅 然後打問號」）。
+  if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指?', color: C.ink, split: true }));
   if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red, side: 'evil' }));
   if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red, side: 'evil' }));
   // 自己湖到的、湖中鏈推出的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉（夜裡已經知道的不重複）。
@@ -328,7 +332,8 @@ export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number,
     marks.set(resolved.merlin, { label: '梅林', color: C.blue, side: 'good' });
     marks.set(resolved.morgana, { label: '莫甘娜', color: C.red, side: 'evil' });
   }
-  marks.set(pv.pick.seat, { label: '你', color: C.blue });
+  // 你：黃圈，不看陣營（站長 11/17：「自己的角色(刺客) 不應該是藍色」）
+  marks.set(pv.pick.seat, { label: '你', color: C.me });
   return marks;
 }
 
@@ -579,6 +584,16 @@ export function lakeLines(known: readonly SheetRow[], cx: number, cy: number): s
  * 小圓桌：十個座位排成正圓、圍著中間放大的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「座位不要橢圓 直接圍繞 logo」）。
  * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。每局出任務的座位寫在右邊的任務格裡，湖也寫在右邊。
  */
+/** 座位的圈：一般一種顏色；還分不出來的拇指左半圈藍、右半圈紅。 */
+function seatRing(x: number, y: number, r: number, m: SeatMark | undefined, width: number): string {
+  if (m?.split) {
+    const arc = (from: number, to: number, color: string): string =>
+      `<path d="M${x} ${y + from * r} A${r} ${r} 0 0 1 ${x} ${y + to * r}" fill="none" stroke="${color}" stroke-width="${width}" class="thumb-ring"/>`;
+    return arc(1, -1, C.blue) + arc(-1, 1, C.red); // 下→左→上 藍；上→右→下 紅
+  }
+  return `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${m ? m.color : C.line}" stroke-width="${m ? width : 2}"/>`;
+}
+
 function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetRow[]): string {
   const uri = logoDataUri();
   const r = TABLE_LOGO_R;
@@ -594,12 +609,12 @@ function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetR
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
     const m = marks.get(seat);
     const me = seat === pv.pick.seat;
-    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.blueFill : C.seat}"/>`);
+    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.meFill : C.seat}"/>`);
     // 知道陣營的座位：圈裡放官方陣營圖中間的圓（淡化），數字照樣看得清楚
     if (m?.side && !me && assetUri(`seat-${m.side}.png`)) {
       parts.push(`<use href="#seat-${m.side}" x="${x - SEAT_R}" y="${y - SEAT_R}" width="${2 * SEAT_R}" height="${2 * SEAT_R}" opacity="0.42" class="seat-side seat-${m.side}"/>`);
     }
-    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="none" stroke="${m ? m.color : C.line}" stroke-width="${m ? 5 : 2}"/>`);
+    parts.push(seatRing(x, y, SEAT_R, m, 5));
     parts.push(text(x, y + 10, seatChar(seat), { size: 28, anchor: 'middle', weight: true }));
     if (m) {
       // 標記字放在座位外側：上半圈在上面、下半圈在下面、左右兩邊在外側。
@@ -616,12 +631,7 @@ function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetR
 
 /** 盾牌（上隊）：24×24 的路徑，跟網站的 ShieldIcon 同一種形狀。 */
 function shield(cx: number, cy: number, size: number): string {
-  // 官方的任務盾牌圖（稍微淡一點，白／黑格還看得出來）；沒有圖檔時畫原本的盾牌
-  if (assetUri('mission-shield.png')) {
-    const h = size;
-    const w = (h * 74) / 99;
-    return `<use href="#mission-shield" x="${(cx - w / 2).toFixed(1)}" y="${(cy - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" opacity="0.9" class="team-shield"/>`;
-  }
+  // 站長 11/17：「盾牌原本的好像比較好」→ 畫回黃色盾牌（不用官方任務盾牌圖）
   const k = size / 24;
   const tx = cx - 12 * k;
   const ty = cy - 12 * k;
@@ -656,7 +666,8 @@ function gridHead(pv: PickView, y: number, known: readonly SheetRow[] = sheetRow
   for (let seat = 1; seat <= 10; seat++) {
     const m = marks.get(seat);
     const cx = seatX(seat) + SEAT_W / 2;
-    if (m) parts.push(`<circle cx="${cx}" cy="${hy - 8}" r="20" fill="${seat === pv.pick.seat ? C.blueFill : 'none'}" stroke="${m.color}" stroke-width="3"/>`);
+    if (m && seat === pv.pick.seat) parts.push(`<circle cx="${cx}" cy="${hy - 8}" r="20" fill="${C.meFill}"/>`);
+    if (m) parts.push(seatRing(cx, hy - 8, 20, m, 3));
     parts.push(text(cx, hy, seatChar(seat), { size: 24, fill: m ? m.color : C.ink, anchor: 'middle', weight: true }));
   }
   parts.push(text(RES_X + RES_W / 2, hy, '結果', { size: 20, fill: C.faint, anchor: 'middle' }));
@@ -678,7 +689,8 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
       const fill = v === 'approve' ? '#ffffff' : v === 'reject' ? '#000000' : v === 'unknown' ? UNKNOWN_VOTE_FILL : '#18181b';
       parts.push(rect(seatX(seat), y, SEAT_W, rh, fill, ' stroke="#27272a" stroke-width="1"'));
       if (v === 'unknown' && !r.team.includes(seat)) parts.push(text(seatX(seat) + SEAT_W / 2, mid, '？', { size: fs - 2, fill: '#d4d4d8', anchor: 'middle' }));
-      if (r.team.includes(seat)) parts.push(shield(seatX(seat) + SEAT_W / 2, y + rh / 2, Math.min(SEAT_W, rh) - 6));
+      // 盾牌在 24 格裡佔 2～22 高：放到列高允許的最大（上下各留 1.5px）
+      if (r.team.includes(seat)) parts.push(shield(seatX(seat) + SEAT_W / 2, y + rh / 2, Math.min(SEAT_W, ((rh - 3) * 24) / 20)));
     }
     const res = r.forced ? '強制' : r.approves === null ? '—' : `${r.approves}票${r.approved ? '過' : ''}`;
     parts.push(text(RES_X + RES_W / 2, mid, res, { size: fs - 2, fill: r.forced ? '#fcd34d' : r.approved ? '#6ee7b7' : C.faint, anchor: 'middle' }));
