@@ -1,0 +1,559 @@
+{
+  "version": 1,
+  "asOf": "2026-11-17",
+  "mainCommit": "caf58fc",
+  "kinds": {
+    "source": "人工或外部來源（正本候選）",
+    "derived": "由程式產生",
+    "snapshot": "凍結快照",
+    "legacy": "舊資料，待封存",
+    "code": "程式",
+    "doc": "文件"
+  },
+  "sources": [
+    {
+      "id": "sheet-paipu",
+      "domain": "records",
+      "path": "Google Sheet「牌譜」分頁",
+      "kind": "source",
+      "producedBy": "人工登錄",
+      "derivedFrom": [],
+      "consumers": [
+        "generate_cache.py",
+        "discord_records_export.py"
+      ],
+      "refresh": "隨時",
+      "targetPhase": 1,
+      "notes": "實戰正本"
+    },
+    {
+      "id": "sheet-sim",
+      "domain": "records",
+      "path": "Google Sheet「模擬瓦」分頁",
+      "kind": "source",
+      "producedBy": "人工登錄",
+      "derivedFrom": [],
+      "consumers": [
+        "discord_records_export.py --sim-sheet"
+      ],
+      "refresh": "隨時",
+      "targetPhase": 1,
+      "notes": "模擬局，永不進數據/AI"
+    },
+    {
+      "id": "discord-forum",
+      "domain": "records",
+      "path": "Discord 牌譜論壇",
+      "kind": "source",
+      "producedBy": "社群貼文",
+      "derivedFrom": [],
+      "consumers": [
+        "discord_records_export.py"
+      ],
+      "refresh": "隨時",
+      "targetPhase": 1,
+      "notes": "部分讀不懂（676 篇）"
+    },
+    {
+      "id": "site-games",
+      "domain": "records",
+      "path": "avalon-game-records/games/",
+      "kind": "source",
+      "producedBy": "GitHubGameArchive.ts",
+      "derivedFrom": [],
+      "consumers": [
+        "game-records-exports.yml"
+      ],
+      "refresh": "有人在站上打就寫",
+      "targetPhase": 2,
+      "notes": "站上對局，接總庫時分開標示"
+    },
+    {
+      "id": "games-cache",
+      "domain": "records",
+      "path": "packages/server/games_cache.json",
+      "kind": "derived",
+      "producedBy": "generate_cache.py（refresh-analysis-cache.yml）",
+      "derivedFrom": [
+        "sheet-paipu",
+        "discord-forum"
+      ],
+      "consumers": [
+        "shared/src/stats",
+        "web analytics",
+        "humanPrBenchmark.ts",
+        "fitBeliefLikelihoods.ts",
+        "strongCohort.ts",
+        "Threads S"
+      ],
+      "refresh": "每晚",
+      "targetPhase": 2,
+      "notes": "2,336 局"
+    },
+    {
+      "id": "records-cache",
+      "domain": "records",
+      "path": "packages/server/records_cache.json",
+      "kind": "derived",
+      "producedBy": "discord_records_export.py + records_merge.py",
+      "derivedFrom": [
+        "discord-forum",
+        "sheet-paipu",
+        "sheet-sim",
+        "games-cache"
+      ],
+      "consumers": [
+        "web 牌譜紀錄頁",
+        "模擬瓦公布連結",
+        "Threads 候選"
+      ],
+      "refresh": "每晚",
+      "targetPhase": 2,
+      "notes": "3,685 篇，可讀 3,009"
+    },
+    {
+      "id": "sheets-cache",
+      "domain": "records",
+      "path": "packages/server/sheets_cache.json",
+      "kind": "snapshot",
+      "producedBy": "手動（2026-04-03 快照，最後改 2026-10-10）",
+      "derivedFrom": [
+        "sheet-paipu"
+      ],
+      "consumers": [
+        "assassinModelWeights.ts",
+        "AssassinModel.ts",
+        "GoodLakeInfo.ts",
+        "invariants/sources.ts",
+        "benchmark/sheetsReplay.ts",
+        "buildSimBank.ts"
+      ],
+      "refresh": "不更新",
+      "targetPhase": 2,
+      "notes": "凍結快照；第 2 階段淘汰"
+    },
+    {
+      "id": "sim-bank",
+      "domain": "records",
+      "path": "packages/server/sim_bank.json",
+      "kind": "derived",
+      "producedBy": "scripts/buildSimBank.ts",
+      "derivedFrom": [
+        "sheets-cache"
+      ],
+      "consumers": [
+        "模擬瓦",
+        "Threads 出題"
+      ],
+      "refresh": "手動",
+      "targetPhase": 2,
+      "notes": "1,778 局，讀的是凍結快照"
+    },
+    {
+      "id": "content-data",
+      "domain": "records",
+      "path": "content/_data/*.yaml|*.csv",
+      "kind": "legacy",
+      "producedBy": "舊匯出",
+      "derivedFrom": [
+        "sheet-paipu"
+      ],
+      "consumers": [
+        "parser.yml（只檢查可讀）",
+        "roleVideos.ts（video_manifest.yaml）"
+      ],
+      "refresh": "不更新",
+      "targetPhase": "cleanup",
+      "notes": "含個人資料卡，需確認公開性"
+    },
+    {
+      "id": "data-sheets-export",
+      "domain": "records",
+      "path": "data/sheets_export/",
+      "kind": "legacy",
+      "producedBy": "舊匯出",
+      "derivedFrom": [
+        "sheet-paipu"
+      ],
+      "consumers": [],
+      "refresh": "不更新",
+      "targetPhase": "cleanup",
+      "notes": ""
+    },
+    {
+      "id": "old-platform",
+      "domain": "records",
+      "path": "avalon-game-platform/",
+      "kind": "legacy",
+      "producedBy": "舊平台複本",
+      "derivedFrom": [],
+      "consumers": [],
+      "refresh": "不更新",
+      "targetPhase": "cleanup",
+      "notes": "8.6 MB"
+    },
+    {
+      "id": "analysis-cache",
+      "domain": "stats",
+      "path": "packages/server/analysis_cache.json",
+      "kind": "derived",
+      "producedBy": "generate_cache.py（Python）",
+      "derivedFrom": [
+        "sheet-paipu",
+        "discord-forum"
+      ],
+      "consumers": [
+        "routes/api.ts",
+        "LeaderboardV3.ts",
+        "bots/stats/*",
+        "shared/src/stats/dataset.ts"
+      ],
+      "refresh": "每晚",
+      "targetPhase": 2,
+      "notes": "6.4 MB；與 TS 引擎重複，靠 parity 對齊"
+    },
+    {
+      "id": "stats-engine-ts",
+      "domain": "stats",
+      "path": "packages/shared/src/stats/*",
+      "kind": "code",
+      "producedBy": "—",
+      "derivedFrom": [
+        "games-cache",
+        "analysis-cache"
+      ],
+      "consumers": [
+        "web 分析分頁",
+        "自動發現",
+        "決定性票"
+      ],
+      "refresh": "即時",
+      "targetPhase": 2,
+      "notes": "Python 與 TS 兩套"
+    },
+    {
+      "id": "discovery",
+      "domain": "stats",
+      "path": "packages/shared/src/stats/discovery*.ts",
+      "kind": "code",
+      "producedBy": "—",
+      "derivedFrom": [
+        "games-cache"
+      ],
+      "consumers": [
+        "web 自動發現",
+        "discovery candidates"
+      ],
+      "refresh": "即時",
+      "targetPhase": 4,
+      "notes": "發現需要穩定編號"
+    },
+    {
+      "id": "legacy-analysis",
+      "domain": "stats",
+      "path": "analysis/、voting_stats.py",
+      "kind": "legacy",
+      "producedBy": "舊 Python 分析",
+      "derivedFrom": [
+        "sheet-paipu"
+      ],
+      "consumers": [],
+      "refresh": "不更新",
+      "targetPhase": "cleanup",
+      "notes": ""
+    },
+    {
+      "id": "player-aliases",
+      "domain": "players",
+      "path": "packages/server/player_aliases.json",
+      "kind": "source",
+      "producedBy": "人工",
+      "derivedFrom": [],
+      "consumers": [
+        "generate_cache.py",
+        "playerNameMatch.ts"
+      ],
+      "refresh": "人工",
+      "targetPhase": 2,
+      "notes": ""
+    },
+    {
+      "id": "player-ratings",
+      "domain": "players",
+      "path": "analysis_cache.json → players/rating",
+      "kind": "derived",
+      "producedBy": "generate_cache.py",
+      "derivedFrom": [
+        "sheet-paipu"
+      ],
+      "consumers": [
+        "web",
+        "strongCohort.ts",
+        "cohort.ts"
+      ],
+      "refresh": "每晚",
+      "targetPhase": 2,
+      "notes": "強者三種定義：cohort PR 切點／strongPool Elo 前 20%+50 場／S≥65 vs 平均 Elo 前 30%"
+    },
+    {
+      "id": "wiki-data",
+      "domain": "wiki",
+      "path": "packages/server/wiki_data.json",
+      "kind": "source",
+      "producedBy": "人工（11/11 整併 57→40）",
+      "derivedFrom": [],
+      "consumers": [
+        "web 百科",
+        "WikiMindMap",
+        "分享頁 /w/<id>/",
+        "routes/analysis.ts",
+        "llmsTxt.ts"
+      ],
+      "refresh": "人工",
+      "targetPhase": 3,
+      "notes": "40 篇；18 篇共 255 個寫死百分比"
+    },
+    {
+      "id": "wiki-hardcoded",
+      "domain": "wiki",
+      "path": "packages/web/src/data/wiki.ts",
+      "kind": "source",
+      "producedBy": "人工",
+      "derivedFrom": [],
+      "consumers": [
+        "web 百科"
+      ],
+      "refresh": "人工",
+      "targetPhase": 3,
+      "notes": "11 篇寫在程式裡"
+    },
+    {
+      "id": "wiki-redirects",
+      "domain": "wiki",
+      "path": "packages/web/src/data/wikiRedirects.ts",
+      "kind": "source",
+      "producedBy": "人工",
+      "derivedFrom": [],
+      "consumers": [
+        "web"
+      ],
+      "refresh": "人工",
+      "targetPhase": 3,
+      "notes": ""
+    },
+    {
+      "id": "wiki-md-old",
+      "domain": "wiki",
+      "path": "docs/avalon-wiki/",
+      "kind": "legacy",
+      "producedBy": "舊 Markdown",
+      "derivedFrom": [],
+      "consumers": [
+        "llmsTxt.ts"
+      ],
+      "refresh": "不更新",
+      "targetPhase": 3,
+      "notes": "32 篇"
+    },
+    {
+      "id": "wiki-backups",
+      "domain": "wiki",
+      "path": "content/wiki_legacy/、content/hackmd_backup/",
+      "kind": "legacy",
+      "producedBy": "舊備份",
+      "derivedFrom": [],
+      "consumers": [],
+      "refresh": "不更新",
+      "targetPhase": "cleanup",
+      "notes": ""
+    },
+    {
+      "id": "wiki-proposals",
+      "domain": "wiki",
+      "path": "docs/wiki-proposals/2026-11_research_proposals.md",
+      "kind": "doc",
+      "producedBy": "Claude",
+      "derivedFrom": [],
+      "consumers": [
+        "#36"
+      ],
+      "refresh": "人工",
+      "targetPhase": 3,
+      "notes": "47 條等勾選"
+    },
+    {
+      "id": "agent-tuning",
+      "domain": "ai",
+      "path": "packages/server/src/ai/AgentTuning.ts + BlueRoundNN.ts",
+      "kind": "code",
+      "producedBy": "優化迴圈",
+      "derivedFrom": [],
+      "consumers": [
+        "遊戲伺服器",
+        "自我對打"
+      ],
+      "refresh": "每回合",
+      "targetPhase": 4,
+      "notes": "開關沒有策略編號"
+    },
+    {
+      "id": "belief-tables",
+      "domain": "ai",
+      "path": "packages/server/src/ai/belief/likelihoods*.json",
+      "kind": "derived",
+      "producedBy": "scripts/fitBeliefLikelihoods.ts",
+      "derivedFrom": [
+        "games-cache"
+      ],
+      "consumers": [
+        "ForwardAgent"
+      ],
+      "refresh": "手動",
+      "targetPhase": 2,
+      "notes": ""
+    },
+    {
+      "id": "strong-policy",
+      "domain": "ai",
+      "path": "packages/server/src/ai/infl/*_strong.json",
+      "kind": "derived",
+      "producedBy": "strongCohort.ts / fitPolicyVotes.ts",
+      "derivedFrom": [
+        "games-cache",
+        "analysis-cache"
+      ],
+      "consumers": [
+        "AI"
+      ],
+      "refresh": "手動",
+      "targetPhase": 2,
+      "notes": ""
+    },
+    {
+      "id": "assassin-weights",
+      "domain": "ai",
+      "path": "packages/server/src/ai/assassin/assassinModelWeights.ts",
+      "kind": "derived",
+      "producedBy": "scripts/assassinModel.ts",
+      "derivedFrom": [
+        "sheets-cache"
+      ],
+      "consumers": [
+        "AssassinModel"
+      ],
+      "refresh": "手動",
+      "targetPhase": 2,
+      "notes": "讀凍結快照"
+    },
+    {
+      "id": "behavior-priors",
+      "domain": "ai",
+      "path": "packages/server/src/ai/priors/*.json",
+      "kind": "legacy",
+      "producedBy": "舊",
+      "derivedFrom": [],
+      "consumers": [
+        "HeuristicAgent"
+      ],
+      "refresh": "不更新",
+      "targetPhase": 2,
+      "notes": ""
+    },
+    {
+      "id": "sop-map",
+      "domain": "ai",
+      "path": "docs/ai/wiki_sop_map.md",
+      "kind": "doc",
+      "producedBy": "人工（Claude）",
+      "derivedFrom": [
+        "wiki-data",
+        "agent-tuning"
+      ],
+      "consumers": [
+        "優化迴圈"
+      ],
+      "refresh": "每回合",
+      "targetPhase": 4,
+      "notes": "180 條，A1～K8 編號"
+    },
+    {
+      "id": "opt-loop",
+      "domain": "ai",
+      "path": "docs/ai/optimization_loop.md",
+      "kind": "doc",
+      "producedBy": "人工（Claude）",
+      "derivedFrom": [],
+      "consumers": [
+        "人讀"
+      ],
+      "refresh": "每回合",
+      "targetPhase": 5,
+      "notes": ""
+    },
+    {
+      "id": "sim-bot",
+      "domain": "content",
+      "path": "packages/server/src/bots/simulation/",
+      "kind": "code",
+      "producedBy": "—",
+      "derivedFrom": [
+        "sim-bank",
+        "records-cache"
+      ],
+      "consumers": [
+        "Discord/LINE"
+      ],
+      "refresh": "—",
+      "targetPhase": 2,
+      "notes": ""
+    },
+    {
+      "id": "threads",
+      "domain": "content",
+      "path": "packages/server/src/bots/threads/（分支 claude/threads-*）",
+      "kind": "code",
+      "producedBy": "—",
+      "derivedFrom": [
+        "sim-bank",
+        "games-cache",
+        "records-cache"
+      ],
+      "consumers": [
+        "Threads"
+      ],
+      "refresh": "每天",
+      "targetPhase": 2,
+      "notes": "PR #44 #47"
+    },
+    {
+      "id": "stats-bots",
+      "domain": "content",
+      "path": "packages/server/src/bots/stats/",
+      "kind": "code",
+      "producedBy": "—",
+      "derivedFrom": [
+        "analysis-cache"
+      ],
+      "consumers": [
+        "Discord/LINE 數據指令"
+      ],
+      "refresh": "—",
+      "targetPhase": 2,
+      "notes": ""
+    },
+    {
+      "id": "research-library",
+      "domain": "research",
+      "path": "docs/ai/research/library/",
+      "kind": "doc",
+      "producedBy": "ChatGPT/Claude",
+      "derivedFrom": [],
+      "consumers": [
+        "人讀"
+      ],
+      "refresh": "人工",
+      "targetPhase": 4,
+      "notes": ""
+    }
+  ]
+}

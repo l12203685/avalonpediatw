@@ -1,0 +1,11 @@
+{
+  "about": "站長更正：對照原始紀錄後，覆寫某個來源記錯的欄位（建庫時先套用再檢查，來源檔不動）。鍵是來源的編號（S<流水號>、D<hash>、Discord 貼文 id、M<流水號>、P<_id>）；set 只能改 config、rounds、lakes、assassination、outcome。",
+  "corrections": {
+    "S572": {
+      "set": {"assassination": "4"},
+      "by": "站長",
+      "date": "2026-11-17",
+      "note": "站長對照手寫紀錄表：刺殺目標是 4家，試算表記成 6家（奧伯倫）"
+    }
+  }
+}
