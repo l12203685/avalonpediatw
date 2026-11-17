@@ -18,6 +18,7 @@ import { ThreadsGenerator } from '../bots/threads/generate';
 import { addDays, exerciseIdOfPick, weekdayOf } from '../bots/threads/plan';
 import {
   igCaption,
+  imageProblem,
   postInstagram,
   fallbackComment,
   loadPlayerNames,
@@ -860,6 +861,26 @@ describe('instagram', () => {
     expect(r.mediaId).not.toBe('old');
     expect(ig.published).toHaveLength(1);
     expect(r.mediaId).toBe(ig.published[0].id);
+  });
+
+  it('IG skips an incomplete puzzle the same way Threads does (liveBlock, missing continuation URL, text that needs the image), without publishing', async () => {
+    const { plan, stateDir } = prepared();
+    const cases: { p: DailyPlan; urls: string[] }[] = [
+      { p: { ...plan, liveBlock: '牌譜太長，題目卡要第二張續圖，但續圖沒有產生' }, urls: ['https://x/a.jpg'] },
+      { p: { ...plan, liveBlock: null, images: [`${plan.date}.png`, `${plan.date}-grid.png`, `${plan.date}-answer.png`] }, urls: ['https://x/a.jpg', 'https://x/c.jpg'] },
+    ];
+    for (const { p, urls } of cases) {
+      const ig = fakeIg();
+      const r = await postInstagram(p, { api: ig.api, stateDir, imageUrls: urls });
+      expect(r.status).toBe('skipped');
+      expect(r.notes.join()).toContain('IG 這天不同步');
+      expect(ig.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+      expect(readState(stateDir, plan.date)?.ig).toBeUndefined();
+    }
+    expect(imageProblem({ ...plan, liveBlock: null, images: [], image: null, text: `x\n${SEE_IMAGE_LINE}` }, [])).toContain('完整局面看圖');
+    // 完整的：照發
+    const ok = fakeIg();
+    expect((await postInstagram({ ...plan, liveBlock: null, images: [`${plan.date}.png`, `${plan.date}-grid.png`] }, { api: ok.api, stateDir, imageUrls: ['https://x/a.jpg', 'https://x/b.jpg'] })).status).toBe('published');
   });
 
   it('IG publishing is checked first: an unconfirmable token or missing publish permission is reported (IG skipped, Threads untouched)', async () => {

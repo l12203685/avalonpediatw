@@ -553,6 +553,9 @@ export async function postInstagram(
   const existing = readState(deps.stateDir, plan.date);
   if (existing?.ig?.mediaId) return { status: 'already-published', mediaId: existing.ig.mediaId, permalink: existing.ig.permalink, notes: ['狀態檔已經有這一天的 IG 貼文'] };
   if (deps.imageUrls.length === 0) return { status: 'skipped', notes: ['沒有圖：IG 不能只發文字，這天不同步'] };
+  // 題目不完整（prepare 擋下的、少了續圖的網址）：IG 這天不同步（只記原因，不影響 Threads）。
+  const missing = imageProblem(plan, deps.imageUrls);
+  if (missing) return { status: 'skipped', notes: [`IG 這天不同步：${missing}`] };
 
   const dup = findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date);
   if (dup) {

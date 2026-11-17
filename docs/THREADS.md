@@ -217,6 +217,7 @@ Threads App 裡「同時分享到 IG」的按鈕沒有 API 可以用，所以另
   發佈的回應不明時不盲目重發，先看 IG 最近的貼文和容器狀態；發出去後馬上把狀態檔推上 `threads-state`。
 - **先確認權杖**：正式同步前先查 IG 帳號和發文額度（要 `instagram_business_content_publish`）；確認不了就跳過 IG、摘要出警告，不影響 Threads。
 - **跟 Threads 分開**：IG 失敗不影響 Threads，反過來也一樣。JPEG 轉檔失敗時當天不同步 IG（摘要有警告），Threads 照常上傳、發文。
+  題目不完整的日子（跟 Threads 同一套檢查：少了續圖或續圖的網址、要看圖卻沒有圖）IG 也不同步。
 
 ### 開關
 
