@@ -83,11 +83,14 @@ for (let i = 0; i < days; i++) {
     console.warn(`${date}: no puzzle for this theme`);
     continue;
   }
-  // 輪播第二張：牌譜圖（網站牌譜頁的格子）。
+  // 輪播第二張：牌譜放不進題目卡時才有的牌譜續圖（後面的列）。
   if (pv && image) {
     try {
-      fs.writeFileSync(path.join(outDir, `${date}-grid.png`), renderGridPng(pv, weekdayOf(date)));
-      draft.post.gridImage = `${date}-grid.png`;
+      const grid = renderGridPng(pv, weekdayOf(date));
+      if (grid) {
+        fs.writeFileSync(path.join(outDir, `${date}-grid.png`), grid);
+        draft.post.gridImage = `${date}-grid.png`;
+      }
     } catch (err) {
       console.warn(`${date}: grid image skipped (${(err as Error).message})`);
     }

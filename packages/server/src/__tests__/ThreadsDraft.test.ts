@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, gridRowHeight, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, wrapLine } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, wrapLine } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -309,37 +309,59 @@ describe('image', () => {
     }
   });
 
-  it('seats sit around a round table: 1 at the top, clockwise to 0 at the upper left', () => {
-    const top = seatPosition(1, 540, 500);
-    expect(top.x).toBeCloseTo(540);
-    expect(top.y).toBeLessThan(500);
-    expect(seatPosition(3, 540, 500).x).toBeGreaterThan(540); // 右半圈
-    expect(seatPosition(6, 540, 500).y).toBeGreaterThan(500); // 正下方
-    expect(seatPosition(10, 540, 500).x).toBeLessThan(540); // 0 在左上
+  it('seats sit around a small round table: 0 at twelve o’clock, clockwise, 5 at six o’clock', () => {
+    const top = seatPosition(10, 300, 400);
+    expect(top.x).toBeCloseTo(300);
+    expect(top.y).toBeLessThan(400);
+    const bottom = seatPosition(5, 300, 400);
+    expect(bottom.x).toBeCloseTo(300);
+    expect(bottom.y).toBeGreaterThan(400);
+    for (const seat of [1, 2, 3, 4]) expect(seatPosition(seat, 300, 400).x).toBeGreaterThan(300); // 右邊往下
+    for (const seat of [6, 7, 8, 9]) expect(seatPosition(seat, 300, 400).x).toBeLessThan(300); // 左邊往上
+    expect(seatPosition(1, 300, 400).y).toBeLessThan(seatPosition(4, 300, 400).y);
+    expect(seatPosition(9, 300, 400).y).toBeLessThan(seatPosition(6, 300, 400).y);
     const [, tue] = planWeek(bank, 0) as ThreadsPick[];
     const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
     expect(svg).toContain('<ellipse'); // 圓桌
     expect(svg).toContain('拇指');
   });
 
-  it('the grid image is the site scoresheet built only from the rendered rows, and fits 4:5 for normal games', () => {
+  it('table, scoresheet and question share one image ≤ 1350; only overflow rows go to a second image', () => {
+    let overflowed = 0;
     for (let w = 0; w < 4; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
         const rows = sheetRows(pv);
-        const svg = buildGridSvg(pv, 3);
-        // 每次提議的文字紀錄都在圖上，而且只有出題前的列（列來自 sheetRows，截斷由上面的測試鎖住）
-        for (const r of rows) if (r.kind === 'proposal') expect(svg).toContain(`>${r.line.split(' ')[0]}<`);
-        expect((svg.match(/<path /g) ?? []).length).toBe(rows.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0));
-        const h = Number(/height="(\d+)"/.exec(svg)?.[1]);
-        if (rows.length <= 22) expect(h).toBeLessThanOrEqual(GRID_TARGET_H);
-        expect(svg).not.toMatch(/10\s*家/);
+        const card = buildPuzzleSvg(pv, 3);
+        const h = Number(/height="(\d+)"/.exec(card)?.[1]);
+        expect(h).toBeLessThanOrEqual(GRID_TARGET_H);
+        const layout = cardLayout(rows.length);
+        const start = gridOverflowStart(pv);
+        const grid = buildGridSvg(pv, 3);
+        const shields = (svg: string): number => (svg.match(/<path /g) ?? []).length;
+        const teamCount = (rs: typeof rows): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0);
+        if (start === null) {
+          expect(grid).toBeNull();
+          expect(layout.rowH).toBeGreaterThanOrEqual(GRID_ROW_MIN);
+          expect(shields(card)).toBe(teamCount(rows)); // 每支盾牌都在題目卡上
+          for (const r of rows) if (r.kind === 'proposal') expect(card).toContain(`>${r.line.split(' ')[0]}<`);
+        } else {
+          overflowed++;
+          expect(grid).not.toBeNull();
+          // 題目卡畫前 start 列、續圖畫剩下的，合起來剛好是全部的列（列只來自 sheetRows，截斷由上面的測試鎖住）
+          expect(shields(card)).toBe(teamCount(rows.slice(0, start)));
+          expect(shields(grid as string)).toBe(teamCount(rows.slice(start)));
+          expect(Number(/height="(\d+)"/.exec(grid as string)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
+        }
+        expect(card).not.toMatch(/10\s*家/);
       }
     }
-    expect(gridRowHeight(5)).toBe(60);
-    expect(gridRowHeight(40)).toBe(34);
+    expect(overflowed).toBeGreaterThan(0); // 長的局真的會用到第二張
+    expect(cardLayout(5)).toMatchObject({ overflow: false, cardRows: 5 });
+    expect(cardLayout(60).overflow).toBe(true);
     const [, , wed] = planWeek(bank, 0) as ThreadsPick[];
-    expect(renderGridPng(pickView(gameOf(wed), wed), 3).subarray(1, 4).toString('ascii')).toBe('PNG');
+    const wedPv = pickView(gameOf(wed), wed);
+    expect(renderGridPng(wedPv, 3)).toBeNull(); // 1-5 的牌譜短，一張就夠
   });
 
   it('the answer card lists yesterday’s blue and red roles and the result', () => {
