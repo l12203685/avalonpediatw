@@ -288,6 +288,40 @@ class ExcludeTest(unittest.TestCase):
         self.assertEqual((rows, excluded[0]["rules"]), ([], ["FORCED_NOT_RUN"]))
 
 
+class CorrectionTest(unittest.TestCase):
+    def test_owner_correction_is_applied_before_the_checks(self):
+        g = copy.deepcopy(GOOD)
+        g["assassination"] = "4"  # the sheet says Oberon; the owner's scoresheet says 7
+        sources = [source(gd.SRC_SHEET, "12", g)]
+        doc = {"corrections": {"S12": {"set": {"assassination": "7"}, "by": "站長", "date": "2026-11-17", "note": "x"},
+                               "S99": {"set": {"outcome": "三紅"}, "by": "站長", "date": "2026-11-17"}}}
+        applied = gd.apply_corrections(sources, doc)
+        self.assertEqual(g["assassination"], "4")  # the source record itself is not changed
+        excluded = []
+        rows = gd.build(sources, excluded)
+        self.assertEqual((excluded, [r["id"] for r in rows], rows[0]["status"]), ([], ["S12"], "ok"))
+        self.assertEqual(rows[0]["game"]["assassination"], "7")
+        self.assertEqual(rows[0]["corrections"], [{"field": "assassination", "old": "4", "new": "7", "by": "站長", "date": "2026-11-17"}])
+        self.assertEqual([a.get("missing", False) for a in applied], [False, True])
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "r.md"
+            gd.write_report(rows, gd.summarize(rows), {}, report, corrections=applied)
+            text = report.read_text(encoding="utf-8")
+            self.assertIn("## 站長更正", text)
+            self.assertIn("S12 `assassination`：4 → 7（站長 2026-11-17）", text)
+            self.assertIn("S99：找不到這一局", text)
+
+    def test_only_record_fields_can_be_corrected(self):
+        with self.assertRaises(ValueError):
+            gd.apply_corrections([source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD))],
+                                 {"corrections": {"S12": {"set": {"names": []}}}})
+
+    def test_committed_corrections_file(self):
+        doc = json.loads((ROOT / "packages" / "server" / "game_db_corrections.json").read_text(encoding="utf-8"))
+        s572 = doc["corrections"]["S572"]
+        self.assertEqual((s572["set"], s572["by"], s572["date"]), ({"assassination": "4"}, "站長", "2026-11-17"))
+
+
 class MainTest(unittest.TestCase):
     def test_missing_primary_cache_leaves_outputs_untouched(self):
         with tempfile.TemporaryDirectory() as tmp:

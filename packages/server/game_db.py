@@ -33,11 +33,17 @@ EXCLUDE_RULES rule in any of its sources -- the assassin shot a teammate (every 
 Oberon included) or a forced 5th proposal that did not go on the mission -- is left out of ``games`` and every
 count; the report lists those games by id and date only. The sources themselves are never changed.
 
+Corrections: game_db_corrections.json (committed) overrides fields of one source's record when the site owner has
+checked the original (e.g. his handwritten scoresheet), before merging and the rule checks; the source caches are
+never edited. Each entry is keyed by the source's public id (``S572`` ...) and carries ``set`` (field -> value),
+``by``, ``date`` and ``note``; the report lists them as 「站長更正」 (id, field, old -> new).
+
 Privacy: no player names, no titles, no free text -- seats, the parsed record, ids and dates only (the same
 level as the public dataset). The repo is public.
 
 Usage:  python game_db.py [--games games_cache.json] [--records records_cache.json]
                           [--snapshot sheets_cache.json] [--sim-bank sim_bank.json]
+                          [--corrections game_db_corrections.json]
                           [--output game_db.json] [--check-report ../../docs/data/game_db_report.md]
 """
 
@@ -275,6 +281,38 @@ def proavalon_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
             "fp": rm.game_fingerprint(game) if game else "",
         })
     return out
+
+
+CORRECTABLE = ("config", "rounds", "lakes", "assassination", "outcome")
+
+
+def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """Override fields of the sources named in game_db_corrections.json (on a copy of the record) and return
+    what was applied: id, field, old, new, by, date -- or ``missing`` when no readable source has that id."""
+    entries = (doc or {}).get("corrections") or {}
+    by_id = {public_id(s): s for s in sources if s["game"]}
+    applied: list[dict[str, Any]] = []
+    for gid, entry in sorted(entries.items()):
+        fields = entry.get("set") or {}
+        unknown = sorted(set(fields) - set(CORRECTABLE))
+        if unknown:
+            raise ValueError(f"game_db_corrections.json {gid}: cannot correct {unknown} (only {CORRECTABLE})")
+        meta = {"by": entry.get("by", ""), "date": entry.get("date", "")}
+        src = by_id.get(gid)
+        if src is None:
+            applied.append({"id": gid, "missing": True, **meta})
+            continue
+        game = dict(src["game"])
+        done = []
+        for field, value in fields.items():
+            done.append({"id": gid, "field": field, "old": game.get(field), "new": value, **meta})
+            game[field] = value
+        src["game"] = game
+        src["corrected"] = [{k: v for k, v in d.items() if k != "id"} for d in done]
+        if {"config", "rounds"} & set(fields):
+            src["fp"] = rm.game_fingerprint(game)
+        applied += done
+    return applied
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +649,7 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
             "game": strip_names(main["game"]),
             **({"problem": main["problem"]} if not main["game"] else {}),
             **({"inferred_votes": inferred} if inferred else {}),
+            **({"corrections": corrected} if (corrected := [c for s in members for c in s.get("corrected", [])]) else {}),
             "checks": checks,
         })
     near_dups(rows)
@@ -758,7 +797,8 @@ def coverage(rows: Sequence[Mapping[str, Any]], snapshot: Any, sim_bank: Any, re
 
 
 def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], cov: Mapping[str, Any], path: Path,
-                 excluded: Sequence[Mapping[str, Any]] = (), hammer: int = 0) -> None:
+                 excluded: Sequence[Mapping[str, Any]] = (), hammer: int = 0,
+                 corrections: Sequence[Mapping[str, Any]] = ()) -> None:
     """docs/data/game_db_report.md: counts by rule and the list of games to look at (ids only)."""
     L: list[str] = []
     L.append("# 牌譜總庫：檢查報告")
@@ -780,6 +820,19 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append("")
     L.append(f"多個來源合成一局的：{counts['merged']} 局。")
     L.append("")
+    if corrections:
+        L.append("## 站長更正")
+        L.append("")
+        L.append("站長對照原始紀錄（例如手寫紀錄表）確認來源記錯的欄位，寫在 `packages/server/game_db_corrections.json`，"
+                 "建庫時先套用再檢查；來源本身不動。")
+        L.append("")
+        for c in corrections:
+            if c.get("missing"):
+                L.append(f"- {c['id']}：找不到這一局（{c['by']} {c['date']}），更正沒有套用")
+            else:
+                same = "（來源已經是這個值，這筆更正可以刪掉）" if c["old"] == c["new"] else ""
+                L.append(f"- {c['id']} `{c['field']}`：{c['old']} → {c['new']}（{c['by']} {c['date']}）{same}")
+        L.append("")
     L.append(f"## 錯誤局：不記錄（{len(excluded)}）")
     L.append("")
     L.append("站長 2026-11-17：「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」。這些局不進總庫（不在 `games`、"
@@ -953,6 +1006,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--snapshot", default=str(HERE / "sheets_cache.json"))
     ap.add_argument("--sim-bank", default=str(HERE / "sim_bank.json"))
     ap.add_argument("--proavalon", default=str(HERE / "proavalon_games.json"))
+    ap.add_argument("--corrections", default=str(HERE / "game_db_corrections.json"))
     ap.add_argument("--output", default=str(HERE / "game_db.json"))
     ap.add_argument("--check-report", dest="report", default=str(HERE.parent.parent / "docs" / "data" / "game_db_report.md"))
     args = ap.parse_args(argv)
@@ -969,6 +1023,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sources += rec_sources
     proavalon_doc = load_json(Path(args.proavalon))
     sources += proavalon_sources(proavalon_doc)
+    corrections = apply_corrections(sources, load_json(Path(args.corrections)))
     excluded: list[dict[str, Any]] = []
     rows = build(sources, excluded)
     counts = summarize(rows, excluded)
@@ -977,7 +1032,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     hammer = sum(n for why, n in ((proavalon_doc or {}).get("skipped") or {}).items() if "5th proposal" in why)
     write_db(rows, counts, Path(args.output))
     if args.report:
-        write_report(rows, counts, cov, Path(args.report), excluded, hammer)
+        write_report(rows, counts, cov, Path(args.report), excluded, hammer, corrections)
     print(f"game_db: {counts['games']} games {counts['byKind']}; merged {counts['merged']}; status {counts['byStatus']}; "
           f"excluded {len(excluded)} {counts['excluded']}")
     return 0
