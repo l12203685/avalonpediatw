@@ -288,9 +288,11 @@ CORRECTABLE = ("config", "rounds", "lakes", "assassination", "outcome")
 
 def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
     """Override fields of the sources named in game_db_corrections.json (on a copy of the record) and return
-    what was applied: id, field, old, new, by, date -- or ``missing`` when no readable source has that id."""
+    what was applied: id, field, old, new, by, date -- or ``missing`` when no source has that id. A source that
+    did not convert (or whose raw text showed a 6th proposal) takes a correction only when it sets the whole
+    record (every CORRECTABLE field, e.g. retyped by the site owner on the console); it then becomes readable."""
     entries = (doc or {}).get("corrections") or {}
-    by_id = {public_id(s): s for s in sources if s["game"]}
+    by_id = {public_id(s): s for s in sources}
     applied: list[dict[str, Any]] = []
     for gid, entry in sorted(entries.items()):
         fields = entry.get("set") or {}
@@ -299,8 +301,18 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             raise ValueError(f"game_db_corrections.json {gid}: cannot correct {unknown} (only {CORRECTABLE})")
         meta = {"by": entry.get("by", ""), "date": entry.get("date", "")}
         src = by_id.get(gid)
-        if src is None:
+        whole = set(fields) == set(CORRECTABLE)
+        if src is None or (not src["game"] and not whole):
             applied.append({"id": gid, "missing": True, **meta})
+            continue
+        if not src["game"]:  # the whole record, retyped: replaces the unreadable one
+            src["game"] = {f: fields[f] for f in CORRECTABLE}
+            src["fp"] = rm.game_fingerprint(src["game"])
+            done = [{"id": gid, "field": "record", "old": src["problem"] or "讀不懂", "new": "站長重打的整局紀錄", **meta}]
+            src["problem"] = ""
+            src.pop("forced_rounds", None)
+            src["corrected"] = [{k: v for k, v in d.items() if k != "id"} for d in done]
+            applied += done
             continue
         game = dict(src["game"])
         done = []
@@ -828,7 +840,7 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         L.append("")
         for c in corrections:
             if c.get("missing"):
-                L.append(f"- {c['id']}：找不到這一局（{c['by']} {c['date']}），更正沒有套用")
+                L.append(f"- {c['id']}：找不到這一局、或這局讀不懂而更正不是整局紀錄（{c['by']} {c['date']}），更正沒有套用")
             else:
                 same = "（來源已經是這個值，這筆更正可以刪掉）" if c["old"] == c["new"] else ""
                 L.append(f"- {c['id']} `{c['field']}`：{c['old']} → {c['new']}（{c['by']} {c['date']}）{same}")
