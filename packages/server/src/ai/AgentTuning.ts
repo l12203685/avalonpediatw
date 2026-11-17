@@ -1190,6 +1190,10 @@ export interface AgentTuning {
    * （真人首湖在第 2 局成功之後湖只上過成功任務的人 84%，機器人 66%），同分不照座位序；其餘情況照原本的共同資訊規則。0 = 關。
    */
   goodLakeHuman: number;
+  /** 第 43 回合 loyalFresh43：「後驗不差」的門檻（紅的機率 < 這個值）；0 = 內建 0.5。 */
+  loyalFresh43Tau: number;
+  /** 第 43 回合（百科 B27／B19／B7：替梅林擋刀，忠臣／派西第 1、2 局的提議去相關；BlueRound43.ts）：非強制提議時，隊上（自己以外）至少放一個前面的提議還沒派過、自己後驗不差（紅的機率 < loyalFresh43Tau）的人；沒有的話把隊上最髒的一個（不是照派成功任務的隊）換成這樣的人裡最乾淨的。位元 1 = 忠臣、2 = 派西、4 = 第 1 局、8 = 第 2 局、16 = 「還沒派過」算整場（不設只算這一局）、32 = 也不和這一局前面看起來偏藍的隊長（紅的機率 < 0.5）的提議重疊超過 1 人（自己以外）、64 = 第 2 局只在第 1 局失敗之後。0 = 關。 */
+  loyalFresh43: number;
   /** 第 42 回合（梅林，專案負責人 11/12 裁定：場內可以偶爾投白、不能開外白）：`merlinKeyApprove41` 的條件，位元 1 = 只在第 3 局；2 = 隊上剛好一個他看得到的紅；4 = 只在這一局的第 1 次提議；8 = 不需要他這個座位的忠臣公開視角也贊成（比例照 `merlinKeyApprove41`）。都只在他在隊上時；不在隊上的隊有他看得到的紅一律反對。0 = 關（照第 41 回合）。 */
   merlinKeyApprove42: number;
   /** 第 41 回合（梅林，BlueRound41.ts；專案負責人 11/12 裁定：場內可以偶爾投白、不能開外白）：紅方已兩勝的第 3–4 局、梅林在隊上、隊上他看得到的紅能讓任務當場失敗，而他這個座位的忠臣公開視角會贊成時，以這個比例贊成（不是自己當隊長的提議；用每一局不一樣的公開狀態算固定雜湊，不用亂數；公開邏輯證明一定會失敗的隊照舊反對）。真人梅林在這一格贊成約 40%（不含自己當隊長；第 41 回合 770 票 40%、第 42 回合 761 票 39%）。0 = 關。 */
@@ -1540,6 +1544,8 @@ export const AGENT_TUNING_KEYS: readonly AgentTuningKey[] = [
   'goodEarlyVote',
   'goodR4White',
   'goodLakeHuman',
+  'loyalFresh43Tau',
+  'loyalFresh43',
   'merlinKeyApprove42',
   'merlinKeyApprove41',
   'beliefLakeIso41',
@@ -1772,6 +1778,8 @@ export const LEGACY_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodEarlyVote: 0,
   goodR4White: 0,
   goodLakeHuman: 0,
+  loyalFresh43Tau: 0,
+  loyalFresh43: 0,
   merlinKeyApprove42: 0,
   merlinKeyApprove41: 0,
   beliefLakeIso41: 0,
@@ -2152,6 +2160,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   goodEarlyVote: 0,
   goodR4White: 0,
   goodLakeHuman: 0,
+  loyalFresh43Tau: 0,
+  loyalFresh43: 0,
   merlinKeyApprove42: 0,
   merlinKeyApprove41: 0,
   beliefLakeIso41: 0,
@@ -2384,6 +2394,8 @@ export const AGENT_TUNING_ENV: Readonly<Record<AgentTuningKey, string>> = Object
   goodEarlyVote: 'AVALON_TUNING_GOOD_EARLY_VOTE',
   goodR4White: 'AVALON_TUNING_GOOD_R4_WHITE',
   goodLakeHuman: 'AVALON_TUNING_GOOD_LAKE_HUMAN',
+  loyalFresh43Tau: 'AVALON_TUNING_LOYAL_FRESH_43_TAU',
+  loyalFresh43: 'AVALON_TUNING_LOYAL_FRESH_43',
   merlinKeyApprove42: 'AVALON_TUNING_MERLIN_KEY_APPROVE_42',
   merlinKeyApprove41: 'AVALON_TUNING_MERLIN_KEY_APPROVE_41',
   beliefLakeIso41: 'AVALON_TUNING_BELIEF_LAKE_ISO_41',
@@ -2885,6 +2897,16 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     if (!Number.isInteger(value) || value < 0 || value > 15) throw new Error(`merlinKeyApprove42 needs 0–15, got "${raw}"`);
     return { merlinKeyApprove42: value };
   }
+  if (name === 'loyalFresh43') {
+    const value = raw === undefined ? 15 : Number.parseInt(raw, 10);
+    if (!Number.isInteger(value) || value < 0 || value > 127) throw new Error(`loyalFresh43 needs 0–127, got "${raw}"`);
+    return { loyalFresh43: value };
+  }
+  if (name === 'loyalFresh43Tau') {
+    const value = raw === undefined ? 0 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`loyalFresh43Tau needs a number in [0, 1], got "${raw}"`);
+    return { loyalFresh43Tau: value };
+  }
   if (name === 'goodFourthWhite' || name === 'goodLakeHuman' || name === 'goodEarlyVote') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
     if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`${name} needs 0–1, got "${raw}"`);
@@ -3067,7 +3089,7 @@ export function describeAgentTuning(t: AgentTuning): string {
     if (key === 'r3NormalVotePrior') continue;
     if (key === 'r3NormalVotePriorEvilOnly' && t.r3NormalVotePrior === 0) continue;
     if (key === 'teamPassRank') { if (t.teamPassRank) parts.push(`teamPassRank=${t.teamPassRank}`); continue; }
-    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive' || key === 'loyalFlowPick' || key === 'beliefRecursiveLeadScope' || key === 'beliefLeadBlend' || key === 'loyalR2View' || key === 'loyalSetPick' || key === 'loyalR2ViewKeep' || key === 'percivalThumbSure' || key === 'ownView' || key === 'ownViewScope' || key === 'ownViewKeep' || key === 'ownViewRounds' || key === 'percivalThumbRead' || key === 'goodOnTeamState' || key === 'goodReuseWhite' || key === 'goodFourthWhite' || key === 'merlinOwnWhite' || key === 'percivalMerlinWhite' || key === 'merlinFlowFollow' || key === 'goodLakeHuman' || key === 'merlinKeyApprove42' || key === 'merlinKeyApprove41' || key === 'beliefLakeIso41' || key === 'loyalLakeHolderP42' || key === 'beliefPendingSkip43' || key === 'goodLake41' || key === 'beliefLakeCal40' || key === 'percivalThumbVote40' || key === 'vote40TailM' || key === 'vote40TailP' || key === 'vote40TailL' || key === 'vote40R5OffM' || key === 'vote40R5OffP' || key === 'vote40R5OffL' || key === 'vote40R5OnM' || key === 'vote40R5OnP' || key === 'vote40R5OnL' || key === 'vote40KeyOffM' || key === 'vote40KeyOffP' || key === 'vote40KeyOffL' || key === 'vote40KeyOnM' || key === 'vote40KeyOnP' || key === 'vote40KeyOnL' || key === 'vote40OffM' || key === 'vote40OffP' || key === 'vote40OffL' || key === 'vote40OnM' || key === 'vote40OnP' || key === 'vote40OnL' || key === 'percivalLakeGuard39' || key === 'loyalLakePair' || key === 'percivalCarry39' || key === 'percivalRead39' || key === 'goodLake39' || key === 'goodEarlyVote' || key === 'goodR4White' || key === 'merlinOnTeamOwn' || key === 'loyalTailWhiteLastTau' || key === 'goodBayesR4Kept' || key === 'goodBayesFsReuse' || key === 'merlinPublicPipeline') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
+    if (key === 'redHideEarly' || key === 'redCleanApprove' || key === 'goodCleanVote' || key === 'redStackRatio' || key === 'redDivisionVote' || key === 'redFavoriteMate' || key === 'goodCleanLead' || key === 'loyalMerlinRead' || key === 'assassinMerlinVotes' || key === 'assassinVoteModel' || key === 'assassinLakeRead' || key === 'assassinLeadRead' || key === 'merlinVoteCover' || key === 'merlinLoyalCover' || key === 'beliefBotTables' || key === 'merlinNormalVote' || key === 'redNormalVote' || key === 'goodTailVote' || key === 'goodKeyVote' || key === 'assassinVoteEps' || key === 'redHideR1' || key === 'goodTailVotePercival' || key === 'redHideR1Who' || key === 'redKeyWhite' || key === 'redCleanWhite' || key === 'merlinReuseNorm' || key === 'assassinReuseRead' || key === 'redHideReuse' || key === 'merlinReuseSkip' || key === 'goodKeyVoteHalf' || key === 'merlinDoomedPublic' || key === 'assassinDoomedRead' || key === 'merlinDoomedAvoid' || key === 'merlinDoomedAvoidMix' || key === 'goodR4TwoFail' || key === 'goodTailCleanR3' || key === 'goodReuseExact' || key === 'goodLeadConsistent' || key === 'beliefBiteCell' || key === 'oberonBiteReject' || key === 'redLeadConsistent' || key === 'redReuseExact' || key === 'redMatchPointApprove' || key === 'goodVoteAlt' || key === 'loyalTailWhite' || key === 'loyalTailWhiteLambda' || key === 'beliefTemper' || key === 'beliefLeadTemper' || key === 'beliefStrongParts' || key === 'redHideR4Solo' || key === 'redHumanVote' || key === 'mpTailWhite' || key === 'mordredSoloApprove' || key === 'redTailVote' || key === 'redLakeHuman' || key === 'loyalR2Reuse' || key === 'goodLakeEntropy' || key === 'goodLakeChain' || key === 'goodLakeChainFuture' || key === 'goodOnTeamSuspect' || key === 'goodOnTeamSuspectKey' || key === 'beliefRecursive' || key === 'goodBayesVote' || key === 'goodBayesBad' || key === 'goodBayesBadKey' || key === 'goodBayesGood' || key === 'goodBayesGoodKey' || key === 'loyalR1Spread' || key === 'beliefLeadRecursive' || key === 'loyalFlowPick' || key === 'beliefRecursiveLeadScope' || key === 'beliefLeadBlend' || key === 'loyalR2View' || key === 'loyalSetPick' || key === 'loyalR2ViewKeep' || key === 'percivalThumbSure' || key === 'ownView' || key === 'ownViewScope' || key === 'ownViewKeep' || key === 'ownViewRounds' || key === 'percivalThumbRead' || key === 'goodOnTeamState' || key === 'goodReuseWhite' || key === 'goodFourthWhite' || key === 'merlinOwnWhite' || key === 'percivalMerlinWhite' || key === 'merlinFlowFollow' || key === 'goodLakeHuman' || key === 'loyalFresh43Tau' || key === 'loyalFresh43' || key === 'merlinKeyApprove42' || key === 'merlinKeyApprove41' || key === 'beliefLakeIso41' || key === 'loyalLakeHolderP42' || key === 'beliefPendingSkip43' || key === 'goodLake41' || key === 'beliefLakeCal40' || key === 'percivalThumbVote40' || key === 'vote40TailM' || key === 'vote40TailP' || key === 'vote40TailL' || key === 'vote40R5OffM' || key === 'vote40R5OffP' || key === 'vote40R5OffL' || key === 'vote40R5OnM' || key === 'vote40R5OnP' || key === 'vote40R5OnL' || key === 'vote40KeyOffM' || key === 'vote40KeyOffP' || key === 'vote40KeyOffL' || key === 'vote40KeyOnM' || key === 'vote40KeyOnP' || key === 'vote40KeyOnL' || key === 'vote40OffM' || key === 'vote40OffP' || key === 'vote40OffL' || key === 'vote40OnM' || key === 'vote40OnP' || key === 'vote40OnL' || key === 'percivalLakeGuard39' || key === 'loyalLakePair' || key === 'percivalCarry39' || key === 'percivalRead39' || key === 'goodLake39' || key === 'goodEarlyVote' || key === 'goodR4White' || key === 'merlinOnTeamOwn' || key === 'loyalTailWhiteLastTau' || key === 'goodBayesR4Kept' || key === 'goodBayesFsReuse' || key === 'merlinPublicPipeline') { if (t[key]) parts.push(`${key}=${t[key]}`); continue; }
     if (key === 'goodCleanVoteMaxAttempt') { if (t.goodCleanVote && t.goodCleanVoteMaxAttempt !== 4) parts.push(`goodCleanVoteMaxAttempt=${t.goodCleanVoteMaxAttempt}`); continue; }
     if (key === 'merlinCoverRate') { if (t.merlinDoomedRed && t.merlinCoverRate !== 1) parts.push(`merlinCoverRate=${t.merlinCoverRate}`); continue; }
     if (key === 'goodLeaderWorldPick') { if (t.goodLeaderWorldPick) parts.push(`goodLeaderWorldPick=${t.goodLeaderWorldPick}`); continue; }

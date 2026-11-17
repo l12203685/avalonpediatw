@@ -240,14 +240,14 @@ describe('mirror group: stats answer shares the reply_token with the mirror queu
     expect(h.mirror.lineReplyQueueSize()).toBe(0);
   });
 
-  it('the command text is still mirrored to Discord + lobby; the answer is not', async () => {
+  it('the command text is mirrored to Discord + lobby; the answer follows to Discord only, after delivery (2026-11-17)', async () => {
     const h = setup();
     await deliver(h, groupText('/戰績 HAO', 'm3', 'rt3'));
 
-    expect(h.lobby.map((m) => m.message)).toEqual(['/戰績 HAO']);
-    expect(h.discordSent).toHaveLength(1);
+    expect(h.lobby.map((m) => m.message)).toEqual(['/戰績 HAO']); // the answer never reaches the lobby
+    await vi.waitFor(() => expect(h.discordSent).toHaveLength(2));
     expect(h.discordSent[0]).toMatch(/\[LINE\]\[LineUser-U1\] \/戰績 HAO$/);
-    expect(h.discordSent.join('\n')).not.toContain('的戰績');
+    expect(h.discordSent[1]).toMatch(/\[LINE\]\[百科機器人\] 📊 HAO 的戰績/);
 
     expect(h.replies).toEqual([{ token: 'rt3', texts: [expect.stringContaining('📊 HAO 的戰績')] }]);
     expect(h.replies[0].texts[0]).toContain('場次 1013｜最終勝率 38.5%');
