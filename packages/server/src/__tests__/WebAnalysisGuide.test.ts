@@ -56,4 +56,17 @@ describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
     nav.openGrouping({ kind: 'tier' } as never);
     expect(useDiscoveryNav.getState()).toMatchObject({ tab: 'strength', view: 'compare' });
   });
+  it('去重導航：總覽能前往刺殺、派隊能前往局勢樹，原始任務路徑仍可展開', () => {
+    const src = (name: string): string => fs.readFileSync(path.join(web, 'components', 'analysis', name), 'utf-8');
+    const overview = src('OverviewPanel.tsx');
+    const rounds = src('RoundsAnalysis.tsx');
+    expect(page).toContain("onOpenAssassination={() => setTab('assassination')}");
+    expect(page).toContain("onOpenStateTree={() => setTab('stateTree')}");
+    expect(overview).toContain('data-testid="analytics-open-assassination"');
+    expect(rounds).toContain('data-testid="analytics-open-state-tree"');
+    expect(rounds).toContain("id: 'mission-paths'");
+    expect(rounds).toContain('rows={pathRows}');
+    expect(rounds).toContain('<MoreDetails items=');
+  });
+
 });
