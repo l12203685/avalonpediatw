@@ -91,6 +91,35 @@ function logoDataUri(): string | null {
   return logoUri;
 }
 
+/**
+ * 官方配件圖（站長 11/18：「直接用官方圖 只是可以淡化 像湖中湖到好可以用湖中陣營的圖 中間的圓圈 淡化 盾牌也是」）：
+ * 網站 packages/web/public/avalon-assets 的 team-good.jpg／team-evil.jpg 中間的圓、mission-shield.jpg（去掉黑底），
+ * 複本放在 assets/threads/（seat-good.png、seat-evil.png、mission-shield.png）。每張圖只放一次（symbol），用的地方 <use>。
+ */
+export const THREADS_ASSET_DIR = path.resolve(__dirname, '..', '..', '..', 'assets', 'threads');
+const assetUris = new Map<string, string | null>();
+function assetUri(file: string): string | null {
+  if (!assetUris.has(file)) {
+    const f = path.join(THREADS_ASSET_DIR, file);
+    assetUris.set(file, fs.existsSync(f) ? `data:image/png;base64,${fs.readFileSync(f).toString('base64')}` : null);
+  }
+  return assetUris.get(file) ?? null;
+}
+
+/** 文件裡用到的配件圖 symbol（seat-good、seat-evil、mission-shield）。 */
+function assetSymbols(body: string): string {
+  const defs: string[] = [];
+  const add = (id: string, file: string, w: number, h: number): void => {
+    if (!body.includes(`#${id}"`)) return;
+    const uri = assetUri(file);
+    if (uri) defs.push(`<symbol id="${id}" viewBox="0 0 ${w} ${h}"><image href="${uri}" width="${w}" height="${h}"/></symbol>`);
+  };
+  add('seat-good', 'seat-good.png', 160, 160);
+  add('seat-evil', 'seat-evil.png', 160, 160);
+  add('mission-shield', 'mission-shield.png', 74, 99);
+  return defs.length ? `<defs>${defs.join('')}</defs>` : '';
+}
+
 function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}): string {
   const uri = opts.watermark === false ? null : logoDataUri();
   // 浮水印：大尺寸、置中在標題列以下的區域、圓角裁切，放在所有內容後面（站長 11/17：「我是希望背景帶有我們的"阿瓦隆百科"logo」）。
@@ -103,7 +132,7 @@ function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}
     : '';
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${height}" viewBox="0 0 ${W} ${height}" font-family="${WEEKLY_CHART_FONT_FAMILY}">` +
-    rect(0, 0, W, height, C.page) + watermark + body + '</svg>'
+    assetSymbols(body) + rect(0, 0, W, height, C.page) + watermark + body + '</svg>'
   );
 }
 
@@ -278,26 +307,26 @@ export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<numb
 }
 
 /** 每個座位的標記；known＝到那一局為止看得到的列（回顧圖只算到那一局，題目卡算到出題那一刻）。 */
-export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string }> {
-  const marks = new Map<number, { label: string; color: string }>();
+export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string; side?: 'good' | 'evil' }> {
+  const marks = new Map<number, { label: string; color: string; side?: 'good' | 'evil' }>();
   const s = pv.view.sight;
   // 圈的顏色：知道陣營的座位一律好人藍、壞人紅（站長 11/18：「湖中鏈可知的陣營也全都一起改座位圈圈顏色」）；分不出來的拇指金色。
   if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指', color: C.gold }));
-  if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red }));
-  if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red }));
+  if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red, side: 'evil' }));
+  if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red, side: 'evil' }));
   // 自己湖到的、湖中鏈推出的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉（夜裡已經知道的不重複）。
   const knowledge = lakeKnowledge(pv, known);
   for (const [seat, k] of knowledge.seats) {
     if (marks.has(seat)) continue;
     const label = k.via === null ? (k.evil ? '湖到紅' : '湖到好') : k.evil ? '湖鏈：紅' : '湖鏈：好';
-    marks.set(seat, { label, color: k.evil ? C.red : C.blue });
+    marks.set(seat, { label, color: k.evil ? C.red : C.blue, side: k.evil ? 'evil' : 'good' });
   }
   // 派西：一根拇指的陣營知道了（自己湖、或湖中鏈），兩根拇指就分得出來（站長 11/18：「拇指湖到好直接寫梅林, 另一根拇指改成莫甘娜,
   // 圓圈也改成藍色/紅色」）。這條蓋過原本的「拇指」標記。
   const resolved = s.kind === 'percival' ? resolveThumbs(s.thumbs, knowledge.seats) : null;
   if (resolved) {
-    marks.set(resolved.merlin, { label: '梅林', color: C.blue });
-    marks.set(resolved.morgana, { label: '莫甘娜', color: C.red });
+    marks.set(resolved.merlin, { label: '梅林', color: C.blue, side: 'good' });
+    marks.set(resolved.morgana, { label: '莫甘娜', color: C.red, side: 'evil' });
   }
   marks.set(pv.pick.seat, { label: '你', color: C.blue });
   return marks;
@@ -565,7 +594,12 @@ function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetR
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
     const m = marks.get(seat);
     const me = seat === pv.pick.seat;
-    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.blueFill : C.seat}" stroke="${m ? m.color : C.line}" stroke-width="${m ? 5 : 2}"/>`);
+    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.blueFill : C.seat}"/>`);
+    // 知道陣營的座位：圈裡放官方陣營圖中間的圓（淡化），數字照樣看得清楚
+    if (m?.side && !me && assetUri(`seat-${m.side}.png`)) {
+      parts.push(`<use href="#seat-${m.side}" x="${x - SEAT_R}" y="${y - SEAT_R}" width="${2 * SEAT_R}" height="${2 * SEAT_R}" opacity="0.42" class="seat-side seat-${m.side}"/>`);
+    }
+    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="none" stroke="${m ? m.color : C.line}" stroke-width="${m ? 5 : 2}"/>`);
     parts.push(text(x, y + 10, seatChar(seat), { size: 28, anchor: 'middle', weight: true }));
     if (m) {
       // 標記字放在座位外側：上半圈在上面、下半圈在下面、左右兩邊在外側。
@@ -582,10 +616,16 @@ function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetR
 
 /** 盾牌（上隊）：24×24 的路徑，跟網站的 ShieldIcon 同一種形狀。 */
 function shield(cx: number, cy: number, size: number): string {
+  // 官方的任務盾牌圖（稍微淡一點，白／黑格還看得出來）；沒有圖檔時畫原本的盾牌
+  if (assetUri('mission-shield.png')) {
+    const h = size;
+    const w = (h * 74) / 99;
+    return `<use href="#mission-shield" x="${(cx - w / 2).toFixed(1)}" y="${(cy - h / 2).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" opacity="0.9" class="team-shield"/>`;
+  }
   const k = size / 24;
   const tx = cx - 12 * k;
   const ty = cy - 12 * k;
-  return `<path transform="translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${k.toFixed(3)})" d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" fill="#facc15" stroke="#1c1917" stroke-width="1.2"/>`;
+  return `<path transform="translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${k.toFixed(3)})" d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" fill="#facc15" stroke="#1c1917" stroke-width="1.2" class="team-shield"/>`;
 }
 
 /** 圖的高度上限（Threads 手機 4:5）。 */

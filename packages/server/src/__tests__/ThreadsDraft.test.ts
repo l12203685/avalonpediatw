@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, recapGroups, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, recapGroups, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -337,7 +337,7 @@ describe('image', () => {
   it('the question card shows only the question round; every earlier round gets its own recap image; every row is drawn exactly once, all ≤ 1350', () => {
     let withRecaps = 0;
     // 牌譜格子的盾牌（stroke-width 1.2）；圓桌上箭頭的盾牌另外算
-    const shields = (svg: string): number => (svg.match(/<path [^>]*d="M12 2 [^>]*stroke-width="1\.2"\/>/g) ?? []).length;
+    const shields = (svg: string): number => (svg.match(/class="team-shield"/g) ?? []).length;
     for (let w = 0; w < 4; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
@@ -482,6 +482,39 @@ describe('image', () => {
         expect(card).not.toContain('class="lane');
       }
     }
+  });
+
+  it('official art: known-alignment seats get the faded team medallion center, the vote grid uses the mission shield; each image is embedded once', () => {
+    for (const f of ['seat-good.png', 'seat-evil.png', 'mission-shield.png']) expect(fs.existsSync(path.join(THREADS_ASSET_DIR, f))).toBe(true);
+    // 梅林看到的紅：紅色陣營圖；格子：任務盾牌圖
+    let pv: ReturnType<typeof pickView> | null = null;
+    for (let w = 0; w < 8 && !pv; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const v = pickView(gameOf(pick), pick);
+        if (sheetRows(v).some((r) => r.kind === 'proposal')) {
+          // 當成梅林看：兩個不是自己的座位是看到的紅
+          const others = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== v.pick.seat).slice(0, 2);
+          pv = { ...v, view: { ...v.view, sight: { kind: 'merlin', seen: others } } } as typeof v;
+          break;
+        }
+      }
+    }
+    expect(pv).not.toBeNull();
+    const svg = allSvg(pv!, 3);
+    const seen = (pv!.view.sight as { seen: number[] }).seen;
+    const card = buildPuzzleSvg(pv!, 3);
+    expect((card.match(/class="seat-side seat-evil"/g) ?? []).length).toBe(seen.length);
+    expect(card.match(/<symbol id="seat-evil"/g)?.length).toBe(1); // 只放一次
+    expect(svg).toContain('href="#mission-shield"');
+    expect(card).toMatch(/class="seat-side seat-evil"[^>]*/);
+    expect(/<use href="#seat-evil"[^>]*opacity="0\.(\d+)"/.exec(card)).not.toBeNull(); // 淡化
+    // 湖中鏈推出的好人：藍色陣營圖
+    const lake = (round: number, holderSeat: number, targetSeat: number, claim: 'o' | 'x' | '', seen2?: 'good' | 'red') => ({ kind: 'lake' as const, round, holderSeat, targetSeat, claim, ...(seen2 ? { seen: seen2 } : {}) });
+    const roles = ['loyal', 'merlin', 'percival', 'assassin', 'morgana', 'loyal', 'mordred', 'loyal', 'loyal', 'oberon'];
+    const marks = seatMarks({ game: { seatRoles: roles }, pick: { seat: 1 }, view: { sight: { kind: 'loyal' } } } as never, [lake(2, 1, 9, 'o', 'good'), lake(3, 9, 6, 'o'), lake(3, 9, 4, 'x')]);
+    expect(marks.get(9)?.side).toBe('good');
+    expect(marks.get(6)?.side).toBe('good');
+    expect(marks.get(4)?.side).toBe('evil');
   });
 
   it('every seat whose alignment you know gets a blue (good) or red (bad) circle: night info, own lake, lake chain', () => {
