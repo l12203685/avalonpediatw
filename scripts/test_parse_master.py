@@ -183,3 +183,9 @@ def test_env_var_drives_default_input(tmp_path: Path, monkeypatch):
     rc = pm.main(["--output", str(out_dir)])
     assert rc == 0
     assert (out_dir / "roles.yaml").exists()
+
+
+def test_profile_card_sheet_is_excluded():
+    # 站長 2026-11-17：個人資料卡（S1 新人挑戰賽報名表）不轉出、不放公開 repo。
+    assert "個人資料卡" in pm.EXCLUDED_SHEETS
+    assert not (Path(__file__).resolve().parents[1] / "content" / "_data" / "個人資料卡.yaml").exists()
