@@ -9,7 +9,14 @@
  * 只畫到出題那一刻：牌譜的列來自 sheetRows(pv)（= pv.shown，決定當下看得到的事件），之後的派票、任務、湖、角色都不在圖裡。
  * 公布完整答案的日子另外一張答案圖（同樣的深色卡片）：昨天那一局的角色，藍方一格、紅方一格（同 IG 答案頁）。
  *
- * 1080 寬（手機一屏），高度照牌譜行數；牌譜超過 22 行改兩欄，一張圖不拆——草稿和自動發文的 `image` 輸出維持一張。
+ * 站長 11/17 第二輪：「我希望順便呈現牌譜的視覺化版本」「拇指金圈圈蠻好的 只是我希望能夠像圍著圈圈 (圓桌武士) 的方式呈現 座位」
+ * 「腳色順序應該是 刺娜德奧派梅」→ 題目卡的座位改成圍著圓桌（1～0 順時針，桌面中間是五局的任務格）；牌譜改成網站牌譜頁的格子
+ * （列 = 每次提議、欄 = 座位 1～0、金色盾牌 = 上隊、白／黑格 = 贊成／反對、任務列、湖中列、右邊結果與文字紀錄，文字裡值得注意的票
+ * 綠色），單獨一張「牌譜圖」；答案卡紅方在上、藍方在下。
+ *
+ * 一篇的圖（輪播，依序）：① 題目卡（1080 寬，約 1,130 高，不超過 Threads 手機 4:5 的 1,350）；② 牌譜圖（列高照列數縮放，盡量
+ * 放進 1,350；列太多才加高）；③ 公布完整答案的日子才有的答案卡。草稿的 `image` 仍是題目卡（只能發一張圖時發它），`gridImage` 是
+ * 牌譜圖、`answerImage` 是答案卡。
  * SVG 用字型檔（和每週排行圖同一個 Noto Sans TC，assets/fonts/）在 @resvg/resvg-js 轉 PNG，不用瀏覽器也不用系統字型，
  * GitHub Actions 上也能跑。圖裡只有座位和牌譜記號，沒有玩家名字。
  */
@@ -226,23 +233,6 @@ function seatMarks(pv: PickView): Map<number, { label: string; color: string }> 
   return marks;
 }
 
-function missionBoxes(rows: readonly SheetRow[], y: number): string {
-  const parts: string[] = [];
-  const bw = 180;
-  const gap = (W - 80 - bw * 5) / 4;
-  for (let r = 1; r <= 5; r++) {
-    const x = 40 + (r - 1) * (bw + gap);
-    const q = rows.find((e): e is Extract<SheetRow, { kind: 'quest' }> => e.kind === 'quest' && e.round === r);
-    const fill = q ? (q.failed ? C.redFill : C.greenFill) : C.seat;
-    const stroke = q ? (q.failed ? C.red : C.green) : C.line;
-    parts.push(rect(x, y, bw, 96, fill, ` rx="16" stroke="${stroke}" stroke-width="2"`));
-    parts.push(text(x + bw / 2, y + 38, `第 ${r} 局・${TEAM_SIZES[r - 1]} 人`, { size: 26, fill: q ? C.ink : C.soft, anchor: 'middle' }));
-    if (q) parts.push(text(x + bw / 2, y + 80, q.mission, { size: 30, fill: C.yellow, anchor: 'middle', weight: true }));
-    else if (FAILS_REQUIRED[r - 1] > 1) parts.push(text(x + bw / 2, y + 78, '要 2 張失敗', { size: 26, fill: C.faint, anchor: 'middle' }));
-  }
-  return parts.join('');
-}
-
 const CLAIM_LINE: Record<string, string> = { o: '說好人（o）', x: '說壞人（x）', '': '沒說' };
 
 /** 牌譜的一行（跟文字貼文同一種寫法），一段一個顏色：隊長＋隊伍白、記號綠、任務結果黃、湖綠。 */
@@ -274,6 +264,68 @@ export function recordLines(rows: readonly SheetRow[]): Seg[][] {
   return out;
 }
 
+/** 圓桌的高度（含座位外圈的標記字）。 */
+const ROUND_TABLE_H = 720;
+const TABLE_RX = 330;
+const TABLE_RY = 190;
+const SEAT_R = 46;
+/** 座位圈的半徑（桌緣再往外一點）。 */
+const RING_RX = TABLE_RX + 70;
+const RING_RY = TABLE_RY + 66;
+
+/** 座位 seat（1～10）在圓桌上的位置：1 在正上方，順時針。 */
+export function seatPosition(seat: number, cx: number, cy: number): { x: number; y: number; ux: number; uy: number } {
+  const a = -Math.PI / 2 + ((seat - 1) * 2 * Math.PI) / 10;
+  const ux = Math.cos(a);
+  const uy = Math.sin(a);
+  return { x: cx + RING_RX * ux, y: cy + RING_RY * uy, ux, uy };
+}
+
+/** 桌面中間的五局任務格（人數、已出的任務結果、第 4 局要 2 張失敗）。 */
+function tableMissions(rows: readonly SheetRow[], cx: number, cy: number): string {
+  const parts: string[] = [];
+  const bw = 104;
+  const gap = 10;
+  const x0 = cx - (bw * 5 + gap * 4) / 2;
+  const y0 = cy - 44;
+  for (let r = 1; r <= 5; r++) {
+    const x = x0 + (r - 1) * (bw + gap);
+    const q = rows.find((e): e is Extract<SheetRow, { kind: 'quest' }> => e.kind === 'quest' && e.round === r);
+    const fill = q ? (q.failed ? C.redFill : C.blueFill) : C.seat;
+    const stroke = q ? (q.failed ? C.red : C.blue) : C.line;
+    parts.push(rect(x, y0, bw, 88, fill, ` rx="14" stroke="${stroke}" stroke-width="2"`));
+    parts.push(text(x + bw / 2, y0 + 32, `${r}・${TEAM_SIZES[r - 1]}人`, { size: 22, fill: q ? C.ink : C.soft, anchor: 'middle' }));
+    if (q) parts.push(text(x + bw / 2, y0 + 70, q.mission, { size: q.mission.length > 4 ? 22 : 26, fill: C.yellow, anchor: 'middle', weight: true }));
+    else if (FAILS_REQUIRED[r - 1] > 1) parts.push(text(x + bw / 2, y0 + 68, '要2張失敗', { size: 18, fill: C.faint, anchor: 'middle' }));
+  }
+  return parts.join('');
+}
+
+/** 圓桌：桌面（任務格）＋十個座位（你藍色、拇指金圈、看到的紅／隊友紅圈、湖到的），標記字在座位外側。 */
+function roundTable(pv: PickView, rows: readonly SheetRow[], top: number): string {
+  const cx = W / 2;
+  const cy = top + ROUND_TABLE_H / 2;
+  const parts: string[] = [
+    `<ellipse cx="${cx}" cy="${cy}" rx="${TABLE_RX}" ry="${TABLE_RY}" fill="${C.card}" fill-opacity="0.92" stroke="${C.gold}" stroke-opacity="0.35" stroke-width="3"/>`,
+    tableMissions(rows, cx, cy),
+  ];
+  const marks = seatMarks(pv);
+  for (let seat = 1; seat <= 10; seat++) {
+    const { x, y, ux, uy } = seatPosition(seat, cx, cy);
+    const m = marks.get(seat);
+    const me = seat === pv.pick.seat;
+    parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.blueFill : C.seat}" stroke="${m ? m.color : C.line}" stroke-width="${m ? 6 : 2}"/>`);
+    parts.push(text(x, y + 15, seatChar(seat), { size: 42, anchor: 'middle', weight: true }));
+    if (m) {
+      // 標記字放在座位外側（上半圈在上面、下半圈在下面），不壓到桌面。
+      const ly = uy < -0.2 ? y - SEAT_R - 14 : uy > 0.2 ? y + SEAT_R + 34 : y + SEAT_R + 34;
+      const lx = Math.abs(uy) <= 0.2 ? x + ux * 6 : x;
+      parts.push(text(lx, ly, m.label, { size: 24, fill: m.color, anchor: 'middle' }));
+    }
+  }
+  return parts.join('');
+}
+
 /** 題目圖的 SVG（weekday = 今天的星期，決定標題）。 */
 export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const role = pv.game.seatRoles[pv.pick.seat - 1];
@@ -291,42 +343,10 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   y += 50;
   parts.push(text(40, y, info, { size: 30, fill: C.soft }));
 
-  // 座位
-  y += 40;
-  const marks = seatMarks(pv);
-  const cw = (W - 80) / 10;
-  for (let seat = 1; seat <= 10; seat++) {
-    const cx = 40 + cw * (seat - 1) + cw / 2;
-    const cy = y + 52;
-    const m = marks.get(seat);
-    const me = seat === pv.pick.seat;
-    parts.push(`<circle cx="${cx}" cy="${cy}" r="40" fill="${me ? C.blueFill : C.seat}" stroke="${m ? m.color : C.line}" stroke-width="${m ? 6 : 2}"/>`);
-    parts.push(text(cx, cy + 14, seatChar(seat), { size: 40, anchor: 'middle', weight: true }));
-    if (m) parts.push(text(cx, cy + 82, m.label, { size: 24, fill: m.color, anchor: 'middle' }));
-  }
-  y += 150;
-
-  // 任務
-  parts.push(missionBoxes(rows, y));
-  y += 130;
-
-  // 牌譜
-  const raw = recordLines(rows);
-  const lines = raw.length ? raw : [[{ t: '第 1 局第一個隊長，前面沒有派票', fill: C.soft }]];
-  const twoCols = lines.length > 22;
-  const size = twoCols ? 26 : 30;
-  const lh = twoCols ? 40 : 44;
-  const perCol = twoCols ? Math.ceil(lines.length / 2) : lines.length;
-  parts.push(`<line x1="40" y1="${y}" x2="${W - 40}" y2="${y}" stroke="${C.line}" stroke-width="2"/>`);
-  y += 50;
-  lines.forEach((line, i) => {
-    const col = twoCols && i >= perCol ? 1 : 0;
-    const row = col ? i - perCol : i;
-    const width = textWidth(line.map((p) => p.t).join(''), size);
-    const max = twoCols ? W / 2 - 60 : W - 80;
-    parts.push(segs(40 + col * (W / 2), y + row * lh, line, width > max ? fitSize(line.map((p) => p.t).join(''), size, max) : size));
-  });
-  y += perCol * lh + 20;
+  // 座位：圍著圓桌（站長 11/17「像圍著圈圈 (圓桌武士) 的方式呈現 座位」），1 在正上方、順時針到 0；桌面中間是五局的任務格。
+  y += 34;
+  parts.push(roundTable(pv, rows, y));
+  y += ROUND_TABLE_H;
 
   // 輪到你
   parts.push(`<line x1="40" y1="${y}" x2="${W - 40}" y2="${y}" stroke="${C.line}" stroke-width="2"/>`);
@@ -337,7 +357,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     : '三藍：輪到你刺殺。誰是梅林？';
   parts.push(text(40, y, prompt, { size: 36, fill: C.blue, weight: true }));
   y += 56;
-  parts.push(text(40, y, '記號：+ 隊外投贊成、- 隊內投反對；o 成功、x 失敗；0 家寫 0', { size: 24, fill: C.faint }));
+  parts.push(text(40, y, '到目前的牌譜在下一張圖（往右滑）｜0 家寫 0', { size: 24, fill: C.faint }));
   y += 40;
   parts.push(text(40, y, '實戰牌譜｜阿瓦隆百科 avalon-game-platform.web.app', { size: 24, fill: C.faint }));
   y += 40;
@@ -347,7 +367,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
 
 // ─── 答案卡 ──────────────────────────────────────────────────────────────
 
-/** 答案圖：昨天那一局的角色，藍方（派西維爾、梅林）一格、紅方一格；ids = 這一局這幾天出過的題號。 */
+/** 答案圖：昨天那一局的角色，紅方一格在上、藍方一格在下（站長 11/17「腳色順序應該是 刺娜德奧派梅」）；ids = 這一局這幾天出過的題號。 */
 export function buildAnswerSvg(pv: PickView, ids: readonly string[] = [pv.exerciseId]): string {
   const roles = pv.game.seatRoles;
   const seatOf = (role: string): number[] => roles.flatMap((r, i) => (r === role ? [i + 1] : []));
@@ -363,14 +383,123 @@ export function buildAnswerSvg(pv: PickView, ids: readonly string[] = [pv.exerci
     items.forEach((it, i) => parts.push(text(76, y + 70 + lh * (i + 1) - 14, it, { size: 50, fill: C.ink, weight: true })));
     y += h + 30;
   };
-  box('藍方', blue, C.blueFill, C.blue);
   box('紅方', red, C.redFill, C.red);
+  box('藍方', blue, C.blueFill, C.blue);
   y += 30;
   parts.push(text(40, y, `結果：${resultText(pv.game)}`, { size: 34, fill: C.yellow, weight: true }));
   y += 56;
   parts.push(text(40, y, '其他座位是忠臣｜實戰牌譜｜阿瓦隆百科 avalon-game-platform.web.app', { size: 24, fill: C.faint }));
   y += 40;
   return svgDoc(y, parts.join(''));
+}
+
+// ─── 牌譜圖（網站牌譜頁的格子） ──────────────────────────────────────────────
+
+/** 盾牌（上隊）：24×24 的路徑，跟網站的 ShieldIcon 同一種形狀。 */
+function shield(cx: number, cy: number, size: number): string {
+  const k = size / 24;
+  const tx = cx - 12 * k;
+  const ty = cy - 12 * k;
+  return `<path transform="translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${k.toFixed(3)})" d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" fill="#facc15" stroke="#1c1917" stroke-width="1.2"/>`;
+}
+
+/** 牌譜圖的高度目標（Threads 手機 4:5）。 */
+export const GRID_TARGET_H = 1350;
+const GRID_HEAD = 150 + 64; // 標題列＋欄名
+const GRID_FOOT = 96;
+
+/** 牌譜圖的列高：盡量讓整張放進 1,350，列太多時最小 34。 */
+export function gridRowHeight(rowCount: number): number {
+  const free = GRID_TARGET_H - GRID_HEAD - GRID_FOOT - 20;
+  return Math.max(34, Math.min(60, Math.floor(free / Math.max(1, rowCount))));
+}
+
+/**
+ * 牌譜圖的 SVG：網站牌譜頁的格子（隊長｜座位 1～0｜結果｜文字紀錄），最後一列「輪到你」。
+ * 列只來自 sheetRows(pv)，所以跟題目卡一樣只到出題的那一刻；欄名只標你和你看得到的人（金、紅），不寫角色。
+ */
+export function buildGridSvg(pv: PickView, weekday: number): string {
+  const rows = sheetRows(pv);
+  const rh = gridRowHeight(rows.length);
+  const fs = Math.max(18, Math.min(26, Math.round(rh * 0.5)));
+  const x0 = 40;
+  const leadW = 64;
+  const resW = 100;
+  const textW = 220;
+  const seatW = (W - 80 - leadW - resW - textW) / 10;
+  const seatX = (seat: number): number => x0 + leadW + seatW * (seat - 1);
+  const resX = x0 + leadW + seatW * 10;
+  const textX = resX + resW;
+  const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・牌譜`, pv.exerciseId)];
+  let y = 150 + 14;
+
+  // 欄名：隊長、1～0（你藍、拇指金、看到的紅／隊友紅）、結果、文字紀錄
+  const marks = seatMarks(pv);
+  const hy = y + 34;
+  parts.push(text(x0 + leadW / 2, hy, '隊長', { size: 22, fill: C.faint, anchor: 'middle' }));
+  for (let seat = 1; seat <= 10; seat++) {
+    const m = marks.get(seat);
+    const cx = seatX(seat) + seatW / 2;
+    if (m) parts.push(`<circle cx="${cx}" cy="${hy - 9}" r="22" fill="${seat === pv.pick.seat ? C.blueFill : 'none'}" stroke="${m.color}" stroke-width="3"/>`);
+    parts.push(text(cx, hy, seatChar(seat), { size: 26, fill: m ? m.color : C.ink, anchor: 'middle', weight: true }));
+  }
+  parts.push(text(resX + resW / 2, hy, '結果', { size: 22, fill: C.faint, anchor: 'middle' }));
+  parts.push(text(textX + 12, hy, '文字紀錄', { size: 22, fill: C.faint }));
+  y += 50;
+  parts.push(`<line x1="${x0}" y1="${y}" x2="${W - 40}" y2="${y}" stroke="${C.line}" stroke-width="2"/>`);
+
+  for (const r of rows) {
+    const mid = y + rh / 2 + fs * 0.36;
+    if (r.kind === 'proposal') {
+      parts.push(rect(x0, y, leadW, rh, '#09090b'));
+      parts.push(text(x0 + leadW / 2, mid, seatChar(r.leaderSeat), { size: fs, fill: '#facc15', anchor: 'middle', weight: true }));
+      for (let seat = 1; seat <= 10; seat++) {
+        const v = r.votes[seat - 1];
+        const fill = v === 'approve' ? '#ffffff' : v === 'reject' ? '#000000' : '#18181b';
+        parts.push(rect(seatX(seat), y, seatW, rh, fill, ` stroke="#27272a" stroke-width="1"`));
+        if (r.team.includes(seat)) parts.push(shield(seatX(seat) + seatW / 2, y + rh / 2, Math.min(seatW, rh) - 6));
+      }
+      const res = r.forced ? '強制' : r.approves === null ? '—' : `${r.approves}票${r.approved ? '過' : ''}`;
+      parts.push(text(resX + resW / 2, mid, res, { size: fs - 2, fill: r.forced ? '#fcd34d' : r.approved ? '#6ee7b7' : C.faint, anchor: 'middle' }));
+      const [team, ...rest] = r.line.split(' ');
+      const seg: Seg[] = [{ t: team }];
+      if (rest.length) seg.push({ t: ` ${rest.join(' ')}`, fill: C.green, weight: true });
+      parts.push(segs(textX + 12, mid, seg, fitSize(r.line, fs, textW - 16)));
+    } else if (r.kind === 'quest') {
+      parts.push(rect(x0, y, W - 80, rh, '#422006', ' fill-opacity="0.75"'));
+      parts.push(rect(x0, y, leadW, rh, '#713f12'));
+      parts.push(text(x0 + leadW / 2, mid, '任務', { size: fs - 4, fill: '#fef08a', anchor: 'middle', weight: true }));
+      const dots = [...r.mission].map((c) => (c === 'x' ? { t: '●', fill: '#ef4444' } : { t: '●', fill: '#3b82f6' }));
+      const verdict = r.failed ? `失敗（${r.failCount} 張）` : r.failCount ? `成功（${r.failCount} 張失敗）` : '成功';
+      parts.push(segs(seatX(1) + seatW * 5, mid, [{ t: `第 ${r.round} 輪任務 `, fill: '#fef9c3', weight: true }, ...dots, { t: ` ${verdict}`, fill: r.failed ? '#fca5a5' : '#93c5fd', weight: true }], fs - 2, 'middle'));
+      parts.push(rect(resX + 6, y + 4, resW - 12, rh - 8, r.failed ? '#dc2626' : '#2563eb', ' rx="6"'));
+      parts.push(text(resX + resW / 2, mid, r.mission, { size: fs - 2, fill: '#ffffff', anchor: 'middle', weight: true }));
+      parts.push(text(textX + 12, mid, r.mission, { size: fs, fill: r.failed ? '#fca5a5' : '#93c5fd', weight: true }));
+    } else if (r.kind === 'lake') {
+      parts.push(rect(x0, y, W - 80, rh, '#083344', ' fill-opacity="0.8"'));
+      parts.push(rect(x0, y, leadW, rh, '#164e63'));
+      parts.push(text(x0 + leadW / 2, mid, '湖中', { size: fs - 4, fill: '#a5f3fc', anchor: 'middle', weight: true }));
+      const claim = r.claim === 'o' ? { t: '宣告藍', fill: '#bfdbfe' } : r.claim === 'x' ? { t: '宣告紅', fill: '#fca5a5' } : { t: '沒說', fill: C.soft };
+      parts.push(segs(seatX(1) + seatW * 5, mid, [{ t: `${seatChar(r.holderSeat)} 家 驗 ${seatChar(r.targetSeat)} 家 → `, fill: '#ecfeff' }, { ...claim, weight: true }], fs - 2, 'middle'));
+      const ll = `${seatChar(r.holderSeat)}>${seatChar(r.targetSeat)}${r.claim ? ` ${r.claim}` : ''}`;
+      parts.push(rect(resX + 6, y + 4, resW - 12, rh - 8, '#0891b2', ' rx="6"'));
+      parts.push(text(resX + resW / 2, mid, ll, { size: fs - 2, fill: '#ffffff', anchor: 'middle', weight: true }));
+      parts.push(text(textX + 12, mid, ll, { size: fs, fill: '#a5f3fc' }));
+    } else {
+      // 輪到你：藍色的一列
+      parts.push(rect(x0, y, W - 80, rh, C.blueFill, ` stroke="${C.blue}" stroke-width="2"`));
+      parts.push(text(x0 + leadW / 2, mid, seatChar(r.leaderSeat), { size: fs, fill: C.blue, anchor: 'middle', weight: true }));
+      const msg = r.round !== null ? `第 ${r.round} 局第 ${r.attempt} 次：輪到你派 ${r.size} 人${r.forced ? '（強制出發）' : ''}` : '三藍：輪到你刺殺，誰是梅林？';
+      parts.push(text(seatX(1) + 12, mid, msg, { size: fs, fill: C.ink, weight: true }));
+    }
+    y += rh;
+  }
+  y += 40;
+  parts.push(text(x0, y, '盾牌 = 上隊｜白 = 贊成、黑 = 反對、灰 = 強制局不投票｜文字：+ 隊外贊成、- 隊內反對（綠色）', { size: 22, fill: C.faint }));
+  y += 36;
+  parts.push(text(x0, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 22, fill: C.faint }));
+  y += 30;
+  return svgDoc(Math.max(y, 600), parts.join(''));
 }
 
 /** SVG → PNG（只用內附的字型）。字型檔或原生套件不在時丟錯，呼叫端改成不附圖。 */
@@ -388,6 +517,11 @@ function svgToPng(svg: string, fontFile: string): Buffer {
 /** 題目圖 PNG。 */
 export function renderPuzzlePng(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer {
   return svgToPng(buildPuzzleSvg(pv, weekday), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
+}
+
+/** 牌譜圖 PNG（輪播的第二張）。 */
+export function renderGridPng(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer {
+  return svgToPng(buildGridSvg(pv, weekday), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
 }
 
 /** 答案圖 PNG（公布完整答案的日子才附）。 */

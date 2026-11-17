@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { buildAnswerSvg, buildPuzzleSvg, recordLines, renderAnswerPng, renderPuzzlePng, sheetRows, textWidth, wrapLine } from '../bots/threads/image';
+import { GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, gridRowHeight, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, wrapLine } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -309,11 +309,48 @@ describe('image', () => {
     }
   });
 
+  it('seats sit around a round table: 1 at the top, clockwise to 0 at the upper left', () => {
+    const top = seatPosition(1, 540, 500);
+    expect(top.x).toBeCloseTo(540);
+    expect(top.y).toBeLessThan(500);
+    expect(seatPosition(3, 540, 500).x).toBeGreaterThan(540); // 右半圈
+    expect(seatPosition(6, 540, 500).y).toBeGreaterThan(500); // 正下方
+    expect(seatPosition(10, 540, 500).x).toBeLessThan(540); // 0 在左上
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
+    expect(svg).toContain('<ellipse'); // 圓桌
+    expect(svg).toContain('拇指');
+  });
+
+  it('the grid image is the site scoresheet built only from the rendered rows, and fits 4:5 for normal games', () => {
+    for (let w = 0; w < 4; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const rows = sheetRows(pv);
+        const svg = buildGridSvg(pv, 3);
+        // 每次提議的文字紀錄都在圖上，而且只有出題前的列（列來自 sheetRows，截斷由上面的測試鎖住）
+        for (const r of rows) if (r.kind === 'proposal') expect(svg).toContain(`>${r.line.split(' ')[0]}<`);
+        expect((svg.match(/<path /g) ?? []).length).toBe(rows.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.length : 0), 0));
+        const h = Number(/height="(\d+)"/.exec(svg)?.[1]);
+        if (rows.length <= 22) expect(h).toBeLessThanOrEqual(GRID_TARGET_H);
+        expect(svg).not.toMatch(/10\s*家/);
+      }
+    }
+    expect(gridRowHeight(5)).toBe(60);
+    expect(gridRowHeight(40)).toBe(34);
+    const [, , wed] = planWeek(bank, 0) as ThreadsPick[];
+    expect(renderGridPng(pickView(gameOf(wed), wed), 3).subarray(1, 4).toString('ascii')).toBe('PNG');
+  });
+
   it('the answer card lists yesterday’s blue and red roles and the result', () => {
     const [, tue] = planWeek(bank, 0) as ThreadsPick[];
     const pv = pickView(gameOf(tue), tue);
     const svg = buildAnswerSvg(pv);
     for (const role of ['派西維爾', '梅林', '刺客', '莫甘娜']) expect(svg).toContain(role);
+    // 站長 11/17「刺娜德奧派梅」：紅方在上、藍方在下
+    expect(svg.indexOf('紅方')).toBeLessThan(svg.indexOf('藍方'));
+    expect(svg.indexOf('刺客')).toBeLessThan(svg.indexOf('莫甘娜'));
+    expect(svg.indexOf('莫甘娜')).toBeLessThan(svg.indexOf('派西維爾'));
     expect(svg).toContain('結果：');
     expect(svg).toContain(pv.exerciseId);
     expect(svg).not.toMatch(/10\s*家/);

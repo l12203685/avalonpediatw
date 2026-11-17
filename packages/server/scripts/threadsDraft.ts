@@ -20,7 +20,7 @@ import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { draftMarkdown, type ThreadsDraft } from '../src/bots/threads/draft';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { futurePicks, parsePicks, pickOverrideOf } from '../src/bots/threads/picksFile';
-import { renderAnswerPng, renderPuzzlePng } from '../src/bots/threads/image';
+import { renderAnswerPng, renderGridPng, renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 
 const root = path.resolve(__dirname, '..');
@@ -82,6 +82,15 @@ for (let i = 0; i < days; i++) {
   if (!draft) {
     console.warn(`${date}: no puzzle for this theme`);
     continue;
+  }
+  // 輪播第二張：牌譜圖（網站牌譜頁的格子）。
+  if (pv && image) {
+    try {
+      fs.writeFileSync(path.join(outDir, `${date}-grid.png`), renderGridPng(pv, weekdayOf(date)));
+      draft.post.gridImage = `${date}-grid.png`;
+    } catch (err) {
+      console.warn(`${date}: grid image skipped (${(err as Error).message})`);
+    }
   }
   // 公布完整答案的日子（昨天不是同一局接著打）另附答案圖：昨天那一局的角色。
   if (withImage && draft.answerToYesterday && !draft.continuesYesterday) {

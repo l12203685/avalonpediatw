@@ -285,8 +285,11 @@ export interface ThreadsDraft {
   pick: ThreadsPick;
   recordId?: string;
   /** 新貼文 A（今天的題目＋昨天的答案）。 */
-  /** image = 題目圖；answerImage = 公布完整答案的日子另附的答案圖（THE ANSWER IS，昨天那一局的角色）。 */
-  post: { text: string; chars: number; image?: string; answerImage?: string };
+  /**
+   * 輪播的圖，依序：image = 題目卡（只能發一張時發它）；gridImage = 牌譜圖（網站牌譜頁的格子，只到出題那一刻）；
+   * answerImage = 公布完整答案的日子另附的答案卡（昨天那一局的角色，紅方在上）。
+   */
+  post: { text: string; chars: number; image?: string; gridImage?: string; answerImage?: string };
   /** A 要引用昨天的貼文 B 發（有昨天的題目就是 true）。 */
   quoteYesterday: boolean;
   /** 今天延續昨天同一局（週四、週六）：A 裡的昨天答案不公布幾好幾壞和角色。 */
@@ -364,7 +367,10 @@ export function draftMarkdown(d: ThreadsDraft): string {
   const out = [`# Threads 草稿 ${d.date}（${d.theme}）`, '', `題號 ${d.exerciseId}${d.recordId ? `｜牌譜 ${recordUrl(d.recordId)}` : ''}`, ''];
   const how = d.answerToYesterday ? `用「引用」昨天（${d.answerToYesterday.date}）的貼文發這篇` : '第一天：直接發（沒有昨天的貼文可以引用）';
   out.push(`## ① 新貼文 A：今天的題目＋昨天的答案（${d.post.chars} 字）`, '', `${how}，附圖。`, '', '```', d.post.text, '```', '');
-  if (d.post.image) out.push(`圖：${d.post.image}${d.post.answerImage ? `，第二張 ${d.post.answerImage}（昨天的答案）` : ''}`, '');
+  if (d.post.image) {
+    const imgs = [`${d.post.image}（題目）`, ...(d.post.gridImage ? [`${d.post.gridImage}（牌譜）`] : []), ...(d.post.answerImage ? [`${d.post.answerImage}（昨天的答案）`] : [])];
+    out.push(`圖（依序發成輪播）：${imgs.join('、')}`, '');
+  }
   out.push('## ② A 的第一則留言（ChatGPT 填）', '');
   out.push(d.firstComment.text ? ['```', d.firstComment.text, '```'].join('\n') : '（還沒填）');
   out.push('', `建議文章：${d.firstComment.articles.map((a) => `${a.title} ${a.url}`).join('；') || '（無）'}`, `關鍵字：${d.firstComment.tags.join('、')}`, '');
