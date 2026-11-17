@@ -47,7 +47,8 @@ jobs:
       STATE_DIR: /tmp/threads-state
       OUT_DIR: /tmp/threads-out
     steps:
-      # 讀這次執行那個 commit 的 threads_live.json（還沒 checkout，所以用 API 讀單一檔）。讀不到就當作空的＝只試跑。
+      # 讀這次執行那個 commit 的 threads_live.json（還沒 checkout，所以用 API 讀單一檔）。
+      # 讀不到就不留檔：閘門看不到合法的檔＝自動的執行只試跑（有設 repo 變數也一樣）。
       - name: 讀正式發的設定（packages/server/threads_live.json）
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,10 +56,11 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh api -H 'Accept: application/vnd.github.raw+json' "repos/${REPO}/contents/packages/server/threads_live.json?ref=${GITHUB_SHA}" > "$LIVE_FILE" 2>/dev/null; then
-            echo '{}' > "$LIVE_FILE"
-            echo "::warning::讀不到 packages/server/threads_live.json，自動的執行只試跑（除非有設 repo 變數 THREADS_LIVE_FROM）"
+            rm -f "$LIVE_FILE"
+            echo "::warning::讀不到 packages/server/threads_live.json，自動的執行只試跑"
+            exit 0
           fi
-          jq -c '{liveFrom, paused}' "$LIVE_FILE" || echo "threads_live.json 不是合法的 JSON，當作空的"
+          jq -c '{liveFrom, paused}' "$LIVE_FILE" || echo "::warning::threads_live.json 不是合法的 JSON，自動的執行只試跑"
 
       - name: 決定日期與模式
         id: gate
@@ -87,23 +89,28 @@ jobs:
           fi
           # 正式發的起始日（站長 11/17：圖、文字、小觀念確認前不要發）：站長在主控台設，Claude 每天同步進 threads_live.json。
           # 起始日＝repo 變數 THREADS_LIVE_FROM（有設就蓋過，相容舊設定），沒設就用檔案的 liveFrom；null／空白＝只試跑。
-          # 沒有起始日、今天／要發的日期早於那天，或檔案 paused=true，自動的觸發一律只試跑。
+          # 自動的觸發只有在 threads_live.json 讀得到、是一個 JSON 物件、paused 是布林值 false 時才可能正式發；
+          # 讀不到、壞掉、paused 沒有或不是布林值都只試跑，有設 repo 變數也一樣（變數只蓋過起始日）。
+          # 沒有起始日（或不是真的日期，例如 2026-02-30）、今天／要發的日期早於那天，也只試跑。
           # 自動＝排程，或 mode=auto 的手動觸發（伺服器每天觸發用的就是這個，services/threadsDispatch.ts）。
           # 手動選 dry-run、record-manual 本來就不會正式發，照常可以用。
-          FILE_LIVE_FROM=""; PAUSED=false
-          if [ -s "${LIVE_FILE:-}" ]; then
-            FILE_LIVE_FROM=$(jq -r 'if (.liveFrom | type) == "string" then .liveFrom else "" end' "$LIVE_FILE" 2>/dev/null || true)
-            PAUSED=$(jq -r 'if .paused == true then "true" else "false" end' "$LIVE_FILE" 2>/dev/null || echo false)
+          real_date() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [ "$(date -u -d "$1" +%F 2>/dev/null || true)" = "$1" ]; }
+          FILE_OK=0; FILE_LIVE_FROM=""; PAUSED=unknown
+          if [ -s "${LIVE_FILE:-}" ] && P=$(jq -rs 'if length == 1 and (.[0] | type) == "object" and (.[0].paused | type) == "boolean" then (.[0].paused | tostring) else error("bad") end' "$LIVE_FILE" 2>/dev/null); then
+            FILE_OK=1; PAUSED="$P"
+            FILE_LIVE_FROM=$(jq -r 'if (.liveFrom | type) == "string" then .liveFrom else "" end' "$LIVE_FILE")
+          else
+            echo "::warning::threads_live.json 讀不到、不是合法的 JSON，或 paused 不是 true/false：自動的執行只試跑"
           fi
           EFFECTIVE_LIVE_FROM="${LIVE_FROM:-$FILE_LIVE_FROM}"
-          if [ -n "$EFFECTIVE_LIVE_FROM" ] && ! [[ "$EFFECTIVE_LIVE_FROM" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-            echo "::warning::正式發的起始日格式不對（$EFFECTIVE_LIVE_FROM），當作沒設＝只試跑"
+          if [ -n "$EFFECTIVE_LIVE_FROM" ] && ! real_date "$EFFECTIVE_LIVE_FROM"; then
+            echo "::warning::正式發的起始日不是真的日期（$EFFECTIVE_LIVE_FROM），當作沒設＝只試跑"
             EFFECTIVE_LIVE_FROM=""
           fi
           AUTO=0
           if [ "$EVENT" = schedule ] || [ "${IN_MODE:-auto}" = auto ]; then AUTO=1; fi
           TODAY=$(TZ=Asia/Taipei date +%F)
-          if [ "$AUTO" = 1 ] && { [ "$PAUSED" = true ] || [ -z "$EFFECTIVE_LIVE_FROM" ] || [[ "$DATE" < "$EFFECTIVE_LIVE_FROM" ]] || [[ "$TODAY" < "$EFFECTIVE_LIVE_FROM" ]]; }; then
+          if [ "$AUTO" = 1 ] && { [ "$FILE_OK" != 1 ] || [ "$PAUSED" != false ] || [ -z "$EFFECTIVE_LIVE_FROM" ] || [[ "$DATE" < "$EFFECTIVE_LIVE_FROM" ]] || [[ "$TODAY" < "$EFFECTIVE_LIVE_FROM" ]]; }; then
             if [ "$MODE" = live ]; then MODE=dry-run; fi
             if [ "$IG" = live ]; then IG=dry-run; fi
           fi

@@ -1156,11 +1156,12 @@ describe('workflow', () => {
       expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', IN_DATE: '2026-01-01', LIVE_FROM: '2026-02-01' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
     });
 
-    it.skipIf(!hasBash)('workflow_dispatch mode=auto goes live on and after THREADS_LIVE_FROM', () => {
-      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: today })).toMatchObject({ mode: 'live', ig: 'live', run: '1' });
-      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01' })).toMatchObject({ mode: 'live', ig: 'live' });
+    it.skipIf(!hasBash || !hasJq)('workflow_dispatch mode=auto goes live on and after THREADS_LIVE_FROM (with a readable, unpaused threads_live.json)', () => {
+      const ok = { liveFrom: null, paused: false };
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: today }, ok)).toMatchObject({ mode: 'live', ig: 'live', run: '1' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01' }, ok)).toMatchObject({ mode: 'live', ig: 'live' });
       // THREADS_PUBLISH 沒開就照舊只試跑
-      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01', PUBLISH: '0', IG_PUBLISH: '0' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01', PUBLISH: '0', IG_PUBLISH: '0' }, ok)).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
     });
 
     it.skipIf(!hasBash)('schedule is still gated; explicit manual modes keep working', () => {
@@ -1201,13 +1202,34 @@ describe('workflow', () => {
       expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, { liveFrom: '2999-01-01', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2026-01-01' });
     });
 
+    it.skipIf(!hasBash || !hasJq)('with the repo variable set, an unreadable / broken file or a missing / non-boolean paused still forces a dry run', () => {
+      const bad: unknown[] = [undefined, '', 'not json', '{"liveFrom":null,"paused":false', {}, { liveFrom: '2026-01-01' }, { liveFrom: null, paused: 'false' }, { liveFrom: null, paused: null }, { liveFrom: null, paused: 0 },
+        [{ liveFrom: null, paused: false }], 'null', '{"liveFrom":null,"paused":false}\n{"liveFrom":null,"paused":true}'];
+      for (const file of bad) {
+        expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1' });
+        expect(runGate({ EVENT: 'schedule', LIVE_FROM: '2026-01-01' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      }
+      // 同樣的變數，檔案讀得到且 paused=false 才正式發
+      expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, { liveFrom: null, paused: false })).toMatchObject({ mode: 'live', ig: 'live' });
+    });
+
+    it.skipIf(!hasBash || !hasJq)('an impossible calendar date (file or repo variable) counts as unset: dry run, no live_from', () => {
+      for (const d of ['2026-02-30', '2026-13-01', '2025-02-29', '2026-04-31', '2026-00-10']) {
+        expect(runGate(auto, { liveFrom: d, paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+        expect(runGate({ ...auto, LIVE_FROM: d }, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+      }
+      // 真的閏日照常
+      expect(runGate(auto, { liveFrom: '2024-02-29', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2024-02-29' });
+    });
+
     it('reads threads_live.json before the gate and passes the gate\'s effective date to every script (not the raw variable)', () => {
       const all = steps();
       const gateIdx = all.findIndex((s) => s.id === 'gate');
       const read = all.findIndex((s) => s.body.includes('contents/packages/server/threads_live.json?ref=${GITHUB_SHA}'));
       expect(read).toBeGreaterThanOrEqual(0);
       expect(read).toBeLessThan(gateIdx);
-      expect(all[read].body).toContain("echo '{}' > \"$LIVE_FILE\""); // 讀不到＝當作空的（只試跑）
+      expect(all[read].body).toContain('rm -f "$LIVE_FILE"'); // 讀不到＝不留檔（閘門只試跑）
+      expect(gateScript()).toContain('{ [ "$FILE_OK" != 1 ] || [ "$PAUSED" != false ] ||');
       expect(all[read].body).toContain('LIVE_FILE: ${{ runner.temp }}/threads_live.json');
       expect(all[gateIdx].body).toContain('LIVE_FILE: ${{ runner.temp }}/threads_live.json');
       expect(gateScript()).toContain('echo "live_from=$EFFECTIVE_LIVE_FROM" >> "$GITHUB_OUTPUT"');
