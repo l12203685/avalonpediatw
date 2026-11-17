@@ -93,3 +93,31 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 - `generate.ts`：把存檔和題庫接起來
 
 測試在 `src/__tests__/ThreadsDraft.test.ts`。
+
+## 站長選局（2026-11-17）
+
+站長 11/17：「我如果需要 看到未來一週 甚至一個月的文章安排 並且我可以自己選擇牌譜(從候選名單中挑 盡量是S高一點的優先)」，
+以及「不能先用條列式表格呈現牌譜就好嗎 (像googlesheet 那樣) 我可以先用條件來篩出自己想要的」。
+
+- **S 是什麼：** 網站的「陣容強度」（站長 10/31）：每局賽前十個座位在當時玩家池裡的 PR 平均，S ≥ 65 是網站的高強度局。
+  來源是 `games_cache.json` 每局的 `lineup[1]`（S×10），用 `generate_cache.py record_fingerprint` 同一個指紋對上題庫的局（`src/bots/threads/strength.ts`）。
+  題庫 1,778 局有 1,218 局對得上 S；對不上或不評分的局 S 顯示「—」，排在最後。牌譜整併（#38）之後 1,777 局有網站牌譜頁。
+- **選局頁：** 站長私人的 claude.ai 頁面（不在公開網站上），兩個分頁：
+  - **日曆：** 從第一篇（11/17）起 28 天，每天目前的題目和照 S 由高到低的前 15 個藍方視角候選（刺殺題是刺客），再補 5 個有網站牌譜頁、S 最高的。
+  - **牌譜表：** 題庫每一局一列（像試算表），欄位：題號、S、網站牌譜、第 1–5 局任務（`oox`／`ooox`／`ooxx`…，沒打到的局空白）、結果（三紅／三藍死（刺中）／三藍活）、
+    刺殺座位、1–0 家角色、派西維爾位置、派西資訊（兩根拇指＝梅林、莫甘娜）、梅林位置、湖（`0>5x`：0 家湖 5 家說壞）、可出題型（1-5、1-5→3-5、2-5、2-5→4-5、3-5、第4局忠臣5人、第5局、刺殺、派西）。
+    每欄都能篩（任務、角色、座位、題型多選；題號、拇指、湖文字含；S 最低值），每一局「選給…」只列主題對得上、還沒鎖住的日子。
+  - 頁面附帶 `candidates.json`、`games.json`（`threads:candidates` 產生）；站長選的寫進頁面資料庫的 `picks/<日期>`（`{ date, exerciseId, nextExerciseId, chosenAt, … }`），只有擁有者能寫。
+  - 週三、週五選了能連著打的局，隔天自動接同一局；週四、週六另選就改出獨立的題目。已經貼出去的日子（`THREADS_POSTED`，11/17 36AKW-2-5）和今天以前的日子鎖住。
+- **選擇的正本：** commit 進 repo 的 `packages/server/threads_picks.json`（自動發佈 #48 的格式）：`{ "version": 1, "picks": { "YYYY-MM-DD": "<題號>" } }`。
+  產生器只有一條選題的路：`pickOverride`（存下來＝已經發出去的那一天優先；選的題不是那天主題能出的就照計畫，原因寫進 `warnings`）。
+  選局頁列出來的題號（`optionsFor`）跟 `pickOverride` 用同一套池子，一定接受。
+- **腳本：** `threads:candidates`（`--picks` 預設 `threads_picks.json`；輸出 `candidates.json`、`games.json`，不進 git）、`threads:draft -- --picks <檔>`（只用今天之後的日子）。
+  `--picks` 也接受選局頁資料庫匯出的 `[{ "date": …, "exerciseId": … }]`。
+
+### 每天早上 8 點（台北）的工作
+
+1. 讀選局頁資料庫的 `picks` 集合（ArtifactData `list`，collection `picks`），只留今天之後的日子，
+   同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好）；有變動就 commit（選擇的正本在 repo）。
+2. 產生今天的草稿（或由自動發佈 #48 讀 `threads_picks.json` 發文）。
+3. 重跑 `threads:candidates -- --today <今天>`，把新的 `candidates.json`、`games.json` 更新到選局頁（今天鎖住、後面的日子照選擇重排）。
