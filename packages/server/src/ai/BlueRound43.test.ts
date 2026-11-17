@@ -165,10 +165,13 @@ describe('loyalFresh43 round-43b R1 opening variants (bits 128 / 256 / 512 / 102
     expect(loyalFresh43Team(on(517), r1b, disjoint)).toBe(disjoint);
   });
 
-  it('1024 (V4, respect from the 3rd on): at most one member of each earlier proposal, one fresh player; the 2nd proposal untouched with 128', () => {
+  it('1024 (V4, respect from the 3rd on): at most one member of each earlier proposal and of the not-yet-proposed; the 2nd proposal untouched with 128', () => {
     const got = mates(loyalFresh43Team(on(1157), r1, stacked));
+    expect(got.length).toBe(2);
     for (const v of R1) expect(got.filter((id) => v.team.includes(id)).length).toBeLessThanOrEqual(1);
-    expect(got.some((id) => !seen.includes(id))).toBe(true);
+    expect(got.filter((id) => !seen.includes(id)).length).toBeLessThanOrEqual(1);
+    const twoFresh = team(['P5', 'P6', 'P7']);
+    expect(loyalFresh43Team(on(1157), r1, twoFresh)).not.toBe(twoFresh);
     const okTeam = team(['P5', 'P1', 'P7']);
     expect(loyalFresh43Team(on(1157), r1, okTeam)).toBe(okTeam);
     const reuse = team(['P5', 'P1', 'P2']);
