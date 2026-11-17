@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, seatMissions, identityText, identityLines } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -416,23 +416,25 @@ describe('image', () => {
     }
   });
 
-  it('under each seat: the missions that seat went on before the question (m1, m3×1), success blue / fail red', () => {
+  it('each played mission chip shows the result and the seats that went (the approved team, 0 for seat 10); no tags under the seats', () => {
     for (let w = 0; w < 4; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
         const rows = sheetRows(pv);
-        const missions = seatMissions(rows);
-        const quests = rows.filter((r) => r.kind === 'quest');
-        // 每次任務的人數＝那一局要的人數，而且都是那一局過了的隊伍
-        for (const q of quests) {
-          if (q.kind !== 'quest') continue;
-          const on = [...missions].filter(([, list]) => list.some((m) => m.round === q.round)).map(([seat]) => seat).sort((a, b) => a - b);
-          const team = rows.find((r) => r.kind === 'proposal' && r.round === q.round && r.approved);
-          expect(team && team.kind === 'proposal' ? [...team.team].sort((a, b) => a - b) : []).toEqual(on);
+        const chips = missionChips(rows, 0, 0, 500).svg;
+        for (let r = 1; r <= 5; r++) {
+          const q = rows.find((x) => x.kind === 'quest' && x.round === r);
+          const team = missionTeam(rows, r);
+          if (!q) {
+            expect(team).toEqual([]); // 還沒出的任務照舊
+            continue;
+          }
+          const approved = rows.find((x) => x.kind === 'proposal' && x.round === r && x.approved);
+          expect(team).toEqual(approved && approved.kind === 'proposal' ? approved.team : []);
+          expect(team).toHaveLength([3, 4, 4, 5, 5][r - 1]);
+          expect(chips).toContain(`>${team.map((x) => (x === 10 ? '0' : String(x))).join('')}<`);
         }
-        const svg = buildPuzzleSvg(pv, 3);
-        for (const [, list] of missions) for (const m of list) expect(svg).toContain(`m${m.round}${m.failCount > 0 ? `×${m.failCount}` : ''}`);
-        if (quests.length === 0) expect(missions.size).toBe(0);
+        expect(buildPuzzleSvg(pv, 3)).not.toMatch(/>m[1-5](×\d)?</); // 座位下方不再有 m1 標籤
       }
     }
   });

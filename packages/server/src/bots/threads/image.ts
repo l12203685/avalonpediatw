@@ -20,8 +20,8 @@
  * 剩下的資訊呈現在旁邊, 還有湖中女神以箭頭 (0 > 9 + 宣告結果) 呈現」→ 小圓桌只剩十個座位圍著中間的標誌，五局任務格移到右邊
  * 「你的視角」下面，湖中女神畫成座位之間的箭頭（拿湖的 → 被驗的，旁邊寫宣告；自己湖的另外寫看到的）。題目卡不另外鋪大浮水印。
  * 同日第三輪：「湖中線我覺得直接跟著任務結果呈現在右邊 0>1 o, 1>9 o, 9>4 x 這樣就好」「座位不要橢圓 直接圍繞 logo 就好 logo 太小的話可以放大」
- * 「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」，以及每個座位下面標出過的任務（m1、m3×1）→ 座位排正圓、標誌放大；
- * 湖改成任務格下面一行；你的視角一行寫完；座位下方是出過的任務（只算出題那一刻以前出完的）。
+ * 「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」→ 座位排正圓、標誌放大；湖改成任務格下面一行；你的視角一行寫完。
+ * 每局出任務的座位：站長看過座位下方的 m1／m3×1 標籤後改成寫在右邊任務格裡（結果下面一行座位號碼）。
  *
  * SVG 用字型檔（和每週排行圖同一個 Noto Sans TC，assets/fonts/）在 @resvg/resvg-js 轉 PNG，不用瀏覽器也不用系統字型，
  * GitHub Actions 上也能跑。圖裡只有座位和牌譜記號，沒有玩家名字。
@@ -290,9 +290,9 @@ const TABLE_LOGO_OPACITY = 0.3;
 const SEAT_R = 30;
 /** 座位排成正圓（站長 11/18：「座位不要橢圓 直接圍繞 logo 就好 logo 太小的話可以放大」）。 */
 const RING_R = 160;
-/** 座位上方（十二點那一圈的標記字）與下方（出過的任務、標記字）留的空間。 */
+/** 座位上方與下方（標記字）留的空間。 */
 const TABLE_TOP_PAD = 34;
-const TABLE_BOTTOM_PAD = 66;
+const TABLE_BOTTOM_PAD = 40;
 /** 小圓桌那一塊的寬高（含座位外側的標記字、座位下方出過的任務）。 */
 const TABLE_BOX_W = 2 * (RING_R + SEAT_R + 64);
 const TABLE_BOX_H = 2 * (RING_R + SEAT_R) + TABLE_TOP_PAD + TABLE_BOTTOM_PAD;
@@ -307,13 +307,14 @@ export function seatPosition(seat: number, cx: number, cy: number): { x: number;
 }
 
 /**
- * 五局任務格（人數、已出的任務結果、第 4 局要 2 張失敗），放在題目卡右邊「你的視角」下面（站長 11/18：任務格移出圓桌）。
+ * 五局任務格（人數、已出的任務結果、出任務的座位、第 4 局要 2 張失敗），放在題目卡右邊「你的視角」下面（站長 11/18：任務格移出圓桌；
+ * 「改成在右邊 任務的部分 直接顯示每局參與的人&結果吧 (就是目前顯示的下方 加入參與任務的座位號碼就可以了)」）。
  * 從 (x0, y0) 往右排，寬度不夠就換行；回傳 SVG 與佔的高度。
  */
 export function missionChips(rows: readonly SheetRow[], x0: number, y0: number, maxW: number): { svg: string; height: number } {
   const parts: string[] = [];
   const bw = 78;
-  const bh = 70;
+  const bh = 94;
   const gap = 8;
   const perRow = Math.max(1, Math.min(5, Math.floor((maxW + gap) / (bw + gap))));
   for (let r = 1; r <= 5; r++) {
@@ -325,8 +326,12 @@ export function missionChips(rows: readonly SheetRow[], x0: number, y0: number, 
     const stroke = q ? (q.failed ? C.red : C.blue) : C.line;
     parts.push(rect(x, y, bw, bh, fill, ` rx="10" stroke="${stroke}" stroke-width="2"`));
     parts.push(text(x + bw / 2, y + 27, `${r}・${TEAM_SIZES[r - 1]}`, { size: 19, fill: q ? C.ink : C.soft, anchor: 'middle' }));
-    if (q) parts.push(text(x + bw / 2, y + 57, q.mission, { size: q.mission.length > 4 ? 17 : 20, fill: C.yellow, anchor: 'middle', weight: true }));
-    else if (FAILS_REQUIRED[r - 1] > 1) parts.push(text(x + bw / 2, y + 55, '2失敗', { size: 15, fill: C.faint, anchor: 'middle' }));
+    if (q) {
+      parts.push(text(x + bw / 2, y + 55, q.mission, { size: q.mission.length > 4 ? 17 : 20, fill: C.yellow, anchor: 'middle', weight: true }));
+      // 出這次任務的座位（那一局過了的提議；第 10 家寫 0）
+      const team = missionTeam(rows, r);
+      if (team.length) parts.push(text(x + bw / 2, y + 82, seatsText(team), { size: 18, fill: C.ink, anchor: 'middle', weight: true }));
+    } else if (FAILS_REQUIRED[r - 1] > 1) parts.push(text(x + bw / 2, y + 58, '2失敗', { size: 15, fill: C.faint, anchor: 'middle' }));
   }
   const lines = Math.ceil(5 / perRow);
   return { svg: parts.join(''), height: lines * bh + (lines - 1) * gap };
@@ -348,39 +353,16 @@ export function lakeLine(rows: readonly SheetRow[]): Seg[] {
   return out;
 }
 
-/**
- * 每個座位出過的任務（站長 11/18：「1號 出過第一/三局 可能數字下方就顯示 "[m1], [m3]"」）：只算出題那一刻以前出完的任務，
- * 那一局出任務的隊伍＝那一局過了的提議。回傳 座位 → [{ 第幾局, 失敗張數, 任務失敗 }]。
- */
-export function seatMissions(rows: readonly SheetRow[]): Map<number, { round: number; failCount: number; failed: boolean }[]> {
-  const out = new Map<number, { round: number; failCount: number; failed: boolean }[]>();
-  for (const q of rows) {
-    if (q.kind !== 'quest') continue;
-    const team = rows.find((p): p is Extract<SheetRow, { kind: 'proposal' }> => p.kind === 'proposal' && p.round === q.round && p.approved);
-    for (const seat of team?.team ?? []) {
-      const list = out.get(seat) ?? [];
-      list.push({ round: q.round, failCount: q.failCount, failed: q.failed });
-      out.set(seat, list);
-    }
-  }
-  return out;
-}
-
-/** 座位下方的任務標籤：m1、m3×1（×後面是失敗張數），任務成功藍、失敗紅；超過兩個換行。 */
-function missionTags(list: readonly { round: number; failCount: number; failed: boolean }[], x: number, y: number): { svg: string; lines: number } {
-  const lines: Seg[][] = [];
-  list.forEach((m, i) => {
-    if (i % 2 === 0) lines.push([]);
-    const line = lines[lines.length - 1];
-    if (line.length) line.push({ t: ' ' });
-    line.push({ t: `m${m.round}${m.failCount > 0 ? `×${m.failCount}` : ''}`, fill: m.failed ? C.red : C.blue, weight: true });
-  });
-  return { svg: lines.map((l, i) => segs(x, y + i * 18, l, 16, 'middle')).join(''), lines: lines.length };
+/** 第 round 局出任務的座位（那一局過了的提議的隊伍）；還沒出任務是 []。 */
+export function missionTeam(rows: readonly SheetRow[], round: number): number[] {
+  if (!rows.some((q) => q.kind === 'quest' && q.round === round)) return [];
+  const team = rows.find((p): p is Extract<SheetRow, { kind: 'proposal' }> => p.kind === 'proposal' && p.round === round && p.approved);
+  return team ? [...team.team] : [];
 }
 
 /**
  * 小圓桌：十個座位排成正圓、圍著中間放大的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「座位不要橢圓 直接圍繞 logo」）。
- * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側，數字下方是這個座位出過的任務（m1、m3×1）。湖寫在右邊。
+ * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。每局出任務的座位寫在右邊的任務格裡，湖也寫在右邊。
  */
 function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: number): string {
   const uri = logoDataUri();
@@ -392,20 +374,17 @@ function roundTable(pv: PickView, rows: readonly SheetRow[], cx: number, cy: num
     : '';
   const parts: string[] = [logo];
   const marks = seatMarks(pv);
-  const missions = seatMissions(rows);
   for (let seat = 1; seat <= 10; seat++) {
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
     const m = marks.get(seat);
     const me = seat === pv.pick.seat;
     parts.push(`<circle cx="${x}" cy="${y}" r="${SEAT_R}" fill="${me ? C.blueFill : C.seat}" stroke="${m ? m.color : C.line}" stroke-width="${m ? 5 : 2}"/>`);
     parts.push(text(x, y + 10, seatChar(seat), { size: 28, anchor: 'middle', weight: true }));
-    const tags = missionTags(missions.get(seat) ?? [], x, y + SEAT_R + 19);
-    parts.push(tags.svg);
     if (m) {
-      // 標記字放在座位外側：上半圈在上面、左右兩邊在外側、下半圈在出過的任務下面。
+      // 標記字放在座位外側：上半圈在上面、下半圈在下面、左右兩邊在外側。
       const side = Math.abs(uy) < 0.45;
       const lx = side ? x + ux * (SEAT_R + 30) : x;
-      const ly = side ? y + 7 : uy < 0 ? y - SEAT_R - 8 : y + SEAT_R + 22 + tags.lines * 18;
+      const ly = side ? y + 7 : uy < 0 ? y - SEAT_R - 8 : y + SEAT_R + 22;
       parts.push(text(lx, ly, m.label, { size: 18, fill: m.color, anchor: 'middle' }));
     }
   }
