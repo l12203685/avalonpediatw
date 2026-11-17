@@ -4,7 +4,7 @@
  *   - draft.ts：新貼文 A＝今天的題目＋昨天的答案（≤ 500 字、引用昨天的貼文、沒有另外串的答案）、延續的日子不公布幾好幾壞和角色、
  *     完整公布附角色與牌譜連結、0 家寫 0、第一天（11/17）沒有昨天的答案；週六沒有連著的局改出第四局忠臣派 5 人；
  *   - generate.ts：存下來的草稿優先（題目、ChatGPT 填的第一則留言保留）、延續跟著前一天實際的那一局；
- *   - image.ts：SVG／PNG、長行斷開。
+ *   - image.ts：深色題目卡與答案卡的 SVG／PNG（題目只畫到出題那一刻）、長行斷開。
  * 用 commit 進 repo 的題庫 sim_bank.json（實戰的局，沒有名字）。
  */
 
@@ -13,10 +13,10 @@ import path from 'path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/bank';
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
-import { midDecision } from '../bots/simulation/scenario';
+import { midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { buildPuzzleSvg, renderPuzzlePng, textWidth, wrapLine } from '../bots/threads/image';
+import { buildAnswerSvg, buildPuzzleSvg, recordLines, renderAnswerPng, renderPuzzlePng, sheetRows, textWidth, wrapLine } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -266,6 +266,87 @@ describe('image', () => {
     expect(svg).toContain('週三・1-5 尾派');
     const png = renderPuzzlePng(pickView(gameOf(mon), mon), 1);
     expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+  });
+
+  it('draws the record only up to the decision: no later vote, mission or lake reaches the renderer', () => {
+    let truncated = 0;
+    for (let w = 0; w < 8; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const game = gameOf(pick);
+        const pv = pickView(game, pick);
+        const rows = sheetRows(pv);
+        expect(rows.length).toBe(pv.shown.length + 1);
+        const last = rows[rows.length - 1];
+        expect(last.kind).toBe('decision');
+        if (pick.proposal === null) continue; // 刺殺題：整局都公開，只有角色不公開
+        const p = game.proposals[pick.proposal];
+        for (const r of rows.slice(0, -1)) {
+          if (r.kind === 'proposal') expect(r.index).toBeLessThan(pick.proposal);
+          else expect(r.round).toBeLessThan(p.round);
+        }
+        if (last.kind === 'decision') expect([last.round, last.attempt, last.leaderSeat]).toEqual([p.round, p.attempt, pick.seat]);
+        if (publicEvents(game).length > pv.shown.length) truncated++;
+      }
+    }
+    expect(truncated).toBeGreaterThan(30); // 檢查真的有東西被截掉
+  });
+
+  it('the card’s record lines use the site notation and only the rows the renderer got', () => {
+    const [, , wed, thu] = planWeek(bank, 0) as ThreadsPick[];
+    for (const pick of [wed, thu]) {
+      const pv = pickView(gameOf(pick), pick);
+      const rows = sheetRows(pv);
+      const lines = recordLines(rows).map((l) => l.map((p) => p.t).join(''));
+      const proposals = rows.filter((r) => r.kind === 'proposal');
+      // 每次提議一行（隊長＋DC 格式），任務一行，湖一行，每局一個標題
+      for (const r of proposals) if (r.kind === 'proposal') expect(lines.some((l) => l.startsWith(`${r.leaderSeat === 10 ? '0' : r.leaderSeat}家 ${r.line}`))).toBe(true);
+      expect(lines.filter((l) => l.startsWith('任務：')).length).toBe(rows.filter((r) => r.kind === 'quest').length);
+      expect(lines.filter((l) => l.startsWith('湖：')).length).toBe(rows.filter((r) => r.kind === 'lake').length);
+      expect(lines.join('\n')).not.toMatch(/10\s*[家號]/);
+    }
+  });
+
+  it('the answer card lists yesterday’s blue and red roles and the result', () => {
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const pv = pickView(gameOf(tue), tue);
+    const svg = buildAnswerSvg(pv);
+    for (const role of ['派西維爾', '梅林', '刺客', '莫甘娜']) expect(svg).toContain(role);
+    expect(svg).toContain('結果：');
+    expect(svg).toContain(pv.exerciseId);
+    expect(svg).not.toMatch(/10\s*家/);
+    expect(renderAnswerPng(pv).subarray(1, 4).toString('ascii')).toBe('PNG');
+  });
+
+  it('rows follow the site notation: votes, approve counts, 強制, DC text line, lake o/x', () => {
+    for (let w = 0; w < 4; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        for (const r of sheetRows(pv)) {
+          if (r.kind === 'proposal') {
+            expect(r.votes).toHaveLength(10);
+            if (r.forced || !r.reliable) {
+              expect(r.votes.every((v) => v === 'none')).toBe(true);
+              expect(r.approves).toBeNull();
+            } else {
+              expect(r.approves).toBe(r.votes.filter((v) => v === 'approve').length);
+              if (r.approved) expect(r.approves as number).toBeGreaterThanOrEqual(6);
+            }
+            expect(r.line.split(' ')[0]).toBe(r.team.map((x) => (x === 10 ? '0' : String(x))).join(''));
+          }
+          if (r.kind === 'lake') expect(['o', 'x', '']).toContain(r.claim);
+        }
+      }
+    }
+  });
+
+  it('the post text keeps theme, record, question, yesterday’s answer, 題號 and the tag only', () => {
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const d = gen.draftFor('2026-11-18') as ThreadsDraft;
+    const lines = d.post.text.split('\n');
+    expect(lines[0]).toContain('週三・1-5 尾派');
+    expect(lines.at(-2)).toBe(`題號 ${d.exerciseId}`);
+    expect(lines.at(-1)).toBe(THREADS_TOPIC_TAG);
+    expect(d.post.text).not.toContain('留言寫');
   });
 
   it('wraps long lines at a comma or bracket', () => {

@@ -21,7 +21,7 @@ import { recordUrl } from '../simulation/recordsIndex';
 import { eventLines, identityLine, questLine, resultText, roleCode, seatLabel, pct } from '../simulation/replies';
 import { TEAM_SIZES, eventIndexOfProposal, isRed, publicEvents, viewAt, type PublicEvent, type SimGame, type SimView } from '../simulation/scenario';
 import { maskOf, seatList, seatsOfMask, teamDigits } from '../simulation/seats';
-import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsKind, type ThreadsPick } from './plan';
+import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsPick } from './plan';
 
 /** Threads 一則貼文的字數上限。 */
 export const THREADS_MAX_CHARS = 500;
@@ -77,10 +77,6 @@ function decisionWords(game: SimGame, pick: ThreadsPick): string {
   return `輪到你派 ${size} 人（第 ${p.round} 局第 ${p.attempt} 次${forced}）。你會派誰？`;
 }
 
-function answerHint(kind: ThreadsKind): string {
-  return kind === 'assassin' ? '留言寫一個座位（0 家寫 0），明天公布答案。' : '留言寫座位（例：469，0 家寫 0），明天公布答案。';
-}
-
 /** 事件行太長時的縮短版：前面幾局只留任務結果和湖，當下這一局的派票全留。 */
 function compactLines(pv: PickView): string[] {
   const round = pv.pick.proposal === null ? 6 : pv.game.proposals[pv.pick.proposal].round;
@@ -113,12 +109,13 @@ export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId
   const bodies: string[][] = noPrior
     ? [['第 1 局第一個隊長，前面沒有派票']]
     : [eventLines(pv.shown, pv.pick.seat, pv.game), compactLines(pv), ['（完整局面看圖）']];
-  return { head, bodies, tail: [decisionWords(pv.game, pv.pick), answerHint(pv.pick.kind)] };
+  // 站長 11/17：「文字部分則是主題 & 牌譜」——題目只留身分、牌譜、輪到你；作答方式不另寫一行（完整局面在圖裡）。
+  return { head, bodies, tail: [decisionWords(pv.game, pv.pick)] };
 }
 
 /** A 的最後兩行：題號與主題標籤。 */
 function footerLines(pv: PickView): string[] {
-  return [`題號 ${pv.exerciseId}｜實戰牌譜，記號看圖或〈牌譜記錄格式與常用術語〉`, THREADS_TOPIC_TAG];
+  return [`題號 ${pv.exerciseId}`, THREADS_TOPIC_TAG];
 }
 
 /**
@@ -288,7 +285,8 @@ export interface ThreadsDraft {
   pick: ThreadsPick;
   recordId?: string;
   /** 新貼文 A（今天的題目＋昨天的答案）。 */
-  post: { text: string; chars: number; image?: string };
+  /** image = 題目圖；answerImage = 公布完整答案的日子另附的答案圖（THE ANSWER IS，昨天那一局的角色）。 */
+  post: { text: string; chars: number; image?: string; answerImage?: string };
   /** A 要引用昨天的貼文 B 發（有昨天的題目就是 true）。 */
   quoteYesterday: boolean;
   /** 今天延續昨天同一局（週四、週六）：A 裡的昨天答案不公布幾好幾壞和角色。 */
@@ -366,7 +364,7 @@ export function draftMarkdown(d: ThreadsDraft): string {
   const out = [`# Threads 草稿 ${d.date}（${d.theme}）`, '', `題號 ${d.exerciseId}${d.recordId ? `｜牌譜 ${recordUrl(d.recordId)}` : ''}`, ''];
   const how = d.answerToYesterday ? `用「引用」昨天（${d.answerToYesterday.date}）的貼文發這篇` : '第一天：直接發（沒有昨天的貼文可以引用）';
   out.push(`## ① 新貼文 A：今天的題目＋昨天的答案（${d.post.chars} 字）`, '', `${how}，附圖。`, '', '```', d.post.text, '```', '');
-  if (d.post.image) out.push(`圖：${d.post.image}`, '');
+  if (d.post.image) out.push(`圖：${d.post.image}${d.post.answerImage ? `，第二張 ${d.post.answerImage}（昨天的答案）` : ''}`, '');
   out.push('## ② A 的第一則留言（ChatGPT 填）', '');
   out.push(d.firstComment.text ? ['```', d.firstComment.text, '```'].join('\n') : '（還沒填）');
   out.push('', `建議文章：${d.firstComment.articles.map((a) => `${a.title} ${a.url}`).join('；') || '（無）'}`, `關鍵字：${d.firstComment.tags.join('、')}`, '');
