@@ -462,3 +462,37 @@ describe('instagram', () => {
     expect(st?.ig?.mediaId).toBeTruthy();
   });
 });
+
+describe('workflow', () => {
+  // 沒有 YAML 套件：照兩格縮排的「- name:／- uses:」切出每一步，只看 id、if、continue-on-error 這幾行。
+  const steps = (): { name: string; id?: string; cond: string; continueOnError: boolean; body: string }[] => {
+    const yml = fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+    return yml
+      .split(/\n {6}- /)
+      .slice(1)
+      .map((body) => ({
+        name: /^(?:name|uses): (.*)/.exec(body)?.[1] ?? '',
+        id: /\n {8}id: (\S+)/.exec(body)?.[1],
+        cond: /\n {8}if: (.*)/.exec(body)?.[1] ?? '',
+        continueOnError: /\n {8}continue-on-error: true/.test(body),
+        body,
+      }));
+  };
+
+  it('an Instagram JPEG conversion failure does not stop the Threads upload and post; IG publishes only after a successful conversion', () => {
+    const all = steps();
+    const jpeg = all.find((s) => s.id === 'ig_jpeg');
+    expect(jpeg?.continueOnError).toBe(true);
+    const image = all.find((s) => s.id === 'image');
+    const post = all.find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
+    const ig = all.find((s) => s.body.includes('threadsPublish.ts post-ig'));
+    expect(image && post && ig).toBeTruthy();
+    // Threads 的上傳和發文不看轉檔的結果
+    expect(image?.cond).not.toContain('ig_jpeg');
+    expect(post?.cond).not.toContain('ig_jpeg');
+    // IG 只在轉檔成功時發，也只拿轉檔成功的 JPEG 網址
+    expect(ig?.cond).toContain("steps.ig_jpeg.outcome == 'success'");
+    expect(image?.body).toContain("IG_JPEG_OK: ${{ steps.ig_jpeg.outcome == 'success' && '1' || '0' }}");
+    expect(image?.body.match(/IG_JPEG_OK" = 1/g)?.length).toBe(2);
+  });
+});

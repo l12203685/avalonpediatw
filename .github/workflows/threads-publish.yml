@@ -182,8 +182,11 @@ jobs:
           IG_PREVIEW: ${{ steps.gate.outputs.ig != 'off' && '1' || '0' }}
         run: npx tsx scripts/threadsPublish.ts prepare --date "$DATE" --state-dir "$STATE_DIR" --out "$OUT_DIR"
 
+      # 轉檔失敗不影響 Threads（continue-on-error）：IG 那邊只在這一步成功時才用 JPEG、才同步。
       - name: IG 用的圖：轉成 1080×1350 JPEG
+        id: ig_jpeg
         if: steps.prepare.outcome == 'success' && steps.gate.outputs.ig != 'off'
+        continue-on-error: true
         env:
           DATE: ${{ steps.gate.outputs.date }}
         run: |
@@ -194,6 +197,12 @@ jobs:
             convert "$f" -background '#f7f5f0' -flatten -resize 1080x1350 -gravity center -extent 1080x1350 -quality 92 "${f%.png}.jpg"
           done
           ls -l "$OUT_DIR"
+
+      - name: IG 的圖沒轉成功：今天不同步 IG（Threads 照常）
+        if: steps.ig_jpeg.outcome == 'failure'
+        run: |
+          echo "::warning::IG 用的 JPEG 沒轉成功，今天不同步 IG；Threads 照常發"
+          rm -f "$OUT_DIR"/*.jpg
 
       - name: 試跑：把要發的內容存成附件
         if: always() && steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'dry-run'
@@ -209,6 +218,7 @@ jobs:
         id: image
         env:
           DATE: ${{ steps.gate.outputs.date }}
+          IG_JPEG_OK: ${{ steps.ig_jpeg.outcome == 'success' && '1' || '0' }}
         run: |
           set -euo pipefail
           mkdir -p "$STATE_DIR/images"
@@ -217,7 +227,7 @@ jobs:
           [ -n "$NAMES" ] || exit 0
           for name in $NAMES; do
             cp "$OUT_DIR/$name" "$STATE_DIR/images/"
-            [ -f "$OUT_DIR/${name%.png}.jpg" ] && cp "$OUT_DIR/${name%.png}.jpg" "$STATE_DIR/images/"
+            if [ "$IG_JPEG_OK" = 1 ] && [ -f "$OUT_DIR/${name%.png}.jpg" ]; then cp "$OUT_DIR/${name%.png}.jpg" "$STATE_DIR/images/"; fi
           done
           git -C "$STATE_DIR" add -A
           git -C "$STATE_DIR" commit -q -m "threads: $DATE 的題目圖" || true
@@ -227,7 +237,7 @@ jobs:
           PNGS=""; JPGS=""
           for name in $NAMES; do
             PNGS="${PNGS:+$PNGS,}$BASE/$name"
-            if [ -f "$OUT_DIR/${name%.png}.jpg" ]; then JPGS="${JPGS:+$JPGS,}$BASE/${name%.png}.jpg"; fi
+            if [ "$IG_JPEG_OK" = 1 ] && [ -f "$OUT_DIR/${name%.png}.jpg" ]; then JPGS="${JPGS:+$JPGS,}$BASE/${name%.png}.jpg"; fi
           done
           echo "urls=$PNGS" >> "$GITHUB_OUTPUT"
           echo "ig_urls=$JPGS" >> "$GITHUB_OUTPUT"
@@ -242,7 +252,7 @@ jobs:
         run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR"
 
       - name: Instagram 同步
-        if: always() && steps.prepare.outcome == 'success' && steps.image.outcome == 'success' && steps.gate.outputs.ig == 'live'
+        if: always() && steps.prepare.outcome == 'success' && steps.ig_jpeg.outcome == 'success' && steps.image.outcome == 'success' && steps.gate.outputs.ig == 'live'
         working-directory: packages/server
         env:
           INSTAGRAM_ACCESS_TOKEN: ${{ env.INSTAGRAM_ACCESS_TOKEN || secrets.INSTAGRAM_ACCESS_TOKEN }}
