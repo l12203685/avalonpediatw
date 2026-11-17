@@ -299,6 +299,37 @@ describe('submitting a correction (the /回報 path, kind correction)', () => {
   });
 });
 
+describe('deploy: the runtime image carries both data files', () => {
+  const root = path.resolve(__dirname, '..', '..', '..', '..');
+  it('the production Dockerfile copies game_db.json and the records cache into the runtime stage', () => {
+    const docker = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf-8');
+    const runtime = docker.slice(docker.lastIndexOf('\nFROM '));
+    expect(runtime).toContain('COPY --from=builder /app/packages/server/game_db.json ./packages/server/game_db.json');
+    expect(runtime).toMatch(/COPY --from=builder \/app\/packages\/server\/\[agr\]\*_cache\.json/); // records_cache.json
+  });
+
+  it('Render (Dockerfile.server) copies the whole context, and .dockerignore keeps both files', () => {
+    expect(fs.readFileSync(path.join(root, 'render.yaml'), 'utf-8')).toMatch(/dockerfilePath: \.\/Dockerfile\.server/);
+    expect(fs.readFileSync(path.join(root, 'Dockerfile.server'), 'utf-8')).toMatch(/^COPY \. \.$/m);
+    const ignore = fs.readFileSync(path.join(root, '.dockerignore'), 'utf-8').split('\n').map((l) => l.trim());
+    for (const f of ['packages/server/game_db.json', 'packages/server/records_cache.json', '*.json', 'packages/server/*.json']) expect(ignore).not.toContain(f);
+    expect(fs.existsSync(path.join(root, 'packages', 'server', 'game_db.json'))).toBe(true);
+  });
+
+  it('a missing game_db.json logs a warning (not silent) and lookups still use the records cache', async () => {
+    vi.stubEnv(ENV_GAME_DB, path.join(dir, 'missing.json'));
+    __resetRecordLookupForTests();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(lookupRecord('S0001')?.names?.[0]).toBe('甲一');
+      expect(lookupRecord('M0002')).toBeNull(); // DB-only record
+      expect(warn.mock.calls.flat().join('\n')).toContain('找不到 game_db.json');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});
+
 describe('help and Discord registration', () => {
   it('/help 更正 is a topic; the basic help mentions /更正', () => {
     expect(HELP_TOPICS).toContain('更正');

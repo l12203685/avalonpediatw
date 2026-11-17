@@ -7,7 +7,8 @@
  *   - game_db.json（牌譜總庫，scripts 產生）：每局的檢查結果（checks：error／warn／info）與 problem。
  * 局號：試算表 S1794、模擬瓦 M536、DC 貼文 id（15～22 位數字）、外部 P…；也認總庫 sources 裡的來源 id。
  *
- * 讀一次就留在記憶體（兩份共約 7 MB 的 JSON，只留查詢用得到的欄位）。讀不到就當沒有那一局。
+ * 讀一次就留在記憶體（兩份共約 7 MB 的 JSON，只留查詢用得到的欄位）。檔案不在 log 一行警告，查詢照樣用另一份；
+ * 正式 image 要帶這兩份（根目錄 Dockerfile 的 COPY；Render 用的 Dockerfile.server 是 COPY . .）。
  * 測試或本機另指檔案：AVALON_RECORDS_CACHE（同 recordsList）、AVALON_GAME_DB。
  */
 import fs from 'fs';
@@ -95,9 +96,13 @@ function asGame(raw: unknown): LookupGame | null {
   return { config: g.config, rounds, lakes, assassination: str(g.assassination), outcome: str(g.outcome) };
 }
 
-function readJson(paths: string[]): unknown {
+function readJson(paths: string[], label: string): unknown {
   const file = paths.find((p) => fs.existsSync(p));
-  if (!file) return null;
+  if (!file) {
+    // 不默默降級：少了總庫，/更正 看不到檢查結果與更正、只在總庫裡的局（模擬、外部）也查不到（Dockerfile 要 COPY 這兩份）。
+    console.warn(`[record-lookup] 找不到 ${label}；/更正 只能用另一份資料查`);
+    return null;
+  }
   try {
     return JSON.parse(fs.readFileSync(file, 'utf-8'));
   } catch {
@@ -113,7 +118,8 @@ function gameDbPaths(): string[] {
 
 function build(): Index {
   const index: Index = { db: new Map(), alias: new Map(), site: new Map() };
-  const db = readJson(gameDbPaths()) as { format?: unknown; games?: unknown } | null;
+  const db = readJson(gameDbPaths(), 'game_db.json') as { format?: unknown; games?: unknown } | null;
+  if (db && !(db.format === 'avalon-game-db' && Array.isArray(db.games))) console.warn('[record-lookup] game_db.json 格式不符；/更正 只能用 records_cache.json 查');
   if (db && db.format === 'avalon-game-db' && Array.isArray(db.games)) {
     for (const raw of db.games as unknown[]) {
       const e = (raw ?? {}) as Record<string, unknown>;
@@ -138,7 +144,7 @@ function build(): Index {
       }
     }
   }
-  const site = readJson(recordsPaths());
+  const site = readJson(recordsPaths(), 'records_cache.json');
   if (isRecordsDocument(site)) {
     for (const raw of site.posts) {
       const p = (raw ?? {}) as Record<string, unknown>;
