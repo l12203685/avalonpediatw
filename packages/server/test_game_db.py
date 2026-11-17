@@ -320,6 +320,25 @@ class CorrectionTest(unittest.TestCase):
         doc = json.loads((ROOT / "packages" / "server" / "game_db_corrections.json").read_text(encoding="utf-8"))
         s572 = doc["corrections"]["S572"]
         self.assertEqual((s572["set"], s572["by"], s572["date"]), ({"assassination": "4"}, "站長", "2026-11-17"))
+        for gid in ("S211", "S2136", "S318", "S892"):  # 主控台更正: whole records retyped by the site owner
+            entry = doc["corrections"][gid]
+            self.assertEqual((set(entry["set"]), entry["note"]), (set(gd.CORRECTABLE), "主控台更正"))
+            self.assertEqual([c["rule"] for c in gd.validate(entry["set"]) if c["level"] != gd.INFO], [], gid)
+
+    def test_whole_record_correction_makes_an_unreadable_source_readable(self):
+        unreadable = dict(source(gd.SRC_SHEET, "12", None), forced_rounds=[2], problem="試算表這局的紀錄讀不懂（proposals）")
+        whole = {f: copy.deepcopy(GOOD[f]) for f in gd.CORRECTABLE}
+        applied = gd.apply_corrections([unreadable], {"corrections": {"S12": {"set": whole, "by": "站長", "date": "2026-11-17"}}})
+        self.assertEqual((applied[0]["field"], applied[0]["old"]), ("record", "試算表這局的紀錄讀不懂（proposals）"))
+        excluded = []
+        rows = gd.build([unreadable], excluded)
+        self.assertEqual((excluded, rows[0]["id"], rows[0]["status"]), ([], "S12", "ok"))
+        self.assertEqual(rows[0]["fp"], rm.game_fingerprint(GOOD))
+        # only part of the record: an unreadable source cannot take it
+        other = dict(source(gd.SRC_SHEET, "13", None), forced_rounds=[2])
+        applied = gd.apply_corrections([other], {"corrections": {"S13": {"set": {"assassination": "7"}}}})
+        self.assertTrue(applied[0]["missing"])
+        self.assertEqual(gd.build([other], excluded), [])
 
 
 class MainTest(unittest.TestCase):

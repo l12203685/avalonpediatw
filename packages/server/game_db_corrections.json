@@ -2,10 +2,60 @@
   "about": "站長更正：對照原始紀錄後，覆寫某個來源記錯的欄位（建庫時先套用再檢查，來源檔不動）。鍵是來源的編號（S<流水號>、D<hash>、Discord 貼文 id、M<流水號>、P<_id>）；set 只能改 config、rounds、lakes、assassination、outcome。",
   "corrections": {
     "S572": {
-      "set": {"assassination": "4"},
+      "set": {
+        "assassination": "4"
+      },
       "by": "站長",
       "date": "2026-11-17",
       "note": "站長對照手寫紀錄表：刺殺目標是 4家，試算表記成 6家（奧伯倫）"
+    },
+    "S211": {
+      "set": {
+        "config": "860729",
+        "rounds": [{"proposals":[{"team":"167","votes":[]},{"team":"289","votes":[]},{"team":"345","votes":[]},{"team":"450","votes":[]},{"team":"458","votes":[]}],"mission":"oox"},{"proposals":[{"team":"1460","votes":[]},{"team":"1570","votes":["1-"]},{"team":"1890","votes":[]},{"team":"1590","votes":["1-"]},{"team":"1280","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"1570","votes":["5-"]},{"team":"2590","votes":[]},{"team":"3450","votes":["5-"]},{"team":"4590","votes":[]},{"team":"2590","votes":[]}],"mission":"ooox"}],
+        "lakes": [{"after":2,"holder":"0","target":"5","claim":"o"}],
+        "assassination": "",
+        "outcome": "三紅"
+      },
+      "by": "站長",
+      "date": "2026-11-17",
+      "note": "主控台更正"
+    },
+    "S2136": {
+      "set": {
+        "config": "689274",
+        "rounds": [{"proposals":[{"team":"149","votes":[]},{"team":"258","votes":[]},{"team":"159","votes":["34+"]},{"team":"157","votes":["4+"]},{"team":"357","votes":[]}],"mission":"ooo"},{"proposals":[{"team":"3567","votes":[]},{"team":"3457","votes":[]},{"team":"3567","votes":["37-","89+"]},{"team":"3567","votes":["37-","89+"]},{"team":"3570","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"3570","votes":[]}],"mission":"oooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"5","claim":"o"}],
+        "assassination": "7",
+        "outcome": "三藍活"
+      },
+      "by": "站長",
+      "date": "2026-11-17",
+      "note": "主控台更正"
+    },
+    "S318": {
+      "set": {
+        "config": "903867",
+        "rounds": [{"proposals":[{"team":"140","votes":[]},{"team":"278","votes":[]},{"team":"367","votes":[]},{"team":"458","votes":[]},{"team":"580","votes":[]}],"mission":"oox"},{"proposals":[{"team":"2569","votes":[]},{"team":"1567","votes":[]},{"team":"1489","votes":[]},{"team":"1689","votes":[]},{"team":"3560","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"3560","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"12569","votes":["16-"]},{"team":"13567","votes":["156-"]},{"team":"14567","votes":["16-"]},{"team":"14569","votes":["16-"]},{"team":"14567","votes":[]}],"mission":"ooooo"},{"proposals":[{"team":"14567","votes":[]},{"team":"14678","votes":["1467-"]},{"team":"14569","votes":["1456-"]},{"team":"24560","votes":["2456-"]},{"team":"14567","votes":[]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"5","claim":"o"},{"after":3,"holder":"5","target":"6","claim":"o"},{"after":4,"holder":"6","target":"4","claim":"o"}],
+        "assassination": "7",
+        "outcome": "三藍死"
+      },
+      "by": "站長",
+      "date": "2026-11-17",
+      "note": "主控台更正"
+    },
+    "S892": {
+      "set": {
+        "config": "327840",
+        "rounds": [{"proposals":[{"team":"123","votes":[]},{"team":"236","votes":[]},{"team":"348","votes":[]},{"team":"136","votes":["4+"]},{"team":"569","votes":[]}],"mission":"ooo"},{"proposals":[{"team":"5690","votes":[]},{"team":"1456","votes":["7+","4-"]},{"team":"5689","votes":[]},{"team":"5689","votes":["3+"]},{"team":"5690","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"5690","votes":[]}],"mission":"oooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"5","claim":"o"}],
+        "assassination": "6",
+        "outcome": "三藍活"
+      },
+      "by": "站長",
+      "date": "2026-11-17",
+      "note": "主控台更正"
     }
   }
 }
