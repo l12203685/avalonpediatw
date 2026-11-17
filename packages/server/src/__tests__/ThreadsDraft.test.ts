@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, roundLines, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, recapGroups, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -351,19 +351,23 @@ describe('image', () => {
         expect(gridOverflowStart(pv)).toBeNull(); // 一局的列放得下題目卡
         expect(shields(card)).toBe(teamCount(cardRows));
         const recaps = buildRoundSvgs(pv, 3);
-        expect(recaps.map((x) => x.round)).toEqual(recapRounds(rows));
+        // 兩局一張（站長 11/18「一張圖最多顯示兩局的派票紀錄」）：1–2、3–4，單數最後一張一局
+        expect(recaps.map((x) => x.rounds)).toEqual(recapGroups(pv));
+        expect(recaps.flatMap((x) => x.rounds)).toEqual(recapRounds(rows));
+        for (const x of recaps) expect(x.rounds.length).toBeLessThanOrEqual(2);
+        if (recapRounds(rows).length >= 2) expect(recaps[0].rounds).toHaveLength(2);
         if (recaps.length) withRecaps++;
         let drawn = cardRows.filter((r) => r.kind !== 'decision').length;
-        for (const { round, svg } of recaps) {
-          const part = roundRows(rows, round);
+        for (const { rounds, svg } of recaps) {
+          const part = rounds.flatMap((r) => roundRows(rows, r));
           drawn += part.length;
           expect(shields(svg)).toBe(teamCount(part));
           expect(Number(/height="(\d+)"/.exec(svg)?.[1])).toBeLessThanOrEqual(GRID_TARGET_H);
-          expect(svg).toContain(`第 ${round} 局`);
+          expect(svg).toContain(rounds.length === 2 ? `第 ${rounds[0]}–${rounds[1]} 局` : `第 ${rounds[0]} 局`);
           expect(svg).not.toMatch(/10\s*家/);
         }
         expect(drawn).toBe(rows.filter((r) => r.kind !== 'decision').length); // 每一列剛好畫一次
-        if (recaps.length) expect(card).toContain(`前面 ${recaps.length} 局的牌譜在後面的圖（往右滑）`);
+        if (recaps.length) expect(card).toContain(`前面 ${recapRounds(rows).length} 局的牌譜在後面的圖（往右滑）`);
         expect(card).not.toMatch(/10\s*家/);
       }
     }
@@ -450,35 +454,48 @@ describe('image', () => {
     }
   });
 
-  it('round lines: only that round, yellow, solid for the team that went on the mission and dashed for other proposals, each with a shield arrowhead at the seat/logo touch point', () => {
-    const fake = [
-      { kind: 'proposal' as const, index: 0, round: 2, attempt: 1, leaderSeat: 1, team: [1, 3, 5, 7], votes: [], approves: null, forced: false, approved: false, reliable: true, line: '1357' },
-      { kind: 'proposal' as const, index: 1, round: 2, attempt: 2, leaderSeat: 2, team: [4, 6, 8, 10], votes: [], approves: null, forced: false, approved: true, reliable: true, line: '4680' },
-    ];
-    const svg = roundLines(fake as never, 300, 400);
-    expect((svg.match(/class="lane lane-proposal"/g) ?? []).length).toBe(3); // 隊長自己不畫
-    expect((svg.match(/class="lane lane-mission"/g) ?? []).length).toBe(4);
-    expect((svg.match(/class="lane-arrow"/g) ?? []).length).toBe(7); // 每條線一個盾牌箭頭
-    const mission = /<line [^>]*class="lane lane-mission"\/>/.exec(svg)![0];
-    const other = /<line [^>]*class="lane lane-proposal"\/>/.exec(svg)![0];
-    expect(mission).not.toContain('stroke-dasharray'); // 出任務的實線
-    expect(other).toContain('stroke-dasharray'); // 其他虛線
-    expect(mission).toContain('#facc15'); // 黃色
-    // 起點在隊長座位與標誌的切點
-    const m1 = /x1="([\d.]+)" y1="([\d.]+)"/.exec(other)!;
-    const rim = logoRimPoint(1, 300, 400);
-    expect(Number(m1[1])).toBeCloseTo(rim.x, 0);
-    expect(Number(m1[2])).toBeCloseTo(rim.y, 0);
-    // 題目卡只畫出題那一局的提議；回顧圖只畫那一局的
+  it('lake lines on the table: holder → target arrows anchored at the logo rim, declaration on the line, latest emphasized; no proposal lines', () => {
+    const lake = (round: number, holderSeat: number, targetSeat: number, claim: 'o' | 'x' | '') => ({ kind: 'lake' as const, round, holderSeat, targetSeat, claim });
+    const svg = lakeLines([lake(2, 10, 2, 'o'), lake(3, 2, 4, 'x'), lake(4, 4, 1, '')], 300, 400);
+    expect((svg.match(/class="lake-line"/g) ?? []).length).toBe(3);
+    expect((svg.match(/class="lake-head"/g) ?? []).length).toBe(3);
+    expect(svg).toContain('>o<');
+    expect(svg).toContain('>x<');
+    expect(svg).toContain('>?<');
+    // 起點在拿湖的人的切點、箭頭尖端在被湖的人的切點
+    const first = /<line x1="([\d.]+)" y1="([\d.]+)"[^>]*class="lake-line"/.exec(svg)!;
+    expect(Number(first[1])).toBeCloseTo(logoRimPoint(10, 300, 400).x, 0);
+    expect(Number(first[2])).toBeCloseTo(logoRimPoint(10, 300, 400).y, 0);
+    const head = /<path d="M([\d.]+) ([\d.]+) /.exec(svg)!;
+    expect(Number(head[1])).toBeCloseTo(logoRimPoint(2, 300, 400).x, 0);
+    expect(Number(head[2])).toBeCloseTo(logoRimPoint(2, 300, 400).y, 0);
+    // 最新的一次湖比較粗
+    const widths = [...svg.matchAll(/stroke-width="([\d.]+)" class="lake-line"/g)].map((m) => Number(m[1]));
+    expect(widths[2]).toBeGreaterThan(widths[0]);
+    expect(lakeLines([], 300, 400)).toBe('');
+    // 題目卡畫出題那一刻知道的每一次湖；沒有派票連線
     for (let w = 0; w < 2; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
-        const rows = sheetRows(pv);
-        const lanes = (rs: readonly (typeof rows)[number][]): number => rs.reduce((n, r) => n + (r.kind === 'proposal' ? r.team.filter((x) => x !== r.leaderSeat).length : 0), 0);
-        expect((buildPuzzleSvg(pv, 3).match(/class="lane /g) ?? []).length).toBe(lanes(cardSheetRows(pv)));
-        for (const { round, svg: rs } of buildRoundSvgs(pv, 3)) expect((rs.match(/class="lane /g) ?? []).length).toBe(lanes(roundRows(rows, round)));
+        const card = buildPuzzleSvg(pv, 3);
+        expect((card.match(/class="lake-line"/g) ?? []).length).toBe(sheetRows(pv).filter((r) => r.kind === 'lake').length);
+        expect(card).not.toContain('class="lane');
       }
     }
+  });
+
+  it('every seat whose alignment you know gets a blue (good) or red (bad) circle: night info, own lake, lake chain', () => {
+    const lake = (round: number, holderSeat: number, targetSeat: number, claim: 'o' | 'x' | '', seen?: 'good' | 'red') => ({ kind: 'lake' as const, round, holderSeat, targetSeat, claim, ...(seen ? { seen } : {}) });
+    const roles = ['loyal', 'merlin', 'percival', 'assassin', 'morgana', 'loyal', 'mordred', 'loyal', 'loyal', 'oberon'];
+    const pv = { game: { seatRoles: roles }, pick: { seat: 1 }, view: { sight: { kind: 'loyal' } } } as never;
+    const marks = seatMarks(pv, [lake(2, 1, 9, 'o', 'good'), lake(3, 9, 4, 'x'), lake(3, 9, 6, 'o')]);
+    const blue = marks.get(1)?.color; // 你
+    expect(marks.get(9)).toMatchObject({ label: '湖到好', color: blue });
+    expect(marks.get(6)).toMatchObject({ label: '湖鏈：好', color: blue });
+    expect(marks.get(4)?.label).toBe('湖鏈：紅');
+    expect(marks.get(4)?.color).not.toBe(blue);
+    const merlin = seatMarks({ game: { seatRoles: roles }, pick: { seat: 2 }, view: { sight: { kind: 'merlin', seen: [4, 5, 10] } } } as never, []);
+    expect(merlin.get(5)?.color).toBe(marks.get(4)?.color); // 夜裡看到的紅＝紅圈
   });
 
   it('lake chain: a player you know is good reports truthfully, so their lake becomes your info (direct and two-hop); red viewers get none; night info is not duplicated', () => {
@@ -563,8 +580,9 @@ describe('image', () => {
     const rows = sheetRows(mine);
     const lakeRound = later.round;
     expect(buildPuzzleSvg(mine, 3)).toContain(label); // 題目卡：出題那一刻知道了
-    for (const { round, svg } of buildRoundSvgs(mine, 3)) {
-      if (round < lakeRound) expect(svg.includes(label)).toBe(false); // 之前的局還不知道
+    for (const { rounds, svg } of buildRoundSvgs(mine, 3)) {
+      const last = rounds[rounds.length - 1]; // 一張圖算到它最後一局
+      if (last < lakeRound) expect(svg.includes(label)).toBe(false); // 之前的局還不知道
       else expect(svg).toContain(label);
     }
     expect(lakeKnowledge(mine, rows.filter((r) => r.kind !== 'decision' && r.round < lakeRound)).seats.has(target)).toBe(false);

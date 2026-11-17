@@ -36,7 +36,7 @@ import {
   type DailyPlan,
 } from '../bots/threads/publish/daily';
 import { extraRenderers } from '../bots/threads/publish/extraImages';
-import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, recapRounds, renderPuzzlePng, sheetRows } from '../bots/threads/image';
+import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, recapGroups, recapRounds, recapSuffix, renderPuzzlePng, sheetRows } from '../bots/threads/image';
 import { SEE_IMAGE_LINE } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
@@ -629,13 +629,13 @@ describe('threads carousel', () => {
     const d = date as string;
     const pv = g.viewOf(g.pickFor(d)!)!;
     // 跟腳本同一個檢查：續圖、回顧圖都要一張不少
-    const rounds = recapRounds(sheetRows(pv));
+    const groups = recapGroups(pv);
     const incomplete = (_d: string, images: readonly string[]): string | null => {
       const need = gridPages(pv).length;
       const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
       if (have < need) return `牌譜要 ${need} 張續圖，只產生了 ${have} 張`;
-      const haveRounds = images.filter((n) => /-round-\d+\.png$/.test(n)).length;
-      return haveRounds < rounds.length ? `前面 ${rounds.length} 局要各一張回顧圖，只產生了 ${haveRounds} 張` : null;
+      const haveRecaps = images.filter((n) => /-rounds-\d+(-\d+)?\.png$/.test(n)).length;
+      return haveRecaps < groups.length ? `前面幾局要 ${groups.length} 張回顧圖，只產生了 ${haveRecaps} 張` : null;
     };
     const plan = prepareDaily(d, {
       gen: g,
@@ -647,7 +647,8 @@ describe('threads carousel', () => {
       renderExtraImages: extraRenderers(g),
       imageIncomplete: incomplete,
     }) as DailyPlan;
-    expect(plan.images).toEqual([`${d}.png`, ...rounds.map((r) => `${d}-round-${r}.png`), `${d}-answer.png`]);
+    expect(plan.images).toEqual([`${d}.png`, ...groups.map((g) => `${d}-${recapSuffix(g)}.png`), `${d}-answer.png`]);
+    expect(groups[0]).toHaveLength(2); // 兩局一張
     expect(plan.liveBlock).toBeNull();
     const urls = plan.images.map((n) => `https://raw.githubusercontent.com/o/r/sha/images/${n}`);
     const { api, calls } = fakeApi();
@@ -682,7 +683,7 @@ describe('threads carousel', () => {
     const base = g.viewOf(g.pickFor(d)!)!;
     // 很長的牌譜：把看得到的事件重複好幾次（只測切張，內容不重要）
     expect(base.shown.length).toBeGreaterThan(0);
-    const copies = Math.ceil(110 / base.shown.length); // 大約 110 列：題目卡放不下，要三張以上的續圖
+    const copies = Math.ceil(240 / base.shown.length); // 大約 240 列：題目卡放不下，要三張以上的續圖
     const long = { ...base, shown: Array.from({ length: copies }, () => base.shown).flat() };
     const rows = sheetRows(long);
     const pages = gridPages(long);

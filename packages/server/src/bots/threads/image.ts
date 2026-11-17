@@ -281,6 +281,7 @@ export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<numb
 export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string }> {
   const marks = new Map<number, { label: string; color: string }>();
   const s = pv.view.sight;
+  // 圈的顏色：知道陣營的座位一律好人藍、壞人紅（站長 11/18：「湖中鏈可知的陣營也全都一起改座位圈圈顏色」）；分不出來的拇指金色。
   if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指', color: C.gold }));
   if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red }));
   if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red }));
@@ -289,7 +290,7 @@ export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number,
   for (const [seat, k] of knowledge.seats) {
     if (marks.has(seat)) continue;
     const label = k.via === null ? (k.evil ? '湖到紅' : '湖到好') : k.evil ? '湖鏈：紅' : '湖鏈：好';
-    marks.set(seat, { label, color: k.evil ? C.red : C.green });
+    marks.set(seat, { label, color: k.evil ? C.red : C.blue });
   }
   // 派西：一根拇指的陣營知道了（自己湖、或湖中鏈），兩根拇指就分得出來（站長 11/18：「拇指湖到好直接寫梅林, 另一根拇指改成莫甘娜,
   // 圓圈也改成藍色/紅色」）。這條蓋過原本的「拇指」標記。
@@ -505,40 +506,43 @@ export function logoRimPoint(seat: number, cx: number, cy: number): { x: number;
   return { x: cx + TABLE_LOGO_R * ux, y: cy + TABLE_LOGO_R * uy };
 }
 
-const LINE_YELLOW = '#facc15';
-/** 箭頭（盾牌）的大小。 */
-const ARROW_SHIELD = 18;
+const LAKE_LINE = '#22d3ee';
 
-/** 盾牌形狀的箭頭：尖端在 (x, y)、指向 angle（弧度）。形狀跟牌譜格子的盾牌一樣。 */
-function shieldArrow(x: number, y: number, angle: number, fill: string): string {
-  const k = ARROW_SHIELD / 24;
-  const deg = (angle * 180) / Math.PI - 90; // 盾牌原本尖端朝下（+y）
-  return `<path transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${deg.toFixed(1)}) scale(${k.toFixed(3)}) translate(-12 -22)" d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" fill="${fill}" stroke="#1c1917" stroke-width="1.5" class="lane-arrow"/>`;
+/** 箭頭頭（三角形）：尖端在 (x, y)、指向 angle（弧度）。 */
+function arrowHead(x: number, y: number, angle: number, fill: string, size: number): string {
+  const back = (d: number, side: number): string => {
+    const bx = x - Math.cos(angle) * d - Math.sin(angle) * side;
+    const by = y - Math.sin(angle) * d + Math.cos(angle) * side;
+    return `${bx.toFixed(1)} ${by.toFixed(1)}`;
+  };
+  return `<path d="M${x.toFixed(1)} ${y.toFixed(1)} L${back(size, size * 0.55)} L${back(size, -size * 0.55)} Z" fill="${fill}" class="lake-head"/>`;
 }
 
 /**
- * 圓桌上一局的提議連線（站長 11/18：「每一局都只呈現該局的表格 & 湖中 然後只呈現該局的 線顏色用黃色 最後真的出任務用實線
- * 其他用虛線 並且帶有箭頭 (盾牌形狀指向)」；端點在座位與標誌的切點：「虛線我希望都從座位跟Logo 的切點處連接」）：
- * 每次提議從隊長拉到每個隊員（隊長自己在隊上不畫），真的出任務的那一隊實線、其他虛線，尾端是盾牌形狀的箭頭。
- * rows 只給那一局的列。
+ * 圓桌上的湖中線（站長 11/18：「覺得派票的實虛線其實沒有很清楚 直接改成湖中線就好 宣告也可以寫在線上」）：
+ * 拿湖的人 → 被驗的人，端點在座位與標誌的切點，線中間寫宣告（o 藍、x 紅、沒說 ?）。最新的一次湖畫粗一點。
+ * lakes 是到那一刻為止的湖（題目卡＝出題那一刻、回顧圖＝到那張圖最後一局）。
  */
-export function roundLines(rows: readonly SheetRow[], cx: number, cy: number): string {
+export function lakeLines(known: readonly SheetRow[], cx: number, cy: number): string {
+  const lakes = known.filter((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
   const out: string[] = [];
-  for (const p of rows) {
-    if (p.kind !== 'proposal') continue;
-    const a = logoRimPoint(p.leaderSeat, cx, cy);
-    for (const seat of p.team) {
-      if (seat === p.leaderSeat) continue;
-      const b = logoRimPoint(seat, cx, cy);
-      const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      // 線停在盾牌的底邊，盾牌尖端碰到被選的座位那一側的切點
-      const ex = b.x - Math.cos(ang) * ARROW_SHIELD * 0.75;
-      const ey = b.y - Math.sin(ang) * ARROW_SHIELD * 0.75;
-      const dash = p.approved ? '' : ' stroke-dasharray="8 6"';
-      out.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="${LINE_YELLOW}" stroke-opacity="${p.approved ? 0.95 : 0.7}" stroke-width="${p.approved ? 3.5 : 2.5}"${dash} class="lane ${p.approved ? 'lane-mission' : 'lane-proposal'}"/>`);
-      out.push(shieldArrow(b.x, b.y, ang, p.approved ? LINE_YELLOW : '#a16207'));
-    }
-  }
+  lakes.forEach((l, i) => {
+    const latest = i === lakes.length - 1;
+    const a = logoRimPoint(l.holderSeat, cx, cy);
+    const b = logoRimPoint(l.targetSeat, cx, cy);
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const head = latest ? 18 : 14;
+    const ex = b.x - Math.cos(ang) * head * 0.8;
+    const ey = b.y - Math.sin(ang) * head * 0.8;
+    out.push(`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="${LAKE_LINE}" stroke-opacity="${latest ? 1 : 0.65}" stroke-width="${latest ? 4 : 2.5}" class="lake-line"/>`);
+    out.push(arrowHead(b.x, b.y, ang, LAKE_LINE, head));
+    // 宣告寫在線的中間（底色擋一下線）
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    const label = l.claim === 'o' ? { t: 'o', fill: '#93c5fd' } : l.claim === 'x' ? { t: 'x', fill: C.red } : { t: '?', fill: C.soft };
+    out.push(`<circle cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" r="15" fill="${C.page}" stroke="${LAKE_LINE}" stroke-opacity="0.6" stroke-width="1.5"/>`);
+    out.push(text(mx, my + 8, label.t, { size: 24, fill: label.fill, anchor: 'middle', weight: true }));
+  });
   return out.join('');
 }
 
@@ -546,7 +550,7 @@ export function roundLines(rows: readonly SheetRow[], cx: number, cy: number): s
  * 小圓桌：十個座位排成正圓、圍著中間放大的阿瓦隆百科標誌（站長 11/18 選 A：標誌含字、不透明度 0.3；「座位不要橢圓 直接圍繞 logo」）。
  * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。每局出任務的座位寫在右邊的任務格裡，湖也寫在右邊。
  */
-function roundTable(pv: PickView, lineRows: readonly SheetRow[], cx: number, cy: number, known: readonly SheetRow[]): string {
+function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetRow[]): string {
   const uri = logoDataUri();
   const r = TABLE_LOGO_R;
   const logo = uri
@@ -554,8 +558,8 @@ function roundTable(pv: PickView, lineRows: readonly SheetRow[], cx: number, cy:
       `<image href="${uri}" x="${cx - r}" y="${cy - r}" width="${2 * r}" height="${2 * r}" opacity="${TABLE_LOGO_OPACITY}" clip-path="url(#tl)" preserveAspectRatio="xMidYMid slice"/>` +
       `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${C.gold}" stroke-opacity="0.3" stroke-width="2"/>`
     : '';
-  // 那一局的提議連線畫在標誌上面、座位下面
-  const parts: string[] = [logo, roundLines(lineRows, cx, cy)];
+  // 湖中線畫在標誌上面、座位下面
+  const parts: string[] = [logo, lakeLines(known, cx, cy)];
   const marks = seatMarks(pv, known);
   for (let seat = 1; seat <= 10; seat++) {
     const { x, y, ux, uy } = seatPosition(seat, cx, cy);
@@ -586,9 +590,12 @@ function shield(cx: number, cy: number, size: number): string {
 
 /** 圖的高度上限（Threads 手機 4:5）。 */
 export const GRID_TARGET_H = 1350;
-/** 格子的列高範圍：放不下時先縮列高，縮到最小還放不下才把後面的列移到第二張圖。 */
-export const GRID_ROW_MAX = 52;
-export const GRID_ROW_MIN = 30;
+/**
+ * 格子的列高範圍：精縮版（站長 11/18 貼的派票紀錄表：一次提議一窄列，整局約 450px），放不下時先縮列高，
+ * 縮到最小還放不下才把後面的列移到第二張圖。
+ */
+export const GRID_ROW_MAX = 26;
+export const GRID_ROW_MIN = 22;
 
 const GX0 = 40;
 const LEAD_W = 60;
@@ -635,10 +642,11 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
     }
     const res = r.forced ? '強制' : r.approves === null ? '—' : `${r.approves}票${r.approved ? '過' : ''}`;
     parts.push(text(RES_X + RES_W / 2, mid, res, { size: fs - 2, fill: r.forced ? '#fcd34d' : r.approved ? '#6ee7b7' : C.faint, anchor: 'middle' }));
+    // 文字紀錄：隊長、隊伍、值得注意的票（站長的表：「1 1347 47-」）
     const [team, ...rest] = r.line.split(' ');
-    const seg: Seg[] = [{ t: team }];
+    const seg: Seg[] = [{ t: `${seatChar(r.leaderSeat)} `, fill: '#facc15', weight: true }, { t: team }];
     if (rest.length) seg.push({ t: ` ${rest.join(' ')}`, fill: C.green, weight: true });
-    parts.push(segs(TEXT_X + 12, mid, seg, fitSize(r.line, fs, TEXT_W - 16)));
+    parts.push(segs(TEXT_X + 12, mid, seg, fitSize(`${seatChar(r.leaderSeat)} ${r.line}`, fs, TEXT_W - 16)));
   } else if (r.kind === 'quest') {
     parts.push(rect(GX0, y, W - 80, rh, '#422006', ' fill-opacity="0.75"'));
     parts.push(rect(GX0, y, LEAD_W, rh, '#713f12'));
@@ -793,7 +801,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const top = 150;
   const cx = 40 + TABLE_BOX_W / 2;
   const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-  parts.push(roundTable(pv, cardRows, cx, cy, rows));
+  parts.push(roundTable(pv, cx, cy, rows));
   const rx = 40 + TABLE_BOX_W + 24;
   const rmax = W - 40 - rx;
   // 你的視角：一行寫完（站長 11/18：「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」），太長才換行
@@ -877,56 +885,81 @@ export function buildGridSvgs(pv: PickView, weekday: number): string[] {
   });
 }
 
+/** 回顧圖底下的列能用的高度（標題、圓桌之下，留給註記與網址）。 */
+const RECAP_FREE = GRID_TARGET_H - CARD_TOP_H - GRID_HEAD_H - 110;
+
 /**
- * 前面幾局的回顧圖（站長 11/18：「每一局都只呈現該局的表格 & 湖中」）：一局一張——小圓桌只畫那一局的提議連線、
- * 右邊是那一局的任務格與湖、下面是那一局的牌譜格子（提議、任務結果、湖）。輪播放在題目卡後面。
+ * 回顧圖怎麼分組（站長 11/18：「然後一張圖最多顯示兩局的派票紀錄 這樣呈現看看」）：前面的局兩局一張（1–2、3–4），
+ * 單數的最後一張一局；兩局的列放不下（列高小於最小值）就拆成一局一張。
  */
-export function buildRoundSvgs(pv: PickView, weekday: number): { round: number; svg: string }[] {
+export function recapGroups(pv: PickView): number[][] {
   const rows = sheetRows(pv);
-  const recaps = recapRounds(rows);
+  const rounds = recapRounds(rows);
+  const groups: number[][] = [];
+  for (let i = 0; i < rounds.length; i += 2) {
+    const pair = rounds.slice(i, i + 2);
+    const n = pair.reduce((k, r) => k + roundRows(rows, r).length, 0);
+    if (pair.length === 2 && Math.floor(RECAP_FREE / n) < GRID_ROW_MIN) groups.push([pair[0]], [pair[1]]);
+    else groups.push(pair);
+  }
+  return groups;
+}
+
+/** 回顧圖的檔名後綴：rounds-1-2、rounds-3（單局）。 */
+export function recapSuffix(group: readonly number[]): string {
+  return `rounds-${group.join('-')}`;
+}
+
+/**
+ * 前面幾局的回顧圖：最多兩局一張——小圓桌畫到那張最後一局為止的湖中線與座位（到那時候知道的），
+ * 右邊是這幾局的任務格與湖、下面是這幾局的牌譜格子（提議、任務結果、湖）。輪播放在題目卡後面。
+ */
+export function buildRoundSvgs(pv: PickView, weekday: number): { rounds: number[]; svg: string }[] {
+  const rows = sheetRows(pv);
+  const groups = recapGroups(pv);
   const pages = gridPages(pv).length;
-  const total = 1 + pages + recaps.length;
-  return recaps.map((round, i) => {
-    const part = roundRows(rows, round);
+  const total = 1 + pages + groups.length;
+  return groups.map((group, i) => {
+    const part = group.flatMap((r) => roundRows(rows, r));
+    const last = group[group.length - 1];
     const k = 2 + pages + i;
-    const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・第 ${round} 局（${k}/${total}）`, pv.exerciseId)];
+    const name = group.length === 1 ? `第 ${group[0]} 局` : `第 ${group[0]}–${last} 局`;
+    const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・${name}（${k}/${total}）`, pv.exerciseId)];
     const top = 150;
     const cx = 40 + TABLE_BOX_W / 2;
     const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-    // 到這一局為止知道的事（這一局的湖算進去，之後的湖不算）
-    const known = rows.filter((r) => r.kind !== 'decision' && r.round <= round);
-    parts.push(roundTable(pv, part, cx, cy, known));
+    // 到這張最後一局為止知道的事（之後的湖不算）
+    const known = rows.filter((r) => r.kind !== 'decision' && r.round <= last);
+    parts.push(roundTable(pv, cx, cy, known));
     const rx = 40 + TABLE_BOX_W + 24;
     let ty = top + 80;
-    parts.push(text(rx, ty, `第 ${round} 局`, { size: 40, weight: true }));
+    parts.push(text(rx, ty, name, { size: 40, weight: true }));
     ty += 26;
-    parts.push(missionChip(rows, round, rx, ty, 78, 94));
+    group.forEach((r, j) => parts.push(missionChip(rows, r, rx + j * 86, ty, 78, 94)));
     ty += 94 + 44;
     const thumbs = pv.view.sight.kind === 'percival' ? pv.view.sight.thumbs : undefined;
-    const lake = lakeBlock(lakeEntries(part, lakeKnowledge(pv, known).chain, { thumbs, known }), rx, ty, 26, [{ t: '湖 ', fill: '#a5f3fc', weight: true }]);
+    const lake = lakeBlock(lakeEntries(part, lakeKnowledge(pv, known).chain, { thumbs, known }), rx, ty, 24, [{ t: '湖 ', fill: '#a5f3fc', weight: true }]);
     parts.push(lake.svg);
-    ty += 48 + lake.height;
-    parts.push(segs(rx, ty, [{ t: '━', fill: LINE_YELLOW }, { t: ' 出任務的隊伍　', fill: C.soft }, { t: '┅', fill: LINE_YELLOW }, { t: ' 其他提議', fill: C.soft }], 20));
-    const layout = cardLayout(part.length);
+    const rh = Math.max(GRID_ROW_MIN, Math.min(GRID_ROW_MAX, Math.floor(RECAP_FREE / Math.max(1, part.length))));
     let y = CARD_TOP_H;
     parts.push(gridHead(pv, y, known));
     y += GRID_HEAD_H;
     for (const r of part) {
-      parts.push(gridRow(r, y, layout.rowH));
-      y += layout.rowH;
+      parts.push(gridRow(r, y, rh));
+      y += rh;
     }
     y += 50;
     parts.push(text(40, y, voteLegend(part), { size: 21, fill: C.faint }));
     y += 36;
     parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
     y += 24;
-    return { round, svg: svgDoc(y, parts.join(''), { watermark: false }) };
+    return { rounds: group, svg: svgDoc(y, parts.join(''), { watermark: false }) };
   });
 }
 
-/** 前面幾局的回顧圖 PNG，照局數順序。 */
-export function renderRoundPngs(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): { round: number; png: Buffer }[] {
-  return buildRoundSvgs(pv, weekday).map(({ round, svg }) => ({ round, png: svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE) }));
+/** 前面幾局的回顧圖 PNG，照順序。 */
+export function renderRoundPngs(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): { rounds: number[]; png: Buffer }[] {
+  return buildRoundSvgs(pv, weekday).map(({ rounds, svg }) => ({ rounds, png: svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE) }));
 }
 
 /** 第一張續圖（放得下時 null）；要全部的續圖用 buildGridSvgs。 */
