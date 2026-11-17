@@ -53,6 +53,7 @@ jobs:
           POST_HOUR: ${{ vars.THREADS_POST_HOUR }}
           HAS_IG: ${{ secrets.INSTAGRAM_ACCESS_TOKEN != '' }}
           IG_PUBLISH: ${{ vars.INSTAGRAM_PUBLISH }}
+          LIVE_FROM: ${{ vars.THREADS_LIVE_FROM }}
         run: |
           set -euo pipefail
           DATE="${IN_DATE:-$(TZ=Asia/Taipei date +%F)}"
@@ -65,6 +66,11 @@ jobs:
           IG=off
           if [ "${HAS_IG:-}" = true ] && [ "$MODE" != record-manual ]; then
             if [ "${IN_MODE:-auto}" != dry-run ] && [ "${IG_PUBLISH:-}" = 1 ]; then IG=live; else IG=dry-run; fi
+          fi
+          # 正式發的起始日（站長 11/17：圖、文字、小觀念確認前不要發）：沒設 THREADS_LIVE_FROM，或今天早於那天，排程一律只試跑。
+          if [ "$EVENT" = schedule ] && { [ -z "${LIVE_FROM:-}" ] || [[ "$DATE" < "$LIVE_FROM" ]]; }; then
+            if [ "$MODE" = live ]; then MODE=dry-run; fi
+            if [ "$IG" = live ]; then IG=dry-run; fi
           fi
           RUN=1
           if [ "$EVENT" = schedule ]; then
