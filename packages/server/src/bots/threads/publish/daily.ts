@@ -18,7 +18,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { ThreadsDraft } from '../draft';
-import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
+import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday } from '../plan';
 import type { ThreadsApi, RecentPost } from './threadsApi';
@@ -269,7 +269,9 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
 
   // 要續圖、續圖也產生了（輪播裡有 -grid）就沒問題；續圖沒產生才擋。
   const incomplete = image && deps.imageIncomplete ? deps.imageIncomplete(date) : null;
-  const liveBlock = incomplete && !images.some((n) => n.endsWith('-grid.png')) ? incomplete : null;
+  let liveBlock = incomplete && !images.some((n) => n.endsWith('-grid.png')) ? incomplete : null;
+  // 貼文的牌譜縮成「完整局面看圖」卻沒有圖：只發文字會是不完整的題目。
+  if (!liveBlock && !image && draft.post.text.includes(SEE_IMAGE_LINE)) liveBlock = '貼文的牌譜寫「完整局面看圖」，但圖沒有產生';
   if (liveBlock) warnings.push(`${liveBlock}（試跑照常；正式發佈這天不發）`);
 
   const chatgpt = readComment(deps.commentsDir, date);
@@ -342,6 +344,18 @@ export function planSummary(plan: DailyPlan, mode: string): string[] {
 }
 
 // ─── post ───────────────────────────────────────────────────────────────────
+
+/**
+ * 用這些公開網址的圖發今天這篇，題目會不會不完整（回傳原因；null＝可以發）。Threads 和 IG 共用：
+ * prepare 已經擋下的（liveBlock）、要續圖但不是每張圖都有網址、貼文寫「完整局面看圖」卻一張圖都沒有。
+ */
+export function imageProblem(plan: Pick<DailyPlan, 'liveBlock' | 'images' | 'image' | 'text'>, imageUrls: readonly string[]): string | null {
+  if (plan.liveBlock) return plan.liveBlock;
+  const images = plan.images ?? (plan.image ? [plan.image] : []);
+  if (images.some((n) => n.endsWith('-grid.png')) && imageUrls.length < images.length) return `題目要續圖，但只有 ${imageUrls.length}／${images.length} 張圖有公開網址`;
+  if (plan.text.includes(SEE_IMAGE_LINE) && imageUrls.length === 0) return '貼文的牌譜寫「完整局面看圖」，但圖沒有公開網址';
+  return null;
+}
 
 /** API 的時間（例如 2026-11-18T04:00:00+0000）→ 台北日期；讀不懂回 null。 */
 export function taipeiDateOf(timestamp: string | undefined): string | null {
@@ -462,11 +476,9 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
   if (wanted > 0 && imageUrls.length === 0) notes.push('有圖但沒有公開網址：只發文字');
   else if (imageUrls.length > 0 && imageUrls.length < wanted) notes.push(`只有 ${imageUrls.length}／${wanted} 張圖有公開網址`);
   if (imageUrls.length > 1) notes.push(`輪播 ${imageUrls.length} 張`);
-  // 題目卡要續圖時，續圖一定要跟著發，否則就是不完整的題目（fail closed）。補留言、補記不受影響。
-  if (plan.liveBlock) throw new Error(`這天不自動發：${plan.liveBlock}`);
-  if (plan.images?.some((n) => n.endsWith('-grid.png')) && imageUrls.length < plan.images.length) {
-    throw new Error(`這天不自動發：題目要續圖，但只有 ${imageUrls.length}／${plan.images.length} 張圖有公開網址`);
-  }
+  // 題目不完整（少了續圖、要看圖卻沒有圖）就不發（fail closed）。補留言、補記不受影響。
+  const missing = imageProblem(plan, imageUrls);
+  if (missing) throw new Error(`這天不自動發：${missing}`);
   const postId = await deps.api.publishPost({
     text: plan.text,
     imageUrls,

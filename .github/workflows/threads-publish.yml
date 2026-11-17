@@ -294,8 +294,15 @@ jobs:
           set -euo pipefail
           [ -d "$STATE_DIR/.git" ] || exit 0
           git -C "$STATE_DIR" add -A
-          git -C "$STATE_DIR" commit -q -m "threads: $DATE（$MODE）" || { echo "沒有要記的"; exit 0; }
-          for d in 2 4 8 16 0; do git -C "$STATE_DIR" push -q origin threads-state && break; [ "$d" = 0 ] && exit 1; sleep "$d"; done
+          git -C "$STATE_DIR" commit -q -m "threads: $DATE（$MODE）" || echo "沒有新的變更"
+          git -C "$STATE_DIR" rev-parse -q --verify HEAD >/dev/null || { echo "沒有要記的"; exit 0; }
+          # 不管這一步有沒有新的 commit 都推：發文時的 checkpoint 可能 commit 了卻沒推成功。被拒就 fetch＋merge 再推。
+          for d in 2 4 8 16 0; do
+            git -C "$STATE_DIR" push -q origin HEAD:threads-state && break
+            [ "$d" = 0 ] && exit 1
+            sleep "$d"
+            { git -C "$STATE_DIR" fetch -q origin threads-state && git -C "$STATE_DIR" merge -q --no-edit FETCH_HEAD; } || true
+          done
 
       - name: 清掉暫存
         if: always()

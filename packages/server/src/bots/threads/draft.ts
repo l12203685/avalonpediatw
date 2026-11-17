@@ -99,6 +99,9 @@ function continuesLine(from: { exerciseId: string; seat: number }, seat: number)
     : `接昨天那一局（${from.exerciseId}），這次換 ${seatLabel(seat)}的視角：`;
 }
 
+/** 牌譜縮到最短時的那一行：貼文的牌譜要靠圖才完整（沒有圖就不能自動發）。 */
+export const SEE_IMAGE_LINE = '（完整局面看圖）';
+
 /** 題目的部分：開頭（身分）、牌譜的三種長度（完整 → 縮短 → 看圖）、結尾（輪到你、怎麼作答）。 */
 export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId: string; seat: number } } = {}): { head: string[]; bodies: string[][]; tail: string[] } {
   const role = pv.game.seatRoles[pv.pick.seat - 1];
@@ -109,7 +112,7 @@ export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId
   const noPrior = !pv.shown.some((e) => e.kind === 'proposal');
   const bodies: string[][] = noPrior
     ? [['第 1 局第一個隊長，前面沒有派票']]
-    : [eventLines(pv.shown, pv.pick.seat, pv.game), compactLines(pv), ['（完整局面看圖）']];
+    : [eventLines(pv.shown, pv.pick.seat, pv.game), compactLines(pv), [SEE_IMAGE_LINE]];
   // 站長 11/17：「文字部分則是主題 & 牌譜」——題目只留身分、牌譜、輪到你；作答方式不另寫一行（完整局面在圖裡）。
   return { head, bodies, tail: [decisionWords(pv.game, pv.pick)] };
 }
