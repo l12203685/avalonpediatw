@@ -15,7 +15,7 @@ import path from 'path';
 import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
-import { renderPuzzlePng } from '../src/bots/threads/image';
+import { gridOverflowStart, renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 import { loadPlayerNames, planSummary, postDaily, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
@@ -106,6 +106,12 @@ async function main(): Promise<number> {
             const pv = pick ? gen.viewOf(pick) : null;
             return pv ? renderPuzzlePng(pv, weekdayOf(d)) : null;
           },
+      // 牌譜太長時題目卡只畫前半、寫「往右滑」：這條管線只發一張圖，正式發佈這天不發（試跑只警告）。
+      imageIncomplete: (d): string | null => {
+        const pick = gen.pickFor(d);
+        const pv = pick ? gen.viewOf(pick) : null;
+        return pv && gridOverflowStart(pv) !== null ? '牌譜太長，題目卡要第二張續圖，但這條管線只發一張圖' : null;
+      },
     });
     if (!plan) {
       say(`## Threads ${date}：這天的主題選不到題目`);

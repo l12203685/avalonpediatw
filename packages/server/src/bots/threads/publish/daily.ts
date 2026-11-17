@@ -205,6 +205,11 @@ export interface DailyPlan {
   resumeComment: boolean;
   errors: string[];
   warnings: string[];
+  /**
+   * 正式發佈不能發的原因（null＝可以）：例如題目卡的牌譜太長、要第二張續圖，但這條管線只發一張圖，
+   * 發出去會是不完整的題目、還叫人往右滑。試跑照常產生（摘要有警告），正式發時 post 段直接失敗、不發。
+   */
+  liveBlock?: string | null;
   draft: ThreadsDraft;
 }
 
@@ -216,6 +221,8 @@ export interface PrepareDeps {
   names?: readonly string[];
   /** 畫圖（pv → PNG）；不給就不附圖。 */
   renderImage?: (date: string) => Buffer | null;
+  /** 有圖的時候檢查：這張圖單獨發會不會不完整（回傳原因；null＝沒問題）。 */
+  imageIncomplete?: (date: string) => string | null;
   warnings?: string[];
 }
 
@@ -238,6 +245,9 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
   const draft = deps.gen.draftFor(date, image ? { image } : {});
   if (!draft) return null;
   warnings.push(...deps.gen.warnings);
+
+  const liveBlock = image && deps.imageIncomplete ? deps.imageIncomplete(date) : null;
+  if (liveBlock) warnings.push(`${liveBlock}（試跑照常；正式發佈這天不發）`);
 
   const chatgpt = readComment(deps.commentsDir, date);
   if (!chatgpt) warnings.push(`沒有 ChatGPT 寫的留言（${path.basename(deps.commentsDir)}/${date}.md），用備案`);
@@ -263,6 +273,7 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     image,
     quote,
     alreadyPublished: !!existing?.postId,
+    liveBlock,
     resumeComment: needsCommentResume(existing),
     errors: validatePost({ text: draft.post.text, comment, names: deps.names }),
     warnings,
@@ -420,6 +431,8 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
     }
   }
 
+  // 發新的 A 之前：題目不完整（例如少了續圖）就不發（fail closed）。補留言、補記不受影響。
+  if (plan.liveBlock) throw new Error(`這天不自動發：${plan.liveBlock}`);
   if (plan.image && !deps.imageUrl) notes.push('有圖但沒有公開網址：只發文字');
   const postId = await deps.api.publishPost({
     text: plan.text,

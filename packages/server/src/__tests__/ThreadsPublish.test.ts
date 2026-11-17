@@ -498,6 +498,31 @@ describe('prepare + post', () => {
     expect(readState(run3, plan.date)).toMatchObject({ postId: r1.postId, commentId: r1.commentId });
   });
 
+  it('a puzzle card that needs a continuation image (record too long) is a warning in the dry run and is not published live', async () => {
+    const stateDir = tmp();
+    const plan = prepareDaily('2026-11-18', {
+      gen: gen(stateDir),
+      stateDir,
+      commentsDir: tmp(),
+      outDir: tmp(),
+      names,
+      renderImage: () => Buffer.from('png'),
+      imageIncomplete: () => '牌譜太長，題目卡要第二張續圖',
+    }) as DailyPlan;
+    expect(plan.errors).toEqual([]); // 試跑照常產生、內容照印
+    expect(plan.liveBlock).toContain('牌譜太長');
+    expect(plan.warnings.join()).toContain('正式發佈這天不發');
+    expect(planSummary(plan, 'dry-run').join('\n')).toContain('正式發佈這天不發');
+    const { api, calls } = fakeApi();
+    await expect(postDaily(plan, { api, stateDir })).rejects.toThrow('這天不自動發');
+    expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    // 沒有圖（只發文字）時不擋；完整的題目卡也不擋
+    const noImage = prepareDaily('2026-11-18', { gen: gen(tmp()), stateDir: tmp(), commentsDir: tmp(), outDir: tmp(), names, imageIncomplete: () => 'x' }) as DailyPlan;
+    expect(noImage.liveBlock).toBeNull();
+    const whole = prepareDaily('2026-11-18', { gen: gen(tmp()), stateDir: tmp(), commentsDir: tmp(), outDir: tmp(), names, renderImage: () => Buffer.from('png'), imageIncomplete: () => null }) as DailyPlan;
+    expect(whole.liveBlock).toBeNull();
+  });
+
   it('posts without a quote when yesterday cannot be found, and refuses content that failed validation', async () => {
     const { plan, stateDir } = prepared('2026-11-18', false);
     const { api, calls } = fakeApi();
