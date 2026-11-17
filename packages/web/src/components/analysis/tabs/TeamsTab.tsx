@@ -22,7 +22,7 @@ import { theorySettings } from '../../../services/api';
 // 2026-11-16 Edward「數據分析太多太亂」：少用的區塊收進最後一個小分頁「更多細節」（每塊預設收起，內容沒有刪）
 type TeamsSection = 'captain' | 'firstVote' | 'progression' | 'more';
 
-export default function TeamsTab(): JSX.Element {
+export default function TeamsTab({ onOpenStateTree }: { onOpenStateTree: () => void }): JSX.Element {
   const { t } = useTranslation('common');
   const { overview } = useAnalysisOverview();
   const lowSample = theorySettings(overview?.theoryConfig).theoryMinCellGames;
@@ -43,8 +43,8 @@ export default function TeamsTab(): JSX.Element {
       {active => {
         switch (active) {
           case 'captain':     return <CaptainAnalysis lowSample={lowSample} />;
-          case 'firstVote':   return <RoundsAnalysis section="firstVote" lowSample={lowSample} />;
-          case 'progression': return <RoundsAnalysis section="progression" lowSample={lowSample} />;
+          case 'firstVote':   return <RoundsAnalysis section="firstVote" lowSample={lowSample} onOpenStateTree={onOpenStateTree} />;
+          case 'progression': return <RoundsAnalysis section="progression" lowSample={lowSample} onOpenStateTree={onOpenStateTree} />;
           case 'more':        return <MoreDetails items={[{ id: 'l139', title: t('analytics.r6.teams.tabs.study'), render: () => <FeatureStudyCard loopId="L139" defaultOpen /> }]} />;
         }
       }}
