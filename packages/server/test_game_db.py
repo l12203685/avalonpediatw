@@ -67,6 +67,8 @@ class ValidateTest(unittest.TestCase):
         g = copy.deepcopy(GOOD)
         g["assassination"] = "2"
         self.assertIn("ASSASSIN_RED", rules(g))
+        g["assassination"] = "4"  # Oberon: possible (the assassin does not know him), only a warning
+        self.assertEqual([c for c in gd.validate(g) if c["rule"] == "ASSASSIN_OBERON"][0]["level"], gd.WARN)
 
     def test_vote_result_needs_six_approvals(self):
         g = copy.deepcopy(GOOD)

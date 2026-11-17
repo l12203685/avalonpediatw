@@ -107,6 +107,7 @@ jobs:
           python packages/server/test_discord_records_import.py
           python packages/server/test_discord_records_export.py
           python packages/server/test_game_db.py
+          python packages/server/test_proavalon_import.py
 
       - name: Write the service-account key to a temp file
         if: steps.creds.outputs.secret != ''

@@ -60,17 +60,20 @@ SRC_SHEET = "sheet"
 SRC_IMPORT = "dc_import"
 SRC_DISCORD = "discord"
 SRC_SIM = "sim_sheet"
-SOURCE_PRIORITY = (SRC_SHEET, SRC_DISCORD, SRC_IMPORT, SRC_SIM)  # whose content the merged game shows
+SRC_PROAVALON = "proavalon"
+SOURCE_PRIORITY = (SRC_SHEET, SRC_DISCORD, SRC_IMPORT, SRC_SIM, SRC_PROAVALON)  # whose content the merged game shows
 SOURCE_LABELS = {
     SRC_SHEET: "試算表 牌譜 分頁",
     SRC_IMPORT: "試算表 Discord匯入 分頁",
     SRC_DISCORD: "Discord 牌譜論壇",
     SRC_SIM: "試算表 模擬瓦 分頁",
+    SRC_PROAVALON: "ProAvalon（外部、匿名）",
 }
 
 KIND_REAL = "real"
 KIND_SIM = "sim"
 KIND_BOT = "bot"
+GROUP_EXTERNAL = "external"  # report / counts group of external rows (kind stays real)
 
 TEAM_SIZES = dri.TEAM_SIZES  # (3, 4, 4, 5, 5): 10 players
 SEATS = gc.SEATS
@@ -98,10 +101,11 @@ RULES: dict[str, tuple[str, str]] = {
     "AFTER_DECIDED": (ERROR, "已經有一方拿到 3 局，後面還有局"),
     "UNDECIDED": (ERROR, "紀錄在任何一方拿到 3 局之前就結束"),
     "OUTCOME": (ERROR, "結果欄跟任務結果或刺殺對不上"),
-    "ASSASSIN_RED": (ERROR, "刺殺目標是紅方座位"),
+    "ASSASSIN_RED": (ERROR, "刺殺目標是刺客認得的紅方（莫甘娜、莫德雷德、自己）"),
     "LAKE": (ERROR, "湖中女神不合規則（同一人、斷鏈、驗過的人又被驗、不在第 2～4 局後）"),
     "VOTE_MARKS": (WARN, "投票記號跟隊伍對不上（場內才會有 -、場外才會有 +；多半是座位寫錯）"),
     "VOTE_RESULT": (WARN, "投票張數跟提議過不過對不上（多半是漏記了場外白／場內黑）"),
+    "ASSASSIN_OBERON": (WARN, "刺客刺了奧伯倫（刺客不認得奧伯倫，可能發生，但值得確認）"),
     "ASSASSIN_MISSING": (WARN, "三藍卻沒有刺殺目標"),
     "ASSASSIN_EXTRA": (WARN, "三紅卻有刺殺目標"),
     "OUTCOME_MISSING": (WARN, "沒有結果"),
@@ -110,6 +114,7 @@ RULES: dict[str, tuple[str, str]] = {
     "CONFLICT": (WARN, "不同來源記的不一樣"),
     "NEAR_DUP": (WARN, "疑似同一局（同一天、同配置，但派隊或任務不同）"),
     "INFERRED_VOTES": (INFO, "順著上一局成功的隊伍派、紀錄沒寫投票：推定全部投白（不是原始紀錄）"),
+    "SOURCE_NOTE": (INFO, "外部來源少記的東西（ProAvalon：湖的宣告、刺中哪個忠臣、舊紀錄的失敗張數）"),
     "OWNER_FLAG": (INFO, "試算表 note 標了要注意（review／badGame 等）"),
     "LAKE_CLAIM": (INFO, "湖的宣告沒有記"),
     "NO_DATE": (INFO, "沒有日期"),
@@ -206,6 +211,28 @@ def records_sources(doc: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]]
             "fp": rm.game_fingerprint(game) if game else "",
         })
     return out, sheet_ids
+
+
+SOURCE_NOTES = {
+    "proavalon:noLakeClaims": "ProAvalon 沒有記湖的宣告",
+    "proavalon:lakeSeatsUnknown": "這局 ProAvalon 沒有記誰拿湖、驗誰",
+    "proavalon:shotLoyalSeatUnknown": "刺客刺的是忠臣，ProAvalon 沒有記是哪一個",
+    "proavalon:failCountUnknown": "舊紀錄只有任務成敗，失敗張數用最少的算（第 4 局 2 張、其他 1 張）",
+}
+
+
+def proavalon_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
+    """proavalon_games.json (proavalon_import.py) -> sources. External: the stats leave them out by default."""
+    out: list[dict[str, Any]] = []
+    for g in (doc or {}).get("games", []):
+        game = g.get("game")
+        out.append({
+            "src": SRC_PROAVALON, "id": str(g["id"]), "kind": KIND_REAL, "date": g.get("date", ""),
+            "venue": g.get("venue", "線瓦"), "legacy": "", "s": None, "game": game,
+            "problem": "" if game else "讀不懂", "flags": list(g.get("flags", [])),
+            "fp": rm.game_fingerprint(game) if game else "",
+        })
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -342,8 +369,10 @@ def validate(game: Mapping[str, Any], partial: bool = False, inferred: list[dict
         return checks + lake_checks(game, rounds, partial)
     if rounds and not decided_at:
         checks.append(_check("UNDECIDED", f"紀錄停在第 {len(rounds)} 局（藍 {blue}、紅 {red}），沒有一方拿到 3 局"))
-    if config_ok and kill and kill in reds:
-        checks.append(_check("ASSASSIN_RED", f"刺殺目標 {seat_label(kill)} 是紅方"))
+    if config_ok and kill and kill == config[3]:
+        checks.append(_check("ASSASSIN_OBERON", f"刺殺目標 {seat_label(kill)} 是奧伯倫"))
+    elif config_ok and kill and kill in reds:
+        checks.append(_check("ASSASSIN_RED", f"刺殺目標 {seat_label(kill)} 是刺客認得的紅方"))
     if red == 3:
         expected = gc.OUTCOME_THREE_RED
         if kill:
@@ -446,6 +475,8 @@ def public_id(src: dict[str, Any]) -> str:
         return rm.SHEET_PREFIX + src["id"]
     if src["src"] == SRC_SIM:
         return rm.SIM_PREFIX + src["id"]
+    if src["src"] == SRC_PROAVALON:
+        return "P" + src["id"]
     return src["id"]  # Discord post id / D<hash>
 
 
@@ -489,14 +520,22 @@ def build(sources: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             elif date < EARLIEST_DATE:
                 checks.append(_check("DATE_RANGE", f"日期 {date}"))
         flags = sorted({f for s in members for f in s["flags"]})
-        if flags:
-            checks.append(_check("OWNER_FLAG", "、".join(flags)))
+        owner = [f for f in flags if f.startswith("flag:")]
+        notes = [f for f in flags if not f.startswith("flag:")]
+        if owner:
+            checks.append(_check("OWNER_FLAG", "、".join(owner)))
+        if notes:
+            checks.append(_check("SOURCE_NOTE", "、".join(SOURCE_NOTES.get(f, f) for f in notes)))
+        external = any(s["src"] == SRC_PROAVALON for s in members)
+        if "proavalon:shotLoyalSeatUnknown" in flags:  # the source never says which loyal servant was shot
+            checks = [c for c in checks if c["rule"] != "ASSASSIN_MISSING"]
         checks.sort(key=lambda c: (LEVEL_ORDER[c["level"]], c["rule"], c["msg"]))
         status = "unreadable" if not main["game"] else (
             ERROR if any(c["level"] == ERROR for c in checks) else WARN if any(c["level"] == WARN for c in checks) else "ok")
         rows.append({
             "id": public_id(cid),
             "kind": kind,
+            **({"external": True} if external else {}),
             "date": date,
             "venue": venue,
             **({"legacyCategory": legacy} if legacy else {}),
@@ -551,17 +590,21 @@ def near_dups(rows: list[dict[str, Any]]) -> None:
 # Output
 # ---------------------------------------------------------------------------
 
+def group(r: Mapping[str, Any]) -> str:
+    return GROUP_EXTERNAL if r.get("external") else r["kind"]
+
+
 def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    by_kind = Counter(r["kind"] for r in rows)
+    by_kind = Counter(group(r) for r in rows)
     by_status: dict[str, Counter] = defaultdict(Counter)
     rules: dict[str, Counter] = defaultdict(Counter)
     combos = Counter()
     sources = Counter()
     for r in rows:
-        by_status[r["kind"]][r["status"]] += 1
+        by_status[group(r)][r["status"]] += 1
         for c in r["checks"]:
-            rules[r["kind"]][c["rule"]] += 1
-        combos[(r["kind"], "+".join(sorted({s["src"] for s in r["sources"]})), bool(r["game"]))] += 1
+            rules[group(r)][c["rule"]] += 1
+        combos[(group(r), "+".join(sorted({s["src"] for s in r["sources"]})), bool(r["game"]))] += 1
         for s in r["sources"]:
             sources[s["src"]] += 1
     return {
@@ -570,6 +613,7 @@ def summarize(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "byStatus": {k: dict(sorted(v.items())) for k, v in sorted(by_status.items())},
         "sources": dict(sorted(sources.items())),
         "merged": sum(1 for r in rows if len(r["sources"]) > 1),
+        "external": sum(1 for r in rows if r.get("external")),
         "rules": {k: dict(sorted(v.items())) for k, v in sorted(rules.items())},
         "combos": [{"kind": k, "sources": s, "readable": ok, "games": n} for (k, s, ok), n in sorted(combos.items())],
     }
@@ -641,10 +685,10 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append("")
     L.append("## 總數")
     L.append("")
-    kind_name = {KIND_REAL: "實戰", KIND_SIM: "模擬", KIND_BOT: "百科AI"}
+    kind_name = {KIND_REAL: "實戰", KIND_SIM: "模擬", KIND_BOT: "百科AI", GROUP_EXTERNAL: "外部（ProAvalon）"}
     L.append("| 類型 | 局數 | 沒問題 | 只有提醒 | 有錯 | 讀不懂 |")
     L.append("|---|---|---|---|---|---|")
-    for k in (KIND_REAL, KIND_BOT, KIND_SIM):
+    for k in (KIND_REAL, KIND_BOT, GROUP_EXTERNAL, KIND_SIM):
         st = counts["byStatus"].get(k)
         if not st:
             continue
@@ -652,8 +696,24 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         L.append(f"| {kind_name[k]} | {total} | {st.get('ok', 0)} | {st.get(WARN, 0)} | {st.get(ERROR, 0)} | {st.get('unreadable', 0)} |")
     L.append("")
     L.append(f"多個來源合成一局的：{counts['merged']} 局。")
+    ext_rows = [r for r in rows if r.get("external")]
+    if ext_rows:
+        L.append("")
+        L.append("## 外部來源：ProAvalon（匿名）")
+        L.append("")
+        L.append(f"站長 2026-11-17：「10人局配置一模一樣 有湖中的才需要納入分析 其他就不用分析了 先存著牌譜就好」。"
+                 f"ProAvalon 匿名匯出（2018–2022）裡 10 人、梅派刺娜德奧、有湖中女神的局轉成總庫格式，共 {len(ext_rows)} 局"
+                 "（`packages/server/proavalon_import.py`，id 是 `P` 加 ProAvalon 的 `_id`）。其他局只存在站長的私人 repo，不進這裡。")
+        L.append("")
+        L.append("- 每局標 `external: true`。**網站統計預設不要算進去**（同一套規則、但不是我們社群的局；ProAvalon 第 5 次提議也要投票）。"
+                 "要用的時候明確打開，例如機器人量尺或強者／新手比較想多一批樣本。")
+        L.append("- ProAvalon 沒有記湖的宣告（`claim` 是空的）；刺中忠臣時不知道是哪一個（刺殺目標空白）；舊紀錄沒有失敗張數"
+                 "（用最少的張數）；部分舊紀錄沒有湖的座位。這些都列在每局的 `SOURCE_NOTE`，不算錯。")
+        L.append("- 第 5 次提議被否決而輸的局（我們的規則沒有這種結局）沒有轉進來。")
+        st = Counter(r["status"] for r in ext_rows)
+        L.append(f"- 檢查結果：沒問題 {st.get('ok', 0)}、只有提醒 {st.get(WARN, 0)}、有錯 {st.get(ERROR, 0)}。")
     L.append("")
-    real_ok = [r for r in rows if r["kind"] != KIND_SIM and r["game"]]
+    real_ok = [r for r in rows if r["kind"] != KIND_SIM and r["game"] and not r.get("external")]
     L.append("## 線上／面對面與陣容強度")
     L.append("")
     L.append("站長 2026-11-17：分類只留「線瓦／面瓦」；「娛樂」「新手局」這類主觀標籤不再當分析篩選，改看成績與當下組成。"
@@ -708,13 +768,14 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         L.append("")
     L.append("## 各規則的局數")
     L.append("")
-    L.append("| 規則 | 等級 | 說明 | 實戰 | 模擬 |")
-    L.append("|---|---|---|---|---|")
+    L.append("| 規則 | 等級 | 說明 | 實戰 | 外部 | 模擬 |")
+    L.append("|---|---|---|---|---|---|")
     level_name = {ERROR: "錯", WARN: "提醒", INFO: "參考"}
     for rule, (level, name) in RULES.items():
         real = counts["rules"].get(KIND_REAL, {}).get(rule, 0) + counts["rules"].get(KIND_BOT, {}).get(rule, 0)
         sim = counts["rules"].get(KIND_SIM, {}).get(rule, 0)
-        L.append(f"| `{rule}` | {level_name[level]} | {name} | {real} | {sim} |")
+        ext = counts["rules"].get(GROUP_EXTERNAL, {}).get(rule, 0)
+        L.append(f"| `{rule}` | {level_name[level]} | {name} | {real} | {ext} | {sim} |")
     L.append("")
     L.append("（一局可以同時違反好幾條；同一條在一局裡出現幾次就算幾次。）")
     L.append("")
@@ -723,7 +784,7 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append("「錯」與「同一來源登錄兩次／來源不一致／疑似重複」逐局列出；其他提醒只列編號。來源編號：S = 試算表牌譜分頁的流水號、"
              "D = Discord匯入分頁、純數字 = Discord 貼文、M = 模擬瓦分頁。")
     L.append("")
-    real_rows = [r for r in rows if r["kind"] != KIND_SIM and r["game"]]
+    real_rows = [r for r in rows if r["kind"] != KIND_SIM and r["game"] and not r.get("external")]
     detail_rules = {"DUP_SAME_SOURCE", "CONFLICT", "NEAR_DUP"}
     for rule, (level, name) in RULES.items():
         hits = [(r, c) for r in real_rows for c in r["checks"] if c["rule"] == rule]
@@ -779,6 +840,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--records", default=str(HERE / "records_cache.json"))
     ap.add_argument("--snapshot", default=str(HERE / "sheets_cache.json"))
     ap.add_argument("--sim-bank", default=str(HERE / "sim_bank.json"))
+    ap.add_argument("--proavalon", default=str(HERE / "proavalon_games.json"))
     ap.add_argument("--output", default=str(HERE / "game_db.json"))
     ap.add_argument("--check-report", dest="report", default=str(HERE.parent.parent / "docs" / "data" / "game_db_report.md"))
     args = ap.parse_args(argv)
@@ -791,6 +853,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sources = dataset_sources(games_doc)
     rec_sources, records_sheet_ids = records_sources(records_doc)
     sources += rec_sources
+    sources += proavalon_sources(load_json(Path(args.proavalon)))
     rows = build(sources)
     counts = summarize(rows)
     dataset_sheet_ids = {s["id"] for s in sources if s["src"] == SRC_SHEET}
