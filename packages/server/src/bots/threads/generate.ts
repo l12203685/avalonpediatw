@@ -7,7 +7,7 @@
 
 import type { SimGame } from '../simulation/scenario';
 import { buildDraft, pickView, type PickView, type ThreadsDraft } from './draft';
-import { THREADS_START_DATE, addDays, aloneFor, dayNumber, buildCandidates, continuationOf, pickForDate, themeOf, weekdayOf, type ThreadsBank, type ThreadsPick } from './plan';
+import { THREADS_START_DATE, addDays, aloneFor, dayNumber, buildCandidates, continuationOf, exerciseIdOfPick, pickForDate, themeOf, weekdayOf, type ThreadsBank, type ThreadsPick } from './plan';
 
 export interface GenerateBank extends ThreadsBank {
   byId: ReadonlyMap<string, number>;
@@ -21,11 +21,29 @@ export interface GenerateDeps {
   readSaved: (date: string) => ThreadsDraft | null;
   /** 第一篇貼文的日期（預設 THREADS_START_DATE）：這一天沒有昨天的答案，之前的日子不產生。 */
   startDate?: string;
+  /**
+   * 站長自己選的題（日期 → 題號，例如 `Y39DE-1-5`；來源是 commit 進 repo 的 threads_picks.json）。
+   * 存下來（已經發出去）的那一天不受影響；選的題不是那天主題能出的就忽略、照計畫，原因寫進 `warnings`。
+   */
+  pickOverride?: (date: string) => string | null;
 }
+
+/** 每個星期幾可以用哪些候選池（週三、週五的池子是兩題一組，取第一題）。 */
+const OVERRIDE_POOLS: Record<number, readonly ('assassin' | 'percival' | 'wedThu' | 'wed' | 'thu' | 'friSat' | 'fri' | 'sat' | 'final')[]> = {
+  1: ['assassin'],
+  2: ['percival'],
+  3: ['wedThu', 'wed'],
+  4: ['thu'],
+  5: ['friSat', 'fri'],
+  6: ['sat'],
+  0: ['final'],
+};
 
 export class ThreadsGenerator {
   private readonly candidates;
   private readonly picks = new Map<string, ThreadsPick | null>();
+  /** 選題被忽略的原因（給 CI 的摘要看）。 */
+  readonly warnings: string[] = [];
 
   constructor(private readonly deps: GenerateDeps) {
     this.candidates = buildCandidates(deps.bank);
@@ -47,6 +65,13 @@ export class ThreadsGenerator {
     let pick: ThreadsPick | null = null;
     const saved = this.deps.readSaved(date);
     if (saved?.pick && this.gameOf(saved.pick.gameId)) pick = saved.pick;
+    if (!pick && this.deps.pickOverride) {
+      const wanted = this.deps.pickOverride(date);
+      if (wanted) {
+        pick = this.resolveOverride(date, wanted);
+        if (!pick) this.warnings.push(`${date}：選的題 ${wanted} 不是這天主題能出的題，改照計畫`);
+      }
+    }
     if (!pick) {
       const theme = themeOf(weekdayOf(date));
       let prev: ThreadsPick | null = null;
@@ -61,6 +86,30 @@ export class ThreadsGenerator {
     }
     this.picks.set(date, pick);
     return pick;
+  }
+
+  /** 題號 → 這一天能出的題；週四、週六先看是不是延續前一天同一局。 */
+  private resolveOverride(date: string, exerciseId: string): ThreadsPick | null {
+    const wd = weekdayOf(date);
+    const theme = themeOf(wd);
+    const gameId = exerciseId.split('-')[0];
+    const g = this.gameOf(gameId);
+    if (!g) return null;
+    if (theme.continues && theme.round !== undefined) {
+      const prev = this.pickFor(addDays(date, -1));
+      if (prev && prev.gameId === gameId) {
+        const c = continuationOf(g.game, theme.round);
+        if (c && exerciseIdOfPick(c, g.game) === exerciseId) return c;
+      }
+    }
+    for (const pool of OVERRIDE_POOLS[wd] ?? []) {
+      for (const cand of this.candidates[pool]) {
+        const p = cand.picks[0];
+        // 這些池子的第一題都不是延續題（週三、週五的第一題；週四、週六的獨立題）。
+        if (p.gameId === gameId && exerciseIdOfPick(p, g.game) === exerciseId) return p;
+      }
+    }
+    return null;
   }
 
   viewOf(pick: ThreadsPick): PickView | null {

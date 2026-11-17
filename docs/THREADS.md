@@ -1,6 +1,6 @@
 # Threads 每日一題草稿
 
-用實戰牌譜出 Threads 每日一題，產生每天要貼的草稿。發文由站長自己來：沒有接 Threads API，也不會自動發。第一則留言由 ChatGPT 寫（Issue #37）。
+用實戰牌譜出 Threads 每日一題，產生每天要貼的草稿。站長 2026-11-17 同意自動發佈：可以照下面〈自動發佈〉用 GitHub Actions 每天自動發；在站長加好權杖、打開開關之前，管線只試跑，發文還是站長自己來。第一則留言由 ChatGPT 寫（Issue #37）。
 
 ## 貼文格式（站長 2026-11-11 定案）
 
@@ -90,6 +90,85 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 - `plan.ts`：一週的計畫
 - `draft.ts`：A 的文字
 - `image.ts`：圖
-- `generate.ts`：把存檔和題庫接起來
+- `generate.ts`：把存檔和題庫接起來；站長選的題（`threads_picks.json`）也在這裡套上
+- `publish/daily.ts`：自動發佈的三段（prepare、post、補記手動發的那一天）、內容檢查、狀態檔
+- `publish/threadsApi.ts`：Threads API（發文、回覆、查最近的貼文、權杖檢查與續期）
 
-測試在 `src/__tests__/ThreadsDraft.test.ts`。
+指令在 `packages/server/scripts/threadsPublish.ts`，工作流程在 `.github/workflows/threads-publish.yml`。
+
+測試在 `src/__tests__/ThreadsDraft.test.ts`、`src/__tests__/ThreadsPublish.test.ts`（自動發佈用假的 HTTP，不會真的連 Threads）。
+
+## 自動發佈
+
+站長 2026-11-17：「我同意threads 自動發佈」。
+
+### 它做什麼
+
+每天台北時間中午 12 點（repo 變數 `THREADS_POST_HOUR` 可以改）：
+1. 產生今天的貼文 A、題目圖、第一則留言，檢查內容：
+   - A ≤ 500 字，最後一行剛好一個 `#阿瓦隆`；
+   - 不寫「10 家／10 號」；
+   - 貼文和留言都不含玩家名字。
+2. 找昨天那篇的貼文 id（自動發的記在狀態檔；手動發的去自己最近的貼文裡找「題號 昨天的題號」）。
+3. 發 A：附圖、引用昨天那篇。第一天或找不到昨天那篇時不引用。
+4. 先把 A 的 id 記下來，再把第一則留言回在 A 底下。
+5. 把貼文網址記進 `threads-state` 分支的 `state/<日期>.json`。
+
+不會重複發：狀態檔有這一天的貼文 id 就跳過；沒有的話先看自己最近的貼文裡有沒有「題號 今天的題號」，有就補記、不再發。
+
+### 一開始只試跑
+
+repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，把要發的貼文、留言和圖放在那次執行的摘要和附件（Actions → Threads 每日發文 → 那一次 → Artifacts），不會碰 Threads。
+
+注意：排程只在 main 分支上跑，這個工作流程要合進 main 之後才會每天自動執行。
+
+### 站長要做的（一次）
+
+1. **建 Meta 開發者應用程式**：到 developers.facebook.com → 我的應用程式 → 建立應用程式 → 使用案例選「存取 Threads API」。
+2. **權限**：在使用案例裡加上 `threads_basic`、`threads_content_publish`、`threads_manage_replies`。
+3. **把自己加成測試人員**：應用程式角色 → 新增 Threads 測試人員（填自己的 Threads 帳號），再到 Threads App 的「設定 → 帳號 → 網站權限 → 邀請」接受。
+4. **產生權杖**：用 Meta 的「Threads API 測試工具」或授權網址登入取得短效權杖，再換成長效權杖（60 天）。拿到兩樣東西：長效權杖、自己的 Threads 使用者 id（數字）。
+5. **放進 GitHub**（repo → Settings → Secrets and variables → Actions）：
+   - Secrets：`THREADS_ACCESS_TOKEN`＝長效權杖；`THREADS_USER_ID`＝使用者 id（可以不填，會用權杖查）。
+   - 權杖不要貼在對話、Issue 或程式裡。
+6. **先手動試跑一次**：Actions → Threads 每日發文 → Run workflow，mode 選 `dry-run`，看摘要。
+7. **打開正式發佈**：Variables 新增 `THREADS_PUBLISH`＝`1`。之後每天中午自動發。
+8. **要停**：把 `THREADS_PUBLISH` 改成 `0` 或刪掉，馬上回到只試跑。
+
+### 權杖到期
+
+長效權杖 60 天到期；用了 24 小時以上、還沒過期時可以續期。
+- **自動續期（建議）**：另外建一個 fine-grained token（只給這個 repo 的 Secrets: Read and write 權限），存成 secret `THREADS_SECRETS_PAT`。正式發佈時，剩不到 20 天就自動續期並寫回 `THREADS_ACCESS_TOKEN`。
+- **沒有 `THREADS_SECRETS_PAT`**：只在摘要寫剩幾天，不會續期。快到期時自己重做第 4–5 步。
+
+### 站長自己選的題
+
+`packages/server/threads_picks.json`：
+
+```json
+{ "version": 1, "picks": { "2026-11-25": "Y39DE-1-5" } }
+```
+
+- 一行「日期（台北）: 題號」。沒列的日子照自動計畫。
+- 選了週三（1-5）那局，週四的 3-5 自動接同一局；週五（2-5）和週六（4-5）也一樣。
+- 題號不是那天主題能出的題就忽略、照計畫，摘要會寫原因。
+- 已經發出去的日子不受影響。
+- 私人選題頁的選擇，由 Claude 每天同步進這個檔案。
+
+### 第一則留言
+
+ChatGPT 寫在 `docs/threads/comments/<日期>.md`，格式見那個資料夾的 README。沒有檔案時用備案：一句觀念加建議文章的網址。
+
+### 手動發的那一天
+
+2026-11-17 是站長手動發的。隔天的 A 會自動去最近的貼文裡找「題號 36AKW-2-5」來引用，不用做什麼。
+
+找不到時（例如那篇被刪了、或超過最近 25 篇），可以手動補記：Actions → Threads 每日發文 → Run workflow，mode 選 `record-manual`、date 填那一天、post_id 填貼文 id（空白就用權杖去找）。
+
+### 圖放哪裡
+
+Threads API 只收公開網址的圖。圖推到這個 repo 的 `threads-state` 分支（`images/<日期>.png`），用 `raw.githubusercontent.com/<repo>/<commit>/images/<日期>.png` 給 Threads 抓。
+- repo 本來就公開，不用另外開服務或碰正式網站的部署。
+- 圖只有座位和牌譜記號，跟貼文一樣是公開內容。
+- 網址綁 commit，不會被之後的檔案蓋掉。
+- 只在正式發的那一刻才推，試跑不推。

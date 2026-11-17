@@ -59,3 +59,5 @@ __pycache__/
 
 # Threads 每日出題草稿（scripts/threadsDraft.ts 的輸出，不進 git）
 packages/server/threads_drafts/
+packages/server/threads_state/
+packages/server/threads_publish_out/

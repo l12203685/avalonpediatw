@@ -1,0 +1,208 @@
+# Threads 每日自動發佈（站長 2026-11-17 同意自動發佈）。說明：docs/THREADS.md〈自動發佈〉。
+#
+# - 預設只試跑：repo 變數 THREADS_PUBLISH 是 '1' 才真的發文；試跑把要發的內容放在這次執行的摘要與附件。
+# - 每小時醒一次，到了台北時間 THREADS_POST_HOUR（預設 12）點以後才做事；同一天發過就不再發。
+# - 權杖只放 secrets（THREADS_ACCESS_TOKEN，選填 THREADS_USER_ID）；這個 repo 的執行紀錄是公開的，任何步驟都不印權杖。
+# - 發文狀態與圖放在 threads-state 分支（state/<日期>.json、images/<日期>.png）；圖用 raw.githubusercontent.com 的公開網址給 Threads 抓。
+name: Threads 每日發文
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '日期 YYYY-MM-DD（台北；空白＝今天）'
+        required: false
+        default: ''
+      mode:
+        description: 'auto＝照 THREADS_PUBLISH；dry-run＝只試跑；record-manual＝補記手動發的那一天'
+        type: choice
+        options: [dry-run, auto, record-manual]
+        default: dry-run
+      post_id:
+        description: 'record-manual 用：那一天手動發的貼文 id（空白＝用權杖去最近的貼文裡找）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: threads-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REPO: ${{ github.repository }}
+      STATE_DIR: ${{ runner.temp }}/threads-state
+      OUT_DIR: ${{ runner.temp }}/threads-out
+    steps:
+      - name: 決定日期與模式
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          IN_DATE: ${{ inputs.date }}
+          IN_MODE: ${{ inputs.mode }}
+          PUBLISH: ${{ vars.THREADS_PUBLISH }}
+          POST_HOUR: ${{ vars.THREADS_POST_HOUR }}
+        run: |
+          set -euo pipefail
+          DATE="${IN_DATE:-$(TZ=Asia/Taipei date +%F)}"
+          if ! [[ "$DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then echo "日期格式不對：$DATE"; exit 1; fi
+          MODE="${IN_MODE:-auto}"
+          if [ "$MODE" = auto ]; then
+            if [ "${PUBLISH:-}" = 1 ]; then MODE=live; else MODE=dry-run; fi
+          fi
+          RUN=1
+          if [ "$EVENT" = schedule ]; then
+            HOUR=$((10#$(TZ=Asia/Taipei date +%H)))
+            WANT=$((10#${POST_HOUR:-12}))
+            # 正式發：到點以後每小時都看一次（排程延遲也補得上），發過就跳過；試跑：只在那個整點跑一次。
+            if [ "$HOUR" -lt "$WANT" ]; then RUN=0; fi
+            if [ "$MODE" = dry-run ] && [ "$HOUR" -ne "$WANT" ]; then RUN=0; fi
+          fi
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+          echo "日期 $DATE，模式 $MODE，執行 $RUN"
+
+      - name: 取出 threads-state 分支
+        if: steps.gate.outputs.run == '1'
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DATE: ${{ steps.gate.outputs.date }}
+          MODE: ${{ steps.gate.outputs.mode }}
+        run: |
+          set -euo pipefail
+          URL="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          if git ls-remote --exit-code --heads "$URL" threads-state >/dev/null 2>&1; then
+            git clone -q --depth 1 --branch threads-state "$URL" "$STATE_DIR"
+          else
+            mkdir -p "$STATE_DIR"
+            git -C "$STATE_DIR" init -q -b threads-state
+            git -C "$STATE_DIR" remote add origin "$URL"
+            printf '# threads-state\n\nThreads 每日自動發佈的狀態（state/<日期>.json）與題目圖（images/<日期>.png）。\n由 .github/workflows/threads-publish.yml 寫入；說明見 main 分支的 docs/THREADS.md。\n' > "$STATE_DIR/README.md"
+          fi
+          git -C "$STATE_DIR" config user.name 'github-actions[bot]'
+          git -C "$STATE_DIR" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          SKIP=0
+          F="$STATE_DIR/state/$DATE.json"
+          if [ "$MODE" = live ] && [ -f "$F" ] && jq -e '.postId != null' "$F" >/dev/null; then SKIP=1; echo "$DATE 已經發過，跳過"; fi
+          echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1'
+
+      - uses: pnpm/action-setup@v3
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1'
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1'
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: 安裝
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1'
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --filter @avalon/shared build
+
+      - name: 權杖快到期就續期（要 secrets.THREADS_SECRETS_PAT 才寫得回去）
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        working-directory: packages/server
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          SECRETS_PAT: ${{ secrets.THREADS_SECRETS_PAT }}
+        run: |
+          set -euo pipefail
+          NEW="$RUNNER_TEMP/threads_new_token"
+          if [ -n "${SECRETS_PAT:-}" ]; then
+            npx tsx scripts/threadsPublish.ts token --token-out "$NEW" || echo "續期沒成功，照舊權杖發文"
+          else
+            npx tsx scripts/threadsPublish.ts token || true
+          fi
+          if [ -s "$NEW" ]; then
+            echo "::add-mask::$(cat "$NEW")"
+            GH_TOKEN="$SECRETS_PAT" gh secret set THREADS_ACCESS_TOKEN --repo "$REPO" < "$NEW"
+            echo "THREADS_ACCESS_TOKEN=$(cat "$NEW")" >> "$GITHUB_ENV"
+            rm -f "$NEW"
+            echo "權杖已續期並寫回 secrets"
+          fi
+
+      - name: 產生今天的貼文並檢查
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode != 'record-manual'
+        working-directory: packages/server
+        env:
+          THREADS_MODE: ${{ steps.gate.outputs.mode }}
+          DATE: ${{ steps.gate.outputs.date }}
+        run: npx tsx scripts/threadsPublish.ts prepare --date "$DATE" --state-dir "$STATE_DIR" --out "$OUT_DIR"
+
+      - name: 試跑：把要發的內容存成附件
+        if: always() && steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'dry-run'
+        uses: actions/upload-artifact@v4
+        with:
+          name: threads-dry-run-${{ steps.gate.outputs.date }}
+          path: ${{ runner.temp }}/threads-out
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: 正式發：把圖推上 threads-state，取得公開網址
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        id: image
+        env:
+          DATE: ${{ steps.gate.outputs.date }}
+        run: |
+          set -euo pipefail
+          if [ -f "$OUT_DIR/$DATE.png" ]; then
+            mkdir -p "$STATE_DIR/images"
+            cp "$OUT_DIR/$DATE.png" "$STATE_DIR/images/$DATE.png"
+            git -C "$STATE_DIR" add -A
+            git -C "$STATE_DIR" commit -q -m "threads: $DATE 的題目圖" || true
+            for d in 2 4 8 16 0; do git -C "$STATE_DIR" push -q origin threads-state && break; [ "$d" = 0 ] && exit 1; sleep "$d"; done
+            SHA=$(git -C "$STATE_DIR" rev-parse HEAD)
+            echo "url=https://raw.githubusercontent.com/${REPO}/${SHA}/images/${DATE}.png" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 正式發：發 A（引用昨天）與第一則留言
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        working-directory: packages/server
+        env:
+          THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          IMAGE_URL: ${{ steps.image.outputs.url }}
+        run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR"
+
+      - name: 補記手動發的那一天
+        if: steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'record-manual'
+        working-directory: packages/server
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          DATE: ${{ steps.gate.outputs.date }}
+          POST_ID: ${{ inputs.post_id }}
+        run: npx tsx scripts/threadsPublish.ts record-manual --date "$DATE" --state-dir "$STATE_DIR" ${POST_ID:+--post-id "$POST_ID"}
+
+      - name: 記下發文狀態
+        if: always() && steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && (steps.gate.outputs.mode == 'live' || steps.gate.outputs.mode == 'record-manual')
+        env:
+          DATE: ${{ steps.gate.outputs.date }}
+          MODE: ${{ steps.gate.outputs.mode }}
+        run: |
+          set -euo pipefail
+          [ -d "$STATE_DIR/.git" ] || exit 0
+          git -C "$STATE_DIR" add -A
+          git -C "$STATE_DIR" commit -q -m "threads: $DATE（$MODE）" || { echo "沒有要記的"; exit 0; }
+          for d in 2 4 8 16 0; do git -C "$STATE_DIR" push -q origin threads-state && break; [ "$d" = 0 ] && exit 1; sleep "$d"; done
+
+      - name: 清掉暫存
+        if: always()
+        run: rm -rf "${{ runner.temp }}/threads_new_token"
