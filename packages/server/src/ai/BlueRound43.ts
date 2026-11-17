@@ -21,7 +21,7 @@
  *   - 位元 128：第 2 家（這一局第 2 個提議）不套用，第 3 家起才套用原本的規則。
  *   - 位元 256「延伸」：第 2 家至少留一個第 1 家的隊員（第 1 家隊長以外），也至少放一個第 1 家沒派過、自己後驗不差的人。
  *   - 位元 512「不重複」：第 2 家隊上（自己以外）沒有第 1 家隊上的人。
- *   - 位元 1024「第 3 家起尊重」：前面每一個提議的隊員（自己以外）最多選一個，也至少放一個這一局還沒派過、自己後驗不差的人。
+ *   - 位元 1024「第 3 家起尊重」：前面每一個提議的隊員、以及這一局還沒人派過的人，各區（自己以外）最多選一個（百科的「尊重」）。
  *   這幾條用 `minimalSwapTeam` 換最少的人；沒設的那一家照原本的規則（位元 256／512 的第 3 家起、位元 128 的第 3 家起）。
  */
 import type { AgentAction, PlayerObservation } from './types';
@@ -94,10 +94,14 @@ export function loyalFresh43Team(tuning: Readonly<AgentTuning>, obs: PlayerObser
       return minimalSwapTeam(obs, action, ok2, allowed, opts);
     }
     if (thisRound.length >= 2 && (mode & 1024) !== 0) {
-      // 1024「第 3 家起尊重」（百科〈3 家對 1AB、2CD 之後的解讀與反饋〉的「尊重」）：前面每一個提議的隊員（自己以外）最多選一個，
-      // 也至少放一個這一局還沒派過、自己後驗不差的人。
-      const sets = thisRound.map((v) => new Set(v.team.filter((id) => id !== me)));
-      const ok3 = (team: readonly string[]): boolean => team.some(fresh) && spread(team)
+      // 1024「第 3 家起尊重」（百科〈3 家對 1AB、2CD 之後的解讀與反饋〉的「尊重」：147、260 之後「147 不能同時選兩人、
+      // 589（2 沒選的區間）不能同時選兩人」）：前面每一個提議的隊員、以及這一局還沒人派過的人，各區（自己以外）最多選一個。
+      const seenRound = new Set(thisRound.flatMap((v) => v.team));
+      const sets = [
+        ...thisRound.map((v) => new Set(v.team.filter((id) => id !== me))),
+        new Set(obs.allPlayerIds.filter((id) => id !== me && !seenRound.has(id))),
+      ];
+      const ok3 = (team: readonly string[]): boolean => spread(team)
         && sets.every((s) => team.filter((id) => id !== me && s.has(id)).length <= 1);
       return minimalSwapTeam(obs, action, ok3, allowed, opts);
     }
