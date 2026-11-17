@@ -2,6 +2,7 @@
  * 優化迴圈第 43 回合・藍方：忠臣／派西第 1、2 局的提議去相關（`loyalFresh43`，百科 B27／B19／B7）。
  */
 import { describe, expect, it } from 'vitest';
+import { withSeededRandom } from './benchmark/agreement';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
@@ -93,6 +94,30 @@ describe('loyalFresh43 (round 43: R1–R2 talk proposals of a loyal / Percival h
     const t = { type: 'team_select' as const, teamIds: ['P5', 'P1', 'P2', 'P3'] };
     expect(loyalFresh43Team(on(15), r2, t)).toBe(t);
     expect(loyalFresh43Team(on(31), r2, t)).not.toBe(t);
+  });
+
+  // PR #60 review：換出的人同分、換完一樣乾淨時，不能永遠換掉隊伍名單上第一個（座位序）。
+  it('ties: every equally scored (out, in) swap can be picked — not the team-list order; the same seed gives the same team', () => {
+    // 一個被否決的提議 P1 帶 P2、P3，只有這三人贊成：P2 與 P3 對稱，P4、P6–P10 也對稱。
+    const sym = asObs({ ...base, failCount: 1, voteHistory: [vote(1, 1, 'P1', ['P1', 'P2', 'P3'], ['P1', 'P2', 'P3'])] });
+    const team = { type: 'team_select' as const, teamIds: ['P5', 'P2', 'P3'] };
+    const share = bayesRedShare(sym, bayesOptionsOf(on(15)));
+    expect(Math.abs(share.get('P2')! - share.get('P3')!)).toBeLessThan(1e-12);
+    const outs = new Set<string>();
+    const ins = new Set<string>();
+    for (let i = 0; i < 40; i++) {
+      const got = withSeededRandom(`r43-tie-${i}`, () => loyalFresh43Team(on(15), sym, team));
+      if (got.type !== 'team_select') throw new Error('team');
+      expect(got.teamIds[0]).toBe('P5');
+      const kept = got.teamIds.filter((id) => id === 'P2' || id === 'P3');
+      expect(kept.length).toBe(1);
+      outs.add(kept[0] === 'P2' ? 'P3' : 'P2');
+      for (const id of got.teamIds) if (!['P5', 'P2', 'P3'].includes(id)) ins.add(id);
+      const again = withSeededRandom(`r43-tie-${i}`, () => loyalFresh43Team(on(15), sym, team));
+      expect(again).toEqual(got);
+    }
+    expect([...outs].sort()).toEqual(['P2', 'P3']);
+    expect(ins.size).toBeGreaterThan(1);
   });
 
   it('the gates bind: no allowed swap → the pipeline team', () => {
