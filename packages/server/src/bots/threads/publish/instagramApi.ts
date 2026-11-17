@@ -6,6 +6,8 @@
  *   兩張以上的圖：每張先建 is_carousel_item 容器，再建 CAROUSEL 容器（children），一樣等好再發。
  * - IG 只收 JPEG、長寬比 4:5 到 1.91:1：圖由 CI 先轉成 1080×1350 的 JPEG（見 threads-publish.yml）。
  * - 權杖只從呼叫端傳進來，錯誤訊息遮掉；暫時性錯誤（網路、429、5xx）照 2／4／8／16 秒重試。
+ * - 例外：發佈（media_publish）不盲目重試。回應不明時先問呼叫端的 `find`（IG 最近的貼文裡有沒有今天的題號）
+ *   和容器狀態：已經發出去就沿用，容器已經 PUBLISHED 卻找不到就停下來，確定還沒發才再發一次。建容器照舊可以重試。
  */
 
 import { ThreadsApiError, redact, type FetchLike } from './threadsApi';
@@ -45,13 +47,14 @@ export class InstagramApi {
     this.backoff = opts.backoff ?? [2000, 4000, 8000, 16000];
   }
 
-  private async call<T>(method: 'GET' | 'POST', path: string, params: Record<string, string | undefined> = {}): Promise<T> {
+  private async call<T>(method: 'GET' | 'POST', path: string, params: Record<string, string | undefined> = {}, opts: { retry?: boolean } = {}): Promise<T> {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== '') q.set(k, v);
     q.set('access_token', this.opts.token);
     const url = `${INSTAGRAM_GRAPH}${path}?${q.toString()}`;
     let last: ThreadsApiError | null = null;
-    for (let attempt = 0; attempt <= this.backoff.length; attempt++) {
+    const tries = opts.retry === false ? 0 : this.backoff.length;
+    for (let attempt = 0; attempt <= tries; attempt++) {
       if (attempt > 0) await this.sleep(this.backoff[attempt - 1]);
       try {
         const res = await this.fetchImpl(url, { method });
@@ -78,6 +81,30 @@ export class InstagramApi {
     return { id: String(r.user_id ?? r.id ?? ''), username: r.username };
   }
 
+  /**
+   * 正式同步前確認權杖能發文：查得到帳號、查得到發文額度（content_publishing_limit 要 instagram_business_content_publish）、
+   * 額度還沒用完。回傳問題（null＝可以發）；確認不了也算問題（呼叫端跳過 IG，不擋 Threads）。
+   */
+  async publishingProblem(): Promise<string | null> {
+    try {
+      const me = await this.me();
+      if (!me.id) return '查不到 IG 帳號：權杖要有 instagram_business_basic、帳號要是專業帳號';
+    } catch (err) {
+      return `查不到 IG 帳號（權杖失效或權限不夠）：${(err as Error).message}`;
+    }
+    try {
+      const r = await this.call<{ data?: { quota_usage?: number; config?: { quota_total?: number } }[] }>('GET', this.v(`/${this.opts.userId}/content_publishing_limit`), {
+        fields: 'quota_usage,config',
+      });
+      const d = r.data?.[0];
+      if (!d) return '查不到 IG 的發文額度：確認不了發文權限';
+      if (d.config?.quota_total !== undefined && (d.quota_usage ?? 0) >= d.config.quota_total) return 'IG 今天的發文額度用完了';
+      return null;
+    } catch (err) {
+      return `確認不了 IG 的發文權限（instagram_business_content_publish）：${(err as Error).message}`;
+    }
+  }
+
   /** 長效權杖續期（要至少用了 24 小時、還沒過期）。 */
   async refresh(): Promise<{ token: string; expiresIn: number }> {
     const r = await this.call<{ access_token: string; expires_in?: number }>('GET', '/refresh_access_token', { grant_type: 'ig_refresh_token' });
@@ -100,8 +127,26 @@ export class InstagramApi {
     throw new ThreadsApiError('IG 容器一直沒有處理好（超過等待時間）', 0, true);
   }
 
-  /** 發一篇：一張圖＝單張；兩張以上＝輪播。回 IG 的貼文 id。 */
-  async publish(input: { imageUrls: readonly string[]; caption: string }): Promise<string> {
+  /**
+   * 發佈容器：回應不明時不盲目重發，先問 find（已經發出去的那一篇）、再看容器狀態；確定還沒發才再發一次。
+   */
+  private async publishContainer(creationId: string, find?: () => Promise<string | null>): Promise<string> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return (await this.call<{ id: string }>('POST', this.v(`/${this.opts.userId}/media_publish`), { creation_id: creationId }, { retry: false })).id;
+      } catch (err) {
+        if (!(err instanceof ThreadsApiError) || !err.transient || attempt >= this.backoff.length) throw err;
+        await this.sleep(this.backoff[attempt]);
+        const found = find ? await find() : null;
+        if (found) return found;
+        const st = await this.call<{ status_code?: string }>('GET', this.v(`/${creationId}`), { fields: 'status_code,status' });
+        if (st.status_code === 'PUBLISHED') throw new ThreadsApiError('IG 容器已經發佈了，但找不到發出去的那一篇：不再重發（避免重複）', 0, false);
+      }
+    }
+  }
+
+  /** 發一篇：一張圖＝單張；兩張以上＝輪播。回 IG 的貼文 id。find：回應不明時找已經發出去的那一篇。 */
+  async publish(input: { imageUrls: readonly string[]; caption: string; find?: () => Promise<string | null> }): Promise<string> {
     if (input.imageUrls.length === 0) throw new ThreadsApiError('IG 一定要有圖', 0, false);
     const user = this.opts.userId;
     let creationId: string;
@@ -117,7 +162,7 @@ export class InstagramApi {
       creationId = (await this.call<{ id: string }>('POST', this.v(`/${user}/media`), { media_type: 'CAROUSEL', children: children.join(','), caption: input.caption })).id;
     }
     await this.waitContainer(creationId);
-    return (await this.call<{ id: string }>('POST', this.v(`/${user}/media_publish`), { creation_id: creationId })).id;
+    return this.publishContainer(creationId, input.find);
   }
 
   async permalink(id: string): Promise<string | undefined> {

@@ -537,22 +537,49 @@ describe('api', () => {
   });
 });
 
-/** 假的 Instagram API。 */
-function fakeIg(opts: { recent?: { id: string; caption: string }[] } = {}) {
+/**
+ * 假的 Instagram API：發佈後真的出現在最近的貼文裡。
+ * losePublish：發佈其實成功但回應丟了（回 503）幾次；noLimit：查不到發文額度（權限不夠）；noMe：查不到帳號。
+ */
+function fakeIg(opts: { recent?: { id: string; caption: string }[]; losePublish?: number; noLimit?: boolean; noMe?: boolean } = {}) {
   const calls: { method: string; path: string; params: URLSearchParams }[] = [];
+  const containers = new Map<string, string>();
+  const published: { id: string; caption: string }[] = [];
+  const publishCalls: string[] = [];
   let n = 0;
+  let lose = opts.losePublish ?? 0;
   const fetch: FetchLike = async (url, init) => {
     const u = new URL(url);
     calls.push({ method: init?.method ?? 'GET', path: u.pathname, params: u.searchParams });
     const reply = (status: number, body: unknown) => ({ ok: status < 400, status, text: async () => JSON.stringify(body) });
-    if (u.pathname.endsWith('/media') && init?.method === 'POST') return reply(200, { id: `ic${++n}` });
-    if (u.pathname.endsWith('/media_publish')) return reply(200, { id: `im${u.searchParams.get('creation_id')}` });
-    if (u.pathname.endsWith('/media')) return reply(200, { data: opts.recent ?? [] });
-    if (u.searchParams.get('fields') === 'status_code,status') return reply(200, { status_code: 'FINISHED' });
+    if (u.pathname.endsWith('/media') && init?.method === 'POST') {
+      const id = `ic${++n}`;
+      containers.set(id, u.searchParams.get('caption') ?? '');
+      return reply(200, { id });
+    }
+    if (u.pathname.endsWith('/media_publish')) {
+      const cid = u.searchParams.get('creation_id') ?? '';
+      publishCalls.push(cid);
+      const id = `im${cid}`;
+      if (published.some((p) => p.id === id)) return reply(400, { error: { message: 'already published' } });
+      published.unshift({ id, caption: containers.get(cid) ?? '' });
+      if (lose > 0) {
+        lose--;
+        return reply(503, { error: { message: 'gateway timeout' } });
+      }
+      return reply(200, { id });
+    }
+    if (u.pathname.endsWith('/media')) return reply(200, { data: [...published, ...(opts.recent ?? [])] });
+    if (u.pathname.endsWith('/content_publishing_limit')) return opts.noLimit ? reply(403, { error: { message: 'missing permission' } }) : reply(200, { data: [{ quota_usage: 1, config: { quota_total: 50 } }] });
+    if (u.pathname.endsWith('/me')) return opts.noMe ? reply(401, { error: { message: 'invalid token' } }) : reply(200, { user_id: '77', username: 'x' });
+    if (u.searchParams.get('fields') === 'status_code,status') {
+      const cid = u.pathname.split('/').pop() ?? '';
+      return reply(200, { status_code: published.some((p) => p.id === `im${cid}`) ? 'PUBLISHED' : 'FINISHED' });
+    }
     if (u.searchParams.get('fields') === 'permalink') return reply(200, { permalink: `https://www.instagram.com/p/${u.pathname.split('/').pop()}/` });
     return reply(404, {});
   };
-  return { api: new InstagramApi({ token: 'IG-SECRET', userId: '77', fetch, sleep: async () => {}, backoff: [1] }), calls };
+  return { api: new InstagramApi({ token: 'IG-SECRET', userId: '77', fetch, sleep: async () => {}, backoff: [1] }), calls, published, publishCalls };
 }
 
 describe('instagram', () => {
@@ -610,6 +637,27 @@ describe('instagram', () => {
 
     const s3 = prepared();
     expect((await postInstagram(s3.plan, { api: fakeIg().api, stateDir: s3.stateDir, imageUrls: [] })).status).toBe('skipped');
+  });
+
+  it('IG published but the response was lost: adopts that post instead of publishing again; checkpoints after publishing', async () => {
+    const { plan, stateDir } = prepared();
+    const ig = fakeIg({ losePublish: 1 });
+    const labels: string[] = [];
+    const r = await postInstagram(plan, { api: ig.api, stateDir, imageUrls: ['https://x/a.jpg'], checkpoint: (l) => void labels.push(l) });
+    expect(r.status).toBe('published');
+    expect(ig.published).toHaveLength(1); // 只有一篇
+    expect(ig.publishCalls).toHaveLength(1); // 沒有重發
+    expect(r.mediaId).toBe(ig.published[0].id);
+    expect(readState(stateDir, plan.date)?.ig?.mediaId).toBe(r.mediaId);
+    expect(labels).toEqual(['IG']);
+  });
+
+  it('IG publishing is checked first: an unconfirmable token or missing publish permission is reported (IG skipped, Threads untouched)', async () => {
+    expect(await fakeIg().api.publishingProblem()).toBeNull();
+    expect(await fakeIg({ noLimit: true }).api.publishingProblem()).toContain('確認不了 IG 的發文權限');
+    expect(await fakeIg({ noMe: true }).api.publishingProblem()).toContain('查不到 IG 帳號');
+    const msg = (await fakeIg({ noMe: true }).api.publishingProblem()) ?? '';
+    expect(msg.includes('IG-SECRET')).toBe(false);
   });
 
   it('a Threads post after IG keeps the IG record', async () => {
@@ -688,5 +736,7 @@ describe('workflow', () => {
   it('the live post step pushes the state right after each side effect (--checkpoint-push)', () => {
     const post = steps().find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
     expect(post?.body).toMatch(/threadsPublish\.ts post --state-dir "\$STATE_DIR" --out "\$OUT_DIR" --checkpoint-push/);
+    const ig = steps().find((s) => s.body.includes('threadsPublish.ts post-ig'));
+    expect(ig?.body).toMatch(/threadsPublish\.ts post-ig --state-dir "\$STATE_DIR" --out "\$OUT_DIR" --checkpoint-push/);
   });
 });

@@ -505,7 +505,10 @@ function stateOrNew(stateDir: string, plan: DailyPlan): ThreadsStateRecord {
   return readState(stateDir, plan.date) ?? { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: null };
 }
 
-export async function postInstagram(plan: DailyPlan, deps: { api: InstagramApi; stateDir: string; imageUrls: readonly string[]; now?: () => Date }): Promise<IgResult> {
+export async function postInstagram(
+  plan: DailyPlan,
+  deps: { api: InstagramApi; stateDir: string; imageUrls: readonly string[]; now?: () => Date; checkpoint?: (label: string) => Promise<void> | void },
+): Promise<IgResult> {
   const now = deps.now ?? ((): Date => new Date());
   if (plan.errors.length > 0) throw new Error(`內容檢查沒過：${plan.errors.join('；')}`);
   const existing = readState(deps.stateDir, plan.date);
@@ -517,9 +520,23 @@ export async function postInstagram(plan: DailyPlan, deps: { api: InstagramApi; 
     writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp } });
     return { status: 'found-existing', mediaId: dup.id, permalink: dup.permalink, notes: ['IG 最近的貼文裡已經有今天的題號，補記、不再發'] };
   }
-  const mediaId = await deps.api.publish({ imageUrls: deps.imageUrls, caption: igCaption(plan) });
+  const notes: string[] = deps.imageUrls.length > 1 ? [`輪播 ${deps.imageUrls.length} 張`] : [];
+  const mediaId = await deps.api.publish({
+    imageUrls: deps.imageUrls,
+    caption: igCaption(plan),
+    // 回應不明時：IG 最近的貼文裡有今天的題號就是已經發了
+    find: async () => findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId)?.id ?? null,
+  });
+  // 發出去就記下並馬上推上去（跟 Threads 的 checkpoint 一樣）：中斷也不會再發一次。
   writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId, publishedAt: now().toISOString() } });
+  if (deps.checkpoint) {
+    try {
+      await deps.checkpoint('IG');
+    } catch (err) {
+      notes.push(`狀態檔沒推上去（IG）：${(err as Error).message}`);
+    }
+  }
   const permalink = await deps.api.permalink(mediaId);
   if (permalink) writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId, permalink, publishedAt: now().toISOString() } });
-  return { status: 'published', mediaId, permalink, notes: deps.imageUrls.length > 1 ? [`輪播 ${deps.imageUrls.length} 張`] : [] };
+  return { status: 'published', mediaId, permalink, notes };
 }

@@ -243,8 +243,25 @@ async function main(): Promise<number> {
       .split(',')
       .map((u) => u.trim())
       .filter(Boolean);
-    const api = await igWithUser();
-    const r = await postInstagram(plan, { api, stateDir, imageUrls });
+    // 先確認 IG 權杖能發文；確認不了就跳過 IG（只警告、這一步不失敗），不影響 Threads。
+    let api: InstagramApi;
+    try {
+      api = await igWithUser();
+    } catch (err) {
+      say(`- ⚠️ Instagram 跳過：${(err as Error).message}`);
+      console.log(`::warning::Instagram 跳過：確認不了 IG 權杖`);
+      flushSummary();
+      return 0;
+    }
+    const problem = await api.publishingProblem();
+    if (problem) {
+      say(`- ⚠️ Instagram 跳過：${problem}`);
+      console.log(`::warning::Instagram 跳過：${problem}`);
+      flushSummary();
+      return 0;
+    }
+    const checkpoint = flag('--checkpoint-push') ? (label: string): Promise<void> => gitCheckpoint(stateDir, `threads: ${plan.date} ${label}`) : undefined;
+    const r = await postInstagram(plan, { api, stateDir, imageUrls, checkpoint });
     say(`- Instagram：${r.status}${r.permalink ? `，${r.permalink}` : r.mediaId ? `，貼文 ${r.mediaId}` : ''}`);
     for (const n of r.notes) say(`- ${n}`);
     flushSummary();

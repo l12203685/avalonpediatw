@@ -272,7 +272,8 @@ jobs:
           INSTAGRAM_ACCESS_TOKEN: ${{ env.INSTAGRAM_ACCESS_TOKEN || secrets.INSTAGRAM_ACCESS_TOKEN }}
           INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
           IG_IMAGE_URLS: ${{ steps.image.outputs.ig_urls }}
-        run: npx tsx scripts/threadsPublish.ts post-ig --state-dir "$STATE_DIR" --out "$OUT_DIR"
+        # 先確認 IG 權杖能發文，確認不了就跳過 IG（警告、不失敗）；發出去後馬上把狀態檔推上 threads-state。
+        run: npx tsx scripts/threadsPublish.ts post-ig --state-dir "$STATE_DIR" --out "$OUT_DIR" --checkpoint-push
 
       - name: 補記手動發的那一天
         if: steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'record-manual'
