@@ -221,6 +221,15 @@ vote reject    - Vote reject
 
 workflow 還沒合併進 `main` 之前，叫機器人會回「GitHub 回應 404」之類的錯誤（不扣次數）。
 
+同一把 `GITHUB_DISPATCH_TOKEN` 也給伺服器的兩個每日觸發用（GitHub 自己的排程常晚好幾小時，所以由伺服器觸發；Actions: Read and write 就能觸發這個 repo 的任何 workflow，不用另外開權限）：
+
+| 變數 | 預設 | 用途 |
+|---|---|---|
+| `NIGHTLY_DISPATCH` | 開 | 設 `off` 停掉每晚觸發牌譜記錄員＋百科AI 每晚補位（`services/nightlyDispatch.ts`） |
+| `NIGHTLY_DISPATCH_AT` | `18:35` | 每晚觸發的開始時間（台北，HH:MM，到 23:00 為止） |
+| `THREADS_DISPATCH` | 開 | 設 `off` 停掉每天觸發 Threads 每日發文（`services/threadsDispatch.ts`；見 docs/THREADS.md〈誰來觸發〉） |
+| `THREADS_POST_HOUR` | `12` | Threads 每天幾點觸發（台北，整點 07 分起、到 23:00 為止；跟 repo 變數同名，要改兩邊一起改）。正式發不發仍由 repo 變數 `THREADS_PUBLISH`、`THREADS_LIVE_FROM` 決定 |
+
 ---
 
 ## 百科AI 對局紀錄與回饋（DC #牌譜紀錄與覆盤＋網站 #ai-games）

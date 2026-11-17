@@ -1111,6 +1111,60 @@ describe('workflow', () => {
     expect(last?.body).toMatch(/fetch -q origin threads-state && git -C "\$STATE_DIR" merge -q --no-edit FETCH_HEAD/);
   });
 
+  describe('go-live gate (THREADS_LIVE_FROM) also covers the server dispatch (workflow_dispatch mode=auto)', () => {
+    // 把「決定日期與模式」那一步的 shell 拿出來真的跑一次，看 mode／ig 的結果。
+    const gateScript = (): string => {
+      const gate = steps().find((s) => s.id === 'gate');
+      const run = gate?.body.split(/\n {8}run: \|\n/)[1] ?? '';
+      return run.split('\n').map((l) => l.replace(/^ {10}/, '')).join('\n');
+    };
+    let hasBash = true;
+    try { execFileSync('bash', ['-c', 'true'], { stdio: 'ignore' }); } catch { hasBash = false; }
+    const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
+    const runGate = (env: Record<string, string>): Record<string, string> => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'threads-gate-'));
+      const out = path.join(dir, 'out');
+      fs.writeFileSync(out, '');
+      try {
+        execFileSync('bash', ['-c', gateScript()], {
+          env: { PATH: process.env.PATH ?? '', GITHUB_OUTPUT: out, PUBLISH: '1', HAS_IG: 'true', IG_PUBLISH: '1', POST_HOUR: '12', IN_DATE: '', IN_MODE: '', LIVE_FROM: '', ...env },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+        return Object.fromEntries(fs.readFileSync(out, 'utf8').trim().split('\n').map((l) => l.split('=') as [string, string]));
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    it('the gate is not limited to schedule events', () => {
+      expect(gateScript()).toContain('if [ "$EVENT" = schedule ] || [ "${IN_MODE:-auto}" = auto ]; then AUTO=1; fi');
+    });
+
+    it.skipIf(!hasBash)('workflow_dispatch mode=auto stays a dry run (Threads and IG) while THREADS_LIVE_FROM is unset or in the future', () => {
+      for (const LIVE_FROM of ['', '2999-01-01']) {
+        const r = runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM });
+        expect(r).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1', date: today });
+      }
+      // 日期填未來（≥ 起始日）也不能繞過：今天還沒到起始日就只試跑
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', IN_DATE: '2999-06-01', LIVE_FROM: '2999-01-01' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      // 補前幾天（早於起始日）也只試跑
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', IN_DATE: '2026-01-01', LIVE_FROM: '2026-02-01' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+    });
+
+    it.skipIf(!hasBash)('workflow_dispatch mode=auto goes live on and after THREADS_LIVE_FROM', () => {
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: today })).toMatchObject({ mode: 'live', ig: 'live', run: '1' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01' })).toMatchObject({ mode: 'live', ig: 'live' });
+      // THREADS_PUBLISH 沒開就照舊只試跑
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01', PUBLISH: '0', IG_PUBLISH: '0' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+    });
+
+    it.skipIf(!hasBash)('schedule is still gated; explicit manual modes keep working', () => {
+      expect(runGate({ EVENT: 'schedule', LIVE_FROM: '' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'dry-run', LIVE_FROM: '' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'record-manual', IN_DATE: '2026-11-17', LIVE_FROM: '' })).toMatchObject({ mode: 'record-manual', ig: 'off', run: '1', date: '2026-11-17' });
+    });
+  });
+
   it('the live post step pushes the state right after each side effect (--checkpoint-push)', () => {
     const post = steps().find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
     expect(post?.body).toMatch(/threadsPublish\.ts post --state-dir "\$STATE_DIR" --out "\$OUT_DIR" --checkpoint-push/);

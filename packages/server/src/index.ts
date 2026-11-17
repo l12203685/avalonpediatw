@@ -32,6 +32,7 @@ import { mountJsonBodyParsers } from './middleware/rawBody';
 import { initializeAsyncNotifier } from './services/AsyncNotifier';
 import { startKeepAlive } from './services/keepAlive';
 import { startNightlyDispatch } from './services/nightlyDispatch';
+import { startThreadsDispatch } from './services/threadsDispatch';
 
 const app: Express = express();
 
@@ -213,6 +214,8 @@ async function main() {
     startKeepAlive();
     // 每晚 18:35（台灣）觸發牌譜記錄員＋百科AI 每晚補位（不再只靠 Claude 排程）。services/nightlyDispatch.ts
     startNightlyDispatch();
+    // 每天 12:07（台灣，THREADS_POST_HOUR）觸發 Threads 每日發文（GitHub 排程常晚好幾小時）。services/threadsDispatch.ts
+    startThreadsDispatch();
 
     // 9. Weekly stats digest — Mondays 12:00 +08, leaderboard to the Discord
     //    mirror channel + LINE reply queue (STATS_DIGEST_ENABLED=false = off).

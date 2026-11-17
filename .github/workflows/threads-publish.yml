@@ -2,6 +2,8 @@
 #
 # - 預設只試跑：repo 變數 THREADS_PUBLISH 是 '1' 才真的發文；試跑把要發的內容放在這次執行的摘要與附件。
 # - 每小時醒一次，到了台北時間 THREADS_POST_HOUR（預設 12）點以後才做事；同一天發過就不再發。
+# - GitHub 的排程常晚好幾小時（甚至不跑），所以 Render 上的伺服器每天 THREADS_POST_HOUR:07 用 mode=auto 觸發一次
+#   （packages/server/src/services/threadsDispatch.ts）；排程留著當備援。兩邊都受 THREADS_LIVE_FROM 的閘門管。
 # - 權杖只放 secrets（THREADS_ACCESS_TOKEN，選填 THREADS_USER_ID）；這個 repo 的執行紀錄是公開的，任何步驟都不印權杖。
 # - 發文狀態與圖放在 threads-state 分支（state/<日期>.json、images/<日期>.png）；圖用 raw.githubusercontent.com 的公開網址給 Threads 抓。
 # - Instagram 同步（選用）：有 secret INSTAGRAM_ACCESS_TOKEN 才會準備；repo 變數 INSTAGRAM_PUBLISH 是 '1' 才真的發。
@@ -67,8 +69,13 @@ jobs:
           if [ "${HAS_IG:-}" = true ] && [ "$MODE" != record-manual ]; then
             if [ "${IN_MODE:-auto}" != dry-run ] && [ "${IG_PUBLISH:-}" = 1 ]; then IG=live; else IG=dry-run; fi
           fi
-          # 正式發的起始日（站長 11/17：圖、文字、小觀念確認前不要發）：沒設 THREADS_LIVE_FROM，或今天早於那天，排程一律只試跑。
-          if [ "$EVENT" = schedule ] && { [ -z "${LIVE_FROM:-}" ] || [[ "$DATE" < "$LIVE_FROM" ]]; }; then
+          # 正式發的起始日（站長 11/17：圖、文字、小觀念確認前不要發）：沒設 THREADS_LIVE_FROM，或今天／要發的日期早於那天，
+          # 自動的觸發一律只試跑。自動＝排程，或 mode=auto 的手動觸發（伺服器每天觸發用的就是這個，services/threadsDispatch.ts）。
+          # 手動選 dry-run、record-manual 本來就不會正式發，照常可以用。
+          AUTO=0
+          if [ "$EVENT" = schedule ] || [ "${IN_MODE:-auto}" = auto ]; then AUTO=1; fi
+          TODAY=$(TZ=Asia/Taipei date +%F)
+          if [ "$AUTO" = 1 ] && { [ -z "${LIVE_FROM:-}" ] || [[ "$DATE" < "$LIVE_FROM" ]] || [[ "$TODAY" < "$LIVE_FROM" ]]; }; then
             if [ "$MODE" = live ]; then MODE=dry-run; fi
             if [ "$IG" = live ]; then IG=dry-run; fi
           fi

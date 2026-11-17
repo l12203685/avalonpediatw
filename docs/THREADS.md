@@ -167,11 +167,32 @@ A 發了、第一則留言沒成功時（狀態檔 `commentId` 是 `null`），�
 
 內容檢查沒過（例如疑似玩家名字）時，執行紀錄、摘要和試跑附件都不放貼文和留言的內容，只放檢查訊息（這個 repo 的 Actions 紀錄是公開的）。
 
+### 誰來觸發（伺服器每天觸發，GitHub 排程當備援）
+
+GitHub 自己的排程對這個 repo 很不準：每日排程常晚 7–8 小時才跑，這個工作流程每小時的排程（`'7 * * * *'`）從生效到 11/17 一次都沒跑過。所以改成跟每晚記錄員一樣，由 Render 上一直開著的伺服器自己觸發：
+
+- 台北時間每天 **12:07**（`THREADS_POST_HOUR` 點 07 分）到 23:00 之間，伺服器用 GitHub 的 workflow_dispatch 觸發一次 `threads-publish.yml`（ref `main`，`mode=auto`、`date` 空白＝今天）。觸發失敗下一分鐘再試；成功後當天不再觸發。程式在 `packages/server/src/services/threadsDispatch.ts`。
+- 伺服器重啟後同一天可能再觸發一次，沒關係：工作流程有 concurrency（同一組排隊、不取消進行中的），而且 `threads-state` 有這一天的貼文 id 就跳過，不會重複發。
+- GitHub 的排程留著當備援；伺服器那次已經發了，排程跑到時一樣跳過。
+- 伺服器的環境變數（Render → Environment）：
+  - `GITHUB_DISPATCH_TOKEN`：跟補位機器人、每晚記錄員共用同一把（只給這個 repo、Actions: Read and write，就能觸發這個 repo 的任何 workflow），不用另外建。沒設就不觸發。
+  - `THREADS_POST_HOUR`（選填，0–22，預設 `12`）：幾點觸發。跟 repo 變數 `THREADS_POST_HOUR` 是兩個地方，要改時兩邊一起改（手動觸發不看 repo 變數的時間，伺服器幾點觸發就幾點發）。
+  - `THREADS_DISPATCH=off`（選填）：停掉伺服器觸發（只剩 GitHub 排程）。
+
+**起始日的閘門一樣管伺服器觸發**：沒設 repo 變數 `THREADS_LIVE_FROM`，或今天（或要發的日期）早於那一天時，「自動」的執行一律只試跑，Threads 和 IG 都是。自動＝排程，或手動觸發選 `mode=auto`（伺服器觸發用的就是這個）。
+
+| 觸發方式 | 起始日之前（或沒設 `THREADS_LIVE_FROM`） | 起始日當天起 |
+|---|---|---|
+| GitHub 排程 | 只試跑 | 照 `THREADS_PUBLISH`／`INSTAGRAM_PUBLISH` |
+| 伺服器觸發、手動選 `auto` | 只試跑 | 照 `THREADS_PUBLISH`／`INSTAGRAM_PUBLISH` |
+| 手動選 `dry-run` | 只試跑 | 只試跑 |
+| 手動選 `record-manual` | 只補記，不發文、不碰 IG | 同左 |
+
 ### 一開始只試跑
 
 repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，把要發的貼文、留言和圖放在那次執行的摘要和附件（Actions → Threads 每日發文 → 那一次 → Artifacts），不會碰 Threads。
 
-注意：排程只在 main 分支上跑，這個工作流程要合進 main 之後才會每天自動執行。
+注意：排程和伺服器觸發都跑 main 分支上的工作流程，要合進 main 之後才會每天自動執行。
 
 ### 站長要做的（一次）
 
@@ -183,7 +204,7 @@ repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，
    - Secrets：`THREADS_ACCESS_TOKEN`＝長效權杖；`THREADS_USER_ID`＝使用者 id（可以不填，會用權杖查）。
    - 權杖不要貼在對話、Issue 或程式裡。
 6. **先手動試跑一次**：Actions → Threads 每日發文 → Run workflow，mode 選 `dry-run`，看摘要。
-7. **打開正式發佈**：Variables 新增 `THREADS_PUBLISH`＝`1`。之後每天中午自動發。
+7. **打開正式發佈**：Variables 新增 `THREADS_PUBLISH`＝`1`，再設 `THREADS_LIVE_FROM`＝正式發的第一天（YYYY-MM-DD）。從那天起每天中午自動發；沒設 `THREADS_LIVE_FROM` 時一律只試跑。
 8. **要停**：把 `THREADS_PUBLISH` 改成 `0` 或刪掉，馬上回到只試跑。
 
 ### 權杖到期

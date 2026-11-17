@@ -15,10 +15,10 @@
  */
 
 type EnvLike = Record<string, string | undefined>;
-type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number }>;
+export type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{ ok: boolean; status: number }>;
 
 export const NIGHTLY_WORKFLOWS = ['signage-recorder.yml', 'signage-player.yml'] as const;
-const REPO_DEFAULT = 'l12203685/avalonpediatw';
+export const REPO_DEFAULT = 'l12203685/avalonpediatw';
 const TAIPEI_MS = 8 * 3600_000;
 const END_MIN = 23 * 60;
 
@@ -33,6 +33,31 @@ export interface NightlyState {
 export function taipeiClock(at: number): { day: string; minute: number } {
   const d = new Date(at + TAIPEI_MS);
   return { day: d.toISOString().slice(0, 10), minute: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+
+export type DispatchResult = { ok: boolean; status?: number; error?: string };
+
+/** 呼叫 GitHub workflow_dispatch（ref main）。不丟例外：沒回應時 status 是 undefined、error 是錯誤種類。 */
+export async function dispatchWorkflow(
+  fetchFn: FetchLike, token: string, repo: string, workflow: string, inputs: Record<string, string>, userAgent: string,
+): Promise<DispatchResult> {
+  try {
+    const res = await fetchFn(`https://api.github.com/repos/${repo}/actions/workflows/${workflow}/dispatches`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        'User-Agent': userAgent,
+      },
+      body: JSON.stringify({ ref: 'main', inputs }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return { ok: res.ok, status: res.status };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.name : 'error' };
+  }
 }
 
 function startMinute(env: EnvLike): number {
@@ -63,25 +88,10 @@ export class NightlyDispatcher {
     const ok: string[] = [];
     for (const wf of NIGHTLY_WORKFLOWS) {
       if (done.includes(wf)) continue;
-      try {
-        const res = await this.fetchFn(`https://api.github.com/repos/${repo}/actions/workflows/${wf}/dispatches`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-            'Content-Type': 'application/json',
-            'User-Agent': 'avalonpediatw-nightly',
-          },
-          body: JSON.stringify({ ref: 'main', inputs: {} }),
-          signal: AbortSignal.timeout(10_000),
-        });
-        if (res.ok) { done.push(wf); ok.push(wf); this.logger.info(`[nightly] dispatched ${wf} (status=${res.status})`); }
-        else { this.state.lastError = `${wf} status=${res.status}`; this.logger.warn(`[nightly] dispatch ${wf} failed (status=${res.status})`); }
-      } catch (err) {
-        this.state.lastError = `${wf} ${err instanceof Error ? err.name : 'error'}`;
-        this.logger.warn(`[nightly] dispatch ${wf} got no answer (${err instanceof Error ? err.name : 'error'})`);
-      }
+      const r = await dispatchWorkflow(this.fetchFn, token, repo, wf, {}, 'avalonpediatw-nightly');
+      if (r.ok) { done.push(wf); ok.push(wf); this.logger.info(`[nightly] dispatched ${wf} (status=${r.status})`); }
+      else if (r.status !== undefined) { this.state.lastError = `${wf} status=${r.status}`; this.logger.warn(`[nightly] dispatch ${wf} failed (status=${r.status})`); }
+      else { this.state.lastError = `${wf} ${r.error}`; this.logger.warn(`[nightly] dispatch ${wf} got no answer (${r.error})`); }
     }
     return ok;
   }
