@@ -1,589 +1,102 @@
-# 標籤|開關|種子|起始局號|局數  （第 42 回合確認：新 main 上 BASE vs VE，三組種子各 100 段 × 1000 局；本機已跑完的段落不列）
-BASE||423001|2000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|2000|1000
-BASE||423101|2000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|2000|1000
-BASE||423201|2000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|2000|1000
-BASE||423001|3000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|3000|1000
-BASE||423101|3000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|3000|1000
-BASE||423201|3000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|3000|1000
-BASE||423001|4000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|4000|1000
-BASE||423101|4000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|4000|1000
-BASE||423201|4000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|4000|1000
-BASE||423001|5000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|5000|1000
-BASE||423101|5000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|5000|1000
-BASE||423201|5000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|5000|1000
-BASE||423001|6000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|6000|1000
-BASE||423101|6000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|6000|1000
-BASE||423201|6000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|6000|1000
-BASE||423001|7000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|7000|1000
-BASE||423101|7000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|7000|1000
-BASE||423201|7000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|7000|1000
-BASE||423001|8000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|8000|1000
-BASE||423101|8000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|8000|1000
-BASE||423201|8000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|8000|1000
-BASE||423001|9000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|9000|1000
-BASE||423101|9000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|9000|1000
-BASE||423201|9000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|9000|1000
-BASE||423001|10000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|10000|1000
-BASE||423101|10000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|10000|1000
-BASE||423201|10000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|10000|1000
-BASE||423001|11000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|11000|1000
-BASE||423101|11000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|11000|1000
-BASE||423201|11000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|11000|1000
-BASE||423001|12000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|12000|1000
-BASE||423101|12000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|12000|1000
-BASE||423201|12000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|12000|1000
-BASE||423001|13000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|13000|1000
-BASE||423101|13000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|13000|1000
-BASE||423201|13000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|13000|1000
-BASE||423001|14000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|14000|1000
-BASE||423101|14000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|14000|1000
-BASE||423201|14000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|14000|1000
-BASE||423001|15000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|15000|1000
-BASE||423101|15000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|15000|1000
-BASE||423201|15000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|15000|1000
-BASE||423001|16000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|16000|1000
-BASE||423101|16000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|16000|1000
-BASE||423201|16000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|16000|1000
-BASE||423001|17000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|17000|1000
-BASE||423101|17000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|17000|1000
-BASE||423201|17000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|17000|1000
-BASE||423001|18000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|18000|1000
-BASE||423101|18000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|18000|1000
-BASE||423201|18000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|18000|1000
-BASE||423001|19000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|19000|1000
-BASE||423101|19000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|19000|1000
-BASE||423201|19000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|19000|1000
-BASE||423001|20000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|20000|1000
-BASE||423101|20000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|20000|1000
-BASE||423201|20000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|20000|1000
-BASE||423001|21000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|21000|1000
-BASE||423101|21000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|21000|1000
-BASE||423201|21000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|21000|1000
-BASE||423001|22000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|22000|1000
-BASE||423101|22000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|22000|1000
-BASE||423201|22000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|22000|1000
-BASE||423001|23000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|23000|1000
-BASE||423101|23000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|23000|1000
-BASE||423201|23000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|23000|1000
-BASE||423001|24000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|24000|1000
-BASE||423101|24000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|24000|1000
-BASE||423201|24000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|24000|1000
-BASE||423001|25000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|25000|1000
-BASE||423101|25000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|25000|1000
-BASE||423201|25000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|25000|1000
-BASE||423001|26000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|26000|1000
-BASE||423101|26000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|26000|1000
-BASE||423201|26000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|26000|1000
-BASE||423001|27000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|27000|1000
-BASE||423101|27000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|27000|1000
-BASE||423201|27000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|27000|1000
-BASE||423001|28000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|28000|1000
-BASE||423101|28000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|28000|1000
-BASE||423201|28000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|28000|1000
-BASE||423001|29000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|29000|1000
-BASE||423101|29000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|29000|1000
-BASE||423201|29000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|29000|1000
-BASE||423001|30000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|30000|1000
-BASE||423101|30000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|30000|1000
-BASE||423201|30000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|30000|1000
-BASE||423001|31000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|31000|1000
-BASE||423101|31000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|31000|1000
-BASE||423201|31000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|31000|1000
-BASE||423001|32000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|32000|1000
-BASE||423101|32000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|32000|1000
-BASE||423201|32000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|32000|1000
-BASE||423001|33000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|33000|1000
-BASE||423101|33000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|33000|1000
-BASE||423201|33000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|33000|1000
-BASE||423001|34000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|34000|1000
-BASE||423101|34000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|34000|1000
-BASE||423201|34000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|34000|1000
-BASE||423001|35000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|35000|1000
-BASE||423101|35000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|35000|1000
-BASE||423201|35000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|35000|1000
-BASE||423001|36000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|36000|1000
-BASE||423101|36000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|36000|1000
-BASE||423201|36000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|36000|1000
-BASE||423001|37000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|37000|1000
-BASE||423101|37000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|37000|1000
-BASE||423201|37000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|37000|1000
-BASE||423001|38000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|38000|1000
-BASE||423101|38000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|38000|1000
-BASE||423201|38000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|38000|1000
-BASE||423001|39000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|39000|1000
-BASE||423101|39000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|39000|1000
-BASE||423201|39000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|39000|1000
-BASE||423001|40000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|40000|1000
-BASE||423101|40000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|40000|1000
-BASE||423201|40000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|40000|1000
-BASE||423001|41000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|41000|1000
-BASE||423101|41000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|41000|1000
-BASE||423201|41000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|41000|1000
-BASE||423001|42000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|42000|1000
-BASE||423101|42000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|42000|1000
-BASE||423201|42000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|42000|1000
-BASE||423001|43000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|43000|1000
-BASE||423101|43000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|43000|1000
-BASE||423201|43000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|43000|1000
-BASE||423001|44000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|44000|1000
-BASE||423101|44000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|44000|1000
-BASE||423201|44000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|44000|1000
-BASE||423001|45000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|45000|1000
-BASE||423101|45000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|45000|1000
-BASE||423201|45000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|45000|1000
-BASE||423001|46000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|46000|1000
-BASE||423101|46000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|46000|1000
-BASE||423201|46000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|46000|1000
-BASE||423001|47000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|47000|1000
-BASE||423101|47000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|47000|1000
-BASE||423201|47000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|47000|1000
-BASE||423001|48000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|48000|1000
-BASE||423101|48000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|48000|1000
-BASE||423201|48000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|48000|1000
-BASE||423001|49000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|49000|1000
-BASE||423101|49000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|49000|1000
-BASE||423201|49000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|49000|1000
-BASE||423001|50000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|50000|1000
-BASE||423101|50000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|50000|1000
-BASE||423201|50000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|50000|1000
-BASE||423001|51000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|51000|1000
-BASE||423101|51000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|51000|1000
-BASE||423201|51000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|51000|1000
-BASE||423001|52000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|52000|1000
-BASE||423101|52000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|52000|1000
-BASE||423201|52000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|52000|1000
-BASE||423001|53000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|53000|1000
-BASE||423101|53000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|53000|1000
-BASE||423201|53000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|53000|1000
-BASE||423001|54000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|54000|1000
-BASE||423101|54000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|54000|1000
-BASE||423201|54000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|54000|1000
-BASE||423001|55000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|55000|1000
-BASE||423101|55000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|55000|1000
-BASE||423201|55000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|55000|1000
-BASE||423001|56000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|56000|1000
-BASE||423101|56000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|56000|1000
-BASE||423201|56000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|56000|1000
-BASE||423001|57000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|57000|1000
-BASE||423101|57000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|57000|1000
-BASE||423201|57000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|57000|1000
-BASE||423001|58000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|58000|1000
-BASE||423101|58000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|58000|1000
-BASE||423201|58000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|58000|1000
-BASE||423001|59000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|59000|1000
-BASE||423101|59000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|59000|1000
-BASE||423201|59000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|59000|1000
-BASE||423001|60000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|60000|1000
-BASE||423101|60000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|60000|1000
-BASE||423201|60000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|60000|1000
-BASE||423001|61000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|61000|1000
-BASE||423101|61000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|61000|1000
-BASE||423201|61000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|61000|1000
-BASE||423001|62000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|62000|1000
-BASE||423101|62000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|62000|1000
-BASE||423201|62000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|62000|1000
-BASE||423001|63000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|63000|1000
-BASE||423101|63000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|63000|1000
-BASE||423201|63000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|63000|1000
-BASE||423001|64000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|64000|1000
-BASE||423101|64000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|64000|1000
-BASE||423201|64000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|64000|1000
-BASE||423001|65000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|65000|1000
-BASE||423101|65000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|65000|1000
-BASE||423201|65000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|65000|1000
-BASE||423001|66000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|66000|1000
-BASE||423101|66000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|66000|1000
-BASE||423201|66000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|66000|1000
-BASE||423001|67000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|67000|1000
-BASE||423101|67000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|67000|1000
-BASE||423201|67000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|67000|1000
-BASE||423001|68000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|68000|1000
-BASE||423101|68000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|68000|1000
-BASE||423201|68000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|68000|1000
-BASE||423001|69000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|69000|1000
-BASE||423101|69000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|69000|1000
-BASE||423201|69000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|69000|1000
-BASE||423001|70000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|70000|1000
-BASE||423101|70000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|70000|1000
-BASE||423201|70000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|70000|1000
-BASE||423001|71000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|71000|1000
-BASE||423101|71000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|71000|1000
-BASE||423201|71000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|71000|1000
-BASE||423001|72000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|72000|1000
-BASE||423101|72000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|72000|1000
-BASE||423201|72000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|72000|1000
-BASE||423001|73000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|73000|1000
-BASE||423101|73000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|73000|1000
-BASE||423201|73000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|73000|1000
-BASE||423001|74000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|74000|1000
-BASE||423101|74000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|74000|1000
-BASE||423201|74000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|74000|1000
-BASE||423001|75000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|75000|1000
-BASE||423101|75000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|75000|1000
-BASE||423201|75000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|75000|1000
-BASE||423001|76000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|76000|1000
-BASE||423101|76000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|76000|1000
-BASE||423201|76000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|76000|1000
-BASE||423001|77000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|77000|1000
-BASE||423101|77000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|77000|1000
-BASE||423201|77000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|77000|1000
-BASE||423001|78000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|78000|1000
-BASE||423101|78000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|78000|1000
-BASE||423201|78000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|78000|1000
-BASE||423001|79000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|79000|1000
-BASE||423101|79000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|79000|1000
-BASE||423201|79000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|79000|1000
-BASE||423001|80000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|80000|1000
-BASE||423101|80000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|80000|1000
-BASE||423201|80000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|80000|1000
-BASE||423001|81000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|81000|1000
-BASE||423101|81000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|81000|1000
-BASE||423201|81000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|81000|1000
-BASE||423001|82000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|82000|1000
-BASE||423101|82000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|82000|1000
-BASE||423201|82000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|82000|1000
-BASE||423001|83000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|83000|1000
-BASE||423101|83000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|83000|1000
-BASE||423201|83000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|83000|1000
-BASE||423001|84000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|84000|1000
-BASE||423101|84000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|84000|1000
-BASE||423201|84000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|84000|1000
-BASE||423001|85000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|85000|1000
-BASE||423101|85000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|85000|1000
-BASE||423201|85000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|85000|1000
-BASE||423001|86000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|86000|1000
-BASE||423101|86000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|86000|1000
-BASE||423201|86000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|86000|1000
-BASE||423001|87000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|87000|1000
-BASE||423101|87000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|87000|1000
-BASE||423201|87000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|87000|1000
-BASE||423001|88000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|88000|1000
-BASE||423101|88000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|88000|1000
-BASE||423201|88000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|88000|1000
-BASE||423001|89000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|89000|1000
-BASE||423101|89000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|89000|1000
-BASE||423201|89000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|89000|1000
-BASE||423001|90000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|90000|1000
-BASE||423101|90000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|90000|1000
-BASE||423201|90000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|90000|1000
-BASE||423001|91000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|91000|1000
-BASE||423101|91000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|91000|1000
-BASE||423201|91000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|91000|1000
-BASE||423001|92000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|92000|1000
-BASE||423101|92000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|92000|1000
-BASE||423201|92000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|92000|1000
-BASE||423001|93000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|93000|1000
-BASE||423101|93000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|93000|1000
-BASE||423201|93000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|93000|1000
-BASE||423001|94000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|94000|1000
-BASE||423101|94000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|94000|1000
-BASE||423201|94000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|94000|1000
-BASE||423001|95000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|95000|1000
-BASE||423101|95000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|95000|1000
-BASE||423201|95000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|95000|1000
-BASE||423001|96000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|96000|1000
-BASE||423101|96000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|96000|1000
-BASE||423201|96000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|96000|1000
-BASE||423001|97000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|97000|1000
-BASE||423101|97000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|97000|1000
-BASE||423201|97000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|97000|1000
-BASE||423001|98000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|98000|1000
-BASE||423101|98000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|98000|1000
-BASE||423201|98000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|98000|1000
-BASE||423001|99000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423001|99000|1000
-BASE||423101|99000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423101|99000|1000
-BASE||423201|99000|1000
-VE|beliefPendingProposal vote40KeyOnL=0.6 vote40KeyOnP=0.6 vote40KeyOnM=0.6 vote40R5OnL=0.5 vote40R5OnP=0.5 vote40R5OffL=0.95 vote40R5OffP=0.95 vote40R5OffM=0.95|423201|99000|1000
+# 標籤|開關|種子|起始局號|局數  （第 43 回合篩選：loyalFresh43=5（忠臣、第 1 局）同種子逐局配對 r42b-confirm 的 BASE 423001 第 0–49,999 局；BASEchk = 新程式開關關著重跑 200 局，和 r42b-confirm BASE_423001_2000 前 200 局比對）
+BASEchk||423001|2000|200
+F5|loyalFresh43=5|423001|0|500
+F5|loyalFresh43=5|423001|500|500
+F5|loyalFresh43=5|423001|1000|500
+F5|loyalFresh43=5|423001|1500|500
+F5|loyalFresh43=5|423001|2000|500
+F5|loyalFresh43=5|423001|2500|500
+F5|loyalFresh43=5|423001|3000|500
+F5|loyalFresh43=5|423001|3500|500
+F5|loyalFresh43=5|423001|4000|500
+F5|loyalFresh43=5|423001|4500|500
+F5|loyalFresh43=5|423001|5000|500
+F5|loyalFresh43=5|423001|5500|500
+F5|loyalFresh43=5|423001|6000|500
+F5|loyalFresh43=5|423001|6500|500
+F5|loyalFresh43=5|423001|7000|500
+F5|loyalFresh43=5|423001|7500|500
+F5|loyalFresh43=5|423001|8000|500
+F5|loyalFresh43=5|423001|8500|500
+F5|loyalFresh43=5|423001|9000|500
+F5|loyalFresh43=5|423001|9500|500
+F5|loyalFresh43=5|423001|10000|500
+F5|loyalFresh43=5|423001|10500|500
+F5|loyalFresh43=5|423001|11000|500
+F5|loyalFresh43=5|423001|11500|500
+F5|loyalFresh43=5|423001|12000|500
+F5|loyalFresh43=5|423001|12500|500
+F5|loyalFresh43=5|423001|13000|500
+F5|loyalFresh43=5|423001|13500|500
+F5|loyalFresh43=5|423001|14000|500
+F5|loyalFresh43=5|423001|14500|500
+F5|loyalFresh43=5|423001|15000|500
+F5|loyalFresh43=5|423001|15500|500
+F5|loyalFresh43=5|423001|16000|500
+F5|loyalFresh43=5|423001|16500|500
+F5|loyalFresh43=5|423001|17000|500
+F5|loyalFresh43=5|423001|17500|500
+F5|loyalFresh43=5|423001|18000|500
+F5|loyalFresh43=5|423001|18500|500
+F5|loyalFresh43=5|423001|19000|500
+F5|loyalFresh43=5|423001|19500|500
+F5|loyalFresh43=5|423001|20000|500
+F5|loyalFresh43=5|423001|20500|500
+F5|loyalFresh43=5|423001|21000|500
+F5|loyalFresh43=5|423001|21500|500
+F5|loyalFresh43=5|423001|22000|500
+F5|loyalFresh43=5|423001|22500|500
+F5|loyalFresh43=5|423001|23000|500
+F5|loyalFresh43=5|423001|23500|500
+F5|loyalFresh43=5|423001|24000|500
+F5|loyalFresh43=5|423001|24500|500
+F5|loyalFresh43=5|423001|25000|500
+F5|loyalFresh43=5|423001|25500|500
+F5|loyalFresh43=5|423001|26000|500
+F5|loyalFresh43=5|423001|26500|500
+F5|loyalFresh43=5|423001|27000|500
+F5|loyalFresh43=5|423001|27500|500
+F5|loyalFresh43=5|423001|28000|500
+F5|loyalFresh43=5|423001|28500|500
+F5|loyalFresh43=5|423001|29000|500
+F5|loyalFresh43=5|423001|29500|500
+F5|loyalFresh43=5|423001|30000|500
+F5|loyalFresh43=5|423001|30500|500
+F5|loyalFresh43=5|423001|31000|500
+F5|loyalFresh43=5|423001|31500|500
+F5|loyalFresh43=5|423001|32000|500
+F5|loyalFresh43=5|423001|32500|500
+F5|loyalFresh43=5|423001|33000|500
+F5|loyalFresh43=5|423001|33500|500
+F5|loyalFresh43=5|423001|34000|500
+F5|loyalFresh43=5|423001|34500|500
+F5|loyalFresh43=5|423001|35000|500
+F5|loyalFresh43=5|423001|35500|500
+F5|loyalFresh43=5|423001|36000|500
+F5|loyalFresh43=5|423001|36500|500
+F5|loyalFresh43=5|423001|37000|500
+F5|loyalFresh43=5|423001|37500|500
+F5|loyalFresh43=5|423001|38000|500
+F5|loyalFresh43=5|423001|38500|500
+F5|loyalFresh43=5|423001|39000|500
+F5|loyalFresh43=5|423001|39500|500
+F5|loyalFresh43=5|423001|40000|500
+F5|loyalFresh43=5|423001|40500|500
+F5|loyalFresh43=5|423001|41000|500
+F5|loyalFresh43=5|423001|41500|500
+F5|loyalFresh43=5|423001|42000|500
+F5|loyalFresh43=5|423001|42500|500
+F5|loyalFresh43=5|423001|43000|500
+F5|loyalFresh43=5|423001|43500|500
+F5|loyalFresh43=5|423001|44000|500
+F5|loyalFresh43=5|423001|44500|500
+F5|loyalFresh43=5|423001|45000|500
+F5|loyalFresh43=5|423001|45500|500
+F5|loyalFresh43=5|423001|46000|500
+F5|loyalFresh43=5|423001|46500|500
+F5|loyalFresh43=5|423001|47000|500
+F5|loyalFresh43=5|423001|47500|500
+F5|loyalFresh43=5|423001|48000|500
+F5|loyalFresh43=5|423001|48500|500
+F5|loyalFresh43=5|423001|49000|500
+F5|loyalFresh43=5|423001|49500|500
