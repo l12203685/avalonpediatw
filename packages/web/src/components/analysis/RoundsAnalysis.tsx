@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatTable, Takeaway, Term, VerdictText, formatRate, type StatColumn } from './ui';
+import { MoreDetails, StatTable, Takeaway, Term, VerdictText, formatRate, type StatColumn } from './ui';
+import { ArrowRight } from 'lucide-react';
 import { outcomeChiSquare, redFinalRate } from './outcomeTest';
 import type { RoundsAnalysisData } from '../../services/api';
 import { useRoundsData } from './teams/useTeamsData';
@@ -167,7 +168,7 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
   );
 }
 
-function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
+function ProgressionSection({ data, lowSample, onOpenStateTree }: { data: RoundsAnalysisData; lowSample?: number; onOpenStateTree: () => void }): JSX.Element {
   const wide = useMediaQuery(WIDE_BOARD_QUERY);
   const { t } = useTranslation('common');
 
@@ -240,46 +241,61 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
           </p>
         </Takeaway>
       ) : null}
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="min-w-0 space-y-3">
-          <StatTable
-            caption={t(`${PG}.roundCaption`)}
-            columns={roundColumns}
-            rows={roundRows}
-            rowKey={row => row.key}
-          />
-          <OutcomeBlocksTable
-            caption={t(`${PG}.branchCaption`)}
-            groupLabel={t(`${PG}.branchGroup`)}
-            rows={branchRows}
-            lowSample={lowSample}
-          />
-        </div>
+      <div className="grid items-start gap-3 lg:grid-cols-2">
+        <StatTable
+          caption={t(`${PG}.roundCaption`)}
+          columns={roundColumns}
+          rows={roundRows}
+          rowKey={row => row.key}
+        />
         <OutcomeBlocksTable
-          caption={t(`${PG}.pathCaption`)}
-          groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
-          rows={pathRows}
-          renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
+          caption={t(`${PG}.branchCaption`)}
+          groupLabel={t(`${PG}.branchGroup`)}
+          rows={branchRows}
           lowSample={lowSample}
-          // 約與左欄 (各任務成功率 + 任務 1 之後) 同高，1280×800 一屏放得下；手機矮一點，390×844 也一屏；
-          // 其餘路徑在表格自己的容器裡捲
-          maxHeight={wide ? 300 : 250}
-          footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
         />
       </div>
+      {/* #21: the state tree is the primary view of complete quest paths.
+          Preserve every original /rounds row in an optional drill-down. */}
+      <button
+        type="button"
+        onClick={onOpenStateTree}
+        data-testid="analytics-open-state-tree"
+        className="inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-800/70 bg-blue-950/30 px-3 py-2 text-left text-sm font-semibold text-blue-200 hover:border-blue-500 hover:text-white"
+      >
+        <span className="min-w-0 break-words">
+          {t(`${PG}.pathCaption`)} · {t('analytics.analysis.tabs.stateTree')}
+        </span>
+        <ArrowRight size={15} className="shrink-0" aria-hidden />
+      </button>
+      <MoreDetails items={[{
+        id: 'mission-paths',
+        title: t(`${PG}.pathCaption`),
+        render: () => (
+          <OutcomeBlocksTable
+            caption={t(`${PG}.pathCaption`)}
+            groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
+            rows={pathRows}
+            renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
+            lowSample={lowSample}
+            maxHeight={wide ? 300 : 250}
+            footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
+          />
+        ),
+      }]} />
       <OutcomeBlocksNote pending={lacksOutcomes(branchRows, pathRows)} />
     </div>
   );
 }
 
-export default function RoundsAnalysis({ section, lowSample }: { section: RoundsSection; lowSample?: number }): JSX.Element {
+export default function RoundsAnalysis({ section, lowSample, onOpenStateTree }: { section: RoundsSection; lowSample?: number; onOpenStateTree: () => void }): JSX.Element {
   const { data, loading, error, notGenerated } = useRoundsData();
   return (
     <TeamsLoadState loading={loading} error={error} notGenerated={notGenerated} empty={!data}>
       {() => (data
         ? section === 'firstVote'
           ? <FirstVoteSection data={data} lowSample={lowSample} />
-          : <ProgressionSection data={data} lowSample={lowSample} />
+          : <ProgressionSection data={data} lowSample={lowSample} onOpenStateTree={onOpenStateTree} />
         : null)}
     </TeamsLoadState>
   );
