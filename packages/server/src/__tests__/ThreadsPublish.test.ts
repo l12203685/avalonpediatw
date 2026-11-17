@@ -32,6 +32,7 @@ import {
   writeState,
   type DailyPlan,
 } from '../bots/threads/publish/daily';
+import { SEE_IMAGE_LINE } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
 
@@ -523,6 +524,40 @@ describe('prepare + post', () => {
     expect(whole.liveBlock).toBeNull();
   });
 
+  it('a post whose record is shortened to 「完整局面看圖」 is not published live without its image', async () => {
+    // 找一天：貼文的牌譜縮到要看圖
+    const g0 = gen(tmp());
+    let date: string | null = null;
+    for (let i = 1; i < 200 && !date; i++) {
+      const d = addDays('2026-11-17', i);
+      if (g0.draftFor(d)?.post.text.includes(SEE_IMAGE_LINE)) date = d;
+    }
+    expect(date).not.toBeNull();
+    const d = date as string;
+    const make = (renderImage?: () => Buffer | null) => {
+      const stateDir = tmp();
+      return { stateDir, plan: prepareDaily(d, { gen: gen(stateDir), stateDir, commentsDir: tmp(), outDir: tmp(), names, ...(renderImage ? { renderImage } : {}) }) as DailyPlan };
+    };
+    for (const { plan, stateDir } of [
+      make(), // 沒有圖
+      make(() => null), // 畫不出來
+      make(() => {
+        throw new Error('font missing');
+      }),
+    ]) {
+      expect(plan.liveBlock).toContain('完整局面看圖');
+      expect(plan.warnings.join()).toContain('正式發佈這天不發');
+      const { api, calls } = fakeApi();
+      await expect(postDaily(plan, { api, stateDir })).rejects.toThrow('這天不自動發');
+      expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    }
+    // 有圖但沒有公開網址：也不發；有網址才發
+    const ok = make(() => Buffer.from('png'));
+    expect(ok.plan.liveBlock).toBeNull();
+    await expect(postDaily(ok.plan, { api: fakeApi().api, stateDir: ok.stateDir })).rejects.toThrow('沒有公開網址');
+    expect((await postDaily(ok.plan, { api: fakeApi().api, stateDir: ok.stateDir, imageUrl: 'https://x/a.png' })).status).toBe('published');
+  }, 60_000);
+
   it('posts without a quote when yesterday cannot be found, and refuses content that failed validation', async () => {
     const { plan, stateDir } = prepared('2026-11-18', false);
     const { api, calls } = fakeApi();
@@ -589,6 +624,14 @@ describe('workflow', () => {
     expect(after.indexOf('fi\n')).toBeLessThan(after.indexOf('echo "THREADS_ACCESS_TOKEN='));
     const post = all.find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
     expect(post?.body).toContain('THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}');
+  });
+
+  it('the final state step always pushes local commits (a checkpoint may have committed without pushing)', () => {
+    const last = steps().find((s) => s.name === '記下發文狀態');
+    expect(last?.body).toContain('commit -q -m "threads: $DATE（$MODE）" || echo');
+    expect(last?.body).not.toMatch(/commit[^\n]*\|\| \{[^}]*exit 0/); // 沒有新 commit 也不提早結束
+    expect(last?.body).toContain('push -q origin HEAD:threads-state');
+    expect(last?.body).toMatch(/fetch -q origin threads-state && git -C "\$STATE_DIR" merge -q --no-edit FETCH_HEAD/);
   });
 
   it('the live post step pushes the state right after each side effect (--checkpoint-push)', () => {

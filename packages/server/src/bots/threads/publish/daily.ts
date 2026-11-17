@@ -18,7 +18,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { ThreadsDraft } from '../draft';
-import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
+import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday } from '../plan';
 import type { ThreadsApi, RecentPost } from './threadsApi';
@@ -246,7 +246,9 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
   if (!draft) return null;
   warnings.push(...deps.gen.warnings);
 
-  const liveBlock = image && deps.imageIncomplete ? deps.imageIncomplete(date) : null;
+  let liveBlock = image && deps.imageIncomplete ? deps.imageIncomplete(date) : null;
+  // 貼文的牌譜縮成「完整局面看圖」卻沒有圖：只發文字會是不完整的題目。
+  if (!liveBlock && !image && draft.post.text.includes(SEE_IMAGE_LINE)) liveBlock = '貼文的牌譜寫「完整局面看圖」，但圖沒有產生';
   if (liveBlock) warnings.push(`${liveBlock}（試跑照常；正式發佈這天不發）`);
 
   const chatgpt = readComment(deps.commentsDir, date);
@@ -433,6 +435,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
 
   // 發新的 A 之前：題目不完整（例如少了續圖）就不發（fail closed）。補留言、補記不受影響。
   if (plan.liveBlock) throw new Error(`這天不自動發：${plan.liveBlock}`);
+  if (plan.text.includes(SEE_IMAGE_LINE) && !(plan.image && deps.imageUrl)) throw new Error('這天不自動發：貼文的牌譜寫「完整局面看圖」，但圖沒有公開網址');
   if (plan.image && !deps.imageUrl) notes.push('有圖但沒有公開網址：只發文字');
   const postId = await deps.api.publishPost({
     text: plan.text,
