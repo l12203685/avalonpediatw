@@ -1,9 +1,11 @@
 /**
  * 網站「牌譜紀錄」頁籤的純函式（Edward 2026-10-30：「百科網站可以直接多一個頁籤是『牌譜紀錄與覆盤』」）。
  *
- * 資料：GET /api/analysis/records = packages/server/records_cache.json（discord_records_export.py 每天從 Discord 論壇
- * #牌譜紀錄與覆盤 產生）。每篇貼文 = 一局：標題、標籤、發文時間，以及解析後的牌譜（或讀不懂的原因）。
- * 只有牌譜本身；討論串的回覆不在網站上，「到 DC 討論」連到那篇貼文。
+ * 資料：GET /api/analysis/records = packages/server/records_cache.json（discord_records_export.py 每天產生）。
+ * 所有來源的牌譜合成一個資料庫（Edward 2026-11-16）：Discord 論壇 #牌譜紀錄與覆盤 的貼文（id = 貼文 id）、
+ * Google 試算表「牌譜」分頁（id = S＋流水號）、「模擬瓦」分頁（id = M＋流水號）；同一局只列一次（DC 貼文優先，
+ * src 標出來源）。每筆 = 一局：標題、標籤、發文時間，以及解析後的牌譜（或讀不懂的原因）。
+ * 只有牌譜本身；討論串的回覆不在網站上，「到 DC 討論」連到那篇貼文（只有 DC 的局有）。
  *
  * 牌譜慣例（同 DC）：座位 1–9 與 0（0 家）；提議一行一隊，後面的投票異常標記「57-」= 隊內 5、7 投反對（內黑），
  * 「6+」= 隊外 6 投贊成（外白），沒標的人照常（隊內贊成、隊外反對）；第 5 次提議是尾家強制局，沒有投票。
@@ -36,7 +38,7 @@ export interface RecordProposal {
 
 export interface RecordRound {
   proposals: RecordProposal[];
-  /** 任務結果 o／x（小寫）。 */
+  /** 任務結果 o／x（小寫）；模擬局最後一輪還沒出任務時是 ''。 */
   mission: string;
 }
 
@@ -57,8 +59,9 @@ export interface RecordGame {
   lakes: RecordLake[];
   /** 刺殺目標座位；三紅或沒寫時 ''。 */
   assassination: string;
-  outcome: RecordOutcome;
-  category: '' | '線瓦' | '面瓦';
+  /** 模擬局沒打完時是 ''。 */
+  outcome: RecordOutcome | '';
+  category: '' | '線瓦' | '面瓦' | '娛樂' | '其他';
 }
 
 /**
@@ -78,14 +81,20 @@ export interface RecordLineup {
 /** 可從紀錄直接證明的失誤：[標籤, 第幾輪（嚴重失誤這個總標籤是 0）, 相關座位]。 */
 export type RecordMistake = [tag: string, round: number, seats: string];
 
+/** 來源：沒有 = 只在 DC；'dc+sheet' = DC 貼文、試算表也有同一局；'sheet' = 只在試算表（id 是 S… 或 M…）。 */
+export type RecordSource = 'dc+sheet' | 'sheet';
+
 export interface RecordPost {
-  /** Discord 討論串 id（= 起始訊息 id）。 */
+  /** Discord 討論串 id（= 起始訊息 id）；只在試算表的局是 S＋流水號（牌譜分頁）或 M＋流水號（模擬瓦分頁）。 */
   id: string;
+  src?: RecordSource;
+  /** 模擬局（DC 標「模擬」的貼文、試算表模擬瓦分頁）。 */
+  sim?: true;
   title: string;
   tags: string[];
-  /** 發文時間（台北，ISO 8601）。 */
+  /** 發文時間（台北，ISO 8601）；只在試算表的局是 ''。 */
   created: string;
-  /** 牌譜日期 YYYY-MM-DD（標題的 MMDD，沒有就發文日）。 */
+  /** 牌譜日期 YYYY-MM-DD（標題的 MMDD，沒有就發文日）；試算表沒寫日期的局是 ''。 */
   date: string;
   game: RecordGame | null;
   /** 讀不懂時的原因（固定的說明文字）與行號。 */
@@ -133,7 +142,7 @@ const TAG_OUTCOME: Readonly<Record<string, RecordOutcome>> = { 三紅: '三紅',
 
 /** 一篇的結果：讀得懂用牌譜的結果，否則看結果標籤（剛好一個才算）。 */
 export function outcomeOf(post: RecordPost): RecordOutcome | null {
-  if (post.game) return post.game.outcome;
+  if (post.game) return post.game.outcome || null;
   const tagged = post.tags.map((t) => TAG_OUTCOME[t]).filter(Boolean);
   return tagged.length === 1 ? tagged[0] : null;
 }
@@ -208,7 +217,7 @@ export function recordsText(game: RecordGame): string {
   const lines: string[] = [];
   game.rounds.forEach((round, i) => {
     round.proposals.forEach((p, a) => lines.push(proposalLine(p, a)));
-    lines.push(round.mission);
+    if (round.mission) lines.push(round.mission);
     const lake = lakes.get(i + 1);
     if (lake) lines.push(lakeLine(lake));
   });
@@ -221,6 +230,22 @@ export function recordsText(game: RecordGame): string {
 /** 「到 DC 討論」的連結：那篇論壇貼文。 */
 export function discordThreadUrl(id: string, guildId: string = DISCORD_GUILD_ID): string {
   return `https://discord.com/channels/${guildId}/${id}`;
+}
+
+/** 這局有沒有 DC 貼文（只在試算表的局沒有討論串、回覆）。 */
+export function isDiscordPost(post: Pick<RecordPost, 'id'>): boolean {
+  return /^[0-9]{15,22}$/.test(post.id);
+}
+
+/** 來源標籤（清單與單局頁）：DC／試算表／DC＋試算表。 */
+export function sourceLabel(post: Pick<RecordPost, 'id' | 'src'>): string {
+  if (post.src === 'sheet' || !isDiscordPost(post)) return '試算表';
+  return post.src === 'dc+sheet' ? 'DC＋試算表' : 'DC';
+}
+
+/** 實戰／模擬。 */
+export function kindLabel(post: Pick<RecordPost, 'sim'>): '實戰' | '模擬' {
+  return post.sim ? '模擬' : '實戰';
 }
 
 /** 失誤標籤（順序與名稱同 generate_cache.MISTAKE_TAGS）與說明。 */
@@ -273,7 +298,11 @@ export function postRoleStrength(post: RecordPost): RoleStrength | null {
 
 export type RecordResultFilter = 'all' | RecordOutcome | 'unreadable';
 
+/** 實戰／模擬（預設只看實戰，模擬一鍵切換）。 */
+export type RecordKindFilter = 'real' | 'sim' | 'all';
+
 export interface RecordFilter {
+  kind: RecordKindFilter;
   result: RecordResultFilter;
   /** YYYY-MM-DD；空字串 = 不限。 */
   from: string;
@@ -289,10 +318,10 @@ export interface RecordFilter {
 }
 
 export const EMPTY_RECORDS_FILTER: RecordFilter = {
-  result: 'all', from: '', to: '', query: '', lineup: DEFAULT_LINEUP_FILTER, mistakes: [],
+  kind: 'real', result: 'all', from: '', to: '', query: '', lineup: DEFAULT_LINEUP_FILTER, mistakes: [],
 };
 
-/** 篩選有沒有在作用（清除篩選按鈕、「符合幾局」）。 */
+/** 篩選有沒有在作用（清除篩選按鈕、「符合幾局」）；實戰／模擬是分頁切換，不算。 */
 export function recordsFilterActive(filter: RecordFilter): boolean {
   return filter.result !== 'all' || Boolean(filter.from || filter.to || filter.query.trim())
     || lineupFilterActive(filter.lineup) || filter.mistakes.length > 0 || Boolean(filter.branch);
@@ -302,6 +331,7 @@ export function recordsFilterActive(filter: RecordFilter): boolean {
 export const RECORDS_FILTER_KEY = 'avalon.records.filter';
 
 const RESULT_FILTERS: readonly RecordResultFilter[] = ['all', '三紅', '三藍死', '三藍活', 'unreadable'];
+const KIND_FILTERS: readonly RecordKindFilter[] = ['real', 'sim', 'all'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** 儲存的文字 → 篩選（讀不到、格式不對的欄位用預設值）。 */
@@ -317,6 +347,7 @@ export function parseRecordsFilter(text: string | null): RecordFilter {
   const branch = sanitizeBranch(raw.branch);
   return {
     ...(branch ? { branch } : {}),
+    kind: KIND_FILTERS.includes(raw.kind as RecordKindFilter) ? (raw.kind as RecordKindFilter) : 'real',
     result: RESULT_FILTERS.includes(raw.result as RecordResultFilter) ? (raw.result as RecordResultFilter) : 'all',
     from: typeof raw.from === 'string' && DATE_RE.test(raw.from) ? raw.from : '',
     to: typeof raw.to === 'string' && DATE_RE.test(raw.to) ? raw.to : '',
@@ -328,6 +359,8 @@ export function parseRecordsFilter(text: string | null): RecordFilter {
 
 /** 這篇有沒有通過篩選。暱稱比對用 playerNameKey（同戰績的認人規則），也比對標題。 */
 export function matchesRecords(post: RecordPost, filter: RecordFilter): boolean {
+  if (filter.kind === 'real' && post.sim) return false;
+  if (filter.kind === 'sim' && !post.sim) return false;
   if (lineupFilterActive(filter.lineup) && !matchesLineup(postLineup(post), lineupCondition(filter.lineup), postSeats(post))) {
     return false;
   }
@@ -363,12 +396,12 @@ export function recordsHash(id?: string): string {
   return id ? `#records=${id}` : '#records';
 }
 
-/** #records → { id: null }；#records=<id> → { id }；其他 hash → null。 */
+/** #records → { id: null }；#records=<id> → { id }（DC 貼文 id、S／M＋流水號）；其他 hash → null。 */
 export function parseRecordsHash(hash: string | null | undefined): { id: string | null } | null {
   const raw = (hash ?? '').replace(/^#/, '').trim();
   if (/^(?:records|paipu)$/i.test(raw)) return { id: null };
-  const m = /^(?:records|paipu)[=/]([0-9]{15,22})$/i.exec(raw);
-  return m ? { id: m[1] } : null;
+  const m = /^(?:records|paipu)[=/]([0-9]{15,22}|[SM][0-9]{1,6})$/i.exec(raw);
+  return m ? { id: /^[sm]/.test(m[1]) ? m[1].toUpperCase() : m[1] } : null;
 }
 
 /** 改名前的舊連結（#paipu、#paipu=<id>，2026-10-31 以前分享的）：App 換成新的 #records…。 */
@@ -412,6 +445,10 @@ export function seatLabel(game: RecordGame, seat: string, prefs: RecordDisplayPr
 
 /** 結果的說明句；關掉角色時不寫刺殺對象的角色、也不寫刺中梅林與否（結果標籤本身就說了）。 */
 export function resultSentence(game: RecordGame, prefs: RecordDisplayPrefs): string {
+  if (game.outcome === '') {
+    const done = game.rounds.filter((r) => r.mission).length;
+    return `模擬：${done ? `打完 ${done} 輪任務` : '還沒出任務'}，還沒分出勝負`;
+  }
   if (game.outcome === '三紅') return '紅方拿下三次任務';
   if (!game.assassination) {
     if (!prefs.roles) return '藍方拿下三次任務';

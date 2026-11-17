@@ -47,13 +47,13 @@ export function postFingerprint(game: RecordPostGame): string {
 }
 
 /**
- * 這一篇是模擬的局（不是真人實戰）：分類、標籤或 `simulated` 旗標寫了模擬（整併後的牌譜紀錄會標，2026-11-16）。
+ * 這一篇是模擬的局（不是真人實戰）：分類、標籤寫了模擬，或有 `sim`／`simulated` 旗標（整併後的牌譜紀錄寫 `sim: true`，2026-11-16）。
  * 模擬的局不當題目、也不拿來連結（Edward：「模擬畢竟只是模擬」）。
  */
-export function isSimulatedPost(p: { game?: unknown; tags?: unknown; simulated?: unknown; category?: unknown }): boolean {
-  if (p.simulated === true) return true;
-  const game = (p.game ?? {}) as { category?: unknown; simulated?: unknown };
-  if (game.simulated === true) return true;
+export function isSimulatedPost(p: { game?: unknown; tags?: unknown; sim?: unknown; simulated?: unknown; category?: unknown }): boolean {
+  if (p.sim === true || p.simulated === true) return true;
+  const game = (p.game ?? {}) as { category?: unknown; sim?: unknown; simulated?: unknown };
+  if (game.sim === true || game.simulated === true) return true;
   const words = [p.category, game.category, ...(Array.isArray(p.tags) ? p.tags : [])].map((x) => String(x ?? ''));
   return words.some((w) => w.includes('模擬'));
 }
