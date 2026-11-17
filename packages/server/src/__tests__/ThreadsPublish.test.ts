@@ -30,6 +30,8 @@ import {
   readState,
   recordManual,
   taipeiDateOf,
+  titleOf,
+  findByExercise,
   savedFromState,
   postedFromState,
   validatePost,
@@ -38,7 +40,7 @@ import {
 } from '../bots/threads/publish/daily';
 import { extraRenderers } from '../bots/threads/publish/extraImages';
 import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, renderPuzzlePng, sheetRows } from '../bots/threads/image';
-import { SEE_IMAGE_LINE } from '../bots/threads/draft';
+import { SEE_IMAGE_LINE, THREADS_TOPIC_TAG } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
 import { InstagramApi } from '../bots/threads/publish/instagramApi';
@@ -216,15 +218,17 @@ describe('picks', () => {
 });
 
 describe('validation', () => {
-  const ok = '題目\n題號 AAAAA-1-5｜實戰牌譜\n#阿瓦隆';
+  const ok = '題目\n輪到你 5家 忠臣 派 3 人，你會派誰？\n\n#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣';
+  const TAG = '#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣';
   it('passes a well-formed post and comment', () => {
     expect(validatePost({ text: ok, comment: '觀念\nhttps://avalon-game-platform.web.app/w/wiki-176/', names: [] })).toEqual([]);
   });
   it('catches length, tag position, 10家 and player names (without printing the name)', () => {
-    expect(validatePost({ text: `${'字'.repeat(501)}\n#阿瓦隆`, comment: 'x' })[0]).toContain('超過');
-    expect(validatePost({ text: '#阿瓦隆\n題目', comment: 'x' }).some((e) => e.includes('最後一行'))).toBe(true);
-    expect(validatePost({ text: '題目\n#阿瓦隆\n#阿瓦隆', comment: 'x' }).some((e) => e.includes('剛好一行'))).toBe(true);
-    expect(validatePost({ text: '10家 派\n#阿瓦隆', comment: 'x' }).some((e) => e.includes('0 家'))).toBe(true);
+    expect(validatePost({ text: `${'字'.repeat(501)}\n${TAG}`, comment: 'x' })[0]).toContain('超過');
+    expect(validatePost({ text: `${TAG}\n題目`, comment: 'x' }).some((e) => e.includes('最後一行'))).toBe(true);
+    expect(validatePost({ text: `題目\n${TAG}\n${TAG}`, comment: 'x' }).some((e) => e.includes('剛好一行'))).toBe(true);
+    expect(validatePost({ text: '題目\n#阿瓦隆', comment: 'x' }).some((e) => e.includes('最後一行'))).toBe(true); // 舊的單一標籤不算
+    expect(validatePost({ text: `10家 派\n${TAG}`, comment: 'x' }).some((e) => e.includes('0 家'))).toBe(true);
     const errs = validatePost({ text: ok, comment: '今天測試者小明很強', names: ['測試者小明', 'ED'] });
     expect(errs).toEqual(['第一則留言含疑似玩家名字（不列出名字）']);
     expect(validatePost({ text: ok, comment: 'RED team', names: ['ED'] })).toEqual([]);
@@ -315,6 +319,29 @@ describe('prepare + post', () => {
     expect(st?.commentId).toBe(res.commentId);
     expect(st?.permalink).toContain(res.postId);
     expect(readState(stateDir, '2026-11-17')?.postId).toBe('y17'); // 昨天補記
+  });
+
+  it('posts no longer carry 題號 (站長 11/17): today’s and yesterday’s posts are recognised by title + Taipei date', async () => {
+    const { plan, stateDir } = prepared();
+    expect(plan.text).not.toContain('題號');
+    const title = titleOf(plan.text);
+    expect(title).toBe('【阿瓦隆每日一題｜週三・1-5 尾派】');
+    expect(plan.quote?.title).toMatch(/^【阿瓦隆每日一題｜週二・/);
+    // 昨天那篇（只有標題、沒有題號）：拿來引用；同一個標題但不是那一天的不算
+    const y = { id: 'y17', text: `${plan.quote?.title}\n…\n\n${THREADS_TOPIC_TAG}`, timestamp: ON_17 };
+    expect(findByExercise([y], '36AKW-2-5', '2026-11-17', plan.quote?.title)?.id).toBe('y17');
+    expect(findByExercise([y], '36AKW-2-5', '2026-11-16', plan.quote?.title)).toBeNull();
+    expect(findByExercise([y], '36AKW-2-5', '2026-11-17', title)).toBeNull(); // 今天的標題不是昨天那篇
+    const { api } = fakeApi({ recent: [y] });
+    const res = await postDaily(plan, { api, stateDir, imageUrl: 'https://raw.githubusercontent.com/o/r/sha/images/2026-11-18.png' });
+    expect(res.quotePostId).toBe('y17');
+    // 今天那篇已經發了（標題＋日期）：補記、不再發
+    const s2 = tmp();
+    const p2 = prepareDaily('2026-11-18', { gen: gen(s2), stateDir: s2, commentsDir: tmp(), outDir: tmp(), names, renderImage: () => Buffer.from('png') }) as DailyPlan;
+    const again = fakeApi({ recent: [{ id: 'dup', text: p2.text, timestamp: ON_18 }] });
+    const r2 = await postDaily(p2, { api: again.api, stateDir: s2 });
+    expect(r2.status).toBe('found-existing');
+    expect(again.calls.some((c) => c.method === 'POST' && c.path.endsWith('/42/threads') && !c.params.get('reply_to_id'))).toBe(false); // A 沒有再發
   });
 
   it('never posts twice: a recorded id skips; a recent post with today’s 題號 is recorded instead of reposting', async () => {
@@ -901,8 +928,9 @@ describe('instagram', () => {
     const c = igCaption(plan);
     expect(c.startsWith(plan.text.split('\n')[0])).toBe(true);
     expect(c).toContain(plan.comment);
-    expect(c.split('\n').filter((l) => l === '#阿瓦隆')).toHaveLength(1);
-    expect(c.endsWith('#阿瓦隆')).toBe(true);
+    expect(c.split('\n').filter((l) => l === THREADS_TOPIC_TAG)).toHaveLength(1);
+    expect(c.endsWith(THREADS_TOPIC_TAG)).toBe(true);
+    expect(c).not.toContain('題號');
     expect(c).toContain('#records=');
   });
 

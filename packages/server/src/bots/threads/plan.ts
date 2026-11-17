@@ -123,7 +123,7 @@ export function weekIndexOf(date: string): number {
  * 腳本用 repo 變數／環境變數 THREADS_LIVE_FROM（正式發的第一天）蓋過這個值；
  * 自動發佈另外只在昨天真的有貼文（threads-state 有記錄）時才引用昨天、附昨天的答案（generate.ts 的 hasPost）。
  */
-export const THREADS_START_DATE = '2026-11-18';
+export const THREADS_START_DATE = '2026-11-17';
 
 /** 今天的台北日期。 */
 export function taipeiToday(now: number = Date.now()): string {

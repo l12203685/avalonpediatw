@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, cardTop, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -122,8 +122,10 @@ describe('draft texts', () => {
       expect([...d.post.text].length).toBe(d.post.chars);
       expect(d.post.text.split('\n').at(-1)).toBe(THREADS_TOPIC_TAG);
       expect(d.post.text).not.toMatch(/10\s*[家號]/);
-      expect(d.post.text).toContain(d.exerciseId);
+      expect(d.post.text).not.toContain(`題號 ${d.exerciseId}`); // 站長 11/17：貼文不寫題號（在圖上）
       expect(d.post.text).toContain(d.theme);
+      expect(d.post.text.split('\n').at(-2)).toBe(''); // 標籤前空一行
+      expect(d.post.text).not.toMatch(/^第 \d+ 局：$/m); // 每一局寫「[第 N 局]」
       // 沒有另外串在昨天底下的答案；答案在 A 裡。
       expect(d).not.toHaveProperty('replyToYesterday');
       if (i === 0) {
@@ -156,11 +158,11 @@ describe('draft texts', () => {
     expect(first.quoteYesterday).toBeFalsy();
     const next = gen.draftFor('2026-11-19') as ThreadsDraft;
     expect(next.answerToYesterday?.exerciseId).toBe(first.exerciseId);
-    expect(next.post.text).toContain(`── 昨天 ${first.exerciseId} 的答案 ──`);
+    expect(next.post.text).toContain(`[昨天 ${first.exerciseId} 的答案]`);
     // 昨天沒有真的貼文（hasPost）：今天也是獨立的一篇
     const noPost = new ThreadsGenerator({ bank, titles, readSaved: () => null, startDate: '2026-11-18', hasPost: () => false });
     expect(noPost.draftFor('2026-11-20')?.answerToYesterday).toBeFalsy();
-    expect(THREADS_START_DATE).not.toBe('2026-11-17');
+    expect(THREADS_START_DATE).toBe('2026-11-17'); // 站長 11/17：「我想從11/17開始」
   });
 
   it('a continued answer reveals nothing; the next day reveals both answers', () => {
@@ -211,10 +213,10 @@ describe('draft texts', () => {
     });
     expect(long).toBeDefined();
     const pv = pickView(gameOf(long as ThreadsPick), long as ThreadsPick);
-    const answers = [['── 昨天 X 的答案 ──', '長答案'.repeat(10)], ['── 昨天 X 的答案 ──', '短']];
+    const answers = [['[昨天 X 的答案]', '長答案'.repeat(10)], ['[昨天 X 的答案]', '短']];
     const text = postText(pv, { weekday: 0, answers });
     expect([...text].length).toBeLessThanOrEqual(THREADS_MAX_CHARS);
-    expect(text).toMatch(/第 1 局 任務/);
+    expect(text).toMatch(/\[第 1 局\] 任務/);
     expect(text).toContain('長答案');
   });
 
@@ -275,8 +277,10 @@ describe('image', () => {
     const pv = pickView(gameOf(wed), wed);
     const svg = buildPuzzleSvg(pv, 3);
     expect(svg.startsWith('<svg')).toBe(true);
-    expect(svg).toContain(pv.exerciseId);
-    expect(svg).toContain('週三・1-5 尾派');
+    // 站長 11/17：一行標題「阿瓦隆百科 ‧ 每日一題: 1-5 第一局尾派 [SV1Q8]」，左上角小標誌
+    expect(svg).toContain(`阿瓦隆百科 ‧ 每日一題: 1-5 第一局尾派 [${pv.pick.gameId}]`);
+    expect(svg).toContain('class="header-logo"');
+    expect(svg).not.toContain('週三・1-5 尾派');
     const png = renderPuzzlePng(pickView(gameOf(mon), mon), 1);
     expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
   });
@@ -405,7 +409,7 @@ describe('image', () => {
     // 任務格在右邊（「你的視角」那一欄，x ≥ 600），不在圓桌裡
     const chip = /<text x="([\d.]+)" y="[\d.]+"[^>]*>(?:<tspan[^>]*>)?任務1/.exec(svg);
     expect(chip).not.toBeNull();
-    expect(Number(chip![1])).toBeGreaterThan(600);
+    expect(Number(chip![1])).toBeGreaterThan(480);
     const one = missionChips(sheetRows(pv), 0, 0, 500);
     const two = missionChips(sheetRows(pv), 0, 0, 200);
     expect(two.height).toBeGreaterThan(one.height); // 寬度不夠就換行
@@ -654,7 +658,7 @@ describe('image', () => {
     const others = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== red!.pick.seat);
     const asRed = { ...red!, view: { ...red!.view, sight: { kind: 'evil', mates: others.slice(0, 2) } } } as typeof red;
     const card = buildPuzzleSvg(asRed!, 3);
-    expect(card).toContain(`r="30" fill="none" stroke="${loyal?.color}"`);
+    expect(card).toContain(`r="27" fill="none" stroke="${loyal?.color}"`);
     expect((card.match(/class="seat-side seat-evil"/g) ?? []).length).toBe(2);
     const asPercival = { ...red!, view: { ...red!.view, sight: { kind: 'percival', thumbs: others.slice(0, 2) } } } as typeof red;
     const pcard = buildPuzzleSvg(asPercival!, 3);
@@ -722,12 +726,13 @@ describe('image', () => {
     const pv = pickView(gameOf(tue), tue);
     const svg = buildAnswerSvg(pv);
     for (const role of ['派西維爾', '梅林', '刺客', '莫甘娜']) expect(svg).toContain(role);
-    // 站長 11/17「刺娜德奧派梅」：紅方在上、藍方在下
-    expect(svg.indexOf('紅方')).toBeLessThan(svg.indexOf('藍方'));
-    expect(svg.indexOf('刺客')).toBeLessThan(svg.indexOf('莫甘娜'));
-    expect(svg.indexOf('莫甘娜')).toBeLessThan(svg.indexOf('派西維爾'));
+    // 站長 11/17「刺娜德奧派梅」：紅方在上、藍方在下（標題列之後）
+    const body = svg.slice(svg.indexOf('紅方'));
+    expect(body.indexOf('紅方')).toBeLessThan(body.indexOf('藍方'));
+    expect(body.indexOf('刺客')).toBeLessThan(body.indexOf('莫甘娜'));
+    expect(body.indexOf('莫甘娜')).toBeLessThan(body.indexOf('派西維爾'));
     expect(svg).toContain('結果：');
-    expect(svg).toContain(pv.exerciseId);
+    expect(svg).toContain(`[${pv.pick.gameId}] · 答案`);
     expect(svg).not.toMatch(/10\s*家/);
     expect(renderAnswerPng(pv).subarray(1, 4).toString('ascii')).toBe('PNG');
   });
@@ -823,14 +828,43 @@ describe('image', () => {
     expect(textWidth('0 家 驗 0 家 → 宣告藍（你看到：好人）', 22)).toBeLessThanOrEqual(10 * 63);
   });
 
-  it('the post text keeps theme, record, question, yesterday’s answer, 題號 and the tag only', () => {
-    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+  it('the post text follows the owner’s 11/18 edit: [第 N 局] headers, one ask line with seat and role, no 題號, blank line + four tags', () => {
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, startDate: '2026-11-18' });
     const d = gen.draftFor('2026-11-18') as ThreadsDraft;
     const lines = d.post.text.split('\n');
-    expect(lines[0]).toContain('週三・1-5 尾派');
-    expect(lines.at(-2)).toBe(`題號 ${d.exerciseId}`);
-    expect(lines.at(-1)).toBe(THREADS_TOPIC_TAG);
+    expect(lines[0]).toBe('【阿瓦隆每日一題｜週三・1-5 尾派】');
+    expect(lines[1]).toMatch(/^你是 \d家・/);
+    expect(lines[2]).toBe('[第 1 局]');
+    expect(lines.at(-3)).toMatch(/^輪到你 \d家 \S+ 派 3 人，你會派誰？$/);
+    expect(lines.at(-2)).toBe('');
+    expect(lines.at(-1)).toBe('#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣');
+    expect(THREADS_TOPIC_TAG).toBe('#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣');
+    expect(d.post.text).not.toContain('題號');
+    expect(d.post.text).not.toContain('強制出發）');
     expect(d.post.text).not.toContain('留言寫');
+  });
+
+  it('the ask line is white, right under 「你是…」, without 第 X 局第 K 次 / 強制出發; the grid ends with a short 輪到你; header is one line with the game id', () => {
+    for (let w = 0; w < 2; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const card = buildPuzzleSvg(pv, 3);
+        const ask = /<text class="ask-line" x="([\d.]+)" y="([\d.]+)"[^>]*><tspan fill="([^"]+)"[^>]*>([^<]+)</.exec(card);
+        expect(ask).not.toBeNull();
+        expect(ask![3]).toBe('#f4f4f5'); // 白字
+        expect(ask![4]).toMatch(pick.proposal === null ? /^三藍：輪到你刺殺/ : /^輪到你派 \d 人$/);
+        const id = card.indexOf('你是 ');
+        expect(id).toBeGreaterThan(-1);
+        expect(card.indexOf('class="ask-line"')).toBeGreaterThan(id); // 在「你是…」後面（下面）
+        expect(Number(ask![2])).toBeLessThan(cardTop(pv)); // 在牌譜上面的右欄
+        expect(card).not.toMatch(/第 \d 局第 \d 次/);
+        expect(card).not.toContain('強制出發');
+        expect(card).toContain(`[${pv.pick.gameId}]`);
+        expect(card).not.toContain(pv.exerciseId); // 標題只寫局號
+        if (pick.proposal !== null) expect(card).toMatch(/>輪到你</);
+        for (const svg of buildGridSvgs(pv, 3)) expect(svg).toContain(`[${pv.pick.gameId}] · 牌譜`);
+      }
+    }
   });
 
   it('wraps long lines at a comma or bracket', () => {

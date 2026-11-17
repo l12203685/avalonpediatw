@@ -35,7 +35,6 @@ import { resultText } from '../simulation/replies';
 import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, type PublicEvent } from '../simulation/scenario';
 import { seatChar } from '../simulation/seats';
 import type { PickView } from './draft';
-import { labelFor } from './plan';
 
 const W = 1080;
 /** 深色卡片的配色（底色接近網站深色介面與 IG 截圖的黑）。 */
@@ -125,9 +124,9 @@ function assetSymbols(body: string): string {
 function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}): string {
   const uri = opts.watermark === false ? null : logoDataUri();
   // 浮水印：大尺寸、置中在標題列以下的區域、圓角裁切，放在所有內容後面（站長 11/17：「我是希望背景帶有我們的"阿瓦隆百科"logo」）。
-  const size = Math.min(W - 80, height - 150 - 80);
+  const size = Math.min(W - 80, height - HEADER_H - 80);
   const wx = (W - size) / 2;
-  const wy = 150 + (height - 150 - size) / 2;
+  const wy = HEADER_H + (height - HEADER_H - size) / 2;
   const watermark = uri && size > 200
     ? `<defs><clipPath id="wm"><rect x="${wx}" y="${wy}" width="${size}" height="${size}" rx="${size / 10}"/></clipPath></defs>` +
       `<image href="${uri}" x="${wx}" y="${wy}" width="${size}" height="${size}" opacity="${WATERMARK_OPACITY}" clip-path="url(#wm)" preserveAspectRatio="xMidYMid slice"/>`
@@ -138,18 +137,45 @@ function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}
   );
 }
 
-/** 標題列：阿瓦隆每日一題、副標、右邊的小標誌與題號。 */
-function headerBand(sub: string, id: string): string {
+/** 標題列的高度（一行）。 */
+export const HEADER_H = 84;
+const HEADER_FONT = 38;
+
+/**
+ * 標題列（站長 11/17：「title 可以寫 [左上角小 Logo 跟title 字體一樣大] 接 {阿瓦隆百科 ‧ 每日一題: 1-5 第一局尾派 [SV1Q8]} 這樣就好」）：
+ * 一行，左上角小標誌（高度＝字級），接「阿瓦隆百科 ‧ 每日一題: <題目> [<局號>]」；續圖、答案卡在後面加「 · 牌譜 2/2」「 · 答案」。
+ */
+export function headerTitle(label: string, gameId: string, suffix = ''): string {
+  return `阿瓦隆百科 ‧ 每日一題: ${label} [${gameId}]${suffix ? ` · ${suffix}` : ''}`;
+}
+
+function headerBand(title: string): string {
   const uri = logoDataUri();
+  const x0 = 40;
+  // 字級跟標誌一起縮：放不下時兩個一起變小
+  const size = fitSize(title, HEADER_FONT, W - 40 - x0 - (uri ? HEADER_FONT + 14 : 0), 26);
+  const top = (HEADER_H - size) / 2;
   const icon = uri
-    ? `<defs><clipPath id="hl"><rect x="${W - 40 - 102}" y="24" width="102" height="102" rx="18"/></clipPath></defs>` +
-      `<image href="${uri}" x="${W - 40 - 102}" y="24" width="102" height="102" clip-path="url(#hl)"/>`
+    ? `<defs><clipPath id="hl"><rect x="${x0}" y="${top}" width="${size}" height="${size}" rx="${size / 6}"/></clipPath></defs>` +
+      `<image href="${uri}" x="${x0}" y="${top}" width="${size}" height="${size}" clip-path="url(#hl)" class="header-logo"/>`
     : '';
-  const idX = uri ? W - 40 - 102 - 24 : W - 40;
-  return rect(0, 0, W, 150, C.header) + icon +
-    text(40, 64, '阿瓦隆每日一題', { size: 40, fill: C.headerInk, weight: true }) +
-    text(40, 118, sub, { size: 32, fill: C.headerSoft }) +
-    text(idX, 118, id, { size: 28, fill: C.headerSoft, anchor: 'end' });
+  const tx = uri ? x0 + size + 14 : x0;
+  return rect(0, 0, W, HEADER_H, C.header) + icon + text(tx, top + size * 0.86, title, { size, fill: C.headerInk, weight: true });
+}
+
+const ZH_NUM = ['', '一', '二', '三', '四', '五'];
+
+/**
+ * 圖上標題的題目（決定點＋一句話）：1-5 第一局尾派、3-4 派西維爾、5-1 第五局第一次、刺殺。
+ * 題號的局號部分另外放在 [ ] 裡。
+ */
+export function cardLabel(pv: PickView): string {
+  if (pv.pick.proposal === null) return '刺殺';
+  const { round: r, attempt: k } = pv.game.proposals[pv.pick.proposal];
+  const code = `${r}-${k}`;
+  if (pv.pick.kind === 'percival') return `${code} 派西維爾`;
+  if (k === 5) return `${code} 第${ZH_NUM[r]}局尾派`;
+  return `${code} 第${ZH_NUM[r]}局第${ZH_NUM[k]}次`;
 }
 
 /** 估一行字的寬度（中文字約一個字級寬，英數約 0.56）。 */
@@ -389,9 +415,10 @@ export function recordLines(rows: readonly SheetRow[]): Seg[][] {
  */
 /** 圓桌中間標誌的不透明度（站長 11/18 選 A：0.3）：看得出是阿瓦隆百科，但不搶座位標記。 */
 const TABLE_LOGO_OPACITY = 0.3;
-const SEAT_R = 30;
+/** 站長 11/17「圓桌好像可以再小一點點」：座位 30→27、圓 160→140（約小 12%），空出來的給右邊和牌譜。 */
+const SEAT_R = 27;
 /** 座位排成正圓（站長 11/18：「座位不要橢圓 直接圍繞 logo 就好 logo 太小的話可以放大」）。 */
-const RING_R = 160;
+const RING_R = 140;
 /** 座位上方與下方（標記字）留的空間。 */
 const TABLE_TOP_PAD = 28;
 const TABLE_BOTTOM_PAD = 36;
@@ -627,7 +654,7 @@ function roundTable(pv: PickView, cx: number, cy: number, known: readonly SheetR
       parts.push(`<use href="#seat-${m.side}" x="${x - SEAT_R}" y="${y - SEAT_R}" width="${2 * SEAT_R}" height="${2 * SEAT_R}" opacity="0.42" class="seat-side seat-${m.side}"/>`);
     }
     parts.push(seatRing(x, y, SEAT_R, m, 5));
-    parts.push(text(x, y + 10, seatChar(seat), { size: 28, anchor: 'middle', weight: true }));
+    parts.push(text(x, y + 9, seatChar(seat), { size: 26, anchor: 'middle', weight: true }));
     if (m) {
       // 標記字放在座位外側：上半圈在上面、下半圈在下面、左右兩邊在外側。
       const side = Math.abs(uy) < 0.45;
@@ -735,7 +762,8 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
   } else {
     parts.push(rect(GX0, y, W - 80, rh, C.blueFill, ` stroke="${C.blue}" stroke-width="2"`));
     parts.push(text(GX0 + LEAD_W / 2, mid, seatChar(r.leaderSeat), { size: fs, fill: C.blue, anchor: 'middle', weight: true }));
-    parts.push(text(seatX(1) + 12, mid, r.round !== null ? `第 ${r.round} 局第 ${r.attempt} 次：輪到你` : '三藍：輪到你刺殺', { size: fs, fill: C.ink, weight: true }));
+    // 站長 11/17：「圖裡面不要寫 (第3局第5次，強制出發)」→ 只留短短的「輪到你」
+    parts.push(text(seatX(1) + 12, mid, r.round !== null ? '輪到你' : '三藍：輪到你刺殺', { size: fs, fill: C.ink, weight: true }));
   }
   return parts.join('');
 }
@@ -743,10 +771,11 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
 // ─── 題目卡（小圓桌＋牌譜格子＋題目，同一張） ─────────────────────────────────
 
 /** 題目卡上方那一塊（標題列＋小圓桌與你的視角）的高度。 */
-const CARD_TOP_H = 150 + TABLE_BOX_H + 10;
+const CARD_TOP_H = HEADER_H + TABLE_BOX_H + 10;
 /** 題目卡下方（題目那一行＋說明＋網址）的高度。 */
 // 題目那一行（56）＋說明（36）＋網址（36）＋下緣（20）：跟 buildPuzzleSvg 底下實際用的一樣，不多留空
-const CARD_FOOT_H = 56 + 36 + 36 + 20;
+/** 題目卡底下：記號說明、網址（題目那一行移到右邊「你是…」下面了）。 */
+const CARD_FOOT_H = 30 + 21 + 36 + 20;
 
 export interface CardLayout {
   /** 題目卡上的格子列數（sheetRows 的前幾列）。 */
@@ -767,12 +796,12 @@ export function voteLegend(rows: readonly SheetRow[]): string {
 }
 
 /** 題目卡版面：一般局整份牌譜跟圓桌、題目放同一張 ≤ 1350；放不下先縮列高，最小列高還放不下就把後面的列移到第二張。 */
-export function cardLayout(rowCount: number): CardLayout {
-  const free = GRID_TARGET_H - CARD_TOP_H - GRID_HEAD_H - CARD_FOOT_H;
+export function cardLayout(rowCount: number, top = CARD_TOP_H): CardLayout {
+  const free = GRID_TARGET_H - top - GRID_HEAD_H - CARD_FOOT_H;
   const rh = Math.min(GRID_ROW_MAX, Math.floor(free / Math.max(1, rowCount)));
-  if (rh >= GRID_ROW_MIN) return { cardRows: rowCount, rowH: rh, overflow: false, height: CARD_TOP_H + GRID_HEAD_H + rh * rowCount + CARD_FOOT_H };
+  if (rh >= GRID_ROW_MIN) return { cardRows: rowCount, rowH: rh, overflow: false, height: top + GRID_HEAD_H + rh * rowCount + CARD_FOOT_H };
   const fit = Math.floor(free / GRID_ROW_MIN);
-  return { cardRows: fit, rowH: GRID_ROW_MIN, overflow: true, height: CARD_TOP_H + GRID_HEAD_H + GRID_ROW_MIN * fit + CARD_FOOT_H };
+  return { cardRows: fit, rowH: GRID_ROW_MIN, overflow: true, height: top + GRID_HEAD_H + GRID_ROW_MIN * fit + CARD_FOOT_H };
 }
 
 /** 牌譜放不下題目卡時，題目卡從第幾列開始畫（前面的列——最早的幾局——在續圖）；放得下回傳 null。 */
@@ -782,7 +811,7 @@ export function gridOverflowStart(pv: PickView): number | null {
 }
 
 /** 續圖一張最多幾列（列高用最小值，整張 ≤ GRID_TARGET_H）。 */
-const GRID_PAGE_FREE = GRID_TARGET_H - 150 - 20 - GRID_HEAD_H - 110;
+const GRID_PAGE_FREE = GRID_TARGET_H - HEADER_H - 20 - GRID_HEAD_H - 110;
 export const GRID_PAGE_ROWS = Math.floor(GRID_PAGE_FREE / GRID_ROW_MIN);
 
 /** 每一列是第幾局（輪到你那一列算出題那一局；刺殺題算最後一局之後）。 */
@@ -798,10 +827,11 @@ export function rowRound(r: SheetRow): number {
 export function cardSplit(pv: PickView): { cardStart: number; pages: { start: number; end: number }[] } {
   const rows = sheetRows(pv);
   const n = rows.length;
-  if (!cardLayout(n).overflow) return { cardStart: 0, pages: [] };
+  const top = cardTop(pv);
+  if (!cardLayout(n, top).overflow) return { cardStart: 0, pages: [] };
   const bounds = rows.map((r, i) => (i === 0 || rowRound(r) !== rowRound(rows[i - 1]) ? i : -1)).filter((i) => i >= 0);
-  let cardStart = bounds.find((i) => i > 0 && !cardLayout(n - i).overflow) ?? -1;
-  if (cardStart < 0) cardStart = n - cardLayout(n).cardRows; // 出題那一局本身就放不下：只好拆
+  let cardStart = bounds.find((i) => i > 0 && !cardLayout(n - i, top).overflow) ?? -1;
+  if (cardStart < 0) cardStart = n - cardLayout(n, top).cardRows; // 出題那一局本身就放不下：只好拆
   const pages: { start: number; end: number }[] = [];
   let start = 0;
   while (start < cardStart) {
@@ -857,29 +887,29 @@ export function cardSheetRows(pv: PickView): SheetRow[] {
   return sheetRows(pv).slice(cardSplit(pv).cardStart);
 }
 
-/** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、整份牌譜（精簡表格）、題目。 */
-export function buildPuzzleSvg(pv: PickView, weekday: number): string {
+/**
+ * 題目卡右上：你的視角、題目（白字）、五局任務格、湖。回傳 SVG 與最下面的 y（題目卡的牌譜從圓桌和這一欄都畫完的地方開始）。
+ */
+function rightColumn(pv: PickView, rows: readonly SheetRow[]): { svg: string; bottom: number } {
+  const parts: string[] = [];
   const role = pv.game.seatRoles[pv.pick.seat - 1];
-  const rows = sheetRows(pv);
-  // 站長 11/18：精縮版的派票紀錄表——整份牌譜、任務結果、湖一次放在題目卡；放不下才把最早的幾局移到續圖
-  const cardRows = cardSheetRows(pv);
-  const pagesN = gridPages(pv).length;
-  const layout = cardLayout(cardRows.length);
-  const parts: string[] = [headerBand(labelFor(weekday, pv.pick), pv.exerciseId)];
-
-  // 左：小圓桌；右：你的視角
-  const top = 150;
-  const cx = 40 + TABLE_BOX_W / 2;
-  const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
-  parts.push(roundTable(pv, cx, cy, rows));
+  const top = HEADER_H;
   const rx = 40 + TABLE_BOX_W + 24;
   const rmax = W - 40 - rx;
   // 你的視角：一行寫完（站長 11/18：「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」），太長才換行
-  let ty = top + 70;
-  for (const { line, size } of identityLines(identityText(pv.pick.seat, role, pv.view.sight), rmax)) {
+  let ty = top + 60;
+  const idLines = identityLines(identityText(pv.pick.seat, role, pv.view.sight), rmax);
+  for (const { line, size } of idLines) {
     parts.push(text(rx, ty, line, { size, weight: true }));
     ty += size + 14;
   }
+  // 題目：白色，放在「你是…」下面（站長 11/17：「"輪到你派 4 人"的字 顏色改白色 放到 "你是 5家 忠臣" 旁邊 或 下面」），
+  // 不寫第幾局第幾次、強制出發
+  const last = rows[rows.length - 1];
+  const prompt = last.kind === 'decision' && last.round !== null ? `輪到你派 ${last.size} 人` : '三藍：輪到你刺殺，誰是梅林？';
+  const pSize = fitSize(prompt, Math.min(32, idLines[0].size), rmax, 22);
+  parts.push(text(rx, ty, prompt, { size: pSize, weight: true, fill: C.ink }).replace('<text ', '<text class="ask-line" '));
+  ty += pSize + 18;
   // 任務格：你的視角下面（站長 11/18：從圓桌移到旁邊），寬度不夠就換行
   const chips = missionChips(rows, rx, ty - 10, rmax);
   parts.push(chips.svg);
@@ -895,11 +925,38 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     const label = lakeLine(rows).map((g) => g.t).join('');
     const avail = W - 40 - lx;
     const size = Math.max(18, Math.min(24, Math.floor((24 * avail) / Math.max(1, textWidth(label, 24)))));
-    parts.push(lakeBlock(entries, lx, ty, size).svg);
+    const lb = lakeBlock(entries, lx, ty, size);
+    parts.push(lb.svg);
+    ty += lb.height;
   }
 
+  return { svg: parts.join(''), bottom: ty };
+}
+
+/** 題目卡的牌譜從哪裡開始：圓桌那一塊和右邊那一欄比較低的那個下面。 */
+export function cardTop(pv: PickView): number {
+  return Math.max(CARD_TOP_H, Math.ceil(rightColumn(pv, sheetRows(pv)).bottom) + 10);
+}
+
+/** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、整份牌譜（精簡表格）、題目。 */
+export function buildPuzzleSvg(pv: PickView, weekday: number): string {
+  const rows = sheetRows(pv);
+  // 站長 11/18：精縮版的派票紀錄表——整份牌譜、任務結果、湖一次放在題目卡；放不下才把最早的幾局移到續圖
+  const cardRows = cardSheetRows(pv);
+  const pagesN = gridPages(pv).length;
+  const layout = cardLayout(cardRows.length, cardTop(pv));
+  const parts: string[] = [headerBand(headerTitle(cardLabel(pv), pv.pick.gameId))];
+
+  // 左：小圓桌；右：你的視角
+  const top = HEADER_H;
+  const cx = 40 + TABLE_BOX_W / 2;
+  const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
+  parts.push(roundTable(pv, cx, cy, rows));
+  const right = rightColumn(pv, rows);
+  parts.push(right.svg);
+
   // 牌譜格子（只到出題那一刻；太長的話最早的幾局在後面的續圖）
-  let y = CARD_TOP_H;
+  let y = cardTop(pv);
   parts.push(gridHead(pv, y, rows));
   y += GRID_HEAD_H;
   for (const r of cardRows.slice(0, layout.cardRows)) {
@@ -907,14 +964,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     y += layout.rowH;
   }
 
-  // 題目
-  y += 30 + 26;
-  const last = rows[rows.length - 1];
-  const prompt = last.kind === 'decision' && last.round !== null
-    ? `輪到你派 ${last.size} 人（第 ${last.round} 局第 ${last.attempt} 次${last.forced ? '，強制出發' : ''}）`
-    : '三藍：輪到你刺殺。誰是梅林？';
-  parts.push(text(40, y, prompt, { size: 36, fill: C.blue, weight: true }));
-  y += 36;
+  y += 30 + 21;
   const hint = pagesN ? `前面幾局的牌譜在後面的圖（往右滑）｜1/${pagesN + 1}` : voteLegend(cardRows);
   parts.push(text(40, y, hint, { size: 21, fill: C.faint }));
   y += 36;
@@ -936,8 +986,8 @@ export function buildGridSvgs(pv: PickView, weekday: number): string[] {
     const part = rows.slice(start, end);
     const k = i + 2;
     const rh = Math.max(GRID_ROW_MIN, Math.min(GRID_ROW_MAX, Math.floor(GRID_PAGE_FREE / Math.max(1, part.length))));
-    const parts: string[] = [headerBand(`${labelFor(weekday, pv.pick)}・牌譜 ${k}/${total}`, pv.exerciseId)];
-    let y = 150 + 20;
+    const parts: string[] = [headerBand(headerTitle(cardLabel(pv), pv.pick.gameId, `牌譜 ${k}/${total}`))];
+    let y = HEADER_H + 20;
     parts.push(gridHead(pv, y));
     y += GRID_HEAD_H;
     for (const r of part) {
@@ -967,8 +1017,11 @@ export function buildAnswerSvg(pv: PickView, ids: readonly string[] = [pv.exerci
   const seatOf = (role: string): number[] => roles.flatMap((r, i) => (r === role ? [i + 1] : []));
   const blue = (['percival', 'merlin'] as const).flatMap((r) => seatOf(r).map((s) => `${ROLE_ZH[r]}：${seatChar(s)} 家`));
   const red = (['assassin', 'morgana', 'mordred', 'oberon', 'minion'] as const).flatMap((r) => seatOf(r).map((s) => `${ROLE_ZH[r]}：${seatChar(s)} 家`));
-  const parts: string[] = [headerBand('昨天的答案', ids.join('、'))];
-  let y = 150 + 50;
+  // 這一局這幾天出過的題（週三 1-5＋週四 3-5 一起公布）：「1-5、3-5」；只有一題就用那一題的標題
+  const codes = ids.map((id) => (id.startsWith(`${pv.pick.gameId}-`) ? id.slice(pv.pick.gameId.length + 1) : id)).map((c) => (c === 'A' ? '刺殺' : c));
+  const label = ids.length > 1 ? codes.join('、') : cardLabel(pv);
+  const parts: string[] = [headerBand(headerTitle(label, pv.pick.gameId, '答案'))];
+  let y = HEADER_H + 50;
   const box = (title: string, items: string[], fill: string, ink: string): void => {
     const lh = 70;
     const h = 70 + items.length * lh + 20;
