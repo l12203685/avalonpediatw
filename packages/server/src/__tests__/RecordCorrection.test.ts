@@ -71,6 +71,14 @@ const GAME_DB = {
       checks: [],
     },
     {
+      // 同一局在論壇貼了兩次：總庫留第一篇，第二篇是來源 id（真實例子的形狀：DUP_SAME_SOURCE）。
+      id: '1600000000000000010', kind: 'real', date: '2026-02-03', venue: '線瓦', status: 'warn',
+      sources: [{ src: 'sheet', id: 'S0010' }, { src: 'discord', id: '1600000000000000010' }, { src: 'discord', id: '1600000000000000011' }],
+      game: { config: '123456', rounds: [{ proposals: [{ team: '789', votes: [] }], mission: 'ooo' }], lakes: [], assassination: '', outcome: '' },
+      problem: '',
+      checks: [{ rule: 'DUP_SAME_SOURCE', level: 'warn', msg: '同一個來源登錄了兩次' }],
+    },
+    {
       id: '1500000000000000001', kind: 'real', date: '2026-11-01', venue: '線瓦', status: 'unreadable',
       sources: [{ src: 'discord', id: '1500000000000000001' }], game: null, problem: '起始訊息不是牌譜', checks: [],
     },
@@ -83,6 +91,7 @@ const RECORDS = {
   guildId: '1132682489840812113',
   posts: [
     { id: 'S0001', title: '試算表牌譜 #1', tags: ['線瓦'], date: '2026-01-02', game: { config: '314680', names: NAMES, rounds: [], lakes: [], assassination: '', outcome: '', category: '線瓦' }, problem: '' },
+    { id: '1600000000000000011', title: '重複貼文', tags: ['線瓦'], date: '2026-02-03', game: { config: '123456', names: NAMES, rounds: [], lakes: [], assassination: '', outcome: '', category: '線瓦' }, problem: '' },
     { id: '1500000000000000001', title: '待檢視', tags: ['線瓦'], date: '2026-11-01', game: null, problem: '起始訊息不是牌譜' },
   ],
 };
@@ -206,6 +215,19 @@ describe('lookup', () => {
     expect(text).toContain('（這局的牌譜讀不懂');
     expect(text.split('起始訊息不是牌譜')).toHaveLength(2); // the DB and the site say the same thing: listed once
     expect(text).toContain('#records=1500000000000000001');
+  });
+
+  it('a source id that is also a site post answers the canonical DB record (its checks), with the site post\'s names and link', async () => {
+    const r = lookupRecord('1600000000000000011');
+    expect(r?.id).toBe('1600000000000000010');
+    expect(r?.problems).toEqual(['同一個來源登錄了兩次']);
+    expect(r?.names?.[0]).toBe('甲一');
+    const text = await answerCorrection({ id: '1600000000000000011', content: '' }, { platform: 'line' });
+    expect(text).toContain('【1600000000000000010】');
+    expect(text).toContain('・同一個來源登錄了兩次');
+    expect(text).not.toContain('檢查沒有找到問題');
+    expect(text).toContain('網站牌譜：https://avalon-game-platform.web.app/#records=1600000000000000011');
+    expect(lookupRecord('S0010')?.id).toBe('1600000000000000010');
   });
 
   it('a source id resolves to the record', () => {

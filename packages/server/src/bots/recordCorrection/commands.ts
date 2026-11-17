@@ -135,7 +135,7 @@ export function formatRecordReply(r: RecordLookup, platform: ReportPlatform): st
   } else {
     parts.push('問題：檢查沒有找到問題');
   }
-  parts.push(r.onSite ? `網站牌譜：${recordUrl(r.id)}` : '網站牌譜：（網站上沒有這一局）');
+  parts.push(r.onSite ? `網站牌譜：${recordUrl(r.siteId || r.id)}` : '網站牌譜：（網站上沒有這一局）');
   const hint = platform === 'line' ? `要更正：/更正 ${r.id} 正確的內容（可以多行，例：第一局是 158）` : `要更正：/更正 局號:${r.id} 內容:正確的內容（例：第一局是 158）`;
   const tail = show(hint);
   let text = [...parts, tail].join('\n');

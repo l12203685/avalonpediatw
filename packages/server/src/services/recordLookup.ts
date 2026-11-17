@@ -47,6 +47,8 @@ export interface RecordLookup {
   problems: string[];
   /** 網站上有這一篇（有連結）。 */
   onSite: boolean;
+  /** 網站那一篇的 id（連結用；通常同 id，打的是另一篇重複貼文時是那一篇）；沒有是 ''。 */
+  siteId: string;
 }
 
 interface DbEntry {
@@ -199,10 +201,13 @@ export function lookupRecord(rawId: string): RecordLookup | null {
   const want = normaliseRecordId(rawId);
   if (!want) return null;
   const idx = index();
-  const id = idx.db.has(want) || idx.site.has(want) ? want : idx.alias.get(want) ?? '';
+  // 總庫優先（檢查結果與更正在那裡）：總庫的局號 → 總庫的來源 id → 只在網站上的局。
+  // 來源 id 也是網站上的一篇（例：同一局在論壇貼了兩次）時，答總庫那一局，網站資料（暱稱、連結）照樣用得上。
+  const id = idx.db.has(want) ? want : idx.alias.get(want) ?? (idx.site.has(want) ? want : '');
   if (!id) return null;
   const db = idx.db.get(id);
-  const site = idx.site.get(id);
+  const siteId = idx.site.has(id) ? id : idx.site.has(want) ? want : '';
+  const site = siteId ? idx.site.get(siteId) : undefined;
   const problems: string[] = [];
   const add = (s: string): void => {
     const t = s.trim();
@@ -224,5 +229,6 @@ export function lookupRecord(rawId: string): RecordLookup | null {
     names: site?.names ?? null,
     problems,
     onSite: Boolean(site),
+    siteId,
   };
 }
