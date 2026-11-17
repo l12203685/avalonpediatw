@@ -45,17 +45,17 @@ function flushSummary(): void {
 }
 
 /**
- * 題目卡之後的圖（輪播第二、三張）：牌譜圖 renderGridPng、公布完整答案那天的答案卡 renderAnswerPng。
- * 這兩個畫圖函式在出圖的 PR（claude/threads-image）裡；還沒合進來時查不到就只發題目卡。
+ * 題目卡之後的圖（輪播第二、三張）：牌譜續圖 renderGridPng（牌譜放不進題目卡時才有，否則回 null）、
+ * 公布完整答案那天的答案卡 renderAnswerPng（#52 已合進 main）。查不到函式就只發題目卡。
  */
-type GridRenderer = (pv: PickView, weekday: number) => Buffer;
+type GridRenderer = (pv: PickView, weekday: number) => Buffer | null;
 type AnswerRenderer = (pv: PickView, ids?: readonly string[]) => Buffer;
-function extraRenderers(gen: ThreadsGenerator): (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer }[] {
+function extraRenderers(gen: ThreadsGenerator): (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[] {
   const mod = threadsImage as unknown as Record<string, unknown>;
   const grid = typeof mod.renderGridPng === 'function' ? (mod.renderGridPng as GridRenderer) : null;
   const answer = typeof mod.renderAnswerPng === 'function' ? (mod.renderAnswerPng as AnswerRenderer) : null;
   return (date, draft) => {
-    const out: { suffix: string; png: Buffer }[] = [];
+    const out: { suffix: string; png: Buffer | null }[] = [];
     const pick = gen.pickFor(date);
     const pv = pick ? gen.viewOf(pick) : null;
     if (grid && pv) out.push({ suffix: 'grid', png: grid(pv, weekdayOf(date)) });

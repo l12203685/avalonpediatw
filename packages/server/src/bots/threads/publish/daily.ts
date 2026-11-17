@@ -222,7 +222,8 @@ export interface PrepareDeps {
   /** 畫題目卡（PNG）；不給就不附圖。 */
   renderImage?: (date: string) => Buffer | null;
   /** 題目卡之後的圖（照順序：牌譜圖、答案卡），檔名是 `<日期>-<suffix>.png`；沒有題目卡就不畫。 */
-  renderExtraImages?: (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer }[];
+  /** png 是 null＝這張今天不用（例如牌譜放得進題目卡，就沒有續圖）。 */
+  renderExtraImages?: (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[];
   warnings?: string[];
 }
 
@@ -249,6 +250,7 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
   if (image && deps.renderExtraImages) {
     try {
       for (const extra of deps.renderExtraImages(date, draft)) {
+        if (!extra.png) continue;
         const name = `${date}-${extra.suffix}.png`;
         fs.writeFileSync(path.join(deps.outDir, name), extra.png);
         images.push(name);

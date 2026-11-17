@@ -550,6 +550,25 @@ describe('threads carousel', () => {
     expect(readState(stateDir, '2026-11-18')?.postId).toBe(res.postId);
   });
 
+  it('an extra image that is not needed today (grid fits on the card → null) is skipped without dropping the answer card', () => {
+    const stateDir = tmp();
+    const plan = prepareDaily('2026-11-18', {
+      gen: gen(stateDir),
+      stateDir,
+      commentsDir: tmp(),
+      outDir: tmp(),
+      names,
+      renderImage: () => Buffer.from('q'),
+      renderExtraImages: () => [
+        { suffix: 'grid', png: null },
+        { suffix: 'answer', png: Buffer.from('a') },
+      ],
+    });
+    if (!plan) throw new Error('no plan');
+    expect(plan.images).toEqual(['2026-11-18.png', '2026-11-18-answer.png']);
+    expect(plan.warnings.join()).not.toContain('其他的圖');
+  });
+
   it('one image stays a single image post; a failing extra renderer keeps the question card', async () => {
     const stateDir = tmp();
     const g = gen(stateDir);
