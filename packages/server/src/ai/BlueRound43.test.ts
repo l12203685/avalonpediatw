@@ -37,7 +37,8 @@ describe('round 43 tuning fields', () => {
     expect(DEFAULT_AGENT_TUNING.loyalFresh43Tau).toBe(0);
     expect(parseTuningFlag('loyalFresh43')).toEqual({ loyalFresh43: 15 });
     expect(parseTuningFlag('loyalFresh43=31')).toEqual({ loyalFresh43: 31 });
-    expect(() => parseTuningFlag('loyalFresh43=128')).toThrow();
+    expect(parseTuningFlag('loyalFresh43=1157')).toEqual({ loyalFresh43: 1157 });
+    expect(() => parseTuningFlag('loyalFresh43=2048')).toThrow();
     expect(parseTuningFlag('loyalFresh43Tau=0.4')).toEqual({ loyalFresh43Tau: 0.4 });
     expect(describeAgentTuning({ ...LEGACY_AGENT_TUNING, loyalFresh43: 15 })).toBe('loyalFresh43=15');
   });
@@ -122,5 +123,69 @@ describe('loyalFresh43 (round 43: R1–R2 talk proposals of a loyal / Percival h
 
   it('the gates bind: no allowed swap → the pipeline team', () => {
     expect(loyalFresh43Team(on(15), r1, stacked, () => false)).toBe(stacked);
+  });
+});
+
+// 第 43b 回合：第 1 局的開局排法（站長 11/17：「從第 3 家之後才開始考慮」；百科 1AB／2CD、1AB／2BC、12A、13A 與 3 家的尊重）。
+describe('loyalFresh43 round-43b R1 opening variants (bits 128 / 256 / 512 / 1024)', () => {
+  const first = [vote(1, 1, 'P1', ['P1', 'P2', 'P3'], ['P1', 'P2', 'P3'])];
+  const r1b = asObs({ ...base, failCount: 1, voteHistory: first }); // the 2nd proposal of R1
+  const team = (ids: string[]) => ({ type: 'team_select' as const, teamIds: ids });
+  const ids = (a: ReturnType<typeof loyalFresh43Team>): string[] => { if (a.type !== 'team_select') throw new Error('team'); return a.teamIds; };
+  const mates = (a: ReturnType<typeof loyalFresh43Team>) => ids(a).filter((id) => id !== 'P5');
+  const firstMates = ['P2', 'P3'];
+  const seen1 = ['P1', 'P2', 'P3'];
+
+  it('128 (V1): the 2nd proposal is left alone (it may reuse the 1st), from the 3rd on it is the round-43 rule', () => {
+    const reuse = team(['P5', 'P1', 'P2']);
+    expect(loyalFresh43Team(on(133), r1b, reuse)).toBe(reuse);
+    expect(loyalFresh43Team(on(5), r1b, reuse)).not.toBe(reuse);
+    const a = withSeededRandom('v1', () => loyalFresh43Team(on(133), r1, stacked));
+    const b = withSeededRandom('v1', () => loyalFresh43Team(on(5), r1, stacked));
+    expect(a).toEqual(b);
+    expect(a).not.toBe(stacked);
+  });
+
+  it('256 (V2, extend): the 2nd proposal keeps one of the 1st proposal\'s members (not its leader) and holds one fresh player', () => {
+    const ext = team(['P5', 'P2', 'P7']);
+    expect(loyalFresh43Team(on(261), r1b, ext)).toBe(ext);
+    for (const start of [['P5', 'P6', 'P7'], ['P5', 'P2', 'P3'], ['P5', 'P1', 'P2']]) {
+      const got = mates(loyalFresh43Team(on(261), r1b, team(start)));
+      expect(got.filter((id) => firstMates.includes(id)).length).toBeGreaterThanOrEqual(1);
+      expect(got.filter((id) => !seen1.includes(id)).length).toBeGreaterThanOrEqual(1);
+      // the fewest swaps: one member changes
+      expect(got.filter((id) => start.includes(id)).length).toBe(1);
+    }
+  });
+
+  it('512 (V3, no overlap): the 2nd proposal holds nobody from the 1st proposal; two members can change', () => {
+    const got = mates(loyalFresh43Team(on(517), r1b, team(['P5', 'P1', 'P2'])));
+    expect(got.every((id) => !seen1.includes(id))).toBe(true);
+    const disjoint = team(['P5', 'P6', 'P7']);
+    expect(loyalFresh43Team(on(517), r1b, disjoint)).toBe(disjoint);
+  });
+
+  it('1024 (V4, respect from the 3rd on): at most one member of each earlier proposal and of the not-yet-proposed; the 2nd proposal untouched with 128', () => {
+    const got = mates(loyalFresh43Team(on(1157), r1, stacked));
+    expect(got.length).toBe(2);
+    for (const v of R1) expect(got.filter((id) => v.team.includes(id)).length).toBeLessThanOrEqual(1);
+    expect(got.filter((id) => !seen.includes(id)).length).toBeLessThanOrEqual(1);
+    const twoFresh = team(['P5', 'P6', 'P7']);
+    expect(loyalFresh43Team(on(1157), r1, twoFresh)).not.toBe(twoFresh);
+    const okTeam = team(['P5', 'P1', 'P7']);
+    expect(loyalFresh43Team(on(1157), r1, okTeam)).toBe(okTeam);
+    const reuse = team(['P5', 'P1', 'P2']);
+    expect(loyalFresh43Team(on(1157), r1b, reuse)).toBe(reuse);
+  });
+
+  it('same seed → same team; R2, Merlin and the gates are as before', () => {
+    for (const m of [133, 261, 517, 1157, 1285]) {
+      const x = withSeededRandom(`s${m}`, () => loyalFresh43Team(on(m), r1b, team(['P5', 'P1', 'P2'])));
+      const y = withSeededRandom(`s${m}`, () => loyalFresh43Team(on(m), r1b, team(['P5', 'P1', 'P2'])));
+      expect(x).toEqual(y);
+      expect(loyalFresh43Team(on(m), r1b, team(['P5', 'P1', 'P2']), () => false)).toEqual(team(['P5', 'P1', 'P2']));
+      expect(loyalFresh43Applies(on(m), asObs({ ...base, myRole: 'merlin' }))).toBe(false);
+      expect(loyalFresh43Applies(on(m), asObs({ ...base, currentRound: 2 }))).toBe(false);
+    }
   });
 });

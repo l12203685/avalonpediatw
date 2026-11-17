@@ -13,7 +13,7 @@ import { seatLabel } from '../simulation/replies';
 import type { SimGame } from '../simulation/scenario';
 import type { ThreadsGenerator, ThreadsOption } from './generate';
 import { HIGH_LINEUP_S, lineupOf } from './strength';
-import { THREADS_POSTED, addDays, dayNumber, exerciseIdOfPick, labelFor, themeOf, weekdayOf, type ThreadsPick } from './plan';
+import { addDays, dayNumber, exerciseIdOfPick, labelFor, themeOf, weekdayOf, type ThreadsPick } from './plan';
 
 export interface CandidateRow {
   exerciseId: string;
@@ -38,7 +38,7 @@ export interface DayPlan {
   /** 已經貼出去或已經過了：不能再選。 */
   locked: boolean;
   /** 目前的題目從哪裡來。 */
-  source: 'posted' | 'picked' | 'chain' | 'auto' | 'none';
+  source: 'picked' | 'chain' | 'auto' | 'none';
   current: CandidateRow | null;
   /** 選了這一天以外的局，週四／週六就不接前一天（說明用）。 */
   breaksChain: boolean;
@@ -112,8 +112,7 @@ export function planDays(deps: CandidatesDeps, start: string, days: number, top 
     const theme = themeOf(wd);
     let source: DayPlan['source'] = 'none';
     if (pick) {
-      if (THREADS_POSTED[date]) source = 'posted';
-      else if (deps.picked?.get(date) && deps.picked.get(date) === idOf(deps, pick)) source = 'picked';
+      if (deps.picked?.get(date) && deps.picked.get(date) === idOf(deps, pick)) source = 'picked';
       else if (pick.continues) source = 'chain';
       else source = 'auto';
     }
@@ -129,7 +128,7 @@ export function planDays(deps: CandidatesDeps, start: string, days: number, top 
       date,
       weekday: wd,
       label: pick ? labelFor(wd, pick) : theme.label,
-      locked: !!THREADS_POSTED[date] || dayNumber(date) <= dayNumber(deps.today),
+      locked: dayNumber(date) <= dayNumber(deps.today),
       source,
       current: pick ? rowOf(deps, pick) : null,
       breaksChain: !!theme.continues,

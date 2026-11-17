@@ -103,11 +103,11 @@ afterEach(() => {
 });
 
 describe('registration', () => {
-  it('seven 模擬 commands (incl. /分析 and /刺; /下一步 removed 2026-11-17) pass discord.js validation; 26 commands in all (incl. /機器人補位, /待修正, /回報, /認領)', () => {
+  it('seven 模擬 commands (incl. /分析 and /刺; /下一步 removed 2026-11-17) pass discord.js validation; 27 commands in all (incl. /機器人補位, /待修正, /回報, /認領, /更正)', () => {
     const json = buildSlashCommands().map((c) => c.toJSON());
-    expect(json).toHaveLength(26);
+    expect(json).toHaveLength(27);
     const names = json.map((c) => c.name);
-    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '分析', '刺', 'assassinate', '區間', '公布', '結束', '戰績', '排行', '默契', '意見', 'help']));
+    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '分析', '刺', 'assassinate', '區間', '公布', '結束', '戰績', '排行', '默契', '意見', 'help', '更正']));
     expect(names).not.toContain('下一步');
     expect(new Set(names).size).toBe(names.length);
     for (const c of json) {

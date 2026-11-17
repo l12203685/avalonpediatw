@@ -19,7 +19,7 @@ import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import * as threadsImage from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
-import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
+import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, postedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { extraRenderers } from '../src/bots/threads/publish/extraImages';
 import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
 import { ThreadsApi, tokenProblem } from '../src/bots/threads/publish/threadsApi';
@@ -55,7 +55,9 @@ function makeGenerator(stateDir: string, warnings: string[]): ThreadsGenerator {
     bank,
     titles,
     readSaved: savedFromState(stateDir),
-    startDate: arg('--start', process.env.THREADS_START_DATE || THREADS_START_DATE),
+    // 昨天真的有貼文（threads-state 有記錄）才引用昨天、附昨天的答案；系列起點用 repo 變數 THREADS_LIVE_FROM（正式發的第一天）。
+    hasPost: postedFromState(stateDir),
+    startDate: arg('--start', process.env.THREADS_LIVE_FROM || process.env.THREADS_START_DATE || THREADS_START_DATE),
     pickOverride: (date) => picks.get(date) ?? null,
   });
 }

@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SIM_STAGE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SIM_STAGE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS, CORRECTION_OPTIONS } from './config';
 import {
   handleHelpCommand,
   HELP_TOPIC_OPTION,
@@ -32,6 +32,7 @@ import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
 import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
 import { handlePaipuFixCommand } from '../paipuFix/discordCommand';
 import { handleClaimCommand, handleReportCommand } from '../reports/discordCommand';
+import { handleCorrectionCommand } from '../recordCorrection/discordCommand';
 import { REPORT_KIND_CHOICES } from '../reports/commands';
 import { CLAIM_NAME_MAX, FEEDBACK_MESSAGE_MAX } from '../../services/communityReports';
 
@@ -238,6 +239,21 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
           .setRequired(true)
           .setMaxLength(500)
       ),
+
+    // 2026-11-17 牌譜更正 (bots/recordCorrection): 內容 empty = look the record up; filled = send a correction.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.CORRECTION)
+      .setDescription('查一局牌譜（含問題），或送出更正給站長 / Look up or correct a game record')
+      .addStringOption((o) =>
+        o.setName(CORRECTION_OPTIONS.ID).setDescription('局號，例如 S1794、M536 或 DC 貼文 id / Record id').setRequired(true).setMaxLength(80)
+      )
+      .addStringOption((o) =>
+        o
+          .setName(CORRECTION_OPTIONS.CONTENT)
+          .setDescription('更正內容（不填＝只查這局）/ The correction (empty = look up)')
+          .setRequired(false)
+          .setMaxLength(FEEDBACK_MESSAGE_MAX)
+      ),
   ];
 }
 
@@ -395,6 +411,10 @@ export class DiscordBotClient {
 
         case COMMANDS.CLAIM:
           await handleClaimCommand(interaction);
+          break;
+
+        case COMMANDS.CORRECTION:
+          await handleCorrectionCommand(interaction);
           break;
 
         default: {

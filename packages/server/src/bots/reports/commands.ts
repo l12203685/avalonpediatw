@@ -22,6 +22,7 @@ import {
   type SubmitResult,
   type SyncDeps,
 } from '../../services/communityReports';
+import { isCorrectionCommandText } from '../recordCorrection/parse';
 
 export type ReportPlatform = 'line' | 'discord';
 
@@ -108,9 +109,9 @@ export function parseClaimText(text: string): ClaimTextCommand | null {
   return { names: splitClaimNames(m[1]) };
 }
 
-/** 是不是回報／認領指令（意見主題計數、聊天匯出、LINE→DC 同步都略過；送出的那則已經貼到兩邊）。 */
+/** 是不是回報／認領／更正指令（意見主題計數、聊天匯出、LINE→DC 同步都略過；送出的那則已經貼到兩邊）。 */
 export function isCommunityCommandText(text: string): boolean {
-  return parseReportText(text) !== null || parseClaimText(text) !== null;
+  return parseReportText(text) !== null || parseClaimText(text) !== null || isCorrectionCommandText(text);
 }
 
 export function reportUsageText(platform: ReportPlatform): string {

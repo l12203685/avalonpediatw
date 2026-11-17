@@ -2,7 +2,7 @@
 /**
  * Threads 選局候選（2026-11-17）：未來幾週每天的題目＋照陣容強度 S 排的候選，給站長的選局頁。
  *
- *   pnpm --filter @avalon/server threads:candidates                          # 從第一篇（11/17）起 28 天
+ *   pnpm --filter @avalon/server threads:candidates                          # 從系列起點（THREADS_LIVE_FROM，預設 11/18）起 28 天
  *   選項：--start YYYY-MM-DD（預設 THREADS_START_DATE）、--days N（預設 28）、--top N（預設 15）、
  *         --linked N（另外補 N 個有網站牌譜頁、S 最高的，預設 5）、
  *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；也接受選局頁資料庫匯出）、--today YYYY-MM-DD（預設台北今天）、
@@ -32,7 +32,7 @@ const arg = (name: string, fallback: string): string => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
 
-const start = arg('--start', THREADS_START_DATE);
+const start = arg('--start', process.env.THREADS_LIVE_FROM || THREADS_START_DATE);
 const days = Number(arg('--days', '28'));
 const top = Number(arg('--top', '15'));
 const extraLinked = Number(arg('--linked', '5'));

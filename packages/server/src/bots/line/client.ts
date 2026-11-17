@@ -41,6 +41,7 @@ import type { SimGame } from '../simulation/scenario';
 import { answerSeatFillerTextCommand } from '../seatFiller/commands';
 import { answerPaipuFixTextCommand } from '../paipuFix/commands';
 import { answerCommunityTextCommand, isCommunityCommandText } from '../reports/commands';
+import { answerCorrectionTextCommand } from '../recordCorrection/commands';
 
 /**
  * Map LINE user IDs to the room they're currently in.
@@ -631,6 +632,38 @@ export class LineBotClient {
   }
 
   /**
+   * 牌譜更正 /更正 (2026-11-17, bots/recordCorrection), or null (not the command).
+   * Never throws. The submitter's display name is only fetched when a correction is sent.
+   * A redelivery answers a lookup again but never sends a correction twice.
+   */
+  private async correctionAnswerFor(text: string, ctx: LeadContext): Promise<string | null> {
+    try {
+      return await answerCorrectionTextCommand(text, {
+        platform: 'line',
+        userId: ctx.userId,
+        redelivery: ctx.duplicate,
+        submitterName: () => this.lineNameFor(ctx),
+      });
+    } catch (error) {
+      console.error(`[LINE correction] handling /更正 failed (${describeError(error)})`);
+      return null;
+    }
+  }
+
+  /** Display name of the person who typed in this chat (group member profile, or the 1:1 profile); '' on failure. */
+  private async lineNameFor(ctx: LeadContext): Promise<string> {
+    if (!ctx.userId) return '';
+    if (ctx.shared) return this.displayNameFor(ctx.chatId, ctx.userId);
+    try {
+      const profile = await this.client.getProfile(ctx.userId);
+      return profile?.displayName ?? '';
+    } catch (err) {
+      console.warn(`[LINE correction] getProfile failed (${describeError(err)})`);
+      return '';
+    }
+  }
+
+  /**
    * 模擬瓦 answer (2026-10-14, bots/simulation), or null (not a 模擬 command,
    * flag off, rate limited). Never throws; logs a code only (no text, no ids).
    */
@@ -675,7 +708,7 @@ export class LineBotClient {
 
   /**
    * The bot answer a text earns, if any: stats commands first, then /意見, then
-   * /補位 (補位機器人), then /待修正 (待修正牌譜清單), then /回報 /認領, then 模擬瓦.
+   * /補位 (補位機器人), then /待修正 (待修正牌譜清單), then /回報 /認領, then /更正, then 模擬瓦.
    * An allow-listed 模擬 practice group gets 模擬 commands and /指令 (模擬 help) only.
    */
   private async leadReplyFor(text: string, ctx: LeadContext): Promise<LeadReply | null> {
@@ -698,6 +731,9 @@ export class LineBotClient {
     if (paipuFix !== null) return { kind: 'paipuFix', text: paipuFix };
     const report = await this.reportAnswerFor(text, ctx.userId, ctx.duplicate);
     if (report !== null) return { kind: 'report', text: report, quoteToken: ctx.quoteToken };
+    // 2026-11-17 /更正: same kind as /回報 (never relayed to Discord; a sent correction is posted to both sides by the bot).
+    const correction = await this.correctionAnswerFor(text, ctx);
+    if (correction !== null) return { kind: 'report', text: correction, quoteToken: ctx.quoteToken };
     return this.simAnswerFor(text, ctx);
   }
 

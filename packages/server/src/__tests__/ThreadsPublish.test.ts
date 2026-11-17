@@ -31,6 +31,7 @@ import {
   recordManual,
   taipeiDateOf,
   savedFromState,
+  postedFromState,
   validatePost,
   writeState,
   type DailyPlan,
@@ -60,8 +61,10 @@ function tmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'threads-pub-'));
 }
 
-function gen(stateDir: string, picks: Map<string, string> = new Map()): ThreadsGenerator {
-  return new ThreadsGenerator({ bank, titles, readSaved: savedFromState(stateDir), pickOverride: (d) => picks.get(d) ?? null });
+/** 測試的系列從 11/17 開始、那天的題目是 36AKW-2-5（以前寫死在程式裡，現在只是測試的設定）。 */
+function gen(stateDir: string, picks: Map<string, string> = new Map(), opts: { hasPost?: (date: string) => boolean } = {}): ThreadsGenerator {
+  const all = new Map([['2026-11-17', '36AKW-2-5'], ...picks]);
+  return new ThreadsGenerator({ bank, titles, readSaved: savedFromState(stateDir), startDate: '2026-11-17', pickOverride: (d) => all.get(d) ?? null, ...opts });
 }
 
 /** 假的 Threads 伺服器的狀態（跨好幾次執行共用：已經發出去的貼文和回覆）。 */
@@ -260,6 +263,37 @@ describe('prepare + post', () => {
     if (!plan) throw new Error('no plan');
     return { plan, stateDir };
   }
+
+  it('quotes yesterday and gives its answer only when yesterday really has a post (threads-state record); otherwise a standalone first post', () => {
+    // 沒有昨天的記錄（例如 11/17 根本沒發）：獨立的一篇，不引用、不附答案
+    const empty = tmp();
+    const alone = prepareDaily('2026-11-18', { gen: gen(empty, new Map(), { hasPost: postedFromState(empty) }), stateDir: empty, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(alone.quote).toBeNull();
+    expect(alone.draft.answerToYesterday).toBeFalsy();
+    expect(alone.text).not.toContain('的答案 ──');
+    // 昨天有貼文 id：引用＋附答案
+    const withPost = tmp();
+    writeState(withPost, { date: '2026-11-17', exerciseId: '36AKW-2-5', draft: gen(withPost).draftFor('2026-11-17') as DailyPlan['draft'], source: 'auto', postId: 'p17' });
+    const quoted = prepareDaily('2026-11-18', { gen: gen(withPost, new Map(), { hasPost: postedFromState(withPost) }), stateDir: withPost, commentsDir: tmp(), outDir: tmp(), names }) as DailyPlan;
+    expect(quoted.quote).toMatchObject({ date: '2026-11-17', exerciseId: '36AKW-2-5', postId: 'p17' });
+    expect(quoted.draft.answerToYesterday?.exerciseId).toBe('36AKW-2-5');
+    // 只試跑過（有草稿記錄、沒有貼文 id）不算
+    const dry = tmp();
+    writeState(dry, { date: '2026-11-17', exerciseId: '36AKW-2-5', draft: gen(dry).draftFor('2026-11-17') as DailyPlan['draft'], source: 'auto', postId: null });
+    expect(postedFromState(dry)('2026-11-17')).toBe(false);
+    // 站長手動發、補記過（還沒有 id）算
+    const manual = tmp();
+    recordManual('2026-11-17', null, { gen: gen(manual), stateDir: manual });
+    expect(postedFromState(manual)('2026-11-17')).toBe(true);
+    // 週四：週三沒有貼文就不接同一局，改出獨立的題目
+    const thuAlone = gen(empty, new Map(), { hasPost: postedFromState(empty) });
+    const thu = thuAlone.pickFor('2026-11-19');
+    expect(thu?.continues).toBeFalsy();
+    expect(thuAlone.draftFor('2026-11-19')?.answerToYesterday).toBeFalsy();
+    const thuChain = gen(tmp(), new Map(), { hasPost: () => true });
+    expect(thuChain.pickFor('2026-11-19')?.continues).toBe(true);
+    expect(thuChain.draftFor('2026-11-19')?.answerToYesterday).toBeTruthy();
+  });
 
   it('quotes yesterday (found in recent posts), records A before the reply, then replies under A', async () => {
     const { plan, stateDir } = prepared();

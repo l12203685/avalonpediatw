@@ -8,8 +8,6 @@
  * 日期或題號格式不對的筆數直接略過。
  */
 
-import { THREADS_POSTED } from './plan';
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const EXERCISE_RE = /^[0-9A-Z]{5,}-(A|[1-5]-[1-5])$/;
 
@@ -45,8 +43,8 @@ export function futurePicks(picks: ReadonlyMap<string, string>, today: string): 
 }
 
 /**
- * 給產生器的 `pickOverride`：已經貼出去的日子（THREADS_POSTED）固定用貼出去的題號，其他日子用站長選的。
+ * 給產生器的 `pickOverride`：站長選的題號。已經發出去的日子由存下來的草稿（threads-state）保護，產生器會先用它。
  */
 export function pickOverrideOf(picks: ReadonlyMap<string, string>): (date: string) => string | null {
-  return (date) => THREADS_POSTED[date] ?? picks.get(date) ?? null;
+  return (date) => picks.get(date) ?? null;
 }
