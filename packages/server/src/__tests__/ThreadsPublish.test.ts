@@ -323,3 +323,33 @@ describe('api', () => {
     expect(redact('x?access_token=abc&y=1 abc', 'abc')).toBe('x?access_token=***&y=1 ***');
   });
 });
+
+describe('workflow', () => {
+  // 沒有 YAML 套件：照兩格縮排的「- name:／- uses:」切出每一步，只看 id、if、continue-on-error 這幾行。
+  const steps = (): { name: string; id?: string; cond: string; continueOnError: boolean; body: string }[] => {
+    const yml = fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+    return yml
+      .split(/\n {6}- /)
+      .slice(1)
+      .map((body) => ({
+        name: /^(?:name|uses): (.*)/.exec(body)?.[1] ?? '',
+        id: /\n {8}id: (\S+)/.exec(body)?.[1],
+        cond: /\n {8}if: (.*)/.exec(body)?.[1] ?? '',
+        continueOnError: /\n {8}continue-on-error: true/.test(body),
+        body,
+      }));
+  };
+
+  it('a Threads token refresh whose secret write fails only warns and still publishes with the refreshed token', () => {
+    const all = steps();
+    const refresh = all.find((s) => s.body.includes('threadsPublish.ts token --token-out'));
+    expect(refresh?.continueOnError).toBe(true);
+    expect(refresh?.body).toContain('if GH_TOKEN="$SECRETS_PAT" gh secret set THREADS_ACCESS_TOKEN');
+    expect(refresh?.body).toContain('::warning::');
+    // 寫回成功與否，這次都用新權杖（寫進 GITHUB_ENV，發文那一步優先讀它）
+    const after = refresh?.body.split('gh secret set THREADS_ACCESS_TOKEN')[1] ?? '';
+    expect(after.indexOf('fi\n')).toBeLessThan(after.indexOf('echo "THREADS_ACCESS_TOKEN='));
+    const post = all.find((s) => s.body.includes('threadsPublish.ts post --state-dir'));
+    expect(post?.body).toContain('THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}');
+  });
+});

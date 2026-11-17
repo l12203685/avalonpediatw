@@ -116,8 +116,10 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --filter @avalon/shared build
 
+      # 續期或寫回 secrets 失敗都不擋住後面的產生與發文（只出警告）。
       - name: 權杖快到期就續期（要 secrets.THREADS_SECRETS_PAT 才寫得回去）
         if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        continue-on-error: true
         working-directory: packages/server
         env:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
@@ -133,10 +135,13 @@ jobs:
           fi
           if [ -s "$NEW" ]; then
             echo "::add-mask::$(cat "$NEW")"
-            GH_TOKEN="$SECRETS_PAT" gh secret set THREADS_ACCESS_TOKEN --repo "$REPO" < "$NEW"
+            if GH_TOKEN="$SECRETS_PAT" gh secret set THREADS_ACCESS_TOKEN --repo "$REPO" < "$NEW"; then
+              echo "權杖已續期並寫回 secrets"
+            else
+              echo "::warning::Threads 權杖續期了但寫不回 secrets（THREADS_SECRETS_PAT 要有這個 repo 的 Secrets 讀寫權限）；這次照樣用新權杖發文"
+            fi
             echo "THREADS_ACCESS_TOKEN=$(cat "$NEW")" >> "$GITHUB_ENV"
             rm -f "$NEW"
-            echo "權杖已續期並寫回 secrets"
           fi
 
       - name: 產生今天的貼文並檢查
