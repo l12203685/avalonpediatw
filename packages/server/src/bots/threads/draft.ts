@@ -10,7 +10,8 @@
  * A 的 500 字同時包含題目和答案：先縮題目的牌譜（前面幾局只留任務與湖 → 「完整局面看圖」），
  * 再縮答案（拿掉理由）；牌譜連結一定留。
  *
- * 發文由 Edward 自己來（沒有 Threads API、不自動發）。
+ * 發文：站長加好權杖、打開 THREADS_PUBLISH 之後由自動發佈的工作流程每天發（publish/、.github/workflows/threads-publish.yml）；
+ * 站長也可以照草稿手動發。
  */
 
 import type { Role } from '@avalon/shared';
@@ -164,7 +165,7 @@ export interface LogicReason {
   worlds: number;
   /** 真人派的隊在幾種裡全好。 */
   teamClean: number;
-  /** 全好機會最大的隊（同分的都列）與種數。 */
+  /** 全好組合最多的隊（同分的都列）與種數。百分比＝紅方可能組合中全好的比例（每種組合算一樣多），不是勝率。 */
   best: { teams: number[][]; clean: number };
 }
 
@@ -215,7 +216,7 @@ function reasonLine(pv: PickView): string | null {
   if (!r) return null;
   const share = (n: number): string => pct(n / r.worlds);
   const bestTeams = r.best.teams.slice(0, 2).map(teamDigits).join('、') + (r.best.teams.length > 2 ? ` 等 ${r.best.teams.length} 隊` : '');
-  return `理由（純邏輯）：紅方還有 ${r.worlds} 種可能，這隊 ${r.teamClean} 種全好（${share(r.teamClean)}）；最有機會全好：${bestTeams}（${share(r.best.clean)}）`;
+  return `理由（純邏輯）：紅方還有 ${r.worlds} 種可能，這隊 ${r.teamClean} 種全好（${share(r.teamClean)}）；全好組合最多：${bestTeams}（${share(r.best.clean)}）`;
 }
 
 function revealLines(game: SimGame, recordId: string | undefined): string[] {

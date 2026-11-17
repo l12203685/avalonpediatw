@@ -50,6 +50,8 @@ describe('records index', () => {
     const base = wikiPost('S01ABC');
     for (const flagged of [
       { ...base, simulated: true },
+      { ...base, sim: true }, // records_cache 的模擬條目（沒有標籤也要認得）
+      { ...base, game: { ...(base.game as object), sim: true } },
       { ...base, tags: ['覆盤', '模擬'] },
       { ...base, category: '模擬' },
       { ...base, game: { ...(base.game as object), category: '模擬' } },
