@@ -150,7 +150,8 @@ function fitSize(line: string, size: number, max: number, min = 14): number {
 
 // ─── 牌譜的列（純資料，測試直接檢查這裡：只會有出題當下看得到的東西） ──────────────
 
-export type VoteCell = 'approve' | 'reject' | 'none';
+/** none = 強制局（不投票）；unknown = 票沒記錄或記得不可靠（跟強制局分開畫，圖例另列）。 */
+export type VoteCell = 'approve' | 'reject' | 'none' | 'unknown';
 
 export type SheetRow =
   | {
@@ -161,7 +162,7 @@ export type SheetRow =
     attempt: number;
     leaderSeat: number;
     team: number[];
-    /** 座位 1～10 的票；強制局與票沒記全的提議是 none。 */
+    /** 座位 1～10 的票；強制局是 none，票沒記全的提議是 unknown。 */
     votes: VoteCell[];
     approves: number | null;
     forced: boolean;
@@ -189,7 +190,7 @@ function proposalRow(e: Extract<PublicEvent, { kind: 'proposal' }>): SheetRow {
   for (let seat = 1; seat <= 10; seat++) {
     const yes = team.has(seat) ? !minus.has(seat) : plus.has(seat);
     if (yes) approves++;
-    votes.push(e.forced || !reliable ? 'none' : yes ? 'approve' : 'reject');
+    votes.push(e.forced ? 'none' : !reliable ? 'unknown' : yes ? 'approve' : 'reject');
   }
   const line = [seatsText(e.teamSeats), e.minusSeats.length ? `${seatsText(e.minusSeats)}-` : '', e.plusSeats.length ? `${seatsText(e.plusSeats)}+` : '']
     .filter(Boolean).join(' ');
@@ -385,8 +386,9 @@ function gridRow(r: SheetRow, y: number, rh: number): string {
     parts.push(text(GX0 + LEAD_W / 2, mid, seatChar(r.leaderSeat), { size: fs, fill: '#facc15', anchor: 'middle', weight: true }));
     for (let seat = 1; seat <= 10; seat++) {
       const v = r.votes[seat - 1];
-      const fill = v === 'approve' ? '#ffffff' : v === 'reject' ? '#000000' : '#18181b';
+      const fill = v === 'approve' ? '#ffffff' : v === 'reject' ? '#000000' : v === 'unknown' ? UNKNOWN_VOTE_FILL : '#18181b';
       parts.push(rect(seatX(seat), y, SEAT_W, rh, fill, ' stroke="#27272a" stroke-width="1"'));
+      if (v === 'unknown' && !r.team.includes(seat)) parts.push(text(seatX(seat) + SEAT_W / 2, mid, '？', { size: fs - 2, fill: '#d4d4d8', anchor: 'middle' }));
       if (r.team.includes(seat)) parts.push(shield(seatX(seat) + SEAT_W / 2, y + rh / 2, Math.min(SEAT_W, rh) - 6));
     }
     const res = r.forced ? '強制' : r.approves === null ? '—' : `${r.approves}票${r.approved ? '過' : ''}`;
@@ -437,6 +439,15 @@ export interface CardLayout {
   /** 放不下時第二張牌譜圖接著畫的列（沒有 = 一張就放得下）。 */
   overflow: boolean;
   height: number;
+}
+
+/** 票沒記錄的格子（比強制局的灰亮，沒上隊的格子再寫「？」）。 */
+const UNKNOWN_VOTE_FILL = '#52525b';
+
+/** 格子下面的圖例；有票沒記錄的提議才多列「？ = 票沒記錄」（跟強制局不投票分開）。 */
+export function voteLegend(rows: readonly SheetRow[]): string {
+  const unknown = rows.some((r) => r.kind === 'proposal' && r.votes.includes('unknown'));
+  return `盾牌 = 上隊｜白 = 贊成、黑 = 反對、灰 = 強制局不投票${unknown ? '、？ = 票沒記錄' : ''}｜文字 +／- 綠色`;
 }
 
 /** 題目卡版面：一般局整份牌譜跟圓桌、題目放同一張 ≤ 1350；放不下先縮列高，最小列高還放不下就把後面的列移到第二張。 */
@@ -498,7 +509,7 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
     : '三藍：輪到你刺殺。誰是梅林？';
   parts.push(text(40, y, prompt, { size: 36, fill: C.blue, weight: true }));
   y += 36;
-  parts.push(text(40, y, layout.overflow ? '牌譜太長：後面的列在下一張圖（往右滑）' : '盾牌 = 上隊｜白 = 贊成、黑 = 反對、灰 = 強制局不投票｜文字 +／- 綠色', { size: 21, fill: C.faint }));
+  parts.push(text(40, y, layout.overflow ? '牌譜太長：後面的列在下一張圖（往右滑）' : voteLegend(rows), { size: 21, fill: C.faint }));
   y += 36;
   parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
   y += 20;
@@ -523,7 +534,7 @@ export function buildGridSvg(pv: PickView, weekday: number): string | null {
     y += rh;
   }
   y += 50;
-  parts.push(text(40, y, '盾牌 = 上隊｜白 = 贊成、黑 = 反對、灰 = 強制局不投票｜文字 +／- 綠色', { size: 21, fill: C.faint }));
+  parts.push(text(40, y, voteLegend(rows), { size: 21, fill: C.faint }));
   y += 36;
   parts.push(text(40, y, '實戰牌譜，只到出題的那一刻｜阿瓦隆百科 avalon-game-platform.web.app', { size: 21, fill: C.faint }));
   y += 24;

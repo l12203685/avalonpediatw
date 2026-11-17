@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, wrapLine } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -387,7 +387,7 @@ describe('image', () => {
           if (r.kind === 'proposal') {
             expect(r.votes).toHaveLength(10);
             if (r.forced || !r.reliable) {
-              expect(r.votes.every((v) => v === 'none')).toBe(true);
+              expect(r.votes.every((v) => v === (r.forced ? 'none' : 'unknown'))).toBe(true);
               expect(r.approves).toBeNull();
             } else {
               expect(r.approves).toBe(r.votes.filter((v) => v === 'approve').length);
@@ -399,6 +399,27 @@ describe('image', () => {
         }
       }
     }
+  });
+
+  it('missing vote records look different from forced proposals and get their own legend entry', () => {
+    const [, tue] = planWeek(bank, 0) as ThreadsPick[];
+    const pv = pickView(gameOf(tue), tue);
+    const i = pv.shown.findIndex((e) => e.kind === 'proposal' && !e.forced);
+    expect(i).toBeGreaterThanOrEqual(0);
+    const plain = buildPuzzleSvg(pv, 2);
+    expect(plain).not.toContain('票沒記錄');
+    expect(plain).toContain('灰 = 強制局不投票');
+    // 同一題，把一次非強制的提議改成票沒記錄
+    const unreliable = { ...pv, shown: pv.shown.map((e, j) => (j === i && e.kind === 'proposal' ? { ...e, votesReliable: false } : e)) };
+    const row = sheetRows(unreliable).find((r) => r.kind === 'proposal' && !r.reliable);
+    expect(row?.kind === 'proposal' && row.votes.every((v) => v === 'unknown')).toBe(true);
+    expect(voteLegend(sheetRows(unreliable))).toContain('？ = 票沒記錄');
+    expect(voteLegend(sheetRows(pv))).not.toContain('票沒記錄');
+    const svg = buildPuzzleSvg(unreliable, 2);
+    expect(svg).toContain('票沒記錄');
+    expect(svg).toContain('#52525b'); // 跟強制局的灰（#18181b）不同色
+    expect(svg).toContain('>？<');
+    expect(textWidth(voteLegend(sheetRows(unreliable)), 21)).toBeLessThanOrEqual(1080 - 80);
   });
 
   it('the post text keeps theme, record, question, yesterday’s answer, 題號 and the tag only', () => {
