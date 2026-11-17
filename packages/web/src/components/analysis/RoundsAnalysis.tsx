@@ -5,6 +5,7 @@ import { outcomeChiSquare, redFinalRate } from './outcomeTest';
 import type { RoundsAnalysisData } from '../../services/api';
 import { useRoundsData } from './teams/useTeamsData';
 import TeamsLoadState from './teams/TeamsLoadState';
+import { topPathShare } from './roundsPaths';
 import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 import OutcomeBlocksTable, {
   BlockHeader, OutcomeBlocksNote, lacksOutcomes,
@@ -222,8 +223,7 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
   const passedBranch = branchRows.find(r => r.key === 'passed');
   const failedBranch = branchRows.find(r => r.key === 'failed');
   const hardest = roundRows.length > 0 ? roundRows.reduce((a, b) => (b.pass < a.pass ? b : a)) : null;
-  const totalGames = branchRows.reduce((sum, r) => sum + r.n, 0);
-  const topPath = pathRows[0];
+  const topPath = topPathShare(data);
   const k7 = 'analytics.r7.progression';
 
   return (
@@ -236,7 +236,7 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
               passed: formatRate(redFinalRate(passedBranch.outcomes)), passedN: passedBranch.n,
             })}
             {hardest && t(`${k7}.hardest`, { label: hardest.label, rate: formatRate(hardest.pass), n: hardest.total })}
-            {topPath && totalGames > 0 && t(`${k7}.topPath`, { path: topPath.path, share: formatRate((topPath.n / totalGames) * 100), n: topPath.n })}
+            {topPath && t(`${k7}.topPath`, { path: topPath.path, share: formatRate(topPath.share), n: topPath.n })}
           </p>
         </Takeaway>
       ) : null}
@@ -290,13 +290,13 @@ function PathsSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample
     })),
     [data],
   );
-  const totalGames = pathRows.reduce((sum, r) => sum + r.n, 0);
-  const topPath = pathRows[0];
+  // 分母 = 全部有路徑的局（任務 1 分支），不是表上前 20 種路徑的加總（roundsPaths.ts）
+  const topPath = topPathShare(data);
   return (
     <div className="space-y-3">
-      {topPath && totalGames > 0 && (
+      {topPath && (
         <Takeaway>
-          <p>{t('analytics.r7.progression.topPath', { path: topPath.path, share: formatRate((topPath.n / totalGames) * 100), n: topPath.n })}</p>
+          <p>{t('analytics.r7.progression.topPath', { path: topPath.path, share: formatRate(topPath.share), n: topPath.n })}</p>
         </Takeaway>
       )}
       <OutcomeBlocksTable

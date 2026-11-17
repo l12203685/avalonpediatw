@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { useDiscoveryNav } from '../../../web/src/components/analysis/discovery/discoveryNav';
 import { CORE_TABS, LEGACY_TABS, resolveTab } from '../../../web/src/components/analysis/core/coreTabs';
 import { STUDY_HOME_TAB } from '../../../web/src/components/analytics/studyLink';
+import { topPathShare } from '../../../web/src/components/analysis/roundsPaths';
 
 const web = path.resolve(__dirname, '..', '..', '..', 'web', 'src');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 讀 i18n JSON，結構很深
@@ -104,5 +105,23 @@ describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
     expect(resolveTab('players')).toEqual({ tab: 'advanced', sub: 'players' });
     expect(page).toMatch(/if \(focus\) return resolveTab\('players'\)/);
     expect(page).toMatch(/if \(focus !== seenFocus\) \{\s*setSeenFocus\(focus\);\s*if \(focus\) goTo\(resolveTab\('players'\)\);/);
+  });
+
+  // PR #54 review：快取的路徑只留最常見的 20 種（也不含沒有路徑的局），拿表上路徑加總當分母會高估最常見那條的比例。
+  it('最常見的路徑：分母是全部有路徑的局（任務 1 分支），不是表上前 20 種路徑的加總', () => {
+    const gameStates = Array.from({ length: 20 }, (_, i) => ({ state: `S${i}`, games: 100 - i }));
+    const shown = gameStates.reduce((s, r) => s + r.games, 0); // 1810
+    const got = topPathShare({ gameStates, mission1Branch: [{ games: 1500 }, { games: 1000 }] });
+    expect(got).toMatchObject({ path: 'S0', n: 100, total: 2500 });
+    expect(got!.share).toBeCloseTo(4, 10);
+    expect(got!.share).toBeLessThan((100 / shown) * 100);
+    // 舊快取沒有分支、或分支比最常見那條還少（對不上）→ 不講比例
+    expect(topPathShare({ gameStates, mission1Branch: [] })).toBeNull();
+    expect(topPathShare({ gameStates, mission1Branch: [{ games: 50 }] })).toBeNull();
+    expect(topPathShare({ gameStates: [], mission1Branch: [{ games: 10 }] })).toBeNull();
+    // 兩個地方（任務進程、完整任務路徑）都用它，不再自己加總路徑
+    const rounds = fs.readFileSync(path.join(web, 'components', 'analysis', 'RoundsAnalysis.tsx'), 'utf-8');
+    expect(rounds.match(/topPathShare\(data\)/g)?.length).toBe(2);
+    expect(rounds).not.toMatch(/pathRows\.reduce/);
   });
 });
