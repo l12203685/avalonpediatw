@@ -265,6 +265,18 @@ export function lakeKnowledge(pv: PickView, known: readonly SheetRow[]): {
   return { seats, chain };
 }
 
+/** 兩根拇指（一梅一娜）其中一根的陣營知道了：好的那根是梅林、另一根是莫甘娜（反過來也一樣）。還分不出來回 null。 */
+export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<number, { evil: boolean }>): { merlin: number; morgana: number } | null {
+  if (thumbs.length !== 2) return null;
+  for (const [i, t] of thumbs.entries()) {
+    const k = seats.get(t);
+    if (!k) continue;
+    const other = thumbs[1 - i];
+    return k.evil ? { merlin: other, morgana: t } : { merlin: t, morgana: other };
+  }
+  return null;
+}
+
 /** 每個座位的標記；known＝到那一局為止看得到的列（回顧圖只算到那一局，題目卡算到出題那一刻）。 */
 export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, { label: string; color: string }> {
   const marks = new Map<number, { label: string; color: string }>();
@@ -273,10 +285,18 @@ export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number,
   if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red }));
   if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red }));
   // 自己湖到的、湖中鏈推出的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉（夜裡已經知道的不重複）。
-  for (const [seat, k] of lakeKnowledge(pv, known).seats) {
+  const knowledge = lakeKnowledge(pv, known);
+  for (const [seat, k] of knowledge.seats) {
     if (marks.has(seat)) continue;
     const label = k.via === null ? (k.evil ? '湖到紅' : '湖到好') : k.evil ? '湖鏈：紅' : '湖鏈：好';
     marks.set(seat, { label, color: k.evil ? C.red : C.green });
+  }
+  // 派西：一根拇指的陣營知道了（自己湖、或湖中鏈），兩根拇指就分得出來（站長 11/18：「拇指湖到好直接寫梅林, 另一根拇指改成莫甘娜,
+  // 圓圈也改成藍色/紅色」）。這條蓋過原本的「拇指」標記。
+  const resolved = s.kind === 'percival' ? resolveThumbs(s.thumbs, knowledge.seats) : null;
+  if (resolved) {
+    marks.set(resolved.merlin, { label: '梅林', color: C.blue });
+    marks.set(resolved.morgana, { label: '莫甘娜', color: C.red });
   }
   marks.set(pv.pick.seat, { label: '你', color: C.blue });
   return marks;
@@ -401,25 +421,45 @@ export function lakeLine(rows: readonly SheetRow[]): Seg[] {
  * 湖的每一筆：「0 > 1 o」（o 藍、x 紅、沒說）與它下面的註記（站長 11/18：「(看到好) 放湖中下方 不要放旁邊」）：
  * 你自己湖的寫（看到好／紅）；湖中鏈讓你知道的寫「9 是好人 → 4 是紅」。chain 來自 lakeKnowledge。
  */
-export function lakeEntries(rows: readonly SheetRow[], chain: readonly { holder: number; target: number; evil: boolean }[] = []): { segs: Seg[]; note?: Seg }[] {
-  const out: { segs: Seg[]; note?: Seg }[] = [];
+export function lakeEntries(
+  rows: readonly SheetRow[],
+  chain: readonly { holder: number; target: number; evil: boolean }[] = [],
+  opts: { thumbs?: readonly number[]; known?: readonly SheetRow[] } = {},
+): { segs: Seg[]; notes: Seg[] }[] {
+  const out: { segs: Seg[]; notes: Seg[] }[] = [];
+  // 派西：第一次讓拇指分出梅林／莫甘娜的那一筆湖（known＝到那時候為止的列，預設就是 rows）
+  let reveal: { holder: number; target: number; round: number; line: string } | null = null;
+  if (opts.thumbs?.length === 2) {
+    for (const l of opts.known ?? rows) {
+      if (l.kind !== 'lake' || !opts.thumbs.includes(l.targetSeat)) continue;
+      const c = chain.find((x) => x.holder === l.holderSeat && x.target === l.targetSeat);
+      const evil = l.seen ? l.seen === 'red' : c ? c.evil : null;
+      if (evil === null) continue;
+      const t = l.targetSeat;
+      const other = opts.thumbs[opts.thumbs[0] === t ? 1 : 0];
+      const [merlin, morgana] = evil ? [other, t] : [t, other];
+      reveal = { holder: l.holderSeat, target: t, round: l.round, line: `${seatChar(t)} 是${evil ? '紅' : '好人'} → ${seatChar(merlin)} 是梅林、${seatChar(morgana)} 是莫甘娜` };
+      break;
+    }
+  }
   for (const r of rows) {
     if (r.kind !== 'lake') continue;
     const segsL: Seg[] = [
       { t: `${seatChar(r.holderSeat)} > ${seatChar(r.targetSeat)} `, fill: C.ink },
       r.claim === 'o' ? { t: 'o', fill: '#93c5fd', weight: true } : r.claim === 'x' ? { t: 'x', fill: C.red, weight: true } : { t: '沒說', fill: C.soft },
     ];
+    const notes: Seg[] = [];
     const c = chain.find((x) => x.holder === r.holderSeat && x.target === r.targetSeat);
-    const note: Seg | undefined = r.seen
-      ? { t: `（看到${r.seen === 'red' ? '紅' : '好'}）`, fill: r.seen === 'red' ? C.red : C.green }
-      : c ? { t: `${seatChar(c.holder)} 是好人 → ${seatChar(c.target)} 是${c.evil ? '紅' : '好人'}`, fill: c.evil ? C.red : C.green } : undefined;
-    out.push(note ? { segs: segsL, note } : { segs: segsL });
+    if (r.seen) notes.push({ t: `（看到${r.seen === 'red' ? '紅' : '好'}）`, fill: r.seen === 'red' ? C.red : C.green });
+    else if (c) notes.push({ t: `${seatChar(c.holder)} 是好人 → ${seatChar(c.target)} 是${c.evil ? '紅' : '好人'}`, fill: c.evil ? C.red : C.green });
+    if (reveal && reveal.holder === r.holderSeat && reveal.target === r.targetSeat && reveal.round === r.round) notes.push({ t: reveal.line, fill: '#93c5fd' });
+    out.push({ segs: segsL, notes });
   }
   return out;
 }
 
 /** 湖那一段：第一行是每一筆（用 | 隔開），註記放在各自那一筆的正下方（疊到就往下一行）。回傳 SVG 與高度。 */
-export function lakeBlock(entries: readonly { segs: Seg[]; note?: Seg }[], x: number, y: number, size: number, prefix: Seg[] = []): { svg: string; height: number } {
+export function lakeBlock(entries: readonly { segs: Seg[]; notes: Seg[] }[], x: number, y: number, size: number, prefix: Seg[] = []): { svg: string; height: number } {
   if (entries.length === 0) return { svg: '', height: 0 };
   const line: Seg[] = [...prefix];
   const starts: number[] = [];
@@ -433,15 +473,18 @@ export function lakeBlock(entries: readonly { segs: Seg[]; note?: Seg }[], x: nu
   const noteSize = Math.max(16, size - 4);
   const rows: number[] = []; // 每一行註記目前的右邊界
   entries.forEach((e, i) => {
-    if (!e.note) return;
-    const nx = Math.min(starts[i], W - 40 - textWidth(e.note.t, noteSize));
-    let k = rows.findIndex((right) => nx > right + 10);
-    if (k < 0) {
-      rows.push(-Infinity);
-      k = rows.length - 1;
+    let below = -1; // 同一筆的第二個註記一定在第一個下面
+    for (const note of e.notes) {
+      const nx = Math.min(starts[i], W - 40 - textWidth(note.t, noteSize));
+      let k = rows.findIndex((right, j) => j > below && nx > right + 10);
+      if (k < 0) {
+        rows.push(-Infinity);
+        k = rows.length - 1;
+      }
+      rows[k] = Math.max(rows[k], nx + textWidth(note.t, noteSize));
+      below = k;
+      parts.push(segs(nx, y + (k + 1) * (noteSize + 10), [note], noteSize));
     }
-    rows[k] = nx + textWidth(e.note.t, noteSize);
-    parts.push(segs(nx, y + (k + 1) * (noteSize + 10), [e.note], noteSize));
   });
   return { svg: parts.join(''), height: rows.length * (noteSize + 10) };
 }
@@ -765,7 +808,8 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   ty += chips.height + 30;
   // 湖：任務格下面一行，從第一次湖的那一局（第 2 局）的任務格下面開始（0 > 5 o | 5 > 9 o | 9 > 8 o）；
   // 註記（看到好、湖中鏈）放在各自那一筆的下面
-  const entries = lakeEntries(rows, lakeKnowledge(pv, rows).chain);
+  const thumbs = pv.view.sight.kind === 'percival' ? pv.view.sight.thumbs : undefined;
+  const entries = lakeEntries(rows, lakeKnowledge(pv, rows).chain, { thumbs });
   if (entries.length) {
     const firstLake = rows.find((r): r is Extract<SheetRow, { kind: 'lake' }> => r.kind === 'lake');
     const i = Math.max(0, Math.min(4, (firstLake?.round ?? 2) - 1));
@@ -858,7 +902,8 @@ export function buildRoundSvgs(pv: PickView, weekday: number): { round: number; 
     ty += 26;
     parts.push(missionChip(rows, round, rx, ty, 78, 94));
     ty += 94 + 44;
-    const lake = lakeBlock(lakeEntries(part, lakeKnowledge(pv, known).chain), rx, ty, 26, [{ t: '湖 ', fill: '#a5f3fc', weight: true }]);
+    const thumbs = pv.view.sight.kind === 'percival' ? pv.view.sight.thumbs : undefined;
+    const lake = lakeBlock(lakeEntries(part, lakeKnowledge(pv, known).chain, { thumbs, known }), rx, ty, 26, [{ t: '湖 ', fill: '#a5f3fc', weight: true }]);
     parts.push(lake.svg);
     ty += 48 + lake.height;
     parts.push(segs(rx, ty, [{ t: '━', fill: LINE_YELLOW }, { t: ' 出任務的隊伍　', fill: C.soft }, { t: '┅', fill: LINE_YELLOW }, { t: ' 其他提議', fill: C.soft }], 20));

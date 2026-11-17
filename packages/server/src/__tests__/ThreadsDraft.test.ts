@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, roundLines, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, roundLines, logoRimPoint, cardSheetRows, questionRound, recapRounds, roundRows, buildRoundSvgs, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -492,7 +492,7 @@ describe('image', () => {
     expect(k.seats.get(4)).toEqual({ evil: true, via: 9 });
     expect(k.seats.get(5)).toEqual({ evil: false, via: 9 });
     expect(k.seats.get(3)).toEqual({ evil: true, via: 5 });
-    const notes = lakeEntries(rows, k.chain).map((e) => e.note?.t);
+    const notes = lakeEntries(rows, k.chain).map((e) => e.notes[0]?.t);
     expect(notes).toEqual(['（看到好）', '9 是好人 → 4 是紅', '9 是好人 → 5 是好人', '5 是好人 → 3 是紅']);
     // 不知道是好人的人宣告的湖不算
     expect(lakeKnowledge(fakePv(1, { kind: 'loyal' }), [lake(2, 6, 4, 'x')]).seats.size).toBe(0);
@@ -506,6 +506,34 @@ describe('image', () => {
     expect(marks.get(4)?.label).toBe('紅');
     expect(marks.get(7)?.label).toBe('湖鏈：紅');
     expect(marks.get(9)?.label).toBe('湖到好');
+  });
+
+  it('Percival: once one thumb’s alignment is known (own lake or chain) the thumbs become 梅林 (blue) and 莫甘娜 (red); not before', () => {
+    const lake = (round: number, holderSeat: number, targetSeat: number, claim: 'o' | 'x' | '', seen?: 'good' | 'red') => ({ kind: 'lake' as const, round, holderSeat, targetSeat, claim, ...(seen ? { seen } : {}) });
+    const roles = ['loyal', 'percival', 'loyal', 'merlin', 'assassin', 'morgana', 'mordred', 'loyal', 'loyal', 'oberon'];
+    const pv = { game: { seatRoles: roles }, pick: { seat: 2 }, view: { sight: { kind: 'percival', thumbs: [4, 6] } } } as never;
+    // 自己湖到拇指 4 是好人 → 4 梅林（藍）、6 莫甘娜（紅）
+    const good = seatMarks(pv, [lake(2, 2, 4, 'o', 'good')]);
+    expect(good.get(4)).toMatchObject({ label: '梅林' });
+    expect(good.get(6)).toMatchObject({ label: '莫甘娜' });
+    expect(good.get(4)?.color).not.toBe(good.get(6)?.color);
+    expect(good.get(4)?.color).toBe(good.get(2)?.color); // 藍（跟「你」同色）
+    // 自己湖到拇指 6 是紅 → 6 莫甘娜、4 梅林
+    const red = seatMarks(pv, [lake(2, 2, 6, 'x', 'red')]);
+    expect(red.get(6)?.label).toBe('莫甘娜');
+    expect(red.get(4)?.label).toBe('梅林');
+    // 湖中鏈：2 湖 1 好，1 湖 4 說好 → 4 梅林
+    const chainRows = [lake(2, 2, 1, 'o', 'good'), lake(3, 1, 4, 'o')];
+    const viaChain = seatMarks(pv, chainRows);
+    expect(viaChain.get(4)?.label).toBe('梅林');
+    expect(viaChain.get(6)?.label).toBe('莫甘娜');
+    const notes = lakeEntries(chainRows, lakeKnowledge(pv, chainRows).chain, { thumbs: [4, 6] }).map((e) => e.notes.map((n) => n.t));
+    expect(notes[1]).toEqual(['1 是好人 → 4 是好人', '4 是好人 → 4 是梅林、6 是莫甘娜']); // 疊在鏈的註記下面
+    // 還沒湖到拇指：照舊「拇指」
+    const before = seatMarks(pv, [lake(2, 2, 1, 'o', 'good')]);
+    expect(before.get(4)?.label).toBe('拇指');
+    expect(before.get(6)?.label).toBe('拇指');
+    expect(resolveThumbs([4, 6], new Map())).toBeNull();
   });
 
   it('each recap shows only what was known by that round (that round’s lake in, later lakes out)', () => {
