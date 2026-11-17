@@ -16,6 +16,8 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../bots/threads/generate';
 import { addDays, exerciseIdOfPick, weekdayOf } from '../bots/threads/plan';
 import {
+  igCaption,
+  postInstagram,
   fallbackComment,
   loadPlayerNames,
   postDaily,
@@ -30,6 +32,7 @@ import {
   type DailyPlan,
 } from '../bots/threads/publish/daily';
 import { ThreadsApi, redact, type FetchLike } from '../bots/threads/publish/threadsApi';
+import { InstagramApi } from '../bots/threads/publish/instagramApi';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
 let bank: SimBank;
@@ -239,5 +242,91 @@ describe('api', () => {
     await expect(failing.publishPost({ text: 'x' })).rejects.toThrow(/HTTP 400/);
     await failing.publishPost({ text: 'x' }).catch((e: Error) => expect(e.message).not.toContain('SECRET-TOKEN'));
     expect(redact('x?access_token=abc&y=1 abc', 'abc')).toBe('x?access_token=***&y=1 ***');
+  });
+});
+
+/** 假的 Instagram API。 */
+function fakeIg(opts: { recent?: { id: string; caption: string }[] } = {}) {
+  const calls: { method: string; path: string; params: URLSearchParams }[] = [];
+  let n = 0;
+  const fetch: FetchLike = async (url, init) => {
+    const u = new URL(url);
+    calls.push({ method: init?.method ?? 'GET', path: u.pathname, params: u.searchParams });
+    const reply = (status: number, body: unknown) => ({ ok: status < 400, status, text: async () => JSON.stringify(body) });
+    if (u.pathname.endsWith('/media') && init?.method === 'POST') return reply(200, { id: `ic${++n}` });
+    if (u.pathname.endsWith('/media_publish')) return reply(200, { id: `im${u.searchParams.get('creation_id')}` });
+    if (u.pathname.endsWith('/media')) return reply(200, { data: opts.recent ?? [] });
+    if (u.searchParams.get('fields') === 'status_code,status') return reply(200, { status_code: 'FINISHED' });
+    if (u.searchParams.get('fields') === 'permalink') return reply(200, { permalink: `https://www.instagram.com/p/${u.pathname.split('/').pop()}/` });
+    return reply(404, {});
+  };
+  return { api: new InstagramApi({ token: 'IG-SECRET', userId: '77', fetch, sleep: async () => {}, backoff: [1] }), calls };
+}
+
+describe('instagram', () => {
+  function prepared(): { plan: DailyPlan; stateDir: string } {
+    const stateDir = tmp();
+    const g = gen(stateDir);
+    const plan = prepareDaily('2026-11-18', { gen: g, stateDir, commentsDir: tmp(), outDir: tmp(), names, renderImage: () => Buffer.from('png') });
+    if (!plan) throw new Error('no plan');
+    return { plan, stateDir };
+  }
+
+  it('caption = the post text + the first comment, #阿瓦隆 once at the end, records link kept as text', () => {
+    const { plan } = prepared();
+    const c = igCaption(plan);
+    expect(c.startsWith(plan.text.split('\n')[0])).toBe(true);
+    expect(c).toContain(plan.comment);
+    expect(c.split('\n').filter((l) => l === '#阿瓦隆')).toHaveLength(1);
+    expect(c.endsWith('#阿瓦隆')).toBe(true);
+    expect(c).toContain('#records=');
+  });
+
+  it('single image: container → wait → publish; records the IG id next to the Threads state; never twice', async () => {
+    const { plan, stateDir } = prepared();
+    writeState(stateDir, { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: 'th1' });
+    const { api, calls } = fakeIg();
+    const r = await postInstagram(plan, { api, stateDir, imageUrls: ['https://raw.githubusercontent.com/o/r/s/images/2026-11-18.jpg'] });
+    expect(r.status).toBe('published');
+    const create = calls.find((c) => c.method === 'POST' && c.path.endsWith('/77/media'));
+    expect(create?.params.get('image_url')).toContain('.jpg');
+    expect(create?.params.get('caption')).toBe(igCaption(plan));
+    expect(calls.some((c) => c.path.endsWith('/77/media_publish'))).toBe(true);
+    const st = readState(stateDir, plan.date);
+    expect(st?.postId).toBe('th1');
+    expect(st?.ig?.mediaId).toBe(r.mediaId);
+    expect(st?.ig?.permalink).toContain('instagram.com');
+    const again = fakeIg();
+    expect((await postInstagram(plan, { api: again.api, stateDir, imageUrls: ['x'] })).status).toBe('already-published');
+    expect(again.calls).toHaveLength(0);
+  });
+
+  it('two images make a carousel; a recent post with today’s 題號 is recorded; no image = skipped', async () => {
+    const { plan, stateDir } = prepared();
+    const { api, calls } = fakeIg();
+    await postInstagram(plan, { api, stateDir, imageUrls: ['https://x/a.jpg', 'https://x/b.jpg'] });
+    const posts = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/77/media'));
+    expect(posts.map((c) => c.params.get('is_carousel_item'))).toEqual(['true', 'true', null]);
+    expect(posts[2].params.get('media_type')).toBe('CAROUSEL');
+    expect(posts[2].params.get('children')).toBe('ic1,ic2');
+
+    const s2 = prepared();
+    const dup = fakeIg({ recent: [{ id: 'old', caption: `題號 ${s2.plan.exerciseId}｜實戰牌譜` }] });
+    expect((await postInstagram(s2.plan, { api: dup.api, stateDir: s2.stateDir, imageUrls: ['x'] })).status).toBe('found-existing');
+    expect(dup.calls.some((c) => c.method === 'POST')).toBe(false);
+    expect(readState(s2.stateDir, s2.plan.date)?.postId).toBeNull(); // Threads 那邊之後照樣能發
+
+    const s3 = prepared();
+    expect((await postInstagram(s3.plan, { api: fakeIg().api, stateDir: s3.stateDir, imageUrls: [] })).status).toBe('skipped');
+  });
+
+  it('a Threads post after IG keeps the IG record', async () => {
+    const { plan, stateDir } = prepared();
+    await postInstagram(plan, { api: fakeIg().api, stateDir, imageUrls: ['x'] });
+    const { api } = fakeApi();
+    await postDaily(plan, { api, stateDir });
+    const st = readState(stateDir, plan.date);
+    expect(st?.postId).toBeTruthy();
+    expect(st?.ig?.mediaId).toBeTruthy();
   });
 });

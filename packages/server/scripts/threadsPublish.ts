@@ -5,6 +5,8 @@
  *   tsx scripts/threadsPublish.ts post    --out <輸出> --state-dir <...>          # 要 THREADS_ACCESS_TOKEN；圖的網址放 IMAGE_URL
  *   tsx scripts/threadsPublish.ts record-manual --date 2026-11-17 --state-dir <...> [--post-id <id>]
  *   tsx scripts/threadsPublish.ts token --token-out <檔案> [--force]                 # 權杖快到期就續期
+ *   tsx scripts/threadsPublish.ts post-ig --out <輸出> --state-dir <...>       # Instagram 同步：要 INSTAGRAM_ACCESS_TOKEN；JPEG 網址放 IG_IMAGE_URLS（逗號分隔）
+ *   tsx scripts/threadsPublish.ts token-ig --token-out <檔案> [--force]              # IG 權杖續期（每週一或 --force）
  *
  * 選項：--picks（預設 packages/server/threads_picks.json）、--comments（預設 docs/threads/comments）、--start（第一篇的日期）。
  * 權杖只從環境變數讀，不印出、不寫進 out；token 指令續期後的新權杖只寫到 --token-out 指定的檔案（CI 用完即刪）。
@@ -17,8 +19,9 @@ import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
-import { loadPlayerNames, postDaily, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
+import { igCaption, loadPlayerNames, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { REQUIRED_SCOPES, ThreadsApi } from '../src/bots/threads/publish/threadsApi';
+import { InstagramApi } from '../src/bots/threads/publish/instagramApi';
 
 const serverRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(serverRoot, '..', '..');
@@ -100,6 +103,26 @@ function printPlan(plan: DailyPlan, mode: string): void {
   say('```');
   say(plan.comment);
   say('```');
+  if (process.env.IG_PREVIEW === '1') {
+    say('### Instagram 說明（同步用）');
+    say('```');
+    say(igCaption(plan));
+    say('```');
+  }
+}
+
+function igFromEnv(userId = process.env.INSTAGRAM_USER_ID || 'me'): InstagramApi {
+  const token = process.env.INSTAGRAM_ACCESS_TOKEN ?? '';
+  if (!token) throw new Error('沒有 INSTAGRAM_ACCESS_TOKEN（GitHub secrets）');
+  return new InstagramApi({ token, userId });
+}
+
+/** 沒設 INSTAGRAM_USER_ID 時用權杖查出 IG 帳號 id。 */
+async function igWithUser(): Promise<InstagramApi> {
+  if (process.env.INSTAGRAM_USER_ID) return igFromEnv();
+  const me = await igFromEnv().me();
+  if (!me.id) throw new Error('查不到 IG 帳號 id：權杖要有 instagram_business_basic，帳號要是專業帳號');
+  return igFromEnv(me.id);
 }
 
 async function main(): Promise<number> {
@@ -194,7 +217,32 @@ async function main(): Promise<number> {
     return 0;
   }
 
-  console.error('用法：threadsPublish.ts prepare|post|record-manual|token …');
+  if (cmd === 'post-ig') {
+    const plan = JSON.parse(fs.readFileSync(path.join(outDir, 'plan.json'), 'utf8')) as DailyPlan;
+    const imageUrls = (process.env.IG_IMAGE_URLS ?? '')
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
+    const api = await igWithUser();
+    const r = await postInstagram(plan, { api, stateDir, imageUrls });
+    say(`- Instagram：${r.status}${r.permalink ? `，${r.permalink}` : r.mediaId ? `，貼文 ${r.mediaId}` : ''}`);
+    for (const n of r.notes) say(`- ${n}`);
+    flushSummary();
+    return 0;
+  }
+
+  if (cmd === 'token-ig') {
+    const out = arg('--token-out');
+    if (out && (flag('--force') || weekdayOf(taipeiToday()) === 1)) {
+      const r = await igFromEnv().refresh();
+      fs.writeFileSync(out, r.token, { mode: 0o600 });
+      say(`- IG 權杖已續期（${Math.floor(r.expiresIn / 86_400)} 天後到期），由下一步寫回 secrets`);
+    }
+    flushSummary();
+    return 0;
+  }
+
+  console.error('用法：threadsPublish.ts prepare|post|record-manual|token|post-ig|token-ig …');
   return 1;
 }
 

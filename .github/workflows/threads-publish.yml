@@ -4,6 +4,8 @@
 # - 每小時醒一次，到了台北時間 THREADS_POST_HOUR（預設 12）點以後才做事；同一天發過就不再發。
 # - 權杖只放 secrets（THREADS_ACCESS_TOKEN，選填 THREADS_USER_ID）；這個 repo 的執行紀錄是公開的，任何步驟都不印權杖。
 # - 發文狀態與圖放在 threads-state 分支（state/<日期>.json、images/<日期>.png）；圖用 raw.githubusercontent.com 的公開網址給 Threads 抓。
+# - Instagram 同步（選用）：有 secret INSTAGRAM_ACCESS_TOKEN 才會準備；repo 變數 INSTAGRAM_PUBLISH 是 '1' 才真的發。
+#   IG 只收 JPEG、長寬比 4:5～1.91:1，所以圖先轉成 1080×1350 的 JPEG（images/<日期>.jpg）。
 name: Threads 每日發文
 
 on:
@@ -49,6 +51,8 @@ jobs:
           IN_MODE: ${{ inputs.mode }}
           PUBLISH: ${{ vars.THREADS_PUBLISH }}
           POST_HOUR: ${{ vars.THREADS_POST_HOUR }}
+          HAS_IG: ${{ secrets.INSTAGRAM_ACCESS_TOKEN != '' }}
+          IG_PUBLISH: ${{ vars.INSTAGRAM_PUBLISH }}
         run: |
           set -euo pipefail
           DATE="${IN_DATE:-$(TZ=Asia/Taipei date +%F)}"
@@ -57,18 +61,24 @@ jobs:
           if [ "$MODE" = auto ]; then
             if [ "${PUBLISH:-}" = 1 ]; then MODE=live; else MODE=dry-run; fi
           fi
+          # Instagram：沒有權杖＝off；手動選 dry-run 或沒開 INSTAGRAM_PUBLISH＝只試跑；補記手動發的那天不碰 IG。
+          IG=off
+          if [ "${HAS_IG:-}" = true ] && [ "$MODE" != record-manual ]; then
+            if [ "${IN_MODE:-auto}" != dry-run ] && [ "${IG_PUBLISH:-}" = 1 ]; then IG=live; else IG=dry-run; fi
+          fi
           RUN=1
           if [ "$EVENT" = schedule ]; then
             HOUR=$((10#$(TZ=Asia/Taipei date +%H)))
             WANT=$((10#${POST_HOUR:-12}))
             # 正式發：到點以後每小時都看一次（排程延遲也補得上），發過就跳過；試跑：只在那個整點跑一次。
             if [ "$HOUR" -lt "$WANT" ]; then RUN=0; fi
-            if [ "$MODE" = dry-run ] && [ "$HOUR" -ne "$WANT" ]; then RUN=0; fi
+            if [ "$MODE" != live ] && [ "$IG" != live ] && [ "$HOUR" -ne "$WANT" ]; then RUN=0; fi
           fi
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "ig=$IG" >> "$GITHUB_OUTPUT"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
-          echo "日期 $DATE，模式 $MODE，執行 $RUN"
+          echo "日期 $DATE，模式 $MODE，IG $IG，執行 $RUN"
 
       - name: 取出 threads-state 分支
         if: steps.gate.outputs.run == '1'
@@ -77,6 +87,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DATE: ${{ steps.gate.outputs.date }}
           MODE: ${{ steps.gate.outputs.mode }}
+          IG: ${{ steps.gate.outputs.ig }}
         run: |
           set -euo pipefail
           URL="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
@@ -90,9 +101,12 @@ jobs:
           fi
           git -C "$STATE_DIR" config user.name 'github-actions[bot]'
           git -C "$STATE_DIR" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          SKIP=0
+          # 要正式發的（Threads、IG）都已經發過才跳過。
+          SKIP=0; TDONE=1; IDONE=1
           F="$STATE_DIR/state/$DATE.json"
-          if [ "$MODE" = live ] && [ -f "$F" ] && jq -e '.postId != null' "$F" >/dev/null; then SKIP=1; echo "$DATE 已經發過，跳過"; fi
+          if [ "$MODE" = live ]; then TDONE=0; [ -f "$F" ] && jq -e '.postId != null' "$F" >/dev/null && TDONE=1; fi
+          if [ "$IG" = live ]; then IDONE=0; [ -f "$F" ] && jq -e '.ig.mediaId != null' "$F" >/dev/null && IDONE=1; fi
+          if { [ "$MODE" = live ] || [ "$IG" = live ]; } && [ "$TDONE" = 1 ] && [ "$IDONE" = 1 ]; then SKIP=1; echo "$DATE 已經發過，跳過"; fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4
@@ -138,13 +152,46 @@ jobs:
             echo "權杖已續期並寫回 secrets"
           fi
 
+      - name: IG 權杖續期（每週一；要 secrets.THREADS_SECRETS_PAT 才寫得回去）
+        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.ig == 'live'
+        working-directory: packages/server
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          SECRETS_PAT: ${{ secrets.THREADS_SECRETS_PAT }}
+        run: |
+          set -euo pipefail
+          NEW="$RUNNER_TEMP/ig_new_token"
+          [ -n "${SECRETS_PAT:-}" ] || exit 0
+          npx tsx scripts/threadsPublish.ts token-ig --token-out "$NEW" || echo "IG 續期沒成功，照舊權杖發文"
+          if [ -s "$NEW" ]; then
+            echo "::add-mask::$(cat "$NEW")"
+            GH_TOKEN="$SECRETS_PAT" gh secret set INSTAGRAM_ACCESS_TOKEN --repo "$REPO" < "$NEW"
+            echo "INSTAGRAM_ACCESS_TOKEN=$(cat "$NEW")" >> "$GITHUB_ENV"
+            rm -f "$NEW"
+            echo "IG 權杖已續期並寫回 secrets"
+          fi
+
       - name: 產生今天的貼文並檢查
+        id: prepare
         if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode != 'record-manual'
         working-directory: packages/server
         env:
           THREADS_MODE: ${{ steps.gate.outputs.mode }}
           DATE: ${{ steps.gate.outputs.date }}
+          IG_PREVIEW: ${{ steps.gate.outputs.ig != 'off' && '1' || '0' }}
         run: npx tsx scripts/threadsPublish.ts prepare --date "$DATE" --state-dir "$STATE_DIR" --out "$OUT_DIR"
+
+      - name: IG 用的圖：轉成 1080×1350 JPEG
+        if: steps.prepare.outcome == 'success' && steps.gate.outputs.ig != 'off'
+        env:
+          DATE: ${{ steps.gate.outputs.date }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for f in "$OUT_DIR/$DATE".png "$OUT_DIR/$DATE"-*.png; do
+            convert "$f" -background '#f7f5f0' -flatten -resize 1080x1350 -gravity center -extent 1080x1350 -quality 92 "${f%.png}.jpg"
+          done
+          ls -l "$OUT_DIR"
 
       - name: 試跑：把要發的內容存成附件
         if: always() && steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'dry-run'
@@ -156,30 +203,44 @@ jobs:
           retention-days: 14
 
       - name: 正式發：把圖推上 threads-state，取得公開網址
-        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        if: steps.prepare.outcome == 'success' && (steps.gate.outputs.mode == 'live' || steps.gate.outputs.ig == 'live')
         id: image
         env:
           DATE: ${{ steps.gate.outputs.date }}
         run: |
           set -euo pipefail
-          if [ -f "$OUT_DIR/$DATE.png" ]; then
-            mkdir -p "$STATE_DIR/images"
-            cp "$OUT_DIR/$DATE.png" "$STATE_DIR/images/$DATE.png"
-            git -C "$STATE_DIR" add -A
-            git -C "$STATE_DIR" commit -q -m "threads: $DATE 的題目圖" || true
-            for d in 2 4 8 16 0; do git -C "$STATE_DIR" push -q origin threads-state && break; [ "$d" = 0 ] && exit 1; sleep "$d"; done
-            SHA=$(git -C "$STATE_DIR" rev-parse HEAD)
-            echo "url=https://raw.githubusercontent.com/${REPO}/${SHA}/images/${DATE}.png" >> "$GITHUB_OUTPUT"
-          fi
+          shopt -s nullglob
+          mkdir -p "$STATE_DIR/images"
+          FILES=("$OUT_DIR/$DATE".png "$OUT_DIR/$DATE"-*.png "$OUT_DIR/$DATE".jpg "$OUT_DIR/$DATE"-*.jpg)
+          [ "${#FILES[@]}" -gt 0 ] || exit 0
+          cp "${FILES[@]}" "$STATE_DIR/images/"
+          git -C "$STATE_DIR" add -A
+          git -C "$STATE_DIR" commit -q -m "threads: $DATE 的題目圖" || true
+          for d in 2 4 8 16 0; do git -C "$STATE_DIR" push -q origin threads-state && break; [ "$d" = 0 ] && exit 1; sleep "$d"; done
+          SHA=$(git -C "$STATE_DIR" rev-parse HEAD)
+          BASE="https://raw.githubusercontent.com/${REPO}/${SHA}/images"
+          [ -f "$OUT_DIR/$DATE.png" ] && echo "url=$BASE/$DATE.png" >> "$GITHUB_OUTPUT"
+          JPGS=""
+          for f in "$OUT_DIR/$DATE".jpg "$OUT_DIR/$DATE"-*.jpg; do JPGS="${JPGS:+$JPGS,}$BASE/$(basename "$f")"; done
+          echo "ig_urls=$JPGS" >> "$GITHUB_OUTPUT"
 
       - name: 正式發：發 A（引用昨天）與第一則留言
-        if: steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && steps.gate.outputs.mode == 'live'
+        if: steps.image.outcome == 'success' && steps.gate.outputs.mode == 'live'
         working-directory: packages/server
         env:
           THREADS_ACCESS_TOKEN: ${{ env.THREADS_ACCESS_TOKEN || secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           IMAGE_URL: ${{ steps.image.outputs.url }}
         run: npx tsx scripts/threadsPublish.ts post --state-dir "$STATE_DIR" --out "$OUT_DIR"
+
+      - name: Instagram 同步
+        if: always() && steps.prepare.outcome == 'success' && steps.image.outcome == 'success' && steps.gate.outputs.ig == 'live'
+        working-directory: packages/server
+        env:
+          INSTAGRAM_ACCESS_TOKEN: ${{ env.INSTAGRAM_ACCESS_TOKEN || secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          IG_IMAGE_URLS: ${{ steps.image.outputs.ig_urls }}
+        run: npx tsx scripts/threadsPublish.ts post-ig --state-dir "$STATE_DIR" --out "$OUT_DIR"
 
       - name: 補記手動發的那一天
         if: steps.gate.outputs.run == '1' && steps.gate.outputs.mode == 'record-manual'
@@ -192,7 +253,7 @@ jobs:
         run: npx tsx scripts/threadsPublish.ts record-manual --date "$DATE" --state-dir "$STATE_DIR" ${POST_ID:+--post-id "$POST_ID"}
 
       - name: 記下發文狀態
-        if: always() && steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && (steps.gate.outputs.mode == 'live' || steps.gate.outputs.mode == 'record-manual')
+        if: always() && steps.gate.outputs.run == '1' && steps.state.outputs.skip != '1' && (steps.gate.outputs.mode == 'live' || steps.gate.outputs.mode == 'record-manual' || steps.gate.outputs.ig == 'live')
         env:
           DATE: ${{ steps.gate.outputs.date }}
           MODE: ${{ steps.gate.outputs.mode }}
@@ -205,4 +266,4 @@ jobs:
 
       - name: 清掉暫存
         if: always()
-        run: rm -rf "${{ runner.temp }}/threads_new_token"
+        run: rm -rf "${{ runner.temp }}/threads_new_token" "${{ runner.temp }}/ig_new_token"

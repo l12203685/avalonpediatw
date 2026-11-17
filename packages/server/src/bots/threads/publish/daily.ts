@@ -18,6 +18,7 @@ import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick } from '../plan';
 import type { ThreadsApi, RecentPost } from './threadsApi';
+import { INSTAGRAM_CAPTION_MAX, type InstagramApi, type RecentMedia } from './instagramApi';
 
 // ─── 站長選的題（threads_picks.json） ───────────────────────────────────────
 
@@ -64,6 +65,8 @@ export interface ThreadsStateRecord {
   quotePostId?: string | null;
   commentId?: string | null;
   publishedAt?: string;
+  /** Instagram 同步（有開才有）。 */
+  ig?: { mediaId: string; permalink?: string; publishedAt?: string };
 }
 
 export function statePath(stateDir: string, date: string): string {
@@ -285,7 +288,7 @@ export async function postDaily(plan: DailyPlan, deps: { api: ThreadsApi; stateD
   const recent = await deps.api.recentPosts();
   const dup = findByExercise(recent, plan.exerciseId);
   if (dup) {
-    writeState(deps.stateDir, { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp });
+    writeState(deps.stateDir, { ...existing, date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp });
     return { status: 'found-existing', postId: dup.id, permalink: dup.permalink, notes: ['自己最近的貼文裡已經有今天的題號，補記、不再發'] };
   }
 
@@ -305,7 +308,8 @@ export async function postDaily(plan: DailyPlan, deps: { api: ThreadsApi; stateD
   if (plan.image && !deps.imageUrl) notes.push('有圖但沒有公開網址：只發文字');
   const postId = await deps.api.publishPost({ text: plan.text, ...(plan.image && deps.imageUrl ? { imageUrl: deps.imageUrl } : {}), ...(quotePostId ? { quotePostId } : {}) });
   // 先記下 A：留言失敗時重跑不會再發一次 A。
-  const rec: ThreadsStateRecord = { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId, quotePostId, commentId: null, publishedAt: now().toISOString() };
+  // 同一天 IG 可能先發了（只開 IG 的時候）：保留狀態檔裡已有的欄位。
+  const rec: ThreadsStateRecord = { ...existing, date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId, quotePostId, commentId: null, publishedAt: now().toISOString() };
   writeState(deps.stateDir, rec);
 
   let commentId: string | null = null;
@@ -327,4 +331,57 @@ export function recordManual(date: string, postId: string | null, deps: { gen: T
   const rec: ThreadsStateRecord = { date, exerciseId: draft.exerciseId, draft, source: 'manual', postId, ...(deps.permalink ? { permalink: deps.permalink } : {}) };
   writeState(deps.stateDir, rec);
   return rec;
+}
+
+// ─── Instagram 同步 ─────────────────────────────────────────────────────────
+
+/**
+ * IG 的貼文說明：Threads 那篇的文字（IG 沒有引用貼文，昨天的答案照樣寫在裡面），
+ * 後面接第一則留言（觀念＋文章網址；IG 說明裡的網址不能點，照純文字放）。#阿瓦隆 放最後一行。
+ */
+export function igCaption(plan: Pick<DailyPlan, 'text' | 'comment'>): string {
+  const body = plan.text
+    .split('\n')
+    .filter((l) => l.trim() !== THREADS_TOPIC_TAG)
+    .join('\n')
+    .trimEnd();
+  const caption = `${body}\n\n${plan.comment.trim()}\n\n${THREADS_TOPIC_TAG}`;
+  return [...caption].length <= INSTAGRAM_CAPTION_MAX ? caption : `${body}\n\n${THREADS_TOPIC_TAG}`;
+}
+
+/** 自己最近的 IG 貼文裡找「題號 <題號>」那一篇。 */
+export function findMediaByExercise(media: readonly RecentMedia[], exerciseId: string): RecentMedia | null {
+  const needle = `題號 ${exerciseId}`;
+  return media.find((m) => (m.caption ?? '').includes(needle)) ?? null;
+}
+
+export interface IgResult {
+  status: 'published' | 'already-published' | 'found-existing' | 'skipped';
+  mediaId?: string;
+  permalink?: string;
+  notes: string[];
+}
+
+/** 狀態檔沒有這一天時（例如只開了 IG）先建一筆，Threads 那邊之後照樣能發。 */
+function stateOrNew(stateDir: string, plan: DailyPlan): ThreadsStateRecord {
+  return readState(stateDir, plan.date) ?? { date: plan.date, exerciseId: plan.exerciseId, draft: plan.draft, source: 'auto', postId: null };
+}
+
+export async function postInstagram(plan: DailyPlan, deps: { api: InstagramApi; stateDir: string; imageUrls: readonly string[]; now?: () => Date }): Promise<IgResult> {
+  const now = deps.now ?? ((): Date => new Date());
+  if (plan.errors.length > 0) throw new Error(`內容檢查沒過：${plan.errors.join('；')}`);
+  const existing = readState(deps.stateDir, plan.date);
+  if (existing?.ig?.mediaId) return { status: 'already-published', mediaId: existing.ig.mediaId, permalink: existing.ig.permalink, notes: ['狀態檔已經有這一天的 IG 貼文'] };
+  if (deps.imageUrls.length === 0) return { status: 'skipped', notes: ['沒有圖：IG 不能只發文字，這天不同步'] };
+
+  const dup = findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId);
+  if (dup) {
+    writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp } });
+    return { status: 'found-existing', mediaId: dup.id, permalink: dup.permalink, notes: ['IG 最近的貼文裡已經有今天的題號，補記、不再發'] };
+  }
+  const mediaId = await deps.api.publish({ imageUrls: deps.imageUrls, caption: igCaption(plan) });
+  writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId, publishedAt: now().toISOString() } });
+  const permalink = await deps.api.permalink(mediaId);
+  if (permalink) writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId, permalink, publishedAt: now().toISOString() } });
+  return { status: 'published', mediaId, permalink, notes: deps.imageUrls.length > 1 ? [`輪播 ${deps.imageUrls.length} 張`] : [] };
 }

@@ -93,6 +93,7 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 - `generate.ts`：把存檔和題庫接起來；站長選的題（`threads_picks.json`）也在這裡套上
 - `publish/daily.ts`：自動發佈的三段（prepare、post、補記手動發的那一天）、內容檢查、狀態檔
 - `publish/threadsApi.ts`：Threads API（發文、回覆、查最近的貼文、權杖檢查與續期）
+- `publish/instagramApi.ts`：Instagram API（同步發同一篇的圖文、輪播、續期）
 
 指令在 `packages/server/scripts/threadsPublish.ts`，工作流程在 `.github/workflows/threads-publish.yml`。
 
@@ -172,3 +173,50 @@ Threads API 只收公開網址的圖。圖推到這個 repo 的 `threads-state` 
 - 圖只有座位和牌譜記號，跟貼文一樣是公開內容。
 - 網址綁 commit，不會被之後的檔案蓋掉。
 - 只在正式發的那一刻才推，試跑不推。
+
+## Instagram 同步
+
+站長 2026-11-17：「我想順便一齊開通IG 的權限 同步發文」。
+
+Threads App 裡「同時分享到 IG」的按鈕沒有 API 可以用，所以另外用 Instagram API 發同一篇。
+
+### 它做什麼
+
+每天 Threads 那篇發完後（或同一次執行裡），把同一篇發到 IG：
+- **圖**：同一張題目圖，轉成 1080×1350 的 JPEG（IG 只收 JPEG，長寬比要在 4:5 到 1.91:1 之間），放在 `threads-state` 分支的 `images/<日期>.jpg`。以後一天有兩張以上的圖，會自動改發輪播。
+- **說明**：Threads 那篇的文字，後面接第一則留言（觀念加文章網址），最後一行 `#阿瓦隆`。
+  - IG 沒有「引用貼文」，昨天的答案照樣寫在說明裡。
+  - IG 說明裡的網址不能點，牌譜和文章網址照純文字放。
+- **不重複發**：狀態檔記了這一天的 IG 貼文 id 就跳過；IG 最近的貼文裡已經有「題號 今天的題號」就補記、不再發。
+- **跟 Threads 分開**：IG 失敗不影響 Threads，反過來也一樣。
+
+### 開關
+
+- 沒有 secret `INSTAGRAM_ACCESS_TOKEN`：完全不碰 IG。
+- 有權杖、但 repo 變數 `INSTAGRAM_PUBLISH` 不是 `1`：只試跑，IG 說明和 JPEG 放在那次執行的摘要和附件。
+- `INSTAGRAM_PUBLISH`＝`1`：正式同步。
+- 手動執行選 `dry-run` 時一律只試跑。
+
+### 站長要做的（一次）
+
+1. **IG 改成專業帳號**：IG App → 設定 → 帳號類型和工具 → 切換為專業帳號（創作者或商家都可以）。
+2. **在同一個 Meta 應用程式加上 Instagram**：developers.facebook.com → 你的應用程式 → 新增使用案例「Instagram API（用 Instagram 登入）」。
+3. **權限**：加上 `instagram_business_basic`、`instagram_business_content_publish`。
+4. **把自己加成 Instagram 測試人員**：應用程式角色 → 新增 Instagram 測試人員（填 IG 帳號），再到 IG 網頁版「設定 → 應用程式和網站 → 測試人員邀請」接受。
+5. **產生權杖**：在 Instagram 使用案例的「API 設定」裡，對自己的 IG 帳號按「產生權杖」，得到長效權杖（60 天）。
+6. **放進 GitHub**（Settings → Secrets and variables → Actions）：
+   - Secret `INSTAGRAM_ACCESS_TOKEN`＝IG 權杖。
+   - Secret `INSTAGRAM_USER_ID`＝IG 帳號 id（可以不填，會用權杖查）。
+   - 權杖不要貼在對話、Issue 或程式裡。
+7. **先試跑**：Actions → Threads 每日發文 → Run workflow，mode 選 `dry-run`，看摘要裡的「Instagram 說明」和附件裡的 JPEG。
+8. **打開**：Variables 新增 `INSTAGRAM_PUBLISH`＝`1`。
+9. **要停**：把 `INSTAGRAM_PUBLISH` 改成 `0` 或刪掉，IG 馬上回到只試跑；刪掉 `INSTAGRAM_ACCESS_TOKEN` 就完全不碰 IG。
+
+### IG 權杖到期
+
+IG 長效權杖也是 60 天。有 secret `THREADS_SECRETS_PAT` 時（同一把，要有 Secrets 讀寫權限），每週一自動續期並寫回 `INSTAGRAM_ACCESS_TOKEN`；沒有的話快到期時重做第 5–6 步。
+
+### 限制
+
+- IG 一定要有圖：那天沒有圖就不同步，摘要會寫。
+- IG 每 24 小時最多用 API 發 50 篇，每天一篇不會碰到。
