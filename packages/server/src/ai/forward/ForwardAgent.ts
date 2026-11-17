@@ -67,6 +67,7 @@ import { loyalR2ViewTeam, loyalSetPickTeam, percivalThumbSureTeam } from '../Blu
 import { bayesOptionsOf, bayesTeamClean } from '../belief/BayesBelief';
 import { earlyOwnTeamWhite, merlinOnTeamOwnApprove, merlinOwnWhiteNow, ownViewFirstPickTeam, percivalThumbReadTeam } from '../BlueRound38';
 import { lakeHolderBarred40, lakePairBarred } from '../BlueRound39';
+import { loyalFresh43Team } from '../BlueRound43';
 import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type PercivalThumbPlan39 } from '../BlueRound39Percival';
 import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
@@ -769,7 +770,12 @@ export class ForwardAgent implements AvalonAgent {
     this.thumbPlan39 = plan39;
     this.lakeBar39 = lakeBar;
     try {
-      const d = this.decideMain(obs);
+      const d0 = this.decideMain(obs);
+      if (d0.action.type !== 'team_select') return d0;
+      // Round 43 `loyalFresh43` (BlueRound43.ts; wiki B27 / B19 / B7): an R1–R2 talk proposal of a loyal / Percival carries at least one player
+      // no earlier proposal has held (and the leader's own posterior does not read as red) — the blue proposals stop moving together, Merlin is covered.
+      const fresh43 = loyalFresh43Team(this.baseline.tuning, obs, d0.action, (team) => this.repairGateOk39(obs, team));
+      const d = fresh43 === d0.action ? d0 : { ...d0, action: fresh43, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → a player no earlier proposal held (round 43)` } };
       if (d.action.type !== 'team_select') return d;
       if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
