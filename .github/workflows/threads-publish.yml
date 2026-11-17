@@ -92,7 +92,8 @@ jobs:
           git -C "$STATE_DIR" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           SKIP=0
           F="$STATE_DIR/state/$DATE.json"
-          if [ "$MODE" = live ] && [ -f "$F" ] && jq -e '.postId != null' "$F" >/dev/null; then SKIP=1; echo "$DATE 已經發過，跳過"; fi
+          # 發過就跳過；但這條管線發的 A 第一則留言沒成功（commentId 記成 null）時照跑，post 段只補發留言。
+          if [ "$MODE" = live ] && [ -f "$F" ] && jq -e '.postId != null and ((.source == "auto" and has("commentId") and .commentId == null) | not)' "$F" >/dev/null; then SKIP=1; echo "$DATE 已經發過，跳過"; fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v4

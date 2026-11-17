@@ -17,7 +17,7 @@ import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
-import { loadPlayerNames, postDaily, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
+import { loadPlayerNames, planSummary, postDaily, prepareDaily, readPicks, readState, recordManual, savedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { REQUIRED_SCOPES, ThreadsApi } from '../src/bots/threads/publish/threadsApi';
 
 const serverRoot = path.resolve(__dirname, '..');
@@ -84,22 +84,7 @@ async function checkToken(api: ThreadsApi): Promise<void> {
 }
 
 function printPlan(plan: DailyPlan, mode: string): void {
-  say(`## Threads ${plan.date}（${plan.draft.theme}）— ${mode}`);
-  say('');
-  say(`- 題號 ${plan.exerciseId}，貼文 ${plan.chars} 字，圖：${plan.image ? '有' : '沒有'}，第一則留言：${plan.commentSource === 'chatgpt' ? 'ChatGPT' : '備案'}`);
-  say(`- 引用：${plan.quote ? `${plan.quote.date}（題號 ${plan.quote.exerciseId}，貼文 id ${plan.quote.postId ?? '還沒記到，發文時去最近的貼文找'}）` : '不引用（第一天）'}`);
-  if (plan.alreadyPublished) say('- 這一天已經發過了：不會再發');
-  for (const w of plan.warnings) say(`- ⚠️ ${w}`);
-  for (const e of plan.errors) say(`- ❌ ${e}`);
-  say('');
-  say('### 貼文 A');
-  say('```');
-  say(plan.text);
-  say('```');
-  say('### 第一則留言');
-  say('```');
-  say(plan.comment);
-  say('```');
+  for (const line of planSummary(plan, mode)) say(line);
 }
 
 async function main(): Promise<number> {
@@ -137,7 +122,7 @@ async function main(): Promise<number> {
 
   if (cmd === 'post') {
     const plan = JSON.parse(fs.readFileSync(path.join(outDir, 'plan.json'), 'utf8')) as DailyPlan;
-    if (plan.alreadyPublished) {
+    if (plan.alreadyPublished && !plan.resumeComment) {
       say(`- ${plan.date} 已經發過，跳過`);
       flushSummary();
       return 0;

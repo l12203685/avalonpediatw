@@ -6,8 +6,10 @@
  *   2. post：（只在正式發佈時）找昨天的貼文 id → 發 A（引用昨天）→ 先記下 A 的 id → 發第一則留言 → 記下網址。
  *   3. recordManual：站長手動發的那一天（例如 11/17）補記貼文 id，隔天才引用得到。
  *
- * 不會重複發：狀態檔（threads-state 分支的 state/<日期>.json）有貼文 id 就跳過；
+ * 不會重複發：狀態檔（threads-state 分支的 state/<日期>.json）有貼文 id 就不再發 A；
  * 沒有的話再查自己最近的貼文裡有沒有「題號 <今天的題號>」（上次發了卻沒記下來）。
+ * A 發了、第一則留言沒成功（狀態檔 commentId 是 null）的話，之後的執行只補發留言。
+ * 內容檢查沒過時，plan.json 不放貼文、留言的內容（CI 的附件是公開的），只放檢查訊息。
  * 權杖只在 post 段用，不寫進任何檔案。
  */
 
@@ -78,6 +80,14 @@ export function readState(stateDir: string, date: string): ThreadsStateRecord | 
   } catch {
     return null;
   }
+}
+
+/**
+ * 這條管線發的 A 已經記下、第一則留言卻沒成功（commentId 明確記成 null）：之後的執行要補發留言。
+ * 站長手動發的、或從最近的貼文補記的（不知道留言發了沒，commentId 沒有記）不補，避免重複留言。
+ */
+export function needsCommentResume(rec: ThreadsStateRecord | null): boolean {
+  return !!rec?.postId && rec.source === 'auto' && rec.commentId === null;
 }
 
 export function writeState(stateDir: string, rec: ThreadsStateRecord): void {
@@ -187,8 +197,10 @@ export interface DailyPlan {
   image: string | null;
   /** 要引用的昨天貼文；第一天是 null。postId 沒記到的話 post 段會去自己最近的貼文裡找。 */
   quote: { date: string; exerciseId: string; postId: string | null } | null;
-  /** 已經發過了（狀態檔有貼文 id）：post 段什麼都不做。 */
+  /** 已經發過了（狀態檔有貼文 id）：post 段不再發 A。 */
   alreadyPublished: boolean;
+  /** A 發了、第一則留言還沒成功：post 段只補發留言。 */
+  resumeComment: boolean;
   errors: string[];
   warnings: string[];
   draft: ThreadsDraft;
@@ -249,13 +261,47 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     image,
     quote,
     alreadyPublished: !!existing?.postId,
+    resumeComment: needsCommentResume(existing),
     errors: validatePost({ text: draft.post.text, comment, names: deps.names }),
     warnings,
     draft: existing?.draft ?? draft,
   };
   fs.mkdirSync(deps.outDir, { recursive: true });
-  fs.writeFileSync(path.join(deps.outDir, 'plan.json'), `${JSON.stringify(plan, null, 2)}\n`);
+  fs.writeFileSync(path.join(deps.outDir, 'plan.json'), `${JSON.stringify(plan.errors.length > 0 ? rejectedPlan(plan) : plan, null, 2)}\n`);
   return plan;
+}
+
+/**
+ * 內容檢查沒過的 plan 寫檔用：拿掉貼文、留言和草稿（可能就是含玩家名字而被擋下的內容；CI 的紀錄和附件是公開的），
+ * 只留檢查訊息（訊息本身不含名字）。
+ */
+export function rejectedPlan(plan: DailyPlan): Omit<DailyPlan, 'text' | 'comment' | 'draft'> & { rejected: true } {
+  const out: Partial<DailyPlan> & { rejected: true } = { ...plan, rejected: true };
+  delete out.text;
+  delete out.comment;
+  delete out.draft;
+  return out as Omit<DailyPlan, 'text' | 'comment' | 'draft'> & { rejected: true };
+}
+
+/**
+ * prepare 印到 CI 紀錄與摘要的內容（Actions 的紀錄是公開的）。
+ * 內容檢查沒過（例如疑似玩家名字）就只印檢查訊息，不印貼文和留言。
+ */
+export function planSummary(plan: DailyPlan, mode: string): string[] {
+  const out: string[] = [];
+  out.push(`## Threads ${plan.date}（${plan.draft.theme}）— ${mode}`);
+  out.push('');
+  out.push(`- 題號 ${plan.exerciseId}，貼文 ${plan.chars} 字，圖：${plan.image ? '有' : '沒有'}，第一則留言：${plan.commentSource === 'chatgpt' ? 'ChatGPT' : '備案'}`);
+  out.push(`- 引用：${plan.quote ? `${plan.quote.date}（題號 ${plan.quote.exerciseId}，貼文 id ${plan.quote.postId ?? '還沒記到，發文時去最近的貼文找'}）` : '不引用（第一天）'}`);
+  if (plan.alreadyPublished) out.push(plan.resumeComment ? '- 這一天的 A 已經發了、第一則留言還沒成功：只補發留言' : '- 這一天已經發過了：不會再發');
+  for (const w of plan.warnings) out.push(`- ⚠️ ${w}`);
+  for (const e of plan.errors) out.push(`- ❌ ${e}`);
+  if (plan.errors.length > 0) {
+    out.push('- 內容檢查沒過：不印出貼文和留言（plan.json 也不放內容）');
+    return out;
+  }
+  out.push('', '### 貼文 A', '```', plan.text, '```', '### 第一則留言', '```', plan.comment, '```');
+  return out;
 }
 
 // ─── post ───────────────────────────────────────────────────────────────────
@@ -267,7 +313,7 @@ export function findByExercise(posts: readonly RecentPost[], exerciseId: string)
 }
 
 export interface PostResult {
-  status: 'published' | 'already-published' | 'found-existing';
+  status: 'published' | 'already-published' | 'found-existing' | 'comment-resumed';
   postId: string;
   permalink?: string;
   commentId?: string | null;
@@ -280,6 +326,17 @@ export async function postDaily(plan: DailyPlan, deps: { api: ThreadsApi; stateD
   const now = deps.now ?? ((): Date => new Date());
   if (plan.errors.length > 0) throw new Error(`內容檢查沒過：${plan.errors.join('；')}`);
   const existing = readState(deps.stateDir, plan.date);
+  if (existing?.postId && needsCommentResume(existing)) {
+    // A 已經發了（不再發），上次第一則留言沒成功：只補留言。
+    const base = { postId: existing.postId, permalink: existing.permalink, quotePostId: existing.quotePostId ?? null };
+    try {
+      const commentId = await deps.api.publishReply({ text: plan.comment, replyToId: existing.postId });
+      writeState(deps.stateDir, { ...existing, commentId });
+      return { status: 'comment-resumed', ...base, commentId, notes: ['A 之前已經發了，這次補發第一則留言'] };
+    } catch (err) {
+      return { status: 'already-published', ...base, commentId: null, notes: [`第一則留言還是沒發成功（下次再補）：${(err as Error).message}`] };
+    }
+  }
   if (existing?.postId) return { status: 'already-published', postId: existing.postId, permalink: existing.permalink, notes: ['狀態檔已經有這一天的貼文 id'] };
 
   const recent = await deps.api.recentPosts();
