@@ -59,9 +59,14 @@ export function r1ReuseThinTeam49(
   return null;
 }
 
-/** `earlyWhite49`：第 2 局的尾家外白門檻（0 = 照 `loyalTailWhite`）。 */
+/**
+ * `earlyWhite49`：第 2 局的尾家外白門檻（0 = 照 `loyalTailWhite`）。`earlyWhite49Mix`（第 1C 節的 50%）：一半的局面照雜湊不用新門檻
+ * （座位、第幾次提議、表決中的隊伍；同一個局面每次一樣）。
+ */
 export function earlyWhiteTuning49(tuning: Readonly<AgentTuning>, obs: PlayerObservation): Readonly<AgentTuning> {
   const tau = tuning.earlyWhite49 ?? 0;
   if (tau <= 0 || (obs.currentRound ?? 1) !== 2) return tuning;
+  if ((tuning.earlyWhite49Mix ?? 0) > 0
+    && hash01(`${obs.myPlayerId}|${obs.failCount ?? 0}|${[...(obs.proposedTeam ?? [])].sort().join(',')}|earlywhite49mix`) >= 0.5) return tuning;
   return { ...tuning, loyalTailWhite: tau };
 }
