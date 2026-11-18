@@ -18,7 +18,8 @@
       "應用": "先看自己夜晚拿到什麼資訊，沒有就照通用原則派，不要假裝有計畫。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-1"]
+        "round": ["1-1"],
+        "phase": "第一局派隊"
       },
       "evidence": "邏輯"
     },
@@ -39,6 +40,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-1"],
+        "phase": "第一局派隊",
+        "role": ["忠臣"],
         "roles": ["loyal"],
         "seats": [1]
       },
@@ -61,75 +64,12 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-1"],
+        "phase": "第一局派隊",
+        "role": ["梅林"],
         "roles": ["merlin"],
         "seats": [1]
       },
       "evidence": "經驗"
-    },
-    {
-      "id": "w205-merlin-plan",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "梅林：可以計畫，但計畫要讓雜魚接得住",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E6%A2%85%E6%9E%97%EF%BC%9A%E5%8F%AF%E4%BB%A5%E8%A8%88%E7%95%AB%EF%BC%8C%E4%BD%86%E8%A8%88%E7%95%AB%E8%A6%81%E8%AE%93%E9%9B%9C%E9%AD%9A%E6%8E%A5%E5%BE%97%E4%BD%8F",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "98aff10ba653",
-        "sourceQuote": "計畫好不好，不在於資訊多，而在於雜魚能不能合理地接手"
-      },
-      "情境": "你是前半區梅林，第一次派票在第一局。",
-      "觀念": "計畫好不好不在資訊多，而在雜魚能不能合理地接手。",
-      "應用": "派一個雜魚坐在同樣位置也派得出來的組合，並回應前面的派票。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-1", "1-2", "1-3", "1-4"],
-        "roles": ["merlin"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w205-percival-seat1",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "派西維爾坐-1-家",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "4da0fb6e7b9a",
-        "sourceQuote": "兩根拇指都還沒行動，1-1 不派拇指（wiki-176）"
-      },
-      "情境": "你是1家派西維爾，兩根拇指都還沒行動。",
-      "觀念": "分不出哪根拇指是梅林，拇指行動前先選定一邊只是擲硬幣。",
-      "應用": "1-1不派拇指，同時避免組合一眼看出在閃兩個人。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-1"],
-        "roles": ["percival"],
-        "seats": [1]
-      },
-      "evidence": "邏輯"
-    },
-    {
-      "id": "w205-red-seat1",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "相認紅方坐-1-家",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E7%9B%B8%E8%AA%8D%E7%B4%85%E6%96%B9%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "bd174a0fce0b",
-        "sourceQuote": "但組合裡有沒有隊友、閃了誰，會在任務結果出來後被回頭檢查"
-      },
-      "情境": "你是1家相認紅方，要派全場第一隊。",
-      "觀念": "1-1無法評估合理性不易被抓，但帶不帶隊友、閃了誰會在任務後被回頭檢查。",
-      "應用": "派一個忠臣坐1家也派得出來的組合。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-1"],
-        "roles": ["assassin", "morgana", "mordred"],
-        "seats": [1]
-      },
-      "evidence": "邏輯"
     },
     {
       "id": "w205-oberon-seat1",
@@ -148,30 +88,12 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-1"],
+        "phase": "第一局派隊",
+        "role": ["奧伯倫"],
         "roles": ["oberon"],
         "seats": [1]
       },
       "evidence": "邏輯"
-    },
-    {
-      "id": "w205-1-2",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "1-2",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "959426d1174e",
-        "sourceQuote": "拓展並延伸前一家的派票：見解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票。"
-      },
-      "情境": "輪到1-2，前面只有1家的一張派票。",
-      "觀念": "1-2的任務是拓展並延伸前一家的派票，替場上增加遊戲分支。",
-      "應用": "先解讀1家可能的視角，再決定延伸、修正或尊重他的組合。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-2"]
-      },
-      "evidence": "經驗"
     },
     {
       "id": "w205-1-3",
@@ -184,54 +106,15 @@
         "sectionHash": "c3f01044d3a4",
         "sourceQuote": "1-3 轉折點：第一局前半的資訊在這裡第一次被綜合。"
       },
-      "情境": "輪到1-3，已經看過1-1和1-2兩張派票。",
-      "觀念": "1-3是轉折點，第一局前半的資訊在這裡第一次被綜合。",
-      "應用": "1-2之後就不是1-1：吸收前面的派票，照時間順序解讀。",
+      "情境": "輪到1-3或2-3，這一局前面已經有兩張派票。",
+      "觀念": "1-3是轉折點，前面的資訊第一次被綜合，2-3相似但資訊幾乎全出來了。",
+      "應用": "照時間順序吸收前面所有派票，再給出你的組合。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-3"]
+        "round": ["1-3", "2-3"],
+        "phase": "第一局派隊"
       },
       "evidence": "經驗"
-    },
-    {
-      "id": "w205-1-4",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "1-4",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-4",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "05af671b859a",
-        "sourceQuote": "綜合 1-1～1-3，給出有用的資訊。"
-      },
-      "情境": "輪到1-4，下一位就是1-5尾家。",
-      "觀念": "1-4要綜合1-1～1-3給出有用的資訊，也是誤導、誘導最好的位置。",
-      "應用": "綜合前三家的派票給出你的視角，讀別人時也把誘導的可能算進去。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-4"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w205-1-5",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "1-5",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "b63ea59a8e50",
-        "sourceQuote": "1-5 的任務結果是最重要的資訊確認點：用來確認 1-1～1-4 的資訊，以及 5 家自己的視角是否合理、正確。"
-      },
-      "情境": "輪到1-5尾家強制局，你派的組合一定會出任務。",
-      "觀念": "1-5的任務結果是最重要的資訊確認點，會驗證1-1～1-4和尾家自己的視角。",
-      "應用": "派之前想清楚：結果出來後，哪些人的視角會被證實或推翻。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-5"]
-      },
-      "evidence": "邏輯"
     },
     {
       "id": "w205-2-1",
@@ -249,47 +132,8 @@
       "應用": "以任務結果最優先，再疊上第一局的派票和黑白球去延伸。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["2-1"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w205-2-3",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "2-3",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=2-3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "62a7e83da39b",
-        "sourceQuote": "和 1-3 有點像，差別在於這時資訊幾乎已全部釋放。"
-      },
-      "情境": "輪到2-3，第二局已經有兩張派票。",
-      "觀念": "2-3和1-3相似，是第二個轉折點，差別在資訊幾乎已全部釋放。",
-      "應用": "照時間順序把前面所有派票綜合起來，再給出你的組合。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["2-3"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w205-2-5",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "2-5",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=2-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "91d9a26bec2a",
-        "sourceQuote": "緊接著就是第一次湖中女神（湖中在第 2、3、4 局任務後使用），因此這個選擇比 1-5 更重要。"
-      },
-      "情境": "輪到2-5尾家，任務結束後緊接著第一次湖中。",
-      "觀念": "2-5是資訊最完整的位置，這個選擇比1-5更重要。",
-      "應用": "先想好「如果任務失敗要怎麼湖」，派票和湖中是一整套流程。",
-      "tags": {
-        "decision": ["派隊", "湖中"],
-        "round": ["2-5"]
+        "round": ["2-1"],
+        "phase": "第二局派隊"
       },
       "evidence": "經驗"
     },
@@ -310,29 +154,7 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["2-*"],
-        "score": ["1:0"],
-        "lastQuestMember": false
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w205-seat6-split",
-      "article": {
-        "slug": "wiki-205",
-        "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
-        "section": "簡化策略",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E7%B0%A1%E5%8C%96%E7%AD%96%E7%95%A5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
-        "sectionHash": "1c8aa1406d0b",
-        "sourceQuote": "一種實戰簡化是：省略 a3 這條行動線，在這個情境下不論什麼角色，大多數時候都拆車；"
-      },
-      "情境": "1-5開藍、你是不在隊上的6家，輪到2-1。",
-      "觀念": "如果你的選擇只跟角色有關，別人就能從你的選擇反推你的角色。",
-      "應用": "一種實戰簡化是不論角色大多數時候都拆車，三加一留給少數情況。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["2-1"],
-        "seats": [6],
+        "phase": "第二局派隊",
         "score": ["1:0"],
         "lastQuestMember": false
       },
@@ -354,7 +176,8 @@
       "應用": "派之前把三件事都想過，不要只想著派全好。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-5", "2-5", "3-5", "4-5", "5-5"]
+        "round": ["1-5", "2-5", "3-5", "4-5", "5-5"],
+        "phase": "通用"
       },
       "evidence": "經驗"
     },
@@ -375,48 +198,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5"],
-        "roles": ["merlin", "percival", "loyal"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w206-loyal-self",
-      "article": {
-        "slug": "wiki-206",
-        "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
-        "section": "怎麼找「共識最像藍方的兩位」",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E6%80%8E%E9%BA%BC%E6%89%BE%E3%80%8C%E5%85%B1%E8%AD%98%E6%9C%80%E5%83%8F%E8%97%8D%E6%96%B9%E7%9A%84%E5%85%A9%E4%BD%8D%E3%80%8D",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
-        "sectionHash": "f7728c07c4bc",
-        "sourceQuote": "外灑等於放棄這個確定的好人，要有理由"
-      },
-      "情境": "你是忠臣尾家，在1-5要派3人隊。",
-      "觀念": "你唯一確定的好人是自己，外灑等於放棄這個確定的好人。",
-      "應用": "派自己加上共識最好的兩位，要外灑就得有理由。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-5"],
-        "roles": ["loyal"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w206-still-trusted",
-      "article": {
-        "slug": "wiki-206",
-        "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
-        "section": "怎麼確保「失敗後還認得下我」",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E6%80%8E%E9%BA%BC%E7%A2%BA%E4%BF%9D%E3%80%8C%E5%A4%B1%E6%95%97%E5%BE%8C%E9%82%84%E8%AA%8D%E5%BE%97%E4%B8%8B%E6%88%91%E3%80%8D",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
-        "sectionHash": "dfc44edd86fc",
-        "sourceQuote": "大家會依照 5 選人的合理性來分配懷疑"
-      },
-      "情境": "你是藍方尾家，擔心組合開出失敗後被懷疑。",
-      "觀念": "開出失敗後大家依你選人的合理性分配懷疑，只有你看得懂的組合最危險。",
-      "應用": "選有公開資訊支撐的人，延伸前面被認為偏好的派票。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-5", "2-5", "3-5"],
+        "phase": "第一局派隊",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"]
       },
       "evidence": "經驗"
@@ -438,73 +221,11 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-5"],
+        "phase": "第一局派隊",
+        "role": ["梅林"],
         "roles": ["merlin"]
       },
       "evidence": "經驗"
-    },
-    {
-      "id": "w206-percival-tail",
-      "article": {
-        "slug": "wiki-206",
-        "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
-        "section": "依角色的差異",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E4%BE%9D%E8%A7%92%E8%89%B2%E7%9A%84%E5%B7%AE%E7%95%B0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
-        "sectionHash": "7ec57a8e5c41",
-        "sourceQuote": "依兩根拇指在 1～4 家的派票，照思考 SOP 決定：派 A 拇指、派 B 拇指，或兩根都不派（派西維爾）"
-      },
-      "情境": "你是派西維爾尾家，兩根拇指已經在前面派過票。",
-      "觀念": "兩根拇指的派票各對應一條世界線，每條世界線各有最佳組合。",
-      "應用": "照思考SOP決定派A拇指、派B拇指，或兩根都不派。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-5", "2-5"],
-        "roles": ["percival"],
-        "thumbsLed": [2]
-      },
-      "evidence": null
-    },
-    {
-      "id": "w206-2-5-lake",
-      "article": {
-        "slug": "wiki-206",
-        "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
-        "section": "藍方-2-5",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E8%97%8D%E6%96%B9-2-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
-        "sectionHash": "a8e0a96220e7",
-        "sourceQuote": "多一件事：組合出去之後，沒有失敗、一張失敗、兩張失敗時，各要湖誰"
-      },
-      "情境": "你是藍方2-5尾家，同時拿著首湖。",
-      "觀念": "組合和湖中是同一個決定，沒有、一張、兩張失敗時各湖誰要先想好。",
-      "應用": "派之前先想好三種結果各湖誰，不要湖已經認定是壞人的人。",
-      "tags": {
-        "decision": ["派隊", "湖中"],
-        "round": ["2-5"],
-        "roles": ["merlin", "percival", "loyal"],
-        "lakeHolder": true
-      },
-      "evidence": null
-    },
-    {
-      "id": "w206-3-5",
-      "article": {
-        "slug": "wiki-206",
-        "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
-        "section": "3-5",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=3-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
-        "sectionHash": "7a27f4653e63",
-        "sourceQuote": "已經有兩局任務結果和一次湖中，鐵邏輯最多的尾家強制局之一"
-      },
-      "情境": "輪到3-5尾家，已有兩局任務結果和一次湖中。",
-      "觀念": "3-5是鐵邏輯最多的尾家之一，比分2:0、1:1、0:2時目標不同。",
-      "應用": "先看比分決定目標，派之前一樣想好結果出來後怎麼湖。",
-      "tags": {
-        "decision": ["派隊", "湖中"],
-        "round": ["3-5"]
-      },
-      "evidence": "邏輯"
     },
     {
       "id": "w206-4-5",
@@ -517,12 +238,14 @@
         "sectionHash": "3f8234a4036c",
         "sourceQuote": "組合裡只有一個壞人，任務不會開紅。"
       },
-      "情境": "輪到4-5，第四局要2張失敗才開紅，你是藍方。",
+      "情境": "第四局要2張失敗才開紅，你是藍方隊長。",
       "觀念": "組合裡只有一個壞人任務不會開紅，所以可以容許一位不確定的人。",
-      "應用": "4-5的組合要和最後一湖一起想，最後一湖要替第5局找人。",
+      "應用": "把不確定的人壓在一位以內，4-5再和最後一湖一起想。",
       "tags": {
         "decision": ["派隊", "湖中"],
-        "round": ["4-5"],
+        "round": ["4-*"],
+        "phase": "第三～五局派隊",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"]
       },
       "evidence": "邏輯"
@@ -544,6 +267,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-5", "3-5", "4-5", "5-5"],
+        "phase": "通用",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "邏輯"
@@ -565,6 +290,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5"],
+        "phase": "第一局派隊",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -586,31 +313,11 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-5", "3-5"],
+        "phase": "通用",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
-    },
-    {
-      "id": "w206-red-2-5-lake",
-      "article": {
-        "slug": "wiki-206",
-        "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
-        "section": "各局的差異",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%90%84%E5%B1%80%E7%9A%84%E5%B7%AE%E7%95%B0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
-        "sectionHash": "737a4b09c937",
-        "sourceQuote": "太明顯的破壞湖中，反而可能讓場上鞏固第一局的組合（wiki-147 下篇）"
-      },
-      "情境": "你是紅方2-5尾家，同時拿著首湖。",
-      "觀念": "組合和湖中要一起設計，太明顯的破壞湖中反而可能讓場上鞏固第一局組合。",
-      "應用": "隊伍內有隊友時，湖隊友說好是最簡單的做法。",
-      "tags": {
-        "decision": ["派隊", "湖中"],
-        "round": ["2-5"],
-        "roles": ["assassin", "morgana", "mordred", "oberon"],
-        "lakeHolder": true
-      },
-      "evidence": null
     },
     {
       "id": "w206-red-4-5",
@@ -629,6 +336,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["4-*"],
+        "phase": "第三～五局派隊",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "邏輯"
@@ -649,7 +358,8 @@
       "應用": "依序想尾家可不可信、組合多好、洗掉後換誰、代價是什麼。",
       "tags": {
         "decision": ["投票"],
-        "round": ["any"]
+        "round": ["any"],
+        "phase": "投票・湖中・出任務"
       },
       "evidence": "邏輯"
     },
@@ -669,7 +379,8 @@
       "應用": "洗尾、保尾只在效益明確時才做，尤其你是尾家時別隨便外白內黑。",
       "tags": {
         "decision": ["投票"],
-        "round": ["any"]
+        "round": ["any"],
+        "phase": "投票・湖中・出任務"
       },
       "evidence": "經驗"
     },
@@ -690,6 +401,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["3-*", "4-*"],
+        "phase": "第三～五局派隊",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"],
         "score": ["0:2", "1:2"]
       },
@@ -712,54 +425,12 @@
       "tags": {
         "decision": ["派隊", "投票"],
         "round": ["3-*", "4-*", "5-*"],
+        "phase": "第三～五局派隊",
+        "role": ["梅林"],
         "roles": ["merlin"],
         "score": ["0:2", "1:2", "2:2"]
       },
       "evidence": "邏輯"
-    },
-    {
-      "id": "w207-round4-one-unsure",
-      "article": {
-        "slug": "wiki-207",
-        "title": "聽牌與決勝局",
-        "section": "一、紅方聽牌（關鍵局）",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E4%B8%80%E3%80%81%E7%B4%85%E6%96%B9%E8%81%BD%E7%89%8C%EF%BC%88%E9%97%9C%E9%8D%B5%E5%B1%80%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
-        "sectionHash": "2bda17710628",
-        "sourceQuote": "1:2 的第 4 局（5 人隊，2 張失敗開紅）：只有一個壞人時任務不會開紅，所以可以容許一人不確定；"
-      },
-      "情境": "1:2進入第四局，紅方再拿一局就贏。",
-      "觀念": "第四局只有一個壞人不會開紅，可以容許一人不確定，兩個壞人就會輸。",
-      "應用": "求穩，把不確定的人壓在一位以內。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["4-*"],
-        "roles": ["merlin", "percival", "loyal"],
-        "score": ["1:2"]
-      },
-      "evidence": "邏輯"
-    },
-    {
-      "id": "w207-merlin-blue-match",
-      "article": {
-        "slug": "wiki-207",
-        "title": "聽牌與決勝局",
-        "section": "藍方-2",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E8%97%8D%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
-        "sectionHash": "c04fc1df27e9",
-        "sourceQuote": "公開資訊已經足夠派出全好組合時，梅林跟著共識就好，不要搶著主導"
-      },
-      "情境": "你是梅林，藍方已兩勝，下一次開藍就進入刺殺。",
-      "觀念": "公開資訊已經夠派出全好組合時，梅林跟著共識就好，不要搶著主導。",
-      "應用": "公開資訊會派錯時，用最小幅度修正，不用超前資訊硬救一局。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["3-*", "4-*"],
-        "roles": ["merlin"],
-        "score": ["2:0", "2:1"]
-      },
-      "evidence": "經驗"
     },
     {
       "id": "w207-blue-match-team",
@@ -778,52 +449,10 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["3-*", "4-*"],
+        "phase": "第三～五局派隊",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"],
         "score": ["2:0", "2:1"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w207-red-leader-match",
-      "article": {
-        "slug": "wiki-207",
-        "title": "聽牌與決勝局",
-        "section": "紅方",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E7%B4%85%E6%96%B9",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
-        "sectionHash": "bc15b3d37d75",
-        "sourceQuote": "第 4 局要兩個紅方同車、兩人都出失敗才會開紅"
-      },
-      "情境": "紅方已兩勝，輪到你這位紅方當隊長。",
-      "觀念": "放進足夠的紅方並出失敗就直接三紅，第四局要兩個紅方。",
-      "應用": "派一個合理又能讓紅方進得去的組合，有保護局時確定必勝才喊結束。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["3-*", "4-*", "5-*"],
-        "roles": ["assassin", "morgana", "mordred", "oberon"],
-        "score": ["0:2", "1:2", "2:2"]
-      },
-      "evidence": "邏輯"
-    },
-    {
-      "id": "w207-red-press-merlin",
-      "article": {
-        "slug": "wiki-207",
-        "title": "聽牌與決勝局",
-        "section": "紅方-2",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E7%B4%85%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
-        "sectionHash": "82840b9f6dc3",
-        "sourceQuote": "推一個看起來合理、但裡面有拇指（刺客、莫甘娜、奧伯倫）的組合：梅林看得到，要擋就得出手，出手的人就成為梅林候選"
-      },
-      "情境": "藍方已兩勝，輪到你這位紅方當隊長。",
-      "觀念": "推看起來合理但有拇指的組合，梅林要擋就得出手，出手的人成為梅林候選。",
-      "應用": "繼續搶任務失敗，同時逼梅林開能力，替刺殺縮小人選。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["3-*", "4-*", "5-*"],
-        "roles": ["assassin", "morgana", "mordred", "oberon"],
-        "score": ["2:0", "2:1", "2:2"]
       },
       "evidence": "經驗"
     },
@@ -844,6 +473,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["3-*", "4-*", "5-*"],
+        "phase": "第三～五局派隊",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"],
         "score": ["2:0", "2:1", "2:2"]
       },
@@ -866,30 +497,11 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["5-*"],
+        "phase": "第三～五局派隊",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"]
       },
       "evidence": "邏輯"
-    },
-    {
-      "id": "w207-final-four-evil",
-      "article": {
-        "slug": "wiki-207",
-        "title": "聽牌與決勝局",
-        "section": "藍方-3",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E8%97%8D%E6%96%B9-3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
-        "sectionHash": "9c43ab2ceda4",
-        "sourceQuote": "派票時先假設四壞在哪裡；"
-      },
-      "情境": "決勝局輪到你派，四個壞人還沒全部確定。",
-      "觀念": "派票時先假設四壞在哪裡，假設不出來代表一定派錯。",
-      "應用": "從你假設的四壞以外選5人，選不出來就回頭重想假設。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["5-*"],
-        "roles": ["merlin", "percival", "loyal"]
-      },
-      "evidence": "經驗"
     },
     {
       "id": "w207-final-not-merlin",
@@ -908,6 +520,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["5-*"],
+        "phase": "第三～五局派隊",
+        "role": ["派西維爾", "忠臣"],
         "roles": ["percival", "loyal"]
       },
       "evidence": "經驗"
@@ -929,6 +543,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -950,6 +566,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -971,6 +589,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "邏輯"
@@ -992,6 +612,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "邏輯"
@@ -1013,6 +635,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1034,6 +658,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1055,6 +681,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1076,6 +704,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1097,6 +727,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "邏輯"
@@ -1118,6 +750,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1139,6 +773,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1160,6 +796,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1181,9 +819,57 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
+    },
+    {
+      "id": "w12-one-story",
+      "article": {
+        "slug": "wiki-12",
+        "title": "刺客 - 如何找出梅林",
+        "section": "八、刺客的最後決策原則",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=%E5%85%AB%E3%80%81%E5%88%BA%E5%AE%A2%E7%9A%84%E6%9C%80%E5%BE%8C%E6%B1%BA%E7%AD%96%E5%8E%9F%E5%89%87",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "d30f7ed58c80",
+        "sourceQuote": "一致性：選那個「整場行動能用同一份梅林視野解釋」的人；"
+      },
+      "情境": "刺殺前，兩名候選人都有說得通的故事線。",
+      "觀念": "選整場行動能用同一份梅林視野解釋、假設最少的那位。",
+      "應用": "不要為了一個少見的例外推翻整體證據。",
+      "tags": {
+        "decision": ["刺殺"],
+        "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": null
+    },
+    {
+      "id": "w12-state-change",
+      "article": {
+        "slug": "wiki-12",
+        "title": "刺客 - 如何找出梅林",
+        "section": "重點摘要",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=%E9%87%8D%E9%BB%9E%E6%91%98%E8%A6%81",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "3b71e3da3fb2",
+        "sourceQuote": "留意狀態變化：莫甘娜被當成壞人後，梅林常開始進任務；"
+      },
+      "情境": "刺殺時回想莫甘娜被當成壞人前後誰的行為變了。",
+      "觀念": "莫甘娜被當成壞人後，梅林常開始進任務。",
+      "應用": "兩紅後還在穩定給資訊的人，要多看一眼。",
+      "tags": {
+        "decision": ["刺殺"],
+        "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": null
     },
     {
       "id": "w207-percival-no-gamble",
@@ -1202,6 +888,8 @@
       "tags": {
         "decision": ["刺殺"],
         "round": ["A"],
+        "phase": "刺殺",
+        "role": ["刺客"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1222,48 +910,8 @@
       "應用": "先判斷前一位的資訊對不對，再決定延伸、修正或尊重。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-2", "1-3", "1-4", "1-5", "2-*"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w24-loyal-respect",
-      "article": {
-        "slug": "wiki-24",
-        "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
-        "section": "3-家對「1ab、2cd」之後的解讀與反饋",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=3-%E5%AE%B6%E5%B0%8D%E3%80%8C1ab%E3%80%812cd%E3%80%8D%E4%B9%8B%E5%BE%8C%E7%9A%84%E8%A7%A3%E8%AE%80%E8%88%87%E5%8F%8D%E9%A5%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
-        "sectionHash": "2bb13c8ac8e9",
-        "sourceQuote": "身為 3 家忠臣，理論上沒有足夠資訊在 1-2 之後就直接認同 2 家的資訊；"
-      },
-      "情境": "你是3家忠臣，1家和2家的組合完全不重疊。",
-      "觀念": "忠臣在1-2之後沒有足夠資訊直接認同2家，認同會顯得很像能力者。",
-      "應用": "選擇尊重時，2家反對和沒選的區間都不同時選兩人。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-3"],
-        "roles": ["loyal"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w24-no-reverse",
-      "article": {
-        "slug": "wiki-24",
-        "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
-        "section": "重點小結",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E9%87%8D%E9%BB%9E%E5%B0%8F%E7%B5%90",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
-        "sectionHash": "6037260cd8d5",
-        "sourceQuote": "通常這樣選完，如果 1、2 真的是兩好，會導致 1、2 雙雙被排除在任務外。"
-      },
-      "情境": "輪到1-2，你在想怎麼回應1家的組合。",
-      "觀念": "和1家完全反向的派票，若1家、2家真是兩好，會讓兩人雙雙被排除。",
-      "應用": "從不同視角推演1家為什麼這樣派，不要直接站反邊。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-2"]
+        "round": ["1-2", "1-3", "1-4", "1-5", "2-*"],
+        "phase": "第一局派隊"
       },
       "evidence": "經驗"
     },
@@ -1283,27 +931,8 @@
       "應用": "回頭問這個區間是誰推出來的、成立需要他是什麼身分。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-4", "1-5", "2-*", "3-*"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w24-conscious",
-      "article": {
-        "slug": "wiki-24",
-        "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
-        "section": "四、有意識的派票",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E5%9B%9B%E3%80%81%E6%9C%89%E6%84%8F%E8%AD%98%E7%9A%84%E6%B4%BE%E7%A5%A8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
-        "sectionHash": "272ca4a48916",
-        "sourceQuote": "不存在純隨機的派票"
-      },
-      "情境": "輪到你派票，正要決定人選。",
-      "觀念": "不存在純隨機的派票，後面的人會延續你的派票展開。",
-      "應用": "派之前想清楚你的前提、選誰、為什麼、在表達什麼、想達到什麼。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["any"]
+        "round": ["1-4", "1-5", "2-*", "3-*"],
+        "phase": "通用"
       },
       "evidence": "經驗"
     },
@@ -1324,6 +953,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-3", "1-4", "1-5", "2-*", "3-*", "4-*"],
+        "phase": "通用",
+        "role": ["忠臣"],
         "roles": ["loyal"]
       },
       "evidence": "經驗"
@@ -1344,7 +975,8 @@
       "應用": "每派一隊都想清楚，它把剩下的人切成哪幾個區間。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-1", "1-2", "1-3", "1-4"]
+        "round": ["1-1", "1-2", "1-3", "1-4"],
+        "phase": "第一局派隊"
       },
       "evidence": "經驗"
     },
@@ -1364,7 +996,8 @@
       "應用": "認定的兩類已占滿4個不同的壞人，沒人派的人才可以選，否則不算安全。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-4", "1-5"]
+        "round": ["1-4", "1-5"],
+        "phase": "第一局派隊"
       },
       "evidence": "邏輯"
     },
@@ -1384,7 +1017,8 @@
       "應用": "先決定1家、2家誰是帶隊友的，才知道誰的組合可以延伸。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-3", "1-4", "1-5"]
+        "round": ["1-3", "1-4", "1-5"],
+        "phase": "第一局派隊"
       },
       "evidence": "邏輯"
     },
@@ -1404,7 +1038,8 @@
       "應用": "先讀完推得出來的位置，再用任務、湖中或讓他當隊長來拆。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-5", "2-*", "3-*", "4-*", "5-*"]
+        "round": ["1-5", "2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用"
       },
       "evidence": "邏輯"
     },
@@ -1424,30 +1059,10 @@
       "應用": "認為5家、0家至少一壞可以外灑，認5家好也能外灑但要派5家。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-4"]
+        "round": ["1-4"],
+        "phase": "第一局派隊"
       },
       "evidence": null
-    },
-    {
-      "id": "w18-same-style",
-      "article": {
-        "slug": "wiki-18",
-        "title": "外灑 - 動機、人選、怎麼讀與出任務後的區間解讀",
-        "section": "先思考自己的派票習慣",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-18&sec=%E5%85%88%E6%80%9D%E8%80%83%E8%87%AA%E5%B7%B1%E7%9A%84%E6%B4%BE%E7%A5%A8%E7%BF%92%E6%85%A3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-18/",
-        "sectionHash": "296cb99db1ba",
-        "sourceQuote": "尤其是前位 1-1～1-4；"
-      },
-      "情境": "你是忠臣，在1-4想跟著前面的資訊外灑。",
-      "觀念": "前位1-1～1-4尤其要平衡自己拿不同角色時的打法。",
-      "應用": "拿梅林時不會在4家外灑，拿忠臣時也不要灑，讓5家自己派、失敗再咬。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-4"],
-        "roles": ["loyal"]
-      },
-      "evidence": "經驗"
     },
     {
       "id": "w176-no-blind",
@@ -1466,6 +1081,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-*", "2-*"],
+        "phase": "第一局派隊",
+        "role": ["派西維爾"],
         "roles": ["percival"],
         "thumbsLed": [0]
       },
@@ -1488,32 +1105,12 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用",
+        "role": ["派西維爾"],
         "roles": ["percival"],
         "thumbsLed": [2]
       },
       "evidence": null
-    },
-    {
-      "id": "w176-front-half",
-      "article": {
-        "slug": "wiki-176",
-        "title": "角色玩法 - 派西維爾",
-        "section": "派西維爾要點",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
-        "sectionHash": "3fbbbe5d4245",
-        "sourceQuote": "踩錯拇指，很有可能讓後面的風向直接歪掉。"
-      },
-      "情境": "你是前半區1～5家的派西，還沒分出梅林。",
-      "觀念": "踩錯拇指，很有可能讓後面的風向直接歪掉。",
-      "應用": "盡量不踩兩根拇指，但也不要閃得太刻意，否則會被認出是派西。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-*"],
-        "roles": ["percival"],
-        "seats": [1, 2, 3, 4, 5]
-      },
-      "evidence": "經驗"
     },
     {
       "id": "w176-back-half",
@@ -1532,6 +1129,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["2-*"],
+        "phase": "第二局派隊",
+        "role": ["派西維爾"],
         "roles": ["percival"],
         "seats": [6, 7, 8, 9]
       },
@@ -1554,9 +1153,80 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用",
+        "role": ["派西維爾"],
         "roles": ["percival"]
       },
       "evidence": "邏輯"
+    },
+    {
+      "id": "w176-no-claim",
+      "article": {
+        "slug": "wiki-176",
+        "title": "角色玩法 - 派西維爾",
+        "section": "降低藍方勝率的理由",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E9%99%8D%E4%BD%8E%E8%97%8D%E6%96%B9%E5%8B%9D%E7%8E%87%E7%9A%84%E7%90%86%E7%94%B1",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "b3344e51e1c7",
+        "sourceQuote": "跳派達成三藍的同時，也暴露了視野"
+      },
+      "情境": "你是派西維爾，兩紅了，想跳出來率領大家。",
+      "觀念": "跳派就算能三藍也暴露了視野，而三藍不等於贏。",
+      "應用": "不要宣稱自己是派西，否則刺客知道梅林就在你信的那根拇指上。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["派西維爾"],
+        "roles": ["percival"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w176-rerun-both",
+      "article": {
+        "slug": "wiki-176",
+        "title": "角色玩法 - 派西維爾",
+        "section": "先不要預設哪根拇指是梅林",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E5%85%88%E4%B8%8D%E8%A6%81%E9%A0%90%E8%A8%AD%E5%93%AA%E6%A0%B9%E6%8B%87%E6%8C%87%E6%98%AF%E6%A2%85%E6%9E%97",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "94db473e1e0f",
+        "sourceQuote": "開始判斷前，兩根拇指誰當梅林都先當成 0 資訊；"
+      },
+      "情境": "你是派西維爾，梅林做了一件你看不懂的事，資訊開始錯亂。",
+      "觀念": "兩根拇指誰是梅林都先當成零資訊，不然會先入為主。",
+      "應用": "把A梅B娜、B梅A娜兩條世界線都重跑一次，不只修正原本那邊。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["派西維爾"],
+        "roles": ["percival"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w176-leave-room",
+      "article": {
+        "slug": "wiki-176",
+        "title": "角色玩法 - 派西維爾",
+        "section": "開能力，還是維持雜魚視角",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E9%96%8B%E8%83%BD%E5%8A%9B%EF%BC%8C%E9%82%84%E6%98%AF%E7%B6%AD%E6%8C%81%E9%9B%9C%E9%AD%9A%E8%A6%96%E8%A7%92",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "f17125c6b41b",
+        "sourceQuote": "雙拇指還沒分出來時，派票的目標是留空間給真的梅林"
+      },
+      "情境": "你是派西維爾，雙拇指還沒分出來，輪到你派票。",
+      "觀念": "派票的目標是留空間給真的梅林，不必替梅林把話說完。",
+      "應用": "寧可像一個派錯的雜魚，也不要讓雜魚分不出好壞能力者。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["派西維爾"],
+        "roles": ["percival"]
+      },
+      "evidence": "經驗"
     },
     {
       "id": "w175-front-half",
@@ -1575,6 +1245,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-1", "1-2", "1-3", "1-4"],
+        "phase": "第一局派隊",
+        "role": ["梅林"],
         "roles": ["merlin"],
         "seats": [1, 2, 3, 4]
       },
@@ -1597,6 +1269,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["2-1", "2-2", "2-3", "2-4"],
+        "phase": "第二局派隊",
+        "role": ["梅林"],
         "roles": ["merlin"]
       },
       "evidence": null
@@ -1618,6 +1292,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["any"],
+        "phase": "通用",
+        "role": ["梅林"],
         "roles": ["merlin"]
       },
       "evidence": "經驗"
@@ -1639,6 +1315,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用",
+        "role": ["梅林"],
         "roles": ["merlin"]
       },
       "evidence": "經驗"
@@ -1660,6 +1338,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["2-*"],
+        "phase": "第二局派隊",
+        "role": ["梅林"],
         "roles": ["merlin"],
         "score": ["1:0"],
         "lastQuestMember": false
@@ -1667,26 +1347,73 @@
       "evidence": "經驗"
     },
     {
-      "id": "w175-protect-one-thumb",
+      "id": "w175-mission-first",
       "article": {
         "slug": "wiki-175",
         "title": "角色玩法 - 梅林",
-        "section": "例二：保護局裡只有一根拇指",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E4%BE%8B%E4%BA%8C%EF%BC%9A%E4%BF%9D%E8%AD%B7%E5%B1%80%E8%A3%A1%E5%8F%AA%E6%9C%89%E4%B8%80%E6%A0%B9%E6%8B%87%E6%8C%87",
+        "section": "基本觀念",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E5%9F%BA%E6%9C%AC%E8%A7%80%E5%BF%B5",
         "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
-        "sectionHash": "9e1ca6fa30a3",
-        "sourceQuote": "第 4 局要 2 張失敗才開紅"
+        "sectionHash": "70505abbe561",
+        "sourceQuote": "三次任務成功才有機會被刺（完成任務是第一要務）。"
       },
-      "情境": "藍方2:1聽牌的第四局，共識組合裡只有一根你的拇指。",
-      "觀念": "第四局要2張失敗才開紅，只有一根拇指的組合不會開紅。",
-      "應用": "確定組合裡沒有莫德雷德時，照共識派、照忠臣投白也沒問題。",
+      "情境": "你是梅林，在想要先顧任務還是先顧躲刺。",
+      "觀念": "三次任務成功才有機會被刺，但三藍後被刺中一樣算輸。",
+      "應用": "先讓別人認下你是好人，你的資訊才傳播得出去。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["4-*"],
-        "roles": ["merlin"],
-        "score": ["2:1"]
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["梅林"],
+        "roles": ["merlin"]
       },
       "evidence": "邏輯"
+    },
+    {
+      "id": "w175-find-mordred",
+      "article": {
+        "slug": "wiki-175",
+        "title": "角色玩法 - 梅林",
+        "section": "重點摘要",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E9%87%8D%E9%BB%9E%E6%91%98%E8%A6%81",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "98d61676a8ed",
+        "sourceQuote": "這是你找莫德的主要方法，但說出來要小心，別讓人看出你「知道那些人沒拇指」。"
+      },
+      "情境": "你是梅林，兩次你看不到拇指的隊伍都開出失敗。",
+      "觀念": "莫德雷德就在兩隊共同的人裡，這是你找莫德的主要方法。",
+      "應用": "說出來要小心，別讓人看出你知道那些人沒拇指。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用",
+        "role": ["梅林"],
+        "roles": ["merlin"]
+      },
+      "evidence": null
+    },
+    {
+      "id": "w175-decoy",
+      "article": {
+        "slug": "wiki-175",
+        "title": "角色玩法 - 梅林",
+        "section": "重點摘要",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E9%87%8D%E9%BB%9E%E6%91%98%E8%A6%81",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "98d61676a8ed",
+        "sourceQuote": "幫自己找擋刀牌：讓派西或推理清楚的忠臣看起來比你更有資訊，刺客的選擇就會變多。"
+      },
+      "情境": "你是梅林，擔心三藍後被刺客找出來。",
+      "觀念": "讓派西或推理清楚的忠臣看起來比你更有資訊，刺客的選擇就變多。",
+      "應用": "前面的人派錯時，能讓派西或忠臣去修正就不要自己來。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["梅林"],
+        "roles": ["merlin"]
+      },
+      "evidence": null
     },
     {
       "id": "w25-no-stack",
@@ -1705,6 +1432,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-3", "1-4", "1-5", "2-*"],
+        "phase": "第一局派隊",
+        "role": ["忠臣"],
         "roles": ["loyal"]
       },
       "evidence": "經驗"
@@ -1726,6 +1455,77 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-2", "1-3", "1-4", "1-5", "2-*"],
+        "phase": "第一局派隊",
+        "role": ["忠臣"],
+        "roles": ["loyal"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w25-not-merlin",
+      "article": {
+        "slug": "wiki-25",
+        "title": "角色玩法 - 亞瑟的忠臣（雜魚）",
+        "section": "忠臣要盡量避免什麼？",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-25&sec=%E5%BF%A0%E8%87%A3%E8%A6%81%E7%9B%A1%E9%87%8F%E9%81%BF%E5%85%8D%E4%BB%80%E9%BA%BC%EF%BC%9F",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/",
+        "sectionHash": "6af0510b45bf",
+        "sourceQuote": "讓邪惡方知道自己是忠臣。"
+      },
+      "情境": "你是忠臣，在想要不要讓大家知道你只是雜魚。",
+      "觀念": "讓邪惡方知道你是忠臣，就等於告訴他們你不是梅林。",
+      "應用": "不要自曝忠臣，推理積極、資訊清楚就是梅林最好的擋刀牌。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["忠臣"],
+        "roles": ["loyal"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w25-share-view",
+      "article": {
+        "slug": "wiki-25",
+        "title": "角色玩法 - 亞瑟的忠臣（雜魚）",
+        "section": "有助於好人方的行為",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-25&sec=%E6%9C%89%E5%8A%A9%E6%96%BC%E5%A5%BD%E4%BA%BA%E6%96%B9%E7%9A%84%E8%A1%8C%E7%82%BA",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/",
+        "sectionHash": "5e3a3bf39f42",
+        "sourceQuote": "就算你的資訊可能盤錯了也沒有關係。"
+      },
+      "情境": "你是忠臣，不確定自己的推理對不對，想保持沉默。",
+      "觀念": "好人一定要互相分享資訊，就算盤錯了也沒有關係。",
+      "應用": "派票給出你的視角，讓共同區間變清晰。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["忠臣"],
+        "roles": ["loyal"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w25-look-good",
+      "article": {
+        "slug": "wiki-25",
+        "title": "角色玩法 - 亞瑟的忠臣（雜魚）",
+        "section": "忠臣要盡量避免什麼？",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-25&sec=%E5%BF%A0%E8%87%A3%E8%A6%81%E7%9B%A1%E9%87%8F%E9%81%BF%E5%85%8D%E4%BB%80%E9%BA%BC%EF%BC%9F",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/",
+        "sectionHash": "6af0510b45bf",
+        "sourceQuote": "好人被當成壞人＝壞人被當成好人的可能性增加了。"
+      },
+      "情境": "你是忠臣，想派一個會讓人誤會你的組合。",
+      "觀念": "場上壞人總數固定，好人被當成壞人，壞人被當成好人的機會就增加。",
+      "應用": "派票和投票都讓自己在別人眼中像好人。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["忠臣"],
         "roles": ["loyal"]
       },
       "evidence": "邏輯"
@@ -1747,6 +1547,8 @@
       "tags": {
         "decision": ["派隊", "出任務"],
         "round": ["any"],
+        "phase": "通用",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1768,6 +1570,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1789,6 +1593,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["any"],
+        "phase": "通用",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1810,28 +1616,9 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-1", "1-2", "1-3", "1-4"],
+        "phase": "第一局派隊",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w177-tail-mate",
-      "article": {
-        "slug": "wiki-177",
-        "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
-        "section": "遊戲進程",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E9%81%8A%E6%88%B2%E9%80%B2%E7%A8%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
-        "sectionHash": "00fa63b675ca",
-        "sourceQuote": "派了怕兩人一起出失敗、開出兩張很蠢，不派又怕被發現有視野。"
-      },
-      "情境": "你是紅方1-5尾家，隊友的票很多。",
-      "觀念": "派隊友怕兩人一起出失敗開出兩張，不派又怕被發現有視野。",
-      "應用": "多數人用位階法：刺客優先出，三個壞人同車時由刺客決定。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-5"],
-        "roles": ["assassin", "morgana", "mordred"]
       },
       "evidence": "經驗"
     },
@@ -1852,6 +1639,8 @@
       "tags": {
         "decision": ["出任務"],
         "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred", "oberon"]
       },
       "evidence": "經驗"
@@ -1873,9 +1662,57 @@
       "tags": {
         "decision": ["出任務"],
         "round": ["1-*", "2-*", "3-*", "5-*"],
+        "phase": "投票・湖中・出任務",
+        "role": ["紅方"],
         "roles": ["assassin", "morgana", "mordred"]
       },
       "evidence": "邏輯"
+    },
+    {
+      "id": "w177-white-habit",
+      "article": {
+        "slug": "wiki-177",
+        "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
+        "section": "外白與人設",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E5%A4%96%E7%99%BD%E8%88%87%E4%BA%BA%E8%A8%AD",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "3ce25d5ffd39",
+        "sourceQuote": "紅方開外白時，最怕的是「玩好人時從來不開、玩壞人時突然開」，這樣很快就會被區分出來。"
+      },
+      "情境": "你是紅方，想開外白讓隊友的組合出任務。",
+      "觀念": "玩好人從來不開、玩壞人突然開外白，很快就會被區分出來。",
+      "應用": "外白的標準和你玩好人時一致，只在效益明確時開。",
+      "tags": {
+        "decision": ["投票"],
+        "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["紅方"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w177-once-fail",
+      "article": {
+        "slug": "wiki-177",
+        "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
+        "section": "出者恆出、藏者恆藏、後進者出",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E5%87%BA%E8%80%85%E6%81%86%E5%87%BA%E3%80%81%E8%97%8F%E8%80%85%E6%81%86%E8%97%8F%E3%80%81%E5%BE%8C%E9%80%B2%E8%80%85%E5%87%BA",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "193416544788",
+        "sourceQuote": "先在任務裡的人已經出過失敗：由他繼續出失敗。"
+      },
+      "情境": "任務裡已有相認隊友，下一局你這位相認紅方也加入。",
+      "觀念": "先在任務裡的人出過失敗就由他繼續出，沒出過就由後進者出。",
+      "應用": "出過失敗的人位階降到最低，沒出過的升到最高。",
+      "tags": {
+        "decision": ["出任務"],
+        "round": ["2-*", "3-*", "5-*"],
+        "phase": "投票・湖中・出任務",
+        "role": ["紅方"],
+        "roles": ["assassin", "morgana", "mordred"]
+      },
+      "evidence": "經驗"
     },
     {
       "id": "w147-plan-before",
@@ -1894,6 +1731,7 @@
       "tags": {
         "decision": ["派隊", "湖中"],
         "round": ["2-*", "3-*", "4-*"],
+        "phase": "第二局派隊",
         "lakeHolder": true
       },
       "evidence": "經驗"
@@ -1915,6 +1753,8 @@
       "tags": {
         "decision": ["湖中"],
         "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"]
       },
       "evidence": "邏輯"
@@ -1935,7 +1775,8 @@
       "應用": "先假設、再用任務驗證，下一次派票再修正。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["any"]
+        "round": ["any"],
+        "phase": "通用"
       },
       "evidence": "經驗"
     },
@@ -1955,7 +1796,8 @@
       "應用": "推理時照這個順序疊資訊，不要讓發言推翻任務結果。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["any"]
+        "round": ["any"],
+        "phase": "通用"
       },
       "evidence": "邏輯"
     },
@@ -1975,7 +1817,8 @@
       "應用": "派之前檢查你相信的人，他視角裡確定的好人有沒有漏掉。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["2-*", "3-*", "4-*", "5-*"]
+        "round": ["2-*", "3-*", "4-*", "5-*"],
+        "phase": "通用"
       },
       "evidence": null
     },
@@ -1996,9 +1839,57 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["any"],
+        "phase": "通用",
+        "role": ["藍方"],
         "roles": ["merlin", "percival", "loyal"]
       },
       "evidence": "邏輯"
+    },
+    {
+      "id": "w165-loyal-vote",
+      "article": {
+        "slug": "wiki-165",
+        "title": "角色總覽 - 誰看得到誰與藍方基礎原則",
+        "section": "亞瑟的忠臣",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-165&sec=%E4%BA%9E%E7%91%9F%E7%9A%84%E5%BF%A0%E8%87%A3",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-165/",
+        "sectionHash": "fe80c9443a68",
+        "sourceQuote": "隨便同意一個沒有自己的組合出任務＝讓壞人更容易進任務。"
+      },
+      "情境": "你是忠臣，這個組合沒有你，你在想要不要外白。",
+      "觀念": "隨便同意一個沒有自己的組合出任務，等於讓壞人更容易進任務。",
+      "應用": "沒被選進任務時不要隨便外白，被選進時也不要亂開內黑。",
+      "tags": {
+        "decision": ["投票"],
+        "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["忠臣"],
+        "roles": ["loyal"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w165-oberon-discuss",
+      "article": {
+        "slug": "wiki-165",
+        "title": "角色總覽 - 誰看得到誰與藍方基礎原則",
+        "section": "刺殺階段奧伯倫可以參與討論嗎？",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-165&sec=%E5%88%BA%E6%AE%BA%E9%9A%8E%E6%AE%B5%E5%A5%A7%E4%BC%AF%E5%80%AB%E5%8F%AF%E4%BB%A5%E5%8F%83%E8%88%87%E8%A8%8E%E8%AB%96%E5%97%8E%EF%BC%9F",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-165/",
+        "sectionHash": "5d2c63f02ccf",
+        "sourceQuote": "本站預設奧伯倫可以參與刺殺討論：刺殺階段，奧伯倫能與其他邪惡方相認並交換情報（見規則說明書）。"
+      },
+      "情境": "刺殺階段，你是奧伯倫，想把看到的線索告訴刺客。",
+      "觀念": "本站預設奧伯倫可以參與刺殺討論，部分社群的規則不讓。",
+      "應用": "玩之前先確認規則，能參與時就說出你的視角。",
+      "tags": {
+        "decision": ["刺殺"],
+        "round": ["A"],
+        "phase": "刺殺",
+        "role": ["奧伯倫", "刺客"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": "經驗"
     },
     {
       "id": "w26-one-line",
@@ -2016,51 +1907,8 @@
       "應用": "選好一個邏輯基點，把邏輯線走到底再派。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["any"]
-      },
-      "evidence": "邏輯"
-    },
-    {
-      "id": "w26-tail-no-balance",
-      "article": {
-        "slug": "wiki-26",
-        "title": "思考原理與大局觀 - 五個原理、平衡、平滑與極化",
-        "section": "打平衡的條件",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-26&sec=%E6%89%93%E5%B9%B3%E8%A1%A1%E7%9A%84%E6%A2%9D%E4%BB%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-26/",
-        "sectionHash": "8e308a0de9ff",
-        "sourceQuote": "尾派乖乖派高機率會過的組合。"
-      },
-      "情境": "你是尾家，想用平衡打法派一隊不一樣的組合。",
-      "觀念": "尾派乖乖派高機率會過的組合，平衡打法不能用在尾派。",
-      "應用": "尾家選你認為最可能全好的組合，不要為了打平衡冒險。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["1-5", "2-5", "3-5", "4-5", "5-5"],
-        "roles": ["merlin", "percival", "loyal"]
-      },
-      "evidence": "經驗"
-    },
-    {
-      "id": "w109-whole-team",
-      "article": {
-        "slug": "wiki-109",
-        "title": "機率 - 條件機率與常用速算表",
-        "section": "範例三：四人任務兩張失敗，外置位好人怎麼選",
-        "url": "https://avalon-game-platform.web.app/#wiki=wiki-109&sec=%E7%AF%84%E4%BE%8B%E4%B8%89%EF%BC%9A%E5%9B%9B%E4%BA%BA%E4%BB%BB%E5%8B%99%E5%85%A9%E5%BC%B5%E5%A4%B1%E6%95%97%EF%BC%8C%E5%A4%96%E7%BD%AE%E4%BD%8D%E5%A5%BD%E4%BA%BA%E6%80%8E%E9%BA%BC%E9%81%B8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-109/",
-        "sectionHash": "7283bec709c2",
-        "sourceQuote": "但要的是整組全好，混一個任務內的人反而最高"
-      },
-      "情境": "第二局4人任務開出兩張失敗，第三局輪你派。",
-      "觀念": "要的是整組全好，混一位任務內的人反而可能比全選任務外還高。",
-      "應用": "判斷要看整組全好的機率，不是看單人的壞人比例。",
-      "tags": {
-        "decision": ["派隊"],
-        "round": ["3-*"],
-        "roles": ["merlin", "percival", "loyal"],
-        "lastQuestFails": [2],
-        "lastQuestMember": false
+        "round": ["any"],
+        "phase": "通用"
       },
       "evidence": "邏輯"
     },
@@ -2081,9 +1929,559 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5"],
+        "phase": "第一局派隊",
+        "role": ["奧伯倫"],
         "roles": ["oberon"]
       },
       "evidence": "經驗"
+    },
+    {
+      "id": "w170-two-styles",
+      "article": {
+        "slug": "wiki-170",
+        "title": "角色玩法 - 莫甘娜",
+        "section": "兩種常見打法：演梅林還是演忠臣",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-170&sec=%E5%85%A9%E7%A8%AE%E5%B8%B8%E8%A6%8B%E6%89%93%E6%B3%95%EF%BC%9A%E6%BC%94%E6%A2%85%E6%9E%97%E9%82%84%E6%98%AF%E6%BC%94%E5%BF%A0%E8%87%A3",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-170/",
+        "sectionHash": "5c060021a815",
+        "sourceQuote": "目的還是 拿下任務失敗 跟 逼迫梅林做事"
+      },
+      "情境": "你是莫甘娜，在想要不要演梅林騙派西。",
+      "觀念": "演梅林和演忠臣都是手段，目的是拿下任務失敗和逼梅林做事。",
+      "應用": "真梅林已在開能力就搶像梅林的位置，真梅林很低調就演忠臣。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["莫甘娜"],
+        "roles": ["morgana"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w170-fake-thumbs",
+      "article": {
+        "slug": "wiki-170",
+        "title": "角色玩法 - 莫甘娜",
+        "section": "打法-a：演梅林",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-170&sec=%E6%89%93%E6%B3%95-a%EF%BC%9A%E6%BC%94%E6%A2%85%E6%9E%97",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-170/",
+        "sectionHash": "19d1199075db",
+        "sourceQuote": "你演出來的三根拇指裡沒有另一根拇指 => 你就不是梅林"
+      },
+      "情境": "你是莫甘娜，正用派票演出一份假的三拇指資訊。",
+      "觀念": "你不知道真梅林是誰，演出的三拇指裡沒有另一根拇指就會露餡。",
+      "應用": "演之前先想好，假區間能不能一路和任務結果對得上。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["莫甘娜"],
+        "roles": ["morgana"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w170-fake-mordred",
+      "article": {
+        "slug": "wiki-170",
+        "title": "角色玩法 - 莫甘娜",
+        "section": "騙梅林：做出假的莫德雷德",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-170&sec=%E9%A8%99%E6%A2%85%E6%9E%97%EF%BC%9A%E5%81%9A%E5%87%BA%E5%81%87%E7%9A%84%E8%8E%AB%E5%BE%B7%E9%9B%B7%E5%BE%B7",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-170/",
+        "sectionHash": "4776938c2392",
+        "sourceQuote": "莫甘娜可以把一位忠臣做成梅林眼中的莫德雷德"
+      },
+      "情境": "你是莫甘娜，想讓梅林在錯的人身上開能力。",
+      "觀念": "梅林眼中沒拇指的人都可能是莫德，你可以把一位忠臣做成假莫德。",
+      "應用": "讓那位忠臣一直和失敗的組合綁在一起，梅林去處理他就會暴露。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["莫甘娜"],
+        "roles": ["morgana"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w170-with-mordred",
+      "article": {
+        "slug": "wiki-170",
+        "title": "角色玩法 - 莫甘娜",
+        "section": "和莫德雷德怎麼配合",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-170&sec=%E5%92%8C%E8%8E%AB%E5%BE%B7%E9%9B%B7%E5%BE%B7%E6%80%8E%E9%BA%BC%E9%85%8D%E5%90%88",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-170/",
+        "sectionHash": "b12d041ab947",
+        "sourceQuote": "莫甘娜騙派西、莫德雷德騙梅林，兩條線同時進行，藍方兩個能力者都在處理錯的人"
+      },
+      "情境": "你和相認隊友分別是莫甘娜和莫德雷德。",
+      "觀念": "莫甘娜騙派西、莫德雷德騙梅林，藍方兩個能力者都在處理錯的人。",
+      "應用": "兩條線同時進行，但不要互相打對立太明顯，也不要互相保。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["莫甘娜", "莫德雷德", "紅方"],
+        "roles": ["morgana", "mordred"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w170-rank-middle",
+      "article": {
+        "slug": "wiki-170",
+        "title": "角色玩法 - 莫甘娜",
+        "section": "位階法（與刺客同時出任務時）",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-170&sec=%E4%BD%8D%E9%9A%8E%E6%B3%95%EF%BC%88%E8%88%87%E5%88%BA%E5%AE%A2%E5%90%8C%E6%99%82%E5%87%BA%E4%BB%BB%E5%8B%99%E6%99%82%EF%BC%89",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-170/",
+        "sectionHash": "ce4f473ea5f2",
+        "sourceQuote": "和一位相認隊友同車、分不出對方是刺客還是莫德 => 先出成功確認位階，下一次由莫甘娜出。"
+      },
+      "情境": "你是莫甘娜，和一位分不出是刺客還是莫德的相認隊友同車。",
+      "觀念": "你在位階中間，對方是刺客會出失敗，任務成功就代表對方是莫德。",
+      "應用": "先出成功確認位階，下一次再由你出失敗。",
+      "tags": {
+        "decision": ["出任務"],
+        "round": ["1-*", "2-*", "3-*", "5-*"],
+        "phase": "投票・湖中・出任務",
+        "role": ["莫甘娜"],
+        "roles": ["morgana"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w170-help-assassin",
+      "article": {
+        "slug": "wiki-170",
+        "title": "角色玩法 - 莫甘娜",
+        "section": "配合刺客",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-170&sec=%E9%85%8D%E5%90%88%E5%88%BA%E5%AE%A2",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-170/",
+        "sectionHash": "346211e57dfb",
+        "sourceQuote": "觀察誰對你和另一根拇指的態度特別猶豫 => 他可能是派西"
+      },
+      "情境": "刺殺時，你是莫甘娜，要幫刺客縮小梅林人選。",
+      "觀念": "對你和另一根拇指特別猶豫的人可能是派西，他最後採信的常是梅林。",
+      "應用": "先找出誰像派西，再看他最後站在哪一根拇指那邊。",
+      "tags": {
+        "decision": ["刺殺"],
+        "round": ["A"],
+        "phase": "刺殺",
+        "role": ["莫甘娜", "刺客"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w166-intersection",
+      "article": {
+        "slug": "wiki-166",
+        "title": "角色玩法 - 莫德雷德",
+        "section": "核心：失敗出在看得到的地方，乾淨留在看不到的地方",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-166&sec=%E6%A0%B8%E5%BF%83%EF%BC%9A%E5%A4%B1%E6%95%97%E5%87%BA%E5%9C%A8%E7%9C%8B%E5%BE%97%E5%88%B0%E7%9A%84%E5%9C%B0%E6%96%B9%EF%BC%8C%E4%B9%BE%E6%B7%A8%E7%95%99%E5%9C%A8%E7%9C%8B%E4%B8%8D%E5%88%B0%E7%9A%84%E5%9C%B0%E6%96%B9",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-166/",
+        "sectionHash": "60c049e862be",
+        "sourceQuote": "任務交集：兩次沒拇指的組合都開紅 => 莫德一定在兩次都參與的人裡"
+      },
+      "情境": "你是莫德雷德，又被派進了梅林看不到拇指的組合。",
+      "觀念": "兩次沒拇指的組合都開紅，梅林用任務交集就能鎖定你。",
+      "應用": "不要在沒拇指的組合裡連續出失敗，第二次就會被交集抓到。",
+      "tags": {
+        "decision": ["出任務"],
+        "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["莫德雷德"],
+        "roles": ["mordred"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w166-mate-fails",
+      "article": {
+        "slug": "wiki-166",
+        "title": "角色玩法 - 莫德雷德",
+        "section": "核心：失敗出在看得到的地方，乾淨留在看不到的地方",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-166&sec=%E6%A0%B8%E5%BF%83%EF%BC%9A%E5%A4%B1%E6%95%97%E5%87%BA%E5%9C%A8%E7%9C%8B%E5%BE%97%E5%88%B0%E7%9A%84%E5%9C%B0%E6%96%B9%EF%BC%8C%E4%B9%BE%E6%B7%A8%E7%95%99%E5%9C%A8%E7%9C%8B%E4%B8%8D%E5%88%B0%E7%9A%84%E5%9C%B0%E6%96%B9",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-166/",
+        "sectionHash": "60c049e862be",
+        "sourceQuote": "照位階法由隊友出失敗 => 梅林會把失敗算在看得到的拇指頭上（紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻〈紅方進"
+      },
+      "情境": "你是莫德雷德，和相認隊友一起進了任務。",
+      "觀念": "照位階法由隊友出失敗，梅林會把失敗算在看得到的拇指頭上。",
+      "應用": "不要搶著出失敗，把乾淨的形象留給關鍵的任務。",
+      "tags": {
+        "decision": ["出任務"],
+        "round": ["1-*", "2-*", "3-*", "5-*"],
+        "phase": "投票・湖中・出任務",
+        "role": ["莫德雷德"],
+        "roles": ["mordred"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w166-hide-plan",
+      "article": {
+        "slug": "wiki-166",
+        "title": "角色玩法 - 莫德雷德",
+        "section": "什麼時候可以藏",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-166&sec=%E4%BB%80%E9%BA%BC%E6%99%82%E5%80%99%E5%8F%AF%E4%BB%A5%E8%97%8F",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-166/",
+        "sectionHash": "e8e22553a0d7",
+        "sourceQuote": "沒有計畫、純粹害怕而不出，是常見錯誤"
+      },
+      "情境": "你是莫德雷德，在想這次要不要藏起來出成功。",
+      "觀念": "有計畫地藏是戰術，沒有計畫、純粹害怕而不出是常見錯誤。",
+      "應用": "藏之前先想好藏了換到什麼、什麼時候再出。",
+      "tags": {
+        "decision": ["出任務"],
+        "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["莫德雷德"],
+        "roles": ["mordred"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w166-split-views",
+      "article": {
+        "slug": "wiki-166",
+        "title": "角色玩法 - 莫德雷德",
+        "section": "分裂不同角色對你的看法",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-166&sec=%E5%88%86%E8%A3%82%E4%B8%8D%E5%90%8C%E8%A7%92%E8%89%B2%E5%B0%8D%E4%BD%A0%E7%9A%84%E7%9C%8B%E6%B3%95",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-166/",
+        "sectionHash": "9ae339164fd9",
+        "sourceQuote": "你可以讓梅林眼中的你偏好、讓忠臣眼中的你偏壞"
+      },
+      "情境": "你是莫德雷德，梅林看你是沒拇指，忠臣看你是未知。",
+      "觀念": "讓梅林眼中的你偏好、忠臣眼中的你偏壞，梅林保你就是在開能力。",
+      "應用": "用派票讓兩邊的看法分開，逼梅林出手保你。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["莫德雷德"],
+        "roles": ["mordred"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w166-tolerant-merlin",
+      "article": {
+        "slug": "wiki-166",
+        "title": "角色玩法 - 莫德雷德",
+        "section": "分裂不同角色對你的看法",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-166&sec=%E5%88%86%E8%A3%82%E4%B8%8D%E5%90%8C%E8%A7%92%E8%89%B2%E5%B0%8D%E4%BD%A0%E7%9A%84%E7%9C%8B%E6%B3%95",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-166/",
+        "sectionHash": "9ae339164fd9",
+        "sourceQuote": "遊戲中會有某個玩家給你比其他人更大的包容，通常那個玩家就是梅林（本文）"
+      },
+      "情境": "刺殺時，你是莫德雷德，要幫刺客找梅林。",
+      "觀念": "整場給你比其他人更大包容的玩家，通常就是梅林。",
+      "應用": "但梅林本來就可能派到莫德，派過你不能拿來排除他。",
+      "tags": {
+        "decision": ["刺殺"],
+        "round": ["A"],
+        "phase": "刺殺",
+        "role": ["莫德雷德", "刺客"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w21-fail-first",
+      "article": {
+        "slug": "wiki-21",
+        "title": "角色玩法 - 奧伯倫",
+        "section": "任務為主",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-21&sec=%E4%BB%BB%E5%8B%99%E7%82%BA%E4%B8%BB",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-21/",
+        "sectionHash": "cc406ae26380",
+        "sourceQuote": "第一局出現兩張失敗（oxx）比任務成功（ooo）對紅方有利（本站牌譜的實際數字見文末數據資料）。"
+      },
+      "情境": "你是奧伯倫，被選進任務，不知道車上有沒有隊友。",
+      "觀念": "被選進任務就先出失敗，兩張失敗也比任務成功對紅方有利。",
+      "應用": "初學者不必顧慮隊友，確認相認紅方在車上時才藏。",
+      "tags": {
+        "decision": ["出任務"],
+        "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["奧伯倫"],
+        "roles": ["oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w21-play-loyal",
+      "article": {
+        "slug": "wiki-21",
+        "title": "角色玩法 - 奧伯倫",
+        "section": "角色定位",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-21&sec=%E8%A7%92%E8%89%B2%E5%AE%9A%E4%BD%8D",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-21/",
+        "sectionHash": "02ad91f6b954",
+        "sourceQuote": "奧伯倫玩得好不好，取決於玩雜魚的技術好不好。"
+      },
+      "情境": "你是奧伯倫，不知道隊友是誰，只知道自己是壞人。",
+      "觀念": "奧伯倫玩得好不好，取決於玩雜魚的技術好不好。",
+      "應用": "反過來盤：對你沒敵意的能力者多半是隊友，有敵意的多半是好人。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["奧伯倫"],
+        "roles": ["oberon"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w21-act-loyal",
+      "article": {
+        "slug": "wiki-21",
+        "title": "角色玩法 - 奧伯倫",
+        "section": "欺騙藍方忠臣",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-21&sec=%E6%AC%BA%E9%A8%99%E8%97%8D%E6%96%B9%E5%BF%A0%E8%87%A3",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-21/",
+        "sectionHash": "1544843318f2",
+        "sourceQuote": "因為不相認，不會發生隊友派票閃你的情況。"
+      },
+      "情境": "你是奧伯倫，還沒被發現是壞人。",
+      "觀念": "你不相認，不會有隊友派票閃你，越像雜魚越好。",
+      "應用": "欺騙是為了在關鍵時刻反咬，該表壞時就果斷表壞。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["奧伯倫"],
+        "roles": ["oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w21-no-votes-good",
+      "article": {
+        "slug": "wiki-21",
+        "title": "角色玩法 - 奧伯倫",
+        "section": "誤導場上資訊",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-21&sec=%E8%AA%A4%E5%B0%8E%E5%A0%B4%E4%B8%8A%E8%B3%87%E8%A8%8A",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-21/",
+        "sectionHash": "38a02f20510a",
+        "sourceQuote": "沒票的好人，就盡量讓他一直沒票（越多好人被當成壞人，你就相對變成好人，比較能出任務）。"
+      },
+      "情境": "你是奧伯倫，場上有一位一直沒票的好人。",
+      "觀念": "越多好人被當成壞人，你就相對變成好人，比較能出任務。",
+      "應用": "沒票的好人就盡量讓他一直沒票，不要替他背書。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["奧伯倫"],
+        "roles": ["oberon"]
+      },
+      "evidence": null
+    },
+    {
+      "id": "w21-exposed-white",
+      "article": {
+        "slug": "wiki-21",
+        "title": "角色玩法 - 奧伯倫",
+        "section": "後期",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-21&sec=%E5%BE%8C%E6%9C%9F",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-21/",
+        "sectionHash": "62a256469833",
+        "sourceQuote": "或是開擾亂用的白球（你知道開這顆白球不會讓任務出去，但會讓大家難以判斷其他人的陣營）。"
+      },
+      "情境": "你是奧伯倫，身分已經暴露，全場都不派你。",
+      "觀念": "暴露後的價值在白球，可以幫隊友衝白球或開擾亂用的白球。",
+      "應用": "不再爭取進任務，把白球用在對隊友有利的組合上。",
+      "tags": {
+        "decision": ["投票"],
+        "round": ["any"],
+        "phase": "投票・湖中・出任務",
+        "role": ["奧伯倫"],
+        "roles": ["oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w50-ability-evil",
+      "article": {
+        "slug": "wiki-50",
+        "title": "能力者與超前資訊 - 誰有內建資訊、怎麼分辨好壞能力者",
+        "section": "能力者",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-50&sec=%E8%83%BD%E5%8A%9B%E8%80%85",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-50/",
+        "sectionHash": "7fb9c9d90197",
+        "sourceQuote": "因此發現某人是能力者時，他高機率是壞人。"
+      },
+      "情境": "你發現某一家的派票明顯帶有內建資訊。",
+      "觀念": "十人局的六位能力者裡有四位是壞人，所以他高機率是壞人。",
+      "應用": "被察覺是能力者時，大家分不出你是好是壞，派票很容易避開你。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["藍方"]
+      },
+      "evidence": "邏輯"
+    },
+    {
+      "id": "w50-blocked-interval",
+      "article": {
+        "slug": "wiki-50",
+        "title": "能力者與超前資訊 - 誰有內建資訊、怎麼分辨好壞能力者",
+        "section": "好的壞人不會給正確的區間",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-50&sec=%E5%A5%BD%E7%9A%84%E5%A3%9E%E4%BA%BA%E4%B8%8D%E6%9C%83%E7%B5%A6%E6%AD%A3%E7%A2%BA%E7%9A%84%E5%8D%80%E9%96%93",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-50/",
+        "sectionHash": "51fc19ad2c7d",
+        "sourceQuote": "他永遠只讓你知道「那邊有壞」，但不讓你知道是誰"
+      },
+      "情境": "一位能力者給的壞人區間大致對，卻總是不點名是誰。",
+      "觀念": "好的壞人只讓你知道那邊有壞，不讓你知道是誰。",
+      "應用": "區間準而細到點名的偏好人能力者，總停在那邊有壞的要留意。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["藍方"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w50-contradiction",
+      "article": {
+        "slug": "wiki-50",
+        "title": "能力者與超前資訊 - 誰有內建資訊、怎麼分辨好壞能力者",
+        "section": "自我修正與前後矛盾的差別",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-50&sec=%E8%87%AA%E6%88%91%E4%BF%AE%E6%AD%A3%E8%88%87%E5%89%8D%E5%BE%8C%E7%9F%9B%E7%9B%BE%E7%9A%84%E5%B7%AE%E5%88%A5",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-50/",
+        "sectionHash": "058e5ad5159a",
+        "sourceQuote": "梅林雖然是能力者，但不太會推翻自己的派票，會微調，但不會整體推翻。"
+      },
+      "情境": "一位能力者第二次派票推翻了自己第一次的能力派。",
+      "觀念": "梅林會微調但不太會整體推翻自己的派票，前後矛盾多半是壞人。",
+      "應用": "先看中間有沒有任務、湖中等變因，有變因的才是自我修正。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["藍方"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w50-blue-strategy",
+      "article": {
+        "slug": "wiki-50",
+        "title": "能力者與超前資訊 - 誰有內建資訊、怎麼分辨好壞能力者",
+        "section": "戰略方向",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-50&sec=%E6%88%B0%E7%95%A5%E6%96%B9%E5%90%91",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-50/",
+        "sectionHash": "d9d4598a6b9a",
+        "sourceQuote": "所有人的行動都往忠臣靠攏（提醒：忠臣是不能出失敗的）。"
+      },
+      "情境": "你是藍方能力者，在想要不要開能力。",
+      "觀念": "好人能力者非必要不開能力，所有人的行動都往忠臣靠攏。",
+      "應用": "理想是忠臣像派西、派西像梅林、梅林像忠臣。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["藍方", "梅林", "派西維爾"],
+        "roles": ["merlin", "percival", "loyal"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w50-red-strategy",
+      "article": {
+        "slug": "wiki-50",
+        "title": "能力者與超前資訊 - 誰有內建資訊、怎麼分辨好壞能力者",
+        "section": "戰略方向",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-50&sec=%E6%88%B0%E7%95%A5%E6%96%B9%E5%90%91",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-50/",
+        "sectionHash": "d9d4598a6b9a",
+        "sourceQuote": "核心：在合理範圍內開能力拿任務失敗，讓資訊越模糊越好。"
+      },
+      "情境": "你是紅方，在想什麼時候該開能力。",
+      "觀念": "紅方要在合理範圍內開能力拿任務失敗，讓資訊越模糊越好。",
+      "應用": "隊友分工拿不同局的任務，逼派梅開能力，把刺殺目標縮到兩人內。",
+      "tags": {
+        "decision": ["派隊", "出任務"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["紅方"],
+        "roles": ["assassin", "morgana", "mordred", "oberon"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w72-merlin-thumb-trusted",
+      "article": {
+        "slug": "wiki-72",
+        "title": "阿瓦隆心法語錄（各角色重點）與社群問答",
+        "section": "梅林",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-72&sec=%E6%A2%85%E6%9E%97",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-72/",
+        "sectionHash": "fa556dbd20ae",
+        "sourceQuote": "死亡率高低，和透露出「他是壞人」的資訊量成正比。"
+      },
+      "情境": "你是梅林，場上都覺得某一家是好人，他卻是你的拇指。",
+      "觀念": "你怎麼處理他的死亡率，和透露出他是壞人的資訊量成正比。",
+      "應用": "只有一紅時可以考慮直接派他出任務，比完全不派他安全。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["梅林"],
+        "roles": ["merlin"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w72-percival-admit",
+      "article": {
+        "slug": "wiki-72",
+        "title": "阿瓦隆心法語錄（各角色重點）與社群問答",
+        "section": "派西篇",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-72&sec=%E6%B4%BE%E8%A5%BF%E7%AF%87",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-72/",
+        "sectionHash": "005c0997d8c4",
+        "sourceQuote": "認錯沒關係，三紅之前都來得及修正。"
+      },
+      "情境": "你是派西維爾，發現自己可能信錯了拇指。",
+      "觀念": "認錯沒關係，三紅之前都來得及修正。",
+      "應用": "釋放資訊的同時，隱藏是誰給你資訊，相信隊友。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用",
+        "role": ["派西維爾"],
+        "roles": ["percival"]
+      },
+      "evidence": "經驗"
+    },
+    {
+      "id": "w72-ability-as-loyal",
+      "article": {
+        "slug": "wiki-72",
+        "title": "阿瓦隆心法語錄（各角色重點）與社群問答",
+        "section": "能力者相關",
+        "url": "https://avalon-game-platform.web.app/#wiki=wiki-72&sec=%E8%83%BD%E5%8A%9B%E8%80%85%E7%9B%B8%E9%97%9C",
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-72/",
+        "sectionHash": "c49a9d0e16a9",
+        "sourceQuote": "你怎麼玩雜魚，當能力者時就怎麼玩。"
+      },
+      "情境": "你拿到能力者，在想要不要秀出你的資訊。",
+      "觀念": "你怎麼玩雜魚，當能力者時就怎麼玩。",
+      "應用": "先讓別人相信你是好人，比讓人知道你是能力者重要。",
+      "tags": {
+        "decision": ["派隊"],
+        "round": ["any"],
+        "phase": "通用"
+      },
+      "evidence": "經驗"
     }
-  ]
+  ],
+  "retired": ["w205-merlin-plan", "w205-percival-seat1", "w205-red-seat1", "w205-1-2", "w205-1-4", "w205-1-5", "w205-2-3", "w205-2-5", "w205-seat6-split", "w206-loyal-self", "w206-still-trusted", "w206-percival-tail", "w206-2-5-lake", "w206-3-5", "w206-red-2-5-lake", "w207-round4-one-unsure", "w207-merlin-blue-match", "w207-red-leader-match", "w207-red-press-merlin", "w207-final-four-evil", "w24-loyal-respect", "w24-conscious", "w24-no-reverse", "w26-tail-no-balance", "w18-same-style", "w176-front-half", "w177-tail-mate", "w109-whole-team", "w175-protect-one-thumb"]
 }

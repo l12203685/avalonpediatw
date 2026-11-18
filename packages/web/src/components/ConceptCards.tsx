@@ -1,22 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Check, Link2, Search, X } from 'lucide-react';
 import {
-  CONCEPT_DECISIONS,
-  CONCEPT_ROUND_FILTERS,
+  CONCEPT_PHASES,
+  CONCEPT_ROLE_TAGS,
   EMPTY_CONCEPT_FILTER,
   conceptAnchorId,
+  conceptPhase,
   conceptsHash,
   evidenceLabel,
   filterConcepts,
+  groupConceptsByPhase,
   roundLabel,
   type ConceptCard,
   type ConceptFilter,
+  type ConceptPhase,
 } from '../utils/concepts';
 import { openWikiArticle } from './wikiLink';
 
 /**
  * 百科觀念卡（2026-11-18，站長：「百科觀念卡 我希望能公開出去」）：百科攻略的第三個檢視（心智圖／列表／觀念卡）。
- * 每張卡三句（情境／觀念／應用）、證據標籤、文章那一節的連結；可以搜尋、照決策和局篩選。
+ * 每張卡三句（情境／觀念／應用）、證據標籤、文章那一節的連結；可以搜尋、照階段和角色篩選。
+ * 階段（2026-11-18 站長：「派票總共80張 好像有點太多了 … 或是直接區分成 [第一局派隊] [第二局派隊] [第三~五局派隊] 這樣呢?」）：
+ * 沒選階段時照階段分組列出，站長的三個派隊分組在最前面；角色（站長：「能力者的文章跟觀念好像完全沒看到?」）篩出講某個角色的卡。
  * #concepts=<id> 捲到那一張並標出來（每日小觀念的「觀念卡:」連結）。卡庫打包成獨立的 chunk（'@concepts-bundle'）。
  */
 
@@ -79,10 +84,11 @@ function Card({ card, highlighted }: { card: ConceptCard; highlighted: boolean }
         ))}
       </dl>
       <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-gray-700 pt-2">
-        {card.tags.decision.map((d) => (
-          <span key={d} className="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-200">{d}</span>
+        <span className="rounded bg-gray-700/50 px-1.5 py-0.5 text-[10px] text-gray-200">{conceptPhase(card)}</span>
+        {(card.tags.role ?? []).map((r) => (
+          <span key={r} className="rounded border border-yellow-500/40 px-1.5 py-0.5 text-[10px] text-yellow-300">{r}</span>
         ))}
-        {card.tags.round.map((r) => (
+        {card.tags.round.filter((r) => r !== 'any' && r !== 'A').map((r) => (
           <span key={r} className="rounded bg-gray-700/30 px-1.5 py-0.5 text-[10px] text-gray-400">{roundLabel(r)}</span>
         ))}
         <span className="flex-1" />
@@ -124,6 +130,13 @@ export default function ConceptCards({ targetId }: { targetId: string | null }):
   }, [cards, targetId]);
 
   const shown = useMemo(() => (cards ? filterConcepts(cards, filter) : []), [cards, filter]);
+  // 階段按鈕上的張數：其他篩選（搜尋、角色）照套，只是不限階段。
+  const phaseCounts = useMemo(() => {
+    const counts = new Map<ConceptPhase, number>();
+    for (const c of cards ? filterConcepts(cards, { ...filter, phase: '' }) : []) counts.set(conceptPhase(c), (counts.get(conceptPhase(c)) ?? 0) + 1);
+    return counts;
+  }, [cards, filter]);
+  const groups = useMemo(() => (filter.phase ? null : groupConceptsByPhase(shown)), [shown, filter.phase]);
   const chip = (active: boolean): string => `px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
     active ? 'bg-yellow-500 text-black shadow' : 'bg-avalon-card/50 text-gray-300 hover:bg-avalon-card border border-gray-600'
   }`;
@@ -149,17 +162,20 @@ export default function ConceptCards({ targetId }: { targetId: string | null }):
           </button>
         )}
       </div>
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="決策">
-        <span className="mr-1 text-[11px] text-gray-500">決策</span>
-        <button type="button" className={chip(!filter.decision)} onClick={() => setFilter({ ...filter, decision: '' })}>全部</button>
-        {CONCEPT_DECISIONS.map((d) => (
-          <button key={d} type="button" className={chip(filter.decision === d)} onClick={() => setFilter({ ...filter, decision: d })}>{d}</button>
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="階段">
+        <span className="mr-1 text-[11px] text-gray-500">階段</span>
+        <button type="button" className={chip(!filter.phase)} onClick={() => setFilter({ ...filter, phase: '' })}>全部</button>
+        {CONCEPT_PHASES.map((p) => (
+          <button key={p} type="button" className={chip(filter.phase === p)} onClick={() => setFilter({ ...filter, phase: p })}>
+            {p}<span className="ml-1 opacity-70">{phaseCounts.get(p) ?? 0}</span>
+          </button>
         ))}
       </div>
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="局">
-        <span className="mr-1 text-[11px] text-gray-500">局</span>
-        {CONCEPT_ROUND_FILTERS.map((r) => (
-          <button key={r.id || 'all'} type="button" className={chip(filter.round === r.id)} onClick={() => setFilter({ ...filter, round: r.id })}>{r.label}</button>
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="角色">
+        <span className="mr-1 text-[11px] text-gray-500">角色</span>
+        <button type="button" className={chip(!filter.role)} onClick={() => setFilter({ ...filter, role: '' })}>全部</button>
+        {CONCEPT_ROLE_TAGS.map((r) => (
+          <button key={r} type="button" className={chip(filter.role === r)} onClick={() => setFilter({ ...filter, role: r })}>{r}</button>
         ))}
       </div>
       {failed && <p className="text-sm text-gray-400">觀念卡載入失敗，請重新整理。</p>}
@@ -175,9 +191,22 @@ export default function ConceptCards({ targetId }: { targetId: string | null }):
           <p className="mt-1 text-xs text-gray-500">換個關鍵字，或把篩選改回「全部」</p>
         </div>
       )}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {shown.map((c) => <Card key={c.id} card={c} highlighted={c.id === targetId} />)}
-      </div>
+      {groups
+        ? groups.map((g) => (
+          <section key={g.phase} className="space-y-2" aria-label={g.phase}>
+            <h3 className="border-b border-gray-700 pb-1 text-sm font-bold text-yellow-400">
+              {g.phase}<span className="ml-2 text-xs font-normal text-gray-400">{g.cards.length} 張</span>
+            </h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {g.cards.map((c) => <Card key={c.id} card={c} highlighted={c.id === targetId} />)}
+            </div>
+          </section>
+        ))
+        : (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {shown.map((c) => <Card key={c.id} card={c} highlighted={c.id === targetId} />)}
+          </div>
+        )}
     </div>
   );
 }

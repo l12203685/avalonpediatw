@@ -17,9 +17,12 @@ import { BLUE_ROLES, RED_ROLES, assassinSeat } from '../bots/simulation/scenario
 import { STATS_SITE_URL } from '../bots/stats/statsReplies';
 import {
   CONCEPT_PARTS,
+  CONCEPT_PHASES,
+  CONCEPT_ROLE_TAGS,
   CONCEPT_SENTENCE_MAX,
   conceptBank,
   conceptMatches,
+  conceptPhaseOf,
   conceptProblems,
   conceptsFor,
   exerciseOf,
@@ -58,7 +61,43 @@ describe('concepts.json format', () => {
     const ids = bank.concepts.map((c) => c.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.length).toBeGreaterThanOrEqual(40);
-    expect(ids.length).toBeLessThanOrEqual(100);
+    expect(ids.length).toBeLessThanOrEqual(150);
+  });
+
+  it('gives every card a phase and keeps 派隊 trimmed (2026-11-18 站長：派票 80 張太多)', () => {
+    expect(bank.concepts.every((c) => (CONCEPT_PHASES as readonly string[]).includes(c.tags.phase))).toBe(true);
+    const teamPhases = bank.concepts.filter((c) => ['第一局派隊', '第二局派隊', '第三～五局派隊'].includes(c.tags.phase));
+    expect(teamPhases.length).toBeGreaterThan(0);
+    expect(teamPhases.length).toBeLessThanOrEqual(50);
+    // 退役的 id 不會再出現
+    const retired = new Set(bank.retired ?? []);
+    expect(bank.concepts.filter((c) => retired.has(c.id))).toEqual([]);
+  });
+
+  it('derives the phase from decision and round', () => {
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['1-1'] })).toBe('第一局派隊');
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['1-5', '2-*'] })).toBe('第一局派隊');
+    expect(conceptPhaseOf({ decision: ['派隊', '湖中'], round: ['2-5'] })).toBe('第二局派隊');
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['3-*', '4-*', '5-*'] })).toBe('第三～五局派隊');
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['1-5', '2-*', '3-*'] })).toBe('通用');
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['any'] })).toBe('通用');
+    expect(conceptPhaseOf({ decision: ['刺殺'], round: ['A'] })).toBe('刺殺');
+    expect(conceptPhaseOf({ decision: ['投票'], round: ['any'] })).toBe('投票・湖中・出任務');
+  });
+
+  it('tags the role-holder articles with a role (站長：能力者的文章跟觀念好像完全沒看到)', () => {
+    const roleArticles: Record<string, string> = {
+      'wiki-175': '梅林', 'wiki-176': '派西維爾', 'wiki-25': '忠臣', 'wiki-12': '刺客',
+      'wiki-170': '莫甘娜', 'wiki-166': '莫德雷德', 'wiki-21': '奧伯倫', 'wiki-177': '紅方',
+    };
+    for (const [slug, role] of Object.entries(roleArticles)) {
+      const cards = bank.concepts.filter((c) => c.article.slug === slug);
+      expect(cards.length, slug).toBeGreaterThanOrEqual(2);
+      expect(cards.every((c) => c.tags.role?.includes(role as never)), slug).toBe(true);
+    }
+    for (const role of CONCEPT_ROLE_TAGS) expect(bank.concepts.some((c) => c.tags.role?.includes(role)), role).toBe(true);
+    expect(conceptProblems({ site: bank.site, concepts: [{ ...bank.concepts[0], tags: { ...bank.concepts[0].tags, role: ['路人'] } }] }).join()).toMatch(/tags.role/);
+    expect(conceptProblems({ site: bank.site, concepts: [{ ...bank.concepts[0], tags: { ...bank.concepts[0].tags, phase: '第六局' } }] }).join()).toMatch(/tags.phase/);
   });
 
   it('keeps every part to one sentence of at most 40 characters', () => {
@@ -150,13 +189,13 @@ describe('conceptsFor', () => {
     expect(red.every((m) => !m.concept.tags.roles || m.concept.tags.roles.includes('morgana'))).toBe(true);
     expect(blue.every((m) => !m.concept.tags.roles || m.concept.tags.roles.includes('percival'))).toBe(true);
     expect(red.map((m) => m.concept.id)).toContain('w206-red-reasonable');
-    expect(blue.map((m) => m.concept.id)).toContain('w206-percival-tail');
+    expect(blue.map((m) => m.concept.id)).toContain('w176-sop');
   });
 
-  it('needs the lake to be in your hand for the 2-5 lake-plan card', () => {
+  it('needs the lake to be in your hand for the lake-plan card at 2-5', () => {
     const holder = ex({ round: 2, attempt: 5, seat: 10, score: '1:0', lakeHolder: true, lastQuestMember: false, lastQuestFails: 0 });
-    expect(conceptMatches(holder).map((m) => m.concept.id)).toContain('w206-2-5-lake');
-    expect(conceptMatches({ ...holder, lakeHolder: false }).map((m) => m.concept.id)).not.toContain('w206-2-5-lake');
+    expect(conceptMatches(holder).map((m) => m.concept.id)).toContain('w147-plan-before');
+    expect(conceptMatches({ ...holder, lakeHolder: false }).map((m) => m.concept.id)).not.toContain('w147-plan-before');
   });
 
   it('uses the score: 紅方聽牌 and 藍方聽牌 get different cards', () => {
@@ -289,7 +328,6 @@ describe('coverage over the exercise bank', () => {
     expect(e.thumbsLed).not.toBe(2);
     const got = conceptMatches(e).map((m) => m.concept.id);
     expect(got).not.toContain('w176-sop');
-    expect(got).not.toContain('w206-percival-tail');
     expect(conceptMatches({ ...e, thumbsLed: 2 }).map((m) => m.concept.id)).toContain('w176-sop');
     expect(conceptMatches({ ...e, thumbsLed: 0 }).map((m) => m.concept.id)).toContain('w176-no-blind');
     // 只對派西的題有意義：別的角色沒有這個資訊，這三張都配不到。

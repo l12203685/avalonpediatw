@@ -14,6 +14,7 @@
  *    （判斷／待驗證 < 經驗 < 邏輯）；文章沒標就是 null。卡片不能比文章說得更肯定。
  *  - tags：配對用。decision＝決策種類；round＝「局-次」（1-5）、「局-*」（那一局每一次）、A（刺殺，同題號的 -A）或 any；其他條件（角色、座位、
  *    比分、持湖、上一局在不在隊上、上一局幾張失敗、派西的拇指已經有幾根當過隊長）有寫才要符合。
+ *    phase（階段，必填）與 role（在講哪個角色）只給網站分組、篩選，不影響配對。
  */
 
 import type { Role } from '@avalon/shared';
@@ -40,10 +41,29 @@ export const SECTION_HASH_RE = /^[0-9a-f]{12}$/;
 
 export const CONCEPT_ROLES: readonly Role[] = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'];
 
+/**
+ * 階段（2026-11-18 站長：「派票總共80張 好像有點太多了 … 或是直接區分成 [第一局派隊] [第二局派隊] [第三~五局派隊] 這樣呢?」）。
+ * 每張卡一個，網站觀念卡頁照這個分組；由 decision／round 推（conceptPhaseOf），跨局的卡歸到它主要講的最早那一局，
+ * 真的通用就是「通用」，可以手動改。
+ */
+export const CONCEPT_PHASES = ['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '通用'] as const;
+export type ConceptPhase = (typeof CONCEPT_PHASES)[number];
+
+/**
+ * 角色標籤（2026-11-18 站長：「能力者的文章跟觀念好像完全沒看到?」）：這張卡是在講哪個角色（或哪一方）怎麼玩，網站的「角色」篩選用。
+ * 跟 tags.roles（配對用：出題的那一家是什麼角色）不同，沒有就是不針對角色的通則。
+ */
+export const CONCEPT_ROLE_TAGS = ['梅林', '派西維爾', '忠臣', '藍方', '刺客', '莫甘娜', '莫德雷德', '奧伯倫', '紅方'] as const;
+export type ConceptRoleTag = (typeof CONCEPT_ROLE_TAGS)[number];
+
 export interface ConceptTags {
   decision: ConceptDecision[];
   /** 「1-5」「2-*」「A」（刺殺）「any」。 */
   round: string[];
+  /** 階段（網站分組用，不影響配對）。 */
+  phase: ConceptPhase;
+  /** 這張卡在講哪個角色／哪一方（網站「角色」篩選用，不影響配對）。 */
+  role?: ConceptRoleTag[];
   /** 出題的那一家的角色。 */
   roles?: Role[];
   /** 出題的那一家的座位（1～10，10 = 0家）。 */
@@ -167,6 +187,13 @@ export function conceptProblems(bank: unknown): string[] {
       out.push(`${at}: tags.decision must be non-empty, from ${CONCEPT_DECISIONS.join('/')}`);
     }
     if (!isStringArray(t.round) || t.round.length === 0 || !t.round.every((r) => ROUND_RE.test(r))) out.push(`${at}: bad tags.round`);
+    if (!CONCEPT_PHASES.includes(t.phase as ConceptPhase)) out.push(`${at}: tags.phase must be one of ${CONCEPT_PHASES.join('/')}`);
+    if (
+      t.role !== undefined &&
+      (!isStringArray(t.role) || t.role.length === 0 || new Set(t.role).size !== t.role.length || !t.role.every((r) => CONCEPT_ROLE_TAGS.includes(r as ConceptRoleTag)))
+    ) {
+      out.push(`${at}: tags.role must be non-empty, unique, from ${CONCEPT_ROLE_TAGS.join('/')}`);
+    }
     if (t.roles !== undefined && (!isStringArray(t.roles) || t.roles.length === 0 || !t.roles.every((r) => CONCEPT_ROLES.includes(r as Role)))) {
       out.push(`${at}: bad tags.roles`);
     }
@@ -185,6 +212,22 @@ export function conceptProblems(bank: unknown): string[] {
     }
   });
   return out;
+}
+
+/**
+ * 由決策與局推階段：有刺殺 → 刺殺；沒有派隊 → 投票・湖中・出任務；派隊而 round 有 any → 通用；
+ * 都在第 3～5 局 → 第三～五局派隊；跨了三局以上 → 通用；其他歸最早的那一局（第一局／第二局派隊）。
+ */
+export function conceptPhaseOf(tags: Pick<ConceptTags, 'decision' | 'round'>): ConceptPhase {
+  if (tags.decision.includes('刺殺')) return '刺殺';
+  if (!tags.decision.includes('派隊')) return '投票・湖中・出任務';
+  if (tags.round.includes('any')) return '通用';
+  const rounds = new Set(tags.round.map((r) => Number(r[0])).filter((n) => n >= 1 && n <= 5));
+  if (rounds.size === 0) return '通用';
+  const first = Math.min(...rounds);
+  if (first >= 3) return '第三～五局派隊';
+  if (rounds.size >= 3) return '通用';
+  return first === 1 ? '第一局派隊' : '第二局派隊';
 }
 
 /** 讀卡庫：格式不對就丟錯（卡庫是 commit 進 repo 的檔案，壞了應該在測試就擋下）。 */

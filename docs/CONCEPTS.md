@@ -4,6 +4,14 @@
 
 觀念卡庫只有一份：`packages/server/src/bots/threads/concepts.json`。Threads 知識卡、網站（百科文章的「本篇觀念卡」、公開觀念卡頁 `#concepts=<id>`）、主控台的觀念卡分頁都讀這一份；文章的正本是 `packages/server/wiki_data.json`（網站打包的 `@wiki-bundle` 和伺服器 `/api/wiki` 都讀它）。
 
+## 階段與角色（tags.phase／tags.role）
+
+> 2026-11-18 站長：「觀念卡 派票總共80張 好像有點太多了 看是不是有些應該精簡一點 或是直接區分成 [第一局派隊] [第二局派隊] [第三~五局派隊] 這樣呢? 然後能力者的文章跟觀念好像完全沒看到?」
+
+- `tags.phase`（必填，一張卡一個）：`第一局派隊`／`第二局派隊`／`第三～五局派隊`／`刺殺`／`投票・湖中・出任務`／`通用`。由 decision 與 round 推（`concepts.ts` 的 `conceptPhaseOf`）：有刺殺 → 刺殺；沒有派隊 → 投票・湖中・出任務；派隊而 round 有 `any` → 通用；都在第 3～5 局 → 第三～五局派隊；跨了三局以上 → 通用；其他歸最早的那一局。可以手動改（例：`w147-plan-before` 跨第 2～4 局，歸第二局派隊）。`concepts:apply` 的 tags 沒給 phase 時照這個規則補上。
+- `tags.role`（選填）：這張卡在講哪個角色或哪一方怎麼玩：`梅林`／`派西維爾`／`忠臣`／`藍方`／`刺客`／`莫甘娜`／`莫德雷德`／`奧伯倫`／`紅方`，可以多個。跟 `tags.roles`（配對用：出題的那一家的角色）不同；沒有就是通則。
+- 兩個都只給網站分組與篩選，不影響 Threads／每日小觀念的配對。公開觀念卡頁沒選階段時照階段分組（站長的三個派隊分組在最前面），另有「角色」篩選。
+
 ## 卡片怎麼指到文章
 
 每張卡的 `article`：
@@ -45,7 +53,7 @@
 | `title-changed` | 文章標題改了 | 任何一次 apply 都會更新標題 |
 | `ok` | 沒事 | |
 
-除了 `ok` 都算待複查（`stale: true`）。目前 99 張、待複查 0 張。
+除了 `ok` 都算待複查（`stale: true`）。目前 109 張（退役 29 個 id）、待複查 0 張。
 
 - **CI**：`ConceptsSource.test.ts` 跑一次檢查，有待複查的卡只印警告（GitHub Actions 上是 `::warning::`），不讓測試失敗；`test.yml` 另有一步 `concepts:check --github`（`continue-on-error`），把清單寫進 job summary。文章或章節不見這種結構性的錯仍由 `ThreadsConcepts.test.ts` 擋下。
 - **每日例行**：`pnpm --filter @avalon/server concepts:check --out <檔>` 寫 JSON（`--json` 印到 stdout；用 `--filter` 時 pnpm 會先印一行標頭，機器讀請用 `--out`）。`--strict` 時有待複查就 exit 1。
@@ -54,9 +62,9 @@
 // ConceptCheckReport
 {
   "checkedAt": "2026-11-18T03:00:00.000Z",
-  "total": 99,
+  "total": 109,
   "stale": 0,
-  "byStatus": { "ok": 99 },
+  "byStatus": { "ok": 109 },
   "needsReview": [],            // 下面 cards 裡 stale 的那些
   "cards": [
     { "id": "w205-who-can-plan", "slug": "wiki-205", "section": "一、1-1-誰能有計畫",
@@ -82,16 +90,18 @@
   "version": 1,
   "exportedAt": "…",
   "site": "https://avalon-game-platform.web.app",
-  "summary": { "total": 99, "stale": 0, "byStatus": { "ok": 99 } },
+  "summary": { "total": 109, "stale": 0, "byStatus": { "ok": 109 } },
   "limits": {                       // 表單的檢查規則，跟 apply 一樣
     "sentenceMax": 40, "quoteMax": 60, "idPattern": "^[a-z0-9][a-z0-9-]{1,63}$",
     "parts": ["情境", "觀念", "應用"],
     "decisions": ["派隊", "投票", "湖中", "刺殺", "出任務"],
     "evidence": ["邏輯", "經驗", "判斷／待驗證"],
-    "roles": ["merlin", "percival", "loyal", "assassin", "morgana", "mordred", "oberon"]
+    "roles": ["merlin", "percival", "loyal", "assassin", "morgana", "mordred", "oberon"],
+    "phases": ["第一局派隊", "第二局派隊", "第三～五局派隊", "刺殺", "投票・湖中・出任務", "通用"],
+    "roleTags": ["梅林", "派西維爾", "忠臣", "藍方", "刺客", "莫甘娜", "莫德雷德", "奧伯倫", "紅方"]
   },
   "cards": [ { /* concepts.json 的卡 */ "stale": false, "status": "ok", "reasons": [], "currentHash": "…", "quoteFound": true } ],
-  "retired": [],                    // 退役的 id（不能再用）
+  "retired": ["w205-1-2", …],       // 退役的 id（不能再用）
   "articles": [ { "slug": "wiki-205", "title": "…", "sections": [ { "slug": "一、1-1-誰能有計畫", "title": "一、1-1 誰能有計畫", "level": 2 } ] } ]
 }
 ```
@@ -104,8 +114,8 @@
 { "edits": [
   // 改句子（整句換掉；每句一句、含句號不超過 40 字、座位寫 N家／0家）
   { "cardId": "w205-who-can-plan", "觀念": "1-1只有梅林和相認紅方有計畫可言。" },
-  // tags 整個換掉（不是合併）；evidence 可以是 null；section 改指同一篇的另一節（null＝整篇）
-  { "cardId": "w205-1-2", "tags": { "decision": ["派隊"], "round": ["1-2"] }, "evidence": "經驗", "section": "1-2" },
+  // tags 整個換掉（不是合併；沒給 phase 就照 decision／round 補）；evidence 可以是 null；section 改指同一篇的另一節（null＝整篇）
+  { "cardId": "w205-1-3", "tags": { "decision": ["派隊"], "round": ["1-3", "2-3"], "phase": "第一局派隊" }, "evidence": "經驗", "section": "1-3" },
   // 指定依據的那一句（必須在那一節裡，最多 60 字）
   { "cardId": "w205-loyal-seat1", "sourceQuote": "你唯一確定的好人是自己。" },
   // 文章改過、卡片仍成立：只重新蓋章
@@ -116,7 +126,7 @@
   { "cardId": "w205-new-idea", "new": {
       "article": { "slug": "wiki-205", "section": "忠臣坐-1-家" },
       "情境": "…。", "觀念": "…。", "應用": "…。",
-      "tags": { "decision": ["派隊"], "round": ["1-1"] },
+      "tags": { "decision": ["派隊"], "round": ["1-1"], "role": ["忠臣"], "roles": ["loyal"] },
       "evidence": "邏輯" } }
 ] }
 ```

@@ -8,8 +8,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   CONCEPT_DECISIONS,
+  CONCEPT_PHASES,
+  CONCEPT_ROLE_TAGS,
   EMPTY_CONCEPT_FILTER,
   conceptAnchorId,
+  conceptPhase,
+  groupConceptsByPhase,
   conceptsHash,
   evidenceLabel,
   filterConcepts,
@@ -67,6 +71,24 @@ describe('concept cards page', () => {
     expect(roundLabel('2-*')).toBe('第 2 局');
     expect(roundLabel('1-5')).toBe('1-5');
     expect(roundLabel('A')).toBe('刺殺');
+  });
+
+  it('groups by phase with the three 派隊 groups first, and filters by phase and role', () => {
+    expect(CONCEPT_PHASES.slice(0, 3)).toEqual(['第一局派隊', '第二局派隊', '第三～五局派隊']);
+    const groups = groupConceptsByPhase(BANK.concepts);
+    expect(groups.map((g) => g.phase)).toEqual(CONCEPT_PHASES.filter((p) => BANK.concepts.some((c) => conceptPhase(c) === p)));
+    expect(groups.reduce((n, g) => n + g.cards.length, 0)).toBe(BANK.concepts.length);
+    for (const p of CONCEPT_PHASES) {
+      const got = filterConcepts(BANK.concepts, { ...EMPTY_CONCEPT_FILTER, phase: p });
+      expect(got.every((c) => c.tags.phase === p)).toBe(true);
+    }
+    for (const r of CONCEPT_ROLE_TAGS) {
+      const got = filterConcepts(BANK.concepts, { ...EMPTY_CONCEPT_FILTER, role: r });
+      expect(got.length, r).toBeGreaterThan(0);
+      expect(got.every((c) => c.tags.role?.includes(r))).toBe(true);
+    }
+    // 舊的卡庫沒有 phase：當成通用
+    expect(conceptPhase({ ...BANK.concepts[0], tags: { decision: ['派隊'], round: ['1-1'] } })).toBe('通用');
   });
 });
 

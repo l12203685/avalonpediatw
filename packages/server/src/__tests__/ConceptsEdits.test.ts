@@ -92,7 +92,8 @@ describe('concepts:apply — edits', () => {
   it('replaces tags and evidence without re-picking the quote', () => {
     const r = applyConceptEdits(bank, [{ cardId: first.id, tags: { decision: ['派隊', '投票'], round: ['1-1'] }, evidence: null }], wiki);
     expect(r.errors).toEqual([]);
-    expect(r.bank.concepts[0].tags).toEqual({ decision: ['派隊', '投票'], round: ['1-1'] });
+    // 沒給 phase（主控台舊版的表單）：照 decision／round 補上
+    expect(r.bank.concepts[0].tags).toEqual({ decision: ['派隊', '投票'], round: ['1-1'], phase: '第一局派隊' });
     expect(r.bank.concepts[0].evidence).toBeNull();
     expect(r.bank.concepts[0].article.sourceQuote).toBe(first.article.sourceQuote);
   });
@@ -125,7 +126,7 @@ describe('concepts:apply — edits', () => {
     const r = applyConceptEdits(bank, [{ cardId: first.id, retire: true }], wiki);
     expect(r.results).toEqual([{ cardId: first.id, action: 'retired', changed: [] }]);
     expect(r.bank.concepts.some((c) => c.id === first.id)).toBe(false);
-    expect(r.bank.retired).toEqual([first.id]);
+    expect(r.bank.retired).toEqual([...(bank.retired ?? []), first.id]);
     const again = applyConceptEdits(r.bank, [{ cardId: first.id, new: { article: { slug: 'wiki-205' }, 情境: '一。', 觀念: '二。', 應用: '三。', tags: { decision: ['派隊'], round: ['any'] } } }], wiki);
     expect(again.errors.join()).toMatch(/retired/);
     expect(applyConceptEdits(r.bank, [{ cardId: first.id, 觀念: '一句。' }], wiki).errors.join()).toMatch(/retired/);
@@ -164,6 +165,7 @@ describe('concepts:apply — edits', () => {
     });
     expect(c.article.sectionHash).toMatch(/^[0-9a-f]{12}$/);
     expect(c.article.sourceQuote).toContain('唯一確定的好人是自己');
+    expect(c.tags).toEqual({ decision: ['派隊'], round: ['1-1'], phase: '第一局派隊', seats: [1] });
     expect(checkConcepts(r.bank, articles).stale).toBe(0);
   });
 
@@ -190,8 +192,10 @@ describe('concepts:export', () => {
       site: bank.site,
       summary: { total: bank.concepts.length, stale: 0, byStatus: { ok: bank.concepts.length } },
       limits: { sentenceMax: 40, quoteMax: 60, parts: ['情境', '觀念', '應用'] },
-      retired: [],
+      retired: bank.retired ?? [],
     });
+    expect(data.limits.phases).toEqual(['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '通用']);
+    expect(data.limits.roleTags).toContain('莫甘娜');
     expect(data.cards[0]).toMatchObject({ ...first, stale: false, status: 'ok', reasons: [], currentHash: first.article.sectionHash, quoteFound: true });
     expect(data.articles.length).toBe(articles.length);
     expect(data.articles.find((a) => a.slug === 'wiki-205')?.sections.some((s) => s.slug === first.article.section)).toBe(true);

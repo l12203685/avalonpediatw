@@ -16,9 +16,12 @@ import {
   CONCEPT_EVIDENCE,
   CONCEPT_ID_RE,
   CONCEPT_PARTS,
+  CONCEPT_PHASES,
   CONCEPT_QUOTE_MAX,
+  CONCEPT_ROLE_TAGS,
   CONCEPT_ROLES,
   CONCEPT_SENTENCE_MAX,
+  conceptPhaseOf,
   conceptProblems,
   type Concept,
   type ConceptBank,
@@ -61,7 +64,8 @@ export interface ConceptNewCard {
 
 /**
  * 主控台的一筆修改。cardId 必填；其他欄位有給的才改：
- *  - 情境／觀念／應用：整句換掉；tags：整個換掉（不是合併）；evidence：可以給 null；section：改指同一篇的另一節（null＝整篇）；
+ *  - 情境／觀念／應用：整句換掉；tags：整個換掉（不是合併；沒給 phase 就照 decision／round 補）；evidence：可以給 null；
+ *    section：改指同一篇的另一節（null＝整篇）；
  *  - sourceQuote：指定依據的那一句（必須在那一節裡）；
  *  - reviewed: true：文章改過、卡片仍成立，只重新蓋章；
  *  - retire: true：退役（從卡庫拿掉，id 記進 retired，之後不能再用）；不能跟其他欄位一起給；
@@ -115,6 +119,23 @@ export function conceptEditsOf(input: unknown): unknown[] | null {
 
 function sameJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * tags 沒給 phase 時照 decision／round 補上（conceptPhaseOf），排在 round 後面；主控台舊版的表單沒有這一欄也能存。
+ * decision／round 本身不對時原樣傳回，交給 conceptProblems 報錯。
+ */
+export function withConceptPhase(tags: unknown): unknown {
+  if (!isObject(tags) || tags.phase !== undefined) return tags;
+  const { decision, round } = tags;
+  if (!Array.isArray(decision) || !Array.isArray(round) || !decision.every((d) => typeof d === 'string') || !round.every((r) => typeof r === 'string')) return tags;
+  const phase = conceptPhaseOf({ decision: decision as ConceptTags['decision'], round: round as string[] });
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(tags)) {
+    out[k] = v;
+    if (k === 'round') out.phase = phase;
+  }
+  return out;
 }
 
 /** 標題與網址照目前的文章重算。 */
@@ -260,7 +281,7 @@ export function applyConceptEdits(bank: ConceptBank, input: unknown, wiki: Conce
           情境: n.情境 as string,
           觀念: n.觀念 as string,
           應用: n.應用 as string,
-          tags: n.tags as unknown as ConceptTags,
+          tags: withConceptPhase(n.tags) as ConceptTags,
           evidence: (n.evidence ?? null) as ConceptEvidence | null,
         },
         bank.site,
@@ -312,9 +333,10 @@ export function applyConceptEdits(bank: ConceptBank, input: unknown, wiki: Conce
       }
     }
     if (e.tags !== undefined) {
-      if (!isObject(e.tags)) errors.push(`${where}: tags must be an object (it replaces the card's tags)`);
-      else if (!sameJson(e.tags, before.tags)) {
-        next.tags = e.tags as unknown as ConceptTags;
+      const tags = withConceptPhase(e.tags);
+      if (!isObject(tags)) errors.push(`${where}: tags must be an object (it replaces the card's tags)`);
+      else if (!sameJson(tags, before.tags)) {
+        next.tags = tags as unknown as ConceptTags;
         changed.push('tags');
       }
     }
@@ -424,6 +446,10 @@ export interface ConceptExport {
     decisions: readonly string[];
     evidence: readonly string[];
     roles: readonly string[];
+    /** tags.phase 可選的值（沒給時 apply 照 decision／round 補）。 */
+    phases: readonly string[];
+    /** tags.role 可選的值。 */
+    roleTags: readonly string[];
   };
   cards: ExportedConcept[];
   retired: string[];
@@ -467,6 +493,8 @@ export function buildConceptExport(
       decisions: CONCEPT_DECISIONS,
       evidence: CONCEPT_EVIDENCE,
       roles: CONCEPT_ROLES,
+      phases: CONCEPT_PHASES,
+      roleTags: CONCEPT_ROLE_TAGS,
     },
     cards,
     retired: [...(bank.retired ?? [])],

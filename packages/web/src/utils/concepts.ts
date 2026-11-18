@@ -12,13 +12,34 @@
 export type ConceptDecision = '派隊' | '投票' | '湖中' | '刺殺' | '出任務';
 export const CONCEPT_DECISIONS: readonly ConceptDecision[] = ['派隊', '投票', '湖中', '刺殺', '出任務'];
 
+/**
+ * 階段（2026-11-18 站長：「派票總共80張 好像有點太多了 … 或是直接區分成 [第一局派隊] [第二局派隊] [第三~五局派隊] 這樣呢?」）。
+ * 同伺服器 concepts.ts 的 CONCEPT_PHASES；站長的三個派隊分組排最前面。
+ */
+export type ConceptPhase = '第一局派隊' | '第二局派隊' | '第三～五局派隊' | '刺殺' | '投票・湖中・出任務' | '通用';
+export const CONCEPT_PHASES: readonly ConceptPhase[] = ['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '通用'];
+
+/** 角色標籤（站長：「能力者的文章跟觀念好像完全沒看到?」），同伺服器的 CONCEPT_ROLE_TAGS。 */
+export type ConceptRoleTag = '梅林' | '派西維爾' | '忠臣' | '藍方' | '刺客' | '莫甘娜' | '莫德雷德' | '奧伯倫' | '紅方';
+export const CONCEPT_ROLE_TAGS: readonly ConceptRoleTag[] = ['梅林', '派西維爾', '忠臣', '藍方', '刺客', '莫甘娜', '莫德雷德', '奧伯倫', '紅方'];
+
 export interface ConceptCard {
   id: string;
   article: { slug: string; title: string; section?: string; url: string; shareUrl: string };
   情境: string;
   觀念: string;
   應用: string;
-  tags: { decision: string[]; round: string[]; roles?: string[]; seats?: number[]; score?: string[] };
+  tags: {
+    decision: string[];
+    round: string[];
+    /** 階段（網站分組用）；舊的卡庫沒有這一欄時當成「通用」。 */
+    phase?: string;
+    /** 這張卡在講哪個角色／哪一方。 */
+    role?: string[];
+    roles?: string[];
+    seats?: number[];
+    score?: string[];
+  };
   evidence: '邏輯' | '經驗' | '判斷／待驗證' | null;
 }
 
@@ -26,6 +47,7 @@ export interface ConceptBankFile {
   version: number;
   site: string;
   concepts: ConceptCard[];
+  retired?: string[];
 }
 
 const CARD_ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
@@ -73,9 +95,17 @@ export interface ConceptFilter {
   query: string;
   decision: ConceptDecision | '';
   round: ConceptRoundFilter;
+  phase: ConceptPhase | '';
+  role: ConceptRoleTag | '';
 }
 
-export const EMPTY_CONCEPT_FILTER: ConceptFilter = { query: '', decision: '', round: '' };
+export const EMPTY_CONCEPT_FILTER: ConceptFilter = { query: '', decision: '', round: '', phase: '', role: '' };
+
+/** 卡片的階段（沒有就是「通用」）。 */
+export function conceptPhase(c: ConceptCard): ConceptPhase {
+  const p = c.tags.phase as ConceptPhase | undefined;
+  return p && CONCEPT_PHASES.includes(p) ? p : '通用';
+}
 
 /** 一張卡的局標籤看起來（「1-5」→「1-5」、「2-*」→「第 2 局」、A → 刺殺、any → 通用）。 */
 export function roundLabel(tag: string): string {
@@ -89,10 +119,12 @@ function normalize(s: string): string {
   return s.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
 }
 
-/** 搜尋（三句、文章標題、章節、卡片 id）＋決策＋局。 */
+/** 搜尋（三句、文章標題、章節、卡片 id）＋決策＋局＋階段＋角色。 */
 export function filterConcepts(cards: readonly ConceptCard[], f: ConceptFilter): ConceptCard[] {
   const q = normalize(f.query);
   return cards.filter((c) => {
+    if (f.phase && conceptPhase(c) !== f.phase) return false;
+    if (f.role && !(c.tags.role ?? []).includes(f.role)) return false;
     if (f.decision && !c.tags.decision.includes(f.decision)) return false;
     if (f.round) {
       const ok = f.round === 'any' || f.round === 'A'
@@ -103,6 +135,11 @@ export function filterConcepts(cards: readonly ConceptCard[], f: ConceptFilter):
     if (!q) return true;
     return normalize([c.情境, c.觀念, c.應用, c.article.title, c.article.section ?? '', c.id].join('\n')).includes(q);
   });
+}
+
+/** 照階段分組（CONCEPT_PHASES 的順序，組內照卡庫順序），沒有卡的階段不列。 */
+export function groupConceptsByPhase(cards: readonly ConceptCard[]): { phase: ConceptPhase; cards: ConceptCard[] }[] {
+  return CONCEPT_PHASES.map((phase) => ({ phase, cards: cards.filter((c) => conceptPhase(c) === phase) })).filter((g) => g.cards.length > 0);
 }
 
 /** 證據標籤的說明（docs/ai/WIKI_EVIDENCE_STANDARD.md）。 */
