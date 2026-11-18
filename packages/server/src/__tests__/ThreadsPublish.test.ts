@@ -1204,7 +1204,9 @@ describe('workflow', () => {
 
     it.skipIf(!hasBash || !hasJq)('with the repo variable set, an unreadable / broken file or a missing / non-boolean paused still forces a dry run', () => {
       const bad: unknown[] = [undefined, '', 'not json', '{"liveFrom":null,"paused":false', {}, { liveFrom: '2026-01-01' }, { liveFrom: null, paused: 'false' }, { liveFrom: null, paused: null }, { liveFrom: null, paused: 0 },
-        [{ liveFrom: null, paused: false }], 'null', '{"liveFrom":null,"paused":false}\n{"liveFrom":null,"paused":true}'];
+        [{ liveFrom: null, paused: false }], 'null', '{"liveFrom":null,"paused":false}\n{"liveFrom":null,"paused":true}',
+        // jq 收、但不是合法 JSON 的值
+        '{"liveFrom":null,"paused":false,"note":NaN}', '{"liveFrom":null,"paused":false,"note":Infinity}', '{"liveFrom":null,"paused":false,"note":-Infinity}'];
       for (const file of bad) {
         expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1' });
         expect(runGate({ EVENT: 'schedule', LIVE_FROM: '2026-01-01' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
