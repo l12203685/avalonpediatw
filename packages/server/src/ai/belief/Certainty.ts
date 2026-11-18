@@ -302,6 +302,39 @@ export function admittedReds(obs: PlayerObservation): string[] {
   return out;
 }
 
+/**
+ * Round 48 `beliefConventionTremble` (methods_backlog.md 第 3 節, DeepRole's tremble): the table conventions L1 enforces — A0 (a good
+ * lake holder declares the truth), A1 (no stalling after two fails) and A2 (return the lake) — as soft facts. For a world (red-set
+ * bitmask over `obs.allPlayerIds`, the viewer's own camp as in `buildCertainty`), `broken` = how many of them it breaks and `kept` =
+ * how many A0 declarations a good holder made truthfully in it. Only the belief reads this (`BayesBelief`, its L0 worlds weighted by
+ * ε^broken·(1 − ε)^kept); the certainty layer and every hard check keep the conventions hard.
+ */
+export function conventionCounter(obs: PlayerObservation, params: CertaintyParams = certaintyParamsFor(obs)): (mask: number) => { broken: number; kept: number } {
+  const ids = obs.allPlayerIds;
+  const idx = new Map(ids.map((id, i) => [id, i]));
+  const bit = (id: string): number => { const i = idx.get(id); return i === undefined ? 0 : 1 << i; };
+  // A0: the same declarations `enumerateWorlds` binds (the viewer's own one superseded by its private result).
+  const ownLakeKeys = new Set((obs.myLakeResults ?? []).map((r) => `${r.round}|${r.targetId}`));
+  const lakes = declaredLakes(obs.lakeHistory)
+    .filter((l) => !(l.holderId === obs.myPlayerId && ownLakeKeys.has(`${l.round}|${l.targetId}`)))
+    .map((l) => ({ holder: bit(l.holderId), target: bit(l.targetId), saysEvil: l.declaredClaim === 'evil' }))
+    .filter((l) => l.holder !== 0 && l.target !== 0);
+  const caps = noStallCaps(obs, params).map((c) => ({ mask: c.team.reduce((m, id) => m | bit(id), 0), max: c.max }));
+  const selfGood = obs.myTeam !== 'evil' && idx.has(obs.myPlayerId);
+  const admitted = admittedReds(obs).filter((id) => !(selfGood && id === obs.myPlayerId)).map(bit).filter((b) => b !== 0);
+  return (mask: number) => {
+    let broken = 0;
+    let kept = 0;
+    for (const l of lakes) {
+      if ((mask & l.holder) !== 0) continue;
+      if (((mask & l.target) !== 0) === l.saysEvil) kept += 1; else broken += 1;
+    }
+    for (const c of caps) if (popcount(mask & c.mask) > c.max) broken += 1;
+    for (const b of admitted) if ((mask & b) === 0) broken += 1;
+    return { broken, kept };
+  };
+}
+
 // ── View ───────────────────────────────────────────────────────
 
 export type CertaintyLevel = 'L0' | 'L1' | 'L1*';

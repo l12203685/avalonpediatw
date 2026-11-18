@@ -170,6 +170,16 @@ function report(st: Store, names: readonly string[], meta: Record<string, unknow
       L.push(summaryRow(name, s, sep));
     }
     res.table = table;
+    // Round 48: every point, the certain ones (p = 0 / 1) included — a candidate that softens the conventions moves points between the two tables.
+    L.push('', '**全部點（含確定點；對數損失把 p 夾在 [1e-6, 1 − 1e-6]）**：', '', '| 範圍 | 點數 | Brier | 對數損失 nats | ECE pp |', '|---|---|---|---|---|');
+    const allRows: Record<string, { n: number; brier: number; logLoss: number; ece: number }> = {};
+    for (const r of ['全部', 'R1', 'R2', 'R3', 'R4', 'R5']) {
+      const s = summarize(pick(st, (vv, _w, rr) => vv === v && (r === '全部' || rr === r)));
+      if (!s.n) continue;
+      allRows[r] = { n: s.n, brier: s.brier, logLoss: s.logLoss, ece: s.ece };
+      L.push(`| ${r} | ${s.n} | ${f4(s.brier)} | ${f3(s.logLoss)} | ${pc(s.ece, 2)} |`);
+    }
+    res.allPoints = allRows;
     // 忠臣的可靠度圖（藍方決策最多的視角）
     const loyal = summarize(pick(st, (vv, ww, _r, _s, c) => vv === v && ww === 'loyal' && c === 'u'));
     L.push('', '**忠臣視角的可靠度圖**：', '', '| p 格 | 點數 | 平均 p % | 真紅比例 %（Wilson 95%） |', '|---|---|---|---|');
@@ -215,14 +225,17 @@ function main(): void {
     const limit = arg('--limit') !== undefined ? Number(arg('--limit')) : undefined;
     const games = loadHuman().slice(0, limit);
     const [k, n] = (arg('--shard') ?? '0/1').split('/').map(Number);
+    // Round 48: --split train = the even-indexed games (where `beliefRecalib` was fitted), test = the odd-indexed ones (held out).
+    const split = arg('--split') ?? 'all';
+    const keep = (gi: number): boolean => (split === 'train' ? gi % 2 === 0 : split === 'test' ? gi % 2 === 1 : true);
     const viewers = new Set(viewersList);
     const started = Date.now();
     games.forEach((g, gi) => {
-      if (gi % n !== k) return;
+      if (!keep(gi) || gi % n !== k) return;
       evalGame(g.game, g.s !== null && g.s >= strongS, vs, viewers, st);
       if (st.games % 100 === 0) process.stderr.write(`[calib ${k}/${n}] ${st.games} games, ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     });
-    meta = { source: 'games_cache.json 真人局（datasetReplay 嚴格重播）', viewers: viewersList.map((w) => ROLE_LABEL[w] ?? w).join('、'), strongS, flags: argv.filter((_, i) => argv[i - 1] === '--flag'), seconds: Math.round((Date.now() - started) / 1000) };
+    meta = { source: `games_cache.json 真人局（datasetReplay 嚴格重播${split === 'train' ? '，偶數序號的局' : split === 'test' ? '，奇數序號的局（第 48 回合的驗證組）' : ''}）`, viewers: viewersList.map((w) => ROLE_LABEL[w] ?? w).join('、'), strongS, flags: argv.filter((_, i) => argv[i - 1] === '--flag'), seconds: Math.round((Date.now() - started) / 1000) };
     const raw = arg('--raw');
     if (raw) fs.writeFileSync(raw, JSON.stringify({ store: st, names, meta }));
   }
