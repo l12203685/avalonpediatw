@@ -13,12 +13,12 @@
  *  - evidence：文章在「觀念」那句命題上標的證據類型（docs/ai/WIKI_EVIDENCE_STANDARD.md）；那句含好幾個命題時取最弱的
  *    （判斷／待驗證 < 經驗 < 邏輯）；文章沒標就是 null。卡片不能比文章說得更肯定。
  *  - tags：配對用。decision＝決策種類；round＝「局-次」（1-5）、「局-*」（那一局每一次）、A（刺殺，同題號的 -A）或 any；其他條件（角色、座位、
- *    比分、持湖、上一局在不在隊上、上一局幾張失敗）有寫才要符合。
+ *    比分、持湖、上一局在不在隊上、上一局幾張失敗、派西的拇指已經有幾根當過隊長）有寫才要符合。
  */
 
 import type { Role } from '@avalon/shared';
 import CONCEPTS_FILE from './concepts.json';
-import type { SimGame } from '../simulation/scenario';
+import { sightFor, type SimGame } from '../simulation/scenario';
 import type { ThreadsPick } from './plan';
 
 export const CONCEPT_DECISIONS = ['派隊', '投票', '湖中', '刺殺', '出任務'] as const;
@@ -50,6 +50,8 @@ export interface ConceptTags {
   lastQuestMember?: boolean;
   /** 上一局的失敗張數。 */
   lastQuestFails?: number[];
+  /** 派西維爾的兩根拇指在這一題之前已經有幾根當過隊長（0～2）；寫了就只配派西的題。 */
+  thumbsLed?: number[];
 }
 
 export interface ConceptArticle {
@@ -148,6 +150,9 @@ export function conceptProblems(bank: unknown): string[] {
     if (t.lastQuestFails !== undefined && (!Array.isArray(t.lastQuestFails) || !t.lastQuestFails.every((n) => Number.isInteger(n) && n >= 0 && n <= 5))) {
       out.push(`${at}: bad tags.lastQuestFails`);
     }
+    if (t.thumbsLed !== undefined && (!Array.isArray(t.thumbsLed) || t.thumbsLed.length === 0 || !t.thumbsLed.every((n) => n === 0 || n === 1 || n === 2))) {
+      out.push(`${at}: bad tags.thumbsLed (0..2)`);
+    }
   });
   return out;
 }
@@ -185,6 +190,8 @@ export interface ConceptExercise {
   lastQuestMember: boolean | null;
   /** 上一局的失敗張數；第一局 null。 */
   lastQuestFails: number | null;
+  /** 派西維爾的題：兩根拇指在這一題之前已經有幾根當過隊長；不是派西的派票題是 null。 */
+  thumbsLed: number | null;
 }
 
 /** 第 round 局結束後用湖中的人：開局在 0家（10），之後是上一次被湖的人；有紀錄就用紀錄。 */
@@ -211,10 +218,19 @@ function scoreBefore(game: SimGame, round: number): string {
 export function exerciseOf(game: SimGame, proposal: number | null, seat: number): ConceptExercise {
   const role = game.seatRoles[seat - 1];
   if (proposal === null) {
-    return { decision: '刺殺', round: null, attempt: null, seat, role, score: scoreBefore(game, 6), lakeHolder: false, lastQuestMember: null, lastQuestFails: null };
+    return {
+      decision: '刺殺', round: null, attempt: null, seat, role, score: scoreBefore(game, 6),
+      lakeHolder: false, lastQuestMember: null, lastQuestFails: null, thumbsLed: null,
+    };
   }
   const p = game.proposals[proposal];
   const last = game.quests.find((q) => q.round === p.round - 1);
+  const sight = sightFor(game, seat);
+  let thumbsLed: number | null = null;
+  if (sight.kind === 'percival') {
+    const leaders = new Set(game.proposals.filter((x) => x.globalIndex < p.globalIndex).map((x) => x.leaderSeat));
+    thumbsLed = sight.thumbs.filter((t) => leaders.has(t)).length;
+  }
   return {
     decision: '派隊',
     round: p.round,
@@ -225,6 +241,7 @@ export function exerciseOf(game: SimGame, proposal: number | null, seat: number)
     lakeHolder: lakeHolderOf(game, p.round) === seat,
     lastQuestMember: last ? last.teamSeats.includes(seat) : null,
     lastQuestFails: last ? last.failCount : null,
+    thumbsLed,
   };
 }
 
@@ -275,6 +292,10 @@ export function matchConcept(c: Concept, ex: ConceptExercise): ConceptMatch | nu
   }
   if (t.lastQuestFails !== undefined) {
     if (ex.lastQuestFails === null || !t.lastQuestFails.includes(ex.lastQuestFails)) return null;
+    score += 2;
+  }
+  if (t.thumbsLed !== undefined) {
+    if (ex.thumbsLed === null || !t.thumbsLed.includes(ex.thumbsLed)) return null;
     score += 2;
   }
   return { concept: c, score, roundMatch };

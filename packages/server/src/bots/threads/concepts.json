@@ -415,7 +415,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-5"],
-        "roles": ["percival"]
+        "roles": ["percival"],
+        "thumbsLed": [2]
       },
       "evidence": null
     },
@@ -1229,8 +1230,8 @@
         "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/"
       },
       "情境": "輪到1-5，覺得前面每個人好像都有問題。",
-      "觀念": "壞人只有4個，把每一類懷疑的人數加起來超過4，就一定有一塊是好人。",
-      "應用": "認定其中兩類成立後，剩下沒人派的人就是可以選的人。",
+      "觀念": "懷疑的幾類人互不重疊、需要的壞人加起來超過4個時，不可能全部成立。",
+      "應用": "認定的兩類已占滿4個不同的壞人，沒人派的人才可以選，否則不算安全。",
       "tags": {
         "decision": ["派隊"],
         "round": ["1-4", "1-5"]
@@ -1324,8 +1325,9 @@
       "應用": "分不出來時兩根拇指都不派，用忠臣的視角自己組隊。",
       "tags": {
         "decision": ["派隊"],
-        "round": ["1-*"],
-        "roles": ["percival"]
+        "round": ["1-*", "2-*"],
+        "roles": ["percival"],
+        "thumbsLed": [0]
       },
       "evidence": "邏輯"
     },
@@ -1344,7 +1346,8 @@
       "tags": {
         "decision": ["派隊"],
         "round": ["1-5", "2-*", "3-*", "4-*", "5-*"],
-        "roles": ["percival"]
+        "roles": ["percival"],
+        "thumbsLed": [2]
       },
       "evidence": null
     },
@@ -1377,7 +1380,7 @@
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E8%A6%81%E9%BB%9E",
         "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/"
       },
-      "情境": "你是後半區6～9家的派西，已經分出梅林。",
+      "情境": "如果你是後半區6～9家的派西，而且已經分出梅林。",
       "觀念": "可以選梅林也可以不選，最重要的是開藍，並且不要出賣梅林。",
       "應用": "必要時勇敢鐵咬莫甘娜，不要每次都和梅林同進同出。",
       "tags": {

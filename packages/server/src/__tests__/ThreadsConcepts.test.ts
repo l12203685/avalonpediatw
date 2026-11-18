@@ -125,6 +125,7 @@ const ex = (over: Partial<ConceptExercise>): ConceptExercise => ({
   lakeHolder: false,
   lastQuestMember: null,
   lastQuestFails: null,
+  thumbsLed: null,
   ...over,
 });
 const ids = (e: ConceptExercise, opts?: Parameters<typeof conceptsFor>[1]): string[] => conceptsFor(e, opts).map((c) => c.id);
@@ -145,7 +146,7 @@ describe('conceptsFor', () => {
 
   it('never gives a blue-only card to a red leader, or a red-only card to a blue leader', () => {
     const red = conceptMatches(ex({ round: 1, attempt: 5, seat: 5, role: 'morgana' }));
-    const blue = conceptMatches(ex({ round: 1, attempt: 5, seat: 5, role: 'percival' }));
+    const blue = conceptMatches(ex({ round: 1, attempt: 5, seat: 5, role: 'percival', thumbsLed: 2 }));
     expect(red.every((m) => !m.concept.tags.roles || m.concept.tags.roles.includes('morgana'))).toBe(true);
     expect(blue.every((m) => !m.concept.tags.roles || m.concept.tags.roles.includes('percival'))).toBe(true);
     expect(red.map((m) => m.concept.id)).toContain('w206-red-reasonable');
@@ -278,6 +279,21 @@ describe('coverage over the exercise bank', () => {
       const l3 = g.lakes.find((l) => l.round === 3);
       if (l2 && l3) expect(l3.holderSeat).toBe(l2.targetSeat);
     }
+  });
+
+  it('gives the "both thumbs have proposed" Percival cards only when both thumbs have led (A9CQS, proposal 5, 6家)', () => {
+    const g = sim.games.find((x) => x.id === 'A9CQS');
+    if (!g) throw new Error('A9CQS missing from sim_bank.json');
+    const e = exerciseOf(g, 5, 6);
+    expect(e.role).toBe('percival');
+    expect(e.thumbsLed).not.toBe(2);
+    const got = conceptMatches(e).map((m) => m.concept.id);
+    expect(got).not.toContain('w176-sop');
+    expect(got).not.toContain('w206-percival-tail');
+    expect(conceptMatches({ ...e, thumbsLed: 2 }).map((m) => m.concept.id)).toContain('w176-sop');
+    expect(conceptMatches({ ...e, thumbsLed: 0 }).map((m) => m.concept.id)).toContain('w176-no-blind');
+    // 只對派西的題有意義：別的角色沒有這個資訊，這三張都配不到。
+    expect(conceptMatches({ ...e, role: 'loyal', thumbsLed: null }).map((m) => m.concept.tags.thumbsLed)).not.toContainEqual(expect.anything());
   });
 
   it('gives every exercise at least one card, and most a card made for its situation', () => {
