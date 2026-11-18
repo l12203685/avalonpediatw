@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { resolveWikiRedirect, resolveWikiSectionAlias } from '../data/wikiRedirects';
 import { parseWikiHash, wikiHash } from '../utils/wikiHash';
+import { parseConceptsHash } from '../utils/concepts';
 
 /**
  * 百科「打開哪一篇」= 網址的 hash（#wiki=<文章 id>，可帶 &sec=<章節>），做法同牌譜紀錄的 #records=（records/recordsLink.ts）：
@@ -101,7 +102,8 @@ export function closeWikiArticle(): void {
 
 /** 離開百科頁籤（SiteNav 換頁籤）或連結的文章不存在時，清掉 #wiki…，免得重新整理又跳回來。 */
 export function clearWikiHash(): void {
-  if (typeof window === 'undefined' || !parseWikiHash(window.location.hash)) return;
+  // 觀念卡檢視的 #concepts（=<id>）也是百科的網址：離開百科時一起清掉。
+  if (typeof window === 'undefined' || (!parseWikiHash(window.location.hash) && !parseConceptsHash(window.location.hash))) return;
   replaceHash('');
   notify();
 }

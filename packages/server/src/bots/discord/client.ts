@@ -25,6 +25,7 @@ import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
 import { getFeedbackService } from '../feedback/service';
 import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
+import { handleConceptDailyDiscord } from '../conceptDaily/discord';
 import { relayInteractionReply } from './replyRelay';
 import { handleSimCommand } from '../simulation/discordCommand';
 import { HELP_TOPICS } from '../help';
@@ -304,6 +305,12 @@ export class DiscordBotClient {
       } catch (err) {
         // Never the error object: it can carry message content.
         console.warn(`[Discord→lobby] messageCreate handler threw (${err instanceof Error ? err.name : typeof err})`);
+      }
+      // 每日小觀念（2026-11-18，bots/conceptDaily）：開了的頻道裡今天的第一則訊息、對小觀念的回饋。
+      try {
+        await handleConceptDailyDiscord(message);
+      } catch (err) {
+        console.warn(`[concept-daily] messageCreate handler threw (${err instanceof Error ? err.name : typeof err})`);
       }
     });
 
