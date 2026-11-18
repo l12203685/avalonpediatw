@@ -43,7 +43,10 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
  */
 type WikiView = 'list' | 'map' | 'concepts';
 
-/** 網址的 #concepts（=<id>）：打開觀念卡檢視、捲到那一張。 */
+/** 換檢視時改了網址（replaceState 不會觸發 hashchange）：通知 useConceptsHash 重讀。 */
+const CONCEPTS_EVENT = 'avalon:concepts-hash';
+
+/** 網址的 #concepts（=<id>）：打開觀念卡檢視、捲到那一張。同一個網址回傳同一個物件。 */
 function useConceptsHash(): { id: string | null } | null {
   const read = (): string => JSON.stringify(typeof window === 'undefined' ? null : parseConceptsHash(window.location.hash));
   const [raw, setRaw] = useState<string>(read);
@@ -51,12 +54,14 @@ function useConceptsHash(): { id: string | null } | null {
     const sync = (): void => setRaw(read());
     window.addEventListener('hashchange', sync);
     window.addEventListener('popstate', sync);
+    window.addEventListener(CONCEPTS_EVENT, sync);
     return (): void => {
       window.removeEventListener('hashchange', sync);
       window.removeEventListener('popstate', sync);
+      window.removeEventListener(CONCEPTS_EVENT, sync);
     };
   }, []);
-  return JSON.parse(raw) as { id: string | null } | null;
+  return useMemo(() => JSON.parse(raw) as { id: string | null } | null, [raw]);
 }
 const WIKI_VIEW_KEY = 'avalon.wiki.view';
 
@@ -220,6 +225,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
     } catch {
       // history blocked: the view still switches
     }
+    window.dispatchEvent(new Event(CONCEPTS_EVENT));
     if (next !== 'concepts') storeView(next);
   };
   // 外面的連結（#concepts=<id>）打開時換到觀念卡檢視。
