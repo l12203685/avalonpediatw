@@ -16,10 +16,10 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.setConfig({ testTimeout: 60_000 });
 import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/bank';
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
-import { THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerVariants, postTitle, questionParts, renderPost, type PickView, type ThreadsDraft } from '../bots/threads/draft';
+import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerVariants, postTitle, questionParts, renderPost, type PickView, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
 import { THREADS_START_DATE, addDays, weekdayOf } from '../bots/threads/plan';
-import { commentText, prepareDaily, type DailyPlan } from '../bots/threads/publish/daily';
+import { commentText, draftNeedsImage, imageProblem, prepareDaily, type DailyPlan } from '../bots/threads/publish/daily';
 import {
   COMMENT_PLACEHOLDERS,
   DEFAULT_COMMENT_TEMPLATE,
@@ -146,13 +146,74 @@ describe('validateTemplate', () => {
 
   it('rejects unknown placeholders, a missing or misplaced {標籤}, a comment without {小觀念}, empty text and over-long fixed text', () => {
     expect(validateTemplate('post', '{標題}\n{局號}\n{標籤}').join()).toContain('{局號}');
-    expect(validateTemplate('post', '{標題}\n{標籤}\n結尾')).toHaveLength(1);
-    expect(validateTemplate('post', '{標籤}\n{標題}\n{標籤}')).toHaveLength(1);
-    expect(validateTemplate('post', '{標題}')).toHaveLength(1);
+    expect(validateTemplate('post', '{標題}\n{派票紀錄}\n{標籤}\n結尾')).toHaveLength(1);
+    expect(validateTemplate('post', '{標題}\n{派票紀錄}\n{標籤}\n{標籤}')).toHaveLength(1);
+    expect(validateTemplate('post', '{標題}\n{派票紀錄}')).toHaveLength(1);
     expect(validateTemplate('comment', '【標題】\n{題號}').join()).toContain('{小觀念}');
     expect(validateTemplate('comment', '{小觀念}\n{你是}').join()).toContain('{你是}'); // 留言不能用貼文的佔位符
     expect(validateTemplate('post', '  \n')).toEqual(['是空的']);
     expect(validateTemplate('post', `${'字'.repeat(501)}\n{標籤}`).join()).toContain('超過 500');
+  });
+});
+
+describe('validateTemplate: what publishing depends on (Codex review of #82)', () => {
+  const ok = '{標題}\n{你是}\n{派票紀錄}\n{提問}\n\n{昨天答案}\n\n{標籤}';
+
+  it('the first line is {標題} alone: no leading blank line, no generic heading, no text next to it (duplicate detection matches the first line + date)', () => {
+    expect(validateTemplate('post', ok)).toEqual([]);
+    expect(validateTemplate('post', `\n${ok}`).join()).toContain('第一行要是 {標題}');
+    expect(validateTemplate('post', `【阿瓦隆每日一題】\n${ok}`).join()).toContain('第一行要是 {標題}');
+    expect(validateTemplate('post', ok.replace('{標題}', '{主題}')).join()).toContain('第一行要是 {標題}');
+    expect(validateTemplate('post', ok.replace('{標題}', '📌 {標題}')).join()).toContain('第一行要是 {標題}');
+    expect(validateTemplate('post', ok.replace('{你是}', '{標題}')).join()).toContain('第一行要是 {標題}');
+  });
+
+  it('{派票紀錄} is required (otherwise a failed image posts a question with no record)', () => {
+    expect(validateTemplate('post', ok.replace('{派票紀錄}\n', '')).join()).toContain('{派票紀錄}');
+  });
+
+  it('a literal hashtag line besides {標籤} is rejected (every post would fail validatePost)', () => {
+    expect(validateTemplate('post', ok.replace('\n\n{標籤}', `\n\n${THREADS_TOPIC_TAG}\n{標籤}`)).join()).toContain('#標籤');
+    expect(validateTemplate('post', ok.replace('{提問}', '{提問}\n#阿瓦隆')).join()).toContain('#標籤');
+    // 句子裡的 # 不算（例如「#1 的觀念」後面還有字）。
+    expect(validateTemplate('post', ok.replace('{提問}', '{提問} #每日一題 快來回答'))).toEqual([]);
+  });
+
+  it('a template passed as a string is checked too: invalid → the default for that day, with a warning', () => {
+    const def = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, postTemplate: '{標題}\n{你是}\n{提問}\n{標籤}' });
+    const date = addDays(THREADS_START_DATE, 2);
+    const d = gen.draftFor(date) as ThreadsDraft;
+    expect(d.post.text).toBe(def.draftFor(date)?.post.text);
+    expect(d.templateWarning).toContain('{派票紀錄}');
+    expect(gen.warnings.some((w) => w.startsWith(`${date}：`))).toBe(true);
+  });
+});
+
+describe('a post that depends on the image is not published without it, in prepare and in post', () => {
+  const draftOf = (text: string, record: string): Pick<ThreadsDraft, 'post' | 'parts'> =>
+    ({ post: { text, chars: [...text].length }, parts: { 派票紀錄: record } as ThreadsDraft['parts'] });
+
+  it('draftNeedsImage: the record shrunk to 「完整局面看圖」, or the record missing from the text', () => {
+    expect(draftNeedsImage(draftOf(`T\n[第 1 局]\n1家 124\n你會派誰？\n\n${THREADS_TOPIC_TAG}`, '[第 1 局]\n1家 124'))).toBe(false);
+    expect(draftNeedsImage(draftOf(`T\n${SEE_IMAGE_LINE}\n你會派誰？\n\n${THREADS_TOPIC_TAG}`, SEE_IMAGE_LINE))).toBe(true);
+    expect(draftNeedsImage(draftOf(`T\n你會派誰？\n\n${THREADS_TOPIC_TAG}`, '[第 1 局]\n1家 124'))).toBe(true);
+    // 舊的草稿沒有 parts：照文字判斷。
+    expect(draftNeedsImage({ post: { text: `T\n你會派誰？`, chars: 6 } })).toBe(false);
+  });
+
+  it('prepare blocks the live post when there is no image; post refuses without a public image URL', () => {
+    const text = `【阿瓦隆每日一題｜週三・1-5 尾派】\n你會派誰？\n\n${THREADS_TOPIC_TAG}`;
+    const real = new ThreadsGenerator({ bank, titles, readSaved: () => null }).draftFor('2026-11-18') as ThreadsDraft;
+    const fake = { ...real, quoteYesterday: false, answerToYesterday: null, post: { text, chars: [...text].length } };
+    const gen = { draftFor: () => fake, warnings: [], pickFor: () => null, gameOf: () => null } as unknown as ThreadsGenerator;
+    const plan = prepareDaily('2026-11-18', { gen, stateDir: tmp(), commentsDir: tmp(), outDir: tmp() }) as DailyPlan;
+    expect(plan.needsImage).toBe(true);
+    expect(plan.liveBlock).toContain('沒有牌譜');
+    expect(imageProblem({ ...plan, liveBlock: null }, [])).toContain('沒有牌譜');
+    expect(imageProblem({ ...plan, liveBlock: null }, ['https://example.test/a.png'])).toBeNull();
+    const normal = prepareDaily('2026-11-18', { gen: new ThreadsGenerator({ bank, titles, readSaved: () => null }), stateDir: tmp(), commentsDir: tmp(), outDir: tmp() }) as DailyPlan;
+    expect(normal.needsImage).toBe(normal.text.includes(SEE_IMAGE_LINE));
   });
 });
 

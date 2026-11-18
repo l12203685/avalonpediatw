@@ -12,7 +12,10 @@
  *   - `{名稱}` 換成那天的內容；名稱只能用下面列的（不認得的佔位符＝範本不合格）。
  *   - 一行只有佔位符、而且都是空的（例如第一天沒有 {昨天答案}、不是延續的日子沒有 {接續}）：整行拿掉；
  *     拿掉之後上下會變成連續兩個空行的話，只留一個。
- *   - 貼文最後一行一定是 {標籤}（自動發佈要求主題標籤剛好一行、在最後一行）；留言一定要有 {小觀念}。
+ *   - 貼文第一行一定是 {標題}、而且只有它（自動發佈靠第一行＋日期認出那天的貼文，防重複發、補記都靠它）；
+ *     一定要有 {派票紀錄}（沒有牌譜的話，圖沒產生就會發出沒有局面的題目）；
+ *     最後一行一定是 {標籤}，其他行不能自己寫主題標籤（自動發佈要求主題標籤剛好一行、在最後一行）。
+ *   - 留言一定要有 {小觀念}。
  *   - 套完之後一樣要 ≤ 500 字：放不下先縮牌譜、再縮答案（跟以前一樣），還是放不下就那一天改用內建格式（警告）。
  */
 
@@ -59,6 +62,11 @@ export const DEFAULT_TEMPLATE: Readonly<ThreadsTemplate> = { post: DEFAULT_POST_
 
 const TOKEN = /\{([^{}\n]*)\}/g;
 
+/** 整行只有 #標籤（例「#阿瓦隆 #梅林」）。 */
+export function isTagLine(line: string): boolean {
+  return /^\s*#[^\s#]+(?:\s+#[^\s#]+)*\s*$/.test(line);
+}
+
 /** 換行統一成 \n、去掉結尾的空白與空行（主控台的文字框常多一個換行）。 */
 export function normalizeTemplate(t: string): string {
   return t.replace(/\r\n?/g, '\n').replace(/\s+$/, '');
@@ -79,8 +87,12 @@ export function validateTemplate(kind: 'post' | 'comment', raw: string): string[
   if (unknown.length) errors.push(`不認得的佔位符：${unknown.map((n) => `{${n}}`).join('、')}（可以用：${allowed.map((n) => `{${n}}`).join('、')}）`);
   if (kind === 'post') {
     const lines = t.split('\n');
-    const tagCount = placeholdersIn(t).filter((n) => n === '標籤').length;
+    const used = placeholdersIn(t);
+    if (lines[0].trim() !== '{標題}' || used.filter((n) => n === '標題').length !== 1) errors.push('第一行要是 {標題}，而且只有它（自動發佈靠第一行認出那天的貼文，防重複發）');
+    if (!used.includes('派票紀錄')) errors.push('要有 {派票紀錄}（沒有牌譜，圖沒產生時會發出沒有局面的題目）');
+    const tagCount = used.filter((n) => n === '標籤').length;
     if (tagCount !== 1 || lines[lines.length - 1].trim() !== '{標籤}') errors.push('最後一行要是 {標籤}，而且只能出現一次（自動發佈要求主題標籤剛好一行、在最後一行）');
+    if (lines.slice(0, -1).some(isTagLine)) errors.push('主題標籤只能用最後一行的 {標籤}，其他行不要自己寫 #標籤（否則每天的貼文都過不了檢查）');
   } else if (!placeholdersIn(t).includes('小觀念')) errors.push('要有 {小觀念}（留言的內文）');
   const literal = [...t.replace(TOKEN, '')].length;
   if (literal > 500) errors.push(`固定的文字就有 ${literal} 字，超過 500`);

@@ -159,6 +159,17 @@ export function commentText(written: string, draft: Pick<ThreadsDraft, 'theme' |
 
 // ─── 內容檢查 ───────────────────────────────────────────────────────────────
 
+/**
+ * 這篇貼文少了圖就不完整嗎：牌譜縮成「完整局面看圖」，或貼文裡根本沒有這天的牌譜（範本沒放 {派票紀錄}；
+ * template.ts 已經不讓這種範本通過，這裡照實際的文字再判斷一次）。
+ */
+export function draftNeedsImage(draft: Pick<ThreadsDraft, 'post' | 'parts'>): boolean {
+  const text = draft.post.text;
+  if (text.includes(SEE_IMAGE_LINE)) return true;
+  const record = draft.parts?.派票紀錄;
+  return record !== undefined && (record === SEE_IMAGE_LINE || !text.includes(record));
+}
+
 /** 玩家名字（只拿來擋，不輸出）：games_cache.json 的 players 加上 player_aliases.json 兩邊。 */
 export function loadPlayerNames(serverRoot: string): string[] {
   const names = new Set<string>();
@@ -243,6 +254,8 @@ export interface DailyPlan {
    * 發出去會是不完整的題目、還叫人往右滑。試跑照常產生（摘要有警告），正式發時 post 段直接失敗、不發。
    */
   liveBlock?: string | null;
+  /** 貼文少了圖就不完整（draftNeedsImage）：沒有圖、或圖沒有公開網址就不發。 */
+  needsImage?: boolean;
   draft: ThreadsDraft;
 }
 
@@ -299,8 +312,9 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
 
   // 要續圖時，續圖要一張不少地產生（images 裡的 -grid-<n>）；畫圖失敗、少了幾張才擋。
   let liveBlock = image && deps.imageIncomplete ? deps.imageIncomplete(date, images) : null;
-  // 貼文的牌譜縮成「完整局面看圖」卻沒有圖：只發文字會是不完整的題目。
-  if (!liveBlock && !image && draft.post.text.includes(SEE_IMAGE_LINE)) liveBlock = '貼文的牌譜寫「完整局面看圖」，但圖沒有產生';
+  // 貼文的牌譜縮成「完整局面看圖」（或貼文裡沒有牌譜）卻沒有圖：只發文字會是不完整的題目。
+  const needsImage = draftNeedsImage(draft);
+  if (!liveBlock && !image && needsImage) liveBlock = draft.post.text.includes(SEE_IMAGE_LINE) ? '貼文的牌譜寫「完整局面看圖」，但圖沒有產生' : '貼文裡沒有牌譜（局面只在圖裡），但圖沒有產生';
   if (liveBlock) warnings.push(`${liveBlock}（試跑照常；正式發佈這天不發）`);
 
   const chatgpt = readComment(deps.commentsDir, date);
@@ -332,6 +346,7 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     quote,
     alreadyPublished: !!existing?.postId,
     liveBlock,
+    needsImage,
     resumeComment: needsCommentResume(existing),
     errors: validatePost({ text: draft.post.text, comment, names: deps.names }),
     warnings,
@@ -379,13 +394,14 @@ export function planSummary(plan: DailyPlan, mode: string): string[] {
 
 /**
  * 用這些公開網址的圖發今天這篇，題目會不會不完整（回傳原因；null＝可以發）。Threads 和 IG 共用：
- * prepare 已經擋下的（liveBlock）、要續圖但不是每張圖都有網址、貼文寫「完整局面看圖」卻一張圖都沒有。
+ * prepare 已經擋下的（liveBlock）、要續圖但不是每張圖都有網址、貼文寫「完整局面看圖」或貼文裡沒有牌譜（needsImage）卻一張圖都沒有。
  */
-export function imageProblem(plan: Pick<DailyPlan, 'liveBlock' | 'images' | 'image' | 'text'>, imageUrls: readonly string[]): string | null {
+export function imageProblem(plan: Pick<DailyPlan, 'liveBlock' | 'images' | 'image' | 'text' | 'needsImage'>, imageUrls: readonly string[]): string | null {
   if (plan.liveBlock) return plan.liveBlock;
   const images = plan.images ?? (plan.image ? [plan.image] : []);
   if (images.some((n) => /-grid(-\d+)?\.png$/.test(n)) && imageUrls.length < images.length) return `題目要續圖，但只有 ${imageUrls.length}／${images.length} 張圖有公開網址`;
   if (plan.text.includes(SEE_IMAGE_LINE) && imageUrls.length === 0) return '貼文的牌譜寫「完整局面看圖」，但圖沒有公開網址';
+  if (plan.needsImage && imageUrls.length === 0) return '貼文裡沒有牌譜（局面只在圖裡），但圖沒有公開網址';
   return null;
 }
 

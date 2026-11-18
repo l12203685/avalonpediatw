@@ -26,7 +26,7 @@ import { eventLines, questLine, resultText, roleCode, seatLabel, pct } from '../
 import { TEAM_SIZES, eventIndexOfProposal, isRed, publicEvents, viewAt, type PublicEvent, type SimGame, type SimView } from '../simulation/scenario';
 import { maskOf, seatList, seatsOfMask, teamDigits } from '../simulation/seats';
 import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsPick } from './plan';
-import { DEFAULT_POST_TEMPLATE, normalizeTemplate, renderTemplate, type PostParts } from './template';
+import { DEFAULT_POST_TEMPLATE, normalizeTemplate, renderTemplate, validateTemplate, type PostParts } from './template';
 
 /** Threads 一則貼文的字數上限。 */
 export const THREADS_MAX_CHARS = 500;
@@ -242,11 +242,15 @@ export function renderPost(
     }
     return { ...(last as RenderedPost), fits: false };
   };
-  const custom = opts.template !== undefined && normalizeTemplate(opts.template) !== DEFAULT_POST_TEMPLATE ? fit(opts.template) : null;
+  const wanted = opts.template !== undefined && normalizeTemplate(opts.template) !== DEFAULT_POST_TEMPLATE ? opts.template : null;
+  // 範本檔讀進來時已經檢查過；這裡再擋一次（直接傳字串進來的呼叫端）。
+  const invalid = wanted !== null ? validateTemplate('post', wanted) : [];
+  const custom = wanted !== null && invalid.length === 0 ? fit(wanted) : null;
   if (custom?.fits) return { text: custom.text, parts: custom.parts, answerIndex: custom.answerIndex };
   const def = fit(DEFAULT_POST_TEMPLATE);
   const out: RenderedPost = { text: def.text, parts: def.parts, answerIndex: def.answerIndex };
-  if (custom) out.warning = `站長的貼文格式套進這天的內容最短也有 ${[...custom.text].length} 字，超過 ${THREADS_MAX_CHARS}，這天改用內建格式`;
+  if (invalid.length) out.warning = `站長的貼文格式不合格（${invalid.join('；')}），這天用內建格式`;
+  else if (custom) out.warning = `站長的貼文格式套進這天的內容最短也有 ${[...custom.text].length} 字，超過 ${THREADS_MAX_CHARS}，這天改用內建格式`;
   return out;
 }
 
