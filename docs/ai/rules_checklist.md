@@ -13,7 +13,7 @@
 | 投票 | 贊成過半才出任務；反對累積 5 次紅方勝 → 第 5 次提議是強制提議，但隊長仍自己選人 | `GameEngine.ts`、1G 刺殺算進強制提議 |
 | 任務牌 | 藍方只能出成功；紅方可選；一張失敗就開紅，7 人以上第 4 局要兩張 | `questFailsRequired`；機器人判斷用失敗張數（INV-B3） |
 | 湖中女神 | 第 2、3、4 局任務後使用；從 0 家開始；不能湖拿過湖的人；被湖者必須交出真實陣營；持湖者可以宣告、可以說謊、可以不宣告；湖權交給被湖者 | `GameEngine.ts` ladyOfTheLakeUsed；`LakePolicy.ts` |
-| 刺殺 | 三藍後進行；紅方可透過發言得知彼此角色，等同所有紅方（含奧伯倫）一起翻牌；最後由刺客決定；刺紅方隊友不算 | `GameServer.sanitizeRoomForPlayer`（state 'discussion' 紅方互見角色）；觀測 `allEvilRoles` |
+| 刺殺 | 三藍後進行；紅方可透過發言得知彼此角色，等同所有紅方（含奧伯倫）一起翻牌；最後由刺客決定；刺紅方隊友不算。站長 2026-11-18 再確認：「規則上 刺殺階段只有刺客可以開牌 但只有邪惡方可以發言討論 奧伯倫屬於邪惡方 所以其實等同四位邪惡方開牌討論」（Threads 刺殺題的「你是」一行因此列出全部紅方隊友與角色，`threads/draft.assassinationMates`） | `GameServer.sanitizeRoomForPlayer`（state 'discussion' 紅方互見角色）；觀測 `allEvilRoles` |
 
 ## 2. 鐵邏輯（社群公認、當作確定）
 
