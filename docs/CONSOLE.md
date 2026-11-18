@@ -66,7 +66,7 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 | `game_counts.json` | 依種類／狀態的局數、錯誤局、問題分組數、「要注意」計數；`dbVersion` = commit；`gameDbInSync` | 牌譜數量（`meta/gameCounts`） |
 | `concepts.json` | 觀念卡庫照抄；沒有卡庫時 `available: false` | 觀念卡 |
 | `wiki_index.json` | 每篇文章的 id、標題、分類、章節（錨點與深連結）、網址、最後修改的 commit／日期 | 文章同步 |
-| `week_drafts.json` ＋ `week_drafts/*.png` | 從 `--date` 起 7 天：貼文、第一則留言、圖、`parts`（範本佔位符的內容）、`frozen`；實際套用的範本與佔位符說明 | 一週草稿、範本編輯 |
+| `week_drafts.json` ＋ `week_drafts/*.png` | 從 `--date` 起 7 天：貼文、第一則留言、圖、`parts`（範本佔位符的內容，都是字串）、`type`（題型 `{ kind, name }`，#89 的 `draft.parts.type`）、`frozen`；實際套用的範本與佔位符說明 | 一週草稿、範本編輯 |
 | `manifest.json` | `sourceSha`（來源 commit，同 `source.sha`；另有 `dirty`）、`generatedAt`（產生時間，ISO、UTC）、每個檔的數量、注意事項 | 頁首「鏡像自 main @sha」與右上角的時間戳記 |
 
 問題牌譜的分組（照 2026-11-17 第一版整理腳本移植，`test_console_export.py` 鎖住跟舊腳本一致）：

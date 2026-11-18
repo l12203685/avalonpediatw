@@ -195,9 +195,31 @@ export interface WeekDay {
   chars: { post: number; comment: number };
   /** 已經發出去（threads-state 有貼文記錄）：內容以發出去的版本為準。 */
   frozen: boolean;
-  /** 貼文範本每個佔位符這天的內容（draft.parts），加上第一則留言的 {小觀念}。 */
+  /** 貼文範本每個佔位符這天的內容（draft.parts 裡的字串），加上第一則留言的 {小觀念}。 */
   parts?: Record<string, string>;
+  /** 這天的題型（#89 的 draft.parts.type：哪一種題目、用哪一份 byType 範本）。 */
+  type?: WeekDayType;
   recordUrl?: string;
+}
+
+/** 題型（同 server draft.ts DraftParts 的 type）。 */
+export interface WeekDayType {
+  kind: string;
+  name: string;
+}
+
+/** draft.parts：佔位符 → 內容，另有 type（#89 起是 { kind, name }，不是字串）。 */
+export type DraftPartsInput = { readonly [key: string]: string | WeekDayType };
+
+/** 拆成佔位符的字串內容與題型。 */
+export function splitDraftParts(parts: DraftPartsInput): { parts: Record<string, string>; type?: WeekDayType } {
+  const out: Record<string, string> = {};
+  let type: WeekDayType | undefined;
+  for (const [k, v] of Object.entries(parts)) {
+    if (typeof v === 'string') out[k] = v;
+    else if (k === 'type' && v && typeof v.kind === 'string' && typeof v.name === 'string') type = { kind: v.kind, name: v.name };
+  }
+  return type ? { parts: out, type } : { parts: out };
 }
 
 export interface WeekDraftsDoc {
@@ -212,13 +234,14 @@ export interface WeekDraftsDoc {
 export function weekDay(input: {
   date: string;
   weekday: number;
-  draft: { theme: string; exerciseId: string; recordId?: string; post: { text: string } } & { parts?: Record<string, string> };
+  draft: { theme: string; exerciseId: string; recordId?: string; post: { text: string } } & { parts?: DraftPartsInput };
   comment: string;
   commentSource: 'file' | 'fallback';
   images: string[];
   frozen: boolean;
 }): WeekDay {
   const { draft } = input;
+  const split = draft.parts ? splitDraftParts(draft.parts) : null;
   return {
     date: input.date,
     weekday: WEEKDAY_ZH[input.weekday],
@@ -230,7 +253,8 @@ export function weekDay(input: {
     images: input.images,
     chars: { post: [...draft.post.text].length, comment: [...input.comment].length },
     frozen: input.frozen,
-    ...(draft.parts ? { parts: draft.parts } : {}),
+    ...(split ? { parts: split.parts } : {}),
+    ...(split?.type ? { type: split.type } : {}),
     ...(draft.recordId ? { recordUrl: `${SITE_URL}/#records=${draft.recordId}` } : {}),
   };
 }
