@@ -1,1400 +1,201 @@
-# 標籤|開關|種子|起始局號|局數  （第 44b 回合分析：每一種 1-1 都分開——忠臣 1 家的 1-1 換成 120 種三人隊之一（均勻亂數，force11=rand）。onlyLoyal11=1：1-1 隊長不是忠臣的局在 1-1 就停（不出列，那些局本來就和預設相同）。R = 換過的；BL = 預設（只跑忠臣 1 家的局）。R 跑在已經有預設結果的種子（423001 第 0–97,999 局、433001／433101／433201 各第 0–99,999 局）和新種子 443001 第 0–499,999 局；443001 另跑 BL 配對。BLchk = 423001 第 2,000–2,999 局，和 r42b-confirm 的預設逐局比對）
-BLchk|onlyLoyal11=1|423001|2000|1000
-R|onlyLoyal11=1 force11=rand|423001|0|1000
-R|onlyLoyal11=1 force11=rand|423001|1000|1000
-R|onlyLoyal11=1 force11=rand|423001|2000|1000
-R|onlyLoyal11=1 force11=rand|423001|3000|1000
-R|onlyLoyal11=1 force11=rand|423001|4000|1000
-R|onlyLoyal11=1 force11=rand|423001|5000|1000
-R|onlyLoyal11=1 force11=rand|423001|6000|1000
-R|onlyLoyal11=1 force11=rand|423001|7000|1000
-R|onlyLoyal11=1 force11=rand|423001|8000|1000
-R|onlyLoyal11=1 force11=rand|423001|9000|1000
-R|onlyLoyal11=1 force11=rand|423001|10000|1000
-R|onlyLoyal11=1 force11=rand|423001|11000|1000
-R|onlyLoyal11=1 force11=rand|423001|12000|1000
-R|onlyLoyal11=1 force11=rand|423001|13000|1000
-R|onlyLoyal11=1 force11=rand|423001|14000|1000
-R|onlyLoyal11=1 force11=rand|423001|15000|1000
-R|onlyLoyal11=1 force11=rand|423001|16000|1000
-R|onlyLoyal11=1 force11=rand|423001|17000|1000
-R|onlyLoyal11=1 force11=rand|423001|18000|1000
-R|onlyLoyal11=1 force11=rand|423001|19000|1000
-R|onlyLoyal11=1 force11=rand|423001|20000|1000
-R|onlyLoyal11=1 force11=rand|423001|21000|1000
-R|onlyLoyal11=1 force11=rand|423001|22000|1000
-R|onlyLoyal11=1 force11=rand|423001|23000|1000
-R|onlyLoyal11=1 force11=rand|423001|24000|1000
-R|onlyLoyal11=1 force11=rand|423001|25000|1000
-R|onlyLoyal11=1 force11=rand|423001|26000|1000
-R|onlyLoyal11=1 force11=rand|423001|27000|1000
-R|onlyLoyal11=1 force11=rand|423001|28000|1000
-R|onlyLoyal11=1 force11=rand|423001|29000|1000
-R|onlyLoyal11=1 force11=rand|423001|30000|1000
-R|onlyLoyal11=1 force11=rand|423001|31000|1000
-R|onlyLoyal11=1 force11=rand|423001|32000|1000
-R|onlyLoyal11=1 force11=rand|423001|33000|1000
-R|onlyLoyal11=1 force11=rand|423001|34000|1000
-R|onlyLoyal11=1 force11=rand|423001|35000|1000
-R|onlyLoyal11=1 force11=rand|423001|36000|1000
-R|onlyLoyal11=1 force11=rand|423001|37000|1000
-R|onlyLoyal11=1 force11=rand|423001|38000|1000
-R|onlyLoyal11=1 force11=rand|423001|39000|1000
-R|onlyLoyal11=1 force11=rand|423001|40000|1000
-R|onlyLoyal11=1 force11=rand|423001|41000|1000
-R|onlyLoyal11=1 force11=rand|423001|42000|1000
-R|onlyLoyal11=1 force11=rand|423001|43000|1000
-R|onlyLoyal11=1 force11=rand|423001|44000|1000
-R|onlyLoyal11=1 force11=rand|423001|45000|1000
-R|onlyLoyal11=1 force11=rand|423001|46000|1000
-R|onlyLoyal11=1 force11=rand|423001|47000|1000
-R|onlyLoyal11=1 force11=rand|423001|48000|1000
-R|onlyLoyal11=1 force11=rand|423001|49000|1000
-R|onlyLoyal11=1 force11=rand|423001|50000|1000
-R|onlyLoyal11=1 force11=rand|423001|51000|1000
-R|onlyLoyal11=1 force11=rand|423001|52000|1000
-R|onlyLoyal11=1 force11=rand|423001|53000|1000
-R|onlyLoyal11=1 force11=rand|423001|54000|1000
-R|onlyLoyal11=1 force11=rand|423001|55000|1000
-R|onlyLoyal11=1 force11=rand|423001|56000|1000
-R|onlyLoyal11=1 force11=rand|423001|57000|1000
-R|onlyLoyal11=1 force11=rand|423001|58000|1000
-R|onlyLoyal11=1 force11=rand|423001|59000|1000
-R|onlyLoyal11=1 force11=rand|423001|60000|1000
-R|onlyLoyal11=1 force11=rand|423001|61000|1000
-R|onlyLoyal11=1 force11=rand|423001|62000|1000
-R|onlyLoyal11=1 force11=rand|423001|63000|1000
-R|onlyLoyal11=1 force11=rand|423001|64000|1000
-R|onlyLoyal11=1 force11=rand|423001|65000|1000
-R|onlyLoyal11=1 force11=rand|423001|66000|1000
-R|onlyLoyal11=1 force11=rand|423001|67000|1000
-R|onlyLoyal11=1 force11=rand|423001|68000|1000
-R|onlyLoyal11=1 force11=rand|423001|69000|1000
-R|onlyLoyal11=1 force11=rand|423001|70000|1000
-R|onlyLoyal11=1 force11=rand|423001|71000|1000
-R|onlyLoyal11=1 force11=rand|423001|72000|1000
-R|onlyLoyal11=1 force11=rand|423001|73000|1000
-R|onlyLoyal11=1 force11=rand|423001|74000|1000
-R|onlyLoyal11=1 force11=rand|423001|75000|1000
-R|onlyLoyal11=1 force11=rand|423001|76000|1000
-R|onlyLoyal11=1 force11=rand|423001|77000|1000
-R|onlyLoyal11=1 force11=rand|423001|78000|1000
-R|onlyLoyal11=1 force11=rand|423001|79000|1000
-R|onlyLoyal11=1 force11=rand|423001|80000|1000
-R|onlyLoyal11=1 force11=rand|423001|81000|1000
-R|onlyLoyal11=1 force11=rand|423001|82000|1000
-R|onlyLoyal11=1 force11=rand|423001|83000|1000
-R|onlyLoyal11=1 force11=rand|423001|84000|1000
-R|onlyLoyal11=1 force11=rand|423001|85000|1000
-R|onlyLoyal11=1 force11=rand|423001|86000|1000
-R|onlyLoyal11=1 force11=rand|423001|87000|1000
-R|onlyLoyal11=1 force11=rand|423001|88000|1000
-R|onlyLoyal11=1 force11=rand|423001|89000|1000
-R|onlyLoyal11=1 force11=rand|423001|90000|1000
-R|onlyLoyal11=1 force11=rand|423001|91000|1000
-R|onlyLoyal11=1 force11=rand|423001|92000|1000
-R|onlyLoyal11=1 force11=rand|423001|93000|1000
-R|onlyLoyal11=1 force11=rand|423001|94000|1000
-R|onlyLoyal11=1 force11=rand|423001|95000|1000
-R|onlyLoyal11=1 force11=rand|423001|96000|1000
-R|onlyLoyal11=1 force11=rand|423001|97000|1000
-R|onlyLoyal11=1 force11=rand|433001|0|1000
-R|onlyLoyal11=1 force11=rand|433001|1000|1000
-R|onlyLoyal11=1 force11=rand|433001|2000|1000
-R|onlyLoyal11=1 force11=rand|433001|3000|1000
-R|onlyLoyal11=1 force11=rand|433001|4000|1000
-R|onlyLoyal11=1 force11=rand|433001|5000|1000
-R|onlyLoyal11=1 force11=rand|433001|6000|1000
-R|onlyLoyal11=1 force11=rand|433001|7000|1000
-R|onlyLoyal11=1 force11=rand|433001|8000|1000
-R|onlyLoyal11=1 force11=rand|433001|9000|1000
-R|onlyLoyal11=1 force11=rand|433001|10000|1000
-R|onlyLoyal11=1 force11=rand|433001|11000|1000
-R|onlyLoyal11=1 force11=rand|433001|12000|1000
-R|onlyLoyal11=1 force11=rand|433001|13000|1000
-R|onlyLoyal11=1 force11=rand|433001|14000|1000
-R|onlyLoyal11=1 force11=rand|433001|15000|1000
-R|onlyLoyal11=1 force11=rand|433001|16000|1000
-R|onlyLoyal11=1 force11=rand|433001|17000|1000
-R|onlyLoyal11=1 force11=rand|433001|18000|1000
-R|onlyLoyal11=1 force11=rand|433001|19000|1000
-R|onlyLoyal11=1 force11=rand|433001|20000|1000
-R|onlyLoyal11=1 force11=rand|433001|21000|1000
-R|onlyLoyal11=1 force11=rand|433001|22000|1000
-R|onlyLoyal11=1 force11=rand|433001|23000|1000
-R|onlyLoyal11=1 force11=rand|433001|24000|1000
-R|onlyLoyal11=1 force11=rand|433001|25000|1000
-R|onlyLoyal11=1 force11=rand|433001|26000|1000
-R|onlyLoyal11=1 force11=rand|433001|27000|1000
-R|onlyLoyal11=1 force11=rand|433001|28000|1000
-R|onlyLoyal11=1 force11=rand|433001|29000|1000
-R|onlyLoyal11=1 force11=rand|433001|30000|1000
-R|onlyLoyal11=1 force11=rand|433001|31000|1000
-R|onlyLoyal11=1 force11=rand|433001|32000|1000
-R|onlyLoyal11=1 force11=rand|433001|33000|1000
-R|onlyLoyal11=1 force11=rand|433001|34000|1000
-R|onlyLoyal11=1 force11=rand|433001|35000|1000
-R|onlyLoyal11=1 force11=rand|433001|36000|1000
-R|onlyLoyal11=1 force11=rand|433001|37000|1000
-R|onlyLoyal11=1 force11=rand|433001|38000|1000
-R|onlyLoyal11=1 force11=rand|433001|39000|1000
-R|onlyLoyal11=1 force11=rand|433001|40000|1000
-R|onlyLoyal11=1 force11=rand|433001|41000|1000
-R|onlyLoyal11=1 force11=rand|433001|42000|1000
-R|onlyLoyal11=1 force11=rand|433001|43000|1000
-R|onlyLoyal11=1 force11=rand|433001|44000|1000
-R|onlyLoyal11=1 force11=rand|433001|45000|1000
-R|onlyLoyal11=1 force11=rand|433001|46000|1000
-R|onlyLoyal11=1 force11=rand|433001|47000|1000
-R|onlyLoyal11=1 force11=rand|433001|48000|1000
-R|onlyLoyal11=1 force11=rand|433001|49000|1000
-R|onlyLoyal11=1 force11=rand|433001|50000|1000
-R|onlyLoyal11=1 force11=rand|433001|51000|1000
-R|onlyLoyal11=1 force11=rand|433001|52000|1000
-R|onlyLoyal11=1 force11=rand|433001|53000|1000
-R|onlyLoyal11=1 force11=rand|433001|54000|1000
-R|onlyLoyal11=1 force11=rand|433001|55000|1000
-R|onlyLoyal11=1 force11=rand|433001|56000|1000
-R|onlyLoyal11=1 force11=rand|433001|57000|1000
-R|onlyLoyal11=1 force11=rand|433001|58000|1000
-R|onlyLoyal11=1 force11=rand|433001|59000|1000
-R|onlyLoyal11=1 force11=rand|433001|60000|1000
-R|onlyLoyal11=1 force11=rand|433001|61000|1000
-R|onlyLoyal11=1 force11=rand|433001|62000|1000
-R|onlyLoyal11=1 force11=rand|433001|63000|1000
-R|onlyLoyal11=1 force11=rand|433001|64000|1000
-R|onlyLoyal11=1 force11=rand|433001|65000|1000
-R|onlyLoyal11=1 force11=rand|433001|66000|1000
-R|onlyLoyal11=1 force11=rand|433001|67000|1000
-R|onlyLoyal11=1 force11=rand|433001|68000|1000
-R|onlyLoyal11=1 force11=rand|433001|69000|1000
-R|onlyLoyal11=1 force11=rand|433001|70000|1000
-R|onlyLoyal11=1 force11=rand|433001|71000|1000
-R|onlyLoyal11=1 force11=rand|433001|72000|1000
-R|onlyLoyal11=1 force11=rand|433001|73000|1000
-R|onlyLoyal11=1 force11=rand|433001|74000|1000
-R|onlyLoyal11=1 force11=rand|433001|75000|1000
-R|onlyLoyal11=1 force11=rand|433001|76000|1000
-R|onlyLoyal11=1 force11=rand|433001|77000|1000
-R|onlyLoyal11=1 force11=rand|433001|78000|1000
-R|onlyLoyal11=1 force11=rand|433001|79000|1000
-R|onlyLoyal11=1 force11=rand|433001|80000|1000
-R|onlyLoyal11=1 force11=rand|433001|81000|1000
-R|onlyLoyal11=1 force11=rand|433001|82000|1000
-R|onlyLoyal11=1 force11=rand|433001|83000|1000
-R|onlyLoyal11=1 force11=rand|433001|84000|1000
-R|onlyLoyal11=1 force11=rand|433001|85000|1000
-R|onlyLoyal11=1 force11=rand|433001|86000|1000
-R|onlyLoyal11=1 force11=rand|433001|87000|1000
-R|onlyLoyal11=1 force11=rand|433001|88000|1000
-R|onlyLoyal11=1 force11=rand|433001|89000|1000
-R|onlyLoyal11=1 force11=rand|433001|90000|1000
-R|onlyLoyal11=1 force11=rand|433001|91000|1000
-R|onlyLoyal11=1 force11=rand|433001|92000|1000
-R|onlyLoyal11=1 force11=rand|433001|93000|1000
-R|onlyLoyal11=1 force11=rand|433001|94000|1000
-R|onlyLoyal11=1 force11=rand|433001|95000|1000
-R|onlyLoyal11=1 force11=rand|433001|96000|1000
-R|onlyLoyal11=1 force11=rand|433001|97000|1000
-R|onlyLoyal11=1 force11=rand|433001|98000|1000
-R|onlyLoyal11=1 force11=rand|433001|99000|1000
-R|onlyLoyal11=1 force11=rand|433101|0|1000
-R|onlyLoyal11=1 force11=rand|433101|1000|1000
-R|onlyLoyal11=1 force11=rand|433101|2000|1000
-R|onlyLoyal11=1 force11=rand|433101|3000|1000
-R|onlyLoyal11=1 force11=rand|433101|4000|1000
-R|onlyLoyal11=1 force11=rand|433101|5000|1000
-R|onlyLoyal11=1 force11=rand|433101|6000|1000
-R|onlyLoyal11=1 force11=rand|433101|7000|1000
-R|onlyLoyal11=1 force11=rand|433101|8000|1000
-R|onlyLoyal11=1 force11=rand|433101|9000|1000
-R|onlyLoyal11=1 force11=rand|433101|10000|1000
-R|onlyLoyal11=1 force11=rand|433101|11000|1000
-R|onlyLoyal11=1 force11=rand|433101|12000|1000
-R|onlyLoyal11=1 force11=rand|433101|13000|1000
-R|onlyLoyal11=1 force11=rand|433101|14000|1000
-R|onlyLoyal11=1 force11=rand|433101|15000|1000
-R|onlyLoyal11=1 force11=rand|433101|16000|1000
-R|onlyLoyal11=1 force11=rand|433101|17000|1000
-R|onlyLoyal11=1 force11=rand|433101|18000|1000
-R|onlyLoyal11=1 force11=rand|433101|19000|1000
-R|onlyLoyal11=1 force11=rand|433101|20000|1000
-R|onlyLoyal11=1 force11=rand|433101|21000|1000
-R|onlyLoyal11=1 force11=rand|433101|22000|1000
-R|onlyLoyal11=1 force11=rand|433101|23000|1000
-R|onlyLoyal11=1 force11=rand|433101|24000|1000
-R|onlyLoyal11=1 force11=rand|433101|25000|1000
-R|onlyLoyal11=1 force11=rand|433101|26000|1000
-R|onlyLoyal11=1 force11=rand|433101|27000|1000
-R|onlyLoyal11=1 force11=rand|433101|28000|1000
-R|onlyLoyal11=1 force11=rand|433101|29000|1000
-R|onlyLoyal11=1 force11=rand|433101|30000|1000
-R|onlyLoyal11=1 force11=rand|433101|31000|1000
-R|onlyLoyal11=1 force11=rand|433101|32000|1000
-R|onlyLoyal11=1 force11=rand|433101|33000|1000
-R|onlyLoyal11=1 force11=rand|433101|34000|1000
-R|onlyLoyal11=1 force11=rand|433101|35000|1000
-R|onlyLoyal11=1 force11=rand|433101|36000|1000
-R|onlyLoyal11=1 force11=rand|433101|37000|1000
-R|onlyLoyal11=1 force11=rand|433101|38000|1000
-R|onlyLoyal11=1 force11=rand|433101|39000|1000
-R|onlyLoyal11=1 force11=rand|433101|40000|1000
-R|onlyLoyal11=1 force11=rand|433101|41000|1000
-R|onlyLoyal11=1 force11=rand|433101|42000|1000
-R|onlyLoyal11=1 force11=rand|433101|43000|1000
-R|onlyLoyal11=1 force11=rand|433101|44000|1000
-R|onlyLoyal11=1 force11=rand|433101|45000|1000
-R|onlyLoyal11=1 force11=rand|433101|46000|1000
-R|onlyLoyal11=1 force11=rand|433101|47000|1000
-R|onlyLoyal11=1 force11=rand|433101|48000|1000
-R|onlyLoyal11=1 force11=rand|433101|49000|1000
-R|onlyLoyal11=1 force11=rand|433101|50000|1000
-R|onlyLoyal11=1 force11=rand|433101|51000|1000
-R|onlyLoyal11=1 force11=rand|433101|52000|1000
-R|onlyLoyal11=1 force11=rand|433101|53000|1000
-R|onlyLoyal11=1 force11=rand|433101|54000|1000
-R|onlyLoyal11=1 force11=rand|433101|55000|1000
-R|onlyLoyal11=1 force11=rand|433101|56000|1000
-R|onlyLoyal11=1 force11=rand|433101|57000|1000
-R|onlyLoyal11=1 force11=rand|433101|58000|1000
-R|onlyLoyal11=1 force11=rand|433101|59000|1000
-R|onlyLoyal11=1 force11=rand|433101|60000|1000
-R|onlyLoyal11=1 force11=rand|433101|61000|1000
-R|onlyLoyal11=1 force11=rand|433101|62000|1000
-R|onlyLoyal11=1 force11=rand|433101|63000|1000
-R|onlyLoyal11=1 force11=rand|433101|64000|1000
-R|onlyLoyal11=1 force11=rand|433101|65000|1000
-R|onlyLoyal11=1 force11=rand|433101|66000|1000
-R|onlyLoyal11=1 force11=rand|433101|67000|1000
-R|onlyLoyal11=1 force11=rand|433101|68000|1000
-R|onlyLoyal11=1 force11=rand|433101|69000|1000
-R|onlyLoyal11=1 force11=rand|433101|70000|1000
-R|onlyLoyal11=1 force11=rand|433101|71000|1000
-R|onlyLoyal11=1 force11=rand|433101|72000|1000
-R|onlyLoyal11=1 force11=rand|433101|73000|1000
-R|onlyLoyal11=1 force11=rand|433101|74000|1000
-R|onlyLoyal11=1 force11=rand|433101|75000|1000
-R|onlyLoyal11=1 force11=rand|433101|76000|1000
-R|onlyLoyal11=1 force11=rand|433101|77000|1000
-R|onlyLoyal11=1 force11=rand|433101|78000|1000
-R|onlyLoyal11=1 force11=rand|433101|79000|1000
-R|onlyLoyal11=1 force11=rand|433101|80000|1000
-R|onlyLoyal11=1 force11=rand|433101|81000|1000
-R|onlyLoyal11=1 force11=rand|433101|82000|1000
-R|onlyLoyal11=1 force11=rand|433101|83000|1000
-R|onlyLoyal11=1 force11=rand|433101|84000|1000
-R|onlyLoyal11=1 force11=rand|433101|85000|1000
-R|onlyLoyal11=1 force11=rand|433101|86000|1000
-R|onlyLoyal11=1 force11=rand|433101|87000|1000
-R|onlyLoyal11=1 force11=rand|433101|88000|1000
-R|onlyLoyal11=1 force11=rand|433101|89000|1000
-R|onlyLoyal11=1 force11=rand|433101|90000|1000
-R|onlyLoyal11=1 force11=rand|433101|91000|1000
-R|onlyLoyal11=1 force11=rand|433101|92000|1000
-R|onlyLoyal11=1 force11=rand|433101|93000|1000
-R|onlyLoyal11=1 force11=rand|433101|94000|1000
-R|onlyLoyal11=1 force11=rand|433101|95000|1000
-R|onlyLoyal11=1 force11=rand|433101|96000|1000
-R|onlyLoyal11=1 force11=rand|433101|97000|1000
-R|onlyLoyal11=1 force11=rand|433101|98000|1000
-R|onlyLoyal11=1 force11=rand|433101|99000|1000
-R|onlyLoyal11=1 force11=rand|433201|0|1000
-R|onlyLoyal11=1 force11=rand|433201|1000|1000
-R|onlyLoyal11=1 force11=rand|433201|2000|1000
-R|onlyLoyal11=1 force11=rand|433201|3000|1000
-R|onlyLoyal11=1 force11=rand|433201|4000|1000
-R|onlyLoyal11=1 force11=rand|433201|5000|1000
-R|onlyLoyal11=1 force11=rand|433201|6000|1000
-R|onlyLoyal11=1 force11=rand|433201|7000|1000
-R|onlyLoyal11=1 force11=rand|433201|8000|1000
-R|onlyLoyal11=1 force11=rand|433201|9000|1000
-R|onlyLoyal11=1 force11=rand|433201|10000|1000
-R|onlyLoyal11=1 force11=rand|433201|11000|1000
-R|onlyLoyal11=1 force11=rand|433201|12000|1000
-R|onlyLoyal11=1 force11=rand|433201|13000|1000
-R|onlyLoyal11=1 force11=rand|433201|14000|1000
-R|onlyLoyal11=1 force11=rand|433201|15000|1000
-R|onlyLoyal11=1 force11=rand|433201|16000|1000
-R|onlyLoyal11=1 force11=rand|433201|17000|1000
-R|onlyLoyal11=1 force11=rand|433201|18000|1000
-R|onlyLoyal11=1 force11=rand|433201|19000|1000
-R|onlyLoyal11=1 force11=rand|433201|20000|1000
-R|onlyLoyal11=1 force11=rand|433201|21000|1000
-R|onlyLoyal11=1 force11=rand|433201|22000|1000
-R|onlyLoyal11=1 force11=rand|433201|23000|1000
-R|onlyLoyal11=1 force11=rand|433201|24000|1000
-R|onlyLoyal11=1 force11=rand|433201|25000|1000
-R|onlyLoyal11=1 force11=rand|433201|26000|1000
-R|onlyLoyal11=1 force11=rand|433201|27000|1000
-R|onlyLoyal11=1 force11=rand|433201|28000|1000
-R|onlyLoyal11=1 force11=rand|433201|29000|1000
-R|onlyLoyal11=1 force11=rand|433201|30000|1000
-R|onlyLoyal11=1 force11=rand|433201|31000|1000
-R|onlyLoyal11=1 force11=rand|433201|32000|1000
-R|onlyLoyal11=1 force11=rand|433201|33000|1000
-R|onlyLoyal11=1 force11=rand|433201|34000|1000
-R|onlyLoyal11=1 force11=rand|433201|35000|1000
-R|onlyLoyal11=1 force11=rand|433201|36000|1000
-R|onlyLoyal11=1 force11=rand|433201|37000|1000
-R|onlyLoyal11=1 force11=rand|433201|38000|1000
-R|onlyLoyal11=1 force11=rand|433201|39000|1000
-R|onlyLoyal11=1 force11=rand|433201|40000|1000
-R|onlyLoyal11=1 force11=rand|433201|41000|1000
-R|onlyLoyal11=1 force11=rand|433201|42000|1000
-R|onlyLoyal11=1 force11=rand|433201|43000|1000
-R|onlyLoyal11=1 force11=rand|433201|44000|1000
-R|onlyLoyal11=1 force11=rand|433201|45000|1000
-R|onlyLoyal11=1 force11=rand|433201|46000|1000
-R|onlyLoyal11=1 force11=rand|433201|47000|1000
-R|onlyLoyal11=1 force11=rand|433201|48000|1000
-R|onlyLoyal11=1 force11=rand|433201|49000|1000
-R|onlyLoyal11=1 force11=rand|433201|50000|1000
-R|onlyLoyal11=1 force11=rand|433201|51000|1000
-R|onlyLoyal11=1 force11=rand|433201|52000|1000
-R|onlyLoyal11=1 force11=rand|433201|53000|1000
-R|onlyLoyal11=1 force11=rand|433201|54000|1000
-R|onlyLoyal11=1 force11=rand|433201|55000|1000
-R|onlyLoyal11=1 force11=rand|433201|56000|1000
-R|onlyLoyal11=1 force11=rand|433201|57000|1000
-R|onlyLoyal11=1 force11=rand|433201|58000|1000
-R|onlyLoyal11=1 force11=rand|433201|59000|1000
-R|onlyLoyal11=1 force11=rand|433201|60000|1000
-R|onlyLoyal11=1 force11=rand|433201|61000|1000
-R|onlyLoyal11=1 force11=rand|433201|62000|1000
-R|onlyLoyal11=1 force11=rand|433201|63000|1000
-R|onlyLoyal11=1 force11=rand|433201|64000|1000
-R|onlyLoyal11=1 force11=rand|433201|65000|1000
-R|onlyLoyal11=1 force11=rand|433201|66000|1000
-R|onlyLoyal11=1 force11=rand|433201|67000|1000
-R|onlyLoyal11=1 force11=rand|433201|68000|1000
-R|onlyLoyal11=1 force11=rand|433201|69000|1000
-R|onlyLoyal11=1 force11=rand|433201|70000|1000
-R|onlyLoyal11=1 force11=rand|433201|71000|1000
-R|onlyLoyal11=1 force11=rand|433201|72000|1000
-R|onlyLoyal11=1 force11=rand|433201|73000|1000
-R|onlyLoyal11=1 force11=rand|433201|74000|1000
-R|onlyLoyal11=1 force11=rand|433201|75000|1000
-R|onlyLoyal11=1 force11=rand|433201|76000|1000
-R|onlyLoyal11=1 force11=rand|433201|77000|1000
-R|onlyLoyal11=1 force11=rand|433201|78000|1000
-R|onlyLoyal11=1 force11=rand|433201|79000|1000
-R|onlyLoyal11=1 force11=rand|433201|80000|1000
-R|onlyLoyal11=1 force11=rand|433201|81000|1000
-R|onlyLoyal11=1 force11=rand|433201|82000|1000
-R|onlyLoyal11=1 force11=rand|433201|83000|1000
-R|onlyLoyal11=1 force11=rand|433201|84000|1000
-R|onlyLoyal11=1 force11=rand|433201|85000|1000
-R|onlyLoyal11=1 force11=rand|433201|86000|1000
-R|onlyLoyal11=1 force11=rand|433201|87000|1000
-R|onlyLoyal11=1 force11=rand|433201|88000|1000
-R|onlyLoyal11=1 force11=rand|433201|89000|1000
-R|onlyLoyal11=1 force11=rand|433201|90000|1000
-R|onlyLoyal11=1 force11=rand|433201|91000|1000
-R|onlyLoyal11=1 force11=rand|433201|92000|1000
-R|onlyLoyal11=1 force11=rand|433201|93000|1000
-R|onlyLoyal11=1 force11=rand|433201|94000|1000
-R|onlyLoyal11=1 force11=rand|433201|95000|1000
-R|onlyLoyal11=1 force11=rand|433201|96000|1000
-R|onlyLoyal11=1 force11=rand|433201|97000|1000
-R|onlyLoyal11=1 force11=rand|433201|98000|1000
-R|onlyLoyal11=1 force11=rand|433201|99000|1000
-R|onlyLoyal11=1 force11=rand|443001|0|1000
-BL|onlyLoyal11=1|443001|0|1000
-R|onlyLoyal11=1 force11=rand|443001|1000|1000
-BL|onlyLoyal11=1|443001|1000|1000
-R|onlyLoyal11=1 force11=rand|443001|2000|1000
-BL|onlyLoyal11=1|443001|2000|1000
-R|onlyLoyal11=1 force11=rand|443001|3000|1000
-BL|onlyLoyal11=1|443001|3000|1000
-R|onlyLoyal11=1 force11=rand|443001|4000|1000
-BL|onlyLoyal11=1|443001|4000|1000
-R|onlyLoyal11=1 force11=rand|443001|5000|1000
-BL|onlyLoyal11=1|443001|5000|1000
-R|onlyLoyal11=1 force11=rand|443001|6000|1000
-BL|onlyLoyal11=1|443001|6000|1000
-R|onlyLoyal11=1 force11=rand|443001|7000|1000
-BL|onlyLoyal11=1|443001|7000|1000
-R|onlyLoyal11=1 force11=rand|443001|8000|1000
-BL|onlyLoyal11=1|443001|8000|1000
-R|onlyLoyal11=1 force11=rand|443001|9000|1000
-BL|onlyLoyal11=1|443001|9000|1000
-R|onlyLoyal11=1 force11=rand|443001|10000|1000
-BL|onlyLoyal11=1|443001|10000|1000
-R|onlyLoyal11=1 force11=rand|443001|11000|1000
-BL|onlyLoyal11=1|443001|11000|1000
-R|onlyLoyal11=1 force11=rand|443001|12000|1000
-BL|onlyLoyal11=1|443001|12000|1000
-R|onlyLoyal11=1 force11=rand|443001|13000|1000
-BL|onlyLoyal11=1|443001|13000|1000
-R|onlyLoyal11=1 force11=rand|443001|14000|1000
-BL|onlyLoyal11=1|443001|14000|1000
-R|onlyLoyal11=1 force11=rand|443001|15000|1000
-BL|onlyLoyal11=1|443001|15000|1000
-R|onlyLoyal11=1 force11=rand|443001|16000|1000
-BL|onlyLoyal11=1|443001|16000|1000
-R|onlyLoyal11=1 force11=rand|443001|17000|1000
-BL|onlyLoyal11=1|443001|17000|1000
-R|onlyLoyal11=1 force11=rand|443001|18000|1000
-BL|onlyLoyal11=1|443001|18000|1000
-R|onlyLoyal11=1 force11=rand|443001|19000|1000
-BL|onlyLoyal11=1|443001|19000|1000
-R|onlyLoyal11=1 force11=rand|443001|20000|1000
-BL|onlyLoyal11=1|443001|20000|1000
-R|onlyLoyal11=1 force11=rand|443001|21000|1000
-BL|onlyLoyal11=1|443001|21000|1000
-R|onlyLoyal11=1 force11=rand|443001|22000|1000
-BL|onlyLoyal11=1|443001|22000|1000
-R|onlyLoyal11=1 force11=rand|443001|23000|1000
-BL|onlyLoyal11=1|443001|23000|1000
-R|onlyLoyal11=1 force11=rand|443001|24000|1000
-BL|onlyLoyal11=1|443001|24000|1000
-R|onlyLoyal11=1 force11=rand|443001|25000|1000
-BL|onlyLoyal11=1|443001|25000|1000
-R|onlyLoyal11=1 force11=rand|443001|26000|1000
-BL|onlyLoyal11=1|443001|26000|1000
-R|onlyLoyal11=1 force11=rand|443001|27000|1000
-BL|onlyLoyal11=1|443001|27000|1000
-R|onlyLoyal11=1 force11=rand|443001|28000|1000
-BL|onlyLoyal11=1|443001|28000|1000
-R|onlyLoyal11=1 force11=rand|443001|29000|1000
-BL|onlyLoyal11=1|443001|29000|1000
-R|onlyLoyal11=1 force11=rand|443001|30000|1000
-BL|onlyLoyal11=1|443001|30000|1000
-R|onlyLoyal11=1 force11=rand|443001|31000|1000
-BL|onlyLoyal11=1|443001|31000|1000
-R|onlyLoyal11=1 force11=rand|443001|32000|1000
-BL|onlyLoyal11=1|443001|32000|1000
-R|onlyLoyal11=1 force11=rand|443001|33000|1000
-BL|onlyLoyal11=1|443001|33000|1000
-R|onlyLoyal11=1 force11=rand|443001|34000|1000
-BL|onlyLoyal11=1|443001|34000|1000
-R|onlyLoyal11=1 force11=rand|443001|35000|1000
-BL|onlyLoyal11=1|443001|35000|1000
-R|onlyLoyal11=1 force11=rand|443001|36000|1000
-BL|onlyLoyal11=1|443001|36000|1000
-R|onlyLoyal11=1 force11=rand|443001|37000|1000
-BL|onlyLoyal11=1|443001|37000|1000
-R|onlyLoyal11=1 force11=rand|443001|38000|1000
-BL|onlyLoyal11=1|443001|38000|1000
-R|onlyLoyal11=1 force11=rand|443001|39000|1000
-BL|onlyLoyal11=1|443001|39000|1000
-R|onlyLoyal11=1 force11=rand|443001|40000|1000
-BL|onlyLoyal11=1|443001|40000|1000
-R|onlyLoyal11=1 force11=rand|443001|41000|1000
-BL|onlyLoyal11=1|443001|41000|1000
-R|onlyLoyal11=1 force11=rand|443001|42000|1000
-BL|onlyLoyal11=1|443001|42000|1000
-R|onlyLoyal11=1 force11=rand|443001|43000|1000
-BL|onlyLoyal11=1|443001|43000|1000
-R|onlyLoyal11=1 force11=rand|443001|44000|1000
-BL|onlyLoyal11=1|443001|44000|1000
-R|onlyLoyal11=1 force11=rand|443001|45000|1000
-BL|onlyLoyal11=1|443001|45000|1000
-R|onlyLoyal11=1 force11=rand|443001|46000|1000
-BL|onlyLoyal11=1|443001|46000|1000
-R|onlyLoyal11=1 force11=rand|443001|47000|1000
-BL|onlyLoyal11=1|443001|47000|1000
-R|onlyLoyal11=1 force11=rand|443001|48000|1000
-BL|onlyLoyal11=1|443001|48000|1000
-R|onlyLoyal11=1 force11=rand|443001|49000|1000
-BL|onlyLoyal11=1|443001|49000|1000
-R|onlyLoyal11=1 force11=rand|443001|50000|1000
-BL|onlyLoyal11=1|443001|50000|1000
-R|onlyLoyal11=1 force11=rand|443001|51000|1000
-BL|onlyLoyal11=1|443001|51000|1000
-R|onlyLoyal11=1 force11=rand|443001|52000|1000
-BL|onlyLoyal11=1|443001|52000|1000
-R|onlyLoyal11=1 force11=rand|443001|53000|1000
-BL|onlyLoyal11=1|443001|53000|1000
-R|onlyLoyal11=1 force11=rand|443001|54000|1000
-BL|onlyLoyal11=1|443001|54000|1000
-R|onlyLoyal11=1 force11=rand|443001|55000|1000
-BL|onlyLoyal11=1|443001|55000|1000
-R|onlyLoyal11=1 force11=rand|443001|56000|1000
-BL|onlyLoyal11=1|443001|56000|1000
-R|onlyLoyal11=1 force11=rand|443001|57000|1000
-BL|onlyLoyal11=1|443001|57000|1000
-R|onlyLoyal11=1 force11=rand|443001|58000|1000
-BL|onlyLoyal11=1|443001|58000|1000
-R|onlyLoyal11=1 force11=rand|443001|59000|1000
-BL|onlyLoyal11=1|443001|59000|1000
-R|onlyLoyal11=1 force11=rand|443001|60000|1000
-BL|onlyLoyal11=1|443001|60000|1000
-R|onlyLoyal11=1 force11=rand|443001|61000|1000
-BL|onlyLoyal11=1|443001|61000|1000
-R|onlyLoyal11=1 force11=rand|443001|62000|1000
-BL|onlyLoyal11=1|443001|62000|1000
-R|onlyLoyal11=1 force11=rand|443001|63000|1000
-BL|onlyLoyal11=1|443001|63000|1000
-R|onlyLoyal11=1 force11=rand|443001|64000|1000
-BL|onlyLoyal11=1|443001|64000|1000
-R|onlyLoyal11=1 force11=rand|443001|65000|1000
-BL|onlyLoyal11=1|443001|65000|1000
-R|onlyLoyal11=1 force11=rand|443001|66000|1000
-BL|onlyLoyal11=1|443001|66000|1000
-R|onlyLoyal11=1 force11=rand|443001|67000|1000
-BL|onlyLoyal11=1|443001|67000|1000
-R|onlyLoyal11=1 force11=rand|443001|68000|1000
-BL|onlyLoyal11=1|443001|68000|1000
-R|onlyLoyal11=1 force11=rand|443001|69000|1000
-BL|onlyLoyal11=1|443001|69000|1000
-R|onlyLoyal11=1 force11=rand|443001|70000|1000
-BL|onlyLoyal11=1|443001|70000|1000
-R|onlyLoyal11=1 force11=rand|443001|71000|1000
-BL|onlyLoyal11=1|443001|71000|1000
-R|onlyLoyal11=1 force11=rand|443001|72000|1000
-BL|onlyLoyal11=1|443001|72000|1000
-R|onlyLoyal11=1 force11=rand|443001|73000|1000
-BL|onlyLoyal11=1|443001|73000|1000
-R|onlyLoyal11=1 force11=rand|443001|74000|1000
-BL|onlyLoyal11=1|443001|74000|1000
-R|onlyLoyal11=1 force11=rand|443001|75000|1000
-BL|onlyLoyal11=1|443001|75000|1000
-R|onlyLoyal11=1 force11=rand|443001|76000|1000
-BL|onlyLoyal11=1|443001|76000|1000
-R|onlyLoyal11=1 force11=rand|443001|77000|1000
-BL|onlyLoyal11=1|443001|77000|1000
-R|onlyLoyal11=1 force11=rand|443001|78000|1000
-BL|onlyLoyal11=1|443001|78000|1000
-R|onlyLoyal11=1 force11=rand|443001|79000|1000
-BL|onlyLoyal11=1|443001|79000|1000
-R|onlyLoyal11=1 force11=rand|443001|80000|1000
-BL|onlyLoyal11=1|443001|80000|1000
-R|onlyLoyal11=1 force11=rand|443001|81000|1000
-BL|onlyLoyal11=1|443001|81000|1000
-R|onlyLoyal11=1 force11=rand|443001|82000|1000
-BL|onlyLoyal11=1|443001|82000|1000
-R|onlyLoyal11=1 force11=rand|443001|83000|1000
-BL|onlyLoyal11=1|443001|83000|1000
-R|onlyLoyal11=1 force11=rand|443001|84000|1000
-BL|onlyLoyal11=1|443001|84000|1000
-R|onlyLoyal11=1 force11=rand|443001|85000|1000
-BL|onlyLoyal11=1|443001|85000|1000
-R|onlyLoyal11=1 force11=rand|443001|86000|1000
-BL|onlyLoyal11=1|443001|86000|1000
-R|onlyLoyal11=1 force11=rand|443001|87000|1000
-BL|onlyLoyal11=1|443001|87000|1000
-R|onlyLoyal11=1 force11=rand|443001|88000|1000
-BL|onlyLoyal11=1|443001|88000|1000
-R|onlyLoyal11=1 force11=rand|443001|89000|1000
-BL|onlyLoyal11=1|443001|89000|1000
-R|onlyLoyal11=1 force11=rand|443001|90000|1000
-BL|onlyLoyal11=1|443001|90000|1000
-R|onlyLoyal11=1 force11=rand|443001|91000|1000
-BL|onlyLoyal11=1|443001|91000|1000
-R|onlyLoyal11=1 force11=rand|443001|92000|1000
-BL|onlyLoyal11=1|443001|92000|1000
-R|onlyLoyal11=1 force11=rand|443001|93000|1000
-BL|onlyLoyal11=1|443001|93000|1000
-R|onlyLoyal11=1 force11=rand|443001|94000|1000
-BL|onlyLoyal11=1|443001|94000|1000
-R|onlyLoyal11=1 force11=rand|443001|95000|1000
-BL|onlyLoyal11=1|443001|95000|1000
-R|onlyLoyal11=1 force11=rand|443001|96000|1000
-BL|onlyLoyal11=1|443001|96000|1000
-R|onlyLoyal11=1 force11=rand|443001|97000|1000
-BL|onlyLoyal11=1|443001|97000|1000
-R|onlyLoyal11=1 force11=rand|443001|98000|1000
-BL|onlyLoyal11=1|443001|98000|1000
-R|onlyLoyal11=1 force11=rand|443001|99000|1000
-BL|onlyLoyal11=1|443001|99000|1000
-R|onlyLoyal11=1 force11=rand|443001|100000|1000
-BL|onlyLoyal11=1|443001|100000|1000
-R|onlyLoyal11=1 force11=rand|443001|101000|1000
-BL|onlyLoyal11=1|443001|101000|1000
-R|onlyLoyal11=1 force11=rand|443001|102000|1000
-BL|onlyLoyal11=1|443001|102000|1000
-R|onlyLoyal11=1 force11=rand|443001|103000|1000
-BL|onlyLoyal11=1|443001|103000|1000
-R|onlyLoyal11=1 force11=rand|443001|104000|1000
-BL|onlyLoyal11=1|443001|104000|1000
-R|onlyLoyal11=1 force11=rand|443001|105000|1000
-BL|onlyLoyal11=1|443001|105000|1000
-R|onlyLoyal11=1 force11=rand|443001|106000|1000
-BL|onlyLoyal11=1|443001|106000|1000
-R|onlyLoyal11=1 force11=rand|443001|107000|1000
-BL|onlyLoyal11=1|443001|107000|1000
-R|onlyLoyal11=1 force11=rand|443001|108000|1000
-BL|onlyLoyal11=1|443001|108000|1000
-R|onlyLoyal11=1 force11=rand|443001|109000|1000
-BL|onlyLoyal11=1|443001|109000|1000
-R|onlyLoyal11=1 force11=rand|443001|110000|1000
-BL|onlyLoyal11=1|443001|110000|1000
-R|onlyLoyal11=1 force11=rand|443001|111000|1000
-BL|onlyLoyal11=1|443001|111000|1000
-R|onlyLoyal11=1 force11=rand|443001|112000|1000
-BL|onlyLoyal11=1|443001|112000|1000
-R|onlyLoyal11=1 force11=rand|443001|113000|1000
-BL|onlyLoyal11=1|443001|113000|1000
-R|onlyLoyal11=1 force11=rand|443001|114000|1000
-BL|onlyLoyal11=1|443001|114000|1000
-R|onlyLoyal11=1 force11=rand|443001|115000|1000
-BL|onlyLoyal11=1|443001|115000|1000
-R|onlyLoyal11=1 force11=rand|443001|116000|1000
-BL|onlyLoyal11=1|443001|116000|1000
-R|onlyLoyal11=1 force11=rand|443001|117000|1000
-BL|onlyLoyal11=1|443001|117000|1000
-R|onlyLoyal11=1 force11=rand|443001|118000|1000
-BL|onlyLoyal11=1|443001|118000|1000
-R|onlyLoyal11=1 force11=rand|443001|119000|1000
-BL|onlyLoyal11=1|443001|119000|1000
-R|onlyLoyal11=1 force11=rand|443001|120000|1000
-BL|onlyLoyal11=1|443001|120000|1000
-R|onlyLoyal11=1 force11=rand|443001|121000|1000
-BL|onlyLoyal11=1|443001|121000|1000
-R|onlyLoyal11=1 force11=rand|443001|122000|1000
-BL|onlyLoyal11=1|443001|122000|1000
-R|onlyLoyal11=1 force11=rand|443001|123000|1000
-BL|onlyLoyal11=1|443001|123000|1000
-R|onlyLoyal11=1 force11=rand|443001|124000|1000
-BL|onlyLoyal11=1|443001|124000|1000
-R|onlyLoyal11=1 force11=rand|443001|125000|1000
-BL|onlyLoyal11=1|443001|125000|1000
-R|onlyLoyal11=1 force11=rand|443001|126000|1000
-BL|onlyLoyal11=1|443001|126000|1000
-R|onlyLoyal11=1 force11=rand|443001|127000|1000
-BL|onlyLoyal11=1|443001|127000|1000
-R|onlyLoyal11=1 force11=rand|443001|128000|1000
-BL|onlyLoyal11=1|443001|128000|1000
-R|onlyLoyal11=1 force11=rand|443001|129000|1000
-BL|onlyLoyal11=1|443001|129000|1000
-R|onlyLoyal11=1 force11=rand|443001|130000|1000
-BL|onlyLoyal11=1|443001|130000|1000
-R|onlyLoyal11=1 force11=rand|443001|131000|1000
-BL|onlyLoyal11=1|443001|131000|1000
-R|onlyLoyal11=1 force11=rand|443001|132000|1000
-BL|onlyLoyal11=1|443001|132000|1000
-R|onlyLoyal11=1 force11=rand|443001|133000|1000
-BL|onlyLoyal11=1|443001|133000|1000
-R|onlyLoyal11=1 force11=rand|443001|134000|1000
-BL|onlyLoyal11=1|443001|134000|1000
-R|onlyLoyal11=1 force11=rand|443001|135000|1000
-BL|onlyLoyal11=1|443001|135000|1000
-R|onlyLoyal11=1 force11=rand|443001|136000|1000
-BL|onlyLoyal11=1|443001|136000|1000
-R|onlyLoyal11=1 force11=rand|443001|137000|1000
-BL|onlyLoyal11=1|443001|137000|1000
-R|onlyLoyal11=1 force11=rand|443001|138000|1000
-BL|onlyLoyal11=1|443001|138000|1000
-R|onlyLoyal11=1 force11=rand|443001|139000|1000
-BL|onlyLoyal11=1|443001|139000|1000
-R|onlyLoyal11=1 force11=rand|443001|140000|1000
-BL|onlyLoyal11=1|443001|140000|1000
-R|onlyLoyal11=1 force11=rand|443001|141000|1000
-BL|onlyLoyal11=1|443001|141000|1000
-R|onlyLoyal11=1 force11=rand|443001|142000|1000
-BL|onlyLoyal11=1|443001|142000|1000
-R|onlyLoyal11=1 force11=rand|443001|143000|1000
-BL|onlyLoyal11=1|443001|143000|1000
-R|onlyLoyal11=1 force11=rand|443001|144000|1000
-BL|onlyLoyal11=1|443001|144000|1000
-R|onlyLoyal11=1 force11=rand|443001|145000|1000
-BL|onlyLoyal11=1|443001|145000|1000
-R|onlyLoyal11=1 force11=rand|443001|146000|1000
-BL|onlyLoyal11=1|443001|146000|1000
-R|onlyLoyal11=1 force11=rand|443001|147000|1000
-BL|onlyLoyal11=1|443001|147000|1000
-R|onlyLoyal11=1 force11=rand|443001|148000|1000
-BL|onlyLoyal11=1|443001|148000|1000
-R|onlyLoyal11=1 force11=rand|443001|149000|1000
-BL|onlyLoyal11=1|443001|149000|1000
-R|onlyLoyal11=1 force11=rand|443001|150000|1000
-BL|onlyLoyal11=1|443001|150000|1000
-R|onlyLoyal11=1 force11=rand|443001|151000|1000
-BL|onlyLoyal11=1|443001|151000|1000
-R|onlyLoyal11=1 force11=rand|443001|152000|1000
-BL|onlyLoyal11=1|443001|152000|1000
-R|onlyLoyal11=1 force11=rand|443001|153000|1000
-BL|onlyLoyal11=1|443001|153000|1000
-R|onlyLoyal11=1 force11=rand|443001|154000|1000
-BL|onlyLoyal11=1|443001|154000|1000
-R|onlyLoyal11=1 force11=rand|443001|155000|1000
-BL|onlyLoyal11=1|443001|155000|1000
-R|onlyLoyal11=1 force11=rand|443001|156000|1000
-BL|onlyLoyal11=1|443001|156000|1000
-R|onlyLoyal11=1 force11=rand|443001|157000|1000
-BL|onlyLoyal11=1|443001|157000|1000
-R|onlyLoyal11=1 force11=rand|443001|158000|1000
-BL|onlyLoyal11=1|443001|158000|1000
-R|onlyLoyal11=1 force11=rand|443001|159000|1000
-BL|onlyLoyal11=1|443001|159000|1000
-R|onlyLoyal11=1 force11=rand|443001|160000|1000
-BL|onlyLoyal11=1|443001|160000|1000
-R|onlyLoyal11=1 force11=rand|443001|161000|1000
-BL|onlyLoyal11=1|443001|161000|1000
-R|onlyLoyal11=1 force11=rand|443001|162000|1000
-BL|onlyLoyal11=1|443001|162000|1000
-R|onlyLoyal11=1 force11=rand|443001|163000|1000
-BL|onlyLoyal11=1|443001|163000|1000
-R|onlyLoyal11=1 force11=rand|443001|164000|1000
-BL|onlyLoyal11=1|443001|164000|1000
-R|onlyLoyal11=1 force11=rand|443001|165000|1000
-BL|onlyLoyal11=1|443001|165000|1000
-R|onlyLoyal11=1 force11=rand|443001|166000|1000
-BL|onlyLoyal11=1|443001|166000|1000
-R|onlyLoyal11=1 force11=rand|443001|167000|1000
-BL|onlyLoyal11=1|443001|167000|1000
-R|onlyLoyal11=1 force11=rand|443001|168000|1000
-BL|onlyLoyal11=1|443001|168000|1000
-R|onlyLoyal11=1 force11=rand|443001|169000|1000
-BL|onlyLoyal11=1|443001|169000|1000
-R|onlyLoyal11=1 force11=rand|443001|170000|1000
-BL|onlyLoyal11=1|443001|170000|1000
-R|onlyLoyal11=1 force11=rand|443001|171000|1000
-BL|onlyLoyal11=1|443001|171000|1000
-R|onlyLoyal11=1 force11=rand|443001|172000|1000
-BL|onlyLoyal11=1|443001|172000|1000
-R|onlyLoyal11=1 force11=rand|443001|173000|1000
-BL|onlyLoyal11=1|443001|173000|1000
-R|onlyLoyal11=1 force11=rand|443001|174000|1000
-BL|onlyLoyal11=1|443001|174000|1000
-R|onlyLoyal11=1 force11=rand|443001|175000|1000
-BL|onlyLoyal11=1|443001|175000|1000
-R|onlyLoyal11=1 force11=rand|443001|176000|1000
-BL|onlyLoyal11=1|443001|176000|1000
-R|onlyLoyal11=1 force11=rand|443001|177000|1000
-BL|onlyLoyal11=1|443001|177000|1000
-R|onlyLoyal11=1 force11=rand|443001|178000|1000
-BL|onlyLoyal11=1|443001|178000|1000
-R|onlyLoyal11=1 force11=rand|443001|179000|1000
-BL|onlyLoyal11=1|443001|179000|1000
-R|onlyLoyal11=1 force11=rand|443001|180000|1000
-BL|onlyLoyal11=1|443001|180000|1000
-R|onlyLoyal11=1 force11=rand|443001|181000|1000
-BL|onlyLoyal11=1|443001|181000|1000
-R|onlyLoyal11=1 force11=rand|443001|182000|1000
-BL|onlyLoyal11=1|443001|182000|1000
-R|onlyLoyal11=1 force11=rand|443001|183000|1000
-BL|onlyLoyal11=1|443001|183000|1000
-R|onlyLoyal11=1 force11=rand|443001|184000|1000
-BL|onlyLoyal11=1|443001|184000|1000
-R|onlyLoyal11=1 force11=rand|443001|185000|1000
-BL|onlyLoyal11=1|443001|185000|1000
-R|onlyLoyal11=1 force11=rand|443001|186000|1000
-BL|onlyLoyal11=1|443001|186000|1000
-R|onlyLoyal11=1 force11=rand|443001|187000|1000
-BL|onlyLoyal11=1|443001|187000|1000
-R|onlyLoyal11=1 force11=rand|443001|188000|1000
-BL|onlyLoyal11=1|443001|188000|1000
-R|onlyLoyal11=1 force11=rand|443001|189000|1000
-BL|onlyLoyal11=1|443001|189000|1000
-R|onlyLoyal11=1 force11=rand|443001|190000|1000
-BL|onlyLoyal11=1|443001|190000|1000
-R|onlyLoyal11=1 force11=rand|443001|191000|1000
-BL|onlyLoyal11=1|443001|191000|1000
-R|onlyLoyal11=1 force11=rand|443001|192000|1000
-BL|onlyLoyal11=1|443001|192000|1000
-R|onlyLoyal11=1 force11=rand|443001|193000|1000
-BL|onlyLoyal11=1|443001|193000|1000
-R|onlyLoyal11=1 force11=rand|443001|194000|1000
-BL|onlyLoyal11=1|443001|194000|1000
-R|onlyLoyal11=1 force11=rand|443001|195000|1000
-BL|onlyLoyal11=1|443001|195000|1000
-R|onlyLoyal11=1 force11=rand|443001|196000|1000
-BL|onlyLoyal11=1|443001|196000|1000
-R|onlyLoyal11=1 force11=rand|443001|197000|1000
-BL|onlyLoyal11=1|443001|197000|1000
-R|onlyLoyal11=1 force11=rand|443001|198000|1000
-BL|onlyLoyal11=1|443001|198000|1000
-R|onlyLoyal11=1 force11=rand|443001|199000|1000
-BL|onlyLoyal11=1|443001|199000|1000
-R|onlyLoyal11=1 force11=rand|443001|200000|1000
-BL|onlyLoyal11=1|443001|200000|1000
-R|onlyLoyal11=1 force11=rand|443001|201000|1000
-BL|onlyLoyal11=1|443001|201000|1000
-R|onlyLoyal11=1 force11=rand|443001|202000|1000
-BL|onlyLoyal11=1|443001|202000|1000
-R|onlyLoyal11=1 force11=rand|443001|203000|1000
-BL|onlyLoyal11=1|443001|203000|1000
-R|onlyLoyal11=1 force11=rand|443001|204000|1000
-BL|onlyLoyal11=1|443001|204000|1000
-R|onlyLoyal11=1 force11=rand|443001|205000|1000
-BL|onlyLoyal11=1|443001|205000|1000
-R|onlyLoyal11=1 force11=rand|443001|206000|1000
-BL|onlyLoyal11=1|443001|206000|1000
-R|onlyLoyal11=1 force11=rand|443001|207000|1000
-BL|onlyLoyal11=1|443001|207000|1000
-R|onlyLoyal11=1 force11=rand|443001|208000|1000
-BL|onlyLoyal11=1|443001|208000|1000
-R|onlyLoyal11=1 force11=rand|443001|209000|1000
-BL|onlyLoyal11=1|443001|209000|1000
-R|onlyLoyal11=1 force11=rand|443001|210000|1000
-BL|onlyLoyal11=1|443001|210000|1000
-R|onlyLoyal11=1 force11=rand|443001|211000|1000
-BL|onlyLoyal11=1|443001|211000|1000
-R|onlyLoyal11=1 force11=rand|443001|212000|1000
-BL|onlyLoyal11=1|443001|212000|1000
-R|onlyLoyal11=1 force11=rand|443001|213000|1000
-BL|onlyLoyal11=1|443001|213000|1000
-R|onlyLoyal11=1 force11=rand|443001|214000|1000
-BL|onlyLoyal11=1|443001|214000|1000
-R|onlyLoyal11=1 force11=rand|443001|215000|1000
-BL|onlyLoyal11=1|443001|215000|1000
-R|onlyLoyal11=1 force11=rand|443001|216000|1000
-BL|onlyLoyal11=1|443001|216000|1000
-R|onlyLoyal11=1 force11=rand|443001|217000|1000
-BL|onlyLoyal11=1|443001|217000|1000
-R|onlyLoyal11=1 force11=rand|443001|218000|1000
-BL|onlyLoyal11=1|443001|218000|1000
-R|onlyLoyal11=1 force11=rand|443001|219000|1000
-BL|onlyLoyal11=1|443001|219000|1000
-R|onlyLoyal11=1 force11=rand|443001|220000|1000
-BL|onlyLoyal11=1|443001|220000|1000
-R|onlyLoyal11=1 force11=rand|443001|221000|1000
-BL|onlyLoyal11=1|443001|221000|1000
-R|onlyLoyal11=1 force11=rand|443001|222000|1000
-BL|onlyLoyal11=1|443001|222000|1000
-R|onlyLoyal11=1 force11=rand|443001|223000|1000
-BL|onlyLoyal11=1|443001|223000|1000
-R|onlyLoyal11=1 force11=rand|443001|224000|1000
-BL|onlyLoyal11=1|443001|224000|1000
-R|onlyLoyal11=1 force11=rand|443001|225000|1000
-BL|onlyLoyal11=1|443001|225000|1000
-R|onlyLoyal11=1 force11=rand|443001|226000|1000
-BL|onlyLoyal11=1|443001|226000|1000
-R|onlyLoyal11=1 force11=rand|443001|227000|1000
-BL|onlyLoyal11=1|443001|227000|1000
-R|onlyLoyal11=1 force11=rand|443001|228000|1000
-BL|onlyLoyal11=1|443001|228000|1000
-R|onlyLoyal11=1 force11=rand|443001|229000|1000
-BL|onlyLoyal11=1|443001|229000|1000
-R|onlyLoyal11=1 force11=rand|443001|230000|1000
-BL|onlyLoyal11=1|443001|230000|1000
-R|onlyLoyal11=1 force11=rand|443001|231000|1000
-BL|onlyLoyal11=1|443001|231000|1000
-R|onlyLoyal11=1 force11=rand|443001|232000|1000
-BL|onlyLoyal11=1|443001|232000|1000
-R|onlyLoyal11=1 force11=rand|443001|233000|1000
-BL|onlyLoyal11=1|443001|233000|1000
-R|onlyLoyal11=1 force11=rand|443001|234000|1000
-BL|onlyLoyal11=1|443001|234000|1000
-R|onlyLoyal11=1 force11=rand|443001|235000|1000
-BL|onlyLoyal11=1|443001|235000|1000
-R|onlyLoyal11=1 force11=rand|443001|236000|1000
-BL|onlyLoyal11=1|443001|236000|1000
-R|onlyLoyal11=1 force11=rand|443001|237000|1000
-BL|onlyLoyal11=1|443001|237000|1000
-R|onlyLoyal11=1 force11=rand|443001|238000|1000
-BL|onlyLoyal11=1|443001|238000|1000
-R|onlyLoyal11=1 force11=rand|443001|239000|1000
-BL|onlyLoyal11=1|443001|239000|1000
-R|onlyLoyal11=1 force11=rand|443001|240000|1000
-BL|onlyLoyal11=1|443001|240000|1000
-R|onlyLoyal11=1 force11=rand|443001|241000|1000
-BL|onlyLoyal11=1|443001|241000|1000
-R|onlyLoyal11=1 force11=rand|443001|242000|1000
-BL|onlyLoyal11=1|443001|242000|1000
-R|onlyLoyal11=1 force11=rand|443001|243000|1000
-BL|onlyLoyal11=1|443001|243000|1000
-R|onlyLoyal11=1 force11=rand|443001|244000|1000
-BL|onlyLoyal11=1|443001|244000|1000
-R|onlyLoyal11=1 force11=rand|443001|245000|1000
-BL|onlyLoyal11=1|443001|245000|1000
-R|onlyLoyal11=1 force11=rand|443001|246000|1000
-BL|onlyLoyal11=1|443001|246000|1000
-R|onlyLoyal11=1 force11=rand|443001|247000|1000
-BL|onlyLoyal11=1|443001|247000|1000
-R|onlyLoyal11=1 force11=rand|443001|248000|1000
-BL|onlyLoyal11=1|443001|248000|1000
-R|onlyLoyal11=1 force11=rand|443001|249000|1000
-BL|onlyLoyal11=1|443001|249000|1000
-R|onlyLoyal11=1 force11=rand|443001|250000|1000
-BL|onlyLoyal11=1|443001|250000|1000
-R|onlyLoyal11=1 force11=rand|443001|251000|1000
-BL|onlyLoyal11=1|443001|251000|1000
-R|onlyLoyal11=1 force11=rand|443001|252000|1000
-BL|onlyLoyal11=1|443001|252000|1000
-R|onlyLoyal11=1 force11=rand|443001|253000|1000
-BL|onlyLoyal11=1|443001|253000|1000
-R|onlyLoyal11=1 force11=rand|443001|254000|1000
-BL|onlyLoyal11=1|443001|254000|1000
-R|onlyLoyal11=1 force11=rand|443001|255000|1000
-BL|onlyLoyal11=1|443001|255000|1000
-R|onlyLoyal11=1 force11=rand|443001|256000|1000
-BL|onlyLoyal11=1|443001|256000|1000
-R|onlyLoyal11=1 force11=rand|443001|257000|1000
-BL|onlyLoyal11=1|443001|257000|1000
-R|onlyLoyal11=1 force11=rand|443001|258000|1000
-BL|onlyLoyal11=1|443001|258000|1000
-R|onlyLoyal11=1 force11=rand|443001|259000|1000
-BL|onlyLoyal11=1|443001|259000|1000
-R|onlyLoyal11=1 force11=rand|443001|260000|1000
-BL|onlyLoyal11=1|443001|260000|1000
-R|onlyLoyal11=1 force11=rand|443001|261000|1000
-BL|onlyLoyal11=1|443001|261000|1000
-R|onlyLoyal11=1 force11=rand|443001|262000|1000
-BL|onlyLoyal11=1|443001|262000|1000
-R|onlyLoyal11=1 force11=rand|443001|263000|1000
-BL|onlyLoyal11=1|443001|263000|1000
-R|onlyLoyal11=1 force11=rand|443001|264000|1000
-BL|onlyLoyal11=1|443001|264000|1000
-R|onlyLoyal11=1 force11=rand|443001|265000|1000
-BL|onlyLoyal11=1|443001|265000|1000
-R|onlyLoyal11=1 force11=rand|443001|266000|1000
-BL|onlyLoyal11=1|443001|266000|1000
-R|onlyLoyal11=1 force11=rand|443001|267000|1000
-BL|onlyLoyal11=1|443001|267000|1000
-R|onlyLoyal11=1 force11=rand|443001|268000|1000
-BL|onlyLoyal11=1|443001|268000|1000
-R|onlyLoyal11=1 force11=rand|443001|269000|1000
-BL|onlyLoyal11=1|443001|269000|1000
-R|onlyLoyal11=1 force11=rand|443001|270000|1000
-BL|onlyLoyal11=1|443001|270000|1000
-R|onlyLoyal11=1 force11=rand|443001|271000|1000
-BL|onlyLoyal11=1|443001|271000|1000
-R|onlyLoyal11=1 force11=rand|443001|272000|1000
-BL|onlyLoyal11=1|443001|272000|1000
-R|onlyLoyal11=1 force11=rand|443001|273000|1000
-BL|onlyLoyal11=1|443001|273000|1000
-R|onlyLoyal11=1 force11=rand|443001|274000|1000
-BL|onlyLoyal11=1|443001|274000|1000
-R|onlyLoyal11=1 force11=rand|443001|275000|1000
-BL|onlyLoyal11=1|443001|275000|1000
-R|onlyLoyal11=1 force11=rand|443001|276000|1000
-BL|onlyLoyal11=1|443001|276000|1000
-R|onlyLoyal11=1 force11=rand|443001|277000|1000
-BL|onlyLoyal11=1|443001|277000|1000
-R|onlyLoyal11=1 force11=rand|443001|278000|1000
-BL|onlyLoyal11=1|443001|278000|1000
-R|onlyLoyal11=1 force11=rand|443001|279000|1000
-BL|onlyLoyal11=1|443001|279000|1000
-R|onlyLoyal11=1 force11=rand|443001|280000|1000
-BL|onlyLoyal11=1|443001|280000|1000
-R|onlyLoyal11=1 force11=rand|443001|281000|1000
-BL|onlyLoyal11=1|443001|281000|1000
-R|onlyLoyal11=1 force11=rand|443001|282000|1000
-BL|onlyLoyal11=1|443001|282000|1000
-R|onlyLoyal11=1 force11=rand|443001|283000|1000
-BL|onlyLoyal11=1|443001|283000|1000
-R|onlyLoyal11=1 force11=rand|443001|284000|1000
-BL|onlyLoyal11=1|443001|284000|1000
-R|onlyLoyal11=1 force11=rand|443001|285000|1000
-BL|onlyLoyal11=1|443001|285000|1000
-R|onlyLoyal11=1 force11=rand|443001|286000|1000
-BL|onlyLoyal11=1|443001|286000|1000
-R|onlyLoyal11=1 force11=rand|443001|287000|1000
-BL|onlyLoyal11=1|443001|287000|1000
-R|onlyLoyal11=1 force11=rand|443001|288000|1000
-BL|onlyLoyal11=1|443001|288000|1000
-R|onlyLoyal11=1 force11=rand|443001|289000|1000
-BL|onlyLoyal11=1|443001|289000|1000
-R|onlyLoyal11=1 force11=rand|443001|290000|1000
-BL|onlyLoyal11=1|443001|290000|1000
-R|onlyLoyal11=1 force11=rand|443001|291000|1000
-BL|onlyLoyal11=1|443001|291000|1000
-R|onlyLoyal11=1 force11=rand|443001|292000|1000
-BL|onlyLoyal11=1|443001|292000|1000
-R|onlyLoyal11=1 force11=rand|443001|293000|1000
-BL|onlyLoyal11=1|443001|293000|1000
-R|onlyLoyal11=1 force11=rand|443001|294000|1000
-BL|onlyLoyal11=1|443001|294000|1000
-R|onlyLoyal11=1 force11=rand|443001|295000|1000
-BL|onlyLoyal11=1|443001|295000|1000
-R|onlyLoyal11=1 force11=rand|443001|296000|1000
-BL|onlyLoyal11=1|443001|296000|1000
-R|onlyLoyal11=1 force11=rand|443001|297000|1000
-BL|onlyLoyal11=1|443001|297000|1000
-R|onlyLoyal11=1 force11=rand|443001|298000|1000
-BL|onlyLoyal11=1|443001|298000|1000
-R|onlyLoyal11=1 force11=rand|443001|299000|1000
-BL|onlyLoyal11=1|443001|299000|1000
-R|onlyLoyal11=1 force11=rand|443001|300000|1000
-BL|onlyLoyal11=1|443001|300000|1000
-R|onlyLoyal11=1 force11=rand|443001|301000|1000
-BL|onlyLoyal11=1|443001|301000|1000
-R|onlyLoyal11=1 force11=rand|443001|302000|1000
-BL|onlyLoyal11=1|443001|302000|1000
-R|onlyLoyal11=1 force11=rand|443001|303000|1000
-BL|onlyLoyal11=1|443001|303000|1000
-R|onlyLoyal11=1 force11=rand|443001|304000|1000
-BL|onlyLoyal11=1|443001|304000|1000
-R|onlyLoyal11=1 force11=rand|443001|305000|1000
-BL|onlyLoyal11=1|443001|305000|1000
-R|onlyLoyal11=1 force11=rand|443001|306000|1000
-BL|onlyLoyal11=1|443001|306000|1000
-R|onlyLoyal11=1 force11=rand|443001|307000|1000
-BL|onlyLoyal11=1|443001|307000|1000
-R|onlyLoyal11=1 force11=rand|443001|308000|1000
-BL|onlyLoyal11=1|443001|308000|1000
-R|onlyLoyal11=1 force11=rand|443001|309000|1000
-BL|onlyLoyal11=1|443001|309000|1000
-R|onlyLoyal11=1 force11=rand|443001|310000|1000
-BL|onlyLoyal11=1|443001|310000|1000
-R|onlyLoyal11=1 force11=rand|443001|311000|1000
-BL|onlyLoyal11=1|443001|311000|1000
-R|onlyLoyal11=1 force11=rand|443001|312000|1000
-BL|onlyLoyal11=1|443001|312000|1000
-R|onlyLoyal11=1 force11=rand|443001|313000|1000
-BL|onlyLoyal11=1|443001|313000|1000
-R|onlyLoyal11=1 force11=rand|443001|314000|1000
-BL|onlyLoyal11=1|443001|314000|1000
-R|onlyLoyal11=1 force11=rand|443001|315000|1000
-BL|onlyLoyal11=1|443001|315000|1000
-R|onlyLoyal11=1 force11=rand|443001|316000|1000
-BL|onlyLoyal11=1|443001|316000|1000
-R|onlyLoyal11=1 force11=rand|443001|317000|1000
-BL|onlyLoyal11=1|443001|317000|1000
-R|onlyLoyal11=1 force11=rand|443001|318000|1000
-BL|onlyLoyal11=1|443001|318000|1000
-R|onlyLoyal11=1 force11=rand|443001|319000|1000
-BL|onlyLoyal11=1|443001|319000|1000
-R|onlyLoyal11=1 force11=rand|443001|320000|1000
-BL|onlyLoyal11=1|443001|320000|1000
-R|onlyLoyal11=1 force11=rand|443001|321000|1000
-BL|onlyLoyal11=1|443001|321000|1000
-R|onlyLoyal11=1 force11=rand|443001|322000|1000
-BL|onlyLoyal11=1|443001|322000|1000
-R|onlyLoyal11=1 force11=rand|443001|323000|1000
-BL|onlyLoyal11=1|443001|323000|1000
-R|onlyLoyal11=1 force11=rand|443001|324000|1000
-BL|onlyLoyal11=1|443001|324000|1000
-R|onlyLoyal11=1 force11=rand|443001|325000|1000
-BL|onlyLoyal11=1|443001|325000|1000
-R|onlyLoyal11=1 force11=rand|443001|326000|1000
-BL|onlyLoyal11=1|443001|326000|1000
-R|onlyLoyal11=1 force11=rand|443001|327000|1000
-BL|onlyLoyal11=1|443001|327000|1000
-R|onlyLoyal11=1 force11=rand|443001|328000|1000
-BL|onlyLoyal11=1|443001|328000|1000
-R|onlyLoyal11=1 force11=rand|443001|329000|1000
-BL|onlyLoyal11=1|443001|329000|1000
-R|onlyLoyal11=1 force11=rand|443001|330000|1000
-BL|onlyLoyal11=1|443001|330000|1000
-R|onlyLoyal11=1 force11=rand|443001|331000|1000
-BL|onlyLoyal11=1|443001|331000|1000
-R|onlyLoyal11=1 force11=rand|443001|332000|1000
-BL|onlyLoyal11=1|443001|332000|1000
-R|onlyLoyal11=1 force11=rand|443001|333000|1000
-BL|onlyLoyal11=1|443001|333000|1000
-R|onlyLoyal11=1 force11=rand|443001|334000|1000
-BL|onlyLoyal11=1|443001|334000|1000
-R|onlyLoyal11=1 force11=rand|443001|335000|1000
-BL|onlyLoyal11=1|443001|335000|1000
-R|onlyLoyal11=1 force11=rand|443001|336000|1000
-BL|onlyLoyal11=1|443001|336000|1000
-R|onlyLoyal11=1 force11=rand|443001|337000|1000
-BL|onlyLoyal11=1|443001|337000|1000
-R|onlyLoyal11=1 force11=rand|443001|338000|1000
-BL|onlyLoyal11=1|443001|338000|1000
-R|onlyLoyal11=1 force11=rand|443001|339000|1000
-BL|onlyLoyal11=1|443001|339000|1000
-R|onlyLoyal11=1 force11=rand|443001|340000|1000
-BL|onlyLoyal11=1|443001|340000|1000
-R|onlyLoyal11=1 force11=rand|443001|341000|1000
-BL|onlyLoyal11=1|443001|341000|1000
-R|onlyLoyal11=1 force11=rand|443001|342000|1000
-BL|onlyLoyal11=1|443001|342000|1000
-R|onlyLoyal11=1 force11=rand|443001|343000|1000
-BL|onlyLoyal11=1|443001|343000|1000
-R|onlyLoyal11=1 force11=rand|443001|344000|1000
-BL|onlyLoyal11=1|443001|344000|1000
-R|onlyLoyal11=1 force11=rand|443001|345000|1000
-BL|onlyLoyal11=1|443001|345000|1000
-R|onlyLoyal11=1 force11=rand|443001|346000|1000
-BL|onlyLoyal11=1|443001|346000|1000
-R|onlyLoyal11=1 force11=rand|443001|347000|1000
-BL|onlyLoyal11=1|443001|347000|1000
-R|onlyLoyal11=1 force11=rand|443001|348000|1000
-BL|onlyLoyal11=1|443001|348000|1000
-R|onlyLoyal11=1 force11=rand|443001|349000|1000
-BL|onlyLoyal11=1|443001|349000|1000
-R|onlyLoyal11=1 force11=rand|443001|350000|1000
-BL|onlyLoyal11=1|443001|350000|1000
-R|onlyLoyal11=1 force11=rand|443001|351000|1000
-BL|onlyLoyal11=1|443001|351000|1000
-R|onlyLoyal11=1 force11=rand|443001|352000|1000
-BL|onlyLoyal11=1|443001|352000|1000
-R|onlyLoyal11=1 force11=rand|443001|353000|1000
-BL|onlyLoyal11=1|443001|353000|1000
-R|onlyLoyal11=1 force11=rand|443001|354000|1000
-BL|onlyLoyal11=1|443001|354000|1000
-R|onlyLoyal11=1 force11=rand|443001|355000|1000
-BL|onlyLoyal11=1|443001|355000|1000
-R|onlyLoyal11=1 force11=rand|443001|356000|1000
-BL|onlyLoyal11=1|443001|356000|1000
-R|onlyLoyal11=1 force11=rand|443001|357000|1000
-BL|onlyLoyal11=1|443001|357000|1000
-R|onlyLoyal11=1 force11=rand|443001|358000|1000
-BL|onlyLoyal11=1|443001|358000|1000
-R|onlyLoyal11=1 force11=rand|443001|359000|1000
-BL|onlyLoyal11=1|443001|359000|1000
-R|onlyLoyal11=1 force11=rand|443001|360000|1000
-BL|onlyLoyal11=1|443001|360000|1000
-R|onlyLoyal11=1 force11=rand|443001|361000|1000
-BL|onlyLoyal11=1|443001|361000|1000
-R|onlyLoyal11=1 force11=rand|443001|362000|1000
-BL|onlyLoyal11=1|443001|362000|1000
-R|onlyLoyal11=1 force11=rand|443001|363000|1000
-BL|onlyLoyal11=1|443001|363000|1000
-R|onlyLoyal11=1 force11=rand|443001|364000|1000
-BL|onlyLoyal11=1|443001|364000|1000
-R|onlyLoyal11=1 force11=rand|443001|365000|1000
-BL|onlyLoyal11=1|443001|365000|1000
-R|onlyLoyal11=1 force11=rand|443001|366000|1000
-BL|onlyLoyal11=1|443001|366000|1000
-R|onlyLoyal11=1 force11=rand|443001|367000|1000
-BL|onlyLoyal11=1|443001|367000|1000
-R|onlyLoyal11=1 force11=rand|443001|368000|1000
-BL|onlyLoyal11=1|443001|368000|1000
-R|onlyLoyal11=1 force11=rand|443001|369000|1000
-BL|onlyLoyal11=1|443001|369000|1000
-R|onlyLoyal11=1 force11=rand|443001|370000|1000
-BL|onlyLoyal11=1|443001|370000|1000
-R|onlyLoyal11=1 force11=rand|443001|371000|1000
-BL|onlyLoyal11=1|443001|371000|1000
-R|onlyLoyal11=1 force11=rand|443001|372000|1000
-BL|onlyLoyal11=1|443001|372000|1000
-R|onlyLoyal11=1 force11=rand|443001|373000|1000
-BL|onlyLoyal11=1|443001|373000|1000
-R|onlyLoyal11=1 force11=rand|443001|374000|1000
-BL|onlyLoyal11=1|443001|374000|1000
-R|onlyLoyal11=1 force11=rand|443001|375000|1000
-BL|onlyLoyal11=1|443001|375000|1000
-R|onlyLoyal11=1 force11=rand|443001|376000|1000
-BL|onlyLoyal11=1|443001|376000|1000
-R|onlyLoyal11=1 force11=rand|443001|377000|1000
-BL|onlyLoyal11=1|443001|377000|1000
-R|onlyLoyal11=1 force11=rand|443001|378000|1000
-BL|onlyLoyal11=1|443001|378000|1000
-R|onlyLoyal11=1 force11=rand|443001|379000|1000
-BL|onlyLoyal11=1|443001|379000|1000
-R|onlyLoyal11=1 force11=rand|443001|380000|1000
-BL|onlyLoyal11=1|443001|380000|1000
-R|onlyLoyal11=1 force11=rand|443001|381000|1000
-BL|onlyLoyal11=1|443001|381000|1000
-R|onlyLoyal11=1 force11=rand|443001|382000|1000
-BL|onlyLoyal11=1|443001|382000|1000
-R|onlyLoyal11=1 force11=rand|443001|383000|1000
-BL|onlyLoyal11=1|443001|383000|1000
-R|onlyLoyal11=1 force11=rand|443001|384000|1000
-BL|onlyLoyal11=1|443001|384000|1000
-R|onlyLoyal11=1 force11=rand|443001|385000|1000
-BL|onlyLoyal11=1|443001|385000|1000
-R|onlyLoyal11=1 force11=rand|443001|386000|1000
-BL|onlyLoyal11=1|443001|386000|1000
-R|onlyLoyal11=1 force11=rand|443001|387000|1000
-BL|onlyLoyal11=1|443001|387000|1000
-R|onlyLoyal11=1 force11=rand|443001|388000|1000
-BL|onlyLoyal11=1|443001|388000|1000
-R|onlyLoyal11=1 force11=rand|443001|389000|1000
-BL|onlyLoyal11=1|443001|389000|1000
-R|onlyLoyal11=1 force11=rand|443001|390000|1000
-BL|onlyLoyal11=1|443001|390000|1000
-R|onlyLoyal11=1 force11=rand|443001|391000|1000
-BL|onlyLoyal11=1|443001|391000|1000
-R|onlyLoyal11=1 force11=rand|443001|392000|1000
-BL|onlyLoyal11=1|443001|392000|1000
-R|onlyLoyal11=1 force11=rand|443001|393000|1000
-BL|onlyLoyal11=1|443001|393000|1000
-R|onlyLoyal11=1 force11=rand|443001|394000|1000
-BL|onlyLoyal11=1|443001|394000|1000
-R|onlyLoyal11=1 force11=rand|443001|395000|1000
-BL|onlyLoyal11=1|443001|395000|1000
-R|onlyLoyal11=1 force11=rand|443001|396000|1000
-BL|onlyLoyal11=1|443001|396000|1000
-R|onlyLoyal11=1 force11=rand|443001|397000|1000
-BL|onlyLoyal11=1|443001|397000|1000
-R|onlyLoyal11=1 force11=rand|443001|398000|1000
-BL|onlyLoyal11=1|443001|398000|1000
-R|onlyLoyal11=1 force11=rand|443001|399000|1000
-BL|onlyLoyal11=1|443001|399000|1000
-R|onlyLoyal11=1 force11=rand|443001|400000|1000
-BL|onlyLoyal11=1|443001|400000|1000
-R|onlyLoyal11=1 force11=rand|443001|401000|1000
-BL|onlyLoyal11=1|443001|401000|1000
-R|onlyLoyal11=1 force11=rand|443001|402000|1000
-BL|onlyLoyal11=1|443001|402000|1000
-R|onlyLoyal11=1 force11=rand|443001|403000|1000
-BL|onlyLoyal11=1|443001|403000|1000
-R|onlyLoyal11=1 force11=rand|443001|404000|1000
-BL|onlyLoyal11=1|443001|404000|1000
-R|onlyLoyal11=1 force11=rand|443001|405000|1000
-BL|onlyLoyal11=1|443001|405000|1000
-R|onlyLoyal11=1 force11=rand|443001|406000|1000
-BL|onlyLoyal11=1|443001|406000|1000
-R|onlyLoyal11=1 force11=rand|443001|407000|1000
-BL|onlyLoyal11=1|443001|407000|1000
-R|onlyLoyal11=1 force11=rand|443001|408000|1000
-BL|onlyLoyal11=1|443001|408000|1000
-R|onlyLoyal11=1 force11=rand|443001|409000|1000
-BL|onlyLoyal11=1|443001|409000|1000
-R|onlyLoyal11=1 force11=rand|443001|410000|1000
-BL|onlyLoyal11=1|443001|410000|1000
-R|onlyLoyal11=1 force11=rand|443001|411000|1000
-BL|onlyLoyal11=1|443001|411000|1000
-R|onlyLoyal11=1 force11=rand|443001|412000|1000
-BL|onlyLoyal11=1|443001|412000|1000
-R|onlyLoyal11=1 force11=rand|443001|413000|1000
-BL|onlyLoyal11=1|443001|413000|1000
-R|onlyLoyal11=1 force11=rand|443001|414000|1000
-BL|onlyLoyal11=1|443001|414000|1000
-R|onlyLoyal11=1 force11=rand|443001|415000|1000
-BL|onlyLoyal11=1|443001|415000|1000
-R|onlyLoyal11=1 force11=rand|443001|416000|1000
-BL|onlyLoyal11=1|443001|416000|1000
-R|onlyLoyal11=1 force11=rand|443001|417000|1000
-BL|onlyLoyal11=1|443001|417000|1000
-R|onlyLoyal11=1 force11=rand|443001|418000|1000
-BL|onlyLoyal11=1|443001|418000|1000
-R|onlyLoyal11=1 force11=rand|443001|419000|1000
-BL|onlyLoyal11=1|443001|419000|1000
-R|onlyLoyal11=1 force11=rand|443001|420000|1000
-BL|onlyLoyal11=1|443001|420000|1000
-R|onlyLoyal11=1 force11=rand|443001|421000|1000
-BL|onlyLoyal11=1|443001|421000|1000
-R|onlyLoyal11=1 force11=rand|443001|422000|1000
-BL|onlyLoyal11=1|443001|422000|1000
-R|onlyLoyal11=1 force11=rand|443001|423000|1000
-BL|onlyLoyal11=1|443001|423000|1000
-R|onlyLoyal11=1 force11=rand|443001|424000|1000
-BL|onlyLoyal11=1|443001|424000|1000
-R|onlyLoyal11=1 force11=rand|443001|425000|1000
-BL|onlyLoyal11=1|443001|425000|1000
-R|onlyLoyal11=1 force11=rand|443001|426000|1000
-BL|onlyLoyal11=1|443001|426000|1000
-R|onlyLoyal11=1 force11=rand|443001|427000|1000
-BL|onlyLoyal11=1|443001|427000|1000
-R|onlyLoyal11=1 force11=rand|443001|428000|1000
-BL|onlyLoyal11=1|443001|428000|1000
-R|onlyLoyal11=1 force11=rand|443001|429000|1000
-BL|onlyLoyal11=1|443001|429000|1000
-R|onlyLoyal11=1 force11=rand|443001|430000|1000
-BL|onlyLoyal11=1|443001|430000|1000
-R|onlyLoyal11=1 force11=rand|443001|431000|1000
-BL|onlyLoyal11=1|443001|431000|1000
-R|onlyLoyal11=1 force11=rand|443001|432000|1000
-BL|onlyLoyal11=1|443001|432000|1000
-R|onlyLoyal11=1 force11=rand|443001|433000|1000
-BL|onlyLoyal11=1|443001|433000|1000
-R|onlyLoyal11=1 force11=rand|443001|434000|1000
-BL|onlyLoyal11=1|443001|434000|1000
-R|onlyLoyal11=1 force11=rand|443001|435000|1000
-BL|onlyLoyal11=1|443001|435000|1000
-R|onlyLoyal11=1 force11=rand|443001|436000|1000
-BL|onlyLoyal11=1|443001|436000|1000
-R|onlyLoyal11=1 force11=rand|443001|437000|1000
-BL|onlyLoyal11=1|443001|437000|1000
-R|onlyLoyal11=1 force11=rand|443001|438000|1000
-BL|onlyLoyal11=1|443001|438000|1000
-R|onlyLoyal11=1 force11=rand|443001|439000|1000
-BL|onlyLoyal11=1|443001|439000|1000
-R|onlyLoyal11=1 force11=rand|443001|440000|1000
-BL|onlyLoyal11=1|443001|440000|1000
-R|onlyLoyal11=1 force11=rand|443001|441000|1000
-BL|onlyLoyal11=1|443001|441000|1000
-R|onlyLoyal11=1 force11=rand|443001|442000|1000
-BL|onlyLoyal11=1|443001|442000|1000
-R|onlyLoyal11=1 force11=rand|443001|443000|1000
-BL|onlyLoyal11=1|443001|443000|1000
-R|onlyLoyal11=1 force11=rand|443001|444000|1000
-BL|onlyLoyal11=1|443001|444000|1000
-R|onlyLoyal11=1 force11=rand|443001|445000|1000
-BL|onlyLoyal11=1|443001|445000|1000
-R|onlyLoyal11=1 force11=rand|443001|446000|1000
-BL|onlyLoyal11=1|443001|446000|1000
-R|onlyLoyal11=1 force11=rand|443001|447000|1000
-BL|onlyLoyal11=1|443001|447000|1000
-R|onlyLoyal11=1 force11=rand|443001|448000|1000
-BL|onlyLoyal11=1|443001|448000|1000
-R|onlyLoyal11=1 force11=rand|443001|449000|1000
-BL|onlyLoyal11=1|443001|449000|1000
-R|onlyLoyal11=1 force11=rand|443001|450000|1000
-BL|onlyLoyal11=1|443001|450000|1000
-R|onlyLoyal11=1 force11=rand|443001|451000|1000
-BL|onlyLoyal11=1|443001|451000|1000
-R|onlyLoyal11=1 force11=rand|443001|452000|1000
-BL|onlyLoyal11=1|443001|452000|1000
-R|onlyLoyal11=1 force11=rand|443001|453000|1000
-BL|onlyLoyal11=1|443001|453000|1000
-R|onlyLoyal11=1 force11=rand|443001|454000|1000
-BL|onlyLoyal11=1|443001|454000|1000
-R|onlyLoyal11=1 force11=rand|443001|455000|1000
-BL|onlyLoyal11=1|443001|455000|1000
-R|onlyLoyal11=1 force11=rand|443001|456000|1000
-BL|onlyLoyal11=1|443001|456000|1000
-R|onlyLoyal11=1 force11=rand|443001|457000|1000
-BL|onlyLoyal11=1|443001|457000|1000
-R|onlyLoyal11=1 force11=rand|443001|458000|1000
-BL|onlyLoyal11=1|443001|458000|1000
-R|onlyLoyal11=1 force11=rand|443001|459000|1000
-BL|onlyLoyal11=1|443001|459000|1000
-R|onlyLoyal11=1 force11=rand|443001|460000|1000
-BL|onlyLoyal11=1|443001|460000|1000
-R|onlyLoyal11=1 force11=rand|443001|461000|1000
-BL|onlyLoyal11=1|443001|461000|1000
-R|onlyLoyal11=1 force11=rand|443001|462000|1000
-BL|onlyLoyal11=1|443001|462000|1000
-R|onlyLoyal11=1 force11=rand|443001|463000|1000
-BL|onlyLoyal11=1|443001|463000|1000
-R|onlyLoyal11=1 force11=rand|443001|464000|1000
-BL|onlyLoyal11=1|443001|464000|1000
-R|onlyLoyal11=1 force11=rand|443001|465000|1000
-BL|onlyLoyal11=1|443001|465000|1000
-R|onlyLoyal11=1 force11=rand|443001|466000|1000
-BL|onlyLoyal11=1|443001|466000|1000
-R|onlyLoyal11=1 force11=rand|443001|467000|1000
-BL|onlyLoyal11=1|443001|467000|1000
-R|onlyLoyal11=1 force11=rand|443001|468000|1000
-BL|onlyLoyal11=1|443001|468000|1000
-R|onlyLoyal11=1 force11=rand|443001|469000|1000
-BL|onlyLoyal11=1|443001|469000|1000
-R|onlyLoyal11=1 force11=rand|443001|470000|1000
-BL|onlyLoyal11=1|443001|470000|1000
-R|onlyLoyal11=1 force11=rand|443001|471000|1000
-BL|onlyLoyal11=1|443001|471000|1000
-R|onlyLoyal11=1 force11=rand|443001|472000|1000
-BL|onlyLoyal11=1|443001|472000|1000
-R|onlyLoyal11=1 force11=rand|443001|473000|1000
-BL|onlyLoyal11=1|443001|473000|1000
-R|onlyLoyal11=1 force11=rand|443001|474000|1000
-BL|onlyLoyal11=1|443001|474000|1000
-R|onlyLoyal11=1 force11=rand|443001|475000|1000
-BL|onlyLoyal11=1|443001|475000|1000
-R|onlyLoyal11=1 force11=rand|443001|476000|1000
-BL|onlyLoyal11=1|443001|476000|1000
-R|onlyLoyal11=1 force11=rand|443001|477000|1000
-BL|onlyLoyal11=1|443001|477000|1000
-R|onlyLoyal11=1 force11=rand|443001|478000|1000
-BL|onlyLoyal11=1|443001|478000|1000
-R|onlyLoyal11=1 force11=rand|443001|479000|1000
-BL|onlyLoyal11=1|443001|479000|1000
-R|onlyLoyal11=1 force11=rand|443001|480000|1000
-BL|onlyLoyal11=1|443001|480000|1000
-R|onlyLoyal11=1 force11=rand|443001|481000|1000
-BL|onlyLoyal11=1|443001|481000|1000
-R|onlyLoyal11=1 force11=rand|443001|482000|1000
-BL|onlyLoyal11=1|443001|482000|1000
-R|onlyLoyal11=1 force11=rand|443001|483000|1000
-BL|onlyLoyal11=1|443001|483000|1000
-R|onlyLoyal11=1 force11=rand|443001|484000|1000
-BL|onlyLoyal11=1|443001|484000|1000
-R|onlyLoyal11=1 force11=rand|443001|485000|1000
-BL|onlyLoyal11=1|443001|485000|1000
-R|onlyLoyal11=1 force11=rand|443001|486000|1000
-BL|onlyLoyal11=1|443001|486000|1000
-R|onlyLoyal11=1 force11=rand|443001|487000|1000
-BL|onlyLoyal11=1|443001|487000|1000
-R|onlyLoyal11=1 force11=rand|443001|488000|1000
-BL|onlyLoyal11=1|443001|488000|1000
-R|onlyLoyal11=1 force11=rand|443001|489000|1000
-BL|onlyLoyal11=1|443001|489000|1000
-R|onlyLoyal11=1 force11=rand|443001|490000|1000
-BL|onlyLoyal11=1|443001|490000|1000
-R|onlyLoyal11=1 force11=rand|443001|491000|1000
-BL|onlyLoyal11=1|443001|491000|1000
-R|onlyLoyal11=1 force11=rand|443001|492000|1000
-BL|onlyLoyal11=1|443001|492000|1000
-R|onlyLoyal11=1 force11=rand|443001|493000|1000
-BL|onlyLoyal11=1|443001|493000|1000
-R|onlyLoyal11=1 force11=rand|443001|494000|1000
-BL|onlyLoyal11=1|443001|494000|1000
-R|onlyLoyal11=1 force11=rand|443001|495000|1000
-BL|onlyLoyal11=1|443001|495000|1000
-R|onlyLoyal11=1 force11=rand|443001|496000|1000
-BL|onlyLoyal11=1|443001|496000|1000
-R|onlyLoyal11=1 force11=rand|443001|497000|1000
-BL|onlyLoyal11=1|443001|497000|1000
-R|onlyLoyal11=1 force11=rand|443001|498000|1000
-BL|onlyLoyal11=1|443001|498000|1000
-R|onlyLoyal11=1 force11=rand|443001|499000|1000
-BL|onlyLoyal11=1|443001|499000|1000
+# 標籤|開關|種子|起始局號|局數  （第 45 回合診斷：5、0 雙紅／雙藍時機器人和真人落差。預設策略、所有 1 家角色，detail=1 只多記整局紀錄（座位以 1-1 隊長為 1 家），行為不變；種子 423001 第 0–99,999 局，和 r42b-confirm 的預設逐局比對前 7 欄）
+DT|detail=1|423001|0|500
+DT|detail=1|423001|500|500
+DT|detail=1|423001|1000|500
+DT|detail=1|423001|1500|500
+DT|detail=1|423001|2000|500
+DT|detail=1|423001|2500|500
+DT|detail=1|423001|3000|500
+DT|detail=1|423001|3500|500
+DT|detail=1|423001|4000|500
+DT|detail=1|423001|4500|500
+DT|detail=1|423001|5000|500
+DT|detail=1|423001|5500|500
+DT|detail=1|423001|6000|500
+DT|detail=1|423001|6500|500
+DT|detail=1|423001|7000|500
+DT|detail=1|423001|7500|500
+DT|detail=1|423001|8000|500
+DT|detail=1|423001|8500|500
+DT|detail=1|423001|9000|500
+DT|detail=1|423001|9500|500
+DT|detail=1|423001|10000|500
+DT|detail=1|423001|10500|500
+DT|detail=1|423001|11000|500
+DT|detail=1|423001|11500|500
+DT|detail=1|423001|12000|500
+DT|detail=1|423001|12500|500
+DT|detail=1|423001|13000|500
+DT|detail=1|423001|13500|500
+DT|detail=1|423001|14000|500
+DT|detail=1|423001|14500|500
+DT|detail=1|423001|15000|500
+DT|detail=1|423001|15500|500
+DT|detail=1|423001|16000|500
+DT|detail=1|423001|16500|500
+DT|detail=1|423001|17000|500
+DT|detail=1|423001|17500|500
+DT|detail=1|423001|18000|500
+DT|detail=1|423001|18500|500
+DT|detail=1|423001|19000|500
+DT|detail=1|423001|19500|500
+DT|detail=1|423001|20000|500
+DT|detail=1|423001|20500|500
+DT|detail=1|423001|21000|500
+DT|detail=1|423001|21500|500
+DT|detail=1|423001|22000|500
+DT|detail=1|423001|22500|500
+DT|detail=1|423001|23000|500
+DT|detail=1|423001|23500|500
+DT|detail=1|423001|24000|500
+DT|detail=1|423001|24500|500
+DT|detail=1|423001|25000|500
+DT|detail=1|423001|25500|500
+DT|detail=1|423001|26000|500
+DT|detail=1|423001|26500|500
+DT|detail=1|423001|27000|500
+DT|detail=1|423001|27500|500
+DT|detail=1|423001|28000|500
+DT|detail=1|423001|28500|500
+DT|detail=1|423001|29000|500
+DT|detail=1|423001|29500|500
+DT|detail=1|423001|30000|500
+DT|detail=1|423001|30500|500
+DT|detail=1|423001|31000|500
+DT|detail=1|423001|31500|500
+DT|detail=1|423001|32000|500
+DT|detail=1|423001|32500|500
+DT|detail=1|423001|33000|500
+DT|detail=1|423001|33500|500
+DT|detail=1|423001|34000|500
+DT|detail=1|423001|34500|500
+DT|detail=1|423001|35000|500
+DT|detail=1|423001|35500|500
+DT|detail=1|423001|36000|500
+DT|detail=1|423001|36500|500
+DT|detail=1|423001|37000|500
+DT|detail=1|423001|37500|500
+DT|detail=1|423001|38000|500
+DT|detail=1|423001|38500|500
+DT|detail=1|423001|39000|500
+DT|detail=1|423001|39500|500
+DT|detail=1|423001|40000|500
+DT|detail=1|423001|40500|500
+DT|detail=1|423001|41000|500
+DT|detail=1|423001|41500|500
+DT|detail=1|423001|42000|500
+DT|detail=1|423001|42500|500
+DT|detail=1|423001|43000|500
+DT|detail=1|423001|43500|500
+DT|detail=1|423001|44000|500
+DT|detail=1|423001|44500|500
+DT|detail=1|423001|45000|500
+DT|detail=1|423001|45500|500
+DT|detail=1|423001|46000|500
+DT|detail=1|423001|46500|500
+DT|detail=1|423001|47000|500
+DT|detail=1|423001|47500|500
+DT|detail=1|423001|48000|500
+DT|detail=1|423001|48500|500
+DT|detail=1|423001|49000|500
+DT|detail=1|423001|49500|500
+DT|detail=1|423001|50000|500
+DT|detail=1|423001|50500|500
+DT|detail=1|423001|51000|500
+DT|detail=1|423001|51500|500
+DT|detail=1|423001|52000|500
+DT|detail=1|423001|52500|500
+DT|detail=1|423001|53000|500
+DT|detail=1|423001|53500|500
+DT|detail=1|423001|54000|500
+DT|detail=1|423001|54500|500
+DT|detail=1|423001|55000|500
+DT|detail=1|423001|55500|500
+DT|detail=1|423001|56000|500
+DT|detail=1|423001|56500|500
+DT|detail=1|423001|57000|500
+DT|detail=1|423001|57500|500
+DT|detail=1|423001|58000|500
+DT|detail=1|423001|58500|500
+DT|detail=1|423001|59000|500
+DT|detail=1|423001|59500|500
+DT|detail=1|423001|60000|500
+DT|detail=1|423001|60500|500
+DT|detail=1|423001|61000|500
+DT|detail=1|423001|61500|500
+DT|detail=1|423001|62000|500
+DT|detail=1|423001|62500|500
+DT|detail=1|423001|63000|500
+DT|detail=1|423001|63500|500
+DT|detail=1|423001|64000|500
+DT|detail=1|423001|64500|500
+DT|detail=1|423001|65000|500
+DT|detail=1|423001|65500|500
+DT|detail=1|423001|66000|500
+DT|detail=1|423001|66500|500
+DT|detail=1|423001|67000|500
+DT|detail=1|423001|67500|500
+DT|detail=1|423001|68000|500
+DT|detail=1|423001|68500|500
+DT|detail=1|423001|69000|500
+DT|detail=1|423001|69500|500
+DT|detail=1|423001|70000|500
+DT|detail=1|423001|70500|500
+DT|detail=1|423001|71000|500
+DT|detail=1|423001|71500|500
+DT|detail=1|423001|72000|500
+DT|detail=1|423001|72500|500
+DT|detail=1|423001|73000|500
+DT|detail=1|423001|73500|500
+DT|detail=1|423001|74000|500
+DT|detail=1|423001|74500|500
+DT|detail=1|423001|75000|500
+DT|detail=1|423001|75500|500
+DT|detail=1|423001|76000|500
+DT|detail=1|423001|76500|500
+DT|detail=1|423001|77000|500
+DT|detail=1|423001|77500|500
+DT|detail=1|423001|78000|500
+DT|detail=1|423001|78500|500
+DT|detail=1|423001|79000|500
+DT|detail=1|423001|79500|500
+DT|detail=1|423001|80000|500
+DT|detail=1|423001|80500|500
+DT|detail=1|423001|81000|500
+DT|detail=1|423001|81500|500
+DT|detail=1|423001|82000|500
+DT|detail=1|423001|82500|500
+DT|detail=1|423001|83000|500
+DT|detail=1|423001|83500|500
+DT|detail=1|423001|84000|500
+DT|detail=1|423001|84500|500
+DT|detail=1|423001|85000|500
+DT|detail=1|423001|85500|500
+DT|detail=1|423001|86000|500
+DT|detail=1|423001|86500|500
+DT|detail=1|423001|87000|500
+DT|detail=1|423001|87500|500
+DT|detail=1|423001|88000|500
+DT|detail=1|423001|88500|500
+DT|detail=1|423001|89000|500
+DT|detail=1|423001|89500|500
+DT|detail=1|423001|90000|500
+DT|detail=1|423001|90500|500
+DT|detail=1|423001|91000|500
+DT|detail=1|423001|91500|500
+DT|detail=1|423001|92000|500
+DT|detail=1|423001|92500|500
+DT|detail=1|423001|93000|500
+DT|detail=1|423001|93500|500
+DT|detail=1|423001|94000|500
+DT|detail=1|423001|94500|500
+DT|detail=1|423001|95000|500
+DT|detail=1|423001|95500|500
+DT|detail=1|423001|96000|500
+DT|detail=1|423001|96500|500
+DT|detail=1|423001|97000|500
+DT|detail=1|423001|97500|500
+DT|detail=1|423001|98000|500
+DT|detail=1|423001|98500|500
+DT|detail=1|423001|99000|500
+DT|detail=1|423001|99500|500

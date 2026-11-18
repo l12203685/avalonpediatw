@@ -40,12 +40,19 @@ async function main(): Promise<void> {
   let force11 = '';
   // round 44b: onlyLoyal11=1 stops a game at the 1-1 when its leader is not a loyal (no row); loyal-leader games run in full, unchanged
   let onlyLoyal11 = false;
+  // round 45 (diagnosis only): detail=1 adds a column 'g' with the whole game in the game_db shape, seats relative to the
+  // 1-1 leader (1..9, 0 = the seat before it): {c: config (assassin, morgana, mordred, oberon, percival, merlin), r: rounds
+  // [{p: [[team, approvers]] ('' approvers = forced 5th), m: 'o'/'x' cards, f: seats that played fail}], l: lakes
+  // [[holder, target, claim o/x/'']], a: assassination target}. Behaviour is unchanged (it only records).
+  let detail = false;
+  let failLog: [number, string][] = [];
   class SkipGame extends Error {}
   argv.forEach((a, i) => {
     if (a !== '--flag') return;
     const f = argv[i + 1];
     if (f.startsWith('force11=')) { force11 = f.slice('force11='.length); return; }
     if (f === 'onlyLoyal11=1') { onlyLoyal11 = true; return; }
+    if (f === 'detail=1') { detail = true; return; }
     Object.assign(variant, parseTuningFlag(f));
   });
   // seats are relative to the 1-1 leader (the engine's first leader is not always P1): rel k -> the k-th seat from the leader
@@ -109,6 +116,7 @@ async function main(): Promise<void> {
         if (t) a = { type: 'team_select', teamIds: t };
       }
       if (a.type === 'assassinate') this.killed = a.targetId;
+      if (detail && a.type === 'quest_vote' && a.vote === 'fail') failLog.push([obs.currentRound ?? 0, obs.myPlayerId]);
       return a;
     }
     pickLakeTarget(obs: PlayerObservation, valid?: readonly string[]): string {
@@ -132,6 +140,7 @@ async function main(): Promise<void> {
       const agents = Array.from({ length: 10 }, (_, s) => new Seat(`P${s + 1}`));
       const gameSeed = `${seed}|${i}`;
       for (const a of agents) a.gameSeed = gameSeed;
+      failLog = [];
       Math.random = seededRandom(`${gameSeed}|setup`);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let res: any;
@@ -158,11 +167,32 @@ async function main(): Promise<void> {
       const lake0 = final.lakeHistory && final.lakeHistory[0] ? relOf(seats, L, final.lakeHistory[0].holderId) : '';
       rows.push([i, res.winner === 'good' ? 1 : 0, tb, mk, quests.length && quests[0].failed ? 1 : 0, quests.filter((q) => q.failed).length, h,
         byId.get(L)!.role, t11, v0 && v0.approved ? 1 : 0, red(relSeat(seats, L, '5')), red(relSeat(seats, L, '0')), lake0, final.lakeHistory && final.lakeHistory[0] ? red(final.lakeHistory[0].holderId) : -1]);
+      if (detail) {
+        const rel = (id: string): string => relOf(seats, L, id);
+        const roleSeat = (r: string): string => { const a = agents.find((x) => x.role === r); return a ? rel(a.agentId) : '-'; };
+        const c = ['assassin', 'morgana', 'mordred', 'oberon', 'percival', 'merlin'].map(roleSeat).join('');
+        const rounds: { p: string[][]; m: string; f: string }[] = [];
+        for (const v of final.voteHistory) {
+          let r = rounds[v.round - 1];
+          if (!r) { r = { p: [], m: '', f: '' }; rounds[v.round - 1] = r; }
+          const forced = v.attempt >= 5;
+          const yes = forced ? '' : seats.filter((id) => v.votes[id] === true).map(rel).join('');
+          r.p.push([v.team.map(rel).join(''), yes]);
+        }
+        for (const q of final.questHistory) {
+          const r = rounds[q.round - 1];
+          if (!r) continue;
+          r.m = 'o'.repeat(q.team.length - q.failCount) + 'x'.repeat(q.failCount);
+          r.f = failLog.filter(([rd]) => rd === q.round).map(([, id]) => rel(id)).join('');
+        }
+        const lakes = (final.lakeHistory ?? []).map((l) => [rel(l.holderId), rel(l.targetId), l.declaredClaim === 'good' ? 'o' : l.declaredClaim === 'evil' ? 'x' : '']);
+        rows[rows.length - 1].push(JSON.stringify({ c, r: rounds, l: lakes, a: killer?.killed ? rel(killer.killed) : '' }));
+      }
       if ((i + 1 - from) % 250 === 0) process.stderr.write(`[sp ${tag}] ${i + 1 - from}/${n} ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     }
   } finally { console.log = originalLog; }
-  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, seconds: Math.round((Date.now() - started) / 1000) };
-  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake'], rows }));
+  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, detail, seconds: Math.round((Date.now() - started) / 1000) };
+  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake', ...(detail ? ['g'] : [])], rows }));
   fs.renameSync(out + '.tmp', out);
   process.stderr.write(`[sp ${tag}] done ${rows.length} games ${meta.seconds}s\n`);
   process.exit(0);
