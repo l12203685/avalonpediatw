@@ -23,7 +23,9 @@
     "concepts:export": "tsx scripts/concepts.ts export",
     "concepts:apply": "tsx scripts/concepts.ts apply",
     "concepts:stamp": "tsx scripts/concepts.ts stamp",
-    "console:export": "tsx scripts/consoleExport.ts"
+    "console:export": "tsx scripts/consoleExport.ts",
+    "bot:gap": "tsx scripts/botGap.ts",
+    "bot:calibration": "tsx scripts/beliefCalibrationCurve.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",
