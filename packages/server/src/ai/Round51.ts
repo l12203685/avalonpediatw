@@ -96,7 +96,8 @@ export function leaderOppRed51(tuning: Readonly<AgentTuning>, obs: PlayerObserva
  * 第 51 回合 B（站長 11/18「忠臣本身的思考能力不夠」的診斷第 1 名；`scripts/loyalGapStudy.ts`）：忠臣持湖時，同一批真人決策點上
  * 機器人湖「出過失敗任務的人」73%（強者真人 52%），湖沒出過失敗任務的藍方 24%（強者 38%）——用人類的優勢表打分數，這是忠臣單一決策裡
  * 落後強者最多的一項（第 2 湖後 −0.28pp／忠臣座位局）。`lakeUntainted51 = w`：`goodLakeInfoMax` 的湖中分數，對出過失敗任務的候選人
- * 扣 w × （最好的資訊量），其餘照舊（同分照座位序）。只給忠臣持湖者。回傳 null = 不適用。
+ * 扣 w × （最好的資訊量），其餘照舊（同分照座位序）。給忠臣與派西持湖者（派西照忠臣的湖法，INV-PL2）。回傳 null = 不適用。
+ * 第 51 回合篩選的版本（`r51-screen` 的 LK）只給忠臣、只看失敗的任務；第 1 關的不變量（INV-PL2 派西沒有照忠臣的湖法、INV-B3 只讀任務結果）因此改成現在的寫法。
  */
 export function untaintedLakePick51(
   tuning: Readonly<AgentTuning>,
@@ -105,10 +106,12 @@ export function untaintedLakePick51(
   analyze: (obs: PlayerObservation, candidates: readonly string[]) => { candidates: ReadonlyArray<{ id: string; score: number; infoGain: number }> } | null,
 ): string | null {
   const w = tuning.lakeUntainted51 ?? 0;
-  if (!(w > 0) || obs.myRole !== 'loyal' || obs.myTeam !== 'good' || pool.length === 0) return null;
+  // 派西也照忠臣的湖法（INV-PL2／10/14 D4：派西持湖 = 帶著拇指事實的忠臣）。
+  if (!(w > 0) || (obs.myRole !== 'loyal' && obs.myRole !== 'percival') || obs.myTeam !== 'good' || pool.length === 0) return null;
   const an = analyze(obs, pool);
   if (!an || an.candidates.length === 0) return null;
-  const tainted = new Set(obs.questHistory.filter((q) => q.result === 'fail').flatMap((q) => q.team));
+  // 出過任務而且任務裡有失敗牌（照張數讀，不只看任務結果：第 4 局一張失敗的成功任務也算；INV-B3）。
+  const tainted = new Set(obs.questHistory.filter((q) => (q.failCount ?? 0) > 0).flatMap((q) => q.team));
   const value = Math.max(0, ...an.candidates.map((c) => c.infoGain));
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const ranked = an.candidates.map((c) => ({ id: c.id, s: c.score - (tainted.has(c.id) ? w * value : 0) }))

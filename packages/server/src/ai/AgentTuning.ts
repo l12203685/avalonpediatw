@@ -1285,7 +1285,7 @@ export interface AgentTuning {
   leaderOppVote51DeltaOut: number;
   /** 第 51 回合（紅方模仿）：紅方（奧伯倫除外）第 3–5 局在隊上、之後還會當隊長、紅方還沒兩勝 → 以這個比例內黑（照局面雜湊）。0 = 關。 */
   leaderOppVoteRed51: number;
-  /** 第 51 回合 B（忠臣持湖，`Round51.untaintedLakePick51`）：`goodLakeInfoMax` 的湖中分數對出過失敗任務的候選人扣這個比例 × 最好的資訊量。0 = 關。 */
+  /** 第 51 回合 B（忠臣與派西持湖，`Round51.untaintedLakePick51`）：`goodLakeInfoMax` 的湖中分數對出過有失敗牌的任務的候選人扣這個比例 × 最好的資訊量。0 = 關。 */
   lakeUntainted51: number;
   /** 第 41 回合（藍方持湖，BlueRound41.ts；報告第 (3) 節＋專案負責人更正）：湖中分數 = h(P(紅)) ＋ 權重 × P(好)，權重 紅方未兩勝而且後面還有湖 2、紅方已兩勝與最後一湖 0；低兩位 = 紅方已兩勝時的資訊做法（1 最不確定、2 最可能是紅、3 第 1 湖最可能是紅、第 2、3 湖最不確定）；位元 4 = 第 1 湖 SF 不分人選範圍（只量）；位元 16 = 梅林用自己的後驗排序（只量）；診斷用（只量）32 = 第 1 湖 FS 照原本、64 = 只用在第 1 湖、128 = 只用在第 2、3 湖、256 = 只用在第 2 湖（第 42 回合）。0 = 關。 */
   goodLake41: number;

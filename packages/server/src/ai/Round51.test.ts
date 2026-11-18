@@ -160,8 +160,9 @@ describe('untaintedLakePick51 (B: loyal lake holder)', () => {
     expect(untaintedLakePick51(T({ lakeUntainted51: 0.2 }), holder(), ['P7', 'P10', 'P5'], an)).toBe('P7'); // 1.0 − 0.2 = 0.8 > 0.7
     expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder(), ['P7', 'P10', 'P5'], an)).toBe('P10'); // 1.0 − 0.5 = 0.5 < 0.7
   });
-  it('loyal holders only', () => {
-    expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'percival' }), ['P7', 'P10'], an)).toBeNull();
+  it('loyal and Percival holders only (Percival lakes as a loyal, INV-PL2)', () => {
+    expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'percival' }), ['P7', 'P10'], an)).toBe('P10');
+    expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'merlin' }), ['P7', 'P10'], an)).toBeNull();
     expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'assassin', myTeam: 'evil' } as Partial<PlayerObservation>), ['P7', 'P10'], an)).toBeNull();
   });
 });
