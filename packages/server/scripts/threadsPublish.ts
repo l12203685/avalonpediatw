@@ -8,7 +8,8 @@
  *   tsx scripts/threadsPublish.ts post-ig --out <輸出> --state-dir <...>       # Instagram 同步：要 INSTAGRAM_ACCESS_TOKEN；JPEG 網址放 IG_IMAGE_URLS（逗號分隔）
  *   tsx scripts/threadsPublish.ts token-ig --token-out <檔案> [--force]              # IG 權杖續期（每週一或 --force）
  *
- * 選項：--picks（預設 packages/server/threads_picks.json）、--comments（預設 docs/threads/comments）、--start（第一篇的日期）。
+ * 選項：--picks（預設 packages/server/threads_picks.json）、--comments（預設 docs/threads/comments）、--start（第一篇的日期）、
+ *       --template（貼文格式，預設 packages/server/threads_template.json；沒有就用內建格式）。
  * 權杖只從環境變數讀，不印出、不寫進 out；token 指令續期後的新權杖只寫到 --token-out 指定的檔案（CI 用完即刪）。
  */
 
@@ -19,6 +20,7 @@ import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
 import * as threadsImage from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
+import { readTemplateFile, type ThreadsTemplate } from '../src/bots/threads/template';
 import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, postedFromState, findByExercise, titleOf, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { extraRenderers } from '../src/bots/threads/publish/extraImages';
 import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
@@ -44,7 +46,14 @@ function flushSummary(): void {
   if (f) fs.appendFileSync(f, `${summaryLines.join('\n')}\n`);
 }
 
-function makeGenerator(stateDir: string, warnings: string[]): ThreadsGenerator {
+/** 站長在主控台改的貼文格式（threads_template.json）；沒有或不合格就用內建格式，原因放進 warnings。 */
+function loadTemplate(warnings: string[]): ThreadsTemplate {
+  const loaded = readTemplateFile(path.resolve(arg('--template', path.join(serverRoot, 'threads_template.json'))));
+  warnings.push(...loaded.warnings);
+  return loaded.template;
+}
+
+function makeGenerator(stateDir: string, warnings: string[], template?: ThreadsTemplate): ThreadsGenerator {
   const bankFile = readSimBankFile([path.join(serverRoot, 'sim_bank.json')]);
   if (!bankFile) throw new Error('sim_bank.json not found or unreadable');
   const bank = buildSimBank(bankFile, readRecordPosts([path.join(serverRoot, 'records_cache.json')]));
@@ -59,6 +68,7 @@ function makeGenerator(stateDir: string, warnings: string[]): ThreadsGenerator {
     hasPost: postedFromState(stateDir),
     startDate: arg('--start', process.env.THREADS_LIVE_FROM || process.env.THREADS_START_DATE || THREADS_START_DATE),
     pickOverride: (date) => picks.get(date) ?? null,
+    ...(template ? { postTemplate: template.post } : {}),
   });
 }
 
@@ -118,9 +128,11 @@ async function main(): Promise<number> {
 
   if (cmd === 'prepare') {
     const warnings: string[] = [];
-    const gen = makeGenerator(stateDir, warnings);
+    const template = loadTemplate(warnings);
+    const gen = makeGenerator(stateDir, warnings, template);
     const plan = prepareDaily(date, {
       gen,
+      commentTemplate: template.comment,
       stateDir,
       outDir,
       commentsDir: path.resolve(arg('--comments', path.join(repoRoot, 'docs', 'threads', 'comments'))),

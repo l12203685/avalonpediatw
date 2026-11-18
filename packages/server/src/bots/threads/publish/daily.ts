@@ -21,6 +21,7 @@ import type { ThreadsDraft } from '../draft';
 import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, postTitle } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday, weekdayOf } from '../plan';
+import { DEFAULT_COMMENT_TEMPLATE, commentBody, normalizeTemplate, renderTemplate, type CommentParts } from '../template';
 import type { ThreadsApi, RecentPost } from './threadsApi';
 import { INSTAGRAM_CAPTION_MAX, INSTAGRAM_CAROUSEL_MAX, type InstagramApi, type RecentMedia } from './instagramApi';
 
@@ -142,6 +143,20 @@ export function fallbackComment(draft: ThreadsDraft): string {
   return `今天這題跟「${topics}」有關，觀念整理在這篇：\n${url}`;
 }
 
+/**
+ * 第一則留言套「留言格式」（template.ts；站長在主控台改、同步進 threads_template.json）：
+ * {小觀念} 是寫好的留言去掉第一行的「【阿瓦隆百科小觀念】」；內建格式套出來跟寫好的檔一字不差。
+ * 站長的格式套完超過 500 字就這天用內建格式（warning）。備案的留言（沒有寫好的檔）不套格式。
+ */
+export function commentText(written: string, draft: Pick<ThreadsDraft, 'theme' | 'exerciseId'>, template?: string): { text: string; warning?: string } {
+  const parts: CommentParts = { 小觀念: commentBody(written), 主題: draft.theme, 題號: draft.exerciseId, 標籤: THREADS_TOPIC_TAG };
+  const def = renderTemplate(DEFAULT_COMMENT_TEMPLATE, parts);
+  if (template === undefined || normalizeTemplate(template) === DEFAULT_COMMENT_TEMPLATE) return { text: def };
+  const text = renderTemplate(template, parts);
+  if ([...text].length <= THREADS_MAX_CHARS) return { text };
+  return { text: def, warning: `站長的留言格式套完 ${[...text].length} 字，超過 ${THREADS_MAX_CHARS}，這天的留言改用內建格式` };
+}
+
 // ─── 內容檢查 ───────────────────────────────────────────────────────────────
 
 /** 玩家名字（只拿來擋，不輸出）：games_cache.json 的 players 加上 player_aliases.json 兩邊。 */
@@ -244,6 +259,8 @@ export interface PrepareDeps {
   renderExtraImages?: (date: string, draft: ThreadsDraft) => { suffix: string; png: Buffer | null }[];
   /** 有圖的時候檢查：這張圖單獨發會不會不完整（回傳原因；null＝沒問題）。 */
   imageIncomplete?: (date: string, images: readonly string[]) => string | null;
+  /** 第一則留言的範本（threads_template.json 的 comment；不給＝內建格式）。 */
+  commentTemplate?: string;
   warnings?: string[];
 }
 
@@ -288,7 +305,9 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
 
   const chatgpt = readComment(deps.commentsDir, date);
   if (!chatgpt) warnings.push(`沒有 ChatGPT 寫的留言（${path.basename(deps.commentsDir)}/${date}.md），用備案`);
-  const comment = chatgpt ?? fallbackComment(draft);
+  const formatted = chatgpt ? commentText(chatgpt, draft, deps.commentTemplate) : null;
+  if (formatted?.warning) warnings.push(formatted.warning);
+  const comment = formatted?.text ?? fallbackComment(draft);
 
   let quote: DailyPlan['quote'] = null;
   if (draft.quoteYesterday) {
