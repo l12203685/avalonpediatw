@@ -19,7 +19,7 @@ import { STATS_SITE_URL } from '../stats/statsReplies';
 import { ROLE_ZH } from '../simulation/commands';
 import { logicModel } from '../simulation/logic';
 import { recordUrl } from '../simulation/recordsIndex';
-import { eventLines, identityLine, questLine, resultText, roleCode, seatLabel, pct } from '../simulation/replies';
+import { eventLines, questLine, resultText, roleCode, seatLabel, pct } from '../simulation/replies';
 import { TEAM_SIZES, eventIndexOfProposal, isRed, publicEvents, viewAt, type PublicEvent, type SimGame, type SimView } from '../simulation/scenario';
 import { maskOf, seatList, seatsOfMask, teamDigits } from '../simulation/seats';
 import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsPick } from './plan';
@@ -88,15 +88,61 @@ export function pickView(game: SimGame, pick: ThreadsPick): PickView {
   return { game, pick, exerciseId: exerciseIdOfPick(pick, game), view, shown: view.events };
 }
 
+/** 「你是」那一行的三段之間、座位之間的分隔（站長 11/18：「格式改成 "你是 {#}家 {身分} | {內建資訊} | {要做的決策}"」）。 */
+export const VIEWER_SEP = ' | ';
+export const VIEWER_SEAT_SEP = ' & ';
+
+/** 夜裡知道的資訊（照 sightFor 的知識模型：紅方看到的隊友不含奧伯倫、也不知道隊友的角色；梅林看不到莫德雷德）。 */
+export function nightInfo(sight: SimView['sight']): string {
+  const seats = (xs: readonly number[]): string => xs.map(seatLabel).join(VIEWER_SEAT_SEP);
+  switch (sight.kind) {
+    case 'loyal': return '無其他資訊';
+    case 'percival': return `看到 ${seats(sight.thumbs)}`;
+    case 'merlin': return sight.seen.length ? `看到紅方 ${seats(sight.seen)}` : '沒看到紅方';
+    case 'evil': return sight.mates.length ? `隊友 ${seats(sight.mates)}` : '看不到隊友';
+    case 'oberon': return '不知道隊友';
+  }
+}
+
+/** 要做的決策：提議題「派 N 人」、刺殺題「刺殺梅林」（題目只有這兩種）。 */
+export function decisionPhrase(game: SimGame, pick: Pick<ThreadsPick, 'proposal'>): string {
+  if (pick.proposal === null) return '刺殺梅林';
+  return `派 ${TEAM_SIZES[game.proposals[pick.proposal].round - 1]} 人`;
+}
+
+/** 刺殺階段的隊友順序（站長的例子：莫甘娜、莫德雷德、奧伯倫）。 */
+const ASSASSINATION_MATE_ORDER: readonly Role[] = ['morgana', 'mordred', 'oberon', 'minion', 'assassin'];
+
 /**
- * 結尾那一行（站長 11/17 改的草稿：「輪到你 5家 忠臣 派 3 人，你會派誰？」）：座位、角色、要做的事，一行；
- * 第幾局第幾次、強制出發不另外寫（標題和牌譜看得出來）。
+ * 刺殺階段刺客知道的隊友：其他紅方全部，含奧伯倫，帶角色。站長 11/18：「規則上 刺殺階段只有刺客可以開牌 但只有邪惡方可以發言討論
+ * 奧伯倫屬於邪惡方 所以其實等同四位邪惡方開牌討論」。只用在刺殺題（決策＝刺殺梅林）；提議題照夜裡的知識（nightInfo）。
  */
-function decisionWords(game: SimGame, pick: ThreadsPick): string {
-  const who = `${seatLabel(pick.seat)} ${ROLE_ZH[game.seatRoles[pick.seat - 1]]}`;
-  if (pick.proposal === null) return `三藍，輪到你 ${who} 刺殺，誰是梅林？`;
-  const size = TEAM_SIZES[game.proposals[pick.proposal].round - 1];
-  return `輪到你 ${who} 派 ${size} 人，你會派誰？`;
+export function assassinationMates(game: SimGame, seat: number): string {
+  const mates = game.seatRoles
+    .map((role, i) => ({ role, seat: i + 1 }))
+    .filter((m) => m.seat !== seat && isRed(m.role))
+    .sort((a, b) => ASSASSINATION_MATE_ORDER.indexOf(a.role) - ASSASSINATION_MATE_ORDER.indexOf(b.role) || a.seat - b.seat);
+  return mates.length ? `隊友 ${mates.map((m) => `${seatLabel(m.seat)}${ROLE_ZH[m.role]}`).join(VIEWER_SEAT_SEP)}` : '沒有隊友';
+}
+
+/**
+ * 「你是」那一行，貼文與題目卡共用（站長 11/18：「文字顯示 "你是 {#}家 {身分}, {內建資訊}, {要做的決策}" 像是 "你是 5家 忠臣, 無其他資訊, 派 3 人"
+ * "你是 0家 派西維爾, 看到 4家 & 9家, 派 4 人" "你是 3家 刺客, 隊友 5家莫甘娜 & 8家莫德雷得 & 7家奧伯倫, 刺殺梅林"」，同日再改「格式改成
+ * "你是 {#}家 {身分} | {內建資訊} | {要做的決策}"」）：例「你是 0家 派西維爾 | 看到 4家 & 9家 | 派 4 人」。
+ * 內建資訊：提議題是夜裡的知識（nightInfo）；刺殺題的紅方是刺殺階段四位紅方開牌討論後的隊友（assassinationMates）。
+ */
+export function viewerLine(game: SimGame, pick: Pick<ThreadsPick, 'seat' | 'proposal'>, sight: SimView['sight']): string {
+  const role = game.seatRoles[pick.seat - 1];
+  const info = pick.proposal === null && isRed(role) ? assassinationMates(game, pick.seat) : nightInfo(sight);
+  return [`你是 ${seatLabel(pick.seat)} ${ROLE_ZH[role]}`, info, decisionPhrase(game, pick)].join(VIEWER_SEP);
+}
+
+/**
+ * 結尾那一行：只留問題（站長 11/18 把座位、角色、派幾人移到開頭的「你是」那一行，原本的「輪到你 5家 忠臣 派 3 人，你會派誰？」就重複了）。
+ * 刺殺題留「三藍」（局面，開頭那一行沒有）。
+ */
+function decisionWords(pick: ThreadsPick): string {
+  return pick.proposal === null ? '三藍，誰是梅林？' : '你會派誰？';
 }
 
 /** 事件行太長時的縮短版：前面幾局只留任務結果和湖，當下這一局的派票全留。 */
@@ -125,17 +171,16 @@ export const SEE_IMAGE_LINE = '（完整局面看圖）';
 
 /** 題目的部分：開頭（身分）、牌譜的三種長度（完整 → 縮短 → 看圖）、結尾（輪到你、怎麼作答）。 */
 export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId: string; seat: number } } = {}): { head: string[]; bodies: string[][]; tail: string[] } {
-  const role = pv.game.seatRoles[pv.pick.seat - 1];
   const head = [
     ...(opts.continuesFrom ? [continuesLine(opts.continuesFrom, pv.pick.seat)] : []),
-    identityLine(pv.pick.seat, role, pv.view.sight),
+    viewerLine(pv.game, pv.pick, pv.view.sight),
   ];
   const noPrior = !pv.shown.some((e) => e.kind === 'proposal');
   const bodies: string[][] = noPrior
     ? [[`${roundHeader(1)} 第一個隊長，前面沒有派票`]]
     : [bracketRounds(eventLines(pv.shown, pv.pick.seat, pv.game)), compactLines(pv), [SEE_IMAGE_LINE]];
   // 站長 11/17：「文字部分則是主題 & 牌譜」——題目只留身分、牌譜、輪到你；作答方式不另寫一行（完整局面在圖裡）。
-  return { head, bodies, tail: [decisionWords(pv.game, pv.pick)] };
+  return { head, bodies, tail: [decisionWords(pv.pick)] };
 }
 
 /** A 的結尾：空一行、主題標籤（站長 11/17 改的草稿拿掉了「題號 …」那一行；題號在圖上和狀態檔）。 */

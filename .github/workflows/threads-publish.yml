@@ -3,7 +3,9 @@
 # - 預設只試跑：repo 變數 THREADS_PUBLISH 是 '1' 才真的發文；試跑把要發的內容放在這次執行的摘要與附件。
 # - 每小時醒一次，到了台北時間 THREADS_POST_HOUR（預設 12）點以後才做事；同一天發過就不再發。
 # - GitHub 的排程常晚好幾小時（甚至不跑），所以 Render 上的伺服器每天 THREADS_POST_HOUR:07 用 mode=auto 觸發一次
-#   （packages/server/src/services/threadsDispatch.ts）；排程留著當備援。兩邊都受 THREADS_LIVE_FROM 的閘門管。
+#   （packages/server/src/services/threadsDispatch.ts）；排程留著當備援。兩邊都受正式發起始日的閘門管。
+# - 正式發的起始日與暫停：站長在主控台設定，Claude 每天同步寫進 packages/server/threads_live.json（liveFrom、paused）。
+#   repo 變數 THREADS_LIVE_FROM 有設就蓋過檔案的 liveFrom（選用，相容舊設定）；paused=true 時自動的執行一律只試跑。
 # - 權杖只放 secrets（THREADS_ACCESS_TOKEN，選填 THREADS_USER_ID）；這個 repo 的執行紀錄是公開的，任何步驟都不印權杖。
 # - 發文狀態與圖放在 threads-state 分支（state/<日期>.json、images/<日期>.png）；圖用 raw.githubusercontent.com 的公開網址給 Threads 抓。
 # - Instagram 同步（選用）：有 secret INSTAGRAM_ACCESS_TOKEN 才會準備；repo 變數 INSTAGRAM_PUBLISH 是 '1' 才真的發。
@@ -45,6 +47,22 @@ jobs:
       STATE_DIR: /tmp/threads-state
       OUT_DIR: /tmp/threads-out
     steps:
+      # 執行當下讀 main 上最新的 threads_live.json（還沒 checkout，所以用 API 讀單一檔）。不用這次執行的 commit：
+      # 排隊或重跑的執行 commit 是舊的，會漏掉後來同步進 main 的 paused=true。發文的程式照舊用這次執行的 commit。
+      # 讀不到就不留檔：閘門看不到合法的檔＝自動的執行只試跑（有設 repo 變數也一樣）。
+      - name: 讀正式發的設定（packages/server/threads_live.json）
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LIVE_FILE: ${{ runner.temp }}/threads_live.json
+        run: |
+          set -euo pipefail
+          if ! gh api -H 'Accept: application/vnd.github.raw+json' "repos/${REPO}/contents/packages/server/threads_live.json?ref=main" > "$LIVE_FILE" 2>/dev/null; then
+            rm -f "$LIVE_FILE"
+            echo "::warning::讀不到 packages/server/threads_live.json，自動的執行只試跑"
+            exit 0
+          fi
+          jq -c '{liveFrom, paused}' "$LIVE_FILE" || echo "::warning::threads_live.json 不是合法的 JSON，自動的執行只試跑"
+
       - name: 決定日期與模式
         id: gate
         env:
@@ -56,6 +74,7 @@ jobs:
           HAS_IG: ${{ secrets.INSTAGRAM_ACCESS_TOKEN != '' }}
           IG_PUBLISH: ${{ vars.INSTAGRAM_PUBLISH }}
           LIVE_FROM: ${{ vars.THREADS_LIVE_FROM }}
+          LIVE_FILE: ${{ runner.temp }}/threads_live.json
         run: |
           set -euo pipefail
           DATE="${IN_DATE:-$(TZ=Asia/Taipei date +%F)}"
@@ -69,13 +88,41 @@ jobs:
           if [ "${HAS_IG:-}" = true ] && [ "$MODE" != record-manual ]; then
             if [ "${IN_MODE:-auto}" != dry-run ] && [ "${IG_PUBLISH:-}" = 1 ]; then IG=live; else IG=dry-run; fi
           fi
-          # 正式發的起始日（站長 11/17：圖、文字、小觀念確認前不要發）：沒設 THREADS_LIVE_FROM，或今天／要發的日期早於那天，
-          # 自動的觸發一律只試跑。自動＝排程，或 mode=auto 的手動觸發（伺服器每天觸發用的就是這個，services/threadsDispatch.ts）。
+          # 正式發的起始日（站長 11/17：圖、文字、小觀念確認前不要發）：站長在主控台設，Claude 每天同步進 threads_live.json。
+          # 起始日＝repo 變數 THREADS_LIVE_FROM（有設就蓋過，相容舊設定），沒設就用檔案的 liveFrom；null／空白＝只試跑。
+          # 自動的觸發只有在 threads_live.json 讀得到、是一個 JSON 物件、paused 是布林值 false 時才可能正式發；
+          # 讀不到、壞掉、paused 沒有或不是布林值都只試跑，有設 repo 變數也一樣（變數只蓋過起始日）。
+          # 沒有起始日（或不是真的日期，例如 2026-02-30）、今天／要發的日期早於那天，也只試跑。
+          # 自動＝排程，或 mode=auto 的手動觸發（伺服器每天觸發用的就是這個，services/threadsDispatch.ts）。
           # 手動選 dry-run、record-manual 本來就不會正式發，照常可以用。
+          # 真的日期才算（2026-02-30、2025-02-29 不算）：用 jq 算每個月有幾天，不靠 GNU date，macOS 上跑測試也一樣。
+          # 含空白或換行（例如 "2026-01-01\n"）一律不算；jq 的 $ 會吃掉結尾的換行，所以用 \A…\z。
+          real_date() {
+            case "$1" in *[[:space:]]*) return 1 ;; esac
+            [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || return 1
+            jq -en --arg d "$1" '$d | capture("\\A(?<y>[0-9]{4})-(?<m>[0-9]{2})-(?<d>[0-9]{2})\\z") | (.y | tonumber) as $y | (.m | tonumber) as $m | (.d | tonumber) as $n
+              | (($y % 4 == 0) and (($y % 100 != 0) or ($y % 400 == 0))) as $leap
+              | $m >= 1 and $m <= 12 and $n >= 1 and $n <= ([31, (if $leap then 29 else 28 end), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][$m - 1])' >/dev/null 2>&1
+          }
+          FILE_OK=0; FILE_LIVE_FROM=""; PAUSED=unknown
+          # 先用嚴格的 JSON 解析（jq 會收 NaN 之類不是 JSON 的值），不合格就當壞檔＝只試跑。
+          strict_json() { python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"), parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))' "$1" >/dev/null 2>&1; }
+          if [ -s "${LIVE_FILE:-}" ] && strict_json "$LIVE_FILE" && P=$(jq -rs 'if length == 1 and (.[0] | type) == "object" and (.[0].paused | type) == "boolean" then (.[0].paused | tostring) else error("bad") end' "$LIVE_FILE" 2>/dev/null); then
+            FILE_OK=1; PAUSED="$P"
+            # 在 jq 裡就檢查原本的字串（bash 的 $(…) 會去掉結尾換行，"2026-01-01\n" 會被洗成合法的樣子）；不合格就給 invalid。
+            FILE_LIVE_FROM=$(jq -r 'if .liveFrom == null then "" elif (.liveFrom | type) == "string" and (.liveFrom | test("\\A[0-9]{4}-[0-9]{2}-[0-9]{2}\\z")) then .liveFrom else "invalid" end' "$LIVE_FILE")
+          else
+            echo "::warning::threads_live.json 讀不到、不是合法的 JSON，或 paused 不是 true/false：自動的執行只試跑"
+          fi
+          EFFECTIVE_LIVE_FROM="${LIVE_FROM:-$FILE_LIVE_FROM}"
+          if [ -n "$EFFECTIVE_LIVE_FROM" ] && ! real_date "$EFFECTIVE_LIVE_FROM"; then
+            echo "::warning::正式發的起始日不是真的日期（$EFFECTIVE_LIVE_FROM），當作沒設＝只試跑"
+            EFFECTIVE_LIVE_FROM=""
+          fi
           AUTO=0
           if [ "$EVENT" = schedule ] || [ "${IN_MODE:-auto}" = auto ]; then AUTO=1; fi
           TODAY=$(TZ=Asia/Taipei date +%F)
-          if [ "$AUTO" = 1 ] && { [ -z "${LIVE_FROM:-}" ] || [[ "$DATE" < "$LIVE_FROM" ]] || [[ "$TODAY" < "$LIVE_FROM" ]]; }; then
+          if [ "$AUTO" = 1 ] && { [ "$FILE_OK" != 1 ] || [ "$PAUSED" != false ] || [ -z "$EFFECTIVE_LIVE_FROM" ] || [[ "$DATE" < "$EFFECTIVE_LIVE_FROM" ]] || [[ "$TODAY" < "$EFFECTIVE_LIVE_FROM" ]]; }; then
             if [ "$MODE" = live ]; then MODE=dry-run; fi
             if [ "$IG" = live ]; then IG=dry-run; fi
           fi
@@ -91,7 +138,8 @@ jobs:
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "ig=$IG" >> "$GITHUB_OUTPUT"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
-          echo "日期 $DATE，模式 $MODE，IG $IG，執行 $RUN"
+          echo "live_from=$EFFECTIVE_LIVE_FROM" >> "$GITHUB_OUTPUT"
+          echo "日期 $DATE，模式 $MODE，IG $IG，執行 $RUN，起始日 ${EFFECTIVE_LIVE_FROM:-（沒設）}，暫停 $PAUSED"
 
       - name: 取出 threads-state 分支
         if: steps.gate.outputs.run == '1'
@@ -202,8 +250,8 @@ jobs:
         env:
           THREADS_MODE: ${{ steps.gate.outputs.mode }}
           DATE: ${{ steps.gate.outputs.date }}
-          # 系列起點（正式發的第一天）；昨天有沒有真的貼文看 threads-state
-          THREADS_LIVE_FROM: ${{ vars.THREADS_LIVE_FROM }}
+          # 系列起點（正式發的第一天，閘門算好的：repo 變數優先，否則 threads_live.json）；昨天有沒有真的貼文看 threads-state
+          THREADS_LIVE_FROM: ${{ steps.gate.outputs.live_from }}
           IG_PREVIEW: ${{ steps.gate.outputs.ig != 'off' && '1' || '0' }}
         run: npx tsx scripts/threadsPublish.ts prepare --date "$DATE" --state-dir "$STATE_DIR" --out "$OUT_DIR"
 
@@ -298,7 +346,7 @@ jobs:
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           DATE: ${{ steps.gate.outputs.date }}
           POST_ID: ${{ inputs.post_id }}
-          THREADS_LIVE_FROM: ${{ vars.THREADS_LIVE_FROM }}
+          THREADS_LIVE_FROM: ${{ steps.gate.outputs.live_from }}
         run: npx tsx scripts/threadsPublish.ts record-manual --date "$DATE" --state-dir "$STATE_DIR" ${POST_ID:+--post-id "$POST_ID"}
 
       - name: 記下發文狀態

@@ -1111,7 +1111,7 @@ describe('workflow', () => {
     expect(last?.body).toMatch(/fetch -q origin threads-state && git -C "\$STATE_DIR" merge -q --no-edit FETCH_HEAD/);
   });
 
-  describe('go-live gate (THREADS_LIVE_FROM) also covers the server dispatch (workflow_dispatch mode=auto)', () => {
+  describe('go-live gate (threads_live.json, THREADS_LIVE_FROM override) also covers the server dispatch (workflow_dispatch mode=auto)', () => {
     // 把「決定日期與模式」那一步的 shell 拿出來真的跑一次，看 mode／ig 的結果。
     const gateScript = (): string => {
       const gate = steps().find((s) => s.id === 'gate');
@@ -1121,13 +1121,18 @@ describe('workflow', () => {
     let hasBash = true;
     try { execFileSync('bash', ['-c', 'true'], { stdio: 'ignore' }); } catch { hasBash = false; }
     const today = new Date(Date.now() + 8 * 3600_000).toISOString().slice(0, 10);
-    const runGate = (env: Record<string, string>): Record<string, string> => {
+    let hasJq = true;
+    try { execFileSync('jq', ['--version'], { stdio: 'ignore' }); } catch { hasJq = false; }
+    // file：threads_live.json 的內容（物件會轉成 JSON，字串照寫）；沒給＝沒有檔。
+    const runGate = (env: Record<string, string>, file?: unknown): Record<string, string> => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'threads-gate-'));
       const out = path.join(dir, 'out');
       fs.writeFileSync(out, '');
+      const liveFile = path.join(dir, 'threads_live.json');
+      if (file !== undefined) fs.writeFileSync(liveFile, typeof file === 'string' ? file : JSON.stringify(file));
       try {
         execFileSync('bash', ['-c', gateScript()], {
-          env: { PATH: process.env.PATH ?? '', GITHUB_OUTPUT: out, PUBLISH: '1', HAS_IG: 'true', IG_PUBLISH: '1', POST_HOUR: '12', IN_DATE: '', IN_MODE: '', LIVE_FROM: '', ...env },
+          env: { PATH: process.env.PATH ?? '', GITHUB_OUTPUT: out, PUBLISH: '1', HAS_IG: 'true', IG_PUBLISH: '1', POST_HOUR: '12', IN_DATE: '', IN_MODE: '', LIVE_FROM: '', LIVE_FILE: liveFile, ...env },
           stdio: ['ignore', 'pipe', 'pipe'],
         });
         return Object.fromEntries(fs.readFileSync(out, 'utf8').trim().split('\n').map((l) => l.split('=') as [string, string]));
@@ -1151,17 +1156,139 @@ describe('workflow', () => {
       expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', IN_DATE: '2026-01-01', LIVE_FROM: '2026-02-01' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
     });
 
-    it.skipIf(!hasBash)('workflow_dispatch mode=auto goes live on and after THREADS_LIVE_FROM', () => {
-      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: today })).toMatchObject({ mode: 'live', ig: 'live', run: '1' });
-      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01' })).toMatchObject({ mode: 'live', ig: 'live' });
+    it.skipIf(!hasBash || !hasJq)('workflow_dispatch mode=auto goes live on and after THREADS_LIVE_FROM (with a readable, unpaused threads_live.json)', () => {
+      const ok = { liveFrom: null, paused: false };
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: today }, ok)).toMatchObject({ mode: 'live', ig: 'live', run: '1' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01' }, ok)).toMatchObject({ mode: 'live', ig: 'live' });
       // THREADS_PUBLISH 沒開就照舊只試跑
-      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01', PUBLISH: '0', IG_PUBLISH: '0' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'auto', LIVE_FROM: '2026-01-01', PUBLISH: '0', IG_PUBLISH: '0' }, ok)).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
     });
 
     it.skipIf(!hasBash)('schedule is still gated; explicit manual modes keep working', () => {
       expect(runGate({ EVENT: 'schedule', LIVE_FROM: '' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
       expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'dry-run', LIVE_FROM: '' })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1' });
       expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'record-manual', IN_DATE: '2026-11-17', LIVE_FROM: '' })).toMatchObject({ mode: 'record-manual', ig: 'off', run: '1', date: '2026-11-17' });
+    });
+
+    const auto = { EVENT: 'workflow_dispatch', IN_MODE: 'auto' };
+
+    it.skipIf(!hasBash || !hasJq)('threads_live.json liveFrom null (or missing / broken file) keeps automatic runs a dry run', () => {
+      for (const file of [{ liveFrom: null, paused: false }, {}, undefined, 'not json', { liveFrom: 'soon', paused: false }]) {
+        expect(runGate(auto, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1', live_from: '' });
+        expect(runGate({ EVENT: 'schedule' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      }
+    });
+
+    it.skipIf(!hasBash || !hasJq)('threads_live.json liveFrom goes live on and after that date (and is passed on as live_from)', () => {
+      expect(runGate(auto, { liveFrom: today, paused: false })).toMatchObject({ mode: 'live', ig: 'live', run: '1', live_from: today });
+      expect(runGate(auto, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2026-01-01' });
+      expect(runGate(auto, { liveFrom: '2999-01-01', paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '2999-01-01' });
+      // 要發的日期早於起始日也只試跑
+      expect(runGate({ ...auto, IN_DATE: '2026-01-01' }, { liveFrom: '2026-02-01', paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      // THREADS_PUBLISH／INSTAGRAM_PUBLISH 沒開照舊只試跑
+      expect(runGate({ ...auto, PUBLISH: '0', IG_PUBLISH: '0' }, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+    });
+
+    it.skipIf(!hasBash || !hasJq)('paused: true forces a dry run for automatic runs (even with the repo variable); manual modes unchanged', () => {
+      expect(runGate(auto, { liveFrom: '2026-01-01', paused: true })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1' });
+      expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, { liveFrom: null, paused: true })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      expect(runGate({ EVENT: 'schedule' }, { liveFrom: '2026-01-01', paused: true })).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      expect(runGate({ EVENT: 'workflow_dispatch', IN_MODE: 'record-manual', IN_DATE: '2026-11-17' }, { liveFrom: '2026-01-01', paused: true })).toMatchObject({ mode: 'record-manual', ig: 'off', run: '1' });
+    });
+
+    it.skipIf(!hasBash || !hasJq)('the THREADS_LIVE_FROM repo variable overrides the file liveFrom', () => {
+      expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, { liveFrom: null, paused: false })).toMatchObject({ mode: 'live', live_from: '2026-01-01' });
+      expect(runGate({ ...auto, LIVE_FROM: '2999-01-01' }, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '2999-01-01' });
+      expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, { liveFrom: '2999-01-01', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2026-01-01' });
+    });
+
+    it.skipIf(!hasBash || !hasJq)('with the repo variable set, an unreadable / broken file or a missing / non-boolean paused still forces a dry run', () => {
+      const bad: unknown[] = [undefined, '', 'not json', '{"liveFrom":null,"paused":false', {}, { liveFrom: '2026-01-01' }, { liveFrom: null, paused: 'false' }, { liveFrom: null, paused: null }, { liveFrom: null, paused: 0 },
+        [{ liveFrom: null, paused: false }], 'null', '{"liveFrom":null,"paused":false}\n{"liveFrom":null,"paused":true}',
+        // jq 收、但不是合法 JSON 的值
+        '{"liveFrom":null,"paused":false,"note":NaN}', '{"liveFrom":null,"paused":false,"note":Infinity}', '{"liveFrom":null,"paused":false,"note":-Infinity}'];
+      for (const file of bad) {
+        expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', run: '1' });
+        expect(runGate({ EVENT: 'schedule', LIVE_FROM: '2026-01-01' }, file)).toMatchObject({ mode: 'dry-run', ig: 'dry-run' });
+      }
+      // 同樣的變數，檔案讀得到且 paused=false 才正式發
+      expect(runGate({ ...auto, LIVE_FROM: '2026-01-01' }, { liveFrom: null, paused: false })).toMatchObject({ mode: 'live', ig: 'live' });
+    });
+
+    it.skipIf(!hasBash || !hasJq)('an impossible calendar date (file or repo variable) counts as unset: dry run, no live_from', () => {
+      for (const d of ['2026-02-30', '2026-13-01', '2025-02-29', '2026-04-31', '2026-00-10']) {
+        expect(runGate(auto, { liveFrom: d, paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+        expect(runGate({ ...auto, LIVE_FROM: d }, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+      }
+      // 真的閏日照常
+      expect(runGate(auto, { liveFrom: '2024-02-29', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2024-02-29' });
+    });
+
+    it.skipIf(!hasBash || !hasJq)('a liveFrom with trailing / leading whitespace or a newline (file or repo variable) counts as unset', () => {
+      for (const d of ['2026-01-01\n', '2026-01-01\n\n', ' 2026-01-01', '2026-01-01 ', '2026-01-01\t', '\n2026-01-01', '2026-01-01\r']) {
+        expect(runGate(auto, { liveFrom: d, paused: false }), JSON.stringify(d)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+        expect(runGate({ ...auto, LIVE_FROM: d }, { liveFrom: '2026-01-01', paused: false }), JSON.stringify(d)).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+      }
+      // 非字串的 liveFrom 也不算
+      expect(runGate(auto, { liveFrom: 20260101, paused: false })).toMatchObject({ mode: 'dry-run', ig: 'dry-run', live_from: '' });
+      // 乾淨的同一天照常
+      expect(runGate(auto, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2026-01-01' });
+    });
+
+    it('the whole workflow file is valid YAML (a script line at column 1 would end the run block)', () => {
+      const yml = fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+      // 每一行不是空行就要縮排在 run: | 的區塊裡；最上層的鍵只有 name/on/permissions/concurrency/jobs/env
+      const topLevel = yml.split('\n').filter((l) => l.length > 0 && !/^\s/.test(l) && !l.startsWith('#'));
+      for (const l of topLevel) expect(l, l).toMatch(/^(name|on|permissions|concurrency|jobs|env|defaults|run-name):/);
+      let hasPyYaml = true;
+      try { execFileSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }); } catch { hasPyYaml = false; }
+      if (hasPyYaml) {
+        execFileSync('python3', ['-c', 'import sys, yaml; yaml.safe_load(sys.stdin)'], { input: yml });
+      }
+    });
+
+    it('the calendar check does not depend on GNU date (portable: jq only)', () => {
+      const script = gateScript();
+      expect(script).not.toMatch(/\bdate\s+(?:-u\s+)?-d\b/);
+      expect(script).not.toContain('--date');
+      expect(script).toMatch(/real_date\(\) \{[\s\S]*jq -en --arg d "\$1"/);
+    });
+
+    it.skipIf(!hasBash || !hasJq)('real_date accepts real dates and rejects impossible ones (leap years, month lengths)', () => {
+      const fn = /\n( *)real_date\(\) \{[\s\S]*?\n\1\}/.exec(gateScript())?.[0] ?? '';
+      expect(fn).not.toBe('');
+      const ok = (d: string): boolean => {
+        try { execFileSync('bash', ['-c', `${fn}\nreal_date "$1"`, 'x', d], { env: { PATH: process.env.PATH ?? '' }, stdio: 'ignore' }); return true; } catch { return false; }
+      };
+      for (const d of ['2024-02-29', '2000-02-29', '2026-01-31', '2026-04-30', '2026-12-31', '2026-11-18']) expect(ok(d), d).toBe(true);
+      for (const d of ['2025-02-29', '1900-02-29', '2026-02-30', '2026-04-31', '2026-13-01', '2026-00-10', '2026-01-00', '2026-1-01', '20260101', '', 'x2026-01-01', '2026-01-01\n', ' 2026-01-01', '2026-01-01 ', '2026-01-01\t']) expect(ok(d), JSON.stringify(d)).toBe(false);
+    });
+
+    it('reads threads_live.json before the gate and passes the gate\'s effective date to every script (not the raw variable)', () => {
+      const all = steps();
+      const gateIdx = all.findIndex((s) => s.id === 'gate');
+      // 執行當下讀 main 上最新的（排隊、重跑的執行也看得到後來同步的 paused），不是這次執行的舊 commit
+      const read = all.findIndex((s) => s.body.includes('contents/packages/server/threads_live.json?ref=main"'));
+      expect(read).toBeGreaterThanOrEqual(0);
+      expect(read).toBeLessThan(gateIdx);
+      expect(all[read].body).not.toContain('GITHUB_SHA');
+      expect(all[read].body).toContain('rm -f "$LIVE_FILE"'); // 讀不到＝不留檔（閘門只試跑）
+      expect(gateScript()).toContain('{ [ "$FILE_OK" != 1 ] || [ "$PAUSED" != false ] ||');
+      expect(all[read].body).toContain('LIVE_FILE: ${{ runner.temp }}/threads_live.json');
+      expect(all[gateIdx].body).toContain('LIVE_FILE: ${{ runner.temp }}/threads_live.json');
+      expect(gateScript()).toContain('echo "live_from=$EFFECTIVE_LIVE_FROM" >> "$GITHUB_OUTPUT"');
+      const users = all.filter((s) => s.body.includes('THREADS_LIVE_FROM:'));
+      expect(users.map((s) => s.name)).toEqual(['產生今天的貼文並檢查', '補記手動發的那一天']);
+      for (const s of users) expect(s.body).toContain('THREADS_LIVE_FROM: ${{ steps.gate.outputs.live_from }}');
+      const yml = fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+      expect(yml.match(/vars\.THREADS_LIVE_FROM/g)).toHaveLength(1); // 只有閘門讀 repo 變數
+    });
+
+    it('the committed threads_live.json has the shape the gate and the console sync expect', () => {
+      const live = JSON.parse(fs.readFileSync(path.join(serverRoot, 'threads_live.json'), 'utf8')) as { liveFrom: unknown; paused: unknown; note: unknown };
+      expect(live.liveFrom === null || (typeof live.liveFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(live.liveFrom))).toBe(true);
+      expect(typeof live.paused).toBe('boolean');
+      expect(typeof live.note).toBe('string');
     });
   });
 

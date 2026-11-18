@@ -32,9 +32,9 @@ import path from 'path';
 import { WEEKLY_CHART_FONT_FAMILY, WEEKLY_CHART_FONT_FILE, escapeXml } from '../stats/weeklyChart';
 import { ROLE_ZH } from '../simulation/commands';
 import { resultText } from '../simulation/replies';
-import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, type PublicEvent } from '../simulation/scenario';
+import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, isRed, type PublicEvent } from '../simulation/scenario';
 import { seatChar } from '../simulation/seats';
-import type { PickView } from './draft';
+import { viewerLine, type PickView } from './draft';
 
 const W = 1080;
 /** 深色卡片的配色（底色接近網站深色介面與 IG 截圖的黑）。 */
@@ -81,8 +81,10 @@ function rect(x: number, y: number, w: number, h: number, fill: string, extra = 
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"${extra}/>`;
 }
 
-/** 阿瓦隆百科的標誌（packages/web/public/logo.png 的複本）：卡片背景的浮水印與標題列右邊的小圖示。 */
+/** 阿瓦隆百科的標誌（packages/web/public/logo.png 的複本）：卡片背景的浮水印與標題列左上角的標誌。 */
 export const THREADS_LOGO_FILE = path.resolve(__dirname, '..', '..', '..', 'assets', 'threads', 'logo.png');
+/** 原圖的邊長（repo 裡最大的一份；網站的 icon-512 比它小）。 */
+const THREADS_LOGO_PX = 640;
 /** 浮水印的不透明度：看得出標誌，但不蓋過牌譜文字。 */
 const WATERMARK_OPACITY = 0.1;
 
@@ -140,26 +142,76 @@ function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}
 /** 標題列的高度（一行）。 */
 export const HEADER_H = 84;
 const HEADER_FONT = 38;
+/** 標題列標誌的邊長是字級的幾倍（站長 11/18：「發文貼圖 左上角logo 可以再大一點點 不然會有點糊掉」；原本＝字級）。 */
+export const HEADER_LOGO_SCALE = 1.5;
+/** 卡片轉 PNG 的倍率（svgToPng 沒有放大，1 張 SVG 單位＝1 像素）；標誌照這個像素數預先縮好。 */
+const RENDER_SCALE = 1;
+
+/**
+ * 標題列用的標誌：從 640×640 的原圖（assets/threads/logo.png）先縮成剛好要畫的像素大小，再放進 SVG。
+ * resvg 直接把 640 的圖畫成 38 像素時只取樣幾個點（沒有 mipmap），標誌裡的「阿瓦隆百科」會鋸齒、糊掉；
+ * 這裡每次縮一半（每一步都是 2:1 的雙三次取樣，等於自己做 mipmap），最後一步縮到目標大小，畫的時候就是 1:1 不再重取樣。
+ * resvg 載不到（只組 SVG 的測試）時用原圖。
+ */
+const headerLogoUris = new Map<number, string | null>();
+export function headerLogoUri(px: number): string | null {
+  const cached = headerLogoUris.get(px);
+  if (cached !== undefined) return cached;
+  const src = logoDataUri();
+  let out = src;
+  if (src) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { Resvg } = require('@resvg/resvg-js') as typeof import('@resvg/resvg-js');
+      const scaleTo = (uri: string, n: number): string => {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${n}" height="${n}" viewBox="0 0 ${n} ${n}"><image href="${uri}" width="${n}" height="${n}" image-rendering="optimizeQuality"/></svg>`;
+        return `data:image/png;base64,${new Resvg(svg).render().asPng().toString('base64')}`;
+      };
+      let uri = src;
+      let cur = THREADS_LOGO_PX;
+      while (Math.floor(cur / 2) >= px) {
+        cur = Math.floor(cur / 2);
+        uri = scaleTo(uri, cur);
+      }
+      out = cur === px ? uri : scaleTo(uri, px);
+    } catch {
+      out = src;
+    }
+  }
+  headerLogoUris.set(px, out);
+  return out;
+}
 
 /**
  * 標題列（站長 11/17：「title 可以寫 [左上角小 Logo 跟title 字體一樣大] 接 {阿瓦隆百科 ‧ 每日一題: 1-5 第一局尾派 [SV1Q8]} 這樣就好」）：
- * 一行，左上角小標誌（高度＝字級），接「阿瓦隆百科 ‧ 每日一題: <題目> [<局號>]」；續圖、答案卡在後面加「 · 牌譜 2/2」「 · 答案」。
+ * 一行，左上角標誌，接「阿瓦隆百科 ‧ 每日一題: <題目> [<局號>]」；續圖、答案卡在後面加「 · 牌譜 2/2」「 · 答案」。
+ * 站長 11/18「左上角logo 可以再大一點點 不然會有點糊掉」→ 標誌改成字級的 1.5 倍、和標題字上下置中，用預先縮好的圖（headerLogoUri）。
  */
 export function headerTitle(label: string, gameId: string, suffix = ''): string {
   return `阿瓦隆百科 ‧ 每日一題: ${label} [${gameId}]${suffix ? ` · ${suffix}` : ''}`;
 }
 
+/** 標題列標誌的邊長（字級 size 時）。 */
+export function headerLogoSize(size: number): number {
+  return Math.round(size * HEADER_LOGO_SCALE);
+}
+
 function headerBand(title: string): string {
-  const uri = logoDataUri();
+  const hasLogo = logoDataUri() !== null;
   const x0 = 40;
+  const gap = 16;
   // 字級跟標誌一起縮：放不下時兩個一起變小
-  const size = fitSize(title, HEADER_FONT, W - 40 - x0 - (uri ? HEADER_FONT + 14 : 0), 26);
+  const size = fitSize(title, HEADER_FONT, W - 40 - x0 - (hasLogo ? headerLogoSize(HEADER_FONT) + gap : 0), 26);
   const top = (HEADER_H - size) / 2;
+  const logo = headerLogoSize(size);
+  // 整數座標、整數邊長：預先縮好的圖 1:1 落在像素格上，不再被內插
+  const ly = Math.round((HEADER_H - logo) / 2);
+  const uri = hasLogo ? headerLogoUri(logo * RENDER_SCALE) : null;
   const icon = uri
-    ? `<defs><clipPath id="hl"><rect x="${x0}" y="${top}" width="${size}" height="${size}" rx="${size / 6}"/></clipPath></defs>` +
-      `<image href="${uri}" x="${x0}" y="${top}" width="${size}" height="${size}" clip-path="url(#hl)" class="header-logo"/>`
+    ? `<defs><clipPath id="hl"><rect x="${x0}" y="${ly}" width="${logo}" height="${logo}" rx="${Math.round(logo / 6)}"/></clipPath></defs>` +
+      `<image href="${uri}" x="${x0}" y="${ly}" width="${logo}" height="${logo}" clip-path="url(#hl)" image-rendering="optimizeQuality" class="header-logo"/>`
     : '';
-  const tx = uri ? x0 + size + 14 : x0;
+  const tx = uri ? x0 + logo + gap : x0;
   return rect(0, 0, W, HEADER_H, C.header) + icon + text(tx, top + size * 0.86, title, { size, fill: C.headerInk, weight: true });
 }
 
@@ -346,6 +398,14 @@ export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<numb
   return null;
 }
 
+/** 卡片上標「隊友」的座位：刺殺題的紅方＝其他紅方全部（含奧伯倫），其他題照夜裡的知識（sight.mates）。 */
+export function teammateSeats(pv: Pick<PickView, 'game' | 'pick' | 'view'>): number[] {
+  if (pv.pick.proposal === null && isRed(pv.game.seatRoles[pv.pick.seat - 1])) {
+    return pv.game.seatRoles.flatMap((r, i) => (i + 1 !== pv.pick.seat && isRed(r) ? [i + 1] : []));
+  }
+  return pv.view.sight.kind === 'evil' ? pv.view.sight.mates : [];
+}
+
 /** 每個座位的標記；known＝到那一刻為止看得到的列（題目卡算到出題那一刻）。 */
 export type SeatMark = { label: string; color: string; side?: 'good' | 'evil'; /** 還分不出來的拇指：半圈藍半圈紅 */ split?: boolean };
 export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, SeatMark> {
@@ -355,7 +415,9 @@ export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number,
   // 分不出來的拇指半圈藍半圈紅、打問號（站長 11/17：「派西維爾看到的姆指可以是半圈藍半圈紅 然後打問號」）。
   if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指?', color: C.ink, split: true }));
   if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red, side: 'evil' }));
-  if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red, side: 'evil' }));
+  // 隊友：提議題照夜裡的知識（看不到奧伯倫）；刺殺題四位紅方開牌討論，其他紅方全部標隊友（含奧伯倫；站長 11/18：「規則上 刺殺階段只有刺客可以開牌
+  // 但只有邪惡方可以發言討論 奧伯倫屬於邪惡方 所以其實等同四位邪惡方開牌討論」，和「你是」那一行的 assassinationMates 一致）。
+  for (const t of teammateSeats(pv)) marks.set(t, { label: '隊友', color: C.red, side: 'evil' });
   // 自己湖到的、湖中鏈推出的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉（夜裡已經知道的不重複）。
   const knowledge = lakeKnowledge(pv, known);
   for (const [seat, k] of knowledge.seats) {
@@ -858,28 +920,34 @@ function nextHint(k: number, total: number): string {
 }
 
 /**
- * 你的視角，一行：忠臣「你是 4家 忠臣」、派西「你是 5家 派西維爾（夜間看到 1、3 兩根拇指）」、
- * 梅林「你是 1家 梅林（看到紅 4、5、7，莫德雷德看不到）」、紅方「你是 3家 刺客（隊友 6、8）」、奧伯倫「（不知道隊友）」。
+ * 你的視角，一行（站長 11/18：「你是 {#}家 {身分} | {內建資訊} | {要做的決策}」，和貼文同一行，見 draft.viewerLine）：
+ * 例：「你是 5家 忠臣 | 無其他資訊 | 派 3 人」「你是 0家 派西維爾 | 看到 4家 & 9家 | 派 4 人」「你是 3家 刺客 | 隊友 5家莫甘娜 & 8家莫德雷德 & 7家奧伯倫 | 刺殺梅林」。
  */
-export function identityText(seat: number, role: keyof typeof ROLE_ZH, sight: PickView['view']['sight']): string {
-  const list = (xs: readonly number[]): string => xs.map(seatChar).join('、');
-  const extra = sight.kind === 'percival' ? `（夜間看到 ${list(sight.thumbs)} 兩根拇指）`
-    : sight.kind === 'merlin' ? `（看到紅 ${list(sight.seen)}，莫德雷德看不到）`
-      : sight.kind === 'evil' ? `（隊友 ${list(sight.mates)}）`
-        : sight.kind === 'oberon' ? '（不知道隊友）' : '';
-  return `你是 ${seatChar(seat)}家 ${ROLE_ZH[role]}${extra}`;
+export function identityText(pv: Pick<PickView, 'game' | 'pick' | 'view'>): string {
+  return viewerLine(pv.game, pv.pick, pv.view.sight);
 }
 
-/** 你的視角排成一行（字級 34 → 最小 26）；還是放不下才把括號裡的資訊換到第二行（不縮排）。 */
-export function identityLines(identity: string, max: number): { line: string; size: number }[] {
-  for (let size = 34; size >= 26; size -= 2) if (textWidth(identity, size) <= max) return [{ line: identity, size }];
-  const i = identity.indexOf('（');
-  if (i < 0) return [{ line: identity, size: fitSize(identity, 34, max, 20) }];
-  const [head, tail] = [identity.slice(0, i), identity.slice(i)];
-  return [
-    { line: head, size: 34 },
-    { line: tail, size: fitSize(tail, 30, max, 20) },
-  ];
+/** 「你是」那一行的字級：平常 34，放不下就一級一級縮，最小 20（約 60%）。 */
+export const IDENTITY_FONT = 34;
+export const IDENTITY_FONT_MIN = 20;
+/** 右欄（圓桌右邊）的左緣與寬度。 */
+const RIGHT_X = 40 + TABLE_BOX_W + 24;
+const RIGHT_MAX = W - 40 - RIGHT_X;
+/** 整列寫的時候（圓桌上面）的寬度與這一條的高度。 */
+const WIDE_MAX = W - 80;
+const WIDE_BAND_PAD = 30;
+
+/**
+ * 你的視角排版：永遠一行、不換行（站長 11/18：「紅方資訊好像有點多 看能不能縮小字體之類的 不要換行」）。
+ * 先放在圓桌右邊，字級 34 一級一級縮到 20；縮到 20 還放不下（例如刺殺題列出三個隊友和角色），
+ * 就改成整列寫在標題列下面、圓桌上面（寬 1000，字級同樣從 34 縮），圓桌與右欄往下移 band 的高度。
+ */
+export function identityLayout(pv: Pick<PickView, 'game' | 'pick' | 'view'>): { line: string; size: number; wide: boolean; band: number } {
+  const line = identityText(pv);
+  const size = fitSize(line, IDENTITY_FONT, RIGHT_MAX, IDENTITY_FONT_MIN);
+  if (textWidth(line, size) <= RIGHT_MAX) return { line, size, wide: false, band: 0 };
+  const wide = fitSize(line, IDENTITY_FONT, WIDE_MAX, IDENTITY_FONT_MIN);
+  return { line, size: wide, wide: true, band: wide + WIDE_BAND_PAD };
 }
 
 /** 題目卡的格子：整份牌譜到「輪到你」（放不下時從 cardSplit 的 cardStart 開始，前面的局在續圖）。 */
@@ -892,24 +960,21 @@ export function cardSheetRows(pv: PickView): SheetRow[] {
  */
 function rightColumn(pv: PickView, rows: readonly SheetRow[]): { svg: string; bottom: number } {
   const parts: string[] = [];
-  const role = pv.game.seatRoles[pv.pick.seat - 1];
-  const top = HEADER_H;
-  const rx = 40 + TABLE_BOX_W + 24;
-  const rmax = W - 40 - rx;
-  // 你的視角：一行寫完（站長 11/18：「你是 4家 忠臣 放同一行 (不用寫灰色小字了)」），太長才換行
-  let ty = top + 60;
-  const idLines = identityLines(identityText(pv.pick.seat, role, pv.view.sight), rmax);
-  for (const { line, size } of idLines) {
-    parts.push(text(rx, ty, line, { size, weight: true }));
-    ty += size + 14;
+  const id = identityLayout(pv);
+  const top = HEADER_H + id.band;
+  const rx = RIGHT_X;
+  const rmax = RIGHT_MAX;
+  // 你的視角＋要做的決策，一行（站長 11/18：「你是 {#}家 {身分} | {內建資訊} | {要做的決策}」；原本另一行白字的「輪到你派 N 人」併進來）。
+  // 不換行：太長就縮字，再放不下就整列寫在圓桌上面（identityLayout）。
+  let ty: number;
+  if (id.wide) {
+    parts.push(text(40, HEADER_H + 14 + id.size * 0.86 + 4, id.line, { size: id.size, weight: true, fill: C.ink }).replace('<text ', '<text class="viewer-line viewer-line-wide" '));
+    ty = top + 40;
+  } else {
+    ty = top + 60;
+    parts.push(text(rx, ty, id.line, { size: id.size, weight: true, fill: C.ink }).replace('<text ', '<text class="viewer-line" '));
+    ty += id.size + 18;
   }
-  // 題目：白色，放在「你是…」下面（站長 11/17：「"輪到你派 4 人"的字 顏色改白色 放到 "你是 5家 忠臣" 旁邊 或 下面」），
-  // 不寫第幾局第幾次、強制出發
-  const last = rows[rows.length - 1];
-  const prompt = last.kind === 'decision' && last.round !== null ? `輪到你派 ${last.size} 人` : '三藍：輪到你刺殺，誰是梅林？';
-  const pSize = fitSize(prompt, Math.min(32, idLines[0].size), rmax, 22);
-  parts.push(text(rx, ty, prompt, { size: pSize, weight: true, fill: C.ink }).replace('<text ', '<text class="ask-line" '));
-  ty += pSize + 18;
   // 任務格：你的視角下面（站長 11/18：從圓桌移到旁邊），寬度不夠就換行
   const chips = missionChips(rows, rx, ty - 10, rmax);
   parts.push(chips.svg);
@@ -935,7 +1000,7 @@ function rightColumn(pv: PickView, rows: readonly SheetRow[]): { svg: string; bo
 
 /** 題目卡的牌譜從哪裡開始：圓桌那一塊和右邊那一欄比較低的那個下面。 */
 export function cardTop(pv: PickView): number {
-  return Math.max(CARD_TOP_H, Math.ceil(rightColumn(pv, sheetRows(pv)).bottom) + 10);
+  return Math.max(CARD_TOP_H + identityLayout(pv).band, Math.ceil(rightColumn(pv, sheetRows(pv)).bottom) + 10);
 }
 
 /** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、整份牌譜（精簡表格）、題目。 */
@@ -947,8 +1012,8 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const layout = cardLayout(cardRows.length, cardTop(pv));
   const parts: string[] = [headerBand(headerTitle(cardLabel(pv), pv.pick.gameId))];
 
-  // 左：小圓桌；右：你的視角
-  const top = HEADER_H;
+  // 左：小圓桌；右：你的視角（你的視角整列寫的時候，圓桌往下移）
+  const top = HEADER_H + identityLayout(pv).band;
   const cx = 40 + TABLE_BOX_W / 2;
   const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
   parts.push(roundTable(pv, cx, cy, rows));

@@ -55,7 +55,7 @@ function makeGenerator(stateDir: string, warnings: string[]): ThreadsGenerator {
     bank,
     titles,
     readSaved: savedFromState(stateDir),
-    // 昨天真的有貼文（threads-state 有記錄）才引用昨天、附昨天的答案；系列起點用 repo 變數 THREADS_LIVE_FROM（正式發的第一天）。
+    // 昨天真的有貼文（threads-state 有記錄）才引用昨天、附昨天的答案；系列起點用 THREADS_LIVE_FROM（正式發的第一天；workflow 傳閘門算好的值）。
     hasPost: postedFromState(stateDir),
     startDate: arg('--start', process.env.THREADS_LIVE_FROM || process.env.THREADS_START_DATE || THREADS_START_DATE),
     pickOverride: (date) => picks.get(date) ?? null,

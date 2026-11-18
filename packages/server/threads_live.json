@@ -1,0 +1,5 @@
+{
+  "liveFrom": null,
+  "paused": false,
+  "note": "Threads／IG 正式發的開關：站長在主控台設定，Claude 每天的同步寫進這個檔（不要手改）。liveFrom＝正式發的第一天（YYYY-MM-DD，台北），null＝只試跑不發；paused＝true 時自動的執行一律只試跑。repo 變數 THREADS_LIVE_FROM 有設就蓋過 liveFrom（選用）。說明：docs/THREADS.md〈自動發佈〉。"
+}

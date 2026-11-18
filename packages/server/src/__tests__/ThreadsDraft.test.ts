@@ -17,9 +17,9 @@ vi.setConfig({ testTimeout: 60_000 });
 import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/bank';
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
-import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, type ThreadsDraft } from '../bots/threads/draft';
+import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, viewerLine, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, cardTop, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLayout, IDENTITY_FONT, IDENTITY_FONT_MIN, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, cardTop, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, teammateSeats, THREADS_ASSET_DIR, HEADER_H, headerLogoSize, headerLogoUri } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -37,6 +37,11 @@ beforeAll(() => {
 const gameOf = (pick: ThreadsPick) => bank.games[bank.byId.get(pick.gameId) as number];
 
 /** 題目卡加上續圖（一整組輪播的牌譜 SVG）：每一列都在其中一張。 */
+/** 題目卡「你是…」那一行（換行的接回去，用空白接）。 */
+function viewerText(svg: string): string {
+  return [...svg.matchAll(/<text class="viewer-line[^"]*"[^>]*><tspan[^>]*>([^<]+)</g)].map((m) => m[1]).join(' ').replace(/&amp;/g, '&');
+}
+
 function allSvg(pv: ReturnType<typeof pickView>, weekday: number): string {
   return [buildPuzzleSvg(pv, weekday), ...buildGridSvgs(pv, weekday)].join('\n');
 }
@@ -281,8 +286,22 @@ describe('image', () => {
     expect(svg).toContain(`阿瓦隆百科 ‧ 每日一題: 1-5 第一局尾派 [${pv.pick.gameId}]`);
     expect(svg).toContain('class="header-logo"');
     expect(svg).not.toContain('週三・1-5 尾派');
-    const png = renderPuzzlePng(pickView(gameOf(mon), mon), 1);
-    expect(png.subarray(1, 4).toString('ascii')).toBe('PNG');
+    // 站長 11/18「左上角logo 可以再大一點點 不然會有點糊掉」：標誌是字級的 1.5 倍、整數座標、和標題列上下置中，
+    // 放進去的是預先縮到剛好大小的 PNG（不是 640 的原圖）
+    const logo = /<image href="data:image\/png;base64,([^"]+)" x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)"[^>]*class="header-logo"/.exec(svg);
+    expect(logo).not.toBeNull();
+    const size = Number(logo![4]);
+    expect(size).toBe(headerLogoSize(38));
+    expect(size).toBe(57);
+    expect(Number(logo![3]) * 2 + size).toBeGreaterThanOrEqual(HEADER_H - 1);
+    expect(Number(logo![3]) * 2 + size).toBeLessThanOrEqual(HEADER_H + 1);
+    const png = Buffer.from(logo![1], 'base64');
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([size, size]); // IHDR 寬高＝畫的大小，1:1 不重取樣
+    expect(headerLogoUri(size)).toBe(`data:image/png;base64,${logo![1]}`);
+    const title = /<text x="(\d+)" y="[\d.]+" font-size="(\d+)"><tspan[^>]*>阿瓦隆百科 ‧ 每日一題/.exec(svg);
+    expect(Number(title![1])).toBeGreaterThanOrEqual(Number(logo![2]) + size + 10); // 標題往右移，不壓到標誌
+    const monPng = renderPuzzlePng(pickView(gameOf(mon), mon), 1);
+    expect(monPng.subarray(1, 4).toString('ascii')).toBe('PNG');
   });
 
   it('draws the record only up to the decision: no later vote, mission or lake reaches the renderer', () => {
@@ -505,7 +524,8 @@ describe('image', () => {
     for (let w = 0; w < 8 && !pv; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const v = pickView(gameOf(pick), pick);
-        if (sheetRows(v).some((r) => r.kind === 'proposal')) {
+        // 刺殺題的紅方看得到全部紅方（teammateSeats 看真的角色，不看換掉的 sight），只用提議題
+        if (pick.proposal !== null && sheetRows(v).some((r) => r.kind === 'proposal')) {
           // 當成梅林看：兩個不是自己的座位是看到的紅
           const others = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== v.pick.seat).slice(0, 2);
           pv = { ...v, view: { ...v.view, sight: { kind: 'merlin', seen: others } } } as typeof v;
@@ -697,19 +717,92 @@ describe('image', () => {
     expect(lakeKnowledge(mine, rows.filter((r) => r.kind !== 'decision' && r.round < lakeRound)).seats.has(target)).toBe(false);
   });
 
-  it('identity is one line without the gray subtitle: 忠臣 / 派西（夜間看到 X、Y 兩根拇指）/ 梅林（看到紅…，莫德雷德看不到）/ 紅方（隊友…）', () => {
-    expect(identityText(4, 'loyal', { kind: 'loyal' } as never)).toBe('你是 4家 忠臣');
-    expect(identityText(5, 'percival', { kind: 'percival', thumbs: [1, 3] } as never)).toBe('你是 5家 派西維爾（夜間看到 1、3 兩根拇指）');
-    expect(identityText(1, 'merlin', { kind: 'merlin', seen: [4, 5, 7] } as never)).toBe('你是 1家 梅林（看到紅 4、5、7，莫德雷德看不到）');
-    expect(identityText(3, 'assassin', { kind: 'evil', mates: [6, 10] } as never)).toBe('你是 3家 刺客（隊友 6、0）');
-    // 放不下才把括號換到第二行（不縮排）
-    const lines = identityLines('你是 1家 梅林（看到紅 4、5、7，莫德雷德看不到）', 460);
-    expect(lines.map((l) => l.line)).toEqual(['你是 1家 梅林', '（看到紅 4、5、7，莫德雷德看不到）']);
-    expect(identityLines('你是 4家 忠臣', 460)).toHaveLength(1);
+  it('identity is one line in the owner’s 11/18 format: 你是 {N}家 {角色} | {內建資訊} | {決策}', () => {
+    const game = (roles: string[]) => ({ seatRoles: roles, proposals: [{ round: 1 }, { round: 2 }] }) as never;
+    // 1 刺 2 娜 3 莫德雷德 4 奧伯倫 5 梅林 6 派西 7-0 忠臣
+    const g = game(['assassin', 'morgana', 'mordred', 'oberon', 'merlin', 'percival', 'loyal', 'loyal', 'loyal', 'loyal']);
+    expect(viewerLine(g, { seat: 7, proposal: 0 }, { kind: 'loyal' })).toBe('你是 7家 忠臣 | 無其他資訊 | 派 3 人');
+    expect(viewerLine(g, { seat: 6, proposal: 1 }, { kind: 'percival', thumbs: [2, 5] })).toBe('你是 6家 派西維爾 | 看到 2家 & 5家 | 派 4 人');
+    expect(viewerLine(g, { seat: 5, proposal: 0 }, { kind: 'merlin', seen: [1, 2, 4] })).toBe('你是 5家 梅林 | 看到紅方 1家 & 2家 & 4家 | 派 3 人');
+    // 提議題的紅方：夜裡的知識（看不到奧伯倫、不知道隊友角色）
+    expect(viewerLine(g, { seat: 1, proposal: 1 }, { kind: 'evil', mates: [2, 3] })).toBe('你是 1家 刺客 | 隊友 2家 & 3家 | 派 4 人');
+    expect(viewerLine(g, { seat: 4, proposal: 0 }, { kind: 'oberon' })).toBe('你是 4家 奧伯倫 | 不知道隊友 | 派 3 人');
+    expect(viewerLine(g, { seat: 10, proposal: 0 }, { kind: 'loyal' })).toBe('你是 0家 忠臣 | 無其他資訊 | 派 3 人');
+  });
+
+  it('assassination: the assassin knows every red teammate with roles, Oberon included (owner 11/18: all four evil reveal and discuss)', () => {
+    // 站長的例子：「你是 3家 刺客, 隊友 5家莫甘娜 & 8家莫德雷得 & 7家奧伯倫, 刺殺梅林」（分隔後來改成「 | 」）
+    const g = { seatRoles: ['loyal', 'merlin', 'assassin', 'loyal', 'morgana', 'percival', 'oberon', 'mordred', 'loyal', 'loyal'], proposals: [] } as never;
+    // 夜裡的知識只看得到 5、8（模型不給奧伯倫）；刺殺階段四位紅方開牌，刺客知道全部隊友和角色
+    expect(viewerLine(g, { seat: 3, proposal: null }, { kind: 'evil', mates: [5, 8] })).toBe('你是 3家 刺客 | 隊友 5家莫甘娜 & 8家莫德雷德 & 7家奧伯倫 | 刺殺梅林');
+    // 卡片的隊友標記也一樣：刺殺題含奧伯倫（7），提議題照夜裡的知識（只有 5、8）
+    const view = { sight: { kind: 'evil', mates: [5, 8] } } as never;
+    expect(teammateSeats({ game: g, pick: { seat: 3, proposal: null } as never, view })).toEqual([5, 7, 8]);
+    expect(teammateSeats({ game: g, pick: { seat: 3, proposal: 0 } as never, view })).toEqual([5, 8]);
+    // 真的刺殺題：卡片與貼文都是這一行
+    let found = false;
+    for (let w = 0; w < 4 && !found; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        if (pick.proposal !== null) continue;
+        const pv = pickView(gameOf(pick), pick);
+        const reds = pv.game.seatRoles.map((r, i) => ({ r, s: i + 1 })).filter((x) => isRed(x.r) && x.s !== pick.seat);
+        const line = viewerLine(pv.game, pick, pv.view.sight);
+        expect(line.startsWith(`你是 ${pick.seat % 10}家 刺客 | 隊友 `)).toBe(true);
+        expect(line.endsWith(' | 刺殺梅林')).toBe(true);
+        for (const x of reds) expect(line).toContain(`${x.s % 10}家`);
+        if (pv.game.seatRoles.includes('oberon')) expect(line).toContain('奧伯倫');
+        expect(postText(pv, { weekday: 1 }).split('\n')[1]).toBe(line);
+        expect(identityText(pv)).toBe(line);
+        // 圓桌與格子欄名：其他紅方全部標隊友（含奧伯倫），和那一行一致
+        const redSeats = reds.map((x) => x.s).sort((p, q) => p - q);
+        expect([...teammateSeats(pv)].sort((p, q) => p - q)).toEqual(redSeats);
+        const marks = seatMarks(pv, sheetRows(pv));
+        for (const t of redSeats) expect(marks.get(t)).toMatchObject({ label: '隊友', side: 'evil' });
+        const card = buildPuzzleSvg(pv, 1);
+        expect((card.match(/>隊友</g) ?? []).length).toBe(redSeats.length);
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  it('the identity line never wraps (owner 11/18: 「紅方資訊好像有點多 看能不能縮小字體之類的 不要換行」): shrink to fit, then span above the table', () => {
+    const fake = (seatRoles: string[], seat: number, proposal: number | null, sight: object) =>
+      ({ game: { seatRoles, proposals: [{ round: 1 }] }, pick: { seat, proposal }, view: { sight } }) as never;
+    const roles = ['loyal', 'merlin', 'assassin', 'loyal', 'morgana', 'percival', 'oberon', 'mordred', 'loyal', 'loyal'];
+    // 短的：圓桌右邊、一行、字級 34 往下縮
+    const loyal = identityLayout(fake(roles, 1, 0, { kind: 'loyal' }));
+    expect(loyal).toMatchObject({ line: '你是 1家 忠臣 | 無其他資訊 | 派 3 人', wide: false, band: 0 });
+    expect(loyal.size).toBeLessThanOrEqual(IDENTITY_FONT);
+    expect(loyal.size).toBeGreaterThanOrEqual(IDENTITY_FONT_MIN);
+    const perc = identityLayout(fake(roles, 6, 0, { kind: 'percival', thumbs: [2, 5] }));
+    expect(perc.wide).toBe(false);
+    expect(textWidth(perc.line, perc.size)).toBeLessThanOrEqual(514);
+    // 刺殺題三個隊友帶角色：縮到最小也放不下右欄 → 整列寫在圓桌上面，還是一行
+    const asn = identityLayout(fake(roles, 3, null, { kind: 'evil', mates: [5, 8] }));
+    expect(asn.line).toBe('你是 3家 刺客 | 隊友 5家莫甘娜 & 8家莫德雷德 & 7家奧伯倫 | 刺殺梅林');
+    expect(textWidth(asn.line, IDENTITY_FONT_MIN)).toBeGreaterThan(514);
+    expect(asn.wide).toBe(true);
+    expect(asn.size).toBeGreaterThanOrEqual(IDENTITY_FONT_MIN);
+    expect(textWidth(asn.line, asn.size)).toBeLessThanOrEqual(1000);
+    expect(asn.band).toBeGreaterThan(asn.size);
+    // 卡片上：每一題都只有一個 viewer-line（沒有接續行），寫得下
+    for (let w = 0; w < 2; w++) {
+      for (const pick of planWeek(bank, w) as ThreadsPick[]) {
+        const pv = pickView(gameOf(pick), pick);
+        const card = buildPuzzleSvg(pv, 3);
+        expect((card.match(/class="viewer-line/g) ?? []).length).toBe(1);
+        const id = identityLayout(pv);
+        expect(textWidth(id.line, id.size)).toBeLessThanOrEqual(id.wide ? 1000 : 514);
+        expect(card).toContain(`font-size="${id.size}"`);
+        if (id.wide) expect(card).toContain('class="viewer-line viewer-line-wide" x="40"');
+      }
+    }
     const [, tue] = planWeek(bank, 0) as ThreadsPick[];
     const svg = buildPuzzleSvg(pickView(gameOf(tue), tue), 2);
-    expect(svg).toContain('兩根拇指');
-    expect(svg).not.toContain('梅林、莫甘娜各一'); // 舊的灰色小字
+    expect(viewerText(svg)).toMatch(/^你是 \d家 派西維爾 \| 看到 \d家 & \d家 \| 派 \d 人$/);
+    expect(svg).not.toContain('兩根拇指'); // 舊的括號寫法
   });
 
   it('the draft markdown lists every continuation image in order', () => {
@@ -819,7 +912,7 @@ describe('image', () => {
       expect(row?.kind === 'lake' && row.seen).toBe(evil ? 'red' : 'good');
       const svg = allSvg(mine, 2);
       expect(svg).toContain(`你看到：${evil ? '紅' : '好人'}`);
-      expect(svg).toContain('拇指');
+      expect(viewerText(buildPuzzleSvg(mine, 2))).toMatch(/派西維爾 \| 看到 \d家 & \d家/);
       expect(recordLines(sheetRows(mine)).map((l) => l.map((x) => x.t).join('')).join('\n')).toContain(`（你看到的：${evil ? '紅' : '好人'}）`);
       // 別人的湖不畫結果
       if (!pv.shown.some((e) => e.kind === 'lake' && e.holderSeat === pv.pick.seat)) expect(allSvg(pv, 2).includes('你看到：')).toBe(false);
@@ -833,9 +926,9 @@ describe('image', () => {
     const d = gen.draftFor('2026-11-18') as ThreadsDraft;
     const lines = d.post.text.split('\n');
     expect(lines[0]).toBe('【阿瓦隆每日一題｜週三・1-5 尾派】');
-    expect(lines[1]).toMatch(/^你是 \d家・/);
+    expect(lines[1]).toMatch(/^你是 \d家 \S+ \| .+ \| 派 3 人$/);
     expect(lines[2]).toBe('[第 1 局]');
-    expect(lines.at(-3)).toMatch(/^輪到你 \d家 \S+ 派 3 人，你會派誰？$/);
+    expect(lines.at(-3)).toBe('你會派誰？'); // 座位、角色、派幾人已經在「你是」那一行
     expect(lines.at(-2)).toBe('');
     expect(lines.at(-1)).toBe('#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣');
     expect(THREADS_TOPIC_TAG).toBe('#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣');
@@ -844,19 +937,20 @@ describe('image', () => {
     expect(d.post.text).not.toContain('留言寫');
   });
 
-  it('the ask line is white, right under 「你是…」, without 第 X 局第 K 次 / 強制出發; the grid ends with a short 輪到你; header is one line with the game id', () => {
+  it('the 「你是…」 line carries the decision (no separate ask line), white, above the grid; no 第 X 局第 K 次 / 強制出發; the grid ends with a short 輪到你; header is one line with the game id', () => {
     for (let w = 0; w < 2; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const pv = pickView(gameOf(pick), pick);
         const card = buildPuzzleSvg(pv, 3);
-        const ask = /<text class="ask-line" x="([\d.]+)" y="([\d.]+)"[^>]*><tspan fill="([^"]+)"[^>]*>([^<]+)</.exec(card);
-        expect(ask).not.toBeNull();
-        expect(ask![3]).toBe('#f4f4f5'); // 白字
-        expect(ask![4]).toMatch(pick.proposal === null ? /^三藍：輪到你刺殺/ : /^輪到你派 \d 人$/);
-        const id = card.indexOf('你是 ');
-        expect(id).toBeGreaterThan(-1);
-        expect(card.indexOf('class="ask-line"')).toBeGreaterThan(id); // 在「你是…」後面（下面）
-        expect(Number(ask![2])).toBeLessThan(cardTop(pv)); // 在牌譜上面的右欄
+        const id = /<text class="viewer-line[^"]*" x="([\d.]+)" y="([\d.]+)"[^>]*><tspan fill="([^"]+)"[^>]*>([^<]+)</.exec(card);
+        expect(id).not.toBeNull();
+        expect(id![3]).toBe('#f4f4f5'); // 白字
+        expect(id![4]).toMatch(/^你是 \d家 /);
+        const all = viewerText(card);
+        expect(all).toBe(viewerLine(pv.game, pv.pick, pv.view.sight));
+        expect(all).toMatch(pick.proposal === null ? / \| 刺殺梅林$/ : / \| 派 \d 人$/);
+        expect(card).not.toContain('class="ask-line"');
+        expect(Number(id![2])).toBeLessThan(cardTop(pv)); // 在牌譜上面的右欄
         expect(card).not.toMatch(/第 \d 局第 \d 次/);
         expect(card).not.toContain('強制出發');
         expect(card).toContain(`[${pv.pick.gameId}]`);

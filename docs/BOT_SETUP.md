@@ -228,7 +228,7 @@ workflow 還沒合併進 `main` 之前，叫機器人會回「GitHub 回應 404�
 | `NIGHTLY_DISPATCH` | 開 | 設 `off` 停掉每晚觸發牌譜記錄員＋百科AI 每晚補位（`services/nightlyDispatch.ts`） |
 | `NIGHTLY_DISPATCH_AT` | `18:35` | 每晚觸發的開始時間（台北，HH:MM，到 23:00 為止） |
 | `THREADS_DISPATCH` | 開 | 設 `off` 停掉每天觸發 Threads 每日發文（`services/threadsDispatch.ts`；見 docs/THREADS.md〈誰來觸發〉） |
-| `THREADS_POST_HOUR` | `12` | Threads 每天幾點觸發（台北，整點 07 分起、到 23:00 為止；跟 repo 變數同名，要改兩邊一起改）。正式發不發仍由 repo 變數 `THREADS_PUBLISH`、`THREADS_LIVE_FROM` 決定 |
+| `THREADS_POST_HOUR` | `12` | Threads 每天幾點觸發（台北，整點 07 分起、到 23:00 為止；跟 repo 變數同名，要改兩邊一起改）。正式發不發仍由 repo 變數 `THREADS_PUBLISH` 與起始日決定：起始日／暫停在主控台設，Claude 每天同步進 `packages/server/threads_live.json`（repo 變數 `THREADS_LIVE_FROM` 選用，有設就蓋過）；見 docs/THREADS.md〈正式發的開關〉 |
 
 ---
 
