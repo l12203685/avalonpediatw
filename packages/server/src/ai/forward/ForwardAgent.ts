@@ -93,6 +93,7 @@ import { evilVouchFollowUpActive, evilVouchTeamConstraint, evilVouchVoteRule } f
 import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp';
 import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
+import { redLeadOffNow, teamWithoutSelf } from '../RedRound46';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
   anyGate,
@@ -970,6 +971,17 @@ export class ForwardAgent implements AvalonAgent {
       _forwardDecideCalls -= 1;
       const asLoyal = this.decide(loyalViewOf(obs));
       if (asLoyal.action.type === 'team_select') return this.ruleDecision(obs, asLoyal.action, 'red loyal lead (doomed R1–R2 proposal)');
+    }
+    // Round 46 (red) `redLeadOff45` (RedRound46.ts): at the strong-human rate, an R3+ red leader sends the public-view loyal team
+    // without himself (strong red leaders leave themselves off 19.7% of their R3+ non-forced proposals; the bots never did).
+    if (redLeadOffNow(this.baseline.tuning, obs)) {
+      _forwardDecideCalls -= 1;
+      const view = loyalViewOf(obs);
+      const asLoyal = this.decide(view);
+      if (asLoyal.action.type === 'team_select') {
+        const team = teamWithoutSelf(obs, asLoyal.action.teamIds, bayesRedShare39(view, bayesOptionsOf39(this.baseline.tuning)));
+        return this.ruleDecision(obs, { type: 'team_select', teamIds: team }, 'red lead off (R3+, strong-human rate)');
+      }
     }
     // Strong-table gap R1 `redNormalVote` (RedVoteCamouflage.ts): off the team, at rate q a red casts the vote a public-view
     // loyal in this seat would, except when the red camp's win or loss rides on this team.

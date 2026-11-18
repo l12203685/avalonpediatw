@@ -97,6 +97,21 @@ export function loyalTailWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObse
  * `loyalTailWhiteEarly`（第 28 回合）：`loyalTailWhiteLast` 開著時，第 1–3 次提議也開，但比較的對象換成「之後每一任隊長（到尾家為止）能派的最乾淨的隊」的最大值——
  * 前面還有別的隊長時，否決換來的不只是尾家的隊。
  */
+/**
+ * 第 46 回合 `tailRedNoVouch45`（第 45 回合診斷：紅 0 家湖隊友 5 家、宣告藍，藍方的尾家外白就不啟動）：觀察的副本，把別人對 `seat` 的「藍」宣告
+ * 改成沒宣告（`'none'`，讀宣告的地方都跳過），如果自己估那個持湖者是紅的機率 ≥ `bar`。沒有要改的就回傳原本的觀察（同一個快取）。`bar` ≤ 0 = 不改。
+ */
+export function withoutSuspectVouch(obs: PlayerObservation, seat: string, bar: number, opts: BayesOptions): PlayerObservation {
+  if (bar <= 0) return obs;
+  const lakes = obs.lakeHistory ?? [];
+  const vouches = lakes.filter((l) => l.targetId === seat && l.declaredClaim === 'good' && l.holderId !== obs.myPlayerId);
+  if (vouches.length === 0) return obs;
+  const share = bayesRedShare(obs, opts);
+  const drop = new Set(vouches.filter((l) => (share.get(l.holderId) ?? 0) >= bar));
+  if (drop.size === 0) return obs;
+  return { ...obs, lakeHistory: lakes.map((l) => (drop.has(l) ? { ...l, declaredClaim: 'none' as const } : l)) };
+}
+
 export function tailWhiteCore(tuning: Readonly<AgentTuning>, obs: PlayerObservation, bar40 = 0): boolean {
   const tau = tuning.loyalTailWhite ?? 0;
   if (tau <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'good') return false;
@@ -110,24 +125,26 @@ export function tailWhiteCore(tuning: Readonly<AgentTuning>, obs: PlayerObservat
   const team = obs.proposedTeam ?? [];
   if (team.length === 0) return false;
   const opts = bayesOptionsOf(tuning);
-  const tailRed = bayesRedShare(obs, opts).get(tail) ?? 0;
+  // Round 46 `tailRedNoVouch45`: the tail's "blue" declarations from a holder this seat reads as likely red do not count here.
+  const view = withoutSuspectVouch(obs, tail, tuning.tailRedNoVouch45 ?? 0, opts);
+  const tailRed = bayesRedShare(view, opts).get(tail) ?? 0;
   // Round 38 `loyalTailWhiteLastTau` (checklist AV-09 / AV-02): the fourth proposal of rounds 3–5 has its own threshold.
   const tau4 = tuning.loyalTailWhiteLastTau ?? 0;
   // Round 40 `vote40Tail*`: rounds 3–5, one threshold per role for the fourth and the earlier proposals (0 = the thresholds above).
   const bar = bar40 > 0 && (obs.currentRound ?? 1) >= 3 ? bar40 : tau4 > 0 && fc === 3 && (obs.currentRound ?? 1) >= 3 ? tau4 : tau;
   if (tailRed < bar) return false;
-  const p = bayesTeamClean(obs, team, opts);
+  const p = bayesTeamClean(view, team, opts);
   if (p === null) return false;
   let alt: number | null = null;
   if (early) {
     for (let o = 1; o <= 4 - fc; o++) {
       const leader = leaderAhead(obs, o);
       if (leader === null) continue;
-      const a = bestCleanWith(obs, leader, team.length, opts);
+      const a = bestCleanWith(view, leader, team.length, opts);
       if (a !== null && (alt === null || a > alt)) alt = a;
     }
   } else {
-    alt = bestCleanWith(obs, tail, team.length, opts);
+    alt = bestCleanWith(view, tail, team.length, opts);
   }
   const lambda = (tuning.loyalTailWhiteLambda ?? 0) > 0 ? tuning.loyalTailWhiteLambda : 1;
   return alt !== null && p >= lambda * alt && p > 0;
