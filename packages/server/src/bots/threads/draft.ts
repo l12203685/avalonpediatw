@@ -25,8 +25,11 @@ import { recordUrl } from '../simulation/recordsIndex';
 import { eventLines, questLine, resultText, roleCode, seatLabel, pct } from '../simulation/replies';
 import { TEAM_SIZES, eventIndexOfProposal, isRed, publicEvents, viewAt, type PublicEvent, type SimGame, type SimView } from '../simulation/scenario';
 import { maskOf, seatList, seatsOfMask, teamDigits } from '../simulation/seats';
-import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsPick } from './plan';
-import { DEFAULT_POST_TEMPLATE, normalizeTemplate, renderTemplate, validateTemplate, type PostParts } from './template';
+import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsKind, type ThreadsPick } from './plan';
+import { DEFAULT_POST_TEMPLATE, normalizeTemplate, renderTemplate, typeOf, validateTemplate, type PostParts } from './template';
+
+/** 草稿 JSON 的 parts：每個佔位符這天的內容，加上這天的題型（主控台照題型挑格式；type 不是佔位符）。 */
+export type DraftParts = PostParts & { type: { kind: ThreadsKind; name: string } };
 
 /** Threads 一則貼文的字數上限。 */
 export const THREADS_MAX_CHARS = 500;
@@ -421,7 +424,7 @@ export interface ThreadsDraft {
   answerToYesterday: { date: string; exerciseId: string; text: string } | null;
   firstComment: FirstCommentSlot;
   /** 貼文 A 每個佔位符這天換成什麼（template.ts；主控台的格式編輯器拿它預覽）。 */
-  parts?: PostParts;
+  parts?: DraftParts;
   /** 站長的貼文格式這天放不下、改用內建格式時的說明。 */
   templateWarning?: string;
 }
@@ -490,7 +493,7 @@ export function buildDraft(input: DraftInput): ThreadsDraft {
     continuesYesterday: continues,
     answerToYesterday: input.yesterday && used ? { date: input.yesterday.date, exerciseId: input.yesterday.pv.exerciseId, text: used.join('\n') } : null,
     firstComment: firstCommentSlot(input.today, input.titles),
-    parts: r.parts,
+    parts: { ...r.parts, type: { kind: input.today.pick.kind, name: typeOf(input.today.pick.kind).name } },
     ...(r.warning ? { templateWarning: r.warning } : {}),
   };
 }

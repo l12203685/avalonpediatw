@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
+    "type-check:scripts": "tsc -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -17,7 +18,8 @@
     "threads:candidates": "tsx scripts/threadsCandidates.ts",
     "threads:draft": "tsx scripts/threadsDraft.ts",
     "threads:ai-answer": "tsx scripts/threadsAiAnswer.ts",
-    "threads:publish": "tsx scripts/threadsPublish.ts"
+    "threads:publish": "tsx scripts/threadsPublish.ts",
+    "console:export": "tsx scripts/consoleExport.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",

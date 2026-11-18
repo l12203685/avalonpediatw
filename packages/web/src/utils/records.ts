@@ -391,17 +391,102 @@ export function matchingSeats(post: RecordPost, query: string): string[] {
   return RECORDS_SEATS.filter((_, i) => playerNameKey(post.game?.names[i] ?? '').includes(q));
 }
 
-/** 牌譜的深連結 #records=<貼文 id>（#records 本身 = 牌譜紀錄頁籤）。 */
-export function recordsHash(id?: string): string {
-  return id ? `#records=${id}` : '#records';
+/**
+ * 「只到出題的那一刻」（2026-11-18，每日小觀念與 Threads 題目的牌局連結：站長「牌局: 優先以當日 threads/IG 發文的題目」）：
+ *   upto = 出題的那一次派票（整局第幾次，從 0 數；proposals 照輪次攤平的順序）——那一次（含）之後的票、任務、湖都藏起來；
+ *          'A' = 刺殺題：任務、湖都看得到，藏起刺殺與結果。
+ *   seat = 出題的那一家（'1'～'9'、'0'）：只顯示他自己的角色與他看得到的資訊；沒給就一個角色都不顯示。
+ * 不管哪一種，結果、刺殺、其他人的角色、標題與標籤（可能寫了結果）、DC 回覆都不顯示；按「看完整牌譜」才打開整局。
+ */
+export interface RecordCut {
+  upto: number | 'A';
+  seat?: string;
 }
 
-/** #records → { id: null }；#records=<id> → { id }（DC 貼文 id、S／M＋流水號）；其他 hash → null。 */
-export function parseRecordsHash(hash: string | null | undefined): { id: string | null } | null {
+/** 牌譜的深連結 #records=<貼文 id>（#records 本身 = 牌譜紀錄頁籤）；給了 cut 就加 &upto=…&seat=…。 */
+export function recordsHash(id?: string, cut?: RecordCut | null): string {
+  if (!id) return '#records';
+  if (!cut) return `#records=${id}`;
+  return `#records=${id}&upto=${cut.upto}${cut.seat ? `&seat=${cut.seat}` : ''}`;
+}
+
+/**
+ * #records → { id: null }；#records=<id> → { id }（DC 貼文 id、S／M＋流水號）；
+ * #records=<id>&upto=<n|A>[&seat=<1-9|0>] → { id, cut }（upto 不認得就當作沒有 cut）；其他 hash → null。
+ */
+export function parseRecordsHash(hash: string | null | undefined): { id: string | null; cut?: RecordCut } | null {
   const raw = (hash ?? '').replace(/^#/, '').trim();
   if (/^(?:records|paipu)$/i.test(raw)) return { id: null };
-  const m = /^(?:records|paipu)[=/]([0-9]{15,22}|[SM][0-9]{1,6})$/i.exec(raw);
-  return m ? { id: /^[sm]/.test(m[1]) ? m[1].toUpperCase() : m[1] } : null;
+  const m = /^(?:records|paipu)[=/]([0-9]{15,22}|[SM][0-9]{1,6})((?:&[a-z]+=[^&]*)*)$/i.exec(raw);
+  if (!m) return null;
+  const id = /^[sm]/.test(m[1]) ? m[1].toUpperCase() : m[1];
+  const params = new Map(m[2].split('&').filter(Boolean).map((p) => p.split('=') as [string, string]));
+  const upto = params.get('upto');
+  if (upto === undefined) return { id };
+  const seat = params.get('seat');
+  const cutUpto = /^a$/i.test(upto) ? 'A' : /^\d{1,3}$/.test(upto) ? Number(upto) : null;
+  if (cutUpto === null) return { id };
+  return { id, cut: { upto: cutUpto, ...(seat && /^[0-9]$/.test(seat) ? { seat } : {}) } };
+}
+
+/** cut 的視角：那一家的角色與他看得到的座位（照標準規則：梅林看到莫德雷德以外的紅、紅方互認但看不到奧伯倫、派西看到兩根拇指）。 */
+export interface CutViewer {
+  seat: string;
+  role: RecordRole;
+  /** 看到的座位與說明，例如「看到的紅方：3、7、9」。沒有資訊就 null。 */
+  knows: string | null;
+}
+
+export function cutViewer(config: string, seat: string | undefined): CutViewer | null {
+  if (!seat || !RECORDS_SEATS.includes(seat as (typeof RECORDS_SEATS)[number])) return null;
+  const role = roleOfSeat(config, seat);
+  const at = (i: number): string => config[i] ?? '';
+  const list = (seats: string[]): string => seats.filter((s) => s && s !== seat).sort((a, b) => RECORDS_SEATS.indexOf(a as (typeof RECORDS_SEATS)[number]) - RECORDS_SEATS.indexOf(b as (typeof RECORDS_SEATS)[number])).join('、');
+  let knows: string | null = null;
+  // 配置六碼：刺客、莫甘娜、莫德雷德、奧伯倫、派西維爾、梅林。
+  if (role.name === '梅林') knows = `看到的紅方：${list([at(0), at(1), at(3)])}（莫德雷德看不到）`;
+  else if (role.name === '派西維爾') knows = `兩根拇指（梅林和莫甘娜）：${list([at(5), at(1)])}`;
+  else if (role.name === '刺客' || role.name === '莫甘娜' || role.name === '莫德雷德') knows = `紅方隊友：${list([at(0), at(1), at(2)])}（奧伯倫看不到）`;
+  return { seat, role, knows };
+}
+
+/**
+ * 牌譜切到出題的那一刻：upto 之前的派票（票照舊）、那之前已經出完的任務與湖；配置、刺殺、結果、名字都清掉。
+ * upto 超過整局的派票數（資料對不上）時整局的派票都留著，但結果照樣藏起來。
+ */
+export function cutRecordGame(game: RecordGame, cut: RecordCut): RecordGame {
+  const hidden = { config: '', assassination: '', outcome: '' as const, names: game.names.map(() => '') };
+  if (cut.upto === 'A') return { ...game, ...hidden };
+  let left = cut.upto;
+  const rounds: RecordRound[] = [];
+  let stopRound = game.rounds.length;
+  for (let r = 0; r < game.rounds.length; r++) {
+    const round = game.rounds[r];
+    if (left >= round.proposals.length) {
+      rounds.push(round);
+      left -= round.proposals.length;
+      continue;
+    }
+    // 出題的那一局：那一次之前的派票，任務還沒出。
+    rounds.push({ proposals: round.proposals.slice(0, left), mission: '' });
+    stopRound = r;
+    break;
+  }
+  // 湖：只留出題那一局之前已經用完的（第 r 局結束後用湖 = after r）。
+  const lakes = game.lakes.filter((l) => l.after <= stopRound);
+  return { ...game, ...hidden, rounds: rounds.filter((r, i) => r.proposals.length > 0 || i < stopRound), lakes };
+}
+
+/** cut 停在哪裡的說明：「第 3 局第 5 次派票」或「刺殺」。 */
+export function cutLabel(game: RecordGame, cut: RecordCut): string {
+  if (cut.upto === 'A') return '刺殺';
+  let left = cut.upto;
+  for (let r = 0; r < game.rounds.length; r++) {
+    const n = game.rounds[r].proposals.length;
+    if (left < n) return `第 ${r + 1} 局第 ${left + 1} 次派票`;
+    left -= n;
+  }
+  return '整局最後';
 }
 
 /** 改名前的舊連結（#paipu、#paipu=<id>，2026-10-31 以前分享的）：App 換成新的 #records…。 */

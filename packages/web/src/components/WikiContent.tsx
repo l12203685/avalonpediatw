@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network } from 'lucide-react';
+import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network, Lightbulb } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { WIKI_COLOR_SCHEME, WIKI_TAGS, hasWikiLayers, normalizeWikiMarkup, wikiArticleRef, wikiBlockLayer, wikiCardExcerpt, wikiImageSrc, wikiLayerOf, wikiUrlTransform } from '../utils/wikiMarkup';
@@ -17,6 +17,8 @@ import RoleVideoCard from './RoleVideoCard';
 import WikiMindMap from './wikiMap/WikiMindMap';
 import { rehypeWikiHeadingIds } from '../utils/wikiSections';
 import { clearWikiHash, closeWikiArticle, currentWikiTarget, openWikiArticle, useOpenWiki } from './wikiLink';
+import ConceptCards from './ConceptCards';
+import { conceptsHash, parseConceptsHash } from '../utils/concepts';
 
 /** 舊資料的標籤常是分類代號（roles、strategies…），和現在的分類對不上，不顯示。 */
 const CATEGORY_IDS = new Set(WIKI_CATEGORIES.map(c => c.id.toLowerCase()));
@@ -35,8 +37,32 @@ function apiToWikiArticle(a: WikiArticleApi): WikiArticle {
   };
 }
 
-/** 列表 = 文章卡片；心智圖 = 分類樹 + 文章間的引用關係（Edward 2026-10-30）。 */
-type WikiView = 'list' | 'map';
+/**
+ * 列表 = 文章卡片；心智圖 = 分類樹 + 文章間的引用關係（Edward 2026-10-30）；
+ * 觀念卡 = 百科觀念卡的公開頁（2026-11-18，#concepts、#concepts=<id>，components/ConceptCards.tsx；不記在瀏覽器，只跟著網址）。
+ */
+type WikiView = 'list' | 'map' | 'concepts';
+
+/** 換檢視時改了網址（replaceState 不會觸發 hashchange）：通知 useConceptsHash 重讀。 */
+const CONCEPTS_EVENT = 'avalon:concepts-hash';
+
+/** 網址的 #concepts（=<id>）：打開觀念卡檢視、捲到那一張。同一個網址回傳同一個物件。 */
+function useConceptsHash(): { id: string | null } | null {
+  const read = (): string => JSON.stringify(typeof window === 'undefined' ? null : parseConceptsHash(window.location.hash));
+  const [raw, setRaw] = useState<string>(read);
+  useEffect(() => {
+    const sync = (): void => setRaw(read());
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+    window.addEventListener(CONCEPTS_EVENT, sync);
+    return (): void => {
+      window.removeEventListener('hashchange', sync);
+      window.removeEventListener('popstate', sync);
+      window.removeEventListener(CONCEPTS_EVENT, sync);
+    };
+  }, []);
+  return useMemo(() => JSON.parse(raw) as { id: string | null } | null, [raw]);
+}
 const WIKI_VIEW_KEY = 'avalon.wiki.view';
 
 /** 預設心智圖（Edward 2026-10-30）；選過列表的人記住列表。 */
@@ -184,11 +210,28 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   // 文章清單已經是最後的版本（API 回來了，或 API 失敗後用了打包的備份）
   const [articlesSettled, setArticlesSettled] = useState(false);
   // A category asked for by the page (「新手指南」) needs the list.
-  const [view, setViewState] = useState<WikiView>(() => (selectedCategory ? 'list' : readStoredView()));
+  const conceptsLink = useConceptsHash();
+  const [view, setViewState] = useState<WikiView>(() => (parseConceptsHash(window.location.hash) ? 'concepts' : selectedCategory ? 'list' : readStoredView()));
   const setView = (next: WikiView): void => {
     setViewState(next);
-    storeView(next);
+    const hash = window.location.hash;
+    try {
+      // 觀念卡的網址：#concepts（可以分享）；換回心智圖／列表時清掉。文章開著（#wiki=…）時不動網址。
+      if (next === 'concepts' && !parseConceptsHash(hash) && !currentWikiTarget()) {
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}${conceptsHash()}`);
+      } else if (next !== 'concepts' && parseConceptsHash(hash)) {
+        window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}`);
+      }
+    } catch {
+      // history blocked: the view still switches
+    }
+    window.dispatchEvent(new Event(CONCEPTS_EVENT));
+    if (next !== 'concepts') storeView(next);
   };
+  // 外面的連結（#concepts=<id>）打開時換到觀念卡檢視。
+  useEffect(() => {
+    if (conceptsLink) setViewState('concepts');
+  }, [conceptsLink]);
 
   // Fetch wiki articles from API, merge with hardcoded
   useEffect(() => {
@@ -385,6 +428,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         {([
           ['map', '心智圖', Network],
           ['list', '列表', LayoutGrid],
+          ['concepts', '觀念卡', Lightbulb],
         ] as const).map(([id, label, Icon]) => (
           <button
             key={id}
@@ -404,12 +448,20 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
       {view === 'map' && (
         <span className="hidden sm:inline min-w-0 text-[11px] text-zinc-500 leading-snug">分類 → 文章的樹狀圖，線條是文章之間的互相引用</span>
       )}
+      {view === 'concepts' && (
+        <span className="hidden sm:inline min-w-0 text-[11px] text-zinc-500 leading-snug">每個觀念三句話：情境、觀念、應用</span>
+      )}
     </div>
   );
 
   return (
     <div className="bg-gradient-to-b from-avalon-dark to-black px-3 py-3">
-      {view === 'map' ? (
+      {view === 'concepts' ? (
+        <div className="max-w-6xl mx-auto space-y-3">
+          {viewToggle}
+          <ConceptCards targetId={conceptsLink?.id ?? null} />
+        </div>
+      ) : view === 'map' ? (
         <div className="max-w-[1600px] mx-auto space-y-3">
           {viewToggle}
           <WikiMindMap articles={allArticles} onOpen={openArticle} />

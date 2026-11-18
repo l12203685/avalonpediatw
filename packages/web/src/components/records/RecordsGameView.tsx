@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { ArrowLeft, Check, Copy, ExternalLink, MessageSquare, Paperclip } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Eye, ExternalLink, MessageSquare, Paperclip } from 'lucide-react';
 import { QuestFailMark, QuestSuccessMark, ShieldIcon } from '../ScoresheetIcons';
 import { RecordTextBlock, RecordTextLine } from './RecordTextLine';
 import { useGameStore } from '../../store/gameStore';
@@ -10,6 +10,9 @@ import {
   RECORDS_SEATS,
   RESULT_TAGS,
   approveCount,
+  cutLabel,
+  cutRecordGame,
+  cutViewer,
   discordThreadUrl,
   isDiscordPost,
   isForcedProposal,
@@ -31,6 +34,7 @@ import {
   type RecordDisplayPrefs,
   type RecordGame,
   type RecordLineup,
+  type RecordCut,
   type RecordOutcome,
   type RecordPost,
 } from '../../utils/records';
@@ -166,6 +170,37 @@ function ResultBanner({ post, game, prefs }: { post: RecordPost; game: RecordGam
         {post.tags.includes('已收錄') && <span className="text-xs text-zinc-400">· 已收錄</span>}
       </div>
       <p className="text-xs text-zinc-200">{resultSentence(game, prefs)}</p>
+    </div>
+  );
+}
+
+/**
+ * 「只到出題的那一刻」的說明（#records=<id>&upto=…&seat=…，每日小觀念與 Threads 題目的牌局連結）：停在哪裡、你是誰、你看得到什麼，
+ * 與「看完整牌譜」。結果、刺殺、其他人的角色、標題、標籤與 DC 回覆都不顯示。
+ */
+function CutBanner({ game, cut, onShowFull }: { game: RecordGame; cut: RecordCut; onShowFull?: () => void }): JSX.Element {
+  const viewer = cutViewer(game.config, cut.seat);
+  return (
+    <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-amber-100" data-testid="records-cut">
+      <p className="text-base font-bold">只到出題的那一刻：{cutLabel(game, cut)}</p>
+      {viewer && (
+        <p className="text-sm" data-testid="records-cut-viewer">
+          你是 {viewer.seat} 家
+          <span className={viewer.role.red ? 'text-red-300' : 'text-blue-200'}> {viewer.role.name}</span>
+          {viewer.knows ? `；${viewer.knows}` : '；沒有夜晚資訊'}
+        </p>
+      )}
+      <p className="mt-0.5 text-xs text-amber-200/80">之後的派票、任務、結果和其他人的角色都先藏起來，想好再看。</p>
+      {onShowFull && (
+        <button
+          type="button"
+          onClick={onShowFull}
+          data-testid="records-show-full"
+          className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-amber-400 px-3 py-1 text-sm font-bold text-black hover:bg-amber-300"
+        >
+          <Eye size={15} />看完整牌譜
+        </button>
+      )}
     </div>
   );
 }
@@ -499,13 +534,24 @@ function Replies({ id, url, fit }: { id: string; url: string; fit: boolean }): J
   );
 }
 
-export default function RecordsGameView({ post, guildId, onBack }: { post: RecordPost; guildId: string; onBack: () => void }): JSX.Element {
+export default function RecordsGameView({ post, guildId, onBack, cut, onShowFull }: {
+  post: RecordPost;
+  guildId: string;
+  onBack: () => void;
+  /** 只到出題的那一刻（#records=<id>&upto=…）；沒有就是整局。 */
+  cut?: RecordCut | null;
+  onShowFull?: () => void;
+}): JSX.Element {
   // 只在試算表的局（S…／M…）沒有 DC 貼文：不放「到 DC 討論」、不讀回覆
-  const discord = isDiscordPost(post);
+  const cutActive = !!(cut && post.game);
+  const discord = isDiscordPost(post) && !cutActive;
   const url = discordThreadUrl(post.id, guildId);
-  const game = post.game;
-  const outcome = outcomeOf(post);
-  const [prefs, setPref] = useRecordsPrefs();
+  const fullGame = post.game;
+  const game = fullGame && cut ? cutRecordGame(fullGame, cut) : fullGame;
+  const outcome = cutActive ? null : outcomeOf(post);
+  const [storedPrefs, setPref] = useRecordsPrefs();
+  // 只到那一刻：角色與名字一律不顯示（那一家自己的資訊寫在上面的說明裡）。
+  const prefs = cutActive ? { roles: false, names: false } : storedPrefs;
   const rootRef = useRef<HTMLElement>(null);
   const fitHeight = useFitToViewport(rootRef);
   const fit = fitHeight !== null;
@@ -544,15 +590,28 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
             </a>
           )}
         </div>
-        <header>
-          <h2 className="break-words text-lg font-bold leading-snug text-white">{post.title || '（沒有標題）'}</h2>
-          <p className="text-[11px] text-zinc-400" data-testid="records-source">
-            牌譜日期 {post.date || '沒寫'}{post.created ? <> · 發文 {formatTaipei(post.created)}</> : null}
-            {' '}· 來源 {sourceLabel(post)} · {kindLabel(post)}
-            {post.tags.length > 0 && <> · {post.tags.join('、')}</>}
-          </p>
-        </header>
-        {game ? (
+        {cutActive ? (
+          <header>
+            <h2 className="text-lg font-bold leading-snug text-white">牌譜（題目）</h2>
+            <p className="text-[11px] text-zinc-400" data-testid="records-source">來源 {sourceLabel(post)} · 標題與標籤先藏起來（可能寫了結果）</p>
+          </header>
+        ) : (
+          <header>
+            <h2 className="break-words text-lg font-bold leading-snug text-white">{post.title || '（沒有標題）'}</h2>
+            <p className="text-[11px] text-zinc-400" data-testid="records-source">
+              牌譜日期 {post.date || '沒寫'}{post.created ? <> · 發文 {formatTaipei(post.created)}</> : null}
+              {' '}· 來源 {sourceLabel(post)} · {kindLabel(post)}
+              {post.tags.length > 0 && <> · {post.tags.join('、')}</>}
+            </p>
+          </header>
+        )}
+        {game && cutActive && fullGame && cut ? (
+          <>
+            <CutBanner game={fullGame} cut={cut} onShowFull={onShowFull} />
+            <MissionTrack game={game} />
+            <LineupSummary post={post} showRoles={false} />
+          </>
+        ) : game ? (
           <>
             <ResultBanner post={post} game={game} prefs={prefs} />
             <MissionTrack game={game} />
@@ -584,7 +643,7 @@ export default function RecordsGameView({ post, guildId, onBack }: { post: Recor
 
       {/* 右欄下半：DC 文字（收合）、回覆（面板內捲動） */}
       <div className={`flex min-h-0 flex-col gap-2 ${side} lg:row-start-2`}>
-        {game && (
+        {game && !cutActive && (
           <details className="flex-shrink-0 rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-1.5">
             <summary className="cursor-pointer text-xs font-semibold text-zinc-300">DC 牌譜格式（文字）</summary>
             <div className="mt-1 flex justify-end"><CopyText text={text} /></div>

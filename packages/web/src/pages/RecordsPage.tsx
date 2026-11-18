@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, ExternalLink, RotateCw, ScrollText, Search, X } from 'lucide-react';
 import { fetchRecordsList, isAnalysisNotGenerated, isAnalysisRouteMissing } from '../services/api';
 import RecordsGameView, { OUTCOME_STYLE } from '../components/records/RecordsGameView';
-import { closeRecords, openRecords, useOpenRecords } from '../components/records/recordsLink';
+import { closeRecords, openRecords, showFullRecord, useOpenRecords, useRecordsCut } from '../components/records/recordsLink';
 import { useRecordsPrefs } from '../components/records/recordsPrefs';
 import LineupFilterEditor from '../components/lineup/LineupFilterEditor';
 import { branchLabel } from '../components/analysis/stateTree/recordBranch';
@@ -157,6 +157,7 @@ export default function RecordsPage(): JSX.Element {
   const [filter, setFilter] = useState<RecordFilter>(storedFilter);
   const [shown, setShown] = useState(PAGE_SIZE);
   const openId = useOpenRecords();
+  const cut = useRecordsCut();
   const [prefs] = useRecordsPrefs();
 
   const fetchList = (force: boolean): void => {
@@ -193,7 +194,7 @@ export default function RecordsPage(): JSX.Element {
     return (
       <div className="mx-auto max-w-7xl px-3 pb-10 pt-2 sm:px-4 lg:pb-0">
         {post ? (
-          <RecordsGameView post={post} guildId={state.data.guildId} onBack={closeRecords} />
+          <RecordsGameView post={post} guildId={state.data.guildId} onBack={closeRecords} cut={cut} onShowFull={() => showFullRecord(post.id)} />
         ) : (
           <div className="space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/80 p-4 text-sm text-zinc-300">
             <p>找不到這篇牌譜（可能已刪除，或是今天剛發、剛加進試算表還沒同步）。</p>

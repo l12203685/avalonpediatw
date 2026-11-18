@@ -14,6 +14,7 @@ Complete guide for setting up Discord and Line bots for Avalon game platform.
 8. [待修正牌譜清單（/待修正）](#待修正牌譜清單待修正)
 9. [百科回報與 ID 認領（/回報、/認領）](#百科回報與-id-認領回報認領)
 10. [牌譜更正（/更正）](#牌譜更正更正)
+11. [每日「阿瓦隆百科小觀念」與觀念卡回饋](#每日阿瓦隆百科小觀念與觀念卡回饋)
 
 ---
 
@@ -382,6 +383,80 @@ DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <
 - 頻率限制：送出跟 `/回報` 共用（每個人 10 分鐘 5 筆）；查詢每個人 10 分鐘 20 次。LINE 重送同一個事件：查詢照答，更正不再送一次。
 - 不同步：LINE 群組裡打的 `/更正` 原文和回覆都不同步到 DC，Discord 的回覆也不同步到 LINE（同 `/回報`；送出的那則 bot 已經直接貼到兩邊）。
 - 程式：`packages/server/src/bots/recordCorrection/`（指令）、`packages/server/src/services/recordLookup.ts`（查局號）。說明：`/help 更正`。
+
+## 每日「阿瓦隆百科小觀念」與觀念卡回饋
+
+2026-11-18 起（站長：「百科觀念卡 我希望能公開出去 並且群組(line & dc) 固定每天早上第一則訊息回覆」「其他人也可以針對這些觀念做回覆 認為不合理或是不清楚的 你再收下做調整」「牌局: 優先以當日 threads/IG 發文的題目」）。**預設全部關閉**，要在 Render 設下面的環境變數才會動。
+
+### 群組裡看到什麼
+
+開了的 LINE 群組／Discord 頻道裡，每天台北 06:00（`CONCEPT_DAILY_START`）以後第一個人講話，bot 就回覆那一則（LINE 用那則訊息的 reply_token、引用它，不用 push 額度；Discord 回覆那一則、不 @ 任何人）。一個群組一天一則，LINE 和 Discord 同一天是同一張卡：
+
+```
+[阿瓦隆百科小觀念]
+情境: 你是忠臣尾家，在1-5要派3人隊。
+觀念: 你唯一確定的好人是自己，外灑等於放棄這個確定的好人。
+應用: 派自己加上共識最好的兩位，要外灑就得有理由。
+牌局: https://avalon-game-platform.web.app/#records=S358&upto=4&seat=5
+觀念卡: https://avalon-game-platform.web.app/#concepts=w206-loyal-self
+覺得不合理或不清楚？直接回覆這則訊息，或打「觀念回饋 內容」
+```
+
+- **選卡**：先看當天 Threads／IG 的題目（跟每日草稿同一個 `ThreadsGenerator.pickFor`：`threads_picks.json`、threads-state 分支的 `state/<日期>.json`、`threads_live.json` 都在發之前從公開 repo 讀最新的），用 `conceptMatches(那一題)` 取最貼近、而且 14 天內沒發過的卡。沒有題目、或配不到卡，才輪替：整副卡照雜湊排好、一輪裡不重複；情境寫了前提（角色、座位、比分、湖、上一局…）的卡要題庫裡有對得上的實戰牌譜才排進輪替。
+- **牌局**：當天那一題的牌譜，**只到出題的那一刻**（`#records=<id>&upto=<整局第幾次派票，從 0 數；刺殺題是 A>&seat=<座位，0 家寫 0>`）：網站藏起那一次（含）之後的派票、任務、湖、結果、刺殺、其他人的角色、名字、標題、標籤與 DC 回覆，只寫「你是 N 家 某角色」和他看得到的座位，按「看完整牌譜」才打開整局。網站上沒有那一局就改連文章那一節，標「文章:」。當天的 Threads 貼文已經發出去（下午才第一則訊息時）會多一行 `Threads: <網址>`。
+- **觀念卡**：公開頁是百科攻略的第三個檢視「觀念卡」（`#concepts`，`#concepts=<卡片 id>` 捲到那一張；`packages/web/src/components/ConceptCards.tsx`），可以搜尋、照決策和局篩選，每張卡有證據標籤與「讀這一節」。
+
+### 「第一則」怎麼判斷、怎麼不重發
+
+- 每分鐘的計時器在起始時間前 30 分鐘就把當天的卡算好、存起來。第一則訊息來時卡還沒好（例如伺服器剛被這則訊息叫醒、題庫還在讀），LINE 最多等 2.5 秒、Discord 15 秒，等不到就這一則不發，下一則再發。
+- 記憶體先標「處理中」，同一個群組同時來的第二則不會再發；**真的送出去之後**才記「今天發過」，沒送出去（reply_token 過期、Discord 失敗）就不記，下一則再試。
+- 「今天發過」、每天選的卡、bot 那一則的訊息 id 存在 private repo 的 JSON 檔（預設帳號庫 `GITHUB_ACCOUNTS_REPO` 的 `bot-state/concept-daily.json`，用 `GITHUB_ACCOUNTS_TOKEN`），重啟後照樣知道今天發過。檔案裡沒有聊天內容：群組 id 是雜湊過的。沒有設定 repo 時只放記憶體（開機 log 會寫；重啟後當天可能再發一次）。
+
+### 回饋
+
+- 在開了的群組裡**引用（回覆）bot 那一則小觀念**（Discord 的回覆、LINE 的引用回覆），或打 `觀念回饋 內容`／`/觀念 內容`（LINE 的引用萬一認不出來時用，算到這個群組最近一次發的那張卡），bot 回「收到，會轉給百科整理，謝謝。」，並把內容貼到管理員頻道（`FEEDBACK_DISCORD_CHANNEL_ID`，沒設就是「大劍管理員」；跟 /意見 同一個地方，**不進 repo、不進 log**）：
+
+  ```
+  【觀念卡回饋】w206-loyal-self
+  日期 2026-11-18｜LINE｜群 3f9c0a1b2c4d｜人 8e1f2a3b4c5d｜時間 2026-11-17T22:31:05.000Z
+  應用那句跟情境對不上
+  ```
+
+  群組與人都只有雜湊（`CONCEPT_ID_SALT`），不寫名字、不 @ 任何人。只打「觀念回饋」沒有內容 → 回用法。
+- 限流：每人 10 分鐘 3 則、一天 10 則；全部每小時 60 則。超過的不回、不存（狀態頁只算次數）。
+
+#### 每日例行作業：讀回饋、標記已處理
+
+只在本機跑（輸出有群友打的原文，不要放進 GitHub Actions、公開 log、issue 或 repo）：
+
+```bash
+cd packages/server
+DISCORD_BOT_TOKEN=… npx tsx scripts/conceptFeedback.ts list --since 2026-11-18T00:00:00+08:00 > concept_feedback.json   # 只列沒處理的；--all 連已處理的
+DISCORD_BOT_TOKEN=… npx tsx scripts/conceptFeedback.ts mark <訊息 id> [<訊息 id> …]                              # 那一則第一行結尾加「（已處理）」
+```
+
+- `list` 的 stdout：`{channelId, since, items: [{messageId, cardId, date, platform, groupHash, userHash, createdAt, text, handled}]}`；`mark` 每一則一行 `{"messageId", "result": "edited|already|not_found|failed"}`。只認 bot 自己貼、開頭「【觀念卡回饋】」的訊息。
+- 改卡：照回饋改 `packages/server/src/bots/threads/concepts.json`（開 PR，`ThreadsConcepts.test.ts` 檢查格式與文章章節），合併後 `mark` 那幾則。
+- 機器人在管理員頻道要有「讀取訊息歷史」；標記是編輯 bot 自己的訊息。
+
+### 環境變數（Render → Environment；全部選填，預設關）
+
+| 變數 | 值 | 說明 |
+|---|---|---|
+| `CONCEPT_DAILY_LINE` | `true` | 開 LINE |
+| `CONCEPT_DAILY_LINE_GROUP_IDS` | `C…,C…` | LINE 群組 id（逗號或空白分隔）；空的就算開了也不發。群組 id：在群裡講一句話，Render → Logs 會印 `[LINE] event from group C…`；鏡像群就是 `LOBBY_MIRROR_LINE_GROUP_ID` 那個 |
+| `CONCEPT_DAILY_DISCORD` | `true` | 開 Discord |
+| `CONCEPT_DAILY_DISCORD_CHANNEL_IDS` | `123…,456…` | Discord 頻道 id（開發者模式 → 頻道右鍵 → 複製 ID） |
+| `CONCEPT_DAILY_START` | `06:00` | 每天幾點（台北）以後的第一則訊息；預設 06:00 |
+| `CONCEPT_FEEDBACK` | `false` | 關掉回饋（預設開，只在上面的群組／頻道） |
+| `CONCEPT_ID_SALT` | 隨機字串 | 群組／使用者 id 雜湊的鹽（選填，有預設值；設了以後別再改，不然同一個群組的雜湊會變） |
+| `CONCEPT_DAILY_STATE_REPO` / `_TOKEN` / `_BRANCH` / `_PATH` | | 狀態檔放哪（預設 `GITHUB_ACCOUNTS_REPO`／`GITHUB_ACCOUNTS_TOKEN`／`GITHUB_ACCOUNTS_BRANCH`／`bot-state/concept-daily.json`）；**務必 private repo**、權杖要有那個 repo 的 Contents 讀寫 |
+| `THREADS_LIVE_FROM` | `YYYY-MM-DD` | 選用：跟 repo 變數同名同義（Threads 正式發的第一天）；沒設就讀 `threads_live.json` 的 `liveFrom` |
+
+- 狀態頁 `/api/bots/status` → `conceptDaily`：開關、列了幾個群組／頻道、狀態放哪（github／memory）、今天的卡片 id 與連結種類、計數（只有數字，沒有 id 或內容）。
+- 程式：`packages/server/src/bots/conceptDaily/`（`plan.ts` 選卡與格式、`service.ts` 一天一次與回饋、`store.ts` 狀態檔、`threadsToday.ts` 當天的 Threads 題目、`discord.ts`）、`packages/server/src/bots/line/client.ts`（跟同步佇列共用 reply_token：指令回答 → 小觀念 → 同步佇列，最多 5 則）、`packages/server/src/services/conceptFeedbackList.ts`（讀回饋、標記）。測試：`ConceptDaily.test.ts`、`WebConceptsAndCut.test.ts`。
+
+---
 
 ## Features
 
