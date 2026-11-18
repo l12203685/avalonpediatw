@@ -42,6 +42,31 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 
 已經有 `<日期>.json` 的日子，會沿用檔案裡的題目和第一則留言，重跑不會換題。所以就算題庫或牌譜連結之後更新了，昨天貼出去的題目和今天 A 裡的答案還是對得上。
 
+### 百科AI 的答案（只給站長，2026-11-18）
+
+站長 11/18：「每日一題 我希望 你先讓百科AI去跑個答案出來給我 我順便可以修正百科AI的思考和盲點」。
+
+```bash
+pnpm --filter server threads:ai-answer --date 2026-11-19            # 那一天的題目（跟 threads:draft 同一套選題）
+pnpm --filter server threads:ai-answer --exercise SV1Q8-3-5         # 指定題號
+pnpm --filter server threads:ai-answer --date 2026-11-18 --week --out ai.json --summary
+# 其他選項：--seed <字串>、--picks <檔>、--drafts <資料夾>、--start YYYY-MM-DD
+```
+
+用牌譜把出題那一家在那一刻的觀察重建出來（`buildReplayObservation`，只放那一家當下看得到的），交給正式的百科AI（ForwardAgent＋HeuristicAgent，`DEFAULT_AGENT_TUNING`）作答。
+`threads:draft` 也把它寫進 `<日期>.json` 的 `aiAnswer`（`--no-ai` 不跑）；**不進貼文、不進 `.md`**，自動發佈不產生它，也不會進 threads-state。
+欄位（`src/bots/threads/aiAnswer.ts` 的 `ThreadsAiAnswer`）：
+
+| 欄位 | 內容 |
+|---|---|
+| `pick` | 百科AI 派的隊／刺的人，和它在 `top.metric` 下的機率、名次；派隊題另有前向推理選中的分數 |
+| `top` | 派隊題：每一種同人數的隊在百科AI 的貝氏信念下「沒有紅」（第 4 局：紅少於 2 人）的機率前 5 名——是它的信念，不是前向推理內部的排序（內部只公開選中的那一個）。刺殺題：刺殺排序用的分數（模型＋投票＋派隊＋重派讀法）的 softmax，照它真的排序（前排優先），附每一項分數 |
+| `belief` | 每一家的 P(紅)（派隊題，附權重最高的 3 個紅方組合）或 P(梅林)（刺殺題） |
+| `reasons` | 每一句標來源：角色資訊、決策路徑（explain 的規則、前向推理軌跡原文）、網站賽後回顧的說明、公開事實（任務、湖、拇指）、刺殺分數的組成、信念驅動（拿掉一類證據重算 P(紅) 的變化——推算，不是百科AI 自己的說明） |
+| `real` | 真人那一手、在百科AI 信念下的機率和名次、結果（通過與否、任務幾張失敗、刺中沒有） |
+| `hindsight` | 看了角色之後：兩邊的隊上有誰是紅、梅林是誰 |
+| `policy` | 機器人、參數指紋、git SHA、種子（不給＝跟模擬瓦 /區間 同一個種子，兩邊派法一致） |
+
 ## 每週主題（2026-11-11）
 
 | 星期 | 今天的題目 | A 裡的昨天答案 |

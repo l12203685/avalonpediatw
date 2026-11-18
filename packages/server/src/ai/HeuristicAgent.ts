@@ -761,6 +761,31 @@ function createForwardAgent(
   return new m.ForwardAgent(agentId, baseline);
 }
 
+/** The terms of one candidate's assassination log-score (model path); they add up to the score `assassinate` ranks by. */
+export interface AssassinScoreTerms {
+  /** Conditional-logit model (`assassin/AssassinModel.ts`). */
+  model: number;
+  /** R3+ vote read (`assassinMerlinVotes`). */
+  vote: number;
+  /** Lake read (`assassinLakeRead`). */
+  lake: number;
+  /** Lead read: clean teams the public could not have picked (`assassinLeadRead`). */
+  lead: number;
+  /** Re-proposal read (`assassinReuseRead`). */
+  reuse: number;
+}
+
+/** `HeuristicAgent.assassinationReadout`: what the assassination ranks by. */
+export interface AssassinationReadout {
+  /** Every non-red seat other than self. */
+  candidates: string[];
+  /** The seats the pick is taken from (the tiers' front); the highest score among them is the target. */
+  front: string[];
+  /** Total log-score per candidate (all candidates, including the ones the tiers dropped). */
+  scores: Map<string, number>;
+  terms: Map<string, AssassinScoreTerms>;
+}
+
 export class HeuristicAgent implements AvalonAgent {
   readonly agentId: string;
   readonly agentType = 'heuristic' as const;
@@ -2623,6 +2648,118 @@ export class HeuristicAgent implements AvalonAgent {
 
   // ── Assassination ────────────────────────────────────────────
 
+  /**
+   * The assassination model path's per-candidate log-scores (`assassinModel` on), split into the terms that add up to the score
+   * `assassinate` ranks by: the conditional-logit model, the R3+ vote read, the lake read, the lead read and the re-proposal read.
+   * Pure (reads `obs` and the tuning only); `assassinate` and the read-only `assassinationReadout` share it.
+   */
+  private assassinModelScores(
+    obs: PlayerObservation,
+    goodPlayers: readonly string[],
+    evilSet: ReadonlySet<string>,
+    ignoreReuse: boolean,
+    doomedMode: number,
+  ): { scores: Map<string, number>; terms: Map<string, AssassinScoreTerms> } {
+    const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
+    const leadWeight = this.tuning.assassinLeadRead ?? 0;
+    const lakeWeight = this.tuning.assassinLakeRead ?? 0;
+    const terms = new Map<string, AssassinScoreTerms>(goodPlayers.map((id) => [id, { model: 0, vote: 0, lake: 0, lead: 0, reuse: 0 }]));
+    const add = (id: string, key: keyof AssassinScoreTerms, v: number): void => {
+      const t = terms.get(id);
+      if (t) t[key] += v;
+    };
+    // `assassinReuseRead=2`: the model's captain features skip those re-proposals too (blue captains' only).
+    const modelObs = this.tuning.assassinReuseRead === 2 ? withoutReuseLeaders(obs, evilSet) : obs;
+    const base = scoreAssassinCandidates(modelObs, [...goodPlayers], this.assassinModelWeights);
+    // Round 21 (red) `assassinReuseRead=10`: the model score, vote read and lead read re-weighted by the stacked fit.
+    const stacked = this.tuning.assassinReuseRead === 10;
+    for (const id of goodPlayers) add(id, 'model', (stacked ? REUSE_STACK_WEIGHTS.model : 1) * (base.get(id) ?? 0));
+    const voteW = stacked ? REUSE_STACK_WEIGHTS.vote : voteWeight;
+    const leadW = stacked ? REUSE_STACK_WEIGHTS.lead : leadWeight;
+    // Round 6 (red) candidate `assassinMerlinVotes` (assassin/MerlinVoteRead.ts): read Merlin off the R3+ votes.
+    if (voteWeight > 0) {
+      const reds = [...evilSet];
+      const m = this.tuning.assassinVoteModel;
+      const model = m >= 4 ? 'normalFit26' : m === 3 ? 'normalFit13' : m === 2 ? 'normalFit' : m ? 'normal' : 'strict';
+      const eps = this.tuning.assassinVoteEps ?? 0;
+      for (const id of goodPlayers) add(id, 'vote', voteW * merlinVoteLogRatio(obs, id, reds, model, eps));
+    }
+    // Round 12 (red) candidate `assassinLakeRead` (assassin/MerlinLakeRead.ts): Merlin never lakes a red he sees.
+    if (lakeWeight > 0) {
+      const reds = [...evilSet];
+      for (const id of goodPlayers) add(id, 'lake', lakeWeight * merlinLakeLogRatio(obs, id, reds));
+    }
+    // Round 6 (red) candidate `assassinLeadRead` (assassin/MerlinLeadRead.ts): 資訊過度超前 — clean teams the public could not have picked.
+    if (leadWeight > 0) {
+      const reds = [...evilSet];
+      const leadOpts = this.tuning.assassinLeadReadBot ? { botTables: this.tuning.beliefBotTables ?? 0 } : {};
+      for (const id of goodPlayers) add(id, 'lead', leadW * merlinLeadLogRatio(obs, id, reds, leadOpts, ignoreReuse, doomedMode >= 2 ? DOOMED_LEAD_EPS : undefined));
+    }
+    // `assassinReuseRead=3`: a captain who passed over Merlin's re-proposal norm is less likely Merlin.
+    const reuseMode = this.tuning.assassinReuseRead ?? 0;
+    if (reuseMode === 3) {
+      for (const id of goodPlayers) add(id, 'reuse', MISSED_REUSE_LOG_LR * missedReuseLeads(obs, id));
+    } else if (reuseMode >= 4) {
+      // Round 21 (red) `assassinReuseRead` 4–10: round-dependent / measured / fitted factors, re-proposal credit, clean misses.
+      for (const id of goodPlayers) add(id, 'reuse', reuseLeadLogRatio(obs, id, reuseMode));
+    }
+    const scores = new Map<string, number>();
+    for (const id of goodPlayers) {
+      const t = terms.get(id) as AssassinScoreTerms;
+      // Same order of additions as before the split (model, vote, lake, lead, reuse), so the sums are bit-identical.
+      scores.set(id, (((t.model + t.vote) + t.lake) + t.lead) + t.reuse);
+    }
+    return { scores, terms };
+  }
+
+  /**
+   * Read-only view of the assassination (Threads 每日一題的「百科AI 答案」, 2026-11-18): the candidates (every non-red seat), the
+   * tiers `assassinate` applies (visible-red leads, doomed R1–R2 leads), and the per-term log-scores of the model path. `null` when
+   * `assassinModel` is off (the older heuristic path has no comparable scores). Never touches memory; the pick is `act()`'s.
+   */
+  assassinationReadout(obs: PlayerObservation): AssassinationReadout | null {
+    if (!this.tuning.assassinModel) return null;
+    const { allGood, goodPlayers, evilSet, visibleRed, doomedMode } = this.assassinCandidates(obs);
+    if (allGood.length === 0) return null;
+    const { scores, terms } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
+    const evidence = visibleRedEvidence(obs, goodPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse);
+    const front = visibleRed.tier ? tierCandidates(goodPlayers, evidence) : [...goodPlayers];
+    // Scores of the seats the tiers dropped (they are never picked while a front-tier seat exists), for display.
+    const dropped = allGood.filter((id) => !goodPlayers.includes(id));
+    const rest = dropped.length ? this.assassinModelScores(obs, dropped, evilSet, visibleRed.ignoreReuse, doomedMode) : null;
+    return {
+      candidates: allGood,
+      front,
+      scores: new Map([...(rest?.scores ?? []), ...scores]),
+      terms: new Map([...(rest?.terms ?? []), ...terms]),
+    };
+  }
+
+  /** The candidate pools of `assassinate` (shared with `assassinationReadout`). */
+  private assassinCandidates(obs: PlayerObservation): {
+    allIds: string[];
+    evilSet: Set<string>;
+    allGood: string[];
+    goodPlayers: string[];
+    visibleRed: { tier: boolean; likelihood: boolean; ignoreDoomed: boolean; ignoreReuse: boolean };
+    doomedMode: number;
+  } {
+    const allIds = this.getPlayerIds(obs);
+    const evilSet = new Set<string>(obs.allEvilIds ?? obs.knownEvils);
+    const allGood = allIds.filter(id => !evilSet.has(id) && id !== obs.myPlayerId);
+    const visibleRed = {
+      tier: this.tuning.assassinVisibleRedTier,
+      likelihood: this.tuning.assassinVisibleRedLikelihood,
+      ignoreDoomed: this.tuning.assassinIgnoreDoomed,
+      ignoreReuse: (this.tuning.assassinReuseRead ?? 0) >= 1,
+    };
+    const doomedMode = this.tuning.assassinDoomedRead ?? 0;
+    if (allGood.length === 0) return { allIds, evilSet, allGood, goodPlayers: [], visibleRed, doomedMode };
+    const tiered = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse)) : allGood;
+    const goodPlayers = visibleRed.tier && (doomedMode === 1 || doomedMode === 3) ? doomedTierCandidates(obs, tiered) : tiered;
+    return { allIds, evilSet, allGood, goodPlayers, visibleRed, doomedMode };
+  }
+
   private assassinate(obs: PlayerObservation): AgentAction {
     const allIds = this.getPlayerIds(obs);
 
@@ -2674,41 +2811,7 @@ export class HeuristicAgent implements AvalonAgent {
       if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0 && lakeWeight <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
-      // `assassinReuseRead=2`: the model's captain features skip those re-proposals too (blue captains' only).
-      const modelObs = this.tuning.assassinReuseRead === 2 ? withoutReuseLeaders(obs, evilSet) : obs;
-      const scores = scoreAssassinCandidates(modelObs, goodPlayers, this.assassinModelWeights);
-      // Round 21 (red) `assassinReuseRead=10`: the model score, vote read and lead read re-weighted by the stacked fit.
-      const stacked = this.tuning.assassinReuseRead === 10;
-      if (stacked) for (const id of goodPlayers) scores.set(id, REUSE_STACK_WEIGHTS.model * (scores.get(id) ?? 0));
-      const voteW = stacked ? REUSE_STACK_WEIGHTS.vote : voteWeight;
-      const leadW = stacked ? REUSE_STACK_WEIGHTS.lead : leadWeight;
-      // Round 6 (red) candidate `assassinMerlinVotes` (assassin/MerlinVoteRead.ts): read Merlin off the R3+ votes.
-      if (voteWeight > 0) {
-        const reds = [...evilSet];
-        const m = this.tuning.assassinVoteModel;
-        const model = m >= 4 ? 'normalFit26' : m === 3 ? 'normalFit13' : m === 2 ? 'normalFit' : m ? 'normal' : 'strict';
-        const eps = this.tuning.assassinVoteEps ?? 0;
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + voteW * merlinVoteLogRatio(obs, id, reds, model, eps));
-      }
-      // Round 12 (red) candidate `assassinLakeRead` (assassin/MerlinLakeRead.ts): Merlin never lakes a red he sees.
-      if (lakeWeight > 0) {
-        const reds = [...evilSet];
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + lakeWeight * merlinLakeLogRatio(obs, id, reds));
-      }
-      // Round 6 (red) candidate `assassinLeadRead` (assassin/MerlinLeadRead.ts): 資訊過度超前 — clean teams the public could not have picked.
-      if (leadWeight > 0) {
-        const reds = [...evilSet];
-        const leadOpts = this.tuning.assassinLeadReadBot ? { botTables: this.tuning.beliefBotTables ?? 0 } : {};
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + leadW * merlinLeadLogRatio(obs, id, reds, leadOpts, visibleRed.ignoreReuse, doomedMode >= 2 ? DOOMED_LEAD_EPS : undefined));
-      }
-      // `assassinReuseRead=3`: a captain who passed over Merlin's re-proposal norm is less likely Merlin.
-      const reuseMode = this.tuning.assassinReuseRead ?? 0;
-      if (reuseMode === 3) {
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + MISSED_REUSE_LOG_LR * missedReuseLeads(obs, id));
-      } else if (reuseMode >= 4) {
-        // Round 21 (red) `assassinReuseRead` 4–10: round-dependent / measured / fitted factors, re-proposal credit, clean misses.
-        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + reuseLeadLogRatio(obs, id, reuseMode));
-      }
+      const { scores } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }
 
