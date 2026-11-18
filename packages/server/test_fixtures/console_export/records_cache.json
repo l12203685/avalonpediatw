@@ -1,0 +1,2128 @@
+{
+ "format": "avalon-records",
+ "version": 1,
+ "posts": [
+  {
+   "id": "1571918924805705778",
+   "date": "2026-11-17",
+   "tags": [
+    "線瓦"
+   ],
+   "problem": "機器人紀錄員的貼文尚待檢視"
+  },
+  {
+   "id": "1453041639647088874",
+   "date": "2025-12-23",
+   "tags": [
+    "三藍被刀",
+    "線瓦"
+   ],
+   "game": {
+    "config": "671430",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "148",
+        "votes": []
+       },
+       {
+        "team": "259",
+        "votes": []
+       },
+       {
+        "team": "345",
+        "votes": []
+       },
+       {
+        "team": "140",
+        "votes": []
+       },
+       {
+        "team": "158",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "2690",
+        "votes": []
+       },
+       {
+        "team": "1470",
+        "votes": []
+       },
+       {
+        "team": "4780",
+        "votes": []
+       },
+       {
+        "team": "3459",
+        "votes": []
+       },
+       {
+        "team": "3590",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "3590",
+        "votes": [
+         "124678+"
+        ]
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "23590",
+        "votes": [
+         "468+"
+        ]
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "9",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "9",
+      "target": "4",
+      "claim": "x"
+     }
+    ],
+    "assassination": "0",
+    "outcome": "三藍死",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 43.6
+   }
+  },
+  {
+   "id": "1453040861041397812",
+   "date": "2025-12-23",
+   "tags": [
+    "三藍躲刺",
+    "線瓦"
+   ],
+   "game": {
+    "config": "452738",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "167",
+        "votes": []
+       },
+       {
+        "team": "279",
+        "votes": []
+       },
+       {
+        "team": "360",
+        "votes": []
+       },
+       {
+        "team": "456",
+        "votes": []
+       },
+       {
+        "team": "135",
+        "votes": [
+         "8-"
+        ]
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "3680",
+        "votes": []
+       },
+       {
+        "team": "1370",
+        "votes": []
+       },
+       {
+        "team": "3689",
+        "votes": []
+       },
+       {
+        "team": "1690",
+        "votes": [
+         "4+"
+        ]
+       },
+       {
+        "team": "3680",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "3680",
+        "votes": [
+         "124579+"
+        ]
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "23680",
+        "votes": [
+         "1459+"
+        ]
+       }
+      ],
+      "mission": "oooox"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "8",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "8",
+      "target": "6",
+      "claim": "o"
+     }
+    ],
+    "assassination": "3",
+    "outcome": "三藍活",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 43.4
+   }
+  },
+  {
+   "id": "1453039902492196965",
+   "date": "2025-12-23",
+   "tags": [
+    "三紅",
+    "線瓦"
+   ],
+   "game": {
+    "config": "498017",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "135",
+        "votes": []
+       },
+       {
+        "team": "269",
+        "votes": []
+       },
+       {
+        "team": "390",
+        "votes": []
+       },
+       {
+        "team": "148",
+        "votes": [
+         "8-9+"
+        ]
+       },
+       {
+        "team": "359",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "2690",
+        "votes": []
+       },
+       {
+        "team": "2670",
+        "votes": []
+       },
+       {
+        "team": "2689",
+        "votes": []
+       },
+       {
+        "team": "2689",
+        "votes": [
+         "47+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "2360",
+        "votes": []
+       },
+       {
+        "team": "1236",
+        "votes": [
+         "6-"
+        ]
+       },
+       {
+        "team": "2368",
+        "votes": [
+         "6-7+"
+        ]
+       },
+       {
+        "team": "2360",
+        "votes": [
+         "15+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "3",
+      "claim": "o"
+     }
+    ],
+    "assassination": "",
+    "outcome": "三紅",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 38.7
+   }
+  },
+  {
+   "id": "1453030368625168505",
+   "date": "2025-12-23",
+   "tags": [
+    "三藍被刀",
+    "線瓦"
+   ],
+   "game": {
+    "config": "839741",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "149",
+        "votes": []
+       },
+       {
+        "team": "269",
+        "votes": []
+       },
+       {
+        "team": "370",
+        "votes": []
+       },
+       {
+        "team": "459",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "590",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "5690",
+        "votes": []
+       },
+       {
+        "team": "5790",
+        "votes": []
+       },
+       {
+        "team": "5890",
+        "votes": []
+       },
+       {
+        "team": "4590",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "5690",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1256",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "2358",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "3567",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "1246",
+        "votes": [
+         "26-"
+        ]
+       },
+       {
+        "team": "1245",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "12450",
+        "votes": [
+         "0-679+"
+        ]
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "9",
+      "claim": "x"
+     },
+     {
+      "after": 3,
+      "holder": "9",
+      "target": "7",
+      "claim": "o"
+     }
+    ],
+    "assassination": "1",
+    "outcome": "三藍死",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 39.3
+   }
+  },
+  {
+   "id": "M718",
+   "date": "2025-09-02",
+   "tags": [
+    "模擬"
+   ],
+   "sim": true,
+   "game": {
+    "config": "641923",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "158",
+        "votes": []
+       },
+       {
+        "team": "290",
+        "votes": []
+       },
+       {
+        "team": "138",
+        "votes": []
+       },
+       {
+        "team": "470",
+        "votes": []
+       },
+       {
+        "team": "158",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     }
+    ],
+    "lakes": [],
+    "assassination": "",
+    "outcome": "",
+    "category": ""
+   }
+  },
+  {
+   "id": "S2015",
+   "date": "2025-02-02",
+   "tags": [
+    "面瓦"
+   ],
+   "problem": "試算表裡這局的紀錄不完整（缺少某一輪的派票、任務張數不對或結果不明）"
+  },
+  {
+   "id": "S2006",
+   "date": "2025-02-02",
+   "tags": [
+    "面瓦"
+   ],
+   "game": {
+    "config": "183407",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "189",
+        "votes": []
+       },
+       {
+        "team": "136",
+        "votes": [
+         "2+"
+        ]
+       },
+       {
+        "team": "390",
+        "votes": []
+       },
+       {
+        "team": "469",
+        "votes": []
+       },
+       {
+        "team": "459",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1689",
+        "votes": []
+       },
+       {
+        "team": "3790",
+        "votes": []
+       },
+       {
+        "team": "3468",
+        "votes": []
+       },
+       {
+        "team": "3690",
+        "votes": []
+       },
+       {
+        "team": "1560",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1269",
+        "votes": []
+       },
+       {
+        "team": "2569",
+        "votes": [
+         "5-",
+         "0+"
+        ]
+       },
+       {
+        "team": "2350",
+        "votes": []
+       },
+       {
+        "team": "1456",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "2560",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "25690",
+        "votes": []
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "2",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "2",
+      "target": "9",
+      "claim": "o"
+     }
+    ],
+    "assassination": "",
+    "outcome": "三紅",
+    "category": "面瓦"
+   },
+   "lineup": {
+    "s": 78.6
+   }
+  },
+  {
+   "id": "S1970",
+   "date": "2024-11-17",
+   "tags": [
+    "面瓦"
+   ],
+   "problem": "試算表裡這局的紀錄不完整（缺少某一輪的派票、任務張數不對或結果不明）"
+  },
+  {
+   "id": "1296135863243247616",
+   "date": "2024-10-16",
+   "tags": [
+    "三藍被刀",
+    "線瓦"
+   ],
+   "game": {
+    "config": "735628",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "149",
+        "votes": []
+       },
+       {
+        "team": "257",
+        "votes": []
+       },
+       {
+        "team": "349",
+        "votes": []
+       },
+       {
+        "team": "345",
+        "votes": []
+       },
+       {
+        "team": "345",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "4560",
+        "votes": []
+       },
+       {
+        "team": "3457",
+        "votes": []
+       },
+       {
+        "team": "3458",
+        "votes": [
+         "19+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "3450",
+        "votes": [
+         "69+",
+         "3-"
+        ]
+       },
+       {
+        "team": "4570",
+        "votes": []
+       },
+       {
+        "team": "2680",
+        "votes": [
+         "1+",
+         "280-"
+        ]
+       },
+       {
+        "team": "2457",
+        "votes": []
+       },
+       {
+        "team": "3579",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "34579",
+        "votes": [
+         "16+"
+        ]
+       }
+      ],
+      "mission": "oooxx"
+     },
+     {
+      "proposals": [
+       {
+        "team": "25689",
+        "votes": [
+         "89-"
+        ]
+       },
+       {
+        "team": "56890",
+        "votes": [
+         "5890-"
+        ]
+       },
+       {
+        "team": "26789",
+        "votes": [
+         "89-"
+        ]
+       },
+       {
+        "team": "14890",
+        "votes": [
+         "190-"
+        ]
+       },
+       {
+        "team": "24890",
+        "votes": []
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "4",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "4",
+      "target": "9",
+      "claim": "o"
+     },
+     {
+      "after": 4,
+      "holder": "9",
+      "target": "8",
+      "claim": "o"
+     }
+    ],
+    "assassination": "8",
+    "outcome": "三藍死",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 49.8
+   }
+  },
+  {
+   "id": "S1623",
+   "date": "2024-10-16",
+   "tags": [
+    "線瓦"
+   ],
+   "game": {
+    "config": "735628",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "147",
+        "votes": []
+       },
+       {
+        "team": "257",
+        "votes": []
+       },
+       {
+        "team": "349",
+        "votes": []
+       },
+       {
+        "team": "345",
+        "votes": [
+         "9+"
+        ]
+       },
+       {
+        "team": "345",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "4560",
+        "votes": []
+       },
+       {
+        "team": "3457",
+        "votes": []
+       },
+       {
+        "team": "3458",
+        "votes": [
+         "19+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "3450",
+        "votes": [
+         "3-",
+         "69+"
+        ]
+       },
+       {
+        "team": "4570",
+        "votes": []
+       },
+       {
+        "team": "2680",
+        "votes": [
+         "280-",
+         "1+"
+        ]
+       },
+       {
+        "team": "2457",
+        "votes": []
+       },
+       {
+        "team": "3579",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "34579",
+        "votes": [
+         "16+"
+        ]
+       }
+      ],
+      "mission": "oooxx"
+     },
+     {
+      "proposals": [
+       {
+        "team": "25689",
+        "votes": [
+         "89-"
+        ]
+       },
+       {
+        "team": "56890",
+        "votes": [
+         "5890-"
+        ]
+       },
+       {
+        "team": "26789",
+        "votes": [
+         "89-"
+        ]
+       },
+       {
+        "team": "14890",
+        "votes": [
+         "190-"
+        ]
+       },
+       {
+        "team": "24890",
+        "votes": []
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "4",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "4",
+      "target": "9",
+      "claim": "o"
+     },
+     {
+      "after": 4,
+      "holder": "9",
+      "target": "8",
+      "claim": "o"
+     }
+    ],
+    "assassination": "8",
+    "outcome": "三藍死",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 50.2
+   }
+  },
+  {
+   "id": "M536",
+   "date": "2024-06-26",
+   "tags": [
+    "模擬"
+   ],
+   "sim": true,
+   "game": {
+    "config": "146790",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "148",
+        "votes": []
+       },
+       {
+        "team": "278",
+        "votes": []
+       },
+       {
+        "team": "359",
+        "votes": []
+       },
+       {
+        "team": "146",
+        "votes": []
+       },
+       {
+        "team": "358",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     }
+    ],
+    "lakes": [],
+    "assassination": "",
+    "outcome": "",
+    "category": ""
+   }
+  },
+  {
+   "id": "1237793766425886770",
+   "date": "2024-05-08",
+   "tags": [
+    "已收錄",
+    "三藍躲刺",
+    "線瓦"
+   ],
+   "game": {
+    "config": "184203",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "148",
+        "votes": [
+         "9+"
+        ]
+       },
+       {
+        "team": "270",
+        "votes": []
+       },
+       {
+        "team": "369",
+        "votes": [
+         "69-"
+        ]
+       },
+       {
+        "team": "469",
+        "votes": [
+         "9-"
+        ]
+       },
+       {
+        "team": "359",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1679",
+        "votes": []
+       },
+       {
+        "team": "1789",
+        "votes": [
+         "2+"
+        ]
+       },
+       {
+        "team": "6789",
+        "votes": []
+       },
+       {
+        "team": "4789",
+        "votes": []
+       },
+       {
+        "team": "6780",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1359",
+        "votes": []
+       },
+       {
+        "team": "2479",
+        "votes": []
+       },
+       {
+        "team": "3590",
+        "votes": []
+       },
+       {
+        "team": "2459",
+        "votes": [
+         "5-"
+        ]
+       },
+       {
+        "team": "3590",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "35690",
+        "votes": [
+         "1+",
+         "35-"
+        ]
+       },
+       {
+        "team": "35790",
+        "votes": [
+         "146+",
+         "35-"
+        ]
+       },
+       {
+        "team": "46789",
+        "votes": [
+         "469-"
+        ]
+       },
+       {
+        "team": "13679",
+        "votes": [
+         "8+",
+         "36-"
+        ]
+       },
+       {
+        "team": "13590",
+        "votes": []
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "5",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "5",
+      "target": "3",
+      "claim": "o"
+     }
+    ],
+    "assassination": "5",
+    "outcome": "三藍活",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 30.2
+   }
+  },
+  {
+   "id": "S1035",
+   "date": "2024-02-24",
+   "tags": [
+    "面瓦"
+   ],
+   "game": {
+    "config": "810965",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "158",
+        "votes": []
+       },
+       {
+        "team": "260",
+        "votes": []
+       },
+       {
+        "team": "378",
+        "votes": []
+       },
+       {
+        "team": "470",
+        "votes": []
+       },
+       {
+        "team": "560",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "2679",
+        "votes": []
+       },
+       {
+        "team": "3790",
+        "votes": []
+       },
+       {
+        "team": "3890",
+        "votes": []
+       },
+       {
+        "team": "2890",
+        "votes": []
+       },
+       {
+        "team": "3890",
+        "votes": []
+       }
+      ],
+      "mission": "ooxx"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1458",
+        "votes": []
+       },
+       {
+        "team": "1260",
+        "votes": [
+         "160-"
+        ]
+       },
+       {
+        "team": "3457",
+        "votes": []
+       },
+       {
+        "team": "4570",
+        "votes": []
+       },
+       {
+        "team": "3457",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "5",
+      "claim": "o"
+     }
+    ],
+    "assassination": "4",
+    "outcome": "三藍活",
+    "category": "面瓦"
+   },
+   "lineup": {
+    "s": 57.5
+   }
+  },
+  {
+   "id": "1183787757504577597",
+   "date": "2023-12-11",
+   "tags": [
+    "S2無差別亂鬥-季後賽",
+    "已收錄",
+    "三藍被刀"
+   ],
+   "game": {
+    "config": "185347",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "137",
+        "votes": []
+       },
+       {
+        "team": "267",
+        "votes": []
+       },
+       {
+        "team": "379",
+        "votes": []
+       },
+       {
+        "team": "458",
+        "votes": []
+       },
+       {
+        "team": "458",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "3670",
+        "votes": []
+       },
+       {
+        "team": "4578",
+        "votes": []
+       },
+       {
+        "team": "4578",
+        "votes": []
+       },
+       {
+        "team": "4578",
+        "votes": [
+         "269+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1370",
+        "votes": []
+       },
+       {
+        "team": "1379",
+        "votes": []
+       },
+       {
+        "team": "2379",
+        "votes": []
+       },
+       {
+        "team": "1379",
+        "votes": [
+         "20+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "34790",
+        "votes": [
+         "37-"
+        ]
+       },
+       {
+        "team": "45790",
+        "votes": [
+         "479-"
+        ]
+       },
+       {
+        "team": "46789",
+        "votes": [
+         "47-"
+        ]
+       },
+       {
+        "team": "26790",
+        "votes": [
+         "34+"
+        ]
+       }
+      ],
+      "mission": "ooooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "26789",
+        "votes": [
+         "2679-1+"
+        ]
+       },
+       {
+        "team": "26790",
+        "votes": [
+         "6-15+"
+        ]
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "7",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "7",
+      "target": "9",
+      "claim": "o"
+     },
+     {
+      "after": 4,
+      "holder": "9",
+      "target": "6",
+      "claim": "o"
+     }
+    ],
+    "assassination": "7",
+    "outcome": "三藍死",
+    "category": ""
+   },
+   "lineup": {
+    "s": 41.2
+   }
+  },
+  {
+   "id": "1176895793110728784",
+   "date": "2023-11-22",
+   "tags": [
+    "已收錄",
+    "三藍躲刺",
+    "S2無差別亂鬥-例行賽"
+   ],
+   "game": {
+    "config": "642017",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "180",
+        "votes": []
+       },
+       {
+        "team": "256",
+        "votes": []
+       },
+       {
+        "team": "234",
+        "votes": []
+       },
+       {
+        "team": "468",
+        "votes": [
+         "1+"
+        ]
+       },
+       {
+        "team": "158",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1670",
+        "votes": [
+         "1-"
+        ]
+       },
+       {
+        "team": "1578",
+        "votes": []
+       },
+       {
+        "team": "1580",
+        "votes": []
+       },
+       {
+        "team": "4569",
+        "votes": []
+       },
+       {
+        "team": "1580",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1578",
+        "votes": []
+       },
+       {
+        "team": "1267",
+        "votes": []
+       },
+       {
+        "team": "3490",
+        "votes": []
+       },
+       {
+        "team": "4678",
+        "votes": [
+         "90+8-"
+        ]
+       },
+       {
+        "team": "1578",
+        "votes": [
+         "0-"
+        ]
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "15789",
+        "votes": [
+         "0+"
+        ]
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "9",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "9",
+      "target": "8",
+      "claim": "o"
+     }
+    ],
+    "assassination": "",
+    "outcome": "三藍活",
+    "category": ""
+   },
+   "lineup": {
+    "s": 29.4
+   }
+  },
+  {
+   "id": "1176895704342483034",
+   "date": "2023-11-22",
+   "tags": [
+    "已收錄",
+    "三藍躲刺",
+    "S2無差別亂鬥-例行賽"
+   ],
+   "game": {
+    "config": "642017",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "180",
+        "votes": []
+       },
+       {
+        "team": "256",
+        "votes": []
+       },
+       {
+        "team": "234",
+        "votes": []
+       },
+       {
+        "team": "468",
+        "votes": [
+         "1+"
+        ]
+       },
+       {
+        "team": "158",
+        "votes": []
+       }
+      ],
+      "mission": "ooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1670",
+        "votes": [
+         "1-"
+        ]
+       },
+       {
+        "team": "1578",
+        "votes": []
+       },
+       {
+        "team": "1580",
+        "votes": []
+       },
+       {
+        "team": "4569",
+        "votes": []
+       },
+       {
+        "team": "1580",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1578",
+        "votes": []
+       },
+       {
+        "team": "1267",
+        "votes": []
+       },
+       {
+        "team": "3490",
+        "votes": []
+       },
+       {
+        "team": "4678",
+        "votes": [
+         "8-90+"
+        ]
+       },
+       {
+        "team": "1578",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "15789",
+        "votes": [
+         "0+"
+        ]
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "9",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "9",
+      "target": "8",
+      "claim": "o"
+     }
+    ],
+    "assassination": "5",
+    "outcome": "三藍活",
+    "category": ""
+   },
+   "lineup": {
+    "s": 29.4
+   }
+  },
+  {
+   "id": "1175108978292838480",
+   "date": "2023-11-18",
+   "tags": [
+    "已收錄",
+    "三藍躲刺",
+    "S2無差別亂鬥-例行賽"
+   ],
+   "game": {
+    "config": "375286",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "156",
+        "votes": [
+         "9+"
+        ]
+       },
+       {
+        "team": "259",
+        "votes": []
+       },
+       {
+        "team": "239",
+        "votes": []
+       },
+       {
+        "team": "247",
+        "votes": []
+       },
+       {
+        "team": "159",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1680",
+        "votes": []
+       },
+       {
+        "team": "3479",
+        "votes": [
+         "0+"
+        ]
+       },
+       {
+        "team": "1380",
+        "votes": []
+       },
+       {
+        "team": "2479",
+        "votes": []
+       },
+       {
+        "team": "1680",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1680",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "12680",
+        "votes": []
+       }
+      ],
+      "mission": "oooox"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "1",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "1",
+      "target": "3",
+      "claim": "x"
+     }
+    ],
+    "assassination": "1",
+    "outcome": "三藍活",
+    "category": ""
+   },
+   "lineup": {
+    "s": 43.6
+   }
+  },
+  {
+   "id": "S673",
+   "date": "2023-11-12",
+   "tags": [
+    "線瓦"
+   ],
+   "game": {
+    "config": "453861",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "169",
+        "votes": []
+       },
+       {
+        "team": "125",
+        "votes": []
+       },
+       {
+        "team": "358",
+        "votes": []
+       },
+       {
+        "team": "148",
+        "votes": []
+       },
+       {
+        "team": "568",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1679",
+        "votes": []
+       },
+       {
+        "team": "2679",
+        "votes": []
+       },
+       {
+        "team": "1480",
+        "votes": []
+       },
+       {
+        "team": "1690",
+        "votes": []
+       },
+       {
+        "team": "2480",
+        "votes": []
+       }
+      ],
+      "mission": "ooxx"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1679",
+        "votes": [
+         "9-",
+         "0+"
+        ]
+       },
+       {
+        "team": "1267",
+        "votes": [
+         "6-",
+         "0+"
+        ]
+       },
+       {
+        "team": "3450",
+        "votes": []
+       },
+       {
+        "team": "1246",
+        "votes": []
+       }
+      ],
+      "mission": "xxxx"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "5",
+      "claim": "x"
+     }
+    ],
+    "assassination": "",
+    "outcome": "三紅",
+    "category": "線瓦"
+   },
+   "lineup": {
+    "s": 44.6
+   }
+  },
+  {
+   "id": "S205",
+   "date": "2022-04-30",
+   "tags": [
+    "面瓦"
+   ],
+   "problem": "試算表裡這局的紀錄不完整（缺少某一輪的派票、任務張數不對或結果不明）"
+  },
+  {
+   "id": "S178",
+   "date": "2022-04-16",
+   "tags": [
+    "面瓦"
+   ],
+   "game": {
+    "config": "840729",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "147",
+        "votes": [
+         "6+"
+        ]
+       },
+       {
+        "team": "258",
+        "votes": []
+       },
+       {
+        "team": "139",
+        "votes": []
+       },
+       {
+        "team": "457",
+        "votes": []
+       },
+       {
+        "team": "258",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1569",
+        "votes": []
+       },
+       {
+        "team": "1478",
+        "votes": []
+       },
+       {
+        "team": "1780",
+        "votes": []
+       },
+       {
+        "team": "1569",
+        "votes": []
+       },
+       {
+        "team": "1560",
+        "votes": []
+       }
+      ],
+      "mission": "oooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1560",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "23567",
+        "votes": [
+         "356-",
+         "0+"
+        ]
+       },
+       {
+        "team": "13569",
+        "votes": [
+         "159-",
+         "8+"
+        ]
+       },
+       {
+        "team": "34569",
+        "votes": [
+         "3569-"
+        ]
+       },
+       {
+        "team": "13569",
+        "votes": [
+         "19-"
+        ]
+       },
+       {
+        "team": "23569",
+        "votes": []
+       }
+      ],
+      "mission": "ooooo"
+     },
+     {
+      "proposals": [
+       {
+        "team": "23569",
+        "votes": []
+       }
+      ],
+      "mission": "ooooo"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "5",
+      "claim": "o"
+     },
+     {
+      "after": 3,
+      "holder": "5",
+      "target": "6",
+      "claim": "o"
+     },
+     {
+      "after": 4,
+      "holder": "0",
+      "target": "4",
+      "claim": "x"
+     }
+    ],
+    "assassination": "3",
+    "outcome": "三藍活",
+    "category": "面瓦"
+   }
+  },
+  {
+   "id": "S20",
+   "date": "",
+   "tags": [
+    "線瓦"
+   ],
+   "game": {
+    "config": "170425",
+    "rounds": [
+     {
+      "proposals": [
+       {
+        "team": "149",
+        "votes": []
+       },
+       {
+        "team": "126",
+        "votes": [
+         "7+"
+        ]
+       },
+       {
+        "team": "369",
+        "votes": []
+       },
+       {
+        "team": "480",
+        "votes": []
+       },
+       {
+        "team": "569",
+        "votes": []
+       }
+      ],
+      "mission": "oox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1680",
+        "votes": []
+       },
+       {
+        "team": "2370",
+        "votes": []
+       },
+       {
+        "team": "3489",
+        "votes": []
+       },
+       {
+        "team": "1490",
+        "votes": []
+       },
+       {
+        "team": "1480",
+        "votes": []
+       }
+      ],
+      "mission": "ooox"
+     },
+     {
+      "proposals": [
+       {
+        "team": "1367",
+        "votes": [
+         "7-"
+        ]
+       },
+       {
+        "team": "3780",
+        "votes": [
+         "7-",
+         "2+"
+        ]
+       },
+       {
+        "team": "2378",
+        "votes": [
+         "190+"
+        ]
+       }
+      ],
+      "mission": "ooox"
+     }
+    ],
+    "lakes": [
+     {
+      "after": 2,
+      "holder": "0",
+      "target": "3",
+      "claim": "o"
+     }
+    ],
+    "assassination": "",
+    "outcome": "三紅",
+    "category": "線瓦"
+   }
+  }
+ ]
+}

@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
+    "type-check:scripts": "tsc -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -16,7 +17,8 @@
     "test:line-sync": "vitest run src/__tests__/LineSyncRoundTrip.test.ts src/__tests__/LineReplyQueue.test.ts src/__tests__/LineWebhookEndpoint.test.ts src/__tests__/ChatMirror.test.ts src/__tests__/KeepAlive.test.ts src/__tests__/LineStatsCommands.test.ts src/__tests__/LineDiscordImageSync.test.ts src/__tests__/RelayMedia.test.ts src/__tests__/LongMessageSync.test.ts src/__tests__/LineSimCommands.test.ts",
     "threads:candidates": "tsx scripts/threadsCandidates.ts",
     "threads:draft": "tsx scripts/threadsDraft.ts",
-    "threads:publish": "tsx scripts/threadsPublish.ts"
+    "threads:publish": "tsx scripts/threadsPublish.ts",
+    "console:export": "tsx scripts/consoleExport.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",
