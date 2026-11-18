@@ -1,4 +1,4 @@
-# 標籤|開關|種子|起始局號|局數  （第 46 回合確認：篩選只有 assassinTailRead45=1 通過（紅方 +0.30 [+0.11, +0.49]）；三組新種子各 10 萬局，和 r43-confirm 的 BASE 逐局配對；BASEchk = 開關都關，和 r43-confirm 比對）
+# 標籤|開關|種子|起始局號|局數  （第 46 回合確認，新預設：main 84eb52a（#90：loyalFresh43=1285 改預設）＋第 46 回合開關（預設關）。篩選只有 assassinTailRead45=1 通過（紅方 +0.30 [+0.11, +0.49]，舊預設）；三組新種子各 10 萬局，和 r43b-confirm 的 V5（＝新預設）逐局配對；BASEchk = 開關都關，和 r43b-confirm V5 比對）
 BASEchk|lake45=1|433001|0|500
 BASEchk|lake45=1|433101|0|500
 BASEchk|lake45=1|433201|0|500
