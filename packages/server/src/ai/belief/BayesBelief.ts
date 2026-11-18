@@ -12,7 +12,7 @@
  */
 import type { PlayerObservation } from '../types';
 import type { AgentTuning } from '../AgentTuning';
-import { buildCertainty } from './Certainty';
+import { buildCertainty, conventionCounter } from './Certainty';
 import { zoneTeamLogProb, type PriorProposal } from './ZoneModel';
 import TABLE from './likelihoods.json';
 import BOT_TABLE from './likelihoods_bot.json';
@@ -409,6 +409,22 @@ export interface BayesOptions {
    * split is the read's only before Percival's own prior (at votes it is the read's exactly).
    */
   thumbRead39?: boolean;
+  /**
+   * Round 48 `beliefRecalib=1` (methods_backlog.md 第 2 節, Platt at the world level): blue seats only, the posterior's log world weights
+   * times b_r for the viewer's current round r (index r − 1; rounds past the end use the last entry) — wts ∝ wts^b_r. b < 1 pulls the
+   * posterior toward its prior (the human records: the default is overconfident from round 3 on, Platt slope 0.72 / 0.53 / 0.45 in R3–R5).
+   */
+  recalibPower?: readonly number[];
+  /** Round 48 `beliefRecalib=2`: blue seats only, the vote / proposal powers (`voteTemper` / `proposalTemper`) times m_r for the current round. */
+  recalibTemper?: readonly number[];
+  /** Round 48 `beliefRecalib=3`: the recalibration is not used while the viewer votes (`gamePhase` team_vote: the vote thresholds were set on the old posterior). */
+  recalibNoVote?: boolean;
+  /**
+   * Round 48 `beliefConventionTremble=ε` (methods_backlog.md 第 3 節, DeepRole's tremble): blue seats only, the posterior starts from the L0
+   * worlds and a world that breaks a table convention (A0 / A1 / A2, `Certainty.conventionCounter`) is weighted by ε per broken convention
+   * (a truthful good holder's declaration by 1 − ε) instead of being removed. The certainty layer stays hard.
+   */
+  conventionTremble?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -637,8 +653,19 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const lead = obs.gamePhase === 'team_select' && (opts.leadVoteTemper !== undefined || opts.leadProposalTemper !== undefined);
   const vT = lead ? opts.leadVoteTemper : opts.voteTemper;
   const pT = lead ? opts.leadProposalTemper : opts.proposalTemper;
-  const temperV = vT !== undefined && vT > 0 ? Math.min(vT, 1) : 1;
-  const temperP = pT !== undefined && pT > 0 ? Math.min(pT, 1) : 1;
+  // Round 48 (`beliefRecalib`, `beliefConventionTremble`): blue seats only (red frozen), like `lakeCal` below.
+  const blueSeat = (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true;
+  const roundIx = Math.max(1, obs.currentRound ?? 1) - 1;
+  const perRound = (xs: readonly number[] | undefined): number => {
+    if (!blueSeat || !xs || xs.length === 0 || (opts.recalibNoVote === true && obs.gamePhase === 'team_vote')) return 1;
+    const x = xs[Math.min(roundIx, xs.length - 1)];
+    return x > 0 ? x : 1;
+  };
+  const rPow = perRound(opts.recalibPower);
+  const rTem = perRound(opts.recalibTemper);
+  const tremble = blueSeat && opts.conventionTremble !== undefined && opts.conventionTremble > 0 && opts.conventionTremble < 1 ? opts.conventionTremble : 0;
+  const temperV = vT !== undefined && vT > 0 ? Math.min(vT * rTem, 1) : Math.min(rTem, 1);
+  const temperP = pT !== undefined && pT > 0 ? Math.min(pT * rTem, 1) : Math.min(rTem, 1);
   const policy = opts.policyVotes === true;
   const picking = obs.gamePhase === 'team_select';
   const leadOff = picking && (opts.recursiveNoLead === true || !recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0));
@@ -665,13 +692,17 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const lakeIso = opts.lakeIso === true && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true && (obs.myRole === 'loyal' || obs.myRole === 'percival');
   // Round 46 `beliefLakePick45`: blue seats only, like the lake calibration (red frozen).
   const lakePick = opts.lakePick !== undefined && opts.lakePick > 0 && opts.lakePick < 1 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true ? opts.lakePick : 0;
-  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}`;
+  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
   if (hit) return hit;
   const view = buildCertainty(obs);
-  const worlds = view.worlds('L1*');
+  // Round 48 `beliefConventionTremble`: the L0 worlds, the conventions as weights (`trembleLog` below).
+  const worlds = tremble > 0 ? view.worlds('L0') : view.worlds('L1*');
+  const conventions = tremble > 0 ? conventionCounter(obs, view.params) : null;
+  const logEps = Math.log(tremble);
+  const log1mEps = Math.log1p(-tremble);
   const ids = obs.allPlayerIds;
   const bitMap = new Map(ids.map((id) => [id, view.bitOf(id)] as const));
   const bit = (id: string): number => bitMap.get(id) ?? view.bitOf(id);
@@ -813,7 +844,11 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       const pick = targetRed ? (kBlue > 0 ? lakePick / kRed : 1 / kRed) : (kRed > 0 ? (1 - lakePick) / kBlue : 1 / kBlue);
       lp += Math.log(pick * l.n);
     }
-    return lp;
+    if (conventions) {
+      const c = conventions(w);
+      lp += c.broken * logEps + c.kept * log1mEps;
+    }
+    return rPow !== 1 ? rPow * lp : lp;
   });
   let wts: number[] = [];
   if (worlds.length > 0) {
@@ -923,6 +958,31 @@ function temperOf(x: number): Pick<BayesOptions, 'voteTemper' | 'proposalTemper'
   return { voteTemper: v > 0 ? v : 1, proposalTemper: pp > 0 ? pp : 1 };
 }
 
+/**
+ * Round 48 `beliefRecalib`: the per-round factors (rounds 1–5), fitted on the even-indexed human games of `games_cache.json`
+ * (`scripts/beliefRecalibFit.ts`, blue viewers at every non-forced vote; the odd-indexed games are the held-out check).
+ * 1 = world power b_r (`recalibPower`); 2 = vote / proposal temper factor m_r (`recalibTemper`); 3 = 1 except at the viewer's own votes.
+ */
+export const RECALIB_48: Readonly<Record<number, { power?: readonly number[]; temper?: readonly number[]; noVote?: boolean }>> = {
+  // Train-split log-loss minima (R1 is flat across the grid, kept at 1): R2 0.9, R3 0.75, R4 0.5, R5 0.4.
+  1: { power: [1, 0.9, 0.75, 0.5, 0.4] },
+  // The same for the temper factor (R1 flat → 1): R2 0.75, R3 0.45–0.6, R4 0.25–0.3, R5 0.25 (votes 0.7 → 0.175, proposals 0.3 → 0.075).
+  2: { temper: [1, 0.75, 0.5, 0.25, 0.25] },
+  // 1 everywhere but the viewer's own votes (which keep the posterior their thresholds were set on).
+  3: { power: [1, 0.9, 0.75, 0.5, 0.4], noVote: true },
+};
+
+function recalibOf(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'recalibPower' | 'recalibTemper' | 'recalibNoVote' | 'conventionTremble'> {
+  const r = RECALIB_48[t.beliefRecalib ?? 0];
+  const eps = t.beliefConventionTremble ?? 0;
+  return {
+    ...(r?.power ? { recalibPower: r.power } : {}),
+    ...(r?.temper ? { recalibTemper: r.temper } : {}),
+    ...(r?.noVote ? { recalibNoVote: true } : {}),
+    ...(eps > 0 ? { conventionTremble: eps } : {}),
+  };
+}
+
 /** The posterior options a seat's tuning asks for (one place for every caller). */
 export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions {
   return {
@@ -945,9 +1005,9 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
     // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
     // recursive vote model was fitted on level-0 features without it.
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
@@ -959,6 +1019,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.beliefLakeCal40 ?? 0) > 0 && t.beliefLakeCal40 !== 1 ? { lakeCal: t.beliefLakeCal40 } : {}),
     ...((t.beliefLakeIso41 ?? 0) > 0 ? { lakeIso: true } : {}),
     ...((t.beliefLakePick45 ?? 0) > 0 ? { lakePick: t.beliefLakePick45 } : {}),
+    ...recalibOf(t),
   };
 }
 

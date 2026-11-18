@@ -51,13 +51,22 @@ export function goodCleanLeadTeam(
   // Round 47 (BlueRound47.ts): public-record overlays on the posterior's worlds, the R4 two-fail objective, lake planning — all off by default.
   const adj = overlay47(tuning, obs);
   const need = (tuning.goodCleanLeadR4Fix47 ?? 0) > 0 ? failsRequired47(obs) : 1;
+  // Round 49 `goodCleanLeadR4Fix49`: clean stays the objective; P(fewer than the fails needed) is only a floor (within ε of its best).
+  const floorEps = (tuning.goodCleanLeadR4Fix49 ?? 0) > 0 && failsRequired47(obs) > 1 ? tuning.goodCleanLeadR4Fix49 : 0;
   const plan = (tuning.lakePlanLead47 ?? 0) > 0 && lakeAfterThisRound(obs) && currentLakeHolder(obs) === me;
-  const ww = adj.size > 0 || need > 1 || plan ? weightedWorlds47(obs, opts, adj) : null;
+  const ww = adj.size > 0 || need > 1 || plan || floorEps > 0 ? weightedWorlds47(obs, opts, adj) : null;
   for (const fill of combinations(pool, size - 1)) {
     const team = [me, ...fill];
     const p = ww ? teamRedsBelow47(ww, team, need) : bayesTeamClean(obs, team, opts);
     if (p === null) return action;
     scored.push({ team, p });
+  }
+  if (floorEps > 0 && ww) {
+    // The two-fail floor: drop the teams whose P(fewer than the fails needed) is more than ε below the best allowed one.
+    const k = failsRequired47(obs);
+    const below = new Map(scored.map((c) => [c, teamRedsBelow47(ww, c.team, k)]));
+    const top = Math.max(...scored.filter((c) => allowed(c.team)).map((c) => below.get(c) ?? 0));
+    for (let i = scored.length - 1; i >= 0; i--) if ((below.get(scored[i]) ?? 0) < top - floorEps) scored.splice(i, 1);
   }
   // Highest first (stable: enumeration order breaks ties); the logic gates (must-fail / dominated) still bind.
   scored.sort((x, y) => (y.p - x.p > 1e-12 ? 1 : x.p - y.p > 1e-12 ? -1 : 0));
