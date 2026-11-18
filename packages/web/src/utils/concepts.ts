@@ -142,9 +142,9 @@ export function groupConceptsByPhase(cards: readonly ConceptCard[]): { phase: Co
   return CONCEPT_PHASES.map((phase) => ({ phase, cards: cards.filter((c) => conceptPhase(c) === phase) })).filter((g) => g.cards.length > 0);
 }
 
-/** 角色玩法的小標：卡片的第一個角色（照 CONCEPT_ROLE_TAGS 的順序，一張卡只列一次），組內照卡庫順序。 */
+/** 角色玩法的小標：卡片 tags.role 寫的第一個角色（一張卡只列一次）；小標照 CONCEPT_ROLE_TAGS 的順序，組內照卡庫順序。 */
 export function groupConceptsByRole(cards: readonly ConceptCard[]): { role: ConceptRoleTag; cards: ConceptCard[] }[] {
-  const firstRole = (c: ConceptCard): ConceptRoleTag | undefined => CONCEPT_ROLE_TAGS.find((r) => (c.tags.role ?? []).includes(r));
+  const firstRole = (c: ConceptCard): ConceptRoleTag | undefined => (c.tags.role ?? []).find((r): r is ConceptRoleTag => CONCEPT_ROLE_TAGS.includes(r as ConceptRoleTag));
   return CONCEPT_ROLE_TAGS.map((role) => ({ role, cards: cards.filter((c) => firstRole(c) === role) })).filter((g) => g.cards.length > 0);
 }
 
