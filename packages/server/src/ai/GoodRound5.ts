@@ -11,6 +11,7 @@
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
+import { currentLakeHolder, failsRequired47, lakeAfterThisRound, lakePlanValue47, overlay47, teamRedsBelow47, weightedWorlds47 } from './BlueRound47';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -47,14 +48,32 @@ export function goodCleanLeadTeam(
   const noThumbs = tuning.percivalCleanNoThumbs === true || (tuning.percivalCleanNoThumbsEarly === true && round <= 2);
   const thumbs = percival && noThumbs && (obs.knownWizards ?? []).length === 2 ? obs.knownWizards ?? [] : [];
   const pool = thumbs.length > 0 && others.filter((id) => !thumbs.includes(id)).length >= size - 1 ? others.filter((id) => !thumbs.includes(id)) : others;
+  // Round 47 (BlueRound47.ts): public-record overlays on the posterior's worlds, the R4 two-fail objective, lake planning — all off by default.
+  const adj = overlay47(tuning, obs);
+  const need = (tuning.goodCleanLeadR4Fix47 ?? 0) > 0 ? failsRequired47(obs) : 1;
+  const plan = (tuning.lakePlanLead47 ?? 0) > 0 && lakeAfterThisRound(obs) && currentLakeHolder(obs) === me;
+  const ww = adj.size > 0 || need > 1 || plan ? weightedWorlds47(obs, opts, adj) : null;
   for (const fill of combinations(pool, size - 1)) {
     const team = [me, ...fill];
-    const p = bayesTeamClean(obs, team, opts);
+    const p = ww ? teamRedsBelow47(ww, team, need) : bayesTeamClean(obs, team, opts);
     if (p === null) return action;
     scored.push({ team, p });
   }
   // Highest first (stable: enumeration order breaks ties); the logic gates (must-fail / dominated) still bind.
   scored.sort((x, y) => (y.p - x.p > 1e-12 ? 1 : x.p - y.p > 1e-12 ? -1 : 0));
   const best = scored.find((c) => allowed(c.team));
+  if (best && plan && ww) {
+    // `lakePlanLead47`: among the allowed teams within ε of the best, the one whose mission result leaves the most for the lake.
+    const eps = tuning.lakePlanLead47;
+    let pick = best;
+    let value = lakePlanValue47(ww, obs, best.team);
+    for (const c of scored) {
+      if (c.p < best.p - eps) break;
+      if (c === best || !allowed(c.team)) continue;
+      const v = lakePlanValue47(ww, obs, c.team);
+      if (v > value + 1e-12) { pick = c; value = v; }
+    }
+    return { type: 'team_select', teamIds: pick.team };
+  }
   return best ? { type: 'team_select', teamIds: best.team } : action;
 }

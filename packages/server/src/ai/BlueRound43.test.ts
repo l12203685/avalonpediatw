@@ -30,9 +30,9 @@ const on = (mode: number, extra: object = {}) => ({ ...DEFAULT_AGENT_TUNING, own
 const seen = ['P1', 'P2', 'P3', 'P4'];
 
 describe('round 43 tuning fields', () => {
-  it('off in the legacy table and the default; flags parse', () => {
+  it('off in the legacy table; V5 (1285) in the default; flags parse', () => {
     expect(LEGACY_AGENT_TUNING.loyalFresh43).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.loyalFresh43).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.loyalFresh43).toBe(1285); // round 43b V5 adopted (site owner 2026-11-18)
     expect(LEGACY_AGENT_TUNING.loyalFresh43Tau).toBe(0);
     expect(DEFAULT_AGENT_TUNING.loyalFresh43Tau).toBe(0);
     expect(parseTuningFlag('loyalFresh43')).toEqual({ loyalFresh43: 15 });
