@@ -29,6 +29,7 @@ import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelW
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
 import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
+import { tailCleanLogRatio } from './RedRound46';
 import { DOOMED_LEAD_EPS, doomedTierCandidates, merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence, withoutReuseLeaders, missedReuseLeads, MISSED_REUSE_LOG_LR, reuseLeadLogRatio, REUSE_STACK_WEIGHTS } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
@@ -2369,7 +2370,8 @@ export class HeuristicAgent implements AvalonAgent {
         // narrowest fix surface.
         if (myRole === 'mordred') return 'success';
         if (myRole === 'morgana') {
-          if (round >= 3) {
+          // Round 46 (red) `redRankOrderR2Fix45`: the same rule on R2 (Morgana + Mordred on R2 played 0 fails 98.9% of the time).
+          if (round >= 3 || (round === 2 && (this.tuning.redRankOrderR2Fix45 ?? 0) > 0)) {
             // R3 hard rule (Edward 2026-04-30 18:08): ≥1 red must fail.
             // morgana picks fail per位階 (assassin lowest → assassin
             // always fails when on team; morgana middle → fails at R3
@@ -2703,11 +2705,20 @@ export class HeuristicAgent implements AvalonAgent {
       // Round 21 (red) `assassinReuseRead` 4–10: round-dependent / measured / fitted factors, re-proposal credit, clean misses.
       for (const id of goodPlayers) add(id, 'reuse', reuseLeadLogRatio(obs, id, reuseMode));
     }
+    // Round 46 (red) `assassinTailRead45` (RedRound46.ts): every forced (5th-proposal) team the candidate led with no red at all.
+    // Kept outside `terms` (the readout's term list is unchanged; the readout's total includes it).
+    const tailMode = this.tuning.assassinTailRead45 ?? 0;
+    const tail = new Map<string, number>();
+    if (tailMode > 0) {
+      for (const id of goodPlayers) tail.set(id, tailCleanLogRatio(obs, id, evilSet, tailMode));
+    }
     const scores = new Map<string, number>();
     for (const id of goodPlayers) {
       const t = terms.get(id) as AssassinScoreTerms;
       // Same order of additions as before the split (model, vote, lake, lead, reuse), so the sums are bit-identical.
-      scores.set(id, (((t.model + t.vote) + t.lake) + t.lead) + t.reuse);
+      const sum = (((t.model + t.vote) + t.lake) + t.lead) + t.reuse;
+      // The forced-team term only when the switch is on (switch off: the sum stays bit-identical).
+      scores.set(id, tailMode > 0 ? sum + (tail.get(id) ?? 0) : sum);
     }
     return { scores, terms };
   }
