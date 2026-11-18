@@ -8,9 +8,12 @@
  *   選項：--out <資料夾>（預設 packages/server/threads_drafts/，不進 git）、--no-image、--days N、
  *         --start YYYY-MM-DD（第一篇貼文的日期：那一天的 A 沒有昨天的答案；預設 THREADS_LIVE_FROM，再沒有就 2026-11-18）、
  *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；每一天都用，存下來的草稿優先）、
- *         --template <檔>（貼文格式，預設 packages/server/threads_template.json；沒有就用內建格式）
+ *         --template <檔>（貼文格式，預設 packages/server/threads_template.json；沒有就用內建格式）、
+ *         --no-ai（不跑百科AI 的答案）
  *
  * 每天寫三個檔：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位、parts＝貼文每個佔位符這天的內容）、<日期>.png（題目圖）。
+ * <日期>.json 另有 aiAnswer：百科AI 在同一個決定點的答案（站長 11/18：先讓百科AI 跑答案給他看、修正它的思考和盲點；
+ * src/bots/threads/aiAnswer.ts）。只給站長看：不進貼文、不進 .md，自動發佈（threadsPublish.ts）也不產生它。
  * 已經有 <日期>.json 的日子沿用裡面的題目和第一則留言（重跑不會換題）。
  * 題目只從實戰出（題庫 sim_bank.json 不含模擬的局）；草稿只有座位和牌譜記號，沒有玩家名字。
  */
@@ -21,7 +24,8 @@ import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { draftMarkdown } from '../src/bots/threads/draft';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
-import { readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
+import { threadsAiAnswer } from '../src/bots/threads/aiAnswer';
+import { gitVersion, readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
 import { pickOverrideOf } from '../src/bots/threads/picksFile';
 import { renderAnswerPng, renderGridPngs, renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
@@ -39,6 +43,7 @@ const start = arg('--date', taipeiToday());
 const days = flag('--week') ? 7 : Number(arg('--days', '1'));
 const outDir = path.resolve(arg('--out', path.join(root, 'threads_drafts')));
 const withImage = !flag('--no-image');
+const withAi = !flag('--no-ai');
 // 系列起點：--start，沒給就用 THREADS_LIVE_FROM（正式發的第一天），再沒有就用預設值。
 const startDate = arg('--start', process.env.THREADS_LIVE_FROM || THREADS_START_DATE);
 const defaultPicks = path.join(root, 'threads_picks.json');
@@ -59,6 +64,7 @@ const titles = new Map(wiki.map((a) => [a.id, a.title] as [string, string]));
 
 fs.mkdirSync(outDir, { recursive: true });
 const readSaved = savedDraftReader(outDir);
+const version = gitVersion(root);
 
 // 站長在主控台改的貼文格式（同步進 threads_template.json）；沒有或不合格就用內建格式。
 const template = readTemplateFile(path.resolve(arg('--template', path.join(root, 'threads_template.json'))));
@@ -112,8 +118,17 @@ for (let i = 0; i < days; i++) {
       }
     }
   }
-  fs.writeFileSync(path.join(outDir, `${date}.json`), `${JSON.stringify(draft, null, 2)}\n`);
+  // 百科AI 的答案（只給站長）：寫進 <日期>.json 的 aiAnswer，不進貼文和 .md。
+  let aiAnswer: ReturnType<typeof threadsAiAnswer> | undefined;
+  if (withAi && pv) {
+    try {
+      aiAnswer = threadsAiAnswer(pv.game, pv.pick, { exerciseId: pv.exerciseId, gitSha: version.sha, gitDirty: version.dirty });
+    } catch (err) {
+      console.warn(`${date}: aiAnswer skipped (${(err as Error).message})`);
+    }
+  }
+  fs.writeFileSync(path.join(outDir, `${date}.json`), `${JSON.stringify(aiAnswer ? { ...draft, aiAnswer } : draft, null, 2)}\n`);
   fs.writeFileSync(path.join(outDir, `${date}.md`), draftMarkdown(draft));
-  console.log(`${date} ${draft.theme} ${draft.exerciseId} post ${draft.post.chars} chars${draft.answerToYesterday ? `, with ${draft.answerToYesterday.exerciseId} answer` : ''}${draft.recordId ? '' : ' (no records page)'}`);
+  console.log(`${date} ${draft.theme} ${draft.exerciseId} post ${draft.post.chars} chars${draft.answerToYesterday ? `, with ${draft.answerToYesterday.exerciseId} answer` : ''}${draft.recordId ? '' : ' (no records page)'}${aiAnswer ? `; 百科AI ${aiAnswer.pick.text}（真人 ${aiAnswer.real.text}）` : ''}`);
 }
 for (const w of gen.warnings) console.warn(w);

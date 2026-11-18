@@ -6,6 +6,7 @@
  *   所以選擇之後改了也不會換掉已經貼出去的題目。
  */
 
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import type { ThreadsDraft } from './draft';
@@ -28,4 +29,15 @@ export function savedDraftReader(dir: string): (date: string) => ThreadsDraft | 
       return null;
     }
   };
+}
+
+/** 這份程式的 git 版本（百科AI 答案的 policy 欄位）：HEAD 的 SHA、有沒有沒 commit 的改動；不是 git 或沒有 git 就 null。 */
+export function gitVersion(cwd: string): { sha: string | null; dirty?: boolean } {
+  try {
+    const sha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const status = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return { sha, dirty: status.trim().length > 0 };
+  } catch {
+    return { sha: null };
+  }
 }
