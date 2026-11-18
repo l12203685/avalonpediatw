@@ -483,6 +483,31 @@ class MainTest(unittest.TestCase):
             self.assertNotIn("停用", text)
 
 
+class SplitTest(unittest.TestCase):
+    """player_aliases.json "splits" (one name, two people) against the database: game ids only, no names."""
+
+    def test_split_ids_resolve_to_database_games(self):
+        import generate_cache as gc  # noqa: PLC0415
+        post = "1571000000000000009"
+        rows = gd.build([source(gd.SRC_SHEET, "1", GOOD), source(gd.SRC_DISCORD, post, GOOD)])
+        self.assertEqual([r["id"] for r in rows], [post])
+        splits = gc.parse_player_aliases({"aliases": {}, "splits": {"Ilse Marr": [
+            {"as": "Orla Pike", "games": ["S1", "S2"]}, {"as": "Orla Pike", "games": [post]},
+            {"as": "Orla Pike", "venue": "面瓦"}]}}).splits
+        got = gd.split_games(rows, [{"id": "S3", "sources": ["S3"]}], splits)
+        self.assertEqual(got, {"rules": 3, "filterRules": 1, "listed": 3, "games": [post], "missing": ["S2"], "excluded": []})
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "r.md"
+            counts = gd.summarize(rows)
+            gd.write_report(rows, counts, {}, report, collisions={"a1": {"names": 1, "games": 1}}, splits=got)
+            text = report.read_text(encoding="utf-8")
+        self.assertIn("## 同名不同人（名字碰撞）候選", text)
+        self.assertIn("| `a1` | 確定 |", text)
+        self.assertIn("列出的 3 個局號對到總庫的 1 局", text)
+        self.assertIn("總庫裡找不到的局號（打錯、或不是統計用的局）：S2", text)
+        self.assertNotRegex(text, "Ilse|Orla")
+
+
 class WorkflowTest(unittest.TestCase):
     def test_nightly_workflow_builds_and_commits_the_database(self):
         text = WORKFLOW.read_text(encoding="utf-8")

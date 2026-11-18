@@ -108,6 +108,7 @@ jobs:
           python packages/server/test_discord_records_import.py
           python packages/server/test_discord_records_export.py
           python packages/server/test_game_db.py
+          python packages/server/test_name_collisions.py
           python packages/server/test_proavalon_import.py
 
       - name: Write the service-account key to a temp file
@@ -242,6 +243,8 @@ jobs:
           # 牌譜總庫（Edward 2026-11-17）：讀上面兩步寫好的 games_cache.json 與 records_cache.json（不另外讀 Google /
           # Discord），把每個來源的同一局合成一筆、逐局檢查規則，寫 game_db.json 與 docs/data/game_db_report.md。
           # 只有座位、牌譜、編號與日期，沒有名字。失敗時保留舊檔（寫入是 atomic），不擋快取推送。
+          # 報告另有「同名不同人」一節（name_collisions.py，只寫數量；名字只進私人主控台的 console:export）
+          # 與 player_aliases.json splits 對到總庫的局號。
           python packages/server/game_db.py --output "${GAME_DB_PATH}" --check-report "${GAME_DB_REPORT}" || \
             echo "::warning title=Game database not rebuilt::game_db.py failed; game_db.json and its report keep the previous version."
 

@@ -6,6 +6,8 @@
                       細節、選項、網站連結、來源標籤；records = 每一局（含 pair 的另一局）每個來源各自的
                       DC 牌譜格式文字，試算表來源另附試算表的原文。
   game_counts.json    依種類／狀態的局數、錯誤局、問題分組的數量、主控台的「要注意」計數，dbVersion = git SHA。
+  name_collisions.json 同名不同人的候選（name_collisions.py：同一局兩個座位同名、同一天同場次兩桌、兩群沒有共同牌友），
+                      每筆附主控台 nameSplits/<id> 的建議文件。這個檔的內容就是名字，一律只給私人主控台。
 
 分組規則照 2026-11-17 主控台第一版的整理腳本（make_rows.py）移植：
   1. excluded  錯誤局（刺客刺到隊友、尾派沒出任務；build 的 excluded）
@@ -19,7 +21,7 @@
   - 不帶主控台自己的狀態欄（answer、status、updatedAt…）：那些是主控台 db 的資料，匯出只給內容。
   - 列的順序固定為（分組、日期、id），重跑結果一字不差。
 
-隱私：預設不輸出任何玩家名字。--names 才在 records 加上每個座位的暱稱（試算表＝牌譜分頁的玩1…玩0；
+隱私：problem_games.json 預設不輸出任何玩家名字。--names 才在 records 加上每個座位的暱稱（試算表＝牌譜分頁的玩1…玩0；
 Discord／模擬瓦＝records_cache 的 names），只給私人主控台用；輸出資料夾要在 repo 外面。
 
 Usage:  python console_export.py --out <dir> [--srv <packages/server>] [--sha <git sha>] [--now <ISO time>] [--names]
@@ -41,6 +43,7 @@ from typing import Any, Mapping, Sequence
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import game_db as G  # noqa: E402
+import name_collisions as NC  # noqa: E402
 import voting_stats as vs  # noqa: E402
 
 SITE_RECORDS = "https://avalon-game-platform.web.app/#records="
@@ -78,7 +81,7 @@ def load_inputs(srv: Path, with_proavalon: bool | None = None) -> dict[str, Any]
     excluded: list[dict[str, Any]] = []
     rebuilt = G.build(sources, excluded)
     return {"db": db, "sources": sources, "texts": texts, "excluded": excluded, "rebuilt": rebuilt,
-            "snapshot": snapshot, "records_doc": records_doc}
+            "snapshot": snapshot, "records_doc": records_doc, "games_doc": games_doc}
 
 
 # ---------------------------------------------------------------------------
@@ -532,8 +535,12 @@ def export(srv: Path, out: Path, sha: str, now: str, names: bool = False,
     })
     counts = game_counts(db, rows, sha, now, in_sync)
     dump(out / "game_counts.json", counts)
+    collisions = {**NC.detect(inputs["games_doc"], db, inputs["records_doc"]), "dbVersion": sha}
+    dump(out / "name_collisions.json", collisions)
     summary = {"problem_games.json": {"games": len(rows), "records": len(records), **counts["problems"]},
-               "game_counts.json": {"games": counts["games"], "gameDbInSync": in_sync}}
+               "game_counts.json": {"games": counts["games"], "gameDbInSync": in_sync},
+               "name_collisions.json": {"candidates": len(collisions["candidates"]),
+                                        **{f"rule_{k}": v["names"] for k, v in collisions["counts"].items()}}}
     return summary
 
 
