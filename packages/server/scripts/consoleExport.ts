@@ -13,6 +13,7 @@
  *
  * 輸出（--out 要在 repo 外面；問題牌譜的原文只給私人主控台）：
  *   problem_games.json、game_counts.json   console_export.py（牌譜總庫）
+ *   name_collisions.json                   console_export.py → name_collisions.py：同名不同人候選（含名字）與 nameSplits 建議文件
  *   concepts.json                          觀念卡庫（這個分支沒有就 available: false）
  *   wiki_index.json                        百科文章：id、標題、章節、網址、最後修改的 commit／日期
  *   week_drafts.json + week_drafts/*.png   從 --date 起 7 天的 Threads 草稿（貼文、第一則留言、圖、parts）與貼文／留言範本
@@ -80,8 +81,9 @@ if (!flag('--skip-games')) {
   Object.assign(files, summary);
   if (summary['game_counts.json']?.gameDbInSync === false) notes.push('game_db.json 跟這份 checkout 的來源重建出來的不一樣（來源改了、總庫還沒重建）：問題清單照 game_db.json');
   if (flag('--names')) notes.push('problem_games.json 含座位暱稱（--names）：只給私人主控台');
+  notes.push('name_collisions.json（同名不同人候選）一律含玩家名字：只給私人主控台');
 } else {
-  notes.push('--skip-games：沒有產生 problem_games.json、game_counts.json');
+  notes.push('--skip-games：沒有產生 problem_games.json、game_counts.json、name_collisions.json');
 }
 
 // ─── 2. 觀念卡 ─────────────────────────────────────────────────────────────

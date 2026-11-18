@@ -35,9 +35,13 @@ def known_names() -> set[str]:
     names: set[str] = set()
     games = json.loads((HERE / "games_cache.json").read_text(encoding="utf-8"))
     names.update(n for n in games.get("players", []) if isinstance(n, str))
-    aliases = json.loads((HERE / "player_aliases.json").read_text(encoding="utf-8")).get("aliases", {})
+    alias_doc = json.loads((HERE / "player_aliases.json").read_text(encoding="utf-8"))
+    aliases = alias_doc.get("aliases", {})
     names.update(aliases)
     names.update(aliases.values())
+    for name, rules in (alias_doc.get("splits") or {}).items():  # one name, two people
+        names.add(name)
+        names.update(r["as"] for r in rules if isinstance(r, dict) and isinstance(r.get("as"), str))
     sheet = json.loads((HERE / "sheets_cache.json").read_text(encoding="utf-8")).get("牌譜") or [[]]
     header, *rows = sheet
     cols = [header.index("玩" + k) for k in ce.SEATS if "玩" + k in header]
@@ -105,8 +109,17 @@ class OutputTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b:
             run_export(Path(a))
             run_export(Path(b))
-            for name in ("problem_games.json", "game_counts.json"):
+            for name in ("problem_games.json", "game_counts.json", "name_collisions.json"):
                 self.assertEqual((Path(a) / name).read_bytes(), (Path(b) / name).read_bytes(), name)
+
+    def test_name_collisions_file(self) -> None:
+        """同名不同人候選：always written next to the problem list (the fixture has no names, so no candidates)."""
+        with tempfile.TemporaryDirectory() as d:
+            summary = run_export(Path(d), sha="abc1234")
+            doc = json.loads((Path(d) / "name_collisions.json").read_text(encoding="utf-8"))
+        self.assertEqual((doc["format"], doc["dbVersion"], doc["candidates"]), ("console-name-collisions", "abc1234", []))
+        self.assertEqual(set(doc["counts"]), {"a1", "a2", "b"})
+        self.assertEqual(summary["name_collisions.json"], {"candidates": 0, "rule_a1": 0, "rule_a2": 0, "rule_b": 0})
 
     def test_counts(self) -> None:
         with tempfile.TemporaryDirectory() as d:

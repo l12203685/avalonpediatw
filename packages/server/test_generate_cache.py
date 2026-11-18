@@ -2953,6 +2953,197 @@ class PlayerAliasTest(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Player splits: one name, two people (player_aliases.json "splits", 站長 2026-11-18). Made-up names:
+# Orla Pike is a stranger who used Ilse Marr's nickname.
+# ---------------------------------------------------------------------------
+
+SPLIT_DOC = {
+    "aliases": {"Tovo Wren": "Ilse Marr"},
+    "splits": {"Tovo Wren": [{"as": "Orla Pike", "games": ["S3", "4", "s5"], "note": "a stranger at 面瓦"}]},
+}
+
+
+def split_log(n: int = 40) -> list[list[str]]:
+    """Games 1..n (流水號 = i + 1), two a day from 2026-06-01; Ilse Marr on seat 1 (typed as her old name
+    Tovo Wren in every third game), 面瓦 for games 21..30, 線瓦 otherwise."""
+    rows = [LOG_HEADERS]
+    for i in range(n):
+        first = "Tovo Wren" if i % 3 == 0 else "Ilse Marr"
+        rows.append(dated(str(i + 1), s_date(i), EARLY[i % 4], [first] + SEAT_NAMES[1:],
+                          category="面瓦" if 20 <= i < 30 else "線瓦"))
+    return rows
+
+
+def seat1(games: list) -> dict[str, str]:
+    return {g.id: g.seat_players["1"] for g in games}
+
+
+class PlayerSplitTest(unittest.TestCase):
+    def test_parse(self) -> None:
+        aliases = gc.parse_player_aliases(SPLIT_DOC)
+        (rule,) = aliases.splits
+        self.assertEqual((rule.name, rule.key, rule.as_name), ("Tovo Wren", "ilse marr", "Orla Pike"))
+        self.assertEqual(rule.games, frozenset({"S3", "S4", "S5"}))  # S<流水號>, a bare 流水號, lower-case s
+        self.assertFalse(rule.has_filter)
+        self.assertEqual(gc.parse_player_aliases({"aliases": {}, "splits": {}}).splits, ())
+        self.assertEqual(gc.parse_player_aliases({"aliases": {}}).splits, ())
+        f = gc.parse_player_aliases({"aliases": {}, "splits": {"Ilse Marr": [
+            {"as": "Orla Pike", "from": "2026-06-11", "to": "2026-06-15", "venue": "面瓦", "seat": 1},
+            {"as": "Orla Pike", "games": ["D0123456789", "1571000000000000001"]}]}}).splits
+        self.assertEqual((f[0].date_from, f[0].date_to, f[0].venue, f[0].seat), ("2026-06-11", "2026-06-15", "面瓦", "1"))
+        self.assertEqual(f[1].post_ids, frozenset({"1571000000000000001"}))
+
+    def test_malformed_splits_are_refused(self) -> None:
+        def doc(splits: object, aliases: dict | None = None) -> dict:
+            return {"aliases": {"Tovo Wren": "Ilse Marr"} if aliases is None else aliases, "splits": splits}
+        bad = [
+            (doc(["Ilse Marr"]), '"splits" is not an object'),
+            (doc({"Ilse Marr": []}), "splits entry 1 ('Ilse Marr'): needs a non-empty list of rules"),
+            (doc({"  ": [{"as": "Orla Pike", "games": ["S1"]}]}), "the name must be a non-empty string"),
+            (doc({"Ilse Marr": ["S1"]}), "rule 1: a rule is an object"),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["S1"], "who": 1}]}), "unknown field(s) who"),
+            (doc({"Ilse Marr": [{"games": ["S1"]}]}), '"as" (the other person\'s name) must be a non-empty string'),
+            (doc({"Ilse Marr": [{"as": "TOVO WREN", "games": ["S1"]}]}), '"as" is the same player as the name'),
+            (doc({"Ilse Marr": [{"as": "Quill Fen", "games": ["S1"]}]}, {"Tovo Wren": "Ilse Marr", "Quill Fen": "Zed Ash"}),
+             '"as" is an alias source'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": "S1"}]}), '"games" must be a list of game ids'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["M12"]}]}), "'M12' is not a game id of the stats"),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["S1"]}, {"as": "Zed Ash", "games": ["1"]}]}),
+             "rule 2: game S1 is already in rule 1 of this name"),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "from": "2026-13-01"}]}), '"from" must be a day YYYY-MM-DD'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "from": "2026-07-01", "to": "2026-06-01"}]}), '"from" is after "to"'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "venue": " "}]}), '"venue" must be a 分類'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["S1"], "seat": "11"}]}), '"seat" must be one of'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["S1"], "note": 3}]}), '"note" must be a string'),
+            (doc({"Ilse Marr": [{"as": "Orla Pike"}]}), "picks no game"),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["S1"]}], "Tovo Wren": [{"as": "Zed Ash", "games": ["S2"]}]}),
+             "splits entry 2 ('Tovo Wren'): splits entry 1 is the same player"),
+            (doc({"Ilse Marr": [{"as": "Orla Pike", "games": ["S1"]}], "Orla Pike": [{"as": "Zed Ash", "games": ["S2"]}]}),
+             '"as" is itself a split name'),
+        ]
+        for d, message in bad:
+            with self.subTest(message=message):
+                with self.assertRaises(ValueError) as caught:
+                    gc.parse_player_aliases(d)
+                self.assertIn(message, str(caught.exception))
+                with self.assertRaises(ValueError) as public:
+                    gc.parse_player_aliases(d, show_names=False)
+                self.assertNotRegex(str(public.exception), "Tovo|Ilse|Quill|Orla|Zed|TOVO")
+
+    def test_malformed_split_file_is_exit_2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "player_aliases.json"
+            path.write_text(json.dumps({"aliases": {}, "splits": {"Ilse Marr": [{"as": "Ilse Marr", "games": ["S1"]}]}}),
+                            encoding="utf-8")
+            with quiet_env(GITHUB_ACTIONS="true"), self.assertRaises(gc.FatalError) as caught:
+                gc.load_player_aliases(path)
+            self.assertEqual((caught.exception.exit_code, caught.exception.title),
+                             (gc.EXIT_CONFIG, "Player alias file malformed"))
+            self.assertNotIn("Ilse", str(caught.exception))
+
+    def test_listed_games_go_to_the_other_person(self) -> None:
+        aliases = gc.parse_player_aliases(SPLIT_DOC)
+        games = gc.parse_game_log(split_log())
+        split, result = gc.apply_player_splits(games, aliases)
+        names = seat1(split)
+        self.assertEqual({k for k, v in names.items() if v == "Orla Pike"}, {"3", "4", "5"})
+        self.assertEqual(names["1"], "Tovo Wren")  # not listed: still hers (the alias merges it later)
+        self.assertEqual((result.rules, result.seats, result.games_changed), (1, 3, 3))
+        self.assertEqual(result.moves, {"Tovo Wren": 3})  # 4 is typed Tovo Wren, 3 and 5 Ilse Marr: one player
+        self.assertEqual((result.unknown_ids, result.name_absent), ([], []))
+        self.assertEqual(seat1(games)["3"], "Ilse Marr")  # the input is untouched
+        again, second = gc.apply_player_splits(split, aliases)  # idempotent
+        self.assertIs(again, split)
+        self.assertEqual(second.seats, 0)
+        self.assertEqual(result.summary(), "1 split rule(s) (player_aliases.json): 3 seat(s) in 3 game(s) counted "
+                                           "for another person")
+
+    def test_filters_seat_and_problems(self) -> None:
+        aliases = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr"}, "splits": {"Ilse Marr": [
+            {"as": "Orla Pike", "from": "2026-06-11", "to": "2026-06-20", "venue": "面瓦"},
+            {"as": "Zed Ash", "games": ["S1", "S999"], "seat": "2"},
+            {"as": "Zed Ash", "to": "2026-06-01", "games": ["S2"]},
+        ]}})
+        split, result = gc.apply_player_splits(gc.parse_game_log(split_log()), aliases)
+        names = seat1(split)
+        # 面瓦 games are 21..30 (2026-06-11 .. 2026-06-15): all inside the dates
+        self.assertEqual({k for k, v in names.items() if v == "Orla Pike"}, {str(i) for i in range(21, 31)})
+        self.assertEqual(names["1"], "Zed Ash")  # rule 3: on or before 2026-06-01 (games 1 and 2) ...
+        self.assertEqual(names["2"], "Zed Ash")  # ... or listed
+        self.assertEqual(result.per_rule, [10, 0, 2])
+        self.assertEqual(result.unknown_ids, ["S999"])
+        self.assertEqual(result.name_absent, ["S1"])  # rule 2 wants seat 2, where she does not sit
+        self.assertIn("1 listed game id(s) not in the stats; 1 listed game(s) without that name; "
+                      "1 rule(s) matched nothing", result.summary())
+
+    def test_doubled_name_split_by_seat(self) -> None:
+        rows = split_log(3)
+        rows[1] = dated("1", s_date(0), "三紅", ["Ilse Marr"] + SEAT_NAMES[1:5] + ["Ilse Marr"] + SEAT_NAMES[6:])
+        aliases = gc.parse_player_aliases({"aliases": {}, "splits": {"Ilse Marr": [
+            {"as": "Orla Pike", "games": ["S1"], "seat": "6"}]}})
+        games = gc.parse_game_log(rows)
+        _, before = gc.canonicalize_player_names(games)
+        self.assertEqual(before.doubled_games, 1)
+        split, names = gc.canonicalize_player_names(games, aliases)
+        self.assertEqual((split[0].seat_players["1"], split[0].seat_players["6"]), ("Ilse Marr", "Orla Pike"))
+        self.assertEqual(names.doubled_games, 0)
+
+    def test_cache_counts_the_split_games_for_the_other_person(self) -> None:
+        aliases = gc.parse_player_aliases(SPLIT_DOC)
+        cache = build_named(split_log(), name_chemistry(["丙"]), aliases)
+        rows = {p["name"]: p for p in cache["players"]["players"]}
+        self.assertEqual(rows["Ilse Marr"]["totalGames"], 37.0)
+        self.assertEqual(rows["Orla Pike"]["totalGames"], 3.0)
+        self.assertNotIn("Tovo Wren", rows)
+        self.assertEqual(cache["players"]["aliases"], {"Tovo Wren": "Ilse Marr"})
+        games, names = gc.canonicalize_player_names(gc.parse_game_log(split_log()), aliases)
+        self.assertIn("1 split rule(s)", names.summary())
+        self.assertEqual(names.splits.moves, {"Tovo Wren": 3})
+        again, names2 = gc.canonicalize_player_names(games, aliases)  # idempotent as a whole
+        self.assertIs(again, games)
+        self.assertEqual(names2.splits.seats, 0)
+
+    def test_guard_accepts_the_drop_the_split_explains(self) -> None:
+        prev = fake_cache(players=3)
+        prev["players"]["players"].append({"name": "Ilse Marr", "totalGames": 40.0})
+        prev["overview"]["totalPlayers"] = prev["players"]["total"] = 4
+        new = fake_cache(players=3)
+        new["players"]["players"] += [{"name": "Ilse Marr", "totalGames": 37.0}, {"name": "Orla Pike", "totalGames": 3.0}]
+        new["overview"]["totalPlayers"] = new["players"]["total"] = 5
+        refused = gc.validate_new_cache(new, prev, show_names=False)
+        self.assertTrue(any("existing player" in p for p in refused))
+        self.assertEqual(gc.validate_new_cache(new, prev, split_moves={"Ilse Marr": 3}), [])
+        self.assertEqual(gc.validate_new_cache(new, prev, split_moves={"ilse marr": 3}), [])  # any spelling
+        new["players"]["aliases"] = {"Tovo Wren": "Ilse Marr"}
+        self.assertEqual(gc.validate_new_cache(new, prev, split_moves={"Tovo Wren": 3}), [])  # the alias's old name
+        self.assertTrue(gc.validate_new_cache(new, prev, split_moves={"Ilse Marr": 2}))  # one game more than moved
+        self.assertTrue(gc.validate_new_cache(new, prev, split_moves={"Orla Pike": 3}))  # moved from someone else
+
+    def test_discord_post_ids_resolve_through_game_db(self) -> None:
+        aliases = gc.parse_player_aliases({"aliases": {"Tovo Wren": "Ilse Marr"}, "splits": {"Ilse Marr": [
+            {"as": "Orla Pike", "games": ["1571000000000000001", "1571000000000000002", "S9"]}]}})
+        db = {"games": [
+            {"id": "1571000000000000001", "sources": [{"src": "discord", "id": "1571000000000000001"},
+                                                     {"src": "sheet", "id": "S7"}]},
+            {"id": "1571000000000000003", "sources": [{"src": "discord", "id": "1571000000000000003"}]},
+        ]}
+        resolved = gc.resolve_split_post_ids(aliases, db)
+        (rule,) = resolved.splits
+        self.assertEqual(rule.games, frozenset({"S7", "S9", "1571000000000000002"}))
+        self.assertEqual(rule.post_ids, frozenset({"1571000000000000002"}))
+        _, result = gc.apply_player_splits(gc.parse_game_log(split_log(10)), resolved)
+        self.assertEqual(result.seats, 2)
+        self.assertEqual(result.unknown_ids, ["1571000000000000002"])
+        self.assertIs(gc.resolve_split_post_ids(gc.NO_ALIASES, db), gc.NO_ALIASES)
+
+    def test_the_repo_file_has_a_splits_section(self) -> None:
+        doc = json.loads(gc.ALIASES_PATH.read_text(encoding="utf-8"))
+        self.assertIsInstance(doc.get("splits"), dict)
+        self.assertIn("splits", doc["_comment"])
+        gc.load_player_aliases(gc.ALIASES_PATH)  # valid
+
+
+# ---------------------------------------------------------------------------
 # rating: 團隊 Elo (compute_rating, Edward 2026-10-30). Invented names only.
 # ---------------------------------------------------------------------------
 
