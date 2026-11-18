@@ -31,6 +31,11 @@ Mapping:
              a loyal servant ('Resistance') does not -- the target stays empty and the game is flagged.
   result     Mission fails → 三紅; Assassinated Merlin correctly → 三藍死; Resistance wins → 三藍活.
 
+Not used by default (站長 2026-11-18「我看ProAvalon 的局基本上很多都在亂玩 其實可以考慮刪掉了」): game_db.py reads
+proavalon_games.json only with ``--with-proavalon``. Known gap before turning it back on: seats are not shifted so
+that round 1's first leader is seat 1 (the site convention) -- seat 1 is ProAvalon's first player; in the 579 games
+the first leader is seat 1 in only 62, while the first lake holder always sits right before the first leader.
+
 Usage:  python proavalon_import.py <lake.jsonl.gz> [--output proavalon_games.json]
 """
 

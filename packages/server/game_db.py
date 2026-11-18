@@ -12,6 +12,10 @@ credentials and adds no new reader of Google / Discord):
   discord    Discord forum #牌譜紀錄與覆盤, one post per game (records_cache.json entries with a numeric id;
              ``game`` is null when the post does not parse -- ``problem`` says why).
   sim_sheet  Google Sheet 模擬瓦 tab (模擬). records_cache.json entries ``M<流水號>``.
+  proavalon  ProAvalon anonymized export (外部, ``P<_id>``; proavalon_games.json from proavalon_import.py).
+             OFF by default since 2026-11-18 (站長「我看ProAvalon 的局基本上很多都在亂玩 其實可以考慮刪掉了」):
+             the default build leaves it out of game_db.json and the report; ``--with-proavalon`` turns it back
+             on. proavalon_games.json and the private raw data stay as they are.
 
   (records_cache.json's ``S<流水號>`` entries are the sheet games again and sim_bank.json is built from the
   牌譜 snapshot sheets_cache.json, so neither is a source of its own; the report only checks their coverage.)
@@ -53,6 +57,7 @@ level as the public dataset). The repo is public.
 Usage:  python game_db.py [--games games_cache.json] [--records records_cache.json]
                           [--snapshot sheets_cache.json] [--sim-bank sim_bank.json]
                           [--corrections game_db_corrections.json]
+                          [--with-proavalon [--proavalon proavalon_games.json]]
                           [--output game_db.json] [--check-report ../../docs/data/game_db_report.md]
 """
 
@@ -96,6 +101,9 @@ KIND_REAL = "real"
 KIND_SIM = "sim"
 KIND_BOT = "bot"
 GROUP_EXTERNAL = "external"  # report / counts group of external rows (kind stays real)
+# ProAvalon (外部) is left out of the default build (站長 2026-11-18「我看ProAvalon 的局基本上很多都在亂玩 其實可以考慮刪掉了」).
+# Reversible: ``python game_db.py --with-proavalon`` puts the games back; nothing is deleted.
+INCLUDE_PROAVALON = False
 
 TEAM_SIZES = dri.TEAM_SIZES  # (3, 4, 4, 5, 5): 10 players
 SEATS = gc.SEATS
@@ -928,7 +936,7 @@ def coverage(rows: Sequence[Mapping[str, Any]], snapshot: Any, sim_bank: Any, re
 
 def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], cov: Mapping[str, Any], path: Path,
                  excluded: Sequence[Mapping[str, Any]] = (), hammer: int = 0,
-                 corrections: Sequence[Mapping[str, Any]] = ()) -> None:
+                 corrections: Sequence[Mapping[str, Any]] = (), proavalon_off: bool = False) -> None:
     """docs/data/game_db_report.md: counts by rule and the list of games to look at (ids only)."""
     L: list[str] = []
     L.append("# 牌譜總庫：檢查報告")
@@ -970,11 +978,13 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append("站長 2026-11-17：「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」。這些局不進總庫（不在 `games`、"
              "上面和下面的數字都不算），來源本身不動。任何一個來源有這種錯就排除；同一局另一個來源沒有這種錯的，另列「來源不一致，已排除」。")
     L.append("")
-    L.append("| 規則 | 說明 | 實戰 | 外部 | 模擬 |")
-    L.append("|---|---|---|---|---|")
+    has_ext = bool(counts.get("external")) or any(GROUP_EXTERNAL in n for n in counts["excluded"].values())
+    L.append("| 規則 | 說明 | 實戰 |" + (" 外部 |" if has_ext else "") + " 模擬 |")
+    L.append("|---|---|---|" + ("---|" if has_ext else "") + "---|")
     for rule in EXCLUDE_RULES:
         n = counts["excluded"].get(rule, {})
-        L.append(f"| `{rule}` | {RULES[rule][1]} | {n.get(KIND_REAL, 0) + n.get(KIND_BOT, 0)} | {n.get(GROUP_EXTERNAL, 0)} | {n.get(KIND_SIM, 0)} |")
+        ext_cell = f" {n.get(GROUP_EXTERNAL, 0)} |" if has_ext else ""
+        L.append(f"| `{rule}` | {RULES[rule][1]} | {n.get(KIND_REAL, 0) + n.get(KIND_BOT, 0)} |{ext_cell} {n.get(KIND_SIM, 0)} |")
     if hammer:
         L.append("")
         L.append(f"另外 ProAvalon 第 5 次提議被否決而輸的 {hammer} 局，匯入時就沒有轉進來（同屬尾派沒有出任務）。")
@@ -1007,6 +1017,14 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         L.append("- 第 5 次提議被否決而輸的局（我們的規則沒有這種結局）沒有轉進來。")
         st = Counter(r["status"] for r in ext_rows)
         L.append(f"- 檢查結果：沒問題 {st.get('ok', 0)}、只有提醒 {st.get(WARN, 0)}、有錯 {st.get(ERROR, 0)}。")
+    elif proavalon_off:
+        L.append("")
+        L.append("## 外部來源：ProAvalon（停用）")
+        L.append("")
+        L.append("站長 2026-11-18：「我看ProAvalon 的局基本上很多都在亂玩 其實可以考慮刪掉了」。ProAvalon 的局（`P` 開頭）"
+                 "預設不進總庫、不進這份報告，網站上從總庫來的東西（例如 `/更正` 查局）也就沒有這些局。"
+                 "原始資料（站長私人 repo）與 `packages/server/proavalon_games.json` 都沒有刪；"
+                 "要再用時加 `--with-proavalon` 重建：`python packages/server/game_db.py --with-proavalon`。")
     L.append("")
     real_ok = [r for r in rows if r["kind"] != KIND_SIM and r["game"] and not r.get("external")]
     L.append("## 線上／面對面與陣容強度")
@@ -1063,8 +1081,8 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         L.append("")
     L.append("## 各規則的局數")
     L.append("")
-    L.append("| 規則 | 等級 | 說明 | 實戰 | 外部 | 模擬 |")
-    L.append("|---|---|---|---|---|---|")
+    L.append("| 規則 | 等級 | 說明 | 實戰 |" + (" 外部 |" if has_ext else "") + " 模擬 |")
+    L.append("|---|---|---|---|" + ("---|" if has_ext else "") + "---|")
     level_name = {ERROR: "錯", WARN: "提醒", INFO: "參考"}
     for rule, (level, name) in RULES.items():
         if rule in EXCLUDE_RULES:
@@ -1072,7 +1090,8 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         real = counts["rules"].get(KIND_REAL, {}).get(rule, 0) + counts["rules"].get(KIND_BOT, {}).get(rule, 0)
         sim = counts["rules"].get(KIND_SIM, {}).get(rule, 0)
         ext = counts["rules"].get(GROUP_EXTERNAL, {}).get(rule, 0)
-        L.append(f"| `{rule}` | {level_name[level]} | {name} | {real} | {ext} | {sim} |")
+        ext_cell = f" {ext} |" if has_ext else ""
+        L.append(f"| `{rule}` | {level_name[level]} | {name} | {real} |{ext_cell} {sim} |")
     L.append("")
     L.append("（一局可以同時違反好幾條；同一條在一局裡出現幾次就算幾次。）")
     L.append("")
@@ -1137,7 +1156,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--records", default=str(HERE / "records_cache.json"))
     ap.add_argument("--snapshot", default=str(HERE / "sheets_cache.json"))
     ap.add_argument("--sim-bank", default=str(HERE / "sim_bank.json"))
-    ap.add_argument("--proavalon", default=str(HERE / "proavalon_games.json"))
+    ap.add_argument("--proavalon", default=str(HERE / "proavalon_games.json"), help="read only with --with-proavalon")
+    ap.add_argument("--with-proavalon", dest="with_proavalon", action="store_true", default=INCLUDE_PROAVALON,
+                    help="put the ProAvalon games (外部, P<_id>) back into the database; off by default since 2026-11-18")
     ap.add_argument("--corrections", default=str(HERE / "game_db_corrections.json"))
     ap.add_argument("--output", default=str(HERE / "game_db.json"))
     ap.add_argument("--check-report", dest="report", default=str(HERE.parent.parent / "docs" / "data" / "game_db_report.md"))
@@ -1153,7 +1174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     sources = dataset_sources(games_doc, snapshot_texts(snapshot))
     rec_sources, records_sheet_ids = records_sources(records_doc)
     sources += rec_sources
-    proavalon_doc = load_json(Path(args.proavalon))
+    proavalon_doc = load_json(Path(args.proavalon)) if args.with_proavalon else None
     sources += proavalon_sources(proavalon_doc)
     corrections = apply_corrections(sources, load_json(Path(args.corrections)))
     excluded: list[dict[str, Any]] = []
@@ -1164,7 +1185,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     hammer = sum(n for why, n in ((proavalon_doc or {}).get("skipped") or {}).items() if "5th proposal" in why)
     write_db(rows, counts, Path(args.output))
     if args.report:
-        write_report(rows, counts, cov, Path(args.report), excluded, hammer, corrections)
+        write_report(rows, counts, cov, Path(args.report), excluded, hammer, corrections, proavalon_off=not args.with_proavalon)
     print(f"game_db: {counts['games']} games {counts['byKind']}; merged {counts['merged']}; status {counts['byStatus']}; "
           f"excluded {len(excluded)} {counts['excluded']}")
     return 0

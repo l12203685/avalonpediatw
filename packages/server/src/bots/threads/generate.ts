@@ -32,6 +32,11 @@ export interface GenerateDeps {
    * 存下來（已經發出去）的那一天不受影響；選的題不是那天主題能出的就忽略、照計畫，原因寫進 `warnings`。
    */
   pickOverride?: (date: string) => string | null;
+  /**
+   * 貼文 A 的範本（站長在主控台改的「貼文格式（每天共用）」，同步進 threads_template.json；template.ts）。
+   * 不給＝內建格式。這一天套不下 500 字就改用內建格式，原因寫進 `warnings`。
+   */
+  postTemplate?: string;
 }
 
 /** 每個星期幾可以用哪些候選池（週三、週五的池子是兩題一組，取第一題）。 */
@@ -191,7 +196,9 @@ export class ThreadsGenerator {
       yesterday: yPick && yView ? { date: yDate, pv: yView, earlier, recordId: this.recordIdOf(yPick.gameId) } : null,
       titles: this.deps.titles,
       ...(opts.image ? { image: opts.image } : {}),
+      ...(this.deps.postTemplate !== undefined ? { template: this.deps.postTemplate } : {}),
     });
+    if (draft.templateWarning && !this.warnings.includes(`${date}：${draft.templateWarning}`)) this.warnings.push(`${date}：${draft.templateWarning}`);
     // ChatGPT 已經填的第一則留言保留。
     const saved = this.deps.readSaved(date);
     if (saved?.firstComment?.text && saved.pick?.gameId === pick.gameId) draft.firstComment.text = saved.firstComment.text;

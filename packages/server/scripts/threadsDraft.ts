@@ -7,9 +7,10 @@
  *   pnpm --filter @avalon/server threads:draft -- --week             # 從 --date（預設今天）起連續 7 天
  *   選項：--out <資料夾>（預設 packages/server/threads_drafts/，不進 git）、--no-image、--days N、
  *         --start YYYY-MM-DD（第一篇貼文的日期：那一天的 A 沒有昨天的答案；預設 THREADS_LIVE_FROM，再沒有就 2026-11-18）、
- *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；每一天都用，存下來的草稿優先）
+ *         --picks <檔>（站長選的題目，預設 packages/server/threads_picks.json；每一天都用，存下來的草稿優先）、
+ *         --template <檔>（貼文格式，預設 packages/server/threads_template.json；沒有就用內建格式）
  *
- * 每天寫三個檔：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位）、<日期>.png（題目圖）。
+ * 每天寫三個檔：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位、parts＝貼文每個佔位符這天的內容）、<日期>.png（題目圖）。
  * 已經有 <日期>.json 的日子沿用裡面的題目和第一則留言（重跑不會換題）。
  * 題目只從實戰出（題庫 sim_bank.json 不含模擬的局）；草稿只有座位和牌譜記號，沒有玩家名字。
  */
@@ -24,6 +25,7 @@ import { readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
 import { pickOverrideOf } from '../src/bots/threads/picksFile';
 import { renderAnswerPng, renderGridPngs, renderPuzzlePng } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
+import { readTemplateFile } from '../src/bots/threads/template';
 
 const root = path.resolve(__dirname, '..');
 const argv = process.argv.slice(2);
@@ -58,7 +60,10 @@ const titles = new Map(wiki.map((a) => [a.id, a.title] as [string, string]));
 fs.mkdirSync(outDir, { recursive: true });
 const readSaved = savedDraftReader(outDir);
 
-const gen = new ThreadsGenerator({ bank, titles, readSaved, startDate, pickOverride: pickOverrideOf(overrides) });
+// 站長在主控台改的貼文格式（同步進 threads_template.json）；沒有或不合格就用內建格式。
+const template = readTemplateFile(path.resolve(arg('--template', path.join(root, 'threads_template.json'))));
+for (const w of template.warnings) console.warn(w);
+const gen = new ThreadsGenerator({ bank, titles, readSaved, startDate, pickOverride: pickOverrideOf(overrides), postTemplate: template.template.post });
 console.log(`bank: ${bank.games.length} games (${bank.records.size} with a records page); out: ${outDir}`);
 
 for (let i = 0; i < days; i++) {
