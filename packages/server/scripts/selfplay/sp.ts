@@ -33,6 +33,7 @@ async function main(): Promise<void> {
   const out = arg('--out');
   if (!out) throw new Error('--out PATH');
   const variant = { ...DEFAULT_AGENT_TUNING };
+  const redTuning = { ...DEFAULT_AGENT_TUNING };
   // Round 44 (analysis only): pseudo-flag force11=<c1|c2|c3|c23|c4|c5|tXYZ> forces a loyal 1-1 leader's first proposal
   // (seats relative to the 1-1 leader = P1; 0 = P10): c1 = leader + two of 4..0, c2 = leader + 2 + one of 4..0,
   // c3 = leader + 3 + one of 4..0, c23 = 1,2,3, c4 = leader out, three of 4..0, c5 = leader out, three of 2..0 holding 2 or 3;
@@ -45,6 +46,9 @@ async function main(): Promise<void> {
   // [{p: [[team, approvers]] ('' approvers = forced 5th), m: 'o'/'x' cards, f: seats that played fail}], l: lakes
   // [[holder, target, claim o/x/'']], a: assassination target}. Behaviour is unchanged (it only records).
   let detail = false;
+  // round 46: lake45=1 adds the first lake's target (relative seat), whether it is red, and the claim (o / x / '').
+  let lake45 = false;
+  const redDesc: string[] = [];
   let failLog: [number, string][] = [];
   class SkipGame extends Error {}
   argv.forEach((a, i) => {
@@ -53,6 +57,9 @@ async function main(): Promise<void> {
     if (f.startsWith('force11=')) { force11 = f.slice('force11='.length); return; }
     if (f === 'onlyLoyal11=1') { onlyLoyal11 = true; return; }
     if (f === 'detail=1') { detail = true; return; }
+    if (f === 'lake45=1') { lake45 = true; return; }
+    // round 46: red.k=v applies an AgentTuning switch to the red seats (the usual --flag k=v is blue seats only)
+    if (f.startsWith('red.')) { Object.assign(redTuning, parseTuningFlag(f.slice(4))); redDesc.push(f.slice(4)); return; }
     Object.assign(variant, parseTuningFlag(f));
   });
   // seats are relative to the 1-1 leader (the engine's first leader is not always P1): rel k -> the k-th seat from the leader
@@ -84,7 +91,6 @@ async function main(): Promise<void> {
     }
     throw new Error(`force11=${force11}?`);
   };
-  const redTuning = { ...DEFAULT_AGENT_TUNING };
 
   class Seat {
     readonly agentType = 'heuristic' as const;
@@ -167,6 +173,10 @@ async function main(): Promise<void> {
       const lake0 = final.lakeHistory && final.lakeHistory[0] ? relOf(seats, L, final.lakeHistory[0].holderId) : '';
       rows.push([i, res.winner === 'good' ? 1 : 0, tb, mk, quests.length && quests[0].failed ? 1 : 0, quests.filter((q) => q.failed).length, h,
         byId.get(L)!.role, t11, v0 && v0.approved ? 1 : 0, red(relSeat(seats, L, '5')), red(relSeat(seats, L, '0')), lake0, final.lakeHistory && final.lakeHistory[0] ? red(final.lakeHistory[0].holderId) : -1]);
+      if (lake45) {
+        const lk = final.lakeHistory && final.lakeHistory[0];
+        rows[rows.length - 1].push(lk ? relOf(seats, L, lk.targetId) : '', lk ? red(lk.targetId) : -1, lk ? (lk.declaredClaim === 'good' ? 'o' : lk.declaredClaim === 'evil' ? 'x' : '') : '');
+      }
       if (detail) {
         const rel = (id: string): string => relOf(seats, L, id);
         const roleSeat = (r: string): string => { const a = agents.find((x) => x.role === r); return a ? rel(a.agentId) : '-'; };
@@ -191,8 +201,8 @@ async function main(): Promise<void> {
       if ((i + 1 - from) % 250 === 0) process.stderr.write(`[sp ${tag}] ${i + 1 - from}/${n} ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     }
   } finally { console.log = originalLog; }
-  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, detail, seconds: Math.round((Date.now() - started) / 1000) };
-  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake', ...(detail ? ['g'] : [])], rows }));
+  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, detail, lake45, red: redDesc.join(' '), seconds: Math.round((Date.now() - started) / 1000) };
+  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake', ...(lake45 ? ['lkT', 'lkTRed', 'lkClaim'] : []), ...(detail ? ['g'] : [])], rows }));
   fs.renameSync(out + '.tmp', out);
   process.stderr.write(`[sp ${tag}] done ${rows.length} games ${meta.seconds}s\n`);
   process.exit(0);

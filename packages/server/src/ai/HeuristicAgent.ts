@@ -29,6 +29,7 @@ import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelW
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
 import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
+import { tailCleanLogRatio } from './RedRound46';
 import { DOOMED_LEAD_EPS, doomedTierCandidates, merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence, withoutReuseLeaders, missedReuseLeads, MISSED_REUSE_LOG_LR, reuseLeadLogRatio, REUSE_STACK_WEIGHTS } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
@@ -2344,7 +2345,8 @@ export class HeuristicAgent implements AvalonAgent {
         // narrowest fix surface.
         if (myRole === 'mordred') return 'success';
         if (myRole === 'morgana') {
-          if (round >= 3) {
+          // Round 46 (red) `redRankOrderR2Fix45`: the same rule on R2 (Morgana + Mordred on R2 played 0 fails 98.9% of the time).
+          if (round >= 3 || (round === 2 && (this.tuning.redRankOrderR2Fix45 ?? 0) > 0)) {
             // R3 hard rule (Edward 2026-04-30 18:08): ≥1 red must fail.
             // morgana picks fail per位階 (assassin lowest → assassin
             // always fails when on team; morgana middle → fails at R3
@@ -2708,6 +2710,11 @@ export class HeuristicAgent implements AvalonAgent {
       } else if (reuseMode >= 4) {
         // Round 21 (red) `assassinReuseRead` 4–10: round-dependent / measured / fitted factors, re-proposal credit, clean misses.
         for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + reuseLeadLogRatio(obs, id, reuseMode));
+      }
+      // Round 46 (red) `assassinTailRead45` (RedRound46.ts): a forced (tail) team with no red at all is Merlin-like.
+      const tailMode = this.tuning.assassinTailRead45 ?? 0;
+      if (tailMode > 0) {
+        for (const id of goodPlayers) scores.set(id, (scores.get(id) ?? 0) + tailCleanLogRatio(obs, id, evilSet, tailMode));
       }
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
     }
