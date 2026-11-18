@@ -32,7 +32,7 @@ import path from 'path';
 import { WEEKLY_CHART_FONT_FAMILY, WEEKLY_CHART_FONT_FILE, escapeXml } from '../stats/weeklyChart';
 import { ROLE_ZH } from '../simulation/commands';
 import { resultText } from '../simulation/replies';
-import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, type PublicEvent } from '../simulation/scenario';
+import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, isRed, type PublicEvent } from '../simulation/scenario';
 import { seatChar } from '../simulation/seats';
 import { VIEWER_SEAT_SEP, VIEWER_SEP, viewerLine, type PickView } from './draft';
 
@@ -398,6 +398,14 @@ export function resolveThumbs(thumbs: readonly number[], seats: ReadonlyMap<numb
   return null;
 }
 
+/** 卡片上標「隊友」的座位：刺殺題的紅方＝其他紅方全部（含奧伯倫），其他題照夜裡的知識（sight.mates）。 */
+export function teammateSeats(pv: Pick<PickView, 'game' | 'pick' | 'view'>): number[] {
+  if (pv.pick.proposal === null && isRed(pv.game.seatRoles[pv.pick.seat - 1])) {
+    return pv.game.seatRoles.flatMap((r, i) => (i + 1 !== pv.pick.seat && isRed(r) ? [i + 1] : []));
+  }
+  return pv.view.sight.kind === 'evil' ? pv.view.sight.mates : [];
+}
+
 /** 每個座位的標記；known＝到那一刻為止看得到的列（題目卡算到出題那一刻）。 */
 export type SeatMark = { label: string; color: string; side?: 'good' | 'evil'; /** 還分不出來的拇指：半圈藍半圈紅 */ split?: boolean };
 export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number, SeatMark> {
@@ -407,7 +415,9 @@ export function seatMarks(pv: PickView, known: readonly SheetRow[]): Map<number,
   // 分不出來的拇指半圈藍半圈紅、打問號（站長 11/17：「派西維爾看到的姆指可以是半圈藍半圈紅 然後打問號」）。
   if (s.kind === 'percival') s.thumbs.forEach((t) => marks.set(t, { label: '拇指?', color: C.ink, split: true }));
   if (s.kind === 'merlin') s.seen.forEach((t) => marks.set(t, { label: '紅', color: C.red, side: 'evil' }));
-  if (s.kind === 'evil') s.mates.forEach((t) => marks.set(t, { label: '隊友', color: C.red, side: 'evil' }));
+  // 隊友：提議題照夜裡的知識（看不到奧伯倫）；刺殺題四位紅方開牌討論，其他紅方全部標隊友（含奧伯倫；站長 11/18：「規則上 刺殺階段只有刺客可以開牌
+  // 但只有邪惡方可以發言討論 奧伯倫屬於邪惡方 所以其實等同四位邪惡方開牌討論」，和「你是」那一行的 assassinationMates 一致）。
+  for (const t of teammateSeats(pv)) marks.set(t, { label: '隊友', color: C.red, side: 'evil' });
   // 自己湖到的、湖中鏈推出的：已經有標記（隊友、看到的紅、拇指）的座位不蓋掉（夜裡已經知道的不重複）。
   const knowledge = lakeKnowledge(pv, known);
   for (const [seat, k] of knowledge.seats) {

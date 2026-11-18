@@ -19,7 +19,7 @@ import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { isRed, midDecision, publicEvents } from '../bots/simulation/scenario';
 import { THREADS_ARTICLES, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerText, buildDraft, draftMarkdown, pickView, postText, viewerLine, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, cardTop, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, THREADS_ASSET_DIR, HEADER_H, headerLogoSize, headerLogoUri } from '../bots/threads/image';
+import { GRID_ROW_MIN, GRID_TARGET_H, buildAnswerSvg, buildGridSvg, buildPuzzleSvg, cardLayout, gridOverflowStart, recordLines, renderAnswerPng, renderGridPng, renderPuzzlePng, seatPosition, sheetRows, textWidth, voteLegend, wrapLine, missionChips, lakeLine, missionTeam, identityText, identityLines, lakeLines, logoRimPoint, cardSheetRows, buildGridSvgs, gridPages, rowRound, cardTop, lakeKnowledge, lakeEntries, lakeBlock, seatMarks, resolveThumbs, teammateSeats, THREADS_ASSET_DIR, HEADER_H, headerLogoSize, headerLogoUri } from '../bots/threads/image';
 import { THREADS_START_DATE, addDays, buildCandidates, labelFor, planWeek, themeOf, weekIndexOf, weekdayOf, type ThreadsPick } from '../bots/threads/plan';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
@@ -524,7 +524,8 @@ describe('image', () => {
     for (let w = 0; w < 8 && !pv; w++) {
       for (const pick of planWeek(bank, w) as ThreadsPick[]) {
         const v = pickView(gameOf(pick), pick);
-        if (sheetRows(v).some((r) => r.kind === 'proposal')) {
+        // 刺殺題的紅方看得到全部紅方（teammateSeats 看真的角色，不看換掉的 sight），只用提議題
+        if (pick.proposal !== null && sheetRows(v).some((r) => r.kind === 'proposal')) {
           // 當成梅林看：兩個不是自己的座位是看到的紅
           const others = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter((x) => x !== v.pick.seat).slice(0, 2);
           pv = { ...v, view: { ...v.view, sight: { kind: 'merlin', seen: others } } } as typeof v;
@@ -734,6 +735,10 @@ describe('image', () => {
     const g = { seatRoles: ['loyal', 'merlin', 'assassin', 'loyal', 'morgana', 'percival', 'oberon', 'mordred', 'loyal', 'loyal'], proposals: [] } as never;
     // 夜裡的知識只看得到 5、8（模型不給奧伯倫）；刺殺階段四位紅方開牌，刺客知道全部隊友和角色
     expect(viewerLine(g, { seat: 3, proposal: null }, { kind: 'evil', mates: [5, 8] })).toBe('你是 3家 刺客, 隊友 5家莫甘娜 & 8家莫德雷德 & 7家奧伯倫, 刺殺梅林');
+    // 卡片的隊友標記也一樣：刺殺題含奧伯倫（7），提議題照夜裡的知識（只有 5、8）
+    const view = { sight: { kind: 'evil', mates: [5, 8] } } as never;
+    expect(teammateSeats({ game: g, pick: { seat: 3, proposal: null } as never, view })).toEqual([5, 7, 8]);
+    expect(teammateSeats({ game: g, pick: { seat: 3, proposal: 0 } as never, view })).toEqual([5, 8]);
     // 真的刺殺題：卡片與貼文都是這一行
     let found = false;
     for (let w = 0; w < 4 && !found; w++) {
@@ -748,6 +753,13 @@ describe('image', () => {
         if (pv.game.seatRoles.includes('oberon')) expect(line).toContain('奧伯倫');
         expect(postText(pv, { weekday: 1 }).split('\n')[1]).toBe(line);
         expect(identityText(pv)).toBe(line);
+        // 圓桌與格子欄名：其他紅方全部標隊友（含奧伯倫），和那一行一致
+        const redSeats = reds.map((x) => x.s).sort((p, q) => p - q);
+        expect([...teammateSeats(pv)].sort((p, q) => p - q)).toEqual(redSeats);
+        const marks = seatMarks(pv, sheetRows(pv));
+        for (const t of redSeats) expect(marks.get(t)).toMatchObject({ label: '隊友', side: 'evil' });
+        const card = buildPuzzleSvg(pv, 1);
+        expect((card.match(/>隊友</g) ?? []).length).toBe(redSeats.length);
         found = true;
         break;
       }
