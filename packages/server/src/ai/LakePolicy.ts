@@ -36,6 +36,7 @@ import { goodLake41Pick } from './BlueRound41';
 import { percivalRead39 } from './BlueRound39Percival';
 import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
+import { redLakeDisguiseNow } from './Round50';
 
 type Camp = 'good' | 'evil';
 
@@ -293,7 +294,8 @@ export function pickLakeTargetForTeam(
 
   // ── AgentTuning.redLakeLoyal（第 27 回合紅方，只量、不採用：改的是下面 Edward 2026-10-13 的裁定）──
   // The red holder picks the target a public-view loyal in this seat would (strong red humans lake an ally 17%, the bot 75%).
-  if (tuning.redLakeLoyal) {
+  // ── AgentTuning.redLakeDisguise50（第 50 回合紅方，湖的均衡疊代用，只測）── a share d of the red holder's lakes picked like redLakeLoyal.
+  if (tuning.redLakeLoyal || redLakeDisguiseNow(tuning, obs)) {
     const view: PlayerObservation = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: true };
     return pickLakeTargetForTeam('good', view, validTargets, tuning);
   }

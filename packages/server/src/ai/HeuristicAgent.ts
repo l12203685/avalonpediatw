@@ -30,6 +30,7 @@ import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
 import { merlinLeadLogRatio } from './assassin/MerlinLeadRead';
 import { tailCleanLogRatio } from './RedRound46';
+import { derivabilityLogRatio50, LAMBDA_ASSASSIN_50, reuseSkip50 } from './Round50';
 import { DOOMED_LEAD_EPS, doomedTierCandidates, merlinSightFromAssassin, pickWithVisibleRed, tierCandidates, visibleRedEvidence, withoutReuseLeaders, missedReuseLeads, MISSED_REUSE_LOG_LR, reuseLeadLogRatio, REUSE_STACK_WEIGHTS } from './assassin/VisibleRedProposals';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from './PercivalThumbs';
 import { beliefOptionsFrom, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
@@ -2692,7 +2693,9 @@ export class HeuristicAgent implements AvalonAgent {
       for (const id of goodPlayers) add(id, 'lake', lakeWeight * merlinLakeLogRatio(obs, id, reds));
     }
     // Round 6 (red) candidate `assassinLeadRead` (assassin/MerlinLeadRead.ts): 資訊過度超前 — clean teams the public could not have picked.
-    if (leadWeight > 0) {
+    // Round 50 (red) `assassinDerivability50=1` takes the lead read's place (below, with the forced proposals too).
+    const deriv50 = this.tuning.assassinDerivability50 ?? 0;
+    if (leadWeight > 0 && deriv50 !== 1) {
       const reds = [...evilSet];
       const leadOpts = this.tuning.assassinLeadReadBot ? { botTables: this.tuning.beliefBotTables ?? 0 } : {};
       for (const id of goodPlayers) add(id, 'lead', leadW * merlinLeadLogRatio(obs, id, reds, leadOpts, ignoreReuse, doomedMode >= 2 ? DOOMED_LEAD_EPS : undefined));
@@ -2712,13 +2715,22 @@ export class HeuristicAgent implements AvalonAgent {
     if (tailMode > 0) {
       for (const id of goodPlayers) tail.set(id, tailCleanLogRatio(obs, id, evilSet, tailMode));
     }
+    // Round 50 (red) `assassinDerivability50` (Round50.ts): could a public-view loyal in the candidate's seat have produced his all-good teams?
+    // 1 = every proposal (re-proposals of a successful team skipped like the lead read), 2 = the forced fifth proposals only. Outside `terms`.
+    const deriv = new Map<string, number>();
+    if (deriv50 > 0) {
+      const reds = [...evilSet];
+      const skip = reuseSkip50(obs, ignoreReuse);
+      for (const id of goodPlayers) deriv.set(id, (LAMBDA_ASSASSIN_50[deriv50] ?? 0) * derivabilityLogRatio50(obs, id, reds, deriv50, skip));
+    }
     const scores = new Map<string, number>();
     for (const id of goodPlayers) {
       const t = terms.get(id) as AssassinScoreTerms;
       // Same order of additions as before the split (model, vote, lake, lead, reuse), so the sums are bit-identical.
       const sum = (((t.model + t.vote) + t.lake) + t.lead) + t.reuse;
       // The forced-team term only when the switch is on (switch off: the sum stays bit-identical).
-      scores.set(id, tailMode > 0 ? sum + (tail.get(id) ?? 0) : sum);
+      const withTail = tailMode > 0 ? sum + (tail.get(id) ?? 0) : sum;
+      scores.set(id, deriv50 > 0 ? withTail + (deriv.get(id) ?? 0) : withTail);
     }
     return { scores, terms };
   }
