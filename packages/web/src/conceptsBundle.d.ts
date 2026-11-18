@@ -1,6 +1,6 @@
-/** vite.config.ts 的 '@concepts-bundle' = packages/server/src/bots/threads/concepts.json（觀念卡庫，打開文章時才載入，見 data/conceptCards.ts）。 */
+/** vite.config.ts 的 '@concepts-bundle' = packages/server/src/bots/threads/concepts.json（百科觀念卡庫，觀念卡檢視才載入）。 */
 declare module '@concepts-bundle' {
-  import type { ConceptCardBank } from './data/conceptCards';
-  const bank: ConceptCardBank;
+  import type { ConceptBankFile } from './utils/concepts';
+  const bank: ConceptBankFile;
   export default bank;
 }

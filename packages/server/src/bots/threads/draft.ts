@@ -10,6 +10,9 @@
  * A 的 500 字同時包含題目和答案：先縮題目的牌譜（前面幾局只留任務與湖 → 「完整局面看圖」），
  * 再縮答案（拿掉理由）；牌譜連結一定留。
  *
+ * 貼文的格式（2026-11-18）：站長在主控台改一次「貼文格式（每天共用）」，每天只換題目的內容；
+ * 這裡算每個佔位符的內容（postParts），template.ts 套範本（預設的內建格式跟之前一字不差）。
+ *
  * 發文：站長加好權杖、打開 THREADS_PUBLISH 之後由自動發佈的工作流程每天發（publish/、.github/workflows/threads-publish.yml）；
  * 站長也可以照草稿手動發。
  */
@@ -23,6 +26,7 @@ import { eventLines, questLine, resultText, roleCode, seatLabel, pct } from '../
 import { TEAM_SIZES, eventIndexOfProposal, isRed, publicEvents, viewAt, type PublicEvent, type SimGame, type SimView } from '../simulation/scenario';
 import { maskOf, seatList, seatsOfMask, teamDigits } from '../simulation/seats';
 import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsPick } from './plan';
+import { DEFAULT_POST_TEMPLATE, normalizeTemplate, renderTemplate, validateTemplate, type PostParts } from './template';
 
 /** Threads 一則貼文的字數上限。 */
 export const THREADS_MAX_CHARS = 500;
@@ -183,25 +187,76 @@ export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId
   return { head, bodies, tail: [decisionWords(pv.pick)] };
 }
 
-/** A 的結尾：空一行、主題標籤（站長 11/17 改的草稿拿掉了「題號 …」那一行；題號在圖上和狀態檔）。 */
-const FOOTER_LINES: readonly string[] = ['', THREADS_TOPIC_TAG];
+/**
+ * 新貼文 A 的內容（每個佔位符換成什麼，template.ts）：標題、今天的題目（接續、你是、派票紀錄、提問）、昨天的答案、主題標籤。
+ * 派票紀錄和昨天答案是這次放進 A 的版本（renderPost 從長到短挑）。
+ */
+export function postParts(
+  pv: PickView,
+  opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number } },
+  body: readonly string[],
+  answer: readonly string[],
+): PostParts {
+  return {
+    標題: postTitle(opts.weekday, pv.pick),
+    主題: labelFor(opts.weekday, pv.pick),
+    題號: pv.exerciseId,
+    接續: opts.continuesFrom ? continuesLine(opts.continuesFrom, pv.pick.seat) : '',
+    你是: viewerLine(pv.game, pv.pick, pv.view.sight),
+    派票紀錄: body.join('\n'),
+    提問: decisionWords(pv.pick),
+    昨天答案: answer.join('\n'),
+    標籤: THREADS_TOPIC_TAG,
+  };
+}
+
+export interface RenderedPost {
+  text: string;
+  /** 實際用的內容（主控台預覽、草稿 JSON 的 parts）。 */
+  parts: PostParts;
+  /** 用了第幾版的昨天答案（answers 的索引；沒有答案是 -1）。 */
+  answerIndex: number;
+  /** 站長的格式套進今天的內容放不下 500 字、改用內建格式時的說明。 */
+  warning?: string;
+}
 
 /**
- * 新貼文 A：標題、今天的題目、昨天的答案、空一行、主題標籤（≤ 500 字）。
- * 答案先用完整版、題目從完整牌譜縮到看圖；都放不下再換短的答案。
+ * 新貼文 A（≤ 500 字）：用範本（預設＝內建格式 DEFAULT_POST_TEMPLATE）套今天的內容。
+ * 答案先用完整版、題目從完整牌譜縮到看圖；都放不下再換短的答案。站長的範本怎麼縮都放不下，這天改用內建格式。
  */
-export function postText(pv: PickView, opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number }; answers?: string[][] }): string {
-  const title = postTitle(opts.weekday, pv.pick);
+export function renderPost(
+  pv: PickView,
+  opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number }; answers?: string[][]; template?: string },
+): RenderedPost {
   const q = questionParts(pv, opts);
   const answers = opts.answers && opts.answers.length > 0 ? opts.answers : [[]];
-  let last = '';
-  for (const ans of answers) {
-    for (const body of q.bodies) {
-      last = [title, ...q.head, ...body, ...q.tail, ...(ans.length ? ['', ...ans] : []), ...FOOTER_LINES].join('\n');
-      if ([...last].length <= THREADS_MAX_CHARS) return last;
+  const fit = (template: string): RenderedPost & { fits: boolean } => {
+    let last: RenderedPost | null = null;
+    for (let a = 0; a < answers.length; a++) {
+      for (const body of q.bodies) {
+        const parts = postParts(pv, opts, body, answers[a]);
+        const text = renderTemplate(template, parts);
+        last = { text, parts, answerIndex: answers[a].length ? a : -1 };
+        if ([...text].length <= THREADS_MAX_CHARS) return { ...last, fits: true };
+      }
     }
-  }
-  return last;
+    return { ...(last as RenderedPost), fits: false };
+  };
+  const wanted = opts.template !== undefined && normalizeTemplate(opts.template) !== DEFAULT_POST_TEMPLATE ? opts.template : null;
+  // 範本檔讀進來時已經檢查過；這裡再擋一次（直接傳字串進來的呼叫端）。
+  const invalid = wanted !== null ? validateTemplate('post', wanted) : [];
+  const custom = wanted !== null && invalid.length === 0 ? fit(wanted) : null;
+  if (custom?.fits) return { text: custom.text, parts: custom.parts, answerIndex: custom.answerIndex };
+  const def = fit(DEFAULT_POST_TEMPLATE);
+  const out: RenderedPost = { text: def.text, parts: def.parts, answerIndex: def.answerIndex };
+  if (invalid.length) out.warning = `站長的貼文格式不合格（${invalid.join('；')}），這天用內建格式`;
+  else if (custom) out.warning = `站長的貼文格式套進這天的內容最短也有 ${[...custom.text].length} 字，超過 ${THREADS_MAX_CHARS}，這天改用內建格式`;
+  return out;
+}
+
+/** 新貼文 A 的文字（renderPost 的 text）。 */
+export function postText(pv: PickView, opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number }; answers?: string[][]; template?: string }): string {
+  return renderPost(pv, opts).text;
 }
 
 // ─── 純邏輯的理由 ─────────────────────────────────────────────────────────
@@ -365,6 +420,10 @@ export interface ThreadsDraft {
   /** A 裡的「昨天的答案」那一段（實際放進 A 的版本）；第一天沒有。 */
   answerToYesterday: { date: string; exerciseId: string; text: string } | null;
   firstComment: FirstCommentSlot;
+  /** 貼文 A 每個佔位符這天換成什麼（template.ts；主控台的格式編輯器拿它預覽）。 */
+  parts?: PostParts;
+  /** 站長的貼文格式這天放不下、改用內建格式時的說明。 */
+  templateWarning?: string;
 }
 
 function tagsOf(pv: PickView): string[] {
@@ -403,6 +462,8 @@ export interface DraftInput {
   /** 百科文章 id → 標題。 */
   titles: ReadonlyMap<string, string>;
   image?: string;
+  /** 貼文 A 的範本（threads_template.json 的 post；不給＝內建格式）。 */
+  template?: string;
 }
 
 export function buildDraft(input: DraftInput): ThreadsDraft {
@@ -412,9 +473,11 @@ export function buildDraft(input: DraftInput): ThreadsDraft {
   const answers = input.yesterday
     ? answerVariants({ yesterday: input.yesterday.pv, earlier: input.yesterday.earlier, todayContinues: continues, recordId: input.yesterday.recordId })
     : [];
-  const text = postText(input.today, { weekday, ...(from ? { continuesFrom: from } : {}), answers });
-  // 實際放進 A 的是哪一版答案（找第一個整段出現在 A 裡的）。
-  const used = answers.find((a) => text.includes(a.join('\n'))) ?? null;
+  const r = renderPost(input.today, { weekday, ...(from ? { continuesFrom: from } : {}), answers, ...(input.template !== undefined ? { template: input.template } : {}) });
+  const text = r.text;
+  // 實際放進 A 的是哪一版答案（範本沒有 {昨天答案} 的話就沒有放進去）。
+  const picked = r.answerIndex >= 0 ? answers[r.answerIndex] : null;
+  const used = picked && text.includes(picked.join('\n')) ? picked : null;
   return {
     date: input.date,
     weekday,
@@ -427,6 +490,8 @@ export function buildDraft(input: DraftInput): ThreadsDraft {
     continuesYesterday: continues,
     answerToYesterday: input.yesterday && used ? { date: input.yesterday.date, exerciseId: input.yesterday.pv.exerciseId, text: used.join('\n') } : null,
     firstComment: firstCommentSlot(input.today, input.titles),
+    parts: r.parts,
+    ...(r.warning ? { templateWarning: r.warning } : {}),
   };
 }
 

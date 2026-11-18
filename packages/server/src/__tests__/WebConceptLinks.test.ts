@@ -1,20 +1,15 @@
 /**
- * 百科文章的「本篇觀念卡」與觀念卡頁的網址（packages/web/src/utils/conceptLinks.ts；docs/CONCEPTS.md）。web 沒有測試執行器，在這裡測。
+ * 百科文章的「本篇觀念卡」（packages/web/src/utils/conceptLinks.ts；docs/CONCEPTS.md）連到公開觀念卡頁（utils/concepts.ts，#86）。
+ * web 沒有測試執行器，在這裡測。
  */
 
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
-import {
-  articleConceptGroups,
-  conceptAnchorId,
-  conceptCardHash,
-  conceptsBySection,
-  isConceptCardId,
-  parseConceptsHash,
-} from '../../../web/src/utils/conceptLinks';
+import { articleConceptAnchorId, articleConceptGroups, conceptsBySection } from '../../../web/src/utils/conceptLinks';
+import { conceptAnchorId, conceptsHash, parseConceptsHash } from '../../../web/src/utils/concepts';
 import { parseWikiHash } from '../../../web/src/utils/wikiHash';
-import { CONCEPT_ID_RE, conceptBank } from '../bots/threads/concepts';
+import { conceptBank } from '../bots/threads/concepts';
 
 const serverRoot = path.resolve(__dirname, '..', '..');
 const wiki = new Map(
@@ -22,23 +17,20 @@ const wiki = new Map(
 );
 const bank = conceptBank();
 
-describe('#concepts=<id>', () => {
-  it('round-trips card ids and leaves other hashes alone', () => {
-    expect(conceptCardHash()).toBe('#concepts');
-    expect(conceptCardHash('w205-1-2')).toBe('#concepts=w205-1-2');
-    expect(parseConceptsHash('#concepts')).toEqual({ id: null });
-    expect(parseConceptsHash('#concepts=w205-1-2')).toEqual({ id: 'w205-1-2' });
-    expect(parseConceptsHash('#concepts/w205-1-2/')).toEqual({ id: 'w205-1-2' });
-    expect(parseConceptsHash('#concepts=<script>')).toEqual({ id: null });
-    expect(parseConceptsHash('#concepts=%E0')).toEqual({ id: null });
-    expect(parseConceptsHash('#wiki=wiki-205')).toBeNull();
-    expect(parseWikiHash(conceptCardHash('w205-1-2'))).toBeNull();
-    for (const c of bank.concepts) expect(parseConceptsHash(conceptCardHash(c.id))).toEqual({ id: c.id });
+describe('links from an article to the concept page', () => {
+  it('every card’s #concepts=<id> link opens that card on the page (anchor concept-<id>)', () => {
+    for (const c of bank.concepts) {
+      const target = parseConceptsHash(conceptsHash(c.id));
+      expect(target).toEqual({ id: c.id });
+      expect(conceptAnchorId(target?.id ?? '')).toBe(`concept-${c.id}`);
+      expect(parseWikiHash(conceptsHash(c.id))).toBeNull();
+    }
+    expect(conceptsHash()).toBe('#concepts');
   });
 
-  it('accepts the same ids as concepts.json', () => {
-    for (const id of ['w205-1-2', 'a1', 'Bad', '-x', 'x'.repeat(65)]) expect(isConceptCardId(id)).toBe(CONCEPT_ID_RE.test(id));
-    expect(conceptAnchorId('w205-1-2')).toBe('concept-card-w205-1-2');
+  it('gives the in-article cards their own anchors, so they never clash with the page underneath the modal', () => {
+    expect(articleConceptAnchorId('w205-1-2')).toBe('wiki-concept-w205-1-2');
+    for (const c of bank.concepts) expect(articleConceptAnchorId(c.id)).not.toBe(conceptAnchorId(c.id));
   });
 });
 

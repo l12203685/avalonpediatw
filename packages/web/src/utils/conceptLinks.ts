@@ -1,8 +1,6 @@
 /**
- * 觀念卡 ↔ 百科文章的連結（2026-11-18，docs/CONCEPTS.md）：
- *
- *   #concepts            → 公開的觀念卡頁
- *   #concepts=<卡片 id>  → 觀念卡頁，捲到那一張（卡片 id 同 concepts.json：小寫英數字與 -，最長 64 字）
+ * 百科文章 → 觀念卡（2026-11-18，docs/CONCEPTS.md）。公開觀念卡頁的網址（#concepts、#concepts=<id>）與頁面上的錨點
+ * （concept-<id>）在 utils/concepts.ts（conceptsHash、parseConceptsHash、conceptAnchorId），這裡不重複。
  *
  * 百科文章的「本篇觀念卡」用 articleConceptGroups 依文章的章節順序分組，標題旁的「觀念卡」連結用 conceptsBySection。
  * 純函式，packages/server/src/__tests__/WebConceptLinks.test.ts 測（web 沒有測試執行器）。
@@ -10,37 +8,12 @@
 
 import { wikiHeadingText, wikiHeadings } from './wikiSections';
 
-/** 同 server concepts.ts 的 CONCEPT_ID_RE。 */
-const CONCEPT_ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
-
-export function isConceptCardId(id: string | null | undefined): boolean {
-  return CONCEPT_ID_RE.test(id ?? '');
-}
-
-/** 觀念卡頁的 hash：#concepts，有卡片時 #concepts=<id>。 */
-export function conceptCardHash(id?: string | null): string {
-  return id ? `#concepts=${encodeURIComponent(id)}` : '#concepts';
-}
-
-/** #concepts → { id: null }；#concepts=<id> → { id }（id 不像卡片 id 時當成 #concepts）；其他 hash → null。 */
-export function parseConceptsHash(hash: string | null | undefined): { id: string | null } | null {
-  const raw = (hash ?? '').replace(/^#/, '').trim();
-  if (/^concepts\/?$/i.test(raw)) return { id: null };
-  const m = /^concepts[=/]([^&]*)/i.exec(raw);
-  if (!m) return null;
-  let id = m[1];
-  try {
-    id = decodeURIComponent(id);
-  } catch {
-    return { id: null };
-  }
-  id = id.trim().replace(/\/+$/, '');
-  return { id: isConceptCardId(id) ? id : null };
-}
-
-/** 文章裡「本篇觀念卡」每張卡的元素 id。 */
-export function conceptAnchorId(id: string): string {
-  return `concept-card-${id}`;
+/**
+ * 「本篇觀念卡」裡每張卡的元素 id（文章 modal 裡）。故意跟公開觀念卡頁的 `concept-<id>`（utils/concepts.ts 的 conceptAnchorId）
+ * 不同：從觀念卡檢視打開文章時，那一頁還在 modal 底下，同一個 id 出現兩次會捲錯地方。
+ */
+export function articleConceptAnchorId(id: string): string {
+  return `wiki-concept-${id}`;
 }
 
 interface CardLike {

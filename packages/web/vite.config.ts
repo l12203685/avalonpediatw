@@ -173,8 +173,7 @@ export default defineConfig({
       // 百科文章的備份 (Edward 2026-10-28：伺服器休眠或連不上時百科照樣能看)：伺服器的 wiki_data.json 打包成
       // 獨立的 chunk，只有 API 失敗時才載入 (型別見 src/wikiBundle.d.ts)。
       '@wiki-bundle': path.resolve(__dirname, '../server/wiki_data.json'),
-      // 觀念卡庫（2026-11-18，docs/CONCEPTS.md）：和 Threads 知識卡、主控台同一份 concepts.json，打開文章時才載入
-      // (型別見 src/conceptsBundle.d.ts，載入見 src/data/conceptCards.ts)。
+      // 百科觀念卡（2026-11-18，觀念卡檢視 components/ConceptCards.tsx）：伺服器的卡庫打包成獨立的 chunk（型別見 src/conceptsBundle.d.ts）。
       '@concepts-bundle': path.resolve(__dirname, '../server/src/bots/threads/concepts.json'),
     },
   },

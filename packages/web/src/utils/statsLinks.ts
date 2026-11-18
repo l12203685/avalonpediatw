@@ -23,12 +23,15 @@
  *      #wiki                                        → 百科攻略（Edward 2026-11-11：文章要發到 Threads）
  *      #wiki=<文章 id> (#wiki/<id>)                   → 百科攻略，打開那篇文章（同 #records=：打開時留在網址列、
  *        換文章時跟著換、關閉時由 WikiContent 清掉；不認得的 id 只開百科攻略。見 utils/wikiHash.ts）
+ *      #concepts (#concepts=<卡片 id>)               → 百科攻略的觀念卡檢視，捲到那一張（2026-11-18，站長：百科觀念卡公開；
+ *        留在網址列，換回心智圖／列表時由 WikiContent 清掉。見 utils/concepts.ts）
  */
 import type { GameState } from '../store/gameStore';
 import { parseStatsQuery } from '../stats/statsFilter';
 import { parseRecordsHash } from './records';
 import { parseAiGamesHash } from './aiGames';
 import { parseWikiHash } from './wikiHash';
+import { parseConceptsHash } from './concepts';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
@@ -54,7 +57,8 @@ export type StatsLink =
   | { kind: 'claim' }
   | { kind: 'practice' }
   | { kind: 'aiGames'; id: string | null }
-  | { kind: 'wiki'; id: string | null };
+  | { kind: 'wiki'; id: string | null }
+  | { kind: 'concepts'; id: string | null };
 
 const STATS_HASHES = new Set(['stats', 'analytics', 'leaderboard', 'rank']);
 
@@ -89,6 +93,8 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (aiGames) return { kind: 'aiGames', id: aiGames.id };
   const wiki = parseWikiHash(raw);
   if (wiki) return { kind: 'wiki', id: wiki.id };
+  const concepts = parseConceptsHash(raw);
+  if (concepts) return { kind: 'concepts', id: concepts.id };
   const m = /^player[=/](.+)$/i.exec(raw);
   if (m) {
     let name = m[1];

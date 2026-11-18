@@ -16,7 +16,7 @@
 | 試算表「Discord匯入」分頁（從 Discord 貼文抄進試算表的局） | `games_cache.json`（id = `D<hash>`） | `dc_import` |
 | Discord 論壇 #牌譜紀錄與覆盤（一篇一局） | `records_cache.json`（id = 貼文 id；讀不懂的 `game` 是空的） | `discord` |
 | 試算表「模擬瓦」分頁（模擬） | `records_cache.json` 的 `M<流水號>` | `sim_sheet` |
-| ProAvalon 匿名匯出（2018–2022，外部） | 只轉「10 人、梅派刺娜德奧、有湖中」的局：`proavalon_import.py` → `proavalon_games.json`（id `P<_id>`）。其他局只存在站長的私人 repo | `proavalon`（`external: true`） |
+| ProAvalon 匿名匯出（2018–2022，外部） | 只轉「10 人、梅派刺娜德奧、有湖中」的局：`proavalon_import.py` → `proavalon_games.json`（id `P<_id>`）。其他局只存在站長的私人 repo | `proavalon`（`external: true`）。**2026-11-18 起預設不進總庫**（見下面第 6 點） |
 | 試算表「牌譜」分頁的快照 `sheets_cache.json` | `sim_bank.json`（模擬瓦／Threads 題庫）從這裡建 | 只檢查涵蓋，不另算一個來源 |
 
 - **合併**：配置、每次提議的隊伍、每局任務全部相同，就是同一局（`generate_cache.record_fingerprint`，跟牌譜紀錄頁用的一樣）。模擬永遠不跟實戰合併。
@@ -74,6 +74,9 @@
 4. **強者的定義**：全站用 PR，已寫進報告的第 2 步計畫。
 5. **規則上確定有錯的 32 局**：要回到試算表或 Discord 貼文改正。最多的是「失敗張數比隊上的紅方多」16 局，配置或座位抄錯。
 6. **外部局（ProAvalon）**：站長說「10人局配置一模一樣 有湖中的才需要納入分析 其他就不用分析了 先存著牌譜就好」。
+   - **2026-11-18 起停用**：站長說「我看ProAvalon 的局基本上很多都在亂玩 其實可以考慮刪掉了」。`game_db.py` 預設不讀 `proavalon_games.json`（`INCLUDE_PROAVALON = False`），總庫、報告與網站上從總庫來的東西（`/更正` 查局）都沒有 `P` 開頭的局。可以復原：`python packages/server/game_db.py --with-proavalon`。`proavalon_import.py`、`proavalon_games.json` 和私人 repo 的原始資料都沒有刪。
+   - 停用前查到的座位問題（記錄用，沒有修）：匯入時把 ProAvalon 的第一個玩家當 1 家，沒有照「1-1 的隊長 = 1 家」平移；579 局裡 517 局（89.3%）第一個隊長不在 1 家。第一個湖在第一個隊長前一個座位的局 501／501（有湖座位的局全部），所以要再打開時，先在匯入時平移座位。
+   以下是停用前的說明：
    - 轉進來 579 局：匯出裡符合的有 589 局，扣掉 10 局「第 5 次提議被否決而輸」，這種結局在我們的規則裡不會發生。
    - 每局標 `external: true`，網站統計預設不算。
    - 沒有記到的資料標在 `SOURCE_NOTE`：湖的宣告；刺中的是哪一個忠臣；舊紀錄的失敗張數；部分舊紀錄的湖座位。

@@ -36,6 +36,8 @@ import {
   withSimLock,
 } from '../simulation/textCommands';
 import { simLineGroupIds } from '../simulation/config';
+import { conceptDailyEnabledFor } from '../conceptDaily/config';
+import { getConceptDaily, type ConceptReply } from '../conceptDaily/service';
 import { renderRecordPng } from '../simulation/recordImage';
 import type { SimGame } from '../simulation/scenario';
 import { answerSeatFillerTextCommand } from '../seatFiller/commands';
@@ -375,7 +377,9 @@ export class LineBotClient {
               if (lead && !duplicate && RELAYED_LEAD_KINDS.has(lead.kind)) {
                 lead.relay = mirrored ? {} : { command: textMessage.text.trim() };
               }
-              if (replyToken) await this.drainQueuedReplies(replyToken, lead);
+              // 每日小觀念（2026-11-18）：今天的第一則訊息、或對小觀念的回饋，跟著這個 reply_token 一起回。
+              const concept = replyToken && !duplicate ? await this.conceptRepliesFor(groupId, userId, event.message) : [];
+              if (replyToken) await this.drainQueuedReplies(replyToken, lead, concept, quoteTokenOf(event.message));
             });
             continue;
           }
@@ -385,9 +389,19 @@ export class LineBotClient {
             await this.handleGroupMedia(source.groupId, source.userId, event.message);
           }
           if (replyToken) {
-            await this.drainQueuedReplies(replyToken, null);
+            const concept = !duplicate && event.type === 'message' ? await this.conceptRepliesFor(source.groupId, source.userId, event.message) : [];
+            await this.drainQueuedReplies(replyToken, null, concept, event.type === 'message' ? quoteTokenOf(event.message) : undefined);
           }
           continue;
+        }
+
+        // 每日小觀念（2026-11-18）：開了小觀念、但不是鏡像群也不是模擬群的 LINE 群（CONCEPT_DAILY_LINE_GROUP_IDS）。
+        if (source.type === 'group' && !simGroup && event.type === 'message' && replyToken && conceptDailyEnabledFor('line', source.groupId)) {
+          const concept = await this.conceptRepliesFor(source.groupId, source.userId, event.message);
+          if (concept.length > 0) {
+            await this.replyConcept(replyToken, concept, quoteTokenOf(event.message));
+            continue;
+          }
         }
 
         if (source.type === 'group' && !simGroup) {
@@ -440,7 +454,9 @@ export class LineBotClient {
               simOnly: true,
               shared: true,
             });
-            if (lead !== null) await this.replyLead(messageEvent.replyToken, lead, false);
+            const concept = duplicate ? [] : await this.conceptRepliesFor(groupId, userId, messageEvent.message);
+            if (lead !== null) await this.replyLead(messageEvent.replyToken, lead, false, concept);
+            else if (concept.length > 0) await this.replyConcept(messageEvent.replyToken, concept, quoteTokenOf(messageEvent.message));
           });
           continue;
         }
@@ -528,23 +544,33 @@ export class LineBotClient {
    * mirror queue; the answer itself is never queued (on failure only the
    * drained mirror messages are put back).
    */
-  private async drainQueuedReplies(replyToken: string, leadReply: LeadReply | null = null): Promise<void> {
+  private async drainQueuedReplies(
+    replyToken: string,
+    leadReply: LeadReply | null = null,
+    concept: ConceptReply[] = [],
+    quoteToken?: string,
+  ): Promise<void> {
     const mirror = getChatMirror();
     const queue = mirror && mirror.isLineReplyQueueEnabled() ? mirror : null;
     const lead: Message[] = leadReply ? this.leadMessages(leadReply, false) : [];
-    const batch = queue ? queue.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN - lead.length) : [];
-    if (lead.length === 0 && batch.length === 0) return;
+    // 每日小觀念（2026-11-18）排在指令回答後面、同步佇列前面。
+    const sending = this.fitConcept(concept, LINE_REPLY_MAX_PER_DRAIN - lead.length);
+    const extra = this.conceptMessages(sending, quoteToken);
+    const batch = queue ? queue.drainLineReplies(LINE_REPLY_MAX_PER_DRAIN - lead.length - extra.length) : [];
+    if (lead.length === 0 && extra.length === 0 && batch.length === 0) return;
     // Queued Discord pictures become image messages while their relay copy
     // is live, else their text note (ChatMirror.lineMessagesFor).
     const out = queue ? queue.lineMessagesFor(batch) : { messages: [], images: 0, fallbacks: 0 };
     let delivered = false;
     try {
-      await this.client.replyMessage(replyToken, [...lead, ...(out.messages as Message[])]);
+      const res = await this.client.replyMessage(replyToken, [...lead, ...extra, ...(out.messages as Message[])]);
       this.stats.repliesDrained += batch.length;
       this.stats.imagesToLine += out.images;
       this.stats.imageNotesToLine += out.fallbacks;
       delivered = true;
+      this.settleConcept(sending, true, res, lead.length);
     } catch (error) {
+      this.settleConcept(sending, false);
       this.stats.replyFailures += 1;
       const imageRejected = out.images > 0 && lineErrorMentionsImage(error);
       if (queue) queue.requeueLineReplies(batch, { imageRejected });
@@ -805,11 +831,76 @@ export class LineBotClient {
     }
   }
 
-  /** 1:1 chat (or SIM_LINE_GROUP_IDS group) reply — no mirror queue there. Failures are logged, never thrown. */
-  private async replyLead(replyToken: string, lead: LeadReply, oneToOne: boolean): Promise<void> {
+  /**
+   * 每日小觀念（2026-11-18，bots/conceptDaily）：這則訊息要不要附上今天的小觀念、或對小觀念回饋的確認。
+   * 沒開小觀念的群組一律空的；等今天的卡最多 2.5 秒（LINE 要很快回 200）。不會丟錯。
+   */
+  private async conceptRepliesFor(groupId: string, userId: string | undefined, message: unknown): Promise<ConceptReply[]> {
+    const svc = getConceptDaily();
+    if (!svc || !conceptDailyEnabledFor('line', groupId)) return [];
+    const m = (message ?? {}) as { type?: unknown; text?: unknown; quotedMessageId?: unknown };
+    return svc.handle(
+      {
+        platform: 'line',
+        chatId: groupId,
+        userId,
+        text: m.type === 'text' && typeof m.text === 'string' ? m.text : '',
+        quotedMessageId: typeof m.quotedMessageId === 'string' && m.quotedMessageId ? m.quotedMessageId : undefined,
+      },
+      { waitMs: 2500 },
+    );
+  }
+
+  /** 放得進這個 reply_token 的小觀念（最多 `slots` 則）；放不下的當作沒送出去（下一則訊息再試）。 */
+  private fitConcept(concept: ConceptReply[], slots: number): ConceptReply[] {
+    const n = Math.max(0, slots);
+    concept.slice(n).forEach((r) => r.failed());
+    return concept.slice(0, n);
+  }
+
+  /** 小觀念的訊息物件（引用觸發的那一則）。 */
+  private conceptMessages(concept: ConceptReply[], quoteToken?: string): Message[] {
+    return concept.map((r) => {
+      const msg: Record<string, unknown> = { type: 'text', text: r.text };
+      if (quoteToken) msg.quoteToken = quoteToken;
+      return msg as unknown as Message;
+    });
+  }
+
+  /** 回覆送出去了（記下 LINE 回的訊息 id，引用回覆才認得）或沒送出去。 */
+  private settleConcept(concept: ConceptReply[], ok: boolean, res?: unknown, offset = 0): void {
+    const sent = (res as { sentMessages?: { id?: unknown }[] } | undefined)?.sentMessages;
+    concept.forEach((r, i) => {
+      if (!ok) return r.failed();
+      const id = sent?.[offset + i]?.id;
+      r.delivered(typeof id === 'string' ? id : undefined);
+    });
+  }
+
+  /** 只有小觀念要回（沒有指令回答、沒有同步佇列的群組）。 */
+  private async replyConcept(replyToken: string, concept: ConceptReply[], quoteToken?: string): Promise<void> {
+    const sending = this.fitConcept(concept, LINE_REPLY_MAX_PER_DRAIN);
+    const messages = this.conceptMessages(sending, quoteToken);
     try {
-      await this.client.replyMessage(replyToken, this.leadMessages(lead, oneToOne));
+      const res = await this.client.replyMessage(replyToken, messages);
+      this.settleConcept(sending, true, res);
     } catch (error) {
+      this.settleConcept(sending, false);
+      this.stats.replyFailures += 1;
+      console.error(`[LINE concept] replyMessage failed (${describeError(error)})`);
+    }
+  }
+
+  /** 1:1 chat (or SIM_LINE_GROUP_IDS group) reply — no mirror queue there. Failures are logged, never thrown. */
+  private async replyLead(replyToken: string, lead: LeadReply, oneToOne: boolean, concept: ConceptReply[] = []): Promise<void> {
+    const first = this.leadMessages(lead, oneToOne);
+    const sending = this.fitConcept(concept, LINE_REPLY_MAX_PER_DRAIN - first.length);
+    const extra = this.conceptMessages(sending, lead.quoteToken);
+    try {
+      const res = await this.client.replyMessage(replyToken, [...first, ...extra]);
+      this.settleConcept(sending, true, res, first.length);
+    } catch (error) {
+      this.settleConcept(sending, false);
       this.stats.replyFailures += 1;
       console.error(`[LINE ${lead.kind}] replyMessage failed (${describeError(error)})`);
       // /排行's chart refused: the text answer instead, on the same token.

@@ -57,6 +57,7 @@ function stateOfLink(link: StatsLink | null): GameState | null {
     case 'aiGames':
       return 'aiGames';
     case 'wiki':
+    case 'concepts':
       return 'wiki';
     case 'records':
       return 'records';
@@ -93,7 +94,7 @@ function App(): JSX.Element {
       else if (link.kind === 'claim') store.setGameState('idClaim');
       else if (link.kind === 'practice') store.setGameState('practice');
       else if (link.kind === 'aiGames') store.setGameState('aiGames');
-      else if (link.kind === 'wiki') store.setGameState('wiki');
+      else if (link.kind === 'wiki' || link.kind === 'concepts') store.setGameState('wiki');
       else if (link.kind === 'records') {
         store.setGameState('records');
         // 舊連結 #paipu… 換成 #records…（不留一筆舊網址的歷史紀錄）
@@ -108,7 +109,8 @@ function App(): JSX.Element {
       // #study=… stays while that study is open (FeatureStudyReport reads it and clears it on close);
       // #records=<id> likewise while that game is open (RecordsPage)
       // #ai-games=<id> 同上（AiGamesPage 讀它、關閉時清掉）；#wiki=<id> 同上（WikiContent 讀它、關閉時清掉）
-      if (link.kind === 'study' || (link.kind === 'records' && link.id) || (link.kind === 'aiGames' && link.id) || (link.kind === 'wiki' && link.id)) return;
+      // #concepts（=<id>）同上（觀念卡檢視讀它、換回心智圖／列表時清掉）
+      if (link.kind === 'study' || link.kind === 'concepts' || (link.kind === 'records' && link.id) || (link.kind === 'aiGames' && link.id) || (link.kind === 'wiki' && link.id)) return;
       // #stats?f=… (a shared filter) stays too: the filter bar keeps it in sync with the filter
       if (link.kind === 'stats' && (link.filter || link.preset || link.cuts)) {
         applySharedFilter(link);

@@ -130,11 +130,77 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 
 草稿和圖只有座位和牌譜記號，沒有玩家名字。第十個座位寫「0家」。
 
+## 貼文格式範本（站長 2026-11-18：主控台改一次、每天套用）
+
+站長 11/18：「我可以再主控台那邊 先調整貼文格式? (應該只有出題內容會改 大部分都可以套用?)」
+
+貼文 A 和第一則留言都由「範本＋佔位符」組出來（`src/bots/threads/template.ts`）。格式只改一次，每天只換佔位符的內容（`draft.postParts`）。
+
+**佔位符**
+
+| 佔位符 | 內容 | 用在 |
+|---|---|---|
+| `{標題}` | 第一行，例「【阿瓦隆每日一題｜週三・1-5 尾派】」（自動發佈靠第一行認出那天的貼文） | 貼文 |
+| `{主題}` | 星期＋主題，例「週三・1-5 尾派」 | 貼文、留言 |
+| `{題號}` | 題庫代號，例「SV1Q8-1-5」（內建格式不寫，題號在圖上） | 貼文、留言 |
+| `{接續}` | 週四、週六接昨天那一局時的一行（「接昨天那一局（…），同一家又輪到尾派：」）；其他日子是空的 | 貼文 |
+| `{你是}` | 「你是 5家 忠臣 \| 無其他資訊 \| 派 3 人」那一行 | 貼文 |
+| `{派票紀錄}` | 牌譜（[第 1 局] 起）；太長自動縮短 | 貼文 |
+| `{提問}` | 「你會派誰？」／刺殺題「三藍，誰是梅林？」 | 貼文 |
+| `{昨天答案}` | 整段昨天的答案（[昨天 … 的答案] 起）；第一天或昨天沒貼文時是空的 | 貼文 |
+| `{標籤}` | `#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣`，一定要是貼文最後一行 | 貼文、留言 |
+| `{小觀念}` | 第一則留言的內文（`docs/threads/comments/<日期>.md` 去掉第一行「【阿瓦隆百科小觀念】」） | 留言 |
+
+**內建格式**（跟改之前的貼文一字不差，`ThreadsTemplate.test.ts` 用改之前的拼法比對兩週的題目）：
+
+```
+{標題}
+{接續}
+{你是}
+{派票紀錄}
+{提問}
+
+{昨天答案}
+
+{標籤}
+```
+
+留言：
+
+```
+【阿瓦隆百科小觀念】
+{小觀念}
+```
+
+**規則**
+- 一行只有佔位符、而且都是空的（例如第一天的 `{昨天答案}`、不是延續日的 `{接續}`）：整行拿掉；拿掉後上下變成連續兩個空行就只留一個。
+- 不認得的佔位符＝範本不合格。留言一定要有 `{小觀念}`。貼文的範本：
+  - 第一行一定是 `{標題}`、而且只有它：自動發佈靠第一行＋台北日期在最近的貼文裡認出那天的貼文（防重複發、補記、引用昨天都靠它）。
+  - 一定要有 `{你是}` 和 `{派票紀錄}`：沒有身分（座位、角色、要做的決策）或牌譜的話，圖沒產生就會發出看不懂的題目。另外 prepare 照實際的文字判斷「這篇少了圖就不完整」（牌譜縮成「完整局面看圖」或貼文裡沒有牌譜，`draftNeedsImage`），沒有圖就不正式發；post 段沒有圖的公開網址也不發（`imageProblem`）。
+  - 最後一行一定是 `{標籤}`（只能一次），其他行不能自己寫整行的 #標籤（不然每天的貼文都過不了發文前的檢查）。
+  - 直接把範本字串傳給產生器（不經過範本檔）的也會檢查，不合格那天用內建格式（警告）。
+- 套完一樣要 ≤ 500 字：放不下時照舊先縮牌譜、再拿掉答案的理由；站長的格式怎麼縮都放不下，那一天改用內建格式（工作流程摘要有警告）。
+- 站長的留言格式套完超過 500 字，那一天的留言用內建格式。沒有寫好的留言檔時用備案，備案不套格式。
+
+**正本與同步**
+- 站長在主控台「每日一題 → 點一天 → 貼文預覽」的「貼文格式（每天共用）」改，存在主控台 db 的 `meta/postTemplate` `{post, comment, updatedAt}`。
+- 主控台 GitHub 讀不到，所以 Claude 每天台北 08:00 的同步把它寫進 `packages/server/threads_template.json`（commit 到 main，不要手改）：
+
+  ```json
+  { "post": "{標題}\n…\n{標籤}", "comment": "【阿瓦隆百科小觀念】\n{小觀念}", "updatedAt": "2026-11-18T01:00:00.000Z", "note": "…" }
+  ```
+
+  寫進去之前先用 `validateTemplate` 檢查，不合格就不寫、在主控台回報。
+- 沒有這個檔、檔壞了、或某一欄不合格：那一欄用內建格式（警告）。`threads:draft`、`threadsPublish.ts prepare` 都讀它（`--template <檔>` 可以換）。
+- 主控台每天的「直接改貼文文字」（`drafts/<日期>` 的 `postEdit`／`commentEdit`）仍然優先於範本。
+- `threads:draft` 的 `<日期>.json` 帶 `parts`（每個佔位符這天的內容），主控台的預覽拿它套範本。
+
 ## 程式與測試
 
 程式在 `packages/server/src/bots/threads/`：
 - `plan.ts`：一週的計畫
-- `draft.ts`：A 的文字
+- `draft.ts`：A 的文字（每個佔位符的內容 `postParts`、套範本 `renderPost`）
+- `template.ts`：貼文格式範本（佔位符、內建格式、檢查、讀 `threads_template.json`）
 - `image.ts`：圖
 - `generate.ts`：把存檔和題庫接起來；站長選的題（`threads_picks.json`）也在這裡套上
 - `publish/daily.ts`：自動發佈的三段（prepare、post、補記手動發的那一天）、內容檢查、狀態檔
@@ -143,7 +209,7 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 
 指令在 `packages/server/scripts/threadsPublish.ts`，工作流程在 `.github/workflows/threads-publish.yml`。
 
-測試在 `src/__tests__/ThreadsDraft.test.ts`、`src/__tests__/ThreadsPublish.test.ts`（自動發佈用假的 HTTP，不會真的連 Threads）。
+測試在 `src/__tests__/ThreadsDraft.test.ts`、`src/__tests__/ThreadsTemplate.test.ts`（貼文格式範本）、`src/__tests__/ThreadsPublish.test.ts`（自動發佈用假的 HTTP，不會真的連 Threads）。
 
 ## 自動發佈
 
@@ -254,7 +320,7 @@ repo 變數 `THREADS_PUBLISH` 不是 `1` 時只試跑：照常產生、檢查，
 
 ### 第一則留言
 
-ChatGPT 寫在 `docs/threads/comments/<日期>.md`，格式見那個資料夾的 README。沒有檔案時用備案：一句觀念加建議文章的網址。
+ChatGPT 寫在 `docs/threads/comments/<日期>.md`，格式見那個資料夾的 README。發之前套留言格式（見〈貼文格式範本〉；內建格式跟檔案一字不差）。沒有檔案時用備案：一句觀念加建議文章的網址（不套格式）。
 
 ### 手動發的那一天
 
@@ -349,3 +415,4 @@ IG 長效權杖也是 60 天。有 secret `THREADS_SECRETS_PAT` 時（同一把�
    同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好；今天和過去的日子保留檔案裡原本的，不刪）；有變動就 commit（選擇的正本在 repo）。
 2. 產生今天的草稿（或由自動發佈 #48 讀 `threads_picks.json` 發文）。
 3. 重跑 `threads:candidates -- --today <今天>`，把新的 `candidates.json`、`games.json` 更新到選局頁（今天鎖住、後面的日子照選擇重排）。
+4. 讀主控台的 `meta/postTemplate`（貼文格式），用 `validateTemplate` 檢查過、跟檔案不一樣就寫進 `packages/server/threads_template.json`（`{post, comment, updatedAt, note}`）並 commit（見〈貼文格式範本〉）。

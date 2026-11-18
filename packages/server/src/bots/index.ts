@@ -50,7 +50,9 @@ import type { Client } from 'discord.js';
 import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../practice/PracticeReportDiscord';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
 import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
-import { simulationStatus, startSimulation } from './simulation';
+import { getSimBankLoader, simulationStatus, startSimulation } from './simulation';
+import { getConceptDaily, initConceptDaily, type ConceptDailyStatus } from './conceptDaily/service';
+import { resolveFeedbackChannelId } from './feedback/config';
 import type { SimulationStatus } from './simulation/metrics';
 import {
   defaultChatExportLogger,
@@ -130,6 +132,26 @@ export async function initializeBots(): Promise<void> {
   // 模擬瓦 (2026-10-14, docs/SIMULATION.md): read the name-free sim_bank.json in
   // the background; the first /模擬 waits for it if it is still loading.
   startSimulation();
+
+  // 每日「阿瓦隆百科小觀念」(2026-11-18, docs/BOT_SETUP.md): off unless CONCEPT_DAILY_LINE /
+  // CONCEPT_DAILY_DISCORD and their group / channel lists are set.
+  startConceptDaily();
+}
+
+/**
+ * 每日小觀念：用模擬瓦的題庫（同一個 sim_bank.json＋牌譜對照）選牌局；回饋跟 /意見 一樣貼到管理員頻道。
+ * 計時器每分鐘看一次，快到起始時間就先算好當天的卡（沒開任何群組時什麼都不做）。
+ */
+export function startConceptDaily(): void {
+  initConceptDaily({
+    bank: () => getSimBankLoader().get(),
+    feedbackSink: async (content) => {
+      const forwarder = getFeedbackService().getDiscordForwarder();
+      const channelId = resolveFeedbackChannelId();
+      if (!forwarder || !channelId) return false;
+      return forwarder.send(channelId, { content, allowedMentions: { parse: [] } });
+    },
+  }).start();
 }
 
 /** The discord.js client once the gateway is ready, else null (re-read on every call). */
@@ -508,6 +530,11 @@ export interface BotStatus {
    * exercise ids, chat ids, user ids or anything anyone typed.
    */
   simulation: SimulationStatus;
+  /**
+   * 每日小觀念 (bots/conceptDaily): flags, how many groups / channels are listed, where the state lives,
+   * today's card id and counters — never group ids, user ids or feedback text. null before the bots start.
+   */
+  conceptDaily: ConceptDailyStatus | null;
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -553,6 +580,7 @@ export function buildBotStatus(): BotStatus {
     chatExport: chatExportStatus(),
     mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
     simulation: simulationStatus(),
+    conceptDaily: getConceptDaily()?.status() ?? null,
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,

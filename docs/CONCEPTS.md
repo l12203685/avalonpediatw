@@ -18,7 +18,12 @@
 | `sectionHash` | 來源那一節的雜湊（下面） |
 | `sourceQuote` | 那一節裡卡片依據的一句（去掉 Markdown 的純文字，最多 60 字） |
 
-**文章 → 卡片**：打開百科文章時，文末有「本篇觀念卡」，依章節在文章裡的順序分組列出這篇的卡（情境／觀念／應用、證據類型）；有卡的章節標題旁有一個小數字，點了捲到那幾張卡。每張卡可以「回到原文這一節」（`#wiki=<id>&sec=<章節>`），或打開觀念卡頁的那一張（`#concepts=<卡片 id>`）。程式：`web/src/components/WikiConceptCards.tsx`、`web/src/utils/conceptLinks.ts`；卡庫由 `web/src/data/conceptCards.ts` 第一次打開文章時才下載（vite alias `@concepts-bundle`）。
+**文章 → 卡片**：打開百科文章時，文末有「本篇觀念卡」，依章節在文章裡的順序分組列出這篇的卡（情境／觀念／應用、證據類型）；有卡的章節標題旁有一個小數字，點了捲到那幾張卡。每張卡可以「回到原文這一節」（`#wiki=<id>&sec=<章節>`），或打開公開觀念卡頁的那一張（`#concepts=<卡片 id>`，#86 的 `components/ConceptCards.tsx` 捲到錨點 `concept-<id>` 並標出來；文末「全部觀念卡」是 `#concepts`）。
+
+- 網址與頁面錨點用 #86 的 `web/src/utils/concepts.ts`（`conceptsHash`、`parseConceptsHash`、`conceptAnchorId`）。
+- 文章裡「本篇觀念卡」的元素 id 是 `wiki-concept-<id>`（`utils/conceptLinks.ts` 的 `articleConceptAnchorId`）：從觀念卡檢視打開文章時那一頁還在 modal 底下，用同一個 id 會捲錯地方。
+- 卡庫的載入同觀念卡頁：vite alias `@concepts-bundle`（型別 `src/conceptsBundle.d.ts`）的獨立 chunk，第一次打開文章時才下載。
+- 程式：`web/src/components/WikiConceptCards.tsx`、`web/src/utils/conceptLinks.ts`。
 
 ## 待複查（staleness）
 
