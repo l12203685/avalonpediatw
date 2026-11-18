@@ -1235,6 +1235,18 @@ describe('workflow', () => {
       expect(runGate(auto, { liveFrom: '2026-01-01', paused: false })).toMatchObject({ mode: 'live', ig: 'live', live_from: '2026-01-01' });
     });
 
+    it('the whole workflow file is valid YAML (a script line at column 1 would end the run block)', () => {
+      const yml = fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+      // 每一行不是空行就要縮排在 run: | 的區塊裡；最上層的鍵只有 name/on/permissions/concurrency/jobs/env
+      const topLevel = yml.split('\n').filter((l) => l.length > 0 && !/^\s/.test(l) && !l.startsWith('#'));
+      for (const l of topLevel) expect(l, l).toMatch(/^(name|on|permissions|concurrency|jobs|env|defaults|run-name):/);
+      let hasPyYaml = true;
+      try { execFileSync('python3', ['-c', 'import yaml'], { stdio: 'ignore' }); } catch { hasPyYaml = false; }
+      if (hasPyYaml) {
+        execFileSync('python3', ['-c', 'import sys, yaml; yaml.safe_load(sys.stdin)'], { input: yml });
+      }
+    });
+
     it('the calendar check does not depend on GNU date (portable: jq only)', () => {
       const script = gateScript();
       expect(script).not.toMatch(/\bdate\s+(?:-u\s+)?-d\b/);

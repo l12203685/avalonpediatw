@@ -106,9 +106,7 @@ jobs:
           }
           FILE_OK=0; FILE_LIVE_FROM=""; PAUSED=unknown
           # 先用嚴格的 JSON 解析（jq 會收 NaN 之類不是 JSON 的值），不合格就當壞檔＝只試跑。
-          strict_json() { python3 -c 'import json, sys
-def bad(c): raise ValueError(c)
-json.load(open(sys.argv[1], encoding="utf-8"), parse_constant=bad)' "$1" >/dev/null 2>&1; }
+          strict_json() { python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"), parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))' "$1" >/dev/null 2>&1; }
           if [ -s "${LIVE_FILE:-}" ] && strict_json "$LIVE_FILE" && P=$(jq -rs 'if length == 1 and (.[0] | type) == "object" and (.[0].paused | type) == "boolean" then (.[0].paused | tostring) else error("bad") end' "$LIVE_FILE" 2>/dev/null); then
             FILE_OK=1; PAUSED="$P"
             # 在 jq 裡就檢查原本的字串（bash 的 $(…) 會去掉結尾換行，"2026-01-01\n" 會被洗成合法的樣子）；不合格就給 invalid。
