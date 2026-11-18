@@ -45,8 +45,9 @@ export const CONCEPT_ROLES: readonly Role[] = ['merlin', 'percival', 'loyal', 'a
  * 階段（2026-11-18 站長：「派票總共80張 好像有點太多了 … 或是直接區分成 [第一局派隊] [第二局派隊] [第三~五局派隊] 這樣呢?」）。
  * 每張卡一個，網站觀念卡頁照這個分組；由 decision／round 推（conceptPhaseOf），跨局的卡歸到它主要講的最早那一局，
  * 真的通用就是「通用」，可以手動改。
+ * 本來會是「通用」但有 role 的卡歸「角色玩法」（2026-11-18 站長：「通用卡張數怎麼這麼多」），通用只留不針對角色的通則。
  */
-export const CONCEPT_PHASES = ['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '通用'] as const;
+export const CONCEPT_PHASES = ['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '角色玩法', '通用'] as const;
 export type ConceptPhase = (typeof CONCEPT_PHASES)[number];
 
 /**
@@ -188,6 +189,7 @@ export function conceptProblems(bank: unknown): string[] {
     }
     if (!isStringArray(t.round) || t.round.length === 0 || !t.round.every((r) => ROUND_RE.test(r))) out.push(`${at}: bad tags.round`);
     if (!CONCEPT_PHASES.includes(t.phase as ConceptPhase)) out.push(`${at}: tags.phase must be one of ${CONCEPT_PHASES.join('/')}`);
+    if (t.phase === '角色玩法' && (!isStringArray(t.role) || t.role.length === 0)) out.push(`${at}: tags.phase 角色玩法 needs tags.role`);
     if (
       t.role !== undefined &&
       (!isStringArray(t.role) || t.role.length === 0 || new Set(t.role).size !== t.role.length || !t.role.every((r) => CONCEPT_ROLE_TAGS.includes(r as ConceptRoleTag)))
@@ -217,16 +219,18 @@ export function conceptProblems(bank: unknown): string[] {
 /**
  * 由決策與局推階段：有刺殺 → 刺殺；沒有派隊 → 投票・湖中・出任務；派隊而 round 有 any → 通用；
  * 都在第 3～5 局 → 第三～五局派隊；跨了三局以上 → 通用；其他歸最早的那一局（第一局／第二局派隊）。
+ * 會是「通用」而有 role 的卡 → 角色玩法。
  */
-export function conceptPhaseOf(tags: Pick<ConceptTags, 'decision' | 'round'>): ConceptPhase {
+export function conceptPhaseOf(tags: Pick<ConceptTags, 'decision' | 'round'> & { role?: readonly string[] }): ConceptPhase {
   if (tags.decision.includes('刺殺')) return '刺殺';
   if (!tags.decision.includes('派隊')) return '投票・湖中・出任務';
-  if (tags.round.includes('any')) return '通用';
+  const general: ConceptPhase = tags.role && tags.role.length > 0 ? '角色玩法' : '通用';
+  if (tags.round.includes('any')) return general;
   const rounds = new Set(tags.round.map((r) => Number(r[0])).filter((n) => n >= 1 && n <= 5));
-  if (rounds.size === 0) return '通用';
+  if (rounds.size === 0) return general;
   const first = Math.min(...rounds);
   if (first >= 3) return '第三～五局派隊';
-  if (rounds.size >= 3) return '通用';
+  if (rounds.size >= 3) return general;
   return first === 1 ? '第一局派隊' : '第二局派隊';
 }
 

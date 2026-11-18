@@ -70,6 +70,10 @@ describe('concepts.json format', () => {
     expect(teamPhases.length).toBeGreaterThan(0);
     expect(teamPhases.length).toBeLessThanOrEqual(50);
     // 退役的 id 不會再出現
+    // 通用只留不針對角色的通則；有角色的歸角色玩法
+    expect(bank.concepts.filter((c) => c.tags.phase === '通用' && c.tags.role)).toEqual([]);
+    expect(bank.concepts.every((c) => c.tags.phase !== '角色玩法' || (c.tags.role?.length ?? 0) > 0)).toBe(true);
+    expect(conceptProblems({ site: bank.site, concepts: [{ ...bank.concepts[0], tags: { decision: ['派隊'], round: ['any'], phase: '角色玩法' } }] }).join()).toMatch(/角色玩法 needs tags.role/);
     const retired = new Set(bank.retired ?? []);
     expect(bank.concepts.filter((c) => retired.has(c.id))).toEqual([]);
   });
@@ -81,6 +85,11 @@ describe('concepts.json format', () => {
     expect(conceptPhaseOf({ decision: ['派隊'], round: ['3-*', '4-*', '5-*'] })).toBe('第三～五局派隊');
     expect(conceptPhaseOf({ decision: ['派隊'], round: ['1-5', '2-*', '3-*'] })).toBe('通用');
     expect(conceptPhaseOf({ decision: ['派隊'], round: ['any'] })).toBe('通用');
+    // 會是通用、但在講某個角色 → 角色玩法（站長：「通用卡張數怎麼這麼多」）
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['any'], role: ['莫甘娜'] })).toBe('角色玩法');
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['1-5', '2-*', '3-*'], role: ['紅方'] })).toBe('角色玩法');
+    expect(conceptPhaseOf({ decision: ['派隊'], round: ['1-1'], role: ['梅林'] })).toBe('第一局派隊');
+    expect(conceptPhaseOf({ decision: ['刺殺'], round: ['A'], role: ['刺客'] })).toBe('刺殺');
     expect(conceptPhaseOf({ decision: ['刺殺'], round: ['A'] })).toBe('刺殺');
     expect(conceptPhaseOf({ decision: ['投票'], round: ['any'] })).toBe('投票・湖中・出任務');
   });

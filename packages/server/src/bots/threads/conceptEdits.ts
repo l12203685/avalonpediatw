@@ -127,9 +127,13 @@ function sameJson(a: unknown, b: unknown): boolean {
  */
 export function withConceptPhase(tags: unknown): unknown {
   if (!isObject(tags) || tags.phase !== undefined) return tags;
-  const { decision, round } = tags;
+  const { decision, round, role } = tags;
   if (!Array.isArray(decision) || !Array.isArray(round) || !decision.every((d) => typeof d === 'string') || !round.every((r) => typeof r === 'string')) return tags;
-  const phase = conceptPhaseOf({ decision: decision as ConceptTags['decision'], round: round as string[] });
+  const phase = conceptPhaseOf({
+    decision: decision as ConceptTags['decision'],
+    round: round as string[],
+    role: Array.isArray(role) ? role.filter((r): r is string => typeof r === 'string') : undefined,
+  });
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(tags)) {
     out[k] = v;

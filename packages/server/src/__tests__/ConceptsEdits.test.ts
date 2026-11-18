@@ -194,7 +194,7 @@ describe('concepts:export', () => {
       limits: { sentenceMax: 40, quoteMax: 60, parts: ['情境', '觀念', '應用'] },
       retired: bank.retired ?? [],
     });
-    expect(data.limits.phases).toEqual(['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '通用']);
+    expect(data.limits.phases).toEqual(['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '角色玩法', '通用']);
     expect(data.limits.roleTags).toContain('莫甘娜');
     expect(data.cards[0]).toMatchObject({ ...first, stale: false, status: 'ok', reasons: [], currentHash: first.article.sectionHash, quoteFound: true });
     expect(data.articles.length).toBe(articles.length);

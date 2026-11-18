@@ -14,6 +14,7 @@ import {
   conceptAnchorId,
   conceptPhase,
   groupConceptsByPhase,
+  groupConceptsByRole,
   conceptsHash,
   evidenceLabel,
   filterConcepts,
@@ -87,6 +88,13 @@ describe('concept cards page', () => {
       expect(got.length, r).toBeGreaterThan(0);
       expect(got.every((c) => c.tags.role?.includes(r))).toBe(true);
     }
+    // 角色玩法照角色分小標：每張卡只列一次，順序照 CONCEPT_ROLE_TAGS
+    const rolePlay = filterConcepts(BANK.concepts, { ...EMPTY_CONCEPT_FILTER, phase: '角色玩法' });
+    expect(rolePlay.length).toBeGreaterThan(0);
+    const byRole = groupConceptsByRole(rolePlay);
+    expect(byRole.reduce((n, g) => n + g.cards.length, 0)).toBe(rolePlay.length);
+    expect(byRole.map((g) => g.role)).toEqual(CONCEPT_ROLE_TAGS.filter((r) => byRole.some((g) => g.role === r)));
+    expect(byRole.every((g) => g.cards.every((c) => c.tags.role?.includes(g.role)))).toBe(true);
     // 舊的卡庫沒有 phase：當成通用
     expect(conceptPhase({ ...BANK.concepts[0], tags: { decision: ['派隊'], round: ['1-1'] } })).toBe('通用');
   });

@@ -16,8 +16,8 @@ export const CONCEPT_DECISIONS: readonly ConceptDecision[] = ['派隊', '投票'
  * 階段（2026-11-18 站長：「派票總共80張 好像有點太多了 … 或是直接區分成 [第一局派隊] [第二局派隊] [第三~五局派隊] 這樣呢?」）。
  * 同伺服器 concepts.ts 的 CONCEPT_PHASES；站長的三個派隊分組排最前面。
  */
-export type ConceptPhase = '第一局派隊' | '第二局派隊' | '第三～五局派隊' | '刺殺' | '投票・湖中・出任務' | '通用';
-export const CONCEPT_PHASES: readonly ConceptPhase[] = ['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '通用'];
+export type ConceptPhase = '第一局派隊' | '第二局派隊' | '第三～五局派隊' | '刺殺' | '投票・湖中・出任務' | '角色玩法' | '通用';
+export const CONCEPT_PHASES: readonly ConceptPhase[] = ['第一局派隊', '第二局派隊', '第三～五局派隊', '刺殺', '投票・湖中・出任務', '角色玩法', '通用'];
 
 /** 角色標籤（站長：「能力者的文章跟觀念好像完全沒看到?」），同伺服器的 CONCEPT_ROLE_TAGS。 */
 export type ConceptRoleTag = '梅林' | '派西維爾' | '忠臣' | '藍方' | '刺客' | '莫甘娜' | '莫德雷德' | '奧伯倫' | '紅方';
@@ -140,6 +140,12 @@ export function filterConcepts(cards: readonly ConceptCard[], f: ConceptFilter):
 /** 照階段分組（CONCEPT_PHASES 的順序，組內照卡庫順序），沒有卡的階段不列。 */
 export function groupConceptsByPhase(cards: readonly ConceptCard[]): { phase: ConceptPhase; cards: ConceptCard[] }[] {
   return CONCEPT_PHASES.map((phase) => ({ phase, cards: cards.filter((c) => conceptPhase(c) === phase) })).filter((g) => g.cards.length > 0);
+}
+
+/** 角色玩法的小標：卡片的第一個角色（照 CONCEPT_ROLE_TAGS 的順序，一張卡只列一次），組內照卡庫順序。 */
+export function groupConceptsByRole(cards: readonly ConceptCard[]): { role: ConceptRoleTag; cards: ConceptCard[] }[] {
+  const firstRole = (c: ConceptCard): ConceptRoleTag | undefined => CONCEPT_ROLE_TAGS.find((r) => (c.tags.role ?? []).includes(r));
+  return CONCEPT_ROLE_TAGS.map((role) => ({ role, cards: cards.filter((c) => firstRole(c) === role) })).filter((g) => g.cards.length > 0);
 }
 
 /** 證據標籤的說明（docs/ai/WIKI_EVIDENCE_STANDARD.md）。 */

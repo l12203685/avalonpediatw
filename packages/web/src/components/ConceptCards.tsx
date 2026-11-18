@@ -10,6 +10,7 @@ import {
   evidenceLabel,
   filterConcepts,
   groupConceptsByPhase,
+  groupConceptsByRole,
   roundLabel,
   type ConceptCard,
   type ConceptFilter,
@@ -105,6 +106,31 @@ function Card({ card, highlighted }: { card: ConceptCard; highlighted: boolean }
   );
 }
 
+function CardGrid({ cards, targetId }: { cards: readonly ConceptCard[]; targetId: string | null }): JSX.Element {
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+      {cards.map((c) => <Card key={c.id} card={c} highlighted={c.id === targetId} />)}
+    </div>
+  );
+}
+
+/** 「角色玩法」再照角色分小標（站長：「通用卡張數怎麼這麼多」），其他階段直接列。 */
+function PhaseCards({ phase, cards, targetId }: { phase: ConceptPhase | null; cards: readonly ConceptCard[]; targetId: string | null }): JSX.Element {
+  if (phase !== '角色玩法') return <CardGrid cards={cards} targetId={targetId} />;
+  return (
+    <div className="space-y-3">
+      {groupConceptsByRole(cards).map((g) => (
+        <div key={g.role} className="space-y-1.5" aria-label={g.role}>
+          <h4 className="text-xs font-semibold text-gray-300">
+            {g.role}<span className="ml-1.5 font-normal text-gray-500">{g.cards.length} 張</span>
+          </h4>
+          <CardGrid cards={g.cards} targetId={targetId} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ConceptCards({ targetId }: { targetId: string | null }): JSX.Element {
   const [cards, setCards] = useState<ConceptCard[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -197,16 +223,10 @@ export default function ConceptCards({ targetId }: { targetId: string | null }):
             <h3 className="border-b border-gray-700 pb-1 text-sm font-bold text-yellow-400">
               {g.phase}<span className="ml-2 text-xs font-normal text-gray-400">{g.cards.length} 張</span>
             </h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {g.cards.map((c) => <Card key={c.id} card={c} highlighted={c.id === targetId} />)}
-            </div>
+            <PhaseCards phase={g.phase} cards={g.cards} targetId={targetId} />
           </section>
         ))
-        : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {shown.map((c) => <Card key={c.id} card={c} highlighted={c.id === targetId} />)}
-          </div>
-        )}
+        : <PhaseCards phase={filter.phase || null} cards={shown} targetId={targetId} />}
     </div>
   );
 }
