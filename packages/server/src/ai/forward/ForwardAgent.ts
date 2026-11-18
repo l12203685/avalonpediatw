@@ -94,6 +94,7 @@ import { goodVouchTeamConstraint, goodVouchVoteRule } from '../GoodLakeFollowUp'
 import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan, teamReuseScorer } from '../TeamReuse';
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import { redLeadOffNow, teamWithoutSelf } from '../RedRound46';
+import { r1ReuseThinTeam49 } from '../BlueRound49';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
   anyGate,
@@ -778,6 +779,14 @@ export class ForwardAgent implements AvalonAgent {
       const fresh43 = loyalFresh43Team(this.baseline.tuning, obs, d0.action, (team) => this.repairGateOk39(obs, team));
       const d = fresh43 === d0.action ? d0 : { ...d0, action: fresh43, reasoningTrace: { ...d0.reasoningTrace, summary: `${d0.reasoningTrace.summary} → a player no earlier proposal held (round 43)` } };
       if (d.action.type !== 'team_select') return d;
+      // Round 49 `r1ReuseRate49` (BlueRound49.ts): after an R1 success, an R2 blue proposal keeps the whole R1 team only at the human rate.
+      if ((this.baseline.tuning.r1ReuseRate49 ?? 0) > 0) {
+        const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
+        const ids = d.action.teamIds;
+        const outs = (): string[] => this.cleanestFirst39(obs.allPlayerIds.filter((id) => !ids.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
+        const thin = r1ReuseThinTeam49(this.baseline.tuning, obs, ids, share, outs, (team) => this.repairGateOk39(obs, team));
+        if (thin) return { ...d, action: { type: 'team_select', teamIds: thin }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the whole R1 team every time (round 49)` } };
+      }
       if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
         const hasProven = d.action.teamIds.some((id) => proven.includes(id));

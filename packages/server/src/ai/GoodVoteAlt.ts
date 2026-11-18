@@ -17,6 +17,7 @@
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { vote40TailBar } from './BlueRound40';
+import { earlyWhiteTuning49 } from './BlueRound49';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
 
 /** 第 a 次提議之後的隊長：offset 1 = 下一任，4 − failCount = 尾家（強制局的隊長）。 */
@@ -89,7 +90,9 @@ export function goodVoteAltKeeps(tuning: Readonly<AgentTuning>, obs: PlayerObser
  */
 export function loyalTailWhiteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   if (obs.myRole !== 'loyal' || obs.publicLoyalView === true) return false;
-  return tailWhiteCore(tuning, obs, vote40TailBar(tuning, obs, 'L'));
+  // Round 49 `earlyWhite49` (BlueRound49.ts): R2 uses its own tail-white threshold.
+  const t = earlyWhiteTuning49(tuning, obs);
+  return tailWhiteCore(t, obs, vote40TailBar(t, obs, 'L'));
 }
 
 /**
