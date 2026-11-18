@@ -47,6 +47,9 @@ jobs:
       - name: Run type checking
         run: pnpm type-check
 
+      - name: Type-check the console export scripts
+        run: pnpm --filter @avalon/server type-check:scripts
+
       - name: Run linting
         run: pnpm lint
 
@@ -62,6 +65,7 @@ jobs:
           python packages/server/test_discord_records_import.py
           python packages/server/test_game_db.py
           python packages/server/test_proavalon_import.py
+          python packages/server/test_console_export.py
 
       - name: Stats engine parity references from the 牌譜 snapshot
         run: |

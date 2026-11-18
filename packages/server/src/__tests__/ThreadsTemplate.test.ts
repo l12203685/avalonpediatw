@@ -18,7 +18,7 @@ import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerVariants, postTitle, questionParts, renderPost, type PickView, type ThreadsDraft } from '../bots/threads/draft';
 import { ThreadsGenerator } from '../bots/threads/generate';
-import { THREADS_START_DATE, addDays, weekdayOf } from '../bots/threads/plan';
+import { THREADS_START_DATE, THREADS_THEMES, addDays, weekdayOf, type ThreadsKind } from '../bots/threads/plan';
 import { commentText, draftNeedsImage, imageProblem, prepareDaily, type DailyPlan } from '../bots/threads/publish/daily';
 import {
   COMMENT_PLACEHOLDERS,
@@ -26,6 +26,9 @@ import {
   DEFAULT_POST_TEMPLATE,
   POST_PLACEHOLDERS,
   PLACEHOLDER_HELP,
+  THREADS_TYPES,
+  templateFor,
+  typeOf,
   commentBody,
   parseTemplateFile,
   readTemplateFile,
@@ -91,7 +94,7 @@ describe('default template = the format before templates, byte for byte', () => 
         const old = legacyPostText(inp.pv, { weekday: weekdayOf(date), ...(inp.continuesFrom ? { continuesFrom: inp.continuesFrom } : {}), answers: inp.answers });
         expect(d.post.text).toBe(old);
         expect(d.parts).toBeDefined();
-        expect(renderTemplate(DEFAULT_POST_TEMPLATE, d.parts as Record<string, string>)).toBe(d.post.text);
+        expect(renderTemplate(DEFAULT_POST_TEMPLATE, d.parts as NonNullable<ThreadsDraft['parts']>)).toBe(d.post.text);
         expect(d.templateWarning).toBeUndefined();
         // 第一天沒有昨天答案；延續的日子有「接續」那一行。
         expect(d.parts?.昨天答案 === '').toBe(i === 0);
@@ -272,7 +275,7 @@ describe('the owner’s template applies to every day', () => {
       expect(lines[1]).toBe(`題號 ${d.exerciseId}`);
       expect(lines.at(-1)).toBe(THREADS_TOPIC_TAG);
       expect(d.post.text).toContain(`👉 ${d.parts?.提問}`);
-      expect(renderTemplate(custom, d.parts as Record<string, string>)).toBe(d.post.text);
+      expect(renderTemplate(custom, d.parts as NonNullable<ThreadsDraft['parts']>)).toBe(d.post.text);
       expect(d.parts?.你是).toBe(base.parts?.你是);
       if (d.answerToYesterday) expect(d.post.text).toContain(d.answerToYesterday.text);
     }
@@ -349,5 +352,104 @@ describe('first comment template', () => {
     expect(plain.comment).toBe(written);
     const fallback = prepareDaily('2026-11-18', { gen, stateDir: tmp(), commentsDir: tmp(), outDir: tmp(), commentTemplate: '💡 {小觀念}' }) as DailyPlan;
     expect(fallback.comment.startsWith('💡')).toBe(false);
+  });
+});
+
+describe('per-type templates (owner 11/18: 「順便幫我整理分類 目前有的題型 我直接進去改各種題型的格式」)', () => {
+  const ok = (marker: string): string => `{標題}\n${marker}\n{接續}\n{你是}\n{派票紀錄}\n{提問}\n\n{昨天答案}\n\n{標籤}`;
+
+  it('THREADS_TYPES lists every kind once with a Chinese name, a description and its days', () => {
+    const kinds = new Set<ThreadsKind>([...THREADS_THEMES.map((t) => t.kind), 'round4']);
+    expect(THREADS_TYPES.map((t) => t.kind).sort()).toEqual([...kinds].sort());
+    for (const t of THREADS_TYPES) {
+      expect(t.name).toMatch(/[\u4e00-\u9fff]/);
+      expect(t.description.length).toBeGreaterThan(5);
+      expect(t.days).toMatch(/週/);
+      expect(typeOf(t.kind)).toBe(t);
+    }
+    expect(new Set(THREADS_TYPES.map((t) => t.name)).size).toBe(THREADS_TYPES.length);
+  });
+
+  it('every draft’s parts carry its type (kind + name), matching the pick', () => {
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const seen = new Set<string>();
+    for (let i = 0; i < 28; i++) {
+      const d = gen.draftFor(addDays(THREADS_START_DATE, i)) as ThreadsDraft;
+      expect(d.parts?.type).toEqual({ kind: d.pick.kind, name: typeOf(d.pick.kind).name });
+      seen.add(d.pick.kind);
+    }
+    expect(seen.has('tail') && seen.has('assassin') && seen.has('percival') && seen.has('final')).toBe(true);
+  });
+
+  it('byType in threads_template.json: valid entries are used; invalid fields, unknown types and a bad shape fall back with warnings', () => {
+    const r = parseTemplateFile({
+      post: ok('共用'),
+      byType: {
+        tail: { post: ok('尾派') },
+        assassin: { comment: '🗡 {小觀念}' },
+        percival: { post: '{標題}\n{派票紀錄}\n{標籤}' }, // 缺 {你是}
+        lake: { post: ok('湖') },
+        final: null,
+      },
+    });
+    expect(r.template.byType).toEqual({ tail: { post: ok('尾派') }, assassin: { comment: '🗡 {小觀念}' } });
+    expect(r.source.byType).toEqual({ tail: { post: 'file' }, assassin: { comment: 'file' } });
+    expect(r.warnings).toHaveLength(2);
+    expect(r.warnings.join()).toContain('派西維爾思考');
+    expect(r.warnings.join()).toContain('lake');
+    expect(parseTemplateFile({ byType: [] }).warnings).toHaveLength(1);
+    expect(parseTemplateFile({ byType: { tail: 'x' } }).warnings).toHaveLength(1);
+    expect(parseTemplateFile({ post: ok('共用') }).template.byType).toBeUndefined();
+  });
+
+  it('templateFor: the type’s own field → the shared one (which is the built-in default when none is saved)', () => {
+    const t = parseTemplateFile({ post: ok('共用'), byType: { tail: { post: ok('尾派') }, final: { comment: '🏁 {小觀念}' } } }).template;
+    expect(templateFor(t, 'tail')).toEqual({ post: ok('尾派'), comment: DEFAULT_COMMENT_TEMPLATE });
+    expect(templateFor(t, 'final')).toEqual({ post: ok('共用'), comment: '🏁 {小觀念}' });
+    expect(templateFor(t, 'percival')).toEqual({ post: ok('共用'), comment: DEFAULT_COMMENT_TEMPLATE });
+    const onlyType = parseTemplateFile({ byType: { assassin: { post: ok('刺殺') } } }).template;
+    expect(templateFor(onlyType, 'tail').post).toBe(DEFAULT_POST_TEMPLATE);
+    expect(templateFor(onlyType, 'assassin').post).toBe(ok('刺殺'));
+  });
+
+  it('the generator picks each day’s template by its type; one tail template serves continuing and standalone days', () => {
+    const t = parseTemplateFile({ post: ok('共用'), byType: { tail: { post: ok('尾派格式') }, assassin: { post: ok('刺殺格式') } } }).template;
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, template: t });
+    let continued = 0, alone = 0;
+    for (let i = 0; i < 14; i++) {
+      const date = addDays(THREADS_START_DATE, i);
+      const d = gen.draftFor(date) as ThreadsDraft;
+      const marker = d.pick.kind === 'tail' ? '尾派格式' : d.pick.kind === 'assassin' ? '刺殺格式' : '共用';
+      expect(d.post.text.split('\n')[1]).toBe(marker);
+      expect(d.post.chars).toBeLessThanOrEqual(THREADS_MAX_CHARS);
+      if (d.pick.kind === 'tail') {
+        if (d.continuesYesterday) {
+          continued++;
+          expect(d.post.text.split('\n')[2]).toMatch(/^接昨天那一局/);
+        } else {
+          alone++;
+          expect(d.post.text.split('\n')[2]).toMatch(/^你是/);
+        }
+      }
+    }
+    expect(continued).toBeGreaterThan(0);
+    expect(alone).toBeGreaterThan(0);
+    expect(gen.warnings).toEqual([]);
+    // 沒有任何格式：跟內建一樣。
+    const plain = new ThreadsGenerator({ bank, titles, readSaved: () => null, template: parseTemplateFile({}).template });
+    const def = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    for (let i = 0; i < 7; i++) expect(plain.draftFor(addDays(THREADS_START_DATE, i))?.post.text).toBe(def.draftFor(addDays(THREADS_START_DATE, i))?.post.text);
+  });
+
+  it('prepareDaily formats the comment with the type’s comment template', () => {
+    const written = '【阿瓦隆百科小觀念】\n尾家看過前面 4 次派票。';
+    const commentsDir = tmp();
+    fs.writeFileSync(path.join(commentsDir, '2026-11-18.md'), written);
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const kind = gen.pickFor('2026-11-18')?.kind as ThreadsKind;
+    const other: ThreadsKind = kind === 'tail' ? 'final' : 'tail';
+    const template = parseTemplateFile({ comment: '共用 {小觀念}', byType: { [kind]: { comment: '這型 {小觀念}' }, [other]: { comment: '別型 {小觀念}' } } }).template;
+    const plan = prepareDaily('2026-11-18', { gen, stateDir: tmp(), commentsDir, outDir: tmp(), template }) as DailyPlan;
+    expect(plan.comment).toBe('這型 尾家看過前面 4 次派票。');
   });
 });

@@ -182,25 +182,56 @@ pnpm --filter @avalon/server threads:draft -- --week              # 從 --date�
 - 套完一樣要 ≤ 500 字：放不下時照舊先縮牌譜、再拿掉答案的理由；站長的格式怎麼縮都放不下，那一天改用內建格式（工作流程摘要有警告）。
 - 站長的留言格式套完超過 500 字，那一天的留言用內建格式。沒有寫好的留言檔時用備案，備案不套格式。
 
+**各題型的格式**（站長 11/18：「順便幫我整理分類 目前有的題型 我直接進去改各種題型的格式」）
+
+題型就是每天題目的 `kind`（`plan.ts` 的 `ThreadsKind`），清單在 `template.ts` 的 `THREADS_TYPES`：
+
+| 鍵（kind） | 名稱 | 哪幾天 | 在問什麼 |
+|---|---|---|---|
+| `assassin` | 刺殺梅林 | 週一 | 三藍之後，刺客（和紅方隊友一起討論）從整場的資訊找出梅林 |
+| `percival` | 派西維爾思考 | 週二 | 派西維爾當隊長派隊：看到兩根拇指但分不出誰是梅林、誰是莫甘娜（第 2 局以後） |
+| `tail` | 尾派 | 週三 1-5、週四 3-5、週五 2-5、週六 4-5 | 第 5 次提案（強制出發）的隊長派隊；週四、週六接前一天同一局，接不上的週四出獨立的 3-5 |
+| `round4` | 第四局忠臣派 5 人 | 週六（沒有能接的 2-5＋4-5 時） | 第 4 局忠臣當隊長派 5 人（要 2 張失敗才開紅） |
+| `final` | 第五局決策 | 週日 | 2:2 的決勝局，隊長派 5 人：開紅直接輸、開藍進入刺殺 |
+
+- 尾派不再細分「接前一天」和「獨立」：差別只在 `{接續}` 那一行（獨立的日子是空的、整行拿掉）和昨天答案的內容（延續的日子本來就不公布幾好幾壞和角色），同一個格式兩種都能用。
+- 每個題型可以只改貼文或只改留言。用哪一個：**這個題型自己的（合格的話）→ 共用的 → 內建格式**。題型自己的格式跟共用的檢查方式一樣；不合格或題型不認得，就略過、用共用的（警告）。
+- 套完放不下 500 字的那一天照舊改用內建格式（警告）。
+- 草稿的 `parts.type` `{kind, name}` 是這一天的題型（不是佔位符），主控台照它挑格式來預覽。
+
 **正本與同步**
-- 站長在主控台「每日一題 → 點一天 → 貼文預覽」的「貼文格式（每天共用）」改，存在主控台 db 的 `meta/postTemplate` `{post, comment, updatedAt}`。
+- 站長在主控台「每日一題 → 點一天 → 貼文預覽」的「貼文格式」改，存在主控台 db 的 `meta/postTemplate`：
+
+  ```json
+  {
+    "post": "{標題}\n…\n{標籤}",
+    "comment": "【阿瓦隆百科小觀念】\n{小觀念}",
+    "byType": {
+      "tail": { "post": "{標題}\n{接續}\n{你是}\n{派票紀錄}\n{提問}\n\n{昨天答案}\n\n{標籤}" },
+      "assassin": { "comment": "【刺殺小觀念】\n{小觀念}" }
+    },
+    "updatedAt": "2026-11-18T01:00:00.000Z"
+  }
+  ```
+
+  `byType` 的鍵只能是上表的 kind；每一型只寫有改的欄位（沒寫、空字串或 `null`＝用共用的）。主控台存的時候整個 `byType` 一起寫（不要只寫其中一型，免得蓋掉其他型）。
 - 主控台 GitHub 讀不到，所以 Claude 每天台北 08:00 的同步把它寫進 `packages/server/threads_template.json`（commit 到 main，不要手改）：
 
   ```json
-  { "post": "{標題}\n…\n{標籤}", "comment": "【阿瓦隆百科小觀念】\n{小觀念}", "updatedAt": "2026-11-18T01:00:00.000Z", "note": "…" }
+  { "post": "{標題}\n…\n{標籤}", "comment": "【阿瓦隆百科小觀念】\n{小觀念}", "byType": { "tail": { "post": "…" } }, "updatedAt": "2026-11-18T01:00:00.000Z", "note": "…" }
   ```
 
-  寫進去之前先用 `validateTemplate` 檢查，不合格就不寫、在主控台回報。
+  形狀跟 `meta/postTemplate` 一樣（多一個 `note`）。寫進去之前先用 `validateTemplate` 檢查（共用的和 `byType` 每一欄），不合格的欄位不寫、在主控台回報。
 - 沒有這個檔、檔壞了、或某一欄不合格：那一欄用內建格式（警告）。`threads:draft`、`threadsPublish.ts prepare` 都讀它（`--template <檔>` 可以換）。
 - 主控台每天的「直接改貼文文字」（`drafts/<日期>` 的 `postEdit`／`commentEdit`）仍然優先於範本。
-- `threads:draft` 的 `<日期>.json` 帶 `parts`（每個佔位符這天的內容），主控台的預覽拿它套範本。
+- `threads:draft` 的 `<日期>.json` 帶 `parts`（每個佔位符這天的內容，加上 `type` 題型），主控台的預覽拿它套範本。
 
 ## 程式與測試
 
 程式在 `packages/server/src/bots/threads/`：
 - `plan.ts`：一週的計畫
 - `draft.ts`：A 的文字（每個佔位符的內容 `postParts`、套範本 `renderPost`）
-- `template.ts`：貼文格式範本（佔位符、內建格式、檢查、讀 `threads_template.json`）
+- `template.ts`：貼文格式範本（佔位符、內建格式、題型 `THREADS_TYPES`、各題型的格式 `templateFor`、檢查、讀 `threads_template.json`）
 - `image.ts`：圖
 - `generate.ts`：把存檔和題庫接起來；站長選的題（`threads_picks.json`）也在這裡套上
 - `publish/daily.ts`：自動發佈的三段（prepare、post、補記手動發的那一天）、內容檢查、狀態檔
@@ -415,4 +446,4 @@ IG 長效權杖也是 60 天。有 secret `THREADS_SECRETS_PAT` 時（同一把�
    同步進 `packages/server/threads_picks.json`（`picksFileBody`，日期排好；今天和過去的日子保留檔案裡原本的，不刪）；有變動就 commit（選擇的正本在 repo）。
 2. 產生今天的草稿（或由自動發佈 #48 讀 `threads_picks.json` 發文）。
 3. 重跑 `threads:candidates -- --today <今天>`，把新的 `candidates.json`、`games.json` 更新到選局頁（今天鎖住、後面的日子照選擇重排）。
-4. 讀主控台的 `meta/postTemplate`（貼文格式），用 `validateTemplate` 檢查過、跟檔案不一樣就寫進 `packages/server/threads_template.json`（`{post, comment, updatedAt, note}`）並 commit（見〈貼文格式範本〉）。
+4. 讀主控台的 `meta/postTemplate`（貼文格式，含各題型的 `byType`），用 `validateTemplate` 檢查過、跟檔案不一樣就寫進 `packages/server/threads_template.json`（`{post, comment, byType, updatedAt, note}`）並 commit（見〈貼文格式範本〉）。

@@ -8,6 +8,7 @@
 import type { SimGame } from '../simulation/scenario';
 import type { PoolName } from './plan';
 import { buildDraft, pickView, type PickView, type ThreadsDraft } from './draft';
+import { templateFor, type ThreadsTemplate } from './template';
 import { THREADS_START_DATE, addDays, aloneFor, dayNumber, buildCandidates, continuationOf, exerciseIdOfPick, pickForDate, themeOf, weekdayOf, type ThreadsBank, type ThreadsPick } from './plan';
 
 export interface GenerateBank extends ThreadsBank {
@@ -37,6 +38,10 @@ export interface GenerateDeps {
    * 不給＝內建格式。這一天套不下 500 字就改用內建格式，原因寫進 `warnings`。
    */
   postTemplate?: string;
+  /**
+   * 整份格式（threads_template.json 讀進來的，含各題型的 byType）：給了就照這一天的題型挑（templateFor），蓋過 postTemplate。
+   */
+  template?: ThreadsTemplate;
 }
 
 /** 每個星期幾可以用哪些候選池（週三、週五的池子是兩題一組，取第一題）。 */
@@ -196,7 +201,7 @@ export class ThreadsGenerator {
       yesterday: yPick && yView ? { date: yDate, pv: yView, earlier, recordId: this.recordIdOf(yPick.gameId) } : null,
       titles: this.deps.titles,
       ...(opts.image ? { image: opts.image } : {}),
-      ...(this.deps.postTemplate !== undefined ? { template: this.deps.postTemplate } : {}),
+      ...(this.deps.template ? { template: templateFor(this.deps.template, pick.kind).post } : this.deps.postTemplate !== undefined ? { template: this.deps.postTemplate } : {}),
     });
     if (draft.templateWarning && !this.warnings.includes(`${date}：${draft.templateWarning}`)) this.warnings.push(`${date}：${draft.templateWarning}`);
     // ChatGPT 已經填的第一則留言保留。

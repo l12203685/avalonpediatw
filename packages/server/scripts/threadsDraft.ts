@@ -63,7 +63,7 @@ const readSaved = savedDraftReader(outDir);
 // 站長在主控台改的貼文格式（同步進 threads_template.json）；沒有或不合格就用內建格式。
 const template = readTemplateFile(path.resolve(arg('--template', path.join(root, 'threads_template.json'))));
 for (const w of template.warnings) console.warn(w);
-const gen = new ThreadsGenerator({ bank, titles, readSaved, startDate, pickOverride: pickOverrideOf(overrides), postTemplate: template.template.post });
+const gen = new ThreadsGenerator({ bank, titles, readSaved, startDate, pickOverride: pickOverrideOf(overrides), template: template.template });
 console.log(`bank: ${bank.games.length} games (${bank.records.size} with a records page); out: ${outDir}`);
 
 for (let i = 0; i < days; i++) {

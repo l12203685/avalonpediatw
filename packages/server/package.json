@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "type-check": "tsc --noEmit",
+    "type-check:scripts": "tsc -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -20,7 +21,8 @@
     "concepts:check": "tsx scripts/concepts.ts check",
     "concepts:export": "tsx scripts/concepts.ts export",
     "concepts:apply": "tsx scripts/concepts.ts apply",
-    "concepts:stamp": "tsx scripts/concepts.ts stamp"
+    "concepts:stamp": "tsx scripts/concepts.ts stamp",
+    "console:export": "tsx scripts/consoleExport.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",
