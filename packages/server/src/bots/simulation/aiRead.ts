@@ -12,9 +12,9 @@
 import type { PlayerObservation } from '../../ai/types';
 import { combinations } from '../../ai/worlds';
 import { withSeededRandom } from '../../ai/benchmark/agreement';
-import { buildReplayObservation, seatId, seatOfId } from '../../ai/benchmark/replayObservation';
+import { buildReplayObservation, seatId, seatOfId, type DecisionPoint } from '../../ai/benchmark/replayObservation';
 import type { ReplayGame } from '../../ai/benchmark/sheetsReplay';
-import { DEFAULT_AGENT_TUNING } from '../../ai/AgentTuning';
+import { DEFAULT_AGENT_TUNING, type AgentTuning } from '../../ai/AgentTuning';
 import { HeuristicAgent } from '../../ai/HeuristicAgent';
 import { ForwardAgent } from '../../ai/forward/ForwardAgent';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow, bayesWorlds } from '../../ai/belief/BayesBelief';
@@ -41,8 +41,31 @@ export interface AiReading {
   good: boolean;
 }
 
-function asReplay(game: SimGame): ReplayGame {
+export function asReplay(game: SimGame): ReplayGame {
   return { ...game, names: Array.from({ length: game.playerCount }, () => '') };
+}
+
+/** 大廳的角色只給「有哪些角色」（照固定順序）：buildReplayObservation 照座位順序給，等於洩漏誰是什麼角色。 */
+export function hideLobbyOrder(o: PlayerObservation): PlayerObservation {
+  return { ...o, lobbyRoles: o.lobbyRoles ? [...o.lobbyRoles].sort() : o.lobbyRoles };
+}
+
+/** 題目那一家在 `point` 當下的觀察（只有那一家當下看得到的資訊；大廳角色不照座位）。 */
+export function decisionObservation(game: SimGame, seat: number, point: DecisionPoint): PlayerObservation {
+  return hideLobbyOrder(buildReplayObservation(asReplay(game), seat, point));
+}
+
+/**
+ * 正式機器人（ForwardAgent 包 HeuristicAgent，參數＝目前的預設 DEFAULT_AGENT_TUNING，整份傳進去所以環境變數蓋不掉），
+ * 已經用這一局第一次派票的觀察開局（onGameStart）。
+ */
+export function defaultBot(game: SimGame, seat: number): { agent: ForwardAgent; base: HeuristicAgent; tuning: AgentTuning } {
+  const id = seatId(seat);
+  const tuning: AgentTuning = { ...DEFAULT_AGENT_TUNING };
+  const base = new HeuristicAgent(id, undefined, undefined, tuning);
+  const agent = new ForwardAgent(id, base);
+  agent.onGameStart(decisionObservation(game, seat, { kind: 'team_select', proposal: 0 }));
+  return { agent, base, tuning };
 }
 
 function sortedSeats(ids: readonly string[]): number[] {
@@ -58,14 +81,9 @@ export function aiReading(game: SimGame, seat: number, proposalIndex: number): A
 }
 
 function readNow(game: SimGame, seat: number, proposalIndex: number): AiReading {
-  const replay = asReplay(game);
-  // 大廳的角色只給「有哪些角色」（照固定順序）：buildReplayObservation 照座位順序給，等於洩漏誰是什麼角色。
-  const lobby = (o: PlayerObservation): PlayerObservation => ({ ...o, lobbyRoles: o.lobbyRoles ? [...o.lobbyRoles].sort() : o.lobbyRoles });
-  const obs: PlayerObservation = lobby(buildReplayObservation(replay, seat, { kind: 'team_select', proposal: proposalIndex }));
+  const obs: PlayerObservation = decisionObservation(game, seat, { kind: 'team_select', proposal: proposalIndex });
   const id = seatId(seat);
-  const tuning = { ...DEFAULT_AGENT_TUNING };
-  const agent = new ForwardAgent(id, new HeuristicAgent(id, undefined, undefined, tuning));
-  agent.onGameStart(lobby(buildReplayObservation(replay, seat, { kind: 'team_select', proposal: 0 })));
+  const { agent, tuning } = defaultBot(game, seat);
   const action = withSeededRandom(`${game.id}|${seat}|team-${proposalIndex}`, () => agent.act(obs));
   const chosenIds = action.type === 'team_select' ? action.teamIds : [];
 

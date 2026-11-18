@@ -16,10 +16,13 @@
  *     一定要有 {你是} 和 {派票紀錄}（沒有身分或牌譜的話，圖沒產生就會發出看不懂的題目）；
  *     最後一行一定是 {標籤}，其他行不能自己寫主題標籤（自動發佈要求主題標籤剛好一行、在最後一行）。
  *   - 留言一定要有 {小觀念}。
+ *   - 各題型可以有自己的格式（站長 11/18：「順便幫我整理分類 目前有的題型 我直接進去改各種題型的格式」）：
+ *     threads_template.json 的 byType[<題型>]（THREADS_TYPES）有、而且合格就用它，沒有就用上面共用的，再沒有就用內建格式。
  *   - 套完之後一樣要 ≤ 500 字：放不下先縮牌譜、再縮答案（跟以前一樣），還是放不下就那一天改用內建格式（警告）。
  */
 
 import fs from 'fs';
+import type { ThreadsKind } from './plan';
 
 /** 貼文 A 的佔位符（順序＝主控台列出來的順序）。 */
 export const POST_PLACEHOLDERS = ['標題', '主題', '題號', '接續', '你是', '派票紀錄', '提問', '昨天答案', '標籤'] as const;
@@ -53,9 +56,55 @@ export const COMMENT_HEADER = '【阿瓦隆百科小觀念】';
 export const DEFAULT_POST_TEMPLATE = ['{標題}', '{接續}', '{你是}', '{派票紀錄}', '{提問}', '', '{昨天答案}', '', '{標籤}'].join('\n');
 export const DEFAULT_COMMENT_TEMPLATE = `${COMMENT_HEADER}\n{小觀念}`;
 
+/** 一個題型自己的格式：只寫要改的那一欄，沒寫的用共用的。 */
+export interface TypeTemplate {
+  post?: string;
+  comment?: string;
+}
+
 export interface ThreadsTemplate {
   post: string;
   comment: string;
+  /** 各題型自己的格式（鍵是 ThreadsKind；讀檔時已經檢查過，不合格的不會在這裡）。 */
+  byType?: Partial<Record<ThreadsKind, TypeTemplate>>;
+}
+
+/** 題型（＝ ThreadsPick.kind）：主控台照這個順序列，各自可以改格式。 */
+export interface ThreadsType {
+  kind: ThreadsKind;
+  /** 中文名稱。 */
+  name: string;
+  /** 一句話說明這個題型在問什麼。 */
+  description: string;
+  /** 哪幾天出這個題型（docs/THREADS.md 的表）。 */
+  days: string;
+}
+
+/**
+ * 目前有的題型。尾派不再細分「接前一天」和「獨立」：兩種的差別只在 {接續} 那一行（獨立的日子是空的、整行拿掉）
+ * 和昨天答案的寫法（延續的日子不公布幾好幾壞和角色，內容本身已經不同），同一個格式兩種都能用。
+ */
+export const THREADS_TYPES: readonly ThreadsType[] = [
+  { kind: 'assassin', name: '刺殺梅林', description: '三藍之後，刺客（和紅方隊友一起討論）從整場的資訊找出梅林', days: '週一' },
+  { kind: 'percival', name: '派西維爾思考', description: '派西維爾當隊長派隊：看到兩根拇指但分不出誰是梅林、誰是莫甘娜（第 2 局以後）', days: '週二' },
+  {
+    kind: 'tail',
+    name: '尾派',
+    description: '第 5 次提案（強制出發）的隊長派隊；週四、週六接前一天同一局（有 {接續} 那一行），接不上的週四出獨立的 3-5',
+    days: '週三 1-5、週四 3-5、週五 2-5、週六 4-5',
+  },
+  { kind: 'round4', name: '第四局忠臣派 5 人', description: '第 4 局忠臣當隊長派 5 人（要 2 張失敗才開紅）', days: '週六（沒有能接的 2-5＋4-5 時）' },
+  { kind: 'final', name: '第五局決策', description: '2:2 的決勝局，隊長派 5 人：開紅直接輸、開藍進入刺殺', days: '週日' },
+];
+
+export function typeOf(kind: ThreadsKind): ThreadsType {
+  return THREADS_TYPES.find((t) => t.kind === kind) as ThreadsType;
+}
+
+/** 這個題型實際用的格式：題型自己的 → 共用的（內建格式已經在共用的裡面）。 */
+export function templateFor(t: ThreadsTemplate, kind: ThreadsKind): { post: string; comment: string } {
+  const own = t.byType?.[kind];
+  return { post: own?.post ?? t.post, comment: own?.comment ?? t.comment };
 }
 
 export const DEFAULT_TEMPLATE: Readonly<ThreadsTemplate> = { post: DEFAULT_POST_TEMPLATE, comment: DEFAULT_COMMENT_TEMPLATE };
@@ -104,11 +153,11 @@ export function validateTemplate(kind: 'post' | 'comment', raw: string): string[
  * 套範本：`{名稱}` 換成 parts 的內容。一行只有佔位符、而且都是空的 → 整行拿掉；拿掉後上下變成連續兩個空行就只留一個。
  * 不認得的佔位符原樣留著（範本先用 validateTemplate 擋掉）。
  */
-export function renderTemplate(template: string, parts: Readonly<Record<string, string>>): string {
+export function renderTemplate(template: string, parts: Readonly<Record<string, unknown>>): string {
   const lines = normalizeTemplate(template).split('\n');
   const out: (string | null)[] = lines.map((line) => {
     const names = placeholdersIn(line);
-    const rendered = line.replace(TOKEN, (m, name: string) => (Object.prototype.hasOwnProperty.call(parts, name) ? parts[name] : m));
+    const rendered = line.replace(TOKEN, (m, name: string) => (typeof parts[name] === 'string' && Object.prototype.hasOwnProperty.call(parts, name) ? (parts[name] as string) : m));
     const onlyTokens = names.length > 0 && line.replace(TOKEN, '').trim() === '';
     return onlyTokens && rendered.trim() === '' ? null : rendered;
   });
@@ -136,12 +185,26 @@ export function commentBody(text: string): string {
 export interface LoadedTemplate {
   template: ThreadsTemplate;
   /** 每一欄用的是檔案裡的還是內建的。 */
-  source: { post: 'file' | 'default'; comment: 'file' | 'default' };
+  source: { post: 'file' | 'default'; comment: 'file' | 'default'; byType?: Partial<Record<ThreadsKind, { post?: 'file'; comment?: 'file' }>> };
   updatedAt?: string;
   warnings: string[];
 }
 
 /** 解析範本檔的內容（已經 JSON.parse 過）。不合格的欄位用內建格式，原因寫進 warnings。 */
+/** 一欄格式的檢查：空的＝沒寫（null）；不合格回錯誤訊息。 */
+function checkField(kind: 'post' | 'comment', v: unknown): { value: string | null; error?: string } {
+  if (v === undefined || v === null || v === '') return { value: null };
+  if (typeof v !== 'string') return { value: null, error: '不是文字' };
+  const errors = validateTemplate(kind, v);
+  return errors.length ? { value: null, error: errors.join('；') } : { value: normalizeTemplate(v) };
+}
+
+const FIELD_NAME = { post: '貼文格式', comment: '留言格式' } as const;
+
+/**
+ * 解析範本檔的內容（已經 JSON.parse 過）。不合格的欄位用內建格式，原因寫進 warnings。
+ * byType：{ <題型>: { post?, comment? } }；題型不認得、或某一欄不合格就略過那一欄（用共用的），也寫進 warnings。
+ */
 export function parseTemplateFile(raw: unknown, label = 'threads_template.json'): LoadedTemplate {
   const out: LoadedTemplate = { template: { ...DEFAULT_TEMPLATE }, source: { post: 'default', comment: 'default' }, warnings: [] };
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -151,20 +214,43 @@ export function parseTemplateFile(raw: unknown, label = 'threads_template.json')
   const o = raw as Record<string, unknown>;
   if (typeof o.updatedAt === 'string') out.updatedAt = o.updatedAt;
   for (const kind of ['post', 'comment'] as const) {
-    const v = o[kind];
-    const name = kind === 'post' ? '貼文格式' : '留言格式';
-    if (v === undefined || v === null || v === '') continue;
-    if (typeof v !== 'string') {
-      out.warnings.push(`${label} 的 ${kind} 不是文字，${name}用內建的`);
-      continue;
-    }
-    const errors = validateTemplate(kind, v);
-    if (errors.length) {
-      out.warnings.push(`${label} 的${name}不合格（${errors.join('；')}），用內建的`);
-      continue;
-    }
-    out.template[kind] = normalizeTemplate(v);
+    const r = checkField(kind, o[kind]);
+    if (r.error) out.warnings.push(`${label} 的${FIELD_NAME[kind]}不合格（${r.error}），用內建的`);
+    if (r.value === null) continue;
+    out.template[kind] = r.value;
     out.source[kind] = 'file';
+  }
+  if (o.byType === undefined || o.byType === null) return out;
+  if (typeof o.byType !== 'object' || Array.isArray(o.byType)) {
+    out.warnings.push(`${label} 的 byType 格式不對（要是 {題型: {post, comment}}），各題型用共用的格式`);
+    return out;
+  }
+  const byType: NonNullable<ThreadsTemplate['byType']> = {};
+  const src: NonNullable<LoadedTemplate['source']['byType']> = {};
+  for (const [key, val] of Object.entries(o.byType as Record<string, unknown>)) {
+    const type = THREADS_TYPES.find((t) => t.kind === key);
+    if (!type) {
+      out.warnings.push(`${label} 的 byType 有不認得的題型「${key}」（可以用：${THREADS_TYPES.map((t) => t.kind).join('、')}），略過`);
+      continue;
+    }
+    if (val === undefined || val === null) continue;
+    if (typeof val !== 'object' || Array.isArray(val)) {
+      out.warnings.push(`${label} 的 byType.${key} 格式不對（要是 {post, comment}），${type.name}用共用的格式`);
+      continue;
+    }
+    const own: TypeTemplate = {};
+    for (const kind of ['post', 'comment'] as const) {
+      const r = checkField(kind, (val as Record<string, unknown>)[kind]);
+      if (r.error) out.warnings.push(`${label} 的「${type.name}」${FIELD_NAME[kind]}不合格（${r.error}），用共用的`);
+      if (r.value === null) continue;
+      own[kind] = r.value;
+      (src[type.kind] ??= {})[kind] = 'file';
+    }
+    if (own.post !== undefined || own.comment !== undefined) byType[type.kind] = own;
+  }
+  if (Object.keys(byType).length) {
+    out.template.byType = byType;
+    out.source.byType = src;
   }
   return out;
 }

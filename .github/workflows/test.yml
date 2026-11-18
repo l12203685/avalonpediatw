@@ -77,6 +77,12 @@ jobs:
       - name: Run tests
         run: pnpm --filter @avalon/server test
 
+      # 觀念卡 ↔ 百科文章（docs/CONCEPTS.md）：文章改了、卡片指的章節雜湊對不上時只出警告（::warning:: 與 job summary），不擋合併。
+      - name: Concept cards source check (warning only)
+        if: matrix.node-version == '20.x'
+        continue-on-error: true
+        run: pnpm --filter @avalon/server concepts:check --github
+
       - name: Remove private parity references
         if: always()
         run: rm -rf -- "${RUNNER_TEMP}/stats-parity"

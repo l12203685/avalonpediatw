@@ -9,7 +9,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "一、1-1-誰能有計畫",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E4%B8%80%E3%80%811-1-%E8%AA%B0%E8%83%BD%E6%9C%89%E8%A8%88%E7%95%AB",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "4659fdf70996",
+        "sourceQuote": "1-1 嚴格來說只有 梅林 和 相認紅方（刺客、莫甘娜、莫德雷德）能有策略"
       },
       "情境": "全場第一次提議1-1，還沒有任務結果、湖中和任何派票。",
       "觀念": "1-1只有梅林和相認紅方能針對別人的身分做計畫，忠臣和奧伯倫不能。",
@@ -27,7 +29,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "忠臣坐-1-家",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E5%BF%A0%E8%87%A3%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "2965f8a14277",
+        "sourceQuote": "你唯一確定的好人是自己。"
       },
       "情境": "你是1家忠臣，要派全場第一隊的3人。",
       "觀念": "唯一確定的好人是自己：派自己加2人全好約27.8%，外灑3人約11.9%。",
@@ -47,7 +51,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "梅林坐-1-家",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E6%A2%85%E6%9E%97%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "64c2449a7b06",
+        "sourceQuote": "一般派（只給沒拇指的人）：資訊少，但死亡率低"
       },
       "情境": "你是1家梅林，前面完全沒有派票可以掩護你。",
       "觀念": "區間派資訊多但死亡率高，一般派只給沒拇指的人，資訊少但死亡率低。",
@@ -67,7 +73,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "梅林：可以計畫，但計畫要讓雜魚接得住",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E6%A2%85%E6%9E%97%EF%BC%9A%E5%8F%AF%E4%BB%A5%E8%A8%88%E7%95%AB%EF%BC%8C%E4%BD%86%E8%A8%88%E7%95%AB%E8%A6%81%E8%AE%93%E9%9B%9C%E9%AD%9A%E6%8E%A5%E5%BE%97%E4%BD%8F",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "98aff10ba653",
+        "sourceQuote": "計畫好不好，不在於資訊多，而在於雜魚能不能合理地接手"
       },
       "情境": "你是前半區梅林，第一次派票在第一局。",
       "觀念": "計畫好不好不在資訊多，而在雜魚能不能合理地接手。",
@@ -86,7 +94,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "派西維爾坐-1-家",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "4da0fb6e7b9a",
+        "sourceQuote": "兩根拇指都還沒行動，1-1 不派拇指（wiki-176）"
       },
       "情境": "你是1家派西維爾，兩根拇指都還沒行動。",
       "觀念": "分不出哪根拇指是梅林，拇指行動前先選定一邊只是擲硬幣。",
@@ -106,7 +116,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "相認紅方坐-1-家",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E7%9B%B8%E8%AA%8D%E7%B4%85%E6%96%B9%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "bd174a0fce0b",
+        "sourceQuote": "但組合裡有沒有隊友、閃了誰，會在任務結果出來後被回頭檢查"
       },
       "情境": "你是1家相認紅方，要派全場第一隊。",
       "觀念": "1-1無法評估合理性不易被抓，但帶不帶隊友、閃了誰會在任務後被回頭檢查。",
@@ -126,7 +138,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "奧伯倫坐-1-家",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E5%A5%A7%E4%BC%AF%E5%80%AB%E5%9D%90-1-%E5%AE%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "88404f1b57f6",
+        "sourceQuote": "奧伯倫在 1-1 的資訊量和忠臣完全一樣，都只知道自己的陣營"
       },
       "情境": "你是1家奧伯倫，只知道自己是壞人。",
       "觀念": "奧伯倫在1-1的資訊量和忠臣完全一樣，都只知道自己的陣營。",
@@ -146,7 +160,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "1-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "959426d1174e",
+        "sourceQuote": "拓展並延伸前一家的派票：見解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票。"
       },
       "情境": "輪到1-2，前面只有1家的一張派票。",
       "觀念": "1-2的任務是拓展並延伸前一家的派票，替場上增加遊戲分支。",
@@ -164,7 +180,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "1-3",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "c3f01044d3a4",
+        "sourceQuote": "1-3 轉折點：第一局前半的資訊在這裡第一次被綜合。"
       },
       "情境": "輪到1-3，已經看過1-1和1-2兩張派票。",
       "觀念": "1-3是轉折點，第一局前半的資訊在這裡第一次被綜合。",
@@ -182,7 +200,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "1-4",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-4",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "05af671b859a",
+        "sourceQuote": "綜合 1-1～1-3，給出有用的資訊。"
       },
       "情境": "輪到1-4，下一位就是1-5尾家。",
       "觀念": "1-4要綜合1-1～1-3給出有用的資訊，也是誤導、誘導最好的位置。",
@@ -200,7 +220,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "1-5",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=1-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "b63ea59a8e50",
+        "sourceQuote": "1-5 的任務結果是最重要的資訊確認點：用來確認 1-1～1-4 的資訊，以及 5 家自己的視角是否合理、正確。"
       },
       "情境": "輪到1-5尾家強制局，你派的組合一定會出任務。",
       "觀念": "1-5的任務結果是最重要的資訊確認點，會驗證1-1～1-4和尾家自己的視角。",
@@ -218,7 +240,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "2-1",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=2-1",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "e6fc069e0bbd",
+        "sourceQuote": "根據第一局的全部資訊，做第二次延伸。"
       },
       "情境": "輪到2-1，第一局的派票和任務結果都已經出來。",
       "觀念": "2-1要根據第一局的全部資訊做第二次延伸。",
@@ -236,7 +260,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "2-3",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=2-3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "62a7e83da39b",
+        "sourceQuote": "和 1-3 有點像，差別在於這時資訊幾乎已全部釋放。"
       },
       "情境": "輪到2-3，第二局已經有兩張派票。",
       "觀念": "2-3和1-3相似，是第二個轉折點，差別在資訊幾乎已全部釋放。",
@@ -254,7 +280,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "2-5",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=2-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "91d9a26bec2a",
+        "sourceQuote": "緊接著就是第一次湖中女神（湖中在第 2、3、4 局任務後使用），因此這個選擇比 1-5 更重要。"
       },
       "情境": "輪到2-5尾家，任務結束後緊接著第一次湖中。",
       "觀念": "2-5是資訊最完整的位置，這個選擇比1-5更重要。",
@@ -272,7 +300,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "四、第一局開藍後：三加一還是拆車",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E5%9B%9B%E3%80%81%E7%AC%AC%E4%B8%80%E5%B1%80%E9%96%8B%E8%97%8D%E5%BE%8C%EF%BC%9A%E4%B8%89%E5%8A%A0%E4%B8%80%E9%82%84%E6%98%AF%E6%8B%86%E8%BB%8A",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "b6b68ebcc989",
+        "sourceQuote": "三加一是合理選項，問題在不分情況永遠三加一（見阿瓦隆心法語錄：「第一局開藍燈就永遠三加一"
       },
       "情境": "第一局開藍，你是第二局的隊長，不在第一局的隊上。",
       "觀念": "三加一是合理選項，問題在不分情況永遠三加一。",
@@ -292,7 +322,9 @@
         "title": "開局與派票位置 - 從 1-1 到 2-5（含開藍後三加一還是拆車）",
         "section": "簡化策略",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-205&sec=%E7%B0%A1%E5%8C%96%E7%AD%96%E7%95%A5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-205/",
+        "sectionHash": "1c8aa1406d0b",
+        "sourceQuote": "一種實戰簡化是：省略 a3 這條行動線，在這個情境下不論什麼角色，大多數時候都拆車；"
       },
       "情境": "1-5開藍、你是不在隊上的6家，輪到2-1。",
       "觀念": "如果你的選擇只跟角色有關，別人就能從你的選擇反推你的角色。",
@@ -313,7 +345,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "尾家強制局的本質",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%B0%BE%E5%AE%B6%E5%BC%B7%E5%88%B6%E5%B1%80%E7%9A%84%E6%9C%AC%E8%B3%AA",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "4b15197febd9",
+        "sourceQuote": "尾家強制局要一次想三件事"
       },
       "情境": "輪到你當尾家強制局隊長，組合一定會出任務。",
       "觀念": "尾家要一次想三件事：最可能全好嗎、失敗後還認得下我嗎、下一步是什麼。",
@@ -331,7 +365,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "怎麼找「共識最像藍方的兩位」",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E6%80%8E%E9%BA%BC%E6%89%BE%E3%80%8C%E5%85%B1%E8%AD%98%E6%9C%80%E5%83%8F%E8%97%8D%E6%96%B9%E7%9A%84%E5%85%A9%E4%BD%8D%E3%80%8D",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "f7728c07c4bc",
+        "sourceQuote": "要看是「誰」給的票：被你判斷為偏好的人給的票，才算進共識"
       },
       "情境": "你是藍方1-5尾家，要從1～4家的資訊挑兩個人。",
       "觀念": "共識不等於票數最多，被你判斷為偏好的人給的票才算進共識。",
@@ -350,7 +386,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "怎麼找「共識最像藍方的兩位」",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E6%80%8E%E9%BA%BC%E6%89%BE%E3%80%8C%E5%85%B1%E8%AD%98%E6%9C%80%E5%83%8F%E8%97%8D%E6%96%B9%E7%9A%84%E5%85%A9%E4%BD%8D%E3%80%8D",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "f7728c07c4bc",
+        "sourceQuote": "外灑等於放棄這個確定的好人，要有理由"
       },
       "情境": "你是忠臣尾家，在1-5要派3人隊。",
       "觀念": "你唯一確定的好人是自己，外灑等於放棄這個確定的好人。",
@@ -369,7 +407,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "怎麼確保「失敗後還認得下我」",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E6%80%8E%E9%BA%BC%E7%A2%BA%E4%BF%9D%E3%80%8C%E5%A4%B1%E6%95%97%E5%BE%8C%E9%82%84%E8%AA%8D%E5%BE%97%E4%B8%8B%E6%88%91%E3%80%8D",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "dfc44edd86fc",
+        "sourceQuote": "大家會依照 5 選人的合理性來分配懷疑"
       },
       "情境": "你是藍方尾家，擔心組合開出失敗後被懷疑。",
       "觀念": "開出失敗後大家依你選人的合理性分配懷疑，只有你看得懂的組合最危險。",
@@ -388,7 +428,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "依角色的差異",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E4%BE%9D%E8%A7%92%E8%89%B2%E7%9A%84%E5%B7%AE%E7%95%B0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "7ec57a8e5c41",
+        "sourceQuote": "看不到莫德雷德：沒拇指的共識人選仍可能是莫德雷德"
       },
       "情境": "你是梅林尾家，場上共識人選裡有你的拇指。",
       "觀念": "尾派越不合理越容易被刺，而沒拇指的共識人選也可能是莫德雷德。",
@@ -407,7 +449,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "依角色的差異",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E4%BE%9D%E8%A7%92%E8%89%B2%E7%9A%84%E5%B7%AE%E7%95%B0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "7ec57a8e5c41",
+        "sourceQuote": "依兩根拇指在 1～4 家的派票，照思考 SOP 決定：派 A 拇指、派 B 拇指，或兩根都不派（派西維爾）"
       },
       "情境": "你是派西維爾尾家，兩根拇指已經在前面派過票。",
       "觀念": "兩根拇指的派票各對應一條世界線，每條世界線各有最佳組合。",
@@ -427,7 +471,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "藍方-2-5",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E8%97%8D%E6%96%B9-2-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "a8e0a96220e7",
+        "sourceQuote": "多一件事：組合出去之後，沒有失敗、一張失敗、兩張失敗時，各要湖誰"
       },
       "情境": "你是藍方2-5尾家，同時拿著首湖。",
       "觀念": "組合和湖中是同一個決定，沒有、一張、兩張失敗時各湖誰要先想好。",
@@ -447,7 +493,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "3-5",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=3-5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "7a27f4653e63",
+        "sourceQuote": "已經有兩局任務結果和一次湖中，鐵邏輯最多的尾家強制局之一"
       },
       "情境": "輪到3-5尾家，已有兩局任務結果和一次湖中。",
       "觀念": "3-5是鐵邏輯最多的尾家之一，比分2:0、1:1、0:2時目標不同。",
@@ -465,7 +513,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "4-5（保護局）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=4-5%EF%BC%88%E4%BF%9D%E8%AD%B7%E5%B1%80%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "3f8234a4036c",
+        "sourceQuote": "組合裡只有一個壞人，任務不會開紅。"
       },
       "情境": "輪到4-5，第四局要2張失敗才開紅，你是藍方。",
       "觀念": "組合裡只有一個壞人任務不會開紅，所以可以容許一位不確定的人。",
@@ -484,7 +534,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "原則",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%8E%9F%E5%89%87",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "0aa9459b5ad3",
+        "sourceQuote": "尾家強制局派出超前組合又開紅，等於自己承認是壞人能力者（能力者與超前資訊 - 誰有內建資訊、怎麼分辨好壞能力者）"
       },
       "情境": "你是紅方尾家，組合一定會出任務。",
       "觀念": "尾家派出資訊超前的組合又開紅，等於自己承認是壞人能力者。",
@@ -503,7 +555,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "原則",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%8E%9F%E5%89%87",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "0aa9459b5ad3",
+        "sourceQuote": "以 1-5 為例就是不帶 0 家：如果 0 是好人又在失敗組合裡，他的視角會比場上清楚得多（另外兩人至少一壞）"
       },
       "情境": "你是紅方1-5尾家，打算讓任務失敗。",
       "觀念": "好人0家若在失敗組合裡，他的視角會比場上清楚得多，2-5就很好派。",
@@ -522,7 +576,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "原則",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%8E%9F%E5%89%87",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "0aa9459b5ad3",
+        "sourceQuote": "不要派一個很好的 A 和一個很壞的 B：外面會自然選 A，兩個壞人一起被丟在外面（wiki-21）"
       },
       "情境": "你是紅方尾家，組合裡要放一個紅方出失敗。",
       "觀念": "派一個很好的人配一個很壞的人，外面會選好的那位，壞人一起被丟在外面。",
@@ -541,7 +597,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "各局的差異",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%90%84%E5%B1%80%E7%9A%84%E5%B7%AE%E7%95%B0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "737a4b09c937",
+        "sourceQuote": "太明顯的破壞湖中，反而可能讓場上鞏固第一局的組合（wiki-147 下篇）"
       },
       "情境": "你是紅方2-5尾家，同時拿著首湖。",
       "觀念": "組合和湖中要一起設計，太明顯的破壞湖中反而可能讓場上鞏固第一局組合。",
@@ -561,7 +619,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "各局的差異",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%90%84%E5%B1%80%E7%9A%84%E5%B7%AE%E7%95%B0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "737a4b09c937",
+        "sourceQuote": "要開紅必須讓兩個壞人同車，而且兩人都要出失敗"
       },
       "情境": "你是紅方第四局的隊長，想拿下這一局。",
       "觀念": "第四局要開紅，必須讓兩個壞人同車而且兩人都出失敗。",
@@ -580,7 +640,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "根本：尾家的權力最大",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E6%A0%B9%E6%9C%AC%EF%BC%9A%E5%B0%BE%E5%AE%B6%E7%9A%84%E6%AC%8A%E5%8A%9B%E6%9C%80%E5%A4%A7",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "4f0134ff89b5",
+        "sourceQuote": "所以前 4 次提議的黑白球，實際上都在回答一個問題：要不要讓這一局的尾家來派？"
       },
       "情境": "前4次提議投票，你在想要不要讓這一局的尾家來派。",
       "觀念": "前4次的黑白球，都在回答「要不要讓這一局的尾家來派」。",
@@ -598,7 +660,9 @@
         "title": "尾家 - 強制局的派法與控尾、洗尾、保尾",
         "section": "四種情況",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-206&sec=%E5%9B%9B%E7%A8%AE%E6%83%85%E6%B3%81",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-206/",
+        "sectionHash": "3b394fb70921",
+        "sourceQuote": "大多數的局面是第三種和第四種 => 正常票是預設，洗尾、保尾都是少數"
       },
       "情境": "你在考慮開外白洗尾，或內黑保尾。",
       "觀念": "大多數局面尾家和組合都可信或都可疑，正常票是預設。",
@@ -616,7 +680,9 @@
         "title": "聽牌與決勝局",
         "section": "一、紅方聽牌（關鍵局）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E4%B8%80%E3%80%81%E7%B4%85%E6%96%B9%E8%81%BD%E7%89%8C%EF%BC%88%E9%97%9C%E9%8D%B5%E5%B1%80%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "2bda17710628",
+        "sourceQuote": "這時派票求的是「最穩」，不是資訊。"
       },
       "情境": "紅方已兩勝，這一局開紅遊戲就直接結束。",
       "觀念": "這時派票求的是最穩，不是資訊。",
@@ -636,7 +702,9 @@
         "title": "聽牌與決勝局",
         "section": "三種局勢下，梅林的優先序",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E4%B8%89%E7%A8%AE%E5%B1%80%E5%8B%A2%E4%B8%8B%EF%BC%8C%E6%A2%85%E6%9E%97%E7%9A%84%E5%84%AA%E5%85%88%E5%BA%8F",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "3aab1aa3ec43",
+        "sourceQuote": "紅方聽牌（2:2 以前） 立刻輸 遊戲繼續 任務 > 隱藏"
       },
       "情境": "你是梅林，紅方已兩勝，組合裡有你看得到的紅。",
       "觀念": "輸掉這一局是確定輸，暴露身分只是可能被刺。",
@@ -656,7 +724,9 @@
         "title": "聽牌與決勝局",
         "section": "一、紅方聽牌（關鍵局）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E4%B8%80%E3%80%81%E7%B4%85%E6%96%B9%E8%81%BD%E7%89%8C%EF%BC%88%E9%97%9C%E9%8D%B5%E5%B1%80%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "2bda17710628",
+        "sourceQuote": "1:2 的第 4 局（5 人隊，2 張失敗開紅）：只有一個壞人時任務不會開紅，所以可以容許一人不確定；"
       },
       "情境": "1:2進入第四局，紅方再拿一局就贏。",
       "觀念": "第四局只有一個壞人不會開紅，可以容許一人不確定，兩個壞人就會輸。",
@@ -676,7 +746,9 @@
         "title": "聽牌與決勝局",
         "section": "藍方-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E8%97%8D%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "c04fc1df27e9",
+        "sourceQuote": "公開資訊已經足夠派出全好組合時，梅林跟著共識就好，不要搶著主導"
       },
       "情境": "你是梅林，藍方已兩勝，下一次開藍就進入刺殺。",
       "觀念": "公開資訊已經夠派出全好組合時，梅林跟著共識就好，不要搶著主導。",
@@ -696,7 +768,9 @@
         "title": "聽牌與決勝局",
         "section": "藍方-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E8%97%8D%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "c04fc1df27e9",
+        "sourceQuote": "組合有理由，也是在保護梅林"
       },
       "情境": "藍方已兩勝，輪到你這位藍方當隊長。",
       "觀念": "組合有公開理由，也是在保護梅林。",
@@ -716,7 +790,9 @@
         "title": "聽牌與決勝局",
         "section": "紅方",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E7%B4%85%E6%96%B9",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "bc15b3d37d75",
+        "sourceQuote": "第 4 局要兩個紅方同車、兩人都出失敗才會開紅"
       },
       "情境": "紅方已兩勝，輪到你這位紅方當隊長。",
       "觀念": "放進足夠的紅方並出失敗就直接三紅，第四局要兩個紅方。",
@@ -736,7 +812,9 @@
         "title": "聽牌與決勝局",
         "section": "紅方-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E7%B4%85%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "82840b9f6dc3",
+        "sourceQuote": "推一個看起來合理、但裡面有拇指（刺客、莫甘娜、奧伯倫）的組合：梅林看得到，要擋就得出手，出手的人就成為梅林候選"
       },
       "情境": "藍方已兩勝，輪到你這位紅方當隊長。",
       "觀念": "推看起來合理但有拇指的組合，梅林要擋就得出手，出手的人成為梅林候選。",
@@ -756,7 +834,9 @@
         "title": "聽牌與決勝局",
         "section": "紅方-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E7%B4%85%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "82840b9f6dc3",
+        "sourceQuote": "推一個看起來合理、裡面只有莫德雷德的組合：梅林看不到他，任務有機會直接開紅（莫德雷德）"
       },
       "情境": "藍方已聽牌或2:2，你是紅方隊長。",
       "觀念": "梅林看不到莫德雷德，只有莫德雷德的合理組合有機會直接開紅。",
@@ -776,7 +856,9 @@
         "title": "聽牌與決勝局",
         "section": "三、22-決勝局",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E4%B8%89%E3%80%8122-%E6%B1%BA%E5%8B%9D%E5%B1%80",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "4aea72c8132d",
+        "sourceQuote": "5 人全好，代表場外 5 人包含全部 4 個壞人。"
       },
       "情境": "2:2決勝局，你要派5人隊。",
       "觀念": "5人全好代表場外5人包含全部4個壞人，派對等於找出全部壞人。",
@@ -795,7 +877,9 @@
         "title": "聽牌與決勝局",
         "section": "藍方-3",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E8%97%8D%E6%96%B9-3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "9c43ab2ceda4",
+        "sourceQuote": "派票時先假設四壞在哪裡；"
       },
       "情境": "決勝局輪到你派，四個壞人還沒全部確定。",
       "觀念": "派票時先假設四壞在哪裡，假設不出來代表一定派錯。",
@@ -814,7 +898,9 @@
         "title": "聽牌與決勝局",
         "section": "藍方-3",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E8%97%8D%E6%96%B9-3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "9c43ab2ceda4",
+        "sourceQuote": "決勝局的動作最新，紅方會優先回頭看這一局是誰在主導。"
       },
       "情境": "2:2決勝局，你是派西維爾或忠臣。",
       "觀念": "紅方會優先回頭看決勝局是誰在主導，主導的人最好不是梅林。",
@@ -833,7 +919,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "四、排除法：誰不可能（或不太可能）是梅林",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=%E5%9B%9B%E3%80%81%E6%8E%92%E9%99%A4%E6%B3%95%EF%BC%9A%E8%AA%B0%E4%B8%8D%E5%8F%AF%E8%83%BD%EF%BC%88%E6%88%96%E4%B8%8D%E5%A4%AA%E5%8F%AF%E8%83%BD%EF%BC%89%E6%98%AF%E6%A2%85%E6%9E%97",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "9c51ed66573c",
+        "sourceQuote": "給出的「超前資訊」只有知道莫德雷德的位置才做得到、且無法從公開資訊推出的人（梅林看不到莫德；"
       },
       "情境": "三藍後進入刺殺，紅方開牌討論誰是梅林。",
       "觀念": "梅林看得到三根拇指，非不得已不會派他們，派過拇指的人比較不像梅林。",
@@ -852,7 +940,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "二、核心思路：找出正確資訊的源頭",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=%E4%BA%8C%E3%80%81%E6%A0%B8%E5%BF%83%E6%80%9D%E8%B7%AF%EF%BC%9A%E6%89%BE%E5%87%BA%E6%AD%A3%E7%A2%BA%E8%B3%87%E8%A8%8A%E7%9A%84%E6%BA%90%E9%A0%AD",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "b741c1ab97b4",
+        "sourceQuote": "好人能力者通常不會在非必要時開能力，所以梅林的痕跡多半不在「最亮眼的一手」，而在「整場資訊都對、而且對得比別人早」。"
       },
       "情境": "刺殺時還剩幾個梅林人選。",
       "觀念": "資訊比大家快、而且事後證明是對的人最可疑。",
@@ -871,7 +961,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "二、核心思路：找出正確資訊的源頭",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=%E4%BA%8C%E3%80%81%E6%A0%B8%E5%BF%83%E6%80%9D%E8%B7%AF%EF%BC%9A%E6%89%BE%E5%87%BA%E6%AD%A3%E7%A2%BA%E8%B3%87%E8%A8%8A%E7%9A%84%E6%BA%90%E9%A0%AD",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "b741c1ab97b4",
+        "sourceQuote": "關於莫德雷德的資訊不比公開推理快（梅林看不到莫德）"
       },
       "情境": "刺殺時檢查一位候選人整場的派票。",
       "觀念": "梅林的指紋是關於拇指的資訊幾乎都對，關於莫德雷德卻不比公開推理快。",
@@ -890,7 +982,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "1-資訊過度超前者-☆☆☆☆☆",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=1-%E8%B3%87%E8%A8%8A%E9%81%8E%E5%BA%A6%E8%B6%85%E5%89%8D%E8%80%85-%E2%98%86%E2%98%86%E2%98%86%E2%98%86%E2%98%86",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "43cd0db05c4b",
+        "sourceQuote": "一個人的「超前」如果需要知道莫德雷德的位置才做得到，而且無法從公開資訊推出來，這份資訊就不是梅林的視野。"
       },
       "情境": "刺殺時發現某人的超前資訊連莫德雷德都抓得到。",
       "觀念": "需要知道莫德雷德位置才做得到的超前，不是梅林的視野。",
@@ -909,7 +1003,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "2-精準區間",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=2-%E7%B2%BE%E6%BA%96%E5%8D%80%E9%96%93",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "31da12d31523",
+        "sourceQuote": "刺客讀法：拿拇指位置對照每個人第一局給的區間，區間切得剛好每塊都有拇指的人，是梅林候選。"
       },
       "情境": "刺殺時回頭看第一局的派票。",
       "觀念": "梅林在1-1～1-4習慣給區間，區間切得剛好每塊都有拇指的人是梅林候選。",
@@ -928,7 +1024,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "3-修正他人",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=3-%E4%BF%AE%E6%AD%A3%E4%BB%96%E4%BA%BA",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "cbad727d58be",
+        "sourceQuote": "梅林常修正別人的區間，但不太會推翻自己的派票；"
       },
       "情境": "刺殺時比較第二局的派票誰在修正誰。",
       "觀念": "梅林常修正別人的區間，但不太會推翻自己的派票。",
@@ -947,7 +1045,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "4-1-5、2-5-的合理性",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=4-1-5%E3%80%812-5-%E7%9A%84%E5%90%88%E7%90%86%E6%80%A7",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "3601b080df4b",
+        "sourceQuote": "尾派有沒有依照前面資訊派出合理的好人組合？"
       },
       "情境": "刺殺時回頭看1-5、2-5的尾派。",
       "觀念": "尾派有沒有依照前面資訊派出合理的好人組合，越不合理越容易死。",
@@ -966,7 +1066,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "2.-投票（黑白球）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=2.-%E6%8A%95%E7%A5%A8%EF%BC%88%E9%BB%91%E7%99%BD%E7%90%83%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "92306034d518",
+        "sourceQuote": "好人本來就常用內黑擋車或把派票權留給後面（見 黑白球投票 - 正常票、異常票與內黑〈四、內黑的用途〉、黑白球投票 - 正"
       },
       "情境": "刺殺時檢查紅方兩勝那局誰在內黑。",
       "觀念": "關鍵局好人本來就常用內黑擋車，有人內黑本身資訊量較低。",
@@ -985,7 +1087,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "2.-分辨要點",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=2.-%E5%88%86%E8%BE%A8%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "c1bd4656f5f4",
+        "sourceQuote": "奧伯倫測試：遊戲開始時，好人裡只有梅林知道奧伯倫是壞人（派西看不到奧伯倫，紅方也不知道他）。"
       },
       "情境": "刺殺時回想誰早早避開或反對奧伯倫。",
       "觀念": "開局時好人裡只有梅林知道奧伯倫是壞人。",
@@ -1004,7 +1108,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "2.-分辨要點",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=2.-%E5%88%86%E8%BE%A8%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "c1bd4656f5f4",
+        "sourceQuote": "源頭與跟隨：同一份正確資訊，先出現的通常是梅林，跟在後面、並且鞏固它的常是派西。"
       },
       "情境": "刺殺時候選人剩下像梅林和像派西的兩人。",
       "觀念": "同一份正確資訊，先出現的通常是梅林，跟在後面鞏固的常是派西。",
@@ -1023,7 +1129,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "2.-分辨要點",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=2.-%E5%88%86%E8%BE%A8%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "c1bd4656f5f4",
+        "sourceQuote": "配對檢驗：找出一組「梅林＋派西」能同時解釋全場派票的組合，比單獨找梅林可靠。"
       },
       "情境": "刺殺時兩名候選人看起來都說得通。",
       "觀念": "找一組梅林加派西能同時解釋全場派票，比單獨找梅林可靠。",
@@ -1042,7 +1150,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "1.-莫甘娜：看派西怎麼對待你",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=1.-%E8%8E%AB%E7%94%98%E5%A8%9C%EF%BC%9A%E7%9C%8B%E6%B4%BE%E8%A5%BF%E6%80%8E%E9%BA%BC%E5%B0%8D%E5%BE%85%E4%BD%A0",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "d84349994e51",
+        "sourceQuote": "莫甘娜與梅林的票（票：被派進組合的次數）：莫甘娜的票很少時，通常梅林身上要有票，反之亦然；"
       },
       "情境": "刺殺時比較莫甘娜和梅林人選被派進組合的次數。",
       "觀念": "莫甘娜的票很少時，通常梅林身上要有票，反之亦然。",
@@ -1061,7 +1171,9 @@
         "title": "刺客 - 如何找出梅林",
         "section": "七、紅方內部的刺殺討論流程",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-12&sec=%E4%B8%83%E3%80%81%E7%B4%85%E6%96%B9%E5%85%A7%E9%83%A8%E7%9A%84%E5%88%BA%E6%AE%BA%E8%A8%8E%E8%AB%96%E6%B5%81%E7%A8%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-12/",
+        "sectionHash": "dffc6559b871",
+        "sourceQuote": "用莫德雷德和奧伯倫做交叉檢查：候選人的資訊是否「拇指全對、莫德沒看到」？"
       },
       "情境": "刺殺階段，紅方開牌一起討論。",
       "觀念": "紅方每人看到的線索不同，莫甘娜、莫德雷德、奧伯倫各有觀察。",
@@ -1080,7 +1192,9 @@
         "title": "聽牌與決勝局",
         "section": "紅方-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-207&sec=%E7%B4%85%E6%96%B9-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-207/",
+        "sectionHash": "82840b9f6dc3",
+        "sourceQuote": "換句話說：派西維爾前期就選進組合的人，通常不是他的拇指"
       },
       "情境": "刺殺時，你們已經認出誰像派西維爾。",
       "觀念": "派西維爾通常不賭拇指，他前期就選進組合的人通常不是他的拇指。",
@@ -1099,7 +1213,9 @@
         "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
         "section": "一、延伸、修正與尊重",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E4%B8%80%E3%80%81%E5%BB%B6%E4%BC%B8%E3%80%81%E4%BF%AE%E6%AD%A3%E8%88%87%E5%B0%8A%E9%87%8D",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
+        "sectionHash": "244730da21ce",
+        "sourceQuote": "修正「通常」代表認為 A、C 至少有一壞"
       },
       "情境": "輪到你派票，前面已經有人派過組合。",
       "觀念": "延伸是認同前人的隊伍資訊，修正通常代表認為隊長或他派的人至少一壞。",
@@ -1117,7 +1233,9 @@
         "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
         "section": "3-家對「1ab、2cd」之後的解讀與反饋",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=3-%E5%AE%B6%E5%B0%8D%E3%80%8C1ab%E3%80%812cd%E3%80%8D%E4%B9%8B%E5%BE%8C%E7%9A%84%E8%A7%A3%E8%AE%80%E8%88%87%E5%8F%8D%E9%A5%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
+        "sectionHash": "2bb13c8ac8e9",
+        "sourceQuote": "身為 3 家忠臣，理論上沒有足夠資訊在 1-2 之後就直接認同 2 家的資訊；"
       },
       "情境": "你是3家忠臣，1家和2家的組合完全不重疊。",
       "觀念": "忠臣在1-2之後沒有足夠資訊直接認同2家，認同會顯得很像能力者。",
@@ -1136,7 +1254,9 @@
         "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
         "section": "重點小結",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E9%87%8D%E9%BB%9E%E5%B0%8F%E7%B5%90",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
+        "sectionHash": "6037260cd8d5",
+        "sourceQuote": "通常這樣選完，如果 1、2 真的是兩好，會導致 1、2 雙雙被排除在任務外。"
       },
       "情境": "輪到1-2，你在想怎麼回應1家的組合。",
       "觀念": "和1家完全反向的派票，若1家、2家真是兩好，會讓兩人雙雙被排除。",
@@ -1154,7 +1274,9 @@
         "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
         "section": "區間要追到源頭",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E5%8D%80%E9%96%93%E8%A6%81%E8%BF%BD%E5%88%B0%E6%BA%90%E9%A0%AD",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
+        "sectionHash": "7a88f3f71955",
+        "sourceQuote": "順著前一家延伸的派票，沒派到的人只是「沒輪到」"
       },
       "情境": "你想把某個「沒被派到」的人當成壞人區間。",
       "觀念": "順著前一家延伸的派票，沒派到的人只是沒輪到，不代表被表壞。",
@@ -1172,7 +1294,9 @@
         "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
         "section": "四、有意識的派票",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E5%9B%9B%E3%80%81%E6%9C%89%E6%84%8F%E8%AD%98%E7%9A%84%E6%B4%BE%E7%A5%A8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
+        "sectionHash": "272ca4a48916",
+        "sourceQuote": "不存在純隨機的派票"
       },
       "情境": "輪到你派票，正要決定人選。",
       "觀念": "不存在純隨機的派票，後面的人會延續你的派票展開。",
@@ -1190,7 +1314,9 @@
         "title": "解讀前人派票 - 延伸、修正、尊重、分類與有意識的派票",
         "section": "五、照派與跟派（牌局範例）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-24&sec=%E4%BA%94%E3%80%81%E7%85%A7%E6%B4%BE%E8%88%87%E8%B7%9F%E6%B4%BE%EF%BC%88%E7%89%8C%E5%B1%80%E7%AF%84%E4%BE%8B%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-24/",
+        "sectionHash": "26e36f5d5704",
+        "sourceQuote": "忠臣派得一模一樣，會讓外置位被派到的次數降低，梅林能派的人選也變少。"
       },
       "情境": "你是忠臣，想直接照派前面某人一模一樣的組合。",
       "觀念": "照派的幾乎都是能力者，忠臣照派會讓梅林能派的人選變少。",
@@ -1209,7 +1335,9 @@
         "title": "視角與區間派票法",
         "section": "區間派票法",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-57&sec=%E5%8D%80%E9%96%93%E6%B4%BE%E7%A5%A8%E6%B3%95",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/",
+        "sectionHash": "80a6998bad85",
+        "sourceQuote": "通常用在 1-1～1-4，讓梅林能快速給出壞人和好人的區域。"
       },
       "情境": "第一局1-1～1-4，大家還在用派票切區間。",
       "觀念": "每人派票機會很少，只給好人資訊太少，所以1-1～1-4常用區間給資訊。",
@@ -1227,7 +1355,9 @@
         "title": "視角與區間派票法",
         "section": "範例：三個假設不會同時成立",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-57&sec=%E7%AF%84%E4%BE%8B%EF%BC%9A%E4%B8%89%E5%80%8B%E5%81%87%E8%A8%AD%E4%B8%8D%E6%9C%83%E5%90%8C%E6%99%82%E6%88%90%E7%AB%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/",
+        "sectionHash": "29e6e105755d",
+        "sourceQuote": "三類照上面的人數全部成立，要 2 + 2 + 1 = 5 個壞人 ⇒ 不可能，一定有一塊是好人；"
       },
       "情境": "輪到1-5，覺得前面每個人好像都有問題。",
       "觀念": "懷疑的幾類人互不重疊、需要的壞人加起來超過4個時，不可能全部成立。",
@@ -1245,7 +1375,9 @@
         "title": "視角與區間派票法",
         "section": "邏輯互斥的區間",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-57&sec=%E9%82%8F%E8%BC%AF%E4%BA%92%E6%96%A5%E7%9A%84%E5%8D%80%E9%96%93",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/",
+        "sectionHash": "7d8ad5d083b7",
+        "sourceQuote": "相認壞只有三人（10 人局），所以至少有一人的視角是「沒帶隊友」＝「閃隊友」。"
       },
       "情境": "1家和2家的組合完全不重疊，輪到你派。",
       "觀念": "相認壞只有三人，1家、2家若都是相認壞，至少一人其實是在閃隊友。",
@@ -1263,7 +1395,9 @@
         "title": "視角與區間派票法",
         "section": "無奈區間-身分可以互換、公開資訊分不出來的位置",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-57&sec=%E7%84%A1%E5%A5%88%E5%8D%80%E9%96%93-%E8%BA%AB%E5%88%86%E5%8F%AF%E4%BB%A5%E4%BA%92%E6%8F%9B%E3%80%81%E5%85%AC%E9%96%8B%E8%B3%87%E8%A8%8A%E5%88%86%E4%B8%8D%E5%87%BA%E4%BE%86%E7%9A%84%E4%BD%8D%E7%BD%AE",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-57/",
+        "sectionHash": "eeb163339f1a",
+        "sourceQuote": "這種區間不是「推錯」，而是「推不出來」：能分出兩人的資訊根本不存在。"
       },
       "情境": "兩個人的處境完全對稱，你分不出誰是壞人。",
       "觀念": "無奈區間不是推錯而是推不出來，能分出兩人的資訊根本不存在。",
@@ -1281,7 +1415,9 @@
         "title": "外灑 - 動機、人選、怎麼讀與出任務後的區間解讀",
         "section": "為什麼-4-應該要定義-50",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-18&sec=%E7%82%BA%E4%BB%80%E9%BA%BC-4-%E6%87%89%E8%A9%B2%E8%A6%81%E5%AE%9A%E7%BE%A9-50",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-18/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-18/",
+        "sectionHash": "2b2ca00bf05b",
+        "sourceQuote": "因為下一位就是尾派。"
       },
       "情境": "你在1-4，下一位就是1-5尾家。",
       "觀念": "下一位就是尾派，所以1-4的派票應該替5家和0家下定義。",
@@ -1299,7 +1435,9 @@
         "title": "外灑 - 動機、人選、怎麼讀與出任務後的區間解讀",
         "section": "先思考自己的派票習慣",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-18&sec=%E5%85%88%E6%80%9D%E8%80%83%E8%87%AA%E5%B7%B1%E7%9A%84%E6%B4%BE%E7%A5%A8%E7%BF%92%E6%85%A3",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-18/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-18/",
+        "sectionHash": "296cb99db1ba",
+        "sourceQuote": "尤其是前位 1-1～1-4；"
       },
       "情境": "你是忠臣，在1-4想跟著前面的資訊外灑。",
       "觀念": "前位1-1～1-4尤其要平衡自己拿不同角色時的打法。",
@@ -1318,7 +1456,9 @@
         "title": "角色玩法 - 派西維爾",
         "section": "派西為什麼不要盲採拇指",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%B4%BE%E8%A5%BF%E7%82%BA%E4%BB%80%E9%BA%BC%E4%B8%8D%E8%A6%81%E7%9B%B2%E6%8E%A1%E6%8B%87%E6%8C%87",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "5fd5fa6ff3e6",
+        "sourceQuote": "單看那一席，盲採的拇指一半是莫甘娜，比非拇指的 1/4 高一倍"
       },
       "情境": "你是派西維爾，兩根拇指都還沒派過票。",
       "觀念": "盲採的拇指一半是莫甘娜，比雙拇指以外的人更容易派到可見紅方。",
@@ -1338,7 +1478,9 @@
         "title": "角色玩法 - 派西維爾",
         "section": "思考-sop",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%80%9D%E8%80%83-sop",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "98fa05f151cc",
+        "sourceQuote": "派 A 拇指＝「信 A 梅 B 娜」的最佳組合。"
       },
       "情境": "你是派西維爾，兩根拇指都已經派過票。",
       "觀念": "A梅B娜、B梅A娜兩條世界線各有最佳組合，兩邊的共同資訊比較可靠。",
@@ -1358,7 +1500,9 @@
         "title": "角色玩法 - 派西維爾",
         "section": "派西維爾要點",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "3fbbbe5d4245",
+        "sourceQuote": "踩錯拇指，很有可能讓後面的風向直接歪掉。"
       },
       "情境": "你是前半區1～5家的派西，還沒分出梅林。",
       "觀念": "踩錯拇指，很有可能讓後面的風向直接歪掉。",
@@ -1378,7 +1522,9 @@
         "title": "角色玩法 - 派西維爾",
         "section": "派西維爾要點",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "3fbbbe5d4245",
+        "sourceQuote": "最重要的是開藍，並且不要出賣梅林。"
       },
       "情境": "如果你是後半區6～9家的派西，而且已經分出梅林。",
       "觀念": "可以選梅林也可以不選，最重要的是開藍，並且不要出賣梅林。",
@@ -1398,7 +1544,9 @@
         "title": "角色玩法 - 派西維爾",
         "section": "派西維爾要點",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-176&sec=%E6%B4%BE%E8%A5%BF%E7%B6%AD%E7%88%BE%E8%A6%81%E9%BB%9E",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-176/",
+        "sectionHash": "3fbbbe5d4245",
+        "sourceQuote": "梅林選的人只代表沒有梅林看得到的拇指，仍可能是莫德雷德。"
       },
       "情境": "你是派西維爾，任務結果指向某人，梅林卻沒有咬他。",
       "觀念": "梅林選的人只代表沒有梅林看得到的拇指，仍可能是莫德雷德。",
@@ -1417,7 +1565,9 @@
         "title": "角色玩法 - 梅林",
         "section": "如何派票",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E5%A6%82%E4%BD%95%E6%B4%BE%E7%A5%A8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "33c3d782cc5e",
+        "sourceQuote": "後面的好人可以自己推出前半區的拇指。"
       },
       "情境": "你是前半區1～4家梅林，第一局要派3人。",
       "觀念": "前半區自己會派票展現陣營感，後面的好人可以自己推出他們的拇指。",
@@ -1437,7 +1587,9 @@
         "title": "角色玩法 - 梅林",
         "section": "派票基本策略",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E6%B4%BE%E7%A5%A8%E5%9F%BA%E6%9C%AC%E7%AD%96%E7%95%A5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "3901aacaa521",
+        "sourceQuote": "1-5 與 2-5：是否依照前面的資訊派出合理的好人組合；"
       },
       "情境": "你是後半區梅林，第一次派票在第二局。",
       "觀念": "2-1～2-4要依前面資訊派合理的好人，鞏固派對的、修正派錯的。",
@@ -1456,7 +1608,9 @@
         "title": "角色玩法 - 梅林",
         "section": "梅林如何讓內建資訊和雜魚視角同步",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E6%A2%85%E6%9E%97%E5%A6%82%E4%BD%95%E8%AE%93%E5%85%A7%E5%BB%BA%E8%B3%87%E8%A8%8A%E5%92%8C%E9%9B%9C%E9%AD%9A%E8%A6%96%E8%A7%92%E5%90%8C%E6%AD%A5",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "7ad50ad4316d",
+        "sourceQuote": "本節以一個 10 人局情境，示範梅林如何先用雜魚視角找出合理故事線，再結合自己的內建資訊選出派票。"
       },
       "情境": "你是梅林，想用派票把內建資訊傳出去。",
       "觀念": "每張派票都要有沒看到拇指的人也說得通的理由，越解釋不了越容易被刺。",
@@ -1475,7 +1629,9 @@
         "title": "角色玩法 - 梅林",
         "section": "梅林可以派拇指嗎-順應局勢，不是為了躲刺",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E6%A2%85%E6%9E%97%E5%8F%AF%E4%BB%A5%E6%B4%BE%E6%8B%87%E6%8C%87%E5%97%8E-%E9%A0%86%E6%87%89%E5%B1%80%E5%8B%A2%EF%BC%8C%E4%B8%8D%E6%98%AF%E7%82%BA%E4%BA%86%E8%BA%B2%E5%88%BA",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "f1c4598d5d90",
+        "sourceQuote": "但不是為了躲刺而派，而是 順應局勢跟資訊，有時可以派就派下去"
       },
       "情境": "你是梅林，場上共識的組合裡有一根你看得到的拇指。",
       "觀念": "預設不派拇指，但順應局勢時可以派，不是為了躲刺而派。",
@@ -1494,7 +1650,9 @@
         "title": "角色玩法 - 梅林",
         "section": "例一：第一局開藍後的三加一",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E4%BE%8B%E4%B8%80%EF%BC%9A%E7%AC%AC%E4%B8%80%E5%B1%80%E9%96%8B%E8%97%8D%E5%BE%8C%E7%9A%84%E4%B8%89%E5%8A%A0%E4%B8%80",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "d04dd016f17e",
+        "sourceQuote": "雜魚面對第一局開藍也常三加一 => 梅林如果「只在 570 全好時才三加一」，反而洩漏資訊"
       },
       "情境": "第一局開藍，你是第二局的梅林隊長，第一局隊上有拇指。",
       "觀念": "梅林如果只在全好時才三加一，反而洩漏資訊。",
@@ -1515,7 +1673,9 @@
         "title": "角色玩法 - 梅林",
         "section": "例二：保護局裡只有一根拇指",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-175&sec=%E4%BE%8B%E4%BA%8C%EF%BC%9A%E4%BF%9D%E8%AD%B7%E5%B1%80%E8%A3%A1%E5%8F%AA%E6%9C%89%E4%B8%80%E6%A0%B9%E6%8B%87%E6%8C%87",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-175/",
+        "sectionHash": "9e1ca6fa30a3",
+        "sourceQuote": "第 4 局要 2 張失敗才開紅"
       },
       "情境": "藍方2:1聽牌的第四局，共識組合裡只有一根你的拇指。",
       "觀念": "第四局要2張失敗才開紅，只有一根拇指的組合不會開紅。",
@@ -1535,7 +1695,9 @@
         "title": "角色玩法 - 亞瑟的忠臣（雜魚）",
         "section": "票多的人與不要無腦疊票",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-25&sec=%E7%A5%A8%E5%A4%9A%E7%9A%84%E4%BA%BA%E8%88%87%E4%B8%8D%E8%A6%81%E7%84%A1%E8%85%A6%E7%96%8A%E7%A5%A8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/",
+        "sectionHash": "bd2b0e68ba66",
+        "sourceQuote": "假如票多的那家是拇指，會讓梅林很難處理（平衡的觀念見思考原理與大局觀 - 五個原理、平衡、平滑與極化〈乙、大局觀〉）。"
       },
       "情境": "你是忠臣，前面好幾家都派了同一個人。",
       "觀念": "票多的通常是好人，但票多的若是拇指，梅林會很難處理。",
@@ -1554,7 +1716,9 @@
         "title": "角色玩法 - 亞瑟的忠臣（雜魚）",
         "section": "派一個人時，要不要參考他的派票",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-25&sec=%E6%B4%BE%E4%B8%80%E5%80%8B%E4%BA%BA%E6%99%82%EF%BC%8C%E8%A6%81%E4%B8%8D%E8%A6%81%E5%8F%83%E8%80%83%E4%BB%96%E7%9A%84%E6%B4%BE%E7%A5%A8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-25/",
+        "sectionHash": "ba40209a5265",
+        "sourceQuote": "其他 9 位玩家是 6 個能力者＋3 個雜魚，所以你參考的派票，多半來自能力者。"
       },
       "情境": "你是忠臣，在想要不要參考前面某人的派票。",
       "觀念": "你以外的9人有6個能力者，你參考的派票多半來自能力者。",
@@ -1573,7 +1737,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "大原則",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E5%A4%A7%E5%8E%9F%E5%89%87",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "17697de0492f",
+        "sourceQuote": "通往三紅的過程通常會逼迫能力者釋放資訊，這些資訊會成為刺殺梅林的線索。"
       },
       "情境": "你是紅方，在想要不要為了刺殺保留身分。",
       "觀念": "三紅是直接獲勝而刺殺可能刺錯，搶三紅的過程也會逼梅林留下線索。",
@@ -1592,7 +1758,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "壞人怎麼被抓到的",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E5%A3%9E%E4%BA%BA%E6%80%8E%E9%BA%BC%E8%A2%AB%E6%8A%93%E5%88%B0%E7%9A%84",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "1b221d8ea47a",
+        "sourceQuote": "如果你想順著場上訊息走（也就是認同「場上認為自己所在的區間有壞」），切記不要去派和你同區間的其他玩家。"
       },
       "情境": "你是紅方，場上共同視角認為你所在的區間有壞。",
       "觀念": "派和你同區間的其他玩家，等於告訴大家「對方比我好，我才是壞人」。",
@@ -1611,7 +1779,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "壞人的數量",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E5%A3%9E%E4%BA%BA%E7%9A%84%E6%95%B8%E9%87%8F",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "2839d15f4a7d",
+        "sourceQuote": "新手壞人常犯的錯誤之一，是派票時忽略「自己身為好人時，視角中應有的壞人數」。"
       },
       "情境": "你是紅方，要派一個假裝是好人的組合。",
       "觀念": "新手壞人常忽略自己身為好人時，視角中應有的壞人數。",
@@ -1630,7 +1800,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "遊戲進程",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E9%81%8A%E6%88%B2%E9%80%B2%E7%A8%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "00fa63b675ca",
+        "sourceQuote": "1-4 以前：自然就好，「刻意」反而顯得你是能力者。"
       },
       "情境": "你是紅方，在1-1～1-4輪到派票。",
       "觀念": "1-4以前自然就好，刻意保隊友或賣隊友反而顯得你是能力者。",
@@ -1649,7 +1821,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "遊戲進程",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E9%81%8A%E6%88%B2%E9%80%B2%E7%A8%8B",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "00fa63b675ca",
+        "sourceQuote": "派了怕兩人一起出失敗、開出兩張很蠢，不派又怕被發現有視野。"
       },
       "情境": "你是紅方1-5尾家，隊友的票很多。",
       "觀念": "派隊友怕兩人一起出失敗開出兩張，不派又怕被發現有視野。",
@@ -1668,7 +1842,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "二、預設：只有自己一個紅方進任務，盡可能出失敗",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E4%BA%8C%E3%80%81%E9%A0%90%E8%A8%AD%EF%BC%9A%E5%8F%AA%E6%9C%89%E8%87%AA%E5%B7%B1%E4%B8%80%E5%80%8B%E7%B4%85%E6%96%B9%E9%80%B2%E4%BB%BB%E5%8B%99%EF%BC%8C%E7%9B%A1%E5%8F%AF%E8%83%BD%E5%87%BA%E5%A4%B1%E6%95%97",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "77950b35b6f5",
+        "sourceQuote": "大部分的遊戲，搶先拿下任務失敗的一方有優勢，同時也給梅林壓力。"
       },
       "情境": "只有你一個紅方進了任務。",
       "觀念": "大部分的遊戲，搶先拿下任務失敗的一方有優勢。",
@@ -1687,7 +1863,9 @@
         "title": "紅方基礎原則 - 出失敗、位階法、派隊友與常見破綻",
         "section": "四、兩位相認紅方同進任務：位階法",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-177&sec=%E5%9B%9B%E3%80%81%E5%85%A9%E4%BD%8D%E7%9B%B8%E8%AA%8D%E7%B4%85%E6%96%B9%E5%90%8C%E9%80%B2%E4%BB%BB%E5%8B%99%EF%BC%9A%E4%BD%8D%E9%9A%8E%E6%B3%95",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-177/",
+        "sectionHash": "c000aa1e158d",
+        "sourceQuote": "互相不知道誰該出失敗，這就是「兩紅相撞」：可能 0 張失敗（都以為對方會出），也可能 2 張失敗（兩人都出）。"
       },
       "情境": "你和相認隊友同時進了任務。",
       "觀念": "互相不知道誰該出時，可能兩人都不出，也可能爆兩張失敗。",
@@ -1706,7 +1884,9 @@
         "title": "湖中女神 - 規則、湖誰、怎麼讀與各比分的湖法",
         "section": "3.4-湖中要在派隊之前就想好",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-147&sec=3.4-%E6%B9%96%E4%B8%AD%E8%A6%81%E5%9C%A8%E6%B4%BE%E9%9A%8A%E4%B9%8B%E5%89%8D%E5%B0%B1%E6%83%B3%E5%A5%BD",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-147/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-147/",
+        "sectionHash": "9ffc408d207e",
+        "sourceQuote": "很多人是派完、任務結果出來才開始想湖誰"
       },
       "情境": "你手上有湖中，又要在這一局派隊。",
       "觀念": "很多人是派完、任務結果出來才開始想湖誰。",
@@ -1725,7 +1905,9 @@
         "title": "湖中女神 - 規則、湖誰、怎麼讀與各比分的湖法",
         "section": "3.1-基本方針：往「最像藍方、但還沒確認」的人湖",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-147&sec=3.1-%E5%9F%BA%E6%9C%AC%E6%96%B9%E9%87%9D%EF%BC%9A%E5%BE%80%E3%80%8C%E6%9C%80%E5%83%8F%E8%97%8D%E6%96%B9%E3%80%81%E4%BD%86%E9%82%84%E6%B2%92%E7%A2%BA%E8%AA%8D%E3%80%8D%E7%9A%84%E4%BA%BA%E6%B9%96",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-147/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-147/",
+        "sectionHash": "424c9cfa60ef",
+        "sourceQuote": "湖到好人 → 多一個確認的好人，而且湖中留在藍方手上：兩個好處"
       },
       "情境": "輪到你用湖中女神。",
       "觀念": "湖到好人多一個確認的好人，湖中也留在藍方手上。",
@@ -1744,7 +1926,9 @@
         "title": "入門行動方針 - 資訊可信度、假設與驗證",
         "section": "派票",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-106&sec=%E6%B4%BE%E7%A5%A8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-106/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-106/",
+        "sectionHash": "deb127e2cc1f",
+        "sourceQuote": "不管你是好人或壞人，都以「自己是好人」作為邏輯基點；"
       },
       "情境": "輪到你派票，不管你是哪一方。",
       "觀念": "派票就是假設你的四壞在哪裡，以「自己是好人」作為邏輯基點。",
@@ -1762,7 +1946,9 @@
         "title": "入門行動方針 - 資訊可信度、假設與驗證",
         "section": "根本性原則（第一性原理）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-106&sec=%E6%A0%B9%E6%9C%AC%E6%80%A7%E5%8E%9F%E5%89%87%EF%BC%88%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-106/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-106/",
+        "sectionHash": "a39e831a11a1",
+        "sourceQuote": "任務結果 > 湖中女神 > 任務派票 + 黑白球投票 > 狀態發言"
       },
       "情境": "場上資訊互相矛盾，你要決定先信哪一個。",
       "觀念": "可信度依序是任務結果、湖中、派票和黑白球，最後才是發言。",
@@ -1780,7 +1966,9 @@
         "title": "常見錯誤 - 派票、黑白球、湖中、觀念與品格",
         "section": "想法矛盾或人選遺漏",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-90&sec=%E6%83%B3%E6%B3%95%E7%9F%9B%E7%9B%BE%E6%88%96%E4%BA%BA%E9%81%B8%E9%81%BA%E6%BC%8F",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-90/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-90/",
+        "sectionHash": "65da6c1ade8b",
+        "sourceQuote": "認 A 好，卻沒派 A 視角中的鐵好。"
       },
       "情境": "你認定某位玩家是好人，正要決定派誰。",
       "觀念": "認A好就要接受A視角中的鐵好，認了A卻不派他們是人選遺漏。",
@@ -1798,7 +1986,9 @@
         "title": "角色總覽 - 誰看得到誰與藍方基礎原則",
         "section": "大原則（藍方）",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-165&sec=%E5%A4%A7%E5%8E%9F%E5%89%87%EF%BC%88%E8%97%8D%E6%96%B9%EF%BC%89",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-165/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-165/",
+        "sectionHash": "fff085269ce7",
+        "sourceQuote": "盡可能選擇你視角中的好人。"
       },
       "情境": "你是藍方，輪到你派票。",
       "觀念": "藍方的大原則是盡可能選擇你視角中的好人。",
@@ -1817,7 +2007,9 @@
         "title": "思考原理與大局觀 - 五個原理、平衡、平滑與極化",
         "section": "一致性",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-26&sec=%E4%B8%80%E8%87%B4%E6%80%A7",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-26/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-26/",
+        "sectionHash": "2b804d3ac13e",
+        "sourceQuote": "定義：當兩件事情的敘述彼此不相關時，就稱為雙重假設。"
       },
       "情境": "你同時考慮好幾種可能，想各取一部分來組隊。",
       "觀念": "用兩個不相關的假設各挑一人是雙重假設，同時成立的可能性極低。",
@@ -1835,7 +2027,9 @@
         "title": "思考原理與大局觀 - 五個原理、平衡、平滑與極化",
         "section": "打平衡的條件",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-26&sec=%E6%89%93%E5%B9%B3%E8%A1%A1%E7%9A%84%E6%A2%9D%E4%BB%B6",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-26/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-26/",
+        "sectionHash": "8e308a0de9ff",
+        "sourceQuote": "尾派乖乖派高機率會過的組合。"
       },
       "情境": "你是尾家，想用平衡打法派一隊不一樣的組合。",
       "觀念": "尾派乖乖派高機率會過的組合，平衡打法不能用在尾派。",
@@ -1854,7 +2048,9 @@
         "title": "機率 - 條件機率與常用速算表",
         "section": "範例三：四人任務兩張失敗，外置位好人怎麼選",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-109&sec=%E7%AF%84%E4%BE%8B%E4%B8%89%EF%BC%9A%E5%9B%9B%E4%BA%BA%E4%BB%BB%E5%8B%99%E5%85%A9%E5%BC%B5%E5%A4%B1%E6%95%97%EF%BC%8C%E5%A4%96%E7%BD%AE%E4%BD%8D%E5%A5%BD%E4%BA%BA%E6%80%8E%E9%BA%BC%E9%81%B8",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-109/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-109/",
+        "sectionHash": "7283bec709c2",
+        "sourceQuote": "但要的是整組全好，混一個任務內的人反而最高"
       },
       "情境": "第二局4人任務開出兩張失敗，第三局輪你派。",
       "觀念": "要的是整組全好，混一位任務內的人反而可能比全選任務外還高。",
@@ -1875,7 +2071,9 @@
         "title": "覆盤 - 第一局模擬題：3、4、5 家怎麼派",
         "section": "小結-2",
         "url": "https://avalon-game-platform.web.app/#wiki=wiki-32&sec=%E5%B0%8F%E7%B5%90-2",
-        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-32/"
+        "shareUrl": "https://avalon-game-platform.web.app/w/wiki-32/",
+        "sectionHash": "c34f14763ec4",
+        "sourceQuote": "奧伯倫就是要最大化隊友的優勢。"
       },
       "情境": "你是奧伯倫，輪到1-5尾家。",
       "觀念": "奧伯倫就是要最大化隊友的優勢，混淆場上資訊或掩護隊友。",

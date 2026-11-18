@@ -15,6 +15,8 @@ import { resolveWikiRedirect } from '../data/wikiRedirects';
 import RoleStatsCard from './RoleStatsCard';
 import RoleVideoCard from './RoleVideoCard';
 import WikiMindMap from './wikiMap/WikiMindMap';
+import WikiConceptCards, { ConceptSectionChip, useConceptCards } from './WikiConceptCards';
+import { conceptsBySection } from '../utils/conceptLinks';
 import { rehypeWikiHeadingIds } from '../utils/wikiSections';
 import { clearWikiHash, closeWikiArticle, currentWikiTarget, openWikiArticle, useOpenWiki } from './wikiLink';
 import ConceptCards from './ConceptCards';
@@ -355,11 +357,28 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
     [selectedMarkup, selectedRole],
   );
 
+  // 觀念卡（docs/CONCEPTS.md）：文末「本篇觀念卡」，有卡的章節標題旁一個小連結捲到那幾張卡。卡庫在第一次打開文章時才下載。
+  const conceptCards = useConceptCards(!!selectedArticle);
+  const sectionCards = useMemo(
+    () => (selectedArticle ? conceptsBySection(conceptCards, selectedArticle.id) : new Map<string, typeof conceptCards>()),
+    [conceptCards, selectedArticle],
+  );
+
   // `[標題](wiki:wiki-57)` links (延伸閱讀 etc.) swap the open article in place; an unknown id is plain text.
   const articleComponents = useMemo(() => {
     const byId = new Map(allArticles.map((a) => [a.id, a]));
+    const heading =
+      (Tag: 'h1' | 'h2' | 'h3' | 'h4') =>
+      ({ children, node, id }: { children?: ReactNode; node?: unknown; id?: string }): JSX.Element => {
+        const cards = id ? sectionCards.get(id) : undefined;
+        return layered(Tag, cards?.length ? <>{children}<ConceptSectionChip cards={cards} /></> : children, node, id);
+      };
     return {
       ...markdownComponents,
+      h1: heading('h1'),
+      h2: heading('h2'),
+      h3: heading('h3'),
+      h4: heading('h4'),
       a: ({ children, href }: { children?: ReactNode; href?: string }): JSX.Element | null => {
         const ref = wikiArticleRef(href);
         if (ref === null) return markdownComponents.a({ children, href });
@@ -377,7 +396,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
         );
       },
     };
-  }, [allArticles]);
+  }, [allArticles, sectionCards]);
 
   // Opening a linked article starts it from the top; a link with a section (#wiki=<id>&sec=…, or an old merged-away id)
   // scrolls to that heading once the article has rendered.
@@ -716,6 +735,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                     </ReactMarkdown>
                   </div>
                 )}
+                <WikiConceptCards articleId={selectedArticle.id} content={selectedArticle.content} cards={conceptCards} />
                 {/* Role short video */}
                 {selectedRole && VIDEO_BY_ROLE[selectedRole] && (
                   <div className="mt-4">

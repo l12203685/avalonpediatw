@@ -99,6 +99,19 @@ describe('weekDay and manifest', () => {
     expect(d).not.toHaveProperty('parts');
     const withParts = weekDay({ date: '2026-11-18', weekday: 3, draft: { ...draft, parts: { 標題: '【標題】' } }, comment: '', commentSource: 'fallback', images: [], frozen: true });
     expect(withParts.parts).toEqual({ 標題: '【標題】' });
+    expect(withParts).not.toHaveProperty('type');
+    // #89：draft.parts.type 是題型物件 { kind, name }，拆成 day.type，parts 只留佔位符的字串
+    const typed = weekDay({
+      date: '2026-11-18',
+      weekday: 3,
+      draft: { ...draft, parts: { 標題: '【標題】', type: { kind: 'tail', name: '尾派' } } },
+      comment: '',
+      commentSource: 'fallback',
+      images: [],
+      frozen: false,
+    });
+    expect(typed.parts).toEqual({ 標題: '【標題】' });
+    expect(typed.type).toEqual({ kind: 'tail', name: '尾派' });
     expect(withParts.frozen).toBe(true);
   });
 

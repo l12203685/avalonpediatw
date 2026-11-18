@@ -32,7 +32,13 @@ export const CONCEPT_SENTENCE_MAX = 40;
 
 export const CONCEPT_PARTS = ['情境', '觀念', '應用'] as const;
 
-const ROLES: readonly Role[] = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'];
+/** sourceQuote 的字數上限（Array.from 的長度）。 */
+export const CONCEPT_QUOTE_MAX = 60;
+
+/** sectionHash：sha256 的前 12 個十六進位字。 */
+export const SECTION_HASH_RE = /^[0-9a-f]{12}$/;
+
+export const CONCEPT_ROLES: readonly Role[] = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'];
 
 export interface ConceptTags {
   decision: ConceptDecision[];
@@ -64,6 +70,13 @@ export interface ConceptArticle {
   url: string;
   /** 分享頁（Threads 會顯示文章卡片，不含章節）。 */
   shareUrl: string;
+  /**
+   * 來源追蹤（docs/CONCEPTS.md）：寫卡或最後一次確認時，那一節 Markdown 的 sha256 前 12 碼（conceptSource.ts 的 sectionHashOf）。
+   * 文章改了、這個值對不上 → concepts:check 列為待複查。
+   */
+  sectionHash?: string;
+  /** 那一節裡卡片依據的一句（去掉 Markdown 的原文，不超過 CONCEPT_QUOTE_MAX 字），用來找回段落、判斷段落還在不在。 */
+  sourceQuote?: string;
 }
 
 export interface Concept {
@@ -80,13 +93,15 @@ export interface ConceptBank {
   version: number;
   site: string;
   concepts: Concept[];
+  /** 退役的卡 id（主控台 retire；不再重複使用，免得外部的 #concepts=<id> 連到別張卡）。 */
+  retired?: string[];
 }
 
 // ─── 載入與檢查 ───────────────────────────────────────────────────────────
 
 const ROUND_RE = /^(?:[1-5]-(?:[1-5]|\*)|A|any)$/;
 const SCORE_RE = /^[0-3]:[0-3]$/;
-const ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
+export const CONCEPT_ID_RE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 
 function isStringArray(x: unknown): x is string[] {
   return Array.isArray(x) && x.every((v) => typeof v === 'string');
@@ -111,11 +126,14 @@ export function conceptProblems(bank: unknown): string[] {
   const b = bank as Partial<ConceptBank> | null;
   if (!b || typeof b !== 'object' || !Array.isArray(b.concepts)) return ['concepts must be an array'];
   if (typeof b.site !== 'string' || !/^https:\/\//.test(b.site)) out.push('site must be an https URL');
+  if (b.retired !== undefined && !isStringArray(b.retired)) out.push('retired must be an array of ids');
+  const retired = new Set(isStringArray(b.retired) ? b.retired : []);
   const seen = new Set<string>();
   b.concepts.forEach((c: Partial<Concept>, i) => {
     const at = `#${i} ${c?.id ?? '?'}`;
-    if (typeof c?.id !== 'string' || !ID_RE.test(c.id)) out.push(`${at}: bad id`);
+    if (typeof c?.id !== 'string' || !CONCEPT_ID_RE.test(c.id)) out.push(`${at}: bad id`);
     else if (seen.has(c.id)) out.push(`${at}: duplicate id`);
+    else if (retired.has(c.id)) out.push(`${at}: id was retired`);
     else seen.add(c.id);
     for (const part of CONCEPT_PARTS) {
       const p = sentenceProblem(c?.[part]);
@@ -124,8 +142,20 @@ export function conceptProblems(bank: unknown): string[] {
     const a = c?.article;
     if (!a || typeof a.slug !== 'string' || typeof a.title !== 'string' || typeof a.url !== 'string' || typeof a.shareUrl !== 'string') {
       out.push(`${at}: article needs slug, title, url, shareUrl`);
-    } else if (a.section !== undefined && (typeof a.section !== 'string' || a.section === '')) {
-      out.push(`${at}: article.section must be a non-empty string when present`);
+    } else {
+      if (a.section !== undefined && (typeof a.section !== 'string' || a.section === '')) {
+        out.push(`${at}: article.section must be a non-empty string when present`);
+      }
+      if (!/^https:\/\//.test(a.url) || !/^https:\/\//.test(a.shareUrl)) out.push(`${at}: article urls must be https`);
+      if (a.sectionHash !== undefined && (typeof a.sectionHash !== 'string' || !SECTION_HASH_RE.test(a.sectionHash))) {
+        out.push(`${at}: article.sectionHash must be 12 hex characters`);
+      }
+      if (
+        a.sourceQuote !== undefined &&
+        (typeof a.sourceQuote !== 'string' || a.sourceQuote.trim() === '' || a.sourceQuote !== a.sourceQuote.trim() || Array.from(a.sourceQuote).length > CONCEPT_QUOTE_MAX)
+      ) {
+        out.push(`${at}: article.sourceQuote must be a trimmed string of 1..${CONCEPT_QUOTE_MAX} characters`);
+      }
     }
     if (c?.evidence !== null && !CONCEPT_EVIDENCE.includes(c?.evidence as ConceptEvidence)) out.push(`${at}: bad evidence`);
     const t = c?.tags;
@@ -137,7 +167,7 @@ export function conceptProblems(bank: unknown): string[] {
       out.push(`${at}: tags.decision must be non-empty, from ${CONCEPT_DECISIONS.join('/')}`);
     }
     if (!isStringArray(t.round) || t.round.length === 0 || !t.round.every((r) => ROUND_RE.test(r))) out.push(`${at}: bad tags.round`);
-    if (t.roles !== undefined && (!isStringArray(t.roles) || t.roles.length === 0 || !t.roles.every((r) => ROLES.includes(r as Role)))) {
+    if (t.roles !== undefined && (!isStringArray(t.roles) || t.roles.length === 0 || !t.roles.every((r) => CONCEPT_ROLES.includes(r as Role)))) {
       out.push(`${at}: bad tags.roles`);
     }
     if (t.seats !== undefined && (!Array.isArray(t.seats) || t.seats.length === 0 || !t.seats.every((s) => Number.isInteger(s) && s >= 1 && s <= 10))) {

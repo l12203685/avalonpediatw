@@ -107,6 +107,38 @@ export function hasWikiSection(content: string, slug: string): boolean {
   return wikiHeadings(content).some((h) => h.slug === slug);
 }
 
+/**
+ * A section's Markdown: its heading line through the line before the next heading of the same or a higher level
+ * (so its sub-sections are included; fenced code skipped when looking for headings). Without a slug, the whole
+ * article (front matter dropped). null when the article has no heading with that anchor.
+ * 觀念卡的來源追蹤用（packages/server/src/bots/threads/conceptSource.ts 算 sectionHash；docs/CONCEPTS.md）。
+ */
+export function wikiSectionMarkdown(content: string, slug?: string): string | null {
+  const body = content.replace(FRONT_MATTER, '');
+  if (!slug) return body;
+  const unique = createSlugger();
+  const lines = body.split('\n');
+  let fence = false;
+  let start = -1;
+  let level = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) {
+      fence = !fence;
+      continue;
+    }
+    if (fence) continue;
+    const m = /^(#{1,6})\s+(.*?)\s*#*\s*$/.exec(lines[i]);
+    if (!m) continue;
+    const s = unique(wikiHeadingSlug(m[2]));
+    if (start >= 0 && m[1].length <= level) return lines.slice(start, i).join('\n');
+    if (start < 0 && s === slug) {
+      start = i;
+      level = m[1].length;
+    }
+  }
+  return start >= 0 ? lines.slice(start).join('\n') : null;
+}
+
 /** The bits of a hast tree the heading-id plugin touches. */
 interface HastNode {
   type?: string;

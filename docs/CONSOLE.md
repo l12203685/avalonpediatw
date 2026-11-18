@@ -32,7 +32,7 @@
 | 站長更正 | `packages/server/game_db_corrections.json` | console:apply（站長的裁定） | 套用後問題消失 |
 | ProAvalon（外部） | `packages/server/proavalon_games.json` | 預設不進總庫（2026-11-18） | 不顯示（`--with-proavalon` 才有） |
 | 百科文章 | `packages/server/wiki_data.json` | 人工／PR | 文章清單 |
-| 觀念卡 | `packages/server/src/bots/threads/concepts.json` | PR；之後 `concepts:apply` | 觀念卡 |
+| 觀念卡 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply`（docs/CONCEPTS.md） | 觀念卡 |
 | Threads 題庫 | `packages/server/sim_bank.json` | `buildSimBank.ts` | 一週草稿 |
 | Threads 選題 | `packages/server/threads_picks.json` | console:apply | 一週草稿、選局頁 |
 | Threads 正式發開關 | `packages/server/threads_live.json` | console:apply | 開關狀態 |
@@ -66,7 +66,7 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 | `game_counts.json` | 依種類／狀態的局數、錯誤局、問題分組數、「要注意」計數；`dbVersion` = commit；`gameDbInSync` | 牌譜數量（`meta/gameCounts`） |
 | `concepts.json` | 觀念卡庫照抄；沒有卡庫時 `available: false` | 觀念卡 |
 | `wiki_index.json` | 每篇文章的 id、標題、分類、章節（錨點與深連結）、網址、最後修改的 commit／日期 | 文章同步 |
-| `week_drafts.json` ＋ `week_drafts/*.png` | 從 `--date` 起 7 天：貼文、第一則留言、圖、`parts`（範本佔位符的內容）、`frozen`；實際套用的範本與佔位符說明 | 一週草稿、範本編輯 |
+| `week_drafts.json` ＋ `week_drafts/*.png` | 從 `--date` 起 7 天：貼文、第一則留言、圖、`parts`（範本佔位符的內容，都是字串）、`type`（題型 `{ kind, name }`，#89 的 `draft.parts.type`）、`frozen`；實際套用的範本與佔位符說明 | 一週草稿、範本編輯 |
 | `manifest.json` | `sourceSha`（來源 commit，同 `source.sha`；另有 `dirty`）、`generatedAt`（產生時間，ISO、UTC）、每個檔的數量、注意事項 | 頁首「鏡像自 main @sha」與右上角的時間戳記 |
 
 問題牌譜的分組（照 2026-11-17 第一版整理腳本移植，`test_console_export.py` 鎖住跟舊腳本一致）：
@@ -100,7 +100,7 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 | 選題：`picks/<日期>` 的 `exerciseId` | `packages/server/threads_picks.json` 的 `picks` | Claude 手動 | export 的那一天 `exerciseId` 變成選的題號 |
 | 草稿：`drafts/<日期>` 的 `commentEdit` | `docs/threads/comments/<日期>.md`（格式見那個資料夾的 README） | Claude 手動 | export 的 `commentSource` 變成 `file` |
 | 草稿：`drafts/<日期>` 的 `postEdit`、`note` | 沒有對應的檔：貼文是產生的。改成選題、範本或程式的修改再套用；做不到就回寫 `applyError` | Claude 判斷 | — |
-| 觀念卡編輯 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply`（另一個分支正在做） | export 的 `concepts.json` |
+| 觀念卡編輯 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply <edits.json>`（格式與驗證見 [docs/CONCEPTS.md](CONCEPTS.md)；`concepts:export` 另給每張卡的待複查旗標與章節目錄） | export 的 `concepts.json`、`concepts:check` 待複查 0 |
 | 玩家別名：`aliasDecisions/<key>` | `packages/server/player_aliases.json` | Claude 手動 | 每晚的快取更新合併那位玩家 |
 | 收件匣：`items/<id>` 的 `reply`、`status` | 看內容：多半是開 issue 或 PR | Claude 判斷 | 回寫 `appliedSha` 或關聯的 PR |
 

@@ -68,7 +68,7 @@ function makeGenerator(stateDir: string, warnings: string[], template?: ThreadsT
     hasPost: postedFromState(stateDir),
     startDate: arg('--start', process.env.THREADS_LIVE_FROM || process.env.THREADS_START_DATE || THREADS_START_DATE),
     pickOverride: (date) => picks.get(date) ?? null,
-    ...(template ? { postTemplate: template.post } : {}),
+    ...(template ? { template } : {}),
   });
 }
 
@@ -132,7 +132,7 @@ async function main(): Promise<number> {
     const gen = makeGenerator(stateDir, warnings, template);
     const plan = prepareDaily(date, {
       gen,
-      commentTemplate: template.comment,
+      template,
       stateDir,
       outDir,
       commentsDir: path.resolve(arg('--comments', path.join(repoRoot, 'docs', 'threads', 'comments'))),
