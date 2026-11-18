@@ -21,7 +21,7 @@ import type { ThreadsDraft } from '../draft';
 import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, postTitle } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday, weekdayOf } from '../plan';
-import { DEFAULT_COMMENT_TEMPLATE, commentBody, normalizeTemplate, renderTemplate, type CommentParts } from '../template';
+import { DEFAULT_COMMENT_TEMPLATE, commentBody, normalizeTemplate, renderTemplate, templateFor, type CommentParts, type ThreadsTemplate } from '../template';
 import type { ThreadsApi, RecentPost } from './threadsApi';
 import { INSTAGRAM_CAPTION_MAX, INSTAGRAM_CAROUSEL_MAX, type InstagramApi, type RecentMedia } from './instagramApi';
 
@@ -274,6 +274,8 @@ export interface PrepareDeps {
   imageIncomplete?: (date: string, images: readonly string[]) => string | null;
   /** 第一則留言的範本（threads_template.json 的 comment；不給＝內建格式）。 */
   commentTemplate?: string;
+  /** 整份格式（含各題型的 byType）：給了就照這一天的題型挑留言格式，蓋過 commentTemplate。 */
+  template?: ThreadsTemplate;
   warnings?: string[];
 }
 
@@ -319,7 +321,8 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
 
   const chatgpt = readComment(deps.commentsDir, date);
   if (!chatgpt) warnings.push(`沒有 ChatGPT 寫的留言（${path.basename(deps.commentsDir)}/${date}.md），用備案`);
-  const formatted = chatgpt ? commentText(chatgpt, draft, deps.commentTemplate) : null;
+  const commentTemplate = deps.template ? templateFor(deps.template, draft.pick.kind).comment : deps.commentTemplate;
+  const formatted = chatgpt ? commentText(chatgpt, draft, commentTemplate) : null;
   if (formatted?.warning) warnings.push(formatted.warning);
   const comment = formatted?.text ?? fallbackComment(draft);
 
