@@ -64,6 +64,19 @@ describe('earlyWhite49', () => {
     expect(earlyWhiteTuning49(T({ earlyWhite49: 0.4 }), r2({ currentRound: 3 })).loyalTailWhite).toBe(DEFAULT_AGENT_TUNING.loyalTailWhite);
     expect(earlyWhiteTuning49(T(), r2()).loyalTailWhite).toBe(DEFAULT_AGENT_TUNING.loyalTailWhite);
   });
+  it('mix (§1C 50%): about half of the R2 states keep the default threshold, the same state always the same way', () => {
+    const t = T({ earlyWhite49: 0.4, earlyWhite49Mix: 1 });
+    let on = 0;
+    for (let i = 0; i < 200; i++) {
+      const o = r2({ myPlayerId: `P${(i % 10) + 1}`, failCount: i % 4, proposedTeam: [`P${(i % 9) + 1}`, `P${((i + 3) % 9) + 1}`, 'P10', `X${i}`] } as Partial<PlayerObservation>);
+      const a = earlyWhiteTuning49(t, o).loyalTailWhite;
+      expect(earlyWhiteTuning49(t, o).loyalTailWhite).toBe(a);
+      if (a === 0.4) on++;
+    }
+    expect(on).toBeGreaterThan(70);
+    expect(on).toBeLessThan(130);
+    expect(parseTuningFlag('earlyWhite49Mix')).toEqual({ earlyWhite49Mix: 1 });
+  });
 });
 
 describe('goodCleanLeadR4Fix49', () => {
