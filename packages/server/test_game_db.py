@@ -455,6 +455,33 @@ class MainTest(unittest.TestCase):
             self.assertEqual(gd.main(["--games", str(d / "none.json")] + args[2:]), 1)
             self.assertEqual(out.read_text(encoding="utf-8"), "old")
 
+    def test_proavalon_is_left_out_unless_turned_back_on(self):
+        # 站長 2026-11-18「我看ProAvalon 的局基本上很多都在亂玩 其實可以考慮刪掉了」: off by default, reversible.
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "games.json").write_text(json.dumps({"fields": [], "vocab": {}, "games": []}), encoding="utf-8")
+            (d / "records.json").write_text(json.dumps({"posts": []}), encoding="utf-8")
+            pa_doc = {"games": [{"id": "abc123", "date": "2021-01-01", "venue": "線瓦", "flags": [], "game": GOOD}]}
+            (d / "pa.json").write_text(json.dumps(pa_doc, ensure_ascii=False), encoding="utf-8")
+            out, report = d / "db.json", d / "r.md"
+            args = ["--games", str(d / "games.json"), "--records", str(d / "records.json"),
+                    "--snapshot", str(d / "x.json"), "--sim-bank", str(d / "x.json"), "--proavalon", str(d / "pa.json"),
+                    "--corrections", str(d / "x.json"), "--output", str(out), "--check-report", str(report)]
+            self.assertFalse(gd.INCLUDE_PROAVALON)
+            self.assertEqual(gd.main(args), 0)
+            db = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual((db["games"], db["counts"]["external"]), ([], 0))
+            text = report.read_text(encoding="utf-8")
+            self.assertIn("ProAvalon（停用）", text)
+            self.assertIn("--with-proavalon", text)
+            self.assertNotIn("| 外部 |", text)
+            self.assertEqual(gd.main(args + ["--with-proavalon"]), 0)
+            db = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual([(g["id"], g.get("external")) for g in db["games"]], [("Pabc123", True)])
+            text = report.read_text(encoding="utf-8")
+            self.assertIn("ProAvalon（匿名）", text)
+            self.assertNotIn("停用", text)
+
 
 class WorkflowTest(unittest.TestCase):
     def test_nightly_workflow_builds_and_commits_the_database(self):
