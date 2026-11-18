@@ -25,6 +25,10 @@ Configuration (environment variables, all optional, checked in this order):
     player_aliases.json (next to this script, owner-directed data): {"aliases": {old
     spelling: official name}}: the two are one player, shown under the official name
     (load_player_aliases; docs/stats/two_stage_outcome.md 玩家別名). No file = no aliases.
+    Its "splits" ({name: [{"as", "games" / "from" / "to" / "venue", "seat"}]}) do the
+    opposite: the seats of the games a rule picks are another person, shown as "as"
+    (parse_player_splits, apply_player_splits; a Discord post id is mapped through
+    game_db.json). Candidates come from name_collisions.py (private console only).
 
 Where each top-level section comes from:
     refreshed from the Sheet  overview, players, playerDetails, missions, lake,
@@ -133,6 +137,7 @@ import argparse
 import bisect
 import contextlib
 import copy
+import dataclasses
 import datetime as dt
 import functools
 import gzip
@@ -174,6 +179,8 @@ GAMES_OUTPUT_PATH = OUTPUT_PATH.with_name(GAMES_OUTPUT_NAME)
 SCRIPTS_DIR = Path(__file__).resolve().parent / "scripts"
 # Owner-directed player aliases (source spelling -> official name), see load_player_aliases.
 ALIASES_PATH = Path(__file__).resolve().parent / "player_aliases.json"
+# 牌譜總庫 (game_db.py, previous run): maps a Discord post id a split rule lists to the stats game ids.
+GAME_DB_PATH = Path(__file__).resolve().parent / "game_db.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 ENV_CREDENTIALS_FILE = "AVALON_STATS_CREDENTIALS_FILE"
@@ -699,6 +706,9 @@ class PlayerAliases:
     names: Mapping[str, str] = field(default_factory=dict)
     keys: Mapping[str, str] = field(default_factory=dict)
     official: Mapping[str, str] = field(default_factory=dict)
+    # "splits" of the file (parse_player_splits): seats of some games that belong to another person
+    # than the name says (a stranger who used the same nickname). Applied before the aliases.
+    splits: tuple["PlayerSplit", ...] = ()
 
     def identity_key(self, name: object) -> str:
         """player_name_key, or the official name's key when the name is an alias source."""
@@ -709,13 +719,209 @@ class PlayerAliases:
 NO_ALIASES = PlayerAliases()
 
 
+# ---------------------------------------------------------------------------
+# Player splits (player_aliases.json "splits"): one name, two people (站長 2026-11-18
+# 「有路人取同id 的話怎麼分辨?」). The opposite of an alias: the seats of the games a rule picks are
+# attributed to the rule's "as" name, so a stranger's games stop counting for the regular player.
+# ---------------------------------------------------------------------------
+
+SPLIT_RULE_KEYS = frozenset({"as", "games", "from", "to", "venue", "seat", "note"})
+# Game ids a split rule may list: game_db.py's public ids of the two sources the stats read
+# (S<流水號> = 牌譜 tab, D<10 hex> = Discord匯入 tab), a bare 流水號, or a Discord post id (the
+# website's 牌譜紀錄 id; resolve_split_post_ids maps it to the S / D id through game_db.json).
+_SPLIT_SHEET_ID_RE = re.compile(r"^[Ss]?(\d{1,9})$")
+_SPLIT_IMPORT_ID_RE = re.compile(r"^D[0-9a-f]{10}$")
+_SPLIT_POST_ID_RE = re.compile(r"^\d{15,21}$")
+_ISO_DAY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@dataclass(frozen=True)
+class PlayerSplit:
+    """One rule of player_aliases.json "splits": the seats where `name` (any spelling of its player,
+    aliases included: `key` = player_identity_key) sits in a game the rule picks are another person,
+    shown as `as_name`. A game is picked when its id is in `games`, or when the rule has a filter
+    (`date_from` / `date_to` / `venue` = the game's 分類) and the game passes every filter. `seat`
+    ("1".."0", optional) limits the rule to that seat (one game listing the name on two seats)."""
+
+    name: str
+    key: str
+    as_name: str
+    games: frozenset[str] = frozenset()
+    date_from: str = ""
+    date_to: str = ""
+    venue: str = ""
+    seat: str = ""
+    post_ids: frozenset[str] = frozenset()  # Discord post ids in `games`, before resolve_split_post_ids
+
+    @property
+    def has_filter(self) -> bool:
+        return bool(self.date_from or self.date_to or self.venue)
+
+    def picks(self, g: "GameRow") -> bool:
+        if split_game_id(g) in self.games:
+            return True
+        if not self.has_filter:
+            return False
+        date = getattr(g, "date", "") or ""
+        if (self.date_from or self.date_to) and not date:
+            return False
+        if self.date_from and date < self.date_from:
+            return False
+        if self.date_to and date > self.date_to:
+            return False
+        return not self.venue or (getattr(g, "category", "") or "").strip() == self.venue
+
+
+def split_game_id(g: "GameRow") -> str:
+    """The id a split rule names a stats game by: game_db.py's public id (S<流水號> for the 牌譜 tab,
+    the games dataset's D<hash> for Discord匯入)."""
+    gid = str(g.id)
+    if g.source == GAME_SOURCE_SHEET and gid.isascii() and gid.isdigit():
+        return "S" + gid
+    return _dataset_game_id(g)
+
+
+def normalize_split_game_id(raw: object) -> str:
+    """A game id as a split rule may write it -> S<流水號> / D<hash> / a Discord post id; '' = not a
+    game id the stats know (a 模擬瓦 M id, a ProAvalon P id, anything else)."""
+    text = unicodedata.normalize("NFKC", str(raw)).strip() if isinstance(raw, str) else ""
+    if _SPLIT_POST_ID_RE.match(text):
+        return text
+    m = _SPLIT_SHEET_ID_RE.match(text)
+    if m:
+        return "S" + str(int(m.group(1)))
+    return text if _SPLIT_IMPORT_ID_RE.match(text) else ""
+
+
+def _valid_iso_day(text: object) -> bool:
+    if not isinstance(text, str) or not _ISO_DAY_RE.match(text):
+        return False
+    try:
+        dt.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def parse_player_splits(raw: Any, aliases: PlayerAliases, show_names: bool = True) -> tuple[PlayerSplit, ...]:
+    """The "splits" section ({name: [{"as": new name, "games": [ids], "from", "to", "venue", "seat",
+    "note"}, ...]}) as PlayerSplit rules in file order, or ValueError saying what is wrong. `aliases`:
+    the same file's aliases (a split names a player by any of his spellings). Rules: the name and
+    "as" are non-empty and are not one player; "as" is no alias source (it would be merged back) and
+    no split's name; one entry per player; each rule picks games by "games" (ids: S<流水號>, D<hash>,
+    a bare 流水號 or a Discord post id) and/or a filter ("from" / "to" YYYY-MM-DD, "venue" = 分類);
+    a game id appears in one rule of a name only. `show_names` False: entries by number only."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, Mapping):
+        raise ValueError('"splits" is not an object of "name": [rules]')
+    rules: list[PlayerSplit] = []
+    split_keys: dict[str, int] = {}
+    entries = list(raw.items())
+    for i, (name, items) in enumerate(entries, 1):
+        where = f"splits entry {i}" + (f" ({name!r})" if show_names else "")
+        if not isinstance(name, str) or not player_name_key(normalize_player_name(name)):
+            raise ValueError(f"{where}: the name must be a non-empty string")
+        tidy = normalize_player_name(name)
+        key = aliases.identity_key(tidy)
+        if key in split_keys:
+            raise ValueError(f"{where}: splits entry {split_keys[key]} is the same player; put all rules in one entry")
+        split_keys[key] = i
+        if not isinstance(items, list) or not items:
+            raise ValueError(f"{where}: needs a non-empty list of rules")
+        seen: dict[str, int] = {}
+        for j, rule in enumerate(items, 1):
+            at = f"{where} rule {j}"
+            if not isinstance(rule, Mapping):
+                raise ValueError(f"{at}: a rule is an object with \"as\" and \"games\" (or from / to / venue)")
+            unknown = sorted(str(k) for k in rule if k not in SPLIT_RULE_KEYS)
+            if unknown:
+                raise ValueError(f"{at}: unknown field(s) {', '.join(unknown)} (allowed: {', '.join(sorted(SPLIT_RULE_KEYS))})")
+            as_raw = rule.get("as")
+            as_name = normalize_player_name(as_raw) if isinstance(as_raw, str) else ""
+            if not player_name_key(as_name):
+                raise ValueError(f"{at}: \"as\" (the other person's name) must be a non-empty string")
+            if aliases.identity_key(as_name) == key:
+                raise ValueError(f"{at}: \"as\" is the same player as the name; pick a name that tells them apart")
+            if player_name_key(as_name) in aliases.keys:
+                raise ValueError(f"{at}: \"as\" is an alias source (it would be merged back); use the official name")
+            games_raw = rule.get("games", [])
+            if not isinstance(games_raw, list) or not all(isinstance(x, str) for x in games_raw):
+                raise ValueError(f"{at}: \"games\" must be a list of game ids (strings)")
+            games: set[str] = set()
+            posts: set[str] = set()
+            for raw_id in games_raw:
+                gid = normalize_split_game_id(raw_id)
+                if not gid:
+                    raise ValueError(f"{at}: {raw_id!r} is not a game id of the stats (S<流水號>, D<hash>, "
+                                     "a 流水號 or a Discord post id)")
+                if gid in seen and seen[gid] != j:
+                    raise ValueError(f"{at}: game {gid} is already in rule {seen[gid]} of this name")
+                seen[gid] = j
+                games.add(gid)
+                if _SPLIT_POST_ID_RE.match(gid):
+                    posts.add(gid)
+            date_from, date_to = rule.get("from", ""), rule.get("to", "")
+            for label, day in (("from", date_from), ("to", date_to)):
+                if day != "" and not _valid_iso_day(day):
+                    raise ValueError(f"{at}: \"{label}\" must be a day YYYY-MM-DD")
+            if date_from and date_to and date_from > date_to:
+                raise ValueError(f"{at}: \"from\" is after \"to\"")
+            venue = rule.get("venue", "")
+            if not isinstance(venue, str) or (venue and not venue.strip()):
+                raise ValueError(f"{at}: \"venue\" must be a 分類 such as 線瓦 / 面瓦")
+            seat = rule.get("seat", "")
+            seat = str(seat) if isinstance(seat, int) and not isinstance(seat, bool) else seat
+            if seat != "" and seat not in SEATS:
+                raise ValueError(f"{at}: \"seat\" must be one of 1..9, 0")
+            note = rule.get("note", "")
+            if not isinstance(note, str):
+                raise ValueError(f"{at}: \"note\" must be a string")
+            if not games and not (date_from or date_to or venue.strip()):
+                raise ValueError(f"{at}: picks no game; give \"games\" and/or a filter (from / to / venue)")
+            rules.append(PlayerSplit(name=tidy, key=key, as_name=as_name, games=frozenset(games),
+                                     date_from=date_from, date_to=date_to, venue=venue.strip(), seat=seat,
+                                     post_ids=frozenset(posts)))
+    for i, rule in enumerate(rules, 1):
+        if aliases.identity_key(rule.as_name) in split_keys:
+            raise ValueError(f"splits rule {i}" + (f" ({rule.name!r} -> {rule.as_name!r})" if show_names else "")
+                             + ": \"as\" is itself a split name (no chains: give the other person a name of his own)")
+    return tuple(rules)
+
+
+def resolve_split_post_ids(aliases: PlayerAliases, game_db: Mapping[str, Any] | None) -> PlayerAliases:
+    """`aliases` with every Discord post id of a split rule resolved to the stats ids of the same game
+    (game_db.json: a row whose id or source id is the post lists its 牌譜 / Discord匯入 sources).
+    Unresolved post ids stay as they are (they pick nothing; split_report counts them)."""
+    if not aliases.splits or not any(r.post_ids for r in aliases.splits):
+        return aliases
+    by_id: dict[str, set[str]] = {}
+    for row in (game_db or {}).get("games", []) if isinstance(game_db, Mapping) else []:
+        if not isinstance(row, Mapping):
+            continue
+        sources = [s for s in row.get("sources", []) if isinstance(s, Mapping)]
+        stats = {str(s.get("id")) for s in sources if s.get("src") in ("sheet", "dc_import")}
+        if not stats:
+            continue
+        for gid in {str(row.get("id", ""))} | {str(s.get("id", "")) for s in sources}:
+            by_id.setdefault(gid, set()).update(stats)
+    rules = []
+    for r in aliases.splits:
+        found = {p for p in r.post_ids if p in by_id}
+        if found:
+            r = dataclasses.replace(r, games=(r.games - found) | frozenset(x for p in found for x in by_id[p]),
+                                    post_ids=r.post_ids - found)
+        rules.append(r)
+    return dataclasses.replace(aliases, splits=tuple(rules))
+
+
 def _alias_entry(i: int, source: object, target: object, show_names: bool) -> str:
     return f"aliases entry {i}" + (f" ({source!r}: {target!r})" if show_names else "")
 
 
 def parse_player_aliases(data: Any, show_names: bool = True) -> PlayerAliases:
-    """The aliases of a player_aliases.json document ({"aliases": {source: official name}}), or
-    ValueError saying what is wrong. Each entry: two non-empty names (spaces and zero-width
+    """The aliases of a player_aliases.json document ({"aliases": {source: official name}}, plus the
+    optional "splits", parse_player_splits), or ValueError saying what is wrong. Each entry: two non-empty names (spaces and zero-width
     characters tidied as in 玩1..玩0) that are not already one player (same player_name_key); one
     official name per source; an official name is no entry's source (no chains: point every old
     spelling straight at the official name) and is spelled one way. `show_names` False (GitHub
@@ -747,7 +953,9 @@ def parse_player_aliases(data: Any, show_names: bool = True) -> PlayerAliases:
         if player_name_key(normalize_player_name(target)) in keys:
             raise ValueError(f"{_alias_entry(i, source, target, show_names)}: the official name is itself an alias "
                              "(the source of another entry); point every old spelling straight at the official name")
-    return PlayerAliases(names=names, keys=keys, official=official)
+    aliases = PlayerAliases(names=names, keys=keys, official=official)
+    splits = parse_player_splits(data.get("splits"), aliases, show_names)
+    return dataclasses.replace(aliases, splits=splits) if splits else aliases
 
 
 def load_player_aliases(path: Path | None = None, show_names: bool | None = None) -> PlayerAliases:
@@ -831,6 +1039,9 @@ class NameMerge:
     # The aliases whose official name is a player of these games ({source: official name}, file
     # order): build_cache writes them as players.aliases for the readers (bots, API, website search).
     aliases: dict[str, str] = field(default_factory=dict)
+    # player_aliases.json "splits" (apply_player_splits): the result of this call. Counts for the log;
+    # split_moves (split name as written -> seats moved to another person) lets the guard accept the drop.
+    splits: "SplitResult | None" = None
 
     @property
     def merged_players(self) -> int:
@@ -862,6 +1073,8 @@ class NameMerge:
         if self.aliased:
             text += (f"; {self.aliased_names} name(s) shown under their official name "
                      f"({ALIASES_PATH.name}, {self.aliased_players} player(s))")
+        if self.splits and self.splits.rules:
+            text += f"; {self.splits.summary()}"
         if self.doubled_games:
             text += f"; {self.doubled_games} game(s) list one player on two seats (check 玩1..玩0)"
         return text
@@ -881,7 +1094,13 @@ def canonicalize_player_names(
     stats, theory) is aggregated from these names, so they all merge the same way. Games whose names
     change are copied; the input is untouched. Idempotent: canonical games come back unchanged (the
     same list).
+
+    The splits of `aliases` (player_aliases.json "splits", apply_player_splits) go first: a seat a rule
+    picks is renamed to the rule's "as" name, so those games count for another person; NameMerge.splits
+    says what they did.
     """
+    original = games
+    games, split_result = apply_player_splits(games, aliases)
     counts: dict[str, Counter] = {}  # identity key -> spelling -> seats
     by_name_key: dict[str, set[str]] = {}  # player_name_key -> spellings
     first_seen: dict[str, int] = {}
@@ -904,7 +1123,7 @@ def canonicalize_player_names(
             by_name_key.setdefault(name_key, set()).add(name)
             first_seen.setdefault(name, len(first_seen))
         doubled += len(keys) < seated
-    merge = NameMerge(doubled_games=doubled, aliased=aliased)
+    merge = NameMerge(doubled_games=doubled, aliased=aliased, splits=split_result)
     shown = {
         key: aliases.official.get(key) or min(spellings, key=lambda s: (-spellings[s], first_seen[s]))
         for key, spellings in counts.items()
@@ -917,7 +1136,7 @@ def canonicalize_player_names(
             merge.display.setdefault(source_key, shown[key])
     merge.aliases = {s: t for s, t in aliases.names.items() if aliases.identity_key(s) in shown}
     out: list[GameRow] = []
-    changed = False
+    changed = split_result.games_changed > 0
     for g in games:
         renamed = {seat: merge.display[player_name_key(name)] for seat, name in g.seat_players.items()}
         if renamed != g.seat_players:
@@ -925,7 +1144,81 @@ def canonicalize_player_names(
             g.seat_players = renamed
             changed = True
         out.append(g)
-    return (out if changed else games), merge
+    return (out if changed else original), merge
+
+
+@dataclass
+class SplitResult:
+    """What apply_player_splits did (counts, game ids and the split names; names stay out of public logs)."""
+
+    rules: int = 0
+    seats: int = 0  # seats renamed to a rule's "as" name
+    games_changed: int = 0
+    # split name as written in the file -> seats moved away from that player (the guard's allowance)
+    moves: dict[str, int] = field(default_factory=dict)
+    per_rule: list[int] = field(default_factory=list)  # seats each rule renamed (file order)
+    # ids listed in a rule that are in none of the games (typo, a game not in the stats, an
+    # unresolved Discord post id) and listed games where the name is on no seat (or not on "seat")
+    unknown_ids: list[str] = field(default_factory=list)
+    name_absent: list[str] = field(default_factory=list)
+
+    def summary(self) -> str:
+        """Counts only (public logs)."""
+        text = (f"{self.rules} split rule(s) ({ALIASES_PATH.name}): {self.seats} seat(s) in "
+                f"{self.games_changed} game(s) counted for another person")
+        if self.unknown_ids:
+            text += f"; {len(self.unknown_ids)} listed game id(s) not in the stats"
+        if self.name_absent:
+            text += f"; {len(self.name_absent)} listed game(s) without that name"
+        idle = sum(1 for n in self.per_rule if n == 0)
+        if idle:
+            text += f"; {idle} rule(s) matched nothing"
+        return text
+
+
+def apply_player_splits(games: list[GameRow], aliases: PlayerAliases = NO_ALIASES) -> tuple[list[GameRow], SplitResult]:
+    """`games` with the seats the splits of `aliases` pick renamed to the rule's "as" name (first rule of
+    the name that picks the game wins), plus what was done. A seat is picked when its name is the rule's
+    player (player_identity_key: any spelling, aliases included), the rule picks the game (PlayerSplit.picks)
+    and, with "seat", it is that seat. Changed games are copied; the input is untouched. Idempotent: a
+    renamed seat holds another player's name, so a second pass changes nothing."""
+    result = SplitResult(rules=len(aliases.splits), per_rule=[0] * len(aliases.splits))
+    if not aliases.splits:
+        return games, result
+    by_key: dict[str, list[tuple[int, PlayerSplit]]] = defaultdict(list)
+    for i, rule in enumerate(aliases.splits):
+        by_key[rule.key].append((i, rule))
+    listed: dict[str, list[tuple[int, PlayerSplit]]] = defaultdict(list)
+    for i, rule in enumerate(aliases.splits):
+        for gid in rule.games:
+            listed[gid].append((i, rule))
+    seen_ids: set[str] = set()
+    out: list[GameRow] = []
+    for g in games:
+        gid = split_game_id(g)
+        seen_ids.add(gid)
+        renamed = dict(g.seat_players)
+        hit_rules: set[int] = set()
+        for seat, name in g.seat_players.items():
+            for i, rule in by_key.get(aliases.identity_key(name), ()):
+                if (not rule.seat or rule.seat == seat) and rule.picks(g):
+                    renamed[seat] = rule.as_name
+                    hit_rules.add(i)
+                    result.seats += 1
+                    result.per_rule[i] += 1
+                    result.moves[rule.name] = result.moves.get(rule.name, 0) + 1
+                    break
+        for i, rule in listed.get(gid, ()):
+            if i not in hit_rules:
+                result.name_absent.append(gid)
+        if renamed != g.seat_players:
+            g = copy.copy(g)
+            g.seat_players = renamed
+            result.games_changed += 1
+        out.append(g)
+    result.unknown_ids = sorted(gid for gid in listed if gid not in seen_ids)
+    result.name_absent = sorted(set(result.name_absent))
+    return (out if result.games_changed else games), result
 
 
 def canonicalize_bot_games(
@@ -5624,6 +5917,21 @@ def explained_by_rewrites(regressions: Sequence[tuple[str, float, float | None]]
     return max(drops) <= rewritten_rows and sum(drops) <= PLAYERS_PER_GAME * rewritten_rows
 
 
+def explained_by_splits(
+    regressions: Sequence[tuple[str, float, float | None]], split_moves: Mapping[str, int] | None,
+    aliases: PlayerAliases = NO_ALIASES,
+) -> list[tuple[str, float, float | None]]:
+    """`regressions` without the drops the owner's splits explain: a player (matched by identity key,
+    `aliases` = cache_aliases of both caches) may lose up to as many games as this run's splits moved
+    from that name to another person (player_aliases.json "splits"; SplitResult.moves)."""
+    if not split_moves or not regressions:
+        return list(regressions)
+    allowed: Counter = Counter()
+    for name, moved in split_moves.items():
+        allowed[aliases.identity_key(name)] += moved
+    return [r for r in regressions if r[1] - (r[2] or 0.0) > allowed.get(aliases.identity_key(r[0]), 0)]
+
+
 def theory_mismatches(cache: Mapping[str, Any]) -> list[str]:
     """Names whose players row has a `theory` block that contradicts the row: not an object, or
     theory.career.games != totalGames (a timeline that lost or gained games). Rows without
@@ -5648,8 +5956,12 @@ def validate_new_cache(
     rewritten_rows: int = 0,
     show_names: bool = True,
     rewritten_duplicates: int = 0,
+    split_moves: Mapping[str, int] | None = None,
 ) -> list[str]:
     """Problems that make `cache` unfit to replace `previous` ([] = OK to write).
+
+    `split_moves`: SplitResult.moves of this run (player_aliases.json "splits": split name -> seats now
+    counted for another person). A player may drop by up to that many games (explained_by_splits).
 
     `rewritten_rows`, `rewritten_duplicates`: GameLogMerge.rewritten_since the day of `previous`.
     A Discord匯入 row rewritten from an edited post (a corrected player id) takes a game away from
@@ -5699,7 +6011,8 @@ def validate_new_cache(
                 "games are only ever appended to 牌譜, so rows were deleted or became unreadable "
                 "(流水號 blank or 配置 not 6 characters?); if that is intended, re-run with --allow-shrink"
             )
-        regressions = games_regressions(cache, previous)
+        regressions = explained_by_splits(games_regressions(cache, previous), split_moves,
+                                          cache_aliases(previous, cache))
         explained = explained_by_rewrites(regressions, rewritten_rows)
         if not explained:
             if show_names:
@@ -5989,7 +6302,11 @@ def run(
     print(f"Leaderboard as of: {as_of.isoformat()}" + (f" (from {ENV_AS_OF})" if os.environ.get(ENV_AS_OF) else ""))
 
     aliases = load_player_aliases()  # before the Sheet: a malformed file fails fast (exit 2)
-    print(f"Player aliases ({ALIASES_PATH.name}): {len(aliases.names)}")
+    print(f"Player aliases ({ALIASES_PATH.name}): {len(aliases.names)}"
+          + (f"; split rules: {len(aliases.splits)}" if aliases.splits else ""))
+    if any(r.post_ids for r in aliases.splits):
+        with contextlib.suppress(OSError, ValueError):
+            aliases = resolve_split_post_ids(aliases, json.loads(GAME_DB_PATH.read_text(encoding="utf-8")))
     previous = load_previous_cache(output_path, allow_shrink)
     merged, chemistry = fetch_sheet_data(source, sheet_id)
     # Discord匯入 rows rewritten from an edited post (a corrected player id) since the existing cache.
@@ -6008,6 +6325,16 @@ def run(
                           f"（{names.aliased_players} 位玩家）")
     if names.doubled_games:
         name_lines.append(f"- 同一位玩家同時坐兩個座位的局：{names.doubled_games}（請檢查那幾局的 玩1～玩0）")
+    split_moves = names.splits.moves if names.splits else {}
+    if names.splits and names.splits.rules:  # counts only
+        sr = names.splits
+        line = (f"- {ALIASES_PATH.name} 的拆分（同名不同人）：{sr.rules} 條規則，{sr.games_changed} 局的 {sr.seats} 個座位"
+                "改算另一位玩家")
+        if sr.unknown_ids:
+            line += f"；{len(sr.unknown_ids)} 個局號不在統計裡"
+        if sr.name_absent:
+            line += f"；{len(sr.name_absent)} 局沒有那個名字"
+        name_lines.append(line)
     # The game-level dataset (複合篩選): the same games, their timeline order fixed over all of them.
     games = assign_timeline_dates(games)
     # 百科AI 局（Edward 2026-11-03「有百科AI的另外算」）只附在資料集最後面，分析快取完全不看。
@@ -6020,7 +6347,8 @@ def run(
     )
 
     show_names = not _in_github_actions()  # the Actions log and job summary are public
-    problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss, rewritten, show_names, rewritten_dups)
+    problems = validate_new_cache(cache, previous, allow_shrink, allow_field_loss, rewritten, show_names, rewritten_dups,
+                                  split_moves=split_moves)
     refusal = f"Refusing to overwrite {output_path.name}:\n- " + "\n- ".join(problems)
     # 不論本機或 CI，資料集檢查均只回報計數與欄位路徑。
     dataset_problems = [] if problems else games_dataset_problems(dataset, cache, games, as_of)

@@ -76,6 +76,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import discord_records_import as dri
 import generate_cache as gc
+import name_collisions as nc
 import records_merge as rm
 import voting_stats as vs
 
@@ -934,9 +935,35 @@ def coverage(rows: Sequence[Mapping[str, Any]], snapshot: Any, sim_bank: Any, re
     return out
 
 
+def split_games(rows: Sequence[Mapping[str, Any]], excluded: Sequence[Mapping[str, Any]],
+                splits: Sequence["gc.PlayerSplit"]) -> dict[str, Any]:
+    """player_aliases.json "splits" against the database (no names: rule numbers and game ids only). Every game id
+    a rule lists (S<流水號> / D<hash> / a Discord post id) is looked up among the rows' ids and source ids: ``games``
+    = the database games the rules name, ``missing`` = ids no row has (typo, or a game that is not in the stats),
+    ``excluded`` = ids of 錯誤局 (left out of the database and the stats). Filter rules (from / to / venue) pick
+    games by date / 分類 when generate_cache.py runs; they are counted, not resolved here."""
+    known: dict[str, str] = {}
+    for r in rows:
+        known[r["id"]] = r["id"]
+        for s in r["sources"]:
+            known[s["id"]] = r["id"]
+    gone = {sid for e in excluded for sid in [e["id"], *e.get("sources", [])]}
+    listed = sorted({gid for rule in splits for gid in rule.games})
+    hit = sorted({known[g] for g in listed if g in known})
+    return {
+        "rules": len(splits),
+        "filterRules": sum(1 for rule in splits if rule.has_filter),
+        "listed": len(listed),
+        "games": hit,
+        "missing": [g for g in listed if g not in known and g not in gone],
+        "excluded": [g for g in listed if g in gone],
+    }
+
+
 def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], cov: Mapping[str, Any], path: Path,
                  excluded: Sequence[Mapping[str, Any]] = (), hammer: int = 0,
-                 corrections: Sequence[Mapping[str, Any]] = (), proavalon_off: bool = False) -> None:
+                 corrections: Sequence[Mapping[str, Any]] = (), proavalon_off: bool = False,
+                 collisions: Mapping[str, Any] | None = None, splits: Mapping[str, Any] | None = None) -> None:
     """docs/data/game_db_report.md: counts by rule and the list of games to look at (ids only)."""
     L: list[str] = []
     L.append("# 牌譜總庫：檢查報告")
@@ -1060,6 +1087,19 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
     L.append(f"- 推定了一部分、還有別的提議對不上：{len(part)} 局")
     L.append(f"- 剩下要站長判斷的：{len(orig) - len(full)} 局（編號在下面「`VOTE_RESULT`」一節）")
     L.append("")
+    if collisions is not None:
+        L.extend(nc.report_lines(collisions))
+    if splits and splits["rules"]:
+        L.append("### 已拆開的同名玩家（`player_aliases.json` 的 `splits`）")
+        L.append("")
+        L.append(f"站長確認是兩個人的名字：{splits['rules']} 條規則（其中 {splits['filterRules']} 條用日期／分類篩選），"
+                 f"列出的 {splits['listed']} 個局號對到總庫的 {len(splits['games'])} 局；那些座位在戰績裡算另一位玩家"
+                 "（`generate_cache.py` 每晚套用）。")
+        if splits["missing"]:
+            L.append(f"- 總庫裡找不到的局號（打錯、或不是統計用的局）：{'、'.join(splits['missing'])}")
+        if splits["excluded"]:
+            L.append(f"- 是錯誤局（不記錄，戰績本來就不算）：{'、'.join(splits['excluded'])}")
+        L.append("")
     L.append("## 每個來源進了哪裡")
     L.append("")
     L.append("| 類型 | 來源組合 | 讀得懂 | 局數 |")
@@ -1160,6 +1200,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--with-proavalon", dest="with_proavalon", action="store_true", default=INCLUDE_PROAVALON,
                     help="put the ProAvalon games (外部, P<_id>) back into the database; off by default since 2026-11-18")
     ap.add_argument("--corrections", default=str(HERE / "game_db_corrections.json"))
+    ap.add_argument("--aliases", default=str(HERE / "player_aliases.json"), help="player_aliases.json (its splits)")
     ap.add_argument("--output", default=str(HERE / "game_db.json"))
     ap.add_argument("--check-report", dest="report", default=str(HERE.parent.parent / "docs" / "data" / "game_db_report.md"))
     args = ap.parse_args(argv)
@@ -1184,10 +1225,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     cov = coverage(rows, snapshot, load_json(Path(args.sim_bank)), records_sheet_ids, dataset_sheet_ids)
     hammer = sum(n for why, n in ((proavalon_doc or {}).get("skipped") or {}).items() if "5th proposal" in why)
     write_db(rows, counts, Path(args.output))
+    # 同名不同人：候選只寫數量（名字只進私人主控台）；站長已拆開的（player_aliases.json splits）對到總庫的局號
+    collisions = nc.counts(nc.candidates(nc.stats_games(games_doc, {"games": rows}, records_doc)))
+    try:
+        splits = split_games(rows, excluded, gc.load_player_aliases(Path(args.aliases), show_names=False).splits)
+    except gc.FatalError as exc:
+        print(f"game_db: {exc}", file=sys.stderr)
+        splits = None
     if args.report:
-        write_report(rows, counts, cov, Path(args.report), excluded, hammer, corrections, proavalon_off=not args.with_proavalon)
+        write_report(rows, counts, cov, Path(args.report), excluded, hammer, corrections, proavalon_off=not args.with_proavalon,
+                     collisions=collisions, splits=splits)
     print(f"game_db: {counts['games']} games {counts['byKind']}; merged {counts['merged']}; status {counts['byStatus']}; "
-          f"excluded {len(excluded)} {counts['excluded']}")
+          f"excluded {len(excluded)} {counts['excluded']}; name collisions "
+          + ", ".join(f"{k} {v['names']}" for k, v in collisions.items())
+          + (f"; split rules {splits['rules']} ({len(splits['games'])} games, {len(splits['missing'])} ids not found)"
+             if splits and splits["rules"] else ""))
     return 0
 
 
