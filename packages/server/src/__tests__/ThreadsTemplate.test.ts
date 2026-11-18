@@ -146,9 +146,9 @@ describe('validateTemplate', () => {
 
   it('rejects unknown placeholders, a missing or misplaced {標籤}, a comment without {小觀念}, empty text and over-long fixed text', () => {
     expect(validateTemplate('post', '{標題}\n{局號}\n{標籤}').join()).toContain('{局號}');
-    expect(validateTemplate('post', '{標題}\n{派票紀錄}\n{標籤}\n結尾')).toHaveLength(1);
-    expect(validateTemplate('post', '{標題}\n{派票紀錄}\n{標籤}\n{標籤}')).toHaveLength(1);
-    expect(validateTemplate('post', '{標題}\n{派票紀錄}')).toHaveLength(1);
+    expect(validateTemplate('post', '{標題}\n{你是}\n{派票紀錄}\n{標籤}\n結尾')).toHaveLength(1);
+    expect(validateTemplate('post', '{標題}\n{你是}\n{派票紀錄}\n{標籤}\n{標籤}')).toHaveLength(1);
+    expect(validateTemplate('post', '{標題}\n{你是}\n{派票紀錄}')).toHaveLength(1);
     expect(validateTemplate('comment', '【標題】\n{題號}').join()).toContain('{小觀念}');
     expect(validateTemplate('comment', '{小觀念}\n{你是}').join()).toContain('{你是}'); // 留言不能用貼文的佔位符
     expect(validateTemplate('post', '  \n')).toEqual(['是空的']);
@@ -170,6 +170,11 @@ describe('validateTemplate: what publishing depends on (Codex review of #82)', (
 
   it('{派票紀錄} is required (otherwise a failed image posts a question with no record)', () => {
     expect(validateTemplate('post', ok.replace('{派票紀錄}\n', '')).join()).toContain('{派票紀錄}');
+  });
+
+  it('{你是} is required too (seat, role and decision; without it a failed image posts a question nobody can read)', () => {
+    expect(validateTemplate('post', ok.replace('{你是}\n', '')).join()).toContain('{你是}');
+    expect(parseTemplateFile({ post: ok.replace('{你是}\n', '') })).toMatchObject({ source: { post: 'default' } });
   });
 
   it('a literal hashtag line besides {標籤} is rejected (every post would fail validatePost)', () => {
@@ -293,7 +298,7 @@ describe('the owner’s template applies to every day', () => {
 
   it('a template that cannot fit 500 characters on a day falls back to the default for that day, with a warning', () => {
     const pad = '固'.repeat(480);
-    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, postTemplate: `{標題}\n${pad}\n{派票紀錄}\n{標籤}` });
+    const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, postTemplate: `{標題}\n${pad}\n{你是}\n{派票紀錄}\n{標籤}` });
     const def = new ThreadsGenerator({ bank, titles, readSaved: () => null });
     const date = addDays(THREADS_START_DATE, 1);
     const d = gen.draftFor(date) as ThreadsDraft;
