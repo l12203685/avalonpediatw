@@ -1221,7 +1221,7 @@ export interface AgentTuning {
   beliefPendingSkip43: number;
   /** 第 46 回合（藍方讀法，第 45 回合診斷原因 1）：別人的湖在後驗裡多一項「持湖者挑誰來驗」的概似——持湖者是紅的世界，被驗者是紅的機率 = 這個值 ÷ 可湖的紅的人數，是藍 = (1 − 這個值) ÷ 可湖的藍的人數；持湖者是藍的世界照均勻（常數，不影響後驗）。照第 1E 節用強者真人的比例 0.17（第 29 回合：強者紅方有隊友可湖時湖隊友 17%）。只給藍方座位（紅方座位、紅方推想別人的視角、遞迴讀人第 0 層不用）。0 = 關。 */
   beliefLakePick45: number;
-  /** 第 46 回合（藍方，第 45 回合診斷原因 2）：`loyalTailWhite`／`mpTailWhite` 算「尾家是紅的機率」與兩個乾淨度時，不採用別人對尾家的「藍」宣告，如果自己估那個持湖者是紅的機率 ≥ 這個值。0 = 關。 */
+  /** 第 46 回合（藍方，第 45 回合診斷原因 2）：`loyalTailWhite`／`mpTailWhite` 算「尾家是紅的機率」與兩個乾淨度時，不採用別人對尾家的「藍」宣告，如果自己估那個持湖者是紅的機率 ≥ 這個值。0 = 關。**第 46 回合預設 0.5**（站長 2026-11-18「採用，改成預設」，裁定 r46-tail-novouch）：新預設（`loyalFresh43=1285`）上三組確認 30 萬局藍方 +0.012 [+0.005, +0.019]、三組都正，改到的局 0.4%；5紅0紅 +0.14 [+0.10, +0.18]；人類 PR 量尺不變（全部座位 +2.88）。環境變數 `AVALON_TUNING_TAIL_RED_NO_VOUCH_45=0` 退回舊做法。 */
   tailRedNoVouch45: number;
   /** 第 46 回合（紅方・刺客，第 45 回合診斷 5藍0藍 原因 1）：刺殺模型的分數加上「強制局（尾家）派的隊完全沒有紅」的概似比（每一次）。1 = 強者真人的比例（梅林 53.5%、其他藍方 38.1% → ×1.40）；2 = 全部真人（60.4%／33.7% → ×1.79）。0 = 關。 */
   assassinTailRead45: number;
@@ -2229,7 +2229,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   loyalLakeHolderP42: 0,
   beliefPendingSkip43: 0,
   beliefLakePick45: 0,
-  tailRedNoVouch45: 0,
+  tailRedNoVouch45: 0.5,
   assassinTailRead45: 0,
   redLeadOff45: 0,
   redRankOrderR2Fix45: 0,

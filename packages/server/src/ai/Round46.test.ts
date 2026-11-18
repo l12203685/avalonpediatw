@@ -39,10 +39,10 @@ function r3(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('flags', () => {
-  it('exist, are off in the legacy and default tables, and parse their ranges', () => {
+  it('exist, are off in the legacy table, off in the default except tailRedNoVouch45 (0.5), and parse their ranges', () => {
     for (const k of KEYS) {
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
-      expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
+      expect(DEFAULT_AGENT_TUNING[k]).toBe(k === 'tailRedNoVouch45' ? 0.5 : 0); // round 46 tailRedNoVouch45=0.5 adopted (site owner 2026-11-18)
     }
     expect(parseTuningFlag('beliefLakePick45')).toEqual({ beliefLakePick45: 0.17 });
     expect(parseTuningFlag('tailRedNoVouch45')).toEqual({ tailRedNoVouch45: 0.5 });
