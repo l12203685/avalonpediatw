@@ -88,8 +88,8 @@ export function pickView(game: SimGame, pick: ThreadsPick): PickView {
   return { game, pick, exerciseId: exerciseIdOfPick(pick, game), view, shown: view.events };
 }
 
-/** 「你是」那一行的三段之間、座位之間的分隔（站長 11/18 定的格式）。 */
-export const VIEWER_SEP = ', ';
+/** 「你是」那一行的三段之間、座位之間的分隔（站長 11/18：「格式改成 "你是 {#}家 {身分} | {內建資訊} | {要做的決策}"」）。 */
+export const VIEWER_SEP = ' | ';
 export const VIEWER_SEAT_SEP = ' & ';
 
 /** 夜裡知道的資訊（照 sightFor 的知識模型：紅方看到的隊友不含奧伯倫、也不知道隊友的角色；梅林看不到莫德雷德）。 */
@@ -127,7 +127,8 @@ export function assassinationMates(game: SimGame, seat: number): string {
 
 /**
  * 「你是」那一行，貼文與題目卡共用（站長 11/18：「文字顯示 "你是 {#}家 {身分}, {內建資訊}, {要做的決策}" 像是 "你是 5家 忠臣, 無其他資訊, 派 3 人"
- * "你是 0家 派西維爾, 看到 4家 & 9家, 派 4 人" "你是 3家 刺客, 隊友 5家莫甘娜 & 8家莫德雷得 & 7家奧伯倫, 刺殺梅林"」）。
+ * "你是 0家 派西維爾, 看到 4家 & 9家, 派 4 人" "你是 3家 刺客, 隊友 5家莫甘娜 & 8家莫德雷得 & 7家奧伯倫, 刺殺梅林"」，同日再改「格式改成
+ * "你是 {#}家 {身分} | {內建資訊} | {要做的決策}"」）：例「你是 0家 派西維爾 | 看到 4家 & 9家 | 派 4 人」。
  * 內建資訊：提議題是夜裡的知識（nightInfo）；刺殺題的紅方是刺殺階段四位紅方開牌討論後的隊友（assassinationMates）。
  */
 export function viewerLine(game: SimGame, pick: Pick<ThreadsPick, 'seat' | 'proposal'>, sight: SimView['sight']): string {

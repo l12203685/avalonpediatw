@@ -34,7 +34,7 @@ import { ROLE_ZH } from '../simulation/commands';
 import { resultText } from '../simulation/replies';
 import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, isRed, type PublicEvent } from '../simulation/scenario';
 import { seatChar } from '../simulation/seats';
-import { VIEWER_SEAT_SEP, VIEWER_SEP, viewerLine, type PickView } from './draft';
+import { viewerLine, type PickView } from './draft';
 
 const W = 1080;
 /** 深色卡片的配色（底色接近網站深色介面與 IG 截圖的黑）。 */
@@ -920,46 +920,34 @@ function nextHint(k: number, total: number): string {
 }
 
 /**
- * 你的視角，一行（站長 11/18：「你是 {#}家 {身分}, {內建資訊}, {要做的決策}」，和貼文同一行，見 draft.viewerLine）：
- * 例：「你是 5家 忠臣, 無其他資訊, 派 3 人」「你是 0家 派西維爾, 看到 4家 & 9家, 派 4 人」「你是 3家 刺客, 隊友 5家 & 8家, 刺殺梅林」。
+ * 你的視角，一行（站長 11/18：「你是 {#}家 {身分} | {內建資訊} | {要做的決策}」，和貼文同一行，見 draft.viewerLine）：
+ * 例：「你是 5家 忠臣 | 無其他資訊 | 派 3 人」「你是 0家 派西維爾 | 看到 4家 & 9家 | 派 4 人」「你是 3家 刺客 | 隊友 5家莫甘娜 & 8家莫德雷德 & 7家奧伯倫 | 刺殺梅林」。
  */
 export function identityText(pv: Pick<PickView, 'game' | 'pick' | 'view'>): string {
   return viewerLine(pv.game, pv.pick, pv.view.sight);
 }
 
-/** 照分隔切成小段，分隔留在前一段的尾巴（「你是 5家 忠臣,」「無其他資訊,」「派 3 人」）。 */
-function splitKeep(line: string, sep: string): string[] {
-  const parts = line.split(sep);
-  return parts.map((p, i) => (i < parts.length - 1 ? p + sep.trimEnd() : p));
-}
-
-/** 小段依序塞進一行一行（不改順序），段與段之間一個空白。 */
-function packParts(parts: readonly string[], size: number, max: number): string[] {
-  const lines: string[] = [];
-  for (const p of parts) {
-    const last = lines[lines.length - 1];
-    if (last !== undefined && textWidth(`${last} ${p}`, size) <= max) lines[lines.length - 1] = `${last} ${p}`;
-    else lines.push(p);
-  }
-  return lines;
-}
+/** 「你是」那一行的字級：平常 34，放不下就一級一級縮，最小 20（約 60%）。 */
+export const IDENTITY_FONT = 34;
+export const IDENTITY_FONT_MIN = 20;
+/** 右欄（圓桌右邊）的左緣與寬度。 */
+const RIGHT_X = 40 + TABLE_BOX_W + 24;
+const RIGHT_MAX = W - 40 - RIGHT_X;
+/** 整列寫的時候（圓桌上面）的寬度與這一條的高度。 */
+const WIDE_MAX = W - 80;
+const WIDE_BAND_PAD = 30;
 
 /**
- * 你的視角：一行寫完（字級 34 → 最小 26）；放不下才換行，順序不變：先在「, 」斷（字級 30 → 26，最多兩行），
- * 還是超過兩行（例如梅林看到三個紅）才連「 & 」也可以斷。
+ * 你的視角排版：永遠一行、不換行（站長 11/18：「紅方資訊好像有點多 看能不能縮小字體之類的 不要換行」）。
+ * 先放在圓桌右邊，字級 34 一級一級縮到 20；縮到 20 還放不下（例如刺殺題列出三個隊友和角色），
+ * 就改成整列寫在標題列下面、圓桌上面（寬 1000，字級同樣從 34 縮），圓桌與右欄往下移 band 的高度。
  */
-export function identityLines(identity: string, max: number): { line: string; size: number }[] {
-  for (let size = 34; size >= 26; size -= 2) if (textWidth(identity, size) <= max) return [{ line: identity, size }];
-  const coarse = splitKeep(identity, VIEWER_SEP);
-  const fine = coarse.flatMap((p) => splitKeep(p, VIEWER_SEAT_SEP));
-  for (const parts of [coarse, fine]) {
-    for (let size = 30; size >= 26; size -= 2) {
-      const lines = packParts(parts, size, max);
-      if (lines.length <= 2 && lines.every((l) => textWidth(l, size) <= max)) return lines.map((line) => ({ line, size }));
-    }
-  }
-  const size = 24;
-  return packParts(fine, size, max).map((line) => ({ line, size: fitSize(line, size, max, 18) }));
+export function identityLayout(pv: Pick<PickView, 'game' | 'pick' | 'view'>): { line: string; size: number; wide: boolean; band: number } {
+  const line = identityText(pv);
+  const size = fitSize(line, IDENTITY_FONT, RIGHT_MAX, IDENTITY_FONT_MIN);
+  if (textWidth(line, size) <= RIGHT_MAX) return { line, size, wide: false, band: 0 };
+  const wide = fitSize(line, IDENTITY_FONT, WIDE_MAX, IDENTITY_FONT_MIN);
+  return { line, size: wide, wide: true, band: wide + WIDE_BAND_PAD };
 }
 
 /** 題目卡的格子：整份牌譜到「輪到你」（放不下時從 cardSplit 的 cardStart 開始，前面的局在續圖）。 */
@@ -972,18 +960,21 @@ export function cardSheetRows(pv: PickView): SheetRow[] {
  */
 function rightColumn(pv: PickView, rows: readonly SheetRow[]): { svg: string; bottom: number } {
   const parts: string[] = [];
-  const top = HEADER_H;
-  const rx = 40 + TABLE_BOX_W + 24;
-  const rmax = W - 40 - rx;
-  // 你的視角＋要做的決策，一行（站長 11/18：「你是 {#}家 {身分}, {內建資訊}, {要做的決策}」；原本另一行白字的「輪到你派 N 人」併進來），
-  // 太長才換行
-  let ty = top + 60;
-  const idLines = identityLines(identityText(pv), rmax);
-  for (const [i, { line, size }] of idLines.entries()) {
-    parts.push(text(rx, ty, line, { size, weight: true, fill: C.ink }).replace('<text ', `<text class="viewer-line${i ? ' viewer-line-cont' : ''}" `));
-    ty += size + 14;
+  const id = identityLayout(pv);
+  const top = HEADER_H + id.band;
+  const rx = RIGHT_X;
+  const rmax = RIGHT_MAX;
+  // 你的視角＋要做的決策，一行（站長 11/18：「你是 {#}家 {身分} | {內建資訊} | {要做的決策}」；原本另一行白字的「輪到你派 N 人」併進來）。
+  // 不換行：太長就縮字，再放不下就整列寫在圓桌上面（identityLayout）。
+  let ty: number;
+  if (id.wide) {
+    parts.push(text(40, HEADER_H + 14 + id.size * 0.86 + 4, id.line, { size: id.size, weight: true, fill: C.ink }).replace('<text ', '<text class="viewer-line viewer-line-wide" '));
+    ty = top + 40;
+  } else {
+    ty = top + 60;
+    parts.push(text(rx, ty, id.line, { size: id.size, weight: true, fill: C.ink }).replace('<text ', '<text class="viewer-line" '));
+    ty += id.size + 18;
   }
-  ty += 4;
   // 任務格：你的視角下面（站長 11/18：從圓桌移到旁邊），寬度不夠就換行
   const chips = missionChips(rows, rx, ty - 10, rmax);
   parts.push(chips.svg);
@@ -1009,7 +1000,7 @@ function rightColumn(pv: PickView, rows: readonly SheetRow[]): { svg: string; bo
 
 /** 題目卡的牌譜從哪裡開始：圓桌那一塊和右邊那一欄比較低的那個下面。 */
 export function cardTop(pv: PickView): number {
-  return Math.max(CARD_TOP_H, Math.ceil(rightColumn(pv, sheetRows(pv)).bottom) + 10);
+  return Math.max(CARD_TOP_H + identityLayout(pv).band, Math.ceil(rightColumn(pv, sheetRows(pv)).bottom) + 10);
 }
 
 /** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、整份牌譜（精簡表格）、題目。 */
@@ -1021,8 +1012,8 @@ export function buildPuzzleSvg(pv: PickView, weekday: number): string {
   const layout = cardLayout(cardRows.length, cardTop(pv));
   const parts: string[] = [headerBand(headerTitle(cardLabel(pv), pv.pick.gameId))];
 
-  // 左：小圓桌；右：你的視角
-  const top = HEADER_H;
+  // 左：小圓桌；右：你的視角（你的視角整列寫的時候，圓桌往下移）
+  const top = HEADER_H + identityLayout(pv).band;
   const cx = 40 + TABLE_BOX_W / 2;
   const cy = top + TABLE_TOP_PAD + RING_R + SEAT_R;
   parts.push(roundTable(pv, cx, cy, rows));
