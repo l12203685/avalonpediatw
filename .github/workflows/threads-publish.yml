@@ -11,6 +11,8 @@
 # - Instagram 同步（選用）：有 secret INSTAGRAM_ACCESS_TOKEN 才會準備；repo 變數 INSTAGRAM_PUBLISH 是 '1' 才真的發。
 #   IG 只收 JPEG、長寬比 4:5～1.91:1，所以圖先轉成 1080×1350 的 JPEG（images/<日期>.jpg）。
 name: Threads 每日發文
+# 執行名稱帶 mode 與 date：伺服器觸發前用它查今天是不是已經觸發過 mode=auto（services/threadsDispatch.ts）。
+run-name: "Threads 每日發文 mode=${{ inputs.mode || github.event_name }} date=${{ inputs.date || 'today' }}"
 
 on:
   schedule:
@@ -34,6 +36,11 @@ on:
 permissions:
   contents: write
 
+# 同一時間只跑一個（2026-11-18 伺服器在 12:07 觸發了兩次、12:16 重新部署後又一次）：後到的排隊，不取消進行中的，
+# 排到時才取出 threads-state，看得到前一個記下的「已經發過」而跳過（「取出 threads-state 分支」那一步）。
+# 刻意用固定的一組、不按日期分：表達式裡算不出台北的日期，用 inputs.date 分組的話，排程（date 空白）
+# 和手動填了今天日期的觸發會落在不同組、可以同時跑，同一天就可能發兩次。
+# GitHub 每組只留一個排隊中的：再來一個會把排隊中的取消（進行中的不受影響），對同一天重複的觸發剛好。
 concurrency:
   group: threads-publish
   cancel-in-progress: false
@@ -262,12 +269,31 @@ jobs:
         continue-on-error: true
         env:
           DATE: ${{ steps.gate.outputs.date }}
+        # ubuntu-latest（24.04）的 runner 映像沒有 ImageMagick（2026-11-18 試跑：convert: command not found），
+        # 所以先找 magick（IM7）或 convert（IM6），都沒有才用 apt 裝 imagemagick（重試一次）。
+        # 每張都檢查輸出真的是 1080×1350 的 JPEG；任何一步失敗＝這一步失敗，下一步出警告、今天不同步 IG。
         run: |
           set -euo pipefail
+          if command -v magick >/dev/null 2>&1; then IM=(magick); ID=(magick identify)
+          elif command -v convert >/dev/null 2>&1; then IM=(convert); ID=(identify)
+          else
+            for try in 1 2; do
+              sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends imagemagick && break
+              [ "$try" = 2 ] && { echo "裝不起 imagemagick"; exit 1; }
+              sleep 5
+            done
+            if command -v magick >/dev/null 2>&1; then IM=(magick); ID=(magick identify); else IM=(convert); ID=(identify); fi
+          fi
+          "${IM[@]}" -version | sed -n 1p
           # plan.json 的 images：題目卡、牌譜圖、答案卡（照發文順序）。
-          for name in $(jq -r '.images[]' "$OUT_DIR/plan.json"); do
+          NAMES=$(jq -r '.images[]' "$OUT_DIR/plan.json")
+          [ -n "$NAMES" ] || { echo "plan.json 沒有圖"; exit 1; }
+          for name in $NAMES; do
             f="$OUT_DIR/$name"
-            convert "$f" -background '#f7f5f0' -flatten -resize 1080x1350 -gravity center -extent 1080x1350 -quality 92 "${f%.png}.jpg"
+            out="${f%.png}.jpg"
+            "${IM[@]}" "$f" -background '#f7f5f0' -flatten -resize 1080x1350 -gravity center -extent 1080x1350 -quality 92 "$out"
+            got=$("${ID[@]}" -format '%m %wx%h' "$out")
+            [ "$got" = 'JPEG 1080x1350' ] || { echo "$out 不是 1080×1350 的 JPEG（$got）"; exit 1; }
           done
           ls -l "$OUT_DIR"
 

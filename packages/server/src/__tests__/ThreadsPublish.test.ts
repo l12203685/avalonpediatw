@@ -1067,6 +1067,130 @@ describe('workflow', () => {
     expect(image?.body.match(/IG_JPEG_OK" = 1/g)?.length).toBe(2);
   });
 
+  // 2026-11-18 試跑：ubuntu-latest 沒有 ImageMagick，convert: command not found，IG 一張圖都沒轉成。
+  describe('IG JPEG conversion works on a runner without ImageMagick preinstalled', () => {
+    const script = (): string => {
+      const run = steps().find((s) => s.id === 'ig_jpeg')?.body.split(/\n {8}run: \|\n/)[1] ?? '';
+      return run.split('\n').map((l) => l.replace(/^ {10}/, '')).join('\n');
+    };
+    const has = (cmd: string): boolean => {
+      try { execFileSync('bash', ['-c', `command -v ${cmd}`], { stdio: 'ignore' }); return true; } catch { return false; }
+    };
+    const hasIm = has('convert') || has('magick');
+
+    it('finds magick/convert first and installs imagemagick with apt only when neither exists (no bare convert)', () => {
+      const s = script();
+      expect(s).not.toBe('');
+      expect(s).toContain('command -v magick');
+      expect(s).toContain('command -v convert');
+      expect(s).toMatch(/sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends imagemagick/);
+      // 真正轉檔的那一行用找到的工具，不寫死 convert
+      expect(s).not.toMatch(/^\s*convert\s/m);
+      expect(s).toContain(`"\${IM[@]}" "$f" -background '#f7f5f0' -flatten -resize 1080x1350 -gravity center -extent 1080x1350 -quality 92 "$out"`);
+      // 每張都檢查輸出真的是 1080×1350 的 JPEG
+      expect(s).toContain(`[ "$got" = 'JPEG 1080x1350' ]`);
+      // 轉不成照舊只警告、不擋 Threads
+      const all = steps();
+      expect(all.find((x) => x.id === 'ig_jpeg')?.continueOnError).toBe(true);
+      expect(all.find((x) => x.cond.includes("steps.ig_jpeg.outcome == 'failure'"))?.body).toContain('::warning::');
+    });
+
+    it.skipIf(!hasIm || !has('jq'))('turns every plan image into a 1080×1350 JPEG', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'threads-igjpeg-'));
+      try {
+        const im = has('magick') ? ['magick'] : ['convert'];
+        execFileSync(im[0], ['-size', '1200x900', 'xc:#336699', path.join(dir, 'a.png')]);
+        execFileSync(im[0], ['-size', '600x1200', 'xc:none', path.join(dir, 'b.png')]); // 透明底要補成米色
+        fs.writeFileSync(path.join(dir, 'plan.json'), JSON.stringify({ images: ['a.png', 'b.png'] }));
+        execFileSync('bash', ['-c', script()], { env: { PATH: process.env.PATH ?? '', OUT_DIR: dir }, stdio: 'pipe' });
+        for (const n of ['a', 'b']) {
+          const buf = fs.readFileSync(path.join(dir, `${n}.jpg`));
+          expect(buf.subarray(0, 2).toString('hex')).toBe('ffd8');
+          const id = has('magick') ? ['magick', 'identify'] : ['identify'];
+          expect(execFileSync(id[0], [...id.slice(1), '-format', '%m %wx%h', path.join(dir, `${n}.jpg`)], { encoding: 'utf8' })).toBe('JPEG 1080x1350');
+        }
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    it.skipIf(!has('jq'))('fails the step (so the fallback warning runs) when ImageMagick is missing and apt cannot install it', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'threads-igjpeg-'));
+      try {
+        // PATH 只放這一步用得到的指令（沒有 magick／convert），sudo 一律失敗、sleep 不真的等。
+        const bin = path.join(dir, 'bin');
+        fs.mkdirSync(bin);
+        for (const c of ['bash', 'jq', 'sed', 'ls', 'cat']) {
+          const where = execFileSync('bash', ['-c', `command -v ${c}`], { encoding: 'utf8' }).trim();
+          fs.symlinkSync(where, path.join(bin, c));
+        }
+        fs.writeFileSync(path.join(bin, 'sudo'), '#!/bin/sh\necho "sudo $*" >> "$OUT_DIR/sudo.log"\nexit 1\n', { mode: 0o755 });
+        fs.writeFileSync(path.join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+        fs.writeFileSync(path.join(dir, 'plan.json'), JSON.stringify({ images: ['a.png'] }));
+        expect(() => execFileSync(path.join(bin, 'bash'), ['-c', script()], { env: { PATH: bin, OUT_DIR: dir }, stdio: 'pipe' })).toThrow();
+        expect(fs.readFileSync(path.join(dir, 'sudo.log'), 'utf8').match(/apt-get update/g)).toHaveLength(2); // 重試一次
+        expect(fs.existsSync(path.join(dir, 'a.jpg'))).toBe(false);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  // 2026-11-18 伺服器 12:07 觸發兩次、12:16 又一次：正式發時不能同時跑、後到的要看得到前一個記下的狀態。
+  describe('duplicate runs are serialized and the later one skips a day that is already posted', () => {
+    const yml = (): string => fs.readFileSync(path.join(serverRoot, '..', '..', '.github', 'workflows', 'threads-publish.yml'), 'utf8');
+
+    it('one fixed concurrency group for every run (not split by date or event) that never cancels a run in progress', () => {
+      const m = /\nconcurrency:\n {2}group: (.*)\n {2}cancel-in-progress: (.*)\n/.exec(yml());
+      expect(m?.[1]).toBe('threads-publish');
+      expect(m?.[2]).toBe('false');
+      // 沒有 job 層的 concurrency 蓋過它
+      expect(yml().split(/\njobs:\n/)[1]).not.toMatch(/\n\s+concurrency:/);
+    });
+
+    it('the run name carries mode and date in the form the server dispatcher looks for', () => {
+      expect(yml()).toContain(`run-name: "Threads 每日發文 mode=\${{ inputs.mode || github.event_name }} date=\${{ inputs.date || 'today' }}"`);
+    });
+
+    const skipScript = (): string => {
+      const run = steps().find((s) => s.id === 'state')?.body.split(/\n {8}run: \|\n/)[1] ?? '';
+      const lines = run.split('\n').map((l) => l.replace(/^ {10}/, ''));
+      const from = lines.findIndex((l) => l.startsWith('SKIP=0;'));
+      const to = lines.findIndex((l) => l.startsWith('echo "skip=$SKIP"'));
+      return lines.slice(from, to + 1).join('\n');
+    };
+    let hasJq = true;
+    try { execFileSync('jq', ['--version'], { stdio: 'ignore' }); } catch { hasJq = false; }
+    const skip = (env: { MODE: string; IG: string }, state?: unknown): string => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'threads-skip-'));
+      try {
+        const out = path.join(dir, 'out');
+        fs.writeFileSync(out, '');
+        if (state !== undefined) {
+          fs.mkdirSync(path.join(dir, 'state'));
+          fs.writeFileSync(path.join(dir, 'state', '2026-11-18.json'), JSON.stringify(state));
+        }
+        execFileSync('bash', ['-c', `set -euo pipefail\n${skipScript()}`], { env: { PATH: process.env.PATH ?? '', STATE_DIR: dir, DATE: '2026-11-18', GITHUB_OUTPUT: out, ...env }, stdio: 'pipe' });
+        return fs.readFileSync(out, 'utf8').trim();
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    };
+
+    it.skipIf(!hasJq)('skips when today is already recorded (Threads, and IG when IG is live); runs otherwise', () => {
+      expect(skipScript()).toMatch(/^SKIP=0;[\s\S]*echo "skip=\$SKIP" >> "\$GITHUB_OUTPUT"$/);
+      const posted = { date: '2026-11-18', source: 'auto', postId: 'p1', commentId: 'c1' };
+      expect(skip({ MODE: 'live', IG: 'off' })).toBe('skip=0'); // 還沒有狀態檔
+      expect(skip({ MODE: 'live', IG: 'off' }, posted)).toBe('skip=1');
+      expect(skip({ MODE: 'live', IG: 'dry-run' }, posted)).toBe('skip=1');
+      expect(skip({ MODE: 'live', IG: 'off' }, { ...posted, commentId: null })).toBe('skip=0'); // 留言沒發成：照跑補留言
+      expect(skip({ MODE: 'live', IG: 'live' }, posted)).toBe('skip=0'); // IG 還沒發
+      expect(skip({ MODE: 'live', IG: 'live' }, { ...posted, ig: { mediaId: 'm1' } })).toBe('skip=1');
+      expect(skip({ MODE: 'dry-run', IG: 'live' }, { ...posted, ig: { mediaId: 'm1' } })).toBe('skip=1');
+      expect(skip({ MODE: 'dry-run', IG: 'dry-run' }, posted)).toBe('skip=0'); // 試跑照跑（不發文）
+    });
+  });
+
   it('an IG token refresh whose secret write fails only warns and does not stop Threads', () => {
     const all = steps();
     const refresh = all.find((s) => s.body.includes('token-ig --token-out'));

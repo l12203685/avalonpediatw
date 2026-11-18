@@ -302,7 +302,8 @@ A 發了、第一則留言沒成功時（狀態檔 `commentId` 是 `null`），�
 GitHub 自己的排程對這個 repo 很不準：每日排程常晚 7–8 小時才跑，這個工作流程每小時的排程（`'7 * * * *'`）從生效到 11/17 一次都沒跑過。所以改成跟每晚記錄員一樣，由 Render 上一直開著的伺服器自己觸發：
 
 - 台北時間每天 **12:07**（`THREADS_POST_HOUR` 點 07 分）到 23:00 之間，伺服器用 GitHub 的 workflow_dispatch 觸發一次 `threads-publish.yml`（ref `main`，`mode=auto`、`date` 空白＝今天）。觸發失敗下一分鐘再試；成功後當天不再觸發。程式在 `packages/server/src/services/threadsDispatch.ts`。
-- 伺服器重啟後同一天可能再觸發一次，沒關係：工作流程有 concurrency（同一組排隊、不取消進行中的），而且 `threads-state` 有這一天的貼文 id 就跳過，不會重複發。
+- 一天只觸發一次，跨重啟、跨程序（2026-11-18 起）：觸發前先查 GitHub 今天（台北 00:00 以後）有沒有 `mode=auto` 的 workflow_dispatch 執行（看執行名稱 `… mode=auto date=today`，被取消的不算），有就不觸發；查不到就不觸發、下一分鐘再試。11/18 12:07 觸發兩次、12:16 又一次，原因是「今天觸發過了」只記在記憶體：連續合併好幾個 PR 時 Render 一個接一個重新部署，新舊程序並存的那一小段各觸發一次，重新部署後的新程序也不知道已經觸發過。
+- 萬一還是兩個一起觸發也不會重複發：工作流程有 concurrency（固定一組 `threads-publish`，後到的排隊、不取消進行中的），排到時才取出 `threads-state`，有這一天的貼文 id 就跳過。
 - GitHub 的排程留著當備援；伺服器那次已經發了，排程跑到時一樣跳過。
 - 伺服器的環境變數（Render → Environment）：
   - `GITHUB_DISPATCH_TOKEN`：跟補位機器人、每晚記錄員共用同一把（只給這個 repo、Actions: Read and write，就能觸發這個 repo 的任何 workflow），不用另外建。沒設就不觸發。
@@ -408,7 +409,7 @@ Threads App 裡「同時分享到 IG」的按鈕沒有 API 可以用，所以另
 - **不重複發**：狀態檔記了這一天的 IG 貼文 id 就跳過；IG 最近的貼文裡已經有今天發的、標題一樣的那一篇就補記、不再發。
   發佈的回應不明時不盲目重發，先看 IG 最近的貼文和容器狀態；發出去後馬上把狀態檔推上 `threads-state`。
 - **先確認權杖**：正式同步前先查 IG 帳號和發文額度（要 `instagram_business_content_publish`）；確認不了就跳過 IG、摘要出警告，不影響 Threads。
-- **跟 Threads 分開**：IG 失敗不影響 Threads，反過來也一樣。JPEG 轉檔失敗時當天不同步 IG（摘要有警告），Threads 照常上傳、發文。
+- **跟 Threads 分開**：IG 失敗不影響 Threads，反過來也一樣。JPEG 轉檔失敗時當天不同步 IG（摘要有警告），Threads 照常上傳、發文。轉檔用 ImageMagick：ubuntu-latest（24.04）的 runner 沒有預裝，找不到 `magick`／`convert` 時那一步先用 apt 裝 `imagemagick`。
   題目不完整的日子（跟 Threads 同一套檢查：少了續圖或續圖的網址、要看圖卻沒有圖）IG 也不同步。
 
 ### 開關
