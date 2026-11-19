@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, ExternalLink, RotateCw, ScrollText, Search, X } from 'lucide-react';
 import { fetchRecordsList, isAnalysisNotGenerated, isAnalysisRouteMissing } from '../services/api';
 import RecordsGameView, { OUTCOME_STYLE } from '../components/records/RecordsGameView';
-import { closeRecords, openRecords, showFullRecord, useOpenRecords, useRecordsCut } from '../components/records/recordsLink';
+import { closeRecords, openRecords, replaceRecordsId, showFullRecord, useOpenRecords, useRecordsCut } from '../components/records/recordsLink';
 import { useRecordsPrefs } from '../components/records/recordsPrefs';
 import LineupFilterEditor from '../components/lineup/LineupFilterEditor';
 import { branchLabel } from '../components/analysis/stateTree/recordBranch';
@@ -12,6 +12,7 @@ import {
   RECORDS_FILTER_KEY,
   RECORD_MISTAKE_TAGS,
   RESULT_TAGS,
+  findRecordPost,
   isDiscordPost,
   matchesRecords,
   matchingSeats,
@@ -189,8 +190,14 @@ export default function RecordsPage(): JSX.Element {
     ? `https://discord.com/channels/${state.data.guildId}/${state.data.forumId}`
     : 'https://discord.com/invite/mBqFqM2TXs';
 
+  // #records=<id>：id 是同一局的另一個局號（試算表 S…、D… 等，aka）也打開那一篇，網址換成那一篇的局號
+  const openPost = useMemo(() => (openId ? findRecordPost(posts, openId) : undefined), [posts, openId]);
+  useEffect(() => {
+    if (openPost && openPost.id !== openId) replaceRecordsId(openPost.id, cut);
+  }, [openPost, openId, cut]);
+
   if (openId && state.status === 'ok') {
-    const post = posts.find((p) => p.id === openId);
+    const post = openPost;
     return (
       <div className="mx-auto max-w-7xl px-3 pb-10 pt-2 sm:px-4 lg:pb-0">
         {post ? (
