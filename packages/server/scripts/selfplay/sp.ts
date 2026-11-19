@@ -52,7 +52,8 @@ async function main(): Promise<void> {
   // 提議與投票都交給「同一座位、只看公開資訊的預設忠臣」：myRole loyal、myTeam good，看不到紅方（knownEvils 清空）、
   // 拇指（knownWizards）、刺殺時的紅方名單；自己拿湖看到的結果保留（坐在那個位置的忠臣拿湖也會看到）。
   // 任務牌、湖的選人與宣告、刺殺照預設（紅方照預設出失敗、壞人持湖照預設宣告）。
-  // A = 紅方連第 5 次強制提議也照忠臣；B = 紅方當第 5 次強制提議的隊長時照預設紅方挑隊（「除非是尾派自己是紅方」）。
+  // A = 紅方連第 5 次強制提議也照忠臣；B = 紅方當第 5 次強制提議的隊長時照預設紅方挑隊（「除非是尾派自己是紅方」）；
+  // C = 同 A，但派西照預設（用拇指；站長 11/19「除了派西維爾 所有人都用忠臣資訊去玩」）。
   let eloyal = '';
   const redDesc: string[] = [];
   let failLog: [number, string][] = [];
@@ -64,7 +65,7 @@ async function main(): Promise<void> {
     if (f === 'onlyLoyal11=1') { onlyLoyal11 = true; return; }
     if (f === 'detail=1') { detail = true; return; }
     if (f === 'lake45=1') { lake45 = true; return; }
-    if (f.startsWith('eloyal=')) { eloyal = f.slice('eloyal='.length); if (eloyal !== 'A' && eloyal !== 'B') throw new Error(`eloyal=${eloyal}?`); return; }
+    if (f.startsWith('eloyal=')) { eloyal = f.slice('eloyal='.length); if (eloyal !== 'A' && eloyal !== 'B' && eloyal !== 'C') throw new Error(`eloyal=${eloyal}?`); return; }
     // round 46: red.k=v applies an AgentTuning switch to the red seats (the usual --flag k=v is blue seats only)
     if (f.startsWith('red.')) { Object.assign(redTuning, parseTuningFlag(f.slice(4))); redDesc.push(f.slice(4)); return; }
     Object.assign(variant, parseTuningFlag(f));
@@ -107,6 +108,7 @@ async function main(): Promise<void> {
   // E-loyal: this decision goes to the loyal shadow (team picks and votes of every non-loyal seat; B keeps a red forced-5th leader red)
   const blindHere = (obs: PlayerObservation): boolean => {
     if (!eloyal || obs.myRole === 'loyal') return false;
+    if (eloyal === 'C' && obs.myRole === 'percival') return false;
     if (obs.gamePhase !== 'team_select' && obs.gamePhase !== 'team_vote') return false;
     if (eloyal === 'B' && obs.myTeam === 'evil' && obs.gamePhase === 'team_select' && obs.failCount >= 4) return false;
     return true;
