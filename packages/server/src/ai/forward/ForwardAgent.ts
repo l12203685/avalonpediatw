@@ -61,7 +61,7 @@ import { redCleanLookTeam, redDivisionReject } from '../RedRound4';
 import { goodCleanLeadTeam } from '../GoodRound5';
 import { goodReuseExactTeam } from '../GoodReuseExact';
 import { loyalR2ReuseTeam, merlinR2PublicTeam } from '../BlueRound30';
-import { bayesVoteCriteria, r1SpreadTeam } from '../BlueRound33';
+import { bayesVoteCriteria, earlyNextLeaderWhite51, r1SpreadTeam } from '../BlueRound33';
 import { loyalFlowPickTeam } from '../BlueRound34';
 import { loyalR2ViewTeam, loyalSetPickTeam, percivalThumbSureTeam } from '../BlueRound37';
 import { bayesOptionsOf, bayesTeamClean } from '../belief/BayesBelief';
@@ -1058,7 +1058,9 @@ export class ForwardAgent implements AvalonAgent {
     }
     // Round 51 `leaderOppVote51` bit 4 (Round51.ts; owner 2026-11-18): R1–R2, a loyal who leads a later proposal of this round inner-blacks
     // on the team, one who does not outer-whites off it, at the human rates. The outer white never passes the good vote gates.
-    const early51 = leaderOppEarly51(this.baseline.tuning, obs);
+    // Bit 16 (owner 2026-11-19): S (does not lead again this round, would lead next round if this team passes) outer-whites in R1–R2
+    // only on its own reading of the team — P(clean) ≥ θ_good − δ_S — never a forced white.
+    const early51 = earlyNextLeaderWhite51(this.baseline.tuning, obs) ? true : leaderOppEarly51(this.baseline.tuning, obs);
     if (early51 === false) return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'R1–R2: I lead later this round (inner black; round 51)');
     if (early51 === true) {
       const team = obs.proposedTeam ?? [];

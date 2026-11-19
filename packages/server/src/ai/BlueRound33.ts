@@ -23,7 +23,7 @@ import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
 import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
 import { percivalThumbVote40, vote40Bar } from './BlueRound40';
 import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
-import { leaderOppShift51 } from './Round51';
+import { deltaS51, earlyNextLeaderWhiteEligible51, leaderOppShift51 } from './Round51';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
@@ -152,6 +152,19 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     if (p >= alt) return { vote: true, reason: 'alt' };
   }
   return { vote: false, reason: 'offDefault' };
+}
+
+/**
+ * 第 51 回合 `leaderOppVote51` 位元 16（站長 11/19）、第 1、2 局：S（這一局不會再當隊長、這隊過了下一局會當隊長）不在隊上，
+ * 照自己對組合的解讀外白——P(隊伍乾淨) ≥ 外白門檻（`goodBayesGood`，第 4 局以後的同一個）− δ_S；公開邏輯證明有紅不外白。
+ * true = 外白（呼叫端再過好人投票關卡），false = 照原本（正常票）。
+ */
+export function earlyNextLeaderWhite51(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  if (!earlyNextLeaderWhiteEligible51(tuning, obs)) return false;
+  const team = obs.proposedTeam ?? [];
+  if (buildCertainty(obs).minReds(team) >= 1) return false;
+  const p = bayesTeamClean(obs, team, bayesOptionsOf(tuning));
+  return p !== null && p >= (tuning.goodBayesGood || BAYES_VOTE_DEFAULTS.good) - deltaS51(tuning);
 }
 
 // ── 第 1 局的提議不疊人（`loyalR1Spread`；Edward 2026-11-09）──────────────

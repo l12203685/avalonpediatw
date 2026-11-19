@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag } from './AgentTuning';
-import { bayesVoteCriteria } from './BlueRound33';
-import { leaderOppEarly51, leaderOppRed51, leaderOppShift51, untaintedLakePick51 } from './Round51';
+import { bayesVoteCriteria, earlyNextLeaderWhite51 } from './BlueRound33';
+import { inNextLeaderGap51, leaderOppEarly51, leaderOppRed51, leaderOppShift51, untaintedLakePick51 } from './Round51';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
@@ -40,7 +40,10 @@ describe('flags', () => {
     expect(parseTuningFlag('lakeUntainted51')).toEqual({ lakeUntainted51: 0.5 });
     expect(LEGACY_AGENT_TUNING.leaderOppVote51DeltaOut).toBe(0);
     expect(DEFAULT_AGENT_TUNING.lakeUntainted51).toBe(0);
-    expect(() => parseTuningFlag('leaderOppVote51=16')).toThrow();
+    expect(parseTuningFlag('leaderOppVote51=17')).toEqual({ leaderOppVote51: 17 });
+    expect(parseTuningFlag('leaderOppVote51DeltaS=0.1')).toEqual({ leaderOppVote51DeltaS: 0.1 });
+    expect(DEFAULT_AGENT_TUNING.leaderOppVote51DeltaS).toBe(0);
+    expect(() => parseTuningFlag('leaderOppVote51=32')).toThrow();
     expect(() => parseTuningFlag('leaderOppVoteRed51=1')).toThrow();
   });
 });
@@ -164,5 +167,37 @@ describe('untaintedLakePick51 (B: loyal lake holder)', () => {
     expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'percival' }), ['P7', 'P10'], an)).toBe('P10');
     expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'merlin' }), ['P7', 'P10'], an)).toBeNull();
     expect(untaintedLakePick51(T({ lakeUntainted51: 0.5 }), holder({ myRole: 'assassin', myTeam: 'evil' } as Partial<PlayerObservation>), ['P7', 'P10'], an)).toBeNull();
+  });
+});
+
+describe('bit 16: outer white only for S = next round\'s leaders who do not lead again this round (owner 11/19)', () => {
+  // owner's examples: 2-2 led by P7 → S = {P1, P2}; 2-3 led by P8 → S = {P1, P2, P3}
+  const r2 = (leader: string, failCount: number, me: string): PlayerObservation =>
+    r3({ currentRound: 2, currentLeader: leader, failCount, myPlayerId: me, proposedTeam: ['P4', 'P5', 'P6', 'P9'], questResults: ['success'], questHistory: [{ round: 1, team: ['P1', 'P2', 'P3'], result: 'success', failCount: 0 }] } as Partial<PlayerObservation>);
+  it('S matches the owner\'s examples', () => {
+    expect(IDS.filter((id) => inNextLeaderGap51(r2('P7', 1, id)))).toEqual(['P1', 'P2']);
+    expect(IDS.filter((id) => inNextLeaderGap51(r2('P8', 2, id)))).toEqual(['P1', 'P2', 'P3']);
+    expect(IDS.filter((id) => inNextLeaderGap51(r3({ myPlayerId: id })))).toEqual(['P6', 'P7', 'P8']); // 3-3 led by P3
+    expect(inNextLeaderGap51(r3({ currentRound: 5, myPlayerId: 'P6' }))).toBe(false); // no next round
+  });
+  it('R3–4: the outer-white threshold drops only for S (δ_S, default 0.05); others and bit 2 unchanged', () => {
+    const s16 = T({ leaderOppVote51: 16 });
+    expect(leaderOppShift51(s16, r3({ myPlayerId: 'P8' }), false)).toBe(0.05);
+    expect(leaderOppShift51(T({ leaderOppVote51: 16, leaderOppVote51DeltaS: 0.1 }), r3({ myPlayerId: 'P6' }), false)).toBe(0.1);
+    expect(leaderOppShift51(s16, r3({ myPlayerId: 'P9' }), false)).toBe(0); // not in S
+    expect(leaderOppShift51(s16, r3({ myPlayerId: 'P4' }), false)).toBe(0); // leads later this round
+    expect(leaderOppShift51(s16, r3(), true)).toBe(0); // bit 1 off
+    expect(leaderOppShift51(T({ leaderOppVote51: 17, leaderOppVote51Delta: 0.05 }), r3(), true)).toBe(0.05);
+  });
+  it('R1–2: S outer-whites only on its own reading — P(clean) ≥ θ_good − δ_S; never outside S, never forced', () => {
+    const o = r2('P8', 2, 'P2');
+    expect(earlyNextLeaderWhite51(T(), o)).toBe(false); // off
+    expect(earlyNextLeaderWhite51(T({ leaderOppVote51: 16, leaderOppVote51DeltaS: 0.99 }), r2('P8', 2, 'P9'))).toBe(false); // not in S
+    expect(earlyNextLeaderWhite51(T({ leaderOppVote51: 16, leaderOppVote51DeltaS: 0.99 }), { ...o, proposedTeam: ['P2', 'P4', 'P5', 'P6'] } as PlayerObservation)).toBe(false); // on the team
+    // the default δ_S = 0.05 cannot clear a typical R2 off-team team (P(clean) far below 0.65): no white
+    expect(earlyNextLeaderWhite51(T({ leaderOppVote51: 16 }), o)).toBe(false);
+    // only a threshold shift: with the bar pushed below the team's own P(clean) it whites
+    expect(earlyNextLeaderWhite51(T({ leaderOppVote51: 16, leaderOppVote51DeltaS: 0.99 }), o)).toBe(true);
+    expect(leaderOppEarly51(T({ leaderOppVote51: 16 }), o)).toBeNull(); // the old hashed path (bit 4) stays off
   });
 });

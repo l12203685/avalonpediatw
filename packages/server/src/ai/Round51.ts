@@ -15,7 +15,7 @@
  *   - `leaderOppVote51`（位元）：1 = 第 3–5 局在隊上、之後還會當隊長 → 內黑的門檻（`goodBayesBad`／`goodBayesBadKey`）降低 δ；
  *     2 = 第 3–5 局不在隊上、這一局不會再當隊長 → 外白的門檻（`goodBayesGood`／`goodBayesGoodKey`）降低 δ；
  *     4 = 第 1、2 局（現行是正常票的硬規則）：照真人的比例開——之後還會當隊長、在隊上 → 內黑；不會再當隊長、不在隊上 → 外白
- *     （外白不越過好人投票關卡）；8 = 派西也用（預設只給忠臣）。
+ *     （外白不越過好人投票關卡）；8 = 派西也用（預設只給忠臣）；16 = 外白只給 S（站長 11/19，`inNextLeaderGap51`）。
  *   - `leaderOppVote51Delta`：內黑門檻的 δ（0 = 0.1）；`leaderOppVote51DeltaOut`：外白門檻的 δ（0 = 同 `leaderOppVote51Delta`）。
  *   - `leaderOppVoteRed51`：紅方（奧伯倫除外）第 3–5 局在隊上、之後還會當隊長、紅方還沒有兩勝 → 以這個比例內黑（照局面雜湊；
  *     真人紅方同一格低 5.4pp、強者 8.3pp）。硬約束（隊長自己的隊、紅方兩勝的隊、莫德雷德單獨在隊上贊成…）照舊優先。
@@ -44,6 +44,39 @@ export const EARLY_RATES_51 = {
   onTeamBlack: [0.015, 0.07],
 } as const;
 
+/**
+ * 站長 2026-11-19（外白的修正，原話）：「那應該是 不會當隊長 但開外白後有機會在下一輪當隊長的人 開外白傾向增加
+ * (例如 2-2 7家派票 只有 12 更有傾向開外白/ 2-3 8加派票 123家都會傾向開外白)」。
+ * 第 r 局第 k 次提議、隊長 L：R = 這一局之後的隊長（L 之後 1..5−k 家）；這隊過了，第 r+1 局的五個隊長 N = L 之後 1..5 家；
+ * S = N \ R \ {L} = L 之後第 6−k..5 家（k 個人）。第 5 局沒有下一局，不適用。
+ * 真人（全部、忠臣，非強制、不在隊上、不在 R）：S 的外白率比其他人高 第 1 局 +0.49 [+0.01, +1.03]、第 2 局 +0.82 [+0.24, +1.37]、
+ * 第 3 局 −0.36 [−1.55, +0.90]、第 4 局 +3.23 [+0.21, +7.38]pp（分層差）。
+ */
+export function inNextLeaderGap51(obs: PlayerObservation): boolean {
+  if ((obs.currentRound ?? 1) >= 5) return false;
+  const ids = obs.allPlayerIds;
+  const at = ids.indexOf(obs.currentLeader);
+  const me = ids.indexOf(obs.myPlayerId);
+  if (at < 0 || me < 0) return false;
+  const off = (me - at + ids.length) % ids.length;
+  const k = (obs.failCount ?? 0) + 1;
+  return off >= 6 - k && off <= 5;
+}
+
+/** 位元 16 的外白門檻位移 δ_S（0 = 0.05）。 */
+export function deltaS51(tuning: Readonly<AgentTuning>): number {
+  return (tuning.leaderOppVote51DeltaS ?? 0) > 0 ? (tuning.leaderOppVote51DeltaS as number) : 0.05;
+}
+
+/**
+ * 位元 16、第 1、2 局：這個座位適不適用 S 的外白（不在隊上、在 S、忠臣；位元 8 加派西）。判斷照 P(隊伍乾淨) ≥ 外白門檻 − δ_S，
+ * 由 `BlueRound33.earlyNextLeaderWhite51` 算（第 1、2 局沒有貝氏投票準則，現行是正常票）。
+ */
+export function earlyNextLeaderWhiteEligible51(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  if (!eligible(tuning, obs) || ((tuning.leaderOppVote51 ?? 0) & 16) === 0 || (obs.currentRound ?? 1) > 2) return false;
+  return !(obs.proposedTeam ?? []).includes(obs.myPlayerId) && inNextLeaderGap51(obs);
+}
+
 /** 這個座位這次投票適不適用（忠臣；位元 8 加派西）：好人、真的忠臣（不是梅林的忠臣視角）、不是隊長、不是強制局。 */
 function eligible(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   const mode = tuning.leaderOppVote51 ?? 0;
@@ -65,16 +98,19 @@ export function leaderOppShift51(tuning: Readonly<AgentTuning>, obs: PlayerObser
   const deltaOut = (tuning.leaderOppVote51DeltaOut ?? 0) > 0 ? (tuning.leaderOppVote51DeltaOut as number) : delta;
   const later = leadsLaterThisRound(obs);
   if (onTeam) return (mode & 1) !== 0 && later ? delta : 0;
-  return (mode & 2) !== 0 && !later ? deltaOut : 0;
+  if ((mode & 2) !== 0 && !later) return deltaOut;
+  if ((mode & 16) !== 0 && inNextLeaderGap51(obs)) return deltaS51(tuning);
+  return 0;
 }
 
 /**
  * 第 1、2 局（位元 4）：true = 外白、false = 內黑、null = 照原本（正常票）。外白要由呼叫端再過好人投票關卡。
+ * 位元 4 是照比例的硬白硬黑，不看對組合的解讀——不符站長 11/19「外白內黑傾向 還是要建立在對組合的解讀上喔 不是硬白硬黑」，不再使用（第 51 回合 L7 −2.43）。
  */
 export function leaderOppEarly51(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean | null {
-  if (!eligible(tuning, obs) || ((tuning.leaderOppVote51 ?? 0) & 4) === 0) return null;
+  if (!eligible(tuning, obs)) return null;
   const round = obs.currentRound ?? 1;
-  if (round > 2) return null;
+  if (round > 2 || ((tuning.leaderOppVote51 ?? 0) & 4) === 0) return null;
   const onTeam = (obs.proposedTeam ?? []).includes(obs.myPlayerId);
   const later = leadsLaterThisRound(obs);
   if (onTeam && later && spotDraw(obs, 'lov51-black') < EARLY_RATES_51.onTeamBlack[round - 1]) return false;
