@@ -1,0 +1,153 @@
+# 標籤|開關|種子|起始局號|局數  （第 51 回合 外白-S（站長 11/19：不會再當隊長、但這隊過了下一局會當隊長的人才外白；照 P(隊伍乾淨) ≥ 門檻 − δ_S，不是硬白）在新預設（main a6ac2d1 ＋ c63fb301，含 loyalRationality50=3）；433001，detail=1；基準 = r50-screen 的 CLR3（r52 BCHK_433001_0 與本機 40 局已確認逐局相同）；BCHK3 = 433001 第 49,500 局起 500 局再確認
+# S16 = leaderOppVote51=16 δ_S 0.35（和舊 L2 的 δ_out 同大小，只給 S）5 萬局；S17 = 16 ＋ L1（內黑 δ 0.05）2.5 萬局
+BCHK3|detail=1|433001|49500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|0|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|0|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|1000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|1000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|1500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|1500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|2000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|2000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|2500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|2500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|3000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|3000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|3500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|3500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|4000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|4000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|4500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|4500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|5000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|5000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|5500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|5500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|6000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|6000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|6500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|6500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|7000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|7000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|7500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|7500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|8000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|8000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|8500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|8500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|9000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|9000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|9500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|9500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|10000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|10000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|10500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|10500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|11000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|11000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|11500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|11500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|12000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|12000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|12500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|12500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|13000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|13000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|13500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|13500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|14000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|14000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|14500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|14500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|15000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|15000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|15500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|15500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|16000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|16000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|16500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|16500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|17000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|17000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|17500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|17500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|18000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|18000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|18500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|18500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|19000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|19000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|19500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|19500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|20000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|20000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|20500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|20500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|21000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|21000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|21500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|21500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|22000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|22000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|22500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|22500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|23000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|23000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|23500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|23500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|24000|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|24000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|24500|500
+S17|leaderOppVote51=17 leaderOppVote51Delta=0.05 leaderOppVote51DeltaS=0.35 detail=1|433001|24500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|25000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|25500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|26000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|26500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|27000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|27500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|28000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|28500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|29000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|29500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|30000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|30500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|31000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|31500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|32000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|32500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|33000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|33500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|34000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|34500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|35000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|35500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|36000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|36500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|37000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|37500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|38000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|38500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|39000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|39500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|40000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|40500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|41000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|41500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|42000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|42500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|43000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|43500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|44000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|44500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|45000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|45500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|46000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|46500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|47000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|47500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|48000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|48500|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|49000|500
+S16|leaderOppVote51=16 leaderOppVote51DeltaS=0.35 detail=1|433001|49500|500
