@@ -418,6 +418,10 @@ class CorrectionTest(unittest.TestCase):
             entry = doc["corrections"][gid]
             self.assertEqual((set(entry["set"]), entry["note"]), (set(gd.CORRECTABLE), "主控台更正"))
             self.assertEqual([c["rule"] for c in gd.validate(entry["set"]) if c["level"] != gd.INFO], [], gid)
+        for gid in ("S209", "S374", "S205", "S1982", "S2040", "S1810"):  # 主控台更正 2026-11-18: whole records
+            entry = doc["corrections"][gid]
+            self.assertEqual((set(entry["set"]), entry["by"], entry["date"]), (set(gd.CORRECTABLE), "站長", "2026-11-18"))
+            self.assertEqual([c["rule"] for c in gd.validate(entry["set"]) if c["level"] != gd.INFO], [], gid)
         s673 = doc["corrections"]["S673"]  # 站長 2026-11-17「尾派沒有出任務 … 不用記錄」
         self.assertEqual((s673["exclude"], s673["by"], s673["date"], "set" in s673), (["FORCED_NOT_RUN"], "站長", "2026-11-17", False))
         self.assertIn("尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄", s673["note"])
@@ -436,6 +440,101 @@ class CorrectionTest(unittest.TestCase):
         applied = gd.apply_corrections([other], {"corrections": {"S13": {"set": {"assassination": "7"}}}})
         self.assertTrue(applied[0]["missing"])
         self.assertEqual(gd.build([other], excluded), [])
+
+    def test_whole_record_on_a_readable_source_is_one_report_line(self):
+        g = copy.deepcopy(GOOD)
+        g["lakes"][0]["claim"] = "x"
+        sources = [source(gd.SRC_SHEET, "12", g)]
+        whole = {f: copy.deepcopy(GOOD[f]) for f in gd.CORRECTABLE}
+        applied = gd.apply_corrections(sources, {"corrections": {"S12": {"set": whole, "by": "站長", "date": "2026-11-18"}}})
+        self.assertEqual([(a["field"], a["old"], a["new"]) for a in applied], [("record", "原紀錄（lakes 不一樣）", gd.WHOLE_RECORD)])
+        self.assertEqual(gd.build(sources)[0]["game"], GOOD)
+
+
+# 配置 123456: reds 1 2 3 4, 派 5, 梅 6. Red has two failed missions after round 2; round 3 5678 then succeeds
+# (all good: a red would have failed it), 0 checks 5 (o), 5 checks 9 (o) -> five iron-good seats 5 6 7 8 9.
+STOPPED = {
+    "config": "123456",
+    "rounds": [
+        {"proposals": [{"team": "157", "votes": ["890+"]}], "mission": "oox"},
+        {"proposals": [{"team": "2390", "votes": ["58+"]}], "mission": "ooxx"},
+        {"proposals": [{"team": "5678", "votes": ["90+"]}], "mission": "oooo"},
+    ],
+    "lakes": [{"after": 2, "holder": "0", "target": "5", "claim": "o"}, {"after": 3, "holder": "5", "target": "9", "claim": "o"}],
+    "assassination": "6",
+    "outcome": "三藍死",
+}
+
+
+class IronGoodTest(unittest.TestCase):
+    """站長 2026-11-18「有五個鐵好了 … 幫我補上這些」：五個鐵好之後的任務是定的，總庫補上。"""
+
+    def test_iron_good_from_missions_and_lakes(self):
+        self.assertEqual(rules(STOPPED)[:1], ["UNDECIDED"])
+        seats, facts = gd.iron_good(STOPPED)
+        self.assertEqual(seats, list("56789"))
+        self.assertIn("第 3 局 5678 成功（紅方已經兩紅，紅方出任務一定出失敗）：全是好人", facts)
+        g = copy.deepcopy(STOPPED)
+        g["lakes"][1]["claim"] = "?"  # no claim: 9 is not proven
+        self.assertEqual(gd.iron_good(g)[0], list("5678"))
+        g = copy.deepcopy(STOPPED)
+        g["lakes"] = [{"after": 2, "holder": "0", "target": "9", "claim": "o"}]  # 0 is not proven good: says nothing
+        self.assertEqual(gd.iron_good(g)[0], list("5678"))
+
+    def test_success_before_two_reds_or_in_round_four_proves_less(self):
+        g = copy.deepcopy(STOPPED)
+        g["rounds"][1]["mission"] = "oooo"  # red has one failed mission: a red may play success on round 3
+        g["rounds"][1]["proposals"][0]["team"] = "5890"
+        self.assertEqual(gd.iron_good(g)[0], [])
+        g = copy.deepcopy(STOPPED)  # round 4 needs two fails: a lone red on it may hide
+        g["rounds"][2]["mission"] = "ooox"
+        g["rounds"].append({"proposals": [{"team": "56789", "votes": []}], "mission": "ooooo"})
+        g["lakes"] = g["lakes"][:1]
+        self.assertNotIn("9", gd.iron_good(g)[0])
+
+    def test_completion(self):
+        done, filled = gd.complete_iron_good(STOPPED)
+        self.assertEqual(filled, {"kind": gd.INFER_IRON_GOOD, "rounds": [4, 5], "team": "56789", "facts": gd.iron_good(STOPPED)[1]})
+        self.assertEqual([r["proposals"][0]["team"] + r["mission"] for r in done["rounds"][3:]], ["56789ooooo"] * 2)
+        self.assertEqual((done["assassination"], done["outcome"]), ("6", "三藍死"))
+        self.assertEqual([c for c in rules(done) if c != "VOTE_RESULT"], [])
+        self.assertEqual(len(STOPPED["rounds"]), 3)  # the record itself is not changed
+
+    def test_no_assassination_stays_flagged(self):
+        g = dict(copy.deepcopy(STOPPED), assassination="")
+        done, _ = gd.complete_iron_good(g)
+        self.assertIn("ASSASSIN_MISSING", rules(done))
+        self.assertEqual(done["outcome"], "三藍死")
+
+    def test_not_completed_unless_airtight(self):
+        cases = {
+            "four iron good": dict(copy.deepcopy(STOPPED), lakes=STOPPED["lakes"][:1]),
+            "recorded 三紅": dict(copy.deepcopy(STOPPED), outcome="三紅", assassination=""),
+            "target contradicts the result": dict(copy.deepcopy(STOPPED), assassination="7"),
+            "another error": dict(copy.deepcopy(STOPPED), config="123455"),
+        }
+        for why, g in cases.items():
+            self.assertIsNone(gd.complete_iron_good(g), why)
+        g = copy.deepcopy(STOPPED)  # stops after round 1: a round of four is left, its team is not determined
+        g["rounds"] = g["rounds"][:2]
+        g["rounds"][1]["mission"] = "oooo"
+        self.assertIsNone(gd.complete_iron_good(g))
+        self.assertIsNone(gd.complete_iron_good(GOOD))  # decided
+
+    def test_build_marks_the_completed_game(self):
+        rows = gd.build([source(gd.SRC_SHEET, "12", copy.deepcopy(STOPPED))])
+        row = rows[0]
+        self.assertEqual((row["completed"]["team"], row["completed"]["rounds"], len(row["game"]["rounds"])), ("56789", [4, 5], 5))
+        self.assertIn("IRON_GOOD", [c["rule"] for c in row["checks"]])
+        self.assertNotIn("UNDECIDED", [c["rule"] for c in row["checks"]])
+        self.assertNotEqual(row["status"], gd.ERROR)
+        self.assertEqual(row["fp"], rm.game_fingerprint(STOPPED))  # merged by what the source says
+        sim = gd.build([source(gd.SRC_SIM, "3", copy.deepcopy(STOPPED), kind=gd.KIND_SIM)])
+        self.assertNotIn("completed", sim[0])
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "r.md"
+            gd.write_report(rows, gd.summarize(rows), {}, report)
+            self.assertIn("- S12：鐵好 56789；補第 4～5 局；結果 三藍死。", report.read_text(encoding="utf-8"))
 
 
 class MainTest(unittest.TestCase):

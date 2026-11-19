@@ -51,6 +51,11 @@ never edited. Each entry is keyed by the source's public id (``S572`` ...) and c
 also) carry ``exclude``: EXCLUDE_RULES ids the site owner ruled the game breaks although no source shows it in record
 syntax (e.g. a Discord post that ends the game before the forced 5th team went); the game is then excluded.
 
+Completion (站長 2026-11-18「有五個鐵好了 ... 幫我補上這些」): a real game whose record stops before either side has 3
+missions while exactly five seats are provably good from the public record (iron_good) gets the remaining missions
+filled in -- those five, all succeed (complete_iron_good) -- marked ``completed`` and IRON_GOOD; ``fp`` stays the
+source's.
+
 Privacy: no player names, no titles, no free text -- seats, the parsed record, ids and dates only (the same
 level as the public dataset). The repo is public.
 
@@ -71,6 +76,7 @@ import sys
 import tempfile
 import unicodedata
 from collections import Counter, defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -118,6 +124,11 @@ VENUES = ("線瓦", "面瓦")  # 線上／面對面: the only category kept as d
 # 陣容強度 S tiers = packages/shared/src/stats/strength.ts S_TIERS (high = 高強度, S >= 65)
 S_TIERS = (("high", 65.0), ("strong", 55.0), ("normal", 38.0), ("weak", float("-inf")))
 INFER_ALL_WHITE = "all_white_after_success"
+# 站長 2026-11-18: once five seats are provably good (鐵好) the remaining missions are forced -- those five go and all
+# succeed -- so recorders often stop writing; game_db completes such a record (complete_iron_good), never silently.
+INFER_IRON_GOOD = "five_iron_good"
+IRON_GOOD_TEAM = 5
+RED_COUNT = 4
 
 ERROR, WARN, INFO = "error", "warn", "info"
 
@@ -146,6 +157,7 @@ RULES: dict[str, tuple[str, str]] = {
     "NEAR_DUP": (WARN, "疑似同一局（同一天、同配置，但派隊或任務不同）"),
     "SUPERSEDED": (WARN, "同一局另一個來源記錯，總庫用了對的那一筆（例如試算表少記一局、配置寫錯）；記錯的來源要改"),
     "INFERRED_VOTES": (INFO, "順著上一局成功的隊伍派、紀錄沒寫投票：推定全部投白（不是原始紀錄）"),
+    "IRON_GOOD": (INFO, "紀錄停在分出勝負前，但已經有五個鐵好：後面的任務推定由這五人出、全部成功（不是原始紀錄）"),
     "SOURCE_NOTE": (INFO, "外部來源少記的東西（ProAvalon：湖的宣告、刺中哪個忠臣、舊紀錄的失敗張數）"),
     "OWNER_FLAG": (INFO, "試算表 note 標了要注意（review／badGame 等）"),
     "LAKE_CLAIM": (INFO, "湖的宣告沒有記"),
@@ -304,13 +316,15 @@ def proavalon_sources(doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
 
 
 CORRECTABLE = ("config", "rounds", "lakes", "assassination", "outcome")
+WHOLE_RECORD = "站長重打的整局紀錄"
 
 
 def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] | None) -> list[dict[str, Any]]:
     """Override fields of the sources named in game_db_corrections.json (on a copy of the record) and return
     what was applied: id, field, old, new, by, date -- or ``missing`` when no source has that id. A source that
     did not convert (or whose raw text showed a 6th proposal) takes a correction only when it sets the whole
-    record (every CORRECTABLE field, e.g. retyped by the site owner on the console); it then becomes readable."""
+    record (every CORRECTABLE field, e.g. retyped by the site owner on the console); it then becomes readable. A whole
+    record on a readable source replaces it and is reported as one ``record`` line naming the fields that differ."""
     entries = (doc or {}).get("corrections") or {}
     by_id = {public_id(s): s for s in sources}
     applied: list[dict[str, Any]] = []
@@ -337,7 +351,7 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
         if not src["game"]:  # the whole record, retyped: replaces the unreadable one
             src["game"] = {f: fields[f] for f in CORRECTABLE}
             src["fp"] = rm.game_fingerprint(src["game"])
-            done = [{"id": gid, "field": "record", "old": src["problem"] or "讀不懂", "new": "站長重打的整局紀錄", **meta}]
+            done = [{"id": gid, "field": "record", "old": src["problem"] or "讀不懂", "new": WHOLE_RECORD, **meta}]
             src["problem"] = ""
             src.pop("forced_rounds", None)
             src["corrected"] = [{k: v for k, v in d.items() if k != "id"} for d in done]
@@ -345,7 +359,12 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             continue
         game = dict(src["game"])
         done = []
-        for field, value in fields.items():
+        if whole:  # a readable record retyped whole: one line (which parts changed), not a dump of every field
+            changed = [f for f in CORRECTABLE if game.get(f) != fields[f]]
+            done.append({"id": gid, "field": "record", "old": f"原紀錄（{'、'.join(changed)} 不一樣）" if changed else WHOLE_RECORD,
+                         "new": WHOLE_RECORD, **meta})
+            game.update(fields)
+        for field, value in ({} if whole else fields).items():
             done.append({"id": gid, "field": field, "old": game.get(field), "new": value, **meta})
             game[field] = value
         src["game"] = game
@@ -551,6 +570,92 @@ def lake_checks(game: Mapping[str, Any], rounds: Sequence[Any], partial: bool) -
     return checks
 
 
+def iron_good(game: Mapping[str, Any]) -> tuple[list[str], list[str]] | None:
+    """The seats that are good (鐵好) in every placement of the 4 reds that fits the public record, and the facts
+    used, in plain words; None when the 配置 or a team is unreadable. Hard rules only (站長 2026-11-18, S1982 / S1810):
+      - a mission with f fails has at least f reds on its team;
+      - once red has two failed missions, every red on a mission fails it (one more failed mission wins the game):
+        a round that needs one fail and succeeded has no red on it, a round 4 that succeeded has at most one;
+      - a good lake holder tells the truth (claim o = the target is good, x = red); '?' or no claim says nothing.
+    Votes and who proposed whom are never used (behaviour, not proof)."""
+    config = str(game.get("config", ""))
+    if not (re.fullmatch(r"[0-9]{6}", config) and len(set(config)) == 6):
+        return None
+    facts: list[str] = []
+    cons: list[Any] = []  # predicates on the red set
+    red = 0
+    for r, rnd in enumerate(game.get("rounds", []), 1):
+        mission = str(rnd.get("mission") or "")
+        props = rnd.get("proposals") or []
+        if not mission:
+            continue
+        team = str(props[-1].get("team", "")) if props else ""
+        if not re.fullmatch(r"[0-9]+", team) or len(set(team)) != len(team) or not re.fullmatch(r"[ox]+", mission):
+            return None
+        fails = mission.count("x")
+        ok = mission_success(r, mission)
+        if fails:
+            cons.append(lambda reds, t=set(team), f=fails: len(reds & t) >= f)
+            facts.append(f"第 {r} 局 {team} 出了 {fails} 張失敗：隊上至少 {fails} 個紅方")
+        if ok and red == 2:
+            most = 1 if r == 4 else 0
+            cons.append(lambda reds, t=set(team), m=most: len(reds & t) <= m)
+            facts.append(f"第 {r} 局 {team} 成功（紅方已經兩紅，紅方出任務一定出失敗）：" +
+                         ("隊上最多 1 個紅方" if most else "全是好人"))
+        if not ok:
+            red += 1
+    for n, lake in enumerate(sorted(game.get("lakes", []), key=lambda lk: lk.get("after", 0)), 1):
+        holder, target, claim = str(lake.get("holder", "")), str(lake.get("target", "")), lake.get("claim", "")
+        if claim in ("o", "x") and holder in SEATS and target in SEATS and holder != target:
+            cons.append(lambda reds, h=holder, t=target, c=claim: h in reds or (t in reds) == (c == "x"))
+            facts.append(f"第 {n} 湖 {seat_label(holder)} 驗 {seat_label(target)} 宣告 {claim}（持湖的是好人就是真話）")
+    fits = [set(reds) for reds in combinations(SEATS, RED_COUNT) if all(c(set(reds)) for c in cons)]
+    if not fits:
+        return None  # the record contradicts itself under these rules: prove nothing
+    maybe_red = set().union(*fits)
+    return [s for s in SEATS if s not in maybe_red], facts
+
+
+def complete_iron_good(game: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """站長 2026-11-18「有五個鐵好了 ... 幫我補上這些」: a record that stops before either side has 3 missions while
+    exactly five seats are already provably good (iron_good) is completed -- every remaining mission is those five,
+    all succeed -- so the game is three blue; the assassination comes from the record (三藍死／活 from the 配置),
+    and without one the game keeps ASSASSIN_MISSING. Only when that is airtight: UNDECIDED is the record's only
+    error (besides a lake after the last recorded round) and the completed game has none; every remaining round
+    sends five (with six iron-good seats the team is not determined); the recorded result does not say 三紅 and
+    does not contradict the target. Returns (completed game, what was added) or None."""
+    errors = {c["rule"] for c in validate(game, infer=False) if c["level"] == ERROR}
+    if "UNDECIDED" not in errors or errors - {"UNDECIDED", "LAKE"}:  # LAKE: a lake after the last recorded round
+        return None  # (the completed game is re-checked below, so any other lake error still blocks)
+    rounds = list(game.get("rounds", []))
+    if not rounds or not all(rnd.get("mission") for rnd in rounds):
+        return None
+    blue = sum(mission_success(r, str(rnd["mission"])) for r, rnd in enumerate(rounds, 1))
+    added = list(range(len(rounds) + 1, len(rounds) + 1 + 3 - blue))
+    if not added or any(TEAM_SIZES[r - 1] != IRON_GOOD_TEAM for r in added):
+        return None
+    found = iron_good(game)
+    if found is None or len(found[0]) != IRON_GOOD_TEAM:
+        return None
+    seats, facts = found
+    team = "".join(seats)
+    config, kill, recorded = str(game["config"]), str(game.get("assassination") or ""), str(game.get("outcome") or "")
+    if recorded == gc.OUTCOME_THREE_RED:
+        return None
+    if kill:
+        outcome = gc.OUTCOME_BLUE_DEAD if kill == config[5] else gc.OUTCOME_BLUE_ALIVE
+        if recorded and recorded != outcome:
+            return None
+    else:
+        outcome = recorded  # 三藍死／活 without a target: kept, flagged ASSASSIN_MISSING
+    done = strip_names(game) or {}
+    done["rounds"] += [{"proposals": [{"team": team, "votes": []}], "mission": "o" * IRON_GOOD_TEAM} for _ in added]
+    done["outcome"] = outcome
+    if any(c["level"] == ERROR for c in validate(done)):
+        return None
+    return done, {"kind": INFER_IRON_GOOD, "rounds": added, "team": team, "facts": facts}
+
+
 # ---------------------------------------------------------------------------
 # Merge
 # ---------------------------------------------------------------------------
@@ -735,8 +840,14 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
             continue
         checks: list[dict[str, str]] = []
         inferred: list[dict[str, Any]] = []
-        if main["game"]:
-            checks += validate(main["game"], partial=kind == KIND_SIM, inferred=inferred)
+        game = main["game"]
+        completed = complete_iron_good(game) if game and kind == KIND_REAL and not external else None
+        if completed:
+            game, filled = completed
+            checks.append(_check("IRON_GOOD", f"紀錄停在第 {filled['rounds'][0] - 1} 局，已經有五個鐵好 {filled['team']}："
+                                              f"{_round_span(filled['rounds'][0], filled['rounds'][-1])}推定由這五人出任務、全部成功"))
+        if game:
+            checks += validate(game, partial=kind == KIND_SIM, inferred=inferred)
             counts = Counter(s["src"] for s in members)
             for src, n in sorted(counts.items()):
                 if n > 1:
@@ -785,9 +896,10 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
                          **({"wrong": True} if id(s) in replaced else {}),
                          **({"fixedByReply": s["fixedByReply"]} if s.get("fixedByReply") else {})} for s in members],
             "fp": main["fp"],
-            "game": strip_names(main["game"]),
+            "game": strip_names(game),
             **({"problem": main["problem"]} if not main["game"] else {}),
             **({"inferred_votes": inferred} if inferred else {}),
+            **({"completed": completed[1]} if completed else {}),
             **({"corrections": corrected} if (corrected := [c for s in members for c in s.get("corrected", [])]) else {}),
             "checks": checks,
         })
@@ -999,6 +1111,20 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
             else:
                 same = "（來源已經是這個值，這筆更正可以刪掉）" if c["old"] == c["new"] else ""
                 L.append(f"- {c['id']} `{c['field']}`：{c['old']} → {c['new']}（{c['by']} {c['date']}）{same}")
+        L.append("")
+    filled = [r for r in rows if r.get("completed")]
+    if filled:
+        L.append(f"## 五個鐵好：補完的局（{len(filled)}）")
+        L.append("")
+        L.append("站長 2026-11-18：紅方兩紅之後，成功的任務加上湖的結果等等讓五個人確定是好人（鐵好），後面的任務只會是這五人出、"
+                 "全部成功，直接進刺殺；紀錄常常就停在那裡。紀錄停在分出勝負前、唯一的錯是「沒有一方拿到 3 局」、而且從公開資訊"
+                 "（任務失敗張數、兩紅後的成功任務、好人持湖說真話）能證明剛好五個鐵好的局，總庫補上後面的任務（`completed: "
+                 f"{INFER_IRON_GOOD}`，不是原始紀錄）；刺殺照原紀錄，沒有刺殺的照樣標「三藍卻沒有刺殺目標」。")
+        L.append("")
+        for r in filled:
+            c = r["completed"]
+            L.append(f"- {r['id']}：鐵好 {c['team']}；補{_round_span(c['rounds'][0], c['rounds'][-1])}；結果 {r['game']['outcome'] or '（沒有）'}。"
+                     + "根據：" + "；".join(c["facts"]))
         L.append("")
     L.append(f"## 錯誤局：不記錄（{len(excluded)}）")
     L.append("")
