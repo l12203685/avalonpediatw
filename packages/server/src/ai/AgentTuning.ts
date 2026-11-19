@@ -2374,7 +2374,6 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   tailClean52: 2,
   merlinKnownRed54: 0,
   failedReuse54: 0,
-  tailClean52: 0,
   exactPick53: 0,
   viewpoint53: 0,
   goodLake41: 0,
