@@ -435,6 +435,12 @@ export interface BayesOptions {
   rationality50?: { scale: number; noVote: boolean; weights?: 'all' };
   /** Round 53 `viewpoint53`: blue seats only, every other seat's proposal read from its leader's public-loyal viewpoint (`Viewpoint53.ts`). */
   viewpoint53?: { scale: number; skipForced: boolean; power?: number };
+  /**
+   * Round 55 `copyDiscount55` → this weight = 1 − d (site owner 2026-11-19「第二局的任務結果資訊 跟第一局任務結果資訊要合起來看」): blue seats only. A rejected,
+   * non-forced proposal whose team holds the whole latest clean successful mission team (a re-proposal / copy of it) is read with weight w
+   * (its proposal term and its votes): every seat copying the same team is not that many independent endorsements of it.
+   */
+  copyWeight55?: number;
   /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
   lakeSusp50?: number;
 }
@@ -566,7 +572,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -709,7 +715,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const rat50W = opts.rationality50?.weights === 'all' ? 'A' : '';
   const susp50 = blueSeat && opts.lakeSusp50 !== undefined && opts.lakeSusp50 > 0 && opts.lakeSusp50 < 1 ? opts.lakeSusp50 : 0;
   const vp53 = blueSeat && opts.viewpoint53 !== undefined && opts.viewpoint53.scale > 0 ? opts.viewpoint53 : null;
-  const fullKey = `${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const copyW = blueSeat && opts.copyWeight55 !== undefined && opts.copyWeight55 >= 0 && opts.copyWeight55 < 1 ? opts.copyWeight55 : 1;
+  const fullKey = `${copyW !== 1 ? `|cd${copyW}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -734,9 +741,16 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const records: PlayerObservation['voteHistory'] = pending
     ? [...obs.voteHistory, { round: obs.currentRound ?? 1, attempt: (obs.failCount ?? 0) + 1, leader: obs.currentLeader, team: [...(obs.proposedTeam ?? [])], approved: false, votes: {} } as PlayerObservation['voteHistory'][number]]
     : obs.voteHistory;
+  // Round 55 `copyDiscount55`: the latest clean successful mission before each proposal's round (copies of it are read with weight copyW).
+  const cleanSuccessBefore = (round: number): string[] | null => {
+    const qs = obs.questHistory.filter((q) => q.round < round && (q.failCount ?? 0) === 0);
+    return qs.length ? qs[qs.length - 1].team : null;
+  };
   const pre = records.map((v) => {
     const teamMask = view.maskOf(v.team);
+    const succ = copyW !== 1 && !v.approved && v.attempt < 5 ? cleanSuccessBefore(v.round) : null;
     return {
+      copyW: succ && succ.every((id) => v.team.includes(id)) ? copyW : 1,
       v,
       teamMask,
       leaderBit: bit(v.leader),
@@ -776,6 +790,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     let lpp = 0;
     let lv = 0;
     for (const p of pre) {
+      const lp0 = lp;
+      const lpp0 = lpp;
+      const lv0 = lv;
       const { v, teamMask } = p;
       const hasRed = (w & teamMask) !== 0;
       // Strict Merlin (Percival's good thumb in this world): proposals from its seen-clean pool.
@@ -838,6 +855,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
         }
         if (tempered) lv += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound); else lp += voteLogIx(campIx(x.b), x.on, hasRed, p.r3, x.yes, p.keyRound);
       }
+      if (p.copyW !== 1) { lp = lp0 + p.copyW * (lp - lp0); lpp = lpp0 + p.copyW * (lpp - lpp0); lv = lv0 + p.copyW * (lv - lv0); }
     }
     for (const q of quests) {
       const reds = sizeOf(w & q.mask);
@@ -1068,6 +1086,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...recalibOf(t),
     ...((t.loyalRationality50 ?? 0) > 0 ? { rationality50: { scale: 1, noVote: t.loyalRationality50 === 2 || t.loyalRationality50 === 4, ...((t.loyalRationality50 ?? 0) >= 3 ? { weights: 'all' as const } : {}) } } : {}),
     ...((t.lakePickSuspicion50 ?? 0) > 0 ? { lakeSusp50: t.lakePickSuspicion50 } : {}),
+    ...((t.copyDiscount55 ?? 0) > 0 ? { copyWeight55: 1 - Math.min(1, t.copyDiscount55 ?? 0) } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
 }
 
