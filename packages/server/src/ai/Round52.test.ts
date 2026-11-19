@@ -37,9 +37,9 @@ function r2Forced(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('tailClean52 flag', () => {
-  it('exists, off by default, parses', () => {
+  it('exists, off in the legacy table, 2 in the default, parses', () => {
     expect(LEGACY_AGENT_TUNING.tailClean52).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.tailClean52).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.tailClean52).toBe(2); // round 52 adopted (site owner 2026-11-19: Percival's 2-5 after an R1 fail uses the cleanest team)
     expect(parseTuningFlag('tailClean52')).toEqual({ tailClean52: 2 });
     expect(parseTuningFlag('tailClean52=3')).toEqual({ tailClean52: 3 });
     expect(() => parseTuningFlag('tailClean52=8')).toThrow();
@@ -60,8 +60,11 @@ describe('tailClean52Bit / tailClean52Tuning', () => {
     expect(tailClean52Bit(r2Forced({ currentRound: 3, questResults: ['fail', 'success'] }))).toBe(0);
   });
   it('off or the bit not set: the same tuning object; on: Percival gets the cleanest-team path', () => {
-    const off = T();
+    const off = T({ tailClean52: 0 });
     expect(tailClean52Tuning(off, r2Forced())).toBe(off);
+    expect(tailClean52Tuning(T(), r2Forced()).goodCleanLead & 2).toBe(2); // the default (=2) applies at 2-5 after an R1 fail
+    const dflt = T();
+    expect(tailClean52Tuning(dflt, r2Forced({ questResults: ['success'] }))).toBe(dflt); // not after an R1 success
     const r1Only = T({ tailClean52: 1 });
     expect(tailClean52Tuning(r1Only, r2Forced())).toBe(r1Only);
     const on = tailClean52Tuning(T({ tailClean52: 2 }), r2Forced());
