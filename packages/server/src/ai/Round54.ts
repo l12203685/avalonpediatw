@@ -26,23 +26,26 @@ function hash01(text: string): number {
 
 const subset = (a: readonly string[], b: readonly string[]): boolean => a.every((x) => b.includes(x));
 
-/** 失敗過的照派的成功隊：成功隊 S 整隊在之後某一個失敗的任務隊 F 裡（照回合，舊的在前）。 */
+/** 任務出了失敗牌（第 4 局一張失敗仍算成功，但一樣公開證明隊上有紅；INV-B3：不只看結果）。 */
+const failCards = (q: { failCount: number }): boolean => (q.failCount ?? 0) > 0;
+
+/** 失敗過的照派的成功隊：沒有失敗牌的成功隊 S 整隊在之後某一個出了失敗牌的任務隊 F 裡（照回合，舊的在前）。 */
 export function failedReuseCores(obs: PlayerObservation): string[][] {
   const qs = obs.questHistory;
-  return qs.filter((s) => s.result === 'success' && qs.some((f) => f.result === 'fail' && f.round > s.round && subset(s.team, f.team))).map((s) => [...s.team]);
+  return qs.filter((s) => !failCards(s) && qs.some((f) => failCards(f) && f.round > s.round && subset(s.team, f.team))).map((s) => [...s.team]);
 }
 
-/** 出過失敗任務、梅林看得到的紅（不是梅林 = 空的）。 */
+/** 出過有失敗牌的任務、梅林看得到的紅（不是梅林 = 空的）。 */
 export function seenRedsOnFailedMissions(obs: PlayerObservation): string[] {
   if (obs.myRole !== 'merlin') return [];
-  const failed = obs.questHistory.filter((q) => q.result === 'fail');
+  const failed = obs.questHistory.filter(failCards);
   return obs.knownEvils.filter((id) => failed.some((q) => q.team.includes(id)));
 }
 
 /** `merlinKnownRed54` 位元 1：照派成功的隊 `succ`（第 `succRound` 局）時，隊上看得到的紅在之後失敗的任務上 → 不照派。 */
 export function merlinReuseTainted54(tuning: Readonly<AgentTuning>, obs: PlayerObservation, succ: readonly string[], succRound: number): boolean {
   if (((tuning.merlinKnownRed54 ?? 0) & 1) === 0 || obs.myRole !== 'merlin') return false;
-  const later = obs.questHistory.filter((q) => q.result === 'fail' && q.round > succRound);
+  const later = obs.questHistory.filter((q) => failCards(q) && q.round > succRound);
   return succ.some((id) => obs.knownEvils.includes(id) && later.some((q) => q.team.includes(id)));
 }
 
