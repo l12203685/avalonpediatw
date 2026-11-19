@@ -1245,6 +1245,9 @@ export interface AgentTuning {
    * 第 50 回合（藍方讀法，站長 11/18「哪些動作是忠臣做得到 或 忠臣可取得的資訊」；`Round50.ts`）：每一個公開動作（提議、強制局、湖的目標）
    * 都在「當時的公開資訊、坐在那個位置的忠臣」下重算一次機器人自己的忠臣評分（最乾淨的隊、湖中分數），忠臣難以說明的動作（和最好的選擇差多少）
    * 乘上真人擬合的殘差權重加到那個人是紅的對數勝算。1 = 強者桌的權重（`Round50.W50_STRONG`），藍方每一個讀後驗的決定；2 = 同 1，自己投票時不用（投票門檻是在舊後驗上定的）；3／4 = 同 1／2，用全部真人的權重（`W50_ALL`，參考）。0 = 關。
+   * **第 50 回合預設 3**（站長 2026-11-19「用全部真人的權重」）：三組確認 433001／433101／433201 各 10 萬局，對 `r46-confirm-v5` 的 TV 藍方 +0.56 [+0.51, +0.61]、三組都正，改到的局約 16%；
+   * 分局面距離（vs CBASE）對真人 −0.0022、對強者 +0.0007，過；5藍0紅 TV 0.078 → 0.058。強者權重的 `=1` 也通過確認（+0.13 [+0.08, +0.18]），站長選全部真人的權重。
+   * 環境變數 `AVALON_TUNING_LOYAL_RATIONALITY_50=0` 退回舊做法。
    */
   loyalRationality50: number;
   /**
@@ -2311,7 +2314,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   r1SuccessTrust47: 0,
   lakePlanLead47: 0,
   goodCleanLeadR4Fix47: 0,
-  loyalRationality50: 0,
+  loyalRationality50: 3,
   lakePickSuspicion50: 0,
   assassinDerivability50: 0,
   redLakeDisguise50: 0,

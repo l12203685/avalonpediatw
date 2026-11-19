@@ -40,10 +40,10 @@ function r3(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('flags', () => {
-  it('exist, are off in the legacy and default tables, and parse their ranges', () => {
+  it('exist, are off in the legacy table, off in the default except loyalRationality50 (3), and parse their ranges', () => {
     for (const k of KEYS) {
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
-      expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
+      expect(DEFAULT_AGENT_TUNING[k]).toBe(k === 'loyalRationality50' ? 3 : 0); // round 50 loyalRationality50=3 adopted (site owner 2026-11-19: all-human weights; confirmation +0.56 [+0.51, +0.61])
     }
     expect(parseTuningFlag('loyalRationality50')).toEqual({ loyalRationality50: 1 });
     expect(parseTuningFlag('loyalRationality50=2')).toEqual({ loyalRationality50: 2 });
@@ -56,11 +56,13 @@ describe('flags', () => {
     expect(describeAgentTuning(T({ lakePickSuspicion50: 0.4 }))).toContain('lakePickSuspicion50=0.4');
   });
 
-  it('off: the posterior options are the default ones', () => {
-    const o = bayesOptionsOf(T());
+  it('off: the posterior options are the pre-round-50 ones; the default reads with the all-human weights', () => {
+    const o = bayesOptionsOf(T({ loyalRationality50: 0 }));
     expect(o.rationality50).toBeUndefined();
     expect(o.lakeSusp50).toBeUndefined();
     expect(bayesOptionsOf(T({ loyalRationality50: 2 })).rationality50).toEqual({ scale: 1, noVote: true });
+    expect(bayesOptionsOf(T()).rationality50).toEqual({ scale: 1, noVote: false, weights: 'all' });
+    expect(bayesOptionsOf(T()).lakeSusp50).toBeUndefined();
   });
 });
 
