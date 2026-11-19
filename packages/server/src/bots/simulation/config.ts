@@ -31,10 +31,13 @@ export const SIM_REPLY_MAX_CHARS = 1800;
  */
 export const SIM_PROPOSE_SOFT_MAX_CHARS = 900;
 
-/** 閒置多久自動結束（分鐘）；SIM_SESSION_TTL_MINUTES 可改（1–240）。 */
-export const SIM_SESSION_TTL_MINUTES_DEFAULT = 30;
-/** 不論有沒有在動，一題最長 2 小時。 */
-export const SIM_SESSION_HARD_CAP_MS = 2 * 60 * 60 * 1000;
+/**
+ * 閒置多久自動結束（分鐘）。Edward 2026-11-19「有人反應模擬瓦的等待時間太短了 先改成除非有人 /公布 否則不會結束」：
+ * 預設不會因為閒置結束（0 = 不限）；SIM_SESSION_TTL_MINUTES 設 1–10080 才會閒置結束。
+ */
+export const SIM_SESSION_TTL_MINUTES_DEFAULT = 0;
+/** 不論有沒有在動，一題最長多久：2026-11-19 起不限（只有 /公布、/結束、開新題、名額上限或重啟會結束）。 */
+export const SIM_SESSION_HARD_CAP_MS = Number.POSITIVE_INFINITY;
 /** 記憶體裡最多幾題（超過就結束最久沒動的）。 */
 export const SIM_MAX_SESSIONS = 500;
 /** 同一個聊天室（群組／頻道）最多幾題。 */
@@ -56,8 +59,8 @@ export const SIM_HUMAN_SMALL_SAMPLE = 30;
 
 export function simSessionTtlMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = Number.parseInt((env.SIM_SESSION_TTL_MINUTES || '').trim(), 10);
-  const minutes = Number.isFinite(raw) && raw >= 1 && raw <= 240 ? raw : SIM_SESSION_TTL_MINUTES_DEFAULT;
-  return minutes * 60 * 1000;
+  const minutes = Number.isFinite(raw) && raw >= 1 && raw <= 10080 ? raw : SIM_SESSION_TTL_MINUTES_DEFAULT;
+  return minutes > 0 ? minutes * 60 * 1000 : Number.POSITIVE_INFINITY;
 }
 
 function idList(raw: string | undefined): Set<string> {
