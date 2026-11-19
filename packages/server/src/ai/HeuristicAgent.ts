@@ -9,6 +9,7 @@
  * - All roles: use vote history to build suspicion scores
  */
 
+import { exactPick53Team } from './Round53';
 import {
   AvalonAgent,
   PlayerObservation,
@@ -874,11 +875,12 @@ export class HeuristicAgent implements AvalonAgent {
     // to avoid circular import (ForwardAgent imports HeuristicAgent).
     if (forwardReasoningEnabled()) {
       const fa = createForwardAgent(this.agentId, this);
-      if (fa) return fa.act(obs);
+      // Round 53 `exactPick53` (Round53.ts): a loyal / Percival leader's final team → the highest P(no red) team (off by default).
+      if (fa) return exactPick53Team(this.tuning, obs, fa.act(obs));
     }
 
     switch (obs.gamePhase) {
-      case 'team_select':  return this.selectTeam(obs);
+      case 'team_select':  return exactPick53Team(this.tuning, obs, this.selectTeam(obs));
       case 'team_vote':    return this.voteOnTeam(obs);
       case 'quest_vote':   return this.voteOnQuest(obs);
       case 'assassination': return this.assassinate(obs);
