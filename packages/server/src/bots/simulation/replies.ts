@@ -1044,7 +1044,7 @@ export function formatReveal(input: RevealInput): string {
 
 // ─── 固定短句 ─────────────────────────────────────────────────────────────
 
-export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（太久沒動作、開了別的題或伺服器重新啟動都會結束）。輸入 /模擬 開一題，/help 模擬 看全部指令';
+export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（有人 /公布 或 /結束、開了別的題或伺服器重新啟動都會結束）。輸入 /模擬 開一題，/help 模擬 看全部指令';
 export const BANK_NOT_READY_TEXT = '模擬瓦題庫還沒準備好，請稍後再試。';
 export const RATE_LIMITED_TEXT = '模擬指令太頻繁了，10 分鐘後再試。';
 export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 4局、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題 題號｜/help 模擬';

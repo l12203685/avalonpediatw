@@ -164,7 +164,7 @@ secret `VITE_SERVER_URL`（玩家前端連的那個後端，探測玩家實際�
 | 變數 | 預設 | 說明 |
 |---|---|---|
 | `SIM_COMMANDS_ENABLED` | 開 | `false` 關 `/模擬` 系列 |
-| `SIM_SESSION_TTL_MINUTES` | 30 | 閒置幾分鐘自動結束（最長 2 小時） |
+| `SIM_SESSION_TTL_MINUTES` | 不限 | 閒置幾分鐘自動結束；沒設就不會因為閒置或時間結束（2026-11-19） |
 | `SIM_DISCORD_PUBLIC_CHANNEL_IDS` | 空 = 到處公開 | 有設 = 只有這些頻道公開回覆，其他地方只有本人看得到 |
 | `SIM_LINE_GROUP_IDS` | 空 | 鏡像群以外可以玩模擬的 LINE 群（只回模擬指令和 `/指令`、用自己的 reply_token） |
 | `SIM_MIRROR_FOLLOWUPS` | 關 | 鏡像群裡開著題目的人打的 `/派` `/區間` `/下一步` `/公布` `/結束` 要不要同步到 Discord／大廳（預設不同步；`/模擬` 開題那句照常同步） |

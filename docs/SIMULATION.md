@@ -255,7 +255,7 @@ Edward 2026-11-17 定的三行：配置 = 刺 娜 莫 奧 派 梅 依序坐幾�
 | 變數 | 預設 | 說明 |
 |---|---|---|
 | `SIM_COMMANDS_ENABLED` | 開 | `false` 關掉（LINE 變成一般聊天；Discord 回「目前停用」；`/指令`、`/help` 不再列出） |
-| `SIM_SESSION_TTL_MINUTES` | 30 | 閒置幾分鐘自動結束（1–240）；不論如何 2 小時結束 |
+| `SIM_SESSION_TTL_MINUTES` | 不限 | 閒置幾分鐘自動結束（1–10080）；沒設就不會因為閒置或時間結束（2026-11-19 Edward：除非有人 /公布 否則不會結束） |
 | `SIM_DISCORD_PUBLIC_CHANNEL_IDS` | 空 | 空 = Discord 到處公開回覆（跟 `/戰績` 一樣）；有設（逗號分隔）= 只有這些頻道公開，其他地方只有本人看得到 |
 | `SIM_LINE_GROUP_IDS` | 空 | 鏡像群以外，也可以玩模擬的 LINE 群（例如另開的「模擬瓦」練習群）；那裡只回模擬指令和 `/指令`，用自己的 reply_token，不送同步佇列 |
 | `SIM_MIRROR_FOLLOWUPS` | 關 | `true` = 鏡像群裡開著題目的人打的後續指令也同步到 Discord／大廳（跟一般文字一樣） |

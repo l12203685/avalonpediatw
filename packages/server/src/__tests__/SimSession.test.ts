@@ -641,8 +641,16 @@ describe('help and co-answering (2026-10-22, first real players)', () => {
     expect(NO_SESSION_TEXT).toContain('伺服器重新啟動');
   });
 
-  it('2 hours is the hard cap even when active', async () => {
-    const e = engine({ ttlMs: 30 * MIN });
+  it('Edward 2026-11-19: by default an exercise never ends from idling or age — only /公布, /結束, a new /模擬, caps or a restart', async () => {
+    const e = engine();
+    await say(e, '/模擬 忠臣 4');
+    clock.now += 3 * 24 * 60 * MIN; // three days idle
+    expect(await say(e, '/區間 789=2')).toContain('區間】');
+    expect(e.activeSessions()).toBe(1);
+  });
+
+  it('a configured hard cap still ends an exercise even when active', async () => {
+    const e = engine({ ttlMs: 30 * MIN, hardCapMs: 2 * 60 * MIN });
     await say(e, '/模擬 忠臣 4');
     for (let i = 0; i < 11; i++) {
       clock.now += 10 * MIN;
