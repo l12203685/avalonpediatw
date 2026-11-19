@@ -30,6 +30,7 @@
 | 牌譜（Discord／模擬瓦） | `packages/server/records_cache.json` | `discord_records_export.py`（每晚） | 同上 |
 | 牌譜總庫 | `packages/server/game_db.json`、`docs/data/game_db_report.md` | `game_db.py`（每晚，讀上面兩個檔） | 同上 |
 | 站長更正 | `packages/server/game_db_corrections.json` | console:apply（站長的裁定） | 套用後問題消失 |
+| 玩家別名／拆分 | `packages/server/player_aliases.json`（`aliases` 合併、`splits` 同名不同人） | console:apply（站長的裁定） | 同名不同人候選（`name_collisions.json`） |
 | ProAvalon（外部） | `packages/server/proavalon_games.json` | 預設不進總庫（2026-11-18） | 不顯示（`--with-proavalon` 才有） |
 | 百科文章 | `packages/server/wiki_data.json` | 人工／PR | 文章清單 |
 | 觀念卡 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply`（docs/CONCEPTS.md） | 觀念卡 |
@@ -67,11 +68,19 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 | `concepts.json` | 觀念卡庫照抄；沒有卡庫時 `available: false` | 觀念卡 |
 | `wiki_index.json` | 每篇文章的 id、標題、分類、章節（錨點與深連結）、網址、最後修改的 commit／日期 | 文章同步 |
 | `week_drafts.json` ＋ `week_drafts/*.png` | 從 `--date` 起 7 天：貼文、第一則留言、圖、`parts`（範本佔位符的內容，都是字串）、`type`（題型 `{ kind, name }`，#89 的 `draft.parts.type`）、`frozen`；實際套用的範本與佔位符說明 | 一週草稿、範本編輯 |
+| `name_collisions.json` | 同名不同人的候選（`name_collisions.py`）：`candidates`（規則 `a1`／`a2`／`b`、可信度、名字、局號、每群的日期／分類／Discord 標籤／牌友數、理由）＋每筆的 `suggested`（`nameSplits/<id>` 建議文件，見〈4. 編輯佇列〉）；`counts` 各規則的名字數與局數；`dbVersion` = commit。**這個檔的內容就是名字，一律含名字** | 同名不同人分頁（主控台頁面由站長另外做） |
 | `manifest.json` | `sourceSha`（來源 commit，同 `source.sha`；另有 `dirty`）、`generatedAt`（產生時間，ISO、UTC）、每個檔的數量、注意事項 | 頁首「鏡像自 main @sha」與右上角的時間戳記 |
 
 問題牌譜的分組（照 2026-11-17 第一版整理腳本移植，`test_console_export.py` 鎖住跟舊腳本一致）：
 `excluded` 錯誤局 → `error` 規則錯誤 → `conflict` 來源不一致 → `dup` 疑似重複 → `stuck` 第 N、N+1 局黏在一起；一局只列在第一個符合的分組。
-預設不輸出玩家名字；`--names` 才在 `records` 加座位暱稱（只給私人主控台）。
+`problem_games.json` 預設不輸出玩家名字；`--names` 才在 `records` 加座位暱稱（只給私人主控台）。`name_collisions.json` 一律有名字（`--out` 本來就必須在 repo 外面）。
+
+同名不同人的規則（`packages/server/name_collisions.py`，讀 `games_cache.json`，名字已套用別名與拆分；百科AI 局不算）：
+`a1` 同一局兩個座位同名（確定：一個人不能坐兩個位置，多半是座位打錯，真的兩人同名才拆）→
+`a2` 同一天、同分類、同場次的兩桌都有這個名字，兩桌共同的名字少於 6 個（很可能：資料沒有時刻，場次是各紀錄者自己數的；Discord 發文時間是上傳時間，常常一次補貼好幾局，不能當開局時間）→
+`b` 這個名字的局分成幾群，群與群之間沒有任何共同的牌友（要人看；每局至少列了 5 個其他名字才算）。
+建議的 `as` 是「名字（2）」「名字（3）」…（沒被用過的），`b` 建議把最大群以外的每一群各拆成一個人，`a2` 建議兩桌裡跟這個名字平常的牌友比較不重疊的那一局，`a1` 建議第二個座位（`seat`）。
+公開的 `docs/data/game_db_report.md` 只有各規則的數量（`game_db.py` 每晚寫），名字只在這裡。
 
 主控台另外還讀 `candidates.json`、`games.json`（`threads:candidates` 產生）和 `players.json`，這三個還沒併進 console:export。
 
@@ -89,7 +98,7 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 - **怎麼進 main**：一律開 PR（分支 `claude/console-apply-<日期>`），標題寫套用了哪幾筆；PR 合併才算套用。不直接推 main。
 - **回寫主控台**：合併後在那筆 db 文件寫 `appliedSha`（main 的 commit）與 `appliedAt`；被拒絕或不能套用的寫 `applyError`（原因）。下一次 export 的 `manifest.source.sha` 包含 `appliedSha`，主控台就能顯示「已進 main」。
 - **冪等**：同一筆編輯套兩次結果一樣（以 db 文件的 id 當鍵）；套用前先讀 repo 現況，已經一樣就只回寫 `appliedSha`。
-- **隱私**：寫進 repo 的只有座位、牌譜記號、id、日期與站長的裁定說明；不寫玩家名字、聊天內容或憑證（repo 是公開的）。
+- **隱私**：寫進 repo 的只有座位、牌譜記號、id、日期與站長的裁定說明；不寫玩家名字、聊天內容或憑證（repo 是公開的）。唯一的例外是站長自己的 `packages/server/player_aliases.json`：別名與拆分（同名不同人）的名字只寫在那裡。
 
 | 編輯（主控台 db） | 寫到 repo 的哪裡 | applier | 套用後怎麼確認 |
 |---|---|---|---|
@@ -102,12 +111,33 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 | 草稿：`drafts/<日期>` 的 `postEdit`、`note` | 沒有對應的檔：貼文是產生的。改成選題、範本或程式的修改再套用；做不到就回寫 `applyError` | Claude 判斷 | — |
 | 觀念卡編輯 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply <edits.json>`（格式與驗證見 [docs/CONCEPTS.md](CONCEPTS.md)；`concepts:export` 另給每張卡的待複查旗標與章節目錄） | export 的 `concepts.json`、`concepts:check` 待複查 0 |
 | 玩家別名：`aliasDecisions/<key>` | `packages/server/player_aliases.json` | Claude 手動 | 每晚的快取更新合併那位玩家 |
+| 同名不同人：`nameSplits/<id>`（`status: 'confirmed'`；每天 08:00 的例行同步套用） | `packages/server/player_aliases.json` 的 `splits`：在 `name` 那一筆（沒有就新增）加一條規則 `{"as": as, "games": games}`，有 `seat` 就帶上，`note` 寫 `nameSplits/<id>` 與站長的說明；格式與驗證見 docs/stats/two_stage_outcome.md〈玩家別名〉的「拆分」。再跑 `python packages/server/generate_cache.py --compare`（本機）確認那幾局改算 `as`、守門通過 | Claude 手動（`parse_player_splits` 會驗證） | 下一次 export 的 `name_collisions.json` 不再列這一筆（那幾局已是 `as` 的名字）；報告〈同名不同人〉的「已拆開」局數 |
 | 收件匣：`items/<id>` 的 `reply`、`status` | 看內容：多半是開 issue 或 PR | Claude 判斷 | 回寫 `appliedSha` 或關聯的 PR |
+
+`nameSplits/<id>` 的文件格式（站長確認拆分；id 是 `name_collisions.json` 給的 `ns_<12 hex>`，同樣的名字＋局號＋座位每次匯出都是同一個 id，所以已經回答過的不會重複出現）：
+
+```json
+{
+  "name": "牌譜上的名字（戰績顯示的那個）",
+  "games": ["S572", "D1b044c559d"],
+  "as": "另一個人的名字",
+  "status": "pending",
+  "seat": "0",
+  "rule": "b",
+  "reason": "為什麼懷疑（匯出時帶的，給站長看）"
+}
+```
+
+- `name`、`games`（局號：`S` + 流水號、`D` + Discord匯入編號；站長也可以改成 Discord 貼文編號）、`as`、`status` 必填；`seat` 只有同一局兩個座位同名時才有；`rule`、`reason` 是匯出帶的說明，套用時不寫進 repo。
+- `status`：`pending`（匯出的建議，還沒看）→ 站長改成 `confirmed`（是兩個人；`as` 和 `games` 可以先改）或 `rejected`（是同一個人，不拆）。只有 `confirmed` 會被套用；`rejected` 留在 db，下次匯出同一個 id 時主控台就知道已經回答過。
+- 套用後照共同規則回寫 `appliedSha`／`appliedAt`（不能套用的寫 `applyError`，例如 `as` 是某個別名的舊寫法）。
+- 隱私：`player_aliases.json` 是站長的檔，名字只寫在那裡；PR 標題與內文、commit 訊息只寫「拆分 N 筆」與局號，不寫名字。
 
 主控台唯讀、由 Claude 同步時照 repo 寫的：`meta/gameCounts`（＝ `game_counts.json`）、`meta/summary`、`posted/<日期>`（＝ `threads-state` 的發文紀錄）。
 
 ## 5. 驗證
 
 - `python packages/server/test_console_export.py`：牌譜這一半在 fixture 上跟舊整理腳本一致、重跑一字不差、fixture 沒有玩家名字。
+- `python packages/server/test_name_collisions.py`：同名不同人的三條規則、建議文件的格式與 id、公開報告只有數量。
 - `pnpm --filter @avalon/server exec vitest run src/__tests__/ConsoleExport.test.ts`：文章清單、最後修改的 commit、觀念卡、manifest；整支程式重跑一字不差、拒絕把輸出寫進 repo。
 - `pnpm --filter @avalon/server type-check:scripts`：匯出程式的型別檢查（`scripts/` 不在 `tsc --noEmit` 的範圍）。

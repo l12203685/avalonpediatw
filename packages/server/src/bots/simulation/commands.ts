@@ -12,6 +12,7 @@
  *                         `1 5 9 *1+` 也可以；各組可以重疊，跟百科「1 2 *1-2」「2 3 7 *2」一樣）
  *   /分析                 剛剛那次 /派 的完整解讀（2026-11-16：/派 只回幾好幾壞，解讀改用這個指令看）
  *   /模擬 1-5～4-5、5局   從那一局第 5 次派票（尾派）／第 5 局開始（可以加角色、座位：/模擬 3-5 梅林）
+ *   /模擬 4局             第 4 局隨機一次忠臣當隊長的派票（2026-11-19；加角色就出那個角色）
  *   /模擬 刺殺            刺殺題（你是刺客），/刺 座位 作答
  *   /模擬 今天            照 Threads 的每週主題出題（2026-11-16）
  *   /區間                 （不帶內容）百科AI 怎麼讀這個局面：各家紅機率、最可能的紅方、百科AI 會派的隊（Edward 2026-11-17）
@@ -45,7 +46,7 @@ export interface IntervalGroup {
 export type SimUsageCommand = 'start' | 'propose' | 'interval' | 'assassinate';
 
 export type SimCommand =
-  | { kind: 'start'; role?: SimRoleChoice; seat?: number; exerciseId?: string; midRound?: number; special?: 'assassin' | 'today' }
+  | { kind: 'start'; role?: SimRoleChoice; seat?: number; exerciseId?: string; midRound?: number; anyAttempt?: boolean; special?: 'assassin' | 'today' }
   /** /刺 座位：刺殺題的答案。 */
   | { kind: 'assassinate'; seat: number }
   | { kind: 'propose'; team: number[] }
@@ -125,8 +126,8 @@ export function normalizeExerciseId(raw: string): string | null {
   return /^[0-9A-HJKMNP-TV-Z]{5,8}-(?:[0-9]|[1-5]-[1-5]|A)$/.test(t) ? t : null;
 }
 
-/** `/模擬 1-5`～`4-5`（尾派）、`5局`（第 5 局）的局面字（-、－、~ 都可以）。 */
-const MID_RE = /(?:^|\s)(?:([1-4])\s*[-－~～]\s*5|(?:第\s*)?(5|五)\s*局)(?=\s|$)/u;
+/** `/模擬 1-5`～`4-5`（尾派）、`4局`（第 4 局任何一次，2026-11-19）、`5局`（第 5 局）的局面字（-、－、~ 都可以）。 */
+const MID_RE = /(?:^|\s)(?:([1-4])\s*[-－~～]\s*5|(?:第\s*)?([45四五])\s*局)(?=\s|$)/u;
 
 /** `/模擬 刺殺`、`/模擬 今天`（只能單獨用）。 */
 const SPECIAL_WORDS: ReadonlyMap<string, 'assassin' | 'today'> = new Map([
@@ -236,7 +237,8 @@ function parseStartArgs(rest: string): SimCommand | null {
     const parsed = others ? parseStartArgs(others) : { kind: 'start' as const };
     if (!parsed) return { kind: 'usage', command: 'start' };
     if (parsed.kind !== 'start' || parsed.exerciseId || parsed.midRound !== undefined || parsed.special) return { kind: 'usage', command: 'start' };
-    return { ...parsed, midRound: mid[1] ? Number(mid[1]) : 5 };
+    if (mid[1]) return { ...parsed, midRound: Number(mid[1]) };
+    return mid[2] === '4' || mid[2] === '四' ? { ...parsed, midRound: 4, anyAttempt: true } : { ...parsed, midRound: 5 };
   }
 
   let role: SimRoleChoice | undefined;

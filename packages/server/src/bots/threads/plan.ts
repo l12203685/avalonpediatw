@@ -166,7 +166,10 @@ function roleAt(game: SimGame, seat: number): Role {
   return game.seatRoles[seat - 1];
 }
 
-/** 一局裡某個尾派（第 round 局第 5 次）的題目；3-5 只出第二局開紅的局（midDecision）。 */
+/**
+ * 一局裡某個尾派（第 round 局第 5 次）的題目；篩選跟模擬瓦同一個函式（midDecision）：3-5 只出第二局開紅的局，
+ * 2-5 只出第 1 局開紅、或 2-1～2-4 至少兩個隊長不是派三加一的局（Edward 2026-11-19）。
+ */
 function tailPick(game: SimGame, round: number, continues = false): ThreadsPick | null {
   const d = midDecision(game, round);
   if (d === null) return null;

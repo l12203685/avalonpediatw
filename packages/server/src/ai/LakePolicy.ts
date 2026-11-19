@@ -28,7 +28,8 @@ import { AVALON_CONFIG } from '@avalon/shared';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
-import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
+import { analyzeGoodLake, pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
+import { untaintedLakePick51 } from './Round51';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
 import { goodLake39Pick } from './BlueRound39';
@@ -36,6 +37,7 @@ import { goodLake41Pick } from './BlueRound41';
 import { percivalRead39 } from './BlueRound39Percival';
 import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
+import { redLakeDisguiseNow } from './Round50';
 
 type Camp = 'good' | 'evil';
 
@@ -266,6 +268,9 @@ export function pickLakeTargetForTeam(
     if (tuning.goodLakeInfoMax) {
       // Round 38 `goodLakeHuman` / `percivalLakeNoMorgana` (BlueRound38.ts): the holder's candidates, then the same common-information pick.
       const humanPool = goodLakeHumanPool(tuning, obs, unknownCandidates);
+      // Round 51 B `lakeUntainted51` (Round51.ts): a loyal holder's score is docked for candidates who sat on a failed mission.
+      const untainted = untaintedLakePick51(tuning, obs, humanPool, (o, c) => analyzeGoodLake(o, c));
+      if (untainted !== null) return untainted;
       const pick = pickGoodLakeTargetInfoMax(obs, humanPool, undefined, tuning.goodLakeTieSpread || (tuning.goodLakeHuman ?? 0) > 0 ? Math.random : undefined);
       if (pick !== null) return pick;
     }
@@ -293,7 +298,8 @@ export function pickLakeTargetForTeam(
 
   // ── AgentTuning.redLakeLoyal（第 27 回合紅方，只量、不採用：改的是下面 Edward 2026-10-13 的裁定）──
   // The red holder picks the target a public-view loyal in this seat would (strong red humans lake an ally 17%, the bot 75%).
-  if (tuning.redLakeLoyal) {
+  // ── AgentTuning.redLakeDisguise50（第 50 回合紅方，湖的均衡疊代用，只測）── a share d of the red holder's lakes picked like redLakeLoyal.
+  if (tuning.redLakeLoyal || redLakeDisguiseNow(tuning, obs)) {
     const view: PlayerObservation = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: true };
     return pickLakeTargetForTeam('good', view, validTargets, tuning);
   }

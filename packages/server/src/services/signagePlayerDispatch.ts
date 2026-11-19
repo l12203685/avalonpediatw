@@ -1,7 +1,8 @@
 /**
  * 補位機器人（signage-cloud seat filler, 2026-11-03）— dispatch service.
  *
- * Players ask the bot (Discord /機器人補位, LINE /補位) to put our signage-cloud
+ * Players ask the bot (Discord /機器人補位, LINE /補位, or the website form
+ * POST /api/seat-filler — routes/seatFiller.ts, 2026-11-19) to put our signage-cloud
  * seat-filler bot into a game room for testing. The bot itself runs in a GitHub
  * Actions workflow (`.github/workflows/signage-player.yml`, workflow_dispatch
  * inputs `room` (房號或房間描述), `password`, `bots` 1–9; 局數不限、房內有人說「離開」
@@ -337,7 +338,7 @@ export class SignagePlayerDispatcher {
 
 let instance: SignagePlayerDispatcher | null = null;
 
-/** Process-wide dispatcher (one set of limits shared by Discord and LINE). */
+/** Process-wide dispatcher (one set of limits shared by Discord, LINE and the website form). */
 export function getSignagePlayerDispatcher(): SignagePlayerDispatcher {
   if (!instance) instance = new SignagePlayerDispatcher();
   return instance;

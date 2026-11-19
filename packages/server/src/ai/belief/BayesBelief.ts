@@ -23,6 +23,8 @@ import { policyVoteLog } from '../infl/policyRead';
 // Round 33 `beliefRecursive`: the level-1 recursive reader (its level-0 seat views call this module's posterior: `useMix` restores its state).
 import { recursiveLogs, recursiveRoleShares, type RoleShare } from '../infl/recursiveRead';
 import { percivalRead39 } from '../BlueRound39Percival';
+// Round 50 (`loyalRationality50`, `lakePickSuspicion50`): a circular import (its public loyal views call this module's posterior inside functions only).
+import { rationalityAdj50, lakePickTerms50, W50_ALL, W50_STRONG } from '../Round50';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -425,6 +427,13 @@ export interface BayesOptions {
    * (a truthful good holder's declaration by 1 − ε) instead of being removed. The certainty layer stays hard.
    */
   conventionTremble?: number;
+  /**
+   * Round 50 `loyalRationality50`: blue seats only, every other seat's red log-odds plus the fitted residual weights × how hard its public
+   * actions are to justify for a loyal with the public record of that moment (`Round50.rationalityAdj50`). `noVote`: not at the viewer's own votes.
+   */
+  rationality50?: { scale: number; noVote: boolean; weights?: 'all' };
+  /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
+  lakeSusp50?: number;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -554,7 +563,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}`;
+    const blendKey = `${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -692,7 +701,11 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const lakeIso = opts.lakeIso === true && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true && (obs.myRole === 'loyal' || obs.myRole === 'percival');
   // Round 46 `beliefLakePick45`: blue seats only, like the lake calibration (red frozen).
   const lakePick = opts.lakePick !== undefined && opts.lakePick > 0 && opts.lakePick < 1 && (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true ? opts.lakePick : 0;
-  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}`;
+  // Round 50 (`loyalRationality50`, `lakePickSuspicion50`): blue seats only (red frozen), like the round-48 options.
+  const rat50 = blueSeat && opts.rationality50 !== undefined && opts.rationality50.scale > 0 && !(opts.rationality50.noVote && obs.gamePhase === 'team_vote') ? opts.rationality50.scale : 0;
+  const rat50W = opts.rationality50?.weights === 'all' ? 'A' : '';
+  const susp50 = blueSeat && opts.lakeSusp50 !== undefined && opts.lakeSusp50 > 0 && opts.lakeSusp50 < 1 ? opts.lakeSusp50 : 0;
+  const fullKey = `${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -738,6 +751,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
   // Round 46 `beliefLakePick45`: the seats each declared lake could inspect (not a holder up to it, not an earlier target).
   const lakePicks = lakePick > 0 ? lakePickTerms(obs, me, bit, all) : [];
+  // Round 50: the public-loyal rationality offsets (the viewer's own seat is never red in a blue viewer's worlds) and the mixture lake-pick terms.
+  const rat50Terms = rat50 > 0 ? [...rationalityAdj50(obs, rat50, opts.rationality50?.weights === 'all' ? W50_ALL : W50_STRONG)].map(([id, a]) => ({ b: bit(id), a })) : [];
+  const susp50Terms = susp50 > 0 ? lakePickTerms50(obs, bit) : [];
   const mixPre = mixMode > 0 && !recMix ? merlinMixturePre(obs, view, mixMode, zone, early, earlyMix, mixRound, policy || recVotes) : null;
   // Round 33: the recursive reader (Percival's strict-Merlin thumbs keep their own proposal model).
   const recLogs = rec > 0 ? recursiveLogs(obs, opts.recursiveLevel0 ?? {}, rec, (leader) => strict.includes(leader)) : null;
@@ -843,6 +859,13 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       // P(pick this target | red holder) relative to the blue holder's uniform 1 / n (the constant cancels).
       const pick = targetRed ? (kBlue > 0 ? lakePick / kRed : 1 / kRed) : (kRed > 0 ? (1 - lakePick) / kBlue : 1 / kBlue);
       lp += Math.log(pick * l.n);
+    }
+    for (const t of rat50Terms) if ((w & t.b) !== 0) lp += t.a;
+    for (const l of susp50Terms) {
+      if ((w & l.hb) === 0) continue;
+      const kRed = sizeOf(w & l.valid);
+      const ws = kRed > 0 ? susp50 : 0;
+      lp += Math.log(ws * ((w & l.tb) !== 0 ? 1 / kRed : 0) / l.pL + (1 - ws));
     }
     if (conventions) {
       const c = conventions(w);
@@ -1005,9 +1028,9 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
     // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
     // recursive vote model was fitted on level-0 features without it.
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
@@ -1020,6 +1043,8 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.beliefLakeIso41 ?? 0) > 0 ? { lakeIso: true } : {}),
     ...((t.beliefLakePick45 ?? 0) > 0 ? { lakePick: t.beliefLakePick45 } : {}),
     ...recalibOf(t),
+    ...((t.loyalRationality50 ?? 0) > 0 ? { rationality50: { scale: 1, noVote: t.loyalRationality50 === 2 || t.loyalRationality50 === 4, ...((t.loyalRationality50 ?? 0) >= 3 ? { weights: 'all' as const } : {}) } } : {}),
+    ...((t.lakePickSuspicion50 ?? 0) > 0 ? { lakeSusp50: t.lakePickSuspicion50 } : {}),
   };
 }
 

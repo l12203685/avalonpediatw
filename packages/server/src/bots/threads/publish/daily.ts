@@ -170,7 +170,7 @@ export function draftNeedsImage(draft: Pick<ThreadsDraft, 'post' | 'parts'>): bo
   return record !== undefined && (record === SEE_IMAGE_LINE || !text.includes(record));
 }
 
-/** 玩家名字（只拿來擋，不輸出）：games_cache.json 的 players 加上 player_aliases.json 兩邊。 */
+/** 玩家名字（只拿來擋，不輸出）：games_cache.json 的 players 加上 player_aliases.json 兩邊（別名的左右、拆分的名字與 as）。 */
 export function loadPlayerNames(serverRoot: string): string[] {
   const names = new Set<string>();
   try {
@@ -180,10 +180,17 @@ export function loadPlayerNames(serverRoot: string): string[] {
     /* 沒有快取就只用別名 */
   }
   try {
-    const a = JSON.parse(fs.readFileSync(path.join(serverRoot, 'player_aliases.json'), 'utf8')) as { aliases?: Record<string, string> };
+    const a = JSON.parse(fs.readFileSync(path.join(serverRoot, 'player_aliases.json'), 'utf8')) as {
+      aliases?: Record<string, string>;
+      splits?: Record<string, unknown>;
+    };
     for (const [k, v] of Object.entries(a.aliases ?? {})) {
       names.add(k);
       names.add(v);
+    }
+    for (const [k, rules] of Object.entries(a.splits ?? {})) {
+      names.add(k);
+      if (Array.isArray(rules)) for (const r of rules) if (r && typeof (r as { as?: unknown }).as === 'string') names.add((r as { as: string }).as);
     }
   } catch {
     /* ignore */

@@ -14,9 +14,19 @@
  *   - 5局 = 第 5 局的任何一次派票（派 5 人）；
  *   - 刺殺 = 三藍、有刺殺的局，你是刺客（看得到紅方隊友＋整局公開紀錄），/刺 座位 作答；
  *   - 今天 = 照 Threads 的每週主題（台北日期，見 TODAY_THEMES）；
- *   - 隨機的 /模擬（沒有指定座位）偶爾出 2-5、3-5（各約 15%，見 SIM_MID_SHARE）；
+ *   - 只指定角色的 /模擬（沒有指定座位）偶爾出 2-5、3-5（各約 15%，見 SIM_MID_SHARE；什麼都沒指定的見 2026-11-19）；
  *   - 題號多一段：K7Q2M-3-5 = 第 3 局第 5 次開始（座位是那一次的隊長）；K7Q2M-A = 那一局的刺殺題；
  *     舊的 K7Q2M-4 照舊是 4 家的第一個決定。
+ *
+ * 2026-11-19（Edward：「你再給題目的時候 至少要篩選」「以後/模擬 沒指定情境(spot)的話 就抽選一局 你應該要可以判斷出
+ * 該局最有價值最值得思考出題的幾個 spot」）：
+ *   - 2-5 只出「第 1 局任務失敗」，或「第 1 局成功、但 2-1～2-4 至少兩個隊長不是派三加一」的局（round2TailWorthy；
+ *     三加一 = 第 1 局出任務的 3 人＋另 1 人）；3-5 照舊只出第 2 局失敗的局（2-5 開藍時 3-1 多半照派，不值得出）；
+ *   - 第四局不只 4-5：`/模擬 4局`、週六的今天主題、自動選題都是「第 4 局隨機一個當過隊長的忠臣」（Threads 的 round4）；
+ *     `/模擬 4-5` 照舊是 4-5；
+ *   - 沒有指定任何東西的 /模擬：抽一局、列出這局的 spot、照「值得想」打分數，從最高的那一個開始（spotValue.ts）。
+ *     指定角色、座位、局面、題號、刺殺、今天的照舊。
+ * 篩選寫在 midDecision 裡，模擬瓦的局面池和 Threads 的候選池（plan.ts tailPick）用同一個函式，兩邊一致。
  * 題庫只有真人實戰（試算表「牌譜」分頁；模擬的局不進題庫，見 bankCodec.buildBankFile）。
  */
 
@@ -116,15 +126,48 @@ export interface SimStage {
 /** 可以指定的尾派局面：1-5、2-5、3-5、4-5。 */
 export const TAIL_ROUNDS: readonly number[] = [1, 2, 3, 4];
 
+/** 三加一：第 2 局的隊 = 第 1 局出任務的 3 人全在、再加 1 人（Edward 2026-11-19 的說法）。 */
+export function isThreePlusOne(game: Pick<SimGame, 'quests'>, teamSeats: readonly number[]): boolean {
+  const q1 = game.quests.find((q) => q.round === 1);
+  if (!q1 || teamSeats.length !== q1.teamSeats.length + 1) return false;
+  return q1.teamSeats.every((s) => teamSeats.includes(s));
+}
+
 /**
- * 這一局 `round` 局第 5 次派票（proposals 的索引），沒有就是 null。
- * 3-5 只出第 2 局任務失敗的局（Edward 11/16：「藍紅或紅紅的 3-5」，Threads 週四「第二局開紅、而且輪到 3-5 尾派」）。
+ * 2-5 值得出（Edward 2026-11-19：「2-5 要給 1-5 有開紅 或 1-5 開藍 但至少 兩個人不是派 三加一 的組合」）：
+ * 第 1 局任務失敗；或成功、但第 2 局第 1～4 次的隊長裡至少兩個人派的不是三加一。
+ * 「1-5」指第 1 局出任務的那一隊（通常是 1-5 強制出發；第 1 局提早出發的局照那一隊算）。
+ */
+export function round2TailWorthy(game: Pick<SimGame, 'quests' | 'proposals'>): boolean {
+  const q1 = game.quests.find((q) => q.round === 1);
+  if (!q1) return false;
+  if (q1.failed) return true;
+  const notThreePlusOne = game.proposals.filter((p) => p.round === 2 && p.attempt <= 4 && !isThreePlusOne(game, p.teamSeats)).length;
+  return notThreePlusOne >= 2;
+}
+
+/** 第 2 局任務失敗（3-5 的條件）。 */
+export function round3TailWorthy(game: Pick<SimGame, 'quests'>): boolean {
+  return !!game.quests.find((q) => q.round === 2)?.failed;
+}
+
+/**
+ * 這一局 `round` 局第 5 次派票（proposals 的索引），沒有或不值得出就是 null。
+ * 2-5 照 round2TailWorthy 篩（2026-11-19）；3-5 只出第 2 局任務失敗的局（Edward 11/16：「藍紅或紅紅的 3-5」，
+ * Threads 週四「第二局開紅、而且輪到 3-5 尾派」；11/19：「2-5開藍 3-1 高機率會照派」）。
+ * 指定題號（K7Q2M-2-5）不經過這裡（stageDecision），照舊出。
  */
 export function midDecision(game: SimGame, round: number): number | null {
   const p = game.proposals.find((x) => x.round === round && x.attempt === 5);
   if (!p) return null;
-  if (round === 3 && !game.quests.find((q) => q.round === 2)?.failed) return null;
+  if (round === 2 && !round2TailWorthy(game)) return null;
+  if (round === 3 && !round3TailWorthy(game)) return null;
   return p.globalIndex;
+}
+
+/** 第 4 局忠臣當隊長的派票（任何一次，照時間；Edward 2026-11-19「隨機給一個第四局有派隊機會的忠臣」）。 */
+export function round4LoyalDecisions(game: SimGame): number[] {
+  return game.proposals.filter((p) => p.round === 4 && game.seatRoles[p.leaderSeat - 1] === 'loyal').map((p) => p.globalIndex);
 }
 
 /** 某一局某一次的派票（proposals 的索引），沒有就是 null。 */
@@ -276,11 +319,12 @@ export function buildDecisionPool(games: readonly SimGame[]): Map<string, Decisi
 }
 
 /**
- * 局面題目池：`局:角色` → 隊長是那個角色的派票。局 1～4 = 那一局第 5 次（尾派，3-5 有條件，見 midDecision）；
- * 局 5 = 第 5 局的每一次派票。`派西:晚` / `派西:早` = 派西維爾當隊長的派票（第 2 局起／第 1 局，週二主題）。
+ * 局面題目池：`局:角色` → 隊長是那個角色的派票。局 1～4 = 那一局第 5 次（尾派，2-5、3-5 有條件，見 midDecision）；
+ * 局 5 = 第 5 局的每一次派票。`4局:角色` = 第 4 局的每一次派票（`/模擬 4局`；沒指定角色時只出忠臣）。
+ * `派西:晚` / `派西:早` = 派西維爾當隊長的派票（第 2 局起／第 1 局，週二主題）。
  */
-export function midPoolKey(round: number, role: Role): string {
-  return `${round}:${role}`;
+export function midPoolKey(round: number, role: Role, anyAttempt = false): string {
+  return anyAttempt && round !== 5 ? `${round}局:${role}` : `${round}:${role}`;
 }
 
 export const PERCIVAL_LATE_KEY = '派西:晚';
@@ -301,6 +345,7 @@ export function buildMidPool(games: readonly SimGame[]): Map<string, DecisionRef
     for (const p of g.proposals) {
       const role = g.seatRoles[p.leaderSeat - 1];
       if (p.round === 5) add(midPoolKey(5, role), { game: gi, proposal: p.globalIndex });
+      if (p.round === 4) add(midPoolKey(4, role, true), { game: gi, proposal: p.globalIndex });
       if (role === 'percival') add(p.round >= 2 ? PERCIVAL_LATE_KEY : PERCIVAL_EARLY_KEY, { game: gi, proposal: p.globalIndex });
     }
   });
@@ -312,7 +357,7 @@ export function buildAssassinPool(games: readonly SimGame[]): number[] {
   return games.map((g, i) => (assassinSeat(g) !== null ? i : -1)).filter((i) => i >= 0);
 }
 
-/** 隨機的 /模擬（沒有指定座位、局面）出 2-5、3-5 的機率（各一份）。 */
+/** 只指定角色的 /模擬（沒有座位、局面）出 2-5、3-5 的機率（各一份）；什麼都沒指定的 /模擬 改用 spotValue 選。 */
 export const SIM_MID_SHARE = 0.15;
 
 /**
@@ -322,8 +367,11 @@ export const SIM_MID_SHARE = 0.15;
 export type TodayTheme =
   | { day: number; label: string; kind: 'assassin' }
   | { day: number; label: string; kind: 'percival' }
-  /** `thenRound`：優先出「這一家下一次就是 thenRound 的尾派」的局；沒有這種局就改出 `fallback`（那一局的尾派）。 */
-  | { day: number; label: string; kind: 'tail'; round: number; thenRound?: number; fallback?: { round: number; label: string } };
+  /**
+   * `thenRound`：優先出「這一家下一次就是 thenRound 的尾派」的局；沒有這種局就改出 `fallback`（那一局的尾派）。
+   * `anyAttempt`：那一局的任何一次（第 4 局 = 忠臣當隊長的任何一次，2026-11-19）。
+   */
+  | { day: number; label: string; kind: 'tail'; round: number; anyAttempt?: boolean; thenRound?: number; fallback?: { round: number; label: string } };
 
 export const TODAY_THEMES: readonly TodayTheme[] = [
   { day: 0, label: '週日：第五局決策（派 5 人）', kind: 'tail', round: 5 },
@@ -332,7 +380,7 @@ export const TODAY_THEMES: readonly TodayTheme[] = [
   { day: 3, label: '週三：1-5 尾派（派 3 人）', kind: 'tail', round: 1 },
   { day: 4, label: '週四：3-5 尾派（第二局開紅，派 4 人）', kind: 'tail', round: 3 },
   { day: 5, label: '週五：2-5 尾派', kind: 'tail', round: 2 },
-  { day: 6, label: '週六：4-5 尾派（派 5 人，要 2 張失敗）', kind: 'tail', round: 4, fallback: { round: 2, label: '週六：2-5 尾派' } },
+  { day: 6, label: '週六：第四局忠臣派 5 人（要 2 張失敗）', kind: 'tail', round: 4, anyAttempt: true, fallback: { round: 2, label: '週六：2-5 尾派' } },
 ];
 
 /** 台北日期的星期（0 = 週日）。 */
@@ -346,6 +394,8 @@ export interface SelectRequest {
   exerciseId?: string;
   /** 指定的局面：1～4 = 那一局第 5 次（尾派）；5 = 第 5 局的任何一次。 */
   midRound?: number;
+  /** 跟 midRound 一起：那一局的任何一次（`/模擬 4局`；沒指定角色時只出忠臣當隊長的）。 */
+  anyAttempt?: boolean;
   /** 刺殺題、今天的主題。 */
   special?: 'assassin' | 'today';
   /** `special: 'today'` 用的星期（台北，0 = 週日）。 */
@@ -353,11 +403,21 @@ export interface SelectRequest {
 }
 
 export type SelectResult =
-  | { ok: true; game: number; seat: number; decision: number; stage?: SimStage; assassin?: boolean; theme?: string }
+  | {
+    ok: true;
+    game: number;
+    seat: number;
+    decision: number;
+    stage?: SimStage;
+    assassin?: boolean;
+    theme?: string;
+    /** 自動選 spot（什麼都沒指定的 /模擬）：同一局接下來值得想的 1～2 題（題號＋題型）。 */
+    alsoWorth?: { exerciseId: string; label: string }[];
+  }
   | { ok: false; reason: 'unknown-id' }
   | { ok: false; reason: 'no-decision'; seat: number }
   | { ok: false; reason: 'no-stage'; stage: SimStage }
-  | { ok: false; reason: 'no-mid'; round: number }
+  | { ok: false; reason: 'no-mid'; round: number; anyAttempt?: boolean }
   | { ok: false; reason: 'no-assassin' }
   | { ok: false; reason: 'thin'; role: Role; seat: number; n: number; available: number[] }
   | { ok: false; reason: 'empty' };
@@ -435,10 +495,11 @@ export function selectExercise(
   else if (req.role) roles = [req.role];
   else roles = SIM_ROLES;
 
-  // 局面池（1-5～4-5、5局）：角色、座位篩過。
-  const midFrom = (round: number): DecisionRef[] => {
+  // 局面池（1-5～4-5、5局、4局）：角色、座位篩過。4局 沒指定角色時只出忠臣當隊長的（Edward 2026-11-19）。
+  const midFrom = (round: number, anyAttempt = false): DecisionRef[] => {
     const list: DecisionRef[] = [];
-    for (const role of roles) list.push(...(bank.midPool?.get(midPoolKey(round, role)) ?? []));
+    const wanted = anyAttempt && round !== 5 && !req.role ? (['loyal'] as const) : roles;
+    for (const role of wanted) list.push(...(bank.midPool?.get(midPoolKey(round, role, anyAttempt)) ?? []));
     return req.seat !== undefined ? list.filter((r) => bank.games[r.game].proposals[r.proposal].leaderSeat === req.seat) : list;
   };
 
@@ -451,7 +512,7 @@ export function selectExercise(
       if (list.length === 0) return { ok: false, reason: 'empty' };
       return fromRef(pick(list, rng), theme.label);
     }
-    let list: readonly DecisionRef[] = midFrom(theme.round);
+    let list: readonly DecisionRef[] = midFrom(theme.round, theme.anyAttempt);
     let label = theme.label;
     let round = theme.round;
     if (list.length === 0 && theme.fallback) {
@@ -487,8 +548,9 @@ export function selectExercise(
     if (wanted !== undefined && midFrom(wanted).length > 0) midRound = wanted;
   }
   if (midRound !== undefined) {
-    const list = preferLinked(midFrom(midRound), bank.records);
-    if (list.length === 0) return { ok: false, reason: 'no-mid', round: midRound };
+    const anyAttempt = midRound === req.midRound && !!req.anyAttempt;
+    const list = preferLinked(midFrom(midRound, anyAttempt), bank.records);
+    if (list.length === 0) return { ok: false, reason: 'no-mid', round: midRound, ...(anyAttempt ? { anyAttempt } : {}) };
     return fromRef(pick(list, rng));
   }
 
