@@ -73,7 +73,7 @@ function main(): void {
       actH = lakeTargetKeys(g, r.idx, l.targetSeat).levels[0][1];
       if (Number.isFinite(b) && b >= 1) actB = lakeTargetKeys(g, r.idx, b).levels[0][1];
     } else continue;
-    for (const [k, on] of [['all', true], ['strong', r.bucket !== null && r.bucket >= sb]] as const) {
+    for (const [k, on] of [['all', true], ['strong', r.bucket !== null && r.bucket >= sb * 10]] as const) {
       if (!on) continue;
       seatGames[k].add(`${r.gi}|${r.seat}`);
       const a = accs[k].get(cell) ?? newAcc();
