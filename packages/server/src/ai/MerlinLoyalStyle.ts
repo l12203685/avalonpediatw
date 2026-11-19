@@ -15,6 +15,7 @@ import { merlinSignalScore } from './belief/ZoneModel';
 import { r1Scorer, r1SpreadActive } from './BlueRound33';
 import { certaintyFor } from './LogicGates';
 import { provenRedBar, provenReds, provenRedStats } from './ProvenRed';
+import { merlinBarredReds54, merlinReuseTainted54 } from './Round54';
 
 /**
  * Every red Merlin knows (Issue #17, Edward 2026-11-16「A>B o，B 有拇指、A 沒拇指，梅林派 A，A 其實就是莫德雷德」): the reds he sees
@@ -75,8 +76,11 @@ export function merlinLoyalStyleTeam(
   // loyal-looking team carries exactly one seen red — 派拇指躲刺 inside the loyal style, so not every Merlin lead is clean.
   const cover = merlinLoyalCoverNow(tuning, obs);
   // Round 38 `merlinFlowFollow` (Edward 2026-11-10): the round's earlier proposals all carry one red he sees — Merlin goes with the flow.
-  const flowRed = merlinFlowRed(tuning, obs);
-  const pool = obs.allPlayerIds.filter((id) => id !== me && (cover || !seen.has(id) || id === flowRed));
+  // Round 54 `merlinKnownRed54` bit 2: a red he sees who sat on a failed mission stays off (R2, R3, R5) — no flow, no cover.
+  const barred54 = merlinBarredReds54(tuning, obs);
+  const flow0 = merlinFlowRed(tuning, obs);
+  const flowRed = flow0 !== null && barred54.includes(flow0) ? null : flow0;
+  const pool = obs.allPlayerIds.filter((id) => id !== me && !barred54.includes(id) && (cover || !seen.has(id) || id === flowRed));
   if (pool.length < size - 1) return action;
   // The public loyal view of my own seat: the same records, none of Merlin's sight.
   const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
@@ -168,6 +172,11 @@ export function merlinReuseNormTeam(
   if (!last || obs.questResults[target - 1] !== 'success') return null;
   const seen = new Set(obs.knownEvils);
   if (!last.team.some((id) => seen.has(id))) return null;
+  // Round 54 `merlinKnownRed54` bit 1: a red he sees on that team sat on a later failed mission — no re-proposal (4570 failed, so not 457 + me).
+  if (merlinReuseTainted54(tuning, obs, last.team, target)) return null;
+  // Bit 2: no red he sees that sat on any failed mission (R2, R3, R5).
+  const barred54 = merlinBarredReds54(tuning, obs);
+  if (barred54.some((id) => last.team.includes(id))) return null;
   const me = obs.myPlayerId;
   const team0 = last.team.includes(me) || (later && last.team.length === size) ? [...last.team] : [me, ...last.team];
   if (team0.length > size) return null;

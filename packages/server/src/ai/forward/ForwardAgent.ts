@@ -96,6 +96,7 @@ import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import { redLeadOffNow, teamWithoutSelf } from '../RedRound46';
 import { r1ReuseThinTeam49 } from '../BlueRound49';
+import { failedReuseBreakTeam54 } from '../Round54';
 import { leaderOppEarly51, leaderOppRed51 } from '../Round51';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
@@ -788,6 +789,15 @@ export class ForwardAgent implements AvalonAgent {
         const outs = (): string[] => this.cleanestFirst39(obs.allPlayerIds.filter((id) => !ids.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
         const thin = r1ReuseThinTeam49(this.baseline.tuning, obs, ids, share, outs, (team) => this.repairGateOk39(obs, team));
         if (thin) return { ...d, action: { type: 'team_select', teamIds: thin }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the whole R1 team every time (round 49)` } };
+      }
+      // Round 54 `failedReuse54` (Round54.ts): a successful team that sat whole on a later failed mission is not re-proposed whole every time —
+      // its member the leader's posterior holds most red makes way for the cleanest outsider (human loyals keep it 32% at R3, the bot 78%).
+      if ((this.baseline.tuning.failedReuse54 ?? 0) > 0) {
+        const share = bayesRedShare39(obs, bayesOptionsOf39(this.baseline.tuning));
+        const ids = d.action.teamIds;
+        const outs = (): string[] => this.cleanestFirst39(obs.allPlayerIds.filter((id) => !ids.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
+        const broken = failedReuseBreakTeam54(this.baseline.tuning, obs, ids, share, outs, (team) => this.repairGateOk39(obs, team));
+        if (broken) return { ...d, action: { type: 'team_select', teamIds: broken }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → the successful team that failed whole is not re-proposed whole (round 54)` } };
       }
       if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
