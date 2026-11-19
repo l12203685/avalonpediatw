@@ -16,7 +16,7 @@ BIN = [('allGood', '全好隊'), ('self', '派自己'), ('exactPrev', '照派這
 MEAN = [('maxOverlapPrev', '和前面提議最多重疊'), ('topPicked', '隊員在這一局被選最多的 k 人裡'), ('popular', '隊員被選 ≥ 2 次'),
         ('neverPicked', '隊員沒被選過'), ('meanPicked', '隊員被選平均次數'), ('approverDiff', '隊員贊成率 − 隊外贊成率'),
         ('approvedPrev4', '隊員投第 4 次贊成的人數'), ('flaggedOffApprove', '隊員投過外白'), ('flaggedOnReject', '隊員投過內黑'),
-        ('r1In', '隊員裡第 1 局出任務的人'), ('reds', '隊上紅數')]
+        ('r1In', '隊員裡第 1 局出任務的人'), ('pClean', '機器人隊長的後驗說這隊沒有紅'), ('reds', '隊上紅數')]
 OUT = [('missionOk', '任務成功'), ('三紅', '三紅'), ('三藍死', '三藍死'), ('三藍活', '三藍活')]
 
 

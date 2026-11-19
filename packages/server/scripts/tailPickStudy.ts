@@ -5,7 +5,7 @@
  *
  * 每個決策點輸出一列 JSON（`--out`，JSONL；沒有玩家名），交給 `tailPickStudy.py` 彙總：
  *   gi、round、r1Failed（第 2 局：第 1 局任務失敗）、leader、role、pr（隊長座位開打前的 PR）、s（桌上強度）、
- *   human／bot：隊伍與特徵（`tailPickFeatures`）、真相（allGood = 隊上沒有紅、reds、merlinIn／morganaIn）；
+ *   human／bot：隊伍與特徵（`tailPickFeatures`）、隊長自己的後驗說這隊沒有紅的機率（pClean）、真相（allGood = 隊上沒有紅、reds、merlinIn／morganaIn）；
  *   人類的那一隊實際出任務：missionOk、outcome（三紅／三藍死／三藍活）。
  *
  *   cd packages/server && npx tsx scripts/tailPickStudy.ts --out rows.jsonl [--flag name=v ...] [--no-bot] [--roles loyal,percival] [--shard k/n]
@@ -24,6 +24,7 @@ import { withSeededRandom } from '../src/ai/benchmark/agreement';
 import { buildReplayObservation, seatId, seatOfId } from '../src/ai/benchmark/replayObservation';
 import { EVIL_ROLES, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { tailPickFeatures } from '../src/ai/benchmark/tailPick';
+import { bayesOptionsOf, bayesTeamClean } from '../src/ai/belief/BayesBelief';
 
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
@@ -90,6 +91,9 @@ function main(): void {
       if (!roles.has(role)) return;
       const q = g.quests.find((x) => x.round === p.round);
       const bot = noBot ? null : botTeamAt(g, p.leaderSeat, idx, tuning);
+      // 隊長自己的後驗（同 `goodCleanLead`：bayesOptionsOf(tuning)）說這隊沒有紅的機率——機器人的派隊模型準不準。
+      const obs = buildReplayObservation(g, p.leaderSeat, { kind: 'team_select', proposal: idx });
+      const pClean = (team: readonly number[]): number | null => bayesTeamClean({ ...obs, seatTeam: obs.myTeam }, team.map(seatId), bayesOptionsOf(tuning));
       n++;
       lines.push(JSON.stringify({
         gi,
@@ -100,8 +104,8 @@ function main(): void {
         pr: d.prs ? d.prs[p.leaderSeat - 1] : null,
         prov: d.prov ? d.prov[p.leaderSeat - 1] : null,
         s: d.s,
-        human: { ...truth(p.teamSeats), ...tailPickFeatures(g, idx, p.teamSeats) },
-        bot: bot && bot.length ? { ...truth(bot), ...tailPickFeatures(g, idx, bot) } : null,
+        human: { ...truth(p.teamSeats), pClean: pClean(p.teamSeats), ...tailPickFeatures(g, idx, p.teamSeats) },
+        bot: bot && bot.length ? { ...truth(bot), pClean: pClean(bot), ...tailPickFeatures(g, idx, bot) } : null,
         missionOk: q ? !q.failed : null,
         outcome,
       }));
