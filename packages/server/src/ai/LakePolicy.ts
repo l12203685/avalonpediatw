@@ -28,7 +28,8 @@ import { AVALON_CONFIG } from '@avalon/shared';
 import { getDefaultAgentTuning, type AgentTuning } from './AgentTuning';
 import { beliefOptionsFrom, defaultBeliefOptions, isForcedVoteRecord, type BeliefOptions } from './belief/BeliefOptions';
 import { beliefFailCards, missionFailed } from './missionFacts';
-import { pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
+import { analyzeGoodLake, pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
+import { untaintedLakePick51 } from './Round51';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
 import { goodLake39Pick } from './BlueRound39';
@@ -267,6 +268,9 @@ export function pickLakeTargetForTeam(
     if (tuning.goodLakeInfoMax) {
       // Round 38 `goodLakeHuman` / `percivalLakeNoMorgana` (BlueRound38.ts): the holder's candidates, then the same common-information pick.
       const humanPool = goodLakeHumanPool(tuning, obs, unknownCandidates);
+      // Round 51 B `lakeUntainted51` (Round51.ts): a loyal holder's score is docked for candidates who sat on a failed mission.
+      const untainted = untaintedLakePick51(tuning, obs, humanPool, (o, c) => analyzeGoodLake(o, c));
+      if (untainted !== null) return untainted;
       const pick = pickGoodLakeTargetInfoMax(obs, humanPool, undefined, tuning.goodLakeTieSpread || (tuning.goodLakeHuman ?? 0) > 0 ? Math.random : undefined);
       if (pick !== null) return pick;
     }

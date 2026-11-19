@@ -95,6 +95,7 @@ import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import { redLeadOffNow, teamWithoutSelf } from '../RedRound46';
 import { r1ReuseThinTeam49 } from '../BlueRound49';
+import { leaderOppEarly51, leaderOppRed51 } from '../Round51';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
   anyGate,
@@ -900,6 +901,12 @@ export class ForwardAgent implements AvalonAgent {
         const v = redHumanVoteFlip(t, obs, d.action.vote);
         if (v !== d.action.vote) return this.ruleDecision(obs, { type: 'team_vote', vote: v }, `red human vote (strong-red rate: ${v ? 'approve' : 'reject'})`);
       }
+      // Round 51 `leaderOppVoteRed51` (Round51.ts): R3+, on the team, I lead later this round — at the human rate the red inner-blacks too.
+      // The hard constraints keep their vote (own proposal, red match point, Mordred alone on the team, Oberon, red lake word).
+      if (d.action.vote && leaderOppRed51(t, obs) && !leaderSelfApproveReason(t, obs) && !redMatchPointApprove(t, obs)
+        && !mordredSoloApproveVote(t, obs) && !redMatchPointDecisiveApprove(t, obs)) {
+        return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red: I lead later this round (inner black; round 51)');
+      }
     }
     return d;
   }
@@ -1047,6 +1054,16 @@ export class ForwardAgent implements AvalonAgent {
         || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null)
         || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning));
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `${obs.myRole} tail white (as the public loyal view; D3 stage 2)`);
+    }
+    // Round 51 `leaderOppVote51` bit 4 (Round51.ts; owner 2026-11-18): R1–R2, a loyal who leads a later proposal of this round inner-blacks
+    // on the team, one who does not outer-whites off it, at the human rates. The outer white never passes the good vote gates.
+    const early51 = leaderOppEarly51(this.baseline.tuning, obs);
+    if (early51 === false) return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'R1–R2: I lead later this round (inner black; round 51)');
+    if (early51 === true) {
+      const team = obs.proposedTeam ?? [];
+      const gated = goodVoteGate(obs, this.gates) !== null
+        || (anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) !== null);
+      if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'R1–R2: I do not lead again this round (outer white; round 51)');
     }
     // Round 33 (loyal / Percival) `goodBayesVote` (BlueRound33.ts; Edward 2026-11-09 ruling 2): the strict Bayesian 內黑／外白 criteria —
     // on the team reject only when P(enough reds to fail) ≥ θ_bad or the certainty proves it; off the team approve only when P(clean) ≥ θ_good

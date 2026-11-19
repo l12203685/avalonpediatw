@@ -117,7 +117,7 @@ describe('registration', () => {
     const sim = json.find((c) => c.name === COMMANDS.SIM);
     expect(sim?.options?.map((o) => [o.name, o.required ?? false])).toEqual([[SIM_OPTIONS.ROLE, false], [SIM_OPTIONS.SEAT, false], [SIM_OPTIONS.STAGE, false], [SIM_OPTIONS.ID, false], [SIM_OPTIONS.HELP, false]]);
     const stage = sim?.options?.[2] as { choices?: { name: string; value: string }[] };
-    expect(stage.choices?.map((c) => c.value)).toEqual(['1-5', '2-5', '3-5', '4-5', '5局', '刺殺', '今天']);
+    expect(stage.choices?.map((c) => c.value)).toEqual(['1-5', '2-5', '3-5', '4-5', '4局', '5局', '刺殺', '今天']);
     expect(json.find((c) => c.name === COMMANDS.SIM_ASSASSINATE)?.options).toEqual([expect.objectContaining({ name: SIM_OPTIONS.SEAT, required: true })]);
     const role = sim?.options?.[0] as { choices?: { name: string; value: string }[] };
     expect(role.choices?.map((c) => c.value)).toEqual([...SIM_ROLE_CHOICES]);

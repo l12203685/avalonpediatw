@@ -113,7 +113,7 @@ export const SIM_OPTIONS = {
   CONTENT: '內容',
   /** /模擬 說明:True → the command list (2026-10-22; the Discord wording uses these option names). */
   HELP: '說明',
-  /** /模擬 局面:1-5…4-5｜5局｜刺殺｜今天 (2026-11-16; same words as LINE's /模擬 3-5 etc.). */
+  /** /模擬 局面:1-5…4-5｜4局｜5局｜刺殺｜今天 (2026-11-16, 4局 2026-11-19; same words as LINE's /模擬 3-5 etc.). */
   STAGE: '局面',
 } as const;
 
@@ -146,7 +146,7 @@ export const CLAIM_OPTIONS = {
 export const SIM_ROLE_CHOICES: readonly string[] = ['梅林', '派西維爾', '忠臣', '刺客', '莫甘娜', '莫德雷德', '奧伯倫', '紅', '藍'];
 
 /** /模擬 局面 choices (value = the LINE spelling). */
-export const SIM_STAGE_CHOICES: readonly string[] = ['1-5', '2-5', '3-5', '4-5', '5局', '刺殺', '今天'];
+export const SIM_STAGE_CHOICES: readonly string[] = ['1-5', '2-5', '3-5', '4-5', '4局', '5局', '刺殺', '今天'];
 
 /**
  * Game-flow commands that used to drive the self-hosted game. Since the

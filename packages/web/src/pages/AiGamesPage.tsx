@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowLeft, Bot, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
 import AiGameReviewPanel from '../components/aiGames/AiGameReviewPanel';
+import SeatFillerCard from '../components/aiGames/SeatFillerCard';
 import { closeAiGame, openAiGame, useOpenAiGame } from '../components/aiGames/aiGamesLink';
 import { aiGamesErrorText, fetchAiGame, fetchAiGames } from '../services/aiGames';
 import { parseAiGameName, type AiGameListItem, type AiGameTrace } from '../utils/aiGames';
@@ -12,6 +13,7 @@ import { parseAiGameName, type AiGameListItem, type AiGameTrace } from '../utils
  * 百科AI 在遊玩頁打的每一局，打完後自動貼到 DC 論壇 #牌譜紀錄與覆盤（一局一篇，2026-11-09 起；舊的 #百科問題回報 已刪除）；這頁從伺服器讀那些貼文：
  * 清單 → 點一局 → 回顧（每個百科AI 決定附理由，每一步可以按「這步怪怪的」，回饋貼成那篇 DC 討論串的回覆）。不用登入。
  * 網址：#ai-games（清單）、#ai-games=<DC 討論串 id>（直接打開那一局；DC 貼文最後一則附這個網址）。
+ * 清單上面是「叫百科AI 補位」表單（components/aiGames/SeatFillerCard.tsx；#seat-filler 也開這頁）。
  */
 
 /** DC 論壇 #牌譜紀錄與覆盤。 */
@@ -51,6 +53,8 @@ function ListView(): JSX.Element {
           （標題有「含百科機器人」）。點一局可以看百科AI 每個派隊、投票、任務、湖、刺殺的理由；覺得哪一步怪，按「這步怪怪的」寫原因，會貼到那篇 DC 討論串。
         </p>
       </header>
+      {/* 叫百科AI 補位（站長 2026-11-19：不在 LINE／DC 群組的人也能叫） */}
+      <SeatFillerCard />
       {list.state === 'loading' && (
         <p className="inline-flex items-center gap-2 py-8 text-sm text-zinc-300"><Loader2 size={16} className="animate-spin" />讀取中…（伺服器剛喚醒時要等 30–60 秒）</p>
       )}

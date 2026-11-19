@@ -92,7 +92,6 @@ import {
   exerciseIdOf,
   isRed,
   publicEvents,
-  selectExercise,
   taipeiWeekday,
   viewAt,
   type PublicEvent,
@@ -101,6 +100,7 @@ import {
 import { recordUrl } from './recordsIndex';
 import { aiReading } from './aiRead';
 import { maskOf } from './seats';
+import { selectStart } from './spotValue';
 
 export type SimPhase = 'answering' | 'answered' | 'no-more-decisions';
 
@@ -644,13 +644,13 @@ export class SimEngine {
   private async start(cmd: Extract<SimCommand, { kind: 'start' }>, req: SimRequest, key: string, previous: SimSession | null, now: number): Promise<SimReply> {
     const bank = await this.opts.bank();
     if (!bank || bank.games.length === 0) return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: !!previous };
-    const picked = selectExercise(bank, { ...cmd, weekday: taipeiWeekday(now) }, this.random(`${key}:${now}`));
+    const picked = selectStart(bank, { ...cmd, weekday: taipeiWeekday(now) }, this.random(`${key}:${now}`));
     if (!picked.ok) {
       let text: string;
       if (picked.reason === 'thin') text = thinPoolText(picked.role, picked.seat, picked.n, picked.available);
       else if (picked.reason === 'no-decision') text = noDecisionText(picked.seat);
       else if (picked.reason === 'no-stage') text = noStageText(picked.stage.round, picked.stage.attempt);
-      else if (picked.reason === 'no-mid') text = noMidText(picked.round);
+      else if (picked.reason === 'no-mid') text = noMidText(picked.round, picked.anyAttempt);
       else if (picked.reason === 'no-assassin') text = noAssassinText();
       else if (picked.reason === 'unknown-id') text = unknownIdText();
       else text = BANK_NOT_READY_TEXT;
@@ -672,6 +672,7 @@ export class SimEngine {
       replacedId: previous?.exerciseId,
       shared: !!req.shared,
       ...(picked.theme ? { theme: picked.theme } : {}),
+      ...(picked.alsoWorth?.length ? { alsoWorth: picked.alsoWorth } : {}),
     };
     const text = picked.assassin ? formatAssassinStart(common) : formatStart({ ...common, decision: events[cursor] as ProposalEvent });
     const role = game.seatRoles[picked.seat - 1];

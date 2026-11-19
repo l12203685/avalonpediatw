@@ -371,6 +371,8 @@ export interface StartInput {
   shared?: boolean;
   /** 今天的主題（/模擬 今天）。 */
   theme?: string;
+  /** 自動選 spot：同一局另外值得想的題（最後一行前加一行）。 */
+  alsoWorth?: { exerciseId: string; label: string }[];
 }
 
 const START_FIRST = '第 1 局第一個隊長，前面沒有派票';
@@ -384,6 +386,7 @@ export function formatStart(input: StartInput): string {
   if (input.theme) parts.push({ text: `（今天${input.theme}）` });
   if (!shown.some((e) => e.kind === 'proposal')) parts.push({ text: START_FIRST });
   else parts.push({ text: codeBlock(compactEventLines(shown, seat, game), platform) });
+  if (input.alsoWorth?.length) parts.push({ text: alsoWorthLine(input.alsoWorth) });
   parts.push({ text: `\n${answerFooter(input.shared)}` });
   return assembleReply(parts);
 }
@@ -407,6 +410,7 @@ export function formatAssassinStart(input: Omit<StartInput, 'decision'>): string
   if (input.theme) parts.push({ text: `（今天${input.theme}）` });
   parts.push({ text: codeBlock(compactEventLines(shown, seat, game), platform) });
   parts.push({ text: '三藍，輪到你刺' });
+  if (input.alsoWorth?.length) parts.push({ text: alsoWorthLine(input.alsoWorth) });
   parts.push({ text: `\n${assassinFooter(input.shared)}` });
   return assembleReply(parts);
 }
@@ -1036,7 +1040,7 @@ export function formatReveal(input: RevealInput): string {
 export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（太久沒動作、開了別的題或伺服器重新啟動都會結束）。輸入 /模擬 開一題，/help 模擬 看全部指令';
 export const BANK_NOT_READY_TEXT = '模擬瓦題庫還沒準備好，請稍後再試。';
 export const RATE_LIMITED_TEXT = '模擬指令太頻繁了，10 分鐘後再試。';
-export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題 題號｜/help 模擬';
+export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 4局、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題 題號｜/help 模擬';
 export const PROPOSE_USAGE = '用法：/派 加座位，例如 /派 469 = 派 4、6、9家（0 家寫 0；4 6 9、4,6,9 也可以）';
 export const ASSASSINATE_USAGE = '用法：/刺 座位，例如 /刺 3（0 家寫 0）';
 export const INTERVAL_USAGE = '用法：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅（也可以 7 8 9 *2、12=1-2、1 5 9 *1+、3 紅、5=好；各組可以重疊）';
@@ -1048,9 +1052,11 @@ const HELP_AI_READ_WORDS = '百科AI 怎麼讀這個局面：各家紅機率、�
 const HELP_INTERVAL_WORDS = '（選填）檢查你自己的區間（7 8 9 裡 2 紅、4 6 0 裡 1 紅），只用確定的資訊看跟局面合不合、還剩幾種可能';
 const HELP_END = '/結束\u3000不公布，直接結束';
 const HELP_ANALYSIS_WORDS = '剛剛那次 /派 的完整解讀（真人怎麼派、你放出的資訊、邏輯、同位置真人）';
-const HELP_MID_WORDS = '從那一局第 5 次（尾派）或第 5 局開始，坐那次的隊長（3-5 只出第 2 局失敗的；可以加角色、座位）';
+const HELP_MID_WORDS = '從那一局第 5 次（尾派）或第 5 局開始，坐那次的隊長（2-5、3-5 有篩；4局＝第 4 局忠臣當隊長的任何一次；可以加角色、座位）';
+/** 什麼都沒指定的 /模擬（2026-11-19：抽一局，從最值得想的 spot 開始，見 spotValue.ts）。 */
+const HELP_RANDOM_WORDS = '抽一局，從這局最值得想的地方開始（附同一局另外值得想的題號）';
 const HELP_KILL_WORDS = '刺殺題：你是刺客，看完整局後 /刺 座位';
-const HELP_TODAY_WORDS = '每週主題：一刺殺 二派西 三1-5 四3-5 五2-5 六4-5 日第5局';
+const HELP_TODAY_WORDS = '每週主題：一刺殺 二派西 三1-5 四3-5 五2-5 六第4局忠臣 日第5局';
 
 /** 牌譜怎麼讀和術語（2026-11-16 起回覆裡不再重複解釋，集中在說明）。 */
 const HELP_GLOSSARY = [
@@ -1067,9 +1073,9 @@ const HELP_GLOSSARY = [
  */
 export const SIM_HELP_TEXT = [
   HELP_TITLE,
-  '/模擬\u3000隨機開一題（第 1 局 2～5 家、任何角色；偶爾 2-5、3-5）',
+  `/模擬\u3000${HELP_RANDOM_WORDS}`,
   '/模擬 角色 座位\u3000指定角色或座位，例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅',
-  `/模擬 1-5～4-5、/模擬 5局\u3000${HELP_MID_WORDS}`,
+  `/模擬 1-5～4-5、/模擬 4局、/模擬 5局\u3000${HELP_MID_WORDS}`,
   `/模擬 刺殺\u3000${HELP_KILL_WORDS}（/刺 3）`,
   `/模擬 今天\u3000${HELP_TODAY_WORDS}`,
   '/模擬 題 題號\u3000做指定的題目，例：/模擬 題 K7Q2M-4（大家可以做同一題）',
@@ -1088,7 +1094,7 @@ export const SIM_HELP_TEXT = [
 /** Discord 的 /模擬 說明:True：跟 slash 指令的選項名一樣（角色、座位、題號、隊伍、內容）；Discord 沒有 /解答。 */
 export const SIM_HELP_TEXT_DISCORD = [
   HELP_TITLE,
-  `/${COMMANDS.SIM}\u3000隨機開一題（第 1 局 2～5 家、任何角色；偶爾 2-5、3-5）`,
+  `/${COMMANDS.SIM}\u3000${HELP_RANDOM_WORDS}`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2\u3000指定角色或座位（可以只選一個；${SIM_OPTIONS.ROLE}選 紅／藍 = 隨機紅方／藍方角色）`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.STAGE}:3-5\u3000${HELP_MID_WORDS}；局面:刺殺 = ${HELP_KILL_WORDS}（/${COMMANDS.SIM_ASSASSINATE} ${SIM_OPTIONS.SEAT}:3）；局面:今天 = ${HELP_TODAY_WORDS}`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4\u3000做指定的題目（大家可以做同一題）`,
@@ -1146,10 +1152,20 @@ export function noStageText(round: number, attempt: number): string {
   return `這一局沒有第 ${round} 局第 ${attempt} 次派票，換一題吧。`;
 }
 
-/** /模擬 1-5～4-5、5局 找不到符合的題目。 */
-export function noMidText(round: number): string {
-  const what = round === 5 ? '第 5 局' : `${round}-5`;
-  return `題庫裡沒有符合的${what}題目${round === 3 ? '（3-5 只出第 2 局任務失敗的局）' : ''}，換個角色或座位試試。`;
+/** /模擬 1-5～4-5、4局、5局 找不到符合的題目。 */
+export function noMidText(round: number, anyAttempt?: boolean): string {
+  const what = round === 5 ? '第 5 局' : anyAttempt ? `第 ${round} 局` : `${round}-5`;
+  const why = round === 3 && !anyAttempt
+    ? '（3-5 只出第 2 局任務失敗的局）'
+    : round === 2 && !anyAttempt
+      ? '（2-5 只出第 1 局失敗、或 2-1～2-4 至少兩人不是派三加一的局）'
+      : '';
+  return `題庫裡沒有符合的${what}題目${why}，換個角色或座位試試。`;
+}
+
+/** 自動選 spot 時同一局另外值得想的題（一行）。 */
+export function alsoWorthLine(items: readonly { exerciseId: string; label: string }[]): string {
+  return `這局也值得想：${items.map((i) => (i.exerciseId.endsWith(`-${i.label}`) ? i.exerciseId : `${i.exerciseId}（${i.label}）`)).join('、')}`;
 }
 
 export function noAssassinText(): string {
