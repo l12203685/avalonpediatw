@@ -47,10 +47,12 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
         if (role || seat) return { kind: 'usage', command: 'start' };
         return { kind: 'start', special: stageRaw === '刺殺' ? 'assassin' : 'today' };
       }
-      const stage = stageRaw ? /^(?:([1-4])-5|(5)局)$/.exec(stageRaw) : null;
+      const stage = stageRaw ? /^(?:([1-4])-5|([45])局)$/.exec(stageRaw) : null;
       if (stageRaw && !stage) return { kind: 'usage', command: 'start' };
       const midRound = stage ? Number(stage[1] ?? stage[2]) : undefined;
-      return { kind: 'start', ...(role ? { role } : {}), ...(seat ? { seat } : {}), ...(midRound ? { midRound } : {}) };
+      // 4局（2026-11-19）：第 4 局任何一次（沒指定角色時只出忠臣當隊長的）。
+      const anyAttempt = !!stage && stage[2] === '4';
+      return { kind: 'start', ...(role ? { role } : {}), ...(seat ? { seat } : {}), ...(midRound ? { midRound } : {}), ...(anyAttempt ? { anyAttempt } : {}) };
     }
     case COMMANDS.SIM_PROPOSE: {
       const r = parseTeam(opts.getString(SIM_OPTIONS.TEAM, true) ?? '');

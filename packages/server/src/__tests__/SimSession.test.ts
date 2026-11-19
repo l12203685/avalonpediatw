@@ -84,12 +84,18 @@ describe('selection', () => {
     expect(await say(e, '/模擬 莫德 3')).toContain('你是 3家・莫德雷德，隊友 5 7\n');
     expect(await say(e, '/模擬 娜 5')).toContain('你是 5家・莫甘娜，隊友 3 7\n');
   });
-  it('seat 1 only when asked; the default pool is R1 seats 2–5', async () => {
+  it('seat 1 only when asked; the default pool (a role, no seat) is R1 seats 2–5', async () => {
     const e = engine({ random: () => () => 0.999 });
     for (let i = 0; i < 5; i++) {
-      const text = (await say(e, '/模擬')) ?? '';
+      const text = (await say(e, '/模擬 忠臣')) ?? '';
       expect(text).toMatch(/【模擬瓦 [WS]\d{4}-[2-5]】/);
     }
+    // A bare /模擬 (2026-11-19) starts at the game's most worth-thinking spot and names one or two more.
+    // (S0000 ended in three rounds: only its assassination is a spot, so nothing more to name.)
+    expect(await say(e, '/模擬')).toMatch(/【模擬瓦 S0000-A】/u);
+    const bare = (await say(engine(), '/模擬')) ?? '';
+    expect(bare).toMatch(/【模擬瓦 W0000-(?:[1-5]-[1-5]|A)】/u);
+    expect(bare).toMatch(/\n這局也值得想：W0000-[^\n]*\n\n\/(?:派|刺) 座位 作答/u);
     expect(await say(e, '/模擬 1')).toMatch(/-1】你是 1家・/);
     expect(await say(e, '/模擬 梅林 1')).toContain('第 1 局第一個隊長，前面沒有派票');
   });
@@ -158,11 +164,11 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect(await say(e, '/模擬 題 M0000-4')).toMatch(/【模擬瓦 M0000-4】你是 4家・[^\n]*\n460 1\+\n279\n370\n\n/u);
   });
 
-  it('a random /模擬 (no seat) is occasionally a 2-5 or 3-5 (the high end of the roll); with a seat never', async () => {
+  it('a role-only /模擬 (no seat) is occasionally a 2-5 or 3-5 (the high end of the roll); with a seat never', async () => {
     const roll = (x: number) => engine({ bank: async () => MID, random: () => () => x });
-    expect(await say(roll(0), '/模擬')).toMatch(/【模擬瓦 [WSM]\d{4}-[2-5]】/u);
-    expect(await say(roll(0.75), '/模擬')).toMatch(/-2-5】/u);
-    expect(await say(roll(0.95), '/模擬')).toMatch(/-3-5】/u);
+    expect(await say(roll(0), '/模擬 忠臣')).toMatch(/【模擬瓦 [WSM]\d{4}-[2-5]】/u);
+    expect(await say(roll(0.75), '/模擬 忠臣')).toMatch(/-2-5】/u);
+    expect(await say(roll(0.95), '/模擬 娜')).toMatch(/-3-5】/u);
     expect(await say(roll(0.95), '/模擬 4')).toMatch(/-4】/u);
     // No 3-5 for this role: falls back to the usual first decision.
     expect(await say(roll(0.95), '/模擬 忠臣')).toMatch(/-[2-5]】你是 \d家・忠臣/u);
@@ -214,7 +220,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect(await say(e, '/公布', G('A'))).toContain('這題刺 2家（代答）：沒刺中 ✗');
   });
 
-  it('/模擬 今天 follows the Threads week (Taipei date): 日 第五局、一 刺殺、二 派西（第 2 局起）、三 1-5、四 3-5、五 2-5、六 4-5（沒有就 2-5）', async () => {
+  it('/模擬 今天 follows the Threads week (Taipei date): 日 第五局、一 刺殺、二 派西（第 2 局起）、三 1-5、四 3-5、五 2-5、六 第四局忠臣（沒有就 2-5）', async () => {
     const at = (iso: string) => engine({ bank: async () => MID, now: () => Date.parse(iso) });
     // 2026-11-16 is a Monday. 23:30 UTC on Sunday is already Monday in Taipei.
     const cases: [string, RegExp, string][] = [
@@ -224,7 +230,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
       ['2026-11-18T04:00:00Z', /-1-5】/u, '（今天週三：1-5 尾派（派 3 人））'],
       ['2026-11-19T04:00:00Z', /M0000-3-5】/u, '（今天週四：3-5 尾派（第二局開紅，派 4 人））'],
       ['2026-11-20T04:00:00Z', /-2-5】/u, '（今天週五：2-5 尾派）'],
-      ['2026-11-21T04:00:00Z', /-2-5】/u, '（今天週六：2-5 尾派）'],
+      ['2026-11-21T04:00:00Z', /-4-\d】你是 \d家・忠臣/u, '（今天週六：第四局忠臣派 5 人（要 2 張失敗））'],
     ];
     for (const [iso, id, theme] of cases) {
       const e = at(iso);

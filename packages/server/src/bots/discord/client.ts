@@ -134,7 +134,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
       .addStringOption((o) =>
         o
           .setName(SIM_OPTIONS.STAGE)
-          .setDescription('尾派 1-5～4-5、第 5 局、刺殺題、今天的主題 / Start position or theme')
+          .setDescription('尾派 1-5～4-5、第 4 局忠臣、第 5 局、刺殺題、今天的主題 / Start position or theme')
           .setRequired(false)
           .addChoices(...SIM_STAGE_CHOICES.map((name) => ({ name, value: name })))
       )
