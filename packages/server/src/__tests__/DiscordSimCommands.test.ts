@@ -213,7 +213,7 @@ describe('handlers', () => {
     await handleSimCommand(revealIt as never);
     const revealArg = revealIt.editReply.mock.calls.at(-1)?.[0] as { content: string; files?: unknown[] };
     const reveal = revealArg.content;
-    expect(reveal.split('\n').slice(0, 2)).toEqual(['【W0000-4 公布】配置: 刺娜莫奧派梅 753921', '原始結果: 三藍死']);
+    expect(reveal.split('\n').slice(0, 2)).toEqual(['【W0000-4 公布】配置: 刺娜莫奧派梅 753921', '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠']);
     // 網站上沒有這一局：文字牌譜放在 code block；整局牌譜圖附檔（Edward 2026-11-17）。
     expect(reveal).toContain('完整牌譜（網站上沒有這一局）:\n```\n460 1+\n');
     expect(revealArg.files).toHaveLength(1);

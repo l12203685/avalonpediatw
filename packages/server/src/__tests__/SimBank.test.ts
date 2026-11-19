@@ -297,8 +297,9 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     (await engine.handleText('/模擬 題 QRSZY-3-5', req))?.commit();
     const r = await engine.handleText('/公布', req);
     const lines = (r?.text ?? '').split('\n');
-    expect(lines.slice(0, 2)).toEqual(['【QRSZY-3-5 公布】配置: 刺娜莫奧派梅 893270', '原始結果: 三藍活']);
-    expect(lines[2]).toMatch(/^完整牌譜(: https:\/\/avalon-game-platform\.web\.app\/#records=\S+|（網站上沒有這一局）:)$/u);
+    expect(lines.slice(0, 2)).toEqual(['【QRSZY-3-5 公布】配置: 刺娜莫奧派梅 893270', '1忠 2奧 3莫 4忠 5忠 6忠 7派 8刺 9娜 0梅']);
+    expect(lines[2]).toBe('原始結果: 三藍活');
+    expect(lines[3]).toMatch(/^完整牌譜(: https:\/\/avalon-game-platform\.web\.app\/#records=\S+|（網站上沒有這一局）:)$/u);
     expect(r?.text).not.toContain('/模擬 再來一題');
     expect(r?.image?.title).toBe('QRSZY-3-5');
     const png = renderRecordPng(r!.image!.game, r!.image!.title);

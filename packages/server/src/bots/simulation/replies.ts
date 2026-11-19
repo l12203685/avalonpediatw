@@ -1004,6 +1004,11 @@ export function resultText(g: SimGame): string {
   return g.assassinTargetSeat ? `三藍活（刺 ${seatLabel(g.assassinTargetSeat)}，沒刺中）` : '三藍活';
 }
 
+/** 「1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠」：1～0 家各是什麼角色（Edward 2026-11-19）。 */
+export function seatRolesLine(game: Pick<SimGame, 'seatRoles'>): string {
+  return game.seatRoles.map((r, i) => `${seatChar(i + 1)}${ROLE_CODE[r] ?? '?'}`).join(' ');
+}
+
 /**
  * /公布（Edward 2026-11-16：「給牌局連結就好」）：角色代碼、你的答案（幾好幾壞）、區間對答案、結果，
  * 加網站上這一局牌譜的連結；網站上沒有這一局（試算表裡比 DC 論壇早、或沒貼到論壇）就附文字牌譜。
@@ -1018,6 +1023,8 @@ export function formatReveal(input: RevealInput): string {
     return i < 0 ? '?' : seatChar(i + 1);
   }).join('');
   parts.push({ text: `【${input.exerciseId} 公布】配置: 刺娜莫奧派梅 ${seats}` });
+  // Edward 2026-11-19：公布時把 1～0 家各是什麼角色也列出來。
+  parts.push({ text: seatRolesLine(g) });
   if (input.kill) {
     // 刺殺題：只多這一行（不然看不出刺中沒有）。
     const merlin = g.seatRoles.indexOf('merlin') + 1;
