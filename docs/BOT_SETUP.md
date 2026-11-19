@@ -194,19 +194,21 @@ vote reject    - Vote reject
 |---|---|---|
 | Discord | `/機器人補位 房號或描述 [人數] [密碼]`（斜線指令；人數選單：補滿、1–9） | `/機器人補位 房號或描述:百科陪練 人數:補滿 密碼:1234` |
 | LINE | `/補位 房號或房間描述 [補滿｜幾人] [密碼:xxxx]`（也接受 `/機器人補位`、全形 `／`） | `/補位 1460`、`/補位 百科陪練 補滿 密碼:1234`、`/補位 「百科 陪練」 3人` |
+| 網站（2026-11-19 起，不用登入、不用在群組裡） | 「百科AI 對局」頁（`#ai-games`，也可用 `#seat-filler`）最上面的「叫百科AI 補位」：房號或描述、人數（1–9、補滿）、密碼（選填） | `https://avalon-game-platform.web.app/#seat-filler` |
 
 - **房號或描述**：`Room-1460`／`1460`；房間內看不到房號時，打建房時寫的房間描述裡的一段字（最多 40 字，不能有引號或換行；有空白就用「」包起來）。
 - **人數**：1–9 個，不填就是 1 個；「補滿」＝一直坐到房間 10 人為止。暱稱 `百科AI_數字`（依房號／描述分段，同時兩間房不撞名），戰績上全部算「百科AI」。
 - **密碼**：私房密碼，只用來進房；GitHub log 會遮掉。LINE 群組裡打的密碼大家看得到。沒給密碼時會照慣例試今天日期 MMDD（台灣時間；凌晨 6 點前也試昨天的），特殊私約局再自己給。
 - **局數**：不限（最多跑 3 小時）；每局開始前與打完後，百科AI 會在聊天室問「需要我離開嗎？」，有人回「離開」就走。
 - 成功時回覆：「已叫百科AI 到「…」（N 個／補到 10 人），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。」Discord 成功的回覆大家看得到，格式錯誤、冷卻中等拒絕只有下指令的人看得到（ephemeral）。
-- **限制**（兩個平台共用，存在伺服器記憶體，重啟會歸零）：全站每 3 分鐘最多叫一次；每天（台北時間）最多 10 次；同一間房 15 分鐘內不重複叫。GitHub 回錯誤時不扣次數；連不到 GitHub（逾時）時仍算一次，避免同一房進兩隻。
+- **限制**（LINE、DC、網站三個入口共用一份，存在伺服器記憶體，重啟會歸零）：全站每 3 分鐘最多叫一次；每天（台北時間）最多 10 次；同一間房 15 分鐘內不重複叫。GitHub 回錯誤時不扣次數；連不到 GitHub（逾時）時仍算一次，避免同一房進兩隻。
+- **網站入口**（站長 2026-11-19：讓不在 LINE／DC 群組的人也能補）：`POST /api/seat-filler`，body `{ room, bots?, password? }`（`packages/server/src/routes/seatFiller.ts`；表單 `packages/web/src/components/aiGames/SeatFillerCard.tsx`）。驗證、回覆文字跟指令一樣，另外每個 IP 每小時最多 3 次（只算真的送出去的；格式錯、被全站限制擋下、GitHub 回錯誤都不算）、每分鐘最多 10 個請求。IP 只以加鹽雜湊存在記憶體，不寫 log；密碼只送給 workflow，不回傳、不記錄。狀態碼：200 已送出、400 格式錯、429 限制、503 還沒設定好、502 GitHub 錯誤、202 連不到 GitHub（可能已送出）。
 - 兩個指令都列在 `/help`（Discord）與 `/指令`（LINE）裡，也不算進意見主題計數與聊天匯出。
-- 運作方式：伺服器呼叫 GitHub Actions 的 workflow_dispatch，跑 `.github/workflows/signage-player.yml`（輸入 `room`、`bots`、`password`，ref `main`）。程式在 `packages/server/src/services/signagePlayerDispatch.ts`、`packages/server/src/bots/seatFiller/`。Log 只記狀態碼，不記玩家名字、訊息內容或 token。
+- 運作方式：伺服器（三個入口都一樣）呼叫 GitHub Actions 的 workflow_dispatch，跑 `.github/workflows/signage-player.yml`（輸入 `room`、`bots`、`password`，ref `main`）。程式在 `packages/server/src/services/signagePlayerDispatch.ts`、`packages/server/src/bots/seatFiller/`。Log 只記狀態碼，不記玩家名字、訊息內容或 token。
 
 ### 管理者要做的設定：GITHUB_DISPATCH_TOKEN
 
-沒設 token 時，指令會回「補位機器人還沒設定好」。設定步驟：
+沒設 token 時，指令（和網站表單）會回「補位機器人還沒設定好」。設定步驟：
 
 1. GitHub → 右上頭像 → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**。
 2. **Repository access** 選 **Only select repositories**，只勾這個 repo（`l12203685/avalonpediatw`）。

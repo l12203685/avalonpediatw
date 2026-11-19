@@ -1,6 +1,6 @@
 /**
  * 補位機器人 commands (2026-11-03) — text parsing and reply texts shared by the
- * LINE text handler and the Discord slash command. The dispatch itself (limits,
+ * LINE text handler, the Discord slash command and the website form (POST /api/seat-filler, 2026-11-19). The dispatch itself (limits,
  * GitHub workflow_dispatch) lives in services/signagePlayerDispatch.ts.
  *
  *   LINE    /補位 <房號或房間描述> [補滿|N人] [密碼:xxxx]   (also /機器人補位, full-width ／, a bare 1460)
@@ -19,12 +19,14 @@ import {
   type SeatFillerParseError,
 } from '../../services/signagePlayerDispatch';
 
-export type SeatFillerPlatform = 'line' | 'discord';
+/** 'web' = 網站「叫百科AI 補位」表單（routes/seatFiller.ts，2026-11-19）。 */
+export type SeatFillerPlatform = 'line' | 'discord' | 'web';
 
 /** Command syntax as advertised in the help texts. */
 export const SEAT_FILLER_USAGE: Record<SeatFillerPlatform, string> = {
   line: '/補位 房號或房間描述 [補滿｜幾人] [密碼:xxxx]',
   discord: '/機器人補位 房號或描述 [人數] [密碼]',
+  web: '網站「百科AI 對局」頁的「叫百科AI 補位」：填房號或房間描述、人數、密碼（選填）',
 };
 
 /** One-line description for the help texts. */
@@ -94,9 +96,12 @@ export function formatWait(ms: number): string {
 }
 
 export function formatSeatFillerParseError(error: SeatFillerParseError, platform: SeatFillerPlatform): string {
-  const example = platform === 'line' ? '/補位 1460、/補位 百科陪練 補滿 密碼:1234' : '/機器人補位 房號或描述:百科陪練 人數:補滿 密碼:1234';
+  const example = platform === 'line'
+    ? '/補位 1460、/補位 百科陪練 補滿 密碼:1234'
+    : platform === 'discord' ? '/機器人補位 房號或描述:百科陪練 人數:補滿 密碼:1234' : '1460、Room-1460 或 百科陪練';
   switch (error) {
     case 'usage':
+      if (platform === 'web') return '請填房號或房間描述（例如 1460，或建房時寫的房間描述裡的一段字）。';
       return `用法：${SEAT_FILLER_USAGE[platform]}，例如 ${example}。房號在大廳看得到；在房間裡看不到房號時，用建房時寫的房間描述裡的一段字就行。人數不填就是 1 個，「補滿」= 補到 10 人。私房沒給密碼時會試今天日期（例如 11 月 5 日 = 1105）。`;
     case 'room':
       return `房號或房間描述不對：房號請輸入 Room-1460 或 1460；房間描述最多 40 個字，不能有引號或換行。例如 ${example}。`;
