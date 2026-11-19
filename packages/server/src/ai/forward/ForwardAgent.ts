@@ -68,6 +68,7 @@ import { bayesOptionsOf, bayesTeamClean } from '../belief/BayesBelief';
 import { earlyOwnTeamWhite, merlinOnTeamOwnApprove, merlinOwnWhiteNow, ownViewFirstPickTeam, percivalThumbReadTeam } from '../BlueRound38';
 import { lakeHolderBarred40, lakePairBarred } from '../BlueRound39';
 import { loyalFresh43Team } from '../BlueRound43';
+import { tailClean52Tuning } from '../Round52';
 import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type PercivalThumbPlan39 } from '../BlueRound39Percival';
 import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
@@ -1158,7 +1159,8 @@ export class ForwardAgent implements AvalonAgent {
     // The new good-leader team rules keep the logic gates (must-fail / dominated, `LogicGates.ts`; INV-T1).
     const gateOk = (team: readonly string[]): boolean => this.thumbOk39(obs, team) && (obs.myTeam !== 'good' || !anyGate(this.gates)
       || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null);
-    const led = goodCleanLeadTeam(this.baseline.tuning, obs, core.action, gateOk);
+    // Round 52 `tailClean52` (Round52.ts): at the R1 / R2 forced proposals Percival uses the same cleanest-team path (his thumb logic included).
+    const led = goodCleanLeadTeam(tailClean52Tuning(this.baseline.tuning, obs), obs, core.action, gateOk);
     // Round 25 hard constraint `redVouchConsistent` (S2): the clean-look swap keeps the red leader's own lake word.
     const looked = redVouchKeptTeam(this.baseline.tuning, obs, led, redCleanLookTeam(this.baseline.tuning, obs, led));
     const swapLabel = looked !== led ? ' → red clean-look team' : led !== core.action ? ' → blue clean-lead team' : '';
