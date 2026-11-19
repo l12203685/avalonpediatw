@@ -20,7 +20,7 @@ vi.mock('../middleware/rateLimit', async (importOriginal) => {
 });
 
 import { analysisRouter } from '../routes/analysis';
-import { ENV_RECORDS_CACHE, RECORDS_NOT_GENERATED, invalidateRecordsPayload } from '../services/recordsList';
+import { ENV_GAME_DB, ENV_RECORDS_CACHE, RECORDS_NOT_GENERATED, invalidateRecordsPayload, recordAliases } from '../services/recordsList';
 import {
   REPLIES_NOT_CONFIGURED,
   REPLIES_TTL_MS,
@@ -66,22 +66,29 @@ app.use('/api/analysis', analysisRouter);
 
 let dir: string;
 let file: string;
+let dbFile: string;
 const savedEnv = process.env[ENV_RECORDS_CACHE];
+const savedDbEnv = process.env[ENV_GAME_DB];
 
 beforeAll(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'records-endpoint-'));
   file = path.join(dir, 'records_cache.json');
+  dbFile = path.join(dir, 'game_db.json');
   process.env[ENV_RECORDS_CACHE] = file;
+  process.env[ENV_GAME_DB] = dbFile;
 });
 
 afterAll(() => {
   if (savedEnv === undefined) delete process.env[ENV_RECORDS_CACHE];
   else process.env[ENV_RECORDS_CACHE] = savedEnv;
+  if (savedDbEnv === undefined) delete process.env[ENV_GAME_DB];
+  else process.env[ENV_GAME_DB] = savedDbEnv;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => {
   fs.writeFileSync(file, JSON.stringify(DOC), 'utf-8');
+  fs.rmSync(dbFile, { force: true });
   invalidateRecordsPayload();
 });
 
@@ -138,6 +145,34 @@ describe('GET /api/analysis/records', () => {
     const res = await request(app).get('/api/analysis/paipu').set('Accept-Encoding', 'identity');
     expect(res.status).toBe(200);
     expect(res.body.data.counts.posts).toBe(2);
+  });
+
+  it('adds aka (other source ids of the same game, from game_db.json) so old links open the merged post', async () => {
+    // 站長 2026-11-19：#records=S1629 打不開（同一局 DC 也有，清單只留 DC 貼文那一篇）
+    const db = {
+      format: 'avalon-game-db', version: 1,
+      games: [
+        { id: '1432000000000000001', status: 'ok', sources: [{ src: 'sheet', id: 'S1629' }, { src: 'discord', id: '1432000000000000001' }, { src: 'dc_import', id: 'Dcc028a2b63' }] },
+        // 總庫局號不在網站上：轉到第一個在網站上的來源（那一篇）
+        { id: 'S77', status: 'error', sources: [{ src: 'sheet', id: 'S77' }, { src: 'discord', id: '1432000000000000002' }] },
+        // 網站上沒有任何一個來源：不加
+        { id: 'S88', status: 'ok', sources: [{ src: 'sheet', id: 'S88' }] },
+      ],
+    };
+    fs.writeFileSync(dbFile, JSON.stringify(db), 'utf-8');
+    invalidateRecordsPayload();
+    const res = await request(app).get('/api/analysis/records').set('Accept-Encoding', 'identity');
+    expect(res.status).toBe(200);
+    const byId = new Map((res.body.data.posts as Array<{ id: string; aka?: string[] }>).map((p) => [p.id, p]));
+    expect(byId.get('1432000000000000001')?.aka).toEqual(['S1629', 'Dcc028a2b63']);
+    expect(byId.get('1432000000000000002')?.aka).toEqual(['S77']);
+    expect(res.body.data.counts).toEqual(DOC.counts);
+    // 沒有總庫（或格式不對）→ 原樣
+    expect(recordAliases(DOC.posts, null).size).toBe(0);
+    expect(recordAliases(DOC.posts, { format: 'other', games: db.games }).size).toBe(0);
+    // 已經是網站上一篇的來源 id（同一局貼兩次）不當 aka：那一篇本來就打得開
+    const twice = recordAliases(DOC.posts, { format: 'avalon-game-db', games: [{ id: '1432000000000000001', sources: [{ id: '1432000000000000002' }, { id: 'S5' }] }] });
+    expect([...twice]).toEqual([['1432000000000000001', ['S5']]]);
   });
 
   it('is 503 for a file of another format or broken JSON', async () => {

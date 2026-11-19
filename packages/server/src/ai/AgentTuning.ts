@@ -1294,6 +1294,9 @@ export interface AgentTuning {
    * 第 52 回合（站長 11/19「1-5 跟 2-5 的尾派」；`Round52.ts`）：位元。派西在第 1、2 局強制局（第 5 次提議）用「最乾淨的隊」（`goodCleanLead` 的派西路徑，
    * 世界 × 真人動作概似的 P(這隊沒有紅) 最高、照拇指邏輯），不照派這一局前面的提議。1 = 1-5；2 = 2-5、第 1 局任務失敗；4 = 2-5、第 1 局任務成功。0 = 關。
    * 真人局：強者派西 2-5（第 1 局紅）照派前面的提議 9.5%、機器人派西 71%（全部派西 23% vs 78%）。
+   * **第 52 回合預設 2**（站長 2026-11-19「2-5 開紅派西改派最乾淨的隊，採用」，所有桌）：真人局重播派西 2-5（第 1 局紅）全好隊 30.6 → 36.3%（真人派西 37.9%）、
+   * 照派前面的提議 78 → 37%；自我對打 423001 5 萬局 −0.03 [−0.11, +0.05]（中性）、分局面距離 真人 −0.0002／強者 +0.0000，過。
+   * 位元 1（1-5）−0.26 [−0.40, −0.12]，不用。環境變數 `AVALON_TUNING_TAIL_CLEAN_52=0` 退回舊做法。
    */
   tailClean52: number;
   /**
@@ -2353,7 +2356,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   leaderOppVote51DeltaOut: 0,
   leaderOppVoteRed51: 0,
   lakeUntainted51: 0,
-  tailClean52: 0,
+  tailClean52: 2,
   merlinKnownRed54: 0,
   failedReuse54: 0,
   goodLake41: 0,

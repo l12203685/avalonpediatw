@@ -12,15 +12,9 @@
  * 測試或本機另指檔案：AVALON_RECORDS_CACHE（同 recordsList）、AVALON_GAME_DB。
  */
 import fs from 'fs';
-import path from 'path';
-import { recordsPaths, isRecordsDocument } from './recordsList';
+import { recordsPaths, isRecordsDocument, gameDbPaths, ENV_GAME_DB } from './recordsList';
 
-export const ENV_GAME_DB = 'AVALON_GAME_DB';
-
-const GAME_DB_PATHS = [
-  path.resolve(__dirname, '..', '..', 'game_db.json'),
-  path.resolve(__dirname, '..', '..', '..', '..', '..', 'packages', 'server', 'game_db.json'),
-];
+export { ENV_GAME_DB };
 
 export interface LookupProposal { team: string; votes: string[] }
 export interface LookupRound { proposals: LookupProposal[]; mission: string }
@@ -111,11 +105,6 @@ function readJson(paths: string[], label: string): unknown {
     console.warn('[record-lookup] 讀取失敗：1');
     return null;
   }
-}
-
-function gameDbPaths(): string[] {
-  const override = process.env[ENV_GAME_DB]?.trim();
-  return override ? [path.resolve(override)] : GAME_DB_PATHS;
 }
 
 function build(): Index {

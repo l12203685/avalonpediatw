@@ -4,7 +4,7 @@
  * 資料：GET /api/analysis/records = packages/server/records_cache.json（discord_records_export.py 每天產生）。
  * 所有來源的牌譜合成一個資料庫（Edward 2026-11-16）：Discord 論壇 #牌譜紀錄與覆盤 的貼文（id = 貼文 id）、
  * Google 試算表「牌譜」分頁（id = S＋流水號）、「模擬瓦」分頁（id = M＋流水號）；同一局只列一次（DC 貼文優先，
- * src 標出來源）。每筆 = 一局：標題、標籤、發文時間，以及解析後的牌譜（或讀不懂的原因）。
+ * src 標出來源，其他來源的局號在 aka，舊連結照樣打得開）。每筆 = 一局：標題、標籤、發文時間，以及解析後的牌譜（或讀不懂的原因）。
  * 只有牌譜本身；討論串的回覆不在網站上，「到 DC 討論」連到那篇貼文（只有 DC 的局有）。
  *
  * 牌譜慣例（同 DC）：座位 1–9 與 0（0 家）；提議一行一隊，後面的投票異常標記「57-」= 隊內 5、7 投反對（內黑），
@@ -87,6 +87,11 @@ export type RecordSource = 'dc+sheet' | 'sheet';
 export interface RecordPost {
   /** Discord 討論串 id（= 起始訊息 id）；只在試算表的局是 S＋流水號（牌譜分頁）或 M＋流水號（模擬瓦分頁）。 */
   id: string;
+  /**
+   * 同一局的其他局號（伺服器組清單時從牌譜總庫 game_db.json 的 sources 補上，services/recordsList.ts recordAliases）：
+   * 試算表也有的 DC 局的 S…、Discord匯入的 D…、重複貼文的另一篇等。#records=<這些 id> 也打開這一篇（findRecordPost）。
+   */
+  aka?: string[];
   src?: RecordSource;
   /** 模擬局（DC 標「模擬」的貼文、試算表模擬瓦分頁）。 */
   sim?: true;
@@ -411,15 +416,35 @@ export function recordsHash(id?: string, cut?: RecordCut | null): string {
 }
 
 /**
- * #records → { id: null }；#records=<id> → { id }（DC 貼文 id、S／M＋流水號）；
+ * 局號正規化：DC 貼文 id（15～22 位數字）、S／M＋流水號（試算表牌譜／模擬瓦分頁）、D＋10 碼雜湊（試算表 Discord匯入）、
+ * P＋24 碼（ProAvalon）；大小寫不拘（s1629 → S1629、D7FB… → D7fb…）。看不懂 → null。
+ */
+export function normaliseRecordsId(raw: string): string | null {
+  const t = raw.trim();
+  if (/^[0-9]{15,22}$/.test(t)) return t;
+  if (/^[SM][0-9]{1,6}$/i.test(t)) return t.toUpperCase();
+  if (/^D[0-9a-f]{10}$/i.test(t) || /^P[0-9a-f]{24}$/i.test(t)) return t[0].toUpperCase() + t.slice(1).toLowerCase();
+  return null;
+}
+
+/**
+ * #records=<id> 打開哪一篇：id 本身就是一篇 → 那一篇；不然找 aka 有這個 id 的那一篇（同一局合併後只留一篇，
+ * 舊連結用的是另一個來源的局號，例：試算表 S1629 = DC 貼文那一篇）；都沒有 → undefined。
+ */
+export function findRecordPost<T extends Pick<RecordPost, 'id' | 'aka'>>(posts: readonly T[], id: string): T | undefined {
+  return posts.find((p) => p.id === id) ?? posts.find((p) => p.aka?.includes(id));
+}
+
+/**
+ * #records → { id: null }；#records=<id> → { id }（DC 貼文 id、S／M＋流水號、D＋雜湊、P＋ProAvalon id；normaliseRecordsId）；
  * #records=<id>&upto=<n|A>[&seat=<1-9|0>] → { id, cut }（upto 不認得就當作沒有 cut）；其他 hash → null。
  */
 export function parseRecordsHash(hash: string | null | undefined): { id: string | null; cut?: RecordCut } | null {
   const raw = (hash ?? '').replace(/^#/, '').trim();
   if (/^(?:records|paipu)$/i.test(raw)) return { id: null };
-  const m = /^(?:records|paipu)[=/]([0-9]{15,22}|[SM][0-9]{1,6})((?:&[a-z]+=[^&]*)*)$/i.exec(raw);
-  if (!m) return null;
-  const id = /^[sm]/.test(m[1]) ? m[1].toUpperCase() : m[1];
+  const m = /^(?:records|paipu)[=/]([0-9A-Za-z]{2,25})((?:&[a-z]+=[^&]*)*)$/i.exec(raw);
+  const id = m ? normaliseRecordsId(m[1]) : null;
+  if (!m || !id) return null;
   const params = new Map(m[2].split('&').filter(Boolean).map((p) => p.split('=') as [string, string]));
   const upto = params.get('upto');
   if (upto === undefined) return { id };

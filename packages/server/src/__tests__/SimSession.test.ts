@@ -199,7 +199,7 @@ describe('2-5 and 3-5 starts, linked games first (Edward 2026-11-16)', () => {
     expect(await say(e, '/刺 2')).toBe('【W0000-A】你刺 2家（可以再刺一次改答案）\n/公布 看結果｜/結束');
     const miss = (await say(e, '/公布')) ?? '';
     // Edward 2026-11-17：公布＝配置、（刺殺題多一行刺中沒有）、原始結果、完整牌譜。
-    expect(miss.split('\n').slice(0, 3)).toEqual(['【W0000-A 公布】配置: 刺娜莫奧派梅 753921', '你刺 2家：沒刺中 ✗', '原始結果: 三藍死']);
+    expect(miss.split('\n').slice(0, 3)).toEqual(['【W0000-A 公布】配置: 刺娜莫奧派梅 753921', '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠', '你刺 2家：沒刺中 ✗']);
     await say(e, '/模擬 題 W0001-A');
     await say(e, '/刺 2');
     await say(e, '/刺 1'); // the last one counts
@@ -307,6 +307,7 @@ describe('a whole exercise', () => {
     // Edward 2026-11-17：只有三行（配置、原始結果、完整牌譜）；fixture 的局在網站上沒有那一篇 → 附文字牌譜。整局牌譜圖另外附（reply.image）。
     expect(reveal.split('\n')).toEqual([
       '【W0000-4 公布】配置: 刺娜莫奧派梅 753921',
+      '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠',
       '原始結果: 三藍死',
       '完整牌譜（網站上沒有這一局）:',
       '460 1+', '279', '370', '469', '157', 'oox',

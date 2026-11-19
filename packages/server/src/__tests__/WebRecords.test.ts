@@ -43,6 +43,8 @@ import {
   isDiscordPost,
   kindLabel,
   sourceLabel,
+  findRecordPost,
+  normaliseRecordsId,
 } from '../../../web/src/utils/records';
 import {
   DEFAULT_LINEUP_FILTER,
@@ -367,6 +369,37 @@ describe('web records: one database (DC + 試算表 牌譜 + 模擬瓦, Edward 2
     expect(parseRecordsHash('#records=m7')).toEqual({ id: 'M7' });
     expect(parseRecordsHash('#records=X7')).toBeNull();
     expect(parseStatsHash('#records=S102')).toEqual({ kind: 'records', id: 'S102' });
+  });
+
+  it('#records=<另一個來源的局號> 打開合併後的那一篇（站長 2026-11-19：S1629／S1951 打不開）', () => {
+    // 同一局在試算表與 DC 都有時清單只留 DC 那一篇；伺服器把試算表 S…、Discord匯入 D… 寫進 aka
+    const merged: RecordPost = { ...POST, id: '1297000000000000001', src: 'dc+sheet', aka: ['S1629', 'Dcc028a2b63'] };
+    const posts = [SHEET, merged, SIM];
+    expect(findRecordPost(posts, 'S1629')).toBe(merged);
+    expect(findRecordPost(posts, 'Dcc028a2b63')).toBe(merged);
+    expect(findRecordPost(posts, '1297000000000000001')).toBe(merged); // 正式局號照舊
+    expect(findRecordPost(posts, SHEET.id)).toBe(SHEET);
+    expect(findRecordPost(posts, 'S9999')).toBeUndefined();
+    // 局號本身就是一篇時優先（另一篇的 aka 剛好也寫了它也不會搶走）
+    expect(findRecordPost([{ ...merged, aka: [SHEET.id] }, SHEET], SHEET.id)).toBe(SHEET);
+
+    // 網址：S／M／D／P 都認，大小寫不拘；&upto=&seat= 照留
+    expect(parseRecordsHash('#records=s1629')).toEqual({ id: 'S1629' });
+    expect(parseRecordsHash('#records=DCC028A2B63')).toEqual({ id: 'Dcc028a2b63' });
+    expect(parseRecordsHash('#records=P5b75aa4683d07b001499d7e9')).toEqual({ id: 'P5b75aa4683d07b001499d7e9' });
+    expect(parseRecordsHash('#records=S1629&upto=4&seat=0')).toEqual({ id: 'S1629', cut: { upto: 4, seat: '0' } });
+    expect(parseRecordsHash('#records=Dcc028a2b63&upto=A')).toEqual({ id: 'Dcc028a2b63', cut: { upto: 'A' } });
+    expect(parseStatsHash('#records=Dcc028a2b63')).toEqual({ kind: 'records', id: 'Dcc028a2b63' });
+    expect(findRecordPost(posts, parseRecordsHash('#records=S1629&upto=4&seat=5')!.id!)).toBe(merged);
+    // 換成正式局號的網址：cut 照留
+    expect(recordsHash(merged.id, { upto: 4, seat: '5' })).toBe('#records=1297000000000000001&upto=4&seat=5');
+
+    // 看不懂的不收
+    expect(normaliseRecordsId('D12345')).toBeNull(); // D 要 10 碼
+    expect(normaliseRecordsId('Dxyz0000000')).toBeNull();
+    expect(normaliseRecordsId('12345')).toBeNull();
+    expect(parseRecordsHash('#records=D12345')).toBeNull();
+    expect(parseRecordsHash('#records=abc')).toBeNull();
   });
 
   it('an unfinished 模擬: no result, no empty mission line', () => {

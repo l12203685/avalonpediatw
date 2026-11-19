@@ -53,6 +53,23 @@ export function showFullRecord(id: string): void {
   notify();
 }
 
+/**
+ * 網址用的是同一局的另一個局號（#records=S1629，那一局在清單上是 DC 貼文那一篇）：同一筆歷史紀錄換成那一篇的局號，
+ * 「只到出題的那一刻」（&upto=…&seat=…）照留，分享出去的是正式局號。
+ */
+export function replaceRecordsId(id: string, cut: RecordCut | null): void {
+  const hash = recordsHash(id, cut);
+  if (window.location.hash === hash) return;
+  try {
+    const state = window.history.state as RecordsHistoryState | null;
+    const next = state && typeof state.avalonRecords === 'string' ? { ...state, avalonRecords: id } : state;
+    window.history.replaceState(next, '', `${window.location.pathname}${window.location.search}${hash}`);
+  } catch {
+    return; // 換不了就留原網址：一樣打得開
+  }
+  notify();
+}
+
 /** 目前網址的「只到出題的那一刻」（沒有就 null）。跟著 hash 更新。 */
 export function useRecordsCut(): RecordCut | null {
   const read = (): string => (typeof window === 'undefined' ? '' : JSON.stringify(parseRecordsHash(window.location.hash)?.cut ?? null));
