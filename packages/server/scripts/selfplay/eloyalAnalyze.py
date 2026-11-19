@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """實驗 E-loyal 分析：讀 sp.ts 的結果目錄，按標籤前綴（BASE_ / ELA_ / ELB_）彙總，和 BASE 逐局配對。
-用法: python3 -I packages/server/scripts/selfplay/eloyalAnalyze.py <selfplay-results 的 results/eloyal> [--json out.json]
+用法: python3 -I packages/server/scripts/selfplay/eloyalAnalyze.py <selfplay-results 的 results/<runId>> [--labels BASE,ELA,ELB] [--pairs ELC:ELA,...] [--json out.json]
+第一個標籤是配對的基準；--pairs X:Y 另外印 X − Y 的逐局配對。eloyal（第一批）= BASE,ELA,ELB；eloyal2（第二批）= DEF,ELA,ELC。
 """
 import sys, os, json, math, hashlib
 from collections import defaultdict
 
 D = sys.argv[1]
-LABELS = ['BASE', 'ELA', 'ELB']
+LABELS = (sys.argv[sys.argv.index('--labels') + 1] if '--labels' in sys.argv else 'BASE,ELA,ELB').split(',')
+PAIRS = [x.split(':') for x in sys.argv[sys.argv.index('--pairs') + 1].split(',')] if '--pairs' in sys.argv else []
 RED_IDX = 4  # c = assassin, morgana, mordred, oberon, percival, merlin
 SEATS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 ROLE_OF_C = ['assassin', 'morgana', 'mordred', 'oberon', 'percival', 'merlin']
@@ -154,21 +156,31 @@ def main():
             'vote': {k: (v[1] / v[0] if v[0] else None, v[3] / v[2] if v[2] else None, v[0], v[2]) for k, v in vote.items()},
             'lead11': {k: (v[1] / v[0], v[0]) for k, v in lead11.items() if v[0]},
         }
-        if lab != 'BASE' and data['BASE']:
+        base = data[LABELS[0]]
+        if lab != LABELS[0] and base:
             o['paired'] = {
-                '三藍活': paired(data['BASE'], gs, lambda r, ix: r[ix['blueWon']]),
-                '任務三藍': paired(data['BASE'], gs, lambda r, ix: r[ix['threeBlue']]),
-                '三藍死': paired(data['BASE'], gs, lambda r, ix: 1 if (r[ix['threeBlue']] and r[ix['merlinKilled']] == 1) else 0),
-                '同局雜湊相同': paired(data['BASE'], gs, lambda r, ix: hash(r[ix['h']])),
+                '三藍活': paired(base, gs, lambda r, ix: r[ix['blueWon']]),
+                '任務三藍': paired(base, gs, lambda r, ix: r[ix['threeBlue']]),
+                '三藍死': paired(base, gs, lambda r, ix: 1 if (r[ix['threeBlue']] and r[ix['merlinKilled']] == 1) else 0),
             }
-            common = set(data['BASE']) & set(gs)
-            o['same_h'] = sum(1 for k in common if data['BASE'][k][0][data['BASE'][k][1]['h']] == gs[k][0][gs[k][1]['h']]) / max(1, len(common))
-            del o['paired']['同局雜湊相同']
+            common = set(base) & set(gs)
+            o['same_h'] = sum(1 for k in common if base[k][0][base[k][1]['h']] == gs[k][0][gs[k][1]['h']]) / max(1, len(common))
         out[lab] = o
+    for x, y in PAIRS:
+        a, b = data[y], data[x]
+        common = set(a) & set(b)
+        out[f'{x}-{y}'] = {'paired': {
+            '三藍活': paired(a, b, lambda r, ix: r[ix['blueWon']]),
+            '任務三藍': paired(a, b, lambda r, ix: r[ix['threeBlue']]),
+            '三藍死': paired(a, b, lambda r, ix: 1 if (r[ix['threeBlue']] and r[ix['merlinKilled']] == 1) else 0),
+        }, 'same_h': sum(1 for k in common if a[k][0][a[k][1]['h']] == b[k][0][b[k][1]['h']]) / max(1, len(common))}
     js = sys.argv[sys.argv.index('--json') + 1] if '--json' in sys.argv else None
     if js:
         json.dump(out, open(js, 'w'), ensure_ascii=False, indent=1)
     for lab, o in out.items():
+        if 'n' not in o:
+            print(f'== {lab} paired ' + '  '.join(f"{k} {100 * m:+.2f}pp ±{100 * h:.2f} (n={n})" for k, (n, m, h) in o['paired'].items()) + f"  same_h {pct(o['same_h'])}")
+            continue
         print(f"== {lab} n={o['n']}")
         print('  ' + '  '.join(f"{k} {pct(o[k])}" for k in ['任務三藍', '三藍死', '三藍活', '三紅']) + f"  刺中率 {pct(o['刺中率'])}  均勻刺中率 {pct(o['均勻刺中率'])}")
         print('  rounds ' + '  '.join(f"R{k} {pct(v[0])} (n={v[1]})" for k, v in o['rounds'].items()))
