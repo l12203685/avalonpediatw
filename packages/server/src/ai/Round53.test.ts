@@ -6,6 +6,9 @@ import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation, VoteRecord } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag } from './AgentTuning';
 import { cleanScores53, exactPick53Applies, exactPick53Team, teamClean53 } from './Round53';
+import { viewpointLog53, type ViewpointTerm53 } from './Viewpoint53';
+import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
+import { Q1, Q2, q1Pass, q2Pass } from '../../scripts/acceptRound53';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
@@ -89,5 +92,31 @@ describe('exactPick53Team', () => {
     const team = b.type === 'team_select' ? b.teamIds : [];
     const best = Math.max(...cleanScores53(r3(), 4, 'posterior', t)!.map((x) => x.p));
     expect(teamClean53(r3(), team, 'posterior', t)!).toBeGreaterThanOrEqual(best - 1e-9);
+  });
+});
+
+describe('viewpoint53 (leader-viewpoint reading)', () => {
+  it('flag exists, off by default, parses 0–15', () => {
+    expect(LEGACY_AGENT_TUNING.viewpoint53).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.viewpoint53).toBe(0);
+    expect(parseTuningFlag('viewpoint53')).toEqual({ viewpoint53: 1 });
+    expect(parseTuningFlag('viewpoint53=3')).toEqual({ viewpoint53: 3 });
+    expect(() => parseTuningFlag('viewpoint53=16')).toThrow();
+  });
+  it('a good leader\'s clean team raises the world; an unclean one lowers it; a red leader with no mate on the team lowers it slightly', () => {
+    // leader bit 1; teams {1,2}, {1,4}; P_L flat.
+    const t: ViewpointTerm53 = { lb: 1, masks: Int32Array.from([1 | 2, 1 | 4]), pl: Float64Array.from([0.5, 0.5]), actual: 1 | 2, forced: false };
+    expect(viewpointLog53([t], 4, 1)).toBeGreaterThan(0); // reds {4}: the actual team is clean
+    expect(viewpointLog53([t], 2, 1)).toBeLessThan(0); // reds {2}: unclean
+    expect(viewpointLog53([t], 1 | 8, 1)).toBeLessThan(0); // leader red, no mate on the team
+    expect(viewpointLog53([t], 4, 0)).toBe(0);
+  });
+  it('acceptance Q1: the default reads 1, 4, 9 as suspicious as 2, 3; viewpoint53=1 separates them', () => {
+    expect(q1Pass(bayesRedShare(Q1(), bayesOptionsOf(T())))).toBe(false);
+    expect(q1Pass(bayesRedShare(Q1(), bayesOptionsOf(T({ viewpoint53: 1 }))))).toBe(true);
+  });
+  it('acceptance Q2 (recorded, not yet met): neither the default nor viewpoint53=1 reads thumb 1 as Merlin', () => {
+    expect(q2Pass(bayesRedShare(Q2(), bayesOptionsOf(T())))).toBe(false);
+    expect(q2Pass(bayesRedShare(Q2(), bayesOptionsOf(T({ viewpoint53: 1 }))))).toBe(false);
   });
 });
