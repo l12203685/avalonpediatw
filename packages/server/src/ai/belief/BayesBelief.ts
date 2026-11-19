@@ -202,6 +202,18 @@ function proposalProb(camp: string, round: number, k: number): number {
   return p;
 }
 
+/**
+ * Round 55b: human copy frequency (`games_cache.json`, 10p, non-forced R2+ proposals after a clean successful mission S): the share of
+ * proposals holding the whole S, by the leader's camp, whether S's other members hold a red, and R2 / R3+ (counts in `optimization_loop.md` 第 55b 回合).
+ */
+export const COPY_FREQ_55B = {
+  good: { clean: [0.834, 0.666], red: [0.669, 0.170] },
+  evil: { clean: [0.636, 0.483], red: [0.664, 0.168] },
+} as const;
+function copyFreq55b(leaderRed: boolean, coreRed: boolean, r3: boolean): number {
+  return COPY_FREQ_55B[leaderRed ? 'evil' : 'good'][coreRed ? 'red' : 'clean'][r3 ? 1 : 0];
+}
+
 function missionProbIn(t: Table, round: number, reds: number, fails: number): number {
   const d = t.mission[`${round}|${reds}`];
   if (!d) return fails === reds ? 0.9 : 0.1;
@@ -441,6 +453,17 @@ export interface BayesOptions {
    * (its proposal term and its votes): every seat copying the same team is not that many independent endorsements of it.
    */
   copyWeight55?: number;
+  /**
+   * Round 55b `copyRepeat55b` → this weight = 1 − d: blue seats only. Among the rejected, non-forced copies of the same latest clean successful
+   * mission team, the first is read as usual and every later one with this weight (the copy is new information once, its repeats are not).
+   */
+  copyRepeatWeight55b?: number;
+  /**
+   * Round 55b `copyFreq55b`: blue seats only. A rejected, non-forced copy's proposal term is the human copy frequency
+   * P(copy | leader red?, a red among the other members of the copied team?, R2 / R3+) (`COPY_FREQ_55B`) instead of the generic team model;
+   * its votes are read as usual.
+   */
+  copyFreq55b?: boolean;
   /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
   lakeSusp50?: number;
 }
@@ -572,7 +595,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -716,7 +739,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const susp50 = blueSeat && opts.lakeSusp50 !== undefined && opts.lakeSusp50 > 0 && opts.lakeSusp50 < 1 ? opts.lakeSusp50 : 0;
   const vp53 = blueSeat && opts.viewpoint53 !== undefined && opts.viewpoint53.scale > 0 ? opts.viewpoint53 : null;
   const copyW = blueSeat && opts.copyWeight55 !== undefined && opts.copyWeight55 >= 0 && opts.copyWeight55 < 1 ? opts.copyWeight55 : 1;
-  const fullKey = `${copyW !== 1 ? `|cd${copyW}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const copyRW = blueSeat && opts.copyRepeatWeight55b !== undefined && opts.copyRepeatWeight55b >= 0 && opts.copyRepeatWeight55b < 1 ? opts.copyRepeatWeight55b : 1;
+  const copyFreq = blueSeat && opts.copyFreq55b === true;
+  const fullKey = `${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -746,11 +771,19 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     const qs = obs.questHistory.filter((q) => q.round < round && (q.failCount ?? 0) === 0);
     return qs.length ? qs[qs.length - 1].team : null;
   };
+  // Round 55b: how many earlier copies of the same successful team (by its round) each copy follows.
+  const copiesSeen = new Map<string, number>();
+  const anyCopy = copyW !== 1 || copyRW !== 1 || copyFreq;
   const pre = records.map((v) => {
     const teamMask = view.maskOf(v.team);
-    const succ = copyW !== 1 && !v.approved && v.attempt < 5 ? cleanSuccessBefore(v.round) : null;
+    const succ = anyCopy && !v.approved && v.attempt < 5 ? cleanSuccessBefore(v.round) : null;
+    const isCopy = succ !== null && succ.every((id) => v.team.includes(id));
+    const ck = isCopy ? [...succ].sort().join(',') : '';
+    const nth = isCopy ? (copiesSeen.get(ck) ?? 0) : 0;
+    if (isCopy) copiesSeen.set(ck, nth + 1);
     return {
-      copyW: succ && succ.every((id) => v.team.includes(id)) ? copyW : 1,
+      copyW: isCopy ? (copyW !== 1 ? copyW : 1) * (copyRW !== 1 && nth >= 1 ? copyRW : 1) : 1,
+      copyCore: isCopy && copyFreq && succ ? view.maskOf(succ.filter((id) => id !== v.leader)) : 0,
       v,
       teamMask,
       leaderBit: bit(v.leader),
@@ -824,6 +857,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
             lpp += Math.log(strictP);
           } else lp += Math.log(strictP);
         }
+      } else if (p.copyCore !== 0 && v.leader !== me && !(recProps || recMix)) {
+        // Round 55b `copyFreq55b`: the copy read through the human copy frequency (leader camp × a red among the copied team's others × round).
+        const f = copyFreq55b((w & p.leaderBit) !== 0, (w & p.copyCore) !== 0, p.r3);
+        if (tempered) lpp += Math.log(f); else lp += Math.log(f);
       } else if (v.leader !== me && p.leaderOn && (!(recProps || recMix) || (strictMask & p.leaderBit) !== 0)) {
         // Proposal (the leader on its own team; not the viewer's own).
         const others = all & ~p.leaderBit;
@@ -1087,6 +1124,8 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.loyalRationality50 ?? 0) > 0 ? { rationality50: { scale: 1, noVote: t.loyalRationality50 === 2 || t.loyalRationality50 === 4, ...((t.loyalRationality50 ?? 0) >= 3 ? { weights: 'all' as const } : {}) } } : {}),
     ...((t.lakePickSuspicion50 ?? 0) > 0 ? { lakeSusp50: t.lakePickSuspicion50 } : {}),
     ...((t.copyDiscount55 ?? 0) > 0 ? { copyWeight55: 1 - Math.min(1, t.copyDiscount55 ?? 0) } : {}),
+    ...((t.copyRepeat55b ?? 0) > 0 ? { copyRepeatWeight55b: 1 - Math.min(1, t.copyRepeat55b ?? 0) } : {}),
+    ...((t.copyFreq55b ?? 0) > 0 ? { copyFreq55b: true } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
 }
 

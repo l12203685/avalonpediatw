@@ -65,3 +65,27 @@ describe('copyDiscount55', () => {
     expect([...b.entries()]).toEqual([...a.entries()]);
   });
 });
+
+const pCoreRedOpts = (o: Partial<typeof DEFAULT_AGENT_TUNING>): number => 1 - (bayesTeamClean(loyal1(), ['P4', 'P5', 'P7'], bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, ...o })) ?? 0);
+
+describe('round 55b: copyRepeat55b / copyFreq55b', () => {
+  it('exist, off in both tables, parse', () => {
+    for (const k of ['copyRepeat55b', 'copyFreq55b'] as const) { expect(LEGACY_AGENT_TUNING[k]).toBe(0); expect(DEFAULT_AGENT_TUNING[k]).toBe(0); }
+    expect(parseTuningFlag('copyRepeat55b')).toEqual({ copyRepeat55b: 1 });
+    expect(parseTuningFlag('copyFreq55b')).toEqual({ copyFreq55b: 1 });
+    expect(() => parseTuningFlag('copyFreq55b=2')).toThrow();
+    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING }).copyRepeatWeight55b).toBeUndefined();
+    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, copyRepeat55b: 1 }).copyRepeatWeight55b).toBe(0);
+    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, copyFreq55b: 1 }).copyFreq55b).toBe(true);
+  });
+  it('the reported game: counting the copy once lies between reading every copy and reading none', () => {
+    const off = pCoreRedOpts({});
+    const once = pCoreRedOpts({ copyRepeat55b: 1 });
+    const none = pCoreRedOpts({ copyDiscount55: 1 });
+    expect(once).toBeGreaterThan(off);
+    expect(once).toBeLessThanOrEqual(none + 1e-9);
+  });
+  it('the reported game: the copy-frequency read makes 457 less clean than the generic team model', () => {
+    expect(pCoreRedOpts({ copyFreq55b: 1 })).toBeGreaterThan(pCoreRedOpts({}));
+  });
+});

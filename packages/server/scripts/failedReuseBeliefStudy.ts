@@ -2,7 +2,7 @@
 /**
  * 第 55 回合（站長 11/19「第二局的任務結果資訊 跟第一局任務結果資訊要合起來看」）：失敗過的照派（成功隊 S 整隊在之後失敗的任務 F 裡）的局面，
  * 好人（忠臣／派西）的後驗說 S 有紅的機率，和真相比。拆成讀法的成分：完整、拿掉「S 成功之後到 F 之前，非出任務的提議（與它們的票）」、
- * 只用任務＋湖（拿掉全部提議與票）、`copyDiscount55` 的幾個 d（照派那一隊的提議以權重 1 − d 讀）。每個決策點一列 JSON（沒有玩家名）。
+ * 只用任務＋湖（拿掉全部提議與票）、`copyDiscount55` 的幾個 d（照派那一隊的提議以權重 1 − d 讀）、第 55b 回合的 `copyRepeat55b`（第二個照派起打折）與 `copyFreq55b`（照派頻率當概似）。每個決策點一列 JSON（沒有玩家名）。
  *
  *   cd packages/server && npx tsx scripts/failedReuseBeliefStudy.ts --out rows.jsonl [--flag name=v ...] [--all-seats]
  */
@@ -61,6 +61,10 @@ function main(): void {
           cd50: [obs, { ...opts, copyWeight55: 0.5 }],
           cd75: [obs, { ...opts, copyWeight55: 0.25 }],
           cd100: [obs, { ...opts, copyWeight55: 0 }],
+          rep75: [obs, { ...opts, copyRepeatWeight55b: 0.25 }],
+          rep100: [obs, { ...opts, copyRepeatWeight55b: 0 }],
+          freq: [obs, { ...opts, copyFreq55b: true }],
+          freqRep100: [obs, { ...opts, copyFreq55b: true, copyRepeatWeight55b: 0 }],
         };
         const pRed: Record<string, number | null> = {};
         const pExtra: Record<string, number | null> = {};
