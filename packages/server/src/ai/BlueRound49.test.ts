@@ -10,7 +10,8 @@ import { goodCleanLeadTeam } from './GoodRound5';
 import { earlyWhiteTuning49, r1ReuseThinTeam49, r1SuccessTeam } from './BlueRound49';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
-const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
+// The default holds earlyWhite49=0.5 (site owner 2026-11-19); these tests start from the switch off.
+const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, earlyWhite49: 0, ...over });
 
 function r2(over: Partial<PlayerObservation> = {}): PlayerObservation {
   return {
@@ -27,7 +28,10 @@ const outs = (): string[] => ['P1', 'P3', 'P4', 'P2', 'P8', 'P9', 'P10'];
 
 describe('flags', () => {
   it('exist, off by default, parse', () => {
-    for (const k of ['r1ReuseRate49', 'goodCleanLeadR4Fix49', 'earlyWhite49'] as const) { expect(LEGACY_AGENT_TUNING[k]).toBe(0); expect(DEFAULT_AGENT_TUNING[k]).toBe(0); }
+    for (const k of ['r1ReuseRate49', 'goodCleanLeadR4Fix49', 'earlyWhite49'] as const) expect(LEGACY_AGENT_TUNING[k]).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.r1ReuseRate49).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.goodCleanLeadR4Fix49).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.earlyWhite49).toBe(0.5); // round 49 adopted by the site owner 2026-11-19 (100% version)
     expect(parseTuningFlag('r1ReuseRate49')).toEqual({ r1ReuseRate49: 0.79 });
     expect(parseTuningFlag('goodCleanLeadR4Fix49')).toEqual({ goodCleanLeadR4Fix49: 0.02 });
     expect(parseTuningFlag('earlyWhite49=0.4')).toEqual({ earlyWhite49: 0.4 });

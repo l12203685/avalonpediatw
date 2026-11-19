@@ -1272,7 +1272,7 @@ export interface AgentTuning {
   r1ReuseRate49: number;
   /** 第 49 回合：`goodCleanLead` 在要兩張失敗的局仍挑「沒有紅」機率最高的隊，但不派「少於兩紅」機率比最好的低超過這個值的隊（第 47 回合修正的修正）。0 = 關。 */
   goodCleanLeadR4Fix49: number;
-  /** 第 49 回合：第 2 局忠臣的尾家外白（`loyalTailWhite`）用這個門檻（機器人第 2 局提早通過 0.3%、真人 15.1%）。0 = 關。 */
+  /** 第 49 回合：第 2 局忠臣的尾家外白（`loyalTailWhite`）用這個門檻（機器人第 2 局提早通過 0.3%、真人 15.1%）。0 = 關。 第 49 回合採用（站長 2026-11-19）：預設 0.5**（100% 版；確認中性 +0.03、距離變小）。 */
   earlyWhite49: number;
   /** 第 49 回合後續（第 1C 節）：`earlyWhite49` 只用在一半的局面（照雜湊）。0 = 關、1 = 開。 */
   earlyWhite49Mix: number;
@@ -1280,6 +1280,7 @@ export interface AgentTuning {
    * 第 51 回合（站長 11/18「當局還有機會當隊長派任務的玩家 開內黑的傾向上升／沒有機會的 開外白的傾向上升」；`Round51.ts`）：位元。
    * 1 = 第 3–5 局在隊上、這一局之後還會當隊長 → 內黑的門檻降低 `leaderOppVote51Delta`；2 = 第 3–5 局不在隊上、這一局不會再當隊長 → 外白的門檻降低
    * `leaderOppVote51DeltaOut`；4 = 第 1、2 局照真人比例開（還會當隊長、在隊上 → 內黑；不會、不在隊上 → 外白，外白不越過投票關卡）；8 = 派西也用（預設只給忠臣）。0 = 關。
+   * **第 51 回合採用 L1（站長 2026-11-19）：預設 1、`leaderOppVote51Delta` 0.05**——確認 +0.28 [+0.23, +0.33]；現在的預設上抽查 2 萬局 +0.33 [+0.15, +0.51]。
    */
   leaderOppVote51: number;
   /** 第 51 回合：`leaderOppVote51` 內黑門檻的位移 δ（0 = 0.1）。 */
@@ -1305,6 +1306,7 @@ export interface AgentTuning {
    * 2 = 第 2、3、5 局（第 4 局要兩張失敗，不管）梅林的隊不放出過失敗任務、他看得到的紅（照派、順著派、派拇指躲刺都一樣）；
    * 4 = 位元 1 在第 4 局也不管（第 4 局照舊照派）。0 = 關。
    * 真人梅林：第 2／3／5 局隊上有出過失敗任務、看得到的紅 1.5／3.2／0.6%（第 4 局 11.9%）；失敗過的照派局面帶那個紅 3.3%（第 3 局），機器人（自我對打）29.9%。
+   * **第 54 回合採用（站長 2026-11-19）：預設 7**——確認 433001／433101／433201 各 10 萬局 +0.16 [+0.13, +0.19]、第 1F 節過。
    */
   merlinKnownRed54: number;
   /**
@@ -2364,15 +2366,15 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   redLakeDisguise50: 0,
   r1ReuseRate49: 0,
   goodCleanLeadR4Fix49: 0,
-  earlyWhite49: 0,
+  earlyWhite49: 0.5, // round 49, adopted by the site owner 2026-11-19 (100% version)
   earlyWhite49Mix: 0,
-  leaderOppVote51: 0,
-  leaderOppVote51Delta: 0,
+  leaderOppVote51: 1, // round 51 L1 (inner black only), adopted by the site owner 2026-11-19
+  leaderOppVote51Delta: 0.05, // round 51 L1: δ 0.05
   leaderOppVote51DeltaOut: 0,
   leaderOppVoteRed51: 0,
   lakeUntainted51: 0,
   tailClean52: 2,
-  merlinKnownRed54: 0,
+  merlinKnownRed54: 7, // round 54, adopted by the site owner 2026-11-19 (confirmation passed)
   failedReuse54: 0,
   exactPick53: 0,
   viewpoint53: 0,
