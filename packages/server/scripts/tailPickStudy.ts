@@ -8,7 +8,8 @@
  *   human／bot：隊伍與特徵（`tailPickFeatures`）、隊長自己的後驗說這隊沒有紅的機率（pClean）、真相（allGood = 隊上沒有紅、reds、merlinIn／morganaIn）；
  *   人類的那一隊實際出任務：missionOk、outcome（三紅／三藍死／三藍活）。
  *
- *   cd packages/server && npx tsx scripts/tailPickStudy.ts --out rows.jsonl [--flag name=v ...] [--no-bot] [--roles loyal,percival] [--shard k/n]
+ *   cd packages/server && npx tsx scripts/tailPickStudy.ts --out rows.jsonl [--flag name=v ...] [--no-bot] [--roles loyal,percival] [--shard k/n] [--all-attempts]
+ *   （第 53 回合 `--all-attempts`：第 1、2 局的每一次提議都算，不只強制局；多記 attempt、forced。）
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -60,6 +61,7 @@ function main(): void {
   if (!out) throw new Error('--out PATH');
   const roles = new Set((arg('--roles') ?? 'loyal,percival').split(','));
   const noBot = argv.includes('--no-bot');
+  const allAttempts = argv.includes('--all-attempts');
   setEvilLakeHumanOptions(evilLakeHumanOptionsFromEnv());
   setVouchFollowUpOptions(vouchFollowUpOptionsFromEnv());
   setGoodVouchOptions(goodVouchOptionsFromEnv());
@@ -86,7 +88,7 @@ function main(): void {
     const succ = g.quests.length - fails;
     const outcome = fails >= 3 ? '三紅' : succ >= 3 ? (g.assassinTargetSeat === merlin ? '三藍死' : '三藍活') : '?';
     g.proposals.forEach((p, idx) => {
-      if (!p.forced || p.round > 2) return;
+      if ((!p.forced && !allAttempts) || p.round > 2) return;
       const role = g.seatRoles[p.leaderSeat - 1];
       if (!roles.has(role)) return;
       const q = g.quests.find((x) => x.round === p.round);
@@ -98,6 +100,8 @@ function main(): void {
       lines.push(JSON.stringify({
         gi,
         round: p.round,
+        attempt: p.attempt,
+        forced: p.forced,
         r1Failed: p.round === 2 ? g.quests.find((x) => x.round === 1)?.failed ?? null : null,
         leader: p.leaderSeat,
         role,
