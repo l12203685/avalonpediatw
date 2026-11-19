@@ -434,7 +434,7 @@ export interface BayesOptions {
    */
   rationality50?: { scale: number; noVote: boolean; weights?: 'all' };
   /** Round 53 `viewpoint53`: blue seats only, every other seat's proposal read from its leader's public-loyal viewpoint (`Viewpoint53.ts`). */
-  viewpoint53?: { scale: number; skipForced: boolean };
+  viewpoint53?: { scale: number; skipForced: boolean; power?: number };
   /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
   lakeSusp50?: number;
 }
@@ -566,7 +566,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -709,7 +709,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const rat50W = opts.rationality50?.weights === 'all' ? 'A' : '';
   const susp50 = blueSeat && opts.lakeSusp50 !== undefined && opts.lakeSusp50 > 0 && opts.lakeSusp50 < 1 ? opts.lakeSusp50 : 0;
   const vp53 = blueSeat && opts.viewpoint53 !== undefined && opts.viewpoint53.scale > 0 ? opts.viewpoint53 : null;
-  const fullKey = `${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const fullKey = `${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -868,7 +868,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       lp += Math.log(pick * l.n);
     }
     for (const t of rat50Terms) if ((w & t.b) !== 0) lp += t.a;
-    if (vp53) lp += viewpointLog53(vp53Terms, w, vp53.scale, vp53Thumbs);
+    if (vp53) lp += (vp53.power ?? 1) * viewpointLog53(vp53Terms, w, vp53.scale, vp53Thumbs);
     for (const l of susp50Terms) {
       if ((w & l.hb) === 0) continue;
       const kRed = sizeOf(w & l.valid);
@@ -1018,10 +1018,11 @@ function recalibOf(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'recal
 /**
  * Round 53 `viewpoint53` (`Viewpoint53.ts`): bit 1 = read the proposals from the leader's viewpoint (q, r fitted on the human records);
  * bit 2 = it replaces the proposal tables (proposal powers → 0); bit 4 = the forced fifth proposals are not read by it; bit 8 = q, r × 0.5.
+ * Round 53b `viewpointPow53`: a power (0, 1] on the whole viewpoint term (the proposals are not independent statements; same idea as `beliefTemper`); 0 / 1 = none.
  */
-function withViewpoint53(o: BayesOptions, x: number): BayesOptions {
+function withViewpoint53(o: BayesOptions, x: number, pow = 0): BayesOptions {
   if ((x & 1) === 0) return o;
-  const out: BayesOptions = { ...o, viewpoint53: { scale: (x & 8) !== 0 ? 0.5 : 1, skipForced: (x & 4) !== 0 } };
+  const out: BayesOptions = { ...o, viewpoint53: { scale: (x & 8) !== 0 ? 0.5 : 1, skipForced: (x & 4) !== 0, ...(pow > 0 && pow !== 1 ? { power: pow } : {}) } };
   if ((x & 2) !== 0) {
     out.proposalTemper = 1e-9;
     if (out.leadProposalTemper !== undefined) out.leadProposalTemper = 1e-9;
@@ -1067,7 +1068,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...recalibOf(t),
     ...((t.loyalRationality50 ?? 0) > 0 ? { rationality50: { scale: 1, noVote: t.loyalRationality50 === 2 || t.loyalRationality50 === 4, ...((t.loyalRationality50 ?? 0) >= 3 ? { weights: 'all' as const } : {}) } } : {}),
     ...((t.lakePickSuspicion50 ?? 0) > 0 ? { lakeSusp50: t.lakePickSuspicion50 } : {}),
-  }, t.viewpoint53 ?? 0);
+  }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
 }
 
 /**
