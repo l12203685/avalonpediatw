@@ -10,7 +10,8 @@
  *
  * 開關（預設全部 0）：
  *   - `merlinKnownRed54`（位元）：1 = 梅林照派成功的隊（`merlinReuseNorm`）時，那一隊上看得到的紅在之後失敗的任務上就不照派（改派照忠臣方式的隊）；
- *     2 = 第 2、3、5 局（第 4 局要兩張失敗，真人 11.9% 會帶，不管）梅林的隊不放出過失敗任務、他看得到的紅（照派、順著派、派拇指躲刺都一樣）。
+ *     2 = 第 2、3、5 局（第 4 局要兩張失敗，真人 11.9% 會帶，不管）梅林的隊不放出過失敗任務、他看得到的紅（照派、順著派、派拇指躲刺都一樣）；
+ *     4 = 位元 1 在第 4 局也不管（第 4 局照舊照派）。
  *   - `failedReuse54`：忠臣／派西當隊長、局面裡有「失敗過的照派」（成功隊 S 整隊在之後失敗的任務 F 裡）、提議整隊包含 S 時，
  *     把 S 裡（自己以外）後驗最紅的一個換成隊外最乾淨、過得了隊長自己關卡的人。1 = 每次換；2 = 照真人留 S 的比例（第 3 局 32%、第 4 局 25%、
  *     第 5 局 16.5%，照局面雜湊）其餘換；3 = 一半（第 1C 節的 50%）。
@@ -45,6 +46,8 @@ export function seenRedsOnFailedMissions(obs: PlayerObservation): string[] {
 /** `merlinKnownRed54` 位元 1：照派成功的隊 `succ`（第 `succRound` 局）時，隊上看得到的紅在之後失敗的任務上 → 不照派。 */
 export function merlinReuseTainted54(tuning: Readonly<AgentTuning>, obs: PlayerObservation, succ: readonly string[], succRound: number): boolean {
   if (((tuning.merlinKnownRed54 ?? 0) & 1) === 0 || obs.myRole !== 'merlin') return false;
+  // Bit 4: round 4 as before (two fails needed; human Merlins keep such a red there 11.9%).
+  if (((tuning.merlinKnownRed54 ?? 0) & 4) !== 0 && (obs.currentRound ?? 1) === 4) return false;
   const later = obs.questHistory.filter((q) => failCards(q) && q.round > succRound);
   return succ.some((id) => obs.knownEvils.includes(id) && later.some((q) => q.team.includes(id)));
 }

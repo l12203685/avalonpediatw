@@ -41,7 +41,8 @@ describe('round 54 flags', () => {
     expect(parseTuningFlag('merlinKnownRed54')).toEqual({ merlinKnownRed54: 3 });
     expect(parseTuningFlag('merlinKnownRed54=1')).toEqual({ merlinKnownRed54: 1 });
     expect(parseTuningFlag('failedReuse54')).toEqual({ failedReuse54: 2 });
-    expect(() => parseTuningFlag('merlinKnownRed54=4')).toThrow();
+    expect(parseTuningFlag('merlinKnownRed54=5')).toEqual({ merlinKnownRed54: 5 });
+    expect(() => parseTuningFlag('merlinKnownRed54=8')).toThrow();
     expect(() => parseTuningFlag('failedReuse54=4')).toThrow();
   });
 });
@@ -68,6 +69,10 @@ describe('merlinKnownRed54', () => {
     // the default `merlinReuseNorm=3` re-proposes 457 + Merlin; with bit 1 it does not
     expect(merlinReuseNormTeam(T(), r3(), 4)).toEqual(['P2', 'P4', 'P5', 'P7']);
     expect(merlinReuseNormTeam(T({ merlinKnownRed54: 1 }), r3(), 4)).toBeNull();
+    // bit 4: round 4 as before
+    const r4 = r3({ currentRound: 4, questResults: ['success', 'fail', 'success'], questHistory: [...r3().questHistory, { round: 3, team: ['P1', 'P2', 'P6', 'P9'], result: 'success', failCount: 0 }] });
+    expect(merlinReuseTainted54(T({ merlinKnownRed54: 1 }), r4, ['P4', 'P5', 'P7'], 1)).toBe(true);
+    expect(merlinReuseTainted54(T({ merlinKnownRed54: 5 }), r4, ['P4', 'P5', 'P7'], 1)).toBe(false);
   });
   it('bit 2: R2, R3, R5 only (R4 needs two fails)', () => {
     expect(merlinBarredReds54(T({ merlinKnownRed54: 2 }), r3())).toEqual(['P5']);
