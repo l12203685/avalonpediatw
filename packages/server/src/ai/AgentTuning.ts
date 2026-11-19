@@ -1299,7 +1299,8 @@ export interface AgentTuning {
   /**
    * 第 54 回合（網站玩家回報 2026-11-19、站長「這種 bug 蠻嚴重的」；`Round54.ts`）：位元。梅林不把出過失敗任務、他看得到的紅放上自己的隊。
    * 1 = 照派成功的隊（`merlinReuseNorm`）時，那一隊上看得到的紅在之後失敗的任務上就不照派（改派照忠臣方式的隊）；
-   * 2 = 第 2、3、5 局（第 4 局要兩張失敗，不管）梅林的隊不放出過失敗任務、他看得到的紅（照派、順著派、派拇指躲刺都一樣）。0 = 關。
+   * 2 = 第 2、3、5 局（第 4 局要兩張失敗，不管）梅林的隊不放出過失敗任務、他看得到的紅（照派、順著派、派拇指躲刺都一樣）；
+   * 4 = 位元 1 在第 4 局也不管（第 4 局照舊照派）。0 = 關。
    * 真人梅林：第 2／3／5 局隊上有出過失敗任務、看得到的紅 1.5／3.2／0.6%（第 4 局 11.9%）；失敗過的照派局面帶那個紅 3.3%（第 3 局），機器人（自我對打）29.9%。
    */
   merlinKnownRed54: number;
@@ -3106,7 +3107,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinKnownRed54') {
     const value = raw === undefined ? 3 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinKnownRed54 needs 0–3, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 7) throw new Error(`merlinKnownRed54 needs 0–7, got "${raw}"`);
     return { merlinKnownRed54: value };
   }
   if (name === 'failedReuse54') {
