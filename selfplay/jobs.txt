@@ -1,0 +1,122 @@
+# 標籤|開關|種子|起始局號|局數  （站長 11/19 三項採用前的抽查，程式 = main 30fc262a：L1 = leaderOppVote51=1＋δ 0.05、EW = earlyWhite49=0.5、NEW = merlinKnownRed54=7＋L1＋EW；433001 第 0–19,999 局 detail=1，和 r54-confirm 的 BASE54 逐局配對；BCHK = 預設 433001 第 0–499 局，確認和 BASE54_433001_0 逐局相同（#121 之後）
+BCHK|detail=1|433001|0|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|0|500
+EW|earlyWhite49=0.5 detail=1|433001|0|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|0|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|500|500
+EW|earlyWhite49=0.5 detail=1|433001|500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|1000|500
+EW|earlyWhite49=0.5 detail=1|433001|1000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|1000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|1500|500
+EW|earlyWhite49=0.5 detail=1|433001|1500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|1500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|2000|500
+EW|earlyWhite49=0.5 detail=1|433001|2000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|2000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|2500|500
+EW|earlyWhite49=0.5 detail=1|433001|2500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|2500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|3000|500
+EW|earlyWhite49=0.5 detail=1|433001|3000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|3000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|3500|500
+EW|earlyWhite49=0.5 detail=1|433001|3500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|3500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|4000|500
+EW|earlyWhite49=0.5 detail=1|433001|4000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|4000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|4500|500
+EW|earlyWhite49=0.5 detail=1|433001|4500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|4500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|5000|500
+EW|earlyWhite49=0.5 detail=1|433001|5000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|5000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|5500|500
+EW|earlyWhite49=0.5 detail=1|433001|5500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|5500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|6000|500
+EW|earlyWhite49=0.5 detail=1|433001|6000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|6000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|6500|500
+EW|earlyWhite49=0.5 detail=1|433001|6500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|6500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|7000|500
+EW|earlyWhite49=0.5 detail=1|433001|7000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|7000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|7500|500
+EW|earlyWhite49=0.5 detail=1|433001|7500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|7500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|8000|500
+EW|earlyWhite49=0.5 detail=1|433001|8000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|8000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|8500|500
+EW|earlyWhite49=0.5 detail=1|433001|8500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|8500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|9000|500
+EW|earlyWhite49=0.5 detail=1|433001|9000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|9000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|9500|500
+EW|earlyWhite49=0.5 detail=1|433001|9500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|9500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|10000|500
+EW|earlyWhite49=0.5 detail=1|433001|10000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|10000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|10500|500
+EW|earlyWhite49=0.5 detail=1|433001|10500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|10500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|11000|500
+EW|earlyWhite49=0.5 detail=1|433001|11000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|11000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|11500|500
+EW|earlyWhite49=0.5 detail=1|433001|11500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|11500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|12000|500
+EW|earlyWhite49=0.5 detail=1|433001|12000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|12000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|12500|500
+EW|earlyWhite49=0.5 detail=1|433001|12500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|12500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|13000|500
+EW|earlyWhite49=0.5 detail=1|433001|13000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|13000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|13500|500
+EW|earlyWhite49=0.5 detail=1|433001|13500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|13500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|14000|500
+EW|earlyWhite49=0.5 detail=1|433001|14000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|14000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|14500|500
+EW|earlyWhite49=0.5 detail=1|433001|14500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|14500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|15000|500
+EW|earlyWhite49=0.5 detail=1|433001|15000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|15000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|15500|500
+EW|earlyWhite49=0.5 detail=1|433001|15500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|15500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|16000|500
+EW|earlyWhite49=0.5 detail=1|433001|16000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|16000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|16500|500
+EW|earlyWhite49=0.5 detail=1|433001|16500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|16500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|17000|500
+EW|earlyWhite49=0.5 detail=1|433001|17000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|17000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|17500|500
+EW|earlyWhite49=0.5 detail=1|433001|17500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|17500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|18000|500
+EW|earlyWhite49=0.5 detail=1|433001|18000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|18000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|18500|500
+EW|earlyWhite49=0.5 detail=1|433001|18500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|18500|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|19000|500
+EW|earlyWhite49=0.5 detail=1|433001|19000|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|19000|500
+L1|leaderOppVote51=1 leaderOppVote51Delta=0.05 detail=1|433001|19500|500
+EW|earlyWhite49=0.5 detail=1|433001|19500|500
+NEW|merlinKnownRed54=7 leaderOppVote51=1 leaderOppVote51Delta=0.05 earlyWhite49=0.5 detail=1|433001|19500|500
