@@ -13,6 +13,7 @@ import { apiRouter } from './routes/api';
 import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { aiGamesRouter } from './routes/aiGames';
+import { reportsRouter } from './routes/reports';
 import { seatFillerRouter } from './routes/seatFiller';
 import { analysisRouter } from './routes/analysis';
 import { statsRouter } from './routes/stats';
@@ -90,6 +91,8 @@ app.use('/api/friends', friendsRouter);
 app.use('/api/feedback', feedbackRouter);
 // 網站「百科AI 對局」：DC 論壇的百科AI對局紀錄＋「這步怪怪的」回饋（Edward 2026-11-05）
 app.use('/api/ai-games', aiGamesRouter);
+// 網站「回報與修正」：百科回報與處理狀態（DC 同步閒聊裡 bot 貼的【百科回報】＋狀態行；站長 2026-11-19）
+app.use('/api/reports', reportsRouter);
 // 網站「叫百科AI 補位」：不在 LINE／DC 群組的人也能叫補位機器人（站長 2026-11-19；限制跟 LINE／DC 共用）
 app.use('/api/seat-filler', seatFillerRouter);
 app.use('/api/analysis', analysisRouter);

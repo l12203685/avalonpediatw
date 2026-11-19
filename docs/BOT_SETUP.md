@@ -316,7 +316,7 @@ Edward 2026-11-05：「只要有百科AI參與的牌局就自動記錄在網站&
 | LINE | `/認領 主ID 其他ID…`（名字有空白用「」包起來；也可以用 、 或 , 隔開） | `/認領 星野路 小路 「Kip Lune」` |
 | Discord | `/回報 內容:… [類型:錯誤／建議／文章內容]`（斜線指令） | `/回報 內容:加一個深色模式 類型:建議` |
 | Discord | `/認領 主id:… 其他id:…` | `/認領 主id:星野路 其他id:小路 「Kip Lune」` |
-| 網站 | 右下角「問題回報」按鈕（`POST /api/feedback`）、「ID 認領」頁（`POST /api/feedback/claim`） | — |
+| 網站 | 右下角「問題回報」按鈕與「回報與修正」頁 `#reports`（`POST /api/feedback`）、「ID 認領」頁（`POST /api/feedback/claim`） | — |
 
 - 回覆：`/回報` →「已收到，會在每天的處理裡看（編號 #R…）」；`/認領` →「已送出，等管理者核准（編號 #C…）」。Discord 的回覆只有下指令的人看得到，大家要看的那則由 bot 直接貼到同步閒聊。`/認領` 的檢查同網站 ID 認領頁（至少一個、最多 10 個其他 ID，每個最多 40 字，其他 ID 不能跟主 ID 一樣——只差大小寫或全半形也算一樣）。
 - 貼出去的訊息（名字都是虛構的）：
@@ -356,6 +356,31 @@ DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <
 - 只列 bot 自己發、開頭「【ID認領】」或「【百科回報」的訊息（別人貼的假訊息不算）。處理完的判斷：那則有一行以「（已合併）」／「（已處理）」結尾，或 bot 回覆那則、內容有「已合併」／「已處理」。
 - 核准的認領：把 `others` 寫進 `packages/server/player_aliases.json`（`{"其他ID": "主ID"}`），下一次每日資料更新生效，再用 `--mark-merged` 標上。
 - 機器人在 #同步閒聊 要有「讀取訊息歷史」；標記是編輯 bot 自己的訊息，不用額外權限。
+
+### 網站「回報與修正」頁與處理狀態（`--note`／`--link`／`--status`）
+
+2026-11-19 起（站長：「bug 修正可以直接呈現在百科網站上嗎? (留言功能)」）。網站 `#reports`（右下角「問題回報」送出後、說明頁都有連結）上面是回報表單，下面是最近約 60 天的【百科回報】（網站＋LINE／DC 的 `/回報`、`/更正`），新的在前，附狀態、處理說明與連結。
+
+**公開的範圍**：回報內容會**公開在網站上**（任何人不用登入就看得到；之前只有 LINE／DC 群組成員看得到）。不給暱稱、帳號、DC 訊息連結；「（來自…・暱稱・頁面 …）」那行整行不給（只拿頁面路徑）；內容裡的 @提及、`<@id>`、「暱稱：／ID：／聯絡：…」與最後一行「by 某人」「—某人」換成 ○○；`/更正` 只給第一行「[更正] 局號」（後面可能是整份牌譜）。其他照回報者寫的原樣——內容裡直接寫的名字擋不掉，看到就用 `--status 隱藏` 拿掉。整個關掉：Render 設 `REPORTS_BOARD=off`。
+
+處理完把狀態寫進 bot 那則訊息（編輯，最後加一行；再標一次會換掉舊的那行）：
+
+```bash
+cd packages/server
+# 修好了（--status 預設 已修正；「已修正：」開頭會自動拿掉）
+DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <訊息 id> --note "已修正：牌譜表格改成可以左右滑" --link https://github.com/l12203685/avalonpediatw/pull/<N>
+# 不改
+DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <訊息 id> --status 不處理 --note "那是原文用法，不算錯字"
+# 還在弄／從網站拿掉（有個資、別人的名字）
+DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <訊息 id> --status 處理中 --note "查原因中"
+DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <訊息 id> --status 隱藏
+```
+
+- 加上的那行（名字、網址是範例）：`【處理・已修正】牌譜表格改成可以左右滑｜<https://github.com/…/pull/123>（已處理）`。已修正／不處理／隱藏 結尾帶「（已處理）」，所以列表的 `processed` 照舊；處理中／收到 不帶（會把舊的「（已處理）」拿掉）。說明跳脫 DC markdown，網址包在 `<>`（不展開預覽）。
+- 規則：已修正、不處理 一定要 `--note`（網站上顯示）；`--note` 最多 300 字、一行；`--link` 只收 `https://`；`--status` 也收 `fixed`、`wontfix`、`in-progress`、`hide`。換完超過 2000 字回 `too_long`、不編輯。結果 `{"messageId":…,"result":"edited|already|not_found|failed|too_long","status":…}`。
+- 列表 `reports[]` 多了 `status`（沒有狀態行＝null）、`note`、`link`。
+- 網站上的狀態：收到（沒標）、處理中、已修正、不處理，以及舊標記「已處理」（只有「（已處理）」或 bot 回覆「已處理」、沒有說明的）；隱藏的不列。日期＝送出時間；說明旁的日期＝那則最後被編輯的時間。
+- 伺服器：`GET /api/reports`（`packages/server/src/routes/reports.ts`、`services/reportBoard.ts`、`services/reportStatus.ts`）用 `DISCORD_BOT_TOKEN` 往回讀 #同步閒聊（最多 20 頁×100 則、60 天），記憶體快取 5 分鐘；網站有人送出回報就清快取，下一次讀馬上看得到。沒設 token 或 `REPORTS_BOARD=off` → 503 `{ ok: false, reports: [] }`。每個 IP 每分鐘 30 次。DC 讀不到時回上一次的（`stale: true`）。頻道很熱鬧、20 頁讀不到 60 天時，更早的只會列重啟後讀過的。
 
 ---
 

@@ -310,7 +310,7 @@ export async function addFriendByShortCode(
 export async function submitFeedback(
   data: { type: 'bug' | 'suggestion' | 'content'; message: string; name?: string; page?: string },
   token?: string
-): Promise<void> {
+): Promise<{ id: string | null }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${SERVER_URL}/api/feedback`, {
@@ -319,6 +319,9 @@ export async function submitFeedback(
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error(`feedback ${res.status}`);
+  // 有貼到 DC 時伺服器回編號（#R…），網站「回報與修正」頁用它標「你送的」
+  const body = (await res.json().catch(() => ({}))) as { id?: unknown };
+  return { id: typeof body.id === 'string' ? body.id : null };
 }
 
 /** ID 認領的一個 ID：名字＋網站算的場數（資訊用）。 */

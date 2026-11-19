@@ -252,7 +252,15 @@ export default function HelpPage(): JSX.Element {
             <span className="text-white font-semibold"> 身分認證機制 </span>
             （為什麼有訪客、為什麼可以綁多帳號）與
             <span className="text-white font-semibold"> 隱私處理 </span>
-            （資料怎麼用）。有其他疑問請到首頁點「回報問題」或聯絡管理員 Discord。
+            （資料怎麼用）。有其他疑問請點右下角「問題回報」，或到
+            <button
+              type="button"
+              onClick={() => { useGameStore.getState().setGameState('reports'); window.scrollTo({ top: 0 }); }}
+              className="mx-1 text-white font-semibold underline underline-offset-2"
+            >
+              回報與修正
+            </button>
+            留言（處理進度也寫在那裡），或聯絡管理員 Discord。
           </p>
           <p className="mt-2 text-zinc-300 text-sm md:text-base leading-relaxed">
             戰績排行與數據分析的名詞、算法與各表說明，集中在下方

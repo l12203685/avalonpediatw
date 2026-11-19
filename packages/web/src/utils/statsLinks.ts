@@ -21,6 +21,7 @@
  *      #ai-games                                    → 百科AI 對局（Edward 2026-11-05；不用登入）
  *      #ai-games=<DC 討論串 id>                      → 百科AI 對局，打開那一局（同 #records=：打開時留在網址列）
  *      #seat-filler (#fill、#補位)                   → 百科AI 對局頁（最上面是「叫百科AI 補位」表單；站長 2026-11-19，不用登入）
+ *      #reports (#feedback、#fixes、#回報)            → 回報與修正（站長 2026-11-19：回報的處理狀態公開在網站上；不用登入）
  *      #wiki                                        → 百科攻略（Edward 2026-11-11：文章要發到 Threads）
  *      #wiki=<文章 id> (#wiki/<id>)                   → 百科攻略，打開那篇文章（同 #records=：打開時留在網址列、
  *        換文章時跟著換、關閉時由 WikiContent 清掉；不認得的 id 只開百科攻略。見 utils/wikiHash.ts）
@@ -33,6 +34,7 @@ import { parseRecordsHash } from './records';
 import { parseAiGamesHash } from './aiGames';
 import { parseWikiHash } from './wikiHash';
 import { parseConceptsHash } from './concepts';
+import { isReportsHash } from './reports';
 
 export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'analytics', 'analysis', 'leaderboard', 'wiki', 'help',
@@ -48,6 +50,8 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'practice',
   // 百科AI 對局（遊玩頁上百科AI 打的每一局＋每個決定的理由，可以按「這步怪怪的」；Edward 2026-11-05）
   'aiGames',
+  // 回報與修正（問題回報＋處理狀態、怎麼修的；站長 2026-11-19：「bug 修正可以直接呈現在百科網站上嗎? (留言功能)」）
+  'reports',
 ]);
 
 export type StatsLink =
@@ -57,6 +61,7 @@ export type StatsLink =
   | { kind: 'records'; id: string | null }
   | { kind: 'claim' }
   | { kind: 'practice' }
+  | { kind: 'reports' }
   | { kind: 'aiGames'; id: string | null }
   | { kind: 'wiki'; id: string | null }
   | { kind: 'concepts'; id: string | null };
@@ -90,6 +95,7 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (records) return { kind: 'records', id: records.id };
   if (/^(id-?)?claim$/i.test(raw)) return { kind: 'claim' };
   if (/^practice$/i.test(raw)) return { kind: 'practice' };
+  if (isReportsHash(raw)) return { kind: 'reports' };
   // #seat-filler（#fill、#補位）= 百科AI 對局頁最上面的「叫百科AI 補位」（站長 2026-11-19：給不在 LINE／DC 群組的人）
   if (/^(?:seat-?filler|fill|%E8%A3%9C%E4%BD%8D|補位)$/i.test(raw)) return { kind: 'aiGames', id: null };
   const aiGames = parseAiGamesHash(raw);
