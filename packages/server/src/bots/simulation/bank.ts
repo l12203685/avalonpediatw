@@ -1,7 +1,8 @@
 /**
  * 模擬瓦（2026-10-14）— 題庫載入。
  *
- * 題庫是 commit 進 repo 的 `packages/server/sim_bank.json`（沒有名字、沒有日期，見 bankCodec.ts），
+ * 題庫是 commit 進 repo 的 `packages/server/sim_bank.json`（沒有名字、沒有日期，見 bankCodec.ts；/公布 的名字
+ * 是執行期從網站的牌譜紀錄清單對來的，不寫進題庫，見 seatNames.ts），
  * 由 `scripts/buildSimBank.ts` 從牌譜總庫 `game_db.json` 產生（每晚，2026-11-20 起；之前讀牌譜快照
  * `sheets_cache.json`）。伺服器只讀題庫，不讀總庫或快照。
  *
@@ -21,6 +22,7 @@ import { describeError } from '../media/bytes';
 import { parseBankEntry, SIM_BANK_VERSION, type SimBankFile } from './bankCodec';
 import { addGameToAggregates, buildHumanAggregates, type HumanAgg } from './human';
 import { linkRecords, readRecordPosts, fingerprintIndex } from './recordsIndex';
+import { linkSeatNames, readSeatNameSources, type SeatNameRules } from './seatNames';
 import { buildAssassinPool, buildDecisionPool, buildMidPool, type DecisionRef, type SimGame } from './scenario';
 
 export interface SimBank {
@@ -38,6 +40,11 @@ export interface SimBank {
    * 讀不到牌譜紀錄清單時是空的。
    */
   records: Map<number, string>;
+  /**
+   * games[] 的索引 → 1～0 家的名字（網站戰績的寫法，沒有名字是 ''；seatNames.ts）：對到的那一篇牌譜紀錄的名字。
+   * /公布 印在座位那一行下面；沒有對到、或那一篇沒有名字的局不在裡面。只在記憶體，不寫進題庫。
+   */
+  names: Map<number, string[]>;
   /** 同位置真人（human.ts）。 */
   humans: Map<string, HumanAgg>;
   /** 解析失敗而丟掉的列數。 */
@@ -58,29 +65,43 @@ function addEntry(entry: SimBankFile['games'][number], games: SimGame[], byId: M
   return true;
 }
 
-function finish(games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number, posts?: readonly unknown[] | null): SimBank {
+/** /公布 名字的規則（player_aliases.json）和局號對照（game_db.json 同一局的所有來源 id）；沒給 = 照原樣的名字。 */
+export interface SeatNameSources {
+  rules: SeatNameRules;
+  ids: ReadonlyMap<string, readonly string[]>;
+}
+
+function finish(
+  games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number,
+  posts?: readonly unknown[] | null, nameSources?: SeatNameSources,
+): SimBank {
+  const records: Map<number, string> = posts ? linkRecords(games, fingerprintIndex(posts)) : new Map();
   return {
     games,
     byId,
     pool: buildDecisionPool(games),
     midPool: buildMidPool(games),
     assassinPool: buildAssassinPool(games),
-    records: posts ? linkRecords(games, fingerprintIndex(posts)) : new Map(),
+    records,
+    names: posts ? linkSeatNames(records, posts, nameSources?.rules, nameSources?.ids) : new Map(),
     humans,
     dropped,
     decisionPoints: games.reduce((n, g) => n + g.proposals.length, 0),
   };
 }
 
-/** 檔案內容 → 題庫（一次做完；測試與工具用）。`posts` = 網站牌譜紀錄的貼文（對連結用，沒給就沒有連結）。 */
-export function buildSimBank(file: SimBankFile, posts?: readonly unknown[] | null): SimBank {
+/**
+ * 檔案內容 → 題庫（一次做完；測試與工具用）。`posts` = 網站牌譜紀錄的貼文（對連結和 /公布 的名字用，沒給就沒有）；
+ * `nameSources` = 名字換成網站寫法的規則。
+ */
+export function buildSimBank(file: SimBankFile, posts?: readonly unknown[] | null, nameSources?: SeatNameSources): SimBank {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
   let dropped = 0;
   for (const entry of Array.isArray(file?.games) ? file.games : []) {
     if (!addEntry(entry, games, byId)) dropped++;
   }
-  return finish(games, byId, buildHumanAggregates(games), dropped, posts);
+  return finish(games, byId, buildHumanAggregates(games), dropped, posts, nameSources);
 }
 
 /** 開機讀題庫時每幾局讓出一次 CPU。 */
@@ -94,6 +115,7 @@ export async function buildSimBankAsync(
   chunk = SIM_BANK_CHUNK,
   pause: () => Promise<void> = yieldToLoop,
   posts?: readonly unknown[] | null,
+  nameSources?: SeatNameSources,
 ): Promise<SimBank> {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
@@ -109,7 +131,7 @@ export async function buildSimBankAsync(
     if ((i + 1) % chunk === 0) await pause();
   }
   await pause();
-  return finish(games, byId, humans, dropped, posts);
+  return finish(games, byId, humans, dropped, posts, nameSources);
 }
 
 export const SIM_BANK_FILE = 'sim_bank.json';
@@ -161,8 +183,10 @@ export class SimBankLoader {
 
   constructor(private readonly load: () => SimBank | null | Promise<SimBank | null> = async () => {
     const file = readSimBankFile();
-    // 網站牌譜紀錄清單（/公布 的連結）：讀不到也照樣出題，只是沒有連結。
-    return file ? buildSimBankAsync(file, SIM_BANK_CHUNK, yieldToLoop, readRecordPosts()) : null;
+    // 網站牌譜紀錄清單（/公布 的連結和名字）：讀不到也照樣出題，只是沒有連結、沒有名字。
+    if (!file) return null;
+    const posts = readRecordPosts();
+    return buildSimBankAsync(file, SIM_BANK_CHUNK, yieldToLoop, posts, posts ? readSeatNameSources() : undefined);
   }) {}
 
   /** 開機後在背景開始讀（不擋開機）。 */

@@ -2,7 +2,7 @@
  * 模擬瓦（2026-10-14）— 回覆文字，純函式（不讀檔、不看時鐘、不連網）。
  *
  * 一則回覆最多 SIM_REPLY_MAX_CHARS（1800）字，跟戰績一樣；超過就從最不重要的段落開始省略。
- * 純文字繁體中文；第十個座位寫 `0`（`0家`）；沒有任何名字。
+ * 純文字繁體中文；第十個座位寫 `0`（`0家`）；沒有任何名字（只有 /公布 在座位那一行下面列 1～0 家是誰，2026-11-20）。
  * 只有 Discord 把派票那一段包在 code block 裡（LINE 不支援 markdown）。
  *
  * Edward 2026-10-14 審查修正（手機上讀得完、講社群的話）：
@@ -980,6 +980,8 @@ export interface RevealInput {
   intervalByCoAnswer?: boolean;
   /** 網站上這一局牌譜的連結（recordsIndex.ts）；沒有就附文字牌譜。 */
   recordUrl?: string;
+  /** 1～0 家的名字（seatNames.ts，網站戰績的寫法；沒有名字是 ''）；沒給就不印名字那一行。 */
+  seatNames?: readonly string[];
   /** 刺殺題：你刺的座位（沒刺就是 null）。 */
   kill?: { target: number | null; coAnswer?: boolean };
   platform: SimPlatform;
@@ -1009,6 +1011,23 @@ export function seatRolesLine(game: Pick<SimGame, 'seatRoles'>): string {
   return game.seatRoles.map((r, i) => `${seatChar(i + 1)}${ROLE_CODE[r] ?? '?'}`).join(' ');
 }
 
+/** Discord 的 markdown 字元前面加反斜線（名字照原樣顯示，`_小明_` 不會變斜體）。 */
+function escapeDiscord(text: string): string {
+  return text.replace(/[\\`*_~|>#[\]()<:-]/gu, (c) => `\\${c}`);
+}
+
+/**
+ * 「1.小明 2.阿華 … 0.阿福」：1～0 家各是誰（Edward 2026-11-20：「模擬瓦公布我說了要把ID 也一起列在座位下方」）。
+ * 沒有名字的座位只寫座位（`5.`）；一個名字都沒有 → ''（不印這一行）。
+ */
+export function seatNamesLine(names: readonly string[] | undefined, platform: SimPlatform): string {
+  if (!names || !names.some((n) => n && n.trim())) return '';
+  return names
+    .slice(0, 10)
+    .map((n, i) => `${seatChar(i + 1)}.${platform === 'discord' ? escapeDiscord(n ?? '') : n ?? ''}`)
+    .join(' ');
+}
+
 /**
  * /公布（Edward 2026-11-16：「給牌局連結就好」）：角色代碼、你的答案（幾好幾壞）、區間對答案、結果，
  * 加網站上這一局牌譜的連結；網站上沒有這一局（試算表裡比 DC 論壇早、或沒貼到論壇）就附文字牌譜。
@@ -1025,6 +1044,8 @@ export function formatReveal(input: RevealInput): string {
   parts.push({ text: `【${input.exerciseId} 公布】配置: 刺娜莫奧派梅 ${seats}` });
   // Edward 2026-11-19：公布時把 1～0 家各是什麼角色也列出來。
   parts.push({ text: seatRolesLine(g) });
+  // Edward 2026-11-20：座位下面再列 1～0 家是誰（名字從網站的牌譜紀錄對來，對不到就不印）。
+  parts.push({ text: seatNamesLine(input.seatNames, input.platform) });
   if (input.kill) {
     // 刺殺題：只多這一行（不然看不出刺中沒有）。
     const merlin = g.seatRoles.indexOf('merlin') + 1;

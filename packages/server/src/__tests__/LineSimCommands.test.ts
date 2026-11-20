@@ -244,6 +244,21 @@ describe('mirror group', () => {
     expect(image.type).toBe('image');
     expect(image.originalContentUrl).toMatch(/^https:\/\/example\.invalid\//u);
   });
+  it('/公布 lists who sat 1～0 under the seats when the bank has names (Edward 2026-11-20); plain text on LINE', async () => {
+    // 編的名字（不是真的玩家）。
+    const i = BANK.byId.get('W0000') as number;
+    const names = ['_甲蟲_', '乙鳥', '丙丁', '丁香', '戊己', '庚辛', '壬癸', '子丑', 'Nova Two', '辰巳'];
+    const loader = new SimBankLoader(() => ({ ...BANK, names: new Map([[i, names]]) }));
+    __setSimForTests({ loader, engine: new SimEngine({ bank: () => loader.get(), random: () => () => 0 }) });
+    const h = setup();
+    await deliver(h, groupText('/模擬 忠臣 4', 'n1', 'rn1'));
+    await deliver(h, groupText('/公布', 'n2', 'rn2'));
+    expect(h.replies.at(-1)?.messages[0].text.split('\n').slice(0, 3)).toEqual([
+      '【W0000-4 公布】配置: 刺娜莫奧派梅 753921',
+      '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠',
+      '1._甲蟲_ 2.乙鳥 3.丙丁 4.丁香 5.戊己 6.庚辛 7.壬癸 8.子丑 9.Nova Two 0.辰巳',
+    ]);
+  });
   it('/公布 without an image relay: the three lines only (no picture path, no push)', async () => {
     const plain = setup();
     await deliver(plain, groupText('/模擬 忠臣 4', 'p1', 'rp1'));
