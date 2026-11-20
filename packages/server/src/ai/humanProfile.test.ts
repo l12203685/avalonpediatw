@@ -83,8 +83,10 @@ describe('the human reading changes blue seats only', () => {
     lakeHistory: [], myLakeResults: [], ...over,
   } as unknown as PlayerObservation);
   it('a loyal reads the copied team as less clean at a human table; a red seat reads the same at every table', () => {
-    const ai = bayesRedShare(obs(), bayesOptionsOf(tuningForOpponent('ai', DEFAULT_AGENT_TUNING)));
-    const hu = bayesRedShare(obs(), bayesOptionsOf(tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING)));
+    const human = tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING);
+    expect(human.viewpoint53).toBe(0); // the leader-viewpoint reading (V3P) is off at human tables
+    const ai = bayesRedShare(obs(), bayesOptionsOf({ ...human, copyDiscount55: 0 }));
+    const hu = bayesRedShare(obs(), bayesOptionsOf(human));
     const s = (m: Map<string, number>): number => ['P4', 'P5', 'P7'].reduce((a, id) => a + (m.get(id) ?? 0), 0);
     expect(s(hu)).toBeGreaterThan(s(ai));
     const red = obs({ myRole: 'assassin', myTeam: 'evil', seatTeam: 'evil', knownEvils: ['P2', 'P3', 'P10'] });

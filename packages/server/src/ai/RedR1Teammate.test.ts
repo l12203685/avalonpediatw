@@ -173,7 +173,9 @@ describe('redR1TeamPlan', () => {
 });
 
 describe('ForwardAgent — redR1Teammate', () => {
-  const tuned = (on: boolean): Partial<AgentTuning> => ({ ...DEFAULT_AGENT_TUNING, redR1Teammate: on });
+  // Round 56b: the leader-viewpoint reading (V3P, default since 2026-11-20) is blue-only (red frozen), so a red leader's loyal imitation
+  // reads without it; the comparison is made without it on both sides.
+  const tuned = (on: boolean): Partial<AgentTuning> => ({ ...DEFAULT_AGENT_TUNING, viewpoint53: 0, viewpointPow53: 0, redR1Teammate: on });
   const teamOf = (o: PlayerObservation, on: boolean): string[] => {
     const a = new ForwardAgent(o.myPlayerId, new HeuristicAgent(o.myPlayerId, undefined, undefined, tuned(on)));
     a.onGameStart(o);
