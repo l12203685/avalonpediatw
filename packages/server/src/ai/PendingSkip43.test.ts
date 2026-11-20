@@ -24,8 +24,10 @@ const q = (round: number, team: string[], result: 'success' | 'fail') => ({ roun
 const r3 = (over: object) => asObs({
   ...base, currentRound: 3, questResults: ['success', 'fail'], questHistory: [q(1, ['P1', 'P2', 'P3'], 'success'), q(2, ['P2', 'P4', 'P6', 'P9'], 'fail')], ...over,
 });
-const PEND = { ...DEFAULT_AGENT_TUNING, beliefPendingProposal: true };
-const clean = (o: PlayerObservation, team: string[], t: object) => bayesTeamClean(o, team, bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, ...t }))!;
+// Round 56b: measured without the leader-viewpoint reading (V3P, default since 2026-11-20), which replaces the proposal tables the pending proposal is read by.
+const BASE = { ...DEFAULT_AGENT_TUNING, viewpoint53: 0, viewpointPow53: 0 };
+const PEND = { ...BASE, beliefPendingProposal: true };
+const clean = (o: PlayerObservation, team: string[], t: object) => bayesTeamClean(o, team, bayesOptionsOf({ ...BASE, ...t }))!;
 
 describe('beliefPendingSkip43', () => {
   it('off in the legacy table and the default; flag parses 0–7', () => {

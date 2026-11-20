@@ -2409,11 +2409,11 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinKnownRed54: 7, // round 54, adopted by the site owner 2026-11-19 (confirmation passed)
   failedReuse54: 0,
   exactPick53: 0,
-  viewpoint53: 0,
+  viewpoint53: 3, // round 53b V3P, adopted by the site owner 2026-11-20 (勝率優先; confirmed on the current defaults in round 56b)
   copyDiscount55: 0,
   copyRepeat55b: 0,
   copyFreq55b: 0,
-  viewpointPow53: 0,
+  viewpointPow53: 0.5, // round 53b V3P (with viewpoint53=3)
   goodLake41: 0,
   beliefLakeCal40: 0,
   percivalThumbVote40: 0,

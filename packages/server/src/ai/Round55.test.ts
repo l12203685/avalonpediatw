@@ -9,6 +9,9 @@ import { buildReplayObservation } from './benchmark/replayObservation';
 import type { ReplayGame, ReplayProposal } from './benchmark/sheetsReplay';
 import type { PlayerObservation } from './types';
 
+// Round 56b: the reported-game numbers were pinned before the leader-viewpoint reading (V3P) became the default (2026-11-20).
+const PRE_V3P = { ...DEFAULT_AGENT_TUNING, viewpoint53: 0, viewpointPow53: 0 };
+
 function reportedGame(): ReplayGame {
   const rounds = [
     [[1, 2, 3], [2, 6, 8], [3, 9, 10], [4, 1, 6], [4, 5, 7]],
@@ -36,7 +39,7 @@ const loyal1 = (): PlayerObservation => {
   const o = buildReplayObservation(reportedGame(), 1, { kind: 'team_select', proposal: 10 });
   return { ...o, seatTeam: o.myTeam };
 };
-const pCoreRed = (d: number): number => 1 - (bayesTeamClean(loyal1(), ['P4', 'P5', 'P7'], bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, copyDiscount55: d })) ?? 0);
+const pCoreRed = (d: number): number => 1 - (bayesTeamClean(loyal1(), ['P4', 'P5', 'P7'], bayesOptionsOf({ ...PRE_V3P, copyDiscount55: d })) ?? 0);
 
 describe('copyDiscount55', () => {
   it('exists, off in both tables, parses', () => {
@@ -66,7 +69,7 @@ describe('copyDiscount55', () => {
   });
 });
 
-const pCoreRedOpts = (o: Partial<typeof DEFAULT_AGENT_TUNING>): number => 1 - (bayesTeamClean(loyal1(), ['P4', 'P5', 'P7'], bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, ...o })) ?? 0);
+const pCoreRedOpts = (o: Partial<typeof DEFAULT_AGENT_TUNING>): number => 1 - (bayesTeamClean(loyal1(), ['P4', 'P5', 'P7'], bayesOptionsOf({ ...PRE_V3P, ...o })) ?? 0);
 
 describe('round 55b: copyRepeat55b / copyFreq55b', () => {
   it('exist, off in both tables, parse', () => {

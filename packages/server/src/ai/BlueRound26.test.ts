@@ -156,7 +156,7 @@ describe('belief: strong tables, unified pyramid, tempering, policy votes (round
   it('options map from the tuning', () => {
     expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefStrongTables: true }).strongTables).toBe(true);
     expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefTemper: 0.5 })).toMatchObject({ voteTemper: 0.5 });
-    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefTemper: 73 })).toMatchObject({ voteTemper: 0.7, proposalTemper: 0.3 });
+    expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefTemper: 73, viewpoint53: 0 })).toMatchObject({ voteTemper: 0.7, proposalTemper: 0.3 });
     expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefTemper: 0 }).voteTemper).toBeUndefined();
     expect(bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefPolicyVotes: true }).policyVotes).toBe(true);
   });

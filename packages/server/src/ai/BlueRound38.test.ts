@@ -37,7 +37,8 @@ const r2 = asObs({
   voteHistory: [...R1, vote(2, 1, 'P6', ['P6', 'P2', 'P3', 'P4'], ['P6', 'P2', 'P3', 'P4'])],
 });
 // The round-38 cases are written on the round-37 default: the round-38 and round-39 adoptions are switched off here.
-const OFF = { ...DEFAULT_AGENT_TUNING, ownView: 0, merlinOnTeamOwn: 0, goodBayesR4Kept: 0, loyalTailWhiteLastTau: 0, goodReuseWhite: 0,
+// Round 56b: the leader-viewpoint reading (V3P, default since 2026-11-20) replaces the proposal tables; these rules were built before it.
+const OFF = { ...DEFAULT_AGENT_TUNING, viewpoint53: 0, viewpointPow53: 0, ownView: 0, merlinOnTeamOwn: 0, goodBayesR4Kept: 0, loyalTailWhiteLastTau: 0, goodReuseWhite: 0,
   percivalRead39: 0, percivalCarry39: 0, merlinFlowFollow: 0, beliefPendingProposal: false, goodBayesBad: 0.8, goodBayesBadKey: 0.7, goodBayesGood: 0.7, loyalTailWhite: 0.7 };
 const T = (over: object) => ({ ...OFF, ...over });
 

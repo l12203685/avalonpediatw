@@ -11,7 +11,8 @@ import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
 import { Q1, Q2, q1Pass, q2Pass } from '../../scripts/acceptRound53';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
-const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
+// Round 56b: the acceptance cases compare against the reading before V3P became the default (2026-11-20); `T()` is that reading.
+const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, viewpoint53: 0, viewpointPow53: 0, ...over });
 
 function vote(round: number, attempt: number, leader: string, team: string[], approvers: string[], approved = false): VoteRecord {
   return { round, attempt, leader, team, approved, votes: Object.fromEntries(IDS.map((id) => [id, approvers.includes(id)])) };
@@ -96,9 +97,10 @@ describe('exactPick53Team', () => {
 });
 
 describe('viewpoint53 (leader-viewpoint reading)', () => {
-  it('flag exists, off by default, parses 0–15', () => {
+  it('flag exists, off in the legacy table, V3P (=3, power 0.5) by default since round 56b, parses 0–15', () => {
     expect(LEGACY_AGENT_TUNING.viewpoint53).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.viewpoint53).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.viewpoint53).toBe(3);
+    expect(DEFAULT_AGENT_TUNING.viewpointPow53).toBe(0.5);
     expect(parseTuningFlag('viewpoint53')).toEqual({ viewpoint53: 1 });
     expect(parseTuningFlag('viewpoint53=3')).toEqual({ viewpoint53: 3 });
     expect(() => parseTuningFlag('viewpoint53=16')).toThrow();

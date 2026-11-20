@@ -8,6 +8,7 @@ import { assassinatorRole, isAssassinator } from '../game/assassinator';
 import { fitTeamToSize } from '../game/teamSize';
 import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
+import { OPPONENT_LABEL, PROFILE_OVERRIDES, opponentTypeOfTable, type OpponentType } from '../ai/humanProfile';
 import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
@@ -193,6 +194,16 @@ function tryMirrorFanout(msg: LobbyChatMessage): void {
 }
 
 /**
+ * 第 56b 回合 C（站長 2026-11-20「真人桌另一套」）：這一桌的機器人用哪一套策略層（`ai/humanProfile.ts`）。
+ * 桌上沒有真人（全是機器人）→ `ai`（基準線＝自我對打量的那一套）；有真人 → 真人桌。網站房間開打時拿不到 10 人開打前的 PR（桌上強度 S），
+ * 所以有真人的桌一律是 `avgHuman`（一般真人桌）；之後拿得到 S 再照 `opponentTypeOfTable` 分弱／一般／強。
+ */
+export function opponentTypeForRoom(room: Pick<Room, 'players'>, tableS: number | null = null): OpponentType {
+  const humans = Object.values(room.players).filter((p) => !p.isBot).length;
+  return opponentTypeOfTable({ humans, tableS });
+}
+
+/**
  * Live bot Lady-of-the-Lake routing (2026-10-13). On by default: the bot's
  * own agent picks the target and the claim (`LakePolicy` with that bot's
  * `AgentTuning`, the same decisions self-play measures).
@@ -263,6 +274,8 @@ export class GameServer {
   private gameEngines: Map<string, GameEngine> = new Map();
   // botId → HeuristicAgent instance (for bot-controlled players)
   private botAgents: Map<string, AvalonAgent> = new Map();
+  /** 第 56b 回合 C：每個機器人現在的策略層（沒有記錄 = `ai`，`addBotToRoom` 建的就是基準線）。 */
+  private botProfiles: Map<string, OpponentType> = new Map();
   // uid → supabase UUID (set from socket.data.supabaseId on join/create)
   private supabaseIds: Map<string, string> = new Map();
   // roomId → start timestamp (ms)
@@ -960,6 +973,9 @@ export class GameServer {
           console.error('[supabase] updateRoomState error:', err)
         );
       }
+
+      // 第 56b 回合 C：開局時照這一桌有沒有真人換成對應的策略層（機器人在開局前才知道最後的座位組成）。
+      this.applyOpponentProfile(updatedRoom);
 
       // Notify each bot agent about their assigned role
       for (const [botId, agent] of this.botAgents.entries()) {
@@ -1802,6 +1818,25 @@ export class GameServer {
     }
   }
 
+  /**
+   * 第 56b 回合 C：這一桌每一個機器人換成 `opponentTypeForRoom` 的策略層（基準線＋`PROFILE_OVERRIDES`；環境變數照舊蓋在基準線上）。
+   * 只換 HeuristicAgent（開局前還沒有任何對局狀態）；已經是同一套的就不換。
+   */
+  private applyOpponentProfile(room: Room): OpponentType {
+    const type = opponentTypeForRoom(room);
+    const overrides = PROFILE_OVERRIDES[type];
+    for (const [pid, p] of Object.entries(room.players)) {
+      if (!p.isBot) continue;
+      const agent = this.botAgents.get(pid);
+      if (!(agent instanceof HeuristicAgent)) continue;
+      if ((this.botProfiles.get(pid) ?? 'ai') === type) continue;
+      this.botAgents.set(pid, new HeuristicAgent(pid, undefined, undefined, overrides));
+      this.botProfiles.set(pid, type);
+    }
+    if (type !== 'ai') console.log(`[bot] room ${room.id}: ${OPPONENT_LABEL[type]}`);
+    return type;
+  }
+
   /** Seat a new bot (HeuristicAgent) in `room`; returns its id. */
   private addBotToRoom(room: Room): string {
     let botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
@@ -1821,6 +1856,7 @@ export class GameServer {
       createdAt: Date.now(),
     };
     this.botAgents.set(botId, new HeuristicAgent(botId));
+    this.botProfiles.delete(botId);
     return botId;
   }
 
@@ -1840,6 +1876,7 @@ export class GameServer {
 
       delete room.players[botId];
       this.botAgents.delete(botId);
+      this.botProfiles.delete(botId);
       this.broadcastRoomState(roomId, room);
     } catch (error) {
       console.error('Error removing bot:', error);
@@ -2793,6 +2830,7 @@ export class GameServer {
       for (const pid of Object.keys(room.players)) {
         if (room.players[pid].isBot) {
           this.botAgents.delete(pid);
+          this.botProfiles.delete(pid);
         }
       }
       for (const [pid, player] of Object.entries(room.players)) {
@@ -3340,11 +3378,11 @@ export class GameServer {
     const room = this.roomManager.getRoom(roomId);
     if (room) {
       for (const [pid, p] of Object.entries(room.players)) {
-        if (p.isBot) this.botAgents.delete(pid);
+        if (p.isBot) { this.botAgents.delete(pid); this.botProfiles.delete(pid); }
       }
     }
     // Also when the room is already gone (removed by another cleanup path).
-    for (const botId of session?.botIds ?? []) this.botAgents.delete(botId);
+    for (const botId of session?.botIds ?? []) { this.botAgents.delete(botId); this.botProfiles.delete(botId); }
     this.spectators.delete(roomId);
     if (session) {
       const socketId = this.playerToSocket.get(session.ownerId);

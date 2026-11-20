@@ -5,43 +5,34 @@
  *   DISCORD_BOT_TOKEN=… ADMIN_DISCORD_IDS=… pnpm --filter @avalon/server exec tsx scripts/listCommunityReports.ts [--days 7] [--channel ID]
  *   … scripts/listCommunityReports.ts --mark-merged <訊息 id>       把那則【ID認領】改成結尾「（已合併）」
  *   … scripts/listCommunityReports.ts --mark-processed <訊息 id>    把那則【百科回報】改成結尾「（已處理）」
+ *   … scripts/listCommunityReports.ts --mark-processed <訊息 id> --note "已修正：…" --link https://github.com/…/pull/N
+ *   … scripts/listCommunityReports.ts --mark-processed <訊息 id> --status 不處理 --note "原因…"
+ *       那則【百科回報】最後換上狀態行「【處理・已修正】說明｜<網址>（已處理）」（src/services/reportStatus.ts），
+ *       網站「回報與修正」頁（#reports）會顯示狀態、說明與連結。--status 預設 已修正；也可以 處理中、收到、隱藏（不上網站）。
  *
- * stdout：JSON（列表，或 {"messageId": …, "result": "edited|already|not_found|failed"}）；stderr：只有數量與狀態碼。
+ * stdout：JSON（列表，或 {"messageId": …, "result": "edited|already|not_found|failed|too_long"}）；stderr：只有數量與狀態碼。
  * 頻道預設 COMMUNITY_REPORT_DISCORD_CHANNEL_ID ＞ LOBBY_MIRROR_DISCORD_CHANNEL_ID ＞ #同步閒聊。
  * 核准＝群組擁有者或 ADMIN_DISCORD_IDS（逗號或空白隔開的 Discord 使用者 id）在【ID認領】那則按 ✅。
  */
-import { listCommunityItems, markCommunityItem, parseAdminIds } from '../src/services/communityReportsList';
-
-function arg(name: string): string | undefined {
-  const i = process.argv.indexOf(name);
-  return i >= 0 ? process.argv[i + 1] : undefined;
-}
+import { listCommunityItems, markCommunityItem, parseAdminIds, parseCliArgs } from '../src/services/communityReportsList';
 
 async function main(): Promise<number> {
+  const args = parseCliArgs(process.argv.slice(2));
+  if (args.cmd === 'error') {
+    console.error(args.message);
+    return 2;
+  }
   const token = (process.env.DISCORD_BOT_TOKEN ?? '').trim();
   if (!token) {
     console.error('需要 DISCORD_BOT_TOKEN');
     return 2;
   }
-  const channelId = arg('--channel');
-  const merged = arg('--mark-merged');
-  const processed = arg('--mark-processed');
-  const target = merged ?? processed;
-  if (target !== undefined) {
-    if (!/^\d{15,22}$/.test(target)) {
-      console.error('訊息 id 要是數字');
-      return 2;
-    }
-    const result = await markCommunityItem({ token, channelId, messageId: target, mark: merged ? 'merged' : 'processed' });
-    process.stdout.write(`${JSON.stringify({ messageId: target, result })}\n`);
+  if (args.cmd === 'mark') {
+    const result = await markCommunityItem({ token, channelId: args.channelId, messageId: args.messageId, mark: args.mark, status: args.status });
+    process.stdout.write(`${JSON.stringify({ messageId: args.messageId, result, ...(args.status ? { status: args.status.status } : {}) })}\n`);
     return result === 'edited' || result === 'already' ? 0 : 1;
   }
-  const days = Number(arg('--days') ?? '7');
-  if (!Number.isFinite(days) || days <= 0 || days > 90) {
-    console.error('--days 要是 1–90');
-    return 2;
-  }
-  const listing = await listCommunityItems({ token, channelId, days, adminIds: parseAdminIds(process.env.ADMIN_DISCORD_IDS) });
+  const listing = await listCommunityItems({ token, channelId: args.channelId, days: args.days, adminIds: parseAdminIds(process.env.ADMIN_DISCORD_IDS) });
   process.stdout.write(`${JSON.stringify(listing, null, 2)}\n`);
   return 0;
 }
