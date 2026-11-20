@@ -14,10 +14,13 @@ import { AVALON_CONFIG, type Role } from '@avalon/shared';
 import { BOT_GAME_CATEGORY } from '@avalon/shared/stats';
 import {
   EVIL_ROLES,
+  FIRST_LAKE_HOLDER_SEAT,
   REPLAY_PLAYER_COUNT,
   ROLE_CODE_ORDER,
   isLakeChainValid,
+  repairLakeChain,
   type Camp,
+  type RawReplayLake,
   type ReplayGame,
   type ReplayLake,
   type ReplayProposal,
@@ -181,7 +184,7 @@ export function replayGameFromDataset(row: DatasetTuple, header: DatasetHeader):
 
   // 湖：lakes 的座位對決定第幾個湖（第 i 對在第 i+2 局之後，"--" = 那一局沒有湖）；宣告從 claims（持湖、目標、
   // x 紅／o 藍／其他）用持湖＋目標對上。沒有 lakes 只有 claims 時照順序從第 2 局排。
-  const lakes: ReplayLake[] = [];
+  const rawLakes: RawReplayLake[] = [];
   const claimsText = get<string>('claims') ?? '';
   const lakesText = get<string>('lakes') ?? '';
   const claimOf = new Map<string, Camp | null>();
@@ -199,11 +202,21 @@ export function replayGameFromDataset(row: DatasetTuple, header: DatasetHeader):
     [...claimOf.keys()].forEach((pair, i) => pairs.push([pair, i + 2]));
   }
   for (const [pair, round] of pairs) {
-    const h = seatOfChar(pair[0]);
-    const t = seatOfChar(pair[1]);
-    if (h === null || t === null) return fail('bad lake seat');
-    lakes.push({ round, holderSeat: h, targetSeat: t, claim: claimOf.get(pair) ?? null });
+    let full = pair;
+    if ((pair.match(/\?/g) ?? []).length === 1) {
+      // 一個座位寫「?」：claims 欄裡那位持湖人（或被驗的人）只有一筆時用那筆，否則留給湖中鏈補（同 game_db.unknown_seat_lakes）
+      const side = pair[0] === '?' ? 1 : 0;
+      const hits = [...claimOf.keys()].filter((p) => p[side] === pair[side] && seatOfChar(p[1 - side]) !== null && p[0] !== p[1]);
+      if (hits.length === 1) full = hits[0];
+    }
+    const h = full[0] === '?' ? null : seatOfChar(full[0]);
+    const t = full[1] === '?' ? null : seatOfChar(full[1]);
+    if ((h === null && full[0] !== '?') || (t === null && full[1] !== '?')) return fail('bad lake seat');
+    rawLakes.push({ round, holderSeat: h, targetSeat: t, claim: claimOf.get(full) ?? null });
   }
+  // 湖中鏈（站長 2026-11-20「接湖的必為下一湖」）：牌譜局從 0家起湖；Discord 局的起點不假設。
+  const repaired = repairLakeChain(rawLakes, source === 0 ? FIRST_LAKE_HOLDER_SEAT : null);
+  const lakes: ReplayLake[] = repaired.lakes;
 
   let winner: Camp;
   let assassinTargetSeat: number | undefined;
@@ -245,6 +258,7 @@ export function replayGameFromDataset(row: DatasetTuple, header: DatasetHeader):
         quests,
         lakes,
         lakeChainValid: isLakeChainValid(lakes, quests),
+        ...(repaired.fixes.length > 0 ? { lakeAutoFixes: repaired.fixes } : {}),
         assassinTargetSeat,
         winner,
       },

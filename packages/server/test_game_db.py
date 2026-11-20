@@ -585,6 +585,82 @@ class IronGoodTest(unittest.TestCase):
             self.assertIn("- S12：鐵好 56789；補第 4～5 局；結果 三藍死。", report.read_text(encoding="utf-8"))
 
 
+class LakeChainFixTest(unittest.TestCase):
+    """站長 2026-11-20「湖中鏈的修正 應該是 你可以直接判斷 接湖的必為下一湖」: corrected, not flagged."""
+
+    FIVE = dict(copy.deepcopy(GOOD), rounds=[
+        {"proposals": [{"team": "567", "votes": ["890+"]}], "mission": "ooo"},
+        {"proposals": [{"team": "1578", "votes": ["90+"]}], "mission": "ooox"},
+        {"proposals": [{"team": "1579", "votes": ["80+"]}], "mission": "ooox"},
+        {"proposals": [{"team": "56789", "votes": ["0+"]}], "mission": "ooooo"},
+        {"proposals": [{"team": "56789", "votes": ["0+"]}], "mission": "ooooo"},
+    ], assassination="7", outcome="三藍活")
+
+    @staticmethod
+    def lakes(*pairs):
+        return [{"after": 2 + n, "holder": h, "target": t, "claim": "o"} for n, (h, t) in enumerate(pairs)]
+
+    def test_holder_contradicting_the_chain_is_corrected(self):
+        g = dict(copy.deepcopy(self.FIVE), lakes=self.lakes(("0", "5"), ("4", "9"), ("9", "8")))
+        self.assertIn("LAKE", rules(g))
+        rows = gd.build([source(gd.SRC_SHEET, "12", g)])
+        row = rows[0]
+        self.assertEqual([(lk["holder"], lk["target"]) for lk in row["game"]["lakes"]], [("0", "5"), ("5", "9"), ("9", "8")])
+        self.assertEqual(row["autoFixes"], [{"kind": "lake_chain", "lake": 2, "field": "holder", "from": "4", "to": "5"}])
+        self.assertNotIn("LAKE", [c["rule"] for c in row["checks"]])
+        self.assertIn("LAKE_AUTOFIX", [c["rule"] for c in row["checks"]])
+        self.assertEqual(row["status"], "ok")  # an automatic correction is info, not an error
+        self.assertEqual(g["lakes"][1]["holder"], "4")  # the source record itself is not edited
+
+    def test_missing_holder_and_target_are_filled_from_the_chain(self):
+        lakes, fixes = gd.fix_lake_chain(self.lakes(("0", "5"), ("", "9"), ("9", "8")), "0")
+        self.assertEqual([(lk["holder"], lk["target"]) for lk in lakes], [("0", "5"), ("5", "9"), ("9", "8")])
+        self.assertEqual(fixes, [{"kind": "lake_chain", "lake": 2, "field": "holder", "from": "", "to": "5"}])
+        lakes, fixes = gd.fix_lake_chain(self.lakes(("0", "5"), ("5", ""), ("9", "8")), "0")
+        self.assertEqual([lk["target"] for lk in lakes], ["5", "9", "8"])
+        self.assertEqual(fixes, [{"kind": "lake_chain", "lake": 2, "field": "target", "from": "", "to": "9"}])
+        lakes, fixes = gd.fix_lake_chain(self.lakes(("0", "5"), ("5", "")), "0")  # nothing after it: never invented
+        self.assertEqual(([(lk["holder"], lk["target"]) for lk in lakes], fixes), ([("0", "5")], []))
+
+    def test_unknown_seat_comes_from_the_claims_column_first(self):
+        game = dict(copy.deepcopy(self.FIVE), lakes=self.lakes(("0", "3")))
+        done = gd.unknown_seat_lakes(game, "033?79", "03x37o79x")
+        self.assertEqual([(lk["after"], lk["holder"], lk["target"], lk["claim"]) for lk in done["lakes"]],
+                         [(2, "0", "3", "o"), (3, "3", "7", "o")])
+        done = gd.unknown_seat_lakes(game, "033?79", "03x")
+        self.assertEqual(done["lakes"][1], {"after": 3, "holder": "3", "target": "", "claim": ""})
+
+    def test_first_lake_starts_at_0_on_the_sheet_only(self):
+        g = dict(copy.deepcopy(self.FIVE), lakes=self.lakes(("4", "5"), ("5", "9")))
+        row = gd.build([source(gd.SRC_SHEET, "12", g)])[0]
+        self.assertEqual(row["game"]["lakes"][0]["holder"], "0")
+        self.assertEqual(row["autoFixes"], [{"kind": "lake_chain", "lake": 1, "field": "holder", "from": "4", "to": "0"}])
+        row = gd.build([source(gd.SRC_DISCORD, "999", copy.deepcopy(g))])[0]  # a Discord table may start elsewhere
+        self.assertEqual((row["game"]["lakes"][0]["holder"], row.get("autoFixes")), ("4", None))
+
+    def test_target_is_corrected_when_the_chain_says_the_target_is_wrong(self):
+        # 0>3 then 7>3: making 3 the holder would have 3 check himself, so lake 1's target is the wrong side
+        lakes, fixes = gd.fix_lake_chain(self.lakes(("0", "3"), ("7", "3")), "0")
+        self.assertEqual([(lk["holder"], lk["target"]) for lk in lakes], [("0", "7"), ("7", "3")])
+        self.assertEqual(fixes, [{"kind": "lake_chain", "lake": 1, "field": "target", "from": "3", "to": "7"}])
+
+    def test_ambiguous_chain_is_still_flagged(self):
+        # 0>2, 1>2, 3>4: lake 1 should check 1, or lake 2 should check 3 -- cannot tell which
+        g = dict(copy.deepcopy(self.FIVE), lakes=self.lakes(("0", "2"), ("1", "2"), ("3", "4")))
+        row = gd.build([source(gd.SRC_SHEET, "12", g)])[0]
+        self.assertNotIn("autoFixes", row)
+        self.assertIn("LAKE", [c["rule"] for c in row["checks"]])
+        self.assertEqual(row["status"], gd.ERROR)
+
+    def test_genuine_rule_break_after_correction_still_flags(self):
+        # lake 2's holder is corrected to 5, but 5 then checks 0, who already held the lake
+        g = dict(copy.deepcopy(self.FIVE), lakes=self.lakes(("0", "5"), ("4", "0")))
+        row = gd.build([source(gd.SRC_SHEET, "12", g)])[0]
+        self.assertEqual([(lk["holder"], lk["target"]) for lk in row["game"]["lakes"]], [("0", "5"), ("5", "0")])
+        msgs = [c["msg"] for c in row["checks"] if c["rule"] == "LAKE"]
+        self.assertTrue(msgs and all("拿過湖" in m and "上一湖驗的是" not in m for m in msgs))
+
+
 class MainTest(unittest.TestCase):
     def test_missing_primary_cache_leaves_outputs_untouched(self):
         with tempfile.TemporaryDirectory() as tmp:

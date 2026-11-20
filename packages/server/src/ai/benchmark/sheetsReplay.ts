@@ -105,6 +105,8 @@ export interface ReplayGame {
   lakes: ReplayLake[];
   /** Holder chain starts at seat 10, follows targets, one lake after R2/R3/R4. */
   lakeChainValid: boolean;
+  /** Lake seats corrected or filled from the chain (repairLakeChain, 站長 2026-11-20); absent = none. */
+  lakeAutoFixes?: LakeAutoFix[];
   assassinTargetSeat?: number;
   winner: Camp;
 }
@@ -114,6 +116,24 @@ export type ReplayParseResult =
   | { ok: false; reason: string };
 
 export type PaipuRow = Readonly<Record<string, string>>;
+
+/** One lake seat set from the chain (game_db.py fix_lake_chain): `from` null = the record left it unknown. */
+export interface LakeAutoFix {
+  kind: 'lake_chain';
+  /** 1-based lake number among the lakes kept. */
+  lake: number;
+  field: 'holder' | 'target';
+  from: number | null;
+  to: number;
+}
+
+/** A lake as read, before repairLakeChain: an unknown seat is null. */
+export interface RawReplayLake {
+  round: number;
+  holderSeat: number | null;
+  targetSeat: number | null;
+  claim: Camp | null;
+}
 
 /** 百科AI 的暱稱（同 generate_cache.is_pedia_bot_name：NFKC、小寫後以「百科AI」或「百科機器人」開頭）。 */
 const PEDIA_BOT_NAME_RE = /^百科(機器人|ai)/;
@@ -298,6 +318,8 @@ export function parseReplayGame(row: PaipuRow): ReplayParseResult {
     }
   }
 
+  // 牌譜分頁的列（有流水號）照試算表的規則從 0家起湖；總庫轉來的列（bankSource，沒有流水號）已經在 game_db.py 修過。
+  const repaired = repairLakeChain(lakes, (row['流水號'] ?? '').trim() ? FIRST_LAKE_HOLDER_SEAT : null);
   return {
     ok: true,
     game: {
@@ -307,8 +329,9 @@ export function parseReplayGame(row: PaipuRow): ReplayParseResult {
       names,
       proposals,
       quests,
-      lakes,
-      lakeChainValid: isLakeChainValid(lakes, quests),
+      lakes: repaired.lakes,
+      lakeChainValid: isLakeChainValid(repaired.lakes, quests),
+      ...(repaired.fixes.length > 0 ? { lakeAutoFixes: repaired.fixes } : {}),
       assassinTargetSeat,
       winner,
     },
@@ -341,4 +364,86 @@ export function isLakeChainValid(lakes: readonly ReplayLake[], quests: readonly 
     holder = lake.targetSeat;
   }
   return true;
+}
+
+/**
+ * 站長 2026-11-20「湖中鏈的修正 應該是 你可以直接判斷 接湖的必為下一湖」：the seat lake k checks holds lake k+1.
+ * Same rule as game_db.py fix_lake_chain (keep the two in step):
+ *   1. an unknown seat is filled from the chain (a holder from the previous target, the first lake's from
+ *      `firstHolder`; a target from the next holder); a lake that cannot be filled is left out;
+ *   2. each broken link (holder k+1 ≠ target k; first holder ≠ `firstHolder`) is fixed on one side, the holder by
+ *      default or the target; of every combination the one with the fewest other rule breaks (lakeing yourself or
+ *      a seat that already held the lake), then the fewest target edits, wins; a tie changes nothing.
+ * Only lakes of consecutive rounds are linked. `firstHolder` null = the table's start is not known.
+ */
+export function repairLakeChain(
+  raw: readonly RawReplayLake[],
+  firstHolder: number | null,
+): { lakes: ReplayLake[]; fixes: LakeAutoFix[] } {
+  const out = [...raw].sort((a, b) => a.round - b.round).map((l) => ({ ...l }));
+  let fixes: LakeAutoFix[] = [];
+  const next = (a: { round: number }, b: { round: number }): boolean => b.round === a.round + 1;
+  out.forEach((l, k) => {
+    const n = out[k + 1];
+    if (l.targetSeat === null && n && next(l, n) && n.holderSeat !== null) {
+      l.targetSeat = n.holderSeat;
+      fixes.push({ kind: 'lake_chain', lake: k + 1, field: 'target', from: null, to: n.holderSeat });
+    }
+  });
+  out.forEach((l, k) => {
+    const prev = k > 0 ? (next(out[k - 1], l) ? out[k - 1].targetSeat : null) : (l.round === 2 ? firstHolder : null);
+    if (l.holderSeat === null && prev !== null) {
+      l.holderSeat = prev;
+      fixes.push({ kind: 'lake_chain', lake: k + 1, field: 'holder', from: null, to: prev });
+    }
+  });
+  const shownIdx = out.map((l, k) => (l.holderSeat !== null && l.targetSeat !== null ? k : -1)).filter((k) => k >= 0);
+  const number = new Map(shownIdx.map((k, n) => [k + 1, n + 1]));
+  fixes = fixes.filter((f) => number.has(f.lake)).map((f) => ({ ...f, lake: number.get(f.lake)! }));
+  const lakes: ReplayLake[] = shownIdx.map((k) => ({ ...out[k], holderSeat: out[k].holderSeat!, targetSeat: out[k].targetSeat! }));
+
+  const holders = lakes.map((l) => l.holderSeat);
+  const targets = lakes.map((l) => l.targetSeat);
+  const links: number[] = [];
+  if (lakes.length > 0 && firstHolder !== null && lakes[0].round === 2 && holders[0] !== firstHolder) links.push(0);
+  for (let k = 1; k < lakes.length; k++) {
+    if (next(lakes[k - 1], lakes[k]) && holders[k] !== targets[k - 1]) links.push(k);
+  }
+  if (links.length === 0) return { lakes, fixes };
+
+  type Edit = { field: 'holder' | 'target'; k: number; from: number; to: number };
+  const scored: { score: [number, number]; edits: Edit[] }[] = [];
+  const total = 2 ** links.length;
+  for (let mask = 0; mask < total; mask++) {
+    if (links[0] === 0 && (mask & 1)) continue; // the first holder has no target before it: holder only
+    const h = [...holders];
+    const t = [...targets];
+    const edits: Edit[] = [];
+    let targetEdits = 0;
+    links.forEach((k, i) => {
+      if (mask & (1 << i)) {
+        edits.push({ field: 'target', k: k - 1, from: targets[k - 1], to: holders[k] });
+        t[k - 1] = holders[k];
+        targetEdits++;
+      } else {
+        const to = k === 0 ? (firstHolder as number) : targets[k - 1];
+        edits.push({ field: 'holder', k, from: holders[k], to });
+        h[k] = to;
+      }
+    });
+    const held = new Set<number>(firstHolder !== null ? [firstHolder] : []);
+    let violations = 0;
+    h.forEach((holder, i) => { held.add(holder); if (held.has(t[i])) violations++; });
+    scored.push({ score: [violations, targetEdits], edits });
+  }
+  scored.sort((a, b) => a.score[0] - b.score[0] || a.score[1] - b.score[1]);
+  if (scored.length > 1 && scored[0].score[0] === scored[1].score[0] && scored[0].score[1] === scored[1].score[1]) {
+    return { lakes, fixes }; // ambiguous: nothing changed, the chain stays invalid
+  }
+  for (const e of scored[0].edits) {
+    if (e.field === 'holder') lakes[e.k].holderSeat = e.to; else lakes[e.k].targetSeat = e.to;
+    fixes.push({ kind: 'lake_chain', lake: e.k + 1, field: e.field, from: e.from, to: e.to });
+  }
+  fixes.sort((a, b) => a.lake - b.lake || a.field.localeCompare(b.field));
+  return { lakes, fixes };
 }

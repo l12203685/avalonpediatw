@@ -9,7 +9,7 @@
  *   R3 2>8 x (loyal tells the truth about Oberon).
  */
 import { describe, it, expect } from 'vitest';
-import { parseReplayGame, type PaipuRow, type ReplayGame } from './sheetsReplay';
+import { parseReplayGame, repairLakeChain, type PaipuRow, type RawReplayLake, type ReplayGame } from './sheetsReplay';
 import { buildReplayObservation, validLakeTargetSeats } from './replayObservation';
 import {
   pinnedQuestCard,
@@ -47,6 +47,42 @@ function game1(): ReplayGame {
   if (!res.ok) throw new Error(res.reason);
   return res.game;
 }
+
+describe('repairLakeChain — 站長 2026-11-20「接湖的必為下一湖」 (same rule as game_db.py fix_lake_chain)', () => {
+  const L = (...pairs: [number | null, number | null][]): RawReplayLake[] =>
+    pairs.map(([h, t], i) => ({ round: 2 + i, holderSeat: h, targetSeat: t, claim: null }));
+  const seats = (r: ReturnType<typeof repairLakeChain>): string => r.lakes.map((l) => `${l.holderSeat}>${l.targetSeat}`).join(' ');
+
+  it('corrects a holder that contradicts the previous target', () => {
+    const r = repairLakeChain(L([10, 2], [3, 8]), 10);
+    expect(seats(r)).toBe('10>2 2>8');
+    expect(r.fixes).toEqual([{ kind: 'lake_chain', lake: 2, field: 'holder', from: 3, to: 2 }]);
+  });
+
+  it('fills a missing holder from the chain and never invents a last target', () => {
+    expect(seats(repairLakeChain(L([10, 2], [null, 8]), 10))).toBe('10>2 2>8');
+    expect(seats(repairLakeChain(L([10, 2], [2, null]), 10))).toBe('10>2');
+  });
+
+  it('starts the first lake at seat 10 only when the table rule is known', () => {
+    expect(seats(repairLakeChain(L([4, 2], [2, 8]), 10))).toBe('10>2 2>8');
+    expect(repairLakeChain(L([4, 2], [2, 8]), null).fixes).toEqual([]);
+  });
+
+  it('leaves an ambiguous chain alone', () => {
+    const r = repairLakeChain(L([10, 2], [1, 2], [3, 4]), 10);
+    expect(seats(r)).toBe('10>2 1>2 3>4');
+    expect(r.fixes).toEqual([]);
+  });
+
+  it('parseReplayGame repairs a 牌譜 row and marks the chain valid', () => {
+    const res = parseReplayGame(row(GAME1_TEXT.replace('2>8 x', '5>8 x'), '901836', '三紅'));
+    if (!res.ok) throw new Error(res.reason);
+    expect(res.game.lakes.map((l) => l.holderSeat)).toEqual([10, 2]);
+    expect(res.game.lakeChainValid).toBe(true);
+    expect(res.game.lakeAutoFixes).toEqual([{ kind: 'lake_chain', lake: 2, field: 'holder', from: 5, to: 2 }]);
+  });
+});
 
 describe('parseReplayGame — hand-checked 牌譜 #1', () => {
   const g = game1();
