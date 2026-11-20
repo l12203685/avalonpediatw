@@ -485,8 +485,47 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(dpe.records_problems(doc), [])
         again, _ = self.merged()
         self.assertEqual(dpe.dump_records(again), dpe.dump_records(doc))  # same ids and order on a re-run
-        # newest first by record date, Discord and sheet together
-        self.assertEqual(ids[:3], [BROKEN.id, GAME.id, "S102"])
+        # newest first by record date, Discord and sheet together; GAME is S101 too, so it carries the sheet's date
+        # 2026-10-20, not its title's 1025 (站長 2026-11-20「日期不同的都以試算表為準」)
+        self.assertEqual(ids[:2], [BROKEN.id, "S102"])
+        self.assertGreater(ids.index(GAME.id), ids.index("S102"))
+        game = next(p for p in doc["posts"] if p["id"] == GAME.id)
+        self.assertEqual((game["date"], game[rm.POST_DATE]), ("2026-10-20", "2026-10-25"))
+        self.assertEqual(counts["date taken from the sheet"], 1)
+        broken = next(p for p in doc["posts"] if p["id"] == BROKEN.id)  # Discord only: its own date
+        self.assertEqual((broken["date"], rm.POST_DATE in broken), ("2026-10-26", False))
+
+    def test_sheet_date_on_a_merged_post(self) -> None:
+        doc, _ = self.merged()
+        again = json.loads(json.dumps(doc))
+        counts = dpe.merge_sheet(again, sheet_doc(), SIM_ROWS, doc)  # a re-merge starts from the post's own date
+        self.assertEqual(dpe.dump_records(again), dpe.dump_records(doc))
+        self.assertEqual(counts["date taken from the sheet"], 1)
+        # the sheet row gets the post's date: nothing to replace, no postDate
+        same_day = sheet_doc()
+        same_day["games"][0][same_day["fields"].index("date")] = "2026-10-25"
+        doc2, _ = build()
+        dpe.merge_sheet(doc2, same_day, SIM_ROWS)
+        game = next(p for p in doc2["posts"] if p["id"] == GAME.id)
+        self.assertEqual((game["date"], game["src"], rm.POST_DATE in game), ("2026-10-25", rm.SRC_BOTH, False))
+        # the sheet row no longer matches: the post is Discord only again, with its own date
+        doc3 = json.loads(json.dumps(doc))
+        other = sheet_doc()
+        other["games"] = other["games"][1:]
+        dpe.merge_sheet(doc3, other, SIM_ROWS, doc)
+        game = next(p for p in doc3["posts"] if p["id"] == GAME.id)
+        self.assertEqual((game["date"], "src" in game, rm.POST_DATE in game), ("2026-10-25", False, False))
+        # shape: postDate only on a dc+sheet post, a full date, different from date
+        for change in ({rm.POST_DATE: "2026-10-20"}, {rm.POST_DATE: "1025"}, {"src": None}):
+            bad = json.loads(json.dumps(doc))
+            post_ = next(p for p in bad["posts"] if p["id"] == GAME.id)
+            for k, v in change.items():
+                if v is None:
+                    post_.pop(k)
+                else:
+                    post_[k] = v
+            self.assertTrue(has(dpe.records_problems(bad), "postDate"), change)
+        self.assertEqual(dpe.records_problems(doc), [])
 
     def test_simulation_rows(self) -> None:
         doc, counts = self.merged()

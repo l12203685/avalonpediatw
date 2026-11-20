@@ -14,7 +14,9 @@ Google Sheet:
 
 Dedupe: a sheet game with the same generate_cache.record_fingerprint (配置 + every proposal's team +
 every mission) as a Discord post OF THE SAME TYPE (實戰 / 模擬) is that post: no second entry; the post
-gets ``src: "dc+sheet"``. 模擬 entries are flagged ``sim`` and stay out of everything that counts real
+gets ``src: "dc+sheet"`` and the sheet's date (站長 2026-11-20「日期不同的都以試算表為準 因為discord 上發文的日期不一定是
+遊戲日期 他們標題也都沒有照預定格式寫 所以搜尋很困難」: a Discord date is the title's MMDD or the day of the post); when
+the two differ, the post's own date is kept in ``postDate`` so a later re-merge starts from it again. 模擬 entries are flagged ``sim`` and stay out of everything that counts real
 games: they never merge into a 實戰 entry, get no 陣容強度 / 失誤標籤, and this list is not an input of
 games_cache.json (generate_cache reads only the 牌譜 / Discord匯入 tabs) or sim_bank.json.
 Sheet-only entries carry ``src: "sheet"``; plain Discord posts carry no ``src`` (the file before
@@ -40,6 +42,7 @@ SIM_TAG = dri.TAG_SIMULATION  # 模擬
 SRC_SHEET = "sheet"
 SRC_BOTH = "dc+sheet"
 FP_KEY = "_fp"  # internal: dropped before the file is written
+POST_DATE = "postDate"  # a dc+sheet post's own (Discord) date when the sheet's date replaced it
 SHEET_TITLE = "試算表牌譜 #{id}"
 # Fixed explanations (the file never carries a record's text) for rows whose record does not convert.
 SHEET_PROBLEM = "試算表裡這局的紀錄不完整（缺少某一輪的派票、任務張數不對或結果不明）"
@@ -324,10 +327,13 @@ def merge_posts(dc_posts: Sequence[dict[str, Any]], sheet: Sequence[dict[str, An
     dc_by_fp: dict[bool, dict[str, dict[str, Any]]] = {False: {}, True: {}}
     for p in dc_posts:
         p.pop("src", None)
+        if POST_DATE in p:  # a previous merge put the sheet's date on it: start from the post's own date again
+            p["date"] = p.pop(POST_DATE)
         if p.get("game"):
             dc_by_fp[bool(p.get("sim"))].setdefault(game_fingerprint(p["game"]), p)
     out = list(dc_posts)
     seen_sim: set[str] = set()  # 模擬瓦 rows that repeat one another (never compared with 實戰 games)
+    dated: set[int] = set()  # posts that already got a sheet date (the first sheet row of a game wins)
     for entry in [*sheet, *sims]:
         fp = entry.pop(FP_KEY, None) or (game_fingerprint(entry["game"]) if entry.get("game") else "")
         if not fp:
@@ -338,6 +344,12 @@ def merge_posts(dc_posts: Sequence[dict[str, Any]], sheet: Sequence[dict[str, An
         if twin is not None:
             twin["src"] = SRC_BOTH
             counts["merged with a Discord post"] += 1
+            if entry.get("date") and id(twin) not in dated:
+                dated.add(id(twin))
+                if entry["date"] != twin.get("date"):  # the sheet's date is the game's date (站長 2026-11-20)
+                    twin[POST_DATE] = twin.get("date") or ""
+                    twin["date"] = entry["date"]
+                    counts["date taken from the sheet"] += 1
             continue
         if sim:
             if fp in seen_sim:

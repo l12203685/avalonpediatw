@@ -221,6 +221,54 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(doc["games"][0]["id"], "S12")
 
 
+class SheetDateTest(unittest.TestCase):
+    """站長 2026-11-20「日期不同的都以試算表為準 因為discord 上發文的日期不一定是遊戲日期」."""
+
+    def test_sheet_date_wins_and_is_not_a_conflict(self):
+        rows = gd.build([source(gd.SRC_SHEET, "12", GOOD, date="2026-01-02"),
+                         source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD), date="2026-01-05")])
+        self.assertEqual((rows[0]["id"], rows[0]["date"], rows[0]["status"]), ("999", "2026-01-02", "ok"))
+        self.assertNotIn("CONFLICT", [c["rule"] for c in rows[0]["checks"]])
+
+    def test_sheet_date_wins_when_the_discord_copy_is_shown(self):
+        wrong = copy.deepcopy(GOOD)
+        wrong["lakes"] = [{"after": 2, "holder": "0", "target": "0", "claim": "o"}]
+        rows = gd.build([source(gd.SRC_SHEET, "12", wrong, date="2026-01-02"),
+                         source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD), date="2026-01-05")])
+        self.assertEqual((rows[0]["sources"][0]["id"], rows[0]["date"]), ("999", "2026-01-02"))
+        msg = next(c["msg"] for c in rows[0]["checks"] if c["rule"] == "CONFLICT")
+        self.assertNotIn("日期", msg)  # only the sheet's rule error is named
+
+    def test_sim_sheet_date_wins_too(self):
+        rows = gd.build([source(gd.SRC_SIM, "3", GOOD, kind=gd.KIND_SIM, date="2026-01-02"),
+                         source(gd.SRC_DISCORD, "999", copy.deepcopy(GOOD), kind=gd.KIND_SIM, date="2026-01-04")])
+        self.assertEqual(rows[0]["date"], "2026-01-02")
+        self.assertNotIn("CONFLICT", [c["rule"] for c in rows[0]["checks"]])
+
+    def test_other_conflicts_and_non_sheet_dates_are_still_flagged(self):
+        other = dict(copy.deepcopy(GOOD), outcome="三藍死")
+        rows = gd.build([source(gd.SRC_SHEET, "12", GOOD), source(gd.SRC_DISCORD, "999", other, date="2026-01-05")])
+        msg = next(c["msg"] for c in rows[0]["checks"] if c["rule"] == "CONFLICT")
+        self.assertIn("結果（三藍活 / 三藍死）", msg)
+        self.assertNotIn("日期", msg)
+        rows = gd.build([source(gd.SRC_DISCORD, "999", GOOD), source(gd.SRC_IMPORT, "Dabc", copy.deepcopy(GOOD), date="2026-01-05")])
+        self.assertIn("日期（2026-01-02 / 2026-01-05）", next(c["msg"] for c in rows[0]["checks"] if c["rule"] == "CONFLICT"))
+
+    def test_discord_only_and_import_keep_their_date(self):
+        rows = gd.build([source(gd.SRC_DISCORD, "999", GOOD, date="2026-01-05"),
+                         source(gd.SRC_IMPORT, "Dabc", copy.deepcopy(GOOD), date="2026-01-05")])
+        self.assertEqual(rows[0]["date"], "2026-01-05")
+
+    def test_records_source_uses_the_posts_own_date(self):
+        doc = {"posts": [{"id": "1234567890123456789", "tags": [], "date": "2026-01-02", "postDate": "2026-01-05",
+                          "src": "dc+sheet", "game": copy.deepcopy(GOOD)}]}
+        srcs, _ = gd.records_sources(doc)
+        self.assertEqual(srcs[0]["date"], "2026-01-05")
+        rows = gd.build([source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD), date="2026-01-02"), *srcs])
+        self.assertEqual(rows[0]["date"], "2026-01-02")
+        self.assertNotIn("CONFLICT", [c["rule"] for c in rows[0]["checks"]])
+
+
 class CleanSourceTest(unittest.TestCase):
     """2026-11-17: rule errors corrected on Discord must not stay listed because the sheet's copy is wrong."""
 

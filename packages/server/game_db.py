@@ -23,7 +23,9 @@ credentials and adds no new reader of Google / Discord):
 
 Merging: games with the same generate_cache.record_fingerprint (配置 + every proposal's team + every mission),
 of the same type, are one game. 模擬 never merges with 實戰 (Edward 2026-11-16「模擬畢竟只是模擬」). The merged
-game's content comes from the first source in SOURCE_PRIORITY (the sheet: what the stats use); its id is the
+game's content comes from the first source in SOURCE_PRIORITY (the sheet: what the stats use); its date is the
+Google Sheet's whenever a sheet tab has the game (SHEET_SOURCES, game_date: 站長 2026-11-20「日期不同的都以試算表為準
+因為discord 上發文的日期不一定是遊戲日期」), so a Discord date that differs is not a conflict; its id is the
 id the website's 牌譜紀錄 page uses (the Discord post id when there is one, else ``S<流水號>`` / ``D<hash>`` /
 ``M<流水號>``), so the id stays the same when a record is corrected.
 
@@ -97,6 +99,11 @@ SRC_DISCORD = "discord"
 SRC_SIM = "sim_sheet"
 SRC_PROAVALON = "proavalon"
 SOURCE_PRIORITY = (SRC_SHEET, SRC_DISCORD, SRC_IMPORT, SRC_SIM, SRC_PROAVALON)  # whose content the merged game shows
+# Sources typed into the Google Sheet with the game's own date. Their date is the game's date whenever the same game is
+# also on Discord (站長 2026-11-20「日期不同的都以試算表為準 因為discord 上發文的日期不一定是遊戲日期 他們標題也都沒有照預定格式寫
+# 所以搜尋很困難」): a Discord date is the title's MMDD or the day of the post. The Discord匯入 tab is not one of them --
+# its 日期時間 is the importer's copy of the Discord date.
+SHEET_SOURCES = (SRC_SHEET, SRC_SIM)
 SOURCE_LABELS = {
     SRC_SHEET: "試算表 牌譜 分頁",
     SRC_IMPORT: "試算表 Discord匯入 分頁",
@@ -281,7 +288,8 @@ def records_sources(doc: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]]
             "src": src,
             "id": sid,
             "kind": KIND_SIM if (post.get("sim") or src == SRC_SIM) else KIND_REAL,
-            "date": post.get("date") or "",
+            # the post's own date (records_merge puts the sheet's on a dc+sheet post; game_date picks it again)
+            "date": post.get(rm.POST_DATE) or post.get("date") or "",
             "venue": next((t for t in tags if t in VENUES), ""),
             "legacy": next((t for t in tags if t in rm.GAME_CATEGORIES[1:] and t not in VENUES), ""),
             "s": lineup.get("s") if isinstance(lineup.get("s"), (int, float)) else None,
@@ -691,11 +699,20 @@ def conflicts(main: Mapping[str, Any], other: Mapping[str, Any]) -> list[str]:
         diff = [f"第 {r} 局第 {k} 次" for (r, k, x), (_, _, y) in zip(va, vb) if x != y]
         if diff:
             out.append("投票（" + "、".join(diff[:3]) + ("…" if len(diff) > 3 else "") + "）")
-    if main["date"] and other["date"] and main["date"] != other["date"]:
+    # a sheet date against a Discord date is not a conflict: the sheet's wins (game_date, 站長 2026-11-20)
+    if (main["date"] and other["date"] and main["date"] != other["date"]
+            and (main["src"] in SHEET_SOURCES) == (other["src"] in SHEET_SOURCES)):
         out.append(f"日期（{main['date']} / {other['date']}）")
     if main["venue"] and other["venue"] and main["venue"] != other["venue"]:
         out.append(f"線上／面對面（{main['venue']} / {other['venue']}）")
     return out
+
+
+def game_date(members: Sequence[Mapping[str, Any]]) -> str:
+    """The date of a merged game: the first sheet source's (SHEET_SOURCES, superseded ones included -- the same game
+    typed at the table), else the first dated source's (站長 2026-11-20「日期不同的都以試算表為準」)."""
+    return (next((s["date"] for s in members if s["src"] in SHEET_SOURCES and s["date"]), "")
+            or next((s["date"] for s in members if s["date"]), ""))
 
 
 def public_id(src: dict[str, Any]) -> str:
@@ -823,7 +840,7 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
         by_src = {s["src"]: s for s in reversed(members)}
         cid = (by_src.get(SRC_DISCORD) or by_src.get(SRC_SHEET) or by_src.get(SRC_IMPORT) or main)
         kind = KIND_SIM if main["kind"] == KIND_SIM else (KIND_BOT if any(s["kind"] == KIND_BOT for s in members) else KIND_REAL)
-        date = next((s["date"] for s in members if s["date"]), "")
+        date = game_date(members)
         venue = next((s["venue"] for s in members if s["venue"]), "")
         legacy = sorted({s["legacy"] for s in members if s["legacy"]})
         s_value = next((s["s"] for s in members if s["s"] is not None), None)
