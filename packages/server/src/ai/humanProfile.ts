@@ -14,6 +14,7 @@
  *
  * 怎麼判斷對手類型（`opponentTypeOfTable`）：桌上沒有真人 → `ai`；有真人、知道桌上強度 S（網站「陣容強度」= 10 人開打前 PR 的平均）
  * → 照網站數據分析的分組切點（`DEFAULT_COHORT_CUTS`：S < 38 弱、38–55 一般、≥ 55 強）；不知道 S → `avgHuman`。
+ * 開打時的 S 由 `tableStrength.ts` 從桌上真人的網站 Elo PR 算（網站房間、練習台補位都接上了）。
  */
 import { DEFAULT_COHORT_CUTS } from '@avalon/shared/stats';
 import { getDefaultAgentTuning, type AgentTuning, type AgentTuningKey } from './AgentTuning';
