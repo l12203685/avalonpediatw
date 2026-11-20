@@ -41,6 +41,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
+import { OPPONENT_LABEL, PROFILE_OVERRIDES, parseOpponentType, type OpponentType } from '../src/ai/humanProfile';
 import type { PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
 import { postAiGameTrace } from '../src/services/aiGameForum';
 import type { Role } from '@avalon/shared';
@@ -77,6 +78,12 @@ const HOURS = Number(arg('hours', MODE === 'live' ? '5.5' : '1'));
  */
 const MAX_GAMES = Math.max(0, Math.min(99, Number(arg('max-games', arg('games', MODE === 'live' ? '99' : '1')))));
 const ROOM = arg('room', '');
+/**
+ * 第 56b 回合 C（站長 2026-11-20「真人桌另一套」，`src/ai/humanProfile.ts`）：策略層。live／room 的桌上是真人 → 真人桌；
+ * 練習台拿不到桌上 10 人開打前的 PR（桌上強度 S），所以預設一般真人桌（avgHuman）。private-test 的其他座位是練習台內建機器人 → ai。
+ * --opponent ai|weak|avg|strong 可以指定。
+ */
+const OPPONENT: OpponentType = parseOpponentType(arg('opponent', '')) ?? (MODE === 'private-test' ? 'ai' : 'avgHuman');
 /**
  * 暱稱。練習台同一個暱稱同時兩個連線會互相干擾（2026-11-03 私房測試：同暱稱兩桌同時打，其中一桌被導回大廳），
  * 所以每個同時在跑的程序用不同暱稱，都是「百科AI_{#}」（Edward 2026-11-03；記錄員靠「百科AI」前綴認，戰績合併成「百科AI」）：
@@ -350,7 +357,7 @@ async function leaveRoom(p: Page, why: string, room: string): Promise<void> {
 // ── 一個座位 ──────────────────────────────────────────────────────────────────────────
 class Seat {
   constructor(readonly label: string) {}
-  agent = new HeuristicAgent('signage-player');
+  agent = new HeuristicAgent('signage-player', undefined, undefined, PROFILE_OVERRIDES[OPPONENT]);
   k!: Knowledge;
   lobbyRoles!: Role[];
   myLake: PrivateLakeResult[] = [];
@@ -985,6 +992,7 @@ async function resume(browser: Browser): Promise<number> {
 
 async function main(): Promise<void> {
   if (MAX_GAMES <= 0) { log('局數 0，不打'); return; }
+  log(`策略層：${OPPONENT_LABEL[OPPONENT]}`);
   const browser = await chromium().launch();
   const deadline = Date.now() + HOURS * 3600_000;
   try {

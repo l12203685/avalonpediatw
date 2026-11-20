@@ -16,9 +16,13 @@ import { buildReplayObservation, seatId, seatOfId, type DecisionPoint } from '..
 import type { ReplayGame } from '../../ai/benchmark/sheetsReplay';
 import { DEFAULT_AGENT_TUNING, type AgentTuning } from '../../ai/AgentTuning';
 import { HeuristicAgent } from '../../ai/HeuristicAgent';
+import { tuningForOpponent, type OpponentType } from '../../ai/humanProfile';
 import { ForwardAgent } from '../../ai/forward/ForwardAgent';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow, bayesWorlds } from '../../ai/belief/BayesBelief';
 import type { SimGame } from './scenario';
+
+/** 模擬瓦、Threads 百科AI 作答讀真人局時用的策略層（第 56b 回合 C）。 */
+export const SIM_OPPONENT: OpponentType = 'avgHuman';
 
 export interface AiTeamOption {
   seats: number[];
@@ -58,10 +62,12 @@ export function decisionObservation(game: SimGame, seat: number, point: Decision
 /**
  * 正式機器人（ForwardAgent 包 HeuristicAgent，參數＝目前的預設 DEFAULT_AGENT_TUNING，整份傳進去所以環境變數蓋不掉），
  * 已經用這一局第一次派票的觀察開局（onGameStart）。
+ * 第 56b 回合 C（站長 2026-11-20「跟真人打的百科AI 用真人牌局當標準」）：題目都是真人局，所以用真人桌的策略層（`humanProfile.ts`）；
+ * 題庫沒有桌上強度 S，一律一般真人桌（`avgHuman` = 預設＋真人桌的讀法）。
  */
 export function defaultBot(game: SimGame, seat: number): { agent: ForwardAgent; base: HeuristicAgent; tuning: AgentTuning } {
   const id = seatId(seat);
-  const tuning: AgentTuning = { ...DEFAULT_AGENT_TUNING };
+  const tuning: AgentTuning = tuningForOpponent(SIM_OPPONENT, DEFAULT_AGENT_TUNING);
   const base = new HeuristicAgent(id, undefined, undefined, tuning);
   const agent = new ForwardAgent(id, base);
   agent.onGameStart(decisionObservation(game, seat, { kind: 'team_select', proposal: 0 }));
