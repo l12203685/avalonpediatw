@@ -38,7 +38,7 @@ function main(): void {
   const k = Number(arg('--k') ?? 50);
   const out = arg('--out') ?? path.resolve(__dirname, '../src/ai/infl/policy_strong.json');
   const { cohorts, dataset } = loadStrongCohorts({});
-  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold);
+  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold, cohorts.basis);
   const games: ReplayGame[] = hg.map((h) => h.game).filter((g) => g.playerCount === 10 && [...g.seatRoles].sort().join(',') === STD);
   const samples = Object.fromEntries(ROLE_CLASSES.map((c) => [c, [] as Sample[]])) as Record<RoleClass, Sample[]>;
   const started = Date.now();

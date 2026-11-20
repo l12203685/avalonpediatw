@@ -20,7 +20,8 @@
  *
  * 群組（`src/ai/infl/strongCohort.ts`）：每一種決策比對它的分面——藍方角色（忠臣、派西）派隊／投票／湖 → 藍方任務王；
  * 梅林 → 梅林存活王；紅方角色派隊／投票／湖／任務牌 → 紅方任務王；刺殺 → 刺客刺中王。前 3／前 5 兩組，
- * 每組再分「全部局」與「高強度局」兩欄。輸出只寫分面與名次，不寫名字。
+ * 每組再分「全部局」與「高強度局」（桌上強度 S ≥ 65，同網站 S_TIERS；第 1G 節起，之前是平均 Elo 前 30%）兩欄。
+ * 「強者玩家」是逐座位的（分面前 3／前 5），不是「高端桌」（S ≥ 55 的整桌，`botGap.ts`）。輸出只寫分面與名次，不寫名字。
  *
  * 決策點與 `agreement.replayGame` 相同（只給那個座位當時知道的東西）：
  *   派隊（完全相同、Jaccard）、投票 R1／R2／R3+、異常票（真人投內黑／外白時機器人同票）、成功後第一個提議、
@@ -237,7 +238,7 @@ function reportLoop(acc: Acc, meta: Record<string, unknown>): void {
     const f = (x: number | null): string => (x === null ? '—' : m === 'jaccard' ? x.toFixed(2) : (100 * x).toFixed(1));
     return `${f(a)}/${f(b)}${m === 'jaccard' ? '' : '%'}`;
   };
-  console.log(`\nLOOP（強者分面前5，全部局/高強度局）：派隊 完全 ${two('team all', 'exact')}、Jaccard ${two('team all', 'jaccard')}`
+  console.log(`\nLOOP（強者玩家＝分面前5（逐座位），全部局/高強度局 S≥65）：派隊 完全 ${two('team all', 'exact')}、Jaccard ${two('team all', 'jaccard')}`
     + `；投票 R1 ${two('vote R1', 'agree')}、R2 ${two('vote R2', 'agree')}、R3+ ${two('vote R3+', 'agree')}`
     + `；異常票同票 ${two('abnormal all', 'agree')}（內黑 ${two('abnormal 內黑', 'agree')}、外白 ${two('abnormal 外白', 'agree')}）`
     + `；R3+ 異常票率 機器人 ${two('vote R3+', 'agentAbnormal')} / 真人 ${two('vote R3+', 'humanAbnormal')}`
@@ -269,7 +270,7 @@ function main(): void {
   }
   const started = Date.now();
   const { cohorts, dataset } = loadStrongCohorts({ dataset: arg('--dataset'), analysis: arg('--analysis') });
-  const { games: allGames, skipped } = humanGamesFromDataset(dataset as unknown as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] }, cohorts.threshold);
+  const { games: allGames, skipped } = humanGamesFromDataset(dataset as unknown as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] }, cohorts.threshold, cohorts.basis);
   const [shardK, shardN] = (arg('--shard') ?? '0/1').split('/').map(Number);
   const limit = arg('--limit') !== undefined ? Number(arg('--limit')) : undefined;
   const games = (limit !== undefined ? allGames.slice(0, limit) : allGames).filter((_, i) => i % shardN === shardK);

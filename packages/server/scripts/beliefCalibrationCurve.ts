@@ -15,6 +15,7 @@
  * 變體：`預設`、`均分`（L1* 世界均分：只用規則，不讀任何動作）、`--flag` 給了再加 `候選`（預設 + 這些開關）。
  * p 是 0 或 1（規則推得出來）的點另外算「確定點」，確定點說錯 = 邏輯錯誤，應該是 0。
  */
+import { DEFAULT_COHORT_CUTS } from '@avalon/shared/stats';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DEFAULT_AGENT_TUNING, parseTuningFlag, type AgentTuning } from '../src/ai/AgentTuning';
@@ -34,7 +35,7 @@ const ROLE_LABEL: Record<string, string> = { loyal: '忠臣', percival: '派西'
 
 export interface Variant { name: string; opts: BayesOptions | 'uniform' }
 
-/** key = 變體|視角|R回合|S(強者桌)/N|u(不確定)/c(確定) → 累加器；確定點另記說錯的次數。 */
+/** key = 變體|視角|R回合|S(高端桌)/N|u(不確定)/c(確定) → 累加器；確定點另記說錯的次數。 */
 export interface Store {
   acc: Record<string, CalAcc>;
   certainWrong: Record<string, number>;
@@ -128,7 +129,7 @@ function report(st: Store, names: readonly string[], meta: Record<string, unknow
   const L: string[] = [];
   const out: Record<string, unknown> = { meta };
   L.push(`# 百科AI 信念校準曲線（真人局）`, '');
-  L.push(`- 資料：${String(meta.source)}，${st.games} 局、${st.points} 個（座位 × 投票點）；視角 ${String(meta.viewers)}；強者桌 = S ≥ ${String(meta.strongS)}`);
+  L.push(`- 資料：${String(meta.source)}，${st.games} 局、${st.points} 個（座位 × 投票點）；視角 ${String(meta.viewers)}；高端桌 = S ≥ ${String(meta.strongS)}`);
   L.push('- 每個點 = 一個藍方座位在一次非強制提議的投票點，對另外一個人說的紅機率 p；y = 那個人真的是紅。主表只算 0 < p < 1 的點（規則推不出來的）；p = 0／1 的確定點另列。');
   L.push('- ECE = Σ n_k|平均 p − 真紅比例| / N（10 格）；Platt：logit(真紅) = a + b·logit(p)，b < 1 = 過度自信（說得太篤定）。');
   for (const v of names) {
@@ -159,7 +160,7 @@ function report(st: Store, names: readonly string[], meta: Record<string, unknow
     for (const w of ['loyal', 'percival', 'merlin']) rows.push([ROLE_LABEL[w], pick(st, (vv, ww, _r, _s, c) => vv === v && ww === w && c === 'u')]);
     for (const r of ['R1', 'R2', 'R3', 'R4', 'R5']) rows.push([`${r}（全部視角）`, pick(st, (vv, _w, rr, _s, c) => vv === v && rr === r && c === 'u')]);
     for (const r of ['R1', 'R2', 'R3', 'R4', 'R5']) rows.push([`${r}（忠臣）`, pick(st, (vv, ww, rr, _s, c) => vv === v && ww === 'loyal' && rr === r && c === 'u')]);
-    rows.push(['強者桌', pick(st, (vv, _w, _r, s, c) => vv === v && s === 'S' && c === 'u')]);
+    rows.push(['高端桌', pick(st, (vv, _w, _r, s, c) => vv === v && s === 'S' && c === 'u')]);
     rows.push(['其他桌', pick(st, (vv, _w, _r, s, c) => vv === v && s === 'N' && c === 'u')]);
     const table: Record<string, CurveSummary & { separation: number }> = {};
     for (const [name, a] of rows) {
@@ -199,7 +200,7 @@ export function loadHuman(file?: string): { game: ReplayGame; s: number | null }
 }
 
 function main(): void {
-  const strongS = Number(arg('--strong-s') ?? 55);
+  const strongS = Number(arg('--strong-s') ?? DEFAULT_COHORT_CUTS.sHi); // 高端桌：網站分組的 S 上切點（第 1G 節）
   const viewersList = (arg('--viewers') ?? 'loyal,percival,merlin').split(',').filter(Boolean);
   const mergeAt = argv.indexOf('--merge');
   const st = newStore();

@@ -109,7 +109,7 @@ async function loadStrongGames(): Promise<{ games: FitGame[]; strong: Selector }
   const { humanGamesFromDataset } = await import('../src/ai/infl/strongData');
   const { inFacetTop } = await import('../src/ai/infl/strongCohort');
   const { cohorts, dataset } = loadStrongCohorts({});
-  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold);
+  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold, cohorts.basis);
   const games = hg.map((h) => h.game).filter((g) => g.playerCount === 10);
   const top = (kind: 'vote' | 'team' | 'lakeClaim') => (g: number, seat: number): boolean =>
     inFacetTop(cohorts, games[g].seatRoles[seat - 1], kind, games[g].names?.[seat - 1] ?? '', 5);

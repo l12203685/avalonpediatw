@@ -2,8 +2,9 @@
  * 強者分面群組（Edward 2026-11-04；docs/ai/strong_metrics.md）。取代「角色王」（原始角色勝率會挑到整體打得不好的角色專家）。
  *
  * 1. **母體（pool）**：網站 Elo（analysis_cache.json → rating.players）非暫定、生涯 ≥ 50 場的人裡，Elo 前 20%（目前 10 人）。
- * 2. **高強度局**：桌上平均開打前 Elo（games_cache.json 的 lineup 第 4 欄 = 每個座位 Elo×10）在所有局的前 30%
- *    （目前 ≥ 1501、1659 局裡 498 局）。
+ * 2. **高強度局**：桌上強度 S ≥ 65（網站數據分析「陣容強度」的 S_TIERS「高強度」；S = 10 個座位開打前 PR 的平均，
+ *    games_cache.json 的 lineup 第 2 欄）。第 1G 節（2026-11-20，站長「整個系統要完全同步同來源」）起取代舊的
+ *    「桌上平均開打前 Elo 前 30%」；舊定義留在 `basis: 'elo'`＋`intensityThreshold` 只做對照。
  * 3. **分面**（分開看，絕不混成一個勝率）：
  *    (a) 任務階段：藍方贏在三藍死或三藍活、紅方贏在三紅（反映派隊／投票／湖／任務）。在高強度局裡，
  *        每一局的「任務階段贏 − 該角色在高強度局的平均」→ 每人每個陣營的平均超額（紅方任務／藍方任務）；
@@ -21,19 +22,33 @@
  * 其他座位是忠臣；outcome 0 三紅、1 三藍死、2 三藍活；分類「百科AI」不算；座位有未知玩家（-1）不算。
  */
 import type { Role } from '@avalon/shared';
+import { S_TIERS } from '@avalon/shared/stats';
 import { EVIL_ROLES, ROLE_CODE_ORDER } from '../benchmark/sheetsReplay';
+
+/** 高強度局的 S 門檻 = 網站 S_TIERS「高強度」的下界（65）。 */
+export const HIGH_INTENSITY_S: number = S_TIERS.find((t) => t.id === 'high')!.min;
+
+/** 高強度局怎麼判：'s' = 桌上強度 S ≥ 門檻（預設，和網站同步）；'elo' = 舊的桌上平均 Elo ≥ 門檻（只做對照）。 */
+export type IntensityBasis = 's' | 'elo';
 
 export const OUTCOME_RED = 0;
 export const OUTCOME_BLUE_DEAD = 1;
 export const OUTCOME_BLUE_ALIVE = 2;
 
-/** 一局（只取分面要用的欄位）：座位 1..10 的名字、角色、結果、桌上平均 Elo（沒有 lineup = null）。 */
+/** 一局（只取分面要用的欄位）：座位 1..10 的名字、角色、結果、桌上強度 S 與平均 Elo（沒有 lineup = null）。 */
 export interface CohortGame {
   id: string;
   names: string[];
   roles: Role[];
   outcome: 0 | 1 | 2;
   avgElo: number | null;
+  /** 桌上強度 S（lineup 第 2 欄 ÷ 10；不評分 = null）。 */
+  s?: number | null;
+}
+
+/** lineup 欄 → S（[pool, S×10, …]；不評分或舊資料 = null）。 */
+export function lineupS(lineup: unknown): number | null {
+  return Array.isArray(lineup) && lineup.length > 1 && typeof lineup[1] === 'number' ? lineup[1] / 10 : null;
 }
 
 export interface RatingRow {
@@ -79,6 +94,7 @@ export function cohortGamesFromDataset(d: DatasetLike): CohortGame[] {
       roles,
       outcome: outcome as 0 | 1 | 2,
       avgElo: elo && elo.length === 10 ? elo.reduce((a, x) => a + x / 10, 0) / 10 : null,
+      s: lineupS(lineup),
     });
   }
   return out;
@@ -92,15 +108,16 @@ export function strongPool(rating: readonly RatingRow[], opts: { topShare?: numb
   return eligible.slice(0, Math.floor(eligible.length * share)).map((p) => p.name);
 }
 
-/** 高強度門檻：有平均 Elo 的局由低到高排，第 floor(n × (1 − topShare)) 個的值；平均 Elo ≥ 門檻 = 高強度。 */
+/** 舊的高強度門檻（basis 'elo'，只做對照）：有平均 Elo 的局由低到高排，第 floor(n × (1 − topShare)) 個的值；平均 Elo ≥ 門檻 = 高強度。 */
 export function intensityThreshold(games: readonly CohortGame[], topShare = 0.3): number {
   const avg = games.map((g) => g.avgElo).filter((x): x is number => x !== null).sort((a, b) => a - b);
   if (avg.length === 0) return Number.POSITIVE_INFINITY;
   return avg[Math.min(avg.length - 1, Math.floor(avg.length * (1 - topShare)))];
 }
 
-export function isHighIntensity(g: Pick<CohortGame, 'avgElo'>, threshold: number): boolean {
-  return g.avgElo !== null && g.avgElo >= threshold;
+export function isHighIntensity(g: Pick<CohortGame, 'avgElo' | 's'>, threshold: number = HIGH_INTENSITY_S, basis: IntensityBasis = 's'): boolean {
+  const v = basis === 's' ? g.s ?? null : g.avgElo;
+  return v !== null && v >= threshold;
 }
 
 export const isRed = (r: Role): boolean => EVIL_ROLES.has(r);
@@ -155,11 +172,15 @@ export interface StrongCohortOptions {
   rateShrinkK?: number;
   /** 刺中率／存活率：高強度樣本少於這個就改用全部局（預設 15）。 */
   minRateSample?: number;
+  /** 高強度局怎麼判（預設 's'：S ≥ threshold）。 */
+  basis?: IntensityBasis;
 }
 
 export interface StrongCohorts {
   pool: string[];
+  /** 高強度門檻（basis 's' = S，'elo' = 平均 Elo）。 */
   threshold: number;
+  basis: IntensityBasis;
   games: number;
   hiGames: number;
   /** 高強度局每個角色的任務階段平均贏率。 */
@@ -182,7 +203,8 @@ export function computeStrongCohorts(
   const K = opts.shrinkK ?? 20;
   const KR = opts.rateShrinkK ?? 10;
   const minRate = opts.minRateSample ?? 15;
-  const hi = games.filter((g) => isHighIntensity(g, threshold));
+  const basis = opts.basis ?? 's';
+  const hi = games.filter((g) => isHighIntensity(g, threshold, basis));
   // 高強度局每個角色的任務階段平均。
   const rs: Record<string, [number, number]> = {};
   for (const g of hi) g.roles.forEach((r) => { const c = (rs[r] ??= [0, 0]); c[0] += missionStageWin(r, g.outcome); c[1]++; });
@@ -208,7 +230,7 @@ export function computeStrongCohorts(
     rate[name] = { assassinHit: { hi: { s: 0, n: 0 }, all: { s: 0, n: 0 } }, merlinSurvival: { hi: { s: 0, n: 0 }, all: { s: 0, n: 0 } } };
   }
   for (const g of games) {
-    const isHi = isHighIntensity(g, threshold);
+    const isHi = isHighIntensity(g, threshold, basis);
     g.names.forEach((name, k) => {
       if (!poolSet.has(name)) return;
       const r = g.roles[k];
@@ -252,7 +274,7 @@ export function computeStrongCohorts(
       return { name, value: avg + (x.s - avg * x.n) / (x.n + KR), raw: mean(x.s, x.n), n: x.n, basis };
     }));
   }
-  return { pool: [...pool], threshold, games: games.length, hiGames: hi.length, roleAverage, rateAverage, facets };
+  return { pool: [...pool], threshold, basis, games: games.length, hiGames: hi.length, roleAverage, rateAverage, facets };
 }
 
 /** 分面的前 k 名（名字；只在記憶體裡用）。 */
@@ -291,6 +313,7 @@ export function publicSummary(c: StrongCohorts, k = 5): Record<string, unknown> 
   return {
     pool: c.pool.length,
     threshold: Math.round(c.threshold * 10) / 10,
+    basis: c.basis,
     games: c.games,
     hiGames: c.hiGames,
     roleAverage: Object.fromEntries(Object.entries(c.roleAverage).map(([r, v]) => [r, Math.round(v * 1000) / 1000])),

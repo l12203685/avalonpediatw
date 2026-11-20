@@ -175,7 +175,7 @@ function main(): void {
   const started = Date.now();
   const views = Number(arg('--views') ?? 2);
   const { cohorts, dataset } = loadStrongCohorts();
-  const { games: all } = humanGamesFromDataset(dataset as unknown as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] }, cohorts.threshold);
+  const { games: all } = humanGamesFromDataset(dataset as unknown as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] }, cohorts.threshold, cohorts.basis);
   const limit = arg('--limit') !== undefined ? Number(arg('--limit')) : undefined;
   const games = limit !== undefined ? all.slice(0, limit) : all;
   const ctx: Ctx = { acc: new Acc(), high };

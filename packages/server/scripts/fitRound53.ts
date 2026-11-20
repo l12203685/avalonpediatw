@@ -5,6 +5,7 @@
  *
  *   cd packages/server && npx tsx scripts/fitRound53.ts [--strong-s 55] [--limit N] [--boot 100] [--json out.json]
  */
+import { DEFAULT_COHORT_CUTS } from '@avalon/shared/stats';
 import * as fs from 'fs';
 import { buildReplayObservation, seatId } from '../src/ai/benchmark/replayObservation';
 import { campOf } from '../src/ai/benchmark/sheetsReplay';
@@ -52,7 +53,7 @@ function boot(pts: readonly Pt[], n: number): [number, number, number] {
 }
 
 function main(): void {
-  const strongS = Number(arg('--strong-s') ?? 55);
+  const strongS = Number(arg('--strong-s') ?? DEFAULT_COHORT_CUTS.sHi); // 高端桌：網站分組的 S 上切點（第 1G 節）
   const limit = Number(arg('--limit') ?? 0);
   const nb = Number(arg('--boot') ?? 100);
   const beta = Number(arg('--beta') ?? BETA_TEAM_50);
@@ -94,11 +95,11 @@ function main(): void {
   }
   const out: Record<string, unknown> = { beta, games: games.length };
   const rows: [string, Pt[]][] = [
-    ['q 好人隊長（全部）', good], ['q 好人隊長（強者桌）', good.filter((p) => p.strong)],
+    ['q 好人隊長（全部）', good], ['q 好人隊長（高端桌 S ≥ 55）', good.filter((p) => p.strong)],
     ['q 忠臣', good.filter((p) => p.group[2] === 'loyal')], ['q 派西', good.filter((p) => p.group[2] === 'percival')], ['q 梅林', good.filter((p) => p.group[2] === 'merlin')],
     ['q 非強制', good.filter((p) => p.group[1] === 'talk')], ['q 強制', good.filter((p) => p.group[1] === 'forced')],
     ...[1, 2, 3, 4, 5].map((k) => [`q 第 ${k} 局`, good.filter((p) => p.group[0] === `R${k}`)] as [string, Pt[]]),
-    ['r 紅隊長（全部）', red], ['r 紅隊長（強者桌）', red.filter((p) => p.strong)],
+    ['r 紅隊長（全部）', red], ['r 紅隊長（高端桌 S ≥ 55）', red.filter((p) => p.strong)],
     ['r 非強制', red.filter((p) => p.group[1] === 'talk')], ['r 強制', red.filter((p) => p.group[1] === 'forced')],
     ...[1, 2, 3, 4, 5].map((k) => [`r 第 ${k} 局`, red.filter((p) => p.group[0] === `R${k}`)] as [string, Pt[]]),
   ];

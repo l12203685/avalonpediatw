@@ -1,7 +1,7 @@
 /**
  * 強者量尺的資料層（2026-11-04；docs/ai/strong_metrics.md）：
  *   - 真人局：games_cache.json 用 `datasetReplay` 嚴格解析成可重播的局，再從資料集的座位欄補上名字（只在記憶體裡）
- *     與桌上平均開打前 Elo（高強度局）；
+ *     與桌上強度 S（高強度局 = S ≥ 65，同網站 S_TIERS；第 1G 節起，舊的平均 Elo 只做對照）；
  *   - 自我對打局：一局結束時的觀察（完整公開紀錄）＋每個座位的角色 → 同一個 `ReplayGame` 形狀，
  *     讓真人與機器人的局走同一套統計（異常票、尾家、INFL 特徵）。
  *   - `votesOf`：一局每一張可信的票（非強制、票數和結果相符）＋真相（隊上有沒有紅）。
@@ -12,11 +12,14 @@ import { replayGamesFromDataset, type DatasetHeader, type DatasetTuple } from '.
 import { EVIL_ROLES, isLakeChainValid, type ReplayGame, type ReplayLake, type ReplayProposal, type ReplayQuest } from '../benchmark/sheetsReplay';
 import { judgeVote, type VoteJudgement } from './abnormalVotes';
 import { missionFailed } from '../missionFacts';
+import { isHighIntensity, lineupS, type IntensityBasis } from './strongCohort';
 
 export interface HumanGame {
   game: ReplayGame;
   /** 桌上平均開打前 Elo（沒有 lineup 的 Elo = null）。 */
   avgElo: number | null;
+  /** 桌上強度 S（沒有 lineup = null）。 */
+  s: number | null;
   hi: boolean;
 }
 
@@ -24,6 +27,7 @@ export interface HumanGame {
 export function humanGamesFromDataset(
   dataset: DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] },
   threshold: number,
+  basis: IntensityBasis = 's',
 ): { games: HumanGame[]; skipped: Record<string, number> } {
   const { games, skipped } = replayGamesFromDataset(dataset);
   const iId = dataset.fields.indexOf('id');
@@ -39,7 +43,8 @@ export function humanGamesFromDataset(
     const lineup = row?.[iLineup] as unknown[] | undefined;
     const elo = Array.isArray(lineup) && lineup.length >= 5 && Array.isArray(lineup[4]) ? (lineup[4] as number[]) : null;
     const avgElo = elo && elo.length === 10 ? elo.reduce((a, x) => a + x / 10, 0) / 10 : null;
-    out.push({ game: { ...dg.game, names }, avgElo, hi: avgElo !== null && avgElo >= threshold });
+    const s = lineupS(lineup);
+    out.push({ game: { ...dg.game, names }, avgElo, s, hi: isHighIntensity({ avgElo, s }, threshold, basis) });
   }
   return { games: out, skipped };
 }

@@ -8,6 +8,9 @@
  *   - 機器人：全機器人自我對打 N 局（正式預設）。
  * 只輸出彙總數字（不輸出玩家名字或單局紀錄）。
  *
+ * **第 1G 節（2026-11-20）起停用，只留作第 4 回合的紀錄**：這裡的「強桌」是同桌超額勝率的前 1/4（sheets_cache），和網站的 S 分層不同；
+ * 桌層級的強者參考改用 `botGap.ts` 的高端桌（S ≥ 分組的 S 上切點，games_cache）與 `strongTableOutcomes.ts`。
+ *
  *   USE_FORWARD_REASONING=true npx tsx scripts/strongTableGap.ts 400
  */
 import * as fs from 'fs';
@@ -210,6 +213,7 @@ class Rec extends HeuristicAgent {
     return mean ? (v[0] / v[1]).toFixed(2) : `${((100 * v[0]) / v[1]).toFixed(1)}%`;
   };
   const keys = [...new Set([...all.keys(), ...bots.keys()])].sort();
+  console.warn("（第 1G 節起停用：強桌 = 超額勝率前 1/4，和網站的 S 分層不同；改用 botGap.ts 的高端桌）");
   console.log(`真人 10 人局 ${humans.length} 局（強桌 ${strongTables.size} 局）；機器人 ${N} 局（正式預設）`);
   console.log('| 指標 | 真人全部 | 真人強桌 | 強角色玩家 | 機器人 | 機器人 − 參考（A/B/E 對強桌，其餘對強角色） |');
   console.log('|---|---|---|---|---|---|');

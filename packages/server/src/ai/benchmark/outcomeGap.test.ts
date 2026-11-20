@@ -8,6 +8,8 @@ import {
   gameFromBotDetail,
   gameFromBotSummary,
   gameFromDb,
+  cacheSourceKey,
+  humanFromCache,
   lake1Cell,
   missionFailed,
   newTally,
@@ -223,5 +225,33 @@ describe('report', () => {
     expect(t.get('role:0')?.get('莫甘娜')?.n).toBe(1);
     expect(t.get('50×lake1')?.get('5藍0紅·驗到紅·說藍')?.n).toBe(1);
     expect(t.get('50×score:R2')?.get('5藍0紅·0:2')?.n).toBe(1);
+  });
+});
+
+describe('humanFromCache（第 1G 節：網站數據分析的同一批局）', () => {
+  it('來源鍵：試算表局加 S 前綴，DC 匯入局用原本的 D id', () => {
+    expect(cacheSourceKey({ id: '12', source: 0 })).toBe('sheet|S12');
+    expect(cacheSourceKey({ id: 'Dabc', source: 1 })).toBe('dc_import|Dabc');
+  });
+
+  it('只收網站那一批局、S 用 games_cache 的、高端桌 = S ≥ 切點；對不到或讀不懂的另外數', () => {
+    const db = [
+      { ...DB, s: 10, sources: [{ src: 'sheet', id: 'S1' }] },
+      { ...DB, s: 10, sources: [{ src: 'dc_import', id: 'D2' }, { src: 'discord', id: '999' }] },
+      { ...DB, status: 'unreadable', sources: [{ src: 'sheet', id: 'S3' }] },
+      { ...DB, sources: [{ src: 'discord', id: '4' }] }, // 只在 DC 的局：網站沒有，不算
+    ];
+    const cache = [
+      { id: '1', source: 0, outcome: '三紅', s: 60 },
+      { id: 'D2', source: 1, outcome: '三紅', s: 40 },
+      { id: '3', source: 0, outcome: '三紅', s: 70 },
+      { id: '5', source: 0, outcome: '三紅', s: null },
+      { id: '6', source: 0, outcome: '', s: 80 }, // 沒有結果：不算
+    ];
+    const ref = humanFromCache(cache, db, 55);
+    expect(ref.site).toEqual({ games: 4, strong: 2 });
+    expect(ref.unmatched).toBe(2);
+    expect(ref.human.map((g) => g.s)).toEqual([60, 40]); // S 換成 games_cache 的
+    expect(ref.strong.map((g) => g.s)).toEqual([60]);
   });
 });
