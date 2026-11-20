@@ -48,7 +48,8 @@ describe('round 56: flags', () => {
     expect(parseTuningFlag('missionJoint56=0.8')).toEqual({ missionJoint56: 0.8 });
     expect(parseTuningFlag('goLike56=3')).toEqual({ goLike56: 3 });
     expect(parseTuningFlag('missionRole56')).toEqual({ missionRole56: 1 });
-    expect(() => parseTuningFlag('goLike56=16')).toThrow();
+    expect(() => parseTuningFlag('goLike56=32')).toThrow();
+    expect(parseTuningFlag('goLike56=31')).toEqual({ goLike56: 31 });
     expect(() => parseTuningFlag('missionJoint56=2')).toThrow();
   });
 });
@@ -95,6 +96,7 @@ describe('round 56: goLike56', () => {
     expect(goLike56Applies(T({ goLike56: 2 }), at(4, 3))).toBe(false);
     expect(goLike56Applies(T({ goLike56: 1 }), at(4, 3))).toBe(true);
     expect(goLike56Obs(at(4, 3)).failCount).toBe(4);
+    expect(goLike56Obs(at(4, 3), true).goLikeOwnViewFc).toBe(3);
   });
   it('the pick is the forced-proposal pick on the same record (or the usual one when its own gates refuse it)', () => {
     const obs = at(4, 3);

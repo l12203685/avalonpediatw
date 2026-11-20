@@ -779,7 +779,7 @@ export class ForwardAgent implements AvalonAgent {
       // Round 56 `goLike56` (Round56.ts; site owner 11/19「1-1~1-4 & 2-1~2-4 做的事情都跟 1-5 & 2-5 一樣」): an R1 / R2 proposal 1–4 is picked as
       // the fifth (forced) one would be on the same record; the team must still pass this decision's own gates and vote rules, else the usual pick.
       if (goLike56Applies(this.baseline.tuning, obs)) {
-        const alt = this.decide(goLike56Obs(obs));
+        const alt = this.decide(goLike56Obs(obs, ((this.baseline.tuning.goLike56 ?? 0) & 16) !== 0));
         if (alt.action.type === 'team_select' && this.repairGateOk39(obs, alt.action.teamIds)) {
           return this.post56(obs, { ...alt, reasoningTrace: { ...alt.reasoningTrace, summary: `${alt.reasoningTrace.summary} → picked as if it goes (round 56)` } });
         }

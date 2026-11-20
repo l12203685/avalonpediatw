@@ -1348,7 +1348,7 @@ export interface AgentTuning {
   missionJoint56: number;
   /**
    * 第 56 回合（`Round56.ts`；站長 11/19「1-1~1-4 & 2-1~2-4 做的事情都跟 1-5 & 2-5 一樣」）：第 1、2 局第 1–4 次提議照第 5 次（強制局）的派法派
-   * （當成這一隊可能真的出任務），新隊過不了自己的閘門或投票規則就照原本。位元：1 = 忠臣第 1 局、2 = 忠臣第 2 局、4 = 派西第 1 局、8 = 派西第 2 局。0 = 關。
+   * （當成這一隊可能真的出任務），新隊過不了自己的閘門或投票規則就照原本。位元：1 = 忠臣第 1 局、2 = 忠臣第 2 局、4 = 派西第 1 局、8 = 派西第 2 局；16 = 個人先驗（`ownView`）照真的第幾次提議加權。0 = 關。
    */
   goLike56: number;
   /**
@@ -3201,7 +3201,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'goLike56') {
     const value = raw === undefined ? 15 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 15) throw new Error(`goLike56 needs 0–15, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 31) throw new Error(`goLike56 needs 0–31, got "${raw}"`);
     return { goLike56: value };
   }
   if (name === 'missionRole56') {
