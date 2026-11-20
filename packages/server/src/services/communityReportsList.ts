@@ -4,7 +4,9 @@
  *   - 【ID認領】approved：群組擁有者（GET /guilds/{id} 的 owner_id）或 ADMIN_DISCORD_IDS 裡的人在那則按了 ✅；
  *     merged：那則被改成帶「（已合併）」，或 bot 回覆那則、內容有「已合併」。
  *   - 【百科回報】processed：那則被改成帶「（已處理）」，或 bot 回覆那則、內容有「已處理」。
- * markCommunityItem 把 bot 自己那則改成結尾加「（已合併）」／「（已處理）」。
+ *     status／note／link：那則最後的狀態行「【處理・已修正】說明｜<網址>（已處理）」（services/reportStatus.ts；
+ *     網站「回報與修正」頁顯示它）。
+ * markCommunityItem 把 bot 自己那則改成結尾加「（已合併）」／「（已處理）」，或（給了 status）換上狀態行。
  *
  * 只在本機跑（scripts/listCommunityReports.ts），不在 GitHub Actions：輸出的 JSON 有暱稱，只寫到 stdout；
  * log 只寫數量與狀態碼。
@@ -26,6 +28,10 @@ import {
   type ReportSource,
 } from './communityReports';
 import { DEFAULT_AI_GAME_GUILD_ID, snowflakeTime } from './aiGameForum';
+import {
+  applyStatus, cleanStatusLink, cleanStatusNote, findStatus, parseStatusLine, parseStatusName, STATUS_LINK_MAX, STATUS_NOTE_MAX,
+  type ReportStatus, type StatusInfo,
+} from './reportStatus';
 
 export const APPROVE_EMOJI = '✅';
 const MESSAGES_PAGE = 100;
@@ -65,6 +71,10 @@ export interface ListedReport {
   text: string;
   source: ReportSource | null;
   processed: boolean;
+  /** 狀態行的狀態；沒有狀態行 → null（processed 就是舊標記）。 */
+  status: ReportStatus | null;
+  note: string | null;
+  link: string | null;
 }
 
 export interface CommunityListing {
@@ -112,7 +122,8 @@ export function parseReportMessage(content: string): { id: string; kind: Feedbac
   if (!m) return null;
   const lines = m[3].split('\n');
   const fromAt = lines.map((l) => l.trim()).findIndex((l) => l.startsWith('（來自'));
-  const body = (fromAt >= 0 ? lines.slice(0, fromAt) : lines).join('\n').replace(new RegExp(`${REPORT_DONE_MARK}\\s*$`), '').trim();
+  const body = (fromAt >= 0 ? lines.slice(0, fromAt) : lines).filter((l) => !parseStatusLine(l))
+    .join('\n').replace(new RegExp(`${REPORT_DONE_MARK}\\s*$`), '').trim();
   return { id: m[2], kind: KIND_BY_LABEL.get(m[1]) ?? null, text: unescapeDiscordMarkdown(body), source: sourceOf(content) };
 }
 
@@ -213,9 +224,11 @@ export async function listCommunityItems(opts: ListOptions): Promise<CommunityLi
     } else if (content.startsWith(REPORT_PREFIX)) {
       const r = parseReportMessage(content);
       if (!r) continue;
+      const st = findStatus(content);
       reports.push({
         id: r.id, messageId: id, url: url(id), createdAt: snowflakeTime(id), kind: r.kind, text: r.text, source: r.source,
         processed: hasDoneMark(content, REPORT_DONE_MARK) || doneByReply.has(id),
+        status: st?.status ?? null, note: st ? st.note || null : null, link: st?.link ?? null,
       });
     }
   }
@@ -230,15 +243,20 @@ export interface MarkOptions {
   token: string;
   messageId: string;
   mark: 'merged' | 'processed';
+  /** 只給【百科回報】：換上狀態行（services/reportStatus.ts），不只加「（已處理）」。 */
+  status?: StatusInfo;
   channelId?: string;
   fetchImpl?: Fetch;
 }
 
+export type MarkResult = 'edited' | 'already' | 'not_found' | 'failed' | 'too_long';
+
 /**
  * bot 自己那則改成結尾加「（已合併）」／「（已處理）」（已經有就不動）。CLAIM 行要留在最後一行，所以加在它前一行的結尾。
- * 回傳 'edited' | 'already' | 'not_found' | 'failed'。
+ * 給了 status（只限【百科回報】）：換上狀態行（舊的狀態行拿掉）；一樣的狀態行已經在 → 'already'；換完超過 2000 字 → 'too_long'。
+ * 回傳 'edited' | 'already' | 'not_found' | 'failed' | 'too_long'。
  */
-export async function markCommunityItem(opts: MarkOptions): Promise<'edited' | 'already' | 'not_found' | 'failed'> {
+export async function markCommunityItem(opts: MarkOptions): Promise<MarkResult> {
   const f = opts.fetchImpl ?? fetch;
   const channelId = opts.channelId || resolveSyncDiscordChannelId();
   const headers = { Authorization: `Bot ${opts.token}`, 'User-Agent': 'DiscordBot (avalonpediatw, 1.0)' };
@@ -250,16 +268,85 @@ export async function markCommunityItem(opts: MarkOptions): Promise<'edited' | '
   const mark = opts.mark === 'merged' ? CLAIM_DONE_MARK : REPORT_DONE_MARK;
   const prefix = opts.mark === 'merged' ? CLAIM_PREFIX : REPORT_PREFIX;
   if (!content.startsWith(prefix)) return 'not_found';
-  if (hasDoneMark(content, mark)) return 'already';
-  const lines = content.split('\n');
-  const at = lines.length > 1 && lines[lines.length - 1].startsWith(CLAIM_LINE_PREFIX) ? lines.length - 2 : lines.length - 1;
-  lines[at] = `${lines[at]}${mark}`;
-  const next = lines.join('\n');
-  if (next.length > 2000) return 'failed';
+  let next: string;
+  if (opts.status && opts.mark === 'processed') {
+    const applied = applyStatus(content, opts.status);
+    if (applied === null) return 'too_long';
+    if (applied === content) return 'already';
+    next = applied;
+  } else {
+    if (hasDoneMark(content, mark)) return 'already';
+    const lines = content.split('\n');
+    const at = lines.length > 1 && lines[lines.length - 1].startsWith(CLAIM_LINE_PREFIX) ? lines.length - 2 : lines.length - 1;
+    lines[at] = `${lines[at]}${mark}`;
+    next = lines.join('\n');
+    if (next.length > 2000) return 'too_long';
+  }
   const patch = await f(`${DISCORD_API}/channels/${channelId}/messages/${opts.messageId}`, {
     method: 'PATCH',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({ content: next, allowed_mentions: { parse: [] } }),
   });
   return patch.ok ? 'edited' : 'failed';
+}
+
+// ─── 腳本的參數（scripts/listCommunityReports.ts） ─────────────────────────────────────
+
+export type CliCommand =
+  | { cmd: 'list'; days: number; channelId?: string }
+  | { cmd: 'mark'; messageId: string; mark: 'merged' | 'processed'; status?: StatusInfo; channelId?: string }
+  | { cmd: 'error'; message: string };
+
+/**
+ * scripts/listCommunityReports.ts 的參數：
+ *   [--days 7] [--channel ID]
+ *   --mark-merged <訊息 id>
+ *   --mark-processed <訊息 id> [--status 已修正｜不處理｜處理中｜收到｜隱藏] [--note "說明"] [--link https://…]
+ * --mark-processed 只給 id ＝ 舊的「（已處理）」標記；有 --status／--note／--link ＝ 狀態行（沒寫 --status ＝ 已修正）。
+ * 已修正／不處理 一定要有 --note（網站上要讓人看得懂）；--link 只收 https。
+ */
+export function parseCliArgs(argv: readonly string[]): CliCommand {
+  const known = new Set(['--days', '--channel', '--mark-merged', '--mark-processed', '--status', '--note', '--link']);
+  const values = new Map<string, string>();
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (!a.startsWith('--')) return { cmd: 'error', message: `看不懂的參數：${a}` };
+    const eq = a.indexOf('=');
+    const name = eq > 0 ? a.slice(0, eq) : a;
+    if (!known.has(name)) return { cmd: 'error', message: `不認得的參數：${name}` };
+    const value = eq > 0 ? a.slice(eq + 1) : argv[i + 1];
+    if (value === undefined || (eq < 0 && value.startsWith('--'))) return { cmd: 'error', message: `${name} 後面要有值` };
+    if (eq < 0) i += 1;
+    values.set(name, value);
+  }
+  const channelId = values.get('--channel');
+  if (channelId !== undefined && !/^\d{15,22}$/.test(channelId)) return { cmd: 'error', message: '--channel 要是數字 id' };
+  const merged = values.get('--mark-merged');
+  const processed = values.get('--mark-processed');
+  const statusArgs = ['--status', '--note', '--link'].filter((k) => values.has(k));
+  if (merged !== undefined && processed !== undefined) return { cmd: 'error', message: '--mark-merged 和 --mark-processed 只能選一個' };
+  const target = merged ?? processed;
+  if (target === undefined) {
+    if (statusArgs.length) return { cmd: 'error', message: `${statusArgs.join('、')} 要跟 --mark-processed <訊息 id> 一起用` };
+    const days = Number(values.get('--days') ?? '7');
+    if (!Number.isFinite(days) || days <= 0 || days > 90) return { cmd: 'error', message: '--days 要是 1–90' };
+    return { cmd: 'list', days, ...(channelId ? { channelId } : {}) };
+  }
+  if (!/^\d{15,22}$/.test(target)) return { cmd: 'error', message: '訊息 id 要是數字' };
+  if (merged !== undefined) {
+    if (statusArgs.length) return { cmd: 'error', message: `${statusArgs.join('、')} 只給 --mark-processed（百科回報）用` };
+    return { cmd: 'mark', messageId: target, mark: 'merged', ...(channelId ? { channelId } : {}) };
+  }
+  if (!statusArgs.length) return { cmd: 'mark', messageId: target, mark: 'processed', ...(channelId ? { channelId } : {}) };
+  const rawStatus = values.get('--status');
+  const status = rawStatus === undefined ? '已修正' : parseStatusName(rawStatus);
+  if (!status) return { cmd: 'error', message: '--status 要是 已修正、不處理、處理中、收到 或 隱藏' };
+  const rawNote = values.get('--note') ?? '';
+  const note = cleanStatusNote(rawNote, status);
+  if ([...note].length > STATUS_NOTE_MAX) return { cmd: 'error', message: `--note 最多 ${STATUS_NOTE_MAX} 字` };
+  if ((status === '已修正' || status === '不處理') && !note) return { cmd: 'error', message: `${status} 要寫 --note（網站上會顯示）` };
+  const rawLink = values.get('--link');
+  const link = rawLink === undefined ? null : cleanStatusLink(rawLink);
+  if (rawLink !== undefined && !link) return { cmd: 'error', message: `--link 要是 https 網址（最多 ${STATUS_LINK_MAX} 字）` };
+  return { cmd: 'mark', messageId: target, mark: 'processed', status: { status, note, link }, ...(channelId ? { channelId } : {}) };
 }

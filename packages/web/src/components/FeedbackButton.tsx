@@ -1,52 +1,32 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bug, BookOpen, ExternalLink, Flag, Lightbulb, Loader, Send, UserCheck, X } from 'lucide-react';
+import { CheckCircle2, ClipboardList, ExternalLink, Flag, UserCheck, X } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
-import { submitFeedback } from '../services/api';
-import { getStoredToken } from '../services/socket';
+import FeedbackForm from './FeedbackForm';
 
 /**
  * 問題回報（Edward 2026-11-02：「DC + 百科網站上用個類似錯誤或是反映問題回報專區」）。
  * 內容頁右下角的按鈕；送出後伺服器貼到 LINE 群組和 DC #同步閒聊（「【百科回報・錯誤】#編號 …」，2026-11-09 起；
  * 舊的 DC 論壇 #百科問題回報 已刪除），管理者每天處理。也可以直接在 LINE／DC 打 /回報。
- * 兩邊都公開，所以表單上講清楚，暱稱選填（不帶登入帳號名稱）；頁面欄自動帶目前網址的路徑與 #。
+ * 兩邊都公開，所以表單上講清楚，暱稱選填（不帶登入帳號名稱）；頁面欄自動帶目前網址的路徑與 #（沒有 # 時帶現在的頁面）。
+ * 2026-11-19（站長：「bug 修正可以直接呈現在百科網站上嗎? (留言功能)」）：表單抽成 FeedbackForm，送出後顯示編號與
+ * 「回報與修正」頁的連結（#reports；處理狀態、怎麼修的都在那裡）。
  */
-
-type FeedbackType = 'bug' | 'suggestion' | 'content';
 
 /** DC #同步閒聊（跟 LINE 群組同步的頻道；回報與 ID 認領都貼在這裡）。 */
 export const SYNC_CHANNEL_URL = 'https://discord.com/channels/1132682489840812113/1132901301802504242';
 
-const TYPES: { id: FeedbackType; label: string; Icon: typeof Bug; on: string; placeholder: string }[] = [
-  { id: 'bug', label: '錯誤', Icon: Bug, on: 'bg-red-900/50 border-red-600 text-red-200', placeholder: '哪一頁、做了什麼、看到什麼，例如：牌譜紀錄在手機上表格超出畫面' },
-  { id: 'content', label: '文章內容', Icon: BookOpen, on: 'bg-sky-900/50 border-sky-600 text-sky-200', placeholder: '哪篇文章、哪一段有誤或需要補充' },
-  { id: 'suggestion', label: '建議', Icon: Lightbulb, on: 'bg-yellow-900/50 border-yellow-600 text-yellow-200', placeholder: '想看到什麼功能或改法' },
-];
-
 export default function FeedbackButton(): JSX.Element {
-  const addToast = useGameStore((s) => s.addToast);
   const setGameState = useGameStore((s) => s.setGameState);
   const [isOpen, setIsOpen] = useState(false);
-  const [type, setType] = useState<FeedbackType>('bug');
-  const [message, setMessage] = useState('');
-  const [name, setName] = useState('');
-  const [sending, setSending] = useState(false);
-  const current = TYPES.find((t) => t.id === type) ?? TYPES[0];
+  /** 剛送出：undefined＝還在填，null＝送出了但沒有編號，字串＝編號。 */
+  const [sent, setSent] = useState<string | null | undefined>(undefined);
 
-  const handleSubmit = async (): Promise<void> => {
-    if (!message.trim()) return;
-    setSending(true);
-    try {
-      const page = `${window.location.pathname}${window.location.hash}`;
-      await submitFeedback({ type, message: message.trim(), name: name.trim() || undefined, page }, getStoredToken() ?? undefined);
-      addToast('已送出，謝謝！已貼到 LINE 群組和 DC 同步閒聊，管理者每天處理', 'success');
-      setMessage('');
-      setIsOpen(false);
-    } catch {
-      addToast('送出失敗，請稍後再試，或在 LINE／DC 打 /回報 內容', 'error');
-    } finally {
-      setSending(false);
-    }
+  const openReports = (): void => {
+    setIsOpen(false);
+    setSent(undefined);
+    setGameState('reports');
+    window.scrollTo({ top: 0 });
   };
 
   return (
@@ -58,71 +38,61 @@ export default function FeedbackButton(): JSX.Element {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 12 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="absolute bottom-14 right-0 w-[min(20rem,calc(100vw-2rem))] space-y-3 rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl"
+            className="absolute bottom-14 right-0 max-h-[calc(100dvh-6rem)] w-[min(20rem,calc(100vw-2rem))] space-y-3 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl"
           >
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white">問題回報</h3>
-              <button type="button" onClick={() => setIsOpen(false)} aria-label="關閉" className="text-zinc-500 hover:text-white">
+              <button type="button" onClick={() => { setIsOpen(false); setSent(undefined); }} aria-label="關閉" className="text-zinc-500 hover:text-white">
                 <X size={16} />
               </button>
             </div>
 
-            <div className="flex gap-1.5">
-              {TYPES.map(({ id, label, Icon, on }) => (
+            {sent !== undefined ? (
+              <div className="space-y-3" data-testid="feedback-sent">
+                <p className="flex items-start gap-1.5 text-sm text-emerald-200">
+                  <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" />
+                  <span>已送出，謝謝！{sent ? <>編號 <span className="font-mono">#{sent}</span>。</> : null}管理者每天處理，修好會寫在「回報與修正」頁。</span>
+                </p>
                 <button
-                  key={id}
                   type="button"
-                  onClick={() => setType(id)}
-                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-1.5 text-xs font-semibold transition ${
-                    type === id ? on : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-white'
-                  }`}
+                  onClick={openReports}
+                  data-testid="feedback-open-reports"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"
                 >
-                  <Icon size={12} /> {label}
+                  <ClipboardList size={14} /> 看「回報與修正」的處理進度
                 </button>
-              ))}
-            </div>
-
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder={current.placeholder}
-              rows={4}
-              maxLength={1000}
-              className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-800 p-2.5 text-sm text-white placeholder-zinc-500 focus:border-sky-500 focus:outline-none"
-            />
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="暱稱（選填，方便回覆你）"
-              maxLength={32}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-white placeholder-zinc-500 focus:border-sky-500 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => { setIsOpen(false); setGameState('idClaim'); window.scrollTo({ top: 0 }); }}
-              data-testid="feedback-id-claim"
-              className="flex w-full items-center gap-1 text-left text-xs text-emerald-300 hover:text-emerald-200"
-            >
-              <UserCheck size={12} className="flex-shrink-0" /> 紀錄裡你用過好幾個 ID？用「ID 認領」請管理者合併
-            </button>
-            <p className="text-xs leading-relaxed text-zinc-500">
-              會貼到 LINE 群組和 DC 的「同步閒聊」（群組成員都看得到），管理者每天處理。也可以直接在 LINE 或 DC 打 /回報 內容。
-              <a href={SYNC_CHANNEL_URL} target="_blank" rel="noopener noreferrer" className="ml-1 inline-flex items-center gap-0.5 text-sky-400 hover:text-sky-300">
-                到 DC 同步閒聊 <ExternalLink size={10} />
-              </a>
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-600">{message.length}/1000</span>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={!message.trim() || sending}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-700 disabled:opacity-40"
-              >
-                {sending ? <Loader size={12} className="animate-spin" /> : <Send size={12} />}
-                送出
-              </button>
-            </div>
+                <button type="button" onClick={() => setSent(undefined)} className="w-full text-center text-xs text-zinc-400 hover:text-white">
+                  再回報一則
+                </button>
+              </div>
+            ) : (
+              <FeedbackForm
+                onSent={(id) => setSent(id)}
+                extra={(
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={openReports}
+                      data-testid="feedback-reports-link"
+                      className="flex w-full items-center gap-1 text-left text-xs text-sky-300 hover:text-sky-200"
+                    >
+                      <ClipboardList size={12} className="flex-shrink-0" /> 看大家回報了什麼、修好了沒：「回報與修正」
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsOpen(false); setGameState('idClaim'); window.scrollTo({ top: 0 }); }}
+                      data-testid="feedback-id-claim"
+                      className="flex w-full items-center gap-1 text-left text-xs text-emerald-300 hover:text-emerald-200"
+                    >
+                      <UserCheck size={12} className="flex-shrink-0" /> 紀錄裡你用過好幾個 ID？用「ID 認領」請管理者合併
+                    </button>
+                    <a href={SYNC_CHANNEL_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-xs text-zinc-400 hover:text-zinc-200">
+                      到 DC 同步閒聊 <ExternalLink size={10} />
+                    </a>
+                  </div>
+                )}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

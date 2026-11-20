@@ -11,6 +11,7 @@ import {
   applyFilter,
   claimCell,
   computeFeatureStudies,
+  computeForcedP5Feature,
   computeLake,
   computeLakeClaimFeature,
   decodeGamesDataset,
@@ -19,6 +20,7 @@ import {
   type Clause,
   type FeatureStudiesSection,
   type GameFilter,
+  type VotingProposal,
 } from '@avalon/shared/stats';
 import { TEN, makeDataset, type GameSpec } from './datasetBuilder';
 
@@ -295,5 +297,57 @@ describe('featureStudies: the filtered L141 swapped into the served section (ref
     expect(refreshFeatureStudies(null, feature, AS_OF)).toEqual({
       generatedAt: AS_OF, sampleSize: { games: 6, lakeLinks: 10 }, features: [feature],
     });
+  });
+});
+
+describe('featureStudies L139 (compute_forced_p5_feature), hand-calculated', () => {
+  // 第 k 輪有第 5 次提議（強制出發）= 這局在第 k 輪打到 P5。沒有結果的局也在分母。
+  const P5 = (round: number): VotingProposal => [round, 5, '157', ''];
+  const forcedSpecs: GameSpec[] = [
+    { id: 'P1', outcome: '三紅', votes: [P5(2), P5(3)] },
+    { id: 'P2', outcome: '三紅', votes: [P5(3)] },
+    { id: 'P3', outcome: '三藍活', kill: '7', votes: [P5(2)] },
+    { id: 'P4', outcome: '三藍死', kill: '6' },
+    { id: 'P5', outcome: '', votes: [P5(3)] },
+    { id: 'P6', outcome: '三藍活', kill: '7', votes: [[2, 4, '157', '1234567']] }, // 第 4 次不算
+  ];
+  const games = decodeGamesDataset(makeDataset(forcedSpecs)).games;
+
+  it('rows per round (R4 / R5 without a forced P5 are left out), the R3 split and the conclusion text', () => {
+    const f = computeForcedP5Feature(games, AS_OF);
+    expect(f.sampleSize).toEqual({ games: 6 });
+    expect(f.computedAt).toBe(AS_OF);
+    expect(f.data.baselineRedPct).toBe(33.33);
+    expect(f.data.rows).toEqual([
+      { round: 'R2', n: 2, threeRedPct: 50, deltaThreeRed: 16.67, deltaThreeBlueAlive: 16.67, deltaThreeBlueDead: -16.67 },
+      { round: 'R3', n: 3, threeRedPct: 66.67, deltaThreeRed: 33.33, deltaThreeBlueAlive: -33.33, deltaThreeBlueDead: -16.67 },
+    ]);
+    expect(f.data.comparison).toEqual({
+      withR3Forced: { n: 3, threeRedPct: 66.67, deltaBaseline: 33.33 },
+      withoutR3Forced: { n: 3, threeRedPct: 0, deltaBaseline: -33.33 },
+    });
+    expect(f.oneLineHook).toBe('R3 出現 forced P5 的局三紅率 66.7%（n=3），比基準 33.3% 高 33.3pp；但這是選擇偏誤，不是因果');
+    expect(f.oneLineHookEn).toBe(
+      'Games with a forced P5 in R3 end 3-red 66.7% of the time (n=3), 33.3pp over the 33.3% baseline; selection bias, not causation',
+    );
+  });
+
+  it('no game: no rows, and the hook prints n=None like Python', () => {
+    const f = computeForcedP5Feature([], AS_OF);
+    expect(f.data.rows).toEqual([]);
+    expect(f.data.comparison.withoutR3Forced).toEqual({ n: 0, threeRedPct: 0, deltaBaseline: 0 });
+    expect(f.oneLineHook).toContain('（n=None）');
+  });
+
+  it('computeFeatureStudies swaps L139 in place, or appends it after the carried-over studies', () => {
+    const previous: FeatureStudiesSection = {
+      generatedAt: '2025-01-01',
+      sampleSize: { games: 1, lakeLinks: 1 },
+      features: [{ loopId: 'L139', title: '舊的' }, { loopId: 'L142' }],
+    };
+    expect(computeFeatureStudies(games, config, AS_OF, previous).features.map((f) => f.loopId)).toEqual(['L141', 'L139', 'L142']);
+    expect(computeFeatureStudies(games, config, AS_OF).features.map((f) => f.loopId)).toEqual(['L141', 'L139']);
+    expect(computeFeatureStudies(games, config, AS_OF, { ...previous, features: [{ loopId: 'L142' }] }).features.map((f) => f.loopId))
+      .toEqual(['L141', 'L142', 'L139']);
   });
 });

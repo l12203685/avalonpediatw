@@ -490,6 +490,7 @@ describe('每日例行作業的列表（mock ✅）與標記', () => {
   const C3 = sf(T + 120_000);
   const R1 = sf(T + 180_000);
   const R2 = sf(T + 240_000);
+  const R3 = sf(T + 270_000);
   const REPLY = sf(T + 300_000);
   const OLD = sf(T - 30 * 86_400_000);
 
@@ -498,6 +499,7 @@ describe('每日例行作業的列表（mock ✅）與標記', () => {
       `【ID認領】#${id} ${main} ← ${others.join('、')}\n（來自網站）\n核准：管理者在這則訊息按 ✅；合併好會在這則加註已合併。${extra}\nCLAIM:${JSON.stringify({ main, others })}`;
     const messages = [
       { id: REPLY, author: { id: BOT, bot: true }, content: '#R0000002 已處理，謝謝', message_reference: { message_id: R2 } },
+      { id: R3, author: { id: BOT }, content: '【百科回報・錯誤】#R0000003 排行頁很慢\n（來自DC）\n【處理・已修正】加了快取｜<https://github.com/example/repo/pull/7>（已處理）' },
       { id: R2, author: { id: BOT }, content: '【百科回報・建議】#R0000002 加一個深色模式\n（來自LINE）' },
       { id: R1, author: { id: BOT }, content: '【百科回報・錯誤】#R0000001 牌譜頁 \\*手機\\* 打不開\n（來自網站・小明）（已處理）' },
       { id: C3, author: { id: BOT }, content: claim('C0000003', '阿丙', ['丙丙'], '（已合併）'), reactions: [{ emoji: { name: '✅' }, count: 1 }] },
@@ -544,6 +546,11 @@ describe('每日例行作業的列表（mock ✅）與標記', () => {
     expect(out.reports.map((r) => [r.id, r.kind, r.text, r.source, r.processed])).toEqual([
       ['R0000001', 'bug', '牌譜頁 *手機* 打不開', 'web', true],
       ['R0000002', 'suggestion', '加一個深色模式', 'line', true],
+      ['R0000003', 'bug', '排行頁很慢', 'discord', true],
+    ]);
+    // 狀態行（每日例行作業 --mark-processed … --note … --link …）
+    expect(out.reports.map((r) => [r.status, r.note, r.link])).toEqual([
+      [null, null, null], [null, null, null], ['已修正', '加了快取', 'https://github.com/example/repo/pull/7'],
     ]);
     // ✅ 只查有 ✅ 的訊息。
     expect(dc.calls.filter((c) => c.includes('/reactions/'))).toHaveLength(3);
