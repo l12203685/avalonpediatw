@@ -31,6 +31,7 @@ export * from './voting';
 export * from './pairs';
 export * from './lake';
 export * from './featureL141';
+export * from './featureL139';
 export * from './twoRed';
 export * from './decisiveVotes';
 export * from './abnormalVotes';

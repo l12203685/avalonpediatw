@@ -24,6 +24,7 @@ import { createHttpRateLimit } from '../middleware/rateLimit';
 import {
   FEEDBACK_KINDS, FEEDBACK_MESSAGE_MAX, cleanPage, parseIdClaim, submitClaim, submitReport, type FeedbackKind,
 } from '../services/communityReports';
+import { invalidateReportBoard } from '../services/reportBoard';
 
 // 2026-04-24 #supabase-retire Batch 1.1+1.2 (hineko_20260424_1240):
 // Dual-write feedback / error_reports to Firestore alongside Supabase.
@@ -152,6 +153,8 @@ router.post('/', feedbackLimit, async (req: Request, res: Response) => {
   });
 
   const posted = await submitReport({ kind, message: trimmedMsg, name: publicName, page: pagePath, source: 'web' });
+  // 網站「回報與修正」頁下一次讀就重新掃，剛送出的那筆馬上看得到（routes/reports.ts）
+  if (posted.ok) invalidateReportBoard();
   if (!posted.ok) {
     const emoji = kind === 'bug' ? '🐛' : kind === 'content' ? '📖' : '💡';
     await sendDiscord(`${emoji} **網站回報** — ${publicName.trim().slice(0, 32) || '匿名'}\n>>> ${trimmedMsg}`);

@@ -19,6 +19,7 @@ import RecordsPage from './pages/RecordsPage';
 import IdClaimPage from './pages/IdClaimPage';
 import PracticePage from './pages/PracticePage';
 import AiGamesPage from './pages/AiGamesPage';
+import ReportsPage from './pages/ReportsPage';
 import RoomPage from './pages/RoomPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -57,6 +58,8 @@ function stateOfLink(link: StatsLink | null): GameState | null {
       return 'practice';
     case 'aiGames':
       return 'aiGames';
+    case 'reports':
+      return 'reports';
     case 'aiHistory':
       return 'aiHistory';
     case 'wiki':
@@ -97,6 +100,7 @@ function App(): JSX.Element {
       else if (link.kind === 'claim') store.setGameState('idClaim');
       else if (link.kind === 'practice') store.setGameState('practice');
       else if (link.kind === 'aiGames') store.setGameState('aiGames');
+      else if (link.kind === 'reports') store.setGameState('reports');
       else if (link.kind === 'aiHistory') store.setGameState('aiHistory');
       else if (link.kind === 'wiki' || link.kind === 'concepts') store.setGameState('wiki');
       else if (link.kind === 'records') {
@@ -381,8 +385,8 @@ function App(): JSX.Element {
   // Edward 2026-10-30：沒有首頁 — 'home' 直接開上次的分頁（數據排行／百科攻略），內容頁不等登入就顯示。
   const shownState = gameState === 'home' ? (bootState ?? lastSiteTab()) : gameState;
   const siteTab = siteTabOf(shownState);
-  // ID 認領、與機器人練習、百科AI 對局（與優化歷程）不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕進來）
-  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice' || shownState === 'aiGames' || shownState === 'aiHistory';
+  // ID 認領、與機器人練習、百科AI 對局（與優化歷程）、回報與修正不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕、右下角「問題回報」進來）
+  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice' || shownState === 'aiGames' || shownState === 'aiHistory' || shownState === 'reports';
 
   if (isLoading && !(statsFirst || publicStatsPage)) {
     return (
@@ -522,6 +526,7 @@ function App(): JSX.Element {
           {shownState === 'idClaim' && <IdClaimPage />}
           {shownState === 'practice' && <PracticePage />}
           {shownState === 'aiGames' && <AiGamesPage />}
+          {shownState === 'reports' && <ReportsPage />}
           {shownState === 'aiHistory' && <AiHistoryPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}

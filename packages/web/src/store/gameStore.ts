@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Room, Player } from '@avalon/shared';
 
-export type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis' | 'analytics' | 'settings' | 'personalStats' | 'profileSettings' | 'claimsNew' | 'adminClaims' | 'adminAdmins' | 'adminImport' | 'help' | 'streams' | 'records' | 'idClaim' | 'practice' | 'aiGames' | 'aiHistory' | 'forgotPassword' | 'resetPassword';
+export type GameState = 'home' | 'lobby' | 'voting' | 'playing' | 'ended' | 'wiki' | 'leaderboard' | 'profile' | 'aiStats' | 'friends' | 'replay' | 'analysis' | 'analytics' | 'settings' | 'personalStats' | 'profileSettings' | 'claimsNew' | 'adminClaims' | 'adminAdmins' | 'adminImport' | 'help' | 'streams' | 'records' | 'idClaim' | 'practice' | 'aiGames' | 'aiHistory' | 'reports' | 'forgotPassword' | 'resetPassword';
 export type SocketStatus = 'connected' | 'disconnected' | 'reconnecting';
 
 export interface Toast {

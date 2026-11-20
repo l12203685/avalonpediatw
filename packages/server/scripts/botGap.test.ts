@@ -59,8 +59,9 @@ describe('botGap loaders', () => {
 
   it('legacy reference (--ref game_db): only readable real games from game_db, strong tables by S', () => {
     const { human, strong } = loadHuman({ ref: 'game_db', gamesFile: REPO_GAMES, humanFile: FIXTURE_DB, strongS: 45 });
-    // fixture：real ok 4 局 + real warn 6 局；error／unreadable／sim 不算
-    expect(human.length).toBe(10);
+    // fixture：real ok 6 局 + real warn 5 局；error／unreadable／sim 不算
+    // （S178 原本是 LAKE error，#136 湖中鏈自動更正後變 ok，所以 10 → 11）
+    expect(human.length).toBe(11);
     expect(strong.length).toBe(human.filter((g) => g.s !== null && g.s >= 45).length);
     expect(strong.length).toBeGreaterThan(0);
     expect(strong.length).toBeLessThan(human.length);
