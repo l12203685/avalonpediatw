@@ -20,6 +20,7 @@
  *      #practice                                    → 與機器人練習（自己 + 9 個機器人；不用登入，背景自動拿訪客身分）
  *      #ai-games                                    → 百科AI 對局（Edward 2026-11-05；不用登入）
  *      #ai-games=<DC 討論串 id>                      → 百科AI 對局，打開那一局（同 #records=：打開時留在網址列）
+ *      #ai-history (#ai-progress)                    → 百科AI 優化歷程（站長 2026-11-20；不用登入。見 utils/aiHistory.ts）
  *      #seat-filler (#fill、#補位)                   → 百科AI 對局頁（最上面是「叫百科AI 補位」表單；站長 2026-11-19，不用登入）
  *      #wiki                                        → 百科攻略（Edward 2026-11-11：文章要發到 Threads）
  *      #wiki=<文章 id> (#wiki/<id>)                   → 百科攻略，打開那篇文章（同 #records=：打開時留在網址列、
@@ -31,6 +32,7 @@ import type { GameState } from '../store/gameStore';
 import { parseStatsQuery } from '../stats/statsFilter';
 import { parseRecordsHash } from './records';
 import { parseAiGamesHash } from './aiGames';
+import { isAiHistoryHash } from './aiHistory';
 import { parseWikiHash } from './wikiHash';
 import { parseConceptsHash } from './concepts';
 
@@ -48,6 +50,8 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'practice',
   // 百科AI 對局（遊玩頁上百科AI 打的每一局＋每個決定的理由，可以按「這步怪怪的」；Edward 2026-11-05）
   'aiGames',
+  // 百科AI 優化歷程（站長 2026-11-20：彙整公布優化的進程歷史）
+  'aiHistory',
 ]);
 
 export type StatsLink =
@@ -58,6 +62,7 @@ export type StatsLink =
   | { kind: 'claim' }
   | { kind: 'practice' }
   | { kind: 'aiGames'; id: string | null }
+  | { kind: 'aiHistory' }
   | { kind: 'wiki'; id: string | null }
   | { kind: 'concepts'; id: string | null };
 
@@ -92,6 +97,7 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (/^practice$/i.test(raw)) return { kind: 'practice' };
   // #seat-filler（#fill、#補位）= 百科AI 對局頁最上面的「叫百科AI 補位」（站長 2026-11-19：給不在 LINE／DC 群組的人）
   if (/^(?:seat-?filler|fill|%E8%A3%9C%E4%BD%8D|補位)$/i.test(raw)) return { kind: 'aiGames', id: null };
+  if (isAiHistoryHash(raw)) return { kind: 'aiHistory' };
   const aiGames = parseAiGamesHash(raw);
   if (aiGames) return { kind: 'aiGames', id: aiGames.id };
   const wiki = parseWikiHash(raw);

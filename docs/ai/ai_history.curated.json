@@ -1,0 +1,436 @@
+{
+  "_readme": "百科AI 優化歷程頁（網站 #ai-history）的手寫資料。每次採用新預設就在 milestones 加一列（只收改成預設的改法），必要時在 series 加一點，然後跑 `npx tsx scripts/build_ai_history.ts` 產生 packages/web/src/data/aiHistory.json。數字照 optimization_loop.md 的回合紀錄抄，不估；沒有就寫 null。win 從改的那一方看（藍方列＝藍方三藍活、紅方列＝紅方勝率），task＝任務三藍率差，單位都是百分點。不寫玩家名字、不貼對話。",
+  "headline": [
+    { "key": "start", "label": "起點（第 0 回合，10/28）", "task": 32.5, "win": 13.9, "hit": 57.3, "sample": "全機器人局 1,500 局" },
+    { "key": "now", "label": "現在（第 54 回合後的預設，11/19）", "task": 54.0, "win": 32.3, "hit": 40.2, "sample": "全機器人局 5 萬局", "note": "任務三藍 54.0% 是第 53b 回合量的預設（30 萬局）；之後採用的改法各自只動 +0.1～+0.4pp" },
+    { "key": "human", "label": "真人局（全部）", "task": 54.5, "win": 30.7, "hit": 43.7, "sample": "真人 10 人局 2,275 局" },
+    { "key": "strong", "label": "真人強者桌", "task": 51.4, "win": 30.1, "hit": 41.5, "sample": "桌上平均 PR ≥ 55，319 局" }
+  ],
+  "series": [
+    { "round": "0", "side": null, "win": 13.9, "task": 32.5, "note": "起點" },
+    { "round": "1", "side": "blue", "win": 32, "task": 40, "note": "約 40% × 81%（對起點的紅方）" },
+    { "round": "2", "side": "red", "win": 29.9, "task": 41.3 },
+    { "round": "5", "side": "blue", "win": 28.4, "task": null },
+    { "round": "13", "side": "blue", "win": 27.5, "task": null },
+    { "round": "14", "side": "red", "win": 24.6, "task": null },
+    { "round": "15", "side": "blue", "win": 29.5, "task": null },
+    { "round": "16", "side": "red", "win": 25.7, "task": null },
+    { "round": "17", "side": "blue", "win": 26.2, "task": null },
+    { "round": "18", "side": "blue", "win": 30.2, "task": 55.5 },
+    { "round": "19", "side": "red", "win": 28.5, "task": 55.8 },
+    { "round": "23", "side": "red", "win": 27.2, "task": 56.1 },
+    { "round": "24", "side": "blue", "win": 32.5, "task": 62.5 },
+    { "round": "25", "side": "red", "win": 31.4, "task": 62 },
+    { "round": "26", "side": "blue", "win": 35.5, "task": 70 },
+    { "round": "27", "side": "red", "win": 28.2, "task": 58.1 },
+    { "round": "28", "side": "blue", "win": 29.4, "task": 60.5 },
+    { "round": "29", "side": "red", "win": 26.6, "task": 61 },
+    { "round": "30", "side": "blue", "win": 26.3, "task": 59.4 },
+    { "round": "32", "side": "blue", "win": 25.2, "task": 56.3, "note": "全面換成強者表（刻意接受的代價）" },
+    { "round": "33", "side": "blue", "win": 24.7, "task": 51.6, "note": "嚴格的貝氏投票準則（刻意接受的代價）" },
+    { "round": "34", "side": "blue", "win": 25.6, "task": 50.8 },
+    { "round": "36", "side": "blue", "win": 26.8, "task": 51.9 },
+    { "round": "37", "side": "blue", "win": 27.4, "task": 51.3 },
+    { "round": "38", "side": "blue", "win": 29.4, "task": 52.1 },
+    { "round": "39", "side": "blue", "win": 30.4, "task": 52.7 },
+    { "round": "43b", "side": "blue", "win": 31.2, "task": null },
+    { "round": "46", "side": "blue", "win": 31.0, "task": 52.8 },
+    { "round": "50", "side": "blue", "win": 31.8, "task": null },
+    { "round": "52", "side": "blue", "win": 31.8, "task": 54.0 },
+    { "round": "54", "side": "blue", "win": 32.3, "task": null, "note": "現在的預設" }
+  ],
+  "milestones": [
+    {
+      "id": "r54-merlin-known-red", "round": "54", "date": "2026-11-19", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "strategy", "highlight": true,
+      "what": "梅林在任務失敗之後，不再照派那支剛失敗、而且有他看得到的紅的隊。",
+      "why": "網站玩家回報看不懂；真人梅林這樣派只有約 3%，機器人 23–30%。失敗過的隊已經不是「成功的隊」，照派只是讓紅方繼續藏。",
+      "win": { "values": [0.16], "lo": 0.13, "hi": 0.19 }, "task": { "values": [0.14], "lo": 0.10, "hi": 0.17 },
+      "sample": "3 組 × 10 萬局確認"
+    },
+    {
+      "id": "r52-percival-tail-clean", "round": "52", "date": "2026-11-19", "side": "blue", "roles": ["percival"], "primary": "percival", "kind": "strategy",
+      "what": "第 1 局任務失敗時，派西在第 2 局最後一次提議（2-5）派自己判斷最乾淨的隊，不整隊照派前面的提議。",
+      "why": "真人強者派西在這一格照派前面的提議只有 9.5%，機器人 71%；改了之後真人局重播的全好隊 30.6% → 36.3%（真人派西 37.9%）。",
+      "win": { "values": [-0.03], "lo": -0.11, "hi": 0.05 }, "task": { "values": [0.09], "lo": -0.01, "hi": 0.20 },
+      "sample": "5 萬局", "note": "自我對打中性；因為在真人桌上更像強者，站長裁定採用。"
+    },
+    {
+      "id": "r51-leader-inside-black", "round": "51", "date": "2026-11-19", "side": "blue", "roles": ["loyal"], "primary": "loyal", "kind": "strategy", "highlight": true,
+      "what": "忠臣第 3–5 局在隊上、之後還會輪到自己當隊長時，比較願意對這隊投反對（內黑）。",
+      "why": "站長的觀察：還有機會自己派隊的人，內黑的傾向較高——自己之後能派更乾淨的隊，不必賭這一隊。",
+      "win": { "values": [0.28], "lo": 0.23, "hi": 0.33 }, "task": { "values": [0.36], "lo": 0.31, "hi": 0.42 },
+      "sample": "3 組 × 10 萬局確認", "note": "同一個想法的另一半「不會再當隊長的人外白」量到是負的（−0.78），不採用。"
+    },
+    {
+      "id": "r49-early-tail-white", "round": "49", "date": "2026-11-19", "side": "blue", "roles": ["loyal"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣在第 2 局就很確定最後一位隊長（尾家）是紅時，提早贊成前面的隊，不讓紅尾家拿到最後一次提議。",
+      "why": "機器人第 2 局提早通過只有 0.3%，真人 15.1%；改了之後各局面的結果分布更像真人與強者。",
+      "win": { "values": [0.03], "lo": -0.01, "hi": 0.07 }, "task": { "values": [0.06], "lo": 0.01, "hi": 0.10 },
+      "sample": "3 組 × 10 萬局確認", "note": "勝率中性、局面更像真人，站長裁定採用。"
+    },
+    {
+      "id": "r50-loyal-rationality", "round": "50", "date": "2026-11-19", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "讀人時，拿每個人的動作和「只看公開資訊的忠臣」在同一局面會怎麼做比；做了忠臣不會做的選擇（湖、尾派、派隊），就讀得比較像紅。",
+      "why": "站長：做出超前資訊或不合理選擇的人，越可能是紅方。權重用全部真人局擬合。",
+      "win": { "values": [0.56], "lo": 0.51, "hi": 0.61 }, "task": { "values": [0.80], "lo": 0.74, "hi": 0.86 },
+      "sample": "3 組 × 10 萬局確認"
+    },
+    {
+      "id": "r46-tail-red-no-vouch", "round": "46", "date": "2026-11-18", "side": "blue", "roles": ["reading", "loyal", "merlin", "percival"], "primary": "reading", "kind": "reading",
+      "what": "判斷尾家是不是紅時，不再採信「自己認為很可能是紅的持湖者」替尾家報的「藍」。",
+      "why": "診斷發現 1 家、0 家都是紅的局藍方輸太多：紅方持湖替隊友報藍被當真。",
+      "win": { "values": [0.012], "lo": 0.005, "hi": 0.019 }, "task": { "values": [0.019], "lo": 0.008, "hi": 0.030 },
+      "sample": "3 組 × 10 萬局確認", "note": "只改到約 0.4% 的局，效果很小但三組都正。"
+    },
+    {
+      "id": "r43b-loyal-opening", "round": "43b", "date": "2026-11-18", "side": "blue", "roles": ["loyal"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣第 1 局派隊的開局排法：第 2 家延伸第 1 家的隊，第 3 家起尊重前面的提議（百科 1AB／2BC、12A 等派法）。",
+      "why": "站長：「從第 3 家之後才開始考慮」；照百科的開局派法，和真人強者第 1 局的派隊更一致。",
+      "win": { "values": [0.27], "lo": 0.19, "hi": 0.34 }, "task": null,
+      "sample": "3 組 × 10 萬局確認"
+    },
+    {
+      "id": "r39-percival-thumbs-merlin-flow", "round": "39", "date": "2026-11-11", "side": "blue", "roles": ["percival", "merlin"], "primary": "blue", "kind": "strategy",
+      "what": "派西讀拇指改用真人牌譜擬合的模型，帶不帶拇指上隊照把握決定；梅林順著前面合理的提議派。",
+      "why": "先在真人決策點逐座位和強者比對再上對局；派西第 2 局判斷單一拇指的正確率 60% → 68%。",
+      "win": { "values": [0.77], "lo": 0.45, "hi": 1.09 }, "task": { "values": [0.3] },
+      "sample": "3 組 × 6000 組種子", "note": "刺中率 43.5% → 42.4%。"
+    },
+    {
+      "id": "r38-loyal-own-view", "round": "38", "date": "2026-11-10", "side": "blue", "roles": ["loyal"], "primary": "loyal", "kind": "strategy", "highlight": true,
+      "what": "忠臣挑隊時帶自己的判斷，不只照公開推理挑同一批人。",
+      "why": "刺客的候選名單常常只剩梅林：忠臣的隊都一樣，只有梅林與眾不同。真人強者的忠臣提議彼此重疊得少。",
+      "win": { "values": [1.50], "lo": 0.18, "hi": 2.82 }, "task": null,
+      "sample": "6000 組種子"
+    },
+    {
+      "id": "r38-vote-rules", "round": "38", "date": "2026-11-10", "side": "blue", "roles": ["loyal", "merlin", "percival"], "primary": "blue", "kind": "strategy",
+      "what": "四條投票規則：梅林在隊上用自己的視角投票、第 4 局留下成功隊的隊、第 4 次提議與尾家的票、照派成功隊時贊成。",
+      "why": "把強者和機器人在投票上的差異一條一條做成規則（強者會在這些局面開異常票）。",
+      "win": { "values": [1.03], "lo": 0.58, "hi": 1.49 }, "task": null,
+      "sample": "6000 組種子（在上一列之上）", "note": "兩列合起來 +2.68 [+1.91, +3.45]、任務三藍 51.6% → 52.1%、刺中率 48.1% → 43.5%。"
+    },
+    {
+      "id": "r37-loyal-r2-view", "round": "37", "date": "2026-11-10", "side": "blue", "roles": ["loyal", "percival"], "primary": "loyal", "kind": "strategy",
+      "what": "第 1 局失敗後，忠臣（和派西）第 2 局的提議帶自己的視角，不完全照公開推理。",
+      "why": "站長：梅林太好抓的根因，是忠臣接受、釋放、傳遞自己視角的能力太弱。",
+      "win": { "values": [0.88], "lo": 0.51, "hi": 1.24 }, "task": { "values": [-0.2] },
+      "sample": "3 組 × 6000 組種子", "note": "刺中率 48.4% → 46.6%：勝率來自梅林比較不好抓。"
+    },
+    {
+      "id": "r36-recursive-blend", "round": "36", "date": "2026-11-10", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading",
+      "what": "挑隊時，把「遞迴讀人」（每個人的動作當成他照自己當時的資訊做的決定來讀）和原本的讀法各半混合。",
+      "why": "站長：讀人要沿著資訊流遞迴修正。只用遞迴的讀法在真人局挑的隊比較髒，各半最穩。",
+      "win": { "values": [0.98], "lo": 0.70, "hi": 1.27 }, "task": { "values": [0.9] },
+      "sample": "3 組 × 6000 組種子"
+    },
+    {
+      "id": "r34-loyal-flow", "round": "34", "date": "2026-11-09", "side": "blue", "roles": ["loyal"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣早期的提議照百科〈解讀前人派票〉回應上一個提議：上一任隊長看起來壞就修正、看起來好就尊重，不再一味延伸或照派。",
+      "why": "真人強者第 1、2 局照派這一局提議的只有 6%，機器人忠臣 31%。",
+      "win": { "values": [1.15], "lo": 0.21, "hi": 2.09 }, "task": null,
+      "sample": "3 組 × 2000 組種子", "note": "刺中率 52.0% → 49.5%。"
+    },
+    {
+      "id": "r34-merlin-fatal-r4", "round": "34", "date": "2026-11-09", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "fix",
+      "what": "梅林判斷「這一票會不會當場輸」時，第 4 局（要兩張失敗）要有兩個以上看得到的紅才算。",
+      "why": "原本隊上一個紅就內黑，變成只有梅林在內黑，刺客一讀就中（模型錯誤）。",
+      "win": { "values": [0.10], "lo": -0.10, "hi": 0.30 }, "task": null,
+      "sample": "3 組 × 2000 組種子"
+    },
+    {
+      "id": "r33-merlin-reuse", "round": "33", "date": "2026-11-09", "side": "blue", "roles": ["merlin", "loyal", "percival"], "primary": "merlin", "kind": "strategy", "highlight": true,
+      "what": "梅林可以照派成功過的隊，即使隊上有他看得到的紅；好人第 5 局不再照派。",
+      "why": "站長：照派成功的隊是常態，梅林不照派反而露餡。改了之後「只剩梅林沒派過看得到的紅」的刺殺 19% → 14%。",
+      "win": { "values": [1.73], "lo": 1.34, "hi": 2.12 }, "task": { "values": [-0.1] },
+      "sample": "3 組 × 2000 組種子", "note": "刺中率 54.8% → 51.5%；同時撤回第 28 回合的「梅林第 2 局不照派有紅的成功隊」。"
+    },
+    {
+      "id": "r33-bayes-vote", "round": "33", "date": "2026-11-09", "side": "blue", "roles": ["loyal", "percival", "merlin"], "primary": "blue", "kind": "reading",
+      "what": "內黑／外白改照寫死的嚴格貝氏準則：估這隊有紅的機率夠高才在隊上投反對、夠乾淨才在隊外贊成。",
+      "why": "站長：判斷更準比較重要，允許自我對打小幅下降；和強者同一局面的在隊上投票一致度 54.1% → 58.8%。",
+      "win": { "values": [-0.80], "lo": -1.33, "hi": -0.27 }, "task": null,
+      "sample": "3 組 × 2000 組種子", "note": "刻意接受的代價。"
+    },
+    {
+      "id": "r32-strong-tables", "round": "32", "date": "2026-11-05", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "讀人模型全面換成用真人強者牌譜擬合的表（派隊、投票都換）。",
+      "why": "站長：「全面換成強者真人表 判斷更準比較重要 勝率應該從其他玩法或策略上調整」。真人局的校準明顯變準。",
+      "win": { "values": [-1.05], "lo": -1.85, "hi": -0.25 }, "task": { "values": [-3.6] },
+      "sample": "3 組 × 2000 組種子", "note": "刻意接受的代價：機器人互打時讀機器人比較不準，但讀真人更準。"
+    },
+    {
+      "id": "r30-lead-strong", "round": "30", "date": "2026-11-05", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading",
+      "what": "挑隊時先改用強者表讀人（第 32 回合再擴大到投票）。",
+      "why": "讀人模型往真人強者收斂；派西在真人局的決策分數明顯變好。",
+      "win": { "values": [-0.43], "lo": -1.29, "hi": 0.43 }, "task": null,
+      "sample": "1 萬組種子", "note": "中性。"
+    },
+    {
+      "id": "r29-assassin-reuse12", "round": "29", "date": "2026-11-04", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy", "highlight": true,
+      "what": "刺客：第 2 局「梅林該照派卻沒照派」的讀法用自我對打資料重新擬合。",
+      "why": "照不照派是梅林最常露出的破綻；資料上交叉驗證刺中率 +5.4pp。",
+      "win": { "values": [3.26], "lo": 2.94, "hi": 3.58 }, "task": { "values": [0] },
+      "sample": "2 組 × 6000 組種子", "note": "刺中率約 +5.3pp，任務三藍不變。"
+    },
+    {
+      "id": "r29-red-fixes", "round": "29", "date": "2026-11-04", "side": "red", "roles": ["mordred", "red"], "primary": "red", "kind": "fix",
+      "what": "紅方已兩勝時，隊上互相認識的紅都出失敗；莫德雷德在自己一張失敗就夠的隊上投贊成。",
+      "why": "基本一致性：機器人原本有時放掉能直接贏的任務。",
+      "win": { "values": [-0.1], "lo": -0.6, "hi": 0.4 }, "task": null,
+      "sample": "2000 組種子", "note": "中性（數字是莫德雷德那條；另一條逐局相同）。"
+    },
+    {
+      "id": "r28-blue-package", "round": "28", "date": "2026-11-04", "side": "blue", "roles": ["merlin", "percival", "loyal"], "primary": "blue", "kind": "strategy",
+      "what": "梅林／派西照公開視角也會提早贊成前面的隊（尾家外白），忠臣第 1–3 次提議也可以；隊外投反對的門檻 0.85 → 0.7；梅林第 2 局不照派有他看得到的紅的成功隊（第 33 回合撤回）。",
+      "why": "拆解刺中率為什麼從 48.8% 升到 53.9%；機器人隊外贊成太少（6.4%，強者 14.5%）。",
+      "win": { "values": [1.55], "lo": 1.16, "hi": 1.94 }, "task": { "values": [2.3] },
+      "sample": "3 組 × 6000 組種子"
+    },
+    {
+      "id": "r27-red-hide-human", "round": "27", "date": "2026-11-04", "side": "red", "roles": ["assassin", "morgana", "mordred"], "primary": "red", "kind": "strategy", "highlight": true,
+      "what": "紅方第 1、2 局照真人強者的比例藏牌（出成功）。",
+      "why": "往強者紅方收斂：機器人紅方的任務牌和強者差最多。",
+      "win": { "values": [6.61], "lo": 5.88, "hi": 7.33 }, "task": { "values": [-6] },
+      "sample": "2 組 × 6000 組種子", "note": "刺中率也約 +6pp（梅林更難藏）。"
+    },
+    {
+      "id": "r27-red-hide-r4-solo", "round": "27", "date": "2026-11-04", "side": "red", "roles": ["assassin", "morgana", "mordred"], "primary": "red", "kind": "strategy",
+      "what": "第 4 局隊上只有一個紅時藏牌（第 4 局要兩張失敗，一張沒用）。",
+      "why": "一張失敗牌只會暴露自己，不會讓任務失敗。",
+      "win": { "values": [0.88], "lo": 0.70, "hi": 1.05 }, "task": null,
+      "sample": "2 組 × 6000 組種子"
+    },
+    {
+      "id": "r27-oberon-self", "round": "27", "date": "2026-11-04", "side": "red", "roles": ["oberon"], "primary": "oberon", "kind": "fix",
+      "what": "奧伯倫在隊上時，把自己算進隊上的紅來投票。",
+      "why": "基本一致性：原本奧伯倫在自己的隊上投票自相矛盾。",
+      "win": { "values": [-0.2] }, "task": null,
+      "sample": "篩選", "note": "中性。"
+    },
+    {
+      "id": "r26-belief-calibration", "round": "26", "date": "2026-11-04", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "信念校準：投票、派隊的證據打折（取次方），後驗不再過度自信；派隊、投票、湖都用同一個後驗，好人投票門檻跟著重定。",
+      "why": "真人局的校準顯示原本太武斷；站長：所有人的動作都應該建立在同一套資訊流上。",
+      "win": { "values": [4.09], "lo": 3.34, "hi": 4.85 }, "task": null,
+      "sample": "3 組 × 6000 組種子", "note": "這一回合藍方三藍活約 30.6% → 35.5%（三紅率約 39% → 30%），是單一改法最大的一次。"
+    },
+    {
+      "id": "r26-loyal-tail-white", "round": "26", "date": "2026-11-04", "side": "blue", "roles": ["loyal"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣第 3 局起很確定尾家是紅時，提早贊成前面的隊（尾家外白）。",
+      "why": "不讓紅色的尾家拿到最後一次提議；強者會這樣做。",
+      "win": { "values": [0.79], "lo": 0.57, "hi": 1.01 }, "task": null,
+      "sample": "3 組 × 6000 組種子"
+    },
+    {
+      "id": "r25-assassin-reuse11", "round": "25", "date": "2026-11-04", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy",
+      "what": "刺客：「梅林該照派卻沒照派」的讀法再擬合一次。",
+      "why": "藍方改了照派的方式之後，舊的係數讀錯。",
+      "win": { "values": [0.84], "lo": 0.62, "hi": 1.06 }, "task": { "values": [0] },
+      "sample": "2 組 × 6000 組種子", "note": "刺中率約 +1.3pp。"
+    },
+    {
+      "id": "r25-red-fixes", "round": "25", "date": "2026-11-04", "side": "red", "roles": ["oberon", "red"], "primary": "red", "kind": "fix",
+      "what": "三條紅方一致性修正：奧伯倫在藍方兩勝時不替別人外白、紅方持湖者言行一致、隊長不在自己的隊上也不投自己的隊反對。",
+      "why": "基本一致性：這些動作原本會直接送藍方資訊。",
+      "win": null, "task": null,
+      "sample": "篩選", "note": "三條都中性（+0.4／−0.1／+0.1，區間都含 0）。"
+    },
+    {
+      "id": "r24-red-alone-cells", "round": "24", "date": "2026-11-03", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "讀紅方第 3 局起在隊上的票時，分開看「隊上有沒有其他紅」。",
+      "why": "紅方隊上只有自己和有隊友時投法不同，混在一起讀會讀錯。",
+      "win": { "values": [2.16], "lo": 1.75, "hi": 2.57 }, "task": { "values": [4] },
+      "sample": "3 組 × 6000 組種子"
+    },
+    {
+      "id": "r24-good-reuse-exact", "round": "24", "date": "2026-11-03", "side": "blue", "roles": ["loyal", "percival"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣／派西照派上一局成功的隊，不把自己換進去。",
+      "why": "照派就照整隊；把自己換進去會拆掉已經成功過的組合。",
+      "win": { "values": [1.29], "lo": 1.03, "hi": 1.56 }, "task": null,
+      "sample": "3 組 × 6000 組種子"
+    },
+    {
+      "id": "r24-leader-self-approve", "round": "24", "date": "2026-11-03", "side": "blue", "roles": ["loyal", "percival", "merlin"], "primary": "blue", "kind": "fix",
+      "what": "隊長一定贊成自己派的隊（自己的隊被照派也贊成）。",
+      "why": "基本一致性：原本藍方隊長有 11.6% 自派自黑。",
+      "win": { "values": [-0.2], "lo": -1.1, "hi": 0.6 }, "task": null,
+      "sample": "篩選", "note": "中性。"
+    },
+    {
+      "id": "r23-assassin-doomed", "round": "23", "date": "2026-11-03", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy",
+      "what": "刺客：第 1、2 局注定被否決、卻放了看得到的紅的提議，嫌疑排到第二層（不再直接當成「不是梅林」）。",
+      "why": "反制梅林在注定被否決的提議裡派拇指躲刺。",
+      "win": { "values": [2.02], "lo": 1.66, "hi": 2.37 }, "task": { "values": [0] },
+      "sample": "2 組 × 6000 組種子", "note": "刺中率約 +3～+4pp；照派讀法的擬合在其上再 +0.4～+0.6。"
+    },
+    {
+      "id": "r19-assassin-reuse", "round": "19", "date": "2026-11-02", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy",
+      "what": "刺客：照派成功的隊不算證據，另外讀「梅林常態下該照派、卻沒照派」的人。",
+      "why": "藍方開始照派之後，照派本身已經不是梅林的記號，「該照派卻不照派」才是。",
+      "win": { "values": [0.6], "lo": 0.3, "hi": 0.9 }, "task": { "values": [0] },
+      "sample": "2 組 × 2000 組種子", "note": "再加「沒照派」的讀法：+0.35／+0.27。"
+    },
+    {
+      "id": "r18-merlin-reuse3", "round": "18", "date": "2026-11-01", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "strategy",
+      "what": "梅林第 3 局起，非關鍵局也照派最近一次成功的隊。",
+      "why": "站長：照派成功的隊算順應局勢；不照派的梅林最顯眼。",
+      "win": { "values": [1.2, 0.8] }, "task": null,
+      "sample": "2 組 × 2000 組種子", "note": "刺中率約 −2pp。"
+    },
+    {
+      "id": "r18-key-vote-cells", "round": "18", "date": "2026-11-01", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading",
+      "what": "關鍵局（紅方已兩勝）的票分開讀。",
+      "why": "關鍵局大家的投法不同，和平常的票混在一起讀會讀錯。",
+      "win": { "values": [1.5, 1.3] }, "task": null,
+      "sample": "2 組 × 6000 組種子"
+    },
+    {
+      "id": "r18-clean-vote-045", "round": "18", "date": "2026-11-01", "side": "blue", "roles": ["loyal", "percival"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣／派西第 3 局起，估這隊乾淨的機率低於 45% 就投反對（原本 25%）。",
+      "why": "門檻重量：0.45 比 0.25 好（第 26 回合信念校準之後再改成 30%）。",
+      "win": { "values": [1.1, 1.7] }, "task": null,
+      "sample": "4000／6000 組種子"
+    },
+    {
+      "id": "r17-merlin-reuse1", "round": "17", "date": "2026-10-31", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "strategy",
+      "what": "梅林第 2 局：上一局成功的隊裡有他看得到的紅（第 1 局藏牌的刺客），也照派那一隊。",
+      "why": "站長：任務成功後照派是常態；梅林可以隨局勢派拇指，不能為了躲刺。",
+      "win": { "values": [1.1, 1.1] }, "task": { "values": [-0.6] },
+      "sample": "2 組 × 2000 組種子", "note": "刺中率約 −2.5pp。"
+    },
+    {
+      "id": "r16-red-key-white", "round": "16", "date": "2026-10-31", "side": "red", "roles": ["red"], "primary": "red", "kind": "strategy",
+      "what": "紅方在關鍵隊（隊上有隊友、紅方已兩勝）的隊外贊成，只在這隊過得了時才開，否則照忠臣投反對。",
+      "why": "紅方的關鍵隊外白有八成投給本來就過不了的隊，只是把自己標成紅。",
+      "win": { "values": [3.0, 3.6, 2.4] }, "task": { "values": [-7] },
+      "sample": "3 組 × 2000 組種子"
+    },
+    {
+      "id": "r16-assassin-hides-r1", "round": "16", "date": "2026-10-31", "side": "red", "roles": ["assassin", "morgana"], "primary": "assassin", "kind": "strategy",
+      "what": "第 1 局只有刺客藏牌，莫甘娜照真人的習慣出失敗。",
+      "why": "拆解發現藏牌抬高刺中率主要靠刺客：刺客藏牌比莫甘娜藏牌值錢。",
+      "win": { "values": [2.6, 2.1, 2.8] }, "task": { "values": [-5] },
+      "sample": "3 組 × 2000 組種子", "note": "第 27 回合起改照真人強者的比例藏牌。"
+    },
+    {
+      "id": "r15-refit-tables", "round": "15", "date": "2026-10-31", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading",
+      "what": "藍方的讀人表照紅方的新打法（第 1 局藏牌之後）重新擬合。",
+      "why": "紅方第 1 局開始藏牌後，舊表把帶藏牌者的隊讀得太乾淨（有藏牌者的局刺中率 79%）。",
+      "win": { "values": [4.0, 4.9, 4.5] }, "task": { "values": [10] },
+      "sample": "3 組 × 2000 組種子"
+    },
+    {
+      "id": "r14-red-hide-r1", "round": "14", "date": "2026-10-31", "side": "red", "roles": ["assassin", "morgana"], "primary": "red", "kind": "strategy",
+      "what": "第 1 局刺客／莫甘娜是隊上唯一看得到的紅時，出成功藏身。",
+      "why": "藍方以為第 1 局一個紅的隊幾乎都會失敗，藏過的紅就被讀成乾淨。",
+      "win": { "values": [3.4, 3.1, 3.0] }, "task": { "values": [-1] },
+      "sample": "3 組 × 2000 組種子", "note": "刺中率約 +5pp；第 27 回合起改照真人強者的比例藏牌。"
+    },
+    {
+      "id": "r13-tail-key-vote", "round": "13", "date": "2026-10-31", "side": "blue", "roles": ["loyal", "percival"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣／派西不在隊上時預設投反對（只為洗尾或拿三藍才外白）；紅方已兩勝時，估這隊乾淨機率低於 50% 就投反對。",
+      "why": "強桌差距：真人強者不在隊上很少贊成，關鍵局更嚴。",
+      "win": { "values": [4.3, 2.8, 2.9] }, "task": null,
+      "sample": "3 組 × 2000 組種子", "note": "三紅率 −3～−5pp、刺中率 −2～−4pp。"
+    },
+    {
+      "id": "r12-assassin-vote-model", "round": "12", "date": "2026-10-31", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy",
+      "what": "刺客照梅林的新票型讀票：在隊上贊成沒有資訊，只看關鍵局的贊成和對有紅的隊的外白。",
+      "why": "梅林改成照忠臣投票之後，舊的讀法讀不到東西。",
+      "win": { "values": [4.3, 3.3] }, "task": null,
+      "sample": "2 組 × 2000 組種子", "note": "刺中率 43–44% → 50–52%。"
+    },
+    {
+      "id": "r12-mordred-hide-r1", "round": "12", "date": "2026-10-31", "side": "red", "roles": ["mordred"], "primary": "mordred", "kind": "strategy",
+      "what": "第 1 局莫德雷德單獨在隊上時出成功藏身。",
+      "why": "藍方讀任務牌時以為紅方從不藏，藏過的莫德雷德之後被當成乾淨的人帶上隊；梅林看不到他，也擋不了。",
+      "win": { "values": [1.4, 1.5] }, "task": null,
+      "sample": "2 組 × 2000 組種子", "note": "第 27 回合起第 1、2 局藏牌改照真人強者的比例。"
+    },
+    {
+      "id": "r11-merlin-normal-vote", "round": "11", "date": "2026-10-30", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "strategy", "highlight": true,
+      "what": "梅林照忠臣的票型投票：在隊上照常贊成、不在隊上不外白有他看得到的紅的隊、關鍵局可以內黑。",
+      "why": "梅林的票太特別，刺客一讀就中。",
+      "win": { "values": [3.2, 2.9] }, "task": null,
+      "sample": "2 組 × 2000 組種子", "note": "刺中率 49% → 42.5%。"
+    },
+    {
+      "id": "r10-assassin-merlin-votes", "round": "10", "date": "2026-10-30", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy",
+      "what": "刺客讀梅林的投票：看得到紅的隊投反對、乾淨的隊投贊成的人比較像梅林。",
+      "why": "百科〈刺殺梅林〉的票型。",
+      "win": { "values": [1.4, 1.6] }, "task": null,
+      "sample": "2 組種子確認"
+    },
+    {
+      "id": "r8-red-normal-vote", "round": "8", "date": "2026-10-30", "side": "red", "roles": ["red"], "primary": "red", "kind": "strategy",
+      "what": "紅方不在隊上時照公開視角的忠臣投票，只在決定三紅／三藍時照紅方利益投。",
+      "why": "強桌差距：機器人紅方的票型太好認。",
+      "win": { "values": [1.8, 2.2] }, "task": null,
+      "sample": "2 組種子確認"
+    },
+    {
+      "id": "r7-bot-tables", "round": "7", "date": "2026-10-30", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "藍方改用照對手實際打法擬合的概似表，讀派隊、投票、任務牌。",
+      "why": "照對手實際的做法讀，逼紅方偽裝。",
+      "win": { "values": [9.0, 8.3] }, "task": { "values": [14.0] },
+      "sample": "2 組種子確認", "note": "三紅率 58.6% → 44.6%（真人強桌 44.7%）。"
+    },
+    {
+      "id": "r6-assassin-lead-read", "round": "6", "date": "2026-10-30", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy", "highlight": true,
+      "what": "刺客讀派隊的「資訊超前」：誰派的隊乾淨得不合理，誰就像梅林。",
+      "why": "百科〈刺殺梅林〉評五顆星的讀法。",
+      "win": { "values": [5.9, 5.1] }, "task": null,
+      "sample": "2 組種子確認", "note": "刺中率 37% → 50%。"
+    },
+    {
+      "id": "r5-blue-package", "round": "5", "date": "2026-10-29", "side": "blue", "roles": ["loyal", "merlin"], "primary": "blue", "kind": "strategy",
+      "what": "忠臣：信念算進「藍方裡有一個梅林」、當隊長派自己判斷最乾淨的隊、第 1 局照判讀派；梅林照忠臣的方式派隊，不放他看得到的紅。",
+      "why": "站長：梅林應該隨局勢跟場上的忠臣做一樣的事。",
+      "win": { "values": [6.2, 6.2] }, "task": { "values": [14] },
+      "sample": "2 組種子確認", "note": "梅林那一條單獨 +1.1／+0.9（含 0），整包採用。"
+    },
+    {
+      "id": "r4-red-clean-look", "round": "4", "date": "2026-10-29", "side": "red", "roles": ["red"], "primary": "red", "kind": "strategy",
+      "what": "紅隊長站在藍方的角度，挑「看起來最乾淨、紅方剛好夠失敗」的隊；適時多帶一個隊友。",
+      "why": "反制藍方「看機率投反對」：要讓藍方估起來乾淨。",
+      "win": { "values": [5.5, 5.1] }, "task": null,
+      "sample": "2 組種子確認"
+    },
+    {
+      "id": "r4-red-rank-order", "round": "4", "date": "2026-10-29", "side": "red", "roles": ["red"], "primary": "red", "kind": "fix",
+      "what": "出任務時紅方照位階分工出失敗牌，不再三個紅一起出失敗。",
+      "why": "站長 4/24 的裁定原本只在備援流程，正式流程漏了。",
+      "win": { "values": [5.2], "lo": 4.0, "hi": 6.4 }, "task": { "values": [-5.8] },
+      "sample": "篩選"
+    },
+    {
+      "id": "r3-clean-vote", "round": "3", "date": "2026-10-29", "side": "blue", "roles": ["loyal", "percival"], "primary": "loyal", "kind": "strategy",
+      "what": "忠臣／派西第 3 局起，估「這隊沒有紅」的機率低於 25% 就投反對；派西照「兩根拇指一好一壞」讀。",
+      "why": "好人太容易放行：第 3 局起紅隊長派的隊全都有紅卻常常通過（真人走到第 5 次提議 40%、機器人 2%）。",
+      "win": { "values": [5.4], "lo": 3.7, "hi": 7.1 }, "task": { "values": [6.0] },
+      "sample": "換種子確認", "note": "刺中率 28.7% → 26.3%。"
+    },
+    {
+      "id": "r2-assassin-ignore-doomed", "round": "2", "date": "2026-10-28", "side": "red", "roles": ["assassin"], "primary": "assassin", "kind": "strategy",
+      "what": "刺客不把第 1、2 局注定被否決的提議算進「派過看得到的紅」。",
+      "why": "反制梅林派拇指躲刺（站長同意修改刺殺裁定）。",
+      "win": { "values": [4.0] }, "task": null,
+      "sample": "1.5 萬局篩選", "note": "刺中率 19% → 29%。"
+    },
+    {
+      "id": "r1-bayes-belief", "round": "1", "date": "2026-10-28", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "藍方改用貝氏信念讀人：算每個人是紅的機率，取代原本的嫌疑分數。",
+      "why": "嫌疑分數校準太差；貝氏讓任務、刺殺兩邊一起升。",
+      "win": { "values": [7.2, 8.9, 9.9, 11.4] }, "task": { "values": [14.1] },
+      "sample": "4 組 × 1.5 萬局", "note": "三紅率約 67.8% → 53.7%。"
+    },
+    {
+      "id": "r1-merlin-doomed-red", "round": "1", "date": "2026-10-28", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "strategy",
+      "what": "梅林在注定被否決的提議裡放他看得到的紅（派拇指），替自己躲刺。",
+      "why": "有代價的戰術：任務小降，但刺客很難找到梅林。",
+      "win": { "values": [8.3], "lo": 7.4, "hi": 9.3 }, "task": { "values": [-2.4] },
+      "sample": "1.5 萬局", "note": "刺中率 56.1% → 21.5%；第 2 回合起刺客學會反制。"
+    }
+  ]
+}
