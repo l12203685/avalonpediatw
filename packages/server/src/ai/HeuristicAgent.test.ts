@@ -2181,7 +2181,8 @@ describe('HeuristicAgent · team-aware vote rewire (Edward 2026-04-30)', () => {
     });
     // R4 of a 5-player game needs one fail: the same must-fail team as above (batch 1D gate).
     expect(approveRate(obs, 20)).toBe(0);
-    const rate = approveRate(obs, 500, GATES_OFF);
+    // Round 56b: the pyramid thresholds under test predate the leader-viewpoint reading (V3P, default since 2026-11-20).
+    const rate = approveRate(obs, 500, { ...GATES_OFF, viewpoint53: 0, viewpointPow53: 0 });
     // Mid-clean team, all members under TEAM_RED_MID_MAX → approve.
     expect(rate).toBeGreaterThan(0.85);
   });

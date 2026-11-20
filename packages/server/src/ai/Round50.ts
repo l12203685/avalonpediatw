@@ -135,9 +135,13 @@ function loyalSeatView(obs: PlayerObservation, seat: string, round: number, vote
 }
 
 let baseOpts: BayesOptions | null = null;
-/** 預設選項的後驗（本回合的開關都關；`publicLoyalView` 讓挑隊自己的先驗不作用）。 */
+/**
+ * 預設選項的後驗（本回合的開關都關；`publicLoyalView` 讓挑隊自己的先驗不作用）。
+ * 第 56b 回合：隊長視角讀法（V3P，`viewpoint53`／`viewpointPow53`）2026-11-20 改成預設，但公開視角的忠臣模型（`W50` 的殘差權重）是在沒有它的讀法上擬合、
+ * 也是在沒有它的時候確認的（藍方讀人與紅方 `assassinDerivability50` 共用），所以這裡照舊不讀。
+ */
 function defaultOpts(): BayesOptions {
-  if (!baseOpts) baseOpts = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, loyalRationality50: 0, lakePickSuspicion50: 0 } as AgentTuning);
+  if (!baseOpts) baseOpts = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, viewpointPow53: 0 } as AgentTuning);
   return baseOpts;
 }
 

@@ -2,7 +2,7 @@
   "_readme": "百科AI 優化歷程頁（網站 #ai-history）的手寫資料。每次採用新預設就在 milestones 加一列（只收改成預設的改法），必要時在 series 加一點，然後跑 `npx tsx scripts/build_ai_history.ts` 產生 packages/web/src/data/aiHistory.json。數字照 optimization_loop.md 的回合紀錄抄，不估；沒有就寫 null。win 從改的那一方看（藍方列＝藍方三藍活、紅方列＝紅方勝率），task＝任務三藍率差，單位都是百分點。不寫玩家名字、不貼對話。真人局／高端桌的對照不寫在這裡：頁面在瀏覽器裡用數據分析同一份資料（/api/analysis/games、陣容強度 S）即時算。",
   "headline": [
     { "key": "start", "label": "起點（第 0 回合，10/28）", "task": 32.5, "win": 13.9, "hit": 57.3, "sample": "全機器人局 1,500 局" },
-    { "key": "now", "label": "現在（第 54 回合後的預設，11/19）", "task": 54.0, "win": 32.3, "hit": 40.2, "sample": "全機器人局 5 萬局", "note": "任務三藍 54.0% 是第 53b 回合量的預設（30 萬局）；之後採用的改法各自只動 +0.1～+0.4pp" }
+    { "key": "now", "label": "現在（第 56b 回合後的預設，11/20）", "task": 61.9, "win": 36.7, "hit": 40.7, "sample": "全機器人局 4.9 萬局（第 56b 回合的新預設）" }
   ],
   "series": [
     { "round": "0", "side": null, "win": 13.9, "task": 32.5, "note": "起點" },
@@ -35,9 +35,17 @@
     { "round": "46", "side": "blue", "win": 31.0, "task": 52.8 },
     { "round": "50", "side": "blue", "win": 31.8, "task": null },
     { "round": "52", "side": "blue", "win": 31.8, "task": 54.0 },
-    { "round": "54", "side": "blue", "win": 32.3, "task": null, "note": "現在的預設" }
+    { "round": "54", "side": "blue", "win": 32.3, "task": null },
+    { "round": "56b", "side": "blue", "win": 36.7, "task": 61.9, "note": "現在的預設" }
   ],
   "milestones": [
+    {
+      "id": "r56b-leader-viewpoint", "round": "56b", "date": "2026-11-20", "side": "blue", "roles": ["reading"], "primary": "reading", "kind": "reading", "highlight": true,
+      "what": "藍方讀每一次提議時，站在「那個位置、只有當時公開資訊的忠臣」會怎麼派的角度讀隊長（隊長視角讀法，整項打 0.5 次方）。",
+      "why": "站長選「勝率優先」：自我對打勝率是到目前最大的單一改法；代價是機器人桌的結果分布離真人桌更遠，所以跟真人打的策略層不用它。",
+      "win": { "values": [5.11], "lo": 4.94, "hi": 5.29 }, "task": { "values": [7.62], "lo": 7.44, "hi": 7.81 },
+      "sample": "3 組 × 10 萬局確認", "note": "第 53b 回合做出來，在現行預設上重跑確認後改成預設；分局面距離變大（第 1F 節不過），站長知情採用。"
+    },
     {
       "id": "r54-merlin-known-red", "round": "54", "date": "2026-11-19", "side": "blue", "roles": ["merlin"], "primary": "merlin", "kind": "strategy", "highlight": true,
       "what": "梅林在任務失敗之後，不再照派那支剛失敗、而且有他看得到的紅的隊。",
