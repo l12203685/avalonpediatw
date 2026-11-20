@@ -11,6 +11,7 @@
  */
 import { RED_ROLES } from './constants';
 import type { Game, GamesDatasetConfig } from './dataset';
+import { computeForcedP5Feature, type ForcedP5Feature } from './featureL139';
 import { pyFormatFixed, rate, rnd1 } from './pyround';
 
 /** generate_cache.LAKE_LABELS：文字記錄第 1 / 2 / 3 條湖行。 */
@@ -70,11 +71,11 @@ export interface LakeClaimFeature {
   computedAt: string;
 }
 
-/** featureStudies 區塊（L141 之外的研究是站長電腦沿用的，引擎不重算，原樣帶過去）。 */
+/** featureStudies 區塊（L141、L139 之外的研究是站長電腦沿用的，引擎不重算，原樣帶過去）。 */
 export interface FeatureStudiesSection {
   generatedAt: string;
   sampleSize: { games: number; lakeLinks: number } & Record<string, unknown>;
-  features: Array<LakeClaimFeature | ({ loopId: string } & Record<string, unknown>)>;
+  features: Array<LakeClaimFeature | ForcedP5Feature | ({ loopId: string } & Record<string, unknown>)>;
   [key: string]: unknown;
 }
 
@@ -218,21 +219,26 @@ export function computeLakeClaimFeature(games: readonly Game[], config: GamesDat
 
 /**
  * generate_cache.refresh_feature_studies：`previous`（快取 / API 的 featureStudies；其他研究的結論已由產生器改寫過，
- * annotate_feature_studies 是冪等的，這裡不再做）的 L141 換成 `feature`（沒有就插在最前面），generatedAt = asOf，
- * sampleSize 的 games / lakeLinks 換成這組局的。L136 / L139 / L142 / L143 原樣（不是從資料集算的，篩選時標
- * 「未套用篩選」）。sampleSize.games = feature.sampleSize.games（Python 的 len(games)）。
+ * annotate_feature_studies 是冪等的，這裡不再做）的 L141 換成 `feature`（沒有就插在最前面），`others` 裡每項
+ * 從牌譜重算的研究（L139，2026-11-20 起）原位替換、沒有就接在最後；generatedAt = asOf，sampleSize 的
+ * games / lakeLinks 換成這組局的。L136 / L142 / L143 原樣（不是從資料集算的，篩選時標「未套用篩選」）。
+ * sampleSize.games = feature.sampleSize.games（Python 的 len(games)）。
  */
 export function refreshFeatureStudies(
   previous: Partial<FeatureStudiesSection> | null | undefined,
   feature: LakeClaimFeature,
   asOf: string,
+  others: readonly ForcedP5Feature[] = [],
 ): FeatureStudiesSection {
   const section: Record<string, unknown> = previous ? { ...previous } : {};
   const features = (Array.isArray(section.features) ? section.features : [])
     .filter((f): f is FeatureStudiesSection['features'][number] => Boolean(f) && typeof f === 'object' && !Array.isArray(f));
-  const index = features.findIndex((f) => f.loopId === feature.loopId);
-  if (index < 0) features.unshift(feature);
-  else features[index] = feature;
+  for (const live of [feature, ...others]) {
+    const index = features.findIndex((f) => f.loopId === live.loopId);
+    if (index >= 0) features[index] = live;
+    else if (live === feature) features.unshift(live);
+    else features.push(live);
+  }
   const sample = { ...((section.sampleSize as Record<string, unknown> | undefined) ?? {}) };
   sample.games = feature.sampleSize.games;
   sample.lakeLinks = feature.sampleSize.links;
@@ -247,12 +253,15 @@ export function refreshFeatureStudies(
   };
 }
 
-/** 篩選後的 featureStudies（`previous` = API 的區塊；沒有時只有 L141，與產生器沒有舊快取時相同）。 */
+/**
+ * 篩選後的 featureStudies：L141 與 L139 從這組局重算（`previous` = API 的區塊；沒有時只有 L141、L139，
+ * 與產生器沒有舊快取時相同）。
+ */
 export function computeFeatureStudies(
   games: readonly Game[],
   config: GamesDatasetConfig,
   asOf: string,
   previous?: Partial<FeatureStudiesSection> | null,
 ): FeatureStudiesSection {
-  return refreshFeatureStudies(previous, computeLakeClaimFeature(games, config, asOf), asOf);
+  return refreshFeatureStudies(previous, computeLakeClaimFeature(games, config, asOf), asOf, [computeForcedP5Feature(games, asOf)]);
 }
