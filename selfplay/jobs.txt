@@ -1,4 +1,4 @@
-# 標籤|開關|種子|起始局號|局數  （第 56 回合篩選：MJ5／MJ8 = missionJoint56=0.5／0.8、G15 = goLike56=15（忠臣＋派西、第 1、2 局）、G3 = 忠臣、G12 = 派西、MR = missionRole56=1；423001 第 0–49,999 局 detail=1，和 r55-screen 的 BASE55（現行預設）逐局配對；BCHK = 現行預設 423001 第 0–499 局；AUD = 現行預設＋jointAudit56（只記錄）第 0–9,999 局；第二批（站長 11/20 採用 V3P 之後）：V3P = viewpoint53=3 viewpointPow53=0.5（基準）、MRV = missionRole56=1＋V3P（各 5 萬局），G15V／MJ5V = 候選＋V3P、G31 = goLike56=31（G15＋個人先驗照真的第幾次加權；各 2.5 萬局）；確認（runId 同一個；MR 篩選 +0.13 [+0.01, +0.26]、第 1F 節過）：CDEF = 現行預設、CMR = missionRole56=1，563001／563101／563201 各 10 萬局，detail=1
+# 標籤|開關|種子|起始局號|局數  （第 56 回合篩選：MJ5／MJ8 = missionJoint56=0.5／0.8、G15 = goLike56=15（忠臣＋派西、第 1、2 局）、G3 = 忠臣、G12 = 派西、MR = missionRole56=1；423001 第 0–49,999 局 detail=1，和 r55-screen 的 BASE55（現行預設）逐局配對；BCHK = 現行預設 423001 第 0–499 局；AUD = 現行預設＋jointAudit56（只記錄）第 0–9,999 局；第二批（站長 11/20 採用 V3P 之後；V3P 的基準直接用第 56b 回合 A 的 r56b-v3p-confirm——CDEF＝現行預設、CV3P＝V3P，563001／563101／563201 各 10 萬局，同一套種子逐局相同）：CV3PMR = missionRole56=1＋V3P（563001 先 5 萬局，之後補滿 10 萬）、G15V／MJ5V = goLike56=15／missionJoint56=0.5＋V3P（563001 第 0–24,999 局）；確認：CMR = missionRole56=1，563001／563101／563201 各 10 萬局（對 CDEF）；G31 = goLike56=31（423001 第 0–9,999 局，對 BASE55）
 BCHK|detail=1|423001|0|500
 G15|goLike56=15 detail=1|423001|0|500
 MJ5|missionJoint56=0.5 detail=1|423001|0|500
@@ -620,1553 +620,923 @@ G3|goLike56=3 detail=1|423001|49000|500
 G12|goLike56=12 detail=1|423001|49000|500
 G3|goLike56=3 detail=1|423001|49500|500
 G12|goLike56=12 detail=1|423001|49500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|0|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|0|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|0|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|0|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|1500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|2500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|3500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|4500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|5500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|6500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|7500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|8500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|9500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|10500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|11500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|12500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|13500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|14500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|15500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|16500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|17500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|18500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|19500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|20500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|21500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|22500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|23500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24000|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24000|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24500|500
-G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24500|500
-MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|24500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|25000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|25000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|25500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|25500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|26000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|26000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|26500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|26500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|27000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|27000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|27500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|27500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|28000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|28000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|28500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|28500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|29000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|29000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|29500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|29500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|30000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|30000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|30500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|30500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|31000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|31000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|31500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|31500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|32000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|32000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|32500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|32500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|33000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|33000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|33500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|33500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|34000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|34000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|34500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|34500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|35000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|35000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|35500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|35500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|36000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|36000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|36500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|36500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|37000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|37000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|37500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|37500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|38000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|38000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|38500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|38500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|39000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|39000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|39500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|39500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|40000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|40000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|40500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|40500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|41000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|41000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|41500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|41500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|42000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|42000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|42500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|42500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|43000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|43000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|43500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|43500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|44000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|44000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|44500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|44500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|45000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|45000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|45500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|45500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|46000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|46000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|46500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|46500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|47000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|47000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|47500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|47500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|48000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|48000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|48500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|48500|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|49000|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|49000|500
-V3P|viewpoint53=3 viewpointPow53=0.5 detail=1|423001|49500|500
-MRV|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|423001|49500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|0|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|0|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|0|500
 G31|goLike56=31 detail=1|423001|0|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|500|500
 G31|goLike56=31 detail=1|423001|500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|1000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|1000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|1000|500
 G31|goLike56=31 detail=1|423001|1000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|1500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|1500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|1500|500
 G31|goLike56=31 detail=1|423001|1500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|2000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|2000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|2000|500
 G31|goLike56=31 detail=1|423001|2000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|2500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|2500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|2500|500
 G31|goLike56=31 detail=1|423001|2500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|3000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|3000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|3000|500
 G31|goLike56=31 detail=1|423001|3000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|3500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|3500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|3500|500
 G31|goLike56=31 detail=1|423001|3500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|4000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|4000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|4000|500
 G31|goLike56=31 detail=1|423001|4000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|4500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|4500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|4500|500
 G31|goLike56=31 detail=1|423001|4500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|5000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|5000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|5000|500
 G31|goLike56=31 detail=1|423001|5000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|5500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|5500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|5500|500
 G31|goLike56=31 detail=1|423001|5500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|6000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|6000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|6000|500
 G31|goLike56=31 detail=1|423001|6000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|6500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|6500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|6500|500
 G31|goLike56=31 detail=1|423001|6500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|7000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|7000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|7000|500
 G31|goLike56=31 detail=1|423001|7000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|7500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|7500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|7500|500
 G31|goLike56=31 detail=1|423001|7500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|8000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|8000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|8000|500
 G31|goLike56=31 detail=1|423001|8000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|8500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|8500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|8500|500
 G31|goLike56=31 detail=1|423001|8500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|9000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|9000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|9000|500
 G31|goLike56=31 detail=1|423001|9000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|9500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|9500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|9500|500
 G31|goLike56=31 detail=1|423001|9500|500
-G31|goLike56=31 detail=1|423001|10000|500
-G31|goLike56=31 detail=1|423001|10500|500
-G31|goLike56=31 detail=1|423001|11000|500
-G31|goLike56=31 detail=1|423001|11500|500
-G31|goLike56=31 detail=1|423001|12000|500
-G31|goLike56=31 detail=1|423001|12500|500
-G31|goLike56=31 detail=1|423001|13000|500
-G31|goLike56=31 detail=1|423001|13500|500
-G31|goLike56=31 detail=1|423001|14000|500
-G31|goLike56=31 detail=1|423001|14500|500
-G31|goLike56=31 detail=1|423001|15000|500
-G31|goLike56=31 detail=1|423001|15500|500
-G31|goLike56=31 detail=1|423001|16000|500
-G31|goLike56=31 detail=1|423001|16500|500
-G31|goLike56=31 detail=1|423001|17000|500
-G31|goLike56=31 detail=1|423001|17500|500
-G31|goLike56=31 detail=1|423001|18000|500
-G31|goLike56=31 detail=1|423001|18500|500
-G31|goLike56=31 detail=1|423001|19000|500
-G31|goLike56=31 detail=1|423001|19500|500
-G31|goLike56=31 detail=1|423001|20000|500
-G31|goLike56=31 detail=1|423001|20500|500
-G31|goLike56=31 detail=1|423001|21000|500
-G31|goLike56=31 detail=1|423001|21500|500
-G31|goLike56=31 detail=1|423001|22000|500
-G31|goLike56=31 detail=1|423001|22500|500
-G31|goLike56=31 detail=1|423001|23000|500
-G31|goLike56=31 detail=1|423001|23500|500
-G31|goLike56=31 detail=1|423001|24000|500
-G31|goLike56=31 detail=1|423001|24500|500
-CDEF|detail=1|563001|0|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|10000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|10000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|10000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|10500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|10500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|10500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|11000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|11000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|11000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|11500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|11500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|11500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|12000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|12000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|12000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|12500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|12500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|12500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|13000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|13000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|13000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|13500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|13500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|13500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|14000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|14000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|14000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|14500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|14500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|14500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|15000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|15000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|15000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|15500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|15500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|15500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|16000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|16000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|16000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|16500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|16500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|16500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|17000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|17000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|17000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|17500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|17500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|17500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|18000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|18000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|18000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|18500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|18500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|18500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|19000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|19000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|19000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|19500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|19500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|19500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|20000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|20000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|20000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|20500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|20500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|20500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|21000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|21000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|21000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|21500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|21500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|21500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|22000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|22000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|22000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|22500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|22500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|22500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|23000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|23000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|23000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|23500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|23500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|23500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|24000|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|24000|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|24000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|24500|500
+G15V|goLike56=15 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|24500|500
+MJ5V|missionJoint56=0.5 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|24500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|25000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|25500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|26000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|26500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|27000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|27500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|28000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|28500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|29000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|29500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|30000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|30500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|31000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|31500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|32000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|32500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|33000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|33500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|34000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|34500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|35000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|35500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|36000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|36500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|37000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|37500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|38000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|38500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|39000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|39500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|40000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|40500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|41000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|41500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|42000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|42500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|43000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|43500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|44000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|44500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|45000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|45500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|46000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|46500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|47000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|47500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|48000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|48500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|49000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|49500|500
 CMR|missionRole56=1 detail=1|563001|0|500
-CDEF|detail=1|563101|0|500
 CMR|missionRole56=1 detail=1|563101|0|500
-CDEF|detail=1|563201|0|500
 CMR|missionRole56=1 detail=1|563201|0|500
-CDEF|detail=1|563001|500|500
 CMR|missionRole56=1 detail=1|563001|500|500
-CDEF|detail=1|563101|500|500
 CMR|missionRole56=1 detail=1|563101|500|500
-CDEF|detail=1|563201|500|500
 CMR|missionRole56=1 detail=1|563201|500|500
-CDEF|detail=1|563001|1000|500
 CMR|missionRole56=1 detail=1|563001|1000|500
-CDEF|detail=1|563101|1000|500
 CMR|missionRole56=1 detail=1|563101|1000|500
-CDEF|detail=1|563201|1000|500
 CMR|missionRole56=1 detail=1|563201|1000|500
-CDEF|detail=1|563001|1500|500
 CMR|missionRole56=1 detail=1|563001|1500|500
-CDEF|detail=1|563101|1500|500
 CMR|missionRole56=1 detail=1|563101|1500|500
-CDEF|detail=1|563201|1500|500
 CMR|missionRole56=1 detail=1|563201|1500|500
-CDEF|detail=1|563001|2000|500
 CMR|missionRole56=1 detail=1|563001|2000|500
-CDEF|detail=1|563101|2000|500
 CMR|missionRole56=1 detail=1|563101|2000|500
-CDEF|detail=1|563201|2000|500
 CMR|missionRole56=1 detail=1|563201|2000|500
-CDEF|detail=1|563001|2500|500
 CMR|missionRole56=1 detail=1|563001|2500|500
-CDEF|detail=1|563101|2500|500
 CMR|missionRole56=1 detail=1|563101|2500|500
-CDEF|detail=1|563201|2500|500
 CMR|missionRole56=1 detail=1|563201|2500|500
-CDEF|detail=1|563001|3000|500
 CMR|missionRole56=1 detail=1|563001|3000|500
-CDEF|detail=1|563101|3000|500
 CMR|missionRole56=1 detail=1|563101|3000|500
-CDEF|detail=1|563201|3000|500
 CMR|missionRole56=1 detail=1|563201|3000|500
-CDEF|detail=1|563001|3500|500
 CMR|missionRole56=1 detail=1|563001|3500|500
-CDEF|detail=1|563101|3500|500
 CMR|missionRole56=1 detail=1|563101|3500|500
-CDEF|detail=1|563201|3500|500
 CMR|missionRole56=1 detail=1|563201|3500|500
-CDEF|detail=1|563001|4000|500
 CMR|missionRole56=1 detail=1|563001|4000|500
-CDEF|detail=1|563101|4000|500
 CMR|missionRole56=1 detail=1|563101|4000|500
-CDEF|detail=1|563201|4000|500
 CMR|missionRole56=1 detail=1|563201|4000|500
-CDEF|detail=1|563001|4500|500
 CMR|missionRole56=1 detail=1|563001|4500|500
-CDEF|detail=1|563101|4500|500
 CMR|missionRole56=1 detail=1|563101|4500|500
-CDEF|detail=1|563201|4500|500
 CMR|missionRole56=1 detail=1|563201|4500|500
-CDEF|detail=1|563001|5000|500
 CMR|missionRole56=1 detail=1|563001|5000|500
-CDEF|detail=1|563101|5000|500
 CMR|missionRole56=1 detail=1|563101|5000|500
-CDEF|detail=1|563201|5000|500
 CMR|missionRole56=1 detail=1|563201|5000|500
-CDEF|detail=1|563001|5500|500
 CMR|missionRole56=1 detail=1|563001|5500|500
-CDEF|detail=1|563101|5500|500
 CMR|missionRole56=1 detail=1|563101|5500|500
-CDEF|detail=1|563201|5500|500
 CMR|missionRole56=1 detail=1|563201|5500|500
-CDEF|detail=1|563001|6000|500
 CMR|missionRole56=1 detail=1|563001|6000|500
-CDEF|detail=1|563101|6000|500
 CMR|missionRole56=1 detail=1|563101|6000|500
-CDEF|detail=1|563201|6000|500
 CMR|missionRole56=1 detail=1|563201|6000|500
-CDEF|detail=1|563001|6500|500
 CMR|missionRole56=1 detail=1|563001|6500|500
-CDEF|detail=1|563101|6500|500
 CMR|missionRole56=1 detail=1|563101|6500|500
-CDEF|detail=1|563201|6500|500
 CMR|missionRole56=1 detail=1|563201|6500|500
-CDEF|detail=1|563001|7000|500
 CMR|missionRole56=1 detail=1|563001|7000|500
-CDEF|detail=1|563101|7000|500
 CMR|missionRole56=1 detail=1|563101|7000|500
-CDEF|detail=1|563201|7000|500
 CMR|missionRole56=1 detail=1|563201|7000|500
-CDEF|detail=1|563001|7500|500
 CMR|missionRole56=1 detail=1|563001|7500|500
-CDEF|detail=1|563101|7500|500
 CMR|missionRole56=1 detail=1|563101|7500|500
-CDEF|detail=1|563201|7500|500
 CMR|missionRole56=1 detail=1|563201|7500|500
-CDEF|detail=1|563001|8000|500
 CMR|missionRole56=1 detail=1|563001|8000|500
-CDEF|detail=1|563101|8000|500
 CMR|missionRole56=1 detail=1|563101|8000|500
-CDEF|detail=1|563201|8000|500
 CMR|missionRole56=1 detail=1|563201|8000|500
-CDEF|detail=1|563001|8500|500
 CMR|missionRole56=1 detail=1|563001|8500|500
-CDEF|detail=1|563101|8500|500
 CMR|missionRole56=1 detail=1|563101|8500|500
-CDEF|detail=1|563201|8500|500
 CMR|missionRole56=1 detail=1|563201|8500|500
-CDEF|detail=1|563001|9000|500
 CMR|missionRole56=1 detail=1|563001|9000|500
-CDEF|detail=1|563101|9000|500
 CMR|missionRole56=1 detail=1|563101|9000|500
-CDEF|detail=1|563201|9000|500
 CMR|missionRole56=1 detail=1|563201|9000|500
-CDEF|detail=1|563001|9500|500
 CMR|missionRole56=1 detail=1|563001|9500|500
-CDEF|detail=1|563101|9500|500
 CMR|missionRole56=1 detail=1|563101|9500|500
-CDEF|detail=1|563201|9500|500
 CMR|missionRole56=1 detail=1|563201|9500|500
-CDEF|detail=1|563001|10000|500
 CMR|missionRole56=1 detail=1|563001|10000|500
-CDEF|detail=1|563101|10000|500
 CMR|missionRole56=1 detail=1|563101|10000|500
-CDEF|detail=1|563201|10000|500
 CMR|missionRole56=1 detail=1|563201|10000|500
-CDEF|detail=1|563001|10500|500
 CMR|missionRole56=1 detail=1|563001|10500|500
-CDEF|detail=1|563101|10500|500
 CMR|missionRole56=1 detail=1|563101|10500|500
-CDEF|detail=1|563201|10500|500
 CMR|missionRole56=1 detail=1|563201|10500|500
-CDEF|detail=1|563001|11000|500
 CMR|missionRole56=1 detail=1|563001|11000|500
-CDEF|detail=1|563101|11000|500
 CMR|missionRole56=1 detail=1|563101|11000|500
-CDEF|detail=1|563201|11000|500
 CMR|missionRole56=1 detail=1|563201|11000|500
-CDEF|detail=1|563001|11500|500
 CMR|missionRole56=1 detail=1|563001|11500|500
-CDEF|detail=1|563101|11500|500
 CMR|missionRole56=1 detail=1|563101|11500|500
-CDEF|detail=1|563201|11500|500
 CMR|missionRole56=1 detail=1|563201|11500|500
-CDEF|detail=1|563001|12000|500
 CMR|missionRole56=1 detail=1|563001|12000|500
-CDEF|detail=1|563101|12000|500
 CMR|missionRole56=1 detail=1|563101|12000|500
-CDEF|detail=1|563201|12000|500
 CMR|missionRole56=1 detail=1|563201|12000|500
-CDEF|detail=1|563001|12500|500
 CMR|missionRole56=1 detail=1|563001|12500|500
-CDEF|detail=1|563101|12500|500
 CMR|missionRole56=1 detail=1|563101|12500|500
-CDEF|detail=1|563201|12500|500
 CMR|missionRole56=1 detail=1|563201|12500|500
-CDEF|detail=1|563001|13000|500
 CMR|missionRole56=1 detail=1|563001|13000|500
-CDEF|detail=1|563101|13000|500
 CMR|missionRole56=1 detail=1|563101|13000|500
-CDEF|detail=1|563201|13000|500
 CMR|missionRole56=1 detail=1|563201|13000|500
-CDEF|detail=1|563001|13500|500
 CMR|missionRole56=1 detail=1|563001|13500|500
-CDEF|detail=1|563101|13500|500
 CMR|missionRole56=1 detail=1|563101|13500|500
-CDEF|detail=1|563201|13500|500
 CMR|missionRole56=1 detail=1|563201|13500|500
-CDEF|detail=1|563001|14000|500
 CMR|missionRole56=1 detail=1|563001|14000|500
-CDEF|detail=1|563101|14000|500
 CMR|missionRole56=1 detail=1|563101|14000|500
-CDEF|detail=1|563201|14000|500
 CMR|missionRole56=1 detail=1|563201|14000|500
-CDEF|detail=1|563001|14500|500
 CMR|missionRole56=1 detail=1|563001|14500|500
-CDEF|detail=1|563101|14500|500
 CMR|missionRole56=1 detail=1|563101|14500|500
-CDEF|detail=1|563201|14500|500
 CMR|missionRole56=1 detail=1|563201|14500|500
-CDEF|detail=1|563001|15000|500
 CMR|missionRole56=1 detail=1|563001|15000|500
-CDEF|detail=1|563101|15000|500
 CMR|missionRole56=1 detail=1|563101|15000|500
-CDEF|detail=1|563201|15000|500
 CMR|missionRole56=1 detail=1|563201|15000|500
-CDEF|detail=1|563001|15500|500
 CMR|missionRole56=1 detail=1|563001|15500|500
-CDEF|detail=1|563101|15500|500
 CMR|missionRole56=1 detail=1|563101|15500|500
-CDEF|detail=1|563201|15500|500
 CMR|missionRole56=1 detail=1|563201|15500|500
-CDEF|detail=1|563001|16000|500
 CMR|missionRole56=1 detail=1|563001|16000|500
-CDEF|detail=1|563101|16000|500
 CMR|missionRole56=1 detail=1|563101|16000|500
-CDEF|detail=1|563201|16000|500
 CMR|missionRole56=1 detail=1|563201|16000|500
-CDEF|detail=1|563001|16500|500
 CMR|missionRole56=1 detail=1|563001|16500|500
-CDEF|detail=1|563101|16500|500
 CMR|missionRole56=1 detail=1|563101|16500|500
-CDEF|detail=1|563201|16500|500
 CMR|missionRole56=1 detail=1|563201|16500|500
-CDEF|detail=1|563001|17000|500
 CMR|missionRole56=1 detail=1|563001|17000|500
-CDEF|detail=1|563101|17000|500
 CMR|missionRole56=1 detail=1|563101|17000|500
-CDEF|detail=1|563201|17000|500
 CMR|missionRole56=1 detail=1|563201|17000|500
-CDEF|detail=1|563001|17500|500
 CMR|missionRole56=1 detail=1|563001|17500|500
-CDEF|detail=1|563101|17500|500
 CMR|missionRole56=1 detail=1|563101|17500|500
-CDEF|detail=1|563201|17500|500
 CMR|missionRole56=1 detail=1|563201|17500|500
-CDEF|detail=1|563001|18000|500
 CMR|missionRole56=1 detail=1|563001|18000|500
-CDEF|detail=1|563101|18000|500
 CMR|missionRole56=1 detail=1|563101|18000|500
-CDEF|detail=1|563201|18000|500
 CMR|missionRole56=1 detail=1|563201|18000|500
-CDEF|detail=1|563001|18500|500
 CMR|missionRole56=1 detail=1|563001|18500|500
-CDEF|detail=1|563101|18500|500
 CMR|missionRole56=1 detail=1|563101|18500|500
-CDEF|detail=1|563201|18500|500
 CMR|missionRole56=1 detail=1|563201|18500|500
-CDEF|detail=1|563001|19000|500
 CMR|missionRole56=1 detail=1|563001|19000|500
-CDEF|detail=1|563101|19000|500
 CMR|missionRole56=1 detail=1|563101|19000|500
-CDEF|detail=1|563201|19000|500
 CMR|missionRole56=1 detail=1|563201|19000|500
-CDEF|detail=1|563001|19500|500
 CMR|missionRole56=1 detail=1|563001|19500|500
-CDEF|detail=1|563101|19500|500
 CMR|missionRole56=1 detail=1|563101|19500|500
-CDEF|detail=1|563201|19500|500
 CMR|missionRole56=1 detail=1|563201|19500|500
-CDEF|detail=1|563001|20000|500
 CMR|missionRole56=1 detail=1|563001|20000|500
-CDEF|detail=1|563101|20000|500
 CMR|missionRole56=1 detail=1|563101|20000|500
-CDEF|detail=1|563201|20000|500
 CMR|missionRole56=1 detail=1|563201|20000|500
-CDEF|detail=1|563001|20500|500
 CMR|missionRole56=1 detail=1|563001|20500|500
-CDEF|detail=1|563101|20500|500
 CMR|missionRole56=1 detail=1|563101|20500|500
-CDEF|detail=1|563201|20500|500
 CMR|missionRole56=1 detail=1|563201|20500|500
-CDEF|detail=1|563001|21000|500
 CMR|missionRole56=1 detail=1|563001|21000|500
-CDEF|detail=1|563101|21000|500
 CMR|missionRole56=1 detail=1|563101|21000|500
-CDEF|detail=1|563201|21000|500
 CMR|missionRole56=1 detail=1|563201|21000|500
-CDEF|detail=1|563001|21500|500
 CMR|missionRole56=1 detail=1|563001|21500|500
-CDEF|detail=1|563101|21500|500
 CMR|missionRole56=1 detail=1|563101|21500|500
-CDEF|detail=1|563201|21500|500
 CMR|missionRole56=1 detail=1|563201|21500|500
-CDEF|detail=1|563001|22000|500
 CMR|missionRole56=1 detail=1|563001|22000|500
-CDEF|detail=1|563101|22000|500
 CMR|missionRole56=1 detail=1|563101|22000|500
-CDEF|detail=1|563201|22000|500
 CMR|missionRole56=1 detail=1|563201|22000|500
-CDEF|detail=1|563001|22500|500
 CMR|missionRole56=1 detail=1|563001|22500|500
-CDEF|detail=1|563101|22500|500
 CMR|missionRole56=1 detail=1|563101|22500|500
-CDEF|detail=1|563201|22500|500
 CMR|missionRole56=1 detail=1|563201|22500|500
-CDEF|detail=1|563001|23000|500
 CMR|missionRole56=1 detail=1|563001|23000|500
-CDEF|detail=1|563101|23000|500
 CMR|missionRole56=1 detail=1|563101|23000|500
-CDEF|detail=1|563201|23000|500
 CMR|missionRole56=1 detail=1|563201|23000|500
-CDEF|detail=1|563001|23500|500
 CMR|missionRole56=1 detail=1|563001|23500|500
-CDEF|detail=1|563101|23500|500
 CMR|missionRole56=1 detail=1|563101|23500|500
-CDEF|detail=1|563201|23500|500
 CMR|missionRole56=1 detail=1|563201|23500|500
-CDEF|detail=1|563001|24000|500
 CMR|missionRole56=1 detail=1|563001|24000|500
-CDEF|detail=1|563101|24000|500
 CMR|missionRole56=1 detail=1|563101|24000|500
-CDEF|detail=1|563201|24000|500
 CMR|missionRole56=1 detail=1|563201|24000|500
-CDEF|detail=1|563001|24500|500
 CMR|missionRole56=1 detail=1|563001|24500|500
-CDEF|detail=1|563101|24500|500
 CMR|missionRole56=1 detail=1|563101|24500|500
-CDEF|detail=1|563201|24500|500
 CMR|missionRole56=1 detail=1|563201|24500|500
-CDEF|detail=1|563001|25000|500
 CMR|missionRole56=1 detail=1|563001|25000|500
-CDEF|detail=1|563101|25000|500
 CMR|missionRole56=1 detail=1|563101|25000|500
-CDEF|detail=1|563201|25000|500
 CMR|missionRole56=1 detail=1|563201|25000|500
-CDEF|detail=1|563001|25500|500
 CMR|missionRole56=1 detail=1|563001|25500|500
-CDEF|detail=1|563101|25500|500
 CMR|missionRole56=1 detail=1|563101|25500|500
-CDEF|detail=1|563201|25500|500
 CMR|missionRole56=1 detail=1|563201|25500|500
-CDEF|detail=1|563001|26000|500
 CMR|missionRole56=1 detail=1|563001|26000|500
-CDEF|detail=1|563101|26000|500
 CMR|missionRole56=1 detail=1|563101|26000|500
-CDEF|detail=1|563201|26000|500
 CMR|missionRole56=1 detail=1|563201|26000|500
-CDEF|detail=1|563001|26500|500
 CMR|missionRole56=1 detail=1|563001|26500|500
-CDEF|detail=1|563101|26500|500
 CMR|missionRole56=1 detail=1|563101|26500|500
-CDEF|detail=1|563201|26500|500
 CMR|missionRole56=1 detail=1|563201|26500|500
-CDEF|detail=1|563001|27000|500
 CMR|missionRole56=1 detail=1|563001|27000|500
-CDEF|detail=1|563101|27000|500
 CMR|missionRole56=1 detail=1|563101|27000|500
-CDEF|detail=1|563201|27000|500
 CMR|missionRole56=1 detail=1|563201|27000|500
-CDEF|detail=1|563001|27500|500
 CMR|missionRole56=1 detail=1|563001|27500|500
-CDEF|detail=1|563101|27500|500
 CMR|missionRole56=1 detail=1|563101|27500|500
-CDEF|detail=1|563201|27500|500
 CMR|missionRole56=1 detail=1|563201|27500|500
-CDEF|detail=1|563001|28000|500
 CMR|missionRole56=1 detail=1|563001|28000|500
-CDEF|detail=1|563101|28000|500
 CMR|missionRole56=1 detail=1|563101|28000|500
-CDEF|detail=1|563201|28000|500
 CMR|missionRole56=1 detail=1|563201|28000|500
-CDEF|detail=1|563001|28500|500
 CMR|missionRole56=1 detail=1|563001|28500|500
-CDEF|detail=1|563101|28500|500
 CMR|missionRole56=1 detail=1|563101|28500|500
-CDEF|detail=1|563201|28500|500
 CMR|missionRole56=1 detail=1|563201|28500|500
-CDEF|detail=1|563001|29000|500
 CMR|missionRole56=1 detail=1|563001|29000|500
-CDEF|detail=1|563101|29000|500
 CMR|missionRole56=1 detail=1|563101|29000|500
-CDEF|detail=1|563201|29000|500
 CMR|missionRole56=1 detail=1|563201|29000|500
-CDEF|detail=1|563001|29500|500
 CMR|missionRole56=1 detail=1|563001|29500|500
-CDEF|detail=1|563101|29500|500
 CMR|missionRole56=1 detail=1|563101|29500|500
-CDEF|detail=1|563201|29500|500
 CMR|missionRole56=1 detail=1|563201|29500|500
-CDEF|detail=1|563001|30000|500
 CMR|missionRole56=1 detail=1|563001|30000|500
-CDEF|detail=1|563101|30000|500
 CMR|missionRole56=1 detail=1|563101|30000|500
-CDEF|detail=1|563201|30000|500
 CMR|missionRole56=1 detail=1|563201|30000|500
-CDEF|detail=1|563001|30500|500
 CMR|missionRole56=1 detail=1|563001|30500|500
-CDEF|detail=1|563101|30500|500
 CMR|missionRole56=1 detail=1|563101|30500|500
-CDEF|detail=1|563201|30500|500
 CMR|missionRole56=1 detail=1|563201|30500|500
-CDEF|detail=1|563001|31000|500
 CMR|missionRole56=1 detail=1|563001|31000|500
-CDEF|detail=1|563101|31000|500
 CMR|missionRole56=1 detail=1|563101|31000|500
-CDEF|detail=1|563201|31000|500
 CMR|missionRole56=1 detail=1|563201|31000|500
-CDEF|detail=1|563001|31500|500
 CMR|missionRole56=1 detail=1|563001|31500|500
-CDEF|detail=1|563101|31500|500
 CMR|missionRole56=1 detail=1|563101|31500|500
-CDEF|detail=1|563201|31500|500
 CMR|missionRole56=1 detail=1|563201|31500|500
-CDEF|detail=1|563001|32000|500
 CMR|missionRole56=1 detail=1|563001|32000|500
-CDEF|detail=1|563101|32000|500
 CMR|missionRole56=1 detail=1|563101|32000|500
-CDEF|detail=1|563201|32000|500
 CMR|missionRole56=1 detail=1|563201|32000|500
-CDEF|detail=1|563001|32500|500
 CMR|missionRole56=1 detail=1|563001|32500|500
-CDEF|detail=1|563101|32500|500
 CMR|missionRole56=1 detail=1|563101|32500|500
-CDEF|detail=1|563201|32500|500
 CMR|missionRole56=1 detail=1|563201|32500|500
-CDEF|detail=1|563001|33000|500
 CMR|missionRole56=1 detail=1|563001|33000|500
-CDEF|detail=1|563101|33000|500
 CMR|missionRole56=1 detail=1|563101|33000|500
-CDEF|detail=1|563201|33000|500
 CMR|missionRole56=1 detail=1|563201|33000|500
-CDEF|detail=1|563001|33500|500
 CMR|missionRole56=1 detail=1|563001|33500|500
-CDEF|detail=1|563101|33500|500
 CMR|missionRole56=1 detail=1|563101|33500|500
-CDEF|detail=1|563201|33500|500
 CMR|missionRole56=1 detail=1|563201|33500|500
-CDEF|detail=1|563001|34000|500
 CMR|missionRole56=1 detail=1|563001|34000|500
-CDEF|detail=1|563101|34000|500
 CMR|missionRole56=1 detail=1|563101|34000|500
-CDEF|detail=1|563201|34000|500
 CMR|missionRole56=1 detail=1|563201|34000|500
-CDEF|detail=1|563001|34500|500
 CMR|missionRole56=1 detail=1|563001|34500|500
-CDEF|detail=1|563101|34500|500
 CMR|missionRole56=1 detail=1|563101|34500|500
-CDEF|detail=1|563201|34500|500
 CMR|missionRole56=1 detail=1|563201|34500|500
-CDEF|detail=1|563001|35000|500
 CMR|missionRole56=1 detail=1|563001|35000|500
-CDEF|detail=1|563101|35000|500
 CMR|missionRole56=1 detail=1|563101|35000|500
-CDEF|detail=1|563201|35000|500
 CMR|missionRole56=1 detail=1|563201|35000|500
-CDEF|detail=1|563001|35500|500
 CMR|missionRole56=1 detail=1|563001|35500|500
-CDEF|detail=1|563101|35500|500
 CMR|missionRole56=1 detail=1|563101|35500|500
-CDEF|detail=1|563201|35500|500
 CMR|missionRole56=1 detail=1|563201|35500|500
-CDEF|detail=1|563001|36000|500
 CMR|missionRole56=1 detail=1|563001|36000|500
-CDEF|detail=1|563101|36000|500
 CMR|missionRole56=1 detail=1|563101|36000|500
-CDEF|detail=1|563201|36000|500
 CMR|missionRole56=1 detail=1|563201|36000|500
-CDEF|detail=1|563001|36500|500
 CMR|missionRole56=1 detail=1|563001|36500|500
-CDEF|detail=1|563101|36500|500
 CMR|missionRole56=1 detail=1|563101|36500|500
-CDEF|detail=1|563201|36500|500
 CMR|missionRole56=1 detail=1|563201|36500|500
-CDEF|detail=1|563001|37000|500
 CMR|missionRole56=1 detail=1|563001|37000|500
-CDEF|detail=1|563101|37000|500
 CMR|missionRole56=1 detail=1|563101|37000|500
-CDEF|detail=1|563201|37000|500
 CMR|missionRole56=1 detail=1|563201|37000|500
-CDEF|detail=1|563001|37500|500
 CMR|missionRole56=1 detail=1|563001|37500|500
-CDEF|detail=1|563101|37500|500
 CMR|missionRole56=1 detail=1|563101|37500|500
-CDEF|detail=1|563201|37500|500
 CMR|missionRole56=1 detail=1|563201|37500|500
-CDEF|detail=1|563001|38000|500
 CMR|missionRole56=1 detail=1|563001|38000|500
-CDEF|detail=1|563101|38000|500
 CMR|missionRole56=1 detail=1|563101|38000|500
-CDEF|detail=1|563201|38000|500
 CMR|missionRole56=1 detail=1|563201|38000|500
-CDEF|detail=1|563001|38500|500
 CMR|missionRole56=1 detail=1|563001|38500|500
-CDEF|detail=1|563101|38500|500
 CMR|missionRole56=1 detail=1|563101|38500|500
-CDEF|detail=1|563201|38500|500
 CMR|missionRole56=1 detail=1|563201|38500|500
-CDEF|detail=1|563001|39000|500
 CMR|missionRole56=1 detail=1|563001|39000|500
-CDEF|detail=1|563101|39000|500
 CMR|missionRole56=1 detail=1|563101|39000|500
-CDEF|detail=1|563201|39000|500
 CMR|missionRole56=1 detail=1|563201|39000|500
-CDEF|detail=1|563001|39500|500
 CMR|missionRole56=1 detail=1|563001|39500|500
-CDEF|detail=1|563101|39500|500
 CMR|missionRole56=1 detail=1|563101|39500|500
-CDEF|detail=1|563201|39500|500
 CMR|missionRole56=1 detail=1|563201|39500|500
-CDEF|detail=1|563001|40000|500
 CMR|missionRole56=1 detail=1|563001|40000|500
-CDEF|detail=1|563101|40000|500
 CMR|missionRole56=1 detail=1|563101|40000|500
-CDEF|detail=1|563201|40000|500
 CMR|missionRole56=1 detail=1|563201|40000|500
-CDEF|detail=1|563001|40500|500
 CMR|missionRole56=1 detail=1|563001|40500|500
-CDEF|detail=1|563101|40500|500
 CMR|missionRole56=1 detail=1|563101|40500|500
-CDEF|detail=1|563201|40500|500
 CMR|missionRole56=1 detail=1|563201|40500|500
-CDEF|detail=1|563001|41000|500
 CMR|missionRole56=1 detail=1|563001|41000|500
-CDEF|detail=1|563101|41000|500
 CMR|missionRole56=1 detail=1|563101|41000|500
-CDEF|detail=1|563201|41000|500
 CMR|missionRole56=1 detail=1|563201|41000|500
-CDEF|detail=1|563001|41500|500
 CMR|missionRole56=1 detail=1|563001|41500|500
-CDEF|detail=1|563101|41500|500
 CMR|missionRole56=1 detail=1|563101|41500|500
-CDEF|detail=1|563201|41500|500
 CMR|missionRole56=1 detail=1|563201|41500|500
-CDEF|detail=1|563001|42000|500
 CMR|missionRole56=1 detail=1|563001|42000|500
-CDEF|detail=1|563101|42000|500
 CMR|missionRole56=1 detail=1|563101|42000|500
-CDEF|detail=1|563201|42000|500
 CMR|missionRole56=1 detail=1|563201|42000|500
-CDEF|detail=1|563001|42500|500
 CMR|missionRole56=1 detail=1|563001|42500|500
-CDEF|detail=1|563101|42500|500
 CMR|missionRole56=1 detail=1|563101|42500|500
-CDEF|detail=1|563201|42500|500
 CMR|missionRole56=1 detail=1|563201|42500|500
-CDEF|detail=1|563001|43000|500
 CMR|missionRole56=1 detail=1|563001|43000|500
-CDEF|detail=1|563101|43000|500
 CMR|missionRole56=1 detail=1|563101|43000|500
-CDEF|detail=1|563201|43000|500
 CMR|missionRole56=1 detail=1|563201|43000|500
-CDEF|detail=1|563001|43500|500
 CMR|missionRole56=1 detail=1|563001|43500|500
-CDEF|detail=1|563101|43500|500
 CMR|missionRole56=1 detail=1|563101|43500|500
-CDEF|detail=1|563201|43500|500
 CMR|missionRole56=1 detail=1|563201|43500|500
-CDEF|detail=1|563001|44000|500
 CMR|missionRole56=1 detail=1|563001|44000|500
-CDEF|detail=1|563101|44000|500
 CMR|missionRole56=1 detail=1|563101|44000|500
-CDEF|detail=1|563201|44000|500
 CMR|missionRole56=1 detail=1|563201|44000|500
-CDEF|detail=1|563001|44500|500
 CMR|missionRole56=1 detail=1|563001|44500|500
-CDEF|detail=1|563101|44500|500
 CMR|missionRole56=1 detail=1|563101|44500|500
-CDEF|detail=1|563201|44500|500
 CMR|missionRole56=1 detail=1|563201|44500|500
-CDEF|detail=1|563001|45000|500
 CMR|missionRole56=1 detail=1|563001|45000|500
-CDEF|detail=1|563101|45000|500
 CMR|missionRole56=1 detail=1|563101|45000|500
-CDEF|detail=1|563201|45000|500
 CMR|missionRole56=1 detail=1|563201|45000|500
-CDEF|detail=1|563001|45500|500
 CMR|missionRole56=1 detail=1|563001|45500|500
-CDEF|detail=1|563101|45500|500
 CMR|missionRole56=1 detail=1|563101|45500|500
-CDEF|detail=1|563201|45500|500
 CMR|missionRole56=1 detail=1|563201|45500|500
-CDEF|detail=1|563001|46000|500
 CMR|missionRole56=1 detail=1|563001|46000|500
-CDEF|detail=1|563101|46000|500
 CMR|missionRole56=1 detail=1|563101|46000|500
-CDEF|detail=1|563201|46000|500
 CMR|missionRole56=1 detail=1|563201|46000|500
-CDEF|detail=1|563001|46500|500
 CMR|missionRole56=1 detail=1|563001|46500|500
-CDEF|detail=1|563101|46500|500
 CMR|missionRole56=1 detail=1|563101|46500|500
-CDEF|detail=1|563201|46500|500
 CMR|missionRole56=1 detail=1|563201|46500|500
-CDEF|detail=1|563001|47000|500
 CMR|missionRole56=1 detail=1|563001|47000|500
-CDEF|detail=1|563101|47000|500
 CMR|missionRole56=1 detail=1|563101|47000|500
-CDEF|detail=1|563201|47000|500
 CMR|missionRole56=1 detail=1|563201|47000|500
-CDEF|detail=1|563001|47500|500
 CMR|missionRole56=1 detail=1|563001|47500|500
-CDEF|detail=1|563101|47500|500
 CMR|missionRole56=1 detail=1|563101|47500|500
-CDEF|detail=1|563201|47500|500
 CMR|missionRole56=1 detail=1|563201|47500|500
-CDEF|detail=1|563001|48000|500
 CMR|missionRole56=1 detail=1|563001|48000|500
-CDEF|detail=1|563101|48000|500
 CMR|missionRole56=1 detail=1|563101|48000|500
-CDEF|detail=1|563201|48000|500
 CMR|missionRole56=1 detail=1|563201|48000|500
-CDEF|detail=1|563001|48500|500
 CMR|missionRole56=1 detail=1|563001|48500|500
-CDEF|detail=1|563101|48500|500
 CMR|missionRole56=1 detail=1|563101|48500|500
-CDEF|detail=1|563201|48500|500
 CMR|missionRole56=1 detail=1|563201|48500|500
-CDEF|detail=1|563001|49000|500
 CMR|missionRole56=1 detail=1|563001|49000|500
-CDEF|detail=1|563101|49000|500
 CMR|missionRole56=1 detail=1|563101|49000|500
-CDEF|detail=1|563201|49000|500
 CMR|missionRole56=1 detail=1|563201|49000|500
-CDEF|detail=1|563001|49500|500
 CMR|missionRole56=1 detail=1|563001|49500|500
-CDEF|detail=1|563101|49500|500
 CMR|missionRole56=1 detail=1|563101|49500|500
-CDEF|detail=1|563201|49500|500
 CMR|missionRole56=1 detail=1|563201|49500|500
-CDEF|detail=1|563001|50000|500
 CMR|missionRole56=1 detail=1|563001|50000|500
-CDEF|detail=1|563101|50000|500
 CMR|missionRole56=1 detail=1|563101|50000|500
-CDEF|detail=1|563201|50000|500
 CMR|missionRole56=1 detail=1|563201|50000|500
-CDEF|detail=1|563001|50500|500
 CMR|missionRole56=1 detail=1|563001|50500|500
-CDEF|detail=1|563101|50500|500
 CMR|missionRole56=1 detail=1|563101|50500|500
-CDEF|detail=1|563201|50500|500
 CMR|missionRole56=1 detail=1|563201|50500|500
-CDEF|detail=1|563001|51000|500
 CMR|missionRole56=1 detail=1|563001|51000|500
-CDEF|detail=1|563101|51000|500
 CMR|missionRole56=1 detail=1|563101|51000|500
-CDEF|detail=1|563201|51000|500
 CMR|missionRole56=1 detail=1|563201|51000|500
-CDEF|detail=1|563001|51500|500
 CMR|missionRole56=1 detail=1|563001|51500|500
-CDEF|detail=1|563101|51500|500
 CMR|missionRole56=1 detail=1|563101|51500|500
-CDEF|detail=1|563201|51500|500
 CMR|missionRole56=1 detail=1|563201|51500|500
-CDEF|detail=1|563001|52000|500
 CMR|missionRole56=1 detail=1|563001|52000|500
-CDEF|detail=1|563101|52000|500
 CMR|missionRole56=1 detail=1|563101|52000|500
-CDEF|detail=1|563201|52000|500
 CMR|missionRole56=1 detail=1|563201|52000|500
-CDEF|detail=1|563001|52500|500
 CMR|missionRole56=1 detail=1|563001|52500|500
-CDEF|detail=1|563101|52500|500
 CMR|missionRole56=1 detail=1|563101|52500|500
-CDEF|detail=1|563201|52500|500
 CMR|missionRole56=1 detail=1|563201|52500|500
-CDEF|detail=1|563001|53000|500
 CMR|missionRole56=1 detail=1|563001|53000|500
-CDEF|detail=1|563101|53000|500
 CMR|missionRole56=1 detail=1|563101|53000|500
-CDEF|detail=1|563201|53000|500
 CMR|missionRole56=1 detail=1|563201|53000|500
-CDEF|detail=1|563001|53500|500
 CMR|missionRole56=1 detail=1|563001|53500|500
-CDEF|detail=1|563101|53500|500
 CMR|missionRole56=1 detail=1|563101|53500|500
-CDEF|detail=1|563201|53500|500
 CMR|missionRole56=1 detail=1|563201|53500|500
-CDEF|detail=1|563001|54000|500
 CMR|missionRole56=1 detail=1|563001|54000|500
-CDEF|detail=1|563101|54000|500
 CMR|missionRole56=1 detail=1|563101|54000|500
-CDEF|detail=1|563201|54000|500
 CMR|missionRole56=1 detail=1|563201|54000|500
-CDEF|detail=1|563001|54500|500
 CMR|missionRole56=1 detail=1|563001|54500|500
-CDEF|detail=1|563101|54500|500
 CMR|missionRole56=1 detail=1|563101|54500|500
-CDEF|detail=1|563201|54500|500
 CMR|missionRole56=1 detail=1|563201|54500|500
-CDEF|detail=1|563001|55000|500
 CMR|missionRole56=1 detail=1|563001|55000|500
-CDEF|detail=1|563101|55000|500
 CMR|missionRole56=1 detail=1|563101|55000|500
-CDEF|detail=1|563201|55000|500
 CMR|missionRole56=1 detail=1|563201|55000|500
-CDEF|detail=1|563001|55500|500
 CMR|missionRole56=1 detail=1|563001|55500|500
-CDEF|detail=1|563101|55500|500
 CMR|missionRole56=1 detail=1|563101|55500|500
-CDEF|detail=1|563201|55500|500
 CMR|missionRole56=1 detail=1|563201|55500|500
-CDEF|detail=1|563001|56000|500
 CMR|missionRole56=1 detail=1|563001|56000|500
-CDEF|detail=1|563101|56000|500
 CMR|missionRole56=1 detail=1|563101|56000|500
-CDEF|detail=1|563201|56000|500
 CMR|missionRole56=1 detail=1|563201|56000|500
-CDEF|detail=1|563001|56500|500
 CMR|missionRole56=1 detail=1|563001|56500|500
-CDEF|detail=1|563101|56500|500
 CMR|missionRole56=1 detail=1|563101|56500|500
-CDEF|detail=1|563201|56500|500
 CMR|missionRole56=1 detail=1|563201|56500|500
-CDEF|detail=1|563001|57000|500
 CMR|missionRole56=1 detail=1|563001|57000|500
-CDEF|detail=1|563101|57000|500
 CMR|missionRole56=1 detail=1|563101|57000|500
-CDEF|detail=1|563201|57000|500
 CMR|missionRole56=1 detail=1|563201|57000|500
-CDEF|detail=1|563001|57500|500
 CMR|missionRole56=1 detail=1|563001|57500|500
-CDEF|detail=1|563101|57500|500
 CMR|missionRole56=1 detail=1|563101|57500|500
-CDEF|detail=1|563201|57500|500
 CMR|missionRole56=1 detail=1|563201|57500|500
-CDEF|detail=1|563001|58000|500
 CMR|missionRole56=1 detail=1|563001|58000|500
-CDEF|detail=1|563101|58000|500
 CMR|missionRole56=1 detail=1|563101|58000|500
-CDEF|detail=1|563201|58000|500
 CMR|missionRole56=1 detail=1|563201|58000|500
-CDEF|detail=1|563001|58500|500
 CMR|missionRole56=1 detail=1|563001|58500|500
-CDEF|detail=1|563101|58500|500
 CMR|missionRole56=1 detail=1|563101|58500|500
-CDEF|detail=1|563201|58500|500
 CMR|missionRole56=1 detail=1|563201|58500|500
-CDEF|detail=1|563001|59000|500
 CMR|missionRole56=1 detail=1|563001|59000|500
-CDEF|detail=1|563101|59000|500
 CMR|missionRole56=1 detail=1|563101|59000|500
-CDEF|detail=1|563201|59000|500
 CMR|missionRole56=1 detail=1|563201|59000|500
-CDEF|detail=1|563001|59500|500
 CMR|missionRole56=1 detail=1|563001|59500|500
-CDEF|detail=1|563101|59500|500
 CMR|missionRole56=1 detail=1|563101|59500|500
-CDEF|detail=1|563201|59500|500
 CMR|missionRole56=1 detail=1|563201|59500|500
-CDEF|detail=1|563001|60000|500
 CMR|missionRole56=1 detail=1|563001|60000|500
-CDEF|detail=1|563101|60000|500
 CMR|missionRole56=1 detail=1|563101|60000|500
-CDEF|detail=1|563201|60000|500
 CMR|missionRole56=1 detail=1|563201|60000|500
-CDEF|detail=1|563001|60500|500
 CMR|missionRole56=1 detail=1|563001|60500|500
-CDEF|detail=1|563101|60500|500
 CMR|missionRole56=1 detail=1|563101|60500|500
-CDEF|detail=1|563201|60500|500
 CMR|missionRole56=1 detail=1|563201|60500|500
-CDEF|detail=1|563001|61000|500
 CMR|missionRole56=1 detail=1|563001|61000|500
-CDEF|detail=1|563101|61000|500
 CMR|missionRole56=1 detail=1|563101|61000|500
-CDEF|detail=1|563201|61000|500
 CMR|missionRole56=1 detail=1|563201|61000|500
-CDEF|detail=1|563001|61500|500
 CMR|missionRole56=1 detail=1|563001|61500|500
-CDEF|detail=1|563101|61500|500
 CMR|missionRole56=1 detail=1|563101|61500|500
-CDEF|detail=1|563201|61500|500
 CMR|missionRole56=1 detail=1|563201|61500|500
-CDEF|detail=1|563001|62000|500
 CMR|missionRole56=1 detail=1|563001|62000|500
-CDEF|detail=1|563101|62000|500
 CMR|missionRole56=1 detail=1|563101|62000|500
-CDEF|detail=1|563201|62000|500
 CMR|missionRole56=1 detail=1|563201|62000|500
-CDEF|detail=1|563001|62500|500
 CMR|missionRole56=1 detail=1|563001|62500|500
-CDEF|detail=1|563101|62500|500
 CMR|missionRole56=1 detail=1|563101|62500|500
-CDEF|detail=1|563201|62500|500
 CMR|missionRole56=1 detail=1|563201|62500|500
-CDEF|detail=1|563001|63000|500
 CMR|missionRole56=1 detail=1|563001|63000|500
-CDEF|detail=1|563101|63000|500
 CMR|missionRole56=1 detail=1|563101|63000|500
-CDEF|detail=1|563201|63000|500
 CMR|missionRole56=1 detail=1|563201|63000|500
-CDEF|detail=1|563001|63500|500
 CMR|missionRole56=1 detail=1|563001|63500|500
-CDEF|detail=1|563101|63500|500
 CMR|missionRole56=1 detail=1|563101|63500|500
-CDEF|detail=1|563201|63500|500
 CMR|missionRole56=1 detail=1|563201|63500|500
-CDEF|detail=1|563001|64000|500
 CMR|missionRole56=1 detail=1|563001|64000|500
-CDEF|detail=1|563101|64000|500
 CMR|missionRole56=1 detail=1|563101|64000|500
-CDEF|detail=1|563201|64000|500
 CMR|missionRole56=1 detail=1|563201|64000|500
-CDEF|detail=1|563001|64500|500
 CMR|missionRole56=1 detail=1|563001|64500|500
-CDEF|detail=1|563101|64500|500
 CMR|missionRole56=1 detail=1|563101|64500|500
-CDEF|detail=1|563201|64500|500
 CMR|missionRole56=1 detail=1|563201|64500|500
-CDEF|detail=1|563001|65000|500
 CMR|missionRole56=1 detail=1|563001|65000|500
-CDEF|detail=1|563101|65000|500
 CMR|missionRole56=1 detail=1|563101|65000|500
-CDEF|detail=1|563201|65000|500
 CMR|missionRole56=1 detail=1|563201|65000|500
-CDEF|detail=1|563001|65500|500
 CMR|missionRole56=1 detail=1|563001|65500|500
-CDEF|detail=1|563101|65500|500
 CMR|missionRole56=1 detail=1|563101|65500|500
-CDEF|detail=1|563201|65500|500
 CMR|missionRole56=1 detail=1|563201|65500|500
-CDEF|detail=1|563001|66000|500
 CMR|missionRole56=1 detail=1|563001|66000|500
-CDEF|detail=1|563101|66000|500
 CMR|missionRole56=1 detail=1|563101|66000|500
-CDEF|detail=1|563201|66000|500
 CMR|missionRole56=1 detail=1|563201|66000|500
-CDEF|detail=1|563001|66500|500
 CMR|missionRole56=1 detail=1|563001|66500|500
-CDEF|detail=1|563101|66500|500
 CMR|missionRole56=1 detail=1|563101|66500|500
-CDEF|detail=1|563201|66500|500
 CMR|missionRole56=1 detail=1|563201|66500|500
-CDEF|detail=1|563001|67000|500
 CMR|missionRole56=1 detail=1|563001|67000|500
-CDEF|detail=1|563101|67000|500
 CMR|missionRole56=1 detail=1|563101|67000|500
-CDEF|detail=1|563201|67000|500
 CMR|missionRole56=1 detail=1|563201|67000|500
-CDEF|detail=1|563001|67500|500
 CMR|missionRole56=1 detail=1|563001|67500|500
-CDEF|detail=1|563101|67500|500
 CMR|missionRole56=1 detail=1|563101|67500|500
-CDEF|detail=1|563201|67500|500
 CMR|missionRole56=1 detail=1|563201|67500|500
-CDEF|detail=1|563001|68000|500
 CMR|missionRole56=1 detail=1|563001|68000|500
-CDEF|detail=1|563101|68000|500
 CMR|missionRole56=1 detail=1|563101|68000|500
-CDEF|detail=1|563201|68000|500
 CMR|missionRole56=1 detail=1|563201|68000|500
-CDEF|detail=1|563001|68500|500
 CMR|missionRole56=1 detail=1|563001|68500|500
-CDEF|detail=1|563101|68500|500
 CMR|missionRole56=1 detail=1|563101|68500|500
-CDEF|detail=1|563201|68500|500
 CMR|missionRole56=1 detail=1|563201|68500|500
-CDEF|detail=1|563001|69000|500
 CMR|missionRole56=1 detail=1|563001|69000|500
-CDEF|detail=1|563101|69000|500
 CMR|missionRole56=1 detail=1|563101|69000|500
-CDEF|detail=1|563201|69000|500
 CMR|missionRole56=1 detail=1|563201|69000|500
-CDEF|detail=1|563001|69500|500
 CMR|missionRole56=1 detail=1|563001|69500|500
-CDEF|detail=1|563101|69500|500
 CMR|missionRole56=1 detail=1|563101|69500|500
-CDEF|detail=1|563201|69500|500
 CMR|missionRole56=1 detail=1|563201|69500|500
-CDEF|detail=1|563001|70000|500
 CMR|missionRole56=1 detail=1|563001|70000|500
-CDEF|detail=1|563101|70000|500
 CMR|missionRole56=1 detail=1|563101|70000|500
-CDEF|detail=1|563201|70000|500
 CMR|missionRole56=1 detail=1|563201|70000|500
-CDEF|detail=1|563001|70500|500
 CMR|missionRole56=1 detail=1|563001|70500|500
-CDEF|detail=1|563101|70500|500
 CMR|missionRole56=1 detail=1|563101|70500|500
-CDEF|detail=1|563201|70500|500
 CMR|missionRole56=1 detail=1|563201|70500|500
-CDEF|detail=1|563001|71000|500
 CMR|missionRole56=1 detail=1|563001|71000|500
-CDEF|detail=1|563101|71000|500
 CMR|missionRole56=1 detail=1|563101|71000|500
-CDEF|detail=1|563201|71000|500
 CMR|missionRole56=1 detail=1|563201|71000|500
-CDEF|detail=1|563001|71500|500
 CMR|missionRole56=1 detail=1|563001|71500|500
-CDEF|detail=1|563101|71500|500
 CMR|missionRole56=1 detail=1|563101|71500|500
-CDEF|detail=1|563201|71500|500
 CMR|missionRole56=1 detail=1|563201|71500|500
-CDEF|detail=1|563001|72000|500
 CMR|missionRole56=1 detail=1|563001|72000|500
-CDEF|detail=1|563101|72000|500
 CMR|missionRole56=1 detail=1|563101|72000|500
-CDEF|detail=1|563201|72000|500
 CMR|missionRole56=1 detail=1|563201|72000|500
-CDEF|detail=1|563001|72500|500
 CMR|missionRole56=1 detail=1|563001|72500|500
-CDEF|detail=1|563101|72500|500
 CMR|missionRole56=1 detail=1|563101|72500|500
-CDEF|detail=1|563201|72500|500
 CMR|missionRole56=1 detail=1|563201|72500|500
-CDEF|detail=1|563001|73000|500
 CMR|missionRole56=1 detail=1|563001|73000|500
-CDEF|detail=1|563101|73000|500
 CMR|missionRole56=1 detail=1|563101|73000|500
-CDEF|detail=1|563201|73000|500
 CMR|missionRole56=1 detail=1|563201|73000|500
-CDEF|detail=1|563001|73500|500
 CMR|missionRole56=1 detail=1|563001|73500|500
-CDEF|detail=1|563101|73500|500
 CMR|missionRole56=1 detail=1|563101|73500|500
-CDEF|detail=1|563201|73500|500
 CMR|missionRole56=1 detail=1|563201|73500|500
-CDEF|detail=1|563001|74000|500
 CMR|missionRole56=1 detail=1|563001|74000|500
-CDEF|detail=1|563101|74000|500
 CMR|missionRole56=1 detail=1|563101|74000|500
-CDEF|detail=1|563201|74000|500
 CMR|missionRole56=1 detail=1|563201|74000|500
-CDEF|detail=1|563001|74500|500
 CMR|missionRole56=1 detail=1|563001|74500|500
-CDEF|detail=1|563101|74500|500
 CMR|missionRole56=1 detail=1|563101|74500|500
-CDEF|detail=1|563201|74500|500
 CMR|missionRole56=1 detail=1|563201|74500|500
-CDEF|detail=1|563001|75000|500
 CMR|missionRole56=1 detail=1|563001|75000|500
-CDEF|detail=1|563101|75000|500
 CMR|missionRole56=1 detail=1|563101|75000|500
-CDEF|detail=1|563201|75000|500
 CMR|missionRole56=1 detail=1|563201|75000|500
-CDEF|detail=1|563001|75500|500
 CMR|missionRole56=1 detail=1|563001|75500|500
-CDEF|detail=1|563101|75500|500
 CMR|missionRole56=1 detail=1|563101|75500|500
-CDEF|detail=1|563201|75500|500
 CMR|missionRole56=1 detail=1|563201|75500|500
-CDEF|detail=1|563001|76000|500
 CMR|missionRole56=1 detail=1|563001|76000|500
-CDEF|detail=1|563101|76000|500
 CMR|missionRole56=1 detail=1|563101|76000|500
-CDEF|detail=1|563201|76000|500
 CMR|missionRole56=1 detail=1|563201|76000|500
-CDEF|detail=1|563001|76500|500
 CMR|missionRole56=1 detail=1|563001|76500|500
-CDEF|detail=1|563101|76500|500
 CMR|missionRole56=1 detail=1|563101|76500|500
-CDEF|detail=1|563201|76500|500
 CMR|missionRole56=1 detail=1|563201|76500|500
-CDEF|detail=1|563001|77000|500
 CMR|missionRole56=1 detail=1|563001|77000|500
-CDEF|detail=1|563101|77000|500
 CMR|missionRole56=1 detail=1|563101|77000|500
-CDEF|detail=1|563201|77000|500
 CMR|missionRole56=1 detail=1|563201|77000|500
-CDEF|detail=1|563001|77500|500
 CMR|missionRole56=1 detail=1|563001|77500|500
-CDEF|detail=1|563101|77500|500
 CMR|missionRole56=1 detail=1|563101|77500|500
-CDEF|detail=1|563201|77500|500
 CMR|missionRole56=1 detail=1|563201|77500|500
-CDEF|detail=1|563001|78000|500
 CMR|missionRole56=1 detail=1|563001|78000|500
-CDEF|detail=1|563101|78000|500
 CMR|missionRole56=1 detail=1|563101|78000|500
-CDEF|detail=1|563201|78000|500
 CMR|missionRole56=1 detail=1|563201|78000|500
-CDEF|detail=1|563001|78500|500
 CMR|missionRole56=1 detail=1|563001|78500|500
-CDEF|detail=1|563101|78500|500
 CMR|missionRole56=1 detail=1|563101|78500|500
-CDEF|detail=1|563201|78500|500
 CMR|missionRole56=1 detail=1|563201|78500|500
-CDEF|detail=1|563001|79000|500
 CMR|missionRole56=1 detail=1|563001|79000|500
-CDEF|detail=1|563101|79000|500
 CMR|missionRole56=1 detail=1|563101|79000|500
-CDEF|detail=1|563201|79000|500
 CMR|missionRole56=1 detail=1|563201|79000|500
-CDEF|detail=1|563001|79500|500
 CMR|missionRole56=1 detail=1|563001|79500|500
-CDEF|detail=1|563101|79500|500
 CMR|missionRole56=1 detail=1|563101|79500|500
-CDEF|detail=1|563201|79500|500
 CMR|missionRole56=1 detail=1|563201|79500|500
-CDEF|detail=1|563001|80000|500
 CMR|missionRole56=1 detail=1|563001|80000|500
-CDEF|detail=1|563101|80000|500
 CMR|missionRole56=1 detail=1|563101|80000|500
-CDEF|detail=1|563201|80000|500
 CMR|missionRole56=1 detail=1|563201|80000|500
-CDEF|detail=1|563001|80500|500
 CMR|missionRole56=1 detail=1|563001|80500|500
-CDEF|detail=1|563101|80500|500
 CMR|missionRole56=1 detail=1|563101|80500|500
-CDEF|detail=1|563201|80500|500
 CMR|missionRole56=1 detail=1|563201|80500|500
-CDEF|detail=1|563001|81000|500
 CMR|missionRole56=1 detail=1|563001|81000|500
-CDEF|detail=1|563101|81000|500
 CMR|missionRole56=1 detail=1|563101|81000|500
-CDEF|detail=1|563201|81000|500
 CMR|missionRole56=1 detail=1|563201|81000|500
-CDEF|detail=1|563001|81500|500
 CMR|missionRole56=1 detail=1|563001|81500|500
-CDEF|detail=1|563101|81500|500
 CMR|missionRole56=1 detail=1|563101|81500|500
-CDEF|detail=1|563201|81500|500
 CMR|missionRole56=1 detail=1|563201|81500|500
-CDEF|detail=1|563001|82000|500
 CMR|missionRole56=1 detail=1|563001|82000|500
-CDEF|detail=1|563101|82000|500
 CMR|missionRole56=1 detail=1|563101|82000|500
-CDEF|detail=1|563201|82000|500
 CMR|missionRole56=1 detail=1|563201|82000|500
-CDEF|detail=1|563001|82500|500
 CMR|missionRole56=1 detail=1|563001|82500|500
-CDEF|detail=1|563101|82500|500
 CMR|missionRole56=1 detail=1|563101|82500|500
-CDEF|detail=1|563201|82500|500
 CMR|missionRole56=1 detail=1|563201|82500|500
-CDEF|detail=1|563001|83000|500
 CMR|missionRole56=1 detail=1|563001|83000|500
-CDEF|detail=1|563101|83000|500
 CMR|missionRole56=1 detail=1|563101|83000|500
-CDEF|detail=1|563201|83000|500
 CMR|missionRole56=1 detail=1|563201|83000|500
-CDEF|detail=1|563001|83500|500
 CMR|missionRole56=1 detail=1|563001|83500|500
-CDEF|detail=1|563101|83500|500
 CMR|missionRole56=1 detail=1|563101|83500|500
-CDEF|detail=1|563201|83500|500
 CMR|missionRole56=1 detail=1|563201|83500|500
-CDEF|detail=1|563001|84000|500
 CMR|missionRole56=1 detail=1|563001|84000|500
-CDEF|detail=1|563101|84000|500
 CMR|missionRole56=1 detail=1|563101|84000|500
-CDEF|detail=1|563201|84000|500
 CMR|missionRole56=1 detail=1|563201|84000|500
-CDEF|detail=1|563001|84500|500
 CMR|missionRole56=1 detail=1|563001|84500|500
-CDEF|detail=1|563101|84500|500
 CMR|missionRole56=1 detail=1|563101|84500|500
-CDEF|detail=1|563201|84500|500
 CMR|missionRole56=1 detail=1|563201|84500|500
-CDEF|detail=1|563001|85000|500
 CMR|missionRole56=1 detail=1|563001|85000|500
-CDEF|detail=1|563101|85000|500
 CMR|missionRole56=1 detail=1|563101|85000|500
-CDEF|detail=1|563201|85000|500
 CMR|missionRole56=1 detail=1|563201|85000|500
-CDEF|detail=1|563001|85500|500
 CMR|missionRole56=1 detail=1|563001|85500|500
-CDEF|detail=1|563101|85500|500
 CMR|missionRole56=1 detail=1|563101|85500|500
-CDEF|detail=1|563201|85500|500
 CMR|missionRole56=1 detail=1|563201|85500|500
-CDEF|detail=1|563001|86000|500
 CMR|missionRole56=1 detail=1|563001|86000|500
-CDEF|detail=1|563101|86000|500
 CMR|missionRole56=1 detail=1|563101|86000|500
-CDEF|detail=1|563201|86000|500
 CMR|missionRole56=1 detail=1|563201|86000|500
-CDEF|detail=1|563001|86500|500
 CMR|missionRole56=1 detail=1|563001|86500|500
-CDEF|detail=1|563101|86500|500
 CMR|missionRole56=1 detail=1|563101|86500|500
-CDEF|detail=1|563201|86500|500
 CMR|missionRole56=1 detail=1|563201|86500|500
-CDEF|detail=1|563001|87000|500
 CMR|missionRole56=1 detail=1|563001|87000|500
-CDEF|detail=1|563101|87000|500
 CMR|missionRole56=1 detail=1|563101|87000|500
-CDEF|detail=1|563201|87000|500
 CMR|missionRole56=1 detail=1|563201|87000|500
-CDEF|detail=1|563001|87500|500
 CMR|missionRole56=1 detail=1|563001|87500|500
-CDEF|detail=1|563101|87500|500
 CMR|missionRole56=1 detail=1|563101|87500|500
-CDEF|detail=1|563201|87500|500
 CMR|missionRole56=1 detail=1|563201|87500|500
-CDEF|detail=1|563001|88000|500
 CMR|missionRole56=1 detail=1|563001|88000|500
-CDEF|detail=1|563101|88000|500
 CMR|missionRole56=1 detail=1|563101|88000|500
-CDEF|detail=1|563201|88000|500
 CMR|missionRole56=1 detail=1|563201|88000|500
-CDEF|detail=1|563001|88500|500
 CMR|missionRole56=1 detail=1|563001|88500|500
-CDEF|detail=1|563101|88500|500
 CMR|missionRole56=1 detail=1|563101|88500|500
-CDEF|detail=1|563201|88500|500
 CMR|missionRole56=1 detail=1|563201|88500|500
-CDEF|detail=1|563001|89000|500
 CMR|missionRole56=1 detail=1|563001|89000|500
-CDEF|detail=1|563101|89000|500
 CMR|missionRole56=1 detail=1|563101|89000|500
-CDEF|detail=1|563201|89000|500
 CMR|missionRole56=1 detail=1|563201|89000|500
-CDEF|detail=1|563001|89500|500
 CMR|missionRole56=1 detail=1|563001|89500|500
-CDEF|detail=1|563101|89500|500
 CMR|missionRole56=1 detail=1|563101|89500|500
-CDEF|detail=1|563201|89500|500
 CMR|missionRole56=1 detail=1|563201|89500|500
-CDEF|detail=1|563001|90000|500
 CMR|missionRole56=1 detail=1|563001|90000|500
-CDEF|detail=1|563101|90000|500
 CMR|missionRole56=1 detail=1|563101|90000|500
-CDEF|detail=1|563201|90000|500
 CMR|missionRole56=1 detail=1|563201|90000|500
-CDEF|detail=1|563001|90500|500
 CMR|missionRole56=1 detail=1|563001|90500|500
-CDEF|detail=1|563101|90500|500
 CMR|missionRole56=1 detail=1|563101|90500|500
-CDEF|detail=1|563201|90500|500
 CMR|missionRole56=1 detail=1|563201|90500|500
-CDEF|detail=1|563001|91000|500
 CMR|missionRole56=1 detail=1|563001|91000|500
-CDEF|detail=1|563101|91000|500
 CMR|missionRole56=1 detail=1|563101|91000|500
-CDEF|detail=1|563201|91000|500
 CMR|missionRole56=1 detail=1|563201|91000|500
-CDEF|detail=1|563001|91500|500
 CMR|missionRole56=1 detail=1|563001|91500|500
-CDEF|detail=1|563101|91500|500
 CMR|missionRole56=1 detail=1|563101|91500|500
-CDEF|detail=1|563201|91500|500
 CMR|missionRole56=1 detail=1|563201|91500|500
-CDEF|detail=1|563001|92000|500
 CMR|missionRole56=1 detail=1|563001|92000|500
-CDEF|detail=1|563101|92000|500
 CMR|missionRole56=1 detail=1|563101|92000|500
-CDEF|detail=1|563201|92000|500
 CMR|missionRole56=1 detail=1|563201|92000|500
-CDEF|detail=1|563001|92500|500
 CMR|missionRole56=1 detail=1|563001|92500|500
-CDEF|detail=1|563101|92500|500
 CMR|missionRole56=1 detail=1|563101|92500|500
-CDEF|detail=1|563201|92500|500
 CMR|missionRole56=1 detail=1|563201|92500|500
-CDEF|detail=1|563001|93000|500
 CMR|missionRole56=1 detail=1|563001|93000|500
-CDEF|detail=1|563101|93000|500
 CMR|missionRole56=1 detail=1|563101|93000|500
-CDEF|detail=1|563201|93000|500
 CMR|missionRole56=1 detail=1|563201|93000|500
-CDEF|detail=1|563001|93500|500
 CMR|missionRole56=1 detail=1|563001|93500|500
-CDEF|detail=1|563101|93500|500
 CMR|missionRole56=1 detail=1|563101|93500|500
-CDEF|detail=1|563201|93500|500
 CMR|missionRole56=1 detail=1|563201|93500|500
-CDEF|detail=1|563001|94000|500
 CMR|missionRole56=1 detail=1|563001|94000|500
-CDEF|detail=1|563101|94000|500
 CMR|missionRole56=1 detail=1|563101|94000|500
-CDEF|detail=1|563201|94000|500
 CMR|missionRole56=1 detail=1|563201|94000|500
-CDEF|detail=1|563001|94500|500
 CMR|missionRole56=1 detail=1|563001|94500|500
-CDEF|detail=1|563101|94500|500
 CMR|missionRole56=1 detail=1|563101|94500|500
-CDEF|detail=1|563201|94500|500
 CMR|missionRole56=1 detail=1|563201|94500|500
-CDEF|detail=1|563001|95000|500
 CMR|missionRole56=1 detail=1|563001|95000|500
-CDEF|detail=1|563101|95000|500
 CMR|missionRole56=1 detail=1|563101|95000|500
-CDEF|detail=1|563201|95000|500
 CMR|missionRole56=1 detail=1|563201|95000|500
-CDEF|detail=1|563001|95500|500
 CMR|missionRole56=1 detail=1|563001|95500|500
-CDEF|detail=1|563101|95500|500
 CMR|missionRole56=1 detail=1|563101|95500|500
-CDEF|detail=1|563201|95500|500
 CMR|missionRole56=1 detail=1|563201|95500|500
-CDEF|detail=1|563001|96000|500
 CMR|missionRole56=1 detail=1|563001|96000|500
-CDEF|detail=1|563101|96000|500
 CMR|missionRole56=1 detail=1|563101|96000|500
-CDEF|detail=1|563201|96000|500
 CMR|missionRole56=1 detail=1|563201|96000|500
-CDEF|detail=1|563001|96500|500
 CMR|missionRole56=1 detail=1|563001|96500|500
-CDEF|detail=1|563101|96500|500
 CMR|missionRole56=1 detail=1|563101|96500|500
-CDEF|detail=1|563201|96500|500
 CMR|missionRole56=1 detail=1|563201|96500|500
-CDEF|detail=1|563001|97000|500
 CMR|missionRole56=1 detail=1|563001|97000|500
-CDEF|detail=1|563101|97000|500
 CMR|missionRole56=1 detail=1|563101|97000|500
-CDEF|detail=1|563201|97000|500
 CMR|missionRole56=1 detail=1|563201|97000|500
-CDEF|detail=1|563001|97500|500
 CMR|missionRole56=1 detail=1|563001|97500|500
-CDEF|detail=1|563101|97500|500
 CMR|missionRole56=1 detail=1|563101|97500|500
-CDEF|detail=1|563201|97500|500
 CMR|missionRole56=1 detail=1|563201|97500|500
-CDEF|detail=1|563001|98000|500
 CMR|missionRole56=1 detail=1|563001|98000|500
-CDEF|detail=1|563101|98000|500
 CMR|missionRole56=1 detail=1|563101|98000|500
-CDEF|detail=1|563201|98000|500
 CMR|missionRole56=1 detail=1|563201|98000|500
-CDEF|detail=1|563001|98500|500
 CMR|missionRole56=1 detail=1|563001|98500|500
-CDEF|detail=1|563101|98500|500
 CMR|missionRole56=1 detail=1|563101|98500|500
-CDEF|detail=1|563201|98500|500
 CMR|missionRole56=1 detail=1|563201|98500|500
-CDEF|detail=1|563001|99000|500
 CMR|missionRole56=1 detail=1|563001|99000|500
-CDEF|detail=1|563101|99000|500
 CMR|missionRole56=1 detail=1|563101|99000|500
-CDEF|detail=1|563201|99000|500
 CMR|missionRole56=1 detail=1|563201|99000|500
-CDEF|detail=1|563001|99500|500
 CMR|missionRole56=1 detail=1|563001|99500|500
-CDEF|detail=1|563101|99500|500
 CMR|missionRole56=1 detail=1|563101|99500|500
-CDEF|detail=1|563201|99500|500
 CMR|missionRole56=1 detail=1|563201|99500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|50000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|50500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|51000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|51500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|52000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|52500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|53000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|53500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|54000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|54500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|55000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|55500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|56000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|56500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|57000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|57500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|58000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|58500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|59000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|59500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|60000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|60500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|61000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|61500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|62000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|62500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|63000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|63500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|64000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|64500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|65000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|65500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|66000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|66500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|67000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|67500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|68000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|68500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|69000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|69500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|70000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|70500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|71000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|71500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|72000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|72500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|73000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|73500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|74000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|74500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|75000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|75500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|76000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|76500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|77000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|77500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|78000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|78500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|79000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|79500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|80000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|80500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|81000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|81500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|82000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|82500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|83000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|83500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|84000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|84500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|85000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|85500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|86000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|86500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|87000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|87500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|88000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|88500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|89000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|89500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|90000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|90500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|91000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|91500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|92000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|92500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|93000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|93500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|94000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|94500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|95000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|95500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|96000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|96500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|97000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|97500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|98000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|98500|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|99000|500
+CV3PMR|missionRole56=1 viewpoint53=3 viewpointPow53=0.5 detail=1|563001|99500|500
