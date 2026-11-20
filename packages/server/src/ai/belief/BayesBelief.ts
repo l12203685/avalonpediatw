@@ -232,6 +232,71 @@ function missionProb(round: number, reds: number, fails: number): number {
   return p;
 }
 
+/**
+ * Round 56 `missionRole56`: human 10-player missions (`games_cache.json`, 2,241 games; `scripts/fitRound56.ts`), fail-card counts by
+ * `round|reds on the team|Oberon on the team (0/1)` (index = fail cards). Two reds with Oberon fail double far more often; Oberon alone hides more.
+ */
+export const MISSION_OBERON_56: Readonly<Record<string, readonly number[]>> = {
+  '1|1|0': [180, 714],
+  '1|1|1': [114, 126],
+  '1|2|0': [82, 142, 14],
+  '1|2|1': [32, 155, 108],
+  '1|3|0': [8, 17, 1, 0],
+  '1|3|1': [7, 23, 12, 0],
+  '2|1|0': [44, 766],
+  '2|1|1': [71, 164],
+  '2|2|0': [45, 204, 39],
+  '2|2|1': [9, 127, 173],
+  '2|3|0': [10, 32, 5, 0],
+  '2|3|1': [2, 41, 39, 7],
+  '2|4|1': [1, 1, 9, 1, 0],
+  '3|1|0': [22, 568],
+  '3|1|1': [27, 142],
+  '3|2|0': [28, 114, 52],
+  '3|2|1': [2, 56, 111],
+  '3|3|0': [6, 10, 3, 20],
+  '3|3|1': [3, 13, 7, 25],
+  '3|4|1': [0, 3, 1, 0, 94],
+  '4|1|0': [247, 157],
+  '4|1|1': [65, 75],
+  '4|2|0': [2, 4, 87],
+  '4|2|1': [34, 15, 27],
+  '4|3|0': [0, 0, 8, 19],
+  '4|3|1': [0, 1, 14, 18],
+  '4|4|1': [0, 0, 0, 7, 32],
+  '5|1|0': [4, 138],
+  '5|1|1': [3, 25],
+  '5|2|0': [0, 1, 6],
+  '5|2|1': [0, 5, 17],
+  '5|3|0': [0, 1, 0, 1],
+  '5|3|1': [0, 0, 0, 2],
+  '5|4|1': [0, 0, 0, 0, 13]
+};
+
+/**
+ * Round 56: P(fails | round, reds, Oberon on the team?) = the mixed table's P(fails | round, reds) × the human ratio
+ * P_h(fails | round, reds, oberon) / P_h(fails | round, reds) (both +1 smoothed), renormalized over 0..reds.
+ */
+function missionProbRole56(round: number, reds: number, fails: number, oberon: boolean): number {
+  if (fails > reds) return 0;
+  const a = MISSION_OBERON_56[`${round}|${reds}|${oberon ? 1 : 0}`];
+  const b = MISSION_OBERON_56[`${round}|${reds}|${oberon ? 0 : 1}`];
+  if (!a) return missionProb(round, reds, fails);
+  const k = reds + 1;
+  const na = a.reduce((x, y) => x + y, 0);
+  const nb = b ? b.reduce((x, y) => x + y, 0) : 0;
+  let tot = 0;
+  let mine = 0;
+  for (let f = 0; f <= reds; f++) {
+    const pa = ((a[f] ?? 0) + 1) / (na + k);
+    const pm = ((a[f] ?? 0) + (b ? b[f] ?? 0 : 0) + 1) / (na + nb + k);
+    const x = missionProb(round, reds, f) * (pa / pm);
+    tot += x;
+    if (f === fails) mine = x;
+  }
+  return tot > 0 ? mine / tot : 0;
+}
+
 function redLakeProb(targetRed: boolean): number {
   const at = (t: Table): number => { const c = t.redLake[targetRed ? 'evil' : 'good'] ?? [1, 2]; return smooth(c[0], c[1]); };
   return blendW(mixL, at(THL), at(TB));
@@ -477,6 +542,11 @@ export interface BayesOptions {
    * its votes are read as usual.
    */
   copyFreq55b?: boolean;
+  /**
+   * Round 56 `missionRole56`: blue seats only, 10-player games. The mission term of each world is averaged over which of its reds is Oberon
+   * (Merlin: one of the reds he sees), each mission's fail cards read from the table scaled by the human Oberon-on-the-team ratio (`MISSION_OBERON_56`).
+   */
+  missionRole56?: boolean;
   /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
   lakeSusp50?: number;
 }
@@ -497,7 +567,8 @@ export function ownViewStrength(obs: PlayerObservation, scope: number, maxRound 
   if (maxRound > 0 && (obs.currentRound ?? 1) > maxRound) return 0;
   if (obs.gamePhase !== 'team_select' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return 0;
   if (!(obs.myRole === 'loyal' || (scope >= 2 && obs.myRole === 'percival'))) return 0;
-  const fc = obs.failCount ?? 0;
+  // Round 56 `goLike56` bit 16: a pick made as the forced one keeps the own prior at its real proposal's weight.
+  const fc = obs.goLikeOwnViewFc ?? obs.failCount ?? 0;
   if (fc >= 4) return 0;
   // The likelier this proposal goes on a mission (human records, `PROPOSAL_GO_RATE`), the less the own prior counts: weight 1 − go/0.3, so
   // about 0.7–1 on the R1–R2 proposals (0.5–8%), part weight on the R3–R5 proposals below 30% (R3 second 0.80, third 0.63; R3 first 25% → 0.17),
@@ -608,7 +679,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${opts.missionRole56 ? 'mr|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -757,7 +828,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const copyW = blueSeat && opts.copyWeight55 !== undefined && opts.copyWeight55 >= 0 && opts.copyWeight55 < 1 ? opts.copyWeight55 : 1;
   const copyRW = blueSeat && opts.copyRepeatWeight55b !== undefined && opts.copyRepeatWeight55b >= 0 && opts.copyRepeatWeight55b < 1 ? opts.copyRepeatWeight55b : 1;
   const copyFreq = blueSeat && opts.copyFreq55b === true;
-  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  // Round 56 `missionRole56`: blue seats, 10 players (the 10-player box always holds Oberon).
+  const mr56 = blueSeat && opts.missionRole56 === true && obs.allPlayerIds.length === 10;
+  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -816,6 +889,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
     };
   });
   const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
+  // Round 56: who can be Oberon — any red; for Merlin only a red he sees (Mordred is the one he cannot see).
+  const oberonPool = mr56 ? (obs.myRole === 'merlin' && obs.knownEvils.length > 0 ? view.maskOf(obs.knownEvils) : all) : 0;
   const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
     .map((l) => ({ hb: bit(l.holderId), tb: bit(l.targetId), evil: l.declaredClaim === 'evil' }));
   // Round 46 `beliefLakePick45`: the seats each declared lake could inspect (not a holder up to it, not an earlier target).
@@ -912,7 +987,24 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       }
       if (p.copyW !== 1) { lp = lp0 + p.copyW * (lp - lp0); lpp = lpp0 + p.copyW * (lpp - lpp0); lv = lv0 + p.copyW * (lv - lv0); }
     }
-    for (const q of quests) {
+    const obCand = mr56 && quests.length > 0 ? w & oberonPool : 0;
+    if (obCand !== 0) {
+      // Round 56 `missionRole56`: the missions' joint likelihood averaged over which red is Oberon (each equally likely).
+      let tot = 0;
+      let nOb = 0;
+      for (let x = obCand; x; x &= x - 1) {
+        const ob = x & -x;
+        let pr = 1;
+        for (const q of quests) {
+          const reds = sizeOf(w & q.mask);
+          if (morganaR1 && q.round === 1 && reds === 1 && (w & q.mask & wizardMask) !== 0) { pr *= q.fails === 0 ? STRICT_EPS : 1 - STRICT_EPS; continue; }
+          pr *= missionProbRole56(q.round, reds, q.fails, (q.mask & ob) !== 0);
+        }
+        tot += pr;
+        nOb++;
+      }
+      lp += tot > 0 ? Math.log(tot / nOb) : -1e9;
+    } else for (const q of quests) {
       const reds = sizeOf(w & q.mask);
       if (morganaR1 && q.round === 1 && reds === 1 && (w & q.mask & wizardMask) !== 0) {
         // The only red on the R1 team is the Morgana thumb (this world): she fails (the human rule; round 16).
@@ -1180,6 +1272,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.blueVoteTemper57 ?? 0) > 0 && (t.blueVoteTemper57 ?? 0) < 1 ? { blueVoteTemper: t.blueVoteTemper57 } : {}),
     ...((t.copyRepeat55b ?? 0) > 0 ? { copyRepeatWeight55b: 1 - Math.min(1, t.copyRepeat55b ?? 0) } : {}),
     ...((t.copyFreq55b ?? 0) > 0 ? { copyFreq55b: true } : {}),
+    ...((t.missionRole56 ?? 0) > 0 ? { missionRole56: true } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
 }
 

@@ -69,6 +69,7 @@ import { earlyOwnTeamWhite, merlinOnTeamOwnApprove, merlinOwnWhiteNow, ownViewFi
 import { lakeHolderBarred40, lakePairBarred } from '../BlueRound39';
 import { loyalFresh43Team } from '../BlueRound43';
 import { tailClean52Tuning } from '../Round52';
+import { goLike56Applies, goLike56Obs, missionJoint56Applies, missionJoint56Team } from '../Round56';
 import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type PercivalThumbPlan39 } from '../BlueRound39Percival';
 import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
@@ -775,6 +776,34 @@ export class ForwardAgent implements AvalonAgent {
     this.thumbPlan39 = plan39;
     this.lakeBar39 = lakeBar;
     try {
+      // Round 56 `goLike56` (Round56.ts; site owner 11/19「1-1~1-4 & 2-1~2-4 做的事情都跟 1-5 & 2-5 一樣」): an R1 / R2 proposal 1–4 is picked as
+      // the fifth (forced) one would be on the same record; the team must still pass this decision's own gates and vote rules, else the usual pick.
+      if (goLike56Applies(this.baseline.tuning, obs)) {
+        const alt = this.decide(goLike56Obs(obs, ((this.baseline.tuning.goLike56 ?? 0) & 16) !== 0));
+        if (alt.action.type === 'team_select' && this.repairGateOk39(obs, alt.action.teamIds)) {
+          return this.post56(obs, { ...alt, reasoningTrace: { ...alt.reasoningTrace, summary: `${alt.reasoningTrace.summary} → picked as if it goes (round 56)` } });
+        }
+      }
+      return this.post56(obs, this.decideFlow(obs, plan39, lakeBar, proven));
+    } finally {
+      this.thumbPlan39 = prevPlan;
+      this.lakeBar39 = prevBar;
+    }
+  }
+
+  /**
+   * Round 56 `missionJoint56` (Round56.ts): a loyal / Percival team whose missions-only P(clean) is under κ × the best is replaced by the cleanest
+   * (full posterior) team among those within κ of the best — gates, own vote rules, the thumb plan and the lake / proven-red bar still bind.
+   */
+  private post56(obs: PlayerObservation, d: ForwardDecision): ForwardDecision {
+    if (d.action.type !== 'team_select' || !missionJoint56Applies(this.baseline.tuning, obs)) return d;
+    const team = missionJoint56Team(this.baseline.tuning, obs, d.action.teamIds, (t) => this.repairGateOk39(obs, t));
+    if (!team) return d;
+    return { ...d, action: { type: 'team_select', teamIds: team }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → missions read together (round 56)` } };
+  }
+
+  private decideFlow(obs: PlayerObservation, plan39: PercivalThumbPlan39 | null, lakeBar: readonly string[], proven: readonly string[]): ForwardDecision {
+    {
       const d0 = this.decideMain(obs);
       if (d0.action.type !== 'team_select') return d0;
       // Round 43 `loyalFresh43` (BlueRound43.ts; wiki B27 / B19 / B7): an R1–R2 talk proposal of a loyal / Percival carries at least one player
@@ -832,9 +861,6 @@ export class ForwardAgent implements AvalonAgent {
       const fixed = this.repairThumbTeam39(obs, plan39, d.action.teamIds);
       if (fixed === null) return d;
       return { ...d, action: { type: 'team_select', teamIds: fixed }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → percival thumb plan (round 39)` } };
-    } finally {
-      this.thumbPlan39 = prevPlan;
-      this.lakeBar39 = prevBar;
     }
   }
 
