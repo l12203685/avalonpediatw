@@ -2,8 +2,8 @@
  * 模擬瓦（2026-10-14）— 題庫載入。
  *
  * 題庫是 commit 進 repo 的 `packages/server/sim_bank.json`（沒有名字、沒有日期，見 bankCodec.ts），
- * 由 `scripts/buildSimBank.ts` 從牌譜快照產生。`sheets_cache.json` 不進 Render 映像檔
- * （.dockerignore），而且裡面有玩家名字，所以伺服器不讀它。
+ * 由 `scripts/buildSimBank.ts` 從牌譜總庫 `game_db.json` 產生（每晚，2026-11-20 起；之前讀牌譜快照
+ * `sheets_cache.json`）。伺服器只讀題庫，不讀總庫或快照。
  *
  * 伺服器開機後在背景讀一次；第一個 /模擬 如果題庫還在讀就等它。
  * 每一列都重新嚴格解析，壞的丟掉並計數。檔案不見或壞掉 → /模擬 回「題庫還沒準備好」，

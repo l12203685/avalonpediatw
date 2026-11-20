@@ -70,9 +70,12 @@ Where each top-level section comes from:
                               those scripts write.
     carried over + refreshed  featureStudies: L141 (lake claim reliability) is
                               recomputed from the game log on every run
-                              (compute_lake_claim_feature); L142 / L143 / L136 /
-                              L139 keep the numbers of the existing file but get
-                              their conclusions rewritten from those numbers
+                              (compute_lake_claim_feature), and so is L139
+                              (forced P5 rounds, compute_forced_p5_feature,
+                              2026-11-20); L142 / L143 / L136 keep the numbers
+                              of the existing file (a one-off snapshot whose
+                              definitions are not in the repo) but get their
+                              conclusions rewritten from those numbers
                               (annotate_feature_studies). generatedAt and
                               sampleSize.games are this run's.
 
@@ -4923,6 +4926,64 @@ def compute_lake_claim_feature(games: list[GameRow], as_of: dt.date) -> dict:
     }
 
 
+def compute_forced_p5_feature(games: list[GameRow], as_of: dt.date) -> dict:
+    """featureStudies L139 (visualType line), recomputed from the game log every run (站長 2026-11-20「所有跟數字統計
+    有關的 都應該跟資料庫連動 而不是寫死」; before, scripts/build_feature_studies.py baked a 2146-game snapshot in).
+    Definition restored from that snapshot (it reproduces its counts on the sheet's games: R2 1829→1822, R3 858→855,
+    R4 146→145, R5 88→85 after later corrections): round k "打到 P5" = the game has a 5th proposal (attempt 5, the
+    forced team) in round k; per round: n, the group's 三紅 rate and its three outcome shares minus all games' shares
+    (pp). R1 is left out (nearly every game reaches 1-5 here, so there is no comparison group); R3 also split into
+    with / without."""
+    def shares(gs: list[GameRow]) -> dict[str, float]:
+        n = len(gs) or 1
+        return {o: 100 * sum(1 for g in gs if g.outcome == o) / n for o in OUTCOMES}
+
+    base = shares(games)
+    forced = [{p[0] for p in g.voting_proposals if p[1] == 5} for g in games]
+    rows = []
+    for r in (2, 3, 4, 5):
+        gs = [g for g, f in zip(games, forced) if r in f]
+        if not gs:  # no game reached P5 in this round: no row (the site shows —)
+            continue
+        sh = shares(gs)
+        rows.append({
+            "round": f"R{r}", "n": len(gs), "threeRedPct": round(sh[OUTCOME_THREE_RED], 2),
+            "deltaThreeRed": round(sh[OUTCOME_THREE_RED] - base[OUTCOME_THREE_RED], 2),
+            "deltaThreeBlueAlive": round(sh[OUTCOME_BLUE_ALIVE] - base[OUTCOME_BLUE_ALIVE], 2),
+            "deltaThreeBlueDead": round(sh[OUTCOME_BLUE_DEAD] - base[OUTCOME_BLUE_DEAD], 2),
+        })
+    with_r3 = [g for g, f in zip(games, forced) if 3 in f]
+    without_r3 = [g for g, f in zip(games, forced) if 3 not in f]
+
+    def side(gs: list[GameRow]) -> dict:
+        red = shares(gs)[OUTCOME_THREE_RED]
+        return {"n": len(gs), "threeRedPct": round(red, 2), "deltaBaseline": round(red - base[OUTCOME_THREE_RED], 2)}
+
+    feature = {
+        "loopId": "L139",
+        "title": "R3+ 強制 P5 局勢偏移",
+        "titleEn": "Forced P5 Round Outcome Shift",
+        "oneLineHook": "",
+        "oneLineHookEn": "",
+        "sampleSize": {"games": len(games)},
+        "visualType": "line",
+        "data": {
+            "axisLabel": "Δ 三紅 (pp)",
+            "baselineRedPct": round(base[OUTCOME_THREE_RED], 2),
+            "rows": rows,
+            "comparison": {"withR3Forced": side(with_r3), "withoutR3Forced": side(without_r3)},
+            "note": "R1 不列：本社群幾乎每局都打到 1-5（尾派），沒有對照組。",
+            "noteEn": "R1 is left out: nearly every game here reaches the forced 1-5, so there is no comparison group.",
+        },
+        "takeaway": "",
+        "takeawayEn": "",
+        "sourceReport": "generate_cache.py",
+        "computedAt": as_of.isoformat(),
+    }
+    _annotate_l139(feature)
+    return feature
+
+
 _ROLE_FULL_NAMES = {"刺": "刺客", "娜": "莫甘娜", "奧": "奧伯倫", "德": "莫德雷德", "梅": "梅林", "派": "派西維爾", "忠": "忠臣"}
 
 
@@ -5083,11 +5144,13 @@ def refresh_feature_studies(previous: Mapping[str, Any] | None, games: list[Game
     section = annotate_feature_studies(previous)
     feature = compute_lake_claim_feature(games, as_of)
     features = [f for f in (section.get("features") or []) if isinstance(f, dict)]
-    index = next((i for i, f in enumerate(features) if f.get("loopId") == feature["loopId"]), None)
-    if index is None:
-        features.insert(0, feature)
-    else:
-        features[index] = feature
+    # Studies recomputed from the game log (L141, L139); the rest stay the carried-over snapshot.
+    for live in (feature, compute_forced_p5_feature(games, as_of)):
+        index = next((i for i, f in enumerate(features) if f.get("loopId") == live["loopId"]), None)
+        if index is None:
+            features.insert(0 if live is feature else len(features), live)
+        else:
+            features[index] = live
     sample = dict(section.get("sampleSize") or {})
     sample.update({"games": len(games), "lakeLinks": feature["sampleSize"]["links"]})
     return {
@@ -5259,7 +5322,7 @@ def assemble_cache(
 ) -> tuple[dict, dict[str, int]]:
     """fresh (build_cache) + strength + the carried-over sections of `previous`.
 
-    With `games`, featureStudies is refreshed too (refresh_feature_studies: L141 from the
+    With `games`, featureStudies is refreshed too (refresh_feature_studies: L141 and L139 from the
     game log, the carried-over studies annotated); without them it is carried as it is.
     """
     cache = dict(fresh)

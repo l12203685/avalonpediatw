@@ -34,6 +34,10 @@ name: Refresh analysis cache
 # 百科文章裡的牌譜數字（站長 2026-11-20「所有跟數字統計有關的 都應該跟資料庫連動 而不是寫死」）：wiki_stats.py
 #       讀同一次寫出的 games_cache.json，重寫 wiki_data.json 與 docs/avalon-wiki 副本裡 <!-- stat:KEY --> 標記內的
 #       表格與句子（口徑同數據分析頁不篩選），有變動就跟快取一起 commit。失敗時保留舊檔、不擋快取推送。
+# 模擬瓦題庫（站長 2026-11-20「整個系統要完全同步同來源」）：scripts/buildSimBank.ts 從同一次寫出的 game_db.json 重建
+#       sim_bank.json（真人實戰、套用站長更正、不含模擬／百科AI／ProAvalon／娛樂），同一局沿用上一版題號；題庫變了而接下來
+#       8 天的 Threads 計畫跟著變的日子，把原本的題號寫進 threads_picks.json（已經寫好的第一則留言照舊對得上）。
+#       失敗時保留舊檔、不擋快取推送。
 
 on:
   schedule:
@@ -69,6 +73,8 @@ jobs:
       GAME_DB_REPORT: docs/data/game_db_report.md
       WIKI_PATH: packages/server/wiki_data.json
       WIKI_DOCS_DIR: docs/avalon-wiki
+      SIM_BANK_PATH: packages/server/sim_bank.json
+      THREADS_PICKS_PATH: packages/server/threads_picks.json
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Pick the credentials secret
@@ -261,13 +267,37 @@ jobs:
           python packages/server/wiki_stats.py || \
             echo "::warning title=Wiki numbers not refreshed::wiki_stats.py failed; the wiki keeps the previous numbers."
 
+      - uses: pnpm/action-setup@v3
+        if: steps.creds.outputs.secret != ''
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v4
+        if: steps.creds.outputs.secret != ''
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Rebuild the 模擬瓦 bank from the 牌譜總庫 (buildSimBank.ts)
+        if: steps.creds.outputs.secret != ''
+        run: |
+          # 題庫跟總庫同一份（src/bots/simulation/bankSource.ts 的條件）；只印計數與題號，不印牌譜內容。
+          # 失敗時保留舊的 sim_bank.json / threads_picks.json，不擋快取推送。
+          if pnpm install --frozen-lockfile && pnpm --filter @avalon/shared build; then
+            (cd packages/server && npx tsx scripts/buildSimBank.ts) || \
+              echo "::warning title=Sim bank not rebuilt::buildSimBank.ts failed; 模擬瓦 keeps the previous bank."
+          else
+            echo "::warning title=Sim bank not rebuilt::pnpm install failed; 模擬瓦 keeps the previous bank."
+          fi
+          git checkout -- pnpm-lock.yaml 2>/dev/null || true
+
       - name: Commit and push if the cache changed
         if: steps.creds.outputs.secret != ''
         env:
           GAMES_DATASET: ${{ steps.regen.outputs.games_dataset }}
         run: |
           # 首次產生的資料集／牌譜紀錄清單尚未追蹤，須以 git status 判斷有無變動。
-          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}" "${GAME_DB_PATH}" "${GAME_DB_REPORT}" "${WIKI_PATH}" "${WIKI_DOCS_DIR}")" ]; then
+          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}" "${GAME_DB_PATH}" "${GAME_DB_REPORT}" "${WIKI_PATH}" "${WIKI_DOCS_DIR}" "${SIM_BANK_PATH}" "${THREADS_PICKS_PATH}")" ]; then
             echo "analysis_cache.json, games_cache.json and records_cache.json are unchanged; nothing to commit."
             echo "- 結果：快取無變動，未 commit" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -300,7 +330,7 @@ jobs:
           if [ -f "${RECORDS_PATH}" ]; then
             git add -- "${RECORDS_PATH}"
           fi
-          for f in "${GAME_DB_PATH}" "${GAME_DB_REPORT}" "${WIKI_PATH}"; do
+          for f in "${GAME_DB_PATH}" "${GAME_DB_REPORT}" "${WIKI_PATH}" "${SIM_BANK_PATH}" "${THREADS_PICKS_PATH}"; do
             if [ -f "${f}" ]; then
               git add -- "${f}"
             fi

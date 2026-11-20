@@ -27,7 +27,7 @@
  *   - 沒有指定任何東西的 /模擬：抽一局、列出這局的 spot、照「值得想」打分數，從最高的那一個開始（spotValue.ts）。
  *     指定角色、座位、局面、題號、刺殺、今天的照舊。
  * 篩選寫在 midDecision 裡，模擬瓦的局面池和 Threads 的候選池（plan.ts tailPick）用同一個函式，兩邊一致。
- * 題庫只有真人實戰（試算表「牌譜」分頁；模擬的局不進題庫，見 bankCodec.buildBankFile）。
+ * 題庫只有真人實戰（牌譜總庫 game_db.json 的實戰局；模擬的局不進題庫，見 bankSource.ts、bankCodec.buildBankFile）。
  */
 
 import type { Role } from '@avalon/shared';

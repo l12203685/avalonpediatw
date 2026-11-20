@@ -34,7 +34,7 @@
 | ProAvalon（外部） | `packages/server/proavalon_games.json` | 預設不進總庫（2026-11-18） | 不顯示（`--with-proavalon` 才有） |
 | 百科文章 | `packages/server/wiki_data.json` | 人工／PR | 文章清單 |
 | 觀念卡 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply`（docs/CONCEPTS.md） | 觀念卡 |
-| Threads 題庫 | `packages/server/sim_bank.json` | `buildSimBank.ts` | 一週草稿 |
+| Threads 題庫 | `packages/server/sim_bank.json` | `buildSimBank.ts`（每晚，讀 `game_db.json`） | 一週草稿 |
 | Threads 選題 | `packages/server/threads_picks.json` | console:apply | 一週草稿、選局頁 |
 | Threads 正式發開關 | `packages/server/threads_live.json` | console:apply | 開關狀態 |
 | Threads 貼文／留言格式 | `packages/server/threads_template.json`（沒有就用內建格式） | console:apply | 範本編輯、草稿 |

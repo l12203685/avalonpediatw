@@ -217101,67 +217101,68 @@
         "loopId": "L139",
         "title": "R3+ 強制 P5 局勢偏移",
         "titleEn": "Forced P5 Round Outcome Shift",
-        "oneLineHook": "R3 出現 forced P5 的局三紅率 50.6%（n=858），比基準 46.1% 高 4.5pp；但這是選擇偏誤，不是因果",
-        "oneLineHookEn": "Games with a forced P5 in R3 end 3-red 50.6% of the time (n=858), 4.5pp over the 46.1% baseline; selection bias, not causation",
+        "oneLineHook": "R3 出現 forced P5 的局三紅率 50.4%（n=924），比基準 45.3% 高 5.2pp；但這是選擇偏誤，不是因果",
+        "oneLineHookEn": "Games with a forced P5 in R3 end 3-red 50.4% of the time (n=924), 5.2pp over the 45.3% baseline; selection bias, not causation",
         "sampleSize": {
-          "games": 2146
+          "games": 2341
         },
         "visualType": "line",
         "data": {
           "axisLabel": "Δ 三紅 (pp)",
-          "baselineRedPct": 46.09,
+          "baselineRedPct": 45.28,
           "rows": [
             {
               "round": "R2",
-              "n": 1829,
-              "threeRedPct": 47.68,
-              "deltaThreeRed": 1.59,
-              "deltaThreeBlueAlive": -0.47,
-              "deltaThreeBlueDead": -1.12
+              "n": 1975,
+              "threeRedPct": 46.73,
+              "deltaThreeRed": 1.45,
+              "deltaThreeBlueAlive": -0.56,
+              "deltaThreeBlueDead": -0.9
             },
             {
               "round": "R3",
-              "n": 858,
-              "threeRedPct": 50.58,
-              "deltaThreeRed": 4.5,
-              "deltaThreeBlueAlive": -5.49,
-              "deltaThreeBlueDead": 0.99
+              "n": 924,
+              "threeRedPct": 50.43,
+              "deltaThreeRed": 5.15,
+              "deltaThreeBlueAlive": -6.1,
+              "deltaThreeBlueDead": 0.95
             },
             {
               "round": "R4",
-              "n": 146,
-              "threeRedPct": 51.37,
-              "deltaThreeRed": 5.28,
-              "deltaThreeBlueAlive": -8.51,
-              "deltaThreeBlueDead": 3.23
+              "n": 160,
+              "threeRedPct": 53.12,
+              "deltaThreeRed": 7.85,
+              "deltaThreeBlueAlive": -9.01,
+              "deltaThreeBlueDead": 1.16
             },
             {
               "round": "R5",
-              "n": 88,
-              "threeRedPct": 46.59,
-              "deltaThreeRed": 0.51,
-              "deltaThreeBlueAlive": -9.97,
-              "deltaThreeBlueDead": 9.47
+              "n": 91,
+              "threeRedPct": 43.96,
+              "deltaThreeRed": -1.32,
+              "deltaThreeBlueAlive": -10.01,
+              "deltaThreeBlueDead": 11.33
             }
           ],
           "comparison": {
             "withR3Forced": {
-              "n": 858,
-              "threeRedPct": 50.58,
-              "deltaBaseline": 4.5
+              "n": 924,
+              "threeRedPct": 50.43,
+              "deltaBaseline": 5.15
             },
             "withoutR3Forced": {
-              "n": 1288,
-              "threeRedPct": 43.09,
-              "deltaBaseline": -3.0
+              "n": 1417,
+              "threeRedPct": 41.92,
+              "deltaBaseline": -3.36
             }
           },
-          "note": "R1 forced P5 比例異常高 (Sheets 匯入 padding), 該 row 不繪入圖表。",
-          "noteEn": "R1 forced P5 frequency is degenerate (Sheets import padding); not plotted."
+          "note": "R1 不列：本社群幾乎每局都打到 1-5（尾派），沒有對照組。",
+          "noteEn": "R1 is left out: nearly every game here reaches the forced 1-5, so there is no comparison group."
         },
         "takeaway": "forced P5（連續五次否決，第五隊強制出發）本身就是局勢已經偏向紅方的結果：藍方掌握不了局面才會一路否決到底，這些局本來就比較容易三紅。它只是局勢不利的徵兆，不是「紅方在掩護」的證據，也不能拿來當判斷依據。",
         "takeawayEn": "A forced P5 (five straight rejections, fifth team goes) is itself the result of a game already tilting evil: good keeps rejecting because it cannot control the table, so these games were headed for 3-red anyway. It is a symptom of a bad position, not evidence of evil cover, and not a read to act on.",
-        "sourceReport": "staging/selfplay/features_study_5reject_round_pattern_3outcome_loop139.md"
+        "sourceReport": "generate_cache.py",
+        "computedAt": "2026-11-19"
       }
     ]
   },

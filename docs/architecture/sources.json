@@ -137,17 +137,18 @@
       "domain": "records",
       "path": "packages/server/sim_bank.json",
       "kind": "derived",
-      "producedBy": "scripts/buildSimBank.ts",
+      "producedBy": "scripts/buildSimBank.ts（refresh-analysis-cache.yml，每晚）",
       "derivedFrom": [
-        "sheets-cache"
+        "games-cache",
+        "records-cache"
       ],
       "consumers": [
         "模擬瓦",
         "Threads 出題"
       ],
-      "refresh": "手動",
+      "refresh": "每晚",
       "targetPhase": 2,
-      "notes": "1,778 局，讀的是凍結快照"
+      "notes": "2026-11-20 起從牌譜總庫 game_db.json 重建（真人實戰、套用站長更正）；同一局沿用題號"
     },
     {
       "id": "content-data",

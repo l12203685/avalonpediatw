@@ -230,7 +230,7 @@ Edward 2026-11-17 定的三行：配置 = 刺 娜 莫 奧 派 梅 依序坐幾�
 
 ## 題庫
 
-- `packages/server/sim_bank.json`，由 `pnpm --filter @avalon/server exec tsx scripts/buildSimBank.ts` 從牌譜快照（`sheets_cache.json` 的「牌譜」分頁）產生，commit 進 repo；快照更新後重跑。只印計數。
+- `packages/server/sim_bank.json`，由 `pnpm --filter @avalon/server exec tsx scripts/buildSimBank.ts` 從牌譜總庫 `game_db.json` 產生（2026-11-20 起；之前讀凍結的牌譜快照 `sheets_cache.json`），commit 進 repo。每晚 `refresh-analysis-cache.yml` 在 `game_db.py` 之後重建：只收真人實戰、套用站長更正、不含模擬／百科AI／ProAvalon／娛樂／補完的局（`src/bots/simulation/bankSource.ts`）。同一局沿用上一版的題號（`buildBankFile` 的 `previous`），新局才另外取號；題庫變了而接下來 8 天的 Threads 計畫跟著變的日子，原本的題號寫進 `threads_picks.json`（`src/bots/threads/planPins.ts`）。只印計數。「同位置真人」因此跟數據分析頁是同一份資料。
 - 條件：嚴格解析成功（跟機器人基準測試同一個解析器）、湖的順序合理、分類不是「娛樂」也不是「模擬」（2026-11-16），同一局只留一份。2026-10-14 快照：2,146 局有紀錄 → 1,970 局可嚴格重播 → 1,778 局進題庫。
 - **只有座位**：沒有玩家名字、沒有日期、沒有流水號、沒有備註。每局只存配置、重新寫過的牌譜（只有數字、o/x、+/-、>）、刺殺座位和結果。題庫照題號排序，看不出對局先後。
 - 題號 = 這局 fingerprint（配置＋每次派票的隊伍＋每局任務，跟 `generate_cache.py` 的 `record_fingerprint` 同一個定義）的 sha1 前 5 碼（Crockford base32）加上座位，例如 `K7Q2M-4`；重建題庫題號不變。

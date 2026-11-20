@@ -17,8 +17,9 @@ credentials and adds no new reader of Google / Discord):
              the default build leaves it out of game_db.json and the report; ``--with-proavalon`` turns it back
              on. proavalon_games.json and the private raw data stay as they are.
 
-  (records_cache.json's ``S<流水號>`` entries are the sheet games again and sim_bank.json is built from the
-  牌譜 snapshot sheets_cache.json, so neither is a source of its own; the report only checks their coverage.)
+  (records_cache.json's ``S<流水號>`` entries are the sheet games again and sim_bank.json is built from this database
+  (scripts/buildSimBank.ts, nightly after this script since 2026-11-20), so neither is a source of its own; the report
+  only checks their coverage.)
 
 Merging: games with the same generate_cache.record_fingerprint (配置 + every proposal's team + every mission),
 of the same type, are one game. 模擬 never merges with 實戰 (Edward 2026-11-16「模擬畢竟只是模擬」). The merged

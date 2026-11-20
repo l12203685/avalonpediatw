@@ -1156,11 +1156,11 @@
           "L139": {
             "question": "In games where a round's mission went all the way to the fifth proposal (P5, forced), do the three endings come out differently from other games?",
             "method": [
-              "One-off study: the original report {{source}} is not in the repository; scripts/build_feature_studies.py wrote it into the cache: a {{games}}-game snapshot. The daily update does not recompute the numbers; generate_cache.py only rewrites the conclusion from them.",
+              "Recomputed from the game log every day (generate_cache.py compute_forced_p5_feature; since 2026-11-20, before that scripts/build_feature_studies.py baked in a snapshot): the same per-game data as the stats page, currently {{games}} games. The definition is restored from the original study; recomputed on the spreadsheet games it matches the snapshot's counts.",
               "P5 = the fifth proposal of a round: when the first four teams are all rejected, the fifth goes on the mission without a vote (forced). \"P5 in R3\" = games whose third mission went to the fifth proposal.",
-              "3-red rate = share of these games that ended 3-red; baseline {{baseline}}% = the 3-red rate over all games of the snapshot. Δ 3-red / Δ 3-blue dead / Δ 3-blue alive = the group's share of that ending − the share over all games (points); the three add up to about 0.",
+              "3-red rate = share of these games that ended 3-red; baseline {{baseline}}% = the 3-red rate over all games. Δ 3-red / Δ 3-blue dead / Δ 3-blue alive = the group's share of that ending − the share over all games (points); the three add up to about 0.",
               "\"With / without P5 in R3\" splits all games in two: {{withN}} + {{withoutN}} = {{games}} games.",
-              "R1 is left out: almost every game reaches P5 in R1, so there is no comparison group (the report attributes it to padding in the spreadsheet import; in this community the first four R1 proposals are also often \"talk teams\" that never go on a mission).",
+              "R1 is left out: nearly every game here reaches the forced 1-5, so there is no comparison group.",
               "95% intervals are computed by the site from the 3-red rate × n back to a count, then the Wilson method (z = 1.96); n < {{min}} is flagged as a small sample."
             ],
             "read": [
@@ -1169,9 +1169,9 @@
             ],
             "caveats": [
               "Selection bias: rejecting all the way to P5 is itself the result of a game already tilting evil (good cannot control the table); P5 is a symptom of a bad position, not the cause, and not evidence of evil cover.",
-              "One-off study: the numbers stay at the {{games}}-game snapshot and do not follow the daily update."
+              "The numbers are recomputed from the game log every day and do not follow the stats page filter."
             ],
-            "baselineNow": "The {{baseline}}% baseline is the 3-red rate of the study's snapshot; the current cache's 3-red rate over all games is {{currentThreeRed}}% (different snapshot and filters), so the two cannot be subtracted directly."
+            "baselineNow": "The {{baseline}}% baseline is the 3-red rate over all games of this study; the current cache's 3-red rate over all games is {{currentThreeRed}}% (they should match; if not, one of them is not updated yet)."
           }
         }
       },

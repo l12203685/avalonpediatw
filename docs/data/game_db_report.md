@@ -112,7 +112,7 @@
 
 - `sheets_cache.json`（牌譜分頁快照）2146 列有流水號；不在 `games_cache.json` 的 0 列，`games_cache.json` 有而快照沒有的 0 局。
 - `records_cache.json` 的試算表牌譜（S 開頭）1356 筆；`games_cache.json` 的牌譜分頁局沒有在牌譜紀錄頁另列的 790 局（同一局已經是 Discord 貼文，用貼文的編號）。
-- `sim_bank.json`（模擬瓦／Threads 題庫）1778 局，其中 1777 局對得到總庫。
+- `sim_bank.json`（模擬瓦／Threads 題庫）2051 局，其中 2050 局對得到總庫。
 
 ## 各規則的局數
 
