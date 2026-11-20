@@ -9,6 +9,7 @@ import { fitTeamToSize } from '../game/teamSize';
 import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { OPPONENT_LABEL, PROFILE_OVERRIDES, opponentTypeOfTable, type OpponentType } from '../ai/humanProfile';
+import { liveTableS } from '../ai/tableStrength';
 import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
@@ -195,12 +196,16 @@ function tryMirrorFanout(msg: LobbyChatMessage): void {
 
 /**
  * 第 56b 回合 C（站長 2026-11-20「真人桌另一套」）：這一桌的機器人用哪一套策略層（`ai/humanProfile.ts`）。
- * 桌上沒有真人（全是機器人）→ `ai`（基準線＝自我對打量的那一套）；有真人 → 真人桌。網站房間開打時拿不到 10 人開打前的 PR（桌上強度 S），
- * 所以有真人的桌一律是 `avgHuman`（一般真人桌）；之後拿得到 S 再照 `opponentTypeOfTable` 分弱／一般／強。
+ * 桌上沒有真人（全是機器人）→ `ai`（基準線＝自我對打量的那一套）；有真人 → 照桌上強度 S 分弱／一般／強真人桌
+ * （`opponentTypeOfTable`；S 讀不到 → `avgHuman`）。
  */
 export function opponentTypeForRoom(room: Pick<Room, 'players'>, tableS: number | null = null): OpponentType {
-  const humans = Object.values(room.players).filter((p) => !p.isBot).length;
-  return opponentTypeOfTable({ humans, tableS });
+  return opponentTypeOfTable({ humans: humanNamesOfRoom(room).length, tableS });
+}
+
+/** 房內真人的顯示名字（機器人不算）；桌上強度 S 用（`ai/tableStrength.ts`）。 */
+export function humanNamesOfRoom(room: Pick<Room, 'players'>): string[] {
+  return Object.values(room.players).filter((p) => !p.isBot).map((p) => String(p.name ?? ''));
 }
 
 /**
@@ -276,6 +281,11 @@ export class GameServer {
   private botAgents: Map<string, AvalonAgent> = new Map();
   /** 第 56b 回合 C：每個機器人現在的策略層（沒有記錄 = `ai`，`addBotToRoom` 建的就是基準線）。 */
   private botProfiles: Map<string, OpponentType> = new Map();
+  /**
+   * 開局時桌上強度 S（真人的顯示名字 → 網站 Elo 的 PR 平均，`ai/tableStrength.ts`，讀網站同一份 analysis_cache.json）；
+   * 讀不到 → null（一般真人桌）。測試可以換掉。
+   */
+  private tableStrengthOf: (humanNames: readonly string[]) => number | null = liveTableS;
   // uid → supabase UUID (set from socket.data.supabaseId on join/create)
   private supabaseIds: Map<string, string> = new Map();
   // roomId → start timestamp (ms)
@@ -1823,7 +1833,9 @@ export class GameServer {
    * 只換 HeuristicAgent（開局前還沒有任何對局狀態）；已經是同一套的就不換。
    */
   private applyOpponentProfile(room: Room): OpponentType {
-    const type = opponentTypeForRoom(room);
+    const humans = humanNamesOfRoom(room);
+    const tableS = humans.length > 0 ? this.tableStrengthOf(humans) : null;
+    const type = opponentTypeForRoom(room, tableS);
     const overrides = PROFILE_OVERRIDES[type];
     for (const [pid, p] of Object.entries(room.players)) {
       if (!p.isBot) continue;
@@ -1833,7 +1845,7 @@ export class GameServer {
       this.botAgents.set(pid, new HeuristicAgent(pid, undefined, undefined, overrides));
       this.botProfiles.set(pid, type);
     }
-    if (type !== 'ai') console.log(`[bot] room ${room.id}: ${OPPONENT_LABEL[type]}`);
+    if (type !== 'ai') console.log(`[bot] room ${room.id}: ${OPPONENT_LABEL[type]}（S ${tableS ?? '—'}）`);
     return type;
   }
 

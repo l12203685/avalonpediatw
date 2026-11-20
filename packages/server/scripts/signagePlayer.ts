@@ -42,6 +42,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
 import { OPPONENT_LABEL, PROFILE_OVERRIDES, parseOpponentType, type OpponentType } from '../src/ai/humanProfile';
+import { liveTableS, opponentTypeOfHumans } from '../src/ai/tableStrength';
 import type { PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
 import { postAiGameTrace } from '../src/services/aiGameForum';
 import type { Role } from '@avalon/shared';
@@ -49,7 +50,7 @@ import {
   ENDED, buildObservation, decisionOpen, evilRolesAtAssassination, historyFromRecord, lobbyCandidate, lobbyRolesLoose, missionCard,
   myLakeFromSnap, nextTeamAction, pendingLakeDeclaration, readKnowledge, seatDecision, seatsCandidate, setOf,
   shortRooms, sid, unsupportedReason, validLakeTargets,
-  type Decision, type Knowledge, type LobbyRoom, type PlatformRecord, type SiteAction, type Snap,
+  type Decision, type Knowledge, type LobbyRoom, type PlatformRecord, type SiteAction, type Snap, type SUser,
 } from './signageAdapter';
 import { BOT_NICK, TEST_ROOM_PREFIX, isPediaBotName } from './signagePaipu';
 import {
@@ -79,11 +80,27 @@ const HOURS = Number(arg('hours', MODE === 'live' ? '5.5' : '1'));
 const MAX_GAMES = Math.max(0, Math.min(99, Number(arg('max-games', arg('games', MODE === 'live' ? '99' : '1')))));
 const ROOM = arg('room', '');
 /**
- * 第 56b 回合 C（站長 2026-11-20「真人桌另一套」，`src/ai/humanProfile.ts`）：策略層。live／room 的桌上是真人 → 真人桌；
- * 練習台拿不到桌上 10 人開打前的 PR（桌上強度 S），所以預設一般真人桌（avgHuman）。private-test 的其他座位是練習台內建機器人 → ai。
- * --opponent ai|weak|avg|strong 可以指定。
+ * 第 56b 回合 C（站長 2026-11-20「真人桌另一套」，`src/ai/humanProfile.ts`）：策略層。
+ * live／room（LINE／DC 的 /補位、網站表單、每晚補位）：開局時照桌上真人的暱稱算桌上強度 S（`src/ai/tableStrength.ts`，
+ * 網站 Elo 的 PR 平均，讀網站同一份 analysis_cache.json），分弱／一般／強真人桌；桌上沒有真人（全是練習台內建機器人）→ ai；S 讀不到 → 一般真人桌。
+ * private-test 的其他座位是練習台內建機器人 → ai。--opponent ai|weak|avg|strong 指定的話整場都用它（不看 S）。
  */
-const OPPONENT: OpponentType = parseOpponentType(arg('opponent', '')) ?? (MODE === 'private-test' ? 'ai' : 'avgHuman');
+const OPPONENT_FIXED: OpponentType | null = parseOpponentType(arg('opponent', '')) ?? (MODE === 'private-test' ? 'ai' : null);
+
+/** 練習台桌上的真人暱稱（練習台內建機器人、百科AI 不算）。 */
+export function signageHumanNames(users: readonly Pick<SUser, 'name' | 'is_robot'>[]): string[] {
+  return users.filter((u) => !u.is_robot && !isPediaBotName(String(u.name ?? ''))).map((u) => String(u.name ?? ''));
+}
+
+/** 這一桌的策略層：有指定（--opponent、私房測試）就用它；否則照桌上真人算 S（`sOf` 測試可換）。 */
+export function signageOpponent(
+  users: readonly Pick<SUser, 'name' | 'is_robot'>[],
+  fixed: OpponentType | null,
+  sOf: (names: readonly string[]) => number | null = liveTableS,
+): { type: OpponentType; tableS: number | null } {
+  if (fixed) return { type: fixed, tableS: null };
+  return opponentTypeOfHumans(signageHumanNames(users), sOf);
+}
 /**
  * 暱稱。練習台同一個暱稱同時兩個連線會互相干擾（2026-11-03 私房測試：同暱稱兩桌同時打，其中一桌被導回大廳），
  * 所以每個同時在跑的程序用不同暱稱，都是「百科AI_{#}」（Edward 2026-11-03；記錄員靠「百科AI」前綴認，戰績合併成「百科AI」）：
@@ -357,7 +374,9 @@ async function leaveRoom(p: Page, why: string, room: string): Promise<void> {
 // ── 一個座位 ──────────────────────────────────────────────────────────────────────────
 class Seat {
   constructor(readonly label: string) {}
-  agent = new HeuristicAgent('signage-player', undefined, undefined, PROFILE_OVERRIDES[OPPONENT]);
+  /** 目前的策略層（開局時照這一桌重算，`signageOpponent`）。 */
+  profile: OpponentType = OPPONENT_FIXED ?? 'avgHuman';
+  agent = new HeuristicAgent('signage-player', undefined, undefined, PROFILE_OVERRIDES[this.profile]);
   k!: Knowledge;
   lobbyRoles!: Role[];
   myLake: PrivateLakeResult[] = [];
@@ -401,6 +420,15 @@ class Seat {
     this.lobbyRoles = lobbyRolesLoose(s.game_roles, s.users.length);
     this.k = readKnowledge(s, this.lobbyRoles);
     this.myLake = []; this.declinedLakes.clear(); this.hist = { votes: [], quests: [] }; this.plan = null; this.planKey = ''; this.started = true; this.startedAt = Date.now();
+    try {
+      const { type, tableS } = signageOpponent(s.users, OPPONENT_FIXED);
+      if (type !== this.profile) {
+        this.profile = type;
+        this.agent = new HeuristicAgent('signage-player', undefined, undefined, PROFILE_OVERRIDES[type]);
+      }
+      // 公開 log：只有策略層與 S（不寫暱稱）
+      log(`${this.label} 策略層：${OPPONENT_LABEL[type]}${OPPONENT_FIXED ? '（指定）' : `（S ${tableS ?? '—'}）`}`);
+    } catch { /* 算不出來就照舊（一般真人桌） */ }
     this.agent.onGameStart(this.obs(s, 'team_select'));
     this.collector = traceHub.join(roomKey(this.label), this.label);
     this.collector.setSeat(this.label, { seat: s.myself.set, nick: String(s.myself.name ?? ''), roleName: String(s.myself.role ?? ''), role: this.k.role, team: this.k.team });
@@ -992,7 +1020,7 @@ async function resume(browser: Browser): Promise<number> {
 
 async function main(): Promise<void> {
   if (MAX_GAMES <= 0) { log('局數 0，不打'); return; }
-  log(`策略層：${OPPONENT_LABEL[OPPONENT]}`);
+  log(`策略層：${OPPONENT_FIXED ? OPPONENT_LABEL[OPPONENT_FIXED] : '開局時照桌上強度 S 決定'}`);
   const browser = await chromium().launch();
   const deadline = Date.now() + HOURS * 3600_000;
   try {

@@ -105,7 +105,10 @@ describe('wiring', () => {
   it('a site room with humans plays the human profile, an all-bot room the baseline', () => {
     expect(opponentTypeForRoom(room(0))).toBe('ai');
     expect(opponentTypeForRoom(room(1))).toBe('avgHuman');
-    const server = new GameServer(new SocketIOServer(createServer())) as unknown as { botAgents: Map<string, AvalonAgent>; applyOpponentProfile(r: Room): string };
+    const server = new GameServer(new SocketIOServer(createServer())) as unknown as {
+      botAgents: Map<string, AvalonAgent>; tableStrengthOf: (n: readonly string[]) => number | null; applyOpponentProfile(r: Room): string;
+    };
+    server.tableStrengthOf = () => null; // table S unknown → avgHuman (tableStrength.test.ts covers the S tiers)
     const r = room(1);
     for (let i = 2; i <= 10; i++) server.botAgents.set(`p${i}`, new HeuristicAgent(`p${i}`));
     expect(server.applyOpponentProfile(r)).toBe('avgHuman');
