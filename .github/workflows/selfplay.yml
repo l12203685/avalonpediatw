@@ -1,0 +1,72 @@
+name: Selfplay (parallel)
+
+# 機器人自我對打平行跑（只用機器人，不讀玩家資料、不用任何金鑰；log 只印進度數字）。
+# 推到 selfplay-runs-adopt1120 分支時（第 56b 回合（站長 11/20 三項裁定）的佇列，不和其他回合的 run 互相取消）用推上來的那個 commit 跑；說明見 selfplay/README.md。
+on:
+  push:
+    branches: [selfplay-runs-adopt1120]
+    paths:
+      - 'selfplay/**'
+      - '.github/workflows/selfplay.yml'
+
+concurrency:
+  group: selfplay-adopt1120
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.p.outputs.shards }}
+      nshards: ${{ steps.p.outputs.nshards }}
+      parallel: ${{ steps.p.outputs.parallel }}
+      runid: ${{ steps.p.outputs.runid }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: |
+          n=$(jq -r .shards selfplay/config.json)
+          echo "shards=$(jq -c '[range(0; .shards)]' selfplay/config.json)" >> "$GITHUB_OUTPUT"
+          echo "nshards=$n" >> "$GITHUB_OUTPUT"
+          echo "parallel=$(jq -r .parallel selfplay/config.json)" >> "$GITHUB_OUTPUT"
+          echo "runid=$(jq -r .runId selfplay/config.json)" >> "$GITHUB_OUTPUT"
+
+  shard:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+      - name: Install
+        run: pnpm install --frozen-lockfile --reporter=silent
+      - name: Build shared
+        run: pnpm --filter @avalon/shared build > /dev/null
+      - name: Results branch
+        run: |
+          git clone -q --depth 1 --branch selfplay-results "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" res
+          git -C res config user.name "selfplay-bot"
+          git -C res config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Run
+        env:
+          SHARD: ${{ matrix.shard }}
+          NSHARDS: ${{ needs.plan.outputs.nshards }}
+          PARALLEL: ${{ needs.plan.outputs.parallel }}
+          RUN_ID: ${{ needs.plan.outputs.runid }}
+          RES_DIR: res
+        run: |
+          echo "nproc $(nproc)"
+          bash selfplay/run_shard.sh
