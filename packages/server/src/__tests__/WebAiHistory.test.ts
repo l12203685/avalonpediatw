@@ -6,12 +6,15 @@ import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
-  ROLE_LABEL, ROLE_ORDER, chartGeometry, deltaMean, deltaTrend, filterMilestones, formatDelta, isAdoptedText,
+  ROLE_LABEL, ROLE_ORDER, chartGeometry, deltaMean, deltaTrend, filterMilestones, formatDelta, humanReferenceRows, isAdoptedText,
   isAiHistoryHash, parseRoundTable, roleSummary, roundOrder, roundStats, sortMilestones,
   type AiHistoryData, type AiMilestone,
 } from '../../../web/src/utils/aiHistory';
 import { PUBLIC_STATS_STATES, parseStatsHash } from '../../../web/src/utils/statsLinks';
 import { buildAiHistory } from '../../../../scripts/build_ai_history';
+import {
+  DEFAULT_COHORT_CUTS, computeStrengthReport, decodeGamesDataset, tableTier,
+} from '@avalon/shared/stats';
 
 const ROOT = path.resolve(__dirname, '../../../..');
 const DATA = JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/web/src/data/aiHistory.json'), 'utf8')) as AiHistoryData;
@@ -31,7 +34,8 @@ describe('aiHistory.json 的資料形狀', () => {
     expect(DATA.stats.rounds).toBeGreaterThanOrEqual(55);
     expect(DATA.stats.adoptedRounds + DATA.stats.notAdoptedRounds).toBe(DATA.stats.rounds);
     expect(DATA.milestones.length).toBeGreaterThanOrEqual(40);
-    expect(DATA.headline.map((h) => h.key)).toEqual(expect.arrayContaining(['start', 'now', 'human', 'strong']));
+    // 真人對照不寫死在資料裡（頁面用數據分析同一份資料即時算），只有機器人的起點與現在
+    expect(DATA.headline.map((h) => h.key)).toEqual(['start', 'now']);
   });
 
   it('每個里程碑的欄位都合法', () => {
@@ -213,6 +217,47 @@ describe('顯示用的純函式', () => {
     expect(g.taskPath).toBe('M10.0,50.0 M63.3,30.0 L90.0,10.0');
     expect(g.ticks).toEqual([0, 20, 40, 60, 80]);
     expect(chartGeometry([{ round: '0', side: null, win: 40, task: null }], box).points[0].x).toBe(50);
+  });
+});
+
+describe('真人對照：和數據分析「陣容強度」同一個來源', () => {
+  const pts = (list: Array<[number, string]>): Array<{ s: number; outcome: string }> => list.map(([s, outcome]) => ({ s, outcome }));
+
+  it('分層與比率', () => {
+    const rows = humanReferenceRows(pts([[70, '三紅'], [60, '三藍死'], [56, '三藍活'], [40, '三藍活'], [30, '三紅'], [66, '三藍活']]));
+    expect(rows.map((r) => [r.key, r.label, r.range, r.n])).toEqual([
+      ['all', '真人局（全部）', '有陣容強度的局', 6],
+      ['high', '高端桌', 'S ≥ 55', 4],
+      ['veryHigh', '高強度', 'S ≥ 65', 2],
+    ]);
+    const high = rows[1];
+    expect(high.task).toBeCloseTo(75);
+    expect(high.win).toBeCloseTo(50);
+    expect(high.red).toBeCloseTo(50);
+    expect(high.hit).toBeCloseTo(100 / 3);
+  });
+
+  it('高端桌跟著分組的 S 上切點；沒有局時比率是 null；不認得的結果不算', () => {
+    const rows = humanReferenceRows(pts([[50, '三紅'], [45, '三藍活'], [44, '其他']]), 45);
+    expect(rows[1]).toMatchObject({ range: 'S ≥ 45', n: 2 });
+    expect(rows[0].n).toBe(2);
+    expect(rows[2]).toMatchObject({ n: 0, task: null, win: null, red: null, hit: null });
+    expect(DEFAULT_COHORT_CUTS.sHi).toBe(55);
+  });
+
+  it('用 repo 裡的 games_cache.json：和陣容強度的分層表、分組的桌分層逐局一致', () => {
+    const decoded = decodeGamesDataset(JSON.parse(fs.readFileSync(path.join(ROOT, 'packages/server/games_cache.json'), 'utf8')));
+    const report = computeStrengthReport(decoded.games, { kind: 'tier' });
+    const rows = humanReferenceRows(report.points);
+    expect(rows[0].n).toBe(report.overall.n);
+    const tierN = (id: string): number => report.tiers.find((t) => t.id === id)!.n;
+    expect(rows[1].n).toBe(tierN('high') + tierN('strong'));
+    expect(rows[2].n).toBe(tierN('high'));
+    const highTable = decoded.games.filter((g) => g.lineup && tableTier(g.lineup.s) === 'high' && ['三紅', '三藍死', '三藍活'].includes(g.outcome as string));
+    expect(rows[1].n).toBe(highTable.length);
+    const all = report.overall;
+    expect(rows[0].win).toBeCloseTo((100 * all.blueAlive) / all.n, 9);
+    expect(rows[0].hit).toBeCloseTo((100 * all.blueDead) / (all.blueDead + all.blueAlive), 9);
   });
 });
 

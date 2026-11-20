@@ -300,6 +300,7 @@ cd packages/server && npx tsx scripts/humanPrBenchmark.ts --workers 4 --bot-cach
 （回合、採用日期、陣營與角色、做了什麼、為什麼、三藍活差與任務三藍差，數字照本節與該回合的確認抄，沒有就寫 `null`；不寫玩家名字、不貼對話），
 預設的整體勝率有新的量測就在 `series` 加一點，然後跑 `npx tsx scripts/build_ai_history.ts` 更新 `packages/web/src/data/aiHistory.json`
 （腳本會核對每一筆的回合在下表是「採用」，也會列出下表有採用卻沒有里程碑的回合；`packages/server/src/__tests__/WebAiHistory.test.ts` 檢查資料沒有過期）。
+真人局與高端桌的對照不寫在 curated 檔：頁面用數據分析「陣容強度」同一份資料（`/api/analysis/games`、S ≥ 分組的上切點，預設 55）即時算（站長 2026-11-20「整個系統要完全同步同來源」）。
 
 | 回合 | 陣營 | 階段 | 篩選局數 | 確認局數 | 改法 | 期望勝率差（單一座位） | 採用 | 參考版本 |
 |---|---|---|---|---|---|---|---|---|

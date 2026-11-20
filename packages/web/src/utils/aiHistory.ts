@@ -7,6 +7,10 @@
  * 每次採用新預設就在 curated 檔加一列、重跑腳本（見 optimization_loop.md 第 4 節的說明）。
  * 測試：packages/server/src/__tests__/WebAiHistory.test.ts（web 沒有測試執行器）。
  */
+import {
+  DEFAULT_COHORT_CUTS, OUTCOME_BLUE_ALIVE, OUTCOME_BLUE_DEAD, OUTCOME_THREE_RED, S_TIERS, TABLE_TIER_LABELS,
+  type StrengthPoint,
+} from '@avalon/shared/stats';
 
 /** 角色（篩選與分角色彙整用）。reading = 藍方全體的讀人方法；blue／red = 一次改到多個角色的整包。 */
 export type AiRole =
@@ -355,3 +359,53 @@ export function isAiHistoryHash(hash: string | null | undefined): boolean {
 }
 
 export const AI_HISTORY_HASH = '#ai-history';
+
+// ── 真人對照（和數據分析同一個來源） ─────────────────────────────────────────────────
+
+/**
+ * 真人局的對照列：站長 2026-11-20「真人強者桌應該是用S 來看吧? 我說了要跟數據分析還有勝率統計那邊同步啊 整個系統要完全同步同來源」。
+ * 輸入是數據分析「陣容強度」同一份報告的每局點（computeStrengthReport(games).points：網站的 /api/analysis/games 資料集、
+ * 百科AI 局不算、有陣容強度 S 的局），分層和網站一樣：
+ *   - 全部：有陣容強度的局（同「陣容強度 › 依 S 分層」的「全部」列）；
+ *   - 高端桌：S ≥ 分組切點的上切點（數據分析「分組」的桌分層，預設 55 = 偏強＋高強度；跟著網站上調的切點）；
+ *   - 高強度：S ≥ 65（S_TIERS）。
+ */
+export interface HumanRefRow {
+  key: 'all' | 'high' | 'veryHigh';
+  label: string;
+  range: string;
+  n: number;
+  /** 任務三藍率 %（三藍死＋三藍活）。 */
+  task: number | null;
+  /** 藍方最終勝率（三藍活）%。 */
+  win: number | null;
+  /** 紅方勝率 %（三紅＋三藍死）。 */
+  red: number | null;
+  /** 刺中率 %（三藍的局裡梅林被刺中）。 */
+  hit: number | null;
+}
+
+function refRow(key: HumanRefRow['key'], label: string, range: string, points: readonly Pick<StrengthPoint, 'outcome'>[]): HumanRefRow {
+  let n = 0;
+  let red3 = 0;
+  let dead = 0;
+  let alive = 0;
+  for (const p of points) {
+    if (p.outcome === OUTCOME_THREE_RED) red3++;
+    else if (p.outcome === OUTCOME_BLUE_DEAD) dead++;
+    else if (p.outcome === OUTCOME_BLUE_ALIVE) alive++;
+    else continue;
+    n++;
+  }
+  const r = (k: number, d: number): number | null => (d > 0 ? (100 * k) / d : null);
+  return { key, label, range, n, task: r(dead + alive, n), win: r(alive, n), red: r(red3 + dead, n), hit: r(dead, dead + alive) };
+}
+
+export function humanReferenceRows(points: readonly Pick<StrengthPoint, 's' | 'outcome'>[], sHi: number = DEFAULT_COHORT_CUTS.sHi): HumanRefRow[] {
+  const veryHigh = S_TIERS.find((t) => t.id === 'high')!;
+  return [
+    refRow('all', '真人局（全部）', '有陣容強度的局', points),
+    refRow('high', `${TABLE_TIER_LABELS.high}桌`, `S ≥ ${sHi}`, points.filter((p) => p.s >= sHi)),
+    refRow('veryHigh', veryHigh.label, veryHigh.range, points.filter((p) => p.s >= veryHigh.min)),
+  ];
+}

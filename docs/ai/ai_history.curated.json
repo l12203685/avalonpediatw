@@ -1,10 +1,8 @@
 {
-  "_readme": "百科AI 優化歷程頁（網站 #ai-history）的手寫資料。每次採用新預設就在 milestones 加一列（只收改成預設的改法），必要時在 series 加一點，然後跑 `npx tsx scripts/build_ai_history.ts` 產生 packages/web/src/data/aiHistory.json。數字照 optimization_loop.md 的回合紀錄抄，不估；沒有就寫 null。win 從改的那一方看（藍方列＝藍方三藍活、紅方列＝紅方勝率），task＝任務三藍率差，單位都是百分點。不寫玩家名字、不貼對話。",
+  "_readme": "百科AI 優化歷程頁（網站 #ai-history）的手寫資料。每次採用新預設就在 milestones 加一列（只收改成預設的改法），必要時在 series 加一點，然後跑 `npx tsx scripts/build_ai_history.ts` 產生 packages/web/src/data/aiHistory.json。數字照 optimization_loop.md 的回合紀錄抄，不估；沒有就寫 null。win 從改的那一方看（藍方列＝藍方三藍活、紅方列＝紅方勝率），task＝任務三藍率差，單位都是百分點。不寫玩家名字、不貼對話。真人局／高端桌的對照不寫在這裡：頁面在瀏覽器裡用數據分析同一份資料（/api/analysis/games、陣容強度 S）即時算。",
   "headline": [
     { "key": "start", "label": "起點（第 0 回合，10/28）", "task": 32.5, "win": 13.9, "hit": 57.3, "sample": "全機器人局 1,500 局" },
-    { "key": "now", "label": "現在（第 54 回合後的預設，11/19）", "task": 54.0, "win": 32.3, "hit": 40.2, "sample": "全機器人局 5 萬局", "note": "任務三藍 54.0% 是第 53b 回合量的預設（30 萬局）；之後採用的改法各自只動 +0.1～+0.4pp" },
-    { "key": "human", "label": "真人局（全部）", "task": 54.5, "win": 30.7, "hit": 43.7, "sample": "真人 10 人局 2,275 局" },
-    { "key": "strong", "label": "真人強者桌", "task": 51.4, "win": 30.1, "hit": 41.5, "sample": "桌上平均 PR ≥ 55，319 局" }
+    { "key": "now", "label": "現在（第 54 回合後的預設，11/19）", "task": 54.0, "win": 32.3, "hit": 40.2, "sample": "全機器人局 5 萬局", "note": "任務三藍 54.0% 是第 53b 回合量的預設（30 萬局）；之後採用的改法各自只動 +0.1～+0.4pp" }
   ],
   "series": [
     { "round": "0", "side": null, "win": 13.9, "task": 32.5, "note": "起點" },

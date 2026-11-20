@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { ArrowLeft, Bot, LineChart, ListChecks, Users } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import historyJson from '../data/aiHistory.json';
+import { strengthReport } from '../stats/statsEngine';
+import { useCohortCuts } from '../stats/cohortCuts';
 import {
-  ROLE_LABEL, chartGeometry, deltaTrend, filterMilestones, formatDelta, roleSummary,
-  type AiDelta, type AiHistoryData, type AiMilestone, type AiSeriesPoint, type RoleFilter,
+  ROLE_LABEL, chartGeometry, deltaTrend, filterMilestones, formatDelta, humanReferenceRows, roleSummary,
+  type AiDelta, type AiHistoryData, type AiMilestone, type AiSeriesPoint, type HumanRefRow, type RoleFilter,
 } from '../utils/aiHistory';
 
 /**
@@ -12,9 +14,32 @@ import {
  * 做了什麼策略/動作/思考優化 導致 任務勝率&最終勝率 提升 (分角色)」）。不用登入。
  * 資料：data/aiHistory.json（scripts/build_ai_history.ts 從 docs/ai/optimization_loop.md 與 docs/ai/ai_history.curated.json 產生）；
  * 純函式在 utils/aiHistory.ts。從「百科AI 對局」頁的連結進來。
+ * 真人局／高端桌的對照不寫死（站長 2026-11-20「整個系統要完全同步同來源」）：用數據分析「陣容強度」同一份報告
+ * （stats/statsEngine strengthReport：/api/analysis/games、百科AI 局不算、沒有篩選），高端桌的 S 切點跟著數據分析的分組切點。
  */
 
 const DATA = historyJson as unknown as AiHistoryData;
+
+type HumanState = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ok'; rows: HumanRefRow[] };
+
+/** 數據分析「陣容強度」的報告（全部局、不套篩選；和數據分析頁共用統計 Worker 與快取）→ 真人對照列。 */
+function useHumanRefs(): HumanState {
+  const sHi = useCohortCuts((st) => st.cuts.sHi);
+  const [points, setPoints] = useState<Parameters<typeof humanReferenceRows>[0] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    strengthReport(null, '', { kind: 'tier' })
+      .then((report) => { if (!cancelled) setPoints(report.points); })
+      .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); });
+    return (): void => { cancelled = true; };
+  }, []);
+  return useMemo<HumanState>(() => {
+    if (points) return { status: 'ok', rows: humanReferenceRows(points, sHi) };
+    if (error) return { status: 'error', message: error };
+    return { status: 'loading' };
+  }, [points, error, sHi]);
+}
 
 const WIN_COLOR = '#3987e5';
 const TASK_COLOR = '#d95926';
@@ -25,6 +50,7 @@ function pct(n: number | null, digits = 1): string {
 
 export default function AiHistoryPage(): JSX.Element {
   const setGameState = useGameStore((s) => s.setGameState);
+  const human = useHumanRefs();
   return (
     <div className="relative z-10 mx-auto max-w-4xl space-y-6 px-4 py-4 text-white">
       <header className="space-y-2">
@@ -41,8 +67,8 @@ export default function AiHistoryPage(): JSX.Element {
           這頁只列<strong className="text-white">改成預設</strong>的改動：做了什麼、為什麼、讓勝率動了多少。
         </p>
       </header>
-      <Headline />
-      <TrendChart series={DATA.series} />
+      <Headline human={human} />
+      <TrendChart series={DATA.series} human={human.status === 'ok' ? human.rows.find((h) => h.key === 'all') ?? null : null} />
       <RoleSummary />
       <Timeline />
       <footer className="space-y-1 border-t border-zinc-800 pt-3 text-[11px] leading-relaxed text-zinc-500">
@@ -61,10 +87,9 @@ export default function AiHistoryPage(): JSX.Element {
 
 // ── 1. 頂端數字 ─────────────────────────────────────────────────────────────────────
 
-function Headline(): JSX.Element {
+function Headline({ human }: { human: HumanState }): JSX.Element {
   const start = DATA.headline.find((h) => h.key === 'start');
   const now = DATA.headline.find((h) => h.key === 'now');
-  const refs = DATA.headline.filter((h) => h.key !== 'start' && h.key !== 'now');
   return (
     <section aria-labelledby="ai-history-headline" className="space-y-3">
       <h2 id="ai-history-headline" className="sr-only">現在 vs 起點</h2>
@@ -89,7 +114,7 @@ function Headline(): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {[...(start ? [start] : []), ...(now ? [now] : []), ...refs].map((h) => (
+            {[...(start ? [start] : []), ...(now ? [now] : [])].map((h) => (
               <tr key={h.key} className={`border-b border-zinc-800/60 last:border-0 ${h.key === 'now' ? 'bg-zinc-800/40' : ''}`}>
                 <td className="px-3 py-2 text-zinc-100">{h.label}</td>
                 <td className="px-2 py-2 text-right font-mono tabular-nums">{pct(h.task)}</td>
@@ -99,10 +124,27 @@ function Headline(): JSX.Element {
                 <td className="px-3 py-2 text-zinc-400">{h.sample}</td>
               </tr>
             ))}
+            {human.status === 'ok' && human.rows.map((h) => (
+              <tr key={h.key} className="border-b border-zinc-800/60 last:border-0" data-testid={`ai-history-human-${h.key}`}>
+                <td className="px-3 py-2 text-zinc-100">{h.label} <span className="text-zinc-500">{h.range}</span></td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{pct(h.task)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{pct(h.win)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{pct(h.red)}</td>
+                <td className="px-2 py-2 text-right font-mono tabular-nums">{pct(h.hit)}</td>
+                <td className="px-3 py-2 text-zinc-400">真人 {h.n.toLocaleString('en-US')} 局</td>
+              </tr>
+            ))}
+            {human.status !== 'ok' && (
+              <tr><td colSpan={6} className="px-3 py-2 text-zinc-500">{human.status === 'loading' ? '讀取數據分析的真人局…（伺服器剛喚醒時要等 30–60 秒）' : `真人局讀不到：${human.message}`}</td></tr>
+            )}
           </tbody>
         </table>
       </div>
-      {now?.note && <p className="text-[11px] text-zinc-500">{now.note}。機器人兩列是機器人互打；真人兩列是真人 10 人局，只當參考目標。</p>}
+      {now?.note && <p className="text-[11px] text-zinc-500">{now.note}。</p>}
+      <p className="text-[11px] leading-relaxed text-zinc-500">
+        機器人兩列是機器人互打。真人列和數據分析「陣容強度」同一份資料、同一個算法（百科AI 局不算；只算有陣容強度 S 的局）：
+        S = 桌上 10 人開打前 PR 的平均；高端桌的切點跟著數據分析「分組」的 S 上切點，高強度 = S ≥ 65。只當參考目標。
+      </p>
     </section>
   );
 }
@@ -136,13 +178,12 @@ function useWidth(fallback: number): [RefObject<HTMLDivElement>, number] {
   return [ref, width];
 }
 
-function TrendChart({ series }: { series: AiSeriesPoint[] }): JSX.Element {
+function TrendChart({ series, human }: { series: AiSeriesPoint[]; human: HumanRefRow | null }): JSX.Element {
   const [wrapRef, wrapWidth] = useWidth(640);
   const BOX = useMemo(() => ({ width: Math.max(280, wrapWidth), height: 220, left: 34, right: 12, top: 12, bottom: 28 }), [wrapWidth]);
   const geo = useMemo(() => chartGeometry(series, BOX), [series, BOX]);
   const labelEvery = Math.max(1, Math.ceil((series.length * 26) / (BOX.width - BOX.left - BOX.right)));
   const [hover, setHover] = useState<number | null>(null);
-  const human = DATA.headline.find((h) => h.key === 'human');
   const hp = hover === null ? null : geo.points[hover];
   const step = geo.points.length > 1 ? geo.points[1].x - geo.points[0].x : BOX.width;
   return (
@@ -151,7 +192,7 @@ function TrendChart({ series }: { series: AiSeriesPoint[] }): JSX.Element {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-zinc-300">
         <span className="inline-flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded" style={{ background: WIN_COLOR }} />藍方最終勝率（三藍活）</span>
         <span className="inline-flex items-center gap-1.5"><span className="inline-block h-0.5 w-4 rounded" style={{ background: TASK_COLOR }} />任務三藍率（文件有數字的回合）</span>
-        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-4 border-t border-dashed border-zinc-500" />真人局</span>
+        <span className="inline-flex items-center gap-1.5"><span className="inline-block w-4 border-t border-dashed border-zinc-500" />真人局（全部，數據分析同一份資料）</span>
       </div>
       <div className="relative rounded-lg border border-zinc-800 bg-zinc-900/70 py-2">
         <div ref={wrapRef} className="w-full">
@@ -162,7 +203,7 @@ function TrendChart({ series }: { series: AiSeriesPoint[] }): JSX.Element {
               <text x={BOX.left - 6} y={geo.yOf(t) + 3} textAnchor="end" fontSize="10" fill="#a1a1aa">{t}%</text>
             </g>
           ))}
-          {human && (
+          {human && human.win !== null && (
             <g>
               <line x1={BOX.left} x2={BOX.width - BOX.right} y1={geo.yOf(human.win)} y2={geo.yOf(human.win)} stroke="#71717a" strokeDasharray="4 3" strokeWidth={1} />
               {human.task !== null && (
