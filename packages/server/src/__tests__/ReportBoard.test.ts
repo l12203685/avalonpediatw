@@ -142,8 +142,35 @@ describe('去名字與頁面', () => {
     expect(anonymizeReportText('兩個問題：\n- 表格太寬\n- 字太小')).toBe('兩個問題：\n- 表格太寬\n- 字太小');
   });
 
-  it('頁面只從「來自」那行拿、只認 avalonpediatw.com', () => {
-    expect(pageOfReport('【百科回報・錯誤】#R1 x\n（來自網站・測試甲・頁面 <https://avalonpediatw.com/#wiki=abc>）')).toBe('/#wiki=abc');
+  it('其他寫法的名字：英文標籤、「ID是／我叫」、有空白的名字、~署名、敬上（名字都是編的）', () => {
+    expect(anonymizeReportText('name: Kip Lune\n排行少一場')).toBe('name：○○\n排行少一場');
+    expect(anonymizeReportText('Nickname：測試壬 / user: abc_99')).toBe('Nickname：○○ / user：○○');
+    expect(anonymizeReportText('@Kip Lune 也遇到，@Bob測試 也是')).toBe('@○○ 也遇到，@○○ 也是');
+    expect(anonymizeReportText('@測試甲 abc 頁面也壞')).toBe('@○○ abc 頁面也壞');
+    expect(anonymizeReportText('暱稱：Kip Lune 的戰績少一場')).toBe('暱稱：○○ 的戰績少一場');
+    expect(anonymizeReportText('我的ID是測試癸，戰績少一場')).toBe('我的ID是○○，戰績少一場');
+    expect(anonymizeReportText('你好我叫測試子，牌譜打不開')).toBe('你好我叫○○，牌譜打不開');
+    expect(anonymizeReportText('按鈕沒反應\n~測試丑')).toBe('按鈕沒反應');
+    expect(anonymizeReportText('按鈕沒反應\n測試丑 敬上')).toBe('按鈕沒反應');
+    // 不是署名的最後一行照留
+    expect(anonymizeReportText('按鈕沒反應\nbyebye')).toBe('按鈕沒反應\nbyebye');
+    expect(anonymizeReportText('這個名字是錯的')).toBe('這個名字是錯的');
+  });
+
+  it('舊格式的整則訊息（來自那行有暱稱、加過「（已處理）」再換狀態行、/更正 的來自那行）都不給名字', () => {
+    const web = `${formatReportMessage('R0000007', { kind: 'bug', message: '雷達圖空白\n—測試寅', source: 'web', name: 'Kip Lune', page: '/#player=KipLune' }, 'discord')}（已處理）\n${formatStatusLine({ status: '已修正', note: '修好了', link: null })}`;
+    const pub = toPublicReport({ id: R1, content: web });
+    expect(pub).toMatchObject({ text: '雷達圖空白', page: '/#player', status: '已修正', note: '修好了' });
+    const fix = toPublicReport({ id: R2, content: `${formatReportMessage('R0000008', { kind: 'correction', message: '[更正] S2222\n1家 測試卯', source: 'discord', name: '測試辰' }, 'discord')}` });
+    expect(fix).toMatchObject({ text: '[更正] S2222', page: null });
+    expect(JSON.stringify([pub, fix])).not.toMatch(/Kip|Lune|測試[寅卯辰]/);
+  });
+
+  it('頁面只從「來自」那行拿、只認 avalonpediatw.com、只給頁面名稱（#player=名字 的名字不給）', () => {
+    expect(pageOfReport('【百科回報・錯誤】#R1 x\n（來自網站・頁面 <https://avalonpediatw.com/#player=KipLune>）')).toBe('/#player');
+    expect(pageOfReport('【百科回報・錯誤】#R1 x\n（來自網站・頁面 <https://avalonpediatw.com/#stats?f=1.abc>）')).toBe('/#stats');
+    expect(pageOfReport('【百科回報・錯誤】#R1 x\n（來自網站・頁面 <https://avalonpediatw.com/>）')).toBeNull();
+    expect(pageOfReport('【百科回報・錯誤】#R1 x\n（來自網站・測試甲・頁面 <https://avalonpediatw.com/#wiki=abc>）')).toBe('/#wiki');
     expect(pageOfReport('【百科回報・錯誤】#R1 x\n（來自網站・頁面 https://avalonpediatw.com/#records）（已處理）')).toBe('/#records');
     expect(pageOfReport('【百科回報・錯誤】#R1 頁面 <https://avalonpediatw.com/#x>\n（來自LINE）')).toBeNull();
     expect(pageOfReport('（來自網站・頁面 <https://evil.example/#x>）')).toBeNull();

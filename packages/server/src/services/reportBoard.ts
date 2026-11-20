@@ -61,30 +61,46 @@ interface DiscordMessage {
 // 控制字元、雙向文字控制、BOM。
 // eslint-disable-next-line no-control-regex
 const UNSAFE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
-const NAME_LABELS = '暱稱|名字|名稱|署名|回報者|回報人|聯絡方式|聯絡|帳號|ID|Id|id';
+const NAME_LABELS = '暱稱|名字|名稱|署名|回報者|回報人|聯絡方式|聯絡|帳號|玩家名稱|使用者|用戶|稱呼|ID|nickname|username|name|user|contact|from';
+/** 「我的ID是…」「暱稱叫…」「我叫…」：這幾個標籤後面接 是／為／叫 也算名字（「名字是」太常是一般句子，不算）。 */
+const NAME_IS_LABELS = '暱稱|帳號|ID|署名';
+/**
+ * 名字：到空白或標點為止；英數結尾、後面空白再接英數開頭的字，一起算（「Kip Lune」不會只遮掉 Kip；「測試甲 abc」只遮測試甲）。
+ */
+const nameToken = (stop: string): string => String.raw`[^\s${stop}]+(?:(?<=[A-Za-z0-9_])[ \t]+[A-Za-z0-9_][^\s${stop}]*)*`;
+const NAME_TOKEN = nameToken(',，。、;；)）');
+const MENTION_TOKEN = nameToken('@＠,，.。、!！?？:：;；()（）「」『』[\\]<>');
 
 /**
- * 內容去名字：DC 提及（<@123>、<@&123>）、@everyone／@here、「@某人」、「暱稱：某人」這種標籤、最後一行「by 某人」「—某人」。
+ * 內容去名字：DC 提及（<@123>、<@&123>）、@everyone／@here、「@某人」、「暱稱：某人」「name: 某人」這種標籤、
+ * 「我的ID是某人」「我叫某人」、最後一行「by 某人」「—某人」「~某人」「某人 敬上」。
  * 其他照回報者寫的原樣（電子郵件的 @ 不動）。
  */
 export function anonymizeReportText(raw: string): string {
   let s = (raw ?? '').replace(/\r\n?/g, '\n').replace(UNSAFE, '');
   s = s.replace(/<@[!&]?\d+>/g, `@${NAME_MASK}`).replace(/<#\d+>/g, '#頻道');
-  s = s.replace(/(^|[^\w.])[@＠][^\s@＠,，.。、!！?？:：;；()（）「」『』[\]<>]+/gu, `$1@${NAME_MASK}`);
-  s = s.replace(new RegExp(`(^|[^\\w])(${NAME_LABELS})\\s*[:：]\\s*[^\\s,，。、;；)）]+`, 'gu'), `$1$2：${NAME_MASK}`);
+  s = s.replace(new RegExp(`(^|[^\\w.])[@＠]${MENTION_TOKEN}`, 'gu'), `$1@${NAME_MASK}`);
+  s = s.replace(new RegExp(`(^|[^\\w])(${NAME_LABELS})\\s*[:：]\\s*${NAME_TOKEN}`, 'giu'), `$1$2：${NAME_MASK}`);
+  s = s.replace(new RegExp(`(^|[^\\w])(${NAME_IS_LABELS})\\s*(是|為|叫)\\s*${NAME_TOKEN}`, 'giu'), `$1$2$3${NAME_MASK}`);
+  s = s.replace(new RegExp(`我叫\\s*${NAME_TOKEN}`, 'gu'), `我叫${NAME_MASK}`);
   const lines = s.split('\n');
   const last = lines[lines.length - 1] ?? '';
-  if (lines.length > 1 && /^\s*(?:by|from|—{1,2}|–|－{2}|-{2}|─{2})\s*\S{1,20}\s*$/iu.test(last)) lines.pop();
+  const signature = /^\s*(?:(?:by|from)(?:\s+|\s*[:：]\s*)|(?:—{1,2}|–|－{2}|-{2}|─{2}|[~～]{1,2})\s*)\S{1,20}\s*$/iu;
+  if (lines.length > 1 && (signature.test(last) || /^\s*\S{1,20}\s*敬上\s*$/u.test(last))) lines.pop();
   return lines.join('\n').trim();
 }
 
-/** 「（來自網站・…・頁面 <https://avalonpediatw.com/#records>）」→ '/#records'；沒有 → null。 */
+/**
+ * 「（來自網站・…・頁面 <https://avalonpediatw.com/#records=123>）」→ '/#records'；沒有 → null。
+ * 只給 # 後面的頁面名稱：#player=名字、#stats?f=…（篩選裡有玩家名字）後面的部分常常就是回報者自己，不公開
+ * （網站也只拿頁面名稱顯示「牌譜紀錄」這種字）。
+ */
 export function pageOfReport(content: string): string | null {
   const from = (content ?? '').split('\n').map((l) => l.trim()).find((l) => l.startsWith('（來自')) ?? '';
   const m = /頁面 <?https:\/\/avalonpediatw\.com(\/[^\s<>）)]*)>?/u.exec(from);
   if (!m) return null;
-  const p = m[1].slice(0, 200);
-  return /^\/[^\s<>`]*$/.test(p) ? p : null;
+  const route = /#([A-Za-z][\w-]{0,40})/.exec(m[1]);
+  return route ? `/#${route[1]}` : null;
 }
 
 /**
