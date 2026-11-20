@@ -16,7 +16,7 @@
  *
  * `goLike56`（位元，0 = 關）：第 1、2 局第 1–4 次提議照第 5 次（強制局）的派法——在同一個紀錄上把「這是第幾次提議」當成第 5 次去派
  * （`ForwardAgent.decide` 用 failCount = 4 的觀察再走一次），新隊過不了自己的閘門或投票規則（真的第幾次）就照原本。
- * 位元 1 = 忠臣第 1 局、2 = 忠臣第 2 局、4 = 派西第 1 局、8 = 派西第 2 局。
+ * 位元 1 = 忠臣第 1 局、2 = 忠臣第 2 局、4 = 派西第 1 局、8 = 派西第 2 局；16 = 個人先驗（`ownView`，第 38 回合）照真的第幾次提議加權（強制局本來是 0）。
  *
  * `missionRole56`（`BayesBelief`）：任務牌模型分「隊上有沒有奧伯倫」，見 `MISSION_OBERON_56`。
  */
@@ -113,6 +113,6 @@ export function goLike56Applies(tuning: Readonly<Partial<AgentTuning>>, obs: Pla
 }
 
 /** The observation the `goLike56` pick is made on: the same record, the proposal counted as the fifth (forced) one. */
-export function goLike56Obs(obs: PlayerObservation): PlayerObservation {
-  return { ...obs, failCount: 4 };
+export function goLike56Obs(obs: PlayerObservation, keepOwnView = false): PlayerObservation {
+  return { ...obs, failCount: 4, ...(keepOwnView ? { goLikeOwnViewFc: obs.failCount ?? 0 } : {}) };
 }

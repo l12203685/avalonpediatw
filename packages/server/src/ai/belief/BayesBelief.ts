@@ -554,7 +554,8 @@ export function ownViewStrength(obs: PlayerObservation, scope: number, maxRound 
   if (maxRound > 0 && (obs.currentRound ?? 1) > maxRound) return 0;
   if (obs.gamePhase !== 'team_select' || obs.myTeam !== 'good' || obs.publicLoyalView === true) return 0;
   if (!(obs.myRole === 'loyal' || (scope >= 2 && obs.myRole === 'percival'))) return 0;
-  const fc = obs.failCount ?? 0;
+  // Round 56 `goLike56` bit 16: a pick made as the forced one keeps the own prior at its real proposal's weight.
+  const fc = obs.goLikeOwnViewFc ?? obs.failCount ?? 0;
   if (fc >= 4) return 0;
   // The likelier this proposal goes on a mission (human records, `PROPOSAL_GO_RATE`), the less the own prior counts: weight 1 − go/0.3, so
   // about 0.7–1 on the R1–R2 proposals (0.5–8%), part weight on the R3–R5 proposals below 30% (R3 second 0.80, third 0.63; R3 first 25% → 0.17),

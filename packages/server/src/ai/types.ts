@@ -103,6 +103,10 @@ export interface PlayerObservation {
    * 只給「只給藍方座位」的讀法分辨（`beliefPendingProposal`），紅方座位的決策不受藍方開關影響。
    */
   seatTeam?: 'good' | 'evil';
+  /**
+   * 第 56 回合 `goLike56` 位元 16：照強制局派的那一次決策（failCount 被當成 4）仍用真的第幾次提議決定 `ownView` 個人先驗的權重（真的 failCount）。
+   */
+  goLikeOwnViewFc?: number;
 
   // Dynamic game state
   currentRound:  number;
