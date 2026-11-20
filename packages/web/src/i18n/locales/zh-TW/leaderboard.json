@@ -18,7 +18,8 @@
     "title": "8 指標排行榜",
     "tabEight": "8 指標精算榜",
     "eligibilityRule": "上榜條件: 所有能力角 (刺/娜/德/奧/派/梅) ≥ 3 場 且 忠臣 ≥ 15 場",
-    "popAvgExplain": "母體均值 (PopAvg) = 全社群 2146 場該指標的整體平均, 用來比較個人是否高於平均",
+    "popAvgExplain": "母體均值 (PopAvg) = 全社群 {{games}} 場該指標的整體平均, 用來比較個人是否高於平均",
+    "popAvgExplainNoCount": "母體均值 (PopAvg) = 全社群所有場次該指標的整體平均, 用來比較個人是否高於平均",
     "headers": {
       "player": "玩家",
       "totalGames": "場",
@@ -58,11 +59,11 @@
       "threeRedHint": "紅角立場・三紅相關欄高亮",
       "threeBlueDeadHint": "紅角立場・三藍死相關欄高亮",
       "threeBlueAliveHint": "藍角立場・三藍活相關欄高亮",
-      "stats": "2146 場全紀錄 · 三紅 989 (46%) · 三藍死 504 (24%) · 三藍活 653 (30%)",
-      "statsAll": "2146 場全紀錄",
-      "statsThreeRed": "三紅 989 (46%)",
-      "statsThreeBlueDead": "三藍死 504 (24%)",
-      "statsThreeBlueAlive": "三藍活 653 (30%)"
+      "stats": "{{games}} 場全紀錄 · 三紅 {{threeRed}} ({{threeRedPct}}) · 三藍死 {{threeBlueDead}} ({{threeBlueDeadPct}}) · 三藍活 {{threeBlueAlive}} ({{threeBlueAlivePct}})",
+      "statsAll": "{{games}} 場全紀錄",
+      "statsThreeRed": "三紅 {{threeRed}} ({{threeRedPct}})",
+      "statsThreeBlueDead": "三藍死 {{threeBlueDead}} ({{threeBlueDeadPct}})",
+      "statsThreeBlueAlive": "三藍活 {{threeBlueAlive}} ({{threeBlueAlivePct}})"
     },
     "filters": {
       "label": "篩選",

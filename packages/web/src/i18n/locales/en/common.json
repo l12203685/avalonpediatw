@@ -336,28 +336,6 @@
       "consistInconsist": "Consist. / Inconsist.",
       "highEvCells": "High-EV conditional cells (Top 5)",
       "noteLabel": "Note:",
-      "feature": {
-        "L141": {
-          "title": "Lake claim reliability",
-          "hook": "A good lake holder almost never lies (99% of calls are true); an evil holder's call is right only ~55% of the time, and an evil \"evil\" call usually frames a good player"
-        },
-        "L142": {
-          "title": "Lake Declarer Behavioral Consistency",
-          "hook": "Roles with enough data all sit at 85–95% consistency, a small spread; \"Assassin 100%\" rests on 15 cases and is too small a sample to be a rule"
-        },
-        "L143": {
-          "title": "Assassin Target Seat Preference",
-          "hook": "Players who led most get hit 49%, those who led least 39%, but lead count is mostly seat rotation, not how active someone is"
-        },
-        "L136": {
-          "title": "Vote Flip Rate After Team Change",
-          "hook": "Flip rates differ by only ±1.6pp across roles (Merlin +1.6, Morgana −2.2): far too small to infer a side from"
-        },
-        "L139": {
-          "title": "Forced P5 Round Outcome Shift",
-          "hook": "Games with a forced P5 in R3 end 3-Red 4.5pp more often, but that is selection bias (the table was already tilting evil), not causation"
-        }
-      },
       "loadError": "Failed to load feature studies",
       "notFound": "Study {{loopId}} is not in the cache yet",
       "lowSample": "Low sample",
@@ -557,11 +535,7 @@
         "interleaveRateCol": "Interleave %",
         "interleaveRedRate": "Interleaved Red Win",
         "noInterleaveRedRate": "Adjacent Red Win",
-        "overallRedRate": "Overall Red Win",
-        "conclusionTitle": "Findings",
-        "concl1": "Mei-Na-Pai (M-Mor-P) has lowest red rate (~41%) — Merlin and Morgana sit adjacent, Percival can tell them apart more easily.",
-        "concl2": "Mei-Pai-Na (M-P-Mor) has highest red rate (~48%) — Percival sandwiched between them, info-passing efficiency drops.",
-        "concl3": "Compare interleaved vs adjacent red win — interleaving means other players sit between the trio, possibly disrupting info flow."
+        "overallRedRate": "Overall Red Win"
       },
       "chemistry": {
         "loading": "Loading chemistry matrix…",
@@ -2151,7 +2125,7 @@
         "rank": "Ranking: decisive accuracy = right ÷ non-neutral decisive votes, shrunk toward the overall average: (right + {{k}} × average) ÷ (votes + {{k}}).",
         "baselineBelow": "On the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}} — all below the overall {{p0}}, so the score does not reward one-sided or habitual voting.",
         "baselineNotBelow": "Caution: on the current decisive spots (follows scope and filter): always approve {{approve}}, always reject {{reject}}, usual voting (approve on-team, reject off-team) {{usual}}, overall {{p0}}. At least one fixed strategy is not below average here, so the score may reward one-sided or habitual voting; read the ranking cautiously.",
-        "honest": "Honestly: whether a vote is decisive depends on the others, so decisive votes are a random ~13% slice of a player's votes. Split-half checks (all games, no filter): regulars with 30+ votes do not agree with themselves, so differences between them are mostly luck; a small agreement appears only when players with 15–29 votes are included. Treat the table as counts and stories, not a stable skill measure.",
+        "honest": "Honestly: whether a vote is decisive depends on the others, so decisive votes are a small random slice of a player's votes. Split-half checks (all games, no filter): regulars with 30+ votes do not agree with themselves, so differences between them are mostly luck; a small agreement appears only when players with 15–29 votes are included. Treat the table as counts and stories, not a stable skill measure.",
         "data": "10-player games, following the filter. Proposals whose votes contradict the result are record errors and excluded. No leader needed; gaps in the proposal record do not matter. Unnamed seats count in totals and roles only."
       },
       "player": {
@@ -2225,7 +2199,7 @@
         "help": {
           "player": "Player groups use the seat's pre-game PR in that game (the same PR as the benchmark rows and Lineup strength: the Elo percentile among players with 30+ career games, computed daily on all games and not affected by the filter). Strong = PR ≥ upper cut, newer = PR < lower cut, regular in between; the default 80/20 matches the benchmark rows' default top 20% / bottom 20%. Provisional seats (under 30 career games at the time), unnamed seats and unrated games have no PR and count as unrated (totals only).",
           "table": "Table groups use the game's S (mean pre-game PR of the 10 seats; provisional and unnamed seats count at most 50). High-end = S ≥ upper cut, casual = S < lower cut, normal in between.",
-          "why": "Why 55 and 38 by default: they are the existing Lineup strength boundaries (S ≥ 65 very strong, 55–65 strong, 38–55 normal, < 38 weak); high-end = very strong + strong, casual = weak. That split resembles the players' 80/20: across all games roughly a fifth are high-end, a little under a quarter casual and over half normal, close to the 22% / 56% / 22% of seats with a PR. For three equal groups, use the tercile cuts below.",
+          "why": "Why 55 and 38 by default: they are the existing Lineup strength boundaries (S ≥ 65 very strong, 55–65 strong, 38–55 normal, < 38 weak); high-end = very strong + strong, casual = weak. That split resembles the players' 80/20 (the live share of each group under the current filter is shown next to the cuts). For three equal groups, use the tercile cuts below.",
           "adjust": "Changing the cuts only changes how groups are split, never anyone's numbers; each viewer's choice is remembered and written into the share link (&c=… in the address). Opening someone's link uses their cuts (none written = the defaults) for that visit only; your remembered cuts are kept."
         }
       },
@@ -2642,7 +2616,7 @@
       "name": "Decisive vote",
       "def": "A blue vote that changed whether the proposal passed: approving a 6–4 pass or rejecting a 5–5 failure.",
       "calc": "Attempts 1–4 only, proposals whose votes match the result; the other nine split exactly 5 approve. Loyal, Percival and Merlin only.",
-      "meaning": "These votes decided whether the mission went. Nobody knows in advance, so they are a random ~13% slice of all votes."
+      "meaning": "These votes decided whether the mission went. Nobody knows in advance, so they are a small random slice of all votes."
     },
     "decisiveAccuracy": {
       "name": "Decisive accuracy",

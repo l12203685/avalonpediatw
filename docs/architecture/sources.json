@@ -300,8 +300,10 @@
       "domain": "wiki",
       "path": "packages/server/wiki_data.json",
       "kind": "source",
-      "producedBy": "人工（11/11 整併 57→40）",
-      "derivedFrom": [],
+      "producedBy": "人工（11/11 整併 57→40）；標記內的牌譜數字由 wiki_stats.py（refresh-analysis-cache.yml，每晚）寫",
+      "derivedFrom": [
+        "games-cache"
+      ],
       "consumers": [
         "web 百科",
         "WikiMindMap",
@@ -311,7 +313,7 @@
       ],
       "refresh": "人工",
       "targetPhase": 3,
-      "notes": "40 篇；18 篇共 255 個寫死百分比"
+      "notes": "40 篇；從牌譜算的數字放在 <!-- stat:KEY --> 標記裡，由 wiki_stats.py 每晚重算（2026-11-20）；其餘百分比是機率算式、例子或寫明日期的歷史引用"
     },
     {
       "id": "wiki-hardcoded",

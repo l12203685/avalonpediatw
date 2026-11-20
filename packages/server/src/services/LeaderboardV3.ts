@@ -30,7 +30,7 @@
  */
 
 import type { PlayerStats } from './sheetsAnalysis';
-import { getAllPlayerStats, isSheetsReady } from './sheetsAnalysis';
+import { getAllPlayerStats, getOverview, isSheetsReady } from './sheetsAnalysis';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -131,6 +131,19 @@ export interface LeaderboardV3Response {
     threeBlueAliveOnBlue: number;
     cellMean: number;
   };
+  /**
+   * 全部局的三種結果（analysis_cache.json overview，數據分析頁同一份；站長 2026-11-20「所有跟數字統計有關的
+   * 都應該跟資料庫連動 而不是寫死」）。以前精算榜的結果膠囊把 2146 局的數字寫死在 i18n。
+   */
+  population: {
+    totalGames: number;
+    threeRed: number;
+    threeBlueDead: number;
+    threeBlueAlive: number;
+    threeRedPct: number;
+    threeBlueDeadPct: number;
+    threeBlueAlivePct: number;
+  } | null;
   meta: {
     totalPlayers: number;
     eligiblePlayers: number;
@@ -378,6 +391,7 @@ export async function getLeaderboardV3(): Promise<LeaderboardV3Response> {
     return {
       entries: [],
       globalMeans: { threeRedOnRed: 0, threeBlueDeadOnRed: 0, threeBlueAliveOnBlue: 0, cellMean: 0 },
+      population: null,
       meta: {
         totalPlayers: 0,
         eligiblePlayers: 0,
@@ -416,8 +430,23 @@ export async function getLeaderboardV3(): Promise<LeaderboardV3Response> {
   // Default sort: shrunk.expectedWin desc (matches Edward's metric 8 + shrinkage)
   entries.sort((a, b) => b.shrunk.expectedWin - a.shrunk.expectedWin);
 
+  const overview = await getOverview();
+  const ob = overview?.outcomeBreakdown;
+  const population: LeaderboardV3Response['population'] = ob
+    ? {
+        totalGames: overview.totalGames,
+        threeRed: ob.threeRed,
+        threeBlueDead: ob.threeBlueDead,
+        threeBlueAlive: ob.threeBlueAlive,
+        threeRedPct: ob.threeRedPct,
+        threeBlueDeadPct: ob.threeBlueDeadPct,
+        threeBlueAlivePct: ob.threeBlueAlivePct,
+      }
+    : null;
+
   const response: LeaderboardV3Response = {
     entries,
+    population,
     globalMeans: {
       threeRedOnRed: rnd1(globalMeans.threeRedOnRed),
       threeBlueDeadOnRed: rnd1(globalMeans.threeBlueDeadOnRed),

@@ -18,7 +18,8 @@
     "title": "8-Metric Leaderboard",
     "tabEight": "8-Metric",
     "eligibilityRule": "Eligibility: each ability role (Assassin / Morgana / Mordred / Oberon / Percival / Merlin) >= 3 games AND Loyal Servant >= 15 games",
-    "popAvgExplain": "PopAvg (population mean) = community average across 2146 games per metric — used as the baseline to compare each player against.",
+    "popAvgExplain": "PopAvg (population mean) = community average across {{games}} games per metric — used as the baseline to compare each player against.",
+    "popAvgExplainNoCount": "PopAvg (population mean) = community average across all games per metric — used as the baseline to compare each player against.",
     "headers": {
       "player": "Player",
       "totalGames": "G",
@@ -58,11 +59,11 @@
       "threeRedHint": "Red side · 3-Red columns emphasized",
       "threeBlueDeadHint": "Red side · 3B-Dead columns emphasized",
       "threeBlueAliveHint": "Blue side · 3B-Alive columns emphasized",
-      "stats": "2146 games total · 3-Red 989 (46%) · 3B-Dead 504 (24%) · 3B-Alive 653 (30%)",
-      "statsAll": "2146 games total",
-      "statsThreeRed": "3-Red 989 (46%)",
-      "statsThreeBlueDead": "3B-Dead 504 (24%)",
-      "statsThreeBlueAlive": "3B-Alive 653 (30%)"
+      "stats": "{{games}} games total · 3-Red {{threeRed}} ({{threeRedPct}}) · 3B-Dead {{threeBlueDead}} ({{threeBlueDeadPct}}) · 3B-Alive {{threeBlueAlive}} ({{threeBlueAlivePct}})",
+      "statsAll": "{{games}} games total",
+      "statsThreeRed": "3-Red {{threeRed}} ({{threeRedPct}})",
+      "statsThreeBlueDead": "3B-Dead {{threeBlueDead}} ({{threeBlueDeadPct}})",
+      "statsThreeBlueAlive": "3B-Alive {{threeBlueAlive}} ({{threeBlueAlivePct}})"
     },
     "filters": {
       "label": "Filters",

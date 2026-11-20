@@ -55,6 +55,14 @@ import { openStudy } from './studyLink';
 /** generate_cache.py LAKE_CLAIM_MIN_SAMPLE：研究表格 n 低於這個值標「樣本不足」。 */
 export const LOW_SAMPLE_N = 30;
 
+/** 一次性研究（L136／L139／L142／L143）放上網站的日期；數字停在那次快照，每晚只改寫結論文字。 */
+export const FEATURE_SNAPSHOT_SINCE = '2026-04-27';
+
+/** 每晚從牌譜重算的研究（目前是 L141）：generate_cache.py 寫的、附 computedAt。 */
+export function isLiveStudy(feature: Pick<FeatureStudyEntry, 'sourceReport' | 'computedAt'>): boolean {
+  return feature.sourceReport === 'generate_cache.py' || Boolean(feature.computedAt);
+}
+
 // ─── Module-level cache + hook ───────────────────────────────────────────────
 
 const studiesLoader = filterScopedLoader(fetchFeatureStudies);
@@ -380,7 +388,10 @@ function FeatureCard({
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-zinc-500">
             <span>
               {t('analytics.featureStudies.sampleSize', { games: feature.sampleSize.games })}
-              {feature.computedAt ? ` · ${feature.computedAt}` : ''}
+              {/* 每晚重算的研究附計算日；一次性研究的數字停在快照，卡片上就標出來，不要看起來像即時數字（站長 2026-11-20） */}
+              {isLiveStudy(feature)
+                ? (feature.computedAt ? ` · ${feature.computedAt}` : '')
+                : ` · ${t('analytics.r6.tabsa.study.snapshot', { since: FEATURE_SNAPSHOT_SINCE })}`}
             </span>
             <StudyLink loopId={feature.loopId} />
           </div>

@@ -9,11 +9,15 @@
  * 同一個指紋（配置｜每次派票的隊伍｜每局任務結果）對上 games_cache.json 的那一局。
  */
 
+import { S_TIERS } from '@avalon/shared/stats';
 import { recordFingerprint } from '../simulation/bankCodec';
 import type { SimGame } from '../simulation/scenario';
 
-/** 網站的高強度門檻（S ≥ 65）。 */
-export const HIGH_LINEUP_S = 65;
+/**
+ * 網站的高強度門檻（S ≥ 65）：直接讀數據分析頁「陣容強度」分層的定義（@avalon/shared S_TIERS 的 high），
+ * 不另外寫一個數字（站長 2026-11-20「整個系統要完全同步同來源」）。
+ */
+export const HIGH_LINEUP_S: number = S_TIERS.find((t) => t.id === 'high')!.min;
 
 interface GamesCacheFile {
   fields?: readonly string[];

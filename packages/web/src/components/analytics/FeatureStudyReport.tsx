@@ -6,7 +6,7 @@ import type { FeatureStudyEntry } from '../../services/api';
 import { SectionTabs } from '../analysis/ui';
 import { useAnalysisOverview } from '../analysis/useAnalysisOverview';
 import {
-  FeatureVisual, LoadFailed, StudyErrorBoundary, studyMinSample, useFeatureStudies,
+  FEATURE_SNAPSHOT_SINCE, FeatureVisual, LoadFailed, StudyErrorBoundary, isLiveStudy, studyMinSample, useFeatureStudies,
 } from './FeatureStudiesPanel';
 import { closeStudy, useOpenStudy } from './studyLink';
 import NotFilteredNote from '../analysis/filter/NotFilteredNote';
@@ -29,8 +29,6 @@ import { isFilterableStudy } from '../../stats/filteredRoutes';
  * 由 AnalyticsPage 掛一個 <FeatureStudyReportHost />；派隊 L139、投票 L136、湖中 L141/L142、
  * 刺殺 L143 的卡片 (FeatureStudyCard → StudyLink) 都打開同一個。
  */
-
-const SNAPSHOT_SINCE = '2026-04-27';
 
 type ReportTab = 'data' | 'method' | 'read';
 
@@ -284,10 +282,9 @@ function SampleLine({ feature }: { feature: FeatureStudyEntry }): JSX.Element {
   unit('leaderEvents');
   unit('attempts');
   unit('chances');
-  const live = feature.sourceReport === 'generate_cache.py' || Boolean(feature.computedAt);
-  parts.push(live
+  parts.push(isLiveStudy(feature)
     ? t('analytics.r6.tabsa.study.live', { date: feature.computedAt ?? '—' })
-    : t('analytics.r6.tabsa.study.snapshot', { games: int(s.games), since: SNAPSHOT_SINCE }));
+    : t('analytics.r6.tabsa.study.snapshot', { games: int(s.games), since: FEATURE_SNAPSHOT_SINCE }));
   return <>{parts.join(' · ')}</>;
 }
 

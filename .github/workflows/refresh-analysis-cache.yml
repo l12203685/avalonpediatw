@@ -31,6 +31,9 @@ name: Refresh analysis cache
 #       快取照常推送，最後一步讓 job 亮紅燈。allow_shrink 也放寬清單篇數變少的檢查。公開紀錄只有數量。
 #       每篇讀得懂的牌譜另附陣容強度（S、每個座位的時點 PR，從同一次寫出的 games_cache.json 算）與可證明的失誤
 #       標籤（Edward 2026-10-31）；沒有 token 或讀 Discord 失敗時用 --merge-only 只重新合併試算表的局並更新這兩項。
+# 百科文章裡的牌譜數字（站長 2026-11-20「所有跟數字統計有關的 都應該跟資料庫連動 而不是寫死」）：wiki_stats.py
+#       讀同一次寫出的 games_cache.json，重寫 wiki_data.json 與 docs/avalon-wiki 副本裡 <!-- stat:KEY --> 標記內的
+#       表格與句子（口徑同數據分析頁不篩選），有變動就跟快取一起 commit。失敗時保留舊檔、不擋快取推送。
 
 on:
   schedule:
@@ -64,6 +67,8 @@ jobs:
       RECORDS_PATH: packages/server/records_cache.json
       GAME_DB_PATH: packages/server/game_db.json
       GAME_DB_REPORT: docs/data/game_db_report.md
+      WIKI_PATH: packages/server/wiki_data.json
+      WIKI_DOCS_DIR: docs/avalon-wiki
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - name: Pick the credentials secret
@@ -248,13 +253,21 @@ jobs:
           python packages/server/game_db.py --output "${GAME_DB_PATH}" --check-report "${GAME_DB_REPORT}" || \
             echo "::warning title=Game database not rebuilt::game_db.py failed; game_db.json and its report keep the previous version."
 
+      - name: Refresh the wiki's 牌譜 numbers (wiki_stats.py)
+        if: steps.creds.outputs.secret != ''
+        run: |
+          # 百科文章裡從牌譜算出來的數字（<!-- stat:KEY --> 標記）跟數據分析頁同一份 games_cache.json、同一套口徑。
+          # 只印改了哪幾個檔，不印內容。失敗時保留舊檔（文章照舊），不擋快取推送。
+          python packages/server/wiki_stats.py || \
+            echo "::warning title=Wiki numbers not refreshed::wiki_stats.py failed; the wiki keeps the previous numbers."
+
       - name: Commit and push if the cache changed
         if: steps.creds.outputs.secret != ''
         env:
           GAMES_DATASET: ${{ steps.regen.outputs.games_dataset }}
         run: |
           # 首次產生的資料集／牌譜紀錄清單尚未追蹤，須以 git status 判斷有無變動。
-          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}" "${GAME_DB_PATH}" "${GAME_DB_REPORT}")" ]; then
+          if [ -z "$(git status --porcelain -- "${CACHE_PATH}" "${GAMES_PATH}" "${RECORDS_PATH}" "${GAME_DB_PATH}" "${GAME_DB_REPORT}" "${WIKI_PATH}" "${WIKI_DOCS_DIR}")" ]; then
             echo "analysis_cache.json, games_cache.json and records_cache.json are unchanged; nothing to commit."
             echo "- 結果：快取無變動，未 commit" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -287,11 +300,13 @@ jobs:
           if [ -f "${RECORDS_PATH}" ]; then
             git add -- "${RECORDS_PATH}"
           fi
-          for f in "${GAME_DB_PATH}" "${GAME_DB_REPORT}"; do
+          for f in "${GAME_DB_PATH}" "${GAME_DB_REPORT}" "${WIKI_PATH}"; do
             if [ -f "${f}" ]; then
               git add -- "${f}"
             fi
           done
+          # 百科副本只加 wiki_stats.py 改過的檔（已追蹤的 Markdown）。
+          git add -u -- "${WIKI_DOCS_DIR}"
           git commit -q -m "chore(stats): 每日更新戰績分析快取（${games} 局）" \
             -m "局數 ${prev_games} → ${games}，玩家 ${prev_players} → ${players}；${dataset_note}${records_note}。由 refresh-analysis-cache workflow 從 Google 試算表重算；archetype、playstyle、featureStudies 沿用前次快取。"
 
