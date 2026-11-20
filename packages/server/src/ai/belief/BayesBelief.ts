@@ -441,6 +441,12 @@ export interface BayesOptions {
    */
   conventionTremble?: number;
   /**
+   * Round 56b `trembleConventions56b`: which conventions `conventionTremble` softens (bit 1 = A0, 2 = A1, 4 = A2); the others stay hard in
+   * the belief (a world breaking one is dropped, as at L1). Absent / 0 / 7 = all three (round 48). Fallbacks mirror `enumerateL1Staged`: no
+   * world keeps the hard ones → A0 alone (when hard), then L0 — both without convention weights.
+   */
+  conventionTrembleMask?: number;
+  /**
    * Round 50 `loyalRationality50`: blue seats only, every other seat's red log-odds plus the fitted residual weights × how hard its public
    * actions are to justify for a loyal with the public record of that moment (`Round50.rationalityAdj50`). `noVote`: not at the viewer's own votes.
    */
@@ -705,6 +711,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const rPow = perRound(opts.recalibPower);
   const rTem = perRound(opts.recalibTemper);
   const tremble = blueSeat && opts.conventionTremble !== undefined && opts.conventionTremble > 0 && opts.conventionTremble < 1 ? opts.conventionTremble : 0;
+  const trembleMask = tremble > 0 && opts.conventionTrembleMask !== undefined && opts.conventionTrembleMask > 0 && opts.conventionTrembleMask < 7 ? opts.conventionTrembleMask : 7;
   const temperV = vT !== undefined && vT > 0 ? Math.min(vT * rTem, 1) : Math.min(rTem, 1);
   const temperP = pT !== undefined && pT > 0 ? Math.min(pT * rTem, 1) : Math.min(rTem, 1);
   const policy = opts.policyVotes === true;
@@ -741,15 +748,17 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const copyW = blueSeat && opts.copyWeight55 !== undefined && opts.copyWeight55 >= 0 && opts.copyWeight55 < 1 ? opts.copyWeight55 : 1;
   const copyRW = blueSeat && opts.copyRepeatWeight55b !== undefined && opts.copyRepeatWeight55b >= 0 && opts.copyRepeatWeight55b < 1 ? opts.copyRepeatWeight55b : 1;
   const copyFreq = blueSeat && opts.copyFreq55b === true;
-  const fullKey = `${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const fullKey = `${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
   if (hit) return hit;
   const view = buildCertainty(obs);
   // Round 48 `beliefConventionTremble`: the L0 worlds, the conventions as weights (`trembleLog` below).
-  const worlds = tremble > 0 ? view.worlds('L0') : view.worlds('L1*');
-  const conventions = tremble > 0 ? conventionCounter(obs, view.params) : null;
+  // Round 56b `trembleConventions56b`: only the masked conventions are soft; a world breaking a hard one is dropped (fallbacks: see the option).
+  const trembleSel = tremble > 0 ? trembleWorlds56b(obs, view, trembleMask) : null;
+  const worlds = trembleSel ? trembleSel.worlds : view.worlds('L1*');
+  const conventions = trembleSel ? trembleSel.counter : null;
   const logEps = Math.log(tremble);
   const log1mEps = Math.log1p(-tremble);
   const ids = obs.allPlayerIds;
@@ -1058,14 +1067,49 @@ export const RECALIB_48: Readonly<Record<number, { power?: readonly number[]; te
   3: { power: [1, 0.9, 0.75, 0.5, 0.4], noVote: true },
 };
 
-function recalibOf(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'recalibPower' | 'recalibTemper' | 'recalibNoVote' | 'conventionTremble'> {
+/**
+ * Round 56b (`trembleConventions56b`; the site owner 2026-11-18 / 11-20: A0 and A1 stay hard, A2 「還湖」 soft at ε): the world set and the
+ * per-world convention count of a tremble posterior. mask 7 = round 48 (L0 worlds, every convention soft). Otherwise the L0 worlds that break
+ * no hard convention, with `broken` / `kept` restricted to the soft ones (`kept` only while A0 is soft); when none is left, the L1 fallbacks:
+ * A0 alone (if A0 is hard) and then L0, without convention weights.
+ */
+export function trembleWorlds56b(
+  obs: PlayerObservation,
+  view: ReturnType<typeof buildCertainty>,
+  mask: number,
+): { worlds: readonly number[]; counter: ((w: number) => { broken: number; kept: number }) | null } {
+  const count = conventionCounter(obs, view.params);
+  const l0 = view.worlds('L0');
+  if (mask === 7) return { worlds: l0, counter: count };
+  const soft0 = (mask & 1) !== 0;
+  const soft1 = (mask & 2) !== 0;
+  const soft2 = (mask & 4) !== 0;
+  const memo = new Map<number, { broken: number; kept: number }>();
+  const kept: number[] = [];
+  for (const w of l0) {
+    const c = count(w);
+    if ((!soft0 && c.a0 > 0) || (!soft1 && c.a1 > 0) || (!soft2 && c.a2 > 0)) continue;
+    kept.push(w);
+    memo.set(w, { broken: (soft0 ? c.a0 : 0) + (soft1 ? c.a1 : 0) + (soft2 ? c.a2 : 0), kept: soft0 ? c.kept : 0 });
+  }
+  if (kept.length > 0) return { worlds: kept, counter: (w) => memo.get(w) ?? { broken: 0, kept: 0 } };
+  if (!soft0) {
+    const a0 = l0.filter((w) => count(w).a0 === 0);
+    if (a0.length > 0) return { worlds: a0, counter: null };
+  }
+  return { worlds: l0, counter: null };
+}
+
+function recalibOf(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'recalibPower' | 'recalibTemper' | 'recalibNoVote' | 'conventionTremble' | 'conventionTrembleMask'> {
   const r = RECALIB_48[t.beliefRecalib ?? 0];
   const eps = t.beliefConventionTremble ?? 0;
+  const mask = t.trembleConventions56b ?? 0;
   return {
     ...(r?.power ? { recalibPower: r.power } : {}),
     ...(r?.temper ? { recalibTemper: r.temper } : {}),
     ...(r?.noVote ? { recalibNoVote: true } : {}),
     ...(eps > 0 ? { conventionTremble: eps } : {}),
+    ...(eps > 0 && mask > 0 && mask < 7 ? { conventionTrembleMask: mask } : {}),
   };
 }
 

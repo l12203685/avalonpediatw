@@ -307,9 +307,11 @@ export function admittedReds(obs: PlayerObservation): string[] {
  * lake holder declares the truth), A1 (no stalling after two fails) and A2 (return the lake) — as soft facts. For a world (red-set
  * bitmask over `obs.allPlayerIds`, the viewer's own camp as in `buildCertainty`), `broken` = how many of them it breaks and `kept` =
  * how many A0 declarations a good holder made truthfully in it. Only the belief reads this (`BayesBelief`, its L0 worlds weighted by
- * ε^broken·(1 − ε)^kept); the certainty layer and every hard check keep the conventions hard.
+ * ε^broken·(1 − ε)^kept); the certainty layer and every hard check keep the conventions hard. Round 56b: `a0` / `a1` / `a2` split `broken` by
+ * convention (`broken` = their sum), so a belief can keep some of them hard (`trembleConventions56b`).
  */
-export function conventionCounter(obs: PlayerObservation, params: CertaintyParams = certaintyParamsFor(obs)): (mask: number) => { broken: number; kept: number } {
+export interface ConventionCount { broken: number; kept: number; a0: number; a1: number; a2: number }
+export function conventionCounter(obs: PlayerObservation, params: CertaintyParams = certaintyParamsFor(obs)): (mask: number) => ConventionCount {
   const ids = obs.allPlayerIds;
   const idx = new Map(ids.map((id, i) => [id, i]));
   const bit = (id: string): number => { const i = idx.get(id); return i === undefined ? 0 : 1 << i; };
@@ -323,15 +325,17 @@ export function conventionCounter(obs: PlayerObservation, params: CertaintyParam
   const selfGood = obs.myTeam !== 'evil' && idx.has(obs.myPlayerId);
   const admitted = admittedReds(obs).filter((id) => !(selfGood && id === obs.myPlayerId)).map(bit).filter((b) => b !== 0);
   return (mask: number) => {
-    let broken = 0;
+    let a0 = 0;
+    let a1 = 0;
+    let a2 = 0;
     let kept = 0;
     for (const l of lakes) {
       if ((mask & l.holder) !== 0) continue;
-      if (((mask & l.target) !== 0) === l.saysEvil) kept += 1; else broken += 1;
+      if (((mask & l.target) !== 0) === l.saysEvil) kept += 1; else a0 += 1;
     }
-    for (const c of caps) if (popcount(mask & c.mask) > c.max) broken += 1;
-    for (const b of admitted) if ((mask & b) === 0) broken += 1;
-    return { broken, kept };
+    for (const c of caps) if (popcount(mask & c.mask) > c.max) a1 += 1;
+    for (const b of admitted) if ((mask & b) === 0) a2 += 1;
+    return { broken: a0 + a1 + a2, kept, a0, a1, a2 };
   };
 }
 

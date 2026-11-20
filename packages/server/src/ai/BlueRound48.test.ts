@@ -116,12 +116,12 @@ describe('beliefConventionTremble: the table conventions as soft facts', () => {
     const count = conventionCounter(obs);
     const mask = (ids: string[]): number => ids.reduce((m, id) => m | (1 << IDS.indexOf(id)), 0);
     // P1 red: its claim binds nothing; R3 team clean → nothing broken.
-    expect(count(mask(['P1', 'P2', 'P4', 'P6']))).toEqual({ broken: 0, kept: 0 });
+    expect(count(mask(['P1', 'P2', 'P4', 'P6']))).toMatchObject({ broken: 0, kept: 0 });
     // P1 good, P5 good: A0 broken; P5 on the R3 success after two fails would be A1 — here P5 is blue.
-    expect(count(mask(['P2', 'P4', 'P6', 'P7']))).toEqual({ broken: 1, kept: 0 });
-    expect(count(mask(['P2', 'P3', 'P4', 'P6']))).toEqual({ broken: 2, kept: 0 });
+    expect(count(mask(['P2', 'P4', 'P6', 'P7']))).toMatchObject({ broken: 1, kept: 0 });
+    expect(count(mask(['P2', 'P3', 'P4', 'P6']))).toMatchObject({ broken: 2, kept: 0 });
     // P1 good, P5 red: A0 kept, but P5 sat on the R3 success after two fails → A1 broken.
-    expect(count(mask(['P2', 'P4', 'P5', 'P6']))).toEqual({ broken: 1, kept: 1 });
+    expect(count(mask(['P2', 'P4', 'P5', 'P6']))).toMatchObject({ broken: 1, kept: 1 });
   });
   it('the hard L1 world set misses worlds the soft posterior keeps at a small weight; the certainty layer is unchanged', () => {
     const obs = r4();
