@@ -460,6 +460,13 @@ export interface BayesOptions {
    */
   copyWeight55?: number;
   /**
+   * Round 57 `blueVoteTemper57` (site owner 2026-11-20「對上 AI/弱真人/一般真人/強真人 你都可能會需要做調整 但不會過度」): blue seats only. The vote
+   * power (`voteTemper`, from `beliefTemper`) is replaced by this value; proposals keep theirs. Human-table profiles only (`humanProfile.ts`):
+   * human votes carry less information than the baseline reads (per-tier human-replay Brier, `scripts/humanProfileStudy.ts`). Red seats, the
+   * views a red seat projects and the recursive reader's level 0 keep `voteTemper` (red frozen).
+   */
+  blueVoteTemper?: number;
+  /**
    * Round 55b `copyRepeat55b` → this weight = 1 − d: blue seats only. Among the rejected, non-forced copies of the same latest clean successful
    * mission team, the first is read as usual and every later one with this weight (the copy is new information once, its repeats are not).
    */
@@ -601,7 +608,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -698,10 +705,12 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const biteMode = opts.biteCell ?? 0;
   // Round 28 `beliefLeadTemper`: a team pick may read the record with other powers than the votes do.
   const lead = obs.gamePhase === 'team_select' && (opts.leadVoteTemper !== undefined || opts.leadProposalTemper !== undefined);
-  const vT = lead ? opts.leadVoteTemper : opts.voteTemper;
   const pT = lead ? opts.leadProposalTemper : opts.proposalTemper;
   // Round 48 (`beliefRecalib`, `beliefConventionTremble`): blue seats only (red frozen), like `lakeCal` below.
   const blueSeat = (obs.seatTeam ?? obs.myTeam) === 'good' && obs.redLoyalView !== true;
+  // Round 57 `blueVoteTemper57`: blue seats read votes with their own power (human-table profiles); the lead temper, when set, still wins at picks.
+  const blueVT = blueSeat && opts.blueVoteTemper !== undefined && opts.blueVoteTemper > 0 && opts.blueVoteTemper < 1 ? opts.blueVoteTemper : 0;
+  const vT = lead ? opts.leadVoteTemper : blueVT > 0 ? blueVT : opts.voteTemper;
   const roundIx = Math.max(1, obs.currentRound ?? 1) - 1;
   const perRound = (xs: readonly number[] | undefined): number => {
     if (!blueSeat || !xs || xs.length === 0 || (opts.recalibNoVote === true && obs.gamePhase === 'team_vote')) return 1;
@@ -748,7 +757,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const copyW = blueSeat && opts.copyWeight55 !== undefined && opts.copyWeight55 >= 0 && opts.copyWeight55 < 1 ? opts.copyWeight55 : 1;
   const copyRW = blueSeat && opts.copyRepeatWeight55b !== undefined && opts.copyRepeatWeight55b >= 0 && opts.copyRepeatWeight55b < 1 ? opts.copyRepeatWeight55b : 1;
   const copyFreq = blueSeat && opts.copyFreq55b === true;
-  const fullKey = `${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -1150,9 +1159,9 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
     // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
     // recursive vote model was fitted on level-0 features without it.
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, blueVoteTemper57: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, blueVoteTemper57: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
@@ -1168,6 +1177,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.loyalRationality50 ?? 0) > 0 ? { rationality50: { scale: 1, noVote: t.loyalRationality50 === 2 || t.loyalRationality50 === 4, ...((t.loyalRationality50 ?? 0) >= 3 ? { weights: 'all' as const } : {}) } } : {}),
     ...((t.lakePickSuspicion50 ?? 0) > 0 ? { lakeSusp50: t.lakePickSuspicion50 } : {}),
     ...((t.copyDiscount55 ?? 0) > 0 ? { copyWeight55: 1 - Math.min(1, t.copyDiscount55 ?? 0) } : {}),
+    ...((t.blueVoteTemper57 ?? 0) > 0 && (t.blueVoteTemper57 ?? 0) < 1 ? { blueVoteTemper: t.blueVoteTemper57 } : {}),
     ...((t.copyRepeat55b ?? 0) > 0 ? { copyRepeatWeight55b: 1 - Math.min(1, t.copyRepeat55b ?? 0) } : {}),
     ...((t.copyFreq55b ?? 0) > 0 ? { copyFreq55b: true } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
