@@ -495,6 +495,20 @@ class MergeTest(unittest.TestCase):
         broken = next(p for p in doc["posts"] if p["id"] == BROKEN.id)  # Discord only: its own date
         self.assertEqual((broken["date"], rm.POST_DATE in broken), ("2026-10-26", False))
 
+    def test_owner_duplicate_rulings_leave_an_entry_out(self) -> None:
+        """站長 2026-11-20 duplicateOf (game_db_corrections.json): 「刪一篇」／「以試算表為準」 -- the named one stays."""
+        doc, _ = build()
+        counts = dpe.merge_sheet(doc, sheet_doc(), SIM_ROWS, None, {BROKEN.id: GAME.id, "S102": GAME.id})
+        ids = [p["id"] for p in doc["posts"]]
+        self.assertNotIn(BROKEN.id, ids)
+        self.assertNotIn("S102", ids)
+        self.assertIn(GAME.id, ids)
+        self.assertEqual(counts["left out as the same game as another (站長)"], 2)
+        self.assertEqual(dpe.records_problems(doc), [])
+        self.assertEqual(rm.duplicate_ids({"corrections": {"1": {"duplicateOf": "S2"}, "S3": {"set": {}}}}), {"1": "S2"})
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(dpe.load_duplicates(Path(tmp) / "none.json"), {})
+
     def test_sheet_date_on_a_merged_post(self) -> None:
         doc, _ = self.merged()
         again = json.loads(json.dumps(doc))

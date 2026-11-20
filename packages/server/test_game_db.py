@@ -453,6 +453,44 @@ class CorrectionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             gd.apply_corrections(sources, {"corrections": {"S12": {"exclude": ["LAKE"]}}})
 
+    def test_owner_plain_exclusion_and_duplicates(self):
+        """站長 2026-11-20：「這局不要記」→ OWNER_EXCLUDE；「是同一局」→ duplicateOf（那一筆不算，以指定的為準）。"""
+        g = copy.deepcopy(GOOD)
+        g["rounds"][0]["mission"] = "oox"  # FAILS_GT_RED: the owner says do not record it
+        twin = copy.deepcopy(GOOD)
+        twin["rounds"][1]["proposals"][0]["team"] = "1579"  # the same game recorded a little differently
+        sources = [source(gd.SRC_SHEET, "12", g), source(gd.SRC_SHEET, "13", copy.deepcopy(GOOD)),
+                   source(gd.SRC_DISCORD, "99", twin)]
+        applied = gd.apply_corrections(sources, {"corrections": {
+            "S12": {"exclude": ["OWNER_EXCLUDE"], "by": "站長", "date": "2026-11-20"},
+            "99": {"duplicateOf": "S13", "by": "站長", "date": "2026-11-20"},
+            "777": {"duplicateOf": "S13", "by": "站長", "date": "2026-11-20"}}})  # already gone from the records list
+        self.assertEqual([(a["id"], a["field"], a["new"]) for a in applied],
+                         [("777", "duplicate", "S13"), ("99", "duplicate", "S13"), ("S12", "exclude", "OWNER_EXCLUDE")])
+        excluded = []
+        rows = gd.build(sources, excluded)
+        self.assertEqual([(r["id"], [s["id"] for s in r["sources"]]) for r in rows], [("S13", ["S13"])])
+        self.assertEqual((excluded[0]["id"], excluded[0]["rules"]), ("S12", ["OWNER_EXCLUDE"]))
+        with tempfile.TemporaryDirectory() as tmp:
+            report = Path(tmp) / "r.md"
+            gd.write_report(rows, gd.summarize(rows, excluded), {}, report, excluded, corrections=applied)
+            text = report.read_text(encoding="utf-8")
+            self.assertIn("- 99：跟 S13 是同一局，不另外算（以 S13 為準，站長 2026-11-20）", text)
+            self.assertIn("- `OWNER_EXCLUDE`：S12（2026-01-02）", text)
+        for bad in ({"duplicateOf": "S12"}, {"duplicateOf": ""}, {"duplicateOf": "S13", "set": {"outcome": "三紅"}}):
+            with self.assertRaises(ValueError):
+                gd.apply_corrections([source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD))], {"corrections": {"S12": bad}})
+
+    def test_whole_record_is_never_lake_autofixed(self):
+        """站長重打的整局紀錄蓋過湖中鏈自動更正（S336：第 1 湖驗 6家、第 2 湖 6家持湖）。"""
+        five = dict(copy.deepcopy(LakeChainFixTest.FIVE), lakes=LakeChainFixTest.lakes(("0", "5"), ("4", "9"), ("9", "8")))
+        self.assertEqual(gd.build([source(gd.SRC_SHEET, "12", copy.deepcopy(five))])[0]["autoFixes"][0]["to"], "5")
+        whole = dict(copy.deepcopy(five), lakes=LakeChainFixTest.lakes(("0", "4"), ("4", "9"), ("9", "8")))
+        sources = [source(gd.SRC_SHEET, "12", copy.deepcopy(five))]
+        gd.apply_corrections(sources, {"corrections": {"S12": {"set": {f: whole[f] for f in gd.CORRECTABLE}}}})
+        row = gd.build(sources)[0]
+        self.assertEqual((row["game"]["lakes"], "autoFixes" in row), (whole["lakes"], False))
+
     def test_only_record_fields_can_be_corrected(self):
         with self.assertRaises(ValueError):
             gd.apply_corrections([source(gd.SRC_SHEET, "12", copy.deepcopy(GOOD))],
@@ -470,6 +508,13 @@ class CorrectionTest(unittest.TestCase):
             entry = doc["corrections"][gid]
             self.assertEqual((set(entry["set"]), entry["by"], entry["date"]), (set(gd.CORRECTABLE), "站長", "2026-11-18"))
             self.assertEqual([c["rule"] for c in gd.validate(entry["set"]) if c["level"] != gd.INFO], [], gid)
+        for gid in ("S1236", "S178", "S336", "S344", "S465", "S487", "S511"):  # 主控台更正 2026-11-20: whole records
+            entry = doc["corrections"][gid]
+            self.assertEqual((set(entry["set"]), entry["by"], entry["date"]), (set(gd.CORRECTABLE), "站長", "2026-11-20"))
+            self.assertEqual([c["rule"] for c in gd.validate(entry["set"]) if c["level"] != gd.INFO], [], gid)
+        for gid in ("S270", "S386"):  # 「這局不要記」
+            self.assertEqual(doc["corrections"][gid]["exclude"], ["OWNER_EXCLUDE"])
+        self.assertEqual(rm.duplicate_ids(doc), {"1176895793110728784": "1176895704342483034", "1302289442345848885": "S1675"})
         s673 = doc["corrections"]["S673"]  # 站長 2026-11-17「尾派沒有出任務 … 不用記錄」
         self.assertEqual((s673["exclude"], s673["by"], s673["date"], "set" in s673), (["FORCED_NOT_RUN"], "站長", "2026-11-17", False))
         self.assertIn("尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄", s673["note"])

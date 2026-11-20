@@ -85,6 +85,7 @@ RECORDS_VERSION = 1
 LEGACY_RECORDS_FORMAT = "avalon-paipu"  # the name before 2026-10-31 (--annotate-only renames it)
 OUTPUT_PATH = Path(__file__).resolve().parent / "records_cache.json"
 GAMES_PATH = OUTPUT_PATH.parent / gc.GAMES_OUTPUT_NAME
+CORRECTIONS_PATH = OUTPUT_PATH.parent / "game_db_corrections.json"  # 站長 duplicateOf rulings (records_merge.duplicate_ids)
 TITLE_MAX = 100
 NAME_MAX = 40
 TAG_MAX = 20
@@ -320,10 +321,11 @@ def is_discord_id(pid: Any) -> bool:
 
 def merge_sheet(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
                 sim_rows: Sequence[Mapping[str, Any]] | None,
-                previous: Mapping[str, Any] | None = None) -> Counter:
+                previous: Mapping[str, Any] | None = None, duplicates: Mapping[str, str] | None = None) -> Counter:
     """Adds the Google Sheet's games (牌譜 tab from games_doc, 模擬瓦 tab from sim_rows) to `doc`'s
     Discord posts, merged by fingerprint and sorted newest first (records_merge). A source that is not
-    available this run (games_doc None, sim_rows None) keeps the previous file's entries of it."""
+    available this run (games_doc None, sim_rows None) keeps the previous file's entries of it. ``duplicates``
+    (records_merge.duplicate_ids) are left out: the site owner ruled them the same game as another entry."""
     dc = [p for p in doc["posts"] if is_discord_id(p.get("id"))]
     old = [p for p in (previous or {}).get("posts", []) if isinstance(p, dict) and not is_discord_id(p.get("id"))]
     counts: Counter = Counter()
@@ -339,7 +341,7 @@ def merge_sheet(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
     else:
         sims = [dict(p) for p in old if str(p.get("id", "")).startswith(rm.SIM_PREFIX)]
         counts["模擬 kept from the previous file"] = len(sims)
-    posts, c = rm.merge_posts(dc, sheet, sims)
+    posts, c = rm.merge_posts(dc, sheet, sims, duplicates)
     counts.update(c)
     if games_doc is None:
         keep_previous_merge(dc, previous)
@@ -473,6 +475,14 @@ def annotate_records(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
                 counts["scored"] += 1
                 counts["matched" if n in matched else "by names"] += 1
     return counts
+
+
+def load_duplicates(path: Path) -> dict[str, str]:
+    """The site owner's duplicateOf rulings (game_db_corrections.json); none when the file is missing."""
+    try:
+        return rm.duplicate_ids(json.loads(path.read_text(encoding="utf-8")))
+    except FileNotFoundError:
+        return {}
 
 
 def load_games_doc(path: Path) -> dict | None:
@@ -796,7 +806,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
     previous = load_previous(out)
     games_doc = load_games_doc(Path(args.games))
     sim_rows, _ = read_sim_rows(args)
-    merged = merge_sheet(doc, games_doc, sim_rows, previous)
+    merged = merge_sheet(doc, games_doc, sim_rows, previous, load_duplicates(Path(args.corrections)))
     annotated = annotate_records(doc, games_doc)
 
     problems = records_problems(doc)
@@ -865,7 +875,7 @@ def run_merge_only(args: argparse.Namespace) -> int:
     doc = json.loads(json.dumps(previous))
     games_doc = load_games_doc(Path(args.games))
     sim_rows, _ = read_sim_rows(args)
-    merged = merge_sheet(doc, games_doc, sim_rows, previous)
+    merged = merge_sheet(doc, games_doc, sim_rows, previous, load_duplicates(Path(args.corrections)))
     annotated = annotate_records(doc, games_doc)
     problems = records_problems(doc)
     if problems:
@@ -894,6 +904,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="write even if the list has many fewer posts than the existing file")
     parser.add_argument("--games", default=str(GAMES_PATH), metavar="PATH",
                         help=f"the game-level dataset for the lineup annotation (default {GAMES_PATH.name} next to this script)")
+    parser.add_argument("--corrections", default=str(CORRECTIONS_PATH), metavar="PATH",
+                        help=f"the site owner's rulings; duplicateOf entries leave a post out (default {CORRECTIONS_PATH.name})")
     parser.add_argument("--annotate-only", action="store_true",
                         help="only recompute lineup / mistakes of the existing --output file (no Discord read)")
     parser.add_argument("--merge-only", action="store_true",

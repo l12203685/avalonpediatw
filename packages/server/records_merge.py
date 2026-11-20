@@ -318,10 +318,24 @@ def sort_key(post: Mapping[str, Any]) -> tuple[str, str, int, int]:
     return (post.get("date") or "", post.get("created") or "", -sheet, int(pid.lstrip(SHEET_PREFIX + SIM_PREFIX) or 0))
 
 
+def duplicate_ids(corrections: Mapping[str, Any] | None) -> dict[str, str]:
+    """id -> the id it is the same game as, from game_db_corrections.json ``duplicateOf`` (站長 2026-11-20: a Discord
+    post posted twice「刪一篇」, or a post that is the sheet's game recorded differently「以試算表為準」)."""
+    entries = (corrections or {}).get("corrections") or {}
+    return {str(gid): e["duplicateOf"] for gid, e in entries.items()
+            if isinstance(e, Mapping) and isinstance(e.get("duplicateOf"), str) and e["duplicateOf"]}
+
+
 def merge_posts(dc_posts: Sequence[dict[str, Any]], sheet: Sequence[dict[str, Any]],
-                sims: Sequence[dict[str, Any]]) -> tuple[list[dict[str, Any]], Counter]:
-    """Discord posts + sheet entries that are not one of them (same fingerprint), newest first."""
+                sims: Sequence[dict[str, Any]],
+                duplicates: Mapping[str, str] | None = None) -> tuple[list[dict[str, Any]], Counter]:
+    """Discord posts + sheet entries that are not one of them (same fingerprint), newest first. Entries the site
+    owner ruled the same game as another (``duplicates``, duplicate_ids) are left out: the named one stays."""
     counts: Counter = Counter()
+    if duplicates:
+        kept = [[e for e in part if str(e.get("id", "")) not in duplicates] for part in (dc_posts, sheet, sims)]
+        counts["left out as the same game as another (站長)"] = len(dc_posts) + len(sheet) + len(sims) - sum(map(len, kept))
+        dc_posts, sheet, sims = kept
     # 模擬 is only a simulation (Edward 2026-11-16「模擬畢竟只是模擬」): a sheet 實戰 game merges only with a
     # real Discord post, a 模擬瓦 row only with a 模擬 post -- never across types
     dc_by_fp: dict[bool, dict[str, dict[str, Any]]] = {False: {}, True: {}}

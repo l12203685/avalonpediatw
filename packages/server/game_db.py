@@ -54,6 +54,10 @@ never edited. Each entry is keyed by the source's public id (``S572`` ...) and c
 ``by``, ``date`` and ``note``; the report lists them as 「站長更正」 (id, field, old -> new). An entry may instead (or
 also) carry ``exclude``: EXCLUDE_RULES ids the site owner ruled the game breaks although no source shows it in record
 syntax (e.g. a Discord post that ends the game before the forced 5th team went); the game is then excluded.
+OWNER_EXCLUDE is the site owner's plain 「這局不要記」. ``duplicateOf`` (站長 2026-11-20) names the source this one is
+the same game as (a Discord post posted twice, or a post that differs from the sheet's copy -- the named one wins):
+the source is left out (records_merge drops it from the records list too). A whole record (``set`` with every
+field) is the site owner's own: the lake-chain autofix never touches it.
 
 Completion (站長 2026-11-18「有五個鐵好了 ... 幫我補上這些」): a real game whose record stops before either side has 3
 missions while exactly five seats are provably good from the public record (iron_good) gets the remaining missions
@@ -154,6 +158,7 @@ RULES: dict[str, tuple[str, str]] = {
     "AFTER_DECIDED": (ERROR, "已經有一方拿到 3 局，後面還有局"),
     "UNDECIDED": (ERROR, "紀錄在任何一方拿到 3 局之前就結束"),
     "OUTCOME": (ERROR, "結果欄跟任務結果或刺殺對不上"),
+    "OWNER_EXCLUDE": (ERROR, "站長裁定這局不要記"),
     "ASSASSIN_TEAMMATE": (ERROR, "刺客刺到隊友（紅方刺殺時全部開牌，奧伯倫也開）"),
     "LAKE": (ERROR, "湖中女神不合規則（同一人、斷鏈、驗過的人又被驗、不在第 2～4 局後）"),
     "VOTE_MARKS": (WARN, "投票記號跟隊伍對不上（場內才會有 -、場外才會有 +；多半是座位寫錯）"),
@@ -177,7 +182,7 @@ RULES: dict[str, tuple[str, str]] = {
 }
 LEVEL_ORDER = {ERROR: 0, WARN: 1, INFO: 2}
 # 錯誤局：不用記錄（Edward 2026-11-17）-- the game is left out of the database, not just flagged
-EXCLUDE_RULES = ("ASSASSIN_TEAMMATE", "FORCED_NOT_RUN")
+EXCLUDE_RULES = ("ASSASSIN_TEAMMATE", "FORCED_NOT_RUN", "OWNER_EXCLUDE")  # OWNER_EXCLUDE: only from corrections
 RED_ROLES = ("刺客", "莫甘娜", "莫德雷德", "奧伯倫")  # 配置 order: config[0..3]
 OWNER_FLAGS = ("flag:review", "flag:badGame", "flag:incident", "flag:substitution", "flag:lakeCorrected")
 
@@ -376,6 +381,14 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             raise ValueError(f"game_db_corrections.json {gid}: cannot exclude by {bad_rules} (only {EXCLUDE_RULES})")
         meta = {"by": entry.get("by", ""), "date": entry.get("date", "")}
         src = by_id.get(gid)
+        same = entry.get("duplicateOf")
+        if same is not None:  # 站長裁定：同一局，以 same 為準（這一筆不算；records_merge 已經把它從清單拿掉時 src 是 None）
+            if not isinstance(same, str) or not same or same == gid or fields or exclude:
+                raise ValueError(f"game_db_corrections.json {gid}: duplicateOf must name another game, alone")
+            if src is not None:
+                src["duplicate_of"] = same
+            applied.append({"id": gid, "field": "duplicate", "old": "", "new": same, **meta})
+            continue
         if src is not None and exclude:  # 站長裁定：錯誤局（不用記錄）
             src["owner_exclude"] = sorted(set(src.get("owner_exclude", [])) | set(exclude), key=EXCLUDE_RULES.index)
             applied += [{"id": gid, "field": "exclude", "old": "", "new": rule, **meta} for rule in exclude]
@@ -390,6 +403,7 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             src["fp"] = rm.game_fingerprint(src["game"])
             done = [{"id": gid, "field": "record", "old": src["problem"] or "讀不懂", "new": WHOLE_RECORD, **meta}]
             src["problem"] = ""
+            src["lake_fixes"] = []  # the site owner's own record: no lake-chain autofix
             src.pop("forced_rounds", None)
             src["corrected"] = [{k: v for k, v in d.items() if k != "id"} for d in done]
             applied += done
@@ -401,6 +415,7 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             done.append({"id": gid, "field": "record", "old": f"原紀錄（{'、'.join(changed)} 不一樣）" if changed else WHOLE_RECORD,
                          "new": WHOLE_RECORD, **meta})
             game.update(fields)
+            src["lake_fixes"] = []  # the site owner's own record: no lake-chain autofix
         for field, value in ({} if whole else fields).items():
             done.append({"id": gid, "field": field, "old": game.get(field), "new": value, **meta})
             game[field] = value
@@ -941,6 +956,8 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
     singles: list[list[dict[str, Any]]] = []
     for s in sources:
         s.pop("superseded", None)
+        if s.get("duplicate_of"):  # 站長裁定：跟另一筆是同一局，只算那一筆
+            continue
         autofix_lakes(s)  # 站長 2026-11-20「接湖的必為下一湖」: before every rule check and the merge
         group = KIND_SIM if s["kind"] == KIND_SIM else KIND_REAL
         if s["game"] and s["fp"]:
@@ -1258,6 +1275,8 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         for c in corrections:
             if c.get("missing"):
                 L.append(f"- {c['id']}：找不到這一局、或這局讀不懂而更正不是整局紀錄（{c['by']} {c['date']}），更正沒有套用")
+            elif c["field"] == "duplicate":
+                L.append(f"- {c['id']}：跟 {c['new']} 是同一局，不另外算（以 {c['new']} 為準，{c['by']} {c['date']}）")
             elif c["field"] == "exclude":
                 L.append(f"- {c['id']}：錯誤局，不記錄（`{c['new']}`，{c['by']} {c['date']}）")
             else:
