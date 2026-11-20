@@ -10,7 +10,8 @@ import { HeuristicAgent } from './HeuristicAgent';
 import type { AvalonAgent, PlayerObservation } from './types';
 import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
 import {
-  OPPONENT_TYPES, PROFILE_KEYS, PROFILE_OVERRIDES, opponentTypeOfTable, parseOpponentType, strengthTierOfS, tuningForOpponent,
+  HUMAN_TABLE_READING, OPPONENT_TYPES, PROFILE_KEYS, PROFILE_OVERRIDES, TIER_MAX_KEYS, TIER_MAX_STEP, opponentTypeOfTable, parseOpponentType,
+  strengthTierOfS, tuningForOpponent,
 } from './humanProfile';
 import { GameServer, opponentTypeForRoom } from '../socket/GameServer';
 import { SIM_OPPONENT } from '../bots/simulation/aiRead';
@@ -25,11 +26,24 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(3);
+      expect(keys.length).toBeLessThanOrEqual(4);
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
       for (const k of changed) expect(PROFILE_KEYS).toContain(k);
+    }
+  });
+  it('round 57: the three human tables share one reading, each tier at most one key one small step away from it', () => {
+    expect(HUMAN_TABLE_READING.blueVoteTemper57).toBe(0.4);
+    expect(PROFILE_OVERRIDES.weakHuman).toEqual(HUMAN_TABLE_READING);
+    expect(PROFILE_OVERRIDES.avgHuman).toEqual(HUMAN_TABLE_READING);
+    expect(PROFILE_OVERRIDES.strongHuman.blueVoteTemper57).toBe(0.3);
+    for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      const o = PROFILE_OVERRIDES[type];
+      const keys = new Set([...Object.keys(o), ...Object.keys(HUMAN_TABLE_READING)]) as Set<AgentTuningKey>;
+      const differ = [...keys].filter((k) => o[k] !== HUMAN_TABLE_READING[k]);
+      expect(differ.length).toBeLessThanOrEqual(TIER_MAX_KEYS);
+      for (const k of differ) expect(Math.abs(Number(o[k] ?? 0) - Number(HUMAN_TABLE_READING[k] ?? 0))).toBeLessThanOrEqual(TIER_MAX_STEP + 1e-9);
     }
   });
   it('the baseline keeps the environment overrides (deploy-time switches still apply under a profile)', () => {
@@ -90,8 +104,24 @@ describe('the human reading changes blue seats only', () => {
     const s = (m: Map<string, number>): number => ['P4', 'P5', 'P7'].reduce((a, id) => a + (m.get(id) ?? 0), 0);
     expect(s(hu)).toBeGreaterThan(s(ai));
     const red = obs({ myRole: 'assassin', myTeam: 'evil', seatTeam: 'evil', knownEvils: ['P2', 'P3', 'P10'] });
-    expect([...bayesRedShare(red, bayesOptionsOf(tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING)))])
-      .toEqual([...bayesRedShare(red, bayesOptionsOf(DEFAULT_AGENT_TUNING))]);
+    for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      expect([...bayesRedShare(red, bayesOptionsOf(tuningForOpponent(type, DEFAULT_AGENT_TUNING)))])
+        .toEqual([...bayesRedShare(red, bayesOptionsOf(DEFAULT_AGENT_TUNING))]);
+    }
+  });
+  it('round 57: blueVoteTemper57 is the vote half of beliefTemper for blue seats only', () => {
+    const base = { ...DEFAULT_AGENT_TUNING, viewpoint53: 0, viewpointPow53: 0 };
+    // beliefTemper=73 → votes 0.7, proposals 0.3; blueVoteTemper57=0.4 at a blue seat = beliefTemper=43 there.
+    const viaTemper = bayesRedShare(obs({ gamePhase: 'team_vote', proposedTeam: ['P1', 'P4', 'P5', 'P7'] }), bayesOptionsOf({ ...base, beliefTemper: 43 }));
+    const viaBlue = bayesRedShare(obs({ gamePhase: 'team_vote', proposedTeam: ['P1', 'P4', 'P5', 'P7'] }), bayesOptionsOf({ ...base, blueVoteTemper57: 0.4 }));
+    const plain = bayesRedShare(obs({ gamePhase: 'team_vote', proposedTeam: ['P1', 'P4', 'P5', 'P7'] }), bayesOptionsOf(base));
+    for (const id of IDS) expect(viaBlue.get(id)).toBeCloseTo(viaTemper.get(id) ?? -1, 12);
+    expect([...viaBlue]).not.toEqual([...plain]);
+    // Votes read softer: the most suspected seat is less certain than with the baseline power.
+    const top = (m: Map<string, number>): number => Math.max(...[...m.values()].filter((x) => x < 1));
+    expect(top(viaBlue)).toBeLessThan(top(plain));
+    const red = obs({ myRole: 'assassin', myTeam: 'evil', seatTeam: 'evil', knownEvils: ['P2', 'P3', 'P10'] });
+    expect([...bayesRedShare(red, bayesOptionsOf({ ...base, blueVoteTemper57: 0.4 }))]).toEqual([...bayesRedShare(red, bayesOptionsOf(base))]);
   });
 });
 
