@@ -34,7 +34,7 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
 };
 
 /** 真人桌可以偏離基準線的開關（只有讀人的信念，而且只給藍方座位）。 */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -47,24 +47,26 @@ export const TIER_MAX_STEP = 0.1;
  * 真人桌的讀法（三種真人桌共用；第 56b 回合 C、第 57 回合；`scripts/humanProfileStudy.ts`，真人局 2,241 局，逐角色 × 逐強度層）：
  * - 照派的提議（被否決、非強制、整隊包含最近一次乾淨成功任務隊）以 1 − 0.75 的權重讀（`copyDiscount55=0.75`）。真人的照派幾乎不帶資訊
  *   （第 55b 回合：第 2 局好人照派的概似比約 1.25），機器人忠臣只在自己後驗說乾淨時才照派，所以自我對打量不到好處（第 55、55b 回合）。
- *   四種寫法（0.75、1、照派只算一次、只算一次＋照派頻率）裡 0.75 的 Brier 最好，而且忠臣／派西／梅林 × 弱／一般／強九格沒有一格變差。
- *   第 57 回合分層再量（偶數局擬合、奇數局驗證）：弱桌改 0.9／1、強桌改 0.5 在擬合的一半變好、在驗證的一半變差，所以三層照舊 0.75。
- * - 隊長視角讀法（`viewpoint53`／`viewpointPow53`，第 53b 回合 V3P）不用：它在真人局的 Brier 變差（全部 +1.3e-4，強桌 +13.3e-4、派西・強桌 +23.7e-4），
- *   基準線就算為了自我對打勝率採用了它，真人桌也照舊不讀。第 57 回合試了只開一部分（次方 0.1／0.25），每一層都比不讀差。
- * - 讀「票」的次方 0.4（`blueVoteTemper57`，基準線 `beliefTemper=73` 的投票那一半是 0.7；派隊那一半 0.3 不變；只給藍方座位）：第 57 回合，
- *   真人的票比基準線讀的少帶資訊——驗證的一半（奇數局）全部 ΔBrier −14.7e-4，弱／一般／強 × 忠臣／派西／梅林十二格（含 S 不明）全部變好。
+ *   第 57 回合分層再量（偶數局擬合、奇數局驗證）：弱桌改 0.9／1、強桌改 0.5 在擬合的一半變好、驗證的一半變差，所以三層照舊 0.75。
+ * - 隊長視角讀法（`viewpoint53`／`viewpointPow53`，第 53b 回合 V3P）不用：真人局的 Brier 變差（強桌、派西最多）。第 57 回合試了只開一部分（次方 0.1／0.25），每一層都比不讀差。
+ * - 讀「票」的次方 0.4（`blueVoteTemper57`；基準線 `beliefTemper=73` 的投票那一半是 0.7，派隊那一半 0.3 不變；只給藍方座位）：第 57 回合，
+ *   真人的票比基準線讀的少帶資訊——驗證的一半全部 ΔBrier −14.7e-4，弱／一般／強／S 不明 × 忠臣／派西／梅林每一格都變好。
+ * - 任務牌分有沒有奧伯倫（`missionRole56=1`，第 56 回合；只給藍方座位）：第 57 回合，擬合 −1.8e-4、驗證 −1.2e-4（都約 2.5 個標準誤），
+ *   每一層都沒有角色變差超過雜訊；人類 PR 量尺不變（+0.03 ± 0.02 pp／座位局）。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1 };
 
 /**
- * 分層的小調整（第 57 回合，偶數局擬合、奇數局驗證；每層最多一個開關、偏離共用值最多 0.1）：
- * - 強真人桌：讀票的次方再低一格到 0.3。強桌的票最不帶資訊（擬合：0.4 → 0.3 再 −5.7e-4，0.2、0.1 還在變好，但超過一格不做）；
- *   驗證的一半 強桌 0.3 比 0.4 再好 −3.1e-4，忠臣／派西／梅林三個角色都比 0.4 好。
- * - 弱、一般真人桌：0.3 和 0.4 的差在雜訊內（擬合 −1.1／−0.6e-4；梅林・弱桌在驗證的一半 0.3 比 0.4 差），照共用的 0.4。
+ * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：
+ * - 弱真人桌：讀票的次方退回一格到 0.5。0.4 的 Brier 在弱桌也變好，但人類 PR 量尺（決策層）弱桌兩半都偏負（−0.38／−0.25 pp／座位局）；
+ *   0.5 量尺中性（−0.11 ± 0.12），Brier 驗證 −9.9e-4、三個角色都變好。
+ * - 強真人桌：讀票的次方再低一格到 0.3。強桌的票最不帶資訊（擬合 0.4 → 0.3 再 −5.7e-4；0.2、0.1 還在變好，但超過一格不做）；
+ *   驗證 0.3 比 0.4 再好 −3.1e-4，忠臣／派西／梅林都比 0.4 好；量尺和 0.4 一樣（+0.08 ± 0.11）。
+ * - 一般真人桌（S 讀不到的桌也是這一層）：共用的 0.4。
  */
 export const PROFILE_OVERRIDES: Readonly<Record<OpponentType, Readonly<Partial<AgentTuning>>>> = {
   ai: {},
-  weakHuman: HUMAN_READING,
+  weakHuman: { ...HUMAN_READING, blueVoteTemper57: 0.5 },
   avgHuman: HUMAN_READING,
   strongHuman: { ...HUMAN_READING, blueVoteTemper57: 0.3 },
 };
