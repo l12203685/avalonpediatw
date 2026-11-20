@@ -384,9 +384,21 @@ export function matchesRecords(post: RecordPost, filter: RecordFilter): boolean 
   const q = playerNameKey(filter.query);
   if (q) {
     const names = post.game?.names ?? [];
-    if (!names.some((n) => playerNameKey(n).includes(q)) && !playerNameKey(post.title).includes(q)) return false;
+    if (!names.some((n) => playerNameKey(n).includes(q)) && !playerNameKey(post.title).includes(q) && !matchesRecordIds(post, filter.query)) return false;
   }
   return true;
+}
+
+/**
+ * 站長 2026-11-20「例如透過配置 870563 直接找到該局」：搜尋框也認配置六碼（例 870563，可以只打前幾碼）
+ * 和局號（DC 貼文 id、S…、M…、D…、P…，含 aka）。
+ */
+export function matchesRecordIds(post: RecordPost, query: string): boolean {
+  const q = query.trim().toLowerCase().replace(/\s+/g, '');
+  if (!q) return false;
+  if (/^\d{4,6}$/.test(q) && post.game?.config && post.game.config.startsWith(q)) return true;
+  const ids = [post.id, ...(post.aka ?? [])].map((x) => x.toLowerCase());
+  return q.length >= 3 && ids.some((x) => x === q || (q.length >= 6 && x.includes(q)));
 }
 
 /** 牌譜裡暱稱符合關鍵字的座位（清單上標出來）。 */

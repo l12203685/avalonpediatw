@@ -164,6 +164,17 @@ describe('web records: filters', () => {
     expect(matchesRecords(POST, { ...f, to: '2026-10-24' })).toBe(false);
   });
 
+  it('Edward 2026-11-20: by config code (prefix) or game id / aka', () => {
+    const f = EMPTY_RECORDS_FILTER;
+    const cfg = GAME.config;
+    expect(matchesRecords(POST, { ...f, query: cfg })).toBe(true);
+    expect(matchesRecords(POST, { ...f, query: cfg.slice(0, 4) })).toBe(true);
+    expect(matchesRecords(POST, { ...f, query: cfg.split('').reverse().join('') === cfg ? '000000' : cfg.split('').reverse().join('') })).toBe(false);
+    expect(matchesRecords(POST, { ...f, query: POST.id })).toBe(true);
+    expect(matchesRecords({ ...POST, aka: ['S1236'] }, { ...f, query: 's1236' })).toBe(true);
+    expect(matchesRecords(POST, { ...f, query: 'S9999' })).toBe(false);
+  });
+
   it('by nickname (case / width insensitive) or title', () => {
     const f = EMPTY_RECORDS_FILTER;
     expect(matchesRecords(POST, { ...f, query: '玩家ｃ' })).toBe(true);

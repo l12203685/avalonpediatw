@@ -260,7 +260,7 @@ export default function RecordsPage(): JSX.Element {
             enterKeyHint="search"
             value={filter.query}
             onChange={(e) => updateFilter((f) => ({ ...f, query: e.target.value }))}
-            placeholder="搜尋玩家暱稱或標題"
+            placeholder="搜尋暱稱、標題、配置（例 870563）或局號"
             data-testid="records-search"
             className="w-full rounded-md border border-zinc-700 bg-zinc-900 py-1.5 pl-8 pr-8 text-sm text-white placeholder-zinc-500 focus:border-amber-400 focus:outline-none"
           />
