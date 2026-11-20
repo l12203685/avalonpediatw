@@ -334,6 +334,31 @@ describe('a whole exercise', () => {
     expect(reveal).not.toContain('460 1+');
   });
 
+  it('/公布 lists who sat 1～0 under the seat roles when the bank has names (Edward 2026-11-20); a missing name shows the seat only', async () => {
+    const i = BANK.byId.get('W0000') as number;
+    // 編的名字（不是真的玩家）。
+    const names = ['甲蟲', '乙鳥', '', '丁香', '戊己', '庚辛', '壬癸', '子丑', 'Nova Two', '辰巳'];
+    const named = { ...BANK, records: new Map([[i, 'S9ABC']]), names: new Map([[i, names]]) };
+    const e = engine({ bank: async () => named });
+    await say(e, '/模擬 忠臣 4');
+    const reveal = ((await say(e, '/公布')) ?? '').split('\n');
+    expect(reveal.slice(0, 4)).toEqual([
+      '【W0000-4 公布】配置: 刺娜莫奧派梅 753921',
+      '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠',
+      '1.甲蟲 2.乙鳥 3. 4.丁香 5.戊己 6.庚辛 7.壬癸 8.子丑 9.Nova Two 0.辰巳',
+      '原始結果: 三藍死',
+    ]);
+    // 刺殺題：名字那一行一樣在座位下面、刺中沒有在名字下面。
+    const k = engine({ bank: async () => named });
+    await say(k, '/模擬 刺殺');
+    await say(k, '/刺 2');
+    expect(((await say(k, '/公布')) ?? '').split('\n').slice(1, 4)).toEqual([
+      '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠',
+      '1.甲蟲 2.乙鳥 3. 4.丁香 5.戊己 6.庚辛 7.壬癸 8.子丑 9.Nova Two 0.辰巳',
+      '你刺 2家：沒刺中 ✗',
+    ]);
+  });
+
   it('/分析 before any /派 says so in one line; /派 replies stay a two-line result', async () => {
     const e = engine();
     await say(e, '/模擬 忠臣 4');

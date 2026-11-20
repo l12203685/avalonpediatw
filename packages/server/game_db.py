@@ -17,12 +17,15 @@ credentials and adds no new reader of Google / Discord):
              the default build leaves it out of game_db.json and the report; ``--with-proavalon`` turns it back
              on. proavalon_games.json and the private raw data stay as they are.
 
-  (records_cache.json's ``S<流水號>`` entries are the sheet games again and sim_bank.json is built from the
-  牌譜 snapshot sheets_cache.json, so neither is a source of its own; the report only checks their coverage.)
+  (records_cache.json's ``S<流水號>`` entries are the sheet games again and sim_bank.json is built from this database
+  (scripts/buildSimBank.ts, nightly after this script since 2026-11-20), so neither is a source of its own; the report
+  only checks their coverage.)
 
 Merging: games with the same generate_cache.record_fingerprint (配置 + every proposal's team + every mission),
 of the same type, are one game. 模擬 never merges with 實戰 (Edward 2026-11-16「模擬畢竟只是模擬」). The merged
-game's content comes from the first source in SOURCE_PRIORITY (the sheet: what the stats use); its id is the
+game's content comes from the first source in SOURCE_PRIORITY (the sheet: what the stats use); its date is the
+Google Sheet's whenever a sheet tab has the game (SHEET_SOURCES, game_date: 站長 2026-11-20「日期不同的都以試算表為準
+因為discord 上發文的日期不一定是遊戲日期」), so a Discord date that differs is not a conflict; its id is the
 id the website's 牌譜紀錄 page uses (the Discord post id when there is one, else ``S<流水號>`` / ``D<hash>`` /
 ``M<流水號>``), so the id stays the same when a record is corrected.
 
@@ -37,7 +40,8 @@ Every merged game gets ``checks``: one entry per broken rule (RULES below), with
 Level ``error`` = the record contradicts the rules of the game (a wrong seat, a wrong count, a wrong result);
 ``warn`` = the record is probably incomplete (votes that do not add up to the outcome, a missing assassination
 target, two sources that disagree, a likely duplicate); ``info`` = worth knowing, not wrong. Nothing is fixed
-automatically: the list is for a person to correct the source.
+automatically -- the list is for a person to correct the source -- except the lake chain (站長 2026-11-20「接湖的必為
+下一湖」, fix_lake_chain: a holder that contradicts the previous target is corrected, ``autoFixes`` + LAKE_AUTOFIX).
 
 Excluded games (Edward 2026-11-17「尾派沒有出任務 刺客刺到隊友 都屬於錯誤局 不用記錄」): a game that breaks an
 EXCLUDE_RULES rule in any of its sources -- the assassin shot a teammate (every red flips at the assassination,
@@ -50,6 +54,10 @@ never edited. Each entry is keyed by the source's public id (``S572`` ...) and c
 ``by``, ``date`` and ``note``; the report lists them as 「站長更正」 (id, field, old -> new). An entry may instead (or
 also) carry ``exclude``: EXCLUDE_RULES ids the site owner ruled the game breaks although no source shows it in record
 syntax (e.g. a Discord post that ends the game before the forced 5th team went); the game is then excluded.
+OWNER_EXCLUDE is the site owner's plain 「這局不要記」. ``duplicateOf`` (站長 2026-11-20) names the source this one is
+the same game as (a Discord post posted twice, or a post that differs from the sheet's copy -- the named one wins):
+the source is left out (records_merge drops it from the records list too). A whole record (``set`` with every
+field) is the site owner's own: the lake-chain autofix never touches it.
 
 Completion (站長 2026-11-18「有五個鐵好了 ... 幫我補上這些」): a real game whose record stops before either side has 3
 missions while exactly five seats are provably good from the public record (iron_good) gets the remaining missions
@@ -76,7 +84,7 @@ import sys
 import tempfile
 import unicodedata
 from collections import Counter, defaultdict
-from itertools import combinations
+from itertools import combinations, product
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -96,6 +104,11 @@ SRC_DISCORD = "discord"
 SRC_SIM = "sim_sheet"
 SRC_PROAVALON = "proavalon"
 SOURCE_PRIORITY = (SRC_SHEET, SRC_DISCORD, SRC_IMPORT, SRC_SIM, SRC_PROAVALON)  # whose content the merged game shows
+# Sources typed into the Google Sheet with the game's own date. Their date is the game's date whenever the same game is
+# also on Discord (站長 2026-11-20「日期不同的都以試算表為準 因為discord 上發文的日期不一定是遊戲日期 他們標題也都沒有照預定格式寫
+# 所以搜尋很困難」): a Discord date is the title's MMDD or the day of the post. The Discord匯入 tab is not one of them --
+# its 日期時間 is the importer's copy of the Discord date.
+SHEET_SOURCES = (SRC_SHEET, SRC_SIM)
 SOURCE_LABELS = {
     SRC_SHEET: "試算表 牌譜 分頁",
     SRC_IMPORT: "試算表 Discord匯入 分頁",
@@ -115,6 +128,7 @@ INCLUDE_PROAVALON = False
 TEAM_SIZES = dri.TEAM_SIZES  # (3, 4, 4, 5, 5): 10 players
 SEATS = gc.SEATS
 LAKE_AFTER = (2, 3, 4)
+LAKE_START = "0"  # the first lake holder on the Google Sheet: one seat before 1家, the first leader
 FORCED_ATTEMPT = 5
 MIN_APPROVE = 6  # of 10 votes
 LEADER_MIN_SHARE = 0.8  # = packages/shared/src/stats/mistakes.ts
@@ -144,6 +158,7 @@ RULES: dict[str, tuple[str, str]] = {
     "AFTER_DECIDED": (ERROR, "已經有一方拿到 3 局，後面還有局"),
     "UNDECIDED": (ERROR, "紀錄在任何一方拿到 3 局之前就結束"),
     "OUTCOME": (ERROR, "結果欄跟任務結果或刺殺對不上"),
+    "OWNER_EXCLUDE": (ERROR, "站長裁定這局不要記"),
     "ASSASSIN_TEAMMATE": (ERROR, "刺客刺到隊友（紅方刺殺時全部開牌，奧伯倫也開）"),
     "LAKE": (ERROR, "湖中女神不合規則（同一人、斷鏈、驗過的人又被驗、不在第 2～4 局後）"),
     "VOTE_MARKS": (WARN, "投票記號跟隊伍對不上（場內才會有 -、場外才會有 +；多半是座位寫錯）"),
@@ -156,6 +171,7 @@ RULES: dict[str, tuple[str, str]] = {
     "CONFLICT": (WARN, "不同來源記的不一樣"),
     "NEAR_DUP": (WARN, "疑似同一局（同一天、同配置，但派隊或任務不同）"),
     "SUPERSEDED": (WARN, "同一局另一個來源記錯，總庫用了對的那一筆（例如試算表少記一局、配置寫錯）；記錯的來源要改"),
+    "LAKE_AUTOFIX": (INFO, "湖中鏈自動更正：接湖的人就是下一湖的持湖人（站長 2026-11-20），不是原始紀錄"),
     "INFERRED_VOTES": (INFO, "順著上一局成功的隊伍派、紀錄沒寫投票：推定全部投白（不是原始紀錄）"),
     "IRON_GOOD": (INFO, "紀錄停在分出勝負前，但已經有五個鐵好：後面的任務推定由這五人出、全部成功（不是原始紀錄）"),
     "SOURCE_NOTE": (INFO, "外部來源少記的東西（ProAvalon：湖的宣告、刺中哪個忠臣、舊紀錄的失敗張數）"),
@@ -166,7 +182,7 @@ RULES: dict[str, tuple[str, str]] = {
 }
 LEVEL_ORDER = {ERROR: 0, WARN: 1, INFO: 2}
 # 錯誤局：不用記錄（Edward 2026-11-17）-- the game is left out of the database, not just flagged
-EXCLUDE_RULES = ("ASSASSIN_TEAMMATE", "FORCED_NOT_RUN")
+EXCLUDE_RULES = ("ASSASSIN_TEAMMATE", "FORCED_NOT_RUN", "OWNER_EXCLUDE")  # OWNER_EXCLUDE: only from corrections
 RED_ROLES = ("刺客", "莫甘娜", "莫德雷德", "奧伯倫")  # 配置 order: config[0..3]
 OWNER_FLAGS = ("flag:review", "flag:badGame", "flag:incident", "flag:substitution", "flag:lakeCorrected")
 
@@ -222,6 +238,29 @@ def raw_forced_rounds(text: str) -> list[int]:
     return forced if not pending else []
 
 
+def unknown_seat_lakes(game: dict[str, Any], lakes: str, claims: str) -> dict[str, Any]:
+    """Put back the sheet's lakes with one unknown seat ('?' in the dataset's lakes column; records_merge leaves them
+    out). The seat comes from the claims column when it holds exactly one lake of that holder (or target); otherwise
+    it stays '' for fix_lake_chain to fill from the chain or leave out. Claims come from the claims column only."""
+    triples = [claims[i:i + 3] for i in range(0, len(claims or "") - 2, 3)]
+    added = []
+    for n, after in enumerate(LAKE_AFTER):
+        pair = (lakes or "")[2 * n:2 * n + 2]
+        if len(pair) != 2 or pair.count("?") != 1 or after >= len(game["rounds"]):
+            continue
+        known = pair.replace("?", "")
+        if known not in SEATS:
+            continue
+        side = pair.index(known)
+        hits = [t for t in triples if t[side] == known and t[1 - side] in SEATS and t[0] != t[1]]
+        holder, target = (hits[0][0], hits[0][1]) if len(hits) == 1 else ((known, "") if side == 0 else ("", known))
+        claim = {"x": "x", "o": "o"}.get(hits[0][2], "") if len(hits) == 1 else ""
+        added.append({"after": after, "holder": holder, "target": target, "claim": claim})
+    if not added:
+        return game
+    return {**game, "lakes": sorted([*game.get("lakes", []), *added], key=lambda lk: lk["after"])}
+
+
 def dataset_sources(doc: Mapping[str, Any] | None, raw_text: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
     """games_cache.json rows -> sources (sheet / dc_import). raw_text = 流水號 -> 文字記錄 of the 牌譜 snapshot."""
     out: list[dict[str, Any]] = []
@@ -233,6 +272,8 @@ def dataset_sources(doc: Mapping[str, Any] | None, raw_text: Mapping[str, str] |
         src = SRC_IMPORT if row[idx["src"]] == gc.GAME_SOURCE_DISCORD else SRC_SHEET
         category = doc["vocab"]["category"][row[idx["cat"]]]
         game, reason = rm.sheet_game(row, doc)
+        if game:
+            game = unknown_seat_lakes(game, row[idx["lakes"]], row[idx["claims"]])
         forced = raw_forced_rounds((raw_text or {}).get(str(row[idx["id"]]), "")) if src == SRC_SHEET and not game else []
         notes = row[idx["note"]] if isinstance(row[idx["note"]], list) else []
         flags = sorted(note_vocab[i] for i in notes if 0 <= i < len(note_vocab) and note_vocab[i] in OWNER_FLAGS)
@@ -280,7 +321,8 @@ def records_sources(doc: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]]
             "src": src,
             "id": sid,
             "kind": KIND_SIM if (post.get("sim") or src == SRC_SIM) else KIND_REAL,
-            "date": post.get("date") or "",
+            # the post's own date (records_merge puts the sheet's on a dc+sheet post; game_date picks it again)
+            "date": post.get(rm.POST_DATE) or post.get("date") or "",
             "venue": next((t for t in tags if t in VENUES), ""),
             "legacy": next((t for t in tags if t in rm.GAME_CATEGORIES[1:] and t not in VENUES), ""),
             "s": lineup.get("s") if isinstance(lineup.get("s"), (int, float)) else None,
@@ -339,6 +381,14 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             raise ValueError(f"game_db_corrections.json {gid}: cannot exclude by {bad_rules} (only {EXCLUDE_RULES})")
         meta = {"by": entry.get("by", ""), "date": entry.get("date", "")}
         src = by_id.get(gid)
+        same = entry.get("duplicateOf")
+        if same is not None:  # 站長裁定：同一局，以 same 為準（這一筆不算；records_merge 已經把它從清單拿掉時 src 是 None）
+            if not isinstance(same, str) or not same or same == gid or fields or exclude:
+                raise ValueError(f"game_db_corrections.json {gid}: duplicateOf must name another game, alone")
+            if src is not None:
+                src["duplicate_of"] = same
+            applied.append({"id": gid, "field": "duplicate", "old": "", "new": same, **meta})
+            continue
         if src is not None and exclude:  # 站長裁定：錯誤局（不用記錄）
             src["owner_exclude"] = sorted(set(src.get("owner_exclude", [])) | set(exclude), key=EXCLUDE_RULES.index)
             applied += [{"id": gid, "field": "exclude", "old": "", "new": rule, **meta} for rule in exclude]
@@ -353,6 +403,7 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             src["fp"] = rm.game_fingerprint(src["game"])
             done = [{"id": gid, "field": "record", "old": src["problem"] or "讀不懂", "new": WHOLE_RECORD, **meta}]
             src["problem"] = ""
+            src["lake_fixes"] = []  # the site owner's own record: no lake-chain autofix
             src.pop("forced_rounds", None)
             src["corrected"] = [{k: v for k, v in d.items() if k != "id"} for d in done]
             applied += done
@@ -364,6 +415,7 @@ def apply_corrections(sources: Sequence[dict[str, Any]], doc: Mapping[str, Any] 
             done.append({"id": gid, "field": "record", "old": f"原紀錄（{'、'.join(changed)} 不一樣）" if changed else WHOLE_RECORD,
                          "new": WHOLE_RECORD, **meta})
             game.update(fields)
+            src["lake_fixes"] = []  # the site owner's own record: no lake-chain autofix
         for field, value in ({} if whole else fields).items():
             done.append({"id": gid, "field": field, "old": game.get(field), "new": value, **meta})
             game[field] = value
@@ -570,6 +622,104 @@ def lake_checks(game: Mapping[str, Any], rounds: Sequence[Any], partial: bool) -
     return checks
 
 
+# ---------------------------------------------------------------------------
+# Lake chain auto-fix (站長 2026-11-20)
+# ---------------------------------------------------------------------------
+
+def _lake_violations(chain: Sequence[tuple[str, str]], start: str) -> int:
+    """Rule breaks of a holder/target chain that are not chain links: a holder lakes himself or a seat that already
+    held the lake (the first holder, ``start`` when the table's rule names one, counts as having held it)."""
+    held = {start} if start else set()
+    bad = 0
+    for holder, target in chain:
+        held.add(holder)
+        bad += target in held
+    return bad
+
+
+def fix_lake_chain(lakes: Sequence[Mapping[str, Any]], start: str = "") -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """站長 2026-11-20「湖中鏈的修正 應該是 你可以直接判斷 接湖的必為下一湖」: the seat lake k checks holds lake k+1,
+    so a recorded holder that contradicts the chain is corrected, not flagged. ``start`` = the first holder by the
+    table's rule (0家 on the Google Sheet: 1家 is the first leader, the lake starts one seat before), '' = unknown.
+
+      1. An unknown seat ('' -- the sheet's '?') is filled from the chain: a holder from the previous target (the first
+         lake's from ``start``), a target from the next recorded holder. A lake that cannot be filled is left out (as
+         before). Only lakes of consecutive rounds are linked (a lake not recorded in between breaks the known chain).
+      2. Each broken link (holder k+1 != target k; the first holder != ``start``) is fixed on one side: the holder
+         (the default, the ruling) or the target. Of every combination, the one with the fewest other rule breaks
+         (_lake_violations), then the fewest target edits, wins; a tie is ambiguous and nothing is changed, so the
+         chain break stays flagged (LAKE). Claims are never touched; a seat is never invented.
+
+    Returns (lakes, fixes); fixes = [{kind: 'lake_chain', lake: k (1-based), field: holder|target, from, to}]."""
+    out = [dict(lk) for lk in sorted(lakes, key=lambda lk: lk.get("after", 0))]
+    fixes: list[dict[str, Any]] = []
+    seat = lambda v: str(v) if str(v) in SEATS else ""  # noqa: E731
+    for lk in out:
+        lk["holder"], lk["target"] = seat(lk.get("holder", "")), seat(lk.get("target", ""))
+    for k, lk in enumerate(out):
+        if not lk["target"] and k + 1 < len(out) and _next_lake(out[k], out[k + 1]) and out[k + 1]["holder"]:
+            lk["target"] = out[k + 1]["holder"]
+            fixes.append({"kind": "lake_chain", "lake": k + 1, "field": "target", "from": "", "to": lk["target"]})
+    for k, lk in enumerate(out):
+        prev = (out[k - 1]["target"] if _next_lake(out[k - 1], lk) else "") if k else (start if lk.get("after") == LAKE_AFTER[0] else "")
+        if not lk["holder"] and prev:
+            lk["holder"] = prev
+            fixes.append({"kind": "lake_chain", "lake": k + 1, "field": "holder", "from": "", "to": prev})
+    shown = [k for k, lk in enumerate(out) if lk["holder"] and lk["target"]]
+    if len(shown) != len(out):  # an unknown seat the chain cannot fill: that lake is not shown (as before)
+        number = {k + 1: n + 1 for n, k in enumerate(shown)}
+        fixes = [dict(f, lake=number[f["lake"]]) for f in fixes if f["lake"] in number]
+        out = [out[k] for k in shown]
+    holders = [lk["holder"] for lk in out]
+    targets = [lk["target"] for lk in out]
+    links = (([0] if out and start and out[0].get("after") == LAKE_AFTER[0] and holders[0] != start else [])
+             + [k for k in range(1, len(out)) if _next_lake(out[k - 1], out[k]) and holders[k] != targets[k - 1]])
+    if not links:
+        return out, fixes
+    best: list[tuple[tuple[int, int], list[tuple[str, int, str, str]]]] = []
+    for choice in product(*[("holder",) if k == 0 else ("holder", "target") for k in links]):
+        h, t, edits = list(holders), list(targets), []
+        for k, side in zip(links, choice):
+            if side == "holder":
+                new = start if k == 0 else targets[k - 1]
+                edits.append(("holder", k, h[k], new))
+                h[k] = new
+            else:
+                edits.append(("target", k - 1, t[k - 1], holders[k]))
+                t[k - 1] = holders[k]
+        score = (_lake_violations(list(zip(h, t)), start), sum(side == "target" for side in choice))
+        best.append((score, edits))
+    best.sort(key=lambda b: b[0])
+    if len(best) > 1 and best[0][0] == best[1][0]:
+        return out, fixes  # ambiguous: which side is wrong cannot be told; the break stays flagged
+    for field, k, old, new in best[0][1]:
+        out[k][field] = new
+        fixes.append({"kind": "lake_chain", "lake": k + 1, "field": field, "from": old, "to": new})
+    fixes.sort(key=lambda f: (f["lake"], f["field"]))
+    return out, fixes
+
+
+def _next_lake(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
+    """Lake b is the one right after lake a (a lake not recorded in between breaks the known chain)."""
+    return isinstance(a.get("after"), int) and b.get("after") == a["after"] + 1
+
+
+def autofix_lakes(src: dict[str, Any]) -> None:
+    """Apply fix_lake_chain to one source's record (once; the record is replaced, never edited in place) and keep
+    the fixes on ``lake_fixes``. The table's rule (lake from 0家) is known for the Google Sheet tabs (SHEET_SOURCES);
+    Discord posts keep their first holder (some online tables start the lake elsewhere)."""
+    if "lake_fixes" in src:
+        return
+    src["lake_fixes"] = []
+    game = src.get("game")
+    if not game or not game.get("lakes"):
+        return
+    lakes, fixes = fix_lake_chain(game["lakes"], LAKE_START if src["src"] in SHEET_SOURCES else "")
+    if fixes or lakes != list(game["lakes"]):
+        src["game"] = {**game, "lakes": lakes}
+    src["lake_fixes"] = fixes
+
+
 def iron_good(game: Mapping[str, Any]) -> tuple[list[str], list[str]] | None:
     """The seats that are good (鐵好) in every placement of the 4 reds that fits the public record, and the facts
     used, in plain words; None when the 配置 or a team is unreadable. Hard rules only (站長 2026-11-18, S1982 / S1810):
@@ -690,11 +840,20 @@ def conflicts(main: Mapping[str, Any], other: Mapping[str, Any]) -> list[str]:
         diff = [f"第 {r} 局第 {k} 次" for (r, k, x), (_, _, y) in zip(va, vb) if x != y]
         if diff:
             out.append("投票（" + "、".join(diff[:3]) + ("…" if len(diff) > 3 else "") + "）")
-    if main["date"] and other["date"] and main["date"] != other["date"]:
+    # a sheet date against a Discord date is not a conflict: the sheet's wins (game_date, 站長 2026-11-20)
+    if (main["date"] and other["date"] and main["date"] != other["date"]
+            and (main["src"] in SHEET_SOURCES) == (other["src"] in SHEET_SOURCES)):
         out.append(f"日期（{main['date']} / {other['date']}）")
     if main["venue"] and other["venue"] and main["venue"] != other["venue"]:
         out.append(f"線上／面對面（{main['venue']} / {other['venue']}）")
     return out
+
+
+def game_date(members: Sequence[Mapping[str, Any]]) -> str:
+    """The date of a merged game: the first sheet source's (SHEET_SOURCES, superseded ones included -- the same game
+    typed at the table), else the first dated source's (站長 2026-11-20「日期不同的都以試算表為準」)."""
+    return (next((s["date"] for s in members if s["src"] in SHEET_SOURCES and s["date"]), "")
+            or next((s["date"] for s in members if s["date"]), ""))
 
 
 def public_id(src: dict[str, Any]) -> str:
@@ -797,6 +956,9 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
     singles: list[list[dict[str, Any]]] = []
     for s in sources:
         s.pop("superseded", None)
+        if s.get("duplicate_of"):  # 站長裁定：跟另一筆是同一局，只算那一筆
+            continue
+        autofix_lakes(s)  # 站長 2026-11-20「接湖的必為下一湖」: before every rule check and the merge
         group = KIND_SIM if s["kind"] == KIND_SIM else KIND_REAL
         if s["game"] and s["fp"]:
             clusters[(group, s["fp"])].append(s)
@@ -822,7 +984,7 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
         by_src = {s["src"]: s for s in reversed(members)}
         cid = (by_src.get(SRC_DISCORD) or by_src.get(SRC_SHEET) or by_src.get(SRC_IMPORT) or main)
         kind = KIND_SIM if main["kind"] == KIND_SIM else (KIND_BOT if any(s["kind"] == KIND_BOT for s in members) else KIND_REAL)
-        date = next((s["date"] for s in members if s["date"]), "")
+        date = game_date(members)
         venue = next((s["venue"] for s in members if s["venue"]), "")
         legacy = sorted({s["legacy"] for s in members if s["legacy"]})
         s_value = next((s["s"] for s in members if s["s"] is not None), None)
@@ -846,6 +1008,12 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
             game, filled = completed
             checks.append(_check("IRON_GOOD", f"紀錄停在第 {filled['rounds'][0] - 1} 局，已經有五個鐵好 {filled['team']}："
                                               f"{_round_span(filled['rounds'][0], filled['rounds'][-1])}推定由這五人出任務、全部成功"))
+        lake_fixes = list(main.get("lake_fixes") or [])
+        if lake_fixes:
+            checks.append(_check("LAKE_AUTOFIX", "、".join(
+                f"第 {f['lake']} 湖{'持湖人' if f['field'] == 'holder' else '驗的人'}"
+                + (f"記成 {seat_label(f['from'])}，改成 {seat_label(f['to'])}" if f["from"] else f"沒記，補 {seat_label(f['to'])}")
+                for f in lake_fixes)))
         if game:
             checks += validate(game, partial=kind == KIND_SIM, inferred=inferred)
             counts = Counter(s["src"] for s in members)
@@ -900,6 +1068,7 @@ def build(sources: Sequence[dict[str, Any]], excluded: list[dict[str, Any]] | No
             **({"problem": main["problem"]} if not main["game"] else {}),
             **({"inferred_votes": inferred} if inferred else {}),
             **({"completed": completed[1]} if completed else {}),
+            **({"autoFixes": lake_fixes} if lake_fixes else {}),
             **({"corrections": corrected} if (corrected := [c for s in members for c in s.get("corrected", [])]) else {}),
             "checks": checks,
         })
@@ -1106,11 +1275,24 @@ def write_report(rows: Sequence[Mapping[str, Any]], counts: Mapping[str, Any], c
         for c in corrections:
             if c.get("missing"):
                 L.append(f"- {c['id']}：找不到這一局、或這局讀不懂而更正不是整局紀錄（{c['by']} {c['date']}），更正沒有套用")
+            elif c["field"] == "duplicate":
+                L.append(f"- {c['id']}：跟 {c['new']} 是同一局，不另外算（以 {c['new']} 為準，{c['by']} {c['date']}）")
             elif c["field"] == "exclude":
                 L.append(f"- {c['id']}：錯誤局，不記錄（`{c['new']}`，{c['by']} {c['date']}）")
             else:
                 same = "（來源已經是這個值，這筆更正可以刪掉）" if c["old"] == c["new"] else ""
                 L.append(f"- {c['id']} `{c['field']}`：{c['old']} → {c['new']}（{c['by']} {c['date']}）{same}")
+        L.append("")
+    lake_fixed = [r for r in rows if r.get("autoFixes")]
+    if lake_fixed:
+        L.append(f"## 湖中鏈自動更正（{len(lake_fixed)}）")
+        L.append("")
+        L.append("站長 2026-11-20：「湖中鏈的修正 應該是 你可以直接判斷 接湖的必為下一湖」。持湖人跟上一湖驗的人對不上、"
+                 "或沒記的座位，總庫照湖中鏈改（`autoFixes`，不是原始紀錄，來源本身不動）；試算表的局第一湖從 0家起。"
+                 "分不出是哪一邊記錯的照樣標「湖中女神不合規則」。")
+        L.append("")
+        for r in lake_fixed:
+            L.append(f"- {r['id']}：" + next(c["msg"] for c in r["checks"] if c["rule"] == "LAKE_AUTOFIX"))
         L.append("")
     filled = [r for r in rows if r.get("completed")]
     if filled:

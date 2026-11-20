@@ -34,7 +34,7 @@
 | ProAvalon（外部） | `packages/server/proavalon_games.json` | 預設不進總庫（2026-11-18） | 不顯示（`--with-proavalon` 才有） |
 | 百科文章 | `packages/server/wiki_data.json` | 人工／PR | 文章清單 |
 | 觀念卡 | `packages/server/src/bots/threads/concepts.json` | `concepts:apply`（docs/CONCEPTS.md） | 觀念卡 |
-| Threads 題庫 | `packages/server/sim_bank.json` | `buildSimBank.ts` | 一週草稿 |
+| Threads 題庫 | `packages/server/sim_bank.json` | `buildSimBank.ts`（每晚，讀 `game_db.json`） | 一週草稿 |
 | Threads 選題 | `packages/server/threads_picks.json` | console:apply | 一週草稿、選局頁 |
 | Threads 正式發開關 | `packages/server/threads_live.json` | console:apply | 開關狀態 |
 | Threads 貼文／留言格式 | `packages/server/threads_template.json`（沒有就用內建格式） | console:apply | 範本編輯、草稿 |
@@ -102,7 +102,7 @@ pnpm --filter @avalon/server console:export -- --out <repo 外面的資料夾> [
 
 | 編輯（主控台 db） | 寫到 repo 的哪裡 | applier | 套用後怎麼確認 |
 |---|---|---|---|
-| 問題牌譜裁定：`games/<id>` 的 `answer`／`answerText`／`correctedRecord`、`decisions/<id>` | `packages/server/game_db_corrections.json`：`set`（只能改 config、rounds、lakes、assassination、outcome；重打整局要五欄都給）或 `exclude`（ASSASSIN_TEAMMATE、FORCED_NOT_RUN），附 `by`、`date`、`note`；再跑 `python packages/server/game_db.py` 重建總庫與報告 | Claude 手動（`game_db.py` 的 `apply_corrections` 會驗證欄位） | 下一次 export 的 `problem_games.json` 不再列這一局 |
+| 問題牌譜裁定：`games/<id>` 的 `answer`／`answerText`／`correctedRecord`、`decisions/<id>` | `packages/server/game_db_corrections.json`：`set`（只能改 config、rounds、lakes、assassination、outcome；重打整局要五欄都給）或 `exclude`（ASSASSIN_TEAMMATE、FORCED_NOT_RUN；「這局不要記」＝OWNER_EXCLUDE）或 `duplicateOf`（「是同一局」：鍵是不算的那一筆，值是為準的那一筆，例如重複貼的 Discord 貼文、「以試算表為準」時的 Discord 貼文），附 `by`、`date`、`note`；再跑 `python packages/server/discord_records_export.py --merge-only`（duplicateOf 也從網站清單拿掉）與 `python packages/server/game_db.py` 重建清單、總庫與報告 | Claude 手動（`game_db.py` 的 `apply_corrections` 會驗證欄位） | 下一次 export 的 `problem_games.json` 不再列這一局 |
 | 「我在來源改好了」：`fixes/<id>` 的 `owner_fixed` | 不改 repo：等每晚的快取更新從試算表／Discord 讀到新版 | 每晚 workflow | export 後那一局消失；還在就回寫 `applyError` |
 | Threads 正式發開關：`meta/threadsLive`（liveFrom、paused） | `packages/server/threads_live.json` | Claude 手動（檔案格式見檔內 note 與 docs/THREADS.md〈自動發佈〉） | `threads-publish.yml` 的閘門摘要 |
 | 貼文／留言格式：`meta/postTemplate` | `packages/server/threads_template.json`（`post`、`comment`、`updatedAt`；要通過 `template.ts` 的 `validateTemplate`） | Claude 手動 | export 的 `week_drafts.json` 的 `templateSource` 變成 `file` |

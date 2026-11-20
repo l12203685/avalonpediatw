@@ -104,7 +104,7 @@ function main(): void {
   const out = arg('--out') ?? path.resolve(__dirname, '../src/ai/infl/recursive_strong.json');
   const level0 = { ...bayesOptionsOf({ ...DEFAULT_AGENT_TUNING, beliefRecursive: 0 }) };
   const { cohorts, dataset } = loadStrongCohorts({});
-  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold);
+  const { games: hg } = humanGamesFromDataset(dataset as never, cohorts.threshold, cohorts.basis);
   const games: ReplayGame[] = hg.map((h) => h.game).filter((g) => g.playerCount === 10 && [...g.seatRoles].sort().join(',') === STD).slice(0, limit);
   const votes = Object.fromEntries(ROLE_CLASSES.map((c) => [c, [] as VoteSample[]])) as Record<RoleClass, VoteSample[]>;
   const props = Object.fromEntries(PROPOSAL_CLASSES.map((c) => [c, [] as PropSample[]])) as Record<ProposalClass, PropSample[]>;

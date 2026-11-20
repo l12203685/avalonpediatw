@@ -9,6 +9,7 @@
  *
  *   cd packages/server && npx tsx scripts/leaderVoteStudy.ts --out rows.csv [--strong-s 55]
  */
+import { DEFAULT_COHORT_CUTS } from '@avalon/shared/stats';
 import * as fs from 'fs';
 import * as path from 'path';
 import { replayGamesFromDataset, type DatasetHeader, type DatasetTuple } from '../src/ai/benchmark/datasetReplay';
@@ -23,7 +24,7 @@ const ROLE_CODE: Record<string, number> = { loyal: 0, percival: 1, merlin: 2, as
 function main(): void {
   const out = arg('--out');
   if (!out) throw new Error('--out PATH');
-  const strongS = Number(arg('--strong-s') ?? 55);
+  const strongS = Number(arg('--strong-s') ?? DEFAULT_COHORT_CUTS.sHi); // 高端桌：網站分組的 S 上切點（第 1G 節）
   const root = path.resolve(__dirname, '..');
   const dataset = JSON.parse(fs.readFileSync(arg('--dataset') ?? path.join(root, 'games_cache.json'), 'utf8')) as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] };
   const analysis = JSON.parse(fs.readFileSync(arg('--analysis') ?? path.join(root, 'analysis_cache.json'), 'utf8')) as { rating: { players: RatingRow[] } };

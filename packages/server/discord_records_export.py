@@ -18,7 +18,8 @@ What goes into the file, newest post first:
     no result tag, no 6-digit 配置: notices, questions);
   * per post: the thread id, the title (control characters dropped, at most TITLE_MAX
     characters), the forum tags, the creation time (Taipei), the record date (from the title's
-    MMDD as the importer reads it, else the day of the post), and either
+    MMDD as the importer reads it, else the day of the post; a post that is also a 牌譜-tab game gets the sheet's
+    date, its own kept in ``postDate`` -- 站長 2026-11-20, records_merge.merge_posts), and either
       - game: the parsed record (配置, the ten nicknames by seat, each round's proposals with
         their vote-anomaly marks and the mission result, the lake uses, the assassination
         target, the result, 線瓦／面瓦), or
@@ -84,6 +85,7 @@ RECORDS_VERSION = 1
 LEGACY_RECORDS_FORMAT = "avalon-paipu"  # the name before 2026-10-31 (--annotate-only renames it)
 OUTPUT_PATH = Path(__file__).resolve().parent / "records_cache.json"
 GAMES_PATH = OUTPUT_PATH.parent / gc.GAMES_OUTPUT_NAME
+CORRECTIONS_PATH = OUTPUT_PATH.parent / "game_db_corrections.json"  # 站長 duplicateOf rulings (records_merge.duplicate_ids)
 TITLE_MAX = 100
 NAME_MAX = 40
 TAG_MAX = 20
@@ -319,10 +321,11 @@ def is_discord_id(pid: Any) -> bool:
 
 def merge_sheet(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
                 sim_rows: Sequence[Mapping[str, Any]] | None,
-                previous: Mapping[str, Any] | None = None) -> Counter:
+                previous: Mapping[str, Any] | None = None, duplicates: Mapping[str, str] | None = None) -> Counter:
     """Adds the Google Sheet's games (牌譜 tab from games_doc, 模擬瓦 tab from sim_rows) to `doc`'s
     Discord posts, merged by fingerprint and sorted newest first (records_merge). A source that is not
-    available this run (games_doc None, sim_rows None) keeps the previous file's entries of it."""
+    available this run (games_doc None, sim_rows None) keeps the previous file's entries of it. ``duplicates``
+    (records_merge.duplicate_ids) are left out: the site owner ruled them the same game as another entry."""
     dc = [p for p in doc["posts"] if is_discord_id(p.get("id"))]
     old = [p for p in (previous or {}).get("posts", []) if isinstance(p, dict) and not is_discord_id(p.get("id"))]
     counts: Counter = Counter()
@@ -338,11 +341,28 @@ def merge_sheet(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
     else:
         sims = [dict(p) for p in old if str(p.get("id", "")).startswith(rm.SIM_PREFIX)]
         counts["模擬 kept from the previous file"] = len(sims)
-    posts, c = rm.merge_posts(dc, sheet, sims)
+    posts, c = rm.merge_posts(dc, sheet, sims, duplicates)
     counts.update(c)
+    if games_doc is None:
+        keep_previous_merge(dc, previous)
+        posts.sort(key=rm.sort_key, reverse=True)
     doc["posts"] = posts
     set_counts(doc)
     return counts
+
+
+def keep_previous_merge(dc: Sequence[dict[str, Any]], previous: Mapping[str, Any] | None) -> None:
+    """The 牌譜 tab was not read this run (its merged rows are not in the previous file either): a Discord post that
+    was ``dc+sheet`` keeps that, and the sheet's date while its own date has not changed (站長 2026-11-20)."""
+    before = {p.get("id"): p for p in (previous or {}).get("posts", [])
+              if isinstance(p, dict) and p.get("src") == rm.SRC_BOTH and is_discord_id(p.get("id"))}
+    for p in dc:
+        old = before.get(p.get("id"))
+        if old is None or p.get("src"):
+            continue
+        p["src"] = rm.SRC_BOTH
+        if old.get(rm.POST_DATE) and old[rm.POST_DATE] == p.get("date") and _full("date", old.get("date")):
+            p[rm.POST_DATE], p["date"] = p["date"], old["date"]
 
 
 # ---------------------------------------------------------------------------
@@ -455,6 +475,14 @@ def annotate_records(doc: dict[str, Any], games_doc: Mapping[str, Any] | None,
                 counts["scored"] += 1
                 counts["matched" if n in matched else "by names"] += 1
     return counts
+
+
+def load_duplicates(path: Path) -> dict[str, str]:
+    """The site owner's duplicateOf rulings (game_db_corrections.json); none when the file is missing."""
+    try:
+        return rm.duplicate_ids(json.loads(path.read_text(encoding="utf-8")))
+    except FileNotFoundError:
+        return {}
 
 
 def load_games_doc(path: Path) -> dict | None:
@@ -580,11 +608,15 @@ def records_problems(doc: Any) -> list[str]:
         if not isinstance(post, dict):
             out["post is not an object"] += 1
             continue
-        keys = set(post) - set(ANNOTATION_KEYS) - {"src", "sim"}
+        keys = set(post) - set(ANNOTATION_KEYS) - {"src", "sim", rm.POST_DATE}
         base = {"id", "title", "tags", "created", "date", "game"}
         if not (keys == base or keys == base | {"problem"} or keys == base | {"problem", "problemLine"}
                 or (keys == base | {FIXED_BY_REPLY} and post.get("game"))):
             out["post keys"] += 1
+        # postDate: a dc+sheet post's own date, kept when the sheet's date replaced it (records_merge, 站長 2026-11-20)
+        if rm.POST_DATE in post and not (post.get("src") == rm.SRC_BOTH and _full("date", post[rm.POST_DATE])
+                                         and post[rm.POST_DATE] != post.get("date")):
+            out["postDate"] += 1
         if FIXED_BY_REPLY in post and not _full("id", post[FIXED_BY_REPLY]):
             out["fixedByReply shape"] += 1
         if any(k in post for k in ANNOTATION_KEYS) and (not post.get("game") or post.get("sim")):
@@ -774,7 +806,7 @@ def run(args: argparse.Namespace, env: Mapping[str, str] | None = None,
     previous = load_previous(out)
     games_doc = load_games_doc(Path(args.games))
     sim_rows, _ = read_sim_rows(args)
-    merged = merge_sheet(doc, games_doc, sim_rows, previous)
+    merged = merge_sheet(doc, games_doc, sim_rows, previous, load_duplicates(Path(args.corrections)))
     annotated = annotate_records(doc, games_doc)
 
     problems = records_problems(doc)
@@ -843,7 +875,7 @@ def run_merge_only(args: argparse.Namespace) -> int:
     doc = json.loads(json.dumps(previous))
     games_doc = load_games_doc(Path(args.games))
     sim_rows, _ = read_sim_rows(args)
-    merged = merge_sheet(doc, games_doc, sim_rows, previous)
+    merged = merge_sheet(doc, games_doc, sim_rows, previous, load_duplicates(Path(args.corrections)))
     annotated = annotate_records(doc, games_doc)
     problems = records_problems(doc)
     if problems:
@@ -872,6 +904,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="write even if the list has many fewer posts than the existing file")
     parser.add_argument("--games", default=str(GAMES_PATH), metavar="PATH",
                         help=f"the game-level dataset for the lineup annotation (default {GAMES_PATH.name} next to this script)")
+    parser.add_argument("--corrections", default=str(CORRECTIONS_PATH), metavar="PATH",
+                        help=f"the site owner's rulings; duplicateOf entries leave a post out (default {CORRECTIONS_PATH.name})")
     parser.add_argument("--annotate-only", action="store_true",
                         help="only recompute lineup / mistakes of the existing --output file (no Discord read)")
     parser.add_argument("--merge-only", action="store_true",

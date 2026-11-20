@@ -65,6 +65,16 @@ interface V3Response {
     threeBlueAliveOnBlue: number;
     cellMean: number;
   };
+  /** 全部局的三種結果（伺服器從 analysis_cache.json overview 帶，跟數據分析頁同一份；舊伺服器沒有 → null）。 */
+  population?: {
+    totalGames: number;
+    threeRed: number;
+    threeBlueDead: number;
+    threeBlueAlive: number;
+    threeRedPct: number;
+    threeBlueDeadPct: number;
+    threeBlueAlivePct: number;
+  } | null;
   meta: {
     totalPlayers: number;
     eligiblePlayers: number;
@@ -412,6 +422,17 @@ export default function LeaderboardV3Table(): JSX.Element {
 
   const meta = data.meta;
   const gm = data.globalMeans;
+  // 結果膠囊的數字跟數據分析頁同一份（站長 2026-11-20「所有跟數字統計有關的 都應該跟資料庫連動 而不是寫死」）。
+  const pop = data.population ?? null;
+  const pctText = (v: number): string => `${Math.round(v)}%`;
+  const popVars = pop
+    ? {
+        games: pop.totalGames.toLocaleString(),
+        threeRed: pop.threeRed.toLocaleString(), threeRedPct: pctText(pop.threeRedPct),
+        threeBlueDead: pop.threeBlueDead.toLocaleString(), threeBlueDeadPct: pctText(pop.threeBlueDeadPct),
+        threeBlueAlive: pop.threeBlueAlive.toLocaleString(), threeBlueAlivePct: pctText(pop.threeBlueAlivePct),
+      }
+    : null;
 
   return (
     <div className="space-y-2">
@@ -428,7 +449,7 @@ export default function LeaderboardV3Table(): JSX.Element {
           </span>
         </p>
         <p className="text-[10px] text-gray-500">
-          {t('leaderboard:v3.popAvgExplain')} · {t('leaderboard:v3.globalMeans')}: 三紅={gm.threeRedOnRed}% · 三藍死={gm.threeBlueDeadOnRed}% · 三藍活={gm.threeBlueAliveOnBlue}% · cell={gm.cellMean}%
+          {t(popVars ? 'leaderboard:v3.popAvgExplain' : 'leaderboard:v3.popAvgExplainNoCount', popVars ?? {})} · {t('leaderboard:v3.globalMeans')}: 三紅={gm.threeRedOnRed}% · 三藍死={gm.threeBlueDeadOnRed}% · 三藍活={gm.threeBlueAliveOnBlue}% · cell={gm.cellMean}%
         </p>
       </div>
 
@@ -530,11 +551,12 @@ export default function LeaderboardV3Table(): JSX.Element {
       )}
 
       {/*
-        Stats pill row — global outcome distribution (2146 games full record).
+        Stats pill row — global outcome distribution (all games, from the analysis cache via
+        /api/leaderboard/v3 `population`; 2026-11-20 no longer hard-coded in i18n).
         The pill matching the active outcomeMode highlights with a thicker border.
-        Numbers are hard-coded into i18n (per spec, no endpoint).
+        Without population (an older server) the row is not shown.
       */}
-      <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+      {popVars && <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
         {(
           [
             { om: 'all', i18nKey: 'leaderboard:v3.outcomeMode.statsAll', tone: 'gray' },
@@ -575,11 +597,11 @@ export default function LeaderboardV3Table(): JSX.Element {
                 active ? 'border-2 font-semibold' : ''
               }`}
             >
-              {t(i18nKey)}
+              {t(i18nKey, popVars)}
             </span>
           );
         })}
-      </div>
+      </div>}
 
       {/*
         Sortable table — Edward 2026-04-27: 字體縮緊 + nowrap，永遠用 raw 數值。

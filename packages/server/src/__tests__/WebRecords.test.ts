@@ -164,6 +164,25 @@ describe('web records: filters', () => {
     expect(matchesRecords(POST, { ...f, to: '2026-10-24' })).toBe(false);
   });
 
+  it('站長 2026-11-20: a dc+sheet post is found by the sheet date, not its Discord date', () => {
+    const f = EMPTY_RECORDS_FILTER;
+    // discord_records_export / records_merge put the sheet's date in `date` and keep the post's own in postDate
+    const merged: RecordPost = { ...POST, src: 'dc+sheet', date: '2026-10-20', postDate: '2026-10-25' };
+    expect(matchesRecords(merged, { ...f, from: '2026-10-20', to: '2026-10-20' })).toBe(true);
+    expect(matchesRecords(merged, { ...f, from: '2026-10-25', to: '2026-10-25' })).toBe(false);
+  });
+
+  it('Edward 2026-11-20: by config code (prefix) or game id / aka', () => {
+    const f = EMPTY_RECORDS_FILTER;
+    const cfg = GAME.config;
+    expect(matchesRecords(POST, { ...f, query: cfg })).toBe(true);
+    expect(matchesRecords(POST, { ...f, query: cfg.slice(0, 4) })).toBe(true);
+    expect(matchesRecords(POST, { ...f, query: cfg.split('').reverse().join('') === cfg ? '000000' : cfg.split('').reverse().join('') })).toBe(false);
+    expect(matchesRecords(POST, { ...f, query: POST.id })).toBe(true);
+    expect(matchesRecords({ ...POST, aka: ['S1236'] }, { ...f, query: 's1236' })).toBe(true);
+    expect(matchesRecords(POST, { ...f, query: 'S9999' })).toBe(false);
+  });
+
   it('by nickname (case / width insensitive) or title', () => {
     const f = EMPTY_RECORDS_FILTER;
     expect(matchesRecords(POST, { ...f, query: '玩家ｃ' })).toBe(true);

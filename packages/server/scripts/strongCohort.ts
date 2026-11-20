@@ -9,7 +9,8 @@
  *   --analysis PATH   分析快取（預設 ./analysis_cache.json；rating.players 的 Elo、場數、暫定）
  *   --pool-share X    母體 = 合格者 Elo 前 X（預設 0.2）
  *   --pool-min N      合格：生涯 ≥ N 場、非暫定（預設 50）
- *   --hi-share X      高強度局 = 桌上平均 Elo 前 X 的局（預設 0.3）
+ *   --hi-s S          高強度局 = 桌上強度 S ≥ 這個值（預設 65 = 網站 S_TIERS「高強度」；第 1G 節）
+ *   --hi-elo-share X  舊定義（只做對照）：高強度局 = 桌上平均 Elo 前 X 的局（第 1G 節前是 0.3）
  *   --top N           每個分面列前 N（預設 5）
  *   --names           主控台印名字（只在主控台；--json 永遠不含名字）
  *   --json PATH       不含名字的摘要
@@ -22,6 +23,7 @@ import {
   cohortGamesFromDataset,
   computeStrongCohorts,
   facetLabel,
+  HIGH_INTENSITY_S,
   intensityThreshold,
   publicSummary,
   strongPool,
@@ -35,7 +37,7 @@ const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
 const has = (name: string): boolean => argv.includes(name);
 
-export function loadStrongCohorts(opts: { dataset?: string; analysis?: string; poolShare?: number; poolMin?: number; hiShare?: number } = {}): {
+export function loadStrongCohorts(opts: { dataset?: string; analysis?: string; poolShare?: number; poolMin?: number; hiS?: number; hiEloShare?: number } = {}): {
   cohorts: StrongCohorts;
   dataset: DatasetLike;
 } {
@@ -44,8 +46,11 @@ export function loadStrongCohorts(opts: { dataset?: string; analysis?: string; p
   const analysis = JSON.parse(fs.readFileSync(opts.analysis ?? path.join(root, 'analysis_cache.json'), 'utf8')) as { rating: { players: RatingRow[] } };
   const games = cohortGamesFromDataset(dataset);
   const pool = strongPool(analysis.rating.players, { topShare: opts.poolShare ?? 0.2, minGames: opts.poolMin ?? 50 });
-  const threshold = intensityThreshold(games, opts.hiShare ?? 0.3);
-  return { cohorts: computeStrongCohorts(games, pool, threshold), dataset };
+  // 第 1G 節：高強度局 = S ≥ 65（網站 S_TIERS）；給了 hiEloShare 才用舊的平均 Elo 前 X（只做對照）
+  if (opts.hiEloShare !== undefined) {
+    return { cohorts: computeStrongCohorts(games, pool, intensityThreshold(games, opts.hiEloShare), { basis: 'elo' }), dataset };
+  }
+  return { cohorts: computeStrongCohorts(games, pool, opts.hiS ?? HIGH_INTENSITY_S, { basis: 's' }), dataset };
 }
 
 const FACET_ORDER: FacetId[] = [
@@ -59,11 +64,12 @@ function main(): void {
     analysis: arg('--analysis'),
     poolShare: arg('--pool-share') !== undefined ? Number(arg('--pool-share')) : undefined,
     poolMin: arg('--pool-min') !== undefined ? Number(arg('--pool-min')) : undefined,
-    hiShare: arg('--hi-share') !== undefined ? Number(arg('--hi-share')) : undefined,
+    hiS: arg('--hi-s') !== undefined ? Number(arg('--hi-s')) : undefined,
+    hiEloShare: arg('--hi-elo-share') !== undefined ? Number(arg('--hi-elo-share')) : undefined,
   });
   const top = Number(arg('--top') ?? 5);
   const names = has('--names');
-  console.log(`母體 ${cohorts.pool.length} 人；局 ${cohorts.games}（有分面資料）；高強度門檻 平均 Elo ≥ ${cohorts.threshold.toFixed(1)}、${cohorts.hiGames} 局`);
+  console.log(`母體 ${cohorts.pool.length} 人；局 ${cohorts.games}（有分面資料）；高強度門檻 ${cohorts.basis === 's' ? 'S' : '平均 Elo'} ≥ ${cohorts.threshold.toFixed(1)}、${cohorts.hiGames} 局`);
   console.log(`高強度局 任務階段平均贏率：${Object.entries(cohorts.roleAverage).map(([r, v]) => `${r} ${(100 * v).toFixed(1)}%`).join('、')}`);
   console.log(`刺中率 平均 高強度 ${(100 * cohorts.rateAverage.assassinHit.hi).toFixed(1)}% / 全部 ${(100 * cohorts.rateAverage.assassinHit.all).toFixed(1)}%；`
     + `梅林存活 高強度 ${(100 * cohorts.rateAverage.merlinSurvival.hi).toFixed(1)}% / 全部 ${(100 * cohorts.rateAverage.merlinSurvival.all).toFixed(1)}%`);

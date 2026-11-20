@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { loadBot, loadHuman } from './botGap';
 
 const FIXTURE_DB = path.resolve(__dirname, '../test_fixtures/console_export/game_db.json');
+// 網站數據分析的資料集（repo 裡的 games_cache.json；console_export 的 fixture 是舊格式）與同一份 game_db.json
+const REPO_GAMES = path.resolve(__dirname, '../games_cache.json');
+const REPO_DB = path.resolve(__dirname, '../game_db.json');
 
 // 捏造的整局紀錄（sp.ts detail=1 的 'g' 欄）：三藍、刺中 1 家梅林。
 const DETAIL = {
@@ -44,8 +47,18 @@ describe('botGap loaders', () => {
     }
   });
 
-  it('keeps only readable real games from game_db and splits the strong tables by S', () => {
-    const { human, strong } = loadHuman(FIXTURE_DB, 45);
+  it('site reference: the stats pages games (games_cache), details from game_db, S from the lineup', () => {
+    const site = loadHuman({ ref: 'site', gamesFile: REPO_GAMES, humanFile: REPO_DB, strongS: 55 });
+    expect(site.note).toContain('網站數據分析的局');
+    // 網站的局幾乎都對得到可讀的牌譜（對不到的寫在 note）
+    expect(site.human.length).toBeGreaterThan(2000);
+    expect(site.strong.length).toBeGreaterThan(200);
+    expect(site.strong.every((g) => g.s !== null && g.s >= 55)).toBe(true);
+    expect(site.strong.length).toBe(site.human.filter((g) => g.s !== null && g.s >= 55).length);
+  });
+
+  it('legacy reference (--ref game_db): only readable real games from game_db, strong tables by S', () => {
+    const { human, strong } = loadHuman({ ref: 'game_db', gamesFile: REPO_GAMES, humanFile: FIXTURE_DB, strongS: 45 });
     // fixture：real ok 4 局 + real warn 6 局；error／unreadable／sim 不算
     expect(human.length).toBe(10);
     expect(strong.length).toBe(human.filter((g) => g.s !== null && g.s >= 45).length);

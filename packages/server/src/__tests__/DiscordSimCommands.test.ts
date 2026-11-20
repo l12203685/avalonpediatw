@@ -221,6 +221,24 @@ describe('handlers', () => {
     expect(engine.counts.started.discord).toBe(1);
   });
 
+  it('/公布 lists who sat 1～0 under the seats (Edward 2026-11-20); markdown in a name is escaped, mentions stay off', async () => {
+    // 編的名字（不是真的玩家）。
+    const i = BANK.byId.get('W0000') as number;
+    const names = ['_甲蟲_', '乙鳥', '', '丁香', '戊己', '庚辛', '壬癸', '子丑', '@everyone', '辰*巳'];
+    const loader = new SimBankLoader(() => ({ ...BANK, names: new Map([[i, names]]) }));
+    engine = new SimEngine({ bank: () => loader.get(), random: () => () => 0 });
+    __setSimForTests({ loader, engine });
+    await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 });
+    const revealIt = makeInteraction(COMMANDS.SIM_REVEAL);
+    await handleSimCommand(revealIt as never);
+    const arg = revealIt.editReply.mock.calls.at(-1)?.[0] as { content: string; allowedMentions: unknown };
+    expect(arg.content.split('\n').slice(1, 3)).toEqual([
+      '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠',
+      '1.\\_甲蟲\\_ 2.乙鳥 3. 4.丁香 5.戊己 6.庚辛 7.壬癸 8.子丑 9.@everyone 0.辰\\*巳',
+    ]);
+    expect(arg.allowedMentions).toEqual({ parse: [] });
+  });
+
   it('a DM (no guild) is not shared: no co-answer note on the start reply and no co-answering', async () => {
     const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'DM-1', 'a', null);
     expect(start).toContain('【模擬瓦 W0000-4】');

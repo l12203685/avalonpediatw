@@ -10,6 +10,7 @@ import {
   computeStrongCohorts,
   decisionFacet,
   facetLabel,
+  HIGH_INTENSITY_S,
   inFacetTop,
   intensityThreshold,
   isHighIntensity,
@@ -39,13 +40,21 @@ describe('strongPool', () => {
   });
 });
 
-describe('intensityThreshold', () => {
-  it('is the value at the (1 − share) quantile of table-average Elo; games without Elo are never high-intensity', () => {
+describe('high-intensity games', () => {
+  it('default (第 1G 節): table strength S ≥ 65, the site S_TIERS 高強度; games without S are never high-intensity', () => {
+    expect(HIGH_INTENSITY_S).toBe(65);
+    expect(isHighIntensity({ avgElo: 1400, s: 65 })).toBe(true);
+    expect(isHighIntensity({ avgElo: 1700, s: 64.9 })).toBe(false); // Elo 不再算
+    expect(isHighIntensity({ avgElo: 1700, s: null })).toBe(false);
+    expect(isHighIntensity({ avgElo: 1700 })).toBe(false);
+  });
+
+  it('legacy (basis elo, comparison only): the (1 − share) quantile of table-average Elo', () => {
     const gs = [1490, 1495, 1500, 1505, 1510, 1515, 1520, 1525, 1530, 1535].map((e) => ({ avgElo: e }));
     const thr = intensityThreshold([...gs, { avgElo: null }] as CohortGame[], 0.3);
     expect(thr).toBe(1525);
-    expect(gs.filter((g) => isHighIntensity(g, thr)).length).toBe(3);
-    expect(isHighIntensity({ avgElo: null }, thr)).toBe(false);
+    expect(gs.filter((g) => isHighIntensity(g, thr, 'elo')).length).toBe(3);
+    expect(isHighIntensity({ avgElo: null }, thr, 'elo')).toBe(false);
   });
 });
 
@@ -59,7 +68,7 @@ describe('cohortGamesFromDataset', () => {
       vocab: { category: ['線瓦', '百科AI'], outcome: ['三紅', '三藍死', '三藍活', '', '其他'] },
       players: ['n0', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9'],
       games: [
-        ['g1', 0, '', 0, 0, [], '012345', 2, '', seats, [0, 0, [], 0, elo]],
+        ['g1', 0, '', 0, 0, [], '012345', 2, '', seats, [0, 612, [], 0, elo]],
         ['g2', 0, '', 1, 0, [], '012345', 2, '', seats, null], // 百科AI
         ['g3', 0, '', 0, 0, [], '012345', 2, '', [...seats.slice(0, 9), -1], null], // 未知玩家
         ['g4', 0, '', 0, 0, [], '012345', 4, '', seats, null], // 沒有結果
@@ -74,13 +83,15 @@ describe('cohortGamesFromDataset', () => {
     expect(g.roles.slice(5, 9)).toEqual(['loyal', 'loyal', 'loyal', 'loyal']);
     expect(g.names[9]).toBe('n9');
     expect(g.avgElo).toBe(1500);
+    expect(g.s).toBeCloseTo(61.2);
   });
 });
 
 /** 捏造的局：座位 1..10 = 名字 names，角色固定（1 刺客、2 莫甘娜、3 莫德雷德、4 奧伯倫、5 派西、6 梅林、7–10 忠臣）。 */
 const ROLES: Role[] = ['assassin', 'morgana', 'mordred', 'oberon', 'percival', 'merlin', 'loyal', 'loyal', 'loyal', 'loyal'];
+/** 高強度 = S ≥ 65：這裡用 avgElo ≥ 1500 的局給 S 70、其他 S 30（沿用原本的寫法）。 */
 function fake(id: string, names: string[], outcome: 0 | 1 | 2, avgElo: number | null = 1600): CohortGame {
-  return { id, names, roles: [...ROLES], outcome, avgElo };
+  return { id, names, roles: [...ROLES], outcome, avgElo, s: avgElo === null ? null : avgElo >= 1500 ? 70 : 30 };
 }
 
 describe('computeStrongCohorts', () => {
@@ -95,7 +106,7 @@ describe('computeStrongCohorts', () => {
   // 低強度局：Blue 當刺客、三藍死 10 次（只算刺中率的全部局）
   for (let i = 0; i < 10; i++) games.push(fake(`low${i}`, names('Blue', 'y8', 'y7'), 1, 1400));
   const pool = ['Red', 'Blue', 'Mid'];
-  const c = computeStrongCohorts(games, pool, 1500, { shrinkK: 10, rateShrinkK: 5, minRateSample: 5 });
+  const c = computeStrongCohorts(games, pool, HIGH_INTENSITY_S, { shrinkK: 10, rateShrinkK: 5, minRateSample: 5 });
 
   it('role averages and excess are measured in high-intensity games only', () => {
     expect(c.hiGames).toBe(10);
@@ -121,7 +132,7 @@ describe('computeStrongCohorts', () => {
     const extra: CohortGame[] = [...games];
     // 'Star' 在高強度局坐刺客 4 次全部三紅（超額 +0.4 × 4 = 1.6，K = 10 → 1.6 / 14）
     for (let i = 0; i < 4; i++) extra.push(fake(`s${i}`, names('Star', 'z8', 'z7'), 0));
-    const cc = computeStrongCohorts(extra, [...pool, 'Star'], 1500, { shrinkK: 10 });
+    const cc = computeStrongCohorts(extra, [...pool, 'Star'], HIGH_INTENSITY_S, { shrinkK: 10 });
     const avg = cc.roleAverage.assassin;
     const star = cc.facets.redMission[0];
     expect(star.name).toBe('Star');
@@ -149,7 +160,7 @@ describe('computeStrongCohorts — rate facets', () => {
     for (let i = 0; i < 6; i++) gs.push(fake(`h${i}`, names('Hi'), i < 4 ? 1 : 2, 1600)); // 高強度 6 次刺殺、刺中 4
     for (let i = 0; i < 3; i++) gs.push(fake(`l${i}`, names('Lo'), 1, 1400)); // 低強度 3 次全中
     gs.push(fake('h9', names('Lo'), 2, 1600)); // 高強度 1 次沒中
-    const c = computeStrongCohorts(gs, ['Hi', 'Lo'], 1500, { rateShrinkK: 2, minRateSample: 5 });
+    const c = computeStrongCohorts(gs, ['Hi', 'Lo'], HIGH_INTENSITY_S, { rateShrinkK: 2, minRateSample: 5 });
     const hi = c.facets.assassinHit.find((e) => e.name === 'Hi')!;
     const lo = c.facets.assassinHit.find((e) => e.name === 'Lo')!;
     expect(hi.basis).toBe('hi');
@@ -177,7 +188,7 @@ describe('decision → facet', () => {
     expect(facetLabel('redMission', 1)).toBe('紅方任務王#1');
     expect(facetLabel('assassinHit', 2)).toBe('刺客刺中王#2');
     expect(facetLabel('mission:mordred', 3)).toBe('莫德雷德任務王#3');
-    const c = computeStrongCohorts([fake('g', ['SecretName', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'], 0)], ['SecretName'], 1500);
+    const c = computeStrongCohorts([fake('g', ['SecretName', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'], 0)], ['SecretName'], HIGH_INTENSITY_S);
     expect(JSON.stringify(publicSummary(c))).not.toContain('SecretName');
     expect(inFacetTop(c, 'assassin', 'vote', 'SecretName', 1)).toBe(true);
     expect(inFacetTop(c, 'loyal', 'vote', 'SecretName', 1)).toBe(true);

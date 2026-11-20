@@ -101,7 +101,7 @@ describe('buildBankFile', () => {
   const { file, counts } = buildBankFile(builderRows());
 
   it('keeps strict-replay, valid-lake, non-娛樂 games once', () => {
-    expect(counts).toEqual({ rows: 7, recorded: 6, replayable: 5, lakeChainInvalid: 1, entertainment: 1, simulated: 0, duplicates: 1, games: 2, idCollisions: 0 });
+    expect(counts).toEqual({ rows: 7, recorded: 6, replayable: 5, lakeChainInvalid: 1, entertainment: 1, simulated: 0, duplicates: 1, games: 2, idCollisions: 0, keptIds: 0, newIds: 2, droppedIds: 0 });
     expect(file.games.map((g) => g.cfg).sort()).toEqual(['128064', '753921']);
   });
 

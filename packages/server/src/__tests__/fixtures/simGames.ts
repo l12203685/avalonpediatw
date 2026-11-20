@@ -78,7 +78,7 @@ export function builderRows(): PaipuRow[] {
     wikiRow('T-0001'),
     shortRow('T-0002'),
     simRow('T-0003', GAME_SHORT_TEXT, GAME_SHORT_CFG, '4', '三藍死', '娛樂'),
-    simRow('T-0004', GAME_WIKI_TEXT.replace('0>4 o', '9>4 o'), GAME_WIKI_CFG, '1', '三藍死'),
+    simRow('T-0004', GAME_WIKI_TEXT.replace('4>3 x', '4>0 x'), GAME_WIKI_CFG, '1', '三藍死'), // 0家拿過湖又被驗：湖中鏈修不了
     simRow('T-0005', `${GAME_WIKI_TEXT}\n1.${FAKE_NAMES[0]}\n2.${FAKE_NAMES[1]}`, GAME_WIKI_CFG, '1', '三藍死'),
     simRow('T-0006', '12\n亂打一通', GAME_WIKI_CFG, '', ''),
     simRow('T-0007', '', GAME_WIKI_CFG, '', ''),

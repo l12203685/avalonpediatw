@@ -591,7 +591,7 @@ export class SimEngine {
       case 'read':
         return this.read(game, target, now);
       case 'reveal':
-        return this.reveal(game, target, bank.records.get(session.game), req);
+        return this.reveal(game, target, bank.records.get(session.game), req, bank.names?.get(session.game));
       case 'end':
         return {
           text: withCoAnswerMark(endedText(session.exerciseId), coAnswer),
@@ -811,7 +811,7 @@ export class SimEngine {
     return this.reply(text, 'read', t, now, () => { this.counts.aiReads += 1; });
   }
 
-  private reveal(game: SimGame, t: SimTarget & { session: SimSession }, postId: string | undefined, req: SimRequest): SimReply {
+  private reveal(game: SimGame, t: SimTarget & { session: SimSession }, postId: string | undefined, req: SimRequest, seatNames?: readonly string[]): SimReply {
     const { session } = t;
     const events = publicEvents(game);
     const answers = [...session.answers.entries()]
@@ -828,6 +828,7 @@ export class SimEngine {
       intervalYours: !t.coAnswer && !session.intervalByCoAnswer,
       intervalByCoAnswer: !!session.intervalByCoAnswer,
       ...(postId ? { recordUrl: recordUrl(postId) } : {}),
+      ...(seatNames ? { seatNames } : {}),
       ...(session.assassin ? { kill: { target: session.kill?.target ?? null, coAnswer: !!session.kill?.coAnswer } } : {}),
       platform: req.platform,
       coAnswer: t.coAnswer,

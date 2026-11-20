@@ -16,7 +16,8 @@ import { buildReplayObservation, seatId, seatOfId } from './benchmark/replayObse
 import type { ReplayGame, ReplayProposal } from './benchmark/sheetsReplay';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
-const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
+// The default holds merlinKnownRed54=7 (site owner 2026-11-19); these tests start from the switch off.
+const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, merlinKnownRed54: 0, ...over });
 
 /** 回報的那一局在第 3 局的局面：第 1 局 P4 P5 P7 成功、第 2 局 P4 P5 P7 P10 失敗一張；梅林 P2 看得到 P3 P5 P8（P7 是莫德雷德）。 */
 function r3(over: Partial<PlayerObservation> = {}): PlayerObservation {
@@ -33,9 +34,9 @@ function r3(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('round 54 flags', () => {
-  it('exist, off by default, parse', () => {
+  it('exist, off in the legacy table, parse', () => {
     expect(LEGACY_AGENT_TUNING.merlinKnownRed54).toBe(0);
-    expect(DEFAULT_AGENT_TUNING.merlinKnownRed54).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.merlinKnownRed54).toBe(7); // round 54 adopted by the site owner 2026-11-19 (confirmation passed)
     expect(LEGACY_AGENT_TUNING.failedReuse54).toBe(0);
     expect(DEFAULT_AGENT_TUNING.failedReuse54).toBe(0);
     expect(parseTuningFlag('merlinKnownRed54')).toEqual({ merlinKnownRed54: 3 });
@@ -163,8 +164,9 @@ function merlinTeamAt(tuning: AgentTuning): number[] {
 }
 
 describe('the reported game, Merlin 2 at 3-2', () => {
-  it('default: re-proposes 457 + himself (5 is a red he sees); merlinKnownRed54 drops the red he sees', () => {
+  it('switch off: re-proposes 457 + himself (5 is a red he sees); merlinKnownRed54 (the default since 2026-11-19) drops the red he sees', () => {
     expect(merlinTeamAt(T()).sort((a, b) => a - b)).toEqual([2, 4, 5, 7]);
+    expect(merlinTeamAt({ ...DEFAULT_AGENT_TUNING }).some((s) => [3, 5, 8].includes(s))).toBe(false);
     for (const bits of [1, 2, 3]) {
       const team = merlinTeamAt(T({ merlinKnownRed54: bits }));
       expect(team).toHaveLength(4);

@@ -1602,7 +1602,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual(first["leaderboard"]["asOf"], AS_OF.isoformat())
         self.assertEqual(first["leaderboard"]["boards"], [])  # fixture games have no 日期時間
         self.assertEqual(first["leaderboard"]["dates"], {"parsed": 0, "unparsed": 4, "earliest": "", "latest": ""})
-        self.assertEqual([f["loopId"] for f in first["featureStudies"]["features"]], ["L141"])  # no previous file
+        self.assertEqual([f["loopId"] for f in first["featureStudies"]["features"]], ["L141", "L139"])  # no previous file: the two live studies
 
         first["featureStudies"] = {
             "generatedAt": "2026-04-27T15:04:56+08:00", "sampleSize": {"games": 2146, "lakeLinks": 4064},
@@ -1622,7 +1622,7 @@ class EndToEndTest(unittest.TestCase):
         studies = second["featureStudies"]  # carried over, L141 recomputed in place, L143 annotated
         self.assertEqual(list(studies), ["generatedAt", "sampleSize", "features"])
         self.assertEqual((studies["generatedAt"], studies["sampleSize"]["games"]), (AS_OF.isoformat(), 5))
-        self.assertEqual([f["loopId"] for f in studies["features"]], ["L141", "L143"])
+        self.assertEqual([f["loopId"] for f in studies["features"]], ["L141", "L143", "L139"])
         self.assertEqual(studies["features"][0]["visualType"], "lakeClaim")
         self.assertEqual(studies["features"][1]["data"], L143_FIXTURE()["data"])  # numbers untouched
         self.assertIn("座位輪替", studies["features"][1]["oneLineHook"])
@@ -3664,6 +3664,26 @@ class FeatureStudiesTest(unittest.TestCase):
         self.assertIn(f"{r3['threeRedPct']:.1f}%（n={r3['n']}）", l139["oneLineHook"])
         self.assertIn("選擇偏誤", l139["oneLineHook"])
 
+    def test_forced_p5_feature_is_computed_from_the_games(self) -> None:
+        # 站長 2026-11-20「所有跟數字統計有關的 都應該跟資料庫連動 而不是寫死」：L139 每次從牌譜重算。
+        games = gc.parse_game_log(aggregation_log())
+        f = gc.compute_forced_p5_feature(games, AS_OF)
+        self.assertEqual((f["loopId"], f["visualType"], f["sourceReport"], f["computedAt"]), ("L139", "line", "generate_cache.py", "2026-10-12"))
+        self.assertEqual(f["sampleSize"], {"games": len(games)})
+        data = f["data"]
+        self.assertTrue(set(r["round"] for r in data["rows"]) <= {"R2", "R3", "R4", "R5"})
+        forced = lambda g, r: any(p[0] == r and p[1] == 5 for p in g.voting_proposals)  # noqa: E731
+        for row in data["rows"]:
+            r = int(row["round"][1])
+            self.assertEqual(row["n"], sum(1 for g in games if forced(g, r)))
+            self.assertGreater(row["n"], 0)
+            self.assertAlmostEqual(row["deltaThreeRed"] + row["deltaThreeBlueAlive"] + row["deltaThreeBlueDead"], 0, delta=0.05)
+        cmp = data["comparison"]
+        self.assertEqual(cmp["withR3Forced"]["n"] + cmp["withoutR3Forced"]["n"], len(games))
+        base = 100 * sum(1 for g in games if g.outcome == gc.OUTCOME_THREE_RED) / len(games)
+        self.assertAlmostEqual(data["baselineRedPct"], round(base, 2))
+        self.assertIn("選擇偏誤", f["oneLineHook"])
+
     def test_annotate_tolerates_odd_sections(self) -> None:
         self.assertEqual(gc.annotate_feature_studies(None), {})
         odd = {"features": [{"loopId": "L142", "data": {"rows": [{"role": "刺", "total": 3}]}}, "junk", {"loopId": "L999", "x": 1}]}
@@ -3678,14 +3698,14 @@ class FeatureStudiesTest(unittest.TestCase):
         self.assertEqual(list(fresh), ["generatedAt", "sampleSize", "features"])
         self.assertEqual(fresh["generatedAt"], "2026-10-12")
         self.assertEqual(fresh["sampleSize"], {"games": 5, "lakeLinks": 5})  # every fixture game has one lake line
-        self.assertEqual([f["loopId"] for f in fresh["features"]], ["L141"])
+        self.assertEqual([f["loopId"] for f in fresh["features"]], ["L141", "L139"])
 
         previous = {"generatedAt": "old", "sampleSize": {"games": 1, "lakeLinks": 1, "extra": 7}, "note": "keep",
                     "features": [L143_FIXTURE(), {"loopId": "L141", "visualType": "bar", "data": {"rows": []}}, {"loopId": "L999"}]}
         out = gc.refresh_feature_studies(previous, games, AS_OF)
         self.assertEqual(list(out), ["generatedAt", "sampleSize", "note", "features"])
         self.assertEqual(out["sampleSize"], {"games": 5, "lakeLinks": 5, "extra": 7})
-        self.assertEqual([f["loopId"] for f in out["features"]], ["L143", "L141", "L999"])
+        self.assertEqual([f["loopId"] for f in out["features"]], ["L143", "L141", "L999", "L139"])  # L139 appended when missing
         self.assertEqual(out["features"][1]["visualType"], "lakeClaim")
         self.assertIn("座位輪替", out["features"][0]["oneLineHook"])
         self.assertEqual(out["features"][2], {"loopId": "L999"})

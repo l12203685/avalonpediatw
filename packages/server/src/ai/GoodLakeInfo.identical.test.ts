@@ -18,6 +18,11 @@
  * changed (659 picks), every one of them at a decision point where
  * `noStallCaps` or `admittedReds` is non-empty; none elsewhere. The digest
  * below is the dump after A1 / A2.
+ *
+ * 2026-11-20 (站長「接湖的必為下一湖」: parseReplayGame repairs the lake chain, sheetsReplay.repairLakeChain): checked
+ * once against the dump before the repair (still 1965add6…1fe7): the lines of exactly 6 games changed (36 of 7442,
+ * 流水號 178 336 623 710 1236 1810 — a lake holder that contradicted the previous target), none elsewhere; those 6
+ * are now lake-legal (1913 → 1919). The digest below is the dump after the repair.
  */
 import { describe, expect, it } from 'vitest';
 import * as crypto from 'crypto';
@@ -27,7 +32,7 @@ import { rowsFromSheet, parseReplayGame } from './benchmark/sheetsReplay';
 import { buildReplayObservation, seatId, validLakeTargetSeats } from './benchmark/replayObservation';
 import { analyzeGoodLake, pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 
-const DIGEST_BEFORE_REFACTOR = '1965add6d17f58828fccc92e50bde6698b96612d121e688e5315107912831fe7';
+const DIGEST_BEFORE_REFACTOR = '6f11738ccd239d6bca8bed8b0fb26c6e63a67474240d6245a608d2fea35a4b40';
 
 describe('GoodLakeInfo — identical analyses after the certainty-layer refactor', () => {
   it('every lake decision point of the 牌譜 reproduces the pre-refactor analysis exactly', () => {
@@ -59,7 +64,7 @@ describe('GoodLakeInfo — identical analyses after the certainty-layer refactor
         }
       }
     }
-    expect(legal).toBe(1913);
+    expect(legal).toBe(1919);
     expect(lines).toHaveLength(7442);
     expect(nulls).toBe(10);
     const digest = crypto.createHash('sha256').update(`${lines.join('\n')}\n`).digest('hex');

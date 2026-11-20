@@ -52,10 +52,17 @@ export function wikiSourceOf(articles: readonly WikiSourceArticle[]): WikiSource
 
 // ─── 雜湊 ─────────────────────────────────────────────────────────────────
 
-/** 只改空白（行尾空白、空行、CRLF）不算改了內容。 */
+/**
+ * 牌譜數字的標記 `<!-- stat:KEY -->…<!-- /stat -->`（packages/server/wiki_stats.py 每晚從逐局資料重寫，站長 2026-11-20
+ * 「所有跟數字統計有關的 都應該跟資料庫連動」）：雜湊只看標記名稱、不看裡面的數字，數字每晚變動不算改了內容。
+ */
+const WIKI_STAT_SPAN_RE = /<!-- stat:([A-Za-z0-9_.-]+) -->[\s\S]*?<!-- \/stat -->/g;
+
+/** 只改空白（行尾空白、空行、CRLF）不算改了內容；牌譜數字標記裡的內容也不算（見 WIKI_STAT_SPAN_RE）。 */
 export function normalizeSectionMarkdown(markdown: string): string {
   return markdown
     .replace(/\r\n?/g, '\n')
+    .replace(WIKI_STAT_SPAN_RE, '<!-- stat:$1 -->')
     .split('\n')
     .map((l) => l.replace(/\s+$/, ''))
     .filter((l) => l !== '')

@@ -1,7 +1,9 @@
 /**
  * 和強者的落差：分局面的結果分布（站長 2026-11-18：「根據尾派陣營以及局勢去區分遊戲結果 來評估與強者的落差」）。
  *
- * 機器人自我對打與真人局（game_db.json 實戰局，另外切出「強者桌」）在同一組固定的局面格上比結果分布
+ * 機器人自我對打與真人局在同一組固定的局面格上比結果分布。真人局 = 網站數據分析的那一批局（games_cache.json，
+ * `decodeGamesDataset`，百科AI 局不算），每局的牌譜細節從 game_db.json 對應的紀錄拿（來源 id 對 games_cache 的 id），
+ * S 用 games_cache 的陣容強度；「高端桌」= S ≥ 分組的 S 上切點（預設 55，同網站；第 1G 節起，取代只讀 game_db 的舊參考）。
  * （三紅／三藍死／三藍活，加上任務三藍）。每一格報 n、機器人率、真人率（Wilson 95%）與差；每一族格
  * （例：5家×0家）算一個以真人頻率加權的 total variation 距離 D；列出加權落差最大的格。
  *
@@ -138,6 +140,9 @@ export function gameFromBotSummary(row: readonly unknown[], cols: readonly strin
 
 /** game_db.json 的一局（只用到的欄）。 */
 export interface DbGame {
+  id?: string;
+  /** 這局的來源（sheet = games_cache 的試算表局，id「S<流水號>」；dc_import = games_cache 的 DC 匯入局，id「D<hash>」）。 */
+  sources?: { src: string; id: string }[];
   kind?: string;
   status?: string;
   external?: boolean;
@@ -554,7 +559,7 @@ export function renderMarkdown(r: GapReport, gate?: { base: GapReport; result: G
   const m = r.meta;
   L.push(`# 和強者的落差：分局面的結果分布（${String(m.label ?? '')}）`, '');
   L.push(`- 機器人：${String(m.bot ?? '')}（${r.totals.bot.n} 局${m.botPartial ? `，其中 ${String(m.botPartial)} 局只有摘要欄，只進 5家×0家／第一湖` : ''}）`);
-  L.push(`- 真人：${String(m.human ?? '')}（實戰局、status ok／warn、非外部來源，${r.totals.human.n} 局）；強者 = 桌上強度 S ≥ ${String(m.strongS ?? '')}（10 個座位開打前 PR 的平均，同網站 strength.ts／game_db 的 strength），${r.totals.strong.n} 局`);
+  L.push(`- 真人：${String(m.human ?? '')}；可以拆局面的 ${r.totals.human.n} 局（實戰局、status ok／warn、非外部來源、結果和任務對得上）。強者 = 高端桌 S ≥ ${String(m.strongS ?? '')}（10 個座位開打前 PR 的平均；同網站數據分析「分組」的桌分層與 S_TIERS 偏強＋高強度），${r.totals.strong.n} 局`);
   L.push(`- 每一格的比例用 Wilson 95%；TV = ½Σ|機器人 − 參考|（三紅／三藍死／三藍活）；雜訊底 = 兩邊分布相同時 TV 的期望值；每一族的 D = 以參考局的格頻率加權的 TV（只算機器人 n ≥ ${String(m.minBot)}、參考 n ≥ ${String(m.minRef)} 的格，權重重新正規化）；總距離 = 基本族 D 的平均（交叉族不算）。加權 = 格頻率 × TV。`);
   L.push('');
   L.push('## 總覽', '');
@@ -600,4 +605,61 @@ export function renderMarkdown(r: GapReport, gate?: { base: GapReport; result: G
     L.push('');
   }
   return L.join('\n');
+}
+
+// ─── 真人參考：網站數據分析的同一批局（第 1G 節） ─────────────────────────────
+
+/** games_cache 解碼後的一局（只用到的欄）。 */
+export interface CacheGameRef {
+  id: string;
+  /** 0 = 試算表、1 = DC 匯入（games_cache 的 src）。 */
+  source: number;
+  outcome: string;
+  /** 陣容強度 S；不評分 = null。 */
+  s: number | null;
+}
+
+/** games_cache 的一局在 game_db 裡的來源鍵（game_db.py 的 public_id：試算表加「S」前綴）。 */
+export function cacheSourceKey(g: Pick<CacheGameRef, 'id' | 'source'>): string {
+  return g.source === 0 ? `sheet|S${g.id}` : `dc_import|${g.id}`;
+}
+
+export interface HumanReference {
+  human: GapGame[];
+  strong: GapGame[];
+  /** 網站那一批局（有結果的）與其中的高端桌局數；可以拆局面的是 human／strong。 */
+  site: { games: number; strong: number };
+  /** 網站的局在 game_db 找不到紀錄、或紀錄讀不懂／結果對不上的局數。 */
+  unmatched: number;
+}
+
+const DECIDED = new Set(['三紅', '三藍死', '三藍活']);
+
+/**
+ * 真人參考 = 網站數據分析的那一批局（games_cache 解碼、百科AI 局已拿掉）裡，game_db 有可讀紀錄的局；S 用 games_cache 的陣容強度，
+ * 高端桌 = S ≥ strongS（網站分組的 S 上切點，預設 55）。
+ */
+export function humanFromCache(cache: readonly CacheGameRef[], db: readonly DbGame[], strongS: number): HumanReference {
+  const byKey = new Map<string, DbGame>();
+  for (const rec of db) for (const src of rec.sources ?? []) {
+    if (src.src === 'sheet' || src.src === 'dc_import') byKey.set(`${src.src}|${src.id}`, rec);
+  }
+  const human: GapGame[] = [];
+  const strong: GapGame[] = [];
+  let games = 0;
+  let strongN = 0;
+  let unmatched = 0;
+  for (const c of cache) {
+    if (!DECIDED.has(c.outcome)) continue;
+    games++;
+    const isStrong = c.s !== null && c.s >= strongS;
+    if (isStrong) strongN++;
+    const rec = byKey.get(cacheSourceKey(c));
+    const g = rec ? gameFromDb(rec) : null;
+    if (!g) { unmatched++; continue; }
+    const withS: GapGame = { ...g, s: c.s };
+    human.push(withS);
+    if (isStrong) strong.push(withS);
+  }
+  return { human, strong, site: { games, strong: strongN }, unmatched };
 }

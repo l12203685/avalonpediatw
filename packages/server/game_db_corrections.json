@@ -160,6 +160,114 @@
       "by": "站長",
       "date": "2026-11-18",
       "note": "主控台更正（2026-11-18）：第 3 湖持湖的是 9家（來源記成 4家），站長重打整局紀錄（兩紅後四個鐵好＋湖到最後一好）"
+    },
+    "S1236": {
+      "set": {
+        "config": "870563",
+        "rounds": [{"proposals":[{"team":"139","votes":[]},{"team":"268","votes":[]},{"team":"390","votes":[]},{"team":"289","votes":["14+"]},{"team":"357","votes":[]}],"mission":"oox"},{"proposals":[{"team":"2670","votes":[]},{"team":"1678","votes":[]},{"team":"2780","votes":[]},{"team":"1489","votes":[]},{"team":"2670","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"1689","votes":["6-"]},{"team":"2468","votes":["46-","5+"]},{"team":"4690","votes":["469-","3+"]},{"team":"1469","votes":["370+"]}],"mission":"oooo"},{"proposals":[{"team":"13460","votes":["46-","258+"]}],"mission":"oooox"},{"proposals":[{"team":"13469","votes":["258+"]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"4","claim":"o"},{"after":3,"holder":"4","target":"3","claim":"o"},{"after":4,"holder":"3","target":"9","claim":"o"}],
+        "assassination": "3",
+        "outcome": "三藍死"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。第 3 湖持湖的是 3家（來源記成 4家）"
+    },
+    "S178": {
+      "set": {
+        "config": "840729",
+        "rounds": [{"proposals":[{"team":"147","votes":["6+"]},{"team":"258","votes":[]},{"team":"139","votes":[]},{"team":"457","votes":[]},{"team":"258","votes":[]}],"mission":"oox"},{"proposals":[{"team":"1569","votes":[]},{"team":"1478","votes":[]},{"team":"1780","votes":[]},{"team":"1569","votes":[]},{"team":"1560","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"1560","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"23567","votes":["356-","0+"]},{"team":"13569","votes":["159-","8+"]},{"team":"34569","votes":["3569-"]},{"team":"13569","votes":["19-"]},{"team":"23569","votes":[]}],"mission":"ooooo"},{"proposals":[{"team":"23569","votes":[]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"5","claim":"o"},{"after":3,"holder":"5","target":"6","claim":"o"},{"after":4,"holder":"6","target":"4","claim":"x"}],
+        "assassination": "3",
+        "outcome": "三藍活"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。第 3 湖持湖的是 6家（來源記成 0家）"
+    },
+    "S336": {
+      "set": {
+        "config": "062145",
+        "rounds": [{"proposals":[{"team":"178","votes":[]},{"team":"267","votes":[]},{"team":"359","votes":[]},{"team":"345","votes":[]},{"team":"459","votes":[]}],"mission":"ooo"},{"proposals":[{"team":"4579","votes":["6+"]},{"team":"5789","votes":[]},{"team":"3459","votes":["9-","8+"]},{"team":"1459","votes":[]},{"team":"5790","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"1459","votes":[]},{"team":"1245","votes":[]},{"team":"3459","votes":[]},{"team":"3456","votes":["6-"]},{"team":"3459","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"34569","votes":[]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"6","claim":"x"},{"after":3,"holder":"6","target":"9","claim":"o"}],
+        "assassination": "4",
+        "outcome": "三藍活"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。第 1 湖驗的是 6家、第 2 湖持湖的是 6家（來源記成 7家）；取代湖中鏈自動更正"
+    },
+    "S344": {
+      "set": {
+        "config": "509276",
+        "rounds": [{"proposals":[{"team":"150","votes":["6+"]},{"team":"290","votes":[]},{"team":"345","votes":[]},{"team":"347","votes":[]},{"team":"560","votes":[]}],"mission":"oox"},{"proposals":[{"team":"3467","votes":[]},{"team":"2346","votes":["7+"]},{"team":"2368","votes":[]},{"team":"1369","votes":["3-"]},{"team":"2390","votes":[]}],"mission":"ooxx"},{"proposals":[{"team":"1346","votes":[]},{"team":"2456","votes":["45-"]},{"team":"3456","votes":[]},{"team":"1346","votes":[]},{"team":"2590","votes":[]}],"mission":"xxxx"}],
+        "lakes": [{"after":2,"holder":"0","target":"4","claim":"o"}],
+        "assassination": "",
+        "outcome": "三紅"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。第 3 局第 5 次提議 2590 出任務、四張失敗（來源記成第 4 次提議 1346 出任務）"
+    },
+    "S465": {
+      "set": {
+        "config": "453718",
+        "rounds": [{"proposals":[{"team":"137","votes":["9+"]},{"team":"256","votes":[]},{"team":"178","votes":["369+"]}],"mission":"ooo"},{"proposals":[{"team":"2468","votes":["8-"]},{"team":"1357","votes":["7-","8+"]},{"team":"1678","votes":[]},{"team":"1378","votes":["26+"]}],"mission":"ooxx"},{"proposals":[{"team":"2568","votes":[]},{"team":"2589","votes":[]},{"team":"2580","votes":[]},{"team":"1259","votes":[]},{"team":"2568","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"23460","votes":["20-"]},{"team":"24680","votes":[]},{"team":"12456","votes":["246-"]},{"team":"24680","votes":["39+"]}],"mission":"ooooo"},{"proposals":[{"team":"24680","votes":["79+"]}],"mission":"oooox"}],
+        "lakes": [{"after":2,"holder":"0","target":"2","claim":"o"},{"after":3,"holder":"2","target":"6","claim":"o"},{"after":4,"holder":"6","target":"8","claim":"o"}],
+        "assassination": "",
+        "outcome": "三紅"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。配置是 453718（來源記成 045318），第 4 局補上漏記的兩次提議"
+    },
+    "S487": {
+      "set": {
+        "config": "042715",
+        "rounds": [{"proposals":[{"team":"167","votes":[]},{"team":"348","votes":["2+"]},{"team":"237","votes":[]},{"team":"456","votes":[]},{"team":"568","votes":[]}],"mission":"ooo"},{"proposals":[{"team":"4568","votes":[]},{"team":"3670","votes":[]},{"team":"2568","votes":[]},{"team":"5689","votes":[]},{"team":"5680","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"1568","votes":[]},{"team":"2458","votes":["6+"]},{"team":"3678","votes":[]},{"team":"2456","votes":[]},{"team":"2568","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"14567","votes":["15-"]},{"team":"34568","votes":["345-","7+"]},{"team":"12358","votes":["135-","6+"]},{"team":"56789","votes":["12+"]}],"mission":"ooooo"},{"proposals":[{"team":"56790","votes":["5679-"]},{"team":"15689","votes":["89-"]},{"team":"35789","votes":["3579-","2+"]},{"team":"15689","votes":["3+"]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"6","claim":"o"},{"after":3,"holder":"6","target":"2","claim":"x"}],
+        "assassination": "5",
+        "outcome": "三藍死"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。第 2 局是一張失敗、第 4 局全成功（來源把失敗記在第 4 局）"
+    },
+    "S511": {
+      "set": {
+        "config": "054123",
+        "rounds": [{"proposals":[{"team":"125","votes":[]},{"team":"258","votes":[]},{"team":"389","votes":[]},{"team":"249","votes":[]},{"team":"258","votes":[]}],"mission":"oox"},{"proposals":[{"team":"3689","votes":[]},{"team":"1570","votes":[]},{"team":"3589","votes":["3-"]},{"team":"1457","votes":["69+"]}],"mission":"ooox"},{"proposals":[{"team":"1450","votes":["236789+"]}],"mission":"xxxx"}],
+        "lakes": [{"after":2,"holder":"0","target":"5","claim":"o"}],
+        "assassination": "",
+        "outcome": "三紅"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-20）：站長重打整局紀錄。第 3 局出任務的是 1450（來源記成 1457）"
+    },
+    "S270": {
+      "exclude": ["OWNER_EXCLUDE"],
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台裁定「這局不要記」（第 4 局失敗張數比隊上的紅方多，無法更正）"
+    },
+    "S386": {
+      "exclude": ["OWNER_EXCLUDE"],
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台裁定「這局不要記」（第 5 局失敗張數比隊上的紅方多，無法更正）"
+    },
+    "1176895793110728784": {
+      "duplicateOf": "1176895704342483034",
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台裁定：「是同一局重複貼，刪一篇」。Discord 同一局貼了兩次，只算 1176895704342483034（Discord 本身不動）"
+    },
+    "1302289442345848885": {
+      "duplicateOf": "S1675",
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台裁定：「是同一局 以試算表為準」。這篇 Discord 貼文跟試算表 S1675 是同一局（派隊與投票記得不一樣），以 S1675 為準"
     }
   }
 }

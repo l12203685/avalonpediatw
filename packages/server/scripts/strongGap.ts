@@ -84,7 +84,7 @@ function main(): void {
   const topK = Number(arg('--top') ?? 10);
   const minN = Number(arg('--min-n') ?? 30);
   const { cohorts, dataset } = loadStrongCohorts();
-  const { games } = humanGamesFromDataset(dataset as unknown as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] }, cohorts.threshold);
+  const { games } = humanGamesFromDataset(dataset as unknown as DatasetHeader & { games: readonly DatasetTuple[]; players: readonly string[] }, cohorts.threshold, cohorts.basis);
   const limit = arg('--limit') !== undefined ? Number(arg('--limit')) : undefined;
   const humans = limit !== undefined ? games.slice(0, limit) : games;
   // 強者的票

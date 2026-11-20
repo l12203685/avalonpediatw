@@ -10,6 +10,8 @@
  * 題號 `id` = sha1(record fingerprint) 的 Crockford base32 前 5 碼；fingerprint 跟
  * generate_cache.py 的 record_fingerprint 同一個定義（配置 + 每次派票的隊伍（座位排序、0 最後）
  * + 每局任務（o 在前 x 在後）），所以重建題庫題號不變，也跟流水號無關。撞號的那幾局一起加長到 6 碼。
+ * 重建時給上一版題庫（`previous`）：上一版有同一局（同一個 fingerprint）就沿用它的題號，新加的局才另外
+ * 取不跟任何人撞的最短前綴——題庫每晚長大，已經出過的題號（Threads 貼文、模擬瓦的題號）不會因為新局撞號而變長。
  * 題庫照題號排序：檔案順序看不出對局先後。
  */
 
@@ -143,15 +145,26 @@ export interface SimBankBuildCounts {
   duplicates: number;
   games: number;
   idCollisions: number;
+  /** 沿用上一版題號的局（同一局）。 */
+  keptIds: number;
+  /** 上一版沒有、新取題號的局。 */
+  newIds: number;
+  /** 上一版有、這一版沒有的題號（局被更正成另一局、被排除，或不再符合條件）。 */
+  droppedIds: number;
 }
 
 /**
  * 牌譜各列 → 題庫。條件（設計 §2、owner D6 預設）：嚴格解析成功、湖的順序合理、
  * 分類不是「娛樂」，也不是「模擬」（只出真人實戰；Edward 2026-11-16：「模擬畢竟只是模擬」）。同一個 fingerprint 只留一局。輸出照題號排序。只回傳計數，不回傳任何列的內容。
  */
-export function buildBankFile(rows: readonly PaipuRow[], builtFrom = 'sheets_cache.json'): { file: SimBankFile; counts: SimBankBuildCounts } {
+export function buildBankFile(
+  rows: readonly PaipuRow[],
+  builtFrom = 'sheets_cache.json',
+  previous?: Pick<SimBankFile, 'games'> | null,
+): { file: SimBankFile; counts: SimBankBuildCounts } {
   const counts: SimBankBuildCounts = {
     rows: rows.length, recorded: 0, replayable: 0, lakeChainInvalid: 0, entertainment: 0, simulated: 0, duplicates: 0, games: 0, idCollisions: 0,
+    keptIds: 0, newIds: 0, droppedIds: 0,
   };
   const byFingerprint = new Map<string, ReplayGame>();
   for (const row of rows) {
@@ -174,9 +187,19 @@ export function buildBankFile(rows: readonly PaipuRow[], builtFrom = 'sheets_cac
     byFingerprint.set(fp, parsed.game);
   }
 
-  const hashed = [...byFingerprint.entries()].map(([fp, game]) => ({ hash: fingerprintHash(fp), game }));
-  const ids = assignIds(hashed.map((h) => h.hash));
+  // 上一版的題號：同一局（fingerprint）沿用。
+  const previousIds = previousIdsByFingerprint(previous);
+  const hashed = [...byFingerprint.entries()].map(([fp, game]) => ({ fp, hash: fingerprintHash(fp), game }));
+  const kept = hashed.map((h) => previousIds.get(h.fp) ?? '');
+  const taken = new Set(kept.filter(Boolean));
+  const fresh = hashed.map((h, i) => (kept[i] ? null : i)).filter((i): i is number => i !== null);
+  const freshIds = assignIds(fresh.map((i) => hashed[i].hash), taken);
+  const ids = [...kept];
+  fresh.forEach((i, k) => { ids[i] = freshIds[k]; });
   counts.idCollisions = hashed.filter((h, i) => ids[i].length > 5).length;
+  counts.keptIds = taken.size;
+  counts.newIds = fresh.length;
+  counts.droppedIds = previousIds.size - taken.size;
   const games = hashed
     .map((h, i) => bankEntryFor(h.game, ids[i]))
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -184,8 +207,21 @@ export function buildBankFile(rows: readonly PaipuRow[], builtFrom = 'sheets_cac
   return { file: { version: SIM_BANK_VERSION, builtFrom, games }, counts };
 }
 
-/** 每個 hash 取最短、不跟別人撞的前綴（至少 5 碼）；撞號的一起加長。 */
-export function assignIds(hashes: readonly string[]): string[] {
+/** 上一版題庫：fingerprint → 題號（解析不了的列略過）。 */
+export function previousIdsByFingerprint(previous?: Pick<SimBankFile, 'games'> | null): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const entry of previous?.games ?? []) {
+    const res = parseBankEntry(entry);
+    if (res.ok && !out.has(recordFingerprint(res.game))) out.set(recordFingerprint(res.game), entry.id);
+  }
+  return out;
+}
+
+/**
+ * 每個 hash 取最短、不跟別人撞的前綴（至少 5 碼）；撞號的一起加長。`taken`：已經有主的題號（上一版沿用的），
+ * 新的局不能拿一樣的。
+ */
+export function assignIds(hashes: readonly string[], taken: ReadonlySet<string> = new Set()): string[] {
   const out: string[] = new Array(hashes.length).fill('');
   let pending = hashes.map((_, i) => i);
   for (let len = 5; pending.length > 0 && len <= 32; len++) {
@@ -196,7 +232,7 @@ export function assignIds(hashes: readonly string[]): string[] {
     }
     const next: number[] = [];
     for (const [key, members] of groups) {
-      if (members.length === 1) out[members[0]] = key;
+      if (members.length === 1 && !taken.has(key)) out[members[0]] = key;
       else next.push(...members);
     }
     pending = next;

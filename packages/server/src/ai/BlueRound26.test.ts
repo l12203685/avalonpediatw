@@ -118,14 +118,15 @@ const r2 = {
 } as unknown as PlayerObservation;
 
 describe('loyalTailWhite (round 26, loyal; D3 stage 1)', () => {
-  const on: AgentTuning = { ...DEFAULT_AGENT_TUNING, loyalTailWhite: 0.7, loyalTailWhiteLast: false };
+  // earlyWhite49 (the default since 2026-11-19) sets its own R2 threshold; these cases are about loyalTailWhite alone.
+  const on: AgentTuning = { ...DEFAULT_AGENT_TUNING, earlyWhite49: 0, loyalTailWhite: 0.7, loyalTailWhiteLast: false };
   it('a certain-red tail: a true loyal approves an earlier team (R2 included), off by default', () => {
-    expect(loyalTailWhiteNow({ ...DEFAULT_AGENT_TUNING, loyalTailWhite: 0 }, r2)).toBe(false);
+    expect(loyalTailWhiteNow({ ...DEFAULT_AGENT_TUNING, earlyWhite49: 0, loyalTailWhite: 0 }, r2)).toBe(false);
     expect(loyalTailWhiteNow(on, r2)).toBe(true);
     // The adopted default fires only on the fourth proposal (failCount 3).
     // (round 32: the case is built on the earlier tables; the strong tables read the R1 votes differently)
     // (round 39: also without the pending-proposal reading and with the round-26 threshold 0.7)
-    const old: AgentTuning = { ...DEFAULT_AGENT_TUNING, beliefStrongTables: false, beliefPendingProposal: false, loyalTailWhite: 0.7 };
+    const old: AgentTuning = { ...DEFAULT_AGENT_TUNING, earlyWhite49: 0, beliefStrongTables: false, beliefPendingProposal: false, loyalTailWhite: 0.7 };
     expect(loyalTailWhiteNow(old, r2)).toBe(false);
     expect(loyalTailWhiteNow(old, { ...r2, failCount: 3, currentLeader: 'P9' } as unknown as PlayerObservation)).toBe(true);
     // Off the team: the same rule (an outer white).

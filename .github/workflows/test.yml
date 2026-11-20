@@ -65,6 +65,7 @@ jobs:
           python packages/server/test_discord_records_import.py
           python packages/server/test_game_db.py
           python packages/server/test_name_collisions.py
+          python packages/server/test_wiki_stats.py
           python packages/server/test_proavalon_import.py
           python packages/server/test_console_export.py
 

@@ -79,6 +79,8 @@ async function main(): Promise<void> {
   const d = bayesOptionsOf(T);
   row('預設', d);
   for (const v of [1, 3, 5, 7, 9, 11]) row(`viewpoint53=${v}`, bayesOptionsOf({ ...T, viewpoint53: v }));
+  // 第 53b 回合：整項的次方
+  for (const v of [1, 3]) for (const pw of [0.25, 0.5, 0.75]) row(`viewpoint53=${v} viewpointPow53=${pw}`, bayesOptionsOf({ ...T, viewpoint53: v, viewpointPow53: pw }));
   if (process.argv.includes('--grid')) {
     for (const sc of [0.25, 0.5, 1, 1.5, 2]) {
       row(`倍數 ${sc}`, { ...d, viewpoint53: { scale: sc, skipForced: false } });

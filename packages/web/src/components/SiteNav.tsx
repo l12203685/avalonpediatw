@@ -214,9 +214,9 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             data-testid="site-ai-games"
             title="百科AI 對局：百科AI 打過的局與每一步的理由，可以回饋"
             aria-label="百科AI 對局"
-            aria-pressed={gameState === 'aiGames'}
+            aria-pressed={gameState === 'aiGames' || gameState === 'aiHistory'}
             className={`hidden h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors min-[400px]:flex sm:min-w-8 sm:px-2 ${
-              gameState === 'aiGames'
+              gameState === 'aiGames' || gameState === 'aiHistory'
                 ? 'border-white bg-white text-black'
                 : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
             }`}

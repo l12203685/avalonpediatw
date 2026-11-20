@@ -403,6 +403,8 @@ def source_records(gid: str, by_pid: Mapping[str, list[dict[str, Any]]], texts: 
             e["raw"] = raw
         if s.get("corrected"):
             e["corrected"] = True
+        if s.get("lake_fixes"):  # 湖中鏈自動更正（站長 2026-11-20）: the text shows the corrected lakes
+            e["lakeAutoFixed"] = True
         out.append(e)
     return out
 
@@ -496,6 +498,8 @@ def game_counts(db: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], sha: s
             {"label": "讀不懂的模擬局", "n": n_games(lambda g: g["status"] == "unreadable", (G.KIND_SIM,))},
             {"label": "推定全開白的局", "n": n_games(lambda g: bool(g.get("inferred_votes"))),
              "note": "上一局成功、這局第 1 次提議順著派、紀錄沒寫投票，推定 10 人全投白"},
+            {"label": "湖中鏈自動更正的局", "n": n_games(lambda g: bool(g.get("autoFixes"))),
+             "note": "接湖的人就是下一湖的持湖人（站長 2026-11-20），總庫照這條改了持湖人或補了座位"},
             {"label": "投票張數跟提議過不過對不上", "n": n_games(has("VOTE_RESULT")), "note": "多半是漏記了場外白／場內黑"},
             {"label": "投票記號跟隊伍對不上", "n": n_games(has("VOTE_MARKS"), (G.KIND_REAL, G.KIND_BOT, G.KIND_SIM)),
              "note": "多半是座位寫錯（含模擬局）"},

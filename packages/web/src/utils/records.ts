@@ -99,8 +99,13 @@ export interface RecordPost {
   tags: string[];
   /** 發文時間（台北，ISO 8601）；只在試算表的局是 ''。 */
   created: string;
-  /** 牌譜日期 YYYY-MM-DD（標題的 MMDD，沒有就發文日）；試算表沒寫日期的局是 ''。 */
+  /**
+   * 牌譜日期 YYYY-MM-DD。試算表也有的 DC 局（src 'dc+sheet'）用試算表的日期（站長 2026-11-20「日期不同的都以試算表為準」）；
+   * 只在 DC 的局是標題的 MMDD，沒有就發文日；試算表沒寫日期的局是 ''。日期篩選與排序都用這個。
+   */
   date: string;
+  /** 'dc+sheet' 的局試算表日期跟 DC 不同時，DC 貼文自己的日期（只記來源，不拿來篩選）。 */
+  postDate?: string;
   game: RecordGame | null;
   /** 讀不懂時的原因（固定的說明文字）與行號。 */
   problem?: string;
@@ -384,9 +389,21 @@ export function matchesRecords(post: RecordPost, filter: RecordFilter): boolean 
   const q = playerNameKey(filter.query);
   if (q) {
     const names = post.game?.names ?? [];
-    if (!names.some((n) => playerNameKey(n).includes(q)) && !playerNameKey(post.title).includes(q)) return false;
+    if (!names.some((n) => playerNameKey(n).includes(q)) && !playerNameKey(post.title).includes(q) && !matchesRecordIds(post, filter.query)) return false;
   }
   return true;
+}
+
+/**
+ * 站長 2026-11-20「例如透過配置 870563 直接找到該局」：搜尋框也認配置六碼（例 870563，可以只打前幾碼）
+ * 和局號（DC 貼文 id、S…、M…、D…、P…，含 aka）。
+ */
+export function matchesRecordIds(post: RecordPost, query: string): boolean {
+  const q = query.trim().toLowerCase().replace(/\s+/g, '');
+  if (!q) return false;
+  if (/^\d{4,6}$/.test(q) && post.game?.config && post.game.config.startsWith(q)) return true;
+  const ids = [post.id, ...(post.aka ?? [])].map((x) => x.toLowerCase());
+  return q.length >= 3 && ids.some((x) => x === q || (q.length >= 6 && x.includes(q)));
 }
 
 /** 牌譜裡暱稱符合關鍵字的座位（清單上標出來）。 */

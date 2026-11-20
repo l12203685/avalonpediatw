@@ -9,7 +9,8 @@ import { bayesVoteCriteria } from './BlueRound33';
 import { leaderOppEarly51, leaderOppRed51, leaderOppShift51, untaintedLakePick51 } from './Round51';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
-const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
+// The default holds L1 (leaderOppVote51=1, δ 0.05; site owner 2026-11-19); these tests start from the switch off.
+const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, leaderOppVote51: 0, leaderOppVote51Delta: 0, ...over });
 
 /** 第 3 局第 3 次提議（failCount 2）、隊長 P3：P4、P5 之後還會當隊長（第 4、5 次），其他人不會。 */
 function r3(over: Partial<PlayerObservation> = {}): PlayerObservation {
@@ -30,8 +31,12 @@ function r3(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('flags', () => {
-  it('exist, off by default, parse', () => {
-    for (const k of ['leaderOppVote51', 'leaderOppVote51Delta', 'leaderOppVoteRed51'] as const) { expect(LEGACY_AGENT_TUNING[k]).toBe(0); expect(DEFAULT_AGENT_TUNING[k]).toBe(0); }
+  it('exist, off in the legacy table, L1 in the default, parse', () => {
+    for (const k of ['leaderOppVote51', 'leaderOppVote51Delta', 'leaderOppVoteRed51'] as const) expect(LEGACY_AGENT_TUNING[k]).toBe(0);
+    // round 51 L1 adopted by the site owner 2026-11-19: inner black only, δ 0.05
+    expect(DEFAULT_AGENT_TUNING.leaderOppVote51).toBe(1);
+    expect(DEFAULT_AGENT_TUNING.leaderOppVote51Delta).toBe(0.05);
+    expect(DEFAULT_AGENT_TUNING.leaderOppVoteRed51).toBe(0);
     expect(parseTuningFlag('leaderOppVote51')).toEqual({ leaderOppVote51: 3 });
     expect(parseTuningFlag('leaderOppVote51=7')).toEqual({ leaderOppVote51: 7 });
     expect(parseTuningFlag('leaderOppVote51Delta=0.2')).toEqual({ leaderOppVote51Delta: 0.2 });
