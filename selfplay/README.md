@@ -6,3 +6,4 @@
 - 每一段的結果（只有每局的勝負、三藍、刺中梅林、第 1 局失敗、失敗任務數和對局雜湊，沒有對局紀錄）推到分支 `selfplay-results` 的 `results/<runId>/`。
 - 已經有結果的段落會跳過，重跑同一個 runId 只補缺的。
 - 和本機跑同一段逐局相同（同一套種子：`種子|局號`）。
+- 第 58 回合：`packages/server/scripts/selfplay/sp.ts` 同 selfplay-runs-adopt1120b（r56b-newdef 用的那一份）。
