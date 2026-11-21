@@ -16,6 +16,7 @@ import { r1Scorer, r1SpreadActive } from './BlueRound33';
 import { certaintyFor } from './LogicGates';
 import { provenRedBar, provenReds, provenRedStats } from './ProvenRed';
 import { merlinBarredReds54, merlinReuseTainted54 } from './Round54';
+import { publicThumb58Applies, publicThumb58Team } from './Round58';
 
 /**
  * Every red Merlin knows (Issue #17, Edward 2026-11-16「A>B o，B 有拇指、A 沒拇指，梅林派 A，A 其實就是莫德雷德」): the reds he sees
@@ -93,14 +94,14 @@ export function merlinLoyalStyleTeam(
   // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
   const zoneWeight = tuning.merlinPublicTieBreak === true ? 0 : 0.05;
   const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
-  const scored: { team: string[]; score: number }[] = [];
+  const scored: { team: string[]; score: number; p: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
     if (cover && fill.filter((id) => seen.has(id)).length !== 1) continue;
     if (flowRed && !fill.includes(flowRed)) continue;
     const team = [me, ...fill];
     const p = bayesTeamClean(publicView, team, pubOpts) ?? 0;
     // Loyal plausibility first; the extension / correction / zone signal only breaks near-ties.
-    scored.push({ team, score: Math.log(Math.max(p, 1e-12)) + (zoneWeight > 0 ? zoneWeight * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me) : 0) });
+    scored.push({ team, p, score: Math.log(Math.max(p, 1e-12)) + (zoneWeight > 0 ? zoneWeight * merlinSignalScore(obs.allPlayerIds, team, seen, prior, me) : 0) });
   }
   // Highest first (stable); the logic gates (must-fail / dominated) still bind.
   // Round 33 `loyalR1Spread`: as the loyals do, an R1 talk proposal takes the least-stacked teams first (Merlin's own seat view of the record).
@@ -112,6 +113,13 @@ export function merlinLoyalStyleTeam(
   } else scored.sort((x, y) => y.score - x.score);
   // A cover team holds a seen red by design (doomed, never a mission), as `merlinDoomedRed` does: no gate on it.
   // The flow team holds a red he sees by design: his own certainty would call it must-fail, so the public loyal's gate binds instead.
+  // Round 58 `merlinPublicThumb58` (site owner 2026-11-20): a red-free team only when one is publicly reasonable; otherwise the public loyal's pick.
+  if (!cover && !flowRed && !spread && publicThumb58Applies(tuning, obs)) {
+    const known = merlinKnownReds(obs);
+    const barred = [...barred54, ...[...known].filter((id) => !seen.has(id))];
+    const t58 = publicThumb58Team(tuning, obs, size, scored, allowed, publicAllowed, { publicView, pubOpts, barred, prior });
+    if (t58) return { type: 'team_select', teamIds: t58 };
+  }
   const best = cover ? scored[0] : scored.find((c) => (flowRed ? publicAllowed(c.team) : allowed(c.team)));
   return best ? { type: 'team_select', teamIds: best.team } : action;
 }
