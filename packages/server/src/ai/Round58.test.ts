@@ -29,7 +29,7 @@ describe('round 58 flags', () => {
     expect(parseTuningFlag('merlinPublicThumbScope58=2')).toEqual({ merlinPublicThumbScope58: 2 });
     expect(parseTuningFlag('merlinOwnRank58')).toEqual({ merlinOwnRank58: 1 });
     expect(() => parseTuningFlag('merlinPublicThumb58=1.5')).toThrow();
-    expect(() => parseTuningFlag('merlinPublicThumbScope58=4')).toThrow();
+    expect(() => parseTuningFlag('merlinPublicThumbScope58=5')).toThrow();
     expect(() => parseTuningFlag('merlinOwnRank58=2')).toThrow();
   });
 
@@ -43,6 +43,10 @@ describe('round 58 flags', () => {
     expect(publicThumb58FallbackOn(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 2 }), obsAt(3, 4))).toBe(false);
     expect(publicThumb58FallbackOn(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 3 }), obsAt(3, 4))).toBe(true);
     expect(publicThumb58FallbackOn(on, obsAt(1, 0, 'loyal'))).toBe(false);
+    // 4 = never (own ranking only)
+    expect(publicThumb58FallbackOn(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 4 }), obsAt(1, 0))).toBe(false);
+    expect(publicThumb58Applies(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 4 }), obsAt(1, 0))).toBe(false);
+    expect(publicThumb58Applies(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 4, merlinOwnRank58: 1 }), obsAt(1, 0))).toBe(true);
     expect(publicThumb58Applies(T(), obsAt(1, 0))).toBe(false);
     // own ranking: every Merlin proposal (the thumb step keeps its scope)
     expect(publicThumb58Applies(T({ merlinPublicThumb58: 0.7, merlinOwnRank58: 1 }), obsAt(3, 4))).toBe(true);
