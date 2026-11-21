@@ -268,6 +268,54 @@
       "by": "站長",
       "date": "2026-11-20",
       "note": "主控台裁定：「是同一局 以試算表為準」。這篇 Discord 貼文跟試算表 S1675 是同一局（派隊與投票記得不一樣），以 S1675 為準"
+    },
+    "S547": {
+      "set": {
+        "config": "098314",
+        "rounds": [{"proposals":[{"team":"168","votes":[]},{"team":"236","votes":[]},{"team":"389","votes":[]},{"team":"468","votes":[]},{"team":"156","votes":[]}],"mission":"ooo"},{"proposals":[{"team":"1569","votes":[]},{"team":"1560","votes":["7+"]},{"team":"1568","votes":[]},{"team":"1569","votes":["8+"]},{"team":"1560","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"1568","votes":[]},{"team":"1256","votes":[]},{"team":"1358","votes":[]},{"team":"1456","votes":[]},{"team":"1569","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"24568","votes":["2-"]},{"team":"14578","votes":["15-"]},{"team":"37890","votes":["12456+"]}],"mission":"oxxxx"}],
+        "lakes": [{"after":2,"holder":"0","target":"8","claim":"o"},{"after":3,"holder":"8","target":"4","claim":"o"}],
+        "assassination": "",
+        "outcome": "三紅"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-21 同步；站長 2026-11-20 重打整局紀錄）。原本第 4 局失敗張數比隊上的紅方多；重打的紀錄第 4 局 24568 出任務、一張成功四張失敗，三紅"
+    },
+    "S1027": {
+      "set": {
+        "config": "307145",
+        "rounds": [{"proposals":[{"team":"168","votes":[]},{"team":"278","votes":[]},{"team":"357","votes":[]},{"team":"458","votes":[]},{"team":"458","votes":[]}],"mission":"ooo"},{"proposals":[{"team":"4690","votes":["4-"]},{"team":"4580","votes":["4-","7+"]},{"team":"2458","votes":[]},{"team":"4589","votes":[]},{"team":"4580","votes":[]}],"mission":"ooox"},{"proposals":[{"team":"1458","votes":[]},{"team":"1248","votes":[]},{"team":"1358","votes":[]},{"team":"4589","votes":[]},{"team":"2458","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"24568","votes":[]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"8","claim":"o"},{"after":3,"holder":"8","target":"4","claim":"o"}],
+        "assassination": "8",
+        "outcome": "三藍活"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-21 同步；站長 2026-11-20 重打整局紀錄）。原本第 4 局失敗張數比隊上的紅方多；重打的紀錄第 4 局全成功，三藍活"
+    },
+    "S551": {
+      "set": {
+        "config": "409527",
+        "rounds": [{"proposals":[{"team":"169","votes":["7+"]},{"team":"289","votes":[]},{"team":"378","votes":[]},{"team":"458","votes":[]},{"team":"458","votes":[]}],"mission":"oox"},{"proposals":[{"team":"1267","votes":[]},{"team":"1678","votes":[]},{"team":"2789","votes":[]},{"team":"1679","votes":["8+"]},{"team":"1350","votes":[]}],"mission":"ooxx"},{"proposals":[{"team":"1479","votes":["49-"]},{"team":"2789","votes":[]},{"team":"2678","votes":["3+"]},{"team":"4590","votes":["123678+"]}],"mission":"xxxx"}],
+        "lakes": [{"after":2,"holder":"0","target":"3","claim":"o"}],
+        "assassination": "",
+        "outcome": "三紅"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-21 同步；站長 2026-11-20 重打整局紀錄）。原本第 3 局失敗張數比隊上的紅方多；重打的紀錄三局後三紅"
+    },
+    "S1107": {
+      "set": {
+        "config": "459638",
+        "rounds": [{"proposals":[{"team":"470","votes":["1+"]},{"team":"278","votes":[]},{"team":"360","votes":[]},{"team":"130","votes":["478+"]}],"mission":"ooo"},{"proposals":[{"team":"1350","votes":[]},{"team":"1360","votes":[]},{"team":"1340","votes":["27+"]}],"mission":"ooox"},{"proposals":[{"team":"1780","votes":[]},{"team":"1390","votes":[]},{"team":"1670","votes":["4+"]},{"team":"1780","votes":[]},{"team":"1270","votes":[]}],"mission":"oooo"},{"proposals":[{"team":"12370","votes":[]}],"mission":"ooooo"}],
+        "lakes": [{"after":2,"holder":"0","target":"1","claim":"o"},{"after":3,"holder":"1","target":"7","claim":"o"}],
+        "assassination": "8",
+        "outcome": "三藍死"
+      },
+      "by": "站長",
+      "date": "2026-11-20",
+      "note": "主控台更正（2026-11-21 同步；站長 2026-11-20 重打整局紀錄）。原本第 4 局失敗張數比隊上的紅方多；重打的紀錄第 4 局全成功，三藍死"
     }
   }
 }
