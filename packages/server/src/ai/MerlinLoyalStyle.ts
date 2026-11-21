@@ -117,7 +117,9 @@ export function merlinLoyalStyleTeam(
   if (!cover && !flowRed && !spread && publicThumb58Applies(tuning, obs)) {
     const known = merlinKnownReds(obs);
     const barred = [...barred54, ...[...known].filter((id) => !seen.has(id))];
-    const t58 = publicThumb58Team(tuning, obs, size, scored, allowed, publicAllowed, { publicView, pubOpts, barred, prior });
+    const ownOpts = bayesOptionsOf(tuning);
+    const ownClean = (team: readonly string[]): number => bayesTeamClean(obs, [...team], ownOpts) ?? 0;
+    const t58 = publicThumb58Team(tuning, obs, size, scored, allowed, publicAllowed, { publicView, pubOpts, barred, prior, ownClean });
     if (t58) return { type: 'team_select', teamIds: t58 };
   }
   const best = cover ? scored[0] : scored.find((c) => (flowRed ? publicAllowed(c.team) : allowed(c.team)));
