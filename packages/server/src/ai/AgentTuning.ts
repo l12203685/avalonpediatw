@@ -1376,7 +1376,7 @@ export interface AgentTuning {
    * 有 → 照舊挑那支乾淨的；沒有（要用超前資訊才派得出全沒拇指的隊）→ 照公開視角的忠臣派（拇指在不在隊上由公開局勢決定）。r = 這個值（0–1），0 = 關。
    */
   merlinPublicThumb58: number;
-  /** 第 58 回合：`merlinPublicThumb58` 用在哪些提議。0／1 = 出任務的機率低於一成的提議（第 1、2 局非強制，同 `merlinFlowFollow`）；2 = 每一次非強制的提議；3 = 每一次提議。 */
+  /** 第 58 回合：`merlinPublicThumb58` 用在哪些提議。0／1 = 出任務的機率低於一成的提議（第 1、2 局非強制，同 `merlinFlowFollow`）；2 = 每一次非強制的提議；3 = 每一次提議；4 = 不派拇指（只用 `merlinOwnRank58`）。 */
   merlinPublicThumbScope58: number;
   /** 第 58 回合（`Round58.ts`，要和 `merlinPublicThumb58` 一起開）：公開上說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率（「符合自己內建資訊」），每一次梅林照忠臣方式的提議都用。0 = 關。 */
   merlinOwnRank58: number;
@@ -3278,7 +3278,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinPublicThumbScope58') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 3) throw new Error(`merlinPublicThumbScope58 needs 0–3, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 4) throw new Error(`merlinPublicThumbScope58 needs 0–4, got "${raw}"`);
     return { merlinPublicThumbScope58: value };
   }
   if (name === 'merlinOwnRank58') {
