@@ -39,8 +39,9 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 59 回合再加一個藍方在隊上的投票門檻 `onTeamVote59`（忠臣、派西第 4 局照字面讀；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  * 第 61 回合再加紅方兩個（協調者轉達：真人局重播過第 1H 節就放進真人桌）：刺客在第 1 局成功、第 2 局失敗的三藍局的讀法倍數 `assassinPath61`、
  * 第 2 局（1:0）落單的紅照真人比例出牌 `redR2Lead61`。真人桌的藍方機器人不會懲罰的事，真人會（第 60 回合），所以紅方也要用真人局判。
+ * 站長 2026-11-23 裁定再加兩個派隊開關：`goLike56`（真人桌照第 5 次派）與 `merlinPublicThumb58`（基準線開、真人桌關回 0）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -70,8 +71,12 @@ export const TIER_MAX_STEP = 0.1;
  *   強桌 −0.63 ± 0.77（兩半都在 1 個標準誤內，刺中率 S ≥ 55 −1.3 [−4.4, +1.9]），沒有一格變差超過雜訊。
  * - 紅方・第 2 局出牌（`redR2Lead61=1`，第 61 回合）：第 1 局成功之後第 2 局落單的紅照全部真人的藏牌比例（刺客 4%、莫甘娜 3%、莫德雷德 3%、奧伯倫 23%）。
  *   同一批真人決策點任務失敗 84.6 → 90.2%（真人 92.4%），高端桌 83.2 → 89.5%（強者 91.6%）；量尺紅方 +0.05 ± 0.01，每一層兩半都不負。
+ * - 第 1、2 局第 1–4 次提議照第 5 次（強制局）的派法派（`goLike56=31`：忠臣＋派西、第 1＋2 局、個人先驗照真的第幾次加權；第 56／57 回合）：
+ *   站長 2026-11-23 對第 57 回合「真人桌：1-1~1-4、2-1~2-4 要不要照第 5 次的派法派」答「要」（只在有真人的桌，機器人桌不變）。量尺 +0.11 ± 0.04、Brier 不變。
+ * - 梅林照公開視角、逼不得已才派拇指（`merlinPublicThumb58`）：站長 2026-11-23「用（機器人互打用，真人桌不用）」——基準線開 0.7，真人桌明寫 0 關回去
+ *   （真人梅林在機器人判定「逼不得已」的點幾乎都派乾淨的隊，第 58 回合第 3 節）。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：
