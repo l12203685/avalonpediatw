@@ -60,7 +60,10 @@ import {
   RATE_LIMITED_TEXT,
   endedNoticeText,
   endedText,
+  analysisHiddenText,
   assassinOnlyText,
+  formatAnswerAck,
+  type EveryoneAnswer,
   formatAnalysis,
   formatAssassinStart,
   formatKillAnswer,
@@ -104,15 +107,25 @@ import { selectStart } from './spotValue';
 
 export type SimPhase = 'answering' | 'answered' | 'no-more-decisions';
 
-/** 同一個決定點最多記幾次 /派（公布時全部列出）。 */
+/** 同一個決定點每個人最多記幾次 /派（公布時全部列出）。 */
 export const SIM_ANSWERS_PER_DECISION = 5;
+/** 同一個決定點全部人加起來最多記幾次 /派（群組大家一起答，2026-11-21）。 */
+export const SIM_ANSWERS_PER_DECISION_TOTAL = 100;
 /** 記住幾個已經送出回覆的 LINE 事件（重送判斷；LINE 的重送在幾分鐘內）。 */
 const ANSWERED_EVENTS_MAX = 5000;
 
-/** 一次 /派：隊伍，以及是不是代答派的（/公布 時標「（代答）」）。 */
+/** 一次 /派：隊伍，以及是不是代答派的（/公布 時標「（代答）」）、誰派的（`平台:使用者`，只用來數第幾位，不存名字）。 */
 export interface SimAnswer {
   team: number[];
   coAnswer: boolean;
+  by?: string;
+}
+
+/** 刺殺題的一次 /刺（群組裡每個人各自記，/公布 一起列；2026-11-21）。 */
+export interface SimKill {
+  target: number;
+  coAnswer: boolean;
+  by?: string;
 }
 
 export interface SimSession {
@@ -141,6 +154,8 @@ export interface SimSession {
   assassin?: boolean;
   /** 刺殺題最後一次 /刺 的座位、是不是代答刺的。 */
   kill?: { target: number; coAnswer: boolean };
+  /** 刺殺題每一次 /刺（照順序；群組的 /公布 列每個人最後一次）。 */
+  kills?: SimKill[];
   startedAt: number;
   lastActiveAt: number;
   /** 每次 commit 加一；過期的轉移不會蓋掉較新的狀態。 */
@@ -161,6 +176,11 @@ export interface SimRequest {
    * 沒給 = 不代答（1 對 1、只有本人看得到回覆的 Discord 頻道）。
    */
   shared?: boolean;
+  /**
+   * 回覆只有打指令的人看得到（Discord 的 ephemeral 回覆，2026-11-21）。`shared` 的聊天室裡：有這個 → /派 /刺 /分析
+   * 照樣回完整結果（只有本人看得到）；沒有（LINE 群組）→ 只回「收到（第 N 位作答）」，結果等 /公布 一起列。
+   */
+  privateReply?: boolean;
   /**
    * 明確的指令（Discord slash）：看不懂的 /派、/區間 沒有題目時也給用法（LINE 打字時當聊天不回）。
    * 一樣受限流管。
@@ -572,20 +592,21 @@ export class SimEngine {
     // 刺殺題只收 /刺 /公布 /結束（2026-11-16）；派票題不收 /刺。
     const pickOnly = ['propose', 'analyze', 'interval', 'read'].includes(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'assassinate');
     if (session.assassin && pickOnly) {
-      return this.reply(withCoAnswerMark(assassinOnlyText(session.exerciseId), coAnswer), 'usage', target, now, () => { this.counts.usage += 1; });
+      return this.reply(assassinOnlyText(session.exerciseId), 'usage', target, now, () => { this.counts.usage += 1; });
     }
     if (!session.assassin && (cmd.kind === 'assassinate' || (cmd.kind === 'usage' && cmd.command === 'assassinate'))) {
-      return this.reply(withCoAnswerMark(notAssassinText(session.exerciseId), coAnswer), 'usage', target, now, () => { this.counts.usage += 1; });
+      return this.reply(notAssassinText(session.exerciseId), 'usage', target, now, () => { this.counts.usage += 1; });
     }
     switch (cmd.kind) {
       case 'usage':
         return this.reply(usageText(cmd.command, cmd.problem), 'usage', target, now, () => { this.counts.usage += 1; });
       case 'propose':
-        return this.propose(cmd.team, game, target, now);
+        return this.propose(cmd.team, game, target, now, req);
       case 'analyze':
+        if (hidesResults(req)) return this.reply(withCoAnswerMark(analysisHiddenText(session.exerciseId), coAnswer), 'analyze', target, now, NOOP);
         return this.analyze(bank, game, target, req, now);
       case 'assassinate':
-        return this.assassinate(cmd.seat, game, target, now);
+        return this.assassinate(cmd.seat, game, target, now, req);
       case 'interval':
         return this.interval(cmd.groups, game, target, now);
       case 'read':
@@ -671,6 +692,8 @@ export class SimEngine {
       platform: req.platform,
       replacedId: previous?.exerciseId,
       shared: !!req.shared,
+      // Discord 公開頻道的 /派 /刺 /分析 只回給本人（discordCommand.simAnswerIsPrivate）；LINE 群組只回收到。
+      ...(req.shared ? { resultsPrivate: req.platform === 'discord' } : {}),
       ...(picked.theme ? { theme: picked.theme } : {}),
       ...(picked.alsoWorth?.length ? { alsoWorth: picked.alsoWorth } : {}),
     };
@@ -708,21 +731,32 @@ export class SimEngine {
   }
 
   /** /刺 座位：刺殺題的答案（最後一次算數），結果在 /公布。 */
-  private assassinate(seat: number, game: SimGame, t: SimTarget & { session: SimSession }, now: number): SimReply {
+  private assassinate(seat: number, game: SimGame, t: SimTarget & { session: SimSession }, now: number, req: SimRequest): SimReply {
     const { session } = t;
     const mates = viewAt(game, session.seat, session.cursor).sight;
     const teammates = mates.kind === 'evil' ? mates.mates : [];
     if (seat === session.seat || teammates.includes(seat)) {
-      return this.reply(withCoAnswerMark(killTeammateText(seat, seat === session.seat), t.coAnswer), 'usage', t, now, () => { this.counts.usage += 1; });
+      return this.reply(killTeammateText(seat, seat === session.seat), 'usage', t, now, () => { this.counts.usage += 1; });
     }
-    return this.reply(formatKillAnswer(session.exerciseId, seat, t.coAnswer), 'assassinate', t, now, () => { this.counts.kills += 1; }, () => ({
+    const by = answererKey(req);
+    const kills = session.kills ?? [];
+    // 群組（LINE）：只回收到第幾位，刺誰也不回顯（題目公布前不讓後面的人看到別人的答案，2026-11-21）。
+    const text = hidesResults(req)
+      ? formatAnswerAck(session.exerciseId, ordinalOf(kills.map((k) => k.by), by), kills.filter((k) => k.by === by).length + 1, t.coAnswer)
+      : formatKillAnswer(session.exerciseId, seat, t.coAnswer, privateNote(req));
+    return this.reply(text, 'assassinate', t, now, () => { this.counts.kills += 1; }, (s) => ({
       kill: { target: seat, coAnswer: t.coAnswer },
+      kills: [...(s.kills ?? []), { target: seat, coAnswer: t.coAnswer, by }].slice(-SIM_ANSWERS_PER_DECISION_TOTAL),
       phase: 'answered',
     }));
   }
 
-  /** /派：記下答案，只回「你派 469：2 好 1 壞」（Edward 2026-11-16）；完整解讀用 /分析。 */
-  private propose(team: number[], game: SimGame, t: SimTarget & { session: SimSession }, now: number): SimReply {
+  /**
+   * /派：記下答案，只回「你派 469：2 好 1 壞」（Edward 2026-11-16）；完整解讀用 /分析。
+   * 群組（2026-11-21，玩家回饋：第一個人一作答，答案就被大家看到）：LINE 群組只回「收到（第 N 位作答）」，
+   * 幾好幾壞等 /公布 一起列；Discord 公開頻道的回覆改成只有本人看得到（privateReply），內容照舊。
+   */
+  private propose(team: number[], game: SimGame, t: SimTarget & { session: SimSession }, now: number, req: SimRequest): SimReply {
     const { session } = t;
     if (session.phase === 'no-more-decisions') {
       return this.reply(noMoreDecisionsText(session.exerciseId), 'no-more', t, now, NOOP);
@@ -734,14 +768,18 @@ export class SimEngine {
       return this.reply(wrongSizeText(size, team.length), 'usage', t, now, () => { this.counts.usage += 1; });
     }
     const reds = team.filter((s) => isRed(game.seatRoles[s - 1])).length;
-    const text = formatProposeResult({ exerciseId: session.exerciseId, team, goods: team.length - reds, reds, coAnswer: t.coAnswer });
+    const by = answererKey(req);
+    const before = session.answers.get(session.decision) ?? [];
+    const text = hidesResults(req)
+      ? formatAnswerAck(session.exerciseId, ordinalOf(before.map((a) => a.by), by), before.filter((a) => a.by === by).length + 1, t.coAnswer)
+      : formatProposeResult({ exerciseId: session.exerciseId, team, goods: team.length - reds, reds, coAnswer: t.coAnswer, privateNote: privateNote(req) });
     const same = maskOf(team) === maskOf(decision.teamSeats);
     return this.reply(text, 'propose', t, now, () => {
       this.counts.answers += 1;
       if (same) this.counts.sameAsReal += 1;
     }, (s) => {
       const answers = new Map(s.answers);
-      answers.set(s.decision, [...(answers.get(s.decision) ?? []), { team: [...team], coAnswer: t.coAnswer }].slice(-SIM_ANSWERS_PER_DECISION));
+      answers.set(s.decision, keepRecentAnswers([...(answers.get(s.decision) ?? []), { team: [...team], coAnswer: t.coAnswer, by }]));
       return { answers, phase: 'answered' };
     });
   }
@@ -817,6 +855,7 @@ export class SimEngine {
     const answers = [...session.answers.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([d, teams]) => ({ decision: events[eventIndexOfProposal(events, d)] as ProposalEvent, teams }));
+    const everyone = req.shared ? everyoneAnswers(game, session, events) : [];
     const text = formatReveal({
       exerciseId: session.exerciseId,
       game,
@@ -830,6 +869,8 @@ export class SimEngine {
       ...(postId ? { recordUrl: recordUrl(postId) } : {}),
       ...(seatNames ? { seatNames } : {}),
       ...(session.assassin ? { kill: { target: session.kill?.target ?? null, coAnswer: !!session.kill?.coAnswer } } : {}),
+      // 大家都看得到的聊天室（2026-11-21）：作答時沒有公開結果，公布時列出每一位的答案和結果。
+      ...(everyone.length > 0 ? { everyone } : {}),
       platform: req.platform,
       coAnswer: t.coAnswer,
     });
@@ -852,4 +893,65 @@ export class SimEngine {
       },
     };
   }
+}
+
+/** 作答的人（`平台:使用者`；LINE 群組事件沒有使用者 id 時大家共用 `*`）。只用來數第幾位，不寫進任何回覆。 */
+function answererKey(req: Pick<SimRequest, 'platform' | 'userId'>): string {
+  return `${req.platform}:${req.userId ?? '*'}`;
+}
+
+/** 這個聊天室大家都看得到回覆、又不能只回給本人（LINE 群組）：作答只回收到，結果等 /公布（2026-11-21）。 */
+export function hidesResults(req: Pick<SimRequest, 'shared' | 'privateReply'>): boolean {
+  return !!req.shared && !req.privateReply;
+}
+
+/** 公開頻道裡只有本人看得到的回覆（Discord）：回覆多一句說明。 */
+function privateNote(req: Pick<SimRequest, 'shared' | 'privateReply'>): boolean {
+  return !!req.shared && !!req.privateReply;
+}
+
+/** `by` 是第幾位作答的人（照第一次作答的順序，1 起算；還沒答過 = 下一位）。 */
+function ordinalOf(previous: readonly (string | undefined)[], by: string): number {
+  const order: string[] = [];
+  for (const b of previous) if (b !== undefined && !order.includes(b)) order.push(b);
+  const i = order.indexOf(by);
+  return i < 0 ? order.length + 1 : i + 1;
+}
+
+/** 每個人最多留最近 SIM_ANSWERS_PER_DECISION 次，全部最多 SIM_ANSWERS_PER_DECISION_TOTAL 次。 */
+function keepRecentAnswers(list: readonly SimAnswer[]): SimAnswer[] {
+  const kept: SimAnswer[] = [];
+  const perPerson = new Map<string, number>();
+  for (let i = list.length - 1; i >= 0 && kept.length < SIM_ANSWERS_PER_DECISION_TOTAL; i--) {
+    const k = list[i].by ?? '';
+    const n = perPerson.get(k) ?? 0;
+    if (n >= SIM_ANSWERS_PER_DECISION) continue;
+    perPerson.set(k, n + 1);
+    kept.push(list[i]);
+  }
+  return kept.reverse();
+}
+
+/** /公布 要列的每一位的答案（照第一次作答的順序）：派票題每一次 /派 的幾好幾壞，刺殺題最後一次 /刺。 */
+function everyoneAnswers(game: SimGame, session: SimSession, events: readonly PublicEvent[]): EveryoneAnswer[] {
+  const order: string[] = [];
+  const add = (by: string | undefined): string => {
+    const k = by ?? '';
+    if (!order.includes(k)) order.push(k);
+    return k;
+  };
+  if (session.assassin) {
+    const last = new Map<string, number>();
+    for (const k of session.kills ?? []) last.set(add(k.by), k.target);
+    const merlin = game.seatRoles.indexOf('merlin') + 1;
+    return order.map((k) => ({ kill: { target: last.get(k) as number, hit: last.get(k) === merlin } }));
+  }
+  const decision = events[eventIndexOfProposal(events, session.decision)] as ProposalEvent;
+  const teams = new Map<string, EveryoneAnswer['teams']>();
+  for (const a of session.answers.get(session.decision) ?? []) {
+    const k = add(a.by);
+    const reds = a.team.filter((s) => isRed(game.seatRoles[s - 1])).length;
+    teams.set(k, [...(teams.get(k) ?? []), { team: a.team, goods: a.team.length - reds, reds, sameAsReal: maskOf(a.team) === maskOf(decision.teamSeats) }]);
+  }
+  return order.map((k) => ({ teams: teams.get(k) ?? [] }));
 }

@@ -392,6 +392,8 @@ export interface SelectRequest {
   role?: SimRoleChoice;
   seat?: number;
   exerciseId?: string;
+  /** 只有局號（`/模擬 K7Q2M`，2026-11-21）：這一局最值得想的地方（spotValue.selectStart）。 */
+  gameId?: string;
   /** 指定的局面：1～4 = 那一局第 5 次（尾派）；5 = 第 5 局的任何一次。 */
   midRound?: number;
   /** 跟 midRound 一起：那一局的任何一次（`/模擬 4局`；沒指定角色時只出忠臣當隊長的）。 */

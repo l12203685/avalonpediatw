@@ -11,18 +11,23 @@
  *   - 不是外部（ProAvalon，external）；
  *   - 讀得懂（有 game）、沒有違反規則（status 不是 error）；
  *   - 不是補完的局（completed：五個鐵好推定後面的任務，不是真的打過的）；
- *   - 分類不是「娛樂」（legacyCategory；同舊題庫，buildBankFile 計在 entertainment）。
+ *   - 分類不是「娛樂」（legacyCategory；同舊題庫，buildBankFile 計在 entertainment）；
+ *   - 2026-11-21：沒有紀錄異常（來源不一致、疑似重複、票記號對不上、備註標了事件／代打／爛局／覆盤，見 quality.ts
+ *     dbRowProblem），也不在人工清單上（sim_bank_exclude.json 的 `db`；群組玩家回報，2026-11-21）。
  * 之後一樣經過 buildBankFile 的嚴格解析（parseReplayGame）與湖的順序檢查。
  * 每一局寫成牌譜文字（派票行＋異常票記號、任務行、湖行），跟題庫 `rec` 同一個格式；沒有名字、沒有日期。
  */
 
 import type { PaipuRow } from '../../ai/benchmark/sheetsReplay';
+import { dbRowProblem, NO_EXCLUSIONS, type SimExclusions } from './quality';
 
 interface DbProposal { team?: unknown; votes?: unknown }
 interface DbRound { proposals?: unknown; mission?: unknown }
 interface DbLake { after?: unknown; holder?: unknown; target?: unknown; claim?: unknown }
 interface DbGame { config?: unknown; rounds?: unknown; lakes?: unknown; assassination?: unknown; outcome?: unknown }
 interface DbRow {
+  id?: unknown;
+  checks?: unknown;
   kind?: unknown;
   external?: unknown;
   status?: unknown;
@@ -42,6 +47,10 @@ export interface GameDbSourceCounts {
   ruleErrors: number;
   /** 補完的局（completed）。 */
   completed: number;
+  /** 紀錄異常（quality.ts dbRowProblem），照原因分（規則代碼或旗標 → 局數）。 */
+  flagged: Record<string, number>;
+  /** 人工清單上的局（sim_bank_exclude.json 的 db）。 */
+  excluded: number;
   /** 交給 buildBankFile 的列。 */
   passed: number;
 }
@@ -72,10 +81,15 @@ export function recordTextOf(game: DbGame): string | null {
   return lines.join('\n');
 }
 
-/** game_db.json → 題庫的列（buildBankFile 的輸入）＋計數。 */
-export function rowsFromGameDb(doc: { games?: unknown } | null | undefined): { rows: PaipuRow[]; counts: GameDbSourceCounts } {
+/** game_db.json → 題庫的列（buildBankFile 的輸入）＋計數。`exclude` = 人工清單（只看 `db`）。 */
+export function rowsFromGameDb(
+  doc: { games?: unknown } | null | undefined,
+  exclude: SimExclusions = NO_EXCLUSIONS,
+): { rows: PaipuRow[]; counts: GameDbSourceCounts } {
   const all = arr(doc?.games) as DbRow[];
-  const counts: GameDbSourceCounts = { rows: all.length, notReal: 0, external: 0, unreadable: 0, ruleErrors: 0, completed: 0, passed: 0 };
+  const counts: GameDbSourceCounts = {
+    rows: all.length, notReal: 0, external: 0, unreadable: 0, ruleErrors: 0, completed: 0, flagged: {}, excluded: 0, passed: 0,
+  };
   const rows: PaipuRow[] = [];
   for (const g of all) {
     if (g.kind !== 'real') { counts.notReal++; continue; }
@@ -84,6 +98,9 @@ export function rowsFromGameDb(doc: { games?: unknown } | null | undefined): { r
     if (!g.game || text === null) { counts.unreadable++; continue; }
     if (g.status === 'error') { counts.ruleErrors++; continue; }
     if (g.completed) { counts.completed++; continue; }
+    const problem = dbRowProblem(g);
+    if (problem) { counts.flagged[problem] = (counts.flagged[problem] ?? 0) + 1; continue; }
+    if (exclude.db.has(str(g.id))) { counts.excluded++; continue; }
     const legacy = arr(g.legacyCategory).map(str);
     rows.push({
       文字記錄: text,

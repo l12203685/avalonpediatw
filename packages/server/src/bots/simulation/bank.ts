@@ -19,7 +19,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { describeError } from '../media/bytes';
-import { parseBankEntry, SIM_BANK_VERSION, type SimBankFile } from './bankCodec';
+import { parseBankEntry, recordFingerprint, SIM_BANK_VERSION, type SimBankFile } from './bankCodec';
+import { gameProblem, isExcludedBankGame, readSimExclusions, type SimExclusions } from './quality';
 import { addGameToAggregates, buildHumanAggregates, type HumanAgg } from './human';
 import { linkRecords, readRecordPosts, fingerprintIndex } from './recordsIndex';
 import { linkSeatNames, readSeatNameSources, type SeatNameRules } from './seatNames';
@@ -49,20 +50,31 @@ export interface SimBank {
   humans: Map<string, HumanAgg>;
   /** 解析失敗而丟掉的列數。 */
   dropped: number;
+  /** 讀題庫時因為紀錄異常或人工清單而不出的局數（quality.ts，2026-11-21；只有伺服器讀題庫時擋）。 */
+  filtered: number;
   /** 所有派票數（每一次派票都是隊長的一個決定點）。 */
   decisionPoints: number;
 }
 
-/** 一列 → 加進 games／byId；壞的或重複的回 false。 */
-function addEntry(entry: SimBankFile['games'][number], games: SimGame[], byId: Map<string, number>): boolean {
+/**
+ * 讀題庫時的異常篩選（2026-11-21，quality.ts）：伺服器讀題庫時給（SimBankLoader），擋掉紀錄本身算得出來的異常和人工清單上的局。
+ * Threads 的工具不給（照題庫原樣，計畫和釘選不受影響；題庫每晚重建時已經篩過）。
+ */
+export interface SimBankFilter {
+  exclude: SimExclusions;
+}
+
+/** 一列 → 加進 games／byId；壞的或重複的回 'dropped'，被篩掉的回 'filtered'。 */
+function addEntry(entry: SimBankFile['games'][number], games: SimGame[], byId: Map<string, number>, filter?: SimBankFilter): 'added' | 'dropped' | 'filtered' {
   const res = parseBankEntry(entry);
-  if (!res.ok || byId.has(entry.id)) return false;
+  if (!res.ok || byId.has(entry.id)) return 'dropped';
+  if (filter && (gameProblem(res.game) || isExcludedBankGame(filter.exclude, recordFingerprint(res.game), entry.id))) return 'filtered';
   // 名字欄位一律丟掉（題庫本來就沒有）：SimGame 沒有 names。
   const game: SimGame & { names?: string[] } = { ...res.game };
   delete game.names;
   byId.set(game.id, games.length);
   games.push(game);
-  return true;
+  return 'added';
 }
 
 /** /公布 名字的規則（player_aliases.json）和局號對照（game_db.json 同一局的所有來源 id）；沒給 = 照原樣的名字。 */
@@ -72,7 +84,7 @@ export interface SeatNameSources {
 }
 
 function finish(
-  games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number,
+  games: SimGame[], byId: Map<string, number>, humans: Map<string, HumanAgg>, dropped: number, filtered: number,
   posts?: readonly unknown[] | null, nameSources?: SeatNameSources,
 ): SimBank {
   const records: Map<number, string> = posts ? linkRecords(games, fingerprintIndex(posts)) : new Map();
@@ -86,6 +98,7 @@ function finish(
     names: posts ? linkSeatNames(records, posts, nameSources?.rules, nameSources?.ids) : new Map(),
     humans,
     dropped,
+    filtered,
     decisionPoints: games.reduce((n, g) => n + g.proposals.length, 0),
   };
 }
@@ -94,14 +107,17 @@ function finish(
  * 檔案內容 → 題庫（一次做完；測試與工具用）。`posts` = 網站牌譜紀錄的貼文（對連結和 /公布 的名字用，沒給就沒有）；
  * `nameSources` = 名字換成網站寫法的規則。
  */
-export function buildSimBank(file: SimBankFile, posts?: readonly unknown[] | null, nameSources?: SeatNameSources): SimBank {
+export function buildSimBank(file: SimBankFile, posts?: readonly unknown[] | null, nameSources?: SeatNameSources, filter?: SimBankFilter): SimBank {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
   let dropped = 0;
+  let filtered = 0;
   for (const entry of Array.isArray(file?.games) ? file.games : []) {
-    if (!addEntry(entry, games, byId)) dropped++;
+    const r = addEntry(entry, games, byId, filter);
+    if (r === 'dropped') dropped++;
+    else if (r === 'filtered') filtered++;
   }
-  return finish(games, byId, buildHumanAggregates(games), dropped, posts, nameSources);
+  return finish(games, byId, buildHumanAggregates(games), dropped, filtered, posts, nameSources);
 }
 
 /** 開機讀題庫時每幾局讓出一次 CPU。 */
@@ -116,13 +132,17 @@ export async function buildSimBankAsync(
   pause: () => Promise<void> = yieldToLoop,
   posts?: readonly unknown[] | null,
   nameSources?: SeatNameSources,
+  filter?: SimBankFilter,
 ): Promise<SimBank> {
   const games: SimGame[] = [];
   const byId = new Map<string, number>();
   let dropped = 0;
+  let filtered = 0;
   const entries = Array.isArray(file?.games) ? file.games : [];
   for (let i = 0; i < entries.length; i++) {
-    if (!addEntry(entries[i], games, byId)) dropped++;
+    const r = addEntry(entries[i], games, byId, filter);
+    if (r === 'dropped') dropped++;
+    else if (r === 'filtered') filtered++;
     if ((i + 1) % chunk === 0) await pause();
   }
   const humans = new Map<string, HumanAgg>();
@@ -131,7 +151,7 @@ export async function buildSimBankAsync(
     if ((i + 1) % chunk === 0) await pause();
   }
   await pause();
-  return finish(games, byId, humans, dropped, posts, nameSources);
+  return finish(games, byId, humans, dropped, filtered, posts, nameSources);
 }
 
 export const SIM_BANK_FILE = 'sim_bank.json';
@@ -171,6 +191,8 @@ export interface SimBankStatus {
   loaded: boolean;
   games: number;
   dropped: number;
+  /** 讀題庫時因為紀錄異常或人工清單而不出的局數。 */
+  filtered: number;
   decisionPoints: number;
   /** 對得到網站牌譜紀錄的局數。 */
   linked: number;
@@ -186,7 +208,8 @@ export class SimBankLoader {
     // 網站牌譜紀錄清單（/公布 的連結和名字）：讀不到也照樣出題，只是沒有連結、沒有名字。
     if (!file) return null;
     const posts = readRecordPosts();
-    return buildSimBankAsync(file, SIM_BANK_CHUNK, yieldToLoop, posts, posts ? readSeatNameSources() : undefined);
+    // 紀錄異常的局不出題（2026-11-21）：人工清單 sim_bank_exclude.json 加了就生效，不用等題庫重建。
+    return buildSimBankAsync(file, SIM_BANK_CHUNK, yieldToLoop, posts, posts ? readSeatNameSources() : undefined, { exclude: readSimExclusions() });
   }) {}
 
   /** 開機後在背景開始讀（不擋開機）。 */
@@ -213,6 +236,6 @@ export class SimBankLoader {
 
   status(): SimBankStatus {
     const b = this.bank;
-    return { loaded: !!b, games: b?.games.length ?? 0, dropped: b?.dropped ?? 0, decisionPoints: b?.decisionPoints ?? 0, linked: b?.records.size ?? 0 };
+    return { loaded: !!b, games: b?.games.length ?? 0, dropped: b?.dropped ?? 0, filtered: b?.filtered ?? 0, decisionPoints: b?.decisionPoints ?? 0, linked: b?.records.size ?? 0 };
   }
 }

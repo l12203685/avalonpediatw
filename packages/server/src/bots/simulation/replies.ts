@@ -341,11 +341,20 @@ export function sharedNote(platform: SimPlatform): string {
   return `${platform === 'discord' ? '頻道' : '群組'}裡沒開題的人也能幫忙答；誰打 /公布 或 /結束 都會結束這題`;
 }
 /**
- * 輪到你派票時的指令列（開題；Edward 2026-11-17 的格式：一行一個、/結束 不列，/公布 就會結束這題；/下一步 同日拿掉）。
- * 大家都看得到回覆的聊天室加「（沒開題的人也能作答）」。
+ * 大家都看得到回覆的聊天室，作答那一行的括號（2026-11-21：作答的結果不在群組裡馬上公開）。
+ * `resultsPrivate`：回覆只有本人看得到（Discord 公開頻道）；沒有（LINE 群組）= 只回收到，結果 /公布 時一起看。
  */
-export function answerFooter(shared?: boolean): string {
-  return [`/派 座位 作答${shared ? ' (沒開題的人也能作答)' : ''}`, '/區間 (百科AI 怎麼讀)', HELP_HINT, '/公布 (結束這題)'].join('\n');
+function sharedAnswerNote(shared?: boolean, resultsPrivate?: boolean): string {
+  if (!shared) return '';
+  return resultsPrivate ? ' (沒開題的人也能作答，結果只有自己看得到)' : ' (沒開題的人也能作答，結果 /公布 時一起看)';
+}
+
+/**
+ * 輪到你派票時的指令列（開題；Edward 2026-11-17 的格式：一行一個、/結束 不列，/公布 就會結束這題；/下一步 同日拿掉）。
+ * 大家都看得到回覆的聊天室加「（沒開題的人也能作答…）」。
+ */
+export function answerFooter(shared?: boolean, resultsPrivate?: boolean): string {
+  return [`/派 座位 作答${sharedAnswerNote(shared, resultsPrivate)}`, '/區間 (百科AI 怎麼讀)', HELP_HINT, '/公布 (結束這題)'].join('\n');
 }
 export const ANSWER_FOOTER = answerFooter(false);
 
@@ -367,8 +376,10 @@ export interface StartInput {
   platform: SimPlatform;
   /** 取代了上一題時的提醒。 */
   replacedId?: string;
-  /** 大家都看得到回覆的聊天室（最後加一行 sharedNote）。 */
+  /** 大家都看得到回覆的聊天室（作答那一行加「沒開題的人也能作答」）。 */
   shared?: boolean;
+  /** 跟 shared 一起：作答的結果只有本人看得到（Discord）；沒有 = 結果 /公布 時一起看（LINE 群組）。 */
+  resultsPrivate?: boolean;
   /** 今天的主題（/模擬 今天）。 */
   theme?: string;
   /** 自動選 spot：同一局另外值得想的題（最後一行前加一行）。 */
@@ -387,15 +398,15 @@ export function formatStart(input: StartInput): string {
   if (!shown.some((e) => e.kind === 'proposal')) parts.push({ text: START_FIRST });
   else parts.push({ text: codeBlock(compactEventLines(shown, seat, game), platform) });
   if (input.alsoWorth?.length) parts.push({ text: alsoWorthLine(input.alsoWorth) });
-  parts.push({ text: `\n${answerFooter(input.shared)}` });
+  parts.push({ text: `\n${answerFooter(input.shared, input.resultsPrivate)}` });
   return assembleReply(parts);
 }
 
 // ─── 刺殺題 ───────────────────────────────────────────────────────────────
 
 /** 刺殺題的指令列（同開題的格式）。 */
-export function assassinFooter(shared?: boolean): string {
-  return [`/刺 座位 作答${shared ? ' (沒開題的人也能作答)' : ''}`, HELP_HINT, '/公布 (結束這題)'].join('\n');
+export function assassinFooter(shared?: boolean, resultsPrivate?: boolean): string {
+  return [`/刺 座位 作答${sharedAnswerNote(shared, resultsPrivate)}`, HELP_HINT, '/公布 (結束這題)'].join('\n');
 }
 export const ASSASSIN_FOOTER = assassinFooter(false);
 
@@ -411,13 +422,30 @@ export function formatAssassinStart(input: Omit<StartInput, 'decision'>): string
   parts.push({ text: codeBlock(compactEventLines(shown, seat, game), platform) });
   parts.push({ text: '三藍，輪到你刺' });
   if (input.alsoWorth?.length) parts.push({ text: alsoWorthLine(input.alsoWorth) });
-  parts.push({ text: `\n${assassinFooter(input.shared)}` });
+  parts.push({ text: `\n${assassinFooter(input.shared, input.resultsPrivate)}` });
   return assembleReply(parts);
 }
 
+/** 公開頻道裡只有本人看得到的回覆（Discord）多的一句。 */
+export const PRIVATE_REPLY_NOTE = '（只有你看得到；/公布 時會列出大家的答案）';
+
 /** /刺 的回覆：記下答案（結果在 /公布）。 */
-export function formatKillAnswer(exerciseId: string, target: number, coAnswer?: boolean): string {
-  return withCoAnswerMark(`【${exerciseId}】你刺 ${seatLabel(target)}（可以再刺一次改答案）\n/公布 看結果｜/結束`, coAnswer);
+export function formatKillAnswer(exerciseId: string, target: number, coAnswer?: boolean, privateNote?: boolean): string {
+  return withCoAnswerMark(`【${exerciseId}】你刺 ${seatLabel(target)}（可以再刺一次改答案）${privateNote ? `\n${PRIVATE_REPLY_NOTE}` : ''}\n/公布 看結果｜/結束`, coAnswer);
+}
+
+/**
+ * 群組裡的 /派、/刺（2026-11-21，群組玩家回報：第一個人作答就暴雷）：LINE 群組不能只回給本人，
+ * 所以只回收到第幾位，答案和幾好幾壞都等 /公布 一起列。`nth` = 這個人在這題的第幾次作答。
+ */
+export function formatAnswerAck(exerciseId: string, ordinal: number, nth: number, coAnswer?: boolean): string {
+  const again = nth > 1 ? `，第 ${nth} 次作答，最後一次算數` : '';
+  return withCoAnswerMark(`【${exerciseId}】收到（第 ${ordinal} 位作答${again}）\n結果 /公布 時一起看`, coAnswer);
+}
+
+/** 群組裡的 /分析：公布前不給（裡面有真人怎麼派、幾好幾壞），1 對 1 照舊。 */
+export function analysisHiddenText(exerciseId: string): string {
+  return `【${exerciseId}】群組裡 /公布 前不顯示分析（不暴雷）。想看完整解讀：私訊機器人 /模擬 題 ${exerciseId}`;
 }
 
 export function assassinOnlyText(exerciseId: string): string {
@@ -857,6 +885,8 @@ export interface ProposeResultInput {
   goods: number;
   reds: number;
   coAnswer?: boolean;
+  /** 公開頻道裡只有本人看得到（Discord，2026-11-21）：多一句說明。 */
+  privateNote?: boolean;
 }
 
 /** /派 的回覆（Edward 2026-11-16：「/派 之後直接顯示結果就好（派到幾好幾壞這樣）」）。 */
@@ -864,6 +894,7 @@ export function formatProposeResult(input: ProposeResultInput): string {
   const parts: ReplyPart[] = [];
   if (input.coAnswer) parts.push({ text: CO_ANSWER_MARK });
   parts.push({ text: `【${input.exerciseId}】你派 ${teamDigits(input.team)}：${input.goods} 好 ${input.reds} 壞` });
+  if (input.privateNote) parts.push({ text: PRIVATE_REPLY_NOTE });
   parts.push({ text: PROPOSE_FOOTER });
   return assembleReply(parts);
 }
@@ -984,8 +1015,33 @@ export interface RevealInput {
   seatNames?: readonly string[];
   /** 刺殺題：你刺的座位（沒刺就是 null）。 */
   kill?: { target: number | null; coAnswer?: boolean };
+  /**
+   * 大家都看得到的聊天室（2026-11-21）：每一位的答案（照第一次作答的順序，不寫名字）。有給就列「作答」那幾行，
+   * 刺殺題的「你刺 N家」那一行改成每一位刺誰。
+   */
+  everyone?: EveryoneAnswer[];
   platform: SimPlatform;
   coAnswer?: boolean;
+}
+
+/** 一位作答者的答案：派票題每一次 /派 的幾好幾壞（＝真人：跟真人那一次派的一樣），刺殺題最後一次 /刺。 */
+export interface EveryoneAnswer {
+  teams?: { team: number[]; goods: number; reds: number; sameAsReal: boolean }[];
+  kill?: { target: number; hit: boolean };
+}
+
+/** /公布 的「作答」那幾行：`第1位：469 2好1壞｜468 3好0壞＝真人`、`第2位：刺 2家 ✗`。沒有人作答 → 一行說明。 */
+export function everyoneLines(list: readonly EveryoneAnswer[]): string[] {
+  if (list.length === 0) return ['作答：沒有人作答'];
+  return [
+    `作答（${list.length} 位）：`,
+    ...list.map((a, i) => {
+      const body = a.kill
+        ? `刺 ${seatLabel(a.kill.target)} ${a.kill.hit ? '✓ 刺中梅林' : '✗'}`
+        : (a.teams ?? []).map((t) => `${teamDigits(t.team)} ${t.goods}好${t.reds}壞${t.sameAsReal ? '＝真人' : ''}`).join('｜');
+      return `第${i + 1}位：${body}`;
+    }),
+  ];
 }
 
 /** 百科的代碼順序：刺 娜 莫 奧 派 梅。 */
@@ -1046,7 +1102,10 @@ export function formatReveal(input: RevealInput): string {
   parts.push({ text: seatRolesLine(g) });
   // Edward 2026-11-20：座位下面再列 1～0 家是誰（名字從網站的牌譜紀錄對來，對不到就不印）。
   parts.push({ text: seatNamesLine(input.seatNames, input.platform) });
-  if (input.kill) {
+  if (input.everyone) {
+    // 大家都看得到的聊天室（2026-11-21）：作答時不公開結果，這裡一起列。
+    for (const line of everyoneLines(input.everyone)) parts.push({ text: line });
+  } else if (input.kill) {
     // 刺殺題：只多這一行（不然看不出刺中沒有）。
     const merlin = g.seatRoles.indexOf('merlin') + 1;
     const t = input.kill.target;
@@ -1068,7 +1127,7 @@ export function formatReveal(input: RevealInput): string {
 export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（有人 /公布 或 /結束、開了別的題或伺服器重新啟動都會結束）。輸入 /模擬 開一題，/help 模擬 看全部指令';
 export const BANK_NOT_READY_TEXT = '模擬瓦題庫還沒準備好，請稍後再試。';
 export const RATE_LIMITED_TEXT = '模擬指令太頻繁了，10 分鐘後再試。';
-export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 4局、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題 題號｜/help 模擬';
+export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 4局、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題號（例：/模擬 K7Q2M 3-5、/模擬 K7Q2M 4家、/模擬 K7Q2M）｜/help 模擬';
 export const PROPOSE_USAGE = '用法：/派 加座位，例如 /派 469 = 派 4、6、9家（0 家寫 0；4 6 9、4,6,9 也可以）';
 export const ASSASSINATE_USAGE = '用法：/刺 座位，例如 /刺 3（0 家寫 0）';
 export const INTERVAL_USAGE = '用法：/區間 789=2 460=1 = 7 8 9 裡有 2 紅、4 6 0 裡有 1 紅（也可以 7 8 9 *2、12=1-2、1 5 9 *1+、3 紅、5=好；各組可以重疊）';
@@ -1106,8 +1165,8 @@ export const SIM_HELP_TEXT = [
   `/模擬 1-5～4-5、/模擬 4局、/模擬 5局\u3000${HELP_MID_WORDS}`,
   `/模擬 刺殺\u3000${HELP_KILL_WORDS}（/刺 3）`,
   `/模擬 今天\u3000${HELP_TODAY_WORDS}`,
-  '/模擬 題 題號\u3000做指定的題目，例：/模擬 題 K7Q2M-4（大家可以做同一題）',
-  `/派 469\u3000${HELP_PROPOSE_WORDS}；回幾好幾壞`,
+  '/模擬 題 題號\u3000指定題目（大家做同一題，「題」可省）：K7Q2M 3-5、K7Q2M 4家、K7Q2M 刺殺、K7Q2M（這局最值得想的）',
+  `/派 469\u3000${HELP_PROPOSE_WORDS}；回幾好幾壞（群組只回收到）`,
   `/分析\u3000${HELP_ANALYSIS_WORDS}`,
   `/區間\u3000${HELP_AI_READ_WORDS}`,
   `/區間 789=2 460=1\u3000${HELP_INTERVAL_WORDS}`,
@@ -1115,7 +1174,7 @@ export const SIM_HELP_TEXT = [
   HELP_END,
   '/help 模擬\u3000這份說明（/模擬 說明 也可以）',
   '群組裡自己沒開題的人也可以幫忙答群組裡最新開的一題（/派 /分析 /區間 /公布 /結束），回覆會標「代答」；'
-    + '誰打 /公布 或 /結束 都會結束那一題。1 對 1 聊天沒有代答。',
+    + '誰打 /公布 或 /結束 都會結束那一題。群組裡作答結果 /公布 才一起列。1 對 1 聊天沒有代答。',
   ...HELP_GLOSSARY,
 ].join('\n');
 
@@ -1125,7 +1184,7 @@ export const SIM_HELP_TEXT_DISCORD = [
   `/${COMMANDS.SIM}\u3000${HELP_RANDOM_WORDS}`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2\u3000指定角色或座位（可以只選一個；${SIM_OPTIONS.ROLE}選 紅／藍 = 隨機紅方／藍方角色）`,
   `/${COMMANDS.SIM} ${SIM_OPTIONS.STAGE}:3-5\u3000${HELP_MID_WORDS}；局面:刺殺 = ${HELP_KILL_WORDS}（/${COMMANDS.SIM_ASSASSINATE} ${SIM_OPTIONS.SEAT}:3）；局面:今天 = ${HELP_TODAY_WORDS}`,
-  `/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4\u3000做指定的題目（大家可以做同一題）`,
+  `/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M 3-5\u3000指定題目（大家做同一題）：K7Q2M 3-5、K7Q2M 4家、K7Q2M 刺殺、K7Q2M（這局最值得想的）`,
   `/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469\u3000${HELP_PROPOSE_WORDS}；回幾好幾壞`,
   `/${COMMANDS.SIM_ANALYSIS}\u3000${HELP_ANALYSIS_WORDS}`,
   `/${COMMANDS.SIM_INTERVAL}\u3000${HELP_AI_READ_WORDS}`,
@@ -1134,7 +1193,7 @@ export const SIM_HELP_TEXT_DISCORD = [
   HELP_END,
   `/${COMMANDS.HELP} 主題:模擬\u3000這份說明（/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True 也可以）`,
   '回覆公開的頻道裡，自己沒開題的人也可以幫忙答頻道裡最新開的一題（/派 /分析 /區間 /公布 /結束），回覆會標「代答」；'
-    + '誰打 /公布 或 /結束 都會結束那一題。只有自己看得到回覆的頻道沒有代答。',
+    + '誰打 /公布 或 /結束 都會結束那一題。公開頻道的 /派 /刺 /分析 只回給自己，/公布 列出大家的答案。只有自己看得到回覆的頻道沒有代答。',
   ...HELP_GLOSSARY,
 ].join('\n');
 
@@ -1172,7 +1231,7 @@ export function thinPoolText(role: Role, seat: number, n: number, available: rea
 }
 
 export function unknownIdText(): string {
-  return '找不到這個題號。題號長得像 K7Q2M-4（題庫代號-座位）或 K7Q2M-3-5（題庫代號-局-次）。';
+  return '找不到這個題號。題號 = 局號＋位置：K7Q2M 3-5（第 3 局第 5 次）、K7Q2M 4家（4家第一次派票，舊寫法 K7Q2M-4）、K7Q2M 刺殺；只打 K7Q2M = 這局最值得想的地方。';
 }
 
 /** 指定的題號（局-次）那一局沒有那一次派票。 */
@@ -1191,9 +1250,23 @@ export function noMidText(round: number, anyAttempt?: boolean): string {
   return `題庫裡沒有符合的${what}題目${why}，換個角色或座位試試。`;
 }
 
-/** 自動選 spot 時同一局另外值得想的題（一行）。 */
+/**
+ * 正式題號 → 「局號 位置」的打法（2026-11-21：玩家想跳到同一局的別的時間點，`K7Q2M-5 1-1`、`K7Q2M 3-5` 都回用法）：
+ * `K7Q2M-3-5` → `K7Q2M 3-5`、`K7Q2M-4` → `K7Q2M 4家`、`K7Q2M-A` → `K7Q2M 刺殺`。看不懂就照原樣。
+ */
+export function spacedExerciseId(exerciseId: string): string {
+  const m = /^([0-9A-Z]+)-(.+)$/.exec(exerciseId);
+  if (!m) return exerciseId;
+  const pos = m[2] === 'A' ? '刺殺' : /^[0-9]$/.test(m[2]) ? `${m[2]}家` : m[2];
+  return `${m[1]} ${pos}`;
+}
+
+/** 自動選 spot 時同一局另外值得想的題（一行，照打就能開：/模擬 K7Q2M 刺殺）。 */
 export function alsoWorthLine(items: readonly { exerciseId: string; label: string }[]): string {
-  return `這局也值得想：${items.map((i) => (i.exerciseId.endsWith(`-${i.label}`) ? i.exerciseId : `${i.exerciseId}（${i.label}）`)).join('、')}`;
+  return `這局也值得想：${items.map((i) => {
+    const typed = spacedExerciseId(i.exerciseId);
+    return typed.endsWith(` ${i.label}`) ? `/模擬 ${typed}` : `/模擬 ${typed}（${i.label}）`;
+  }).join('、')}`;
 }
 
 export function noAssassinText(): string {

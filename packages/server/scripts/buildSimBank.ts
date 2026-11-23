@@ -15,6 +15,8 @@
  * 題號穩定：讀上一版題庫（--previous，預設就是 --out 那個檔），同一局沿用題號（bankCodec.buildBankFile）。
  * Threads：舊題庫照計畫會出、新題庫算出來不一樣的接下來 N 天（--pin-days，預設 8），題號寫進 threads_picks.json
  * （src/bots/threads/planPins.ts），已經寫好的第一則留言還是對得上。
+ * 紀錄異常的局不收（2026-11-21，src/bots/simulation/quality.ts）：總庫檢查（來源不一致、疑似重複、票記號對不上、
+ * 備註標了事件／代打／爛局／覆盤）、紀錄本身算得出來的異常、人工清單 sim_bank_exclude.json（--exclude PATH）。
  * 離線、可重現；只印計數，不印任何一局的內容。
  */
 
@@ -24,6 +26,7 @@ import { rowsFromSheet } from '../src/ai/benchmark/sheetsReplay';
 import { buildSimBank } from '../src/bots/simulation/bank';
 import { buildBankFile, type SimBankFile } from '../src/bots/simulation/bankCodec';
 import { rowsFromGameDb } from '../src/bots/simulation/bankSource';
+import { readSimExclusions } from '../src/bots/simulation/quality';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { addDays, taipeiToday } from '../src/bots/threads/plan';
 import { parsePicks, picksFileBody } from '../src/bots/threads/picksFile';
@@ -44,6 +47,7 @@ const dbPath = path.resolve(arg('--db', path.join(root, 'game_db.json')));
 const picksPath = path.resolve(arg('--picks', path.join(root, 'threads_picks.json')));
 const pinDays = Number(arg('--pin-days', '8'));
 const today = arg('--today', taipeiToday());
+const exclude = readSimExclusions([path.resolve(arg('--exclude', path.join(root, 'sim_bank_exclude.json')))]);
 
 const readJson = (p: string): unknown => JSON.parse(fs.readFileSync(p, 'utf8'));
 const previous = fs.existsSync(previousPath) ? (readJson(previousPath) as SimBankFile) : null;
@@ -51,12 +55,13 @@ const previous = fs.existsSync(previousPath) ? (readJson(previousPath) as SimBan
 let built;
 if (snapshot) {
   const data = readJson(path.resolve(snapshot)) as Record<string, string[][]>;
-  built = buildBankFile(rowsFromSheet(data['牌譜'] ?? []), path.basename(snapshot), previous);
+  built = buildBankFile(rowsFromSheet(data['牌譜'] ?? []), path.basename(snapshot), previous, exclude);
 } else {
-  const source = rowsFromGameDb(readJson(dbPath) as { games?: unknown });
+  const source = rowsFromGameDb(readJson(dbPath) as { games?: unknown }, exclude);
   const c = source.counts;
-  console.log(`game_db: ${c.rows} games; left out: 模擬/百科AI ${c.notReal}, ProAvalon ${c.external}, unreadable ${c.unreadable}, rule errors ${c.ruleErrors}, completed ${c.completed}; passed ${c.passed}`);
-  built = buildBankFile(source.rows, path.basename(dbPath), previous);
+  const flagged = Object.entries(c.flagged).sort().map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
+  console.log(`game_db: ${c.rows} games; left out: 模擬/百科AI ${c.notReal}, ProAvalon ${c.external}, unreadable ${c.unreadable}, rule errors ${c.ruleErrors}, completed ${c.completed}; record anomalies (${flagged}), manual list ${c.excluded}; passed ${c.passed}`);
+  built = buildBankFile(source.rows, path.basename(dbPath), previous, exclude);
 }
 const { file, counts } = built;
 
@@ -66,7 +71,7 @@ const text = `{\n  "version": ${file.version},\n  "builtFrom": ${JSON.stringify(
 const changed = !fs.existsSync(outPath) || fs.readFileSync(outPath, 'utf8') !== text;
 
 console.log(`rows ${counts.rows}, with a record ${counts.recorded}, strict replay ok ${counts.replayable}`);
-console.log(`dropped: lake chain ${counts.lakeChainInvalid}, 娛樂 ${counts.entertainment}, 模擬 ${counts.simulated}, duplicate records ${counts.duplicates}`);
+console.log(`dropped: lake chain ${counts.lakeChainInvalid}, 娛樂 ${counts.entertainment}, 模擬 ${counts.simulated}, duplicate records ${counts.duplicates}, record anomalies ${counts.anomalous}, manual list ${counts.excluded}`);
 console.log(`bank games ${counts.games} (ids longer than 5: ${counts.idCollisions})`);
 console.log(`ids vs previous bank: kept ${counts.keptIds}, new ${counts.newIds}, gone ${counts.droppedIds}`);
 

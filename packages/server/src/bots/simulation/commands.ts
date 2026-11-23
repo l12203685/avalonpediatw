@@ -6,7 +6,8 @@
  *
  *   /模擬                 隨機一題（第 1 局 2～5 家，任何角色）
  *   /模擬 派西 2          指定角色／座位（順序不拘，也可以只給其中一個；紅、藍 = 隨機紅方／藍方角色）
- *   /模擬 題 K7Q2M-4      指定題號（整群可以做同一題）
+ *   /模擬 題 K7Q2M-4      指定題號（整群可以做同一題）；2026-11-21 起 `K7Q2M 3-5`、`K7Q2M 4家`、`K7Q2M 刺殺`、
+ *                         只打局號 `K7Q2M` 也可以（「題」可以省略），見 parseExerciseRef
  *   /派 469               作答（0 = 0 家；`4 6 9`、`4,6,9`、`4 6 10` 都可以）
  *   /區間 789=2 460=1     區間（選填；百科寫法 `7 8 9 *2 4 6 0 *1`、`12=1-2`、`3=紅`、`3 壞`、`5=好`、
  *                         `1 5 9 *1+` 也可以；各組可以重疊，跟百科「1 2 *1-2」「2 3 7 *2」一樣）
@@ -46,7 +47,11 @@ export interface IntervalGroup {
 export type SimUsageCommand = 'start' | 'propose' | 'interval' | 'assassinate';
 
 export type SimCommand =
-  | { kind: 'start'; role?: SimRoleChoice; seat?: number; exerciseId?: string; midRound?: number; anyAttempt?: boolean; special?: 'assassin' | 'today' }
+  | {
+    kind: 'start'; role?: SimRoleChoice; seat?: number; exerciseId?: string; midRound?: number; anyAttempt?: boolean; special?: 'assassin' | 'today';
+    /** 只有局號（`/模擬 K7Q2M`，2026-11-21）：這一局最值得想的地方。 */
+    gameId?: string;
+  }
   /** /刺 座位：刺殺題的答案。 */
   | { kind: 'assassinate'; seat: number }
   | { kind: 'propose'; team: number[] }
@@ -87,13 +92,17 @@ const FULL_RE = /^\/\s*(模擬瓦|模拟瓦|模擬|模拟|區間|区间|下一�
 
 /** 角色別名 → 角色（長的先比）。 */
 const ROLE_ALIASES: ReadonlyArray<readonly [string, SimRoleChoice]> = ([
-  ['派西維爾', 'percival'], ['派西维尔', 'percival'], ['派西', 'percival'], ['派', 'percival'],
+  // 2026-11-21（玩家回饋「/模擬 奧伯5」不認得）：補上常見的短寫與同音字（奧伯、歐伯倫、莫甘、娜娜、莫德雷、魔德、派西維…）。
+  ['派西維爾', 'percival'], ['派西维尔', 'percival'], ['派西瓦爾', 'percival'], ['派西瓦尔', 'percival'], ['派西維', 'percival'], ['派西维', 'percival'],
+  ['派希維爾', 'percival'], ['派希维尔', 'percival'], ['派西', 'percival'], ['派希', 'percival'], ['派', 'percival'],
   ['梅林', 'merlin'], ['梅', 'merlin'],
   ['忠臣', 'loyal'], ['雜魚', 'loyal'], ['杂鱼', 'loyal'], ['忠', 'loyal'],
   ['刺客', 'assassin'], ['刺', 'assassin'],
-  ['莫甘娜', 'morgana'], ['魔甘娜', 'morgana'], ['娜', 'morgana'],
-  ['莫德雷德', 'mordred'], ['莫德', 'mordred'], ['默德', 'mordred'], ['德', 'mordred'],
-  ['奧伯倫', 'oberon'], ['奥伯伦', 'oberon'], ['奧柏倫', 'oberon'], ['奥柏伦', 'oberon'], ['奧', 'oberon'], ['奥', 'oberon'],
+  ['莫甘娜', 'morgana'], ['魔甘娜', 'morgana'], ['摩甘娜', 'morgana'], ['莫甘', 'morgana'], ['魔甘', 'morgana'], ['娜娜', 'morgana'], ['娜', 'morgana'],
+  ['莫德雷德', 'mordred'], ['默德雷德', 'mordred'], ['莫德雷', 'mordred'], ['默德雷', 'mordred'], ['莫德', 'mordred'], ['默德', 'mordred'], ['魔德', 'mordred'], ['德', 'mordred'],
+  ['奧伯倫', 'oberon'], ['奥伯伦', 'oberon'], ['奧柏倫', 'oberon'], ['奥柏伦', 'oberon'], ['歐伯倫', 'oberon'], ['欧伯伦', 'oberon'],
+  ['奧伯龍', 'oberon'], ['奥伯龙', 'oberon'], ['奧伯', 'oberon'], ['奥伯', 'oberon'], ['奧柏', 'oberon'], ['奥柏', 'oberon'], ['歐伯', 'oberon'], ['欧伯', 'oberon'],
+  ['奧', 'oberon'], ['奥', 'oberon'],
   ['紅方', 'red'], ['红方', 'red'], ['壞人', 'red'], ['坏人', 'red'], ['紅', 'red'], ['红', 'red'],
   ['藍方', 'blue'], ['蓝方', 'blue'], ['好人', 'blue'], ['藍', 'blue'], ['蓝', 'blue'],
 ] as Array<[string, SimRoleChoice]>).sort((a, b) => b[0].length - a[0].length);
@@ -117,13 +126,69 @@ export function parseRoleChoice(raw: string): SimRoleChoice | null {
   return null;
 }
 
+/** Crockford base32 的局號字元（題號前半段）。 */
+const GAME_CODE = '[0-9A-HJKMNP-TV-Z]{5,8}';
+
+/** I/L 當 1、O 當 0，不分大小寫。 */
+function crockfordUpper(raw: string): string {
+  return (raw ?? '').normalize('NFKC').trim().toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
+}
+
 /**
  * Crockford base32：題號裡 I/L 當 1、O 當 0，不分大小寫。
  * `K7Q2M-4`（4 家的第一個決定）或 `K7Q2M-3-5`（第 3 局第 5 次開始，2026-11-16）。
  */
 export function normalizeExerciseId(raw: string): string | null {
-  const t = (raw ?? '').normalize('NFKC').trim().toUpperCase().replace(/[IL]/g, '1').replace(/O/g, '0');
-  return /^[0-9A-HJKMNP-TV-Z]{5,8}-(?:[0-9]|[1-5]-[1-5]|A)$/.test(t) ? t : null;
+  const t = crockfordUpper(raw);
+  return new RegExp(`^${GAME_CODE}-(?:[0-9]|[1-5]-[1-5]|A)$`).test(t) ? t : null;
+}
+
+/** 局號（題號前半段，例如 `K7Q2M`），或 null。 */
+export function normalizeGameCode(raw: string): string | null {
+  const t = crockfordUpper(raw);
+  return new RegExp(`^${GAME_CODE}$`).test(t) ? t : null;
+}
+
+/**
+ * 題號的寫法（2026-11-21，玩家回饋：想跳到同一局的別的時間點，打 `K7Q2M 3-5`、`K7Q2M-5 1-1` 都回用法）。
+ * 題號 = **局號 + 位置**，中間空白或 `-` 都可以：
+ *   - `K7Q2M 3-5`／`K7Q2M-3-5`：第 3 局第 5 次（坐那一次的隊長）；`1-1`～`5-5` 都可以；
+ *   - `K7Q2M 4家`／`K7Q2M 4`／`K7Q2M-4`：4 家第一次派票（舊寫法照舊）；
+ *   - `K7Q2M 刺殺`／`K7Q2M-A`：刺殺題；
+ *   - 只打 `K7Q2M`：這一局最值得想的地方（跟什麼都沒指定的 /模擬 同一套評分），附同一局另外值得想的題號；
+ *   - 舊題號後面再接位置（`K7Q2M-4 3-5`）：換到那個位置（同一局）。
+ * 回傳：`exerciseId`（正式題號，`K7Q2M-3-5` 這種，Threads 與題庫用的同一個）、`gameId`（只有局號），
+ * 或 `problem`（局號看得懂、位置看不懂）。不像題號 → null。
+ */
+export type ExerciseRef = { exerciseId: string } | { gameId: string } | { problem: string };
+
+/** 題號後半段（位置）→ 正式題號的尾巴（`4`、`3-5`、`A`），看不懂 null。 */
+function spotSuffix(raw: string): string | null {
+  const t = raw.normalize('NFKC').trim();
+  if (/^(?:A|a|刺殺|刺杀|刺殺題|刺)$/u.test(t)) return 'A';
+  const stage = /^([1-5])\s*[-－~～]\s*([1-5])$/u.exec(t);
+  if (stage) return `${stage[1]}-${stage[2]}`;
+  const seat = /^(10|[0-9])\s*[家號号]?$/u.exec(t);
+  if (seat) return seat[1] === '10' ? '0' : seat[1];
+  return null;
+}
+
+export const SAME_GAME_HINT = '同一局換位置：題號後面空一格寫位置，例如 /模擬 K7Q2M 3-5（第 3 局第 5 次）、/模擬 K7Q2M 4家（4家第一次派票）、/模擬 K7Q2M 刺殺；只打 /模擬 K7Q2M = 這局最值得想的地方';
+
+export function parseExerciseRef(raw: string): ExerciseRef | null {
+  const t = (raw ?? '').normalize('NFKC').trim();
+  const whole = normalizeExerciseId(t);
+  if (whole) return { exerciseId: whole };
+  const m = /^([0-9A-Za-z]{5,8})(.*)$/su.exec(t);
+  const code = m ? normalizeGameCode(m[1]) : null;
+  if (!m || !code) return null;
+  const rest = m[2];
+  if (!rest.trim()) return { gameId: code };
+  // 舊題號（K7Q2M-4、K7Q2M-A）後面再接位置：位置算數（同一局）。
+  const after = /^-(?:10|[0-9]|[Aa])\s+(.+)$/su.exec(rest) ?? /^[-\s]+(.+)$/su.exec(rest);
+  if (!after) return null;
+  const suffix = spotSuffix(after[1]);
+  return suffix ? { exerciseId: `${code}-${suffix}` } : { problem: SAME_GAME_HINT };
 }
 
 /** `/模擬 1-5`～`4-5`（尾派）、`4局`（第 4 局任何一次，2026-11-19）、`5局`（第 5 局）的局面字（-、－、~ 都可以）。 */
@@ -210,6 +275,13 @@ export function parseInterval(raw: string): { groups: IntervalGroup[] } | { prob
   return { groups };
 }
 
+/** 題號（parseExerciseRef 的結果）→ 開題指令；不像題號或位置看不懂 → 用法。 */
+export function refCommand(ref: ExerciseRef | null): SimCommand {
+  if (ref && 'exerciseId' in ref) return { kind: 'start', exerciseId: ref.exerciseId };
+  if (ref && 'gameId' in ref) return { kind: 'start', gameId: ref.gameId };
+  return { kind: 'usage', command: 'start', problem: ref ? ref.problem : `題號長得像 K7Q2M-4 或 K7Q2M 3-5。${SAME_GAME_HINT}` };
+}
+
 /**
  * /模擬 後面的內容。照段落看：數字（可以接「家」）是座位、其他字要剛好是角色別名。
  * 一個都認不得（`/模擬什麼時候可以玩`）→ null，當一般聊天；認得一部分 → 用法。
@@ -218,13 +290,13 @@ function parseStartArgs(rest: string): SimCommand | null {
   const t = rest.normalize('NFKC').trim();
   if (!t) return { kind: 'start' };
   if (HELP_WORDS.has(t.toLowerCase())) return { kind: 'help' };
-  const byId = /^(?:題號?|题号?|#)\s*(\S+)$/u.exec(t);
-  if (byId) {
-    const id = normalizeExerciseId(byId[1]);
-    return id ? { kind: 'start', exerciseId: id } : { kind: 'usage', command: 'start', problem: '題號長得像 K7Q2M-4' };
+  const byId = /^(?:題號?|题号?|#)\s*(.+)$/su.exec(t);
+  if (byId) return refCommand(parseExerciseRef(byId[1]));
+  // 不加「題」也可以：開頭是局號（裡面有英文字母，免得跟座位數字混在一起）或完整的舊題號。
+  if (normalizeExerciseId(t) || /^(?=[0-9]*[A-Za-z])[0-9A-Za-z]{5,8}(?:$|[-\s])/u.test(t)) {
+    const ref = parseExerciseRef(t);
+    if (ref) return refCommand(ref);
   }
-  const bareId = normalizeExerciseId(t);
-  if (bareId && /-/.test(t)) return { kind: 'start', exerciseId: bareId };
 
   const special = SPECIAL_WORDS.get(t);
   if (special) return { kind: 'start', special };
@@ -236,7 +308,7 @@ function parseStartArgs(rest: string): SimCommand | null {
     const others = t.replace(MID_RE, ' ').trim();
     const parsed = others ? parseStartArgs(others) : { kind: 'start' as const };
     if (!parsed) return { kind: 'usage', command: 'start' };
-    if (parsed.kind !== 'start' || parsed.exerciseId || parsed.midRound !== undefined || parsed.special) return { kind: 'usage', command: 'start' };
+    if (parsed.kind !== 'start' || parsed.exerciseId || parsed.gameId || parsed.midRound !== undefined || parsed.special) return { kind: 'usage', command: 'start' };
     if (mid[1]) return { ...parsed, midRound: Number(mid[1]) };
     return mid[2] === '4' || mid[2] === '四' ? { ...parsed, midRound: 4, anyAttempt: true } : { ...parsed, midRound: 5 };
   }

@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  SAME_GAME_HINT,
   SIM_COMMAND_RE,
   formatIntervalGroup,
   isSimCommandText,
@@ -51,12 +52,46 @@ describe('/模擬', () => {
     ['/模擬 題號 K7Q2M-0', { kind: 'start', exerciseId: 'K7Q2M-0' }],
     ['/模擬 K7Q2M-4', { kind: 'start', exerciseId: 'K7Q2M-4' }],
     ['/模擬 題 KIQ2O-4', { kind: 'start', exerciseId: 'K1Q20-4' }],
+    // 2026-11-21（玩家回饋）：短寫的角色名。
+    ['/模擬 奧伯5', { kind: 'start', role: 'oberon', seat: 5 }],
+    ['/模擬 奧伯 5', { kind: 'start', role: 'oberon', seat: 5 }],
+    ['/模擬 奥伯', { kind: 'start', role: 'oberon' }],
+    ['/模擬 歐伯倫 2', { kind: 'start', role: 'oberon', seat: 2 }],
+    ['/模擬 奧柏 0', { kind: 'start', role: 'oberon', seat: 10 }],
+    ['/模擬 莫甘 3', { kind: 'start', role: 'morgana', seat: 3 }],
+    ['/模擬 娜娜', { kind: 'start', role: 'morgana' }],
+    ['/模擬 莫德雷 4', { kind: 'start', role: 'mordred', seat: 4 }],
+    ['/模擬 魔德', { kind: 'start', role: 'mordred' }],
+    ['/模擬 派西維 6', { kind: 'start', role: 'percival', seat: 6 }],
+    ['/模擬 0派西', { kind: 'start', role: 'percival', seat: 10 }],
+    // 2026-11-21（玩家回饋）：題號 = 局號＋位置，空白或 - 隔開；只打局號 = 這局最值得想的地方。
+    ['/模擬 AFZE4 3-5', { kind: 'start', exerciseId: 'AFZE4-3-5' }],
+    ['/模擬 afze4 3－5', { kind: 'start', exerciseId: 'AFZE4-3-5' }],
+    ['/模擬 AFZE4 1-1', { kind: 'start', exerciseId: 'AFZE4-1-1' }],
+    ['/模擬 AFZE4 5家', { kind: 'start', exerciseId: 'AFZE4-5' }],
+    ['/模擬 AFZE4 5', { kind: 'start', exerciseId: 'AFZE4-5' }],
+    ['/模擬 AFZE4 10', { kind: 'start', exerciseId: 'AFZE4-0' }],
+    ['/模擬 AFZE4-5家', { kind: 'start', exerciseId: 'AFZE4-5' }],
+    ['/模擬 AFZE4 刺殺', { kind: 'start', exerciseId: 'AFZE4-A' }],
+    ['/模擬 AFZE4', { kind: 'start', gameId: 'AFZE4' }],
+    ['/模擬 題 AFZE4', { kind: 'start', gameId: 'AFZE4' }],
+    ['/模擬 題 12345 3-5', { kind: 'start', exerciseId: '12345-3-5' }],
+    ['/模擬 AFZE4-5 3-4', { kind: 'start', exerciseId: 'AFZE4-3-4' }],
+    ['/模擬 AFZE4-A 2-5', { kind: 'start', exerciseId: 'AFZE4-2-5' }],
+    ['/模擬 題 AFZE4 3-5', { kind: 'start', exerciseId: 'AFZE4-3-5' }],
   ])('%s', (text, expected) => {
     expect(parseSimCommand(text)).toEqual(expected);
   });
 
-  it.each(['/模擬 派西 2 3', '/模擬 11', '/模擬 題 ???', '/模擬 派西 xyz'])('usage for %s', (text) => {
+  it.each(['/模擬 派西 2 3', '/模擬 11', '/模擬 題 ???', '/模擬 派西 xyz', '/模擬 12345'])('usage for %s', (text) => {
     expect(parseSimCommand(text)).toMatchObject({ kind: 'usage', command: 'start' });
+  });
+
+  // 局號看得懂、位置看不懂（例如一個範圍）：回同一局換位置的寫法，不回顯打的字。
+  it.each(['/模擬 AFZE4-5 1-1～3-4', '/模擬 AFZE4 6-1', '/模擬 AFZE4 5 3-5'])('same-game hint for %s', (text) => {
+    const cmd = parseSimCommand(text);
+    expect(cmd).toMatchObject({ kind: 'usage', command: 'start', problem: SAME_GAME_HINT });
+    expect(JSON.stringify(cmd)).not.toContain('AFZE4');
   });
 
   // 2026-10-22：玩家問「還有什麼指令可以玩」→ /模擬 說明（幫助、指令、? 也可以）。
