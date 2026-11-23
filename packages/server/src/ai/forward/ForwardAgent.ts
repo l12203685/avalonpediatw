@@ -77,6 +77,7 @@ import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason
 import { redR2LeadCard61 } from '../RedRound61';
 import { oberonR1Card64, round64MerlinOn } from '../Round64';
 import { redCrowdWhite65 } from '../Round65';
+import { r2InnerBlack66 } from '../Round66';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -1125,6 +1126,12 @@ export class ForwardAgent implements AvalonAgent {
         || (round <= 2 && anyGate(this.gates) && teamGateBreach(obs, certaintyFor(obs), team, round, this.gates) !== null)
         || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning));
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `${obs.myRole} tail white (as the public loyal view; D3 stage 2)`);
+    }
+    // Round 66 `r2InnerBlack66` (Round66.ts): R2, non-forced, on the team (not the leader) — a loyal whose own reading puts P(a red on the team)
+    // ≥ θ inner-blacks; Percival / Merlin only where the public loyal view of this seat would (D3 staged release, owner 2026-11-04). A reject
+    // needs no vote gate. Off (θ = 0) the path is unchanged.
+    if (r2InnerBlack66(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'R2: on the team, my reading puts a red on it (inner black; round 66)');
     }
     // Round 51 `leaderOppVote51` bit 4 (Round51.ts; owner 2026-11-18): R1–R2, a loyal who leads a later proposal of this round inner-blacks
     // on the team, one who does not outer-whites off it, at the human rates. The outer white never passes the good vote gates.
