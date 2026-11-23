@@ -32,10 +32,16 @@ describe('round 66 switches', () => {
       expect(t.r2InnerBlack66Roles).toBe(0);
       expect(t.r2InnerBlack66Mix).toBe(0);
     }
-    for (const p of Object.values(PROFILE_OVERRIDES)) expect(p.r2InnerBlack66 ?? 0).toBe(0);
+    // Round 66: the three human tables carry θ = 0.9 (Percival + Merlin, the default roles); the bot-only baseline stays off.
+    expect(PROFILE_OVERRIDES.ai.r2InnerBlack66 ?? 0).toBe(0);
+    for (const k of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      expect(PROFILE_OVERRIDES[k].r2InnerBlack66).toBe(0.9);
+      expect(PROFILE_OVERRIDES[k].r2InnerBlack66Roles ?? 0).toBe(0);
+    }
     expect(parseTuningFlag('r2InnerBlack66')).toEqual({ r2InnerBlack66: 0.9 });
     expect(parseTuningFlag('r2InnerBlack66=0.85')).toEqual({ r2InnerBlack66: 0.85 });
     expect(parseTuningFlag('r2InnerBlack66Roles=7')).toEqual({ r2InnerBlack66Roles: 7 });
+    expect(parseTuningFlag('r2InnerBlack66Roles')).toEqual({ r2InnerBlack66Roles: 6 });
     expect(parseTuningFlag('r2InnerBlack66Mix')).toEqual({ r2InnerBlack66Mix: 0.5 });
     expect(() => parseTuningFlag('r2InnerBlack66=1.5')).toThrow();
     expect(() => parseTuningFlag('r2InnerBlack66Roles=64')).toThrow();
@@ -51,9 +57,9 @@ describe('r2InnerBlack66', () => {
     expect(p as number).toBeLessThan(1);
   });
 
-  it('a loyal inner-blacks exactly when P(red on the team) ≥ θ', () => {
-    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: (p as number) - 0.01 }), obs())).toBe(true);
-    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: Math.min(1, (p as number) + 0.01) }), obs())).toBe(false);
+  it('a loyal (bit 1) inner-blacks exactly when P(red on the team) ≥ θ', () => {
+    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: (p as number) - 0.01, r2InnerBlack66Roles: 1 }), obs())).toBe(true);
+    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: Math.min(1, (p as number) + 0.01), r2InnerBlack66Roles: 1 }), obs())).toBe(false);
     expect(r2InnerBlack66(DEFAULT_AGENT_TUNING, obs())).toBe(false);
   });
 
@@ -70,8 +76,12 @@ describe('r2InnerBlack66', () => {
     expect(r2InnerBlack66(on, obs({ gamePhase: 'team_select' }))).toBe(false);
   });
 
-  it('roles: 0 = loyal only; Percival and Merlin need their bits', () => {
-    const loyalOnly = resolveAgentTuning({ r2InnerBlack66: 0.01 });
+  it('roles: 0 = Percival + Merlin (public view); the loyal needs bit 1', () => {
+    const dflt = resolveAgentTuning({ r2InnerBlack66: 0.01 });
+    expect(r2InnerBlack66(dflt, obs())).toBe(false);
+    expect(r2InnerBlack66(dflt, obs({ myRole: 'percival', knownWizards: ['P7', 'P8'] }))).toBe(true);
+    expect(r2InnerBlack66(dflt, obs({ myRole: 'merlin', knownEvils: ['P7', 'P8', 'P9'] }))).toBe(true);
+    const loyalOnly = resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Roles: 1 });
     expect(r2InnerBlack66(loyalOnly, obs())).toBe(true);
     expect(r2InnerBlack66(loyalOnly, obs({ myRole: 'percival', knownWizards: ['P7', 'P8'] }))).toBe(false);
     expect(r2InnerBlack66(loyalOnly, obs({ myRole: 'merlin', knownEvils: ['P7', 'P8', 'P9'] }))).toBe(false);
@@ -103,7 +113,7 @@ describe('r2InnerBlack66', () => {
 
   it('mix p: only part of the spots (hash of seat, proposal, team), the same spot always the same', () => {
     let n = 0;
-    const half = resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Mix: 0.5 });
+    const half = resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Roles: 1, r2InnerBlack66Mix: 0.5 });
     for (const me of ['P1', 'P5', 'P7', 'P8', 'P9', 'P10']) for (const fc of [0, 1, 2, 3]) {
       const o = obs({ myPlayerId: me, failCount: fc, proposedTeam: [me, 'P2', 'P3', 'P6'] });
       const v = r2InnerBlack66(half, o);
@@ -112,7 +122,7 @@ describe('r2InnerBlack66', () => {
     }
     expect(n).toBeGreaterThan(3);
     expect(n).toBeLessThan(21);
-    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Mix: 1 }), obs())).toBe(true);
+    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Roles: 1, r2InnerBlack66Mix: 1 }), obs())).toBe(true);
   });
 
   it('ForwardAgent: off = the R1–R2 normal vote (approve on the team); on = inner black', () => {
@@ -123,6 +133,7 @@ describe('r2InnerBlack66', () => {
       return a.type === 'team_vote' ? a.vote : null;
     };
     expect(decide(resolveAgentTuning({}))).toBe(true);
-    expect(decide(resolveAgentTuning({ r2InnerBlack66: 0.01 }))).toBe(false);
+    expect(decide(resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Roles: 1 }))).toBe(false);
+    expect(decide(resolveAgentTuning({ r2InnerBlack66: 0.01 }))).toBe(true);
   });
 });

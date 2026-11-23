@@ -1419,7 +1419,7 @@ export interface AgentTuning {
   /** 第 66 回合（`Round66.ts`；藍方第 2 局在隊上的票）：第 2 局非強制、在隊上（不是隊長）的藍方，自己的讀法（後驗）說「這隊有紅」≥ θ 就內黑；值 = θ。0 = 關。 */
   r2InnerBlack66: number;
   /** 第 66 回合：`r2InnerBlack66` 給哪些角色（位元）：1 = 忠臣、2 = 派西（同座位的公開視角忠臣也內黑、而且他自己的後驗也過 θ）、4 = 梅林（同座位的公開視角忠臣也內黑）；
-   *  8 = 派西兩根拇指都在隊上（確定有紅，私人資訊；D3 範圍外，只量）、16 = 梅林隊上有他看得到的紅（私人資訊；D3 範圍外，只量）。0 = 1（只給忠臣）。 */
+   *  8 = 派西兩根拇指都在隊上（確定有紅，私人資訊；D3 範圍外，只量）、16 = 梅林隊上有他看得到的紅（私人資訊；D3 範圍外，只量）。0 = 6（派西＋梅林；忠臣那一支第 1H 節每一層都變差，所以預設不給）。 */
   r2InnerBlack66Roles: number;
   /** 第 66 回合：`r2InnerBlack66` 的混合比例（第 1C 節：中性改測 50%）；照局面雜湊 < p 才內黑。0 = 一律（100%）。 */
   r2InnerBlack66Mix: number;
@@ -3429,7 +3429,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     return { r2InnerBlack66Mix: value };
   }
   if (name === 'r2InnerBlack66Roles') {
-    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
+    const value = raw === undefined ? 6 : Number.parseInt(raw, 10);
     if (!Number.isFinite(value) || value < 0 || value > 31) throw new Error(`r2InnerBlack66Roles needs 0–31, got "${raw}"`);
     return { r2InnerBlack66Roles: value };
   }
