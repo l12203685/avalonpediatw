@@ -9,7 +9,7 @@
  *   Q2（第 3 局，4 家派西挑 3-4，拇指 1、8）：見 `diagRound53Game.ts`。真實：梅林 1、莫甘娜 8，紅 2、6、8、0。
  *      準則：P(8 紅) > P(1 紅)（1 讀成梅林那一邊），而且 0 在 9 人裡 P(紅) 前 4 高。
  *
- *   cd packages/server && USE_FORWARD_REASONING=true npx tsx scripts/acceptRound53.ts [--grid]
+ *   cd packages/server && USE_FORWARD_REASONING=true npx tsx scripts/acceptRound53.ts [--grid] [--variant 名稱:開關=值,…（@human = 一般真人桌）]
  */
 import type { PlayerObservation, VoteRecord, QuestRecord, LakePublicRecord } from '../src/ai/types';
 
@@ -81,6 +81,16 @@ async function main(): Promise<void> {
   for (const v of [1, 3, 5, 7, 9, 11]) row(`viewpoint53=${v}`, bayesOptionsOf({ ...T, viewpoint53: v }));
   // 第 53b 回合：整項的次方
   for (const v of [1, 3]) for (const pw of [0.25, 0.5, 0.75]) row(`viewpoint53=${v} viewpointPow53=${pw}`, bayesOptionsOf({ ...T, viewpoint53: v, viewpointPow53: pw }));
+  // 第 63 回合：`--variant 名稱:開關=值,開關=值`（`@human` = 一般真人桌策略層 `PROFILE_OVERRIDES.avgHuman`）。
+  const { parseTuningFlag } = await import('../src/ai/AgentTuning');
+  const { PROFILE_OVERRIDES } = await import('../src/ai/humanProfile');
+  process.argv.forEach((x, i) => {
+    if (x !== '--variant') return;
+    const [name, rest = ''] = process.argv[i + 1].split(':');
+    const t = { ...T };
+    for (const f of rest.split(',').filter(Boolean)) Object.assign(t, f === '@human' ? PROFILE_OVERRIDES.avgHuman : parseTuningFlag(f));
+    row(name, bayesOptionsOf(t));
+  });
   if (process.argv.includes('--grid')) {
     for (const sc of [0.25, 0.5, 1, 1.5, 2]) {
       row(`倍數 ${sc}`, { ...d, viewpoint53: { scale: sc, skipForced: false } });
