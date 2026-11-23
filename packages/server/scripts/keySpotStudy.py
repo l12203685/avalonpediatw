@@ -37,7 +37,6 @@ from collections import defaultdict
 import numpy as np
 
 RED = {'assassin', 'morgana', 'mordred', 'oberon'}
-SEAT = {i: str(i % 10) for i in range(1, 11)}
 
 
 def camp(role):
