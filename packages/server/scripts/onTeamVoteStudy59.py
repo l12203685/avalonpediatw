@@ -11,7 +11,7 @@ import math
 import sys
 from collections import defaultdict
 
-args = [a for a in sys.argv[1:] if not a.startswith('--')]
+args = [a for i, a in enumerate(sys.argv[1:]) if a.endswith('.jsonl')]
 col = 'H'
 if '--col' in sys.argv:
     col = sys.argv[sys.argv.index('--col') + 1]
