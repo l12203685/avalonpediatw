@@ -47,7 +47,7 @@ export default function ReportsPage(): JSX.Element {
   const justSentMissing = justSent !== null && list.state === 'ready' && !list.reports.some((r) => r.id === justSent);
 
   return (
-    <div className="relative z-10 mx-auto max-w-3xl space-y-4 px-3 py-4 text-white sm:px-4">
+    <div className="relative z-10 mx-auto max-w-3xl space-y-4 overflow-x-hidden px-3 py-4 text-white sm:px-4">
       <header className="space-y-1">
         <h1 className="flex items-center gap-2 text-lg font-bold"><ClipboardList size={20} className="text-sky-300" />回報與修正</h1>
         <p className="text-xs leading-relaxed text-zinc-300">
@@ -143,7 +143,7 @@ function ReportItem({ report: r, mine }: { report: PublicReport; mine: boolean }
         </span>
         <span className="font-mono text-zinc-500">#{r.id}</span>
         {mine && <span className="rounded bg-sky-900/70 px-1.5 py-0.5 text-sky-200">你送的</span>}
-        <span>{meta.join('・')}</span>
+        <span className="min-w-0 break-words">{meta.join('・')}</span>
       </div>
       <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-zinc-100">{r.text}</p>
       {(r.note || r.link) && (

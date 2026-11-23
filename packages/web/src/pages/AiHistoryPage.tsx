@@ -52,7 +52,7 @@ export default function AiHistoryPage(): JSX.Element {
   const setGameState = useGameStore((s) => s.setGameState);
   const human = useHumanRefs();
   return (
-    <div className="relative z-10 mx-auto max-w-4xl space-y-6 px-4 py-4 text-white">
+    <div className="relative z-10 mx-auto max-w-4xl space-y-6 overflow-x-hidden px-3 py-4 text-white sm:px-4">
       <header className="space-y-2">
         <button
           type="button"
@@ -196,7 +196,7 @@ function TrendChart({ series, human }: { series: AiSeriesPoint[]; human: HumanRe
       </div>
       <div className="relative rounded-lg border border-zinc-800 bg-zinc-900/70 py-2">
         <div ref={wrapRef} className="w-full">
-        <svg width={BOX.width} height={BOX.height} viewBox={`0 0 ${BOX.width} ${BOX.height}`} className="block" role="img" aria-label="百科AI 預設每回合之後的藍方最終勝率與任務三藍率">
+        <svg width={BOX.width} height={BOX.height} viewBox={`0 0 ${BOX.width} ${BOX.height}`} className="block h-auto max-w-full" role="img" aria-label="百科AI 預設每回合之後的藍方最終勝率與任務三藍率">
           {geo.ticks.map((t) => (
             <g key={t}>
               <line x1={BOX.left} x2={BOX.width - BOX.right} y1={geo.yOf(t)} y2={geo.yOf(t)} stroke="#3f3f46" strokeWidth={t === 0 ? 1 : 0.5} />
@@ -240,7 +240,7 @@ function TrendChart({ series, human }: { series: AiSeriesPoint[]; human: HumanRe
         </div>
         {hp && (
           <div
-            className="pointer-events-none absolute top-2 rounded-md border border-zinc-700 bg-zinc-950/95 px-2 py-1 text-[11px] leading-snug text-zinc-200 shadow"
+            className="pointer-events-none absolute top-2 max-w-[calc(100%-3.5rem)] break-words rounded-md border border-zinc-700 bg-zinc-950/95 px-2 py-1 text-[11px] leading-snug text-zinc-200 shadow"
             style={hp.x / BOX.width > 0.6 ? { right: '0.75rem' } : { left: '3rem' }}
           >
             <div className="font-semibold text-white">第 {hp.p.round} 回合{hp.p.side ? `（改${hp.p.side === 'blue' ? '藍' : '紅'}方）` : ''}</div>

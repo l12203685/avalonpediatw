@@ -36,14 +36,14 @@ export default function LineupFilterEditor({ value, onChange, testIdPrefix = 'li
   const set = (patch: Partial<LineupFilterState>): void => onChange(sanitizeLineupState({ ...value, ...patch }));
   const enabled = (value.sOn ? 1 : 0) + (value.countOn ? 1 : 0) + ROLE_CONDITIONS.filter((r) => value.roleOn[r.key]).length;
   return (
-    <div className="flex flex-col gap-1 text-xs text-zinc-300" data-testid={`${testIdPrefix}-filter`}>
+    <div className="flex min-w-0 flex-col gap-1 text-xs text-zinc-300" data-testid={`${testIdPrefix}-filter`}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <label className="inline-flex items-center gap-1">
+        <label className="inline-flex max-w-full flex-wrap items-center gap-1">
           <input type="checkbox" checked={value.sOn} onChange={(e) => set({ sOn: e.target.checked })} data-testid={`${testIdPrefix}-s-on`} />
           <span title="S = 桌上 10 人開打前 PR 的平均">S ≥</span>
           <NumberBox value={value.sMin} min={0} max={100} label="S 下限" disabled={!value.sOn} onChange={(v) => set({ sMin: v })} testId={`${testIdPrefix}-s-min`} />
         </label>
-        <label className="inline-flex items-center gap-1">
+        <label className="inline-flex max-w-full flex-wrap items-center gap-1">
           <input type="checkbox" checked={value.countOn} onChange={(e) => set({ countOn: e.target.checked })} data-testid={`${testIdPrefix}-count-on`} />
           <span>PR</span>
           <NumberBox value={value.strongPr} min={0} max={100} label="PR 門檻" disabled={!value.countOn} onChange={(v) => set({ strongPr: v })} testId={`${testIdPrefix}-pr`} />

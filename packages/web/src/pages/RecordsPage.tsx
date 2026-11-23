@@ -213,7 +213,7 @@ export default function RecordsPage(): JSX.Element {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-3 pb-10 pt-3 sm:px-4" data-testid="records-page">
+    <div className="mx-auto max-w-4xl overflow-x-hidden px-3 pb-10 pt-3 sm:px-4" data-testid="records-page">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <div className="flex items-center gap-1.5">
           <ScrollText size={20} className="text-amber-300" />
@@ -300,7 +300,7 @@ export default function RecordsPage(): JSX.Element {
             max={filter.to || undefined}
             onChange={(e) => updateFilter((f) => ({ ...f, from: e.target.value }))}
             aria-label="從"
-            className="w-[8.5rem] rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-white [color-scheme:dark]"
+            className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-white [color-scheme:dark] sm:w-[8.5rem] sm:flex-none"
           />
           <span>到</span>
           <input
@@ -309,7 +309,7 @@ export default function RecordsPage(): JSX.Element {
             min={filter.from || undefined}
             onChange={(e) => updateFilter((f) => ({ ...f, to: e.target.value }))}
             aria-label="到"
-            className="w-[8.5rem] rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-white [color-scheme:dark]"
+            className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-white [color-scheme:dark] sm:w-[8.5rem] sm:flex-none"
           />
         </div>
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-zinc-400" data-testid="records-lineup-row">
