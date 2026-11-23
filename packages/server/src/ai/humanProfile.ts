@@ -33,8 +33,11 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
   strongHuman: '強真人桌',
 };
 
-/** 真人桌可以偏離基準線的開關（只有讀人的信念，而且只給藍方座位）。 */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56'];
+/**
+ * 真人桌可以偏離基準線的開關：讀人的信念（只給藍方座位），加上第 58 回合一個梅林派隊的開關 `merlinOwnRank58`——
+ * 站長 2026-11-20 的裁定本身就是這條派法（「要從公開資訊中找到符合自己內建資訊」），真人局重播（梅林的提議、人類 PR 量尺兩半）都沒有一層變差。
+ */
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -53,8 +56,11 @@ export const TIER_MAX_STEP = 0.1;
  *   真人的票比基準線讀的少帶資訊——驗證的一半全部 ΔBrier −14.7e-4，弱／一般／強／S 不明 × 忠臣／派西／梅林每一格都變好。
  * - 任務牌分有沒有奧伯倫（`missionRole56=1`，第 56 回合；只給藍方座位）：第 57 回合，擬合 −1.8e-4、驗證 −1.2e-4（都約 2.5 個標準誤），
  *   每一層都沒有角色變差超過雜訊；人類 PR 量尺不變（+0.03 ± 0.02 pp／座位局）。
+ * - 梅林在公開上說得通的乾淨隊裡先比自己的乾淨機率（`merlinOwnRank58=0.5`，第 58 回合；站長 11/20「要從公開資訊中找到符合自己內建資訊」）：
+ *   真人梅林 3,465 個提議重播 Jaccard +0.006 ± 0.006、全好隊 +1.8pp，沒有一層變差；人類 PR 量尺梅林 +0.69 ± 0.18 pp／座位局（偶數局 +0.60、奇數局 +0.77），
+ *   各層兩半都在 2 個標準誤內；網站 Room-17（2026-11-20）3-5 梅林不再派帶莫德雷德的隊。自我對打 −0.36（刺客讀得到），所以基準線不用。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

@@ -14,7 +14,7 @@
  *   3. 沒有 → 照公開視角的忠臣派（公開機率最高、同分看延伸前面的派票、再同分照局面雜湊；拇指在不在隊上由公開局勢決定）。
  * `merlinPublicThumbScope58`：第 3 步（照公開視角派拇指）用在哪些提議。0／1 = 出任務的機率低於一成的提議（第 1、2 局非強制，
  *   `BlueRound37.PROPOSAL_GO_RATE`，同 `merlinFlowFollow`）；2 = 每一次非強制的提議；3 = 每一次提議；4 = 不用（只用 `merlinOwnRank58`）。範圍外照現行（乾淨的隊裡公開最乾淨的）。
- * `merlinOwnRank58 = 1`（「符合自己內建資訊」）：第 2 步在公開上說得通的乾淨隊裡，先比梅林自己的「這隊沒有紅」機率（他看得到的紅＋用私人資訊推得到的莫德雷德），
+ * `merlinOwnRank58 = r′`（0–1，0 = 關；「符合自己內建資訊」）：第 1 步在公開上說得通的乾淨隊裡，先比梅林自己的「這隊沒有紅」機率（他看得到的紅＋用私人資訊推得到的莫德雷德），
  *   同分再照現行的公開分數；每一次梅林照忠臣方式的提議都用（第 3 步仍照上面的範圍）。
  *   驗收案例：2026-11-20 網站 Room-17 一局（DC #牌譜紀錄與覆盤；決策 #130），梅林 5 家看得到 1、3、10，第 1 局 456 失敗 → 莫德雷德在 4、6 之一；
  *   3-5 現行仍派帶 6 的隊（6 = 莫德雷德，任務失敗、紅方三勝）。公開上說得通、又完全避開 4、6 的隊存在，梅林就該派那一支。
@@ -30,8 +30,7 @@ export const round58Stats = { applies: 0, cleanKept: 0, fallback: 0, fallbackThu
 
 /** 這一次梅林的提議要不要套第 58 回合的規則（第 3 步的範圍另外看 `publicThumb58FallbackOn`）。 */
 export function publicThumb58Applies(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  const r = tuning.merlinPublicThumb58 ?? 0;
-  if (!(r > 0) || obs.myRole !== 'merlin') return false;
+  if (obs.myRole !== 'merlin') return false;
   return (tuning.merlinOwnRank58 ?? 0) > 0 || publicThumb58FallbackOn(tuning, obs);
 }
 
@@ -82,7 +81,8 @@ export function publicThumb58Team(
   publicAllowed: (team: readonly string[]) => boolean,
   ctx: PublicThumb58Ctx,
 ): string[] | null {
-  const r = Math.min(tuning.merlinPublicThumb58 ?? 0, 1);
+  // 「說得通」的倍數：有 `merlinPublicThumb58` 用它，否則用 `merlinOwnRank58` 的值（只比自己的乾淨機率、不派拇指）。
+  const r = Math.min((tuning.merlinPublicThumb58 ?? 0) > 0 ? tuning.merlinPublicThumb58 : tuning.merlinOwnRank58 ?? 0, 1);
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
   const none = new Set<string>();

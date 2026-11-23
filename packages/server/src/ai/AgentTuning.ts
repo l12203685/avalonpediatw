@@ -1378,7 +1378,10 @@ export interface AgentTuning {
   merlinPublicThumb58: number;
   /** 第 58 回合：`merlinPublicThumb58` 用在哪些提議。0／1 = 出任務的機率低於一成的提議（第 1、2 局非強制，同 `merlinFlowFollow`）；2 = 每一次非強制的提議；3 = 每一次提議；4 = 不派拇指（只用 `merlinOwnRank58`）。 */
   merlinPublicThumbScope58: number;
-  /** 第 58 回合（`Round58.ts`，要和 `merlinPublicThumb58` 一起開）：公開上說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率（「符合自己內建資訊」），每一次梅林照忠臣方式的提議都用。0 = 關。 */
+  /**
+   * 第 58 回合（`Round58.ts`；站長 11/20「要從公開資訊中找到符合自己內建資訊」）：公開上說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率，每一次梅林照忠臣方式的提議都用。
+   * 值 = 「說得通」的倍數 r′（0–1）；同時開 `merlinPublicThumb58` 時倍數用它的值。0 = 關。
+   */
   merlinOwnRank58: number;
   /** 第 41 回合（藍方持湖，BlueRound41.ts；報告第 (3) 節＋專案負責人更正）：湖中分數 = h(P(紅)) ＋ 權重 × P(好)，權重 紅方未兩勝而且後面還有湖 2、紅方已兩勝與最後一湖 0；低兩位 = 紅方已兩勝時的資訊做法（1 最不確定、2 最可能是紅、3 第 1 湖最可能是紅、第 2、3 湖最不確定）；位元 4 = 第 1 湖 SF 不分人選範圍（只量）；位元 16 = 梅林用自己的後驗排序（只量）；診斷用（只量）32 = 第 1 湖 FS 照原本、64 = 只用在第 1 湖、128 = 只用在第 2、3 湖、256 = 只用在第 2 湖（第 42 回合）。0 = 關。 */
   goodLake41: number;
@@ -3282,8 +3285,8 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     return { merlinPublicThumbScope58: value };
   }
   if (name === 'merlinOwnRank58') {
-    const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 1) throw new Error(`merlinOwnRank58 needs 0–1, got "${raw}"`);
+    const value = raw === undefined ? 0.5 : Number.parseFloat(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`merlinOwnRank58 needs 0–1, got "${raw}"`);
     return { merlinOwnRank58: value };
   }
   if (name === 'blueVoteTemper57') {

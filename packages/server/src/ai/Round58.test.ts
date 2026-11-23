@@ -7,6 +7,7 @@ import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag } from './AgentTuning';
 import { publicThumb58Applies, publicThumb58FallbackOn, round58Stats } from './Round58';
+import { tuningForOpponent } from './humanProfile';
 import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
 import { withSeededRandom } from './benchmark/agreement';
@@ -27,10 +28,13 @@ describe('round 58 flags', () => {
     expect(parseTuningFlag('merlinPublicThumb58')).toEqual({ merlinPublicThumb58: 0.5 });
     expect(parseTuningFlag('merlinPublicThumb58=0.7')).toEqual({ merlinPublicThumb58: 0.7 });
     expect(parseTuningFlag('merlinPublicThumbScope58=2')).toEqual({ merlinPublicThumbScope58: 2 });
-    expect(parseTuningFlag('merlinOwnRank58')).toEqual({ merlinOwnRank58: 1 });
+    expect(parseTuningFlag('merlinOwnRank58')).toEqual({ merlinOwnRank58: 0.5 });
     expect(() => parseTuningFlag('merlinPublicThumb58=1.5')).toThrow();
     expect(() => parseTuningFlag('merlinPublicThumbScope58=5')).toThrow();
     expect(() => parseTuningFlag('merlinOwnRank58=2')).toThrow();
+    // own ranking alone (no thumb step): applies at every Merlin proposal
+    expect(publicThumb58Applies(T({ merlinOwnRank58: 0.5 }), obsAt(1, 0))).toBe(true);
+    expect(publicThumb58FallbackOn(T({ merlinOwnRank58: 0.5 }), obsAt(1, 0))).toBe(false);
   });
 
   it('scope: low go-rate proposals (R1–R2 non-forced) by default; 2 = every non-forced; 3 = every proposal; Merlin only', () => {
@@ -118,5 +122,8 @@ describe('Room-17 (site, 2026-11-20, decision #130): Merlin 5 at 3-5', () => {
       expect(team.some((s) => [1, 3, 4, 6, 10].includes(s))).toBe(false);
     }
     expect(round58Stats.ownChanged).toBeGreaterThan(before);
+    // the single-switch form used by the human-table profiles (round 58: merlinOwnRank58=0.5, no thumb step)
+    expect(merlinTeams(T({ merlinOwnRank58: 0.5 }))['3-5']).toEqual([5, 7, 8, 9]);
+    expect(merlinTeams(tuningForOpponent('avgHuman', T()))['3-5']).toEqual([5, 7, 8, 9]);
   }, 60000);
 });
