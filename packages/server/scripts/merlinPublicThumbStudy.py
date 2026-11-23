@@ -81,6 +81,9 @@ def main():
         ('高端桌 S≥55', lambda r: r['s'] is not None and r['s'] >= 55),
         ('高強度 S≥65', lambda r: r['s'] is not None and r['s'] >= 65),
         ('梅林 PR≥80', lambda r: r['pr'] is not None and r['pr'] >= 80),
+        ('弱桌 S<38', lambda r: r['s'] is not None and r['s'] < 38),
+        ('一般桌 38≤S<55', lambda r: r['s'] is not None and 38 <= r['s'] < 55),
+        ('S 不明', lambda r: r['s'] is None),
     ]
     scopes = [
         ('每一次提議', lambda r: True),
