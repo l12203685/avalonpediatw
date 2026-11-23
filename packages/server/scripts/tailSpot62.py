@@ -12,7 +12,8 @@
      每個座位「是紅」與「被真人／機器人選上」各自和這些訊號的關係（條件 logit／logistic，偶數局擬合、奇數局驗證）。
   3. 機器人和強者派不同隊的類型與結果。
 
-  python3 scripts/tailSpot62.py --human h.jsonl --rows r_*.jsonl [--md out.md] [--cols A,H,...]
+  python3 scripts/tailSpot62.py --human h.jsonl --rows r_*.jsonl [--md out.md] [--cols A,H,...] [--cand T1:H,TA:A]
+  4. 候選開關在同一批決策點的乾淨率配對差（--cand）。
 """
 import argparse
 import json
@@ -142,6 +143,7 @@ def main():
     ap.add_argument('--rows', nargs='+', required=True)
     ap.add_argument('--md')
     ap.add_argument('--cols', default='A,H')
+    ap.add_argument('--cand', help='候選:對照,…（例：T1:H,TA:A）')
     a = ap.parse_args()
     games = {g['gi']: g for g in load([a.human])}
     rows = [r for r in load(a.rows) if r['gi'] in games]
@@ -266,44 +268,60 @@ def main():
           f'{np.mean([sum(is_red(g(r), s) for s in g(r)["quests"][0][1]) for r in xs]):.2f} | {np.mean([r["hClean"] for r in xs])*100:.1f} | {np.mean([r["c_A"] for r in xs])*100:.1f} | '
           f'{np.mean([r["ctx"]["r1leader"] in r["human"] for r in xs])*100:.1f} | {np.mean([r["ctx"]["r1leader"] in r["teams"]["A"] for r in xs])*100:.1f} |')
 
-    # 每個座位：是紅、被選上（真人／強者／A）與訊號
-    P('\n**每個座位（隊長以外，忠臣／派西當隊長）：訊號 → 是紅、被選上**（logistic；係數 = log-odds，括號 = 標準誤；基準線後驗的 logit 一起放，看訊號在機器人的讀法之外還多帶多少）\n')
-    feat_names = ['inR1', 'r1Leader', 'nPropR1', 'nPropR2', 'proposedR1Team', 'apprR1TeamRate']
-    zh = {'inR1': '在第 1 局失敗隊上', 'r1Leader': '是 1-5 的隊長', 'nPropR1': '1-1…1-4 被別人提過幾次', 'nPropR2': '2-1…2-4 被別人提過幾次',
-          'proposedR1Team': '提過含失敗隊兩人以上的隊', 'apprR1TeamRate': '對含失敗隊兩人以上的隊的贊成率'}
+    # 每個座位：第 62 回合公開讀法的特徵（`Round62.tailRead62Features`，f62）→ 是紅（在後驗之外）、被選上
+    FN = ['inR1', 'r1Lead', 'r1Pick', 'r1LeadUnr', 'consSeed', 'nPropR1', 'nPropR2', 'apprR1out', 'apprR2fail', 'r2PropFail']
+    zh = {'inR1': '在第 1 局失敗隊上', 'r1Lead': '派第 1 局那一隊的隊長', 'r1Pick': '第 1 局隊上、隊長自己挑的（1-1…1-4 沒人提過）',
+          'r1LeadUnr': '第 1 局隊長、隊上有他自己挑的人（不合理的隊）', 'consSeed': '1-1…1-4 自己的提議放了幾個第 1 局隊員', 'nPropR1': '1-1…1-4 被別人提過幾次',
+          'nPropR2': '2-1…2-4 被別人提過幾次', 'apprR1out': '1-1…1-4 不在隊上時對含兩個第 1 局隊員的隊的贊成率（−0.5…+0.5）',
+          'apprR2fail': '2-1…2-4 對含兩個第 1 局隊員的隊的贊成率', 'r2PropFail': '2-1…2-4 自己派了含第 1 局隊員的隊'}
     seats = []
     for r in sig_rows:
-        if r['role'] not in ('loyal', 'percival'):
+        if r['role'] not in ('loyal', 'percival') or not r.get('f62'):
             continue
         g = games[r['gi']]
-        for s, f in r['feats'].items():
-            seats.append((r, s, f, is_red(g, s), s in r['human'], s in r['teams']['A']))
+        for s, f in r['f62'].items():
+            s = int(s)
+            ph = min(max(r['redH'][s - 1], 1e-4), 1 - 1e-4)
+            seats.append(dict(gi=r['gi'], strong=(r['s'] or -1) >= 55, red=float(is_red(g, s)), off=math.log(ph / (1 - ph)), f=f,
+                              hum=float(s in r['human']), A=float(s in r['teams']['A'])))
 
     def logit_fit(X, y):
         X = np.column_stack([np.ones(len(X)), X])
         b = np.zeros(X.shape[1])
-        for _ in range(50):
+        for _ in range(60):
             p = 1 / (1 + np.exp(-X @ b))
-            W = p * (1 - p)
-            H = X.T @ (X * W[:, None]) + 1e-6 * np.eye(X.shape[1])
+            H = X.T @ (X * (p * (1 - p))[:, None]) + 1e-6 * np.eye(X.shape[1])
             b += np.linalg.solve(H, X.T @ (y - p))
-        se = np.sqrt(np.diag(np.linalg.inv(H)))
-        return b, se
+        return b, np.sqrt(np.diag(np.linalg.inv(H)))
 
-    X = np.array([[f[k] for k in feat_names] for _, _, f, _, _, _ in seats], float)
-    yred = np.array([x[3] for x in seats], float)
-    yh = np.array([x[4] for x in seats], float)
-    yA = np.array([x[5] for x in seats], float)
-    strong = np.array([(x[0]['s'] or -1) >= 55 for x in seats])
-    res = {}
-    for name, y, m in (('是紅', yred, np.ones(len(seats), bool)), ('真人選上', yh, np.ones(len(seats), bool)),
-                       ('高端桌真人選上', yh, strong), ('機器人 A 選上', yA, np.ones(len(seats), bool))):
-        res[name] = logit_fit(X[m], y[m])
-    P('| 訊號 | ' + ' | '.join(res) + ' |')
-    P('|---|' + '---|' * len(res))
-    for i, k in enumerate(['常數'] + feat_names):
-        P(f'| {zh.get(k, k)} | ' + ' | '.join(f'{b[i]:+.2f}（{se[i]:.2f}）' for b, se in res.values()) + ' |')
-    P(f'\n（座位數 {len(seats)}，高端桌 {int(strong.sum())}。「是紅」是真相；選上的係數和「是紅」同號 = 選了比較紅的人。）\n')
+    if seats:
+        off = np.array([x['off'] for x in seats])
+        F = np.array([x['f'] for x in seats], float)
+        X = np.column_stack([off, F])
+        ev = np.array([x['gi'] % 2 == 0 for x in seats])
+        st = np.array([x['strong'] for x in seats])
+        y = {k: np.array([x[k] for x in seats]) for k in ('red', 'hum', 'A')}
+        fits = [('是紅（全部）', 'red', np.ones(len(seats), bool)), ('是紅（偶數局）', 'red', ev), ('是紅（奇數局）', 'red', ~ev),
+                ('真人選上', 'hum', np.ones(len(seats), bool)), ('高端桌真人選上', 'hum', st), ('機器人 A 選上', 'A', np.ones(len(seats), bool))]
+        res = [(n, *logit_fit(X[m], y[k][m])) for n, k, m in fits]
+        P('\n**每個座位（隊長以外，忠臣／派西當隊長）：公開讀法的特徵 → 是紅（在真人桌策略層後驗之外）、被選上**'
+          '（logistic；第一列是後驗 logit 的係數，其他是殘差係數 = log-odds，括號 = 標準誤）\n')
+        P('| 特徵 | ' + ' | '.join(n for n, _, _ in res) + ' |')
+        P('|---|' + '---|' * len(res))
+        for i, k in enumerate(['常數', '後驗 logit'] + FN):
+            P(f'| {zh.get(k, k)} | ' + ' | '.join(f'{b[i]:+.2f}（{se[i]:.2f}）' for _, b, se in res) + ' |')
+        P(f'\n（座位數 {len(seats)}，高端桌 {int(st.sum())}。「是紅」的殘差係數 ≈ 0 = 後驗已經讀到；選上的係數和「是紅」不同號 = 選人時看了沒有資訊的訊號。）\n')
+        # 交叉驗證：一半擬合殘差權重、另一半看預測（對數損失）
+        def ll(p, t):
+            p = np.clip(p, 1e-6, 1 - 1e-6)
+            return -np.mean(t * np.log(p) + (1 - t) * np.log(1 - p))
+        P('| 擬合 → 驗證 | 後驗本身 對數損失 | 加上讀法（只用特徵權重，同開關） | 差 |')
+        P('|---|---|---|---|')
+        for tr, te, nm in ((ev, ~ev, '偶數局 → 奇數局'), (~ev, ev, '奇數局 → 偶數局')):
+            b, _ = logit_fit(X[tr], y['red'][tr])
+            p0 = 1 / (1 + np.exp(-off[te]))
+            p1 = 1 / (1 + np.exp(-(off[te] + F[te] @ b[2:])))
+            P(f'| {nm} | {ll(p0, y["red"][te]):.5f} | {ll(p1, y["red"][te]):.5f} | {ll(p1, y["red"][te]) - ll(p0, y["red"][te]):+.5f} |')
 
     # ─── 3. 機器人和強者派不同隊的類型 ───
     P('\n### 3. 機器人（A）和真人派不同隊：類型與結果（高端桌 S≥55；全部真人在括號）\n')
@@ -326,6 +344,28 @@ def main():
                 continue
             m = lambda ys, k: np.mean([y[k] for y in ys]) * 100 if ys else float('nan')
             P(f'| {t} | {len(st)} | {m(st, "hClean"):.1f} | {m(st, "c_A"):.1f} | {m(st, "hWin"):.1f} | {len(al)} | {m(al, "hClean"):.1f} | {m(al, "c_A"):.1f} | {m(al, "hWin"):.1f} |')
+
+    # ─── 4. 候選開關：同一批決策點的配對差 ───
+    if a.cand:
+        P('\n### 4. 候選開關：同一批決策點，乾淨率 候選 − 對照（以局為群集的 bootstrap）\n')
+        P('| 候選（對照） | 局面 | 樣本 | 角色 | n | 改到的點 | 對照 乾淨 % | 候選 乾淨 % | 差 [95%] |')
+        P('|---|---|---|---|---|---|---|---|---|')
+        for pair in a.cand.split(','):
+            c, b0 = pair.split(':')
+            for sp in spots:
+                for tn, tf in tiers:
+                    for rl, rf in roles:
+                        xs = [r for r in rows if r['spot'] == sp and tf(r) and rf(r) and r['teams'].get(c) and r['teams'].get(b0)]
+                        if len(xs) < 10:
+                            continue
+                        ch = sum(1 for r in xs if r['teams'][c] != r['teams'][b0])
+                        if sp != '2-5（0:1）' and ch == 0:
+                            continue
+                        gi = [r['gi'] for r in xs]
+                        cb = [clean(games[r['gi']], r['teams'][b0]) for r in xs]
+                        cc = [clean(games[r['gi']], r['teams'][c]) for r in xs]
+                        d = boot_mean([x - y for x, y in zip(cc, cb)], gi)
+                        P(f'| {c}（{b0}） | {sp} | {tn} | {rl} | {len(xs)} | {ch} | {np.mean(cb)*100:.1f} | {np.mean(cc)*100:.1f} | {fmt(d, sign=True)} |')
 
     out = '\n'.join(md) + '\n'
     if a.md:
