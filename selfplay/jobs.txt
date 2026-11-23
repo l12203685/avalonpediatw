@@ -1,4 +1,4 @@
-# 標籤|開關|種子|起始局號|局數  （第 65 回合篩選，紅方座位：W5／W3 = redCrowdWhite65=0.5／0.3（跟著大家外白）、K5 = redStackRate65=0.5（第 3、5 局疊隊友的比例）、ON = oberonNormalVote（奧伯倫照雜魚投票；第 2 批）、OW = oberonNormalVote＋redCrowdWhite65=0.5；563001 第 0–49,999 局 detail=1，和 r58-screen 的 P7（= 現行預設，本機 20／20 逐局相同）逐局配對）
+# 標籤|開關|種子|起始局號|局數  （第 65 回合篩選，紅方座位：W5／W3 = redCrowdWhite65=0.5／0.3（跟著大家外白）、K5 = redStackRate65=0.5（第 3、5 局疊隊友的比例）、ON = oberonNormalVote（奧伯倫照雜魚投票；第 2 批）、OW = oberonNormalVote＋redCrowdWhite65=0.5；確認（第 3 批，新種子 653001 第 0–49,999 局）：CB = 現行預設、CN = ON；篩選 563001 第 0–49,999 局 detail=1，和 r58-screen 的 P7（= 現行預設，本機 20／20 逐局相同）逐局配對）
 W5|red.redCrowdWhite65=0.5 detail=1|563001|0|500
 W5|red.redCrowdWhite65=0.5 detail=1|563001|500|500
 W5|red.redCrowdWhite65=0.5 detail=1|563001|1000|500
@@ -499,3 +499,203 @@ ON|red.oberonNormalVote=1 detail=1|563001|48000|500
 ON|red.oberonNormalVote=1 detail=1|563001|48500|500
 ON|red.oberonNormalVote=1 detail=1|563001|49000|500
 ON|red.oberonNormalVote=1 detail=1|563001|49500|500
+CB|detail=1|653001|0|500
+CN|red.oberonNormalVote=1 detail=1|653001|0|500
+CB|detail=1|653001|500|500
+CN|red.oberonNormalVote=1 detail=1|653001|500|500
+CB|detail=1|653001|1000|500
+CN|red.oberonNormalVote=1 detail=1|653001|1000|500
+CB|detail=1|653001|1500|500
+CN|red.oberonNormalVote=1 detail=1|653001|1500|500
+CB|detail=1|653001|2000|500
+CN|red.oberonNormalVote=1 detail=1|653001|2000|500
+CB|detail=1|653001|2500|500
+CN|red.oberonNormalVote=1 detail=1|653001|2500|500
+CB|detail=1|653001|3000|500
+CN|red.oberonNormalVote=1 detail=1|653001|3000|500
+CB|detail=1|653001|3500|500
+CN|red.oberonNormalVote=1 detail=1|653001|3500|500
+CB|detail=1|653001|4000|500
+CN|red.oberonNormalVote=1 detail=1|653001|4000|500
+CB|detail=1|653001|4500|500
+CN|red.oberonNormalVote=1 detail=1|653001|4500|500
+CB|detail=1|653001|5000|500
+CN|red.oberonNormalVote=1 detail=1|653001|5000|500
+CB|detail=1|653001|5500|500
+CN|red.oberonNormalVote=1 detail=1|653001|5500|500
+CB|detail=1|653001|6000|500
+CN|red.oberonNormalVote=1 detail=1|653001|6000|500
+CB|detail=1|653001|6500|500
+CN|red.oberonNormalVote=1 detail=1|653001|6500|500
+CB|detail=1|653001|7000|500
+CN|red.oberonNormalVote=1 detail=1|653001|7000|500
+CB|detail=1|653001|7500|500
+CN|red.oberonNormalVote=1 detail=1|653001|7500|500
+CB|detail=1|653001|8000|500
+CN|red.oberonNormalVote=1 detail=1|653001|8000|500
+CB|detail=1|653001|8500|500
+CN|red.oberonNormalVote=1 detail=1|653001|8500|500
+CB|detail=1|653001|9000|500
+CN|red.oberonNormalVote=1 detail=1|653001|9000|500
+CB|detail=1|653001|9500|500
+CN|red.oberonNormalVote=1 detail=1|653001|9500|500
+CB|detail=1|653001|10000|500
+CN|red.oberonNormalVote=1 detail=1|653001|10000|500
+CB|detail=1|653001|10500|500
+CN|red.oberonNormalVote=1 detail=1|653001|10500|500
+CB|detail=1|653001|11000|500
+CN|red.oberonNormalVote=1 detail=1|653001|11000|500
+CB|detail=1|653001|11500|500
+CN|red.oberonNormalVote=1 detail=1|653001|11500|500
+CB|detail=1|653001|12000|500
+CN|red.oberonNormalVote=1 detail=1|653001|12000|500
+CB|detail=1|653001|12500|500
+CN|red.oberonNormalVote=1 detail=1|653001|12500|500
+CB|detail=1|653001|13000|500
+CN|red.oberonNormalVote=1 detail=1|653001|13000|500
+CB|detail=1|653001|13500|500
+CN|red.oberonNormalVote=1 detail=1|653001|13500|500
+CB|detail=1|653001|14000|500
+CN|red.oberonNormalVote=1 detail=1|653001|14000|500
+CB|detail=1|653001|14500|500
+CN|red.oberonNormalVote=1 detail=1|653001|14500|500
+CB|detail=1|653001|15000|500
+CN|red.oberonNormalVote=1 detail=1|653001|15000|500
+CB|detail=1|653001|15500|500
+CN|red.oberonNormalVote=1 detail=1|653001|15500|500
+CB|detail=1|653001|16000|500
+CN|red.oberonNormalVote=1 detail=1|653001|16000|500
+CB|detail=1|653001|16500|500
+CN|red.oberonNormalVote=1 detail=1|653001|16500|500
+CB|detail=1|653001|17000|500
+CN|red.oberonNormalVote=1 detail=1|653001|17000|500
+CB|detail=1|653001|17500|500
+CN|red.oberonNormalVote=1 detail=1|653001|17500|500
+CB|detail=1|653001|18000|500
+CN|red.oberonNormalVote=1 detail=1|653001|18000|500
+CB|detail=1|653001|18500|500
+CN|red.oberonNormalVote=1 detail=1|653001|18500|500
+CB|detail=1|653001|19000|500
+CN|red.oberonNormalVote=1 detail=1|653001|19000|500
+CB|detail=1|653001|19500|500
+CN|red.oberonNormalVote=1 detail=1|653001|19500|500
+CB|detail=1|653001|20000|500
+CN|red.oberonNormalVote=1 detail=1|653001|20000|500
+CB|detail=1|653001|20500|500
+CN|red.oberonNormalVote=1 detail=1|653001|20500|500
+CB|detail=1|653001|21000|500
+CN|red.oberonNormalVote=1 detail=1|653001|21000|500
+CB|detail=1|653001|21500|500
+CN|red.oberonNormalVote=1 detail=1|653001|21500|500
+CB|detail=1|653001|22000|500
+CN|red.oberonNormalVote=1 detail=1|653001|22000|500
+CB|detail=1|653001|22500|500
+CN|red.oberonNormalVote=1 detail=1|653001|22500|500
+CB|detail=1|653001|23000|500
+CN|red.oberonNormalVote=1 detail=1|653001|23000|500
+CB|detail=1|653001|23500|500
+CN|red.oberonNormalVote=1 detail=1|653001|23500|500
+CB|detail=1|653001|24000|500
+CN|red.oberonNormalVote=1 detail=1|653001|24000|500
+CB|detail=1|653001|24500|500
+CN|red.oberonNormalVote=1 detail=1|653001|24500|500
+CB|detail=1|653001|25000|500
+CN|red.oberonNormalVote=1 detail=1|653001|25000|500
+CB|detail=1|653001|25500|500
+CN|red.oberonNormalVote=1 detail=1|653001|25500|500
+CB|detail=1|653001|26000|500
+CN|red.oberonNormalVote=1 detail=1|653001|26000|500
+CB|detail=1|653001|26500|500
+CN|red.oberonNormalVote=1 detail=1|653001|26500|500
+CB|detail=1|653001|27000|500
+CN|red.oberonNormalVote=1 detail=1|653001|27000|500
+CB|detail=1|653001|27500|500
+CN|red.oberonNormalVote=1 detail=1|653001|27500|500
+CB|detail=1|653001|28000|500
+CN|red.oberonNormalVote=1 detail=1|653001|28000|500
+CB|detail=1|653001|28500|500
+CN|red.oberonNormalVote=1 detail=1|653001|28500|500
+CB|detail=1|653001|29000|500
+CN|red.oberonNormalVote=1 detail=1|653001|29000|500
+CB|detail=1|653001|29500|500
+CN|red.oberonNormalVote=1 detail=1|653001|29500|500
+CB|detail=1|653001|30000|500
+CN|red.oberonNormalVote=1 detail=1|653001|30000|500
+CB|detail=1|653001|30500|500
+CN|red.oberonNormalVote=1 detail=1|653001|30500|500
+CB|detail=1|653001|31000|500
+CN|red.oberonNormalVote=1 detail=1|653001|31000|500
+CB|detail=1|653001|31500|500
+CN|red.oberonNormalVote=1 detail=1|653001|31500|500
+CB|detail=1|653001|32000|500
+CN|red.oberonNormalVote=1 detail=1|653001|32000|500
+CB|detail=1|653001|32500|500
+CN|red.oberonNormalVote=1 detail=1|653001|32500|500
+CB|detail=1|653001|33000|500
+CN|red.oberonNormalVote=1 detail=1|653001|33000|500
+CB|detail=1|653001|33500|500
+CN|red.oberonNormalVote=1 detail=1|653001|33500|500
+CB|detail=1|653001|34000|500
+CN|red.oberonNormalVote=1 detail=1|653001|34000|500
+CB|detail=1|653001|34500|500
+CN|red.oberonNormalVote=1 detail=1|653001|34500|500
+CB|detail=1|653001|35000|500
+CN|red.oberonNormalVote=1 detail=1|653001|35000|500
+CB|detail=1|653001|35500|500
+CN|red.oberonNormalVote=1 detail=1|653001|35500|500
+CB|detail=1|653001|36000|500
+CN|red.oberonNormalVote=1 detail=1|653001|36000|500
+CB|detail=1|653001|36500|500
+CN|red.oberonNormalVote=1 detail=1|653001|36500|500
+CB|detail=1|653001|37000|500
+CN|red.oberonNormalVote=1 detail=1|653001|37000|500
+CB|detail=1|653001|37500|500
+CN|red.oberonNormalVote=1 detail=1|653001|37500|500
+CB|detail=1|653001|38000|500
+CN|red.oberonNormalVote=1 detail=1|653001|38000|500
+CB|detail=1|653001|38500|500
+CN|red.oberonNormalVote=1 detail=1|653001|38500|500
+CB|detail=1|653001|39000|500
+CN|red.oberonNormalVote=1 detail=1|653001|39000|500
+CB|detail=1|653001|39500|500
+CN|red.oberonNormalVote=1 detail=1|653001|39500|500
+CB|detail=1|653001|40000|500
+CN|red.oberonNormalVote=1 detail=1|653001|40000|500
+CB|detail=1|653001|40500|500
+CN|red.oberonNormalVote=1 detail=1|653001|40500|500
+CB|detail=1|653001|41000|500
+CN|red.oberonNormalVote=1 detail=1|653001|41000|500
+CB|detail=1|653001|41500|500
+CN|red.oberonNormalVote=1 detail=1|653001|41500|500
+CB|detail=1|653001|42000|500
+CN|red.oberonNormalVote=1 detail=1|653001|42000|500
+CB|detail=1|653001|42500|500
+CN|red.oberonNormalVote=1 detail=1|653001|42500|500
+CB|detail=1|653001|43000|500
+CN|red.oberonNormalVote=1 detail=1|653001|43000|500
+CB|detail=1|653001|43500|500
+CN|red.oberonNormalVote=1 detail=1|653001|43500|500
+CB|detail=1|653001|44000|500
+CN|red.oberonNormalVote=1 detail=1|653001|44000|500
+CB|detail=1|653001|44500|500
+CN|red.oberonNormalVote=1 detail=1|653001|44500|500
+CB|detail=1|653001|45000|500
+CN|red.oberonNormalVote=1 detail=1|653001|45000|500
+CB|detail=1|653001|45500|500
+CN|red.oberonNormalVote=1 detail=1|653001|45500|500
+CB|detail=1|653001|46000|500
+CN|red.oberonNormalVote=1 detail=1|653001|46000|500
+CB|detail=1|653001|46500|500
+CN|red.oberonNormalVote=1 detail=1|653001|46500|500
+CB|detail=1|653001|47000|500
+CN|red.oberonNormalVote=1 detail=1|653001|47000|500
+CB|detail=1|653001|47500|500
+CN|red.oberonNormalVote=1 detail=1|653001|47500|500
+CB|detail=1|653001|48000|500
+CN|red.oberonNormalVote=1 detail=1|653001|48000|500
+CB|detail=1|653001|48500|500
+CN|red.oberonNormalVote=1 detail=1|653001|48500|500
+CB|detail=1|653001|49000|500
+CN|red.oberonNormalVote=1 detail=1|653001|49000|500
+CB|detail=1|653001|49500|500
+CN|red.oberonNormalVote=1 detail=1|653001|49500|500
