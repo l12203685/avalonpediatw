@@ -4,7 +4,7 @@ import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag, resolveAgen
 import { publicTeamRedProb67, redEarlyBlack67 } from './Round67';
 import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
-import { PROFILE_OVERRIDES } from './humanProfile';
+import { OPPONENT_TYPES, PROFILE_OVERRIDES, tuningForOpponent } from './humanProfile';
 
 const ids = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const allYes = (team: readonly string[]): Record<string, boolean> => Object.fromEntries(ids.map((id) => [id, team.includes(id) || id === 'P9']));
@@ -30,11 +30,15 @@ const r1Obs = (over: Partial<PlayerObservation> = {}): PlayerObservation =>
 
 describe('round 67 switches', () => {
   it('default off in the default and the legacy tables and on every opponent profile; flags parse', () => {
-    for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
-      expect(t.redEarlyBlack67).toBe(0);
-      expect(t.redEarlyBlack67Scope).toBe(0);
+    // Round 67: the default (bot-only baseline) carries θ = 0.89 with the default scope (Morgana / Mordred, R2 after an R1 fail, a teammate on
+    // the team, not the decisive vote); the legacy table is off; the human tables inherit the baseline (no override).
+    expect(DEFAULT_AGENT_TUNING.redEarlyBlack67).toBe(0.89);
+    expect(LEGACY_AGENT_TUNING.redEarlyBlack67).toBe(0);
+    for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) expect(t.redEarlyBlack67Scope).toBe(0);
+    for (const k of OPPONENT_TYPES) {
+      expect(PROFILE_OVERRIDES[k].redEarlyBlack67).toBeUndefined();
+      expect(tuningForOpponent(k).redEarlyBlack67).toBe(0.89);
     }
-    for (const k of ['ai', 'weakHuman', 'avgHuman', 'strongHuman'] as const) expect(PROFILE_OVERRIDES[k].redEarlyBlack67 ?? 0).toBe(0);
     expect(parseTuningFlag('redEarlyBlack67')).toEqual({ redEarlyBlack67: 0.8 });
     expect(parseTuningFlag('redEarlyBlack67=0.6')).toEqual({ redEarlyBlack67: 0.6 });
     expect(parseTuningFlag('redEarlyBlack67Scope')).toEqual({ redEarlyBlack67Scope: 25 });
@@ -57,10 +61,11 @@ describe('redEarlyBlack67', () => {
     expect(publicTeamRedProb67(DEFAULT_AGENT_TUNING, obs({ knownEvils: ['P8', 'P9'] }), obs().proposedTeam ?? [])).toBeCloseTo(p as number, 9);
   });
 
-  it('inner-blacks exactly when P(red on the team) ≥ θ; off by default', () => {
+  it('inner-blacks exactly when P(red on the team) ≥ θ; off in the legacy table', () => {
     expect(redEarlyBlack67(at((p as number) - 0.01), obs())).toBe(true);
     expect(redEarlyBlack67(at(Math.min(1, (p as number) + 0.01)), obs())).toBe(false);
-    expect(redEarlyBlack67(DEFAULT_AGENT_TUNING, obs())).toBe(false);
+    expect(redEarlyBlack67(LEGACY_AGENT_TUNING, obs())).toBe(false);
+    expect(redEarlyBlack67({ ...DEFAULT_AGENT_TUNING, redEarlyBlack67: 0 }, obs({ myRole: 'morgana', myPlayerId: 'P3', knownEvils: ['P2', 'P7'] }))).toBe(false);
   });
 
   it('off the team, as the leader, R3, the forced proposal, blue seats and other phases: never', () => {
@@ -112,7 +117,8 @@ describe('redEarlyBlack67', () => {
       const a = new ForwardAgent('P2', base).decide({ ...obs(), seatTeam: 'evil' } as PlayerObservation).action;
       return a.type === 'team_vote' ? a.vote : null;
     };
-    expect(decide(resolveAgentTuning({}))).toBe(true);
+    expect(decide(resolveAgentTuning({ redEarlyBlack67: 0 }))).toBe(true);
+    expect(decide(resolveAgentTuning({}))).toBe(true); // the default scope leaves the assassin out
     expect(decide(resolveAgentTuning({ redEarlyBlack67: 0.01, redEarlyBlack67Scope: 89 }))).toBe(false);
     expect(decide(resolveAgentTuning({ redEarlyBlack67: 0.01 }))).toBe(true); // the assassin needs bit 64
     expect(decide(resolveAgentTuning({ redEarlyBlack67: 0.999, redEarlyBlack67Scope: 89 }))).toBe(true);

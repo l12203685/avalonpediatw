@@ -3,10 +3,10 @@
   "generatedAt": "2026-11-23",
   "source": "docs/ai/optimization_loop.md 第 4 節＋docs/ai/ai_history.curated.json（scripts/build_ai_history.ts）",
   "stats": {
-    "rounds": 64,
-    "adoptedRounds": 42,
+    "rounds": 65,
+    "adoptedRounds": 43,
     "notAdoptedRounds": 22,
-    "latestRound": "66"
+    "latestRound": "67"
   },
   "headline": [
     {
@@ -228,10 +228,47 @@
       "side": "blue",
       "win": 37.8,
       "task": null,
-      "note": "現在的預設（第 58 回合 P7 篩選 5 萬局）"
+      "note": "第 58 回合 P7 篩選 5 萬局"
+    },
+    {
+      "round": "67",
+      "side": "red",
+      "win": 37.5,
+      "task": null,
+      "note": "現在的預設（第 67 回合篩選＋確認 4 萬局，藍方三藍活 37.45%）"
     }
   ],
   "milestones": [
+    {
+      "id": "r67-red-early-black",
+      "round": "67",
+      "date": "2026-11-23",
+      "side": "red",
+      "roles": [
+        "morgana",
+        "mordred"
+      ],
+      "primary": "red",
+      "kind": "strategy",
+      "what": "莫甘娜、莫德雷德第 2 局（第 1 局失敗之後）在隊上、隊上有隊友時，照同座位只看公開紀錄的忠臣讀這隊：公開上很可能有紅（P ≥ 0.89）就內黑偽裝；自己這一票會決定過不過時照贊成。",
+      "why": "人類 PR 量尺逐決策拆解：機器人紅方第 1、2 局在隊上一律贊成，真人第 2 局內黑約 4%；照讀法開的內黑率和真人一樣（3–4%）。",
+      "win": {
+        "values": [
+          0.31
+        ],
+        "lo": 0.22,
+        "hi": 0.41
+      },
+      "task": {
+        "values": [
+          -0.54
+        ],
+        "lo": -0.65,
+        "hi": -0.43
+      },
+      "sample": "2 萬局篩選＋2 萬局確認合併（逐局配對）",
+      "note": "篩選 +0.28、確認 +0.34，區間都在 0 以上；刺中率不變；分局面距離變小（第 1F 節過）；真人桌沿用。"
+    },
     {
       "id": "r58-merlin-public-thumb",
       "round": "58",

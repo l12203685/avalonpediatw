@@ -2580,7 +2580,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   r2InnerBlack66: 0,
   r2InnerBlack66Roles: 0,
   r2InnerBlack66Mix: 0,
-  redEarlyBlack67: 0,
+  redEarlyBlack67: 0.89,
   redEarlyBlack67Scope: 0,
   innerBlackEvGate63: 0,
   innerBlackEvGate63Mode: 0,
