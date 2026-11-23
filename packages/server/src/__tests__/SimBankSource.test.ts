@@ -9,6 +9,7 @@ import type { ReplayGame } from '../ai/benchmark/sheetsReplay';
 import { buildSimBank } from '../bots/simulation/bank';
 import { assignIds, bankEntryFor, buildBankFile, recordFingerprint, type SimBankFile } from '../bots/simulation/bankCodec';
 import { recordTextOf, rowsFromGameDb } from '../bots/simulation/bankSource';
+import { gameProblem, parseSimExclusions, readSimExclusions, rotationStart } from '../bots/simulation/quality';
 import { seatChar } from '../bots/simulation/seats';
 import { ThreadsGenerator } from '../bots/threads/generate';
 import { addDays, exerciseIdOfPick } from '../bots/threads/plan';
@@ -61,9 +62,53 @@ describe('sim bank source: game_db.json', () => {
         { ...ok, legacyCategory: ['娛樂'] },
       ],
     });
-    expect(counts).toEqual({ rows: 8, notReal: 2, external: 1, unreadable: 1, ruleErrors: 1, completed: 1, passed: 2 });
+    expect(counts).toEqual({ rows: 8, notReal: 2, external: 1, unreadable: 1, ruleErrors: 1, completed: 1, flagged: {}, excluded: 0, passed: 2 });
     const built = buildBankFile(rows, 'game_db.json');
     expect(built.counts).toMatchObject({ entertainment: 1, games: 1 });
+  });
+
+  it('leaves out games with record anomalies (problem-games checks, recorder flags) and the manual list; keeps the harmless checks (2026-11-21)', () => {
+    const check = (rule: string, msg = ''): Record<string, string> => ({ rule, level: 'warn', msg });
+    const { rows, counts } = rowsFromGameDb({
+      games: [
+        { ...ok, id: 'S1', checks: [check('CONFLICT')] },
+        { ...ok, id: 'S2', checks: [check('NEAR_DUP')] },
+        { ...ok, id: 'S3', checks: [check('VOTE_MARKS')] },
+        { ...ok, id: 'S4', checks: [check('OWNER_FLAG', 'flag:incident')] },
+        { ...ok, id: 'S5', checks: [check('OWNER_FLAG', 'flag:incident、flag:substitution')] },
+        { ...ok, id: 'S6', checks: [check('OWNER_FLAG', 'flag:badGame')] },
+        { ...ok, id: 'S7', checks: [check('OWNER_FLAG', 'flag:lakeCorrected'), check('VOTE_RESULT'), check('LEADER'), check('INFERRED_VOTES'), check('LAKE_CLAIM')] },
+        { ...ok, id: 'S8' },
+        { ...ok, id: 'S9' },
+      ],
+    }, parseSimExclusions({ games: [{ db: 'S9', reason: '玩家回報' }] }));
+    expect(counts.flagged).toEqual({ CONFLICT: 1, NEAR_DUP: 1, VOTE_MARKS: 1, 'flag:incident': 2, 'flag:badGame': 1 });
+    expect(counts).toMatchObject({ excluded: 1, passed: 2 });
+    expect(rows).toHaveLength(2);
+  });
+
+  it('the bank builder drops games whose record contradicts itself, and manual-list games by bank id or fingerprint', () => {
+    const rows = rowsFromGameDb({ games: [ok, { kind: 'real', status: 'ok', game: dbGameOf(short, '三藍活') }] }).rows;
+    const first = buildBankFile(rows, 'game_db.json').file;
+    const shortId = first.games.find((g) => g.rec === bankEntryFor(short, 'X').rec)?.id as string;
+    const byBank = buildBankFile(rows, 'game_db.json', first, parseSimExclusions({ games: [{ bank: shortId }] }));
+    expect(byBank.counts).toMatchObject({ excluded: 1, games: 1 });
+    const byFp = buildBankFile(rows, 'game_db.json', null, parseSimExclusions({ games: [{ fp: recordFingerprint(wiki) }] }));
+    expect(byFp.counts).toMatchObject({ excluded: 1, games: 1 });
+    // A failed mission with no red on the team: the 配置 is wrong (so are the thumbs and what Merlin saw).
+    expect(gameProblem(wiki)).toBeNull();
+    const quests = wiki.quests.map((q) => (q.failCount > 0 ? q : { ...q, failCount: 1, successCount: q.successCount - 1 }));
+    const blueOnly = { ...wiki, quests, seatRoles: wiki.seatRoles.map(() => 'loyal' as const) };
+    expect(gameProblem(blueOnly)).toBe('fails-gt-red');
+  });
+
+  it('a rotation that clearly starts elsewhere than seat 1 is an anomaly; an unclear one is not', () => {
+    const team = (leader: number): number[] => [leader];
+    const props = (start: number) => Array.from({ length: 10 }, (_, k) => ({ teamSeats: team(((start + k) % 10) + 1) }));
+    expect(rotationStart({ proposals: props(0) as never, playerCount: 10 })).toBe(0);
+    expect(rotationStart({ proposals: props(3) as never, playerCount: 10 })).toBe(3);
+    expect(gameProblem({ proposals: props(3) as never, quests: [], seatRoles: [], playerCount: 10 })).toBe('leader-rotation');
+    expect(rotationStart({ proposals: Array.from({ length: 10 }, () => ({ teamSeats: [1, 2, 3] })) as never, playerCount: 10 })).toBeNull();
   });
 });
 
@@ -87,7 +132,8 @@ describe('the committed sim_bank.json', () => {
 
   it('is built from the committed game_db.json (rebuild it: tsx scripts/buildSimBank.ts)', () => {
     expect(bank.builtFrom).toBe('game_db.json');
-    const rebuilt = buildBankFile(rowsFromGameDb(readJson('game_db.json') as { games?: unknown }).rows, 'game_db.json', bank).file;
+    const exclude = readSimExclusions([path.join(SERVER, 'sim_bank_exclude.json')]);
+    const rebuilt = buildBankFile(rowsFromGameDb(readJson('game_db.json') as { games?: unknown }, exclude).rows, 'game_db.json', bank, exclude).file;
     expect(rebuilt.games.length).toBe(bank.games.length);
     expect(rebuilt).toEqual(bank);
   }, 60_000);
@@ -109,8 +155,13 @@ describe('Threads plan pins when the bank changes', () => {
     const oldGen = gen(oldBank, new Map());
     const planned = new Set(dates.map((d) => oldGen.pickFor(d)?.gameId).filter(Boolean));
     // 新題庫：拿掉一些沒排進計畫的局（池子變小，第 k 週拿第 k 個就換了人）。
-    const smaller = buildSimBank({ ...file, games: file.games.filter((g, i) => planned.has(g.id) || i % 5 !== 0) });
-    const res = planPins(oldBank, smaller, new Map(), dates);
+    // 拿掉哪一份才會換到計畫要看題庫的內容（題庫每晚會變）：試幾種拿法，取第一個真的讓計畫變了的。
+    let smaller = oldBank;
+    let res = planPins(oldBank, oldBank, new Map(), dates);
+    for (let k = 0; k < 5 && res.pins.size === 0; k++) {
+      smaller = buildSimBank({ ...file, games: file.games.filter((g, i) => planned.has(g.id) || i % 5 !== k) });
+      res = planPins(oldBank, smaller, new Map(), dates);
+    }
     expect(res.lost.size).toBe(0);
     expect(res.pins.size).toBeGreaterThan(0);
     const after = gen(smaller, res.pins);

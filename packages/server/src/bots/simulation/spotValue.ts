@@ -32,6 +32,7 @@ import { decisionObservation, defaultBot } from './aiRead';
 import {
   TEAM_SIZES,
   assassinSeat,
+  firstDecision,
   exerciseIdOf,
   midDecision,
   round4LoyalDecisions,
@@ -230,7 +231,7 @@ type SelectBank = Parameters<typeof selectExercise>[0];
 
 /** 什麼都沒指定的 /模擬（沒有角色、座位、局面、題號、刺殺、今天）。 */
 export function isBareStart(req: SelectRequest): boolean {
-  return !req.role && req.seat === undefined && !req.exerciseId && req.midRound === undefined && !req.special;
+  return !req.role && req.seat === undefined && !req.exerciseId && !req.gameId && req.midRound === undefined && !req.special;
 }
 
 /** 選局時最多抽幾局（抽到沒有任何 spot 的局就再抽）。 */
@@ -247,23 +248,44 @@ export function selectValueSpot(bank: SelectBank, rng: () => number): SelectResu
   if (list.length === 0) return null;
   for (let n = 0; n < SPOT_DRAWS; n++) {
     const gi = list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
-    const game = bank.games[gi];
-    const ranked = bestPerKind(rankSpots(game));
-    if (ranked.length === 0) continue;
-    const top = ranked[0].spot;
-    const alsoWorth = ranked.slice(1, 1 + SPOT_ALSO_WORTH).map((r) => ({ exerciseId: r.spot.exerciseId, label: SPOT_LABEL[r.spot.kind] }));
-    const extra = alsoWorth.length > 0 ? { alsoWorth } : {};
-    if (top.proposal === null) {
-      return { ok: true, game: gi, seat: top.seat, decision: game.proposals.length - 1, assassin: true, ...extra };
-    }
-    const p = game.proposals[top.proposal];
-    return { ok: true, game: gi, seat: top.seat, decision: top.proposal, stage: { round: p.round, attempt: p.attempt }, ...extra };
+    const r = bestSpotOf(bank, gi);
+    if (r) return r;
   }
   return null;
 }
 
-/** 開題：什麼都沒指定 → 自動選 spot；其他（指定角色、座位、局面、題號、刺殺、今天）照舊 selectExercise。 */
+/** 這一局分數最高的 spot（附其他題型最高的 1～2 題）；這局沒有任何 spot 就 null。 */
+export function bestSpotOf(bank: SelectBank, gi: number): SelectResult | null {
+  const game = bank.games[gi];
+  const ranked = bestPerKind(rankSpots(game));
+  if (ranked.length === 0) return null;
+  const top = ranked[0].spot;
+  const alsoWorth = ranked.slice(1, 1 + SPOT_ALSO_WORTH).map((r) => ({ exerciseId: r.spot.exerciseId, label: SPOT_LABEL[r.spot.kind] }));
+  const extra = alsoWorth.length > 0 ? { alsoWorth } : {};
+  if (top.proposal === null) {
+    return { ok: true, game: gi, seat: top.seat, decision: game.proposals.length - 1, assassin: true, ...extra };
+  }
+  const p = game.proposals[top.proposal];
+  return { ok: true, game: gi, seat: top.seat, decision: top.proposal, stage: { round: p.round, attempt: p.attempt }, ...extra };
+}
+
+/**
+ * 開題：什麼都沒指定 → 自動選 spot；只有局號（`/模擬 K7Q2M`，2026-11-21）→ 這一局分數最高的 spot
+ * （沒有 spot 的局改出 1 家的第一次派票，再沒有就第一個有派票的座位）；其他（指定角色、座位、局面、題號、刺殺、今天）照舊 selectExercise。
+ */
 export function selectStart(bank: SelectBank, req: SelectRequest, rng: () => number): SelectResult {
+  if (req.gameId) {
+    const gi = bank.byId.get(req.gameId);
+    if (gi === undefined) return { ok: false, reason: 'unknown-id' };
+    const best = bestSpotOf(bank, gi);
+    if (best) return best;
+    const game = bank.games[gi];
+    for (let seat = 1; seat <= 10; seat++) {
+      const d = firstDecision(game, seat);
+      if (d !== null) return { ok: true, game: gi, seat, decision: d };
+    }
+    return { ok: false, reason: 'unknown-id' };
+  }
   if (isBareStart(req)) {
     const r = selectValueSpot(bank, rng);
     if (r) return r;

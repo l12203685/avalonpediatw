@@ -13,7 +13,7 @@
 import { AttachmentBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { COMMANDS, SIM_OPTIONS } from '../discord/config';
 import { describeError } from '../media/bytes';
-import { normalizeExerciseId, parseInterval, parseRoleChoice, parseTeam, type SimCommand } from './commands';
+import { parseExerciseRef, parseInterval, parseRoleChoice, parseTeam, refCommand, type SimCommand } from './commands';
 import { SIM_CONFIG, simDiscordPublicChannelIds } from './config';
 import { getSimEngine } from './index';
 import { renderRecordPng } from './recordImage';
@@ -34,10 +34,8 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
       const seatRaw = opts.getInteger(SIM_OPTIONS.SEAT, false);
       const seat = seatRaw === 0 ? 10 : seatRaw;
       const idRaw = opts.getString(SIM_OPTIONS.ID, false);
-      if (idRaw) {
-        const id = normalizeExerciseId(idRaw);
-        return id ? { kind: 'start', exerciseId: id } : { kind: 'usage', command: 'start', problem: '題號長得像 K7Q2M-4' };
-      }
+      // 題號（2026-11-21 起「局號 位置」也可以：K7Q2M 3-5、K7Q2M 4家、K7Q2M 刺殺、只寫 K7Q2M；舊的 K7Q2M-4 照舊）。
+      if (idRaw) return refCommand(parseExerciseRef(idRaw));
       const role = roleRaw ? parseRoleChoice(roleRaw) : null;
       if (roleRaw && !role) return { kind: 'usage', command: 'start' };
       if (seat !== null && seat !== undefined && (seat < 1 || seat > 10)) return { kind: 'usage', command: 'start' };
@@ -112,8 +110,22 @@ export async function handleSimCommand(interaction: ChatInputCommandInteraction)
 
 export const SIM_ERROR_TEXT = '模擬瓦出了點問題，請稍後再試。';
 
+/**
+ * 公開頻道裡也只回給本人的指令（2026-11-21，玩家回饋：群組裡第一個人一作答，答案就被大家看到）：
+ * /派 /刺 的結果（幾好幾壞、刺誰）和 /分析（真人怎麼派）在 /公布 之前只有作答的人看得到；/公布 列出每一位的答案。
+ */
+export function simAnswerIsPrivate(cmd: SimCommand | null): boolean {
+  if (!cmd) return false;
+  return cmd.kind === 'propose' || cmd.kind === 'assassinate' || cmd.kind === 'analyze'
+    || (cmd.kind === 'usage' && (cmd.command === 'propose' || cmd.command === 'assassinate'));
+}
+
 async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<void> {
-  const ephemeral = !simReplyIsPublic(interaction.channelId);
+  const publicChannel = simReplyIsPublic(interaction.channelId);
+  const cmd = SIM_CONFIG.commandsEnabled ? simCommandFromInteraction(interaction) : null;
+  // 公開頻道（伺服器裡）的 /派 /刺 /分析：回覆只有本人看得到（ephemeral），其他人等 /公布。
+  const privateAnswer = publicChannel && !!interaction.guildId && simAnswerIsPrivate(cmd);
+  const ephemeral = !publicChannel || privateAnswer;
   if (ephemeral) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   else await interaction.deferReply();
 
@@ -121,7 +133,6 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     await interaction.editReply({ content: SIM_DISABLED_TEXT, allowedMentions: { parse: [] } });
     return;
   }
-  const cmd = simCommandFromInteraction(interaction);
   if (!cmd) {
     await interaction.deleteReply();
     return;
@@ -136,7 +147,9 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     userId: interaction.user.id,
     explicit: true,
     // 私訊沒有別人看得到：不代答、也不加「頻道裡…」那一行（全域註冊的指令在私訊也能用）。
-    shared: !ephemeral && !!interaction.guildId,
+    // 公開頻道裡只回給本人的 /派 /刺 /分析 照樣是 shared（代答、/公布 列大家的答案），回覆內容照舊（privateReply）。
+    shared: publicChannel && !!interaction.guildId,
+    ...(privateAnswer ? { privateReply: true } : {}),
   };
   // 同一個頻道的模擬指令排隊：「算回覆 → 送出 → commit」一次一個（Edward 2026-10-14 審查修正；
   // 2026-10-22 起整個頻道一條隊，代答要動哪一題輪到它時才決定）。

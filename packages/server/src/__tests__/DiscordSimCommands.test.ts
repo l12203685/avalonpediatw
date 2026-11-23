@@ -188,6 +188,12 @@ describe('options → command', () => {
     expect(m(COMMANDS.SIM_ASSASSINATE, { [SIM_OPTIONS.SEAT]: 0 })).toEqual({ kind: 'assassinate', seat: 10 });
     expect(m(COMMANDS.SIM_ASSASSINATE, { [SIM_OPTIONS.SEAT]: 3 })).toEqual({ kind: 'assassinate', seat: 3 });
     expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'w0001-2-5' })).toEqual({ kind: 'start', exerciseId: 'W0001-2-5' });
+    // 2026-11-21：題號也可以寫「局號 位置」或只寫局號。
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'w0001 2-5' })).toEqual({ kind: 'start', exerciseId: 'W0001-2-5' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'W0001 4家' })).toEqual({ kind: 'start', exerciseId: 'W0001-4' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'W0001 刺殺' })).toEqual({ kind: 'start', exerciseId: 'W0001-A' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: 'W0001' })).toEqual({ kind: 'start', gameId: 'W0001' });
+    expect(m(COMMANDS.SIM, { [SIM_OPTIONS.ID]: '???' })).toMatchObject({ kind: 'usage', command: 'start' });
     expect(m(COMMANDS.SIM_REVEAL)).toEqual({ kind: 'reveal' });
     expect(m(COMMANDS.SIM_END)).toEqual({ kind: 'end' });
   });
@@ -201,10 +207,17 @@ describe('handlers', () => {
     const start = content(it1).content;
     expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣\n');
     expect(start).toContain('```\n460 1+\n279\n370\n```');
-    expect(start).toContain('\n\n/派 座位 作答 (沒開題的人也能作答)\n/區間 (百科AI 怎麼讀)\n/help 模擬\n/公布 (結束這題)');
+    expect(start).toContain('\n\n/派 座位 作答 (沒開題的人也能作答，結果只有自己看得到)\n/區間 (百科AI 怎麼讀)\n/help 模擬\n/公布 (結束這題)');
 
-    expect(await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' })).toBe('【W0000-4】你派 469：2 好 1 壞\n/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布');
-    expect(await run(COMMANDS.SIM_ANALYSIS)).toContain('① 真人：4家 派 469（跟你一樣）→ 被否決');
+    // 2026-11-21（玩家回饋：一個人作答就暴雷）：公開頻道的 /派 /分析 只回給本人（ephemeral），內容照舊。
+    const proposeIt = makeInteraction(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' });
+    await handleSimCommand(proposeIt as never);
+    expect(proposeIt.deferReply.mock.calls[0][0]).toEqual({ flags: MessageFlags.Ephemeral });
+    expect(content(proposeIt).content).toBe('【W0000-4】你派 469：2 好 1 壞\n（只有你看得到；/公布 時會列出大家的答案）\n/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布');
+    const analysisIt = makeInteraction(COMMANDS.SIM_ANALYSIS);
+    await handleSimCommand(analysisIt as never);
+    expect(analysisIt.deferReply.mock.calls[0][0]).toEqual({ flags: MessageFlags.Ephemeral });
+    expect(content(analysisIt).content).toContain('① 真人：4家 派 469（跟你一樣）→ 被否決');
     expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('【W0000-4 區間】789=2：可能（45/126 種）');
     const read = await run(COMMANDS.SIM_INTERVAL);
     expect(read).toContain('【W0000-4 百科AI 怎麼讀】');
@@ -214,6 +227,8 @@ describe('handlers', () => {
     const revealArg = revealIt.editReply.mock.calls.at(-1)?.[0] as { content: string; files?: unknown[] };
     const reveal = revealArg.content;
     expect(reveal.split('\n').slice(0, 2)).toEqual(['【W0000-4 公布】配置: 刺娜莫奧派梅 753921', '1梅 2派 3莫 4忠 5娜 6忠 7刺 8忠 9奧 0忠']);
+    expect(revealIt.deferReply.mock.calls[0][0]).toBeUndefined(); // /公布 is public, with everyone's answers
+    expect(reveal).toMatch(/\n作答（1 位）：\n第1位：469 2好1壞/u);
     // 網站上沒有這一局：文字牌譜放在 code block；整局牌譜圖附檔（Edward 2026-11-17）。
     expect(reveal).toContain('完整牌譜（網站上沒有這一局）:\n```\n460 1+\n');
     expect(revealArg.files).toHaveLength(1);
@@ -252,10 +267,10 @@ describe('handlers', () => {
     const start = await run(COMMANDS.SIM, { [SIM_OPTIONS.ROLE]: '忠臣', [SIM_OPTIONS.SEAT]: 4 }, 'CH-1', 'a');
     // Public channel: the owner is told others may help and that /公布 or /結束 ends it for everyone.
     expect(start.split('\n').at(-1)).toBe('/公布 (結束這題)');
-    expect(start).toContain('/派 座位 作答 (沒開題的人也能作答)');
+    expect(start).toContain('/派 座位 作答 (沒開題的人也能作答，結果只有自己看得到)');
     expect(sharedNote('discord')).toContain('頻道裡');
     const co = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-1', 'b');
-    expect(co.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞', '/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布']);
+    expect(co.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞', '（只有你看得到；/公布 時會列出大家的答案）', '/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布']);
     expect(co).not.toContain('u-1');
     // A malformed /派 from someone without an exercise is answered with the usage only (never a co-answer).
     const bad = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' }, 'CH-1', 'b');
@@ -291,7 +306,7 @@ describe('handlers', () => {
     expect(help).toContain(`/${COMMANDS.SIM_PROPOSE} ${SIM_OPTIONS.TEAM}:469`);
     expect(help).toContain(`/${COMMANDS.SIM_INTERVAL} ${SIM_OPTIONS.CONTENT}:789=2 460=1`);
     expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ROLE}:派西維爾 ${SIM_OPTIONS.SEAT}:2`);
-    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M-4`);
+    expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.ID}:K7Q2M 3-5`);
     expect(help).toContain(`/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True`);
     expect(help).not.toContain('/解答'); // LINE only
     expect(engine.activeSessions()).toBe(0);

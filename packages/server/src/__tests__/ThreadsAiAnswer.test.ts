@@ -28,9 +28,13 @@ beforeAll(() => {
   bank = buildSimBank(file, readRecordPosts([path.join(serverRoot, 'records_cache.json')]));
 });
 
-/** 11/18–11/24 主控台選的題（週三 1-5、週四 3-5、週六 4-5、週日第五局、週一刺殺、週二派西）。 */
-const TEAM_IDS = ['SV1Q8-1-5', 'SV1Q8-3-5', 'JSD3E-4-5', 'DMH6Q-5-1', 'TMQ2M-3-4'];
-const KILL_ID = 'G85S5-A';
+/**
+ * 11/18–11/24 主控台選的題（週三 1-5、週四 3-5、週六 4-5、週日第五局、週一刺殺、週二派西）。
+ * 2026-11-21：JSD3E（備註：有一家重新登入後沒看到拇指）和 G85S5（備註標了事件）是紀錄異常的局，題庫不再收
+ * （bots/simulation/quality.ts），改用題庫裡另外的 4-5 和刺殺題。
+ */
+const TEAM_IDS = ['SV1Q8-1-5', 'SV1Q8-3-5', '010HP-4-5', 'DMH6Q-5-1', 'TMQ2M-3-4'];
+const KILL_ID = '007TB-A';
 
 function resolve(id: string) {
   const t = targetOfExercise(bank, id);
@@ -167,7 +171,7 @@ describe('threadsAiAnswer — team decisions', () => {
   });
 
   it('a 10-player round 4 ranks teams by "fewer than 2 reds" and lists both probabilities', () => {
-    const { game, target } = resolve('JSD3E-4-5');
+    const { game, target } = resolve('010HP-4-5');
     const a = threadsAiAnswer(game, target);
     expect(a.decision.failsRequired).toBe(2);
     expect(a.top.metric).toContain('少於 2');

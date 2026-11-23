@@ -373,11 +373,12 @@ describe('mirror group', () => {
     await deliver(h, groupText('/模擬 忠臣 4', 'k1', 'rk1'));
     // The group start reply tells the owner others may help and /公布 or /結束 ends it for everyone.
     expect(h.replies.at(-1)?.messages[0].text.split('\n').at(-1)).toBe('/公布 (結束這題)');
-    expect(h.replies.at(-1)?.messages[0].text).toContain('/派 座位 作答 (沒開題的人也能作答)');
+    expect(h.replies.at(-1)?.messages[0].text).toContain('/派 座位 作答 (沒開題的人也能作答，結果 /公布 時一起看)');
     const fromU2 = { ...groupText(typed('/派 469'), 'k2', 'rk2'), source: { type: 'group', groupId: GROUP, userId: 'U2' } };
     await deliver(h, fromU2);
     const answer = h.replies.at(-1)?.messages[0].text ?? '';
-    expect(answer.split('\n').slice(0, 2)).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞']);
+    // 2026-11-21（玩家回饋：一個人作答就暴雷）：群組只回收到第幾位，不回幾好幾壞、也不回顯隊伍。
+    expect(answer.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】收到（第 1 位作答）', '結果 /公布 時一起看']);
     expect(answer).not.toMatch(/U1|U2|LineUser/u); // nobody is named
     expect(h.replies.at(-1)?.messages[0].quoteToken).toBe('q-k2');
     // A co-answer is a follow-up of an open exercise: not mirrored (SIM_MIRROR_FOLLOWUPS off).
@@ -385,6 +386,8 @@ describe('mirror group', () => {
     // The owner continues on the same exercise (now answered); the co-answered /派 is marked in the listing.
     await deliver(h, groupText('/公布', 'k3', 'rk3'));
     expect(h.replies.at(-1)?.messages[0].text).toContain('【W0000-4 公布】配置: 刺娜莫奧派梅 753921');
+    // /公布 lists every answer with its result, numbered, no names.
+    expect(h.replies.at(-1)?.messages[0].text).toMatch(/\n作答（1 位）：\n第1位：469 2好1壞(?:＝真人)?\n/u);
 
     await deliver(h, groupText('/模擬 說明', 'k4', 'rk4'));
     expect(h.replies.at(-1)?.messages[0].text).toBe(SIM_HELP_TEXT);

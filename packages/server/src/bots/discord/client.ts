@@ -139,7 +139,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
           .addChoices(...SIM_STAGE_CHOICES.map((name) => ({ name, value: name })))
       )
       .addStringOption((o) =>
-        o.setName(SIM_OPTIONS.ID).setDescription('題號，例如 K7Q2M-4、K7Q2M-3-5（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(12)
+        o.setName(SIM_OPTIONS.ID).setDescription('題號：K7Q2M 3-5、K7Q2M 4家、K7Q2M 刺殺、只寫 K7Q2M（大家做同一題）/ Exercise id').setRequired(false).setMaxLength(20)
       )
       .addBooleanOption((o) =>
         o.setName(SIM_OPTIONS.HELP).setDescription('看全部指令的說明（不開題）/ Show the command list').setRequired(false)

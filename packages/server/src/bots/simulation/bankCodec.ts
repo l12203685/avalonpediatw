@@ -22,6 +22,7 @@ import {
   type PaipuRow,
   type ReplayGame,
 } from '../../ai/benchmark/sheetsReplay';
+import { gameProblem, isExcludedBankGame, NO_EXCLUSIONS, type SimExclusions } from './quality';
 import { seatChar, teamDigits } from './seats';
 
 export const SIM_BANK_VERSION = 1;
@@ -143,6 +144,10 @@ export interface SimBankBuildCounts {
   /** 分類寫「模擬」的局（不是真人實戰，Edward 11/16：「模擬畢竟只是模擬」）。 */
   simulated: number;
   duplicates: number;
+  /** 紀錄本身算得出來的異常（quality.ts gameProblem：失敗比紅多、隊長輪替不是從 1 家起算），2026-11-21。 */
+  anomalous: number;
+  /** 人工清單上的局（sim_bank_exclude.json 的 bank／fp），2026-11-21。 */
+  excluded: number;
   games: number;
   idCollisions: number;
   /** 沿用上一版題號的局（同一局）。 */
@@ -155,17 +160,21 @@ export interface SimBankBuildCounts {
 
 /**
  * 牌譜各列 → 題庫。條件（設計 §2、owner D6 預設）：嚴格解析成功、湖的順序合理、
- * 分類不是「娛樂」，也不是「模擬」（只出真人實戰；Edward 2026-11-16：「模擬畢竟只是模擬」）。同一個 fingerprint 只留一局。輸出照題號排序。只回傳計數，不回傳任何列的內容。
+ * 分類不是「娛樂」，也不是「模擬」（只出真人實戰；Edward 2026-11-16：「模擬畢竟只是模擬」）、
+ * 沒有紀錄本身算得出來的異常、不在人工清單上（2026-11-21，quality.ts）。同一個 fingerprint 只留一局。輸出照題號排序。只回傳計數，不回傳任何列的內容。
  */
 export function buildBankFile(
   rows: readonly PaipuRow[],
   builtFrom = 'sheets_cache.json',
   previous?: Pick<SimBankFile, 'games'> | null,
+  exclude: SimExclusions = NO_EXCLUSIONS,
 ): { file: SimBankFile; counts: SimBankBuildCounts } {
   const counts: SimBankBuildCounts = {
-    rows: rows.length, recorded: 0, replayable: 0, lakeChainInvalid: 0, entertainment: 0, simulated: 0, duplicates: 0, games: 0, idCollisions: 0,
-    keptIds: 0, newIds: 0, droppedIds: 0,
+    rows: rows.length, recorded: 0, replayable: 0, lakeChainInvalid: 0, entertainment: 0, simulated: 0, duplicates: 0,
+    anomalous: 0, excluded: 0, games: 0, idCollisions: 0, keptIds: 0, newIds: 0, droppedIds: 0,
   };
+  // 上一版的題號：同一局（fingerprint）沿用；人工清單的題號也照這個對。
+  const previousIds = previousIdsByFingerprint(previous);
   const byFingerprint = new Map<string, ReplayGame>();
   for (const row of rows) {
     if (!(row['文字記錄'] ?? '').trim()) continue;
@@ -176,7 +185,9 @@ export function buildBankFile(
     if (!parsed.game.lakeChainValid) { counts.lakeChainInvalid++; continue; }
     if ((row['分類'] ?? '').trim() === '娛樂') { counts.entertainment++; continue; }
     if ((row['分類'] ?? '').includes('模擬')) { counts.simulated++; continue; }
+    if (gameProblem(parsed.game)) { counts.anomalous++; continue; }
     const fp = recordFingerprint(parsed.game);
+    if (isExcludedBankGame(exclude, fp, previousIds.get(fp))) { counts.excluded++; continue; }
     const prev = byFingerprint.get(fp);
     if (prev) {
       counts.duplicates++;
@@ -187,8 +198,6 @@ export function buildBankFile(
     byFingerprint.set(fp, parsed.game);
   }
 
-  // 上一版的題號：同一局（fingerprint）沿用。
-  const previousIds = previousIdsByFingerprint(previous);
   const hashed = [...byFingerprint.entries()].map(([fp, game]) => ({ fp, hash: fingerprintHash(fp), game }));
   const kept = hashed.map((h) => previousIds.get(h.fp) ?? '');
   const taken = new Set(kept.filter(Boolean));
