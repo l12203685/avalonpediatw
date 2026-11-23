@@ -155,8 +155,13 @@ describe('Threads plan pins when the bank changes', () => {
     const oldGen = gen(oldBank, new Map());
     const planned = new Set(dates.map((d) => oldGen.pickFor(d)?.gameId).filter(Boolean));
     // 新題庫：拿掉一些沒排進計畫的局（池子變小，第 k 週拿第 k 個就換了人）。
-    const smaller = buildSimBank({ ...file, games: file.games.filter((g, i) => planned.has(g.id) || i % 5 !== 0) });
-    const res = planPins(oldBank, smaller, new Map(), dates);
+    // 拿掉哪一份才會換到計畫要看題庫的內容（題庫每晚會變）：試幾種拿法，取第一個真的讓計畫變了的。
+    let smaller = oldBank;
+    let res = planPins(oldBank, oldBank, new Map(), dates);
+    for (let k = 0; k < 5 && res.pins.size === 0; k++) {
+      smaller = buildSimBank({ ...file, games: file.games.filter((g, i) => planned.has(g.id) || i % 5 !== k) });
+      res = planPins(oldBank, smaller, new Map(), dates);
+    }
     expect(res.lost.size).toBe(0);
     expect(res.pins.size).toBeGreaterThan(0);
     const after = gen(smaller, res.pins);
