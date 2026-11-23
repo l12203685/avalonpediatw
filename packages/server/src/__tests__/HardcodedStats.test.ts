@@ -26,6 +26,7 @@ const PATTERNS: Array<[string, RegExp]> = [
   ['比率帶局數', /\d+(?:\.\d+)?\s*%\s*[（(]\s*\d[\d,]*\s*(?:局|場|筆)/],
   ['上千局的樣本數', /(?<![\d,.])(?:\d,\d{3}|[1-9]\d{3})\s*(?:局|場)(?!次)/],
   ['快照寫法', /統計日\s*\d{4}-\d{2}-\d{2}/],
+  ['比率對比', /\d+(?:\.\d+)?\s*%\s*對\s*\d+(?:\.\d+)?\s*%/],
 ];
 
 /**
@@ -34,7 +35,10 @@ const PATTERNS: Array<[string, RegExp]> = [
  */
 const ALLOW: Record<string, { pattern: RegExp; why: string }[]> = {
   'wiki-182': [{ pattern: /三(?:紅|藍梅死|藍梅活)：\d+\.\d%（\d+ 場）/, why: '2023 年 S2 積分賽的戰績（已結束的賽季，標題寫明 2023）' }],
-  'wiki-147': [{ pattern: /n=2[04]0|n=480/, why: '2026-11-16 的一次性統計，文中寫明日期與 n、不隨每晚更新' }],
+  'wiki-147': [
+    { pattern: /n=2[04]0|n=480/, why: '2026-11-16 的一次性統計，文中寫明日期與 n、不隨每晚更新' },
+    { pattern: /約 56% 對 55%/, why: '2026-11-16 同一段一次性統計，待 wiki_stats.py 補動態標記後移除' },
+  ],
   'wiki-209': [{ pattern: /牌譜數據報告（2,146 局，資料至 2026-02）/, why: '引用舊報告的標題（本文整合自…），不是現在的數字' }],
 };
 
@@ -101,6 +105,9 @@ function collect(): Hit[] {
     const text = fs.readFileSync(p, 'utf8');
     scanText(rel(p), p.endsWith('.json') ? stringsOf(JSON.parse(text)).join('\n') : codeLines(text), hits);
   }
+  // 網站首頁 HTML（防 SEO/meta 寫死局數與勝率）
+  const webIndex = path.join(ROOT, 'packages', 'web', 'index.html');
+  if (fs.existsSync(webIndex)) scanText(rel(webIndex), fs.readFileSync(webIndex, 'utf8'), hits);
   // 觀念卡（網址欄位除外：網址的 %E4… 不是比率）
   const concepts = JSON.parse(fs.readFileSync(path.join(SERVER, 'src', 'bots', 'threads', 'concepts.json'), 'utf8')) as unknown;
   const noUrls = JSON.parse(JSON.stringify(concepts, (k, v) => (/url/i.test(k) ? undefined : v))) as unknown;
@@ -150,8 +157,9 @@ describe('hard-coded statistics guard (站長 2026-11-20：統計數字跟資料
       '原組合 44%，n=240',
       '三紅：53.3%（16 場）',
       '本站牌譜（資料期間 2017-02-13～2026-10-25，2,284 局，統計日 2026-10-30）',
+      '湖中留在藍方手上的機率約 56% 對 55%',
     ]) scanText('sample', s, hits);
-    expect(new Set(hits.map((h) => h.text)).size).toBe(5);
+    expect(new Set(hits.map((h) => h.text)).size).toBe(6);
     const clean: Hit[] = [];
     for (const s of ['兩人全好的機率約 28%（10/36）', 'S ≥ 65 高強度', '30 場以上', '<!-- stat:x -->2,341 局（30.9%）<!-- /stat -->']) scanText('sample', s, clean);
     expect(clean).toEqual([]);
