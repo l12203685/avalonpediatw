@@ -55,7 +55,7 @@ export function tailRead62Applies(obs: PlayerObservation): boolean {
   if (obs.myRole !== 'loyal' && obs.myRole !== 'percival') return false;
   if ((obs.currentRound ?? 1) !== 2 || (obs.failCount ?? 0) < 4 || obs.currentLeader !== obs.myPlayerId) return false;
   const q1 = obs.questHistory.find((q) => q.round === 1);
-  return q1 !== undefined && q1.result === 'fail';
+  return q1 !== undefined && (q1.failCount ?? 0) >= 1;
 }
 
 /** 每個座位（自己除外）的公開特徵；第 1 局沒有任務紀錄時回傳空的。 */
