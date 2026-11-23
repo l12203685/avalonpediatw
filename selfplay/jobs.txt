@@ -1,4 +1,4 @@
-# 標籤|開關|種子|起始局號|局數  （第 68 回合篩選，藍方座位：L1 = lakeChain68=0.5（信任鏈的局面）、LX = lakeChain68=0.5 lakeChain68Scope=3（含紅方已兩勝／最後一湖，只量）、L0 = lakeChain68=0.25；563001 detail=1，和 r67-screen 的 F89（= 現行預設）逐局配對）
+# 標籤|開關|種子|起始局號|局數  （第 68 回合篩選，藍方座位：L1 = lakeChain68=0.5（信任鏈的局面）、LX = lakeChain68=0.5 lakeChain68Scope=3（含紅方已兩勝／最後一湖，只量）、L0 = lakeChain68=0.25、M50 = L1＋lakeChain68Mix=0.5（第 1C 節）；563001 detail=1，和 r67-screen 的 F89（= 現行預設）逐局配對）
 L1|lakeChain68=0.5 detail=1|563001|0|500
 L1|lakeChain68=0.5 detail=1|563001|500|500
 L1|lakeChain68=0.5 detail=1|563001|1000|500
@@ -99,3 +99,43 @@ L0|lakeChain68=0.25 detail=1|563001|18000|500
 L0|lakeChain68=0.25 detail=1|563001|18500|500
 L0|lakeChain68=0.25 detail=1|563001|19000|500
 L0|lakeChain68=0.25 detail=1|563001|19500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|0|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|1000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|1500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|2000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|2500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|3000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|3500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|4000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|4500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|5000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|5500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|6000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|6500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|7000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|7500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|8000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|8500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|9000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|9500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|10000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|10500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|11000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|11500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|12000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|12500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|13000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|13500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|14000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|14500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|15000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|15500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|16000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|16500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|17000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|17500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|18000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|18500|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|19000|500
+M50|lakeChain68=0.5 lakeChain68Mix=0.5 detail=1|563001|19500|500
