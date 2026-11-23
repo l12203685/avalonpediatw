@@ -26,6 +26,7 @@ import { percivalRead39 } from '../BlueRound39Percival';
 // Round 50 (`loyalRationality50`, `lakePickSuspicion50`): a circular import (its public loyal views call this module's posterior inside functions only).
 import { rationalityAdj50, lakePickTerms50, W50_ALL, W50_STRONG } from '../Round50';
 import { viewpointLog53, viewpointTerms53 } from '../Viewpoint53';
+import { missionProbScore68, missionScoreApplies68 } from '../Round68';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -554,6 +555,11 @@ export interface BayesOptions {
    * (Merlin: one of the reds he sees), each mission's fail cards read from the table scaled by the human Oberon-on-the-team ratio (`MISSION_OBERON_56`).
    */
   missionRole56?: boolean;
+  /**
+   * Round 68 `missionScore68` (bits: 1 = R4, 2 = R3; `Round68.ts`): blue seats only. The mission term scaled by the human
+   * ratio P_h(fails | round, red already has two wins, reds) / P_h(fails | round, reds) (`MISSION_SCORE_68`).
+   */
+  missionScore68?: number;
   /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
   lakeSusp50?: number;
 }
@@ -686,7 +692,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${(opts.copyCap63 ?? 0) > 0 ? `cc${opts.copyCap63}|` : ''}${opts.missionRole56 ? 'mr|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${(opts.copyCap63 ?? 0) > 0 ? `cc${opts.copyCap63}|` : ''}${opts.missionRole56 ? 'mr|' : ''}${(opts.missionScore68 ?? 0) > 0 ? `ms${opts.missionScore68}|` : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -839,7 +845,9 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const copyCap = blueSeat && (opts.copyCap63 === 1 || opts.copyCap63 === 2) ? opts.copyCap63 : 0;
   // Round 56 `missionRole56`: blue seats, 10 players (the 10-player box always holds Oberon).
   const mr56 = blueSeat && opts.missionRole56 === true && obs.allPlayerIds.length === 10;
-  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${copyCap > 0 ? `|cc${copyCap}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  // Round 68 `missionScore68`: blue seats, 10 players (the human table is 10-player).
+  const ms68 = blueSeat && obs.allPlayerIds.length === 10 ? opts.missionScore68 ?? 0 : 0;
+  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${ms68 > 0 ? `|ms${ms68}` : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${copyCap > 0 ? `|cc${copyCap}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -901,7 +909,11 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
         .map((id) => ({ b: bit(id), on: v.team.includes(id), yes: v.votes[id] === true, raw: v.votes[id] })),
     };
   });
-  const quests = obs.questHistory.map((q) => ({ round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0 }));
+  const quests = obs.questHistory.map((q, i) => ({
+    round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0,
+    // Round 68: red already has two wins before this mission (and the score cell is in `MISSION_SCORE_68`'s scope).
+    s68: ms68 > 0 && missionScoreApplies68(ms68, q.round) ? (obs.questHistory.slice(0, i).filter((x) => x.result === 'fail').length >= 2 ? 1 : 0) : -1,
+  }));
   // Round 56: who can be Oberon — any red; for Merlin only a red he sees (Mordred is the one he cannot see).
   const oberonPool = mr56 ? (obs.myRole === 'merlin' && obs.knownEvils.length > 0 ? view.maskOf(obs.knownEvils) : all) : 0;
   const lakes = (obs.lakeHistory ?? []).filter((l) => l.declaredClaim !== 'none' && l.holderId !== me)
@@ -1014,7 +1026,8 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
         for (const q of quests) {
           const reds = sizeOf(w & q.mask);
           if (morganaR1 && q.round === 1 && reds === 1 && (w & q.mask & wizardMask) !== 0) { pr *= q.fails === 0 ? STRICT_EPS : 1 - STRICT_EPS; continue; }
-          pr *= missionProbRole56(q.round, reds, q.fails, (q.mask & ob) !== 0);
+          const isOb = (q.mask & ob) !== 0;
+          pr *= q.s68 >= 0 ? missionProbScore68(q.round, q.s68 === 1, reds, q.fails, (f) => missionProbRole56(q.round, reds, f, isOb)) : missionProbRole56(q.round, reds, q.fails, isOb);
         }
         tot += pr;
         nOb++;
@@ -1027,7 +1040,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
         lp += Math.log(q.fails === 0 ? STRICT_EPS : 1 - STRICT_EPS);
         continue;
       }
-      const p = missionProb(q.round, reds, q.fails);
+      const p = q.s68 >= 0 ? missionProbScore68(q.round, q.s68 === 1, reds, q.fails, (f) => missionProb(q.round, reds, f)) : missionProb(q.round, reds, q.fails);
       lp += p > 0 ? Math.log(p) : -1e9;
     }
     if (mixPre) { if (tempered) lv += merlinMixtureLog(mixPre, w); else lp += merlinMixtureLog(mixPre, w); }
@@ -1290,6 +1303,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.copyFreq55b ?? 0) > 0 ? { copyFreq55b: true } : {}),
     ...((t.loyalCopyCap63 ?? 0) > 0 ? { copyCap63: t.loyalCopyCap63 } : {}),
     ...((t.missionRole56 ?? 0) > 0 ? { missionRole56: true } : {}),
+    ...((t.missionScore68 ?? 0) > 0 ? { missionScore68: t.missionScore68 } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
 }
 
