@@ -74,6 +74,7 @@ import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type Perc
 import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
+import { redR2LeadCard61 } from '../RedRound61';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -995,6 +996,9 @@ export class ForwardAgent implements AvalonAgent {
       // Round 27 `redHideR4Solo` (RedRound27.ts): one fail cannot fail a two-fail mission — the lone red it sees hides.
       const r4 = redHideR4SoloCard(this.baseline.tuning, obs);
       if (r4) return this.ruleDecision(obs, { type: 'quest_vote', vote: r4 }, 'red hides on a two-fail mission (one fail cannot fail it)');
+      // Round 61 `redR2Lead61` (RedRound61.ts): R2 after an R1 success, the lone red hides at the real-game rate (fails more often).
+      const r2Lead = redR2LeadCard61(this.baseline.tuning, obs);
+      if (r2Lead) return this.ruleDecision(obs, { type: 'quest_vote', vote: r2Lead }, `red R2 card after an R1 success at the real-game rate (${r2Lead})`);
       // Round 27 `redHideHuman` (RedRound27.ts): R1–R2 lone red at the strong human rate of its role.
       const human = redHideHumanCard(this.baseline.tuning, obs);
       if (human) return this.ruleDecision(obs, { type: 'quest_vote', vote: human }, `red R1–R2 card at the strong human rate (${human})`);

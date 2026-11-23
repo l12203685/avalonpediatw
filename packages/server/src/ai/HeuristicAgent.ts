@@ -26,6 +26,7 @@ import {
   resolveAgentTuning,
   type AgentTuning,
 } from './AgentTuning';
+import { path61Mults } from './RedRound61';
 import { pickAssassinTargetByModel, scoreAssassinCandidates, type AssassinModelWeights } from './assassin/AssassinModel';
 import { merlinVoteLogRatio } from './assassin/MerlinVoteRead';
 import { merlinLakeLogRatio } from './assassin/MerlinLakeRead';
@@ -2724,6 +2725,12 @@ export class HeuristicAgent implements AvalonAgent {
       const reds = [...evilSet];
       const skip = reuseSkip50(obs, ignoreReuse);
       for (const id of goodPlayers) deriv.set(id, (LAMBDA_ASSASSIN_50[deriv50] ?? 0) * derivabilityLogRatio50(obs, id, reds, deriv50, skip));
+    }
+    // Round 61 (red) `assassinPath61` (RedRound61.ts): after an R1 success and an R2 fail, the vote / lead / re-proposal reads
+    // weigh less (multipliers fitted on the even real games). Off (or another mission order): the terms are untouched.
+    const mults = path61Mults(this.tuning, obs);
+    if (mults) {
+      for (const t of terms.values()) { t.vote *= mults.vote; t.lead *= mults.lead; t.reuse *= mults.reuse; }
     }
     const scores = new Map<string, number>();
     for (const id of goodPlayers) {

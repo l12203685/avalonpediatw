@@ -10,7 +10,7 @@
  * - `ai`（對手是機器人、自我對打）= 基準線本身，不加任何東西。
  * - `weakHuman`／`avgHuman`／`strongHuman` = 基準線＋真人桌的讀法。判準是真人局的準確度（分角色，`scripts/humanProfileStudy.ts`），
  *   自我對打只當參考（docs/ai/optimization_loop.md 第 1 節「真人桌的改法」）。
- * - 可以改的開關只限 `PROFILE_KEYS`（讀人的信念，藍方座位才用），避免一個對手類型長成另一套策略；測試會檢查。
+ * - 可以改的開關只限 `PROFILE_KEYS`（讀人的信念，藍方座位才用；第 58 回合起加梅林派隊、第 61 回合起加紅方刺殺與第 2 局出牌），避免一個對手類型長成另一套策略；測試會檢查。
  * - 三種真人桌共用一組讀法（`HUMAN_READING`），各層只在上面做小調整（第 57 回合：每層最多一個開關、偏離最多 0.1；`TIER_MAX_KEYS`／`TIER_MAX_STEP`）。
  *
  * 怎麼判斷對手類型（`opponentTypeOfTable`）：桌上沒有真人 → `ai`；有真人、知道桌上強度 S（網站「陣容強度」= 10 人開打前 PR 的平均）
@@ -37,8 +37,10 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 真人桌可以偏離基準線的開關：讀人的信念（只給藍方座位），加上第 58 回合一個梅林派隊的開關 `merlinOwnRank58`——
  * 站長 2026-11-20 的裁定本身就是這條派法（「要從公開資訊中找到符合自己內建資訊」），真人局重播（梅林的提議、人類 PR 量尺兩半）都沒有一層變差；
  * 第 59 回合再加一個藍方在隊上的投票門檻 `onTeamVote59`（忠臣、派西第 4 局照字面讀；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
+ * 第 61 回合再加紅方兩個（協調者轉達：真人局重播過第 1H 節就放進真人桌）：刺客在第 1 局成功、第 2 局失敗的三藍局的讀法倍數 `assassinPath61`、
+ * 第 2 局（1:0）落單的紅照真人比例出牌 `redR2Lead61`。真人桌的藍方機器人不會懲罰的事，真人會（第 60 回合），所以紅方也要用真人局判。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -63,8 +65,13 @@ export const TIER_MAX_STEP = 0.1;
  * - 忠臣、派西第 4 局在隊上照字面讀（`onTeamVote59=0.8`，第 59 回合）：P(隊上的紅 ≥ 2) ≥ 0.8 才內黑（基準線把第 4 局當成一張失敗，P(隊上有紅) ≥ 0.8 就內黑，
  *   第 4 局在隊上內黑 53%，真人 29%）。真人局 28,807 個藍方在隊上的投票點：和真人同票 +2.6pp（第 4 局 +9.0）、票對 +3.6pp；
  *   人類 PR 量尺藍方 +0.26 ± 0.07 pp／座位局（忠臣 +0.36、派西 +0.14；偶數局 +0.28、奇數局 +0.25），沒有一格變差超過 2 個標準誤。梅林照原本（一起改是負的）。
+ * - 紅方・刺客（`assassinPath61=1`，第 61 回合）：第 1 局成功、第 2 局失敗的三藍局，投票／隊長／照派三項讀法乘 0.25／0.4／0.15。
+ *   真人刺殺點 1,193 個刺中率 39.1 → 40.3%（+1.3 [+0.3, +2.3]；奇數號驗證 +1.2）；人類 PR 量尺刺客 +0.67 ± 0.29（偶數 +0.71、奇數 +0.62）；
+ *   強桌 −0.63 ± 0.77（兩半都在 1 個標準誤內，刺中率 S ≥ 55 −1.3 [−4.4, +1.9]），沒有一格變差超過雜訊。
+ * - 紅方・第 2 局出牌（`redR2Lead61=1`，第 61 回合）：第 1 局成功之後第 2 局落單的紅照全部真人的藏牌比例（刺客 4%、莫甘娜 3%、莫德雷德 3%、奧伯倫 23%）。
+ *   同一批真人決策點任務失敗 84.6 → 90.2%（真人 92.4%），高端桌 83.2 → 89.5%（強者 91.6%）；量尺紅方 +0.05 ± 0.01，每一層兩半都不負。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：
