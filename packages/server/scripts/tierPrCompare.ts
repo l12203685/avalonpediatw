@@ -7,7 +7,8 @@
  *   cd packages/server && npx tsx scripts/tierPrCompare.ts a.jsonl b.jsonl [--dataset games_cache.json] [--split train|test|all]
  *
  * 每個（局, 座位）把所有決策的優勢加總（= 量尺的「總 PR」單位，勝率 pp）；Δ = 候選 − 對照（同一批決策點、同一份優勢表，人類那一邊相同），
- * 以局為集群的標準誤。另列忠臣／派西投票正確率（乾淨的隊贊成、有紅的隊反對）。強度層同 `humanProfile.ts`（S < 38／38–55／≥ 55／不明）。
+ * 以局為集群的標準誤（第 61 回合起也列紅方四個角色與紅方合計）。另列忠臣／派西投票正確率（乾淨的隊贊成、有紅的隊反對）。強度層同 `humanProfile.ts`（S < 38／38–55／≥ 55／不明）。
+ * `--types a,b`：只加總這些決策種類（第 61 回合；座位局的分母不變）。
  * `--split`：train = 10 人局裡偶數號的局、test = 奇數號（同 `humanProfileStudy.ts --split` 的切法）。
  * 只輸出彙總。
  */
@@ -32,6 +33,8 @@ function main(): void {
   const tenIx = new Map<number, number>();
   games.forEach((g, gi) => { if (g.game.playerCount === 10) tenIx.set(gi, tenIx.size); });
   const split = arg('--split') ?? 'all';
+  // 第 61 回合：`--types assassinate,quest` 只加總這些決策種類的優勢（拆開兩個開關各自的貢獻；座位局的分母不變）
+  const types = arg('--types')?.split(',');
   const keepGi = (gi: number): boolean => {
     const ix = tenIx.get(gi);
     if (ix === undefined) return false;
@@ -43,6 +46,7 @@ function main(): void {
     for (const x of xs) {
       if (!keepGi(x.gi)) continue;
       const k = `${x.gi}|${x.seat}`;
+      if (types && !types.includes(x.type)) { if (!m.has(k)) m.set(k, { bot: 0, role: x.role, gi: x.gi }); continue; }
       const o = m.get(k) ?? { bot: 0, role: x.role, gi: x.gi };
       o.bot += x.bot;
       m.set(k, o);
@@ -56,8 +60,9 @@ function main(): void {
   for (const [k, va] of sa) {
     const vb = sb.get(k);
     if (!vb) continue;
-    for (const cell of [`${tierOf(va.gi)}|${va.role}`, `all|${va.role}`, `${tierOf(va.gi)}|blue`, `all|blue`]) {
+    for (const cell of [`${tierOf(va.gi)}|${va.role}`, `all|${va.role}`, `${tierOf(va.gi)}|blue`, `all|blue`, `${tierOf(va.gi)}|red`, `all|red`]) {
       if (cell.endsWith('|blue') && campOf(va.role as never) !== 'good') continue;
+      if (cell.endsWith('|red') && campOf(va.role as never) !== 'evil') continue;
       const g = perGame.get(cell) ?? new Map<number, { d: number; n: number }>();
       const o = g.get(va.gi) ?? { d: 0, n: 0 };
       o.d += vb.bot - va.bot;
@@ -99,7 +104,8 @@ function main(): void {
   console.log('| 強度層 | 角色 | 座位局 | Δ 機器人優勢（pp／座位局）± 標準誤 | 忠臣／派西投票正確（對照 → 候選） |');
   console.log('|---|---|---|---|---|');
   for (const t of ['weak', 'avg', 'strong', 'unknown', 'all']) {
-    for (const r of ['loyal', 'percival', 'merlin', 'blue']) {
+    // 第 61 回合：紅方角色與紅方合計（只改紅方決策的候選；`humanPrBenchmark.ts --roles` 只重播紅方座位時藍方沒有列）
+    for (const r of ['loyal', 'percival', 'merlin', 'blue', 'assassin', 'morgana', 'mordred', 'oberon', 'red']) {
       const s = stat(perGame.get(`${t}|${r}`));
       if (!s.n) continue;
       const x = va.get(`${t}|${r}`);
