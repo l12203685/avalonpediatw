@@ -29,7 +29,7 @@ const an = (_o: PlayerObservation, c: readonly string[]) => ({
 
 describe('round 68 switches', () => {
   it('off in the default and the legacy tables and on every opponent profile; flags parse', () => {
-    for (const k of ['lakeChain68', 'lakeChain68Good', 'lakeChain68Scope', 'lakeChain68Roles', 'missionScore68'] as const) {
+    for (const k of ['lakeChain68', 'lakeChain68Good', 'lakeChain68Scope', 'lakeChain68Roles', 'lakeChain68Mix', 'missionScore68'] as const) {
       expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
       for (const o of OPPONENT_TYPES) expect(PROFILE_OVERRIDES[o][k]).toBeUndefined();
@@ -39,6 +39,8 @@ describe('round 68 switches', () => {
     expect(parseTuningFlag('lakeChain68Scope=3')).toEqual({ lakeChain68Scope: 3 });
     expect(parseTuningFlag('lakeChain68Roles')).toEqual({ lakeChain68Roles: 3 });
     expect(parseTuningFlag('missionScore68')).toEqual({ missionScore68: 1 });
+    expect(parseTuningFlag('lakeChain68Mix')).toEqual({ lakeChain68Mix: 0.5 });
+    expect(() => parseTuningFlag('lakeChain68Mix=2')).toThrow();
     expect(() => parseTuningFlag('lakeChain68=-1')).toThrow();
     expect(() => parseTuningFlag('lakeChain68Scope=4')).toThrow();
     expect(() => parseTuningFlag('lakeChain68Roles=8')).toThrow();
@@ -81,6 +83,21 @@ describe('lakeChain68Pick', () => {
     expect(lakeChain68Pick(T({ lakeChain68: 0.5, lakeChain68Roles: 4 }), lakeObs({ myRole: 'merlin' }), ['P7', 'P4'], an)).toBe('P4');
     expect(lakeChain68Pick(T({ lakeChain68: 0.5, lakeChain68Roles: 7 }), lakeObs({ myRole: 'assassin', myTeam: 'evil' } as Partial<PlayerObservation>), ['P7', 'P4'], an)).toBeNull();
     expect(lakeChain68Pick(on, lakeObs(), [], an)).toBeNull();
+  });
+
+  it('50% mix: a position hash decides, the same position always the same way', () => {
+    const seen = new Set<string | null>();
+    let used = 0;
+    for (let i = 1; i <= 10; i++) {
+      const o = lakeObs({ myPlayerId: `P${i}` });
+      const pick = lakeChain68Pick(T({ lakeChain68: 0.5, lakeChain68Mix: 0.5 }), o, ['P7', 'P4'].filter((x) => x !== `P${i}`).concat(i === 4 || i === 7 ? ['P5'] : []), an);
+      expect(lakeChain68Pick(T({ lakeChain68: 0.5, lakeChain68Mix: 0.5 }), o, ['P7', 'P4'].filter((x) => x !== `P${i}`).concat(i === 4 || i === 7 ? ['P5'] : []), an)).toBe(pick);
+      seen.add(pick === null ? null : 'x');
+      if (pick !== null) used++;
+    }
+    expect(seen.size).toBe(2);
+    expect(used).toBeGreaterThan(0);
+    expect(used).toBeLessThan(10);
   });
 });
 

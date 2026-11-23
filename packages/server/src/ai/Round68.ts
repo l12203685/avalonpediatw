@@ -10,6 +10,7 @@
  *    `lakeChain68Scope`（位元；0 = 1）：1 = 後面還有湖、紅方還沒兩勝（現行的信任鏈本來就開的局面）；
  *    2 = 紅方已兩勝或最後一湖——**Edward 10/13 與專案負責人 11/12「紅方已兩勝只看資訊」的範圍，改它要站長決定，只量**。
  *    `lakeChain68Roles`（位元；0 = 3）：1 = 忠臣、2 = 派西（派西持湖 = 帶著拇指事實的忠臣，INV-PL2）、4 = 梅林。
+ *    `lakeChain68Mix = p`（0 = 一律）：第 1C 節，照局面雜湊 < p 才用。
  *    同分照原本（座位序）；候選照現行的湖規則過濾（`goodLakeHumanPool`）。第 51 回合 `lakeUntainted51` 是同一個方向、不分局面的版本。
  *
  * 2. **任務牌模型分比分**（第 5 局 2-2、第 4 局成功之後的藍隊長：量尺 −0.51 ± 0.14 pp／局，機器人的隊會失敗 50% vs 真人 34%、
@@ -27,6 +28,12 @@ import { AVALON_CONFIG } from '@avalon/shared';
 
 /** 診斷計數（研究腳本用；不影響決策）。 */
 export const round68Stats = { lakeChecked: 0, lakeChanged: 0 };
+
+function hash01(s: string): number {
+  let h = 0x811c9dc5;
+  for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000;
+}
 
 /** 這一湖是不是信任鏈的局面（後面還有湖、紅方還沒兩勝）。 */
 export function lakeTrustRegime68(obs: PlayerObservation): boolean {
@@ -59,6 +66,9 @@ export function lakeChain68Pick(
   const scope = (tuning.lakeChain68Scope ?? 0) || 1;
   const trust = lakeTrustRegime68(obs);
   if (!((trust && (scope & 1) !== 0) || (!trust && (scope & 2) !== 0))) return null;
+  // 第 1C 節「中性改測 50%」：照局面雜湊（持湖者、第幾局、候選）< p 才用，同一局面每次一樣。0 = 一律。
+  const mix = tuning.lakeChain68Mix ?? 0;
+  if (mix > 0 && hash01(`${obs.myPlayerId}|${obs.currentRound}|${[...pool].sort().join(',')}|lake68`) >= mix) return null;
   const an = analyze(obs, pool);
   if (!an || an.candidates.length === 0) return null;
   round68Stats.lakeChecked++;
