@@ -35,9 +35,10 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
 
 /**
  * 真人桌可以偏離基準線的開關：讀人的信念（只給藍方座位），加上第 58 回合一個梅林派隊的開關 `merlinOwnRank58`——
- * 站長 2026-11-20 的裁定本身就是這條派法（「要從公開資訊中找到符合自己內建資訊」），真人局重播（梅林的提議、人類 PR 量尺兩半）都沒有一層變差。
+ * 站長 2026-11-20 的裁定本身就是這條派法（「要從公開資訊中找到符合自己內建資訊」），真人局重播（梅林的提議、人類 PR 量尺兩半）都沒有一層變差；
+ * 第 59 回合再加一個藍方在隊上的投票門檻 `onTeamVote59`（忠臣、派西第 4 局照字面讀；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -59,8 +60,11 @@ export const TIER_MAX_STEP = 0.1;
  * - 梅林在公開上說得通的乾淨隊裡先比自己的乾淨機率（`merlinOwnRank58=0.5`，第 58 回合；站長 11/20「要從公開資訊中找到符合自己內建資訊」）：
  *   真人梅林 3,465 個提議重播 Jaccard +0.006 ± 0.006、全好隊 +1.8pp，沒有一層變差；人類 PR 量尺梅林 +0.69 ± 0.18 pp／座位局（偶數局 +0.60、奇數局 +0.77），
  *   各層兩半都在 2 個標準誤內；網站 Room-17（2026-11-20）3-5 梅林不再派帶莫德雷德的隊。自我對打 −0.36（刺客讀得到），所以基準線不用。
+ * - 忠臣、派西第 4 局在隊上照字面讀（`onTeamVote59=0.8`，第 59 回合）：P(隊上的紅 ≥ 2) ≥ 0.8 才內黑（基準線把第 4 局當成一張失敗，P(隊上有紅) ≥ 0.8 就內黑，
+ *   第 4 局在隊上內黑 53%，真人 29%）。真人局 28,807 個藍方在隊上的投票點：和真人同票 +2.6pp（第 4 局 +9.0）、票對 +3.6pp；
+ *   人類 PR 量尺藍方 +0.26 ± 0.07 pp／座位局（忠臣 +0.36、派西 +0.14；偶數局 +0.28、奇數局 +0.25），沒有一格變差超過 2 個標準誤。梅林照原本（一起改是負的）。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

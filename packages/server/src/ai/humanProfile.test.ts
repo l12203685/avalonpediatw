@@ -26,7 +26,7 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(6); // round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling)
+      expect(keys.length).toBeLessThanOrEqual(7); // round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
@@ -37,6 +37,8 @@ describe('one baseline, small per-opponent adjustments', () => {
     expect(HUMAN_TABLE_READING.blueVoteTemper57).toBe(0.4);
     expect(HUMAN_TABLE_READING.missionRole56).toBe(1);
     expect(HUMAN_TABLE_READING.merlinOwnRank58).toBe(0.5);
+    expect(HUMAN_TABLE_READING.onTeamVote59).toBe(0.8);
+    expect(DEFAULT_AGENT_TUNING.onTeamVote59).toBe(0);
     expect(PROFILE_OVERRIDES.avgHuman).toEqual(HUMAN_TABLE_READING);
     expect(PROFILE_OVERRIDES.weakHuman.blueVoteTemper57).toBe(0.5);
     expect(PROFILE_OVERRIDES.strongHuman.blueVoteTemper57).toBe(0.3);
