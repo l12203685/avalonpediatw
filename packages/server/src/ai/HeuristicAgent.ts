@@ -9,6 +9,7 @@
  * - All roles: use vote history to build suspicion scores
  */
 
+import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
 import { exactPick53Team } from './Round53';
 import {
   AvalonAgent,
@@ -832,6 +833,8 @@ export class HeuristicAgent implements AvalonAgent {
    * baseline measures the fit it just produced, not the file on disk.
    */
   private readonly assassinModelWeights: AssassinModelWeights | undefined;
+  /** Round 70 `r5Lead70`: the delegate for a blue leader's R5 proposal (built on first use). */
+  private r5Lead70Agent: HeuristicAgent | undefined;
 
   private memory: AgentMemory = this.createEmptyMemory();
 
@@ -863,6 +866,14 @@ export class HeuristicAgent implements AvalonAgent {
   act(obs: PlayerObservation): AgentAction {
     // Round 39: the deciding seat's own camp travels with every view built from this observation (`seatTeam`).
     if (obs.seatTeam === undefined) obs = { ...obs, seatTeam: obs.myTeam };
+    // Round 70 `r5Lead70` (Round70.ts): a blue leader's non-forced R5 proposal is picked with the recalibrated reading — a delegate agent
+    // with the adjusted switches, its memory rebuilt from the public history (the ingestion below is idempotent). Off = this path is skipped.
+    if ((this.tuning.r5Lead70 ?? 0) > 0 && r5Lead70Applies(this.tuning, obs)) {
+      if (!this.r5Lead70Agent) this.r5Lead70Agent = new HeuristicAgent(this.agentId, undefined, this.priors, r5Lead70Tuning(this.tuning), this.assassinModelWeights);
+      round70Stats.applied++;
+      this.r5Lead70Agent.onGameStart(obs);
+      return this.r5Lead70Agent.act(obs);
+    }
     // Idempotent ingestion: update cross-round memory from public history.
     this.ingestVoteHistory(obs);
     this.ingestQuestHistory(obs);
