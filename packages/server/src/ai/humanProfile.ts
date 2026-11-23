@@ -42,8 +42,9 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 站長 2026-11-23 裁定再加兩個派隊開關：`goLike56`（真人桌照第 5 次派）與 `merlinPublicThumb58`（基準線開、真人桌關回 0）。
  * 第 65 回合再加奧伯倫的票 `oberonNormalVote`（第 16 回合的開關；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  * 第 66 回合再加藍方第 2 局在隊上的內黑 `r2InnerBlack66`（派西、梅林照同座位公開視角忠臣的讀法；人類 PR 量尺兩半都沒有一層變差）。
+ * 第 68 回合再加藍方持湖的目標 `lakeChain68`（忠臣、派西在信任鏈的局面少湖出過失敗任務的人；人類 PR 量尺兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -85,10 +86,15 @@ export const TIER_MAX_STEP = 0.1;
  *   真人 93.7%。真人局 6,224 個派西／梅林的這種投票點：改到 329 點（5.3%），被反對的隊 85–89% 真的有紅（全部 74%），票對 +3.4／+4.4pp，和真人同票 −2.7／−4.4pp；
  *   人類 PR 量尺派西 +0.46 ± 0.06、梅林 +0.60 ± 0.06 pp／座位局（偶數局 +0.48／+0.53、奇數局 +0.43／+0.66），每一層兩半都是正的。忠臣那一支（位元 1）每一層都變差（−0.14 ± 0.02），不放。
  * - 紅隊長第 3、5 局少疊隊友 `redStackRate65` 站長 2026-11-23 裁定只上基準線（0.5，自我對打紅方 +1.05）；真人桌人類 PR 量尺 −0.11 ± 0.01，這裡維持 0。
+ * - 藍方持湖的目標（`lakeChain68=0.25`，第 68 回合；`lakeChain68Scope`／`Roles` 預設 = 後面還有湖、紅方還沒兩勝的局面，忠臣＋派西）：`goodLakeInfoMax` 的湖中分數
+ *   對出過有失敗牌的任務的候選人扣 0.25 ×（最好的資訊量）。人類 PR 量尺把藍方持湖的目標排在藍方落差第 1（−2.67 ± 0.23 pp／局）：機器人在信任鏈的局面湖出過失敗任務的人 47%（真人 31%）、
+ *   湖沒出過失敗任務的藍方 49%（真人 59%）。真人局 1,245 個這種持湖點：沒出過失敗任務的藍方 49 → 73%、出過失敗任務的人 47 → 18%，和真人湖同一人 32.3 → 31.3%（高端桌 41.7 → 41.7%）；
+ *   人類 PR 量尺藍方 +0.36 ± 0.02 pp／座位局（忠臣 +0.40、派西 +0.52；偶數局 +0.35、奇數局 +0.36），每一層兩半都是正的（最小：強桌派西偶數局 +0.10 ± 0.10）。
+ *   0.5 的量尺更大（+0.44 ± 0.03），但和真人湖同一人掉到 28.4%（高端桌 35.4%），所以真人桌用 0.25。紅方已兩勝、最後一湖照 Edward 10/13、11/12「只看資訊」不動。自我對打兩個都中性，基準線不用。
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

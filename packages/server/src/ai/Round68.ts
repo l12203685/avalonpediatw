@@ -75,7 +75,7 @@ export function lakeChain68Pick(
   const tainted = taintedSeats68(obs);
   const value = Math.max(0, ...an.candidates.map((c) => c.infoGain));
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
-  const rank = (adj: boolean) => an.candidates
+  const rank = (adj: boolean): Array<{ id: string; s: number }> => an.candidates
     .map((c) => ({ id: c.id, s: c.score + (adj ? g * (1 - 2 * c.pEvil) * value - (tainted.has(c.id) ? w * value : 0) : 0) }))
     .sort((a, b) => (Math.abs(b.s - a.s) > 1e-9 ? b.s - a.s : (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)));
   const pick = rank(true)[0]?.id ?? null;

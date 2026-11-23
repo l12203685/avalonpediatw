@@ -45,8 +45,8 @@ function main(): void {
     const seen = (s: number): boolean => it.role === 'merlin' && red(s) && roleOf(s) !== 'mordred';
     const need = (round: number): number => AVALON_CONFIG[10].questFailsRequired?.[round - 1] ?? 1;
     // 湖：第 round 局開始前公開的宣告；自己持湖看到的真相。
-    const lakesBefore = (round: number) => g.lakes.filter((l) => l.round < round);
-    const lakeSets = (round: number) => {
+    const lakesBefore = (round: number): typeof g.lakes => g.lakes.filter((l) => l.round < round);
+    const lakeSets = (round: number): { ownRed: Set<number>; declRed: Set<number>; declGood: Set<number>; n: number } => {
       const ls = lakesBefore(round);
       const ownRed = new Set(ls.filter((l) => l.holderSeat === seat && red(l.targetSeat)).map((l) => l.targetSeat));
       const declRed = new Set(ls.filter((l) => l.holderSeat !== seat && l.claim === 'evil').map((l) => l.targetSeat));

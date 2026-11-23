@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag, resolveAgentTuning, type AgentTuning } from './AgentTuning';
 import { MISSION_SCORE_68, lakeChain68Pick, lakeTrustRegime68, missionProbScore68, missionScoreApplies68, taintedSeats68 } from './Round68';
-import { OPPONENT_TYPES, PROFILE_OVERRIDES } from './humanProfile';
+import { OPPONENT_TYPES, PROFILE_OVERRIDES, tuningForOpponent } from './humanProfile';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
@@ -28,11 +28,17 @@ const an = (_o: PlayerObservation, c: readonly string[]) => ({
 });
 
 describe('round 68 switches', () => {
-  it('off in the default and the legacy tables and on every opponent profile; flags parse', () => {
+  it('off in the default and the legacy tables; lakeChain68 = 0.25 on the human tables; flags parse', () => {
     for (const k of ['lakeChain68', 'lakeChain68Good', 'lakeChain68Scope', 'lakeChain68Roles', 'lakeChain68Mix', 'missionScore68'] as const) {
       expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
-      for (const o of OPPONENT_TYPES) expect(PROFILE_OVERRIDES[o][k]).toBeUndefined();
+      for (const o of OPPONENT_TYPES) if (k !== 'lakeChain68') expect(PROFILE_OVERRIDES[o][k]).toBeUndefined();
+    }
+    // Round 68: the three human tables carry lakeChain68 = 0.25 (default scope / roles); the bot-only baseline stays off.
+    expect(PROFILE_OVERRIDES.ai.lakeChain68).toBeUndefined();
+    for (const o of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      expect(PROFILE_OVERRIDES[o].lakeChain68).toBe(0.25);
+      expect(tuningForOpponent(o).lakeChain68).toBe(0.25);
     }
     expect(parseTuningFlag('lakeChain68')).toEqual({ lakeChain68: 0.5 });
     expect(parseTuningFlag('lakeChain68Good=1')).toEqual({ lakeChain68Good: 1 });
