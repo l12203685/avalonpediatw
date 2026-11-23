@@ -78,6 +78,7 @@ import { redR2LeadCard61 } from '../RedRound61';
 import { oberonR1Card64, round64MerlinOn } from '../Round64';
 import { redCrowdWhite65 } from '../Round65';
 import { r2InnerBlack66 } from '../Round66';
+import { redEarlyBlack67 } from '../Round67';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -1089,6 +1090,11 @@ export class ForwardAgent implements AvalonAgent {
         if (!asLoyal.action.vote && redCrowdWhite65(this.baseline.tuning, obs)) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red normal vote (crowd white: passes without my vote; round 65)');
         return this.ruleDecision(obs, { type: 'team_vote', vote: asLoyal.action.vote }, 'red normal vote (as a loyal)');
       }
+    }
+    // Round 67 `redEarlyBlack67` (Round67.ts): R1–R2, a red on the team (not the leader) rejects where the public loyal view of its seat reads
+    // P(a red on the team) ≥ θ — the inner black a confident loyal would cast (D3 staged release); off (θ = 0) the path is unchanged.
+    if (redEarlyBlack67(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red R1–R2 on the team: the public loyal view reads a red on it (inner black; round 67)');
     }
     if (obs.gamePhase === 'team_vote' && obs.myTeam === 'evil') {
       const yes = redCleanApproveVote(this.baseline.tuning, obs);
