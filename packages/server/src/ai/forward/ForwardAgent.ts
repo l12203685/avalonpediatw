@@ -1074,9 +1074,10 @@ export class ForwardAgent implements AvalonAgent {
     if (redNormalVoteNow(this.baseline.tuning, obs)) {
       const forced = obs.myRole === 'oberon' ? null : redVoteCritical(obs);
       // Round 69 `redKeyCrowd69` (Round69.ts): R3 at red's match point, a teammate on the team, off it — where `redKeyWhite` keeps the loyal vote,
-      // also count the off-team blues whose public view reads the team clean (≥ τ); white when that reaches the majority. Off (τ = 0): unchanged.
+      // white on the 4th proposal (bit 1; the 3rd too with bit 2), or (bit 4) when the off-team blues whose public view reads the team clean
+      // (≥ τ) bring the estimate to the majority. Off (0): unchanged.
       if (forced === true && (this.baseline.tuning.redKeyCrowd69 ?? 0) > 0 && !redKeyWhiteVote(this.baseline.tuning, obs) && redKeyCrowd69(this.baseline.tuning, obs)) {
-        return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red key team: passes with the blues whose public view reads it clean (outer white; round 69)');
+        return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red key team at red match point: outer white (round 69)');
       }
       // Round 16 `redKeyWhite` (RedVoteCamouflage.ts): the key-team outer white only when the team can pass (and, mode 2,
       // only as many reds as the majority needs); otherwise the loyal vote below.

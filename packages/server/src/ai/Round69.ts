@@ -7,14 +7,18 @@
  * 門檻）和不在隊上的紅，**不在隊上的藍方一律當反對**；湊不到過半就照忠臣投（反對）。第 65 回合的「跟著大家外白」`redCrowdWhite65` 是在全部第 3 局起的
  * 隊外票上做的（三把尺都不過）；這一格只動紅方已兩勝、隊友在隊上的關鍵隊。
  *
- * `redKeyCrowd69 = τ`（0 = 關）：在這一格、`redKeyWhite` 說不外白時，再把不在隊上的藍方也算進來——站在那個座位（同一份公開紀錄、藍方的讀法 `bayesTeamClean`）
- * 估「這隊沒有紅」≥ τ 的算贊成。隊上的贊成（同 `redKeyWhite`）＋不在隊上的紅（含自己）＋這些藍方 ≥ 過半 → 外白（贊成）。只用投票前的公開紀錄，不看別人這一次的票；
- * 讀的是隊伍組合在公開紀錄上的樣子（站長 11/19「外白內黑傾向 還是要建立在對組合的解讀上 不是硬白硬黑」）。
- * `redKeyCrowd69Scope`（位元；0 = 1）：1 = 第 3 局；2 = 第 4、5 局也適用（只量）；4 = 只在第 3–4 次提議；8 = 尾家（第 5 次的隊長）不是看得到的紅
- * （尾家是紅的話強制局紅方自己派隊就贏，現在外白只會被看到）；16 = 第 4 次提議（強制局之前的最後一次）不估贊成數，一律外白；32 = 第 3 次提議也一律外白（要和 16 一起）。
- * 16／32 的依據（真人局這一格 3,884 點，`scripts/redSideStudy69.ts`）：其他人實際的贊成數 ≥ 5（自己這一票決定或不管自己都過）第 1、2 次提議 7–11%、
- * 第 3 次 22%、第 4 次 56%；真人在第 4 次贊成 56.5%（高端桌 63.6%），機器人 6.9%。公開視角的忠臣後驗在這一格幾乎都說「有紅」（不在隊上的藍方
- * P(乾淨) ≥ 0.3 平均 0.11 人，真人實際贊成 0.30 人），所以只靠 τ 的估計抓不到桌上「快到強制局、大家放行」的票。
+ * 真人局這一格 3,884 點（`scripts/redSideStudy69.ts`）：其他人實際的贊成數 ≥ 5（自己這一票決定、或不管自己都過）第 1、2 次提議 7–11%、第 3 次 22%、
+ * **第 4 次（強制局之前的最後一次）56%**；真人在第 4 次贊成 56.5%（高端桌 63.6%），機器人 6.9%。公開視角的忠臣後驗在這一格幾乎都說「有紅」
+ * （不在隊上的藍方 P(乾淨) ≥ 0.3 平均 0.11 人，真人實際贊成 0.30 人），所以只靠公開後驗估贊成數抓不到桌上「快到強制局、大家放行」的票。
+ *
+ * `redKeyCrowd69`（位元；0 = 關）：在這一格、`redKeyWhite` 說不外白時——
+ * - 1 = 第 4 次提議外白（不估贊成數：這隊過了紅方就贏；過不了下一隊就是強制局）；
+ * - 2 = 第 3 次提議也外白；
+ * - 4 = 其他提議估贊成數：隊上的贊成（同 `redKeyWhite`）＋不在隊上的紅（含自己）＋不在隊上、站在那個座位（同一份公開紀錄、藍方的讀法 `bayesTeamClean`）
+ *   估「這隊沒有紅」≥ τ（`redKeyCrowd69Tau`，0 = 0.5）的藍方 ≥ 過半就外白（讀的是隊伍組合在公開紀錄上的樣子，站長 11/19「外白內黑傾向 還是要建立在
+ *   對組合的解讀上 不是硬白硬黑」；只用投票前的公開紀錄，不看別人這一次的票）；
+ * - 8 = 尾家（第 5 次的隊長）是看得到的紅（含自己）時不適用（強制局紅方自己派隊就贏，現在外白只會被看到）；
+ * - 16 = 第 4、5 局（紅方已兩勝）也適用（只量）。
  * 硬約束（隊長自己的提議、奧伯倫、紅方持湖者言行一致…）在呼叫端之前就處理掉了；奧伯倫看不到隊友，不在範圍內。
  */
 import type { AgentTuning } from './AgentTuning';
@@ -62,32 +66,32 @@ export function keyCrowdEstimate69(tuning: Readonly<AgentTuning>, obs: PlayerObs
   return { onYes, onBlue, offReds, offBlueP };
 }
 
-/** 這一格（相認紅、紅方已兩勝、非強制、不在隊上、隊上有看得到的隊友；局與第幾次照範圍）。 */
+/** 這一格（相認紅、紅方已兩勝、非強制、不在隊上、隊上有看得到的隊友；局照位元 16、尾家照位元 8）。 */
 export function inKeyCrowdCell69(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  if (obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil' || obs.myRole === 'oberon') return false;
-  const scope = (tuning.redKeyCrowd69Scope ?? 0) || 1;
+  const bits = tuning.redKeyCrowd69 ?? 0;
+  if (bits <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil' || obs.myRole === 'oberon') return false;
   const round = obs.currentRound ?? 1;
-  if (round < 3 || (round === 3 && (scope & 1) === 0) || (round > 3 && (scope & 2) === 0)) return false;
-  const fc = obs.failCount ?? 0;
-  if (fc >= 4 || ((scope & 4) !== 0 && fc < 2)) return false;
+  if (round < 3 || (round > 3 && (bits & 16) === 0)) return false;
+  if ((obs.failCount ?? 0) >= 4) return false;
   if ((obs.questResults ?? []).filter((r) => r === 'fail').length < 2) return false;
   const team = obs.proposedTeam ?? [];
   if (team.includes(obs.myPlayerId) || !team.some((id) => obs.knownEvils.includes(id))) return false;
-  if ((scope & 8) !== 0) {
+  if ((bits & 8) !== 0) {
     const tail = tailLeaderOf(obs);
     if (tail !== null && (tail === obs.myPlayerId || obs.knownEvils.includes(tail))) return false;
   }
   return true;
 }
 
-/** `redKeyCrowd69`：true = 改投贊成（關鍵隊外白，把不在隊上、公開上會贊成的藍方也算進來就過得了）；false = 照原本。 */
+/** `redKeyCrowd69`：true = 改投贊成（關鍵隊外白）；false = 照原本。 */
 export function redKeyCrowd69(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
-  const tau = tuning.redKeyCrowd69 ?? 0;
-  if (!(tau > 0) || !inKeyCrowdCell69(tuning, obs)) return false;
+  if (!inKeyCrowdCell69(tuning, obs)) return false;
+  const bits = tuning.redKeyCrowd69 ?? 0;
   round69Stats.checked++;
-  const scope = (tuning.redKeyCrowd69Scope ?? 0) || 1;
   const fc = obs.failCount ?? 0;
-  if (((scope & 16) !== 0 && fc === 3) || ((scope & 48) === 48 && fc === 2)) { round69Stats.white++; return true; }
+  if (((bits & 1) !== 0 && fc === 3) || ((bits & 2) !== 0 && fc === 2)) { round69Stats.white++; return true; }
+  if ((bits & 4) === 0) return false;
+  const tau = (tuning.redKeyCrowd69Tau ?? 0) || 0.5;
   const e = keyCrowdEstimate69(tuning, obs);
   const majority = Math.floor(obs.playerCount / 2) + 1;
   const yes = e.onYes + e.offReds + e.offBlueP.filter((p) => p >= tau).length;
