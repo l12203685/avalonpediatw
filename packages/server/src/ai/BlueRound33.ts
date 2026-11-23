@@ -24,6 +24,7 @@ import { r1InflCtx, r1InfoValueInfl } from './BlueRound34';
 import { percivalThumbVote40, vote40Bar } from './BlueRound40';
 import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 import { leaderOppShift51 } from './Round51';
+import { onTeamBar59 } from './Round59';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
@@ -89,11 +90,13 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     // 第 38 回合 `goodBayesR4Kept`（1、3；檢查表 AV-03）：第 4 局第 1 次提議、隊長留下第 3 局成功的整支隊，公開邏輯沒有指出隊上有紅、也沒有人被湖宣告紅 → 贊成。
     if (((tuning.goodBayesR4Kept ?? 0) & 1) !== 0 && r3TeamKeptAtR4(obs, team) && cert.minReds(team) === 0
       && !(obs.lakeHistory ?? []).some((l) => l.declaredClaim === 'evil' && team.includes(l.targetId))) return { vote: true, reason: 'onDefault' };
-    const below = bayesTeamRedsBelow(obs, team, req, r4Mix ? bayesOptionsOf({ ...tuning, beliefRecursive: 5 }) : opts);
+    // 第 59 回合 `onTeamVote59`／`onTeamVote59R3`（Round59.ts）：第 4 局照字面讀（P(隊上的紅 ≥ 2)）、第 3 局的門檻（關著時 null）。
+    const lit59 = onTeamBar59(tuning, obs, failsRequiredNow(obs));
+    const below = bayesTeamRedsBelow(obs, team, lit59 ? lit59.req : req, r4Mix && !lit59 ? bayesOptionsOf({ ...tuning, beliefRecursive: 5 }) : opts);
     if (below === null) return null;
     // 第 40 回合 `vote40*`：分局面、分角色的門檻（沒有設時用原本的）。
     // 第 51 回合 `leaderOppVote51`（站長 11/18）：這一局之後還會當隊長 → 內黑的門檻降低 δ（關著時 0）。
-    const bad = (vote40Bar(tuning, obs, true) || (key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad)))
+    const bad = (lit59?.bar || vote40Bar(tuning, obs, true) || (key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad)))
       - leaderOppShift51(tuning, obs, true);
     if (!(1 - below >= bad)) return { vote: true, reason: 'onDefault' };
     // 第 38 回合 `goodOnTeamState`：內黑照局面（比分、整隊照派、自己還會不會派、被宣告紅的人），不是只看門檻。
