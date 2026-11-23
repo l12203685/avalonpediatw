@@ -1,21 +1,21 @@
-# 標籤|開關|種子|起始局號|局數  （第 69 回合篩選，紅方座位：K16 = red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17（第 3 局紅方已兩勝、不在隊上、隊上有隊友：第 4 次提議外白）；563001 第 0–9,999 局 detail=1 f69=1；對照 BASE（現行預設）之後只補 f69 > 0 的局）
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|0|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|1000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|1500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|2000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|2500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|3000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|3500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|4000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|4500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|5000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|5500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|6000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|6500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|7000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|7500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|8000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|8500|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|9000|500
-K16|red.redKeyCrowd69=1 red.redKeyCrowd69Scope=17 detail=1 f69=1|563001|9500|500
+# 標籤|開關|種子|起始局號|局數  （第 69 回合篩選的對照：BASE = 現行預設（main 77704be0，含 #167 的 redStackRate65=0.5），只跑 K16 的 f69 > 0 的局（selfplay/only/，1,679／10,000 局）；其他局和 K16 逐局相同）
+BASE|detail=1 only=../../selfplay/only/K16_563001_0.txt|563001|0|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_500.txt|563001|500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_1000.txt|563001|1000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_1500.txt|563001|1500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_2000.txt|563001|2000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_2500.txt|563001|2500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_3000.txt|563001|3000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_3500.txt|563001|3500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_4000.txt|563001|4000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_4500.txt|563001|4500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_5000.txt|563001|5000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_5500.txt|563001|5500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_6000.txt|563001|6000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_6500.txt|563001|6500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_7000.txt|563001|7000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_7500.txt|563001|7500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_8000.txt|563001|8000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_8500.txt|563001|8500|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_9000.txt|563001|9000|500
+BASE|detail=1 only=../../selfplay/only/K16_563001_9500.txt|563001|9500|500
