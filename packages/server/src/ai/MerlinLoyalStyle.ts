@@ -58,6 +58,7 @@ export function merlinLoyalStyleTeam(
   action: AgentAction,
   allowed: (team: readonly string[]) => boolean = () => true,
   publicAllowed: (team: readonly string[]) => boolean = allowed,
+  forecast?: (view: PlayerObservation) => string[] | null,
 ): AgentAction {
   if (!tuning.merlinLoyalStyle || action.type !== 'team_select' || obs.myRole !== 'merlin') return action;
   const me = obs.myPlayerId;
@@ -119,7 +120,7 @@ export function merlinLoyalStyleTeam(
     const barred = [...barred54, ...[...known].filter((id) => !seen.has(id))];
     const ownOpts = bayesOptionsOf(tuning);
     const ownClean = (team: readonly string[]): number => bayesTeamClean(obs, [...team], ownOpts) ?? 0;
-    const t58 = publicThumb58Team(tuning, obs, size, scored, allowed, publicAllowed, { publicView, pubOpts, barred, prior, ownClean });
+    const t58 = publicThumb58Team(tuning, obs, size, scored, allowed, publicAllowed, { publicView, pubOpts, barred, prior, ownClean, forecast });
     if (t58) return { type: 'team_select', teamIds: t58 };
   }
   const best = cover ? scored[0] : scored.find((c) => (flowRed ? publicAllowed(c.team) : allowed(c.team)));

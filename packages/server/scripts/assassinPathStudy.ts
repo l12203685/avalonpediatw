@@ -11,6 +11,7 @@
  *   npx tsx scripts/assassinPathStudy.ts --export-cards OUT [--flag k=v ...]
  *     第 2 局出牌：真人局第 1 局成功之後，第 2 局任務隊上每一個紅方座位，機器人（同一個時間點、只用那個座位的資訊）出的牌與真人的牌
  *     （真人的牌只有推得出來時才有：任務 0 張失敗 = 全部成功、失敗張數 = 紅數 = 全部失敗）。
+ *     第 64 回合：`--card-round 1` 改看第 1 局任務隊上每一個紅方座位（奧伯倫第 1 局一律出失敗 `oberonR1AlwaysFail64` 的第 1H 節量測）。
  *     NORM.jsonl = `keySpotStudy.ts --export-bot` 的輸出（自我對打 detail=1 的整局紀錄，座位以 1-1 隊長為 1 家）。
  *
  * 刺殺是一局的最後一個動作，前面的局面不受刺客怎麼刺影響，所以同一份自我對打紀錄可以直接比「現行」和「候選」的刺殺（逐局配對、沒有抽樣差）。
@@ -134,27 +135,28 @@ function* botSpots(file: string, limit: number): Generator<Spot> {
 
 function exportCards(out: string): void {
   const lines: string[] = [];
+  const R = Number(arg('--card-round') ?? 2);
   for (const sp of humanSpots()) {
     const g = sp.game;
     if (g.playerCount !== 10) continue;
     const q1 = g.quests.find((q) => q.round === 1);
-    const q2 = g.quests.find((q) => q.round === 2);
-    if (!q1 || !q2 || q1.failed) continue;
+    const q2 = g.quests.find((q) => q.round === R);
+    if (!q1 || !q2 || (R === 2 && q1.failed)) continue;
     const reds = q2.teamSeats.filter((s) => campOf(g.seatRoles[s - 1]) === 'evil');
     for (const seat of reds) {
       const agent = new HeuristicAgent(seatId(seat), undefined, undefined, tuning);
       agent.onGameStart(buildReplayObservation(g, seat, { kind: 'team_select', proposal: 0 }));
-      const obs = buildReplayObservation(g, seat, { kind: 'quest_vote', round: 2 });
-      const act = withSeededRandom(`${g.id}|${seat}|quest-2`, () => agent.act(obs));
+      const obs = buildReplayObservation(g, seat, { kind: 'quest_vote', round: R });
+      const act = withSeededRandom(`${g.id}|${seat}|quest-${R}`, () => agent.act(obs));
       lines.push(JSON.stringify({
         gi: sp.gi, s: sp.s, seat, role: g.seatRoles[seat - 1], reds: reds.length,
         mates: obs.proposedTeam.filter((id) => id !== obs.myPlayerId && obs.knownEvils.includes(id)).length,
-        fails: q2.failCount, human: pinnedQuestCard(g, 2, seat), agent: act.type === 'quest_vote' ? act.vote : null,
+        fails: q2.failCount, human: pinnedQuestCard(g, R, seat), agent: act.type === 'quest_vote' ? act.vote : null,
       }));
     }
   }
   fs.writeFileSync(out, lines.join('\n') + '\n');
-  console.error(`wrote ${lines.length} R2 red cards → ${out}`);
+  console.error(`wrote ${lines.length} R${R} red cards → ${out}`);
 }
 
 function main(): void {

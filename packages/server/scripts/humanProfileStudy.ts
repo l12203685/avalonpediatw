@@ -15,6 +15,7 @@
  * - `--split train|test|all`：train = 偶數號的局（擬合用）、test = 奇數號的局（驗證用；同 `beliefCalibrationCurve.ts` 第 48 回合的切法）。`--limit N` 只用前 N 局。
  * - 每個（變體 × 角色 × 強度層）的 ΔBrier 對第一個變體的**以局為單位的標準誤**（同一局的點彼此相關，所以用局當集群：
  *   Δ = Σ_g d_g ／ Σ_g n_g，Var ≈ G／(G−1) · Σ_g (d_g − Δ n_g)² ／ (Σ n_g)²），表格多一節「ΔBrier ± 標準誤」，`--json` 也有。
+ * 第 64 回合：`--tier strong`（或 weak／avg／unknown）只算這一層的局（強真人桌的候選省時間；切分照舊用全部局的序號）。
  */
 import * as fs from 'fs';
 import { DEFAULT_AGENT_TUNING, parseTuningFlag, type AgentTuning } from '../src/ai/AgentTuning';
@@ -180,6 +181,7 @@ function main(): void {
     const games = loadHuman().slice(0, limit);
     // 第 57 回合：train = 偶數號的局（擬合）、test = 奇數號的局（驗證）
     const split = arg('--split') ?? 'all';
+    const onlyTier = arg('--tier');
     const keep = (gi: number): boolean => (split === 'train' ? gi % 2 === 0 : split === 'test' ? gi % 2 === 1 : true);
     const started = Date.now();
     let kept = -1;
@@ -187,7 +189,9 @@ function main(): void {
       if (!keep(gi)) return;
       kept += 1;
       if (kept % n !== k) return;
-      evalGame(g.game, g.s === null ? 'unknown' : strengthTierOfS(g.s), vs, st);
+      const tier = g.s === null ? 'unknown' : strengthTierOfS(g.s);
+      if (onlyTier && tier !== onlyTier) return;
+      evalGame(g.game, tier, vs, st);
       if (st.games % 100 === 0) process.stderr.write(`[profile ${k}/${n}] ${st.games} games, ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     });
     const raw = arg('--raw');

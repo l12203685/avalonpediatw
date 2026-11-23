@@ -15,6 +15,7 @@
  *   --flag NAME[=V]    AgentTuning 開關（可重複；同 agreementBenchmark）
  *   --legacy           從全關的舊表開始再套 --flag
  *   --roles R1,R2,…    只重播這些角色的座位（第 61 回合：只改紅方決策的候選用 assassin,morgana,mordred,oberon；其他座位沒有機器人決策）
+ *   --min-s S          只重播桌上強度 S ≥ S 的局（第 64 回合：強真人桌的候選；優勢表照舊用全部真人局擬合）
  *
  * 做法（細節見 src/ai/benchmark/humanPr.ts）：資料集每一局（嚴格解析，`datasetReplay.ts`）每一個座位都換成機器人
  * 重播（`agreement.replayGame`，和 agreementBenchmark 相同的觀察重建：只看那個座位當時知道的事），記下機器人在
@@ -87,6 +88,7 @@ interface Args {
   cacheAny?: boolean;
   /** 第 61 回合：只重播這些角色的座位（空 = 全部）。 */
   roles?: string[];
+  minS?: number;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -130,6 +132,7 @@ function parseArgs(argv: string[]): Args {
       case '--dump': args.dump = path.resolve(next()); break;
       case '--cache-any': args.cacheAny = true; break;
       case '--roles': args.roles = next().split(',').map((x) => x.trim()).filter(Boolean); break;
+      case '--min-s': args.minS = Number.parseFloat(next()); break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -160,9 +163,10 @@ function loadGames(args: Args): { games: DatasetReplayGame[]; skipped: Record<st
 }
 
 /** 重播 games 裡 gi % n === k 的局，回傳機器人的決策。 */
-function replayShard(games: readonly DatasetReplayGame[], tuning: AgentTuning, k: number, n: number, roles?: readonly string[]): BotRecord[] {
+function replayShard(games: readonly DatasetReplayGame[], tuning: AgentTuning, k: number, n: number, roles?: readonly string[], minS?: number): BotRecord[] {
   const out: BotRecord[] = [];
   for (let gi = k; gi < games.length; gi += n) {
+    if (minS !== undefined && !((games[gi].s ?? -1) >= minS)) continue;
     const g = games[gi].game;
     const seats = Array.from({ length: g.playerCount }, (_, i) => i + 1).filter((s) => !roles?.length || roles.includes(g.seatRoles[s - 1]));
     const outcomes = replayGame(g, seats, { makeAgent: (id) => new HeuristicAgent(id, undefined, undefined, tuning) });
@@ -179,7 +183,7 @@ function replayShard(games: readonly DatasetReplayGame[], tuning: AgentTuning, k
 }
 
 async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tuning: AgentTuning): Promise<{ records: BotRecord[]; forward: number }> {
-  const key = `${describeAgentTuning(tuning)}|${games.length}|${games.map((g) => g.game.id).join(',').length}${args.roles?.length ? `|roles=${args.roles.join(',')}` : ''}`;
+  const key = `${describeAgentTuning(tuning)}|${games.length}|${games.map((g) => g.game.id).join(',').length}${args.roles?.length ? `|roles=${args.roles.join(',')}` : ''}${args.minS !== undefined ? `|minS=${args.minS}` : ''}`;
   if (args.botCache && fs.existsSync(args.botCache)) {
     const cached = JSON.parse(fs.readFileSync(args.botCache, 'utf8')) as { key: string; records: BotRecord[]; forward: number };
     if (cached.key === key || args.cacheAny) {
@@ -192,7 +196,7 @@ async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tun
   let records: BotRecord[] = [];
   let forward = 0;
   if (args.workers <= 1) {
-    records = replayShard(games, tuning, 0, 1, args.roles);
+    records = replayShard(games, tuning, 0, 1, args.roles, args.minS);
     forward = getForwardTelemetry().totalDecisions;
   } else {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'humanpr-'));
@@ -202,6 +206,7 @@ async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tun
       ...args.rawFlags.flatMap((f) => ['--flag', f]),
       ...(args.legacy ? ['--legacy'] : []),
       ...(args.roles?.length ? ['--roles', args.roles.join(',')] : []),
+      ...(args.minS !== undefined ? ['--min-s', String(args.minS)] : []),
     ];
     const jobs = Array.from({ length: args.workers }, (_, k) => new Promise<void>((resolve, reject) => {
       const out = path.join(dir, `shard${k}.json`);
@@ -417,7 +422,7 @@ async function main(): Promise<void> {
 
   if (args.shard) {
     const [k, n] = args.shard;
-    const records = replayShard(games, tuning, k, n, args.roles);
+    const records = replayShard(games, tuning, k, n, args.roles, args.minS);
     fs.writeFileSync(args.out!, JSON.stringify({ records, forward: getForwardTelemetry().totalDecisions }));
     return;
   }

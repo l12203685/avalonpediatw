@@ -24,6 +24,7 @@ import type { AgentTuning } from './AgentTuning';
 import { bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
 import { merlinSignalScore } from './belief/ZoneModel';
 import { PROPOSAL_GO_RATE } from './BlueRound37';
+import { forcedThumbGate64, goodLeadersCanGoClean64, oneThumbTeam64, temperedPick64 } from './Round64';
 
 /** 診斷計數（`merlinPublicThumbStudy`、自我對打的拆解用；不影響決策）。 */
 export const round58Stats = { applies: 0, cleanKept: 0, fallback: 0, fallbackThumb: 0, ownChanged: 0 };
@@ -66,6 +67,8 @@ export interface PublicThumb58Ctx {
   prior: readonly { leader: string; team: readonly string[] }[];
   /** 梅林自己的「這隊沒有紅」機率（`merlinOwnRank58`）；沒給 = 不比。 */
   ownClean?: (team: readonly string[]) => number;
+  /** 第 64 回合 G4：照機器人忠臣派法推測別的座位當隊長會派的隊（`Round64.forecastView64` 的觀察）。沒給 = 不推測。 */
+  forecast?: (view: PlayerObservation) => string[] | null;
 }
 
 /**
@@ -103,7 +106,8 @@ export function publicThumb58Team(
   const top = Math.max(...pub.map((c) => c.p));
   const floor = r * top - 1e-12;
   const ok = clean.filter((c) => c.p >= floor && allowed(c.team));
-  if (ok.length > 0) {
+  const keepClean = (): string[] | null => {
+    if (ok.length === 0) return null;
     round58Stats.cleanKept++;
     if (!ctx.ownClean || (tuning.merlinOwnRank58 ?? 0) <= 0) return ok[0].team;
     // 「符合自己內建資訊」：說得通的乾淨隊裡，梅林自己最確定沒有紅的那支（同分照現行的順序）。
@@ -111,13 +115,31 @@ export function publicThumb58Team(
     own.sort((x, y) => (Math.abs(y.q - x.q) > 1e-9 ? y.q - x.q : x.i - y.i));
     if (own[0].i !== 0) round58Stats.ownChanged++;
     return own[0].team;
+  };
+  // 第 64 回合 G4（站長 11/23）：要派拇指之前，先推測後面的好人隊長派不派得出沒有拇指的隊；派得出就不刻意放可見紅（null = 現行的乾淨隊）。
+  const forecastOn = (tuning.merlinForecast64 ?? 0) > 0 && ctx.forecast !== undefined;
+  // 第 64 回合 G5（Gemini 問題四）：「逼不得已」改成量化的條件，最多一根拇指。
+  const theta = tuning.merlinForcedThumbGate64 ?? 0;
+  if (theta > 0 && publicThumb58FallbackOn(tuning, obs)) {
+    if (forcedThumbGate64(theta, obs, { pub, clean: clean.filter((c) => allowed(c.team)) }) === 'clean') return keepClean();
+    const one = oneThumbTeam64(obs, pub);
+    if (!one) return keepClean();
+    if (forecastOn && goodLeadersCanGoClean64(tuning, obs, ctx.forecast!)) return keepClean();
+    round58Stats.fallback++;
+    round58Stats.fallbackThumb++;
+    return one;
   }
+  if (ok.length > 0) return keepClean();
   if (!publicThumb58FallbackOn(tuning, obs)) return null;
   // 逼不得已：公開上說得通的隊全都帶拇指 → 照公開視角的忠臣派。
   pub.sort((x, y) => y.score - x.score);
-  const pick = pub.find((c) => c.team.some((id) => seen.has(id)) || allowed(c.team));
+  let pick = pub.find((c) => c.team.some((id) => seen.has(id)) || allowed(c.team))?.team ?? null;
   if (!pick) return null;
+  if (forecastOn && pick.some((id) => seen.has(id))) {
+    if (goodLeadersCanGoClean64(tuning, obs, ctx.forecast!)) return null;
+    if (((tuning.merlinForecast64 ?? 0) & 4) !== 0) pick = temperedPick64(obs, pub, floor, allowed) ?? pick;
+  }
   round58Stats.fallback++;
-  if (pick.team.some((id) => seen.has(id))) round58Stats.fallbackThumb++;
-  return pick.team;
+  if (pick.some((id) => seen.has(id))) round58Stats.fallbackThumb++;
+  return pick;
 }

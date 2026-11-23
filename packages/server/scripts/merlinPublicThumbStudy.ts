@@ -9,6 +9,9 @@
  *   cd packages/server && USE_FORWARD_REASONING=true npx tsx scripts/merlinPublicThumbStudy.ts --out rows.jsonl \
  *     --variant BASE: --variant P5:merlinPublicThumb58=0.5 [--shard k/n]
  * （`--variant 標籤:開關1,開關2`；開關 = `--flag` 的 name=v；空的 = 現行預設）
+ *
+ * 第 64 回合加：`--roles loyal,percival`（預設 merlin）＝改看這些角色當隊長的提議（每列多 role、seat；拇指 = 梅林看得到的紅，扣掉莫德雷德）；
+ * `--max-round N`＝只看第 N 局以前的提議（第 1、2 局 = 2；重播到最後一個目標就停，省時間）；`--non-forced`＝只看第 1–4 次提議。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -72,6 +75,9 @@ function main(): void {
   const root = path.resolve(__dirname, '..');
   const raw = JSON.parse(fs.readFileSync(arg('--dataset') ?? path.join(root, 'games_cache.json'), 'utf8'));
   const { games } = replayGamesFromDataset(raw);
+  const roles = (arg('--roles') ?? 'merlin').split(',').filter(Boolean);
+  const maxRound = Number(arg('--max-round') ?? 99);
+  const nonForced = argv.includes('--non-forced');
   const lines: string[] = [];
   let n = 0;
   const [shardK, shardN] = (arg('--shard') ?? '0/1').split('/').map(Number);
@@ -79,30 +85,33 @@ function main(): void {
     const d = games[gi];
     const g = d.game;
     if (g.playerCount !== 10) continue;
-    const merlin = g.seatRoles.indexOf('merlin') + 1;
-    if (merlin <= 0) continue;
     const red = (s: number): boolean => EVIL_ROLES.has(g.seatRoles[s - 1]);
     const seen = new Set(g.seatRoles.flatMap((r, i) => (EVIL_ROLES.has(r) && r !== 'mordred' ? [i + 1] : [])));
-    const targets = new Set<number>();
-    g.proposals.forEach((p, idx) => { if (p.leaderSeat === merlin) targets.add(idx); });
-    if (targets.size === 0) continue;
-    const bot = variants.map((v) => botTeamsAt(g, merlin, targets, v.tuning));
-    const desc = (team: readonly number[]): Record<string, unknown> => ({ team: [...team].sort((a, b) => a - b), thumbs: team.filter((s) => seen.has(s)).length, allGood: !team.some(red) });
+    const merlin = g.seatRoles.indexOf('merlin') + 1;
     const fails = g.quests.filter((q) => q.failed).length;
     const succ = g.quests.length - fails;
     const outcome = fails >= 3 ? '三紅' : succ >= 3 ? (g.assassinTargetSeat === merlin ? '三藍死' : '三藍活') : '?';
-    for (const idx of targets) {
-      const p = g.proposals[idx];
-      const row: Record<string, unknown> = {
-        gi, round: p.round, attempt: p.attempt, forced: p.forced, pr: d.prs ? d.prs[merlin - 1] : null, s: d.s,
-        went: p.wentOnMission, outcome, human: desc(p.teamSeats),
-      };
-      variants.forEach((v, k) => {
-        const b = bot[k].get(idx);
-        row[v.label] = b && b.team.length ? { ...desc(b.team), fb: b.fallback } : null;
-      });
-      lines.push(JSON.stringify(row));
-      n++;
+    const desc = (team: readonly number[]): Record<string, unknown> => ({ team: [...team].sort((a, b) => a - b), thumbs: team.filter((s) => seen.has(s)).length, allGood: !team.some(red) });
+    for (let leader = 1; leader <= g.playerCount; leader++) {
+      const role = g.seatRoles[leader - 1];
+      if (!roles.includes(role)) continue;
+      const targets = new Set<number>();
+      g.proposals.forEach((p, idx) => { if (p.leaderSeat === leader && p.round <= maxRound && !(nonForced && p.forced)) targets.add(idx); });
+      if (targets.size === 0) continue;
+      const bot = variants.map((v) => botTeamsAt(g, leader, targets, v.tuning));
+      for (const idx of targets) {
+        const p = g.proposals[idx];
+        const row: Record<string, unknown> = {
+          gi, role, seat: leader, round: p.round, attempt: p.attempt, forced: p.forced, pr: d.prs ? d.prs[leader - 1] : null, s: d.s,
+          went: p.wentOnMission, outcome, human: desc(p.teamSeats),
+        };
+        variants.forEach((v, k) => {
+          const b = bot[k].get(idx);
+          row[v.label] = b && b.team.length ? { ...desc(b.team), fb: b.fallback } : null;
+        });
+        lines.push(JSON.stringify(row));
+        n++;
+      }
     }
     if (gi % 200 === shardK) console.error(`game ${gi}: ${n} decision points`);
   }

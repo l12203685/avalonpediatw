@@ -75,6 +75,7 @@ import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } 
 import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
 import { redR2LeadCard61 } from '../RedRound61';
+import { oberonR1Card64, round64MerlinOn } from '../Round64';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -793,6 +794,27 @@ export class ForwardAgent implements AvalonAgent {
   }
 
   /**
+   * Round 64 G4 (`Round64.ts`): the team the bot's own loyal policy would send from `view` (another seat, public record only) —
+   * a fresh agent so this agent's per-decision state is untouched, under its own seeded random so this decision's draws do not move.
+   */
+  private forecastTeam64(view: PlayerObservation): string[] | null {
+    const original = Math.random;
+    let s = 0x9e3779b9;
+    for (const ch of `${view.myPlayerId}|${view.currentRound}|${view.failCount}|${view.voteHistory.length}|forecast64`) s = Math.imul(s ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    Math.random = (): number => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    try {
+      const agent = new HeuristicAgent(view.myPlayerId, undefined, undefined, this.baseline.tuning);
+      agent.onGameStart(view);
+      const a = agent.act(view);
+      return a.type === 'team_select' ? a.teamIds : null;
+    } catch {
+      return null;
+    } finally {
+      Math.random = original;
+    }
+  }
+
+  /**
    * Round 56 `missionJoint56` (Round56.ts): a loyal / Percival team whose missions-only P(clean) is under κ × the best is replaced by the cleanest
    * (full posterior) team among those within κ of the best — gates, own vote rules, the thumb plan and the lake / proven-red bar still bind.
    */
@@ -996,6 +1018,9 @@ export class ForwardAgent implements AvalonAgent {
       // Round 27 `redHideR4Solo` (RedRound27.ts): one fail cannot fail a two-fail mission — the lone red it sees hides.
       const r4 = redHideR4SoloCard(this.baseline.tuning, obs);
       if (r4) return this.ruleDecision(obs, { type: 'quest_vote', vote: r4 }, 'red hides on a two-fail mission (one fail cannot fail it)');
+      // Round 64 G7 `oberonR1AlwaysFail64` (Round64.ts): Oberon on the R1 mission always fails.
+      const oberon64 = oberonR1Card64(this.baseline.tuning, obs);
+      if (oberon64) return this.ruleDecision(obs, { type: 'quest_vote', vote: oberon64 }, 'oberon fails on R1 (round 64)');
       // Round 61 `redR2Lead61` (RedRound61.ts): R2 after an R1 success, the lone red hides at the real-game rate (fails more often).
       const r2Lead = redR2LeadCard61(this.baseline.tuning, obs);
       if (r2Lead) return this.ruleDecision(obs, { type: 'quest_vote', vote: r2Lead }, `red R2 card after an R1 success at the real-game rate (${r2Lead})`);
@@ -1293,7 +1318,9 @@ export class ForwardAgent implements AvalonAgent {
           return { ...d, action: pub.action, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: the public loyal team of his seat (no red he sees)` } };
         }
       }
-      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk, publicGateOk);
+      // Round 64 G4 `merlinForecast64`: before a thumb, Merlin forecasts the later good leaders with the bot's own loyal pick (fresh agents, public view).
+      const forecast = round64MerlinOn(this.baseline.tuning) ? (view: PlayerObservation): string[] | null => this.forecastTeam64(view) : undefined;
+      const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk, publicGateOk, forecast);
       // Round 30 `merlinR2Public` (BlueRound30.ts): with a clean R1 team, Merlin passes it over at R2 when the public loyal of his seat would.
       const r2Pub = merlinR2PublicTeam(this.baseline.tuning, obs, styled, publicGateOk);
       if (r2Pub !== styled) return { ...d, action: r2Pub, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin R2: as the public loyal (cleanest team without the whole R1 team)` } };
