@@ -1,0 +1,202 @@
+# 標籤|開關|種子|起始局號|局數  （第 59 回合篩選：F8 = onTeamVote59=0.8（第 4 局在隊上照字面讀 P(隊上的紅 ≥ 2)）、F8T85 = F8＋onTeamVote59R3=0.85（第 3 局在隊上的門檻）；563001 第 0–49,999 局 detail=1，和 r56b-newdef 的 NEWDEF（現行預設，含 V3P）逐局配對；BCHK = 現行預設 563001 第 0–499 局）
+BCHK|detail=1|563001|0|500
+F8|onTeamVote59=0.8 detail=1|563001|0|500
+F8|onTeamVote59=0.8 detail=1|563001|500|500
+F8|onTeamVote59=0.8 detail=1|563001|1000|500
+F8|onTeamVote59=0.8 detail=1|563001|1500|500
+F8|onTeamVote59=0.8 detail=1|563001|2000|500
+F8|onTeamVote59=0.8 detail=1|563001|2500|500
+F8|onTeamVote59=0.8 detail=1|563001|3000|500
+F8|onTeamVote59=0.8 detail=1|563001|3500|500
+F8|onTeamVote59=0.8 detail=1|563001|4000|500
+F8|onTeamVote59=0.8 detail=1|563001|4500|500
+F8|onTeamVote59=0.8 detail=1|563001|5000|500
+F8|onTeamVote59=0.8 detail=1|563001|5500|500
+F8|onTeamVote59=0.8 detail=1|563001|6000|500
+F8|onTeamVote59=0.8 detail=1|563001|6500|500
+F8|onTeamVote59=0.8 detail=1|563001|7000|500
+F8|onTeamVote59=0.8 detail=1|563001|7500|500
+F8|onTeamVote59=0.8 detail=1|563001|8000|500
+F8|onTeamVote59=0.8 detail=1|563001|8500|500
+F8|onTeamVote59=0.8 detail=1|563001|9000|500
+F8|onTeamVote59=0.8 detail=1|563001|9500|500
+F8|onTeamVote59=0.8 detail=1|563001|10000|500
+F8|onTeamVote59=0.8 detail=1|563001|10500|500
+F8|onTeamVote59=0.8 detail=1|563001|11000|500
+F8|onTeamVote59=0.8 detail=1|563001|11500|500
+F8|onTeamVote59=0.8 detail=1|563001|12000|500
+F8|onTeamVote59=0.8 detail=1|563001|12500|500
+F8|onTeamVote59=0.8 detail=1|563001|13000|500
+F8|onTeamVote59=0.8 detail=1|563001|13500|500
+F8|onTeamVote59=0.8 detail=1|563001|14000|500
+F8|onTeamVote59=0.8 detail=1|563001|14500|500
+F8|onTeamVote59=0.8 detail=1|563001|15000|500
+F8|onTeamVote59=0.8 detail=1|563001|15500|500
+F8|onTeamVote59=0.8 detail=1|563001|16000|500
+F8|onTeamVote59=0.8 detail=1|563001|16500|500
+F8|onTeamVote59=0.8 detail=1|563001|17000|500
+F8|onTeamVote59=0.8 detail=1|563001|17500|500
+F8|onTeamVote59=0.8 detail=1|563001|18000|500
+F8|onTeamVote59=0.8 detail=1|563001|18500|500
+F8|onTeamVote59=0.8 detail=1|563001|19000|500
+F8|onTeamVote59=0.8 detail=1|563001|19500|500
+F8|onTeamVote59=0.8 detail=1|563001|20000|500
+F8|onTeamVote59=0.8 detail=1|563001|20500|500
+F8|onTeamVote59=0.8 detail=1|563001|21000|500
+F8|onTeamVote59=0.8 detail=1|563001|21500|500
+F8|onTeamVote59=0.8 detail=1|563001|22000|500
+F8|onTeamVote59=0.8 detail=1|563001|22500|500
+F8|onTeamVote59=0.8 detail=1|563001|23000|500
+F8|onTeamVote59=0.8 detail=1|563001|23500|500
+F8|onTeamVote59=0.8 detail=1|563001|24000|500
+F8|onTeamVote59=0.8 detail=1|563001|24500|500
+F8|onTeamVote59=0.8 detail=1|563001|25000|500
+F8|onTeamVote59=0.8 detail=1|563001|25500|500
+F8|onTeamVote59=0.8 detail=1|563001|26000|500
+F8|onTeamVote59=0.8 detail=1|563001|26500|500
+F8|onTeamVote59=0.8 detail=1|563001|27000|500
+F8|onTeamVote59=0.8 detail=1|563001|27500|500
+F8|onTeamVote59=0.8 detail=1|563001|28000|500
+F8|onTeamVote59=0.8 detail=1|563001|28500|500
+F8|onTeamVote59=0.8 detail=1|563001|29000|500
+F8|onTeamVote59=0.8 detail=1|563001|29500|500
+F8|onTeamVote59=0.8 detail=1|563001|30000|500
+F8|onTeamVote59=0.8 detail=1|563001|30500|500
+F8|onTeamVote59=0.8 detail=1|563001|31000|500
+F8|onTeamVote59=0.8 detail=1|563001|31500|500
+F8|onTeamVote59=0.8 detail=1|563001|32000|500
+F8|onTeamVote59=0.8 detail=1|563001|32500|500
+F8|onTeamVote59=0.8 detail=1|563001|33000|500
+F8|onTeamVote59=0.8 detail=1|563001|33500|500
+F8|onTeamVote59=0.8 detail=1|563001|34000|500
+F8|onTeamVote59=0.8 detail=1|563001|34500|500
+F8|onTeamVote59=0.8 detail=1|563001|35000|500
+F8|onTeamVote59=0.8 detail=1|563001|35500|500
+F8|onTeamVote59=0.8 detail=1|563001|36000|500
+F8|onTeamVote59=0.8 detail=1|563001|36500|500
+F8|onTeamVote59=0.8 detail=1|563001|37000|500
+F8|onTeamVote59=0.8 detail=1|563001|37500|500
+F8|onTeamVote59=0.8 detail=1|563001|38000|500
+F8|onTeamVote59=0.8 detail=1|563001|38500|500
+F8|onTeamVote59=0.8 detail=1|563001|39000|500
+F8|onTeamVote59=0.8 detail=1|563001|39500|500
+F8|onTeamVote59=0.8 detail=1|563001|40000|500
+F8|onTeamVote59=0.8 detail=1|563001|40500|500
+F8|onTeamVote59=0.8 detail=1|563001|41000|500
+F8|onTeamVote59=0.8 detail=1|563001|41500|500
+F8|onTeamVote59=0.8 detail=1|563001|42000|500
+F8|onTeamVote59=0.8 detail=1|563001|42500|500
+F8|onTeamVote59=0.8 detail=1|563001|43000|500
+F8|onTeamVote59=0.8 detail=1|563001|43500|500
+F8|onTeamVote59=0.8 detail=1|563001|44000|500
+F8|onTeamVote59=0.8 detail=1|563001|44500|500
+F8|onTeamVote59=0.8 detail=1|563001|45000|500
+F8|onTeamVote59=0.8 detail=1|563001|45500|500
+F8|onTeamVote59=0.8 detail=1|563001|46000|500
+F8|onTeamVote59=0.8 detail=1|563001|46500|500
+F8|onTeamVote59=0.8 detail=1|563001|47000|500
+F8|onTeamVote59=0.8 detail=1|563001|47500|500
+F8|onTeamVote59=0.8 detail=1|563001|48000|500
+F8|onTeamVote59=0.8 detail=1|563001|48500|500
+F8|onTeamVote59=0.8 detail=1|563001|49000|500
+F8|onTeamVote59=0.8 detail=1|563001|49500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|0|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|1000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|1500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|2000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|2500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|3000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|3500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|4000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|4500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|5000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|5500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|6000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|6500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|7000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|7500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|8000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|8500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|9000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|9500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|10000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|10500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|11000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|11500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|12000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|12500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|13000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|13500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|14000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|14500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|15000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|15500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|16000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|16500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|17000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|17500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|18000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|18500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|19000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|19500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|20000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|20500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|21000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|21500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|22000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|22500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|23000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|23500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|24000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|24500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|25000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|25500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|26000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|26500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|27000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|27500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|28000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|28500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|29000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|29500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|30000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|30500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|31000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|31500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|32000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|32500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|33000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|33500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|34000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|34500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|35000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|35500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|36000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|36500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|37000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|37500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|38000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|38500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|39000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|39500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|40000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|40500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|41000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|41500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|42000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|42500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|43000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|43500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|44000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|44500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|45000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|45500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|46000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|46500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|47000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|47500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|48000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|48500|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|49000|500
+F8T85|onTeamVote59=0.8 onTeamVote59R3=0.85 detail=1|563001|49500|500
