@@ -26,7 +26,7 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(11); // round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0)
+      expect(keys.length).toBeLessThanOrEqual(12); // round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
@@ -41,6 +41,9 @@ describe('one baseline, small per-opponent adjustments', () => {
     expect(DEFAULT_AGENT_TUNING.onTeamVote59).toBe(0);
     expect(HUMAN_TABLE_READING.assassinPath61).toBe(1);
     expect(HUMAN_TABLE_READING.redR2Lead61).toBe(1);
+    // Round 65: Oberon votes like a public-view loyal off the team from R3 on, at human tables only.
+    expect(HUMAN_TABLE_READING.oberonNormalVote).toBe(true);
+    expect(DEFAULT_AGENT_TUNING.oberonNormalVote).toBe(false);
     expect(PROFILE_OVERRIDES.avgHuman).toEqual(HUMAN_TABLE_READING);
     expect(PROFILE_OVERRIDES.weakHuman.blueVoteTemper57).toBe(0.5);
     expect(PROFILE_OVERRIDES.strongHuman.blueVoteTemper57).toBe(0.3);
