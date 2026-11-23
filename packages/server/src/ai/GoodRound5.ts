@@ -12,6 +12,7 @@ import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { currentLakeHolder, failsRequired47, lakeAfterThisRound, lakePlanValue47, overlay47, teamRedsBelow47, weightedWorlds47 } from './BlueRound47';
+import { overlay62 } from './Round62';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -50,6 +51,8 @@ export function goodCleanLeadTeam(
   const pool = thumbs.length > 0 && others.filter((id) => !thumbs.includes(id)).length >= size - 1 ? others.filter((id) => !thumbs.includes(id)) : others;
   // Round 47 (BlueRound47.ts): public-record overlays on the posterior's worlds, the R4 two-fail objective, lake planning — all off by default.
   const adj = overlay47(tuning, obs);
+  // Round 62 `tailRead62` (Round62.ts): at 2-5 after a failed R1, the public reading of the failed team, the 1-5 team's reasonableness and everyone's proposals / votes.
+  for (const [id, a] of overlay62(tuning, obs)) adj.set(id, (adj.get(id) ?? 0) + a);
   const need = (tuning.goodCleanLeadR4Fix47 ?? 0) > 0 ? failsRequired47(obs) : 1;
   // Round 49 `goodCleanLeadR4Fix49`: clean stays the objective; P(fewer than the fails needed) is only a floor (within ε of its best).
   const floorEps = (tuning.goodCleanLeadR4Fix49 ?? 0) > 0 && failsRequired47(obs) > 1 ? tuning.goodCleanLeadR4Fix49 : 0;
