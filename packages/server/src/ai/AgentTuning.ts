@@ -2501,7 +2501,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   missionRole56: 0,
   viewpointPow53: 0.5, // round 53b V3P (with viewpoint53=3)
   blueVoteTemper57: 0, // round 57: human-table profiles only (humanProfile.ts)
-  merlinPublicThumb58: 0, // round 58 candidate (site owner 2026-11-20 ruling on Merlin's public-view picks)
+  merlinPublicThumb58: 0.7, // round 58 P7, ON for bot tables by the site owner's 2026-11-23 ruling (human-table profiles set it back to 0)
   merlinPublicThumbScope58: 0,
   merlinOwnRank58: 0,
   assassinPath61: 0,

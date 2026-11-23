@@ -19,12 +19,14 @@ const obsAt = (round: number, failCount: number, role = 'merlin'): PlayerObserva
   ({ myRole: role, currentRound: round, failCount } as unknown as PlayerObservation);
 
 describe('round 58 flags', () => {
-  it('exist, off in both tables, parse', () => {
+  it('exist, parse; P7 (=0.7) is on in the current defaults (site owner 2026-11-23, bot tables only), off in legacy', () => {
     for (const t of [LEGACY_AGENT_TUNING, DEFAULT_AGENT_TUNING]) {
-      expect(t.merlinPublicThumb58).toBe(0);
       expect(t.merlinPublicThumbScope58).toBe(0);
       expect(t.merlinOwnRank58).toBe(0);
     }
+    expect(LEGACY_AGENT_TUNING.merlinPublicThumb58).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.merlinPublicThumb58).toBe(0.7);
+    expect(tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING).merlinPublicThumb58).toBe(0);
     expect(parseTuningFlag('merlinPublicThumb58')).toEqual({ merlinPublicThumb58: 0.5 });
     expect(parseTuningFlag('merlinPublicThumb58=0.7')).toEqual({ merlinPublicThumb58: 0.7 });
     expect(parseTuningFlag('merlinPublicThumbScope58=2')).toEqual({ merlinPublicThumbScope58: 2 });
@@ -33,8 +35,8 @@ describe('round 58 flags', () => {
     expect(() => parseTuningFlag('merlinPublicThumbScope58=5')).toThrow();
     expect(() => parseTuningFlag('merlinOwnRank58=2')).toThrow();
     // own ranking alone (no thumb step): applies at every Merlin proposal
-    expect(publicThumb58Applies(T({ merlinOwnRank58: 0.5 }), obsAt(1, 0))).toBe(true);
-    expect(publicThumb58FallbackOn(T({ merlinOwnRank58: 0.5 }), obsAt(1, 0))).toBe(false);
+    expect(publicThumb58Applies(T({ merlinPublicThumb58: 0, merlinOwnRank58: 0.5 }), obsAt(1, 0))).toBe(true);
+    expect(publicThumb58FallbackOn(T({ merlinPublicThumb58: 0, merlinOwnRank58: 0.5 }), obsAt(1, 0))).toBe(false);
   });
 
   it('scope: low go-rate proposals (R1–R2 non-forced) by default; 2 = every non-forced; 3 = every proposal; Merlin only', () => {
@@ -51,7 +53,7 @@ describe('round 58 flags', () => {
     expect(publicThumb58FallbackOn(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 4 }), obsAt(1, 0))).toBe(false);
     expect(publicThumb58Applies(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 4 }), obsAt(1, 0))).toBe(false);
     expect(publicThumb58Applies(T({ merlinPublicThumb58: 0.7, merlinPublicThumbScope58: 4, merlinOwnRank58: 1 }), obsAt(1, 0))).toBe(true);
-    expect(publicThumb58Applies(T(), obsAt(1, 0))).toBe(false);
+    expect(publicThumb58Applies(T({ merlinPublicThumb58: 0 }), obsAt(1, 0))).toBe(false);
     // own ranking: every Merlin proposal (the thumb step keeps its scope)
     expect(publicThumb58Applies(T({ merlinPublicThumb58: 0.7, merlinOwnRank58: 1 }), obsAt(3, 4))).toBe(true);
     expect(publicThumb58FallbackOn(T({ merlinPublicThumb58: 0.7, merlinOwnRank58: 1 }), obsAt(3, 4))).toBe(false);
@@ -123,7 +125,7 @@ describe('Room-17 (site, 2026-11-20, decision #130): Merlin 5 at 3-5', () => {
     }
     expect(round58Stats.ownChanged).toBeGreaterThan(before);
     // the single-switch form used by the human-table profiles (round 58: merlinOwnRank58=0.5, no thumb step)
-    expect(merlinTeams(T({ merlinOwnRank58: 0.5 }))['3-5']).toEqual([5, 7, 8, 9]);
+    expect(merlinTeams(T({ merlinPublicThumb58: 0, merlinOwnRank58: 0.5 }))['3-5']).toEqual([5, 7, 8, 9]);
     expect(merlinTeams(tuningForOpponent('avgHuman', T()))['3-5']).toEqual([5, 7, 8, 9]);
   }, 60000);
 });

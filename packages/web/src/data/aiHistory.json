@@ -4,8 +4,8 @@
   "source": "docs/ai/optimization_loop.md 第 4 節＋docs/ai/ai_history.curated.json（scripts/build_ai_history.ts）",
   "stats": {
     "rounds": 60,
-    "adoptedRounds": 41,
-    "notAdoptedRounds": 19,
+    "adoptedRounds": 42,
+    "notAdoptedRounds": 18,
     "latestRound": "62"
   },
   "headline": [
@@ -221,11 +221,46 @@
       "round": "56b",
       "side": "blue",
       "win": 36.7,
-      "task": 61.9,
-      "note": "現在的預設"
+      "task": 61.9
+    },
+    {
+      "round": "58",
+      "side": "blue",
+      "win": 37.8,
+      "task": null,
+      "note": "現在的預設（第 58 回合 P7 篩選 5 萬局）"
     }
   ],
   "milestones": [
+    {
+      "id": "r58-merlin-public-thumb",
+      "round": "58",
+      "date": "2026-11-23",
+      "side": "blue",
+      "roles": [
+        "merlin"
+      ],
+      "primary": "merlin",
+      "kind": "strategy",
+      "what": "梅林第 1、2 局非強制的提議：公開上說得通的隊全都帶他看得到的紅時，照公開視角的忠臣派（逼不得已才派拇指），不再用超前資訊硬派一支乾淨的隊。",
+      "why": "站長 11/20 的規則字面做法，11/23 裁定「用（機器人互打用，真人桌不用）」：機器人桌勝率變好、刺中率下降；真人梅林不這樣派，所以跟真人打的策略層不用它。",
+      "win": {
+        "values": [
+          1.13
+        ],
+        "lo": 1.01,
+        "hi": 1.25
+      },
+      "task": {
+        "values": [
+          -0.68
+        ],
+        "lo": -0.8,
+        "hi": -0.56
+      },
+      "sample": "5 萬局篩選（逐局配對）",
+      "note": "刺中率 40.7% → 38.2%；分局面距離變大（第 1F 節不過），站長知情採用。"
+    },
     {
       "id": "r56b-leader-viewpoint",
       "round": "56b",

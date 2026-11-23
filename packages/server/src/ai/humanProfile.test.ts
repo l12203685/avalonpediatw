@@ -26,7 +26,7 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(9); // round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay)
+      expect(keys.length).toBeLessThanOrEqual(11); // round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0)
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
@@ -44,8 +44,16 @@ describe('one baseline, small per-opponent adjustments', () => {
     expect(PROFILE_OVERRIDES.avgHuman).toEqual(HUMAN_TABLE_READING);
     expect(PROFILE_OVERRIDES.weakHuman.blueVoteTemper57).toBe(0.5);
     expect(PROFILE_OVERRIDES.strongHuman.blueVoteTemper57).toBe(0.3);
-    // goLike56 (a team-pick rule, round 56) is not a reading switch: never in a human profile.
-    for (const type of OPPONENT_TYPES) expect(PROFILE_OVERRIDES[type].goLike56).toBeUndefined();
+    // Site owner 2026-11-23: human tables pick R1/R2 attempts 1–4 like attempt 5 (goLike56=31); the bot baseline does not.
+    expect(HUMAN_TABLE_READING.goLike56).toBe(31);
+    expect(DEFAULT_AGENT_TUNING.goLike56).toBe(0);
+    expect(PROFILE_OVERRIDES.ai.goLike56).toBeUndefined();
+    // Site owner 2026-11-23: Merlin's public-view thumb fallback (round 58 P7) is for bot tables only.
+    expect(DEFAULT_AGENT_TUNING.merlinPublicThumb58).toBe(0.7);
+    for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING).merlinPublicThumb58).toBe(0);
+      expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING).goLike56).toBe(31);
+    }
     for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
       const o = PROFILE_OVERRIDES[type];
       const keys = new Set([...Object.keys(o), ...Object.keys(HUMAN_TABLE_READING)]) as Set<AgentTuningKey>;
