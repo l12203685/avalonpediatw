@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, Calendar, ChevronDown, PencilLine, LayoutGrid, Network, Lightbulb } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { normalizeLocale } from '../i18n';
+import { loadTwToCnConverter, type TextConverter } from '../i18n/opencc';
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import { WIKI_COLOR_SCHEME, WIKI_TAGS, hasWikiLayers, normalizeWikiMarkup, wikiArticleRef, wikiBlockLayer, wikiCardExcerpt, wikiImageSrc, wikiLayerOf, wikiUrlTransform } from '../utils/wikiMarkup';
 import type { WikiHastNode } from '../utils/wikiMarkup';
@@ -195,7 +197,23 @@ const markdownComponents = {
 };
 
 export default function WikiContent({ selectedCategory, onPublishedCountChange }: WikiContentProps): JSX.Element {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
+  const activeLocale = normalizeLocale(i18n.resolvedLanguage ?? i18n.language);
+  const [twToCn, setTwToCn] = useState<TextConverter | null>(null);
+
+  useEffect(() => {
+    if (activeLocale !== 'zh-CN') return;
+    let cancelled = false;
+    void loadTwToCnConverter().then((converter) => {
+      if (!cancelled) setTwToCn(() => converter);
+    });
+    return (): void => { cancelled = true; };
+  }, [activeLocale]);
+
+  const displayWikiText = useCallback(
+    (text: string): string => (activeLocale === 'zh-CN' && twToCn ? twToCn(text) : text),
+    [activeLocale, twToCn],
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [showPending, setShowPending] = useState(false);
   const [activeCategory, setActiveCategory] = useState(selectedCategory || '');
@@ -351,10 +369,10 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
   // 角色文章：即時的實戰數據卡緊接在〈實戰數據怎麼讀〉一節後面（那一節在解讀這張卡；2026-11-11 角色數據併進角色文章），
   // 沒有這一節時放文末；短片放文末。
   const selectedRole = selectedArticle ? WIKI_ARTICLE_ROLE[selectedArticle.id] : undefined;
-  const selectedMarkup = useMemo(() => (selectedArticle ? normalizeWikiMarkup(selectedArticle.content) : ''), [selectedArticle]);
+  const selectedMarkup = useMemo(() => (selectedArticle ? displayWikiText(normalizeWikiMarkup(selectedArticle.content)) : ''), [selectedArticle, displayWikiText]);
   const [markupBeforeCard, markupAfterCard] = useMemo(
-    () => (selectedRole ? splitAfterSection(selectedMarkup, STATS_SECTION) : [selectedMarkup, '']),
-    [selectedMarkup, selectedRole],
+    () => (selectedRole ? splitAfterSection(selectedMarkup, displayWikiText(STATS_SECTION)) : [selectedMarkup, '']),
+    [selectedMarkup, selectedRole, displayWikiText],
   );
 
   // 觀念卡（docs/CONCEPTS.md）：文末「本篇觀念卡」，有卡的章節標題旁一個小連結捲到那幾張卡。卡庫在第一次打開文章時才下載。
@@ -589,8 +607,8 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-white mb-1 leading-snug">{article.title}</h3>
-                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{wikiCardExcerpt(article.excerpt, article.content)}</p>
+                    <h3 className="text-base font-bold text-white mb-1 leading-snug">{displayWikiText(article.title)}</h3>
+                    <p className="text-gray-300 text-xs mb-2 line-clamp-3 leading-snug">{displayWikiText(wikiCardExcerpt(article.excerpt, article.content))}</p>
                     <div className="flex flex-wrap gap-1.5">
                       {displayTags(article.tags).slice(0, 4).map((tag) => (
                         <span
@@ -640,12 +658,12 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                     className="text-left px-3 py-2 rounded-md border border-gray-700 bg-avalon-card/20 hover:border-amber-400 transition-colors"
                   >
                     <div className="flex items-start gap-2">
-                      <h3 className="flex-1 min-w-0 text-sm font-semibold text-gray-200 leading-snug break-words">{article.title}</h3>
+                      <h3 className="flex-1 min-w-0 text-sm font-semibold text-gray-200 leading-snug break-words">{displayWikiText(article.title)}</h3>
                       <span className="shrink-0 text-[10px] font-semibold text-amber-300 border border-amber-500/50 rounded px-1 py-0.5 leading-none">
                         {t('wiki.pendingBadge')}
                       </span>
                     </div>
-                    <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 leading-snug">{wikiCardExcerpt(article.excerpt, article.content)}</p>
+                    <p className="text-gray-400 text-[11px] mt-1 line-clamp-1 leading-snug">{displayWikiText(wikiCardExcerpt(article.excerpt, article.content))}</p>
                   </button>
                 ))}
               </div>
@@ -678,7 +696,7 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
             >
               {/* Header (sticky) */}
               <div data-wiki-modal-header className="sticky top-0 z-10 flex items-start justify-between px-4 py-3 md:px-6 bg-avalon-card border-b border-gray-700">
-                <h2 className="text-base md:text-lg font-bold text-white flex-1 pr-3 leading-snug">{selectedArticle.title}</h2>
+                <h2 className="text-base md:text-lg font-bold text-white flex-1 pr-3 leading-snug">{displayWikiText(selectedArticle.title)}</h2>
                 <button
                   onClick={() => closeWikiArticle()}
                   className="text-gray-400 hover:text-white shrink-0"
@@ -705,6 +723,14 @@ export default function WikiContent({ selectedCategory, onPublishedCountChange }
                   <span>{selectedArticle.author}</span>
                 </div>
 
+                {activeLocale === 'en' && (
+                  <div
+                    data-testid="wiki-chinese-only-notice"
+                    className="mb-4 rounded-lg border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs text-amber-200"
+                  >
+                    {t('wiki.chineseOnlyNotice', { defaultValue: 'This article is currently available in Chinese only.' })}
+                  </div>
+                )}
                 <div className="wiki-prose">
                   {hasWikiLayers(selectedMarkup) && <WikiLayerLegend />}
                   <ReactMarkdown

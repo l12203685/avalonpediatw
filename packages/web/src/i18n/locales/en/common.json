@@ -10,8 +10,9 @@
   },
   "language": {
     "label": "Language",
-    "zh-TW": "中",
-    "en": "EN"
+    "zh-TW": "繁",
+    "en": "EN",
+    "zh-CN": "简"
   },
   "nav": {
     "back": "Back",
@@ -61,7 +62,8 @@
       "replays": "Replays & Events",
       "data": "Data",
       "about": "About"
-    }
+    },
+    "chineseOnlyNotice": "This article is currently available in Chinese only."
   },
   "gate": {
     "modalTitle": "Sign in to continue",

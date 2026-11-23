@@ -10,8 +10,9 @@
   },
   "language": {
     "label": "語言",
-    "zh-TW": "中",
-    "en": "EN"
+    "zh-TW": "繁",
+    "en": "EN",
+    "zh-CN": "简"
   },
   "nav": {
     "back": "返回",
@@ -61,7 +62,8 @@
       "replays": "覆盤與賽事",
       "data": "數據",
       "about": "關於本站"
-    }
+    },
+    "chineseOnlyNotice": "本文目前只有中文"
   },
   "gate": {
     "modalTitle": "登入以繼續",

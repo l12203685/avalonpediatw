@@ -11,6 +11,7 @@ import { getStoredToken } from '../services/socket';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import IOSInstallGuide from './IOSInstallGuide';
 import ForceUpdateButton from './ForceUpdateButton';
+import LanguageSwitcher from './LanguageSwitcher';
 import { clearRecordsHash } from './records/recordsLink';
 import { clearAiGamesHash } from './aiGames/aiGamesLink';
 import { clearWikiHash } from './wikiLink';
@@ -251,6 +252,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
             <span className="hidden sm:inline lg:hidden">ID認領</span>
             <span className="hidden lg:inline">認領</span>
           </button>
+          <LanguageSwitcher className="flex-shrink-0" />
           <ForceUpdateButton
             compact
             className="flex h-8 w-[30px] flex-shrink-0 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 sm:w-8 transition-colors hover:bg-zinc-800 hover:text-white disabled:cursor-wait disabled:opacity-50"
