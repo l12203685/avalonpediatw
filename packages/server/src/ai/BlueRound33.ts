@@ -25,6 +25,7 @@ import { percivalThumbVote40, vote40Bar } from './BlueRound40';
 import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 import { leaderOppShift51 } from './Round51';
 import { onTeamBar59 } from './Round59';
+import { evGate63 } from './Round63';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
@@ -98,7 +99,11 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     // 第 51 回合 `leaderOppVote51`（站長 11/18）：這一局之後還會當隊長 → 內黑的門檻降低 δ（關著時 0）。
     const bad = (lit59?.bar || vote40Bar(tuning, obs, true) || (key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad)))
       - leaderOppShift51(tuning, obs, true);
-    if (!(1 - below >= bad)) return { vote: true, reason: 'onDefault' };
+    // 第 63 回合 `innerBlackEvGate63`（Round63.ts；Gemini G1）：內黑要「否決之後的期望過關率」高出邊際（做法位元 1：而且門檻也要內黑；關著時 null）。
+    const ev63 = evGate63(tuning, obs, team, opts);
+    if (ev63 !== null) {
+      if (!ev63.reject || (((tuning.innerBlackEvGate63Mode ?? 0) & 1) !== 0 && !(1 - below >= bad))) return { vote: true, reason: 'onDefault' };
+    } else if (!(1 - below >= bad)) return { vote: true, reason: 'onDefault' };
     // 第 38 回合 `goodOnTeamState`：內黑照局面（比分、整隊照派、自己還會不會派、被宣告紅的人），不是只看門檻。
     if (onTeamStateApprove(tuning, obs, 1 - below, key)) return { vote: true, reason: 'onState' };
     return { vote: false, reason: 'bad' };

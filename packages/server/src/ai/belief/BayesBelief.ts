@@ -543,6 +543,13 @@ export interface BayesOptions {
    */
   copyFreq55b?: boolean;
   /**
+   * Round 63 `loyalCopyCap63` (Gemini G2, `docs/ai/gemini_strategy_review.md`): blue seats only. A proposal whose team holds k − 1 earlier
+   * proposals' whole teams (other leaders; copies and extensions of them) has its proposal term scaled by 1/√k. Mode 1: only in the worlds
+   * where its leader is blue (and not one of Percival's thumbs) — a plain loyal repeating others is not k independent endorsements; red
+   * leaders keep the full term. Mode 2: every world. Votes are read as usual.
+   */
+  copyCap63?: number;
+  /**
    * Round 56 `missionRole56`: blue seats only, 10-player games. The mission term of each world is averaged over which of its reds is Oberon
    * (Merlin: one of the reds he sees), each mission's fail cards read from the table scaled by the human Oberon-on-the-team ratio (`MISSION_OBERON_56`).
    */
@@ -679,7 +686,7 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
   if (blend > 0 && blend < 1 && (opts.leadRecursive ?? 0) > 0 && obs.gamePhase === 'team_select' && recursiveLeadInScope(obs, opts.recursiveLeadScope ?? 0)) {
-    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${opts.missionRole56 ? 'mr|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
+    const blendKey = `${(opts.blueVoteTemper ?? 0) > 0 ? `bvt${opts.blueVoteTemper}|` : ''}${(opts.copyWeight55 ?? 1) !== 1 ? `cd${opts.copyWeight55}|` : ''}${(opts.copyRepeatWeight55b ?? 1) !== 1 ? `cr${opts.copyRepeatWeight55b}|` : ''}${opts.copyFreq55b ? 'cf|' : ''}${(opts.copyCap63 ?? 0) > 0 ? `cc${opts.copyCap63}|` : ''}${opts.missionRole56 ? 'mr|' : ''}${opts.viewpoint53 ? `vp${opts.viewpoint53.scale},${opts.viewpoint53.skipForced ? 1 : 0},${opts.viewpoint53.power ?? 1}|` : ''}${blend}|${opts.lakeCal ?? 1}|${opts.lakeIso === true ? 1 : 0}|${opts.pendingProposal === true ? 1 : 0}${(opts.lakePick ?? 0) > 0 ? `|lp${opts.lakePick}` : ''}${opts.rationality50 ? `|ra${opts.rationality50.scale}${opts.rationality50.noVote ? 'n' : ''}${opts.rationality50.weights === 'all' ? 'A' : ''}` : ''}${(opts.lakeSusp50 ?? 0) > 0 ? `|ls${opts.lakeSusp50}` : ''}`;
     let store = blendCaches.get(blendKey);
     if (!store) { store = new WeakMap(); blendCaches.set(blendKey, store); }
     const hit = store.get(obs);
@@ -828,9 +835,11 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const copyW = blueSeat && opts.copyWeight55 !== undefined && opts.copyWeight55 >= 0 && opts.copyWeight55 < 1 ? opts.copyWeight55 : 1;
   const copyRW = blueSeat && opts.copyRepeatWeight55b !== undefined && opts.copyRepeatWeight55b >= 0 && opts.copyRepeatWeight55b < 1 ? opts.copyRepeatWeight55b : 1;
   const copyFreq = blueSeat && opts.copyFreq55b === true;
+  // Round 63 `loyalCopyCap63`: blue seats (red frozen).
+  const copyCap = blueSeat && (opts.copyCap63 === 1 || opts.copyCap63 === 2) ? opts.copyCap63 : 0;
   // Round 56 `missionRole56`: blue seats, 10 players (the 10-player box always holds Oberon).
   const mr56 = blueSeat && opts.missionRole56 === true && obs.allPlayerIds.length === 10;
-  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${copyCap > 0 ? `|cc${copyCap}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -865,14 +874,18 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   // Round 55b: how many earlier copies of the same successful team (by its round) each copy follows.
   const copiesSeen = new Map<string, number>();
   const anyCopy = copyW !== 1 || copyRW !== 1 || copyFreq;
-  const pre = records.map((v) => {
+  const pre = records.map((v, ix) => {
     const teamMask = view.maskOf(v.team);
+    // Round 63 `loyalCopyCap63`: k = 1 + the earlier proposals (other leaders) whose whole team this team holds.
+    let capK = 1;
+    if (copyCap > 0) for (let j = 0; j < ix; j++) { const u = records[j]; if (u.leader !== v.leader && u.team.length > 0 && u.team.every((id) => v.team.includes(id))) capK++; }
     const succ = anyCopy && !v.approved && v.attempt < 5 ? cleanSuccessBefore(v.round) : null;
     const isCopy = succ !== null && succ.every((id) => v.team.includes(id));
     const ck = isCopy ? [...succ].sort().join(',') : '';
     const nth = isCopy ? (copiesSeen.get(ck) ?? 0) : 0;
     if (isCopy) copiesSeen.set(ck, nth + 1);
     return {
+      capW: capK > 1 ? 1 / Math.sqrt(capK) : 1,
       copyW: isCopy ? (copyW !== 1 ? copyW : 1) * (copyRW !== 1 && nth >= 1 ? copyRW : 1) : 1,
       copyCore: isCopy && copyFreq && succ ? view.maskOf(succ.filter((id) => id !== v.leader)) : 0,
       v,
@@ -962,7 +975,10 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
         const k = sizeOf(w & teamMask & ~p.leaderBit);
         const n = choose(redsAvail, k) * choose(goodsAvail, v.team.length - 1 - k);
         if (n > 0) {
-          if (tempered) lpp += Math.log(proposalProbIx(campIx(p.leaderBit), p.r3, k) / n); else lp += Math.log(proposalProbIx(campIx(p.leaderBit), p.r3, k) / n);
+          const ci = campIx(p.leaderBit);
+          // Round 63 `loyalCopyCap63`: the repeated proposal's term × 1/√k (mode 1: blue-leader worlds only).
+          const cw = p.capW !== 1 && (copyCap === 2 || ci === 0) ? p.capW : 1;
+          if (tempered) lpp += cw * Math.log(proposalProbIx(ci, p.r3, k) / n); else lp += cw * Math.log(proposalProbIx(ci, p.r3, k) / n);
         }
       }
       // Votes (no vote on the forced fifth proposal: `voters` is empty there).
@@ -1272,6 +1288,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.blueVoteTemper57 ?? 0) > 0 && (t.blueVoteTemper57 ?? 0) < 1 ? { blueVoteTemper: t.blueVoteTemper57 } : {}),
     ...((t.copyRepeat55b ?? 0) > 0 ? { copyRepeatWeight55b: 1 - Math.min(1, t.copyRepeat55b ?? 0) } : {}),
     ...((t.copyFreq55b ?? 0) > 0 ? { copyFreq55b: true } : {}),
+    ...((t.loyalCopyCap63 ?? 0) > 0 ? { copyCap63: t.loyalCopyCap63 } : {}),
     ...((t.missionRole56 ?? 0) > 0 ? { missionRole56: true } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
 }
