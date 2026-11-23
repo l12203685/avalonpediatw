@@ -35,12 +35,15 @@ const at = (bits: number, tau = 0): ReturnType<typeof resolveAgentTuning> => res
 const crowd = (tau: number): ReturnType<typeof resolveAgentTuning> => at(4, tau);
 
 describe('round 69 switches', () => {
-  it('default off in the default and legacy tables; flags parse', () => {
+  it('default off in the default and legacy tables, on at the human tables; flags parse', () => {
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.redKeyCrowd69).toBe(0);
       expect(t.redKeyCrowd69Tau).toBe(0);
     }
     for (const k of OPPONENT_TYPES) expect(tuningForOpponent(k).redKeyCrowd69 ?? 0).toBe(PROFILE_OVERRIDES[k].redKeyCrowd69 ?? 0);
+    // Round 69: the three human tables carry bit 1 (the 4th proposal); the bot baseline stays off.
+    expect(PROFILE_OVERRIDES.ai.redKeyCrowd69).toBeUndefined();
+    for (const k of ['weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(k).redKeyCrowd69).toBe(1);
     expect(parseTuningFlag('redKeyCrowd69')).toEqual({ redKeyCrowd69: 1 });
     expect(parseTuningFlag('redKeyCrowd69=31')).toEqual({ redKeyCrowd69: 31 });
     expect(parseTuningFlag('redKeyCrowd69Tau')).toEqual({ redKeyCrowd69Tau: 0.5 });

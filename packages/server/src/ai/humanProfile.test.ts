@@ -26,7 +26,7 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(15); // round 68: + lakeChain68 (blue lake target, real-game replay); 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
+      expect(keys.length).toBeLessThanOrEqual(16); // round 69: + redKeyCrowd69 (red key-team outer white on the 4th proposal, real-game replay); round 68: + lakeChain68 (blue lake target, real-game replay); 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
@@ -44,6 +44,9 @@ describe('one baseline, small per-opponent adjustments', () => {
     // Round 65: Oberon votes like a public-view loyal off the team from R3 on, at human tables only.
     expect(HUMAN_TABLE_READING.oberonNormalVote).toBe(true);
     expect(DEFAULT_AGENT_TUNING.oberonNormalVote).toBe(false);
+    // Round 69: the R3 key-team outer white on the 4th proposal (red at two fails, a teammate on the team), at human tables only.
+    expect(HUMAN_TABLE_READING.redKeyCrowd69).toBe(1);
+    expect(DEFAULT_AGENT_TUNING.redKeyCrowd69).toBe(0);
     expect(PROFILE_OVERRIDES.avgHuman).toEqual(HUMAN_TABLE_READING);
     expect(PROFILE_OVERRIDES.weakHuman.blueVoteTemper57).toBe(0.5);
     expect(PROFILE_OVERRIDES.strongHuman.blueVoteTemper57).toBe(0.3);
