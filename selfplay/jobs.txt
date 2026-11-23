@@ -1,4 +1,44 @@
-# 標籤|開關|種子|起始局號|局數  （第 66 回合篩選，藍方座位：V6 = r2InnerBlack66=0.9 r2InnerBlack66Roles=6（派西／梅林第 2 局在隊上照同座位公開視角忠臣的讀法內黑）；563001 第 0–19,999 局 detail=1，和 r58-screen 的 P7（= 現行預設，本機 20／20 逐局相同）逐局配對）
+# 標籤|開關|種子|起始局號|局數  （第 66 回合篩選，藍方座位：V6 = r2InnerBlack66=0.9 r2InnerBlack66Roles=6（派西／梅林第 2 局在隊上照同座位公開視角忠臣的讀法內黑）；563001 第 0–19,999 局 detail=1，和 r58-screen 的 P7（= 現行預設，本機 20／20 逐局相同）逐局配對；第 2 批：M6 = V6 ＋ r2InnerBlack66Mix=0.5（第 1C 節：V6 中性，改測 50%），同一批種子）
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|0|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|1000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|1500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|2000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|2500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|3000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|3500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|4000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|4500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|5000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|5500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|6000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|6500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|7000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|7500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|8000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|8500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|9000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|9500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|10000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|10500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|11000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|11500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|12000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|12500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|13000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|13500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|14000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|14500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|15000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|15500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|16000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|16500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|17000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|17500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|18000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|18500|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|19000|500
+M6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 r2InnerBlack66Mix=0.5 detail=1|563001|19500|500
 V6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 detail=1|563001|0|500
 V6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 detail=1|563001|500|500
 V6|r2InnerBlack66=0.9 r2InnerBlack66Roles=6 detail=1|563001|1000|500
