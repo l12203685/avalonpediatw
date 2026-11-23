@@ -76,6 +76,7 @@ import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
 import { redR2LeadCard61 } from '../RedRound61';
 import { oberonR1Card64, round64MerlinOn } from '../Round64';
+import { redCrowdWhite65 } from '../Round65';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -1072,6 +1073,8 @@ export class ForwardAgent implements AvalonAgent {
       // Round 16 `redKeyWhite` (RedVoteCamouflage.ts): the key-team outer white only when the team can pass (and, mode 2,
       // only as many reds as the majority needs); otherwise the loyal vote below.
       if (forced !== null && (forced === false || redKeyWhiteVote(this.baseline.tuning, obs))) {
+        // Round 65 `redCrowdWhite65` (Round65.ts): the camp-interest reject only when the team cannot pass without this red's vote.
+        if (!forced && redCrowdWhite65(this.baseline.tuning, obs)) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red normal vote (crowd white: passes without my vote; round 65)');
         return this.ruleDecision(obs, { type: 'team_vote', vote: forced }, 'red normal vote (critical team: camp interest)');
       }
       _forwardDecideCalls -= 1;
@@ -1081,6 +1084,8 @@ export class ForwardAgent implements AvalonAgent {
         // Round 16 `redCleanWhite` (RedVoteCamouflage.ts): a red's loyal view counts its own seat as blue and reads clean
         // teams dirtier than a real blue does — at rate q, white a team without a red it sees anyway.
         if (!asLoyal.action.vote && redCleanWhiteNow(this.baseline.tuning, obs)) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red normal vote (clean-team outer white)');
+        // Round 65 `redCrowdWhite65` (Round65.ts): the loyal-view reject cannot stop a team the table passes anyway — white with the crowd.
+        if (!asLoyal.action.vote && redCrowdWhite65(this.baseline.tuning, obs)) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red normal vote (crowd white: passes without my vote; round 65)');
         return this.ruleDecision(obs, { type: 'team_vote', vote: asLoyal.action.vote }, 'red normal vote (as a loyal)');
       }
     }

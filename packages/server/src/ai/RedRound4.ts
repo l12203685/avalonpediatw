@@ -24,6 +24,7 @@
 import type { AgentAction, PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, type BayesOptions } from './belief/BayesBelief';
+import { redStackAllowed65 } from './Round65';
 
 function combinations<T>(items: readonly T[], k: number): T[][] {
   const out: T[][] = [];
@@ -95,7 +96,8 @@ export function redCleanLookTeam(tuning: Readonly<AgentTuning>, obs: PlayerObser
   const min = bestOf(failsNeeded);
   // C1: stack one more teammate when that costs little of the cleanest look.
   const ratio = tuning.redStackRatio ?? 0;
-  if (ratio > 0) {
+  // Round 65 `redStackRate65` (Round65.ts): on R3 / R5 non-forced proposals the extra teammate only at rate p.
+  if (ratio > 0 && redStackAllowed65(tuning, obs)) {
     const stacked = bestOf(failsNeeded + 1);
     if (stacked.team && stacked.score >= ratio * min.score) return { type: 'team_select', teamIds: stacked.team };
   }
