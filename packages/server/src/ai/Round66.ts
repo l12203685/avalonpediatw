@@ -16,6 +16,7 @@
  * - 2 派西：同座位的公開視角忠臣過 θ，而且他自己的後驗（含拇指）也過 θ。
  * - 4 梅林：同座位的公開視角忠臣過 θ（不用他看得到的紅）。
  * - 8 派西兩根拇指都在隊上（確定有紅）→ 反對；16 梅林隊上有他看得到的紅 → 反對。這兩個用私人資訊，在 D3 的範圍外，只量、不採用（要站長決定）。
+ * `r2InnerBlack66Mix = p`（0 = 一律）：第 1C 節「中性改測 50%」——照局面雜湊（座位、第幾次提議、隊伍）< p 才內黑，同一局面每次一樣。
  * 反對不需要過好人投票關卡（關卡只擋贊成）；隊長自己的提議與照派自己這一局先前的隊（`leaderSelfApprove`）在呼叫端之前就處理掉了。
  */
 import type { AgentTuning } from './AgentTuning';
@@ -24,6 +25,12 @@ import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 
 /** 診斷計數（研究腳本用；不影響決策）。 */
 export const round66Stats = { checked: 0, black: 0 };
+
+function hash01(s: string): number {
+  let h = 0x811c9dc5;
+  for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000;
+}
 
 /** 同一座位、只有公開紀錄的忠臣視角（沒有梅林看得到的紅、沒有派西的拇指）。 */
 function publicLoyal(obs: PlayerObservation): PlayerObservation {
@@ -59,6 +66,8 @@ export function r2InnerBlack66(tuning: Readonly<AgentTuning>, obs: PlayerObserva
     if ((roles & 16) !== 0 && team.some((id) => obs.knownEvils.includes(id))) black = true;
     else if ((roles & 4) !== 0) black = (teamRedProb66(tuning, publicLoyal(obs), team) ?? 0) >= theta;
   }
+  const mix = tuning.r2InnerBlack66Mix ?? 0;
+  if (black && mix > 0 && hash01(`${obs.myPlayerId}|${obs.failCount ?? 0}|${[...team].sort().join(',')}|r2black66`) >= mix) black = false;
   if (black) round66Stats.black++;
   return black;
 }

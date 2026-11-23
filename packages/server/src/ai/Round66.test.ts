@@ -30,11 +30,13 @@ describe('round 66 switches', () => {
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.r2InnerBlack66).toBe(0);
       expect(t.r2InnerBlack66Roles).toBe(0);
+      expect(t.r2InnerBlack66Mix).toBe(0);
     }
     for (const p of Object.values(PROFILE_OVERRIDES)) expect(p.r2InnerBlack66 ?? 0).toBe(0);
     expect(parseTuningFlag('r2InnerBlack66')).toEqual({ r2InnerBlack66: 0.9 });
     expect(parseTuningFlag('r2InnerBlack66=0.85')).toEqual({ r2InnerBlack66: 0.85 });
     expect(parseTuningFlag('r2InnerBlack66Roles=7')).toEqual({ r2InnerBlack66Roles: 7 });
+    expect(parseTuningFlag('r2InnerBlack66Mix')).toEqual({ r2InnerBlack66Mix: 0.5 });
     expect(() => parseTuningFlag('r2InnerBlack66=1.5')).toThrow();
     expect(() => parseTuningFlag('r2InnerBlack66Roles=64')).toThrow();
   });
@@ -97,6 +99,20 @@ describe('r2InnerBlack66', () => {
     const merl = resolveAgentTuning({ r2InnerBlack66: hi, r2InnerBlack66Roles: 16 });
     expect(r2InnerBlack66(merl, obs({ myRole: 'merlin', knownEvils: ['P3', 'P7', 'P8'] }))).toBe(true);
     expect(r2InnerBlack66(merl, obs({ myRole: 'merlin', knownEvils: ['P7', 'P8', 'P9'] }))).toBe(false);
+  });
+
+  it('mix p: only part of the spots (hash of seat, proposal, team), the same spot always the same', () => {
+    let n = 0;
+    const half = resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Mix: 0.5 });
+    for (const me of ['P1', 'P5', 'P7', 'P8', 'P9', 'P10']) for (const fc of [0, 1, 2, 3]) {
+      const o = obs({ myPlayerId: me, failCount: fc, proposedTeam: [me, 'P2', 'P3', 'P6'] });
+      const v = r2InnerBlack66(half, o);
+      expect(r2InnerBlack66(half, o)).toBe(v);
+      if (v) n++;
+    }
+    expect(n).toBeGreaterThan(3);
+    expect(n).toBeLessThan(21);
+    expect(r2InnerBlack66(resolveAgentTuning({ r2InnerBlack66: 0.01, r2InnerBlack66Mix: 1 }), obs())).toBe(true);
   });
 
   it('ForwardAgent: off = the R1–R2 normal vote (approve on the team); on = inner black', () => {
