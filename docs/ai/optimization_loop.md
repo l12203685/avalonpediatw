@@ -9782,7 +9782,12 @@ pnpm --filter @avalon/server bot:gap -- --bot <selfplay-results>/results/r62-scr
 - 測試：`Round58.test.ts`（現行預設 0.7、舊表 0、一般真人桌 0；開關語意的測試在 0 上量）、`humanProfile.test.ts`、`AgentTuning.test.ts`（預設描述字串多 `merlinPublicThumb58=0.7`）。
 - 網站優化歷程：第 58 回合在回合紀錄表改成「是」，`ai_history.curated.json` 加一筆里程碑，`aiHistory.json` 重新產生。
 
-**驗收**：見 PR（不變量、伺服器完整測試、`tsc --noEmit`、小規模自我對打確認方向和第 58 回合相同）。
+**驗收**：
+- 不變量（`invariantHarness.ts`，前 300 局重播＋探針＋300 局自我對打，種子 563001）：新基準線、一般真人桌（`HUMAN_READING` 全部開關＋`goLike56=31`、`merlinPublicThumb58=0`）**每一條規則的機器人違反都是 0**；
+  A0、A1 的編碼 INV-B1／INV-B2 0 違反（好人持湖說實話、兩敗後紅方必出失敗照舊 100%）；探針「派出確定會失敗的隊」「隊上有確定紅」0／3,772；ForwardAgent 退回 0。
+- 小規模自我對打（全部座位同一套，逐局配對，舊預設 `merlinPublicThumb58=0` vs 新預設）：563001 第 0–749 局 藍方 +0.93 [+0.15, +1.71]、563101 第 0–749 局 +1.47 [+0.46, +2.47]，
+  合併 1,500 組 +1.20 [+0.56, +1.84]，方向和第 58 回合篩選（+1.13）相同。
+- 伺服器完整測試 283 個檔案通過、1 個略過（4,449 個測試通過、27 個略過）；`tsc --noEmit`（server 與 scripts）乾淨；`build_ai_history.ts --check` 最新。
 
 ### 附：「被越多人選的人越可能是好人」（Edward 10/29）
 
