@@ -10,13 +10,16 @@
  * `onTeamVote59 = θ₄`（0 = 關）：第 4 局在隊上照字面讀，P(隊上的紅 ≥ 2) ≥ θ₄ 才內黑。
  * `onTeamVote59R3 = θ₃`（0 = 照原本）：第 3 局在隊上內黑的門檻（取代 `goodBayesBad`／`goodBayesBadKey`）。
  * 兩個都只改 `bayesVoteCriteria` 的門檻那一步：公開邏輯證明會失敗（provFail）、好人投票關卡、湖的硬規則、隊長自己贊成、第 5 局都不變；
- * 「之後還會當隊長」的位移（`leaderOppVote51`）照樣扣。梅林在隊上的正常票走公開視角的同一段，所以一起變。
+ * 「之後還會當隊長」的位移（`leaderOppVote51`）照樣扣。
+ * 只給忠臣、派西：梅林在隊上的正常票也走這一段（坐在梅林位置的公開視角，`publicLoyalView`），但人類 PR 量尺上梅林一起改是負的
+ * （第 4 局照字面時梅林會贊成帶一個他看得到的紅的隊；−0.26 ± 0.04 pp／座位局，每一層都負），所以梅林照原本。
  */
 import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 
 /** 第 59 回合在這一點的（要幾個紅、門檻）；null = 照原本。呼叫端：藍方在隊上、第 3–5 局、非強制、不是隊長。 */
 export function onTeamBar59(tuning: Readonly<AgentTuning>, obs: PlayerObservation, failsRequired: number): { req: number; bar: number } | null {
+  if (obs.publicLoyalView === true) return null;
   const round = obs.currentRound ?? 1;
   if (round === 4) {
     const t4 = tuning.onTeamVote59 ?? 0;

@@ -40,6 +40,12 @@ describe('round 59 tuning fields', () => {
     expect(onTeamBar59(t, asObs({ ...r4('P10', []), currentRound: 5 }), 1)).toBeNull();
     expect(onTeamBar59(DEFAULT_AGENT_TUNING, r4('P10', []), 2)).toBeNull();
   });
+  it('Merlin keeps the current rule: his on-team normal vote goes through the public loyal view, which the switch skips', () => {
+    const t: AgentTuning = { ...DEFAULT_AGENT_TUNING, onTeamVote59: 0.8, onTeamVote59R3: 0.9 };
+    const o = asObs({ ...r4('P10', ['P4', 'P6', 'P7', 'P8', 'P10']), publicLoyalView: true });
+    expect(onTeamBar59(t, o, 2)).toBeNull();
+    expect(bayesVoteCriteria(t, o)).toEqual(bayesVoteCriteria(DEFAULT_AGENT_TUNING, o));
+  });
 });
 
 describe('onTeamVote59: R4 on the team reads the two-fail requirement literally', () => {
