@@ -2576,7 +2576,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinForcedThumbGate64: 0,
   oberonR1AlwaysFail64: 0,
   redCrowdWhite65: 0,
-  redStackRate65: 0,
+  redStackRate65: 0.5, // 站長 2026-11-23 裁定：基準線採用（第 65 回合自我對打紅方 +1.05）；真人桌在 humanProfile 維持 0
   r2InnerBlack66: 0,
   r2InnerBlack66Roles: 0,
   r2InnerBlack66Mix: 0,

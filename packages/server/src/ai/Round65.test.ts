@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
 import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag, resolveAgentTuning } from './AgentTuning';
 import { crowdApprovals65, redCrowdWhite65, redStackAllowed65 } from './Round65';
+import { tuningForOpponent } from './humanProfile';
 
 const ids = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 
@@ -16,11 +17,12 @@ function redObs(over: Partial<PlayerObservation> = {}): PlayerObservation {
 }
 
 describe('round 65 switches', () => {
-  it('default off in the default and the legacy tables; flags parse', () => {
-    for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
-      expect(t.redCrowdWhite65).toBe(0);
-      expect(t.redStackRate65).toBe(0);
-    }
+  it('crowd white off; stack rate 0.5 in the baseline only (site owner 2026-11-23); flags parse', () => {
+    for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) expect(t.redCrowdWhite65).toBe(0);
+    expect(DEFAULT_AGENT_TUNING.redStackRate65).toBe(0.5);
+    expect(LEGACY_AGENT_TUNING.redStackRate65).toBe(0);
+    expect(tuningForOpponent('ai').redStackRate65).toBe(0.5);
+    for (const k of ['weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(k).redStackRate65).toBe(0);
     expect(parseTuningFlag('redCrowdWhite65')).toEqual({ redCrowdWhite65: 0.5 });
     expect(parseTuningFlag('redCrowdWhite65=0.3')).toEqual({ redCrowdWhite65: 0.3 });
     expect(parseTuningFlag('redStackRate65=0.5')).toEqual({ redStackRate65: 0.5 });

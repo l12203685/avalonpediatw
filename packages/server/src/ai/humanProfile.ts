@@ -43,7 +43,7 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 65 回合再加奧伯倫的票 `oberonNormalVote`（第 16 回合的開關；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  * 第 66 回合再加藍方第 2 局在隊上的內黑 `r2InnerBlack66`（派西、梅林照同座位公開視角忠臣的讀法；人類 PR 量尺兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -84,10 +84,11 @@ export const TIER_MAX_STEP = 0.1;
  *   同座位的公開視角忠臣讀出 P(隊上有紅) ≥ 0.9 就反對（派西還要自己的後驗也 ≥ 0.9；梅林不用他看得到的紅；D3 分階段解除的範圍）。機器人原本在這一格 100% 贊成，
  *   真人 93.7%。真人局 6,224 個派西／梅林的這種投票點：改到 329 點（5.3%），被反對的隊 85–89% 真的有紅（全部 74%），票對 +3.4／+4.4pp，和真人同票 −2.7／−4.4pp；
  *   人類 PR 量尺派西 +0.46 ± 0.06、梅林 +0.60 ± 0.06 pp／座位局（偶數局 +0.48／+0.53、奇數局 +0.43／+0.66），每一層兩半都是正的。忠臣那一支（位元 1）每一層都變差（−0.14 ± 0.02），不放。
+ * - 紅隊長第 3、5 局少疊隊友 `redStackRate65` 站長 2026-11-23 裁定只上基準線（0.5，自我對打紅方 +1.05）；真人桌人類 PR 量尺 −0.11 ± 0.01，這裡維持 0。
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：
