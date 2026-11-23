@@ -26,7 +26,7 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(13); // round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
+      expect(keys.length).toBeLessThanOrEqual(14); // 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
