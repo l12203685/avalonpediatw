@@ -44,8 +44,9 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 66 回合再加藍方第 2 局在隊上的內黑 `r2InnerBlack66`（派西、梅林照同座位公開視角忠臣的讀法；人類 PR 量尺兩半都沒有一層變差）。
  * 第 68 回合再加藍方持湖的目標 `lakeChain68`（忠臣、派西在信任鏈的局面少湖出過失敗任務的人；人類 PR 量尺兩半都沒有一層變差）。
  * 第 69 回合再加紅方第 3 局紅方已兩勝的關鍵隊外白 `redKeyCrowd69`（第 4 次提議；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
+ * 第 71 回合再加紅方第 5 局（2:2）隊上一定有紅時的外白 `redR5Red71`（只用規則推得出來的「一定有紅」；人類 PR 量尺兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -98,10 +99,17 @@ export const TIER_MAX_STEP = 0.1;
  *   贊成率 4.9 → 21.9%（真人 21.0%）、把真人的票換成機器人的票這隊當場過（紅方贏）11.7 → 14.3%（真人 15.5%）；人類 PR 量尺紅方 +0.32 ± 0.02 pp／紅方座位局
  *   （真人桌讀法上；刺客 +0.25、莫甘娜 +0.34、莫德雷德 +0.68；偶數局 +0.30、奇數局 +0.34），每一層兩半、每個角色都是正的（最小：弱桌刺客偶數局 +0.17 ± 0.05）；
  *   這一格的量尺落差 −1.04 → +0.23。自我對打紅方 −0.21 [−0.39, −0.03]（機器人藍方會讀外白），基準線不用。
+ * - 紅方・第 5 局（2:2）隊上一定有紅時的外白（`redR5Red71=1`，第 71 回合；範圍預設 = 相認紅＋奧伯倫，確定性層只用規則與自己的視野 L0）：紅方不在隊上、
+ *   隊上沒有看得到的隊友時，基準線把「沒有看得到的隊友」當成「全藍的隊」反對（盤點 G3 的 `redVoteCritical`），但相認紅看不到奧伯倫、奧伯倫看不到任何人；
+ *   任務的失敗張數與自己的視野推得出隊上一定有紅時（真人局這一格 3,516 點的 2.2%，推出來的 100% 真的有紅）改投贊成——隊上的紅會出失敗（A1），這隊過了紅方就贏，
+ *   也不是 G3 說的「全藍的隊」。真人局這一格：贊成 5.5 → 7.5%，把真人的票換成機器人的票「這隊當場過而且有紅」4.0 → 4.2%、「當場過而且全藍」33.9 → 33.9%（不變）；
+ *   和真人同票 −0.6 [−1.1, −0.1]（真人在這一格贊成 34%，贊成的隊有紅 27%，和不贊成的隊幾乎一樣，同票量不到「挑對的隊」）。人類 PR 量尺紅方 +0.04 ± 0.01 pp／紅方座位局
+ *   （真人桌讀法上；奧伯倫 +0.06、莫德雷德 +0.04、莫甘娜 +0.03、刺客 +0.02；偶數局 +0.04、奇數局 +0.04；弱／一般／強／S 不明 +0.06／+0.05／+0.03／+0.01），
+ *   沒有一格變差超過 1 個標準誤。自我對打（基準線，563001 第 0–9,999 局）紅方 −0.02 [−0.05, +0.01]（中性；機器人藍方讀得到不在隊上的紅一起外白），基準線不用。
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.8, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

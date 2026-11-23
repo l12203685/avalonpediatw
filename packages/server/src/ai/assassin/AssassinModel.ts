@@ -68,6 +68,12 @@ export const ASSASSIN_FEATURE_NAMES: readonly string[] = [
   'seat1', 'seat2', 'seat3', 'seat4', 'seat5', 'seat6', 'seat7', 'seat8', 'seat9', 'seat10',
 ];
 
+/** Round 71 `assassinSight71`: the red set some feature groups read in place of the assassin's teammates (bits: 1 votes, 2 leads, 4 on-team). */
+export interface AssassinSight {
+  ally: ReadonlySet<string>;
+  parts: number;
+}
+
 function isForced(v: VoteRecord): boolean {
   return v.attempt >= 5;
 }
@@ -80,11 +86,17 @@ function ratio(num: number, den: number): number {
  * 候選人 `candidateId` 的特徵向量（與 `ASSASSIN_FEATURE_NAMES` 同序）。
  * `obs` 必須是刺客自己的觀測（`myPlayerId` = 刺客）。
  */
-export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: string): number[] {
+export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: string, sight?: AssassinSight): number[] {
   const me = obs.myPlayerId;
-  const ally = new Set(obs.knownEvils);
+  const ally0 = new Set(obs.knownEvils);
+  // Round 71 `assassinSight71` (Round71.ts): the reds Merlin sees (every red but Mordred, once the reds show their cards) in place of the
+  // assassin's own teammates, per feature group (bit 1 votes, 2 leads, 4 proposals the candidate was on). Absent: the trained features as before.
+  const allyOf = (bit: number): ReadonlySet<string> => (sight && (sight.parts & bit) !== 0 ? sight.ally : ally0);
+  const ally = allyOf(1);
   const evilAll = new Set<string>([me, ...obs.knownEvils, ...(obs.allEvilIds ?? [])]);
-  const visibleEvil = (id: string): boolean => id === me || ally.has(id);
+  const visibleEvil = (id: string): boolean => id === me || ally0.has(id);
+  const onTeamAlly = allyOf(4);
+  const visibleOnTeam = (id: string): boolean => id === me || onTeamAlly.has(id);
 
   const votes = obs.voteHistory;
   const quests = obs.questHistory;
@@ -100,7 +112,7 @@ export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: s
     const onTeam = v.team.includes(c);
     if (onTeam) {
       propCount++;
-      if (v.team.some((id) => id !== c && visibleEvil(id))) onTeamWithEvil++;
+      if (v.team.some((id) => id !== c && visibleOnTeam(id))) onTeamWithEvil++;
     }
     if (visibleEvil(v.leader)) {
       evilLed++;
@@ -186,11 +198,12 @@ export function assassinCandidateFeatures(obs: PlayerObservation, candidateId: s
 
   // 隊長
   let led = 0, ledWithSelf = 0, ledWithAlly = 0, ledClean = 0, ledApproved = 0;
+  const leadAlly = allyOf(2);
   for (const v of votes) {
     if (v.leader !== c) continue;
     led++;
     const hasSelf = v.team.includes(me);
-    const hasAlly = v.team.some((id) => ally.has(id));
+    const hasAlly = v.team.some((id) => leadAlly.has(id));
     if (hasSelf) ledWithSelf++;
     if (hasAlly) ledWithAlly++;
     if (!hasSelf && !hasAlly) ledClean++;
@@ -265,10 +278,11 @@ export function scoreAssassinCandidates(
   obs: PlayerObservation,
   candidates: readonly string[],
   model: AssassinModelWeights = ASSASSIN_MODEL_WEIGHTS,
+  sight?: AssassinSight,
 ): Map<string, number> {
   const out = new Map<string, number>();
   for (const id of candidates) {
-    out.set(id, dot(model.weights, assassinCandidateFeatures(obs, id)));
+    out.set(id, dot(model.weights, assassinCandidateFeatures(obs, id, sight)));
   }
   return out;
 }

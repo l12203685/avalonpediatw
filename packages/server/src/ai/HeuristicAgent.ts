@@ -9,6 +9,7 @@
  * - All roles: use vote history to build suspicion scores
  */
 
+import { assassinSight71 } from './Round71';
 import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
 import { exactPick53Team } from './Round53';
 import {
@@ -2687,7 +2688,8 @@ export class HeuristicAgent implements AvalonAgent {
     };
     // `assassinReuseRead=2`: the model's captain features skip those re-proposals too (blue captains' only).
     const modelObs = this.tuning.assassinReuseRead === 2 ? withoutReuseLeaders(obs, evilSet) : obs;
-    const base = scoreAssassinCandidates(modelObs, [...goodPlayers], this.assassinModelWeights);
+    // Round 71 `assassinSight71` (Round71.ts): the model's red-on-team features read the reds Merlin sees (off: undefined, unchanged).
+    const base = scoreAssassinCandidates(modelObs, [...goodPlayers], this.assassinModelWeights, assassinSight71(this.tuning, obs));
     // Round 21 (red) `assassinReuseRead=10`: the model score, vote read and lead read re-weighted by the stacked fit.
     const stacked = this.tuning.assassinReuseRead === 10;
     for (const id of goodPlayers) add(id, 'model', (stacked ? REUSE_STACK_WEIGHTS.model : 1) * (base.get(id) ?? 0));

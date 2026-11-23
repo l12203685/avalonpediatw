@@ -80,6 +80,7 @@ import { redCrowdWhite65 } from '../Round65';
 import { r2InnerBlack66 } from '../Round66';
 import { redEarlyBlack67 } from '../Round67';
 import { redKeyCrowd69 } from '../Round69';
+import { redR5Red71 } from '../Round71';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -1068,6 +1069,11 @@ export class ForwardAgent implements AvalonAgent {
         const team = teamWithoutSelf(obs, asLoyal.action.teamIds, bayesRedShare39(view, bayesOptionsOf39(this.baseline.tuning)));
         return this.ruleDecision(obs, { type: 'team_select', teamIds: team }, 'red lead off (R3+, strong-human rate)');
       }
+    }
+    // Round 71 `redR5Red71` (Round71.ts): R5 (2:2), off the team, no teammate this red sees on it — "no seen teammate" is not "no red" (the
+    // known reds do not see Oberon, Oberon sees no one): approve when this red's own view reads P(a red on the team) ≥ θ. Off (0): unchanged.
+    if (redR5Red71(this.baseline.tuning, obs)) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red R5 off the team: its own view reads a red on it (round 71)');
     }
     // Strong-table gap R1 `redNormalVote` (RedVoteCamouflage.ts): off the team, at rate q a red casts the vote a public-view
     // loyal in this seat would, except when the red camp's win or loss rides on this team.
