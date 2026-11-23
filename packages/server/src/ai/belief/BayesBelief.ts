@@ -27,6 +27,7 @@ import { percivalRead39 } from '../BlueRound39Percival';
 import { rationalityAdj50, lakePickTerms50, W50_ALL, W50_STRONG } from '../Round50';
 import { viewpointLog53, viewpointTerms53 } from '../Viewpoint53';
 import { missionProbScore68, missionScoreApplies68 } from '../Round68';
+import { missionFailed } from '../missionFacts';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -912,7 +913,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const quests = obs.questHistory.map((q, i) => ({
     round: q.round, mask: view.maskOf(q.team), fails: q.failCount ?? 0,
     // Round 68: red already has two wins before this mission (and the score cell is in `MISSION_SCORE_68`'s scope).
-    s68: ms68 > 0 && missionScoreApplies68(ms68, q.round) ? (obs.questHistory.slice(0, i).filter((x) => x.result === 'fail').length >= 2 ? 1 : 0) : -1,
+    s68: ms68 > 0 && missionScoreApplies68(ms68, q.round) ? (obs.questHistory.slice(0, i).filter((x) => missionFailed(x)).length >= 2 ? 1 : 0) : -1,
   }));
   // Round 56: who can be Oberon — any red; for Merlin only a red he sees (Mordred is the one he cannot see).
   const oberonPool = mr56 ? (obs.myRole === 'merlin' && obs.knownEvils.length > 0 ? view.maskOf(obs.knownEvils) : all) : 0;
