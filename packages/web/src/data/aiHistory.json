@@ -3,10 +3,10 @@
   "generatedAt": "2026-11-23",
   "source": "docs/ai/optimization_loop.md 第 4 節＋docs/ai/ai_history.curated.json（scripts/build_ai_history.ts）",
   "stats": {
-    "rounds": 59,
+    "rounds": 60,
     "adoptedRounds": 41,
-    "notAdoptedRounds": 18,
-    "latestRound": "61"
+    "notAdoptedRounds": 19,
+    "latestRound": "62"
   },
   "headline": [
     {
