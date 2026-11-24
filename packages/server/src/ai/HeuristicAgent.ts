@@ -11,6 +11,7 @@
 
 import { assassinSight71 } from './Round71';
 import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
+import { r2Lead72Applies, r2Lead72Tuning, round72Stats } from './Round72';
 import { exactPick53Team } from './Round53';
 import {
   AvalonAgent,
@@ -836,6 +837,8 @@ export class HeuristicAgent implements AvalonAgent {
   private readonly assassinModelWeights: AssassinModelWeights | undefined;
   /** Round 70 `r5Lead70`: the delegate for a blue leader's R5 proposal (built on first use). */
   private r5Lead70Agent: HeuristicAgent | undefined;
+  /** Round 72 `r2Lead72`: the delegate for a blue leader's R2 proposal after an R1 fail (built on first use). */
+  private r2Lead72Agent: HeuristicAgent | undefined;
 
   private memory: AgentMemory = this.createEmptyMemory();
 
@@ -874,6 +877,14 @@ export class HeuristicAgent implements AvalonAgent {
       round70Stats.applied++;
       this.r5Lead70Agent.onGameStart(obs);
       return this.r5Lead70Agent.act(obs);
+    }
+    // Round 72 `r2Lead72` (Round72.ts): a blue leader's non-forced R2 proposal after an R1 fail is picked with the adjusted reading — the same
+    // delegate mechanism as round 70 (memory rebuilt from the public history). Off = this path is skipped.
+    if ((this.tuning.r2Lead72 ?? 0) > 0 && r2Lead72Applies(this.tuning, obs)) {
+      if (!this.r2Lead72Agent) this.r2Lead72Agent = new HeuristicAgent(this.agentId, undefined, this.priors, r2Lead72Tuning(this.tuning), this.assassinModelWeights);
+      round72Stats.applied++;
+      this.r2Lead72Agent.onGameStart(obs);
+      return this.r2Lead72Agent.act(obs);
     }
     // Idempotent ingestion: update cross-round memory from public history.
     this.ingestVoteHistory(obs);
