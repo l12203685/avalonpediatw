@@ -2627,6 +2627,72 @@
           "experience": "Games played ÷ 10, capped at 100. Not a win rate, so it is not compared with everyone."
         },
         "note": "Items that cannot be computed are not drawn (never shown as zero). The small text on each row is how many games the number uses."
+      },
+      "decisive": {
+        "lead": "{{scope}}: when a Good player's vote alone decided whether the team went (a deciding vote), it was right {{rate}} of the time.",
+        "abnormal": "Votes against habit are hardest: approving while off the team was right {{offYes}}, rejecting while on the team was right {{onNo}}.",
+        "luck": "Each player has few deciding votes, so individual ranks are mostly luck; the group numbers (strong / regular / new) are more reliable.",
+        "barsTitle": "How often each kind of vote was right",
+        "group": {
+          "onYes": "On the team, approve",
+          "onNo": "On the team, reject",
+          "offYes": "Off the team, approve",
+          "offNo": "Off the team, reject"
+        },
+        "usual": "usual",
+        "unusual": "against habit",
+        "votes": "{{n}} votes",
+        "refLine": "The white line on each bar = everyone's rate.",
+        "metric": "Deciding-vote accuracy",
+        "raw": "unadjusted {{rate}}",
+        "count": "{{n}} deciding votes",
+        "rolesAdvanced": "Advanced: by role (Loyal, Percival, Merlin), vote counts and scope notes",
+        "cohortAdvanced": "Advanced: groups (strong / regular / new) and the 3×3 grid",
+        "who": "At least {{min}} deciding votes to be listed ({{count}} players)"
+      },
+      "strength": {
+        "curve": {
+          "higher": "The strongest tables see \"{{metric}}\" more often: {{strong}}, versus {{weak}} at the weakest tables (all games {{all}}).",
+          "lower": "The strongest tables see \"{{metric}}\" less often: {{strong}}, versus {{weak}} at the weakest tables (all games {{all}}).",
+          "same": "Strong or weak tables, \"{{metric}}\" is about the same: {{strong}} at the strongest, {{weak}} at the weakest (all games {{all}})."
+        },
+        "tiers": "Good wins most at {{hi}} tables ({{hiRate}}) and least at {{lo}} tables ({{loRate}}).",
+        "trend": {
+          "up": "A typical table's {{measure}} is higher than before: about {{a}} around {{from}}, {{b}} around {{to}}.",
+          "down": "A typical table's {{measure}} is lower than before: about {{a}} around {{from}}, {{b}} around {{to}}.",
+          "same": "A typical table's {{measure}} is about the same as before: {{a}} around {{from}}, {{b}} around {{to}}."
+        },
+        "sDef": "S = the average pre-game strength rank of the 10 players at the table (0–100, higher is stronger)."
+      },
+      "blocks": {
+        "higher": "{{name}} wins more as Evil: {{red}} of Evil games won, {{blue}} of Good games.",
+        "lower": "{{name}} wins more as Good: {{blue}} of Good games won, {{red}} of Evil games.",
+        "same": "{{name}} wins {{red}} of games on either side.",
+        "roles": "Best role: {{hi}} ({{hiRate}}); hardest: {{lo}} ({{loRate}})."
+      },
+      "theory": {
+        "role": {
+          "higher": "With roles dealt at normal odds, {{name}} would be expected to win {{rate}}; over the same games they actually won {{actual}}, better than expected.",
+          "lower": "With roles dealt at normal odds, {{name}} would be expected to win {{rate}}; over the same games they actually won only {{actual}} — they drew harder roles.",
+          "same": "With roles dealt at normal odds, {{name}} would be expected to win {{rate}}; over the same games they actually won {{actual}} too."
+        },
+        "position": {
+          "higher": "Sitting evenly in all ten seats, {{name}} would be expected to win {{rate}}; over the same games they actually won {{actual}}.",
+          "lower": "Sitting evenly in all ten seats, {{name}} would be expected to win {{rate}}; over the same games they actually won only {{actual}}.",
+          "same": "Sitting evenly in all ten seats, {{name}} would be expected to win {{rate}}; over the same games they actually won {{actual}} too."
+        }
+      },
+      "elo": {
+        "peak": "{{name}} is at Elo {{elo}} now (1500 is average), rank {{rank}}; peak {{peak}} ({{date}}).",
+        "atPeak": "{{name}} is at Elo {{elo}} now (1500 is average), rank {{rank}} — their highest yet."
+      },
+      "seatWin": {
+        "blue": "As Good, seat {{hi}} wins most ({{hiRate}}) and seat {{lo}} least ({{loRate}}).",
+        "red": "As Evil, seat {{hi}} wins most ({{hiRate}}) and seat {{lo}} least ({{loRate}})."
+      },
+      "roleWin": {
+        "lead": "Across all players, the role that wins most is {{hi}} ({{hiRate}}); the hardest is {{lo}} ({{loRate}}).",
+        "how": "Each row has three parts: missions, the assassination after Good completes three missions, and who finally won — all from that role's side."
       }
     }
   },

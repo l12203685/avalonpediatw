@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
 import { riverSeries, type RiverPoint, type StrengthReport } from '@avalon/shared/stats';
-import { OUTCOME_COLORS, InfoTip } from '../ui';
+import { OUTCOME_COLORS, InfoTip, Takeaway } from '../ui';
 import { useMediaQuery } from '../overview/useMediaQuery';
+import { strengthTrendGlance } from '../core/glance';
+import { sentenceText } from '../core/glanceView';
 
 /**
  * 陣容強度走勢的河流圖（Edward 2026-10-31：「ELO 最低／最高／中位／平均可以同時呈現在圖上吧？變成有點像河流區間那樣」）。
@@ -13,9 +16,14 @@ import { useMediaQuery } from '../overview/useMediaQuery';
  *  - 深色帶：桌上第 1 ～ 第 3 四分位（中間一半的座位）；
  *  - 白線：桌上中位數；黃虛線：桌上平均（PR 版的平均就是 S）。
  * 下方細條：同一個視窗裡三種結果的比例。可切 Elo（賽前 Elo）／PR（時點 PR，S 版）。
+ * (2026-11-25 站長「一目瞭然」，第四批) 最上面一句話：典型一桌的中位數，第一點跟最後一點比（跟白線同一份數字）；
+ * 三種結果改用白話（三個任務失敗／梅林被刺中／藍方贏），「Q1～Q3」寫成「中間一半」。
  */
 
 type Mode = 'elo' | 'pr';
+/** 一句話裡「前後差不多」的門檻：Elo 差不到 10 分、PR 差不到 3。 */
+const TREND_EVEN_ELO = 10;
+const TREND_EVEN_PR = 3;
 
 const fmtDate = (t: number): string => new Date(t).toISOString().slice(0, 7);
 
@@ -45,15 +53,16 @@ function RiverTip({ active, payload, mode }: { active?: boolean; payload?: Array
       <div>{mode === 'elo' ? '桌上 Elo' : '桌上 PR'}：最高 {f(d.max)}、Q3 {f(d.q3)}、<b>中位 {f(d.median)}</b>、平均 {mode === 'elo' ? d.mean.toFixed(1) : d.mean.toFixed(1)}、Q1 {f(d.q1)}、最低 {f(d.min)}</div>
       <div>S（中位數）{d.s.toFixed(1)}</div>
       <div className="text-zinc-400">
-        <span style={{ color: OUTCOME_COLORS.三紅 }}>三紅 {d.threeRed.toFixed(0)}%</span>{' · '}
-        <span style={{ color: OUTCOME_COLORS.三藍死 }}>被刀 {d.blueDead.toFixed(0)}%</span>{' · '}
-        <span style={{ color: OUTCOME_COLORS.三藍活 }}>躲刺 {d.blueAlive.toFixed(0)}%</span>
+        <span style={{ color: OUTCOME_COLORS.三紅 }}>三個任務失敗 {d.threeRed.toFixed(0)}%</span>{' · '}
+        <span style={{ color: OUTCOME_COLORS.三藍死 }}>梅林被刺中 {d.blueDead.toFixed(0)}%</span>{' · '}
+        <span style={{ color: OUTCOME_COLORS.三藍活 }}>藍方贏 {d.blueAlive.toFixed(0)}%</span>
       </div>
     </div>
   );
 }
 
 export default function StrengthTrend({ report }: { report: StrengthReport }): JSX.Element {
+  const { t } = useTranslation('common');
   const hasElo = report.points.some((p) => p.elo);
   const [mode, setMode] = useState<Mode>(hasElo ? 'elo' : 'pr');
   const wide = useMediaQuery('(min-width: 640px)');
@@ -67,8 +76,22 @@ export default function StrengthTrend({ report }: { report: StrengthReport }): J
     ? [0, 100]
     : data.length ? [Math.floor(Math.min(...data.map((d) => d.min)) - 2), Math.ceil(Math.max(...data.map((d) => d.max)) + 2)] : [1450, 1550];
   const margin = { top: 6, right: 8, bottom: 0, left: wide ? 0 : -6 };
+  const first = data[0];
+  const last = data[data.length - 1];
+  const lead = sentenceText(t, strengthTrendGlance(
+    first ? { date: fmtDate(first.t), median: first.median } : null,
+    last ? { date: fmtDate(last.t), median: last.median } : null,
+    mode === 'elo' ? '賽前 Elo' : '實力排名（PR）',
+    mode === 'elo' ? TREND_EVEN_ELO : TREND_EVEN_PR,
+  ));
   return (
     <div className="space-y-1" data-testid="strength-trend">
+      {lead && (
+        <Takeaway className="mb-2">
+          <p className="text-sm font-semibold text-white sm:text-[15px]" data-testid="strength-trend-lead">{lead}</p>
+          <p className="text-zinc-400">白線＝那段時間典型一桌的中位數；色帶＝同一桌從最弱到最強的人。</p>
+        </Takeaway>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         {(['elo', 'pr'] as const).map((m) => (
           <button
@@ -92,7 +115,7 @@ export default function StrengthTrend({ report }: { report: StrengthReport }): J
         </InfoTip>
         <span className="ml-auto flex flex-wrap gap-2 text-[11px] text-zinc-400">
           <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-3 rounded-sm bg-blue-400/20" />最低～最高</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-3 rounded-sm bg-blue-400/50" />Q1～Q3</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block h-2.5 w-3 rounded-sm bg-blue-400/50" />中間一半</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block h-0.5 w-3 bg-zinc-100" />中位</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block h-0.5 w-3 border-t border-dashed border-amber-300" />平均</span>
         </span>
@@ -124,7 +147,7 @@ export default function StrengthTrend({ report }: { report: StrengthReport }): J
         </ResponsiveContainer>
       </div>
       <p className="flex flex-wrap gap-x-3 text-[11px] text-zinc-500">
-        <span>細條：<span style={{ color: OUTCOME_COLORS.三紅 }}>三紅</span>／<span style={{ color: OUTCOME_COLORS.三藍死 }}>三藍被刀</span>／<span style={{ color: OUTCOME_COLORS.三藍活 }}>三藍躲刺</span> 的比例（前後各 30 局）</span>
+        <span>細條：<span style={{ color: OUTCOME_COLORS.三紅 }}>三個任務失敗</span>／<span style={{ color: OUTCOME_COLORS.三藍死 }}>梅林被刺中</span>／<span style={{ color: OUTCOME_COLORS.三藍活 }}>藍方贏</span> 的比例（前後各 30 局）</span>
         <span>{report.points.length} 局有陣容強度（篩選後共 {report.games} 局）</span>
       </p>
     </div>

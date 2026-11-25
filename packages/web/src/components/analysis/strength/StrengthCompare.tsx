@@ -22,6 +22,16 @@ interface Row {
   all: StrengthMetricValue;
 }
 
+/**
+ * (2026-11-25 站長「一目瞭然」，第四批) 三種結局的指標名稱在畫面上改用白話（定義在 @avalon/shared STRENGTH_METRICS，
+ * 那邊的 label 是三紅率／三藍被刀率／三藍躲刺率；只換顯示的字，數字不動，滑過仍看原本的定義）。
+ */
+const PLAIN_LABEL: Readonly<Record<string, string>> = {
+  threeRed: '三個任務失敗',
+  blueDead: '梅林被刺中',
+  blueAlive: '藍方贏',
+};
+
 export default function StrengthCompare({ report, kind, setKind, pr, setPr, count, setCount, weak, setWeak, dim, setDim }: {
   report: StrengthReport;
   kind: GroupingKind; setKind: (k: GroupingKind) => void;
@@ -51,7 +61,7 @@ export default function StrengthCompare({ report, kind, setKind, pr, setPr, coun
   const columns: StatColumn<Row>[] = [
     {
       key: 'label', label: '指標', className: 'whitespace-normal min-w-[8.5rem]',
-      format: (_, r) => <span title={r.help} className="cursor-help underline decoration-dotted decoration-zinc-600 underline-offset-2">{r.label}</span>,
+      format: (_, r) => <span title={r.help} className="cursor-help underline decoration-dotted decoration-zinc-600 underline-offset-2">{PLAIN_LABEL[r.id] ?? r.label}</span>,
     },
     ...cmp.groups.map((g, i): StatColumn<Row> => ({
       key: `g${i}`,
@@ -110,7 +120,7 @@ export default function StrengthCompare({ report, kind, setKind, pr, setPr, coun
         <Takeaway>
           {cmp.groups.map((g, i) => (
             <span key={g.id} className="mr-3 inline-block">
-              <b>{g.label}</b>：三紅 {formatMetric(red.values[i].value, 'rate')}、刺中 {formatMetric(hit.values[i].value, 'rate')}
+              <b>{g.label}</b>：三個任務失敗 {formatMetric(red.values[i].value, 'rate')}、做完三個任務後梅林被刺中 {formatMetric(hit.values[i].value, 'rate')}
               <span className="text-zinc-500">（{g.games} 局）</span>
             </span>
           ))}

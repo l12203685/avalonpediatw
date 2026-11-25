@@ -1,10 +1,11 @@
 /**
  * 模擬瓦（2026-10-14）— 狀態頁計數（`/api/bots/status → simulation`）。
  *
- * 只有數字和布林：沒有題號、聊天室 id、使用者 id，也沒有任何人打的字。重啟歸零。
+ * 只有數字和布林：沒有題號、聊天室 id、使用者 id，也沒有任何人打的字。重啟歸零（進行中的題目本身會存檔，計數不存）。
  */
 
 import type { Role } from '@avalon/shared';
+import type { SimPersistenceStatus } from './persist';
 
 export interface SimCounts {
   started: { line: number; discord: number };
@@ -70,6 +71,7 @@ export interface SimulationStatus {
   /** 世界模型有沒有算派票行為（v1 純邏輯：false）。 */
   weighsBehaviour: boolean;
   bank: { loaded: boolean; games: number; dropped: number; decisionPoints: number; linked: number };
-  sessions: { active: number };
+  /** persistence：進行中的題目存檔（persist.ts）——有沒有設定、開機有沒有讀回來、寫了幾次。 */
+  sessions: { active: number; persistence: SimPersistenceStatus };
   counts: SimCounts;
 }
