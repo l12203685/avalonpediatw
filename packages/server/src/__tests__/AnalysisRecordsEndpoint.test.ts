@@ -20,7 +20,10 @@ vi.mock('../middleware/rateLimit', async (importOriginal) => {
 });
 
 import { analysisRouter } from '../routes/analysis';
-import { ENV_GAME_DB, ENV_RECORDS_CACHE, RECORDS_NOT_GENERATED, invalidateRecordsPayload, recordAliases } from '../services/recordsList';
+import {
+  ENV_GAME_DB, ENV_PLAYER_ALIASES, ENV_RECORDS_CACHE, RECORDS_NOT_GENERATED, invalidateRecordsPayload, recordAliases, recordNameRenames,
+  renameRecordNames,
+} from '../services/recordsList';
 import {
   REPLIES_NOT_CONFIGURED,
   REPLIES_TTL_MS,
@@ -67,6 +70,8 @@ app.use('/api/analysis', analysisRouter);
 let dir: string;
 let file: string;
 let dbFile: string;
+let aliasFile: string;
+const savedAliasEnv = process.env[ENV_PLAYER_ALIASES];
 const savedEnv = process.env[ENV_RECORDS_CACHE];
 const savedDbEnv = process.env[ENV_GAME_DB];
 
@@ -76,6 +81,8 @@ beforeAll(() => {
   dbFile = path.join(dir, 'game_db.json');
   process.env[ENV_RECORDS_CACHE] = file;
   process.env[ENV_GAME_DB] = dbFile;
+  aliasFile = path.join(dir, 'player_aliases.json');
+  process.env[ENV_PLAYER_ALIASES] = aliasFile;
 });
 
 afterAll(() => {
@@ -83,12 +90,15 @@ afterAll(() => {
   else process.env[ENV_RECORDS_CACHE] = savedEnv;
   if (savedDbEnv === undefined) delete process.env[ENV_GAME_DB];
   else process.env[ENV_GAME_DB] = savedDbEnv;
+  if (savedAliasEnv === undefined) delete process.env[ENV_PLAYER_ALIASES];
+  else process.env[ENV_PLAYER_ALIASES] = savedAliasEnv;
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 beforeEach(() => {
   fs.writeFileSync(file, JSON.stringify(DOC), 'utf-8');
   fs.rmSync(dbFile, { force: true });
+  fs.rmSync(aliasFile, { force: true });
   invalidateRecordsPayload();
 });
 
@@ -173,6 +183,34 @@ describe('GET /api/analysis/records', () => {
     // 已經是網站上一篇的來源 id（同一局貼兩次）不當 aka：那一篇本來就打得開
     const twice = recordAliases(DOC.posts, { format: 'avalon-game-db', games: [{ id: '1432000000000000001', sources: [{ id: '1432000000000000002' }, { id: 'S5' }] }] });
     expect([...twice]).toEqual([['1432000000000000001', ['S5']]]);
+  });
+
+  it('shows the official name for a seat written in an old spelling (player_aliases.json)', async () => {
+    // 站長 2026-11-25：牌譜上寫成「甲/乙」的那一場其實只有甲在玩 → 別名表「甲/乙 → 甲」，牌譜紀錄也直接顯示甲
+    const names = [...NAMES];
+    names[2] = '玩家Ｃ/玩家x';
+    names[5] = '百科AI_3';
+    const doc = { ...DOC, posts: [DOC.posts[0], { ...DOC.posts[1], game: { ...DOC.posts[1].game, names } }] };
+    fs.writeFileSync(file, JSON.stringify(doc), 'utf-8');
+    fs.writeFileSync(aliasFile, JSON.stringify({ _comment: 'x', aliases: { '玩家C/玩家X': '玩家C', '百科AI_3': '百科AI', 壞掉: 3 } }), 'utf-8');
+    invalidateRecordsPayload();
+    const res = await request(app).get('/api/analysis/records').set('Accept-Encoding', 'identity');
+    expect(res.status).toBe(200);
+    const shown = res.body.data.posts[1].game.names as string[];
+    expect(shown[2]).toBe('玩家C');
+    expect(shown[5]).toBe('百科AI_3'); // 機器人的座位名保留編號
+    expect(shown.filter((_, i) => i !== 2)).toEqual(names.filter((_, i) => i !== 2));
+    expect(res.body.data.posts[0]).toEqual(DOC.posts[0]); // 沒有牌譜的貼文原樣
+    // 沒有別名檔、壞掉的別名檔 → 名字照貼文原樣
+    fs.writeFileSync(aliasFile, '{ not json', 'utf-8');
+    invalidateRecordsPayload();
+    const raw = await request(app).get('/api/analysis/records').set('Accept-Encoding', 'identity');
+    expect(raw.body.data.posts[1].game.names).toEqual(names);
+    expect(recordNameRenames(null).size).toBe(0);
+    expect(recordNameRenames({ aliases: [] }).size).toBe(0);
+    const post = doc.posts[1];
+    expect(renameRecordNames(post, new Map())).toBe(post);
+    expect(renameRecordNames(post, new Map([['沒有這個人', '甲']]))).toBe(post);
   });
 
   it('is 503 for a file of another format or broken JSON', async () => {
