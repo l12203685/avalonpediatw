@@ -26,7 +26,7 @@ import path from 'path';
 import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
-import { renderPuzzlePng } from '../src/bots/threads/image';
+import { renderPuzzlePng } from '../src/bots/threads/card';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 import { commentText, fallbackComment, postedFromState, readComment, readPicks, savedFromState } from '../src/bots/threads/publish/daily';
 import { COMMENT_PLACEHOLDERS, PLACEHOLDER_HELP, POST_PLACEHOLDERS, commentBody, readTemplateFile } from '../src/bots/threads/template';

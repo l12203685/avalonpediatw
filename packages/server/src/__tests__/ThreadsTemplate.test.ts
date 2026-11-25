@@ -1,6 +1,8 @@
 /**
  * Threads 貼文格式（2026-11-18，站長：「我可以再主控台那邊 先調整貼文格式? (應該只有出題內容會改 大部分都可以套用?)」）：
- *   - 內建格式跟改之前的寫法一字不差（兩週的題目、三種系列起點；用改之前的拼法重算一次比對）；
+ *   - 內建格式就是照順序接起來（兩週的題目、三種系列起點；用直接拼的寫法重算一次比對）：
+ *     標題（一句話的問題）、接續、你是、三個選項、空一行＋精簡的局面、空一行＋答案、空一行、標籤（2026-11-25「一目瞭然」）；
+ *     檔案裡存的是 11/25 以前的內建格式＝站長沒改過，照現在的內建格式；
  *   - 套範本的規則：空的佔位符整行拿掉、不留連續空行、多行的內容照放；
  *   - 範本檢查：不認得的佔位符、{標籤} 要在最後一行、留言要有 {小觀念}；
  *   - threads_template.json：沒有、壞掉、某一欄不合格 → 那一欄用內建格式＋警告；
@@ -17,6 +19,7 @@ vi.setConfig({ testTimeout: 60_000 });
 import { buildSimBank, readSimBankFile, type SimBank } from '../bots/simulation/bank';
 import { readRecordPosts } from '../bots/simulation/recordsIndex';
 import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, answerVariants, postTitle, questionParts, renderPost, type PickView, type ThreadsDraft } from '../bots/threads/draft';
+import { choiceLines, choicesFor } from '../bots/threads/choices';
 import { ThreadsGenerator } from '../bots/threads/generate';
 import { THREADS_START_DATE, THREADS_THEMES, addDays, weekdayOf, type ThreadsKind } from '../bots/threads/plan';
 import { commentText, draftNeedsImage, imageProblem, prepareDaily, type DailyPlan } from '../bots/threads/publish/daily';
@@ -24,6 +27,7 @@ import {
   COMMENT_PLACEHOLDERS,
   DEFAULT_COMMENT_TEMPLATE,
   DEFAULT_POST_TEMPLATE,
+  LEGACY_POST_TEMPLATE,
   POST_PLACEHOLDERS,
   PLACEHOLDER_HELP,
   THREADS_TYPES,
@@ -50,15 +54,18 @@ beforeAll(() => {
 
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'threads-tpl-'));
 
-/** 改之前的拼法（2026-11-18 的 postText，原樣搬來）：標題、題目、空一行＋答案、空一行、標籤。 */
-function legacyPostText(pv: PickView, opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number }; answers?: string[][] }): string {
+/**
+ * 不經過範本、直接拼的寫法：標題（問題）、接續＋你是、三個選項、空一行＋局面、空一行＋答案、空一行、標籤。
+ * 放不下時先換短的答案，最後才把局面縮成「看圖」。
+ */
+function plainPostText(pv: PickView, opts: { weekday: number; continuesFrom?: { exerciseId: string; seat: number }; answers?: string[][] }): string {
   const title = postTitle(opts.weekday, pv.pick);
   const q = questionParts(pv, opts);
   const answers = opts.answers && opts.answers.length > 0 ? opts.answers : [[]];
   let last = '';
-  for (const ans of answers) {
-    for (const body of q.bodies) {
-      last = [title, ...q.head, ...body, ...q.tail, ...(ans.length ? ['', ...ans] : []), '', THREADS_TOPIC_TAG].join('\n');
+  for (const body of q.bodies) {
+    for (const ans of answers) {
+      last = [title, ...q.head, ...choiceLines(choicesFor(pv)), '', ...body, ...(ans.length ? ['', ...ans] : []), '', THREADS_TOPIC_TAG].join('\n');
       if ([...last].length <= THREADS_MAX_CHARS) return last;
     }
   }
@@ -83,15 +90,15 @@ function inputsFor(gen: ThreadsGenerator, date: string, startDate: string): { pv
   return { pv, ...(continues ? { continuesFrom: { exerciseId: yPv.exerciseId, seat: yPv.pick.seat } } : {}), answers };
 }
 
-describe('default template = the format before templates, byte for byte', () => {
+describe('default template = the plain concatenation, byte for byte', () => {
   for (const startDate of [THREADS_START_DATE, '2026-11-18', '2026-11-23']) {
-    it(`two weeks of picks from ${startDate}: drafts equal the old concatenation; parts re-render to the same text`, () => {
+    it(`two weeks of picks from ${startDate}: drafts equal the plain concatenation; parts re-render to the same text`, () => {
       const gen = new ThreadsGenerator({ bank, titles, readSaved: () => null, startDate });
       for (let i = 0; i < 14; i++) {
         const date = addDays(startDate, i);
         const d = gen.draftFor(date) as ThreadsDraft;
         const inp = inputsFor(gen, date, startDate);
-        const old = legacyPostText(inp.pv, { weekday: weekdayOf(date), ...(inp.continuesFrom ? { continuesFrom: inp.continuesFrom } : {}), answers: inp.answers });
+        const old = plainPostText(inp.pv, { weekday: weekdayOf(date), ...(inp.continuesFrom ? { continuesFrom: inp.continuesFrom } : {}), answers: inp.answers });
         expect(d.post.text).toBe(old);
         expect(d.parts).toBeDefined();
         expect(renderTemplate(DEFAULT_POST_TEMPLATE, d.parts as NonNullable<ThreadsDraft['parts']>)).toBe(d.post.text);
@@ -102,6 +109,8 @@ describe('default template = the format before templates, byte for byte', () => 
         expect(d.parts?.標題).toBe(d.post.text.split('\n')[0]);
         expect(d.parts?.題號).toBe(d.exerciseId);
         expect(d.parts?.主題).toBe(d.theme);
+        expect(d.parts?.選項).toBe(choiceLines(choicesFor(inp.pv)).join('\n'));
+        expect(d.post.text).toContain(`\n${d.parts?.選項}\n`);
       }
       expect(gen.warnings).toEqual([]);
     });
@@ -115,14 +124,30 @@ describe('default template = the format before templates, byte for byte', () => 
       expect(b.draftFor(date)?.post.text).toBe(a.draftFor(date)?.post.text);
     }
   });
+
+  it('the built-in format from before 2026-11-25 stored in the file means “never customised”: the current built-in format is used, no warning', () => {
+    expect(validateTemplate('post', LEGACY_POST_TEMPLATE)).toEqual([]);
+    expect(LEGACY_POST_TEMPLATE).not.toBe(DEFAULT_POST_TEMPLATE);
+    const a = new ThreadsGenerator({ bank, titles, readSaved: () => null });
+    const b = new ThreadsGenerator({ bank, titles, readSaved: () => null, postTemplate: `${LEGACY_POST_TEMPLATE}\n` });
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(THREADS_START_DATE, i);
+      expect(b.draftFor(date)?.post.text).toBe(a.draftFor(date)?.post.text);
+    }
+    expect(b.warnings).toEqual([]);
+  });
 });
 
 describe('renderTemplate', () => {
   const parts = { 標題: 'T', 接續: '', 你是: 'V', 派票紀錄: 'r1\nr2', 提問: 'Q', 昨天答案: '', 標籤: '#tag' };
 
   it('drops a line whose placeholders are all empty, without leaving two blank lines', () => {
-    expect(renderTemplate(DEFAULT_POST_TEMPLATE, parts)).toBe('T\nV\nr1\nr2\nQ\n\n#tag');
-    expect(renderTemplate(DEFAULT_POST_TEMPLATE, { ...parts, 昨天答案: 'A1\nA2', 接續: 'C' })).toBe('T\nC\nV\nr1\nr2\nQ\n\nA1\nA2\n\n#tag');
+    expect(renderTemplate(LEGACY_POST_TEMPLATE, parts)).toBe('T\nV\nr1\nr2\nQ\n\n#tag');
+    expect(renderTemplate(LEGACY_POST_TEMPLATE, { ...parts, 昨天答案: 'A1\nA2', 接續: 'C' })).toBe('T\nC\nV\nr1\nr2\nQ\n\nA1\nA2\n\n#tag');
+    // 現在的內建格式：問題（標題）、你是、三個選項、空一行＋局面、空一行＋答案、空一行、標籤
+    const now = { ...parts, 選項: 'A a\nB b\nC c\n都不是？' };
+    expect(renderTemplate(DEFAULT_POST_TEMPLATE, now)).toBe('T\nV\nA a\nB b\nC c\n都不是？\n\nr1\nr2\n\n#tag');
+    expect(renderTemplate(DEFAULT_POST_TEMPLATE, { ...now, 昨天答案: 'A1\nA2', 接續: 'C' })).toBe('T\nC\nV\nA a\nB b\nC c\n都不是？\n\nr1\nr2\n\nA1\nA2\n\n#tag');
     // 兩個空的段落之間的空行也只留一個。
     expect(renderTemplate('{標題}\n\n{接續}\n\n{昨天答案}\n\n{標籤}', parts)).toBe('T\n\n#tag');
     // 最前面的空佔位符行：後面的空行一起拿掉。

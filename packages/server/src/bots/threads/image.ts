@@ -30,15 +30,13 @@
 import fs from 'fs';
 import path from 'path';
 import { WEEKLY_CHART_FONT_FAMILY, WEEKLY_CHART_FONT_FILE, escapeXml } from '../stats/weeklyChart';
-import { ROLE_ZH } from '../simulation/commands';
-import { resultText } from '../simulation/replies';
 import { BLUE_ROLES, FAILS_REQUIRED, TEAM_SIZES, isRed, type PublicEvent } from '../simulation/scenario';
 import { seatChar } from '../simulation/seats';
 import { viewerLine, type PickView } from './draft';
 
-const W = 1080;
+export const W = 1080;
 /** 深色卡片的配色（底色接近網站深色介面與 IG 截圖的黑）。 */
-const C = {
+export const C = {
   page: '#131316',
   ink: '#f4f4f5',
   soft: '#a1a1aa',
@@ -62,9 +60,9 @@ const C = {
 };
 
 /** 一段一個顏色的文字（tspan）。 */
-type Seg = { t: string; fill?: string; weight?: boolean };
+export type Seg = { t: string; fill?: string; weight?: boolean };
 
-function segs(x: number, y: number, parts: readonly Seg[], size: number, anchor: 'start' | 'middle' | 'end' = 'start'): string {
+export function segs(x: number, y: number, parts: readonly Seg[], size: number, anchor: 'start' | 'middle' | 'end' = 'start'): string {
   const a = anchor !== 'start' ? ` text-anchor="${anchor}"` : '';
   const spans = parts.map((p) => {
     const stroke = p.weight ? ` stroke="${p.fill ?? C.ink}" stroke-width="${Math.max(0.7, size / 40)}"` : '';
@@ -73,11 +71,11 @@ function segs(x: number, y: number, parts: readonly Seg[], size: number, anchor:
   return `<text x="${x}" y="${y}" font-size="${size}"${a}>${spans}</text>`;
 }
 
-function text(x: number, y: number, s: string, o: { size: number; fill?: string; anchor?: 'start' | 'middle' | 'end'; weight?: boolean }): string {
+export function text(x: number, y: number, s: string, o: { size: number; fill?: string; anchor?: 'start' | 'middle' | 'end'; weight?: boolean }): string {
   return segs(x, y, [{ t: s, fill: o.fill, weight: o.weight }], o.size, o.anchor);
 }
 
-function rect(x: number, y: number, w: number, h: number, fill: string, extra = ''): string {
+export function rect(x: number, y: number, w: number, h: number, fill: string, extra = ''): string {
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"${extra}/>`;
 }
 
@@ -89,7 +87,7 @@ const THREADS_LOGO_PX = 640;
 const WATERMARK_OPACITY = 0.1;
 
 let logoUri: string | null | undefined;
-function logoDataUri(): string | null {
+export function logoDataUri(): string | null {
   if (logoUri === undefined) logoUri = fs.existsSync(THREADS_LOGO_FILE) ? `data:image/png;base64,${fs.readFileSync(THREADS_LOGO_FILE).toString('base64')}` : null;
   return logoUri;
 }
@@ -102,7 +100,7 @@ function logoDataUri(): string | null {
  */
 export const THREADS_ASSET_DIR = path.resolve(__dirname, '..', '..', '..', 'assets', 'threads');
 const assetUris = new Map<string, string | null>();
-function assetUri(file: string): string | null {
+export function assetUri(file: string): string | null {
   if (!assetUris.has(file)) {
     const f = path.join(THREADS_ASSET_DIR, file);
     assetUris.set(file, fs.existsSync(f) ? `data:image/png;base64,${fs.readFileSync(f).toString('base64')}` : null);
@@ -123,7 +121,7 @@ function assetSymbols(body: string): string {
   return defs.length ? `<defs>${defs.join('')}</defs>` : '';
 }
 
-function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}): string {
+export function svgDoc(height: number, body: string, opts: { watermark?: boolean } = {}): string {
   const uri = opts.watermark === false ? null : logoDataUri();
   // 浮水印：大尺寸、置中在標題列以下的區域、圓角裁切，放在所有內容後面（站長 11/17：「我是希望背景帶有我們的"阿瓦隆百科"logo」）。
   const size = Math.min(W - 80, height - HEADER_H - 80);
@@ -196,7 +194,7 @@ export function headerLogoSize(size: number): number {
   return Math.round(size * HEADER_LOGO_SCALE);
 }
 
-function headerBand(title: string): string {
+export function headerBand(title: string): string {
   const hasLogo = logoDataUri() !== null;
   const x0 = 40;
   const gap = 16;
@@ -259,7 +257,7 @@ export function wrapLine(line: string, size: number, max: number): string[] {
 }
 
 /** 一行字放不下時縮小字級（最小 min）。 */
-function fitSize(line: string, size: number, max: number, min = 14): number {
+export function fitSize(line: string, size: number, max: number, min = 14): number {
   let s = size;
   while (s > min && textWidth(line, s) > max) s -= 1;
   return s;
@@ -641,10 +639,10 @@ export function logoRimPoint(seat: number, cx: number, cy: number): { x: number;
   return { x: cx + TABLE_LOGO_R * ux, y: cy + TABLE_LOGO_R * uy };
 }
 
-const LAKE_LINE = '#22d3ee';
+export const LAKE_LINE = '#22d3ee';
 
 /** 箭頭頭（三角形）：尖端在 (x, y)、指向 angle（弧度）。 */
-function arrowHead(x: number, y: number, angle: number, fill: string, size: number): string {
+export function arrowHead(x: number, y: number, angle: number, fill: string, size: number): string {
   const back = (d: number, side: number): string => {
     const bx = x - Math.cos(angle) * d - Math.sin(angle) * side;
     const by = y - Math.sin(angle) * d + Math.cos(angle) * side;
@@ -686,7 +684,7 @@ export function lakeLines(known: readonly SheetRow[], cx: number, cy: number): s
  * 座位標記（你、拇指、看到的紅、隊友、湖到的）在座位外側。每局出任務的座位寫在右邊的任務格裡，湖也寫在右邊。
  */
 /** 座位的圈：一般一種顏色；還分不出來的拇指左半圈藍、右半圈紅。 */
-function seatRing(x: number, y: number, r: number, m: SeatMark | undefined, width: number): string {
+export function seatRing(x: number, y: number, r: number, m: SeatMark | undefined, width: number): string {
   if (m?.split) {
     const arc = (from: number, to: number, color: string): string =>
       `<path d="M${x} ${y + from * r} A${r} ${r} 0 0 1 ${x} ${y + to * r}" fill="none" stroke="${color}" stroke-width="${width}" class="thumb-ring"/>`;
@@ -1003,8 +1001,11 @@ export function cardTop(pv: PickView): number {
   return Math.max(CARD_TOP_H + identityLayout(pv).band, Math.ceil(rightColumn(pv, sheetRows(pv)).bottom) + 10);
 }
 
-/** 題目圖的 SVG（weekday = 今天的星期，決定標題）：小圓桌＋你的視角、整份牌譜（精簡表格）、題目。 */
-export function buildPuzzleSvg(pv: PickView, weekday: number): string {
+/**
+ * 牌譜卡（輪播第 2 張，2026-11-25 以前是題目卡）：小圓桌＋你的視角、整份牌譜（精簡表格）到「輪到你」。
+ * 站長 11/25：「希望能更直觀讓看到的人一目瞭然」→ 第 1 張改成大字的題目卡（card.ts），這一張留給想照牌譜細推的人，內容不變。
+ */
+export function buildRecordSvg(pv: PickView, weekday: number): string {
   const rows = sheetRows(pv);
   // 站長 11/18：精縮版的派票紀錄表——整份牌譜、任務結果、湖一次放在題目卡；放不下才把最早的幾局移到續圖
   const cardRows = cardSheetRows(pv);
@@ -1069,44 +1070,18 @@ export function buildGridSvgs(pv: PickView, weekday: number): string[] {
 }
 
 
-/** 第一張續圖（放得下時 null）；要全部的續圖用 buildGridSvgs。 */
-export function buildGridSvg(pv: PickView, weekday: number): string | null {
-  return buildGridSvgs(pv, weekday)[0] ?? null;
+/** 牌譜的圖一共幾張：牌譜卡＋放不下時的續圖（發文時這幾張要一張不少）。 */
+export function recordImageCount(pv: PickView): number {
+  return 1 + gridPages(pv).length;
 }
 
-// ─── 答案卡 ──────────────────────────────────────────────────────────────
-
-/** 答案圖：昨天那一局的角色，紅方一格在上、藍方一格在下（站長 11/17「腳色順序應該是 刺娜德奧派梅」）；ids = 這一局這幾天出過的題號。 */
-export function buildAnswerSvg(pv: PickView, ids: readonly string[] = [pv.exerciseId]): string {
-  const roles = pv.game.seatRoles;
-  const seatOf = (role: string): number[] => roles.flatMap((r, i) => (r === role ? [i + 1] : []));
-  const blue = (['percival', 'merlin'] as const).flatMap((r) => seatOf(r).map((s) => `${ROLE_ZH[r]}：${seatChar(s)} 家`));
-  const red = (['assassin', 'morgana', 'mordred', 'oberon', 'minion'] as const).flatMap((r) => seatOf(r).map((s) => `${ROLE_ZH[r]}：${seatChar(s)} 家`));
-  // 這一局這幾天出過的題（週三 1-5＋週四 3-5 一起公布）：「1-5、3-5」；只有一題就用那一題的標題
-  const codes = ids.map((id) => (id.startsWith(`${pv.pick.gameId}-`) ? id.slice(pv.pick.gameId.length + 1) : id)).map((c) => (c === 'A' ? '刺殺' : c));
-  const label = ids.length > 1 ? codes.join('、') : cardLabel(pv);
-  const parts: string[] = [headerBand(headerTitle(label, pv.pick.gameId, '答案'))];
-  let y = HEADER_H + 50;
-  const box = (title: string, items: string[], fill: string, ink: string): void => {
-    const lh = 70;
-    const h = 70 + items.length * lh + 20;
-    parts.push(rect(40, y, W - 80, h, fill, ` rx="18" fill-opacity="0.8" stroke="${ink}" stroke-width="2"`));
-    parts.push(text(76, y + 54, title, { size: 28, fill: ink }));
-    items.forEach((it, i) => parts.push(text(76, y + 70 + lh * (i + 1) - 14, it, { size: 50, fill: C.ink, weight: true })));
-    y += h + 30;
-  };
-  box('紅方', red, C.redFill, C.red);
-  box('藍方', blue, C.blueFill, C.blue);
-  y += 30;
-  parts.push(text(40, y, `結果：${resultText(pv.game)}`, { size: 34, fill: C.yellow, weight: true }));
-  y += 56;
-  parts.push(text(40, y, '其他座位是忠臣｜實戰牌譜｜阿瓦隆百科 avalon-game-platform.web.app', { size: 24, fill: C.faint }));
-  y += 40;
-  return svgDoc(y, parts.join(''));
+/** 牌譜的圖，照順序：牌譜卡、（放不下時）續圖。 */
+export function buildRecordSvgs(pv: PickView, weekday: number): string[] {
+  return [buildRecordSvg(pv, weekday), ...buildGridSvgs(pv, weekday)];
 }
 
 /** SVG → PNG（只用內附的字型）。字型檔或原生套件不在時丟錯，呼叫端改成不附圖。 */
-function svgToPng(svg: string, fontFile: string): Buffer {
+export function svgToPng(svg: string, fontFile: string): Buffer {
   if (!fs.existsSync(fontFile)) throw new Error(`threads image font missing: ${fontFile}`);
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Resvg } = require('@resvg/resvg-js') as typeof import('@resvg/resvg-js');
@@ -1117,22 +1092,10 @@ function svgToPng(svg: string, fontFile: string): Buffer {
   return resvg.render().asPng();
 }
 
-/** 題目圖 PNG。 */
-export function renderPuzzlePng(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer {
-  return svgToPng(buildPuzzleSvg(pv, weekday), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
-}
-
-/** 牌譜續圖 PNG，照順序（要幾張就幾張）；牌譜放得進題目卡時回傳 []。 */
+/**
+ * 牌譜的圖 PNG，照順序（檔名 <日期>-grid-<n>.png）：第 1 張是牌譜卡（一定有），後面是放不下時的續圖。
+ * 題目卡（<日期>.png）和答案卡在 card.ts。
+ */
 export function renderGridPngs(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer[] {
-  return buildGridSvgs(pv, weekday).map((svg) => svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE));
-}
-
-/** 第一張續圖 PNG（放得下時 null）；要全部的續圖用 renderGridPngs。 */
-export function renderGridPng(pv: PickView, weekday: number, opts: { fontFile?: string } = {}): Buffer | null {
-  return renderGridPngs(pv, weekday, opts)[0] ?? null;
-}
-
-/** 答案圖 PNG（公布完整答案的日子才附）。 */
-export function renderAnswerPng(pv: PickView, ids?: readonly string[], opts: { fontFile?: string } = {}): Buffer {
-  return svgToPng(buildAnswerSvg(pv, ids), opts.fontFile ?? WEEKLY_CHART_FONT_FILE);
+  return buildRecordSvgs(pv, weekday).map((svg) => svgToPng(svg, opts.fontFile ?? WEEKLY_CHART_FONT_FILE));
 }

@@ -18,7 +18,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { ThreadsDraft } from '../draft';
-import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, postTitle } from '../draft';
+import { SEE_IMAGE_LINE, THREADS_MAX_CHARS, THREADS_TOPIC_TAG, legacyPostTitle, postTitle } from '../draft';
 import type { ThreadsGenerator } from '../generate';
 import { addDays, exerciseIdOfPick, taipeiToday, weekdayOf } from '../plan';
 import { DEFAULT_COMMENT_TEMPLATE, commentBody, normalizeTemplate, renderTemplate, templateFor, type CommentParts, type ThreadsTemplate } from '../template';
@@ -249,7 +249,8 @@ export interface DailyPlan {
   images: string[];
   /** 要引用的昨天貼文；第一天是 null。postId 沒記到的話 post 段會去自己最近的貼文裡找。 */
   /** title：昨天那篇的第一行（貼文裡沒有題號時，靠它在最近的貼文裡找昨天那篇）。 */
-  quote: { date: string; exerciseId: string; postId: string | null; title?: string } | null;
+  /** legacyTitle：2026-11-25 以前的標題格式（昨天那篇是站長照舊草稿手動發的時候，用它認）。 */
+  quote: { date: string; exerciseId: string; postId: string | null; title?: string; legacyTitle?: string } | null;
   /** 已經發過了（狀態檔有貼文 id）：post 段不再發 A。 */
   alreadyPublished: boolean;
   /** A 發了、第一則留言還沒成功：post 段只補發留言。 */
@@ -341,7 +342,8 @@ export function prepareDaily(date: string, deps: PrepareDeps): DailyPlan | null 
     const yGame = yPick ? deps.gen.gameOf(yPick.gameId) : null;
     const yEx = yState?.exerciseId ?? draft.answerToYesterday?.exerciseId ?? (yPick && yGame ? exerciseIdOfPick(yPick, yGame.game) : null);
     const yTitle = yState?.draft?.post?.text ? titleOf(yState.draft.post.text) : yPick ? postTitle(weekdayOf(yDate), yPick) : undefined;
-    if (yEx) quote = { date: yDate, exerciseId: yEx, postId: yState?.postId ?? null, ...(yTitle ? { title: yTitle } : {}) };
+    const yLegacy = yPick ? legacyPostTitle(weekdayOf(yDate), yPick) : undefined;
+    if (yEx) quote = { date: yDate, exerciseId: yEx, postId: yState?.postId ?? null, ...(yTitle ? { title: yTitle } : {}), ...(yLegacy && yLegacy !== yTitle ? { legacyTitle: yLegacy } : {}) };
   }
 
   const plan: DailyPlan = {
@@ -422,21 +424,35 @@ export function taipeiDateOf(timestamp: string | undefined): string | null {
   return Number.isNaN(ms) ? null : taipeiToday(ms);
 }
 
-/** 貼文的第一行（標題，例如「【阿瓦隆每日一題｜週三・1-5 尾派】」）。 */
+/** 貼文的第一行（標題，例如「【阿瓦隆每日一題｜週三】第 1 局前四隊都沒過，最後一隊輪到你派，派誰？」）。 */
 export function titleOf(text: string): string {
   return text.split('\n')[0].trim();
 }
 
-/** 這篇是不是那一題：舊貼文有「題號 <題號>」那一行；新貼文沒有題號（站長 11/17），比第一行的標題（標題有星期和主題）。 */
-function isPostOf(text: string, exerciseId: string, title: string | undefined): boolean {
-  return text.includes(`題號 ${exerciseId}`) || (!!title && titleOf(text) === title);
+/** 可以認的標題：一個，或好幾個（現在的格式＋2026-11-25 以前的格式）。 */
+export type TitleMatch = string | readonly (string | undefined)[] | undefined;
+
+/**
+ * 這一天這一題可以認的標題：實際的第一行，加上 2026-11-25 以前的格式（「【阿瓦隆每日一題｜週三・1-5 尾派】」；
+ * 站長照舊草稿手動發的那幾天）。兩種都只認那一天（台北）發的，不會認錯別天的貼文。
+ */
+export function dayTitles(text: string, date: string, draft?: Pick<ThreadsDraft, 'pick'> | null): string[] {
+  const out = [titleOf(text)];
+  if (draft?.pick) out.push(legacyPostTitle(weekdayOf(date), draft.pick));
+  return [...new Set(out.filter(Boolean))];
+}
+
+/** 這篇是不是那一題：舊貼文有「題號 <題號>」那一行；新貼文沒有題號（站長 11/17），比第一行的標題。 */
+function isPostOf(text: string, exerciseId: string, title: TitleMatch): boolean {
+  const titles = (typeof title === 'string' ? [title] : title ?? []).filter((t): t is string => !!t);
+  return text.includes(`題號 ${exerciseId}`) || titles.includes(titleOf(text));
 }
 
 /**
  * 自己最近的貼文裡找那一題的那一篇（題號或標題，見 isPostOf）。給 date 時只認那一天（台北）發的：
  * 站長可能選了之前某天發過的同一題，舊的那篇不能當成今天的（也不能當成昨天的引用）。
  */
-export function findByExercise(posts: readonly RecentPost[], exerciseId: string, date?: string, title?: string): RecentPost | null {
+export function findByExercise(posts: readonly RecentPost[], exerciseId: string, date?: string, title?: TitleMatch): RecentPost | null {
   return posts.find((p) => isPostOf(p.text ?? '', exerciseId, title) && (date === undefined || taipeiDateOf(p.timestamp) === date)) ?? null;
 }
 
@@ -514,7 +530,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
   if (existing?.postId) return { status: 'already-published', postId: existing.postId, permalink: existing.permalink, notes: ['狀態檔已經有這一天的貼文 id'] };
 
   const recent = await deps.api.recentPosts();
-  const dup = findByExercise(recent, plan.exerciseId, plan.date, titleOf(plan.text));
+  const dup = findByExercise(recent, plan.exerciseId, plan.date, dayTitles(plan.text, plan.date, plan.draft));
   if (dup) {
     // 上次發了卻沒記下來（例如狀態檔沒推上去就中斷）：補記 A，留言也先查再補。
     // 同一天 IG 可能先發了：保留狀態檔裡已有的欄位。
@@ -527,7 +543,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
 
   let quotePostId: string | null = plan.quote?.postId ?? null;
   if (plan.quote && !quotePostId) {
-    const y = findByExercise(recent, plan.quote.exerciseId, plan.quote.date, plan.quote.title);
+    const y = findByExercise(recent, plan.quote.exerciseId, plan.quote.date, [plan.quote.title, plan.quote.legacyTitle]);
     if (y) {
       quotePostId = y.id;
       const yState = readState(deps.stateDir, plan.quote.date);
@@ -551,7 +567,7 @@ export async function postDaily(plan: DailyPlan, deps: PostDeps): Promise<PostRe
     imageUrls,
     ...(quotePostId ? { quotePostId } : {}),
     // 回應不明時：自己最近的貼文裡有今天那一篇就是已經發了
-    find: async () => findByExercise(await deps.api.recentPosts(), plan.exerciseId, plan.date, titleOf(plan.text))?.id ?? null,
+    find: async () => findByExercise(await deps.api.recentPosts(), plan.exerciseId, plan.date, dayTitles(plan.text, plan.date, plan.draft))?.id ?? null,
   });
   // 先記下 A（並推上去）：留言失敗或中斷時重跑不會再發一次 A。
   // 同一天 IG 可能先發了（只開 IG 的時候）：保留狀態檔裡已有的欄位。
@@ -593,7 +609,7 @@ export function igCaption(plan: Pick<DailyPlan, 'text' | 'comment'>): string {
 }
 
 /** IG 最近的貼文裡找那一題的那一篇（題號或標題）；給 date 時只認那一天（台北）發的（同一題之前發過的舊貼文不算）。 */
-export function findMediaByExercise(media: readonly RecentMedia[], exerciseId: string, date?: string, title?: string): RecentMedia | null {
+export function findMediaByExercise(media: readonly RecentMedia[], exerciseId: string, date?: string, title?: TitleMatch): RecentMedia | null {
   return media.find((m) => isPostOf(m.caption ?? '', exerciseId, title) && (date === undefined || taipeiDateOf(m.timestamp) === date)) ?? null;
 }
 
@@ -625,7 +641,7 @@ export async function postInstagram(
   const missing = imageProblem(plan, deps.imageUrls);
   if (missing) return { status: 'skipped', notes: [`IG 這天不同步：${missing}`] };
 
-  const dup = findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date, titleOf(plan.text));
+  const dup = findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date, dayTitles(plan.text, plan.date, plan.draft));
   if (dup) {
     writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId: dup.id, permalink: dup.permalink, publishedAt: dup.timestamp } });
     return { status: 'found-existing', mediaId: dup.id, permalink: dup.permalink, notes: ['IG 最近的貼文裡已經有今天那一篇，補記、不再發'] };
@@ -635,7 +651,7 @@ export async function postInstagram(
     imageUrls: deps.imageUrls,
     caption: igCaption(plan),
     // 回應不明時：IG 最近的貼文裡有今天那一篇就是已經發了
-    find: async () => findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date, titleOf(plan.text))?.id ?? null,
+    find: async () => findMediaByExercise(await deps.api.recentMedia(), plan.exerciseId, plan.date, dayTitles(plan.text, plan.date, plan.draft))?.id ?? null,
   });
   // 發出去就記下並馬上推上去（跟 Threads 的 checkpoint 一樣）：中斷也不會再發一次。
   writeState(deps.stateDir, { ...stateOrNew(deps.stateDir, plan), ig: { mediaId, publishedAt: now().toISOString() } });

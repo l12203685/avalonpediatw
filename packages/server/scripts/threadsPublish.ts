@@ -18,10 +18,11 @@ import path from 'path';
 import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { readRecordPosts } from '../src/bots/simulation/recordsIndex';
 import { ThreadsGenerator } from '../src/bots/threads/generate';
+import * as threadsCard from '../src/bots/threads/card';
 import * as threadsImage from '../src/bots/threads/image';
 import { THREADS_START_DATE, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 import { readTemplateFile, type ThreadsTemplate } from '../src/bots/threads/template';
-import { igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, postedFromState, findByExercise, titleOf, type DailyPlan } from '../src/bots/threads/publish/daily';
+import { dayTitles, igCaption, loadPlayerNames, planSummary, postDaily, postInstagram, prepareDaily, readPicks, readState, recordManual, savedFromState, postedFromState, findByExercise, type DailyPlan } from '../src/bots/threads/publish/daily';
 import { extraRenderers } from '../src/bots/threads/publish/extraImages';
 import { gitCheckpoint } from '../src/bots/threads/publish/stateGit';
 import { ThreadsApi, tokenProblem } from '../src/bots/threads/publish/threadsApi';
@@ -143,17 +144,17 @@ async function main(): Promise<number> {
         : (d): Buffer | null => {
             const pick = gen.pickFor(d);
             const pv = pick ? gen.viewOf(pick) : null;
-            return pv ? threadsImage.renderPuzzlePng(pv, weekdayOf(d)) : null;
+            return pv ? threadsCard.renderPuzzlePng(pv, weekdayOf(d)) : null;
           },
       renderExtraImages: flag('--no-image') ? undefined : extraRenderers(gen),
-      // 牌譜太長時題目卡只畫前半、寫「往右滑」：續圖（renderExtraImages 的 grid）沒產生就正式發佈這天不發。
-      // 牌譜太長時分成幾張續圖（要幾張就幾張）：一張不少地產生了才發；畫圖失敗、少了幾張，正式發佈這天不發。
+      // 題目卡寫「整份牌譜在下一張（往右滑）」：牌譜的圖（renderExtraImages 的 grid：牌譜卡＋放不下時的續圖）要一張不少地產生了才發；
+      // 畫圖失敗、少了幾張，正式發佈這天不發。
       imageIncomplete: (d, images): string | null => {
         const pick = gen.pickFor(d);
         const pv = pick ? gen.viewOf(pick) : null;
-        const need = pv ? threadsImage.gridPages(pv).length : 0;
+        const need = pv ? threadsImage.recordImageCount(pv) : 0;
         const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
-        return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
+        return have < need ? `牌譜的圖要 ${need} 張，只產生了 ${have} 張` : null;
       },
     });
     if (!plan) {
@@ -197,7 +198,7 @@ async function main(): Promise<number> {
     if (!postId && process.env.THREADS_ACCESS_TOKEN) {
       const draft = readState(stateDir, date)?.draft ?? gen.draftFor(date);
       if (draft) {
-        const found = findByExercise(await (await apiWithUser()).recentPosts(), draft.exerciseId, date, titleOf(draft.post.text));
+        const found = findByExercise(await (await apiWithUser()).recentPosts(), draft.exerciseId, date, dayTitles(draft.post.text, date, draft));
         if (found) {
           postId = found.id;
           permalink = found.permalink;

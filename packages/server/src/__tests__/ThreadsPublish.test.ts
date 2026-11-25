@@ -31,6 +31,7 @@ import {
   recordManual,
   taipeiDateOf,
   titleOf,
+  dayTitles,
   findByExercise,
   savedFromState,
   postedFromState,
@@ -39,7 +40,9 @@ import {
   type DailyPlan,
 } from '../bots/threads/publish/daily';
 import { extraRenderers } from '../bots/threads/publish/extraImages';
-import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildPuzzleSvg, gridOverflowStart, gridPages, renderPuzzlePng, sheetRows } from '../bots/threads/image';
+import { renderPuzzlePng } from '../bots/threads/card';
+import { legacyPostTitle } from '../bots/threads/draft';
+import { GRID_PAGE_ROWS, GRID_TARGET_H, buildGridSvgs, buildRecordSvg, gridOverflowStart, gridPages, recordImageCount, sheetRows } from '../bots/threads/image';
 import { SEE_IMAGE_LINE, THREADS_TOPIC_TAG } from '../bots/threads/draft';
 import { gitCheckpoint } from '../bots/threads/publish/stateGit';
 import { REQUIRED_SCOPES, ThreadsApi, redact, tokenProblem, type FetchLike } from '../bots/threads/publish/threadsApi';
@@ -325,8 +328,20 @@ describe('prepare + post', () => {
     const { plan, stateDir } = prepared();
     expect(plan.text).not.toContain('題號');
     const title = titleOf(plan.text);
-    expect(title).toBe('【阿瓦隆每日一題｜週三・1-5 尾派】');
-    expect(plan.quote?.title).toMatch(/^【阿瓦隆每日一題｜週二・/);
+    // 2026-11-25：第一行＝系列名＋星期＋一句話的問題
+    expect(title).toBe('【阿瓦隆每日一題｜週三】第 1 局前四隊都沒過，最後一隊輪到你派，派誰？');
+    expect(plan.quote?.title).toMatch(/^【阿瓦隆每日一題｜週二】你是派西維爾/);
+    // 昨天那篇是站長照 11/25 以前的草稿手動發的（舊標題）：照樣認得出來，只認那一天
+    expect(plan.quote?.legacyTitle).toBe('【阿瓦隆每日一題｜週二・派西維爾思考】');
+    const old = { id: 'old17', text: `${plan.quote?.legacyTitle}\n…\n\n${THREADS_TOPIC_TAG}`, timestamp: ON_17 };
+    expect(findByExercise([old], '36AKW-2-5', '2026-11-17', [plan.quote?.title, plan.quote?.legacyTitle])?.id).toBe('old17');
+    expect(findByExercise([old], '36AKW-2-5', '2026-11-16', [plan.quote?.title, plan.quote?.legacyTitle])).toBeNull();
+    const viaOld = await postDaily(plan, { api: fakeApi({ recent: [old] }).api, stateDir: tmp(), imageUrl: 'https://raw.githubusercontent.com/o/r/sha/images/2026-11-18.png' });
+    expect(viaOld.quotePostId).toBe('old17');
+    // 今天那篇是照舊草稿手動發的：一樣補記、不再發
+    expect(dayTitles(plan.text, plan.date, plan.draft)).toEqual([title, legacyPostTitle(3, plan.draft.pick)]);
+    const manual = fakeApi({ recent: [{ id: 'm18', text: `${legacyPostTitle(3, plan.draft.pick)}\n…`, timestamp: ON_18 }] });
+    expect((await postDaily(plan, { api: manual.api, stateDir: tmp() })).status).toBe('found-existing');
     // 昨天那篇（只有標題、沒有題號）：拿來引用；同一個標題但不是那一天的不算
     const y = { id: 'y17', text: `${plan.quote?.title}\n…\n\n${THREADS_TOPIC_TAG}`, timestamp: ON_17 };
     expect(findByExercise([y], '36AKW-2-5', '2026-11-17', plan.quote?.title)?.id).toBe('y17');
@@ -674,7 +689,7 @@ describe('threads carousel', () => {
     expect(readState(stateDir, '2026-11-18')?.postId).toBe(res.postId);
   });
 
-  it('the Threads carousel is question card (→ continuation only when needed) → answer card; no recap images are required', async () => {
+  it('the Threads carousel is question card → record card (→ continuation only when needed) → answer card; no recap images are required', async () => {
     // 找一天：前面有出完的局，而且那天公布昨天的完整答案（有答案卡）
     const stateDir = tmp();
     const g = gen(stateDir);
@@ -689,11 +704,12 @@ describe('threads carousel', () => {
     expect(date).not.toBeNull();
     const d = date as string;
     const pv = g.viewOf(g.pickFor(d)!)!;
-    // 跟腳本同一個檢查：只看續圖
-    const need = gridPages(pv).length;
+    // 跟腳本同一個檢查：牌譜的圖（牌譜卡＋放不下時的續圖）一張不少
+    const need = recordImageCount(pv);
+    expect(need).toBe(1 + gridPages(pv).length);
     const incomplete = (_d: string, images: readonly string[]): string | null => {
       const have = images.filter((n) => /-grid-\d+\.png$/.test(n)).length;
-      return have < need ? `牌譜要 ${need} 張續圖，只產生了 ${have} 張` : null;
+      return have < need ? `牌譜的圖要 ${need} 張，只產生了 ${have} 張` : null;
     };
     const plan = prepareDaily(d, {
       gen: g,
@@ -714,7 +730,8 @@ describe('threads carousel', () => {
     await postDaily(plan, { api, stateDir, imageUrls: urls });
     const creates = calls.filter((c) => c.method === 'POST' && c.path.endsWith('/42/threads'));
     const n = urls.length;
-    expect(creates.slice(0, n).map((c) => c.params.get('image_url'))).toEqual(urls); // 題目卡 →（續圖）→ 答案卡
+    expect(creates.slice(0, n).map((c) => c.params.get('image_url'))).toEqual(urls); // 題目卡 → 牌譜卡 →（續圖）→ 答案卡
+    expect(n).toBeGreaterThanOrEqual(3);
     expect(creates[n].params.get('media_type')).toBe('CAROUSEL');
     expect(creates[n].params.get('children')?.split(',')).toHaveLength(n);
   }, 60_000); // 畫圖＋排程找日子：CI 整套平行跑時會超過預設 5 秒
@@ -738,7 +755,7 @@ describe('threads carousel', () => {
     expect(gridOverflowStart(long)).toBeLessThan(rows.length);
     for (const pg of pages) expect(pg.end - pg.start).toBeLessThanOrEqual(GRID_PAGE_ROWS);
     const total = pages.length + 1;
-    const card = buildPuzzleSvg(long, weekdayOf(d));
+    const card = buildRecordSvg(long, weekdayOf(d));
     expect(card).toContain(`前面幾局的牌譜在後面的圖（往右滑）｜1/${total}`);
     const svgs = buildGridSvgs(long, weekdayOf(d));
     expect(svgs).toHaveLength(pages.length);

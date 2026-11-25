@@ -7,8 +7,8 @@
  *   不另外在昨天底下串答案。不用私訊對答案、不當天公布。
  * 週四、週六延續同一局時，A 裡的昨天答案只講真人派了什麼、之後公開的事（任務結果）和純邏輯的理由，
  * 不講幾好幾壞和角色（同一局還在打）；完整答案在隔天（週五、週日）的 A 一起公布（Edward 11/17「照現在這樣」）。
- * A 的 500 字同時包含題目和答案：先縮題目的牌譜（前面幾局只留任務與湖 → 「完整局面看圖」），
- * 再縮答案（拿掉理由）；牌譜連結一定留。
+ * A 的 500 字同時包含題目和答案：先縮答案（拿掉理由、三個選項那一行），再把題目的局面縮成「完整局面看圖」；
+ * 牌譜連結一定留。（2026-11-25 以前貼文放整份牌譜、先縮題目；現在整份牌譜在圖的第 2 張，貼文只放精簡的局面。）
  *
  * 貼文的格式（2026-11-18）：站長在主控台改一次「貼文格式（每天共用）」，每天只換題目的內容；
  * 這裡算每個佔位符的內容（postParts），template.ts 套範本（預設的內建格式跟之前一字不差）。
@@ -22,11 +22,12 @@ import { STATS_SITE_URL } from '../stats/statsReplies';
 import { ROLE_ZH } from '../simulation/commands';
 import { logicModel } from '../simulation/logic';
 import { recordUrl } from '../simulation/recordsIndex';
-import { eventLines, questLine, resultText, roleCode, seatLabel, pct } from '../simulation/replies';
+import { eventLines, resultText, roleCode, seatLabel, pct } from '../simulation/replies';
 import { TEAM_SIZES, eventIndexOfProposal, isRed, publicEvents, viewAt, type PublicEvent, type SimGame, type SimView } from '../simulation/scenario';
 import { maskOf, seatList, seatsOfMask, teamDigits } from '../simulation/seats';
 import { exerciseIdOfPick, labelFor, weekdayOf, type ThreadsKind, type ThreadsPick } from './plan';
-import { DEFAULT_POST_TEMPLATE, normalizeTemplate, renderTemplate, typeOf, validateTemplate, type PostParts } from './template';
+import { choiceLines, choiceReveal, choicesFor, realLetter } from './choices';
+import { DEFAULT_POST_TEMPLATE, LEGACY_POST_TEMPLATE, normalizeTemplate, renderTemplate, typeOf, validateTemplate, type PostParts } from './template';
 
 /** 草稿 JSON 的 parts：每個佔位符這天的內容，加上這天的題型（主控台照題型挑格式；type 不是佔位符）。 */
 export type DraftParts = PostParts & { type: { kind: ThreadsKind; name: string } };
@@ -36,8 +37,32 @@ export const THREADS_MAX_CHARS = 500;
 /** 每篇新貼文最後一行的主題標籤（Edward 2026-11-17「加 #阿瓦隆」；同日站長改 11/18 的草稿時換成這四個）。 */
 export const THREADS_TOPIC_TAG = '#阿瓦隆 #梅林 #派西維爾 #亞瑟的忠臣';
 
-/** 貼文第一行（標題）：自動發佈也用它在最近的貼文裡認出這一天的那一篇（貼文裡沒有題號）。 */
+const WEEKDAY_ZH = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+/**
+ * 一句話的問題（站長 11/25：「希望能更直觀讓看到的人一目瞭然」）：不用認得「1-5 尾派」這種寫法也看得懂在問什麼。
+ * 只看題型和第幾局，所以沒有那一局的資料也算得出來（自動發佈靠它認昨天那一篇）。
+ */
+export function hookQuestion(pick: Pick<ThreadsPick, 'kind' | 'round'>): string {
+  switch (pick.kind) {
+    case 'assassin': return '好人拿下三局，你是刺客：誰是梅林？';
+    case 'percival': return '你是派西維爾，兩根拇指分不出誰是梅林，這一隊派誰？';
+    case 'round4': return '第 4 局要 2 張失敗才算失敗，輪到你派 5 人，派誰？';
+    case 'final': return '2 比 2 的最後一局，輪到你派 5 人，派誰？';
+    case 'tail': return `第 ${pick.round ?? 1} 局前四隊都沒過，最後一隊輪到你派，派誰？`;
+  }
+}
+
+/**
+ * 貼文第一行（標題）＝系列名＋星期＋一句話的問題，例「【阿瓦隆每日一題｜週三】第 1 局前四隊都沒過，最後一隊輪到你派，派誰？」。
+ * 滑過去的人第一行就看到在問什麼。自動發佈也用它在最近的貼文裡認出這一天的那一篇（貼文裡沒有題號）。
+ */
 export function postTitle(weekday: number, pick: Pick<ThreadsPick, 'kind' | 'round' | 'continues'>): string {
+  return `【阿瓦隆每日一題｜${WEEKDAY_ZH[((weekday % 7) + 7) % 7]}】${hookQuestion(pick)}`;
+}
+
+/** 2026-11-25 以前的標題（「【阿瓦隆每日一題｜週三・1-5 尾派】」）：認舊貼文用（站長之前手動發的那幾天）。 */
+export function legacyPostTitle(weekday: number, pick: Pick<ThreadsPick, 'kind' | 'round' | 'continues'>): string {
   return `【阿瓦隆每日一題｜${labelFor(weekday, pick)}】`;
 }
 
@@ -152,17 +177,38 @@ function decisionWords(pick: ThreadsPick): string {
   return pick.proposal === null ? '三藍，誰是梅林？' : '你會派誰？';
 }
 
-/** 事件行太長時的縮短版：前面幾局只留任務結果和湖，當下這一局的派票全留。 */
+/** 出題那一刻的比數：好人（任務成功）幾局、壞人（任務失敗）幾局。 */
+export function scoreOf(pv: Pick<PickView, 'shown'>): { good: number; evil: number } {
+  const quests = pv.shown.filter((e) => e.kind === 'quest');
+  const evil = quests.filter((e) => e.kind === 'quest' && e.failed).length;
+  return { good: quests.length - evil, evil };
+}
+
+/**
+ * 貼文裡的局面（2026-11-25 起貼文只放這個精簡版，整份牌譜在圖的第 2 張）：比數、前面幾局只留任務結果和湖、
+ * 當下這一局的派票全留。
+ */
 function compactLines(pv: PickView): string[] {
   const round = pv.pick.proposal === null ? 6 : pv.game.proposals[pv.pick.proposal].round;
-  const lines: string[] = [];
+  const score = scoreOf(pv);
+  const lines: string[] = score.good + score.evil > 0 ? [`比數 好人 ${score.good}：${score.evil} 壞人`] : [];
   for (const e of pv.shown) {
     if (e.kind === 'proposal') {
       if (e.round < round) continue;
       if (!lines.includes(roundHeader(e.round))) lines.push(roundHeader(e.round));
       lines.push(eventLines([e], pv.pick.seat, pv.game, { startRound: e.round })[0]);
-    } else if (e.kind === 'quest') lines.push(`${roundHeader(e.round)} ${questLine(e)}`);
-    else lines.push(eventLines([e], pv.pick.seat, pv.game, { startRound: e.round })[0]);
+    } else if (e.kind === 'quest') {
+      // 前面的局一局一行白話：哪一隊出任務、成功還是失敗、幾張失敗（不用認得 oox 的寫法）
+      lines.push(`${roundHeader(e.round)} ${teamDigits(e.teamSeats)} 任務${e.failed ? '失敗' : '成功'}${e.failCount > 0 ? `（${e.failCount} 張失敗）` : ''}`);
+    } else {
+      // 湖接在那一局的任務後面；自己拿湖的那一次照樣寫你看到的（只有你知道）
+      const said = e.claim === 'evil' ? '說壞人' : e.claim === 'good' ? '說好人' : '沒說結果';
+      const own = e.holderSeat === pv.pick.seat ? pv.view.ownLakes.find((l) => l.targetSeat === e.targetSeat) : undefined;
+      const lake = `湖：${seatLabel(e.holderSeat)}驗 ${seatLabel(e.targetSeat)}，${said}${own ? `（你看到的：${own.evil ? '壞人' : '好人'}）` : ''}`;
+      const last = lines.length - 1;
+      if (last >= 0 && lines[last].startsWith(`${roundHeader(e.round)} `)) lines[last] += `｜${lake}`;
+      else lines.push(lake);
+    }
   }
   return lines;
 }
@@ -185,9 +231,15 @@ export function questionParts(pv: PickView, opts: { continuesFrom?: { exerciseId
   const noPrior = !pv.shown.some((e) => e.kind === 'proposal');
   const bodies: string[][] = noPrior
     ? [[`${roundHeader(1)} 第一個隊長，前面沒有派票`]]
-    : [bracketRounds(eventLines(pv.shown, pv.pick.seat, pv.game)), compactLines(pv), [SEE_IMAGE_LINE]];
-  // 站長 11/17：「文字部分則是主題 & 牌譜」——題目只留身分、牌譜、輪到你；作答方式不另寫一行（完整局面在圖裡）。
+    : [compactLines(pv), [SEE_IMAGE_LINE]];
+  // 站長 11/17：「文字部分則是主題 & 牌譜」；11/25「希望能更直觀讓看到的人一目瞭然」→ 貼文只留精簡的局面，
+  // 整份牌譜（每一次提議和票）在圖的第 2 張（牌譜卡）。
   return { head, bodies, tail: [decisionWords(pv.pick)] };
+}
+
+/** 整份牌譜的文字版（[第 N 局] 起每一次提議、任務、湖）：貼文不再放，留給要對照的人和測試。 */
+export function fullRecordLines(pv: PickView): string[] {
+  return bracketRounds(eventLines(pv.shown, pv.pick.seat, pv.game));
 }
 
 /**
@@ -206,6 +258,7 @@ export function postParts(
     題號: pv.exerciseId,
     接續: opts.continuesFrom ? continuesLine(opts.continuesFrom, pv.pick.seat) : '',
     你是: viewerLine(pv.game, pv.pick, pv.view.sight),
+    選項: choiceLines(choicesFor(pv)).join('\n'),
     派票紀錄: body.join('\n'),
     提問: decisionWords(pv.pick),
     昨天答案: answer.join('\n'),
@@ -225,7 +278,8 @@ export interface RenderedPost {
 
 /**
  * 新貼文 A（≤ 500 字）：用範本（預設＝內建格式 DEFAULT_POST_TEMPLATE）套今天的內容。
- * 答案先用完整版、題目從完整牌譜縮到看圖；都放不下再換短的答案。站長的範本怎麼縮都放不下，這天改用內建格式。
+ * 放不下時先換短的答案（拿掉理由、再拿掉三個選項那一行），還是放不下才把今天的局面縮成「完整局面看圖」。
+ * 站長的範本怎麼縮都放不下，這天改用內建格式。
  */
 export function renderPost(
   pv: PickView,
@@ -235,8 +289,9 @@ export function renderPost(
   const answers = opts.answers && opts.answers.length > 0 ? opts.answers : [[]];
   const fit = (template: string): RenderedPost & { fits: boolean } => {
     let last: RenderedPost | null = null;
-    for (let a = 0; a < answers.length; a++) {
-      for (const body of q.bodies) {
+    // 2026-11-25 起先縮昨天的答案（理由、三個選項那一行；答案卡上都有），今天的局面留到最後才縮成「看圖」。
+    for (const body of q.bodies) {
+      for (let a = 0; a < answers.length; a++) {
         const parts = postParts(pv, opts, body, answers[a]);
         const text = renderTemplate(template, parts);
         last = { text, parts, answerIndex: answers[a].length ? a : -1 };
@@ -245,7 +300,9 @@ export function renderPost(
     }
     return { ...(last as RenderedPost), fits: false };
   };
-  const wanted = opts.template !== undefined && normalizeTemplate(opts.template) !== DEFAULT_POST_TEMPLATE ? opts.template : null;
+  // 站長沒改過的格式（跟現在或 11/25 以前的內建格式一字不差）＝用現在的內建格式。
+  const same = opts.template === undefined ? DEFAULT_POST_TEMPLATE : normalizeTemplate(opts.template);
+  const wanted = opts.template !== undefined && same !== DEFAULT_POST_TEMPLATE && same !== LEGACY_POST_TEMPLATE ? opts.template : null;
   // 範本檔讀進來時已經檢查過；這裡再擋一次（直接傳字串進來的呼叫端）。
   const invalid = wanted !== null ? validateTemplate('post', wanted) : [];
   const custom = wanted !== null && invalid.length === 0 ? fit(wanted) : null;
@@ -326,10 +383,26 @@ function realDecisionLine(pv: PickView, withTruth: boolean): string {
   const p = pv.game.proposals[pv.pick.proposal as number];
   const role: Role = pv.game.seatRoles[p.leaderSeat - 1];
   const who = withTruth ? `${seatLabel(p.leaderSeat)}・${ROLE_ZH[role]}` : seatLabel(p.leaderSeat);
-  let line = `真人（${who}）派 ${teamDigits(p.teamSeats)}`;
+  // 題目給的三個選項裡真人選的那一個（字母）
+  const letter = realLetter(choicesFor(pv));
+  let line = `真人（${who}）派 ${letter ? `${letter} ` : ''}${teamDigits(p.teamSeats)}`;
   if (withTruth) line += `：${teamGoodBad(pv.game, p.teamSeats)}`;
   line += p.wentOnMission ? `，${missionWords(pv.game, p.round)}` : '，沒有出發';
   return line;
+}
+
+/**
+ * 答案卡上的一句話理由（只用那一家當下看得到的資訊；百分比＝紅方可能組合中全好的比例，不是勝率），分號前後各一行：
+ * 「只看當時的資訊：這隊在 9% 的可能裡全是好人；最高的隊（1345 等 20 隊）是 14%」。刺殺題沒有。
+ */
+export function reasonSentence(pv: PickView): string | null {
+  const r = logicReason(pv);
+  if (!r) return null;
+  const share = (n: number): string => pct(n / r.worlds);
+  const head = `只看當時的資訊：這隊在 ${share(r.teamClean)} 的可能裡全是好人`;
+  if (r.teamClean >= r.best.clean) return `${head}；已經是最高的`;
+  const best = teamDigits(r.best.teams[0]) + (r.best.teams.length > 1 ? ` 等 ${r.best.teams.length} 隊` : '');
+  return `${head}；最高的隊（${best}）是 ${share(r.best.clean)}`;
 }
 
 /** 一行的純邏輯理由（只用那一家當下看得到的資訊）。 */
@@ -366,11 +439,18 @@ export interface AnswerInput {
 export function answerVariants(input: AnswerInput): string[][] {
   const y = input.yesterday;
   const head = `[昨天 ${y.exerciseId} 的答案]`;
+  // 題目給的三個選項，各自的真相（完整公布的那天才講）
+  const options = `三個選項：${choiceReveal(y).map((c) => c.text).join('｜')}`;
   if (y.pick.kind === 'assassin') {
     const merlin = y.game.seatRoles.indexOf('merlin') + 1;
     const target = y.game.assassinTargetSeat;
-    const line = `梅林是 ${seatLabel(merlin)}${target ? `；真人刺 ${seatLabel(target)}（${target === merlin ? '刺中' : '沒刺中'}）` : ''}`;
-    return [[head, line, ...revealLines(y.game, input.recordId)]];
+    const letterOf = (seat: number): string => {
+      const c = choicesFor(y).items.find((x) => x.seats[0] === seat);
+      return c ? `${c.letter} ` : '';
+    };
+    const line = `梅林是 ${letterOf(merlin)}${seatLabel(merlin)}${target ? `；真人刺 ${letterOf(target)}${seatLabel(target)}（${target === merlin ? '刺中' : '沒刺中'}）` : ''}`;
+    const reveal = revealLines(y.game, input.recordId);
+    return [[head, line, options, ...reveal], [head, line, ...reveal]];
   }
   const why = reasonLine(y);
   if (input.todayContinues) {
@@ -381,7 +461,8 @@ export function answerVariants(input: AnswerInput): string[][] {
   const earlier = input.earlier ? [`前一題 ${input.earlier.exerciseId}：${realDecisionLine(input.earlier, true)}`] : [];
   const base = [head, ...earlier, realDecisionLine(y, true)];
   const reveal = revealLines(y.game, input.recordId);
-  return why ? [[...base, why, ...reveal], [...base, ...reveal]] : [[...base, ...reveal]];
+  // 放不下時先拿掉理由，再拿掉三個選項那一行
+  return [...(why ? [[...base, options, why, ...reveal]] : []), [...base, options, ...reveal], [...base, ...reveal]];
 }
 
 /** 最完整的那一版（測試、預覽用）。 */
@@ -412,8 +493,9 @@ export interface ThreadsDraft {
   recordId?: string;
   /** 新貼文 A（今天的題目＋昨天的答案）。 */
   /**
-   * 輪播的圖，依序：image = 題目卡（只能發一張時發它）；gridImage = 牌譜圖（網站牌譜頁的格子，只到出題那一刻）；
-   * answerImage = 公布完整答案的日子另附的答案卡（昨天那一局的角色，紅方在上）。
+   * 輪播的圖，依序：image = 題目卡（大字的問題、圓桌、三個選項；只能發一張時發它）；gridImages = 牌譜的圖
+   * （第 1 張是牌譜卡：網站牌譜頁的格子，只到出題那一刻；放不下時後面接續圖）；
+   * answerImage = 公布完整答案的日子另附的答案卡（真人選了哪一個、三個選項的真相、昨天那一局的角色）。
    */
   post: { text: string; chars: number; image?: string; gridImages?: string[]; /** 舊的草稿（只有一張續圖）。 */ gridImage?: string; answerImage?: string };
   /** A 要引用昨天的貼文 B 發（有昨天的題目就是 true）。 */
@@ -507,7 +589,7 @@ export function draftMarkdown(d: ThreadsDraft): string {
     const grids = d.post.gridImages ?? (d.post.gridImage ? [d.post.gridImage] : []);
     const imgs = [
       `${d.post.image}（題目）`,
-      ...grids.map((g, i) => `${g}（牌譜 ${i + 2}/${grids.length + 1}）`),
+      ...grids.map((g, i) => `${g}（牌譜 ${i + 1}/${grids.length}）`),
       ...(d.post.answerImage ? [`${d.post.answerImage}（昨天的答案）`] : []),
     ];
     out.push(`圖（依序發成輪播）：${imgs.join('、')}`, '');

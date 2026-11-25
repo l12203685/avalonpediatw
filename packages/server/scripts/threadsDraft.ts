@@ -11,7 +11,8 @@
  *         --template <檔>（貼文格式，預設 packages/server/threads_template.json；沒有就用內建格式）、
  *         --no-ai（不跑百科AI 的答案）
  *
- * 每天寫三個檔：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位、parts＝貼文每個佔位符這天的內容）、<日期>.png（題目圖）。
+ * 每天寫：<日期>.md（複製貼上用）、<日期>.json（題號、ChatGPT 的留言欄位、parts＝貼文每個佔位符這天的內容）、<日期>.png（題目卡）、
+ * <日期>-grid-1.png（牌譜卡；放不下時還有 grid-2…）、公布完整答案的日子 <日期>-answer.png（答案卡）。
  * <日期>.json 另有 aiAnswer：百科AI 在同一個決定點的答案（站長 11/18：先讓百科AI 跑答案給他看、修正它的思考和盲點；
  * src/bots/threads/aiAnswer.ts）。只給站長看：不進貼文、不進 .md，自動發佈（threadsPublish.ts）也不產生它。
  * 已經有 <日期>.json 的日子沿用裡面的題目和第一則留言（重跑不會換題）。
@@ -27,7 +28,8 @@ import { ThreadsGenerator } from '../src/bots/threads/generate';
 import { threadsAiAnswer } from '../src/bots/threads/aiAnswer';
 import { gitVersion, readPicksFile, savedDraftReader } from '../src/bots/threads/inputs';
 import { pickOverrideOf } from '../src/bots/threads/picksFile';
-import { renderAnswerPng, renderGridPngs, renderPuzzlePng } from '../src/bots/threads/image';
+import { renderAnswerPng, renderPuzzlePng } from '../src/bots/threads/card';
+import { renderGridPngs } from '../src/bots/threads/image';
 import { THREADS_START_DATE, addDays, taipeiToday, weekdayOf } from '../src/bots/threads/plan';
 import { readTemplateFile } from '../src/bots/threads/template';
 
@@ -90,7 +92,7 @@ for (let i = 0; i < days; i++) {
     console.warn(`${date}: no puzzle for this theme`);
     continue;
   }
-  // 題目卡之後：牌譜放不進題目卡時的續圖（後面的列，要幾張就幾張），檔名跟自動發佈一樣 <日期>-grid-<n>.png。
+  // 題目卡之後：牌譜的圖（第 1 張是牌譜卡，放不下時後面接續圖），檔名跟自動發佈一樣 <日期>-grid-<n>.png。
   if (pv && image) {
     try {
       const grids = renderGridPngs(pv, weekdayOf(date)).map((png, i) => {
@@ -109,9 +111,10 @@ for (let i = 0; i < days; i++) {
     const yPv = yPick ? gen.viewOf(yPick) : null;
     if (yPv) {
       const before = yPick?.continues ? gen.pickFor(addDays(date, -2)) : null;
-      const ids = before && before.gameId === yPv.pick.gameId ? [gen.viewOf(before)?.exerciseId, yPv.exerciseId].filter((x): x is string => !!x) : [yPv.exerciseId];
+      const earlier = before && before.gameId === yPv.pick.gameId ? gen.viewOf(before) : null;
+      const ids = earlier ? [earlier.exerciseId, yPv.exerciseId] : [yPv.exerciseId];
       try {
-        fs.writeFileSync(path.join(outDir, `${date}-answer.png`), renderAnswerPng(yPv, ids));
+        fs.writeFileSync(path.join(outDir, `${date}-answer.png`), renderAnswerPng(yPv, ids, earlier ? { earlier } : {}));
         draft.post.answerImage = `${date}-answer.png`;
       } catch (err) {
         console.warn(`${date}: answer image skipped (${(err as Error).message})`);
