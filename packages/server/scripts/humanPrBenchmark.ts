@@ -18,6 +18,7 @@
  *   --min-s S          只重播桌上強度 S ≥ S 的局（第 64 回合：強真人桌的候選；優勢表照舊用全部真人局擬合）
  *   --tier-profile     第 73 回合：每一局照那一桌的強度層用真人桌的策略層重播（`humanProfile.ts`：S < 38 弱、38–55 一般、≥ 55 強、S 不明 = 一般；
  *                      `--flag` 疊在策略層上面）；不給 = 每一局都用同一組開關（基準線＋`--flag`）
+ *   --quest-adv PATH   第 78 回合：每一張能確定的紅方任務牌，出失敗／出成功在同一份優勢表裡各值多少（JSON lines；只用真人資料，配 `--roles none` 就不用重播）
  *   --wl-tables PATH   第 75 回合：`assassinWorldLine75` 改用這份世界線的表（交叉擬合用；不給 = 正式的表）
  *
  * 做法（細節見 src/ai/benchmark/humanPr.ts）：資料集每一局（嚴格解析，`datasetReplay.ts`）每一個座位都換成機器人
@@ -90,6 +91,11 @@ interface Args {
   out?: string;
   /** 第 28 回合：把每個評分過的決策（局、座位、種類、角色、索引、人類／機器人優勢）寫成 JSON lines，給分項拆解用。 */
   dump?: string;
+  /**
+   * 第 78 回合：每一張「能確定」的紅方任務牌（局序號、座位、第幾局、真人的牌）在同一份優勢表（同一折）裡出失敗／出成功各值多少，寫成 JSON lines。
+   * 只用真人資料，不需要機器人重播（配 `--roles none`）；只改任務牌的候選可以直接從這份表換算量尺的差。
+   */
+  questAdv?: string;
   /** 第 28 回合：`--bot-cache` 不比對 key，直接讀（拆解舊版快取用；預設比對）。 */
   cacheAny?: boolean;
   /** 第 61 回合：只重播這些角色的座位（空 = 全部）。 */
@@ -140,6 +146,7 @@ function parseArgs(argv: string[]): Args {
       }
       case '--out': args.out = next(); break;
       case '--dump': args.dump = path.resolve(next()); break;
+      case '--quest-adv': args.questAdv = path.resolve(next()); break;
       case '--cache-any': args.cacheAny = true; break;
       case '--roles': args.roles = next().split(',').map((x) => x.trim()).filter(Boolean); break;
       case '--min-s': args.minS = Number.parseFloat(next()); break;
@@ -531,6 +538,24 @@ async function main(): Promise<void> {
   }
 
   if (args.dump) fs.writeFileSync(args.dump, scored.map((x) => JSON.stringify(x)).join('\n') + '\n');
+  if (args.questAdv) {
+    const lines: string[] = [];
+    games.forEach((d, gi) => {
+      const g = d.game;
+      const tab = tables.get('quest')![foldOf(g.id)];
+      for (const q of g.quests) {
+        for (const seat of q.teamSeats) {
+          const pinned = pinnedQuestCard(g, q.round, seat);
+          if (pinned === null) continue;
+          lines.push(JSON.stringify({
+            gi, seat, round: q.round, role: g.seatRoles[seat - 1], human: pinned === 'fail' ? 'F' : 'S',
+            F: advantage(tab, questKeys(g, q.round, seat, true)), S: advantage(tab, questKeys(g, q.round, seat, false)),
+          }));
+        }
+      }
+    });
+    fs.writeFileSync(args.questAdv, lines.join('\n') + '\n');
+  }
 
   // 一個座位一局的加總（總 PR）。
   const seatSum = new Map<string, Scored>();

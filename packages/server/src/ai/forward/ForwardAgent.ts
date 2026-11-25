@@ -77,6 +77,7 @@ import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
 import { redR2LeadCard61 } from '../RedRound61';
 import { oberonR1Card64, round64MerlinOn } from '../Round64';
+import { pairCard78, r4KeyFailCard78 } from '../Round78';
 import { redCrowdWhite65 } from '../Round65';
 import { r2InnerBlack66 } from '../Round66';
 import { redEarlyBlack67 } from '../Round67';
@@ -1020,6 +1021,10 @@ export class ForwardAgent implements AvalonAgent {
       // every one of them fails (the rank order's hidden card buys nothing once the fail ends the game).
       const mp = redMatchPointFailCard(this.baseline.tuning, obs);
       if (mp) return this.ruleDecision(obs, { type: 'quest_vote', vote: mp }, 'red match point: every known red fails');
+      // Round 78 `r4KeyFail78` (Round78.ts): the two-fail mission at red's match point with too few reds in sight — fail anyway
+      // (always, or when the red's own posterior says the team can probably fail it). Off: null, `redHideR4Solo` decides as before.
+      const key78 = r4KeyFailCard78(this.baseline.tuning, obs);
+      if (key78) return this.ruleDecision(obs, { type: 'quest_vote', vote: key78 }, 'red fails on a two-fail mission at red match point (round 78)');
       // Round 29 `redStackHide` (RedRound29.ts): two or more recognised reds on an R2–R3 mission all hide at the human rate.
       const stack = redStackHideCard(this.baseline.tuning, obs);
       if (stack) return this.ruleDecision(obs, { type: 'quest_vote', vote: stack }, 'recognised reds all hide (human rate)');
@@ -1046,6 +1051,13 @@ export class ForwardAgent implements AvalonAgent {
       // Round 19 `redHideReuse` (RedRound2.ts): the hidden assassin hides again when his successful team is re-proposed.
       const reuseHide = redHideReuseCard(this.baseline.tuning, obs);
       if (reuseHide) return this.ruleDecision(obs, { type: 'quest_vote', vote: reuseHide }, 'assassin hides again on a re-proposed team');
+    }
+    // Round 78 `redPairOne78` / `redPairAlways78` (Round78.ts): two recognised reds on a one-fail mission (R1–R3) — one agreed
+    // seat fails (or this red always does). Off, or another cell: null, the rank order below decides as before.
+    if (obs.gamePhase === 'quest_vote' && obs.myTeam === 'evil'
+      && !(this.baseline.tuning.humanQuestCardRules && humanQuestCardRule(obs) !== null)) {
+      const pair78 = pairCard78(this.baseline.tuning, obs);
+      if (pair78) return this.ruleDecision(obs, { type: 'quest_vote', vote: pair78 }, `two recognised reds on a one-fail mission (round 78) ${pair78}`);
     }
     // 位階法 (Edward 4/24; `redRankOrder`): the recognised reds split the fail cards — it lived only on the
     // baseline fallback path, so the production pipeline had every red fail (two reds on R2/R3: 2 fail cards).

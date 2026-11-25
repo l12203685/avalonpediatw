@@ -70,6 +70,7 @@ const CLASS_LABEL: Record<string, string> = {
   owner: '站長的糾正與標註',
   wiki: '百科原則（還沒做的列）',
   otherAi: '其他 AI 的提案',
+  r78: '紅方的任務牌（第 78 回合的量測）',
   ...Object.fromEntries(Object.entries(BANK_CLASSES).map(([k, v]) => [`bank:${k}`, v])),
 };
 const labelOf = (cls: string): string => CLASS_LABEL[cls] ?? cls;
