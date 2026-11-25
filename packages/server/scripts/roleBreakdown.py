@@ -529,14 +529,32 @@ def measure(role, cat, cell, feat, xs_sel, xs_all):
     r['verdict'], r['verdictZh'] = verdict(r)
     seats = ROLE_SEATS[role]['sel'] or 1
     r['per100'] = 100 * r['n'] * abs(r['gap']) / 100 / seats
-    r['impact'] = (r['n'] / seats) * (r['gap'] / 100) * r['wr']['d'] if r.get('wr') and r['wr'].get('d') is not None and sig({'lo': r['wr']['lo'], 'hi': r['wr']['hi']}) else None
+    r['fine'] = fine_cell(cat, ckey)
     return r
+
+
+def fine_cell(cat, key):
+    """這一格有沒有把比數（或事後的真相）固定住。沒固定的格子混了不同的局勢（落後的局本來就比較常做某些事），勝率那把尺不能用。"""
+    import re
+    if cat == 'vote':
+        return bool(re.match(r'^r[15]\.', key) or re.match(r'^r\d\.(on|off)\.(d|s|\d\d)$', key))
+    if cat in ('team', 'quest'):
+        return bool(re.match(r'^r[15]$', key) or re.match(r'^r\d\.\d\d$', key))
+    if cat == 'lake':
+        return key in ('red<2', 'red2')
+    if cat == 'claim':
+        return key != 'all'
+    return False
 
 
 def verdict(r):
     """W 真人強者比較好（可能是弱點）／B 百科AI 比較好／S 做法不同、看不出誰好／= 差不多。"""
     if not sig(r):
         return '=', '差不多'
+    fine = fine_cell(r['cat'], r['cell'])
+    if r['cat'] == 'lake' and r['feature'] == 'red' and r['role'] not in RED and r['cell'] == 'red2':
+        # 紅方已兩勝：湖是用來抓紅的，驗到紅方就是比較好。
+        return ('W', '真人強者比較常驗到紅方') if r['gap'] > 0 else ('B', '百科AI 比較常驗到紅方')
     feature_is_good = r['feature'] in ('clean',) and r['cat'] == 'team' and r['role'] not in RED
     if r['cat'] == 'kill':
         if r['feature'] != 'merlin':
@@ -546,7 +564,7 @@ def verdict(r):
         return ('W', '真人強者刺得比較準') if r['gap'] > 0 else ('B', '百科AI 刺得比較準')
     gd = r.get('good')
     wr = r.get('wr')
-    wr_sig = bool(wr) and wr.get('d') is not None and wr.get('lo') is not None and (wr['lo'] > 0 or wr['hi'] < 0)
+    wr_sig = fine and bool(wr) and wr.get('d') is not None and wr.get('lo') is not None and (wr['lo'] > 0 or wr['hi'] < 0)
     if r['role'] == 'merlin' and r['cat'] == 'vote' and wr_sig:
         # 梅林的票不只看投對：還要不被刺客認出來，所以先看勝率（含被刺）。
         same_dir = (wr['d'] > 0) == (r['gap'] > 0)
@@ -691,7 +709,7 @@ def judge_cell(r):
     wr = r.get('wr')
     if gd and gd.get('lo') is not None and r['cat'] == 'vote':
         bits.append(f"{gd['zh'].split('（')[0]} {pct(gd['strong'])} 對 {pct(gd['bot'])}{'' if sig(gd) else '（區間跨 0）'}")
-    if wr and wr.get('d') is not None and r['cat'] != 'kill':
+    if wr and wr.get('d') is not None and r['cat'] != 'kill' and fine_cell(r['cat'], r['cell']):
         bits.append(f"全部真人這樣做的勝率 {pct(wr['wr1'])}（{wr['n1']} 次）、不這樣做 {pct(wr['wr0'])}（{wr['n0']} 次）{'' if (wr['lo'] > 0 or wr['hi'] < 0) else '（區間跨 0）'}")
     return Tag(r['verdict'], r['verdictZh'] + ('：' + '；'.join(bits) if bits else ''))
 
@@ -814,6 +832,8 @@ def role_leads(role, min_per100=3.0):
                 continue
             if not sig(r) or r['n'] < MIN_N[cat]:
                 continue
+            if role == 'merlin' and cat == 'kill' and r['feature'] != 'merlin':
+                continue  # 梅林那一欄的刺殺是「真人刺客 vs 機器人刺客」，挑對象的細節放在刺客那邊
             if r['per100'] < (min_per100 if cat in ('vote', 'team') else 1.0):
                 continue
             out.append(r)
@@ -991,6 +1011,49 @@ def fails_section():
           '第 4 局要 2 張失敗才算失敗；其他局 1 張就夠，多出的失敗只是多曝光一個紅方。紅方已兩勝時「每個相認的紅方都出失敗」是站長定的硬規則（redMatchPointFail）。勝率不到 10 次的不列。')
 
 
+# 梅林的票和被刺中：三藍的局裡，梅林第 3～5 局的異常票和最後有沒有被刺中（全部真人）。
+def merlin_vote_rows():
+    kinds = [
+        ('在隊上、隊上有認得的紅方 → 內黑', lambda d: d['on'] and d['known'] > 0),
+        ('在隊上、隊上沒有認得的紅方 → 內黑', lambda d: d['on'] and d['known'] == 0),
+        ('不在隊上、隊上有認得的紅方 → 外白', lambda d: not d['on'] and d['known'] > 0),
+        ('不在隊上、隊上沒有認得的紅方 → 外白', lambda d: not d['on'] and d['known'] == 0),
+    ]
+    by = defaultdict(list)
+    for d in SPOTS.get(('merlin', 'vote'), []):
+        if d['rd'] >= 3 and GAMES[d['g']]['outcome'] != '三紅':
+            by[(d['g'], d['seat'])].append(d)
+    out = []
+    for zh, f in kinds:
+        t = {'never': [0, 0], 'did': [0, 0]}
+        share_h = share_b = n = 0
+        for (g, _), ds in by.items():
+            xs = [d for d in ds if f(d)]
+            if not xs:
+                continue
+            abn = sum(1 for d in xs if d['hu'] != d['on'])
+            cell = t['never' if abn == 0 else 'did']
+            cell[0] += 1
+            cell[1] += GAMES[g]['outcome'] == '三藍死'
+            share_h += abn / len(xs)
+            share_b += sum(1 for d in xs if d['bh'] != d['on']) / len(xs)
+            n += 1
+        out.append({'kind': zh, 'games': n, 'humanShare': 100 * share_h / n if n else None, 'botShare': 100 * share_b / n if n else None,
+                    'neverN': t['never'][0], 'neverHit': 100 * t['never'][1] / t['never'][0] if t['never'][0] else None,
+                    'didN': t['did'][0], 'didHit': 100 * t['did'][1] / t['did'][0] if t['did'][0] else None})
+    return out
+
+
+MERLIN_VOTES = merlin_vote_rows()
+
+
+def merlin_vote_section():
+    h(2, '梅林的票和被刺中')
+    para('只看走到三藍的局、全部真人梅林。每一局看梅林在第 3～5 局遇到這種提議時投了幾次異常票；「這樣投過」= 至少一次。右邊是那些局最後梅林被刺中的比例。這是相關，不是因果（紅方兩勝的局本來就比較常內黑、也比較容易被刺中），只當線索。')
+    table(['梅林遇到的提議 → 異常票', '有這種提議的局', '真人平均這樣投的比例', '百科AI', '從沒這樣投：被刺中（局數）', '這樣投過：被刺中（局數）'],
+          [[r['kind'], r['games'], pct(r['humanShare']), pct(r['botShare']), f"{pct(r['neverHit'])}（{r['neverN']}）", f"{pct(r['didHit'])}（{r['didN']}）"] for r in MERLIN_VOTES])
+
+
 # ── 線索（匿名）──
 def all_leads():
     out = []
@@ -1054,12 +1117,13 @@ table(['角色'] + [SAME_ZH[c] for c in CATS], rows, '黑白球投票大部分�
 for role in ROLES:
     role_section(role)
 fails_section()
+merlin_vote_section()
 selection_section()
 h(2, '做法與限制')
 ul([
     '每個決策點獨立重播：機器人沒有參與之前的局面，之後也照真人的牌譜走。量的是「同一個局面會不會做一樣的事」，不是「換成機器人打這一局會不會贏」。',
     '站長 2026-11-25：玩家除了發言以外，沒有機器人看不到的資訊；所以和強者的差別就是決策的差別。發言（誰說了什麼）牌譜沒有，機器人也讀不到。',
-    '「誰比較好」有兩把尺：事後看（用牌譜的真相打分數）；或全部真人在同一格做 A、做 B 的勝率（相關，不是因果：會選 A 的人可能本來就比較強）。兩把尺都分不出來的列「做法不同，看不出誰好」。',
+    '「誰比較好」有兩把尺：事後看（用牌譜的真相打分數）；或全部真人在同一格做 A、做 B 的勝率（相關，不是因果：會選 A 的人可能本來就比較強）。勝率那把尺只用在比數（或事後的真相）已經固定的格子，不然落後的局本來就比較常做某些事，會看錯方向。兩把尺都分不出來的列「做法不同，看不出誰好」。',
     '區間 = 以局為單位重抽 1000 次的 95% 區間。表很多，單一格子的差別有些只是巧合；次數少的（＊）只能看方向。湖中一場最多三次，但每次都關鍵，次數少也照列。',
     '投票的牌譜只記異常票（內黑、外白），其餘都當正常票；只算票數對得上結果的提議。任務牌：兩個以上紅方只出一部分失敗時看不出是誰出的，照比例算。',
     '強者的選法見〈怎麼選各角色的強者〉；每個角色的人不一樣，同一個人可以在好幾個角色入選。',
@@ -1088,6 +1152,14 @@ def inline_html(t):
 def md_table_html(lines):
     rows = [[c.strip() for c in ln.strip().strip('|').split('|')] for ln in lines]
     head, body = rows[0], rows[2:]
+    if head[0] == '#' and len(head) >= 5:
+        # 排名表（# ｜角色｜局面｜真人強者｜百科AI｜其他欄…）：手機上一列一張卡片比較好讀。
+        out = []
+        for r in body:
+            rest = ''.join(f'<p><b>{inline_html(hd)}</b>{inline_html(v)}</p>' for hd, v in zip(head[5:], r[5:]))
+            out.append(f'<div class="card"><div class="ct"><b>{inline_html(r[0])}</b>{inline_html(r[1])}｜{inline_html(r[2])}</div>'
+                       f'<div class="cv"><span class="hp">{inline_html(head[3])} {inline_html(r[3])}</span><span class="hb">{inline_html(head[4])} {inline_html(r[4])}</span></div>{rest}</div>')
+        return '\n'.join(out)
     return ('<div class="tw"><table><thead><tr>' + ''.join(f'<th>{inline_html(x)}</th>' for x in head) + '</tr></thead><tbody>'
             + ''.join('<tr>' + ''.join(f'<td>{inline_html(x)}</td>' for x in r) + '</tr>' for r in body) + '</tbody></table></div>')
 
@@ -1180,6 +1252,14 @@ tbody tr:nth-child(even) td{background:#12161c}
 .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
 .bar b{position:relative;font-weight:500;font-size:12px;line-height:17px;padding-left:6px;color:#fff;text-shadow:0 0 3px #000}
 .bar.p i{background:#2f6fa8}.bar.b i{background:#a87420}.bar.s i{background:#3c7f55}
+.card{border:1px solid #262d38;border-radius:8px;padding:10px 12px;margin:10px 0;background:#12161c}
+.ct{font-weight:600;font-size:15px;line-height:1.5}
+.ct b{display:inline-block;min-width:24px;height:24px;line-height:24px;text-align:center;border-radius:12px;background:#e0a43a;color:#111;margin-right:8px;font-size:13px}
+.cv{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.cv span{padding:3px 10px;border-radius:4px;font-size:13.5px}
+.hp{background:#1d3f5e}.hb{background:#5c4215}
+.card p{margin:4px 0;font-size:13.5px;color:#c9d1dc}
+.card p b{color:#8f9aab;font-weight:600;margin-right:8px}
 .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12.5px;line-height:1.5;white-space:normal}
 .tag.gw{background:#5a2226;color:#ffc9cc;border:1px solid #8a3338}.tag.gb{background:#1f4a30;color:#c4efd2;border:1px solid #2f7048}
 .tag.gs{background:#2a3038;color:#c9d1dc;border:1px solid #3a4350}.tag.ge{background:transparent;color:#8791a0}
@@ -1215,6 +1295,7 @@ public = {
     'same': {role: {cat: RESULT[role][cat]['same'] for cat in RESULT[role]} for role in ROLES},
     'cells': CELLS,
     'failCounts': [{'cell': k[0], 'reds': k[1], 'n': v['n'], 'human': dict(v['human']), 'bot': dict(v['bot']), 'baseline': dict(v['baseline']), 'redWinsByHumanFails': dict(v['win'])} for k, v in sorted(FAILS.items())],
+    'merlinVotes': MERLIN_VOTES,
     'selection': ANON_SELECT,
 }
 json.dump(clean(public), open(os.path.join(OUT, 'cells.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
@@ -1226,13 +1307,13 @@ def slim(r):
         o[k] = None if r.get(k) is None else round(float(r[k]), 1)
     if r.get('good') and r['cat'] == 'vote':
         o['goodStrong'], o['goodBot'] = round(float(r['good']['strong']), 1), round(float(r['good']['bot']), 1)
-    if r.get('wr') and r['wr'].get('d') is not None:
+    if r.get('wr') and r['wr'].get('d') is not None and r.get('fine'):
         o['wr'] = [round(float(r['wr']['wr1']), 1), int(r['wr']['n1']), round(float(r['wr']['wr0']), 1), int(r['wr']['n0'])]
     return o
 
 
 # 可以放進 repo 的小檔：次數夠、區間不跨 0 的格子（以及每一類的「全部」）。
-json.dump({'meta': public['meta'], 'seats': ROLE_SEATS, 'same': clean(public['same']), 'failCounts': public['failCounts'],
+json.dump({'meta': public['meta'], 'seats': ROLE_SEATS, 'same': clean(public['same']), 'failCounts': public['failCounts'], 'merlinVotes': clean(MERLIN_VOTES),
            'cells': [slim(r) for r in CELLS if r['n'] >= MIN_N[r['cat']] and (sig(r) or r['cell'] == 'all')]},
           open(os.path.join(OUT, 'cells.public.json'), 'w', encoding='utf8'), ensure_ascii=False, indent=0)
 json.dump(clean({**public, 'selectionNamed': SELECT, 'selected': {role: player_names(role) for role in ROLES}}),
