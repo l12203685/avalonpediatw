@@ -25,6 +25,10 @@
     views   四個紅方的視角各帶多少：不知道誰是莫甘娜／莫德雷德、不知道誰是奧伯倫、只有梅林（不推派西維爾）
     export  給 TypeScript 的表（--out DIR：worldLines75_full／even／odd.json）
     cells   正式的表（--tables）裡幾個主要的格，給文件用
+    bot     自我對打：同一份整局紀錄上重算的刺殺（--base 現行、--cand 候選；`assassinPathStudy.ts --export-bot`），逐局配對
+    patch   把重算的刺殺目標寫回自我對打結果檔（--src DIR --src-prefix P --cand X.jsonl --out DIR --out-prefix Q），給 `bot:gap` 量第 1F 節
+    merge   交叉擬合的兩份輸出照局號合成一份（--even-tables-file 用偶數號擬合的表跑的、--odd-tables-file 用奇數號擬合的表跑的 → --out FILE；
+            每一局取「沒有看過它的那張表」的那一列；刺殺點的 jsonl 與 `humanPrBenchmark.ts --dump` 都可以）
 """
 import argparse
 import json
@@ -581,6 +585,77 @@ def print_cells(path):
         print(f'- {name}（{tot} 次）：' + '、'.join(f'{c} {100 * v / tot:.1f}%（每個座位 {100 * v / tot / LAKE_N[rs][c]:.1f}%）' for c, v in row.items()))
 
 
+def bot_compare(base_path, cand_path, games_n):
+    """自我對打：同一份紀錄上現行與候選的刺殺，逐局配對（刺殺是最後一個動作）。"""
+    base = load(base_path)
+    cand = {a['gi']: a for a in load(cand_path)}
+    logged = sum(1 for a in base if a.get('logged') == a['bot'])
+    print(f'刺殺點 {len(base)}（現行重算和紀錄相同 {logged}／{len(base)}）；局數 {games_n}')
+    print('| 範圍 | n | 現行 % | 候選 % | 改到 | 多刺中／少刺中 | 候選 − 現行 [95%] |')
+    print('|---|---|---|---|---|---|---|')
+    groups = [('全部', base)] + [(o.replace('B', '藍').replace('R', '紅'), [a for a in base if a['order'] == o]) for o in ORDERS]
+    for name, rs in groups:
+        if not rs:
+            continue
+        b = np.array([a['bot'] == a['merlin'] for a in rs], dtype=float)
+        c = np.array([cand[a['gi']]['bot'] == a['merlin'] for a in rs], dtype=float)
+        chg = sum(1 for a in rs if cand[a['gi']]['bot'] != a['bot'])
+        lo, hi = boot(c - b)
+        print(f'| {name} | {len(rs)} | {100 * b.mean():.2f} | {100 * c.mean():.2f} | {chg} | {int(((c - b) > 0).sum())}／{int(((c - b) < 0).sum())} | '
+              f'{100 * (c - b).mean():+.2f} [{100 * lo:+.2f}, {100 * hi:+.2f}] |')
+    d = np.zeros(games_n)
+    for i, a in enumerate(base):
+        d[i] = (cand[a['gi']]['bot'] == a['merlin']) - (a['bot'] == a['merlin'])
+    lo, hi = boot(d)
+    three = len(base) / games_n
+    hb = np.mean([a['bot'] == a['merlin'] for a in base])
+    hc = np.mean([cand[a['gi']]['bot'] == a['merlin'] for a in base])
+    print(f'紅方勝率差（每局）：{100 * d.mean():+.2f} [{100 * lo:+.2f}, {100 * hi:+.2f}] pp；任務三藍 {100 * three:.2f}%（不變）；'
+          f'藍方勝率 {100 * three * (1 - hb):.2f} → {100 * three * (1 - hc):.2f}%')
+
+
+def patch_results(src, prefix, cand_path, out, oprefix):
+    """把候選的刺殺目標寫回 `sp.ts` 的結果檔（g 欄的 a、blueWon、merlinKilled），局的順序同 `keySpotStudy.ts --export-bot`。"""
+    cand = {a['gi']: a for a in load(cand_path)}
+    os.makedirs(out, exist_ok=True)
+    files = sorted(f for f in os.listdir(src) if f.endswith('.json') and f.startswith(prefix))
+    gi = changed = n = 0
+    for f in files:
+        with open(os.path.join(src, f), encoding='utf8') as fh:
+            d = json.load(fh)
+        cols = d['cols']
+        g_at, bw, mk, tb = cols.index('g'), cols.index('blueWon'), cols.index('merlinKilled'), cols.index('threeBlue')
+        for row in d['rows']:
+            a = cand.get(gi)
+            if a is not None:
+                assert row[tb] == 1, (gi, row[:6])
+                g = json.loads(row[g_at])
+                new = '0' if a['bot'] == 10 else str(a['bot'])
+                changed += int(str(g['a']) != new)
+                g['a'] = new
+                row[g_at] = json.dumps(g, separators=(',', ':'))
+                hit = 1 if a['bot'] == a['merlin'] else 0
+                row[mk] = hit
+                row[bw] = 1 - hit
+                n += 1
+            gi += 1
+        with open(os.path.join(out, oprefix + f[len(prefix):]), 'w', encoding='utf8') as fh:
+            json.dump(d, fh)
+    print(f'{len(files)} 個檔、{gi} 局、{n} 個刺殺、改到 {changed} 個目標')
+
+
+def merge_folds(even_file, odd_file, out):
+    """每一局取沒有看過它的那張表的那一列：偶數號的局 ← 奇數號擬合的表；奇數號的局 ← 偶數號擬合的表。"""
+    n = 0
+    with open(out, 'w', encoding='utf8') as fh:
+        for path, want in ((even_file, 1), (odd_file, 0)):
+            for r in load(path):
+                if r['gi'] % 2 == want:
+                    fh.write(json.dumps(r, ensure_ascii=False) + '\n')
+                    n += 1
+    print(f'{n} 列 → {out}')
+
+
 def main():
     global KAPPA, ALT_SPLIT
     ap = argparse.ArgumentParser()
@@ -593,9 +668,22 @@ def main():
     ap.add_argument('--tables', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'ai', 'assassin', 'worldLines75Tables.json'))
     ap.add_argument('--kappa', type=float, default=None, help='格子往上一層收縮的強度（預設 10）')
     ap.add_argument('--alt-split', action='store_true', help='換一種奇偶切法（穩健性檢查）')
+    ap.add_argument('--cand')
+    ap.add_argument('--games', type=int, default=10000, help='--part bot：這份自我對打紀錄的總局數')
+    ap.add_argument('--src')
+    ap.add_argument('--src-prefix', default='')
+    ap.add_argument('--out-prefix', default='WL_')
+    ap.add_argument('--even-tables-file')
+    ap.add_argument('--odd-tables-file')
     args = ap.parse_args()
     if args.part == 'cells':
         return print_cells(args.tables)
+    if args.part == 'bot':
+        return bot_compare(args.base, args.cand, args.games)
+    if args.part == 'patch':
+        return patch_results(args.src, args.src_prefix, args.cand, args.out, args.out_prefix)
+    if args.part == 'merge':
+        return merge_folds(args.even_tables_file, args.odd_tables_file, args.out)
     if args.kappa is not None:
         KAPPA = args.kappa
     ALT_SPLIT = args.alt_split
