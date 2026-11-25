@@ -4,13 +4,17 @@ import { useStatsFilter } from '../../../stats/statsFilter';
 import { withClauses } from '../../../stats/filterDraft';
 import { useDiscoveryNav } from './discoveryNav';
 import {
-  findingClause, findingClusters, findingGrouping, findingLink, findingNotes, findingSentence, findingStrategy, formatCi, formatDiff, formatValue,
+  findingClause, findingClusters, findingGrouping, findingLink, findingNotes, findingSentence, findingStrategy, formatCi, formatDiff, formatDiffPlain,
+  formatValue,
 } from './discoveryText';
+import { InfoTip } from '../ui';
 import { openDiscoveryLink } from './openDiscoveryLink';
 
 /**
  * 一項發現：一句話、兩組的小長條、差距與信賴區間、樣本數，能套用時附連結。新資料（兩紅派隊、關鍵票、全部投票）另有
  * 「可能的策略」（假設；不給時寫原因）與「看數字」（數字所在的分頁）。
+ * 2026-11-25（站長：數據要一目瞭然）：差距寫成白話（「前者少 21 個百分點」），信賴區間與 q 收進「統計細節」小視窗；
+ * 「n=243」改成「樣本 243」。數字本身沒有改。
  */
 export default function DiscoveryCard({ finding: f }: { finding: DiscoveryFinding }): JSX.Element {
   const setFilter = useStatsFilter((s) => s.setFilter);
@@ -33,13 +37,16 @@ export default function DiscoveryCard({ finding: f }: { finding: DiscoveryFindin
       <p className="text-[13px] leading-snug text-zinc-100" title={`${f.dimension.help}；${f.metric.help}`}>{findingSentence(f)}</p>
       <div className="mt-1.5 grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5 tabular-nums">
         <span className="truncate text-zinc-400">{f.a.label}</span>
-        <span>{bar(f.a.value, 'bg-amber-400')} <b className="ml-1 text-zinc-100">{formatValue(f.a.value, k)}</b> <span className="text-zinc-500">n={f.a.n}</span></span>
+        <span>{bar(f.a.value, 'bg-amber-400')} <b className="ml-1 text-zinc-100">{formatValue(f.a.value, k)}</b> <span className="text-zinc-500">樣本 {f.a.n}</span></span>
         <span className="truncate text-zinc-400">{f.b.label}</span>
-        <span>{bar(f.b.value, 'bg-zinc-400')} <b className="ml-1 text-zinc-100">{formatValue(f.b.value, k)}</b> <span className="text-zinc-500">n={f.b.n}</span></span>
+        <span>{bar(f.b.value, 'bg-zinc-400')} <b className="ml-1 text-zinc-100">{formatValue(f.b.value, k)}</b> <span className="text-zinc-500">樣本 {f.b.n}</span></span>
       </div>
-      <p className="mt-1 text-[11px] text-zinc-400">
-        差 <b className={f.diff > 0 ? 'text-amber-300' : 'text-sky-300'}>{formatDiff(f.diff, k)}</b>（{formatCi(f)}，q {f.q < 0.001 ? '< 0.001' : `= ${f.q.toFixed(3)}`}）
-        · 單位：{UNIT_LABELS[f.unit]}
+      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] text-zinc-400" data-testid="discovery-diff">
+        <span>前者<b className="ml-0.5 text-zinc-100">{formatDiffPlain(f.diff, k)}</b></span>
+        <InfoTip text="統計細節" title="統計細節" testId="discovery-stat-detail">
+          <p>差 {formatDiff(f.diff, k)}（{formatCi(f)}，q {f.q < 0.001 ? '< 0.001' : `= ${f.q.toFixed(3)}`}）· 單位：{UNIT_LABELS[f.unit]}</p>
+          <p>pp＝百分點。95% CI＝差距大概落在這個範圍；q 越小，越不像只是運氣（已經算進「同時比了很多項」）。</p>
+        </InfoTip>
       </p>
       {clusters && <p className="text-[11px] text-zinc-500">樣本：{clusters}</p>}
       {findingNotes(f).map((n) => <p key={n} className="text-[11px] text-zinc-500">※ {n}</p>)}

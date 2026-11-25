@@ -3,9 +3,12 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { fetchAnalysisMissions, getErrorMessage } from '../../services/api';
 import type { MissionAnalysisData } from '../../services/api';
-import { SectionTabs, StatTable, Takeaway, OUTCOME_COLORS, formatRate, type StatColumn } from './ui';
+import {
+  Advanced, GlanceLegend, GlanceRow, SectionTabs, SplitBar, StatTable, Takeaway, Term, OUTCOME_COLORS, formatInt, formatRate, type StatColumn,
+} from './ui';
 import { useRoundsData } from './teams/useTeamsData';
-import { redFinalRate } from './outcomeTest';
+import { missionRatesGlance, missionSwingGlance, pctText, restText } from './core/glance';
+import { sampleText, sentenceText, winLegend, winSegments } from './core/glanceView';
 import OutcomeBlocksTable, { useMinCellGames, type OutcomeGroup } from './OutcomeBlocksTable';
 import { useAnalysisOverview } from './useAnalysisOverview';
 
@@ -32,6 +35,13 @@ import { useAnalysisOverview } from './useAnalysisOverview';
  *     + 0／1／2+ 張失敗票三欄；/rounds 沒有時成功率顯示「—」。
  *   - 「任務 → 結局」的分組沿用快取 (0 張失敗＝通過)：第 4 輪那兩列改叫「0 張失敗票／有失敗票」，不再說成敗。
  *   - 兩頁最上面各一句話 (從資料當下算)：最難／最容易成功的任務；結局差最多的那一輪。
+ *
+ * (2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」)
+ *   - 成功率：五個任務各一格 (大數字＋成功｜失敗比例條＋小字局數)，最難／最容易的那格有標記；
+ *     0／1／2+ 張失敗票的表收進「進階」。
+ *   - 任務 → 結局：每個任務成功的局、失敗的局各一條「藍方贏｜紅方贏」比例條；三種結局的完整表收進「進階」。
+ *     一句話改成用藍方最後贏的比例說 (跟總覽、湖中女神同一種說法)，數字跟長條出自同一個 helper (core/glance.ts)。
+ *   - 算法都沒有改：成功率照舊用 /rounds 的 roundProgression，藍方贏＝三藍活 ÷ 那一組的局數 (＝100% − 紅方最後贏)。
  */
 
 type MissionView = 'pass' | 'outcome';
@@ -114,9 +124,7 @@ export default function MissionAnalysis(): JSX.Element {
     { key: 'oneFail', label: t('analytics.deep.mission.fail1'), term: 'failCards', format: 'pct', bar: { color: OUTCOME_COLORS.三藍死 } },
     { key: 'twoFail', label: t('analytics.deep.mission.fail2'), term: 'failCards', format: 'pct', bar: { color: OUTCOME_COLORS.三紅 } },
   ];
-  const withSuccess = passRows.filter(r => r.successRate !== null);
-  const hardest = withSuccess.length > 1 ? withSuccess.reduce((a, b) => ((b.successRate ?? 0) < (a.successRate ?? 0) ? b : a)) : null;
-  const easiest = withSuccess.length > 1 ? withSuccess.reduce((a, b) => ((b.successRate ?? 0) > (a.successRate ?? 0) ? b : a)) : null;
+  const rates = missionRatesGlance(passRows);
   const m4 = passRows.find(r => r.round === 4);
 
   const corr = (data.missionOutcomeCorrelation ?? []).filter(c => c.round <= 4);
@@ -132,10 +140,9 @@ export default function MissionAnalysis(): JSX.Element {
       { key: `f${c.round}`, label: t(r4 ? 'analytics.r7.missions.r4Some' : `${k}.failed`, { round: c.round }), counts: c.failedOutcomes, tone: 'red' },
     );
   }
-  const gaps = corr
-    .map(c => ({ round: c.round, passed: redFinalRate(c.passedOutcomes), failed: redFinalRate(c.failedOutcomes), pn: c.passedGames, fn: c.failedGames }))
-    .filter((g): g is { round: number; passed: number; failed: number; pn: number; fn: number } => g.passed !== null && g.failed !== null && g.round !== 4);
-  const widest = gaps.length > 0 ? gaps.reduce((a, b) => (Math.abs(b.failed - b.passed) > Math.abs(a.failed - a.passed) ? b : a)) : null;
+  const swing = missionSwingGlance(corr);
+  const g = 'analytics.glance.missions';
+  const thin = (n: number): string | undefined => (n < min ? t('analytics.glance.thin') : undefined);
 
   const items = [
     { id: 'pass' as MissionView, label: t(`${k}.tabs.pass`) },
@@ -146,23 +153,63 @@ export default function MissionAnalysis(): JSX.Element {
     <SectionTabs items={items} persistKey="analysis.missions" ariaLabel={t('analytics.analysis.tabs.missions')}>
       {(view) => (view === 'pass' ? (
         <div className="space-y-2">
-          {hardest && easiest && (
+          {rates.sentence && (
             <Takeaway>
               <p>
-                {t('analytics.r7.missions.passTakeaway', {
-                  hard: hardest.round, hardRate: formatRate(hardest.successRate), easy: easiest.round, easyRate: formatRate(easiest.successRate),
-                })}
+                {sentenceText(t, rates.sentence)}
                 {m4?.oneFail !== null && m4?.oneFail !== undefined && t('analytics.r7.missions.m4', { rate: formatRate(m4.oneFail) })}
               </p>
             </Takeaway>
           )}
-          <StatTable
-            caption={t(`${k}.passCaption`)}
-            columns={passColumns}
-            rows={passRows}
-            rowKey={r => String(r.round)}
-            footnote={t('analytics.r7.missions.passNote')}
-          />
+          {rates.rows.length > 0 && (
+            <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="mission-rates-glance">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h4 className="text-xs font-semibold text-zinc-300"><Term term="missionSuccessRate">{t(`${g}.ratesTitle`)}</Term></h4>
+                <GlanceLegend items={[{ name: t(`${g}.success`), tone: 'blue' }, { name: t(`${g}.fail`), tone: 'red' }]} />
+              </div>
+              <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-5">
+                {rates.rows.map(r => {
+                  const sample = t(`${g}.reached`, { n: formatInt(r.success.n) });
+                  return (
+                    <div key={r.round} className="flex min-w-0 items-center gap-3 sm:block" data-testid={`mission-rate-${r.round}`}>
+                      <div className="w-20 shrink-0 sm:mb-1 sm:w-auto">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-200">
+                          {t(`${g}.mission`, { round: r.round })}
+                          {(r.round === rates.hardest || r.round === rates.easiest) && (
+                            <span className="rounded bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-200">
+                              {t(r.round === rates.hardest ? `${g}.hardest` : `${g}.easiest`)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-2xl font-black leading-tight tabular-nums text-white">{pctText(r.success.pct)}</div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <SplitBar
+                          sample={sample}
+                          segments={[
+                            { pct: r.success.pct, text: pctText(r.success.pct), name: t(`${g}.success`), tone: 'blue' },
+                            { pct: 100 - r.success.pct, text: restText(r.success.pct), name: t(`${g}.fail`), tone: 'red' },
+                          ]}
+                        />
+                        <div className="mt-0.5 text-[11px] tabular-nums text-zinc-500">{sample}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+          <Advanced title={t(`${g}.ratesAdvanced`)} testId="mission-rates-advanced">
+            {() => (
+              <StatTable
+                caption={t(`${k}.passCaption`)}
+                columns={passColumns}
+                rows={passRows}
+                rowKey={r => String(r.round)}
+                footnote={t('analytics.r7.missions.passNote')}
+              />
+            )}
+          </Advanced>
         </div>
       ) : corr.length === 0 ? (
         <p className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-6 text-center text-xs text-zinc-500">
@@ -170,23 +217,47 @@ export default function MissionAnalysis(): JSX.Element {
         </p>
       ) : (
         <div className="space-y-2">
-          {widest && (
-            <Takeaway>
-              <p>
-                {t('analytics.r7.missions.outcomeTakeaway', {
-                  round: widest.round, failed: formatRate(widest.failed), fn: widest.fn, passed: formatRate(widest.passed), pn: widest.pn,
-                  // 勝率顯示整數 (Edward 2026-10-30)：差用顯示出來的兩個整數相減，讀者自己算得出來。
-                  gap: Math.abs(Math.round(widest.failed) - Math.round(widest.passed)),
+          {swing.sentence && <Takeaway><p>{sentenceText(t, swing.sentence)}</p></Takeaway>}
+          {swing.rows.length > 0 && (
+            <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="mission-swing-glance">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h4 className="text-xs font-semibold text-zinc-300">{t(`${g}.swingTitle`)}</h4>
+                <GlanceLegend items={winLegend(t)} />
+              </div>
+              <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+                {swing.rows.map(r => {
+                  // 任務 4：這份分組只分有沒有失敗票 (7 人以上 1 張失敗票任務仍成功)，不說成敗
+                  const r4 = r.round === 4;
+                  return (
+                    <div key={r.round} className="min-w-0 space-y-1.5" data-testid={`mission-swing-${r.round}`}>
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-100">
+                        {t(`${g}.mission`, { round: r.round })}
+                        {r.round === swing.widest && (
+                          <span className="rounded bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-200">{t(`${g}.widest`)}</span>
+                        )}
+                      </div>
+                      <GlanceRow label={t(r4 ? `${g}.zeroFailAfter` : `${g}.passedAfter`)} sample={sampleText(t, r.passed.n)} thin={thin(r.passed.n)}>
+                        <SplitBar segments={winSegments(t, r.passed)} sample={sampleText(t, r.passed.n)} />
+                      </GlanceRow>
+                      <GlanceRow label={t(r4 ? `${g}.someFailAfter` : `${g}.failedAfter`)} sample={sampleText(t, r.failed.n)} thin={thin(r.failed.n)}>
+                        <SplitBar segments={winSegments(t, r.failed)} sample={sampleText(t, r.failed.n)} />
+                      </GlanceRow>
+                    </div>
+                  );
                 })}
-              </p>
-            </Takeaway>
+              </div>
+            </section>
           )}
-          <OutcomeBlocksTable
-            caption={t(`${k}.outcomeCaption`)}
-            rows={groups}
-            groupLabel={t(`${k}.group`)}
-            footnote={t('analytics.r7.missions.outcomeNote')}
-          />
+          <Advanced title={t(`${g}.swingAdvanced`)} testId="mission-swing-advanced">
+            {() => (
+              <OutcomeBlocksTable
+                caption={t(`${k}.outcomeCaption`)}
+                rows={groups}
+                groupLabel={t(`${k}.group`)}
+                footnote={t('analytics.r7.missions.outcomeNote')}
+              />
+            )}
+          </Advanced>
         </div>
       ))}
     </SectionTabs>

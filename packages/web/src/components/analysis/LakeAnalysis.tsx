@@ -3,9 +3,11 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { fetchAnalysisLake, getErrorMessage, roleFaction } from '../../services/api';
 import type { LakeAnalysisData, LakeRoleStat, OutcomeBreakdown } from '../../services/api';
-import { SectionTabs, Takeaway, Term, VerdictText, formatRate } from './ui';
+import { Advanced, GlanceLegend, GlanceRow, SectionTabs, SplitBar, Takeaway, Term, VerdictText, formatRate } from './ui';
 import { outcomeChiSquare, outcomeRow, redFinalRate } from './outcomeTest';
-import OutcomeBlocksTable, { type OutcomeGroup } from './OutcomeBlocksTable';
+import { blueWinShare, lakeHolderGlance } from './core/glance';
+import { sampleText, sentenceText, winLegend, winSegments } from './core/glanceView';
+import OutcomeBlocksTable, { useMinCellGames, type OutcomeGroup } from './OutcomeBlocksTable';
 import { roleOrderIndex, useRoleLabel } from './roleLabels';
 import { filterScopedLoader } from '../../stats/filterScopedLoader';
 
@@ -38,6 +40,9 @@ import { filterScopedLoader } from '../../stats/filterScopedLoader';
  * (2026-10-28 Edward：結果更直觀、名詞白話) 每個視圖最上面一句話 (數字從資料當下算)：
  *   陣營 = 紅方／藍方持湖時紅方最終勝率 + 卡方檢定；角色 = 紅方勝率最高／最低的角色 + 卡方檢定 (七個角色的三種結局比例)。
  *   「持湖者 → 被湖者」表頭可點開看定義。
+ * (2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」) 陣營視圖改成比例條：誰拿湖 (藍方／紅方)、湖到誰 (四種組合) 各一條
+ *   「藍方贏｜紅方贏」＋小字局數；一句話改成用藍方最後贏的比例說 (跟總覽的卡片同一句、同一個 helper，core/glance.ts)，
+ *   卡方檢定的判讀留在句尾；三種結局的完整表收進「進階」(手機上原本要橫向捲才看得完)。算法沒有改。
  */
 
 export type LakeView = 'faction' | 'holderRole' | 'targetRole';
@@ -99,6 +104,8 @@ export default function LakeAnalysis({ view, lake, onLakeChange }: LakeAnalysisP
   const { t } = useTranslation('common');
   const roleLabel = useRoleLabel();
   const { data, loading, error } = useLakeData();
+  const min = useMinCellGames();
+  const thin = (n: number): string | undefined => (n < min ? t('analytics.glance.thin') : undefined);
   const k = 'analytics.r6.tabsa.lake';
 
   if (loading) {
@@ -185,26 +192,59 @@ export default function LakeAnalysis({ view, lake, onLakeChange }: LakeAnalysisP
     ];
     const redH = holders.find(h => h.faction === RED);
     const blueH = holders.find(h => h.faction !== RED);
-    if (redH && blueH) {
+    const glance = lakeHolderGlance(holders, lakeLabel);
+    const g = 'analytics.glance.lake';
+    if (glance && redH && blueH) {
       takeaway = (
         <p>
-          {t('analytics.r7.lake.faction', {
-            lake: lakeLabel,
-            red: formatRate(redFinalRate(redH.outcomes)), redN: gamesOf(redH.outcomes),
-            blue: formatRate(redFinalRate(blueH.outcomes)), blueN: gamesOf(blueH.outcomes),
-          })}
+          {sentenceText(t, glance.sentence)}
           <VerdictText result={outcomeChiSquare([redH.outcomes, blueH.outcomes])} />
-          {t('analytics.r7.lake.end')}
         </p>
       );
     }
-    table = (
+    const side = (f: string): string => t(f === RED ? `${g}.redSide` : `${g}.blueSide`);
+    // 比例條照「藍方拿湖在前」排（跟上面誰拿湖的兩條同一個順序）；進階的表格維持原本的順序
+    const blueFirst = (f: string): number => (f === RED ? 1 : 0);
+    const comboRows = [...combos].sort((a, b) => blueFirst(a.holderFaction) - blueFirst(b.holderFaction) || blueFirst(a.targetFaction) - blueFirst(b.targetFaction)).flatMap(c => {
+      const share = blueWinShare(c.outcomes);
+      return share ? [{ key: `${c.holderFaction}-${c.targetFaction}`, label: t(`${g}.combo`, { holder: side(c.holderFaction), target: side(c.targetFaction) }), share }] : [];
+    });
+    const fullTable = (
       <OutcomeBlocksTable
         caption={t(`${k}.factionCaption`, { lake: lakeLabel })}
         groupLabel={<Term term="lakeCombo">{t(`${k}.group`)}</Term>}
         rows={rows}
         footnote={t(`${k}.factionNote`)}
       />
+    );
+    table = !glance ? fullTable : (
+      <div className="space-y-2">
+        <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="lake-faction-glance">
+          <div className="mb-2 flex justify-end"><GlanceLegend items={winLegend(t)} /></div>
+          <div className="grid gap-x-6 gap-y-3 lg:grid-cols-2">
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.holderTitle`)}</h4>
+              <GlanceRow label={t(`${g}.blueRow`)} sample={sampleText(t, glance.blueHolder.n)} thin={thin(glance.blueHolder.n)}>
+                <SplitBar segments={winSegments(t, glance.blueHolder)} sample={sampleText(t, glance.blueHolder.n)} />
+              </GlanceRow>
+              <GlanceRow label={t(`${g}.redRow`)} sample={sampleText(t, glance.redHolder.n)} thin={thin(glance.redHolder.n)}>
+                <SplitBar segments={winSegments(t, glance.redHolder)} sample={sampleText(t, glance.redHolder.n)} />
+              </GlanceRow>
+            </div>
+            {comboRows.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-zinc-100"><Term term="lakeCombo">{t(`${g}.comboTitle`)}</Term></h4>
+                {comboRows.map(c => (
+                  <GlanceRow key={c.key} label={c.label} sample={sampleText(t, c.share.n)} thin={thin(c.share.n)}>
+                    <SplitBar segments={winSegments(t, c.share)} sample={sampleText(t, c.share.n)} />
+                  </GlanceRow>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+        <Advanced title={t(`${g}.advanced`)} testId="lake-faction-advanced">{() => fullTable}</Advanced>
+      </div>
     );
   } else {
     const stats: LakeRoleStat[] = (view === 'holderRole' ? detail?.holderRoleStats : detail?.targetRoleStats) ?? [];

@@ -22,6 +22,16 @@ export function formatDiff(d: number, kind: 'rate' | 'avg'): string {
   return kind === 'rate' ? `${sign}${Math.abs(d).toFixed(0)}pp` : `${sign}${Math.abs(d).toFixed(2)}`;
 }
 
+/**
+ * 差距的白話寫法（站長 2026-11-25：數據要一目瞭然，不寫 pp）：前一組比後一組「多 9 個百分點」「少 0.25」；
+ * 四捨五入後是 0 就寫「一樣」。統計細節（信賴區間、q）另外收在卡片的「統計細節」裡。
+ */
+export function formatDiffPlain(d: number, kind: 'rate' | 'avg'): string {
+  const abs = kind === 'rate' ? Math.abs(d).toFixed(0) : Math.abs(d).toFixed(2);
+  if (Number(abs) === 0) return '一樣';
+  return `${d > 0 ? '多' : '少'} ${abs}${kind === 'rate' ? ' 個百分點' : ''}`;
+}
+
 export function formatCi(f: Pick<DiscoveryFinding, 'lo' | 'hi' | 'metric'>): string {
   const k = f.metric.kind;
   const one = (v: number): string => (k === 'rate' ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(0)}` : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)}`);

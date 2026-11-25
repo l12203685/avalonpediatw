@@ -782,7 +782,7 @@
           "advanced": "Advanced"
         },
         "howTo": {
-          "overview": "The big picture first: three layers in order (mission results → Lady of the Lake → teams & votes), each with a line of data and what to do about it. Open a layer when you want the details.",
+          "overview": "The big picture first: who wins more often on top, then one card per layer (mission results → Lady of the Lake → teams & votes) with one conclusion, one key number and what to do about it. Open a layer when you want the details.",
           "missions": "Mission results are the most important information: how often each mission passes, who wins after a mission passes or fails, where a mission order plus lake announcements leads (state tree), and how often the assassin hits after three blue missions. Use it to judge how dangerous the current spot is.",
           "lake": "For picking a Lady of the Lake target and reading announcements: lake in blue or red hands, holder and target roles, and how trustworthy announcements are.",
           "teamsVotes": "For proposing and for approve/reject: how often teams with a red get rejected, how often all-good teams get approved, how leaders pick, and how strong players pick after two reds.",
@@ -799,24 +799,19 @@
         },
         "actionLabel": "What to do: ",
         "details": "See details",
-        "overviewMore": "Overall and per-player results (the previous overview)",
+        "overviewMore": "Advanced: each player's three endings and games (the previous overview)",
         "advancedIntro": "Details and cross-cuts live here; seats, roles and lineup strength can also be sliced with the filter above.",
         "missions": {
           "title": "Mission results",
-          "m1": "When mission 1 passes, blue wins {{passed}} of games ({{passedN}} games); when it fails, only {{failed}} ({{failedN}} games).",
-          "kill": "In games that reach three blue missions, the assassin hits Merlin {{rate}} of the time ({{n}} games).",
           "action": "Treat mission 1 as a key mission and send the safest team; three blue missions are not a win yet, so Merlin must hide and loyal servants and Percival should draw the assassin's attention."
         },
         "lake": {
           "title": "Lady of the Lake",
-          "holder": "With the first lake in blue hands, blue wins {{blue}} ({{blueN}} games); in red hands only {{red}} ({{redN}} games).",
           "action": "Give the lake to the player you are surest is blue; discount the announcement of a suspicious holder (see announcement trust).",
           "stateTreeLink": "Mission results and lake announcements together: Missions × lake (state tree)"
         },
         "teamsVotes": {
           "title": "Teams & votes",
-          "votes": "On teams with a red, {{evil}} of votes are rejects; on all-blue teams, {{good}} are approves.",
-          "r3": "From mission 3 on, teams with a red are rejected {{evil}} of the time ({{n}} votes).",
           "action": "Reject when a suspicious player is on the team; don't block a team that looks all good just to make a point. After two reds, pick like strong players do."
         }
       }
@@ -1843,16 +1838,13 @@
       "missions": {
         "success": "Success",
         "zeroFail": "0 fails",
-        "passTakeaway": "The hardest mission is mission {{hard}} ({{hardRate}}), the easiest mission {{easy}} ({{easyRate}}). ",
         "m4": "On mission 4, {{rate}} of games showed a single fail card — with 7+ players the mission still succeeds.",
         "passNote": "Denominator = games that reached the mission. Success follows the rules (same data as Teams › Mission progress): with 7+ players mission 4 needs two fail cards to fail; 0 / 1 / 2+ fails = how many fail cards came out, adding up to 100%. The old table used \"0 fails\" as the pass rate, which made mission 4 look too low.",
         "r4Zero": "Mission 4: 0 fail cards",
         "r4Some": "Mission 4: some fail cards",
-        "outcomeTakeaway": "Mission {{round}} is most tied to the result: when it failed Red won {{failed}} (n={{fn}}), when it passed {{passed}} (n={{pn}}) — a {{gap}}-point gap.",
         "outcomeNote": "\"Passed\" = 0 fail cards, \"failed\" = 1 or more (the cache's grouping). With 7+ players mission 4 still succeeds on a single fail card, so mission 4 rows say \"0 / some fail cards\" and are left out of the summary; mission 5 is omitted (its result decides three fails or three successes)."
       },
       "lake": {
-        "faction": "{{lake}}: when Red held the Lake Red won {{red}} (n={{redN}}); when Blue held it {{blue}} (n={{blueN}}): ",
         "holderRole": "{{lake}}: Red won most when the holder was {{hi}} ({{hiRate}}, n={{hiN}}) and least with {{lo}} ({{loRate}}, n={{loN}}); outcome shares across the seven roles: ",
         "targetRole": "{{lake}}: Red won most when the target was {{hi}} ({{hiRate}}, n={{hiN}}) and least with {{lo}} ({{loRate}}, n={{loN}}); outcome shares across the seven roles: ",
         "end": "."
@@ -2357,6 +2349,86 @@
           "ref": " · {{label}} {{pct}}",
           "help": "Each number is followed by the comparison group's (the same as the team table below: your PR group or everyone); the group excludes your own votes, and each vote is grouped by that game's PR. Measures with fewer than {{min}} votes in your denominator are faded. The per-situation, grouped and key versions are on the leaderboard's decisive-votes board, \"Unusual votes\" tab."
         }
+      }
+    },
+    "glance": {
+      "sample": {
+        "games": "{{n}} games",
+        "votes": "{{n}} votes"
+      },
+      "blueWins": "Blue wins",
+      "redWins": "Red wins",
+      "thin": "small sample",
+      "thinNote": "One group has fewer than {{min}} games: a small sample, treat it as a hint.",
+      "overall": {
+        "title": "Who wins more often",
+        "redAhead": "Red wins more often: Red {{red}}, Blue {{blue}}.",
+        "blueAhead": "Blue wins more often: Blue {{blue}}, Red {{red}}.",
+        "even": "Red and Blue are close: Red {{red}}, Blue {{blue}}.",
+        "redKey": "of games end in a Red win",
+        "blueKey": "of games end in a Blue win",
+        "redHow": "Red wins in two ways: three missions fail ({{threeRed}} of all games), or Blue completes three missions but Merlin is assassinated ({{killed}}).",
+        "players": "{{n}} players"
+      },
+      "missions": {
+        "m1": {
+          "failLower": "When mission 1 fails, Blue goes on to win only {{failed}}; when it succeeds, {{passed}}.",
+          "failHigher": "When mission 1 fails, Blue still goes on to win {{failed}}; when it succeeds, {{passed}}.",
+          "same": "Whether mission 1 succeeds or fails, Blue goes on to win {{passed}}.",
+          "key": "Blue's final win share after mission 1 fails",
+          "passedRow": "Games where mission 1 succeeded",
+          "failedRow": "Games where mission 1 failed"
+        },
+        "kill": "After Blue completes three missions, the assassin hits Merlin {{rate}} of the time.",
+        "killRow": "The assassination after three Blue missions",
+        "hit": "Merlin hit",
+        "miss": "Missed",
+        "rates": "The hardest mission is mission {{hard}} ({{hardRate}}), the easiest is mission {{easy}} ({{easyRate}}).",
+        "ratesTitle": "How often each mission succeeds",
+        "success": "Success",
+        "fail": "Fail",
+        "mission": "Mission {{round}}",
+        "hardest": "Hardest",
+        "easiest": "Easiest",
+        "reached": "{{n}} games got here",
+        "ratesAdvanced": "Advanced: how many fail cards each mission showed (full table)",
+        "swing": {
+          "failLower": "Mission {{round}} matters most: Blue goes on to win {{passed}} when it succeeds and only {{failed}} when it fails, a {{gap}}-point gap.",
+          "failHigher": "Mission {{round}} differs most: Blue goes on to win {{failed}} when it fails and {{passed}} when it succeeds, a {{gap}}-point gap.",
+          "same": "Whether missions 1 to 3 succeed or fail, Blue's final win share is about the same."
+        },
+        "swingTitle": "Who wins in the end after each mission succeeds or fails",
+        "widest": "Biggest gap",
+        "passedAfter": "It succeeded",
+        "failedAfter": "It failed",
+        "zeroFailAfter": "No fail cards",
+        "someFailAfter": "Some fail cards",
+        "swingAdvanced": "Advanced: full table of the three endings (missions, assassination, game)"
+      },
+      "lake": {
+        "redLower": "{{who}}: when Blue holds it, Blue goes on to win {{blue}}; when Red holds it, only {{red}}.",
+        "redHigher": "{{who}}: when Red holds it, Blue still goes on to win {{red}}; when Blue holds it, {{blue}}.",
+        "same": "{{who}}: whichever side holds it, Blue goes on to win {{blue}}.",
+        "key": "Blue's final win share with the lake in Blue hands",
+        "blueRow": "Games where Blue held the lake",
+        "redRow": "Games where Red held the lake",
+        "holderTitle": "Who holds the lake",
+        "comboTitle": "Who gets checked",
+        "combo": "{{holder}} holds, checks {{target}}",
+        "blueSide": "Blue",
+        "redSide": "Red",
+        "advanced": "Advanced: full table of the three endings (missions, assassination, game)"
+      },
+      "votes": {
+        "blueAlsoHalf": "Teams with a Red get {{withRed}} reject votes; all-Blue teams still get {{allBlue}}.",
+        "blueLower": "Teams with a Red get {{withRed}} reject votes; all-Blue teams only {{allBlue}}.",
+        "blueHigher": "All-Blue teams are rejected even more: {{allBlue}} reject votes, against {{withRed}} for teams with a Red.",
+        "same": "Teams with a Red and all-Blue teams both get {{withRed}} reject votes.",
+        "key": "Reject votes when the team has a Red",
+        "withRedRow": "Team has a Red",
+        "allBlueRow": "Team is all Blue",
+        "reject": "Reject",
+        "approve": "Approve"
       }
     }
   },
