@@ -117,8 +117,10 @@ function bootDiff(pairs: readonly { g: string; d: number }[], n = 2000): [number
 }
 
 function compare(baseFile: string, candFile: string): void {
-  const base = new Map(readRows([baseFile]).map((r) => [`${r.profile}|${r.id}`, r]));
-  const cand = readRows([candFile]);
+  // 兩次結果用「哪一套（去掉 ＋開關 的部分）＋題號」對起來。
+  const bare = (profile: string): string => profile.split('＋')[0];
+  const base = new Map(baseFile.split(',').flatMap((f) => readRows([f])).map((r) => [`${bare(r.profile)}|${r.id}`, r]));
+  const cand = candFile.split(',').flatMap((f) => readRows([f])).map((r) => ({ ...r, profile: bare(r.profile) }));
   const keys = [...new Set(cand.map((r) => `${r.profile}|${r.cls}`))];
   console.log('| 套 | 類別 | 題數 | 前 | 後 | 差 [95%] | 變對／變錯 |');
   console.log('|---|---|---|---|---|---|---|');

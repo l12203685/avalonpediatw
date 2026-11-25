@@ -23,6 +23,7 @@ import { policyVoteLog } from '../infl/policyRead';
 // Round 33 `beliefRecursive`: the level-1 recursive reader (its level-0 seat views call this module's posterior: `useMix` restores its state).
 import { recursiveLogs, recursiveRoleShares, type RoleShare } from '../infl/recursiveRead';
 import { percivalRead39 } from '../BlueRound39Percival';
+import { blendThumbSplit74, round74Stats } from '../Round74';
 // Round 50 (`loyalRationality50`, `lakePickSuspicion50`): a circular import (its public loyal views call this module's posterior inside functions only).
 import { rationalityAdj50, lakePickTerms50, W50_ALL, W50_STRONG } from '../Round50';
 import { viewpointLog53, viewpointTerms53 } from '../Viewpoint53';
@@ -492,6 +493,11 @@ export interface BayesOptions {
    */
   thumbRead39?: boolean;
   /**
+   * Round 74 `thumbBlend74` (Round74.ts): Percival's thumb split is the log-odds mix of the posterior's and the round-39 fitted read's
+   * (weight on the read; 1 = `thumbRead39`). Within each thumb assignment the worlds keep their weights. 0 / undefined = off.
+   */
+  thumbBlend74?: number;
+  /**
    * Round 48 `beliefRecalib=1` (methods_backlog.md 第 2 節, Platt at the world level): blue seats only, the posterior's log world weights
    * times b_r for the viewer's current round r (index r − 1; rounds past the end use the last entry) — wts ∝ wts^b_r. b < 1 pulls the
    * posterior toward its prior (the human records: the default is overconfident from round 3 on, Platt slope 0.72 / 0.53 / 0.45 in R3–R5).
@@ -689,6 +695,19 @@ function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Poster
     store.set('r40', out);
     return out;
   }
+  // Round 74 `thumbBlend74` (Round74.ts): the same tilt with the split mixed (log-odds) between the posterior's and the fitted read's.
+  if ((opts.thumbBlend74 ?? 0) > 0 && obs.myRole === 'percival' && (obs.knownWizards ?? []).length === 2 && (obs.seatTeam ?? obs.myTeam) === 'good'
+    && obs.publicLoyalView !== true) {
+    const base = posterior(obs, { ...opts, thumbBlend74: 0 });
+    let store = ownViewCache.get(base);
+    if (!store) { store = new Map(); ownViewCache.set(base, store); }
+    const key = `b74|${opts.thumbBlend74}`;
+    const hit = store.get(key);
+    if (hit) return hit;
+    const out = thumbRead39Posterior(obs, base, opts.thumbBlend74);
+    store.set(key, out);
+    return out;
+  }
   // Round 36 `beliefLeadBlend`: where the lead-only recursive reader applies, mix its world weights with the level-0 posterior's
   // (λ·recursive + (1 − λ)·level 0; same L1* worlds) — the pick stays near the current one and only leans toward the recursive read.
   const blend = opts.leadBlend ?? 0;
@@ -741,13 +760,16 @@ function thumbNoStainPosterior(obs: PlayerObservation, opts: Readonly<BayesOptio
 }
 
 /** Round 40: `base` tilted so that P(thumb A is red) = 1 − the fitted read's P(A is Merlin) (`percivalRead39`), before any `ownView` offsets. */
-function thumbRead39Posterior(obs: PlayerObservation, base: Posterior): Posterior {
+function thumbRead39Posterior(obs: PlayerObservation, base: Posterior, blend74?: number): Posterior {
   const read = percivalRead39(obs);
   if (!read || base.worlds.length === 0) return base;
   const ta = base.bitOf(read.thumbs[0]);
   const pa = base.worlds.reduce((acc, w, i) => acc + ((w & ta) !== 0 ? base.wts[i] : 0), 0);
   if (!(pa > 0 && pa < 1)) return base;
-  const qa = Math.min(Math.max(1 - read.pFirst, 0), 1);
+  const qRead = Math.min(Math.max(1 - read.pFirst, 0), 1);
+  // Round 74 `thumbBlend74`: the split is the log-odds mix of the posterior's and the read's (undefined = the read's, round 40).
+  const qa = blend74 === undefined ? qRead : blendThumbSplit74(pa, qRead, blend74);
+  if (blend74 !== undefined) round74Stats.blend += 1;
   const fa = qa / pa;
   const fb = (1 - qa) / (1 - pa);
   const raw = base.worlds.map((w, i) => base.wts[i] * ((w & ta) !== 0 ? fa : fb));
@@ -1290,6 +1312,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Retired in round 39: not combined with `percivalRead39` (the round-39 read keeps the two-fail-card evidence it erased).
     ...(t.beliefThumbNoStain === true && !((t.percivalRead39 ?? 0) > 0) ? { thumbNoStain: true } : {}),
     ...(t.percivalRead39 === 1 ? { thumbRead39: true } : {}),
+    ...(t.percivalRead39 !== 1 && (t.thumbBlend74 ?? 0) > 0 ? { thumbBlend74: Math.min(t.thumbBlend74 as number, 1) } : {}),
     ...(t.beliefPendingProposal === true ? { pendingProposal: true } : {}),
     ...(t.beliefPendingProposal === true && (t.beliefPendingSkip43 ?? 0) > 0 ? { pendingSkip: t.beliefPendingSkip43 } : {}),
     ...((t.beliefLakeCal40 ?? 0) > 0 && t.beliefLakeCal40 !== 1 ? { lakeCal: t.beliefLakeCal40 } : {}),

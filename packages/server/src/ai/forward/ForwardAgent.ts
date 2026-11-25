@@ -71,6 +71,7 @@ import { loyalFresh43Team } from '../BlueRound43';
 import { tailClean52Tuning } from '../Round52';
 import { goLike56Applies, goLike56Obs, missionJoint56Applies, missionJoint56Team } from '../Round56';
 import { percivalRead39, percivalThumbPlan39, percivalThumbPlanAllows, type PercivalThumbPlan39 } from '../BlueRound39Percival';
+import { noInfoPlan74 } from '../Round74';
 import { bayesOptionsOf as bayesOptionsOf39, bayesRedShare as bayesRedShare39 } from '../belief/BayesBelief';
 import { loyalWikiPickTeam } from '../BlueRound35';
 import { goodLeadConsistentTeam, goodNoInnerBlackRepeat, leaderSelfApproveReason, leadConsistentSkip, ownVoteRejects } from '../GoodLeadConsistent';
@@ -768,7 +769,8 @@ export class ForwardAgent implements AvalonAgent {
     // Round 39: the deciding seat's own camp travels with every view built from this observation (`seatTeam`; set by HeuristicAgent.act too).
     if (obs.seatTeam === undefined) obs = withSeatTeam(obs);
     // Round 39 `percivalCarry39` (BlueRound39Percival.ts): Percival's thumb plan for this team_select, drawn once and checked by every re-pick step.
-    const plan39 = percivalThumbPlan39(this.baseline.tuning, obs);
+    // Round 74 `percivalNoInfo74` (Round74.ts): when the read cannot tell the thumbs apart the plan bars both (off: the plan as it is).
+    const plan39 = noInfoPlan74(this.baseline.tuning, obs, percivalThumbPlan39(this.baseline.tuning, obs));
     // Round 39 `loyalLakePair` (BlueRound39.ts): the seat another holder declared evil last round stays off this round's team.
     // Round 40 `loyalLakePair` bits 2 / 8: the holder of that declaration stays off proposals 1–3 too.
     const lakeBar0 = [lakePairBarred(this.baseline.tuning, obs), lakeHolderBarred40(this.baseline.tuning, obs)].filter((x): x is string => x !== null);
