@@ -27,6 +27,8 @@
     cells   正式的表（--tables）裡幾個主要的格，給文件用
     bot     自我對打：同一份整局紀錄上重算的刺殺（--base 現行、--cand 候選；`assassinPathStudy.ts --export-bot`），逐局配對
     patch   把重算的刺殺目標寫回自我對打結果檔（--src DIR --src-prefix P --cand X.jsonl --out DIR --out-prefix Q），給 `bot:gap` 量第 1F 節
+    botparts 自我對打的整局紀錄（--bot b.jsonl，`keySpotStudy.ts --export-bot`）上，用全部真人局擬合的表：九個分量拿掉／只留一個時
+            只用世界線的刺中率（機器人的梅林／派西維爾露在哪一個分量；不分層）
     merge   交叉擬合的兩份輸出照局號合成一份（--even-tables-file 用偶數號擬合的表跑的、--odd-tables-file 用奇數號擬合的表跑的 → --out FILE；
             每一局取「沒有看過它的那張表」的那一列；刺殺點的 jsonl 與 `humanPrBenchmark.ts --dump` 都可以）
 """
@@ -644,6 +646,30 @@ def patch_results(src, prefix, cand_path, out, oprefix):
     print(f'{len(files)} 個檔、{gi} 局、{n} 個刺殺、改到 {changed} 個目標')
 
 
+def bot_parts(games, bot_path, l2, limit):
+    """機器人桌：真人局擬合的表與權重，逐分量看機器人的梅林露在哪裡。"""
+    w, _ = stack_weights(games, np.ones(len(COMPS)), l2)
+    tb = fit_tables(games)
+    bots = [Game(g) for g in load(bot_path) if g.get('at') is not None]
+    bots = [g for g in bots if g.ok][:limit]
+    scored = score_many(bots, tb, 'full')
+    print(f'自我對打的刺殺點 {len(bots)}（紀錄上的刺中率 {100 * np.mean([g.g["at"] == g.merlin for g in bots]):.1f}%）')
+    sets = [('全部', []), ('拿掉派西那一側（Pk Pv Pl）', ['Pk', 'Pv', 'Pl']), ('拿掉梅林那一側（Mk Mv Ml）', ['Mk', 'Mv', 'Ml']), ('拿掉忠臣那一側（Lk Lv Ll）', ['Lk', 'Lv', 'Ll']),
+            ('拿掉派隊（Pk Mk Lk）', ['Pk', 'Mk', 'Lk']), ('拿掉票（Pv Mv Lv）', ['Pv', 'Mv', 'Lv']), ('拿掉湖（Pl Ml Ll）', ['Pl', 'Ml', 'Ll'])]
+    sets += [(f'只用 {c}', [x for x in COMPS if x != c]) for c in COMPS]
+    print('| 分量 | 只用世界線的刺中率 % | 派西第一名是真派西 % |')
+    print('|---|---|---|')
+    for name, drop in sets:
+        mask = np.array([0.0 if c in drop else 1.0 for c in COMPS])
+        hit = px = 0
+        for g, sc in zip(bots, scored):
+            _, worlds, arr = sc[0]
+            my, mx = marginals([(None, worlds, arr @ (w * mask))])
+            hit += argmax_seat(my) == g.merlin
+            px += argmax_seat(mx) == g.percival
+        print(f'| {name} | {100 * hit / len(bots):.1f} | {100 * px / len(bots):.1f} |')
+
+
 def merge_folds(even_file, odd_file, out):
     """每一局取沒有看過它的那張表的那一列：偶數號的局 ← 奇數號擬合的表；奇數號的局 ← 偶數號擬合的表。"""
     n = 0
@@ -673,6 +699,8 @@ def main():
     ap.add_argument('--src')
     ap.add_argument('--src-prefix', default='')
     ap.add_argument('--out-prefix', default='WL_')
+    ap.add_argument('--bot')
+    ap.add_argument('--limit', type=int, default=3000)
     ap.add_argument('--even-tables-file')
     ap.add_argument('--odd-tables-file')
     args = ap.parse_args()
@@ -692,6 +720,8 @@ def main():
     if args.part == 'export':
         print(f'真人局 {len(games)}')
         return export_tables(games, args.out, args.l2)
+    if args.part == 'botparts':
+        return bot_parts(games, args.bot, args.l2, args.limit)
     spots = {r['gi']: r for r in load(args.base)}
     alts = {a.split('=')[0]: {r['gi']: r for r in load(a.split('=')[1])} for a in args.alt}
     print(f'真人局 {len(games)}；刺殺點 {len(spots)}')
