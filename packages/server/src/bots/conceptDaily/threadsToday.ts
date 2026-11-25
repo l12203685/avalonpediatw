@@ -14,7 +14,7 @@ import path from 'path';
 import type { SimBank } from '../simulation/bank';
 import { exerciseOfPick } from '../threads/concepts';
 import { ThreadsGenerator } from '../threads/generate';
-import type { ThreadsDraft } from '../threads/draft';
+import { hookQuestion, type ThreadsDraft } from '../threads/draft';
 import { parsePicks } from '../threads/picksFile';
 import { THREADS_START_DATE, addDays, exerciseIdOfPick } from '../threads/plan';
 import { cutoffRecordUrl, type ThreadsToday } from './plan';
@@ -126,6 +126,7 @@ export function threadsToday(bank: Pick<SimBank, 'games' | 'byId' | 'records'>, 
     exerciseId: exerciseIdOfPick(pick, g.game),
     exercise: exerciseOfPick(g.game, pick),
     recordUrl: postId ? cutoffRecordUrl(postId, pick.proposal, pick.seat) : null,
+    question: hookQuestion(pick),
     ...(typeof permalink === 'string' && /^https:\/\/(www\.)?threads\.(net|com)\//.test(permalink) ? { threadsUrl: permalink } : {}),
   };
 }

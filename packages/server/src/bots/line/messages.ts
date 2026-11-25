@@ -237,7 +237,7 @@ export function createRolesMessage() {
               },
               {
                 type: 'text',
-                text: '知道所有壞人(莫甘娜除外)。必須向刺客隱藏身份。',
+                text: '知道刺客、莫甘娜、奧伯倫是壞人（看不到莫德雷德）。要向刺客隱藏身分。',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',
@@ -330,7 +330,7 @@ export function createRolesMessage() {
               },
               {
                 type: 'text',
-                text: '在派西維爾眼中偽裝成梅林。梅林仍能看出你是壞人。',
+                text: '在派西維爾眼中跟梅林一樣。梅林看得出你是壞人。',
                 size: 'sm',
                 wrap: true,
                 margin: 'md',

@@ -50,10 +50,10 @@ export function hideSimFollowUp(text: string, req: Pick<SimRequest, 'platform' |
   return !!cmd && getSimEngine().answersFollowUp(req, cmd);
 }
 
-/** 只回模擬的練習群裡的 /指令、/help（後面可以接 模擬）→ 模擬瓦的指令說明（LINE 版）；其他 null。 */
+/** 只回模擬的練習群裡的 /指令、/help、/說明（後面可以接 模擬）→ 模擬瓦的指令說明（LINE 版）；其他 null。 */
 export function simHelpFor(text: string): string | null {
   if (!SIM_CONFIG.commandsEnabled) return null;
-  return /^[/／]\s*(指令|help)\s*(模擬瓦?|模拟瓦?|sim)?\s*$/iu.test((text ?? '').normalize('NFKC').trim()) ? SIM_HELP_TEXT : null;
+  return /^[/／]\s*(指令|help|說明|说明)\s*(模擬瓦?|模拟瓦?|sim)?\s*$/iu.test((text ?? '').normalize('NFKC').trim()) ? SIM_HELP_TEXT : null;
 }
 
 /** LINE 1 對 1 的快速按鈕（群組裡不放：按鈕要放在最後一則，鏡像群的最後一則是同步訊息）。 */

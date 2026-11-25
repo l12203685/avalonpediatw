@@ -22,6 +22,7 @@ export const RELAYED_DISCORD_COMMANDS: ReadonlySet<string> = new Set([
   COMMANDS.SIM_END,
   COMMANDS.SEAT_FILLER,
   COMMANDS.PAIPU_FIX,
+  COMMANDS.DAILY_QUESTION,
 ]);
 
 /** 回覆附了圖（/排行 的圖表）：LINE 那邊只有文字，加一行說明。 */

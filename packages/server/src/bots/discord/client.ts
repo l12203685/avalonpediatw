@@ -19,6 +19,8 @@ import {
   handleStatsCommand,
   handleLeaderboardCommand,
   handleChemistryCommand,
+  COMMAND_ERROR_TEXT,
+  UNKNOWN_COMMAND_TEXT,
 } from './commands';
 import { getChatMirror } from '../ChatMirror';
 import { FEEDBACK_CONTENT_MAX_CHARS } from '../feedback/config';
@@ -34,6 +36,7 @@ import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
 import { handlePaipuFixCommand } from '../paipuFix/discordCommand';
 import { handleClaimCommand, handleReportCommand } from '../reports/discordCommand';
 import { handleCorrectionCommand } from '../recordCorrection/discordCommand';
+import { handleDailyQuestionCommand } from '../dailyQuestion/discordCommand';
 import { REPORT_KIND_CHOICES } from '../reports/commands';
 import { CLAIM_NAME_MAX, FEEDBACK_MESSAGE_MAX } from '../../services/communityReports';
 
@@ -47,32 +50,40 @@ import { CLAIM_NAME_MAX, FEEDBACK_MESSAGE_MAX } from '../../services/communityRe
  */
 export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>> {
   return [
-    new SlashCommandBuilder()
-      .setName(COMMANDS.HELP)
-      .setDescription('Show help for all Avalon Bot commands（加主題看細節）')
-      .addStringOption((o) =>
-        o
-          .setName(HELP_TOPIC_OPTION)
-          .setDescription('看某個功能的細節 / Details of one feature')
-          .setRequired(false)
-          .addChoices(...HELP_TOPICS.map((t) => ({ name: t, value: t })))
-      ),
+    // /help and /說明 (2026-11-25) are the same command under two names: same option, same reply.
+    ...[COMMANDS.HELP, COMMANDS.HELP_ZH].map((name) =>
+      new SlashCommandBuilder()
+        .setName(name)
+        .setDescription('機器人有哪些指令，每個一行（加主題看細節）/ Bot help')
+        .addStringOption((o) =>
+          o
+            .setName(HELP_TOPIC_OPTION)
+            .setDescription('看某個功能的細節 / Details of one feature')
+            .setRequired(false)
+            .addChoices(...HELP_TOPICS.map((t) => ({ name: t, value: t })))
+        )
+    ),
 
     // 2026-10-09: kept registered (no options) so users get a pointer to
     // signage-cloud instead of "unknown command".
     ...PLAY_PLATFORM_COMMANDS.map((name) =>
       new SlashCommandBuilder()
         .setName(name)
-        .setDescription('Games are played on signage-cloud now — replies with the link (前往 signage-cloud 開局)')
+        .setDescription('對局已改到 signage-cloud：回覆開局連結 / Games are played on signage-cloud')
     ),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.RULES)
-      .setDescription('Display Avalon game rules'),
+      .setDescription('阿瓦隆規則（10 人局）/ Game rules'),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.ROLES)
-      .setDescription('Display information about all roles'),
+      .setDescription('七個角色各知道什麼 / Roles'),
+
+    // 2026-11-25 每日一題 (bots/dailyQuestion) — today's Threads／IG question; public reply, same text as LINE.
+    new SlashCommandBuilder()
+      .setName(COMMANDS.DAILY_QUESTION)
+      .setDescription('今天的阿瓦隆每日一題：問題、牌譜連結、怎麼在這裡作答 / Today\'s question'),
 
     // 2026-10-10 stats lookup — CJK names, see COMMANDS.STATS in config.ts.
     new SlashCommandBuilder()
@@ -353,7 +364,12 @@ export class DiscordBotClient {
     try {
       switch (commandName) {
         case COMMANDS.HELP:
+        case COMMANDS.HELP_ZH:
           await handleHelpCommand(interaction);
+          break;
+
+        case COMMANDS.DAILY_QUESTION:
+          await handleDailyQuestionCommand(interaction);
           break;
 
         // 2026-10-09: games are played on signage-cloud — the game-flow
@@ -425,7 +441,7 @@ export class DiscordBotClient {
           break;
 
         default: {
-          const msg = '❌ Unknown command!';
+          const msg = UNKNOWN_COMMAND_TEXT;
           if (interaction.deferred) {
             await interaction.editReply(msg);
           } else if (!interaction.replied) {
@@ -441,7 +457,7 @@ export class DiscordBotClient {
     } catch (error) {
       console.error(`Error handling command ${commandName}:`, error);
       // Safe fallback that works whether the handler deferred, replied, or neither
-      const errMsg = '❌ An error occurred while executing the command.';
+      const errMsg = COMMAND_ERROR_TEXT;
       try {
         if (interaction.deferred && !interaction.replied) {
           await interaction.editReply(errMsg);

@@ -1,6 +1,6 @@
-import { AttachmentBuilder, ChatInputCommandInteraction, CommandInteraction, DiscordAPIError, EmbedBuilder, MessageFlags } from 'discord.js';
+import { AttachmentBuilder, ChatInputCommandInteraction, CommandInteraction, DiscordAPIError, MessageFlags } from 'discord.js';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS } from './config';
+import { STATS_OPTIONS } from './config';
 import {
   WEEKLY_CHART_CAPTION,
   chemistryReply,
@@ -10,16 +10,19 @@ import {
   leaderboardScopeText,
   playerCardReply,
 } from '../stats/statsQueries';
-import { SIM_HELP_FOLLOW_UP, STATS_COMMAND_USAGE, STATS_PAGE_URL } from '../stats/statsReplies';
-import { SIM_CONFIG } from '../simulation/config';
-import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from '../seatFiller/commands';
-import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from '../paipuFix/commands';
-import { CLAIM_HELP_TEXT, CLAIM_USAGE, REPORT_HELP_TEXT, REPORT_USAGE } from '../reports/commands';
-import { CORRECTION_HELP_TEXT, CORRECTION_USAGE } from '../recordCorrection/commands';
-import { helpTopicOf, topicHelpText } from '../help';
+import { helpText, helpTopicOf } from '../help';
+import { rolesText, rulesText } from '../rules';
 
 /** Option name of /help (2026-11-17: /help 主題:模擬 → that topic's details). */
 export const HELP_TOPIC_OPTION = '主題';
+
+/**
+ * Fallback replies of the command dispatcher (client.ts), Traditional Chinese since 2026-11-25
+ * (they were 「❌ Unknown command!」 and 「❌ An error occurred while executing the command.」).
+ * Fixed texts: they never echo what the person typed and never carry the error itself.
+ */
+export const UNKNOWN_COMMAND_TEXT = '這個指令機器人不認得（可能是舊的指令）。打 /help 看現在有哪些指令。';
+export const COMMAND_ERROR_TEXT = '指令執行時出了問題，請稍後再試一次；一直不行的話請用 /回報 告訴我們。';
 
 // ── Play platform pointer (2026-10-09) ───────────────────────────────────────
 
@@ -32,9 +35,8 @@ export const HELP_TOPIC_OPTION = '主題';
  */
 export function buildPlayPlatformMessage(commandName: string): string {
   return [
-    `🎲 對局已改到 signage-cloud 進行，\`/${commandName}\` 不再在本站開房或操作對局。`,
-    `👉 前往 signage-cloud 開局：${PLAY_PLATFORM_URL}`,
-    'Games are now played on signage-cloud — open the link above to create or join a game.',
+    `🎲 對局已改到 signage-cloud，\`/${commandName}\` 不在這裡開房或操作對局了。`,
+    `👉 開局、加入都在這裡：${PLAY_PLATFORM_URL}`,
   ].join('\n');
 }
 
@@ -45,87 +47,22 @@ export async function handlePlayPlatformCommand(interaction: CommandInteraction)
   });
 }
 
-// ── /help ────────────────────────────────────────────────────────────────────
+// ── /help、/說明 ─────────────────────────────────────────────────────────────
 
+/**
+ * /help［主題］ and /說明［主題］ (bots/help.ts). Since 2026-11-25 the reply without a topic is the same
+ * one-line-per-feature text LINE gets (Edward 2026-11-17：「機器人最基本的說明就是 /help 剩下可以再靠後面打
+ * 指令細查」); before, Discord answered with a long half-English embed that also led with the retired
+ * game-flow commands. Plain text, public, mentions off.
+ */
 export async function handleHelpCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
-  // /help 主題:模擬 (2026-11-17, bots/help.ts): just that topic's details, plain text.
   const options = (interaction as unknown as Partial<ChatInputCommandInteraction>).options;
   const raw = typeof options?.getString === 'function' ? options.getString(HELP_TOPIC_OPTION) : null;
   const topic = raw ? helpTopicOf(raw) : null;
-  if (topic) {
-    const scope = topic === '戰績' ? await leaderboardScopeText() : null;
-    await interaction.editReply({ content: topicHelpText(topic, 'discord', scope), allowedMentions: { parse: [] } });
-    return;
-  }
   // The window /排行 ranks by, from the cache (a schemaVersion-3 cache still ranks by 各人最近 100 場).
-  const scope = await leaderboardScopeText();
-
-  const embed = new EmbedBuilder()
-    .setColor(DISCORD_CONFIG.colors.neutral)
-    .setTitle('🎭 Avalon Bot Help')
-    .setDescription(
-      `對局已改到 signage-cloud 進行 — Games are now played on signage-cloud:\n${PLAY_PLATFORM_URL}`
-    )
-    .addFields(
-      {
-        name: '🎲 開局 / Play',
-        value:
-          `${PLAY_PLATFORM_COMMANDS.map((name) => `/${name}`).join(' ')}\n` +
-          '只會回覆 signage-cloud 開局連結，不再在本站開房。\n' +
-          'These commands now just reply with the signage-cloud link.',
-        inline: false,
-      },
-      {
-        name: '📊 戰績查詢 / Stats',
-        value:
-          `\`${STATS_COMMAND_USAGE.player}\` 個人戰績（名字可打一部分）\n` +
-          `\`${STATS_COMMAND_USAGE.leaderboard}\` 角色理論勝率排行 Top 10${scope ? `（${scope}）` : ''}\n` +
-          `\`${STATS_COMMAND_USAGE.chemistry}\` 兩人同隊默契\n` +
-          `\`${STATS_COMMAND_USAGE.feedback}\` 給管理者的建議或回報問題\n` +
-          `每週一 12:00 (+08) 自動貼出本週排行。完整圖表（不用登入）：${STATS_PAGE_URL}`,
-        inline: false,
-      },
-      // 模擬瓦 (2026-10-14 review fix): listed only while SIM_COMMANDS_ENABLED is on.
-      ...(SIM_CONFIG.commandsEnabled
-        ? [{
-          name: '🧩 模擬瓦 / Proposal drill',
-          value:
-            `\`${STATS_COMMAND_USAGE.simulation}\` 真人對局停在你派票的當下：看前面的派票、寫區間、自己派，看你的派票放出什麼資訊\n` +
-            `接著用 ${SIM_HELP_FOLLOW_UP}（一人一題，30 分鐘沒動作自動結束；回覆公開的頻道裡，沒開題的人也可以幫忙答最新的一題）\n` +
-            `\`/help 主題:模擬\` 全部指令的白話說明`,
-          inline: false,
-        }]
-        : []),
-      {
-        name: '🤖 補位機器人 / Seat filler',
-        value: `\`${SEAT_FILLER_USAGE.discord}\` ${SEAT_FILLER_HELP_TEXT}\n${SEAT_FILLER_LIMITS_TEXT}`,
-        inline: false,
-      },
-      {
-        name: '📝 待修正牌譜 / Records to fix',
-        value: `\`${PAIPU_FIX_USAGE.discord}\` ${PAIPU_FIX_HELP_TEXT}（每天凌晨匯入讀不懂的貼文）`,
-        inline: false,
-      },
-      {
-        name: '📮 回報與 ID 認領 / Reports & ID claims',
-        value: `\`${REPORT_USAGE.discord}\` ${REPORT_HELP_TEXT}\n\`${CLAIM_USAGE.discord}\` ${CLAIM_HELP_TEXT}（管理者核准後生效）\n\`${CORRECTION_USAGE.discord}\` ${CORRECTION_HELP_TEXT}`,
-        inline: false,
-      },
-      {
-        name: `/${COMMANDS.RULES}`,
-        value: 'Display game rules',
-        inline: false,
-      },
-      {
-        name: `/${COMMANDS.ROLES}`,
-        value: 'Display role descriptions',
-        inline: false,
-      }
-    )
-    .setFooter({ text: '/help 主題:模擬（或 戰績、補位、待修正、回報、意見）看細節' });
-
-  await interaction.editReply({ embeds: [embed] });
+  const scope = topic === '戰績' ? await leaderboardScopeText() : null;
+  await interaction.editReply({ content: helpText(topic, 'discord', scope), allowedMentions: { parse: [] } });
 }
 
 // ── Stats lookup (2026-10-10) ────────────────────────────────────────────────
@@ -182,91 +119,19 @@ export async function handleChemistryCommand(interaction: ChatInputCommandIntera
   await replyStats(interaction, () => chemistryReply(a, b));
 }
 
-// ── /rules ───────────────────────────────────────────────────────────────────
+// ── /rules、/roles ───────────────────────────────────────────────────────────
 
+/**
+ * /rules and /roles (bots/rules.ts): the 10-player rules and the seven roles, one line each, in
+ * Traditional Chinese (2026-11-25). The old English embeds were wrong for this community — they said
+ * Merlin cannot see Morgana, left Mordred out and ended the game on five rejections.
+ */
 export async function handleRulesCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
-
-  const embed = new EmbedBuilder()
-    .setColor(DISCORD_CONFIG.colors.neutral)
-    .setTitle('Avalon Game Rules')
-    .addFields(
-      {
-        name: 'Objective',
-        value:
-          '**Good Team**: Complete 3 successful quests\n**Evil Team**: Complete 3 failed quests or assassinate Merlin',
-        inline: false,
-      },
-      {
-        name: 'Roles',
-        value:
-          '**Good**: Merlin, Percival, Loyal Servants\n**Evil**: Assassin, Morgana, Oberon (optional)',
-        inline: false,
-      },
-      {
-        name: 'Voting Phase',
-        value:
-          'All players vote to approve/reject the proposed team. Majority rules. 5 rejections = evil wins.',
-        inline: false,
-      },
-      {
-        name: 'Quest Phase',
-        value:
-          'Selected players choose success/fail. Even 1 fail fails the quest. Good needs 3 wins.',
-        inline: false,
-      },
-      {
-        name: 'Assassination',
-        value: 'If good wins 3 quests, assassin tries to identify and kill Merlin.',
-        inline: false,
-      }
-    )
-    .setFooter({ text: 'Use /roles for detailed role information' });
-
-  await interaction.editReply({ embeds: [embed] });
+  await interaction.editReply({ content: rulesText('discord'), allowedMentions: { parse: [] } });
 }
-
-// ── /roles ───────────────────────────────────────────────────────────────────
 
 export async function handleRolesCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
-
-  const embed = new EmbedBuilder()
-    .setColor(DISCORD_CONFIG.colors.neutral)
-    .setTitle('Avalon Roles')
-    .addFields(
-      {
-        name: 'Merlin (Good)',
-        value: 'Knows all evil players (except Morgana). Must hide identity.',
-        inline: true,
-      },
-      {
-        name: 'Percival (Good)',
-        value: 'Knows who Merlin and Morgana are, but not which is which.',
-        inline: true,
-      },
-      {
-        name: 'Loyal Servants (Good)',
-        value: 'Regular good players. No special information.',
-        inline: true,
-      },
-      {
-        name: 'Assassin (Evil)',
-        value: 'Can assassinate a player in the final phase. Kills Merlin = evil wins.',
-        inline: true,
-      },
-      {
-        name: 'Morgana (Evil)',
-        value: 'Evil team member. Appears as Merlin to Percival. Merlin cannot see her.',
-        inline: true,
-      },
-      {
-        name: 'Oberon (Evil)',
-        value: 'Evil player unknown to other evil members. Unique challenge.',
-        inline: true,
-      }
-    )
-    .setFooter({ text: 'Use /rules for complete game rules' });
-
-  await interaction.editReply({ embeds: [embed] });
+  await interaction.editReply({ content: rolesText('discord'), allowedMentions: { parse: [] } });
 }
