@@ -921,8 +921,8 @@ export function strengthTrendGlance(
 // ── 個人分析：三塊勝率、理論勝率、Elo ──────────────────────────────────────────
 
 export interface BlockFinalInput {
-  /** 自己那一方最後贏的比例（0–100）；算不出來 null。 */
-  win: number | null;
+  /** 自己那一方最後贏的比例（0–100）；算不出來 null／undefined。 */
+  win: number | null | undefined;
   n: number;
 }
 
@@ -980,3 +980,14 @@ export function eloGlance(
   return { key: 'elo.atPeak', params };
 }
 
+
+// ── 位置、角色與默契：每個座位／角色最後贏多少（第四批，390px 巡一遍時補的一句話） ──────────────────
+
+/**
+ * 一組「名字＋自己那一方最後贏的比例」裡，最高、最低的兩個（只比場數夠的）。
+ * key = 句型（例 'seatWin.blue'、'roleWin.lead'）；hi／lo 原樣放進句子（座位號、角色名稱）。
+ */
+export function winExtremesSentence(rows: ReadonlyArray<{ name: string } & BlockFinalInput> | null | undefined, key: string, min: number): Sentence | null {
+  const ex = extremes((rows ?? []).flatMap(r => (finite(r.win) && r.n > 0 ? [{ name: r.name, share: { pct: r.win, n: r.n } }] : [])), min);
+  return ex ? { key, params: { hi: ex.hi.name, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.name, loRate: pctText(ex.lo.share.pct) } } : null;
+}

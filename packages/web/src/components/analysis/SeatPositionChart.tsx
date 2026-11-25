@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { outcomeBlocks, theorySettings } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import { blockValues, seatDisplay, seatFactionCounts, useIsWide } from './seatRoleBlocks';
-import { MetricBlocks, type MetricBlockRow } from './ui';
+import { MetricBlocks, Takeaway, type MetricBlockRow } from './ui';
+import { winExtremesSentence } from './core/glance';
+import { sentenceText } from './core/glanceView';
 
 /**
  * 各位置的三塊結果 (全體) — 「位置」分頁的第一個小分頁。
@@ -49,7 +51,19 @@ export default function SeatPositionChart(): JSX.Element {
     ...blockValues(outcomeBlocks(s[faction], faction)),
   }));
 
+  // (2026-11-25 站長「一目瞭然」，第四批) 表格上面一句話：當藍方、當紅方各是坐哪裡最後贏最多／最少（表上「遊戲結果」那一欄）
+  const leads = (['blue', 'red'] as const).map(faction => sentenceText(t, winExtremesSentence(
+    rowsFor(faction).map((r, i) => ({ name: seatDisplay(seats[i].seat), win: r.final.win, n: r.final.n ?? 0 })),
+    `seatWin.${faction}`, minCell,
+  ))).filter((s): s is string => !!s);
+
   return (
+    <div className="space-y-3">
+    {leads.length > 0 && (
+      <Takeaway>
+        {leads.map((s, i) => <p key={i} className={i === 0 ? 'text-sm font-semibold text-white sm:text-[15px]' : ''} data-testid="seat-win-lead">{s}</p>)}
+      </Takeaway>
+    )}
     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
       {(['red', 'blue'] as const).map(faction => (
         <MetricBlocks
@@ -67,6 +81,7 @@ export default function SeatPositionChart(): JSX.Element {
           footnote={t('analytics.r6.tabsb.seats.note')}
         />
       ))}
+    </div>
     </div>
   );
 }

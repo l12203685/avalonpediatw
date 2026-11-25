@@ -2685,6 +2685,14 @@
       "elo": {
         "peak": "{{name}} is at Elo {{elo}} now (1500 is average), rank {{rank}}; peak {{peak}} ({{date}}).",
         "atPeak": "{{name}} is at Elo {{elo}} now (1500 is average), rank {{rank}} — their highest yet."
+      },
+      "seatWin": {
+        "blue": "As Good, seat {{hi}} wins most ({{hiRate}}) and seat {{lo}} least ({{loRate}}).",
+        "red": "As Evil, seat {{hi}} wins most ({{hiRate}}) and seat {{lo}} least ({{loRate}})."
+      },
+      "roleWin": {
+        "lead": "Across all players, the role that wins most is {{hi}} ({{hiRate}}); the hardest is {{lo}} ({{loRate}}).",
+        "how": "Each row has three parts: missions, the assassination after Good completes three missions, and who finally won — all from that role's side."
       }
     }
   },
