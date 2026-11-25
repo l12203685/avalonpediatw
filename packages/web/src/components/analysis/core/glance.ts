@@ -809,3 +809,185 @@ export function radarGlance(axes: readonly RadarAxisInput[] | null | undefined, 
     sentence: { key: 'radar.own', params: { name, best: hi.key, bestValue: pctText(hi.value), worst: lo.key, worstValue: pctText(lo.value) } },
   };
 }
+
+// ══ 第四批（2026-11-25）：決定性票、陣容強度、個人分析的其他小分頁 ══════════════════════════════
+
+// ── 戰績排行「決定性票／關鍵外白內黑」：全體投對多少、四種投法各投對多少 ────────────────────────
+
+export interface DecisiveGroupInput {
+  /** onYes／onNo／offYes／offNo（在不在隊上 × 投贊成或反對）。 */
+  group: string;
+  right: number;
+  wrong: number;
+}
+
+export interface DecisiveGlance {
+  /** 全體的正確率（0–100）；n = 不算中性的決定性票張數。 */
+  overall: Share | null;
+  /** 四種投法各自的正確率（照傳進來的順序；沒有票的不列）。 */
+  groups: Array<{ group: string; share: Share }>;
+  /** 全體投對多少（scope = 範圍的叫法，原樣放進句子）。 */
+  sentence: Sentence | null;
+  /** 跟習慣反著投的兩種票（外白、內黑）各投對多少；有一種沒有票就不寫。 */
+  abnormalSentence: Sentence | null;
+}
+
+/** p0 = 全體正確率（0–1，跟表格同一個數）；groups = 全體的四組對／錯張數。 */
+export function decisiveGlance(p0: number | null | undefined, groups: readonly DecisiveGroupInput[] | null | undefined, scope: string): DecisiveGlance {
+  const rows = (groups ?? []).flatMap(g => {
+    const n = (finite(g.right) ? g.right : 0) + (finite(g.wrong) ? g.wrong : 0);
+    return n > 0 ? [{ group: g.group, share: { pct: (g.right / n) * 100, n } }] : [];
+  });
+  const n = rows.reduce((s, r) => s + r.share.n, 0);
+  const overall: Share | null = finite(p0) && n > 0 ? { pct: p0 * 100, n } : null;
+  const offYes = rows.find(r => r.group === 'offYes');
+  const onNo = rows.find(r => r.group === 'onNo');
+  return {
+    overall,
+    groups: rows,
+    sentence: overall ? { key: 'decisive.lead', params: { scope, rate: pctText(overall.pct) } } : null,
+    abnormalSentence: offYes && onNo
+      ? { key: 'decisive.abnormal', params: { offYes: pctText(offYes.share.pct), onNo: pctText(onNo.share.pct) } }
+      : null,
+  };
+}
+
+// ── 陣容強度：桌上越強，三種結局怎麼變 ──────────────────────────────────────────
+
+export interface StrengthBinInput {
+  /** 這一箱的局數。 */
+  n: number;
+  /** 這一箱的比例（0–100）。 */
+  rate: number;
+}
+
+/**
+ * 「強度與結果」：最弱的那一箱（第一箱）跟最強的那一箱（最後一箱）比；metric = 結局的白話（例「三個任務失敗」）。
+ * overall = 全部局的比例（0–100）。
+ */
+export function strengthCurveGlance(bins: readonly StrengthBinInput[] | null | undefined, overall: number | null | undefined, metric: string): Sentence | null {
+  const rows = (bins ?? []).filter(b => finite(b.n) && b.n > 0 && finite(b.rate));
+  if (rows.length < 2 || !finite(overall)) return null;
+  const weak = rows[0];
+  const strong = rows[rows.length - 1];
+  const rel = relation(strong.rate, weak.rate);
+  return { key: `strength.curve.${rel}`, params: { metric, strong: pctText(strong.rate), weak: pctText(weak.rate), all: pctText(overall) } };
+}
+
+export interface StrengthTierInput {
+  /** 分層的名字（例「高強度」）。 */
+  label: string;
+  n: number;
+  threeRed: number;
+  blueDead: number;
+  blueAlive: number;
+}
+
+export interface StrengthTiersGlance {
+  /** 每一層三種結局的比例（0–100，佔這層的局）。 */
+  rows: Array<{ label: string; n: number; threeRed: number; blueDead: number; blueAlive: number }>;
+  hi: string | null;
+  lo: string | null;
+  /** 藍方贏最多、最少的分層（只比局數夠的）。 */
+  sentence: Sentence | null;
+}
+
+export function strengthTiersGlance(tiers: readonly StrengthTierInput[] | null | undefined, min: number): StrengthTiersGlance {
+  const rows = (tiers ?? [])
+    .filter(r => finite(r.n) && r.n > 0)
+    .map(r => ({ label: r.label, n: r.n, threeRed: (r.threeRed / r.n) * 100, blueDead: (r.blueDead / r.n) * 100, blueAlive: (r.blueAlive / r.n) * 100 }));
+  const ex = extremes(rows.map(r => ({ label: r.label, share: { pct: r.blueAlive, n: r.n } })), min);
+  if (!ex) return { rows, hi: null, lo: null, sentence: null };
+  return {
+    rows, hi: ex.hi.label, lo: ex.lo.label,
+    sentence: { key: 'strength.tiers', params: { hi: ex.hi.label, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.label, loRate: pctText(ex.lo.share.pct) } },
+  };
+}
+
+/**
+ * 「走勢」：典型一桌的中位數，第一點跟最後一點比；measure = 「賽前 Elo」或「實力排名（PR）」，日期寫年-月。
+ * 差不到 evenGap（顯示的整數）就說「前後差不多」（Elo 差 3 分不算變低）。
+ */
+export function strengthTrendGlance(
+  first: { date: string; median: number } | null | undefined, last: { date: string; median: number } | null | undefined, measure: string,
+  evenGap = 1,
+): Sentence | null {
+  if (!first || !last || !finite(first.median) || !finite(last.median) || first === last) return null;
+  const gap = shownPct(last.median) - shownPct(first.median);
+  const key = `strength.trend.${Math.abs(gap) < evenGap ? 'same' : gap > 0 ? 'up' : 'down'}`;
+  return { key, params: { measure, from: first.date, to: last.date, a: shownPct(first.median), b: shownPct(last.median) } };
+}
+
+// ── 個人分析：三塊勝率、理論勝率、Elo ──────────────────────────────────────────
+
+export interface BlockFinalInput {
+  /** 自己那一方最後贏的比例（0–100）；算不出來 null／undefined。 */
+  win: number | null | undefined;
+  n: number;
+}
+
+export interface PlayerBlocksGlance {
+  sentence: Sentence | null;
+  /** 角色裡最會贏、最難贏的（只比場數夠的；params 的 hi／lo 是角色的資料鍵）。 */
+  roleSentence: Sentence | null;
+}
+
+export function playerBlocksGlance(
+  red: BlockFinalInput | null | undefined, blue: BlockFinalInput | null | undefined,
+  roles: ReadonlyArray<{ role: string } & BlockFinalInput> | null | undefined, name: string, min: number,
+): PlayerBlocksGlance {
+  const ok = (b: BlockFinalInput | null | undefined): b is BlockFinalInput & { win: number } => !!b && finite(b.win) && b.n > 0;
+  const sentence = ok(red) && ok(blue)
+    ? { key: `blocks.${relation(red.win, blue.win)}`, params: { name, red: pctText(red.win), blue: pctText(blue.win) } }
+    : null;
+  const ex = extremes((roles ?? []).flatMap(r => (ok(r) ? [{ role: r.role, share: { pct: r.win, n: r.n } }] : [])), min);
+  return {
+    sentence,
+    roleSentence: ex
+      ? { key: 'blocks.roles', params: { hi: ex.hi.role, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.role, loRate: pctText(ex.lo.share.pct) } }
+      : null,
+  };
+}
+
+/**
+ * 理論勝率：照角色算預期贏多少（role）、同一段場次實際贏多少（actual）；
+ * 實際比預期高／低／一樣換句型。沒有角色理論時用位置理論（kind = 'position'）。
+ */
+export function theoryGlance(
+  role: { rate: number | null; actual: number | null } | null | undefined,
+  position: { rate: number | null; actual: number | null } | null | undefined,
+  name: string,
+): Sentence | null {
+  const pick = role && finite(role.rate) && finite(role.actual) ? { kind: 'role', ...role }
+    : position && finite(position.rate) && finite(position.actual) ? { kind: 'position', ...position } : null;
+  if (!pick || !finite(pick.rate) || !finite(pick.actual)) return null;
+  const rel = relation(pick.actual, pick.rate);
+  return { key: `theory.${pick.kind}.${rel}`, params: { name, rate: pctText(pick.rate), actual: pctText(pick.actual) } };
+}
+
+/** Elo：現在多少、排第幾、最高到過多少（series = [日期, Elo, …]，跟走勢圖同一份）。 */
+export function eloGlance(
+  elo: number | null | undefined, rank: number | null | undefined, series: ReadonlyArray<readonly [string, number, ...unknown[]]> | null | undefined, name: string,
+): Sentence | null {
+  if (!finite(elo)) return null;
+  const pts = (series ?? []).filter(p => finite(p[1]));
+  const peak = pts.reduce<readonly [string, number, ...unknown[]] | null>((a, b) => (!a || b[1] > a[1] ? b : a), null);
+  const now = Math.round(elo);
+  const params: Record<string, string | number> = { name, elo: now, rank: finite(rank) ? rank : '—' };
+  if (peak && Math.round(peak[1]) > now) {
+    return { key: 'elo.peak', params: { ...params, peak: Math.round(peak[1]), date: peak[0] } };
+  }
+  return { key: 'elo.atPeak', params };
+}
+
+
+// ── 位置、角色與默契：每個座位／角色最後贏多少（第四批，390px 巡一遍時補的一句話） ──────────────────
+
+/**
+ * 一組「名字＋自己那一方最後贏的比例」裡，最高、最低的兩個（只比場數夠的）。
+ * key = 句型（例 'seatWin.blue'、'roleWin.lead'）；hi／lo 原樣放進句子（座位號、角色名稱）。
+ */
+export function winExtremesSentence(rows: ReadonlyArray<{ name: string } & BlockFinalInput> | null | undefined, key: string, min: number): Sentence | null {
+  const ex = extremes((rows ?? []).flatMap(r => (finite(r.win) && r.n > 0 ? [{ name: r.name, share: { pct: r.win, n: r.n } }] : [])), min);
+  return ex ? { key, params: { hi: ex.hi.name, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.name, loRate: pctText(ex.lo.share.pct) } } : null;
+}

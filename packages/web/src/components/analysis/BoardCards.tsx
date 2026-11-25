@@ -92,7 +92,7 @@ function Card({ row, tone, refValue, max }: { row: BoardCardRow; tone: GlanceTon
     : <div className={cls} data-testid="board-card">{body}</div>;
 }
 
-export function BoardCards({ rows, reference = [], referenceExtra, refValue, tone = 'rank', max = 100, topN = 10, table }: {
+export function BoardCards({ rows, reference = [], referenceExtra, refValue, refNote, tone = 'rank', max = 100, topN = 10, table }: {
   rows: readonly BoardCardRow[];
   /** 對照組（不排名）：收在下面的收合區。 */
   reference?: readonly BoardCardRow[];
@@ -100,6 +100,8 @@ export function BoardCards({ rows, reference = [], referenceExtra, refValue, ton
   referenceExtra?: ReactNode;
   /** 長條上的白線（不算散客的全體）。 */
   refValue?: number | null;
+  /** 白線是什麼（預設「不算散客的全體」；別的對照例如決定性票的全體正確率自己給）。 */
+  refNote?: string;
   tone?: GlanceTone;
   /** 長條滿格代表多少（勝率 = 100）。 */
   max?: number;
@@ -128,7 +130,7 @@ export function BoardCards({ rows, reference = [], referenceExtra, refValue, ton
         </button>
       )}
       <p className="text-[11px] text-zinc-500">
-        {refValue !== null && refValue !== undefined && t(`${G}.refLine`)}
+        {refValue !== null && refValue !== undefined && (refNote ?? t(`${G}.refLine`))}
         {rows.some(r => r.onClick) && t(`${G}.tapHint`)}
       </p>
       {(reference.length > 0 || referenceExtra) && (

@@ -98,7 +98,7 @@ issue:
 1. GitHub PR diff、base/main SHA、Issue ownership 與目標清楚；若 PR 仍 Draft，先有 Ready-for-review 與實際審查。
 2. TypeScript/Socket/Signage/資料工作需有 fail-before/pass-after、type-check、lint、integration CI；策略工作還需合法角色視野、不看未來、真人/paired-seed 最終藍勝和刺殺生存驗收。
 3. Docs-only PR 可能被 GitHub Actions 的 `paths-ignore` 跳過；不要說「測試全綠」。要至少做連結、JSON／Markdown 結構、引用來源狀態、內文一致性人工驗證。
-4. **main 自動部署風險**：本專案 `PROJECT_CONTEXT.md` 記錄 Render push main 會自動部署、Firebase 前端有自己的 workflow；另有 Cloudflare/Vercel CI 狀態。合併前需確認實際觸發、保留回滾與健康檢查，不能假定合併不會部署。
+4. **main 自動部署風險**：本專案 `PROJECT_CONTEXT.md` 記錄 Render push main 會自動部署、Firebase 前端有自己的 workflow；另有 Cloudflare/Vercel CI 狀態。合併前需確認實際觸發、保留回滾與健康檢查，不能假定合併不會部署。 **2026-11-25 補充（Claude 提出，站長出國中，回來後請他確認）**：會讓正式機重啟的 PR（改到 `packages/server/**`、`packages/shared/**` 的執行檔案等，清單見 `render.yaml` 的 `buildFilter`）不要白天逐個合併，CI 過了先放著，集中在台北 03:30 左右一次合併；只改網站、文件、測試的不受限。原因與細節見 [`docs/BOTS.md`〈伺服器重啟〉](../BOTS.md#伺服器重啟什麼還在什麼會不見)。
 5. 重要房規、登入/安全、資料遷移、Secrets、可能中斷服務的高風險合併需 Edward 確認；若無法確認或 CI 失敗則阻塞不合併。
 6. 合併時綁定 `expected_head_sha`；確認 GitHub 回傳 `merged=true`、main SHA 和 CI/deploy。Claude 負責追蹤服務及回滾，Gemini 做獨立 smoke。
 

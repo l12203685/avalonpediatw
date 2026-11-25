@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next';
 import { roleFaction } from '../../../services/api';
 import type { AnalysisTheorySettings, OutcomeBlocks } from '../../../services/api';
-import { MetricBlocks, type MetricBlockRow } from '../ui';
+import { MetricBlocks, Takeaway, type MetricBlockRow } from '../ui';
+import { playerBlocksGlance } from '../core/glance';
+import { sentenceText } from '../core/glanceView';
 import { orderedRoles, type PlayerRadarModel } from './radarModel';
 
 /**
@@ -12,6 +14,8 @@ import { orderedRoles, type PlayerRadarModel } from './radarModel';
  * 舊快取只列紅藍兩列並提示「下次每日更新後提供」)。數字全由 @avalon/shared playerOutcomeBlocks 算好，
  * 這裡只排列。取代舊的「詳細數據」側欄與任務結算口徑的「角色勝率」長條。
  * 樣本少的格子變淡，門檻 = 快取的 theoryMinCellGames (與理論勝率補值同一個數)。
+ * (2026-11-25 站長「一目瞭然」，第四批) 表格上面一句話：當紅方、當藍方最後各贏多少（表上「遊戲結果」那兩格），
+ * 角色裡最會贏、最難贏的（只比場數夠的）。
  */
 export default function BlocksPanel({
   model, settings,
@@ -39,10 +43,23 @@ export default function BlocksPanel({
   }
 
   const minCell = settings.theoryMinCellGames;
+  const glance = playerBlocksGlance(
+    blocks.red?.final, blocks.blue?.final,
+    roles ? Object.entries(roles).map(([role, b]) => ({ role, ...b.final })) : null,
+    model.player.name, minCell,
+  );
+  const lead = sentenceText(t, glance.sentence);
+  const roleLine = sentenceText(t, glance.roleSentence);
 
   // 2026-10-30：表格說明收進 ⓘ；舊快取還沒有各角色列的提示是資料狀態，照樣印在表格下面。
   return (
-    <div className="min-w-0 lg:max-w-4xl">
+    <div className="min-w-0 space-y-2 lg:max-w-4xl">
+      {(lead || roleLine) && (
+        <Takeaway>
+          {lead && <p className="text-sm font-semibold text-white sm:text-[15px]" data-testid="blocks-lead">{lead}</p>}
+          {roleLine && <p>{roleLine}</p>}
+        </Takeaway>
+      )}
       <MetricBlocks
         rows={rows}
         lowSample={minCell > 0 ? minCell : undefined}
