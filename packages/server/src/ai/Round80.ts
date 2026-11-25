@@ -16,7 +16,8 @@
  * `merlinLoyalFreeScope80`（位元，0 = 每一局的第 1–4 次提議、找不到就用能力避開、照現行的順序挑）：
  *   1 = 只有第 1、2 局非強制（出任務的機率低於一成，`BlueRound37.PROPOSAL_GO_RATE`，同 `merlinPublicThumb58` 的範圍）；
  *   2 = 強制局（第 5 次）也用；4 = 說得通的隊全都帶拇指時照現行（不改成用能力避開）；
- *   8 = 說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率（他看得到的紅＋自己確定的紅，同 `merlinOwnRank58`），同分照現行的分數。
+ *   8 = 說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率（他看得到的紅＋自己確定的紅，同 `merlinOwnRank58`），同分照現行的分數；
+ *   16 = 站長之前允許的帶拇指照舊：照派成功的隊（11/09「本來就可以照派成功隊」）、順著全場帶同一個拇指（11/10「全場都派 7…梅林也只能派 7」）——只換掉其他的拇指。
  * A0／A1 不相干（只改梅林自己當隊長的提議；邏輯閘門照舊擋）。
  */
 import type { AgentTuning } from './AgentTuning';
@@ -25,7 +26,7 @@ import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { merlinSignalScore } from './belief/ZoneModel';
 import { r1Scorer, r1SpreadActive } from './BlueRound33';
 import { PROPOSAL_GO_RATE } from './BlueRound37';
-import { merlinPublicScoring } from './MerlinLoyalStyle';
+import { merlinFlowRed, merlinPublicScoring, merlinReuseNormTeam } from './MerlinLoyalStyle';
 
 /** 診斷計數（研究腳本、自我對打的拆解用；不影響決策）。 */
 export const round80Stats = {
@@ -96,6 +97,14 @@ export function loyalFree80Set(
 
 const keyOf = (team: readonly string[]): string => [...team].sort().join(',');
 
+/** 現行那一支是照派成功的隊（`merlinReuseNorm`）或順著全場帶的那根拇指（`merlinFlowFollow`）。 */
+function reuseOrFlow80(tuning: Readonly<AgentTuning>, obs: PlayerObservation, cur: readonly string[], publicAllowed: (team: readonly string[]) => boolean): boolean {
+  const flow = merlinFlowRed(tuning, obs);
+  if (flow !== null && cur.includes(flow)) return true;
+  const norm = merlinReuseNormTeam(tuning, obs, cur.length, publicAllowed);
+  return norm !== null && keyOf(norm) === keyOf(cur);
+}
+
 /**
  * 第 80 回合的挑法：`cur` = 現行預設這一次會派的隊；`allowed` = 梅林自己的關卡（邏輯閘門、湖、證明的紅）；`publicAllowed` = 公開視角的邏輯閘門；
  * `barred` = 梅林不放的人。回傳要派的隊（不改就是 `cur` 本身）。
@@ -110,6 +119,8 @@ export function loyalFree80Team(
 ): readonly string[] {
   if (!loyalFree80Applies(tuning, obs) || cur.length === 0) return cur;
   const bits = tuning.merlinLoyalFreeScope80 ?? 0;
+  // 位元 16：站長之前允許的兩種帶拇指照舊——照派成功的隊（11/09「本來就可以照派成功隊」，`merlinReuseNorm`）、順著全場帶同一個拇指（11/10，`merlinFlowFollow`）。
+  if ((bits & 16) !== 0 && reuseOrFlow80(tuning, obs, cur, publicAllowed)) return cur;
   const r = tuning.merlinLoyalFree80 ?? 0;
   const set = loyalFree80Set(tuning, obs, cur.length, r, publicAllowed, barred);
   if (!set) return cur;

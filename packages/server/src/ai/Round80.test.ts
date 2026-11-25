@@ -30,7 +30,7 @@ describe('round 80 flags', () => {
     expect(parseTuningFlag('merlinLoyalFree80=0.3')).toEqual({ merlinLoyalFree80: 0.3 });
     expect(parseTuningFlag('merlinLoyalFreeScope80=5')).toEqual({ merlinLoyalFreeScope80: 5 });
     expect(() => parseTuningFlag('merlinLoyalFree80=1.5')).toThrow();
-    expect(() => parseTuningFlag('merlinLoyalFreeScope80=16')).toThrow();
+    expect(() => parseTuningFlag('merlinLoyalFreeScope80=32')).toThrow();
     expect(describeAgentTuning(T({ merlinLoyalFree80: 0.5, merlinLoyalFreeScope80: 1 }))).toContain('merlinLoyalFree80=0.5');
     expect(describeAgentTuning(T({ merlinLoyalFree80: 0.5, merlinLoyalFreeScope80: 1 }))).toContain('merlinLoyalFreeScope80=1');
     expect(describeAgentTuning(T())).not.toContain('merlinLoyalFree80');
@@ -118,6 +118,8 @@ describe('round 80: the plausible set and the pick', () => {
     expect(on).toEqual(best.team.map(seatOfId).sort((x, y) => x - y));
     // R3+-only would not apply here: bit 1 keeps R1–R2 (applies), forced bit irrelevant
     expect(merlinTeamAt(T({ merlinLoyalFree80: 0.5, merlinLoyalFreeScope80: 1 }), g, 3)).toEqual(on);
+    // bit 16: going with the flow (owner 11/10) stays as it is
+    expect(merlinTeamAt(T({ merlinLoyalFree80: 0.5, merlinLoyalFreeScope80: 16 }), g, 3)).toEqual(off);
   }, 120000);
 
   it('a clean current pick inside the plausible set is kept (the switch changes nothing)', () => {

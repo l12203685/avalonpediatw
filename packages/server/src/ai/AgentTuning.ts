@@ -1533,7 +1533,8 @@ export interface AgentTuning {
   /**
    * 第 80 回合：`merlinLoyalFree80` 的範圍與做法（位元；0 = 每一局的第 1–4 次提議、找不到就用能力避開、照現行的順序挑）：
    * 1 = 只有第 1、2 局非強制（出任務的機率低於一成，同 `merlinPublicThumb58`）；2 = 強制局（第 5 次）也用；
-   * 4 = 說得通的隊全都帶拇指時照現行（不改成用能力避開）；8 = 說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率（同 `merlinOwnRank58`）。
+   * 4 = 說得通的隊全都帶拇指時照現行（不改成用能力避開）；8 = 說得通的乾淨隊裡先比梅林自己的「這隊沒有紅」機率（同 `merlinOwnRank58`）；
+   * 16 = 照派成功的隊、順著全場帶的拇指照舊（站長 11/09、11/10 允許的兩種）。
    */
   merlinLoyalFreeScope80: number;
   /**
@@ -3724,7 +3725,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinLoyalFreeScope80') {
     const value = raw === undefined ? 0 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 15) throw new Error(`merlinLoyalFreeScope80 needs an integer 0–15, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 31) throw new Error(`merlinLoyalFreeScope80 needs an integer 0–31, got "${raw}"`);
     return { merlinLoyalFreeScope80: value };
   }
   if (name === 'assassinNeedTwo73') {
