@@ -297,6 +297,26 @@ describe('replaySeat — decision enumeration', () => {
     expect(votes.every((v) => v.match === (v.defaultMatch === 1))).toBe(true);
   });
 
+  it('openQuestCards adds the unpinned evil cards without changing any other decision point', () => {
+    const real = (id: string): BenchmarkAgent => new HeuristicAgent(id);
+    let open = 0;
+    for (let seat = 1; seat <= 10; seat++) {
+      const plain = replaySeat(g, seat, { makeAgent: real });
+      const withOpen = replaySeat(g, seat, { makeAgent: real, openQuestCards: true });
+      expect(withOpen.filter((o) => o.type !== 'questOpen')).toEqual(plain);
+      expect(plain.some((o) => o.type === 'questOpen')).toBe(false);
+      for (const o of withOpen.filter((x) => x.type === 'questOpen')) {
+        open += 1;
+        // 隊上不只一個紅方、只出了一部分失敗：這個座位的牌看不出來，記「失敗張數 ÷ 隊上紅方人數」。
+        expect(o).toMatchObject({ side: 'evil', human: 'unknown', match: false });
+        expect(o.humanFailShare).toBeGreaterThan(0);
+        expect(o.humanFailShare).toBeLessThan(1);
+        expect(['success', 'fail']).toContain(o.agent);
+      }
+    }
+    expect(open).toBeGreaterThan(0);
+  });
+
   it('is deterministic for the real agent (seeded Math.random)', () => {
     const run = (): unknown => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
       .map((seat) => replaySeat(g, seat, { makeAgent: (id) => new HeuristicAgent(id) }));
