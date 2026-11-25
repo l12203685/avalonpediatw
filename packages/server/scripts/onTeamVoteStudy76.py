@@ -280,7 +280,8 @@ def part_cand():
         print('| 候選 | 改到 | 反對率 | 和真人同票 | Δ 同票 | 危險的隊擋下（真人） | 安全的隊放行（真人） | 票對（真人） | Δ 票對 |')
         print('|---|---|---|---|---|---|---|---|---|')
         hl = line(rs, 'human')
-        for lab in [''] + labels:
+        here = [lab for lab in labels if any(r['H' + lab] != r['H'] for r in rs)]
+        for lab in [''] + here:
             c = 'H' + lab
             l = line(rs, c)
             ag = cluster(rs, lambda r: (1.0 if r[c] == r['human'] else 0.0) - (1.0 if r['H'] == r['human'] else 0.0))
@@ -291,7 +292,7 @@ def part_cand():
         print(f'\n分強度層（{scope_name}）：反對率／危險擋下／安全放行／Δ 同票／Δ 票對\n')
         print('| 候選 | 弱桌 | 一般桌 | 強桌 | S 不明 |')
         print('|---|---|---|---|---|')
-        for lab in [''] + labels:
+        for lab in [''] + here:
             c = 'H' + lab
             cells = []
             for _, tier in TIERS[1:]:
@@ -313,6 +314,11 @@ def part_cand():
                 cells.append('／'.join(fmt(yard(lab, None, sp, role)) for sp in ('all', 'even', 'odd')))
             print(f'| {lab} | ' + ' | '.join(cells) + ' |')
             out.setdefault(lab, {})['yard'] = {sp: yard(lab, None, sp, None) for sp in ('all', 'even', 'odd')}
+        print('\n分強度層（忠臣＋派西；全部／偶數號局／奇數號局）\n')
+        print('| 候選 | 弱桌 | 一般桌 | 強桌 | S 不明 |')
+        print('|---|---|---|---|---|')
+        for lab in labels:
+            print(f'| {lab} | ' + ' | '.join('／'.join(fmt(yard(lab, tier, sp, None)) for sp in ('all', 'even', 'odd')) for _, tier in TIERS[1:]) + ' |')
         print('\n分強度層 × 角色（全部／偶數號局／奇數號局）\n')
         print('| 候選 | 角色 | 弱桌 | 一般桌 | 強桌 | S 不明 |')
         print('|---|---|---|---|---|---|')
