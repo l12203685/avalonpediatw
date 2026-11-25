@@ -285,7 +285,9 @@ describe('practice mode — full games over sockets', () => {
     httpServer = createServer();
     io = new SocketIOServer(httpServer, { cors: { origin: true, credentials: true } });
     io.use(authenticateSocket);
-    gameServer = new GameServer(io, { botDelayScale: BOT_DELAY_SCALE, practiceReportSink });
+    // redTalkWaitScale: when the test human is red and a bot is the assassin, the bot waits for 「/刺殺 N」 (站長 2026-11-25);
+    // this human never types it, so the wait (3 minutes in production) is shrunk like the bot delays and the bot's own pick is used.
+    gameServer = new GameServer(io, { botDelayScale: BOT_DELAY_SCALE, redTalkWaitScale: BOT_DELAY_SCALE, practiceReportSink });
     gameServer.start();
     await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', () => resolve()));
     port = (httpServer.address() as AddressInfo).port;

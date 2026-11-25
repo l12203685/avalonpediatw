@@ -14,7 +14,8 @@ import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
 import {
-  ASSASSIN_ASK_TEXT, AssassinCommandWait, assassinWaitDeadline, redAssassinView, redTalkEnabled, redViewMessage,
+  ASSASSIN_ASK_TEXT, AssassinCommandWait, RED_TALK_SUBMIT_DELAY_MS, assassinWaitDeadline, redAssassinView, redTalkEnabled,
+  redViewMessage,
 } from '../ai/redAssassinTalk';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import { LobbyChatBuffer, LobbyChatMessage } from './LobbyChatBuffer';
@@ -255,6 +256,12 @@ export interface GameServerOptions {
    */
   botDelayScale?: number;
   /**
+   * Multiplier for the red assassination-discussion waits (`ai/redAssassinTalk.ts`: how long a bot assassin waits for
+   * 「/刺殺 N」 and the few seconds before it acts on one). Default 1 = production timing; game-flow tests that only need
+   * the game to finish pass a small value.
+   */
+  redTalkWaitScale?: number;
+  /**
    * Where 「這步怪怪的」 practice reports go. Default: the Sheets writer built
    * from GOOGLE_SERVICE_ACCOUNT_JSON (`createPracticeReportWriter`); `null`
    * = saving unavailable. Tests inject a fake sink.
@@ -277,6 +284,7 @@ export class GameServer {
   private practiceSinkStatus: PracticeReportStatus;
   private practiceDiscord: PracticeReportCopy | null;
   private readonly botDelayScale: number;
+  private readonly redTalkWaitScale: number;
   // `${roomId}:${round}:${holderId}` of bot lake inspections already queued.
   private pendingBotLake: Set<string> = new Set();
   private gameEngines: Map<string, GameEngine> = new Map();
@@ -311,6 +319,8 @@ export class GameServer {
     this.roomManager = new RoomManager();
     const scale = options.botDelayScale;
     this.botDelayScale = typeof scale === 'number' && Number.isFinite(scale) && scale >= 0 ? scale : 1;
+    const talkScale = options.redTalkWaitScale;
+    this.redTalkWaitScale = typeof talkScale === 'number' && Number.isFinite(talkScale) && talkScale >= 0 ? talkScale : 1;
     if (options.practiceReportSink !== undefined) {
       this.practiceSink = options.practiceReportSink;
       this.practiceSinkStatus = options.practiceReportSink ? 'ok' : 'no-credentials';
@@ -1768,15 +1778,18 @@ export class GameServer {
     const goods = ids.filter((id) => r.players[id].team !== 'evil');
     const fallback = assassinPick && goods.includes(assassinPick) ? assassinPick : goods[0];
     if (!fallback) return false;
+    const now = Date.now();
     state.wait = new AssassinCommandWait({
       mySeat: seatOf(assassinId),
       redSeats: new Set(reds.map(seatOf)),
       tableSeats: new Set(ids.map(seatOf)),
       fallbackSeat: seatOf(fallback),
-      deadlineAt: assassinWaitDeadline(Date.now(), engine.getAssassinationTimeoutMs()),
+      // `redTalkWaitScale` is 1 in production; game-flow tests shrink it so a practice game still finishes in seconds.
+      deadlineAt: now + this.redTalkWait(assassinWaitDeadline(now, engine.getAssassinationTimeoutMs()) - now),
+      submitDelayMs: this.redTalkWait(RED_TALK_SUBMIT_DELAY_MS),
     });
     this.emitBotChat(roomId, assassinId, ASSASSIN_ASK_TEXT);
-    state.timer = setInterval(() => this.pollRedTalk(roomId), 1000);
+    state.timer = setInterval(() => this.pollRedTalk(roomId), Math.max(50, this.redTalkWait(1000)));
     return true;
   }
 
@@ -3205,6 +3218,11 @@ export class GameServer {
   // and is removed by `sweepPracticeRooms` after it ends or goes idle. Every
   // bot decision is traced with a reason (`preparePracticeTrace`); the trace
   // stays server-side until the game ends (`practice:trace`).
+
+  /** Scale a red-discussion wait (`redTalkWaitScale`, 1 in production). */
+  private redTalkWait(ms: number): number {
+    return Math.max(0, Math.round(ms * this.redTalkWaitScale));
+  }
 
   /** Scale a bot "thinking" delay (tests run with a small `botDelayScale`). */
   private botDelay(ms: number): number {

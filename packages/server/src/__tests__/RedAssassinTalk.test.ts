@@ -201,6 +201,7 @@ function serverWith(humans: string[], timerMs: number | null = 180_000) {
     gameEngines: new Map([['r1', engine]]),
     botAgents: new Map(IDS.filter((id) => !humans.includes(id)).map((id) => [id, new HeuristicAgent(id)])),
     botDelayScale: 0,
+    redTalkWaitScale: 1,
     redTalk: new Map(),
     isPracticeRoom: () => false,
     broadcastRoomState: vi.fn(),
