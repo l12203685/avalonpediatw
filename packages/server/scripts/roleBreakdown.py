@@ -8,7 +8,8 @@
   OUT/report.md、report.html   私人報告（有玩家名字；同一份內容，深色、手機可讀）
   OUT/data.json                私人：選人表＋所有表格的數字
   OUT/leads.md                 匿名：各角色的線索表（可以貼進 docs）
-  OUT/cells.json               匿名：每個格子的合計數字（可以放進 repo）
+  OUT/cells.json               匿名：每個格子的合計數字
+  OUT/cells.public.json        匿名：次數夠、區間不跨 0 的格子（小檔，可以放進 repo）
 
   cd packages/server
   npx tsx scripts/roleSpots.ts replay --out /repo 外/full && npx tsx scripts/roleSpots.ts annotate --out /repo 外/full
@@ -821,6 +822,11 @@ def cat_lake(role, c):
             r = find(role, 'lake', ck, key)
             if r:
                 rows.append(std_row(f"{r['cellZh']}：{r['featureZh']}", r, 'lake'))
+    for ck in ('after2', 'after3', 'after4'):
+        for key in ('red', 'mFailed'):
+            r = find(role, 'lake', ck, key)
+            if r:
+                rows.append(std_row(f"{r['cellZh']}：{r['featureZh']}", r, 'lake'))
     if rows:
         table(STD_HEAD, rows)
 
@@ -853,6 +859,11 @@ def cat_team(role, c):
     if rows:
         zh = dict((k, z) for k, z, _ in FEATURES['team'])[key]
         table([f'分局：{zh}'] + STD_HEAD[1:], rows)
+    extra = {'merlin': 'known', 'percival': 'thumb'}.get(role)
+    if extra:
+        rows = rows_of(role, 'team', ['r1', 'r2', 'r3', 'r4', 'r5', 'a1', 'a4'], extra)
+        if rows:
+            table([f"分局：{dict((k, z) for k, z, _ in FEATURES['team'])[extra]}"] + STD_HEAD[1:], rows)
     if red:
         rows = rows_of(role, 'team', ['r1', 'r2', 'r3', 'r4', 'r5'], 'self')
         if rows:
@@ -1177,6 +1188,23 @@ public = {
     'selection': ANON_SELECT,
 }
 json.dump(clean(public), open(os.path.join(OUT, 'cells.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
+
+
+def slim(r):
+    o = {'role': r['role'], 'cat': r['cat'], 'cell': r['cellZh'], 'feature': r['featureZh'].split('（')[0], 'n': r['n'], 'verdict': r['verdict']}
+    for k in ('strong', 'bot', 'baseline', 'all', 'gap', 'lo', 'hi', 'per100'):
+        o[k] = None if r.get(k) is None else round(float(r[k]), 1)
+    if r.get('good') and r['cat'] == 'vote':
+        o['goodStrong'], o['goodBot'] = round(float(r['good']['strong']), 1), round(float(r['good']['bot']), 1)
+    if r.get('wr') and r['wr'].get('d') is not None:
+        o['wr'] = [round(float(r['wr']['wr1']), 1), int(r['wr']['n1']), round(float(r['wr']['wr0']), 1), int(r['wr']['n0'])]
+    return o
+
+
+# 可以放進 repo 的小檔：次數夠、區間不跨 0 的格子（以及每一類的「全部」）。
+json.dump({'meta': public['meta'], 'seats': ROLE_SEATS, 'same': clean(public['same']), 'failCounts': public['failCounts'],
+           'cells': [slim(r) for r in CELLS if r['n'] >= MIN_N[r['cat']] and (sig(r) or r['cell'] == 'all')]},
+          open(os.path.join(OUT, 'cells.public.json'), 'w', encoding='utf8'), ensure_ascii=False, indent=0)
 json.dump(clean({**public, 'selectionNamed': SELECT, 'selected': {role: player_names(role) for role in ROLES}}),
           open(os.path.join(OUT, 'data.json'), 'w', encoding='utf8'), ensure_ascii=False, indent=1)
 open(os.path.join(OUT, 'leads.md'), 'w', encoding='utf8').write(leads_md())
