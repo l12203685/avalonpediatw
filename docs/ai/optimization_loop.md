@@ -11553,7 +11553,11 @@ A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）照舊是硬�
 
 #### 10. 驗收（測試）與可重現
 
-{{ACCEPT}}
+- 新增 `Round76.test.ts`（15 個：四個開關預設關、舊表關、每一種對手類型都關、解析與範圍；`onTeamBar76` 照比分取門檻（1:2 用 Key、2:1 用 Open，另一個比分退回第 59 回合）、只在第 4 局兩張失敗、梅林的公開視角略過、漸進的門檻在 θ ± w 之內而且同一個局面每次一樣、沒有 θ 時不適用；投票：門檻兩邊的贊成與內黑、兩個比分互不影響、沒有第 59 回合的開關也能用、漸進的兩端；不變的部分（證明會失敗的隊、不在隊上、隊長、第 3 局、梅林）；`onTeamR4Prov76`：只有一個確定的紅時改看 P(≥ 2 紅) 的門檻、只在照字面讀的局面、單獨開不改基準線）；`AgentTuning.test`（新開關列為數值開關）；`humanProfile.test`（`HUMAN_TABLE_READING.onTeamVote59 = 0.55`、基準線 0、上限照舊 17）。
+- 伺服器完整測試 298 個檔案通過、1 個略過（4,619 個測試通過、27 個略過）；`tsc --noEmit`（server 與 scripts）乾淨；新檔案 eslint 0 個錯誤、0 個警告；`build_ai_history.ts` 重新產生（沒有基準線採用，沒有新里程碑）。
+- 不變量（`invariantHarness.ts`，前 300 局重播＋探針＋300 局自我對打，種子 761001）：三組——基準線＋全部開關一起開（`onTeamVote59=0.55 onTeamR4Key76=0.4 onTeamR4Open76=0.6 onTeamR4Soft76=0.2 onTeamR4Prov76=1`）、真人桌（新的 `HUMAN_READING` 全部開關）、真人桌＋`onTeamR4Prov76=1`——**每一條規則的機器人違反都是 0**（84 列）；A0、A1 的編碼 INV-B1／INV-B2 0 違反（重播 3,531／5,945 個機會、自我對打 3,365／5,809、3,496／5,498、3,479／5,485）；INV-V1 0；INV-A2（刺殺分層）0；探針「派出確定會失敗的隊」「隊上有確定紅」0／3,772；靜態掃描 INV-B3 0；ForwardAgent 退回 0。
+- 開關關時逐局相同：本機 563001 第 0–11 局 12／12 和 r69-screen 合成的現行預設相同；候選自我對打沒有碰到的 1,942 局也逐局相同。採用之後的真人桌 = 表裡的 `L55`（抽 755 點重跑，H 的票 755／755 相同；`--h-flag onTeamVote59=0.8` 重現採用之前的 H，755／755 相同）。量尺的快算法（用 `alt` 欄換算）和整份重播的結果相同（+0.15 ± 0.04，分層、兩半的每一格都相同）。
+- 新檔：`src/ai/Round76.ts`、`scripts/onTeamVoteStudy76.ts`（只輸出資料集序號、座位、角色、局面、票、後驗，沒有名字）、`scripts/onTeamVoteStudy76.py`、`docs/ai/gap/r76-on-team-vote.md`（完整表）、`docs/ai/gap/r76-L55.md`（第 1F 節報告）。`humanPrBenchmark.ts --dump` 的投票列多一欄 `alt`（另一票的優勢；原本的欄位不變）。中間檔不進 repo。自我對打用 `selfplay-runs-r71` 分支的 `sp.ts`（沒有改）。
 
 ```
 cd packages/server
