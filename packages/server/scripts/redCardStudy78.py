@@ -408,13 +408,17 @@ def part_cand():
         body.append([c, changed, f'{distance(col):.3f}', f'{100 * e:+.3f}',
                      f'{p[("all", "all")][0]:+.3f} ± {p[("all", "all")][1]:.3f}', f'{p[("all", 0)][0]:+.3f}／{p[("all", 1)][0]:+.3f}', wt])
     table(['候選', '改到的牌', '張數分布離真人（0 = 一樣）', '照真人同張數的勝率換算（紅方勝率 pp／局）', '人類 PR 量尺（pp／紅方座位局 ± 標準誤）', '偶數局／奇數局', '最差的一層 × 一半'], body)
-    print('候選疊在基準線上（同一批真人局；整隊的張數分布離真人多遠）：\n')
-    body = [['現行（基準線）', '—', f'{distance("A"):.3f}']]
+    print('候選疊在基準線上（同一批真人局；整隊的張數分布離真人多遠、人類 PR 量尺對基準線）：\n')
+    body = [['現行（基準線）', '—', f'{distance("A"):.3f}', '—', '—', '—']]
     for c in cands:
         col = 'A' + c
         if col in ROWS[0]:
-            body.append([c, sum(r[col] != r['A'] for r in ROWS), f'{distance(col):.3f}'])
-    table(['候選', '改到的牌', '張數分布離真人'], body)
+            p = pr(col, 'A')
+            worst = min(((p[(t, h)][0] + 2 * p[(t, h)][1], t, h) for t in ('weakHuman', 'avgHuman', 'strongHuman', 'unknown') for h in (0, 1)), key=lambda x: x[0])
+            wt = f'{TIER_ZH[worst[1]]}{"偶" if worst[2] == 0 else "奇"}數局 {p[(worst[1], worst[2])][0]:+.3f} ± {p[(worst[1], worst[2])][1]:.3f}'
+            body.append([c, sum(r[col] != r['A'] for r in ROWS), f'{distance(col):.3f}',
+                         f'{p[("all", "all")][0]:+.3f} ± {p[("all", "all")][1]:.3f}', f'{p[("all", 0)][0]:+.3f}／{p[("all", 1)][0]:+.3f}', wt])
+    table(['候選', '改到的牌', '張數分布離真人', '人類 PR 量尺（pp／紅方座位局 ± 標準誤）', '偶數局／奇數局', '最差的一層 × 一半'], body)
 
 
 # ── seat：一個座位換成機器人、隊友照真人（兩個相認紅同隊）────────────────────
