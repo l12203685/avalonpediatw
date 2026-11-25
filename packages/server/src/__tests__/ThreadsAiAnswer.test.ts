@@ -218,7 +218,9 @@ describe('threadsAiAnswer — assassination', () => {
     for (const id of readout.candidates) {
       const t = readout.terms.get(id);
       expect(t).toBeDefined();
-      if (t) expect(t.model + t.vote + t.lake + t.lead + t.reuse).toBeCloseTo(readout.scores.get(id) ?? NaN, 10);
+      // Round 79: the world-line assassin is the default — the score is `own × (the five terms) + worldLine` (own = 0 by default).
+      if (t) expect(readout.own * (t.model + t.vote + t.lake + t.lead + t.reuse) + (t.worldLine ?? 0)).toBeCloseTo(readout.scores.get(id) ?? NaN, 10);
+      if (t && t.worldLine === undefined) expect(readout.own).toBe(1);
     }
   });
 });

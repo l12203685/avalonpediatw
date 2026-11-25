@@ -49,13 +49,28 @@ export function worldLineReadout75(tuning: Readonly<AgentTuning>, obs: PlayerObs
  * 候選人不在世界線裡（不會發生：候選人都是藍方）當成比最低的邊際再低一點。
  */
 export function applyWorldLine75(tuning: Readonly<AgentTuning>, obs: PlayerObservation, scores: Map<string, number>): Map<string, number> {
+  return worldLineParts75(tuning, obs, scores).scores;
+}
+
+/**
+ * 第 79 回合（世界線刺客改成預設之後，Threads 百科AI 答案要把分數拆開給人看）：同 `applyWorldLine75`，另外回傳每個候選人的世界線那一項
+ * （`w × log P(梅林 = id)`）與現行分數的倍數 `own`——分數 = `own × 現行分數 + add`。開關關、或不適用時 `add` 是 null、`scores` 是同一個 Map。
+ */
+export function worldLineParts75(
+  tuning: Readonly<AgentTuning>, obs: PlayerObservation, scores: Map<string, number>,
+): { scores: Map<string, number>; add: Map<string, number> | null; own: number } {
   const read = worldLineReadout75(tuning, obs);
-  if (!read) return scores;
+  if (!read) return { scores, add: null, own: 1 };
   const w = tuning.assassinWorldLine75 ?? 0;
   const own = tuning.assassinWorldLineOwn75 ?? 0;
   let floor = 0;
   for (const v of read.merlin.values()) if (v < floor) floor = v;
   const out = new Map<string, number>();
-  for (const [id, s] of scores) out.set(id, own * s + w * (read.merlin.get(id) ?? floor - 1));
-  return out;
+  const add = new Map<string, number>();
+  for (const [id, s] of scores) {
+    const a = w * (read.merlin.get(id) ?? floor - 1);
+    add.set(id, a);
+    out.set(id, own * s + a);
+  }
+  return { scores: out, add, own };
 }

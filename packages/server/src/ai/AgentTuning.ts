@@ -1471,6 +1471,8 @@ export interface AgentTuning {
    * 進而推出誰是派西維爾、誰是梅林的世界線」）：刺殺分數加上這個值 ×「派西維爾－梅林」世界線的梅林邊際 log P(梅林 = 候選人)
    * （30 條世界線，每個藍方座位照世界線給他的角色的派隊／票／湖的概似，真人局擬合的表）。0 = 關。只在紅方開牌之後（`allEvilRoles`）、10 人局套用；
    * 分層（`assassinVisibleRedTier`）照舊在前。
+   * **第 79 回合起基準線預設 1**（協調者在站長 11/25 授權下的決定，站長可以改回：這裡寫回 0，或伺服器設 `AVALON_TUNING_ASSASSIN_WORLD_LINE_75=0`）；
+   * 真人桌只有一般真人桌跟著開，弱、強真人桌在 `humanProfile.ts` 關回 0。
    */
   assassinWorldLine75: number;
   /** 第 75 回合：`assassinWorldLine75` 開的時候，現行的刺殺分數（模型＋投票／湖／隊長／照派讀法）乘上這個值再加世界線。0 = 分層內只用世界線。 */
@@ -2760,7 +2762,8 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   r2Lead72: 0,
   r2Lead72Temper: 0,
   assassinSight71: 0,
-  assassinWorldLine75: 0,
+  // 第 79 回合：世界線刺客改成預設開（協調者在站長 11/25 授權下的決定；改回 = 這裡寫 0）。
+  assassinWorldLine75: 1,
   assassinWorldLineOwn75: 0,
   redR5Red71: 0,
   redR5Red71Scope: 0,

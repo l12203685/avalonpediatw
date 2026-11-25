@@ -14,7 +14,8 @@ import { buildReplayObservation, seatId } from './benchmark/replayObservation';
 import type { ReplayGame, ReplayProposal } from './benchmark/sheetsReplay';
 import type { Role } from '@avalon/shared';
 
-const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
+// Round 79: the world-line assassin is the default; assassinPath61 scales the older terms, so these tests run with it off.
+const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, assassinWorldLine75: 0, ...over });
 
 // 1 忠臣、2 梅林、3 刺客、4 忠臣、5 莫甘娜、6 派西、7 莫德雷德、8 忠臣、9 奧伯倫、10 忠臣
 const ROLES: Role[] = ['loyal', 'merlin', 'assassin', 'loyal', 'morgana', 'percival', 'mordred', 'loyal', 'oberon', 'loyal'] as Role[];

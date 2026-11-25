@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PlayerObservation } from './types';
-import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, parseTuningFlag, resolveAgentTuning } from './AgentTuning';
+import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, getDefaultAgentTuning, parseTuningFlag, resolveAgentTuning } from './AgentTuning';
 import { applyWorldLine75, setWorldLineTables75, worldLineReadout75, worldLineTables75 } from './Round75';
 import { HeuristicAgent } from './HeuristicAgent';
 import { HUMAN_TABLE_READING, tuningForOpponent } from './humanProfile';
@@ -55,13 +55,23 @@ const same: [number, number] = [1000, 300];
 describe('round 75 assassinWorldLine75', () => {
   afterEach(() => setWorldLineTables75(null));
 
-  it('the baseline and the legacy table keep it off; the human tables follow HUMAN_TABLE_READING; the flags parse', () => {
-    for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
-      expect(t.assassinWorldLine75).toBe(0);
-      expect(t.assassinWorldLineOwn75).toBe(0);
-    }
-    expect(tuningForOpponent('ai').assassinWorldLine75).toBe(DEFAULT_AGENT_TUNING.assassinWorldLine75);
-    for (const k of ['weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(k).assassinWorldLine75).toBe(HUMAN_TABLE_READING.assassinWorldLine75 ?? 0);
+  it('round 79: the baseline has it on (inside the tier only, own score × 0); the legacy table keeps it off; the flags parse', () => {
+    // Round 79 (the coordinator's decision under the site owner's 2026-11-25 delegation; one line to turn back:
+    // `assassinWorldLine75: 0` in DEFAULT_AGENT_TUNING, or AVALON_TUNING_ASSASSIN_WORLD_LINE_75=0 on the server).
+    expect(DEFAULT_AGENT_TUNING.assassinWorldLine75).toBe(1);
+    expect(DEFAULT_AGENT_TUNING.assassinWorldLineOwn75).toBe(0);
+    expect(LEGACY_AGENT_TUNING.assassinWorldLine75).toBe(0);
+    expect(LEGACY_AGENT_TUNING.assassinWorldLineOwn75).toBe(0);
+    expect(tuningForOpponent('ai', DEFAULT_AGENT_TUNING).assassinWorldLine75).toBe(1);
+    // Human tables: the shared reading does not set it (it follows the baseline); a tier turns it back off only through its own override.
+    expect(HUMAN_TABLE_READING.assassinWorldLine75).toBeUndefined();
+    expect(tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING).assassinWorldLine75).toBe(1);
+    expect(tuningForOpponent('weakHuman', DEFAULT_AGENT_TUNING).assassinWorldLine75).toBe(0);
+    expect(tuningForOpponent('strongHuman', DEFAULT_AGENT_TUNING).assassinWorldLine75).toBe(0);
+    // The server-side switch turns the baseline and the tables that follow it back to the old assassin.
+    const off = getDefaultAgentTuning({ AVALON_TUNING_ASSASSIN_WORLD_LINE_75: '0' } as NodeJS.ProcessEnv);
+    expect(off.assassinWorldLine75).toBe(0);
+    for (const k of ['ai', 'weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(k, off).assassinWorldLine75).toBe(0);
     expect(parseTuningFlag('assassinWorldLine75')).toEqual({ assassinWorldLine75: 1 });
     expect(parseTuningFlag('assassinWorldLine75=0.75')).toEqual({ assassinWorldLine75: 0.75 });
     expect(parseTuningFlag('assassinWorldLineOwn75=0.25')).toEqual({ assassinWorldLineOwn75: 0.25 });
@@ -193,7 +203,10 @@ describe('round 75 assassinWorldLine75', () => {
     expect(rm.front).toEqual(rb.front);
     const read = worldLines75(o)!;
     for (const id of blues) {
-      expect(rw.terms.get(id)).toEqual(rb.terms.get(id));
+      // The five terms are unchanged; round 79 adds the world line's own term (score = own × five terms + worldLine).
+      const { worldLine, ...five } = rw.terms.get(id)!;
+      expect(five).toEqual(rb.terms.get(id));
+      expect(worldLine!).toBeCloseTo(read.merlin.get(id)!, 9);
       expect(rw.scores.get(id)!).toBeCloseTo(read.merlin.get(id)!, 9);
       expect(rm.scores.get(id)!).toBeCloseTo(0.25 * rb.scores.get(id)! + 0.75 * read.merlin.get(id)!, 9);
     }
