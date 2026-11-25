@@ -120,7 +120,7 @@ def spot_rows(games, spots, scored, wv, flags):
         front = {c['seat'] for c in sp['cands'] if c['front']}
         r = {'gi': gi, 's': sp.get('s'), 'merlin': gm.merlin, 'percival': gm.percival, 'mFront': int(gm.merlin in front),
              'nFront': len(front), 'human': sp.get('human'), 'bot': sp.get('bot'), 'logged': sp.get('logged'),
-             'roles': gm.roles, 'flag': flags.get(str(gi)) if flags else None}
+             'roles': gm.roles, 'flag': flags.get(str(gi)) if flags else None, 'front': front}
         for name, m in masks.items():
             marg = merlin_marginal(worlds, arr @ (wv * m), blue)
             r['lp:' + name] = marg[gm.merlin]
@@ -196,6 +196,14 @@ def decoys(rows, who):
         out['missPercival'] = 100.0 * p / len(miss)
         out['missLoyal'] = 100.0 * sum(1 for r in miss if r['roles'][r[tgt_key] - 1] == 'loyal') / len(miss)
         out['missRed'] = 100.0 * sum(1 for r in miss if r['roles'][r[tgt_key] - 1] in ('assassin', 'morgana', 'mordred', 'oberon')) / len(miss)
+        # 為什麼是他：刺錯的那個人在不在分層的第一層、在世界線（正式的表）的梅林邊際裡排第幾（1 = 最像梅林）、真梅林排第幾
+        out['missTargetFront'] = 100.0 * sum(1 for r in miss if r[tgt_key] in r['front']) / len(miss)
+        out['missTargetRank'] = float(np.mean([1 + sum(1 for v in r['marg'].values() if v > r['marg'][r[tgt_key]]) for r in miss]))
+        out['missMerlinRank'] = float(np.mean([1 + sum(1 for v in r['marg'].values() if v > r['marg'][r['merlin']]) for r in miss]))
+        out['missMerlinFront'] = 100.0 * sum(1 for r in miss if r['mFront']) / len(miss)
+    hits = [r for r in rows if r.get(tgt_key) is not None]
+    out['n'] = len(hits)
+    out['hit'] = 100.0 * sum(1 for r in hits if r[tgt_key] == r['merlin']) / max(len(hits), 1)
     return out
 
 
@@ -276,8 +284,8 @@ def main():
     ap.add_argument('--flags')
     ap.add_argument('--tables', default=TABLES)
     ap.add_argument('--part', default='signals')
-    ap.add_argument('--strong-surv', type=float, default=0.6, help='強的真人梅林：他其他局當梅林、三藍之後活下來的比例 ≥ 這個值')
-    ap.add_argument('--strong-n', type=int, default=6, help='強的真人梅林：其他局三藍的梅林局至少幾局')
+    ap.add_argument('--strong-surv', type=float, default=0.6, help='強的真人梅林：他另一半的局（局號奇偶和這一局不同）當梅林、三藍之後活下來的比例 ≥ 這個值')
+    ap.add_argument('--strong-n', type=int, default=4, help='強的真人梅林：另一半（局號奇偶不同）的局裡三藍的梅林局至少幾局；強的刺客同樣用另一半的局、刺中率 ≥ 0.5')
     ap.add_argument('--min-s', type=float, default=None, help='真人局只看桌上強度 S ≥ 這個值')
     ap.add_argument('--json')
     args = ap.parse_args()
@@ -287,7 +295,7 @@ def main():
 
     def strong(gi):
         f = flags.get(str(gi)) if flags else None
-        return bool(f and f['surv'] is not None and f['n3'] >= args.strong_n and f['surv'] >= args.strong_surv and f['ex'] is not None and f['ex'] >= 0)
+        return bool(f and f.get('surv') is not None and f['n3'] >= args.strong_n and f['surv'] >= args.strong_surv and f['ex'] is not None and f['ex'] >= 0)
 
     if args.part == 'rates':
         res = {'all': rates(games)}
@@ -323,7 +331,17 @@ def main():
         dec['strongLogged'] = decoys(st, 'human')
         dec['strongModel'] = decoys(st, 'model')
         dec['strongFront'] = summarize_decoys(st, sp_by)
-    print('\n擋刀：', json.dumps(dec, ensure_ascii=False))
+
+        def strong_asn(r):
+            f = r['flag'] or {}
+            return f.get('an', 0) >= args.strong_n and f.get('ahit') is not None and f['ahit'] >= 0.5
+
+        sa = [r for r in rows if strong_asn(r)]
+        dec['strongAssassinLogged'] = decoys(sa, 'human')
+        dec['otherAssassinLogged'] = decoys([r for r in rows if not strong_asn(r)], 'human')
+    print('\n擋刀：')
+    for k, v in dec.items():
+        print(f'  {k}: ' + ', '.join(f'{a}={b:.1f}' if isinstance(b, float) else f'{a}={b}' for a, b in v.items()))
     if args.json:
         json.dump({'sums': sums, 'decoys': dec}, open(args.json, 'w'), ensure_ascii=False, indent=1)
 
