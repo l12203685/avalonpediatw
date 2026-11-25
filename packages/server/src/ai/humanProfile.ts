@@ -12,6 +12,7 @@
  *   自我對打只當參考（docs/ai/optimization_loop.md 第 1 節「真人桌的改法」）。
  * - 可以改的開關只限 `PROFILE_KEYS`（讀人的信念，藍方座位才用；第 58 回合起加梅林派隊、第 61 回合起加紅方刺殺與第 2 局出牌），避免一個對手類型長成另一套策略；測試會檢查。
  * - 三種真人桌共用一組讀法（`HUMAN_READING`），各層只在上面做小調整（第 57 回合：每層最多一個開關、偏離最多 0.1；`TIER_MAX_KEYS`／`TIER_MAX_STEP`）。
+ *   第 79 回合起每層最多兩個：多的那一個只能是 `TIER_SWITCH_KEYS` 裡的整個開或整個關（世界線刺客 `assassinWorldLine75`：弱桌、強桌關回舊刺客）。
  *
  * 怎麼判斷對手類型（`opponentTypeOfTable`）：桌上沒有真人 → `ai`；有真人、知道桌上強度 S（網站「陣容強度」= 10 人開打前 PR 的平均）
  * → 照網站數據分析的分組切點（`DEFAULT_COHORT_CUTS`：S < 38 弱、38–55 一般、≥ 55 強）；不知道 S → `avgHuman`。
@@ -46,15 +47,23 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 69 回合再加紅方第 3 局紅方已兩勝的關鍵隊外白 `redKeyCrowd69`（第 4 次提議；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  * 第 71 回合再加紅方第 5 局（2:2）隊上一定有紅時的外白 `redR5Red71`（只用規則推得出來的「一定有紅」；人類 PR 量尺兩半都沒有一層變差）。
  * 第 74 回合再加派西的拇指讀法 `thumbBlend74`（派西後驗裡兩根拇指誰是紅的比例混進真人牌譜擬合的讀法；真人局 Brier 每一層兩半都變好、人類 PR 量尺兩半都沒有一層變差）。
+ * 第 79 回合再加世界線刺客 `assassinWorldLine75`（第 75 回合的開關；第 79 回合改成基準線預設開）：真人桌只有在那一層的人類 PR 量尺兩半都是正的才用，
+ * 其他層在這裡關回 0（舊刺客）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
  * （測試檢查）。分層只做小調整，不讓某一層長成另一套。
  */
-export const TIER_MAX_KEYS = 1;
+export const TIER_MAX_KEYS = 2;
 export const TIER_MAX_STEP = 0.1;
+/**
+ * 第 79 回合：分層可以整個關掉（或打開）的開關——不是「偏離一小格」，而是那一層用不用這個做法。只限這裡列的；
+ * 每一個都要有那一層真人局重播的依據（人類 PR 量尺該層兩半都是正的才用）。`TIER_MAX_KEYS` 因此從 1 改成 2：
+ * 原本的那一個小調整（讀票的次方），加上最多一個這裡的開關。
+ */
+export const TIER_SWITCH_KEYS: readonly AgentTuningKey[] = ['assassinWorldLine75'];
 
 /**
  * 真人桌的讀法（三種真人桌共用；第 56b 回合 C、第 57 回合；`scripts/humanProfileStudy.ts`，真人局 2,241 局，逐角色 × 逐強度層）：

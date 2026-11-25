@@ -10,7 +10,7 @@ import { HeuristicAgent } from './HeuristicAgent';
 import type { AvalonAgent, PlayerObservation } from './types';
 import { bayesOptionsOf, bayesRedShare } from './belief/BayesBelief';
 import {
-  HUMAN_TABLE_READING, OPPONENT_TYPES, PROFILE_KEYS, PROFILE_OVERRIDES, TIER_MAX_KEYS, TIER_MAX_STEP, opponentTypeOfTable, parseOpponentType,
+  HUMAN_TABLE_READING, OPPONENT_TYPES, PROFILE_KEYS, PROFILE_OVERRIDES, TIER_MAX_KEYS, TIER_MAX_STEP, TIER_SWITCH_KEYS, opponentTypeOfTable, parseOpponentType,
   strengthTierOfS, tuningForOpponent,
 } from './humanProfile';
 import { GameServer, opponentTypeForRoom } from '../socket/GameServer';
@@ -26,14 +26,14 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(18); // round 74: + thumbBlend74 (Percival's thumb split mixed with the read fitted on human records, real-game replay); round 71: + redR5Red71 (red R5 outer white on a team that certainly holds a red, real-game replay); round 69: + redKeyCrowd69 (red key-team outer white on the 4th proposal, real-game replay); round 68: + lakeChain68 (blue lake target, real-game replay); 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
+      expect(keys.length).toBeLessThanOrEqual(19); // round 79: + assassinWorldLine75 (a baseline default now; the weak and strong tables turn it back off — their human-replay yardstick is not positive in both halves); round 74: + thumbBlend74 (Percival's thumb split mixed with the read fitted on human records, real-game replay); round 71: + redR5Red71 (red R5 outer white on a team that certainly holds a red, real-game replay); round 69: + redKeyCrowd69 (red key-team outer white on the 4th proposal, real-game replay); round 68: + lakeChain68 (blue lake target, real-game replay); 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
       for (const k of changed) expect(PROFILE_KEYS).toContain(k);
     }
   });
-  it('round 57: the three human tables share one reading, each tier at most one key one small step away from it', () => {
+  it('round 57: the three human tables share one reading, each tier a small step away from it (round 79: plus at most one whole switch)', () => {
     expect(HUMAN_TABLE_READING.blueVoteTemper57).toBe(0.4);
     expect(HUMAN_TABLE_READING.missionRole56).toBe(1);
     expect(HUMAN_TABLE_READING.merlinOwnRank58).toBe(0.5);
@@ -65,12 +65,24 @@ describe('one baseline, small per-opponent adjustments', () => {
       expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING).merlinPublicThumb58).toBe(0);
       expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING).goLike56).toBe(31);
     }
+    // Round 79: the world-line assassin is a baseline default; the human tables follow it only where that tier's human-replay yardstick is
+    // positive in both halves (the average table). The weak and the strong table turn it back off — a whole switch, not a small step.
+    expect(TIER_MAX_KEYS).toBe(2);
+    expect(TIER_SWITCH_KEYS).toEqual(['assassinWorldLine75']);
+    expect(DEFAULT_AGENT_TUNING.assassinWorldLine75).toBe(1);
+    expect(HUMAN_TABLE_READING.assassinWorldLine75).toBeUndefined();
+    expect(PROFILE_OVERRIDES.weakHuman.assassinWorldLine75).toBe(0);
+    expect(PROFILE_OVERRIDES.strongHuman.assassinWorldLine75).toBe(0);
+    const shared = tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING);
     for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
-      const o = PROFILE_OVERRIDES[type];
-      const keys = new Set([...Object.keys(o), ...Object.keys(HUMAN_TABLE_READING)]) as Set<AgentTuningKey>;
-      const differ = [...keys].filter((k) => o[k] !== HUMAN_TABLE_READING[k]);
+      const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
+      const differ = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== shared[k]);
       expect(differ.length).toBeLessThanOrEqual(TIER_MAX_KEYS);
-      for (const k of differ) expect(Math.abs(Number(o[k] ?? 0) - Number(HUMAN_TABLE_READING[k] ?? 0))).toBeLessThanOrEqual(TIER_MAX_STEP + 1e-9);
+      // At most one small step (a number at most TIER_MAX_STEP away from the shared value) and at most one whole switch from TIER_SWITCH_KEYS.
+      const steps = differ.filter((k) => !TIER_SWITCH_KEYS.includes(k));
+      expect(steps.length).toBeLessThanOrEqual(1);
+      for (const k of steps) expect(Math.abs(Number(t[k] ?? 0) - Number(shared[k] ?? 0))).toBeLessThanOrEqual(TIER_MAX_STEP + 1e-9);
+      expect(differ.filter((k) => TIER_SWITCH_KEYS.includes(k)).length).toBeLessThanOrEqual(1);
     }
   });
   it('the baseline keeps the environment overrides (deploy-time switches still apply under a profile)', () => {

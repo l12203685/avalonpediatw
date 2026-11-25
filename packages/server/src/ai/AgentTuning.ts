@@ -2743,7 +2743,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   r2Lead72: 0,
   r2Lead72Temper: 0,
   assassinSight71: 0,
-  assassinWorldLine75: 0,
+  assassinWorldLine75: 1,
   assassinWorldLineOwn75: 0,
   redR5Red71: 0,
   redR5Red71Scope: 0,
