@@ -50,7 +50,7 @@ import type { Client } from 'discord.js';
 import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../practice/PracticeReportDiscord';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
 import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
-import { getSimBankLoader, simulationStatus, startSimulation } from './simulation';
+import { flushSimulation, getSimBankLoader, simulationStatus, startSimulation } from './simulation';
 import { getConceptDaily, initConceptDaily, type ConceptDailyStatus } from './conceptDaily/service';
 import { resolveFeedbackChannelId } from './feedback/config';
 import type { SimulationStatus } from './simulation/metrics';
@@ -131,11 +131,25 @@ export async function initializeBots(): Promise<void> {
 
   // 模擬瓦 (2026-10-14, docs/SIMULATION.md): read the name-free sim_bank.json in
   // the background; the first /模擬 waits for it if it is still loading.
+  // 2026-11-25: also reads back the exercises that were open before the restart
+  // (simulation/persist.ts; a JSON file in the private state repo).
   startSimulation();
 
   // 每日「阿瓦隆百科小觀念」(2026-11-18, docs/BOT_SETUP.md): off unless CONCEPT_DAILY_LINE /
   // CONCEPT_DAILY_DISCORD and their group / channel lists are set.
   startConceptDaily();
+}
+
+/**
+ * 關機前（server 的 index.ts 收到 SIGTERM／SIGINT）：把模擬瓦還沒寫進存檔的題目寫完，重啟後接得回來。
+ * 最久等 `timeoutMs`（Render 給 30 秒），從不丟錯；log 只有固定文字。
+ */
+export async function shutdownBots(timeoutMs = 8_000): Promise<void> {
+  try {
+    await flushSimulation(timeoutMs);
+  } catch {
+    console.warn('[sim] flushing open exercises at shutdown failed');
+  }
 }
 
 /**
