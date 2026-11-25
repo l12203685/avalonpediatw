@@ -6,13 +6,16 @@
  *   cd packages/server
  *   npx tsx scripts/roleSpots.ts replay   --out DIR [--workers 2] [--limit N]     # 慢：機器人逐點重播 → DIR/raw.<k>.jsonl
  *   npx tsx scripts/roleSpots.ts annotate --out DIR                               # 快：補上局面欄位 → DIR/spots.jsonl、games.json
+ *   npx tsx scripts/roleSpots.ts games    --out DIR                               # 只寫 games.json（選人用，不用等 replay）
  *
  * replay：同 `playerAgreement.ts` 的重播（`agreement.replaySeat`：機器人坐在那個座位、只看當時的公開紀錄＋自己角色的資訊），
  *   真人桌策略層（agent）與基準線（agentAi）各跑一次，合成一筆。另外開 `openQuestCards`：紅方出任務但牌譜看不出
  *   是誰出失敗的那幾張，也記機器人會出什麼（`questOpen`，真人那一欄 = 失敗張數 ÷ 隊上紅方人數）。
  *   局的排除同 `playerAgreement.ts`（百科AI 局、badGame、總庫的錯誤／重複局、無法嚴格重播的局）。
  * annotate：不跑機器人，只用牌譜替每個決策點補 `spotContext.ts` 的欄位（比數、隊伍組成、這個座位認得的紅方、
- *   湖中對象、刺殺對象的角色……），所以欄位要改時不用重跑 replay。games.json = 每局的角色、結果、刺殺（給分析用）。
+ *   湖中對象、刺殺對象的角色……），所以欄位要改時不用重跑 replay。
+ * games.json：算進來的每一局真人局（含無法嚴格重播的：`replayable` = false，只用來算勝率）的角色、結果、刺殺、
+ *   每個座位的玩家編號（資料集 `players` 的索引，沒有名字）。
  * 後續：`roleBreakdown.py`（選各角色的強者、分情境比較、線索表）。
  */
 import * as fs from 'fs';
@@ -21,7 +24,8 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { execSync, fork } from 'child_process';
 import { replaySeat, type DecisionOutcome } from '../src/ai/benchmark/agreement';
-import { replayGameFromDataset, type DatasetReplayGame } from '../src/ai/benchmark/datasetReplay';
+import { replayGameFromDataset, seatOfChar, type DatasetReplayGame } from '../src/ai/benchmark/datasetReplay';
+import { REPLAY_PLAYER_COUNT, ROLE_CODE_ORDER } from '../src/ai/benchmark/sheetsReplay';
 import { excludedDatasetKeys, type GameDbCorrection, type GameDbRow, type Profile } from '../src/ai/benchmark/playerAgreement';
 import { spotContext } from '../src/ai/benchmark/spotContext';
 import { loadJson, makeAgentFor, opponentOf, type Dataset } from './playerAgreement';
@@ -63,7 +67,7 @@ function parseArgs(argv: string[]): Args {
       default: throw new Error(`unknown argument ${k}`);
     }
   }
-  if (!['replay', 'annotate'].includes(a.mode)) throw new Error('first argument: replay | annotate');
+  if (!['replay', 'annotate', 'games'].includes(a.mode)) throw new Error('first argument: replay | annotate | games');
   if (!a.out) throw new Error('--out DIR is required');
   return a;
 }
@@ -85,6 +89,68 @@ export interface RoleSpot {
   /** questOpen：失敗張數 ÷ 隊上紅方人數。 */
   humanFailShare?: number;
   tier: string;
+}
+
+/** games.json 的一局。 */
+interface GameRow {
+  id: string;
+  source: number;
+  date: string;
+  /** 座位 1..10 的玩家編號（資料集 players 的索引；-1 = 沒寫名字）。 */
+  players: number[];
+  roles: string[];
+  outcome: string;
+  /** 被刺的座位（沒有刺殺或沒記 = null）。 */
+  killSeat: number | null;
+  replayable: boolean;
+  tableS?: number | null;
+  tier?: string;
+  /** 任務結果的順序（B 藍／R 紅）。 */
+  missions?: string;
+  lakes?: number;
+}
+
+/** 算進來的真人局（百科AI 局、badGame、總庫的錯誤／重複局不算；角色或結果讀不出來的也不算）。 */
+function countedGames(a: Args, ds: Dataset): GameRow[] {
+  const at = (name: string): number => ds.fields.indexOf(name);
+  const dbRows = fs.existsSync(a.gameDb) ? loadJson<{ games: GameDbRow[] }>(a.gameDb).games : [];
+  const corrections = fs.existsSync(a.corrections) ? loadJson<{ corrections: Record<string, GameDbCorrection> }>(a.corrections).corrections : {};
+  const excluded = excludedDatasetKeys(dbRows, corrections);
+  const out: GameRow[] = [];
+  for (const row of ds.games) {
+    const gid = String(row[at('id')]);
+    const notes = ((row[at('note')] as number[] | undefined) ?? []).map((i) => ds.vocab.noteTags[i]);
+    if (ds.vocab.category?.[row[at('cat')] as number] === '百科AI') continue;
+    if (excluded.get(`${row[at('src')]}|${gid}`) || notes.includes('flag:badGame')) continue;
+    const code = String(row[at('config')] ?? '');
+    const outcome = ds.vocab.outcome[row[at('outcome')] as number];
+    if (!/^[0-9]{6}$/.test(code) || new Set(code).size !== 6) continue;
+    if (outcome !== '三紅' && outcome !== '三藍死' && outcome !== '三藍活') continue;
+    const roles: string[] = new Array<string>(REPLAY_PLAYER_COUNT).fill('loyal');
+    for (let i = 0; i < 6; i++) roles[(seatOfChar(code[i]) as number) - 1] = ROLE_CODE_ORDER[i];
+    const kill = String(row[at('kill')] ?? '');
+    const res = replayGameFromDataset(row, ds);
+    out.push({
+      id: gid, source: row[at('src')] as number, date: String(row[at('date')] ?? ''),
+      players: [...(row[at('seats')] as number[])], roles, outcome,
+      killSeat: kill.length === 1 ? seatOfChar(kill) : null,
+      replayable: res.ok,
+      ...(res.ok ? {
+        tableS: res.value.s, tier: opponentOf(res.value),
+        missions: res.value.game.quests.map((q) => (q.failed ? 'R' : 'B')).join(''),
+        lakes: res.value.game.lakes.length,
+      } : {}),
+    });
+  }
+  return out;
+}
+
+function writeGames(a: Args, ds: Dataset): void {
+  const meta = fs.existsSync(path.join(a.out, 'raw.meta.json')) ? loadJson<Record<string, unknown>>(path.join(a.out, 'raw.meta.json')) : {};
+  const games = countedGames(a, ds);
+  fs.mkdirSync(a.out, { recursive: true });
+  fs.writeFileSync(path.join(a.out, 'games.json'), JSON.stringify({ meta, datasetGames: ds.games.length, games }));
+  console.error(`wrote ${a.out}/games.json: ${games.length} human games (${games.filter((g) => g.replayable).length} replayable)`);
 }
 
 /** 可以重播的真人局（排除同 playerAgreement.ts）。 */
@@ -170,7 +236,6 @@ async function replay(a: Args): Promise<void> {
 async function annotate(a: Args): Promise<void> {
   const ds = loadJson<Dataset>(a.dataset);
   const games = new Map(eligibleGames(a, ds).map((x) => [x.id, x.g]));
-  const meta = fs.existsSync(path.join(a.out, 'raw.meta.json')) ? loadJson<Record<string, unknown>>(path.join(a.out, 'raw.meta.json')) : {};
   const files = fs.readdirSync(a.out).filter((f) => /^raw\.\d+\.jsonl$/.test(f)).sort();
   if (files.length === 0) throw new Error(`no raw.<k>.jsonl in ${a.out} (run replay first)`);
   const fd = fs.openSync(path.join(a.out, 'spots.jsonl'), 'w');
@@ -194,26 +259,14 @@ async function annotate(a: Args): Promise<void> {
     if (buf.length) fs.writeSync(fd, buf.join('\n') + '\n');
   }
   fs.closeSync(fd);
-  const gamesOut = [...seen].map((id) => {
-    const g = games.get(id)!;
-    const q = g.game.quests;
-    const blue = q.filter((x) => !x.failed).length;
-    return {
-      id, date: g.date, source: g.source, tableS: g.s, tier: opponentOf(g),
-      roles: g.game.seatRoles,
-      missions: q.map((x) => (x.failed ? 'R' : 'B')).join(''),
-      blueWins: blue, redWins: q.length - blue,
-      assassinTargetSeat: g.game.assassinTargetSeat ?? null,
-      lakes: g.game.lakes.length,
-    };
-  });
-  fs.writeFileSync(path.join(a.out, 'games.json'), JSON.stringify({ meta, games: gamesOut }));
-  console.error(`annotated ${n} decision points of ${seen.size} games → ${a.out}/spots.jsonl, games.json`);
+  writeGames(a, ds);
+  console.error(`annotated ${n} decision points of ${seen.size} games → ${a.out}/spots.jsonl`);
 }
 
 async function main(): Promise<void> {
   const a = parseArgs(process.argv.slice(2));
   if (a.mode === 'replay') { if (a.shard) runShard(a); else await replay(a); return; }
+  if (a.mode === 'games') { writeGames(a, loadJson<Dataset>(a.dataset)); return; }
   await annotate(a);
 }
 
