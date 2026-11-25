@@ -10,7 +10,14 @@ import {
 } from '@avalon/shared/stats';
 import { useGameStore } from '../../../store/gameStore';
 import { useStatsFiltered } from '../../../stats/statsFilter';
-import { InfoTip, SectionTabs, StatTable, Term, useSectionTab, type SectionTabItem, type StatColumn, type StatTermKey } from '../ui';
+import {
+  Advanced, GlanceRow, InfoTip, MeterBar, SectionTabs, StatTable, Takeaway, Term, useSectionTab,
+  type SectionTabItem, type StatColumn, type StatTermKey,
+} from '../ui';
+import { BoardCards } from '../BoardCards';
+import { boardGlance, decisiveGlance, pctText, type DecisiveGlance } from '../core/glance';
+import { sentenceText } from '../core/glanceView';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../../hooks/useMediaQuery';
 import {
   DECISIVE_GROUP_TERMS, DECISIVE_MIN_FILTERED, DECISIVE_MIN_OPTIONS, DECISIVE_ROLE_COLORS, DECISIVE_SCOPE_KEY,
 } from './decisiveLayout';
@@ -31,11 +38,15 @@ import DecisiveCohortView from '../cohort/DecisiveCohortView';
  *  - 一律白／一律黑／照常投的正確率即時算（report.all.baselines），篩選後不一定都低於平均，說明跟著換句子。
  *  - (2026-11-11 Edward) 個人排行上面加分組（cohort/DecisiveCohortView）：強者／一般人／新手與 S × PR 九宮格，關鍵票與全部投票；
  *    分組的數字才可靠，個人名次大多是運氣。
+ *  - (2026-11-25 站長「一目瞭然」，第四批) 最上面先一句話（全體投對多少、前三名、外白／內黑投對多少、名次大多是運氣），
+ *    四組改成四條長條（白話的名字＋對率，白線＝全體）。手機：個人排行改成前 10 名的小卡（BoardCards），依角色、分組／九宮格、
+ *    完整表格都收進「進階」；桌機照舊攤開。數字跟原本的表同一份（report.all、players），只是換寫法。
  */
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string;
 
 const K = 'analytics.decisive';
+const GD = 'analytics.glance.decisive';
 /** 表身在框裡捲 (表頭固定)。 */
 const TABLE_MAX_HEIGHT = 'max(15rem, calc(100vh - 25rem))';
 
@@ -292,6 +303,48 @@ function RoleBreakdown({ report }: { report: DecisiveReport }): JSX.Element {
   );
 }
 
+// ── 一眼看懂：一句話＋四組長條 ─────────────────────────────────────────────
+
+function DecisiveLead({ glance, board, who }: { glance: DecisiveGlance; board: string | null; who: string }): JSX.Element {
+  const { t } = useTranslation('common');
+  return (
+    <Takeaway>
+      {glance.sentence && <p className="text-sm font-semibold text-white sm:text-[15px]" data-testid="decisive-lead">{sentenceText(t, glance.sentence)}</p>}
+      {board && <p data-testid="decisive-top">{board}</p>}
+      {glance.abnormalSentence && <p className="text-zinc-300">{sentenceText(t, glance.abnormalSentence)}</p>}
+      <p className="text-zinc-400">{t(`${GD}.luck`)}</p>
+      <p className="text-zinc-400" data-testid="decisive-who">{who}</p>
+    </Takeaway>
+  );
+}
+
+function DecisiveGroupBars({ glance }: { glance: DecisiveGlance }): JSX.Element | null {
+  const { t } = useTranslation('common');
+  if (glance.groups.length === 0) return null;
+  const ref = glance.overall?.pct ?? null;
+  return (
+    <section className="space-y-1.5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="decisive-groups">
+      <h4 className="text-xs font-bold text-zinc-300">{t(`${GD}.barsTitle`)}</h4>
+      <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+        {glance.groups.map(({ group, share: s }) => {
+          const label = t(`${GD}.group.${group}`);
+          return (
+            <GlanceRow
+              key={group}
+              label={label}
+              tag={DECISIVE_ABNORMAL.has(group as DecisiveGroup) ? t(`${GD}.unusual`) : undefined}
+              sample={t(`${GD}.votes`, { n: s.n.toLocaleString('en-US') })}
+            >
+              <MeterBar pct={s.pct} text={pctText(s.pct)} tone="plain" refPct={ref} label={`${label} ${pctText(s.pct)}（${t(`${GD}.votes`, { n: s.n })}）`} />
+            </GlanceRow>
+          );
+        })}
+      </div>
+      {ref !== null && <p className="text-[11px] text-zinc-500">{t(`${GD}.refLine`)}</p>}
+    </section>
+  );
+}
+
 // ── 主元件 ─────────────────────────────────────────────────────────────
 
 export default function DecisiveBoard(): JSX.Element {
@@ -306,10 +359,16 @@ export default function DecisiveBoard(): JSX.Element {
   const [sortKey, setSortKey] = useState<DecisiveSortKey>('score');
   const state = useDecisiveReport(scope);
   const report = state.status === 'ok' ? state.report : null;
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
 
   const rows = useMemo(
     () => (report ? sortDecisiveRows(report.players.filter((p) => p.n >= minN), sortKey) : []),
     [report, minN, sortKey],
+  );
+  // 一句話的前三名一律照正確率（收縮後）：換排序只換下面的榜，句子說的「最高」不跟著變成別的欄位
+  const byScore = useMemo(
+    () => (report ? sortDecisiveRows(report.players.filter((p) => p.n >= minN), 'score') : []),
+    [report, minN],
   );
 
   // 三種固定投法在同一批關鍵位置上的正確率（即時算，跟著篩選與範圍）：都低於全體平均才能說分數不獎勵單邊投票。
@@ -471,52 +530,87 @@ export default function DecisiveBoard(): JSX.Element {
     },
   ];
 
+  const glance = decisiveGlance(report.all.p0, DECISIVE_GROUPS.map((group) => ({ group, ...report.all.grid[group] })), t(`${K}.scope.${scope}`));
+  const board = boardGlance(byScore.map((r) => ({ name: r.name, value: r.score === null ? null : r.score * 100 })), t(`${GD}.metric`));
+  const summary = (
+    <p className="text-xs text-zinc-400" data-testid="decisive-summary">
+      {t(`${K}.summary`, {
+        proposals: report.all.proposals,
+        votes: tot.right + tot.wrong + tot.neutral,
+        neutral: tot.neutral,
+        p0: pct(report.all.p0, 1),
+        unnamed: report.all.unnamed,
+      })}
+    </p>
+  );
+  const minNote = (
+    <span className="text-[11px] text-zinc-500" data-testid="decisive-min-note">
+      {t(`${K}.minNote`, {
+        min: minN, def: filtered ? DECISIVE_MIN_FILTERED : DECISIVE_MIN_N,
+        count: rows.length, coverage: share(listedN, namedN), k: report.k,
+      })}
+    </span>
+  );
+  const table = (): JSX.Element => (
+    <StatTable
+      columns={columns}
+      rows={rows}
+      maxHeight={TABLE_MAX_HEIGHT}
+      rowKey={(r) => `decisive-${r.name}`}
+      onRowClick={(r) => openPlayerStats(r.name)}
+      empty={t(`${K}.empty`, { min: minN })}
+    />
+  );
+  const cohort = <DecisiveCohortView scope={scope} onScope={setScope} />;
+
   return (
     <div className="space-y-3" data-testid="decisive-board">
       {header}
-      <p className="text-xs text-zinc-400">
-        {t(`${K}.summary`, {
-          proposals: report.all.proposals,
-          votes: tot.right + tot.wrong + tot.neutral,
-          neutral: tot.neutral,
-          p0: pct(report.all.p0, 1),
-          unnamed: report.all.unnamed,
-        })}
-      </p>
-      <ul className="grid gap-1 text-[11px] sm:grid-cols-2 lg:grid-cols-4" data-testid="decisive-legend">
-        {DECISIVE_GROUPS.map((group) => (
-          <li
-            key={group}
-            className={`rounded-md border px-2 py-1 ${DECISIVE_ABNORMAL.has(group) ? 'border-amber-700/60 bg-amber-950/30 text-amber-100' : 'border-zinc-800 bg-zinc-950/60 text-zinc-300'}`}
-          >
-            <Term term={DECISIVE_GROUP_TERMS[group]} className="font-semibold">{t(`${K}.col.${group}`)}</Term>
-            <span className="ml-1">{t(`${K}.legend.${group}`)}</span>
-            <span className="ml-1 text-zinc-500">{t(`${K}.legendRate`, { rate: pct(decisiveRate(report.all.grid[group])), right: report.all.grid[group].right, wrong: report.all.grid[group].wrong })}</span>
-          </li>
-        ))}
-      </ul>
-      <RoleBreakdown report={report} />
-      {/* 2026-11-11 Edward：個人的關鍵票太少，分組（強者／一般人／新手、S × PR 九宮格）放在個人排行上面 */}
-      <DecisiveCohortView scope={scope} onScope={setScope} />
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      <DecisiveLead glance={glance} board={sentenceText(t, board.sentence)} who={t(`${GD}.who`, { min: minN, count: rows.length })} />
+      <DecisiveGroupBars glance={glance} />
+      {wide ? (
+        <>
+          {summary}
+          <RoleBreakdown report={report} />
+          {/* 2026-11-11 Edward：個人的關鍵票太少，分組（強者／一般人／新手、S × PR 九宮格）放在個人排行上面 */}
+          {cohort}
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <h4 className="text-xs font-bold text-zinc-300">{t(`${K}.tableTitle`)}</h4>
+              {minNote}
+            </div>
+            {table()}
+          </div>
+        </>
+      ) : (
+        <>
           <h4 className="text-xs font-bold text-zinc-300">{t(`${K}.tableTitle`)}</h4>
-          <span className="text-[11px] text-zinc-500" data-testid="decisive-min-note">
-            {t(`${K}.minNote`, {
-              min: minN, def: filtered ? DECISIVE_MIN_FILTERED : DECISIVE_MIN_N,
-              count: rows.length, coverage: share(listedN, namedN), k: report.k,
-            })}
-          </span>
-        </div>
-        <StatTable
-          columns={columns}
-          rows={rows}
-          maxHeight={TABLE_MAX_HEIGHT}
-          rowKey={(r) => `decisive-${r.name}`}
-          onRowClick={(r) => openPlayerStats(r.name)}
-          empty={t(`${K}.empty`, { min: minN })}
-        />
-      </div>
+          {rows.length === 0 ? <p className="text-xs text-zinc-500">{t(`${K}.empty`, { min: minN })}</p> : (
+            <BoardCards
+              rows={rows.map((r, i) => ({
+                key: `decisive-${r.name}`,
+                rank: i + 1,
+                name: r.name,
+                value: r.score === null ? null : r.score * 100,
+                text: r.score === null ? '—' : pctText(r.score * 100),
+                details: [
+                  t(`${GD}.count`, { n: r.n }),
+                  ...(r.raw === null ? [] : [t(`${GD}.raw`, { rate: pctText(r.raw * 100) })]),
+                ],
+                label: `${r.name} ${t(`${GD}.metric`)} ${r.score === null ? '—' : pctText(r.score * 100)}（${t(`${GD}.count`, { n: r.n })}）`,
+                onClick: () => openPlayerStats(r.name),
+              }))}
+              refValue={glance.overall?.pct ?? null}
+              refNote={t(`${GD}.refLine`)}
+              table={() => <div className="space-y-1">{minNote}{table()}</div>}
+            />
+          )}
+          <Advanced title={t(`${GD}.cohortAdvanced`)} testId="decisive-cohort-advanced">{() => cohort}</Advanced>
+          <Advanced title={t(`${GD}.rolesAdvanced`)} testId="decisive-roles-advanced">
+            {() => <div className="space-y-2">{summary}<RoleBreakdown report={report} /></div>}
+          </Advanced>
+        </>
+      )}
     </div>
   );
 }

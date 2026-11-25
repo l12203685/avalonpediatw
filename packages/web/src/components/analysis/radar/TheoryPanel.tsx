@@ -2,7 +2,10 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fmtTheoryPct, roleFaction } from '../../../services/api';
 import type { AnalysisTheorySettings } from '../../../services/api';
-import { StatTable, type StatColumn } from '../ui';
+import { Advanced, StatTable, Takeaway, type StatColumn } from '../ui';
+import { theoryGlance } from '../core/glance';
+import { sentenceText } from '../core/glanceView';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../../hooks/useMediaQuery';
 import {
   orderedRoles, roleCellStatus, roleWindowSizes, roleWindowsFinal,
   type PlayerRadarModel, type RoleCellStatus,
@@ -19,6 +22,8 @@ import {
  * 右表：角色理論每個角色用到的場次 (勝／場、視窗、進總和的勝率、打滿／未打滿／補值／沒打過)。
  * 視窗與門檻全讀 theorySettings() (overview.theoryConfig)，不寫死；舊快取 (schemaVersion < 4) 沒有
  * roleWindows → 角色理論那一列與右表顯示「下次每日更新後提供」，位置理論讀 last100、整體理論讀 career。
+ * (2026-11-25 站長「一目瞭然」，第四批) 最上面一句話：照角色算預期贏多少、同一段場次實際贏多少（表上同一列的兩個數字）；
+ * 手機上左表（六欄，很寬）收進「進階」，換成三行「理論名稱：數字」。
  */
 
 type TheoryKey = 'role' | 'position' | 'overall';
@@ -104,6 +109,12 @@ export default function TheoryPanel({
   ];
 
   const muted = (text: ReactNode): JSX.Element => <span className="font-normal text-zinc-500">{text}</span>;
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
+  const lead = sentenceText(t, theoryGlance(
+    { rate: rows[0].rate, actual: rows[0].final },
+    { rate: rows[1].rate, actual: rows[1].final },
+    model.player.name,
+  ));
 
   const theoryColumns: StatColumn<TheoryRow>[] = [
     {
@@ -183,22 +194,48 @@ export default function TheoryPanel({
     },
   ];
 
+  const summaryTable = (
+    <StatTable
+      caption={t('analytics.r6.radar.theory.summaryCaption')}
+      columns={theoryColumns}
+      rows={rows}
+      rowKey={row => row.key}
+      footnote={
+        <>
+          {t('analytics.r6.radar.theory.note', {
+            special, loyal, position: settings.positionGames, overall: settings.overallMinGames,
+          })}
+          {minCell > 0 && <> {t('analytics.r6.radar.theory.noteTopUp', { n: minCell })}</>}
+        </>
+      }
+    />
+  );
+  // 手機：三行「理論：數字（範圍）」，完整的表收進進階
+  const phoneSummary = (
+    <div className="min-w-0 space-y-2">
+      <div className="text-sm font-bold text-zinc-200">{t('analytics.r6.radar.theory.summaryCaption')}</div>
+      <ul className="space-y-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs" data-testid="theory-phone-rows">
+        {rows.map(row => (
+          <li key={row.key} className="flex items-baseline gap-2">
+            <span className="w-20 shrink-0 font-semibold text-zinc-200">{t(`analytics.r6.radar.theory.${row.key}`)}</span>
+            <b className={`tabular-nums ${row.rate === null ? 'font-normal text-zinc-500' : 'text-amber-300'}`}>{row.rate === null ? row.note : fmtTheoryPct(row.rate)}</b>
+            <span className="min-w-0 text-[11px] text-zinc-500">{row.range}</span>
+          </li>
+        ))}
+      </ul>
+      <Advanced title={t('analytics.glance.board.fullTable')} testId="theory-advanced">{() => summaryTable}</Advanced>
+    </div>
+  );
+
   return (
+    <div className="space-y-3">
+      {lead && (
+        <Takeaway>
+          <p className="text-sm font-semibold text-white sm:text-[15px]" data-testid="theory-lead">{lead}</p>
+        </Takeaway>
+      )}
     <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-      <StatTable
-        caption={t('analytics.r6.radar.theory.summaryCaption')}
-        columns={theoryColumns}
-        rows={rows}
-        rowKey={row => row.key}
-        footnote={
-          <>
-            {t('analytics.r6.radar.theory.note', {
-              special, loyal, position: settings.positionGames, overall: settings.overallMinGames,
-            })}
-            {minCell > 0 && <> {t('analytics.r6.radar.theory.noteTopUp', { n: minCell })}</>}
-          </>
-        }
-      />
+      {wide ? summaryTable : phoneSummary}
       {rw ? (
         <StatTable
           caption={t('analytics.r6.radar.theory.rolesCaption')}
@@ -215,6 +252,7 @@ export default function TheoryPanel({
           </p>
         </div>
       )}
+    </div>
     </div>
   );
 }
