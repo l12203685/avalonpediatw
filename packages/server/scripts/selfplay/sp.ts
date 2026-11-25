@@ -30,6 +30,7 @@ async function main(): Promise<void> {
   const { round69Stats } = await import('../../src/ai/Round69');
   const { round70Stats } = await import('../../src/ai/Round70');
   const { round71Stats } = await import('../../src/ai/Round71');
+  const { round78Stats } = await import('../../src/ai/Round78');
   const n = Number(arg('--games') ?? 1000);
   const from = Number(arg('--from') ?? 0);
   const seed = arg('--seed') ?? '423001';
@@ -59,6 +60,9 @@ async function main(): Promise<void> {
   let f70 = false;
   // round 71: f71=1 adds a column 'f71' = how many times `redR5Red71` turned a red's R5 vote into a white in the game (0 = identical to the game without the switch).
   let f71 = false;
+  // round 78: f78=1 adds a column 'f78' = how many red mission cards the round-78 switches (`r4KeyFail78`, `redPairOne78`, `redPairAlways78`)
+  // decided in the game (0 = identical to the game without the switches).
+  let f78 = false;
   let only: Set<number> | null = null;
   const redDesc: string[] = [];
   let failLog: [number, string][] = [];
@@ -73,6 +77,7 @@ async function main(): Promise<void> {
     if (f === 'f69=1') { f69 = true; return; }
     if (f === 'f70=1') { f70 = true; return; }
     if (f === 'f71=1') { f71 = true; return; }
+    if (f === 'f78=1') { f78 = true; return; }
     if (f.startsWith('only=')) { only = new Set(fs.readFileSync(f.slice('only='.length), 'utf8').split(/\s+/).filter(Boolean).map(Number)); return; }
     // round 46: red.k=v applies an AgentTuning switch to the red seats (the usual --flag k=v is blue seats only)
     if (f.startsWith('red.')) { Object.assign(redTuning, parseTuningFlag(f.slice(4))); redDesc.push(f.slice(4)); return; }
@@ -163,6 +168,7 @@ async function main(): Promise<void> {
       const white69 = round69Stats.white;
       const applied70 = round70Stats.applied;
       const white71 = round71Stats.r5White;
+      const fired78 = round78Stats.key + round78Stats.pair;
       const agents = Array.from({ length: 10 }, (_, s) => new Seat(`P${s + 1}`));
       const gameSeed = `${seed}|${i}`;
       for (const a of agents) a.gameSeed = gameSeed;
@@ -200,6 +206,7 @@ async function main(): Promise<void> {
       if (f69) rows[rows.length - 1].push(round69Stats.white - white69);
       if (f70) rows[rows.length - 1].push(round70Stats.applied - applied70);
       if (f71) rows[rows.length - 1].push(round71Stats.r5White - white71);
+      if (f78) rows[rows.length - 1].push(round78Stats.key + round78Stats.pair - fired78);
       if (detail) {
         const rel = (id: string): string => relOf(seats, L, id);
         const roleSeat = (r: string): string => { const a = agents.find((x) => x.role === r); return a ? rel(a.agentId) : '-'; };
@@ -224,8 +231,8 @@ async function main(): Promise<void> {
       if ((i + 1 - from) % 250 === 0) process.stderr.write(`[sp ${tag}] ${i + 1 - from}/${n} ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     }
   } finally { console.log = originalLog; }
-  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, detail, lake45, f69, f70, f71, only: only ? only.size : null, red: redDesc.join(' '), seconds: Math.round((Date.now() - started) / 1000) };
-  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake', ...(lake45 ? ['lkT', 'lkTRed', 'lkClaim'] : []), ...(f69 ? ['f69'] : []), ...(f70 ? ['f70'] : []), ...(f71 ? ['f71'] : []), ...(detail ? ['g'] : [])], rows }));
+  const meta = { games: rows.length, seed, from, blue: describeAgentTuning(variant), force11, onlyLoyal11, detail, lake45, f69, f70, f71, f78, only: only ? only.size : null, red: redDesc.join(' '), seconds: Math.round((Date.now() - started) / 1000) };
+  fs.writeFileSync(out + '.tmp', JSON.stringify({ meta, cols: ['i', 'blueWon', 'threeBlue', 'merlinKilled', 'r1Failed', 'failedMissions', 'h', 'leaderRole', 't11', 'ok11', 'red5', 'red0', 'lake0', 'redLake', ...(lake45 ? ['lkT', 'lkTRed', 'lkClaim'] : []), ...(f69 ? ['f69'] : []), ...(f70 ? ['f70'] : []), ...(f71 ? ['f71'] : []), ...(f78 ? ['f78'] : []), ...(detail ? ['g'] : [])], rows }));
   fs.renameSync(out + '.tmp', out);
   process.stderr.write(`[sp ${tag}] done ${rows.length} games ${meta.seconds}s\n`);
   if (process.env.SP_STATS) {
