@@ -12152,6 +12152,115 @@ npx tsx scripts/humanPrBenchmark.ts --workers 2 --boot 0 --roles merlin --tier-p
 npx tsx scripts/tierPrCompare.ts pr_H.jsonl pr_HC.jsonl --split all|train|test
 ```
 
+### 第 79 回合（紅方・刺客：**採用**第 75 回合的世界線刺客 `assassinWorldLine75`——協調者在站長 11/25 授權下的決定，站長可以改回；採用前在現行程式（第 74、76、77 回合之後）上重新驗證，每一項都和第 75 回合一致：新種子 3,000 局實際對打紅方 **+5.40 [+3.90, +6.90]**（刺中 36.2 → 45.4%、藍方 37.6 → 32.2%），1 萬局重算 +4.87、真人刺殺點 39.1 → 43.2%、量尺分層與第 75 回合相同；**基準線改成開，一般真人桌跟著開，弱桌、強桌維持舊刺客**；第 1A 節第 2 條的線改成「不低於真人高端桌（≈31%）」，第 1F 節高端桌三、四族超過容許值記成接受的偏離，2026-11-25）
+
+**給玩家看的三句話**：
+1. 改了什麼：百科AI 當刺客時，會把四個紅方知道的事（誰是莫甘娜、莫德雷德、奧伯倫）合起來，一次比對「誰是派西維爾、誰是梅林」的 30 種可能，再挑最說得通的那個梅林刺。
+2. 在桌上會注意到什麼：全是百科AI 的桌和一般強度的真人桌，三藍之後梅林比較容易被刺中（百科AI 互打從約 36% 升到 45%，和真人刺客差不多）；弱桌、強桌的刺法照舊。
+3. 怎麼改回：站長在設定裡把這個開關（`assassinWorldLine75`）改回 0，或在伺服器設 `AVALON_TUNING_ASSASSIN_WORLD_LINE_75=0`，百科AI 就回到原本的刺法。
+
+**這是協調者的決定，不是關卡自動通過**：協調者在站長 2026-11-25「你其他優化 如果我沒回應 都先照你自己建議的方式做 要不要上那些 反正我之後可以回來再調整」的授權下決定採用。
+理由（第 75、77 回合與各角色比較）：刺殺是全部角色裡差最多的一格（強者刺客 52%、百科AI 38%、全部真人 44%）；第 77 回合量到機器人的梅林並沒有比真人的梅林好認，世界線刺客只是讓機器人桌看起來像真人桌（刺中 46% 對真人 44.5%、藍方 31–32% 對真人桌 30%）。所以第 1A 節第 2 條的 36.7% 和「刺客跟真人一樣強」不能同時成立。
+**一行改回**：`packages/server/src/ai/AgentTuning.ts` 的 `DEFAULT_AGENT_TUNING` 裡 `assassinWorldLine75: 1` 改回 `0`（不用改程式時：伺服器環境變數 `AVALON_TUNING_ASSASSIN_WORLD_LINE_75=0`，基準線與跟著它的一般真人桌一起回到舊刺客）。
+
+A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）照舊是硬的；刺殺照舊四個紅方一起討論（紅方開牌，`allEvilRoles`）；分層 `assassinVisibleRedTier`／INV-A2 照第 75 回合不動，`assassinWorldLineOwn75` 照舊 0（分層內只用世界線）。
+程式 = `origin/claude/opt-round-77`（main＋第 74 回合＋各角色工具＋第 77 回合）7670998d；PR 排在它們之後合併。完整的中間表：`docs/ai/gap/r79-adopt-worldline.md`。
+
+#### 1. 重新驗證（翻開關之前；任何一項和第 75 回合矛盾就停、什麼都不採用）
+
+| 項目 | 第 75 回合 | 第 79 回合（現行程式） | 一致？ |
+|---|---|---|---|
+| 現行預設對 `r69-screen` 對照 | 40／40 逐局相同 | 563001 第 0–39 局 40／40 逐局相同（對照仍然有效，不重跑） | 是 |
+| 自我對打：1 萬局整局紀錄上重算（563001 第 0–9,999 局） | +4.87 [+4.07, +5.68]，刺中 38.44 → 46.74%，藍方 36.12 → 31.25% | **逐位相同**（5,867 個刺殺點、改到 2,905 個、多刺中／少刺中 1,153／666） | 是 |
+| 自我對打：新種子實際對打（563301 第 0–2,999 局，新預設、舊預設各跑一次） | （563101 確認 +5.97 [+4.40, +7.50]） | **+5.40 [+3.90, +6.90]**；刺殺之前 3,000／3,000 局相同；1,769 個刺殺點、改到 904 個、多刺中／少刺中 362／200；刺中 36.24 → 45.39%；藍方 37.60 → 32.20%；任務三藍 58.97%（不變） | 是 |
+| 第 1F 節（1 萬局重算） | 總距離 −0.0133／−0.0020，高端桌四族超過 0.01 | 逐位相同 | 是 |
+| 第 1F 節（新種子實際對打 3,000 局） | （確認 3,000 局：−0.0153／−0.0031，role:5 +0.0136） | −0.0210／−0.0039；超過 0.01：forced:R5 +0.0164、role:5 +0.0111、role:0 +0.0173（都是對高端桌） | 是 |
+| 真人刺殺點（1,193 點，交叉擬合，TypeScript 正式路徑） | 39.1 → 43.2%（+4.1 [+0.8, +7.4]） | 39.1 → 43.2%（+4.1 [+0.9, +7.1]；真人資料、擬合的表與第 75 回合逐位相同） | 是 |
+| 第 1H 節（量尺刺客，對真人桌讀法，分層兩半） | 一般桌 +3.34 ± 1.32（兩半都正）、弱桌 −2.05 ± 2.05 | 每一格逐位相同（下表） | 是 |
+| 新預設實際對打的身分檢查 | — | 程式改成預設開之後：不帶旗標 563301 第 0–39 局和新預設那一組 40／40 相同；加 `red.assassinWorldLine75=0` 和舊預設那一組 40／40 相同 | — |
+
+逐任務順序（新種子 3,000 局，刺中率 舊 → 新）：紅紅藍藍藍 43.5 → 51.1、藍藍藍 26.3 → 35.5、紅藍藍藍 33.4 → 38.1、藍紅藍藍 30.5 → 34.1、藍紅紅藍藍 39.0 → 65.0、藍藍紅藍 46.2 → 59.1、紅藍紅藍藍 50.0 → 62.1；只有藍藍紅紅藍（56 點）53.6 → 51.8。
+
+#### 2. 第 1A 節第 2 條：藍方的線
+
+採用之後基準線的藍方三藍活：1 萬局 31.25%、新種子 3,000 局 32.20%。新的線＝真人高端桌（S ≥ 55）的藍方勝率 31.2%（第 77 回合量的）：兩組都在線上（1 萬局只高 0.05pp，貼著線）。舊的 36.7% 留在第 1A 節當歷史。
+下一個藍方回合的起點因此是 31–32%，不是 36%。
+
+#### 3. 真人桌：照第 1H 節分層
+
+人類 PR 量尺刺客（`humanPrBenchmark.ts --roles assassin --tier-profile`，對照 `--flag assassinWorldLine75=0`、候選 `=1` 用偶數號／奇數號擬合的表各跑一次、每一局取沒看過它的那張表；`tierPrCompare.ts --types assassinate`）。Δ pp／座位局 ± 標準誤（以局為集群）：
+
+| 強度層 | 座位局 | 全部 | 偶數局 | 奇數局 | 兩半都正？ | 這一層 |
+|---|---|---|---|---|---|---|
+| 弱 S < 38 | 391 | −2.05 ± 2.05 | −1.52 ± 2.74 | −2.58 ± 3.05 | 否（兩半都負） | **舊刺客**（`weakHuman` 明寫 0） |
+| 一般 38–55 | 928 | +3.34 ± 1.32 | +5.04 ± 1.78 | +1.69 ± 1.94 | 是 | 開 |
+| S 不明 | 614 | +1.30 ± 1.63 | +0.00 ± 2.29 | +2.62 ± 2.32 | 偶數局剛好 0（沒有一半是負的） | 併在一般真人桌 |
+| **一般真人桌（`avgHuman` 實際管到的桌＝一般＋S 不明）** | 1,542 | **+2.53 ± 1.03** | **+3.01 ± 1.41** | **+2.06 ± 1.49** | **是** | **開（跟著基準線）** |
+| 強 S ≥ 55 | 317 | +0.63 ± 2.23 | +2.45 ± 2.75 | −1.30 ± 3.57 | 否（奇數局負） | **舊刺客**（`strongHuman` 明寫 0） |
+| 全部 | 2,250 | +1.47 ± 0.85 | +2.13 ± 1.14 | +0.80 ± 1.25 | 是 | — |
+
+- 現行的分層把 S 讀不到的桌當一般真人桌（`opponentTypeOfTable`），所以「一般真人桌開不開」看的是它實際管到的桌：一般＋S 不明合起來兩半都正。S 不明單獨看偶數局是 +0.00——沒有變差、也沒有變好；要把 S 不明分開就得多開一個對手類型，超出「用現有的分層機制」，列在站長題目第 2 題。
+- 真人刺殺點同樣的分層（刺中率，對現行真人桌讀法）：一般桌 +6.4 [+1.4, +11.2]、S 不明 +2.3 [−3.7, +8.0]、弱桌 −4.2 [−12.2, +3.7]、強桌 +1.3 [−7.6, +10.1]（`r79-adopt-worldline.md` 第 2 節）。
+- **機制**：`HUMAN_READING` 不寫 `assassinWorldLine75`（跟著基準線），`PROFILE_OVERRIDES.weakHuman`、`strongHuman` 明寫 `assassinWorldLine75: 0`。這是「那一層用不用這個做法」的整個開關，不是偏離一小格，所以 `TIER_MAX_KEYS` 從 1 改成 2，新增 `TIER_SWITCH_KEYS = ['assassinWorldLine75']`：每層最多一小格（讀票的次方）加上最多一個這裡的整個開關（測試檢查）；`PROFILE_KEYS` 加 `assassinWorldLine75`，每層覆寫個數上限 18 → 19（測試的註解寫了原因）。
+
+#### 4. 情境題庫（第 74 回合；`scenarioSuite.ts`，基準線＋一般真人桌）
+
+| 類別 | 題數 | 改之前（`assassinWorldLine75=0`） | 改之後 | 真人當時 |
+|---|---|---|---|---|
+| 硬規則 A0、A1、站長寫死的裁定（硬） | 34 | 100%／100% | 100%／100% | — |
+| 站長的糾正與標註 | 10 | 40%／40% | 40%／40%（同） | — |
+| 每日一題：刺殺（刺中梅林），基準線 | 1,089 | 39.0% | **45.1%**（+6.06 [+2.85, +9.27]，變對／變錯 195／129） | 44.8% |
+| 每日一題：刺殺，一般真人桌 | 1,089 | 40.3% | **45.1%**（+4.78 [+1.56, +8.08]，188／136） | 44.8% |
+
+- 硬規則全過（結束碼 0）。刺殺那一類要打折看：每日一題的題目出自真人局，正式的世界線表是全部真人局擬合的，這 1,089 題大多在擬合資料裡（交叉擬合的數字看第 1 節的真人刺殺點：+4.1）。
+
+#### 5. 不變量
+
+INV_PLACEHOLDER
+
+#### 6. 本回合的結果
+
+| 開關 | 第 1 關（真人刺殺點，交叉擬合） | 自我對打（紅方 Δ） | 第 1F 節 | 第 1H 節（量尺刺客，對真人桌讀法） | 判定 |
+|---|---|---|---|---|---|
+| **`assassinWorldLine75=1`** | 39.1 → **43.2%**（+4.1 [+0.9, +7.1]），和第 75 回合相同 | 新種子實際對打 **+5.40 [+3.90, +6.90]**；1 萬局重算 +4.87 [+4.03, +5.68] | 總距離變小（−0.0133／−0.0020、實際對打 −0.0210／−0.0039），高端桌三、四族超過 0.01 → **接受的偏離**（第 1F 節） | 一般真人桌 +2.53 ± 1.03（兩半都正）；弱 −2.05、強 +0.63（奇數局 −1.30） | **基準線採用**（協調者在站長 11/25 授權下的決定）；**一般真人桌跟著開**；弱、強真人桌維持舊刺客 |
+
+**現在的狀態**：`DEFAULT_AGENT_TUNING.assassinWorldLine75 = 1`（`assassinWorldLineOwn75 = 0`）；`ai`（全機器人房、自我對打）與 `avgHuman`（一般真人桌、S 讀不到的桌、模擬瓦與 Threads 百科AI 作答）用世界線刺客；`weakHuman`、`strongHuman` 用舊刺客（`assassinPath61` 那一套）。世界線的表照舊是 `src/ai/assassin/worldLines75Tables.json`（真人局 2,234 局擬合，只有計數）。
+
+**要站長決定的**（協調者已照建議做；站長可以改回）：
+1. **基準線開世界線刺客**——已開。選項：(a) 維持開（建議）：機器人桌的刺客補到真人的水準，藍方 31–32% 和真人高端桌一樣；(b) 改回 0：刺客回到 38% 上下，藍方回到 36–37%。
+2. **S 讀不到的桌**——現在跟著一般真人桌開（量尺偶數局 +0.00、奇數局 +2.62）。選項：(a) 維持（建議：一般真人桌實際管到的桌兩半都正，S 不明沒有一半是負的）；(b) 多開一個「S 不明」的對手類型、讓它用舊刺客（要改分層機制）。
+3. **弱桌、強桌**——維持舊刺客。等真人局多了重擬（`worldLineStudy75.py --part export`）再量；弱桌兩半都負，可能要分開擬合。
+
+#### 下一回合
+
+1. **藍方（梅林）**：基準線的藍方現在是 31–32%（第 1A 節第 2 條的新線 31.2% 就在旁邊）。第 77 回合試過的 `merlinCover77` 在紅方重新擬合之後什麼都沒剩；下一個藍方回合要找的是「讓真人梅林也不好認」的派法，不是把機器人的梅林藏得比真人更深。
+2. 真人局增加之後重擬世界線的表，弱桌、強桌、S 不明再用第 1H 節量一次，兩半都正就照本回合的機制打開（`PROFILE_OVERRIDES` 拿掉那一層的 `assassinWorldLine75: 0`）。
+
+#### 7. 驗收（測試）與可重現
+
+TEST_PLACEHOLDER
+
+```
+cd packages/server
+# 身分檢查（現行預設對 r69-screen；新預設、舊預設）
+USE_FORWARD_REASONING=true npx tsx scripts/selfplay/sp.ts --seed 563001 --from 0 --games 40 --out OLD_563001_0.json --flag detail=1 --flag red.assassinWorldLine75=0
+# 新種子實際對打（各 6 段 × 500 局）
+USE_FORWARD_REASONING=true npx tsx scripts/selfplay/sp.ts --seed 563301 --from 0 --games 500 --out NEW_563301_0.json --flag detail=1
+USE_FORWARD_REASONING=true npx tsx scripts/selfplay/sp.ts --seed 563301 --from 0 --games 500 --out OLD_563301_0.json --flag detail=1 --flag red.assassinWorldLine75=0
+python3 scripts/adoptCheck79.py selfplay --old OLD --new NEW
+npx tsx scripts/botGap.ts --bot NEW --bot-prefix NEW_ --baseline OLD --baseline-prefix OLD_
+# 1 萬局重算與第 1F 節、真人刺殺點：第 75 回合第 9 節的指令（舊刺客加 --flag assassinWorldLine75=0）；python3 scripts/adoptCheck79.py spots --old hA_A.jsonl --old-human hA_H.jsonl --new hA_cf.jsonl
+# 第 1H 節
+npx tsx scripts/humanPrBenchmark.ts --workers 2 --boot 0 --roles assassin --tier-profile --flag assassinWorldLine75=0 --dump pr_H.jsonl
+npx tsx scripts/humanPrBenchmark.ts --workers 2 --boot 0 --roles assassin --tier-profile --flag assassinWorldLine75=1 --wl-tables worldLines75_even.json --dump pr_e.jsonl   # odd 同
+python3 scripts/worldLineStudy75.py --part merge --even-tables-file pr_e.jsonl --odd-tables-file pr_o.jsonl --out pr_cf.jsonl
+npx tsx scripts/tierPrCompare.ts pr_H.jsonl pr_cf.jsonl --split all|train|test --types assassinate
+# 情境題庫
+npx tsx scripts/scenarioSuite.ts --quiet [--flag assassinWorldLine75=0]
+npx tsx scripts/scenarioSuite.ts --no-fixtures --bank --bank-class kill --quiet [--flag assassinWorldLine75=0] --dump kill.jsonl
+npx tsx scripts/scenarioSuite.ts --compare kill_old.jsonl kill_new.jsonl
+```
+
 ### 附：「被越多人選的人越可能是好人」（Edward 10/29）
 
 真人 10 人局 1,970 局（`scripts/selectionByCamp.ts`）：依「被別人當隊長的提議選進隊伍的次數」在同一局裡排名——
