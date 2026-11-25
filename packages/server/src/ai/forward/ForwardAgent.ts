@@ -1333,18 +1333,12 @@ export class ForwardAgent implements AvalonAgent {
       // seen red who sat on a failed mission (round 54), a red his own certainty proves, a lake-barred seat; the public loyal's gate binds.
       if (merlinCover77Now(this.baseline.tuning, obs)) {
         round77Stats.applies++;
+        // The whole loyal decision of that view (`decide`: the pipeline plus the talk-proposal steps after it — round 43's fresh player, the
+        // lake bars of the loyal view, round 56), with its own per-decision state; this decision's state comes back afterwards.
         const pubView = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: false } as PlayerObservation;
-        const pubBar = [lakePairBarred(this.baseline.tuning, pubView), lakeHolderBarred40(this.baseline.tuning, pubView)].filter((x): x is string => x !== null);
-        const outerBar = this.lakeBar39;
-        this.lakeBar39 = pubBar;
-        let pub: ForwardDecision;
-        try {
-          pub = this.decideMain(pubView);
-        } finally {
-          this.lakeBar39 = outerBar;
-        }
+        const pub = this.decide(pubView);
         const seen77 = new Set(obs.knownEvils);
-        const barred77 = [...pubBar, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen77.has(id))];
+        const barred77 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen77.has(id))];
         if (pub.action.type === 'team_select' && pub.action.teamIds.length === d.action.teamIds.length
           && merlinCover77TeamOk(this.baseline.tuning, obs, pub.action.teamIds, barred77) && publicGateOk(pub.action.teamIds)) {
           round77Stats.sent++;

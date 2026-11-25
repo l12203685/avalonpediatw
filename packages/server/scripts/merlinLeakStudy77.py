@@ -12,6 +12,7 @@
                 另外照「放了誰」拆（自己、看得到的紅、莫德雷德、派西、忠臣；有放／沒放）。
   --part rates  梅林／忠臣／派西當隊長時的比例（放自己、放看得到的紅、放莫德雷德、放派西、照派上一次成功的隊…），真人 vs 機器人。
   --part hit    只用梅林的派隊（Mk）與全部分量時，世界線第一名是梅林的比例（給自我對打的候選比較用；不分層）。
+  --part refit  紅方跟著調整：世界線的表改用這一份自我對打重新擬合（交叉擬合），只用世界線、不分層的刺中率；對照 = 真人局擬合的正式表。
 
 輸入 = `keySpotStudy.ts --export-human／--export-bot` 的 jsonl（只有座位、角色、隊伍、票、任務牌、湖、刺殺，沒有玩家名）。
 
@@ -270,6 +271,29 @@ def part_hit(bot, tb, w):
         print(f'| {name} | {100 * hit / len(games):.1f} |')
 
 
+def part_refit(bot, human_tb, w, kfold):
+    """紅方跟著調整：世界線的表與疊加權重改用這一份自我對打重新擬合（交叉擬合：每一份用其他幾份的局擬合），只用世界線、不分層的刺中率。
+    對照 = 真人局擬合的正式表在同一批刺殺點上的刺中率。"""
+    wl.KFOLD = kfold
+    out, weights, _ = wl.crossfit(bot, view='full', verbose=True)
+    spots = [g for g in bot if g.g.get('at') is not None]
+    weights_h = np.array([w[c] for c in wl.COMPS])
+    scored = wl.score_many(spots, human_tb, 'full')
+    hit_r = hit_h = px_r = 0
+    for g, sc in zip(spots, scored):
+        my, mx = wl.marginals(out[g.g['gi']])
+        hit_r += wl.argmax_seat(my) == g.merlin
+        px_r += wl.argmax_seat(mx) == g.percival
+        _, worlds, arr = sc[0]
+        my2, _ = wl.marginals([(None, worlds, arr @ weights_h)])
+        hit_h += wl.argmax_seat(my2) == g.merlin
+    n = len(spots)
+    three = n / len(bot)
+    print(f'局數 {len(bot)}、刺殺點 {n}（任務三藍 {100 * three:.2f}%）；紀錄上的刺中率 {100 * np.mean([g.g["at"] == g.merlin for g in spots]):.1f}%')
+    print(f'| 真人局擬合的表（不分層） | {100 * hit_h / n:.1f} | 藍方勝率 {100 * three * (1 - hit_h / n):.2f}% |')
+    print(f'| 這一份自我對打重新擬合的表（分 {kfold} 份交叉擬合；不分層） | {100 * hit_r / n:.1f} | 藍方勝率 {100 * three * (1 - hit_r / n):.2f}% | 派西第一名是真派西 {100 * px_r / n:.1f}% |')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--human')
@@ -279,6 +303,7 @@ def main():
     ap.add_argument('--spots-only', action='store_true', help='只看有刺殺的局（三藍）')
     ap.add_argument('--limit', type=int, default=0)
     ap.add_argument('--json')
+    ap.add_argument('--kfold', type=int, default=4)
     args = ap.parse_args()
     tb, w = load_tables(args.tables)
 
@@ -289,6 +314,8 @@ def main():
     bot = games_of(args.bot) if args.bot else []
     if args.part == 'hit':
         return part_hit(bot, tb, w)
+    if args.part == 'refit':
+        return part_refit(bot, tb, w, args.kfold)
     hum = games_of(args.human)
     if args.part == 'leak':
         return part_leak(hum, bot, tb, w, args.json)
