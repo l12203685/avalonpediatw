@@ -19,7 +19,8 @@
  * - `redPairOne78 = 位元`（1 = 第 1 局、2 = 第 2 局、4 = 第 3 局）：一張失敗就夠的任務、兩邊都還沒兩勝、隊上剛好兩個相認紅 → 照約定只出一張。
  *   `redPairOne78Who`：1 = 座位在前面的那一個出（照 `allPlayerIds` 的順序；兩個人都算得出同一個答案，機器人之間一定剛好一張）；
  *   2 = 先看公開紀錄（百科〈紅方基礎原則〉I3「出者恆出、藏者恆藏」：之前單獨上過有失敗牌的任務的人繼續出、另一個藏；
- *   之前單獨上過零失敗任務的人繼續藏、另一個出），兩個人的紀錄一樣時照原本的位階法；3 = 同 2，紀錄一樣時照座位。0 = 1。
+ *   之前單獨上過零失敗任務的人繼續藏、另一個出），兩個人的紀錄一樣時照原本的位階法——只補一格：兩個人上一次一起出任務都藏了，
+ *   這一次莫甘娜出（照位階法會一起藏的只有莫甘娜＋莫德雷德，位階低的出）；3 = 同 2，紀錄一樣時照座位。0 = 1。
  * - `redPairAlways78 = 位元`（同上的局）：一張失敗就夠的任務、兩邊都還沒兩勝、隊上剛好兩個相認紅 → 自己一律出失敗（不靠隊友；
  *   給真人桌量「至少一張」用——真人隊友不會照機器人的約定）。`redPairOne78` 同一局有開時以 `redPairOne78` 為準。
  *
@@ -124,6 +125,16 @@ export function pairStatus78(obs: PlayerObservation, a: string, b: string): [Pai
   return [sa, sb];
 }
 
+/** 兩個人最近一次一起上的任務（隊上只有這兩個相認紅）是不是零失敗。 */
+export function lastJointHid78(obs: PlayerObservation, a: string, b: string): boolean {
+  const known = new Set([obs.myPlayerId, ...obs.knownEvils]);
+  const round = obs.currentRound ?? 1;
+  const joint = obs.questHistory
+    .filter((q) => q.round < round && q.team.includes(a) && q.team.includes(b) && q.team.filter((id) => known.has(id)).length === 2)
+    .sort((x, y) => y.round - x.round)[0];
+  return joint !== undefined && (joint.failCount ?? (joint.result === 'fail' ? 1 : 0)) === 0;
+}
+
 /** 座位在前面（`allPlayerIds` 的順序）的那一個 = true。 */
 function seatFirst(obs: PlayerObservation, me: string, mate: string): boolean {
   return obs.allPlayerIds.indexOf(me) < obs.allPlayerIds.indexOf(mate);
@@ -152,6 +163,9 @@ export function pairCard78(tuning: Readonly<AgentTuning>, obs: PlayerObservation
     if (sMe === 'H' && sMate === 'N') return 'success';
     if (sMate === 'H' && sMe === 'N') return 'fail';
     if (who === 3) return seatFirst(obs, me, mate) ? 'fail' : 'success';
+    // 紀錄一樣 → 位階法。唯一補的一格：兩個人上一次一起出任務都藏了（零失敗）——照位階法會兩個都藏的只有莫甘娜＋莫德雷德，
+    // 所以莫甘娜知道隊友是莫德雷德（他照位階法繼續藏），這一次由位階低的莫甘娜出（原本是「跟著隊友一起藏」，又是零失敗）。
+    if (obs.myRole === 'morgana' && sMe === 'H' && sMate === 'H' && lastJointHid78(obs, me, mate)) return 'fail';
     return null;
   }
   if (always > 0 && roundBit(always, round)) return 'fail';
