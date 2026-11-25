@@ -46,7 +46,8 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 69 回合再加紅方第 3 局紅方已兩勝的關鍵隊外白 `redKeyCrowd69`（第 4 次提議；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  * 第 71 回合再加紅方第 5 局（2:2）隊上一定有紅時的外白 `redR5Red71`（只用規則推得出來的「一定有紅」；人類 PR 量尺兩半都沒有一層變差）。
  * 第 74 回合再加派西的拇指讀法 `thumbBlend74`（派西後驗裡兩根拇指誰是紅的比例混進真人牌譜擬合的讀法；真人局 Brier 每一層兩半都變好、人類 PR 量尺兩半都沒有一層變差）。
- * 第 78 回合再加紅方第 2 局的任務牌 `redRankOrderR2Fix45`（第 46 回合的開關：莫甘娜第 2 局和一個認得的隊友同隊時出失敗；人類 PR 量尺兩半都沒有一層變差）。
+ * 第 78 回合再加紅方第 2 局的任務牌 `redRankOrderR2Fix45`（第 46 回合的開關：莫甘娜第 2 局和一個認得的隊友同隊時出失敗；人類 PR 量尺兩半都沒有一層變差），
+ * 和 `redPairOne78`（= 0：基準線採用的第 3 局座位約定只在機器人之間有用，真人桌照原本的位階法）。
  */
 export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'redRankOrderR2Fix45', 'redPairOne78'];
 

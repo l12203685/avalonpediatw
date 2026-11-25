@@ -3,10 +3,10 @@
   "generatedAt": "2026-11-25",
   "source": "docs/ai/optimization_loop.md 第 4 節＋docs/ai/ai_history.curated.json（scripts/build_ai_history.ts）",
   "stats": {
-    "rounds": 74,
-    "adoptedRounds": 43,
+    "rounds": 75,
+    "adoptedRounds": 44,
     "notAdoptedRounds": 31,
-    "latestRound": "76"
+    "latestRound": "78"
   },
   "headline": [
     {
@@ -239,6 +239,37 @@
     }
   ],
   "milestones": [
+    {
+      "id": "r78-red-pair-one",
+      "round": "78",
+      "date": "2026-11-25",
+      "side": "red",
+      "roles": [
+        "assassin",
+        "morgana",
+        "mordred"
+      ],
+      "primary": "red",
+      "kind": "strategy",
+      "what": "第 3 局（兩邊都還沒兩勝）兩個認得彼此的紅方同隊時，照座位約定只出一張失敗：座位在前面的那一個出、另一個出成功。",
+      "why": "各角色的強者比較：紅方只認得隊友、不知道隊友的角色，位階法讓刺客＋莫甘娜第 3 局兩張都出（真人 6%）；一張就夠，多一張只是多曝光。",
+      "win": {
+        "values": [
+          0.2
+        ],
+        "lo": 0.11,
+        "hi": 0.29
+      },
+      "task": {
+        "values": [
+          -0.3
+        ],
+        "lo": -0.4,
+        "hi": -0.2
+      },
+      "sample": "1 萬局篩選＋1 萬局確認合併（逐局配對）",
+      "note": "篩選 +0.20、確認 +0.20，區間都在 0 以上；刺中率不變；分局面距離變小（第 1F 節過）；真人桌不用（真人隊友不知道這個約定）。"
+    },
     {
       "id": "r67-red-early-black",
       "round": "67",
