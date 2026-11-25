@@ -534,6 +534,12 @@ def verdict(r):
             return 'S', '沒刺中的時候刺到誰（做法不同）'
         return ('W', '真人強者刺得比較準') if r['gap'] > 0 else ('B', '百科AI 刺得比較準')
     gd = r.get('good')
+    wr = r.get('wr')
+    wr_sig = bool(wr) and wr.get('d') is not None and wr.get('lo') is not None and (wr['lo'] > 0 or wr['hi'] < 0)
+    if r['role'] == 'merlin' and r['cat'] == 'vote' and wr_sig:
+        # 梅林的票不只看投對：還要不被刺客認出來，所以先看勝率（含被刺）。
+        same_dir = (wr['d'] > 0) == (r['gap'] > 0)
+        return ('W', '真人強者的做法勝率比較高（含被刺）') if same_dir else ('B', '百科AI 的做法勝率比較高（含被刺）')
     if gd and gd.get('lo') is not None and r['cat'] == 'vote':
         if gd['lo'] > 0:
             return 'W', '真人強者比較好（事後看）'
@@ -541,8 +547,7 @@ def verdict(r):
             return 'B', '百科AI 比較好（事後看）'
     if feature_is_good:
         return ('W', '真人強者的隊比較乾淨') if r['gap'] > 0 else ('B', '百科AI 的隊比較乾淨')
-    wr = r.get('wr')
-    if wr and wr.get('d') is not None and wr.get('lo') is not None and (wr['lo'] > 0 or wr['hi'] < 0):
+    if wr_sig:
         same_dir = (wr['d'] > 0) == (r['gap'] > 0)
         return ('W', '真人強者的做法勝率比較高') if same_dir else ('B', '百科AI 的做法勝率比較高')
     return 'S', '做法不同，看不出誰好'
@@ -584,13 +589,20 @@ def fail_count_table():
     for role in RED:
         for d in SPOTS.get((role, 'quest'), []):
             by[(d['g'], d['rd'])].append(d)
-    out = defaultdict(lambda: {'n': 0, 'human': Counter(), 'bot': Counter(), 'baseline': Counter()})
+    out = defaultdict(lambda: {'n': 0, 'human': Counter(), 'bot': Counter(), 'baseline': Counter(), 'win': Counter()})
     for (g, rd), ds in by.items():
         reds = ds[0]['reds']
         if reds < 2 or len(ds) != reds:
             continue
-        key = (f'第{rd}局' if rd in (4,) else '第1～3、5局', min(reds, 3))
+        if rd == 4:
+            where = '第4局（要 2 張失敗）'
+        elif ds[0]['rw'] >= 2:
+            where = '紅方已兩勝（第3、5局，1 張就贏）'
+        else:
+            where = f'第{rd}局（紅方還沒兩勝）'
+        key = (where, min(reds, 3))
         t = out[key]
+        t['win'][min(ds[0]['fails'], 3)] += ds[0]['win']
         t['n'] += 1
         t['human'][min(ds[0]['fails'], 3)] += 1
         t['bot'][min(int(sum(d['bh'] for d in ds)), 3)] += 1
@@ -957,8 +969,10 @@ def fails_section():
 
         def dist(cn):
             return '／'.join(f'{100 * cn[k] / n:.0f}%' for k in range(0, key[1] + 1))
-        rows.append([f'{key[0]}・隊上 {key[1]} 個紅方{"以上" if key[1] == 3 else ""}', n, dist(t['human']), dist(t['bot']), dist(t['baseline'])])
-    table(['局面', '任務數', '真人：0／1／2…張失敗', '百科AI', '基準線'], rows, '第 4 局要 2 張失敗才算失敗；其他局 1 張就夠，多出的失敗只是多曝光一個紅方。')
+        wr = '／'.join((f"{100 * t['win'][k] / t['human'][k]:.0f}%" if t['human'][k] >= 10 else '—') for k in range(0, key[1] + 1))
+        rows.append([f'{key[0]}・隊上 {key[1]} 個紅方{"以上" if key[1] == 3 else ""}', n, dist(t['human']), dist(t['bot']), dist(t['baseline']), wr])
+    table(['局面', '任務數', '真人：0／1／2…張失敗', '百科AI', '基準線', '真人出 0／1／2…張時紅方的勝率'], rows,
+          '第 4 局要 2 張失敗才算失敗；其他局 1 張就夠，多出的失敗只是多曝光一個紅方。紅方已兩勝時「每個相認的紅方都出失敗」是站長定的硬規則（redMatchPointFail）。勝率不到 10 次的不列。')
 
 
 # ── 線索（匿名）──
@@ -1184,7 +1198,7 @@ public = {
     'seats': ROLE_SEATS,
     'same': {role: {cat: RESULT[role][cat]['same'] for cat in RESULT[role]} for role in ROLES},
     'cells': CELLS,
-    'failCounts': [{'cell': k[0], 'reds': k[1], 'n': v['n'], 'human': dict(v['human']), 'bot': dict(v['bot']), 'baseline': dict(v['baseline'])} for k, v in sorted(FAILS.items())],
+    'failCounts': [{'cell': k[0], 'reds': k[1], 'n': v['n'], 'human': dict(v['human']), 'bot': dict(v['bot']), 'baseline': dict(v['baseline']), 'redWinsByHumanFails': dict(v['win'])} for k, v in sorted(FAILS.items())],
     'selection': ANON_SELECT,
 }
 json.dump(clean(public), open(os.path.join(OUT, 'cells.json'), 'w', encoding='utf8'), ensure_ascii=False, separators=(',', ':'))
