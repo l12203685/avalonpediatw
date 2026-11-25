@@ -39,6 +39,7 @@ export const DAILY_QUESTION_UNAVAILABLE_TEXT = '每日一題暫時讀不到，�
 export const DAILY_QUESTION_LOADING_TEXT = '今天的題目還在準備，請過一下再打一次 /每日一題。';
 
 export const DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT = '昨天的答案暫時讀不到，請稍後再打一次 /每日一題 昨天。';
+export const DAILY_QUESTION_YESTERDAY_LOADING_TEXT = '昨天的答案還在準備，請過一下再打一次 /每日一題 昨天。';
 /** 後面接了看不懂的字（例：/每日一題 答案、/每日一題 前天）。固定文字，不回顯打的字。 */
 export const DAILY_QUESTION_USAGE_HINT = '用法：/每日一題（今天的題目）、/每日一題 昨天（昨天的題目和答案）。今天的答案明天才看得到。';
 
@@ -268,7 +269,7 @@ export function formatYesterdayLoad(load: YesterdayLoad): string {
     case 'none':
       return formatNoYesterdayQuestion(load.date);
     case 'loading':
-      return DAILY_QUESTION_LOADING_TEXT;
+      return DAILY_QUESTION_YESTERDAY_LOADING_TEXT;
     case 'unavailable':
       return DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT;
   }

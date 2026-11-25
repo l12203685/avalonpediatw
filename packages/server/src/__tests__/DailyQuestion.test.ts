@@ -16,6 +16,7 @@ import {
   DAILY_QUESTION_UNAVAILABLE_TEXT,
   DAILY_QUESTION_USAGE,
   DAILY_QUESTION_USAGE_HINT,
+  DAILY_QUESTION_YESTERDAY_LOADING_TEXT,
   DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT,
   YESTERDAY_STATE_DAYS,
   __resetDailyQuestionForTests,
@@ -356,7 +357,8 @@ describe('/每日一題 昨天（2026-11-25 第二批）：指令與回覆文字
   it('no question yesterday / still loading / unreadable', () => {
     expect(formatNoYesterdayQuestion('2026-11-24')).toBe('昨天（11/24 週二）沒有每日一題。今天的題目：/每日一題');
     expect(formatYesterdayLoad({ kind: 'none', date: '2026-11-24' })).toBe(formatNoYesterdayQuestion('2026-11-24'));
-    expect(formatYesterdayLoad({ kind: 'loading' })).toBe(DAILY_QUESTION_LOADING_TEXT);
+    expect(formatYesterdayLoad({ kind: 'loading' })).toBe(DAILY_QUESTION_YESTERDAY_LOADING_TEXT);
+    expect(DAILY_QUESTION_YESTERDAY_LOADING_TEXT).toContain('/每日一題 昨天');
     expect(formatYesterdayLoad({ kind: 'unavailable' })).toBe(DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT);
     expect(formatYesterdayLoad({ kind: 'found', answer: ANSWER })).toBe(formatYesterdayAnswer(ANSWER));
   });
