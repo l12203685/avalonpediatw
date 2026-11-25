@@ -91,6 +91,7 @@ import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinKeyApprove41Now } from '../BlueRound41';
 import { merlinKnownReds, merlinLoyalStyleTeam, merlinPublicPipelineOn, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
 import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77';
+import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -1396,6 +1397,15 @@ export class ForwardAgent implements AvalonAgent {
       const styled = merlinLoyalStyleTeam(this.baseline.tuning, obs, d.action, gateOk, publicGateOk, forecast);
       // Round 30 `merlinR2Public` (BlueRound30.ts): with a clean R1 team, Merlin passes it over at R2 when the public loyal of his seat would.
       const r2Pub = merlinR2PublicTeam(this.baseline.tuning, obs, styled, publicGateOk);
+      // Round 80 `merlinLoyalFree80` (Round80.ts; site owner 2026-11-25): among the teams the public loyal of his seat could plausibly send, one
+      // with no red he sees when there is one; when every plausible team holds one, his own sight keeps them off (not the round-58 thumb).
+      const chosen = r2Pub !== styled ? r2Pub : styled;
+      if (chosen.type === 'team_select' && loyalFree80Applies(this.baseline.tuning, obs)) {
+        const seen80 = new Set(obs.knownEvils);
+        const barred80 = [...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen80.has(id))];
+        const t80 = loyalFree80Team(this.baseline.tuning, obs, chosen.teamIds, gateOk, publicGateOk, barred80);
+        if (t80 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t80] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a red-free team the loyal of his seat could send (round 80)` } };
+      }
       if (r2Pub !== styled) return { ...d, action: r2Pub, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin R2: as the public loyal (cleanest team without the whole R1 team)` } };
       if (styled !== d.action) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin loyal-style team` } };
       return d;

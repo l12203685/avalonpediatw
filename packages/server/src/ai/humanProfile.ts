@@ -51,8 +51,9 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 其他層在這裡關回 0（舊刺客）。
  * 第 78 回合再加紅方第 2 局的任務牌 `redRankOrderR2Fix45`（第 46 回合的開關：莫甘娜第 2 局和一個認得的隊友同隊時出失敗；人類 PR 量尺兩半都沒有一層變差），
  * 和 `redPairOne78`（= 0：基準線採用的第 3 局座位約定只在機器人之間有用，真人桌照原本的位階法）。
+ * 第 80 回合再加梅林派隊 `merlinLoyalFree80`（站長 11/25「在忠臣資訊視角內 可以派出的全沒拇指組合…那當然還是用能力避開」；人類 PR 量尺梅林兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75', 'redRankOrderR2Fix45', 'redPairOne78'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75', 'redRankOrderR2Fix45', 'redPairOne78', 'merlinLoyalFree80'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -143,8 +144,18 @@ export const TIER_SWITCH_KEYS: readonly AgentTuningKey[] = ['assassinWorldLine75
  *   −0.004 ± 0.014（隊友照紀錄），人類 PR 量尺 −0.017 ± 0.008（量尺只看得到「兩張都出／兩張都藏」，看不到「剛好一張」），所以真人桌維持 0（照原本的位階法）。
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
+ * - 梅林的提議（`merlinLoyalFree80=0.5`，第 80 回合；站長 2026-11-25「梅林學忠臣的意思是 在忠臣資訊視角內 可以派出的全沒拇指組合 但如果只用忠臣資訊一定會派到拇指
+ *   那當然還是用能力避開」）：在坐在他位置、只看公開紀錄的忠臣說得通的隊（公開的「這隊沒有紅」≥ 最高的一半）裡挑不帶他看得到的紅的；沒有就用自己的資訊避開。
+ *   真人桌原本就有 `merlinOwnRank58=0.5`（同一個「說得通」），差別只在現行還會帶拇指的兩條路：照派帶拇指的成功隊（`merlinReuseNorm`）與順著全場帶同一個拇指
+ *   （`merlinFlowFollow`）。真人局 3,476 個梅林的提議改到 240 個（第 1、2 局非強制 186 個），拇指率 6.9 → 0%（真人 12.0%；第 1、2 局非強制 10.5 → 0%，真人 12.8%）；
+ *   和真人「帶不帶拇指」一致 −1.8 ± 1.5（高端桌 +1.2 ± 2.3、高強度 +1.8 ± 5.6），完全相同 −1.9 ± 0.5。
+ *   人類 PR 量尺梅林 +0.55 ± 0.09 pp／座位局（偶數局 +0.39 ± 0.11、奇數局 +0.71 ± 0.14；弱 −0.03／一般 +0.47／強 +0.98／S 不明 +0.81），
+ *   沒有一格變差超過 1 個標準誤（最差：弱桌奇數局 −0.19 ± 0.21）。只蓋第 1、2 局的版本 +0.32 ± 0.08（弱桌奇數局 −0.33 ± 0.19），所以每一局都用。
+ *   基準線不用（自我對打：世界線刺客之下 −2.60 [−3.22, −1.96]，梅林完全不帶拇指更好認）。
+ * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
+ *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25, redRankOrderR2Fix45: 1, redPairOne78: 0 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25, redRankOrderR2Fix45: 1, redPairOne78: 0, merlinLoyalFree80: 0.5 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

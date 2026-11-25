@@ -3,9 +3,9 @@
   "generatedAt": "2026-11-25",
   "source": "docs/ai/optimization_loop.md 第 4 節＋docs/ai/ai_history.curated.json（scripts/build_ai_history.ts）",
   "stats": {
-    "rounds": 78,
+    "rounds": 79,
     "adoptedRounds": 45,
-    "notAdoptedRounds": 33,
+    "notAdoptedRounds": 34,
     "latestRound": "81"
   },
   "headline": [

@@ -41,6 +41,29 @@ function combinations<T>(items: readonly T[], k: number): T[][] {
   return out;
 }
 
+/**
+ * The public loyal view of Merlin's own seat and how `merlinLoyalStyleTeam` scores a team on it (round 80 `Round80.ts` reuses it, so the
+ * "loyal-plausible" set is measured on exactly the score Merlin's pick is ranked by): the view (same records, none of his sight), the belief
+ * options, the weight of the zone / extension tie-break and the earlier R1–R2 proposals it reads.
+ */
+export function merlinPublicScoring(tuning: Readonly<AgentTuning>, obs: PlayerObservation): {
+  publicView: PlayerObservation; pubOpts: BayesOptions; zoneWeight: number; prior: { leader: string; team: string[] }[];
+} {
+  const me = obs.myPlayerId;
+  // The public loyal view of my own seat: the same records, none of Merlin's sight.
+  const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
+  // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
+  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
+  // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
+  const pubOpts: BayesOptions = merlinPublicPipelineOn(tuning, obs)
+    ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
+    : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
+  // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
+  const zoneWeight = tuning.merlinPublicTieBreak === true ? 0 : 0.05;
+  const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: [...p.team] }));
+  return { publicView, pubOpts, zoneWeight, prior };
+}
+
 /** Merlin's loyal-style team, or the action unchanged. */
 
 /**
@@ -84,17 +107,7 @@ export function merlinLoyalStyleTeam(
   const flowRed = flow0 !== null && barred54.includes(flow0) ? null : flow0;
   const pool = obs.allPlayerIds.filter((id) => id !== me && !barred54.includes(id) && (cover || !seen.has(id) || id === flowRed));
   if (pool.length < size - 1) return action;
-  // The public loyal view of my own seat: the same records, none of Merlin's sight.
-  const publicView = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
-  // Round 38 `ownView` (scope 3): the public loyal of Merlin's seat has his own prior too — Merlin's team is one such a loyal could send.
-  const ownView = (tuning.ownView ?? 0) > 0 && (tuning.ownViewScope ?? 0) >= 3 ? { ownView: { sigma: tuning.ownView ?? 0, keep: tuning.ownViewKeep ?? 0, scope: 3, maxRound: tuning.ownViewRounds ?? 0 } } : {};
-  // Round 38 `merlinPublicPipeline` (checklist ML-01): read the public record with the options every loyal pick uses, not the older subset.
-  const pubOpts: BayesOptions = merlinPublicPipelineOn(tuning, obs)
-    ? { ...bayesOptionsOf({ ...tuning, ownView: 0, ownViewKeep: 0 }), ...ownView }
-    : { botTables: tuning.beliefBotTables ?? 0, botTablesNext: tuning.beliefBotTablesNext === true, botMissionNext: tuning.beliefBotMissionNext === true, keyVoteCells: tuning.beliefKeyVoteCells === true, ...ownView };
-  // Round 38 `merlinPublicTieBreak` (checklist ML-03): no private zone score on top of the public P(clean).
-  const zoneWeight = tuning.merlinPublicTieBreak === true ? 0 : 0.05;
-  const prior = obs.voteHistory.filter((p) => p.round <= 2 && p.leader !== me).map((p) => ({ leader: p.leader, team: p.team }));
+  const { publicView, pubOpts, zoneWeight, prior } = merlinPublicScoring(tuning, obs);
   const scored: { team: string[]; score: number; p: number }[] = [];
   for (const fill of combinations(pool, size - 1)) {
     if (cover && fill.filter((id) => seen.has(id)).length !== 1) continue;
