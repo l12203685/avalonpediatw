@@ -1,0 +1,1295 @@
+{
+  "schema": 1,
+  "about": "情境題庫（第 74 回合）。roles = 刺客／莫甘娜／莫德雷德／奧伯倫／派西／梅林 的座位（0 = 10 家），其他人是忠臣；record = 到決策點為止的牌譜（站長的寫法）。只有座位，沒有玩家名字。格式說明在 scenarioSuite.ts。",
+  "scenarios": [
+    {
+      "id": "A0-loyal-red",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家忠臣第一湖驗到莫甘娜",
+      "source": "硬規則 A0：好人持湖說實話（rules_checklist 第 2 節「藍方湖不說謊」）",
+      "roles": "678953",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "7"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-loyal-blue",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家忠臣第一湖驗到忠臣",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678953",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "4"
+      },
+      "expect": [
+        {
+          "claim": "good"
+        }
+      ]
+    },
+    {
+      "id": "A0-loyal-mordred",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家忠臣第一湖驗到莫德雷德（第 1 局已經失敗）",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678953",
+      "record": [
+        "128 456+",
+        "oox",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "8"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-loyal-merlin",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家忠臣第一湖驗到梅林（紅方已兩勝）",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678953",
+      "record": [
+        "126 345+",
+        "oox",
+        "2347 15+",
+        "ooox"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "3"
+      },
+      "expect": [
+        {
+          "claim": "good"
+        }
+      ]
+    },
+    {
+      "id": "A0-loyal-oberon-two-down",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家忠臣第一湖驗到奧伯倫（紅方已兩勝）",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678953",
+      "record": [
+        "126 345+",
+        "oox",
+        "2347 15+",
+        "ooox"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "9"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-percival-morgana",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家派西第一湖驗到莫甘娜那一根拇指",
+      "source": "硬規則 A0：好人持湖說實話；Edward 10/14「派西的湖 = 藍方的湖」",
+      "roles": "678903",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "7"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-percival-merlin",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家派西第一湖驗到梅林那一根拇指",
+      "source": "硬規則 A0：好人持湖說實話；Edward 10/14「派西的湖 = 藍方的湖」",
+      "roles": "678903",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "3"
+      },
+      "expect": [
+        {
+          "claim": "good"
+        }
+      ]
+    },
+    {
+      "id": "A0-merlin-seen-red",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家梅林第一湖驗到他本來就看得到的刺客",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678950",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "6"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-merlin-mordred",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家梅林第一湖驗到他看不到的莫德雷德",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678950",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "8"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-merlin-loyal",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家梅林第一湖驗到忠臣",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678950",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "1"
+      },
+      "expect": [
+        {
+          "claim": "good"
+        }
+      ]
+    },
+    {
+      "id": "A0-second-lake-red",
+      "cls": "A0",
+      "hard": true,
+      "title": "第二湖：被宣藍的 4 家忠臣接著驗到刺客",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "678953",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo",
+        "0>4 o",
+        "3456 12+",
+        "ooox"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "6"
+      },
+      "expect": [
+        {
+          "claim": "evil"
+        }
+      ]
+    },
+    {
+      "id": "A0-second-lake-accused",
+      "cls": "A0",
+      "hard": true,
+      "title": "第二湖：被紅方持湖者宣紅的 2 家忠臣，驗到忠臣照樣說藍",
+      "source": "硬規則 A0：好人持湖說實話",
+      "roles": "789053",
+      "record": [
+        "789 012+",
+        "oox",
+        "7890 12+",
+        "ooox",
+        "0>2 x",
+        "3456 12+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "4"
+      },
+      "expect": [
+        {
+          "claim": "good"
+        }
+      ]
+    },
+    {
+      "id": "A0-belief-accused-knows",
+      "cls": "A0",
+      "hard": true,
+      "title": "4 家忠臣被 0 家宣紅：好人不會說謊，所以 0 家一定是紅",
+      "source": "硬規則 A0（信念）：好人持湖者不可能做的宣告會讓持湖者自曝（rules_checklist 第 2 節）",
+      "roles": "789053",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo",
+        "0>4 x"
+      ],
+      "ask": {
+        "kind": "vote",
+        "seat": "4",
+        "team": "3450"
+      },
+      "expect": [
+        {
+          "pRedAtLeast": {
+            "seat": "0",
+            "p": 0.99
+          }
+        },
+        {
+          "vote": "reject"
+        }
+      ]
+    },
+    {
+      "id": "A0-belief-accused-leads",
+      "cls": "A0",
+      "hard": true,
+      "title": "4 家忠臣被 0 家宣紅之後當隊長：不帶 0 家",
+      "source": "硬規則 A0（信念）＋站長 11/16「被證明的紅不派」（INV-PR1）",
+      "roles": "789053",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345",
+        "3456 12+",
+        "oooo",
+        "0>4 x"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "4"
+      },
+      "expect": [
+        {
+          "teamLacks": "0"
+        },
+        {
+          "pRedAtLeast": {
+            "seat": "0",
+            "p": 0.99
+          }
+        }
+      ]
+    },
+    {
+      "id": "A0-belief-own-lake",
+      "cls": "A0",
+      "hard": true,
+      "title": "0 家忠臣自己驗到 7 家是紅（也宣了紅）：之後 P(紅) 是 1",
+      "source": "硬規則 A0（信念）：自己的湖是確定的",
+      "roles": "678953",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo",
+        "0>7 x"
+      ],
+      "ask": {
+        "kind": "vote",
+        "seat": "0",
+        "team": "3457"
+      },
+      "expect": [
+        {
+          "pRedAtLeast": {
+            "seat": "7",
+            "p": 0.99
+          }
+        },
+        {
+          "vote": "reject"
+        }
+      ]
+    },
+    {
+      "id": "A1-assassin-r3",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝，第 3 局強制局刺客自己在隊上",
+      "source": "硬規則 A1：紅方已兩勝，紅一定出失敗（Edward 10/26「不會刻意拖延」）",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2348 156+",
+        "ooox",
+        "0>1 o",
+        "3456",
+        "4561",
+        "5612",
+        "6123"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "7",
+        "team": "1247"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-morgana-r3",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝，第 3 局莫甘娜被忠臣帶上隊",
+      "source": "硬規則 A1：紅方已兩勝，紅一定出失敗",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2349 156+",
+        "ooox",
+        "0>1 o",
+        "3456"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "8",
+        "team": "1248 56+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-mordred-r3",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝，第 3 局莫德雷德被梅林帶上隊（梅林看不到他）",
+      "source": "硬規則 A1：紅方已兩勝，紅一定出失敗",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2348 156+",
+        "ooox",
+        "0>1 o"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "9",
+        "team": "3459 12+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-oberon-r3",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝，第 3 局奧伯倫落單在隊上",
+      "source": "硬規則 A1：紅方已兩勝，紅一定出失敗",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2348 156+",
+        "ooox",
+        "0>1 o",
+        "3456"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "0",
+        "team": "1240 56+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-r4-two-reds-assassin",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝，第 4 局（要兩張失敗）刺客和莫甘娜都在隊上：刺客",
+      "source": "硬規則 A1；第 29 回合「紅方兩紅時相認紅都出失敗」",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2348 156+",
+        "ooox",
+        "0>1 o",
+        "1345 26+",
+        "oooo",
+        "1>2 o"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "7",
+        "team": "12478 56+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-r4-two-reds-morgana",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝，第 4 局（要兩張失敗）刺客和莫甘娜都在隊上：莫甘娜",
+      "source": "硬規則 A1；第 29 回合「紅方兩紅時相認紅都出失敗」",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2348 156+",
+        "ooox",
+        "0>1 o",
+        "1345 26+",
+        "oooo",
+        "1>2 o"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "8",
+        "team": "12478 56+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-r5-mordred",
+      "cls": "A1",
+      "hard": true,
+      "title": "2:2 的第 5 局，莫德雷德落單在隊上",
+      "source": "硬規則 A1：紅方已兩勝，紅一定出失敗",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2345 16+",
+        "oooo",
+        "0>1 o",
+        "3458 12+",
+        "ooox",
+        "1>2 o",
+        "12345 6+",
+        "ooooo",
+        "2>3 o"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "9",
+        "team": "12349 56+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-r5-assassin-with-oberon",
+      "cls": "A1",
+      "hard": true,
+      "title": "2:2 的第 5 局，刺客和奧伯倫都在隊上（互相不認得）：刺客",
+      "source": "硬規則 A1：紅方已兩勝，紅一定出失敗",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2345 16+",
+        "oooo",
+        "0>1 o",
+        "3458 12+",
+        "ooox",
+        "1>2 o",
+        "12345 6+",
+        "ooooo",
+        "2>3 o"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "7",
+        "team": "12370 456+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "A1-belief-clean-after-two-fails",
+      "cls": "A1",
+      "hard": true,
+      "title": "紅方已兩勝之後第 3 局 3456 成功：這四個人一定是藍",
+      "source": "硬規則 A1（信念）：Edward 10/26「兩局失敗後任務成功 ⇒ 隊上紅方不足以讓任務失敗」",
+      "roles": "789012",
+      "record": [
+        "789 012+",
+        "oox",
+        "7890 12+",
+        "ooox",
+        "0>3 o",
+        "3456 12+",
+        "oooo",
+        "3>4 o"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "4"
+      },
+      "expect": [
+        {
+          "pRedAtMost": {
+            "seat": "3",
+            "p": 0.001
+          }
+        },
+        {
+          "pRedAtMost": {
+            "seat": "5",
+            "p": 0.001
+          }
+        },
+        {
+          "pRedAtMost": {
+            "seat": "6",
+            "p": 0.001
+          }
+        },
+        {
+          "teamHas": "3456"
+        }
+      ]
+    },
+    {
+      "id": "RUL-return-lake",
+      "cls": "ruling",
+      "hard": true,
+      "title": "還湖：2 家忠臣被 0 家宣紅，第 3 局 3456 在紅方已兩勝之後成功；2 家要把湖給 3456 其中一個",
+      "source": "Edward 10/26「A>B 壞，B 要把湖交給確定是好人的人，稱為還湖」；站長 11/23「還湖照舊 100% 硬」",
+      "roles": "789053",
+      "record": [
+        "789 012+",
+        "oox",
+        "7890 12+",
+        "ooox",
+        "0>2 x",
+        "3456 12+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeTarget"
+      },
+      "expect": [
+        {
+          "targetIs": "3456"
+        }
+      ]
+    },
+    {
+      "id": "RUL-proven-red-not-picked",
+      "cls": "ruling",
+      "hard": true,
+      "title": "0 家忠臣自己驗到 7 家是紅，2:2 的第 5 局輪到他派隊：不帶 7 家",
+      "source": "站長 11/16「被證明的紅不派」（PR #19，INV-PR1，沒有例外）",
+      "roles": "678953",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2346 15+",
+        "ooox",
+        "0>7 x",
+        "3456",
+        "4561",
+        "5612",
+        "6123",
+        "1237",
+        "ooox",
+        "7>8 o",
+        "12345",
+        "12345 0+",
+        "ooooo",
+        "8>9 o"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "0"
+      },
+      "expect": [
+        {
+          "teamLacks": "7"
+        }
+      ]
+    },
+    {
+      "id": "RUL-leader-on-own-team-loyal",
+      "cls": "ruling",
+      "hard": true,
+      "title": "1-1：1 家忠臣派隊，自己在隊上",
+      "source": "站長裁定：隊長必在隊上（wiki_sop_map 第 0 節第 2 條）",
+      "roles": "789053",
+      "record": [],
+      "ask": {
+        "kind": "team",
+        "seat": "1"
+      },
+      "expect": [
+        {
+          "teamHas": "1"
+        }
+      ]
+    },
+    {
+      "id": "RUL-leader-on-own-team-merlin",
+      "cls": "ruling",
+      "hard": true,
+      "title": "1-3：3 家梅林派隊，自己在隊上",
+      "source": "站長裁定：隊長必在隊上",
+      "roles": "789053",
+      "record": [
+        "124",
+        "235"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "3"
+      },
+      "expect": [
+        {
+          "teamHas": "3"
+        }
+      ]
+    },
+    {
+      "id": "RUL-leader-approves-own-team",
+      "cls": "ruling",
+      "hard": true,
+      "title": "1-2：2 家忠臣派了 234，自己的票",
+      "source": "第 24 回合硬約束：隊長派票與自己的票一致（站長 11/03）",
+      "roles": "789053",
+      "record": [
+        "124"
+      ],
+      "ask": {
+        "kind": "vote",
+        "seat": "2",
+        "team": "234"
+      },
+      "expect": [
+        {
+          "vote": "approve"
+        }
+      ]
+    },
+    {
+      "id": "RUL-percival-no-thumb-r1",
+      "cls": "ruling",
+      "hard": true,
+      "title": "1-2：2 家派西（拇指在 6、8）沒有資訊，不帶拇指",
+      "source": "Edward 10/14「派西沒資訊時預設不派拇指」",
+      "roles": "789126",
+      "record": [
+        "134"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "2"
+      },
+      "expect": [
+        {
+          "teamLacks": "68"
+        }
+      ]
+    },
+    {
+      "id": "RUL-percival-both-thumbs-on-team",
+      "cls": "ruling",
+      "hard": true,
+      "title": "1-1：5 家派西和兩根拇指同隊，投什麼",
+      "source": "Edward 10/14「派西確定會失敗 = 梅林莫甘娜同時進任務 投反對 = 出賣梅林」",
+      "roles": "789053",
+      "record": [],
+      "ask": {
+        "kind": "vote",
+        "seat": "5",
+        "team": "358"
+      },
+      "expect": [
+        {
+          "vote": "approve"
+        }
+      ]
+    },
+    {
+      "id": "RUL-public-red-holder-silent",
+      "cls": "ruling",
+      "hard": true,
+      "title": "第 1 局 780 三張失敗（三個都是公開的紅），0 家持湖驗了 1 家：不宣告",
+      "source": "Edward 10/26「已公開確定是紅的持湖者不宣告」",
+      "roles": "789053",
+      "record": [
+        "780 123+",
+        "xxx",
+        "1234 56+",
+        "oooo"
+      ],
+      "ask": {
+        "kind": "lakeClaim",
+        "target": "1"
+      },
+      "expect": [
+        {
+          "claim": "none"
+        }
+      ]
+    },
+    {
+      "id": "RUL-mordred-approves-own-fail",
+      "cls": "ruling",
+      "hard": true,
+      "title": "紅方已兩勝，第 3 局莫德雷德在隊上、隊上沒有隊友：投贊成",
+      "source": "第 29 回合硬約束：莫德雷德在自己一張失敗就夠的隊上投白",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2348 156+",
+        "ooox",
+        "0>1 o"
+      ],
+      "ask": {
+        "kind": "vote",
+        "seat": "9",
+        "team": "3459"
+      },
+      "expect": [
+        {
+          "vote": "approve"
+        }
+      ]
+    },
+    {
+      "id": "RUL-assassin-skips-red-proposer",
+      "cls": "ruling",
+      "hard": true,
+      "title": "刺殺：4 家第 3 局帶過梅林看得到的刺客，不刺 4 家",
+      "source": "Edward 10/26「派過梅林看得到的紅的隊長排除在選項外」（INV-A2）",
+      "roles": "789053",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 16+",
+        "oooo",
+        "0>1 o",
+        "1235",
+        "1247 356+",
+        "ooox",
+        "1>2 o",
+        "12356 4+",
+        "ooooo"
+      ],
+      "ask": {
+        "kind": "kill"
+      },
+      "expect": [
+        {
+          "targetNot": "4"
+        }
+      ]
+    },
+    {
+      "id": "OWN-SV1Q8-3-5",
+      "cls": "owner",
+      "title": "站長的派法：3-5 派 2579（或 2570），36 不能派",
+      "source": "站長 2026-11-18 主控台「我看不太懂你派的邏輯 但如果換成我派的話…我會派 2579」（每日一題 SV1Q8-3-5）",
+      "bank": "SV1Q8-3-5",
+      "expect": [
+        {
+          "teamIs": [
+            "2579",
+            "2570"
+          ]
+        }
+      ],
+      "note": "站長的理由：0 高機率不是紅（是紅可以直接連拿兩局，沒必要藏）；2 的地位比 3 高，大家不認 3 和第二局去加 3 的 6；7 願意選 2 比較像好人；留後續發展空間選 9。這一題對的是「讀法和站長一樣不一樣」，不是事後的結果（事後的角色：7 家奧伯倫、9 家莫德雷德、0 家梅林）。"
+    },
+    {
+      "id": "OWN-SV1Q8-3-5-no-36",
+      "cls": "owner",
+      "title": "同一題的底線：隊上不能有 3、6",
+      "source": "站長 2026-11-18「36不能派」（每日一題 SV1Q8-3-5）",
+      "bank": "SV1Q8-3-5",
+      "expect": [
+        {
+          "teamLacks": "36"
+        }
+      ]
+    },
+    {
+      "id": "OWN-Q1-read-1-5",
+      "cls": "owner",
+      "title": "1-5：149／270／346／459 都被否決，5 家忠臣怎麼讀",
+      "source": "站長 2026-11-19 標註（第 53 回合驗收題 Q1）：1、4、9 偏好人；3 家的 346 最可疑",
+      "roles": "286041",
+      "record": [
+        "149",
+        "270",
+        "346",
+        "459"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "5"
+      },
+      "expect": [
+        {
+          "pRedBelow": [
+            "1",
+            "2"
+          ],
+          "margin": 0.02
+        },
+        {
+          "pRedBelow": [
+            "4",
+            "2"
+          ],
+          "margin": 0.02
+        },
+        {
+          "pRedBelow": [
+            "9",
+            "2"
+          ],
+          "margin": 0.02
+        },
+        {
+          "pRedBelow": [
+            "1",
+            "3"
+          ],
+          "margin": 0.02
+        },
+        {
+          "pRedBelow": [
+            "4",
+            "3"
+          ],
+          "margin": 0.02
+        },
+        {
+          "pRedBelow": [
+            "9",
+            "3"
+          ],
+          "margin": 0.02
+        },
+        {
+          "pRedTop": {
+            "seat": "3",
+            "n": 3
+          }
+        }
+      ],
+      "note": "真實：梅林 1、莫甘娜 8、派西 4，紅 2、6、8、0（刺客／莫德雷德／奧伯倫在 2、6、0 的分配是隨意放的，不影響這一題）。"
+    },
+    {
+      "id": "OWN-Q2-thumb-3-4",
+      "cls": "owner",
+      "title": "3-4：4 家派西（拇指 1、8），1 家是梅林那一邊，0 家要在最可疑的前四個",
+      "source": "站長 2026-11-19 標註（第 53 回合驗收題 Q2）",
+      "roles": "286041",
+      "record": [
+        "149",
+        "270",
+        "346",
+        "459",
+        "250",
+        "oox",
+        "1679",
+        "3780",
+        "3780 2+",
+        "3790",
+        "3790",
+        "ooox",
+        "0>4 o",
+        "1347 47-",
+        "3478 2+",
+        "2347 4-"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "4"
+      },
+      "expect": [
+        {
+          "pRedBelow": [
+            "1",
+            "8"
+          ]
+        },
+        {
+          "pRedTop": {
+            "seat": "0",
+            "n": 4
+          }
+        }
+      ],
+      "note": "真實：梅林 1、莫甘娜 8，紅 2、6、8、0（刺客／莫德雷德／奧伯倫的座位隨意放，派西看不到）。"
+    },
+    {
+      "id": "OWN-TMQ2M-3-4-thumb",
+      "cls": "owner",
+      "title": "每日一題 11/24：4 家派西（拇指 3、7），梅林 3 家和他看不到的莫德雷德一起出了失敗的任務",
+      "source": "每日一題 2026-11-24（TMQ2M-3-4）：百科AI 把莫甘娜當成梅林",
+      "bank": "TMQ2M-3-4",
+      "expect": [
+        {
+          "pRedBelow": [
+            "3",
+            "7"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OWN-TMQ2M-3-4-team",
+      "cls": "owner",
+      "title": "同一題：派西的隊不帶莫甘娜（7 家）",
+      "source": "每日一題 2026-11-24（TMQ2M-3-4）",
+      "bank": "TMQ2M-3-4",
+      "expect": [
+        {
+          "teamLacks": "7"
+        }
+      ]
+    },
+    {
+      "id": "OWN-percival-no-skip-tell",
+      "cls": "owner",
+      "title": "1-2：2 家派西（拇指 6、8）不要派剛好跳過 6、8 的 279",
+      "source": "Edward 10/29「不帶拇指可以，但不要用夾、跳把拇指位置點出來」（第 1A-3 節第 2 條）",
+      "roles": "789126",
+      "record": [
+        "134"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "2"
+      },
+      "expect": [
+        {
+          "teamNot": [
+            "279"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OWN-percival-no-info-r2",
+      "cls": "owner",
+      "title": "2-1：6 家派西（拇指 3、9），第 1 局強制局 358 一張失敗、只有 3 家被沾到——分不出來，兩根都不帶",
+      "source": "Edward 10/14「派西沒資訊時預設不派拇指」；每日一題題庫：被一張失敗的任務沾到的那一根是梅林 50.9%（584 題），真人在這個局面 45% 兩根都不帶",
+      "roles": "798063",
+      "record": [
+        "124",
+        "235",
+        "346",
+        "457",
+        "358",
+        "oox"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "6"
+      },
+      "expect": [
+        {
+          "teamLacks": "39"
+        }
+      ],
+      "note": "真實：3 家是梅林，和他看不到的莫德雷德（8 家）一起出了失敗的任務；沒沾到的 9 家是莫甘娜。"
+    },
+    {
+      "id": "OWN-merlin-r1-no-seen-red",
+      "cls": "owner",
+      "title": "1-3：3 家梅林派隊，不帶看得到的紅（7、8、0）",
+      "source": "第 1E 節第 5 條（Edward 11/04）：梅林第 1、2 局的提議幾乎不帶看得到的紅",
+      "roles": "789053",
+      "record": [
+        "124",
+        "235"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "3"
+      },
+      "expect": [
+        {
+          "teamLacks": "780"
+        }
+      ]
+    },
+    {
+      "id": "OWN-merlin-r2-no-seen-red",
+      "cls": "owner",
+      "title": "2-1：第 1 局 125 成功，6 家梅林派 2-1，不帶看得到的紅（7、8、0）",
+      "source": "第 1E 節第 5 條（Edward 11/04）",
+      "roles": "789056",
+      "record": [
+        "124",
+        "235",
+        "346",
+        "451",
+        "125",
+        "ooo"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "6"
+      },
+      "expect": [
+        {
+          "teamLacks": "780"
+        }
+      ]
+    },
+    {
+      "id": "WIKI-I3-failer-keeps-failing",
+      "cls": "wiki",
+      "title": "出者恆出：刺客第 1 局自己出了失敗，1:1 的第 3 局又落單在隊上",
+      "source": "百科〈紅方基礎原則〉I3「出者恆出、藏者恆藏」（wiki_sop_map：未實作）",
+      "roles": "789053",
+      "record": [
+        "127 345+",
+        "oox",
+        "2345 16+",
+        "oooo",
+        "0>1 o",
+        "3456"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "7",
+        "team": "1247 56+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "WIKI-I7-exposed-red-fails",
+      "cls": "wiki",
+      "title": "已經被打成鐵壞：第 1 局 780 三張失敗，第 2 局奧伯倫又被帶上隊",
+      "source": "百科〈紅方何時要派隊友〉I7「後期／已被打成鐵壞：沒必要做好事」（wiki_sop_map：未實作）",
+      "roles": "789053",
+      "record": [
+        "780 123+",
+        "xxx"
+      ],
+      "ask": {
+        "kind": "card",
+        "seat": "0",
+        "team": "1230 456+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "WIKI-D12-no-outer-white-before-own-turn",
+      "cls": "wiki",
+      "title": "1-1：3 家忠臣不在隊上、這一局自己還有派票的機會，不外白",
+      "source": "百科〈外白（實戰篇）〉D12「自己有派票回合時不該外白」（wiki_sop_map：未實作）",
+      "roles": "789056",
+      "record": [],
+      "ask": {
+        "kind": "vote",
+        "seat": "3",
+        "team": "124"
+      },
+      "expect": [
+        {
+          "vote": "reject"
+        }
+      ]
+    },
+    {
+      "id": "WIKI-B28-not-just-drop-the-rejecter",
+      "cls": "wiki",
+      "title": "2-2：上一隊 2345 被隊上的 5 家內黑否決；3 家忠臣不要只把 5 家換掉、其他三個照舊",
+      "source": "百科〈新手常見錯誤〉B28「只拔掉內黑的人、組合幾乎不變」（wiki_sop_map：未實作）",
+      "roles": "789056",
+      "record": [
+        "123 456+",
+        "ooo",
+        "2345 5-"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "3"
+      },
+      "expect": [
+        {
+          "teamNot": [
+            "2341",
+            "2346",
+            "2347",
+            "2348",
+            "2349",
+            "2340"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "WIKI-H8-front-merlin-picks-back-half",
+      "cls": "wiki",
+      "title": "1-2：2 家梅林（前半區）先派第一局沒有派票權的後半區（6–9），不派前半區也不派 5、0",
+      "source": "百科〈QnA 資訊相關〉H8（wiki_sop_map：未實作）",
+      "roles": "134502",
+      "record": [
+        "167"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "2"
+      },
+      "expect": [
+        {
+          "teamLacks": "13450"
+        }
+      ]
+    },
+    {
+      "id": "AI-G7-oberon-r1-fail",
+      "cls": "otherAi",
+      "title": "第 1 局奧伯倫落單上車：先出失敗",
+      "source": "其他 AI 的提案 G7（Issue #149；百科〈奧伯倫〉「被選進任務就先出失敗」）；現行照強者比例藏牌，第 64 回合量過沒有採用",
+      "roles": "789053",
+      "record": [],
+      "ask": {
+        "kind": "card",
+        "seat": "0",
+        "team": "120 345+"
+      },
+      "expect": [
+        {
+          "card": "fail"
+        }
+      ]
+    },
+    {
+      "id": "AI-G6-red-leader-one-red",
+      "cls": "otherAi",
+      "title": "1:1 的第 3 局，刺客當隊長（非強制）：隊上只放自己一個紅",
+      "source": "其他 AI 的提案 G6（Issue #149「紅方派隊太好認」）；第 65 回合量過，溫和版沒有採用",
+      "roles": "389057",
+      "record": [
+        "127 456+",
+        "ooo",
+        "2348 156+",
+        "ooox",
+        "0>1 o"
+      ],
+      "ask": {
+        "kind": "team",
+        "seat": "3"
+      },
+      "expect": [
+        {
+          "teamRedsMax": 1
+        }
+      ]
+    }
+  ]
+}
