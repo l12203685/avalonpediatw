@@ -11,6 +11,7 @@
 - 玩家的順序、名字都從 spots.json 讀；本檔沒有任何玩家名字。report.*、data.json 有名字，不可以放進 repo；
   leads.md 是匿名的（只有合計），可以貼進 docs。
 - --dataset：資料集（列出「名字裡含有你打的字」的其他玩家與局數，確認沒有對錯人）。
+- --code-note TEXT：接在「百科AI 程式版本」後面的說明（例如「= main abc1234 ＋ 工具的改動」）。
 - --notes DIR：DIR/method_extra.md 會接在〈做法與限制〉後面（手寫的補充）。
 - 事後真相（隊上的紅方、驗到的人是不是紅方）只用來比誰比較準。危險的隊 = 紅方人數夠讓任務失敗（第 4 局要 2 個）。
 - 區間：相同% 用 Wilson；「玩家 − 百科AI」用以局為單位的重抽（BOOT 次）。
@@ -29,7 +30,7 @@ opts = {}
 pos = []
 i = 0
 while i < len(argv):
-    if argv[i] in ('--dataset', '--notes'):
+    if argv[i] in ('--dataset', '--notes', '--code-note'):
         opts[argv[i][2:]] = argv[i + 1]
         i += 2
     else:
@@ -978,7 +979,7 @@ METHOD = """### 做法
 
 - **資料**：網站戰績與數據分析用的那一批真人局（{games} 局）。不含 ProAvalon、不含百科AI 局；試算表標記的壞局、牌譜總庫標的錯誤局與疑似重複局、站長更正檔排除的局都不算；牌譜無法一步一步嚴格重播的局也不算（各有幾局見〈玩家與局數〉）。只比玩家拿到**忠臣**的座位。
 - **重播**：和第 1 關的座位一致度、人類 PR 量尺同一套。百科AI 坐在玩家的那個座位，只拿到那一刻桌上的公開紀錄（忠臣沒有額外資訊），做一個決定，和玩家實際的選擇比；之後照真人的牌譜繼續走，下一個決策點再比一次。
-- **百科AI**：目前 main 的程式（{sha}），用它在真人桌真的會用的策略層（照那一局開打前的桌上強度分弱／一般／強三層，強度不明算一般）。總表括號裡的「基準線層」是機器人互打用的那一套，只當對照。
+- **百科AI**：重播當時的程式 {sha}{note}，用它在真人桌真的會用的策略層（照那一局開打前的桌上強度分弱／一般／強三層，強度不明算一般）。總表括號裡的「基準線層」是機器人互打用的那一套，只當對照。
 - **湖中**：忠臣持湖時驗誰（同一個座位才算相同）。**派隊**：當隊長的每一次提議，含強制局；整隊每個人都一樣才算相同，另外列重疊度與差幾人。**投票**：第 1～4 次提議的每一張票（強制局不投票），同一種顏色算相同。
 - **事後真相**（隊上有幾個紅方、驗到的人是不是紅方、隊長是不是紅方）只用來比誰比較準，做決定的當下兩邊都看不到。「危險的隊」= 隊上紅方人數夠讓任務失敗（第 4 局要 2 張失敗，所以要 2 個紅方）。
 - **區間**：相同% 用 Wilson 95% 區間；「玩家 − 百科AI」的差用以局為單位的重抽（{boot} 次），同一局的決策點綁在一起。
@@ -1145,7 +1146,7 @@ os.makedirs(OUT, exist_ok=True)
 per_player_compute()
 roles_zh = '忠臣'
 h(1, f'{NP} 位玩家的{roles_zh}決策點 × 百科AI：哪裡相同、哪裡不同')
-para(f"產生：{meta['generatedAt'][:16].replace('T', ' ')} UTC｜百科AI 程式版本 {meta['gitSha'][:10]}（目前的 main）｜資料：網站戰績的真人局 {meta['datasetGames']} 局裡，這 {NP} 位拿到忠臣的局。私人分析，內含玩家名字，不要貼到公開的地方。")
+para(f"產生：{meta['generatedAt'][:16].replace('T', ' ')} UTC｜百科AI 程式版本 {meta['gitSha'][:10]}{opts.get('code-note', '')}｜資料：網站戰績的真人局 {meta['datasetGames']} 局裡，這 {NP} 位拿到忠臣的局。私人分析，內含玩家名字，不要貼到公開的地方。")
 h(2, '結論')
 ul(conclusion_items())
 h(2, '玩家與局數')
@@ -1168,7 +1169,7 @@ para('每一類挑兩種合計差很多的情形，各一個實際的局面。�
 examples_section()
 h(2, '做法與限制')
 lake_ns = [sum(1 for s in LAKE if s['player'] == n) for n in ORDER]
-rawmd(METHOD.format(games=meta['datasetGames'], sha=meta['gitSha'][:10], boot=BOOT, lakes=len(LAKE), lake_min=min(lake_ns), lake_max=max(lake_ns),
+rawmd(METHOD.format(games=meta['datasetGames'], sha=meta['gitSha'][:10], note=opts.get('code-note', ''), boot=BOOT, lakes=len(LAKE), lake_min=min(lake_ns), lake_max=max(lake_ns),
                     seats=len({(x['gameId'], x['seat']) for x in H}), ugames=len({x['gameId'] for x in H})))
 if 'notes' in opts and os.path.exists(os.path.join(opts['notes'], 'method_extra.md')):
     rawmd(open(os.path.join(opts['notes'], 'method_extra.md'), encoding='utf8').read().strip())
