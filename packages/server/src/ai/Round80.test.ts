@@ -19,11 +19,17 @@ const obsAt = (round: number, failCount: number, extra: Partial<PlayerObservatio
   ({ myRole: 'merlin', myPlayerId: 'p1', gamePhase: 'team_select', currentRound: round, failCount, knownEvils: ['p2', 'p3', 'p4'], voteHistory: [], ...extra } as unknown as PlayerObservation);
 
 describe('round 80 flags', () => {
-  it('exist, default off everywhere (legacy, baseline, every human-table profile), parse', () => {
+  it('exist, default off on the baseline, 0.5 on the three human tables, parse', () => {
     expect(AGENT_TUNING_KEYS).toContain('merlinLoyalFree80');
     expect(AGENT_TUNING_KEYS).toContain('merlinLoyalFreeScope80');
-    for (const t of [LEGACY_AGENT_TUNING, DEFAULT_AGENT_TUNING, tuningForOpponent('weakHuman', DEFAULT_AGENT_TUNING), tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING), tuningForOpponent('strongHuman', DEFAULT_AGENT_TUNING)]) {
+    for (const t of [LEGACY_AGENT_TUNING, DEFAULT_AGENT_TUNING]) {
       expect(t.merlinLoyalFree80).toBe(0);
+      expect(t.merlinLoyalFreeScope80).toBe(0);
+    }
+    // the human tables (round 80, real-game replay): 0.5, every round attempts 1–4
+    for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
+      expect(t.merlinLoyalFree80).toBe(0.5);
       expect(t.merlinLoyalFreeScope80).toBe(0);
     }
     expect(parseTuningFlag('merlinLoyalFree80')).toEqual({ merlinLoyalFree80: 0.5 });
