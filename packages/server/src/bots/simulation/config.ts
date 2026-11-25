@@ -36,9 +36,9 @@ export const SIM_PROPOSE_SOFT_MAX_CHARS = 900;
  * 預設不會因為閒置結束（0 = 不限）；SIM_SESSION_TTL_MINUTES 設 1–10080 才會閒置結束。
  */
 export const SIM_SESSION_TTL_MINUTES_DEFAULT = 0;
-/** 不論有沒有在動，一題最長多久：2026-11-19 起不限（只有 /公布、/結束、開新題、名額上限或重啟會結束）。 */
+/** 不論有沒有在動，一題最長多久：2026-11-19 起不限（只有 /公布、/結束、開新題、名額上限會結束；2026-11-25 起重啟也不會，見 persist.ts）。 */
 export const SIM_SESSION_HARD_CAP_MS = Number.POSITIVE_INFINITY;
-/** 記憶體裡最多幾題（超過就結束最久沒動的）。 */
+/** 最多同時開著幾題（超過就結束最久沒動的）；存檔也是這個上限。 */
 export const SIM_MAX_SESSIONS = 500;
 /** 同一個聊天室（群組／頻道）最多幾題。 */
 export const SIM_MAX_SESSIONS_PER_CHAT = 30;

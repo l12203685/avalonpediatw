@@ -440,6 +440,7 @@ DISCORD_BOT_TOKEN=… npx tsx scripts/listCommunityReports.ts --mark-processed <
 - 每分鐘的計時器在起始時間前 30 分鐘就把當天的卡算好、存起來。第一則訊息來時卡還沒好（例如伺服器剛被這則訊息叫醒、題庫還在讀），LINE 最多等 2.5 秒、Discord 15 秒，等不到就這一則不發，下一則再發。
 - 記憶體先標「處理中」，同一個群組同時來的第二則不會再發；**真的送出去之後**才記「今天發過」，沒送出去（reply_token 過期、Discord 失敗）就不記，下一則再試。
 - 「今天發過」、每天選的卡、bot 那一則的訊息 id 存在 private repo 的 JSON 檔（預設帳號庫 `GITHUB_ACCOUNTS_REPO` 的 `bot-state/concept-daily.json`，用 `GITHUB_ACCOUNTS_TOKEN`），重啟後照樣知道今天發過。檔案裡沒有聊天內容：群組 id 是雜湊過的。沒有設定 repo 時只放記憶體（開機 log 會寫；重啟後當天可能再發一次）。
+- 模擬瓦進行中的題目（2026-11-25）存在同一個 repo、同一個資料夾的 `bot-state/sim-sessions.json`，用同一把權杖，不用另外設定；見 [`BOTS.md`〈伺服器重啟〉](BOTS.md#伺服器重啟什麼還在什麼會不見)。
 
 ### 回饋
 

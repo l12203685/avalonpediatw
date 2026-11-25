@@ -1,7 +1,7 @@
 /**
  * 每日小觀念 — 要撐過重啟的狀態：每一天發了哪張卡、每個群組今天發過沒、bot 發出的那一則的訊息 id（認引用回覆用）。
  *
- * 機器人原本沒有資料庫（模擬瓦的題目只在記憶體、每週排行靠很窄的時間窗）；Render 是「GitHub-only」架構，
+ * 機器人原本沒有資料庫（每週排行靠很窄的時間窗；模擬瓦的題目 2026-11-25 起用同一套存，simulation/persist.ts）；Render 是「GitHub-only」架構，
  * Firestore 沒有設定。所以這份狀態是一個 JSON 檔，放在 private repo（預設跟帳號庫同一個，GITHUB_ACCOUNTS_*，
  * 見 config.ts conceptStateRepoConfig），用 GitHub Contents API 讀寫（帶 sha，衝突就重讀合併再寫）。
  * 裡面沒有聊天內容、沒有名字：群組 id 是雜湊過的（hashChatId），卡片 id、日期與 bot 自己那則的訊息 id。
