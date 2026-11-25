@@ -12261,7 +12261,12 @@ A0、A1 的編碼 INV-B1／INV-B2 0 違反（重播 3,531／5,945 個機會；�
 
 #### 7. 驗收（測試）與可重現
 
-TEST_PLACEHOLDER
+- 改的程式：`AgentTuning.ts`（`assassinWorldLine75: 1`）、`humanProfile.ts`（`PROFILE_KEYS` 加 `assassinWorldLine75`、弱／強真人桌明寫 0、`TIER_MAX_KEYS` 1 → 2、`TIER_SWITCH_KEYS`）；
+  `HeuristicAgent.assassinationReadout` 多回傳世界線那一項（`terms.worldLine`、`own`；分數 = `own` × 舊的五項 ＋ 世界線，算法和之前逐位相同，改完之後 563301 第 0–39 局仍然和新預設那一組 40／40 相同），
+  `Round75.ts` 加 `worldLineParts75`（`applyWorldLine75` 改成呼叫它）；Threads 百科AI 答案（`bots/threads/aiAnswer.ts`）的刺殺分數照世界線寫（「世界線 −0.77 = −0.77」，標題說明是四個紅方合起來比對 30 種組合），原本「加起來就是排序用的分數」的五項在世界線開時不再是排序用的分數。
+- 測試：`Round75.test.ts`（基準線預設開、舊表關、弱／強真人桌關、一般真人桌開、環境變數關掉時基準線與真人桌一起回舊刺客；readout 的五項不變、世界線那一項 = log P(梅林)）、`humanProfile.test.ts`（覆寫上限 19、`TIER_MAX_KEYS` 2、每層最多一小格加一個整個開關）、`AgentTuning.test.ts`（預設的描述字串）、`Round61.test.ts`（`assassinPath61` 量的是舊刺客，明寫 `assassinWorldLine75: 0`）、`ThreadsAiAnswer.test.ts`（分數 = own × 五項 ＋ 世界線）。
+- TESTRUN_PLACEHOLDER
+- 新腳本：`scripts/adoptCheck79.py`（採用前的配對檢查：真人刺殺點分層、自我對打逐局配對）、`scripts/blueStrengthOutcomes.py`（真人局照藍方／紅方平均 PR 分組的結果分布；只有合計）。中間檔不進 repo；`docs/ai/gap/r79-adopt-worldline.md` 只有合計數字。
 
 ```
 cd packages/server
