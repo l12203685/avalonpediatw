@@ -78,8 +78,9 @@ const optBool = (v: unknown): boolean => v === undefined || typeof v === 'boolea
 const optStr = (v: unknown): boolean => v === undefined || isStr(v);
 
 function storedSession(s: SimSession): StoredSession {
-  const { game: _index, answers, ...rest } = s;
-  return { ...rest, answers: [...answers.entries()] };
+  const out: Omit<SimSession, 'answers' | 'game'> & { game?: number; answers: [number, SimAnswer[]][] } = { ...s, answers: [...s.answers.entries()] };
+  delete out.game;
+  return out;
 }
 
 /** 存檔裡的一題 → 記憶體裡的一題（game = -1：還沒對過題庫）；有任何欄位不對就整題不要（null）。 */
@@ -288,7 +289,7 @@ export class GitHubSimBackend implements SimStateBackend {
  * 開機讀檔的結果：
  *   'memory-only' 沒設定 repo（只在記憶體）；'restored' 讀回來了；
  *   'empty' 檔案不在（第一次上線，或被刪了）；'version' 存檔格式的版本不同；'unreadable' 讀不到（網路、權杖）。
- * 後三種 = 重啟前的題目沒能讀回來。
+ * 後三種 = 重啟前的題目沒能讀回來；之後回頭再讀、或寫入衝突時讀到了一份讀得懂的，就改成 'restored'。
  */
 export type RestoreOutcome = 'memory-only' | 'restored' | 'empty' | 'version' | 'unreadable';
 
@@ -367,7 +368,10 @@ export class SimPersistence {
     this.debounceMs = opts.debounceMs ?? SIM_PERSIST_DEBOUNCE_MS;
     this.firstDelayMs = opts.firstDelayMs ?? SIM_PERSIST_FIRST_DELAY_MS;
     this.maxBytes = opts.maxBytes ?? SIM_PERSIST_MAX_BYTES;
-    this.logger = opts.logger ?? { info: (m) => console.log(`[sim] ${m}`), warn: (m) => console.warn(`[sim] ${m}`) };
+    this.logger = opts.logger ?? {
+      info: (m): void => { console.log(`[sim] ${m}`); },
+      warn: (m): void => { console.warn(`[sim] ${m}`); },
+    };
     this.handoverMs = opts.handoverMs ?? HANDOVER_MS;
     this.bootAt = this.now();
     if (!this.backend) this.outcome = 'memory-only';
@@ -433,7 +437,13 @@ export class SimPersistence {
       this.outcome = 'empty';
     } else {
       this.version = got.version;
-      this.outcome = this.adopt(got.json, true) ? 'restored' : 'version';
+      let adopted: false | 'same' | 'ahead' = false;
+      try {
+        adopted = this.adopt(got.json, true);
+      } catch {
+        // 檔案內容讓合併出錯（不該發生）：當成讀不懂，從空的開始，不能讓模擬指令永遠卡在「正在讀」。
+      }
+      this.outcome = adopted ? 'restored' : 'version';
       if (this.outcome === 'version') this.logger.warn('saved exercises have another format version; starting empty');
       else this.logger.info(`restored ${this.counts.restoredSessions} open exercises from ${backend.name}`);
     }
@@ -479,7 +489,7 @@ export class SimPersistence {
         this.version = got.version;
         const adopted = this.adopt(got.json, false);
         if (!adopted) return;
-        if (this.outcome === 'unreadable') this.outcome = 'restored';
+        this.outcome = 'restored';
         if (adopted === 'ahead') this.touch(true);
       } catch {
         // 讀不到就算了：下一次再讀，或寫入衝突時再合併。
@@ -536,7 +546,7 @@ export class SimPersistence {
         failure = 'conflict';
         const fresh = await backend.load();
         this.version = fresh ? fresh.version : null;
-        if (fresh && this.adopt(fresh.json, false) && this.outcome === 'unreadable') this.outcome = 'restored';
+        if (fresh && this.adopt(fresh.json, false)) this.outcome = 'restored';
       } catch (err) {
         failure = err instanceof Error ? err.message.slice(0, 80) : typeof err;
         break;

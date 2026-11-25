@@ -28,6 +28,7 @@ import {
 } from '../bots/simulation/persist';
 import { NO_SESSION_KEPT_TEXT, NO_SESSION_TEXT, RESTORING_TEXT, SIM_HELP_TEXT, endedNoticeText, restartLostText } from '../bots/simulation/replies';
 import { SimEngine, emptySnapshot, type SimRequest, type SimSession, type SimSessionStore, type SimStoreSnapshot } from '../bots/simulation/session';
+import { repoWriteKey, serializeRepoWrite } from '../services/githubRepoWrites';
 import { fixtureBankWithMid } from './fixtures/simGames';
 
 const BANK = fixtureBankWithMid();
@@ -803,5 +804,55 @@ describe('GitHubSimBackend（假的 fetch，不連網路）', () => {
     const b = await restart(new GitHubSimBackend(cfg, gh.fetchImpl));
     expect(b.logs).toEqual(['restored 1 open exercises from github']);
     expect(await say(b, '/分析', DM)).toContain('你派 469');
+  });
+});
+
+describe('同一個 repo 的寫入排隊（帳號庫的註冊跟機器人的狀態檔寫同一個 private repo）', () => {
+  it('同一個 repo、同一個分支一次只送一個；不同的 repo 互不相干；出錯不會卡住後面的', async () => {
+    const key = repoWriteKey('Owner/Private', 'main');
+    expect(key).toBe(repoWriteKey('owner/private', 'MAIN'));
+    const log: string[] = [];
+    const job = (name: string, ms: number, fail = false) => async (): Promise<string> => {
+      log.push(`${name} 開始`);
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      log.push(`${name} 結束`);
+      if (fail) throw new Error(name);
+      return name;
+    };
+    const results = await Promise.allSettled([
+      serializeRepoWrite(key, job('a', 30)),
+      serializeRepoWrite(key, job('b', 5, true)),
+      serializeRepoWrite(key, job('c', 1)),
+      serializeRepoWrite(repoWriteKey('owner/other', 'main'), job('x', 1)),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(['fulfilled', 'rejected', 'fulfilled', 'fulfilled']);
+    const same = log.filter((l) => !l.startsWith('x'));
+    expect(same).toEqual(['a 開始', 'a 結束', 'b 開始', 'b 結束', 'c 開始', 'c 結束']);
+    expect(log.indexOf('x 開始')).toBeLessThan(log.indexOf('a 結束'));
+    // 前一個卡住：最久等 maxWaitMs，之後照樣送。
+    void serializeRepoWrite(key, () => new Promise<void>(() => undefined));
+    expect(await serializeRepoWrite(key, async () => 'after', 20)).toBe('after');
+  });
+
+  it('模擬瓦寫檔的時候，別的寫入（例如註冊）等它寫完才送', async () => {
+    const log: string[] = [];
+    let finish: () => void = () => undefined;
+    const slow = (async (_url: string, init: { method?: string } = {}) => {
+      if (init.method === 'PUT') {
+        log.push('sim PUT 開始');
+        await new Promise<void>((resolve) => { finish = resolve; });
+        log.push('sim PUT 結束');
+      }
+      return { ok: true, status: 200, json: async () => ({ content: { sha: 's1' } }) } as unknown as Response;
+    }) as unknown as typeof fetch;
+    const backend = new GitHubSimBackend({ token: 't', repo: 'o/private', branch: 'main', path: 'bot-state/sim-sessions.json', api: 'https://api.example.test' }, slow);
+    const saving = backend.save('{}', null);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const other = serializeRepoWrite(repoWriteKey('o/private', 'main'), async () => { log.push('註冊 PUT'); });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(log).toEqual(['sim PUT 開始']);
+    finish();
+    await Promise.all([saving, other]);
+    expect(log).toEqual(['sim PUT 開始', 'sim PUT 結束', '註冊 PUT']);
   });
 });

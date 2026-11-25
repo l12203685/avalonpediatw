@@ -736,6 +736,8 @@ export class SimEngine {
     if (!bank) return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: true };
     const game = this.gameOf(bank, session);
     if (!game) {
+      // 這一次開機開的題目對不到對局（不該發生）：照舊當成題庫還沒好，題目留著。
+      if (session.game >= 0) return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: true };
       // 重啟後讀回來的題目，這一局已經不在題庫裡（題庫每晚重建）：講明沒能接回來，這一題結束。
       return {
         text: withCoAnswerMark(endedNoticeText(session.exerciseId, 'lost'), coAnswer),

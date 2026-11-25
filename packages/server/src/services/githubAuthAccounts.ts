@@ -26,6 +26,7 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { hashPassword, verifyPassword, normalizeEmail } from './passwordHash';
+import { repoWriteKey, serializeRepoWrite } from './githubRepoWrites';
 
 // ── 設定 ────────────────────────────────────────────────────
 const TOKEN  = process.env.GITHUB_ACCOUNTS_TOKEN  || '';
@@ -146,11 +147,13 @@ async function ghPutJson(path: string, obj: unknown, message: string, sha?: stri
   const content = Buffer.from(JSON.stringify(obj, null, 2), 'utf8').toString('base64');
   const body: Record<string, unknown> = { message, content, branch: BRANCH };
   if (sha) body.sha = sha;
-  const res = await fetch(url, {
+  // 同一個 repo 的寫入排隊（2026-11-25）：機器人的狀態檔（模擬瓦進行中的題目，最多每 25 秒寫一次）也寫這個
+  // repo；同一瞬間兩個寫入會有一個被 GitHub 拒絕（409）。見 services/githubRepoWrites.ts。
+  const res = await serializeRepoWrite(repoWriteKey(REPO, BRANCH), () => fetch(url, {
     method:  'PUT',
     headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
     body:    JSON.stringify(body),
-  });
+  }));
   return res.status;
 }
 

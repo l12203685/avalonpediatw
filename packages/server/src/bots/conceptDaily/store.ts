@@ -9,6 +9,7 @@
  */
 
 import { createHash } from 'crypto';
+import { repoWriteKey, serializeRepoWrite } from '../../services/githubRepoWrites';
 import type { ConceptPlatform, ConceptStateRepoConfig } from './config';
 import type { DayPlan } from './plan';
 
@@ -149,7 +150,10 @@ export class GitHubJsonFile {
       branch: this.cfg.branch,
     };
     if (sha) body.sha = sha;
-    const res = await this.fetchImpl(this.url(false), { method: 'PUT', headers: { ...this.headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body), ...this.signal() });
+    // 同一個 repo 的寫入排隊（帳號庫的註冊、改密碼也寫這個 repo；同時寫會有一個被 GitHub 拒絕）。
+    const res = await serializeRepoWrite(repoWriteKey(this.cfg.repo, this.cfg.branch), () => this.fetchImpl(this.url(false), {
+      method: 'PUT', headers: { ...this.headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body), ...this.signal(),
+    }));
     if (res.ok) {
       const out = (await res.json().catch(() => ({}))) as { content?: { sha?: string } };
       return { ok: true, sha: out.content?.sha ?? null };
