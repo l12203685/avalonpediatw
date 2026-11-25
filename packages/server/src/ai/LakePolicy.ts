@@ -39,6 +39,7 @@ import { percivalRead39 } from './BlueRound39Percival';
 import { goodLakeHumanPool } from './BlueRound38';
 import { claimPossibleForGoodHolder, returnLakeOptions } from './belief/Certainty';
 import { redLakeDisguiseNow } from './Round50';
+import { merlinLakeMix82Now } from './Round82';
 
 type Camp = 'good' | 'evil';
 
@@ -222,7 +223,7 @@ export function pickLakeTargetForTeam(
     // ── AgentTuning.merlinLakeLoyal（第 13 回合藍方・梅林）──
     // Merlin picks the target a public-view loyal in this seat would (his seen reds are not avoided; the claim
     // stays truthful) — a Merlin who never lakes a red he sees stands out (self-play: 0% vs 23% for other blues).
-    if (tuning.merlinLakeLoyal && obs.myRole === 'merlin') {
+    if ((tuning.merlinLakeLoyal || merlinLakeMix82Now(tuning, obs)) && obs.myRole === 'merlin') {
       obs = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, allEvilIds: undefined };
     }
     // Edward 2026-04-24 batch 2 fix #7: all good players avoid lake-
