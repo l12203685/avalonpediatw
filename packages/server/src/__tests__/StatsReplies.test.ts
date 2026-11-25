@@ -19,11 +19,15 @@ import type {
   PlayerRoleWindows,
   PlayerStats,
   PlayerTheoryWindow,
+  StrengthPlayerData,
 } from '../services/sheetsAnalysis';
-import { getAllPlayerStats } from '../services/sheetsAnalysis';
+import { getAllPlayerStats, getRatingBoard } from '../services/sheetsAnalysis';
 import {
   DEFAULT_LEADERBOARD_SCOPE,
   DIGEST_IMPROVED_SIZE,
+  HEADLINE_CLOSE_POINTS,
+  HEADLINE_MIN_GAMES,
+  HEADLINE_ROLE_MIN_GAMES,
   LEADERBOARD_PENDING_NOTE,
   MAX_NAME_CANDIDATES,
   OUTCOME_BLOCKS_FOOTNOTE,
@@ -47,6 +51,8 @@ import {
   normalizeName,
   newcomersLine,
   overviewTotalsLine,
+  pct,
+  playerHeadline,
   roleTitlesLine,
   selectLeaderboard,
   signed,
@@ -253,7 +259,8 @@ describe('formatPlayerCard', () => {
       caseVariants: ['Hao', 'hao'],
     });
     const lines = text.split('\n');
-    expect(lines[0]).toBe('📊 HAO 的戰績');
+    // 2026-11-25 第二批：第一行接一句話。這份舊快取沒有整體理論 → 報最終勝率、不跟全體比；角色照擅長／較弱清單。
+    expect(lines[0]).toBe('📊 HAO 的戰績：打了 1013 場，最終勝率 38.5%；最拿手刺客，較弱莫甘娜。');
     expect(lines[1]).toBe('近 100 場｜角色理論 52.3%｜位置理論 50.8%｜最終 49.0%');
     expect(lines[2]).toBe('近 50 場｜角色理論 55.1%｜位置理論 53.2%｜最終 52.0%');
     expect(lines[3]).toBe('生涯 1013 場｜角色理論 47.9%｜位置理論 47.2%｜最終 38.5%');
@@ -347,7 +354,7 @@ describe('formatPlayerCard on a schemaVersion-4 cache', () => {
     const text = formatPlayerCard({ player: schema4Player() });
     const lines = text.split('\n');
     expect(lines.slice(0, 6)).toEqual([
-      '📊 Tovo Wren 的戰績',
+      '📊 Tovo Wren 的戰績：打了 1013 場，最終勝率 38.5%。',
       '角色理論（各角色近 10 場、忠臣近 40 場）52.3%',
       '位置理論（近 100 場）50.8%｜最終勝率 49.0%',
       '整體理論（生涯 1013 場）47.9%｜位置理論 47.2%｜最終勝率 38.5%',
@@ -810,6 +817,112 @@ describe('parseStatsCommand (LINE)', () => {
 
   it('passes the name on as typed (matching then ignores case)', () => {
     expect(parseStatsCommand('/戰績 SIN')).toEqual({ kind: 'player', query: 'SIN' });
+  });
+});
+
+describe('/戰績 第一行的一句話（2026-11-25 第二批）', () => {
+  const strength = (top: string[], bottom: string[], sample = 40): StrengthPlayerData => ({
+    roles: [...top, ...bottom].map((role) => ({ role, winRate: 50, sampleSize: sample, zScore: 0, color: 'neutral' as const })),
+    topRoles: top,
+    bottomRoles: bottom,
+    hasData: true,
+  });
+  const withOverall = (games: number, overall: number): PlayerStats =>
+    contractPlayer('測試玩家甲', games, 44, null, {
+      theory: { roleWindows: roleWindows(50, 100, true), last100: tw(100, 100, 50, 50, 45), career: { ...tw(0, games, 47, 47, 44), overallTheory: overall } },
+    });
+
+  it('games, 整體理論 against the field average in percentage points, best and weakest role', () => {
+    expect(playerHeadline({ player: withOverall(880, 48.1), strength: strength(['莫甘娜', '梅林'], ['刺客']), fieldOverallTheory: 46.2 }))
+      .toBe('打了 880 場，整體理論勝率 48.1%，比全體平均（46.2%）高 1.9 個百分點；最拿手莫甘娜，較弱刺客。');
+    expect(playerHeadline({ player: withOverall(312, 41.7), strength: strength(['忠臣'], ['奧伯倫']), fieldOverallTheory: 46.2 }))
+      .toBe('打了 312 場，整體理論勝率 41.7%，比全體平均（46.2%）低 4.5 個百分點；最拿手忠臣，較弱奧伯倫。');
+  });
+
+  it('less than one point from the average reads 「差不多」 (no number to over-read)', () => {
+    expect(playerHeadline({ player: withOverall(500, 46.9), fieldOverallTheory: 46.2 })).toBe('打了 500 場，整體理論勝率 46.9%，跟全體平均（46.2%）差不多。');
+    expect(playerHeadline({ player: withOverall(500, 45.3), fieldOverallTheory: 46.2 })).toBe('打了 500 場，整體理論勝率 45.3%，跟全體平均（46.2%）差不多。');
+    expect(HEADLINE_CLOSE_POINTS).toBe(1);
+    // 剛好差 1.0 個百分點就寫數字。
+    expect(playerHeadline({ player: withOverall(500, 47.2), fieldOverallTheory: 46.2 })).toContain('高 1.0 個百分點');
+  });
+
+  it('the difference is the two printed numbers subtracted (each rounded to one decimal first)', () => {
+    // 48.14 → 48.1、46.26 → 46.3：印出來的兩個數相減是 1.8（原始值相減是 1.88，四捨五入會變 1.9）。
+    expect(playerHeadline({ player: withOverall(500, 48.14), fieldOverallTheory: 46.26 })).toBe('打了 500 場，整體理論勝率 48.1%，比全體平均（46.3%）高 1.8 個百分點。');
+  });
+
+  it('fewer than 30 games: says so, compares nothing and names no role', () => {
+    expect(HEADLINE_MIN_GAMES).toBe(30);
+    expect(playerHeadline({ player: withOverall(29, 60), strength: strength(['梅林'], ['刺客']), fieldOverallTheory: 46.2 }))
+      .toBe('打了 29 場，場數還少，下面的數字先參考就好。');
+    expect(playerHeadline({ player: withOverall(30, 47.3), fieldOverallTheory: 46.2 })).toContain('打了 30 場，整體理論勝率 47.3%');
+  });
+
+  it('a role with fewer than 10 games is not named; the next one on the list is', () => {
+    expect(HEADLINE_ROLE_MIN_GAMES).toBe(10);
+    const s: StrengthPlayerData = {
+      roles: [
+        { role: '梅林', winRate: 80, sampleSize: 5, zScore: 1.6, color: 'high' },
+        { role: '忠臣', winRate: 55, sampleSize: 120, zScore: 0.4, color: 'neutral' },
+        { role: '奧伯倫', winRate: 20, sampleSize: 4, zScore: -1.2, color: 'low' },
+      ],
+      topRoles: ['梅林', '忠臣'],
+      bottomRoles: ['奧伯倫'],
+      hasData: true,
+    };
+    expect(playerHeadline({ player: withOverall(300, 48.1), strength: s, fieldOverallTheory: 46.2 }))
+      .toBe('打了 300 場，整體理論勝率 48.1%，比全體平均（46.2%）高 1.9 個百分點；最拿手忠臣。');
+    expect(playerHeadline({ player: withOverall(300, 48.1), strength: { ...s, hasData: false }, fieldOverallTheory: 46.2 })).not.toContain('最拿手');
+  });
+
+  it('no field average (the cache has no baseline): the rate alone; no 整體理論 (older cache): the final win rate, never compared', () => {
+    expect(playerHeadline({ player: withOverall(300, 48.1), fieldOverallTheory: null })).toBe('打了 300 場，整體理論勝率 48.1%。');
+    expect(playerHeadline({ player: withOverall(300, 48.1) })).toBe('打了 300 場，整體理論勝率 48.1%。');
+    const old = contractPlayer('測試玩家乙', 300, 38.5, null, { theory: { career: tw(0, 300, 47.9, 47.2, 38.5) } });
+    expect(playerHeadline({ player: old, fieldOverallTheory: 46.2 })).toBe('打了 300 場，最終勝率 38.5%。');
+    expect(playerHeadline({ player: contractPlayer('測試玩家乙', 300, 38.5, null), fieldOverallTheory: 46.2 })).toBe('打了 300 場，最終勝率 38.5%。');
+  });
+
+  it('is the first line of the card, after the name; the detail lines follow unchanged', () => {
+    const input = { player: withOverall(880, 48.1), strength: strength(['莫甘娜'], ['刺客']), fieldOverallTheory: 46.2 };
+    const lines = formatPlayerCard(input).split('\n');
+    expect(lines[0]).toBe('📊 測試玩家甲 的戰績：打了 880 場，整體理論勝率 48.1%，比全體平均（46.2%）高 1.9 個百分點；最拿手莫甘娜，較弱刺客。');
+    expect(lines[0].split('。')).toHaveLength(2); // 一句話
+    expect(lines[1]).toBe('角色理論（各角色近 10 場、忠臣近 40 場）50.0%');
+    expect(lines[3]).toBe('整體理論（生涯 880 場）48.1%｜位置理論 47.0%｜最終勝率 44.0%');
+    // 拿掉第一行那句話，其餘跟沒有這個功能時一模一樣。
+    const before = formatPlayerCard({ player: input.player, strength: input.strength }).split('\n');
+    expect(lines.slice(1)).toEqual(before.slice(1));
+    expect(lines[0]).not.toContain('超額');
+  });
+
+  it('real cache: every card starts with one sentence; the field average is the 全體 line of the /排行 chart', async () => {
+    const players = await getAllPlayerStats();
+    let compared = 0;
+    let few = 0;
+    for (const p of players) {
+      const first = (await playerCardReply(p.name)).split('\n')[0];
+      const head = `📊 ${p.name} 的戰績：`;
+      expect(first.startsWith(head), p.name).toBe(true);
+      const sentence = first.slice(head.length);
+      expect(sentence, p.name).toMatch(
+        /^打了 \d+ 場，(?:場數還少，下面的數字先參考就好|(?:整體理論勝率|最終勝率) \d+\.\d%(?:，(?:跟全體平均（\d+\.\d%）差不多|比全體平均（\d+\.\d%）[高低] \d+\.\d 個百分點))?(?:；最拿手(?:梅林|派西維爾|忠臣|刺客|莫甘娜|莫德雷德|奧伯倫)(?:，較弱(?:梅林|派西維爾|忠臣|刺客|莫甘娜|莫德雷德|奧伯倫))?)?)。$/u,
+      );
+      expect(sentence, p.name).not.toMatch(/undefined|null|NaN|—/);
+      if (sentence.includes('全體平均')) compared += 1;
+      if (sentence.includes('場數還少')) few += 1;
+      const games = Math.round(p.theory?.career?.games ?? p.totalGames);
+      expect(sentence.includes('場數還少'), p.name).toBe(games < HEADLINE_MIN_GAMES);
+    }
+    // 現在的快取（schemaVersion 4，有 rating.theoryBaselines）：30 場以上的人都有跟全體比。
+    const rating = await getRatingBoard();
+    if (typeof rating?.theoryBaselines?.all?.overall === 'number' && players.some((p) => typeof p.theory?.career?.overallTheory === 'number')) {
+      expect(compared).toBe(players.length - few);
+      const all = pct(rating.theoryBaselines.all.overall);
+      const sample = players.find((p) => Math.round(p.theory?.career?.games ?? p.totalGames) >= HEADLINE_MIN_GAMES);
+      if (sample) expect((await playerCardReply(sample.name)).split('\n')[0]).toContain(`全體平均（${all}）`);
+    }
   });
 });
 

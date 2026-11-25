@@ -16,6 +16,7 @@
  * - 每個（變體 × 角色 × 強度層）的 ΔBrier 對第一個變體的**以局為單位的標準誤**（同一局的點彼此相關，所以用局當集群：
  *   Δ = Σ_g d_g ／ Σ_g n_g，Var ≈ G／(G−1) · Σ_g (d_g − Δ n_g)² ／ (Σ n_g)²），表格多一節「ΔBrier ± 標準誤」，`--json` 也有。
  * 第 64 回合：`--tier strong`（或 weak／avg／unknown）只算這一層的局（強真人桌的候選省時間；切分照舊用全部局的序號）。
+ * 第 74 回合：`--roles percival`（逗號分隔）只算這些角色的座位（只改一個角色讀法的候選省時間；不給＝忠臣、派西、梅林都算）。
  */
 import * as fs from 'fs';
 import { DEFAULT_AGENT_TUNING, parseTuningFlag, type AgentTuning } from '../src/ai/AgentTuning';
@@ -30,6 +31,7 @@ import { loadHuman } from './beliefCalibrationCurve';
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
 const CERTAIN = 1e-9;
+const ONLY_ROLES = arg('--roles')?.split(',').map((x) => x.trim()).filter(Boolean);
 const ROLES = ['loyal', 'percival', 'merlin'] as const;
 const ROLE_LABEL: Record<string, string> = { loyal: '忠臣', percival: '派西', merlin: '梅林' };
 const TIERS: readonly (StrengthTier | 'unknown')[] = ['weak', 'avg', 'strong', 'unknown'];
@@ -78,6 +80,7 @@ function evalGame(game: ReplayGame, tier: string, vs: readonly Variant[], st: St
   for (let seat = 1; seat <= game.playerCount; seat++) {
     const role = game.seatRoles[seat - 1];
     if (!(ROLES as readonly string[]).includes(role)) continue;
+    if (ONLY_ROLES && !ONLY_ROLES.includes(role)) continue;
     const me = seatId(seat);
     game.proposals.forEach((p, i) => {
       if (p.forced) return;

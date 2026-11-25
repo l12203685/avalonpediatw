@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Role } from '@avalon/shared';
 import type { ReplayGame, ReplayProposal } from './sheetsReplay';
-import { lakeContext, proposalFrame, spotContext, teamContext, voteContext, type LakeContext, type TeamContext, type VoteContext } from './spotContext';
+import {
+  assassinContext, lakeClaimContext, lakeContext, proposalFrame, questContext, seatKnowledge, spotContext, teamContext, voteContext,
+  type AssassinContext, type LakeClaimContext, type LakeContext, type QuestContext, type TeamContext, type VoteContext,
+} from './spotContext';
 
 /** 一次提議；票 = 在隊上贊成、不在隊上反對（`approve` 另外指定贊成的人）。 */
 function prop(globalIndex: number, round: number, attempt: number, team: number[], went: boolean, approve?: number[]): ReplayProposal {
@@ -39,6 +42,8 @@ const GAME: ReplayGame = {
   lakeChainValid: true,
   winner: 'good',
 };
+/** 同一局，但刺客刺了 0家（派西維爾）。 */
+const GAME_KILL: ReplayGame = { ...GAME, assassinTargetSeat: 10 };
 
 describe('proposalFrame', () => {
   it('the first proposal has no history', () => {
@@ -64,7 +69,10 @@ describe('proposalFrame', () => {
 describe('teamContext', () => {
   it('compares the player team with the bot team on the same frame', () => {
     const c = teamContext(GAME, 4, [5, 6, 10, 3]);
-    expect(c.human).toEqual({ hasSelf: true, failedOthers: 2, keepsLastSuccess: false, lakeGoodOthers: 0, lakeEvilOthers: 0, hasPrevLeader: false, overlapPrev: 2, reds: 0 });
+    expect(c.human).toEqual({
+      hasSelf: true, failedOthers: 2, successOnlyOthers: 0, knownRedOthers: 0, thumbOthers: 0, keepsLastSuccess: false, lakeGoodOthers: 0, lakeEvilOthers: 0,
+      hasPrevLeader: false, overlapPrev: 2, reds: 0, roles: ['loyal', 'loyal', 'loyal', 'merlin'],
+    });
     expect(c.agent).toMatchObject({ hasSelf: true, failedOthers: 1, lakeGoodOthers: 1, overlapPrev: 2, reds: 0 });
     expect(c.seatsDiffer).toBe(2);
   });
@@ -96,7 +104,7 @@ describe('lakeContext', () => {
   it('first lake: the holder cannot be inspected; target kinds from the public record', () => {
     const c = lakeContext(GAME, 0, 7);
     expect(c).toMatchObject({ afterRound: 2, blueWins: 1, redWins: 1, valid: [1, 2, 3, 4, 5, 6, 7, 8, 9], validReds: 4, validMissions: { failed: 4, successOnly: 0, none: 5 } });
-    expect(c.human).toEqual({ seat: 3, missions: 'failed', ledFailedMission: true, onHolderProposals: false, clockwise: 3, ring: 3, red: false });
+    expect(c.human).toEqual({ seat: 3, missions: 'failed', ledFailedMission: true, onHolderProposals: false, clockwise: 3, ring: 3, knownRed: false, thumb: false, red: false, role: 'loyal' });
     expect(c.agent).toMatchObject({ seat: 7, missions: 'failed', ledFailedMission: false, clockwise: 7, ring: 3, red: true });
   });
 
@@ -121,9 +129,81 @@ describe('spotContext', () => {
     expect(lake.agent?.seat).toBe(6);
   });
 
-  it('no context for quest cards, lake claims, assassination or an unknown proposal', () => {
-    expect(spotContext(GAME, { type: 'quest', seat: 7, round: 2, agent: 'fail' })).toBeNull();
-    expect(spotContext(GAME, { type: 'assassinate', seat: 4, round: 3, agent: '6' })).toBeNull();
+  it('quest cards, lake claims and the assassination get their own context', () => {
+    const quest = spotContext(GAME, { type: 'quest', seat: 7, round: 2, agent: 'fail' }) as QuestContext;
+    expect(quest).toEqual({ round: 2, blueWins: 1, redWins: 0, size: 4, failsRequired: 1, isLeader: false, knownRedOthers: 0, redsOnTeam: 1, failCount: 1, missionFailed: true });
+    expect((spotContext(GAME, { type: 'questOpen', seat: 7, round: 2, agent: 'fail' }) as QuestContext).round).toBe(2);
+    const claim = spotContext(GAME, { type: 'lakeClaim', seat: 3, round: 3, agent: 'evil' }) as LakeClaimContext;
+    expect(claim.target).toMatchObject({ seat: 7, red: true, role: 'morgana' });
+    const kill = spotContext(GAME_KILL, { type: 'assassinate', seat: 4, round: 3, agent: '6' }) as AssassinContext;
+    expect(kill.agent?.role).toBe('merlin');
+  });
+
+  it('no context for an unknown proposal, lake or mission, or a game without an assassination', () => {
     expect(spotContext(GAME, { type: 'vote', seat: 5, round: 5, attempt: 1, agent: 'approve' })).toBeNull();
+    expect(spotContext(GAME, { type: 'lakeClaim', seat: 3, round: 4, agent: 'good' })).toBeNull();
+    expect(spotContext(GAME, { type: 'quest', seat: 7, round: 5, agent: 'fail' })).toBeNull();
+    expect(spotContext(GAME, { type: 'assassinate', seat: 4, round: 3, agent: '6' })).toBeNull();
+  });
+});
+
+describe('seatKnowledge (what a seat knows from the deal)', () => {
+  it('Merlin sees the reds except Mordred; reds see each other except Oberon; Percival sees two thumbs', () => {
+    expect(seatKnowledge(GAME, 6)).toEqual({ reds: [4, 7, 9], thumbs: [] });
+    expect(seatKnowledge(GAME, 4)).toEqual({ reds: [7, 8], thumbs: [] });
+    expect(seatKnowledge(GAME, 9)).toEqual({ reds: [], thumbs: [] });
+    expect(seatKnowledge(GAME, 10)).toEqual({ reds: [], thumbs: [6, 7] });
+    expect(seatKnowledge(GAME, 1)).toEqual({ reds: [], thumbs: [] });
+  });
+
+  it('team features count the known reds and thumbs of the seat that decides', () => {
+    // 梅林（6家）看 2 局那支失敗的隊：7家 是他認得的紅方；派西（0家）看同一隊：7家 是拇指。
+    expect(voteContext(GAME, 2, 6).features).toMatchObject({ knownRedOthers: 1, thumbOthers: 0, reds: 1 });
+    expect(voteContext(GAME, 2, 10).features).toMatchObject({ knownRedOthers: 0, thumbOthers: 1 });
+    // 刺客（4家）當隊長：機器人的隊帶了莫甘娜、莫德雷德兩個隊友，玩家的隊沒有。
+    const c = teamContext(GAME, 3, [4, 7, 8, 1]);
+    expect(c.human).toMatchObject({ hasSelf: false, knownRedOthers: 0, successOnlyOthers: 0 });
+    expect(c.agent).toMatchObject({ hasSelf: true, knownRedOthers: 2, reds: 3, roles: ['loyal', 'assassin', 'morgana', 'mordred'] });
+    // 第 3 局第 2 次提議：5家、6家 還沒出過任務，1家、2家 出過失敗任務 → 只出過成功任務的人 0 個。
+    expect(proposalFrame(GAME, 4).successSeats).toEqual([1, 2, 3]);
+  });
+
+  it('lake targets: known red / thumb of the holder', () => {
+    const merlinHolds: ReplayGame = { ...GAME, lakes: [{ round: 2, holderSeat: 10, targetSeat: 6, claim: 'good' }, { round: 3, holderSeat: 6, targetSeat: 8, claim: 'good' }] };
+    const c = lakeContext(merlinHolds, 1, 7);
+    expect(c).toMatchObject({ validKnownReds: 3, validThumbs: 0 });
+    expect(c.human).toMatchObject({ seat: 8, knownRed: false, red: true, role: 'mordred' });
+    expect(c.agent).toMatchObject({ seat: 7, knownRed: true, red: true });
+    expect(lakeContext(merlinHolds, 0, 7)).toMatchObject({ validThumbs: 2, human: { thumb: true, role: 'merlin' }, agent: { thumb: true, role: 'morgana' } });
+  });
+});
+
+describe('questContext / lakeClaimContext / assassinContext', () => {
+  it('quest card: score before the round, reds on the team, the allies this seat knows', () => {
+    const twoReds: ReplayGame = {
+      ...GAME,
+      proposals: [...GAME.proposals.slice(0, 4), prop(4, 3, 2, [4, 7, 9, 6], true)],
+      quests: [...GAME.quests.slice(0, 2), { round: 3, teamSeats: [4, 7, 9, 6], successCount: 2, failCount: 2, failed: true }],
+    };
+    expect(questContext(twoReds, 3, 4)).toEqual({ round: 3, blueWins: 1, redWins: 1, size: 4, failsRequired: 1, isLeader: false, knownRedOthers: 1, redsOnTeam: 3, failCount: 2, missionFailed: true });
+    expect(questContext(twoReds, 3, 9)).toMatchObject({ knownRedOthers: 0, redsOnTeam: 3 });
+    expect(questContext(twoReds, 4, 4)).toBeNull();
+  });
+
+  it('lake claim: the inspected seat and the score after that mission', () => {
+    expect(lakeClaimContext(GAME, 0)).toMatchObject({ afterRound: 2, blueWins: 1, redWins: 1, target: { seat: 3, red: false, knownRed: false } });
+  });
+
+  it('assassination: the path of the game and both targets', () => {
+    const c = assassinContext(GAME_KILL, 6) as AssassinContext;
+    expect(c).toMatchObject({ path: 'BRB', redWins: 1, lakes: 2 });
+    expect(c.human).toEqual({ seat: 10, successMissions: 0, failedMissions: 0, ledSuccess: 0, innerBlack: 0, outerWhite: 0, heldLake: true, lakeClaimed: null, role: 'percival' });
+    expect(c.agent).toMatchObject({ seat: 6, successMissions: 1, failedMissions: 0, lakeClaimed: null, role: 'merlin' });
+    expect(assassinContext(GAME_KILL, null)?.agent).toBeNull();
+    // 1家：第 1、3 局成功、第 2 局失敗；當隊長的第 1 局成功；3家 被湖中宣告是藍方、持過湖。
+    expect(assassinContext({ ...GAME_KILL, assassinTargetSeat: 1 }, 3)).toMatchObject({
+      human: { successMissions: 2, failedMissions: 1, ledSuccess: 1, lakeClaimed: null, heldLake: false },
+      agent: { lakeClaimed: 'good', heldLake: true, ledSuccess: 0 },
+    });
   });
 });

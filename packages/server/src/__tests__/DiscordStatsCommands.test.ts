@@ -188,7 +188,7 @@ describe('/戰績', () => {
     const { content } = publicReply(it1);
     const lines = content.split('\n');
     expect(lines.slice(0, 4)).toEqual([
-      '📊 HAO 的戰績',
+      '📊 HAO 的戰績：打了 1013 場，最終勝率 38.5%。',
       '近 100 場｜角色理論 52.3%｜位置理論 50.8%｜最終 49.0%',
       '近 50 場｜角色理論 55.1%｜位置理論 53.2%｜最終 52.0%',
       '生涯 1013 場｜角色理論 47.9%｜位置理論 47.2%｜最終 38.5%',
@@ -205,7 +205,7 @@ describe('/戰績', () => {
     await handleStatsCommand(it1 as never);
     const lines = publicReply(it1).content.split('\n');
     expect(lines.slice(0, 6)).toEqual([
-      '📊 Tovo Wren 的戰績',
+      '📊 Tovo Wren 的戰績：打了 420 場，最終勝率 44.3%。',
       '角色理論（各角色近 10 場、忠臣近 40 場）53.4%',
       '位置理論（近 100 場）51.7%｜最終勝率 47.0%',
       '整體理論（生涯 420 場）49.9%｜位置理論 48.8%｜最終勝率 44.3%',

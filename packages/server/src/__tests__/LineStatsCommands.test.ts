@@ -82,7 +82,8 @@ import { LineReplyQueue } from '../bots/line/replyQueue';
 import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
 import { UNKNOWN_COMMAND_HINT } from '../bots/help';
-import { DAILY_QUESTION_UNAVAILABLE_TEXT, __resetDailyQuestionForTests } from '../bots/dailyQuestion/commands';
+import { DAILY_QUESTION_UNAVAILABLE_TEXT, DAILY_QUESTION_USAGE_HINT, DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT, __resetDailyQuestionForTests } from '../bots/dailyQuestion/commands';
+import { rolesText, rulesText } from '../bots/rules';
 import { __setSimForTests } from '../bots/simulation';
 import { SimBankLoader } from '../bots/simulation/bank';
 import { RelayMediaStore } from '../bots/media/relayMedia';
@@ -480,5 +481,39 @@ describe('/每日一題 (2026-11-25, bots/dailyQuestion) on LINE', () => {
     await deliver(h, groupText('/每日一題', 'dq5', 'rtDQ5', 'Cother-group'));
     log.mockRestore();
     expect(h.replies).toEqual([]);
+  });
+
+  it('/每日一題 昨天 (batch 2): answered like the command itself — mirror group (relayed to Discord), 1:1, practice group', async () => {
+    process.env.SIM_LINE_GROUP_IDS = 'Cpractice-group';
+    const h = setup();
+    await deliver(h, groupText('/每日一題 昨天', 'dq6', 'rtDQ6'));
+    await new Promise((r) => setTimeout(r, 20));
+    await deliver(h, userText('／每日一題昨天', 'dq7', 'rtDQ7'), groupText('/每日一題 昨日', 'dq8', 'rtDQ8', 'Cpractice-group'));
+    expect(h.replies).toEqual([
+      { token: 'rtDQ6', texts: [DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT] },
+      { token: 'rtDQ7', texts: [DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT] },
+      { token: 'rtDQ8', texts: [DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT] },
+    ]);
+    expect(h.bot.getWebhookStats()).toMatchObject({ dailyQuestionReplies: 3, replyFailures: 0 });
+    expect(h.discordSent.some((m) => m.endsWith(DAILY_QUESTION_YESTERDAY_UNAVAILABLE_TEXT))).toBe(true);
+  });
+
+  it('a word it does not know after the command gets the usage line', async () => {
+    const h = setup();
+    await deliver(h, userText('/每日一題 前天', 'dq9', 'rtDQ9'));
+    expect(h.replies).toEqual([{ token: 'rtDQ9', texts: [DAILY_QUESTION_USAGE_HINT] }]);
+  });
+});
+
+describe('/規則、/角色 typed on LINE (batch 2: the same words Discord has as slash commands)', () => {
+  it('mirror group and 1:1 answer with the rules / roles text; chatter that starts the same way is left alone', async () => {
+    const h = setup();
+    await deliver(h, groupText('/規則', 'rr1', 'rtRR1'));
+    await new Promise((r) => setTimeout(r, 20));
+    await deliver(h, userText('／角色', 'rr2', 'rtRR2'), groupText('/角色扮演好玩嗎', 'rr3', 'rtRR3'));
+    expect(h.replies).toEqual([
+      { token: 'rtRR1', texts: [rulesText()] },
+      { token: 'rtRR2', texts: [rolesText()] },
+    ]);
   });
 });

@@ -45,8 +45,9 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 68 回合再加藍方持湖的目標 `lakeChain68`（忠臣、派西在信任鏈的局面少湖出過失敗任務的人；人類 PR 量尺兩半都沒有一層變差）。
  * 第 69 回合再加紅方第 3 局紅方已兩勝的關鍵隊外白 `redKeyCrowd69`（第 4 次提議；真人局重播同票、人類 PR 量尺兩半都沒有一層變差）。
  * 第 71 回合再加紅方第 5 局（2:2）隊上一定有紅時的外白 `redR5Red71`（只用規則推得出來的「一定有紅」；人類 PR 量尺兩半都沒有一層變差）。
+ * 第 74 回合再加派西的拇指讀法 `thumbBlend74`（派西後驗裡兩根拇指誰是紅的比例混進真人牌譜擬合的讀法；真人局 Brier 每一層兩半都變好、人類 PR 量尺兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -112,10 +113,17 @@ export const TIER_MAX_STEP = 0.1;
  *   和真人同票 −0.6 [−1.1, −0.1]（真人在這一格贊成 34%，贊成的隊有紅 27%，和不贊成的隊幾乎一樣，同票量不到「挑對的隊」）。人類 PR 量尺紅方 +0.04 ± 0.01 pp／紅方座位局
  *   （真人桌讀法上；奧伯倫 +0.06、莫德雷德 +0.04、莫甘娜 +0.03、刺客 +0.02；偶數局 +0.04、奇數局 +0.04；弱／一般／強／S 不明 +0.06／+0.05／+0.03／+0.01），
  *   沒有一格變差超過 1 個標準誤。自我對打（基準線，563001 第 0–9,999 局）紅方 −0.02 [−0.05, +0.01]（中性；機器人藍方讀得到不在隊上的紅一起外白），基準線不用。
+ * - 派西的拇指讀法（`thumbBlend74=0.25`，第 74 回合；情境題庫 `docs/ai/gap/r74-scenarios.md`）：派西後驗裡「兩根拇指誰是紅」的比例＝後驗和第 39 回合擬合讀法
+ *   （`percivalRead39`，真人牌譜擬合）在 log-odds 上的加權平均，讀法占 0.25；每一種拇指分配裡各個世界的相對權重不變。每日一題題庫 1,849 個派西題：
+ *   後驗把梅林當成比較像藍的那一根 68.3%（Brier 0.200），擬合的讀法 69.9%（0.187）。真人局派西的 26 萬個信念點（`humanProfileStudy.ts --roles percival`）：
+ *   ΔBrier 偶數局 −30.3e-4 ± 2.3、奇數局 −24.0e-4 ± 2.2，弱／一般／強／S 不明每一層兩半都變好（最小：S 不明奇數局 −18.9e-4 ± 4.3）。
+ *   人類 PR 量尺派西 +0.43 ± 0.12 pp／座位局（偶數局 +0.34 ± 0.16、奇數局 +0.53 ± 0.17；弱 +0.53、一般 +0.36、強 +0.04 ± 0.37、S 不明 +0.68），
+ *   沒有一格變差超過 2 個標準誤（最差：強桌偶數局 −0.62 ± 0.44，強桌奇數局 +0.74 ± 0.60）。權重 0.15–0.5 都是正的（+0.30～+0.43），0.75、1 掉到 +0.17、+0.09
+ *   （1 = 第 40 回合的 `percivalRead39=1`：強桌偶數局 −1.71 ± 0.71），所以用 0.25。基準線不用（讀法是真人牌譜擬合的；第 40 回合整個換成讀法自我對打 −0.75）。
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

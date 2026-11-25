@@ -8,8 +8,15 @@
  *     新的 /模擬 取代舊的，回覆第一行講明。同一個人跨聊天室最多同時 2 題（最久沒動的先結束）。
  *   - 2026-11-19 起不會因為閒置或時間結束（Edward「除非有人 /公布 否則不會結束」；SIM_SESSION_TTL_MINUTES 可另設閒置期限）；最多 500 題（最久沒動的先結束），
  *     同一個聊天室最多 30 題；每人 10 分鐘最多 30 個模擬指令，超過提醒一次後不回。
- *     過期或被擠掉的題目，之後打指令會說是哪一題、為什麼結束、怎麼重開（只記在記憶體）。
- *   - 不存檔：部署或重啟就清空（每天約 03:47 +08 快取更新會重新部署）。
+ *     過期或被擠掉的題目，之後打指令會說是哪一題、為什麼結束、怎麼重開。
+ *   - **重啟後題目還在**（2026-11-25，Edward「有些人送出後發現正在進行的未公布的結束了」：一天裡每合併一次後端的
+ *     修改伺服器就重啟一次，題目全清）：進行中的題目和「你的題目怎麼結束的」會存到 private repo 的一個 JSON 檔
+ *     （persist.ts；跟每日小觀念同一個 repo），開機先讀回來才回答模擬指令。沒設定那個 repo 時照舊只在記憶體
+ *     （重啟就清空；開機 log 會寫）。限流、狀態頁的計數不存（重啟歸零）。
+ *   - **這裡的 id 都是雜湊過的**（persist.ts simIdHash）：題目的 key、聊天室、使用者、作答的人、LINE 事件代號，
+ *     在記憶體裡和存檔裡都只有雜湊；沒有名字。查的時候把進來的 id 雜湊後比對。
+ *   - 題目記的是題庫代號（gameId）；games[] 的索引（game）只在這一次開機有效，重啟後第一次用到時照代號重新對
+ *     （題庫每晚重建，索引會變）。對不到（那一局從題庫拿掉了）就講明這一題沒能接回來。
  *   - **送出後才算數**：handle() 回 `{ text, commit }`，呼叫端確定回覆送出後才呼叫 commit()，
  *     回覆失敗不會跳過一步。
  *   - **同一個聊天室一次只處理一個指令**：呼叫端用 withLock() 把「算回覆 → 送出 → commit」包起來
@@ -19,7 +26,7 @@
  *   - LINE 重送（同一個事件）：上一次的回覆已經送出（commit 過）就不再回；沒送出才重算。送出過的事件記在
  *     store 上（不是題目上），所以 /公布、/結束 把題目結束之後的重送也認得出來，不會改指到別題
  *     （2026-10-22 審查修正）；重送也一律不代答。
- *   - 打的字、答案、區間只在這裡的記憶體；log 只有固定文字（這個檔案沒有 log）。
+ *   - 打的字不留；答案、區間只在這裡的記憶體和上面那個 private repo 的存檔；log 只有固定文字（這個檔案沒有 log）。
  *   - **代答**（2026-10-22，第一批真人的問題「要本人回答還是別人也可以答」）：自己在這個聊天室沒有開著的題目
  *     的人，打寫對的 /派 /區間 /公布 /結束 會作用在這個聊天室**最新開的那一題**上，回覆第一行標「代答」
  *     （不寫名字）；自己有題目的人還是只動自己的。每人的限流、每題的閒置期限都不變。審查修正：
@@ -46,6 +53,7 @@ import {
   SIM_MAX_SESSIONS_PER_USER,
   SIM_RATE_LIMIT_MAX,
   SIM_RATE_LIMIT_WINDOW_MS,
+  SIM_RESTORE_WAIT_MS,
   SIM_SESSION_HARD_CAP_MS,
   simBeliefModelId,
   simSessionTtlMs,
@@ -53,11 +61,15 @@ import {
 import { campShares, humanAggFor, proposalFeatures } from './human';
 import { beliefModelFor, type SimBeliefModel } from './logic';
 import { emptySimCounts, type SimCounts } from './metrics';
+import { simIdHash, type SimPersistence } from './persist';
 import { evaluateInterval, intervalGroupTrue, logicPanel, releasePanel, teamCleanUnder, type ProposalEvent } from './reading';
 import {
   BANK_NOT_READY_TEXT,
+  NO_SESSION_KEPT_TEXT,
   NO_SESSION_TEXT,
   RATE_LIMITED_TEXT,
+  RESTORING_TEXT,
+  restartLostText,
   endedNoticeText,
   endedText,
   analysisHiddenText,
@@ -135,6 +147,9 @@ export interface SimSession {
   /** `平台:使用者`（同一個人跨聊天室的上限用）；沒有使用者 id 時沒有。 */
   userKey?: string;
   exerciseId: string;
+  /** 題庫代號（重啟後照這個重新對到 games[] 的索引）。 */
+  gameId: string;
+  /** 題庫 games[] 的索引；剛從存檔讀回來、還沒對過題庫時是 -1。 */
   game: number;
   seat: number;
   role: Role;
@@ -190,7 +205,7 @@ export interface SimRequest {
 
 export type SimReplyKind =
   | 'start' | 'propose' | 'analyze' | 'assassinate' | 'interval' | 'read' | 'removed' | 'reveal' | 'end'
-  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more' | 'help';
+  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more' | 'help' | 'restoring';
 
 export interface SimReply {
   text: string;
@@ -206,12 +221,19 @@ export interface SimReply {
   image?: { game: SimGame; title: string };
 }
 
+/** 題目的 key：`平台:聊天室:使用者`，聊天室和使用者都是雜湊（存檔裡也是這個）。 */
 export function sessionKeyFor(req: Pick<SimRequest, 'platform' | 'chatId' | 'userId'>): string {
-  return `${req.platform}:${req.chatId}:${req.userId ?? '*'}`;
+  return `${req.platform}:${simIdHash(req.chatId)}:${req.userId ? simIdHash(req.userId) : '*'}`;
 }
 
+/** `平台:聊天室`（雜湊）。 */
 export function chatKeyFor(req: Pick<SimRequest, 'platform' | 'chatId'>): string {
-  return `${req.platform}:${req.chatId}`;
+  return `${req.platform}:${simIdHash(req.chatId)}`;
+}
+
+/** `平台:使用者`（雜湊）；沒有使用者 id 時是 `平台:*`。 */
+export function userKeyFor(req: Pick<SimRequest, 'platform' | 'userId'>): string {
+  return `${req.platform}:${req.userId ? simIdHash(req.userId) : '*'}`;
 }
 
 /** 一個指令要動的題目：自己的，或代答的（這個聊天室最新開的一題）。 */
@@ -233,21 +255,61 @@ export interface SimStoreOptions {
   maxPerUser: number;
 }
 
-export type EndedReason = 'expired' | 'evicted';
+/** 'lost'：重啟後沒能接回來（那一局已經不在題庫裡，或存檔放不下）。 */
+export type EndedReason = 'expired' | 'evicted' | 'lost';
+
+export interface EndedInfo {
+  exerciseId: string;
+  reason: EndedReason;
+  /** 什麼時候結束的（兩份存檔合併時比新舊用）。 */
+  at: number;
+}
 
 /** 過期或被擠掉的題目（記住題號，下次打指令時告訴本人）。 */
 const ENDED_MEMORY_MAX = 1000;
+/** 「這個 key 的題目在什麼時候結束／講過了」記多久、最多幾筆（只在兩份存檔合併時用，見 persist.ts mergeSnapshots）。 */
+const CLOSED_KEEP_MS = 60 * 60 * 1000;
+const CLOSED_MAX = 1000;
+
+/** 整個 store 的內容（存檔、讀回來、合併用）。sessions 的順序 = 最久沒用的在前。 */
+export interface SimStoreSnapshot {
+  sessions: SimSession[];
+  ended: [string, EndedInfo][];
+  /** key → 什麼時候 /公布、/結束，或講過結束的說明。 */
+  closed: [string, number][];
+  noticed: string[];
+  events: string[];
+}
+
+export function emptySnapshot(): SimStoreSnapshot {
+  return { sessions: [], ended: [], closed: [], noticed: [], events: [] };
+}
+
+export interface SimStoreHooks {
+  now?: () => number;
+  /**
+   * 內容變了。`hard` = 重啟後接不回來就會錯的變動（開題、作答、結束…）；false = 只有「最後一次動是什麼時候」
+   * 和 LINE 重送紀錄（不值得為它單獨寫一次檔，下一次寫或關機時一起寫）。
+   */
+  onChange?: (hard: boolean) => void;
+}
 
 /** Map 的順序 = 最近使用的在最後（LRU）。 */
 export class SimSessionStore {
   private readonly sessions = new Map<string, SimSession>();
-  private readonly ended = new Map<string, { exerciseId: string; reason: EndedReason }>();
+  private readonly ended = new Map<string, EndedInfo>();
+  private readonly closed = new Map<string, number>();
   /** 已經送出回覆（commit 過）的 LINE 事件；題目結束了也記得（重送不會改指到別題）。 */
   private readonly answeredEvents = new Set<string>();
   /** 剛聽過「你的題目已經結束」的人：打別的指令之前，/公布 /結束 不代答。 */
   private readonly noticed = new Set<string>();
+  private readonly now: () => number;
+  private readonly changed: (hard: boolean) => void;
 
-  constructor(private readonly opts: SimStoreOptions, private readonly onExpire: () => void = () => undefined) {}
+  constructor(private readonly opts: SimStoreOptions, private readonly onExpire: () => void = () => undefined, hooks: SimStoreHooks = {}) {
+    this.now = hooks.now ?? Date.now;
+    this.changed = hooks.onChange ?? ((): void => undefined);
+  }
 
   private expired(s: SimSession, now: number): boolean {
     return now - s.lastActiveAt > this.opts.ttlMs || now - s.startedAt > this.opts.hardCapMs;
@@ -255,7 +317,7 @@ export class SimSessionStore {
 
   private remember(s: SimSession, reason: EndedReason): void {
     this.ended.delete(s.key);
-    this.ended.set(s.key, { exerciseId: s.exerciseId, reason });
+    this.ended.set(s.key, { exerciseId: s.exerciseId, reason, at: this.now() });
     while (this.ended.size > ENDED_MEMORY_MAX) {
       const oldest = this.ended.keys().next().value;
       if (oldest === undefined) break;
@@ -263,11 +325,21 @@ export class SimSessionStore {
     }
   }
 
-  private evict(key: string): void {
+  private close(key: string): void {
+    this.closed.delete(key);
+    this.closed.set(key, this.now());
+    while (this.closed.size > CLOSED_MAX) {
+      const oldest = this.closed.keys().next().value;
+      if (oldest === undefined) break;
+      this.closed.delete(oldest);
+    }
+  }
+
+  private evict(key: string, reason: EndedReason = 'evicted'): void {
     const s = this.sessions.get(key);
     if (!s) return;
     this.sessions.delete(key);
-    this.remember(s, 'evicted');
+    this.remember(s, reason);
   }
 
   /** 清掉過期的（每次指令都順便做，最多 500 個，很便宜）。 */
@@ -277,6 +349,7 @@ export class SimSessionStore {
         this.sessions.delete(key);
         this.remember(s, 'expired');
         this.onExpire();
+        this.changed(true);
       }
     }
   }
@@ -286,15 +359,17 @@ export class SimSessionStore {
     return this.sessions.get(key) ?? null;
   }
 
-  /** 這個 key 上一題怎麼結束的（過期／被擠掉），沒有就是 null。 */
-  endedInfo(key: string): { exerciseId: string; reason: EndedReason } | null {
+  /** 這個 key 上一題怎麼結束的（過期／被擠掉／沒能接回來），沒有就是 null。 */
+  endedInfo(key: string): EndedInfo | null {
     return this.ended.get(key) ?? null;
   }
 
   /** 已經告訴本人了（之後的後續指令改成代答；/公布 /結束 要等本人先打別的指令）。 */
   forgetEnded(key: string): void {
     this.ended.delete(key);
+    this.close(key);
     capped(this.noticed, key, ENDED_MEMORY_MAX);
+    this.changed(true);
   }
 
   /** 剛聽過結束的說明、還沒打別的指令。 */
@@ -303,7 +378,7 @@ export class SimSessionStore {
   }
 
   clearNoticed(key: string): void {
-    this.noticed.delete(key);
+    if (this.noticed.delete(key)) this.changed(true);
   }
 
   /** 這個 LINE 事件的回覆已經送出過。 */
@@ -313,6 +388,7 @@ export class SimSessionStore {
 
   noteAnsweredEvent(eventKey: string): void {
     capped(this.answeredEvents, eventKey, ANSWERED_EVENTS_MAX);
+    this.changed(false);
   }
 
   /** 這個聊天室裡最新開的一題（代答的對象）；同時開的取最近使用的。沒有就是 null。 */
@@ -325,12 +401,8 @@ export class SimSessionStore {
     return newest;
   }
 
-  /** 放進去（放到最後 = 最近使用）；超過上限就結束最久沒動的。 */
-  set(session: SimSession): void {
-    this.sessions.delete(session.key);
-    this.ended.delete(session.key);
-    this.noticed.delete(session.key);
-    this.sessions.set(session.key, session);
+  /** 超過上限就結束最久沒動的（同一個聊天室、同一個人、全部）。 */
+  private enforceCaps(session: SimSession): void {
     const sameChat = [...this.sessions.values()].filter((s) => s.chatKey === session.chatKey);
     for (let i = 0; i < sameChat.length - this.opts.maxPerChat; i++) this.evict(sameChat[i].key);
     if (session.userKey) {
@@ -344,12 +416,61 @@ export class SimSessionStore {
     }
   }
 
+  /**
+   * 放進去（放到最後 = 最近使用）；超過上限就結束最久沒動的。`soft` = 這次只更新了「最後一次動是什麼時候」
+   * （不值得單獨寫一次檔）。
+   */
+  set(session: SimSession, soft = false): void {
+    this.sessions.delete(session.key);
+    this.ended.delete(session.key);
+    this.closed.delete(session.key);
+    this.noticed.delete(session.key);
+    this.sessions.set(session.key, session);
+    this.enforceCaps(session);
+    this.changed(!soft);
+  }
+
+  /** /公布、/結束，或重啟後接不回來：這一題沒了（記下時間，合併存檔時不會被舊的一份救回來）。 */
   delete(key: string): void {
-    this.sessions.delete(key);
+    if (!this.sessions.delete(key)) return;
+    this.close(key);
+    this.changed(true);
   }
 
   size(): number {
     return this.sessions.size;
+  }
+
+  /** 整份內容（存檔用；不會改到 store）。 */
+  snapshot(): SimStoreSnapshot {
+    const cutoff = this.now() - CLOSED_KEEP_MS;
+    for (const [key, at] of this.closed) if (at < cutoff) this.closed.delete(key);
+    return {
+      sessions: [...this.sessions.values()],
+      ended: [...this.ended.entries()],
+      closed: [...this.closed.entries()],
+      noticed: [...this.noticed],
+      events: [...this.answeredEvents],
+    };
+  }
+
+  /**
+   * 換成這一份（開機讀回來、或跟存檔合併之後）。不會觸發 onChange。題目照最後一次動的時間排（最久沒動的在前），
+   * 超過上限的照舊結束最久沒動的。
+   */
+  replace(snap: SimStoreSnapshot): void {
+    this.sessions.clear();
+    this.ended.clear();
+    this.closed.clear();
+    this.noticed.clear();
+    this.answeredEvents.clear();
+    for (const [key, info] of snap.ended.slice(-ENDED_MEMORY_MAX)) this.ended.set(key, info);
+    for (const [key, at] of snap.closed.slice(-CLOSED_MAX)) this.closed.set(key, at);
+    for (const key of snap.noticed.slice(-ENDED_MEMORY_MAX)) this.noticed.add(key);
+    for (const key of snap.events.slice(-ANSWERED_EVENTS_MAX)) this.answeredEvents.add(key);
+    const ordered = [...snap.sessions].sort((a, b) => a.lastActiveAt - b.lastActiveAt);
+    for (const s of ordered) this.sessions.set(s.key, s);
+    for (const s of ordered) if (this.sessions.get(s.key) === s) this.enforceCaps(s);
   }
 }
 
@@ -406,6 +527,10 @@ export interface SimEngineOptions {
   random?: (seed: string) => () => number;
   /** withLock 等前一個指令最久多久（毫秒）；之後照樣處理，不會卡死。 */
   lockWaitMs?: number;
+  /** 進行中的題目存檔（persist.ts）；沒給 = 只在記憶體。 */
+  persistence?: SimPersistence;
+  /** 重啟後題目還在讀回來時，一個指令最久等多久（毫秒）；還沒好就回「請再打一次」。 */
+  restoreWaitMs?: number;
 }
 
 const NOOP = (): void => undefined;
@@ -430,7 +555,9 @@ export class SimEngine {
         maxPerUser: opts.maxPerUser ?? SIM_MAX_SESSIONS_PER_USER,
       },
       () => { this.counts.expired += 1; },
+      { now: this.now, onChange: (hard): void => { opts.persistence?.touch(hard); } },
     );
+    opts.persistence?.attach(this.store);
     this.limiter = new SimRateLimiter(opts.rateLimit?.windowMs ?? SIM_RATE_LIMIT_WINDOW_MS, opts.rateLimit?.max ?? SIM_RATE_LIMIT_MAX);
     this.model = opts.model ?? beliefModelFor(simBeliefModelId());
     this.random = opts.random ?? seededRandom;
@@ -472,6 +599,11 @@ export class SimEngine {
     if (req.duplicate) return { ...mine, skippedDuplicate: true };
     if ((cmd.kind === 'reveal' || cmd.kind === 'end') && this.store.wasNoticed(key)) return mine;
     return { key: newest.key, session: newest, coAnswer: true, endedNotice: false, skippedDuplicate: false };
+  }
+
+  /** 這個引擎的存檔（狀態頁用）；沒有 = 只在記憶體。 */
+  get persistence(): SimPersistence | undefined {
+    return this.opts.persistence;
   }
 
   get beliefModelId(): string {
@@ -521,13 +653,30 @@ export class SimEngine {
    */
   async handle(cmd: SimCommand, req: SimRequest): Promise<SimReply | null> {
     if (!SIM_CONFIG.commandsEnabled) return null;
+    // 剛重啟、進行中的題目還在讀回來：先等一下；還沒好就請他再打一次（不能回「你沒有題目」——題目可能正要讀回來）。
+    const persistence = this.opts.persistence;
+    if (persistence && cmd.kind !== 'help') {
+      const waitMs = this.opts.restoreWaitMs ?? SIM_RESTORE_WAIT_MS;
+      if (!persistence.isReady()) {
+        await atMost(persistence.restore(), waitMs);
+        if (!persistence.isReady()) {
+          // 看不懂的 /派、/區間（LINE 打字，可能只是聊天）照舊不回。
+          if (cmd.kind === 'usage' && cmd.command !== 'start' && !req.explicit) return null;
+          return { text: RESTORING_TEXT, kind: 'restoring', commit: NOOP, sessionOpen: false };
+        }
+      } else if (persistence.inHandover()) {
+        // 剛開機的幾分鐘，舊的那台伺服器可能還在收指令：先看一眼存檔有沒有被它改過（沒改過就沒事）。
+        // 最久等 2.5 秒（LINE 的 webhook 等太久會重送）；等不到就照手上的回答。
+        await atMost(persistence.catchUp(), Math.min(waitMs, 2_500));
+      }
+    }
     // LINE 重送同一個事件，而第一次的回覆已經送出：不再回（也不走第二步）。在決定要動哪一題之前看：
     // 第一次的 /公布、/結束 已經把題目結束掉時，重送不會改指到這個聊天室的別題。
-    if (req.duplicate && req.eventKey && this.store.eventAnswered(req.eventKey)) return null;
+    const eventKey = req.eventKey ? simIdHash(req.eventKey) : undefined;
+    if (req.duplicate && eventKey && this.store.eventAnswered(eventKey)) return null;
     const reply = await this.compute(cmd, req);
     if (!reply) return null;
     const ownKey = sessionKeyFor(req);
-    const { eventKey } = req;
     const commit = reply.commit;
     return {
       ...reply,
@@ -573,21 +722,35 @@ export class SimEngine {
     if (!session) {
       const ended = this.store.endedInfo(ownKey);
       return {
-        text: ended ? endedNoticeText(ended.exerciseId, ended.reason) : NO_SESSION_TEXT,
+        text: ended ? endedNoticeText(ended.exerciseId, ended.reason) : this.noSessionText(),
         kind: 'no-session',
         commit: (): void => {
           this.counts.noSession += 1;
           // 講過一次自己的題目怎麼結束的；聊天室裡有別人的題目時，下一個指令起代答。
-          if (t.endedNotice) this.store.forgetEnded(ownKey);
+          // 沒能接回來的（'lost'）講過就忘掉：不然每一個指令都再講一次。
+          if (t.endedNotice || ended?.reason === 'lost') this.store.forgetEnded(ownKey);
         },
         sessionOpen: false,
       };
     }
     const bank = await this.opts.bank();
-    if (!bank || !bank.games[session.game]) {
-      return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: true };
+    if (!bank) return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: true };
+    const game = this.gameOf(bank, session);
+    if (!game) {
+      // 這一次開機開的題目對不到對局（不該發生）：照舊當成題庫還沒好，題目留著。
+      if (session.game >= 0) return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: true };
+      // 重啟後讀回來的題目，這一局已經不在題庫裡（題庫每晚重建）：講明沒能接回來，這一題結束。
+      return {
+        text: withCoAnswerMark(endedNoticeText(session.exerciseId, 'lost'), coAnswer),
+        kind: 'no-session',
+        sessionOpen: false,
+        commit: (): void => {
+          if (this.store.get(session.key, this.now())?.version !== session.version) return;
+          this.store.delete(session.key);
+          this.counts.noSession += 1;
+        },
+      };
     }
-    const game = bank.games[session.game];
     const target: SimTarget & { session: SimSession } = { key: session.key, session, coAnswer };
     // 刺殺題只收 /刺 /公布 /結束（2026-11-16）；派票題不收 /刺。
     const pickOnly = ['propose', 'analyze', 'interval', 'read'].includes(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'assassinate');
@@ -628,6 +791,34 @@ export class SimEngine {
     }
   }
 
+  /** 沒有進行中的題目時怎麼說：有存檔 → 不提重啟；重啟前的題目沒能讀回來 → 講明伺服器更新過、怎麼重開。 */
+  private noSessionText(): string {
+    const p = this.opts.persistence;
+    if (!p || !p.keeps()) return NO_SESSION_TEXT;
+    const lostAt = p.lostAt();
+    return lostAt === null ? NO_SESSION_KEPT_TEXT : restartLostText(lostAt);
+  }
+
+  /**
+   * 這一題的對局。剛從存檔讀回來的題目（game = -1）照題庫代號重新對到索引，並確認存下來的位置在這一局裡還成立；
+   * 對不到或對不上 → null（呼叫端講明這一題沒能接回來）。
+   */
+  private gameOf(bank: SimBank, session: SimSession): SimGame | null {
+    if (session.game >= 0) return bank.games[session.game] ?? null;
+    const index = bank.byId.get(session.gameId);
+    const game = index === undefined ? undefined : bank.games[index];
+    if (index === undefined || !game) return null;
+    const events = publicEvents(game);
+    const fits = game.seatRoles[session.seat - 1] === session.role
+      && session.decision >= 0 && session.decision < game.proposals.length
+      && [...session.answers.keys()].every((d) => d >= 0 && d < game.proposals.length)
+      && (session.assassin ? session.cursor === events.length : events[session.cursor]?.kind === 'proposal');
+    if (!fits) return null;
+    // 同一個物件就地補上索引（不算一次變動，version 不動）。
+    session.game = index;
+    return game;
+  }
+
   /**
    * 綁在一題上的回覆：commit 時更新 lastActiveAt（以及 `update` 的狀態）；送出過的事件由 handle() 記。
    * 代答的文字由呼叫端標好（算在長度裡）；這裡只計數。
@@ -657,7 +848,7 @@ export class SimEngine {
           ...(update ? update(current) : {}),
           lastActiveAt: now,
           version: current.version + 1,
-        });
+        }, !update);
       },
     };
   }
@@ -665,7 +856,8 @@ export class SimEngine {
   private async start(cmd: Extract<SimCommand, { kind: 'start' }>, req: SimRequest, key: string, previous: SimSession | null, now: number): Promise<SimReply> {
     const bank = await this.opts.bank();
     if (!bank || bank.games.length === 0) return { text: BANK_NOT_READY_TEXT, kind: 'bank', commit: NOOP, sessionOpen: !!previous };
-    const picked = selectStart(bank, { ...cmd, weekday: taipeiWeekday(now) }, this.random(`${key}:${now}`));
+    // 選題的亂數種子用原本的 id（不存，只在這裡用一次）：跟雜湊前選到的題目一樣。
+    const picked = selectStart(bank, { ...cmd, weekday: taipeiWeekday(now) }, this.random(`${req.platform}:${req.chatId}:${req.userId ?? '*'}:${now}`));
     if (!picked.ok) {
       let text: string;
       if (picked.reason === 'thin') text = thinPoolText(picked.role, picked.seat, picked.n, picked.available);
@@ -706,9 +898,10 @@ export class SimEngine {
       commit: (): void => {
         this.store.set({
           key,
-          chatKey: `${req.platform}:${req.chatId}`,
-          ...(req.userId ? { userKey: `${req.platform}:${req.userId}` } : {}),
+          chatKey: chatKeyFor(req),
+          ...(req.userId ? { userKey: userKeyFor(req) } : {}),
           exerciseId,
+          gameId: game.id,
           game: picked.game,
           seat: picked.seat,
           role,
@@ -895,9 +1088,16 @@ export class SimEngine {
   }
 }
 
-/** 作答的人（`平台:使用者`；LINE 群組事件沒有使用者 id 時大家共用 `*`）。只用來數第幾位，不寫進任何回覆。 */
+/** 等 `p`，最久 `ms` 毫秒（到時間就不等了，`p` 照樣繼續）。 */
+async function atMost(p: Promise<void>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([p, new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); timer.unref?.(); })]);
+  if (timer) clearTimeout(timer);
+}
+
+/** 作答的人（`平台:使用者`，雜湊；LINE 群組事件沒有使用者 id 時大家共用 `*`）。只用來數第幾位，不寫進任何回覆。 */
 function answererKey(req: Pick<SimRequest, 'platform' | 'userId'>): string {
-  return `${req.platform}:${req.userId ?? '*'}`;
+  return userKeyFor(req);
 }
 
 /** 這個聊天室大家都看得到回覆、又不能只回給本人（LINE 群組）：作答只回收到，結果等 /公布（2026-11-21）。 */

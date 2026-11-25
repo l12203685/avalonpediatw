@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { outcomeBlocks, roleFaction, theorySettings } from '../../services/api';
 import { useAnalysisOverview } from './useAnalysisOverview';
 import { ROLE_ORDER, blockValues, rolePopulation, useAnalysisPlayerRows, useIsWide } from './seatRoleBlocks';
-import { MetricBlocks, type MetricBlockRow } from './ui';
+import { MetricBlocks, Takeaway, type MetricBlockRow } from './ui';
+import { winExtremesSentence } from './core/glance';
+import { sentenceText } from './core/glanceView';
 
 /**
  * 各角色的三塊結果 (全體)。
@@ -66,8 +68,16 @@ export default function RoleFinalWinRates(): JSX.Element {
   });
 
   // 2026-10-30：表格說明收進表名旁的 ⓘ；舊快取的「下次每日更新後提供」是資料狀態，照樣印出來。
+  // (2026-11-25 站長「一目瞭然」，第四批) 表格上面一句話：最常贏、最難贏的角色（表上「遊戲結果」那一欄）
+  const lead = sentenceText(t, winExtremesSentence(rows.map(r => ({ name: r.label as string, win: r.final.win, n: r.final.n ?? 0 })), 'roleWin.lead', minCell));
   return (
-    <div className="min-w-0 max-w-3xl">
+    <div className="min-w-0 max-w-3xl space-y-2">
+      {lead && (
+        <Takeaway>
+          <p className="text-sm font-semibold text-white sm:text-[15px]" data-testid="role-win-lead">{lead}</p>
+          <p className="text-zinc-400">{t('analytics.glance.roleWin.how')}</p>
+        </Takeaway>
+      )}
       <MetricBlocks
         rows={rows}
         caption={t('analytics.r6.tabsb.roleBlocks.title')}

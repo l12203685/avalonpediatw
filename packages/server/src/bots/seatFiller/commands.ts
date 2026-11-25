@@ -4,7 +4,7 @@
  * GitHub workflow_dispatch) lives in services/signagePlayerDispatch.ts.
  *
  *   LINE    /補位 <房號或房間描述> [補滿|N人] [密碼:xxxx]   (also /機器人補位, full-width ／, a bare 1460)
- *   Discord /機器人補位 房號或描述:… [人數:1–9／補滿] [密碼:…]
+ *   Discord /補位 房號或描述:… [人數:1–9／補滿] [密碼:…]   (2026-11-25 batch 2; the original /機器人補位 still works)
  * (Edward 2026-11-04：房間內看不到房號 → 可以用房間描述；私房要密碼；一次補滿；局數不限、請它離開就好)
  *
  * docs/BOT_SETUP.md「補位機器人」.
@@ -25,7 +25,7 @@ export type SeatFillerPlatform = 'line' | 'discord' | 'web';
 /** Command syntax as advertised in the help texts. */
 export const SEAT_FILLER_USAGE: Record<SeatFillerPlatform, string> = {
   line: '/補位 房號或房間描述 [補滿｜幾人] [密碼:xxxx]',
-  discord: '/機器人補位 房號或描述 [人數] [密碼]',
+  discord: '/補位 房號或描述 [人數] [密碼]',
   web: '網站「百科AI 對局」頁的「叫百科AI 補位」：填房號或房間描述、人數、密碼（選填）',
 };
 
@@ -34,6 +34,9 @@ export const SEAT_FILLER_HELP_TEXT = `叫百科AI 進 signage-cloud 房間補位
 
 /** The abuse limits in words (Discord /help). */
 export const SEAT_FILLER_LIMITS_TEXT = `全站每 ${SEAT_FILLER_LIMITS.cooldownMs / 60000} 分鐘一次、每天最多 ${SEAT_FILLER_LIMITS.dailyMax} 次、同一房 ${SEAT_FILLER_LIMITS.sameRoomMs / 60000} 分鐘內不重複`;
+
+/** Both platforms answer to both names (/help 補位). */
+export const SEAT_FILLER_ALIAS_TEXT = '打 /機器人補位 也一樣。';
 
 /** Answer to a LINE redelivery of a command this process already handled. */
 export const SEAT_FILLER_REDELIVERY_TEXT = '這則補位指令已經處理過了，不會重複叫機器人。';
@@ -98,7 +101,7 @@ export function formatWait(ms: number): string {
 export function formatSeatFillerParseError(error: SeatFillerParseError, platform: SeatFillerPlatform): string {
   const example = platform === 'line'
     ? '/補位 1460、/補位 百科陪練 補滿 密碼:1234'
-    : platform === 'discord' ? '/機器人補位 房號或描述:百科陪練 人數:補滿 密碼:1234' : '1460、Room-1460 或 百科陪練';
+    : platform === 'discord' ? '/補位 房號或描述:百科陪練 人數:補滿 密碼:1234' : '1460、Room-1460 或 百科陪練';
   switch (error) {
     case 'usage':
       if (platform === 'web') return '請填房號或房間描述（例如 1460，或建房時寫的房間描述裡的一段字）。';
