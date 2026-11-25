@@ -46,6 +46,7 @@ KAPPA = 10.0
 PROCS = int(os.environ.get('WL75_PROCS', '2'))
 FOLD_PERCIVAL = False  # True = 只有梅林的模型（派西當成忠臣；世界線只剩 6 條）
 ALT_SPLIT = False  # True = 換一種切法檢查（外層用序號除以 2 的奇偶，內層用序號的奇偶）
+KFOLD = 2  # > 2 = 分 K 份（穩健性檢查）：每一份用其他 K − 1 份的局擬合（比對半切更接近正式的表用的局數）
 COMPS = ('Pk', 'Pv', 'Pl', 'Mk', 'Mv', 'Ml', 'Lk', 'Lv', 'Ll')
 
 
@@ -54,7 +55,20 @@ def outer_half(gi):
 
 
 def inner_half(gi):
+    if KFOLD > 2:
+        return (gi // KFOLD) % 2
     return gi % 2 if ALT_SPLIT else (gi // 2) % 2
+
+
+def model_ids():
+    """交叉擬合的每一個模型：(編號, 這一局是不是它的擬合局, 這一局是不是它的驗證局)。"""
+    if KFOLD > 2:
+        return [(f, (lambda gi, f=f: gi % KFOLD != f), (lambda gi, f=f: gi % KFOLD == f)) for f in range(KFOLD)]
+    return [(h, (lambda gi, h=h: outer_half(gi) == h), (lambda gi, h=h: outer_half(gi) != h)) for h in (0, 1)]
+
+
+def model_of_test(gi):
+    return gi % KFOLD if KFOLD > 2 else 1 - outer_half(gi)
 
 
 def load(p):
@@ -390,13 +404,13 @@ def crossfit(games, view='full', mask=None, l2=1.0, verbose=False, fold=False):
     FOLD_PERCIVAL = fold
     mask = np.ones(len(COMPS)) if mask is None else np.asarray(mask, dtype=float)
     out, weights, inner_out = {}, {}, {}
-    for half in (0, 1):
-        train = [g for g in games if outer_half(g.g['gi']) == half]
-        test = [g for g in games if outer_half(g.g['gi']) != half]
+    for half, is_train, is_test in model_ids():
+        train = [g for g in games if is_train(g.g['gi'])]
+        test = [g for g in games if is_test(g.g['gi'])]
         w, keep = stack_weights(train, mask, l2)
         weights[half] = w
         if verbose:
-            print(f'  擬合 {"偶" if half == 0 else "奇"}數號：疊加權重 ' + ' '.join(f'{c}={v:+.2f}' for c, v in zip(COMPS, w)))
+            print(f'  模型 {half}（擬合 {len(train)} 局）：疊加權重 ' + ' '.join(f'{c}={v:+.2f}' for c, v in zip(COMPS, w)))
         for g, worlds, arr in keep:
             inner_out[(half, g.g['gi'])] = [(g.reds, worlds, arr @ w)]
         tb = fit_tables(train)
@@ -459,7 +473,7 @@ def build_rows(games, spots, alts, view='full', mask=None, l2=1.0, verbose=False
     by_gi = {g.g['gi']: g for g in games}
     res, weights, inner = crossfit(games, view=view, mask=mask, l2=l2, verbose=verbose, fold=fold)
     combo = {}
-    for half in (0, 1):
+    for half, _, _ in model_ids():
         tr = []
         for (h, gi), sc in inner.items():
             if h != half or gi not in spots:
@@ -468,7 +482,7 @@ def build_rows(games, spots, alts, view='full', mask=None, l2=1.0, verbose=False
             tr.append({'cands': spots[gi]['cands'], 'merlin': by_gi[gi].merlin, 'my': my})
         combo[half] = fit_combo(tr)
         if verbose:
-            print(f'  擬合 {"偶" if half == 0 else "奇"}數號：現行分數 × {combo[half][0]}、世界線 × {combo[half][1]}（{len(tr)} 個刺殺點）')
+            print(f'  模型 {half}：現行分數 × {combo[half][0]}、世界線 × {combo[half][1]}（{len(tr)} 個刺殺點）')
     rows = []
     for gi, sp in spots.items():
         if gi not in res:
@@ -478,14 +492,13 @@ def build_rows(games, spots, alts, view='full', mask=None, l2=1.0, verbose=False
         my, mx = marginals(sc)
         front = {c['seat'] for c in sp['cands'] if c['front']}
         tot = {c['seat']: c['total'] for c in sp['cands']}
-        half = 1 - outer_half(gi)
-        a, b = combo[half]
+        a, b = combo[model_of_test(gi)]
         top_y = argmax_seat(my)
         mix = {s: a * tot[s] + b * my.get(s, -50.0) for s in tot}
         best_w = max(((z, w) for _, worlds, zz in sc for w, z in zip(worlds, zz)), key=lambda t: t[0])[1]
         given_y = {x: z for _, worlds, zz in sc for (x, y), z in zip(worlds, zz) if y == g.merlin and x is not None}
         row = {
-            'gi': gi, 'even': 1 - outer_half(gi), 's': sp['s'], 'order': sp['order'],
+            'gi': gi, 'even': 1 - (gi % 2 if KFOLD > 2 else outer_half(gi)), 's': sp['s'], 'order': sp['order'],
             'human': int(sp['human'] == g.merlin), 'humanP': int(sp['human'] == g.percival), 'bot': int(sp['bot'] == g.merlin),
             'wl': int(top_y == g.merlin), 'wlP': int(top_y == g.percival),
             'wlT': int(argmax_seat(my, front) == g.merlin),
@@ -683,7 +696,7 @@ def merge_folds(even_file, odd_file, out):
 
 
 def main():
-    global KAPPA, ALT_SPLIT
+    global KAPPA, ALT_SPLIT, KFOLD
     ap = argparse.ArgumentParser()
     ap.add_argument('--human')
     ap.add_argument('--base')
@@ -694,6 +707,7 @@ def main():
     ap.add_argument('--tables', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', 'ai', 'assassin', 'worldLines75Tables.json'))
     ap.add_argument('--kappa', type=float, default=None, help='格子往上一層收縮的強度（預設 10）')
     ap.add_argument('--alt-split', action='store_true', help='換一種奇偶切法（穩健性檢查）')
+    ap.add_argument('--kfold', type=int, default=2, help='> 2 = 分 K 份交叉擬合（穩健性檢查；預設對半切）')
     ap.add_argument('--cand')
     ap.add_argument('--games', type=int, default=10000, help='--part bot：這份自我對打紀錄的總局數')
     ap.add_argument('--src')
@@ -715,6 +729,7 @@ def main():
     if args.kappa is not None:
         KAPPA = args.kappa
     ALT_SPLIT = args.alt_split
+    KFOLD = args.kfold
     games = [Game(g) for g in load(args.human)]
     games = [g for g in games if g.ok]
     if args.part == 'export':
