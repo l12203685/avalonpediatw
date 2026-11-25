@@ -22,7 +22,7 @@ import { SIM_CONFIG } from './simulation/config';
 import { simHelpText } from './simulation/replies';
 import { STATS_COMMAND_USAGE, STATS_PAGE_URL_TEXT } from './stats/statsReplies';
 import { DAILY_QUESTION_HELP_TEXT, DAILY_QUESTION_USAGE } from './dailyQuestion/usage';
-import { PLAY_PLATFORM_LINE, RULES_USAGE, rolesText, rulesText } from './rules';
+import { RULES_USAGE, playPlatformLine, rolesText, rulesText } from './rules';
 
 export type HelpPlatform = 'line' | 'discord';
 
@@ -84,7 +84,7 @@ export function basicHelpText(platform: HelpPlatform): string {
   lines.push(`${REPORT_USAGE[platform]}\u3000回報網站或文章的問題（${CLAIM_USAGE[platform]} 合併 ID）`);
   lines.push(`${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議`);
   lines.push(`${platform === 'discord' ? RULES_USAGE : '/help 規則、/help 角色'}\u3000遊戲規則、角色介紹`);
-  lines.push(PLAY_PLATFORM_LINE);
+  lines.push(playPlatformLine(platform));
   lines.push(`/help 主題 看細節（例：${helpCmd}；打 /說明 也一樣）`);
   return lines.join('\n');
 }

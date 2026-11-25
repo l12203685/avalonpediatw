@@ -16,10 +16,15 @@ import { PLAY_PLATFORM_URL } from '@avalon/shared';
 /** 說明裡的指令寫法（只有 Discord 有這兩個斜線指令；LINE 用 /help 規則、/help 角色）。 */
 export const RULES_USAGE = '/rules /roles';
 
-/** 說明裡「去哪裡開局」的那一行（對局在 signage-cloud，這裡不開房）。 */
-export const PLAY_PLATFORM_LINE = `🎲 開局、對局：signage-cloud ${PLAY_PLATFORM_URL}`;
-
 export type RulesPlatform = 'line' | 'discord';
+
+/**
+ * 說明裡「去哪裡開局」的那一行（對局在 signage-cloud，這裡不開房）。
+ * Discord 的網址用 <> 包起來：照樣可以點，但不會在說明下面多出一大塊登入頁的預覽。
+ */
+export function playPlatformLine(platform: RulesPlatform): string {
+  return `🎲 開局、對局：signage-cloud ${platform === 'discord' ? `<${PLAY_PLATFORM_URL}>` : PLAY_PLATFORM_URL}`;
+}
 
 /** 另一份怎麼看：Discord 有斜線指令，LINE 用 /help 主題。 */
 function pointer(to: 'rules' | 'roles', platform: RulesPlatform): string {

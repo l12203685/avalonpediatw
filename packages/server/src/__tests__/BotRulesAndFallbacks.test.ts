@@ -8,7 +8,7 @@ import { COMMANDS, DISCORD_CONFIG } from '../bots/discord/config';
 import { buildSlashCommands } from '../bots/discord/client';
 import { COMMAND_ERROR_TEXT, UNKNOWN_COMMAND_TEXT, handleRolesCommand, handleRulesCommand } from '../bots/discord/commands';
 import { HELP_TOPICS, UNKNOWN_COMMAND_HINT, helpText, parseHelpCommand, topicHelpText, unknownCommandHint } from '../bots/help';
-import { PLAY_PLATFORM_LINE, rolesText, rulesText } from '../bots/rules';
+import { playPlatformLine, rolesText, rulesText } from '../bots/rules';
 import { simHelpFor } from '../bots/simulation/textCommands';
 import { SIM_HELP_TEXT } from '../bots/simulation/replies';
 import { formatStatsHelp } from '../bots/stats/statsReplies';
@@ -186,7 +186,8 @@ describe('command lists', () => {
     expect(t).toContain('/每日一題\u3000今天的阿瓦隆每日一題');
     expect(formatStatsHelp('discord')).toContain('/更正 局號 [內容]');
   });
-  it('the play line carries the play URL', () => {
-    expect(PLAY_PLATFORM_LINE).toBe(`🎲 開局、對局：signage-cloud ${PLAY_PLATFORM_URL}`);
+  it('the play line carries the play URL; on Discord it is wrapped in <> so no login-page preview is added under the help', () => {
+    expect(playPlatformLine('line')).toBe(`🎲 開局、對局：signage-cloud ${PLAY_PLATFORM_URL}`);
+    expect(playPlatformLine('discord')).toBe(`🎲 開局、對局：signage-cloud <${PLAY_PLATFORM_URL}>`);
   });
 });
