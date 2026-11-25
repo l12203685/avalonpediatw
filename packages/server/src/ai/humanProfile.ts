@@ -141,12 +141,20 @@ const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, vi
  * - 強真人桌：讀票的次方再低一格到 0.3。強桌的票最不帶資訊（擬合 0.4 → 0.3 再 −5.7e-4；0.2、0.1 還在變好，但超過一格不做）；
  *   驗證 0.3 比 0.4 再好 −3.1e-4，忠臣／派西／梅林都比 0.4 好；量尺和 0.4 一樣（+0.08 ± 0.11）。
  * - 一般真人桌（S 讀不到的桌也是這一層）：共用的 0.4。
+ *
+ * 第 79 回合（協調者在站長 11/25 授權下的決定，站長可以改回）：世界線刺客 `assassinWorldLine75` 改成基準線預設開，`HUMAN_READING` 不寫它（跟著基準線）。
+ * 真人桌照第 1H 節分層判（人類 PR 量尺刺客，對現行真人桌讀法，世界線的表交叉擬合；pp／座位局，偶數局／奇數局）：
+ * - 一般真人桌（S 38–55 ＋ S 讀不到）：+3.01 ± 1.41／+2.06 ± 1.49，兩半都正 → **開**（跟著基準線）。
+ *   其中 S 38–55 +5.04／+1.69；S 讀不到 +0.00／+2.62（偶數局剛好 0，沒有一半是負的；現行的分層把 S 讀不到併在一般真人桌，沒有另開一層）。
+ * - 弱真人桌：−1.52 ± 2.74／−2.58 ± 3.05，兩半都負 → **關回 0**（舊刺客）。
+ * - 強真人桌：+2.45 ± 2.75／−1.30 ± 3.57，奇數局是負的 → **關回 0**（舊刺客）。
+ * 關回去是整個開關（`TIER_SWITCH_KEYS`），不是偏離一小格，所以 `TIER_MAX_KEYS` 從 1 改成 2。
  */
 export const PROFILE_OVERRIDES: Readonly<Record<OpponentType, Readonly<Partial<AgentTuning>>>> = {
   ai: {},
-  weakHuman: { ...HUMAN_READING, blueVoteTemper57: 0.5 },
+  weakHuman: { ...HUMAN_READING, blueVoteTemper57: 0.5, assassinWorldLine75: 0 },
   avgHuman: HUMAN_READING,
-  strongHuman: { ...HUMAN_READING, blueVoteTemper57: 0.3 },
+  strongHuman: { ...HUMAN_READING, blueVoteTemper57: 0.3, assassinWorldLine75: 0 },
 };
 
 /** 三種真人桌共用的讀法（測試、說明用）。 */
