@@ -133,7 +133,7 @@ export default function StrengthOutcome({ report }: { report: StrengthReport }):
                         className="px-1 py-0.5 text-center text-zinc-100"
                       >
                         <div className="font-semibold">{shrunk.toFixed(0)}</div>
-                        <div className="text-[9px] text-zinc-300/80">n={c.n}</div>
+                        <div className="text-[9px] text-zinc-300/80">{c.n} 局</div>
                       </td>
                     );
                   })}

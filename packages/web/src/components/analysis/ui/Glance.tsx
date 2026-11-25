@@ -12,15 +12,19 @@ import { ChevronRight } from 'lucide-react';
  *  - MeterBar：單一比例的長條（刺中率、佔幾成的局），數字寫在長條右邊；可以加一條白線當對照（全體）。
  *  - RankRow：排行用的一列＝名字｜長條｜小字樣本數（手機上樣本數換到長條下面，不橫向捲）。
  * 顏色全站一致：藍＝藍方（好人）得利，紅＝紅方（壞人）得利；投票用黑白球：深灰＝反對、白＝贊成。
+ * （第三批）跟陣營無關的個人數字用灰（plain），排行榜上比的數字用琥珀（rank）。
  * 字一律用文字色（白／灰），不拿陣營色當字色——陣營靠旁邊的色塊認。
  */
-export type GlanceTone = 'blue' | 'red' | 'no' | 'yes';
+/** plain＝跟陣營無關的數字（個人的整體勝率、理論勝率）；rank＝排行榜上比的那個數字（琥珀：強調／名次）。 */
+export type GlanceTone = 'blue' | 'red' | 'no' | 'yes' | 'plain' | 'rank';
 
 const SEGMENT_CLASS: Readonly<Record<GlanceTone, string>> = {
   blue: 'bg-blue-600 text-white',
   red: 'bg-red-600 text-white',
   no: 'bg-zinc-600 text-white',
   yes: 'bg-zinc-200 text-zinc-900',
+  plain: 'bg-zinc-500 text-white',
+  rank: 'bg-amber-600 text-white',
 };
 
 const SWATCH_CLASS: Readonly<Record<GlanceTone, string>> = {
@@ -28,6 +32,8 @@ const SWATCH_CLASS: Readonly<Record<GlanceTone, string>> = {
   red: 'bg-red-600',
   no: 'bg-zinc-600',
   yes: 'bg-zinc-200',
+  plain: 'bg-zinc-500',
+  rank: 'bg-amber-600',
 };
 
 export interface SplitSegment {

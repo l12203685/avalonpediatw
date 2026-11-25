@@ -128,6 +128,33 @@ export function buildRadarModel(
   };
 }
 
+/**
+ * 對照用的「全體」（基準組，預設是不算散客的全體）在各軸上的數字：跟這位玩家同一套算法（遊戲結果、刺殺結果用同一個
+ * playerOutcomeBlocks／finalFields，角色理論、位置理論讀基準組的 theory）。經驗不是勝率，沒有對照。算不出來的是 null。
+ */
+export function fieldAxisValues(
+  group: { row: unknown; theory: { roleTheory?: number | null; positionTheory?: number | null } | null } | null | undefined,
+): Record<AxisKey, number | null> {
+  const none: Record<AxisKey, number | null> = {
+    winRate: null, redWinRate: null, blueMerlinProtect: null, missionWinRate: null,
+    roleTheory: null, positionTheory: null, redMerlinKillRate: null, experience: null,
+  };
+  if (!group?.row) return none;
+  const player = group.row as AnalysisPlayerStats;
+  const ff = finalFields(player);
+  const blocks = playerOutcomeBlocks(player);
+  return {
+    ...none,
+    winRate: num(ff.finalWinRate),
+    redWinRate: num(blocks.red?.final.win ?? ff.finalRedWinRate),
+    blueMerlinProtect: num(blocks.blue?.assassination.win),
+    missionWinRate: num(ff.missionWinRate),
+    roleTheory: num(group.theory?.roleTheory),
+    positionTheory: num(group.theory?.positionTheory),
+    redMerlinKillRate: num(blocks.red?.assassination.win),
+  };
+}
+
 /** roleOutcomes / roleWindows 的角色，固定順序在前、其他接後。 */
 export function orderedRoles(roles: Iterable<string>): string[] {
   const set = new Set(roles);

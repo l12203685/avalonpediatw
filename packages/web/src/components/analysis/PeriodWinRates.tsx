@@ -4,8 +4,11 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { useStatsFiltered } from '../../stats/statsFilter';
 import { useAnalysisPlayerRows, type PlayerWithSeatStats } from './seatRoleBlocks';
-import { InfoTip, RATE_DIGITS, StatTable, type StatColumn } from './ui';
-import { BenchmarkToggle, benchmarkPlayerRow, useBenchmarkPinned } from './BenchmarkRows';
+import { InfoTip, RATE_DIGITS, StatTable, formatInt, type StatColumn } from './ui';
+import { BenchmarkToggle, benchmarkName, benchmarkPlayerRow, useBenchmarkGroups, useBenchmarkPinned } from './BenchmarkRows';
+import { BoardCards, BoardLead, type BoardCardRow } from './BoardCards';
+import { boardGlance, pctText, shownPct } from './core/glance';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 
 /**
  * 勝率表 (2026-10-26，玩家回饋：「我想要看近期的玩家勝率就好，篩掉最近沒出現的，例如這颱風天我就想要看這四天」)。
@@ -17,6 +20,8 @@ import { BenchmarkToggle, benchmarkPlayerRow, useBenchmarkPinned } from './Bench
  * 預設依場數排序、最低 50 場 (Edward 2026-10-28)；篩一段短期間時最低 3 場 (50 場會讓表變空)。
  * (2026-11-03 Edward) 最上面釘基準列 (散客／全體／前 X%／中間／後 Y% (預設 20／20)，BenchmarkRows)：不受排序、最低場數影響，
  * 不算進人數。
+ * (2026-11-25 站長「一目瞭然」，第三批) 表格上面先一句話 (照目前的排序，前三名是誰、多少；比最終勝率時加上不算散客的全體)；
+ * 手機改成一位玩家一張小卡 (BoardCards)，先列前 10 名、「看全部」展開，基準列收在「對照組」、完整表格收在「進階」。
  */
 type SortKey = 'finalWinRate' | 'excessWinRate' | 'totalGames';
 
@@ -38,6 +43,8 @@ export default function PeriodWinRates(): JSX.Element {
   const [sort, setSort] = useState<SortKey>('totalGames');
   const k = 'analytics.winRates';
   const pinned = useBenchmarkPinned(benchmarkPlayerRow).props;
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
+  const { section, groups } = useBenchmarkGroups();
 
   const rows = useMemo(() => {
     const list = (players ?? []).filter((p) => p.totalGames >= minGames && num(p.finalWinRate) !== null);
@@ -74,6 +81,51 @@ export default function PeriodWinRates(): JSX.Element {
     { key: 'lastPlayed', label: t(`${k}.col.lastPlayed`), format: 'text', className: 'text-zinc-400' },
   ];
 
+  const table = (): JSX.Element => (
+    <StatTable
+      columns={columns}
+      rows={rows}
+      rowKey={(r) => r.name}
+      stickyFirstColumn
+      maxHeight="min(60vh, 32rem)"
+      onRowClick={(r) => openPlayerStats(r.name)}
+      empty={t(`${k}.empty`)}
+      {...pinned}
+    />
+  );
+
+  // ── 一句話與手機的小卡：跟表格同一份 rows、同一個排序 ──
+  const G = 'analytics.glance.board';
+  const signed = (v: number): string => `${shownPct(v) > 0 ? '+' : ''}${shownPct(v)}`;
+  const fmt = (v: number): string => (sort === 'totalGames' ? t(`${G}.games`, { n: formatInt(v) }) : sort === 'excessWinRate' ? signed(v) : pctText(v));
+  const valueOf = (p: PlayerWithSeatStats): number | null => (sort === 'totalGames' ? p.totalGames : num(p[sort]));
+  const regular = groups.find((g) => g.id === 'regular');
+  const base = sort === 'finalWinRate' && regular ? num(benchmarkPlayerRow(regular).finalWinRate) : null;
+  const sortLabel = t(`${k}.col.${sort === 'totalGames' ? 'games' : sort === 'excessWinRate' ? 'excess' : 'finalWinRate'}`);
+  const glance = boardGlance(rows.map((p) => ({ name: p.name, value: valueOf(p) })), sortLabel, fmt, base, sort === 'totalGames' ? 'most' : 'top');
+  const maxGames = Math.max(1, ...rows.map((p) => p.totalGames));
+  const card = (p: PlayerWithSeatStats, rank: number | null, name: string): BoardCardRow => {
+    const v = valueOf(p);
+    const w = wins(p);
+    const pair = (label: string, x: unknown): string[] => (num(x) === null ? [] : [t(`${G}.pair`, { label, value: pctText(x as number) })]);
+    return {
+      key: `${rank === null ? 'ref' : 'row'}-${name}`,
+      rank,
+      name,
+      // 超額勝率有正有負，不畫成從 0 開始的長條
+      value: sort === 'excessWinRate' ? null : v,
+      text: v === null ? '—' : sort === 'totalGames' ? formatInt(v) : fmt(v),
+      details: [
+        ...(sort === 'finalWinRate' ? [] : pair(t(`${k}.col.finalWinRate`), p.finalWinRate)),
+        ...pair(t(`${k}.col.red`), p.finalRedWinRate),
+        ...pair(t(`${k}.col.blue`), p.finalBlueWinRate),
+        ...(sort === 'totalGames' ? [] : [w === null ? t(`${G}.games`, { n: formatInt(p.totalGames) }) : t(`${G}.winsOf`, { games: formatInt(p.totalGames), wins: formatInt(w) })]),
+      ],
+      label: v === null ? undefined : `${name} ${sortLabel} ${fmt(v)}`,
+      onClick: rank === null ? undefined : (): void => openPlayerStats(p.name),
+    };
+  };
+
   return (
     <div className="space-y-2" data-testid="period-win-rates">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
@@ -97,18 +149,19 @@ export default function PeriodWinRates(): JSX.Element {
           {t(filtered ? `${k}.scopeFiltered` : `${k}.scopeAll`, { count: rows.length })}
           <InfoTip title={t(`${k}.tab`)}><p>{t(`${k}.note`)}</p></InfoTip>
         </span>
-        <BenchmarkToggle />
+        {wide && <BenchmarkToggle />}
       </div>
-      <StatTable
-        columns={columns}
-        rows={rows}
-        rowKey={(r) => r.name}
-        stickyFirstColumn
-        maxHeight="min(60vh, 32rem)"
-        onRowClick={(r) => openPlayerStats(r.name)}
-        empty={t(`${k}.empty`)}
-        {...pinned}
-      />
+      <BoardLead glance={glance} />
+      {wide || rows.length === 0 ? table() : (
+        <BoardCards
+          rows={rows.map((p, i) => card(p, i + 1, p.name))}
+          reference={section ? groups.map((g) => card(benchmarkPlayerRow(g), null, benchmarkName(t, section, g, true))) : []}
+          referenceExtra={<BenchmarkToggle />}
+          refValue={base}
+          max={sort === 'totalGames' ? maxGames : 100}
+          table={table}
+        />
+      )}
     </div>
   );
 }
