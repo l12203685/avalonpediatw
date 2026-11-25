@@ -13,6 +13,8 @@
   cd packages/server
   npx tsx scripts/roleSpots.ts replay --out /repo 外/full && npx tsx scripts/roleSpots.ts annotate --out /repo 外/full
   python3 -I scripts/roleBreakdown.py /repo 外/full /repo 外/out [--dataset games_cache.json] [--notes DIR] [--code-note TEXT]
+      [--top 7] [--min-role-games 30] [--min-loyal-games 100] [--regular-games 100] [--shrink 30] [--assassin-by win|hit]
+      [--pick FILE]    FILE = {"merlin": ["名字", ...], ...}：這些角色不照規則選，直接用指定的人（檔案放 repo 外）
 
 本檔沒有任何玩家名字（名字從資料集讀）。OUT 不可以在 repo 裡。
 
@@ -44,7 +46,7 @@ opts = {'top': '7', 'min-role-games': '30', 'min-loyal-games': '100', 'regular-g
 pos = []
 i = 0
 while i < len(argv):
-    if argv[i].startswith('--') and argv[i][2:] in ('dataset', 'notes', 'code-note', 'top', 'min-role-games', 'min-loyal-games', 'regular-games', 'shrink', 'assassin-by'):
+    if argv[i].startswith('--') and argv[i][2:] in ('dataset', 'notes', 'code-note', 'top', 'min-role-games', 'min-loyal-games', 'regular-games', 'shrink', 'assassin-by', 'pick'):
         opts[argv[i][2:]] = argv[i + 1]
         i += 2
     else:
@@ -136,6 +138,7 @@ def shrunk(k, n, mean, weight=SHRINK):
     return 100 * (k + weight * mean / 100) / (n + weight)
 
 
+PICK = json.load(open(opts['pick'], encoding='utf8')) if opts.get('pick') else {}
 SELECT = {}
 SEL = {}
 for role in ROLES:
@@ -143,7 +146,7 @@ for role in ROLES:
     rows = []
     for p in tot:
         n = rg[(p, role)]
-        if n < need:
+        if n < need and NAMES[p] not in PICK.get(role, []):
             continue
         r = {
             'player': NAMES[p], 'pid': p, 'roleGames': n, 'roleWinPct': 100 * rw[(p, role)] / n,
@@ -160,6 +163,11 @@ for role in ROLES:
     keyf = (lambda r: -r['hitShrunk']) if role == 'assassin' and opts['assassin-by'] == 'hit' else (lambda r: -r['roleWinShrunk'])
     rows.sort(key=keyf)
     picked = [r for r in rows if r['overallOk'] and r['aboveMean']][:TOP]
+    if role in PICK:
+        missing = [n for n in PICK[role] if n not in NAMES]
+        if missing:
+            sys.exit(f'--pick: not in the dataset: {missing}')
+        picked = [r for r in rows if r['player'] in PICK[role]]
     for r in rows:
         r['picked'] = r in picked
     SELECT[role] = {'minGames': need, 'candidates': len(rows), 'roleMeanPct': ROLE_MEAN[role], 'rows': rows}
@@ -733,17 +741,34 @@ def role_section(role):
         rows.append([f'{CAT_ZH[cat]}：{SAME_ZH[cat]}', f"{s['n']}{small(s['n'], cat)}", Bar(s['bot']), pct(s['baseline']), pct(s['botAll']), s['allN']])
     table(['和百科AI 做一樣的事的比例', '強者的決策點', '強者 × 百科AI', '強者 × 基準線', '全部真人 × 百科AI', '全部真人的決策點'], rows,
           '「刺殺」：紅方一起討論，所以每個紅方角色都算；百科AI = 機器人坐在刺客座位的選擇。「任務牌」只算牌譜看得出是誰出的那些。')
+    leads = role_leads(role)
+    if leads:
+        h(3, f'{ROLE_ZH[role]}：差最多的地方（照「每 100 局差幾次」排）')
+        table(['局面：比什麼', '真人強者 ／ 百科AI', '每 100 局差幾次', '次數', '誰比較好'],
+              [[f"{CAT_ZH[r['cat']].split('（')[0] if r['cat'] != 'claim' else '湖中宣告'}｜{r['cellZh']}：{r['featureZh'].split('（')[0]}", PB(r['strong'], r['bot']), f"{r['per100']:.0f}", n_txt(r, r['cat']), judge_cell(r)] for r in leads[:12]],
+              '只列區間不跨 0 的。紅色 = 真人強者比較好（可能是弱點）、綠色 = 百科AI 比較好、灰色 = 做法不同但看不出誰好。「每 100 局」= 每 100 個拿這個角色的座位。')
     for cat in CATS:
         c = RESULT[role].get(cat)
         if not c:
             continue
         CATEGORY[cat](role, c)
-    leads = role_leads(role)
-    if leads:
-        h(3, f'{ROLE_ZH[role]}：差最多的地方（照「每 100 局差幾次」排）')
-        table(['局面', '比什麼', '次數', '真人強者 ／ 百科AI', '每 100 局差幾次', '誰比較好'],
-              [[f"{CAT_ZH[r['cat']]}｜{r['cellZh']}", r['featureZh'], n_txt(r, r['cat']), PB(r['strong'], r['bot']), f"{r['per100']:.0f}", judge_cell(r)] for r in leads[:12]],
-              '只列區間不跨 0 的。🔴 = 真人強者比較好（可能是弱點）、🟢 = 百科AI 比較好、⚪ = 做法不同但看不出誰好。')
+    per_player_table(role)
+
+
+def per_player_table(role):
+    rows = []
+    for name, pid in [(r['player'], r['pid']) for r in SELECT[role]['rows'] if r['picked']]:
+        row = [name]
+        seats_ = set()
+        for cat in CATS:
+            xs = [d for d in SPOTS.get((role, cat), []) if d['pid'] == pid and d['sbh'] is not None]
+            seats_ |= {(d['g'], d['seat']) for d in xs} if cat == 'vote' else set()
+            row.append(f"{pct(mean(d['sbh'] for d in xs))}（{len(xs)}）" if xs else '—')
+        row.insert(1, len(seats_))
+        rows.append(row)
+    if rows:
+        h(3, f'{ROLE_ZH[role]}：每一位和百科AI 做一樣的事的比例')
+        table(['玩家', '座位數'] + [SAME_ZH[c] for c in CATS], rows, '括號 = 決策點數。')
 
 
 class Bar:
@@ -1140,8 +1165,8 @@ def clean(o):
     return o
 
 
-ANON_SELECT = {role: {'minGames': s['minGames'], 'candidates': s['candidates'], 'roleMeanPct': s['roleMeanPct'], 'picked': [
-    {k: r[k] for k in r if k not in ('player', 'pid')} for r in s['rows'] if r['picked']]} for role, s in SELECT.items()}
+# 公開的檔案只放人數，不放每一位的局數與勝率（對得回是誰）。
+ANON_SELECT = {role: {'minGames': s['minGames'], 'candidates': s['candidates'], 'roleMeanPct': s['roleMeanPct'], 'picked': len(SEL[role])} for role, s in SELECT.items()}
 public = {
     'meta': {**META, 'games': len(GAMES), 'replayed': len(REPLAYED), 'top': TOP, 'minRoleGames': MIN_ROLE_GAMES, 'minLoyalGames': MIN_LOYAL_GAMES,
              'regularGames': REGULAR_GAMES, 'regulars': len(REGULARS), 'overallMedian': MEDIAN, 'shrink': SHRINK, 'hitMean': HIT_MEAN, 'merlinSafeMean': SAFE_MEAN},
