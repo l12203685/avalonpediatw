@@ -2589,7 +2589,7 @@
         "legend": "色塊由左到右是第 1 個任務起：藍＝任務成功、紅＝任務失敗",
         "after": "之後",
         "howTo": "怎麼看這棵樹",
-        "more": "還看得出什麼（同比分的其他順序、湖中女神的宣告、照派）"
+        "more": "還看得出什麼（其他順序、湖的宣告、照派）"
       },
       "radar": {
         "mixed": "跟全體比，{{name}}最強的是{{best}}（{{bestValue}}，全體 {{bestField}}），最弱的是{{worst}}（{{worstValue}}，全體 {{worstField}}）。",

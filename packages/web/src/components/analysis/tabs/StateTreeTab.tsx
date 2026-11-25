@@ -37,7 +37,7 @@ function Legend({ metric, mid }: { metric: ColorMetric; mid: number | null }): J
     const rate = t < 0.5 ? m * (t * 2) : m + (1 - m) * ((t - 0.5) * 2);
     return divergingColor(rate, mid, metric);
   });
-  const name = metric === 'blueWin' ? '藍方最終勝率' : '三紅率';
+  const name = metric === 'blueWin' ? '藍方最後贏的比例' : '三個任務失敗的比例';
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-400">
       <span>{name}</span>
@@ -46,7 +46,7 @@ function Legend({ metric, mid }: { metric: ColorMetric; mid: number | null }): J
       <span>100%</span>
       <span className="text-zinc-500">（灰＝全體 {pct(mid)}）</span>
       <span className="ml-2 inline-block h-2.5 w-4 rounded-sm border border-dashed border-zinc-500" aria-hidden />
-      <span className="text-zinc-500">其他＝不到門檻的分支合計</span>
+      <span className="text-zinc-500">其他＝局數太少的走法加在一起</span>
     </div>
   );
 }
@@ -56,6 +56,8 @@ function Legend({ metric, mid }: { metric: ColorMetric; mid: number | null }): J
  * 第 1→5 局一層一層分支（藍／紅），第 2、3、4 局後（還沒分出勝負）插一層湖的宣告；每個節點有局數、佔比、三種結果，
  * 點一下看細節（藍方勝率、刺中率、下一局的派隊、最常見的下一步），可以把這條分支套用成上方的篩選。
  * 資料跟著上方的篩選，在統計 Worker 裡整理（stateTree/stateTree.ts）。桌機橫向樹、手機縮排清單。
+ * （2026-11-25 站長「一目瞭然」，第三批）圖上面原本的一大段字改成一句話＋兩條比例條，怎麼讀圖與其他發現收在兩個收合區
+ * （StateTreeSummary）；圖例那一行留著。
  */
 export default function StateTreeTab(): JSX.Element {
   const state = useStateTreeGames();
@@ -125,7 +127,7 @@ export default function StateTreeTab(): JSX.Element {
 
   return (
     <div className="space-y-3">
-      <StateTreeSummary f={findings} />
+      <StateTreeSummary f={findings} desktop={desktop} excluded={excluded} />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <SectionTabs items={MODES} value={mode} onChange={(m) => { setMode(m); setSelectedId(null); }} size="sm" ariaLabel="湖的分支方式" />
@@ -136,8 +138,8 @@ export default function StateTreeTab(): JSX.Element {
             onChange={(e) => setMetric(e.target.value as ColorMetric)}
             className="rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-xs text-zinc-200"
           >
-            <option value="blueWin">藍方最終勝率</option>
-            <option value="threeRed">三紅率</option>
+            <option value="blueWin">藍方最後贏的比例</option>
+            <option value="threeRed">三個任務失敗的比例</option>
           </select>
         </label>
         <label className="flex items-center gap-1.5 text-xs text-zinc-400">
@@ -157,12 +159,6 @@ export default function StateTreeTab(): JSX.Element {
         </div>
       </div>
       <Legend metric={metric} mid={mid} />
-      <p className="text-[11px] leading-snug text-zinc-500">
-        每一層是一局任務（藍＝成功、紅＝失敗；第 4 局要兩張失敗），第 2、3、4 局後是那一次湖中女神的宣告（說好／說壞；藍方持湖照慣例說真話，紅方可能說謊）。
-        邊越粗局數越多；節點下的細條是三紅／三藍被刀／三藍躲刺。{desktop ? '滑過或點節點看細節，點 +／− 展開收合。' : '點一列展開並看細節。'}
-        {excluded > 0 && ` 另有 ${excluded} 局任務沒打完、不是 10 人標準隊伍人數或結果與任務對不上，沒有列入。`}
-      </p>
-
       {desktop ? (
         <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-4">
           <div className="rounded-xl border border-zinc-700/60 bg-avalon-card/30 p-3">

@@ -312,6 +312,7 @@ export default function TheoryTable({
           reference={section ? groups.map((g) => card(benchmarkBoardRow(g), null, benchmarkName(t, section, g, true), true)) : []}
           referenceExtra={<BenchmarkToggle />}
           refValue={base}
+          tone="rank"
           max={isRate ? 100 : maxGames}
           table={table}
         />

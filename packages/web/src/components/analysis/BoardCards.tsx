@@ -92,7 +92,7 @@ function Card({ row, tone, refValue, max }: { row: BoardCardRow; tone: GlanceTon
     : <div className={cls} data-testid="board-card">{body}</div>;
 }
 
-export function BoardCards({ rows, reference = [], referenceExtra, refValue, tone = 'blue', max = 100, topN = 10, table }: {
+export function BoardCards({ rows, reference = [], referenceExtra, refValue, tone = 'rank', max = 100, topN = 10, table }: {
   rows: readonly BoardCardRow[];
   /** 對照組（不排名）：收在下面的收合區。 */
   reference?: readonly BoardCardRow[];

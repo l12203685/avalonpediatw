@@ -471,6 +471,7 @@ function BoardPanel({
           reference={section ? refRows.map(({ group, row }) => view.card(row, `ref-${group.id}`, null, benchmarkName(t, section, group, true))) : []}
           referenceExtra={benchmark ? <BenchmarkToggle /> : undefined}
           refValue={base}
+          tone={board.metric === 'hitRate' ? 'red' : 'rank'}
           max={view.max}
           table={table}
         />
