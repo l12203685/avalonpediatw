@@ -2624,7 +2624,7 @@
           "roleTheory": "Expected win rate if roles are drawn at the normal odds: each role's win rate over the player's last {{special}} games in it ({{loyal}} as Loyal Servant), weighted by the chance of drawing it.",
           "positionTheory": "Expected win rate if all ten seats are equally likely: the average of the player's win rate in each seat over the last {{games}} games.",
           "redMerlinKillRate": "As Red, in games where Blue completed three missions: share where Merlin was assassinated.",
-          "experience": "Games played ÷ 10, capped at 100 (1000 games = 100). Not a win rate, so it is not compared with everyone."
+          "experience": "Games played ÷ 10, capped at 100. Not a win rate, so it is not compared with everyone."
         },
         "note": "Items that cannot be computed are not drawn (never shown as zero). The small text on each row is how many games the number uses."
       }
