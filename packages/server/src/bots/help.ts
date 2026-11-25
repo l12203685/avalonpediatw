@@ -22,7 +22,7 @@ import { SEAT_FILLER_ALIAS_TEXT, SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT,
 import { SIM_CONFIG } from './simulation/config';
 import { simHelpText } from './simulation/replies';
 import { STATS_COMMAND_USAGE, STATS_PAGE_URL_TEXT } from './stats/statsReplies';
-import { DAILY_QUESTION_HELP_TEXT, DAILY_QUESTION_USAGE } from './dailyQuestion/usage';
+import { DAILY_QUESTION_HELP_TEXT, DAILY_QUESTION_USAGE, DAILY_QUESTION_YESTERDAY_HELP_TEXT, DAILY_QUESTION_YESTERDAY_USAGE } from './dailyQuestion/usage';
 import { RULES_USAGE, playPlatformLine, rolesText, rulesText } from './rules';
 
 export type HelpPlatform = 'line' | 'discord';
@@ -85,7 +85,7 @@ export function basicHelpText(platform: HelpPlatform): string {
   const helpCmd = platform === 'discord' ? '/help 主題:模擬' : '/help 模擬';
   const lines = ['📖 阿瓦隆百科機器人'];
   if (SIM_CONFIG.commandsEnabled) lines.push('/模擬\u3000模擬瓦：真人牌譜停在派票的當下，換你派');
-  lines.push(`${DAILY_QUESTION_USAGE}\u3000今天的每日一題：題目、牌譜連結、怎麼在這裡作答`);
+  lines.push(`${DAILY_QUESTION_USAGE}\u3000今天的每日一題：題目、牌譜連結、怎麼在這裡作答（${DAILY_QUESTION_YESTERDAY_USAGE[platform]} 看昨天的答案）`);
   lines.push(`${STATS_COMMAND_USAGE.player}\u3000個人戰績（還有 /排行 /默契）`);
   lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000叫百科AI 進房補位`);
   lines.push(`${PAIPU_FIX_USAGE[platform]}\u3000待修正的牌譜（${CORRECTION_USAGE[platform]} 查一局、送更正）`);
@@ -130,6 +130,7 @@ export function topicHelpText(topic: HelpTopic, platform: HelpPlatform, scope: s
     case '每日一題':
       return [
         `📌 ${DAILY_QUESTION_USAGE}\u3000${DAILY_QUESTION_HELP_TEXT}`,
+        `${DAILY_QUESTION_YESTERDAY_USAGE[platform]}\u3000${DAILY_QUESTION_YESTERDAY_HELP_TEXT}`,
         '題目跟當天 Threads／IG 的「阿瓦隆每日一題」同一題（每天換；/今日一題 也可以）。',
         SIM_CONFIG.commandsEnabled ? '回覆裡附的 /模擬 題號 可以直接在這裡作答，/公布 對答案。' : '',
       ].filter(Boolean).join('\n');
