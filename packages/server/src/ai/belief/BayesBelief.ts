@@ -28,6 +28,7 @@ import { rationalityAdj50, lakePickTerms50, W50_ALL, W50_STRONG } from '../Round
 import { viewpointLog53, viewpointTerms53 } from '../Viewpoint53';
 import { missionProbScore68, missionScoreApplies68 } from '../Round68';
 import { missionFailed } from '../missionFacts';
+import { merlinCoverMix77 } from '../Round77';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -1162,6 +1163,10 @@ const shareCache = new WeakMap<Posterior, Map<string, number>>();
  */
 function merlinEarlyOptions(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'merlinEarlyStrict' | 'merlinEarlyMix' | 'merlinEarlyMixRound'> {
   const strict = t.merlinLoyalStyle === true;
+  // Round 77 `merlinCover77` (Round77.ts): Merlin sends the loyal pipeline's team on a share q of his R1–R2 non-forced proposals — those read
+  // 1 − q strict, q generic (the round bits of `merlinCoverScope77` pick the round). Off = null, nothing changes.
+  const cover77 = strict ? merlinCoverMix77(t) : null;
+  if (cover77) return { merlinEarlyStrict: true, merlinEarlyMix: cover77.mix, merlinEarlyMixRound: cover77.round };
   const m = t.merlinDoomedPublic ?? 0;
   // Round 24 `merlinDoomedAvoidMix`: a share q strict, 1 − q generic (Merlin's `merlinDoomedAvoid` teams sometimes hold a seen red).
   const q = t.merlinDoomedAvoidMix ?? 0;

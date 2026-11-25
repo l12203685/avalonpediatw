@@ -86,7 +86,8 @@ import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from 
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
 import { merlinKeyApprove41Now } from '../BlueRound41';
-import { merlinLoyalStyleTeam, merlinPublicPipelineOn, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
+import { merlinKnownReds, merlinLoyalStyleTeam, merlinPublicPipelineOn, merlinNormalVoteNow, merlinVoteCoverApprove, merlinVoteFatal, percivalLoyalStyleTeam } from '../MerlinLoyalStyle';
+import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -104,7 +105,7 @@ import { teamReuseActive, teamReuseCandidateTeams, teamReuseGuard, teamReusePlan
 import { loyalViewOf, redR1TeamPlan, visibleTeammatesOn, type RedR1TeamPlan } from '../RedR1Teammate';
 import { redLeadOffNow, teamWithoutSelf } from '../RedRound46';
 import { r1ReuseThinTeam49 } from '../BlueRound49';
-import { failedReuseBreakTeam54 } from '../Round54';
+import { failedReuseBreakTeam54, merlinBarredReds54 } from '../Round54';
 import { leaderOppEarly51, leaderOppRed51 } from '../Round51';
 import { percivalBothThumbsReject, percivalNoThumbsR1Active, percivalR1ThumbException } from '../PercivalThumbs';
 import {
@@ -1326,6 +1327,32 @@ export class ForwardAgent implements AvalonAgent {
       const pubObs = { ...obs, myRole: 'loyal', knownEvils: [], knownWizards: undefined, myLakeResults: [] } as PlayerObservation;
       const publicGateOk = (team: readonly string[]): boolean => this.thumbOk39(obs, team) && (!anyGate(this.gates)
         || teamGateBreach(pubObs, certaintyFor(pubObs), team, obs.currentRound ?? 1, this.gates) === null);
+      // Round 77 `merlinCover77` (Round77.ts; paired with the round-75 world-line assassin): on a proposal that all but never becomes a mission
+      // (R1–R2 non-forced) Merlin sends, at rate q, the team the full loyal pipeline of his seat sends on the public record — a red he sees is
+      // on it or not as the public record has it, so his proposals in these cells are distributed as a loyal's. Kept off the team as before: a
+      // seen red who sat on a failed mission (round 54), a red his own certainty proves, a lake-barred seat; the public loyal's gate binds.
+      if (merlinCover77Now(this.baseline.tuning, obs)) {
+        round77Stats.applies++;
+        const pubView = { ...obs, myRole: 'loyal', myTeam: 'good', knownEvils: [], knownWizards: undefined, allEvilIds: undefined, publicLoyalView: false } as PlayerObservation;
+        const pubBar = [lakePairBarred(this.baseline.tuning, pubView), lakeHolderBarred40(this.baseline.tuning, pubView)].filter((x): x is string => x !== null);
+        const outerBar = this.lakeBar39;
+        this.lakeBar39 = pubBar;
+        let pub: ForwardDecision;
+        try {
+          pub = this.decideMain(pubView);
+        } finally {
+          this.lakeBar39 = outerBar;
+        }
+        const seen77 = new Set(obs.knownEvils);
+        const barred77 = [...pubBar, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen77.has(id))];
+        if (pub.action.type === 'team_select' && pub.action.teamIds.length === d.action.teamIds.length
+          && merlinCover77TeamOk(this.baseline.tuning, obs, pub.action.teamIds, barred77) && publicGateOk(pub.action.teamIds)) {
+          round77Stats.sent++;
+          if (pub.action.teamIds.some((id) => seen77.has(id))) round77Stats.thumb++;
+          return { ...d, action: pub.action, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: the team the loyal of his seat sends (round 77 cover)` } };
+        }
+        round77Stats.barred++;
+      }
       // Round 39 `merlinPublicPipeline=2` (checklist ML-01 value 2): the team the full loyal pipeline of his seat would send on the
       // public record (every loyal step runs: own prior, flow answer, R2 own view, reuse, the reasonable set). Merlin sends exactly that
       // team when it holds no red he sees and passes his gates; otherwise his red-free loyal-style pick as before.
