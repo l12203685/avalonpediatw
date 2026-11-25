@@ -13,6 +13,7 @@
   --part rates  梅林／忠臣／派西當隊長時的比例（放自己、放看得到的紅、放莫德雷德、放派西、照派上一次成功的隊…），真人 vs 機器人。
   --part votes  同 leak，但看票（Mv、Lv）：第幾局 × 在不在隊上 × 隊上幾個看得到的紅 × 贊成／反對。
   --part hit    只用梅林的派隊（Mk）與全部分量時，世界線第一名是梅林的比例（給自我對打的候選比較用；不分層）。
+  --part refit-ablate  同 refit，但逐一拿掉／只留某些分量（機器人的規律落在哪一個分量）。
   --part refit  紅方跟著調整：世界線的表改用這一份自我對打重新擬合（交叉擬合），只用世界線、不分層的刺中率；對照 = 真人局擬合的正式表。
 
 輸入 = `keySpotStudy.ts --export-human／--export-bot` 的 jsonl（只有座位、角色、隊伍、票、任務牌、湖、刺殺，沒有玩家名）。
@@ -325,6 +326,27 @@ def part_votes(hum, bot, tb, w):
     print(f'| 合計（全部的格） | | {th:+.3f} | | {tbt:+.3f} | {tbt - th:+.3f} |')
 
 
+def part_refit_ablate(bot, kfold):
+    """重新擬合的表（同 refit）拿掉／只留某些分量時的刺中率：機器人的規律落在哪一個分量。"""
+    wl.KFOLD = kfold
+    spots = [g for g in bot if g.g.get('at') is not None]
+    sets = [('全部分量', None), ('拿掉梅林的派隊（Mk）', ['Mk']), ('只用梅林的派隊（Mk）', [c for c in wl.COMPS if c != 'Mk']),
+            ('拿掉梅林那一側（Mk Mv Ml）', ['Mk', 'Mv', 'Ml']), ('拿掉派西那一側（Pk Pv Pl）', ['Pk', 'Pv', 'Pl']), ('拿掉忠臣那一側（Lk Lv Ll）', ['Lk', 'Lv', 'Ll']),
+            ('拿掉票（Pv Mv Lv）', ['Pv', 'Mv', 'Lv'])]
+    print(f'局數 {len(bot)}、刺殺點 {len(spots)}；表與疊加權重用這一份自我對打擬合（分 {kfold} 份交叉擬合），只用世界線、不分層')
+    print('| 分量 | 刺中率 % | 派西第一名是真派西 % |')
+    print('|---|---|---|')
+    for name, drop in sets:
+        mask = [0.0 if drop and c in drop else 1.0 for c in wl.COMPS]
+        out, _w, _ = wl.crossfit(bot, view='full', mask=mask)
+        hit = px = 0
+        for g in spots:
+            my, mx = wl.marginals(out[g.g['gi']])
+            hit += wl.argmax_seat(my) == g.merlin
+            px += wl.argmax_seat(mx) == g.percival
+        print(f'| {name} | {100 * hit / len(spots):.1f} | {100 * px / len(spots):.1f} |', flush=True)
+
+
 def part_refit(bot, human_tb, w, kfold):
     """紅方跟著調整：世界線的表與疊加權重改用這一份自我對打重新擬合（交叉擬合：每一份用其他幾份的局擬合），只用世界線、不分層的刺中率。
     對照 = 真人局擬合的正式表在同一批刺殺點上的刺中率。"""
@@ -370,6 +392,8 @@ def main():
         return part_hit(bot, tb, w)
     if args.part == 'refit':
         return part_refit(bot, tb, w, args.kfold)
+    if args.part == 'refit-ablate':
+        return part_refit_ablate(bot, args.kfold)
     hum = games_of(args.human)
     if args.part == 'leak':
         return part_leak(hum, bot, tb, w, args.json)
@@ -377,7 +401,7 @@ def main():
         return part_rates(hum, bot, tb, w)
     if args.part == 'votes':
         return part_votes(hum, bot, tb, w)
-    raise SystemExit('--part leak|rates|votes|hit|refit')
+    raise SystemExit('--part leak|rates|votes|hit|refit|refit-ablate')
 
 
 if __name__ == '__main__':
