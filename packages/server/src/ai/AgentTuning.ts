@@ -1499,6 +1499,7 @@ export interface AgentTuning {
    * （1 = 第 40 回合的 `percivalRead39=1`）。0 = 關；只寫開關名稱不給值 = 0.5。**第 74 回合：三種真人桌用 0.25（`humanProfile.ts`），基準線 0。**
    */
   thumbBlend74: number;
+  /**
    * 第 76 回合（`Round76.ts`；忠臣、派西第 4 局在隊上的票）：比分 1:2（紅方已兩勝）時，P(隊上的紅 ≥ 2) ≥ 這個值才內黑
    * （取代 `onTeamVote59` 在這個比分的值）。0 = 關。
    */
@@ -3658,6 +3659,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
     const value = raw === undefined ? (name === 'percivalNoInfo74' ? 0.6 : 0.5) : Number.parseFloat(raw);
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${name} needs 0–1, got "${raw}"`);
     return name === 'percivalNoInfo74' ? { percivalNoInfo74: value } : { thumbBlend74: value };
+  }
   if (name === 'onTeamR4Key76' || name === 'onTeamR4Open76' || name === 'onTeamR4Soft76') {
     const hi = name === 'onTeamR4Soft76' ? 0.5 : 1;
     const value = raw === undefined ? (name === 'onTeamR4Soft76' ? 0.3 : 0.5) : Number.parseFloat(raw);
