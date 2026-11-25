@@ -240,9 +240,11 @@ for g in GAMES.values():
     if not k:
         continue
     for seat, role in enumerate(g['roles'], 1):
-        if role in RED and role != 'assassin':
+        # 梅林也記一份：真人刺客與機器人刺客各自有沒有抓到「這一位梅林」。
+        if (role in RED and role != 'assassin') or role == 'merlin':
             pid = g['players'][seat - 1]
-            SPOTS[(role, 'kill')].append({**k, 'seat': seat, 'role': role, 'pid': pid, 'sel': pid in SEL[role], 'via': True})
+            SPOTS[(role, 'kill')].append({**k, 'seat': seat, 'role': role, 'pid': pid, 'sel': pid in SEL[role], 'via': True,
+                                          'win': 1 if side_won(g, role) else 0, 'red': role in RED})
 REPLAYED = {d['g'] for (r, c), xs in SPOTS.items() if c == 'vote' for d in xs}
 ROLE_SEATS = {}
 for role in ROLES:
@@ -394,6 +396,13 @@ FEATURES = {
         ('merlin', '刺中梅林', lambda d, w: 1.0 if d[w]['role'] == 'merlin' else 0.0),
         ('percival', '刺到派西維爾', lambda d, w: 1.0 if d[w]['role'] == 'percival' else 0.0),
         ('loyal', '刺到忠臣', lambda d, w: 1.0 if d[w]['role'] == 'loyal' else 0.0),
+        ('noFail', '刺沒出過失敗任務的人', lambda d, w: 1.0 if d[w]['failedMissions'] == 0 else 0.0),
+        ('succ2', '刺出過 2 次以上成功任務的人', lambda d, w: 1.0 if d[w]['successMissions'] >= 2 else 0.0),
+        ('led', '刺派出過成功任務的隊長', lambda d, w: 1.0 if d[w]['ledSuccess'] > 0 else 0.0),
+        ('ib', '刺投過內黑的人', lambda d, w: 1.0 if d[w]['innerBlack'] > 0 else 0.0),
+        ('ow', '刺投過外白的人', lambda d, w: 1.0 if d[w]['outerWhite'] > 0 else 0.0),
+        ('lakeGood', '刺被湖中宣告是藍方的人', lambda d, w: 1.0 if d[w]['lakeClaimed'] == 'good' else 0.0),
+        ('lakeHeld', '刺持過湖的人', lambda d, w: 1.0 if d[w]['heldLake'] else 0.0),
     ],
 }
 FEATURE_ROLES = {'thumb': {'percival'}, 'thumb2': {'percival'}, 'known': {'merlin', 'assassin', 'morgana', 'mordred'}}
@@ -531,7 +540,9 @@ def verdict(r):
     feature_is_good = r['feature'] in ('clean',) and r['cat'] == 'team' and r['role'] not in RED
     if r['cat'] == 'kill':
         if r['feature'] != 'merlin':
-            return 'S', '沒刺中的時候刺到誰（做法不同）'
+            return 'S', '挑刺殺對象的方式不同'
+        if r['role'] == 'merlin':
+            return 'S', ('真人刺客比百科AI 刺客更抓得到這幾位梅林' if r['gap'] > 0 else '百科AI 刺客比真人刺客更抓得到這幾位梅林')
         return ('W', '真人強者刺得比較準') if r['gap'] > 0 else ('B', '百科AI 刺得比較準')
     gd = r.get('good')
     wr = r.get('wr')
@@ -753,7 +764,7 @@ def role_section(role):
         s = c['same']
         rows.append([f'{CAT_ZH[cat]}：{SAME_ZH[cat]}', f"{s['n']}{small(s['n'], cat)}", Bar(s['bot']), pct(s['baseline']), pct(s['botAll']), s['allN']])
     table(['和百科AI 做一樣的事的比例', '強者的決策點', '強者 × 百科AI', '強者 × 基準線', '全部真人 × 百科AI', '全部真人的決策點'], rows,
-          '「刺殺」：紅方一起討論，所以每個紅方角色都算；百科AI = 機器人坐在刺客座位的選擇。「任務牌」只算牌譜看得出是誰出的那些。')
+          '「刺殺」：紅方一起討論，所以每個紅方角色都算；百科AI = 機器人坐在刺客座位的選擇（梅林那一列 = 這幾位當梅林的局，真人刺客與機器人刺客刺的是不是同一個人）。「任務牌」只算牌譜看得出是誰出的那些。')
     leads = role_leads(role)
     if leads:
         h(3, f'{ROLE_ZH[role]}：差最多的地方（照「每 100 局差幾次」排）')
@@ -946,13 +957,18 @@ def cat_kill(role, c):
     rows = []
     for key, zh, _ in FEATURES['kill']:
         r = find(role, 'kill', 'all', key)
-        if r:
-            rows.append(std_row(zh, r, 'kill'))
+        if r and (role == 'assassin' or key in ('merlin', 'percival', 'loyal')):
+            rows.append(std_row(zh if role != 'merlin' else zh.replace('刺中梅林', '被刺中'), r, 'kill'))
     for ck in ('red0', 'red1', 'red2'):
         r = find(role, 'kill', ck, 'merlin')
         if r:
-            rows.append(std_row(f"{r['cellZh']}：刺中梅林", r, 'kill'))
-    note = '走到三藍的局。' + ('' if role == 'assassin' else f'{ROLE_ZH[role]}不是動手的人，但紅方一起討論：這裡是「強者拿{ROLE_ZH[role]}的那幾局」實際刺的人，對上機器人坐在刺客座位會刺的人。')
+            rows.append(std_row(f"{r['cellZh']}：{'刺中梅林' if role != 'merlin' else '被刺中'}", r, 'kill'))
+    if role == 'assassin':
+        note = '走到三藍的局。'
+    elif role == 'merlin':
+        note = '走到三藍的局。這裡反過來看：「真人強者」那一欄 = 當時的真人刺客刺的人，「百科AI」= 機器人坐在刺客座位會刺的人；兩邊抓的都是這幾位梅林。'
+    else:
+        note = f'走到三藍的局。{ROLE_ZH[role]}不是動手的人，但紅方一起討論：這裡是「強者拿{ROLE_ZH[role]}的那幾局」實際刺的人，對上機器人坐在刺客座位會刺的人。'
     table(STD_HEAD, rows, note)
 
 
