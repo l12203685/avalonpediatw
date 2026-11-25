@@ -73,13 +73,14 @@ interface Server {
 const servers: Server[] = [];
 
 /** 一台「伺服器」：自己的引擎＋存檔，接在同一個假 repo 上。計時器全關（要測的那幾題自己開）。 */
-function boot(repo: SimStateBackend | null, opts: { bank?: SimBank; timers?: boolean; ttlMs?: number; maxBytes?: number; restoreWaitMs?: number } = {}): Server {
+function boot(repo: SimStateBackend | null, opts: { bank?: SimBank; timers?: boolean; ttlMs?: number; maxBytes?: number; restoreWaitMs?: number; handoverMs?: number } = {}): Server {
   const logs: string[] = [];
   const persist = new SimPersistence({
     backend: repo,
     now: () => clock.now,
     loadRetryDelaysMs: [1, 1],
     catchUpDelaysMs: [],
+    handoverMs: opts.handoverMs ?? 0,
     ...(opts.timers ? {} : { debounceMs: 3_600_000, firstDelayMs: 3_600_000 }),
     ...(opts.maxBytes ? { maxBytes: opts.maxBytes } : {}),
     logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
@@ -309,7 +310,7 @@ describe('什麼時候寫', () => {
     vi.useFakeTimers({ now: T0 });
     const real = clock.now;
     const repo = new FakeRepo();
-    const persist = new SimPersistence({ backend: repo, now: () => Date.now(), catchUpDelaysMs: [], logger: { info: () => undefined, warn: () => undefined } });
+    const persist = new SimPersistence({ backend: repo, now: () => Date.now(), catchUpDelaysMs: [], handoverMs: 0, logger: { info: () => undefined, warn: () => undefined } });
     const engine = new SimEngine({ bank: async () => BANK, now: () => Date.now(), random: () => () => 0, persistence: persist });
     servers.push({ engine, persist, logs: [] });
     const run = async (text: string): Promise<void> => { (await engine.handleText(text, DM))?.commit(); };
@@ -363,7 +364,7 @@ describe('什麼時候寫', () => {
       save: async (text, version) => (flaky.down ? { ok: false, conflict: false } : repo.save(text, version)),
     };
     const logs: string[] = [];
-    const persist = new SimPersistence({ backend, now: () => Date.now(), catchUpDelaysMs: [], logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) } });
+    const persist = new SimPersistence({ backend, now: () => Date.now(), catchUpDelaysMs: [], handoverMs: 0, logger: { info: (m) => logs.push(m), warn: (m) => logs.push(m) } });
     const engine = new SimEngine({ bank: async () => BANK, now: () => Date.now(), random: () => () => 0, persistence: persist });
     servers.push({ engine, persist, logs });
     await persist.restore();
@@ -480,7 +481,35 @@ describe('兩台伺服器同時活著（Render 先開新的、再關舊的）', 
     expect(repo.sha).toBe(sha);
   });
 
-  it('開機後自己排好回頭讀的時間（45 秒、2 分、5 分、10 分）', async () => {
+  it('剛開機的 3 分鐘內，每個模擬指令回答之前先看一眼存檔：舊的那台剛開的題目、剛作的答，新的這台馬上接得到', async () => {
+    const repo = seeded();
+    const old = await restart(repo);
+    const fresh = await restart(repo, { handoverMs: 180_000 });
+    // 新的那台已經開機讀過檔案（空的）；之後才在舊的那台開題、作答（舊的那台寫了檔）。
+    await say(old, '/模擬 忠臣 4', G('A'));
+    await say(old, '/派 469', G('A'));
+    await old.persist.flush();
+    expect(fresh.engine.activeSessions()).toBe(0);
+    // 下一個指令落在新的那台：不會回「你沒有題目」。
+    expect(await say(fresh, '/派 123', G('A'))).toBe('【W0000-4】收到（第 1 位作答，第 2 次作答，最後一次算數）\n結果 /公布 時一起看');
+    // 公布時，在舊的那台作的答和在新的這台作的答都在。
+    const reveal = await say(fresh, '/公布', G('B'));
+    for (const team of ['469', '123']) expect(reveal, team).toContain(team);
+    expect(fresh.persist.status().conflicts).toBe(0);
+
+    // 檔案沒被改過：看一眼就好，不合併、不寫。3 分鐘之後不再每個指令都看。
+    await fresh.persist.flush();
+    const { sha, loads } = repo;
+    expect(await say(fresh, '/公布', G('A'))).toBe(NO_SESSION_KEPT_TEXT);
+    expect(repo.loads).toBe(loads + 1);
+    clock.now += 180_000;
+    expect(await say(fresh, '/公布', G('A'))).toBe(NO_SESSION_KEPT_TEXT);
+    expect(repo.loads).toBe(loads + 1);
+    await fresh.persist.flush();
+    expect(repo.sha).toBe(sha);
+  });
+
+  it('開機後自己排好回頭讀的時間（5 分、10 分）', async () => {
     vi.useFakeTimers({ now: T0 });
     const repo = new FakeRepo();
     repo.text = snapshotToFileText(emptySnapshot(), T0);
@@ -489,7 +518,7 @@ describe('兩台伺服器同時活著（Render 先開新的、再關舊的）', 
     servers.push({ engine, persist, logs: [] });
     await persist.restore();
     expect(repo.loads).toBe(1);
-    for (const [ms, loads] of [[44_000, 1], [2_000, 2], [75_000, 3], [180_000, 4], [300_000, 5], [3_600_000, 5]]) {
+    for (const [ms, loads] of [[299_000, 1], [2_000, 2], [300_000, 3], [3_600_000, 3]]) {
       await vi.advanceTimersByTimeAsync(ms);
       expect(repo.loads).toBe(loads);
     }

@@ -655,17 +655,18 @@ export class SimEngine {
     if (!SIM_CONFIG.commandsEnabled) return null;
     // 剛重啟、進行中的題目還在讀回來：先等一下；還沒好就請他再打一次（不能回「你沒有題目」——題目可能正要讀回來）。
     const persistence = this.opts.persistence;
-    if (persistence && !persistence.isReady() && cmd.kind !== 'help') {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        persistence.restore(),
-        new Promise<void>((resolve) => { timer = setTimeout(resolve, this.opts.restoreWaitMs ?? SIM_RESTORE_WAIT_MS); timer.unref?.(); }),
-      ]);
-      if (timer) clearTimeout(timer);
+    if (persistence && cmd.kind !== 'help') {
+      const waitMs = this.opts.restoreWaitMs ?? SIM_RESTORE_WAIT_MS;
       if (!persistence.isReady()) {
-        // 看不懂的 /派、/區間（LINE 打字，可能只是聊天）照舊不回。
-        if (cmd.kind === 'usage' && cmd.command !== 'start' && !req.explicit) return null;
-        return { text: RESTORING_TEXT, kind: 'restoring', commit: NOOP, sessionOpen: false };
+        await atMost(persistence.restore(), waitMs);
+        if (!persistence.isReady()) {
+          // 看不懂的 /派、/區間（LINE 打字，可能只是聊天）照舊不回。
+          if (cmd.kind === 'usage' && cmd.command !== 'start' && !req.explicit) return null;
+          return { text: RESTORING_TEXT, kind: 'restoring', commit: NOOP, sessionOpen: false };
+        }
+      } else if (persistence.inHandover()) {
+        // 剛開機的幾分鐘，舊的那台伺服器可能還在收指令：先看一眼存檔有沒有被它改過（沒改過就沒事）。
+        await atMost(persistence.catchUp(), waitMs);
       }
     }
     // LINE 重送同一個事件，而第一次的回覆已經送出：不再回（也不走第二步）。在決定要動哪一題之前看：
@@ -1082,6 +1083,13 @@ export class SimEngine {
       },
     };
   }
+}
+
+/** 等 `p`，最久 `ms` 毫秒（到時間就不等了，`p` 照樣繼續）。 */
+async function atMost(p: Promise<void>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([p, new Promise<void>((resolve) => { timer = setTimeout(resolve, ms); timer.unref?.(); })]);
+  if (timer) clearTimeout(timer);
 }
 
 /** 作答的人（`平台:使用者`，雜湊；LINE 群組事件沒有使用者 id 時大家共用 `*`）。只用來數第幾位，不寫進任何回覆。 */

@@ -13,8 +13,11 @@
  *   - 寫：有變動才寫，最多每 25 秒一次（變動後先等 2 秒）；只有「最後一次動的時間」變了不單獨寫。
  *   - 關機：SIGTERM 時把還沒寫的寫完（flush()；server 的 index.ts 接 SIGTERM）。
  *   - 新舊兩台伺服器會同時活一小段（Render 先開新的、再關舊的）：舊的關機前最後寫的那一次，新的那台可能已經
- *     讀過檔案了。所以新的那台開機後再回頭讀幾次（45 秒、2 分、5 分、10 分），跟自己手上的合併（mergeSnapshots：
- *     每一題取比較晚動過的那一份；已經 /公布、/結束 的不會被舊的一份救回來）。寫入衝突時也是同一個合併。
+ *     讀過檔案了。所以新的那台開機後的 3 分鐘內，每個模擬指令回答之前先看一眼檔案有沒有被改過（catchUp()；
+ *     沒改過就什麼都不做），之後在 5 分、10 分再各看一次；改過就跟自己手上的合併（mergeSnapshots：每一題取
+ *     比較晚動過的那一份；已經 /公布、/結束 的不會被舊的一份救回來）。寫入衝突時也是同一個合併。
+ *     已知的限制：那一小段時間裡，同一題的指令如果兩台輪流收到（Discord 兩台都連著時才會），較早那一台多記的
+ *     那一步會被較晚動過的那一份蓋掉——整份取代，不逐筆合併答案。
  *   - 檔案上限 600 KB（GitHub 讀檔上限 1 MB）；放不下時最久沒動的題目不存，改記成「沒能接回來」。
  *   - 存檔格式的版本不同、檔案不在、讀不到 → 從空的開始，之後沒有題目的人打指令時講明「伺服器更新過、題目沒留下來、
  *     怎麼重開」（replies.ts restartLostText）。
@@ -38,6 +41,8 @@ const PERSIST_EVENTS_MAX = 300;
 const PERSIST_ENDED_MAX = 300;
 /** 每個 GitHub 請求最久等多久。 */
 const REQUEST_TIMEOUT_MS = 8_000;
+/** 開機後多久以內，舊的那台伺服器可能還活著、還在收指令（這段時間每個模擬指令先看一眼檔案）。 */
+const HANDOVER_MS = 3 * 60 * 1000;
 
 /** 聊天室／使用者／LINE 事件代號的雜湊（12 碼）：記憶體和存檔裡都只放這個。 */
 export function simIdHash(id: string): string {
@@ -297,6 +302,8 @@ export interface SimPersistenceOptions {
   loadRetryDelaysMs?: readonly number[];
   /** 開機後隔多久回頭再讀一次（毫秒；接住舊伺服器關機前最後寫的那一次）。 */
   catchUpDelaysMs?: readonly number[];
+  /** 開機後多久以內每個模擬指令先看一眼檔案（毫秒；0 = 不看）。 */
+  handoverMs?: number;
   logger?: { info: (m: string) => void; warn: (m: string) => void };
 }
 
@@ -316,6 +323,15 @@ export interface SimPersistenceStatus {
   pending: boolean;
 }
 
+/** 兩份內容「題目、結束紀錄」一不一樣（只看 key、時間、version；LINE 事件代號那些不算）。 */
+function signature(snap: SimStoreSnapshot): string {
+  return JSON.stringify([
+    snap.sessions.map((s) => `${s.key}|${s.lastActiveAt}|${s.version}`).sort(),
+    snap.ended.map(([k, e]) => `${k}|${e.at}`).sort(),
+    snap.closed.map(([k, at]) => `${k}|${at}`).sort(),
+  ]);
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms).unref?.(); });
 
 export class SimPersistence {
@@ -330,6 +346,8 @@ export class SimPersistence {
   private outcome: RestoreOutcome | null = null;
   private restoring: Promise<void> | null = null;
   private readonly bootAt: number;
+  private readyAt = Number.NEGATIVE_INFINITY;
+  private readonly handoverMs: number;
   /** 有任何還沒寫的變動；`wanted` = 其中有值得馬上排一次寫的。 */
   private dirty = false;
   private wanted = false;
@@ -350,6 +368,7 @@ export class SimPersistence {
     this.firstDelayMs = opts.firstDelayMs ?? SIM_PERSIST_FIRST_DELAY_MS;
     this.maxBytes = opts.maxBytes ?? SIM_PERSIST_MAX_BYTES;
     this.logger = opts.logger ?? { info: (m) => console.log(`[sim] ${m}`), warn: (m) => console.warn(`[sim] ${m}`) };
+    this.handoverMs = opts.handoverMs ?? HANDOVER_MS;
     this.bootAt = this.now();
     if (!this.backend) this.outcome = 'memory-only';
   }
@@ -372,6 +391,14 @@ export class SimPersistence {
   /** 重啟前的題目沒能讀回來 → 這次開機的時間；讀回來了（或沒設定存檔）→ null。 */
   lostAt(): number | null {
     return this.outcome === 'empty' || this.outcome === 'version' || this.outcome === 'unreadable' ? this.bootAt : null;
+  }
+
+  /**
+   * 剛開機、舊的那台伺服器可能還活著：這段時間每個模擬指令回答之前先 catchUp()（session.ts），不然會拿開機時
+   * 讀到的那一份回答——那之後在舊的那台開的題目、作的答，要等舊的那台關機寫檔才看得到。
+   */
+  inHandover(): boolean {
+    return !!this.backend && this.outcome !== null && !this.stopped && this.now() - this.readyAt < this.handoverMs;
   }
 
   /** 開機讀一次（重複呼叫等同一個）。從不丟錯。 */
@@ -410,32 +437,37 @@ export class SimPersistence {
       if (this.outcome === 'version') this.logger.warn('saved exercises have another format version; starting empty');
       else this.logger.info(`restored ${this.counts.restoredSessions} open exercises from ${backend.name}`);
     }
+    this.readyAt = this.now();
     // 檔案不在或版本不同：寫一份現在的（下次開機就讀得到，不會再說「沒能留下來」）。
     if (this.outcome !== 'restored') this.dirty = true;
     this.wanted = this.wanted || this.dirty;
     this.schedule();
-    for (const delay of this.opts.catchUpDelaysMs ?? [45_000, 120_000, 300_000, 600_000]) {
+    for (const delay of this.opts.catchUpDelaysMs ?? [300_000, 600_000]) {
       const t = setTimeout(() => { void this.catchUp(); }, delay);
       t.unref?.();
       this.catchUps.push(t);
     }
   }
 
-  /** 把檔案內容併進 store；版本不同 → false（不動 store）。 */
-  private adopt(json: unknown, boot: boolean): boolean {
+  /**
+   * 把檔案內容併進 store；版本不同 → false（不動 store）。'same' = 合併的結果跟檔案裡的一樣（不用寫回去），
+   * 'ahead' = 這台伺服器手上有檔案裡沒有的。
+   */
+  private adopt(json: unknown, boot: boolean): false | 'same' | 'ahead' {
     const parsed = snapshotFromFile(json);
     if (parsed === 'version' || !this.store) return false;
-    this.store.replace(mergeSnapshots(parsed.snapshot, this.store.snapshot()));
+    const merged = mergeSnapshots(parsed.snapshot, this.store.snapshot());
+    this.store.replace(merged);
     if (boot) {
       this.counts.restoredSessions = parsed.snapshot.sessions.length;
       this.counts.droppedSessions = parsed.dropped;
     }
-    return true;
+    return signature(merged) === signature(parsed.snapshot) ? 'same' : 'ahead';
   }
 
   /**
-   * 開機後回頭再讀一次：檔案在這之後被改過（舊伺服器關機前最後寫的那一次）就合併進來，再把合併的結果寫回去。
-   * 開機時讀不到的，這裡讀到了也算讀回來。
+   * 開機後回頭再讀一次：檔案在這之後被改過（舊伺服器關機前最後寫的那一次）就合併進來；這台手上有檔案裡沒有的
+   * 才排一次寫。檔案沒被改過 → 什麼都不做。開機時讀不到的，這裡讀到了也算讀回來。從不丟錯。
    */
   catchUp(): Promise<void> {
     this.queue = this.queue.then(async () => {
@@ -445,9 +477,10 @@ export class SimPersistence {
         const got = await backend.load();
         if (!got || got.version === this.version) return;
         this.version = got.version;
-        if (!this.adopt(got.json, false)) return;
+        const adopted = this.adopt(got.json, false);
+        if (!adopted) return;
         if (this.outcome === 'unreadable') this.outcome = 'restored';
-        this.touch(true);
+        if (adopted === 'ahead') this.touch(true);
       } catch {
         // 讀不到就算了：下一次再讀，或寫入衝突時再合併。
       }
