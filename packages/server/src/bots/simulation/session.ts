@@ -666,7 +666,8 @@ export class SimEngine {
         }
       } else if (persistence.inHandover()) {
         // 剛開機的幾分鐘，舊的那台伺服器可能還在收指令：先看一眼存檔有沒有被它改過（沒改過就沒事）。
-        await atMost(persistence.catchUp(), waitMs);
+        // 最久等 2.5 秒（LINE 的 webhook 等太久會重送）；等不到就照手上的回答。
+        await atMost(persistence.catchUp(), Math.min(waitMs, 2_500));
       }
     }
     // LINE 重送同一個事件，而第一次的回覆已經送出：不再回（也不走第二步）。在決定要動哪一題之前看：
