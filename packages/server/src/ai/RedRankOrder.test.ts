@@ -35,6 +35,7 @@ describe('redRankOrder', () => {
     }
   });
   it('switch off: the old production behaviour (Mordred fails too)', () => {
-    expect(card('mordred', 'P2', 3, { ...DEFAULT_AGENT_TUNING, redRankOrder: false })).toBe('fail');
+    // round 78: the baseline's R3 seat convention (redPairOne78=4) also decides this card, so switch it off too to see the old behaviour
+    expect(card('mordred', 'P2', 3, { ...DEFAULT_AGENT_TUNING, redRankOrder: false, redPairOne78: 0 })).toBe('fail');
   });
 });
