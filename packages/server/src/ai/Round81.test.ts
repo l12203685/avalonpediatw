@@ -51,7 +51,8 @@ describe('round 81 switches', () => {
     expect(parseTuningFlag('mpOwnRead81Scope=12')).toEqual({ mpOwnRead81Scope: 12 });
     expect(parseTuningFlag('oberonNormalRate81')).toEqual({ oberonNormalRate81: 0.5 });
     expect(() => parseTuningFlag('mpOwnRead81=1.5')).toThrow();
-    expect(() => parseTuningFlag('mpOwnRead81Scope=16')).toThrow();
+    expect(parseTuningFlag('mpOwnRead81Scope=22')).toEqual({ mpOwnRead81Scope: 22 });
+    expect(() => parseTuningFlag('mpOwnRead81Scope=32')).toThrow();
     expect(() => parseTuningFlag('oberonNormalRate81=-0.1')).toThrow();
   });
 });
@@ -80,6 +81,19 @@ describe('mpOwnRead81', () => {
     expect(inMpCell81(at(0.7, 1), oberon)).toBe(false);
     expect(inMpCell81(at(0.7, 2), oberon)).toBe(true);
     expect(inMpCell81(at(0.7, 2), { ...oberon, proposedTeam: ['P1', 'P3', 'P5', 'P6'] } as PlayerObservation)).toBe(true); // Oberon sees no one
+    // Bit 16: half the spots (seat / round / attempt hash), the same spot the same way every time.
+    let inHalf = 0;
+    let total = 0;
+    for (const seat of ['P2', 'P3', 'P7']) for (let fc = 0; fc < 4; fc++) {
+      const o = obs({ myPlayerId: seat, knownEvils: ['P2', 'P3', 'P7'].filter((x) => x !== seat), failCount: fc });
+      const a = inMpCell81(at(0.7, 16), o);
+      expect(inMpCell81(at(0.7, 16), o)).toBe(a);
+      if (a) expect(inMpCell81(on, o)).toBe(true);
+      inHalf += a ? 1 : 0;
+      total++;
+    }
+    expect(inHalf).toBeGreaterThan(0);
+    expect(inHalf).toBeLessThan(total);
   });
 
   it('white at P(enough reds) ≥ θ; below θ unchanged (null), or black with bit 4', () => {

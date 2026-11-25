@@ -13,7 +13,7 @@
  *   自己看得到的隊友不夠讓這隊失敗（相認紅：隊上看得到的隊友 < 要的失敗張數；奧伯倫：一律）——用自己的視角（自己的紅方資訊＋公開紀錄，
  *   `bayesTeamRedsBelow`）估 P(隊上的紅夠讓任務失敗)，≥ θ 就投白（這隊過了，隊上的紅出失敗——A1——紅方就贏）。
  *   `mpOwnRead81Scope`（位元）：1 = 相認紅；2 = 奧伯倫（角色位元都不設 = 兩種都算）；4 = 低於 θ 也照讀法投黑（不只加白：奧伯倫原本不管隊上有沒有紅都常投白）；
- *   8 = 只在第 3 局（不含第 4 局 1:2）。
+ *   8 = 只在第 3 局（不含第 4 局 1:2）；16 = 一半做一半不做（第 1C 節；依座位、局、第幾次提議雜湊，同一個局面每次一樣）。
  *   不碰：藍方已兩勝的局面（硬約束 `oberonMatchPoint`、相認紅的 `redVoteCritical` 在前面判）、看得到夠多隊友的相認紅（`redKeyWhite`／`redKeyCrowd69`）、
  *   自己的提議（`leaderSelfApprove`）、強制局、紅方持湖者言行一致、被咬的奧伯倫。
  * - `oberonNormalRate81 = q`（0～1）：`oberonNormalVote` 開著時（真人桌），奧伯倫第 3 局起不在隊上只以比例 q 照「坐在這個位置的忠臣」投
@@ -52,7 +52,13 @@ export function inMpCell81(tuning: Readonly<AgentTuning>, obs: PlayerObservation
   const team = obs.proposedTeam ?? [];
   if (team.includes(obs.myPlayerId)) return false;
   const seen = oberon ? 0 : team.filter((id) => obs.knownEvils.includes(id)).length;
-  return seen < failsRequired(obs, round);
+  if (seen >= failsRequired(obs, round)) return false;
+  if ((scope & 16) !== 0) {
+    let h = 0x811c9dc5;
+    for (const ch of `${obs.myPlayerId}|${round}|${obs.failCount ?? 0}|mp81`) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+    if ((h % 10000) / 10000 >= 0.5) return false;
+  }
+  return true;
 }
 
 /** 紅方自己視角 P(隊上的紅夠讓這個任務失敗)。 */

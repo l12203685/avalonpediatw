@@ -1489,7 +1489,7 @@ export interface AgentTuning {
    * 自己的視角 P(隊上的紅夠讓任務失敗) ≥ 這個值就投白。0 = 關。
    */
   mpOwnRead81: number;
-  /** 第 81 回合：`mpOwnRead81` 的範圍（位元）：1 = 相認紅、2 = 奧伯倫（都不設 = 兩種）；4 = 低於門檻也照讀法投黑；8 = 只在第 3 局。 */
+  /** 第 81 回合：`mpOwnRead81` 的範圍（位元）：1 = 相認紅、2 = 奧伯倫（都不設 = 兩種）；4 = 低於門檻也照讀法投黑；8 = 只在第 3 局；16 = 一半做一半不做（雜湊）。 */
   mpOwnRead81Scope: number;
   /** 第 81 回合：`oberonNormalVote` 開著時，奧伯倫第 3 局起不在隊上只以這個比例照忠臣投（其他時候照基準線的投法）。0 = 關（整個開或關照原本）。 */
   oberonNormalRate81: number;
@@ -3735,7 +3735,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'mpOwnRead81Scope') {
     const value = raw === undefined ? 0 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 15) throw new Error(`mpOwnRead81Scope needs an integer 0–15, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 31) throw new Error(`mpOwnRead81Scope needs an integer 0–31, got "${raw}"`);
     return { mpOwnRead81Scope: value };
   }
   if (name === 'redR5Red71Scope') {
