@@ -25,6 +25,8 @@ export interface ViewpointTerm53 {
   /** 實際的隊。 */
   actual: number;
   forced: boolean;
+  /** 第 77 回合：第 1、2 局非強制的提議 = 那一局的位元（第 1 局 1、第 2 局 2）；其他 0／沒有。 */
+  early?: number;
 }
 
 /** 觀察者以外的每一次提議的隊長視角項（`skipForced`：不讀第 5 次強制提議）。 */
@@ -32,7 +34,8 @@ export function viewpointTerms53(obs: PlayerObservation, skipForced = false, bet
   const reads = proposalReads50(obs);
   const me = obs.myPlayerId;
   const out: ViewpointTerm53[] = [];
-  for (const r of reads) {
+  for (let i = 0; i < reads.length; i++) {
+    const r = reads[i];
     if (!r || r.leader === me || (skipForced && r.forced)) continue;
     let mx = -Infinity;
     for (const x of r.logp) if (x > mx) mx = x;
@@ -40,7 +43,8 @@ export function viewpointTerms53(obs: PlayerObservation, skipForced = false, bet
     let z = 0;
     for (const x of e) z += x;
     for (let k = 0; k < e.length; k++) e[k] /= z;
-    out.push({ lb: r.bitOf(r.leader), masks: r.masks, pl: e, actual: r.actualMask, forced: r.forced });
+    const v = obs.voteHistory[i];
+    out.push({ lb: r.bitOf(r.leader), masks: r.masks, pl: e, actual: r.actualMask, forced: r.forced, early: v && !r.forced && v.attempt < 5 && v.round <= 2 ? v.round : 0 });
   }
   return out;
 }
@@ -57,14 +61,18 @@ export const R53 = 0.05;
 
 /**
  * 世界 w（紅的位元遮罩）下全部隊長視角項的對數權重。`thumbs`：觀察者是派西時兩根拇指的位元（好的那根是梅林）；0 = 不知道誰是梅林。
- * `scale` 乘在 q、r 上（1 = 擬合值）。
+ * `scale` 乘在 q、r 上（1 = 擬合值）。`cover`（第 77 回合）：第 1、2 局非強制的提議（`rounds` 的位元：1 = 第 1 局、2 = 第 2 局）好人隊長的 q
+ * 以 `share` 的比例換成忠臣的值（梅林在那些提議照忠臣的流程派）；不給 = 照舊。
  */
-export function viewpointLog53(terms: readonly ViewpointTerm53[], w: number, scale: number, thumbs = 0): number {
+export function viewpointLog53(terms: readonly ViewpointTerm53[], w: number, scale: number, thumbs = 0, cover?: { share: number; rounds: number }): number {
   let s = 0;
   const r = Math.min(R53 * scale, 0.99);
   for (const t of terms) {
     if ((w & t.lb) === 0) {
-      const q = Math.min((thumbs !== 0 ? ((thumbs & t.lb) !== 0 ? Q53_MERLIN : Q53_OTHER) : Q53_MIX) * scale, 0.99);
+      const q0 = thumbs !== 0 ? ((thumbs & t.lb) !== 0 ? Q53_MERLIN : Q53_OTHER) : Q53_MIX;
+      // 第 77 回合 `merlinCover77`：梅林在第 1、2 局非強制的提議以 share 的比例照忠臣的流程派——那些提議裡「知道一些東西的好人」的比例往忠臣的值靠。
+      const covered = cover !== undefined && cover.share > 0 && (t.early ?? 0) > 0 && (cover.rounds & (t.early ?? 0)) !== 0 && q0 > Q53_OTHER;
+      const q = Math.min((covered ? q0 + (Q53_OTHER - q0) * Math.min(cover!.share, 1) : q0) * scale, 0.99);
       if (!(q > 0)) continue;
       let z = 0;
       for (let k = 0; k < t.masks.length; k++) if ((w & t.masks[k]) === 0) z += t.pl[k];

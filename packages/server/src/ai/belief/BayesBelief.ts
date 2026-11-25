@@ -395,6 +395,12 @@ export interface BayesOptions {
   /** With `merlinEarlyMix`: only this round's doomed proposals are mixed (the other round's stay strict); 0 / absent = both (round 22 `merlinDoomedPublic` 3 / 4). */
   merlinEarlyMixRound?: number;
   /**
+   * Round 77 `merlinCover77` (with `merlinEarlyMix`): the generic share of the Merlin candidate's R1–R2 non-forced proposals reads with the
+   * good-leader row of the proposal table — there Merlin sends the team a loyal of his seat sends — instead of the Merlin row (which says a
+   * Merlin all but never holds a red, and would turn the covered proposals into evidence against the true Merlin). Absent = the Merlin row.
+   */
+  merlinEarlyGood?: boolean;
+  /**
    * `beliefKeyVoteCells` (round 17): key-round votes (R3+, red has two wins) read from the bot table's `voteKey` cells — since
    * round 16 the reds white a key team off the team only when it can pass, so key-round votes differ from the other R3+ votes.
    */
@@ -520,7 +526,7 @@ export interface BayesOptions {
    */
   rationality50?: { scale: number; noVote: boolean; weights?: 'all' };
   /** Round 53 `viewpoint53`: blue seats only, every other seat's proposal read from its leader's public-loyal viewpoint (`Viewpoint53.ts`). */
-  viewpoint53?: { scale: number; skipForced: boolean; power?: number };
+  viewpoint53?: { scale: number; skipForced: boolean; power?: number; cover?: { share: number; rounds: number } };
   /**
    * Round 55 `copyDiscount55` → this weight = 1 − d (site owner 2026-11-19「第二局的任務結果資訊 跟第一局任務結果資訊要合起來看」): blue seats only. A rejected,
    * non-forced proposal whose team holds the whole latest clean successful mission team (a re-proposal / copy of it) is read with weight w
@@ -785,6 +791,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const early = opts.merlinEarlyStrict === true;
   const earlyMix = early ? Math.min(Math.max(opts.merlinEarlyMix ?? 1, 0), 1) : 1;
   const mixRound = earlyMix < 1 ? opts.merlinEarlyMixRound ?? 0 : 0;
+  const earlyGood = opts.merlinEarlyGood === true;
   const keyCells = opts.keyVoteCells === true;
   const morganaR1 = opts.morganaR1 === true && percival;
   const aloneCells = opts.redAloneCells === true;
@@ -820,7 +827,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const recMix = rec >= 4;
   // Without tempering every term goes straight into lp in record order (the same floating-point sums as before round 26).
   const tempered = temperV < 1 || temperP < 1;
-  const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
+  const key = `${rec > 0 ? `R${rec}` : ''}${policy ? 'Pv' : ''}${temperV < 1 ? `V${temperV}` : ''}${temperP < 1 ? `P${temperP}` : ''}${biteMode > 0 ? `B${biteMode}` : ''}${aloneCells ? 'A' : ''}${morganaR1 ? 'g' : ''}${thumbs.length > 0 ? 't' : ''}${strict.length > 0 ? 's' : ''}${mixMode > 0 ? `m${mixMode}` : ''}${zone ? 'z' : ''}${early ? 'e' : ''}${earlyMix < 1 ? `q${earlyMix}r${mixRound}${earlyGood ? 'G' : ''}` : ''}${keyCells ? 'k' : ''}${mix > 0 ? `b${mix}${TB === TB_NEXT ? 'n' : TBM === TB_NEXT ? 'M' : ''}` : ''}${partsKey > 0 ? `S${partsKey}` : ''}${mixV !== mix || mixP !== mix ? `v${mixV}p${mixP}m${mixM}l${mixL}` : ''}`;
   // Round 38 `beliefPendingProposal`: the proposal being voted on, as one more proposal record without votes.
   // Round 39: blue seats only — a red seat's own reading, its loyal-view vote (`redLoyalView`) and the views it projects for other
   // seats (`seatTeam` stays the deciding seat's camp) stay as they were: red frozen. (An observation without `seatTeam` falls back to its
@@ -849,7 +856,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
   const mr56 = blueSeat && opts.missionRole56 === true && obs.allPlayerIds.length === 10;
   // Round 68 `missionScore68`: blue seats, 10 players (the human table is 10-player).
   const ms68 = blueSeat && obs.allPlayerIds.length === 10 ? opts.missionScore68 ?? 0 : 0;
-  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${ms68 > 0 ? `|ms${ms68}` : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${copyCap > 0 ? `|cc${copyCap}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
+  const fullKey = `${blueVT > 0 ? `|bvt${blueVT}` : ''}${mr56 ? '|mr' : ''}${ms68 > 0 ? `|ms${ms68}` : ''}${copyW !== 1 ? `|cd${copyW}` : ''}${copyRW !== 1 ? `|cr${copyRW}` : ''}${copyFreq ? '|cf' : ''}${copyCap > 0 ? `|cc${copyCap}` : ''}${vp53 ? `|vp${vp53.scale},${vp53.skipForced ? 1 : 0},${vp53.power ?? 1}${vp53.cover ? `,c${vp53.cover.share}r${vp53.cover.rounds}` : ''}` : ''}${key}${rec > 0 ? `|L0${level0Signature(opts.recursiveLevel0)}` : ''}${pending ? '|pend' : ''}${lakeCal !== 1 ? `|lc${lakeCal}` : ''}${lakeIso ? '|iso' : ''}${lakePick > 0 ? `|lp${lakePick}` : ''}${rPow !== 1 ? `|rp${rPow}` : ''}${tremble > 0 ? `|tr${tremble}${trembleMask !== 7 ? `m${trembleMask}` : ''}` : ''}${rat50 > 0 ? `|ra${rat50}${rat50W}` : ''}${susp50 > 0 ? `|ls${susp50}` : ''}`;
   let store = caches.get(fullKey);
   if (!store) { store = new WeakMap(); caches.set(fullKey, store); }
   const hit = store.get(obs);
@@ -971,7 +978,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
             const redsAvail = sizeOf(w & others);
             const kk = sizeOf(w & teamMask & ~p.leaderBit);
             const ng = choose(redsAvail, kk) * choose(sizeOf(others) - redsAvail, v.team.length - 1 - kk);
-            const genericP = ng > 0 ? proposalProbIx(campIx(p.leaderBit), p.r3, kk) / ng : 0;
+            const genericP = ng > 0 ? proposalProbIx(earlyGood ? 0 : campIx(p.leaderBit), p.r3, kk) / ng : 0;
             if (tempered) lpp += Math.log(earlyMix * strictP + (1 - earlyMix) * genericP); else lp += Math.log(earlyMix * strictP + (1 - earlyMix) * genericP);
           } else if (tempered) {
             lpp += Math.log(strictP);
@@ -1064,7 +1071,7 @@ function posteriorWith(obs: PlayerObservation, opts: Readonly<BayesOptions>): Po
       lp += Math.log(pick * l.n);
     }
     for (const t of rat50Terms) if ((w & t.b) !== 0) lp += t.a;
-    if (vp53) lp += (vp53.power ?? 1) * viewpointLog53(vp53Terms, w, vp53.scale, vp53Thumbs);
+    if (vp53) lp += (vp53.power ?? 1) * viewpointLog53(vp53Terms, w, vp53.scale, vp53Thumbs, vp53.cover);
     for (const l of susp50Terms) {
       if ((w & l.hb) === 0) continue;
       const kRed = sizeOf(w & l.valid);
@@ -1161,12 +1168,12 @@ const shareCache = new WeakMap<Posterior, Map<string, number>>();
  * round 22 `merlinDoomedPublic` ≥ 2, where Merlin follows the public view there — as a generic blue's (2), half and half
  * (2 + `merlinDoomedPublicHalf`), or generic in R1 only (3) / R2 only (4).
  */
-function merlinEarlyOptions(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'merlinEarlyStrict' | 'merlinEarlyMix' | 'merlinEarlyMixRound'> {
+function merlinEarlyOptions(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'merlinEarlyStrict' | 'merlinEarlyMix' | 'merlinEarlyMixRound' | 'merlinEarlyGood'> {
   const strict = t.merlinLoyalStyle === true;
   // Round 77 `merlinCover77` (Round77.ts): Merlin sends the loyal pipeline's team on a share q of his R1–R2 non-forced proposals — those read
   // 1 − q strict, q generic (the round bits of `merlinCoverScope77` pick the round). Off = null, nothing changes.
   const cover77 = strict ? merlinCoverMix77(t) : null;
-  if (cover77) return { merlinEarlyStrict: true, merlinEarlyMix: cover77.mix, merlinEarlyMixRound: cover77.round };
+  if (cover77) return { merlinEarlyStrict: true, merlinEarlyMix: cover77.mix, merlinEarlyMixRound: cover77.round, merlinEarlyGood: true };
   const m = t.merlinDoomedPublic ?? 0;
   // Round 24 `merlinDoomedAvoidMix`: a share q strict, 1 − q generic (Merlin's `merlinDoomedAvoid` teams sometimes hold a seen red).
   const q = t.merlinDoomedAvoidMix ?? 0;
@@ -1255,9 +1262,11 @@ function recalibOf(t: Readonly<Partial<AgentTuning>>): Pick<BayesOptions, 'recal
  * bit 2 = it replaces the proposal tables (proposal powers → 0); bit 4 = the forced fifth proposals are not read by it; bit 8 = q, r × 0.5.
  * Round 53b `viewpointPow53`: a power (0, 1] on the whole viewpoint term (the proposals are not independent statements; same idea as `beliefTemper`); 0 / 1 = none.
  */
-function withViewpoint53(o: BayesOptions, x: number, pow = 0): BayesOptions {
+function withViewpoint53(o: BayesOptions, x: number, pow = 0, cover: { mix: number; round: number } | null = null): BayesOptions {
   if ((x & 1) === 0) return o;
-  const out: BayesOptions = { ...o, viewpoint53: { scale: (x & 8) !== 0 ? 0.5 : 1, skipForced: (x & 4) !== 0, ...(pow > 0 && pow !== 1 ? { power: pow } : {}) } };
+  // Round 77 `merlinCover77`: the R1–R2 non-forced proposals Merlin sends as a loyal are read with the loyal's q (`Viewpoint53.viewpointLog53`).
+  const cover77 = cover && cover.mix < 1 ? { cover: { share: 1 - cover.mix, rounds: cover.round === 0 ? 3 : cover.round } } : {};
+  const out: BayesOptions = { ...o, viewpoint53: { scale: (x & 8) !== 0 ? 0.5 : 1, skipForced: (x & 4) !== 0, ...(pow > 0 && pow !== 1 ? { power: pow } : {}), ...cover77 } };
   if ((x & 2) !== 0) {
     out.proposalTemper = 1e-9;
     if (out.leadProposalTemper !== undefined) out.leadProposalTemper = 1e-9;
@@ -1310,7 +1319,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.loyalCopyCap63 ?? 0) > 0 ? { copyCap63: t.loyalCopyCap63 } : {}),
     ...((t.missionRole56 ?? 0) > 0 ? { missionRole56: true } : {}),
     ...((t.missionScore68 ?? 0) > 0 ? { missionScore68: t.missionScore68 } : {}),
-  }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0);
+  }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0, t.merlinLoyalStyle === true ? merlinCoverMix77(t) : null);
 }
 
 /**

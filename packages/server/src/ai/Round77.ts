@@ -15,8 +15,10 @@
  * `merlinCoverScope77`（位元；0 = 1＋2）：1 = 第 1 局；2 = 第 2 局；4 = 那一隊帶兩個以上看得到的紅就照原本的派法；
  * 8 = 這一局他前面已經有一次非強制的提議帶過看得到的紅，就照原本的派法（一局最多一次）。
  *
- * 藍方的讀法跟著變：`merlinCover77` 開的時候，忠臣／派西讀「可能是梅林的人」第 1、2 局非強制的提議，嚴格模型（不放看得到的紅）的比重
- * 是 1 − q，其餘照一般藍方的派隊表（`BayesOptions.merlinEarlyMix`，`merlinCoverMix77`）。
+ * 藍方的讀法跟著變（`merlinCoverMix77`）：`merlinCover77` 開的時候，忠臣／派西讀好人隊長第 1、2 局非強制的提議，「知道一些東西的好人」的比例
+ * 以 q 的比例換成忠臣的值（現行預設讀提議用的隊長視角讀法，`Viewpoint53.viewpointLog53` 的 `cover`：派西眼中好的那根拇指原本用梅林的 0.455，
+ * 蓋住的提議用忠臣的 0.077）。不這樣讀，梅林照忠臣派的那一隊一帶到看得到的紅，派西維爾就會把隊上的人讀得太乾淨、把真梅林那根拇指讀成莫甘娜。
+ * 舊的嚴格讀法（`BayesOptions.merlinEarlyMix`；現行預設的提議次方是 0，不會用到）也一樣：嚴格模型的比重 1 − q，其餘照忠臣隊長的派隊表（`merlinEarlyGood`）。
  */
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';

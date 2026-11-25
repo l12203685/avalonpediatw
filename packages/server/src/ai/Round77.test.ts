@@ -7,7 +7,7 @@ import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { AGENT_TUNING_KEYS, DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
 import { merlinCover77Now, merlinCover77TeamOk, merlinCoverMix77, round77Stats } from './Round77';
-import { bayesOptionsOf } from './belief/BayesBelief';
+import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { tuningForOpponent } from './humanProfile';
 import { HeuristicAgent } from './HeuristicAgent';
 import { ForwardAgent } from './forward/ForwardAgent';
@@ -100,7 +100,7 @@ describe('round 77 flags', () => {
     expect(merlinCover77TeamOk(T({ merlinCover77: 1, merlinCoverScope77: 4 }), obs, ['p1', 'p2', 'p6'], [])).toBe(true);
   });
 
-  it('the blues read the Merlin candidate\'s R1–R2 non-forced proposals as 1 − q strict, q generic; off = the reading is untouched', () => {
+  it('the blues read the Merlin candidate\'s R1–R2 non-forced proposals as 1 − q strict, q as a loyal leader\'s; off = the reading is untouched', () => {
     expect(merlinCoverMix77(T())).toBeNull();
     expect(merlinCoverMix77(T({ merlinCover77: 1 }))).toEqual({ mix: 0, round: 0 });
     expect(merlinCoverMix77(T({ merlinCover77: 0.25, merlinCoverScope77: 1 }))).toEqual({ mix: 0.75, round: 1 });
@@ -113,11 +113,42 @@ describe('round 77 flags', () => {
     expect(on.merlinEarlyStrict).toBe(true);
     expect(on.merlinEarlyMix).toBe(0.5);
     expect(on.merlinEarlyMixRound).toBe(2);
+    expect(on.merlinEarlyGood).toBe(true);
+    expect(off.merlinEarlyGood).toBeUndefined();
+    // the leader-viewpoint reader (round 53; the one the current defaults read proposals with) carries the covered share and rounds
+    expect(off.viewpoint53?.cover).toBeUndefined();
+    expect(on.viewpoint53?.cover).toEqual({ share: 0.5, rounds: 2 });
+    expect(bayesOptionsOf(T({ merlinCover77: 1 })).viewpoint53?.cover).toEqual({ share: 1, rounds: 3 });
     // every other belief option is the same as with the switch off (the level-0 reader of the recursive read carries the same three)
     const strip = (o: unknown): unknown => (o && typeof o === 'object' && !Array.isArray(o)
-      ? Object.fromEntries(Object.entries(o as Record<string, unknown>).filter(([k]) => !k.startsWith('merlinEarly')).map(([k, v]) => [k, strip(v)]))
+      ? Object.fromEntries(Object.entries(o as Record<string, unknown>).filter(([k]) => !k.startsWith('merlinEarly') && k !== 'cover').map(([k, v]) => [k, strip(v)]))
       : o);
     expect(strip(on)).toEqual(strip(off));
+  });
+});
+
+describe('round 77: Percival reads a covered proposal of his Merlin thumb', () => {
+  // 派西 3 家看得到 4 家（梅林）與 5 家（莫甘娜）。1-4 由 4 家派 4·5·9——真梅林照忠臣的流程派，帶到另一根拇指。
+  const roles = ['loyal', 'loyal', 'percival', 'merlin', 'morgana', 'assassin', 'oberon', 'mordred', 'loyal', 'loyal'];
+  const g = (): ReplayGame => game(roles, [[1, 2, 9], [2, 8, 10], [3, 1, 9], [4, 5, 9], [5, 1, 2]]);
+  const pMerlin = (tuning: AgentTuning): number => {
+    const obs = buildReplayObservation(g(), 3, { kind: 'team_vote', proposal: 4 });
+    return bayesTeamClean(obs, [seatId(3), seatId(4)], bayesOptionsOf(tuning)) ?? -1;
+  };
+
+  it('off: sending the other thumb counts against him being Merlin (Merlin\'s q); on: that talk proposal reads as a loyal leader\'s', () => {
+    const off = pMerlin(T());
+    const on = pMerlin(T({ merlinCover77: 1 }));
+    expect(off).toBeGreaterThan(0);
+    expect(on).toBeGreaterThan(off + 0.03);
+    expect(on).toBeLessThan(0.6);
+    // half the proposals covered: in between
+    const half = pMerlin(T({ merlinCover77: 0.5 }));
+    expect(half).toBeGreaterThan(off);
+    expect(half).toBeLessThan(on);
+    // R2-only scope: the R1 proposal still reads as before
+    expect(pMerlin(T({ merlinCover77: 1, merlinCoverScope77: 2 }))).toBeCloseTo(off, 9);
+    expect(pMerlin(T({ merlinCover77: 1, merlinCoverScope77: 1 }))).toBeCloseTo(on, 9);
   });
 });
 
@@ -156,9 +187,9 @@ describe('round 77: Merlin leads a talk proposal as the loyal of his seat would'
     const off = merlinTeamAt(T(), g, 3);
     expect(off).toHaveLength(3);
     expect(off).toContain(4);
-    // the loyal of the same seat: the same game with seat 4 dealt a loyal (he sees nobody)
+    // the loyal of the same seat: the same game with seat 4 dealt a loyal (he sees nobody), under the same switches
     const loyalRoles = roles.map((r, i) => (i === 3 ? 'loyal' : r));
-    const loyalTeam = merlinTeamAt(T(), game(loyalRoles, [...earlier, [4, 1, 2]]), 3);
+    const loyalTeam = merlinTeamAt(T({ merlinCover77: 1 }), game(loyalRoles, [...earlier, [4, 1, 2]]), 3);
     const before = { ...round77Stats };
     const on = merlinTeamAt(T({ merlinCover77: 1 }), g, 3);
     expect(round77Stats.applies).toBe(before.applies + 1);
@@ -169,7 +200,7 @@ describe('round 77: Merlin leads a talk proposal as the loyal of his seat would'
     expect(on).not.toEqual(off);
     // R1 only / R2 only bits: this is round 1
     expect(merlinTeamAt(T({ merlinCover77: 1, merlinCoverScope77: 2 }), g, 3)).toEqual(off);
-    expect(merlinTeamAt(T({ merlinCover77: 1, merlinCoverScope77: 1 }), g, 3)).toEqual(on);
+    expect(merlinTeamAt(T({ merlinCover77: 1, merlinCoverScope77: 1 }), g, 3)).toEqual(merlinTeamAt(T({ merlinCover77: 1, merlinCoverScope77: 1 }), game(loyalRoles, [...earlier, [4, 1, 2]]), 3));
   }, 120000);
 
   it('the forced fifth proposal is a mission: untouched, and it holds no red he sees', () => {
@@ -194,7 +225,8 @@ describe('round 77: Merlin leads a talk proposal as the loyal of his seat would'
       const r = [...rest.slice(0, 3), 'merlin', ...rest.slice(3)];
       const pick = (leader: number, a: number, b: number): number[] => [leader, ((leader + a - 1) % 10) + 1, ((leader + b - 1) % 10) + 1];
       const teams = [pick(1, 4 + (k % 3), 7), pick(2, 3 + (k % 3), 7), pick(3, 2 + (k % 2), 5), [4, 1, 2]];
-      const loyalTeam = merlinTeamAt(T(), game(r.map((role) => (role === 'merlin' ? 'loyal' : role)), teams), 3);
+      // the loyal of the same seat under the same switches (the blues' reading of talk proposals moves with the switch)
+      const loyalTeam = merlinTeamAt(T({ merlinCover77: 1 }), game(r.map((role) => (role === 'merlin' ? 'loyal' : role)), teams), 3);
       const off = merlinTeamAt(T(), game(r, teams), 3);
       const before = round77Stats.sent;
       const on = merlinTeamAt(T({ merlinCover77: 1 }), game(r, teams), 3);
