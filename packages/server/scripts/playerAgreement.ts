@@ -131,17 +131,17 @@ function parseArgs(argv: string[]): Args {
   return a;
 }
 
-type Dataset = DatasetHeader & { games: DatasetTuple[]; players: string[]; aliases?: Record<string, string> };
+export type Dataset = DatasetHeader & { games: DatasetTuple[]; players: string[]; aliases?: Record<string, string> };
 
 /** 一局要重播的座位：[資料集 id, [[玩家, 座位], ...]]。 */
 type Job = [string, Array<[string, number]>];
 
-function opponentOf(g: DatasetReplayGame): OpponentType {
+export function opponentOf(g: DatasetReplayGame): OpponentType {
   // 真人局：桌上一定有真人；層照開打前的 S（資料集 lineup），S 不明 = 一般真人桌。
   return opponentTypeOfTable({ humans: 9, tableS: g.s });
 }
 
-function makeAgentFor(profile: Profile, opp: OpponentType): (id: string) => HeuristicAgent {
+export function makeAgentFor(profile: Profile, opp: OpponentType): (id: string) => HeuristicAgent {
   // 同 GameServer：真人桌 = new HeuristicAgent(id, _, _, PROFILE_OVERRIDES[type])；機器人桌 = new HeuristicAgent(id)。
   return profile === 'human'
     ? (id): HeuristicAgent => new HeuristicAgent(id, undefined, undefined, PROFILE_OVERRIDES[opp])
@@ -167,7 +167,7 @@ function replayJob(g: DatasetReplayGame, player: string, seat: number, profile: 
   return out;
 }
 
-function loadJson<T>(p: string): T {
+export function loadJson<T>(p: string): T {
   return JSON.parse(fs.readFileSync(p, 'utf8')) as T;
 }
 

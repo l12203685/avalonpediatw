@@ -87,7 +87,12 @@ export function withSeededRandom<T>(seed: string, fn: () => T): T {
 
 // ── Decision outcomes ──────────────────────────────────────────
 
-export type DecisionType = 'team' | 'vote' | 'quest' | 'lakeTarget' | 'lakeClaim' | 'assassinate';
+/**
+ * `questOpen` (2026-11-25, only with `ReplayOptions.openQuestCards`): an evil seat on a mission whose own card
+ * cannot be told from the log (some but not all of the reds on the team failed). `human` = 'unknown'; the outcome
+ * carries `humanFailShare` (fail cards / reds on the team) so rates can still be compared in aggregate.
+ */
+export type DecisionType = 'team' | 'vote' | 'quest' | 'questOpen' | 'lakeTarget' | 'lakeClaim' | 'assassinate';
 
 export interface DecisionOutcome {
   gameId: string;
@@ -113,6 +118,8 @@ export interface DecisionOutcome {
   humanNonDefault?: boolean;
   /** Vote only: agent cast an anomaly. */
   agentNonDefault?: boolean;
+  /** questOpen only: fail cards played / reds on the team (the expected share of this seat's card being a fail). */
+  humanFailShare?: number;
   /** Assassinate only: the human / agent target was Merlin. */
   humanHitMerlin?: boolean;
   agentHitMerlin?: boolean;
@@ -265,6 +272,12 @@ export function ruleAssassinate(obs: PlayerObservation): string {
 
 export interface ReplayOptions {
   makeAgent: AgentFactory;
+  /**
+   * Also emit a `questOpen` outcome for an evil seat whose mission card is not pinned (default off: the scored
+   * decision points stay exactly the same; the agent's memory is rebuilt from the observation, so the extra call
+   * does not change its later decisions).
+   */
+  openQuestCards?: boolean;
 }
 
 /**
@@ -369,6 +382,24 @@ export function replaySeat(game: ReplayGame, seat: number, opts: ReplayOptions):
         ruleMatch: ruleQuest(obs) === pinned ? 1 : 0,
         situation: `quest R${round} ${role} ${evilOnTeam === 1 ? 'solo' : `${evilOnTeam} evil on team`}`,
         divergence: agentCard === pinned ? 'match' : `human ${pinned} / agent ${agentCard}`,
+      });
+    } else if (opts.openQuestCards && side === 'evil' && quest.teamSeats.includes(seat)) {
+      const obs = buildReplayObservation(game, seat, { kind: 'quest_vote', round });
+      const action = act(obs, `quest-${round}`);
+      const agentCard = action.type === 'quest_vote' ? action.vote : 'success';
+      const evilOnTeam = quest.teamSeats.filter((s) => campOf(game.seatRoles[s - 1]) === 'evil').length;
+      out.push({
+        ...base,
+        type: 'questOpen',
+        round,
+        human: 'unknown',
+        agent: agentCard,
+        match: false,
+        defaultMatch: 0,
+        ruleMatch: 0,
+        humanFailShare: quest.failCount / evilOnTeam,
+        situation: `quest R${round} ${role} ${evilOnTeam} evil on team, card not pinned`,
+        divergence: 'unknown',
       });
     }
 
