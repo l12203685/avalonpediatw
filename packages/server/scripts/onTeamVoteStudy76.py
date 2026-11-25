@@ -134,28 +134,37 @@ def part_base():
         print(f'| {why} | {"贊成" if v else "反對"} | {o[0]} | {pct(o[1], o[0])} | {pct(o[2], o[0])} |')
 
 
+def gain(x):
+    """量尺上「反對 − 贊成」的平均優勢差（pp／票）± 標準誤（以局為集群）；沒有 `--pr` 回空白。"""
+    x = [r for r in x if (r['gi'], r['seat'], r['pi']) in pr]
+    if not x:
+        return ''
+    m, hw = cluster(x, lambda r: pr[(r['gi'], r['seat'], r['pi'])]['R'] - pr[(r['gi'], r['seat'], r['pi'])]['A'])
+    return f'{m:+.2f} ± {hw / 1.96:.2f}'
+
+
 def part_curve():
     for name, f in [('第 4 局在隊上（全部）', lambda r: True), ('比分 1:2（紅方已兩勝）', lambda r: r['rw'] == 2), ('比分 2:1', lambda r: r['rw'] == 1)]:
         rs = [r for r in rows if r['on'] and r['round'] == 4 and r['H_p2'] is not None and f(r)]
         print(f'\n### {name}：照 H 的後驗 P(隊上的紅 ≥ 2) 分格（{len(rs)} 票）\n')
-        print('| P(隊上的紅 ≥ 2) | 票數 | 任務真的會失敗 | 真人反對 | 強者座位（PR ≥ 70）反對 | H 反對 | A 反對 |')
-        print('|---|---|---|---|---|---|---|')
+        print('| P(隊上的紅 ≥ 2) | 票數 | 任務真的會失敗 | 真人反對 | 強者座位（PR ≥ 70）反對 | H 反對 | A 反對 | 量尺：反對 − 贊成（pp／票 ± 標準誤） |')
+        print('|---|---|---|---|---|---|---|---|')
         for lo in range(10):
             x = [r for r in rs if min(9, int(r['H_p2'] * 10)) == lo]
             if not x:
                 continue
             st = [r for r in x if r['pr'] is not None and not r['prov'] and r['pr'] >= 70]
-            print(f'| {lo / 10:.1f}–{(lo + 1) / 10:.1f} | {len(x)} | {pct(sum(1 for r in x if danger(r)), len(x))} | {pct(sum(1 - r["human"] for r in x), len(x))} | {pct(sum(1 - r["human"] for r in st), len(st))}（{len(st)}） | {pct(sum(1 - r["H"] for r in x), len(x))} | {pct(sum(1 - r["A"] for r in x), len(x))} |')
+            print(f'| {lo / 10:.1f}–{(lo + 1) / 10:.1f} | {len(x)} | {pct(sum(1 for r in x if danger(r)), len(x))} | {pct(sum(1 - r["human"] for r in x), len(x))} | {pct(sum(1 - r["human"] for r in st), len(st))}（{len(st)}） | {pct(sum(1 - r["H"] for r in x), len(x))} | {pct(sum(1 - r["A"] for r in x), len(x))} | {gain(x)} |')
     for name, f in [('第 3 局在隊上（全部）', lambda r: True), ('比分 0:2（紅方已兩勝）', lambda r: r['rw'] == 2), ('比分 1:1', lambda r: r['rw'] == 1), ('比分 2:0', lambda r: r['rw'] == 0)]:
         rs = [r for r in rows if r['on'] and r['round'] == 3 and r['H_p1'] is not None and f(r)]
         print(f'\n### {name}：照 H 的後驗 P(隊上自己以外有紅) 分格（{len(rs)} 票）\n')
-        print('| P(隊上有紅) | 票數 | 隊上真的有紅 | 真人反對 | H 反對 | A 反對 |')
-        print('|---|---|---|---|---|---|')
-        for lo in range(10):
-            x = [r for r in rs if min(9, int(r['H_p1'] * 10)) == lo]
-            if not x:
+        print('| P(隊上有紅) | 票數 | 隊上真的有紅 | 真人反對 | H 反對 | A 反對 | 量尺：反對 − 贊成（pp／票 ± 標準誤） |')
+        print('|---|---|---|---|---|---|---|')
+        for lo in range(20):
+            x = [r for r in rs if min(19, int(r['H_p1'] * 20)) == lo]
+            if len(x) < 30:
                 continue
-            print(f'| {lo / 10:.1f}–{(lo + 1) / 10:.1f} | {len(x)} | {pct(sum(1 for r in x if danger(r)), len(x))} | {pct(sum(1 - r["human"] for r in x), len(x))} | {pct(sum(1 - r["H"] for r in x), len(x))} | {pct(sum(1 - r["A"] for r in x), len(x))} |')
+            print(f'| {lo / 20:.2f}–{(lo + 1) / 20:.2f} | {len(x)} | {pct(sum(1 for r in x if danger(r)), len(x))} | {pct(sum(1 - r["human"] for r in x), len(x))} | {pct(sum(1 - r["H"] for r in x), len(x))} | {pct(sum(1 - r["A"] for r in x), len(x))} | {gain(x)} |')
 
 
 def games_of(tier, split):
