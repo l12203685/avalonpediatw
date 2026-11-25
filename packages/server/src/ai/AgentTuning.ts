@@ -2772,7 +2772,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   onTeamR4Prov76: 0,
   r4KeyFail78: 0,
   r4KeyFail78Roles: 0,
-  redPairOne78: 0,
+  redPairOne78: 4, // 第 78 回合：基準線採用（兩個相認紅第 3 局同隊照座位只出一張；自我對打紅方篩選 +0.20、確認 +0.20 [+0.08, +0.32]）；真人桌在 humanProfile 維持 0
   redPairOne78Who: 0,
   redPairAlways78: 0,
   innerBlackEvGate63: 0,

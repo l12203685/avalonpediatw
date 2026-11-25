@@ -13,7 +13,9 @@ import { enoughRedsProb78, inR4KeyCell78, lastJointHid78, pairCard78, pairMate78
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
 const asObs = (o: object) => o as unknown as PlayerObservation;
-const on = (over: Partial<AgentTuning>): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
+/** the baseline with every round-78 switch off (the baseline adopts `redPairOne78=4`; the tests switch things on from here). */
+const OFF: AgentTuning = { ...DEFAULT_AGENT_TUNING, redPairOne78: 0 };
+const on = (over: Partial<AgentTuning>): AgentTuning => ({ ...OFF, ...over });
 
 // 紅方：P7 刺客、P8 莫甘娜、P9 莫德雷德、P10 奧伯倫。
 const RED: Record<string, { role: string; sees: string[] }> = {
@@ -43,13 +45,16 @@ const play = (tuning: AgentTuning, obs: PlayerObservation): string => {
 };
 
 describe('round 78 tuning fields', () => {
-  it('off by default, in the legacy table and on every opponent profile; flags parse and describe', () => {
+  it('off in the legacy table and on every human profile, redPairOne78=4 on the baseline; flags parse and describe', () => {
     for (const k of ['r4KeyFail78', 'r4KeyFail78Roles', 'redPairOne78', 'redPairOne78Who', 'redPairAlways78'] as const) {
-      expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
+      expect(DEFAULT_AGENT_TUNING[k]).toBe(k === 'redPairOne78' ? 4 : 0); // round 78: baseline adopts redPairOne78=4 (R3 only)
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
     }
-    expect(round78On(DEFAULT_AGENT_TUNING)).toBe(false);
-    for (const t of OPPONENT_TYPES) expect(round78On(tuningForOpponent(t, DEFAULT_AGENT_TUNING))).toBe(false);
+    expect(round78On(LEGACY_AGENT_TUNING)).toBe(false);
+    expect(round78On(DEFAULT_AGENT_TUNING)).toBe(true);
+    expect(round78On({ ...DEFAULT_AGENT_TUNING, redPairOne78: 0 })).toBe(false);
+    // human tables keep the rank order (the seat convention needs a bot teammate); the ai profile is the baseline itself
+    for (const t of OPPONENT_TYPES) expect(round78On(tuningForOpponent(t, DEFAULT_AGENT_TUNING))).toBe(t === 'ai');
     expect(parseTuningFlag('r4KeyFail78')).toEqual({ r4KeyFail78: 1 });
     expect(parseTuningFlag('r4KeyFail78=0.3')).toEqual({ r4KeyFail78: 0.3 });
     expect(parseTuningFlag('r4KeyFail78Roles=1')).toEqual({ r4KeyFail78Roles: 1 });
@@ -74,7 +79,7 @@ describe('r4KeyFail78: the two-fail mission at red match point with too few reds
     // Two recognised reds on the team: `redMatchPointFail` (the hard constraint) owns it.
     const pair = card('P8', 4, ['P1', 'P2', 'P3', 'P7', 'P8'], KEY_HISTORY);
     expect(inR4KeyCell78(pair)).toBe(false);
-    expect(redMatchPointFailCard(DEFAULT_AGENT_TUNING, pair)).toBe('fail');
+    expect(redMatchPointFailCard(OFF, pair)).toBe('fail');
     // Blue has two wins (2:1), one-fail rounds, off the team, blue seats: not the cell.
     expect(inR4KeyCell78(card('P10', 4, R4_TEAM, OPEN_HISTORY))).toBe(false);
     expect(inR4KeyCell78(card('P10', 3, ['P1', 'P2', 'P3', 'P10'], KEY_HISTORY.slice(0, 2)))).toBe(false);
@@ -83,9 +88,9 @@ describe('r4KeyFail78: the two-fail mission at red match point with too few reds
   });
 
   it('off: the lone red hides as before (redHideR4Solo); 1: fails; the role mask picks Oberon or the recognised reds', () => {
-    expect(r4KeyFailCard78(DEFAULT_AGENT_TUNING, oberon)).toBeNull();
-    expect(play(DEFAULT_AGENT_TUNING, oberon)).toBe('success');
-    expect(play(DEFAULT_AGENT_TUNING, lone)).toBe('success');
+    expect(r4KeyFailCard78(OFF, oberon)).toBeNull();
+    expect(play(OFF, oberon)).toBe('success');
+    expect(play(OFF, lone)).toBe('success');
     expect(play(on({ r4KeyFail78: 1 }), oberon)).toBe('fail');
     expect(play(on({ r4KeyFail78: 1 }), lone)).toBe('fail');
     expect(play(on({ r4KeyFail78: 1, r4KeyFail78Roles: 1 }), oberon)).toBe('fail');
@@ -95,7 +100,7 @@ describe('r4KeyFail78: the two-fail mission at red match point with too few reds
   });
 
   it('a threshold reads the seat\'s own posterior that the team can fail the mission', () => {
-    const p = enoughRedsProb78(DEFAULT_AGENT_TUNING, oberon);
+    const p = enoughRedsProb78(OFF, oberon);
     expect(p).not.toBeNull();
     const prob = p as number;
     expect(prob).toBeGreaterThan(0);
@@ -108,10 +113,10 @@ describe('r4KeyFail78: the two-fail mission at red match point with too few reds
     const t = on({ r4KeyFail78: 1 });
     const open = card('P10', 4, R4_TEAM, OPEN_HISTORY);
     expect(r4KeyFailCard78(t, open)).toBeNull();
-    expect(play(t, open)).toBe(play(DEFAULT_AGENT_TUNING, open));
+    expect(play(t, open)).toBe(play(OFF, open));
     const r3 = card('P10', 3, ['P1', 'P2', 'P3', 'P10'], [q(1, ['P1', 'P2', 'P7'], 1), q(2, ['P3', 'P4', 'P5', 'P9'], 1)]);
     expect(play(t, r3)).toBe('fail');
-    expect(play(DEFAULT_AGENT_TUNING, r3)).toBe('fail');
+    expect(play(OFF, r3)).toBe('fail');
   });
 });
 
@@ -131,11 +136,11 @@ describe('redPairOne78 / redPairAlways78: two recognised reds on a one-fail miss
   });
 
   it('off: the rank order (Morgana + Mordred on R2 both hide, the assassin + Morgana on R3 both fail)', () => {
-    expect(pairCard78(DEFAULT_AGENT_TUNING, dmR2('P8'))).toBeNull();
-    expect([play(DEFAULT_AGENT_TUNING, dmR2('P8')), play(DEFAULT_AGENT_TUNING, dmR2('P9'))]).toEqual(['success', 'success']);
+    expect(pairCard78(OFF, dmR2('P8'))).toBeNull();
+    expect([play(OFF, dmR2('P8')), play(OFF, dmR2('P9'))]).toEqual(['success', 'success']);
     const h = [q(1, ['P1', 'P2', 'P3'], 0), q(2, ['P1', 'P2', 'P3', 'P10'], 1)];
     const am = (me: string) => card(me, 3, ['P1', 'P2', 'P7', 'P8'], h);
-    expect([play(DEFAULT_AGENT_TUNING, am('P7')), play(DEFAULT_AGENT_TUNING, am('P8'))]).toEqual(['fail', 'fail']);
+    expect([play(OFF, am('P7')), play(OFF, am('P8'))]).toEqual(['fail', 'fail']);
   });
 
   it('seat order (Who 1): exactly one fail from every pair, the earlier seat', () => {
@@ -185,7 +190,7 @@ describe('redPairOne78 / redPairAlways78: two recognised reds on a one-fail miss
     const h3 = [q(1, ['P1', 'P2', 'P7'], 1), q(2, ['P1', 'P2', 'P3', 'P4'], 0)];
     const am = (me: string) => card(me, 3, ['P1', 'P2', 'P7', 'P8'], h3);
     expect([play(t, am('P7')), play(t, am('P8'))]).toEqual(['fail', 'success']);
-    expect([play(DEFAULT_AGENT_TUNING, am('P7')), play(DEFAULT_AGENT_TUNING, am('P8'))]).toEqual(['fail', 'fail']);
+    expect([play(OFF, am('P7')), play(OFF, am('P8'))]).toEqual(['fail', 'fail']);
   });
 
   it('equal records (Who 2): the rank order as before, except Morgana fails after the pair hid together', () => {
@@ -196,7 +201,7 @@ describe('redPairOne78 / redPairAlways78: two recognised reds on a one-fail miss
     // Hid together on R1 (only Morgana + Mordred do under the rank order): Morgana fails on R2, Mordred still hides.
     const joint = [q(1, ['P1', 'P8', 'P9'], 0)];
     expect([play(t, dmR2('P8', joint)), play(t, dmR2('P9', joint))]).toEqual(['fail', 'success']);
-    expect([play(DEFAULT_AGENT_TUNING, dmR2('P8', joint)), play(DEFAULT_AGENT_TUNING, dmR2('P9', joint))]).toEqual(['success', 'success']);
+    expect([play(OFF, dmR2('P8', joint)), play(OFF, dmR2('P9', joint))]).toEqual(['success', 'success']);
     // Who 3: equal records fall back to the seat order.
     const x = on({ redPairOne78: 6, redPairOne78Who: 3 });
     expect([play(x, dmR2('P8')), play(x, dmR2('P9'))]).toEqual(['fail', 'success']);
