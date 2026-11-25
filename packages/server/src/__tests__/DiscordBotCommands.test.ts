@@ -189,7 +189,7 @@ describe('Discord bot: game-flow commands point to signage-cloud', () => {
     },
   );
 
-  it('/help: one plain-text line per feature (same text as LINE), with the play URL and /rules /roles', async () => {
+  it('/help: one plain-text line per feature (same text as LINE), with the play URL and /規則 /角色', async () => {
     const interaction = makeInteraction(userId, COMMANDS.HELP);
 
     await handleHelpCommand(interaction as never);
@@ -202,7 +202,7 @@ describe('Discord bot: game-flow commands point to signage-cloud', () => {
     expect(payload.allowedMentions).toEqual({ parse: [] });
     expect(payload.content).toBe(basicHelpText('discord'));
     expect(payload.content).toContain(PLAY_PLATFORM_URL);
-    expect(payload.content).toContain(`/${COMMANDS.RULES} /${COMMANDS.ROLES}`);
+    expect(payload.content).toContain(`/${COMMANDS.RULES_ZH} /${COMMANDS.ROLES_ZH}`);
     // Game-flow commands are no longer advertised.
     expect(payload.content).not.toContain(`/${COMMANDS.CREATE}`);
     expect(payload.content).not.toContain(`/${COMMANDS.JOIN}`);

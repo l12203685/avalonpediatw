@@ -13,6 +13,10 @@ import { liveTableS } from '../ai/tableStrength';
 import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
+import {
+  ASSASSIN_ASK_TEXT, AssassinCommandWait, RED_TALK_SUBMIT_DELAY_MS, assassinWaitDeadline, redAssassinView, redTalkEnabled,
+  redViewMessage,
+} from '../ai/redAssassinTalk';
 import { SocketRateLimiter } from '../middleware/rateLimit';
 import { LobbyChatBuffer, LobbyChatMessage } from './LobbyChatBuffer';
 import {
@@ -252,6 +256,12 @@ export interface GameServerOptions {
    */
   botDelayScale?: number;
   /**
+   * Multiplier for the red assassination-discussion waits (`ai/redAssassinTalk.ts`: how long a bot assassin waits for
+   * 「/刺殺 N」 and the few seconds before it acts on one). Default 1 = production timing; game-flow tests that only need
+   * the game to finish pass a small value.
+   */
+  redTalkWaitScale?: number;
+  /**
    * Where 「這步怪怪的」 practice reports go. Default: the Sheets writer built
    * from GOOGLE_SERVICE_ACCOUNT_JSON (`createPracticeReportWriter`); `null`
    * = saving unavailable. Tests inject a fake sink.
@@ -274,6 +284,7 @@ export class GameServer {
   private practiceSinkStatus: PracticeReportStatus;
   private practiceDiscord: PracticeReportCopy | null;
   private readonly botDelayScale: number;
+  private readonly redTalkWaitScale: number;
   // `${roomId}:${round}:${holderId}` of bot lake inspections already queued.
   private pendingBotLake: Set<string> = new Set();
   private gameEngines: Map<string, GameEngine> = new Map();
@@ -281,6 +292,11 @@ export class GameServer {
   private botAgents: Map<string, AvalonAgent> = new Map();
   /** 第 56b 回合 C：每個機器人現在的策略層（沒有記錄 = `ai`，`addBotToRoom` 建的就是基準線）。 */
   private botProfiles: Map<string, OpponentType> = new Map();
+  /**
+   * 刺殺階段紅方討論（站長 2026-11-25，`ai/redAssassinTalk.ts`）：紅方有真人時，每間房這一局的狀態——紅方機器人說過看法了沒、
+   * 刺客機器人在等的隊友指令（`wait`）與它的計時器。紅方全是機器人的房間不會有這筆。
+   */
+  private redTalk: Map<string, { engine: GameEngine; assassinId: string | null; wait: AssassinCommandWait | null; timer: ReturnType<typeof setInterval> | null }> = new Map();
   /**
    * 開局時桌上強度 S（真人的顯示名字 → 網站 Elo 的 PR 平均，`ai/tableStrength.ts`，讀網站同一份 analysis_cache.json）；
    * 讀不到 → null（一般真人桌）。測試可以換掉。
@@ -303,6 +319,8 @@ export class GameServer {
     this.roomManager = new RoomManager();
     const scale = options.botDelayScale;
     this.botDelayScale = typeof scale === 'number' && Number.isFinite(scale) && scale >= 0 ? scale : 1;
+    const talkScale = options.redTalkWaitScale;
+    this.redTalkWaitScale = typeof talkScale === 'number' && Number.isFinite(talkScale) && talkScale >= 0 ? talkScale : 1;
     if (options.practiceReportSink !== undefined) {
       this.practiceSink = options.practiceReportSink;
       this.practiceSinkStatus = options.practiceReportSink ? 'ok' : 'no-credentials';
@@ -1454,6 +1472,9 @@ export class GameServer {
 
   /** Called whenever a room transitions to 'ended' state */
   private onGameEnded(roomId: string, room: Room): void {
+    // 刺殺階段紅方討論：這局結束了，不再等指令
+    this.stopRedTalk(roomId);
+    this.redTalk?.delete(roomId);
     // Practice rooms announce the end exactly once (the trace is sent once).
     if (this.isPracticeRoom(roomId) && !this.practice.markEnded(roomId)) return;
     const evilWins = room.evilWins === true;
@@ -1700,6 +1721,131 @@ export class GameServer {
     });
   }
 
+  /** A bot player's own chat line (same shape as a player's message). */
+  private emitBotChat(roomId: string, botId: string, message: string): void {
+    const room = this.roomManager.getRoom(roomId);
+    this.io.to(roomId).emit('chat:message-received', {
+      id: uuidv4(),
+      roomId,
+      playerId: botId,
+      playerName: room?.players[botId]?.name ?? botId,
+      message,
+      timestamp: Date.now(),
+    });
+  }
+
+  // ─── 刺殺階段紅方討論（站長 2026-11-25，`ai/redAssassinTalk.ts`）────────────
+  //
+  // Only when at least one red is human. Every red bot posts its Merlin view in the room chat (there is no red-only channel;
+  // reds are revealed to each other from the assassination on). A bot assassin does not pick by itself: it asks the reds for
+  // 「/刺殺 N」 and assassinates the latest valid seat a few seconds after it arrives, or its own pick when time runs out
+  // (inside the room's assassination timer, or ~3 minutes without one). All-bot reds never reach this: unchanged.
+
+  /**
+   * Start the red discussion for this game (once per engine). Returns true while a bot assassin is handed to the reds
+   * (the caller then must not assassinate by itself).
+   */
+  private startRedTalk(roomId: string, r: Room, engine: GameEngine, assassinId: string | null): boolean {
+    const prev = this.redTalk.get(roomId);
+    if (prev && prev.engine === engine) return prev.wait !== null;
+    if (prev?.timer) clearInterval(prev.timer);
+    this.redTalk.delete(roomId);
+    if (!redTalkEnabled()) return false;
+    const ids = Object.keys(r.players);
+    const reds = ids.filter((id) => r.players[id].team === 'evil');
+    if (!reds.some((id) => !r.players[id].isBot)) return false; // 紅方全是機器人：照舊
+    const seatOf = (id: string): number => ids.indexOf(id) + 1;
+    // 刺殺階段紅方開牌相認：每個紅方都知道隊友的角色與位置
+    const allEvilRoles = Object.fromEntries(reds.map((id) => [id, r.players[id].role as Role]));
+    const state: { engine: GameEngine; assassinId: string | null; wait: AssassinCommandWait | null; timer: ReturnType<typeof setInterval> | null } = {
+      engine, assassinId, wait: null, timer: null,
+    };
+    this.redTalk.set(roomId, state);
+    let assassinPick: string | null = null;
+    for (const id of reds) {
+      if (!r.players[id].isBot) continue;
+      try {
+        const obs: PlayerObservation = { ...this.buildBotObservation(r, id, engine, 'assassination'), allEvilIds: [...reds], allEvilRoles: { ...allEvilRoles } };
+        const view = redAssassinView(this.botAgents.get(id), obs, seatOf);
+        if (!view) continue;
+        if (id === assassinId) assassinPick = view.pick;
+        this.emitBotChat(roomId, id, redViewMessage(view, seatOf));
+      } catch (err) {
+        console.error(`[bot] red talk view error in room ${roomId}:`, err);
+      }
+    }
+    if (!assassinId || !r.players[assassinId]?.isBot) return false; // 真人刺客自己決定
+    const goods = ids.filter((id) => r.players[id].team !== 'evil');
+    const fallback = assassinPick && goods.includes(assassinPick) ? assassinPick : goods[0];
+    if (!fallback) return false;
+    const now = Date.now();
+    state.wait = new AssassinCommandWait({
+      mySeat: seatOf(assassinId),
+      redSeats: new Set(reds.map(seatOf)),
+      tableSeats: new Set(ids.map(seatOf)),
+      fallbackSeat: seatOf(fallback),
+      // `redTalkWaitScale` is 1 in production; game-flow tests shrink it so a practice game still finishes in seconds.
+      deadlineAt: now + this.redTalkWait(assassinWaitDeadline(now, engine.getAssassinationTimeoutMs()) - now),
+      submitDelayMs: this.redTalkWait(RED_TALK_SUBMIT_DELAY_MS),
+    });
+    this.emitBotChat(roomId, assassinId, ASSASSIN_ASK_TEXT);
+    state.timer = setInterval(() => this.pollRedTalk(roomId), Math.max(50, this.redTalkWait(1000)));
+    return true;
+  }
+
+  private stopRedTalk(roomId: string): void {
+    const st = this.redTalk.get(roomId);
+    if (st?.timer) clearInterval(st.timer);
+    if (st) st.timer = null;
+  }
+
+  /** A human's chat line while a bot assassin waits for 「/刺殺 N」. */
+  private onRedTalkChat(roomId: string, playerId: string, text: string): void {
+    const st = this.redTalk.get(roomId);
+    if (!st?.wait || st.wait.done || !st.assassinId) return;
+    const r = this.roomManager.getRoom(roomId);
+    if (!r || r.state !== 'discussion') return;
+    const reply = st.wait.onChat(Object.keys(r.players).indexOf(playerId) + 1, text, Date.now());
+    if (reply) this.emitBotChat(roomId, st.assassinId, reply);
+  }
+
+  private pollRedTalk(roomId: string): void {
+    const st = this.redTalk.get(roomId);
+    if (!st?.wait || !st.assassinId) { this.stopRedTalk(roomId); return; }
+    const r = this.roomManager.getRoom(roomId);
+    if (!r || r.state !== 'discussion' || this.gameEngines.get(roomId) !== st.engine) { this.stopRedTalk(roomId); return; }
+    const step = st.wait.poll(Date.now());
+    if (!step) return;
+    this.stopRedTalk(roomId);
+    const assassinId = st.assassinId;
+    const ids = Object.keys(r.players);
+    this.emitBotChat(roomId, assassinId, step.reply);
+    const chosen = ids[step.seat - 1];
+    const backup = ids.find((id) => id !== assassinId && r.players[id].team !== 'evil');
+    for (const targetId of [chosen, backup]) {
+      if (!targetId) continue;
+      try {
+        const agent = this.botAgents.get(assassinId);
+        const killTrace = this.isPracticeRoom(roomId)
+          ? this.preparePracticeTrace(r, assassinId, this.buildBotObservation(r, assassinId, st.engine, 'assassination'), {
+              kind: 'assassinate', targetId, source: 'agent', agent,
+            })
+          : null;
+        st.engine.submitAssassination(assassinId, targetId);
+        this.commitPracticeTrace(roomId, killTrace);
+        const updated = this.roomManager.getRoom(roomId)!;
+        this.emitSystemChat(roomId, `系統: ${seatOfInRoom(assassinId, updated)} 刺殺 ${seatOfInRoom(targetId, updated)}`);
+        this.broadcastRoomState(roomId, updated, true);
+        this.onGameEnded(roomId, updated);
+        return;
+      } catch (err) {
+        console.error(`[bot] red talk assassination error in room ${roomId}:`, err);
+        // 刺不成（例如狀態已變）：房間還在刺殺階段才試備用對象，不讓遊戲卡住
+        if (this.roomManager.getRoom(roomId)?.state !== 'discussion') return;
+      }
+    }
+  }
+
   private handleChatMessage(socket: Socket, roomId: string, message: string): void {
     try {
       // Rate limiting
@@ -1731,6 +1877,8 @@ export class GameServer {
         message: trimmedMessage,
         timestamp: Date.now(),
       });
+      // 刺殺階段：刺客機器人在等紅方隊友的「/刺殺 N」
+      this.onRedTalkChat(roomId, playerId, trimmedMessage);
     } catch (error) {
       console.error('Error sending chat message:', error);
     }
@@ -2492,7 +2640,9 @@ export class GameServer {
           // The assassinator (assassin; Mordred at 7 players; Morgana when neither is dealt).
           const killer = assassinatorRole(Object.values(r.players).map((p) => p.role));
           const assassinEntry = killer ? Object.entries(r.players).find(([, p]) => p.role === killer) : undefined;
-          if (assassinEntry && r.players[assassinEntry[0]]?.isBot) {
+          // 紅方有真人：紅方機器人先在聊天說梅林看法；刺客是機器人時交給紅方隊友用「/刺殺 N」決定（紅方全是機器人：照舊，直接刺）
+          const handedToReds = this.startRedTalk(roomId, r, engine, assassinEntry?.[0] ?? null);
+          if (!handedToReds && assassinEntry && r.players[assassinEntry[0]]?.isBot) {
             const assassinId = assassinEntry[0];
             const agent = this.botAgents.get(assassinId);
             let targetId: string;
@@ -3068,6 +3218,11 @@ export class GameServer {
   // and is removed by `sweepPracticeRooms` after it ends or goes idle. Every
   // bot decision is traced with a reason (`preparePracticeTrace`); the trace
   // stays server-side until the game ends (`practice:trace`).
+
+  /** Scale a red-discussion wait (`redTalkWaitScale`, 1 in production). */
+  private redTalkWait(ms: number): number {
+    return Math.max(0, Math.round(ms * this.redTalkWaitScale));
+  }
 
   /** Scale a bot "thinking" delay (tests run with a small `botDelayScale`). */
   private botDelay(ms: number): number {

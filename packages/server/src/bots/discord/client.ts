@@ -9,7 +9,7 @@ import {
   ActivityType,
   Message,
 } from 'discord.js';
-import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SIM_STAGE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS, CORRECTION_OPTIONS } from './config';
+import { DISCORD_CONFIG, COMMANDS, PLAY_PLATFORM_COMMANDS, STATS_OPTIONS, FEEDBACK_OPTIONS, SIM_OPTIONS, SIM_ROLE_CHOICES, SIM_STAGE_CHOICES, SEAT_FILLER_OPTIONS, REPORT_OPTIONS, CLAIM_OPTIONS, CORRECTION_OPTIONS, DAILY_QUESTION_OPTIONS, DAILY_QUESTION_DAY_CHOICES } from './config';
 import {
   handleHelpCommand,
   HELP_TOPIC_OPTION,
@@ -72,18 +72,31 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
         .setDescription('對局已改到 signage-cloud：回覆開局連結 / Games are played on signage-cloud')
     ),
 
-    new SlashCommandBuilder()
-      .setName(COMMANDS.RULES)
-      .setDescription('阿瓦隆規則（10 人局）/ Game rules'),
+    // /規則 = /rules and /角色 = /roles (2026-11-25, batch 2): one reply under two names each.
+    ...[COMMANDS.RULES_ZH, COMMANDS.RULES].map((name) =>
+      new SlashCommandBuilder()
+        .setName(name)
+        .setDescription('阿瓦隆規則（10 人局）/ Game rules')
+    ),
 
-    new SlashCommandBuilder()
-      .setName(COMMANDS.ROLES)
-      .setDescription('七個角色各知道什麼 / Roles'),
+    ...[COMMANDS.ROLES_ZH, COMMANDS.ROLES].map((name) =>
+      new SlashCommandBuilder()
+        .setName(name)
+        .setDescription('七個角色各知道什麼 / Roles')
+    ),
 
     // 2026-11-25 每日一題 (bots/dailyQuestion) — today's Threads／IG question; public reply, same text as LINE.
+    // 哪一天:昨天 (batch 2) = yesterday's question with its answer; today's question never shows its answer.
     new SlashCommandBuilder()
       .setName(COMMANDS.DAILY_QUESTION)
-      .setDescription('今天的阿瓦隆每日一題：問題、牌譜連結、怎麼在這裡作答 / Today\'s question'),
+      .setDescription('阿瓦隆每日一題：今天的題目（或昨天的題目和答案）/ Daily question')
+      .addStringOption((o) =>
+        o
+          .setName(DAILY_QUESTION_OPTIONS.DAY)
+          .setDescription('不選＝今天的題目；昨天＝昨天的題目和答案 / Today (default) or yesterday with its answer')
+          .setRequired(false)
+          .addChoices(...DAILY_QUESTION_DAY_CHOICES.map((c) => ({ name: c.name, value: c.value })))
+      ),
 
     // 2026-10-10 stats lookup — CJK names, see COMMANDS.STATS in config.ts.
     new SlashCommandBuilder()
@@ -189,30 +202,33 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
       .setName(COMMANDS.SIM_END)
       .setDescription('模擬瓦：結束這一題（不公布）/ End the exercise'),
 
-    // 2026-11-03 補位機器人 (bots/seatFiller) — same limits as LINE's /補位.
-    new SlashCommandBuilder()
-      .setName(COMMANDS.SEAT_FILLER)
-      .setDescription('叫百科AI 進 signage-cloud 房間補位 / Summon 百科AI seat fillers')
-      .addStringOption((o) =>
-        o
-          .setName(SEAT_FILLER_OPTIONS.ROOM)
-          .setDescription('房號（1460）或房間描述裡的一段字（房間內看不到房號時用）/ Room no. or description')
-          .setRequired(true)
-          .setMaxLength(40)
-      )
-      .addStringOption((o) =>
-        o
-          .setName(SEAT_FILLER_OPTIONS.BOTS)
-          .setDescription(`派幾個（預設 ${SEAT_FILLER_BOTS.default}；補滿 = 補到 10 人）/ How many`)
-          .setRequired(false)
-          .addChoices(
-            { name: '補滿（補到 10 人）', value: '補滿' },
-            ...Array.from({ length: SEAT_FILLER_BOTS.max }, (_, i) => ({ name: `${i + 1} 個`, value: String(i + 1) })),
-          )
-      )
-      .addStringOption((o) =>
-        o.setName(SEAT_FILLER_OPTIONS.PASSWORD).setDescription('私房密碼（只用來進房）/ Private-room password').setRequired(false).setMaxLength(32)
-      ),
+    // 2026-11-03 補位機器人 (bots/seatFiller) — same limits as LINE's /補位. Since 2026-11-25 (batch 2) under
+    // two names, /補位 (what LINE types) and the original /機器人補位: same options, same handler.
+    ...[COMMANDS.SEAT_FILLER_ZH, COMMANDS.SEAT_FILLER].map((name) =>
+      new SlashCommandBuilder()
+        .setName(name)
+        .setDescription('叫百科AI 進 signage-cloud 房間補位 / Summon 百科AI seat fillers')
+        .addStringOption((o) =>
+          o
+            .setName(SEAT_FILLER_OPTIONS.ROOM)
+            .setDescription('房號（1460）或房間描述裡的一段字（房間內看不到房號時用）/ Room no. or description')
+            .setRequired(true)
+            .setMaxLength(40)
+        )
+        .addStringOption((o) =>
+          o
+            .setName(SEAT_FILLER_OPTIONS.BOTS)
+            .setDescription(`派幾個（預設 ${SEAT_FILLER_BOTS.default}；補滿 = 補到 10 人）/ How many`)
+            .setRequired(false)
+            .addChoices(
+              { name: '補滿（補到 10 人）', value: '補滿' },
+              ...Array.from({ length: SEAT_FILLER_BOTS.max }, (_, i) => ({ name: `${i + 1} 個`, value: String(i + 1) })),
+            )
+        )
+        .addStringOption((o) =>
+          o.setName(SEAT_FILLER_OPTIONS.PASSWORD).setDescription('私房密碼（只用來進房）/ Private-room password').setRequired(false).setMaxLength(32)
+        )
+    ),
 
     // 2026-11-09 待修正牌譜清單 (bots/paipuFix) — same list as LINE's /待修正, public reply.
     new SlashCommandBuilder()
@@ -386,10 +402,12 @@ export class DiscordBotClient {
           break;
 
         case COMMANDS.RULES:
+        case COMMANDS.RULES_ZH:
           await handleRulesCommand(interaction);
           break;
 
         case COMMANDS.ROLES:
+        case COMMANDS.ROLES_ZH:
           await handleRolesCommand(interaction);
           break;
 
@@ -421,6 +439,7 @@ export class DiscordBotClient {
           break;
 
         case COMMANDS.SEAT_FILLER:
+        case COMMANDS.SEAT_FILLER_ZH:
           await handleSeatFillerCommand(interaction);
           break;
 

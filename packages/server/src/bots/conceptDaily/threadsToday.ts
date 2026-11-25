@@ -32,6 +32,11 @@ export interface ThreadsInputs {
   liveFrom: string | null;
   /** 日期 → 狀態檔（沒有 = null）。 */
   states: Map<string, ThreadsStateLike | null>;
+  /**
+   * 狀態檔這次沒讀到、也不確定有沒有的日子（連不上、逾時、5xx；確定沒有的 404 不算）。
+   * /每日一題 昨天 靠它判斷「今天是不是接昨天同一局」可不可信（不可信就先不公布昨天的答案）。
+   */
+  unread?: ReadonlySet<string>;
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -45,6 +50,8 @@ export interface FetchThreadsOptions {
   timeoutMs?: number;
   /** 讀不到時用的本機檔（映像檔裡的 packages/server/）。 */
   localDir?: string;
+  /** 狀態檔往回讀幾天（含當天）；預設 3（當天與前兩天）。/每日一題 昨天 要 4 天。 */
+  days?: number;
 }
 
 async function getJson(f: Fetch, url: string, timeoutMs: number): Promise<{ status: number; body: unknown }> {
@@ -72,7 +79,7 @@ function liveFromOf(raw: unknown): string | null {
   return typeof v === 'string' && DATE_RE.test(v) ? v : null;
 }
 
-/** 讀當天（與前兩天）要用的輸入。不會丟錯：讀不到的部分用本機檔或空的。 */
+/** 讀當天（與前兩天；`days` 可以多讀）要用的輸入。不會丟錯：讀不到的部分用本機檔或空的。 */
 export async function fetchThreadsInputs(date: string, opts: FetchThreadsOptions = {}): Promise<ThreadsInputs> {
   const f = opts.fetchImpl ?? fetch;
   const repo = opts.repo ?? (process.env.THREADS_STATE_REPO || 'l12203685/avalonpediatw');
@@ -86,7 +93,7 @@ export async function fetchThreadsInputs(date: string, opts: FetchThreadsOptions
       return { status: 0, body: null };
     }
   };
-  const dates = [date, addDays(date, -1), addDays(date, -2)];
+  const dates = Array.from({ length: Math.max(1, opts.days ?? 3) }, (_, i) => addDays(date, -i));
   const [picksRes, liveRes, ...stateRes] = await Promise.all([
     safe(raw('main', 'packages/server/threads_picks.json')),
     safe(raw('main', 'packages/server/threads_live.json')),
@@ -95,17 +102,19 @@ export async function fetchThreadsInputs(date: string, opts: FetchThreadsOptions
   const picksRaw = picksRes.body ?? readLocal(path.join(localDir, 'threads_picks.json'));
   const liveRaw = liveRes.body ?? readLocal(path.join(localDir, 'threads_live.json'));
   const states = new Map<string, ThreadsStateLike | null>();
+  const unread = new Set<string>();
   dates.forEach((d, i) => {
     const b = stateRes[i].body;
     states.set(d, b && typeof b === 'object' ? (b as ThreadsStateLike) : null);
+    if (stateRes[i].status !== 200 && stateRes[i].status !== 404) unread.add(d);
   });
-  return { picks: parsePicks(picksRaw), liveFrom: liveFromOf(liveRaw), states };
+  return { picks: parsePicks(picksRaw), liveFrom: liveFromOf(liveRaw), states, unread };
 }
 
-/** 當天的 Threads 題目（跟草稿同一個 pickFor）；那天沒有題目或題庫沒有那一局就 null。 */
-export function threadsToday(bank: Pick<SimBank, 'games' | 'byId' | 'records'>, date: string, inputs: ThreadsInputs): ThreadsToday | null {
+/** 跟每日草稿同一套選題的產生器（存下來的草稿、那天有沒有貼文、系列起點、站長選的題都照 `inputs`）。 */
+export function threadsGenerator(bank: Pick<SimBank, 'games' | 'byId' | 'records'>, inputs: ThreadsInputs): ThreadsGenerator {
   const state = (d: string): ThreadsStateLike | null => inputs.states.get(d) ?? null;
-  const gen = new ThreadsGenerator({
+  return new ThreadsGenerator({
     bank,
     titles: new Map(),
     readSaved: (d): ThreadsDraft | null => state(d)?.draft ?? null,
@@ -116,12 +125,17 @@ export function threadsToday(bank: Pick<SimBank, 'games' | 'byId' | 'records'>, 
     startDate: process.env.THREADS_LIVE_FROM || inputs.liveFrom || process.env.THREADS_START_DATE || THREADS_START_DATE,
     pickOverride: (d): string | null => inputs.picks.get(d) ?? null,
   });
+}
+
+/** 當天的 Threads 題目（跟草稿同一個 pickFor）；那天沒有題目或題庫沒有那一局就 null。 */
+export function threadsToday(bank: Pick<SimBank, 'games' | 'byId' | 'records'>, date: string, inputs: ThreadsInputs): ThreadsToday | null {
+  const gen = threadsGenerator(bank, inputs);
   const pick = gen.pickFor(date);
   if (!pick) return null;
   const g = gen.gameOf(pick.gameId);
   if (!g) return null;
   const postId = bank.records.get(g.index);
-  const permalink = state(date)?.permalink;
+  const permalink = inputs.states.get(date)?.permalink;
   return {
     exerciseId: exerciseIdOfPick(pick, g.game),
     exercise: exerciseOfPick(g.game, pick),

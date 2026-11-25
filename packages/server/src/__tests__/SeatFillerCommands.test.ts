@@ -235,7 +235,9 @@ describe('Discord /機器人補位', () => {
 describe('help, topic counting, chat export', () => {
   it('help texts list the platform syntax', () => {
     expect(formatStatsHelp('line')).toContain('/補位 房號或房間描述');
-    expect(formatStatsHelp('discord')).toContain('/機器人補位 房號或描述');
+    // 2026-11-25 batch 2: Discord answers to /補位 too, and the help names that one (the group's word).
+    expect(formatStatsHelp('discord')).toContain('/補位 房號或描述');
+    expect(formatStatsHelp('discord')).not.toContain('/機器人補位 房號或描述');
   });
 
   it('observe() does not count the command as a topic', () => {

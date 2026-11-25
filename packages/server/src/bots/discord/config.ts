@@ -54,6 +54,10 @@ export const COMMANDS = {
   ASSASSINATE: 'assassinate',
   RULES: 'rules',
   ROLES: 'roles',
+  // 2026-11-25 (batch 2): the same two under the names the group types (LINE answers /規則 and /角色 too).
+  // The English names stay registered, so nobody who is used to them hits "unknown command".
+  RULES_ZH: '規則',
+  ROLES_ZH: '角色',
   // 2026-10-10 stats lookup (analysis_cache.json). CJK names on purpose:
   // Discord allows them (no case, 1–32 chars of \p{L}\p{N}_-), and they are
   // exactly what the LINE group types, so one syntax works on both platforms
@@ -80,8 +84,11 @@ export const COMMANDS = {
   SIM_END: '結束',
   // 2026-11-03 補位機器人 (bots/seatFiller, services/signagePlayerDispatch.ts):
   // puts the signage-cloud seat-filler bot into a room. LINE types /補位 (or
-  // /機器人補位); Discord gets the longer, unambiguous name only.
+  // /機器人補位). Discord at first had the longer name only; since 2026-11-25 (batch 2)
+  // /補位 is registered too — same options, same handler, same limits — because /補位 is
+  // what the group actually types.
   SEAT_FILLER: '機器人補位',
+  SEAT_FILLER_ZH: '補位',
   // 2026-11-09 待修正牌譜清單 (bots/paipuFix, services/paipuFixList.ts): same word
   // as LINE's /待修正; lists the 牌譜 posts tagged 待修正 with the reason.
   PAIPU_FIX: '待修正',
@@ -111,6 +118,15 @@ export const FEEDBACK_OPTIONS = {
   CONTENT: '內容',
 } as const;
 
+/** Option name and choices of /每日一題 (bots/dailyQuestion; value = the word LINE types after the command). */
+export const DAILY_QUESTION_OPTIONS = {
+  DAY: '哪一天',
+} as const;
+export const DAILY_QUESTION_DAY_CHOICES: readonly { name: string; value: string }[] = [
+  { name: '今天的題目', value: '今天' },
+  { name: '昨天的題目和答案', value: '昨天' },
+];
+
 /** Option names of the 模擬瓦 slash commands (bots/simulation). */
 export const SIM_OPTIONS = {
   ROLE: '角色',
@@ -124,7 +140,7 @@ export const SIM_OPTIONS = {
   STAGE: '局面',
 } as const;
 
-/** Option names of /機器人補位 (bots/seatFiller). */
+/** Option names of /補位 and /機器人補位 (bots/seatFiller). */
 export const SEAT_FILLER_OPTIONS = {
   ROOM: '房號或描述',
   BOTS: '人數',

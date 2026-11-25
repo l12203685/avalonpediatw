@@ -10,6 +10,9 @@
  * - 舊局號（2026-11-19 站長：#records=S1629 打不開）：同一局在試算表與 DC 都有時，清單只留 DC 那一篇（id = 貼文 id），
  *   試算表的 S…、Discord匯入的 D…、重複貼文等其他來源 id 就對不到。組回應時讀牌譜總庫 game_db.json（每局的 sources），
  *   把「網站上沒有這個 id 的來源 id」寫進那一篇的 aka（recordAliases），網站用它把舊連結轉到那一篇。總庫不在 → 照原樣，不加 aka。
+ * - 玩家別名（2026-11-25 站長：「把 軒/ED 直接改成軒 那場我沒玩」）：座位上的名字是 player_aliases.json 左邊的舊寫法時，
+ *   改顯示右邊的正式名字（跟戰績、排行一致；只差大小寫／全半形也算）。百科AI_1、百科AI_2… 是不同座位的機器人，不併成同一個名字。
+ *   別名檔不在或格式不對 → 名字照貼文原樣。records_cache.json 本身不改（每天從 Discord 重新產生）。
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -30,6 +33,14 @@ export const ENV_GAME_DB = 'AVALON_GAME_DB';
 const GAME_DB_PATHS = [
   path.resolve(__dirname, '..', '..', 'game_db.json'),
   path.resolve(__dirname, '..', '..', '..', '..', '..', 'packages', 'server', 'game_db.json'),
+];
+
+/** 玩家別名（player_aliases.json，站長指定）；本機或測試另指檔案用這個。 */
+export const ENV_PLAYER_ALIASES = 'AVALON_PLAYER_ALIASES';
+
+const ALIASES_PATHS = [
+  path.resolve(__dirname, '..', '..', 'player_aliases.json'),
+  path.resolve(__dirname, '..', '..', '..', '..', '..', 'packages', 'server', 'player_aliases.json'),
 ];
 
 const RECORDS_PATHS = [
@@ -92,6 +103,57 @@ export function recordAliases(posts: readonly unknown[], db: unknown): Map<strin
   return out;
 }
 
+/** 名字的比對鍵：全半形、大小寫、頭尾空白不分（同 generate_cache.py 的 player_name_key 的用意）。 */
+function nameKey(name: string): string {
+  return name.normalize('NFKC').trim().toLowerCase();
+}
+
+/** 百科AI、百科AI_3：機器人的座位名，牌譜上保留編號。 */
+const PEDIA_BOT_NAME = /^百科AI(?:_\d+)?$/;
+
+/**
+ * player_aliases.json 的 aliases → 牌譜上要換掉的寫法（鍵 = nameKey(舊寫法)，值 = 正式名字）。
+ * 機器人的座位名不換。不是物件、值不是字串的項目略過。
+ */
+export function recordNameRenames(doc: unknown): Map<string, string> {
+  const out = new Map<string, string>();
+  const aliases = (doc as { aliases?: unknown } | null)?.aliases;
+  if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases)) return out;
+  for (const [from, to] of Object.entries(aliases as Record<string, unknown>)) {
+    if (typeof to !== 'string' || !to.trim() || PEDIA_BOT_NAME.test(from.trim())) continue;
+    out.set(nameKey(from), to.trim());
+  }
+  return out;
+}
+
+/** 一篇貼文的座位名字照別名換成正式名字；沒有要換的就回傳原物件。 */
+export function renameRecordNames(post: unknown, renames: ReadonlyMap<string, string>): unknown {
+  if (renames.size === 0) return post;
+  const game = (post as { game?: { names?: unknown } | null } | null)?.game;
+  const names = game?.names;
+  if (!Array.isArray(names)) return post;
+  let changed = false;
+  const next = names.map((n) => {
+    const to = typeof n === 'string' ? renames.get(nameKey(n)) : undefined;
+    if (to === undefined || to === n) return n;
+    changed = true;
+    return to;
+  });
+  return changed ? { ...(post as object), game: { ...(game as object), names: next } } : post;
+}
+
+function readRenames(): Map<string, string> {
+  const override = process.env[ENV_PLAYER_ALIASES]?.trim();
+  const file = (override ? [path.resolve(override)] : ALIASES_PATHS).find((p) => fs.existsSync(p));
+  if (!file) return new Map();
+  try {
+    return recordNameRenames(JSON.parse(fs.readFileSync(file, 'utf-8')));
+  } catch {
+    console.warn('[analysis/records] player_aliases.json 讀取失敗：名字照貼文原樣');
+    return new Map();
+  }
+}
+
 function readGameDb(): unknown {
   const file = gameDbPaths().find((p) => fs.existsSync(p));
   if (!file) {
@@ -129,9 +191,11 @@ function build(): RecordLoad {
     return { ok: false, status: 503, error: RECORDS_NOT_GENERATED };
   }
   const aka = recordAliases(doc.posts, readGameDb());
-  const data = aka.size === 0 ? doc : {
+  const renames = readRenames();
+  const data = aka.size === 0 && renames.size === 0 ? doc : {
     ...doc,
-    posts: doc.posts.map((p) => {
+    posts: doc.posts.map((raw) => {
+      const p = renameRecordNames(raw, renames);
       const extra = aka.get(String((p as { id?: unknown } | null)?.id ?? ''));
       return extra ? { ...(p as object), aka: extra } : p;
     }),

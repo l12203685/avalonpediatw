@@ -36,9 +36,9 @@ export const SIM_PROPOSE_SOFT_MAX_CHARS = 900;
  * 預設不會因為閒置結束（0 = 不限）；SIM_SESSION_TTL_MINUTES 設 1–10080 才會閒置結束。
  */
 export const SIM_SESSION_TTL_MINUTES_DEFAULT = 0;
-/** 不論有沒有在動，一題最長多久：2026-11-19 起不限（只有 /公布、/結束、開新題、名額上限或重啟會結束）。 */
+/** 不論有沒有在動，一題最長多久：2026-11-19 起不限（只有 /公布、/結束、開新題、名額上限會結束；2026-11-25 起重啟也不會，見 persist.ts）。 */
 export const SIM_SESSION_HARD_CAP_MS = Number.POSITIVE_INFINITY;
-/** 記憶體裡最多幾題（超過就結束最久沒動的）。 */
+/** 最多同時開著幾題（超過就結束最久沒動的）；存檔也是這個上限。 */
 export const SIM_MAX_SESSIONS = 500;
 /** 同一個聊天室（群組／頻道）最多幾題。 */
 export const SIM_MAX_SESSIONS_PER_CHAT = 30;
@@ -49,6 +49,16 @@ export const SIM_MAX_SESSIONS_PER_CHAT = 30;
 export const SIM_MAX_SESSIONS_PER_USER = 2;
 /** 同一題的指令排隊：前一個指令（算回覆＋送出）最久等這麼久，之後照樣處理。 */
 export const SIM_LOCK_WAIT_MS = 15_000;
+/**
+ * 進行中的題目存檔（2026-11-25，persist.ts）：有變動時最多每 25 秒寫一次（變動後先等 2 秒，把同一個指令的幾個
+ * 變動併成一次）；關機（SIGTERM）時把還沒寫的寫完。
+ */
+export const SIM_PERSIST_DEBOUNCE_MS = 25_000;
+export const SIM_PERSIST_FIRST_DELAY_MS = 2_000;
+/** 存檔最大多少位元組（GitHub Contents API 讀檔上限 1 MB）；超過就先不存最久沒動的題目。 */
+export const SIM_PERSIST_MAX_BYTES = 600_000;
+/** 重啟後題目還在讀回來時，一個指令最久等多久；還沒好就回「請過幾秒再打一次」。 */
+export const SIM_RESTORE_WAIT_MS = 4_000;
 /** 每人 10 分鐘最多 30 個模擬指令；超過只提醒一次，之後不回。 */
 export const SIM_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 export const SIM_RATE_LIMIT_MAX = 30;

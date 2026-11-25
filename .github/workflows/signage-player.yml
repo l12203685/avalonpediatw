@@ -156,6 +156,8 @@ jobs:
           PASSWORD: ${{ inputs.password }}
           # 百科AI 對局紀錄貼 DC 論壇 #牌譜紀錄與覆盤（同 signage-recorder.yml 的機器人 token；沒設就只打不貼）
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # 刺殺階段紅方討論（docs/BOTS.md）：repo variable RED_ASSASSIN_TALK=off 關掉；沒設 = 開
+          RED_ASSASSIN_TALK: ${{ vars.RED_ASSASSIN_TALK }}
         run: |
           if [ -n "$PASSWORD" ]; then echo "::add-mask::$PASSWORD"; fi
           export NODE_PATH="$(npm root -g)"
