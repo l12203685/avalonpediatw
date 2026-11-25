@@ -8,12 +8,15 @@
  *  - 自動發現卡片的差距寫成白話（多／少幾個百分點）。
  * 第二批（同日）：刺殺、任務路徑、湖中女神的角色與宣告、派隊與投票內頁的句子與長條；三藍死（梅林被刺中）改用紅色系。
  * 第三批（同日）：戰績排行（前三名一句話、上榜條件白話）、局勢樹（同比分不同順序）、個人分析（跟全體比最強／最弱）。
+ * 第四批（同日）：決定性票（全體投對多少、外白／內黑）、陣容強度（強弱桌比、分層、走勢）、個人分析其他小分頁
+ *   （三塊勝率、理論勝率、Elo）、各位置／各角色最後誰贏。
  * 玩家名字都是假的（測試玩家甲…）。
  */
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
+  decisiveGlance, eloGlance, playerBlocksGlance, strengthCurveGlance, strengthTiersGlance, strengthTrendGlance, theoryGlance, winExtremesSentence,
   boardGlance, boardRulesGlance, radarGlance, stateTreeGlance,
   anyThin, blueWinShare, captainGlance, extremes, firstTeamGlance, killDetailGlance, killGlance, lakeClaimGlance, lakeHolderGlance, missionOneGlance,
   missionRatesGlance, missionSwingGlance, overallGlance, pathsGlance, pctText, relation, restText, roleRankGlance, seatHalvesSentence, seatKillGlance,
@@ -567,6 +570,101 @@ describe('一眼看懂（第三批）：個人分析', () => {
   });
 });
 
+describe('一眼看懂（第四批）：決定性票', () => {
+  const groups = [
+    { group: 'onYes', right: 1243, wrong: 667 },
+    { group: 'onNo', right: 294, wrong: 194 },
+    { group: 'offYes', right: 230, wrong: 205 },
+    { group: 'offNo', right: 1364, wrong: 404 },
+  ];
+
+  it('全體正確率用表上同一個數（0–1 → 整數百分比），四組的對率 = 對 ÷（對 + 錯）', () => {
+    const g = decisiveGlance(0.681, groups, '兩紅之後');
+    expect(g.overall?.pct).toBeCloseTo(68.1, 6);
+    expect(g.overall?.n).toBe(1910 + 488 + 435 + 1768);
+    expect(g.sentence).toEqual({ key: 'decisive.lead', params: { scope: '兩紅之後', rate: '68%' } });
+    expect(g.groups.map(x => pctText(x.share.pct))).toEqual(['65%', '60%', '53%', '77%']);
+    expect(g.abnormalSentence).toEqual({ key: 'decisive.abnormal', params: { offYes: '53%', onNo: '60%' } });
+  });
+
+  it('沒有票的組不列、外白或內黑沒有票就不寫那一句；沒有全體正確率不寫第一句', () => {
+    const g = decisiveGlance(null, [{ group: 'onYes', right: 3, wrong: 1 }, { group: 'offYes', right: 0, wrong: 0 }], '第 3～5 局');
+    expect(g.groups.map(x => x.group)).toEqual(['onYes']);
+    expect(g.sentence).toBeNull();
+    expect(g.abnormalSentence).toBeNull();
+  });
+});
+
+describe('一眼看懂（第四批）：陣容強度', () => {
+  it('強弱桌：最後一箱跟第一箱比，句型跟著高低換', () => {
+    const bins = [{ n: 210, rate: 49.2 }, { n: 213, rate: 46 }, { n: 211, rate: 46.6 }];
+    expect(strengthCurveGlance(bins, 47.1, '三個任務失敗')).toEqual({
+      key: 'strength.curve.lower', params: { metric: '三個任務失敗', strong: '47%', weak: '49%', all: '47%' },
+    });
+    expect(strengthCurveGlance([{ n: 10, rate: 20 }, { n: 10, rate: 31 }], 25, '藍方贏')?.key).toBe('strength.curve.higher');
+    expect(strengthCurveGlance([{ n: 10, rate: 30.2 }, { n: 10, rate: 29.8 }], 30, '藍方贏')?.key).toBe('strength.curve.same');
+    expect(strengthCurveGlance([{ n: 10, rate: 30 }], 30, '藍方贏')).toBeNull();
+  });
+
+  it('分層：藍方贏（三藍活 ÷ 這層的局）最多、最少的分層；局數不夠的不比', () => {
+    const tiers = [
+      { label: '高強度', n: 154, threeRed: 72, blueDead: 36, blueAlive: 46 },
+      { label: '偏強', n: 189, threeRed: 89, blueDead: 41, blueAlive: 59 },
+      { label: '偏弱', n: 421, threeRed: 214, blueDead: 89, blueAlive: 118 },
+      { label: '極少', n: 5, threeRed: 0, blueDead: 0, blueAlive: 5 },
+    ];
+    const g = strengthTiersGlance(tiers, 20);
+    expect(g.sentence).toEqual({ key: 'strength.tiers', params: { hi: '偏強', hiRate: '31%', lo: '偏弱', loRate: '28%' } });
+    expect(g.rows[0].threeRed).toBeCloseTo((72 / 154) * 100, 6);
+  });
+
+  it('走勢：差不到門檻說「前後差不多」，不把 3 分說成變低', () => {
+    const a = { date: '2023-11', median: 1491.2 };
+    expect(strengthTrendGlance(a, { date: '2026-11', median: 1488.4 }, '賽前 Elo', 10)?.key).toBe('strength.trend.same');
+    expect(strengthTrendGlance(a, { date: '2026-11', median: 1512 }, '賽前 Elo', 10)).toEqual({
+      key: 'strength.trend.up', params: { measure: '賽前 Elo', from: '2023-11', to: '2026-11', a: 1491, b: 1512 },
+    });
+    expect(strengthTrendGlance(a, { date: '2026-11', median: 1470 }, '賽前 Elo', 10)?.key).toBe('strength.trend.down');
+    expect(strengthTrendGlance(null, a, 'PR')).toBeNull();
+  });
+});
+
+describe('一眼看懂（第四批）：個人分析的其他小分頁、各位置／各角色', () => {
+  it('三塊勝率：當紅方、藍方最後各贏多少；角色只比場數夠的', () => {
+    const roles = [
+      { role: '刺客', win: 85.2, n: 122 }, { role: '忠臣', win: 33.1, n: 499 }, { role: '梅林', win: 90, n: 3 },
+    ];
+    const g = playerBlocksGlance({ win: 80.1, n: 438 }, { win: 38.2, n: 731 }, roles, '測試玩家甲', 10);
+    expect(g.sentence).toEqual({ key: 'blocks.higher', params: { name: '測試玩家甲', red: '80%', blue: '38%' } });
+    expect(g.roleSentence).toEqual({ key: 'blocks.roles', params: { hi: '刺客', hiRate: '85%', lo: '忠臣', loRate: '33%' } });
+    expect(playerBlocksGlance({ win: null, n: 0 }, { win: 50, n: 10 }, null, '測試玩家甲', 10).sentence).toBeNull();
+  });
+
+  it('理論勝率：實際比預期高／低／一樣；沒有角色理論時用位置理論', () => {
+    expect(theoryGlance({ rate: 56.04, actual: 61 }, null, '測試玩家甲')).toEqual({
+      key: 'theory.role.higher', params: { name: '測試玩家甲', rate: '56%', actual: '61%' },
+    });
+    expect(theoryGlance({ rate: 56, actual: 50 }, null, '測試玩家甲')?.key).toBe('theory.role.lower');
+    expect(theoryGlance({ rate: null, actual: 50 }, { rate: 60.1, actual: 60 }, '測試玩家甲')?.key).toBe('theory.position.same');
+    expect(theoryGlance(null, null, '測試玩家甲')).toBeNull();
+  });
+
+  it('Elo：最高點用走勢圖同一份 series；現在就是最高點時換句型', () => {
+    const series = [['2024-01-01', 1490, 30, 10], ['2025-05-01', 1580, 10, 500], ['2026-11-01', 1560, 8, 1100]] as const;
+    expect(eloGlance(1559.6, 3, series, '測試玩家甲')).toEqual({
+      key: 'elo.peak', params: { name: '測試玩家甲', elo: 1560, rank: 3, peak: 1580, date: '2025-05-01' },
+    });
+    expect(eloGlance(1590, 1, series, '測試玩家甲')?.key).toBe('elo.atPeak');
+    expect(eloGlance(null, 1, series, '測試玩家甲')).toBeNull();
+  });
+
+  it('各位置／各角色：最後贏最多、最少的（只比場數夠的）', () => {
+    const rows = [{ name: '1', win: 54.1, n: 900 }, { name: '0', win: 59.3, n: 880 }, { name: '5', win: 70, n: 4 }, { name: '7', win: 49.6, n: 870 }];
+    expect(winExtremesSentence(rows, 'seatWin.blue', 10)).toEqual({ key: 'seatWin.blue', params: { hi: '0', hiRate: '59%', lo: '7', loRate: '50%' } });
+    expect(winExtremesSentence([{ name: '1', win: 50, n: 10 }], 'seatWin.red', 10)).toBeNull();
+  });
+});
+
 describe('顏色：梅林被刺中（三藍死）是紅方贏，用紅色系', () => {
   const rgb = (hex: string): [number, number, number] => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
 
@@ -635,6 +733,19 @@ describe('一眼看懂：每個句型兩種語言都有字', () => {
     })),
     { key: 'radar.own', params: { name: '測試玩家甲', best: '紅方最終勝率', bestValue: '80%', worst: '任務勝率', worstValue: '48%' } },
     { key: 'rules.window', params: { n: 100 } },
+    // 第四批
+    { key: 'decisive.lead', params: { scope: '兩紅之後', rate: '68%' } },
+    { key: 'decisive.abnormal', params: { offYes: '53%', onNo: '60%' } },
+    ...['higher', 'lower', 'same'].map(k => ({ key: `strength.curve.${k}`, params: { metric: '三個任務失敗', strong: '47%', weak: '49%', all: '47%' } })),
+    { key: 'strength.tiers', params: { hi: '偏強', hiRate: '32%', lo: '偏弱', loRate: '29%' } },
+    ...['up', 'down', 'same'].map(k => ({ key: `strength.trend.${k}`, params: { measure: '賽前 Elo', from: '2023-11', to: '2026-11', a: 1491, b: 1488 } })),
+    ...['higher', 'lower', 'same'].map(k => ({ key: `blocks.${k}`, params: { name: '測試玩家甲', red: '80%', blue: '38%' } })),
+    { key: 'blocks.roles', params: { hi: '刺客', hiRate: '85%', lo: '忠臣', loRate: '33%' } },
+    ...['role', 'position'].flatMap(kind => ['higher', 'lower', 'same'].map(k => ({ key: `theory.${kind}.${k}`, params: { name: '測試玩家甲', rate: '56%', actual: '56%' } }))),
+    { key: 'elo.peak', params: { name: '測試玩家甲', elo: 1565, rank: 1, peak: 1580, date: '2025-05-01' } },
+    { key: 'elo.atPeak', params: { name: '測試玩家甲', elo: 1565, rank: 1 } },
+    ...['blue', 'red'].map(k => ({ key: `seatWin.${k}`, params: { hi: '0', hiRate: '59%', lo: '7', loRate: '50%' } })),
+    { key: 'roleWin.lead', params: { hi: '刺客', hiRate: '85%', lo: '忠臣', loRate: '33%' } },
   ];
   for (const lang of ['zh-TW', 'en']) {
     it(`${lang}：句型都有字、要填的數字都給了、沒有寫死的百分比`, () => {

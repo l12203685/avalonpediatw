@@ -26,6 +26,7 @@ import { ensureAdminsSeed } from './services/AdminService';
 import {
   initializeBots,
   registerBotRoutes,
+  shutdownBots,
   syncLineWebhookEndpointAtBoot,
   startLineWebhookWatchdog,
   startStatsDigest,
@@ -233,5 +234,24 @@ main().catch(err => {
   console.error('Fatal: server bootstrap failed', err);
   process.exit(1);
 });
+
+// Graceful shutdown (2026-11-25). Render sends SIGTERM on every deploy (and
+// before a free instance sleeps) and waits 30 s before SIGKILL. Use that time
+// to write the open 模擬瓦 exercises to the private state repo so they are
+// still there after the restart (bots/simulation/persist.ts). Before this
+// there was no handler at all: node runs as PID 1 in the container, where an
+// unhandled SIGTERM is ignored, so the old instance simply ran on until it was
+// killed. A second signal exits right away.
+let shuttingDown = false;
+function shutdown(signal: NodeJS.Signals): void {
+  if (shuttingDown) process.exit(0);
+  shuttingDown = true;
+  console.log(`${signal} received: saving bot state before exit`);
+  void shutdownBots()
+    .catch(() => undefined)
+    .finally(() => process.exit(0));
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
 
 export { app };

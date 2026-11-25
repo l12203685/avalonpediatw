@@ -23,6 +23,12 @@ services:
     # 進行中的對局、大廳聊天、LINE 待送佇列都在記憶體裡，會一起消失。戰績歸檔
     # 每打完一局就 commit 一次 avalon-game-records/** 到 main，沒有這個過濾的話，
     # 正式機會每局重開一次。server 執行期只讀 packages/server 與 packages/shared。
+    #
+    # 2026-11-25：模擬瓦進行中的題目不再跟著消失——存在 private repo 的
+    # bot-state/sim-sessions.json（跟帳號庫同一個 repo、同一把 GITHUB_ACCOUNTS_TOKEN，
+    # 不用新的設定），關機（SIGTERM）前寫完、開機讀回來。對局、大廳聊天、LINE 待送佇列
+    # 還是會消失，所以：會碰到下面 paths 的 PR 不要白天一個一個合併，集中在半夜
+    # （台北 03:30 左右）一次合併。細節與規則見 docs/BOTS.md〈伺服器重啟〉。
     buildFilter:
       paths:
         - packages/server/**

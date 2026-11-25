@@ -16,7 +16,8 @@ import { ChevronRight } from 'lucide-react';
  * 字一律用文字色（白／灰），不拿陣營色當字色——陣營靠旁邊的色塊認。
  */
 /** plain＝跟陣營無關的數字（個人的整體勝率、理論勝率）；rank＝排行榜上比的那個數字（琥珀：強調／名次）。 */
-export type GlanceTone = 'blue' | 'red' | 'no' | 'yes' | 'plain' | 'rank';
+/** （第四批）kill＝梅林被刺中（三藍死，紫紅 #d1287a，同 tokens.ts OUTCOME_COLORS）：三種結局一起畫時用。 */
+export type GlanceTone = 'blue' | 'red' | 'no' | 'yes' | 'plain' | 'rank' | 'kill';
 
 const SEGMENT_CLASS: Readonly<Record<GlanceTone, string>> = {
   blue: 'bg-blue-600 text-white',
@@ -25,6 +26,7 @@ const SEGMENT_CLASS: Readonly<Record<GlanceTone, string>> = {
   yes: 'bg-zinc-200 text-zinc-900',
   plain: 'bg-zinc-500 text-white',
   rank: 'bg-amber-600 text-white',
+  kill: 'bg-[#d1287a] text-white',
 };
 
 const SWATCH_CLASS: Readonly<Record<GlanceTone, string>> = {
@@ -34,6 +36,7 @@ const SWATCH_CLASS: Readonly<Record<GlanceTone, string>> = {
   yes: 'bg-zinc-200',
   plain: 'bg-zinc-500',
   rank: 'bg-amber-600',
+  kill: 'bg-[#d1287a]',
 };
 
 export interface SplitSegment {

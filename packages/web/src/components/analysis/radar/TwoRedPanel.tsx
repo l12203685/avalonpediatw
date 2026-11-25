@@ -132,7 +132,7 @@ function RoundTable({ round, mine, all, refLabel }: { round: TwoRedRound; mine: 
   const tot = byIndex[TWO_RED_TOTAL_INDEX];
   const atMostOne = (c: TwoRedCounts): number => c.allGood + c.mordred + c.oneThumb;
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
     <StatTable
       caption={t('analytics.r6.radar.twoRed.roundCaption', { round })}
       columns={columns}
@@ -245,7 +245,8 @@ export default function TwoRedPanel({ name }: { name: string }): JSX.Element {
       <AbnormalPlayerLine name={name} tier={mode === 'group' && tier !== 'unrated' ? tier : null} />
       <SectionTabs items={tabs} persistKey="analysis.players.twoRed" ariaLabel={t('analytics.r6.radar.twoRed.roleTabs')} size="sm">
         {(role) => (
-          <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)_minmax(0,5fr)]">
+          // 手機一欄也要 minmax(0,1fr)：預設的 auto 欄會被表格撐寬，整頁跟著左右捲（2026-11-25 第四批，390px 時頁寬 521）
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)_minmax(0,5fr)]">
             {TWO_RED_ROUNDS.map((round) => (
               <RoundTable
                 key={round}
