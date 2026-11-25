@@ -11,6 +11,7 @@
                 機器人 − 真人 = 機器人的梅林比真人的梅林多露的部分。格 = 第幾局 × 第幾次提議 × 比數 × 隊上幾個梅林看得到的紅 × 自己在不在隊上。
                 另外照「放了誰」拆（自己、看得到的紅、莫德雷德、派西、忠臣；有放／沒放）。
   --part rates  梅林／忠臣／派西當隊長時的比例（放自己、放看得到的紅、放莫德雷德、放派西、照派上一次成功的隊…），真人 vs 機器人。
+  --part votes  同 leak，但看票（Mv、Lv）：第幾局 × 在不在隊上 × 隊上幾個看得到的紅 × 贊成／反對。
   --part hit    只用梅林的派隊（Mk）與全部分量時，世界線第一名是梅林的比例（給自我對打的候選比較用；不分層）。
   --part refit  紅方跟著調整：世界線的表改用這一份自我對打重新擬合（交叉擬合），只用世界線、不分層的刺中率；對照 = 真人局擬合的正式表。
 
@@ -271,6 +272,59 @@ def part_hit(bot, tb, w):
         print(f'| {name} | {100 * hit / len(games):.1f} |')
 
 
+def vote_rows(gm, tb, w):
+    """每個藍方座位的每一張票（非強制、可靠、不是自己的提議）：像梅林 − 像忠臣的證據（Mv、Lv），照格累計。"""
+    reds = gm.reds
+    seen = {reds[r] for r in SEEN}
+    out = []
+    for s in gm.blue:
+        role = 'M' if s == gm.merlin else 'P' if s == gm.percival else 'L'
+        others = [b for b in gm.blue if b != s]
+        mine = [p for p in gm.props if not p['forced'] and p['appr'] is not None and p['leader'] != s]
+        if not mine:
+            continue
+        acc = [0.0] * len(mine)
+        hyps_m = [('M', x, None) for x in others]
+        hyps_l = [('L', x, y) for x in others for y in others if x != y]
+        for hyps, comp_w in ((hyps_m, w['Mv']), (hyps_l, -w['Lv'])):
+            for rs, x, y in hyps:
+                ev = wl.vote_events(gm, reds, s, rs, x, y)
+                for i, (_c, key, inv, v) in enumerate(ev):
+                    acc[i] += comp_w * (tb.ll_bin(key, v) - tb.ll_bin(inv, v)) / len(hyps)
+        for p, d in zip(mine, acc):
+            ns = len(p['team'] & seen)
+            out.append({'role': role, 'D': d, 'cell': ('R1–R2' if p['r'] <= 2 else f'R{p["r"]}', '在隊上' if s in p['team'] else '不在隊上',
+                                                        f'看得到的紅×{"2+" if ns >= 2 else ns}', '贊成' if s in p['appr'] else '反對')})
+    return out
+
+
+def part_votes(hum, bot, tb, w):
+    print('票（非強制、不是自己的提議）：每局貢獻 = 梅林的證據總和／梅林座位 − 忠臣的證據總和／忠臣座位（正 = 這一格讓梅林比忠臣更像梅林）\n')
+    tabs = {}
+    for name, games in (('真人', hum), ('機器人', bot)):
+        acc = defaultdict(lambda: [0.0, 0.0, 0, 0])
+        for gm in games:
+            for r in vote_rows(gm, tb, w):
+                if r['role'] == 'P':
+                    continue
+                a = acc[r['cell']]
+                i = 0 if r['role'] == 'M' else 1
+                a[i] += r['D']
+                a[2 + i] += 1
+        g = len(games)
+        tabs[name] = {k: (a[0] / g - a[1] / (4 * g), a[2] / g, a[3] / (4 * g)) for k, a in acc.items()}
+    print('| 格 | 真人：梅林／忠臣 每座位局的票數 | 真人 每局貢獻 | 機器人：梅林／忠臣 票數 | 機器人 每局貢獻 | 機器人 − 真人 |')
+    print('|---|---|---|---|---|---|')
+    zero = (0.0, 0.0, 0.0)
+    for k in sorted(set(tabs['真人']) | set(tabs['機器人'])):
+        x, y = tabs['真人'].get(k, zero), tabs['機器人'].get(k, zero)
+        if abs(x[0]) < 0.002 and abs(y[0]) < 0.002:
+            continue
+        print(f'| {fmt_key(k)} | {x[1]:.2f}／{x[2]:.2f} | {x[0]:+.3f} | {y[1]:.2f}／{y[2]:.2f} | {y[0]:+.3f} | {y[0] - x[0]:+.3f} |')
+    th, tbt = sum(v[0] for v in tabs['真人'].values()), sum(v[0] for v in tabs['機器人'].values())
+    print(f'| 合計（全部的格） | | {th:+.3f} | | {tbt:+.3f} | {tbt - th:+.3f} |')
+
+
 def part_refit(bot, human_tb, w, kfold):
     """紅方跟著調整：世界線的表與疊加權重改用這一份自我對打重新擬合（交叉擬合：每一份用其他幾份的局擬合），只用世界線、不分層的刺中率。
     對照 = 真人局擬合的正式表在同一批刺殺點上的刺中率。"""
@@ -321,7 +375,9 @@ def main():
         return part_leak(hum, bot, tb, w, args.json)
     if args.part == 'rates':
         return part_rates(hum, bot, tb, w)
-    raise SystemExit('--part leak|rates|hit')
+    if args.part == 'votes':
+        return part_votes(hum, bot, tb, w)
+    raise SystemExit('--part leak|rates|votes|hit|refit')
 
 
 if __name__ == '__main__':
