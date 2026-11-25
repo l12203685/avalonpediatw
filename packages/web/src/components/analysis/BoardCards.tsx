@@ -43,7 +43,7 @@ export interface BoardCardRow {
   /** 名次；對照組沒有名次（null）。 */
   rank: number | null;
   name: ReactNode;
-  /** 長條的長度（0–max）；null = 沒有數字，不畫長條。 */
+  /** 長條的長度（0–max）；null = 不畫長條（沒有數字，或這個數字不適合畫成從 0 開始的長條），大數字改寫在名字右邊。 */
   value: number | null;
   /** 長條右邊的大數字（例：「60%」）。 */
   text: string;
@@ -71,13 +71,13 @@ function Card({ row, tone, refValue, max }: { row: BoardCardRow; tone: GlanceTon
         {row.rank !== null && <span className={`w-5 shrink-0 text-right text-sm font-black tabular-nums ${rankClass(row.rank)}`}>{row.rank}</span>}
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{row.name}</span>
         {row.thin && <span className="shrink-0 rounded bg-amber-500/15 px-1 text-[10px] font-semibold text-amber-200">{t(`${G}.thin`)}</span>}
+        {/* 沒有長條的榜（Elo、有正有負的數字）：大數字寫在名字右邊 */}
+        {row.value === null && <span className={`shrink-0 text-sm font-bold tabular-nums ${row.text === '—' ? 'text-zinc-500' : 'text-white'} ${row.thin ? 'opacity-60' : ''}`} title={row.label}>{row.text}</span>}
       </div>
-      {row.value !== null ? (
+      {row.value !== null && (
         <div className={`mt-1 ${row.thin ? 'opacity-60' : ''}`}>
           <MeterBar pct={row.value} text={row.text} tone={tone} refPct={refValue} max={max} label={row.label} />
         </div>
-      ) : (
-        <p className="mt-1 text-right text-xs font-bold tabular-nums text-zinc-500">{row.text}</p>
       )}
       {row.details && row.details.length > 0 && (
         <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] leading-snug tabular-nums text-zinc-400">

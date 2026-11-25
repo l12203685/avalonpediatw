@@ -1899,7 +1899,7 @@
       "col": {
         "rankName": "名次／玩家",
         "elo": "Elo",
-        "sigma": "±1σ",
+        "sigma": "誤差",
         "games": "場數",
         "modelTheory": "模型理論勝率",
         "lastPlayed": "最後出賽"
@@ -2577,10 +2577,11 @@
         "minGames": "生涯至少 {{n}} 場",
         "roles": "六個特殊角色各打過 {{k}} 場、忠臣 {{kl}} 場",
         "sep": "、",
-        "who": "{{list}}的人才上榜；",
-        "everyone": "打過的人都列；",
+        "who": "理論勝率榜要{{list}}才上榜；",
+        "everyone": "理論勝率榜打過的人都列；",
         "window": "數字看每個人自己最近 {{n}} 場。",
-        "career": "數字看每個人生涯全部場次。"
+        "career": "數字看每個人生涯全部場次。",
+        "others": "其他榜的條件寫在各榜上面。"
       },
       "tree": {
         "order": "同樣是 {{blues}} 個任務成功、{{reds}} 個失敗，順序不同差很多：「{{high}}」之後藍方最後贏 {{highRate}}，「{{low}}」之後只有 {{lowRate}}。",

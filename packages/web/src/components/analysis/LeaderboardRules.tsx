@@ -111,7 +111,7 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
   const g = 'analytics.glance.rules';
   const summary = `${rules.who.length > 0
     ? t(`${g}.who`, { list: rules.who.map((p) => sentenceText(t, p)).join(t(`${g}.sep`)) })
-    : t(`${g}.everyone`)}${sentenceText(t, rules.window) ?? ''}`;
+    : t(`${g}.everyone`)}${sentenceText(t, rules.window) ?? ''}${t(`${g}.others`)}`;
 
   const select = (
     label: string, value: string, options: Array<[string, string]>, onChange: (v: string) => void, testId: string,

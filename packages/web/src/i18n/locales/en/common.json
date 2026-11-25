@@ -2575,13 +2575,14 @@
       },
       "rules": {
         "active": "played in the last {{days}} days",
-        "minGames": "at least {{n}} career games",
-        "roles": "at least {{k}} games in each of the six special roles and {{kl}} as Loyal Servant",
+        "minGames": "have at least {{n}} career games",
+        "roles": "have at least {{k}} games in each of the six special roles and {{kl}} as Loyal Servant",
         "sep": ", ",
-        "who": "Listed: players who {{list}}; ",
-        "everyone": "Everyone who has played is listed; ",
+        "who": "Theory board: listed if you {{list}}; ",
+        "everyone": "Theory board: everyone who has played is listed; ",
         "window": "numbers use each player's own last {{n}} games.",
-        "career": "numbers use each player's whole career."
+        "career": "numbers use each player's whole career.",
+        "others": " Other boards state their own rule above the board."
       },
       "tree": {
         "order": "With the same {{blues}} missions passed and {{reds}} failed, the order matters a lot: after \"{{high}}\" Blue ends up winning {{highRate}}, after \"{{low}}\" only {{lowRate}}.",

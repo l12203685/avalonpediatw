@@ -479,10 +479,10 @@ describe('一眼看懂（第三批）：戰績排行', () => {
       return who + render('zh-TW', g.window);
     };
     const base = { activeDays: 90, mainGames: 100, theoryMinGames: 50, requireRoleWindows: 1, roleWindowGames: 10, loyalWindowGames: 40 };
-    expect(say(base)).toBe('最近 90 天有打、生涯至少 50 場、六個特殊角色各打過 10 場、忠臣 40 場的人才上榜；數字看每個人自己最近 100 場。');
-    expect(say({ ...base, requireRoleWindows: 0 })).toBe('最近 90 天有打、生涯至少 50 場的人才上榜；數字看每個人自己最近 100 場。');
+    expect(say(base)).toBe('理論勝率榜要最近 90 天有打、生涯至少 50 場、六個特殊角色各打過 10 場、忠臣 40 場才上榜；數字看每個人自己最近 100 場。');
+    expect(say({ ...base, requireRoleWindows: 0 })).toBe('理論勝率榜要最近 90 天有打、生涯至少 50 場才上榜；數字看每個人自己最近 100 場。');
     // 全部放寬：打過的人都列，數字看生涯
-    expect(say({ ...base, activeDays: 0, theoryMinGames: 0, requireRoleWindows: 0, mainGames: 0 })).toBe('打過的人都列；數字看每個人生涯全部場次。');
+    expect(say({ ...base, activeDays: 0, theoryMinGames: 0, requireRoleWindows: 0, mainGames: 0 })).toBe('理論勝率榜打過的人都列；數字看每個人生涯全部場次。');
     // 英文也組得出來
     const en = boardRulesGlance(base);
     for (const p of [...en.who, en.window]) expect(render('en', p)).toMatch(/\S{6}/);
