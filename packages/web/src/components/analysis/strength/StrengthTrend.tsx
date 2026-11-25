@@ -21,6 +21,9 @@ import { sentenceText } from '../core/glanceView';
  */
 
 type Mode = 'elo' | 'pr';
+/** 一句話裡「前後差不多」的門檻：Elo 差不到 10 分、PR 差不到 3。 */
+const TREND_EVEN_ELO = 10;
+const TREND_EVEN_PR = 3;
 
 const fmtDate = (t: number): string => new Date(t).toISOString().slice(0, 7);
 
@@ -79,6 +82,7 @@ export default function StrengthTrend({ report }: { report: StrengthReport }): J
     first ? { date: fmtDate(first.t), median: first.median } : null,
     last ? { date: fmtDate(last.t), median: last.median } : null,
     mode === 'elo' ? '賽前 Elo' : '實力排名（PR）',
+    mode === 'elo' ? TREND_EVEN_ELO : TREND_EVEN_PR,
   ));
   return (
     <div className="space-y-1" data-testid="strength-trend">

@@ -601,6 +601,7 @@ export default function DecisiveBoard(): JSX.Element {
                 onClick: () => openPlayerStats(r.name),
               }))}
               refValue={glance.overall?.pct ?? null}
+              refNote={t(`${GD}.refLine`)}
               table={() => <div className="space-y-1">{minNote}{table()}</div>}
             />
           )}

@@ -904,13 +904,17 @@ export function strengthTiersGlance(tiers: readonly StrengthTierInput[] | null |
   };
 }
 
-/** 「走勢」：典型一桌的中位數從第一點到最後一點；measure = 「賽前 Elo」或「PR」，日期寫年-月。 */
+/**
+ * 「走勢」：典型一桌的中位數，第一點跟最後一點比；measure = 「賽前 Elo」或「實力排名（PR）」，日期寫年-月。
+ * 差不到 evenGap（顯示的整數）就說「前後差不多」（Elo 差 3 分不算變低）。
+ */
 export function strengthTrendGlance(
   first: { date: string; median: number } | null | undefined, last: { date: string; median: number } | null | undefined, measure: string,
+  evenGap = 1,
 ): Sentence | null {
   if (!first || !last || !finite(first.median) || !finite(last.median) || first === last) return null;
-  const rel = relation(last.median, first.median);
-  const key = `strength.trend.${rel === 'higher' ? 'up' : rel === 'lower' ? 'down' : 'same'}`;
+  const gap = shownPct(last.median) - shownPct(first.median);
+  const key = `strength.trend.${Math.abs(gap) < evenGap ? 'same' : gap > 0 ? 'up' : 'down'}`;
   return { key, params: { measure, from: first.date, to: last.date, a: shownPct(first.median), b: shownPct(last.median) } };
 }
 

@@ -143,7 +143,7 @@ export default function StrengthOutcome({ report }: { report: StrengthReport }):
         </div>
         <div className="h-[200px] w-full sm:h-[240px]">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={curve} margin={{ top: 6, right: 12, bottom: 0, left: wide ? 0 : -14 }}>
+            <ComposedChart data={curve} margin={{ top: 6, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="#27272a" strokeDasharray="3 3" />
               <XAxis dataKey="mid" type="number" domain={['dataMin - 2', 'dataMax + 2']} stroke="#71717a" fontSize={11}
                 tickFormatter={(v: number) => v.toFixed(0)} label={{ value: '桌上 S', position: 'insideBottomRight', offset: -2, fill: '#71717a', fontSize: 10 }} />

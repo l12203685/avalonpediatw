@@ -2658,9 +2658,9 @@
         },
         "tiers": "Good wins most at {{hi}} tables ({{hiRate}}) and least at {{lo}} tables ({{loRate}}).",
         "trend": {
-          "up": "A typical table's {{measure}} has gone up: about {{a}} around {{from}}, {{b}} around {{to}}.",
-          "down": "A typical table's {{measure}} has gone down: about {{a}} around {{from}}, {{b}} around {{to}}.",
-          "same": "A typical table's {{measure}} has stayed about the same: {{a}} around {{from}}, {{b}} around {{to}}."
+          "up": "A typical table's {{measure}} is higher than before: about {{a}} around {{from}}, {{b}} around {{to}}.",
+          "down": "A typical table's {{measure}} is lower than before: about {{a}} around {{from}}, {{b}} around {{to}}.",
+          "same": "A typical table's {{measure}} is about the same as before: {{a}} around {{from}}, {{b}} around {{to}}."
         },
         "sDef": "S = the average pre-game strength rank of the 10 players at the table (0–100, higher is stronger)."
       },
