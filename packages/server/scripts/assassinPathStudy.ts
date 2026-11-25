@@ -15,6 +15,9 @@
  *     NORM.jsonl = `keySpotStudy.ts --export-bot` 的輸出（自我對打 detail=1 的整局紀錄，座位以 1-1 隊長為 1 家）。
  *
  * 刺殺是一局的最後一個動作，前面的局面不受刺客怎麼刺影響，所以同一份自我對打紀錄可以直接比「現行」和「候選」的刺殺（逐局配對、沒有抽樣差）。
+ *
+ * 第 75 回合：`--wl-tables PATH` 換一份世界線的表（`worldLineStudy75.py --part export`；交叉擬合時驗證的那一半用另一半擬合的表），
+ * `--wl` 每個候選人多輸出世界線的梅林／派西維爾邊際（`wl`、`wlp`；不管 `assassinWorldLine75` 開沒開都算）。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,6 +29,8 @@ import { buildReplayObservation, seatId, seatOfId } from '../src/ai/benchmark/re
 import { pinnedQuestCard, withSeededRandom } from '../src/ai/benchmark/agreement';
 import { campOf, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { assassinPathFeatures61, missionOrder61 } from '../src/ai/RedRound61';
+import { setWorldLineTables75, worldLineTables75 } from '../src/ai/Round75';
+import { worldLines75, type WorldLineTables } from '../src/ai/assassin/WorldLines75';
 
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
@@ -33,6 +38,9 @@ const args = (name: string): string[] => argv.flatMap((a, i) => (a === name && a
 
 const tuning = resolveAgentTuning(Object.assign({}, ...args('--flag').map(parseTuningFlag)));
 const EXCLUDED_TAGS = new Set(['flag:badGame', 'flag:incident']);
+const wlTables = arg('--wl-tables');
+if (wlTables) setWorldLineTables75(JSON.parse(fs.readFileSync(wlTables, 'utf8')) as WorldLineTables);
+const withWl = argv.includes('--wl');
 
 interface Spot { gi: number; s: number | null; game: ReplayGame; logged?: number | null }
 
@@ -50,9 +58,11 @@ function row(sp: Spot): Record<string, unknown> | null {
   const bot = act.type === 'assassinate' ? seatOfId(act.targetId) : null;
   const reds = obs.allEvilIds ?? [];
   const front = new Set(read.front);
+  const wl = withWl ? worldLines75(obs, worldLineTables75()) : null;
   const cands = read.candidates.map((id) => {
     const t = read.terms.get(id)!;
-    return { seat: seatOfId(id), front: front.has(id) ? 1 : 0, total: read.scores.get(id) ?? 0, ...t, f: assassinPathFeatures61(obs, id, reds) };
+    const extra = wl ? { wl: wl.merlin.get(id) ?? null, wlp: wl.percival.get(id) ?? null } : {};
+    return { seat: seatOfId(id), front: front.has(id) ? 1 : 0, total: read.scores.get(id) ?? 0, ...t, ...extra, f: assassinPathFeatures61(obs, id, reds) };
   });
   return { gi: sp.gi, s: sp.s, order: missionOrder61(obs), merlin: mSeat, human: g.assassinTargetSeat, bot, logged: sp.logged, cands };
 }
