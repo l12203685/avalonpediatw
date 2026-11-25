@@ -35,6 +35,8 @@ export type ScenarioAsk =
   | { kind: 'vote'; seat: string; team: string }
   /** 這一隊（`team`，牌譜寫法；要過半或第 5 次）出任務，`seat` 出什麼牌。 */
   | { kind: 'card'; seat: string; team: string }
+  /** 這一隊（`team`，牌譜寫法）出任務，隊上每一個紅方各自出牌（各看各的）；答案 = 一共幾張失敗（第 78 回合）。 */
+  | { kind: 'cards'; team: string }
   /** 持湖者（照湖的順序）要驗誰。 */
   | { kind: 'lakeTarget' }
   /** 持湖者驗了 `target`，怎麼宣告。 */
@@ -56,6 +58,8 @@ export type ScenarioCheck =
   | { teamRedsMax: number }
   | { vote: 'approve' | 'reject' }
   | { card: 'fail' | 'success' }
+  /** 整隊的失敗張數在這個範圍裡（`cards` 題；任務牌是蓋著出的，看得到的只有張數）。 */
+  | { failCards: { min?: number; max?: number } }
   /** 宣告：truth = 照驗到的說。 */
   | { claim: 'good' | 'evil' | 'none' | 'truth' }
   /** 湖／刺殺的目標是這些人之一。 */
@@ -132,6 +136,8 @@ interface Built {
   game: ReplayGame;
   point: DecisionPoint;
   seat: number;
+  /** `cards` 題：隊上的紅方座位（每一個都出牌）；`seat` 是其中第一個（座位圖用）。 */
+  cardSeats?: number[];
 }
 
 function proposalOf(line: string, index: number, round: number, attempt: number, seatRoles: readonly Role[]): ReplayProposal {
@@ -253,6 +259,13 @@ export function buildScenario(fx: ScenarioFixture): Built {
       if (!p.forced && p.approveCount * 2 <= PLAYERS) throw new Error(`${fx.id}: 出任務的隊沒有過半（${p.approveCount} 票）；補上隊外贊成的人`);
       return { game, point: { kind: 'quest_vote', round }, seat };
     }
+    case 'cards': {
+      const p = nextStub(ask.team, true);
+      const reds = p.teamSeats.filter((s) => campOf(seatRoles[s - 1]) === 'evil');
+      if (reds.length === 0) throw new Error(`${fx.id}: 出任務的隊上沒有紅方`);
+      if (!p.forced && p.approveCount * 2 <= PLAYERS) throw new Error(`${fx.id}: 出任務的隊沒有過半（${p.approveCount} 票）；補上隊外贊成的人`);
+      return { game, point: { kind: 'quest_vote', round }, seat: reds[0], cardSeats: reds };
+    }
     case 'lakeTarget':
     case 'lakeClaim': {
       if (inRound > 0 || quests.length < 2 || quests.length > 4 || lakes.some((l) => l.round === quests.length)) throw new Error(`${fx.id}: 現在不是用湖的時候`);
@@ -278,6 +291,8 @@ export interface ScenarioAnswer {
   team?: number[];
   vote?: 'approve' | 'reject';
   card?: 'fail' | 'success';
+  /** `cards` 題：隊上的紅方一共出了幾張失敗。 */
+  failCards?: number;
   /** 湖或刺殺的目標。 */
   target?: number;
   claim?: 'good' | 'evil' | 'none';
@@ -324,6 +339,18 @@ export function answerScenario(built: Built, tuning: AgentTuning, seed: string):
       break;
     }
     case 'quest_vote': {
+      if (built.cardSeats) {
+        // 隊上每一個紅方各自出牌：各用自己的觀察、自己的機器人、自己的亂數（和真的一起出任務一樣，互相看不到對方出什麼）。
+        const played = built.cardSeats.map((s) => {
+          const view = hideLobby(buildReplayObservation(game, s, point));
+          const who = agentsFor(game, s, tuning).agent;
+          const a = withSeededRandom(`${game.id}|${s}|quest-${point.round}${seed ? `|${seed}` : ''}`, () => who.act(view));
+          return { seat: s, fail: a.type === 'quest_vote' && a.vote === 'fail' };
+        });
+        out.failCards = played.filter((x) => x.fail).length;
+        out.text = `${out.failCards} 張失敗（${played.map((x) => `${seatChar(x.seat)} 家${x.fail ? '失敗' : '成功'}`).join('、')}）`;
+        break;
+      }
       const a = withSeededRandom(seedOf(`quest-${point.round}`), () => agent.act(obs));
       out.card = a.type === 'quest_vote' && a.vote === 'fail' ? 'fail' : 'success';
       out.text = out.card === 'fail' ? '出失敗' : '出成功';
@@ -387,6 +414,11 @@ export function checkAnswer(built: Built, ans: ScenarioAnswer, check: ScenarioCh
   }
   if ('vote' in check) return ans.vote === check.vote ? '' : `投了${ans.vote === 'approve' ? '贊成' : '反對'}`;
   if ('card' in check) return ans.card === check.card ? '' : `出了${ans.card === 'fail' ? '失敗' : '成功'}`;
+  if ('failCards' in check) {
+    const n = ans.failCards ?? -1;
+    const { min = 0, max = Number.POSITIVE_INFINITY } = check.failCards;
+    return n >= min && n <= max ? '' : `${ans.text}（要 ${min === max ? `剛好 ${min}` : Number.isFinite(max) ? `${min}–${max}` : `至少 ${min}`} 張）`;
+  }
   if ('claim' in check) {
     let want: string = check.claim;
     if (check.claim === 'truth') {
