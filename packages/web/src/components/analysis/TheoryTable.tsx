@@ -1,10 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useGameStore } from '../../store/gameStore';
-import { InfoTip, StatTable, Term, STAT_TERMS, type StatColumn, type StatTermKey } from './ui';
+import { InfoTip, StatTable, Term, STAT_TERMS, formatInt, type StatColumn, type StatTermKey } from './ui';
 import BoardInfo from './BoardInfo';
 import { fmtPct, fmtTheoryPct, type AnalysisLeaderboardBoard, type AnalysisLeaderboardRow } from '../../services/api';
-import { BenchmarkToggle, benchmarkBoardRow, useBenchmarkPinned } from './BenchmarkRows';
+import { BenchmarkToggle, benchmarkBoardRow, benchmarkName, useBenchmarkGroups, useBenchmarkPinned } from './BenchmarkRows';
+import { BoardCards, BoardLead, type BoardCardRow } from './BoardCards';
+import { boardGlance, pctText } from './core/glance';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 
 /**
  * 理論勝率：一張表 (Edward 2026-10-28「位置理論跟整體理論還是可以合併吧? 我不知道為什麼要分兩個頁面? 是因為條件不同嗎?
@@ -21,6 +24,11 @@ import { BenchmarkToggle, benchmarkBoardRow, useBenchmarkPinned } from './Benchm
  *
  * (2026-11-03 Edward：基準列「呈現在所有排行跟數據分析的最上列」) 表身最上面釘散客／全體／前 X%／中間／後 Y% (預設 20／20) 五列
  * (BenchmarkRows)：不排名、不受排序影響；數字看篩選後該組的全部座位 (不是最近 N 場／各角色窗)。
+ *
+ * (2026-11-25 站長：「數據分析…希望能更直觀讓看到的人一目瞭然」，第三批) 表格上面先一句話：照目前的排序，前三名是誰、多少，
+ * 不算散客的全體多少 (BoardLead，數字寫整數)。手機 (不到 640px) 不再是要橫向捲的表：一位玩家一張小卡 (BoardCards：名次、名字、
+ * 一條長條＋大數字、白線＝全體、一行小字是其他幾個理論勝率與場數)，先列前 10 名、按「看全部」展開；基準列收在「對照組」，
+ * 完整表格收在「進階」。桌機照舊是表格。數字都是同一份資料 (只是手機寫整數)。
  */
 
 type Row = AnalysisLeaderboardRow;
@@ -104,6 +112,42 @@ export default function TheoryTable({
   const pinned = useBenchmarkPinned(benchmarkBoardRow, { indent: 'w-5' }).props;
   const label = (key: string): string => t(`analytics.boards.theory.col.${key}`);
   const short = (r: Row): boolean => windowGames > 0 && r.games < windowGames;
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
+  const { section, groups } = useBenchmarkGroups();
+
+  // ── 一句話與手機的小卡：跟表格同一份 rows、同一個排序 ──
+  const G = 'analytics.glance.board';
+  const isRate = sortKey !== 'careerGames';
+  const fmt = (v: number): string => (isRate ? pctText(v) : t(`${G}.games`, { n: formatInt(v) }));
+  const regular = groups.find((g) => g.id === 'regular');
+  const baseValue = isRate && regular ? benchmarkBoardRow(regular)[sortKey] : null;
+  const base = isNum(baseValue) ? baseValue : null;
+  const glance = boardGlance(rows.map((r) => ({ name: r.name, value: r[sortKey] })), label(sortKey), fmt, base, isRate ? 'top' : 'most');
+  const maxGames = Math.max(1, ...rows.map((r) => r.careerGames ?? 0));
+  const thinFor = (r: Row): boolean => (sortKey === 'roleTheory' ? r.fullWindows === false
+    : sortKey === 'overallTheory' || sortKey === 'careerGames' ? false : short(r));
+  // 小字只放兩個最常看的（最終勝率在前），其餘在「進階：完整表格」
+  const DETAIL_KEYS: readonly TheorySortKey[] = ['finalWinRate', 'roleTheory', 'positionTheory'];
+  const card = (r: Row, rank: number | null, name: string, group = false): BoardCardRow => {
+    const v = r[sortKey];
+    const details: string[] = DETAIL_KEYS
+      .filter((k) => k !== sortKey && isNum(r[k]))
+      .slice(0, 2)
+      .map((k) => t(`${G}.pair`, { label: label(k), value: pctText(r[k] as number) }));
+    if (sortKey === 'assassinWinRate' && isNum(r.threeBlueGames)) details.push(t(`${G}.threeBlue`, { n: formatInt(r.threeBlueGames) }));
+    if (sortKey !== 'careerGames') details.push(t(group ? `${G}.games` : `${G}.careerGames`, { n: formatInt(r.careerGames) }));
+    return {
+      key: `${group ? 'ref' : 'row'}-${name}`,
+      rank,
+      name,
+      value: isNum(v) ? v : null,
+      text: isNum(v) ? fmt(v) : '—',
+      details,
+      thin: !group && thinFor(r),
+      label: isNum(v) ? `${name} ${label(sortKey)} ${fmt(v)}` : undefined,
+      onClick: group ? undefined : (): void => openPlayerStats(r.name),
+    };
+  };
 
   /** 比率格；`dim` 時變淡並附原因。`theory`：角色／位置／整體理論一位小數，其他勝率整數 (Edward 2026-10-30)。 */
   const pct = (v: unknown, dim: string | null, extra?: ReactNode, theory = false): ReactNode => (
@@ -227,6 +271,17 @@ export default function TheoryTable({
     },
   ];
 
+  const table = (): JSX.Element => (
+    <StatTable
+      columns={columns}
+      rows={rows}
+      maxHeight={TABLE_MAX_HEIGHT}
+      rowKey={(row) => `theory-${row.name}`}
+      onRowClick={(row) => openPlayerStats(row.name)}
+      {...pinned}
+    />
+  );
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
@@ -237,8 +292,8 @@ export default function TheoryTable({
             <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
           </BoardInfo>
         </InfoTip>
-        <BenchmarkToggle className="ml-auto" />
-        <label className="inline-flex items-center gap-1 text-xs text-zinc-400">
+        {wide && <BenchmarkToggle className="ml-auto" />}
+        <label className={`inline-flex items-center gap-1 text-xs text-zinc-400 ${wide ? '' : 'ml-auto'}`}>
           {t('analytics.boards.theory.sortBy')}
           <select
             value={sortKey}
@@ -250,14 +305,18 @@ export default function TheoryTable({
           </select>
         </label>
       </div>
-      <StatTable
-        columns={columns}
-        rows={rows}
-        maxHeight={TABLE_MAX_HEIGHT}
-        rowKey={(row) => `theory-${row.name}`}
-        onRowClick={(row) => openPlayerStats(row.name)}
-        {...pinned}
-      />
+      <BoardLead glance={glance} />
+      {wide ? table() : (
+        <BoardCards
+          rows={rows.map((r, i) => card(r, i + 1, r.name))}
+          reference={section ? groups.map((g) => card(benchmarkBoardRow(g), null, benchmarkName(t, section, g, true), true)) : []}
+          referenceExtra={<BenchmarkToggle />}
+          refValue={base}
+          tone="rank"
+          max={isRate ? 100 : maxGames}
+          table={table}
+        />
+      )}
     </div>
   );
 }

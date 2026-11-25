@@ -68,3 +68,20 @@ export function useBenchmarks(): BenchmarksSection | null {
   // 別張表先算好的 (同一個篩選) 直接用
   return show ? data ?? loader.peek() : null;
 }
+
+/**
+ * 目前篩選的基準組，不看「顯示基準列」開關（2026-11-25：個人分析拿「不算散客的全體」當對照，那是內容的一部分，
+ * 不是表格上可以關掉的基準列）；還沒算好或拿不到時 null。
+ */
+export function useBenchmarkSection(): BenchmarksSection | null {
+  const [data, setData] = useState<BenchmarksSection | null>(() => loader.peek());
+  useEffect(() => {
+    if (loader.peek()) return undefined;
+    let cancelled = false;
+    loader.load()
+      .then((b) => { if (!cancelled) setData(b); })
+      .catch(() => { if (!cancelled) setData(null); });
+    return (): void => { cancelled = true; };
+  }, []);
+  return data ?? loader.peek();
+}

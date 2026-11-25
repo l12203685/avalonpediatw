@@ -119,9 +119,10 @@ describe('數據分析：從這裡開始、怎麼用、發現與策略', () => {
     expect(topPathShare({ gameStates, mission1Branch: [] })).toBeNull();
     expect(topPathShare({ gameStates, mission1Branch: [{ games: 50 }] })).toBeNull();
     expect(topPathShare({ gameStates: [], mission1Branch: [{ games: 10 }] })).toBeNull();
-    // 兩個地方（任務進程、完整任務路徑）都用它，不再自己加總路徑
+    // 完整任務路徑用它，不再自己加總路徑（沒有地方用的「任務進程」元件 2026-11-25 第三批刪掉了，原本是兩個地方）
     const rounds = fs.readFileSync(path.join(web, 'components', 'analysis', 'RoundsAnalysis.tsx'), 'utf-8');
-    expect(rounds.match(/topPathShare\(data\)/g)?.length).toBe(2);
+    expect(rounds.match(/topPathShare\(data\)/g)?.length).toBe(1);
+    expect(rounds).not.toContain('ProgressionSection');
     expect(rounds).not.toMatch(/pathRows\.reduce/);
   });
 });

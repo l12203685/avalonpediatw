@@ -7,11 +7,14 @@
  *  - 每一個句型在繁中、英文都有字，而且句子裡真的填了那些數字；
  *  - 自動發現卡片的差距寫成白話（多／少幾個百分點）。
  * 第二批（同日）：刺殺、任務路徑、湖中女神的角色與宣告、派隊與投票內頁的句子與長條；三藍死（梅林被刺中）改用紅色系。
+ * 第三批（同日）：戰績排行（前三名一句話、上榜條件白話）、局勢樹（同比分不同順序）、個人分析（跟全體比最強／最弱）。
+ * 玩家名字都是假的（測試玩家甲…）。
  */
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
+  boardGlance, boardRulesGlance, radarGlance, stateTreeGlance,
   anyThin, blueWinShare, captainGlance, extremes, firstTeamGlance, killDetailGlance, killGlance, lakeClaimGlance, lakeHolderGlance, missionOneGlance,
   missionRatesGlance, missionSwingGlance, overallGlance, pathsGlance, pctText, relation, restText, roleRankGlance, seatHalvesSentence, seatKillGlance,
   shareText, shownPct, twoRedGlance, twoWay, votersGlance, votesGlance, type Sentence,
@@ -432,6 +435,138 @@ describe('一眼看懂（第二批）：派隊與投票的內頁', () => {
   });
 });
 
+describe('一眼看懂（第三批）：戰績排行', () => {
+  const rows = [
+    { name: '測試玩家甲', value: 60 },
+    { name: '測試玩家乙', value: 55.5 },
+    { name: '測試玩家丙', value: null },
+    { name: '測試玩家丁', value: 54.4 },
+    { name: '測試玩家戊', value: 50 },
+  ];
+
+  it('一句話講榜上前三名（照榜的順序，沒有數字的跳過），數字寫整數；對照是不算散客的全體', () => {
+    const g = boardGlance(rows, '角色理論', pctText, 46.2);
+    expect(g.top.map(r => r.name)).toEqual(['測試玩家甲', '測試玩家乙', '測試玩家丁']);
+    expect(g.sentence?.key).toBe('board.top3');
+    const text = render('zh-TW', g.sentence as Sentence);
+    for (const part of ['角色理論', '測試玩家甲（60%）', '測試玩家乙（56%）', '測試玩家丁（54%）']) expect(text).toContain(part);
+    expect(text).not.toContain('測試玩家丙');
+    expect(render('zh-TW', g.baseSentence as Sentence)).toContain('46%');
+    expect(render('en', g.sentence as Sentence)).toContain('60%');
+  });
+
+  it('榜上只有一兩位：句型跟著人數換；沒有人、沒有對照時不寫', () => {
+    expect(boardGlance(rows.slice(0, 2), '刺中率').sentence?.key).toBe('board.top2');
+    expect(boardGlance(rows.slice(0, 1), '刺中率').sentence?.key).toBe('board.top1');
+    expect(boardGlance(rows.slice(0, 1), '刺中率').baseSentence).toBeNull();
+    expect(boardGlance([], '刺中率', pctText, 44).sentence).toBeNull();
+    expect(boardGlance(null, '刺中率', pctText, 44).baseSentence).toBeNull();
+    expect(boardGlance([{ name: '測試玩家甲', value: null }], '刺中率').sentence).toBeNull();
+  });
+
+  it('數字的寫法由榜決定（進步榜寫百分點、場數寫場）', () => {
+    const g = boardGlance([{ name: '測試玩家甲', value: 16 }, { name: '測試玩家乙', value: 11 }], '角色理論進步', v => `+${v} 個百分點`, null, 'most');
+    expect(g.sentence?.key).toBe('board.most2');
+    expect(render('zh-TW', g.sentence as Sentence)).toBe('角色理論進步最多的是測試玩家甲（+16 個百分點），再來是測試玩家乙（+11 個百分點）。');
+  });
+
+  it('上榜條件寫成白話：幾個條件用頓號接，數字看最近幾場', () => {
+    const zh = load('zh-TW').analytics.glance.rules;
+    const say = (r: Parameters<typeof boardRulesGlance>[0]): string => {
+      const g = boardRulesGlance(r);
+      const who = g.who.length
+        ? (zh.who as string).replace('{{list}}', g.who.map(p => render('zh-TW', p)).join(zh.sep))
+        : zh.everyone;
+      return who + render('zh-TW', g.window);
+    };
+    const base = { activeDays: 90, mainGames: 100, theoryMinGames: 50, requireRoleWindows: 1, roleWindowGames: 10, loyalWindowGames: 40 };
+    expect(say(base)).toBe('理論勝率榜要最近 90 天有打、生涯至少 50 場、六個特殊角色各打過 10 場、忠臣 40 場才上榜；數字看每個人自己最近 100 場。');
+    expect(say({ ...base, requireRoleWindows: 0 })).toBe('理論勝率榜要最近 90 天有打、生涯至少 50 場才上榜；數字看每個人自己最近 100 場。');
+    // 全部放寬：打過的人都列，數字看生涯
+    expect(say({ ...base, activeDays: 0, theoryMinGames: 0, requireRoleWindows: 0, mainGames: 0 })).toBe('理論勝率榜打過的人都列；數字看每個人生涯全部場次。');
+    // 英文也組得出來
+    const en = boardRulesGlance(base);
+    for (const p of [...en.who, en.window]) expect(render('en', p)).toMatch(/\S{6}/);
+  });
+});
+
+describe('一眼看懂（第三批）：局勢樹', () => {
+  const seq = (s: string, n: number, blueWin: number | null) => ({ seq: s, n, blueWin });
+
+  it('講差最多的那一組：同樣的比分，哪個順序藍方贏最多、哪個最少（比例是 0–1，畫面寫整數百分比）', () => {
+    const g = stateTreeGlance({
+      total: 2000, baseline: { blueWin: 0.31 },
+      contrasts: [
+        { score: '1:2', high: seq('紅紅藍', 292, 0.4315), low: seq('藍紅紅', 431, 0.1508) },
+        { score: '2:2', high: seq('紅紅藍藍', 291, 0.44), low: seq('藍紅紅藍', 304, 0.21) },
+      ],
+    });
+    expect(g.sentence?.key).toBe('tree.order');
+    expect(g.high).toEqual({ seq: '紅紅藍', blue: { pct: 43.15, n: 292 } });
+    expect(g.low?.blue.n).toBe(431);
+    const text = render('zh-TW', g.sentence as Sentence);
+    for (const part of ['1 個任務成功', '2 個失敗', '「紅紅藍」', '43%', '「藍紅紅」', '15%']) expect(text).toContain(part);
+  });
+
+  it('兩個順序顯示出來一樣：不寫「只有」', () => {
+    const g = stateTreeGlance({ total: 100, baseline: { blueWin: 0.3 }, contrasts: [{ score: '1:1', high: seq('紅藍', 40, 0.304), low: seq('藍紅', 40, 0.296) }] });
+    expect(g.sentence?.key).toBe('tree.orderSame');
+    expect(render('zh-TW', g.sentence as Sentence)).not.toContain('只有');
+  });
+
+  it('局太少、沒有可比的順序：只講全部局藍方贏多少；0 局不寫', () => {
+    const g = stateTreeGlance({ total: 12, baseline: { blueWin: 0.25 }, contrasts: [] });
+    expect(g.sentence).toEqual({ key: 'tree.overall', params: { n: 12, blue: '25%' } });
+    expect(g.high).toBeNull();
+    expect(stateTreeGlance({ total: 0, baseline: { blueWin: null }, contrasts: [] }).sentence).toBeNull();
+    expect(stateTreeGlance(null).sentence).toBeNull();
+  });
+});
+
+describe('一眼看懂（第三批）：個人分析', () => {
+  const axis = (key: string, value: number | null, field: number | null, n: number | null = 200) => ({ key, value, field, n });
+
+  it('有高有低：最強＝比全體高最多的，最弱＝比全體低最多的；經驗不是勝率，不比', () => {
+    const g = radarGlance([
+      axis('winRate', 52, 46), axis('redWinRate', 80, 70), axis('missionWinRate', 48, 51),
+      axis('redMerlinKillRate', null, 43), axis('experience', 100, null),
+    ], '測試玩家甲', 5);
+    expect(g.rows.map(r => r.key)).toEqual(['winRate', 'redWinRate', 'missionWinRate', 'experience']);
+    expect(g.best).toBe('redWinRate');
+    expect(g.worst).toBe('missionWinRate');
+    expect(g.sentence?.key).toBe('radar.mixed');
+    expect(g.sentence?.params).toMatchObject({ name: '測試玩家甲', bestValue: '80%', bestField: '70%', worstValue: '48%', worstField: '51%' });
+    expect(g.rows.find(r => r.key === 'redWinRate')?.diff).toBe(10);
+    expect(g.rows.find(r => r.key === 'experience')?.diff).toBeNull();
+  });
+
+  it('句型跟著資料：全部不輸全體、全部沒贏過全體', () => {
+    const above = radarGlance([axis('winRate', 54, 46), axis('blueMerlinProtect', 62, 57), axis('positionTheory', 60.1, 46.2)], '測試玩家甲', 5);
+    expect(above.sentence?.key).toBe('radar.allAbove');
+    expect([above.best, above.worst]).toEqual(['positionTheory', 'blueMerlinProtect']);
+    const below = radarGlance([axis('winRate', 40, 46), axis('redWinRate', 69, 70), axis('missionWinRate', 51, 51)], '測試玩家乙', 5);
+    expect(below.sentence?.key).toBe('radar.allBelow');
+    expect([below.best, below.worst]).toEqual(['missionWinRate', 'winRate']);
+    expect(render('zh-TW', below.sentence as Sentence)).toContain('測試玩家乙');
+  });
+
+  it('場數不夠的那一項不當最強、最弱（夠的有兩項以上時）', () => {
+    const g = radarGlance([axis('winRate', 52, 46), axis('missionWinRate', 49, 51), axis('redMerlinKillRate', 100, 43, 2)], '測試玩家甲', 5);
+    expect(g.best).toBe('winRate');
+    expect(g.rows).toHaveLength(3);
+  });
+
+  it('全體還沒算好：只比自己的各項（不比經驗）；可比的不到兩項就不寫', () => {
+    const g = radarGlance([axis('winRate', 52, null), axis('redWinRate', 80, null), axis('experience', 100, null)], '測試玩家甲', 5);
+    expect(g.sentence?.key).toBe('radar.own');
+    expect([g.best, g.worst]).toEqual(['redWinRate', 'winRate']);
+    expect(radarGlance([axis('winRate', 52, 46)], '測試玩家甲', 5).sentence).toBeNull();
+    expect(radarGlance([], '測試玩家甲', 5).rows).toEqual([]);
+    // 每一項都跟全體一樣：沒有最強最弱
+    expect(radarGlance([axis('winRate', 46, 46), axis('redWinRate', 70, 70)], '測試玩家甲', 5).sentence).toBeNull();
+  });
+});
+
 describe('顏色：梅林被刺中（三藍死）是紅方贏，用紅色系', () => {
   const rgb = (hex: string): [number, number, number] => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
 
@@ -484,6 +619,22 @@ describe('一眼看懂：每個句型兩種語言都有字', () => {
     ...['higher', 'lower', 'same'].map(k => ({ key: `firstTeam.merlin.${k}`, params: { a: '31%', b: '30%' } })),
     { key: 'firstTeam.reds', params: { hi: 0, hiRate: '34%', lo: 2, loRate: '29%' } },
     { key: 'twoRed.best', params: { round: 3, hi: '梅林', hiRate: '71%', lo: '忠臣', loRate: '31%' } },
+    // 第三批
+    { key: 'board.top3', params: { metric: '角色理論', first: '測試玩家甲', firstValue: '60%', second: '測試玩家乙', secondValue: '56%', third: '測試玩家丙', thirdValue: '54%' } },
+    { key: 'board.top2', params: { metric: '角色理論', first: '測試玩家甲', firstValue: '60%', second: '測試玩家乙', secondValue: '56%' } },
+    { key: 'board.top1', params: { metric: '角色理論', first: '測試玩家甲', firstValue: '60%' } },
+    { key: 'board.base', params: { metric: '角色理論', base: '46%' } },
+    { key: 'board.most3', params: { metric: '場數', first: '測試玩家甲', firstValue: '1,200 場', second: '測試玩家乙', secondValue: '1,100 場', third: '測試玩家丙', thirdValue: '1,000 場' } },
+    { key: 'board.most2', params: { metric: '場數', first: '測試玩家甲', firstValue: '1,200 場', second: '測試玩家乙', secondValue: '1,100 場' } },
+    { key: 'board.most1', params: { metric: '場數', first: '測試玩家甲', firstValue: '1,200 場' } },
+    ...['order', 'orderSame'].map(k => ({ key: `tree.${k}`, params: { blues: '1', reds: '2', high: '紅紅藍', highRate: '43%', low: '藍紅紅', lowRate: '15%' } })),
+    { key: 'tree.overall', params: { n: 2336, blue: '31%' } },
+    ...['mixed', 'allAbove', 'allBelow'].map(k => ({
+      key: `radar.${k}`,
+      params: { name: '測試玩家甲', best: '紅方最終勝率', bestValue: '80%', bestField: '70%', worst: '任務勝率', worstValue: '48%', worstField: '51%' },
+    })),
+    { key: 'radar.own', params: { name: '測試玩家甲', best: '紅方最終勝率', bestValue: '80%', worst: '任務勝率', worstValue: '48%' } },
+    { key: 'rules.window', params: { n: 100 } },
   ];
   for (const lang of ['zh-TW', 'en']) {
     it(`${lang}：句型都有字、要填的數字都給了、沒有寫死的百分比`, () => {

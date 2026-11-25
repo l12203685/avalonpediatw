@@ -6,14 +6,17 @@ import {
 } from 'lucide-react';
 import { useStatsFilter, useStatsFiltered } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
-import { InfoTip, SectionTabs, StatTable, type SectionTabItem, type StatColumn } from './ui';
-import BoardInfo from './BoardInfo';
+import { InfoTip, SectionTabs, StatTable, formatInt, type SectionTabItem, type StatColumn } from './ui';
+import BoardInfo, { boardText } from './BoardInfo';
 import TheoryTable from './TheoryTable';
 import LeaderboardRules from './LeaderboardRules';
 import RoleChampions from './RoleChampions';
 import EloBoard from './EloBoard';
 import { BOARDS_PERSIST_KEY, DECISIVE_TAB } from './decisive/decisiveLayout';
-import { BenchmarkToggle, benchmarkBoardRow, useBenchmarkPinned } from './BenchmarkRows';
+import { BenchmarkToggle, benchmarkBoardRow, benchmarkName, useBenchmarkGroups, useBenchmarkPinned } from './BenchmarkRows';
+import { BoardCards, BoardLead, type BoardCardRow } from './BoardCards';
+import { boardGlance, pctText, shownPct } from './core/glance';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 import {
   fetchAnalysisLeaderboard,
   getErrorMessage,
@@ -78,6 +81,11 @@ import {
  * (2026-11-11 Edward：「最佳第六人」擴大成「關鍵 場外／場內 × 白／黑 × 對／錯」) 快取的各榜後面加「關鍵外白／內黑」
  * (decisive/DecisiveBoard，BoardsTab 傳進來)：統計 Worker 從每局資料算、跟著篩選；上榜門檻是自己的「最低關鍵票」，
  * 不用上方的上榜條件 (那些是場數／近 N 場的門檻，這個榜看的是關鍵票張數)。
+ *
+ * (2026-11-25 站長：「數據分析…希望能更直觀讓看到的人一目瞭然」，第三批) 各榜 (進步、刺客、新人與舊快取的角色／位置／整體理論)
+ * 表格上面先一句話 (前三名是誰、多少；有基準列的榜加上不算散客的全體) 與「誰上榜」一行 (快取 note 的第一句)。手機 (不到 640px)
+ * 改成一位玩家一張小卡 (BoardCards)，先列前 10 名、「看全部」展開，基準列收在「對照組」、完整表格收在「進階」；桌機照舊是表格。
+ * 理論勝率表見 TheoryTable。上榜條件的摘要改成一句白話 (LeaderboardRules)。
  */
 
 /** 小分頁順序；不在這裡的 id 依快取順序排在後面。 */
@@ -409,6 +417,35 @@ function BoardPanel({
     { indent: 'w-5', filter: (g) => benchmark !== null && (benchmark !== 'hitRate' || g.assassin.attempts > 0) },
   ).props;
 
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
+  const { section, groups } = useBenchmarkGroups();
+  const view = useMemo(() => boardCardView(board, t), [board, t]);
+  const table = (): JSX.Element => (
+    <StatTable
+      columns={columns}
+      rows={rows}
+      rowKey={(row, i) => `${board.id}-${row.rank}-${row.role ?? ''}-${row.name}-${i}`}
+      onRowClick={row => openPlayerStats(row.name)}
+      rowTitle={row => rowTip(t, row) || undefined}
+      {...pinned}
+    />
+  );
+  // 對照組：跟表格的基準列同一份數字（刺客榜＝刺中率，其他＝該榜的理論勝率）
+  const refRows = view && benchmark
+    ? groups.filter(g => benchmark !== 'hitRate' || g.assassin.attempts > 0).map(g => ({
+        group: g,
+        row: benchmark === 'hitRate'
+          ? { ...benchmarkBoardRow(g), value: g.assassin.hitRate ?? 0, games: g.assassin.attempts }
+          : benchmarkBoardRow(g),
+      }))
+    : [];
+  const regular = refRows.find(r => r.group.id === 'regular');
+  const base = view && regular ? view.value(regular.row) : null;
+  const glance = view
+    ? boardGlance(rows.map(r => ({ name: r.name, value: view.value(r) })), view.metric, view.sentenceText, base, board.metric === 'roleTheoryDelta' ? 'most' : 'top')
+    : null;
+  const who = boardText(board, isEn).who ?? null;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap">
@@ -420,22 +457,109 @@ function BoardPanel({
             <p className="text-zinc-400">{t('analytics.r6.boards.clickHint')}</p>
           </BoardInfo>
         </InfoTip>
-        {benchmark && <BenchmarkToggle className="ml-auto" />}
+        {benchmark && (wide || !view) && <BenchmarkToggle className="ml-auto" />}
         {board.allGames && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-800/50 text-amber-300">
             {t('analytics.boards.exception')}
           </span>
         )}
       </div>
-      <StatTable
-        columns={columns}
-        rows={rows}
-        rowKey={(row, i) => `${board.id}-${row.rank}-${row.role ?? ''}-${row.name}-${i}`}
-        onRowClick={row => openPlayerStats(row.name)}
-        rowTitle={row => rowTip(t, row) || undefined}
-        {...pinned}
-      />
+      {glance && <BoardLead glance={glance} who={who} />}
+      {wide || !view ? table() : (
+        <BoardCards
+          rows={rows.map((r, i) => view.card(r, `${board.id}-${i}`, r.rank, r.name, () => openPlayerStats(r.name)))}
+          reference={section ? refRows.map(({ group, row }) => view.card(row, `ref-${group.id}`, null, benchmarkName(t, section, group, true))) : []}
+          referenceExtra={benchmark ? <BenchmarkToggle /> : undefined}
+          refValue={base}
+          tone={board.metric === 'hitRate' ? 'red' : 'rank'}
+          max={view.max}
+          table={table}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * 一個榜在「一句話」與手機小卡上的寫法：主要的數字是哪一欄、怎麼寫（整數）、小字列哪些。跟 boardColumns 同一份列、同一個欄位，
+ * 只是換寫法；角色王那種一個角色一列的榜沒有（null，照舊用表格）。
+ */
+interface BoardCardView {
+  /** 這個榜比的數字叫什麼（放進一句話）。 */
+  metric: string;
+  value: (row: Row) => number | null;
+  /** 一句話裡的寫法（例：「60%」「+16 個百分點」）。 */
+  sentenceText: (v: number) => string;
+  /** 長條滿格代表多少。 */
+  max: number;
+  card: (row: Row, key: string, rank: number | null, name: string, onClick?: () => void) => BoardCardRow;
+}
+
+const CARD_DETAIL_FIELDS: readonly TheoryField[] = ['finalWinRate', 'roleTheory', 'positionTheory'];
+
+function boardCardView(board: AnalysisLeaderboardBoard, t: Translate): BoardCardView | null {
+  const rows = board.rows;
+  if (board.id === 'roleTitles' || rows.some(r => r.role)) return null;
+  const G = 'analytics.glance.board';
+  const col = (key: string): string => t(`analytics.r6.boards.col.${key}`);
+  const pair = (label: string, v: unknown): string[] => (isNum(v) ? [t(`${G}.pair`, { label, value: pctText(v) })] : []);
+  const career = (r: Row, group: boolean): string[] => (isNum(r.careerGames)
+    ? [t(group ? `${G}.games` : `${G}.careerGames`, { n: formatInt(r.careerGames) })] : []);
+  const make = (
+    metric: string, value: (r: Row) => number | null, text: (v: number) => string, sentence: (v: number) => string, max: number,
+    details: (r: Row, group: boolean) => string[],
+  ): BoardCardView => ({
+    metric, value, sentenceText: sentence, max,
+    card: (row, key, rank, name, onClick): BoardCardRow => {
+      const v = value(row);
+      return {
+        key, rank, name,
+        value: v, text: v === null ? '—' : text(v),
+        details: details(row, rank === null),
+        label: v === null ? undefined : `${name} ${metric} ${sentence(v)}`,
+        onClick,
+      };
+    },
+  });
+
+  // 進步榜：角色理論的差（百分點）。長條滿格 = 榜上進步最多的那一位。
+  if (board.metric === 'roleTheoryDelta') {
+    const value = (r: Row): number | null => (isNum(r.value) ? r.value : null);
+    const top = Math.max(1, ...rows.map(r => value(r) ?? 0));
+    return make(
+      t(`${G}.improvedMetric`), value,
+      v => t(`${G}.pointsShort`, { n: shownPct(v) }), v => t(`${G}.points`, { n: shownPct(v) }), top,
+      (r, group) => [
+        ...(isNum(r.priorRoleTheory) && isNum(r.recentRoleTheory)
+          ? [t(`${G}.improvedFrom`, { before: pctText(r.priorRoleTheory), after: pctText(r.recentRoleTheory) })] : []),
+        ...career(r, group),
+      ],
+    );
+  }
+  // 刺客榜：刺中率，小字寫刺殺幾次、刺中幾次。
+  if (board.metric === 'hitRate') {
+    return make(
+      col('hitRate'), r => (isNum(r.value) ? r.value : null), pctText, pctText, 100,
+      (r, group) => [
+        ...(isNum(r.hits) ? [t(`${G}.hits`, { attempts: formatInt(isNum(r.attempts) ? r.attempts : r.games), hits: formatInt(r.hits) })] : []),
+        ...(group ? [] : career(r, group)),
+      ],
+    );
+  }
+  // 角色理論／位置理論／整體理論（舊快取的三個榜、新人榜、近 50 場）與不認得的 metric：主要的數字 = 該榜的那一欄。
+  const field = isTheoryField(board.metric) ? board.metric : undefined;
+  const value = (r: Row): number | null => {
+    const v = field && isNum(r[field]) ? r[field] : r.value;
+    return isNum(v) ? v : null;
+  };
+  return make(
+    field ? col(field) : col('value'), value, pctText, pctText, 100,
+    (r, group) => [
+      // 小字只放兩個（最終勝率在前），其餘在「進階：完整表格」
+      ...CARD_DETAIL_FIELDS.filter(f => f !== field).flatMap(f => pair(col(f), r[f])).slice(0, 2),
+      ...career(r, group),
+      ...(r.qualifiedOn ? [t(`${G}.qualifiedOn`, { date: r.qualifiedOn })] : r.firstPlayed ? [t(`${G}.firstPlayed`, { date: r.firstPlayed })] : []),
+    ],
   );
 }
 

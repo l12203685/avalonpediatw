@@ -3,7 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, Clock, Loader, RefreshCw } from 'lucide-react';
 import { useStatsFiltered } from '../../stats/statsFilter';
 import { useGameStore } from '../../store/gameStore';
-import { InfoTip, StatTable, type StatColumn } from './ui';
+import { InfoTip, StatTable, formatInt, type StatColumn } from './ui';
+import { BoardCards, BoardLead } from './BoardCards';
+import { boardGlance, pctText } from './core/glance';
+import { useMediaQuery, WIDE_BOARD_QUERY } from '../../hooks/useMediaQuery';
 import {
   fetchAnalysisRating,
   fmtElo,
@@ -22,6 +25,8 @@ import {
  * 有出賽、計入場數 ≥ boardMinGames 的玩家 (兩個門檻都讀快取的 RATING_CONFIG)；可以放寬，場數不到
  * provisionalGames 的標「暫定」。欄位：名次＋玩家、Elo、±1σ、場數、模型理論勝率、最後出賽；點一列開那位玩家的
  * 玩家雷達 (Elo 走勢在那裡)。Elo 依對局順序而定，不隨複合篩選重算，篩選中會註明。
+ * (2026-11-25 站長「一目瞭然」，第三批) 表格上面先一句話 (目前條件下前三名的 Elo)；手機改成一位玩家一張小卡 (BoardCards：
+ * Elo 寫在名字右邊，不畫長條——Elo 都在 1500 上下，從 0 畫起看不出差別)，先列前 10 名，完整表格收在「進階」。
  */
 
 const MIN_GAMES_CHOICES = [1, 10, 30, 50, 100];
@@ -49,6 +54,7 @@ export default function EloBoard(): JSX.Element {
   const [reload, setReload] = useState(0);
   const [activeOnly, setActiveOnly] = useState(true);
   const [minGames, setMinGames] = useState<number | null>(null);
+  const wide = useMediaQuery(WIDE_BOARD_QUERY);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +140,19 @@ export default function EloBoard(): JSX.Element {
     );
   }
 
+  const G = 'analytics.glance.board';
+  const glance = boardGlance(rows.map(r => ({ name: r.name, value: r.elo })), t(`${G}.eloMetric`), v => fmtElo(v));
+  const table = (): JSX.Element => (
+    <StatTable
+      columns={columns}
+      rows={rows}
+      rowKey={row => row.name}
+      onRowClick={row => openPlayerStats(row.name)}
+      rowTitle={row => t('analytics.elo.rowTip', { first: row.firstPlayed ?? '—', last: row.lastPlayed ?? '—' })}
+      empty={t('analytics.elo.empty')}
+    />
+  );
+
   return (
     <div className="space-y-2" data-testid="elo-board">
       <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap">
@@ -168,14 +187,27 @@ export default function EloBoard(): JSX.Element {
         </label>
         <span className="text-zinc-500">{t('analytics.elo.shown', { count: rows.length })}</span>
       </div>
-      <StatTable
-        columns={columns}
-        rows={rows}
-        rowKey={row => row.name}
-        onRowClick={row => openPlayerStats(row.name)}
-        rowTitle={row => t('analytics.elo.rowTip', { first: row.firstPlayed ?? '—', last: row.lastPlayed ?? '—' })}
-        empty={t('analytics.elo.empty')}
-      />
+      <BoardLead glance={glance} />
+      {wide || rows.length === 0 ? table() : (
+        <BoardCards
+          rows={rows.map(r => ({
+            key: r.name,
+            rank: r.shownRank,
+            name: r.name,
+            value: null,
+            text: fmtElo(r.elo),
+            details: [
+              ...(isNum(r.sigma) ? [t(`${G}.eloRange`, { sigma: fmtElo(r.sigma) })] : []),
+              t(`${G}.eloGames`, { n: formatInt(r.games) }),
+              ...(isNum(r.modelTheory) ? [t(`${G}.eloTheory`, { rate: pctText(r.modelTheory) })] : []),
+            ],
+            thin: r.provisional,
+            label: `${r.name} Elo ${fmtElo(r.elo)}`,
+            onClick: () => openPlayerStats(r.name),
+          }))}
+          table={table}
+        />
+      )}
     </div>
   );
 }

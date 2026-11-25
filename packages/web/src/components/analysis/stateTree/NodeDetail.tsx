@@ -14,9 +14,9 @@ export function ratioPct(r: Ratio): string {
 }
 
 const OUTCOME_ROWS: Array<{ key: keyof OutcomeMix; label: string }> = [
-  { key: '三紅', label: '三紅' },
-  { key: '三藍死', label: '三藍被刀' },
-  { key: '三藍活', label: '三藍躲刺' },
+  { key: '三紅', label: '三個任務失敗' },
+  { key: '三藍死', label: '梅林被刺中' },
+  { key: '三藍活', label: '藍方贏' },
 ];
 
 /** 三種結果的細長條（2px 間隔；顏色同分析頁的三種結果）。 */
@@ -114,19 +114,19 @@ export default function NodeDetail({ node, chain, rootN, baseline, onApply, onRe
 
       <div className="grid grid-cols-3 gap-2 rounded-lg border border-zinc-700/60 bg-zinc-900/40 p-2 text-center">
         <div>
-          <div className="text-[10px] text-zinc-500">藍方最終勝率</div>
+          <div className="text-[10px] text-zinc-500">藍方最後贏</div>
           <div className="font-bold text-zinc-100">{pct(blueWin)}</div>
           <div className="text-[10px] text-zinc-500">全體 {pct(outcomeRate(baseline, '三藍活'))}</div>
         </div>
         <div>
-          <div className="text-[10px] text-zinc-500">三紅率</div>
+          <div className="text-[10px] text-zinc-500">三個任務失敗</div>
           <div className="font-bold text-zinc-100">{pct(threeRed)}</div>
           <div className="text-[10px] text-zinc-500">全體 {pct(outcomeRate(baseline, '三紅'))}</div>
         </div>
         <div>
-          <div className="text-[10px] text-zinc-500">三藍刺中率</div>
+          <div className="text-[10px] text-zinc-500">梅林被刺中</div>
           <div className="font-bold text-zinc-100">{pct(hit)}</div>
-          <div className="text-[10px] text-zinc-500">{threeBlue} 局三藍</div>
+          <div className="text-[10px] text-zinc-500">{threeBlue} 局打到刺殺</div>
         </div>
       </div>
 

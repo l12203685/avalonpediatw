@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { SlidersHorizontal, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
 import { hasDateRange, type GameFilter, type LeaderboardOverrideKey, type LeaderboardOverrides } from '@avalon/shared/stats';
 import { useStatsFilter } from '../../stats/statsFilter';
+import { boardRulesGlance } from './core/glance';
+import { sentenceText } from './core/glanceView';
 
 /**
  * 上榜條件 (Edward 2026-10-28「數據排行部分 "上榜"條件也做成可調整可變可選」)：排行上方一列，摘要一行 + 「調整」
@@ -101,15 +103,15 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
     return list.map((v) => [String(v), text(v)]);
   };
 
-  const summary = [
-    days(cur('activeDays')),
-    games(cur('mainGames')),
-    t(`${r}.minGamesShort`, { count: cur('theoryMinGames') }),
-    cur('requireRoleWindows') ? t(`${r}.roleWindowsShort`, { k: cur('roleWindowGames'), kl: cur('loyalWindowGames') }) : t(`${r}.roleWindowsOffShort`),
-    t(`${r}.overallShort`, { count: cur('overallMinGames') }),
-    titleAuto ? t(`${r}.titleAutoShort`) : t(`${r}.titleFixedShort`, { other: cur('roleTitleGames'), loyal: cur('loyalTitleGames') }),
-    t(`${r}.assassinShort`, { count: cur('assassinMinAttempts') }),
-  ].filter(Boolean).join(' · ');
+  // 2026-11-25 站長「一目瞭然」：摘要從一串門檻縮寫改成一句白話（誰會上榜、數字看哪幾場）；其他門檻（整體理論、角色王、刺客榜）按「調整」才列出來。
+  const rules = boardRulesGlance({
+    activeDays: cur('activeDays'), mainGames: cur('mainGames'), theoryMinGames: cur('theoryMinGames'),
+    requireRoleWindows: cur('requireRoleWindows'), roleWindowGames: cur('roleWindowGames'), loyalWindowGames: cur('loyalWindowGames'),
+  });
+  const g = 'analytics.glance.rules';
+  const summary = `${rules.who.length > 0
+    ? t(`${g}.who`, { list: rules.who.map((p) => sentenceText(t, p)).join(t(`${g}.sep`)) })
+    : t(`${g}.everyone`)}${sentenceText(t, rules.window) ?? ''}${t(`${g}.others`)}`;
 
   const select = (
     label: string, value: string, options: Array<[string, string]>, onChange: (v: string) => void, testId: string,
@@ -135,7 +137,7 @@ export default function LeaderboardRules({ config }: { config: Config | undefine
           <SlidersHorizontal size={14} />
           {t(`${r}.title`)}
         </span>
-        <span className={`min-w-0 ${modified ? 'text-amber-200' : 'text-zinc-400'}`}>{summary}</span>
+        <span className={`min-w-0 text-[13px] leading-snug ${modified ? 'text-amber-200' : 'text-zinc-200'}`} data-testid="leaderboard-rules-summary">{summary}</span>
         {periodMode && (
           <span className="rounded bg-sky-950/70 px-1.5 py-0.5 text-[11px] text-sky-200" data-testid="leaderboard-rules-period">
             {t(`${r}.periodAuto`, { defaultValue: '有日期範圍：門檻已依期間自動放寬（場數門檻 = 期間內每人場數的中位數）' })}

@@ -621,3 +621,191 @@ export function twoRedGlance(cells: ReadonlyArray<{ round: number; role: string;
   }
   return { rounds, sentence };
 }
+
+// ══ 第三批（2026-11-25）：戰績排行、局勢樹、個人分析 ════════════════════════════════
+
+// ── 戰績排行：前三名一句話、上榜條件一句話 ─────────────────────────────────
+
+export interface BoardRowInput {
+  name: string;
+  value: number | null | undefined;
+}
+
+export interface BoardGlance {
+  /** 前幾名（照傳進來的順序，最多三位；沒有數字的不算）。 */
+  top: Array<{ name: string; value: number }>;
+  sentence: Sentence | null;
+  /** 對照（不含散客的全體）的那一句；沒有對照時 null。 */
+  baseSentence: Sentence | null;
+}
+
+/**
+ * rows = 已經照這個數字排好的榜（第一列＝第一名）；metric = 這個數字叫什麼（原樣放進句子）；
+ * fmt = 數字怎麼寫（勝率寫整數百分比、進步寫「+16 個百分點」、Elo 寫整數）；base = 全體（不含散客）的同一個數字；
+ * word = 'top'（勝率、Elo：「最高」）或 'most'（場數、進步幾個百分點：「最多」）。
+ */
+export function boardGlance(
+  rows: readonly BoardRowInput[] | null | undefined, metric: string, fmt: (v: number) => string = pctText, base?: number | null,
+  word: 'top' | 'most' = 'top',
+): BoardGlance {
+  const top = (rows ?? []).flatMap(r => (finite(r.value) ? [{ name: r.name, value: r.value }] : [])).slice(0, 3);
+  if (top.length === 0) return { top, sentence: null, baseSentence: null };
+  const params: Record<string, string | number> = { metric, first: top[0].name, firstValue: fmt(top[0].value) };
+  if (top[1]) { params.second = top[1].name; params.secondValue = fmt(top[1].value); }
+  if (top[2]) { params.third = top[2].name; params.thirdValue = fmt(top[2].value); }
+  return {
+    top,
+    sentence: { key: `board.${word}${top.length}`, params },
+    baseSentence: finite(base) ? { key: 'board.base', params: { metric, base: fmt(base) } } : null,
+  };
+}
+
+export interface BoardRulesInput {
+  /** 最近幾天要有出賽（0 = 不限）。 */
+  activeDays: number;
+  /** 數字看最近幾場（0 = 生涯全部）。 */
+  mainGames: number;
+  /** 生涯至少幾場（0 = 不限）。 */
+  theoryMinGames: number;
+  /** 每個角色的場數要不要打滿才列（0／1）。 */
+  requireRoleWindows: number;
+  /** 六個特殊角色各幾場、忠臣幾場。 */
+  roleWindowGames: number;
+  loyalWindowGames: number;
+}
+
+export interface BoardRulesGlance {
+  /** 上榜要符合的條件，一條一個短句（全部都要符合）；空的 = 打過的人都列。 */
+  who: Sentence[];
+  /** 數字看哪一段場次。 */
+  window: Sentence;
+}
+
+/** 上榜條件寫成白話：誰會上榜（幾個條件用頓號接起來）＋數字看哪幾場。 */
+export function boardRulesGlance(r: BoardRulesInput): BoardRulesGlance {
+  const who: Sentence[] = [];
+  if (r.activeDays > 0) who.push({ key: 'rules.active', params: { days: r.activeDays } });
+  if (r.theoryMinGames > 0) who.push({ key: 'rules.minGames', params: { n: r.theoryMinGames } });
+  if (r.requireRoleWindows) who.push({ key: 'rules.roles', params: { k: r.roleWindowGames, kl: r.loyalWindowGames } });
+  return {
+    who,
+    window: r.mainGames > 0 ? { key: 'rules.window', params: { n: r.mainGames } } : { key: 'rules.career', params: {} },
+  };
+}
+
+// ── 局勢樹：同樣的比分，順序不同差多少 ────────────────────────────────────
+
+export interface TreeSeqInput {
+  /** 任務的順序，例「紅紅藍」。 */
+  seq: string;
+  n: number;
+  /** 藍方最後贏的比例（0–1）；算不出來 null。 */
+  blueWin: number | null;
+}
+
+export interface StateTreeGlance {
+  /** 同樣比分裡藍方最後贏最多、最少的兩種順序（差最多的那一組）；沒有可比的 null。 */
+  high: { seq: string; blue: Share } | null;
+  low: { seq: string; blue: Share } | null;
+  sentence: Sentence | null;
+}
+
+/**
+ * contrasts = stateTreeFindings 的同比分對照（已照差距大到小排）；baseline = 全部局藍方最後贏的比例（0–1）。
+ * 有對照：講差最多的那一組；沒有（局太少）：只講全部局藍方贏多少。
+ */
+export function stateTreeGlance(
+  f: { total: number; baseline: { blueWin: number | null }; contrasts: ReadonlyArray<{ score: string; high: TreeSeqInput; low: TreeSeqInput }> } | null | undefined,
+): StateTreeGlance {
+  const none: StateTreeGlance = { high: null, low: null, sentence: null };
+  if (!f || !finite(f.total) || f.total <= 0) return none;
+  const c = f.contrasts.find(x => finite(x.high.blueWin) && finite(x.low.blueWin) && x.high.n > 0 && x.low.n > 0);
+  if (!c || !finite(c.high.blueWin) || !finite(c.low.blueWin)) {
+    return finite(f.baseline.blueWin)
+      ? { ...none, sentence: { key: 'tree.overall', params: { n: f.total, blue: pctText(f.baseline.blueWin * 100) } } }
+      : none;
+  }
+  const high = { seq: c.high.seq, blue: { pct: c.high.blueWin * 100, n: c.high.n } };
+  const low = { seq: c.low.seq, blue: { pct: c.low.blueWin * 100, n: c.low.n } };
+  const [blues, reds] = c.score.split(':');
+  const key = relation(low.blue.pct, high.blue.pct) === 'same' ? 'tree.orderSame' : 'tree.order';
+  return {
+    high, low,
+    sentence: { key, params: { blues, reds, high: high.seq, highRate: pctText(high.blue.pct), low: low.seq, lowRate: pctText(low.blue.pct) } },
+  };
+}
+
+// ── 個人分析：跟全體比，哪一項最強、哪一項最弱 ──────────────────────────────
+
+export interface RadarAxisInput {
+  key: string;
+  /** 這位玩家的數字（0–100）；算不出來 null。 */
+  value: number | null;
+  /** 這個數字用到的場數；不知道 null。 */
+  n: number | null;
+  /** 全體（不含散客）的同一個數字；沒有可比的（例：經驗不是勝率）null。 */
+  field: number | null;
+}
+
+export interface RadarGlanceRow {
+  key: string;
+  value: number;
+  n: number | null;
+  field: number | null;
+  /** 比全體高幾個百分點（顯示的整數相減）；沒有可比的 null。 */
+  diff: number | null;
+}
+
+export interface RadarGlance {
+  /** 算得出來的那幾項（照傳進來的順序）。 */
+  rows: RadarGlanceRow[];
+  best: string | null;
+  worst: string | null;
+  /** params 的 best／worst 是指標的資料鍵，畫面換成指標名稱再填。 */
+  sentence: Sentence | null;
+}
+
+/**
+ * 最強＝比全體高最多的那一項，最弱＝比全體低最多（或領先最少）的那一項；只比場數夠（n ≥ min）的，夠的不到兩項才全部一起比。
+ * 句型跟著資料：有高有低寫「最強…最弱…」；全部不輸全體寫「領先最多…最少…」；全部沒贏寫「最接近…差最多…」。
+ * 沒有全體的數字時（還沒算好）只比這位玩家自己的各項。
+ */
+export function radarGlance(axes: readonly RadarAxisInput[] | null | undefined, name: string, min: number): RadarGlance {
+  const rows: RadarGlanceRow[] = (axes ?? []).flatMap(a => (finite(a.value)
+    ? [{ key: a.key, value: a.value, n: a.n, field: finite(a.field) ? a.field : null, diff: finite(a.field) ? shownPct(a.value) - shownPct(a.field) : null }]
+    : []));
+  const none: RadarGlance = { rows, best: null, worst: null, sentence: null };
+  const enough = (list: RadarGlanceRow[]): RadarGlanceRow[] => {
+    const pool = list.filter(r => r.n === null || r.n >= min);
+    return pool.length >= 2 ? pool : list;
+  };
+  const compared = enough(rows.filter((r): r is RadarGlanceRow & { field: number; diff: number } => r.diff !== null));
+  if (compared.length >= 2) {
+    const diffOf = (r: RadarGlanceRow): number => r.diff ?? 0;
+    const best = compared.reduce((a, b) => (diffOf(b) > diffOf(a) ? b : a));
+    const worst = compared.reduce((a, b) => (diffOf(b) < diffOf(a) ? b : a));
+    if (best.key === worst.key || diffOf(best) === diffOf(worst)) return none;
+    const kind = diffOf(best) > 0 && diffOf(worst) < 0 ? 'mixed' : diffOf(worst) >= 0 ? 'allAbove' : 'allBelow';
+    return {
+      rows, best: best.key, worst: worst.key,
+      sentence: {
+        key: `radar.${kind}`,
+        params: {
+          name,
+          best: best.key, bestValue: pctText(best.value), bestField: pctText(best.field ?? 0),
+          worst: worst.key, worstValue: pctText(worst.value), worstField: pctText(worst.field ?? 0),
+        },
+      },
+    };
+  }
+  // 沒有全體可比：只講自己的各項（經驗不是勝率，不比）
+  const own = enough(rows.filter(r => r.key !== 'experience'));
+  if (own.length < 2) return none;
+  const hi = own.reduce((a, b) => (b.value > a.value ? b : a));
+  const lo = own.reduce((a, b) => (b.value < a.value ? b : a));
+  if (relation(lo.value, hi.value) === 'same') return none;
+  return {
+    rows, best: hi.key, worst: lo.key,
+    sentence: { key: 'radar.own', params: { name, best: hi.key, bestValue: pctText(hi.value), worst: lo.key, worstValue: pctText(lo.value) } },
+  };
+}
