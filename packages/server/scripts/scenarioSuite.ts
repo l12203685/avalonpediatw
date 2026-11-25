@@ -18,6 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import { DEFAULT_AGENT_TUNING, parseTuningFlag, type AgentTuning } from '../src/ai/AgentTuning';
 import { percivalRead39 } from '../src/ai/BlueRound39Percival';
+import { seededRandom } from '../src/ai/benchmark/agreement';
 import { seatId } from '../src/ai/benchmark/replayObservation';
 import { EVIL_ROLES } from '../src/ai/benchmark/sheetsReplay';
 import { parseOpponentType, tuningForOpponent, OPPONENT_LABEL, type OpponentType } from '../src/ai/humanProfile';
@@ -104,8 +105,7 @@ function bootDiff(pairs: readonly { g: string; d: number }[], n = 2000): [number
   const groups = new Map<string, number[]>();
   for (const p of pairs) { const a = groups.get(p.g); if (a) a.push(p.d); else groups.set(p.g, [p.d]); }
   const gs = [...groups.values()];
-  let seed = 74_001;
-  const rnd = (): number => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const rnd = seededRandom('scenarioSuite|round74');
   const means: number[] = [];
   for (let b = 0; b < n; b++) {
     let s = 0; let c = 0;
