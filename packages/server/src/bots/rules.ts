@@ -1,5 +1,6 @@
 /**
- * 遊戲規則與角色介紹的文字（2026-11-25）— Discord 的 /rules、/roles，和兩邊的 /help 規則、/help 角色 共用，純函式。
+ * 遊戲規則與角色介紹的文字（2026-11-25）— 兩邊的 /規則、/角色（Discord 的 /rules、/roles 照舊可以用）和
+ * /help 規則、/help 角色 共用，純函式。兩個平台同一份文字。
  *
  * 之前 Discord 的 /rules、/roles 是英文 embed，而且寫錯：寫「梅林看不到莫甘娜」（其實看不到的是莫德雷德）、
  * 沒有莫德雷德、寫「5 次否決壞人贏」（這個社群第 5 次派隊是直接出發、不投票）。
@@ -13,8 +14,11 @@
 
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 
-/** 說明裡的指令寫法（只有 Discord 有這兩個斜線指令；LINE 用 /help 規則、/help 角色）。 */
-export const RULES_USAGE = '/rules /roles';
+/**
+ * 說明裡的指令寫法。2026-11-25（第二批）起兩邊都是 /規則、/角色：Discord 多註冊這兩個中文名字（/rules、/roles 照舊可以用），
+ * LINE 打字也認（之前 LINE 只有 /help 規則、/help 角色）。
+ */
+export const RULES_USAGE = '/規則 /角色';
 
 export type RulesPlatform = 'line' | 'discord';
 
@@ -26,14 +30,12 @@ export function playPlatformLine(platform: RulesPlatform): string {
   return `🎲 開局、對局：signage-cloud ${platform === 'discord' ? `<${PLAY_PLATFORM_URL}>` : PLAY_PLATFORM_URL}`;
 }
 
-/** 另一份怎麼看：Discord 有斜線指令，LINE 用 /help 主題。 */
-function pointer(to: 'rules' | 'roles', platform: RulesPlatform): string {
-  if (to === 'roles') return platform === 'discord' ? '角色介紹：/roles' : '角色介紹：/help 角色';
-  return platform === 'discord' ? '規則：/rules' : '規則：/help 規則';
-}
+/** 另一份怎麼看（兩邊同一個打法）。 */
+const ROLES_POINTER = '角色介紹：/角色';
+const RULES_POINTER = '規則：/規則';
 
 /** 10 人局的規則，一行一件事。 */
-export function rulesText(platform: RulesPlatform = 'discord'): string {
+export function rulesText(): string {
   return [
     '📜 阿瓦隆規則（10 人局）',
     '陣營：藍方（好人）6 人＝梅林、派西維爾、忠臣 4 人；紅方（壞人）4 人＝刺客、莫甘娜、莫德雷德、奧伯倫',
@@ -43,12 +45,12 @@ export function rulesText(platform: RulesPlatform = 'discord'): string {
     '同一局前四次派隊都沒過：第 5 次派的隊直接出發，不投票',
     '湖中女神：第 2、3、4 局任務後，拿湖的人驗一位玩家是好人還是壞人，湖交給被驗的人；開局湖在 0家',
     '勝負：藍方先拿 3 局成功 → 刺客指認梅林，刺中紅方贏、沒刺中藍方贏；紅方先拿 3 局失敗就贏',
-    pointer('roles', platform),
+    ROLES_POINTER,
   ].join('\n');
 }
 
 /** 七個角色各知道什麼，一行一個。 */
-export function rolesText(platform: RulesPlatform = 'discord'): string {
+export function rolesText(): string {
   return [
     '🎭 阿瓦隆角色（10 人局）',
     '🔵 梅林：知道刺客、莫甘娜、奧伯倫是壞人，看不到莫德雷德；被刺客刺中藍方就輸',
@@ -59,6 +61,6 @@ export function rolesText(platform: RulesPlatform = 'discord'): string {
     '🔴 莫德雷德：梅林看不到他',
     '🔴 奧伯倫：不知道隊友是誰，隊友也不知道他；梅林看得到他',
     '刺客、莫甘娜、莫德雷德三個人互相知道。',
-    pointer('rules', platform),
+    RULES_POINTER,
   ].join('\n');
 }

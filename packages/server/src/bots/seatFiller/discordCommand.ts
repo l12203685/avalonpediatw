@@ -1,5 +1,6 @@
 /**
- * Discord slash command `/機器人補位 房號或描述:… [人數:1–9／補滿] [密碼:…]` (2026-11-03; 11-04 描述／補滿／密碼).
+ * Discord slash command `/補位 房號或描述:… [人數:1–9／補滿] [密碼:…]` (2026-11-03 as `/機器人補位`; 11-04 描述／補滿／密碼;
+ * 2026-11-25 batch 2: also registered as `/補位`, the name LINE types — both names run this handler).
  *
  * Refusals (format, limits, not configured) are ephemeral — only the person
  * who typed it needs them. A request that passes the limits is answered in

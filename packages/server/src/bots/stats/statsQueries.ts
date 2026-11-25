@@ -93,11 +93,14 @@ export async function playerCardReply(query: string): Promise<string> {
     const player = (await getPlayerByName(match.name)) ?? players.find((p) => p.name === match.name);
     if (!player) return formatNameProblem({ kind: 'none', query });
 
-    const [archetype, strength, playstyle, leaderboard] = await Promise.all([
+    const [archetype, strength, playstyle, leaderboard, overview, rating] = await Promise.all([
       getPlayerArchetype(match.name).catch(() => null),
       getPlayerStrength(match.name).catch(() => null),
       getPlayerPlaystyle(match.name).catch(() => null),
       getLeaderboard().catch(() => null),
+      // 第一行那句話的「全體平均」：跟 /排行 圖上「全體」那條線同一個基準（同一份快取）。
+      getOverview().catch(() => null),
+      getRatingBoard().catch(() => null),
     ]);
     const minCell = leaderboard?.config?.theoryMinCellGames;
     // 新人榜 ranks role theory over windows that are not full: the card names the rank instead of
@@ -112,6 +115,7 @@ export async function playerCardReply(query: string): Promise<string> {
       alias: match.alias,
       minCellGames: typeof minCell === 'number' ? minCell : undefined,
       newcomerRank: typeof newcomer?.rank === 'number' ? newcomer.rank : null,
+      fieldOverallTheory: chartBaselines(rating?.theoryBaselines, overview).all.overall,
     });
   });
 }

@@ -5,8 +5,9 @@
  *   /help 模擬       模擬瓦的全部指令（同 /模擬 說明）
  *   /help 戰績       /戰績 /排行 /默契
  *   /help 補位｜待修正｜回報｜更正｜意見｜每日一題
- *   /help 規則｜角色  遊戲規則、角色介紹（bots/rules.ts；Discord 的 /rules、/roles 同一份，LINE 只有這個入口）
+ *   /help 規則｜角色  遊戲規則、角色介紹（bots/rules.ts）
  *   /說明［主題］    同 /help（2026-11-25：群組裡都打中文，/說明 跟 /help 一樣）
+ *   /規則、/角色     同 /help 規則、/help 角色（2026-11-25 第二批：兩邊同一個打法；Discord 的 /rules、/roles 照舊可以用）
  *
  * LINE 打字：/help、/說明（全形斜線「／」也可以，主題前的空白可有可無）；舊的 /指令 照舊回完整的指令清單（stats/statsReplies.formatStatsHelp）。
  * Discord：slash /help 主題:模擬、/說明 主題:模擬（選項，見 discord/client.ts）；2026-11-25 起沒選主題時跟 LINE 回同一份
@@ -17,11 +18,11 @@
 import { CLAIM_HELP_TEXT, CLAIM_USAGE, REPORT_HELP_TEXT, REPORT_USAGE } from './reports/commands';
 import { CORRECTION_HELP_TEXT, CORRECTION_USAGE } from './recordCorrection/commands';
 import { PAIPU_FIX_HELP_TEXT, PAIPU_FIX_USAGE } from './paipuFix/commands';
-import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from './seatFiller/commands';
+import { SEAT_FILLER_ALIAS_TEXT, SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } from './seatFiller/commands';
 import { SIM_CONFIG } from './simulation/config';
 import { simHelpText } from './simulation/replies';
 import { STATS_COMMAND_USAGE, STATS_PAGE_URL_TEXT } from './stats/statsReplies';
-import { DAILY_QUESTION_HELP_TEXT, DAILY_QUESTION_USAGE } from './dailyQuestion/usage';
+import { DAILY_QUESTION_HELP_TEXT, DAILY_QUESTION_USAGE, DAILY_QUESTION_YESTERDAY_HELP_TEXT, DAILY_QUESTION_YESTERDAY_USAGE } from './dailyQuestion/usage';
 import { RULES_USAGE, playPlatformLine, rolesText, rulesText } from './rules';
 
 export type HelpPlatform = 'line' | 'discord';
@@ -52,10 +53,15 @@ export function helpTopicOf(word: string): HelpTopic | null {
 const HELP_RE = /^[/／]\s*help(?![a-z])(.*)$/isu;
 /** /說明（2026-11-25）：跟 /help 一樣。 */
 const HELP_ZH_RE = /^[/／]\s*(?:說明|说明)(.*)$/su;
+/**
+ * /規則、/角色（2026-11-25 第二批）：整句只有這個指令才算，所以「/角色扮演」「/規則 是什麼」還是一般聊天。
+ */
+const RULES_ROLES_RE = /^[/／]\s*(規則|规则|角色|角色介紹|角色介绍)$/u;
 
 /**
  * /help、/help 模擬、/說明、/說明 模擬 → { topic }（topic 沒寫或看不懂是 null）；不是說明指令 → null。
  * /說明 後面直接接字（沒有空白）時要是認得的主題才算（`/說明模擬` 算、`/說明書在哪` 是聊天）。
+ * /規則、/角色 → 那個主題。
  */
 export function parseHelpCommand(text: string): { topic: HelpTopic | null; raw: string } | null {
   const t = (text ?? '').normalize('NFKC').trim();
@@ -64,6 +70,8 @@ export function parseHelpCommand(text: string): { topic: HelpTopic | null; raw: 
     const raw = m[1].trim();
     return { topic: raw ? helpTopicOf(raw) : null, raw };
   }
+  const direct = RULES_ROLES_RE.exec(t);
+  if (direct) return { topic: direct[1].startsWith('角色') ? '角色' : '規則', raw: direct[1] };
   const zh = HELP_ZH_RE.exec(t);
   if (!zh) return null;
   const raw = zh[1].trim();
@@ -77,13 +85,13 @@ export function basicHelpText(platform: HelpPlatform): string {
   const helpCmd = platform === 'discord' ? '/help 主題:模擬' : '/help 模擬';
   const lines = ['📖 阿瓦隆百科機器人'];
   if (SIM_CONFIG.commandsEnabled) lines.push('/模擬\u3000模擬瓦：真人牌譜停在派票的當下，換你派');
-  lines.push(`${DAILY_QUESTION_USAGE}\u3000今天的每日一題：題目、牌譜連結、怎麼在這裡作答`);
+  lines.push(`${DAILY_QUESTION_USAGE}\u3000今天的每日一題：題目、牌譜連結、怎麼在這裡作答（${DAILY_QUESTION_YESTERDAY_USAGE[platform]} 看昨天的答案）`);
   lines.push(`${STATS_COMMAND_USAGE.player}\u3000個人戰績（還有 /排行 /默契）`);
   lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000叫百科AI 進房補位`);
   lines.push(`${PAIPU_FIX_USAGE[platform]}\u3000待修正的牌譜（${CORRECTION_USAGE[platform]} 查一局、送更正）`);
   lines.push(`${REPORT_USAGE[platform]}\u3000回報網站或文章的問題（${CLAIM_USAGE[platform]} 合併 ID）`);
   lines.push(`${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議`);
-  lines.push(`${platform === 'discord' ? RULES_USAGE : '/help 規則、/help 角色'}\u3000遊戲規則、角色介紹`);
+  lines.push(`${RULES_USAGE}\u3000遊戲規則、角色介紹`);
   lines.push(playPlatformLine(platform));
   lines.push(`/help 主題 看細節（例：${helpCmd}；打 /說明 也一樣）`);
   return lines.join('\n');
@@ -104,7 +112,7 @@ export function topicHelpText(topic: HelpTopic, platform: HelpPlatform, scope: s
         STATS_PAGE_URL_TEXT,
       ].join('\n');
     case '補位':
-      return [`🤖 ${SEAT_FILLER_USAGE[platform]}`, SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT].join('\n');
+      return [`🤖 ${SEAT_FILLER_USAGE[platform]}`, SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_ALIAS_TEXT].join('\n');
     case '待修正':
       return `📝 ${PAIPU_FIX_USAGE[platform]}\u3000${PAIPU_FIX_HELP_TEXT}（每天凌晨匯入讀不懂的貼文）`;
     case '回報':
@@ -122,13 +130,14 @@ export function topicHelpText(topic: HelpTopic, platform: HelpPlatform, scope: s
     case '每日一題':
       return [
         `📌 ${DAILY_QUESTION_USAGE}\u3000${DAILY_QUESTION_HELP_TEXT}`,
+        `${DAILY_QUESTION_YESTERDAY_USAGE[platform]}\u3000${DAILY_QUESTION_YESTERDAY_HELP_TEXT}`,
         '題目跟當天 Threads／IG 的「阿瓦隆每日一題」同一題（每天換；/今日一題 也可以）。',
         SIM_CONFIG.commandsEnabled ? '回覆裡附的 /模擬 題號 可以直接在這裡作答，/公布 對答案。' : '',
       ].filter(Boolean).join('\n');
     case '規則':
-      return rulesText(platform);
+      return rulesText();
     case '角色':
-      return rolesText(platform);
+      return rolesText();
   }
 }
 

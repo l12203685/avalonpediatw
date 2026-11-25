@@ -45,6 +45,9 @@ import { OPPONENT_LABEL, PROFILE_OVERRIDES, parseOpponentType, type OpponentType
 import { liveTableS, opponentTypeOfHumans } from '../src/ai/tableStrength';
 import type { PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
 import { postAiGameTrace } from '../src/services/aiGameForum';
+import {
+  ASSASSIN_ASK_TEXT, AssassinCommandWait, assassinWaitDeadline, redAssassinView, redTalkEnabled, redViewMessage, seatLabel,
+} from '../src/ai/redAssassinTalk';
 import type { Role } from '@avalon/shared';
 import {
   ENDED, buildObservation, decisionOpen, evilRolesAtAssassination, historyFromRecord, lobbyCandidate, lobbyRolesLoose, missionCard,
@@ -154,6 +157,17 @@ const PRIVATE_LOG = arg('private-log', '');
 /** 百科AI 對局紀錄貼 DC（見檔頭）：每晚與指定房間預設開，私房測試預設關。 */
 const AI_TRACE = arg('ai-trace', MODE === 'private-test' ? 'off' : 'on') !== 'off';
 const CHAT = arg('chat', 'on') !== 'off';
+/**
+ * 刺殺階段紅方討論（站長 2026-11-25，`src/ai/redAssassinTalk.ts`）：紅方有真人隊友時，百科AI（任何紅方角色）在房間聊天說
+ * 梅林看法；百科AI 是刺客時等紅方隊友打「/刺殺 N」。練習台沒有紅方專用頻道，就在房間聊天。
+ * 預設開；`--red-talk off` 或環境變數 RED_ASSASSIN_TALK=off 關掉（紅方全是機器人時本來就不會用到）。
+ */
+const RED_TALK = CHAT && arg('red-talk', redTalkEnabled() ? 'on' : 'off') !== 'off';
+/**
+ * 練習台刺殺階段有沒有倒數：程式碼和紀錄都看不出來（畫面資料沒有倒數欄位），當作沒有 → 最多等
+ * `RED_TALK_NO_TIMER_WAIT_MS`（約 3 分鐘）就刺自己的第一人選。
+ */
+const SIGNAGE_ASSASSIN_TIMER_MS: number | null = null;
 /** 本機測試用：只看標題以這個開頭的房間（測每晚補位流程時，避免碰到真人的房間）。 */
 const ONLY_TITLE = arg('only-title', '');
 /**
@@ -393,6 +407,8 @@ class Seat {
   pending: { key: string; make: () => void } | null = null;
   /** 已記過的決定（同一個決定重送時不重複記）。 */
   traced = new Set<string>();
+  /** 刺殺階段紅方討論（這一局；`redTalkStep`）。 */
+  redTalk: RedTalkState | null = null;
 
   /** 記一筆決定（AI 決定當下的觀察先複製一份；理由在送出之後才算，不拖慢動作）。 */
   draft(key: string, input: DecisionInput, obs: PlayerObservation | null, round: number, attempt: number, source: 'agent' | 'fallback', s: Snap): void {
@@ -420,6 +436,7 @@ class Seat {
     this.lobbyRoles = lobbyRolesLoose(s.game_roles, s.users.length);
     this.k = readKnowledge(s, this.lobbyRoles);
     this.myLake = []; this.declinedLakes.clear(); this.hist = { votes: [], quests: [] }; this.plan = null; this.planKey = ''; this.started = true; this.startedAt = Date.now();
+    this.redTalk = null;
     try {
       const { type, tableS } = signageOpponent(s.users, OPPONENT_FIXED);
       if (type !== this.profile) {
@@ -524,6 +541,15 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
     if (seat.k.mismatch && Date.now() - seat.startedAt < 60_000) seat.refresh(s);
     if (seat.k.mismatch && Date.now() - seat.startedAt < 6000) { await sleep(500); continue; } // 先等標記到齊再做決定
     myLakeFromSnap(s, seat.myLake).forEach((m) => { if (!seat.myLake.some((x) => x.round === m.round)) { seat.myLake.push(m); plog(`${room} 湖結果 ${m.targetId} ${m.result}`); } });
+    // 刺殺階段紅方討論：紅方有真人隊友時先說梅林看法；自己是刺客就等隊友的「/刺殺 N」（等的時候不走下面的決定）
+    if (RED_TALK && seat.k.team === 'evil' && assassinationPhase(s)) {
+      try {
+        if ((await redTalkStep(p, seat, s)) === 'hold') { await sleep(300); continue; }
+      } catch (err) {
+        log(`${room} 刺殺階段討論出錯（${(err instanceof Error ? err.message : String(err)).slice(0, 80)}），照原本的方式刺殺`);
+        if (seat.redTalk) seat.redTalk.active = false;
+      }
+    }
     const d = seatDecision(s, seat.myLake, seat.declinedLakes);
     // 讀不到自己湖到的結果時不宣告、也不擋後面的決定（Issue #16）；公開 log 只寫狀態，不寫座位與身分
     const unseen = pendingLakeDeclaration(s);
@@ -581,6 +607,99 @@ async function playGameInner(p: Page, room: string, seat: Seat, ended: { capture
     }
     await sleep(60);
   }
+}
+
+// ── 刺殺階段紅方討論 ─────────────────────────────────────────────────────────────────
+interface RedTalkState {
+  /** 紅方有真人隊友（否則整個功能不用，照舊）。 */
+  active: boolean;
+  /** 紅方座位（含自己；刺殺階段紅方開牌後自己畫面上看得到的）。 */
+  redSeats: number[];
+  /** 看法有發出去（聊天發不出去時刺客照舊自己刺）。 */
+  said: boolean;
+  /** 自己的第一人選（座位）。 */
+  pick: number | null;
+  /** 刺客：等隊友的指令。 */
+  wait: AssassinCommandWait | null;
+  /** 已經讀過的聊天（之後的才算新的）。 */
+  chatBase: ChatMsg[];
+  /** 已決定刺的座位與上次按的時間（按了畫面還沒變就再按同一個人，不改成自己的判斷）。 */
+  target: { seat: number; at: number } | null;
+}
+
+/** 刺殺階段：三個任務成功、遊戲還沒結束。 */
+export function assassinationPhase(s: Pick<Snap, 'gaming' | 'status' | 'missions'>): boolean {
+  return s.gaming && s.status !== ENDED && s.missions.filter(Boolean).length >= 3;
+}
+
+/** 紅方座位裡的真人隊友（練習台內建機器人、百科AI、自己都不算）。 */
+export function humanRedSeats(s: Pick<Snap, 'users' | 'myself'>, redSeats: readonly number[]): number[] {
+  return s.users
+    .filter((u) => redSeats.includes(u.set) && u.set !== s.myself.set && !u.is_robot && !isPediaBotName(String(u.name ?? '')))
+    .map((u) => u.set);
+}
+
+/**
+ * 刺殺階段紅方討論的一步。回傳 'hold'：自己是刺客、正在等隊友指令（或剛刺了），這一輪不要走一般的決定；'go'：照舊。
+ */
+async function redTalkStep(p: Page, seat: Seat, s: Snap): Promise<'hold' | 'go'> {
+  let st = seat.redTalk;
+  if (!st) {
+    const evilRoles = evilRolesAtAssassination(s, seat.k);
+    const redSeats = Object.keys(evilRoles).map(setOf);
+    st = { active: humanRedSeats(s, redSeats).length > 0, redSeats, said: false, pick: null, wait: null, chatBase: [], target: null };
+    seat.redTalk = st;
+    if (!st.active) return 'go'; // 紅方全是機器人：照舊（不說話、不等）
+    st.chatBase = await chats(p);
+    let view: ReturnType<typeof redAssassinView> = null;
+    try {
+      view = redAssassinView(seat.agent, seat.obs(s, 'assassination', { allEvilIds: Object.keys(evilRoles), allEvilRoles: evilRoles }), setOf);
+    } catch { view = null; }
+    st.pick = view ? setOf(view.pick) : null;
+    if (view) {
+      const text = redViewMessage(view, setOf);
+      st.said = await chatConfirmed(p, text);
+      plog(`${seat.label} 刺殺階段看法${st.said ? '' : '（沒發出去）'}：${text}`);
+    }
+  }
+  if (!st.active || !decisionOpen(s, 'assassinate')) return 'go'; // 不是刺客：說完看法就好，真人刺客自己決定
+  if (st.target) {
+    // 已經刺了，畫面還開著刺殺：8 秒後再按同一個人
+    if (Date.now() - st.target.at > 8000) { st.target.at = Date.now(); await press(p, { kind: 'touch', set: st.target.seat }); }
+    return 'hold';
+  }
+  if (!st.wait) {
+    if (!st.said) { st.active = false; return 'go'; } // 聊天發不出去，沒辦法請隊友決定：照舊自己刺
+    const goods = s.users.map((u) => u.set).filter((x) => !st!.redSeats.includes(x));
+    const fallback = st.pick !== null && goods.includes(st.pick) ? st.pick : goods[0];
+    if (fallback === undefined) { st.active = false; return 'go'; }
+    st.wait = new AssassinCommandWait({
+      mySeat: s.myself.set, redSeats: new Set(st.redSeats), tableSeats: new Set(s.users.map((u) => u.set)),
+      fallbackSeat: fallback, deadlineAt: assassinWaitDeadline(Date.now(), SIGNAGE_ASSASSIN_TIMER_MS),
+    });
+    await chatConfirmed(p, ASSASSIN_ASK_TEXT);
+    plog(`${seat.label} 刺殺：請紅方隊友用 /刺殺 決定`);
+  }
+  const now = await chats(p);
+  for (const c of newHumanChats(st.chatBase, now)) {
+    const reply = st.wait.onChat(Number(c.set), String(c.msg ?? ''), Date.now());
+    if (reply) await chat(p, reply);
+  }
+  st.chatBase = now;
+  const step = st.wait.poll(Date.now());
+  if (!step) return 'hold';
+  await chatConfirmed(p, step.reply);
+  plog(`${seat.label} 刺殺 → ${step.seat}（${step.source === 'command' ? '紅方隊友指令' : '時間到，自己的判斷'}）`);
+  const key = 'assassinate-redtalk';
+  seat.draft(key, { kind: 'assassinate', targetId: sid(step.seat) },
+    seat.obs(s, 'assassination', { allEvilIds: st.redSeats.map(sid), allEvilRoles: evilRolesAtAssassination(s, seat.k) }),
+    Math.min(5, s.missions.length), 0, 'agent', s);
+  seat.collector?.notes.add(step.source === 'command'
+    ? `刺殺由紅方真人隊友在聊天用「/刺殺」決定（${seatLabel(step.seat)}）`
+    : '刺殺時沒有收到紅方隊友的「/刺殺」指令，時間快到，照百科AI 自己的判斷');
+  st.target = { seat: step.seat, at: Date.now() };
+  if ((await press(p, { kind: 'touch', set: step.seat })) === 'ok') seat.commit(key);
+  return 'hold';
 }
 
 /** 依現在要做的決定問 AI，轉成一個練習台動作。fallback：AI 出錯或卡太久時的保守動作。 */
