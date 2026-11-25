@@ -641,10 +641,12 @@ export interface BoardGlance {
 
 /**
  * rows = 已經照這個數字排好的榜（第一列＝第一名）；metric = 這個數字叫什麼（原樣放進句子）；
- * fmt = 數字怎麼寫（勝率寫整數百分比、進步寫「+16 個百分點」、Elo 寫整數）；base = 全體（不含散客）的同一個數字。
+ * fmt = 數字怎麼寫（勝率寫整數百分比、進步寫「+16 個百分點」、Elo 寫整數）；base = 全體（不含散客）的同一個數字；
+ * word = 'top'（勝率、Elo：「最高」）或 'most'（場數、進步幾個百分點：「最多」）。
  */
 export function boardGlance(
   rows: readonly BoardRowInput[] | null | undefined, metric: string, fmt: (v: number) => string = pctText, base?: number | null,
+  word: 'top' | 'most' = 'top',
 ): BoardGlance {
   const top = (rows ?? []).flatMap(r => (finite(r.value) ? [{ name: r.name, value: r.value }] : [])).slice(0, 3);
   if (top.length === 0) return { top, sentence: null, baseSentence: null };
@@ -653,7 +655,7 @@ export function boardGlance(
   if (top[2]) { params.third = top[2].name; params.thirdValue = fmt(top[2].value); }
   return {
     top,
-    sentence: { key: `board.top${top.length}`, params },
+    sentence: { key: `board.${word}${top.length}`, params },
     baseSentence: finite(base) ? { key: 'board.base', params: { metric, base: fmt(base) } } : null,
   };
 }

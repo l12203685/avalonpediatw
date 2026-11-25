@@ -102,7 +102,7 @@ export default function PeriodWinRates(): JSX.Element {
   const regular = groups.find((g) => g.id === 'regular');
   const base = sort === 'finalWinRate' && regular ? num(benchmarkPlayerRow(regular).finalWinRate) : null;
   const sortLabel = t(`${k}.col.${sort === 'totalGames' ? 'games' : sort === 'excessWinRate' ? 'excess' : 'finalWinRate'}`);
-  const glance = boardGlance(rows.map((p) => ({ name: p.name, value: valueOf(p) })), sortLabel, fmt, base);
+  const glance = boardGlance(rows.map((p) => ({ name: p.name, value: valueOf(p) })), sortLabel, fmt, base, sort === 'totalGames' ? 'most' : 'top');
   const maxGames = Math.max(1, ...rows.map((p) => p.totalGames));
   const card = (p: PlayerWithSeatStats, rank: number | null, name: string): BoardCardRow => {
     const v = valueOf(p);
@@ -122,7 +122,7 @@ export default function PeriodWinRates(): JSX.Element {
         ...(sort === 'totalGames' ? [] : [w === null ? t(`${G}.games`, { n: formatInt(p.totalGames) }) : t(`${G}.winsOf`, { games: formatInt(p.totalGames), wins: formatInt(w) })]),
       ],
       label: v === null ? undefined : `${name} ${sortLabel} ${fmt(v)}`,
-      onClick: rank === null ? undefined : () => openPlayerStats(p.name),
+      onClick: rank === null ? undefined : (): void => openPlayerStats(p.name),
     };
   };
 

@@ -442,7 +442,7 @@ function BoardPanel({
   const regular = refRows.find(r => r.group.id === 'regular');
   const base = view && regular ? view.value(regular.row) : null;
   const glance = view
-    ? boardGlance(rows.map(r => ({ name: r.name, value: view.value(r) })), view.metric, view.sentenceText, base)
+    ? boardGlance(rows.map(r => ({ name: r.name, value: view.value(r) })), view.metric, view.sentenceText, base, board.metric === 'roleTheoryDelta' ? 'most' : 'top')
     : null;
   const who = boardText(board, isEn).who ?? null;
 
@@ -510,7 +510,7 @@ function boardCardView(board: AnalysisLeaderboardBoard, t: Translate): BoardCard
     details: (r: Row, group: boolean) => string[],
   ): BoardCardView => ({
     metric, value, sentenceText: sentence, max,
-    card: (row, key, rank, name, onClick) => {
+    card: (row, key, rank, name, onClick): BoardCardRow => {
       const v = value(row);
       return {
         key, rank, name,

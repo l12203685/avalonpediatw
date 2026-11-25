@@ -465,8 +465,9 @@ describe('一眼看懂（第三批）：戰績排行', () => {
   });
 
   it('數字的寫法由榜決定（進步榜寫百分點、場數寫場）', () => {
-    const g = boardGlance([{ name: '測試玩家甲', value: 16 }, { name: '測試玩家乙', value: 11 }], '角色理論進步', v => `+${v} 個百分點`);
-    expect(render('zh-TW', g.sentence as Sentence)).toContain('測試玩家甲（+16 個百分點）');
+    const g = boardGlance([{ name: '測試玩家甲', value: 16 }, { name: '測試玩家乙', value: 11 }], '角色理論進步', v => `+${v} 個百分點`, null, 'most');
+    expect(g.sentence?.key).toBe('board.most2');
+    expect(render('zh-TW', g.sentence as Sentence)).toBe('角色理論進步最多的是測試玩家甲（+16 個百分點），再來是測試玩家乙（+11 個百分點）。');
   });
 
   it('上榜條件寫成白話：幾個條件用頓號接，數字看最近幾場', () => {
@@ -623,6 +624,9 @@ describe('一眼看懂：每個句型兩種語言都有字', () => {
     { key: 'board.top2', params: { metric: '角色理論', first: '測試玩家甲', firstValue: '60%', second: '測試玩家乙', secondValue: '56%' } },
     { key: 'board.top1', params: { metric: '角色理論', first: '測試玩家甲', firstValue: '60%' } },
     { key: 'board.base', params: { metric: '角色理論', base: '46%' } },
+    { key: 'board.most3', params: { metric: '場數', first: '測試玩家甲', firstValue: '1,200 場', second: '測試玩家乙', secondValue: '1,100 場', third: '測試玩家丙', thirdValue: '1,000 場' } },
+    { key: 'board.most2', params: { metric: '場數', first: '測試玩家甲', firstValue: '1,200 場', second: '測試玩家乙', secondValue: '1,100 場' } },
+    { key: 'board.most1', params: { metric: '場數', first: '測試玩家甲', firstValue: '1,200 場' } },
     ...['order', 'orderSame'].map(k => ({ key: `tree.${k}`, params: { blues: '1', reds: '2', high: '紅紅藍', highRate: '43%', low: '藍紅紅', lowRate: '15%' } })),
     { key: 'tree.overall', params: { n: 2336, blue: '31%' } },
     ...['mixed', 'allAbove', 'allBelow'].map(k => ({

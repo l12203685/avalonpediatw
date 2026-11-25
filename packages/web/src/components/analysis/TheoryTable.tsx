@@ -122,7 +122,7 @@ export default function TheoryTable({
   const regular = groups.find((g) => g.id === 'regular');
   const baseValue = isRate && regular ? benchmarkBoardRow(regular)[sortKey] : null;
   const base = isNum(baseValue) ? baseValue : null;
-  const glance = boardGlance(rows.map((r) => ({ name: r.name, value: r[sortKey] })), label(sortKey), fmt, base);
+  const glance = boardGlance(rows.map((r) => ({ name: r.name, value: r[sortKey] })), label(sortKey), fmt, base, isRate ? 'top' : 'most');
   const maxGames = Math.max(1, ...rows.map((r) => r.careerGames ?? 0));
   const thinFor = (r: Row): boolean => (sortKey === 'roleTheory' ? r.fullWindows === false
     : sortKey === 'overallTheory' || sortKey === 'careerGames' ? false : short(r));
@@ -145,7 +145,7 @@ export default function TheoryTable({
       details,
       thin: !group && thinFor(r),
       label: isNum(v) ? `${name} ${label(sortKey)} ${fmt(v)}` : undefined,
-      onClick: group ? undefined : () => openPlayerStats(r.name),
+      onClick: group ? undefined : (): void => openPlayerStats(r.name),
     };
   };
 
