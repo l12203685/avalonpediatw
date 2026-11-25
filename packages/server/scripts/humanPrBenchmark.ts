@@ -259,6 +259,8 @@ interface Scored {
   agree: boolean;
   idx?: number;
   botAction?: string;
+  /** 第 76 回合：投票才有——機器人投另一票時的優勢（同一份表）；只改票的候選可以不重播、直接從這一欄換算。 */
+  alt?: number;
 }
 
 /** 一個決策點的人類與機器人選擇 → 兩組鍵（刺殺另外算）。 */
@@ -512,7 +514,8 @@ async function main(): Promise<void> {
     const keys = decisionKeys(d, rec);
     if (!keys) continue;
     const tab = tables.get(type)![foldOf(g.id)];
-    scored.push({ gi, seat, type, role, bucket, human: advantage(tab, keys.human), bot: advantage(tab, keys.bot), agree: keys.agree, idx: recIdx, botAction: agent });
+    const alt = type === 'vote' ? advantage(tab, voteKeys(g, recIdx, seat, agent !== 'approve')) : undefined;
+    scored.push({ gi, seat, type, role, bucket, human: advantage(tab, keys.human), bot: advantage(tab, keys.bot), agree: keys.agree, idx: recIdx, botAction: agent, ...(alt === undefined ? {} : { alt }) });
   }
 
   if (args.dump) fs.writeFileSync(args.dump, scored.map((x) => JSON.stringify(x)).join('\n') + '\n');
