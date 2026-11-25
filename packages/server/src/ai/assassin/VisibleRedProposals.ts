@@ -60,6 +60,7 @@
 
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { PlayerObservation, VoteRecord } from '../types';
+import { needTwoSingleSeen73, round73Stats } from '../Round73';
 
 /** What Merlin sees, from the assassinator's seat. */
 export interface MerlinSight {
@@ -200,14 +201,19 @@ export function visibleRedEvidence(
   candidates: readonly string[],
   ignoreDoomed = false,
   ignoreReuse = false,
+  ignoreNeedTwo = false,
 ): Map<string, VisibleRedEvidence> {
   const sight = merlinSightFromAssassin(obs);
+  // Round 73 `assassinNeedTwo73` bit 1 (Round73.ts): on a two-fail round a lead holding exactly one red Merlin sees is no tier evidence
+  // (that red cannot fail the mission alone; human Merlins lead such teams at 0.59 of the other blues' rate). Only with the reds' roles known.
+  const needTwo = ignoreNeedTwo && obs.allEvilRoles !== undefined && sight.ambiguous.length === 0;
   const out = new Map<string, VisibleRedEvidence>();
   for (const id of candidates) out.set(id, { certainRounds: [], ambiguousRounds: [], tier: 0, logLikelihood: 0 });
   for (const v of obs.voteHistory) {
     const e = out.get(v.leader);
     if (!e || !countsForTier(v, ignoreDoomed)) continue;
     if (ignoreReuse && successfulTeamReuse(obs, v, sight)) continue;
+    if (needTwo && needTwoSingleSeen73(obs.playerCount, v.round, v.team, sight.certain)) { round73Stats.tier++; continue; }
     const k = classifyTeamForAssassin(v.team, sight);
     if (k === 'certain') {
       e.certainRounds.push(v.round);
@@ -230,6 +236,8 @@ export interface VisibleRedOptions {
   ignoreDoomed?: boolean;
   /** Round 19 `assassinReuseRead`: re-proposals of a successful mission team do not count (`successfulTeamReuse`). */
   ignoreReuse?: boolean;
+  /** Round 73 `assassinNeedTwo73` bit 1: two-fail-round leads with exactly one seen red do not count. */
+  ignoreNeedTwo?: boolean;
 }
 
 /**
@@ -257,7 +265,7 @@ export function pickWithVisibleRed(
   opts: VisibleRedOptions,
 ): string {
   if (candidates.length === 0) throw new Error('pickWithVisibleRed: no candidates');
-  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false, opts.ignoreReuse ?? false);
+  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false, opts.ignoreReuse ?? false, opts.ignoreNeedTwo ?? false);
   const pool = opts.tier ? tierCandidates(candidates, evidence) : [...candidates];
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const score = (id: string): number =>

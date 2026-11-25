@@ -743,7 +743,7 @@ export function explainAssassination(
   const parts: string[] = [`候選 ${candidates.length} 人（排除紅方）`];
   let rule: string | undefined;
   if (tuning.assassinVisibleRedTier && candidates.length > 0) {
-    const evidence = visibleRedEvidence(obs, candidates, tuning.assassinIgnoreDoomed, (tuning.assassinReuseRead ?? 0) >= 1);
+    const evidence = visibleRedEvidence(obs, candidates, tuning.assassinIgnoreDoomed, (tuning.assassinReuseRead ?? 0) >= 1, ((tuning.assassinNeedTwo73 ?? 0) & 1) !== 0);
     const flagged = candidates.filter((id) => evidence.get(id)?.tier === 1);
     if (flagged.length > 0 && flagged.length < candidates.length) {
       parts.push(

@@ -16,6 +16,8 @@
  *   --legacy           從全關的舊表開始再套 --flag
  *   --roles R1,R2,…    只重播這些角色的座位（第 61 回合：只改紅方決策的候選用 assassin,morgana,mordred,oberon；其他座位沒有機器人決策）
  *   --min-s S          只重播桌上強度 S ≥ S 的局（第 64 回合：強真人桌的候選；優勢表照舊用全部真人局擬合）
+ *   --tier-profile     第 73 回合：每一局照那一桌的強度層用真人桌的策略層重播（`humanProfile.ts`：S < 38 弱、38–55 一般、≥ 55 強、S 不明 = 一般；
+ *                      `--flag` 疊在策略層上面）；不給 = 每一局都用同一組開關（基準線＋`--flag`）
  *
  * 做法（細節見 src/ai/benchmark/humanPr.ts）：資料集每一局（嚴格解析，`datasetReplay.ts`）每一個座位都換成機器人
  * 重播（`agreement.replayGame`，和 agreementBenchmark 相同的觀察重建：只看那個座位當時知道的事），記下機器人在
@@ -47,6 +49,7 @@ import { replayGamesFromDataset, type DatasetReplayGame } from '../src/ai/benchm
 import { pinnedQuestCard, replayGame } from '../src/ai/benchmark/agreement';
 import { BENCHMARK_ROLES } from '../src/ai/benchmark/cohorts';
 import { campOf } from '../src/ai/benchmark/sheetsReplay';
+import { opponentTypeOfTable, tuningForOpponent, type OpponentType } from '../src/ai/humanProfile';
 import {
   PR_BUCKETS,
   advantage,
@@ -89,6 +92,8 @@ interface Args {
   /** 第 61 回合：只重播這些角色的座位（空 = 全部）。 */
   roles?: string[];
   minS?: number;
+  /** 第 73 回合：每一局照桌上強度層用真人桌的策略層（`tuningForOpponent`），`--flag` 疊在上面。 */
+  tierProfile?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -133,6 +138,7 @@ function parseArgs(argv: string[]): Args {
       case '--cache-any': args.cacheAny = true; break;
       case '--roles': args.roles = next().split(',').map((x) => x.trim()).filter(Boolean); break;
       case '--min-s': args.minS = Number.parseFloat(next()); break;
+      case '--tier-profile': args.tierProfile = true; break;
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -163,11 +169,21 @@ function loadGames(args: Args): { games: DatasetReplayGame[]; skipped: Record<st
 }
 
 /** 重播 games 裡 gi % n === k 的局，回傳機器人的決策。 */
-function replayShard(games: readonly DatasetReplayGame[], tuning: AgentTuning, k: number, n: number, roles?: readonly string[], minS?: number): BotRecord[] {
+function replayShard(games: readonly DatasetReplayGame[], base: AgentTuning, k: number, n: number, roles?: readonly string[], minS?: number, tier?: Partial<AgentTuning>): BotRecord[] {
   const out: BotRecord[] = [];
+  // `--tier-profile`: the table's own human profile (weak / average / strong by its S; unknown S = average), the flags on top.
+  const tiered = new Map<OpponentType, AgentTuning>();
+  const tuningOf = (s: number | null | undefined): AgentTuning => {
+    if (!tier) return base;
+    const type = opponentTypeOfTable({ humans: 10, tableS: s ?? null });
+    let t = tiered.get(type);
+    if (!t) { t = { ...tuningForOpponent(type, base), ...tier }; tiered.set(type, t); }
+    return t;
+  };
   for (let gi = k; gi < games.length; gi += n) {
     if (minS !== undefined && !((games[gi].s ?? -1) >= minS)) continue;
     const g = games[gi].game;
+    const tuning = tuningOf(games[gi].s);
     const seats = Array.from({ length: g.playerCount }, (_, i) => i + 1).filter((s) => !roles?.length || roles.includes(g.seatRoles[s - 1]));
     const outcomes = replayGame(g, seats, { makeAgent: (id) => new HeuristicAgent(id, undefined, undefined, tuning) });
     for (const o of outcomes) {
@@ -183,7 +199,7 @@ function replayShard(games: readonly DatasetReplayGame[], tuning: AgentTuning, k
 }
 
 async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tuning: AgentTuning): Promise<{ records: BotRecord[]; forward: number }> {
-  const key = `${describeAgentTuning(tuning)}|${games.length}|${games.map((g) => g.game.id).join(',').length}${args.roles?.length ? `|roles=${args.roles.join(',')}` : ''}${args.minS !== undefined ? `|minS=${args.minS}` : ''}`;
+  const key = `${describeAgentTuning(tuning)}|${games.length}|${games.map((g) => g.game.id).join(',').length}${args.roles?.length ? `|roles=${args.roles.join(',')}` : ''}${args.minS !== undefined ? `|minS=${args.minS}` : ''}${args.tierProfile ? '|tierProfile' : ''}`;
   if (args.botCache && fs.existsSync(args.botCache)) {
     const cached = JSON.parse(fs.readFileSync(args.botCache, 'utf8')) as { key: string; records: BotRecord[]; forward: number };
     if (cached.key === key || args.cacheAny) {
@@ -196,7 +212,7 @@ async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tun
   let records: BotRecord[] = [];
   let forward = 0;
   if (args.workers <= 1) {
-    records = replayShard(games, tuning, 0, 1, args.roles, args.minS);
+    records = replayShard(games, tuning, 0, 1, args.roles, args.minS, args.tierProfile ? args.flags : undefined);
     forward = getForwardTelemetry().totalDecisions;
   } else {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'humanpr-'));
@@ -207,6 +223,7 @@ async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tun
       ...(args.legacy ? ['--legacy'] : []),
       ...(args.roles?.length ? ['--roles', args.roles.join(',')] : []),
       ...(args.minS !== undefined ? ['--min-s', String(args.minS)] : []),
+      ...(args.tierProfile ? ['--tier-profile'] : []),
     ];
     const jobs = Array.from({ length: args.workers }, (_, k) => new Promise<void>((resolve, reject) => {
       const out = path.join(dir, `shard${k}.json`);
@@ -422,7 +439,7 @@ async function main(): Promise<void> {
 
   if (args.shard) {
     const [k, n] = args.shard;
-    const records = replayShard(games, tuning, k, n, args.roles, args.minS);
+    const records = replayShard(games, tuning, k, n, args.roles, args.minS, args.tierProfile ? args.flags : undefined);
     fs.writeFileSync(args.out!, JSON.stringify({ records, forward: getForwardTelemetry().totalDecisions }));
     return;
   }
@@ -489,7 +506,7 @@ async function main(): Promise<void> {
       const base = killBase(foldOf(g.id));
       const humanHit = g.assassinTargetSeat === merlin ? 1 : 0;
       const botHit = Number.parseInt(agent, 10) === merlin ? 1 : 0;
-      scored.push({ gi, seat, type, role, bucket, human: humanHit - base, bot: botHit - base, agree: g.assassinTargetSeat === Number.parseInt(agent, 10) });
+      scored.push({ gi, seat, type, role, bucket, human: humanHit - base, bot: botHit - base, agree: g.assassinTargetSeat === Number.parseInt(agent, 10), botAction: agent });
       continue;
     }
     const keys = decisionKeys(d, rec);

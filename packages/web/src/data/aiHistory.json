@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24",
+  "generatedAt": "2026-11-25",
   "source": "docs/ai/optimization_loop.md 第 4 節＋docs/ai/ai_history.curated.json（scripts/build_ai_history.ts）",
   "stats": {
-    "rounds": 70,
+    "rounds": 71,
     "adoptedRounds": 43,
-    "notAdoptedRounds": 27,
-    "latestRound": "72"
+    "notAdoptedRounds": 28,
+    "latestRound": "73"
   },
   "headline": [
     {

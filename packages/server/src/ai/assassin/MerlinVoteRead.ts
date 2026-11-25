@@ -9,6 +9,7 @@
  */
 import type { PlayerObservation } from '../types';
 import { genericGoodVoteProb } from '../belief/BayesBelief';
+import { needsTwoFails73, round73Stats } from '../Round73';
 
 const EPS = 0.05;
 const EPS13 = 0.01;
@@ -61,7 +62,7 @@ function fatalThen(obs: PlayerObservation, round: number, seen: number): boolean
  * `eps`: Merlin's approve rate in the cells his seen reds bar (第 14 回合 `assassinVoteEps`; 0 = the model's own: 0.05, and 0.01 for
  * `'normalFit13'`, whose generic-blue rates are near 0.05 themselves — the bot Merlin's is 0%).
  */
-export function merlinVoteLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], model: MerlinVoteModel = 'strict', epsIn = 0): number {
+export function merlinVoteLogRatio(obs: PlayerObservation, candidate: string, reds: readonly string[], model: MerlinVoteModel = 'strict', epsIn = 0, skipNeedTwo = false): number {
   const eps = epsIn > 0 ? epsIn : model === 'normalFit13' || model === 'normalFit26' ? EPS13 : EPS;
   const late = obs.voteHistory.filter((v) => v.round >= 3 && v.attempt < 5 && v.votes[candidate] !== undefined);
   if (late.length === 0 || reds.length === 0) return 0;
@@ -79,6 +80,9 @@ export function merlinVoteLogRatio(obs: PlayerObservation, candidate: string, re
       let pg = genericGoodVoteProb(on, hasRed, v.round, true);
       let pm: number;
       if (normal) {
+        // Round 73 `assassinNeedTwo73` bit 4 (Round73.ts): on a two-fail round a team with exactly one seen red cannot fail by that red
+        // alone — human Merlins vote on it as the other blues do, on the team or off it. No read.
+        if (skipNeedTwo && roles && seen === 1 && needsTwoFails73(obs.playerCount, v.round)) { round73Stats.vote++; continue; }
         // Merlin votes as the generic blue would (no information) unless the seen reds bar the approve.
         const barred = on ? fatalThen(obs, v.round, seen) : seen > 0;
         if (!barred) continue;

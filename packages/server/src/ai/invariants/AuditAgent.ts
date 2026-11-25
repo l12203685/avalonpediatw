@@ -38,6 +38,8 @@ export interface DecisionRecord {
   assassinIgnoreDoomed?: boolean;
   /** assassinate: the deciding agent's `assassinReuseRead` (round 19: re-proposals of a successful team are no tell). */
   assassinReuseRead?: number;
+  /** assassinate: the deciding agent's `assassinNeedTwo73` (round 73: a two-fail-round lead with exactly one seen red is no tier evidence). */
+  assassinNeedTwo73?: number;
   /** lake_target: the chosen target; lake_claim: the inspected target. */
   lakeTarget?: string;
   /** lake_target: the legal targets offered. */
@@ -128,6 +130,7 @@ export class AuditAgent implements AvalonAgent {
       if (obs.gamePhase === 'assassination') {
         rec.assassinIgnoreDoomed = this.base.tuning.assassinIgnoreDoomed;
         rec.assassinReuseRead = this.base.tuning.assassinReuseRead ?? 0;
+        rec.assassinNeedTwo73 = this.base.tuning.assassinNeedTwo73 ?? 0;
       }
       if (obs.gamePhase === 'team_select') rec.exclusions = this.fwd.lastTeamExclusions();
       this.records.push(rec);
