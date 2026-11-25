@@ -81,6 +81,10 @@ import {
 import { LineReplyQueue } from '../bots/line/replyQueue';
 import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
+import { UNKNOWN_COMMAND_HINT } from '../bots/help';
+import { DAILY_QUESTION_UNAVAILABLE_TEXT, __resetDailyQuestionForTests } from '../bots/dailyQuestion/commands';
+import { __setSimForTests } from '../bots/simulation';
+import { SimBankLoader } from '../bots/simulation/bank';
 import { RelayMediaStore } from '../bots/media/relayMedia';
 import { WEEKLY_CHART_CAPTION, __resetLeaderboardChartCacheForTests } from '../bots/stats/statsQueries';
 import type { LobbyChatMessage } from '../socket/LobbyChatBuffer';
@@ -393,11 +397,30 @@ describe('1:1 chat and other groups', () => {
     expect(h.lobby).toEqual([]);
   });
 
-  it('1:1 legacy commands stay silent while LINE_BOT_COMMANDS_ENABLED is off', async () => {
+  it('1:1 while LINE_BOT_COMMANDS_ENABLED is off: a slash command the bot does not know gets one fixed hint (2026-11-25), chatter stays unanswered', async () => {
     const h = setup();
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await deliver(h, userText('/create', 'u2', 'rtH'), userText('hi', 'u3', 'rtI'));
+    await deliver(h, userText('/create', 'u2', 'rtH'), userText('hi', 'u3', 'rtI'), userText('／戰積 測試玩家甲', 'u4', 'rtJ'));
     log.mockRestore();
+    expect(h.replies).toEqual([
+      { token: 'rtH', texts: [UNKNOWN_COMMAND_HINT] },
+      { token: 'rtJ', texts: [UNKNOWN_COMMAND_HINT] },
+    ]);
+    // The hint never repeats what the person typed.
+    expect(UNKNOWN_COMMAND_HINT).not.toContain('create');
+    expect(h.bot.getWebhookStats().unknownCommandHints).toBe(2);
+  });
+
+  it('1:1 with the stats commands off: no hint either (the hint points to /help, which is off too)', async () => {
+    const h = setup();
+    LINE_CONFIG.statsCommandsEnabled = false;
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await deliver(h, userText('/create', 'u2', 'rtH2'));
+    } finally {
+      LINE_CONFIG.statsCommandsEnabled = true;
+      log.mockRestore();
+    }
     expect(h.replies).toEqual([]);
   });
 
@@ -405,6 +428,56 @@ describe('1:1 chat and other groups', () => {
     const h = setup();
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     await deliver(h, groupText('/排行', 'g1', 'rtG', 'Cother-group'));
+    log.mockRestore();
+    expect(h.replies).toEqual([]);
+  });
+});
+
+describe('/每日一題 (2026-11-25, bots/dailyQuestion) on LINE', () => {
+  // No network here: the question bank is "missing", so the answer is the fixed retry line.
+  beforeEach(() => {
+    __resetDailyQuestionForTests();
+    __setSimForTests({ loader: new SimBankLoader(() => null) });
+  });
+  afterEach(() => {
+    __resetDailyQuestionForTests();
+    __setSimForTests({ loader: null, engine: null });
+    delete process.env.SIM_LINE_GROUP_IDS;
+  });
+
+  it('mirror group: answers on the reply_token (first slot), is counted, and the reply is relayed to Discord', async () => {
+    const h = setup();
+    await queueMirrorMessages(h.mirror, 2);
+    await deliver(h, groupText('/每日一題', 'dq1', 'rtDQ1'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(h.replies).toHaveLength(1);
+    expect(h.replies[0].token).toBe('rtDQ1');
+    expect(h.replies[0].texts[0]).toBe(DAILY_QUESTION_UNAVAILABLE_TEXT);
+    expect(h.replies[0].texts).toHaveLength(3); // the answer + the two queued mirror messages
+    expect(h.bot.getWebhookStats()).toMatchObject({ dailyQuestionReplies: 1, statsReplies: 0, replyFailures: 0 });
+    // The command line is mirrored like any text; the bot's answer follows it.
+    expect(h.discordSent.some((m) => m.endsWith('/每日一題'))).toBe(true);
+    expect(h.discordSent.some((m) => m.endsWith(DAILY_QUESTION_UNAVAILABLE_TEXT))).toBe(true);
+  });
+
+  it('1:1 and /今日一題: answered too; ordinary chatter that mentions it is not', async () => {
+    const h = setup();
+    await deliver(h, userText('／今日一題', 'dq2', 'rtDQ2'), userText('每日一題好難', 'dq3', 'rtDQ3'));
+    expect(h.replies).toEqual([{ token: 'rtDQ2', texts: [DAILY_QUESTION_UNAVAILABLE_TEXT] }]);
+  });
+
+  it('a 模擬-only practice group answers it as well (the reply leads into /模擬 題號)', async () => {
+    process.env.SIM_LINE_GROUP_IDS = 'Cpractice-group';
+    const h = setup();
+    await deliver(h, groupText('/每日一題', 'dq4', 'rtDQ4', 'Cpractice-group'));
+    expect(h.replies).toEqual([{ token: 'rtDQ4', texts: [DAILY_QUESTION_UNAVAILABLE_TEXT] }]);
+    expect(h.bot.getWebhookStats().dailyQuestionReplies).toBe(1);
+  });
+
+  it('a group that is neither the mirror group nor a practice group gets nothing', async () => {
+    const h = setup();
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await deliver(h, groupText('/每日一題', 'dq5', 'rtDQ5', 'Cother-group'));
     log.mockRestore();
     expect(h.replies).toEqual([]);
   });

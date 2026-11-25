@@ -2,6 +2,7 @@
  * /help（Edward 2026-11-17：「我覺得機器人最基本的說明就是 /help 剩下可以再靠後面打指令細查 比如 /help 模擬 這樣」）。
  */
 import { afterEach, describe, expect, it } from 'vitest';
+import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { basicHelpText, HELP_TOPICS, helpText, helpTopicOf, parseHelpCommand, topicHelpText } from '../bots/help';
 import { SIM_CONFIG } from '../bots/simulation/config';
 import { SIM_HELP_TEXT, SIM_HELP_TEXT_DISCORD } from '../bots/simulation/replies';
@@ -40,10 +41,14 @@ describe('texts', () => {
     const line = basicHelpText('line');
     const lines = line.split('\n');
     expect(lines[0]).toBe('📖 阿瓦隆百科機器人');
-    expect(lines.at(-1)).toBe('/help 主題 看細節（例：/help 模擬）');
-    for (const cmd of ['/模擬', '/戰績 名字', '/補位', '/待修正', '/回報', '/意見 文字']) expect(line).toContain(cmd);
-    expect(lines.length).toBeLessThanOrEqual(9);
-    expect(basicHelpText('discord').split('\n').at(-1)).toBe('/help 主題 看細節（例：/help 主題:模擬）');
+    expect(lines.at(-1)).toBe('/help 主題 看細節（例：/help 模擬；打 /說明 也一樣）');
+    for (const cmd of ['/模擬', '/每日一題', '/戰績 名字', '/補位', '/待修正', '/回報', '/意見 文字', '/help 規則、/help 角色']) expect(line).toContain(cmd);
+    // 2026-11-25：多了 /每日一題、規則與角色、去哪裡開局，還是每個功能一行。
+    expect(lines.length).toBeLessThanOrEqual(11);
+    for (const l of lines) expect(l.split('\n')).toHaveLength(1);
+    expect(line).toContain(`🎲 開局、對局：signage-cloud ${PLAY_PLATFORM_URL}`);
+    expect(basicHelpText('discord').split('\n').at(-1)).toBe('/help 主題 看細節（例：/help 主題:模擬；打 /說明 也一樣）');
+    expect(basicHelpText('discord')).toContain('/rules /roles\u3000遊戲規則、角色介紹');
   });
   it('/help 模擬 is the 模擬瓦 command list (same as /模擬 說明); /區間 shows how 百科AI reads, /區間 789=2 checks your own; no /下一步', () => {
     expect(topicHelpText('模擬', 'line')).toBe(SIM_HELP_TEXT);
