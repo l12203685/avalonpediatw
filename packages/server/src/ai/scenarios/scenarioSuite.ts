@@ -309,10 +309,6 @@ export function answerScenario(built: Built, tuning: AgentTuning, seed: string):
   const obs = observationOf(built);
   const { agent, base } = agentsFor(game, seat, tuning);
   const out: ScenarioAnswer = { text: '' };
-  if (obs.myTeam === 'good') {
-    const share = bayesRedShare(obs, bayesOptionsOf(tuning));
-    out.pRed = obs.allPlayerIds.map((id) => share.get(id) ?? 0);
-  }
   const seedOf = (key: string): string => `${game.id}|${seat}|${key}${seed ? `|${seed}` : ''}`;
   switch (point.kind) {
     case 'team_select': {
@@ -354,6 +350,11 @@ export function answerScenario(built: Built, tuning: AgentTuning, seed: string):
       out.text = `刺 ${seatChar(out.target)} 家`;
       break;
     }
+  }
+  // 信念在決定之後才算（跟每日一題的百科AI 答案同一個順序）：1-1 隊長自己的先驗是用決定那一刻的亂數抽的，先算信念會改到決定。
+  if (obs.myTeam === 'good') {
+    const share = withSeededRandom(seedOf('belief'), () => bayesRedShare(obs, bayesOptionsOf(tuning)));
+    out.pRed = obs.allPlayerIds.map((id) => share.get(id) ?? 0);
   }
   return out;
 }

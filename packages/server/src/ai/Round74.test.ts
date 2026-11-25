@@ -23,14 +23,14 @@ const STAINED = fx({ record: ['124', '235', '346', '457', '358', 'oox'], ask: { 
 const LOYAL = fx({ record: ['124', '235', '346'], ask: { kind: 'team', seat: '4' } });
 
 describe('round 74 switches', () => {
-  it('are off by default, in the legacy table and for every opponent type; flags parse', () => {
+  it('are off in the baseline and the legacy table; the human tables use thumbBlend74 = 0.25 (adopted this round); flags parse', () => {
     for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) {
       expect(t.percivalNoInfo74).toBe(0);
       expect(t.thumbBlend74).toBe(0);
     }
     for (const k of OPPONENT_TYPES) {
-      expect(tuningForOpponent(k).percivalNoInfo74).toBe(0);
-      expect(tuningForOpponent(k).thumbBlend74).toBe(0);
+      expect(tuningForOpponent(k, DEFAULT_AGENT_TUNING).percivalNoInfo74).toBe(0);
+      expect(tuningForOpponent(k, DEFAULT_AGENT_TUNING).thumbBlend74).toBe(k === 'ai' ? 0 : 0.25);
     }
     expect(parseTuningFlag('percivalNoInfo74')).toEqual({ percivalNoInfo74: 0.6 });
     expect(parseTuningFlag('percivalNoInfo74=0.7')).toEqual({ percivalNoInfo74: 0.7 });
@@ -122,10 +122,10 @@ describe('thumbBlend74 in the posterior', () => {
 });
 
 describe('the agent', () => {
-  it('answers the same with both switches at 0 as with the current default (every opponent type)', () => {
+  it('answers the same with the switches at their current values written out (baseline: both 0; human tables: thumbBlend74 as adopted)', () => {
     for (const type of OPPONENT_TYPES) {
       const base = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
-      const off = { ...base, percivalNoInfo74: 0, thumbBlend74: 0 };
+      const off = { ...base, percivalNoInfo74: 0, thumbBlend74: type === 'ai' ? 0 : 0.25 };
       for (const f of [STAINED, LOYAL]) {
         const b = buildScenario(f);
         expect(answerScenario(b, off, 's1')).toEqual(answerScenario(b, base, 's1'));
