@@ -11480,9 +11480,9 @@ npx tsx scripts/tierPrCompare.ts prR_base.jsonl prR_cand.jsonl --split all|train
 
 #### 5. 驗收（測試）與可重現
 
-- 新增 `scenarios/scenarioSuite.test.ts`（8 個：題目檔格式、沒有名字、牌譜寫錯會擋、觀察只有那一家看得到的、每一種檢查、硬規則的題目在基準線與三種真人桌每個種子都過、同一個種子同一個答案、題庫的題目對得上）、`Round74.test.ts`（8 個：預設、解析、`blendThumbSplit74`、`noInfoPlan74`、後驗只動派西的拇指比例、其他角色逐位相同、開關寫成現值答案相同、打開時第 2 局分不出來不帶拇指）、`humanProfile.test.ts`（上限 18、真人桌 0.25／基準線 0）、`AgentTuning.test`（兩個新開關列為數值開關）。
-- 伺服器完整測試 @@TESTS@@；`tsc --noEmit`（server 與 scripts）乾淨；新檔案 eslint 0 個錯誤、0 個警告；`build_ai_history.ts` 重新產生（基準線沒有改，沒有新里程碑）。
-- 不變量（`invariantHarness.ts`，前 300 局重播＋探針＋300 局自我對打，種子 741001）：@@INVARIANTS@@
+- 新增 `scenarios/scenarioSuite.test.ts`（12 個：題目檔格式、沒有名字、牌譜的讀法、牌譜寫錯會擋、觀察只有那一家看得到的、每一種檢查、硬規則的題目在基準線與三種真人桌每個種子都過（4 個）、同一個種子同一個答案、題庫的題目對得上）、`Round74.test.ts`（8 個：預設、解析、`blendThumbSplit74`、`noInfoPlan74`、後驗只動派西的拇指比例、其他角色逐位相同、開關寫成現值答案相同、打開時第 2 局分不出來不帶拇指）、`humanProfile.test.ts`（上限 18、真人桌 0.25／基準線 0）、`AgentTuning.test`（兩個新開關列為數值開關）。
+- 伺服器完整測試 303 個檔案通過、1 個略過（4,714 個測試通過、27 個略過；合併第 75、76 回合之後跑的）；`tsc --noEmit`（server 與 scripts）乾淨；新檔案與改到的檔案 eslint 0 個錯誤（新檔案 0 個警告；`BayesBelief.ts` 原本就有的 1 個警告照舊）；`build_ai_history.ts` 重新產生（基準線沒有改，沒有新里程碑）。
+- 不變量（`invariantHarness.ts`，前 300 局重播＋探針＋300 局自我對打，種子 741001）：兩組——基準線＋`thumbBlend74=1`、真人桌（`HUMAN_READING` 全部開關，含 `thumbBlend74=0.25` 與第 76 回合的 `onTeamVote59=0.55`）——**每一條規則的機器人違反都是 0**（84 列）；A0、A1 的編碼 INV-B1／INV-B2 0 違反（重播 3,531／5,945 個機會、自我對打 3,676／5,331 與 3,652／4,735）；INV-Pe2（派西不硬排除拇指）0 違反（重播 304、自我對打 368／374 個機會，其中第 1 局不帶拇指的裁定豁免 278／337）；探針「派出確定會失敗的隊」「隊上有確定紅」0／3,772；靜態掃描 INV-B3 0；ForwardAgent 退回 0。**`percivalNoInfo74=0.6` 打開時 INV-Pe2 違反**（重播 165／469、自我對打 195／561 與 181／555；其他規則都是 0）：這個開關就是硬擋拇指，和 INV-Pe2 的字面衝突（同第 39 回合的 `percivalCarry39=1`／`2`），所以沒有站長的裁定不能用——本回合沒有採用，預設關。基準線逐局相同：`sp.ts`（分支 `selfplay-runs-r71`）563001 第 0–39 局，本分支和 main（eadd4c3a）40／40 逐局相同。
 - 新檔：`src/ai/scenarios/scenarioSuite.ts`、`bankScenarios.ts`、`fixtures.json`、`scenarioSuite.test.ts`、`src/ai/Round74.ts`、`Round74.test.ts`、`scripts/scenarioSuite.ts`、`scripts/thumbStudy74.ts`（只輸出題號、座位、角色，沒有名字）、`scripts/thumbStudy74.py`、`docs/ai/gap/r74-scenarios.md`。`humanProfileStudy.ts` 加 `--roles`；`BayesBelief.ts` 的 `thumbRead39Posterior` 多一個可選參數（不給時逐位相同）；`ForwardAgent.ts` 的拇指計畫多包一層（開關關時傳回同一個物件）。`bots/threads/` 沒有改（只讀）。中間檔不進 repo。
 
 ```
