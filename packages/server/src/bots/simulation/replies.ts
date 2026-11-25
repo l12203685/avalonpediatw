@@ -1125,6 +1125,25 @@ export function formatReveal(input: RevealInput): string {
 // ─── 固定短句 ─────────────────────────────────────────────────────────────
 
 export const NO_SESSION_TEXT = '你目前沒有進行中的模擬（有人 /公布 或 /結束、開了別的題或伺服器重新啟動都會結束）。輸入 /模擬 開一題，/help 模擬 看全部指令';
+/** 有存檔時（persist.ts）：重啟不會結束題目，所以不提重啟。 */
+export const NO_SESSION_KEPT_TEXT = '你目前沒有進行中的模擬（有人 /公布 或 /結束、或開了別的題都會結束）。輸入 /模擬 開一題，/help 模擬 看全部指令';
+/** 伺服器剛重啟、進行中的題目還在讀回來。 */
+export const RESTORING_TEXT = '伺服器剛更新完，正在把進行中的題目讀回來，請過幾秒再打一次。';
+
+/** 台北時間的「月/日 時:分」（例 11/25 16:30）。 */
+function taipeiStamp(at: number): string {
+  const d = new Date(at + 8 * 60 * 60 * 1000);
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
+}
+
+/**
+ * 重啟前的題目沒能讀回來（存檔不在、讀不到或格式不同），而這個人現在沒有題目：講明伺服器更新過、題目沒留下來、怎麼重開。
+ * 不知道他原本是哪一題，所以請他照題目第一行的題號重開。
+ */
+export function restartLostText(restartedAt: number): string {
+  return `你目前沒有進行中的模擬。伺服器在 ${taipeiStamp(restartedAt)} 更新過，那之前還沒公布的題目這次沒能留下來。原本有題目的話，打 /模擬 題號 重開同一題（題號在題目的第一行，例：/模擬 K7Q2M-4），或 /模擬 開新的一題`;
+}
 export const BANK_NOT_READY_TEXT = '模擬瓦題庫還沒準備好，請稍後再試。';
 export const RATE_LIMITED_TEXT = '模擬指令太頻繁了，10 分鐘後再試。';
 export const START_USAGE = '用法：/模擬｜/模擬 角色 座位（例：/模擬 派西 2、/模擬 梅林、/模擬 7、/模擬 紅）｜/模擬 1-5～4-5、/模擬 4局、/模擬 5局（可以加角色）｜/模擬 刺殺｜/模擬 今天｜/模擬 題號（例：/模擬 K7Q2M 3-5、/模擬 K7Q2M 4家、/模擬 K7Q2M）｜/help 模擬';
@@ -1221,6 +1240,9 @@ export function endedText(exerciseId: string): string {
 
 /** 題目過期或被擠掉之後，本人再打指令時的說明。 */
 export function endedNoticeText(exerciseId: string, reason: EndedReason): string {
+  if (reason === 'lost') {
+    return `你的模擬 ${exerciseId} 在伺服器更新後沒能接回來（這一局可能已經從題庫拿掉）。/模擬 題 ${exerciseId} 重開試試，或 /模擬 開新的一題`;
+  }
   const why = reason === 'expired' ? '太久沒動作' : '同時開的題目太多，最久沒動的先結束';
   return `你的模擬 ${exerciseId} 已經結束（${why}）。/模擬 題 ${exerciseId} 從頭再做一次，或 /模擬 開新的一題`;
 }
