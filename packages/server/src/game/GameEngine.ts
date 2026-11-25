@@ -240,6 +240,11 @@ export class GameEngine {
     return Math.round(base * m);
   }
 
+  /** The effective assassination timer of this room (ms), or null when it has none (刺殺階段紅方討論 waits within it). */
+  public getAssassinationTimeoutMs(): number | null {
+    return this.getTimeoutMs(ASSASSINATION_TIMEOUT_MS);
+  }
+
   /**
    * True when the room is operating in async ("棋瓦") mode. Centralised so
    * downstream code never has to remember the `?? 'realtime'` default.

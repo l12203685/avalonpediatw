@@ -140,7 +140,7 @@ function redTalkReasons(
   }
   // 湖：梅林不會湖自己看得到的紅
   if (terms && terms.lake > 0) {
-    const lakes = obs.lakeHistory.filter((l) => l.holderId === pick);
+    const lakes = (obs.lakeHistory ?? []).filter((l) => l.holderId === pick);
     if (lakes.length > 0 && lakes.every((l) => seen([l.targetId]) === 0)) out.push({ w: 30 + terms.lake, text: `${P} 拿湖時沒有湖梅林看得到的紅` });
   }
   if (worldLine > 0) out.push({ w: 20, text: `照誰像派西維爾、誰像梅林一起推，${P} 最可能是梅林` });
