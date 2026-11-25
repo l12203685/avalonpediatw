@@ -1,8 +1,10 @@
 /**
  * 分析頁共用 UI 的顏色與數字格式 (2026-10-14 round 6：每個分析分頁一頁一屏、能用表格就不用圖)。
  *
- * 三種結果的顏色跟 OutcomeBar 一致 (三紅 紅 / 三藍死 琥珀 / 三藍活 藍)，
- * 固定顯示順序 三紅 → 三藍死 → 三藍活。這裡只放與資料無關的常數與格式化，
+ * 三種結果的顏色跟 OutcomeBar 一致 (三紅 紅 / 三藍死 淺紅 / 三藍活 藍)，
+ * 固定顯示順序 三紅 → 三藍死 → 三藍活。
+ * (2026-11-25 站長：數據分析要一目瞭然 → 顏色全站一致：紅＝紅方贏、藍＝藍方贏。三藍死是紅方贏的一種，
+ *  從琥珀改成紅色系的淺紅：跟三紅排在一起分得出來，又一眼看得出是紅方贏的那一邊。琥珀只留給「強調／名次」。)這裡只放與資料無關的常數與格式化，
  * 條件機率本身由 packages/shared 的 helper 算，元件只負責顯示。
  * 不 import services/api (那裡一載入就讀 Vite 環境變數)，格式與 api.ts 的 fmtPct 相同。
  */
@@ -22,7 +24,7 @@ export const OUTCOME_ORDER: readonly OutcomeKey[] = ['三紅', '三藍死', '三
 /** 與 OutcomeBar 的 RED / BLUE_DEAD / BLUE_ALIVE 相同。 */
 export const OUTCOME_COLORS: Readonly<Record<OutcomeKey, string>> = {
   三紅: '#ef4444',
-  三藍死: '#f59e0b',
+  三藍死: '#fca5a5',
   三藍活: '#3b82f6',
 };
 
@@ -33,19 +35,21 @@ export const OUTCOME_LABEL_KEYS: Readonly<Record<OutcomeKey, string>> = {
   三藍活: 'analytics.deep.outcomes.threeBlueAlive',
 };
 
-/** 陣營／強調色：紅方、藍方、琥珀 (刺殺、名次第一)。 */
-export type Tone = 'red' | 'blue' | 'amber';
+/** 陣營／強調色：紅方、藍方、kill (刺殺、三藍死：紅色系的淺紅)、琥珀 (強調的那一欄、名次第一)。 */
+export type Tone = 'red' | 'blue' | 'kill' | 'amber';
 
 export const TONE_TEXT: Readonly<Record<Tone, string>> = {
   red: 'text-red-300',
   blue: 'text-blue-300',
+  kill: 'text-red-200',
   amber: 'text-amber-300',
 };
 
 export const TONE_HEX: Readonly<Record<Tone, string>> = {
   red: OUTCOME_COLORS.三紅,
   blue: OUTCOME_COLORS.三藍活,
-  amber: OUTCOME_COLORS.三藍死,
+  kill: OUTCOME_COLORS.三藍死,
+  amber: '#f59e0b',
 };
 
 /**

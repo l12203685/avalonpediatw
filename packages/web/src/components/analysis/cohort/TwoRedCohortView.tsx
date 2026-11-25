@@ -7,7 +7,12 @@ import {
   type TwoRedCategory, type TwoRedCohortCounts, type TwoRedCohortData, type TwoRedRole, type TwoRedRound, type TwoRedTierKey,
 } from '@avalon/shared/stats';
 import { useCohortCuts } from '../../../stats/cohortCuts';
-import { InfoTip, SectionTabs, StatTable, useSectionTab, type SectionTabItem, type StatColumn } from '../ui';
+import {
+  Advanced, GlanceLegend, GlanceRow, InfoTip, SectionTabs, SplitBar, StatTable, Takeaway, useSectionTab,
+  type SectionTabItem, type SplitSegment, type StatColumn,
+} from '../ui';
+import { pctText, restText, twoRedGlance, type Share } from '../core/glance';
+import { sampleText, sentenceText } from '../core/glanceView';
 import { TWO_RED_TERMS, TWO_RED_TONES } from '../radar/twoRedLayout';
 import CohortGrid, { type CohortMeasure } from './CohortGrid';
 import CohortCutsControl from './CohortCutsControl';
@@ -20,6 +25,10 @@ import { useTwoRedCohort } from './useCohortData';
  * 強者／一般人／新手（＋全體），每一局一張表；下面是選定的分類在（玩家分層 × 桌分層）九宮格裡的比率。
  * 切點（cohortCuts）換了只在主執行緒重數，不用回 Worker。分組的算法在 twoRedTierTables / twoRedCohortGrid（同一個
  * cohortGrid，表與九宮格的合計一定對得上）。
+ *
+ * （2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」，第二批）最上面先給一眼看懂的版本：一句話＋三個任務各一張卡
+ * （手機上一張一張往下排，不用橫向捲），每張卡三條「全是藍方｜有紅方」——梅林、派西維爾、忠臣當隊長時派出的隊
+ * （全體、每一次派隊合計，就是下面表格「全體」那一列的「全好」）。原本的分組表、切點、九宮格整塊收進「進階」，內容沒有改。
  */
 
 type SlotId = 'total' | '1' | '2' | '3' | '4' | '5';
@@ -97,7 +106,7 @@ function TierRoundTable({ round, rows }: { round: TwoRedRound; rows: TierRow[] }
   );
 }
 
-function Body({ data }: { data: TwoRedCohortData }): JSX.Element {
+function Body({ data, detailOpen }: { data: TwoRedCohortData; detailOpen: boolean }): JSX.Element {
   const { t } = useTranslation('common');
   const label = useColumnLabel();
   const cuts = useCohortCuts((s) => s.cuts);
@@ -134,7 +143,7 @@ function Body({ data }: { data: TwoRedCohortData }): JSX.Element {
     </span>
   );
 
-  return (
+  const detail = (
     <div className="space-y-3" data-testid="two-red-cohort">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <h4 className="text-sm font-bold text-zinc-100">{t(`${K}.twoRed.title`)}</h4>
@@ -207,9 +216,67 @@ function Body({ data }: { data: TwoRedCohortData }): JSX.Element {
       />
     </div>
   );
+
+  // 一眼看懂：三個任務各一張卡，每個隊長角色一條「全是藍方｜有紅方」（全體、每一次派隊合計）
+  const g = 'analytics.glance.twoRed';
+  const roleName = (r: string): string => t(`analytics.r6.radar.twoRed.role.${r}`);
+  const glance = twoRedGlance(
+    TWO_RED_ROUNDS.flatMap((round) => TWO_RED_ROLES.map((r) => ({ round, role: r, cell: tiers.tables.all[r][round][TWO_RED_TOTAL_INDEX] }))),
+    COHORT_MIN_N,
+  );
+  const cleanSegments = (clean: Share): SplitSegment[] => [
+    { pct: clean.pct, text: pctText(clean.pct), name: t(`${g}.clean`), tone: 'blue' },
+    { pct: 100 - clean.pct, text: restText(clean.pct), name: t(`${g}.dirty`), tone: 'red' },
+  ];
+  const times = (n: number): string => sampleText(t, n, 'times');
+  if (glance.rounds.length === 0) return detail;
+
+  return (
+    <div className="space-y-2">
+      {glance.sentence && (
+        <Takeaway>
+          <p>
+            {sentenceText(t, {
+              key: glance.sentence.key,
+              params: { ...glance.sentence.params, hi: roleName(String(glance.sentence.params.hi)), lo: roleName(String(glance.sentence.params.lo)) },
+            })}
+          </p>
+        </Takeaway>
+      )}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="two-red-glance">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h4 className="text-xs font-semibold text-zinc-300">{t(`${g}.title`)}</h4>
+          <GlanceLegend items={[{ name: t(`${g}.clean`), tone: 'blue' }, { name: t(`${g}.dirty`), tone: 'red' }]} />
+        </div>
+        <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">{t(`${g}.what`)}</p>
+        <div className="grid gap-3 lg:grid-cols-3">
+          {glance.rounds.map((r) => (
+            <div key={r.round} className="min-w-0 space-y-2 rounded-lg border border-zinc-800 bg-zinc-900/40 p-2.5" data-testid={`two-red-round-${r.round}`}>
+              <div>
+                <div className="text-sm font-bold text-zinc-100">{t('analytics.glance.missions.mission', { round: r.round })}</div>
+                <div className="text-[11px] text-zinc-500">{t(r.round === 4 ? `${g}.needTwo` : `${g}.needOne`)}</div>
+              </div>
+              {r.rows.map((row) => (
+                <GlanceRow
+                  key={row.role}
+                  label={t(`${g}.leader`, { role: roleName(row.role) })}
+                  sample={times(row.clean.n)}
+                  thin={row.clean.n < COHORT_MIN_N ? t('analytics.glance.thin') : undefined}
+                >
+                  <SplitBar segments={cleanSegments(row.clean)} sample={times(row.clean.n)} />
+                </GlanceRow>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+      <Advanced title={t(`${g}.advanced`)} testId="two-red-advanced" defaultOpen={detailOpen}>{() => detail}</Advanced>
+    </div>
+  );
 }
 
-export default function TwoRedCohortView(): JSX.Element {
+/** detailOpen = 「進階」一開始就打開（從玩家雷達的「看各組」、自動發現連過來時，要看的是分組表）。 */
+export default function TwoRedCohortView({ detailOpen = false }: { detailOpen?: boolean }): JSX.Element {
   const { t } = useTranslation('common');
   const state = useTwoRedCohort();
   if (state.status === 'error') {
@@ -226,5 +293,5 @@ export default function TwoRedCohortView(): JSX.Element {
       </div>
     );
   }
-  return <Body data={state.data} />;
+  return <Body data={state.data} detailOpen={detailOpen} />;
 }

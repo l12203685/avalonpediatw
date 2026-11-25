@@ -5,9 +5,12 @@ import { outcomeBlocks } from '../../services/api';
 import { chiSquareIndependence, type ChiSquareResult } from '../../utils/chiSquare';
 import { useAnalysisOverview, deriveStages } from './useAnalysisOverview';
 import {
-  InfoTip, MetricBlocks, StatTable, Takeaway, Term, VerdictText, OUTCOME_COLORS, formatRate,
+  Advanced, GlanceLegend, InfoTip, KeyNumber, MeterBar, MetricBlocks, RankRow, SplitBar, StatTable, Takeaway, Term, VerdictText,
+  OUTCOME_COLORS, formatInt, formatRate,
   type MetricBlockRow, type StatColumn,
 } from './ui';
+import { killDetailGlance, pctText, seatHalvesSentence, seatKillGlance, type SeatKillGlance, type Share } from './core/glance';
+import { hitLegend, hitSegments, sampleText, sentenceText } from './core/glanceView';
 import { useMinCellGames } from './OutcomeBlocksTable';
 import { seatDisplay } from './seatRoleBlocks';
 
@@ -22,6 +25,13 @@ import { seatDisplay } from './seatRoleBlocks';
  *   - AssassinationSeatTable (刺殺分頁的「座位與刺殺」)：梅林、刺客坐在各位置時，三藍局的刺中率
  *     (三藍死 ÷ 三藍局，附三藍局數)，資料是 overview.seatPositionWinRates[].roles[].outcomes；
  *     舊快取沒有各位置的角色結果時顯示「下次每日更新後提供」。
+ *
+ * (2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」，第二批)
+ *   - 刺殺結算：一句話＋一個大數字（梅林被刺中的比例，整數）＋一條「刺中梅林｜沒刺中」比例條＋小字局數；
+ *     從紅方、藍方看的三塊結果表收進「進階」。刺中＝紅方贏，全站改用紅色系（原本是琥珀）。
+ *   - 座位與刺殺：梅林、刺客各一欄，十個座位各一條刺中率長條（數字直接寫在旁邊、白線＝全體），最高／最低有標記；
+ *     句子裡的「n=」拿掉，樣本數寫成小字「樣本 N」；原本的表格收進「進階」。
+ *   算法沒有改：刺中率＝三藍死 ÷（三藍死＋三藍活），句子、長條都出自 core/glance.ts 的同一個結果。
  */
 export default function AssassinationCard(): JSX.Element {
   const { t } = useTranslation('common');
@@ -48,9 +58,6 @@ export default function AssassinationCard(): JSX.Element {
   const killPct = legacy && typeof overview.merlinKillRate === 'number'
     ? overview.merlinKillRate
     : stages.assassination.killPct;
-  const survivePct = legacy && typeof overview.merlinKillRate === 'number'
-    ? Math.round((100 - overview.merlinKillRate) * 10) / 10
-    : stages.assassination.survivePct;
   const { games, merlinKilled, merlinSurvived } = stages.assassination;
 
   const ob = overview.outcomeBreakdown;
@@ -68,65 +75,61 @@ export default function AssassinationCard(): JSX.Element {
     })
     : [];
 
+  const glance = killDetailGlance({ games, killPct, merlinKilled, merlinSurvived });
+  const g = 'analytics.glance.kill';
+
   return (
-    <div className="space-y-3">
-      <motion.div
+    <div className="space-y-2">
+      {glance && <Takeaway><p>{sentenceText(t, glance.sentence)}</p></Takeaway>}
+      <motion.section
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-avalon-card/30 border border-gray-700 rounded-xl p-4"
+        className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"
+        data-testid="kill-glance"
       >
-        <div className="flex items-center gap-2 mb-1">
-          <Crosshair size={16} className="text-amber-300" />
-          <h3 className="text-sm font-bold text-gray-300">{t('analytics.deep.assassination.title')}</h3>
-          {/* 2026-10-30：副標與規則收進 ⓘ */}
-          <InfoTip title={t('analytics.deep.assassination.title')}>
-            <p>{t('analytics.deep.assassination.sub')}</p>
-            <p>{t('analytics.deep.assassination.rule')}</p>
-          </InfoTip>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 mb-3 mt-2">
-          <div className="bg-gray-800/40 rounded-lg px-3 py-2">
-            <p className="text-xl font-black text-white">{games.toLocaleString()}</p>
-            <p className="text-[10px] text-gray-500">{t('analytics.deep.assassination.threeBlueGames')}</p>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <div className="flex items-center gap-2">
+            <Crosshair size={15} className="shrink-0 text-zinc-400" aria-hidden />
+            <h3 className="text-xs font-semibold text-zinc-300">{t(`${g}.title`)}</h3>
+            {/* 2026-10-30：副標與規則收進 ⓘ */}
+            <InfoTip title={t('analytics.deep.assassination.title')}>
+              <p>{t('analytics.deep.assassination.sub')}</p>
+              <p>{t('analytics.deep.assassination.rule')}</p>
+            </InfoTip>
           </div>
-          <div className="bg-gray-800/40 rounded-lg px-3 py-2">
-            <p className="text-xl font-black text-amber-300">{killPct}%</p>
-            <p className="text-[10px] text-gray-500">{t('analytics.deep.assassination.killRate')}</p>
-            {games > 0 && (
-              <p className="text-[10px] text-gray-600">{t('analytics.deep.assassination.killedCount', { count: merlinKilled })}</p>
-            )}
+          <GlanceLegend items={hitLegend(t)} />
+        </div>
+        {glance ? (
+          <div className="grid items-center gap-x-6 gap-y-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <KeyNumber value={pctText(glance.hit.pct)} label={<Term term="killRate">{t(`${g}.key`)}</Term>} tone="red" />
+            <div className="min-w-0">
+              <SplitBar size="lg" showNames segments={hitSegments(t, glance.hit)} sample={t(`${g}.sample`, { n: formatInt(glance.hit.n) })} />
+              <p className="mt-1 text-[11px] tabular-nums text-zinc-500">
+                {t(`${g}.sample`, { n: formatInt(glance.hit.n) })}
+                {' · '}
+                {t(`${g}.counts`, { killed: formatInt(glance.killed), survived: formatInt(glance.survived) })}
+              </p>
+            </div>
           </div>
-          <div className="bg-gray-800/40 rounded-lg px-3 py-2">
-            <p className="text-xl font-black text-blue-300">{survivePct}%</p>
-            <p className="text-[10px] text-gray-500">{t('analytics.deep.assassination.surviveRate')}</p>
-            {games > 0 && (
-              <p className="text-[10px] text-gray-600">{t('analytics.deep.assassination.survivedCount', { count: merlinSurvived })}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="h-2 w-full rounded-full overflow-hidden flex bg-gray-800">
-          <div className="h-full bg-amber-500" style={{ width: `${Math.max(0, Math.min(100, killPct))}%` }} />
-          <div className="h-full bg-blue-500" style={{ width: `${Math.max(0, Math.min(100, survivePct))}%` }} />
-        </div>
-        <div className="flex justify-between text-[10px] text-gray-500 mt-1">
-          <span className="text-amber-300">{t('analytics.deep.outcomes.threeBlueDead')}</span>
-          <span className="text-blue-300">{t('analytics.deep.outcomes.threeBlueAlive')}</span>
-        </div>
-
-        {legacy && (
-          <p className="text-[10px] text-gray-600 mt-2">{t('analytics.deep.assassination.legacy')}</p>
+        ) : (
+          <p className="py-4 text-center text-xs text-zinc-500">{t('analytics.ui.table.empty')}</p>
         )}
-      </motion.div>
+        {legacy && (
+          <p className="mt-2 text-[10px] text-zinc-600">{t('analytics.deep.assassination.legacy')}</p>
+        )}
+      </motion.section>
 
       {blockRows.length > 0 && (
-        <MetricBlocks
-          caption={<span className="text-xs">{t('analytics.r6.tabsa.assassination.blocksCaption')}</span>}
-          rows={blockRows}
-          lowSample={min}
-          groupLabel={t('analytics.r6.tabsa.assassination.side')}
-        />
+        <Advanced title={t(`${g}.advanced`)} testId="kill-advanced">
+          {() => (
+            <MetricBlocks
+              caption={<span className="text-xs">{t('analytics.r6.tabsa.assassination.blocksCaption')}</span>}
+              rows={blockRows}
+              lowSample={min}
+              groupLabel={t('analytics.r6.tabsa.assassination.side')}
+            />
+          )}
+        </Advanced>
       )}
     </div>
   );
@@ -168,16 +171,6 @@ function sumCells(cells: Array<KillCell | null>): KillCell | null {
   const dead = live.reduce((s, c) => s + c.dead, 0);
   const n = live.reduce((s, c) => s + c.n, 0);
   return { dead, n, rate: n > 0 ? (dead / n) * 100 : null };
-}
-
-/** 最高、最低刺中率的座位 (只看 n ≥ min 的座位；都不夠時看全部)。 */
-function extremes(rows: SeatKillRow[], role: SeatRole, min: number): { hi: SeatKillRow; lo: SeatKillRow } | null {
-  const withRate = rows.filter(r => r[role]?.rate !== null && r[role] !== null);
-  const pool = withRate.filter(r => (r[role]?.n ?? 0) >= min);
-  const list = pool.length >= 2 ? pool : withRate;
-  if (list.length < 2) return null;
-  const sorted = [...list].sort((a, b) => (b[role]?.rate ?? 0) - (a[role]?.rate ?? 0));
-  return { hi: sorted[0], lo: sorted[sorted.length - 1] };
 }
 
 /** 刺中率長條：0–100%，白線 = 全部三藍局的刺中率 (高於／低於平均一眼看得出來)；n 固定寬度，長條才對齊 (手機省略 n，移上去看)。 */
@@ -261,21 +254,51 @@ export function AssassinationSeatTable(): JSX.Element {
 
   const test = (role: SeatRole): ChiSquareResult | null =>
     chiSquareIndependence(seatRows.map(r => [r[role]?.dead ?? 0, (r[role]?.n ?? 0) - (r[role]?.dead ?? 0)]));
-  const line = (role: SeatRole): JSX.Element => {
-    const ex = extremes(seatRows, role, min);
+  const g = 'analytics.glance.seatKill';
+  const toShare = (c: KillCell | null): Share | null => (c && c.rate !== null && c.n > 0 ? { pct: c.rate, n: c.n } : null);
+  const glanceOf = (role: SeatRole): SeatKillGlance => seatKillGlance(
+    seatRows.map(r => ({ seat: seatDisplay(r.seat ?? ''), dead: r[role]?.dead ?? 0, n: r[role]?.n ?? 0 })), role, min,
+  );
+  const glances: Record<SeatRole, SeatKillGlance> = { merlin: glanceOf('merlin'), assassin: glanceOf('assassin') };
+  const halves = seatHalvesSentence(toShare(groups[0].merlin), toShare(groups[1].merlin));
+  const line = (role: SeatRole): JSX.Element | null => {
+    const sentence = glances[role].sentence;
+    if (!sentence) return null;
     return (
       <p>
-        <span className="font-semibold text-white">{t(`${k7}.${role}Lead`)}</span>
+        {sentenceText(t, sentence)}
         <VerdictText result={test(role)} />
-        {ex && t(`${k7}.${role}Rest`, {
-          hiSeat: seatDisplay(ex.hi.seat ?? ''), hi: formatRate(ex.hi[role]?.rate), hiN: ex.hi[role]?.n,
-          loSeat: seatDisplay(ex.lo.seat ?? ''), lo: formatRate(ex.lo[role]?.rate), loN: ex.lo[role]?.n,
-        })}
-        {role === 'merlin' && groups[0].merlin && groups[1].merlin && t(`${k7}.groups`, {
-          front: formatRate(groups[0].merlin.rate), frontN: groups[0].merlin.n,
-          back: formatRate(groups[1].merlin.rate), backN: groups[1].merlin.n,
-        })}
+        {t(`${g}.end`)}
+        {role === 'merlin' && sentenceText(t, halves)}
       </p>
+    );
+  };
+  const seatBar = (key: string, label: string, share: Share | null, tag?: string): JSX.Element | null => (share ? (
+    <RankRow key={key} label={label} tag={tag} sample={sampleText(t, share.n, 'plain')} thin={share.n < min ? t('analytics.glance.thin') : undefined}>
+      <MeterBar
+        pct={share.pct}
+        text={pctText(share.pct)}
+        tone="red"
+        refPct={overall?.rate ?? null}
+        label={`${label} ${pctText(share.pct)}（${sampleText(t, share.n, 'plain')}）`}
+      />
+    </RankRow>
+  ) : null);
+  const column = (role: SeatRole): JSX.Element => {
+    const gl = glances[role];
+    return (
+      <div className="min-w-0 space-y-1.5" data-testid={`seat-kill-${role}`}>
+        <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.${role}Title`)}</h4>
+        {gl.rows.map(r => seatBar(
+          r.seat,
+          t(`${k}.seatLabel`, { seat: r.seat }),
+          r.share,
+          r.seat === gl.hi ? t(`${g}.hi`) : r.seat === gl.lo ? t(`${g}.lo`) : undefined,
+        ))}
+        <div className="space-y-1.5 border-t border-zinc-800 pt-1.5">
+          {groups.map(gr => seatBar(gr.key, gr.label, toShare(gr[role])))}
+        </div>
+      </div>
     );
   };
 
@@ -289,30 +312,49 @@ export function AssassinationSeatTable(): JSX.Element {
     ),
     title: t(`${k}.${key}SeatTitle`),
     align: 'right',
-    format: (_v, row) => <KillBar cell={row[key]} refRate={overall?.rate ?? null} min={min} />,
+    format: (_v, row): JSX.Element => <KillBar cell={row[key]} refRate={overall?.rate ?? null} min={min} />,
     value: r => r[key]?.rate,
-    tone: 'amber',
+    tone: 'kill',
     emphasis: key === 'merlin',
   });
 
+  const fullTable = (
+    <StatTable
+      caption={t(`${k}.seatCaption`)}
+      columns={[
+        { key: 'label', label: t(`${k}.seat`), value: r => r.label },
+        killColumn('merlin'),
+        killColumn('assassin'),
+      ]}
+      rows={rows}
+      rowKey={r => r.key}
+      highlightRow={r => r.kind !== undefined}
+      footnote={<>{t(`${k7}.note`)} {t('analytics.r6.tabsa.outcomeTable.lowSample', { min })}</>}
+    />
+  );
+
   return (
     <div className="space-y-2">
-      <Takeaway>
-        {line('merlin')}
-        {line('assassin')}
-      </Takeaway>
-      <StatTable
-        caption={t(`${k}.seatCaption`)}
-        columns={[
-          { key: 'label', label: t(`${k}.seat`), value: r => r.label },
-          killColumn('merlin'),
-          killColumn('assassin'),
-        ]}
-        rows={rows}
-        rowKey={r => r.key}
-        highlightRow={r => r.kind !== undefined}
-        footnote={<>{t(`${k7}.note`)} {t('analytics.r6.tabsa.outcomeTable.lowSample', { min })}</>}
-      />
+      {(glances.merlin.sentence || glances.assassin.sentence) && (
+        <Takeaway>
+          {line('merlin')}
+          {line('assassin')}
+        </Takeaway>
+      )}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="seat-kill-glance">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h3 className="text-xs font-semibold text-zinc-300"><Term term="killRate">{t(`${g}.title`)}</Term></h3>
+          <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
+            <span className="inline-block h-3 w-0.5 bg-white/80" aria-hidden />
+            {t(`${g}.refLegend`, { rate: overall && overall.rate !== null ? pctText(overall.rate) : '—' })}
+          </span>
+        </div>
+        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+          {column('merlin')}
+          {column('assassin')}
+        </div>
+      </section>
+      <Advanced title={t(`${g}.advanced`)} testId="seat-kill-advanced">{() => fullTable}</Advanced>
     </div>
   );
 }

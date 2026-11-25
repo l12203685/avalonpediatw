@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, GitBranch } from 'lucide-react';
 import MissionAnalysis from '../MissionAnalysis';
@@ -104,6 +104,9 @@ export function TeamsVotesCoreTab(): JSX.Element {
   const [active, setView] = useSectionTab<TeamsVotesSub>(items, { defaultValue: 'votes', persistKey: CORE_PERSIST.teamsVotes });
   const view: TeamsVotesSub = active ?? 'votes';
   const nav = useDiscoveryNav();
+  // 從玩家雷達的「看各組」、自動發現連過來：要看的是分組表，所以「進階」直接打開
+  const [detailOpen, setDetailOpen] = useState(false);
+  if (nav.view === 'twoRedCohort' && !detailOpen) setDetailOpen(true);
   useEffect(() => {
     if (nav.view !== 'twoRedCohort') return;
     setView('twoRed');
@@ -115,7 +118,7 @@ export function TeamsVotesCoreTab(): JSX.Element {
       <SectionTabs items={items} value={view} onChange={setView} ariaLabel={t('analytics.analysis.core.tabs.teamsVotes')}>
         {(v) => {
           if (v === 'teams') return <><TeamsTab /><DiscoveryBlock page="teams" /></>;
-          if (v === 'twoRed') return <TwoRedCohortView />;
+          if (v === 'twoRed') return <TwoRedCohortView key={detailOpen ? 'open' : 'glance'} detailOpen={detailOpen} />;
           return <><VotesTab /><DiscoveryBlock page="votes" /></>;
         }}
       </SectionTabs>

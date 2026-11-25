@@ -582,11 +582,6 @@
       "assassination": {
         "title": "Assassination stage",
         "sub": "3-Blue games only (after blue completes three missions): did the Assassin hit Merlin",
-        "threeBlueGames": "3-Blue games",
-        "killRate": "Merlin kill rate (3-Blue)",
-        "surviveRate": "Merlin survival rate",
-        "killedCount": "{{count}} killed",
-        "survivedCount": "{{count}} survived",
         "rule": "3-Blue-killed = red wins the game; 3-Blue-alive = blue wins. 3-Red games have no assassination and are excluded",
         "legacy": "Legacy cache: derived from merlinKillRate (3-Blue kill rate)"
       },
@@ -1810,23 +1805,12 @@
         "tableNote": "Outcome columns = share of the player's games (hidden on phones); missions, assassination, final = share their side won, assassination n = three-success games. All players = every player-game once."
       },
       "seatKill": {
-        "merlinLead": "Merlin's seat: ",
-        "merlinRest": ". Seat {{hiSeat}} is hit most often ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}})",
-        "assassinLead": "Assassin's seat: ",
-        "assassinRest": ". Seat {{hiSeat}} hits most ({{hi}}, n={{hiN}}), seat {{loSeat}} least ({{lo}}, n={{loN}}).",
-        "groups": "; Merlin in seats 1–5 is hit {{front}} (n={{frontN}}), in seats 6–0 {{back}} (n={{backN}}).",
         "front": "Seats 1–5",
         "back": "Seats 6–0",
         "rateLabel": "Hit rate",
         "note": "Hit rate = Merlin hit ÷ three-success games; n = three-success games with that role in that seat; the white line = the hit rate over all three-success games. \"Real / could be luck\" comes from a chi-square test over the hit / miss counts of all 10 seats."
       },
-      "captain": {
-        "takeaway": "Missions led by a Red leader failed {{red}} of the time (n={{redN}} missions); Blue leaders {{blue}} (n={{blueN}}).",
-        "trend": " The share of Red leaders falls from {{first}} on mission 1 to {{last}} on mission {{lastMission}}."
-      },
       "firstVote": {
-        "merlin": "With Merlin on the 1-1 team Red won {{yes}} (n={{yesN}}), without Merlin {{no}} (n={{noN}}): ",
-        "redCount": "With 0–3 Red players on the 1-1 team, Red's final win rate stays between {{min}} and {{max}}: ",
         "end": ".",
         "introRest": " = the first team proposal for mission 1. Whether Merlin / Percival was on it and how many Red players it had, versus mission 1 success and the result; \"real / could be luck\" compares the three-outcome shares."
       },
@@ -1844,19 +1828,12 @@
         "r4Some": "Mission 4: some fail cards",
         "outcomeNote": "\"Passed\" = 0 fail cards, \"failed\" = 1 or more (the cache's grouping). With 7+ players mission 4 still succeeds on a single fail card, so mission 4 rows say \"0 / some fail cards\" and are left out of the summary; mission 5 is omitted (its result decides three fails or three successes)."
       },
-      "lake": {
-        "holderRole": "{{lake}}: Red won most when the holder was {{hi}} ({{hiRate}}, n={{hiN}}) and least with {{lo}} ({{loRate}}, n={{loN}}); outcome shares across the seven roles: ",
-        "targetRole": "{{lake}}: Red won most when the target was {{hi}} ({{hiRate}}, n={{hiN}}) and least with {{lo}} ({{loRate}}, n={{loN}}); outcome shares across the seven roles: ",
-        "end": "."
-      },
       "votes": {
         "tabs": {
           "overview": "Voting overview",
           "flip": "Flips after changes"
         },
         "missing": "This cache has no per-player vote counts; available after the next daily update.",
-        "takeawayTeam": "When a team had a Red player, {{evil}} of votes rejected it; when it was all Blue, {{good}} of votes approved it.",
-        "takeawayVoter": "From mission 3 on, Loyal Servants rejected {{loyal}} of the time, Red players {{red}}.",
         "caption": {
           "team": "By team: how people voted",
           "voter": "By voter: rejections from mission 3 on"
@@ -2354,7 +2331,9 @@
     "glance": {
       "sample": {
         "games": "{{n}} games",
-        "votes": "{{n}} votes"
+        "votes": "{{n}} votes",
+        "times": "{{n}} times",
+        "plain": "sample {{n}}"
       },
       "blueWins": "Blue wins",
       "redWins": "Red wins",
@@ -2417,7 +2396,16 @@
         "combo": "{{holder}} holds, checks {{target}}",
         "blueSide": "Blue",
         "redSide": "Red",
-        "advanced": "Advanced: full table of the three endings (missions, assassination, game)"
+        "advanced": "Advanced: full table of the three endings (missions, assassination, game)",
+        "holderRole": "{{who}}: blue wins most when the holder is {{hi}} ({{hiRate}}) and least when it is {{lo}} ({{loRate}}): ",
+        "targetRole": "{{who}}: blue wins most when the person checked is {{hi}} ({{hiRate}}) and least when it is {{lo}} ({{loRate}}): ",
+        "roleEnd": ".",
+        "holderRoleTitle": "Who wins, by the role of the lake holder (best for blue first)",
+        "targetRoleTitle": "Who wins, by the role of the person checked (best for blue first)",
+        "roleHi": "highest",
+        "roleLo": "lowest",
+        "allRow": "All games",
+        "roleNote": "The square before each name is that role's side."
       },
       "votes": {
         "blueAlsoHalf": "Teams with a Red get {{withRed}} reject votes; all-Blue teams still get {{allBlue}}.",
@@ -2429,6 +2417,130 @@
         "allBlueRow": "Team is all Blue",
         "reject": "Reject",
         "approve": "Approve"
+      },
+      "kill": {
+        "flip": "Three passed missions is not yet a win for blue: in {{hit}} of these games Merlin is assassinated and red wins; in {{miss}} he survives and blue wins.",
+        "none": "In the games where blue passed three missions, Merlin was never assassinated: blue won them all.",
+        "all": "In the games where blue passed three missions, Merlin was assassinated every time: red won them all.",
+        "title": "After blue passes three missions: does the assassin hit Merlin?",
+        "key": "of these games: Merlin is assassinated and red steals the win",
+        "hitLegend": "Merlin hit (red wins)",
+        "missLegend": "Missed (blue wins)",
+        "sample": "{{n}} games reached the assassination",
+        "counts": "hit in {{killed}}, missed in {{survived}}",
+        "advanced": "Advanced: mission, assassination and game results from each side (table)"
+      },
+      "seatKill": {
+        "merlin": "Merlin is assassinated most often in seat {{hiSeat}} ({{hi}}) and least in seat {{loSeat}} ({{lo}}): ",
+        "assassin": "The assassin hits most often from seat {{hiSeat}} ({{hi}}) and least from seat {{loSeat}} ({{lo}}): ",
+        "end": ". ",
+        "backLower": "Seats 1–5 combined: Merlin is hit {{front}}; seats 6–0 only {{back}}.",
+        "backHigher": "Seats 6–0 combined: Merlin is hit {{back}}; seats 1–5 only {{front}}.",
+        "halvesSame": "Merlin is hit equally often in seats 1–5 and 6–0 ({{front}}).",
+        "title": "How often Merlin is assassinated, by seat",
+        "merlinTitle": "When Merlin sits here: hit",
+        "assassinTitle": "When the assassin sits here: hits Merlin",
+        "hi": "highest",
+        "lo": "lowest",
+        "refLegend": "white line = all games ({{rate}})",
+        "advanced": "Advanced: full table by Merlin and assassin seat"
+      },
+      "paths": {
+        "top": "The most common path is \"{{path}}\" (紅 = mission failed, 藍 = mission passed): {{share}} of games.",
+        "kill": "Among the paths where blue passes three missions, blue wins most after \"{{best}}\" ({{bestRate}}) and least after \"{{worst}}\" ({{worstRate}}).",
+        "legend": "Squares left to right are missions 1 to 5",
+        "passed": "mission passed",
+        "failed": "mission failed",
+        "redTitle": "Three failed missions: red wins outright",
+        "redSub": "bar = share of all games",
+        "blueTitle": "Blue passes three missions, then the assassination decides",
+        "blueSub": "bar = who wins in the end",
+        "ofAll": "{{share}} of games",
+        "best": "best for blue",
+        "worst": "worst for blue",
+        "common": "most common",
+        "advanced": "Advanced: mission, assassination and game results for each path (table)"
+      },
+      "claim": {
+        "redLower": "When a blue holder says \"red\", it is true {{blue}} of the time; when a red holder says \"red\", only {{red}} — judge the holder first.",
+        "redHigher": "When a red holder says \"red\" it is true {{red}} of the time, more than a blue holder's {{blue}}.",
+        "same": "Whether a blue or a red holder says \"red\", it is true {{blue}} of the time.",
+        "byLake": "Regardless of holder, {{lake}}: \"red\" is true {{saidRed}} of the time, \"blue\" {{saidBlue}}.",
+        "title": "How often the lake holder's claim is true",
+        "key": "of a red holder's \"red\" claims are true",
+        "saidRed": "says \"red\"",
+        "saidBlue": "says \"blue\"",
+        "saidRedLegend": "said \"red\" and it was true",
+        "saidBlueLegend": "said \"blue\" and it was true",
+        "byHolder": "By who holds the lake",
+        "blueHolder": "Blue holder",
+        "redHolder": "Red holder",
+        "advanced": "Advanced: full table (one decimal, with confidence intervals)",
+        "byLakeTitle": "By which lake (any holder)",
+        "undeclared": "{{n}} more lake checks had no recorded claim and are not counted."
+      },
+      "votesR3": {
+        "blueAlsoHalf": "From mission 3 on: teams with a red player get {{withRed}} reject votes; all-blue teams still get {{allBlue}}.",
+        "blueLower": "From mission 3 on: teams with a red player get {{withRed}} reject votes; all-blue teams fewer, {{allBlue}}.",
+        "blueHigher": "From mission 3 on: all-blue teams are rejected more often ({{allBlue}} of votes) than teams with a red player ({{withRed}}).",
+        "same": "From mission 3 on: teams with and without a red player both get {{withRed}} reject votes."
+      },
+      "voters": {
+        "higher": "From mission 3 on, red players reject more often than loyal servants: {{b}} vs {{a}} of their votes.",
+        "lower": "From mission 3 on, loyal servants reject more often than red players: {{a}} vs {{b}} of their votes.",
+        "same": "From mission 3 on, loyal servants and red players reject equally often ({{a}})."
+      },
+      "votesPage": {
+        "title": "How people vote: share of reject (black) and approve (white)",
+        "allMissions": "All missions",
+        "fromThree": "From mission 3 on",
+        "voters": "From mission 3 on, by who votes",
+        "loyal": "Votes by loyal servants",
+        "red": "Votes by red players",
+        "note": "Every vote on proposals 1–4 of each mission counts (the 5th proposal goes without a vote).",
+        "advanced": "Advanced: full voting tables"
+      },
+      "captain": {
+        "higher": "Missions led by a red captain fail {{b}} of the time; with a blue captain, {{a}}.",
+        "lower": "Missions led by a red captain fail only {{b}} of the time, less than a blue captain's {{a}}.",
+        "same": "Missions fail {{a}} of the time whether the captain is red or blue.",
+        "trend": {
+          "lower": "The chance of a red captain falls from {{a}} on mission {{first}} to {{b}} on mission {{last}}.",
+          "higher": "The chance of a red captain rises from {{a}} on mission {{first}} to {{b}} on mission {{last}}.",
+          "same": "The chance of a red captain is {{a}} on both mission {{first}} and mission {{last}}."
+        },
+        "failTitle": "Do missions pass or fail, by who led the team",
+        "blueRow": "Blue captain",
+        "redRow": "Red captain",
+        "missions": "{{n}} missions",
+        "whoTitle": "Who leads each mission",
+        "blueLeader": "blue captain",
+        "redLeader": "red captain",
+        "advanced": "Advanced: full captain tables (mission, assassination and game results)"
+      },
+      "firstTeam": {
+        "merlin": {
+          "lower": "When Merlin is on the very first team, blue goes on to win {{a}}; without Merlin only {{b}}: ",
+          "higher": "When Merlin is not on the very first team, blue goes on to win {{b}}; with Merlin, {{a}}: ",
+          "same": "Whether or not Merlin is on the very first team, blue goes on to win {{a}}: "
+        },
+        "reds": "Blue wins most when the very first team has {{hi}} red players ({{hiRate}}) and least with {{lo}} ({{loRate}}): ",
+        "title": "Who is on the very first proposed team, and who wins in the end",
+        "whoTitle": "Merlin or Percival on the team",
+        "redsTitle": "Red players on the team",
+        "advanced": "Advanced: full first-team tables (mission 1 success and the three endings)",
+        "redCount": "{{count}} red"
+      },
+      "twoRed": {
+        "clean": "all blue",
+        "dirty": "has a red player",
+        "title": "After red has won two missions: do blue captains still put a red player on the team?",
+        "what": "One more failed mission ends the game, so these teams matter most. Each bar covers every team proposed by captains of that role.",
+        "needOne": "one fail card fails the mission",
+        "needTwo": "two fail cards are needed to fail the mission",
+        "leader": "{{role}} as captain",
+        "advanced": "Advanced: by skill group, team breakdown and the 3×3 grid",
+        "best": "On mission {{round}} after red has won two: {{hi}} captains propose an all-blue team most often ({{hiRate}}), {{lo}} captains least ({{loRate}})."
       }
     }
   },

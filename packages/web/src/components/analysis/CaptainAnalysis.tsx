@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatTable, Takeaway, formatRate, type StatColumn } from './ui';
+import {
+  Advanced, GlanceLegend, GlanceRow, RankRow, SplitBar, StatTable, Takeaway, Term, formatInt, type SplitSegment, type StatColumn,
+} from './ui';
+import { captainGlance, pctText, restText, type Share } from './core/glance';
+import { sampleText, sentenceText } from './core/glanceView';
 import type { CaptainAnalysisData } from '../../services/api';
 import { useCaptainData } from './teams/useTeamsData';
 import TeamsLoadState from './teams/TeamsLoadState';
@@ -24,6 +28,9 @@ import OutcomeBlocksTable, {
  * (2026-10-28 Edward：結果要更直觀、名詞要白話) 最上面一句話：紅方／藍方隊長的任務各失敗幾成、紅方當隊長的
  *   比例從任務 1 到最後一個任務怎麼變 (數字都從表上的資料當下算)；表頭可點開看定義 (Term)。
  *   以任務為單位，同一局會算好幾次，所以這裡不做卡方檢定。
+ * (2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」，第二批) 兩張表改成比例條：誰當隊長時任務成功｜失敗
+ *   (藍方、紅方隊長各一條，小字是任務數)、每個任務是藍方還是紅方當隊長 (五條)；句子拿掉「n=」；原本的兩張表收進「進階」。
+ *   數字是表上的同一組 (core/glance.ts captainGlance)，算法沒有改。
  */
 
 type Faction = '紅方' | '藍方';
@@ -125,10 +132,23 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
   );
 
   const failShare = (faction: Faction): CaptainRow | undefined => captainRows.find(r => r.faction === faction && !r.passed);
-  const redFail = failShare('紅方');
-  const blueFail = failShare('藍方');
-  const firstMission = perMissionRows[0];
-  const lastMission = perMissionRows[perMissionRows.length - 1];
+  const failOf = (faction: Faction): { failPct: number | null; missions: number } | null => {
+    const row = failShare(faction);
+    return row ? { failPct: row.share, missions: row.factionTotal } : null;
+  };
+  const glance = captainGlance({ red: failOf('紅方'), blue: failOf('藍方') }, data?.perMission);
+  const g = 'analytics.glance.captain';
+  const missions = (n: number): string => t(`${g}.missions`, { n: formatInt(n) });
+  // 成功｜失敗：fail = 失敗的比例，成功用 100 減（兩段加起來 100%）
+  const passFail = (fail: Share): SplitSegment[] => [
+    { pct: 100 - fail.pct, text: restText(fail.pct), name: t('analytics.glance.missions.success'), tone: 'blue' },
+    { pct: fail.pct, text: pctText(fail.pct), name: t('analytics.glance.missions.fail'), tone: 'red' },
+  ];
+  // 藍方隊長｜紅方隊長
+  const whoLeads = (red: Share): SplitSegment[] => [
+    { pct: 100 - red.pct, text: restText(red.pct), name: t(`${g}.blueLeader`), tone: 'blue' },
+    { pct: red.pct, text: pctText(red.pct), name: t(`${g}.redLeader`), tone: 'red' },
+  ];
 
   return (
     <TeamsLoadState
@@ -137,21 +157,8 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
       notGenerated={notGenerated}
       empty={!data || data.perMission.length === 0}
     >
-      {() => (
-        <div className="space-y-3">
-          {redFail && blueFail && firstMission && lastMission && (
-            <Takeaway>
-              <p>
-                {t('analytics.r7.captain.takeaway', {
-                  red: formatRate(redFail.share), redN: redFail.factionTotal,
-                  blue: formatRate(blueFail.share), blueN: blueFail.factionTotal,
-                })}
-                {perMissionRows.length > 1 && t('analytics.r7.captain.trend', {
-                  first: formatRate(firstMission.red), last: formatRate(lastMission.red), lastMission: lastMission.key,
-                })}
-              </p>
-            </Takeaway>
-          )}
+      {() => {
+        const tables = (
           <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
             <StatTable
               caption={t('analytics.r6.teams.captain.perMissionCaption')}
@@ -170,9 +177,57 @@ export default function CaptainAnalysis({ lowSample }: { lowSample?: number }): 
               footnote={t('analytics.r6.teams.captain.nNote')}
             />
           </div>
-          <OutcomeBlocksNote pending={lacksOutcomes(captainRows)} />
-        </div>
-      )}
+        );
+        if (!glance) {
+          return (
+            <div className="space-y-3">
+              {tables}
+              <OutcomeBlocksNote pending={lacksOutcomes(captainRows)} />
+            </div>
+          );
+        }
+        return (
+          <div className="space-y-2">
+            <Takeaway>
+              <p>
+                {sentenceText(t, glance.sentence)}
+                {sentenceText(t, glance.trend)}
+              </p>
+            </Takeaway>
+            <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="captain-glance">
+              <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+                <div className="min-w-0 space-y-2" data-testid="captain-fail">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                    <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.failTitle`)}</h4>
+                    <GlanceLegend items={[{ name: t('analytics.glance.missions.success'), tone: 'blue' }, { name: t('analytics.glance.missions.fail'), tone: 'red' }]} />
+                  </div>
+                  <GlanceRow label={t(`${g}.blueRow`)} sample={missions(glance.blueFail.n)}>
+                    <SplitBar segments={passFail(glance.blueFail)} sample={missions(glance.blueFail.n)} />
+                  </GlanceRow>
+                  <GlanceRow label={t(`${g}.redRow`)} sample={missions(glance.redFail.n)}>
+                    <SplitBar segments={passFail(glance.redFail)} sample={missions(glance.redFail.n)} />
+                  </GlanceRow>
+                </div>
+                {glance.perMission.length > 0 && (
+                  <div className="min-w-0 space-y-2" data-testid="captain-who">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <h4 className="text-xs font-bold text-zinc-100"><Term term="captainFaction">{t(`${g}.whoTitle`)}</Term></h4>
+                      <GlanceLegend items={[{ name: t(`${g}.blueLeader`), tone: 'blue' }, { name: t(`${g}.redLeader`), tone: 'red' }]} />
+                    </div>
+                    {glance.perMission.map(m => (
+                      <RankRow key={m.mission} label={t('analytics.glance.missions.mission', { round: m.mission })} sample={sampleText(t, m.red.n)}>
+                        <SplitBar segments={whoLeads(m.red)} sample={sampleText(t, m.red.n)} />
+                      </RankRow>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+            <Advanced title={t(`${g}.advanced`)} testId="captain-advanced">{() => tables}</Advanced>
+            <OutcomeBlocksNote pending={lacksOutcomes(captainRows)} />
+          </div>
+        );
+      }}
     </TeamsLoadState>
   );
 }

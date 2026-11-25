@@ -6,7 +6,8 @@
  *  - MetricBlocks：任務結果 / 刺殺結果 / 遊戲結果 三塊條件結果表
  *  - Term / InfoTip：名詞說明、表格標題旁的 ⓘ (滑過／點一下才顯示，末尾連到說明頁；2026-10-30)
  *  - Takeaway / VerdictText：小分頁最上面的一句話結論、卡方檢定的白話判讀 (2026-10-28)
- *  - Glance (SplitBar / GlanceLegend / GlanceRow / KeyNumber / Advanced)：一眼看懂用的比例條、大數字、「進階」收合 (2026-11-25)
+ *  - Glance (SplitBar / GlanceLegend / GlanceRow / KeyNumber / Advanced / MeterBar / RankRow / PathChips)：一眼看懂用的比例條、大數字、
+ *    排行長條、「進階」收合 (2026-11-25)
  */
 export { default as SectionTabs, useSectionTab } from './SectionTabs';
 export type { SectionTabItem, SectionTabsProps } from './SectionTabs';
@@ -30,5 +31,5 @@ export { Takeaway, VerdictText } from './Takeaway';
 export type { StatTermKey } from './statTerms';
 export { default as MoreDetails } from './MoreDetails';
 export type { MoreDetailsItem } from './MoreDetails';
-export { Advanced, GlanceLegend, GlanceRow, KeyNumber, SplitBar } from './Glance';
+export { Advanced, GlanceLegend, GlanceRow, KeyNumber, MeterBar, PathChips, RankRow, SplitBar } from './Glance';
 export type { GlanceTone, SplitSegment } from './Glance';

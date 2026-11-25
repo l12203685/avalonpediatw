@@ -3,9 +3,9 @@ import { Loader, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { fetchAnalysisLake, getErrorMessage, roleFaction } from '../../services/api';
 import type { LakeAnalysisData, LakeRoleStat, OutcomeBreakdown } from '../../services/api';
-import { Advanced, GlanceLegend, GlanceRow, SectionTabs, SplitBar, Takeaway, Term, VerdictText, formatRate } from './ui';
-import { outcomeChiSquare, outcomeRow, redFinalRate } from './outcomeTest';
-import { blueWinShare, lakeHolderGlance } from './core/glance';
+import { Advanced, GlanceLegend, GlanceRow, RankRow, SectionTabs, SplitBar, Takeaway, Term, VerdictText } from './ui';
+import { outcomeChiSquare } from './outcomeTest';
+import { blueWinShare, lakeHolderGlance, roleRankGlance } from './core/glance';
 import { sampleText, sentenceText, winLegend, winSegments } from './core/glanceView';
 import OutcomeBlocksTable, { useMinCellGames, type OutcomeGroup } from './OutcomeBlocksTable';
 import { roleOrderIndex, useRoleLabel } from './roleLabels';
@@ -43,6 +43,10 @@ import { filterScopedLoader } from '../../stats/filterScopedLoader';
  * (2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」) 陣營視圖改成比例條：誰拿湖 (藍方／紅方)、湖到誰 (四種組合) 各一條
  *   「藍方贏｜紅方贏」＋小字局數；一句話改成用藍方最後贏的比例說 (跟總覽的卡片同一句、同一個 helper，core/glance.ts)，
  *   卡方檢定的判讀留在句尾；三種結局的完整表收進「進階」(手機上原本要橫向捲才看得完)。算法沒有改。
+ * (2026-11-25 第二批) 持湖角色／被湖角色：七個角色各一條「藍方贏｜紅方贏」，照藍方最後贏的比例高到低排，
+ *   名字前的色塊是角色的陣營，最高／最低有標記，最下面一條是這次湖的全部局；一句話改用藍方最後贏的比例說
+ *   (跟陣營頁、總覽同一種說法)，「n=」拿掉、樣本寫小字「共 N 局」；三種結局的完整表收進「進階」(手機上原本要橫向捲)。
+ *   算法沒有改：藍方最後贏＝三藍活 ÷ 那一組的局數 (＝100% − 原本句子的紅方最後贏)。
  */
 
 export type LakeView = 'faction' | 'holderRole' | 'targetRole';
@@ -65,11 +69,6 @@ export function useLakeData(): { data: LakeAnalysisData | null; loading: boolean
 }
 
 const RED = '紅方';
-
-/** 這組的局數 (三種結果加總，跟表上的「局數」同一個數)。 */
-function gamesOf(o: OutcomeBreakdown | undefined): number {
-  return o ? outcomeRow(o).reduce((a, b) => a + b, 0) : 0;
-}
 
 /** 幾組 OutcomeBreakdown 相加 (例：紅方持湖 + 藍方持湖 = 這次湖的全部局)。 */
 function sumOutcomes(list: Array<OutcomeBreakdown | undefined>): { threeRed: number; threeBlueDead: number; threeBlueAlive: number } {
@@ -258,28 +257,59 @@ export default function LakeAnalysis({ view, lake, onLakeChange }: LakeAnalysisP
         counts: r.outcomes,
       })),
     ];
-    const rated = sorted
-      .map(r => ({ role: r.role, rate: redFinalRate(r.outcomes), n: gamesOf(r.outcomes) }))
-      .filter((r): r is { role: string; rate: number; n: number } => r.rate !== null);
-    if (rated.length > 1) {
-      const hi = rated.reduce((a, b) => (b.rate > a.rate ? b : a));
-      const lo = rated.reduce((a, b) => (b.rate < a.rate ? b : a));
+    const kind = view === 'holderRole' ? 'holderRole' : 'targetRole';
+    const rank = roleRankGlance(sorted, kind, lakeLabel, min);
+    const g = 'analytics.glance.lake';
+    if (rank.sentence) {
+      const { hi, lo } = rank.sentence.params;
       takeaway = (
         <p>
-          {t(view === 'holderRole' ? 'analytics.r7.lake.holderRole' : 'analytics.r7.lake.targetRole', {
-            lake: lakeLabel, hi: roleLabel(hi.role), hiRate: formatRate(hi.rate), hiN: hi.n, lo: roleLabel(lo.role), loRate: formatRate(lo.rate), loN: lo.n,
-          })}
+          {sentenceText(t, { key: rank.sentence.key, params: { ...rank.sentence.params, hi: roleLabel(String(hi)), lo: roleLabel(String(lo)) } })}
           <VerdictText result={outcomeChiSquare(sorted.map(r => r.outcomes))} />
-          {t('analytics.r7.lake.end')}
+          {t(`${g}.roleEnd`)}
         </p>
       );
     }
-    table = (
+    const all = blueWinShare(allRow.counts);
+    const fullTable = (
       <OutcomeBlocksTable
         caption={t(view === 'holderRole' ? `${k}.holderRoleCaption` : `${k}.targetRoleCaption`, { lake: lakeLabel })}
         groupLabel={t(view === 'holderRole' ? `${k}.holderRole` : `${k}.targetRole`)}
         rows={rows}
       />
+    );
+    table = rank.rows.length === 0 ? fullTable : (
+      <div className="space-y-2">
+        <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid={`lake-${kind}-glance`}>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <h4 className="text-xs font-semibold text-zinc-300">{t(`${g}.${kind}Title`)}</h4>
+            <GlanceLegend items={winLegend(t)} />
+          </div>
+          <div className="space-y-2">
+            {rank.rows.map(r => (
+              <RankRow
+                key={r.role}
+                label={roleLabel(r.role)}
+                dot={roleFaction(r.role) === 'red' ? 'red' : 'blue'}
+                tag={r.role === rank.hi ? t(`${g}.roleHi`) : r.role === rank.lo ? t(`${g}.roleLo`) : undefined}
+                sample={sampleText(t, r.share.n)}
+                thin={thin(r.share.n)}
+              >
+                <SplitBar segments={winSegments(t, r.share)} sample={sampleText(t, r.share.n)} />
+              </RankRow>
+            ))}
+            {all && (
+              <div className="border-t border-zinc-800 pt-2">
+                <RankRow label={t(`${g}.allRow`)} sample={sampleText(t, all.n)}>
+                  <SplitBar segments={winSegments(t, all)} sample={sampleText(t, all.n)} />
+                </RankRow>
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-500">{t(`${g}.roleNote`)}</p>
+        </section>
+        <Advanced title={t(`${g}.advanced`)} testId={`lake-${kind}-advanced`}>{() => fullTable}</Advanced>
+      </div>
     );
   }
 

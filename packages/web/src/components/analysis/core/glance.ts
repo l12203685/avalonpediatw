@@ -37,6 +37,11 @@ export function pctText(pct: number): string {
   return `${shownPct(pct)}%`;
 }
 
+/** 「佔幾成」用：有、但四捨五入後是 0 的寫「<1%」，不寫成 0%（0% 會被讀成沒有）。 */
+export function shareText(pct: number): string {
+  return pct > 0 && shownPct(pct) === 0 ? '<1%' : pctText(pct);
+}
+
 /**
  * 兩段比例條的另一段：100 − 顯示出來的那個整數。兩段各自四捨五入的話 43.5%／56.5% 會變成「44% ＋ 57%」，
  * 加起來不是 100；所以只有主要的那一段（藍方贏、成功、刺中…）照原本的數字進位，另一段用減的。
@@ -249,7 +254,11 @@ export interface VotesGlance {
   sentence: Sentence;
 }
 
-export function votesGlance(pooled: Record<string, VoteCell | undefined> | null | undefined, evilKey = 'evilAll', goodKey = 'goodAll'): VotesGlance | null {
+export function votesGlance(
+  pooled: Record<string, VoteCell | undefined> | null | undefined, evilKey = 'evilAll', goodKey = 'goodAll',
+  /** 句型放在哪一組字底下：'votes'（全部任務）或 'votesR3'（第 3 個任務起）。 */
+  scope: 'votes' | 'votesR3' = 'votes',
+): VotesGlance | null {
   const evil = pooled?.[evilKey];
   const good = pooled?.[goodKey];
   if (!evil || !good || !finite(evil.rate) || !finite(good.rate) || !(evil.votes > 0) || !(good.votes > 0)) return null;
@@ -258,6 +267,357 @@ export function votesGlance(pooled: Record<string, VoteCell | undefined> | null 
   // 全藍的隊：每一票不是贊成就是反對，反對 = 100 − 贊成（用顯示的整數減，跟長條上的數字一樣）
   const redReject = shownPct(withRed.pct);
   const blueReject = restPct(allBlueApprove.pct);
-  const key = blueReject === redReject ? 'votes.same' : blueReject > redReject ? 'votes.blueHigher' : blueReject >= 50 ? 'votes.blueAlsoHalf' : 'votes.blueLower';
+  const kind = blueReject === redReject ? 'same' : blueReject > redReject ? 'blueHigher' : blueReject >= 50 ? 'blueAlsoHalf' : 'blueLower';
+  const key = `${scope}.${kind}`;
   return { withRed, allBlueApprove, sentence: { key, params: { withRed: `${redReject}%`, allBlue: `${blueReject}%` } } };
+}
+
+// ══ 第二批（2026-11-25）：刺殺、任務路徑、湖中女神的角色與宣告、派隊與投票的內頁 ══════════════════
+
+/** 一組裡最高、最低的兩個：只比樣本夠（n ≥ min）的；夠的不到兩個才全部一起比。顯示出來一樣就不比（null）。 */
+export function extremes<T extends { share: Share }>(rows: readonly T[], min: number): { hi: T; lo: T } | null {
+  const pool = rows.filter(r => r.share.n >= min);
+  const list = pool.length >= 2 ? pool : rows;
+  if (list.length < 2) return null;
+  const hi = list.reduce((a, b) => (b.share.pct > a.share.pct ? b : a));
+  const lo = list.reduce((a, b) => (b.share.pct < a.share.pct ? b : a));
+  return relation(lo.share.pct, hi.share.pct) === 'same' ? null : { hi, lo };
+}
+
+// ── 刺殺：藍方做完三個任務之後 ────────────────────────────────────────
+
+export interface KillDetailGlance {
+  /** 梅林被刺中（紅方贏）的比例；n = 打到刺殺的局數。沒刺中（藍方贏）是剩下的那一段。 */
+  hit: Share;
+  killed: number;
+  survived: number;
+  sentence: Sentence;
+}
+
+export function killDetailGlance(a: { games: number; killPct: number; merlinKilled?: number; merlinSurvived?: number } | null | undefined): KillDetailGlance | null {
+  if (!a || !finite(a.games) || a.games <= 0 || !finite(a.killPct)) return null;
+  const killed = finite(a.merlinKilled) ? a.merlinKilled : Math.round((a.killPct / 100) * a.games);
+  const survived = finite(a.merlinSurvived) ? a.merlinSurvived : a.games - killed;
+  const hit: Share = { pct: a.killPct, n: a.games };
+  const key = shownPct(hit.pct) === 0 ? 'kill.none' : shownPct(hit.pct) === 100 ? 'kill.all' : 'kill.flip';
+  return { hit, killed, survived, sentence: { key, params: { hit: pctText(hit.pct), miss: restText(hit.pct) } } };
+}
+
+export interface SeatKillInput {
+  /** 畫面上的座位號（第十個座位是 0）。 */
+  seat: string;
+  /** 梅林被刺中的局數。 */
+  dead: number;
+  /** 打到刺殺的局數。 */
+  n: number;
+}
+
+export interface SeatKillGlance {
+  rows: Array<{ seat: string; share: Share }>;
+  hi: string | null;
+  lo: string | null;
+  sentence: Sentence | null;
+}
+
+/** who = 誰坐在這個位置（'merlin'：梅林坐這裡時被刺中；'assassin'：刺客坐這裡時刺中）。 */
+export function seatKillGlance(input: readonly SeatKillInput[] | null | undefined, who: 'merlin' | 'assassin', min: number): SeatKillGlance {
+  const rows = (input ?? [])
+    .filter(r => finite(r.n) && r.n > 0 && finite(r.dead))
+    .map(r => ({ seat: r.seat, share: { pct: (r.dead / r.n) * 100, n: r.n } }));
+  const ex = extremes(rows, min);
+  if (!ex) return { rows, hi: null, lo: null, sentence: null };
+  return {
+    rows, hi: ex.hi.seat, lo: ex.lo.seat,
+    sentence: { key: `seatKill.${who}`, params: { hiSeat: ex.hi.seat, hi: pctText(ex.hi.share.pct), loSeat: ex.lo.seat, lo: pctText(ex.lo.share.pct) } },
+  };
+}
+
+/** 梅林坐前半（1～5 家）、後半（6～0 家）各被刺中多少。 */
+export function seatHalvesSentence(front: Share | null | undefined, back: Share | null | undefined): Sentence | null {
+  if (!front || !back) return null;
+  const rel = relation(back.pct, front.pct);
+  const key = `seatKill.${rel === 'lower' ? 'backLower' : rel === 'higher' ? 'backHigher' : 'halvesSame'}`;
+  return { key, params: { front: pctText(front.pct), back: pctText(back.pct) } };
+}
+
+// ── 任務路徑：五個任務依序成功／失敗的走法 ────────────────────────────────
+
+export interface PathInput {
+  /** 例「紅紅藍藍藍」：紅 = 任務失敗、藍 = 任務成功。 */
+  state: string;
+  games: number;
+  outcomes?: OutcomeCountsInput | null;
+}
+
+export interface PathRow {
+  path: string;
+  games: number;
+  /** 佔全部局的比例（0–100）。 */
+  ofAll: number;
+  /** 藍方做完三個任務的走法：藍方最後贏（梅林沒被刺中）的比例；三個任務失敗的走法沒有（紅方直接贏）。 */
+  blue: Share | null;
+}
+
+export interface PathsGlance {
+  total: number;
+  /** 三個任務失敗、紅方直接贏的走法（照局數多到少）。 */
+  redPaths: PathRow[];
+  /** 藍方做完三個任務的走法（照局數多到少）。 */
+  bluePaths: PathRow[];
+  top: PathRow | null;
+  /** 藍方做完三個任務的走法裡，藍方最後贏最多／最少的（只比樣本夠的）。 */
+  best: string | null;
+  worst: string | null;
+  sentence: Sentence | null;
+  killSentence: Sentence | null;
+}
+
+function countChar(s: string, c: string): number {
+  return Array.from(s).filter(x => x === c).length;
+}
+
+/** total = 全部有路徑的局（不是列出來的幾條加總；roundsPaths.ts topPathShare 的分母）。 */
+export function pathsGlance(states: readonly PathInput[] | null | undefined, total: number, min: number): PathsGlance {
+  const empty: PathsGlance = { total: 0, redPaths: [], bluePaths: [], top: null, best: null, worst: null, sentence: null, killSentence: null };
+  if (!finite(total) || total <= 0) return empty;
+  const rows = (states ?? []).filter(s => finite(s.games) && s.games > 0 && s.games <= total);
+  const row = (s: PathInput, blue: Share | null): PathRow => ({ path: s.state, games: s.games, ofAll: (s.games / total) * 100, blue });
+  const byGames = (a: PathRow, b: PathRow): number => b.games - a.games;
+  const redPaths = rows.filter(s => countChar(s.state, '紅') >= 3).map(s => row(s, null)).sort(byGames);
+  const bluePaths = rows.filter(s => countChar(s.state, '藍') >= 3 && countChar(s.state, '紅') < 3).map(s => row(s, blueWinShare(s.outcomes))).sort(byGames);
+  const all = [...redPaths, ...bluePaths].sort(byGames);
+  const top = all[0] ?? null;
+  const ex = extremes(bluePaths.flatMap(p => (p.blue ? [{ path: p.path, share: p.blue }] : [])), min);
+  return {
+    total, redPaths, bluePaths, top,
+    best: ex?.hi.path ?? null, worst: ex?.lo.path ?? null,
+    sentence: top ? { key: 'paths.top', params: { path: top.path, share: shareText(top.ofAll) } } : null,
+    killSentence: ex
+      ? { key: 'paths.kill', params: { best: ex.hi.path, bestRate: pctText(ex.hi.share.pct), worst: ex.lo.path, worstRate: pctText(ex.lo.share.pct) } }
+      : null,
+  };
+}
+
+// ── 湖中女神：持湖／被湖的是哪個角色時，藍方贏多少 ─────────────────────────────
+
+export interface RoleOutcomeInput {
+  role: string;
+  outcomes?: OutcomeCountsInput | null;
+}
+
+export interface RoleRankGlance {
+  /** 照藍方最後贏的比例高到低排。 */
+  rows: Array<{ role: string; share: Share }>;
+  hi: string | null;
+  lo: string | null;
+  /** params 的 hi／lo 是角色的資料鍵，畫面換成角色名稱再填。 */
+  sentence: Sentence | null;
+}
+
+/** kind = 'holderRole'（持湖的人）或 'targetRole'（被湖的人）；who = 這次湖的叫法。 */
+export function roleRankGlance(stats: readonly RoleOutcomeInput[] | null | undefined, kind: 'holderRole' | 'targetRole', who: string, min: number): RoleRankGlance {
+  const rows = (stats ?? [])
+    .flatMap(r => { const share = blueWinShare(r.outcomes); return share ? [{ role: r.role, share }] : []; })
+    .sort((a, b) => b.share.pct - a.share.pct);
+  const ex = extremes(rows, min);
+  if (!ex) return { rows, hi: null, lo: null, sentence: null };
+  return {
+    rows, hi: ex.hi.role, lo: ex.lo.role,
+    sentence: { key: `lake.${kind}`, params: { who, hi: ex.hi.role, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.role, loRate: pctText(ex.lo.share.pct) } },
+  };
+}
+
+// ── 湖中女神：宣告可不可信 ──────────────────────────────────────────
+
+export interface ClaimCellInput {
+  /** 第幾次湖（依湖分的那幾列）。 */
+  lake?: string;
+  /** 持湖的人的陣營（依持湖者分的那幾列）：'evil'／'紅' = 紅方。 */
+  holder?: string;
+  holderEn?: string;
+  /** 宣告：'evil'／'紅' = 說對方是紅方。 */
+  declared: string;
+  declaredEn?: string;
+  n: number;
+  /** 宣告屬實的比例（0–100）。 */
+  hitRate: number;
+}
+
+export interface ClaimPair {
+  key: string;
+  /** 說「紅」時屬實的比例；n = 說「紅」的次數。 */
+  saidRed: Share | null;
+  /** 說「藍」時屬實的比例。 */
+  saidBlue: Share | null;
+}
+
+export interface LakeClaimGlance {
+  /** 依第幾次湖（key = 資料上的叫法，例「首湖」）。 */
+  byLake: ClaimPair[];
+  /** 依持湖的人的陣營（key = 'blue'／'red'，藍方在前）。 */
+  byHolder: ClaimPair[];
+  /** 紅方拿湖說「紅」屬實的比例（大數字）。 */
+  redHolderSaidRed: Share | null;
+  /** 藍方、紅方拿湖說「紅」各有多少是真的。 */
+  sentence: Sentence | null;
+  /** 第一次湖（不分誰拿湖）說「紅」、說「藍」各有多少是真的。 */
+  lakeSentence: Sentence | null;
+}
+
+const isRedWord = (zh: string | undefined, en: string | undefined): boolean => en === 'evil' || zh === '紅';
+
+function claimPairs(cells: readonly ClaimCellInput[], keyOf: (c: ClaimCellInput) => string): ClaimPair[] {
+  const pairs: ClaimPair[] = [];
+  for (const c of cells) {
+    if (!finite(c.n) || c.n <= 0 || !finite(c.hitRate)) continue;
+    const key = keyOf(c);
+    let pair = pairs.find(p => p.key === key);
+    if (!pair) { pair = { key, saidRed: null, saidBlue: null }; pairs.push(pair); }
+    const share: Share = { pct: c.hitRate, n: c.n };
+    if (isRedWord(c.declared, c.declaredEn)) pair.saidRed = share;
+    else pair.saidBlue = share;
+  }
+  return pairs;
+}
+
+export function lakeClaimGlance(rows: readonly ClaimCellInput[] | null | undefined, holderRows: readonly ClaimCellInput[] | null | undefined): LakeClaimGlance {
+  const byLake = claimPairs(rows ?? [], c => c.lake ?? '');
+  const byHolder = claimPairs(holderRows ?? [], c => (isRedWord(c.holder, c.holderEn) ? 'red' : 'blue'))
+    .sort((a, b) => (a.key === 'blue' ? 0 : 1) - (b.key === 'blue' ? 0 : 1));
+  const blue = byHolder.find(p => p.key === 'blue')?.saidRed ?? null;
+  const red = byHolder.find(p => p.key === 'red')?.saidRed ?? null;
+  let sentence: Sentence | null = null;
+  if (blue && red) {
+    const rel = relation(red.pct, blue.pct);
+    const key = `claim.${rel === 'lower' ? 'redLower' : rel === 'higher' ? 'redHigher' : 'same'}`;
+    sentence = { key, params: { blue: pctText(blue.pct), red: pctText(red.pct) } };
+  }
+  const first = byLake.find(p => p.saidRed && p.saidBlue);
+  const lakeSentence: Sentence | null = first?.saidRed && first.saidBlue
+    ? { key: 'claim.byLake', params: { lake: first.key, saidRed: pctText(first.saidRed.pct), saidBlue: pctText(first.saidBlue.pct) } }
+    : null;
+  return { byLake, byHolder, redHolderSaidRed: red, sentence, lakeSentence };
+}
+
+// ── 派隊與投票的內頁 ─────────────────────────────────────────────
+
+/** 兩組比一比：b 比 a 低／高／一樣 → `${prefix}.lower|higher|same`，params 是 a、b 兩個百分比的字。 */
+export function twoWay(a: Share | null | undefined, b: Share | null | undefined, prefix: string, extra: Record<string, string | number> = {}): Sentence | null {
+  if (!a || !b) return null;
+  return { key: `${prefix}.${relation(b.pct, a.pct)}`, params: { ...extra, a: pctText(a.pct), b: pctText(b.pct) } };
+}
+
+export interface VotersGlance {
+  /** 第 3 個任務起，忠臣、紅方投反對的比例；n = 票數。 */
+  loyal: Share;
+  red: Share;
+  sentence: Sentence;
+}
+
+export function votersGlance(pooled: Record<string, VoteCell | undefined> | null | undefined): VotersGlance | null {
+  const cell = (key: string): Share | null => {
+    const c = pooled?.[key];
+    return c && finite(c.rate) && c.votes > 0 ? { pct: c.rate, n: c.votes } : null;
+  };
+  const loyal = cell('loyalR3');
+  const red = cell('redR3');
+  const sentence = twoWay(loyal, red, 'voters');
+  return loyal && red && sentence ? { loyal, red, sentence } : null;
+}
+
+export interface CaptainGlance {
+  /** 紅方、藍方當隊長帶出去的任務，失敗的比例；n = 任務數。成功是剩下的那一段。 */
+  redFail: Share;
+  blueFail: Share;
+  /** 每個任務由紅方當隊長的比例；n = 打到這個任務的局數。藍方隊長是剩下的那一段。 */
+  perMission: Array<{ mission: number; red: Share }>;
+  sentence: Sentence;
+  trend: Sentence | null;
+}
+
+export function captainGlance(
+  fails: { red?: { failPct: number | null; missions: number } | null; blue?: { failPct: number | null; missions: number } | null } | null | undefined,
+  missions: ReadonlyArray<{ mission: number; redCaptainRate: number; games: number }> | null | undefined,
+): CaptainGlance | null {
+  const share = (c: { failPct: number | null; missions: number } | null | undefined): Share | null =>
+    (c && finite(c.failPct) && c.missions > 0 ? { pct: c.failPct, n: c.missions } : null);
+  const redFail = share(fails?.red);
+  const blueFail = share(fails?.blue);
+  const sentence = twoWay(blueFail, redFail, 'captain');
+  if (!redFail || !blueFail || !sentence) return null;
+  const perMission = (missions ?? [])
+    .filter(m => finite(m.redCaptainRate) && finite(m.games) && m.games > 0)
+    .map(m => ({ mission: m.mission, red: { pct: m.redCaptainRate, n: m.games } }));
+  const first = perMission[0];
+  const last = perMission[perMission.length - 1];
+  const trend = first && last && first !== last
+    ? twoWay(first.red, last.red, 'captain.trend', { first: first.mission, last: last.mission })
+    : null;
+  return { redFail, blueFail, perMission, sentence, trend };
+}
+
+export interface FirstTeamGlance {
+  /** 第一支隊伍裡有／沒有梅林、派西維爾的局，藍方最後贏的比例。 */
+  merlinIn: Share | null;
+  merlinOut: Share | null;
+  percivalIn: Share | null;
+  percivalOut: Share | null;
+  /** 第一支隊伍裡有幾個紅方 → 藍方最後贏的比例。 */
+  redCounts: Array<{ count: number; share: Share }>;
+  merlinSentence: Sentence | null;
+  redSentence: Sentence | null;
+}
+
+export function firstTeamGlance(
+  vision: Partial<Record<'merlinInTeam' | 'merlinNotInTeam' | 'percivalInTeam' | 'percivalNotInTeam', { outcomes?: OutcomeCountsInput | null } | null>> | null | undefined,
+  redInTeam: ReadonlyArray<{ redCount: number; outcomes?: OutcomeCountsInput | null }> | null | undefined,
+  min: number,
+): FirstTeamGlance {
+  const merlinIn = blueWinShare(vision?.merlinInTeam?.outcomes);
+  const merlinOut = blueWinShare(vision?.merlinNotInTeam?.outcomes);
+  const redCounts = (redInTeam ?? []).flatMap(r => { const share = blueWinShare(r.outcomes); return share ? [{ count: r.redCount, share }] : []; });
+  const ex = extremes(redCounts, min);
+  return {
+    merlinIn, merlinOut,
+    percivalIn: blueWinShare(vision?.percivalInTeam?.outcomes),
+    percivalOut: blueWinShare(vision?.percivalNotInTeam?.outcomes),
+    redCounts,
+    merlinSentence: twoWay(merlinIn, merlinOut, 'firstTeam.merlin'),
+    redSentence: ex
+      ? { key: 'firstTeam.reds', params: { hi: ex.hi.count, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.count, loRate: pctText(ex.lo.share.pct) } }
+      : null,
+  };
+}
+
+export interface TwoRedCell {
+  /** 派隊的次數。 */
+  n: number;
+  /** 其中隊上沒有任何紅方的次數。 */
+  allGood: number;
+}
+
+export interface TwoRedGlance {
+  /** 每個任務一張卡；每張卡每個隊長角色一列：派出全是藍方的隊的比例（n = 派隊次數）。 */
+  rounds: Array<{ round: number; rows: Array<{ role: string; clean: Share }> }>;
+  /** 句子講的那個任務（第一個比得出高低的）。params 的 hi／lo 是角色的資料鍵，畫面換成角色名稱再填。 */
+  sentence: Sentence | null;
+}
+
+export function twoRedGlance(cells: ReadonlyArray<{ round: number; role: string; cell: TwoRedCell | null | undefined }> | null | undefined, min: number): TwoRedGlance {
+  const rounds: TwoRedGlance['rounds'] = [];
+  for (const c of cells ?? []) {
+    if (!c.cell || !finite(c.cell.n) || c.cell.n <= 0 || !finite(c.cell.allGood)) continue;
+    let round = rounds.find(r => r.round === c.round);
+    if (!round) { round = { round: c.round, rows: [] }; rounds.push(round); }
+    round.rows.push({ role: c.role, clean: { pct: (c.cell.allGood / c.cell.n) * 100, n: c.cell.n } });
+  }
+  rounds.sort((a, b) => a.round - b.round);
+  let sentence: Sentence | null = null;
+  for (const r of rounds) {
+    const ex = extremes(r.rows.map(x => ({ role: x.role, share: x.clean })), min);
+    if (!ex) continue;
+    sentence = { key: 'twoRed.best', params: { round: r.round, hi: ex.hi.role, hiRate: pctText(ex.hi.share.pct), lo: ex.lo.role, loRate: pctText(ex.lo.share.pct) } };
+    break;
+  }
+  return { rounds, sentence };
 }

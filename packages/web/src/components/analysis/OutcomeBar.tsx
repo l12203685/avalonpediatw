@@ -15,7 +15,8 @@ import { useTranslation } from 'react-i18next';
 import type { OutcomeBreakdown } from '../../services/api';
 
 const RED   = '#ef4444';
-const BLUE_DEAD  = '#f59e0b';
+// 三藍死＝紅方贏的一種：紅色系的淺紅（2026-11-25，跟 ui/tokens.ts OUTCOME_COLORS 同一個顏色）
+const BLUE_DEAD  = '#fca5a5';
 const BLUE_ALIVE = '#3b82f6';
 
 export interface OutcomeBarProps {

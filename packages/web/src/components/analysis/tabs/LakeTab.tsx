@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import LakeAnalysis from '../LakeAnalysis';
+import LakeClaimGlance from '../LakeClaimGlance';
 import { FeatureStudyCard } from '../../analytics/FeatureStudiesPanel';
 import { MoreDetails, SectionTabs } from '../ui';
 
@@ -28,7 +29,7 @@ export default function LakeTab(): JSX.Element {
   return (
     <SectionTabs items={items} persistKey="analysis.lake" ariaLabel={t('analytics.analysis.tabs.lake')}>
       {(view) => {
-        if (view === 'claim') return <FeatureStudyCard loopId="L141" defaultOpen />;
+        if (view === 'claim') return <LakeClaimGlance />;
         if (view === 'more') return <MoreDetails items={[{ id: 'l142', title: t(`${k}.consistency`), render: () => <FeatureStudyCard loopId="L142" defaultOpen /> }]} />;
         return <LakeAnalysis view={view} lake={lake} onLakeChange={setLake} />;
       }}

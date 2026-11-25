@@ -17,10 +17,10 @@ export default function StrengthTiers({ report }: { report: StrengthReport }): J
     { key: 'label', label: '分層', format: (_, r) => <span title={r.range}><b>{r.label}</b> <span className="text-zinc-500">{r.range}</span></span> },
     { key: 'n', label: '局數', format: 'int' },
     { key: 'threeRed', label: '三紅', format: 'pct', value: (r) => pct(r.threeRed, r.n), tone: 'red', title: '三紅的局 ÷ 這層的局', lowSample: 20, n: 'n' },
-    { key: 'blueDead', label: '三藍被刀', format: 'pct', value: (r) => pct(r.blueDead, r.n), tone: 'amber', title: '三藍但梅林被刺中的局 ÷ 這層的局', lowSample: 20, n: 'n' },
+    { key: 'blueDead', label: '三藍被刀', format: 'pct', value: (r) => pct(r.blueDead, r.n), tone: 'kill', title: '三藍但梅林被刺中的局 ÷ 這層的局', lowSample: 20, n: 'n' },
     { key: 'blueAlive', label: '三藍躲刺', format: 'pct', value: (r) => pct(r.blueAlive, r.n), tone: 'blue', title: '三藍而且梅林沒被刺中的局 ÷ 這層的局', lowSample: 20, n: 'n' },
     {
-      key: 'hit', label: '刺中率', format: 'pct', value: (r) => pct(r.blueDead, r.blueDead + r.blueAlive), tone: 'amber',
+      key: 'hit', label: '刺中率', format: 'pct', value: (r) => pct(r.blueDead, r.blueDead + r.blueAlive), tone: 'kill',
       title: '三藍的局裡，刺客刺中梅林的比例', n: (r) => r.blueDead + r.blueAlive, lowSample: 20,
     },
   ];

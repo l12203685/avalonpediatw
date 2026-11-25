@@ -13,8 +13,8 @@ export function sentenceText(t: TFunction, s: Sentence | null | undefined): stri
   return s ? t(`${G}.${s.key}`, s.params) : null;
 }
 
-/** 「共 982 局」「共 66,429 票」。 */
-export function sampleText(t: TFunction, n: number, unit: 'games' | 'votes' = 'games'): string {
+/** 「共 982 局」「共 66,429 票」「共 571 次」「樣本 113」。 */
+export function sampleText(t: TFunction, n: number, unit: 'games' | 'votes' | 'times' | 'plain' = 'games'): string {
   return t(`${G}.sample.${unit}`, { n: formatInt(n) });
 }
 
@@ -24,6 +24,18 @@ export function winSegments(t: TFunction, blue: Share): SplitSegment[] {
     { pct: blue.pct, text: pctText(blue.pct), name: t(`${G}.blueWins`), tone: 'blue' },
     { pct: 100 - blue.pct, text: restText(blue.pct), name: t(`${G}.redWins`), tone: 'red' },
   ];
+}
+
+/** 刺中梅林（紅方贏）｜沒刺中（藍方贏）。hit = 梅林被刺中的比例。 */
+export function hitSegments(t: TFunction, hit: Share): SplitSegment[] {
+  return [
+    { pct: hit.pct, text: pctText(hit.pct), name: t(`${G}.missions.hit`), tone: 'red' },
+    { pct: 100 - hit.pct, text: restText(hit.pct), name: t(`${G}.missions.miss`), tone: 'blue' },
+  ];
+}
+
+export function hitLegend(t: TFunction): Array<{ name: string; tone: GlanceTone }> {
+  return [{ name: t(`${G}.kill.hitLegend`), tone: 'red' }, { name: t(`${G}.kill.missLegend`), tone: 'blue' }];
 }
 
 export function winLegend(t: TFunction): Array<{ name: string; tone: GlanceTone }> {

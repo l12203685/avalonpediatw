@@ -108,7 +108,7 @@ export default function SummaryStrip({ totalGames, totalPlayers, stages }: {
           label={t('analytics.deep.overview.stages.assassination')}
           scope={t('analytics.r6.overview.summary.threeBlueOnly')}
           n={stages.assassination.games}
-          a={{ label: t('analytics.deep.overview.stages.killed'), pct: stages.assassination.killPct, className: 'text-amber-300' }}
+          a={{ label: t('analytics.deep.overview.stages.killed'), pct: stages.assassination.killPct, className: 'text-red-200' }}
           b={{ label: t('analytics.deep.overview.stages.survived'), pct: stages.assassination.survivePct, className: 'text-blue-300' }}
         />
         <Stage

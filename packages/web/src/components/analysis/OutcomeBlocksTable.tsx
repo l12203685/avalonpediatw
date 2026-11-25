@@ -106,7 +106,7 @@ export default function OutcomeBlocksTable({
       value: row => row.blocks.assassination.win,
       n: row => row.blocks.assassination.n,
       lowSample: min,
-      tone: 'amber',
+      tone: 'kill',
       bar: { color: OUTCOME_COLORS.三藍死 },
     },
     {

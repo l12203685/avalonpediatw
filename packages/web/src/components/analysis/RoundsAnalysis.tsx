@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatTable, Takeaway, Term, VerdictText, formatRate, type StatColumn } from './ui';
+import {
+  Advanced, GlanceLegend, MeterBar, PathChips, RankRow, SplitBar, StatTable, Takeaway, Term, VerdictText, formatRate, type StatColumn,
+} from './ui';
+import { firstTeamGlance, pathsGlance, shareText, type Share } from './core/glance';
+import { sampleText, sentenceText, winLegend, winSegments } from './core/glanceView';
 import { outcomeChiSquare, redFinalRate } from './outcomeTest';
 import type { RoundsAnalysisData } from '../../services/api';
 import { useRoundsData } from './teams/useTeamsData';
@@ -28,6 +32,10 @@ import OutcomeBlocksTable, {
  * (2026-10-28 Edward：結果更直觀、名詞白話) 兩個小分頁最上面各一句話 (Takeaway)，數字都從資料當下算：
  *   1-1：有／沒有梅林、紅方 0–3 人時紅方最終勝率，加卡方檢定 (三種結局比例的差異明顯或可能只是運氣)；
  *   任務進程：任務 1 成功／失敗之後紅方最終勝率、最難成功的任務、最常見的路徑。表頭可點開看定義 (Term)。
+ * (2026-11-25 站長：「希望能更直觀讓看到的人一目瞭然」，第二批) section='paths' (任務結果 › 任務路徑)：
+ *   一句話 (最常見的走法佔幾成；藍方做完三個任務的走法裡哪一種藍方贏最多／最少) ＋ 兩欄排行長條：
+ *   「藍方做完三個任務」每種走法一條藍方贏｜紅方贏、「三個任務失敗」每種走法一條佔全部局的比例；
+ *   百分比整數、樣本寫「共 N 局」；三塊結果的表收進「進階」。算法沒有改 (core/glance.ts pathsGlance 只分組、排序)。
  */
 
 export type RoundsSection = 'firstVote' | 'progression' | 'paths';
@@ -52,23 +60,6 @@ interface FirstVoteRow extends OutcomeGroupRow {
 
 function finite(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
-}
-
-/** 路徑 (例「紅紅藍藍藍」) 畫成一排色塊：紅 = 任務失敗、藍 = 任務成功。 */
-function PathChips({ path, label }: { path: string; label: string }): JSX.Element {
-  return (
-    <span role="img" className="inline-flex items-center gap-0.5" title={path} aria-label={label}>
-      {Array.from(path).map((c, i) => (
-        <span
-          key={i}
-          aria-hidden
-          className={`inline-block h-3 w-3 rounded-[3px] ${
-            c === '紅' ? 'bg-red-500' : c === '藍' ? 'bg-blue-500' : 'bg-zinc-600'
-          }`}
-        />
-      ))}
-    </span>
-  );
 }
 
 function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
@@ -121,30 +112,19 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
   const merlinIn = visionRows.find(r => r.key === 'merlinIn');
   const merlinOut = visionRows.find(r => r.key === 'merlinOut');
   const merlinTest = merlinIn?.outcomes && merlinOut?.outcomes ? outcomeChiSquare([merlinIn.outcomes, merlinOut.outcomes]) : null;
-  const redRates = redRows.map(r => redFinalRate(r.outcomes)).filter((v): v is number => v !== null);
   const redTest = redRows.every(r => r.outcomes) ? outcomeChiSquare(redRows.map(r => r.outcomes)) : null;
   const k7 = 'analytics.r7.firstVote';
 
-  return (
+  const g = 'analytics.glance.firstTeam';
+  const glance = firstTeamGlance(data.visionStats, data.redInR11, lowSample ?? 0);
+  const thin = (n: number): string | undefined => (lowSample !== undefined && n < lowSample ? t('analytics.glance.thin') : undefined);
+  const winRow = (key: string, label: string, share: Share | null): JSX.Element | null => (share ? (
+    <RankRow key={key} wide label={label} sample={sampleText(t, share.n)} thin={thin(share.n)}>
+      <SplitBar segments={winSegments(t, share)} sample={sampleText(t, share.n)} />
+    </RankRow>
+  ) : null);
+  const tables = (
     <div className="space-y-3">
-      {(merlinTest || redTest) && (
-        <Takeaway>
-          {merlinTest && merlinIn && merlinOut && (
-            <p>
-              {t(`${k7}.merlin`, { yes: formatRate(redFinalRate(merlinIn.outcomes)), yesN: merlinIn.n, no: formatRate(redFinalRate(merlinOut.outcomes)), noN: merlinOut.n })}
-              <VerdictText result={merlinTest} />
-              {t(`${k7}.end`)}
-            </p>
-          )}
-          {redTest && redRates.length > 1 && (
-            <p>
-              {t(`${k7}.redCount`, { min: formatRate(Math.min(...redRates)), max: formatRate(Math.max(...redRates)) })}
-              <VerdictText result={redTest} />
-              {t(`${k7}.end`)}
-            </p>
-          )}
-        </Takeaway>
-      )}
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <OutcomeBlocksTable
           caption={t(`${FV}.visionCaption`)}
@@ -164,6 +144,53 @@ function FirstVoteSection({ data, lowSample }: { data: RoundsAnalysisData; lowSa
         />
       </div>
       <OutcomeBlocksNote pending={lacksOutcomes(visionRows, redRows)} />
+    </div>
+  );
+  const hasBars = !!(glance.merlinIn || glance.percivalIn || glance.redCounts.length > 0);
+  if (!hasBars) return tables;
+
+  return (
+    <div className="space-y-2">
+      {(glance.merlinSentence || glance.redSentence) && (
+        <Takeaway>
+          {glance.merlinSentence && (
+            <p>
+              {sentenceText(t, glance.merlinSentence)}
+              <VerdictText result={merlinTest} />
+              {t(`${k7}.end`)}
+            </p>
+          )}
+          {glance.redSentence && (
+            <p>
+              {sentenceText(t, glance.redSentence)}
+              <VerdictText result={redTest} />
+              {t(`${k7}.end`)}
+            </p>
+          )}
+        </Takeaway>
+      )}
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="first-team-glance">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h4 className="text-xs font-semibold text-zinc-300"><Term term="firstProposal">{t(`${g}.title`)}</Term></h4>
+          <GlanceLegend items={winLegend(t)} />
+        </div>
+        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+          <div className="min-w-0 space-y-2" data-testid="first-team-who">
+            <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.whoTitle`)}</h4>
+            {winRow('merlinIn', t(`${FV}.merlinIn`), glance.merlinIn)}
+            {winRow('merlinOut', t(`${FV}.merlinOut`), glance.merlinOut)}
+            {winRow('percivalIn', t(`${FV}.percivalIn`), glance.percivalIn)}
+            {winRow('percivalOut', t(`${FV}.percivalOut`), glance.percivalOut)}
+          </div>
+          {glance.redCounts.length > 0 && (
+            <div className="min-w-0 space-y-2" data-testid="first-team-reds">
+              <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.redsTitle`)}</h4>
+              {glance.redCounts.map(r => winRow(String(r.count), t(`${g}.redCount`, { count: r.count }), r.share))}
+            </div>
+          )}
+        </div>
+      </section>
+      <Advanced title={t(`${g}.advanced`)} testId="first-team-advanced">{() => tables}</Advanced>
     </div>
   );
 }
@@ -278,6 +305,8 @@ function ProgressionSection({ data, lowSample }: { data: RoundsAnalysisData; low
  */
 function PathsSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample?: number }): JSX.Element {
   const { t } = useTranslation('common');
+  const min = lowSample ?? 0;
+  const g = 'analytics.glance.paths';
   const pathRows = useMemo<(OutcomeGroupRow & { path: string })[]>(
     () => (data.gameStates ?? []).map(s => ({
       key: s.state,
@@ -292,22 +321,88 @@ function PathsSection({ data, lowSample }: { data: RoundsAnalysisData; lowSample
   );
   // 分母 = 全部有路徑的局（任務 1 分支），不是表上前 20 種路徑的加總（roundsPaths.ts）
   const topPath = topPathShare(data);
+  const glance = useMemo(() => pathsGlance(data.gameStates, topPath?.total ?? 0, min), [data, topPath?.total, min]);
+  const chips = (path: string): JSX.Element => <PathChips path={path} label={t(`${PG}.pathAria`, { path })} />;
+  const thin = (n: number): string | undefined => (n < min ? t('analytics.glance.thin') : undefined);
+  // 佔全部局的長條：最常見的那條當滿格，短的才看得出差別
+  const maxShare = Math.max(1, ...glance.redPaths.map(p => p.ofAll));
+  const fullTable = (
+    <OutcomeBlocksTable
+      caption={t(`${PG}.pathCaption`)}
+      groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
+      rows={pathRows}
+      renderLabel={row => chips(row.path)}
+      lowSample={lowSample}
+      maxHeight={420}
+      footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
+    />
+  );
+  if (!glance.top) {
+    return (
+      <div className="space-y-3">
+        {fullTable}
+        <OutcomeBlocksNote pending={lacksOutcomes(pathRows)} />
+      </div>
+    );
+  }
   return (
-    <div className="space-y-3">
-      {topPath && (
-        <Takeaway>
-          <p>{t('analytics.r7.progression.topPath', { path: topPath.path, share: formatRate(topPath.share), n: topPath.n })}</p>
-        </Takeaway>
-      )}
-      <OutcomeBlocksTable
-        caption={t(`${PG}.pathCaption`)}
-        groupLabel={<Term term="missionPath">{t(`${PG}.path`)}</Term>}
-        rows={pathRows}
-        renderLabel={row => <PathChips path={row.path} label={t(`${PG}.pathAria`, { path: row.path })} />}
-        lowSample={lowSample}
-        maxHeight={420}
-        footnote={t(`${PG}.pathNote`, { count: pathRows.length })}
-      />
+    <div className="space-y-2">
+      <Takeaway>
+        <p>{sentenceText(t, glance.sentence)}</p>
+        {glance.killSentence && <p>{sentenceText(t, glance.killSentence)}</p>}
+      </Takeaway>
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3" data-testid="paths-glance">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <h3 className="text-xs font-semibold text-zinc-300"><Term term="missionPath">{t(`${g}.legend`)}</Term></h3>
+          <GlanceLegend items={[{ name: t(`${g}.passed`), tone: 'blue' }, { name: t(`${g}.failed`), tone: 'red' }]} />
+        </div>
+        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+          {glance.bluePaths.length > 0 && (
+            <div className="min-w-0 space-y-2" data-testid="paths-blue">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.blueTitle`)}</h4>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 text-[11px] text-zinc-500">
+                  <span>{t(`${g}.blueSub`)}</span>
+                  <GlanceLegend items={winLegend(t)} />
+                </div>
+              </div>
+              {glance.bluePaths.map(p => (
+                <RankRow
+                  key={p.path}
+                  wide
+                  label={chips(p.path)}
+                  tag={p.path === glance.best ? t(`${g}.best`) : p.path === glance.worst ? t(`${g}.worst`) : undefined}
+                  sample={`${t(`${g}.ofAll`, { share: shareText(p.ofAll) })} · ${sampleText(t, p.games)}`}
+                  thin={thin(p.games)}
+                >
+                  {p.blue && <SplitBar segments={winSegments(t, p.blue)} sample={sampleText(t, p.games)} />}
+                </RankRow>
+              ))}
+            </div>
+          )}
+          {glance.redPaths.length > 0 && (
+            <div className="min-w-0 space-y-2" data-testid="paths-red">
+              <div>
+                <h4 className="text-xs font-bold text-zinc-100">{t(`${g}.redTitle`)}</h4>
+                <p className="text-[11px] text-zinc-500">{t(`${g}.redSub`)}</p>
+              </div>
+              {glance.redPaths.map(p => (
+                <RankRow
+                  key={p.path}
+                  wide
+                  label={chips(p.path)}
+                  tag={p.path === glance.top?.path ? t(`${g}.common`) : undefined}
+                  sample={sampleText(t, p.games)}
+                  thin={thin(p.games)}
+                >
+                  <MeterBar pct={p.ofAll} max={maxShare} text={shareText(p.ofAll)} tone="red" label={`${p.path} ${shareText(p.ofAll)}（${sampleText(t, p.games)}）`} />
+                </RankRow>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+      <Advanced title={t(`${g}.advanced`)} testId="paths-advanced">{() => fullTable}</Advanced>
       <OutcomeBlocksNote pending={lacksOutcomes(pathRows)} />
     </div>
   );

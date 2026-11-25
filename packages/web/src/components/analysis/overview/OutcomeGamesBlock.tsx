@@ -49,7 +49,7 @@ interface ShareRow {
 
 /** 贏輸的顏色：綠色 (不跟紅藍陣營、琥珀刺中混)。 */
 const WIN_COLOR = '#10b981';
-const OUTCOME_TONE: Record<ShareOutcome, Tone> = { 三紅: 'red', 三藍死: 'amber', 三藍活: 'blue' };
+const OUTCOME_TONE: Record<ShareOutcome, Tone> = { 三紅: 'red', 三藍死: 'kill', 三藍活: 'blue' };
 /** i18n 鍵 (analytics.r7.mix.side.*)。 */
 const OUTCOME_KEY: Record<ShareOutcome, string> = { 三紅: 'threeRed', 三藍死: 'threeBlueDead', 三藍活: 'threeBlueAlive' };
 

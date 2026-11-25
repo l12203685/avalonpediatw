@@ -631,7 +631,7 @@ function AssassinTargetVisual({ feature, full }: { feature: FeatureStudyEntry; f
     { key: 'tier', label: t('analytics.featureStudies.tier'), value: r => (isEn ? r.tierEn : r.tierZh) },
     {
       key: 'hitRate', label: t('analytics.featureStudies.hitRate'), title: t(`${k}.hitRateTitle`),
-      format: 'pct', n: 'n', lowSample: min, tone: 'amber', emphasis: true,
+      format: 'pct', n: 'n', lowSample: min, tone: 'kill', emphasis: true,
     },
   ];
   if (full) {
@@ -644,7 +644,7 @@ function AssassinTargetVisual({ feature, full }: { feature: FeatureStudyEntry; f
     { key: 'seat', label: t('analytics.featureStudies.seat'), value: r => t(`${k}.seatLabel`, { seat: displaySeatKey(r.seat) }) },
     {
       key: 'hitRate', label: t('analytics.featureStudies.hitRate'), title: t(`${k}.hitRateTitle`),
-      format: 'pct', n: 'n', lowSample: min, tone: 'amber',
+      format: 'pct', n: 'n', lowSample: min, tone: 'kill',
     },
   ];
   if (full) {
@@ -868,7 +868,7 @@ function ForcedP5Visual({ feature, full }: { feature: FeatureStudyEntry; full: b
   columns.push({ key: 'deltaThreeRed', label: t(`${k}.deltaThreeRed`), align: 'right', format: v => signedPp(v), tone: r => (r.deltaThreeRed >= 0 ? 'red' : 'blue') });
   if (full) {
     columns.push(
-      { key: 'deltaThreeBlueDead', label: t(`${k}.deltaThreeBlueDead`), align: 'right', format: v => signedPp(v), tone: 'amber' },
+      { key: 'deltaThreeBlueDead', label: t(`${k}.deltaThreeBlueDead`), align: 'right', format: v => signedPp(v), tone: 'kill' },
       { key: 'deltaThreeBlueAlive', label: t(`${k}.deltaThreeBlueAlive`), align: 'right', format: v => signedPp(v), tone: 'blue' },
     );
   }

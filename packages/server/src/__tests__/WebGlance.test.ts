@@ -6,14 +6,17 @@
  *  - 兩段比例條加起來一定是 100%；沒有資料時回 null（畫面不寫 0%）；
  *  - 每一個句型在繁中、英文都有字，而且句子裡真的填了那些數字；
  *  - 自動發現卡片的差距寫成白話（多／少幾個百分點）。
+ * 第二批（同日）：刺殺、任務路徑、湖中女神的角色與宣告、派隊與投票內頁的句子與長條；三藍死（梅林被刺中）改用紅色系。
  */
 import fs from 'fs';
 import path from 'path';
 import { describe, expect, it } from 'vitest';
 import {
-  anyThin, blueWinShare, killGlance, lakeHolderGlance, missionOneGlance, missionRatesGlance, missionSwingGlance, overallGlance, pctText, relation,
-  restText, shownPct, votesGlance, type Sentence,
+  anyThin, blueWinShare, captainGlance, extremes, firstTeamGlance, killDetailGlance, killGlance, lakeClaimGlance, lakeHolderGlance, missionOneGlance,
+  missionRatesGlance, missionSwingGlance, overallGlance, pathsGlance, pctText, relation, restText, roleRankGlance, seatHalvesSentence, seatKillGlance,
+  shareText, shownPct, twoRedGlance, twoWay, votersGlance, votesGlance, type Sentence,
 } from '../../../web/src/components/analysis/core/glance';
+import { OUTCOME_COLORS, TONE_HEX } from '../../../web/src/components/analysis/ui/tokens';
 import { formatDiffPlain } from '../../../web/src/components/analysis/discovery/discoveryText';
 
 const web = path.resolve(__dirname, '..', '..', '..', 'web', 'src');
@@ -225,6 +228,234 @@ describe('一眼看懂：派隊與投票', () => {
   });
 });
 
+describe('一眼看懂（第二批）：刺殺', () => {
+  it('刺殺結算：梅林被刺中的比例與另一段加起來 100%，句子填同一組數字', () => {
+    const g = killDetailGlance({ games: 1289, killPct: 43.5, merlinKilled: 561, merlinSurvived: 728 })!;
+    expect(g.hit).toEqual({ pct: 43.5, n: 1289 });
+    expect([g.killed, g.survived]).toEqual([561, 728]);
+    expect(g.sentence).toEqual({ key: 'kill.flip', params: { hit: '44%', miss: '56%' } });
+    expect(render('zh-TW', g.sentence)).toContain('44% 梅林被刺中');
+    // 舊快取只有比例：局數從比例推
+    expect(killDetailGlance({ games: 200, killPct: 25 })).toMatchObject({ killed: 50, survived: 150 });
+    expect(killDetailGlance({ games: 10, killPct: 0 })!.sentence.key).toBe('kill.none');
+    expect(killDetailGlance({ games: 10, killPct: 100 })!.sentence.key).toBe('kill.all');
+    expect(killDetailGlance({ games: 0, killPct: 0 })).toBeNull();
+    expect(killDetailGlance(null)).toBeNull();
+  });
+
+  it('座位：最高、最低只比樣本夠的座位；第十個座位照傳進來的寫（0 家）', () => {
+    const rows = [
+      { seat: '1', dead: 46, n: 100 },
+      { seat: '2', dead: 53, n: 100 },
+      { seat: '9', dead: 30, n: 100 },
+      { seat: '0', dead: 34, n: 100 },
+      // 樣本太少：4 局裡 4 局被刺中不算最高
+      { seat: '5', dead: 4, n: 4 },
+    ];
+    const g = seatKillGlance(rows, 'merlin', 30);
+    expect(g.rows).toHaveLength(5);
+    expect([g.hi, g.lo]).toEqual(['2', '9']);
+    expect(g.sentence).toEqual({ key: 'seatKill.merlin', params: { hiSeat: '2', hi: '53%', loSeat: '9', lo: '30%' } });
+    expect(render('zh-TW', g.sentence!)).toBe('梅林坐 2 家最常被刺中（53%），坐 9 家最少（30%）：');
+    expect(seatKillGlance(rows, 'assassin', 30).sentence!.key).toBe('seatKill.assassin');
+    // 都一樣、只有一個座位、沒有資料：不比
+    expect(seatKillGlance([{ seat: '1', dead: 5, n: 10 }, { seat: '2', dead: 50, n: 100 }], 'merlin', 5).sentence).toBeNull();
+    expect(seatKillGlance([{ seat: '1', dead: 5, n: 10 }], 'merlin', 5).sentence).toBeNull();
+    expect(seatKillGlance(null, 'merlin', 5)).toEqual({ rows: [], hi: null, lo: null, sentence: null });
+  });
+
+  it('前半、後半座位：句型跟著資料換', () => {
+    const front = { pct: 50.2, n: 665 };
+    const back = { pct: 37.1, n: 624 };
+    expect(seatHalvesSentence(front, back)).toEqual({ key: 'seatKill.backLower', params: { front: '50%', back: '37%' } });
+    expect(seatHalvesSentence(back, front)!.key).toBe('seatKill.backHigher');
+    expect(seatHalvesSentence(front, { pct: 49.8, n: 10 })!.key).toBe('seatKill.halvesSame');
+    expect(seatHalvesSentence(front, null)).toBeNull();
+  });
+
+  it('extremes：樣本夠的不到兩個才全部一起比', () => {
+    const rows = [{ k: 'a', share: { pct: 80, n: 3 } }, { k: 'b', share: { pct: 40, n: 50 } }, { k: 'c', share: { pct: 20, n: 2 } }];
+    expect(extremes(rows, 30)).toMatchObject({ hi: { k: 'a' }, lo: { k: 'c' } });
+    expect(extremes([...rows, { k: 'd', share: { pct: 60, n: 40 } }], 30)).toMatchObject({ hi: { k: 'd' }, lo: { k: 'b' } });
+  });
+});
+
+describe('一眼看懂（第二批）：任務路徑', () => {
+  const states = [
+    { state: '紅紅紅', games: 290, outcomes: oc(290, 0, 0) },
+    { state: '紅藍藍藍', games: 110, outcomes: oc(0, 38, 72) },
+    { state: '藍藍藍', games: 100, outcomes: oc(0, 31, 69) },
+    { state: '藍紅紅藍藍', games: 70, outcomes: oc(0, 43, 27) },
+    { state: '藍紅藍紅紅', games: 3, outcomes: oc(3, 0, 0) },
+    // 樣本太少的藍方走法不拿來比最高最低
+    { state: '紅藍紅藍藍', games: 2, outcomes: oc(0, 0, 2) },
+  ];
+
+  it('分成「三個任務失敗」和「藍方做完三個任務」兩組，分母是全部的局（不是列出來的加總）', () => {
+    const g = pathsGlance(states, 1000, 30);
+    expect(g.redPaths.map(p => p.path)).toEqual(['紅紅紅', '藍紅藍紅紅']);
+    expect(g.bluePaths.map(p => p.path)).toEqual(['紅藍藍藍', '藍藍藍', '藍紅紅藍藍', '紅藍紅藍藍']);
+    expect(g.redPaths[0]).toMatchObject({ games: 290, blue: null });
+    expect(g.redPaths[0].ofAll).toBeCloseTo(29, 6);
+    expect(g.bluePaths[1].blue).toEqual({ pct: 69, n: 100 });
+    expect(g.top!.path).toBe('紅紅紅');
+    expect(g.sentence).toEqual({ key: 'paths.top', params: { path: '紅紅紅', share: '29%' } });
+    expect([g.best, g.worst]).toEqual(['藍藍藍', '藍紅紅藍藍']);
+    expect(g.killSentence).toEqual({ key: 'paths.kill', params: { best: '藍藍藍', bestRate: '69%', worst: '藍紅紅藍藍', worstRate: '39%' } });
+  });
+
+  it('佔不到 1% 的寫「<1%」，不寫 0%', () => {
+    expect(shareText(0.3)).toBe('<1%');
+    expect(shareText(0)).toBe('0%');
+    expect(shareText(0.6)).toBe('1%');
+    expect(shareText(28.9)).toBe('29%');
+  });
+
+  it('沒有總局數、沒有資料：空的結果，畫面改顯示原本的表', () => {
+    expect(pathsGlance(states, 0, 30).top).toBeNull();
+    expect(pathsGlance(null, 100, 30)).toMatchObject({ redPaths: [], bluePaths: [], sentence: null, killSentence: null });
+  });
+});
+
+describe('一眼看懂（第二批）：湖中女神的角色與宣告', () => {
+  it('角色：照藍方最後贏的比例高到低排，句子用藍方勝率', () => {
+    const stats = [
+      { role: '刺客', outcomes: oc(56, 18, 26) },
+      { role: '梅林', outcomes: oc(36, 21, 43) },
+      { role: '忠臣', outcomes: oc(43, 26, 31) },
+      { role: '奧伯倫', outcomes: oc(2, 0, 2) },
+    ];
+    const g = roleRankGlance(stats, 'holderRole', '首位接湖者', 30);
+    expect(g.rows.map(r => r.role)).toEqual(['奧伯倫', '梅林', '忠臣', '刺客']);
+    // 奧伯倫只有 4 局：排在表上，但不拿來當最高
+    expect([g.hi, g.lo]).toEqual(['梅林', '刺客']);
+    expect(g.sentence).toEqual({ key: 'lake.holderRole', params: { who: '首位接湖者', hi: '梅林', hiRate: '43%', lo: '刺客', loRate: '26%' } });
+    expect(render('zh-TW', g.sentence!)).toBe('首位接湖者：拿湖的是梅林時，藍方最後贏最多（43%）；是刺客時最少（26%）：');
+    expect(roleRankGlance(stats, 'targetRole', 'X', 30).sentence!.key).toBe('lake.targetRole');
+    expect(roleRankGlance([], 'holderRole', 'X', 30)).toEqual({ rows: [], hi: null, lo: null, sentence: null });
+  });
+
+  it('宣告：照誰拿湖、第幾次湖分組；紅方拿湖說「紅」比較低才寫「只有」', () => {
+    const cell = (extra: Record<string, string>, declaredEn: string, n: number, hitRate: number) => ({ declared: declaredEn === 'evil' ? '紅' : '藍', declaredEn, n, hitRate, ...extra });
+    const rows = [
+      cell({ lake: '首湖' }, 'evil', 571, 70.1), cell({ lake: '首湖' }, 'good', 1756, 85.7),
+      cell({ lake: '二湖' }, 'evil', 304, 84.9), cell({ lake: '二湖' }, 'good', 1072, 89.9),
+    ];
+    const holderRows = [
+      cell({ holderEn: 'evil', holder: '紅' }, 'evil', 339, 26.5), cell({ holderEn: 'evil', holder: '紅' }, 'good', 1121, 63.5),
+      cell({ holderEn: 'good', holder: '藍' }, 'evil', 773, 98.7), cell({ holderEn: 'good', holder: '藍' }, 'good', 2141, 99.7),
+    ];
+    const g = lakeClaimGlance(rows, holderRows);
+    expect(g.byLake.map(p => p.key)).toEqual(['首湖', '二湖']);
+    expect(g.byLake[0]).toEqual({ key: '首湖', saidRed: { pct: 70.1, n: 571 }, saidBlue: { pct: 85.7, n: 1756 } });
+    // 藍方拿湖排前面
+    expect(g.byHolder.map(p => p.key)).toEqual(['blue', 'red']);
+    expect(g.redHolderSaidRed).toEqual({ pct: 26.5, n: 339 });
+    expect(g.sentence).toEqual({ key: 'claim.redLower', params: { blue: '99%', red: '27%' } });
+    expect(g.lakeSentence).toEqual({ key: 'claim.byLake', params: { lake: '首湖', saidRed: '70%', saidBlue: '86%' } });
+    expect(render('zh-TW', g.sentence!)).toContain('紅方拿湖說「紅」只有 27% 是真的');
+    // 沒有依持湖者分的資料（舊快取）：只剩依湖的那一句
+    const old = lakeClaimGlance(rows, undefined);
+    expect(old.sentence).toBeNull();
+    expect(old.lakeSentence!.key).toBe('claim.byLake');
+    expect(lakeClaimGlance(null, null)).toEqual({ byLake: [], byHolder: [], redHolderSaidRed: null, sentence: null, lakeSentence: null });
+  });
+});
+
+describe('一眼看懂（第二批）：派隊與投票的內頁', () => {
+  it('第 3 個任務起的票用自己的句型；投票的人比忠臣和紅方', () => {
+    const pooled = {
+      evilAll: { votes: 1000, rate: 62.2 }, goodAll: { votes: 400, rate: 45.1 },
+      evilR3: { votes: 600, rate: 58.1 }, goodR3: { votes: 300, rate: 54.2 },
+      loyalR3: { votes: 380, rate: 50.2 }, redR3: { votes: 385, rate: 60.1 },
+    };
+    const late = votesGlance(pooled, 'evilR3', 'goodR3', 'votesR3')!;
+    expect(late.sentence).toEqual({ key: 'votesR3.blueLower', params: { withRed: '58%', allBlue: '46%' } });
+    expect(votesGlance(pooled)!.sentence.key).toBe('votes.blueAlsoHalf');
+    const v = votersGlance(pooled)!;
+    expect(v.loyal).toEqual({ pct: 50.2, n: 380 });
+    expect(v.sentence).toEqual({ key: 'voters.higher', params: { a: '50%', b: '60%' } });
+    expect(render('zh-TW', v.sentence)).toBe('第 3 個任務起，紅方比忠臣更常投反對：紅方 60% 的票是反對，忠臣 50%。');
+    expect(votersGlance({ ...pooled, redR3: { votes: 10, rate: 40 } })!.sentence.key).toBe('voters.lower');
+    expect(votersGlance({ loyalR3: { votes: 10, rate: 40 } })).toBeNull();
+  });
+
+  it('twoWay：b 比 a 高、低、一樣', () => {
+    const a = { pct: 44.4, n: 10 };
+    expect(twoWay(a, { pct: 84.1, n: 10 }, 'x')).toEqual({ key: 'x.higher', params: { a: '44%', b: '84%' } });
+    expect(twoWay(a, { pct: 10, n: 10 }, 'x', { first: 1 })).toEqual({ key: 'x.lower', params: { first: 1, a: '44%', b: '10%' } });
+    expect(twoWay(a, { pct: 44, n: 10 }, 'x')!.key).toBe('x.same');
+    expect(twoWay(a, null, 'x')).toBeNull();
+  });
+
+  it('隊長：紅方、藍方隊長的任務各失敗多少；紅方當隊長的機會怎麼變', () => {
+    const g = captainGlance(
+      { red: { failPct: 84.0, missions: 2397 }, blue: { failPct: 44.4, missions: 6839 } },
+      [{ mission: 1, redCaptainRate: 35.2, games: 2356 }, { mission: 2, redCaptainRate: 28, games: 2356 }, { mission: 5, redCaptainRate: 10.3, games: 747 }],
+    )!;
+    expect(g.redFail).toEqual({ pct: 84, n: 2397 });
+    expect(g.sentence).toEqual({ key: 'captain.higher', params: { a: '44%', b: '84%' } });
+    expect(render('zh-TW', g.sentence)).toBe('紅方當隊長帶出去的任務，84% 失敗；藍方當隊長是 44%。');
+    expect(g.perMission.map(m => m.mission)).toEqual([1, 2, 5]);
+    expect(g.trend).toEqual({ key: 'captain.trend.lower', params: { first: 1, last: 5, a: '35%', b: '10%' } });
+    expect(render('zh-TW', g.trend!)).toBe('紅方當隊長的機會從任務 1 的 35% 降到任務 5 的 10%。');
+    expect(captainGlance({ red: { failPct: 30, missions: 10 }, blue: { failPct: 50, missions: 10 } }, [])!).toMatchObject({ sentence: { key: 'captain.lower' }, trend: null });
+    expect(captainGlance({ red: { failPct: null, missions: 10 }, blue: { failPct: 50, missions: 10 } }, [])).toBeNull();
+  });
+
+  it('第一支隊伍：有沒有梅林、有幾個紅方 → 藍方最後贏的比例', () => {
+    const g = firstTeamGlance(
+      { merlinInTeam: { outcomes: oc(45, 24, 31) }, merlinNotInTeam: { outcomes: oc(450, 240, 310) }, percivalInTeam: { outcomes: oc(46, 24, 30) } },
+      [{ redCount: 0, outcomes: oc(40, 26, 34) }, { redCount: 1, outcomes: oc(45, 24, 31) }, { redCount: 2, outcomes: oc(47, 24, 29) }, { redCount: 3, outcomes: oc(0, 1, 1) }],
+      30,
+    );
+    expect(g.merlinIn).toEqual({ pct: 31, n: 100 });
+    expect(g.percivalOut).toBeNull();
+    expect(g.merlinSentence).toEqual({ key: 'firstTeam.merlin.same', params: { a: '31%', b: '31%' } });
+    // 3 個紅方只有 2 局：不當最高
+    expect(g.redSentence).toEqual({ key: 'firstTeam.reds', params: { hi: 0, hiRate: '34%', lo: 2, loRate: '29%' } });
+    expect(firstTeamGlance(null, null, 30)).toMatchObject({ merlinIn: null, redCounts: [], merlinSentence: null, redSentence: null });
+  });
+
+  it('兩紅之後的派隊：每個任務、每個隊長角色派出全藍隊的比例；句子講第一個比得出高低的任務', () => {
+    const g = twoRedGlance([
+      { round: 3, role: '梅林', cell: { n: 380, allGood: 270 } },
+      { round: 3, role: '忠臣', cell: { n: 1595, allGood: 494 } },
+      { round: 3, role: '派西維爾', cell: { n: 3, allGood: 3 } },
+      { round: 5, role: '梅林', cell: { n: 164, allGood: 130 } },
+      { round: 4, role: '梅林', cell: { n: 0, allGood: 0 } },
+    ], 5);
+    expect(g.rounds.map(r => r.round)).toEqual([3, 5]);
+    expect(g.rounds[0].rows[1]).toEqual({ role: '忠臣', clean: { pct: (494 / 1595) * 100, n: 1595 } });
+    expect(g.sentence).toEqual({ key: 'twoRed.best', params: { round: 3, hi: '梅林', hiRate: '71%', lo: '忠臣', loRate: '31%' } });
+    expect(twoRedGlance([], 5)).toEqual({ rounds: [], sentence: null });
+  });
+});
+
+describe('顏色：梅林被刺中（三藍死）是紅方贏，用紅色系', () => {
+  const rgb = (hex: string): [number, number, number] => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
+
+  it('三藍死是紅色系（不是琥珀），跟三紅分得出來；三藍活是藍', () => {
+    const [r, g, b] = rgb(OUTCOME_COLORS.三藍死);
+    expect(r).toBeGreaterThan(g);
+    // 琥珀／黃是「綠比藍多很多」；紅色系的綠、藍差不多
+    expect(Math.abs(g - b)).toBeLessThan(30);
+    expect(OUTCOME_COLORS.三藍死).not.toBe(OUTCOME_COLORS.三紅);
+    const [br, , bb] = rgb(OUTCOME_COLORS.三藍活);
+    expect(bb).toBeGreaterThan(br);
+    expect(TONE_HEX.kill).toBe(OUTCOME_COLORS.三藍死);
+  });
+
+  it('畫三種結局的元件沒有自己寫死琥珀色', () => {
+    const read = (file: string): string => fs.readFileSync(path.join(web, file), 'utf-8');
+    for (const file of ['components/analysis/OutcomeBar.tsx', 'components/analysis/AssassinationCard.tsx']) {
+      expect(read(file), file).not.toMatch(/#f59e0b|amber/);
+    }
+    // 牌譜紀錄的結局標籤
+    expect(read('components/records/RecordsGameView.tsx')).not.toMatch(/三藍死: '[^']*amber/);
+  });
+});
+
 describe('一眼看懂：每個句型兩種語言都有字', () => {
   const sentences: Sentence[] = [
     ...['overall.redAhead', 'overall.blueAhead', 'overall.even'].map(key => ({ key, params: { red: '69%', blue: '31%' } })),
@@ -234,6 +465,22 @@ describe('一眼看懂：每個句型兩種語言都有字', () => {
     ...['failLower', 'failHigher', 'same'].map(k => ({ key: `missions.swing.${k}`, params: { round: 1, gap: 16, passed: '40%', failed: '24%' } })),
     ...['redLower', 'redHigher', 'same'].map(k => ({ key: `lake.${k}`, params: { who: '首位接湖者', blue: '33%', red: '27%' } })),
     ...['blueAlsoHalf', 'blueLower', 'blueHigher', 'same'].map(k => ({ key: `votes.${k}`, params: { withRed: '62%', allBlue: '55%' } })),
+    // 第二批
+    ...['flip', 'none', 'all'].map(k => ({ key: `kill.${k}`, params: { hit: '44%', miss: '56%' } })),
+    ...['merlin', 'assassin'].map(k => ({ key: `seatKill.${k}`, params: { hiSeat: '2', hi: '53%', loSeat: '0', lo: '30%' } })),
+    ...['backLower', 'backHigher', 'halvesSame'].map(k => ({ key: `seatKill.${k}`, params: { front: '50%', back: '37%' } })),
+    { key: 'paths.top', params: { path: '紅紅紅', share: '29%' } },
+    { key: 'paths.kill', params: { best: '藍藍藍', bestRate: '69%', worst: '藍紅紅藍藍', worstRate: '38%' } },
+    ...['holderRole', 'targetRole'].map(k => ({ key: `lake.${k}`, params: { who: '首位接湖者', hi: '梅林', hiRate: '43%', lo: '奧伯倫', loRate: '26%' } })),
+    ...['redLower', 'redHigher', 'same'].map(k => ({ key: `claim.${k}`, params: { blue: '99%', red: '27%' } })),
+    { key: 'claim.byLake', params: { lake: '首湖', saidRed: '70%', saidBlue: '86%' } },
+    ...['blueAlsoHalf', 'blueLower', 'blueHigher', 'same'].map(k => ({ key: `votesR3.${k}`, params: { withRed: '58%', allBlue: '46%' } })),
+    ...['higher', 'lower', 'same'].map(k => ({ key: `voters.${k}`, params: { a: '50%', b: '60%' } })),
+    ...['higher', 'lower', 'same'].map(k => ({ key: `captain.${k}`, params: { a: '44%', b: '84%' } })),
+    ...['higher', 'lower', 'same'].map(k => ({ key: `captain.trend.${k}`, params: { first: 1, last: 5, a: '35%', b: '10%' } })),
+    ...['higher', 'lower', 'same'].map(k => ({ key: `firstTeam.merlin.${k}`, params: { a: '31%', b: '30%' } })),
+    { key: 'firstTeam.reds', params: { hi: 0, hiRate: '34%', lo: 2, loRate: '29%' } },
+    { key: 'twoRed.best', params: { round: 3, hi: '梅林', hiRate: '71%', lo: '忠臣', loRate: '31%' } },
   ];
   for (const lang of ['zh-TW', 'en']) {
     it(`${lang}：句型都有字、要填的數字都給了、沒有寫死的百分比`, () => {
