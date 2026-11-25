@@ -1,7 +1,7 @@
 /**
  * 每日小觀念 — 要撐過重啟的狀態：每一天發了哪張卡、每個群組今天發過沒、bot 發出的那一則的訊息 id（認引用回覆用）。
  *
- * 機器人原本沒有資料庫（模擬瓦的題目只在記憶體、每週排行靠很窄的時間窗）；Render 是「GitHub-only」架構，
+ * 機器人原本沒有資料庫（每週排行靠很窄的時間窗；模擬瓦的題目 2026-11-25 起用同一套存，simulation/persist.ts）；Render 是「GitHub-only」架構，
  * Firestore 沒有設定。所以這份狀態是一個 JSON 檔，放在 private repo（預設跟帳號庫同一個，GITHUB_ACCOUNTS_*，
  * 見 config.ts conceptStateRepoConfig），用 GitHub Contents API 讀寫（帶 sha，衝突就重讀合併再寫）。
  * 裡面沒有聊天內容、沒有名字：群組 id 是雜湊過的（hashChatId），卡片 id、日期與 bot 自己那則的訊息 id。
@@ -9,6 +9,7 @@
  */
 
 import { createHash } from 'crypto';
+import { repoWriteKey, serializeRepoWrite } from '../../services/githubRepoWrites';
 import type { ConceptPlatform, ConceptStateRepoConfig } from './config';
 import type { DayPlan } from './plan';
 
@@ -110,10 +111,13 @@ export class MemoryBackend implements StateBackend {
 
 type Fetch = typeof fetch;
 
-/** GitHub Contents API 上的一個 JSON 檔（private repo）。log 只寫狀態碼。 */
-export class GitHubBackend implements StateBackend {
-  readonly name = 'github';
-  constructor(private readonly cfg: ConceptStateRepoConfig, private readonly fetchImpl: Fetch = fetch) {}
+/**
+ * GitHub Contents API 上的一個 JSON 檔（private repo）：讀回內容與 sha；寫入帶 sha（別人先寫了 → conflict）。
+ * 每日小觀念（下面的 GitHubBackend）和模擬瓦進行中的題目（simulation/persist.ts）共用。log 只寫狀態碼。
+ * `timeoutMs`：每個請求最久等多久（沒給 = 不設）。
+ */
+export class GitHubJsonFile {
+  constructor(private readonly cfg: ConceptStateRepoConfig, private readonly fetchImpl: Fetch = fetch, private readonly timeoutMs?: number) {}
 
   private headers(): Record<string, string> {
     return { Authorization: `Bearer ${this.cfg.token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'avalonpediatw-bot' };
@@ -124,28 +128,57 @@ export class GitHubBackend implements StateBackend {
     return withRef ? `${base}?ref=${encodeURIComponent(this.cfg.branch)}` : base;
   }
 
-  async load(): Promise<{ state: ConceptDailyState; version: string | null } | null> {
-    const res = await this.fetchImpl(this.url(true), { headers: this.headers() });
+  private signal(): { signal?: AbortSignal } {
+    return this.timeoutMs ? { signal: AbortSignal.timeout(this.timeoutMs) } : {};
+  }
+
+  /** 檔案不存在 → null；讀不到（網路、權杖）→ 丟錯（訊息只有狀態碼）。`json` 是 JSON.parse 的結果（空檔 = null）。 */
+  async read(): Promise<{ json: unknown; sha: string | null } | null> {
+    const res = await this.fetchImpl(this.url(true), { headers: this.headers(), ...this.signal() });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`state GET ${res.status}`);
     const body = (await res.json()) as { content?: string; sha?: string };
     const json = Buffer.from(body.content ?? '', 'base64').toString('utf8');
-    return { state: normalizeState(json ? JSON.parse(json) : null), version: body.sha ?? null };
+    return { json: json ? JSON.parse(json) : null, sha: body.sha ?? null };
+  }
+
+  /** 寫整份（`text` 是檔案內容）。`sha` = read() 拿到的；檔案被別人改過（409／422）→ conflict。 */
+  async write(text: string, message: string, sha: string | null): Promise<{ ok: true; sha: string | null } | { ok: false; conflict: boolean }> {
+    const body: Record<string, unknown> = {
+      message,
+      content: Buffer.from(text, 'utf8').toString('base64'),
+      branch: this.cfg.branch,
+    };
+    if (sha) body.sha = sha;
+    // 同一個 repo 的寫入排隊（帳號庫的註冊、改密碼也寫這個 repo；同時寫會有一個被 GitHub 拒絕）。
+    const res = await serializeRepoWrite(repoWriteKey(this.cfg.repo, this.cfg.branch), () => this.fetchImpl(this.url(false), {
+      method: 'PUT', headers: { ...this.headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body), ...this.signal(),
+    }));
+    if (res.ok) {
+      const out = (await res.json().catch(() => ({}))) as { content?: { sha?: string } };
+      return { ok: true, sha: out.content?.sha ?? null };
+    }
+    return { ok: false, conflict: res.status === 409 || res.status === 422 };
+  }
+}
+
+/** 每日小觀念的狀態檔（GitHub）。 */
+export class GitHubBackend implements StateBackend {
+  readonly name = 'github';
+  private readonly file: GitHubJsonFile;
+  constructor(cfg: ConceptStateRepoConfig, fetchImpl: Fetch = fetch) {
+    this.file = new GitHubJsonFile(cfg, fetchImpl);
+  }
+
+  async load(): Promise<{ state: ConceptDailyState; version: string | null } | null> {
+    const got = await this.file.read();
+    return got ? { state: normalizeState(got.json), version: got.sha } : null;
   }
 
   async save(state: ConceptDailyState, version: string | null): Promise<{ ok: true; version: string | null } | { ok: false; conflict: boolean }> {
-    const body: Record<string, unknown> = {
-      message: `bot-state: concept daily ${Object.keys(state.days).sort().pop() ?? ''}`.trim(),
-      content: Buffer.from(`${JSON.stringify(state, null, 2)}\n`, 'utf8').toString('base64'),
-      branch: this.cfg.branch,
-    };
-    if (version) body.sha = version;
-    const res = await this.fetchImpl(this.url(false), { method: 'PUT', headers: { ...this.headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (res.ok) {
-      const out = (await res.json().catch(() => ({}))) as { content?: { sha?: string } };
-      return { ok: true, version: out.content?.sha ?? null };
-    }
-    return { ok: false, conflict: res.status === 409 || res.status === 422 };
+    const message = `bot-state: concept daily ${Object.keys(state.days).sort().pop() ?? ''}`.trim();
+    const res = await this.file.write(`${JSON.stringify(state, null, 2)}\n`, message, version);
+    return res.ok ? { ok: true, version: res.sha } : res;
   }
 }
 

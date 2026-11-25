@@ -26,7 +26,7 @@ describe('one baseline, small per-opponent adjustments', () => {
   it('human profiles only touch the listed belief keys, a few of them', () => {
     for (const type of OPPONENT_TYPES) {
       const keys = Object.keys(PROFILE_OVERRIDES[type]) as AgentTuningKey[];
-      expect(keys.length).toBeLessThanOrEqual(20); // round 80: + merlinLoyalFree80 (Merlin: a red-free team among the loyal-plausible ones, else his sight; real-game replay); round 79: + assassinWorldLine75 (a baseline default now; the weak and strong tables turn it back off — their human-replay yardstick is not positive in both halves); round 74: + thumbBlend74 (Percival's thumb split mixed with the read fitted on human records, real-game replay); round 71: + redR5Red71 (red R5 outer white on a team that certainly holds a red, real-game replay); round 69: + redKeyCrowd69 (red key-team outer white on the 4th proposal, real-game replay); round 68: + lakeChain68 (blue lake target, real-game replay); 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
+      expect(keys.length).toBeLessThanOrEqual(22); // round 80: + merlinLoyalFree80 (Merlin: a red-free team among the loyal-plausible ones, else his sight; real-game replay); round 78: + redPairOne78 (= 0; baseline only: a bot-to-bot seat convention), + redRankOrderR2Fix45 (Morgana fails on R2 with one recognised teammate, real-game replay); round 79: + assassinWorldLine75 (a baseline default now; the weak and strong tables turn it back off — their human-replay yardstick is not positive in both halves); round 74: + thumbBlend74 (Percival's thumb split mixed with the read fitted on human records, real-game replay); round 71: + redR5Red71 (red R5 outer white on a team that certainly holds a red, real-game replay); round 69: + redKeyCrowd69 (red key-team outer white on the 4th proposal, real-game replay); round 68: + lakeChain68 (blue lake target, real-game replay); 2026-11-23 ruling: + redStackRate65 (= 0; baseline only); round 66: + r2InnerBlack66 (Percival / Merlin R2 on-team inner black, real-game replay); round 58: + merlinOwnRank58 (site owner 2026-11-20 ruling); round 59: + onTeamVote59; round 61: + assassinPath61, redR2Lead61 (red, real-game replay); 2026-11-23 rulings: + goLike56, merlinPublicThumb58 (= 0); round 65: + oberonNormalVote (red, real-game replay)
       for (const k of keys) expect(PROFILE_KEYS).toContain(k);
       const t = tuningForOpponent(type, DEFAULT_AGENT_TUNING);
       const changed = (Object.keys(DEFAULT_AGENT_TUNING) as AgentTuningKey[]).filter((k) => t[k] !== DEFAULT_AGENT_TUNING[k]);
@@ -52,6 +52,12 @@ describe('one baseline, small per-opponent adjustments', () => {
     // Round 74: Percival's thumb split leans a quarter of the way to the read fitted on human records — human tables only.
     expect(HUMAN_TABLE_READING.thumbBlend74).toBe(0.25);
     expect(DEFAULT_AGENT_TUNING.thumbBlend74).toBe(0);
+    // Round 78: Morgana fails on R2 with one recognised teammate (the round-46 switch) — human tables only.
+    expect(HUMAN_TABLE_READING.redRankOrderR2Fix45).toBe(1);
+    expect(DEFAULT_AGENT_TUNING.redRankOrderR2Fix45).toBe(0);
+    // Round 78: two recognised reds on one R3 team play exactly one fail by seat — a bot-to-bot convention, baseline only.
+    expect(DEFAULT_AGENT_TUNING.redPairOne78).toBe(4);
+    expect(HUMAN_TABLE_READING.redPairOne78).toBe(0);
     expect(PROFILE_OVERRIDES.avgHuman).toEqual(HUMAN_TABLE_READING);
     expect(PROFILE_OVERRIDES.weakHuman.blueVoteTemper57).toBe(0.5);
     expect(PROFILE_OVERRIDES.strongHuman.blueVoteTemper57).toBe(0.3);

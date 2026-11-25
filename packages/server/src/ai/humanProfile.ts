@@ -10,7 +10,7 @@
  * - `ai`（對手是機器人、自我對打）= 基準線本身，不加任何東西。
  * - `weakHuman`／`avgHuman`／`strongHuman` = 基準線＋真人桌的讀法。判準是真人局的準確度（分角色，`scripts/humanProfileStudy.ts`），
  *   自我對打只當參考（docs/ai/optimization_loop.md 第 1 節「真人桌的改法」）。
- * - 可以改的開關只限 `PROFILE_KEYS`（讀人的信念，藍方座位才用；第 58 回合起加梅林派隊、第 61 回合起加紅方刺殺與第 2 局出牌），避免一個對手類型長成另一套策略；測試會檢查。
+ * - 可以改的開關只限 `PROFILE_KEYS`（讀人的信念，藍方座位才用；第 58 回合起加梅林派隊、第 61 回合起加紅方刺殺與第 2 局出牌、第 78 回合加莫甘娜第 2 局的牌、兩個相認紅第 3 局的約定（真人桌 = 0）），避免一個對手類型長成另一套策略；測試會檢查。
  * - 三種真人桌共用一組讀法（`HUMAN_READING`），各層只在上面做小調整（第 57 回合：每層最多一個開關、偏離最多 0.1；`TIER_MAX_KEYS`／`TIER_MAX_STEP`）。
  *   第 79 回合起每層最多兩個：多的那一個只能是 `TIER_SWITCH_KEYS` 裡的整個開或整個關（世界線刺客 `assassinWorldLine75`：弱桌、強桌關回舊刺客）。
  *
@@ -49,9 +49,11 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 第 74 回合再加派西的拇指讀法 `thumbBlend74`（派西後驗裡兩根拇指誰是紅的比例混進真人牌譜擬合的讀法；真人局 Brier 每一層兩半都變好、人類 PR 量尺兩半都沒有一層變差）。
  * 第 79 回合再加世界線刺客 `assassinWorldLine75`（第 75 回合的開關；第 79 回合改成基準線預設開）：真人桌只有在那一層的人類 PR 量尺兩半都是正的才用，
  * 其他層在這裡關回 0（舊刺客）。
+ * 第 78 回合再加紅方第 2 局的任務牌 `redRankOrderR2Fix45`（第 46 回合的開關：莫甘娜第 2 局和一個認得的隊友同隊時出失敗；人類 PR 量尺兩半都沒有一層變差），
+ * 和 `redPairOne78`（= 0：基準線採用的第 3 局座位約定只在機器人之間有用，真人桌照原本的位階法）。
  * 第 80 回合再加梅林派隊 `merlinLoyalFree80`（站長 11/25「在忠臣資訊視角內 可以派出的全沒拇指組合…那當然還是用能力避開」；人類 PR 量尺梅林兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75', 'merlinLoyalFree80'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75', 'redRankOrderR2Fix45', 'redPairOne78', 'merlinLoyalFree80'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -130,6 +132,16 @@ export const TIER_SWITCH_KEYS: readonly AgentTuningKey[] = ['assassinWorldLine75
  *   人類 PR 量尺派西 +0.43 ± 0.12 pp／座位局（偶數局 +0.34 ± 0.16、奇數局 +0.53 ± 0.17；弱 +0.53、一般 +0.36、強 +0.04 ± 0.37、S 不明 +0.68），
  *   沒有一格變差超過 2 個標準誤（最差：強桌偶數局 −0.62 ± 0.44，強桌奇數局 +0.74 ± 0.60）。權重 0.15–0.5 都是正的（+0.30～+0.43），0.75、1 掉到 +0.17、+0.09
  *   （1 = 第 40 回合的 `percivalRead39=1`：強桌偶數局 −1.71 ± 0.71），所以用 0.25。基準線不用（讀法是真人牌譜擬合的；第 40 回合整個換成讀法自我對打 −0.75）。
+ * - 紅方・莫甘娜第 2 局和一個認得的隊友同隊時出失敗（`redRankOrderR2Fix45=1`，第 46 回合的開關；第 78 回合，`docs/ai/gap/r78-red-cards.md`）：位階法讓莫甘娜第 1、2 局
+ *   第一次和隊友同隊時「先觀察」（出成功），莫德雷德也藏，所以莫甘娜＋莫德雷德第 2 局同隊時機器人兩張都藏 95%（真人 18%；真人這種隊出一張時紅方勝率 89%、零張 76%）。
+ *   站長 4/30 的原則「隊上有紅必出失敗」原本只做到第 3 局，這裡往前到第 2 局（位階低的莫甘娜出）。真人局 247 張這種牌（真人出失敗的比例 50%，機器人 4% → 100%）：
+ *   人類 PR 量尺紅方 +0.112 ± 0.015 pp／紅方座位局（偶數局 +0.152、奇數局 +0.073；弱／一般／強／S 不明 +0.056／+0.108／+0.112／+0.155，每一層兩半都是正的，
+ *   最小：弱桌奇數局 +0.008 ± 0.008）；只有莫甘娜的牌會變（莫甘娜 +0.448 ± 0.060 pp／座位局）。量尺只看得到「兩張都出／兩張都藏」的牌，所以另外把一個座位換成機器人、
+ *   真人隊友照真人的比例出牌重算：+0.071 ± 0.012（隊友照角色）、+0.026 ± 0.019（隊友照「出者恆出」），都是正的。代價：隊友剛好是刺客、他也出的時候會變成兩張
+ *   （真人刺客第 2 局有隊友時出失敗約 61%）；兩個機器人剛好是刺客＋莫甘娜時第 2 局一定兩張。基準線不用（第 46 回合：機器人互打紅方 −1.11）。
+ * - 兩個相認紅第 3 局同隊照座位只出一張 `redPairOne78=4` 第 78 回合只上基準線（自我對打紅方篩選 +0.20 [+0.07, +0.33]、新局確認 +0.20 [+0.08, +0.32]，第 1F 節兩次都過）。
+ *   這是機器人之間的約定（座位在前面的那一個出），真人隊友不知道；真人局把一個座位換成機器人、隊友照真人重算 −0.007 ± 0.005（隊友照角色）、
+ *   −0.004 ± 0.014（隊友照紀錄），人類 PR 量尺 −0.017 ± 0.008（量尺只看得到「兩張都出／兩張都藏」，看不到「剛好一張」），所以真人桌維持 0（照原本的位階法）。
  * - 梅林的提議（`merlinLoyalFree80=0.5`，第 80 回合；站長 2026-11-25「梅林學忠臣的意思是 在忠臣資訊視角內 可以派出的全沒拇指組合 但如果只用忠臣資訊一定會派到拇指
  *   那當然還是用能力避開」）：在坐在他位置、只看公開紀錄的忠臣說得通的隊（公開的「這隊沒有紅」≥ 最高的一半）裡挑不帶他看得到的紅的；沒有就用自己的資訊避開。
  *   真人桌原本就有 `merlinOwnRank58=0.5`（同一個「說得通」），差別只在現行還會帶拇指的兩條路：照派帶拇指的成功隊（`merlinReuseNorm`）與順著全場帶同一個拇指
@@ -141,7 +153,7 @@ export const TIER_SWITCH_KEYS: readonly AgentTuningKey[] = ['assassinWorldLine75
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25, merlinLoyalFree80: 0.5 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25, redRankOrderR2Fix45: 1, redPairOne78: 0, merlinLoyalFree80: 0.5 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：
