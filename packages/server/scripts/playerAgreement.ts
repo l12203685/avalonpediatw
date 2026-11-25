@@ -15,6 +15,10 @@
  *   --workers N          平行子行程（預設 min(3, CPU 數)）
  *   --limit N            每位玩家只用前 N 局（測試用）
  *   --top K / --examples E  每位玩家列前 K 種不同、每種 E 個例子（預設 5／2）
+ *   --roles A,B          只算玩家拿這些角色的座位（loyal、percival、merlin、assassin、morgana、mordred、oberon；預設全部）
+ *   --dump-spots         另外寫 spots.json：每一個決策點（每一張票都在，不只異常票）＋局面欄位（`spotContext.ts`：
+ *                        比數、隊伍組成、湖中對象的種類、事後真相），給分情境的統計用（`playerAgreementBreakdown.py`）
+ *   --dump-reasons       spots.json 裡和玩家不同的決策點（human 層）附上機器人的一句理由（要多跑一次解釋，比較慢）
  *
  * 做法：網站的真人局（排除 flag:badGame 與總庫標的錯誤／重複局）裡玩家坐的每一個座位，用 `agreement.replaySeat`
  * （第 1 關的座位一致度、人類 PR 量尺的同一套重播：只給那個座位當時知道的東西）讓機器人在每個決策點做決定，和玩家實際的選擇比。
@@ -34,6 +38,7 @@ import { replaySeat, type DecisionOutcome } from '../src/ai/benchmark/agreement'
 import { replayGameFromDataset, type DatasetHeader, type DatasetReplayGame, type DatasetTuple } from '../src/ai/benchmark/datasetReplay';
 import { campOf } from '../src/ai/benchmark/sheetsReplay';
 import { buildReplayObservation, seatId, validLakeTargetSeats } from '../src/ai/benchmark/replayObservation';
+import { spotContext } from '../src/ai/benchmark/spotContext';
 import { explainAssassination, explainLakeClaim, explainLakeTarget, explainQuestCard, explainTeamProposal, explainTeamVote, type DecisionExplanation } from '../src/ai/explain';
 import {
   METRICS,
@@ -71,6 +76,9 @@ interface Args {
   limit?: number;
   top: number;
   examples: number;
+  roles?: string[];
+  dumpSpots: boolean;
+  dumpReasons: boolean;
   shard?: [number, number];
   shardOut?: string;
   jobs?: string;
@@ -87,6 +95,8 @@ function parseArgs(argv: string[]): Args {
     workers: Math.max(1, Math.min(3, os.cpus().length)),
     top: 5,
     examples: 2,
+    dumpSpots: false,
+    dumpReasons: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
@@ -103,6 +113,14 @@ function parseArgs(argv: string[]): Args {
       case '--limit': a.limit = Number.parseInt(next(), 10); break;
       case '--top': a.top = Number.parseInt(next(), 10); break;
       case '--examples': a.examples = Number.parseInt(next(), 10); break;
+      case '--roles': {
+        a.roles = next().split(',').map((r) => r.trim()).filter(Boolean);
+        const bad = a.roles.filter((r) => !(ROLE_ORDER as readonly string[]).includes(r));
+        if (bad.length) throw new Error(`unknown role ${bad.join(', ')} (use ${ROLE_ORDER.join(', ')})`);
+        break;
+      }
+      case '--dump-spots': a.dumpSpots = true; break;
+      case '--dump-reasons': a.dumpSpots = true; a.dumpReasons = true; break;
       case '--shard': { const [x, n] = next().split('/').map((v) => Number.parseInt(v, 10)); a.shard = [x, n]; break; }
       case '--shard-out': a.shardOut = next(); break;
       case '--jobs': a.jobs = next(); break;
@@ -258,6 +276,8 @@ interface PlayerInfo {
     excluded: Record<string, number>;
     botGame: number;
     unreplayable: Record<string, number>;
+    /** --roles：玩家在這一局沒有拿到指定的角色。 */
+    otherRole: number;
     replayed: number;
     seatGames: number;
     tiers: Record<string, number>;
@@ -298,6 +318,7 @@ function summaryMd(
   L.push('**策略層**：human = 真人桌會用的層（照該局開打前的桌上強度 S：S<38 弱、38–55 一般、≥55 強，S 不明算一般）；ai = 基準線（自我對打那一套）。真人桌的開關只改藍方讀人，紅方決策兩欄相同。', '');
   L.push('**異常票**（同數據分析 `abnormalVotes.ts`）：內黑 = 在隊上投反對、外白 = 不在隊上投贊成；只算第 1～4 次提議、票數對得上結果的提議（強制局沒有投票）。兩個方向都列。');
   L.push('**出任務**只算紅方而且牌可以確定的（任務 0 張失敗 → 成功；失敗張數 = 隊上紅方數 → 失敗）；藍方只能出成功，不列。**刺殺**：玩家是任何紅方的局都算（紅方一起討論），AI = 機器人坐刺客座位的選擇。', '');
+  if (Array.isArray(meta.roles)) L.push(`**只算這些角色的座位**：${(meta.roles as string[]).map((r) => ROLE_ZH[r] ?? r).join('、')}（玩家拿其他角色的局不比）。`, '');
   L.push('## 玩家與局數', '');
   L.push('| 輸入 | 正式名字 | 併進來的寫法 | 資料集裡的局 | 排除 | 無法嚴格重播 | 比對的局 | 桌層（弱／一般／強） |');
   L.push('|---|---|---|---|---|---|---|---|');
@@ -306,7 +327,7 @@ function summaryMd(
     const un = Object.values(p.games.unreplayable).reduce((x, y) => x + y, 0);
     const spell = [...new Set([...p.spellingsSeen, ...p.aliasEntries])].join('、') || p.canonical;
     const t = p.games.tiers;
-    L.push(`| ${p.query} | ${p.canonical} | ${spell}${p.splitRules.length ? `（拆分規則 ${p.splitRules.length} 條）` : ''} | ${p.games.inDataset} | ${ex} | ${un + p.games.botGame} | ${p.games.replayed} | ${t.weakHuman ?? 0}／${t.avgHuman ?? 0}／${t.strongHuman ?? 0} |`);
+    L.push(`| ${p.query} | ${p.canonical} | ${spell}${p.splitRules.length ? `（拆分規則 ${p.splitRules.length} 條）` : ''} | ${p.games.inDataset} | ${ex} | ${un + p.games.botGame} | ${p.games.replayed}${p.games.otherRole ? `（另有 ${p.games.otherRole} 局拿其他角色，不比）` : ''} | ${t.weakHuman ?? 0}／${t.avgHuman ?? 0}／${t.strongHuman ?? 0} |`);
   }
   L.push('');
   for (const profile of PROFILES) {
@@ -420,12 +441,12 @@ async function main(): Promise<void> {
     const spellingsSeen = [...new Set(spellSources.flatMap((acc) => [...acc].filter((s) => { try { return playerIdentityKey(s, aliasMap) === key; } catch { return false; } })))].sort();
     const info: PlayerInfo = {
       query: q, canonical, aliasEntries, splitRules, spellingsSeen,
-      games: { inDataset: 0, excluded: {}, botGame: 0, unreplayable: {}, replayed: 0, seatGames: 0, tiers: {}, flags: {}, roles: {} },
+      games: { inDataset: 0, excluded: {}, botGame: 0, unreplayable: {}, otherRole: 0, replayed: 0, seatGames: 0, tiers: {}, flags: {}, roles: {} },
     };
     let used = 0;
     for (const row of ds.games) {
-      const seats = (row[iSeats] as number[]).map((k, i) => (k === pk ? i + 1 : 0)).filter((s) => s > 0);
-      if (seats.length === 0) continue;
+      const allSeats = (row[iSeats] as number[]).map((k, i) => (k === pk ? i + 1 : 0)).filter((s) => s > 0);
+      if (allSeats.length === 0) continue;
       info.games.inDataset += 1;
       const gid = String(row[iId]);
       const why = excluded.get(`${row[iSrc]}|${gid}`);
@@ -434,6 +455,8 @@ async function main(): Promise<void> {
       if (why || notes.includes('flag:badGame')) { const w = why ?? '試算表標 badGame'; info.games.excluded[w] = (info.games.excluded[w] ?? 0) + 1; continue; }
       const rep = replays.get(gid)!.res;
       if (!rep.ok) { info.games.unreplayable[rep.reason] = (info.games.unreplayable[rep.reason] ?? 0) + 1; continue; }
+      const seats = a.roles ? allSeats.filter((s) => a.roles!.includes(rep.value.game.seatRoles[s - 1])) : allSeats;
+      if (seats.length === 0) { info.games.otherRole += 1; continue; }
       if (a.limit !== undefined && used >= a.limit) continue;
       used += 1;
       info.games.replayed += 1;
@@ -447,7 +470,7 @@ async function main(): Promise<void> {
       jobsByGame.set(gid, js);
     }
     infos.push(info);
-    console.error(`${q} → ${canonical}: ${info.games.inDataset} games in dataset, ${info.games.replayed} replayed`);
+    console.error(`${q} → ${canonical}: ${info.games.inDataset} games in dataset, ${info.games.replayed} replayed${a.roles ? ` (${a.roles.join(',')}; other roles ${info.games.otherRole})` : ''}`);
   }
 
   const jobs: Job[] = [...jobsByGame.entries()];
@@ -487,6 +510,7 @@ async function main(): Promise<void> {
       human: '真人桌策略層：HeuristicAgent(id, _, _, PROFILE_OVERRIDES[opponentTypeOfTable({ humans, tableS: 該局開打前 S })])',
       ai: '基準線：HeuristicAgent(id)（DEFAULT_AGENT_TUNING）',
     },
+    ...(a.roles ? { roles: a.roles } : {}),
     abnormalVote: '內黑 = 在隊上投反對；外白 = 不在隊上投贊成；第 1～4 次提議、票數對得上結果（agreement.replaySeat: !forced && votesReliable）；定義同 packages/shared/src/stats/abnormalVotes.ts、packages/server/src/ai/infl/abnormalVotes.ts',
     questCard: '紅方、可確定的牌（agreement.pinnedQuestCard）',
     assassinate: '玩家是任何紅方的局；AI = 機器人在刺客座位的刺殺選擇（玩家是刺客時就是玩家的座位）',
@@ -494,6 +518,17 @@ async function main(): Promise<void> {
   };
   const json = { meta, players: infos, results, disagreements, disagreementsByType: byType, disagreementsAi };
   fs.writeFileSync(path.join(a.out, 'agreement.json'), JSON.stringify(json, null, 1));
+  if (a.dumpSpots) {
+    const dump = spots.map((s) => {
+      const g = replays.get(s.gameId)!.res;
+      if (!g.ok) return s;
+      const ctx = spotContext(g.value.game, s);
+      const reason = a.dumpReasons && !s.match && s.profile === 'human' ? explainSpot(g.value, s) : undefined;
+      return { ...s, tableS: g.value.s, date: g.value.date, ...(ctx ? { ctx } : {}), ...(reason !== undefined ? { reason } : {}) };
+    });
+    fs.writeFileSync(path.join(a.out, 'spots.json'), JSON.stringify({ meta, players: infos, spots: dump }));
+    console.error(`wrote ${path.join(a.out, 'spots.json')} (${dump.length} decision points)`);
+  }
   fs.writeFileSync(path.join(a.out, 'summary.md'), summaryMd(infos, results, disagreements, byType, meta));
   console.error(`wrote ${path.join(a.out, 'agreement.json')} and summary.md`);
 }
