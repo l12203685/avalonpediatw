@@ -24,7 +24,7 @@ import { parseOpponentType, tuningForOpponent, OPPONENT_LABEL, type OpponentType
 import { buildSimBank, readSimBankFile } from '../src/bots/simulation/bank';
 import { BANK_CLASSES, bankScenarios, type BankClass } from '../src/ai/scenarios/bankScenarios';
 import {
-  answerScenario, buildScenario, checkAnswer, observationOf, runScenario, seatChar, teamText, validateFile,
+  answerScenario, buildScenario, checkAnswer, observationOf, recordText, runScenario, seatDiagram, validateFile,
   type ScenarioAnswer, type ScenarioFile, type ScenarioFixture,
 } from '../src/ai/scenarios/scenarioSuite';
 
@@ -181,6 +181,40 @@ function thumbExtras(s: ReturnType<typeof bankScenarios>[number], ans: ScenarioA
   };
 }
 
+/** `--diagram 題號,題號`：每一題的牌譜、座位圖、百科AI（每一套）的答案和正確答案，Markdown。題庫的題號寫 `thumb:TMQ2M-3-4` 這種。 */
+function diagrams(ids: readonly string[]): void {
+  const file = JSON.parse(fs.readFileSync(path.join(root, 'src/ai/scenarios/fixtures.json'), 'utf8')) as ScenarioFile;
+  const bankFile = readSimBankFile([path.join(root, 'sim_bank.json')]);
+  const all = bankFile ? bankScenarios(buildSimBank(bankFile)) : [];
+  const profiles = profilesOf();
+  for (const id of ids) {
+    let fx = file.scenarios.find((x) => x.id === id);
+    let built: Parameters<typeof observationOf>[0] | undefined;
+    let human = '';
+    if (fx && !fx.bank) built = buildScenario(fx);
+    else {
+      const s = all.find((x) => (fx ? x.fixture.bank === fx.bank : x.fixture.id === id));
+      if (!s) { console.log(`（找不到 ${id}）`); continue; }
+      built = s;
+      human = s.humanText;
+      fx = fx ?? s.fixture;
+    }
+    console.log(`#### ${fx.id}｜${fx.title}\n`);
+    console.log(`出處：${fx.source}\n`);
+    const rec = recordText(built);
+    if (rec) console.log(`${rec.split('\n').map((l) => `- ${l}`).join('\n')}\n`);
+    const answers = profiles.map((p) => ({ p, ans: answerScenario(built as NonNullable<typeof built>, p.tuning, '') }));
+    console.log(`${seatDiagram(built, answers[answers.length - 1].ans)}\n`);
+    for (const { p, ans } of answers) {
+      const why = fx.expect.map((c) => checkAnswer(built as NonNullable<typeof built>, ans, c)).filter(Boolean);
+      console.log(`- ${p.name}：${ans.text} → ${why.length ? `不過（${why.join('；')}）` : '過'}`);
+    }
+    if (human) console.log(`- ${human}`);
+    if (fx.note) console.log(`- 說明：${fx.note}`);
+    console.log('');
+  }
+}
+
 function main(): void {
   const report = rest('--report');
   if (report.length) {
@@ -192,6 +226,8 @@ function main(): void {
   }
   const cmp = rest('--compare');
   if (cmp.length === 2) { compare(cmp[0], cmp[1]); return; }
+  const dia = arg('--diagram', '');
+  if (dia) { diagrams(dia.split(',')); return; }
 
   const quiet = flag('--quiet');
   const only = arg('--only', '');
@@ -269,7 +305,6 @@ function main(): void {
   } else {
     console.log('\n硬規則的題目全部通過。');
   }
-  void teamText; void seatChar;
 }
 
 main();

@@ -491,7 +491,9 @@ export function recordText(built: Built): string {
     const ps = game.proposals.filter((p) => p.round === r && p.globalIndex < until && p.teamSeats.length > 0);
     if (!ps.length) break;
     const q = game.quests.find((x) => x.round === r && ps.some((p) => p.wentOnMission));
-    const lake = game.lakes.find((l) => l.round === r && l.targetSeat !== 0 && (point.kind !== 'lake' || game.lakes.indexOf(l) < point.lake));
+    // 只列決策點之前已經用掉的湖（題庫的局有整局的紀錄，後面的不能露出來）。
+    const curRound = point.kind === 'team_select' || point.kind === 'team_vote' ? game.proposals[point.proposal].round : point.kind === 'quest_vote' ? point.round : Number.POSITIVE_INFINITY;
+    const lake = game.lakes.find((l) => l.round === r && l.targetSeat !== 0 && l.round < curRound && (point.kind !== 'lake' || game.lakes.indexOf(l) < point.lake));
     const txt = ps.map((p) => `${teamText(p.teamSeats)}${p.minusSeats.length ? ` ${teamText(p.minusSeats)}-` : ''}${p.plusSeats.length ? ` ${teamText(p.plusSeats)}+` : ''}`).join(' / ');
     out.push(`第 ${r} 局：${txt}${q ? ` → ${'o'.repeat(q.successCount)}${'x'.repeat(q.failCount)}` : ''}${lake ? `；湖 ${seatChar(lake.holderSeat)}>${seatChar(lake.targetSeat)} ${lake.claim === 'good' ? 'o' : lake.claim === 'evil' ? 'x' : '（沒宣告）'}` : ''}`);
   }
