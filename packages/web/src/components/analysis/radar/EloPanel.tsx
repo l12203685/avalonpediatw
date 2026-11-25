@@ -13,6 +13,9 @@ import {
   type TheoryTrendGames,
 } from '../../../services/api';
 import { DEFAULT_TREND_VIEW, dayNumber, gamePoints, niceTicks, rollingMean, trendWindow, type TrendView } from './trendSeries';
+import { Takeaway } from '../ui';
+import { eloGlance } from '../core/glance';
+import { sentenceText } from '../core/glanceView';
 
 /**
  * 玩家雷達 > Elo 走勢 (Edward 2026-10-30「ELO 曲線不錯，可以放在玩家頁面」)。
@@ -115,8 +118,15 @@ export default function EloPanel({
 
   const { player, config } = data;
   const provisionalGames = typeof config.provisionalGames === 'number' ? config.provisionalGames : 30;
+  // (2026-11-25 站長「一目瞭然」，第四批) 一句話：現在多少、排第幾、最高到過多少（跟下面的圖同一份 series）
+  const lead = sentenceText(t, eloGlance(player.elo, player.rank, data.series, player.name));
   return (
     <div className={state === 'loading' ? 'opacity-50 transition-opacity' : 'transition-opacity'} data-testid="elo-panel">
+      {lead && (
+        <Takeaway className="mb-2">
+          <p className="text-sm font-semibold text-white sm:text-[15px]" data-testid="elo-lead">{lead}</p>
+        </Takeaway>
+      )}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2 text-xs text-zinc-400">
         <span className="whitespace-nowrap">
           Elo <b className="text-2xl font-black text-white tabular-nums">{fmtElo(player.elo)}</b>
