@@ -25,7 +25,7 @@ import { percivalThumbVote40, vote40Bar } from './BlueRound40';
 import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 import { leaderOppShift51 } from './Round51';
 import { onTeamBar59 } from './Round59';
-import { onTeamBar76 } from './Round76';
+import { onTeamBar76, provReq76 } from './Round76';
 import { evGate63 } from './Round63';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
@@ -85,7 +85,8 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     // 第 35 回合 `goodBayesR4Mix`：第 4 局（要兩張失敗）照字面讀，P(≥ 2 紅) 用角色混合讀人（只有這一格）。
     const r4Mix = tuning.goodBayesR4Mix === true && mode >= 3 && failsRequiredNow(obs) >= 2;
     const req = mode >= 3 && !r4Mix ? 1 : failsRequiredNow(obs);
-    if (cert.minReds(team) >= req) return { vote: false, reason: 'provFail' };
+    // 第 76 回合 `onTeamR4Prov76`（Round76.ts）：第 4 局照字面讀的時候，「公開邏輯證明會失敗」也要兩個確定的紅（關著時照原本的 req）。
+    if (cert.minReds(team) >= provReq76(tuning, obs, failsRequiredNow(obs), req)) return { vote: false, reason: 'provFail' };
     // 第 40 回合 `percivalThumbVote40`（PV-V2／PV-V3）：派西在隊上、隊上只有一根拇指。
     const thumbVote = percivalThumbVote40(tuning, obs, team);
     if (thumbVote !== null) return { vote: thumbVote, reason: thumbVote ? 'onDefault' : 'bad' };

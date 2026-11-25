@@ -7,7 +7,8 @@ import { DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTu
 import { bayesOptionsOf, bayesTeamRedsBelow } from './belief/BayesBelief';
 import { bayesVoteCriteria } from './BlueRound33';
 import { onTeamBar59 } from './Round59';
-import { onTeamBar76, round76On } from './Round76';
+import { onTeamBar76, provReq76, round76On } from './Round76';
+import { buildCertainty } from './belief/Certainty';
 import { OPPONENT_TYPES, tuningForOpponent } from './humanProfile';
 
 const IDS = Array.from({ length: 10 }, (_, i) => `P${i + 1}`);
@@ -42,7 +43,7 @@ const p2Of = (o: PlayerObservation, team: string[]): number => 1 - (bayesTeamRed
 
 describe('round 76 tuning fields', () => {
   it('off by default, in the legacy table and on every opponent profile; flags parse and describe', () => {
-    for (const k of ['onTeamR4Key76', 'onTeamR4Open76', 'onTeamR4Soft76'] as const) {
+    for (const k of ['onTeamR4Key76', 'onTeamR4Open76', 'onTeamR4Soft76', 'onTeamR4Prov76'] as const) {
       expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
     }
@@ -53,6 +54,8 @@ describe('round 76 tuning fields', () => {
     expect(parseTuningFlag('onTeamR4Soft76')).toEqual({ onTeamR4Soft76: 0.3 });
     expect(() => parseTuningFlag('onTeamR4Key76=1.2')).toThrow();
     expect(() => parseTuningFlag('onTeamR4Soft76=0.6')).toThrow();
+    expect(parseTuningFlag('onTeamR4Prov76')).toEqual({ onTeamR4Prov76: 1 });
+    expect(() => parseTuningFlag('onTeamR4Prov76=2')).toThrow();
     expect(describeAgentTuning(on({ onTeamR4Key76: 0.5 }))).toContain('onTeamR4Key76=0.5');
   });
 });
@@ -139,5 +142,35 @@ describe('the vote: mission 4 on the team', () => {
     expect(bayesVoteCriteria(low, r3)).toEqual(bayesVoteCriteria(base, r3));
     const merlin = asObs({ ...(key as unknown as object), publicLoyalView: true });
     expect(bayesVoteCriteria(low, merlin)).toEqual(bayesVoteCriteria(base, merlin));
+  });
+});
+
+describe('onTeamR4Prov76: a proven fail on mission 4 needs two certain reds', () => {
+  // P1 P2 P3 failed R1 with one card: the public logic proves a red among them. A mission-4 team holding all three holds a certain red — one, not two.
+  const proven = ['P1', 'P2', 'P3', 'P4', 'P10'];
+  const o = r4('P10', proven);
+  const k = r4Key('P10', proven);
+  it('the fixture: exactly one red is certain on the team', () => {
+    expect(buildCertainty(o).minReds(proven)).toBe(1);
+  });
+  it('provReq76: the literal count only on mission 4, with the switch, where a literal bar applies; never for Merlin\'s public view', () => {
+    expect(provReq76(on({ onTeamVote59: 0.8, onTeamR4Prov76: 1 }), o, 2, 1)).toBe(2);
+    expect(provReq76(on({ onTeamVote59: 0.8 }), o, 2, 1)).toBe(1);
+    expect(provReq76(on({ onTeamR4Prov76: 1 }), o, 2, 1)).toBe(1);
+    expect(provReq76(on({ onTeamR4Key76: 0.5, onTeamR4Prov76: 1 }), k, 2, 1)).toBe(2);
+    expect(provReq76(on({ onTeamR4Key76: 0.5, onTeamR4Prov76: 1 }), o, 2, 1)).toBe(1);
+    expect(provReq76(on({ onTeamVote59: 0.8, onTeamR4Prov76: 1 }), asObs({ ...(o as unknown as object), currentRound: 3 }), 1, 1)).toBe(1);
+    expect(provReq76(on({ onTeamVote59: 0.8, onTeamR4Prov76: 1 }), asObs({ ...(o as unknown as object), publicLoyalView: true }), 2, 1)).toBe(1);
+  });
+  it('without the switch one certain red is an outright reject; with it the vote goes to the P(≥ 2 reds) bar', () => {
+    expect(bayesVoteCriteria(on({ onTeamVote59: 0.99 }), o)).toEqual({ vote: false, reason: 'provFail' });
+    const p = p2Of(o, proven);
+    expect(p).toBeGreaterThan(0);
+    expect(p).toBeLessThan(0.99);
+    expect(bayesVoteCriteria(on({ onTeamVote59: 0.99, onTeamR4Prov76: 1 }), o)).toEqual({ vote: true, reason: 'onDefault' });
+    expect(bayesVoteCriteria(on({ onTeamVote59: Math.max(0.01, p - 0.01), onTeamR4Prov76: 1 }), o)).toEqual({ vote: false, reason: 'bad' });
+  });
+  it('the baseline layer (no literal reading) is untouched by the switch alone', () => {
+    expect(bayesVoteCriteria(on({ onTeamR4Prov76: 1 }), o)).toEqual(bayesVoteCriteria(DEFAULT_AGENT_TUNING, o));
   });
 });
