@@ -44,6 +44,8 @@ import { answerSeatFillerTextCommand } from '../seatFiller/commands';
 import { answerPaipuFixTextCommand } from '../paipuFix/commands';
 import { answerCommunityTextCommand, isCommunityCommandText } from '../reports/commands';
 import { answerCorrectionTextCommand } from '../recordCorrection/commands';
+import { answerDailyQuestionTextCommand } from '../dailyQuestion/commands';
+import { UNKNOWN_COMMAND_HINT, unknownCommandHint } from '../help';
 
 /**
  * Map LINE user IDs to the room they're currently in.
@@ -149,6 +151,10 @@ export interface LineWebhookStats {
   paipuFixReplies: number;
   /** 百科回報／ID 認領 replies sent (2026-11-09, bots/reports): /回報 /認領. */
   reportReplies: number;
+  /** 每日一題 replies sent (2026-11-25, bots/dailyQuestion): /每日一題 /今日一題. */
+  dailyQuestionReplies: number;
+  /** 1:1 「看不懂這個指令」 hints sent (2026-11-25, bots/help unknownCommandHint). */
+  unknownCommandHints: number;
   /** 2026-10-13 media sync — counts only. LINE pictures uploaded to Discord. */
   imagesToDiscord: number;
   /** LINE pictures sent to Discord as a text note (too large, download or upload failed, too many waiting, or CHAT_MIRROR_IMAGES=false). */
@@ -172,7 +178,7 @@ export interface LineWebhookStats {
  * booked under.
  */
 interface LeadReply {
-  kind: 'stats' | 'feedback' | 'seatFiller' | 'paipuFix' | 'report' | 'sim';
+  kind: 'stats' | 'feedback' | 'seatFiller' | 'paipuFix' | 'report' | 'dailyQuestion' | 'sim';
   text: string;
   /**
    * 模擬瓦 (2026-10-14): applies the step only once the reply went out, so a
@@ -196,7 +202,7 @@ interface LeadReply {
 }
 
 /** 回覆會同步到 Discord 的種類（/意見 是匿名的、/回報 /認領 機器人自己會貼到 DC，都不同步）。 */
-const RELAYED_LEAD_KINDS: ReadonlySet<LeadReply['kind']> = new Set(['stats', 'sim', 'seatFiller', 'paipuFix']);
+const RELAYED_LEAD_KINDS: ReadonlySet<LeadReply['kind']> = new Set(['stats', 'sim', 'seatFiller', 'paipuFix', 'dailyQuestion']);
 
 /** Where a text came from, for the 模擬瓦 session key and LINE redelivery. */
 interface LeadContext {
@@ -243,6 +249,8 @@ export class LineBotClient {
     seatFillerReplies: 0,
     paipuFixReplies: 0,
     reportReplies: 0,
+    dailyQuestionReplies: 0,
+    unknownCommandHints: 0,
     imagesToDiscord: 0,
     imageNotesToDiscord: 0,
     imagesSkipped: 0,
@@ -437,6 +445,15 @@ export class LineBotClient {
           // (rate limited, an already-answered redelivery, /派西 2 with no
           // exercise) never falls through to the legacy "未知指令" handler.
           if (isActiveSimCommand(textMessage.text)) continue;
+          // 2026-11-25: a mistyped slash command in a 1:1 chat (/戰積 …) used to get no answer at all while
+          // the legacy commands are off (the default). Now a fixed one-line hint; groups stay silent.
+          if (!LINE_CONFIG.commandsEnabled && LINE_CONFIG.statsCommandsEnabled) {
+            const hint = unknownCommandHint(textMessage.text);
+            if (hint) {
+              await this.replyUnknownCommandHint(messageEvent.replyToken, hint);
+              continue;
+            }
+          }
         }
 
         // 模擬瓦 (2026-10-14): an allow-listed practice group answers 模擬
@@ -645,6 +662,30 @@ export class LineBotClient {
   }
 
   /**
+   * 每日一題 (2026-11-25, bots/dailyQuestion), or null (not the command).
+   * Never throws. Read-only, so a redelivery is simply answered again.
+   */
+  private async dailyQuestionAnswerFor(text: string): Promise<string | null> {
+    try {
+      return await answerDailyQuestionTextCommand(text, 'line');
+    } catch (error) {
+      console.error(`[LINE daily-question] handling /每日一題 failed (${describeError(error)})`);
+      return null;
+    }
+  }
+
+  /** 1:1 only: the fixed 「看不懂這個指令」 line. Failures are logged, never thrown. */
+  private async replyUnknownCommandHint(replyToken: string, hint: string): Promise<void> {
+    try {
+      await this.client.replyMessage(replyToken, [{ type: 'text', text: hint }]);
+      this.stats.unknownCommandHints += 1;
+    } catch (error) {
+      this.stats.replyFailures += 1;
+      console.error(`[LINE] unknown-command hint failed (${describeError(error)})`);
+    }
+  }
+
+  /**
    * 百科回報／ID 認領 (2026-11-09, bots/reports), or null (not the command).
    * Never throws. A redelivery is answered without a second submission.
    */
@@ -734,13 +775,16 @@ export class LineBotClient {
 
   /**
    * The bot answer a text earns, if any: stats commands first, then /意見, then
-   * /補位 (補位機器人), then /待修正 (待修正牌譜清單), then /回報 /認領, then /更正, then 模擬瓦.
+   * /補位 (補位機器人), then /待修正 (待修正牌譜清單), then /每日一題, then /回報 /認領, then /更正, then 模擬瓦.
    * An allow-listed 模擬 practice group gets 模擬 commands and /指令 (模擬 help) only.
    */
   private async leadReplyFor(text: string, ctx: LeadContext): Promise<LeadReply | null> {
     if (ctx.simOnly) {
       const help = simHelpFor(text);
       if (help !== null) return { kind: 'sim', text: help, quoteToken: ctx.quoteToken };
+      // 2026-11-25: /每日一題 also answers in the practice groups (its reply leads straight into /模擬 題號).
+      const daily = await this.dailyQuestionAnswerFor(text);
+      if (daily !== null) return { kind: 'dailyQuestion', text: daily, quoteToken: ctx.quoteToken };
       return this.simAnswerFor(text, ctx);
     }
     const stats = await this.statsAnswerFor(text);
@@ -755,6 +799,8 @@ export class LineBotClient {
     if (seatFiller !== null) return { kind: 'seatFiller', text: seatFiller };
     const paipuFix = await this.paipuFixAnswerFor(text);
     if (paipuFix !== null) return { kind: 'paipuFix', text: paipuFix };
+    const daily = await this.dailyQuestionAnswerFor(text);
+    if (daily !== null) return { kind: 'dailyQuestion', text: daily };
     const report = await this.reportAnswerFor(text, ctx.userId, ctx.duplicate);
     if (report !== null) return { kind: 'report', text: report, quoteToken: ctx.quoteToken };
     // 2026-11-17 /更正: same kind as /回報 (never relayed to Discord; a sent correction is posted to both sides by the bot).
@@ -823,6 +869,7 @@ export class LineBotClient {
     else if (lead.kind === 'seatFiller') this.stats.seatFillerReplies += 1;
     else if (lead.kind === 'paipuFix') this.stats.paipuFixReplies += 1;
     else if (lead.kind === 'report') this.stats.reportReplies += 1;
+    else if (lead.kind === 'dailyQuestion') this.stats.dailyQuestionReplies += 1;
     else this.stats.simReplies += 1;
     try {
       lead.commit?.();
@@ -1333,7 +1380,8 @@ export class LineBotClient {
       default:
         response = {
           type: 'text',
-          text: `未知指令:「/${command}」。輸入「/help」查看可用指令。`,
+          // 2026-11-25: fixed text — the old line echoed what the person typed.
+          text: UNKNOWN_COMMAND_HINT,
           quickReply: {
             items: [
               {

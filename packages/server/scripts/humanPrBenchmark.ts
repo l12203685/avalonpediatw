@@ -18,6 +18,7 @@
  *   --min-s S          只重播桌上強度 S ≥ S 的局（第 64 回合：強真人桌的候選；優勢表照舊用全部真人局擬合）
  *   --tier-profile     第 73 回合：每一局照那一桌的強度層用真人桌的策略層重播（`humanProfile.ts`：S < 38 弱、38–55 一般、≥ 55 強、S 不明 = 一般；
  *                      `--flag` 疊在策略層上面）；不給 = 每一局都用同一組開關（基準線＋`--flag`）
+ *   --wl-tables PATH   第 75 回合：`assassinWorldLine75` 改用這份世界線的表（交叉擬合用；不給 = 正式的表）
  *
  * 做法（細節見 src/ai/benchmark/humanPr.ts）：資料集每一局（嚴格解析，`datasetReplay.ts`）每一個座位都換成機器人
  * 重播（`agreement.replayGame`，和 agreementBenchmark 相同的觀察重建：只看那個座位當時知道的事），記下機器人在
@@ -50,6 +51,8 @@ import { pinnedQuestCard, replayGame } from '../src/ai/benchmark/agreement';
 import { BENCHMARK_ROLES } from '../src/ai/benchmark/cohorts';
 import { campOf } from '../src/ai/benchmark/sheetsReplay';
 import { opponentTypeOfTable, tuningForOpponent, type OpponentType } from '../src/ai/humanProfile';
+import { setWorldLineTables75 } from '../src/ai/Round75';
+import type { WorldLineTables } from '../src/ai/assassin/WorldLines75';
 import {
   PR_BUCKETS,
   advantage,
@@ -94,6 +97,8 @@ interface Args {
   minS?: number;
   /** 第 73 回合：每一局照桌上強度層用真人桌的策略層（`tuningForOpponent`），`--flag` 疊在上面。 */
   tierProfile?: boolean;
+  /** 第 75 回合：`assassinWorldLine75` 用的表（`worldLineStudy75.py --part export`）；不給 = 正式的表。 */
+  wlTables?: string;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -139,6 +144,12 @@ function parseArgs(argv: string[]): Args {
       case '--roles': args.roles = next().split(',').map((x) => x.trim()).filter(Boolean); break;
       case '--min-s': args.minS = Number.parseFloat(next()); break;
       case '--tier-profile': args.tierProfile = true; break;
+      case '--wl-tables': {
+        // 第 75 回合：換一份世界線的表（交叉擬合：驗證的那一半用另一半的局擬合的表）
+        args.wlTables = path.resolve(next());
+        setWorldLineTables75(JSON.parse(fs.readFileSync(args.wlTables, 'utf8')) as WorldLineTables);
+        break;
+      }
       case '--help': case '-h':
         console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
         process.exit(0);
@@ -224,6 +235,7 @@ async function botDecisions(args: Args, games: readonly DatasetReplayGame[], tun
       ...(args.roles?.length ? ['--roles', args.roles.join(',')] : []),
       ...(args.minS !== undefined ? ['--min-s', String(args.minS)] : []),
       ...(args.tierProfile ? ['--tier-profile'] : []),
+      ...(args.wlTables ? ['--wl-tables', args.wlTables] : []),
     ];
     const jobs = Array.from({ length: args.workers }, (_, k) => new Promise<void>((resolve, reject) => {
       const out = path.join(dir, `shard${k}.json`);
@@ -259,6 +271,8 @@ interface Scored {
   agree: boolean;
   idx?: number;
   botAction?: string;
+  /** 第 76 回合：投票才有——機器人投另一票時的優勢（同一份表）；只改票的候選可以不重播、直接從這一欄換算。 */
+  alt?: number;
 }
 
 /** 一個決策點的人類與機器人選擇 → 兩組鍵（刺殺另外算）。 */
@@ -512,7 +526,8 @@ async function main(): Promise<void> {
     const keys = decisionKeys(d, rec);
     if (!keys) continue;
     const tab = tables.get(type)![foldOf(g.id)];
-    scored.push({ gi, seat, type, role, bucket, human: advantage(tab, keys.human), bot: advantage(tab, keys.bot), agree: keys.agree, idx: recIdx, botAction: agent });
+    const alt = type === 'vote' ? advantage(tab, voteKeys(g, recIdx, seat, agent !== 'approve')) : undefined;
+    scored.push({ gi, seat, type, role, bucket, human: advantage(tab, keys.human), bot: advantage(tab, keys.bot), agree: keys.agree, idx: recIdx, botAction: agent, ...(alt === undefined ? {} : { alt }) });
   }
 
   if (args.dump) fs.writeFileSync(args.dump, scored.map((x) => JSON.stringify(x)).join('\n') + '\n');

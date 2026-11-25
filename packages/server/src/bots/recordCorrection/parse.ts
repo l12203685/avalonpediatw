@@ -2,6 +2,13 @@
  * /更正 的解析（沒有其他 import：reports/commands 的 isCommunityCommandText 也用，避免循環相依）。見 ./commands.ts。
  */
 
+/** 指令寫法與一行描述（說明裡用；放在這個沒有 import 的檔案，stats/statsReplies 的 /指令 才能列它而不循環相依）。 */
+export const CORRECTION_USAGE: Record<'line' | 'discord', string> = {
+  line: '/更正 局號 [更正內容]',
+  discord: '/更正 局號 [內容]',
+};
+export const CORRECTION_HELP_TEXT = '查一局牌譜（含檢查出來的問題），或送出更正給站長';
+
 const CORRECTION_RE = /^[/／][\s\u3000]*(?:更正|牌譜更正|牌谱更正)(?=[\s\u3000]|$)([\s\S]*)$/u;
 
 export interface CorrectionCommand {

@@ -16,15 +16,9 @@ import { lookupRecord, normaliseRecordId, type LookupGame, type RecordLookup } f
 import { FEEDBACK_MESSAGE_MAX, reportMessageFits, submitReport, type FeedbackReport, type ReportSource, type SyncDeps } from '../../services/communityReports';
 import { recordUrl } from '../simulation/recordsIndex';
 import { SUBMIT_REDELIVERY_TEXT, submitResultText, type ReportPlatform } from '../reports/commands';
-import { parseCorrectionText, type CorrectionCommand } from './parse';
+import { CORRECTION_USAGE, parseCorrectionText, type CorrectionCommand } from './parse';
 
-export { parseCorrectionText, isCorrectionCommandText, type CorrectionCommand } from './parse';
-
-export const CORRECTION_USAGE: Record<ReportPlatform, string> = {
-  line: '/更正 局號 [更正內容]',
-  discord: '/更正 局號 [內容]',
-};
-export const CORRECTION_HELP_TEXT = '查一局牌譜（含檢查出來的問題），或送出更正給站長';
+export { CORRECTION_HELP_TEXT, CORRECTION_USAGE, parseCorrectionText, isCorrectionCommandText, type CorrectionCommand } from './parse';
 export const CORRECTION_RECEIVED_TEXT = '收到，站長確認後才會改';
 export const CORRECTION_RATE_LIMITED_TEXT = '查得太頻繁了，請過幾分鐘再試。';
 /** 送出的內容最多幾字（同 /回報）。 */

@@ -30,16 +30,20 @@ export const DISCORD_CONFIG = {
     discussionTimeout: 120000, // 2 minutes for discussion
   },
 
-  // Game status rotation
+  // Status rotation (2026-11-25: what the bot can do, in the group's own words — the old lines
+  // 「Watching Resistance Games」「Listening to Discord Servers」 said nothing).
   statuses: [
-    { name: 'Avalon | /help', type: 'PLAYING' },
-    { name: 'Resistance Games', type: 'WATCHING' },
-    { name: 'Discord Servers', type: 'LISTENING' },
+    { name: '/help 看指令', type: 'PLAYING' },
+    { name: '/模擬 練派票', type: 'PLAYING' },
+    { name: '/每日一題', type: 'PLAYING' },
+    { name: '/戰績 查戰績', type: 'PLAYING' },
   ],
 };
 
 export const COMMANDS = {
   HELP: 'help',
+  // 2026-11-25: /說明 = /help in the group's own language (same options, same reply; LINE types /說明 too).
+  HELP_ZH: '說明',
   CREATE: 'create',
   JOIN: 'join',
   START: 'start',
@@ -87,6 +91,9 @@ export const COMMANDS = {
   CLAIM: '認領',
   // 2026-11-17 牌譜更正 (bots/recordCorrection): look up a record, or send a correction (posted like /回報).
   CORRECTION: '更正',
+  // 2026-11-25 每日一題 (bots/dailyQuestion): today's Threads／IG question — the question line, the record
+  // link cut at the decision, and how to answer it here with /模擬. Same word as LINE's /每日一題.
+  DAILY_QUESTION: '每日一題',
   // 2026-10-13: the admin-only /社群週報 (paid weekly digest) was removed;
   // registerCommands() overwrites the whole command list, so it disappears
   // from Discord on the next deploy (see client.ts).

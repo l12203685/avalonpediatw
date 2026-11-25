@@ -4,10 +4,13 @@
  *   /help            最基本的說明：每個功能一行，最後一行「/help 主題 看細節」
  *   /help 模擬       模擬瓦的全部指令（同 /模擬 說明）
  *   /help 戰績       /戰績 /排行 /默契
- *   /help 補位｜待修正｜回報｜更正｜意見
+ *   /help 補位｜待修正｜回報｜更正｜意見｜每日一題
+ *   /help 規則｜角色  遊戲規則、角色介紹（bots/rules.ts；Discord 的 /rules、/roles 同一份，LINE 只有這個入口）
+ *   /說明［主題］    同 /help（2026-11-25：群組裡都打中文，/說明 跟 /help 一樣）
  *
- * LINE 打字：/help（全形斜線「／」也可以，主題前的空白可有可無）；舊的 /指令 照舊回完整的指令清單（stats/statsReplies.formatStatsHelp）。
- * Discord：slash /help 主題:模擬（選項，見 discord/client.ts）。
+ * LINE 打字：/help、/說明（全形斜線「／」也可以，主題前的空白可有可無）；舊的 /指令 照舊回完整的指令清單（stats/statsReplies.formatStatsHelp）。
+ * Discord：slash /help 主題:模擬、/說明 主題:模擬（選項，見 discord/client.ts）；2026-11-25 起沒選主題時跟 LINE 回同一份
+ * 「每個功能一行」的文字（之前是一大張中英夾雜的 embed）。
  * 看不懂的主題就回最基本的說明。純函式（範圍文字 scope 由呼叫的人讀快取後傳進來）。
  */
 
@@ -18,10 +21,12 @@ import { SEAT_FILLER_HELP_TEXT, SEAT_FILLER_LIMITS_TEXT, SEAT_FILLER_USAGE } fro
 import { SIM_CONFIG } from './simulation/config';
 import { simHelpText } from './simulation/replies';
 import { STATS_COMMAND_USAGE, STATS_PAGE_URL_TEXT } from './stats/statsReplies';
+import { DAILY_QUESTION_HELP_TEXT, DAILY_QUESTION_USAGE } from './dailyQuestion/usage';
+import { RULES_USAGE, playPlatformLine, rolesText, rulesText } from './rules';
 
 export type HelpPlatform = 'line' | 'discord';
 
-export const HELP_TOPICS = ['模擬', '戰績', '補位', '待修正', '回報', '更正', '意見'] as const;
+export const HELP_TOPICS = ['模擬', '每日一題', '戰績', '補位', '待修正', '回報', '更正', '意見', '規則', '角色'] as const;
 export type HelpTopic = (typeof HELP_TOPICS)[number];
 
 /** 主題的別名（打法不同、同一個主題）。 */
@@ -33,6 +38,9 @@ const TOPIC_ALIASES: Readonly<Record<string, HelpTopic>> = {
   更正: '更正', 牌譜更正: '更正', 牌谱更正: '更正',
   回報: '回報', 回报: '回報', 認領: '回報', 认领: '回報',
   意見: '意見', 意见: '意見',
+  每日一題: '每日一題', 今日一題: '每日一題', 每日一题: '每日一題', 今日一题: '每日一題', 一題: '每日一題',
+  規則: '規則', 规则: '規則', rules: '規則',
+  角色: '角色', 角色介紹: '角色', roles: '角色',
 };
 
 /** 主題字 → 主題；看不懂 → null。 */
@@ -42,13 +50,26 @@ export function helpTopicOf(word: string): HelpTopic | null {
 }
 
 const HELP_RE = /^[/／]\s*help(?![a-z])(.*)$/isu;
+/** /說明（2026-11-25）：跟 /help 一樣。 */
+const HELP_ZH_RE = /^[/／]\s*(?:說明|说明)(.*)$/su;
 
-/** /help、/help 模擬 → { topic }（topic 沒寫或看不懂是 null）；不是說明指令 → null。 */
+/**
+ * /help、/help 模擬、/說明、/說明 模擬 → { topic }（topic 沒寫或看不懂是 null）；不是說明指令 → null。
+ * /說明 後面直接接字（沒有空白）時要是認得的主題才算（`/說明模擬` 算、`/說明書在哪` 是聊天）。
+ */
 export function parseHelpCommand(text: string): { topic: HelpTopic | null; raw: string } | null {
-  const m = HELP_RE.exec((text ?? '').normalize('NFKC').trim());
-  if (!m) return null;
-  const raw = m[1].trim();
-  return { topic: raw ? helpTopicOf(raw) : null, raw };
+  const t = (text ?? '').normalize('NFKC').trim();
+  const m = HELP_RE.exec(t);
+  if (m) {
+    const raw = m[1].trim();
+    return { topic: raw ? helpTopicOf(raw) : null, raw };
+  }
+  const zh = HELP_ZH_RE.exec(t);
+  if (!zh) return null;
+  const raw = zh[1].trim();
+  const topic = raw ? helpTopicOf(raw) : null;
+  if (raw && !topic && !/^\s/u.test(zh[1])) return null;
+  return { topic, raw };
 }
 
 /** 最基本的說明：每個功能一行。 */
@@ -56,12 +77,15 @@ export function basicHelpText(platform: HelpPlatform): string {
   const helpCmd = platform === 'discord' ? '/help 主題:模擬' : '/help 模擬';
   const lines = ['📖 阿瓦隆百科機器人'];
   if (SIM_CONFIG.commandsEnabled) lines.push('/模擬\u3000模擬瓦：真人牌譜停在派票的當下，換你派');
+  lines.push(`${DAILY_QUESTION_USAGE}\u3000今天的每日一題：題目、牌譜連結、怎麼在這裡作答`);
   lines.push(`${STATS_COMMAND_USAGE.player}\u3000個人戰績（還有 /排行 /默契）`);
   lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000叫百科AI 進房補位`);
   lines.push(`${PAIPU_FIX_USAGE[platform]}\u3000待修正的牌譜（${CORRECTION_USAGE[platform]} 查一局、送更正）`);
   lines.push(`${REPORT_USAGE[platform]}\u3000回報網站或文章的問題（${CLAIM_USAGE[platform]} 合併 ID）`);
   lines.push(`${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議`);
-  lines.push(`/help 主題 看細節（例：${helpCmd}）`);
+  lines.push(`${platform === 'discord' ? RULES_USAGE : '/help 規則、/help 角色'}\u3000遊戲規則、角色介紹`);
+  lines.push(playPlatformLine(platform));
+  lines.push(`/help 主題 看細節（例：${helpCmd}；打 /說明 也一樣）`);
   return lines.join('\n');
 }
 
@@ -95,10 +119,31 @@ export function topicHelpText(topic: HelpTopic, platform: HelpPlatform, scope: s
       ].join('\n');
     case '意見':
       return `💬 ${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議或回報問題（只有管理者看得到）`;
+    case '每日一題':
+      return [
+        `📌 ${DAILY_QUESTION_USAGE}\u3000${DAILY_QUESTION_HELP_TEXT}`,
+        '題目跟當天 Threads／IG 的「阿瓦隆每日一題」同一題（每天換；/今日一題 也可以）。',
+        SIM_CONFIG.commandsEnabled ? '回覆裡附的 /模擬 題號 可以直接在這裡作答，/公布 對答案。' : '',
+      ].filter(Boolean).join('\n');
+    case '規則':
+      return rulesText(platform);
+    case '角色':
+      return rolesText(platform);
   }
 }
 
 /** /help［主題］的回覆：主題看不懂或沒寫 → 最基本的說明。 */
 export function helpText(topic: HelpTopic | null, platform: HelpPlatform, scope: string | null = null): string {
   return topic ? topicHelpText(topic, platform, scope) : basicHelpText(platform);
+}
+
+/**
+ * 看不懂的斜線指令的回覆（2026-11-25）：LINE 1 對 1 裡打錯字（/戰積、/模似）之前完全沒有回應。
+ * 固定文字，絕不回顯使用者打的字。群組裡不用它（「/笑死」這種聊天不該被機器人回）。
+ */
+export const UNKNOWN_COMMAND_HINT = '看不懂這個指令。打 /help 看有哪些指令（例：/戰績 名字、/模擬、/每日一題）。';
+
+/** 斜線開頭、後面緊接著字（`/戰積 小明`、`／模似`）→ 提示；其他（一般聊天、只有一個斜線）→ null。 */
+export function unknownCommandHint(text: string): string | null {
+  return /^\/\S/u.test((text ?? '').normalize('NFKC').trim()) ? UNKNOWN_COMMAND_HINT : null;
 }

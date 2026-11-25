@@ -37,7 +37,7 @@ describe('one baseline, small per-opponent adjustments', () => {
     expect(HUMAN_TABLE_READING.blueVoteTemper57).toBe(0.4);
     expect(HUMAN_TABLE_READING.missionRole56).toBe(1);
     expect(HUMAN_TABLE_READING.merlinOwnRank58).toBe(0.5);
-    expect(HUMAN_TABLE_READING.onTeamVote59).toBe(0.8);
+    expect(HUMAN_TABLE_READING.onTeamVote59).toBe(0.55); // round 76: 0.8 -> 0.55 (same key; the round-76 switches stay off)
     expect(DEFAULT_AGENT_TUNING.onTeamVote59).toBe(0);
     expect(HUMAN_TABLE_READING.assassinPath61).toBe(1);
     expect(HUMAN_TABLE_READING.redR2Lead61).toBe(1);

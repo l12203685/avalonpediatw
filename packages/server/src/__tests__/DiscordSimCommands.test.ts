@@ -103,11 +103,11 @@ afterEach(() => {
 });
 
 describe('registration', () => {
-  it('seven 模擬 commands (incl. /分析 and /刺; /下一步 removed 2026-11-17) pass discord.js validation; 27 commands in all (incl. /機器人補位, /待修正, /回報, /認領, /更正)', () => {
+  it('seven 模擬 commands (incl. /分析 and /刺; /下一步 removed 2026-11-17) pass discord.js validation; 29 commands in all (incl. /機器人補位, /待修正, /回報, /認領, /更正, /說明, /每日一題)', () => {
     const json = buildSlashCommands().map((c) => c.toJSON());
-    expect(json).toHaveLength(27);
+    expect(json).toHaveLength(29);
     const names = json.map((c) => c.name);
-    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '分析', '刺', 'assassinate', '區間', '公布', '結束', '戰績', '排行', '默契', '意見', 'help', '更正']));
+    expect(names).toEqual(expect.arrayContaining(['模擬', '派', '分析', '刺', 'assassinate', '區間', '公布', '結束', '戰績', '排行', '默契', '意見', 'help', '說明', '每日一題', '更正']));
     expect(names).not.toContain('下一步');
     expect(new Set(names).size).toBe(names.length);
     for (const c of json) {
@@ -137,22 +137,21 @@ describe('registration', () => {
   });
 
   it('/help and the LINE /指令 advertise /模擬 (only while it is on)', async () => {
-    const helpFields = async (): Promise<{ name: string; value: string }[]> => {
+    // 2026-11-25: Discord /help is the same plain text as LINE's (no embed).
+    const helpContent = async (): Promise<string> => {
       const it1 = makeInteraction(COMMANDS.HELP);
       await handleHelpCommand(it1 as never);
-      return (it1.editReply.mock.calls[0][0] as { embeds: { toJSON: () => { fields: { name: string; value: string }[] } }[] }).embeds[0].toJSON().fields;
+      return (it1.editReply.mock.calls[0][0] as { content: string }).content;
     };
-    const field = (await helpFields()).find((f) => f.name.includes('模擬瓦'));
-    expect(field?.value).toContain('/模擬 [角色] [座位]');
-    expect(field?.value).toContain('/派 /分析 /區間 /公布 /結束');
-    expect(field?.value).toContain('/help 主題:模擬');
+    expect(await helpContent()).toContain('/模擬\u3000模擬瓦：真人牌譜停在派票的當下，換你派');
+    expect(await helpContent()).toContain('/help 主題:模擬');
     expect(formatStatsHelp('line')).toContain('/模擬 [角色] [座位]\u3000模擬瓦：練派票資訊的釋放與解讀');
     expect(formatStatsHelp('line')).toContain('/help 模擬 看全部指令');
     expect(formatStatsHelp('discord')).toContain('/模擬 [角色] [座位]');
 
     SIM_CONFIG.commandsEnabled = false;
     try {
-      expect((await helpFields()).some((f) => f.name.includes('模擬瓦'))).toBe(false);
+      expect(await helpContent()).not.toContain('/模擬');
       expect(formatStatsHelp('line')).not.toContain('/模擬');
     } finally {
       SIM_CONFIG.commandsEnabled = true;

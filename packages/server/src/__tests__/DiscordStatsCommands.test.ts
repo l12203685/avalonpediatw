@@ -110,6 +110,7 @@ vi.mock('../services/sheetsAnalysis', async (importOriginal) => ({
 
 import { COMMANDS, STATS_OPTIONS } from '../bots/discord/config';
 import {
+  HELP_TOPIC_OPTION,
   handleChemistryCommand,
   handleHelpCommand,
   handleLeaderboardCommand,
@@ -328,21 +329,21 @@ describe('/默契', () => {
 });
 
 describe('/help', () => {
-  const statsField = async (): Promise<string | undefined> => {
-    const it1 = makeInteraction(COMMANDS.HELP);
+  // 2026-11-25: /help is plain text; the stats details (with the window /排行 ranks by) are /help 主題:戰績.
+  const statsTopic = async (): Promise<string> => {
+    const it1 = makeInteraction(COMMANDS.HELP, { [HELP_TOPIC_OPTION]: '戰績' });
     await handleHelpCommand(it1 as never);
-    const json = (it1.editReply.mock.calls[0][0] as { embeds: Array<{ toJSON: () => { fields?: Array<{ name: string; value: string }> } }> }).embeds[0].toJSON();
-    return json.fields?.find((f) => f.name.includes('戰績'))?.value;
+    return (it1.editReply.mock.calls[0][0] as { content: string }).content;
   };
 
   it('names the window /排行 ranks by, from the cache (schemaVersion 3 until the first refresh, then 4)', async () => {
-    // The fixture's main board is a schemaVersion-3 one: /排行 prints 各人最近 100 場, so does /help.
-    expect(await statsField()).toContain('`/排行` 角色理論勝率排行 Top 10（各人最近 100 場）\n');
+    // The fixture's main board is a schemaVersion-3 one: /排行 prints 各人最近 100 場, so does /help 主題:戰績.
+    expect(await statsTopic()).toContain('/排行\u3000角色理論勝率排行 Top 10（各人最近 100 場）\n');
     const main = fixture.leaderboard.boards[0];
     const period = main.period;
     main.period = '各角色近 10 場、忠臣近 40 場';
     try {
-      expect(await statsField()).toContain('`/排行` 角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）\n');
+      expect(await statsTopic()).toContain('/排行\u3000角色理論勝率排行 Top 10（各角色近 10 場、忠臣近 40 場）\n');
     } finally {
       main.period = period;
     }
@@ -351,13 +352,13 @@ describe('/help', () => {
   it('advertises the stats commands', async () => {
     const it1 = makeInteraction(COMMANDS.HELP);
     await handleHelpCommand(it1 as never);
-    const json = (it1.editReply.mock.calls[0][0] as { embeds: Array<{ toJSON: () => { fields?: Array<{ name: string; value: string }> } }> }).embeds[0].toJSON();
-    const field = json.fields?.find((f) => f.name.includes('戰績'));
-    expect(field?.value).toContain('/戰績 名字');
-    expect(field?.value).toContain('`/排行` 角色理論勝率排行 Top 10（');
-    expect(field?.value).toContain('/默契 名字1 名字2');
-    expect(field?.value).toContain('`/意見 文字` 給管理者的建議或回報問題');
-    expect(field?.value).not.toContain('超額');
-    expect(field?.value).toContain('每週一 12:00');
+    const basic = (it1.editReply.mock.calls[0][0] as { content: string }).content;
+    expect(basic).toContain('/戰績 名字\u3000個人戰績（還有 /排行 /默契）');
+    expect(basic).toContain('/意見 文字\u3000給管理者的建議');
+    const topic = await statsTopic();
+    expect(topic).toContain('/戰績 名字');
+    expect(topic).toContain('/默契 名字1 名字2');
+    expect(topic).not.toContain('超額');
+    expect(topic).toContain('每週一 12:00');
   });
 });

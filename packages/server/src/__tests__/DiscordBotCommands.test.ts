@@ -30,6 +30,7 @@ import {
   handleHelpCommand,
   handlePlayPlatformCommand,
 } from '../bots/discord/commands';
+import { basicHelpText } from '../bots/help';
 import {
   buildRoleRevealEmbed,
   computeKnownEvils,
@@ -150,6 +151,8 @@ describe('Discord bot: game-flow commands point to signage-cloud', () => {
     expect(msg).toContain(PLAY_PLATFORM_URL);
     expect(msg).toContain('/create');
     expect(msg).toContain('signage-cloud');
+    // 2026-11-25: Traditional Chinese only.
+    expect(msg).not.toMatch(/Games are now played/);
   });
 
   it.each([...PLAY_PLATFORM_COMMANDS])(
@@ -186,22 +189,25 @@ describe('Discord bot: game-flow commands point to signage-cloud', () => {
     },
   );
 
-  it('/help: points to the play URL and still lists /rules and /roles', async () => {
+  it('/help: one plain-text line per feature (same text as LINE), with the play URL and /rules /roles', async () => {
     const interaction = makeInteraction(userId, COMMANDS.HELP);
 
     await handleHelpCommand(interaction as never);
 
     expect(interaction.deferReply).toHaveBeenCalledTimes(1);
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
-    const [payload] = interaction.editReply.mock.calls[0];
-    const json = payload.embeds[0].toJSON();
-    expect(json.description).toContain(PLAY_PLATFORM_URL);
-    const names = (json.fields ?? []).map((f: { name: string }) => f.name);
-    expect(names).toContain(`/${COMMANDS.RULES}`);
-    expect(names).toContain(`/${COMMANDS.ROLES}`);
-    // Game-flow commands are no longer advertised as standalone entries.
-    expect(names).not.toContain(`/${COMMANDS.CREATE}`);
-    expect(names).not.toContain(`/${COMMANDS.JOIN} <room-id>`);
+    const [payload] = interaction.editReply.mock.calls[0] as unknown as [{ content: string; embeds?: unknown; allowedMentions: unknown }];
+    // 2026-11-25: no embed any more — the same one-line-per-feature text LINE gets.
+    expect(payload.embeds).toBeUndefined();
+    expect(payload.allowedMentions).toEqual({ parse: [] });
+    expect(payload.content).toBe(basicHelpText('discord'));
+    expect(payload.content).toContain(PLAY_PLATFORM_URL);
+    expect(payload.content).toContain(`/${COMMANDS.RULES} /${COMMANDS.ROLES}`);
+    // Game-flow commands are no longer advertised.
+    expect(payload.content).not.toContain(`/${COMMANDS.CREATE}`);
+    expect(payload.content).not.toContain(`/${COMMANDS.JOIN}`);
+    // Traditional Chinese: none of the old English lines.
+    expect(payload.content).not.toMatch(/Display|Avalon Bot Help|These commands/);
   });
 });
 

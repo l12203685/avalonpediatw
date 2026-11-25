@@ -155,6 +155,8 @@ Line uses webhook (HTTP POST) for events.
 
 ## Commands
 
+> **這一節是舊清單**（對局還在本站開的時候寫的）。現在的指令、兩邊的差別、每個指令回什麼，看 [`BOTS.md`](BOTS.md)；群組裡打 `/help` 或 `/說明` 也看得到。下面的 `/create`、`/join`、`/vote` 等只會回 signage-cloud 的開局網址。
+
 ### Discord Commands (Slash Commands)
 
 #### Basic Commands

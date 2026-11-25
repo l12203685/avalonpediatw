@@ -49,6 +49,8 @@ export interface ThreadsToday {
   /** 那一題的牌譜（只到出題的那一刻）；網站上沒有那一局就 null。 */
   recordUrl: string | null;
   threadsUrl?: string;
+  /** 一句話的問題，跟貼文第一行同一句（threads/draft.ts hookQuestion）；/每日一題 用（2026-11-25）。 */
+  question?: string;
 }
 
 function hash32(text: string): number {

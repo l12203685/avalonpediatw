@@ -25,6 +25,7 @@ import { percivalThumbVote40, vote40Bar } from './BlueRound40';
 import { fourthWhiteNow, onTeamStateApprove, percivalMerlinWhiteNow, r3TeamKeptAtR4, reuseWhiteNow } from './BlueRound38';
 import { leaderOppShift51 } from './Round51';
 import { onTeamBar59 } from './Round59';
+import { onTeamBar76, provReq76 } from './Round76';
 import { evGate63 } from './Round63';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
@@ -84,7 +85,8 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     // 第 35 回合 `goodBayesR4Mix`：第 4 局（要兩張失敗）照字面讀，P(≥ 2 紅) 用角色混合讀人（只有這一格）。
     const r4Mix = tuning.goodBayesR4Mix === true && mode >= 3 && failsRequiredNow(obs) >= 2;
     const req = mode >= 3 && !r4Mix ? 1 : failsRequiredNow(obs);
-    if (cert.minReds(team) >= req) return { vote: false, reason: 'provFail' };
+    // 第 76 回合 `onTeamR4Prov76`（Round76.ts）：第 4 局照字面讀的時候，「公開邏輯證明會失敗」也要兩個確定的紅（關著時照原本的 req）。
+    if (cert.minReds(team) >= provReq76(tuning, obs, failsRequiredNow(obs), req)) return { vote: false, reason: 'provFail' };
     // 第 40 回合 `percivalThumbVote40`（PV-V2／PV-V3）：派西在隊上、隊上只有一根拇指。
     const thumbVote = percivalThumbVote40(tuning, obs, team);
     if (thumbVote !== null) return { vote: thumbVote, reason: thumbVote ? 'onDefault' : 'bad' };
@@ -92,7 +94,8 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     if (((tuning.goodBayesR4Kept ?? 0) & 1) !== 0 && r3TeamKeptAtR4(obs, team) && cert.minReds(team) === 0
       && !(obs.lakeHistory ?? []).some((l) => l.declaredClaim === 'evil' && team.includes(l.targetId))) return { vote: true, reason: 'onDefault' };
     // 第 59 回合 `onTeamVote59`／`onTeamVote59R3`（Round59.ts）：第 4 局照字面讀（P(隊上的紅 ≥ 2)）、第 3 局的門檻（關著時 null）。
-    const lit59 = onTeamBar59(tuning, obs, failsRequiredNow(obs));
+    // 第 76 回合（Round76.ts）：第 4 局照比分分開的門檻、門檻附近的漸進（關著時 null → 照第 59 回合）。
+    const lit59 = onTeamBar76(tuning, obs, failsRequiredNow(obs), team) ?? onTeamBar59(tuning, obs, failsRequiredNow(obs));
     const below = bayesTeamRedsBelow(obs, team, lit59 ? lit59.req : req, r4Mix && !lit59 ? bayesOptionsOf({ ...tuning, beliefRecursive: 5 }) : opts);
     if (below === null) return null;
     // 第 40 回合 `vote40*`：分局面、分角色的門檻（沒有設時用原本的）。
