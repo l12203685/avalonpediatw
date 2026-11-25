@@ -203,7 +203,10 @@ describe('round 75 assassinWorldLine75', () => {
     expect(rm.front).toEqual(rb.front);
     const read = worldLines75(o)!;
     for (const id of blues) {
-      expect(rw.terms.get(id)).toEqual(rb.terms.get(id));
+      // The five terms are unchanged; round 79 adds the world line's own term (score = own × five terms + worldLine).
+      const { worldLine, ...five } = rw.terms.get(id)!;
+      expect(five).toEqual(rb.terms.get(id));
+      expect(worldLine!).toBeCloseTo(read.merlin.get(id)!, 9);
       expect(rw.scores.get(id)!).toBeCloseTo(read.merlin.get(id)!, 9);
       expect(rm.scores.get(id)!).toBeCloseTo(0.25 * rb.scores.get(id)! + 0.75 * read.merlin.get(id)!, 9);
     }

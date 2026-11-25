@@ -10,7 +10,7 @@
  */
 
 import { assassinSight71 } from './Round71';
-import { applyWorldLine75 } from './Round75';
+import { worldLineParts75 } from './Round75';
 import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
 import { r2Lead72Applies, r2Lead72Tuning, round72Stats } from './Round72';
 import { exactPick53Team } from './Round53';
@@ -782,6 +782,11 @@ export interface AssassinScoreTerms {
   lead: number;
   /** Re-proposal read (`assassinReuseRead`). */
   reuse: number;
+  /**
+   * Round 75 world line (`assassinWorldLine75`, the default since round 79): `w × log P(Merlin = seat)`. Only when it applies; then the score
+   * is `own × (the five terms above) + worldLine` (`AssassinationReadout.own`, 0 by default = the world line alone).
+   */
+  worldLine?: number;
 }
 
 /** `HeuristicAgent.assassinationReadout`: what the assassination ranks by. */
@@ -793,6 +798,8 @@ export interface AssassinationReadout {
   /** Total log-score per candidate (all candidates, including the ones the tiers dropped). */
   scores: Map<string, number>;
   terms: Map<string, AssassinScoreTerms>;
+  /** Round 79: the multiplier of the five terms when the world line applies (`assassinWorldLineOwn75`); 1 when it does not. */
+  own: number;
 }
 
 export class HeuristicAgent implements AvalonAgent {
@@ -2690,7 +2697,7 @@ export class HeuristicAgent implements AvalonAgent {
     evilSet: ReadonlySet<string>,
     ignoreReuse: boolean,
     doomedMode: number,
-  ): { scores: Map<string, number>; terms: Map<string, AssassinScoreTerms> } {
+  ): { scores: Map<string, number>; terms: Map<string, AssassinScoreTerms>; own: number } {
     const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
     const leadWeight = this.tuning.assassinLeadRead ?? 0;
     const lakeWeight = this.tuning.assassinLakeRead ?? 0;
@@ -2773,7 +2780,9 @@ export class HeuristicAgent implements AvalonAgent {
     }
     // Round 75 (red) `assassinWorldLine75` (Round75.ts, assassin/WorldLines75.ts): the Percival–Merlin world lines' log P(Merlin = seat),
     // mixed with the score above. Off (or no red reveal / not the 10-player roles): the same Map, untouched. Outside `terms`.
-    return { scores: applyWorldLine75(this.tuning, obs, scores), terms };
+    const wl = worldLineParts75(this.tuning, obs, scores);
+    if (wl.add) for (const [id, v] of wl.add) { const t = terms.get(id); if (t) t.worldLine = v; }
+    return { scores: wl.scores, terms, own: wl.own };
   }
 
   /**
@@ -2785,7 +2794,7 @@ export class HeuristicAgent implements AvalonAgent {
     if (!this.tuning.assassinModel) return null;
     const { allGood, goodPlayers, evilSet, visibleRed, doomedMode } = this.assassinCandidates(obs);
     if (allGood.length === 0) return null;
-    const { scores, terms } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
+    const { scores, terms, own } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
     const evidence = visibleRedEvidence(obs, goodPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo);
     const front = visibleRed.tier ? tierCandidates(goodPlayers, evidence) : [...goodPlayers];
     // Scores of the seats the tiers dropped (they are never picked while a front-tier seat exists), for display.
@@ -2796,6 +2805,7 @@ export class HeuristicAgent implements AvalonAgent {
       front,
       scores: new Map([...(rest?.scores ?? []), ...scores]),
       terms: new Map([...(rest?.terms ?? []), ...terms]),
+      own,
     };
   }
 

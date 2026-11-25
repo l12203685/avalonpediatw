@@ -458,7 +458,7 @@ function answerAssassination(game: SimGame, target: AiAnswerTarget, opts: AiAnsw
         chosen: s === aiTarget,
         real: s === realTarget,
         front: front.has(s),
-        ...(t ? { terms: { model: r3(t.model), vote: r3(t.vote), lake: r3(t.lake), lead: r3(t.lead), reuse: r3(t.reuse) } } : {}),
+        ...(t ? { terms: { model: r3(t.model), vote: r3(t.vote), lake: r3(t.lake), lead: r3(t.lead), reuse: r3(t.reuse), ...(t.worldLine !== undefined ? { worldLine: r3(t.worldLine) } : {}) } } : {}),
       });
     }
   }
@@ -480,13 +480,23 @@ function answerAssassination(game: SimGame, target: AiAnswerTarget, opts: AiAnsw
     if (!t) return `${seatTxt(s)}：沒有分數`;
     const parts = [['模型', t.model], ['投票', t.vote], ['湖', t.lake], ['派隊', t.lead], ['重派', t.reuse]] as const;
     const sum = t.model + t.vote + t.lake + t.lead + t.reuse;
-    return `${seatTxt(s)} ${parts.filter(([, v]) => v !== 0).map(([n, v]) => `${n} ${v >= 0 ? '+' : ''}${v.toFixed(2)}`).join(' ')} = ${sum.toFixed(2)}`
-      + `（P(梅林) ${(probs.get(s) ?? 0).toFixed(2)}${readout && !readout.front.includes(seatId(s)) ? '，不在前排' : ''}）`;
+    const sign = (v: number): string => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
+    const tail = `（P(梅林) ${(probs.get(s) ?? 0).toFixed(2)}${readout && !readout.front.includes(seatId(s)) ? '，不在前排' : ''}）`;
+    // 第 79 回合起預設是世界線刺客：分數 = 世界線那一項（＋舊的各項 × own；預設 own = 0，舊的各項不算進分數）。
+    if (t.worldLine !== undefined) {
+      const own = readout?.own ?? 0;
+      return `${seatTxt(s)} 世界線 ${sign(t.worldLine)}${own ? ` ＋ 舊的各項 ${sign(sum)} × ${own}` : ''} = ${(own * sum + t.worldLine).toFixed(2)}${tail}`;
+    }
+    return `${seatTxt(s)} ${parts.filter(([, v]) => v !== 0).map(([n, v]) => `${n} ${sign(v)}`).join(' ')} = ${sum.toFixed(2)}${tail}`;
   };
   if (readout) {
     const shown = [...new Set([...order.slice(0, 3), realTarget, merlinSeat].filter((s) => order.includes(s)))];
     // 梅林是誰是事後的資訊：只用來決定多列哪一家的分數，句子裡不寫誰是梅林（看 hindsight）。
-    reasons.push({ source: 'terms', label: '刺殺分數的組成（log 分數，加起來就是排序用的分數）', text: shown.map(termTxt).join('；') });
+    const worldLine = [...readout.terms.values()].some((t) => t.worldLine !== undefined);
+    const label = worldLine
+      ? '刺殺分數（世界線刺客：四個紅方的資訊合起來，比對 30 種「誰是派西維爾、誰是梅林」的組合；分數 = 這一家是梅林的 log 機率）'
+      : '刺殺分數的組成（log 分數，加起來就是排序用的分數）';
+    reasons.push({ source: 'terms', label, text: shown.map(termTxt).join('；') });
   }
   for (const s of order.slice(0, 3)) {
     const facts = seatFacts(obs, s);
