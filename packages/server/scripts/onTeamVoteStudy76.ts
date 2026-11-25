@@ -2,7 +2,7 @@
 /**
  * 第 76 回合：忠臣／派西第 3–5 局的票，全部真人局逐點重播（第 59 回合 `onTeamVoteStudy59.ts` 的延伸）。
  *
- *   cd packages/server && npx tsx scripts/onTeamVoteStudy76.ts --out rows.jsonl [--shard k/n] [--variant 標籤[@局,局]:開關=值,開關=值 …]
+ *   cd packages/server && npx tsx scripts/onTeamVoteStudy76.ts --out rows.jsonl [--shard k/n] [--h-flag 開關=值 …] [--variant 標籤[@局,局]:開關=值,開關=值 …]
  *
  * 真人局 `games_cache.json` 十人局，每個忠臣／派西座位在下面的投票點，用第 1 關的同一套重播（同 `agreement.replaySeat`：
  * 只給那個座位當時知道的東西、亂數照「局號|座位|vote-提議號」）讓機器人投一次：
@@ -10,6 +10,7 @@
  *   - 不在隊上：第 3–5 局的第 4 次提議（再否決就是強制局）。
  * 每點記：
  *   - 機器人的票：H = 真人桌策略層（照開打前的 S 分弱／一般／強；S 不明 = 一般）、A = 基準線；H 另記理由（`ForwardAgent` 推理紀錄的那一條規則）。
+ *     `--h-flag` 疊在 H 上面（候選也跟著）：第 76 回合的表是在採用之前量的，要重現就加 `--h-flag onTeamVote59=0.8`。
  *   - `--variant` 的開關疊在 H 上面再投一次（只在標籤指定的局、而且在隊上的點重投，其他點照 H；`@3,4` = 第 3、4 局，不寫 = 第 4 局）。
  *   - 這個座位的後驗（H 與 A 各一份）：P(隊上自己以外有紅)、P(隊上的紅 ≥ 2)；隊上實際的紅數、要幾張失敗。
  *   - 局面：第幾局、第幾次提議、比分、隊伍人數、這一局之後自己還會不會當隊長；座位 PR、桌上 S 與強度層。
@@ -41,6 +42,8 @@ function flags(spec: string): Partial<AgentTuning> {
 }
 
 interface Variant { label: string; rounds: number[]; tuning: Partial<AgentTuning> }
+
+const hFlags: Partial<AgentTuning> = flags(args('--h-flag').join(','));
 
 const variants: Variant[] = args('--variant').map((v) => {
   const i = v.indexOf(':');
@@ -101,7 +104,8 @@ function main(): void {
           human: p.votes[seat - 1] ? 1 : 0, later: leadsLaterThisRound(obs) ? 1 : 0,
         };
         const team = p.teamSeats.map(seatId);
-        for (const [col, over] of [['H', PROFILE_OVERRIDES[opp]], ['A', {}]] as const) {
+        const hOver: Partial<AgentTuning> = { ...PROFILE_OVERRIDES[opp], ...hFlags };
+        for (const [col, over] of [['H', hOver], ['A', {}]] as const) {
           const v = vote(over, idx, col === 'H');
           row[col] = v.vote ? 1 : 0;
           if (col === 'H') row.H_why = v.why;
@@ -112,7 +116,7 @@ function main(): void {
           row[`${col}_p2`] = b2 === null ? null : +(1 - b2).toFixed(4);
         }
         for (const v of variants) {
-          row[`H${v.label}`] = on && v.rounds.includes(p.round) ? (vote({ ...PROFILE_OVERRIDES[opp], ...v.tuning }, idx, false).vote ? 1 : 0) : row.H;
+          row[`H${v.label}`] = on && v.rounds.includes(p.round) ? (vote({ ...hOver, ...v.tuning }, idx, false).vote ? 1 : 0) : row.H;
         }
         lines.push(JSON.stringify(row));
         points += 1;

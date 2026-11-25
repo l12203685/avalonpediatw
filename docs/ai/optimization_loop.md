@@ -11558,8 +11558,8 @@ A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）照舊是硬�
 ```
 cd packages/server
 npx tsx scripts/humanPrBenchmark.ts --workers 2 --boot 0 --tier-profile --roles loyal,percival --flag onTeamVote59=0.8 --dump prH.jsonl      # 本回合之前的真人桌
-npx tsx scripts/onTeamVoteStudy76.ts --out rows_k.jsonl --shard k/2 --variant L55:onTeamVote59=0.55 --variant K5:onTeamR4Key76=0.5 \
-  --variant S5w3:onTeamVote59=0.5,onTeamR4Soft76=0.3 --variant P8:onTeamR4Prov76=1 --variant T85@3:onTeamVote59R3=0.85 …      # k = 0, 1；H 要用本回合之前的值時加 onTeamVote59=0.8 當對照
+npx tsx scripts/onTeamVoteStudy76.ts --out rows_k.jsonl --shard k/2 --h-flag onTeamVote59=0.8 --variant L55:onTeamVote59=0.55 --variant K5:onTeamR4Key76=0.5 \
+  --variant S5w3:onTeamVote59=0.5,onTeamR4Soft76=0.3 --variant P8:onTeamR4Prov76=1 --variant T85@3:onTeamVote59R3=0.85 …      # k = 0, 1；--h-flag = 本回合之前的真人桌
 python3 scripts/onTeamVoteStudy76.py rows_*.jsonl --part base|curve [--role loyal]
 python3 scripts/onTeamVoteStudy76.py rows_*.jsonl --pr prH.jsonl --part cells|cand
 npx tsx scripts/humanPrBenchmark.ts --workers 2 --boot 0 --tier-profile --roles loyal,percival --flag onTeamVote59=0.55 --dump prL55.jsonl   # 整份重播確認
