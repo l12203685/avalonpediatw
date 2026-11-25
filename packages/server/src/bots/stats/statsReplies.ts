@@ -213,6 +213,70 @@ export interface PlayerCardInput {
    * role theory over windows that are not full, so the card must not say they are unranked.
    */
   newcomerRank?: number | null;
+  /**
+   * 全體的整體理論勝率（%）：整份樣本當成一位玩家算出來的值，跟 /排行 圖上「全體」那條線同一個數字
+   * （statsQueries.chartBaselines）。卡片第一行拿它跟這位玩家的整體理論比；沒有就不比。
+   */
+  fieldOverallTheory?: number | null;
+}
+
+// ─── 第一行的一句話（2026-11-25 第二批）──────────────────────────────────────
+
+/** 生涯場數不到這個數就不下結論（快取自己排行、算全體基準的門檻也是 30 場）。 */
+export const HEADLINE_MIN_GAMES = 30;
+/** 跟全體平均差不到這麼多個百分點就說「差不多」。 */
+export const HEADLINE_CLOSE_POINTS = 1;
+/** 一個角色至少打過這麼多場才在第一行點名（跟角色理論看的「各角色近 10 場」同一個數）。 */
+export const HEADLINE_ROLE_MIN_GAMES = 10;
+
+const round1 = (v: number): number => Math.round(v * 10) / 10;
+
+/** 擅長／較弱清單裡第一個場數夠的角色。 */
+function headlineRole(strength: StrengthPlayerData | null | undefined, names: readonly string[] | undefined): string | null {
+  if (!strength?.hasData || !Array.isArray(strength.roles)) return null;
+  for (const role of names ?? []) {
+    const entry = strength.roles.find((r) => r.role === role);
+    if (entry && entry.winRate !== null && entry.sampleSize >= HEADLINE_ROLE_MIN_GAMES) return role;
+  }
+  return null;
+}
+
+/**
+ * /戰績 第一行的一句話結論（站長的常設規則 2026-11-25：照提案做）：打了幾場、整體理論勝率比全體平均高或低多少、
+ * 最拿手和較弱的角色。只用卡片下面本來就有的數字（生涯場數、整體理論、擅長角色）和 /排行 圖上的「全體」基準；
+ * 不另外算新的指標。
+ *   - 不到 HEADLINE_MIN_GAMES 場：只說場數還少，不比較、不點名角色。
+ *   - 舊快取沒有整體理論：改報最終勝率，不比較（全體的基準是理論勝率，不能拿來比最終勝率）。
+ *   - 差距用印出來的兩個數字（各一位小數）相減，所以讀的人自己減也是同一個數。
+ */
+export function playerHeadline(input: Pick<PlayerCardInput, 'player' | 'strength' | 'fieldOverallTheory'>): string {
+  const p = input.player;
+  const career = p.theory?.career;
+  const games = Math.round(typeof career?.games === 'number' ? career.games : p.totalGames);
+  if (!Number.isFinite(games) || games < HEADLINE_MIN_GAMES) {
+    return `打了 ${Number.isFinite(games) ? games : 0} 場，場數還少，下面的數字先參考就好。`;
+  }
+  const parts: string[] = [];
+  const overall = career?.overallTheory;
+  if (typeof overall === 'number' && Number.isFinite(overall)) {
+    const field = input.fieldOverallTheory;
+    if (typeof field === 'number' && Number.isFinite(field)) {
+      const diff = round1(round1(overall) - round1(field));
+      const versus = Math.abs(diff) < HEADLINE_CLOSE_POINTS
+        ? `跟全體平均（${pct(field)}）差不多`
+        : `比全體平均（${pct(field)}）${diff > 0 ? '高' : '低'} ${Math.abs(diff).toFixed(1)} 個百分點`;
+      parts.push(`打了 ${games} 場，整體理論勝率 ${pct(overall)}，${versus}`);
+    } else {
+      parts.push(`打了 ${games} 場，整體理論勝率 ${pct(overall)}`);
+    }
+  } else {
+    parts.push(`打了 ${games} 場，最終勝率 ${pct(career?.finalWinRate ?? p.finalWinRate)}`);
+  }
+  const best = headlineRole(input.strength, input.strength?.topRoles);
+  const weak = headlineRole(input.strength, input.strength?.bottomRoles);
+  if (best && weak && best !== weak) parts.push(`最拿手${best}，較弱${weak}`);
+  else if (best) parts.push(`最拿手${best}`);
+  return `${parts.join('；')}。`;
 }
 
 /**
@@ -409,10 +473,14 @@ function outcomeBlockLine(label: string, b: OutcomeBlocks): string {
  * (`missionWinRate` falls back to the legacy `winRate`, which has the same 任務結算 meaning). The excess
  * win rate and the legacy roleTheory are never shown; on a cache without `theory` the card says the
  * theory rates come with the next refresh.
+ *
+ * 2026-11-25 (batch 2): the first line ends with a one-sentence conclusion (playerHeadline) —
+ * 「📊 名字 的戰績：打了 N 場，整體理論勝率 x%，比全體平均（y%）高 z 個百分點；最拿手…，較弱…。」; the detail
+ * lines below are unchanged.
  */
 export function formatPlayerCard(input: PlayerCardInput): string {
   const p = input.player;
-  const lines: string[] = [`📊 ${p.name} 的戰績`];
+  const lines: string[] = [`📊 ${p.name} 的戰績：${playerHeadline(input)}`];
   const theory = theoryLines(p, input.newcomerRank);
   const roleWindows = roleWindowSizes(p.theory?.roleWindows);
   const blocks = roleWindows ? playerOutcomeBlocks(p) : null;
@@ -924,7 +992,7 @@ export function formatStatsHelp(platform: StatsPlatform, scope: string | null = 
   }
   // 每日一題 (2026-11-25, bots/dailyQuestion): /每日一題 on both platforms.
   lines.push(`${DAILY_QUESTION_USAGE}\u3000${DAILY_QUESTION_HELP_TEXT}`);
-  // 補位機器人 (2026-11-03, bots/seatFiller): LINE types /補位, Discord has /機器人補位.
+  // 補位機器人 (2026-11-03, bots/seatFiller): /補位 on both platforms (/機器人補位 works too).
   lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000${SEAT_FILLER_HELP_TEXT}`);
   // 待修正牌譜清單 (2026-11-09, bots/paipuFix): /待修正 on both platforms.
   lines.push(`${PAIPU_FIX_USAGE[platform]}\u3000${PAIPU_FIX_HELP_TEXT}`);

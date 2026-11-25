@@ -119,19 +119,20 @@ export async function handleChemistryCommand(interaction: ChatInputCommandIntera
   await replyStats(interaction, () => chemistryReply(a, b));
 }
 
-// ── /rules、/roles ───────────────────────────────────────────────────────────
+// ── /規則、/角色（/rules、/roles）───────────────────────────────────────────────
 
 /**
- * /rules and /roles (bots/rules.ts): the 10-player rules and the seven roles, one line each, in
+ * /規則 = /rules and /角色 = /roles (bots/rules.ts; the Chinese names since 2026-11-25 batch 2, the English
+ * ones stay registered): the 10-player rules and the seven roles, one line each, in
  * Traditional Chinese (2026-11-25). The old English embeds were wrong for this community — they said
  * Merlin cannot see Morgana, left Mordred out and ended the game on five rejections.
  */
 export async function handleRulesCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
-  await interaction.editReply({ content: rulesText('discord'), allowedMentions: { parse: [] } });
+  await interaction.editReply({ content: rulesText(), allowedMentions: { parse: [] } });
 }
 
 export async function handleRolesCommand(interaction: CommandInteraction): Promise<void> {
   await interaction.deferReply();
-  await interaction.editReply({ content: rolesText('discord'), allowedMentions: { parse: [] } });
+  await interaction.editReply({ content: rolesText(), allowedMentions: { parse: [] } });
 }
