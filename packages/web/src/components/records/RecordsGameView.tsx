@@ -54,7 +54,7 @@ import {
 
 export const OUTCOME_STYLE: Readonly<Record<RecordOutcome, string>> = {
   三紅: 'bg-red-500/20 text-red-200 border-red-500/50',
-  三藍死: 'bg-red-300/15 text-red-200 border-red-300/50',
+  三藍死: 'bg-pink-700/25 text-pink-200 border-pink-500/60',
   三藍活: 'bg-blue-500/20 text-blue-200 border-blue-500/50',
 };
 

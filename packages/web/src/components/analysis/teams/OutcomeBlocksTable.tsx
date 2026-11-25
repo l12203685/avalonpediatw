@@ -57,7 +57,7 @@ export interface OutcomeBlocksTableProps<R extends OutcomeGroupRow> {
 
 const BLOCKS: readonly OutcomeBlockKey[] = ['mission', 'assassination', 'final'];
 
-/** 三紅 → 紅、三藍死 (刺中) → 淺紅、紅方勝 → 紅 (與 OutcomeBar / Donut 的顏色一致)。 */
+/** 三紅 → 紅、三藍死 (刺中) → 紫紅、紅方勝 → 紅 (與 OutcomeBar / Donut 的顏色一致)。 */
 const BLOCK_TONE: Readonly<Record<OutcomeBlockKey, Tone>> = {
   mission: 'red',
   assassination: 'kill',

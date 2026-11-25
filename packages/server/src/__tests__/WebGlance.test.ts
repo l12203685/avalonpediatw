@@ -435,11 +435,14 @@ describe('一眼看懂（第二批）：派隊與投票的內頁', () => {
 describe('顏色：梅林被刺中（三藍死）是紅方贏，用紅色系', () => {
   const rgb = (hex: string): [number, number, number] => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
 
-  it('三藍死是紅色系（不是琥珀），跟三紅分得出來；三藍活是藍', () => {
+  it('三紅是亮紅、三藍死是紫紅（不是琥珀），跟三紅分得出來；三藍活是藍', () => {
     const [r, g, b] = rgb(OUTCOME_COLORS.三藍死);
     expect(r).toBeGreaterThan(g);
-    // 琥珀／黃是「綠比藍多很多」；紅色系的綠、藍差不多
-    expect(Math.abs(g - b)).toBeLessThan(30);
+    // 琥珀／黃是「綠比藍多很多」；紫紅是藍比綠多、紅最多（站長 2026-11-25：三紅亮紅、三藍死紫紅）
+    expect(g - b).toBeLessThan(30);
+    expect(b).toBeGreaterThan(g);
+    expect(r).toBeGreaterThan(b);
+    expect(OUTCOME_COLORS.三紅).toBe('#ef4444');
     expect(OUTCOME_COLORS.三藍死).not.toBe(OUTCOME_COLORS.三紅);
     const [br, , bb] = rgb(OUTCOME_COLORS.三藍活);
     expect(bb).toBeGreaterThan(br);
