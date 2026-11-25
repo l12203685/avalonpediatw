@@ -34,7 +34,7 @@ function expectPlainChinese(text: string): void {
 
 describe('rulesText / rolesText', () => {
   it('rules: the 10-player facts the site uses, one line each', () => {
-    const t = rulesText('discord');
+    const t = rulesText();
     const lines = t.split('\n');
     expect(lines[0]).toBe('📜 阿瓦隆規則（10 人局）');
     expect(t).toContain('五局的任務人數：3、4、4、5、5');
@@ -45,27 +45,26 @@ describe('rulesText / rolesText', () => {
     for (const role of ['梅林', '派西維爾', '忠臣', '刺客', '莫甘娜', '莫德雷德', '奧伯倫']) expect(t).toContain(role);
     // 之前英文版寫的「5 次否決壞人贏」不是這個社群的規則。
     expect(t).not.toMatch(/5 rejections|否決/);
-    expect(lines.at(-1)).toBe('角色介紹：/roles');
-    expect(rulesText('line').split('\n').at(-1)).toBe('角色介紹：/help 角色');
+    // 2026-11-25 第二批：兩邊同一份文字、同一個打法。
+    expect(lines.at(-1)).toBe('角色介紹：/角色');
     expect(lines.length).toBeLessThanOrEqual(9);
     expectPlainChinese(t);
   });
 
   it('roles: Merlin does not see Mordred (and does see Morgana and Oberon); seven roles', () => {
-    const t = rolesText('discord');
+    const t = rolesText();
     expect(t).toContain('🔵 梅林：知道刺客、莫甘娜、奧伯倫是壞人，看不到莫德雷德');
     expect(t).toContain('🔴 莫德雷德：梅林看不到他');
     expect(t).toContain('🔴 莫甘娜：在派西維爾眼中跟梅林一樣');
     expect(t).toContain('🔴 奧伯倫：不知道隊友是誰，隊友也不知道他；梅林看得到他');
     expect(t).not.toContain('莫甘娜除外');
     expect(t.split('\n').filter((l) => /^🔵|^🔴/u.test(l))).toHaveLength(7);
-    expect(t.split('\n').at(-1)).toBe('規則：/rules');
-    expect(rolesText('line').split('\n').at(-1)).toBe('規則：/help 規則');
+    expect(t.split('\n').at(-1)).toBe('規則：/規則');
     expectPlainChinese(t);
   });
 
   it('seats are written N家 (0家), never 10家 / 10 號', () => {
-    for (const t of [rulesText('line'), rolesText('line')]) expect(t).not.toMatch(/10\s*[家號]/u);
+    for (const t of [rulesText(), rolesText()]) expect(t).not.toMatch(/10\s*[家號]/u);
   });
 
   it('the legacy LINE role cards no longer say Merlin cannot see Morgana', () => {
@@ -81,11 +80,11 @@ describe('Discord /rules, /roles', () => {
     const rules = interaction(COMMANDS.RULES);
     await handleRulesCommand(rules as never);
     expect(rules.deferReply).toHaveBeenCalledTimes(1);
-    expect(rules.editReply).toHaveBeenCalledWith({ content: rulesText('discord'), allowedMentions: { parse: [] } });
+    expect(rules.editReply).toHaveBeenCalledWith({ content: rulesText(), allowedMentions: { parse: [] } });
     const roles = interaction(COMMANDS.ROLES);
     await handleRolesCommand(roles as never);
-    expect(roles.editReply).toHaveBeenCalledWith({ content: rolesText('discord'), allowedMentions: { parse: [] } });
-    for (const t of [rulesText('discord'), rolesText('discord')]) expect(t.length).toBeLessThanOrEqual(2000);
+    expect(roles.editReply).toHaveBeenCalledWith({ content: rolesText(), allowedMentions: { parse: [] } });
+    for (const t of [rulesText(), rolesText()]) expect(t.length).toBeLessThanOrEqual(2000);
   });
 
   it('every slash command description is in Chinese (an English gloss may follow) and fits Discord (≤ 100)', () => {
@@ -110,13 +109,13 @@ describe('/help 規則、/help 角色（LINE 沒有 /rules /roles，用這個入
     expect(parseHelpCommand('/help 規則')?.topic).toBe('規則');
     expect(parseHelpCommand('/help 角色')?.topic).toBe('角色');
     expect(parseHelpCommand('/help rules')?.topic).toBe('規則');
-    expect(topicHelpText('規則', 'line')).toBe(rulesText('line'));
-    expect(topicHelpText('角色', 'line')).toBe(rolesText('line'));
-    expect(topicHelpText('規則', 'discord')).toBe(rulesText('discord'));
+    expect(topicHelpText('規則', 'line')).toBe(rulesText());
+    expect(topicHelpText('角色', 'line')).toBe(rolesText());
+    expect(topicHelpText('規則', 'discord')).toBe(rulesText());
   });
   it('LINE typed: /help 規則 answers with the rules', async () => {
-    expect(await answerStatsTextCommand('/help 規則', 'line')).toBe(rulesText('line'));
-    expect(await answerStatsTextCommand('／說明 角色', 'line')).toBe(rolesText('line'));
+    expect(await answerStatsTextCommand('/help 規則', 'line')).toBe(rulesText());
+    expect(await answerStatsTextCommand('／說明 角色', 'line')).toBe(rolesText());
   });
 });
 
