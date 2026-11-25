@@ -10,6 +10,7 @@
  */
 
 import { assassinSight71 } from './Round71';
+import { applyWorldLine75 } from './Round75';
 import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
 import { r2Lead72Applies, r2Lead72Tuning, round72Stats } from './Round72';
 import { exactPick53Team } from './Round53';
@@ -2770,7 +2771,9 @@ export class HeuristicAgent implements AvalonAgent {
       const withTail = tailMode > 0 ? sum + (tail.get(id) ?? 0) : sum;
       scores.set(id, deriv50 > 0 ? withTail + (deriv.get(id) ?? 0) : withTail);
     }
-    return { scores, terms };
+    // Round 75 (red) `assassinWorldLine75` (Round75.ts, assassin/WorldLines75.ts): the Percival–Merlin world lines' log P(Merlin = seat),
+    // mixed with the score above. Off (or no red reveal / not the 10-player roles): the same Map, untouched. Outside `terms`.
+    return { scores: applyWorldLine75(this.tuning, obs, scores), terms };
   }
 
   /**
@@ -2873,7 +2876,7 @@ export class HeuristicAgent implements AvalonAgent {
       const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
       const leadWeight = this.tuning.assassinLeadRead ?? 0;
       const lakeWeight = this.tuning.assassinLakeRead ?? 0;
-      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0 && lakeWeight <= 0) {
+      if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0 && lakeWeight <= 0 && (this.tuning.assassinWorldLine75 ?? 0) <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
       const { scores } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
