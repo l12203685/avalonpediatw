@@ -52,9 +52,9 @@ export const ASSASSIN_ASK_TEXT = '我是刺客，請紅方討論後在聊天輸�
  */
 export function parseAssassinCommand(text: string): number | null {
   const t = String(text ?? '')
-    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xff10 + 48))
-    .replace(/／/g, '/')
-    .replace(/　/g, ' ')
+    .replace(/[\uff10-\uff19]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xff10 + 48))
+    .replace(/\uff0f/g, '/')
+    .replace(/\u3000/g, ' ')
     .trim();
   const m = /^\/\s*刺[殺杀]\s*(10|[0-9])\s*家?$/.exec(t);
   if (!m) return null;
