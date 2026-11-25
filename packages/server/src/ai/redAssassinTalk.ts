@@ -122,7 +122,7 @@ function redTalkReasons(
   // 分層：當隊長時派過梅林看得到的紅的人排在後面
   if (readout && readout.front.includes(pick) && readout.front.length < candidates.length) {
     const dropped = candidates.filter((id) => !readout.front.includes(id));
-    out.push({ w: 100, text: `${seatsText(dropped, seatOf)} 當隊長時派過梅林看得到的紅，先排除` });
+    out.push({ w: 100, text: `${seatsText(dropped, seatOf)} 當隊長時派過梅林看得到的紅，排在後面` });
   }
   // 隊長：自己派的隊都沒有梅林看得到的紅
   const leads = obs.voteHistory.filter((v) => v.leader === pick);
