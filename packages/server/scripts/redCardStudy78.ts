@@ -13,6 +13,7 @@
  *   - 這個座位自己的後驗：P(隊上的紅 ≥ 2)、P(隊上的紅 ≥ 自己看得到的＋1)（= 隊上還有自己看不到的紅）。
  *   - 局面：第幾局、比分、隊伍人數、要幾張失敗、是不是強制局、自己是不是隊長；隊上實際的紅方角色、自己看得到幾個隊友在隊上；
  *     隊上其他人有幾個出過「有失敗牌的任務」（公開）。
+ *   - 隊上剛好兩個相認紅、一張失敗就夠的格子（`Round78.pairMate78`）：兩個人的公開紀錄（`pairSt`：自己、隊友各一個字，F 出過／H 藏過／N 沒有）。
  *   - 牌譜：整隊的失敗張數、這個座位的牌能不能確定（0 張 = 都出成功、張數 = 紅方人數 = 都出失敗）、任務有沒有失敗、這一局最後紅方有沒有贏。
  *   - 座位 PR、桌上 S 與強度層。
  * 輸出一行一點的 JSONL（沒有名字；局號只用來對 `roleSpots.ts games` 的玩家編號，選強者用），另外每個紅方座位一行 `k:"seat"`（量尺換算的分母）。
@@ -30,6 +31,7 @@ import { buildReplayObservation, seatId } from '../src/ai/benchmark/replayObserv
 import { campOf } from '../src/ai/benchmark/sheetsReplay';
 import { replayGamesFromDataset } from '../src/ai/benchmark/datasetReplay';
 import { bayesOptionsOf, bayesTeamRedsBelow } from '../src/ai/belief/BayesBelief';
+import { pairMate78, pairStatus78 } from '../src/ai/Round78';
 
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
@@ -110,6 +112,12 @@ function main(): void {
           knownOn, stainedOthers: q.teamSeats.filter((s) => s !== seat && stained.has(s)).length, selfStained: stained.has(seat) ? 1 : 0,
           fails: q.failCount, failed: q.failed ? 1 : 0, human: pinned === null ? null : pinned === 'fail' ? 'F' : 'S', redWon,
         };
+        // 兩個相認紅同隊的格子（Round78.pairMate78）：自己／隊友的公開紀錄（F 出過、H 藏過、N 沒有）、自己的座位是不是在前面。
+        const mate = pairMate78(obs);
+        if (mate !== null) {
+          row.pairSt = pairStatus78(obs, id, mate).join('');
+          row.seatFirst = obs.allPlayerIds.indexOf(id) < obs.allPlayerIds.indexOf(mate) ? 1 : 0;
+        }
         const team = q.teamSeats.map(seatId);
         const hOver: Partial<AgentTuning> = { ...PROFILE_OVERRIDES[opp], ...hFlags };
         for (const [col, over] of [['H', hOver], ['A', {}]] as const) {
