@@ -41,6 +41,9 @@ function failsRequired(obs: PlayerObservation, round: number): number {
 const fails = (obs: PlayerObservation): number => (obs.questResults ?? []).filter((r) => r === 'fail').length;
 const wins = (obs: PlayerObservation): number => (obs.questResults ?? []).filter((r) => r === 'success').length;
 
+/** 診斷計數（自我對打拆解用；不影響決策）：`key` = `r4KeyFail78` 改出失敗的次數、`pair` = `redPairOne78`／`redPairAlways78` 決定一張牌的次數。 */
+export const round78Stats = { key: 0, pair: 0 };
+
 /** 第 78 回合的開關有沒有任何一個打開。 */
 export function round78On(tuning: Readonly<AgentTuning>): boolean {
   return (tuning.r4KeyFail78 ?? 0) > 0 || (tuning.redPairOne78 ?? 0) > 0 || (tuning.redPairAlways78 ?? 0) > 0;
@@ -76,9 +79,12 @@ export function r4KeyFailCard78(tuning: Readonly<AgentTuning>, obs: PlayerObserv
   if (!(v > 0) || !inR4KeyCell78(obs)) return null;
   const mask = (tuning.r4KeyFail78Roles ?? 0) > 0 ? tuning.r4KeyFail78Roles : 3;
   if ((mask & (obs.myRole === 'oberon' ? 1 : 2)) === 0) return null;
-  if (v >= 1) return 'fail';
-  const p = enoughRedsProb78(tuning, obs);
-  return p !== null && p >= v ? 'fail' : null;
+  if (v < 1) {
+    const p = enoughRedsProb78(tuning, obs);
+    if (p === null || p < v) return null;
+  }
+  round78Stats.key++;
+  return 'fail';
 }
 
 // ── (b)(c) 兩個相認紅同隊、一張失敗就夠 ──────────────────────────────────────
@@ -147,6 +153,12 @@ const roundBit = (mask: number, round: number): boolean => (mask & (1 << (round 
  * (R1–R3, neither side at two wins); null = the rank order decides as before.
  */
 export function pairCard78(tuning: Readonly<AgentTuning>, obs: PlayerObservation): 'fail' | 'success' | null {
+  const card = pairCardOf78(tuning, obs);
+  if (card !== null) round78Stats.pair++;
+  return card;
+}
+
+function pairCardOf78(tuning: Readonly<AgentTuning>, obs: PlayerObservation): 'fail' | 'success' | null {
   const one = tuning.redPairOne78 ?? 0;
   const always = tuning.redPairAlways78 ?? 0;
   if (!(one > 0) && !(always > 0)) return null;
