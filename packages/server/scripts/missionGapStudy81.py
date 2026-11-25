@@ -262,6 +262,8 @@ def main():
     ap.add_argument('--games', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'games_cache.json'))
     ap.add_argument('--json')
     ap.add_argument('--thr', type=float, default=55)
+    ap.add_argument('--md')
+    ap.add_argument('--nodes', default='R3 0:2,R5 2:2,R2 1:0,R1 0:0,R3 1:1')
     a = ap.parse_args()
     hum = load_humans(a.games)
     strong = [g for g in hum if g['b'] is not None and g['b'] >= a.thr and g['r'] >= a.thr]
@@ -277,7 +279,9 @@ def main():
         res['pdlScore_all'] = pdl_by_score(res['pdl_all'])
         ci, tci = bootstrap_pdl(strong, res['bot'])
         res['pdlScore_strong_ci'] = ci; res['pdl_strong_total_ci'] = tci
+        res['lead7'] = {'humanStrong': lead7(strong), 'humanAll': lead7(hum), 'bot': lead7(bots)}
         res['treeThreeBlue'] = {'humanStrong': value_fn(res['humanStrong'])(''), 'humanAll': value_fn(res['humanAll'])(''), 'bot': value_fn(res['bot'])('')}
+    if a.md and 'bot' in res: open(a.md, 'w').write(md_report(res, a.nodes.split(',')))
     s = json.dumps(res, ensure_ascii=False)
     if a.json: open(a.json, 'w').write(s)
     for k in ('humanAll', 'humanStrong', 'bot'):
@@ -326,6 +330,112 @@ def bootstrap_pdl(strong, B, reps=400, seed=81):
     def ci(xs):
         xs = sorted(xs); return (xs[int(0.025 * len(xs))], xs[int(0.975 * len(xs)) - 1])
     return {k: ci(v) for k, v in acc.items()}, ci(tot)
+
+def lead7(games):
+    """線索表第 7 項：莫甘娜第 2 局（1:0）當隊長的提議——隊上有梅林、隊上 ≥ 2 個紅、照派第 1 局出任務的隊（非強制／全部）。"""
+    c = defaultdict(int)
+    for g in games:
+        if not g['rounds'] or not g['leaderKnown'] or len(g['rounds']) < 2: continue
+        if g['rounds'][0]['m'].count('x') >= 1: continue  # 1:0 = 第 1 局成功
+        roles = g['roles']; gi = len(g['rounds'][0]['p'])
+        r1team = set(g['rounds'][0]['p'][-1][0])
+        for pi, (t, ap, forced) in enumerate(g['rounds'][1]['p']):
+            L = leader_of(gi + pi)
+            if roles[L] != 'morgana': continue
+            c['n'] += 1
+            c['merlin'] += any(roles[ch] == 'merlin' for ch in t)
+            c['red2'] += sum(1 for ch in t if roles[ch] in RED) >= 2
+            c['copy'] += r1team <= set(t)
+            c['self'] += L in t
+    return dict(c)
+
+SRCS = [('兩邊都強的真人', 'humanStrong'), ('全部真人', 'humanAll'), ('機器人', 'bot')]
+ROLE_ZH = {'assassin': '刺客', 'morgana': '莫甘娜', 'mordred': '莫德雷德', 'oberon': '奧伯倫', 'merlin': '梅林', 'percival': '派西維爾', 'loyal': '忠臣'}
+
+def pct(d, a, b):
+    n = d.get(b, 0)
+    return f"{100 * d.get(a, 0) / n:.1f}" if n else '—'
+
+def pctn(d, k):
+    n = d.get(k + '_n', 0)
+    return f"{100 * d.get(k + '_yes', 0) / n:.1f}（{int(n)}）" if n else '—'
+
+def md_report(res, nodes):
+    L = []
+    hs, ha, b = res['humanStrong'], res['humanAll'], res['bot']
+    L.append('## 1. 三種結果與任務三藍\n')
+    L.append('| | 局數 | 三紅 | 三藍死 | 三藍活 | 任務三藍 |')
+    L.append('|---|---|---|---|---|---|')
+    for lab, k in SRCS:
+        A = res[k]
+        L.append(f"| {lab} | {A['n']} | {100*A['outcome']['三紅']:.1f} | {100*A['outcome']['三藍死']:.1f} | {100*A['outcome']['三藍活']:.1f} | {100*A['threeBlue']:.1f} |")
+    t = res['treeThreeBlue']
+    L.append(f"\n任務順序完整的局（拆解用）：兩邊都強的真人 {sum(hs['paths'].values())} 局、任務三藍 {100*t['humanStrong']:.1f}%；全部真人 {sum(ha['paths'].values())} 局 {100*t['humanAll']:.1f}%；機器人 {100*t['bot']:.1f}%。"
+             f"兩邊都強的真人局有 {hs['n'] - sum(hs['paths'].values())} 局任務順序不完整（紀錄只寫到一半），只進上面的三種結果。\n")
+    L.append('## 2. 落差在哪幾個任務節點（逐節點相加 = 總差）\n')
+    L.append('每一格 = 「這一格的任務失敗率從真人換成機器人」讓任務三藍多出幾個百分點（performance-difference：真人走到這一格的機率 × 失敗率的差 × 這一格之後成功、失敗兩條路在機器人局的任務三藍差）。'
+             '加起來剛好等於「機器人 − 真人（任務順序完整的局）」。區間 = 真人局的自助法 95%（400 次），機器人那一邊當作固定。\n')
+    L.append('| 任務節點（藍:紅） | 兩邊都強的真人：失敗率（局數） | 全部真人 | 機器人 | 貢獻 pp（對兩邊都強的真人，95% 區間） | 貢獻 pp（對全部真人） |')
+    L.append('|---|---|---|---|---|---|')
+    ag = {k: agg_by_score(res[k]['D']) for _, k in SRCS}
+    order = sorted(res['pdlScore_strong'], key=lambda x: -abs(res['pdlScore_strong'][x]))
+    def nodefail(A, sc):
+        n = f = 0
+        for pth, v in A['node'].items():
+            if score_of(pth) == sc: n += v['n']; f += v['fail']
+        return f"{100*f/n:.1f}（{n}）" if n else '—'
+    for sc in order:
+        lo, hi = res['pdlScore_strong_ci'].get(sc, (0, 0))
+        L.append(f"| {sc} | {nodefail(hs, sc)} | {nodefail(ha, sc)} | {nodefail(b, sc)} | **{100*res['pdlScore_strong'][sc]:+.2f}** [{100*lo:+.2f}, {100*hi:+.2f}] | {100*res['pdlScore_all'].get(sc, 0):+.2f} |")
+    tot = sum(res['pdlScore_strong'].values()); tl, th = res['pdl_strong_total_ci']
+    L.append(f"| 合計 | | | | {100*tot:+.2f} [{100*tl:+.2f}, {100*th:+.2f}] | {100*sum(res['pdlScore_all'].values()):+.2f} |\n")
+    L.append('照任務順序（路徑）拆：\n')
+    L.append('| 路徑 | 兩邊都強的真人：失敗率（局數） | 機器人 | 貢獻 pp |')
+    L.append('|---|---|---|---|')
+    for pth, v in sorted(res['pdl_strong'].items(), key=lambda x: -abs(x[1]))[:12]:
+        h = hs['node'][pth]; bb = b['node'].get(pth, {'n': 0, 'fail': 0})
+        L.append(f"| {pth or '（開局）'} → 第 {len(pth)+1} 局 | {100*h['fail']/h['n']:.1f}（{h['n']}） | {100*bb['fail']/max(1,bb['n']):.1f}（{bb['n']}） | {100*v:+.2f} |")
+    L.append('')
+    rows = [('任務數', 'n', None), ('任務失敗 %', 'fail', 'n'), ('出任務的隊夠讓任務失敗 %', 'dirty', 'n'), ('夠失敗的隊真的失敗 %（任務牌）', 'failGivenDirty', 'dirty'),
+            ('出任務的隊：紅隊長 %', 'leadR', 'n'), ('　紅隊長的隊夠失敗 %', 'leadR_dirty', 'leadR'), ('　藍隊長的隊夠失敗 %', 'leadB_dirty', 'leadB'),
+            ('第 1 次提議就出任務 %', 'att1', 'n'), ('拖到強制局 %', 'att5', 'n'), ('　強制局的隊夠失敗 %', 'att5_dirty', 'att5'),
+            ('提議數', 'Pn', None), ('紅隊長的提議夠失敗 %', 'PleadR_dirty', 'PleadR'), ('藍隊長的提議夠失敗 %', 'PleadB_dirty', 'PleadB'),
+            ('夠失敗的提議通過 %（非強制）', 'VDpass', 'VDn'), ('乾淨的提議通過 %（非強制）', 'VCpass', 'VCn'),
+            ('夠失敗的提議：藍方在隊上投白 %', 'VD_bin_yes', 'VD_bin_n'), ('夠失敗的提議：藍方不在隊上投白 %', 'VD_bout_yes', 'VD_bout_n'),
+            ('乾淨的提議：藍方不在隊上投白 %', 'VC_bout_yes', 'VC_bout_n')]
+    if 'lead7' in res:
+        L.append('## 4. 線索表第 7 項：莫甘娜第 2 局（1:0）當隊長\n')
+        L.append('| | 提議數 | 隊上有梅林 % | 隊上 ≥ 2 個紅 % | 隊上有第 1 局整隊 % | 派自己 % |')
+        L.append('|---|---|---|---|---|---|')
+        for lab, k in SRCS:
+            c = res['lead7'][k]; n = c.get('n', 0)
+            if n: L.append(f"| {lab} | {n} | {100*c['merlin']/n:.1f} | {100*c['red2']/n:.1f} | {100*c['copy']/n:.1f} | {100*c['self']/n:.1f} |")
+        L.append('')
+    for nd in nodes:
+        L.append(f'## 3. {nd}：出任務的隊、隊長、票\n')
+        L.append('| 項目 | ' + ' | '.join(l for l, _ in SRCS) + ' |')
+        L.append('|---|' + '---|' * len(SRCS))
+        for lab, a, bb in rows:
+            cells = [str(int(ag[k].get(nd, {}).get(a, 0))) if bb is None else pct(ag[k].get(nd, {}), a, bb) for _, k in SRCS]
+            L.append(f'| {lab} | ' + ' | '.join(cells) + ' |')
+        for at in range(1, 6):
+            cells = [pct(ag[k].get(nd, {}), f'PleadR_att{at}_dirty', f'PleadR_att{at}') + '／' + pct(ag[k].get(nd, {}), f'PleadB_att{at}_dirty', f'PleadB_att{at}') for _, k in SRCS]
+            L.append(f'| 第 {at} 次提議：紅隊長／藍隊長的隊夠失敗 % | ' + ' | '.join(cells) + ' |')
+        for r in ['assassin', 'morgana', 'mordred', 'oberon', 'merlin', 'percival', 'loyal']:
+            cells = [pct(ag[k].get(nd, {}), f'PleadRole_{r}_dirty', f'PleadRole_{r}') for _, k in SRCS]
+            L.append(f'| {ROLE_ZH[r]}當隊長：提議夠失敗 % | ' + ' | '.join(cells) + ' |')
+        L.append('\n紅方的票（非強制的提議；括號 = 票數）：\n')
+        L.append('| 紅方的票 | ' + ' | '.join(l for l, _ in SRCS) + ' |')
+        L.append('|---|' + '---|' * len(SRCS))
+        vrows = [('相認紅不在隊上、看得到夠多隊友在隊上 → 投白 %', 'RO_known_sees'), ('相認紅不在隊上、看不到夠多隊友但隊其實夠失敗 → 投白 %', 'RO_known_dirty'),
+                 ('相認紅不在隊上、隊其實不夠失敗 → 投白 %', 'RO_known_clean'), ('奧伯倫不在隊上、隊其實夠失敗 → 投白 %', 'RO_oberon_dirty'),
+                 ('奧伯倫不在隊上、隊其實不夠失敗 → 投白 %', 'RO_oberon_clean'), ('相認紅在夠失敗的隊上 → 投白 %', 'RI_known_dirty'), ('奧伯倫在夠失敗的隊上 → 投白 %', 'RI_oberon_dirty')]
+        for lab, k2 in vrows:
+            L.append(f'| {lab} | ' + ' | '.join(pctn(ag[k].get(nd, {}), k2) for _, k in SRCS) + ' |')
+        for at in range(1, 5):
+            L.append(f'| 　看得到夠多隊友 → 投白 %，第 {at} 次提議 | ' + ' | '.join(pctn(ag[k].get(nd, {}), f'RO_known_sees_att{at}') for _, k in SRCS) + ' |')
+        L.append('')
+    return '\n'.join(L)
 
 if __name__ == '__main__':
     main()
