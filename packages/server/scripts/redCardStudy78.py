@@ -329,11 +329,10 @@ def tv(a, b, mx):
 
 def part_cand():
     cands = [c[1:] for c in ROWS[0] if c.startswith('H') and c not in ('H', 'H_why', 'H_p2', 'H_pMore')]
-    # (1) 整隊失敗張數的分布離真人多遠（隊上兩個以上紅方的任務；格 = 局 × 比分 × 隊上的紅）
+    # (1) 整隊失敗張數的分布離真人多遠（每一次有紅方上的任務；格 = 局 × 比分 × 隊上的紅）
     multi = defaultdict(list)
     for m in MIS.values():
-        if len(m) >= 2:
-            multi[cell_of(m)].append(m)
+        multi[cell_of(m)].append(m)
     total = sum(len(v) for v in multi.values())
 
     def distance(col):
@@ -354,7 +353,7 @@ def part_cand():
     def ev(col, sel=lambda m: True):
         per = defaultdict(lambda: [0.0, 0])
         for m in MIS.values():
-            if len(m) < 2 or not sel(m):
+            if not sel(m):
                 continue
             t = W[m[0]['half']]
             c = cell_of(m)
@@ -397,7 +396,7 @@ def part_cand():
                 out[(tier, half)] = (100 * tot / n, 100 * math.sqrt(max(var, 0)) / n)
         return out
 
-    print('候選（開關疊在真人桌策略層上；整隊的張數 = 隊上每個紅方座位都換成機器人）：\n')
+    print('候選（開關疊在真人桌策略層上；整隊的張數 = 隊上每個紅方座位都換成機器人；每一次有紅方上的任務都算）：\n')
     body = [['現行（真人桌策略層）', '—', f'{distance("H"):.3f}', '—', '—', '—', '—']]
     for c in cands:
         col = 'H' + c
