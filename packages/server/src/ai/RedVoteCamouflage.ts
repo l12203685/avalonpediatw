@@ -11,12 +11,14 @@
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
+import { oberonNormalPick81 } from './Round81';
 
 export function redNormalVoteNow(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
   const q = tuning.redNormalVote ?? 0;
   if (q <= 0 || obs.gamePhase !== 'team_vote' || obs.myTeam !== 'evil') return false;
   // Round 16 `oberonNormalVote`: Oberon too (no critical-team exception: he sees no teammate).
-  if (obs.myRole === 'oberon' && !tuning.oberonNormalVote) return false;
+  // Round 81 `oberonNormalRate81` (Round81.ts): with the switch on, only at rate q (seat / round / attempt hash).
+  if (obs.myRole === 'oberon' && !oberonNormalPick81(tuning, obs)) return false;
   const round = obs.currentRound ?? 1;
   if (round < 3 || (obs.failCount ?? 0) >= 4) return false;
   if ((obs.proposedTeam ?? []).includes(obs.myPlayerId)) return false;

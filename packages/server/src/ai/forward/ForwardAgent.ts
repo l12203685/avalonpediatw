@@ -83,6 +83,7 @@ import { r2InnerBlack66 } from '../Round66';
 import { redEarlyBlack67 } from '../Round67';
 import { redKeyCrowd69 } from '../Round69';
 import { redR5Red71 } from '../Round71';
+import { mpOwnRead81 } from '../Round81';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -1089,6 +1090,12 @@ export class ForwardAgent implements AvalonAgent {
     // known reds do not see Oberon, Oberon sees no one): approve when this red's own view reads P(a red on the team) ≥ θ. Off (0): unchanged.
     if (redR5Red71(this.baseline.tuning, obs)) {
       return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red R5 off the team: its own view reads a red on it (round 71)');
+    }
+    // Round 81 `mpOwnRead81` (Round81.ts): red has two fails, blue fewer than two wins, off the team, too few teammates in sight to fail it —
+    // white when this red's own view reads enough reds on the team (≥ θ); with scope bit 4 black below θ. Off (0): unchanged.
+    const mp81 = mpOwnRead81(this.baseline.tuning, obs);
+    if (mp81 !== null) {
+      return this.ruleDecision(obs, { type: 'team_vote', vote: mp81 }, `red match point off the team: its own view reads ${mp81 ? 'enough' : 'too few'} reds on it (round 81)`);
     }
     // Strong-table gap R1 `redNormalVote` (RedVoteCamouflage.ts): off the team, at rate q a red casts the vote a public-view
     // loyal in this seat would, except when the red camp's win or loss rides on this team.
