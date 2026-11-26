@@ -3,7 +3,7 @@
  *
  * 座位一律用 1..n（幾家）；`S`／`X` 的欄位照 `residual.ts` 的特徵清單。
  */
-import { SEAT_FEATURES, VOTE_FEATURES, QUEST_FEATURES, teamGroupOf } from './residual';
+import { SEAT_FEATURES, VOTE_FEATURES } from './residual';
 import { prf } from './residualFit';
 
 /** 一個座位（一位玩家坐過的一局的一個位置）。 */
@@ -102,7 +102,6 @@ const bucket = (m: Record<string, Rate>, key: string): Rate => (m[key] ??= empty
 const eqSeats = (a: readonly number[], b: readonly number[]): boolean => a.length === b.length && [...a].sort((x, y) => x - y).join(',') === [...b].sort((x, y) => x - y).join(',');
 const SI = (name: typeof SEAT_FEATURES[number]): number => SEAT_FEATURES.indexOf(name);
 const VI = (name: typeof VOTE_FEATURES[number]): number => VOTE_FEATURES.indexOf(name);
-const QI = (name: typeof QUEST_FEATURES[number]): number => QUEST_FEATURES.indexOf(name);
 const sideOf = (role: string): 'good' | 'evil' => (['merlin', 'percival', 'loyal'].includes(role) ? 'good' : 'evil');
 
 /** 異常票（內黑 = 在隊上投反對；外白 = 不在隊上投贊成；隊長算在隊上）。 */
@@ -166,7 +165,6 @@ export function evaluatePlayer(inp: EvalInput): PlayerEval {
     percival: { games: 0, round: emptyRate(), game: emptyRate(), switched: emptyRate(), humanTrustsMerlin: { n: 0, hit: 0 } },
     merlin: { metrics: {}, agree: {}, assassinHitOnHim: { n: 0, hit: 0 } },
   };
-  const groupOf = (j: number): string => teamGroupOf(roleOf(j), sideOf(roleOf(j)));
 
 
   const abnPairs: Record<'red' | 'blue', Record<Col, Array<readonly [boolean, boolean]>>> = {
