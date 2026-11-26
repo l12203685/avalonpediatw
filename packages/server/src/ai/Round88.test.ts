@@ -34,7 +34,7 @@ describe('round 88 flags', () => {
     expect(parseTuningFlag('merlinEvScope88=11')).toEqual({ merlinEvScope88: 11 });
     expect(parseTuningFlag('merlinEvTemp88=0.2')).toEqual({ merlinEvTemp88: 0.2 });
     expect(() => parseTuningFlag('merlinEvAssassin88=11')).toThrow();
-    expect(() => parseTuningFlag('merlinEvScope88=256')).toThrow();
+    expect(() => parseTuningFlag('merlinEvScope88=512')).toThrow();
     expect(describeAgentTuning(T({ merlinEvAssassin88: 1, merlinEvScope88: 3 }))).toContain('merlinEvAssassin88=1');
     expect(describeAgentTuning(T())).not.toContain('merlinEvAssassin88');
   });
