@@ -309,7 +309,7 @@ def cmd_belief(a):
     train = ~late & (gi % 5 != 0)
     valid = ~late & (gi % 5 == 0)
     pure = a.mode == 'pure'
-    allowed = [i for i, f in enumerate(feat_names) if not (pure and f in PURE_DROP)]
+    allowed = [i for i, f in enumerate(feat_names) if not (pure and f in PURE_DROP) and f not in (a.drop or [])]
     offset = -1 if pure else feat_names.index('baseLogit')
     print(f'belief {a.mode}: {train.sum()} train rows, {valid.sum()} valid rows, {late.sum()} test rows, {len(allowed)} features', file=sys.stderr)
     trees, init = boost(X, y, gid, w, train, valid, 'binary', allowed, offset, a.trees, a.depth, a.lr, a.l2, a.min_hess, a.subsample, a.seed)
@@ -331,7 +331,7 @@ def cmd_belief(a):
         'rows': {'train': int(train.sum()), 'valid': int(valid.sum()), 'test': int(test.sum())},
         'games': {'train': int(len(np.unique(gi[~late]))), 'test': int(len(np.unique(gi[late])))},
         'hyper': {'trees': len(trees), 'depth': a.depth, 'lr': a.lr, 'l2': a.l2, 'minHess': a.min_hess, 'subsample': a.subsample, 'seed': a.seed, 'bins': NBINS},
-        'mode': a.mode, 'oos': res,
+        'mode': a.mode, 'drop': a.drop or [], 'oos': res,
     }
     js['meta'] = meta
     if a.out:
@@ -502,6 +502,7 @@ def main():
     pb.add_argument('--data', nargs='+', required=True)
     pb.add_argument('--mode', default='stack', choices=('stack', 'pure'))
     pb.add_argument('--dump')
+    pb.add_argument('--drop', nargs='*', help='這些特徵不拿來切（例如座位）')
     pa = sp.choices['assassin']
     pa.add_argument('--human', nargs='+', required=True)
     pa.add_argument('--bot', nargs='*', default=[])
