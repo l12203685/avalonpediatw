@@ -61,6 +61,9 @@ import type { RoomManager } from '../../game/RoomManager';
 import { authenticateSocket } from '../../middleware/auth';
 import type { PracticeFlagRow, PracticeFlagSink } from '../../practice/PracticeReportWriter';
 import type { PracticeTracePayload, PracticeTraceEntry, PracticeFlagResult } from '../../practice/types';
+import type { PracticeExploitRow, PracticeExploitSink } from '../../practice/PracticeExploitReport';
+import { getPracticeExploitAskCounter } from '../../practice/PracticeExploitReport';
+import type { PracticeSession } from '../../practice/PracticeSessions';
 
 const BOT_DELAY_SCALE = 0.02;
 
@@ -261,6 +264,14 @@ interface GameServerInternals {
   roomManager: RoomManager;
   botAgents: Map<string, unknown>;
   sweepPracticeRooms: () => void;
+  practice: { get: (roomId: string) => PracticeSession | undefined };
+}
+
+class FakeExploitSink implements PracticeExploitSink {
+  rows: Array<{ row: PracticeExploitRow; decisions: number }> = [];
+  async appendExploit(row: PracticeExploitRow, decisions: readonly PracticeTraceEntry[]): Promise<void> {
+    this.rows.push({ row, decisions: decisions.length });
+  }
 }
 
 class FakeSink implements PracticeFlagSink {
@@ -281,13 +292,18 @@ describe('practice mode — full games over sockets', () => {
   const humans: Human[] = [];
   const spies: Array<ReturnType<typeof vi.spyOn>> = [];
 
-  async function boot(practiceReportSink: PracticeFlagSink | null): Promise<void> {
+  async function boot(practiceReportSink: PracticeFlagSink | null, practiceExploitSink?: PracticeExploitSink | null): Promise<void> {
     httpServer = createServer();
     io = new SocketIOServer(httpServer, { cors: { origin: true, credentials: true } });
     io.use(authenticateSocket);
     // redTalkWaitScale: when the test human is red and a bot is the assassin, the bot waits for 「/刺殺 N」 (站長 2026-11-25);
     // this human never types it, so the wait (3 minutes in production) is shrunk like the bot delays and the bot's own pick is used.
-    gameServer = new GameServer(io, { botDelayScale: BOT_DELAY_SCALE, redTalkWaitScale: BOT_DELAY_SCALE, practiceReportSink });
+    gameServer = new GameServer(io, {
+      botDelayScale: BOT_DELAY_SCALE,
+      redTalkWaitScale: BOT_DELAY_SCALE,
+      practiceReportSink,
+      ...(practiceExploitSink !== undefined ? { practiceExploitSink } : {}),
+    });
     gameServer.start();
     await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', () => resolve()));
     port = (httpServer.address() as AddressInfo).port;
@@ -586,4 +602,71 @@ describe('practice mode — full games over sockets', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toMatch(/無法儲存/);
   }, 90000);
+
+  it('「被針對」 question: owner only, after the end, one row per game with the trace; flagged games are kept on cleanup', async () => {
+    const exploitSink = new FakeExploitSink();
+    await boot(sink, exploitSink);
+    const counter = getPracticeExploitAskCounter();
+    const before = counter.snapshot();
+    const { human, roomId } = await playPractice('exploit-human', { seat: 6, role: 'assassin' });
+    expect(human.trace!.exploitAsk).toEqual({ enabled: true, done: false });
+    const session = internals().practice.get(roomId)!;
+    expect(session.exploit?.base).toMatchObject({ traceId: roomId, humanSeat: 6, humanRole: 'assassin', humanTeam: 'evil' });
+
+    const intruder = await connect(port, 'exploit-intruder', 'Intruder');
+    sockets.push(intruder);
+    const stolen = await emitAck<PracticeFlagResult>(intruder, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['lake'] });
+    expect(stolen.ok).toBe(false);
+
+    // Shown counts once per game.
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'shown' });
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'shown' });
+    expect(counter.snapshot().shown).toBe(before.shown + 1);
+
+    const empty = await emitAck<PracticeFlagResult>(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['bogus'] });
+    expect(empty).toEqual({ ok: false, error: '請至少選一項' });
+
+    const ok = await emitAck<PracticeFlagResult>(human.socket, 'practice:exploit-ask', {
+      roomId, action: 'answer', choices: ['vote_fixed', 'none'], text: '  紅方一直贊成  ',
+    });
+    expect(ok).toEqual({ ok: true });
+    expect(exploitSink.rows).toHaveLength(1);
+    const { row, decisions } = exploitSink.rows[0];
+    expect(row).toMatchObject({
+      traceId: roomId, humanSeat: 6, humanRole: 'assassin', humanTeam: 'evil',
+      winner: human.trace!.winner, endReason: human.trace!.endReason,
+      choices: ['vote_fixed'], text: '紅方一直贊成', status: 'answered',
+      decisionCount: human.trace!.entries.length,
+    });
+    expect(row.flags).toEqual(session.exploit!.flags);
+    expect(decisions).toBe(human.trace!.entries.length);
+    expect(counter.snapshot().answered).toBe(before.answered + 1);
+    expect(counter.snapshot().choices.vote_fixed).toBe(before.choices.vote_fixed + 1);
+
+    // A second answer / skip changes nothing; the pulled trace says done.
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['lake'] });
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'skip' });
+    expect(exploitSink.rows).toHaveLength(1);
+    const pulled = await emitAck<{ ok: boolean; payload: PracticeTracePayload }>(human.socket, 'practice:get-trace', roomId);
+    expect(pulled.payload.exploitAsk).toEqual({ enabled: true, done: true });
+
+    // Next game, not answered: on cleanup a row is written only when the game was auto-flagged
+    // (forced here, so the cleanup path is always exercised).
+    const second = await playPractice('exploit-human-2', { seat: 2, role: 'merlin' });
+    const s2 = internals().practice.get(second.roomId)!;
+    if (s2.exploit!.flags.length === 0) s2.exploit!.flags = [{ code: 'bot_assassin_missed', detail: '測試' }];
+    internals().roomManager.deleteRoom(second.roomId);
+    internals().sweepPracticeRooms();
+    await waitFor(() => exploitSink.rows.length === 2, { label: 'flagged row on cleanup' });
+    expect(exploitSink.rows[1].row).toMatchObject({ traceId: second.roomId, status: 'no-answer', choices: [], text: '' });
+    expect(exploitSink.rows[1].decisions).toBeGreaterThan(0);
+
+    // Third game: not flagged, nobody answered → nothing written on cleanup.
+    const third = await playPractice('exploit-human-3', { seat: 4, role: 'loyal' });
+    internals().practice.get(third.roomId)!.exploit!.flags = [];
+    internals().roomManager.deleteRoom(third.roomId);
+    internals().sweepPracticeRooms();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(exploitSink.rows).toHaveLength(2);
+  }, 120000);
 });
