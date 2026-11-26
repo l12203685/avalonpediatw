@@ -29,7 +29,7 @@ import { handleFeedbackCommand } from '../feedback/discordCommand';
 import { handleDiscordMirrorMessage } from './mirrorInbound';
 import { handleConceptDailyDiscord } from '../conceptDaily/discord';
 import { relayInteractionReply } from './replyRelay';
-import { handleSimCommand } from '../simulation/discordCommand';
+import { answerSimFeedbackMessage, handleSimCommand } from '../simulation/discordCommand';
 import { HELP_TOPICS } from '../help';
 import { handleSeatFillerCommand } from '../seatFiller/discordCommand';
 import { SEAT_FILLER_BOTS } from '../../services/signagePlayerDispatch';
@@ -333,6 +333,8 @@ export class DiscordBotClient {
         // Never the error object: it can carry message content.
         console.warn(`[Discord→lobby] messageCreate handler threw (${err instanceof Error ? err.name : typeof err})`);
       }
+      // 模擬瓦（2026-11-26）：剛 /公布 的題目，有人說爛局、吐槽 → 記下來（simulation/feedback.ts）。從不丟錯。
+      await answerSimFeedbackMessage(message);
       // 每日小觀念（2026-11-18，bots/conceptDaily）：開了的頻道裡今天的第一則訊息、對小觀念的回饋。
       try {
         await handleConceptDailyDiscord(message);

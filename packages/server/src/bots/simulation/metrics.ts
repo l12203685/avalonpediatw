@@ -36,6 +36,11 @@ export interface SimCounts {
   help: number;
   /** 幫別人開的題目作答（代答）的指令次數。 */
   coAnswers: number;
+  /**
+   * 玩家對題目的回饋（feedback.ts，站長 2026-11-26）：記下幾則、其中幾則說爛局／紀錄有問題、幾局被 2 位以上說爛局（要人看，
+   * 原文和題號在管理員頻道「大劍管理員」）。
+   */
+  feedback: { recorded: number; bad: number; flaggedGames: number };
 }
 
 export const COUNTED_ROLES: readonly Role[] = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'];
@@ -63,6 +68,7 @@ export function emptySimCounts(): SimCounts {
     rateLimited: 0,
     help: 0,
     coAnswers: 0,
+    feedback: { recorded: 0, bad: 0, flaggedGames: 0 },
   };
 }
 

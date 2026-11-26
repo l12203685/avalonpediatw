@@ -747,7 +747,7 @@ export class LineBotClient {
       if (!reply) return null;
       const lead: LeadReply = { kind: 'sim', text: reply.text, commit: reply.commit, quoteToken: ctx.quoteToken, quickReply: reply.sessionOpen };
       if (reply.image) {
-        const image = this.simRecordImage(reply.image.game, reply.image.title, reply.text);
+        const image = this.simRecordImage(reply.image.game, reply.image.title, reply.text, reply.image.names);
         if (image) lead.image = image;
       }
       return lead;
@@ -761,11 +761,11 @@ export class LineBotClient {
    * /公布 的整局牌譜圖（2026-11-17）：畫成 PNG、放進同步的圖片中繼拿公開網址（跟 /排行 的圖表同一條路）。
    * 中繼沒開（沒有免費的圖片路）或畫圖失敗就回 null，只送文字。從不丟錯。
    */
-  private simRecordImage(game: SimGame, title: string, caption: string): LeadReply['image'] | null {
+  private simRecordImage(game: SimGame, title: string, caption: string, names?: readonly string[]): LeadReply['image'] | null {
     const mirror = getChatMirror();
     if (!mirror || !mirror.lineImageRelay()) return null;
     try {
-      const url = mirror.relayReplyPngUrl(renderRecordPng(game, title), `simrecord:${game.id}`);
+      const url = mirror.relayReplyPngUrl(renderRecordPng(game, title, names ? { names } : {}), `simrecord:${game.id}|${title}`);
       return url ? { url, caption } : null;
     } catch (error) {
       console.error(`[LINE sim] record image failed, answering with text (${describeError(error)})`);

@@ -114,6 +114,14 @@ import {
 } from './scenario';
 import { recordUrl } from './recordsIndex';
 import { aiReading, type AiPickPoint, type AiPicks } from './aiRead';
+import {
+  SIM_FEEDBACK_ACK,
+  SIM_FEEDBACK_FLAG_AT,
+  SIM_FEEDBACK_WINDOW_MS,
+  classifySimFeedback,
+  clipFeedbackText,
+  type SimFeedbackRecord,
+} from './feedback';
 import { maskOf } from './seats';
 import { selectStart } from './spotValue';
 
@@ -205,7 +213,7 @@ export interface SimRequest {
 
 export type SimReplyKind =
   | 'start' | 'propose' | 'analyze' | 'assassinate' | 'interval' | 'read' | 'removed' | 'reveal' | 'end'
-  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more' | 'help' | 'restoring';
+  | 'usage' | 'no-session' | 'bank' | 'select' | 'rate-limited' | 'no-more' | 'help' | 'restoring' | 'feedback';
 
 export interface SimReply {
   text: string;
@@ -537,7 +545,17 @@ export interface SimEngineOptions {
    * 正式機（index.ts）給；沒給 = 不印那一行（測試的全題庫掃描不用每題都重派）。丟錯 = 不印，/公布 照常。
    */
   aiPicks?: (game: SimGame, seat: number, point: AiPickPoint) => Promise<AiPicks | null>;
+  /**
+   * 玩家對題目的回饋（feedback.ts，站長 2026-11-26）記到哪裡：正式機（index.ts）交給 /意見 同一個地方（feedback/service.ts，
+   * 管理員頻道）。沒給 = 照樣認得、回覆、計數，只是不轉出去。從不等它（不擋回覆），丟錯也不影響回覆。
+   */
+  feedbackSink?: (record: SimFeedbackRecord) => void;
 }
+
+/** 記得幾個聊天室最近的 /公布、幾組「已經回過這題的回饋」（只在記憶體，重啟就忘）。 */
+const RECENT_REVEALS_MAX = 500;
+const FEEDBACK_ACKED_MAX = 5000;
+const BAD_REPORT_GAMES_MAX = 2000;
 
 const NOOP = (): void => undefined;
 
@@ -549,6 +567,12 @@ export class SimEngine {
   private readonly random: (seed: string) => () => number;
   private readonly locks = new Map<string, Promise<void>>();
   readonly counts: SimCounts = emptySimCounts();
+  /** `平台:聊天室` → 最近一次 /公布 的題目（玩家回饋用；只在記憶體）。 */
+  private readonly recentReveals = new Map<string, { exerciseId: string; gameId: string; at: number }>();
+  /** `題號|平台:使用者`：已經回過「收到」的。 */
+  private readonly feedbackAcked = new Set<string>();
+  /** 局號 → 說爛局的人（`平台:使用者`，雜湊）。 */
+  private readonly badReporters = new Map<string, Set<string>>();
 
   constructor(private readonly opts: SimEngineOptions) {
     this.now = opts.now ?? Date.now;
@@ -650,7 +674,78 @@ export class SimEngine {
   async handleText(text: string, req: SimRequest): Promise<SimReply | null> {
     if (!SIM_CONFIG.commandsEnabled) return null;
     const cmd = parseSimCommand(text);
-    return cmd ? this.handle(cmd, req) : null;
+    return cmd ? this.handle(cmd, req) : this.feedbackFor(text, req);
+  }
+
+  /**
+   * 不是指令的一句話：是不是對這個聊天室剛 /公布（或開著、剛被動過）的題目的回饋（feedback.ts）。是 → 記下來，
+   * 同一個人同一題第一次回「收到，已記下這題的回饋」（之後照樣記、回 null）；不是 → null（照一般聊天）。
+   * LINE 重送的事件不再記一次。原文只交給 feedbackSink，不寫 log。
+   */
+  feedbackFor(text: string, req: SimRequest): SimReply | null {
+    if (!SIM_CONFIG.commandsEnabled || req.duplicate) return null;
+    const kind = classifySimFeedback(text);
+    if (!kind) return null;
+    const now = this.now();
+    const chatKey = chatKeyFor(req);
+    const revealed = this.recentReveals.get(chatKey);
+    const open = this.store.newestInChat(chatKey, now);
+    const candidates = [
+      revealed && now - revealed.at <= SIM_FEEDBACK_WINDOW_MS ? { exerciseId: revealed.exerciseId, gameId: revealed.gameId, at: revealed.at } : null,
+      open && now - open.lastActiveAt <= SIM_FEEDBACK_WINDOW_MS ? { exerciseId: open.exerciseId, gameId: open.gameId, at: open.lastActiveAt } : null,
+    ].filter((c): c is { exerciseId: string; gameId: string; at: number } => c !== null);
+    if (candidates.length === 0) return null;
+    const target = candidates.sort((a, b) => b.at - a.at)[0];
+    const user = userKeyFor(req);
+    let flagged = false;
+    let reporters = this.badReporters.get(target.gameId)?.size ?? 0;
+    if (kind === 'bad' && req.userId) {
+      // 沒有使用者 id（LINE 群組沒給）時不算「不同的人」：只記錄，不算進要人看。
+      let set = this.badReporters.get(target.gameId);
+      if (!set) {
+        set = new Set();
+        this.badReporters.set(target.gameId, set);
+        trimOldest(this.badReporters, BAD_REPORT_GAMES_MAX);
+      }
+      const before = set.size;
+      set.add(user);
+      reporters = set.size;
+      flagged = before < SIM_FEEDBACK_FLAG_AT && reporters >= SIM_FEEDBACK_FLAG_AT;
+    }
+    this.counts.feedback.recorded += 1;
+    if (kind === 'bad') this.counts.feedback.bad += 1;
+    if (flagged) this.counts.feedback.flaggedGames += 1;
+    const record: SimFeedbackRecord = {
+      exerciseId: target.exerciseId,
+      gameId: target.gameId,
+      platform: req.platform,
+      user: req.userId ? simIdHash(req.userId) : '*',
+      at: now,
+      kind,
+      text: clipFeedbackText(text),
+      badReporters: reporters,
+      flagged,
+    };
+    try {
+      this.opts.feedbackSink?.(record);
+    } catch (err) {
+      console.warn(`[sim] feedback sink failed (${err instanceof Error ? err.name : typeof err})`);
+    }
+    const ackKey = `${target.exerciseId}|${user}`;
+    if (this.feedbackAcked.has(ackKey)) return null;
+    return {
+      text: SIM_FEEDBACK_ACK,
+      kind: 'feedback',
+      sessionOpen: false,
+      commit: (): void => {
+        this.feedbackAcked.add(ackKey);
+        while (this.feedbackAcked.size > FEEDBACK_ACKED_MAX) {
+          const oldest = this.feedbackAcked.values().next().value;
+          if (oldest === undefined) break;
+          this.feedbackAcked.delete(oldest);
+        }
+      },
+    };
   }
 
   /**
@@ -1099,6 +1194,11 @@ export class SimEngine {
         if (!current || current.version !== session.version) return;
         this.store.delete(session.key);
         this.counts.reveals += 1;
+        // 玩家回饋（feedback.ts）：記得這個聊天室剛公布了哪一題。
+        const chatKey = chatKeyFor(req);
+        this.recentReveals.delete(chatKey);
+        this.recentReveals.set(chatKey, { exerciseId: session.exerciseId, gameId: session.gameId, at: this.now() });
+        trimOldest(this.recentReveals, RECENT_REVEALS_MAX);
         if (t.coAnswer) this.counts.coAnswers += 1;
         for (const g of session.interval ?? []) {
           this.counts.intervalGroupsTotal += 1;
@@ -1106,6 +1206,15 @@ export class SimEngine {
         }
       },
     };
+  }
+}
+
+/** Map 超過 `max` 筆就丟掉最早放進去的。 */
+function trimOldest<K, V>(map: Map<K, V>, max: number): void {
+  while (map.size > max) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest as K);
   }
 }
 

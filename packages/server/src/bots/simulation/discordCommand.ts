@@ -164,7 +164,7 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
     let files: AttachmentBuilder[] | undefined;
     if (reply.image) {
       try {
-        files = [new AttachmentBuilder(renderRecordPng(reply.image.game, reply.image.title), { name: 'record.png', description: '完整牌譜' })];
+        files = [new AttachmentBuilder(renderRecordPng(reply.image.game, reply.image.title, reply.image.names ? { names: reply.image.names } : {}), { name: 'record.png', description: '完整牌譜' })];
       } catch (err) {
         console.error(`[sim] record image failed, answering with text (${describeError(err)})`);
       }
@@ -177,4 +177,36 @@ async function runSimCommand(interaction: ChatInputCommandInteraction): Promise<
       console.error(`[sim] Discord commit failed (${describeError(err)})`);
     }
   });
+}
+
+/** answerSimFeedbackMessage 用到的 discord.js Message 欄位（測試可以給假的）。 */
+export interface SimFeedbackMessageLike {
+  author: { bot: boolean; id: string };
+  webhookId?: string | null;
+  channelId: string;
+  guildId?: string | null;
+  content?: string | null;
+  reply(options: { content: string; allowedMentions: { parse: []; repliedUser: boolean } }): Promise<unknown>;
+}
+
+/**
+ * 頻道裡打的一般訊息（不是 slash）：剛 /公布 的題目的回饋（simulation/feedback.ts，站長 2026-11-26）就記下來，
+ * 同一個人同一題第一次回「收到，已記下這題的回饋」。只看回覆公開的伺服器頻道（私訊、只有本人看得到回覆的頻道不看）；
+ * bot、webhook 不算。回 true = 回了。從不丟錯；log 只有錯誤代碼。
+ */
+export async function answerSimFeedbackMessage(message: SimFeedbackMessageLike): Promise<boolean> {
+  try {
+    if (!SIM_CONFIG.commandsEnabled || message.author.bot || message.webhookId || !message.guildId) return false;
+    if (!simReplyIsPublic(message.channelId)) return false;
+    const text = (message.content ?? '').trim();
+    if (!text) return false;
+    const reply = getSimEngine().feedbackFor(text, { platform: 'discord', chatId: message.channelId, userId: message.author.id, shared: true });
+    if (!reply) return false;
+    await message.reply({ content: reply.text, allowedMentions: { parse: [], repliedUser: false } });
+    reply.commit();
+    return true;
+  } catch (err) {
+    console.error(`[sim] Discord feedback reply failed (${describeError(err)})`);
+    return false;
+  }
 }
