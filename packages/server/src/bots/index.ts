@@ -51,6 +51,7 @@ import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../pr
 import { getPracticeExploitAskCounter, type PracticeExploitAskStats } from '../practice/PracticeExploitReport';
 import { getInGameFeedback, type InGameFeedbackStats } from '../inGameFeedback';
 import { lakeChatDeclareStatus } from '../game/lakeChatDeclare';
+import { evaluateDeploySafety, readLiveRestartStatus, readLiveRoomCounts, type DeployLiveStatus, type LiveRestartStatusLike } from '../services/deploySafety';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
 import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
 import { flushSimulation, getSimBankLoader, simulationStatus, startSimulation } from './simulation';
@@ -565,6 +566,14 @@ export interface BotStatus {
    * today's card id and counters — never group ids, user ids or feedback text. null before the bots start.
    */
   conceptDaily: ConceptDailyStatus | null;
+  /**
+   * 現在重啟（部署）的話誰會丟掉東西（站長 2026-11-26，services/deploySafety.ts）：只有數字和代碼。
+   * scripts/deployGate.mjs 讀 live.safeToDeploy。
+   */
+  live: DeployLiveStatus & {
+    /** 伺服器更新時保存進度（socket/liveSnapshot.ts）：存檔有沒有設定、這台開機接回來幾間、關機存了幾間。null＝還沒接上。 */
+    restart: LiveRestartStatusLike | null;
+  };
   discord: {
     enabled: boolean;
     ready: boolean;
@@ -598,6 +607,8 @@ export function buildBotStatus(): BotStatus {
   const discordBot = getDiscordBot();
   const lineBot = getLineBot();
   const mirror = getChatMirror();
+  const simulation = simulationStatus();
+  const lineReplyQueue = mirror?.lineReplyQueueSize() ?? 0;
   return {
     generatedAt: new Date().toISOString(),
     keepAlive: getKeepAliveState(),
@@ -612,8 +623,18 @@ export function buildBotStatus(): BotStatus {
     practice: { exploitAsks: getPracticeExploitAskCounter().snapshot() },
     chatExport: chatExportStatus(),
     mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
-    simulation: simulationStatus(),
+    simulation,
     conceptDaily: getConceptDaily()?.status() ?? null,
+    live: {
+      ...evaluateDeploySafety({
+        rooms: readLiveRoomCounts(),
+        simSessionsActive: simulation.sessions.active,
+        simSessionsPersisted: simulation.sessions.persistence.configured && simulation.sessions.persistence.ready,
+        pendingFeedbackRows: getInGameFeedback().heldFeedbackRows(),
+        lineReplyQueue,
+      }),
+      restart: readLiveRestartStatus(),
+    },
     discord: {
       enabled: !!process.env.DISCORD_BOT_TOKEN,
       ready: discordBot?.isClientReady() ?? false,
@@ -628,7 +649,7 @@ export function buildBotStatus(): BotStatus {
       statsCommandsEnabled: LINE_CONFIG.statsCommandsEnabled,
       mirrorGroupConfigured: !!(process.env.LOBBY_MIRROR_LINE_GROUP_ID || '').trim(),
       outbound: lineOutboundMode,
-      replyQueueSize: mirror?.lineReplyQueueSize() ?? 0,
+      replyQueueSize: lineReplyQueue,
       webhook: getLineWebhookState(),
       stats: lineBot?.getWebhookStats() ?? null,
     },

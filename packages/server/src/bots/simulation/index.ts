@@ -14,18 +14,23 @@ import { aiPicks } from './aiRead';
 import { SimBankLoader, type SimBank } from './bank';
 import { SIM_CONFIG } from './config';
 import type { SimulationStatus } from './metrics';
-import { GitHubSimBackend, SimPersistence, simStateRepoConfig } from './persist';
+import { getLiveStateStore } from '../../services/liveStateStore';
+import { GitHubSimBackend, SheetsSimBackend, SimPersistence, simStateRepoConfig } from './persist';
 import { SimEngine } from './session';
 
 let loader: SimBankLoader | null = null;
 let engine: SimEngine | null = null;
 let persistence: SimPersistence | null = null;
 
-/** 進行中的題目存檔（persist.ts）：有設定 private repo 就存 GitHub，沒有就只在記憶體。 */
+/**
+ * 進行中的題目存檔（persist.ts）：有設定 private repo 就存 GitHub；沒有就存私人那份試算表的「伺服器暫存」分頁
+ * （2026-11-26，services/liveStateStore.ts）；兩個都沒有才只在記憶體。
+ */
 export function getSimPersistence(): SimPersistence {
   if (!persistence) {
     const repo = simStateRepoConfig();
-    persistence = new SimPersistence({ backend: repo ? new GitHubSimBackend(repo) : null });
+    const sheet = repo ? null : getLiveStateStore().store;
+    persistence = new SimPersistence({ backend: repo ? new GitHubSimBackend(repo) : sheet ? new SheetsSimBackend(sheet) : null });
   }
   return persistence;
 }
