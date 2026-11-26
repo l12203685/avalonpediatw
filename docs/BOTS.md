@@ -220,13 +220,33 @@ AI騎士 打的每一局打完後自動貼到 Discord #牌譜紀錄與覆盤（�
 
 | 東西 | 重啟後 | 存在哪 |
 |---|---|---|
-| 模擬瓦進行中的題目（題號、看到哪、每個人的 `/派` `/刺` `/區間`） | **還在**，接著 `/派` `/公布` 就好（2026-11-25 起） | private repo 的 `bot-state/sim-sessions.json` |
+| **遊玩頁進行中的對局**（有真人的；含練習局、大廳裡有人在等的房間） | **還在**（2026-11-26 起）：玩家自動連回同一間、同一個座位，聊天室出現「伺服器更新完成，已恢復進度」；計時器接著倒數（至少留 45 秒） | 私人試算表「伺服器暫存」分頁（加密），讀回來就清空 |
+| 模擬瓦進行中的題目（題號、看到哪、每個人的 `/派` `/刺` `/區間`） | **還在**，接著 `/派` `/公布` 就好（2026-11-25 起） | private repo 的 `bot-state/sim-sessions.json`；沒設定那個 repo 時（正式機現在就是）存私人試算表「伺服器暫存」分頁（2026-11-26） |
 | 每日小觀念「今天發過沒」 | 還在 | private repo 的 `bot-state/concept-daily.json` |
 | 戰績、牌譜、帳號 | 還在 | 本來就不在記憶體 |
-| **遊玩頁進行中的對局、大廳聊天、LINE 待送的同步訊息** | **不見** | 只在記憶體 |
+| 網站房間進行中那幾局對百科AI 的回饋、練習局還在等追問的回答 | 關機前先寫進試算表（2026-11-26 起；局後那 15 分鐘不等了） | 私人試算表 |
+| **大廳聊天、LINE 待送的同步訊息** | **不見** | 只在記憶體 |
+| 只有機器人的房間 | 不見（沒有人會丟掉東西） | 只在記憶體 |
 | 指令的頻率限制、狀態頁的計數 | 歸零 | 只在記憶體 |
 | 模擬瓦「剛公布哪一題」「誰說過這局爛」（玩家回饋用，2026-11-26） | 忘掉（已經轉到管理員頻道的回饋還在） | 只在記憶體 |
-| 網站房間進行中那幾局的聊天（遊戲內回饋用，2026-11-26） | 不見；那幾局還沒寫進試算表的回饋也不見（已經轉到管理員頻道的還在） | 只在記憶體 |
+| 網站房間進行中那幾局的聊天前後文（遊戲內回饋用） | 接回來的局重新開始收 | 只在記憶體 |
+
+### 對局怎麼接回來（2026-11-26，站長：「…或是會影響就會儲存進度」）
+
+程式 `socket/liveSnapshot.ts`、`services/liveStateStore.ts`，測試 `LiveStateRestore.test.ts`。
+
+1. Render 換版：新的一台先起來、流量切過去；**60 秒後**舊的那台才收到關機訊號（SIGTERM），最多再活 30 秒。這段時間舊的那台上的人照常在打。
+2. 舊的那台收到 SIGTERM：先把遊戲內回饋、練習局回答寫進試算表 → 拍下每一間有真人的房間（房間、角色、票、任務、湖中、計時器還剩多久、房間密碼、機器人的策略層、練習紀錄）→ 房間裡出現「伺服器更新中：這一局已經存好，幾秒後會自動接回來」→ 不再收對局動作 → 寫進存檔 → 結束（最多 25 秒）。
+3. 玩家的連線斷掉、網頁自動重連到新的那台、自動回到原本的房間（網頁本來就會：重連時送 `game:join-room`）。
+4. 新的那台：開機讀一次存檔，之後 5 分鐘內每 10 秒看一次；玩家要進的房間還不在時也先看一次。讀到就把房間接回來：計時器接著倒數（剩不到 45 秒的補到 45 秒），機器人重建（記憶從公開的派票、任務紀錄重算），然後把存檔清空。超過 15 分鐘的存檔不讀。
+5. 每個真人第一次連回來時，聊天室收到「伺服器更新完成，已恢復進度」（只有自己看得到）。
+
+已知的限制：
+
+- 拍照之後到結束之間（幾秒）按的動作不算，接回來後再按一次。
+- 刺殺階段、紅方有真人、刺客是機器人：紅方機器人會重講一次看法、重新等「/刺殺 N」，刺殺的計時器重新算。
+- 存檔在私人那份試算表（預設跟「練習回報」同一份，`LIVE_STATE_SHEET_ID` 可以換、`off` 關掉）。內容用 `JWT_SECRET` 導出的金鑰加密，看得到試算表的人也看不到角色或名字；`JWT_SECRET` 換了就讀不出來（當成沒有存檔）。
+- 狀態頁 `/api/bots/status → live.restart`：`configured`（有存檔的地方）、`restoredRooms`（這台開機接回來幾間）、`lastRead`（最近一次讀存檔：`empty` 沒有、`restored` 接回來了、`stale` 太舊、`unreadable` 解不開、`error` 讀不到）、`savedRooms`／`saveFailures`（關機時）。
 
 模擬瓦的題目怎麼留下來（`simulation/persist.ts`，測試 `SimPersist.test.ts`）：
 
@@ -234,16 +254,60 @@ AI騎士 打的每一局打完後自動貼到 Discord #牌譜紀錄與覆盤（�
 - 剛重啟的幾秒內打模擬指令，可能回「伺服器剛更新完，正在把進行中的題目讀回來，請過幾秒再打一次」——再打一次就好，不會被說成沒有題目。
 - 萬一沒能讀回來（檔案讀不到、格式換了版），沒有題目的人打指令時會看到「伺服器在 11/25 16:30 更新過，那之前還沒公布的題目這次沒能留下來…打 /模擬 題號 重開同一題」；知道是哪一題時會直接講題號。
 - 檔案只在 private repo。沒有名字、沒有聊天內容；聊天室和使用者的 id 都是雜湊過的。題目 `/公布`、`/結束` 後就從檔案拿掉（private repo 的修改紀錄裡還留著舊版，一樣只有雜湊）。
-- 不用新的環境變數或權杖（跟帳號庫同一個 `GITHUB_ACCOUNTS_REPO`／`GITHUB_ACCOUNTS_TOKEN`）。沒設定時照舊只在記憶體，開機 log 會寫一行。
+- 不用新的環境變數或權杖（跟帳號庫同一個 `GITHUB_ACCOUNTS_REPO`／`GITHUB_ACCOUNTS_TOKEN`）。沒設定時（正式機現在就是）改存私人試算表的「伺服器暫存」分頁（2026-11-26，加密，跟對局房間同一個地方，`SheetsSimBackend`）；連 Google 服務帳號都沒有時才只在記憶體，開機 log 會寫一行。
 - 狀態頁 `/api/bots/status → simulation.sessions.persistence`：`configured`（有設定）、`restored`（開機有讀回來）、`writes`／`writeFailures`（寫了幾次、失敗幾次）。
 
-### 給每一個會合併 PR 的 AI：後端的修改集中在半夜合併
+### 給每一個會合併 PR 的 AI：合併前先跑部署閘門
 
-- **會讓伺服器重啟的 PR**：改到 `packages/server/**` 或 `packages/shared/**` 的執行檔案（測試 `__tests__/`、`*.test.ts` 和 `*.md` 不算），或 `Dockerfile.server`、根目錄的 `package.json`、`pnpm-lock.yaml`、`tsconfig.json` 等（完整清單是 `render.yaml` 的 `buildFilter`）。這種 PR 一合併進 main，正式機就重啟一次。
-- **規則：這種 PR 不要白天一個一個合併。CI 過了先放著，集中在台北時間 03:30 左右一次合併**（那時幾乎沒有人在玩；每天約 03:47 的牌譜更新本來就會重啟一次）。2026-11-25 白天 09:14–16:30 合併了 9 次，伺服器重啟 9 次，站長收到「題目做到一半不見了」的回報。
-- **不會重啟、隨時可以合併的 PR**：只改網站（`packages/web/**`）、只改文件（`*.md`、`docs/`）、只改測試、只改根目錄的 `scripts/` 或 `.github/` 的。注意 `packages/server/scripts/` 和 `packages/server/` 底下的資料檔（例如 `sim_bank.json`）算在 `packages/server/**` 裡，會重啟。
+站長 2026-11-26：「你未來可以先確定沒有影響進行中的局或任務再合併嗎 或是會影響就會儲存進度」。同一天也說了「跑完不能就直接更新/合併嗎」——所以不再等半夜，**CI 過了、閘門說可以，就合併**。
+
+- **會讓伺服器重啟的 PR**：改到 `packages/server/**` 或 `packages/shared/**` 的執行檔案（測試 `__tests__/`、`*.test.ts` 和 `*.md` 不算），或 `Dockerfile.server`、根目錄的 `package.json`、`pnpm-lock.yaml`、`tsconfig.json` 等（完整清單是 `render.yaml` 的 `buildFilter`）。這種 PR 一合併進 main，正式機就重啟一次。注意 `packages/server/scripts/` 和 `packages/server/` 底下的資料檔（例如 `sim_bank.json`）也算。
+- **合併這種 PR 之前先跑**（repo 根目錄，不用裝任何東西，Node 18 以上）：
+
+  ```
+  node scripts/deployGate.mjs            # 問一次：0 = 可以合併，1 = 先不要
+  node scripts/deployGate.mjs --wait 30  # 不行就每分鐘再問，最多等 30 分鐘
+  ```
+
+  它讀 `/api/bots/status → live`，印出原因（代碼＋一句白話）和不是 0 的數字。回 1 就先放著，晚點再跑。
+- **不會重啟、隨時可以合併的 PR**：只改網站（`packages/web/**`）、只改文件（`*.md`、`docs/`）、只改測試、只改根目錄的 `scripts/` 或 `.github/` 的。這些不用跑閘門。
 - 例外：正式機壞掉要馬上修的，照樣馬上合併；合併留言寫一句為什麼不能等。
-- 模擬瓦的題目現在重啟後還在，但**遊玩頁進行中的對局還是會被重啟打斷**，所以這條規則照舊要守。
+- 閘門說可以、到真的重啟之間還有幾分鐘（Render 要先建新版），這段時間開的局會在重啟時存檔、接回來（見上面〈對局怎麼接回來〉），不會整局不見；但能不打斷就不打斷，所以閘門照樣把進行中的對局算成「擋」。
+
+`/api/bots/status → live` 的欄位（只有數字和代碼，沒有房間代號、名字）：
+
+| 欄位 | 意思 |
+|---|---|
+| `roomsInGame` | 遊戲中的房間（練習房不算） |
+| `roomsInGameWithHumans` | 其中有真人連線中的 |
+| `roomsInGameHumansAway` | 其中有真人、但真人全都斷線了的（手機鎖屏、關分頁，回來還能接著打） |
+| `roomsInGameBotsOnly` | 其中只有機器人的 |
+| `roomsInLobbyWithHumans` | 大廳裡有真人在等的房間 |
+| `practiceInGame` | 與機器人練習，遊戲中 |
+| `redTalkWaits` | 刺殺階段，機器人刺客在等紅方真人打「/刺殺 N」 |
+| `practiceExploitPending` | 練習局局後的回答，還在等追問、還沒寫進試算表 |
+| `simSessionsActive` | 模擬瓦進行中的題目 |
+| `pendingFeedbackRows` | 遊戲內回饋，還沒寫進試算表的句數 |
+| `lineReplyQueue` | LINE 待送的同步訊息 |
+| `safeToDeploy` | 重啟的話沒有任何真人會丟掉東西 |
+| `reasons` / `blocking` | 所有原因的代碼（擋的在前）／其中會擋的 |
+
+| 代碼 | 擋不擋 | 意思 |
+|---|---|---|
+| `rooms_in_game_with_humans` | 擋 | 有真人的對局正在進行 |
+| `rooms_in_game_humans_away` | 擋 | 對局進行中、真人暫時斷線。確定不會回來（例如已經放著很久）可以 `--allow rooms_in_game_humans_away` |
+| `practice_in_game` | 擋 | 有人在跟機器人練習 |
+| `red_talk_waits` | 擋 | 刺客在等紅方真人下指令 |
+| `sim_sessions_unsaved` | 擋 | 模擬瓦有題目，而且沒有存檔（private repo 沒設定） |
+| `feedback_unsaved` | 擋 | 遊戲內回饋還沒寫進試算表 |
+| `practice_exploit_pending` | 擋 | 練習局的回答還沒寫進試算表 |
+| `live_counts_unavailable` | 擋 | 伺服器沒回報房間數（不知道就當不安全） |
+| `lobby_with_humans` | 不擋 | 大廳有人在等（重啟後重新開房就好） |
+| `line_reply_queue` | 不擋 | LINE 待送的同步訊息會不見（要等群組裡有人講話才送得出去，可能放好幾個小時） |
+| `sim_sessions_saved` | 不擋 | 模擬瓦有題目、有存檔，重啟後讀得回來 |
+| `bot_only_rooms` | 不擋 | 只有機器人的房間 |
+
+程式：`packages/server/src/services/deploySafety.ts`（判斷）、`GameServer.liveCounts()`（房間數）、`scripts/deployGate.mjs`（閘門）；測試 `DeploySafety.test.ts`。
 
 ## Discord 和 LINE 哪裡不一樣
 
