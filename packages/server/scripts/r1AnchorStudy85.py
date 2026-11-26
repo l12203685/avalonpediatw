@@ -248,3 +248,60 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+
+def pr_table(paths, base=None):
+    """`r1AnchorStudy85.ts` 的輸出（真人局決策點上的機器人 vs 真人）：每一格的「整個第 1 局的隊都在」比例、隊會失敗的比例、量尺（機器人 − 真人，pp／決策）。
+    base 給了另外算候選 − 對照（同一批決策點，配對）。"""
+    def load(p):
+        return [json.loads(l) for l in open(p, encoding='utf-8') if l.strip()]
+    out = []
+    rows = load(paths)
+    B = {(r['gi'], r['rd'], r['att']): r for r in load(base)} if base else None
+    cells = defaultdict(list)
+    for r in rows:
+        if not r['bt']:
+            continue
+        for key in ((r['spot'], r['role']), (r['spot'], 'blue'), (r['spot'], 'blue', r['on'])):
+            cells[key].append(r)
+    def se_mean(xs):
+        n = len(xs)
+        if n < 2:
+            return (float('nan'), float('nan'))
+        m = sum(xs) / n
+        v = sum((x - m) ** 2 for x in xs) / (n - 1)
+        return (m, math.sqrt(v / n))
+    out.append('| 格 | 隊長 | n | 真人：整個第 1 局的隊都在 % | 機器人 % | 真人隊會失敗 % | 機器人隊會失敗 % | 量尺 機器人 − 真人（pp／決策） |' + (' 候選 − 對照（pp） | 候選改到 |' if B else ''))
+    out.append('|---|---|---|---|---|---|---|---|' + ('---|---|' if B else ''))
+    spots = [('A2', '第 2 局'), ('A3o', '第 3 局（第 2 局成功）'), ('A3x', '第 3 局（第 2 局失敗、沒有包含第 1 局的隊）'), ('B', '前一局包含第 1 局的隊而且失敗')]
+    for sp, lab in spots:
+        for who in ('loyal', 'percival', 'merlin', 'blue', ('blue', 0), ('blue', 1), ('blue', 2)):
+            key = (sp,) + (who if isinstance(who, tuple) else (who,))
+            rs = cells.get(key, [])
+            if not rs:
+                continue
+            n = len(rs)
+            hs = sum(r['ht']['sup'] for r in rs) / n
+            bs = sum(r['bt']['sup'] for r in rs) / n
+            hd = sum(r['ht']['dirty'] for r in rs) / n
+            bd = sum(r['bt']['dirty'] for r in rs) / n
+            m, se = se_mean([100 * (r['b'] - r['h']) for r in rs])
+            wl = CLASS_ZH.get(who, '') if not isinstance(who, tuple) else '藍方・' + {0: '不在第 1 局的隊上', 1: '在第 1 局的隊上', 2: '失敗那一隊加進來的人'}[who[1]]
+            line = f'| {lab} | {wl} | {n} | {100 * hs:.1f} | {100 * bs:.1f} | {100 * hd:.1f} | {100 * bd:.1f} | {m:+.2f} ± {se:.2f} |'
+            if B:
+                ds = []
+                ch = 0
+                for r in rs:
+                    b0 = B.get((r['gi'], r['rd'], r['att']))
+                    if b0 is None:
+                        continue
+                    ds.append(100 * (r['b'] - b0['b']))
+                    ch += (r['bt'] != b0['bt']) or abs(r['b'] - b0['b']) > 1e-12
+                m2, se2 = se_mean(ds)
+                line += f' {m2:+.3f} ± {se2:.3f} | {ch} |'
+            out.append(line)
+    return '\n'.join(out)
+
+
+if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == '--pr-only':
+    pass
