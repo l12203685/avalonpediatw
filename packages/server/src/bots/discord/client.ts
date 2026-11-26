@@ -189,7 +189,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_INTERVAL)
-      .setDescription('模擬瓦：百科AI 怎麼讀這個局面（填內容 = 檢查你的區間）/ How the bot reads it')
+      .setDescription('模擬瓦：AI騎士 怎麼讀這個局面（填內容 = 檢查你的區間）/ How the bot reads it')
       .addStringOption((o) =>
         o.setName(SIM_OPTIONS.CONTENT).setDescription('選填：例如 789=2 460=1 = 7 8 9 裡 2 紅 / Optional: your groups').setRequired(false).setMaxLength(100)
       ),
@@ -207,7 +207,7 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
     ...[COMMANDS.SEAT_FILLER_ZH, COMMANDS.SEAT_FILLER].map((name) =>
       new SlashCommandBuilder()
         .setName(name)
-        .setDescription('叫百科AI 進 signage-cloud 房間補位 / Summon 百科AI seat fillers')
+        .setDescription('叫AI騎士 進 signage-cloud 房間補位 / Summon AI Knight seat fillers')
         .addStringOption((o) =>
           o
             .setName(SEAT_FILLER_OPTIONS.ROOM)

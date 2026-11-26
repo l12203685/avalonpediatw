@@ -55,7 +55,7 @@ import {
   shortRooms, sid, unsupportedReason, validLakeTargets,
   type Decision, type Knowledge, type LobbyRoom, type PlatformRecord, type SiteAction, type Snap, type SUser,
 } from './signageAdapter';
-import { BOT_NICK, TEST_ROOM_PREFIX, isPediaBotName } from './signagePaipu';
+import { BOT_NICK, TEST_ROOM_PREFIX, botNickOf, isPediaBotName } from './signagePaipu';
 import {
   AiTraceHub, draftDecision, type AiGameCollector, type DecisionInput, type EndCapture, type SeatStatus,
 } from './signageAiTrace';
@@ -106,17 +106,17 @@ export function signageOpponent(
 }
 /**
  * 暱稱。練習台同一個暱稱同時兩個連線會互相干擾（2026-11-03 私房測試：同暱稱兩桌同時打，其中一桌被導回大廳），
- * 所以每個同時在跑的程序用不同暱稱，都是「百科AI_{#}」（Edward 2026-11-03；記錄員靠「百科AI」前綴認，戰績合併成「百科AI」）：
- *   - 每晚補位：百科AI_0
- *   - 指定房間：百科AI_21… 依房號／房間描述分段（見 nickBase）——每間房一個 workflow（concurrency 依房號）
- *   - player_aliases.json 把 百科AI_0～99 都併成「百科AI」（Edward 11/03「百科AI玩的都當成同一個人」）
- *   - 指定房間多個（私房陪練、本機執行）：百科AI_1 … 百科AI_9
- *   - 看座位用的觀眾席分頁：百科AI看房1460（只旁觀、不入座；每間房各一個暱稱）
+ * 所以每個同時在跑的程序用不同暱稱。站長 2026-11-26 起是「AI騎士_百科_{##}」（以前「百科AI_{#}」；記錄員新舊前綴都認，
+ * 戰績上新舊名字都併成「AI騎士_百科」：generate_cache.py knight_aliases，Edward 11/03「百科AI玩的都當成同一個人」）：
+ *   - 每晚補位：AI騎士_百科_00
+ *   - 指定房間：AI騎士_百科_21… 依房號／房間描述分段（見 nickBase）——每間房一個 workflow（concurrency 依房號）
+ *   - 指定房間多個（私房陪練、本機執行）：AI騎士_百科_01 … AI騎士_百科_09
+ *   - 看座位用的觀眾席分頁：AI騎士看房1460（只旁觀、不入座；每間房各一個暱稱）
  */
 const roomNo = (name: string): string => (/(\d+)\s*$/.exec(name)?.[1] ?? '');
 /**
  * 指定房間的暱稱編號：每間房一段（20–29、30–39 … 90–99，依房號或房間描述），同時派兩間房也不撞名；
- * 第 i 個機器人 = 段首 + i。player_aliases.json 把 百科AI_0～99 都併成「百科AI」。
+ * 第 i 個機器人 = 段首 + i（0–99，戰績上都併成「AI騎士_百科」）。
  */
 const ROOM_TITLE_ARG = arg('title', '');
 function nickBase(): number {
@@ -125,8 +125,8 @@ function nickBase(): number {
   if (ROOM_TITLE_ARG) { let h = 0; for (const ch of ROOM_TITLE_ARG) h = (h * 31 + ch.codePointAt(0)!) >>> 0; return 20 + (h % 8) * 10; }
   return 0;
 }
-const NICK = arg('nick', MODE === 'room' ? `百科AI_${nickBase() + 1}` : BOT_NICK);
-const watchNick = (room: string): string => `百科AI看房${roomNo(room)}`;
+const NICK = arg('nick', MODE === 'room' ? botNickOf(nickBase() + 1) : BOT_NICK);
+const watchNick = (room: string): string => `AI騎士看房${roomNo(room)}`;
 const PASSWORD = arg('password', '');
 /** 指定房間也可以用房間描述找（--title 文字：描述含這段文字的房間），玩家開房前不必先知道房號。 */
 const ROOM_TITLE = arg('title', '');
@@ -183,7 +183,7 @@ const MAX_BOTS_PER_ROOM = 1;
 const MAX_BOTS_ROOM_MODE = 9;
 const BOTS = Math.max(1, Math.min(MODE === 'room' ? MAX_BOTS_ROOM_MODE : MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
 /** 第 i 個機器人（1 起算）的暱稱：只有 1 個時就是 NICK；多個時 百科AI_1 … 百科AI_9。 */
-const botNick = (i: number, n: number): string => (n <= 1 ? NICK : `百科AI_${nickBase() + i}`);
+const botNick = (i: number, n: number): string => (n <= 1 ? NICK : botNickOf(nickBase() + i));
 /** 開局後的「開眼階段」狀態字串。 */
 const EYES = '開眼階段';
 /**
@@ -194,10 +194,10 @@ const EYES = '開眼階段';
 const ACT_MS = Math.max(0, Number(arg('act-ms', '0')) || 0);
 const actDelay = (): number => ACT_MS * (0.5 + Math.random());
 const POLL_MS = 150;
-const HELLO = '我是百科AI（阿瓦隆百科的測試機器人），人不夠時來補位；有意見請在 LINE 或 DC 打 /回報';
+const HELLO = '我是AI騎士（阿瓦隆百科的測試機器人），人不夠時來補位；有意見請在 LINE 或 DC 打 /回報';
 /** 開局前／每局打完後問一次（Edward 11/04）。ASK_SEC 秒內有人回「離開」就走，沒人回或回「留下」就留著。 */
 const ASK_SEC = Number(arg('ask-sec', '40'));
-const ASK_TEXT = `百科AI：需要我離開嗎？要我走請打「離開」，要我留下請打「留下」；${ASK_SEC} 秒內沒人說離開我就留下`;
+const ASK_TEXT = `AI騎士：需要我離開嗎？要我走請打「離開」，要我留下請打「留下」；${ASK_SEC} 秒內沒人說離開我就留下`;
 const LEAVE_RE = /離開|走吧|請走|你走|快走|退出|退房|bye|掰/i;
 const STAY_RE = /留下|留著|別走|不要走|不用走|不用離開|不必離開|繼續/;
 /** 一則聊天的意思：留下優先（「不用離開」也含「離開」兩字）。 */
@@ -258,7 +258,7 @@ const roomTitles = new Map<string, string>();
 const roomKey = (label: string): string => label.replace(/#\d+$/, '');
 const traceHub = new AiTraceHub(async (c: AiGameCollector) => {
   let trace;
-  try { trace = c.build(roomTitles.get(c.room) ?? ''); } catch { log(`${c.room}：百科AI對局紀錄組不出來`); return; }
+  try { trace = c.build(roomTitles.get(c.room) ?? ''); } catch { log(`${c.room}：AI騎士對局紀錄組不出來`); return; }
   if (!trace) return; // 沒有打到遊戲結束（角色沒公開）的局不貼
   if (PRIVATE_LOG) {
     try {
@@ -268,10 +268,10 @@ const traceHub = new AiTraceHub(async (c: AiGameCollector) => {
   }
   if (!AI_TRACE) return;
   // log 只寫房號、狀態與數量（aiGameForum 自己的訊息也只有狀態碼）
-  const r = await postAiGameTrace(trace, { log: (m) => log(`${c.room}：百科AI對局 DC ${m}`) });
-  if (r.outcome === 'sent') log(`${c.room}：百科AI對局已貼到 DC（${trace.decisions.length} 個決定、${r.followups} 則後續訊息${r.tagged ? '' : '、沒掛標籤'}）`);
-  else if (r.outcome === 'skipped') log(`${c.room}：沒有 DISCORD_BOT_TOKEN，百科AI對局不貼 DC`);
-  else log(`${c.room}：百科AI對局貼 DC 失敗（HTTP ${r.status ?? 0}）`);
+  const r = await postAiGameTrace(trace, { log: (m) => log(`${c.room}：AI騎士對局 DC ${m}`) });
+  if (r.outcome === 'sent') log(`${c.room}：AI騎士對局已貼到 DC（${trace.decisions.length} 個決定、${r.followups} 則後續訊息${r.tagged ? '' : '、沒掛標籤'}）`);
+  else if (r.outcome === 'skipped') log(`${c.room}：沒有 DISCORD_BOT_TOKEN，AI騎士對局不貼 DC`);
+  else log(`${c.room}：AI騎士對局貼 DC 失敗（HTTP ${r.status ?? 0}）`);
 });
 
 /** 局結束時抓的資料（角色公開後）：畫面、派票紀錄、房間頁的平面紀錄、系統訊息。抓不到的部分留空，不丟錯。 */
@@ -696,7 +696,7 @@ async function redTalkStep(p: Page, seat: Seat, s: Snap): Promise<'hold' | 'go'>
     Math.min(5, s.missions.length), 0, 'agent', s);
   seat.collector?.notes.add(step.source === 'command'
     ? `刺殺由紅方真人隊友在聊天用「/刺殺」決定（${seatLabel(step.seat)}）`
-    : '刺殺時沒有收到紅方隊友的「/刺殺」指令，時間快到，照百科AI 自己的判斷');
+    : '刺殺時沒有收到紅方隊友的「/刺殺」指令，時間快到，照AI騎士 自己的判斷');
   st.target = { seat: step.seat, at: Date.now() };
   if ((await press(p, { kind: 'touch', set: step.seat })) === 'ok') seat.commit(key);
   return 'hold';
@@ -816,7 +816,7 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
       try { s = await snap(p); } catch { s = null; }
       if (s) {
         if (s.gaming && s.status !== ENDED) { started = true; break; }
-        if (leaveRequested.has(roomBase(room))) { await leaveRoom(p, '房內有人請百科AI離開', room); return played; }
+        if (leaveRequested.has(roomBase(room))) { await leaveRoom(p, '房內有人請AI騎士離開', room); return played; }
         if (!askDone && !asked) {
           // 練習台連發兩則時第二則會被吃掉（2026-11-04 實測）：打招呼和提問合成一則，送出後確認聊天室真的有這則
           const before = await chats(p);
@@ -831,8 +831,8 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
         } else if (!askDone && asked) {
           const fresh = newHumanChats(asked.before, await chats(p));
           const intents = fresh.map((c) => leaveIntent(String(c.msg ?? '')));
-          if (intents.includes('leave')) { leaveRequested.add(roomBase(room)); await chat(p, '好，我們先離開，謝謝！'); await leaveRoom(p, '房內有人請百科AI離開', room); return played; }
-          if (intents.includes('stay') || Date.now() - asked.at > ASK_SEC * 1000) { askDone = true; log(`${room}：沒有人要百科AI離開，留下`); }
+          if (intents.includes('leave')) { leaveRequested.add(roomBase(room)); await chat(p, '好，我們先離開，謝謝！'); await leaveRoom(p, '房內有人請AI騎士離開', room); return played; }
+          if (intents.includes('stay') || Date.now() - asked.at > ASK_SEC * 1000) { askDone = true; log(`${room}：沒有人要AI騎士離開，留下`); }
         }
         // 私房多機器人（--password --bots N）：同房的其他百科機器人是自己人，不算違反「每間房最多 1 個」
         if (!isHost && s.myself.master) { await leaveRoom(p, '變成房主（不佔房主位）', room); return played; }
@@ -942,7 +942,7 @@ async function privateTest(browser: Browser): Promise<void> {
   await sleep(1500);
   const s = await snap(host);
   if (s && !s.enable_lake) { await hostInvoke(host, 'SetLake', true); await sleep(800); }
-  log(`私房測試：${s?.users.length ?? 0} 人入座（百科機器人 ${BOTS} 個），打 ${MAX_GAMES} 局`);
+  log(`私房測試：${s?.users.length ?? 0} 人入座（AI騎士 ${BOTS} 個），打 ${MAX_GAMES} 局`);
   const results = await Promise.all(bots.map((b, i) => stayAndPlay(b.page, `private${b.label}`, MAX_GAMES, false, i === 0, false)));
   log(`私房測試結束：各座位打完 ${results.join('/')} 局`);
   for (const b of bots) await b.page.context().close().catch(() => undefined);
@@ -1042,7 +1042,7 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
   if (alreadyPlayed >= MAX_GAMES) { log('重連的那局已打完，結束'); return; }
   const bots = await loginBots(browser, 1);
   const lobby = bots[0].page;
-  log(`指定房間 ${ROOM || '（依房間描述）'}：百科機器人 ${BOTS} 個，打 ${MAX_GAMES} 局`);
+  log(`指定房間 ${ROOM || '（依房間描述）'}：AI騎士 ${BOTS} 個，打 ${MAX_GAMES} 局`);
   let lastLen = -1; let stableSince = Date.now();
   const findBy = Date.now() + FIND_MIN * 60_000;
   let roomPw = '';
@@ -1095,7 +1095,7 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
     // 沒坐進去的機器人立刻登出（關掉分頁），不留在大廳
     for (const b of bots) if (!seated.includes(b) && b !== bots[0]) await b.page.context().close().catch(() => undefined);
     if (!seated.length) bots.length = 1;
-    log(`${r.name}：坐進 ${seated.length}/${BOTS} 個百科機器人`);
+    log(`${r.name}：坐進 ${seated.length}/${BOTS} 個AI騎士`);
     if (!seated.length) { await sleep(10000); continue; }
     const results = await Promise.all(seated.map((b, i) => stayAndPlay(b.page, `${r.name}${b.label}`, MAX_GAMES - alreadyPlayed, false, false, i === 0)));
     log(`指定房間結束：各座位打完 ${results.join('/')} 局`);

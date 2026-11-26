@@ -30,6 +30,7 @@
 import type { Role } from '@avalon/shared';
 import { conceptStateRepoConfig, type ConceptStateRepoConfig } from '../conceptDaily/config';
 import { GitHubJsonFile, hashChatId } from '../conceptDaily/store';
+import type { LiveStateStore } from '../../services/liveStateStore';
 import type { IntervalGroup } from './commands';
 import { SIM_PERSIST_DEBOUNCE_MS, SIM_PERSIST_FIRST_DELAY_MS, SIM_PERSIST_MAX_BYTES } from './config';
 import type { EndedInfo, EndedReason, SimAnswer, SimKill, SimPhase, SimSession, SimSessionStore, SimStoreSnapshot } from './session';
@@ -280,6 +281,24 @@ export class GitHubSimBackend implements SimStateBackend {
   async save(text: string, version: string | null): Promise<{ ok: true; version: string | null } | { ok: false; conflict: boolean }> {
     const res = await this.file.write(text, 'bot-state: sim sessions', version);
     return res.ok ? { ok: true, version: res.sha } : res;
+  }
+}
+
+/**
+ * 2026-11-26：private repo 沒設定時（正式機現在就是這樣），改存私人那份試算表的「伺服器暫存」分頁
+ * （services/liveStateStore.ts：加密過、一格一段），跟對局房間的存檔同一個地方。不用新的環境變數。
+ */
+export class SheetsSimBackend implements SimStateBackend {
+  readonly name = 'sheets';
+  constructor(private readonly store: Pick<LiveStateStore, 'read' | 'write'>) {}
+
+  async load(): Promise<{ json: unknown; version: string | null } | null> {
+    const got = await this.store.read('sim');
+    return got ? { json: got.json, version: got.version } : null;
+  }
+
+  async save(text: string, version: string | null): Promise<{ ok: true; version: string | null } | { ok: false; conflict: boolean }> {
+    return this.store.write('sim', JSON.parse(text) as unknown, version);
   }
 }
 

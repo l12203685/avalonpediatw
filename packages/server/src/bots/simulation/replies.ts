@@ -354,7 +354,7 @@ function sharedAnswerNote(shared?: boolean, resultsPrivate?: boolean): string {
  * 大家都看得到回覆的聊天室加「（沒開題的人也能作答…）」。
  */
 export function answerFooter(shared?: boolean, resultsPrivate?: boolean): string {
-  return [`/派 座位 作答${sharedAnswerNote(shared, resultsPrivate)}`, '/區間 (百科AI 怎麼讀)', HELP_HINT, '/公布 (結束這題)'].join('\n');
+  return [`/派 座位 作答${sharedAnswerNote(shared, resultsPrivate)}`, '/區間 (AI騎士 怎麼讀)', HELP_HINT, '/公布 (結束這題)'].join('\n');
 }
 export const ANSWER_FOOTER = answerFooter(false);
 
@@ -874,9 +874,9 @@ function popcountMask(m: number): number {
 }
 
 /** /派 之後的指令列。 */
-export const PROPOSE_FOOTER = '/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布';
+export const PROPOSE_FOOTER = '/分析 看完整解讀｜/區間 AI騎士 怎麼讀｜/公布';
 /** /分析 之後的指令列。 */
-export const ANALYSIS_FOOTER = '/派 再派一次比較｜/區間 百科AI 怎麼讀｜/公布';
+export const ANALYSIS_FOOTER = '/派 再派一次比較｜/區間 AI騎士 怎麼讀｜/公布';
 
 export interface ProposeResultInput {
   exerciseId: string;
@@ -960,7 +960,7 @@ export function formatInterval(exerciseId: string, ev: IntervalEval, model: SimB
   } else if (ev.groups.length === 1) {
     parts.push({ text: `【${exerciseId} 區間】${formatIntervalGroup(ev.groups[0].group)}：${verdictOf(ev.groups[0])}` });
   }
-  parts.push({ text: '/派｜/區間 百科AI 怎麼讀｜/公布' });
+  parts.push({ text: '/派｜/區間 AI騎士 怎麼讀｜/公布' });
   return assembleReply(parts);
 }
 
@@ -970,7 +970,7 @@ export function formatInterval(exerciseId: string, ev: IntervalEval, model: SimB
 export function formatAiRead(exerciseId: string, seat: number, read: AiReading, coAnswer = false): string {
   const parts: ReplyPart[] = [];
   if (coAnswer) parts.push({ text: CO_ANSWER_MARK });
-  parts.push({ text: `【${exerciseId} 百科AI 怎麼讀】` });
+  parts.push({ text: `【${exerciseId} AI騎士 怎麼讀】` });
   const others = read.redShare.filter((r) => r.seat !== seat).sort((a, b) => b.p - a.p || a.seat - b.seat);
   parts.push({ text: `紅機率：${others.map((r) => `${seatChar(r.seat)} ${pct(r.p)}`).join('・')}` });
   if (read.topWorlds.length) {
@@ -979,8 +979,8 @@ export function formatAiRead(exerciseId: string, seat: number, read: AiReading, 
   const safeWord = read.twoFails ? '不會出 2 張失敗' : '全好';
   const [chosen, ...alts] = read.teams;
   if (chosen) {
-    const why = chosen.safe === null ? '百科AI 的紅方派法' : `${safeWord} ${pct(chosen.safe)}`;
-    parts.push({ text: `百科AI 會派：${teamDigits(chosen.seats)}（${why}）` });
+    const why = chosen.safe === null ? 'AI騎士 的紅方派法' : `${safeWord} ${pct(chosen.safe)}`;
+    parts.push({ text: `AI騎士 會派：${teamDigits(chosen.seats)}（${why}）` });
   }
   if (alts.length) {
     parts.push({ text: `${safeWord}機率最高的其他隊：${alts.map((t) => `${teamDigits(t.seats)} ${pct(t.safe ?? 0)}`).join('｜')}` });
@@ -991,7 +991,7 @@ export function formatAiRead(exerciseId: string, seat: number, read: AiReading, 
 
 /** 拿掉的指令（/下一步，2026-11-17）。 */
 export function removedCommandText(command: string): string {
-  return `/${command} 已經拿掉了。直接 /派 作答；想看百科AI 怎麼讀打 /區間，看答案打 /公布`;
+  return `/${command} 已經拿掉了。直接 /派 作答；想看AI騎士 怎麼讀打 /區間，看答案打 /公布`;
 }
 
 // ─── /公布 ────────────────────────────────────────────────────────────────
@@ -1053,7 +1053,7 @@ export function everyoneLines(list: readonly EveryoneAnswer[]): string[] {
  */
 export function aiPicksLine(ai: AiPicks | null | undefined): string {
   if (!ai || ai.picks.length === 0) return '';
-  const label = ai.kind === 'assassinate' ? '百科AI 會刺' : '百科AI 會派';
+  const label = ai.kind === 'assassinate' ? 'AI騎士 會刺' : 'AI騎士 會派';
   const name = (seats: readonly number[]): string => (ai.kind === 'assassinate' ? seatLabel(seats[0]) : teamDigits(seats));
   const others = Math.round(ai.others * 100);
   if (ai.picks.length === 1 && others < 5) return `${label}：${name(ai.picks[0].seats)}`;
@@ -1174,7 +1174,7 @@ export const INTERVAL_USAGE = '用法：/區間 789=2 460=1 = 7 8 9 裡有 2 紅
 /** 說明的第一行（兩個平台一樣）。 */
 const HELP_TITLE = '🧩 模擬瓦指令（真人對局停在某一家要派票的當下，換你來派，看你的派票放出什麼資訊）';
 const HELP_PROPOSE_WORDS = '作答：派 4、6、9家（0 家寫 0；人數要對，可以派好幾次比較）';
-const HELP_AI_READ_WORDS = '百科AI 怎麼讀這個局面：各家紅機率、最可能的紅方、百科AI 這時會派的隊（藍方附全好機率）';
+const HELP_AI_READ_WORDS = 'AI騎士 怎麼讀這個局面：各家紅機率、最可能的紅方、AI騎士 這時會派的隊（藍方附全好機率）';
 const HELP_INTERVAL_WORDS = '（選填）檢查你自己的區間（7 8 9 裡 2 紅、4 6 0 裡 1 紅），只用確定的資訊看跟局面合不合、還剩幾種可能';
 const HELP_END = '/結束\u3000不公布，直接結束';
 const HELP_ANALYSIS_WORDS = '剛剛那次 /派 的完整解讀（真人怎麼派、你放出的資訊、邏輯、同位置真人）';

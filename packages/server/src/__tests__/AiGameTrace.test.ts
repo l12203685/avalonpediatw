@@ -113,7 +113,7 @@ describe('組 trace（虛構的一局）', () => {
     expect(t.winner).toBe('evil');
   });
 
-  it('百科AI 的決定：依時間編號、第幾局第幾次、動作與理由（同練習模式的說明）', () => {
+  it('AI騎士 的決定：依時間編號、第幾局第幾次、動作與理由（同練習模式的說明）', () => {
     const t = syntheticTrace();
     expect(t.decisions.map((d) => [d.id, d.seat, d.kind, d.round, d.attempt, d.action])).toEqual([
       [1, 3, 'vote', 1, 1, '贊成'],
@@ -168,11 +168,11 @@ describe('組 trace（虛構的一局）', () => {
   });
 });
 
-describe('多個百科AI 合成一份', () => {
+describe('多個AI騎士 合成一份', () => {
   afterEach(() => { vi.useRealTimers(); });
 
   const draft = (seat: number, at: number): DraftDecision => ({
-    at, round: 1, attempt: 1, kind: 'vote', seat, nick: `百科AI_${seat}`, role: 'loyal', team: 'good', action: '贊成', detail: { vote: true }, reason: '測試', source: 'agent',
+    at, round: 1, attempt: 1, kind: 'vote', seat, nick: `AI騎士_${seat}`, role: 'loyal', team: 'good', action: '贊成', detail: { vote: true }, reason: '測試', source: 'agent',
   });
 
   it('同房同一局：兩個座位都報完才送出一次；決定依時間合併；下一局開新的', async () => {
@@ -214,9 +214,9 @@ describe('多個百科AI 合成一份', () => {
 });
 
 describe('DC 訊息與文字', () => {
-  it('討論串標題：百科AI對局 yyyymmdd_HHMM 房間描述／房號（台灣時間）', () => {
-    expect(aiGameThreadName(syntheticTrace())).toBe('百科AI對局 20261105_2105 週四練習團／Room-1460');
-    expect(aiGameThreadName({ startedAt: '2026-11-05T13:05:00.000Z', endedAt: '', room: 'Room-9', title: '' })).toBe('百科AI對局 20261105_2105 Room-9');
+  it('討論串標題：AI騎士對局 yyyymmdd_HHMM 房間描述／房號（台灣時間；2026-11-26 以前是百科AI對局）', () => {
+    expect(aiGameThreadName(syntheticTrace())).toBe('AI騎士對局 20261105_2105 週四練習團／Room-1460');
+    expect(aiGameThreadName({ startedAt: '2026-11-05T13:05:00.000Z', endedAt: '', room: 'Room-9', title: '' })).toBe('AI騎士對局 20261105_2105 Room-9');
     expect([...aiGameThreadName({ startedAt: '', endedAt: '', room: 'R', title: '長'.repeat(200) })].length).toBeLessThanOrEqual(100);
   });
 
@@ -224,13 +224,13 @@ describe('DC 訊息與文字', () => {
     const s = aiGameSummary(syntheticTrace());
     expect(s.length).toBeLessThanOrEqual(2000);
     expect(s).toContain('結果：紅方勝（任務 藍 3：紅 0，刺客刺 1家 刺中梅林）');
-    expect(s).toContain('百科AI：2家 刺客（百科AI_22）、3家 派西維爾（百科AI_21）');
+    expect(s).toContain('AI騎士：2家 刺客（百科AI_22）、3家 派西維爾（百科AI_21）');
     expect(s).toContain('配置：刺 2、娜 5、德 7、奧 0、派 3、梅 1');
     expect(s).toMatch(/第幾局第幾次＋哪一家＋哪個動作＋為什麼怪/);
     expect(s).toContain('trace.json');
   });
 
-  it('依局分組：公開紀錄穿插百科AI 的決定；最後一則附網站網址', () => {
+  it('依局分組：公開紀錄穿插AI騎士 的決定；最後一則附網站網址', () => {
     const t = syntheticTrace();
     const blocks = roundBlocks(t);
     expect(blocks.map((b) => b.split('\n')[0])).toEqual(['**第 1 局**', '**第 2 局**', '**第 3 局**', '**刺殺**']);
