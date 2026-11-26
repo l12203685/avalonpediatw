@@ -33,11 +33,11 @@ export default function SeatFillerCard(): JSX.Element {
 
   return (
     <section id="seat-filler" data-testid="seat-filler-card" className="space-y-2 rounded-lg border border-amber-400/30 bg-zinc-900/80 p-3">
-      <h2 className="flex items-center gap-2 text-sm font-bold text-amber-200"><UserPlus size={16} />叫百科AI 補位</h2>
+      <h2 className="flex items-center gap-2 text-sm font-bold text-amber-200"><UserPlus size={16} />叫AI騎士 補位</h2>
       <p className="text-xs leading-relaxed text-zinc-300">
         在
         <a href={PLAY_PLATFORM_URL} target="_blank" rel="noopener noreferrer" className="mx-1 text-emerald-300 underline underline-offset-2">signage-cloud</a>
-        開了房但缺人？不用進 LINE／DC 群組，在這裡叫百科AI 進房，約 1–2 分鐘後坐下。局數不限，要它走就在房內聊天室打「離開」。
+        開了房但缺人？不用進 LINE／DC 群組，在這裡叫AI騎士 進房，約 1–2 分鐘後坐下。局數不限，要它走就在房內聊天室打「離開」。
       </p>
       <form onSubmit={(e) => { void submit(e); }} className="space-y-2">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_6.5rem_8rem]">
@@ -81,7 +81,7 @@ export default function SeatFillerCard(): JSX.Element {
             className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-black transition-colors hover:bg-zinc-200 disabled:opacity-60"
           >
             {sending ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-            {sending ? '送出中…' : '叫百科AI'}
+            {sending ? '送出中…' : '叫AI騎士'}
           </button>
           <span className="text-[11px] text-zinc-500">{SEAT_FILLER_LIMITS_LINE}</span>
         </div>

@@ -50,8 +50,8 @@ const FAQ_SECTIONS: FaqSection[] = [
               {' '}signage-cloud{' '}
             </a>
             進行；開房缺人時可以到
-            <a href="#seat-filler" className="text-white font-semibold underline"> 百科AI 對局 </a>
-            頁叫百科AI 補位（不用進 LINE／DC 群組）。
+            <a href="#seat-filler" className="text-white font-semibold underline"> AI騎士 對局 </a>
+            頁叫AI騎士 補位（不用進 LINE／DC 群組）。
             <br />
             <span className="text-white font-semibold">不能：</span>
             加好友 / 出現在排行榜 / 看歷史對局回放。
@@ -261,6 +261,17 @@ export default function HelpPage(): JSX.Element {
               回報與修正
             </button>
             留言（處理進度也寫在那裡），或聯絡管理員 Discord。
+          </p>
+          <p className="mt-2 text-zinc-300 text-sm md:text-base leading-relaxed">
+            想用自己的 AI（ChatGPT、Gemini、Claude……）一起改百科？看
+            <button
+              type="button"
+              onClick={() => { useGameStore.getState().setGameState('collab'); window.scrollTo({ top: 0 }); }}
+              className="mx-1 text-white font-semibold underline underline-offset-2"
+            >
+              用你的 AI 一起改百科
+            </button>
+            （GitHub 協作說明與啟動提示）。
           </p>
           <p className="mt-2 text-zinc-300 text-sm md:text-base leading-relaxed">
             戰績排行與數據分析的名詞、算法與各表說明，集中在下方
