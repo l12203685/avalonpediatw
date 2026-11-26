@@ -331,6 +331,23 @@ export const STYLE_WORDS = {
   merlinHidden: '藏鋒',
 } as const;
 export type StyleWord = typeof STYLE_WORDS[keyof typeof STYLE_WORDS];
+
+/** 每個詞的白話（`{比}` = 比較的對象：其他 AI騎士，或百科AI）。 */
+export const STYLE_GLOSS: Readonly<Record<StyleWord, string>> = {
+  穩健: '各方面都接近{比}',
+  激進: '紅方比{比}更衝、更不藏',
+  潛伏: '紅方比{比}更會藏',
+  鐵壁: '藍方投票比{比}嚴',
+  寬容: '藍方投票比{比}鬆',
+  明燈: '梅林比{比}更常照自己看到的紅投票',
+  藏鋒: '梅林比{比}藏得深',
+};
+
+/** 標籤 → 白話（四個字的標籤 = 兩個詞）。 */
+export function glossOf(tag: string, versus: string): string {
+  const words = tag.length === 4 ? [tag.slice(0, 2), tag.slice(2)] : [tag];
+  return words.map((w) => (STYLE_GLOSS[w as StyleWord] ?? w).replace('{比}', versus)).join('，');
+}
 export const STYLE_VOCAB: readonly StyleWord[] = Object.values(STYLE_WORDS);
 
 /** 一個方向至少要偏離這麼多才算（0..1，偏離預設的幅度）。 */
@@ -431,7 +448,7 @@ function whoOf(roles: readonly string[], side: 'good' | 'evil' | null): string {
 }
 
 /** profile 的白話說明（≤ 300 字；擂台 `style` 欄）。 */
-export function describeStyle(layers: Pick<BotProfile, 'sides' | 'roles'>, tag: string): string {
+export function describeStyle(layers: Pick<BotProfile, 'sides' | 'roles'>, tag: string, versus = '百科AI'): string {
   const lines: string[] = [];
   for (const [k, v] of Object.entries(layers.sides?.evil ?? {})) {
     const s = describeKnob(k as KnobKey, v as number | boolean, '紅方');
@@ -452,7 +469,7 @@ export function describeStyle(layers: Pick<BotProfile, 'sides' | 'roles'>, tag: 
     const s = describeKnob(e.key, e.value, allRedButOberon ? '紅方（奧伯倫除外）' : whoOf(e.roles, null));
     if (s) lines.push(s);
   }
-  const head = `依一位玩家自己的真人牌局擬合的打法（風格標籤：${tag}，和其他 AI騎士 比）。和百科AI 不同的地方：`;
+  const head = `依一位玩家自己的真人牌局擬合的打法。風格「${tag}」：${glossOf(tag, versus)}。和百科AI 不同的地方：`;
   const body = lines.length ? `${lines.join('；')}。其他照百科AI。` : '沒有，和百科AI 幾乎一樣。';
   let text = head + body;
   if ([...text].length > 300) text = `${[...text].slice(0, 299).join('')}…`;
@@ -495,12 +512,13 @@ export function knightFolderId(playerId: string, serial: number): string {
 /** 一份 AI騎士 的 profile（擂台格式，作者固定 AI騎士團）。 */
 export function buildKnightProfile(playerId: string, serial: number, layers: Pick<BotProfile, 'sides' | 'roles'>, center: StyleCenter = NO_CENTER): BotProfile {
   const tag = styleTag(layers, center);
+  const versus = center === NO_CENTER ? '百科AI' : '其他 AI騎士';
   const p: BotProfile = {
     schema: 1,
     name: knightName(playerId, serial),
     author: HOUSE_AUTHOR,
     official: true,
-    style: describeStyle(layers, tag),
+    style: describeStyle(layers, tag, versus),
     tag,
   };
   if (layers.sides) p.sides = layers.sides;

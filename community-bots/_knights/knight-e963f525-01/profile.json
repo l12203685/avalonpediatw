@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "name": "AI騎士_豬豬_01",
+  "author": "AI騎士團",
+  "official": true,
+  "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。",
+  "tag": "寬容",
+  "sides": {
+    "evil": {
+      "redR1Teammate": false
+    }
+  },
+  "roles": {
+    "percival": {
+      "goodBayesGood": 0.4,
+      "goodBayesBad": 0.99,
+      "goodBayesGoodKey": 0.5,
+      "goodBayesBadKey": 0.95
+    },
+    "loyal": {
+      "goodBayesGood": 0.4,
+      "goodBayesBad": 0.99,
+      "goodBayesGoodKey": 0.5,
+      "goodBayesBadKey": 0.95
+    }
+  }
+}

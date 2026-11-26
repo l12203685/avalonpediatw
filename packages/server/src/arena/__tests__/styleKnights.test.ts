@@ -15,6 +15,7 @@ import {
   chooseShrunk,
   choicesToLayers,
   describeStyle,
+  glossOf,
   expectedMatch,
   familyAgreement,
   familyOf,
@@ -224,6 +225,11 @@ describe('knight names, folders and profiles', () => {
     expect(community.ok).toBe(false);
     expect(community.errors.join(' ')).toMatch(/AI騎士_/);
     expect(community.errors.join(' ')).toMatch(/official/);
+  });
+
+  it('glosses every vocabulary word and joined tags', () => {
+    for (const w of STYLE_VOCAB) expect(glossOf(w, '其他 AI騎士')).toContain('其他 AI騎士');
+    expect(glossOf(`${STYLE_WORDS.redBold}${STYLE_WORDS.blueStrict}`, '百科AI')).toBe('紅方比百科AI更衝、更不藏，藍方投票比百科AI嚴');
   });
 
   it('describes a default-like profile plainly', () => {
