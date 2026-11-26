@@ -5,7 +5,7 @@
  * （不在 packages/ 裡，所以不會觸發網站或伺服器重新部署）；網站在瀏覽器裡直接讀 GitHub 上的那一份。
  * 格式見 packages/server/src/arena/report.ts（`Leaderboard`）。
  */
-import { knightDisplayName } from '@avalon/shared';
+import { knightDisplayName } from './knightNames';
 import { REPO_URL } from '../i18n/collab';
 
 export const LEADERBOARD_URL = 'https://raw.githubusercontent.com/l12203685/avalonpediatw/main/arena/leaderboard.json';

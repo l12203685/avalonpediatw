@@ -66,7 +66,8 @@ def load_json(path: Path) -> Any:
 
 
 def is_bot_name(name: str) -> bool:
-    return name.startswith(BOT_CATEGORY) or name.startswith("百科機器人")
+    """我們的機器人：AI騎士_…（站長 2026-11-26 起），舊的 百科AI_…、百科機器人…（同 generate_cache.is_pedia_bot_name）。"""
+    return name.startswith(BOT_CATEGORY) or name.startswith("百科機器人") or name.upper().startswith("AI騎士")
 
 
 def stats_games(games_doc: Mapping[str, Any], db: Mapping[str, Any] | None = None,

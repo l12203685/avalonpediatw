@@ -43,7 +43,7 @@ describe('回報與修正：純函式', () => {
     expect(pageLabel('/#records=1570000000000000001')).toBe('牌譜紀錄');
     expect(pageLabel('/#wiki=merlin-basics')).toBe('百科攻略');
     expect(pageLabel('/#analytics')).toBe('戰績排行');
-    expect(pageLabel('/#aiGames')).toBe('百科AI 對局');
+    expect(pageLabel('/#aiGames')).toBe('AI騎士 對局');
     expect(pageLabel('/#idClaim')).toBe('ID 認領');
     expect(pageLabel('/')).toBe('');
     expect(pageLabel(null)).toBe('');

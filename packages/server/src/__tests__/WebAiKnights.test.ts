@@ -3,7 +3,12 @@
  * 網站的深連結（新的 #ai-knights、#my-knight；舊連結照樣開對的分頁）、對局標題新舊都認、排行榜上舊名字顯示成新名字、
  * 伺服器給網站的 trace 與牌譜也把舊名字換成新名字（存下來的紀錄不改）。
  */
+import fs from 'fs';
+import path from 'path';
 import { describe, expect, it } from 'vitest';
+import { knightDisplayName as webKnightDisplayName } from '../../../web/src/utils/knightNames';
+import { withKnightNames } from '../../../web/src/services/api';
+import type { RecordList } from '../../../web/src/utils/records';
 import { PUBLIC_STATS_STATES, parseStatsHash } from '../../../web/src/utils/statsLinks';
 import { parseAiGameName } from '../../../web/src/utils/aiGames';
 import { parseLeaderboard } from '../../../web/src/utils/arena';
@@ -52,6 +57,20 @@ describe('AI騎士 對局 titles', () => {
 });
 
 describe('old bot names show as new names (stored records unchanged)', () => {
+  it('the web copy of knightDisplayName matches the shared fixture', () => {
+    const cases = (JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'knight_names.json'), 'utf-8')) as { cases: { name: string; display: string }[] }).cases;
+    for (const c of cases) expect(webKnightDisplayName(c.name)).toBe(c.display);
+  });
+
+  it('web records list: bot seat names shown with the new name, the same object when nothing changes', () => {
+    const list = { posts: [{ id: 'a', game: { names: ['百科AI_3', '虛構甲'] } }, { id: 'b', game: null }] } as unknown as RecordList;
+    const out = withKnightNames(list);
+    expect(out.posts[0].game?.names).toEqual(['AI騎士_百科_03', '虛構甲']);
+    expect(out.posts[1]).toBe(list.posts[1]);
+    const plain = { posts: [{ id: 'c', game: { names: ['虛構乙'] } }] } as unknown as RecordList;
+    expect(withKnightNames(plain)).toBe(plain);
+  });
+
   it('public trace: AI seats and decisions get the new name; humans stay anonymous', () => {
     const t = {
       seats: [{ seat: 1, name: '百科AI_21', ai: true }, { seat: 2, name: '虛構甲', ai: false }, { seat: 3, name: 'AI騎士_百科_22', ai: true }],

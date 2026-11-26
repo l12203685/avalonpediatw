@@ -26,7 +26,7 @@ export const DEFAULT_KNIGHT_STATS_NAME = `${KNIGHT_PREFIX}_${DEFAULT_KNIGHT_STYL
 
 /** NFKC（全形 ＡＩ → AI）、去掉零寬字元、去頭尾空白：比對用，不改顯示。 */
 function tidy(name: string): string {
-  return name.normalize('NFKC').replace(/[​-‏⁠-⁤﻿]/g, '').trim();
+  return name.normalize('NFKC').replace(/[\u200b-\u200f\u2060-\u2064\ufeff]/g, '').trim();
 }
 
 /** 兩位數序號（0–99）；超過 99 照原樣。 */
