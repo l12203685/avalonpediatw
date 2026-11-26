@@ -32,7 +32,7 @@ import { LineBotClient } from '../bots/line/client';
 import { LINE_CONFIG } from '../bots/line/config';
 import { __resetChatMirrorForTests } from '../bots/ChatMirror';
 
-const SUCCESS = '已叫百科AI 到「Room-1460」（1 個），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。';
+const SUCCESS = '已叫AI騎士 到「Room-1460」（1 個），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。';
 
 let now = Date.UTC(2026, 10, 3, 4, 0, 0);
 let status = 204;

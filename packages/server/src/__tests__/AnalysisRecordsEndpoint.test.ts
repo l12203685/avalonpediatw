@@ -198,17 +198,18 @@ describe('GET /api/analysis/records', () => {
     expect(res.status).toBe(200);
     const shown = res.body.data.posts[1].game.names as string[];
     expect(shown[2]).toBe('玩家C');
-    expect(shown[5]).toBe('百科AI_3'); // 機器人的座位名保留編號
-    expect(shown.filter((_, i) => i !== 2)).toEqual(names.filter((_, i) => i !== 2));
+    expect(shown[5]).toBe('AI騎士_百科_03'); // 機器人的座位名保留編號，舊名字顯示成新名字（站長 2026-11-26）
+    const botShown = names.map((n, i) => (i === 5 ? 'AI騎士_百科_03' : n));
+    expect(shown.filter((_, i) => i !== 2)).toEqual(botShown.filter((_, i) => i !== 2));
     expect(res.body.data.posts[0]).toEqual(DOC.posts[0]); // 沒有牌譜的貼文原樣
-    // 沒有別名檔、壞掉的別名檔 → 名字照貼文原樣
+    // 沒有別名檔、壞掉的別名檔 → 名字照貼文原樣（機器人的舊名字照樣顯示成新名字）
     fs.writeFileSync(aliasFile, '{ not json', 'utf-8');
     invalidateRecordsPayload();
     const raw = await request(app).get('/api/analysis/records').set('Accept-Encoding', 'identity');
-    expect(raw.body.data.posts[1].game.names).toEqual(names);
+    expect(raw.body.data.posts[1].game.names).toEqual(botShown);
     expect(recordNameRenames(null).size).toBe(0);
     expect(recordNameRenames({ aliases: [] }).size).toBe(0);
-    const post = doc.posts[1];
+    const post = DOC.posts[1];
     expect(renameRecordNames(post, new Map())).toBe(post);
     expect(renameRecordNames(post, new Map([['沒有這個人', '甲']]))).toBe(post);
   });

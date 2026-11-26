@@ -125,6 +125,19 @@ export class PracticeSessions {
     return session;
   }
 
+  /** 伺服器更新後讀回來的一間（socket/liveSnapshot.ts）；已經有同一間 → 不動，回 false。 */
+  restore(session: PracticeSession): boolean {
+    if (this.sessions.has(session.roomId)) return false;
+    this.sessions.set(session.roomId, {
+      ...session,
+      options: { ...session.options },
+      botIds: [...session.botIds],
+      entries: [...session.entries],
+      flaggedEntryIds: new Set(session.flaggedEntryIds),
+    });
+    return true;
+  }
+
   has(roomId: string | undefined | null): boolean {
     return typeof roomId === 'string' && this.sessions.has(roomId);
   }

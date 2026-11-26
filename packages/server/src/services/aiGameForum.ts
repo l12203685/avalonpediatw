@@ -12,7 +12,7 @@
  * 不丟錯：沒有 token／論壇關掉 → skipped；DC 失敗 → failed（只記狀態碼）。log 只寫狀態碼與數量，不寫標題、暱稱或內容。
  */
 import {
-  AI_GAME_TAG_NAME, formatFlagReply, paipuPostBody, paipuResultTag, paipuThreadNameOf, parseAiGameTrace,
+  AI_GAME_TAG_NAME, AI_GAME_TITLE_MARKS, formatFlagReply, paipuPostBody, paipuResultTag, paipuThreadNameOf, parseAiGameTrace,
   type AiGameTrace,
 } from './aiGameTrace';
 
@@ -234,10 +234,11 @@ export function snowflakeTime(id: string): string {
   }
 }
 
-/** 是不是這個論壇裡的百科AI對局討論串（標題開頭「百科AI對局」）。 */
+/** 是不是這個論壇裡的 AI騎士 對局討論串（標題開頭「AI騎士對局」／舊的「百科AI對局」，或有「含AI騎士」／舊的「含百科機器人」）。 */
 export function isAiGameThread(t: DiscordThread, forumId: string): boolean {
-  return t.parent_id === forumId && typeof t.id === 'string' && /^\d+$/.test(t.id)
-    && typeof t.name === 'string' && (t.name.startsWith(AI_GAME_TAG_NAME) || t.name.includes('含百科機器人'));
+  if (t.parent_id !== forumId || typeof t.id !== 'string' || !/^\d+$/.test(t.id) || typeof t.name !== 'string') return false;
+  const name = t.name;
+  return AI_GAME_TITLE_MARKS.prefixes.some((p) => name.startsWith(p)) || AI_GAME_TITLE_MARKS.contains.some((c) => name.includes(c));
 }
 
 /** 只讀 Discord 自己 CDN 上的附件（不讓 trace 的網址指到別處）。 */
