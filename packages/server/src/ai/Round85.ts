@@ -35,6 +35,7 @@
  *
  * 純函式；沒有 `Math.random`。
  */
+import { splitMixGate86 } from './Round86';
 import type { PlayerObservation } from './types';
 import type { AgentTuning } from './AgentTuning';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
@@ -78,7 +79,7 @@ export function r1Split85Applies(tuning: Readonly<AgentTuning>, obs: PlayerObser
   if ((obs.seatTeam ?? obs.myTeam) !== 'good') return false;
   const scope = tuning.r1Split85Scope ?? 0;
   if (obs.myRole !== 'loyal' && obs.myRole !== 'percival' && !(obs.myRole === 'merlin' && (scope & 1) !== 0)) return false;
-  return r1SplitCore85(obs, scope) !== null;
+  return r1SplitCore85(obs, scope) !== null && splitMixGate86(tuning, obs);
 }
 
 /**

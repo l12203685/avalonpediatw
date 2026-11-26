@@ -61,3 +61,19 @@ export function softTierScores86(
   for (const id of all) out.set(id, (scores.get(id) ?? 0) + (inFront.has(id) ? 0 : pen));
   return out;
 }
+
+function hash01(text: string): number {
+  let h = 0x811c9dc5;
+  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 10000) / 10000;
+}
+
+/**
+ * `splitMix86 = q`（藍方，0 = 關＝`r1Split85` 照原本每次都判）：第 85 回合的 `r1Split85`（失敗之後不再照派第 1 局的隊＋1）只在比例 q 的局面做
+ * （照座位、局、第幾次提議雜湊）——混合的忠臣：有時候拆、有時候照派，梅林正確的拆法混在忠臣裡（站長 11/26 刺殺那一段）。
+ */
+export function splitMixGate86(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  const q = tuning.splitMix86 ?? 0;
+  if (!(q > 0) || q >= 1) return true;
+  return hash01(`${obs.myPlayerId}|${obs.currentRound ?? 0}|${obs.failCount ?? 0}|splitmix86`) < q;
+}
