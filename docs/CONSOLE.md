@@ -55,6 +55,11 @@
 `feedback.simFeedback.sent`（轉到管理員頻道幾則）。數字不是 0 就在同步摘要裡寫一行，提醒站長去「大劍管理員」看 `🎲 模擬瓦回饋` 那幾則（原文和題號只在那裡，不進 repo、不進主控台）；
 `flaggedGames > 0` 時寫明「有局被 2 位以上說爛局，要不要加進 `sim_bank_exclude.json` 等站長決定」。計數重啟（每次部署後端）就歸零，所以要在當天看。
 
+**同一次同步也看網站房間聊天裡的遊戲內回饋**（站長 2026-11-26「遊戲中的對話你也記得讀取並學習 有可能是玩家對你玩法的反饋」）：
+`/api/bots/status` 的 `feedback.inGame`（`capturedGames`、`flagged`、`forwarded`、`throttled`、`sheet.rows`）；完整的在私人試算表「遊戲內回饋」分頁，
+Drive 連接器讀得到就整理成百科AI 改進項目寫進 `docs/ai/optimization_loop.md`〈遊戲內回饋 → 待測清單〉（只寫改寫後的情境，不引原話、不寫名字），
+讀不到就在摘要寫數字、請站長匯出那個分頁。原文不進 repo、不進主控台。湖中宣告只打在聊天裡被讀到的次數是 `lakeChatDeclare.declared`（只看，不用處理）。
+
 同步的順序固定是「先 apply、再 export」：export 只反映 main 上已經有的東西，所以 apply 的 PR 合併前，主控台會同時顯示「站長已裁定（db）」和「main 還沒套用（鏡像）」，這是對的狀態，不要在主控台裡把它抹平。
 
 ## 3. 主控台鏡像：`console:export`
