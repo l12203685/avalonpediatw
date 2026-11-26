@@ -30,6 +30,7 @@ import { viewpointLog53, viewpointTerms53 } from '../Viewpoint53';
 import { missionProbScore68, missionScoreApplies68 } from '../Round68';
 import { missionFailed } from '../missionFacts';
 import { merlinCoverMix77 } from '../Round77';
+import { ml90Applies, ml90Cfg, ml90Key, ml90Weights, type Ml90Cfg } from '../Round90';
 
 interface Table {
   vote: Record<string, [number, number]>;
@@ -576,6 +577,11 @@ export interface BayesOptions {
   missionScore68?: number;
   /** Round 50 `lakePickSuspicion50=w`: blue seats only, the mixture lake-pick term (`Round50.lakePickTerms50`). */
   lakeSusp50?: number;
+  /**
+   * Round 90 `mlBelief90` (`Round90.ts`, roadmap Phase C): loyal (and, by scope, Percival) seats tilt the final world weights toward the
+   * trained world-posterior model's P(red) per seat (iterative proportional fitting on the same worlds). Blue seats only (red frozen).
+   */
+  ml90?: Ml90Cfg;
 }
 
 /** Near-impossible event under the strict-Merlin model. */
@@ -657,6 +663,19 @@ function ownViewOffsetsOf(obs: PlayerObservation, cfg: { sigma: number; keep: nu
 }
 
 function posterior(obs: PlayerObservation, opts: Readonly<BayesOptions>): Posterior {
+  // Round 90 `mlBelief90`: the whole posterior below, then the worlds tilted toward the model's marginals (off: this branch never runs).
+  if (opts.ml90 && ml90Applies(opts.ml90, obs)) {
+    const cfg = opts.ml90;
+    const base = posterior(obs, { ...opts, ml90: undefined });
+    let store = ownViewCache.get(base);
+    if (!store) { store = new Map(); ownViewCache.set(base, store); }
+    const key = ml90Key(cfg);
+    const hit = store.get(key);
+    if (hit) return hit;
+    const out = base.worlds.length > 0 ? { ...base, wts: ml90Weights(obs, base, cfg) } : base;
+    store.set(key, out);
+    return out;
+  }
   // Round 38 `ownView`: the pick's posterior from the viewer's own prior — the world weights times exp(Σ offsets of the reds in the world).
   const ov = opts.ownView;
   if (ov && ownViewStrength(obs, ov.scope, ov.maxRound ?? 0) > 0) {
@@ -1317,9 +1336,9 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     // Level 0 of the recursive reader never reads the pending proposal (round 39 review): its voter views (`infl/flow.ts`
     // `seatViewObs`) carry no `seatTeam`, so the blue-only gate would pass for every voter, red seats' readings included, and the
     // recursive vote model was fitted on level-0 features without it.
-    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, blueVoteTemper57: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
+    ...((t.beliefRecursive ?? 0) > 0 ? { recursive: t.beliefRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, blueVoteTemper57: 0, mlBelief90: 0 }), ...(t.beliefRecursiveNoLead === true ? { recursiveNoLead: true } : {}), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}) } : {}),
     ...((t.beliefRecursive ?? 0) <= 0 && (t.beliefLeadRecursive ?? 0) > 0
-      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, blueVoteTemper57: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
+      ? { leadRecursive: t.beliefLeadRecursive, recursiveLevel0: bayesOptionsOf({ ...t, beliefRecursive: 0, beliefLeadRecursive: 0, ownView: 0, ownViewKeep: 0, beliefPendingProposal: false, beliefLakeCal40: 0, beliefLakeIso41: 0, beliefLakePick45: 0, beliefRecalib: 0, beliefConventionTremble: 0, loyalRationality50: 0, lakePickSuspicion50: 0, viewpoint53: 0, blueVoteTemper57: 0, mlBelief90: 0 }), ...((t.beliefRecursiveLeadScope ?? 0) > 0 ? { recursiveLeadScope: t.beliefRecursiveLeadScope } : {}), ...((t.beliefLeadBlend ?? 0) > 0 ? { leadBlend: t.beliefLeadBlend } : {}) } : {}),
     ...temperOf(t.beliefTemper ?? 0),
     ...leadTemperOf(t.beliefLeadTemper ?? 0),
     ...((t.ownView ?? 0) > 0 || (t.ownViewKeep ?? 0) > 0 ? { ownView: { sigma: t.ownView ?? 0, keep: t.ownViewKeep ?? 0, scope: Math.max(1, t.ownViewScope ?? 0), maxRound: t.ownViewRounds ?? 0 } } : {}),
@@ -1342,6 +1361,7 @@ export function bayesOptionsOf(t: Readonly<Partial<AgentTuning>>): BayesOptions 
     ...((t.loyalCopyCap63 ?? 0) > 0 ? { copyCap63: t.loyalCopyCap63 } : {}),
     ...((t.missionRole56 ?? 0) > 0 ? { missionRole56: true } : {}),
     ...((t.missionScore68 ?? 0) > 0 ? { missionScore68: t.missionScore68 } : {}),
+    ...(ml90Cfg(t) ? { ml90: ml90Cfg(t) } : {}),
   }, t.viewpoint53 ?? 0, t.viewpointPow53 ?? 0, t.merlinLoyalStyle === true ? merlinCoverMix77(t) : null);
 }
 

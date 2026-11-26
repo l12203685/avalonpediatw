@@ -358,132 +358,112 @@ def load_assassin(paths, domain, late_override=None):
     return rows
 
 
-def assassin_matrix(spots, feat_names):
-    X, y, gid, dom, late, keys, wl, front = [], [], [], [], [], [], [], []
+def assassin_matrix(spots):
+    X, y, gid, front, wl = [], [], [], [], []
     for si, s in enumerate(spots):
         for c in s['cands']:
             X.append(c['x'])
             y.append(1.0 if c['seat'] == s['merlin'] else 0.0)
             gid.append(si)
-            dom.append(s['domain'])
-            late.append(s.get('late', 0))
-            wl.append(c.get('wl', 0.0))
-            front.append(c.get('front', 1))
-        keys.append(s)
-    return (np.array(X, dtype=np.float64), np.array(y), np.array(gid, dtype=np.int64), np.array(dom), np.array(late), keys,
-            np.array(wl, dtype=np.float64), np.array(front))
+            front.append(c['front'])
+            wl.append(c['wl'] if c['wl'] is not None else c['x'][0])
+    return np.array(X, dtype=np.float64), np.array(y), np.array(gid, dtype=np.int64), np.array(front), np.array(wl, dtype=np.float64)
 
 
-def spot_eval(p, y, gid, keys, bot_pick_field='bot'):
-    """每一個刺殺點：模型第一名命中梅林的比例、梅林的 log P、Brier（6 個候選人）、和現行刺客（紀錄裡的 bot 目標）的命中率。"""
-    G = gid.max() + 1
-    hit = np.zeros(G)
-    ll = np.zeros(G)
-    br = np.zeros(G)
-    for g in range(G):
-        idx = np.where(gid == g)[0]
-        pp = p[idx]
+def spot_scores(z, y, gid, front, spots, sel_spots, tier):
+    """每一個選到的刺殺點：模型第一名（tier = 只在分層第一層裡挑）是不是梅林、梅林的 −log P（全部候選人 softmax）、6 人的 Brier。"""
+    hit, ll, br = [], [], []
+    for si in sel_spots:
+        idx = np.where(gid == si)[0]
+        zz = z[idx]
+        p = np.exp(zz - zz.max())
+        p /= p.sum()
         yy = y[idx]
-        hit[g] = float(yy[int(np.argmax(pp))] == 1)
-        ll[g] = -math.log(max(float((pp * yy).sum()), 1e-12))
-        br[g] = float(((pp - yy) ** 2).sum())
-    return hit, ll, br
+        cand = idx if not tier or front[idx].max() == 0 else idx[front[idx] > 0]
+        best = cand[int(np.argmax(z[cand]))]
+        hit.append(float(y[best] == 1))
+        ll.append(-math.log(max(float((p * yy).sum()), 1e-12)))
+        br.append(float(((p - yy) ** 2).sum()))
+    return np.array(hit), np.array(ll), np.array(br)
+
+
+def paired(a, b, B, seed=90):
+    """b − a 的平均與 95% 重抽信賴區間（同一批刺殺點配對）。"""
+    rng = np.random.default_rng(seed)
+    n = len(a)
+    d = b - a
+    bs = [d[rng.integers(0, n, n)].mean() for _ in range(B)]
+    return float(d.mean()), [float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5))]
 
 
 def cmd_assassin(a):
-    feat_names = json.load(open(a.features, encoding='utf8'))['features'] if a.features else None
+    feat_names = json.load(open(a.human[0][:-6] + '.meta.json', encoding='utf8'))['features']
     hum = load_assassin(a.human, 'human')
-    bots = []
-    for i, p in enumerate(a.bot):
-        bots.append(load_assassin([p], f'bot{i}', late_override=0))
-    if feat_names is None:
-        feat_names = hum[0]['features']
-    allspots = hum + [s for b in bots for s in b]
-    X, y, gid, dom, late, keys, wl, front = assassin_matrix(allspots, feat_names)
+    bots = [load_assassin([p], f'bot{i}', late_override=0) for i, p in enumerate(a.bot)]
+    spots = hum + [s for b in bots for s in b]
+    X, y, gid, front, wl = assassin_matrix(spots)
+    dom = np.array([spots[g]['domain'] for g in gid])
+    sdom = np.array([s['domain'] for s in spots])
+    slate = np.array([s.get('late', 0) for s in spots])
+    sgi = np.array([s['gi'] for s in spots])
     off = feat_names.index(a.offset) if a.offset else -1
-    is_h = dom == 'human'
-    # 重量：真人局每一點 = a.human_weight，機器人 = 1
-    w = np.where(is_h, a.human_weight, 1.0)
-    allowed = list(range(len(feat_names)))
-    results = {}
+    w = np.where(dom == 'human', a.human_weight, 1.0)
+    allowed = [i for i, f in enumerate(feat_names) if f not in (a.drop or [])]
+    h_test = np.where((sdom == 'human') & (slate == 1))[0]
+    h_valid_spot = (sdom == 'human') & (slate == 0) & (sgi % 5 == 0)
+    h_train_spot = (sdom == 'human') & (slate == 0) & ~h_valid_spot
+    # --valid-bot：機器人局序號 mod 5 == 0 的刺殺點也拿來決定樹的棵數（不進擬合）；正式模型照常用全部機器人局擬合以外的點。
+    b_valid_spot = (sdom != 'human') & (sgi % 5 == 0) if a.valid_bot else np.zeros(len(spots), dtype=bool)
+    rowmask = lambda smask: smask[gid]  # noqa: E731
 
-    def fit(train_mask, valid_mask, tag):
-        trees, init = boost(X, y, gid, w, train_mask, valid_mask, 'group', allowed, off, a.trees, a.depth, a.lr, a.l2, a.min_hess, a.subsample, a.seed, log=False)
+    def fit(train_spots, tag, valid_spots=None):
+        vs = h_valid_spot | (b_valid_spot & train_spots) if valid_spots is None else valid_spots
+        trees, init = boost(X, y, gid, w, rowmask(train_spots & ~b_valid_spot), rowmask(vs), 'group', allowed, off, a.trees, a.depth, a.lr, a.l2,
+                            a.min_hess, a.subsample, a.seed, log=False)
         js = to_json(f'r90-assassin-{tag}', 'group', feat_names, off, init, trees, {})
         tr, ini = round_json(js)
         return js, predict(tr, ini, X, off)
 
-    def softmax_all(z):
-        return group_softmax(z, gid)
-
-    spots_h_test = np.array([s['domain'] == 'human' and s.get('late', 0) == 1 for s in keys])
-    hum_valid = is_h & (late == 0) & (gid % 5 == 0)
-    hum_train = is_h & (late == 0) & ~hum_valid
-    # 交叉擬合：機器人第 i 組的點用「真人擬合那一半＋其他機器人組」的模型算
-    preds = {}
+    allbot = np.zeros(len(spots), dtype=bool)
     for i in range(len(bots)):
-        others = np.zeros(len(y), dtype=bool)
-        for j in range(len(bots)):
-            if j != i:
-                others |= dom == f'bot{j}'
-        tm = hum_train | others
-        js, z = fit(tm, hum_valid, f'cf{i}')
+        allbot |= sdom == f'bot{i}'
+    js_full, zf = fit(h_train_spot | allbot, 'full')
+    js_h, zh = fit(h_train_spot, 'humanOnly')
+    zcf = np.zeros(len(y))
+    for i in range(len(bots)):
+        others = allbot & (sdom != f'bot{i}')
+        _, z = fit(h_train_spot | others, f'cf{i}')
         m = dom == f'bot{i}'
-        preds[f'bot{i}'] = z
-        print(f'  cross-fit bot{i}: {len(js["trees"])} trees', file=sys.stderr)
-    # 正式的模型：真人擬合那一半＋全部機器人組；真人驗證那一半是樣本外
-    allbot = np.zeros(len(y), dtype=bool)
-    for j in range(len(bots)):
-        allbot |= dom == f'bot{j}'
-    js_full, zf = fit(hum_train | allbot, hum_valid, 'full')
-    # 只用真人局（對照：不加機器人）
-    js_h, zh = fit(hum_train, hum_valid, 'humanOnly')
-    pf = softmax_all(zf)
-    ph = softmax_all(zh)
-    pwl = softmax_all(np.where(np.isfinite(wl), wl, -50.0))
-    # 現行刺客：分層（front）裡世界線最高的那一個
-    pcur = softmax_all(np.where(front > 0, wl, wl - 50.0))
-    for name, mask_spot in (('真人局驗證（後 1/3）', spots_h_test),):
-        sel = np.where(np.isin(gid, np.where(mask_spot)[0]))[0]
-        sub_gid = remap(gid, np.isin(gid, np.where(mask_spot)[0]))
-        out = {}
-        for pn, pp in (('現行刺客（分層＋世界線）', pcur), ('世界線（不分層）', pwl), ('第2號（真人＋機器人）', pf), ('第2號（只用真人）', ph)):
-            hit, ll, br = spot_eval(pp[sel], y[sel], sub_gid, None)
-            out[pn] = {'spots': int(len(hit)), 'hit': float(hit.mean()), 'logloss': float(ll.mean()), 'brier': float(br.mean()), '_hit': hit, '_ll': ll, '_br': br}
-        # 配對重抽
-        rng = np.random.default_rng(90)
-        base = out['現行刺客（分層＋世界線）']
-        G = len(base['_hit'])
-        for pn, r in out.items():
-            if pn == '現行刺客（分層＋世界線）':
-                continue
-            ds = {'hit': [], 'logloss': [], 'brier': []}
-            for _ in range(a.boot):
-                ix = rng.integers(0, G, G)
-                for k, key in (('hit', '_hit'), ('logloss', '_ll'), ('brier', '_br')):
-                    ds[k].append(r[key][ix].mean() - base[key][ix].mean())
-            for k in ds:
-                r[f'd_{k}'] = float(r['_' + {'hit': 'hit', 'logloss': 'll', 'brier': 'br'}[k]].mean() - base['_' + {'hit': 'hit', 'logloss': 'll', 'brier': 'br'}[k]].mean())
-                r[f'd_{k}_ci'] = [float(np.percentile(ds[k], 2.5)), float(np.percentile(ds[k], 97.5))]
-        for r in out.values():
-            for k in ('_hit', '_ll', '_br'):
-                r.pop(k)
-        results[name] = out
-    # 機器人局（交叉擬合）的命中率
+        zcf[m] = z[m]
+    print(f'  trees: full {len(js_full["trees"])}, humanOnly {len(js_h["trees"])}', file=sys.stderr)
+    results = {}
+
+    def block(sel, zs, label):
+        cur = np.array([float(spots[si]['cur'] == spots[si]['merlin']) for si in sel])
+        hum_hit = np.array([float(spots[si]['human'] == spots[si]['merlin']) for si in sel])
+        _, wl_ll, wl_br = spot_scores(wl, y, gid, front, spots, sel, True)
+        out = {'spots': int(len(sel)), '現行刺客命中': float(cur.mean()), '真人刺客命中（紀錄）': float(hum_hit.mean()),
+               '世界線 logloss': float(wl_ll.mean()), '世界線 Brier': float(wl_br.mean())}
+        for name, z in zs:
+            for tier in (True, False):
+                hit, ll, br = spot_scores(z, y, gid, front, spots, sel, tier)
+                d, ci = paired(cur, hit, a.boot)
+                key = f'{name}（{"分層" if tier else "不分層"}）'
+                out[key] = {'命中': float(hit.mean()), '命中差': d, '命中差 CI': ci}
+                if tier:
+                    dl, cil = paired(wl_ll, ll, a.boot)
+                    db, cib = paired(wl_br, br, a.boot)
+                    out[key].update({'logloss': float(ll.mean()), 'logloss差': dl, 'logloss差 CI': cil, 'Brier': float(br.mean()), 'Brier差': db, 'Brier差 CI': cib})
+        results[label] = out
+
+    block(h_test, [('第2號（真人＋機器人）', zf), ('第2號（只用真人）', zh)], '真人局驗證（後 1/3）')
     for i in range(len(bots)):
-        msk = dom == f'bot{i}'
-        sel = np.where(msk)[0]
-        sub_gid = remap(gid, msk)
-        pcf = group_softmax(preds[f'bot{i}'][sel], sub_gid)
-        out = {}
-        for pn, pp in (('現行刺客（分層＋世界線）', group_softmax(np.where(front[sel] > 0, wl[sel], wl[sel] - 50.0), sub_gid)), ('第2號（交叉擬合）', pcf)):
-            hit, ll, br = spot_eval(pp, y[sel], sub_gid, None)
-            out[pn] = {'spots': int(len(hit)), 'hit': float(hit.mean()), 'logloss': float(ll.mean()), 'brier': float(br.mean())}
-        results[f'機器人 {a.bot[i].split("/")[-1]}（交叉擬合）'] = out
+        sel = np.where(sdom == f'bot{i}')[0]
+        block(sel, [('第2號（交叉擬合）', zcf)], f'機器人 {a.bot[i].split("/")[-1]}（交叉擬合：留這一組）')
     meta = {
         'data': '刺殺點（三藍之後；真人局 games_cache.json 十人局＋自我對打 detail=1 的整局紀錄），每個候選人（非紅、非刺客）一列；y = 是梅林',
-        'split': '真人局照日期排序前 2/3 擬合（局序號 mod 5 == 0 決定樹的棵數）、後 1/3 驗證；機器人局全部進擬合（交叉擬合時留一組）',
-        'humanWeight': a.human_weight,
+        'split': '真人局照日期排序前 2/3 擬合（局序號 mod 5 == 0 的局決定樹的棵數）、後 1/3 驗證；機器人局全部進擬合（交叉擬合時留下要量的那一組）',
+        'bots': [p.split('/')[-1] for p in a.bot], 'humanWeight': a.human_weight, 'validBot': bool(a.valid_bot), 'offset': a.offset or None, 'drop': a.drop or [],
         'hyper': {'trees': len(js_full['trees']), 'depth': a.depth, 'lr': a.lr, 'l2': a.l2, 'minHess': a.min_hess, 'subsample': a.subsample, 'seed': a.seed},
         'oos': results,
     }
@@ -491,9 +471,12 @@ def cmd_assassin(a):
     if a.out:
         with open(a.out, 'w', encoding='utf8') as fh:
             json.dump(js_full, fh, ensure_ascii=False, separators=(',', ':'))
+    if a.out_human:
+        js_h['meta'] = dict(meta, data=meta['data'] + '（只用真人局擬合那一半，不加機器人局）', hyper=dict(meta['hyper'], trees=len(js_h['trees'])))
+        with open(a.out_human, 'w', encoding='utf8') as fh:
+            json.dump(js_h, fh, ensure_ascii=False, separators=(',', ':'))
     if a.out_cf:
-        for i in range(len(bots)):
-            pass
+        np.save(a.out_cf, np.stack([gid, y, zcf, zf], axis=1))
     print(json.dumps(results, ensure_ascii=False, indent=1))
 
 
@@ -518,10 +501,12 @@ def main():
     pa = sp.choices['assassin']
     pa.add_argument('--human', nargs='+', required=True)
     pa.add_argument('--bot', nargs='*', default=[])
-    pa.add_argument('--features')
     pa.add_argument('--offset', default='')
+    pa.add_argument('--drop', nargs='*')
+    pa.add_argument('--valid-bot', action='store_true')
     pa.add_argument('--human-weight', type=float, default=1.0)
     pa.add_argument('--out-cf')
+    pa.add_argument('--out-human')
     a = ap.parse_args()
     if a.cmd == 'belief':
         return cmd_belief(a)
