@@ -34,6 +34,7 @@ import {
   type FeedbackDiscordForwarder,
 } from '../bots/feedback';
 import type { PracticeFlagRow } from './PracticeReportWriter';
+import { formatPracticeExploitForward, type PracticeExploitRow } from './PracticeExploitReport';
 import { DECISION_KIND_LABEL_ZH, ROLE_LABEL_ZH, seatLabelZh } from './types';
 
 /** Copies posted per rolling hour at most (the same cap as /意見, counted separately). */
@@ -63,6 +64,11 @@ export interface PracticeReportDiscordStats {
 /** What GameServer needs: post a copy of a saved report; resolves, never rejects. */
 export interface PracticeReportCopy {
   forward(row: PracticeFlagRow): Promise<PracticeReportCopyOutcome>;
+  /**
+   * 練習局「被針對」回報（2026-11-26，practice/PracticeExploitReport.ts）：同一個頻道、同一個每小時上限、
+   * 同一組次數。沒實作的（舊的測試假物件）就不貼。
+   */
+  forwardExploit?(row: PracticeExploitRow): Promise<PracticeReportCopyOutcome>;
 }
 
 const OFF = ['false', '0', 'off', 'no'];
@@ -150,8 +156,17 @@ export class PracticeReportDiscord implements PracticeReportCopy {
 
   /** Post a copy of one saved report. Resolves with the outcome; never rejects. */
   async forward(row: PracticeFlagRow): Promise<PracticeReportCopyOutcome> {
+    return this.safePost(() => formatPracticeReportForward(row));
+  }
+
+  /** 練習局「被針對」回報的一則貼文（沒有名字、沒有 id）。Resolves with the outcome; never rejects. */
+  async forwardExploit(row: PracticeExploitRow): Promise<PracticeReportCopyOutcome> {
+    return this.safePost(() => formatPracticeExploitForward(row, clip));
+  }
+
+  private async safePost(build: () => string): Promise<PracticeReportCopyOutcome> {
     try {
-      return await this.post(row);
+      return await this.post(build);
     } catch (err) {
       // Only the synchronous part (settings, formatting) can get here; post() handles the send.
       this.counts.failed += 1;
@@ -170,7 +185,7 @@ export class PracticeReportDiscord implements PracticeReportCopy {
     return { enabled, ...this.counts };
   }
 
-  private async post(row: PracticeFlagRow): Promise<PracticeReportCopyOutcome> {
+  private async post(build: () => string): Promise<PracticeReportCopyOutcome> {
     if (!this.enabled()) return 'disabled';
     const channelId = this.channelId();
     const sender = this.sender();
@@ -186,7 +201,7 @@ export class PracticeReportDiscord implements PracticeReportCopy {
       this.logger.warn(`practice report saved but not posted to Discord: hourly cap (${this.maxPerHour}) reached`);
       return 'throttled';
     }
-    const content = formatPracticeReportForward(row);
+    const content = build();
     // Reserve the slot before the send (reports can overlap) and give it back when nothing was
     // posted, so a Discord outage cannot eat the hourly cap (same as /意見).
     this.sendTimes.push(now);

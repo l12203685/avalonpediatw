@@ -7,6 +7,22 @@
  * Nothing here is persisted — a restart simply forgets practice rooms.
  */
 import type { PracticeDecisionKind, PracticeOptions, PracticeTraceEntry } from './types';
+import type { PracticeExploitFlag } from './exploitFlags';
+import type { PracticeExploitRow } from './PracticeExploitReport';
+
+/**
+ * 練習局「被針對」回報（2026-11-26）：局結束時記下這局的結果與自動標記，等玩家回答／略過，
+ * 或房間清掉時（被標記但沒回答）寫一列。
+ */
+export interface PracticeExploitState {
+  /** 結果、玩家座位／角色（局結束時固定）。 */
+  base: Pick<PracticeExploitRow, 'traceId' | 'humanSeat' | 'humanRole' | 'humanTeam' | 'winner' | 'endReason'>;
+  flags: PracticeExploitFlag[];
+  /** 題目顯示過（只算一次）。 */
+  shown: boolean;
+  /** 已經寫了一列（或正在寫）；之後的回答一律不收。 */
+  written: boolean;
+}
 
 export const PRACTICE_LIMITS = Object.freeze({
   /** Ended practice rooms stay reviewable this long, then are removed. */
@@ -47,6 +63,8 @@ export interface PracticeSession {
   entries: PracticeTraceEntry[];
   flaggedEntryIds: Set<number>;
   lastFlagAt: number;
+  /** 局結束後才有（練習局「被針對」回報）。 */
+  exploit: PracticeExploitState | null;
 }
 
 export type NewTraceEntry = Omit<PracticeTraceEntry, 'id' | 'at'>;
@@ -82,6 +100,7 @@ export class PracticeSessions {
       entries: [],
       flaggedEntryIds: new Set(),
       lastFlagAt: 0,
+      exploit: null,
     };
     this.sessions.set(roomId, session);
     return session;

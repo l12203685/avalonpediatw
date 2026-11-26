@@ -48,6 +48,7 @@ import {
 } from './feedback';
 import type { Client } from 'discord.js';
 import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../practice/PracticeReportDiscord';
+import { getPracticeExploitAskCounter, type PracticeExploitAskStats } from '../practice/PracticeExploitReport';
 import { getInGameFeedback, type InGameFeedbackStats } from '../inGameFeedback';
 import { lakeChatDeclareStatus } from '../game/lakeChatDeclare';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
@@ -537,6 +538,11 @@ export interface BotStatus {
    */
   lakeChatDeclare: { enabled: boolean; declared: number; holderMessagesUnread: number };
   /**
+   * 練習局「被針對」（2026-11-26，practice/PracticeExploitReport.ts）：局後那一題顯示／回答／略過幾局、
+   * 每個選項幾次、自動標記「可能被針對」幾局（每條規則幾局）、寫進私人試算表幾列／失敗幾次。只有數字。
+   */
+  practice: { exploitAsks: PracticeExploitAskStats };
+  /**
    * Daily chat-log export (bots/chatExport): three booleans, the last day's
    * date, time, counts and outcome code, and the catch-up's day counts; the
    * same for the reading copy under `readingCopy` (two booleans, lastRun,
@@ -603,6 +609,7 @@ export function buildBotStatus(): BotStatus {
       inGame: getInGameFeedback().snapshot(),
     },
     lakeChatDeclare: lakeChatDeclareStatus(),
+    practice: { exploitAsks: getPracticeExploitAskCounter().snapshot() },
     chatExport: chatExportStatus(),
     mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
     simulation: simulationStatus(),

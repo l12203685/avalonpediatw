@@ -50,6 +50,20 @@ import {
   type PracticeReportStatus,
 } from '../practice/PracticeReportWriter';
 import { getPracticeReportDiscord, type PracticeReportCopy } from '../practice/PracticeReportDiscord';
+import {
+  createPracticeExploitSheetWriter,
+  getPracticeExploitAskCounter,
+  isNoteworthy,
+  isPracticeExploitAskEnabled,
+  parseExploitChoices,
+  sanitizeExploitText,
+  type PracticeExploitAnswerStatus,
+  type PracticeExploitChoice,
+  type PracticeExploitRow,
+  type PracticeExploitSink,
+} from '../practice/PracticeExploitReport';
+import { detectPracticeExploits } from '../practice/exploitFlags';
+import type { PracticeSession } from '../practice/PracticeSessions';
 import { getInGameFeedback } from '../inGameFeedback';
 import { LAKE_CHAT_SUFFIX, getLakeChatWatcher } from '../game/lakeChatDeclare';
 import {
@@ -275,6 +289,11 @@ export interface GameServerOptions {
    * unless `practiceReportSink` is injected (tests), then none unless given here.
    */
   practiceReportDiscord?: PracticeReportCopy | null;
+  /**
+   * Where practice 「被針對」 answers / auto-flags go (practice/PracticeExploitReport.ts). Default: the
+   * Sheets writer from env — unless `practiceReportSink` is injected (tests), then none unless given here.
+   */
+  practiceExploitSink?: PracticeExploitSink | null;
 }
 
 export class GameServer {
@@ -285,6 +304,7 @@ export class GameServer {
   private practiceSink: PracticeFlagSink | null;
   private practiceSinkStatus: PracticeReportStatus;
   private practiceDiscord: PracticeReportCopy | null;
+  private practiceExploitSink: PracticeExploitSink | null;
   private readonly botDelayScale: number;
   private readonly redTalkWaitScale: number;
   // `${roomId}:${round}:${holderId}` of bot lake inspections already queued.
@@ -334,6 +354,16 @@ export class GameServer {
     this.practiceDiscord = options.practiceReportDiscord !== undefined
       ? options.practiceReportDiscord
       : options.practiceReportSink !== undefined ? null : getPracticeReportDiscord();
+    if (options.practiceExploitSink !== undefined) {
+      this.practiceExploitSink = options.practiceExploitSink;
+      getPracticeExploitAskCounter().sheetStatus = options.practiceExploitSink ? 'ok' : 'disabled';
+    } else if (options.practiceReportSink !== undefined) {
+      this.practiceExploitSink = null;
+    } else {
+      const built = createPracticeExploitSheetWriter(process.env);
+      this.practiceExploitSink = built.writer;
+      getPracticeExploitAskCounter().sheetStatus = built.status;
+    }
     // Make the same RoomManager visible to non-socket callers (Discord /
     // LINE bot handlers) so a room created via /create can be started,
     // joined, and ended from either the web or Discord. Without this wiring
@@ -422,6 +452,11 @@ export class GameServer {
 
       socket.on('practice:flag', (payload: unknown, ack?: unknown) => {
         void this.handlePracticeFlag(socket, payload, typeof ack === 'function' ? ack as (res: PracticeFlagResult) => void : undefined);
+      });
+
+      // 練習局「被針對」：局後一題（顯示／略過／回答）
+      socket.on('practice:exploit-ask', (payload: unknown, ack?: unknown) => {
+        void this.handlePracticeExploitAsk(socket, payload, typeof ack === 'function' ? ack as (res: PracticeFlagResult) => void : undefined);
       });
 
       // Emit user authenticated
@@ -3479,6 +3514,28 @@ export class GameServer {
     // otherwise delete the room ~30 min after it was CREATED, cutting the
     // review window short. Count the window from the end of the game.
     room.updatedAt = Date.now();
+    // 練習局「被針對」（2026-11-26）：記下結果和自動標記，等玩家回答、略過，或房間清掉時寫。
+    try {
+      const ids = Object.keys(room.players);
+      const human = room.players[session.ownerId];
+      const flags = detectPracticeExploits(room, session.ownerId);
+      session.exploit = {
+        base: {
+          traceId: roomId,
+          humanSeat: ids.indexOf(session.ownerId) + 1,
+          humanRole: human?.role ?? null,
+          humanTeam: human?.team === 'good' || human?.team === 'evil' ? human.team : null,
+          winner: room.evilWins === true ? 'evil' : room.evilWins === false ? 'good' : null,
+          endReason: room.endReason,
+        },
+        flags,
+        shown: false,
+        written: false,
+      };
+      getPracticeExploitAskCounter().noteFlags(flags);
+    } catch (err) {
+      console.warn('[practice] exploit check failed:', err instanceof Error ? err.message : 'unknown');
+    }
     const socketId = this.playerToSocket.get(session.ownerId);
     if (socketId) this.io.to(socketId).emit('practice:trace', this.buildPracticePayload(roomId, room));
     console.log(`✓ Practice game ended in room ${roomId} (${session.entries.length} bot decisions traced)`);
@@ -3505,7 +3562,122 @@ export class GameServer {
       flagUnavailableReason: this.practiceSink ? undefined : practiceReportUnavailableReason(this.practiceSinkStatus),
       flagsLeft: this.practice.flagsLeft(roomId),
       flaggedEntryIds: session ? [...session.flaggedEntryIds] : [],
+      exploitAsk: {
+        enabled: this.practiceExploitSink !== null && isPracticeExploitAskEnabled(),
+        done: session?.exploit?.written === true,
+      },
     };
+  }
+
+  /**
+   * 練習局「被針對」局後一題（站長 2026-11-26）。`action`：'shown'（題目顯示出來，只算一次）、
+   * 'skip'（略過／先別再問：被自動標記的局照樣寫一列）、'answer'（choices＋選填 text，寫一列）。
+   * 只有練習房的玩家、局結束後；一局只收一次。玩家寫的字從不寫 log。
+   */
+  private async handlePracticeExploitAsk(
+    socket: Socket,
+    rawPayload: unknown,
+    ack?: (res: PracticeFlagResult) => void,
+  ): Promise<void> {
+    const reply = (res: PracticeFlagResult): void => { if (ack) ack(res); };
+    try {
+      const obj = rawPayload && typeof rawPayload === 'object' ? rawPayload as Record<string, unknown> : {};
+      const roomId = typeof obj.roomId === 'string' ? obj.roomId : '';
+      const uid = (socket.data.user as User | undefined)?.uid;
+      const session = this.practice.get(roomId);
+      if (!session || !uid || session.ownerId !== uid) {
+        reply({ ok: false, error: '找不到這個練習房（可能已逾時清除）' });
+        return;
+      }
+      const st = session.exploit;
+      if (!st) {
+        reply({ ok: false, error: '對局結束後才能回答' });
+        return;
+      }
+      const counter = getPracticeExploitAskCounter();
+      const action = obj.action;
+      if (action === 'shown') {
+        if (!st.shown) { st.shown = true; counter.noteShown(); }
+        reply({ ok: true });
+        return;
+      }
+      if (st.written) {
+        reply({ ok: true });
+        return;
+      }
+      if (action === 'skip') {
+        counter.noteSkipped();
+        if (st.flags.length > 0) await this.writePracticeExploitRow(session, [], '', 'skipped');
+        else st.written = true;
+        reply({ ok: true });
+        return;
+      }
+      if (action !== 'answer') {
+        reply({ ok: false, error: '看不懂這個回答' });
+        return;
+      }
+      const choices = parseExploitChoices(obj.choices);
+      const text = sanitizeExploitText(obj.text);
+      if (choices.length === 0 && !text) {
+        reply({ ok: false, error: '請至少選一項' });
+        return;
+      }
+      if (!this.practiceExploitSink) {
+        reply({ ok: false, error: '這台伺服器目前存不下回答' });
+        return;
+      }
+      const ok = await this.writePracticeExploitRow(session, choices, text, 'answered');
+      if (!ok) {
+        reply({ ok: false, error: '儲存失敗，請稍後再試' });
+        return;
+      }
+      counter.noteAnswered(choices);
+      reply({ ok: true });
+    } catch (err) {
+      console.warn('[practice] exploit answer failed:', err instanceof Error ? err.message : 'unknown');
+      reply({ ok: false, error: '儲存失敗，請稍後再試' });
+    }
+  }
+
+  /**
+   * 寫一列「練習被針對」（有內容的局連同決策紀錄），成功後有內容的局也貼管理員頻道。
+   * 一局只寫一次（`written`）；回答寫失敗會放回去讓玩家再送。從不丟錯。
+   */
+  private async writePracticeExploitRow(
+    session: PracticeSession,
+    choices: PracticeExploitChoice[],
+    text: string,
+    status: PracticeExploitAnswerStatus,
+  ): Promise<boolean> {
+    const st = session.exploit;
+    const sink = this.practiceExploitSink;
+    if (!st || st.written) return false;
+    st.written = true;
+    if (!sink) return false;
+    const row: PracticeExploitRow = {
+      at: Date.now(),
+      ...st.base,
+      choices,
+      text,
+      status,
+      flags: st.flags,
+      decisionCount: session.entries.length,
+    };
+    const noteworthy = isNoteworthy(row);
+    const counter = getPracticeExploitAskCounter();
+    try {
+      await sink.appendExploit(row, noteworthy ? [...session.entries] : []);
+      counter.noteSaved(true);
+    } catch (error) {
+      counter.noteSaved(false);
+      if (status === 'answered') st.written = false;
+      // Step + HTTP status only — never the player's text or a response body.
+      const what = error instanceof Error && error.name === 'PracticeExploitSheetError' ? error.message : 'unexpected error';
+      console.warn(`[practice] exploit row not saved for room ${st.base.traceId}: ${what}`);
+      return false;
+    }
+    if (noteworthy) void this.practiceDiscord?.forwardExploit?.(row);
+    return true;
   }
 
   /**
@@ -3618,6 +3790,10 @@ export class GameServer {
   /** Remove a practice room completely (engine timers, bots, session, room). */
   private disposePracticeRoom(roomId: string): void {
     const session = this.practice.get(roomId);
+    // 練習局「被針對」：被自動標記、玩家沒回答也沒略過 → 清掉前寫一列（不等它寫完）。
+    if (session?.exploit && !session.exploit.written && session.exploit.flags.length > 0) {
+      void this.writePracticeExploitRow(session, [], '', 'no-answer');
+    }
     const engine = this.gameEngines.get(roomId);
     if (engine) engine.cleanup();
     const room = this.roomManager.getRoom(roomId);
