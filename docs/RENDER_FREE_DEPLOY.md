@@ -77,3 +77,17 @@ curl https://<你的服務>.onrender.com/health
 - 額度：單一服務全月常駐 ≤ 744 小時，低於每個 workspace 每月 750 小時的免費額度；
   **同 workspace 再開第二個常駐 Free 服務就會超額**（超額後所有 Free 服務停到下個月）。
 - 部署或 Render 重啟後仍有一次 ~30–60 秒冷啟動，之後自動恢復常駐。細節見 `docs/LINE_DISCORD_SYNC.md`。
+
+## 合併後端 PR 之前：部署閘門（2026-11-26）
+
+每次合併到 main、而且改到後端（`render.yaml` 的 `buildFilter`），Render 就重新部署：先開新的一台，新的起來、流量切過去，**再等 60 秒**送 `SIGTERM` 給舊的那台，舊的那台最多再活 30 秒（`maxShutdownDelaySeconds`，預設 30、最多 300）就被強制關掉。記憶體裡的對局、練習房、刺殺等指令、LINE 待送訊息都會跟著消失。
+
+所以合併前先在 repo 根目錄跑：
+
+```
+node scripts/deployGate.mjs            # 0 = 現在重啟不會讓任何真人丟掉東西；1 = 先不要
+node scripts/deployGate.mjs --wait 30  # 不行就每分鐘再問一次，最多等 30 分鐘
+```
+
+欄位和原因代碼的說明：`docs/BOTS.md`〈給每一個會合併 PR 的 AI：合併前先跑部署閘門〉。
+

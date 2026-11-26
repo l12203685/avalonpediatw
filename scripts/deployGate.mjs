@@ -10,7 +10,7 @@
  *   DEPLOY_GATE_URL=http://localhost:3001 node scripts/deployGate.mjs   問別台
  *
  * 讀 /api/bots/status → live（packages/server/src/services/deploySafety.ts）。只印數字和代碼。
- * 沒有任何相依套件，Node 18 以上就能跑。說明：docs/DEPLOY_GATE.md。
+ * 沒有任何相依套件，Node 18 以上就能跑。說明：docs/BOTS.md〈合併前先跑部署閘門〉、docs/RENDER_FREE_DEPLOY.md。
  */
 
 const DEFAULT_URL = 'https://avalon-server-z6c0-cs0s.onrender.com';
