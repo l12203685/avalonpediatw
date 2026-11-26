@@ -76,7 +76,7 @@ export function gatedThumb83Passes(ev: GatedThumb83Eval, cfg: GatedThumb83Config
 }
 
 /** 這一局之後還會有的湖（第 2、3、4 局任務之後各一次）裡，排在第 `m` 局任務之前的有幾次。 */
-function lakesBefore(obs: PlayerObservation, round: number, m: number): number {
+export function lakesBefore(obs: PlayerObservation, round: number, m: number): number {
   if (obs.playerCount < 7) return 0;
   // 第 3 局起還沒有任何湖的紀錄 = 這一局沒有開湖（真人局可以關湖）。
   if (round >= 3 && (obs.lakeHistory?.length ?? 0) === 0) return 0;
@@ -109,7 +109,7 @@ function seatView(obs: PlayerObservation, seat: string): PlayerObservation {
 }
 
 /** 好人那一側的共同看法：每一個可能是好人的座位（梅林看得到的紅以外）的公開視角，照梅林估的「他是好人」加權，每個人是紅的平均機率。 */
-function goodSideShares(obs: PlayerObservation, rec: PlayerObservation, pubOpts: Readonly<BayesOptions>, own: ReadonlyMap<string, number>): Map<string, number> {
+export function goodSideShares(obs: PlayerObservation, rec: PlayerObservation, pubOpts: Readonly<BayesOptions>, own: ReadonlyMap<string, number>): Map<string, number> {
   const me = obs.myPlayerId;
   const seen = new Set(obs.knownEvils);
   const acc = new Map<string, number>(obs.allPlayerIds.map((id) => [id, 0]));

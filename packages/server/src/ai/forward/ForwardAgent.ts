@@ -95,6 +95,7 @@ import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77'
 import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import { tierCover82Applies, tierCover82Team } from '../Round82';
 import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
+import { ev88Applies, ev88Team } from '../Round88';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -1421,10 +1422,24 @@ export class ForwardAgent implements AvalonAgent {
         const barred83 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen83.has(id))];
         return gatedThumb83Team(this.baseline.tuning, obs, team, publicGateOk, barred83);
       };
+      // Round 88 `merlinEvAssassin88` (Round88.ts; roadmap Phase A item 2, Issue #215): in its scope Merlin's team is the candidate with the best
+      // log P(three blue) + λ log(1 − P(assassinated)); it supersedes the round-82 / round-83 steps there (the round-83 gate is its thumb rule).
+      const ev88On = chosen.type === 'team_select' && ev88Applies(this.baseline.tuning, obs);
+      const ev88 = (team: readonly string[]): readonly string[] => {
+        const seen88 = new Set(obs.knownEvils);
+        const barred88 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen88.has(id))];
+        return ev88Team(this.baseline.tuning, obs, team, gateOk, publicGateOk, barred88);
+      };
+      const ev88Trace = 'merlin: the best P(three blue) × (1 − P(assassinated)) among the loyal-plausible teams (round 88)';
       if (chosen.type === 'team_select' && loyalFree80Applies(this.baseline.tuning, obs)) {
         const seen80 = new Set(obs.knownEvils);
         const barred80 = [...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen80.has(id))];
         const t80 = loyalFree80Team(this.baseline.tuning, obs, chosen.teamIds, gateOk, publicGateOk, barred80);
+        if (t80 !== chosen.teamIds && ev88On) {
+          const t88 = ev88(t80);
+          if (t88 !== t80) return { ...d, action: { type: 'team_select', teamIds: [...t88] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → ${ev88Trace}` } };
+          return { ...d, action: { type: 'team_select', teamIds: [...t80] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a red-free team the loyal of his seat could send (round 80)` } };
+        }
         if (t80 !== chosen.teamIds) {
           // Round 83: the gated thumb also applies on top of the round-80 pick (the human tables run round 80).
           const t83 = gate83(t80);
@@ -1434,7 +1449,11 @@ export class ForwardAgent implements AvalonAgent {
       }
       // Round 82 `merlinTierCover82` (Round82.ts): on an R3–R4 non-forced proposal that rarely goes, at rate q a loyal-plausible team holding
       // exactly one red he sees (a slip a loyal in his seat could make), once he has never certainly led a seen red; measured, not adopted.
-      if (chosen.type === 'team_select' && tierCover82Applies(this.baseline.tuning, obs)) {
+      if (chosen.type === 'team_select' && ev88On) {
+        const t88 = ev88(chosen.teamIds);
+        if (t88 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t88] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → ${ev88Trace}` } };
+      }
+      if (chosen.type === 'team_select' && !ev88On && tierCover82Applies(this.baseline.tuning, obs)) {
         const seen82 = new Set(obs.knownEvils);
         const barred82 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen82.has(id))];
         const t82 = tierCover82Team(this.baseline.tuning, obs, chosen.teamIds, publicGateOk, barred82);
@@ -1442,7 +1461,7 @@ export class ForwardAgent implements AvalonAgent {
       }
       // Round 83 `merlinGatedThumb83` (Round83.ts; site owner 2026-11-26): only when (a) mission results + the lake still find the good five
       // after this team fails and (b) the good side still takes Merlin for good, at rate q a loyal-plausible team holding exactly one red he sees.
-      if (chosen.type === 'team_select') {
+      if (chosen.type === 'team_select' && !ev88On) {
         const t83 = gate83(chosen.teamIds);
         if (t83 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t83] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a gated thumb (the good five still findable, he stays trusted; round 83)` } };
       }
