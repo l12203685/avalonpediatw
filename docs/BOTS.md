@@ -354,7 +354,7 @@ Discord 的指令清單從 29 個變 32 個（多 `/規則`、`/角色`、`/補�
 ## AI 擂台（社群自建機器人）
 
 > 2026-11-26，站長：「我們有辦法提供個人AI的雛形嗎 然後他們再根據這個雛形送出自己認為的AI樣貌 以後就可以是一堆自建AI對戰」。
-> 這一節的機器人**不在群組或網站房間裡**，只在每週的擂台裡互打。投稿說明：[`community-bots/README.md`](../community-bots/README.md)；網站：`#arena`。
+> 這一節的機器人**不在群組或網站房間裡**，只在擂台裡互打（每天 12 萬局）。投稿說明：[`community-bots/README.md`](../community-bots/README.md)；網站：`#arena`。
 
 - **一隻社群機器人 = 百科AI 的引擎 ＋ 作者選的打法開關**（`community-bots/<id>/profile.json`）。第 1 階段不執行任何人的程式碼；
   開關只開放 `packages/server/src/arena/knobs.ts` 的白名單（每個都量過真的會改變打法、有範圍），邏輯防護不開放。
@@ -362,14 +362,73 @@ Discord 的指令清單從 29 個變 32 個（多 `/規則`、`/角色`、`/補�
   `AI arena bot check` workflow 自動跑（`pull_request`、唯讀、沒有 secret，fork 來的也安全）。
 - **本機試打**：`arena:local <資料夾> [--games 300] [--players 5-10]`：你的機器人坐一半座位、其他是百科AI，每局再打一次全百科AI 當對照，
   印陣營／角色勝率（成對差）、三種結局、刺中率。`--workers` 預設 2。
-- **每週擂台**：`.github/workflows/arena-tournament.yml`，每週一 02:23（台灣）＋可手動跑。參賽 = 百科AI（1500 分）＋
-  `community-bots/_examples/` 兩隻示範對手（激進派紅方、保守藍方）＋ 合併進 main 的社群機器人。10 人局、隨機座位、每個座位隨機抽一隻；
-  分數 = 分陣營的隊伍邏輯回歸（紅方分、藍方分、總分，95% 區間）。結果 commit 到 `arena/leaderboard.json`，網站直接讀 GitHub 上的那一份。
-- **不會重開伺服器**：`community-bots/` 與 `arena/` 不在 Render 的 buildFilter、也不在網站部署的 `packages/**` 裡；推送用 `GITHUB_TOKEN`，不會觸發其他 workflow。
-  不需要任何 secret。（擂台的程式本身在 `packages/server/src/arena/` 與 `scripts/arena*`，第一次合併那一次會照常重新部署。）
+- **每日大賽（像 CI/CD）**：站長 2026-11-26「跑AI擂台會需要耗token 嗎 如果不用的話 我希望你做成像CICD 並且每天至少跑10萬局」。
+  **不耗任何 token**：擂台只跑我們自己的引擎（自我對打），不呼叫任何 LLM；GitHub Actions 對公開 repo 的標準 runner 不收費。
+  `.github/workflows/arena-tournament.yml`：
+  - **每天 04:17（台灣）**：120,000 局，`plan` → `play`（12 片同時跑，每片 10,000 局、一台 4 vCPU runner 開 4 個行程）→ `aggregate`。
+  - **合併到 main 動到 `community-bots/**` 或 `packages/server/src/arena/**` 時（CD）**：補跑 20,000 局（4 片 × 5,000），新的／改過的機器人當天就有分數。
+  - **手動**（workflow_dispatch）：`games` 輸入局數（空白 = 120,000；每片最多 1 萬局、最多 20 片，超過就每片多打；上限 60 萬）。
+  - 參賽 = 百科AI（1500 分）＋ `community-bots/_examples/` 兩隻示範對手（激進派紅方、保守藍方）＋ `community-bots/_knights/` 的官方 AI騎士（見下面）＋ 合併進 main 的社群機器人。
+    10 人局、隨機座位、每個座位隨機抽一隻；分數 = 分陣營的隊伍邏輯回歸（紅方分、藍方分、總分，95% 區間），一次用這一輪全部的局擬合。
+  - **可重現**：第 n 局只由 (seed, n) 決定，跟切幾片、每片幾個行程無關（`src/arena/daily.ts`；測試鎖住「分片合併 = 一次跑完」）。
+    每日排程的 seed = `arena-<台北日期>`，重跑失敗的分片會得到一樣的局；補跑／手動的 seed 加上 run 編號，同一天多輪不會重複。
+  - **分片結果**：每局壓成 31 個字元（名冊索引＋角色＋結局），一片 1 萬局約 340 KB，當 artifact 留 7 天。`aggregate` 檢查每片的 seed 與名冊雜湊一樣、
+    局號不重疊；某一片失敗（runner 掛掉）時用到齊的照樣算，少掉的局數寫在排行榜（`daily.missingGames`）與 job summary。12 萬局合併＋擬合約 12 秒。
+  - **寫進 main 的只有 `arena/`**：`arena/leaderboard.json`（多了 `daily`：今天／累計局數、這一輪幾片、每個 runner 每秒幾局；`trend`：最近 30 天的總分）
+    與 `arena/history/<台北日期>.json`（一天一份、一隻機器人一行，約 2 KB；同一天多輪局數相加、分數用最新一輪；60 天前的每日檔併成
+    `arena/history/YYYY-Www.json` 每週一份，依局數加權平均）。累計局數 = 全部快照的局數加總。
+  - **不重疊**：每日／手動一組、補跑一組 concurrency（GitHub 同一組只留一個排隊中的，分開才不會讓補跑把當天的每日大賽擠掉）；
+    寫排行榜的 `aggregate` 全部排同一條隊（`arena-aggregate`），而且從 main 最新的 `arena/` 開始算，一次只有一個在 commit。
+  - **實測吞吐（2026-11-26，PR #217 的 smoke，GitHub `ubuntu-latest` 4 vCPU、Node 22）**：2,000 局 693 秒 = **每個 runner 每秒 2.89 局**
+    （4 個行程，每個 vCPU 每秒 0.72 局；31 隻參賽、10 人局）。本機（4 核、和其他工作共用）單一行程約每秒 1.4 局，CPU 時間約 0.7 秒／局，
+    大部分花在 ForwardAgent 的貝氏推論（`BayesBelief.posterior`）。
+    → 每片 1 萬局約 58 分鐘、加安裝約 1 小時；**12 片同時跑，每天 12 萬局、整輪約 65–70 分鐘**（04:17 開始，約 05:30 前寫回排行榜），
+    比 10 萬局多 20%（就算兩片失敗也還有 10 萬局）；每天約 12 小時 runner 時間（公開 repo 免費），遠低於單一 job 6 小時、同時 20 個 job 的上限。
+    補跑 2 萬局約 35 分鐘。要更多局：手動輸入或改 workflow 的 `games`（20 片 × 1 萬 = 20 萬局仍約 1 小時）。
+- **PR 檢查**：`.github/workflows/arena-check.yml` 除了 `arena:check`，再跑一場 2,000 局的小擂台（同一條 `arena:daily shard → aggregate`、寫在暫存資料夾、
+  不 commit），分數表貼在 job summary（不留 PR 留言）；約 12 分鐘，和 Test & Lint 一起跑、不拉長 PR 的等待。
+- **不會重開伺服器**：`community-bots/` 與 `arena/` 不在 Render 的 buildFilter、也不在網站部署的 `packages/**` 裡；推送用 `GITHUB_TOKEN`，
+  GitHub 不會因為 `GITHUB_TOKEN` 的推送再觸發 workflow（所以也不會觸發自己；而且 `arena/` 不在補跑的 paths 裡）。
+  不需要任何 secret。（擂台的程式本身在 `packages/server/src/arena/` 與 `scripts/arena*`，合併那一次會照常重新部署。）
+- **網站**（`#arena`，在「AI騎士團」頁的擂台分頁）：今天打了幾局、累計幾局、最後更新時間（台灣時間），每隻機器人最近 30 天的總分走勢小圖。
+- **本機跑每日大賽的一片**：`pnpm --filter @avalon/server arena:daily shard --date 2026-11-26 --kind manual --run-id 1 --games 200 --slice 0/2 --out /tmp/s/0.json`，
+  兩片都跑完後 `arena:daily aggregate --in /tmp/s --arena /tmp/arena-copy`（`--arena` 給一份複製的資料夾，免得改到 repo 裡的排行榜）。
+  舊的 `arena:tournament`（一次跑完、只寫排行榜）照樣能用。
 - **之後的「代理騎士」**（網站上登入就能用滑桿調一隻機器人）會用同一份 schema 與檢查（`src/arena/profile.ts`），
   匯出成 `{"profiles":[{"id","title","profile"}]}` 交給 `arena:tournament --extra`，排行榜已經有 `title` 欄位（侍從／騎士／圓桌騎士）。
 - **第 2 階段**（寫程式的機器人、沙盒）只有設計：[`docs/ai/ARENA_CODE_BOTS.md`](ai/ARENA_CODE_BOTS.md)。
+
+### 依玩家風格建立的 AI騎士
+
+> 2026-11-26，站長：「我希望你先針對目前的強者 或是至少總場數超過250場的玩家分別建立他們各自風格的AI騎士」；
+> 命名：「還是直接用玩家id吧 repo本身公開也沒關係 因為玩家也是匿名」。
+
+- **是什麼**：`community-bots/_knights/<id>/profile.json`，每一隻 = 百科AI 的引擎 ＋ 用**一位玩家自己的真人牌局**擬合出來的擂台開關。
+  名字 `AI騎士_{玩家ID}_{##}`（玩家ID = 網站上顯示的那個、併過 `player_aliases.json` 的舊名；## 從 01 起，留給之後的變化版），
+  作者「AI騎士團」、`"official": true`，`tag` 是從開關算出來的風格標籤（固定詞表：穩健／激進／潛伏／鐵壁／寬容／明燈／藏鋒，最明顯的一個，
+  第二明顯的也夠強就接在後面）。`style` 是白話說明。每天的擂台自動上場（名冊來源 `house`，排行榜稱號「AI騎士團」）。
+- **選哪些玩家**：網站真人局（百科AI 局不算）總場數 ≥ 250，或是強者玩家（第 1G 節：強者分面前 5）。第一批（2026-11-26 的資料）30 位：27 位場數 ≥ 250、11 位強者玩家（8 位兩者都是），可以重播的座位 14,251 個。
+- **怎麼擬合**（`packages/server/scripts/styleKnights.ts`，純函式 `src/arena/styleKnights.ts`）：
+  1. 玩家坐過的每個座位，用第 1 關／人類 PR 量尺同一套重播（只給那個座位當時知道的東西，每個決策點獨立），百科AI 和幾組改過開關的版本各算一次決策。
+  2. 決策分成互不重疊的「決策族」：紅方第 1、2 局藏牌、奧伯倫開局出失敗、紅方第 1 局帶隊友、紅方疊隊友、紅方投票（照紅方利益投／放行乾淨隊二選一條軸）、
+     忠臣和派西第 3 局起的票（在隊上／不在隊上 × 一般局／關鍵局，四個門檻）、梅林投票、梅林派隊、派西第 1 局派隊、刺殺。
+  3. 局依局號雜湊分兩半。每一族在**擬合的一半**挑一個開關值：期望一致數往全體（所有入選玩家）的一致率收縮（κ = 20：決策點少的族主要跟全體）後最高的那個；
+     機率開關用「開關 = 0／1」兩次重播的加權算期望一致度。
+  4. **留出的一半**比較 AI騎士 和百科AI 跟玩家實際選擇的一致度；比百科AI 高才留下。再用合起來的 profile 實際重播留出的一半一次，確認族與族之間沒有互相抵銷。
+  5. 湖中（目標、宣告）沒有開放的開關，所以不比。真人有發言，機器人沒有；一致度是「同一個局面做一樣的決定」，不是強弱。
+- **結果**（`docs/ai/gap/style_knights.json`，留出一半的一致度差，pp = 百分點）：30 位裡 **28 隻留下**（2 位在留出的一半沒有比百科AI 更像，−0.07、−0.79pp，不建）。
+  留下的 28 隻：一致度平均從百科AI 的 79.7% 到 81.5%；差的分布 最小 +0.40／中位數 +1.64／最大 +3.52pp（含沒留下的兩位：25% 分位 +0.83、75% 分位 +2.49）。
+  用合起來的 profile 實際重播，差幾乎一樣（中位數 +1.9pp），族與族之間沒有互相抵銷。標籤：寬容 8、鐵壁 7、藏鋒 5、穩健 5、明燈 2、藏鋒鐵壁 1。
+  幾乎所有玩家共同的方向（所以標籤改成和其他 AI騎士 比）：忠臣和派西在隊上比百科AI 少內黑、不在隊上比較願意放行；紅方第 1 局當隊長不帶隊友；
+  紅方的票照百科AI 的「裝好人」最像真人（沒有人往「照紅方利益投」那邊動）。
+  `arena:local` 100 局抽查兩隻（成對對照）：陣營勝率和百科AI 的差都在 ±6pp 內、區間跨過 0（局數少，看不出強弱；它們本來就是照像不像擬合，不是照強弱）。
+- **藍方投票的開關**：現行百科AI 第 3 局起忠臣、派西的票由「嚴格的貝氏準則」（`goodBayesVote`）決定，舊的 `goodCleanVote`／`goodTailVote`／`goodKeyVote`
+  在真人局的決策點上幾乎不會改變任何一票（試跑 938 票 0 票不同）。所以這一批把貝氏準則自己的四個門檻
+  （`goodBayesGood`／`goodBayesBad`／`goodBayesGoodKey`／`goodBayesBadKey`）加進擂台白名單（`arena:knobs --live`：16 局裡 3／10／2／5 局打法不同），AI騎士 用它們擬合藍方的票。
+- **重產**：`cd packages/server && npx tsx scripts/styleKnights.ts --out <repo 外的資料夾> --workers 2 --write-knights --summary ../../docs/ai/gap/style_knights.json`
+  （約 50 分鐘；`--out` 裡的 `players.csv`、`fit.json` 是私人的工作檔，不進 repo）。只會清掉它自己以前寫的 `knight-*` 資料夾。
+- **之後認領**：玩家登入網站（「代理騎士」，`我的騎士`）後可以認領自己的那一隻：改名、用文字或滑桿調、看它的擂台對局。認領前它是官方的、不屬於任何帳號；
+  不想要自己的 AI騎士 的玩家：重產時加 `--exclude <玩家ID>`，那個資料夾就會被清掉。
 
 ## 上線要注意的（只有站長能做）
 
