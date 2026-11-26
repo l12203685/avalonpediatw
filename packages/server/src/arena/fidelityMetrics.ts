@@ -418,25 +418,25 @@ export function formatPlayerTable(name: string, e: PlayerEval, splitLabel: strin
   out.push(`#### ${name}（${splitLabel}）`, '', '| 動作 | 測試決策點 | 百科AI | v1 | v2 | v2 前三名／附註 | 自我一致度（天花板，簽名內留一；可比的決策點數） |', '|---|---|---|---|---|---|---|');
   out.push(rateRow('全部（各動作合計）', e.overall));
   out.push(rateRow('1 任務牌（紅方，可確定的）', e.quest, '', e.quest.ceiling));
-  for (const [k, r] of Object.entries(e.quest.byRound).sort()) out.push(rateRow(`　任務牌 ${k}`, r));
-  for (const [k, r] of Object.entries(e.quest.bySeen).sort()) out.push(rateRow(`　任務牌 ${k}`, r));
-  for (const [k, r] of Object.entries(e.quest.byFails).sort()) out.push(rateRow(`　任務牌 ${k}`, r));
+  for (const [k, r] of Object.entries(e.quest.byRound).sort()) out.push(rateRow(`└ 任務牌 ${k}`, r));
+  for (const [k, r] of Object.entries(e.quest.bySeen).sort()) out.push(rateRow(`└ 任務牌 ${k}`, r));
+  for (const [k, r] of Object.entries(e.quest.byFails).sort()) out.push(rateRow(`└ 任務牌 ${k}`, r));
   out.push(rateRow('2 派隊（完全一樣才算）', e.team.top1, `前三名命中 ${pct(e.team.top3V2, e.team.top1.n)}`, e.team.ceiling));
-  for (const [k, r] of Object.entries(e.team.byRound).sort()) out.push(rateRow(`　派隊 ${k}`, r));
-  out.push(rateRow('　派隊：AI 第一名在玩家歷史前三名', e.team.top1InHistTop3, `歷史可比 ${e.team.histN}`));
-  out.push(`| 　派隊：前三名和玩家歷史前三名重疊 | ${e.team.histOverlap.n} | ${pct(e.team.histOverlap.D, e.team.histOverlap.n)} | ${pct(e.team.histOverlap.K, e.team.histOverlap.n)} | ${pct(e.team.histOverlap.V2, e.team.histOverlap.n)} | 百科AI／v1 只給一組 | |`);
+  for (const [k, r] of Object.entries(e.team.byRound).sort()) out.push(rateRow(`└ 派隊 ${k}`, r));
+  out.push(rateRow('└ 派隊：AI 第一名在玩家歷史前三名', e.team.top1InHistTop3, `歷史可比 ${e.team.histN}`));
+  out.push(`| └ 派隊：前三名和玩家歷史前三名重疊 | ${e.team.histOverlap.n} | ${pct(e.team.histOverlap.D, e.team.histOverlap.n)} | ${pct(e.team.histOverlap.K, e.team.histOverlap.n)} | ${pct(e.team.histOverlap.V2, e.team.histOverlap.n)} | 百科AI／v1 只給一組 | |`);
   out.push(rateRow('3 投票（全部）', e.vote, '', e.vote.ceiling));
   for (const side of ['red', 'blue'] as const) {
     const a = e.vote.abnormal[side];
-    out.push(`| 　異常票 F1（${side === 'red' ? '紅方' : '藍方'}；真人異常 ${a.humanAbn}／${a.spots}） | ${a.spots} | ${f1s(a.D)} | ${f1s(a.K)} | ${f1s(a.V2)} | v2 準確率 ${a.V2.precision?.toFixed(2) ?? '—'}、召回 ${a.V2.recall?.toFixed(2) ?? '—'} | |`);
+    out.push(`| └ 異常票 F1（${side === 'red' ? '紅方' : '藍方'}；真人異常 ${a.humanAbn}／${a.spots}） | ${a.spots} | ${f1s(a.D)} | ${f1s(a.K)} | ${f1s(a.V2)} | v2 準確率 ${a.V2.precision?.toFixed(2) ?? '—'}、召回 ${a.V2.recall?.toFixed(2) ?? '—'} | |`);
   }
-  for (const [k, r] of Object.entries(e.vote.byKind).sort()) out.push(rateRow(`　投票 ${k}`, r));
+  for (const [k, r] of Object.entries(e.vote.byKind).sort()) out.push(rateRow(`└ 投票 ${k}`, r));
   out.push(rateRow('4 湖中對象', e.lakeTarget, `前三名命中 ${pct(e.lakeTarget.top3V2, e.lakeTarget.n)}`, e.lakeTarget.ceiling));
-  out.push(rateRow('　湖中宣告（紅方）', e.lakeClaim, '', e.lakeClaim.ceiling));
+  out.push(rateRow('└ 湖中宣告（紅方）', e.lakeClaim, '', e.lakeClaim.ceiling));
   out.push(rateRow('5 刺殺（弱訊號，不當主數字）', e.assassin));
   out.push(rateRow(`6 派西信任：每局結束時信同一根拇指（${e.percival.games} 局）`, e.percival.round));
-  out.push(rateRow('　派西信任：整場最後信的那根', e.percival.game, `真人最後信對梅林 ${pct(e.percival.humanTrustsMerlin.hit, e.percival.humanTrustsMerlin.n)}`));
-  out.push(rateRow('　派西信任：有沒有換過', e.percival.switched));
+  out.push(rateRow('└ 派西信任：整場最後信的那根', e.percival.game, `真人最後信對梅林 ${pct(e.percival.humanTrustsMerlin.hit, e.percival.humanTrustsMerlin.n)}`));
+  out.push(rateRow('└ 派西信任：有沒有換過', e.percival.switched));
   out.push('', '梅林區塊（同樣的決策點，比率：真人／百科AI／v1／v2）', '', '| 項目 | 決策點 | 真人 | 百科AI | v1 | v2 | v2 逐點一致 |', '|---|---|---|---|---|---|---|');
   for (const [k, m] of Object.entries(e.merlin.metrics).sort()) {
     const ag = e.merlin.agree[k];
@@ -459,7 +459,7 @@ export function formatPrivateTable(players: ReadonlyArray<{ id: string }>, resul
 }
 
 const frac = (x: number, n: number): number | null => (n ? Math.round((1000 * x) / n) / 1000 : null);
-const rateOut = (r: Rate): Record<string, number | null> => ({ n: r.n, D: frac(r.D, r.n), K: frac(r.K, r.n), V2: frac(r.V2, r.n) });
+const rateOut = (r: Rate): { n: number; D: number | null; K: number | null; V2: number | null } => ({ n: r.n, D: frac(r.D, r.n), K: frac(r.K, r.n), V2: frac(r.V2, r.n) });
 
 function median(xs: number[]): number | null {
   const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);

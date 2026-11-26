@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fork } from 'child_process';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
-import { DEFAULT_AGENT_TUNING, type AgentTuning } from '../src/ai/AgentTuning';
+import type { AgentTuning } from '../src/ai/AgentTuning';
 import type { AgentAction, PlayerObservation } from '../src/ai/types';
 import { pinnedQuestCard, withSeededRandom } from '../src/ai/benchmark/agreement';
 import { replayGameFromDataset } from '../src/ai/benchmark/datasetReplay';

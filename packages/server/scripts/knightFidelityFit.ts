@@ -24,7 +24,7 @@ import {
 } from '../src/arena/residual';
 import { fitChoice, fitLogistic, toWeights, type ChoiceRow, type LogisticRow } from '../src/arena/residualFit';
 import {
-  evaluatePlayer, type EvalInput, type PlayerEval, type Predictor,
+  abnormalKind, evaluatePlayer, type EvalInput, type PlayerEval, type Predictor,
   type FidJob, type FidMeta, type FidRecord, type TeamRec, type VoteRec, type QuestRec, type LakeRec, type ClaimRec, type AssassinRec,
 } from '../src/arena/fidelityMetrics';
 import { validateProfile, type BotProfile } from '../src/arena/profile';
@@ -35,10 +35,10 @@ const SERVER = path.resolve(__dirname, '..');
 const REPO = path.resolve(SERVER, '..', '..');
 const KNIGHTS_DIR = path.join(REPO, 'community-bots', '_knights');
 
-interface Args { inFile?: string; out?: string; only: string[]; summary?: string; writeKnights: boolean; popCap: number }
+interface Args { inFile?: string; out?: string; only: string[]; summary?: string; writeKnights: boolean; popCap: number; abnSlack: number }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { only: [], writeKnights: false, popCap: 3000 };
+  const a: Args = { only: [], writeKnights: false, popCap: 3000, abnSlack: 0.005 };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const next = (): string => { const v = argv[++i]; if (v === undefined) throw new Error(`${k} needs a value`); return v; };
@@ -49,6 +49,7 @@ function parseArgs(argv: string[]): Args {
       case '--summary': a.summary = path.resolve(next()); break;
       case '--write-knights': a.writeKnights = true; break;
       case '--pop-cap': a.popCap = Number.parseInt(next(), 10); break;
+      case '--abn-slack': a.abnSlack = Number(next()); break;
       case '--help': case '-h': console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); process.exit(0); break;
       default: throw new Error(`unknown argument ${k}`);
     }
@@ -204,6 +205,57 @@ function fitModel(samples: readonly Sample[], players: readonly number[], roleOf
   return { pop, per: fitPer(byKG, pop, lambda), lambda };
 }
 
+// ── 異常票的門檻 ───────────────────────────────────────────
+
+/**
+ * 每一組投票權重的截距再平移 δ（全體共用一個 δ）：在擬合部分挑 F1（預測異常票 vs 真人異常票）最高的 δ，
+ * 但整體投票一致度最多只能比 δ = 0 低 `slack`。站長要「異常票發生的地方相同」，只看一致度的話模型會幾乎不投異常票。
+ */
+function calibrateAbnormal(model: Model, fit: readonly Sample[], roleOf: (j: number) => string, slack: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (slack < 0) return out;
+  const byKey = new Map<string, Array<{ z: number; s: VoteRec }>>();
+  for (const smp of fit) {
+    if (smp.r.t !== 'V') continue;
+    const kg = kindGroup(smp.r, roleOf(smp.r.j))!;
+    const key = `${kg[0]}|${kg[1]}`;
+    const beta = model.per.get(smp.player)?.get(key) ?? model.pop.get(key);
+    if (!beta) continue;
+    let z = 0;
+    for (let i = 0; i < beta.length; i++) z += beta[i] * smp.r.x[i];
+    const list = byKey.get(key) ?? [];
+    list.push({ z, s: smp.r });
+    byKey.set(key, list);
+  }
+  const grid = Array.from({ length: 25 }, (_, i) => (i - 12) * 0.25);
+  for (const [key, list] of byKey) {
+    const score = (delta: number): { acc: number; f1: number } => {
+      let hit = 0; let tp = 0; let fp = 0; let fn = 0;
+      for (const { z, s } of list) {
+        const pred = z + delta >= 0 ? 1 : 0;
+        if (pred === s.h) hit++;
+        const pa = abnormalKind(s.on === 1, s.ld === 1, pred === 1) !== null;
+        const ha = abnormalKind(s.on === 1, s.ld === 1, s.h === 1) !== null;
+        if (pa && ha) tp++; else if (pa) fp++; else if (ha) fn++;
+      }
+      return { acc: hit / list.length, f1: tp ? (2 * tp) / (2 * tp + fp + fn) : 0 };
+    };
+    const base = score(0);
+    let best = 0;
+    let bestF1 = base.f1;
+    for (const d of grid) {
+      const sc = score(d);
+      if (sc.acc >= base.acc - slack && sc.f1 > bestF1 + 1e-9) { best = d; bestF1 = sc.f1; }
+    }
+    out[key] = best;
+    if (best !== 0) {
+      for (const per of model.per.values()) { const b = per.get(key); if (b) b[0] += best; }
+      const pb = model.pop.get(key); if (pb) pb[0] += best;
+    }
+  }
+  return out;
+}
+
 // ── 預測 ───────────────────────────────────────────────────
 
 function predictorFor(model: Model, player: number, roleOf: (j: number) => string): Predictor {
@@ -288,8 +340,10 @@ async function main(): Promise<void> {
   for (const split of ['half', 'time'] as const) {
     const t0 = Date.now();
     const isTest = (j: number): boolean => ex.jobs[j][split] === 1;
-    const model = fitModel(samples.filter((s) => !isTest(s.r.j)), ex.players.map((_, i) => i), roleOf, a.popCap, split === 'half', lambda);
+    const fitPart = samples.filter((s) => !isTest(s.r.j));
+    const model = fitModel(fitPart, ex.players.map((_, i) => i), roleOf, a.popCap, split === 'half', lambda);
     lambda ??= model.lambda;
+    console.error(`  abnormal-vote shift: ${JSON.stringify(calibrateAbnormal(model, fitPart, roleOf, a.abnSlack))}`);
     for (const p of players) {
       const input: EvalInput = {
         records: recs.filter((r) => ex.jobs[r.j].p === p),
@@ -303,6 +357,7 @@ async function main(): Promise<void> {
 
   if (a.writeKnights) {
     const model = fitModel(samples, ex.players.map((_, i) => i), roleOf, a.popCap, false, lambda);
+    calibrateAbnormal(model, samples, roleOf, a.abnSlack);
     let wrote = 0;
     for (const p of players) {
       const id = ex.players[p].id;
