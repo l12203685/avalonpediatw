@@ -61,10 +61,13 @@ export function aiGamesHash(id?: string | null): string {
 
 // ── 清單 ──────────────────────────────────────────────────────────────────────────────
 
-/** 討論串標題「百科AI對局 yyyymmdd_HHMM 房間描述／房號」→ 顯示用的時間與房間。讀不懂時 when 空字串、where＝標題。 */
+/**
+ * 討論串標題「AI騎士對局 yyyymmdd_HHMM 房間描述／房號」（2026-11-26 以前「百科AI對局 …」，新舊都認）→ 顯示用的時間與房間。
+ * 讀不懂時 when 空字串、where＝標題（舊的「含百科機器人」記號顯示成「含AI騎士」）。
+ */
 export function parseAiGameName(name: string): { when: string; where: string } {
-  const m = /^百科AI對局\s+(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})\s*(.*)$/.exec(name.trim());
-  if (!m) return { when: '', where: name.replace(/^百科AI對局\s*/, '') };
+  const m = /^(?:AI騎士|百科AI)對局\s+(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})\s*(.*)$/.exec(name.trim());
+  if (!m) return { when: '', where: name.replace(/^(?:AI騎士|百科AI)對局\s*/, '').replace('含百科機器人', '含AI騎士') };
   return { when: `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}`, where: m[6] || '' };
 }
 

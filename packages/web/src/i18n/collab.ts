@@ -12,7 +12,7 @@ export const GUIDE_URL = `${REPO_URL}/blob/main/docs/ai/EXTERNAL_AI_COLLABORATIO
 
 const zhTW = {
   title: '用你的 AI 一起改百科',
-  intro: '任何人都可以用自己的 AI（ChatGPT、Gemini、Claude……）幫百科或百科AI 提改進。成果都放在 GitHub，公開、看得到。',
+  intro: '任何人都可以用自己的 AI（ChatGPT、Gemini、Claude……）幫百科或AI騎士 提改進。成果都放在 GitHub，公開、看得到。',
   howTitle: '怎麼參加',
   how1: '開一張 Issue：用「外部 AI 協作」表單，說明你想改什麼。',
   how2: '要改文件或程式：從你自己的 fork 開 PR。',
@@ -21,6 +21,9 @@ const zhTW = {
   rulesBody: '貼到 GitHub 就是永遠公開。不要貼玩家名字、聊天紀錄、原始私人牌譜、密鑰；座位寫「N 家」；資料只給彙總。',
   nextTitle: '接下來會怎樣',
   nextBody: '我們會審查。文件改動審過就能合併，程式改動要測試全綠。AI 策略的想法會先做成開關、實際量過再決定要不要採用，結果回貼在你的 Issue。',
+  arenaTitle: 'AI 擂台：做你自己的機器人',
+  arenaBody: '不想改百科，只想讓 AI 幫你做一隻自己風格的阿瓦隆機器人？用範本寫一份設定檔、開 PR，每週和AI騎士、其他人的機器人對打，上排行榜。',
+  arenaLink: '去 AI 擂台',
   promptTitle: '給你的 AI 的啟動提示',
   promptHint: '整段複製，貼給你的 AI。',
   copy: '複製',
@@ -54,7 +57,7 @@ const zhTW = {
 
 const en: typeof zhTW = {
   title: 'Improve the wiki with your own AI',
-  intro: 'Anyone can use their own AI (ChatGPT, Gemini, Claude, ...) to propose improvements to the wiki or the wiki bot. Everything happens on GitHub, in public.',
+  intro: 'Anyone can use their own AI (ChatGPT, Gemini, Claude, ...) to propose improvements to the wiki or the AI Knights. Everything happens on GitHub, in public.',
   howTitle: 'How to join',
   how1: 'Open an Issue with the "External AI collaboration" form and say what you want to change.',
   how2: 'To change docs or code, open a PR from your own fork.',
@@ -63,6 +66,9 @@ const en: typeof zhTW = {
   rulesBody: 'Anything posted to GitHub is public forever. Never post player names, chat logs, raw private game records or secrets. Write seats as "seat N" and share only aggregated data.',
   nextTitle: 'What happens next',
   nextBody: 'We review it. Docs-only changes can merge after review; code changes need green CI. Strategy ideas are turned into switches and measured before adoption, with results posted back on your Issue.',
+  arenaTitle: 'AI Arena: build your own bot',
+  arenaBody: 'Rather build your own Avalon bot than edit the wiki? Fill in a template with your AI, open a PR, and play weekly against the AI Knights and everyone else\'s bots on a leaderboard.',
+  arenaLink: 'Go to the AI Arena',
   promptTitle: 'Starter prompt for your AI',
   promptHint: 'Copy all of it and paste it to your AI.',
   copy: 'Copy',

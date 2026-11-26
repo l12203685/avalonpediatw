@@ -16,7 +16,7 @@ import { isPracticeRoomId } from '../services/practice';
  * 遊戲內回饋（站長 2026-11-26）：有百科AI 坐的局，聊天裡對 AI 玩法的回饋會匿名記下來（只有座位號碼，
  * server src/inGameFeedback）。開局時在聊天最底下（最舊的位置）放一行淡淡的說明；練習房不收、不顯示。
  */
-export const BOT_FEEDBACK_NOTICE = '本局有百科AI，聊天中對 AI 的回饋會匿名記錄用來改進';
+export const BOT_FEEDBACK_NOTICE = '本局有AI騎士，聊天中對 AI 的回饋會匿名記錄用來改進';
 
 interface ChatMessage {
   id: string;

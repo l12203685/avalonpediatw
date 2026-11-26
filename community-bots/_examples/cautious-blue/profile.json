@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "name": "保守藍方",
+  "author": "avalonpediatw",
+  "style": "示範對手。藍方很難放行：一般局和關鍵局的投黑門檻都拉高，不在隊上幾乎都投黑；梅林早期派隊照忠臣，藏得更深。紅方照AI騎士。",
+  "sides": {
+    "good": {
+      "goodCleanVote": 0.6,
+      "goodKeyVote": 0.6,
+      "goodTailVote": 0.85
+    }
+  },
+  "roles": {
+    "merlin": {
+      "merlinCover77": 1
+    }
+  }
+}

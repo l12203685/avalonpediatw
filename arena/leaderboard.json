@@ -1,0 +1,284 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-11-26T10:37:14.713Z",
+  "seed": "arena-2026-11-26",
+  "games": 600,
+  "sizes": [
+    10
+  ],
+  "reference": "baike",
+  "method": "每局隨機座位、每個座位隨機抽一隻機器人（可重複），角色由引擎發。分數 = 分陣營的隊伍邏輯回歸（AI騎士_百科 = 1500；+100 分 ≈ 一整邊換成它時勝算 ×1.78），區間 = 95% 信賴區間。",
+  "baseRedWin": {
+    "10": 0.74
+  },
+  "bots": [
+    {
+      "rank": 1,
+      "id": "example-cautious-blue",
+      "name": "保守藍方",
+      "author": null,
+      "source": "example",
+      "title": null,
+      "style": "示範對手。藍方很難放行：一般局和關鍵局的投黑門檻都拉高，不在隊上幾乎都投黑；梅林早期派隊照忠臣，藏得更深。紅方照AI騎士。",
+      "knobs": [
+        "good.goodCleanVote=0.6",
+        "good.goodKeyVote=0.6",
+        "good.goodTailVote=0.85",
+        "merlin.merlinCover77=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1504.5,
+          "low": 1390.3,
+          "high": 1618.6
+        },
+        "red": {
+          "rating": 1483.2,
+          "low": 1336,
+          "high": 1630.5
+        },
+        "blue": {
+          "rating": 1525.7,
+          "low": 1355.6,
+          "high": 1695.7
+        }
+      },
+      "seats": 1986,
+      "games": 586,
+      "red": {
+        "seats": 786,
+        "winRate": 0.676
+      },
+      "blue": {
+        "seats": 1200,
+        "winRate": 0.342
+      },
+      "assassin": {
+        "tries": 107,
+        "hits": 54
+      }
+    },
+    {
+      "rank": 2,
+      "id": "baike",
+      "name": "AI騎士_百科",
+      "author": null,
+      "source": "reference",
+      "title": null,
+      "style": "網站上正在跑的AI騎士_百科（目前訓練出來的引擎、正式預設，沒有改任何開關）。所有分數都以它為 1500。",
+      "knobs": [],
+      "rating": {
+        "overall": {
+          "rating": 1500,
+          "low": 1500,
+          "high": 1500
+        },
+        "red": {
+          "rating": 1500,
+          "low": 1500,
+          "high": 1500
+        },
+        "blue": {
+          "rating": 1500,
+          "low": 1500,
+          "high": 1500
+        }
+      },
+      "seats": 1997,
+      "games": 594,
+      "red": {
+        "seats": 799,
+        "winRate": 0.683
+      },
+      "blue": {
+        "seats": 1198,
+        "winRate": 0.336
+      },
+      "assassin": {
+        "tries": 120,
+        "hits": 49
+      }
+    },
+    {
+      "rank": 3,
+      "id": "example-aggressive-red",
+      "name": "激進派紅方",
+      "author": null,
+      "source": "example",
+      "title": null,
+      "style": "示範對手。紅方不藏：第 1、2 局能出失敗就出，票照紅方利益投，第 3、5 局常疊隊友；奧伯倫開局就搶失敗。藍方照AI騎士。",
+      "knobs": [
+        "evil.redHideHuman=false",
+        "evil.redNormalVote=0.2",
+        "evil.redStackRate65=1",
+        "evil.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1417.8,
+          "low": 1309.1,
+          "high": 1526.5
+        },
+        "red": {
+          "rating": 1345.5,
+          "low": 1203.8,
+          "high": 1487.2
+        },
+        "blue": {
+          "rating": 1490.1,
+          "low": 1324.6,
+          "high": 1655.5
+        }
+      },
+      "seats": 2017,
+      "games": 590,
+      "red": {
+        "seats": 815,
+        "winRate": 0.632
+      },
+      "blue": {
+        "seats": 1202,
+        "winRate": 0.333
+      },
+      "assassin": {
+        "tries": 125,
+        "hits": 47
+      }
+    }
+  ],
+  "rejected": [],
+  "knobCatalog": [
+    {
+      "key": "redHideHuman",
+      "kind": "boolean",
+      "side": "evil",
+      "default": true,
+      "zh": "第 1、2 局自己是隊上唯一看得到的紅時，照強者紅方的比例偶爾出成功藏身。",
+      "en": "Rounds 1-2, sole visible red on the team: sometimes play success to hide, at strong human rates."
+    },
+    {
+      "key": "redNormalVote",
+      "kind": "number",
+      "side": "evil",
+      "default": 1,
+      "zh": "第 3 局起不在隊上時，照「只看公開紀錄的忠臣」那樣投票的比例（偽裝成雜魚）。",
+      "en": "From round 3, off the team: share of votes cast like a public-info loyal would (camouflage).",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "redCleanWhite",
+      "kind": "number",
+      "side": "evil",
+      "default": 0,
+      "zh": "偽裝投票時，隊上沒有自己看得到的紅、忠臣會投黑的隊，改投白的比例。",
+      "en": "While camouflaging: chance to approve a clean-looking team that a loyal would reject.",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "redCleanApprove",
+      "kind": "number",
+      "side": "evil",
+      "default": 0,
+      "zh": "第 3 局起不在隊上、隊上沒有看得到的紅時贊成的機率。",
+      "en": "From round 3, off the team and no visible red on it: chance to approve.",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "redStackRate65",
+      "kind": "number",
+      "side": "evil",
+      "default": 0.5,
+      "zh": "第 3、5 局紅方當隊長時，多帶一位隊友上任務的比例。",
+      "en": "Rounds 3 and 5 as red leader: how often to bring one extra teammate.",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "redR1Teammate",
+      "kind": "boolean",
+      "side": "evil",
+      "default": true,
+      "zh": "紅方第 1 局當隊長時，前四次提議有時（約一半）放一位隊友。",
+      "en": "Red leader in round 1: about half of the first four proposals include a teammate."
+    },
+    {
+      "key": "oberonR1AlwaysFail64",
+      "kind": "number",
+      "side": "evil",
+      "default": 0,
+      "zh": "奧伯倫第 1 局上任務一律出失敗（0 = 關、1 = 開）。",
+      "en": "Oberon always fails a round-1 mission (0 = off, 1 = on).",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "goodCleanVote",
+      "kind": "number",
+      "side": "good",
+      "default": 0.3,
+      "zh": "第 3 局起，忠臣和派西估「這隊沒有紅」的機率低於這個門檻就投黑。",
+      "en": "From round 3, loyals and Percival reject when the chance the team is clean is below this.",
+      "min": 0,
+      "max": 0.9
+    },
+    {
+      "key": "goodKeyVote",
+      "kind": "number",
+      "side": "good",
+      "default": 0.3,
+      "zh": "紅方已拿兩局（再一個紅就輸）時，忠臣和派西的投黑門檻。",
+      "en": "When red has two fails already: the clean-chance bar below which loyals and Percival reject.",
+      "min": 0,
+      "max": 0.9
+    },
+    {
+      "key": "goodTailVote",
+      "kind": "number",
+      "side": "good",
+      "default": 0.7,
+      "zh": "第 3 局起忠臣和派西不在隊上時預設投黑，這隊乾淨的機率達到這個門檻才投白。",
+      "en": "From round 3, loyals and Percival off the team reject unless the clean chance reaches this.",
+      "min": 0,
+      "max": 0.95
+    },
+    {
+      "key": "merlinNormalVote",
+      "kind": "number",
+      "side": "good",
+      "default": 1,
+      "zh": "梅林第 3 局起照「只看公開紀錄的忠臣」那樣投票的比例（只在會直接輸掉時才擋）。",
+      "en": "From round 3, share of Merlin votes cast like a public-info loyal (blocks only when a red team would win outright).",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "merlinCover77",
+      "kind": "number",
+      "side": "good",
+      "default": 0,
+      "zh": "第 1、2 局幾乎不會出任務的提議裡，梅林照「只看公開紀錄的忠臣」會派的隊來派的比例（看得到的紅在不在隊上照公開局勢）。",
+      "en": "Rounds 1-2, in proposals that will not go: share of Merlin proposals that copy what a public-info loyal would pick.",
+      "min": 0,
+      "max": 1
+    },
+    {
+      "key": "percivalNoThumbsR1",
+      "kind": "boolean",
+      "side": "good",
+      "default": true,
+      "zh": "派西第 1 局當隊長時，兩根拇指（梅林／莫甘娜）都不放進隊。",
+      "en": "Percival as leader in round 1 leaves both thumbs (Merlin / Morgana) out."
+    },
+    {
+      "key": "assassinModel",
+      "kind": "boolean",
+      "side": "assassin",
+      "default": true,
+      "zh": "刺殺用牌譜訓練的模型；關掉改用舊的經驗規則。",
+      "en": "Assassinate with the model trained on human games; off = the older rule of thumb."
+    }
+  ]
+}
