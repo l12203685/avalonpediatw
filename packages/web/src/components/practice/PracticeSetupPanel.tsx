@@ -1,7 +1,7 @@
 /**
  * 網站「與機器人練習」— setup card (PracticePage: 導覽列「與機器人練習」按鈕 / #practice).
- * Picks a seat, an optional role and which AI騎士 the 9 bots are (one knight for all, or a random mix;
- * 站長 2026-11-26「練習台想呼叫AI騎士_ED」), then creates + starts the practice room.
+ * Picks a seat, an optional role and which AI騎士 sits at each of the 9 bot seats (「一隻一隻召喚」, with
+ * 「全部同一位」/「隨機混搭」 as quick fills; 站長 2026-11-26), then creates + starts the practice room.
  */
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,14 @@ import {
   type PracticeRoleChoice,
 } from '../../services/practice';
 import { DEFAULT_KNIGHT_ID, KNIGHT_MIX_ID, useKnights } from '../../services/knights';
+import PracticeLineupPicker, { emptyLineup, LINEUP_SIZE, type Lineup, type LineupFill } from './PracticeLineupPicker';
+
+/** 上次的設定 → 陣容（舊版只存了一位 `knight`：全部那一位；`random-mix`：全空、隨機補）。 */
+function initialLineup(last: { knight?: string; lineup?: Lineup }): Lineup {
+  if (last.lineup) return Array.from({ length: LINEUP_SIZE }, (_, i) => last.lineup?.[i] ?? null);
+  if (last.knight && last.knight !== KNIGHT_MIX_ID && last.knight !== DEFAULT_KNIGHT_ID) return Array.from({ length: LINEUP_SIZE }, () => last.knight!);
+  return emptyLineup();
+}
 
 interface Props {
   onBack: () => void;
@@ -29,18 +37,20 @@ export default function PracticeSetupPanel({ onBack, ready = true, status }: Pro
   const last = usePracticeStore((s) => s.lastOptions);
   const [seat, setSeat] = useState<number | null>(last.seat);
   const [role, setRole] = useState<PracticeRoleChoice | null>(last.role);
-  const [knight, setKnight] = useState<string>(last.knight ?? DEFAULT_KNIGHT_ID);
+  const [lineup, setLineup] = useState<Lineup>(() => initialLineup(last));
+  const [fill, setFill] = useState<LineupFill>(last.fill ?? (last.knight === KNIGHT_MIX_ID && !last.lineup ? 'random' : 'baike'));
   const [busy, setBusy] = useState(false);
   const { knights, ready: knightsReady } = useKnights(ready);
-  // 上次選的騎士已經不在名冊裡（或名冊還沒讀到）：選單顯示百科，送出也送百科。
-  const knightKnown = knight === KNIGHT_MIX_ID || knights.some((k) => k.id === knight);
-  const knightValue = knightKnown ? knight : DEFAULT_KNIGHT_ID;
-  const picked = knights.find((k) => k.id === knightValue);
 
   const handleStart = async (): Promise<void> => {
     if (busy || !ready) return;
     setBusy(true);
-    const ok = await startPractice({ seat, role, knight: knightValue }, (error) => t('createFailed', { error }));
+    // 名冊裡已經沒有的騎士（或名冊還沒讀到）：那一格當成沒指定。
+    const clean = lineup.map((id) => (id && knights.some((k) => k.id === id) ? id : null));
+    // 舊版伺服器只認 `knight`：9 格同一位 → 那一位；全空＋隨機 → 隨機混搭；其他 → 百科。
+    const same = clean.every((id) => id !== null && id === clean[0]) ? clean[0]! : null;
+    const legacy = same ?? (clean.every((id) => id === null) && fill === 'random' ? KNIGHT_MIX_ID : DEFAULT_KNIGHT_ID);
+    const ok = await startPractice({ seat, role, knight: legacy, lineup: clean, fill }, (error) => t('createFailed', { error }));
     if (!ok) setBusy(false);
   };
 
@@ -93,27 +103,17 @@ export default function PracticeSetupPanel({ onBack, ready = true, status }: Pro
           </select>
         </label>
 
-        <label className="space-y-1 block sm:col-span-2">
-          <span className="text-xs font-semibold text-zinc-400">{t('knightLabel')}</span>
-          <select
-            data-testid="practice-knight"
-            value={knightValue}
-            onChange={(e) => setKnight(e.target.value)}
-            className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-white"
-          >
-            {knights.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.id === DEFAULT_KNIGHT_ID ? t('knightDefault', { name: k.name }) : k.tag ? `${k.name}（${k.tag}）` : k.name}
-              </option>
-            ))}
-            {knights.length > 1 && <option value={KNIGHT_MIX_ID}>{t('knightMix')}</option>}
-          </select>
-          <span className="block text-[11px] leading-relaxed text-zinc-400" data-testid="practice-knight-style">
-            {knightValue === KNIGHT_MIX_ID ? t('knightMixHint') : picked?.style ?? ''}
-            {!knightsReady && ready ? ` ${t('knightLoading')}` : ''}
-          </span>
-        </label>
       </div>
+
+      <PracticeLineupPicker
+        knights={knights}
+        lineup={lineup}
+        fill={fill}
+        playerSeat={seat}
+        onChange={setLineup}
+        onFill={setFill}
+        loading={!knightsReady && ready}
+      />
 
       <div className="space-y-2">
         {status}

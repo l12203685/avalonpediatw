@@ -24,6 +24,13 @@ export interface PracticeOptions {
   role: PracticeRoleChoice | null;
   /** 對手／隊友用哪一位 AI騎士（名冊 id，或 `random-mix` 隨機混搭）；沒給 = AI騎士_百科。 */
   knight?: string;
+  /**
+   * 一隻一隻召喚：9 個機器人座位（照座位順序、跳過玩家）各指定哪一位；null = 沒指定（用 `fill` 補）。
+   * 有這一項伺服器就不看 `knight`；舊版伺服器不認得，照 `knight`（送出時一起帶）。
+   */
+  lineup?: Array<string | null>;
+  /** 沒指定的座位用誰補：百科（預設）或隨機。 */
+  fill?: 'baike' | 'random';
 }
 
 export type PracticeDecisionKind =
