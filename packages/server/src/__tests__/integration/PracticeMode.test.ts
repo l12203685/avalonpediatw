@@ -311,7 +311,7 @@ describe('practice mode — full games over sockets', () => {
 
   async function playPractice(
     uid: string,
-    options: { seat?: number | null; role?: string | null },
+    options: { seat?: number | null; role?: string | null; knight?: string },
     evilCard: 'success' | 'fail' = 'fail',
   ): Promise<{ human: Human; roomId: string }> {
     const socket = await connect(port, uid, `練習-${uid}`);
@@ -524,6 +524,59 @@ describe('practice mode — full games over sockets', () => {
     const gone = await emitAck<{ ok: boolean }>(owner, 'practice:get-trace', roomId);
     expect(gone.ok).toBe(false);
   }, 120000);
+
+  it('AI騎士: one knight for every bot — seat names, trace seats and the knight\'s switches per role', async () => {
+    await boot(sink);
+    const { human, roomId } = await playPractice('knight-human', { seat: 2, role: 'loyal', knight: 'knight-ed-01' });
+    const trace = human.trace!;
+    const bots = trace.seats.filter((s) => s.isBot);
+    expect(bots).toHaveLength(9);
+    expect(bots.every((s) => s.knightId === 'knight-ed-01' && s.knightName === 'AI騎士_ED')).toBe(true);
+    expect(bots.map((s) => s.name).sort()).toEqual(Array.from({ length: 9 }, (_, i) => `AI騎士_ED_0${i + 1}`));
+    expect(trace.seats.find((s) => !s.isBot)?.knightId).toBeUndefined();
+    assertTraceComplete(human.ended!, 'knight-human', human, trace);
+    // The knight's switches were applied for each bot's own side / role (sides.evil.redR1Teammate=false; loyal goodBayesBad=0.99).
+    const { roomManager, botAgents } = internals();
+    const room = roomManager.getRoom(roomId)!;
+    for (const s of bots) {
+      const tuning = (botAgents.get(s.playerId) as { tuning: Record<string, unknown> }).tuning;
+      if (room.players[s.playerId].team === 'evil') expect(tuning.redR1Teammate).toBe(false);
+      if (room.players[s.playerId].role === 'loyal') expect(tuning.goodBayesBad).toBe(0.99);
+    }
+  }, 90000);
+
+  it('AI騎士: random mix gives each bot a registry knight with a unique seat name; unknown ids fall back to 百科', async () => {
+    await boot(sink);
+    const owner = await connect(port, 'mix-human', 'Mix');
+    sockets.push(owner);
+    const list = await emitAck<{ ok: boolean; knights: Array<{ id: string; name: string }> }>(owner, 'knights:list');
+    expect(list.ok).toBe(true);
+    expect(list.knights[0]).toMatchObject({ id: 'baike', name: 'AI騎士_百科' });
+    expect(list.knights.some((k) => k.id === 'knight-ed-01' && k.name === 'AI騎士_ED')).toBe(true);
+    const ids = new Set(list.knights.map((k) => k.id));
+
+    const res = await emitAck<{ ok: boolean; roomId: string }>(owner, 'practice:create', { seat: 1, role: 'merlin', knight: 'random-mix' });
+    expect(res.ok).toBe(true);
+    const { roomManager } = internals();
+    const room = roomManager.getRoom(res.roomId)!;
+    const botNames = Object.values(room.players).filter((p) => p.isBot).map((p) => p.name);
+    expect(botNames).toHaveLength(9);
+    expect(new Set(botNames).size).toBe(9);
+    expect(botNames.every((n) => /^AI騎士_.+_\d{2}$/.test(n))).toBe(true);
+    const knightIds = Object.keys(room.players).filter((id) => room.players[id].isBot)
+      .map((id) => (gameServer as unknown as { botKnights: Map<string, string> }).botKnights.get(id)!);
+    expect(knightIds.every((id) => ids.has(id))).toBe(true);
+    expect(new Set(knightIds).size).toBe(9); // the roster has more than 9 knights: no repeats in one mix
+
+    // (one practice create per player every 3 s: a second player)
+    const owner2 = await connect(port, 'mix-human-2', 'Mix2');
+    sockets.push(owner2);
+    const res2 = await emitAck<{ ok: boolean; roomId: string }>(owner2, 'practice:create', { knight: 'no-such-knight' });
+    expect(res2.ok).toBe(true);
+    const room2 = roomManager.getRoom(res2.roomId)!;
+    expect(Object.values(room2.players).filter((p) => p.isBot).map((p) => p.name).sort())
+      .toEqual(Array.from({ length: 9 }, (_, i) => `AI騎士_百科_0${i + 1}`));
+  }, 60000);
 
   it('cleanup: review window counts from the end; a room removed elsewhere still frees its bots', async () => {
     await boot(sink);
