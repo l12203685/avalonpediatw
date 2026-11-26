@@ -348,7 +348,9 @@ function EntryCard({ entry, trace, seat }: { entry: PracticeTraceEntry; trace: P
       <header className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="rounded bg-black/40 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-200">{t(`kind.${entry.kind}`)}</span>
         <span className="font-bold">{seatText(entry.botSeat)} {t(`role.${seat?.role ?? entry.botRole}`)}</span>
-        {seat?.knightName && <span className="text-[10px] text-zinc-300">{seat.knightName}</span>}
+        {seat?.knightName && (
+          <span className="text-[10px] text-zinc-300">{seat.name.startsWith(seat.knightName) ? seat.name : seat.knightName}</span>
+        )}
         <span className="text-white font-semibold">→ {entry.action}</span>
         {entry.source === 'fallback' && (
           <span className="rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] text-amber-200">{t('fallback')}</span>
