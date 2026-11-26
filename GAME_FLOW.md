@@ -62,6 +62,13 @@ This document describes the complete game flow implemented in Phase 2.1, includi
 
 ---
 
+### 2b. 湖中宣告（按鈕或聊天，2026-11-26）
+
+驗完湖的人可以按「宣告」（`game:declare-lake-result` → `GameEngine.declareLakeResult`），也可以直接在房間聊天打結果
+（「湖3好」「2>3 o」「3是好人」；站長 2026-11-26「因為有時候玩家的湖中宣告會只送文字」）。聊天讀得懂時照按鈕一樣記下，
+`LadyOfTheLakeRecord.declaredVia = 'chat'`、事件 `lady_of_the_lake_declared` 多 `via: 'chat'`，系統訊息「系統: 2>3 o（取自聊天）」。
+規則與關法（`LAKE_CHAT_DECLARE=off`）見 `docs/BOTS.md`〈湖中宣告只打在聊天裡〉；程式 `packages/server/src/game/lakeChatDeclare.ts`。
+
 ### 3. Discussion Phase (討論階段)
 **State**: `discussion`
 

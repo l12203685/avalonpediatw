@@ -294,7 +294,7 @@ describe('LINE mirror group: /意見', () => {
     log.mockRestore();
     expect(h.replies).toEqual([]);
     expect(forwarded).toEqual([]);
-    expect(getFeedbackService().snapshot()).toEqual({ weeks: [], opinions: { line: 0, discord: 0 } });
+    expect(getFeedbackService().snapshot()).toEqual({ weeks: [], opinions: { line: 0, discord: 0 }, simFeedback: { sent: 0, skipped: 0, failed: 0, throttled: 0 }, inGameForwards: { sent: 0, skipped: 0, failed: 0, throttled: 0 } });
   });
 
   it('stats commands still win slot 1 and are booked under statsReplies, not feedbackReplies', async () => {
@@ -567,18 +567,26 @@ describe('/api/bots/status → feedback', () => {
     for (const platform of [w.line, w.discord]) {
       for (const n of Object.values(platform)) expect(Number.isInteger(n)).toBe(true);
     }
-    expect(Object.keys(feedback).sort()).toEqual(['commandEnabled', 'opinions', 'practiceReports', 'weeks']);
+    expect(Object.keys(feedback).sort()).toEqual(['commandEnabled', 'inGame', 'inGameForwards', 'opinions', 'practiceReports', 'simFeedback', 'weeks']);
     expect(JSON.stringify(feedback)).not.toMatch(/排行怪怪的|牌譜格式|u-1/);
   });
 
   it('is present (empty) when nothing has been heard yet', () => {
     __resetPracticeReportDiscordForTests();
     delete process.env.PRACTICE_REPORT_DISCORD;
-    const { feedback } = buildBotStatus();
+    const { feedback: full, lakeChatDeclare } = buildBotStatus();
+    const { inGame, ...feedback } = full;
+    // 2026-11-26: site room chat about 百科AI play (numbers only) and lake declarations read from chat.
+    expect(inGame).toMatchObject({ enabled: true, capturedGames: 0, flagged: 0, forwarded: 0, throttled: 0 });
+    expect(Object.keys(inGame.sheet).sort()).toEqual(['failed', 'rows', 'status']);
+    expect(lakeChatDeclare).toEqual({ enabled: true, declared: 0, holderMessagesUnread: 0 });
     expect(feedback).toEqual({
       commandEnabled: true, weeks: [], opinions: { line: 0, discord: 0 },
       // 2026-10-14: the practice mode's 「這步怪怪的」 copies to the same admin channel (numbers only).
       practiceReports: { enabled: true, sent: 0, skipped: 0, failed: 0, throttled: 0 },
+      // 2026-11-26: 模擬瓦 players' feedback on an exercise, forwarded to the same admin channel (numbers only).
+      simFeedback: { sent: 0, skipped: 0, failed: 0, throttled: 0 },
+      inGameForwards: { sent: 0, skipped: 0, failed: 0, throttled: 0 },
     });
     process.env.PRACTICE_REPORT_DISCORD = 'off';
     expect(buildBotStatus().feedback.practiceReports.enabled).toBe(false);

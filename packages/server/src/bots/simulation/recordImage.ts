@@ -3,7 +3,10 @@
  *
  * 跟 Threads 的牌譜圖（bots/threads/image.ts 的 buildGridSvg，PR #52）同一種畫法：深色卡片、阿瓦隆百科浮水印、
  * 網站牌譜頁的格子（隊長｜座位 1～0｜結果｜文字紀錄），盾牌 = 上隊，白／黑格 = 贊成／反對，任務列、湖中列。
- * 不同的是這裡畫**整局**（/公布 之後，沒有不能看的）、欄名寫每一家的角色（紅方紅字）；只寫座位和角色，不寫玩家名字。
+ * 不同的是這裡畫**整局**（/公布 之後，沒有不能看的）、欄名寫每一家的角色（紅方紅字）。
+ * 站長 2026-11-26「公布時的圖上沒有玩家id」：角色下面再寫那一家的名字（跟 /公布 文字那一行同一份：seatNames.ts，
+ * 網站戰績的寫法、別名與拆分套過；百科AI_n 照原樣）。名字太長就換到第二行、再長就截斷加「…」；字型沒有的 emoji 拿掉；
+ * 不知道名字的那一家只有座位。圖只貼在社群群組（跟文字那一行一樣）。
  * 純函式出 SVG；PNG 用專案內附的字型（resvg），字型或原生套件不在時丟錯，呼叫端改成不附圖。
  */
 import fs from 'fs';
@@ -66,6 +69,69 @@ function shield(cx: number, cy: number, size: number): string {
   return `<path transform="translate(${tx.toFixed(1)} ${ty.toFixed(1)}) scale(${k.toFixed(3)})" d="M12 2 L20 5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5 Z" fill="#facc15" stroke="#1c1917" stroke-width="1.2"/>`;
 }
 
+/** 名字那一行的字級、每一欄最多幾行。 */
+const NAME_SIZE = 18;
+const NAME_LINES = 2;
+
+/** 字的寬度（em）：中日韓、全形 1；其他（英數）大約 0.62，寬字母 0.9。量不準沒關係，寧可少放一個字。 */
+function charEm(ch: string): number {
+  const cp = ch.codePointAt(0) ?? 0;
+  if (cp >= 0x1100 && (cp <= 0x115f || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7a3)
+    || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe30 && cp <= 0xfe4f) || (cp >= 0xff00 && cp <= 0xff60)
+    || (cp >= 0xffe0 && cp <= 0xffe6) || cp >= 0x20000)) return 1;
+  if (ch === '…') return 1;
+  if (/[MWmw@%&]/u.test(ch)) return 0.9;
+  if (/[iljI.,:;'|!]/u.test(ch)) return 0.35;
+  return 0.62;
+}
+
+/**
+ * 字型（Noto Sans TC）沒有的字拿掉：emoji、膚色、變體選擇字、零寬連接字、國旗字母；名字收乾淨（seatNames.tidySeatName 收過，這裡再保險一次）。
+ */
+export function drawableName(raw: string | undefined): string {
+  return (raw ?? '')
+    .replace(/\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\p{Variation_Selector}|\u{200D}|\u{20E3}|[\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+/**
+ * 名字 → 最多 `lines` 行、每行寬度不超過 `width`（px，字級 `size`）；放不下的最後一行結尾換成「…」。
+ */
+export function wrapName(name: string, width: number, size: number = NAME_SIZE, lines: number = NAME_LINES): string[] {
+  const chars = [...drawableName(name)];
+  if (chars.length === 0) return [];
+  const max = width / size;
+  const out: string[] = [];
+  let cur = '';
+  let w = 0;
+  let i = 0;
+  for (; i < chars.length; i++) {
+    const e = charEm(chars[i]);
+    if (w + e > max && cur) {
+      out.push(cur);
+      if (out.length === lines) break;
+      cur = '';
+      w = 0;
+    }
+    if (cur === '' && chars[i] === ' ') continue;
+    cur += chars[i];
+    w += e;
+  }
+  if (out.length < lines && cur) {
+    out.push(cur);
+    i = chars.length;
+  }
+  if (i < chars.length) {
+    // 截斷：最後一行留出「…」的位置。
+    let last = [...out[out.length - 1]];
+    const ell = charEm('…');
+    while (last.length > 0 && last.reduce((a, c) => a + charEm(c), 0) + ell > max) last = last.slice(0, -1);
+    out[out.length - 1] = `${last.join('').trimEnd()}…`;
+  }
+  return out.map((l) => l.trim()).filter(Boolean);
+}
+
 /** 這局的結果：三紅／三藍死／三藍活（照紀錄）。 */
 export function originalResult(game: SimGame): string {
   const fails = game.quests.filter((q) => q.failed).length;
@@ -73,11 +139,11 @@ export function originalResult(game: SimGame): string {
   return game.winner === 'evil' ? '三藍死' : '三藍活';
 }
 
-/** 整局牌譜圖的 SVG。`title` = 題號（標題列右邊）。 */
-export function buildRecordSvg(game: SimGame, title: string): string {
+/** 整局牌譜圖的 SVG。`title` = 題號（標題列右邊）；`names` = 1～0 家的名字（沒有名字是 ''；沒給就不畫名字）。 */
+export function buildRecordSvg(game: SimGame, title: string, names?: readonly string[]): string {
   const events = publicEvents(game);
   const rows = events.length;
-  const rh = Math.max(34, Math.min(56, Math.floor((1350 - 150 - 90 - 110) / Math.max(1, rows))));
+  const rh = Math.max(34, Math.min(56, Math.floor((1350 - 150 - 90 - 110 - (names?.some(Boolean) ? 52 : 0)) / Math.max(1, rows))));
   const fs = Math.max(18, Math.min(26, Math.round(rh * 0.5)));
   const x0 = 40;
   const leadW = 64;
@@ -99,7 +165,10 @@ export function buildRecordSvg(game: SimGame, title: string): string {
   parts.push(text(40, 64, '模擬瓦・完整牌譜', { size: 40, fill: C.headerInk, weight: true }));
   parts.push(text(40, 118, `${originalResult(game)}｜${title}`, { size: 30, fill: C.headerSoft }));
 
-  // 欄名：座位＋角色
+  // 欄名：座位＋角色（＋名字）
+  const nameLines = Array.from({ length: 10 }, (_, i) => wrapName(names?.[i] ?? '', seatW - 6));
+  const nameRows = Math.max(0, ...nameLines.map((l) => l.length));
+  const nameH = nameRows > 0 ? 10 + nameRows * (NAME_SIZE + 3) : 0;
   let y = 150 + 12;
   const hy = y + 30;
   parts.push(text(x0 + leadW / 2, hy + 14, '隊長', { size: 22, fill: C.faint, anchor: 'middle' }));
@@ -109,10 +178,13 @@ export function buildRecordSvg(game: SimGame, title: string): string {
     const cx = seatX(seat) + seatW / 2;
     parts.push(text(cx, hy, seatChar(seat), { size: 26, fill: C.ink, anchor: 'middle', weight: true }));
     parts.push(text(cx, hy + 32, ROLE_CHAR[role] ?? '', { size: 24, fill: red ? C.red : '#93c5fd', anchor: 'middle', weight: true }));
+    nameLines[seat - 1].forEach((line, k) => {
+      parts.push(text(cx, hy + 32 + 10 + (k + 1) * (NAME_SIZE + 3) - 3, line, { size: NAME_SIZE, fill: C.soft, anchor: 'middle' }));
+    });
   }
   parts.push(text(resX + resW / 2, hy + 14, '結果', { size: 22, fill: C.faint, anchor: 'middle' }));
   parts.push(text(textX + 12, hy + 14, '文字紀錄', { size: 22, fill: C.faint }));
-  y += 76;
+  y += 76 + nameH;
   parts.push(`<line x1="${x0}" y1="${y}" x2="${W - 40}" y2="${y}" stroke="${C.line}" stroke-width="2"/>`);
 
   for (const e of events) {
@@ -183,16 +255,16 @@ export function buildRecordSvg(game: SimGame, title: string): string {
 
 const pngCache = new Map<string, Buffer>();
 
-/** 整局牌譜圖 PNG（同一局快取，最多 64 張）。 */
-export function renderRecordPng(game: SimGame, title: string, opts: { fontFile?: string } = {}): Buffer {
-  const key = `${game.id}|${title}`;
+/** 整局牌譜圖 PNG（同一局同樣的名字快取，最多 64 張）。 */
+export function renderRecordPng(game: SimGame, title: string, opts: { fontFile?: string; names?: readonly string[] } = {}): Buffer {
+  const key = `${game.id}|${title}|${(opts.names ?? []).join('\u0001')}`;
   const hit = pngCache.get(key);
   if (hit) return hit;
   const fontFile = opts.fontFile ?? WEEKLY_CHART_FONT_FILE;
   if (!fs.existsSync(fontFile)) throw new Error(`sim record image font missing: ${fontFile}`);
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Resvg } = require('@resvg/resvg-js') as typeof import('@resvg/resvg-js');
-  const png = new Resvg(buildRecordSvg(game, title), {
+  const png = new Resvg(buildRecordSvg(game, title, opts.names), {
     font: { fontFiles: [fontFile], loadSystemFonts: false, defaultFontFamily: WEEKLY_CHART_FONT_FAMILY },
     background: C.page,
   }).render().asPng();

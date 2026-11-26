@@ -1,14 +1,16 @@
 /**
  * 網站「與機器人練習」— post-game review: every role revealed, every bot
  * decision grouped by round with its reason, filters by bot / decision type,
- * and a 「這步怪怪的」 report button on each decision.
+ * a 「這步怪怪的」 report button on each decision, and (2026-11-26) one skippable
+ * question: which bot habit did you exploit this game (PracticeExploitAsk).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flag, Check, ChevronDown, ChevronUp, Loader2, RotateCcw } from 'lucide-react';
+import { Flag, Check, ChevronDown, ChevronUp, Loader2, MessageSquare, RotateCcw } from 'lucide-react';
 import '../../i18n/practice';
 import { PRACTICE_NS } from '../../i18n/practice';
 import { usePracticeStore } from '../../store/practiceStore';
+import PracticeExploitAsk, { END_CARD_TEXT_ID, isExploitAskMuted } from './PracticeExploitAsk';
 import {
   fetchPracticeTrace,
   flagPracticeDecision,
@@ -152,6 +154,21 @@ function ReviewBody({ trace, currentPlayerId, botSeat, setBotSeat, kind, setKind
   }, [filtered, t]);
 
   const me = trace.seats.find((s) => s.playerId === currentPlayerId);
+  // 「整局回饋（不限某一步）」：局後那一題還開著就跳到它的文字框，不然打開同一個流程（source=whole-game）。
+  const exploitDone = usePracticeStore((s) => Boolean(s.exploitDone[trace.roomId])) || trace.exploitAsk?.done === true;
+  const [wholeOpen, setWholeOpen] = useState(0);
+  const [wholeSent, setWholeSent] = useState(0);
+  const wholeLeft = (trace.exploitAsk?.wholeGameLeft ?? 5) - wholeSent;
+  const canWhole = trace.exploitAsk?.enabled === true && wholeLeft > 0;
+  const openWhole = (): void => {
+    const endText = !exploitDone && !isExploitAskMuted() ? document.getElementById(END_CARD_TEXT_ID) : null;
+    if (endText) {
+      endText.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      endText.focus();
+      return;
+    }
+    setWholeOpen((n) => (n > 0 ? 0 : Date.now()));
+  };
   const winnerText = trace.winner === 'good' ? t('winnerGood') : trace.winner === 'evil' ? t('winnerEvil') : '';
   const reasonText = trace.endReason ? t(`endReason.${trace.endReason}`, { defaultValue: '' }) : '';
 
@@ -178,7 +195,30 @@ function ReviewBody({ trace, currentPlayerId, botSeat, setBotSeat, kind, setKind
         {!trace.canFlag && trace.flagUnavailableReason && (
           <p className="text-[11px] text-amber-300/90">{trace.flagUnavailableReason}</p>
         )}
+        {canWhole && (
+          <button
+            type="button"
+            onClick={openWhole}
+            aria-expanded={wholeOpen > 0}
+            data-testid="practice-whole-game-button"
+            className="inline-flex items-center gap-1 rounded border border-amber-600/70 bg-amber-950/40 px-2 py-0.5 text-[11px] font-semibold text-amber-200 hover:bg-amber-900/50"
+          >
+            <MessageSquare size={12} />{t('exploitAsk.wholeGame')}
+          </button>
+        )}
       </div>
+
+      {/* 局後的整局回饋：開放式文字框為主，標籤選填，送出後一個開放的追問（可略過） */}
+      <PracticeExploitAsk trace={trace} />
+      {wholeOpen > 0 && (
+        <PracticeExploitAsk
+          key={wholeOpen}
+          trace={trace}
+          source="whole-game"
+          onSent={() => setWholeSent((n) => n + 1)}
+          onClose={() => setWholeOpen(0)}
+        />
+      )}
 
       {/* Filters */}
       <div className="space-y-1.5">

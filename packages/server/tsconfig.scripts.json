@@ -4,5 +4,5 @@
     "noEmit": true,
     "rootDir": "../.."
   },
-  "include": ["scripts/consoleExport.ts", "scripts/console/**/*.ts", "scripts/concepts.ts", "scripts/conceptsWiki.ts", "scripts/botGap.ts", "scripts/beliefCalibrationCurve.ts"]
+  "include": ["scripts/consoleExport.ts", "scripts/console/**/*.ts", "scripts/concepts.ts", "scripts/conceptsWiki.ts", "scripts/botGap.ts", "scripts/beliefCalibrationCurve.ts", "scripts/inGameFeedbackReport.ts"]
 }

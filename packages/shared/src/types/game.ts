@@ -450,6 +450,12 @@ export interface LadyOfTheLakeRecord {
   declared?:      boolean;
   /** The public claim the holder made ('good' or 'evil'). */
   declaredClaim?: 'good' | 'evil';
+  /**
+   * 'chat' when the declaration was read from the holder's room chat (「湖3好」「2>3 o」…) instead of the declare
+   * button (站長 2026-11-26「有時候玩家的湖中宣告會只送文字」, server game/lakeChatDeclare.ts). Absent = the button
+   * (or a bot). The claim itself is recorded exactly the same way.
+   */
+  declaredVia?: 'chat';
 }
 
 export interface ChatMessage {

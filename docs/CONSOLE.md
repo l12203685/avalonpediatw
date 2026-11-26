@@ -50,6 +50,27 @@
 | 每小時 :07 | `threads-publish.yml` | 讀 main 的 `threads_live.json`、`threads_picks.json`、`threads_template.json`、留言檔；試跑或正式發，狀態寫 `threads-state` |
 | 每天（Claude 同步） | **console:apply → console:export** | 先把主控台 db 的編輯寫回 repo（PR），合併後從 main 匯出、重新發佈主控台 |
 
+**每天早上同步時順便看模擬瓦的玩家回饋**（2026-11-26）：主控台讀不到 Discord，所以只看公開的 `/api/bots/status`（只有數字）：
+`simulation.counts.feedback` = `{ recorded, bad, flaggedGames }`（記下幾則、幾則說爛局或紀錄有問題、幾局被 2 位以上說爛局）、
+`feedback.simFeedback.sent`（轉到管理員頻道幾則）。數字不是 0 就在同步摘要裡寫一行，提醒站長去「大劍管理員」看 `🎲 模擬瓦回饋` 那幾則（原文和題號只在那裡，不進 repo、不進主控台）；
+`flaggedGames > 0` 時寫明「有局被 2 位以上說爛局，要不要加進 `sim_bank_exclude.json` 等站長決定」。計數重啟（每次部署後端）就歸零，所以要在當天看。
+
+**同一次同步也看網站房間聊天裡的遊戲內回饋**（站長 2026-11-26「遊戲中的對話你也記得讀取並學習 有可能是玩家對你玩法的反饋」）：
+`/api/bots/status` 的 `feedback.inGame`（`capturedGames`、`flagged`、`forwarded`、`throttled`、`sheet.rows`）；完整的在私人試算表「遊戲內回饋」分頁，
+Drive 連接器讀得到就把每一局（分頁一局一列、整段對話）整理成「整體印象 → 相關的局面／決策 → 要測的假設」寫進 `docs/ai/optimization_loop.md`〈遊戲內回饋 → 待測清單〉（只寫改寫後的話，不引原話、不寫名字），
+讀不到就在摘要寫數字、請站長匯出那個分頁。原文不進 repo、不進主控台。湖中宣告只打在聊天裡被讀到的次數是 `lakeChatDeclare.declared`（只看，不用處理）。
+
+**同一次同步也看練習局的整局回饋與「被針對」**（站長 2026-11-26「如果你在練習局發現被針對 也要學起來」）：`/api/bots/status` 的 `practice.exploitAsks`
+（`shown`、`answered`、`withText`、`followUpAsked`、`followUpAnswered`、`wholeGame`、`skipped`、`autoFlagged`、`autoFlagRules`、`choices`、`saved`、`saveFailed`）；完整的在私人試算表「練習被針對」（一則一列，玩家寫的整局描述＋追問的回答）和
+「練習決策紀錄」（同一個追蹤碼，那局每個百科AI 決策）兩個分頁。讀得到就照 `docs/ai/optimization_loop.md`〈練習被針對 → 剝削回合與待測清單〉
+整理、2 局以上的交給剝削回合（第 86 回合）；讀不到（Drive 連接器只拿得到第一個分頁）就在摘要寫數字，
+並建議站長匯出兩個分頁，或設 `PRACTICE_EXPLOIT_SHEET_ID` 讓它在另一份試算表當第一個分頁。玩家寫的字不進 repo、不進主控台。
+
+**回饋一律當成「一整局／一種打法的描述」來讀**（站長 2026-11-26：「百科AI 的問題回饋有時候是一個整體 而不是單一個決策點 所以之後你接受回饋的方式應該是用描述性跟對話性的方式 開放式的」）：
+08:00 同步和每天的例行整理，不論是 `/意見`、模擬瓦回饋、遊戲內回饋（一局一段對話）、練習局整局回饋或「這步怪怪的」，每一則都整理成
+**「整體印象 → 相關的局面／決策 → 要測的假設」**，不切成單一個決策點；回饋看不懂時在 Discord 那則回饋的討論串**最多回一個**開放的追問
+（「從哪一局開始覺得不對？」「你覺得它應該怎麼打？」），不連問、不引導、不點名（`docs/COMMUNITY_FEEDBACK.md`〈回饋當成「一整局／一種打法的描述」來讀〉）。
+
 同步的順序固定是「先 apply、再 export」：export 只反映 main 上已經有的東西，所以 apply 的 PR 合併前，主控台會同時顯示「站長已裁定（db）」和「main 還沒套用（鏡像）」，這是對的狀態，不要在主控台裡把它抹平。
 
 ## 3. 主控台鏡像：`console:export`

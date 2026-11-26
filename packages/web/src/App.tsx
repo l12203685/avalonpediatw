@@ -38,6 +38,7 @@ import AdminClaimsPage from './pages/AdminClaimsPage';
 import AdminAdminsPage from './pages/AdminAdminsPage';
 import AdminImportPage from './pages/AdminImportPage';
 import HelpPage from './pages/HelpPage';
+import CollabPage from './pages/CollabPage';
 import FeedbackButton from './components/FeedbackButton';
 import ToastContainer from './components/ToastContainer';
 import { submitError } from './services/api';
@@ -62,6 +63,8 @@ function stateOfLink(link: StatsLink | null): GameState | null {
       return 'reports';
     case 'aiHistory':
       return 'aiHistory';
+    case 'collab':
+      return 'collab';
     case 'wiki':
     case 'concepts':
       return 'wiki';
@@ -102,6 +105,7 @@ function App(): JSX.Element {
       else if (link.kind === 'aiGames') store.setGameState('aiGames');
       else if (link.kind === 'reports') store.setGameState('reports');
       else if (link.kind === 'aiHistory') store.setGameState('aiHistory');
+      else if (link.kind === 'collab') store.setGameState('collab');
       else if (link.kind === 'wiki' || link.kind === 'concepts') store.setGameState('wiki');
       else if (link.kind === 'records') {
         store.setGameState('records');
@@ -386,7 +390,7 @@ function App(): JSX.Element {
   const shownState = gameState === 'home' ? (bootState ?? lastSiteTab()) : gameState;
   const siteTab = siteTabOf(shownState);
   // ID 認領、與機器人練習、百科AI 對局（與優化歷程）、回報與修正不是頁籤，但同樣掛導覽列與背景（從導覽列的按鈕、右下角「問題回報」進來）
-  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice' || shownState === 'aiGames' || shownState === 'aiHistory' || shownState === 'reports';
+  const withSiteNav = siteTab !== null || shownState === 'idClaim' || shownState === 'practice' || shownState === 'aiGames' || shownState === 'aiHistory' || shownState === 'reports' || shownState === 'collab';
 
   if (isLoading && !(statsFirst || publicStatsPage)) {
     return (
@@ -528,6 +532,7 @@ function App(): JSX.Element {
           {shownState === 'aiGames' && <AiGamesPage />}
           {shownState === 'reports' && <ReportsPage />}
           {shownState === 'aiHistory' && <AiHistoryPage />}
+          {shownState === 'collab' && <CollabPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage

@@ -62,7 +62,7 @@ import type { ReplayGame } from '../../ai/benchmark/sheetsReplay';
 import { FAILS_REQUIRED, isRed, type PublicEvent, type Sight, type SimGame } from './scenario';
 import { maskDigits, seatChar, seatList, seatsOfMask, sortSeats, teamDigits } from './seats';
 import type { EndedReason } from './session';
-import type { AiReading } from './aiRead';
+import type { AiPicks, AiReading } from './aiRead';
 import { originalResult } from './recordImage';
 
 export type SimPlatform = 'line' | 'discord';
@@ -1020,6 +1020,8 @@ export interface RevealInput {
    * 刺殺題的「你刺 N家」那一行改成每一位刺誰。
    */
   everyone?: EveryoneAnswer[];
+  /** 百科AI 在這題那一刻會派（刺）的前幾種（aiRead.aiPicks，站長 2026-11-26）；沒給就不印那一行。 */
+  aiPicks?: AiPicks | null;
   platform: SimPlatform;
   coAnswer?: boolean;
 }
@@ -1042,6 +1044,22 @@ export function everyoneLines(list: readonly EveryoneAnswer[]): string[] {
       return `第${i + 1}位：${body}`;
     }),
   ];
+}
+
+/**
+ * 「百科AI 會派：135（約 60%）、136（25%）、145（15%）」（站長 2026-11-26）：正式機器人在這題那一刻會派的前三種。
+ * 只有一種（每次都派同一隊，或其他都不到 5%）就只寫那一隊、不寫百分比；沒列的加起來 ≥ 5% 時補「其他 N%」。
+ * 刺殺題寫「百科AI 會刺：7家（約 70%）、3家（30%）」。沒有結果 → ''（不印這一行）。
+ */
+export function aiPicksLine(ai: AiPicks | null | undefined): string {
+  if (!ai || ai.picks.length === 0) return '';
+  const label = ai.kind === 'assassinate' ? '百科AI 會刺' : '百科AI 會派';
+  const name = (seats: readonly number[]): string => (ai.kind === 'assassinate' ? seatLabel(seats[0]) : teamDigits(seats));
+  const others = Math.round(ai.others * 100);
+  if (ai.picks.length === 1 && others < 5) return `${label}：${name(ai.picks[0].seats)}`;
+  const cells = ai.picks.map((c, i) => `${name(c.seats)}（${i === 0 ? '約 ' : ''}${Math.round(c.p * 100)}%）`);
+  if (others >= 5) cells.push(`其他 ${others}%`);
+  return `${label}：${cells.join('、')}`;
 }
 
 /** 百科的代碼順序：刺 娜 莫 奧 派 梅。 */
@@ -1112,6 +1130,8 @@ export function formatReveal(input: RevealInput): string {
     const who = input.coAnswer || input.kill.coAnswer ? '這題' : '你';
     parts.push({ text: t === null ? `${who}沒有刺` : `${who}刺 ${seatLabel(t)}${input.kill.coAnswer ? CO_ANSWER_TAG : ''}：${t === merlin ? '刺中梅林 ✓' : '沒刺中 ✗'}` });
   }
+  // 站長 2026-11-26：現行百科AI 在這題那一刻會派的組合（前三種；只有一種就一種）。
+  parts.push({ text: aiPicksLine(input.aiPicks) });
   parts.push({ text: `原始結果: ${originalResult(g)}` });
   if (input.recordUrl) {
     parts.push({ text: `完整牌譜: ${input.recordUrl}` });

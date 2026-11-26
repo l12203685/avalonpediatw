@@ -48,6 +48,9 @@ import {
 } from './feedback';
 import type { Client } from 'discord.js';
 import { getPracticeReportDiscord, type PracticeReportDiscordStats } from '../practice/PracticeReportDiscord';
+import { getPracticeExploitAskCounter, type PracticeExploitAskStats } from '../practice/PracticeExploitReport';
+import { getInGameFeedback, type InGameFeedbackStats } from '../inGameFeedback';
+import { lakeChatDeclareStatus } from '../game/lakeChatDeclare';
 import { createDiscordChatExportPort, shareChatExportReads } from './chatExport/discordPort';
 import { ChatExportBotStatus, ChatExportService, chatExportStatus, initializeChatExport, initializeChatExportReadingCopy } from './chatExport/service';
 import { flushSimulation, getSimBankLoader, simulationStatus, startSimulation } from './simulation';
@@ -524,8 +527,21 @@ export interface BotStatus {
    * received. Numbers and one flag only — never text, names or ids.
    * practiceReports (2026-10-14): the practice mode's 「這步怪怪的」 copies to the same admin
    * channel — on/off (PRACTICE_REPORT_DISCORD) and sent / skipped / failed / throttled counts.
+   * inGame (2026-11-26, src/inGameFeedback): site room chat about 百科AI play — games captured, messages,
+   * flagged, forwarded, throttled (per-game cap) and the private sheet's status / rows / failures; the
+   * admin-channel outcomes are inGameForwards. Numbers only.
    */
-  feedback: FeedbackSnapshot & { commandEnabled: boolean; practiceReports: PracticeReportDiscordStats };
+  feedback: FeedbackSnapshot & { commandEnabled: boolean; practiceReports: PracticeReportDiscordStats; inGame: InGameFeedbackStats };
+  /**
+   * 湖中宣告只打在聊天裡（2026-11-26，game/lakeChatDeclare.ts）：開關（LAKE_CHAT_DECLARE）、從聊天記下幾次宣告、
+   * 驗湖的人在等宣告時說了但讀不準（沒記）的句數。只有數字。
+   */
+  lakeChatDeclare: { enabled: boolean; declared: number; holderMessagesUnread: number };
+  /**
+   * 練習局「被針對」（2026-11-26，practice/PracticeExploitReport.ts）：局後那一題顯示／回答／略過幾局、
+   * 每個選項幾次、自動標記「可能被針對」幾局（每條規則幾局）、寫進私人試算表幾列／失敗幾次。只有數字。
+   */
+  practice: { exploitAsks: PracticeExploitAskStats };
   /**
    * Daily chat-log export (bots/chatExport): three booleans, the last day's
    * date, time, counts and outcome code, and the catch-up's day counts; the
@@ -590,7 +606,10 @@ export function buildBotStatus(): BotStatus {
       commandEnabled: FEEDBACK_CONFIG.commandEnabled,
       ...getFeedbackService().snapshot(),
       practiceReports: getPracticeReportDiscord().snapshot(),
+      inGame: getInGameFeedback().snapshot(),
     },
+    lakeChatDeclare: lakeChatDeclareStatus(),
+    practice: { exploitAsks: getPracticeExploitAskCounter().snapshot() },
     chatExport: chatExportStatus(),
     mediaRelay: { enabled: !!relayMediaStore, stats: relayMediaStore?.stats() ?? null },
     simulation: simulationStatus(),

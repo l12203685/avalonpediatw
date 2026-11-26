@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Bot, ChevronRight, LineChart, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bot, ChevronRight, LineChart, Loader2, RefreshCw, Sparkles } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import AiGameReviewPanel from '../components/aiGames/AiGameReviewPanel';
 import SeatFillerCard from '../components/aiGames/SeatFillerCard';
@@ -53,6 +53,7 @@ function ListView(): JSX.Element {
           <a href={PAIPU_FORUM_URL} target="_blank" rel="noopener noreferrer" className="mx-1 text-emerald-300 underline underline-offset-2">#牌譜紀錄與覆盤</a>
           （標題有「含百科機器人」）。點一局可以看百科AI 每個派隊、投票、任務、湖、刺殺的理由；覺得哪一步怪，按「這步怪怪的」寫原因，會貼到那篇 DC 討論串。
         </p>
+        <div className="flex flex-wrap gap-2">
         {/* 百科AI 優化歷程（#ai-history；站長 2026-11-20） */}
         <button
           type="button"
@@ -63,6 +64,17 @@ function ListView(): JSX.Element {
           <LineChart size={14} className="text-sky-300" />百科AI 優化歷程：改了什麼、勝率怎麼變
           <ChevronRight size={14} className="text-zinc-500" />
         </button>
+        {/* 用你的 AI 一起改百科（#collab；站長 2026-11-26） */}
+        <button
+          type="button"
+          data-testid="collab-link"
+          onClick={() => { useGameStore.getState().setGameState('collab'); window.scrollTo({ top: 0 }); }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-white"
+        >
+          <Sparkles size={14} className="text-amber-300" />用你的 AI 一起改百科
+          <ChevronRight size={14} className="text-zinc-500" />
+        </button>
+        </div>
       </header>
       {/* 叫百科AI 補位（站長 2026-11-19：不在 LINE／DC 群組的人也能叫） */}
       <SeatFillerCard />
