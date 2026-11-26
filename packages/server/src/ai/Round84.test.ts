@@ -36,12 +36,25 @@ function obs(over: Partial<PlayerObservation> = {}): PlayerObservation {
   } as PlayerObservation;
 }
 
-const tun = (over: Partial<AgentTuning>): AgentTuning => resolveAgentTuning(over);
+/** The default table with the round-84 switches off, then `over` (the adopted defaults would otherwise fire in these unit checks). */
+const OFF84: Partial<AgentTuning> = { earlyGo84: 0, redSixWhite84: 0, redWhiteScope84: 0 };
+const tun = (over: Partial<AgentTuning>): AgentTuning => resolveAgentTuning({ ...OFF84, ...over });
+const OFF = (): AgentTuning => tun({});
 
 describe('round 84 switches', () => {
-  it('default off in the default and legacy tables and at every opponent type; flags parse', () => {
-    for (const t of [DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING]) for (const k of KEYS) expect(t[k]).toBe(0);
-    for (const o of OPPONENT_TYPES) for (const k of KEYS) expect(tuningForOpponent(o)[k]).toBe(0);
+  it('legacy off; the adopted defaults (B1 bot tables only, R2 everywhere); flags parse', () => {
+    // Round 84 adoption: the baseline turns on B1 (earlyGo84 = 0.3) and R2 (redSixWhite84 = 1, scope 4); the human tables keep B1 off and follow R2.
+    const adopted: Partial<Record<(typeof KEYS)[number], number>> = { earlyGo84: 0.3, redSixWhite84: 1, redWhiteScope84: 4 };
+    for (const k of KEYS) {
+      expect(LEGACY_AGENT_TUNING[k]).toBe(0);
+      expect(DEFAULT_AGENT_TUNING[k]).toBe(adopted[k] ?? 0);
+      expect(tuningForOpponent('ai', DEFAULT_AGENT_TUNING)[k]).toBe(adopted[k] ?? 0);
+    }
+    for (const o of OPPONENT_TYPES) {
+      if (o === 'ai') continue;
+      const t = tuningForOpponent(o, DEFAULT_AGENT_TUNING);
+      for (const k of KEYS) expect(t[k]).toBe(k === 'earlyGo84' ? 0 : adopted[k] ?? 0);
+    }
     expect(parseTuningFlag('earlyGo84')).toEqual({ earlyGo84: 0.3 });
     expect(parseTuningFlag('earlyGoOn84=0.2')).toEqual({ earlyGoOn84: 0.2 });
     expect(parseTuningFlag('earlyGoNear84')).toEqual({ earlyGoNear84: 0.9 });
@@ -97,7 +110,7 @@ describe('earlyGo84 / earlyGoOn84 (blue)', () => {
   it('scope: not at red match point, leader, red seat, nested loyal views, Merlin with a seen red or on the team, role and round bits', () => {
     const t = tun({ earlyGo84: 0.001, earlyGoOn84: 0.001, earlyGoScope84: 16, earlyGoNear84: 0.001 });
     const base = earlyGo84(t, obs());
-    expect(earlyGo84(DEFAULT_AGENT_TUNING, obs())).toBe(false);
+    expect(earlyGo84(OFF(), obs())).toBe(false);
     expect(earlyGo84(t, obs({ questResults: ['fail', 'success'] }))).toBe(false);
     expect(earlyGo84(t, obs({ failCount: 4 }))).toBe(false);
     expect(earlyGo84(t, obs({ myPlayerId: 'P1' }))).toBe(false); // leader
@@ -127,7 +140,7 @@ describe('earlyGo84 / earlyGoOn84 (blue)', () => {
   });
 
   it('innerBlackBar84 replaces the on-team bar only at red match point; bayesVoteCriteria follows it', () => {
-    expect(innerBlackBar84(DEFAULT_AGENT_TUNING, obs())).toBeNull();
+    expect(innerBlackBar84(OFF(), obs())).toBeNull();
     expect(innerBlackBar84(tun({ innerBlackBar84: 0.85 }), obs())).toBe(0.85);
     expect(innerBlackBar84(tun({ innerBlackBar84: 0.85 }), obs({ questResults: ['fail', 'success'] }))).toBeNull();
     expect(innerBlackBar84(tun({ innerBlackBar84: 0.85, earlyGoScope84: 4 }), obs({ currentRound: 4, questResults: ['fail', 'fail', 'success'] }))).toBeNull();
@@ -157,7 +170,7 @@ describe('earlyGo84 / earlyGoOn84 (blue)', () => {
       expect(decide(t, o)).toBe(true);
     }
     expect(fired).toBeGreaterThan(0);
-    expect(typeof decide(resolveAgentTuning({}), obs())).toBe('boolean');
+    expect(typeof decide(OFF(), obs())).toBe('boolean');
   });
 });
 
@@ -191,7 +204,7 @@ describe('redTailWhite84 / redSixWhite84 (red)', () => {
     const blueTail = red({ currentLeader: 'P5', failCount: 3 });
     const clean = tailSendsClean84(DEFAULT_AGENT_TUNING, blueTail);
     expect(redMatchWhite84(tun({ redTailWhite84: 1 }), blueTail)).toBe(clean);
-    expect(redMatchWhite84(DEFAULT_AGENT_TUNING, blueTail)).toBe(false);
+    expect(redMatchWhite84(OFF(), blueTail)).toBe(false);
   });
 
   it('R2: whites only when the estimate reaches the majority; bit 1 also needs R1; bit 4 only the needed reds', () => {
@@ -216,6 +229,6 @@ describe('redTailWhite84 / redSixWhite84 (red)', () => {
     const blueTail = red({ currentLeader: 'P5', failCount: 3 });
     expect(tailSendsClean84(DEFAULT_AGENT_TUNING, { ...blueTail, seatTeam: 'evil' } as PlayerObservation)).toBe(true);
     expect(decide(tun({ redTailWhite84: 1 }), blueTail)).toBe(true);
-    expect(typeof decide(resolveAgentTuning({}), blueTail)).toBe('boolean');
+    expect(typeof decide(OFF(), blueTail)).toBe('boolean');
   });
 });

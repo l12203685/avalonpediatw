@@ -2912,14 +2912,14 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinGatedThumbB83: 0,
   merlinGatedThumbLake83: 0,
   merlinGatedThumbScope83: 0,
-  earlyGo84: 0,
+  earlyGo84: 0.3, // round 84 B1, ON for bot tables: at red's match point a good seat outer-whites a near-cleanest team when the later captains up to the forced fifth are likely all red (human-table profiles set it back to 0)
   earlyGoOn84: 0,
   earlyGoNear84: 0,
   earlyGoScope84: 0,
   innerBlackBar84: 0,
   redTailWhite84: 0,
-  redSixWhite84: 0,
-  redWhiteScope84: 0,
+  redSixWhite84: 1, // round 84 R2, ON for bot tables and the human tables: a recognised red off a teammate team at red's match point outer-whites when the estimated whites reach the majority (only the reds needed, scope 4)
+  redWhiteScope84: 4,
   innerBlackEvGate63: 0,
   innerBlackEvGate63Mode: 0,
   loyalCopyCap63: 0,
