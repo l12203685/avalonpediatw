@@ -1402,11 +1402,22 @@ export class ForwardAgent implements AvalonAgent {
       // Round 80 `merlinLoyalFree80` (Round80.ts; site owner 2026-11-25): among the teams the public loyal of his seat could plausibly send, one
       // with no red he sees when there is one; when every plausible team holds one, his own sight keeps them off (not the round-58 thumb).
       const chosen = r2Pub !== styled ? r2Pub : styled;
+      const gate83 = (team: readonly string[]): readonly string[] => {
+        if (!gatedThumb83Applies(this.baseline.tuning, obs)) return team;
+        const seen83 = new Set(obs.knownEvils);
+        const barred83 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen83.has(id))];
+        return gatedThumb83Team(this.baseline.tuning, obs, team, publicGateOk, barred83);
+      };
       if (chosen.type === 'team_select' && loyalFree80Applies(this.baseline.tuning, obs)) {
         const seen80 = new Set(obs.knownEvils);
         const barred80 = [...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen80.has(id))];
         const t80 = loyalFree80Team(this.baseline.tuning, obs, chosen.teamIds, gateOk, publicGateOk, barred80);
-        if (t80 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t80] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a red-free team the loyal of his seat could send (round 80)` } };
+        if (t80 !== chosen.teamIds) {
+          // Round 83: the gated thumb also applies on top of the round-80 pick (the human tables run round 80).
+          const t83 = gate83(t80);
+          if (t83 !== t80) return { ...d, action: { type: 'team_select', teamIds: [...t83] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a gated thumb (the good five still findable, he stays trusted; round 83)` } };
+          return { ...d, action: { type: 'team_select', teamIds: [...t80] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a red-free team the loyal of his seat could send (round 80)` } };
+        }
       }
       // Round 82 `merlinTierCover82` (Round82.ts): on an R3–R4 non-forced proposal that rarely goes, at rate q a loyal-plausible team holding
       // exactly one red he sees (a slip a loyal in his seat could make), once he has never certainly led a seen red; measured, not adopted.
@@ -1418,10 +1429,8 @@ export class ForwardAgent implements AvalonAgent {
       }
       // Round 83 `merlinGatedThumb83` (Round83.ts; site owner 2026-11-26): only when (a) mission results + the lake still find the good five
       // after this team fails and (b) the good side still takes Merlin for good, at rate q a loyal-plausible team holding exactly one red he sees.
-      if (chosen.type === 'team_select' && gatedThumb83Applies(this.baseline.tuning, obs)) {
-        const seen83 = new Set(obs.knownEvils);
-        const barred83 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen83.has(id))];
-        const t83 = gatedThumb83Team(this.baseline.tuning, obs, chosen.teamIds, publicGateOk, barred83);
+      if (chosen.type === 'team_select') {
+        const t83 = gate83(chosen.teamIds);
         if (t83 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t83] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a gated thumb (the good five still findable, he stays trusted; round 83)` } };
       }
       if (r2Pub !== styled) return { ...d, action: r2Pub, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin R2: as the public loyal (cleanest team without the whole R1 team)` } };
