@@ -93,13 +93,13 @@ def analyse(games):
                             role3 = rl if rl in ('merlin', 'percival') else 'loyal'
                             if not on and clean:
                                 for key in ('B1', f'B1_later{"R" if laterRed else "B"}', f'B1_{role3}', f'B1_att{a5}', f'B1_{sc}',
-                                            f'B1_later{"R" if laterRed else "B"}_{role3}'):
+                                            f'B1_later{"R" if laterRed else "B"}_{role3}', f'B1_{sc}_later{"R" if laterRed else "B"}'):
                                     C[key].add(yes, passed, fails, oc)
                             if not on and dirty:
                                 C['B1x_dirtyOff'].add(yes, passed, fails, oc)
                                 C[f'B1x_dirtyOff_{role3}'].add(yes, passed, fails, oc)
                             if on and dirty:
-                                for key in ('B2', f'B2_later{"R" if laterRed else "B"}', f'B2_{role3}', f'B2_att{a5}', f'B2_{sc}'):
+                                for key in ('B2', f'B2_later{"R" if laterRed else "B"}', f'B2_{role3}', f'B2_att{a5}', f'B2_{sc}', f'B2_{sc}_later{"R" if laterRed else "B"}'):
                                     C[key].add(yes, passed, fails, oc)
                             if on and clean:
                                 for key in ('B2c', f'B2c_later{"R" if laterRed else "B"}', f'B2c_{role3}', f'B2c_att{a5}'):
@@ -112,7 +112,7 @@ def analyse(games):
                                     others = sum(1 for x in apset if x != s)
                                     bucket = 'ge6' if others >= 6 else ('eq5' if others == 5 else 'le4')
                                     for key in ('R', f'R1_tail{"R" if tailRed else "B"}', f'R1_tail{"R" if tailRed else "B"}_att{a5}', f'R_att{a5}', f'R_{sc}',
-                                                f'R2_{bucket}', f'R2_{bucket}_att{a5}', f'R_{rl}', f'R1_laterBlue{min(len(laterBlue), 2)}'):
+                                                f'R2_{bucket}', f'R2_{bucket}_att{a5}', f'R_{rl}', f'R1_laterBlue{min(len(laterBlue), 2)}', f'R1_{sc}_tail{"R" if tailRed else "B"}', f'R2_{sc}_{bucket}'):
                                         C[key].add(yes, passed, fails, oc)
                                 else:
                                     C['Rx_noTeammate' + ('_dirty' if dirty else '_clean')].add(yes, passed, fails, oc)
