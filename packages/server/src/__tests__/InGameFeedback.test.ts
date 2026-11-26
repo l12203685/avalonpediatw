@@ -7,6 +7,7 @@ import {
   IN_GAME_CHAT_MAX_MESSAGES,
   IN_GAME_FEEDBACK_HEADER,
   IN_GAME_FEEDBACK_TAB,
+  IN_GAME_FORWARD_WAIT_MS,
   IN_GAME_MAX_FORWARDS_PER_GAME,
   IN_GAME_POST_GAME_MS,
   InGameChatCapture,
@@ -129,32 +130,67 @@ describe('InGameChatCapture', () => {
     expect(cap.snapshot()).toMatchObject({ capturedGames: 1, openGames: 1 });
   });
 
-  it('forwards a flagged line with seats only (no names), tagged with game / mission / phase', () => {
+  it('forwards a flagged line with up to 3 lines of context before and after (seats only, no names)', () => {
     const { cap, forwarded } = setup();
     cap.startGame('room-ab12', { botSeats: [3, 7], seatCount: 7 });
-    cap.onChat('room-ab12', chat({ text: '大家好' }));
+    for (const t of ['一', '二', '三', '四']) cap.onChat('room-ab12', chat({ seat: 2, text: `前面${t}` }));
     const hit = cap.onChat('room-ab12', chat({ seat: 4, text: '3家為什麼這樣派', round: 3 }));
     expect(hit?.reason).toBe('bot-seat');
-    expect(forwarded).toEqual(['📮 遊戲內回饋（房間 room-ab12，第1局任務3・派隊投票，4家→提到 3家百科AI）：3家為什麼這樣派']);
+    // Waits for the lines after it.
+    expect(forwarded).toEqual([]);
+    cap.onChat('room-ab12', chat({ seat: 5, text: '我也覺得', round: 3 }));
+    cap.onChat('room-ab12', chat({ seat: 6, text: '對啊', round: 3 }));
+    expect(forwarded).toEqual([]);
+    cap.onChat('room-ab12', chat({ seat: 1, text: '下一個', round: 3 }));
+    expect(forwarded).toEqual([[
+      '📮 遊戲內回饋（房間 room-ab12，第1局任務3・派隊投票，4家→提到 3家百科AI）',
+      '　 2家：前面二',
+      '　 2家：前面三',
+      '　 2家：前面四',
+      '▶ 4家：3家為什麼這樣派',
+      '　 5家：我也覺得',
+      '　 6家：對啊',
+      '　 1家：下一個',
+    ].join('\n')]);
+    // A post-game line with nothing after it goes out when the game closes; mentions never ping.
     cap.onChat('room-ab12', chat({ seat: 10, text: 'AI 好強 @everyone', phase: 'ended' }));
-    expect(forwarded[1]).toBe('📮 遊戲內回饋（房間 room-ab12，第1局・局後，0家→提到 百科AI）：AI 好強 @\u200beveryone');
-    expect(cap.snapshot()).toMatchObject({ messages: 3, flagged: 2, forwarded: 2, throttled: 0 });
+    expect(forwarded).toHaveLength(1);
+    void cap.closeGame('room-ab12');
+    expect(forwarded[1].split('\n')[0]).toBe('📮 遊戲內回饋（房間 room-ab12，第1局・局後，0家→提到 百科AI）');
+    expect(forwarded[1].split('\n').at(-1)).toBe('▶ 0家：AI 好強 @\u200beveryone');
+    expect(cap.snapshot()).toMatchObject({ messages: 9, flagged: 2, forwarded: 2, throttled: 0 });
   });
 
-  it('caps the forwards per game; the rest is counted as throttled and still goes to the sheet', async () => {
+  it('a flagged line waits at most 2 minutes for context (sweep)', () => {
+    const { cap, forwarded, tick } = setup();
+    cap.startGame('r', { botSeats: [3], seatCount: 7 });
+    cap.onChat('r', chat({ text: 'AI 亂打' }));
+    cap.sweep(() => true);
+    expect(forwarded).toHaveLength(0);
+    tick(IN_GAME_FORWARD_WAIT_MS);
+    cap.sweep(() => true);
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0]).toContain('▶ 4家：AI 亂打');
+  });
+
+  it('caps the forwards per game; the rest is counted as throttled and still goes into the one row', async () => {
     const { cap, forwarded, rows } = setup();
     cap.startGame('r', { botSeats: [3], seatCount: 7 });
     for (let i = 0; i < IN_GAME_MAX_FORWARDS_PER_GAME + 3; i += 1) cap.onChat('r', chat({ text: `AI 好強 ${i}` }));
-    expect(forwarded).toHaveLength(IN_GAME_MAX_FORWARDS_PER_GAME);
     expect(cap.snapshot()).toMatchObject({ flagged: IN_GAME_MAX_FORWARDS_PER_GAME + 3, throttled: 3 });
     await cap.closeGame('r');
-    expect(rows[0]).toHaveLength(IN_GAME_MAX_FORWARDS_PER_GAME + 3);
+    expect(forwarded).toHaveLength(IN_GAME_MAX_FORWARDS_PER_GAME);
+    expect(rows[0]).toHaveLength(1);
+    expect(rows[0][0][4]).toBe(IN_GAME_MAX_FORWARDS_PER_GAME + 3);
+    expect(String(rows[0][0][9]).match(/▶/g)).toHaveLength(IN_GAME_MAX_FORWARDS_PER_GAME + 3);
   });
 
-  it('keeps post-game chat for 15 minutes, then writes the sheet once with the bot roles', async () => {
+  it('keeps post-game chat for 15 minutes, then writes one row for the game: the flagged lines as one conversation', async () => {
     const { cap, rows, tick } = setup();
     cap.startGame('r', { botSeats: [3, 7], seatCount: 7 });
+    cap.onChat('r', chat({ seat: 2, text: '我覺得 4 可疑', round: 2, proposal: 2 }));
     cap.onChat('r', chat({ seat: 4, text: '7家好強', round: 2, proposal: 2 }));
+    for (let i = 0; i < 8; i += 1) cap.onChat('r', chat({ seat: 1, text: `閒聊${i}`, round: 3 }));
     cap.endGame('r', { 3: 'assassin', 7: 'merlin' });
     tick(IN_GAME_POST_GAME_MS - 1000);
     cap.onChat('r', chat({ seat: 5, text: '為什麼刺我', phase: 'lobby' })); // back in the lobby: still post-game
@@ -165,12 +201,27 @@ describe('InGameChatCapture', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(rows).toHaveLength(1);
-    const [first, second] = rows[0];
-    expect(first).toHaveLength(IN_GAME_FEEDBACK_HEADER.length);
-    expect(first.slice(1, 12)).toEqual(['r', 1, '派隊投票', 2, 2, '4家', '7家百科AI', '7家梅林', '講到百科AI 的座位', '3家、7家', 2]);
-    expect(first[12]).toBe('7家好強');
-    expect(second.slice(3, 9)).toEqual(['局後', '', '', '5家', '沒指名', '']);
-    expect(cap.snapshot()).toMatchObject({ openGames: 0, sheet: { rows: 2, failed: 0 } });
+    expect(rows[0]).toHaveLength(1);
+    const row = rows[0][0];
+    expect(row).toHaveLength(IN_GAME_FEEDBACK_HEADER.length);
+    expect(row.slice(1, 9)).toEqual(['r', 1, '3家、7家', 2, '派隊投票、局後', '7家百科AI、沒指名', '7家梅林', '講到百科AI 的座位、問為什麼這樣玩']);
+    expect(row[9]).toBe([
+      '【第1局任務2・派隊投票】',
+      '　 2家：我覺得 4 可疑',
+      '▶ 4家：7家好強（提到 7家百科AI・講到百科AI 的座位）',
+      '【第1局任務3・派隊投票】',
+      '　 1家：閒聊0',
+      '　 1家：閒聊1',
+      '　 1家：閒聊2',
+      '……',
+      '【第1局任務3・派隊投票】',
+      '　 1家：閒聊5',
+      '　 1家：閒聊6',
+      '　 1家：閒聊7',
+      '【第1局・局後】',
+      '▶ 5家：為什麼刺我（提到 沒指名・問為什麼這樣玩）',
+    ].join('\n'));
+    expect(cap.snapshot()).toMatchObject({ openGames: 0, sheet: { rows: 1, failed: 0 } });
   });
 
   it('closes a game when its room is gone or a new game starts; numbers the games per room', async () => {
@@ -180,10 +231,11 @@ describe('InGameChatCapture', () => {
     cap.startGame('r', { botSeats: [3], seatCount: 7 }); // 第2局
     await Promise.resolve();
     expect(rows).toHaveLength(1);
+    expect(forwarded).toHaveLength(1);
     cap.onChat('r', chat({ text: 'AI 亂打' }));
-    expect(forwarded[1]).toContain('第2局任務2');
     cap.sweep(() => false);
     await Promise.resolve();
+    expect(forwarded[1]).toContain('第2局任務2');
     expect(rows).toHaveLength(2);
     expect(cap.snapshot().openGames).toBe(0);
   });

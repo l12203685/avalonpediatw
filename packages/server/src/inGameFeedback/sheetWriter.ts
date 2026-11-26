@@ -23,20 +23,17 @@ export const IN_GAME_FEEDBACK_HEADER = [
   '時間(+08)',
   '房間',
   '第幾局',
+  '本局百科AI 座位',
+  '回饋則數',
   '階段',
-  '任務',
-  '第幾次派隊',
-  '說話的座位',
   '提到的百科AI',
   '那個百科AI 的角色',
   '類型',
-  '本局百科AI 座位',
-  '本局回饋則數',
-  '內容',
+  '整局對話（▶＝被挑出的那句，前後各 3 句當脈絡）',
 ] as const;
 
-/** 一格最多 50,000 字；聊天本來就只收 500 字。 */
-const CELL_MAX_CHARS = 1000;
+/** 一格最多 50,000 字（整局對話那一格自己截在 40,000）。 */
+const CELL_MAX_CHARS = 45_000;
 
 type Credentials = NonNullable<ReturnType<typeof parseServiceAccountJson>>;
 
@@ -117,7 +114,7 @@ export class InGameFeedbackSheetWriter implements InGameFeedbackSink {
       });
       return true;
     }
-    const head = (await this.call('read-header', `/values/${encodeURIComponent(`'${IN_GAME_FEEDBACK_TAB}'!A1:M1`)}`, {
+    const head = (await this.call('read-header', `/values/${encodeURIComponent(`'${IN_GAME_FEEDBACK_TAB}'!A1:J1`)}`, {
       method: 'GET',
     })) as { values?: unknown[][] };
     return !Array.isArray(head.values) || head.values.length === 0 || (head.values[0] ?? []).length === 0;

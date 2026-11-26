@@ -5,9 +5,11 @@
  *
  *   pnpm --filter @avalon/server exec tsx scripts/inGameFeedbackReport.ts <CSV 路徑> [--no-text]
  *
- * 照情境分組印出來：階段 → 被提到的百科AI 的角色（局後才知道；沒指名的歸「沒指名」）→ 類型。每組有則數和
- * 涉及幾局，預設附原文（只印在你自己的終端機）；--no-text 只印數字。08:00 同步用這份把回饋改寫成
- * 「百科AI 改進項目」（轉述、不引原文、不寫名字）放進待測清單——見 docs/ai/optimization_loop.md。
+ * 分頁是**一局一列**：整局被挑出的話連同前後脈絡串成一段對話（站長 2026-11-26「百科AI 的問題回饋有時候是一個整體
+ * 而不是單一個決策點」）。這裡照被提到的百科AI 的角色分組（局後才知道；沒指名的歸「沒指名」），每組有幾局、
+ * 幾則、出現在哪些階段，預設附每一局的整段對話（只印在你自己的終端機）；--no-text 只印數字。08:00 同步用這份把
+ * 每一局整理成「整體印象 → 相關的局面／決策 → 要測的假設」（轉述、不引原文、不寫名字）放進待測清單——
+ * 見 docs/ai/optimization_loop.md。
  *
  * 不寫任何檔案；CSV 在 repo 裡面就拒絕（原文不能進公開 repo）。
  */
@@ -19,12 +21,12 @@ import * as path from 'path';
 const COL = {
   game: '房間',
   gameNo: '第幾局',
+  count: '回饋則數',
   phase: '階段',
-  round: '任務',
   mentioned: '提到的百科AI',
   roles: '那個百科AI 的角色',
   kind: '類型',
-  text: '內容',
+  narrative: '整局對話（▶＝被挑出的那句，前後各 3 句當脈絡）',
 } as const;
 
 /** 最小的 CSV 解析（Google 試算表下載的格式：逗號、雙引號跳脫、欄位內可以換行）。 */
@@ -51,15 +53,17 @@ export function parseCsv(src: string): string[][] {
   return rows.filter((r) => r.some((x) => x.trim() !== ''));
 }
 
+/** 一局。 */
 export interface FeedbackRow {
   game: string;
-  phase: string;
-  round: string;
+  /** 這局被挑出幾則。 */
+  count: number;
+  phases: string[];
   /** 被提到的百科AI 的角色（中文，例如「梅林」）；沒有 → []。 */
   roles: string[];
   mentioned: string;
-  kind: string;
-  text: string;
+  kinds: string[];
+  narrative: string;
 }
 
 /** 「3家刺客、7家梅林」→ ['刺客', '梅林']。 */
@@ -67,58 +71,59 @@ export function rolesOf(cell: string): string[] {
   return cell.split('、').map((x) => x.replace(/^\s*\d{1,2}家/u, '').trim()).filter(Boolean);
 }
 
+const list = (cell: string): string[] => cell.split('、').map((x) => x.trim()).filter(Boolean);
+
 export function readRows(table: string[][]): FeedbackRow[] {
   const [header, ...body] = table;
   if (!header) return [];
   const idx = (name: string): number => header.findIndex((h) => h.trim() === name);
   const at = (r: string[], name: string): string => { const i = idx(name); return i >= 0 ? (r[i] ?? '').trim() : ''; };
-  if (idx(COL.text) < 0 || idx(COL.phase) < 0) throw new Error('不是「遊戲內回饋」分頁的 CSV（找不到「階段」「內容」欄）');
+  if (idx(COL.narrative) < 0 || idx(COL.phase) < 0) throw new Error('不是「遊戲內回饋」分頁的 CSV（找不到「階段」「整局對話」欄）');
   return body.map((r) => ({
     game: `${at(r, COL.game)}#${at(r, COL.gameNo)}`,
-    phase: at(r, COL.phase) || '（不明）',
-    round: at(r, COL.round),
+    count: Number(at(r, COL.count)) || 0,
+    phases: list(at(r, COL.phase)),
     roles: rolesOf(at(r, COL.roles)),
     mentioned: at(r, COL.mentioned),
-    kind: at(r, COL.kind) || '（不明）',
-    text: at(r, COL.text),
+    kinds: list(at(r, COL.kind)),
+    narrative: at(r, COL.narrative),
   }));
 }
 
 export interface FeedbackGroup {
-  phase: string;
   role: string;
-  kind: string;
-  count: number;
   games: number;
-  texts: string[];
+  lines: number;
+  /** 階段 → 出現在幾局。 */
+  phases: Record<string, number>;
+  narratives: string[];
 }
 
-/** 階段 × 角色 × 類型；一則提到兩個角色就兩組都算。由多到少。 */
+/** 照被提到的百科AI 的角色分組；一局提到兩個角色就兩組都算。由局數多到少。 */
 export function groupFeedback(rows: readonly FeedbackRow[]): FeedbackGroup[] {
-  const map = new Map<string, FeedbackGroup & { gameSet: Set<string> }>();
+  const map = new Map<string, FeedbackGroup>();
   for (const r of rows) {
-    const roles = r.roles.length > 0 ? r.roles : [r.mentioned === '沒指名' || !r.mentioned ? '沒指名' : '角色不明'];
+    const noRole = r.mentioned === '' || r.mentioned.split('、').every((m) => m.trim() === '沒指名');
+    const roles = r.roles.length > 0 ? [...new Set(r.roles)] : [noRole ? '沒指名' : '角色不明'];
     for (const role of roles) {
-      const key = `${r.phase}|${role}|${r.kind}`;
-      let g = map.get(key);
-      if (!g) { g = { phase: r.phase, role, kind: r.kind, count: 0, games: 0, texts: [], gameSet: new Set() }; map.set(key, g); }
-      g.count += 1;
-      g.gameSet.add(r.game);
-      g.texts.push(r.round ? `任務${r.round}：${r.text}` : r.text);
+      let g = map.get(role);
+      if (!g) { g = { role, games: 0, lines: 0, phases: {}, narratives: [] }; map.set(role, g); }
+      g.games += 1;
+      g.lines += r.count;
+      for (const p of r.phases) g.phases[p] = (g.phases[p] ?? 0) + 1;
+      g.narratives.push(`${r.game}（${r.kinds.join('、') || '類型不明'}）\n${r.narrative}`);
     }
   }
-  return [...map.values()]
-    .map(({ gameSet, ...g }) => ({ ...g, games: gameSet.size }))
-    .sort((a, b) => b.count - a.count || a.phase.localeCompare(b.phase) || a.role.localeCompare(b.role));
+  return [...map.values()].sort((a, b) => b.games - a.games || b.lines - a.lines || a.role.localeCompare(b.role));
 }
 
 export function formatReport(groups: readonly FeedbackGroup[], opts: { withText: boolean }): string {
   if (groups.length === 0) return '沒有回饋。';
-  const total = groups.reduce((s, g) => s + g.count, 0);
-  const lines = [`遊戲內回饋：${groups.length} 組（一則提到兩個角色會算兩次，合計 ${total}）`];
+  const lines = [`遊戲內回饋：${groups.length} 組（一局提到兩個角色會算兩次）。每一局請整理成「整體印象 → 相關的局面／決策 → 要測的假設」。`];
   for (const g of groups) {
-    lines.push('', `■ ${g.phase}｜${g.role}｜${g.kind}：${g.count} 則、${g.games} 局`);
-    if (opts.withText) for (const t of g.texts) lines.push(`  - ${t}`);
+    const phases = Object.entries(g.phases).sort((a, b) => b[1] - a[1]).map(([p, n]) => `${p} ${n}`).join('、');
+    lines.push('', `■ ${g.role}：${g.games} 局、${g.lines} 則（階段：${phases || '—'}）`);
+    if (opts.withText) for (const n of g.narratives) lines.push(...n.split('\n').map((x, i) => (i === 0 ? `  ◆ ${x}` : `    ${x}`)));
   }
   return lines.join('\n');
 }
