@@ -4,7 +4,7 @@ name: AI arena tournament
 # docs/BOTS.md〈AI 擂台〉）。不用任何 LLM、不用任何 token：只跑百科AI 自己的引擎（自我對打），社群機器人只是
 # profile.json 裡白名單的開關（資料，不是程式），而且只讀已經合併進 main 的資料夾。
 #
-#   每天 04:17（台灣）：120,000 局，切成 12 片同時跑（每片 10,000 局、一台 4 核 runner），合併後重算分數，
+#   每天 04:17（台灣）：120,000 局，切成 12 片同時跑（每片 10,000 局、一台 4 vCPU runner、約 1 小時），合併後重算分數，
 #                       寫 arena/leaderboard.json 與 arena/history/<日期>.json，有變動才 commit 到 main。
 #   合併到 main 動到 community-bots/** 或擂台程式時（CD）：補跑 20,000 局（4 片），新的／改過的機器人當天就有分數。
 #   手動（workflow_dispatch）：可以指定局數。
@@ -105,7 +105,7 @@ jobs:
   play:
     needs: plan
     runs-on: ubuntu-latest
-    # 每片 10,000 局在 4 核 runner 上約 30–50 分鐘（docs/BOTS.md 有實測數字）；上限遠低於 GitHub 的 6 小時。
+    # 實測一台 4 vCPU runner 每秒 2.89 局：每片 10,000 局約 58 分鐘（docs/BOTS.md〈AI 擂台〉）；上限遠低於 GitHub 的 6 小時。
     timeout-minutes: 300
     strategy:
       fail-fast: false
