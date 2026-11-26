@@ -63,9 +63,9 @@ def game_events(rec):
             continue
         rnd = ri + 1
         for pi, (team, yes) in enumerate(rd['p']):
-            leader = SEATS[k % 10]
+            leader = rd['L'][pi] if 'L' in rd else SEATS[k % 10]
             k += 1
-            forced = pi >= 4
+            forced = (pi in rd['F']) if 'F' in rd else pi >= 4
             if forced or merlin not in team or merlin == leader:
                 continue
             if merlin in yes:
@@ -92,6 +92,38 @@ def game_events(rec):
             else:
                 mission_wins += 1
     return out
+
+
+def load_human(path):
+    """`keySpotStudy.ts --export-human` rows → the same shape as the self-play games (seats 1..10 → '1'..'9','0')."""
+    games = {}
+    for line in open(path, encoding='utf8'):
+        if not line.strip():
+            continue
+        h = json.loads(line)
+        if h.get('out') not in ('red3', 'blueDead', 'blueAlive'):
+            continue
+        sc = lambda s: '0' if s == 10 else str(s)
+        roles = h['roles']
+        c = ''.join((sc(roles.index(r) + 1) if r in roles else '-') for r in ROLES)
+        rounds = []
+        for p in h['props']:
+            rnd, att, leader, team, yes, forced = p[0], p[1], p[2], p[3], p[4], p[5]
+            while len(rounds) < rnd:
+                rounds.append({'p': [], 'm': '', 'L': []})
+            rounds[rnd - 1]['p'].append([''.join(sc(s) for s in team), '' if forced or yes is None else ''.join(sc(s) for s in yes)])
+            rounds[rnd - 1]['L'].append(sc(leader))
+            if forced:
+                rounds[rnd - 1].setdefault('F', set()).add(len(rounds[rnd - 1]['p']) - 1)
+        for q in h['quests']:
+            rnd, team, nf = q[0], q[1], q[2]
+            if rnd <= len(rounds):
+                rounds[rnd - 1]['m'] = 'o' * (len(team) - nf) + 'x' * nf
+        out = h['out']
+        games[h['gi']] = {'blueWon': 1 if out == 'blueAlive' else 0, 'threeBlue': 0 if out == 'red3' else 1,
+                          'killed': 1 if out == 'blueDead' else (0 if out == 'blueAlive' else -1), 'h': '', 's': h.get('s'),
+                          'g': {'c': c, 'r': rounds}}
+    return games
 
 
 def summarize(games, label):
@@ -142,8 +174,25 @@ def main():
     ap.add_argument('--base', default=None, help='the paired control arm name')
     ap.add_argument('--fill', action='append', default=[], help='NAME=BASENAME: games missing in NAME (only= runs) are taken from BASENAME')
     ap.add_argument('--reps', type=int, default=2000)
+    ap.add_argument('--human', help='keySpotStudy.ts --export-human rows (games_cache strict replay)')
+    ap.add_argument('--flags', help='strong-human-Merlin flags (game index → numbers; made from player ids, never in the repo)')
+    ap.add_argument('--strong-n', type=int, default=4)
+    ap.add_argument('--strong-surv', type=float, default=0.6)
     args = ap.parse_args()
     arms = {}
+    if args.human:
+        hum = load_human(args.human)
+        arms['真人局：全部'] = hum
+        arms['真人局：高端桌 S ≥ 55'] = {i: r for i, r in hum.items() if r.get('s') is not None and r['s'] >= 55}
+        if args.flags:
+            fl = json.load(open(args.flags))
+
+            def strong(i):
+                f = fl.get(str(i))
+                return bool(f and f.get('surv') is not None and f['n3'] >= args.strong_n and f['surv'] >= args.strong_surv
+                            and f.get('ex') is not None and f['ex'] >= 0)
+            arms['真人局：強的真人梅林'] = {i: r for i, r in hum.items() if strong(i)}
+            arms['真人局：其他真人梅林'] = {i: r for i, r in hum.items() if not strong(i)}
     for a in args.arm:
         name, path = a.split('=', 1)
         arms[name] = load(path)
