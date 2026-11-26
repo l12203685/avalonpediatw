@@ -50,6 +50,8 @@ import {
   type PracticeReportStatus,
 } from '../practice/PracticeReportWriter';
 import { getPracticeReportDiscord, type PracticeReportCopy } from '../practice/PracticeReportDiscord';
+import { getInGameFeedback } from '../inGameFeedback';
+import { LAKE_CHAT_SUFFIX, getLakeChatWatcher } from '../game/lakeChatDeclare';
 import {
   PRACTICE_PLAYER_COUNT,
   PRACTICE_ROOM_PREFIX,
@@ -389,6 +391,14 @@ export class GameServer {
     // 網站「與機器人練習」: drop practice rooms that ended / went idle.
     const practiceSweep = setInterval(() => this.sweepPracticeRooms(), 60 * 1000);
     practiceSweep.unref?.();
+
+    // 遊戲內回饋（站長 2026-11-26）：收掉局後 15 分鐘到了、或房間已經沒了的局（有回饋就寫進私人試算表）。
+    const inGameSweep = setInterval(() => {
+      const alive = (id: string): boolean => !!this.roomManager.getRoom(id);
+      getInGameFeedback().sweep(alive);
+      getLakeChatWatcher().prune(alive);
+    }, 60 * 1000);
+    inGameSweep.unref?.();
 
     this.io.on('connection', (socket: Socket) => {
       const user = socket.data.user as User;
@@ -1005,6 +1015,13 @@ export class GameServer {
       // 第 56b 回合 C：開局時照這一桌有沒有真人換成對應的策略層（機器人在開局前才知道最後的座位組成）。
       this.applyOpponentProfile(updatedRoom);
 
+      // 遊戲內回饋（站長 2026-11-26）：有百科AI 坐的局開始收聊天（練習房不收：練習局一律不記錄）。
+      if (!isPractice) {
+        const seatIds = Object.keys(updatedRoom.players);
+        const botSeats = seatIds.flatMap((id, i) => (updatedRoom.players[id].isBot ? [i + 1] : []));
+        getInGameFeedback().startGame(roomId, { botSeats, seatCount: seatIds.length });
+      }
+
       // Notify each bot agent about their assigned role
       for (const [botId, agent] of this.botAgents.entries()) {
         if (updatedRoom.players[botId]) {
@@ -1477,6 +1494,15 @@ export class GameServer {
     this.redTalk?.delete(roomId);
     // Practice rooms announce the end exactly once (the trace is sent once).
     if (this.isPracticeRoom(roomId) && !this.practice.markEnded(roomId)) return;
+    // 遊戲內回饋：記下百科AI 的角色（寫試算表用），局後聊天再收 15 分鐘。
+    if (!this.isPracticeRoom(roomId)) {
+      const botRoles: Record<number, string> = {};
+      Object.keys(room.players).forEach((id, i) => {
+        const p = room.players[id];
+        if (p.isBot && p.role) botRoles[i + 1] = p.role;
+      });
+      getInGameFeedback().endGame(roomId, botRoles);
+    }
     const evilWins = room.evilWins === true;
     const playerCount = Object.keys(room.players).length;
     const startTime = this.roomStartTimes.get(roomId);
@@ -1879,9 +1905,61 @@ export class GameServer {
       });
       // 刺殺階段：刺客機器人在等紅方隊友的「/刺殺 N」
       this.onRedTalkChat(roomId, playerId, trimmedMessage);
+      // 湖中宣告只打在聊天裡（站長 2026-11-26）：讀得懂就照按鈕一樣記下
+      this.onLakeChat(roomId, playerId, trimmedMessage);
+      // 遊戲內回饋（站長 2026-11-26）：有百科AI 的局，對它玩法的回饋記下來
+      this.onInGameFeedbackChat(roomId, playerId, trimmedMessage);
     } catch (error) {
       console.error('Error sending chat message:', error);
     }
+  }
+
+  /**
+   * 湖中宣告只打在聊天裡（站長 2026-11-26「因為有時候玩家的湖中宣告會只送文字」，game/lakeChatDeclare.ts）：
+   * 剛驗完湖、還沒宣告的那位在下一個任務結果出來前打「湖3好」「2>3 o」這類話，讀得懂就照按鈕一樣
+   * declareLakeResult（紀錄多 declaredVia: 'chat'），系統訊息多「（取自聊天）」。每個房間都適用；LAKE_CHAT_DECLARE=off 關掉。
+   */
+  private onLakeChat(roomId: string, playerId: string, text: string): void {
+    try {
+      const room = this.roomManager.getRoom(roomId);
+      if (!room || room.players[playerId]?.isBot) return;
+      const watcher = getLakeChatWatcher();
+      const claim = watcher.claimFor(roomId, room, playerId, text);
+      if (!claim) return;
+      const engine = this.gameEngines.get(roomId);
+      if (!engine) return;
+      const record = engine.declareLakeResult(playerId, claim, { via: 'chat' });
+      if (!record) return;
+      watcher.noteDeclared();
+      const updated = this.roomManager.getRoom(roomId) ?? room;
+      this.emitSystemChat(
+        roomId,
+        `系統: ${seatOfInRoom(playerId, updated)}>${seatOfInRoom(record.targetId, updated)} ${claim === 'good' ? 'o' : 'x'}${LAKE_CHAT_SUFFIX}`,
+      );
+      // 跟按鈕一樣：引擎的 onStateChange 已經廣播並排好百科AI 的下一步，這裡只補一次廣播。
+      this.broadcastRoomState(roomId, updated);
+    } catch (err) {
+      console.error(`[lake-chat] declare failed in room ${roomId}: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+  }
+
+  /** 遊戲內回饋（src/inGameFeedback）：有在收的局，交給它判斷；內容不寫 log。 */
+  private onInGameFeedbackChat(roomId: string, playerId: string, text: string): void {
+    const capture = getInGameFeedback();
+    if (!capture.isCapturing(roomId)) return;
+    const room = this.roomManager.getRoom(roomId);
+    if (!room || room.players[playerId]?.isBot) return;
+    const ids = Object.keys(room.players);
+    const leaderId = ids[room.leaderIndex];
+    const attemptsThisRound = (room.voteHistory ?? []).filter((v) => v.round === room.currentRound).length;
+    capture.onChat(roomId, {
+      seat: ids.indexOf(playerId) + 1,
+      text,
+      phase: room.state,
+      round: room.currentRound,
+      proposal: attemptsThisRound + (room.state === 'voting' ? 1 : 0),
+      leaderIsBot: !!(leaderId && room.players[leaderId]?.isBot),
+    });
   }
 
   // ─── #63 Public lobby chat ──────────────────────────────────────────────

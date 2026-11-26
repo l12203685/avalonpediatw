@@ -76,6 +76,11 @@ export interface FeedbackSnapshot {
    * 失敗、超過每小時上限。跟 /意見 共用頻道和每小時上限。
    */
   simFeedback: { sent: number; skipped: number; failed: number; throttled: number };
+  /**
+   * 網站房間聊天裡對百科AI 玩法的回饋（2026-11-26，src/inGameFeedback）轉到管理員頻道的結果。跟 /意見 共用頻道和每小時上限；
+   * 每局自己的上限在 inGameFeedback（那裡的 throttled 另算，在 feedback.inGame）。
+   */
+  inGameForwards: { sent: number; skipped: number; failed: number; throttled: number };
 }
 
 export interface FeedbackServiceOptions {
@@ -121,6 +126,7 @@ export class FeedbackService {
   private readonly logger: NonNullable<FeedbackServiceOptions['logger']>;
   private readonly opinions = { line: 0, discord: 0 };
   private readonly simFeedback = { sent: 0, skipped: 0, failed: 0, throttled: 0 };
+  private readonly inGameForwards = { sent: 0, skipped: 0, failed: 0, throttled: 0 };
   /** Epoch ms of forwards in the last hour (for the global flood cap). */
   private forwardTimes: number[] = [];
 
@@ -227,8 +233,30 @@ export class FeedbackService {
       });
   }
 
+  /**
+   * 網站遊戲內回饋（站長 2026-11-26「遊戲中的對話你也記得讀取並學習 有可能是玩家對你玩法的反饋」，src/inGameFeedback）：
+   * 已經排好格式的一則（`📮 遊戲內回饋（房間…，第N局任務M，K家→提到 …）：…`，只有座位、沒有名字和 id）送到同一個管理員頻道。
+   * 不等 Discord、從不丟錯；log 只有固定文字。結果只算數字（snapshot().inGameForwards）。
+   */
+  recordInGameFeedback(content: string): Promise<FeedbackForwardOutcome> {
+    return this.send('site', content, 'in-game feedback')
+      .catch((err: unknown): FeedbackForwardOutcome => {
+        this.logger.error(`forwarding in-game feedback failed: ${describeError(err)}`);
+        return 'failed';
+      })
+      .then((outcome) => {
+        if (outcome !== 'none') this.inGameForwards[outcome] += 1;
+        return outcome;
+      });
+  }
+
   snapshot(): FeedbackSnapshot {
-    return { weeks: this.counter.snapshot(), opinions: { ...this.opinions }, simFeedback: { ...this.simFeedback } };
+    return {
+      weeks: this.counter.snapshot(),
+      opinions: { ...this.opinions },
+      simFeedback: { ...this.simFeedback },
+      inGameForwards: { ...this.inGameForwards },
+    };
   }
 
   private forward(platform: FeedbackPlatform, content: string): Promise<FeedbackForwardOutcome> {
@@ -236,7 +264,7 @@ export class FeedbackService {
   }
 
   /** 一則（已經排好格式的）文字送到管理員頻道：頻道、每小時上限、失敗時還回額度，/意見 和模擬瓦回饋共用。 */
-  private async send(platform: FeedbackPlatform, content: string, what: string): Promise<FeedbackForwardOutcome> {
+  private async send(platform: FeedbackPlatform | 'site', content: string, what: string): Promise<FeedbackForwardOutcome> {
     const channelId = this.channelId();
     if (!channelId || !this.discord) {
       this.logger.warn(`${what} from ${platform} acknowledged but not forwarded (no Discord channel / sender)`);
