@@ -13192,7 +13192,8 @@ A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）照舊是硬�
 
 #### 5. 不變量與情境題庫
 
-NOTE_INV
+- 不變量（`invariantHarness.ts`，前 300 局重播＋探針＋300 局自我對打，種子 791001）四組：新預設（`earlyGo84=0.3`、`redSixWhite84=1`、`redWhiteScope84=4`）、新預設＋全部開關開（`earlyGoOn84=0.3`、`innerBlackBar84=0.85`、`redTailWhite84=1`）、一般真人桌（`HUMAN_READING`，`earlyGo84=0`）、一般真人桌＋全部開關開——**每一條規則（84 列）的機器人違反都是 0**；A0、A1 的 INV-B1／INV-B2 0 違反（重播 3,531／5,945 個機會；自我對打 3,173–3,520／3,919–5,358）；探針「派出確定會失敗的隊」「隊上有確定紅」0／3,772；ForwardAgent 退回 0。
+- 情境題庫（`scenarioSuite.ts --quiet`）：新預設、全部開關開兩組，硬規則（A0 15 題、A1 11 題、站長寫死的裁定 10 題）100%，其餘各類和第 83 回合相同。
 
 #### 6. 本回合的結果
 
@@ -13227,7 +13228,11 @@ NOTE_INV
 
 #### 7. 驗收（測試）與可重現
 
-NOTE_TESTS
+- 新增 `Round84.test.ts`（11 個：開關與預設——舊表全關、基準線 B1 0.3／R2a 1、4，真人桌 B1 0、R2a 跟著；解析；紅方聽牌的格子；B1／B2 的量是機率、自己是之後的隊長時「後面全是紅」= 0；照三個條件開、位元 1／2／4／8／16、梅林看得到紅或在隊上不做、巢狀的忠臣視角不做；`innerBlackBar84` 只在紅方聽牌、`bayesVoteCriteria` 跟著；ForwardAgent 藍方開的地方投白；紅方的格子、R1 尾派是看得到的紅不做、R2 估票、位元 1／4；ForwardAgent R1 投白）；`AgentTuning.test`（8 個新開關列為數值開關、預設描述加三個）；`humanProfile.test`（`PROFILE_KEYS` 上限 24）。
+- 伺服器完整測試 313 個檔案：310 過、1 略過、2 個在機器滿載時逾時（`SimBank`、`ThreadsPublish`），單獨重跑 93／93 通過；`tsc --noEmit`（server 與 scripts）乾淨；新檔與改到的檔 eslint 0 個錯誤；`build_ai_history.ts` 重新產生（新里程碑 r84 兩筆）。
+- 開關全關時 582001 第 0–39 局 40／40 和第 83 回合的基準線相同；新預設 583001 第 0–39 局 40／40 和組合組 BRc 相同。
+- 隱私：腳本的輸入輸出只有座位、角色、隊伍、票、任務牌、湖與比例，沒有玩家名。
+- 新檔：`src/ai/Round84.ts`、`src/ai/Round84.test.ts`、`scripts/matchPointVoteStudy84.py`、`scripts/voteGate84.py`、`docs/ai/gap/r84-match-point-votes.md`。改到：`ForwardAgent.ts`（藍方在 `loyalTailWhite` 之前、紅方在 `redKeyCrowd69` 之前各多一步，關的時候不走）、`BlueRound33.ts`（`innerBlackBar84`）、`AgentTuning.ts`（8 個開關、基準線預設）、`humanProfile.ts`（真人桌 `earlyGo84: 0`）。自我對打用 `selfplay-runs-r71` 分支的 `sp.ts`（本機多印 `round84Stats`，沒有改對局）。
 
 ```
 cd packages/server
