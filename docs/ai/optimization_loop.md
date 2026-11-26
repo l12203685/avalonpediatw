@@ -13241,7 +13241,7 @@ A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）照舊是硬�
 #### 8. 驗收（測試）與可重現
 
 - 新增 `Round85.test.ts`（10 個：開關存在、預設 0、四種桌 0、解析與描述；`r1Split85` 的格——第 1 局成功、前一局包含整個第 1 局的隊而且有失敗牌、位元 2；只有忠臣／派西（位元 1 加梅林）、紅方不算；挑法：自己在隊上、不含整個第 1 局的隊、λ = 1 時留著、隊長的票擋下全部替代時不改；關的時候和預設逐題相同；`failTest85` 的格與挑法；模擬瓦的路；7 題 `r85` 情境題在四種桌的結果）；`AgentTuning.test`（四個新開關列為數值開關）；`scenarioSuite.test`（`teamHasSome`）。
-- 伺服器完整測試 {fulltest}；`tsc --noEmit`（server 與 scripts）乾淨；新檔案與改到的檔案 eslint 0 個錯誤。
+- 伺服器完整測試 313 個檔案（4,967 個測試：4,940 通過、27 略過）；第一次跑有 2 個不過——`WebAiHistory`（要重產 `aiHistory.json`，已重產）與 `SimBank` 的性質測試（機器滿載時超過 300 秒）——兩個單獨重跑都通過；`tsc --noEmit`（server 與 scripts）乾淨；新檔案與改到的檔案 eslint 0 個錯誤。
 - 隱私：腳本只輸出合計；網站百科AI 對局的 trace 是網站公開的（真人暱稱已經拿掉），沒有進 repo。
 - 新檔：`src/ai/Round85.ts`、`src/ai/Round85.test.ts`、`scripts/r1AnchorStudy85.py`、`scripts/r1AnchorStudy85.ts`、`docs/ai/gap/r85-r1-anchor.md`、`docs/ai/gap/r85-r1-anchor-diag.md`。改到：`ForwardAgent.ts`（`decideFlow` 多一步 `r1Split85`、`post56` 多一步 `failTest85`，關的時候不走）、`AgentTuning.ts`（四個開關）、`scenarios/scenarioSuite.ts`（`teamHasSome`）、`scenarios/fixtures.json`（7 題）。
 
