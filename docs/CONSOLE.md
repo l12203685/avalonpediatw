@@ -50,6 +50,11 @@
 | 每小時 :07 | `threads-publish.yml` | 讀 main 的 `threads_live.json`、`threads_picks.json`、`threads_template.json`、留言檔；試跑或正式發，狀態寫 `threads-state` |
 | 每天（Claude 同步） | **console:apply → console:export** | 先把主控台 db 的編輯寫回 repo（PR），合併後從 main 匯出、重新發佈主控台 |
 
+**每天早上同步時順便看模擬瓦的玩家回饋**（2026-11-26）：主控台讀不到 Discord，所以只看公開的 `/api/bots/status`（只有數字）：
+`simulation.counts.feedback` = `{ recorded, bad, flaggedGames }`（記下幾則、幾則說爛局或紀錄有問題、幾局被 2 位以上說爛局）、
+`feedback.simFeedback.sent`（轉到管理員頻道幾則）。數字不是 0 就在同步摘要裡寫一行，提醒站長去「大劍管理員」看 `🎲 模擬瓦回饋` 那幾則（原文和題號只在那裡，不進 repo、不進主控台）；
+`flaggedGames > 0` 時寫明「有局被 2 位以上說爛局，要不要加進 `sim_bank_exclude.json` 等站長決定」。計數重啟（每次部署後端）就歸零，所以要在當天看。
+
 同步的順序固定是「先 apply、再 export」：export 只反映 main 上已經有的東西，所以 apply 的 PR 合併前，主控台會同時顯示「站長已裁定（db）」和「main 還沒套用（鏡像）」，這是對的狀態，不要在主控台裡把它抹平。
 
 ## 3. 主控台鏡像：`console:export`
