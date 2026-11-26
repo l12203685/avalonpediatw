@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "name": "怯行護符",
+  "author": "f093285329000-cmd",
+  "style": "像藿藿一樣膽小謹慎，多數時候不敢冒險、容易緊張而派票略顯矛盾，也容易被場上語氣影響；但當局面逼她必須扛責（尾派或危急關鍵）時，會鼓起勇氣派出推測勝率較高的車，並懂得把看起來能外白的人放車外協助。",
+  "overrides": {
+    "redHideHuman": true,
+    "redNormalVote": 0.85,
+    "redCleanWhite": 0.15,
+    "redCleanApprove": 0.1,
+    "redStackRate65": 0.35,
+    "redR1Teammate": true,
+    "oberonR1AlwaysFail64": 0,
+    "goodCleanVote": 0.25,
+    "goodKeyVote": 0.2,
+    "goodTailVote": 0.75,
+    "merlinNormalVote": 0.85,
+    "merlinCover77": 0.1,
+    "percivalNoThumbsR1": true,
+    "assassinModel": true
+  },
+  "sides": {
+    "good": {
+      "goodCleanVote": 0.2,
+      "goodKeyVote": 0.15,
+      "goodTailVote": 0.8,
+      "merlinNormalVote": 0.75,
+      "merlinCover77": 0.05,
+      "percivalNoThumbsR1": true
+    },
+    "evil": {
+      "redNormalVote": 0.9,
+      "redCleanWhite": 0.05,
+      "redCleanApprove": 0.05,
+      "redStackRate65": 0.25,
+      "redR1Teammate": true
+    }
+  },
+  "roles": {
+    "merlin": {
+      "merlinNormalVote": 0.8,
+      "merlinCover77": 0.15,
+      "goodCleanVote": 0.25,
+      "goodKeyVote": 0.2,
+      "goodTailVote": 0.75
+    },
+    "percival": {
+      "percivalNoThumbsR1": true,
+      "goodCleanVote": 0.2,
+      "goodKeyVote": 0.15,
+      "goodTailVote": 0.8
+    },
+    "loyal": {
+      "goodCleanVote": 0.15,
+      "goodKeyVote": 0.1,
+      "goodTailVote": 0.85
+    },
+    "assassin": {
+      "assassinModel": true,
+      "redNormalVote": 0.85,
+      "redCleanWhite": 0.1,
+      "redCleanApprove": 0.1
+    },
+    "morgana": {
+      "redNormalVote": 0.9,
+      "redCleanWhite": 0.05,
+      "redCleanApprove": 0.05,
+      "redStackRate65": 0.3
+    },
+    "mordred": {
+      "redNormalVote": 0.85,
+      "redCleanWhite": 0.1,
+      "redCleanApprove": 0.1,
+      "redStackRate65": 0.3
+    },
+    "oberon": {
+      "oberonR1AlwaysFail64": 0,
+      "redNormalVote": 0.95,
+      "redCleanWhite": 0,
+      "redCleanApprove": 0,
+      "redStackRate65": 0.2
+    }
+  }
+}
