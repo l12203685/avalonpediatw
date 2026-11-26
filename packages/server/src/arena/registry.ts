@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { validateProfile, validateRoster, BOT_ID_RE, type BotProfile } from './profile';
 
-export type BotSource = 'reference' | 'example' | 'community' | 'extra';
+export type BotSource = 'reference' | 'example' | 'house' | 'community' | 'extra';
 
 export interface RegisteredBot {
   id: string;
@@ -71,6 +71,7 @@ export function checkBotFolder(folder: string, opts: { house?: boolean } = {}): 
 
 /** 官方 AI騎士 的資料夾（依玩家風格建立；作者固定「AI騎士團」，見 profile.ts `HOUSE_AUTHOR`）。 */
 export const HOUSE_DIR = '_knights';
+export const HOUSE_TITLE = 'AI騎士團';
 
 /** 這個資料夾在 `community-bots/_knights/` 底下嗎（只有這裡的 profile 可以用「AI騎士」開頭的名字）。 */
 export function isHouseFolder(folder: string): boolean {
@@ -92,10 +93,10 @@ export interface Roster {
 }
 
 /**
- * 讀整個名冊：百科AI（參考點）→ 示範對手 → 社群機器人 → 外部清單。
- * 社群資料夾以 `_` 開頭的不算參賽（`_template`、`_examples`）。
+ * 讀整個名冊：百科AI（參考點）→ 示範對手 → 官方 AI騎士（`_knights/`）→ 社群機器人 → 外部清單。
+ * 社群資料夾以 `_` 開頭的不算一般參賽者（`_template`；`_examples`、`_knights` 另外讀）。
  */
-export function loadRoster(opts: { dir?: string; extra?: readonly RegisteredBot[]; includeExamples?: boolean } = {}): Roster {
+export function loadRoster(opts: { dir?: string; extra?: readonly RegisteredBot[]; includeExamples?: boolean; includeHouse?: boolean } = {}): Roster {
   const dir = opts.dir ?? defaultCommunityDir();
   const bots: RegisteredBot[] = [{ id: REFERENCE_ID, source: 'reference', profile: null }];
   const rejected: Roster['rejected'] = [];
@@ -106,12 +107,30 @@ export function loadRoster(opts: { dir?: string; extra?: readonly RegisteredBot[
       else rejected.push({ id: `_examples/${name}`, errors: c.errors });
     }
   }
+  if (opts.includeHouse !== false) {
+    for (const name of subfolders(path.join(dir, HOUSE_DIR))) {
+      const c = checkBotFolder(path.join(dir, HOUSE_DIR, name), { house: true });
+      if (c.ok && c.profile) bots.push({ id: name, source: 'house', profile: c.profile, title: HOUSE_TITLE });
+      else rejected.push({ id: `${HOUSE_DIR}/${name}`, errors: c.errors });
+    }
+    // 官方 AI騎士 不受「一人一隻」限制，但名字一樣不能重複（重複的、後面的不收）。
+    const house = bots.filter((b) => b.source === 'house');
+    const houseErrors = validateRoster(house.map((b) => ({ id: b.id, profile: { ...b.profile!, author: b.id } })));
+    const dupHouse = new Set(houseErrors.map((e) => e.split('：')[0]));
+    for (const id of dupHouse) {
+      rejected.push({ id: `${HOUSE_DIR}/${id}`, errors: houseErrors.filter((e) => e.startsWith(`${id}：`)) });
+      bots.splice(bots.findIndex((b) => b.source === 'house' && b.id === id), 1);
+    }
+  }
+  const houseNames = new Set(bots.filter((b) => b.source === 'house').map((b) => b.profile!.name.toLowerCase().replace(/\s+/g, '')));
   const community: RegisteredBot[] = [];
   for (const name of subfolders(dir)) {
     if (name.startsWith('_')) continue;
     const c = checkBotFolder(path.join(dir, name));
-    if (c.ok && c.profile) community.push({ id: name, source: 'community', profile: c.profile });
-    else rejected.push({ id: name, errors: c.errors });
+    if (!c.ok || !c.profile) { rejected.push({ id: name, errors: c.errors }); continue; }
+    if (bots.some((b) => b.id === name)) { rejected.push({ id: name, errors: [`資料夾名稱「${name}」和官方的機器人重複`] }); continue; }
+    if (houseNames.has(c.profile.name.toLowerCase().replace(/\s+/g, ''))) { rejected.push({ id: name, errors: [`名字「${c.profile.name}」和官方的 AI騎士 重複`] }); continue; }
+    community.push({ id: name, source: 'community', profile: c.profile });
   }
   const rosterErrors = validateRoster(community.map((b) => ({ id: b.id, profile: b.profile! })));
   // 名字重複／一人兩隻：後面的（資料夾名稱排序）不收。

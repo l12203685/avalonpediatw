@@ -24,6 +24,10 @@ export interface BotProfile {
   author: string;
   /** 打法說明（作者自己寫的一段話）。 */
   style: string;
+  /** 風格標籤（可選，最多 8 個字；例如依玩家風格建立的 AI騎士 的「穩健」「激進鐵壁」）。 */
+  tag?: string;
+  /** 官方的 AI騎士（只有 `community-bots/_knights/` 裡的可以、而且一定要寫 `true`；作者固定 `HOUSE_AUTHOR`）。 */
+  official?: boolean;
   /** 所有座位都套用的開關。 */
   overrides?: KnobValues;
   /** 只在這一邊套用（後蓋前：overrides → sides → roles）。 */
@@ -43,10 +47,12 @@ export const BOT_ID_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 export const GITHUB_HANDLE_RE = /^(?!-)[A-Za-z0-9-]{1,39}$/;
 export const NAME_MAX = 24;
 export const STYLE_MAX = 300;
+export const TAG_MAX = 8;
 
 /**
- * 官方的 AI騎士（`community-bots/_knights/`，依玩家風格建立；站長 2026-11-26）：作者固定是這個名字，
- * 不是 GitHub 帳號。社群投稿不能用這個作者、也不能用「AI騎士」開頭的名字（不能冒充官方騎士）。
+ * 官方的 AI騎士（`community-bots/_knights/`，依玩家風格建立；站長 2026-11-26）：profile 寫 `"official": true`、
+ * 作者固定是這個名字（不是 GitHub 帳號），不受「一人一隻」限制。社群投稿不能寫 `official`、不能用這個作者、
+ * 也不能用「AI騎士」開頭的名字（不能冒充官方騎士）。
  */
 export const HOUSE_AUTHOR = 'AI騎士團';
 /** 官方騎士名字的開頭（比對前先 NFKC、轉小寫、拿掉空白和分隔符號：「ＡＩ 騎士」「ai_騎士」都算）。 */
@@ -71,7 +77,7 @@ export function isHouseKnightName(name: string): boolean {
   return foldName(name).startsWith(HOUSE_NAME_PREFIX);
 }
 
-const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'overrides', 'sides', 'roles']);
+const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles']);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -134,8 +140,10 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
     const hit = RESERVED_NAME_PARTS.find((p) => folded.includes(p));
     if (hit) errors.push(`name 不能包含「${hit}」（保留給官方）`);
     // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}。「AI騎士」開頭的名字只給官方的風格騎士（_knights/）。
-    if (!opts.house && isHouseKnightName(name)) errors.push('name 不能用「AI騎士」開頭（保留給官方的 AI騎士）');
+    if (!opts.house && isHouseKnightName(name)) errors.push('name 不能用「AI騎士」開頭（AI騎士_ 這類名字保留給官方的 AI騎士）');
   }
+  if (opts.house && raw.official !== true) errors.push('官方 AI騎士 的 profile 要寫 "official": true');
+  if (!opts.house && raw.official !== undefined) errors.push('official 只給官方的 AI騎士（community-bots/_knights/）用');
   let author: string | undefined;
   if (opts.house) {
     if (raw.author !== HOUSE_AUTHOR) errors.push(`官方 AI騎士 的 author 要是「${HOUSE_AUTHOR}」`);
@@ -144,6 +152,7 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
     errors.push('author 要是你的 GitHub 帳號（英文、數字、減號，不含 @）');
   } else author = raw.author;
   const style = checkText('style', raw.style, STYLE_MAX, errors, { multiline: true });
+  const tag = raw.tag === undefined ? undefined : checkText('tag', raw.tag, TAG_MAX, errors);
   const overrides = checkKnobs('overrides', raw.overrides, errors, warnings);
   let sides: BotProfile['sides'];
   if (raw.sides !== undefined) {
@@ -175,6 +184,8 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   if (errors.length === 0 && knobCount === 0) warnings.push('沒有改任何開關：這隻會和AI騎士 打得一模一樣');
   if (errors.length > 0) return { ok: false, errors, warnings };
   const profile: BotProfile = { schema: PROFILE_SCHEMA_VERSION, name: name!, author: author!, style: style! };
+  if (tag) profile.tag = tag;
+  if (opts.house) profile.official = true;
   if (overrides) profile.overrides = overrides;
   if (sides) profile.sides = sides;
   if (roles) profile.roles = roles;

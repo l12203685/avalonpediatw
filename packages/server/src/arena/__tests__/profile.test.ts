@@ -95,7 +95,7 @@ describe('validateProfile', () => {
     // 舊的保留字照舊
     expect(validateProfile({ ...base, name: '我是百科ＡＩ' }, 'my-bot').errors.join()).toContain('百科ai');
     // 官方的風格騎士（_knights/）：可以用 AI騎士 開頭，作者固定 AI騎士團
-    const house = { ...base, name: 'AI騎士_穩健_01', author: HOUSE_AUTHOR };
+    const house = { ...base, name: 'AI騎士_穩健_01', author: HOUSE_AUTHOR, official: true };
     expect(validateProfile(house, 'k-steady-01', { house: true }).ok).toBe(true);
     expect(validateProfile({ ...house, author: 'octocat' }, 'k-steady-01', { house: true }).errors.join()).toContain(HOUSE_AUTHOR);
     // 官方騎士也不能含「百科AI」
@@ -112,7 +112,7 @@ describe('validateProfile', () => {
         fs.writeFileSync(path.join(folder, 'profile.json'), JSON.stringify(profile));
         return folder;
       };
-      const official = write(path.join(dir, HOUSE_DIR, 'k-steady-01'), { ...base, name: 'AI騎士_穩健_01', author: HOUSE_AUTHOR });
+      const official = write(path.join(dir, HOUSE_DIR, 'k-steady-01'), { ...base, name: 'AI騎士_穩健_01', author: HOUSE_AUTHOR, official: true });
       const fake = write(path.join(dir, 'k-steady-01'), { ...base, name: 'AI騎士_穩健_01' });
       expect(isHouseFolder(official)).toBe(true);
       expect(isHouseFolder(fake)).toBe(false);

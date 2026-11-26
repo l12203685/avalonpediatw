@@ -8,6 +8,7 @@ import { ARENA_KNOBS } from './knobs';
 import { profileKnobSummary } from './profile';
 import { REFERENCE_ID, REFERENCE_NAME, type RegisteredBot } from './registry';
 import type { Outcome, TableResult } from './table';
+import type { RunKind, Trend } from './daily';
 
 // ── 座位安排 ─────────────────────────────────────────────
 
@@ -131,11 +132,13 @@ export interface LeaderboardBot {
   rank: number;
   id: string;
   name: string;
-  /** 作者自己選擇公開的 GitHub 帳號；百科AI 與示範對手為 null。 */
+  /** 作者自己選擇公開的 GitHub 帳號；百科AI、示範對手與官方 AI騎士 為 null。 */
   author: string | null;
   source: RegisteredBot['source'];
   /** 稱號（侍從／騎士／圓桌騎士…，之後的「代理騎士」用）；沒有就是 null。 */
   title: string | null;
+  /** 風格標籤（依玩家風格建立的 AI騎士 才有）；沒有就是 null。 */
+  tag: string | null;
   style: string;
   knobs: string[];
   rating: { overall: SideRating; red: SideRating; blue: SideRating };
@@ -161,6 +164,26 @@ export interface Leaderboard {
   rejected: { id: string; errors: string[] }[];
   /** 開放的開關（網站的說明與「給你的 AI 的提示」用，和 knobs.ts 同一份）。 */
   knobCatalog: KnobCatalogEntry[];
+  /** 每日大賽（`arena:daily aggregate`）才有：今天與累計局數、這一輪怎麼跑的。 */
+  daily?: DailyInfo;
+  /** 每日大賽才有：最近幾天的總分走勢。 */
+  trend?: Trend;
+}
+
+export interface DailyInfo {
+  /** 台北日期。 */
+  date: string;
+  /** 這一輪：每日排程／合併到 main 後補跑／手動。 */
+  kind: RunKind;
+  gamesToday: number;
+  runsToday: number;
+  /** 開始每日大賽以來總共打了幾局（歷史快照加總）。 */
+  gamesTotal: number;
+  shards: number;
+  /** 某一片失敗時少掉的局數（0 = 全部到齊）。 */
+  missingGames: number;
+  gamesPerSecPerRunner: number;
+  slowestShardSec: number;
 }
 
 export interface KnobCatalogEntry {
@@ -224,6 +247,7 @@ export function buildLeaderboard(args: {
       author: b.source === 'community' || b.source === 'extra' ? b.profile?.author ?? null : null,
       source: b.source,
       title: b.title ?? null,
+      tag: b.profile?.tag ?? null,
       style: b.profile?.style ?? REFERENCE_STYLE,
       knobs: b.profile ? profileKnobSummary(b.profile) : [],
       rating: { overall: roundSide(r.overall), red: roundSide(r.red), blue: roundSide(r.blue) },

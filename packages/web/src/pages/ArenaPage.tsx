@@ -4,13 +4,13 @@ import { Check, Copy, ExternalLink, Loader2, RefreshCw, Swords, Trophy } from 'l
 import '../i18n/arena';
 import { ARENA_NS } from '../i18n/arena';
 import {
-  BOTS_FOLDER_URL, BOTS_README_URL, TEMPLATE_URL, fetchLeaderboard, fmtInterval, fmtPct, fmtRating, knobLines,
-  type ArenaBot, type ArenaLeaderboard,
+  BOTS_FOLDER_URL, BOTS_README_URL, TEMPLATE_URL, fetchLeaderboard, fmtCount, fmtInterval, fmtPct, fmtRating, fmtTaipeiTime,
+  knobLines, sparkPoints, type ArenaBot, type ArenaLeaderboard, type ArenaTrend,
 } from '../utils/arena';
 
 /**
  * AI 擂台（#arena；站長 2026-11-26「提供個人AI的雛形 … 以後就可以是一堆自建AI對戰」）。不用登入。
- * 排行榜在瀏覽器裡讀 GitHub main 上的 arena/leaderboard.json（每週由 arena-tournament workflow 產生）。
+ * 排行榜在瀏覽器裡讀 GitHub main 上的 arena/leaderboard.json（每天由 arena-tournament workflow 產生）。
  * 說明文件：community-bots/README.md、docs/BOTS.md〈AI 擂台〉。
  */
 export default function ArenaPage(): JSX.Element {
@@ -70,12 +70,23 @@ export default function ArenaPage(): JSX.Element {
         {status === 'failed' && <p className="text-xs text-zinc-400">{t('loadFailed')}</p>}
         {status === 'ok' && board && (
           <>
-            <p className="mb-2 text-[11px] text-zinc-500">
-              {t('updated', { date: board.generatedAt.slice(0, 10), games: board.games, sizes: board.sizes.join('/') })}
-            </p>
-            <BoardTable bots={board.bots} />
+            {board.daily ? (
+              <div className="mb-2 space-y-1" data-testid="arena-daily">
+                <div className="flex flex-wrap gap-1.5 text-[11px] tabular-nums">
+                  <span className="rounded-md border border-emerald-800/70 bg-emerald-950/40 px-2 py-0.5 text-emerald-200">{t('gamesToday', { today: fmtCount(board.daily.gamesToday) })}</span>
+                  <span className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-zinc-200">{t('gamesTotal', { total: fmtCount(board.daily.gamesTotal) })}</span>
+                  <span className="px-0.5 py-0.5 text-zinc-500">{t('updatedDaily', { time: fmtTaipeiTime(board.generatedAt) })}</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-zinc-500">{t('dailyHint')}</p>
+              </div>
+            ) : (
+              <p className="mb-2 text-[11px] text-zinc-500">
+                {t('updated', { date: board.generatedAt.slice(0, 10), games: board.games, sizes: board.sizes.join('/') })}
+              </p>
+            )}
+            <BoardTable bots={board.bots} trend={board.trend} />
             <ul className="space-y-2 md:hidden">
-              {board.bots.map((b) => <BotCard key={b.id} bot={b} />)}
+              {board.bots.map((b) => <BotCard key={b.id} bot={b} trend={board.trend} />)}
             </ul>
           </>
         )}
@@ -146,8 +157,29 @@ function BotName({ bot }: { bot: ArenaBot }): JSX.Element {
   );
 }
 
-function BoardTable({ bots }: { bots: ArenaBot[] }): JSX.Element {
+/** 一隻機器人最近幾天的總分走勢（小折線，至少兩天有分數才畫）。 */
+function Spark({ trend, id }: { trend?: ArenaTrend; id: string }): JSX.Element | null {
   const { t } = useTranslation(ARENA_NS);
+  const values = trend?.ratings[id];
+  if (!trend || !values) return null;
+  const w = 64; const h = 18;
+  const points = sparkPoints(values, w, h);
+  if (!points) return null;
+  const known = values.filter((v): v is number => v !== null);
+  const first = known[0]; const last = known[known.length - 1];
+  const color = last > first + 5 ? 'text-emerald-300' : last < first - 5 ? 'text-rose-300' : 'text-zinc-400';
+  const label = `${t('trendTitle', { days: trend.dates.length })}：${known.map((v) => Math.round(v)).join(' → ')}`;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className={`inline-block align-middle ${color}`} role="img" aria-label={label} data-testid="arena-spark">
+      <title>{label}</title>
+      <polyline points={points} fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BoardTable({ bots, trend }: { bots: ArenaBot[]; trend?: ArenaTrend }): JSX.Element {
+  const { t } = useTranslation(ARENA_NS);
+  const showTrend = !!trend && trend.dates.length >= 2;
   const th = 'px-2 py-1.5 text-left font-semibold text-zinc-400 whitespace-nowrap';
   const td = 'px-2 py-1.5 align-top whitespace-nowrap tabular-nums';
   return (
@@ -163,6 +195,7 @@ function BoardTable({ bots }: { bots: ArenaBot[] }): JSX.Element {
             <th className={th}>{t('colRedWin')}</th>
             <th className={th}>{t('colBlueWin')}</th>
             <th className={th}>{t('colSeats')}</th>
+            {showTrend && <th className={th}>{t('colTrend')}</th>}
           </tr>
         </thead>
         <tbody>
@@ -183,6 +216,7 @@ function BoardTable({ bots }: { bots: ArenaBot[] }): JSX.Element {
               <td className={td}>{fmtPct(b.red.winRate)}</td>
               <td className={td}>{fmtPct(b.blue.winRate)}</td>
               <td className={td}>{b.seats}</td>
+              {showTrend && <td className={td}>{b.source !== 'reference' && <Spark trend={trend} id={b.id} />}</td>}
             </tr>
           ))}
         </tbody>
@@ -191,7 +225,7 @@ function BoardTable({ bots }: { bots: ArenaBot[] }): JSX.Element {
   );
 }
 
-function BotCard({ bot: b }: { bot: ArenaBot }): JSX.Element {
+function BotCard({ bot: b, trend }: { bot: ArenaBot; trend?: ArenaTrend }): JSX.Element {
   const { t } = useTranslation(ARENA_NS);
   return (
     <li className="rounded-lg border border-zinc-800 bg-black/30 p-2.5 text-xs">
@@ -201,7 +235,10 @@ function BotCard({ bot: b }: { bot: ArenaBot }): JSX.Element {
           <BotName bot={b} />
         </div>
         <div className="flex-shrink-0 text-right">
-          <span className="text-base font-bold tabular-nums">{fmtRating(b.rating.overall)}</span>
+          <span className="flex items-center justify-end gap-1.5">
+            {b.source !== 'reference' && <Spark trend={trend} id={b.id} />}
+            <span className="text-base font-bold tabular-nums">{fmtRating(b.rating.overall)}</span>
+          </span>
           {b.source !== 'reference' && <span className="block text-[10px] text-zinc-500 tabular-nums">{fmtInterval(b.rating.overall)}</span>}
         </div>
       </div>

@@ -26,7 +26,7 @@ const zhTW = {
   mine: {
     title: '我的騎士',
     soon: '還在做',
-    body: '之後登入就能擁有一隻自己的 AI騎士：用一句話描述你想要的打法（例如「紅方再大膽一點」「不要那麼容易被看穿」），或看它打完的局寫回饋，慢慢把它調成你的風格。它會自動參加每週擂台。',
+    body: '之後登入就能擁有一隻自己的 AI騎士：用一句話描述你想要的打法（例如「紅方再大膽一點」「不要那麼容易被看穿」），或看它打完的局寫回饋，慢慢把它調成你的風格。它會自動參加每天的擂台。',
     titles: '成長稱號：侍從 → 騎士 → 圓桌騎士（看打過的局數與分數）。',
     nowTitle: '現在可以先做的事',
     nowArena: '去擂台：照範本做一隻自己的機器人（要會用 GitHub，或請你的 AI 幫忙）',
@@ -53,7 +53,7 @@ const en: typeof zhTW = {
   mine: {
     title: 'My knight',
     soon: 'Coming soon',
-    body: 'Soon you can sign in and own an AI Knight: describe the style you want in your own words (e.g. "bolder as red", "harder to read"), or leave feedback on its games, and tune it step by step. It joins the weekly arena automatically.',
+    body: 'Soon you can sign in and own an AI Knight: describe the style you want in your own words (e.g. "bolder as red", "harder to read"), or leave feedback on its games, and tune it step by step. It joins the daily arena automatically.',
     titles: 'Ranks: Squire → Knight → Knight of the Round Table (by games played and rating).',
     nowTitle: 'What you can do now',
     nowArena: 'Arena: build your own bot from the template (needs GitHub, or ask your AI to help)',

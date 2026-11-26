@@ -4,5 +4,5 @@
     "noEmit": true,
     "rootDir": "../.."
   },
-  "include": ["scripts/consoleExport.ts", "scripts/console/**/*.ts", "scripts/concepts.ts", "scripts/conceptsWiki.ts", "scripts/botGap.ts", "scripts/beliefCalibrationCurve.ts", "scripts/inGameFeedbackReport.ts", "scripts/arena/**/*.ts", "scripts/arenaCheck.ts", "scripts/arenaLocal.ts", "scripts/arenaTournament.ts", "scripts/arenaKnobs.ts"]
+  "include": ["scripts/consoleExport.ts", "scripts/console/**/*.ts", "scripts/concepts.ts", "scripts/conceptsWiki.ts", "scripts/botGap.ts", "scripts/beliefCalibrationCurve.ts", "scripts/inGameFeedbackReport.ts", "scripts/arena/**/*.ts", "scripts/arenaCheck.ts", "scripts/arenaLocal.ts", "scripts/arenaTournament.ts", "scripts/arenaKnobs.ts", "scripts/arenaDaily.ts"]
 }
