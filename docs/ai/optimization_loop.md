@@ -13389,7 +13389,7 @@ E12（第 1、2 局門檻內的拇指）與 E2g：**基準線 → BE12 −0.54 �
   校準單調、`succ88`（看得到的紅照那局要幾張失敗、莫德雷德的機率）、`p3b88`；**世界線的隊長探針和「把提議接在紀錄後面整個重算」到小數 9 位相同**；E 是機率、莫德雷德的分布加起來是 1、不是梅林 null；
   P(三藍) 各分支是機率、強制局與位元 8 ρ = 1；關、範圍外回傳同一個物件；開著時挑到的是分數最高的那支、梅林在隊上、人數對；拇指只經過第 83 回合的門檻（位元 16 例外）、位元 32 不帶、位元 128 只多拇指、
   λ = 0 關、τ > 0 抽到的是候選之一而且同一個觀察結果相同、不放的人與他自己的閘門有效）；`AgentTuning.test`（三個新開關列為數值開關）。
-- 伺服器完整測試 321 個檔案：320 過、1 略過（5,135 個測試通過、27 個略過；`WebAiHistory` 在重新產生 `aiHistory.json` 之後通過）；`tsc --noEmit`（server 與 scripts）乾淨；新檔與改到的檔 eslint 0 個錯誤（`ForwardAgent.ts` 原本就有的 7 個警告）；`build_ai_history.ts` 重新產生（沒有新里程碑）。
+- 伺服器完整測試 321 個檔案：320 過、1 略過（5,109 個測試通過、27 個略過；`WebAiHistory` 在重新產生 `aiHistory.json` 之後通過）；`tsc --noEmit`（server 與 scripts）乾淨；新檔與改到的檔 eslint 0 個錯誤（`ForwardAgent.ts` 原本就有的 7 個警告）；`build_ai_history.ts` 重新產生（沒有新里程碑）。
 - 開關關時逐局相同：583001 第 0–39 局 `merlinEvAssassin88=0` 40／40 和第 84 回合的組合組 BRc 相同（關的時候 `ev88Applies` 為假，`ForwardAgent` 的路徑和原本一樣）。
 - 隱私：腳本的輸入輸出只有座位、角色、隊伍、票、任務牌、湖、刺殺與比例；「強的真人梅林」的局號旗標要讀玩家名才產生得出來，沒有進 repo。
 - 新檔：`src/ai/Round88.ts`、`src/ai/Round88.test.ts`、`scripts/merlinEvStudy88.ts`、`scripts/merlinEvStudy88.py`、`docs/ai/gap/r88-merlin-ev.md`、`docs/ai/gap/r88-calib-raw.md`。
