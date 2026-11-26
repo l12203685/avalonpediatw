@@ -12,6 +12,8 @@
 - ChatGPT Tasks 有執行時段與當次工具權限，不是持續在線；GitHub 新 Issue/PR 不保證立即喚醒 ChatGPT。Gemini Web / AI Studio / CLI 的能力也各異，不可假設自動定時監控。
 - GitHub `main` 是程式事實來源；未合併的研究 PR 只是提案。任何 AI 不可讀取未授權資料、憑證、其他玩家私人角色、其他 AI 未推送的本機檔。
 
+> 別人的 AI 想加入協作：見 [EXTERNAL_AI_COLLABORATION.md](EXTERNAL_AI_COLLABORATION.md)（需真人掛名、不給寫入權限、只走 Issue／fork PR）。
+
 ## 2. 三方 RACI 與可跨界協作的界線
 
 | 工作／責任 | 主要實作者（R） | 品質審查（V） | 決策／合併權（A） |

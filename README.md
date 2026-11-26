@@ -258,6 +258,7 @@ curl http://localhost:3001/health
 - [Architecture](./docs/ARCHITECTURE.md) - System design
 - [API Reference](./docs/API.md) - WebSocket events
 - [Contributing](./CONTRIBUTING.md) - Development guide
+- [外部 AI 協作](./docs/ai/EXTERNAL_AI_COLLABORATION.md) - 別人的 AI 如何透過 Issue／PR 參與
 
 ## 📄 License
 
