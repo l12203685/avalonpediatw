@@ -1,0 +1,26 @@
+{
+  "_comment": "AI騎士的名字（站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}）。@avalon/shared knights.ts 與 generate_cache.py 的 knight_* 函式都對這份測：display = 顯示的名字、stats = 戰績上算哪一位（null = 不是機器人）、bot = 是不是我們的機器人。",
+  "cases": [
+    { "name": "百科AI", "display": "AI騎士_百科", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科AI_0", "display": "AI騎士_百科_00", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科AI_3", "display": "AI騎士_百科_03", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科AI_27", "display": "AI騎士_百科_27", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科ai_5", "display": "AI騎士_百科_05", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科ＡＩ_1", "display": "AI騎士_百科_01", "stats": "AI騎士_百科", "bot": true },
+    { "name": " 百科AI_9 ", "display": "AI騎士_百科_09", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科AI看房1460", "display": "AI騎士看房1460", "stats": "AI騎士_百科", "bot": true },
+    { "name": "百科機器人A", "display": "百科機器人A", "stats": "AI騎士_百科", "bot": true },
+    { "name": "AI騎士_百科_03", "display": "AI騎士_百科_03", "stats": "AI騎士_百科", "bot": true },
+    { "name": "AI騎士_百科_00", "display": "AI騎士_百科_00", "stats": "AI騎士_百科", "bot": true },
+    { "name": "ai騎士_百科_12", "display": "ai騎士_百科_12", "stats": "AI騎士_百科", "bot": true },
+    { "name": "AI騎士_穩健_01", "display": "AI騎士_穩健_01", "stats": "AI騎士_穩健_01", "bot": true },
+    { "name": "AI騎士_激進鐵壁_02", "display": "AI騎士_激進鐵壁_02", "stats": "AI騎士_激進鐵壁_02", "bot": true },
+    { "name": "AI騎士", "display": "AI騎士", "stats": "AI騎士_百科", "bot": true },
+    { "name": "AI騎士看房1460", "display": "AI騎士看房1460", "stats": "AI騎士_百科", "bot": true },
+    { "name": "虛構甲", "display": "虛構甲", "stats": null, "bot": false },
+    { "name": "AI", "display": "AI", "stats": null, "bot": false },
+    { "name": "騎士", "display": "騎士", "stats": null, "bot": false },
+    { "name": "我是百科AI迷", "display": "我是百科AI迷", "stats": null, "bot": false },
+    { "name": "百科", "display": "百科", "stats": null, "bot": false }
+  ]
+}
