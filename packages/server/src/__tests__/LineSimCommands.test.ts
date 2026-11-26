@@ -259,6 +259,25 @@ describe('mirror group', () => {
       '1._甲蟲_ 2.乙鳥 3.丙丁 4.丁香 5.戊己 6.庚辛 7.壬癸 8.子丑 9.Nova Two 0.辰巳',
     ]);
   });
+  it('2026-11-26: a complaint right after /公布 is recorded and acknowledged once; it is still mirrored like any chat', async () => {
+    const records: unknown[] = [];
+    const loader = new SimBankLoader(() => BANK);
+    __setSimForTests({ loader, engine: new SimEngine({ bank: () => loader.get(), random: () => () => 0, feedbackSink: (r) => records.push(r) }) });
+    const h = setup();
+    await deliver(h, groupText('/模擬 忠臣 4', 'f1', 'rf1'));
+    await deliver(h, groupText('/公布', 'f2', 'rf2'));
+    await deliver(h, groupText(typed('這局很爛'), 'f3', 'rf3', GROUP, { webhookEventId: 'EF3', deliveryContext: { isRedelivery: false } }));
+    expect(h.replies.at(-1)).toMatchObject({ token: 'rf3', messages: [{ type: 'text', text: '收到，已記下這題的回饋', quoteToken: 'q-f3' }] });
+    expect(h.lobby.map((m) => m.message)).toContain('這局很爛');
+    // 同一個人同一題只回一次；重送也不再記
+    const before = h.replies.length;
+    await deliver(h, groupText(typed('真的是爛局'), 'f4', 'rf4'));
+    await deliver(h, groupText('這局很爛', 'f3', 'rf3b', GROUP, { webhookEventId: 'EF3', deliveryContext: { isRedelivery: true } }));
+    expect(h.replies.slice(before).flatMap((r) => r.messages.map((m) => m.text))).not.toContain('收到，已記下這題的回饋');
+    expect(records).toHaveLength(2);
+    expect(records[0]).toMatchObject({ exerciseId: 'W0000-4', platform: 'line', kind: 'bad', text: '這局很爛' });
+  });
+
   it('/公布 without an image relay: the three lines only (no picture path, no push)', async () => {
     const plain = setup();
     await deliver(plain, groupText('/模擬 忠臣 4', 'p1', 'rp1'));
