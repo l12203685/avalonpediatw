@@ -6,7 +6,10 @@
 報 Brier、ECE（10 格等寬）、和只用平均刺中率的 Brier 比；參考：刺殺時刺客的世界線（四個紅方開牌，真的視角）`wlEnd`。
 也報 E 在候選隊之間差多少（同一個決策點最低／最高）與真人梅林帶拇指時的 E。
 
-  python3 scripts/merlinEvStudy88.py --set 真人局=ev_h.jsonl --set 機器人=ev_b.jsonl [--md OUT.md]
+  python3 scripts/merlinEvStudy88.py --set 真人局=ev_h.jsonl --set 機器人=ev_b.jsonl [--flags 局號旗標.json] [--md OUT.md]
+
+`--flags`（不進 repo，要讀玩家名才產生得出來；同第 82、83、87 回合）：局號 → 這一局的梅林在另一半的局三藍之後活下來的比例 `surv`、局數 `n3`、
+超額勝率 `ex`；給了就把每一組真人局再拆「強的真人梅林」（n3 ≥ 4、surv ≥ 0.6、ex ≥ 0）與其他。
 """
 import argparse
 import json
@@ -148,14 +151,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--set', action='append', default=[])
     ap.add_argument('--md')
+    ap.add_argument('--flags')
     a = ap.parse_args()
+    flags = json.load(open(a.flags)) if a.flags else None
+
+    def strong(r):
+        f = flags.get(str(r['gi'])) if flags else None
+        return bool(f) and f.get('n3', 0) >= 4 and (f.get('surv') or 0) >= 0.6 and f.get('ex') is not None and f['ex'] >= 0
+
     out = []
     coefs = {}
     for s in a.set:
         name, path = s.split('=', 1)
-        res = table(name, load(path), out)
+        rows = load(path)
+        res = table(name, rows, out)
         if 'E（派了實際的隊之後）全部提議' in res:
             coefs[name] = res['E（派了實際的隊之後）全部提議'][0].tolist()
+        if flags is not None and name.startswith('真人'):
+            for lab, keep in (('強的真人梅林', True), ('其他真人梅林', False)):
+                sub = [r for r in rows if strong(r) == keep]
+                res = table(f'{name}：{lab}', sub, out)
+                if 'E（派了實際的隊之後）全部提議' in res:
+                    coefs[f'{name}：{lab}'] = res['E（派了實際的隊之後）全部提議'][0].tolist()
     out.append('係數（全部提議、全部局擬合，給 `Round88.ts`）：' + json.dumps(coefs, ensure_ascii=False))
     text = '\n'.join(out)
     print(text)
