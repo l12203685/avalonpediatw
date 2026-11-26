@@ -11,6 +11,7 @@
  *   --strong-top K     強者玩家 = 強者分面前 K（預設 5；第 1G 節，scripts/strongCohort.ts）
  *   --kappa K          收縮強度（預設 20：玩家每一族的決策點少於 20 個時，全體的偏好佔一半以上）
  *   --select-only      只選玩家、寫 players.csv
+ *   --exclude ID       不替這位玩家建 AI騎士（可重複；玩家不想要時用；對法同網站，舊名也認得）
  *   --sample N         只取平均分布的 N 個座位（試跑、估時間用；結果不能用）
  *   --write-knights    把留下來的 AI騎士 寫進 community-bots/_knights/<id>/profile.json（先清掉這支程式以前寫的資料夾）
  *   --summary PATH     彙總（不含任何對局紀錄）：每隻 AI騎士 的留出一半一致度、標籤、開關
@@ -28,7 +29,6 @@
  * 湖中（目標、宣告）沒有開放的開關，AI騎士 和百科AI 在湖中的決策一樣，所以不列入比較。
  */
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import { fork } from 'child_process';
 import { playerIdentityKey } from '@avalon/shared';
@@ -77,6 +77,7 @@ interface Args {
   kappa: number;
   selectOnly: boolean;
   sample?: number;
+  exclude: string[];
   writeKnights: boolean;
   summary?: string;
   dataset: string;
@@ -93,7 +94,7 @@ interface Args {
 
 function parseArgs(argv: string[]): Args {
   const a: Args = {
-    workers: 2, minGames: 250, strongTop: 5, kappa: 20, selectOnly: false, writeKnights: false,
+    workers: 2, minGames: 250, strongTop: 5, kappa: 20, selectOnly: false, writeKnights: false, exclude: [],
     dataset: path.join(SERVER, 'games_cache.json'),
     gameDb: path.join(SERVER, 'game_db.json'),
     corrections: path.join(SERVER, 'game_db_corrections.json'),
@@ -111,6 +112,7 @@ function parseArgs(argv: string[]): Args {
       case '--kappa': a.kappa = Number(next()); break;
       case '--select-only': a.selectOnly = true; break;
       case '--sample': a.sample = Number.parseInt(next(), 10); break;
+      case '--exclude': a.exclude.push(next()); break;
       case '--write-knights': a.writeKnights = true; break;
       case '--summary': a.summary = path.resolve(next()); break;
       case '--dataset': a.dataset = path.resolve(next()); break;
@@ -368,6 +370,7 @@ function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; jobs: Job[
     const games = gamesOfGroup(idx);
     const strong = strongOf.get(key) ?? [];
     if (games < a.minGames && strong.length === 0) continue;
+    if (a.exclude.some((x) => keyOf(x) === key)) { skipped.push({ id: ds.players[idx[0]], why: '--exclude' }); continue; }
     const id = idx.slice().sort((x, y) => (perIndex.get(y) ?? 0) - (perIndex.get(x) ?? 0))[0];
     const name = ds.players[id];
     if (!knightNameFits(name)) { skipped.push({ id: name, why: '名字太長，放不進擂台名字（24 字）' }); continue; }
