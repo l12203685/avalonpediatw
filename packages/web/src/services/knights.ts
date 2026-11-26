@@ -57,19 +57,30 @@ export function fetchKnights(): Promise<KnightSummary[]> {
   return inflight;
 }
 
-/** 名冊 hook：`ready` = false 時先顯示百科。`enabled` = false 時不去問（例如還沒連線）。 */
+/**
+ * 名冊 hook：讀到之前先顯示百科。`enabled` = false 時不去問（例如還沒連線）。
+ * 沒讀到（還沒連上、舊版伺服器）每 3 秒再試，最多 5 次；`ready` = 讀到名冊或放棄了。
+ */
 export function useKnights(enabled = true): { knights: readonly KnightSummary[]; ready: boolean } {
   const [knights, setKnights] = useState<readonly KnightSummary[]>(cache ?? FALLBACK_KNIGHTS);
   const [ready, setReady] = useState(cache !== null);
   useEffect(() => {
-    if (!enabled || cache) return;
+    if (!enabled) return;
+    if (cache) { setKnights(cache); setReady(true); return; }
     let alive = true;
-    void fetchKnights().then((list) => {
-      if (!alive) return;
-      setKnights(list);
-      setReady(true);
-    });
-    return () => { alive = false; };
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = (): void => {
+      tries++;
+      void fetchKnights().then((list) => {
+        if (!alive) return;
+        setKnights(list);
+        if (cache || tries >= 5) setReady(true);
+        else timer = setTimeout(attempt, 3000);
+      });
+    };
+    attempt();
+    return (): void => { alive = false; if (timer) clearTimeout(timer); };
   }, [enabled]);
   return { knights, ready };
 }

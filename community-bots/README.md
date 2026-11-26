@@ -110,6 +110,9 @@
 或兩個接在一起）。它們每週都上擂台，不受「一人一隻」限制。社群投稿**不能**寫 `official`、不能用「AI騎士團」當作者、名字也不能用 `AI騎士_` 開頭。
 怎麼擬合的見 [`docs/BOTS.md`〈依玩家風格建立的 AI騎士〉](../docs/BOTS.md)。之後玩家登入網站就能認領、改名、自己調自己的那一隻（代理騎士）。
 
+網站的練習台和房間「加入 AI」也能指定哪一位 AI騎士。伺服器讀的是內建的 `packages/server/src/arena/knights.generated.json`：
+改了 `_knights/` 裡的檔案，要跑 `pnpm --filter @avalon/server knights:generate` 一起提交（PR 檢查會比對）。
+
 ## 排行榜怎麼算
 
 - 每週一（台灣時間 02:23）GitHub Actions 跑 `arena:tournament`：參賽 = 百科AI ＋ 示範對手 ＋ 所有合併進 main 的機器人。
