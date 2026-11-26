@@ -84,6 +84,7 @@ import { redEarlyBlack67 } from '../Round67';
 import { redKeyCrowd69 } from '../Round69';
 import { redR5Red71 } from '../Round71';
 import { mpOwnRead81 } from '../Round81';
+import { earlyGo84, redMatchWhite84 } from '../Round84';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
@@ -94,6 +95,7 @@ import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77'
 import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import { tierCover82Applies, tierCover82Team } from '../Round82';
 import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
+import { failTest85Applies, failTest85Team, r1Split85Applies, r1Split85Team } from '../Round85';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -832,6 +834,13 @@ export class ForwardAgent implements AvalonAgent {
    * (full posterior) team among those within κ of the best — gates, own vote rules, the thumb plan and the lake / proven-red bar still bind.
    */
   private post56(obs: PlayerObservation, d: ForwardDecision): ForwardDecision {
+    // Round 85 `failTest85` (Round85.ts; site owner 11/26「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」): a non-tail loyal / Percival proposal after a
+    // failed mission that holds none of that team's players is replaced by the cleanest team testing part of it, when within λ (off: unchanged).
+    // Here (not in decideFlow) so the R2 pick of `goLike56` (human tables: picked as if it goes) is covered as well.
+    if (d.action.type === 'team_select' && failTest85Applies(this.baseline.tuning, obs)) {
+      const test = failTest85Team(this.baseline.tuning, obs, d.action.teamIds, (team) => this.repairGateOk39(obs, team));
+      if (test) d = { ...d, action: { type: 'team_select', teamIds: test }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → tests part of the team that just failed (round 85)` } };
+    }
     if (d.action.type !== 'team_select' || !missionJoint56Applies(this.baseline.tuning, obs)) return d;
     const team = missionJoint56Team(this.baseline.tuning, obs, d.action.teamIds, (t) => this.repairGateOk39(obs, t));
     if (!team) return d;
@@ -863,6 +872,13 @@ export class ForwardAgent implements AvalonAgent {
         const outs = (): string[] => this.cleanestFirst39(obs.allPlayerIds.filter((id) => !ids.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
         const broken = failedReuseBreakTeam54(this.baseline.tuning, obs, ids, share, outs, (team) => this.repairGateOk39(obs, team));
         if (broken) return { ...d, action: { type: 'team_select', teamIds: broken }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → the successful team that failed whole is not re-proposed whole (round 54)` } };
+      }
+      // Round 85 `r1Split85` (Round85.ts; player report 11/26「0家三加一 任務失敗後 所有人還是會直接無腦繼續第一局三加一」): after a failed mission that held
+      // the whole successful R1 team, a loyal / Percival leader passes the R1 team + 1 over for the cleanest team without the whole R1 team when that
+      // one is within λ of it (off: the pipeline's team).
+      if (r1Split85Applies(this.baseline.tuning, obs)) {
+        const split = r1Split85Team(this.baseline.tuning, obs, d.action.teamIds, (team) => this.repairGateOk39(obs, team));
+        if (split) return { ...d, action: { type: 'team_select', teamIds: split }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the R1 team + 1 again after it failed (round 85)` } };
       }
       if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
@@ -1107,6 +1123,11 @@ export class ForwardAgent implements AvalonAgent {
       // Round 69 `redKeyCrowd69` (Round69.ts): R3 at red's match point, a teammate on the team, off it — where `redKeyWhite` keeps the loyal vote,
       // white on the 4th proposal (bit 1; the 3rd too with bit 2), or (bit 4) when the off-team blues whose public view reads the team clean
       // (≥ τ) bring the estimate to the majority. Off (0): unchanged.
+      // Round 84 `redTailWhite84` / `redSixWhite84` (Round84.ts; owner 2026-11-26): red's match point, enough seen teammates on the team, off it —
+      // outer white when the forced fifth's captain would send a team without a red (R1) or the whites can reach the majority (R2). Off: unchanged.
+      if (forced === true && redMatchWhite84(this.baseline.tuning, obs)) {
+        return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red match point: outer white for the teammate team (round 84)');
+      }
       if (forced === true && (this.baseline.tuning.redKeyCrowd69 ?? 0) > 0 && !redKeyWhiteVote(this.baseline.tuning, obs) && redKeyCrowd69(this.baseline.tuning, obs)) {
         return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'red key team at red match point: outer white (round 69)');
       }
@@ -1149,6 +1170,13 @@ export class ForwardAgent implements AvalonAgent {
       if (!anyGate(this.gates) || teamGateBreach(obs, certaintyFor(obs), team, obs.currentRound ?? 1, this.gates) === null) {
         return this.ruleDecision(obs, { type: 'team_vote', vote: true }, 'R1–R2: the team keeps every player of my own proposal of this round');
       }
+    }
+    // Round 84 `earlyGo84` / `earlyGoOn84` (Round84.ts; owner 2026-11-26): at red's match point a good seat approves (off the team: outer white;
+    // on it: no inner black) when no later captain up to the forced fifth is expected to send a cleaner team and this one is near the cleanest.
+    // Merlin only as the public loyal view of his seat and never on a team with a red he sees. Never past the good vote gates or Merlin's fatal team.
+    if (earlyGo84(this.baseline.tuning, obs)) {
+      const gated = goodVoteGate(obs, this.gates) !== null || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning));
+      if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `red match point: no later captain sends a cleaner team (round 84, ${(obs.proposedTeam ?? []).includes(obs.myPlayerId) ? 'on the team' : 'outer white'})`);
     }
     // Round 26 (loyal) `loyalTailWhite` (GoodVoteAlt.ts; D3 stage 1, Edward 2026-11-04): a true loyal approves an earlier non-forced
     // proposal — on or off the team, any round — when the forced fifth's leader is likely red and this team is at least as clean as

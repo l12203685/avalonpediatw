@@ -52,6 +52,8 @@ export type ScenarioCheck =
   | { teamNot: string[] }
   /** 隊上要有這些人。 */
   | { teamHas: string }
+  /** 隊上至少要有這些人裡的一個（第 85 回合：站長 11/26「找前一局開紅的」）。 */
+  | { teamHasSome: string }
   /** 隊上不能有這些人。 */
   | { teamLacks: string }
   /** 隊上的紅（照真實角色）最多幾個（0 = 全藍）。 */
@@ -403,6 +405,9 @@ export function checkAnswer(built: Built, ans: ScenarioAnswer, check: ScenarioCh
   if ('teamHas' in check) {
     const miss = seatsOf(check.teamHas).filter((s) => !team.includes(s));
     return miss.length ? `派了 ${teamText(team)}，少了 ${teamText(miss)}` : '';
+  }
+  if ('teamHasSome' in check) {
+    return seatsOf(check.teamHasSome).some((s) => team.includes(s)) ? '' : `派了 ${teamText(team)}，${check.teamHasSome} 一個都沒帶`;
   }
   if ('teamLacks' in check) {
     const bad = seatsOf(check.teamLacks).filter((s) => team.includes(s));
