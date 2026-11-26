@@ -311,6 +311,14 @@ export class InGameChatCapture {
     return !!g && (g.closeAt === null || this.now() < g.closeAt);
   }
 
+  /** 還開著的局裡、判斷成回饋但還沒寫進試算表的句數（/api/bots/status → live.pendingFeedbackRows；重啟會丟）。 */
+  heldFeedbackRows(): number {
+    if (!this.sink) return 0;
+    let n = 0;
+    for (const g of this.games.values()) n += g.flagged.length;
+    return n;
+  }
+
   /** 這一局記憶體裡留著幾句（測試用）。 */
   heldMessages(roomId: string): number {
     return this.games.get(roomId)?.messages.length ?? 0;

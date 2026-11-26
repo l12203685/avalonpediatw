@@ -67,6 +67,7 @@ import {
 import { detectPracticeExploits } from '../practice/exploitFlags';
 import type { PracticeSession } from '../practice/PracticeSessions';
 import { getInGameFeedback } from '../inGameFeedback';
+import type { LiveRoomCounts } from '../services/deploySafety';
 import { LAKE_CHAT_SUFFIX, getLakeChatWatcher } from '../game/lakeChatDeclare';
 import {
   PRACTICE_PLAYER_COUNT,
@@ -371,6 +372,47 @@ export class GameServer {
     // joined, and ended from either the web or Discord. Without this wiring
     // the bot throws "RoomManager not initialised" on its first command.
     setSharedRoomManager(this.roomManager);
+  }
+
+  /**
+   * 「現在合併會不會打斷人？」（站長 2026-11-26，services/deploySafety.ts）：只有數字，沒有房間代號、名字。
+   * 真人 = 不是機器人；「連線中」= status 不是 disconnected。
+   */
+  public liveCounts(): LiveRoomCounts {
+    const counts: LiveRoomCounts = {
+      roomsInGame: 0,
+      roomsInGameWithHumans: 0,
+      roomsInGameHumansAway: 0,
+      roomsInGameBotsOnly: 0,
+      roomsInLobbyWithHumans: 0,
+      practiceInGame: 0,
+      redTalkWaits: 0,
+      practiceExploitPending: 0,
+    };
+    for (const room of this.roomManager.getAllRooms()) {
+      const humans = Object.values(room.players).filter((p) => !p.isBot);
+      const connected = humans.some((p) => p.status !== 'disconnected');
+      if (room.state === 'lobby') {
+        if (connected) counts.roomsInLobbyWithHumans += 1;
+        continue;
+      }
+      if (room.state === 'ended') continue;
+      if (this.practice.has(room.id)) {
+        if (humans.length > 0) counts.practiceInGame += 1;
+        continue;
+      }
+      counts.roomsInGame += 1;
+      if (connected) counts.roomsInGameWithHumans += 1;
+      else if (humans.length > 0) counts.roomsInGameHumansAway += 1;
+      else counts.roomsInGameBotsOnly += 1;
+    }
+    for (const st of this.redTalk.values()) {
+      if (st.wait && !st.wait.done) counts.redTalkWaits += 1;
+    }
+    for (const roomId of this.practice.roomIds()) {
+      if (this.practice.get(roomId)?.exploit?.pending) counts.practiceExploitPending += 1;
+    }
+    return counts;
   }
 
   /**

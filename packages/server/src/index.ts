@@ -36,6 +36,7 @@ import { initializeAsyncNotifier } from './services/AsyncNotifier';
 import { startKeepAlive } from './services/keepAlive';
 import { startNightlyDispatch } from './services/nightlyDispatch';
 import { startThreadsDispatch } from './services/threadsDispatch';
+import { setLiveRoomCountsSource } from './services/deploySafety';
 
 const app: Express = express();
 
@@ -167,6 +168,8 @@ async function main() {
   // 3. Start GameServer — this binds `io.on('connection', ...)` handlers
   const gameServer = new GameServer(io);
   gameServer.start();
+  // /api/bots/status → live：現在重啟的話誰會丟掉東西（scripts/deployGate.mjs 讀它）。
+  setLiveRoomCountsSource(() => gameServer.liveCounts());
   console.log(
     firebaseInitialized
       ? '✓ Socket.IO game server started'
