@@ -22,6 +22,8 @@
  *   - `merlinGatedThumbScope83`（位元）：1 = 第 2 局也做；2 = 強制局（第 5 次提議）也做；4 = 只有第 1–3 次提議；8 = 一局最多一次（之前第 2 局起已經派過看得到的紅就不做）。
  * 範圍外、門檻外照舊（INV-M1／INV-T1 在門檻外照樣是 0；門檻內是登記的例外，`gatedThumb83Exempt`）。
  * A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）不相干：只改梅林自己當隊長的提議，紅方已兩勝時 (a) 一定是 0。開關關時逐局相同。
+ *
+ * 第 83 回合採用：基準線（機器人互打）`merlinGatedThumb83 = 1`、門檻用預設（a 0.5、b 0.6、λ 0.5）；三種真人桌明寫 0（人類 PR 量尺梅林每一層兩半都是負的）。
  */
 import { AVALON_CONFIG } from '@avalon/shared';
 import type { AgentTuning } from './AgentTuning';

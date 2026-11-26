@@ -1,5 +1,5 @@
 /**
- * 第 83 回合（藍方・梅林）：站長 11/26 的「有條件的拇指」`merlinGatedThumb83`（預設關）與兩個條件 (a)、(b)。
+ * 第 83 回合（藍方・梅林）：站長 11/26 的「有條件的拇指」`merlinGatedThumb83`（基準線預設 1、真人桌 0）與兩個條件 (a)、(b)。
  */
 import { describe, expect, it } from 'vitest';
 import type { AgentTuning } from './AgentTuning';
@@ -23,8 +23,10 @@ describe('round 83 flags', () => {
     for (const k of KEYS) {
       expect(AGENT_TUNING_KEYS).toContain(k);
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
-      expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
-      for (const type of ['ai', 'weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING)[k]).toBe(0);
+      // round 83: the gated thumb is a bot-table default (rate 1, default thresholds); every human table turns it off
+      expect(DEFAULT_AGENT_TUNING[k]).toBe(k === 'merlinGatedThumb83' ? 1 : 0);
+      expect(tuningForOpponent('ai', DEFAULT_AGENT_TUNING)[k]).toBe(k === 'merlinGatedThumb83' ? 1 : 0);
+      for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING)[k]).toBe(0);
     }
     expect(parseTuningFlag('merlinGatedThumb83')).toEqual({ merlinGatedThumb83: 0.5 });
     expect(parseTuningFlag('merlinGatedThumbA83=0.4')).toEqual({ merlinGatedThumbA83: 0.4 });
@@ -32,14 +34,14 @@ describe('round 83 flags', () => {
     expect(() => parseTuningFlag('merlinGatedThumb83=2')).toThrow();
     expect(() => parseTuningFlag('merlinGatedThumbScope83=16')).toThrow();
     expect(describeAgentTuning(T({ merlinGatedThumb83: 0.5 }))).toContain('merlinGatedThumb83=0.5');
-    expect(describeAgentTuning(T())).not.toContain('merlinGatedThumb83');
+    expect(describeAgentTuning(T({ merlinGatedThumb83: 0 }))).not.toContain('merlinGatedThumb83');
     expect(gatedThumb83Config(T())).toEqual({ a: GATE_A_DEFAULT, b: GATE_B_DEFAULT, lake: 0.5 });
     expect(gatedThumb83Config(T({ merlinGatedThumbA83: 0.3, merlinGatedThumbB83: 0.7, merlinGatedThumbLake83: 0.2 }))).toEqual({ a: 0.3, b: 0.7, lake: 0.2 });
   });
 
   it('scope: Merlin, team selection, R3–R4 non-forced by default; bits widen or narrow it; red at two wins never', () => {
     const on = T({ merlinGatedThumb83: 0.5 });
-    expect(gatedThumb83Applies(T(), obsAt(3, 0))).toBe(false);
+    expect(gatedThumb83Applies(T({ merlinGatedThumb83: 0 }), obsAt(3, 0))).toBe(false);
     for (const round of [1, 2, 5]) expect(gatedThumb83Applies(on, obsAt(round, 0))).toBe(false);
     for (const round of [3, 4]) {
       for (const fc of [0, 1, 2, 3]) expect(gatedThumb83Applies(on, obsAt(round, fc))).toBe(true);
@@ -121,7 +123,7 @@ describe('gatedThumb83Eval / gatedThumb83Team', () => {
 
   it('closed gate, off, q = 0, barred reds, a seen red already on the team, or the public gate → unchanged', () => {
     expect(gatedThumb83Team(T({ merlinGatedThumb83: 1, merlinGatedThumbA83: 1, merlinGatedThumbB83: 1 }), obs, cur, () => true, [])).toBe(cur);
-    expect(gatedThumb83Team(T(), obs, cur, () => true, [])).toBe(cur);
+    expect(gatedThumb83Team(T({ merlinGatedThumb83: 0 }), obs, cur, () => true, [])).toBe(cur);
     expect(gatedThumb83Team(T({ merlinGatedThumb83: 1e-9, ...OPEN }), obsL, cur, () => true, [])).toBe(cur);
     const open = T({ merlinGatedThumb83: 1, ...OPEN });
     expect(gatedThumb83Team(open, obs, cur, () => true, [])).toBe(cur);
@@ -134,7 +136,7 @@ describe('gatedThumb83Eval / gatedThumb83Team', () => {
     const open = T({ merlinGatedThumb83: 0.5, ...OPEN });
     expect(gatedThumb83Exempt(open, obsL, thumbTeam)).toBe(true);
     expect(gatedThumb83Exempt(open, obs, thumbTeam)).toBe(false);
-    expect(gatedThumb83Exempt(T(), obsL, thumbTeam)).toBe(false);
+    expect(gatedThumb83Exempt(T({ merlinGatedThumb83: 0 }), obsL, thumbTeam)).toBe(false);
     expect(gatedThumb83Exempt(open, obsL, [seatId(4), seatId(1), seatId(5), seatId(6)])).toBe(false);
     expect(gatedThumb83Exempt(T({ merlinGatedThumb83: 0.5, merlinGatedThumbA83: 1, merlinGatedThumbB83: 1, merlinGatedThumbLake83: 1 }), obsL, thumbTeam)).toBe(false);
     const ev = gatedThumb83Eval(open, obsL, thumbTeam)!;

@@ -53,7 +53,7 @@ export const OPPONENT_LABEL: Readonly<Record<OpponentType, string>> = {
  * 和 `redPairOne78`（= 0：基準線採用的第 3 局座位約定只在機器人之間有用，真人桌照原本的位階法）。
  * 第 80 回合再加梅林派隊 `merlinLoyalFree80`（站長 11/25「在忠臣資訊視角內 可以派出的全沒拇指組合…那當然還是用能力避開」；人類 PR 量尺梅林兩半都沒有一層變差）。
  */
-export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75', 'redRankOrderR2Fix45', 'redPairOne78', 'merlinLoyalFree80'];
+export const PROFILE_KEYS: readonly AgentTuningKey[] = ['copyDiscount55', 'copyRepeat55b', 'copyFreq55b', 'viewpoint53', 'viewpointPow53', 'blueVoteTemper57', 'missionRole56', 'merlinOwnRank58', 'onTeamVote59', 'assassinPath61', 'redR2Lead61', 'merlinPublicThumb58', 'goLike56', 'oberonNormalVote', 'r2InnerBlack66', 'redStackRate65', 'lakeChain68', 'redKeyCrowd69', 'redR5Red71', 'thumbBlend74', 'assassinWorldLine75', 'redRankOrderR2Fix45', 'redPairOne78', 'merlinLoyalFree80', 'merlinGatedThumb83'];
 
 /**
  * 「不會過度」（第 57 回合）：三種真人桌共用 `HUMAN_READING`，每一層最多再改 `TIER_MAX_KEYS` 個開關、每個開關最多偏離共用值 `TIER_MAX_STEP`
@@ -152,10 +152,13 @@ export const TIER_SWITCH_KEYS: readonly AgentTuningKey[] = ['assassinWorldLine75
  *   人類 PR 量尺梅林 +0.55 ± 0.09 pp／座位局（偶數局 +0.39 ± 0.11、奇數局 +0.71 ± 0.14；弱 −0.03／一般 +0.47／強 +0.98／S 不明 +0.81），
  *   沒有一格變差超過 1 個標準誤（最差：弱桌奇數局 −0.19 ± 0.21）。只蓋第 1、2 局的版本 +0.32 ± 0.08（弱桌奇數局 −0.33 ± 0.19），所以每一局都用。
  *   基準線不用（自我對打：世界線刺客之下 −2.60 [−3.22, −1.96]，梅林完全不帶拇指更好認）。
+ * - 梅林有條件的拇指 `merlinGatedThumb83` = 0（第 83 回合；站長 2026-11-26 裁定允許、基準線採用 `=1`）：真人桌關掉。
+ *   人類 PR 量尺梅林（真人桌讀法上，候選 − 真人桌，pp／座位局）：`=0.5` −0.29 ± 0.06、`=1` −0.79 ± 0.10，每一層兩半都是負的；
+ *   第 1 關拇指一致 `=0.5` −0.5 ± 0.4、`=1` −1.8 ± 0.6。對真人刺客帶這根拇指是扣分（對世界線刺客是加分）。
  * - （不是覆寫）紅方第 1、2 局在隊上的內黑 `redEarlyBlack67=0.89` 是第 67 回合改進基準線的，真人桌直接沿用：在這組讀法上量，人類 PR 量尺紅方 +0.08 ± 0.01 pp／座位局
  *   （莫甘娜 +0.12、莫德雷德 +0.22；弱／一般／強／S 不明 +0.05／+0.09／+0.14／+0.07，偶數局 +0.09、奇數局 +0.08），沒有一格是負的。
  */
-const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25, redRankOrderR2Fix45: 1, redPairOne78: 0, merlinLoyalFree80: 0.5 };
+const HUMAN_READING: Readonly<Partial<AgentTuning>> = { copyDiscount55: 0.75, viewpoint53: 0, viewpointPow53: 0, blueVoteTemper57: 0.4, missionRole56: 1, merlinOwnRank58: 0.5, onTeamVote59: 0.55, assassinPath61: 1, redR2Lead61: 1, merlinPublicThumb58: 0, goLike56: 31, oberonNormalVote: true, r2InnerBlack66: 0.9, redStackRate65: 0, lakeChain68: 0.25, redKeyCrowd69: 1, redR5Red71: 1, thumbBlend74: 0.25, redRankOrderR2Fix45: 1, redPairOne78: 0, merlinLoyalFree80: 0.5, merlinGatedThumb83: 0 };
 
 /**
  * 分層的小調整（第 57 回合；每層最多一個開關、偏離共用值最多 0.1）：

@@ -1579,6 +1579,7 @@ export interface AgentTuning {
    * 第 83 回合（`Round83.ts`；站長 2026-11-26「如果依局勢判斷 有機會靠著任務加湖中找到五好 並且自己能被好人認下 那就可以派拇指」）：
    * 範圍內（預設第 3、4 局非強制）梅林本來要派的隊沒有看得到的紅時，以這個比例在忠臣說得通的隊裡找剛好帶一個看得到的紅、
    * 而且 (a)「出了一張失敗之後好人還拿得到三次成功」的機率 ≥ `merlinGatedThumbA83`、(b) 其他好人平均認他是好人 ≥ `merlinGatedThumbB83`（或湖認下）的那一支。0 = 關。
+   * 第 83 回合採用：基準線預設 1（機器人互打），真人桌明寫 0。
    */
   merlinGatedThumb83: number;
   /** 第 83 回合：(a) 的門檻（0 = 預設 `Round83.GATE_A_DEFAULT`）。 */
@@ -2871,7 +2872,7 @@ export const DEFAULT_AGENT_TUNING: Readonly<AgentTuning> = Object.freeze({
   merlinTierCover82: 0,
   merlinTierCoverScope82: 0,
   merlinLakeMix82: 0,
-  merlinGatedThumb83: 0,
+  merlinGatedThumb83: 1, // round 83, ON for bot tables: the site owner's 2026-11-26 ruling allows a thumb inside the gate (human-table profiles set it back to 0)
   merlinGatedThumbA83: 0,
   merlinGatedThumbB83: 0,
   merlinGatedThumbLake83: 0,
