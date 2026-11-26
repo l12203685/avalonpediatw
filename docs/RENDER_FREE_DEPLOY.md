@@ -91,3 +91,7 @@ node scripts/deployGate.mjs --wait 30  # 不行就每分鐘再問一次，最多
 
 欄位和原因代碼的說明：`docs/BOTS.md`〈給每一個會合併 PR 的 AI：合併前先跑部署閘門〉。
 
+**真的重啟了也不會整局不見**（2026-11-26）：舊的那台收到 SIGTERM 時把有真人的房間存進私人試算表（加密），新的那台接回來，玩家自動連回同一間、同一個座位。流程與限制見 `docs/BOTS.md`〈對局怎麼接回來〉。不用新的環境變數（用本來就有的 `GOOGLE_SERVICE_ACCOUNT_JSON` 與 `JWT_SECRET`）。
+
+關機等多久（`maxShutdownDelaySeconds`）：預設 30 秒，存檔只要幾秒（伺服器自己最多等 25 秒），**不用改**。萬一要改：`render.yaml` 的服務底下加 `maxShutdownDelaySeconds: 60`（1–300），或 Render Dashboard → 服務 → Settings 裡的同名設定（免費方案是否開放以 Render 畫面為準）。
+
