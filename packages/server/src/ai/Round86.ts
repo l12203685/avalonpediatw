@@ -42,3 +42,22 @@ export function r1RideCard86(tuning: Readonly<AgentTuning>, obs: PlayerObservati
   round86Stats.ride++;
   return 'success';
 }
+
+/**
+ * `assassinTierSoft86 = lr`（紅方・刺客，0 = 關；第 3 步「藍方剝削刺客」的反制手臂）：刺客的分層（`assassinVisibleRedTier`，INV-A2）是硬的——
+ * 只要還有人當隊長時沒放過梅林看得到的紅，放過的人就完全不考慮。藍方的剝削（`merlinTierCover82`：梅林在不會出任務的提議放一個看得到的紅）
+ * 就是讓梅林掉出第一層。這個開關把分層改成軟的：被分層排到後面的人不刪掉，分數加上 log(lr)（lr = 真人的概似比 0.27，INV-A2 的出處）。
+ * 碰到 INV-A2（目前登記成 0 違反的第 2 層規則）——只量，不採用。
+ * 回傳 null = 關或不適用（照原本）；否則回傳全部候選人的分數（第一層照原本、後面的加 log(lr)）。
+ */
+export function softTierScores86(
+  tuning: Readonly<AgentTuning>, all: readonly string[], front: readonly string[], scores: ReadonlyMap<string, number>,
+): Map<string, number> | null {
+  const lr = tuning.assassinTierSoft86 ?? 0;
+  if (!(lr > 0) || front.length === all.length) return null;
+  const inFront = new Set(front);
+  const pen = Math.log(lr);
+  const out = new Map<string, number>();
+  for (const id of all) out.set(id, (scores.get(id) ?? 0) + (inFront.has(id) ? 0 : pen));
+  return out;
+}

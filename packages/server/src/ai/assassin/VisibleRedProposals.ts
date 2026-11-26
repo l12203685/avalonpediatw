@@ -181,13 +181,22 @@ function countsForTier(v: VoteRecord, ignoreDoomed = false): boolean {
  * 照派成功的隊算順應局勢; `merlinReuseNorm=3` since round 18): loyal and Merlin captains both do it, so the seen red it
  * carries says nothing about the captain. The assassinator's mirror of `MerlinLoyalStyle.merlinReuseProposal`.
  */
-export function successfulTeamReuse(obs: PlayerObservation, v: VoteRecord, sight: MerlinSight = merlinSightFromAssassin(obs)): boolean {
+export function successfulTeamReuse(obs: PlayerObservation, v: VoteRecord, sight: MerlinSight = merlinSightFromAssassin(obs), failReuse = false): boolean {
   if (v.round < 3 || v.attempt >= 5) return false;
   if (obs.questResults.slice(0, v.round - 1).filter((r) => r === 'fail').length >= 2) return false;
   const seen = v.team.filter((id) => sight.certain.has(id) || sight.ambiguous.includes(id));
   if (seen.length === 0) return false;
   return obs.questHistory.some((q) => q.round < v.round && obs.questResults[q.round - 1] === 'success'
-    && q.team.every((id) => v.team.includes(id)) && seen.every((id) => q.team.includes(id)));
+    && q.team.every((id) => v.team.includes(id)) && seen.every((id) => q.team.includes(id))
+    // Round 86 `assassinFailReuse86`: a later failed mission that held the whole successful team ends the norm — re-proposing it
+    // after that fail (with a red Merlin sees on it) is a choice Merlin would not make (site owner 2026-11-26).
+    && !(failReuse && failedAfterSuccess86(obs, q.round, q.team, v.round)));
+}
+
+/** Round 86: some mission after round `okRound` and before round `before` failed with all of `team` on it. */
+export function failedAfterSuccess86(obs: PlayerObservation, okRound: number, team: readonly string[], before: number): boolean {
+  return obs.questHistory.some((f) => f.round > okRound && f.round < before && obs.questResults[f.round - 1] === 'fail'
+    && team.every((id) => f.team.includes(id)));
 }
 
 /** Leads the soft factor counts: non-forced only (its rates were measured on non-forced leads). */
@@ -202,6 +211,7 @@ export function visibleRedEvidence(
   ignoreDoomed = false,
   ignoreReuse = false,
   ignoreNeedTwo = false,
+  failReuse = false,
 ): Map<string, VisibleRedEvidence> {
   const sight = merlinSightFromAssassin(obs);
   // Round 73 `assassinNeedTwo73` bit 1 (Round73.ts): on a two-fail round a lead holding exactly one red Merlin sees is no tier evidence
@@ -212,7 +222,7 @@ export function visibleRedEvidence(
   for (const v of obs.voteHistory) {
     const e = out.get(v.leader);
     if (!e || !countsForTier(v, ignoreDoomed)) continue;
-    if (ignoreReuse && successfulTeamReuse(obs, v, sight)) continue;
+    if (ignoreReuse && successfulTeamReuse(obs, v, sight, failReuse)) continue;
     if (needTwo && needTwoSingleSeen73(obs.playerCount, v.round, v.team, sight.certain)) { round73Stats.tier++; continue; }
     const k = classifyTeamForAssassin(v.team, sight);
     if (k === 'certain') {
@@ -236,6 +246,8 @@ export interface VisibleRedOptions {
   ignoreDoomed?: boolean;
   /** Round 19 `assassinReuseRead`: re-proposals of a successful mission team do not count (`successfulTeamReuse`). */
   ignoreReuse?: boolean;
+  /** Round 86 `assassinFailReuse86`: `successfulTeamReuse`'s `failReuse`. */
+  failReuse?: boolean;
   /** Round 73 `assassinNeedTwo73` bit 1: two-fail-round leads with exactly one seen red do not count. */
   ignoreNeedTwo?: boolean;
 }
@@ -265,7 +277,7 @@ export function pickWithVisibleRed(
   opts: VisibleRedOptions,
 ): string {
   if (candidates.length === 0) throw new Error('pickWithVisibleRed: no candidates');
-  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false, opts.ignoreReuse ?? false, opts.ignoreNeedTwo ?? false);
+  const evidence = visibleRedEvidence(obs, candidates, opts.ignoreDoomed ?? false, opts.ignoreReuse ?? false, opts.ignoreNeedTwo ?? false, opts.failReuse ?? false);
   const pool = opts.tier ? tierCandidates(candidates, evidence) : [...candidates];
   const order = new Map(obs.allPlayerIds.map((id, i) => [id, i]));
   const score = (id: string): number =>
