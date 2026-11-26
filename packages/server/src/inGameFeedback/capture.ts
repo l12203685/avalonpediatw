@@ -426,6 +426,11 @@ export class InGameChatCapture {
     );
   }
 
+  /** 伺服器要關了（SIGTERM）：每一局都收掉、有回饋就寫進試算表（局後的 15 分鐘不等了）。 */
+  closeAll(): Promise<void> {
+    return Promise.all([...this.games.keys()].map((id) => this.closeGame(id))).then(() => undefined);
+  }
+
   snapshot(): InGameFeedbackStats {
     return {
       enabled: this.enabled(),

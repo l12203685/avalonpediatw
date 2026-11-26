@@ -136,3 +136,28 @@ export function readLiveRoomCounts(): LiveRoomCounts | null {
     return null;
   }
 }
+
+// ─── 伺服器更新時保存進度的狀態（socket/liveSnapshot.ts）────────────────────────
+
+/** /api/bots/status → live.restart：存檔有沒有設定、這台接回來幾間、關機存了幾間（只有數字）。 */
+export interface LiveRestartStatusLike {
+  configured: boolean;
+  restoredRooms: number;
+  lastRead: string;
+  savedRooms: number;
+  saveFailures: number;
+}
+
+let restartSource: (() => LiveRestartStatusLike | null) | null = null;
+
+export function setLiveRestartStatusSource(fn: (() => LiveRestartStatusLike | null) | null): void {
+  restartSource = fn;
+}
+
+export function readLiveRestartStatus(): LiveRestartStatusLike | null {
+  try {
+    return restartSource?.() ?? null;
+  } catch {
+    return null;
+  }
+}

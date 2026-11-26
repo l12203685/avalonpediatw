@@ -36,7 +36,9 @@ import { initializeAsyncNotifier } from './services/AsyncNotifier';
 import { startKeepAlive } from './services/keepAlive';
 import { startNightlyDispatch } from './services/nightlyDispatch';
 import { startThreadsDispatch } from './services/threadsDispatch';
-import { setLiveRoomCountsSource } from './services/deploySafety';
+import { setLiveRestartStatusSource, setLiveRoomCountsSource } from './services/deploySafety';
+import { getLiveStateStore } from './services/liveStateStore';
+import { LiveRestore } from './socket/liveSnapshot';
 
 const app: Express = express();
 
@@ -170,6 +172,12 @@ async function main() {
   gameServer.start();
   // /api/bots/status → live：現在重啟的話誰會丟掉東西（scripts/deployGate.mjs 讀它）。
   setLiveRoomCountsSource(() => gameServer.liveCounts());
+  // 伺服器更新時保存進度（socket/liveSnapshot.ts）：開機把舊的那台存的房間接回來，之後 5 分鐘內每 10 秒再看一次
+  // （舊的那台在新的起來 60 秒後才收到 SIGTERM、才存檔）。存在私人試算表（services/liveStateStore.ts），不用新設定。
+  liveRestore = new LiveRestore(gameServer, getLiveStateStore().store);
+  gameServer.attachLiveRestore(liveRestore);
+  setLiveRestartStatusSource(() => liveRestore?.status() ?? null);
+  liveRestore.startBootPolling();
   console.log(
     firebaseInitialized
       ? '✓ Socket.IO game server started'
@@ -238,6 +246,8 @@ main().catch(err => {
   process.exit(1);
 });
 
+let liveRestore: LiveRestore | null = null;
+
 // Graceful shutdown (2026-11-25). Render sends SIGTERM on every deploy (and
 // before a free instance sleeps) and waits 30 s before SIGKILL. Use that time
 // to write the open 模擬瓦 exercises to the private state repo so they are
@@ -245,14 +255,20 @@ main().catch(err => {
 // there was no handler at all: node runs as PID 1 in the container, where an
 // unhandled SIGTERM is ignored, so the old instance simply ran on until it was
 // killed. A second signal exits right away.
+//
+// 2026-11-26（站長：「…或是會影響就會儲存進度」）：同時把有真人的房間存起來（遊戲內回饋、練習局回答先寫掉），
+// 新的那台接回來（socket/liveSnapshot.ts）。Render 預設只等 30 秒，所以最多等 25 秒就結束。
 let shuttingDown = false;
+const SHUTDOWN_BUDGET_MS = 25_000;
 function shutdown(signal: NodeJS.Signals): void {
   if (shuttingDown) process.exit(0);
   shuttingDown = true;
-  console.log(`${signal} received: saving bot state before exit`);
-  void shutdownBots()
-    .catch(() => undefined)
-    .finally(() => process.exit(0));
+  console.log(`${signal} received: saving rooms and bot state before exit`);
+  setTimeout(() => process.exit(0), SHUTDOWN_BUDGET_MS).unref();
+  void Promise.allSettled([
+    liveRestore ? liveRestore.saveOnShutdown() : Promise.resolve(0),
+    shutdownBots(),
+  ]).finally(() => process.exit(0));
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

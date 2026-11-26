@@ -146,6 +146,11 @@ export class RoomManager {
     }
   }
 
+  /** The room's password (null = none); for the restart snapshot only. */
+  public getRoomPassword(roomId: string): string | null {
+    return this.roomPasswords.get(roomId) ?? null;
+  }
+
   public checkRoomPassword(roomId: string, password?: string): boolean {
     const stored = this.roomPasswords.get(roomId);
     if (!stored) return true; // no password set

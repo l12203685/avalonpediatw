@@ -113,6 +113,8 @@ export class GameEngine {
   private questVoteTimeout: NodeJS.Timeout | null = null;
   private assassinationTimeout: NodeJS.Timeout | null = null;
   private ladyOfTheLakeTimeout: NodeJS.Timeout | null = null;
+  /** When the phase timer that is running now fires (epoch ms); for the restart snapshot (伺服器更新時保存進度). */
+  private timerDeadlineAt: number | null = null;
   private onStateChange: ((room: Room) => void) | null = null;
   /**
    * Async-mode (棋瓦 P2) hook fired after `recomputePending()` opens a NEW
@@ -243,6 +245,13 @@ export class GameEngine {
   /** The effective assassination timer of this room (ms), or null when it has none (刺殺階段紅方討論 waits within it). */
   public getAssassinationTimeoutMs(): number | null {
     return this.getTimeoutMs(ASSASSINATION_TIMEOUT_MS);
+  }
+
+  /** A phase timer's length: null when the room has none (unlimited / async), else `overrideMs` (resume) or the full length. */
+  private phaseTimerMs(base: number, overrideMs?: number): number | null {
+    const full = this.getTimeoutMs(base);
+    if (full === null) return null;
+    return overrideMs !== undefined && Number.isFinite(overrideMs) ? Math.max(0, Math.round(overrideMs)) : full;
   }
 
   /**
@@ -443,16 +452,17 @@ export class GameEngine {
     this.recomputePending();
   }
 
-  private startTeamSelectPhase(): void {
+  private startTeamSelectPhase(overrideMs?: number): void {
     if (this.teamSelectTimeout) {
       clearTimeout(this.teamSelectTimeout);
       this.teamSelectTimeout = null;
     }
-    const timeoutMs = this.getTimeoutMs(TEAM_SELECT_TIMEOUT_MS);
+    const timeoutMs = this.phaseTimerMs(TEAM_SELECT_TIMEOUT_MS, overrideMs);
     if (timeoutMs === null) {
       // Unlimited mode — no AFK auto-select.
       return;
     }
+    this.timerDeadlineAt = Date.now() + timeoutMs;
     this.teamSelectTimeout = setTimeout(() => {
       if (this.room.state === 'voting' && this.room.questTeam.length === 0) {
         // #107 Edward 2026-04-25 「任務派票思考時間如果到了 => 直接從自己順時針派四位玩家」
@@ -488,17 +498,18 @@ export class GameEngine {
     }, timeoutMs);
   }
 
-  private startQuestPhase(): void {
+  private startQuestPhase(overrideMs?: number): void {
     if (this.questVoteTimeout) {
       clearTimeout(this.questVoteTimeout);
       this.questVoteTimeout = null;
     }
 
-    const timeoutMs = this.getTimeoutMs(QUEST_TIMEOUT_MS);
+    const timeoutMs = this.phaseTimerMs(QUEST_TIMEOUT_MS, overrideMs);
     if (timeoutMs === null) {
       // Unlimited mode — wait indefinitely for quest team votes.
       return;
     }
+    this.timerDeadlineAt = Date.now() + timeoutMs;
     this.questVoteTimeout = setTimeout(() => {
       if (this.room.state === 'quest') {
         // Auto-vote success for any team members who didn't vote in time.
@@ -535,12 +546,21 @@ export class GameEngine {
       leaderName: this.room.players[leaderId]?.name ?? leaderId,
     });
 
-    // Set vote timeout
-    const timeoutMs = this.getTimeoutMs(VOTE_TIMEOUT_MS);
+    this.armVoteTimer();
+  }
+
+  /** The team-vote AFK timer (full length, or `overrideMs` when resuming after a restart). */
+  private armVoteTimer(overrideMs?: number): void {
+    if (this.voteTimeout) {
+      clearTimeout(this.voteTimeout);
+      this.voteTimeout = null;
+    }
+    const timeoutMs = this.phaseTimerMs(VOTE_TIMEOUT_MS, overrideMs);
     if (timeoutMs === null) {
       // Unlimited mode — wait indefinitely for all players to vote.
       return;
     }
+    this.timerDeadlineAt = Date.now() + timeoutMs;
     this.voteTimeout = setTimeout(() => {
       if (this.room.state === 'voting') {
         this.handleVoteTimeout();
@@ -1161,16 +1181,23 @@ export class GameEngine {
     });
     this.recomputePending();
 
-    // Timeout: if holder doesn't choose, skip the phase.
-    // Spec: Lady auto-pick is NOT allowed — unlimited mode simply waits.
+    this.armLadyPickTimer();
+  }
+
+  /**
+   * Timeout: if holder doesn't choose, skip the phase.
+   * Spec: Lady auto-pick is NOT allowed — unlimited mode simply waits.
+   */
+  private armLadyPickTimer(overrideMs?: number): void {
     if (this.ladyOfTheLakeTimeout) {
       clearTimeout(this.ladyOfTheLakeTimeout);
       this.ladyOfTheLakeTimeout = null;
     }
-    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_PICK_TIMEOUT_MS);
+    const timeoutMs = this.phaseTimerMs(LADY_OF_THE_LAKE_PICK_TIMEOUT_MS, overrideMs);
     if (timeoutMs === null) {
       return;
     }
+    this.timerDeadlineAt = Date.now() + timeoutMs;
     this.ladyOfTheLakeTimeout = setTimeout(() => {
       if (this.room.state === 'lady_of_the_lake') {
         this.logEvent('lady_of_the_lake_timeout', { holderId: this.room.ladyOfTheLakeHolder });
@@ -1255,15 +1282,16 @@ export class GameEngine {
    * cannot hang the table. Edward 2026-04-26: declare 從 90s 降 30s — pick
    * 才需要長時間思考, declare 通常已經想好了.
    */
-  private startLakeDeclarationTimeout(declarerId: string): void {
+  private startLakeDeclarationTimeout(declarerId: string, overrideMs?: number): void {
     if (this.ladyOfTheLakeTimeout) {
       clearTimeout(this.ladyOfTheLakeTimeout);
       this.ladyOfTheLakeTimeout = null;
     }
-    const timeoutMs = this.getTimeoutMs(LADY_OF_THE_LAKE_DECLARE_TIMEOUT_MS);
+    const timeoutMs = this.phaseTimerMs(LADY_OF_THE_LAKE_DECLARE_TIMEOUT_MS, overrideMs);
     if (timeoutMs === null) {
       return; // Unlimited thinking time — declarer waits as long as they want.
     }
+    this.timerDeadlineAt = Date.now() + timeoutMs;
     this.ladyOfTheLakeTimeout = setTimeout(() => {
       if (this.room.state !== 'lady_of_the_lake') return;
       // Still waiting on a declaration — silently advance as a skip.
@@ -1423,13 +1451,24 @@ export class GameEngine {
     });
     this.recomputePending();
 
-    // Set assassination timeout. Default on timeout = don't assassinate =>
-    // good wins (handled by resolveAssassination(null)).
-    const timeoutMs = this.getTimeoutMs(ASSASSINATION_TIMEOUT_MS);
+    this.armAssassinationTimer();
+  }
+
+  /**
+   * Assassination timeout. Default on timeout = don't assassinate =>
+   * good wins (handled by resolveAssassination(null)).
+   */
+  private armAssassinationTimer(overrideMs?: number): void {
+    if (this.assassinationTimeout) {
+      clearTimeout(this.assassinationTimeout);
+      this.assassinationTimeout = null;
+    }
+    const timeoutMs = this.phaseTimerMs(ASSASSINATION_TIMEOUT_MS, overrideMs);
     if (timeoutMs === null) {
       // Unlimited mode — assassin takes as long as needed.
       return;
     }
+    this.timerDeadlineAt = Date.now() + timeoutMs;
     this.assassinationTimeout = setTimeout(() => {
       if (this.room.state === 'discussion') {
         // If assassin doesn't choose in time, good wins
@@ -1646,47 +1685,101 @@ export class GameEngine {
       );
     }
     const engine = new GameEngine(room);
-    for (const [id, role] of Object.entries(snapshot.roleAssignments)) {
-      engine.roleAssignments.set(id, role);
+    engine.loadState(snapshot);
+    return engine;
+  }
+
+  /**
+   * Load a serialized snapshot into this engine (built for the same room, e.g. by
+   * GameServer's factory so its state-change hooks are wired). Timers are not armed:
+   * call `resumeTimers` afterwards.
+   */
+  public loadState(snapshot: GameEngineState): void {
+    if (snapshot.roomId !== this.room.id) {
+      throw new Error(
+        `Snapshot roomId "${snapshot.roomId}" does not match room.id "${this.room.id}"`
+      );
     }
-    engine.questVotes = [...snapshot.questVotes];
-    engine.currentLeaderIndex = snapshot.currentLeaderIndex;
-    engine.voteAttemptInRound = snapshot.voteAttemptInRound;
-    engine.eventBuffer = [...snapshot.eventBuffer];
-    engine.eventSeq = snapshot.eventSeq;
-    engine.effectiveQuestSizes = snapshot.effectiveQuestSizes
+    this.roleAssignments = new Map();
+    for (const [id, role] of Object.entries(snapshot.roleAssignments)) {
+      this.roleAssignments.set(id, role);
+    }
+    this.questVotes = [...snapshot.questVotes];
+    this.currentLeaderIndex = snapshot.currentLeaderIndex;
+    this.voteAttemptInRound = snapshot.voteAttemptInRound;
+    this.eventBuffer = [...snapshot.eventBuffer];
+    this.eventSeq = snapshot.eventSeq;
+    this.effectiveQuestSizes = snapshot.effectiveQuestSizes
       ? [...snapshot.effectiveQuestSizes]
       : null;
     // 棋瓦 P1: rehydrate the pause-gate snapshot on the room. v1 snapshots
     // have no `pending` field — that is correct (they are realtime games),
     // so the room.pending stays undefined.
     if (snapshot.pending !== undefined) {
-      engine.room.pending = { ...snapshot.pending };
+      this.room.pending = { ...snapshot.pending };
     }
-    return engine;
+  }
+
+  /** Practice overrides of this room (null for normal rooms); saved with the restart snapshot. */
+  public getPracticeConfig(): PracticeAssignment | null {
+    return this.practice ? { ...this.practice } : null;
+  }
+
+  /**
+   * How long the phase timer running now still has (ms), or null when none is running
+   * (unlimited thinking time, async room, between phases). For the restart snapshot.
+   */
+  public getTimerRemainingMs(now: number = Date.now()): number | null {
+    const running = this.teamSelectTimeout || this.voteTimeout || this.questVoteTimeout
+      || this.assassinationTimeout || this.ladyOfTheLakeTimeout;
+    if (!running || this.timerDeadlineAt === null) return null;
+    return Math.max(0, this.timerDeadlineAt - now);
+  }
+
+  /**
+   * After a restart (伺服器更新時保存進度): re-arm the timer of the phase the room is in.
+   * `remainingMs` = what was left when the snapshot was taken (null = the full length);
+   * at least `floorMs` so players have time to come back. No-op for rooms without timers.
+   */
+  public resumeTimers(remainingMs: number | null, floorMs = 0): void {
+    this.clearTimers();
+    const ms = remainingMs === null ? undefined : Math.max(floorMs, remainingMs);
+    const r = this.room;
+    switch (r.state) {
+      case 'voting':
+        if (r.questTeam.length === 0) this.startTeamSelectPhase(ms);
+        else this.armVoteTimer(ms);
+        break;
+      case 'quest':
+        this.startQuestPhase(ms);
+        break;
+      case 'lady_of_the_lake':
+        if (r.ladyOfTheLakeTarget) {
+          const declarer = r.ladyOfTheLakeHistory?.at(-1)?.holderId ?? r.ladyOfTheLakeHolder ?? '';
+          this.startLakeDeclarationTimeout(declarer, ms);
+        } else {
+          this.armLadyPickTimer(ms);
+        }
+        break;
+      case 'discussion':
+        this.armAssassinationTimer(ms);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private clearTimers(): void {
+    for (const key of ['teamSelectTimeout', 'voteTimeout', 'questVoteTimeout', 'assassinationTimeout', 'ladyOfTheLakeTimeout'] as const) {
+      const t = this[key];
+      if (t) clearTimeout(t);
+      this[key] = null;
+    }
+    this.timerDeadlineAt = null;
   }
 
   public cleanup(): void {
-    if (this.teamSelectTimeout) {
-      clearTimeout(this.teamSelectTimeout);
-      this.teamSelectTimeout = null;
-    }
-    if (this.voteTimeout) {
-      clearTimeout(this.voteTimeout);
-      this.voteTimeout = null;
-    }
-    if (this.questVoteTimeout) {
-      clearTimeout(this.questVoteTimeout);
-      this.questVoteTimeout = null;
-    }
-    if (this.assassinationTimeout) {
-      clearTimeout(this.assassinationTimeout);
-      this.assassinationTimeout = null;
-    }
-    if (this.ladyOfTheLakeTimeout) {
-      clearTimeout(this.ladyOfTheLakeTimeout);
-      this.ladyOfTheLakeTimeout = null;
-    }
+    this.clearTimers();
     this.onStateChange = null;
   }
 
