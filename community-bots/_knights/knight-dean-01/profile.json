@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "name": "AI騎士_Dean_01",
+  "author": "AI騎士團",
+  "official": true,
+  "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒鐵壁」：梅林比其他 AI騎士藏得深，藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；派西第 1 局當隊長會放一根拇指。其他照百科AI。",
+  "tag": "藏鋒鐵壁",
+  "sides": {
+    "evil": {
+      "redR1Teammate": false
+    }
+  },
+  "roles": {
+    "merlin": {
+      "merlinCover77": 1
+    },
+    "percival": {
+      "goodBayesGood": 0.9,
+      "goodBayesBad": 0.99,
+      "goodBayesGoodKey": 0.95,
+      "goodBayesBadKey": 0.95,
+      "percivalNoThumbsR1": false
+    },
+    "loyal": {
+      "goodBayesGood": 0.9,
+      "goodBayesBad": 0.99,
+      "goodBayesGoodKey": 0.95,
+      "goodBayesBadKey": 0.95
+    }
+  }
+}

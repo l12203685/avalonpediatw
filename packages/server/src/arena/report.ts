@@ -131,11 +131,13 @@ export interface LeaderboardBot {
   rank: number;
   id: string;
   name: string;
-  /** 作者自己選擇公開的 GitHub 帳號；百科AI 與示範對手為 null。 */
+  /** 作者自己選擇公開的 GitHub 帳號；百科AI、示範對手與官方 AI騎士 為 null。 */
   author: string | null;
   source: RegisteredBot['source'];
   /** 稱號（侍從／騎士／圓桌騎士…，之後的「代理騎士」用）；沒有就是 null。 */
   title: string | null;
+  /** 風格標籤（依玩家風格建立的 AI騎士 才有）；沒有就是 null。 */
+  tag: string | null;
   style: string;
   knobs: string[];
   rating: { overall: SideRating; red: SideRating; blue: SideRating };
@@ -224,6 +226,7 @@ export function buildLeaderboard(args: {
       author: b.source === 'community' || b.source === 'extra' ? b.profile?.author ?? null : null,
       source: b.source,
       title: b.title ?? null,
+      tag: b.profile?.tag ?? null,
       style: b.profile?.style ?? REFERENCE_STYLE,
       knobs: b.profile ? profileKnobSummary(b.profile) : [],
       rating: { overall: roundSide(r.overall), red: roundSide(r.red), blue: roundSide(r.blue) },

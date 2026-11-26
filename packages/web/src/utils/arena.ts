@@ -19,8 +19,10 @@ export interface ArenaBot {
   id: string;
   name: string;
   author: string | null;
-  source: 'reference' | 'example' | 'community' | 'extra';
+  source: 'reference' | 'example' | 'house' | 'community' | 'extra';
   title: string | null;
+  /** 風格標籤（依玩家風格建立的 AI騎士 才有；舊的排行榜沒有這個欄位）。 */
+  tag?: string | null;
   style: string;
   knobs: string[];
   rating: { overall: SideRating; red: SideRating; blue: SideRating };

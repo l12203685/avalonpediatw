@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { checkBotFolder, defaultCommunityDir, loadRoster } from '../src/arena/registry';
+import { HOUSE_AUTHOR } from '../src/arena/profile';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
@@ -52,7 +53,7 @@ function main(): number {
     else { failed++; console.log(`✗ ${c.id}`); }
     for (const e of c.errors) { console.log(`  錯誤：${e}`); annotate('error', file, e); }
     for (const w of c.warnings) { console.log(`  提醒：${w}`); annotate('warning', file, w); }
-    if (prAuthor && c.profile && !c.id.startsWith('_') && c.profile.author.toLowerCase() !== prAuthor.toLowerCase()) {
+    if (prAuthor && c.profile && !c.id.startsWith('_') && c.profile.author !== HOUSE_AUTHOR && c.profile.author.toLowerCase() !== prAuthor.toLowerCase()) {
       const msg = `author「${c.profile.author}」和開 PR 的帳號「${prAuthor}」不同；請確認這是你本人公開的帳號`;
       console.log(`  提醒：${msg}`);
       annotate('warning', file, msg);
@@ -63,7 +64,8 @@ function main(): number {
     const roster = loadRoster({ dir });
     const community = roster.bots.filter((b) => b.source === 'community');
     const examples = roster.bots.filter((b) => b.source === 'example');
-    console.log(`名冊：${community.length} 隻社群機器人、${examples.length} 隻示範對手、百科AI 1 隻`);
+    const house = roster.bots.filter((b) => b.source === 'house');
+    console.log(`名冊：${community.length} 隻社群機器人、${house.length} 隻官方 AI騎士、${examples.length} 隻示範對手、百科AI 1 隻`);
     for (const r of roster.rejected) {
       failed++;
       console.log(`✗ ${r.id}`);
