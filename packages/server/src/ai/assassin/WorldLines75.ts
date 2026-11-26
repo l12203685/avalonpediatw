@@ -340,3 +340,82 @@ export function worldLines75(obs: PlayerObservation, tables: WorldLineTables = W
   }
   return { worlds, merlin, percival };
 }
+
+/**
+ * 第 88 回合（`Round88.ts`）：座位 `seat` 當隊長、在紀錄後面多接一個提議（只算「誰被放上隊」，票還沒投 ⇒ 不算票）之後，
+ * 刺客的世界線對「`seat` 是梅林」的邊際。和 `seatScore` 的隊長那一段同一個算法（另寫一份，不動上面的程式，刺客的結果逐位元不變）。
+ */
+function leaderPickScore(c: Ctx, s: string, rs: RoleHyp, x: string | null, y: string | null, p: Prop): number {
+  const { reds, redRole, tb } = c;
+  const m = reds.morgana;
+  const team = p.team;
+  const forced = p.forced ? 1 : 0;
+  const exposed = p.onFail.has(m) || p.lakedX.has(m) ? 1 : 0;
+  const self = team.has(s);
+  let pick = tb.llBin(['k', rs, 'self', 0, p.r, forced], self) - tb.llBin(['k', 'B', 'self', p.r, forced], self);
+  for (const t of c.ids) {
+    if (t === s) continue;
+    const pub0 = p.lastSucc.has(t) ? 1 : 0;
+    const pub1 = p.onFail.has(t) ? 1 : 0;
+    const red = redRole.get(t);
+    const rt = red ?? (t === y ? 'merlin' : t === x ? 'percival' : 'loyal');
+    const inv = red ?? 'blue';
+    let extra = 0;
+    if (rs === 'P' && rt === 'merlin') extra = team.has(m) ? 1 : 0;
+    else if (rs === 'P' && rt === 'morgana') extra = exposed;
+    const on = team.has(t);
+    pick += tb.llBin(['k', rs, rt, extra, p.r, forced, pub0, pub1], on) - tb.llBin(['k', 'B', inv, p.r, forced, pub0, pub1], on);
+  }
+  return pick;
+}
+
+export interface WorldLineLeaderProbe {
+  /** log P(梅林 = `seat`)，現在的紀錄。 */
+  base: number;
+  /** 每一支 `teams`：多接一個 `seat` 當隊長的提議之後的 log P(梅林 = `seat`)。 */
+  after: number[];
+}
+
+/**
+ * `obs` 要有 `allEvilRoles`（四個紅方的角色；第 88 回合由梅林照他看得到的紅＋莫德雷德的假設填）；`seat` 不能是紅。
+ * 提議接在 `obs.currentRound`、第 `failCount + 1` 次（第 5 次 = 強制局）。不適用時 null。
+ */
+export function worldLines75LeaderProbe(
+  obs: PlayerObservation,
+  seat: string,
+  teams: readonly (readonly string[])[],
+  tables: WorldLineTables = WORLD_LINE_TABLES_75,
+): WorldLineLeaderProbe | null {
+  const read = worldLines75(obs, tables);
+  if (!read) return null;
+  const reds = redsOf(obs) as Reds;
+  const redRole = new Map<string, string>([[reds.assassin, 'assassin'], [reds.morgana, 'morgana'], [reds.mordred, 'mordred'], [reds.oberon, 'oberon']]);
+  if (redRole.has(seat) || !obs.allPlayerIds.includes(seat)) return null;
+  const c: Ctx = { ids: obs.allPlayerIds, props: [], reds, redRole, lakes: [], tb: readerOf(tables) };
+  const w = tables.weights;
+  const marginal = (scores: readonly number[]): number => {
+    const mine: number[] = [];
+    read.worlds.forEach((wl, i) => { if (wl.merlin === seat) mine.push(scores[i]); });
+    return logSumExp(mine) - logSumExp(scores);
+  };
+  const base = marginal(read.worlds.map((wl) => wl.score));
+  const round = obs.currentRound ?? 1;
+  const attempt = (obs.failCount ?? 0) + 1;
+  const after = teams.map((team) => {
+    const ext: PlayerObservation = {
+      ...obs,
+      voteHistory: [...obs.voteHistory, { round, attempt, leader: seat, team: [...team], approved: false, votes: {} }],
+    };
+    const props = propsOf(ext);
+    const p = props[props.length - 1];
+    const scores = read.worlds.map((wl) => {
+      const rs: RoleHyp = wl.merlin === seat ? 'M' : wl.percival === seat ? 'P' : 'L';
+      const idx = rs === 'P' ? 0 : rs === 'M' ? 3 : 6;
+      const x = rs === 'P' ? null : wl.percival;
+      const y = rs === 'M' ? null : wl.merlin;
+      return wl.score + (w[idx] ?? 0) * leaderPickScore(c, seat, rs, x, y, p);
+    });
+    return marginal(scores);
+  });
+  return { base, after };
+}
