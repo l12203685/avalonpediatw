@@ -37,6 +37,7 @@ import { beliefOptionsFrom } from '../belief/BeliefOptions';
 import type { PlayerObservation } from '../types';
 import { AuditAgent, type DecisionRecord } from './AuditAgent';
 import { checkDecision, checkObservation, checkPublicRound } from './checks';
+import { setGatedThumb83InvariantTuning } from '../Round83';
 import { truthFromRoles, type Truth } from './context';
 import { Ledger } from './ledger';
 
@@ -102,6 +103,8 @@ export function auditReplayGame(game: ReplayGame, opts: ReplayOptions, result: H
   const truth = replayTruth(game);
   const L = result.replay;
   const belief = beliefOptionsFrom(opts.tuning);
+  // Round 83: the gated-thumb exemption of INV-M1 / INV-T1 is judged with this run's switches (off = no exemption).
+  setGatedThumb83InvariantTuning(opts.tuning);
   let l1Empty = false;
   result.l1EmptyGames.replayGames++;
 
@@ -270,6 +273,7 @@ export async function auditSelfPlay(opts: SelfPlayOptions, result: HarnessResult
   const engine = new SelfPlayEngine();
   const L = result.selfplay;
   const belief = beliefOptionsFrom(opts.tuning);
+  setGatedThumb83InvariantTuning(opts.tuning);
   for (let i = 0; i < opts.games; i++) {
     const agents = Array.from({ length: opts.playerCount }, (_, k) => new AuditAgent(`P${k + 1}`, opts.tuning));
     const gameSeed = `${opts.seed}|${i}`;

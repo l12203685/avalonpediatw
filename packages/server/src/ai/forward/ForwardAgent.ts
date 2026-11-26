@@ -93,6 +93,7 @@ import { merlinKnownReds, merlinLoyalStyleTeam, merlinPublicPipelineOn, merlinNo
 import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77';
 import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import { tierCover82Applies, tierCover82Team } from '../Round82';
+import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -1414,6 +1415,14 @@ export class ForwardAgent implements AvalonAgent {
         const barred82 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen82.has(id))];
         const t82 = tierCover82Team(this.baseline.tuning, obs, chosen.teamIds, publicGateOk, barred82);
         if (t82 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t82] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a loyal-plausible slip with one red he sees (round 82)` } };
+      }
+      // Round 83 `merlinGatedThumb83` (Round83.ts; site owner 2026-11-26): only when (a) mission results + the lake still find the good five
+      // after this team fails and (b) the good side still takes Merlin for good, at rate q a loyal-plausible team holding exactly one red he sees.
+      if (chosen.type === 'team_select' && gatedThumb83Applies(this.baseline.tuning, obs)) {
+        const seen83 = new Set(obs.knownEvils);
+        const barred83 = [...this.lakeBar39, ...merlinBarredReds54(this.baseline.tuning, obs), ...[...merlinKnownReds(obs)].filter((id) => !seen83.has(id))];
+        const t83 = gatedThumb83Team(this.baseline.tuning, obs, chosen.teamIds, publicGateOk, barred83);
+        if (t83 !== chosen.teamIds) return { ...d, action: { type: 'team_select', teamIds: [...t83] }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin: a gated thumb (the good five still findable, he stays trusted; round 83)` } };
       }
       if (r2Pub !== styled) return { ...d, action: r2Pub, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin R2: as the public loyal (cleanest team without the whole R1 team)` } };
       if (styled !== d.action) return { ...d, action: styled, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → merlin loyal-style team` } };
