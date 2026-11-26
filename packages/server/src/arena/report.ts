@@ -8,6 +8,7 @@ import { ARENA_KNOBS } from './knobs';
 import { profileKnobSummary } from './profile';
 import { REFERENCE_ID, REFERENCE_NAME, type RegisteredBot } from './registry';
 import type { Outcome, TableResult } from './table';
+import type { RunKind, Trend } from './daily';
 
 // ── 座位安排 ─────────────────────────────────────────────
 
@@ -163,6 +164,26 @@ export interface Leaderboard {
   rejected: { id: string; errors: string[] }[];
   /** 開放的開關（網站的說明與「給你的 AI 的提示」用，和 knobs.ts 同一份）。 */
   knobCatalog: KnobCatalogEntry[];
+  /** 每日大賽（`arena:daily aggregate`）才有：今天與累計局數、這一輪怎麼跑的。 */
+  daily?: DailyInfo;
+  /** 每日大賽才有：最近幾天的總分走勢。 */
+  trend?: Trend;
+}
+
+export interface DailyInfo {
+  /** 台北日期。 */
+  date: string;
+  /** 這一輪：每日排程／合併到 main 後補跑／手動。 */
+  kind: RunKind;
+  gamesToday: number;
+  runsToday: number;
+  /** 開始每日大賽以來總共打了幾局（歷史快照加總）。 */
+  gamesTotal: number;
+  shards: number;
+  /** 某一片失敗時少掉的局數（0 = 全部到齊）。 */
+  missingGames: number;
+  gamesPerSecPerRunner: number;
+  slowestShardSec: number;
 }
 
 export interface KnobCatalogEntry {
