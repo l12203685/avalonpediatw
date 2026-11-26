@@ -137,7 +137,7 @@ describe('InGameChatCapture', () => {
     expect(hit?.reason).toBe('bot-seat');
     expect(forwarded).toEqual(['📮 遊戲內回饋（房間 room-ab12，第1局任務3・派隊投票，4家→提到 3家百科AI）：3家為什麼這樣派']);
     cap.onChat('room-ab12', chat({ seat: 10, text: 'AI 好強 @everyone', phase: 'ended' }));
-    expect(forwarded[1]).toBe('📮 遊戲內回饋（房間 room-ab12，第1局・局後，0家→提到 百科AI）：AI 好強 @​everyone');
+    expect(forwarded[1]).toBe('📮 遊戲內回饋（房間 room-ab12，第1局・局後，0家→提到 百科AI）：AI 好強 @\u200beveryone');
     expect(cap.snapshot()).toMatchObject({ messages: 3, flagged: 2, forwarded: 2, throttled: 0 });
   });
 
@@ -157,7 +157,7 @@ describe('InGameChatCapture', () => {
     cap.onChat('r', chat({ seat: 4, text: '7家好強', round: 2, proposal: 2 }));
     cap.endGame('r', { 3: 'assassin', 7: 'merlin' });
     tick(IN_GAME_POST_GAME_MS - 1000);
-    cap.onChat('r', chat({ seat: 5, text: '為什麼刺我', phase: 'ended' }));
+    cap.onChat('r', chat({ seat: 5, text: '為什麼刺我', phase: 'lobby' })); // back in the lobby: still post-game
     expect(cap.isCapturing('r')).toBe(true);
     tick(2000);
     expect(cap.isCapturing('r')).toBe(false);

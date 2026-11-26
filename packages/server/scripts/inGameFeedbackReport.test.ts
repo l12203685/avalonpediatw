@@ -20,7 +20,7 @@ const FIXTURE = csv([
 
 describe('inGameFeedbackReport', () => {
   it('parses the exported tab (quotes, commas, newlines) by column name', () => {
-    const rows = readRows(parseCsv(`﻿${FIXTURE}`));
+    const rows = readRows(parseCsv(`\uFEFF${FIXTURE}`));
     expect(rows).toHaveLength(4);
     expect(rows[1]).toMatchObject({ game: 'R1#1', phase: '派隊投票', round: '3', roles: ['刺客'], text: '3家亂打, 說真的' });
     expect(rows[2].text).toBe('AI 好強\n下次再來');

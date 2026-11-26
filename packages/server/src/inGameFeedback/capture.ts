@@ -237,14 +237,17 @@ export class InGameChatCapture {
       const chars = [...(input.text ?? '').trim()];
       if (chars.length === 0) return null;
       const text = chars.length > IN_GAME_CHAT_MAX_CHARS ? chars.slice(0, IN_GAME_CHAT_MAX_CHARS).join('') : chars.join('');
+      // 局後（房間回到開局前也算局後，直到收完）。
+      const postGame = input.phase === 'ended' || g.closeAt !== null;
+      const phase: GameState = postGame ? 'ended' : input.phase;
       const hit = classifyInGameFeedback(text, {
         botSeats: g.botSeats,
-        postGame: input.phase === 'ended',
+        postGame,
         leaderIsBot: input.leaderIsBot,
         seatCount: g.seatCount,
       });
       const msg: CapturedMessage = {
-        at: now, seat: input.seat, text, phase: input.phase, round: input.round, proposal: input.proposal, hit,
+        at: now, seat: input.seat, text, phase, round: input.round, proposal: input.proposal, hit,
       };
       g.messages.push(msg);
       if (g.messages.length > IN_GAME_CHAT_MAX_MESSAGES) g.messages.shift();
