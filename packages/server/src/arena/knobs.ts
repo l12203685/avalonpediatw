@@ -111,6 +111,36 @@ export const ARENA_KNOBS: readonly Knob[] = [
     zhUp: '越高越常投黑。',
     zhDown: '越低越常放行；0 = 不用這條。預設 0.7。',
   },
+  // 第 33 回合起忠臣、派西第 3 局起的票（不是隊長、第 1–4 次提議）由「嚴格的貝氏準則」決定（`goodBayesVote`，BlueRound33.ts），
+  // 上面三個門檻在這個範圍裡不會用到。下面四個是這條準則自己的門檻（依玩家風格建立的 AI騎士 用來擬合藍方的票；2026-11-26 加）。
+  {
+    key: 'goodBayesGood', kind: 'number', side: 'good', min: 0.4, max: 0.95,
+    zh: '第 3 局起（紅方還沒拿兩局），忠臣和派西不在隊上時，估「這隊沒有紅」的機率要到這個門檻才投贊成。',
+    en: 'From round 3 (red below two fails), loyals and Percival off the team approve only when the chance the team is clean reaches this.',
+    zhUp: '越高越常投反對（不在隊上幾乎不放行）。',
+    zhDown: '越低越常放行。預設 0.7。',
+  },
+  {
+    key: 'goodBayesBad', kind: 'number', side: 'good', min: 0.5, max: 0.99,
+    zh: '第 3 局起（紅方還沒拿兩局），忠臣和派西在隊上時，估「這隊有紅、會失敗」的機率要到這個門檻才投反對（內黑）。',
+    en: 'From round 3 (red below two fails), loyals and Percival on the team reject only when the chance the team fails reaches this.',
+    zhUp: '越高越少內黑（在隊上幾乎都贊成）。',
+    zhDown: '越低越常內黑。預設 0.8。',
+  },
+  {
+    key: 'goodBayesGoodKey', kind: 'number', side: 'good', min: 0.5, max: 0.99,
+    zh: '紅方已拿兩局（再一個紅就輸）時，忠臣和派西不在隊上要多確定「這隊沒有紅」才投贊成。',
+    en: 'When red has two fails: how sure loyals and Percival off the team must be that the team is clean before approving.',
+    zhUp: '越高關鍵局越不敢放行。',
+    zhDown: '越低關鍵局越願意賭。預設 0.9。',
+  },
+  {
+    key: 'goodBayesBadKey', kind: 'number', side: 'good', min: 0.4, max: 0.99,
+    zh: '紅方已拿兩局時，忠臣和派西在隊上要多確定「這隊有紅」才投反對（內黑）。',
+    en: 'When red has two fails: how sure loyals and Percival on the team must be that the team fails before rejecting.',
+    zhUp: '越高關鍵局越少內黑。',
+    zhDown: '越低關鍵局越常內黑。預設 0.7。',
+  },
   {
     key: 'merlinNormalVote', kind: 'number', side: 'good', min: 0, max: 1,
     zh: '梅林第 3 局起照「只看公開紀錄的忠臣」那樣投票的比例（只在會直接輸掉時才擋）。',
