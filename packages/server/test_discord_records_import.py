@@ -1183,7 +1183,9 @@ class GenerateCacheUnionTest(unittest.TestCase):
         last = dataset["games"][-1]
         self.assertEqual(last[gc.GAMES_DATASET_FIELDS.index("cat")], gc.DATASET_CATEGORIES.index(gc.BOT_CATEGORY))
         seats = last[gc.GAMES_DATASET_FIELDS.index("seats")]
-        self.assertEqual((dataset["players"][seats[0]], dataset["players"][seats[9]]), ("百科AI", "百科AI"))
+        # 站長 2026-11-26：百科AI 改名 AI騎士；舊暱稱 百科AI_n 經程式裡的別名表併成 AI騎士_百科（紀錄本身不改）
+        self.assertEqual((dataset["players"][seats[0]], dataset["players"][seats[9]]), ("AI騎士_百科", "AI騎士_百科"))
+        self.assertNotIn("AI騎士", json.dumps(cache, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------

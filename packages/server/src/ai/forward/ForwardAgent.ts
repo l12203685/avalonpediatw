@@ -86,6 +86,7 @@ import { redR5Red71 } from '../Round71';
 import { mpOwnRead81 } from '../Round81';
 import { earlyGo84, redMatchWhite84 } from '../Round84';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
+import { r1RideCard86 } from '../Round86';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
@@ -95,6 +96,8 @@ import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77'
 import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import { tierCover82Applies, tierCover82Team } from '../Round82';
 import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
+import { failTest85Applies, failTest85Team, r1Split85Applies, r1Split85Team } from '../Round85';
+import { shield87Decide } from '../Round87';
 import { ev88Applies, ev88Team } from '../Round88';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
@@ -834,6 +837,13 @@ export class ForwardAgent implements AvalonAgent {
    * (full posterior) team among those within κ of the best — gates, own vote rules, the thumb plan and the lake / proven-red bar still bind.
    */
   private post56(obs: PlayerObservation, d: ForwardDecision): ForwardDecision {
+    // Round 85 `failTest85` (Round85.ts; site owner 11/26「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」): a non-tail loyal / Percival proposal after a
+    // failed mission that holds none of that team's players is replaced by the cleanest team testing part of it, when within λ (off: unchanged).
+    // Here (not in decideFlow) so the R2 pick of `goLike56` (human tables: picked as if it goes) is covered as well.
+    if (d.action.type === 'team_select' && failTest85Applies(this.baseline.tuning, obs)) {
+      const test = failTest85Team(this.baseline.tuning, obs, d.action.teamIds, (team) => this.repairGateOk39(obs, team));
+      if (test) d = { ...d, action: { type: 'team_select', teamIds: test }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → tests part of the team that just failed (round 85)` } };
+    }
     if (d.action.type !== 'team_select' || !missionJoint56Applies(this.baseline.tuning, obs)) return d;
     const team = missionJoint56Team(this.baseline.tuning, obs, d.action.teamIds, (t) => this.repairGateOk39(obs, t));
     if (!team) return d;
@@ -865,6 +875,13 @@ export class ForwardAgent implements AvalonAgent {
         const outs = (): string[] => this.cleanestFirst39(obs.allPlayerIds.filter((id) => !ids.includes(id) && !lakeBar.includes(id) && !obs.knownEvils.includes(id)), share);
         const broken = failedReuseBreakTeam54(this.baseline.tuning, obs, ids, share, outs, (team) => this.repairGateOk39(obs, team));
         if (broken) return { ...d, action: { type: 'team_select', teamIds: broken }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → the successful team that failed whole is not re-proposed whole (round 54)` } };
+      }
+      // Round 85 `r1Split85` (Round85.ts; player report 11/26「0家三加一 任務失敗後 所有人還是會直接無腦繼續第一局三加一」): after a failed mission that held
+      // the whole successful R1 team, a loyal / Percival leader passes the R1 team + 1 over for the cleanest team without the whole R1 team when that
+      // one is within λ of it (off: the pipeline's team).
+      if (r1Split85Applies(this.baseline.tuning, obs)) {
+        const split = r1Split85Team(this.baseline.tuning, obs, d.action.teamIds, (team) => this.repairGateOk39(obs, team));
+        if (split) return { ...d, action: { type: 'team_select', teamIds: split }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the R1 team + 1 again after it failed (round 85)` } };
       }
       if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
@@ -983,6 +1000,14 @@ export class ForwardAgent implements AvalonAgent {
         return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red: I lead later this round (inner black; round 51)');
       }
     }
+    // Round 87 `merlinInnerBlackShield87` (Round87.ts; Gemini handoff v2 item 1): Merlin on the team, about to reject — when the public loyal view
+    // of his seat holds the team clean enough and his seen reds cannot lose it on the spot, he approves as that view would. Off: never evaluated.
+    if (obs.gamePhase === 'team_vote' && obs.myRole === 'merlin' && d.action.type === 'team_vote' && !d.action.vote
+      && (this.baseline.tuning.merlinInnerBlackShield87 ?? 0) > 0) {
+      const s87 = shield87Decide(this.baseline.tuning, obs, d.action.vote, () => goodVoteGate(loyalViewOf(obs), this.gates) === null
+        && goodVoteGate(obs, { ...this.gates, mustFail: false }) === null);
+      if (s87?.approve) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `merlin on the team: the public view holds it clean enough (${s87.p.toFixed(2)}; round 87)`);
+    }
     return d;
   }
 
@@ -1031,6 +1056,10 @@ export class ForwardAgent implements AvalonAgent {
       // (always, or when the red's own posterior says the team can probably fail it). Off: null, `redHideR4Solo` decides as before.
       const key78 = r4KeyFailCard78(this.baseline.tuning, obs);
       if (key78) return this.ruleDecision(obs, { type: 'quest_vote', vote: key78 }, 'red fails on a two-fail mission at red match point (round 78)');
+      // Round 86 `r1Ride86` (Round86.ts; exploit arm only): the lone red on the R1 (and R2 after an R1 success) mission hides to ride the
+      // "R1 team + 1" proposals. Off: null.
+      const ride86 = r1RideCard86(this.baseline.tuning, obs);
+      if (ride86) return this.ruleDecision(obs, { type: 'quest_vote', vote: ride86 }, 'lone red hides to ride the R1 team (round 86 exploit)');
       // Round 29 `redStackHide` (RedRound29.ts): two or more recognised reds on an R2–R3 mission all hide at the human rate.
       const stack = redStackHideCard(this.baseline.tuning, obs);
       if (stack) return this.ruleDecision(obs, { type: 'quest_vote', vote: stack }, 'recognised reds all hide (human rate)');

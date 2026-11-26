@@ -52,6 +52,8 @@ export type ScenarioCheck =
   | { teamNot: string[] }
   /** 隊上要有這些人。 */
   | { teamHas: string }
+  /** 隊上至少要有這些人裡的一個（第 85 回合：站長 11/26「找前一局開紅的」）。 */
+  | { teamHasSome: string }
   /** 隊上不能有這些人。 */
   | { teamLacks: string }
   /** 隊上的紅（照真實角色）最多幾個（0 = 全藍）。 */
@@ -404,6 +406,9 @@ export function checkAnswer(built: Built, ans: ScenarioAnswer, check: ScenarioCh
     const miss = seatsOf(check.teamHas).filter((s) => !team.includes(s));
     return miss.length ? `派了 ${teamText(team)}，少了 ${teamText(miss)}` : '';
   }
+  if ('teamHasSome' in check) {
+    return seatsOf(check.teamHasSome).some((s) => team.includes(s)) ? '' : `派了 ${teamText(team)}，${check.teamHasSome} 一個都沒帶`;
+  }
   if ('teamLacks' in check) {
     const bad = seatsOf(check.teamLacks).filter((s) => team.includes(s));
     return bad.length ? `派了 ${teamText(team)}，不該帶 ${teamText(bad)}` : '';
@@ -510,8 +515,8 @@ export function seatDiagram(built: Built, ans: ScenarioAnswer | null): string {
     row('這一家看到', (s) => (s === seat ? '**自己**' : thumbs.has(s) ? '拇指' : seen.has(s) ? '紅' : '')),
     ...shownQuests.map((q) => row(`第 ${q.round} 局（${q.failCount} 張失敗）`, (s) => (q.teamSeats.includes(s) ? '出' : ''))),
   ];
-  if (ans?.pRed) lines.push(row('百科AI 的 P(紅)', (s) => (s === seat ? '—' : ans.pRed![s - 1].toFixed(2))));
-  if (ans?.team) lines.push(row('百科AI 派', (s) => (ans.team!.includes(s) ? '●' : '')));
+  if (ans?.pRed) lines.push(row('AI騎士 的 P(紅)', (s) => (s === seat ? '—' : ans.pRed![s - 1].toFixed(2))));
+  if (ans?.team) lines.push(row('AI騎士 派', (s) => (ans.team!.includes(s) ? '●' : '')));
   return lines.join('\n');
 }
 

@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, type Role } from '@avalon/shared';
+import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, knightName, type Role } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
@@ -10,6 +10,9 @@ import { getAsyncNotifier } from '../services/AsyncNotifier';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { OPPONENT_LABEL, PROFILE_OVERRIDES, opponentTypeOfTable, type OpponentType } from '../ai/humanProfile';
 import { liveTableS } from '../ai/tableStrength';
+import {
+  DEFAULT_KNIGHT_ID, getKnight, knightTuningOverrides, knightsForLineup, knightsForSeats, listKnightSummaries, nextKnightSeatName, resolveKnightId,
+} from '../arena/knights';
 import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
 import { PlayerObservation, AvalonAgent } from '../ai/types';
@@ -67,6 +70,17 @@ import {
 import { detectPracticeExploits } from '../practice/exploitFlags';
 import type { PracticeSession } from '../practice/PracticeSessions';
 import { getInGameFeedback } from '../inGameFeedback';
+import type { LiveRoomCounts } from '../services/deploySafety';
+import {
+  LIVE_RESTORED_TEXT,
+  LIVE_RESUME_FLOOR_MS,
+  LIVE_SAVING_TEXT,
+  LIVE_SNAPSHOT_VERSION,
+  type LiveRestore,
+  type LiveRoomSnapshot,
+  type LiveSnapshotFile,
+  type LiveSnapshotHost,
+} from './liveSnapshot';
 import { LAKE_CHAT_SUFFIX, getLakeChatWatcher } from '../game/lakeChatDeclare';
 import {
   PRACTICE_PLAYER_COUNT,
@@ -298,7 +312,7 @@ export interface GameServerOptions {
   practiceExploitSink?: PracticeExploitSink | null;
 }
 
-export class GameServer {
+export class GameServer implements LiveSnapshotHost {
   private io: SocketIOServer;
   private roomManager: RoomManager;
   // 網站「與機器人練習」(2026-10-13): practice-room registry + bot decision traces.
@@ -316,6 +330,12 @@ export class GameServer {
   private botAgents: Map<string, AvalonAgent> = new Map();
   /** 第 56b 回合 C：每個機器人現在的策略層（沒有記錄 = `ai`，`addBotToRoom` 建的就是基準線）。 */
   private botProfiles: Map<string, OpponentType> = new Map();
+  /**
+   * 指定了哪一位 AI騎士 的機器人（站長 2026-11-26「練習台想呼叫AI騎士_ED」；`arena/knights.ts`）。
+   * 沒有記錄 = 沒指定（AI騎士_百科）。開局時 `applyOpponentProfile` 把騎士的開關蓋在這一桌的策略層上。
+   * 伺服器更新時跟著存檔走（`liveSnapshot.ts` 的 bots[].knight），接回來的房間還是同一位騎士。
+   */
+  private botKnights: Map<string, string> = new Map();
   /**
    * 刺殺階段紅方討論（站長 2026-11-25，`ai/redAssassinTalk.ts`）：紅方有真人時，每間房這一局的狀態——紅方機器人說過看法了沒、
    * 刺客機器人在等的隊友指令（`wait`）與它的計時器。紅方全是機器人的房間不會有這筆。
@@ -337,6 +357,12 @@ export class GameServer {
   // #63 — ring buffer for the main-page public chat. Memory-only by design
   // (MVP scope); persistent sync is tracked under #82.
   private lobbyChat: LobbyChatBuffer = new LobbyChatBuffer();
+  /** 伺服器要關了（SIGTERM，已經存檔）：不再收對局動作。 */
+  private frozen = false;
+  /** 伺服器更新後接回來的房間 → 還沒看到「已恢復進度」那句的真人。 */
+  private restoredGreeting: Map<string, Set<string>> = new Map();
+  /** 伺服器更新時保存進度（socket/liveSnapshot.ts）；index.ts 接上。 */
+  private liveRestore: LiveRestore | null = null;
 
   constructor(io: SocketIOServer, options: GameServerOptions = {}) {
     this.io = io;
@@ -371,6 +397,215 @@ export class GameServer {
     // joined, and ended from either the web or Discord. Without this wiring
     // the bot throws "RoomManager not initialised" on its first command.
     setSharedRoomManager(this.roomManager);
+  }
+
+  /**
+   * 「現在合併會不會打斷人？」（站長 2026-11-26，services/deploySafety.ts）：只有數字，沒有房間代號、名字。
+   * 真人 = 不是機器人；「連線中」= status 不是 disconnected。
+   */
+  public liveCounts(): LiveRoomCounts {
+    const counts: LiveRoomCounts = {
+      roomsInGame: 0,
+      roomsInGameWithHumans: 0,
+      roomsInGameHumansAway: 0,
+      roomsInGameBotsOnly: 0,
+      roomsInLobbyWithHumans: 0,
+      practiceInGame: 0,
+      redTalkWaits: 0,
+      practiceExploitPending: 0,
+    };
+    for (const room of this.roomManager.getAllRooms()) {
+      const humans = Object.values(room.players).filter((p) => !p.isBot);
+      const connected = humans.some((p) => p.status !== 'disconnected');
+      if (room.state === 'lobby') {
+        if (connected) counts.roomsInLobbyWithHumans += 1;
+        continue;
+      }
+      if (room.state === 'ended') continue;
+      if (this.practice.has(room.id)) {
+        if (humans.length > 0) counts.practiceInGame += 1;
+        continue;
+      }
+      counts.roomsInGame += 1;
+      if (connected) counts.roomsInGameWithHumans += 1;
+      else if (humans.length > 0) counts.roomsInGameHumansAway += 1;
+      else counts.roomsInGameBotsOnly += 1;
+    }
+    for (const st of this.redTalk.values()) {
+      if (st.wait && !st.wait.done) counts.redTalkWaits += 1;
+    }
+    for (const roomId of this.practice.roomIds()) {
+      if (this.practice.get(roomId)?.exploit?.pending) counts.practiceExploitPending += 1;
+    }
+    return counts;
+  }
+
+  // ─── 伺服器更新時保存進度（站長 2026-11-26，socket/liveSnapshot.ts）─────────────
+
+  /** index.ts 接上（之後玩家重連到還不在的房間時，先看一次存檔）。 */
+  public attachLiveRestore(lr: LiveRestore | null): void {
+    this.liveRestore = lr;
+  }
+
+  public hasRoom(roomId: string): boolean {
+    return !!this.roomManager.getRoom(roomId);
+  }
+
+  /** 寫掉還在記憶體、重啟會丟的：遊戲內回饋（每一局收掉、寫進試算表）、練習局還在等追問的回答。 */
+  public async flushPendingWrites(): Promise<void> {
+    const jobs: Promise<unknown>[] = [getInGameFeedback().closeAll()];
+    for (const roomId of this.practice.roomIds()) {
+      const session = this.practice.get(roomId);
+      if (session?.exploit?.pending) jobs.push(this.flushPracticeExploitPending(session));
+    }
+    await Promise.allSettled(jobs);
+  }
+
+  /**
+   * 每一間有真人的房間（大廳裡有人連線中的、遊戲中的、練習中的）拍一張：房間、引擎、計時器還剩多久、密碼、機器人的策略層、
+   * 開局時間、練習紀錄。只有機器人的房間不存（沒有人會丟掉東西）。
+   */
+  public buildLiveSnapshot(now: number = Date.now()): LiveSnapshotFile {
+    const rooms: LiveRoomSnapshot[] = [];
+    for (const room of this.roomManager.getAllRooms()) {
+      if (room.state === 'ended') continue;
+      const players = Object.values(room.players);
+      const humans = players.filter((p) => !p.isBot);
+      if (humans.length === 0) continue;
+      if (room.state === 'lobby' && !humans.some((p) => p.status !== 'disconnected')) continue;
+      const inGame = room.state !== 'lobby';
+      const engine = this.gameEngines.get(room.id);
+      if (inGame && !engine) continue;
+      const session = this.practice.get(room.id);
+      const supabaseIds: Record<string, string> = {};
+      for (const p of players) {
+        const sid = this.supabaseIds.get(p.id);
+        if (sid) supabaseIds[p.id] = sid;
+      }
+      const snap: LiveRoomSnapshot = {
+        room,
+        engine: inGame && engine ? engine.serialize() : null,
+        practiceConfig: engine?.getPracticeConfig() ?? null,
+        timerRemainingMs: inGame && engine ? engine.getTimerRemainingMs(now) : null,
+        password: this.roomManager.getRoomPassword(room.id),
+        bots: players.filter((p) => p.isBot).map((p) => ({ id: p.id, profile: this.botProfiles.get(p.id) ?? null, knight: this.botKnights.get(p.id) ?? null })),
+        startedAt: this.roomStartTimes.get(room.id) ?? null,
+        supabaseIds,
+        practice: session ? { ...session, flaggedEntryIds: [...session.flaggedEntryIds] } : null,
+      };
+      rooms.push(JSON.parse(JSON.stringify(snap)) as LiveRoomSnapshot);
+    }
+    return { version: LIVE_SNAPSHOT_VERSION, savedAt: now, rooms };
+  }
+
+  /** 存好之後：不再收對局動作、機器人不再動；跟存起來的房間說一聲。 */
+  public freezeForShutdown(roomIds: readonly string[]): void {
+    this.frozen = true;
+    for (const roomId of roomIds) this.emitSystemChat(roomId, LIVE_SAVING_TEXT);
+  }
+
+  /** 把存檔裡的房間接回來；已經有的房間不動（重複呼叫不會接兩次）。回接回來幾間。 */
+  public restoreLiveSnapshot(file: LiveSnapshotFile, _now: number = Date.now()): number {
+    let restored = 0;
+    for (const snap of file.rooms) {
+      try {
+        if (this.restoreLiveRoom(snap)) restored += 1;
+      } catch (err) {
+        console.warn(`[live-state] a saved room could not be restored (${err instanceof Error ? err.name : 'error'})`);
+        this.roomManager.deleteRoom(snap.room.id);
+        this.gameEngines.get(snap.room.id)?.cleanup();
+        this.gameEngines.delete(snap.room.id);
+      }
+    }
+    return restored;
+  }
+
+  private restoreLiveRoom(snap: LiveRoomSnapshot): boolean {
+    const roomId = snap.room.id;
+    if (this.roomManager.getRoom(roomId)) return false;
+    const humanIds: string[] = [];
+    for (const p of Object.values(snap.room.players)) {
+      if (p.isBot) continue;
+      p.status = 'disconnected'; // 還沒連回來；重連時（handleJoinRoom）改回 active
+      humanIds.push(p.id);
+    }
+    if (this.roomManager.rehydrate([snap.room]) !== 1) return false;
+    const room = this.roomManager.getRoom(roomId)!;
+    if (snap.password) this.roomManager.setRoomPassword(roomId, snap.password);
+    const inGame = room.state !== 'lobby';
+    const engine = this.createGameEngine(roomId, room);
+    if (inGame && snap.engine) engine.loadState(snap.engine);
+    if (snap.practiceConfig) engine.configurePractice(snap.practiceConfig);
+    this.gameEngines.set(roomId, engine);
+    for (const bot of snap.bots) {
+      if (!room.players[bot.id]) continue;
+      const profile = bot.profile !== null && bot.profile in PROFILE_OVERRIDES ? (bot.profile as OpponentType) : null;
+      const overrides = profile ? PROFILE_OVERRIDES[profile] : undefined;
+      // 指定的 AI騎士 也接回來（不然接回來的房間會變回百科）；名冊裡已經沒有這一位 → 百科。
+      const knightId = bot.knight === null ? null : getKnight(bot.knight) ? bot.knight : DEFAULT_KNIGHT_ID;
+      if (knightId) this.botKnights.set(bot.id, knightId);
+      else this.botKnights.delete(bot.id);
+      const p = room.players[bot.id];
+      const team = p.team === 'evil' ? 'evil' : p.team === 'good' ? 'good' : null;
+      // 遊戲中：和開局時 applyOpponentProfile 一樣，騎士的開關（照這一局的角色、陣營）蓋在策略層上面；大廳裡開局時才蓋。
+      const tuning = inGame && knightId && knightId !== DEFAULT_KNIGHT_ID
+        ? { ...overrides, ...knightTuningOverrides(knightId, p.role, team) }
+        : overrides;
+      const agent = new HeuristicAgent(bot.id, undefined, undefined, tuning);
+      this.botAgents.set(bot.id, agent);
+      if (profile) this.botProfiles.set(bot.id, profile);
+      else this.botProfiles.delete(bot.id);
+      // 機器人的記憶是從公開的派票、任務紀錄重算的（每次 act 都會把還沒看過的補上），開局知道的紅方在這裡給。
+      if (inGame) agent.onGameStart(this.buildBotObservation(room, bot.id, engine, 'team_select'));
+    }
+    if (snap.startedAt !== null) this.roomStartTimes.set(roomId, snap.startedAt);
+    for (const [pid, sid] of Object.entries(snap.supabaseIds)) this.supabaseIds.set(pid, sid);
+    if (snap.practice) {
+      this.practice.restore({
+        ...snap.practice,
+        flaggedEntryIds: new Set(snap.practice.flaggedEntryIds),
+        lastActivityAt: Date.now(),
+      });
+    }
+    if (inGame) {
+      const isPractice = this.practice.has(roomId);
+      const seatIds = Object.keys(room.players);
+      if (!isPractice) {
+        const botSeats = seatIds.flatMap((id, i) => (room.players[id].isBot ? [i + 1] : []));
+        getInGameFeedback().startGame(roomId, { botSeats, seatCount: seatIds.length });
+      }
+      // 刺殺階段、紅方有真人、刺客是機器人：紅方討論會重新開始（機器人重講看法、重新等「/刺殺 N」），刺殺的計時器也重新算，
+      // 不然等指令的時間會超過剩下的時間。其他階段照存檔時剩下的時間（至少 LIVE_RESUME_FLOOR_MS）。
+      const reds = seatIds.filter((id) => room.players[id].team === 'evil');
+      const killer = assassinatorRole(Object.values(room.players).map((p) => p.role));
+      const assassinIsBot = !!killer && Object.values(room.players).some((p) => p.role === killer && p.isBot);
+      const redTalkRestarts = room.state === 'discussion' && redTalkEnabled() && reds.some((id) => !room.players[id].isBot) && assassinIsBot;
+      engine.resumeTimers(redTalkRestarts ? null : snap.timerRemainingMs, LIVE_RESUME_FLOOR_MS);
+      this.scheduleBotActions(roomId);
+    }
+    if (humanIds.length > 0) this.restoredGreeting.set(roomId, new Set(humanIds));
+    console.log(`[live-state] room restored (${room.state}, ${humanIds.length} human, ${snap.bots.length} bot)`);
+    return true;
+  }
+
+  /** 接回來的房間：每個真人第一次連回來時，私下收到「伺服器更新完成，已恢復進度」。 */
+  private greetRestored(socket: Socket, roomId: string, playerId: string): void {
+    const waiting = this.restoredGreeting.get(roomId);
+    if (!waiting?.delete(playerId)) return;
+    if (waiting.size === 0) this.restoredGreeting.delete(roomId);
+    // 晚一點送：重新整理的頁面要先收到房間、聊天框掛上去才收得到。
+    const t = setTimeout(() => {
+      socket.emit('chat:message-received', {
+        id: uuidv4(),
+        roomId,
+        playerId: 'system',
+        playerName: '系統',
+        message: LIVE_RESTORED_TEXT,
+        timestamp: Date.now(),
+        isSystem: true,
+      });
+    }, 1500);
+    t.unref?.();
   }
 
   /**
@@ -418,6 +653,9 @@ export class GameServer {
           this.roomStartTimes.delete(roomId);
         }
       }
+      for (const roomId of this.restoredGreeting.keys()) {
+        if (!this.roomManager.getRoom(roomId)) this.restoredGreeting.delete(roomId);
+      }
     }, 10 * 60 * 1000); // every 10 minutes
 
     // 網站「與機器人練習」: drop practice rooms that ended / went idle.
@@ -439,6 +677,8 @@ export class GameServer {
       // Practice rooms: any event the owner sends for the room counts as
       // activity (idle cleanup). Most game events carry roomId first.
       socket.use((packet, next) => {
+        // 伺服器要關了、房間已經存好：對局動作不收（接回來後照存檔的樣子繼續）。
+        if (this.frozen && typeof packet[0] === 'string' && /^(game|practice):/.test(packet[0])) return;
         const roomArg = packet[1];
         if (typeof roomArg === 'string' && this.practice.has(roomArg)) this.practice.touch(roomArg);
         next();
@@ -488,6 +728,11 @@ export class GameServer {
       );
 
       socket.on('game:join-room', (roomId: string, password?: string) => {
+        // 剛開機：舊的那台可能剛把這間存檔，先看一次存檔再進（伺服器更新時保存進度）。
+        if (typeof roomId === 'string' && !this.roomManager.getRoom(roomId) && this.liveRestore?.inHandover()) {
+          void this.liveRestore.ensureRoom(roomId).finally(() => this.handleJoinRoom(socket, roomId, user, password));
+          return;
+        }
         this.handleJoinRoom(socket, roomId, user, password);
       });
 
@@ -545,12 +790,18 @@ export class GameServer {
         this.handleKickPlayer(socket, roomId, targetPlayerId);
       });
 
-      socket.on('game:add-bot', (roomId: string, _legacyDifficulty?: string) => {
+      socket.on('game:add-bot', (roomId: string, opts?: unknown) => {
         // Edward 2026-04-29 — AI no longer split into easy/normal/hard.
-        // Any difficulty value the client sends is ignored; every bot
+        // A legacy difficulty string in the 2nd argument is ignored; every bot
         // uses the unified strongest strategy (see HeuristicAgent docs).
-        void _legacyDifficulty;
-        this.handleAddBot(socket, roomId);
+        // 站長 2026-11-26：第 2 個參數也可以是 { knightId }——房主指定哪一位 AI騎士（沒給 = 舊的加法，名字「AI」）。
+        const knightRaw = opts && typeof opts === 'object' ? (opts as { knightId?: unknown }).knightId : undefined;
+        this.handleAddBot(socket, roomId, knightRaw);
+      });
+
+      // AI騎士 名冊（練習台、房間的「指定 AI騎士」選單用）。
+      socket.on('knights:list', (ack?: unknown) => {
+        if (typeof ack === 'function') (ack as (res: unknown) => void)({ ok: true, knights: listKnightSummaries() });
       });
 
       socket.on('game:remove-bot', (roomId: string, botId: string) => {
@@ -943,6 +1194,7 @@ export class GameServer {
         // client specifically needs this to re-derive role/team/current
         // phase from an empty store after a page refresh.
         this.broadcastRoomState(roomId, room);
+        this.greetRestored(socket, roomId, playerId);
 
         console.log(`✓ Player ${user.displayName} reconnected to room ${roomId}`);
         return;
@@ -2068,7 +2320,7 @@ export class GameServer {
     }
   }
 
-  private handleAddBot(socket: Socket, roomId: string): void {
+  private handleAddBot(socket: Socket, roomId: string, knightRaw?: unknown): void {
     try {
       const room = this.roomManager.getRoom(roomId);
       if (!room) { socket.emit('error', 'Room not found'); return; }
@@ -2082,9 +2334,10 @@ export class GameServer {
         socket.emit('error', 'Room is full'); return;
       }
 
-      this.addBotToRoom(room);
+      const knightId = resolveKnightId(knightRaw);
+      this.addBotToRoom(room, knightId ?? undefined);
       this.broadcastRoomState(roomId, room);
-      console.log(`✓ Bot AI added to room ${roomId}`);
+      console.log(`✓ Bot AI added to room ${roomId}${knightId ? ` (knight ${knightId})` : ''}`);
     } catch (error) {
       console.error('Error adding bot:', error);
       socket.emit('error', 'Failed to add bot');
@@ -2104,6 +2357,14 @@ export class GameServer {
       if (!p.isBot) continue;
       const agent = this.botAgents.get(pid);
       if (!(agent instanceof HeuristicAgent)) continue;
+      // 指定了 AI騎士（不是百科）：角色剛發好，每一局都照這一局的角色、陣營重建（騎士的開關蓋在策略層上面）。
+      const knightId = this.botKnights.get(pid);
+      if (knightId && knightId !== DEFAULT_KNIGHT_ID) {
+        const team = p.team === 'evil' ? 'evil' : p.team === 'good' ? 'good' : null;
+        this.botAgents.set(pid, new HeuristicAgent(pid, undefined, undefined, { ...overrides, ...knightTuningOverrides(knightId, p.role, team) }));
+        this.botProfiles.set(pid, type);
+        continue;
+      }
       if ((this.botProfiles.get(pid) ?? 'ai') === type) continue;
       this.botAgents.set(pid, new HeuristicAgent(pid, undefined, undefined, overrides));
       this.botProfiles.set(pid, type);
@@ -2112,8 +2373,12 @@ export class GameServer {
     return type;
   }
 
-  /** Seat a new bot (HeuristicAgent) in `room`; returns its id. */
-  private addBotToRoom(room: Room): string {
+  /**
+   * Seat a new bot (HeuristicAgent) in `room`; returns its id.
+   * `knightId`（名冊裡的 id）：座位名換成那位 AI騎士＋這間房沒人用的序號（AI騎士_ED_01、第二位 AI騎士_ED_02）；
+   * 沒給 = 百科（AI騎士_百科_01、_02…）。
+   */
+  private addBotToRoom(room: Room, knightId?: string): string {
     let botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
     while (room.players[botId]) botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
     // Edward 2026-04-29: AI no longer split into difficulty tiers.
@@ -2121,9 +2386,13 @@ export class GameServer {
     // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
     //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
     // chip) disambiguate multiple bots in the same room.
+    // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}。指定了騎士 → 那位騎士＋這間房沒人用的序號（AI騎士_ED_01）；
+    // 沒指定 = 百科：AI騎士_百科_01、_02…
+    const knight = knightId ? getKnight(knightId) : undefined;
+    const name = nextKnightSeatName(knight ? knight.baseName : knightName(), Object.values(room.players).map((p) => String(p.name ?? '')));
     room.players[botId] = {
       id: botId,
-      name: 'AI',
+      name,
       role: null,
       team: null,
       status: 'active',
@@ -2132,6 +2401,8 @@ export class GameServer {
     };
     this.botAgents.set(botId, new HeuristicAgent(botId));
     this.botProfiles.delete(botId);
+    if (knight) this.botKnights.set(botId, knight.id);
+    else this.botKnights.delete(botId);
     return botId;
   }
 
@@ -2152,6 +2423,7 @@ export class GameServer {
       delete room.players[botId];
       this.botAgents.delete(botId);
       this.botProfiles.delete(botId);
+      this.botKnights.delete(botId);
       this.broadcastRoomState(roomId, room);
     } catch (error) {
       console.error('Error removing bot:', error);
@@ -2313,6 +2585,7 @@ export class GameServer {
   private readonly botVoteRecovery = new Map<string, { round: number; proposal: number; attempts: number }>();
 
   private scheduleBotActions(roomId: string): void {
+    if (this.frozen) return; // 伺服器要關了、已經存檔：機器人不再動，接回來後重新排
     const room = this.roomManager.getRoom(roomId);
     if (!room || room.state === 'lobby' || room.state === 'ended') return;
 
@@ -3405,8 +3678,12 @@ export class GameServer {
       room.isPrivate = true;
       room.roleOptions = { ...room.roleOptions, ladyOfTheLake: true };
       room.players[uid].avatar = user.photoURL;
-      const botIds: string[] = [];
-      for (let i = 1; i < PRACTICE_PLAYER_COUNT; i++) botIds.push(this.addBotToRoom(room));
+      // 對手／隊友用哪一位 AI騎士（預設百科；練習房的機器人一律用騎士的座位名，複盤看得出誰坐哪裡）。
+      // 一隻一隻召喚（lineup）：第 k 個機器人照座位順序坐第 k 個機器人座位（引擎的 botOrder），同一位的序號照座位順序 _01、_02。
+      const botIds = (options.lineup
+        ? knightsForLineup(options.lineup, PRACTICE_PLAYER_COUNT - 1, options.fill)
+        : knightsForSeats(options.knight, PRACTICE_PLAYER_COUNT - 1)
+      ).map((id) => this.addBotToRoom(room, id));
 
       this.practice.create(roomId, uid, options, botIds);
       const engine = this.createGameEngine(roomId, room);
@@ -3415,6 +3692,7 @@ export class GameServer {
         seatIndex: options.seat !== null ? options.seat - 1 : undefined,
         role: options.role ?? undefined,
         quietEventLog: true,
+        ...(options.lineup ? { botOrder: botIds } : {}),
       });
       this.gameEngines.set(roomId, engine);
 
@@ -3426,7 +3704,9 @@ export class GameServer {
       if (ack) ack({ ok: true, roomId });
       this.handleStartGame(socket, roomId);
       console.log(
-        `✓ Practice room ${roomId} started (seat=${options.seat ?? 'random'}, role=${options.role ?? 'random'})`,
+        `✓ Practice room ${roomId} started (seat=${options.seat ?? 'random'}, role=${options.role ?? 'random'}, ${options.lineup
+          ? `lineup=${options.lineup.filter(Boolean).length}/9 picked, fill=${options.fill}`
+          : `knight=${options.knight}`})`,
       );
     } catch (error) {
       console.error('[practice] create failed:', error instanceof Error ? error.message : 'unknown');
@@ -3477,6 +3757,11 @@ export class GameServer {
     const entry = check.entry;
     const note = sanitizeFlagNote(obj.note);
     this.practice.commitFlag(roomId, entry.id);
+    // 不是百科的 AI騎士 做的決定：理由前面標出是哪一位（回報的人看的是那位騎士的打法，不是百科AI 本身）。
+    const flagRoom = this.roomManager.getRoom(roomId);
+    const flagBotId = flagRoom ? Object.keys(flagRoom.players)[entry.botSeat - 1] : undefined;
+    const flagKnight = flagBotId ? getKnight(this.botKnights.get(flagBotId)) : undefined;
+    const knightTag = flagKnight && flagKnight.id !== DEFAULT_KNIGHT_ID ? `［${flagKnight.baseName}］` : '';
     const row: PracticeFlagRow = {
       at: Date.now(),
       roomId,
@@ -3486,7 +3771,7 @@ export class GameServer {
       botRole: entry.botRole,
       kind: entry.kind,
       decision: entry.action,
-      reason: [entry.reason, entry.rule ? `規則：${entry.rule}` : '', entry.knowledge ?? '']
+      reason: [knightTag, entry.reason, entry.rule ? `規則：${entry.rule}` : '', entry.knowledge ?? '']
         .filter(Boolean)
         .join(' '),
       note,
@@ -3548,14 +3833,19 @@ export class GameServer {
 
   private buildPracticePayload(roomId: string, room: Room): PracticeTracePayload {
     const session = this.practice.get(roomId);
-    const seats = Object.entries(room.players).map(([pid, p], i) => ({
-      seat: i + 1,
-      playerId: pid,
-      name: p.name,
-      role: p.role ?? null,
-      team: p.team ?? null,
-      isBot: p.isBot === true,
-    }));
+    const seats = Object.entries(room.players).map(([pid, p], i) => {
+      const seat: PracticeTracePayload['seats'][number] = {
+        seat: i + 1,
+        playerId: pid,
+        name: p.name,
+        role: p.role ?? null,
+        team: p.team ?? null,
+        isBot: p.isBot === true,
+      };
+      const knight = p.isBot ? getKnight(this.botKnights.get(pid)) : undefined;
+      if (knight) { seat.knightId = knight.id; seat.knightName = knight.baseName; }
+      return seat;
+    });
     return {
       roomId,
       ownerId: session?.ownerId ?? room.host,
@@ -3877,11 +4167,11 @@ export class GameServer {
     const room = this.roomManager.getRoom(roomId);
     if (room) {
       for (const [pid, p] of Object.entries(room.players)) {
-        if (p.isBot) { this.botAgents.delete(pid); this.botProfiles.delete(pid); }
+        if (p.isBot) { this.botAgents.delete(pid); this.botProfiles.delete(pid); this.botKnights.delete(pid); }
       }
     }
     // Also when the room is already gone (removed by another cleanup path).
-    for (const botId of session?.botIds ?? []) { this.botAgents.delete(botId); this.botProfiles.delete(botId); }
+    for (const botId of session?.botIds ?? []) { this.botAgents.delete(botId); this.botProfiles.delete(botId); this.botKnights.delete(botId); }
     this.spectators.delete(roomId);
     if (session) {
       const socketId = this.playerToSocket.get(session.ownerId);

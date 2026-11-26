@@ -1389,6 +1389,8 @@ class CommittedCachePropertyTest(unittest.TestCase):
 SNAPSHOT = Path(__file__).resolve().parent / "sheets_cache.json"
 # player name -> key table shared with the TS matcher's test (src/__tests__/PlayerNameLookup.test.ts).
 NAME_KEY_CASES = Path(__file__).resolve().parent / "src" / "__tests__" / "fixtures" / "player_name_keys.json"
+# AI騎士 名字（站長 2026-11-26）：同 src/__tests__/KnightNames.test.ts。
+KNIGHT_NAME_CASES = Path(__file__).resolve().parent / "src" / "__tests__" / "fixtures" / "knight_names.json"
 REBUILD_FINGERPRINT = {"totalGames": 2146, "totalPlayers": 198, "threeRed": 999, "threeBlueDead": 499, "threeBlueAlive": 648}
 GAME_1276_PLAYERS = ['Tovo Wren', 'Ilse Marr', 'Quill Fen', 'Fable Alder', 'Fable Birch', 'Fable Cedar', 'Fable Elm', 'Fable Fir', 'Fable Hazel', 'Fable Willow']
 
@@ -2813,7 +2815,9 @@ class PlayerAliasTest(unittest.TestCase):
             path = Path(tmp) / "player_aliases.json"
             self.assertIs(gc.load_player_aliases(path), gc.NO_ALIASES)  # no file = no aliases
             path.write_text(json.dumps(TEST_ALIASES_DOC), encoding="utf-8")
-            self.assertEqual(gc.load_player_aliases(path), sample_aliases())
+            # 載入時加上 AI騎士 的別名（with_knight_aliases，站長 2026-11-26）
+            self.assertEqual(gc.load_player_aliases(path), gc.parse_player_aliases(gc.with_knight_aliases(TEST_ALIASES_DOC)))
+            self.assertEqual(gc.load_player_aliases(path).identity_key("Tovo Wren"), sample_aliases().identity_key("Tovo Wren"))
             path.write_text('{"aliases": {"Tovo Wren": "Ilse Marr",}}', encoding="utf-8")
             with self.assertRaises(gc.FatalError) as caught:
                 gc.load_player_aliases(path)
@@ -4100,9 +4104,36 @@ class GamesDatasetTest(unittest.TestCase):
         tampered["key"] = "0" * 16
         self.assertIn("key does not match the content", gc.games_dataset_privacy_problems(tampered))
 
+    def test_knight_names_match_the_ts_fixture(self) -> None:
+        # 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}；同一份表也給 @avalon/shared knights.ts 測（KnightNames.test.ts）
+        cases = json.loads(KNIGHT_NAME_CASES.read_text(encoding="utf-8"))["cases"]
+        for c in cases:
+            with self.subTest(name=c["name"]):
+                self.assertEqual(gc.knight_display_name(c["name"]), c["display"])
+                self.assertEqual(gc.knight_stats_name(c["name"]), c["stats"])
+                self.assertEqual(gc.is_pedia_bot_name(c["name"]), c["bot"])
+
+    def test_knight_aliases_join_old_and_new_bot_names(self) -> None:
+        # 新舊名字在戰績上是同一位；檔案裡「百科AI_n → 百科AI」的寫法也接得上（不改存下來的紀錄）
+        aliases = gc.parse_player_aliases(gc.with_knight_aliases({"aliases": {"百科AI_1": "百科AI", "虛構甲2": "虛構甲"}}))
+        ident = aliases.identity_key
+        self.assertEqual(ident("百科AI_1"), ident("AI騎士_百科_01"))
+        self.assertEqual(ident("百科AI"), ident("AI騎士_百科_27"))
+        self.assertEqual(ident("百科ＡＩ_99"), gc.player_name_key("AI騎士_百科"))
+        self.assertEqual(aliases.official[gc.player_name_key("AI騎士_百科")], "AI騎士_百科")
+        self.assertEqual(ident("虛構甲2"), gc.player_name_key("虛構甲"))
+        self.assertEqual(ident("AI騎士_穩健_01"), gc.player_name_key("AI騎士_穩健_01"))
+        self.assertTrue(gc.is_pedia_bot_name("AI騎士_百科_03"))
+        # 檔案沒寫的編號也有程式裡的別名；真的 player_aliases.json 載入時也接得上
+        self.assertEqual(gc.parse_player_aliases(gc.with_knight_aliases({"aliases": {}})).identity_key("百科AI_5"), gc.player_name_key("AI騎士_百科"))
+        real = gc.load_player_aliases(show_names=False)
+        self.assertEqual(real.identity_key("百科AI_81"), real.identity_key("AI騎士_百科_81"))
+        # 檔案本身不改：格式錯的照樣報錯
+        self.assertEqual(gc.with_knight_aliases({"aliases": 3}), {"aliases": 3})
+
     def test_bot_games_are_counted_separately(self) -> None:
         # Edward 2026-11-03「有百科AI的另外算」：分類「百科AI」，或座位有百科AI 暱稱的局（名字都是虛構的）
-        self.assertTrue(all(gc.is_pedia_bot_name(n) for n in ("百科AI_3", "百科ai_0", "百科ＡＩ_1", " 百科機器人A")))
+        self.assertTrue(all(gc.is_pedia_bot_name(n) for n in ("百科AI_3", "百科ai_0", "百科ＡＩ_1", " 百科機器人A", "AI騎士_百科_03", "ＡＩ騎士_穩健_01")))
         self.assertFalse(any(gc.is_pedia_bot_name(n) for n in ("阿瓦隆百科", "測試3", "", None)))
         bot_names = ["百科AI_1"] + SEAT_NAMES[1:9] + ["百科ＡＩ_2"]
         header = DATASET_HEADERS + ["discord_post_id"]
@@ -4114,12 +4145,13 @@ class GamesDatasetTest(unittest.TestCase):
         self.assertEqual((len(merged.games), len(merged.raw_rows)), (235, 236))  # 暫存匯出（機器人訓練）也沒有它們
         self.assertIn(f"2 of them with 百科AI, counted separately (category {gc.BOT_CATEGORY}", merged.summary())
         # run 的流程：人類局照舊，百科AI 局用人類局的寫法、別名併成「百科AI」，接在資料集最後
-        aliases = gc.parse_player_aliases({"aliases": {"百科AI_1": "百科AI", "百科AI_2": "百科AI"}})
+        aliases = gc.parse_player_aliases(gc.with_knight_aliases({"aliases": {"百科AI_1": "百科AI", "百科AI_2": "百科AI"}}))
         human, _ = gc.drop_dates_after(merged.games, TEST_AS_OF)
         human, names = gc.canonicalize_player_names(human, aliases)
         human = gc.assign_timeline_dates(human)
         bots = gc.canonicalize_bot_games(merged.bot_games, names, aliases)
-        self.assertEqual((bots[0].seat_players["1"], bots[0].seat_players["0"], bots[0].seat_players["2"]), ("百科AI", "百科AI", "乙"))
+        # AI騎士（站長 2026-11-26）：舊名字 百科AI_n 併成 AI騎士_百科（程式裡的別名表，檔案指向「百科AI」的也改指它）
+        self.assertEqual((bots[0].seat_players["1"], bots[0].seat_players["0"], bots[0].seat_players["2"]), ("AI騎士_百科", "AI騎士_百科", "乙"))
         dataset = gc.encode_games_dataset(human, names.aliases, bots)
         _, cache = dataset_and_cache(human)
         cache["overview"]["gamesKey"] = dataset["key"]
@@ -4136,7 +4168,7 @@ class GamesDatasetTest(unittest.TestCase):
         self.assertEqual([r[lineup] for r in rows[-2:]], [[], []])  # 不評陣容強度
         self.assertEqual([r[lineup] for r in rows[:-2]], [r[lineup] for r in self.dataset["games"]])  # 人類局的 Elo 不受影響
         self.assertEqual(dataset["players"][:len(self.dataset["players"])], self.dataset["players"])
-        self.assertEqual(dataset["players"][-1], "百科AI")
+        self.assertEqual(dataset["players"][-1], "AI騎士_百科")
         self.assertEqual([g.category for g in gc.decode_games_dataset(dataset)[-2:]], [gc.BOT_CATEGORY] * 2)
         # 守門：百科AI 局必須在最後、不能有陣容強度
         moved = copy.deepcopy(dataset)

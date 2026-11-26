@@ -43,9 +43,11 @@ export const UNVERIFIED_PREFIX = '【待檢視】';
  * is_robot 是 false），所以記錄員靠暱稱認：有它的局一律待檢視，內文寫它坐哪一家；檢視後匯入成分類「百科AI」（另外算、不進戰績）。
  * 以「百科機器人」開頭的暱稱都算（scripts/signagePlay.ts 的模擬戰用 百科機器人A～I）。
  */
-export const BOT_NICK = '百科AI_0';
-/** Edward 2026-11-03：暱稱改「百科AI_{#}」（例 百科AI_1），戰績上全部當同一個人「百科AI」；舊的「百科機器人…」照樣認。 */
-const BOT_NICK_RE = /^百科(機器人|AI)/i;
+/** 第 n 號補位機器人的暱稱 `AI騎士_百科_{##}`（站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}，風格沒指定 = 百科；同 @avalon/shared knightName）。 */
+export const botNickOf = (n: number): string => `AI騎士_百科_${n >= 0 && n < 10 ? `0${n}` : n}`;
+export const BOT_NICK = botNickOf(0);
+/** 暱稱 AI騎士_…（站長 2026-11-26）；舊的「百科AI_{#}」（Edward 2026-11-03）、「百科機器人…」照樣認。戰績上都是同一位「AI騎士_百科」。 */
+const BOT_NICK_RE = /^(?:百科(?:機器人|AI)|AI騎士)/i;
 /** 這個暱稱是百科機器人（補位或模擬戰）。 */
 export const isPediaBotName = (name: string): boolean => BOT_NICK_RE.test(name.trim());
 /** 百科機器人私房測試的房間描述開頭（signagePlayer --mode private-test）：記錄員不旁觀這種房間。 */
@@ -167,7 +169,7 @@ export function noPostReason(game: RecordedGame): string | null {
   if (robots) return `有練習台內建機器人（${robots} 個）`;
   // 2026-11-09：有百科AI 的局由百科AI 自己貼到牌譜區（同格式，附 trace.json），記錄員不重複貼
   const bots = botSeats(game).length;
-  return bots ? `有百科AI（${bots} 個，由百科AI 自己貼）` : null;
+  return bots ? `有AI騎士（${bots} 個，由AI騎士 自己貼）` : null;
 }
 
 /** 只貼真人 10 人局（遊玩頁內建機器人的練習局不貼）。 */
@@ -181,7 +183,7 @@ export function postSkipReason(game: RecordedGame): string | null {
   if (users.length !== 10) return `${users.length} 人局`;
   if (users.some((u) => (u as { is_robot?: boolean } | null)?.is_robot)) return '有機器人';
   const bots = botSeats(game);
-  if (bots.length) return `百科機器人參與（坐 ${bots.map(d).join('、')} 家），不是真人紀錄`;
+  if (bots.length) return `AI騎士參與（坐 ${bots.map(d).join('、')} 家），不是真人紀錄`;
   // 記錄員中途才進房的局（開局前的提議與任務沒看到）不貼：10/31 第一晚就貼出一篇缺第 1 局的牌譜
   if ((game as { joinedMidGame?: boolean }).joinedMidGame) return '中途加入';
   return isCompleteRecord(game) ? null : '牌譜不完整（沒打完或提議／任務人數不對）';
@@ -257,7 +259,7 @@ export function paipuTags(game: RecordedGame): string[] {
 export function unverifiedThreadName(game: RecordedGame): string {
   const when = game.startedAt ?? game.endedAt;
   const room = String(game.room ?? '').replace(/\s+/g, '');
-  const parts = [botSeats(game).length ? '含百科機器人' : '', twDay(when), twHHMM(when), room, hasValidConfig(game) ? paipuConfig(game) : ''].filter(Boolean);
+  const parts = [botSeats(game).length ? '含AI騎士' : '', twDay(when), twHHMM(when), room, hasValidConfig(game) ? paipuConfig(game) : ''].filter(Boolean);
   return `${UNVERIFIED_PREFIX}${parts.join('_') || '未知局'}`.slice(0, 100);
 }
 

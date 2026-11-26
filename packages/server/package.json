@@ -25,7 +25,13 @@
     "concepts:stamp": "tsx scripts/concepts.ts stamp",
     "console:export": "tsx scripts/consoleExport.ts",
     "bot:gap": "tsx scripts/botGap.ts",
-    "bot:calibration": "tsx scripts/beliefCalibrationCurve.ts"
+    "bot:calibration": "tsx scripts/beliefCalibrationCurve.ts",
+    "arena:check": "tsx scripts/arenaCheck.ts",
+    "arena:local": "tsx scripts/arenaLocal.ts",
+    "arena:tournament": "tsx scripts/arenaTournament.ts",
+    "arena:knobs": "tsx scripts/arenaKnobs.ts",
+    "knights:generate": "tsx scripts/knightsGenerate.ts",
+    "arena:daily": "tsx scripts/arenaDaily.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",

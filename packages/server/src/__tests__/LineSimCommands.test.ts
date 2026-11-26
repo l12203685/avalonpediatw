@@ -225,7 +225,7 @@ describe('mirror group', () => {
     await deliver(h, groupText('/模擬 忠臣 4', 'm1', 'rt1', GROUP, { webhookEventId: 'E1', deliveryContext: { isRedelivery: false } }));
     await deliver(h, groupText('/區間', 'm2', 'rt2', GROUP, { webhookEventId: 'E2', deliveryContext: { isRedelivery: false } }));
     expect(h.replies).toHaveLength(2);
-    expect(h.replies[1].messages[0].text).toContain('百科AI 怎麼讀】');
+    expect(h.replies[1].messages[0].text).toContain('AI騎士 怎麼讀】');
     await deliver(h, groupText('/區間', 'm2', 'rt2b', GROUP, { webhookEventId: 'E2', deliveryContext: { isRedelivery: true } }));
     expect(h.replies).toHaveLength(2); // nothing queued, nothing to say: no reply at all
     await deliver(h, groupText('/模擬 忠臣 4', 'm1', 'rt1b', GROUP, { webhookEventId: 'E1', deliveryContext: { isRedelivery: true } }));
@@ -303,7 +303,7 @@ describe('mirror group', () => {
     await Promise.all([first, second]);
     h.setReplyDelay(0);
     expect(h.replies.map((r) => r.token)).toEqual(['rt1', 'rt2', 'rt3']);
-    expect(h.replies[2].messages[0].text).toContain('百科AI 怎麼讀】');
+    expect(h.replies[2].messages[0].text).toContain('AI騎士 怎麼讀】');
     // Both commands landed: /公布 lists the answer.
     expect(getSimEngine().counts.answers).toBe(1);
     expect(getSimEngine().counts.aiReads).toBe(1);
@@ -384,7 +384,7 @@ describe('mirror group', () => {
     await deliver(h, groupText('/結束', 'x3', 'rx3b', GROUP, { webhookEventId: 'X3', deliveryContext: { isRedelivery: true } }));
     expect(h.replies).toHaveLength(3);
     await deliver(h, fromU2('/區間', 'x4', 'rx4'));
-    expect(h.replies.at(-1)?.messages[0].text).toMatch(/^【W0000-2 百科AI 怎麼讀】/u); // U2's own, still open
+    expect(h.replies.at(-1)?.messages[0].text).toMatch(/^【W0000-2 AI騎士 怎麼讀】/u); // U2's own, still open
   });
 
   it('a member without an exercise co-answers the newest one in the group (marked 代答, not mirrored); /模擬 說明 lists the commands', async () => {
