@@ -11,6 +11,7 @@ const zhTW = {
   title: 'AI騎士團',
   intro: '跟 AI騎士 有關的都在這裡：看它打過的局、它怎麼變強、擂台排行、跟它練習，也可以一起改它。',
   navLabel: 'AI騎士團',
+  navShort: 'AI騎士',
   navTitle: 'AI騎士團：AI騎士的對局、優化歷程、擂台、練習',
   tabs: {
     games: '對局',
@@ -37,6 +38,7 @@ const en: typeof zhTW = {
   title: 'AI Knights',
   intro: 'Everything about the AI Knights in one place: the games they played, how they improved, the arena leaderboard, practice games, and how to help improve them.',
   navLabel: 'AI Knights',
+  navShort: 'AI',
   navTitle: 'AI Knights: games, progress, arena and practice',
   tabs: {
     games: 'Games',

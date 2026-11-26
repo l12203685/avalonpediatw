@@ -182,7 +182,7 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
           ))}
           {/* AI騎士團（站長 2026-11-26：與百科AI 有關的全部挪到一個頁面下）：原本的「與機器人練習」「百科AI 對局」兩顆合成這一顆，
               開 AI騎士團（對局、優化歷程、擂台、我的騎士、練習、一起改），在那幾頁時都是按下的樣子。
-              400px 以下只有圖示；400–1023px 圖示＋字；1024–1279px 一列最擠，只有圖示；1280px 以上只有字 */}
+              360px 以下只有圖示；360–639px 只有短字「AI騎士」（390px 手機放得下）；640–1023px 圖示＋字；1024–1279px 一列最擠，只有圖示；1280px 以上只有字 */}
           <button
             type="button"
             onClick={() => {
@@ -202,8 +202,9 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
                 : 'border-amber-500/60 bg-zinc-900 text-amber-100 hover:bg-zinc-800 hover:text-white'
             }`}
           >
-            <Bot size={15} className="flex-shrink-0 xl:hidden" />
-            <span className="hidden min-[400px]:inline lg:hidden">{tk('navLabel')}</span>
+            <Bot size={15} className="flex-shrink-0 min-[360px]:hidden sm:block xl:hidden" />
+            <span className="hidden min-[360px]:inline sm:hidden">{tk('navShort')}</span>
+            <span className="hidden sm:inline lg:hidden">{tk('navLabel')}</span>
             <span className="hidden xl:inline">{tk('navLabel')}</span>
           </button>
           <button
