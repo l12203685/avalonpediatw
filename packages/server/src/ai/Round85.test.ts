@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentTuning } from './AgentTuning';
 import { AGENT_TUNING_KEYS, DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
-import { r1Split85Applies, r1Split85Team, r1SplitCore85, round85Stats } from './Round85';
+import { failTest85Applies, failTest85Team, failTestTeam85, r1Split85Applies, r1Split85Team, r1SplitCore85, round85Stats } from './Round85';
 import { tuningForOpponent } from './humanProfile';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
 import { answerScenario, buildScenario, observationOf, runScenario, type ScenarioFile, type ScenarioFixture } from './scenarios/scenarioSuite';
@@ -24,7 +24,7 @@ const ids = (s: string): string[] => [...s].map((c) => seatId(c === '0' ? 10 : N
 
 describe('round 85 flags', () => {
   it('exist, default off everywhere, parse and describe', () => {
-    for (const k of ['r1Split85', 'r1Split85Scope'] as const) {
+    for (const k of ['r1Split85', 'r1Split85Scope', 'failTest85', 'failTest85Scope'] as const) {
       expect(AGENT_TUNING_KEYS).toContain(k);
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
       expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
@@ -37,6 +37,10 @@ describe('round 85 flags', () => {
     expect(() => parseTuningFlag('r1Split85Scope=8')).toThrow();
     expect(describeAgentTuning(T({ r1Split85: 0.9 }))).toContain('r1Split85=0.9');
     expect(describeAgentTuning(T())).not.toContain('r1Split85');
+    expect(parseTuningFlag('failTest85')).toEqual({ failTest85: 0.9 });
+    expect(parseTuningFlag('failTest85Scope=1')).toEqual({ failTest85Scope: 1 });
+    expect(() => parseTuningFlag('failTest85Scope=2')).toThrow();
+    expect(describeAgentTuning(T({ failTest85: 0.5 }))).toContain('failTest85=0.5');
   });
 });
 
@@ -111,16 +115,68 @@ describe('round 85 pick', () => {
 });
 
 describe('round 85 scenario cases (fixtures.json, cls r85)', () => {
-  // Not `hard` (only A0 / A1 / the owner's written rulings may be), but the reported spot is checked here on every profile the site uses.
+  // Not `hard` (only A0 / A1 / the owner's written rulings may be). The reported spot (R1 + X failed) is answered by the default and every
+  // human table; the owner's 11/26 rule (a non-tail loyal / Percival tests part of the team that just failed) needs `failTest85` on —
+  // the default 2 家 in R85-fail-r1-loyal-on sends 2346 (none of 1 / 5).
   const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'scenarios', 'fixtures.json'), 'utf8')) as ScenarioFile;
   const cases = file.scenarios.filter((x) => x.cls === 'r85');
-  it('there are four, and the default and every human table answer all of them', () => {
-    expect(cases).toHaveLength(4);
+  const pass = (c: ScenarioFixture, tun: AgentTuning) => runScenario(c, buildScenario(c), tun, ['', 'a', 'b']);
+  it('seven cases; the default misses only the owner-rule case with the leader on the failed team', () => {
+    expect(cases).toHaveLength(7);
     for (const type of ['ai', 'weakHuman', 'avgHuman', 'strongHuman'] as const) {
       for (const c of cases) {
-        const r = runScenario(c, buildScenario(c), tuningForOpponent(type, DEFAULT_AGENT_TUNING), ['', 'a', 'b']);
-        expect({ id: c.id, type, pass: r.pass, why: r.why }).toEqual({ id: c.id, type, pass: 1, why: [] });
+        const r = pass(c, tuningForOpponent(type, DEFAULT_AGENT_TUNING));
+        expect({ id: c.id, type, pass: r.pass }).toEqual({ id: c.id, type, pass: c.id === 'R85-fail-r1-loyal-on' ? 0 : 1 });
       }
     }
+  }, 120_000);
+  it('with r1Split85 and failTest85 on (λ 0.01) every case passes on the default and the average human table', () => {
+    for (const type of ['ai', 'avgHuman'] as const) {
+      const tun = tuningForOpponent(type, { ...DEFAULT_AGENT_TUNING, r1Split85: 0.01, failTest85: 0.01 });
+      for (const c of cases) expect({ id: c.id, type, why: pass(c, tun).why }).toEqual({ id: c.id, type, why: [] });
+    }
+  }, 120_000);
+});
+
+describe('round 85 failTest85 (site owner 11/26「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」)', () => {
+  // 第 1 局 125 一張失敗（5 家刺客）；第 2 局第 1 次是 2 家忠臣（在失敗那一隊上），第 2 次是 3 家忠臣（不在）。
+  const R2_LEAD2 = ['125 346+', 'oox'];
+  const R2_LEAD3 = [...R2_LEAD2, '2346'];
+  it('spot: R2+ after a failed mission, non-tail only', () => {
+    expect([...failTestTeam85(observationOf(buildScenario(fx(R2_LEAD3))))!].sort()).toEqual(ids('125').sort());
+    expect(failTestTeam85(observationOf(buildScenario(fx(['125 346+', 'ooo']))))).toBeNull();
+    // the fifth (tail) proposal is not in scope
+    const tail = observationOf(buildScenario(fx([...R2_LEAD2, '2346', '3456', '4567', '5678'])));
+    expect(tail.failCount).toBe(4);
+    expect(failTestTeam85(tail)).toBeNull();
+    const o = observationOf(buildScenario(fx(R2_LEAD3)));
+    expect(failTest85Applies(T(), o)).toBe(false);
+    expect(failTest85Applies(T({ failTest85: 0.9 }), o)).toBe(true);
+  });
+
+  it('a team holding none of the failed team gets the cleanest team testing part of it; a team already holding one is kept', () => {
+    for (const rec of [R2_LEAD2, R2_LEAD3]) {
+      const o = observationOf(buildScenario(fx(rec)));
+      const failed = ids('125').filter((id) => id !== o.myPlayerId);
+      const none = [o.myPlayerId, ...ids('34680').filter((id) => id !== o.myPlayerId)].slice(0, 4);
+      expect(none.some((id) => failed.includes(id))).toBe(false);
+      const alt = failTest85Team(T({ failTest85: 0.01 }), o, none)!;
+      expect(alt).not.toBeNull();
+      expect(alt).toContain(o.myPlayerId);
+      const k = alt.filter((id) => failed.includes(id)).length;
+      expect(k).toBeGreaterThanOrEqual(1);
+      expect(k).toBeLessThan(failed.length);
+      expect(failTest85Team(T({ failTest85: 0.01 }), o, [o.myPlayerId, failed[0], ...none.slice(1, 3)])).toBeNull();
+      expect(failTest85Team(T(), o, none)).toBeNull();
+    }
+  });
+
+  it('模擬瓦 reads the live bot on the average human table, so a switch in the default or the human reading reaches it', async () => {
+    const { defaultBot, SIM_OPPONENT } = await import('../bots/simulation/aiRead');
+    expect(SIM_OPPONENT).toBe('avgHuman');
+    expect(defaultBot).toBeTypeOf('function');
+    const t = tuningForOpponent('avgHuman', { ...DEFAULT_AGENT_TUNING, failTest85: 0.5, r1Split85: 0.5 });
+    expect(t.failTest85).toBe(0.5);
+    expect(t.r1Split85).toBe(0.5);
   });
 });

@@ -94,7 +94,7 @@ import { merlinCover77Now, merlinCover77TeamOk, round77Stats } from '../Round77'
 import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import { tierCover82Applies, tierCover82Team } from '../Round82';
 import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
-import { r1Split85Applies, r1Split85Team } from '../Round85';
+import { failTest85Applies, failTest85Team, r1Split85Applies, r1Split85Team } from '../Round85';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -833,6 +833,13 @@ export class ForwardAgent implements AvalonAgent {
    * (full posterior) team among those within κ of the best — gates, own vote rules, the thumb plan and the lake / proven-red bar still bind.
    */
   private post56(obs: PlayerObservation, d: ForwardDecision): ForwardDecision {
+    // Round 85 `failTest85` (Round85.ts; site owner 11/26「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」): a non-tail loyal / Percival proposal after a
+    // failed mission that holds none of that team's players is replaced by the cleanest team testing part of it, when within λ (off: unchanged).
+    // Here (not in decideFlow) so the R2 pick of `goLike56` (human tables: picked as if it goes) is covered as well.
+    if (d.action.type === 'team_select' && failTest85Applies(this.baseline.tuning, obs)) {
+      const test = failTest85Team(this.baseline.tuning, obs, d.action.teamIds, (team) => this.repairGateOk39(obs, team));
+      if (test) d = { ...d, action: { type: 'team_select', teamIds: test }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → tests part of the team that just failed (round 85)` } };
+    }
     if (d.action.type !== 'team_select' || !missionJoint56Applies(this.baseline.tuning, obs)) return d;
     const team = missionJoint56Team(this.baseline.tuning, obs, d.action.teamIds, (t) => this.repairGateOk39(obs, t));
     if (!team) return d;

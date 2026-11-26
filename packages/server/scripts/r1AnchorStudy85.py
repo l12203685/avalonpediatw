@@ -130,6 +130,46 @@ def analyse(games, live_ai_only=False):
     return C, T
 
 
+def analyse_fail(games, live_ai_only=False):
+    """站長 2026-11-26「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」：前一局任務失敗（開紅）之後，下一局第 1–4 次提議（非尾派）
+    隊上有幾個前一局失敗那一隊的人（不含隊長自己）：0 = 沒碰、部分 = 拆開測、全部 = 整隊留。分隊長角色 × 隊長在不在失敗那一隊上。"""
+    C = defaultdict(lambda: [0, 0])
+    for g in games:
+        if not g.get('rounds') or not g.get('leaderKnown'):
+            continue
+        roles = g['roles']
+        rounds = g['rounds']
+        gidx = 0
+        starts = []
+        for r in rounds:
+            starts.append(gidx)
+            gidx += len(r['p'])
+        for k in range(1, len(rounds)):
+            if not failed(k - 1, rounds[k - 1]['m']):
+                continue
+            F = set(rounds[k - 1]['p'][-1][0])
+            for pi, p in enumerate(rounds[k]['p']):
+                if p[2] or pi >= 4:
+                    continue
+                L = leader_of(starts[k] + pi)
+                if live_ai_only and L not in g.get('aiSeats', set()):
+                    continue
+                c = cls_of(roles[L])
+                if c not in ('loyal', 'percival'):
+                    continue
+                Fo = F - {L}
+                o = len(set(p[0]) & Fo)
+                cat = 'none' if o == 0 else ('all' if o == len(Fo) else 'part')
+                on = 'on' if L in F else 'off'
+                for key in (f'F|{c}', f'F|lp', f'F|lp|{on}', f'F|lp|R{k + 1}'):
+                    for cc in ('none', 'part', 'all'):
+                        C[f'{key}|{cc}'][0] += cat == cc
+                        C[f'{key}|{cc}'][1] += 1
+                    C[f'{key}|dirty'][0] += sum(1 for x in p[0] if roles[x] in RED) >= NEED[k]
+                    C[f'{key}|dirty'][1] += 1
+    return C
+
+
 def live_games(d):
     """網站百科AI 對局的 trace → 同一個格式（座位以第 1 局第 1 個隊長為 1家）。"""
     zh = {'刺客': 'assassin', '莫甘娜': 'morgana', '莫德雷德': 'mordred', '奧伯倫': 'oberon', '派西維爾': 'percival', '梅林': 'merlin'}
@@ -231,6 +271,14 @@ def main():
                     L.append(f'| {lab} | ' + ' | '.join(fmt(*res[n]['T'].get(f'{tag}|{tk}', [0, 0])) for n in names) + ' |')
             for key, lab in ((f'C|{tag}|withR1', '下一局出任務的隊包含第 1 局的隊：任務成功 %'), (f'C|{tag}|noR1', '下一局出任務的隊拆掉第 1 局的隊：任務成功 %')):
                 L.append(f'| {lab} | ' + ' | '.join(fmt(*res[n]['C'].get(key, [0, 0])) for n in names) + ' |')
+    L.append('\n### C. 站長 11/26「非尾派忠臣／派西也應該要找前一局開紅的」：前一局失敗之後，第 1–4 次提議（忠臣＋派西隊長）隊上有幾個失敗那一隊的人（不含自己）\n')
+    F = {n: analyse_fail(gs, ai) for n, gs, ai in groups}
+    L.append('| 隊長 | 失敗那一隊的人 | ' + ' | '.join(names) + ' |')
+    L.append('|---|---|' + '---|' * len(names))
+    for key, lab in (('F|lp', '忠臣＋派西'), ('F|loyal', '忠臣'), ('F|percival', '派西'), ('F|lp|off', '不在失敗那一隊上'), ('F|lp|on', '在失敗那一隊上'),
+                     ('F|lp|R2', '第 2 局'), ('F|lp|R3', '第 3 局'), ('F|lp|R4', '第 4 局'), ('F|lp|R5', '第 5 局')):
+        for cc, cl in (('none', '一個都沒帶 %'), ('part', '帶一部分（拆開測）%'), ('all', '整隊都帶 %'), ('dirty', '隊會失敗 %')):
+            L.append(f'| {lab} | {cl} | ' + ' | '.join(fmt(*F[n].get(f'{key}|{cc}', [0, 0])) for n in names) + ' |')
     L.append('\n**B 格裡藍方隊長照派第 1 局的隊＋人時，第 1 局的隊上真的有紅 %**\n')
     L.append('| 隊長 | ' + ' | '.join(names) + ' |')
     L.append('|---|' + '---|' * len(names))

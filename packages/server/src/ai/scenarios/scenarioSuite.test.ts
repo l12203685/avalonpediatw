@@ -89,6 +89,8 @@ describe('checks', () => {
     const ans = { team: [1, 2, 7], text: '派 127', pRed: [0, 0.2, 0.1, 0.3, 0.3, 0.3, 0.9, 0.5, 0.5, 0.5] };
     expect(checkAnswer(b, ans, { teamHas: '12' })).toBe('');
     expect(checkAnswer(b, ans, { teamLacks: '7' })).toContain('不該帶 7');
+    expect(checkAnswer(b, ans, { teamHasSome: '1' })).toBe('');
+    expect(checkAnswer(b, ans, { teamHasSome: '90' })).toContain('一個都沒帶');
     expect(checkAnswer(b, ans, { teamIs: ['127', '123'] })).toBe('');
     expect(checkAnswer(b, ans, { teamNot: ['721'] })).toContain('不該派');
     expect(checkAnswer(b, ans, { teamRedsMax: 0 })).toContain('隊上的紅：7');

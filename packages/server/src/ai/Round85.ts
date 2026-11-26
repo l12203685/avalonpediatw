@@ -20,6 +20,17 @@
  *     第 30 回合的 `loyalR2Reuse` 是同一個做法用在第 2 局（第 1 局成功之後），所以第 2 局那一半直接用那個開關量，不另寫。
  *   - `r1Split85Scope`（位元）：1 = 梅林也做；2 = 不只前一局——之前任何一局出了失敗牌、包含整個第 1 局的隊都算；4 = 強制局也做。
  *
+ * 站長 2026-11-26 補充（原話）：「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」——非尾派（第 1–4 次提議）的忠臣／派西隊長，前一局任務失敗（開紅）之後，
+ * 提議要用到失敗那一隊的資訊：帶其中一部分的人把他們拆開測，不是完全不碰。
+ *   - 量測（`r1AnchorStudy85.py` 第 C 節）：機器人忠臣＋派西這種提議一個都沒帶 22%（真人 25.1%、兩邊都強 21.5%），帶一部分 78%（真人 74.6%、兩邊都強 78.2%）——
+ *     整體已經和強的真人一樣；第 2 局（第 1 局失敗之後）一個都沒帶 47%（真人 44.7%、兩邊都強 42.9%）。
+ *   - `failTest85 = λ`：前一局任務失敗、非尾派、忠臣／派西當隊長、正式流程最後派的隊**一個都沒有**失敗那一隊的人（隊長自己以外）時，
+ *     「含自己、帶失敗那一隊一部分的人（至少一個、不是全部）」的隊裡後驗 P(沒有紅) 最高的那一隊 ≥ λ × 原本那一隊 → 改派那一隊。
+ *     和 `r1Split85` 一起開 = 「找前一局開紅的、但不是整個舊的乾淨核心＋新面孔」。`failTest85Scope` 位元 1 = 梅林也做。
+ *
+ * 模擬瓦「百科AI 會派的組合」用的是正式機器人（`bots/simulation/aiRead.ts`：一般真人桌 = `tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING)`），
+ * 所以這兩個開關只要放進基準線或真人桌的讀法，模擬瓦就跟著變。
+ *
  * 純函式；沒有 `Math.random`。
  */
 import type { PlayerObservation } from './types';
@@ -29,7 +40,7 @@ import { goodVouchTeamConstraint } from './GoodLakeFollowUp';
 import { ownVoteRejects } from './GoodLeadConsistent';
 
 /** 自我對打的計數（只給 `sp.ts` 印；不影響決策）。 */
-export const round85Stats = { spots: 0, split: 0, keptMath: 0, noAlt: 0 };
+export const round85Stats = { spots: 0, split: 0, keptMath: 0, noAlt: 0, fSpots: 0, fTest: 0, fKeptMath: 0, fNoAlt: 0 };
 
 const subset = (a: readonly string[], b: readonly string[]): boolean => a.every((x) => b.includes(x));
 
@@ -105,5 +116,63 @@ export function r1Split85Team(
     return t;
   }
   round85Stats.noAlt++;
+  return null;
+}
+
+/** `failTest85` 的格：第 2 局起、非尾派（第 1–4 次）、前一局任務失敗 → 失敗那一隊；不是 → null。只看公開紀錄。 */
+export function failTestTeam85(obs: PlayerObservation): string[] | null {
+  const round = obs.currentRound ?? 1;
+  if (round < 2 || (obs.failCount ?? 0) >= 4) return null;
+  if (obs.questResults[round - 2] !== 'fail') return null;
+  const prev = obs.questHistory.find((q) => q.round === round - 1);
+  return prev ? [...prev.team] : null;
+}
+
+/** 開關開著、這個座位與這一次提議在範圍內（真的藍方座位：忠臣／派西，位元 1 加梅林）。 */
+export function failTest85Applies(tuning: Readonly<AgentTuning>, obs: PlayerObservation): boolean {
+  if (!((tuning.failTest85 ?? 0) > 0) || obs.myTeam !== 'good' || obs.publicLoyalView === true) return false;
+  if ((obs.seatTeam ?? obs.myTeam) !== 'good') return false;
+  const scope = tuning.failTest85Scope ?? 0;
+  if (obs.myRole !== 'loyal' && obs.myRole !== 'percival' && !(obs.myRole === 'merlin' && (scope & 1) !== 0)) return false;
+  return failTestTeam85(obs) !== null;
+}
+
+/**
+ * `failTest85`：範圍內、`team` 一個都沒有失敗那一隊的人（隊長自己以外）時，回傳「含自己、帶失敗那一隊至少一個但不是全部的人」裡 P(沒有紅) 最高、
+ * 過得了 `ok`、隊長湖的宣告與自己投票規則的那一隊（≥ λ × 原本那一隊）；不改 → null。
+ */
+export function failTest85Team(
+  tuning: Readonly<AgentTuning>,
+  obs: PlayerObservation,
+  team: readonly string[],
+  ok: (team: readonly string[]) => boolean = () => true,
+): string[] | null {
+  if (!failTest85Applies(tuning, obs)) return null;
+  const me = obs.myPlayerId;
+  const failed = failTestTeam85(obs)!.filter((id) => id !== me);
+  if (failed.length === 0 || team.some((id) => failed.includes(id))) return null;
+  round85Stats.fSpots++;
+  const lambda = tuning.failTest85 ?? 0;
+  const opts = bayesOptionsOf(tuning);
+  const base = bayesTeamClean(obs, team, opts);
+  if (base === null) return null;
+  const vouch = tuning.goodVouchFollowUp ? goodVouchTeamConstraint(obs) : null;
+  const scored: { t: string[]; p: number }[] = [];
+  for (const fill of combinations(obs.allPlayerIds.filter((id) => id !== me), team.length - 1)) {
+    const k = fill.filter((id) => failed.includes(id)).length;
+    if (k === 0 || k === failed.length) continue;
+    const t = [me, ...fill];
+    scored.push({ t, p: bayesTeamClean(obs, t, opts) ?? 0 });
+  }
+  scored.sort((a, b) => b.p - a.p);
+  for (const { t, p } of scored) {
+    if (p < lambda * base) { round85Stats.fKeptMath++; return null; }
+    if (!ok(t)) continue;
+    if (vouch && (vouch.banned.some((id) => t.includes(id)) || vouch.required.some((id) => !t.includes(id)))) continue;
+    if (ownVoteRejects(tuning, obs, t)) continue;
+    round85Stats.fTest++;
+    return t;
+  }
+  round85Stats.fNoAlt++;
   return null;
 }
