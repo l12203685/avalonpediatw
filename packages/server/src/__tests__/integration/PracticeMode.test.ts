@@ -630,7 +630,7 @@ describe('practice mode — full games over sockets', () => {
     const ok = await emitAck<PracticeExploitAskResult>(human.socket, 'practice:exploit-ask', {
       roomId, action: 'answer', choices: ['vote_fixed', 'none'], text: '  紅方整局一直贊成有我的隊，藍方好像沒發現  ',
     });
-    expect(ok).toEqual({ ok: true, followUp: { question: '從哪一局開始覺得不對？' } });
+    expect(ok).toEqual({ ok: true, followUp: { code: 'when', question: '從哪一局開始覺得不對？' } });
     expect(exploitSink.rows).toHaveLength(0);
     const fu = await emitAck<PracticeExploitAskResult>(human.socket, 'practice:exploit-ask', { roomId, action: 'follow-up', text: '第二局' });
     expect(fu).toEqual({ ok: true });

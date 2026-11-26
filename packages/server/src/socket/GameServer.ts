@@ -3684,7 +3684,7 @@ export class GameServer {
       if (source === 'end-card') st.endCardDone = true;
       else st.wholeGameCount += 1;
       counter.noteAnswered(source, choices, text !== '');
-      reply(followUp ? { ok: true, followUp: { question: followUp.question } } : { ok: true });
+      reply(followUp ? { ok: true, followUp: { code: followUp.code, question: followUp.question } } : { ok: true });
     } catch (err) {
       console.warn('[practice] exploit answer failed:', err instanceof Error ? err.message : 'unknown');
       reply({ ok: false, error: '儲存失敗，請稍後再試' });

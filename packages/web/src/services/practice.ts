@@ -80,8 +80,8 @@ export interface PracticeTracePayload {
   flagUnavailableReason?: string;
   flagsLeft: number;
   flaggedEntryIds: number[];
-  /** 局後一題「這局你有針對百科AI 的哪個習慣嗎？」：enabled＝會問也存得下來；done＝這局已回答或略過。 */
-  exploitAsk?: { enabled: boolean; done: boolean };
+  /** 局後的整局回饋：enabled＝會問也存得下來；done＝局後那一題已回答或略過；wholeGameLeft＝「整局回饋」還能送幾則。 */
+  exploitAsk?: { enabled: boolean; done: boolean; wholeGameLeft?: number };
 }
 
 /** 局後那一題的選項（伺服器 practice/PracticeExploitReport.ts 有同樣一份）。 */
@@ -149,13 +149,28 @@ export async function skipPracticeExploitAsk(roomId: string): Promise<PracticeFl
   return emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'skip' });
 }
 
-/** 局後那一題：送出回答。 */
+export type PracticeExploitSource = 'end-card' | 'whole-game';
+
+export interface PracticeExploitAskResult {
+  ok: boolean;
+  error?: string;
+  /** 有的話：一個開放的追問（伺服器用簡單規則挑），答案寫在同一列。 */
+  followUp?: { code: string; question: string };
+}
+
+/** 整局回饋：送出描述（主要）＋選填標籤。`source`：局後那一題，或回顧裡的「整局回饋（不限某一步）」。 */
 export async function answerPracticeExploitAsk(
   roomId: string,
   choices: readonly PracticeExploitChoice[],
   text: string,
-): Promise<PracticeFlagResult> {
-  return emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'answer', choices, text });
+  source: PracticeExploitSource = 'end-card',
+): Promise<PracticeExploitAskResult> {
+  return emitWithAck<PracticeExploitAskResult>('practice:exploit-ask', { roomId, action: 'answer', choices, text, source });
+}
+
+/** 追問的回答（空字串＝略過）。 */
+export async function answerPracticeFollowUp(roomId: string, text: string): Promise<PracticeExploitAskResult> {
+  return emitWithAck<PracticeExploitAskResult>('practice:exploit-ask', { roomId, action: 'follow-up', text });
 }
 
 /**
