@@ -86,6 +86,7 @@ import { redR5Red71 } from '../Round71';
 import { mpOwnRead81 } from '../Round81';
 import { earlyGo84, redMatchWhite84 } from '../Round84';
 import { redHideHumanCard, redHideR4SoloCard, redHumanVoteFlip, redMatchPointDecisiveApprove } from '../RedRound27';
+import { r1RideCard86 } from '../Round86';
 import { mordredSoloApproveVote, redMatchPointFailCard, redStackHideCard } from '../RedRound29';
 import { halfOf, oberonBiteRejectNow, oberonMatchPointReject, redMatchPointApprove, redReuseExactTeam, redVouchKeptTeam, redVouchOnTeamReject } from '../RedRound25';
 import { bestZoneTeam } from '../belief/ZoneModel';
@@ -1054,6 +1055,10 @@ export class ForwardAgent implements AvalonAgent {
       // (always, or when the red's own posterior says the team can probably fail it). Off: null, `redHideR4Solo` decides as before.
       const key78 = r4KeyFailCard78(this.baseline.tuning, obs);
       if (key78) return this.ruleDecision(obs, { type: 'quest_vote', vote: key78 }, 'red fails on a two-fail mission at red match point (round 78)');
+      // Round 86 `r1Ride86` (Round86.ts; exploit arm only): the lone red on the R1 (and R2 after an R1 success) mission hides to ride the
+      // "R1 team + 1" proposals. Off: null.
+      const ride86 = r1RideCard86(this.baseline.tuning, obs);
+      if (ride86) return this.ruleDecision(obs, { type: 'quest_vote', vote: ride86 }, 'lone red hides to ride the R1 team (round 86 exploit)');
       // Round 29 `redStackHide` (RedRound29.ts): two or more recognised reds on an R2–R3 mission all hide at the human rate.
       const stack = redStackHideCard(this.baseline.tuning, obs);
       if (stack) return this.ruleDecision(obs, { type: 'quest_vote', vote: stack }, 'recognised reds all hide (human rate)');
