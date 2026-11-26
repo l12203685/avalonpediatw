@@ -126,6 +126,17 @@ def load_human(path):
     return games
 
 
+def final_fails(rec):
+    f = 0
+    for ri, rd in enumerate(rec['g']['r']):
+        if rd is None:
+            continue
+        m = rd.get('m', '')
+        if m and m.count('x') >= (2 if ri + 1 == 4 else 1):
+            f += 1
+    return f
+
+
 def summarize(games, label):
     n = len(games)
     tb = [i for i, r in games.items() if r['threeBlue'] == 1]
@@ -228,6 +239,26 @@ def main():
     for name, s in sums.items():
         f = lambda k: f"{s[k][0]:.1f}／{s[k][1]:.1f}／{s[k][2]:.1f}"
         print(f"| {name} | {f('Ef')} | {f('Ese')} | {f('Ec')} | {f('E4')} | {f('Enf')} | {f('E12')} |")
+    print()
+    print('同一個比分裡比（三藍局照最後比分分層；事件 = 第 3 局起，全部種類）：')
+    print()
+    print('| 組 | 3:0 有事件 %／刺中 有／沒 | 3:1 | 3:2 | 分層後的差（加權，pp） |')
+    print('|---|---|---|---|---|')
+    for name, games in arms.items():
+        cells = []
+        wsum = 0.0
+        wdiff = 0.0
+        for fails in (0, 1, 2):
+            tb = [r for r in games.values() if r['threeBlue'] == 1 and final_fails(r) == fails]
+            ev = [r for r in tb if any(e[0] >= 3 for e in r['ev'])]
+            ne = [r for r in tb if not any(e[0] >= 3 for e in r['ev'])]
+            hk = 100 * sum(r['killed'] == 1 for r in ev) / max(1, len(ev))
+            nk = 100 * sum(r['killed'] == 1 for r in ne) / max(1, len(ne))
+            cells.append(f"{100 * len(ev) / max(1, len(tb)):.1f}／{hk:.1f}／{nk:.1f}（{len(tb)}）")
+            if ev and ne:
+                wsum += len(ev)
+                wdiff += len(ev) * (hk - nk)
+        print(f"| {name} | {' | '.join(cells)} | {wdiff / max(1, wsum):+.1f} |")
     print()
     print('事件數（第 3 局起，全部局；局、種類）：')
     for name, s in sums.items():
