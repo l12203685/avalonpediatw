@@ -5,6 +5,7 @@
  * （不在 packages/ 裡，所以不會觸發網站或伺服器重新部署）；網站在瀏覽器裡直接讀 GitHub 上的那一份。
  * 格式見 packages/server/src/arena/report.ts（`Leaderboard`）。
  */
+import { knightDisplayName } from './knightNames';
 import { REPO_URL } from '../i18n/collab';
 
 export const LEADERBOARD_URL = 'https://raw.githubusercontent.com/l12203685/avalonpediatw/main/arena/leaderboard.json';
@@ -68,7 +69,8 @@ export function parseLeaderboard(raw: unknown): ArenaLeaderboard | null {
     generatedAt: String(d.generatedAt ?? ''),
     games: Number(d.games ?? 0),
     sizes: Array.isArray(d.sizes) ? d.sizes.map(Number) : [],
-    bots: d.bots,
+    // 舊排行榜上的「百科AI」顯示成「AI騎士_百科」（站長 2026-11-26 改名；下一次每週重算就是新名字）
+    bots: d.bots.map((b) => (b.id === 'baike' ? { ...b, name: knightDisplayName(b.name) } : b)),
     knobCatalog: Array.isArray(d.knobCatalog) ? d.knobCatalog : undefined,
   };
 }
