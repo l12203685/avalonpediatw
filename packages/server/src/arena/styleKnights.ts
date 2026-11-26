@@ -356,7 +356,8 @@ export function styleAxes(layers: Pick<BotProfile, 'sides' | 'roles'>): { red: n
     + (D.goodBayesBadKey - (knobAt(layers, role, 'goodBayesBadKey') as number)) / 0.2;
   const blue = (blueRole('loyal') + blueRole('percival')) / 2;
   const merlin = (1 - (knobAt(layers, 'merlin', 'merlinNormalVote') as number)) - (knobAt(layers, 'merlin', 'merlinCover77') as number);
-  return { red: redScore, blue, merlin };
+  // 紅方、藍方各有好幾個開關加總，除以 2 讓「一個開關整個推到底」大約是 0.5、和梅林（一個開關推到底 = 1）比較得起來。
+  return { red: redScore / 2, blue: blue / 2, merlin };
 }
 
 /** 風格標籤（2 或 4 個字，詞表裡的詞）。 */
