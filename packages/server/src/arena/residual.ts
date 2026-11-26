@@ -30,6 +30,7 @@ export const RESIDUAL_VERSION = 1;
 export const SEAT_FEATURES = [
   'self', 'eng', 'pRed', 'knownRed', 'thumb', 'failOn', 'succOn', 'lastProp', 'lastMission',
   'lakeGood', 'lakeBad', 'myLakeGood', 'myLakeBad', 'adjacent', 'dist', 'approvedFailed', 'ledFailed',
+  'propRound', 'approvedLast', 'ledRound',
 ] as const;
 /** 整隊多加的特徵。 */
 export const TEAM_EXTRA_FEATURES = ['exactEng', 'exactPrevProp', 'exactLastMission'] as const;
@@ -158,6 +159,12 @@ export interface History {
   myLakeBad: Set<string>;
   approvedFailed: Map<string, number>;
   ledFailed: Map<string, number>;
+  /** 這一局（同一個任務回合）已經有幾次提議帶了這個座位。 */
+  propRound: Map<string, number>;
+  /** 上一次提議投贊成的座位。 */
+  approvedLast: Set<string>;
+  /** 這一局已經當過隊長的座位。 */
+  ledRound: Set<string>;
 }
 
 export function history(obs: PlayerObservation): History {
@@ -189,7 +196,19 @@ export function history(obs: PlayerObservation): History {
     ledFailed.set(passed.leader, (ledFailed.get(passed.leader) ?? 0) + 1);
     for (const [id, yes] of Object.entries(passed.votes ?? {})) if (yes) approvedFailed.set(id, (approvedFailed.get(id) ?? 0) + 1);
   }
-  return { failOn, succOn, lastProp, lastMission: lastQuest?.team ?? [], lakeGood, lakeBad, myLakeGood, myLakeBad, approvedFailed, ledFailed };
+  const propRound = new Map<string, number>();
+  const ledRound = new Set<string>();
+  for (const v of votes) {
+    if (v.round !== obs.currentRound) continue;
+    ledRound.add(v.leader);
+    for (const id of v.team) propRound.set(id, (propRound.get(id) ?? 0) + 1);
+  }
+  const last = votes.length ? votes[votes.length - 1] : undefined;
+  const approvedLast = new Set(Object.entries(last?.votes ?? {}).filter(([, yes]) => yes).map(([id]) => id));
+  return {
+    failOn, succOn, lastProp, lastMission: lastQuest?.team ?? [], lakeGood, lakeBad, myLakeGood, myLakeBad, approvedFailed, ledFailed,
+    propRound, approvedLast, ledRound,
+  };
 }
 
 /**
@@ -221,6 +240,9 @@ export function seatFeatures(obs: PlayerObservation, engine: readonly string[], 
       d / Math.max(1, n - 1),
       Math.min(2, h.approvedFailed.get(id) ?? 0),
       Math.min(2, h.ledFailed.get(id) ?? 0),
+      Math.min(4, h.propRound.get(id) ?? 0) / 4,
+      h.approvedLast.has(id) ? 1 : 0,
+      h.ledRound.has(id) ? 1 : 0,
     ];
   });
 }

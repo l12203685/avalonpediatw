@@ -10,7 +10,9 @@ import { HeuristicAgent } from '../ai/HeuristicAgent';
 import type { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { seededRandom, withSeededRandom } from '../ai/benchmark/agreement';
 import type { AgentAction, AvalonAgent, PlayerObservation } from '../ai/types';
+import { deriveValidLakeTargets } from '../ai/LakePolicy';
 import { resolveProfileTuning, type ArenaSide, type BotProfile } from './profile';
+import { ResidualPolicy } from './residual';
 
 export interface Entrant {
   /** 名冊裡的 id（資料夾名稱；百科AI = `baike`）。 */
@@ -51,6 +53,8 @@ function fnv1a(text: string): string {
 class ArenaSeat implements AvalonAgent {
   readonly agentType = 'heuristic' as const;
   private inner: HeuristicAgent | null = null;
+  /** 官方 AI騎士 的每人殘差層（schema 2 的 `residual`）；沒有 = 照引擎。 */
+  private residual: ResidualPolicy | null = null;
   role = '';
   team: ArenaSide = 'good';
   assassinated: string | undefined;
@@ -71,21 +75,36 @@ class ArenaSeat implements AvalonAgent {
     this.team = obs.myTeam === 'evil' ? 'evil' : 'good';
     const tuning = resolveProfileTuning(this.entrant.profile, this.role, this.team);
     this.inner = new HeuristicAgent(this.agentId, undefined, undefined, tuning);
+    this.residual = this.entrant.profile?.residual ? new ResidualPolicy(this.entrant.profile.residual, tuning) : null;
     this.inner.onGameStart(obs);
   }
 
   act(obs: PlayerObservation): AgentAction {
-    const a = withSeededRandom(this.seedFor(obs), () => this.inner!.act(obs));
+    let a = withSeededRandom(this.seedFor(obs), () => this.inner!.act(obs));
+    if (this.residual) a = this.adjust(obs, a);
     if (a.type === 'assassinate') this.assassinated = a.targetId;
     return a;
   }
 
+  /** 殘差層：引擎決定之後重新打分（硬規則在 `ResidualPolicy` 裡）。 */
+  private adjust(obs: PlayerObservation, a: AgentAction): AgentAction {
+    const r = this.residual!;
+    switch (a.type) {
+      case 'team_select': return { type: 'team_select', teamIds: r.team(obs, a.teamIds) };
+      case 'team_vote': return { type: 'team_vote', vote: r.vote(obs, a.vote) };
+      case 'quest_vote': return { type: 'quest_vote', vote: r.questCard(obs, a.vote) };
+      case 'assassinate': return { type: 'assassinate', targetId: r.assassinate(obs, a.targetId) };
+    }
+  }
+
   pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string {
-    return withSeededRandom(this.seedFor(obs, 'lake'), () => this.inner!.pickLakeTarget(obs, validTargets));
+    const t = withSeededRandom(this.seedFor(obs, 'lake'), () => this.inner!.pickLakeTarget(obs, validTargets));
+    return this.residual ? this.residual.lakeTarget(obs, validTargets ?? deriveValidLakeTargets(obs), t) : t;
   }
 
   declareLake(obs: PlayerObservation, targetId: string, trueFaction: 'good' | 'evil' | undefined): 'good' | 'evil' | null {
-    return withSeededRandom(this.seedFor(obs, `claim-${targetId}`), () => this.inner!.declareLake(obs, targetId, trueFaction));
+    const c = withSeededRandom(this.seedFor(obs, `claim-${targetId}`), () => this.inner!.declareLake(obs, targetId, trueFaction));
+    return this.residual ? this.residual.lakeClaim(obs, targetId, trueFaction, c) : c;
   }
 
   onGameEnd(obs: PlayerObservation, won: boolean): void {

@@ -56,7 +56,9 @@ export function checkBotFolder(folder: string, opts: { house?: boolean } = {}): 
   const file = path.join(folder, 'profile.json');
   if (!fs.existsSync(file)) return { id, ok: false, errors: [...errors, '缺少 profile.json'], warnings };
   const text = fs.readFileSync(file, 'utf8');
-  if (text.length > 16 * 1024) errors.push('profile.json 太大（上限 16 KB）');
+  // 官方 AI騎士 帶殘差層權重（schema 2），上限放寬到 32 KB；社群投稿照舊 16 KB。
+  const limitKb = (opts.house ?? isHouseFolder(folder)) ? 32 : 16;
+  if (text.length > limitKb * 1024) errors.push(`profile.json 太大（上限 ${limitKb} KB）`);
   let raw: unknown;
   try {
     raw = JSON.parse(text);
