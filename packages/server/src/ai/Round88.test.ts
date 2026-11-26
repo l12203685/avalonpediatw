@@ -34,7 +34,7 @@ describe('round 88 flags', () => {
     expect(parseTuningFlag('merlinEvScope88=11')).toEqual({ merlinEvScope88: 11 });
     expect(parseTuningFlag('merlinEvTemp88=0.2')).toEqual({ merlinEvTemp88: 0.2 });
     expect(() => parseTuningFlag('merlinEvAssassin88=11')).toThrow();
-    expect(() => parseTuningFlag('merlinEvScope88=128')).toThrow();
+    expect(() => parseTuningFlag('merlinEvScope88=256')).toThrow();
     expect(describeAgentTuning(T({ merlinEvAssassin88: 1, merlinEvScope88: 3 }))).toContain('merlinEvAssassin88=1');
     expect(describeAgentTuning(T())).not.toContain('merlinEvAssassin88');
   });
@@ -160,6 +160,9 @@ describe('merlinExposure88 / worldLines75LeaderProbe / ev88Team', () => {
     const traceNo: Ev88Cand[] = [];
     ev88Team(T({ merlinEvAssassin88: 1, merlinEvScope88: 2 | 32, ...OPEN }), obsL, cur, () => true, () => true, [], traceNo);
     expect(traceNo.some((c) => c.thumbs > 0)).toBe(false);
+    const traceOnly: Ev88Cand[] = [];
+    ev88Team(T({ merlinEvAssassin88: 1, merlinEvScope88: 2 | 128, ...OPEN }), obsL, cur, () => true, () => true, [], traceOnly);
+    expect(traceOnly.filter((c) => !c.cur).every((c) => c.thumbs === 1)).toBe(true);
     const traceUngated: Ev88Cand[] = [];
     ev88Team(T({ merlinEvAssassin88: 1, merlinEvScope88: 2 | 16, merlinGatedThumbA83: 1, merlinGatedThumbB83: 1 }), obsL, cur, () => true, () => true, [], traceUngated);
     expect(traceUngated.some((c) => c.thumbs === 1)).toBe(true);

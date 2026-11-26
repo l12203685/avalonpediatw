@@ -26,7 +26,8 @@
  *
  * `merlinEvTemp88 = τ`（0 = 取最高）：照 exp((分數 − 最高) / τ) 的比例抽（混合策略，給「紅方重新學過」用）。
  * `merlinEvAssassin88 = λ`（0 = 關）；`merlinEvScope88`（位元，0 = 2）：1 = 第 1、2 局非強制；2 = 第 3、4 局非強制；4 = 強制局；
- * 8 = 第 1、2 局非強制當成第 5 次（ρ = 1）；16 = 帶看得到的紅不看第 83 回合的門檻（研究用）；32 = 只在乾淨的隊之間挑；64 = 用機器人局的校準。
+ * 8 = 第 1、2 局非強制當成第 5 次（ρ = 1）；16 = 帶看得到的紅不看第 83 回合的門檻（研究用）；32 = 只在乾淨的隊之間挑；64 = 用機器人局的校準；
+ * 128 = 不換別的乾淨隊（候選只有現行那一支＋過門檻的拇指隊）。
  * 範圍內的第 3、4 局，第 83 回合的有條件拇指變成這裡的一個特例（`ForwardAgent` 不再另外走第 83 回合那一步）。
  *
  * A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）不相干：只改梅林自己當隊長的提議。開關關時這個檔案不改任何決定（逐局相同）。
@@ -231,9 +232,12 @@ export function ev88Team(
   const curKey = keyOf(cur);
   const plausible = set.teams.filter((t) => t.plausible && t.publicOk);
   const pool: { team: readonly string[]; thumbs: number; cur: boolean }[] = [{ team: cur, thumbs: cur.filter((id) => seen.has(id)).length, cur: true }];
-  for (const t of plausible) {
-    if (keyOf(t.team) === curKey || t.thumbs !== 0 || !allowed(t.team)) continue;
-    pool.push({ team: t.team, thumbs: 0, cur: false });
+  // 位元 128：不換別的乾淨隊（候選 = 現行那一支＋過門檻的拇指隊；第 83 回合變成這裡的特例：拇指要「分數」贏過現行的隊才派）。
+  if ((bits & 128) === 0) {
+    for (const t of plausible) {
+      if (keyOf(t.team) === curKey || t.thumbs !== 0 || !allowed(t.team)) continue;
+      pool.push({ team: t.team, thumbs: 0, cur: false });
+    }
   }
   if ((bits & 32) === 0) {
     // 帶一個看得到的紅：站長 11/26 的兩個條件（第 83 回合的門檻）要過，而且不變量已經登記了例外——第 1、2 局非強制（派拇指躲刺）

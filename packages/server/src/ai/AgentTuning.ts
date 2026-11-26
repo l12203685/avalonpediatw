@@ -1617,7 +1617,7 @@ export interface AgentTuning {
   /**
    * 第 88 回合：`merlinEvAssassin88` 的範圍與做法（位元；0 = 2）：1 = 第 1、2 局非強制；2 = 第 3、4 局非強制；4 = 強制局（第 5 次提議）；
    * 8 = 第 1、2 局非強制「當成第 5 次」（這一隊一定出任務；`goLike56` 的意思）；16 = 帶一個看得到的紅不必過第 83 回合的門檻（研究用，違反 INV-M1）；
-   * 32 = 不帶看得到的紅（只在乾淨的隊之間挑）；64 = 刺殺機率用機器人局校準的係數（預設真人局）。
+   * 32 = 不帶看得到的紅（只在乾淨的隊之間挑）；64 = 刺殺機率用機器人局校準的係數（預設真人局）；128 = 不換別的乾淨隊（候選 = 現行＋過門檻的拇指隊）。
    */
   merlinEvScope88: number;
   /** 第 88 回合：`merlinEvAssassin88` 的溫度 τ（0 = 取分數最高的一支；> 0 = 照 exp((分數 − 最高) / τ) 的比例抽，混合策略）。 */
@@ -3969,7 +3969,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinEvScope88') {
     const value = raw === undefined ? 0 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 127) throw new Error(`merlinEvScope88 needs an integer 0–127, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 255) throw new Error(`merlinEvScope88 needs an integer 0–255, got "${raw}"`);
     return { merlinEvScope88: value };
   }
   if (name === 'earlyGoScope84' || name === 'redWhiteScope84') {
