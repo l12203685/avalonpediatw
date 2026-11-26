@@ -93,7 +93,6 @@ interface SeatRec { b: number; props: PropRec[]; votes: VoteRec[]; lakes: LakeRe
 export interface DM89Pre {
   mode: 'loyal' | 'percival';
   cfg: DM89Cfg;
-  n: number;
   all: number;
   meBit: number;
   thumbMask: number;
@@ -161,12 +160,12 @@ export function dm89Pre(
       s.lakes.push({ tb: bit(l.targetId) });
     }
   }
-  return { mode, cfg, n: ids.length, all: maskOf(ids), meBit: bit(me), thumbMask: maskOf(thumbs), seats, proposalProb, voteProb };
+  return { mode, cfg, all: maskOf(ids), meBit: bit(me), thumbMask: maskOf(thumbs), seats, proposalProb, voteProb };
 }
 
 /** log Σ_{M, D} P(M) P(D) Π (梅林模型 / 一般藍方模型)：世界 `w`（紅方的位元）被「誰是梅林、誰是莫德雷德」重新加權的倍數。 */
 export function dm89Log(pre: DM89Pre, w: number): number {
-  const { seats, all, n, cfg } = pre;
+  const { seats, all, cfg } = pre;
   const reds: number[] = [];
   for (let x = w & all; x; x &= x - 1) reds.push(x & -x);
   if (reds.length === 0) return 0;
@@ -209,6 +208,5 @@ export function dm89Log(pre: DM89Pre, w: number): number {
       sum += Math.exp(lr);
     }
   }
-  void n;
   return Math.log(sum / (ms.length * ds.length));
 }
