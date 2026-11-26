@@ -10,6 +10,13 @@ import {
   sortSeatsForDisplay,
 } from '../utils/seatDisplay';
 import { useChatStore } from '../store/chatStore';
+import { isPracticeRoomId } from '../services/practice';
+
+/**
+ * 遊戲內回饋（站長 2026-11-26）：有百科AI 坐的局，聊天裡對 AI 玩法的回饋會匿名記下來（只有座位號碼，
+ * server src/inGameFeedback）。開局時在聊天最底下（最舊的位置）放一行淡淡的說明；練習房不收、不顯示。
+ */
+export const BOT_FEEDBACK_NOTICE = '本局有百科AI，聊天中對 AI 的回饋會匿名記錄用來改進';
 
 interface ChatMessage {
   id: string;
@@ -31,7 +38,7 @@ interface ChatMessage {
 interface UnifiedEntry {
   id: string;
   timestamp: number;
-  kind: 'system' | 'player';
+  kind: 'system' | 'player' | 'notice';
   text: string;
   /** Player-only — sender id (for self vs other styling). */
   playerId?: string;
@@ -231,6 +238,8 @@ export default function ChatPanel({
       const claim = l.declared
         ? (l.declaredClaim === 'good' ? 'o' : 'x')
         : '?';
+      // 站長 2026-11-26：宣告是從驗湖的人打的聊天讀到的（沒按宣告鈕），跟伺服器的系統訊息一樣註明。
+      const via = l.declared && l.declaredVia === 'chat' ? '（取自聊天）' : '';
       // Lake events happen between rounds — slot after the round's quest (+80).
       // Edward 2026-04-26 19:25 spec 24「系統 湖 0>9 x 資訊重複了 只要顯示
       // 系統: 0>9 x 就可以」: drop「湖」prefix — N>M o/x format itself is the
@@ -240,9 +249,15 @@ export default function ChatPanel({
         id: `sys-lake-${l.round}-${idx}`,
         timestamp: room.createdAt + l.round * ROUND_BASE_MS + 80,
         kind: 'system',
-        text: `系統: ${holderLabel}>${targetLabel} ${claim}`,
+        text: `系統: ${holderLabel}>${targetLabel} ${claim}${via}`,
       });
     });
+
+    // 有百科AI 的局（不是練習房）：開局後最舊的位置放一行說明。
+    const hasBot = Object.values(room.players).some((p) => p.isBot);
+    if (hasBot && room.state !== 'lobby' && !isPracticeRoomId(room.id)) {
+      out.push({ id: 'notice-bot-feedback', timestamp: room.createdAt - 1, kind: 'notice', text: BOT_FEEDBACK_NOTICE });
+    }
 
     return out;
     // Edward 2026-04-26 19:25 spec 25「有時候沒有即時跳出系統訊息」: explicit
@@ -313,6 +328,13 @@ export default function ChatPanel({
         <p className="text-center text-gray-600 text-[11px] py-4">{t('game:chat.noMessages')}</p>
       )}
       {merged.map(entry => {
+        if (entry.kind === 'notice') {
+          return (
+            <p key={entry.id} className="text-center text-[10px] text-gray-500 py-0.5">
+              {entry.text}
+            </p>
+          );
+        }
         if (entry.kind === 'system') {
           return (
             <div key={entry.id} className="flex justify-start">
