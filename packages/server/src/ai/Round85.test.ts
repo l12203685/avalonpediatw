@@ -8,7 +8,9 @@ import { AGENT_TUNING_KEYS, DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeA
 import { r1Split85Applies, r1Split85Team, r1SplitCore85, round85Stats } from './Round85';
 import { tuningForOpponent } from './humanProfile';
 import { bayesOptionsOf, bayesTeamClean } from './belief/BayesBelief';
-import { answerScenario, buildScenario, observationOf, type ScenarioFixture } from './scenarios/scenarioSuite';
+import { answerScenario, buildScenario, observationOf, runScenario, type ScenarioFile, type ScenarioFixture } from './scenarios/scenarioSuite';
+import * as fs from 'fs';
+import * as path from 'path';
 import { seatId } from './benchmark/replayObservation';
 
 const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
@@ -103,6 +105,21 @@ describe('round 85 pick', () => {
       const b = buildScenario(fx(rec));
       for (const seed of ['', 'a', 'b']) {
         expect(answerScenario(b, T({ r1Split85: 0 }), seed).team).toEqual(answerScenario(b, DEFAULT_AGENT_TUNING, seed).team);
+      }
+    }
+  });
+});
+
+describe('round 85 scenario cases (fixtures.json, cls r85)', () => {
+  // Not `hard` (only A0 / A1 / the owner's written rulings may be), but the reported spot is checked here on every profile the site uses.
+  const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'scenarios', 'fixtures.json'), 'utf8')) as ScenarioFile;
+  const cases = file.scenarios.filter((x) => x.cls === 'r85');
+  it('there are four, and the default and every human table answer all of them', () => {
+    expect(cases).toHaveLength(4);
+    for (const type of ['ai', 'weakHuman', 'avgHuman', 'strongHuman'] as const) {
+      for (const c of cases) {
+        const r = runScenario(c, buildScenario(c), tuningForOpponent(type, DEFAULT_AGENT_TUNING), ['', 'a', 'b']);
+        expect({ id: c.id, type, pass: r.pass, why: r.why }).toEqual({ id: c.id, type, pass: 1, why: [] });
       }
     }
   });
