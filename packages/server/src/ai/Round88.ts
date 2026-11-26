@@ -45,7 +45,7 @@ import { worldLineTables75 } from './Round75';
 /** 校準：P(被刺 | 三藍) = σ(a + b × logit(E))。真人局（強弱都算）三藍的局、梅林當隊長的每一個提議（`merlinEvStudy88.ts`）。 */
 export const CAL_HUMAN = { a: 0.667, b: 0.801 } as const;
 /** 同上，機器人局（現行預設、世界線刺客）。 */
-export const CAL_BOT = { a: -0.4, b: 0.7 } as const;
+export const CAL_BOT = { a: 1.862, b: 2.194 } as const;
 
 /** 診斷計數（研究腳本、自我對打的拆解用；不影響決策）。 */
 export const round88Stats = { applies: 0, cands: 0, changed: 0, toThumb: 0, fromThumb: 0, thumbEval: 0, thumbOk: 0, sumDeltaE: 0 };
