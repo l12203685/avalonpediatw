@@ -80,7 +80,23 @@ export interface PracticeTracePayload {
   flagUnavailableReason?: string;
   flagsLeft: number;
   flaggedEntryIds: number[];
+  /** 局後一題「這局你有針對百科AI 的哪個習慣嗎？」：enabled＝會問也存得下來；done＝這局已回答或略過。 */
+  exploitAsk?: { enabled: boolean; done: boolean };
 }
+
+/** 局後那一題的選項（伺服器 practice/PracticeExploitReport.ts 有同樣一份）。 */
+export const PRACTICE_EXPLOIT_CHOICES = [
+  'red_bot_play',
+  'blue_bot_play',
+  'merlin_obvious',
+  'assassin_fooled',
+  'team_fixed',
+  'vote_fixed',
+  'lake',
+  'none',
+] as const;
+export type PracticeExploitChoice = (typeof PRACTICE_EXPLOIT_CHOICES)[number];
+export const PRACTICE_EXPLOIT_TEXT_MAX = 500;
 
 export interface PracticeFlagResult {
   ok: boolean;
@@ -117,6 +133,25 @@ export async function fetchPracticeTrace(roomId: string): Promise<PracticeTraceP
 /** 「這步怪怪的」 — server appends it to the private report sheet. */
 export async function flagPracticeDecision(roomId: string, entryId: number, note: string): Promise<PracticeFlagResult> {
   return emitWithAck<PracticeFlagResult>('practice:flag', { roomId, entryId, note });
+}
+
+/** 局後那一題：題目顯示了（伺服器只算一次）。失敗不用管。 */
+export function notePracticeExploitShown(roomId: string): void {
+  emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'shown' }).catch(() => undefined);
+}
+
+/** 局後那一題：略過（這局被伺服器標記的話照樣記一列）。 */
+export async function skipPracticeExploitAsk(roomId: string): Promise<PracticeFlagResult> {
+  return emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'skip' });
+}
+
+/** 局後那一題：送出回答。 */
+export async function answerPracticeExploitAsk(
+  roomId: string,
+  choices: readonly PracticeExploitChoice[],
+  text: string,
+): Promise<PracticeFlagResult> {
+  return emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'answer', choices, text });
 }
 
 /**

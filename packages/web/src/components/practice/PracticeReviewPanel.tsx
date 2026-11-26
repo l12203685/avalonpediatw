@@ -1,7 +1,8 @@
 /**
  * 網站「與機器人練習」— post-game review: every role revealed, every bot
  * decision grouped by round with its reason, filters by bot / decision type,
- * and a 「這步怪怪的」 report button on each decision.
+ * a 「這步怪怪的」 report button on each decision, and (2026-11-26) one skippable
+ * question: which bot habit did you exploit this game (PracticeExploitAsk).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +10,7 @@ import { Flag, Check, ChevronDown, ChevronUp, Loader2, RotateCcw } from 'lucide-
 import '../../i18n/practice';
 import { PRACTICE_NS } from '../../i18n/practice';
 import { usePracticeStore } from '../../store/practiceStore';
+import PracticeExploitAsk from './PracticeExploitAsk';
 import {
   fetchPracticeTrace,
   flagPracticeDecision,
@@ -179,6 +181,9 @@ function ReviewBody({ trace, currentPlayerId, botSeat, setBotSeat, kind, setKind
           <p className="text-[11px] text-amber-300/90">{trace.flagUnavailableReason}</p>
         )}
       </div>
+
+      {/* 局後一題：這局有沒有針對百科AI 的習慣（可略過） */}
+      <PracticeExploitAsk trace={trace} />
 
       {/* Filters */}
       <div className="space-y-1.5">
