@@ -11,6 +11,7 @@
  * `packages/web/src/services/practice.ts`.
  */
 import type { Role } from '@avalon/shared';
+import { DEFAULT_KNIGHT_ID, resolveKnightId } from '../arena/knights';
 
 export const PRACTICE_ROOM_PREFIX = 'PRACTICE-';
 export const PRACTICE_PLAYER_COUNT = 10;
@@ -36,6 +37,11 @@ export interface PracticeOptions {
   seat: number | null;
   /** Forced role; null = random. */
   role: PracticeRoleChoice | null;
+  /**
+   * 對手／隊友用哪一位 AI騎士（站長 2026-11-26）：名冊裡的 id（`arena/knights.ts`；預設 `baike` = AI騎士_百科），
+   * 或 `random-mix`（每個機器人座位各抽一位）。
+   */
+  knight: string;
 }
 
 /** Tolerant parse of the client payload — anything unusable becomes "random". */
@@ -46,7 +52,9 @@ export function parsePracticeOptions(raw: unknown): PracticeOptions {
   const role = typeof obj.role === 'string' && (PRACTICE_ROLE_CHOICES as readonly string[]).includes(obj.role)
     ? (obj.role as PracticeRoleChoice)
     : null;
-  return { seat, role };
+  // 沒傳 → 百科；不認得的 id → 百科（resolveKnightId 記一次次數）。
+  const knight = resolveKnightId(obj.knight, { allowMix: true }) ?? DEFAULT_KNIGHT_ID;
+  return { seat, role, knight };
 }
 
 export type PracticeDecisionKind =
@@ -107,6 +115,9 @@ export interface PracticeSeatInfo {
   role: Role | null;
   team: 'good' | 'evil' | null;
   isBot: boolean;
+  /** 這個機器人座位是哪一位 AI騎士（名冊 id、不帶序號的名字）；真人座位沒有。 */
+  knightId?: string;
+  knightName?: string;
 }
 
 /** Sent to the practice owner only after the game ended. */

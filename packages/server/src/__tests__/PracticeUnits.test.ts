@@ -84,10 +84,10 @@ describe('GameEngine practice overrides', () => {
 
 describe('practice options + labels', () => {
   it('parses tolerant options', () => {
-    expect(parsePracticeOptions({ seat: 3, role: 'merlin' })).toEqual({ seat: 3, role: 'merlin' });
-    expect(parsePracticeOptions({ seat: '10', role: 'oberon' })).toEqual({ seat: 10, role: 'oberon' });
-    expect(parsePracticeOptions({ seat: 11, role: 'minion' })).toEqual({ seat: null, role: null });
-    expect(parsePracticeOptions(null)).toEqual({ seat: null, role: null });
+    expect(parsePracticeOptions({ seat: 3, role: 'merlin' })).toEqual({ seat: 3, role: 'merlin', knight: 'baike' });
+    expect(parsePracticeOptions({ seat: '10', role: 'oberon' })).toEqual({ seat: 10, role: 'oberon', knight: 'baike' });
+    expect(parsePracticeOptions({ seat: 11, role: 'minion' })).toEqual({ seat: null, role: null, knight: 'baike' });
+    expect(parsePracticeOptions(null)).toEqual({ seat: null, role: null, knight: 'baike' });
     expect(isPracticeRoomId('PRACTICE-ABC')).toBe(true);
     expect(isPracticeRoomId('1234')).toBe(false);
     expect(seatLabelZh(10)).toBe('0家');
