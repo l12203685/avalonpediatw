@@ -68,7 +68,6 @@ import { detectPracticeExploits } from '../practice/exploitFlags';
 import type { PracticeSession } from '../practice/PracticeSessions';
 import { getInGameFeedback } from '../inGameFeedback';
 import type { LiveRoomCounts } from '../services/deploySafety';
-import { redTalkEnabled } from '../ai/redAssassinTalk';
 import {
   LIVE_RESTORED_TEXT,
   LIVE_RESUME_FLOOR_MS,
