@@ -66,7 +66,7 @@
 - `name`、`style` 不能放**玩家名字**、網址、`@` 別人，也不能冒充官方（不能含「百科AI」「官方」「管理員」等）。
   審查的人會看名字；不合適的會請你改。
 - 一開始**一人一隻**（同一個 `author` 只能有一隻）；名字不能和別隻重複。
-- 資料夾只能放 `profile.json` 和 `README.md`。想寫真的程式？那是第 2 階段（[設計](../docs/ai/ARENA_CODE_BOTS.md)），還沒開放。
+- 資料夾只能放 `profile.json` 和 `README.md`。所有機器人都是百科AI 核心引擎的微調，不收程式碼（站長 2026-11-26 裁定，[紀錄](../docs/ai/ARENA_CODE_BOTS.md)）。
 - 你的機器人只在擂台裡打，不會變成網站上陪真人打的百科AI。
 
 ## 開放的開關
@@ -118,7 +118,7 @@
 3. `pnpm --filter @avalon/server arena:check community-bots/<id>` validates it; `arena:local community-bots/<id> [--games N]` plays it against the wiki bot with paired control games and prints win rates per side and role, the three-outcome split and the assassin hit rate.
 4. Open a PR from your fork that adds only your folder. The `AI arena bot check` workflow validates it; once merged it plays in the next weekly tournament.
 
-Rules: no player names, links or @mentions in `name` / `style`; no impersonating the site; one bot per person; names must be unique. The arena never runs submitted code (code bots are phase 2, see [`docs/ai/ARENA_CODE_BOTS.md`](../docs/ai/ARENA_CODE_BOTS.md)).
+Rules: no player names, links or @mentions in `name` / `style`; no impersonating the site; one bot per person; names must be unique. The arena never runs submitted code: every bot is a tuning of the core engine (code bots are not planned, see [`docs/ai/ARENA_CODE_BOTS.md`](../docs/ai/ARENA_CODE_BOTS.md)).
 
 | Side | Knob | Range | Default | Meaning |
 |---|---|---|---|---|
