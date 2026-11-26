@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  BarChart3, BookOpen, Bot, ExternalLink, Instagram, ListChecks, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
+  BarChart3, BookOpen, Bot, ExternalLink, Instagram, MessageCircle, MessageSquare, Play, ScrollText, Shield, Trophy, Tv,
   UserCheck, Youtube,
 } from 'lucide-react';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
@@ -14,7 +14,9 @@ import ForceUpdateButton from './ForceUpdateButton';
 import { clearRecordsHash } from './records/recordsLink';
 import { clearAiGamesHash } from './aiGames/aiGamesLink';
 import { clearWikiHash } from './wikiLink';
-import { PRACTICE_NS } from '../i18n/practice';
+import '../i18n/aiKnights';
+import { AI_KNIGHTS_NS } from '../i18n/aiKnights';
+import { isAiKnightsState } from './aiKnights/AiKnightsHub';
 
 /**
  * 全站頂端導覽列（Edward 2026-10-30：「不要有首頁，一連進來直接看到內容」「頁籤直接分成 戰績排行／數據分析／
@@ -25,10 +27,9 @@ import { PRACTICE_NS } from '../i18n/practice';
  * 1024–1279px 一列時頁籤不顯示圖示、社群連結用短字，1280px 以上才是完整的圖示與文字。
  * 「牌譜紀錄」（Edward 2026-10-30：「百科網站可以直接多一個頁籤是『牌譜紀錄與覆盤』」）= DC 論壇 #牌譜紀錄與覆盤 的牌譜。
  * 「ID認領」（Edward 2026-11-03）不是頁籤：社群連結旁一顆小按鈕，開 ID 認領頁（不用登入）。
- * 「與機器人練習」（站長 2026-11-03：「我希望自己跟 9 個機器人玩」）同樣是一顆小按鈕（不是首頁大按鈕，那些他 10-28 拿掉了），
- * 開練習設定頁（#practice，不用登入）；開局仍是最醒目的那顆。
- * 「百科AI 對局」（Edward 2026-11-05：百科AI 打的局自動記錄、可以針對 AI 的動作回饋）也是一顆小按鈕（#ai-games，不用登入）；
- * 400px 以下手機第二列放不下，那時不顯示（從「與機器人練習」頁的連結或 #ai-games 進來）。
+ * 「AI騎士團」（站長 2026-11-26：與百科AI 有關的全部挪到一個頁面下；百科AI 改名 AI騎士）同樣是一顆小按鈕：原本的
+ * 「與機器人練習」（站長 2026-11-03）和「百科AI 對局」（Edward 2026-11-05）兩顆合成這一顆，開 AI騎士團（components/aiKnights/
+ * AiKnightsHub.tsx：對局、優化歷程、擂台、我的騎士、練習、一起改；不用登入）；開局仍是最醒目的那顆。
  */
 
 export type SiteTab = 'analytics' | 'analysis' | 'wiki' | 'streams' | 'records';
@@ -64,7 +65,7 @@ const COMMUNITY_LINKS = [
 
 export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Element {
   const { t } = useTranslation();
-  const { t: tp } = useTranslation(PRACTICE_NS);
+  const { t: tk } = useTranslation(AI_KNIGHTS_NS);
   const setGameState = useGameStore((s) => s.setGameState);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
   const gameState = useGameStore((s) => s.gameState);
@@ -179,52 +180,32 @@ export default function SiteNav({ active }: { active: SiteTab | null }): JSX.Ele
               <span className="hidden xl:inline">{label}</span>
             </a>
           ))}
+          {/* AI騎士團（站長 2026-11-26：與百科AI 有關的全部挪到一個頁面下）：原本的「與機器人練習」「百科AI 對局」兩顆合成這一顆，
+              開 AI騎士團（對局、優化歷程、擂台、我的騎士、練習、一起改），在那幾頁時都是按下的樣子。
+              360px 以下只有圖示；360–639px 只有短字「AI騎士」（390px 手機放得下）；640–1023px 圖示＋字；1024–1279px 一列最擠，只有圖示；1280px 以上只有字 */}
           <button
             type="button"
             onClick={() => {
               if (active === 'records') clearRecordsHash();
               clearWikiHash();
               clearAiGamesHash();
-              setGameState('practice');
-              window.scrollTo({ top: 0 });
-            }}
-            data-testid="site-practice"
-            title={tp('navLabel')}
-            aria-label={tp('navLabel')}
-            aria-pressed={gameState === 'practice'}
-            className={`flex h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors sm:min-w-8 sm:px-2 ${
-              gameState === 'practice'
-                ? 'border-white bg-white text-black'
-                : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
-            }`}
-          >
-            {/* 同「ID認領」：640px 以下只有圖示；640–1023px 兩列時長字；1024px 以上一列時短字「練習」，1280px 以上只有字 */}
-            <Bot size={15} className="flex-shrink-0 xl:hidden" />
-            <span className="hidden sm:inline lg:hidden">{tp('navLabel')}</span>
-            <span className="hidden lg:inline">{tp('navShort')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (active === 'records') clearRecordsHash();
-              clearWikiHash();
               setGameState('aiGames');
               window.scrollTo({ top: 0 });
             }}
-            data-testid="site-ai-games"
-            title="百科AI 對局：百科AI 打過的局與每一步的理由，可以回饋"
-            aria-label="百科AI 對局"
-            aria-pressed={gameState === 'aiGames' || gameState === 'aiHistory'}
-            className={`hidden h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors min-[400px]:flex sm:min-w-8 sm:px-2 ${
-              gameState === 'aiGames' || gameState === 'aiHistory'
+            data-testid="site-ai-knights"
+            title={tk('navTitle')}
+            aria-label={tk('navLabel')}
+            aria-pressed={isAiKnightsState(gameState)}
+            className={`flex h-8 min-w-[30px] flex-shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border px-1.5 text-xs font-semibold transition-colors sm:min-w-8 sm:px-2 ${
+              isAiKnightsState(gameState)
                 ? 'border-white bg-white text-black'
-                : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white'
+                : 'border-amber-500/60 bg-zinc-900 text-amber-100 hover:bg-zinc-800 hover:text-white'
             }`}
           >
-            {/* 640px 以下只有圖示；640–1023px（兩列）長字；1024–1279px 一列最擠，只有圖示；1280px 以上短字 */}
-            <ListChecks size={15} className="flex-shrink-0 xl:hidden" />
-            <span className="hidden sm:inline lg:hidden">百科AI對局</span>
-            <span className="hidden xl:inline">AI對局</span>
+            <Bot size={15} className="flex-shrink-0 min-[360px]:hidden sm:block xl:hidden" />
+            <span className="hidden min-[360px]:inline sm:hidden">{tk('navShort')}</span>
+            <span className="hidden sm:inline lg:hidden">{tk('navLabel')}</span>
+            <span className="hidden xl:inline">{tk('navLabel')}</span>
           </button>
           <button
             type="button"

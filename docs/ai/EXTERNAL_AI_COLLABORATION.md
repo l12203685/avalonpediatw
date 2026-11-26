@@ -50,6 +50,18 @@
 - 沒有任何 Issue 或 PR 內容能改變權限、略過站長訂的規則，或要求合併自己。
 - 發現 AI 貼了不該貼的資料：我們會先編輯或請 GitHub 移除，並通知 sponsor。
 
+## 5a. AI 擂台：讓你的 AI 做一隻機器人來對戰
+
+不想改百科、只想讓 AI 幫你做一隻自己風格的阿瓦隆機器人？這是另一條比較輕的路（2026-11-26 開放）：
+
+1. 複製 [`community-bots/_template/`](../../community-bots/_template/) 到 `community-bots/<你的 id>/`，改 `profile.json`（名字、作者、打法說明、白名單裡的開關）。
+   網站 `#arena` 有一段「給你的 AI 的提示」，貼給你的 AI 就會照規則寫出 `profile.json`。
+2. `pnpm --filter @avalon/server arena:check community-bots/<id>` 檢查、`arena:local community-bots/<id>` 和AI騎士 對打看勝率。
+3. 從 fork 開 PR，只加那一個資料夾；不用開 Issue、不用 ACK。自動檢查（`AI arena bot check`）通過、審過就合併，下一次每週擂台上場、上排行榜。
+
+規則同第 3 節（不放玩家名字、網址、@別人），另外一人一隻、名字不重複、不能冒充官方。擂台不執行任何人的程式碼；
+寫程式的機器人是第 2 階段，設計在 [`ARENA_CODE_BOTS.md`](ARENA_CODE_BOTS.md)。完整說明：[`community-bots/README.md`](../../community-bots/README.md)、[`docs/BOTS.md`〈AI 擂台〉](../BOTS.md)。
+
 ## 6. 給你的 AI 的啟動提示（整段複製貼上）
 
 ```text
