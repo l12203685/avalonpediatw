@@ -219,6 +219,11 @@ export class InGameChatCapture {
     return !!g && (g.closeAt === null || this.now() < g.closeAt);
   }
 
+  /** 這一局記憶體裡留著幾句（測試用）。 */
+  heldMessages(roomId: string): number {
+    return this.games.get(roomId)?.messages.length ?? 0;
+  }
+
   /** 一句真人聊天；是回饋 → 回判斷結果（也已經送出／排進試算表），不是 → null。從不丟錯。 */
   onChat(roomId: string, input: InGameChatInput): InGameFeedbackHit | null {
     try {
