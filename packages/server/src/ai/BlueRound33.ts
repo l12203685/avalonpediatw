@@ -27,6 +27,7 @@ import { leaderOppShift51 } from './Round51';
 import { onTeamBar59 } from './Round59';
 import { onTeamBar76, provReq76 } from './Round76';
 import { evGate63 } from './Round63';
+import { innerBlackBar84 } from './Round84';
 
 // ── 嚴格的貝氏內黑／外白準則（`goodBayesVote`；Edward 2026-11-09 裁定 2）──────────────
 
@@ -100,7 +101,8 @@ export function bayesVoteCriteria(tuning: Readonly<AgentTuning>, obs: PlayerObse
     if (below === null) return null;
     // 第 40 回合 `vote40*`：分局面、分角色的門檻（沒有設時用原本的）。
     // 第 51 回合 `leaderOppVote51`（站長 11/18）：這一局之後還會當隊長 → 內黑的門檻降低 δ（關著時 0）。
-    const bad = (lit59?.bar || vote40Bar(tuning, obs, true) || (key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad)))
+    // 第 84 回合 `innerBlackBar84`（Round84.ts）：紅方聽牌在隊上，內黑的門檻換成這個值（關著時 null → 照原本）。
+    const bad = (innerBlackBar84(tuning, obs) ?? (lit59?.bar || vote40Bar(tuning, obs, true) || (key ? (tuning.goodBayesBadKey || BAYES_VOTE_DEFAULTS.badKey) : (tuning.goodBayesBad || BAYES_VOTE_DEFAULTS.bad))))
       - leaderOppShift51(tuning, obs, true);
     // 第 63 回合 `innerBlackEvGate63`（Round63.ts；Gemini G1）：內黑要「否決之後的期望過關率」高出邊際（做法位元 1：而且門檻也要內黑；關著時 null）。
     const ev63 = evGate63(tuning, obs, team, opts);
