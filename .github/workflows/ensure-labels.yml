@@ -1,0 +1,24 @@
+# 建立協作用的標籤（站長 2026-11-26：外部 AI 協作的 Issue 表單會自動掛 ai:external，標籤要先存在）。
+# 只用內建的 GITHUB_TOKEN（issues: write），不用任何密鑰；--force 讓重跑不會出錯（已存在就更新顏色與說明）。
+name: ensure-labels
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ensure-labels.yml
+
+permissions:
+  issues: write
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh label create "ai:external" --color "8B5CF6" --description "外部 AI 協作（見 docs/ai/EXTERNAL_AI_COLLABORATION.md）" --force
