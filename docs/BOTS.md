@@ -305,7 +305,7 @@ Discord 的指令清單從 29 個變 32 個（多 `/規則`、`/角色`、`/補�
   不需要任何 secret。（擂台的程式本身在 `packages/server/src/arena/` 與 `scripts/arena*`，第一次合併那一次會照常重新部署。）
 - **之後的「代理騎士」**（網站上登入就能用滑桿調一隻機器人）會用同一份 schema 與檢查（`src/arena/profile.ts`），
   匯出成 `{"profiles":[{"id","title","profile"}]}` 交給 `arena:tournament --extra`，排行榜已經有 `title` 欄位（侍從／騎士／圓桌騎士）。
-- **第 2 階段**（寫程式的機器人、沙盒）只有設計：[`docs/ai/ARENA_CODE_BOTS.md`](ai/ARENA_CODE_BOTS.md)。
+- **寫程式的機器人不做**（站長 2026-11-26：所有風格 AI 都是核心引擎的微調）；原本的第 2 階段設計留作紀錄：[`docs/ai/ARENA_CODE_BOTS.md`](ai/ARENA_CODE_BOTS.md)。
 
 ## 上線要注意的（只有站長能做）
 
