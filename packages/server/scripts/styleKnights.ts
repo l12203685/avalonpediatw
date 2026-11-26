@@ -70,7 +70,7 @@ const FACETS = [
   'mission:merlin', 'mission:percival', 'mission:loyal', 'mission:assassin', 'mission:morgana', 'mission:mordred', 'mission:oberon',
 ] as const;
 
-interface Args {
+export interface Args {
   out?: string;
   workers: number;
   minGames: number;
@@ -94,7 +94,7 @@ interface Args {
   probeIds?: string[];
 }
 
-function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[]): Args {
   const a: Args = {
     workers: 2, minGames: 250, strongTop: 5, kappa: 20, selectOnly: false, writeKnights: false, exclude: [],
     dataset: path.join(SERVER, 'games_cache.json'),
@@ -134,10 +134,10 @@ function parseArgs(argv: string[]): Args {
   return a;
 }
 
-type Dataset = DatasetHeader & { games: DatasetTuple[]; players: string[]; aliases?: Record<string, string> };
+export type Dataset = DatasetHeader & { games: DatasetTuple[]; players: string[]; aliases?: Record<string, string> };
 
 /** 一個座位：[局號, 座位, 玩家編號（入選清單裡的位置）, 半（0 擬合、1 留出）]。 */
-type Job = [string, number, number, 0 | 1];
+export type Job = [string, number, number, 0 | 1];
 
 /** 子行程輸出的一個決策點：[job, 種類, 第幾局, 第幾次提議, 紅方失敗數, 在隊上（1／0）, 玩家的選擇, {probe: 機器人的選擇}]。 */
 type RawSpot = [number, DecisionType, number, number, number, number, string, Record<string, string>];
@@ -313,7 +313,7 @@ async function runWorkers(a: Args, jobs: Job[], extra: string[], tag: string): P
 
 // ── 選玩家 ─────────────────────────────────────────────────
 
-interface Selected {
+export interface Selected {
   id: string;
   games: number;
   strong: string[];
@@ -322,7 +322,7 @@ interface Selected {
   indices: number[];
 }
 
-function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; jobs: Job[]; skipped: Array<{ id: string; why: string }> } {
+export function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; jobs: Job[]; skipped: Array<{ id: string; why: string }> } {
   const aliasFile = fs.existsSync(a.aliases) ? loadJson<{ aliases?: Record<string, string> }>(a.aliases) : {};
   const aliasMap: Record<string, string> = { ...(aliasFile.aliases ?? {}), ...(ds.aliases ?? {}) };
   const keyOf = (name: string): string => playerIdentityKey(name, aliasMap);
