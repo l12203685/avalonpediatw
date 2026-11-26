@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, ChevronRight, Copy, ExternalLink, Sparkles, Swords } from 'lucide-react';
+import { Check, ChevronRight, Copy, ExternalLink, Sparkles, Swords } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import '../i18n/collab';
 import { COLLAB_NS, GUIDE_URL, ISSUE_FORM_URL, REPO_URL } from '../i18n/collab';
@@ -30,13 +30,6 @@ export default function CollabPage(): JSX.Element {
   return (
     <div className="relative z-10 mx-auto max-w-3xl space-y-4 overflow-x-hidden px-3 py-4 text-white sm:px-4" data-testid="collab-page">
       <header className="space-y-1">
-        <button
-          type="button"
-          onClick={() => { setGameState('home'); window.scrollTo({ top: 0 }); }}
-          className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
-        >
-          <ArrowLeft size={14} />{t('back')}
-        </button>
         <h1 className="flex items-center gap-2 text-lg font-bold"><Sparkles size={20} className="text-amber-300" />{t('title')}</h1>
         <p className="text-xs leading-relaxed text-zinc-300">{t('intro')}</p>
       </header>

@@ -206,21 +206,21 @@ describe('handlers', () => {
     const start = content(it1).content;
     expect(start).toContain('【模擬瓦 W0000-4】你是 4家・忠臣\n');
     expect(start).toContain('```\n460 1+\n279\n370\n```');
-    expect(start).toContain('\n\n/派 座位 作答 (沒開題的人也能作答，結果只有自己看得到)\n/區間 (百科AI 怎麼讀)\n/help 模擬\n/公布 (結束這題)');
+    expect(start).toContain('\n\n/派 座位 作答 (沒開題的人也能作答，結果只有自己看得到)\n/區間 (AI騎士 怎麼讀)\n/help 模擬\n/公布 (結束這題)');
 
     // 2026-11-21（玩家回饋：一個人作答就暴雷）：公開頻道的 /派 /分析 只回給本人（ephemeral），內容照舊。
     const proposeIt = makeInteraction(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' });
     await handleSimCommand(proposeIt as never);
     expect(proposeIt.deferReply.mock.calls[0][0]).toEqual({ flags: MessageFlags.Ephemeral });
-    expect(content(proposeIt).content).toBe('【W0000-4】你派 469：2 好 1 壞\n（只有你看得到；/公布 時會列出大家的答案）\n/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布');
+    expect(content(proposeIt).content).toBe('【W0000-4】你派 469：2 好 1 壞\n（只有你看得到；/公布 時會列出大家的答案）\n/分析 看完整解讀｜/區間 AI騎士 怎麼讀｜/公布');
     const analysisIt = makeInteraction(COMMANDS.SIM_ANALYSIS);
     await handleSimCommand(analysisIt as never);
     expect(analysisIt.deferReply.mock.calls[0][0]).toEqual({ flags: MessageFlags.Ephemeral });
     expect(content(analysisIt).content).toContain('① 真人：4家 派 469（跟你一樣）→ 被否決');
     expect(await run(COMMANDS.SIM_INTERVAL, { [SIM_OPTIONS.CONTENT]: '789=2' })).toContain('【W0000-4 區間】789=2：可能（45/126 種）');
     const read = await run(COMMANDS.SIM_INTERVAL);
-    expect(read).toContain('【W0000-4 百科AI 怎麼讀】');
-    expect(read).toContain('百科AI 會派：');
+    expect(read).toContain('【W0000-4 AI騎士 怎麼讀】');
+    expect(read).toContain('AI騎士 會派：');
     const revealIt = makeInteraction(COMMANDS.SIM_REVEAL);
     await handleSimCommand(revealIt as never);
     const revealArg = revealIt.editReply.mock.calls.at(-1)?.[0] as { content: string; files?: unknown[] };
@@ -269,7 +269,7 @@ describe('handlers', () => {
     expect(start).toContain('/派 座位 作答 (沒開題的人也能作答，結果只有自己看得到)');
     expect(sharedNote('discord')).toContain('頻道裡');
     const co = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '469' }, 'CH-1', 'b');
-    expect(co.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞', '（只有你看得到；/公布 時會列出大家的答案）', '/分析 看完整解讀｜/區間 百科AI 怎麼讀｜/公布']);
+    expect(co.split('\n')).toEqual([CO_ANSWER_MARK, '【W0000-4】你派 469：2 好 1 壞', '（只有你看得到；/公布 時會列出大家的答案）', '/分析 看完整解讀｜/區間 AI騎士 怎麼讀｜/公布']);
     expect(co).not.toContain('u-1');
     // A malformed /派 from someone without an exercise is answered with the usage only (never a co-answer).
     const bad = await run(COMMANDS.SIM_PROPOSE, { [SIM_OPTIONS.TEAM]: '西 2' }, 'CH-1', 'b');
@@ -277,7 +277,7 @@ describe('handlers', () => {
     expect(bad).not.toContain(CO_ANSWER_MARK);
     expect(await run(COMMANDS.SIM_INTERVAL, {}, 'CH-2', 'a')).toContain('你目前沒有進行中的模擬');
     const own = await run(COMMANDS.SIM_INTERVAL, {}, 'CH-1', 'a');
-    expect(own).toContain('百科AI 怎麼讀】');
+    expect(own).toContain('AI騎士 怎麼讀】');
     expect(own).not.toContain(CO_ANSWER_MARK);
     expect(engine.counts.coAnswers).toBe(1);
   });

@@ -2,10 +2,13 @@
 
 > 站長 2026-11-26：「我們有辦法提供個人AI的雛形嗎 然後他們再根據這個雛形送出自己認為的AI樣貌 以後就可以是一堆自建AI對戰」
 >
-> 網站上的擂台與排行榜：<https://avalon-game-platform.web.app/#arena>
+> 網站上的擂台與排行榜：<https://avalon-game-platform.web.app/#arena>（在「AI騎士團」頁的「擂台」分頁）
+>
+> 站長 2026-11-26 起，原本的「百科AI」改名 **AI騎士**：每一隻叫 `AI騎士_{風格}_{##}`，風格沒寫就是「百科」＝目前訓練出來的引擎
+> （排行榜上的參考點 `AI騎士_百科`）。
 
-**一隻機器人 = 百科AI 的引擎 ＋ 你選的打法開關。** 不用寫程式：你只要交一份 `profile.json`，
-說你的機器人叫什麼、怎麼打、要調哪些開關。每週一擂台會讓所有機器人和百科AI 混在一起打很多局，
+**一隻機器人 = AI騎士 的引擎 ＋ 你選的打法開關。** 不用寫程式：你只要交一份 `profile.json`，
+說你的機器人叫什麼、怎麼打、要調哪些開關。擂台每天會讓所有機器人和AI騎士 混在一起打 12 萬局，
 每隻都會坐到紅方和藍方、和各種隊友同桌，算出分數上排行榜。
 
 擂台**不執行任何人的程式碼**（第 1 階段）。開關只開放下面這張表；邏輯防護（例如好人上任務一律出成功）不能關。
@@ -38,7 +41,7 @@
    | `sides` | `good`（藍方）／`evil`（紅方）：只在那一邊套用。 |
    | `roles` | `merlin`、`percival`、`loyal`、`assassin`、`morgana`、`mordred`、`oberon`：只在拿到那個角色時套用。 |
 
-   套用順序：百科AI 預設 → `overrides` → `sides` → `roles`，後面的蓋前面的。沒寫的開關照百科AI。
+   套用順序：AI騎士 預設 → `overrides` → `sides` → `roles`，後面的蓋前面的。沒寫的開關照AI騎士。
 
 3. **檢查**（需要 Node 20+ 與 pnpm 8；在 repo 根目錄 `pnpm install` 後）：
 
@@ -54,20 +57,21 @@
    pnpm --filter @avalon/server arena:local community-bots/fast-red --games 1000 --players 5-10
    ```
 
-   每一局你的機器人隨機坐一半的座位、其他是百科AI（所以紅藍兩邊都會坐到），同一局再打一次「全部百科AI」當對照，印出：
-   你坐紅方／藍方時那一邊的勝率和百科AI 比（成對差、95% 區間）、分角色勝率、三種結局（三紅／三藍刺中／三藍活）的比例、
+   每一局你的機器人隨機坐一半的座位、其他是AI騎士（所以紅藍兩邊都會坐到），同一局再打一次「全部AI騎士」當對照，印出：
+   你坐紅方／藍方時那一邊的勝率和AI騎士 比（成對差、95% 區間）、分角色勝率、三種結局（三紅／三藍刺中／三藍活）的比例、
    你當刺客時的刺中率。區間跨過 0 就是還看不出好壞，加 `--games` 會更準。
 
 5. **投稿**：從你的 fork 開 PR，**只加你那一個資料夾**。PR 會自動跑檢查（`AI arena bot check`）；
-   通過、審過就合併，下一次每週擂台就會上場。
+   PR 上也會跑一場 2,000 局的小擂台，分數表在那次檢查的 job summary 裡（不會留言在 PR 上），先看看大概落在哪。
+   通過、審過就合併，合併當天就會補跑 2 萬局、上排行榜，之後每天一起打。
 
 ## 規則
 
-- `name`、`style` 不能放**玩家名字**、網址、`@` 別人，也不能冒充官方（不能含「百科AI」「官方」「管理員」等）。
+- `name`、`style` 不能放**玩家名字**、網址、`@` 別人，也不能冒充官方：`name` 不能含「百科AI」「官方」「管理員」等，也不能用「AI騎士」開頭（大小寫、全半形、空白、`_` `-` 這類分隔符號都不分）——「AI騎士」開頭只給官方的風格騎士（`community-bots/_knights/`，作者「AI騎士團」）。
   審查的人會看名字；不合適的會請你改。
 - 一開始**一人一隻**（同一個 `author` 只能有一隻）；名字不能和別隻重複。
-- 資料夾只能放 `profile.json` 和 `README.md`。所有機器人都是百科AI 核心引擎的微調，不收程式碼（站長 2026-11-26 裁定，[紀錄](../docs/ai/ARENA_CODE_BOTS.md)）。
-- 你的機器人只在擂台裡打，不會變成網站上陪真人打的百科AI。
+- 資料夾只能放 `profile.json` 和 `README.md`。所有機器人都是 AI騎士 核心引擎的微調，不收程式碼（站長 2026-11-26 裁定，[紀錄](../docs/ai/ARENA_CODE_BOTS.md)）。
+- 你的機器人只在擂台裡打，不會變成網站上陪真人打的AI騎士。
 
 ## 開放的開關
 
@@ -75,7 +79,7 @@
 `pnpm --filter @avalon/server arena:knobs --table` 從
 [`packages/server/src/arena/knobs.ts`](../packages/server/src/arena/knobs.ts) 產生，改那份再重產。
 
-| 陣營 | 開關 | 範圍 | 百科AI 預設 | 白話說明 | 往上／往下 |
+| 陣營 | 開關 | 範圍 | AI騎士 預設 | 白話說明 | 往上／往下 |
 |---|---|---|---|---|---|
 | 紅方 | `redHideHuman` | true / false | true | 第 1、2 局自己是隊上唯一看得到的紅時，照強者紅方的比例偶爾出成功藏身。 | 開（預設）：早期偶爾藏牌，比較不容易被讀出來。 關：改走舊規則（第 1 局刺客／莫甘娜落單一律出成功藏身）。 |
 | 紅方 | `redNormalVote` | 0 – 1 | 1 | 第 3 局起不在隊上時，照「只看公開紀錄的忠臣」那樣投票的比例（偽裝成雜魚）。 | 1（預設）：票看起來像好人，難抓。 越低越常照紅方利益投（有隊友的隊投白、沒隊友的投黑），比較衝也比較好認。 |
@@ -101,13 +105,13 @@
 - [`_examples/aggressive-red`](_examples/aggressive-red/profile.json)「激進派紅方」：紅方不藏牌、票照紅方利益投、常疊隊友；奧伯倫開局就搶失敗。
 - [`_examples/cautious-blue`](_examples/cautious-blue/profile.json)「保守藍方」：藍方投黑門檻都拉高；梅林早期派隊照忠臣、藏得更深。
 
-這兩隻是擂台的內建示範對手，每週都會上場（不算任何人的投稿）。
+這兩隻是擂台的內建示範對手，每天都會上場（不算任何人的投稿）。
 
 ## 官方 AI騎士（`_knights/`）
 
 [`_knights/`](_knights/) 裡是**依玩家風格建立的 AI騎士**（站長 2026-11-26）：每一隻用一位玩家自己的真人牌局擬合開關，名字是
 `AI騎士_{玩家ID}_{##}`，作者固定「AI騎士團」，profile 寫 `"official": true`，另外有一個風格標籤 `tag`（穩健／激進／潛伏／鐵壁／寬容／明燈／藏鋒，
-或兩個接在一起）。它們每週都上擂台，不受「一人一隻」限制。社群投稿**不能**寫 `official`、不能用「AI騎士團」當作者、名字也不能用 `AI騎士_` 開頭。
+或兩個接在一起）。它們每天都上擂台，不受「一人一隻」限制。社群投稿**不能**寫 `official`、不能用「AI騎士團」當作者、名字也不能用 `AI騎士_` 開頭。
 怎麼擬合的見 [`docs/BOTS.md`〈依玩家風格建立的 AI騎士〉](../docs/BOTS.md)。之後玩家登入網站就能認領、改名、自己調自己的那一隻（代理騎士）。
 
 網站的練習台和房間「加入 AI」也能指定哪一位 AI騎士。伺服器讀的是內建的 `packages/server/src/arena/knights.generated.json`：
@@ -115,24 +119,27 @@
 
 ## 排行榜怎麼算
 
-- 每週一（台灣時間 02:23）GitHub Actions 跑 `arena:tournament`：參賽 = 百科AI ＋ 示範對手 ＋ 所有合併進 main 的機器人。
-  10 人局、每個座位隨機抽一隻（可重複），角色由遊戲引擎發；局數 = max(600, 150 × 參賽數)。
-- 分數 = 分陣營的隊伍邏輯回歸：百科AI 固定 1500；+100 分大約是「一整邊都換成它、對手是百科AI」時贏的機會變成 1.8 倍。
+- **每天凌晨 04:17（台灣時間）**GitHub Actions 跑每日大賽：12 萬局，切成 12 片同時跑（每片 1 萬局、約 1 小時）。
+  參賽 = AI騎士_百科 ＋ 示範對手 ＋ 官方 AI騎士（`_knights/`）＋ 所有合併進 main 的機器人。
+  10 人局、每個座位隨機抽一隻（可重複），角色由遊戲引擎發。**不用任何 AI 額度**：全部是 AI騎士 自己的引擎在 GitHub 上對打。
+- 有新的或改過的機器人合併進 main 時，當天再補跑 2 萬局，不用等到隔天。
+- 分數 = 分陣營的隊伍邏輯回歸：AI騎士_百科 固定 1500；+100 分大約是「一整邊都換成它、對手是 AI騎士_百科」時贏的機會變成 1.8 倍。
   分紅方分、藍方分，總分是兩者平均；括號是 95% 信賴區間。
-- 結果寫進 [`arena/leaderboard.json`](../arena/leaderboard.json)（只有機器人名字與作者自己公開的 GitHub 帳號），網站直接讀這一份。
+- 結果寫進 [`arena/leaderboard.json`](../arena/leaderboard.json)（只有機器人名字與作者自己公開的 GitHub 帳號），網站直接讀這一份；
+  每天的分數另外存一份小快照在 [`arena/history/`](../arena/history/)（網站的走勢小圖用；60 天前的併成每週一份）。
 
 ---
 
 ## English (short)
 
-**A bot = the wiki bot's engine + the style knobs you choose.** No code: submit one `profile.json`.
+**A bot = the AI Knight engine (formerly "百科AI"; the reference bot is `AI騎士_百科`) + the style knobs you choose.** No code: submit one `profile.json`.
 
 1. Copy [`_template/`](_template/) to `community-bots/<your-id>/` (lowercase letters, digits, dashes). Only `profile.json` and an optional `README.md` are allowed.
 2. Fill in `name` (≤ 24 chars), `author` (your GitHub handle, shown publicly), `style` (≤ 300 chars), and knobs in `overrides` (all seats), `sides.good` / `sides.evil`, or `roles.<role>`. Later layers win; unset knobs keep the default.
-3. `pnpm --filter @avalon/server arena:check community-bots/<id>` validates it; `arena:local community-bots/<id> [--games N]` plays it against the wiki bot with paired control games and prints win rates per side and role, the three-outcome split and the assassin hit rate.
-4. Open a PR from your fork that adds only your folder. The `AI arena bot check` workflow validates it; once merged it plays in the next weekly tournament.
+3. `pnpm --filter @avalon/server arena:check community-bots/<id>` validates it; `arena:local community-bots/<id> [--games N]` plays it against the AI Knight with paired control games and prints win rates per side and role, the three-outcome split and the assassin hit rate.
+4. Open a PR from your fork that adds only your folder. The `AI arena bot check` workflow validates it; the PR also runs a 2,000-game smoke tournament (results in the job summary). Once merged it gets a 20,000-game catch-up run the same day, then plays in the daily tournament (120,000 games every night, 04:17 Taiwan time; no AI credits, only the engine playing itself on GitHub Actions).
 
-Rules: no player names, links or @mentions in `name` / `style`; no impersonating the site; one bot per person; names must be unique. The arena never runs submitted code: every bot is a tuning of the core engine (code bots are not planned, see [`docs/ai/ARENA_CODE_BOTS.md`](../docs/ai/ARENA_CODE_BOTS.md)).
+Rules: no player names, links or @mentions in `name` / `style`; no impersonating the site (`name` may not contain "百科AI" and may not start with "AI騎士", reserved for the official knights in `_knights/`); one bot per person; names must be unique. The arena never runs submitted code: every bot is a tuning of the core engine (code bots are not planned, see [`docs/ai/ARENA_CODE_BOTS.md`](../docs/ai/ARENA_CODE_BOTS.md)).
 
 | Side | Knob | Range | Default | Meaning |
 |---|---|---|---|---|

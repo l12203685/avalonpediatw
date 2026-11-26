@@ -34,12 +34,12 @@ const pp = (d: { mean: number; low: number; high: number }): string =>
 
 function line(label: string, s: PairedStat): string {
   if (s.games === 0) return `${label}：沒有坐到`;
-  return `${label}：${pct(s.bot.rate)}（百科AI ${pct(s.control.rate)}）差 ${pp(s.diff)}，${s.games} 局`;
+  return `${label}：${pct(s.bot.rate)}（AI騎士 ${pct(s.control.rate)}）差 ${pp(s.diff)}，${s.games} 局`;
 }
 
 export function formatLocalReport(r: LocalReport, name: string): string {
   const out: string[] = [];
-  out.push(`「${name}」對百科AI，${r.games} 局（另有同樣 ${r.games} 局全部百科AI 當對照）`);
+  out.push(`「${name}」對AI騎士，${r.games} 局（另有同樣 ${r.games} 局全部AI騎士 當對照）`);
   out.push('');
   out.push('陣營（你坐這一邊時，這一邊的勝率）');
   out.push(`  ${line('紅方', r.sides.evil)}`);
@@ -56,9 +56,9 @@ export function formatLocalReport(r: LocalReport, name: string): string {
   const a = r.assassin;
   out.push(a.bot.n === 0
     ? '刺殺：你沒有出手刺殺過'
-    : `刺殺：你出手 ${a.bot.n} 次、刺中 ${pct(a.bot.rate)}（同座位的百科AI ${a.control.n} 次、刺中 ${pct(a.control.rate)}）`);
+    : `刺殺：你出手 ${a.bot.n} 次、刺中 ${pct(a.bot.rate)}（同座位的AI騎士 ${a.control.n} 次、刺中 ${pct(a.control.rate)}）`);
   out.push('');
-  out.push('差的區間跨過 0 = 還看不出比百科AI 好或差；想更準就加 --games。');
+  out.push('差的區間跨過 0 = 還看不出比AI騎士 好或差；想更準就加 --games。');
   return out.join('\n');
 }
 

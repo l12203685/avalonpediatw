@@ -94,7 +94,8 @@ describe('game:add-bot with a knight id', () => {
     const before = knightFallbackCounter.unknown;
     host.emit('game:add-bot', roomId, { knightId: 'no-such-knight' });
     await waitFor(() => botNames().length === 5, 'five bots');
-    expect(botNames()).toEqual(['AI', 'AI', 'AI騎士_ED_01', 'AI騎士_ED_02', 'AI騎士_百科_01']);
+    // 沒指定騎士（舊用戶端）= 百科：AI騎士_百科_01、_02（#214 改名）；不認得的 id 也退回百科 → _03。
+    expect(botNames()).toEqual(['AI騎士_百科_01', 'AI騎士_百科_02', 'AI騎士_ED_01', 'AI騎士_ED_02', 'AI騎士_百科_03']);
     expect(knightFallbackCounter.unknown).toBe(before + 1);
     // The client sees the knight names in the room state.
     await waitFor(() => latest && Object.values(latest.players).filter((p) => p.isBot).length === 5, 'client state');
@@ -111,7 +112,7 @@ describe('game:add-bot with a knight id', () => {
     // Game start: deal roles by hand, then the same step handleStartGame runs.
     const ids = Object.keys(room.players);
     const roles: Array<[string, 'good' | 'evil']> = [['loyal', 'good'], ['merlin', 'good'], ['morgana', 'evil'], ['assassin', 'evil'], ['percival', 'good'], ['loyal', 'good']];
-    expect(ids.map((id) => room.players[id].name)).toEqual(['Host', 'AI', 'AI', 'AI騎士_ED_02', 'AI騎士_百科_01', 'AI騎士_ED_01']);
+    expect(ids.map((id) => room.players[id].name)).toEqual(['Host', 'AI騎士_百科_01', 'AI騎士_百科_02', 'AI騎士_ED_02', 'AI騎士_百科_03', 'AI騎士_ED_01']);
     ids.forEach((id, i) => { room.players[id].role = roles[i][0] as never; room.players[id].team = roles[i][1]; });
     internals.applyOpponentProfile(room);
     for (const id of ids) {

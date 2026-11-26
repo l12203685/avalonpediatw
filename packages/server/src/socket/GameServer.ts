@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, type Role } from '@avalon/shared';
+import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, knightName, type Role } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
@@ -2138,7 +2138,7 @@ export class GameServer {
   /**
    * Seat a new bot (HeuristicAgent) in `room`; returns its id.
    * `knightId`（名冊裡的 id）：座位名換成那位 AI騎士＋這間房沒人用的序號（AI騎士_ED_01、第二位 AI騎士_ED_02）；
-   * 沒給 = 舊的加法（名字「AI」）。
+   * 沒給 = 百科（AI騎士_百科_01、_02…）。
    */
   private addBotToRoom(room: Room, knightId?: string): string {
     let botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
@@ -2148,10 +2148,10 @@ export class GameServer {
     // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
     //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
     // chip) disambiguate multiple bots in the same room.
+    // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}。指定了騎士 → 那位騎士＋這間房沒人用的序號（AI騎士_ED_01）；
+    // 沒指定 = 百科：AI騎士_百科_01、_02…
     const knight = knightId ? getKnight(knightId) : undefined;
-    const name = knight
-      ? nextKnightSeatName(knight.baseName, Object.values(room.players).map((p) => String(p.name ?? '')))
-      : 'AI';
+    const name = nextKnightSeatName(knight ? knight.baseName : knightName(), Object.values(room.players).map((p) => String(p.name ?? '')));
     room.players[botId] = {
       id: botId,
       name,

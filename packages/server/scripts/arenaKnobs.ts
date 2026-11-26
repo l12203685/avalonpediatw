@@ -41,7 +41,7 @@ export function knobTableZh(): string {
     const range = k.kind === 'boolean' ? 'true / false' : `${k.min} – ${k.max}`;
     return `| ${SIDE_ZH[k.side]} | \`${k.key}\` | ${range} | ${fmtDefault(k)} | ${k.zh} | ${k.zhUp} ${k.zhDown} |`;
   });
-  return ['| 陣營 | 開關 | 範圍 | 百科AI 預設 | 白話說明 | 往上／往下 |', '|---|---|---|---|---|---|', ...rows].join('\n');
+  return ['| 陣營 | 開關 | 範圍 | AI騎士 預設 | 白話說明 | 往上／往下 |', '|---|---|---|---|---|---|', ...rows].join('\n');
 }
 
 export function knobTableEn(): string {
