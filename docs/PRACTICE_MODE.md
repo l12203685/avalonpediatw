@@ -66,9 +66,60 @@ Edward 10/14：練習回報「要」也貼到管理員頻道。每一則**寫進
 - 開關：`PRACTICE_REPORT_DISCORD=false`（或 `0`、`off`、`no`）只關掉這份 Discord 副本，試算表照寫；不設就是開。每則回報時重新讀，不用重啟。
 - 程式：`packages/server/src/practice/PracticeReportDiscord.ts`；測試 `src/__tests__/PracticeReportDiscord.test.ts`。
 
+## 局後一題：這局有沒有針對百科AI 的習慣（2026-11-26）
+
+站長 2026-11-26 原話：「如果你在練習局發現被針對 也要學起來 問一下玩練習局的玩家 自己是哪邊被針對 或是就每一場結束都直接問 為什麼這場的玩法未來會被針對」。
+
+**每一局練習結束**，回顧頁最上面（結果和身分下面）有一張小卡片：
+
+- 「這局你有針對百科AI 的哪個習慣嗎？」可複選：紅方百科AI 的打法／藍方百科AI 的打法／梅林太好認／刺客好騙／派隊太固定／投票太固定／湖中／沒有，正常打。
+- 點「沒有，正常打」一下就送出；選了別的才出現選填的「怎麼針對的？未來這種打法哪裡會被針對？」（最多 500 字）和「送出」。
+- 「略過」只略過這局；「這段時間先別再問」記在這台瀏覽器 6 小時（`localStorage` 的 `avalon_practice_exploit_ask_mute_until`，讀寫失敗就當沒記，照樣只藏這一次）。
+- 一局只收一次；回答過或略過後，重新整理也不會再問（伺服器記得）。伺服器存不下來（沒有服務帳號、`PRACTICE_EXPLOIT_SHEET_ID=off`）或 `PRACTICE_EXPLOIT_ASK=off` 時不顯示。
+- 中英文都有（`packages/web/src/i18n/practice.ts` 的 `exploitAsk`）。卡片：`packages/web/src/components/practice/PracticeExploitAsk.tsx`。
+
+### 伺服器自己標「可能被針對」（不用問）
+
+一局結束時伺服器先看這局（規則全部在 `packages/server/src/practice/exploitFlags.ts`，測試 `__tests__/PracticeExploitFlags.test.ts`）。前提一律是**玩家贏了**，再有任何一條：
+
+| 代號 | 什麼時候 |
+|---|---|
+| `red_hit_bot_merlin` | 玩家是紅方，刺中百科AI 的梅林 |
+| `bot_assassin_missed` | 玩家是藍方而且是梅林，百科AI 刺客刺錯人（刺殺逾時不算） |
+| `bots_trusted_human_red` | 玩家是紅方，藍方百科AI 派了、或藍方百科AI 過半數贊成了有玩家在內的隊伍 ≥ 3 次 |
+| `bots_followed_lake_lie` | 玩家是紅方、湖中宣告跟看到的不一樣，之後藍方百科AI 照著走：說壞人是好人 → 之後藍方百科AI 派了或過半數贊成有那個人的隊；說好人是壞人 → 之後藍方百科AI 有派隊，但再也沒有派、也沒有過半數贊成有那個人的隊 |
+
+藍方玩家在湖中說謊不算（被騙的會是藍方隊友，不是百科AI 的弱點）。
+
+### 存到哪裡
+
+- 私人試算表（預設＝「練習回報」同一份 `1k-ZNYqCnnS__Oc-NLX_ciVmaHOnBwilHbFjXeE5orx8`）：
+  - 分頁「**練習被針對**」一局一列：時間(+08)、追蹤碼（練習房號）、玩家座位、玩家角色、玩家陣營、勝方、結束原因、玩家選的、玩家寫的、回答狀態（有回答／略過／沒回答）、自動標記（可能被針對）、機器人決策數。
+  - 分頁「**練習決策紀錄**」：**有內容的局**（選了某個習慣、有寫字、或被自動標記）才寫，那局每一個百科AI 決策一列（追蹤碼、序號、回合、第幾次派隊、機器人座位、角色、陣營、決策類型、決策、規則、理由節錄 400 字、來源）。練習房的決策本來只在記憶體留 30 分鐘，這樣之後還查得到。「練習回報」分頁的「房間」欄也是同一個號碼。
+  - 什麼時候寫：玩家回答時馬上寫；被自動標記但玩家按略過時馬上寫；被自動標記、玩家什麼都沒按，就在練習房清掉時寫（按「再練一局」「回首頁」「結束練習」、或 30 分鐘到了）。伺服器在那之前重啟就沒了（全部在記憶體）。沒被標記、也沒回答的局什麼都不寫。
+  - `PRACTICE_EXPLOIT_SHEET_ID` 可以換一份試算表（貼 id 或網址；例如另開一份讓「練習被針對」當第一個分頁，Drive 連接器才讀得到）；`off` 不寫；公開的戰績試算表一律拒絕。不設時跟著 `PRACTICE_REPORT_SHEET_ID`。分頁沒有會自動建立（加在最後面，不動「聊天紀錄」的第一個位置）。
+- 管理員頻道「大劍管理員」：只貼有內容的局，跟「這步怪怪的」同一個發送器、同一個頻道、同一個每小時 30 則、同一組次數（`feedback.practiceReports`），`PRACTICE_REPORT_DISCORD=false` 一起關：
+
+```
+🎯 練習被針對｜PRACTICE-AB12CD34EF
+玩家 3家 莫甘娜（紅方）｜紅方勝・刺中梅林
+玩家選：梅林太好認、派隊太固定
+怎麼針對：……（最多 300 字）
+自動標記：紅方玩家刺中百科AI 梅林（刺中 5家）
+```
+
+  沒有玩家名字、沒有帳號 id，不會 @ 人。
+- 不進公開 repo、不寫 log（只有固定文字和 HTTP 狀態碼）。`/api/bots/status` 的 `practice.exploitAsks` 只有數字（重啟歸零）：
+  `enabled`、`sheet`（`ok`／`disabled`／`public-refused`／`no-credentials`／`bad-credentials`）、`shown`（題目真的顯示的局數）、`answered`、`skipped`、
+  `autoFlagged` 和 `autoFlagRules`（每條規則幾局）、`saved`、`saveFailed`、`choices`（每個選項幾次）。
+- 之後怎麼用：每天 08:00 同步讀這兩個分頁，改寫成「被針對的習慣」放進對抗剝削那一回合（第 86 回合）和待測清單，見 `docs/ai/optimization_loop.md`〈練習被針對 → 剝削回合與待測清單〉。
+- Socket：`practice:exploit-ask` `{ roomId, action: 'shown' | 'skip' | 'answer', choices?, text? }` → `{ ok, error? }`；只有房主、只在局結束後。
+- 程式：`packages/server/src/practice/PracticeExploitReport.ts`（選項、列、試算表、貼文、數字）、`exploitFlags.ts`、`GameServer.handlePracticeExploitAsk`；
+  測試 `__tests__/PracticeExploitReport.test.ts`、`__tests__/integration/PracticeMode.test.ts`（「被針對」那一個）。
+
 ## 技術摘要
 
-- Socket 事件：`practice:create`（建立並開局，回 `{ ok, roomId }`）、`practice:trace`（對局結束後只送給房主）、`practice:get-trace`（結束後重新拉；結束前一律拒絕）、`practice:flag`（回報）。
+- Socket 事件：`practice:create`（建立並開局，回 `{ ok, roomId }`）、`practice:trace`（對局結束後只送給房主）、`practice:get-trace`（結束後重新拉；結束前一律拒絕）、`practice:flag`（回報）、`practice:exploit-ask`（局後一題，見上）。
 - 房間代碼 `PRACTICE-` 開頭；座位／角色指定只在練習房生效（`GameEngine.configurePractice`），一般房間發牌不變。
 - 同一個帳號在任何分頁還在別的房間（進行中，或大廳裡還連線）時不能開練習；建立練習房每 3 秒一次，同時以連線與帳號計算。
 - 順便修到、一般房間也適用的地方：

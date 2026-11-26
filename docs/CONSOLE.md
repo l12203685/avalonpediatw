@@ -60,6 +60,12 @@
 Drive 連接器讀得到就整理成百科AI 改進項目寫進 `docs/ai/optimization_loop.md`〈遊戲內回饋 → 待測清單〉（只寫改寫後的情境，不引原話、不寫名字），
 讀不到就在摘要寫數字、請站長匯出那個分頁。原文不進 repo、不進主控台。湖中宣告只打在聊天裡被讀到的次數是 `lakeChatDeclare.declared`（只看，不用處理）。
 
+**同一次同步也看練習局的「被針對」**（站長 2026-11-26「如果你在練習局發現被針對 也要學起來」）：`/api/bots/status` 的 `practice.exploitAsks`
+（`shown`、`answered`、`skipped`、`autoFlagged`、`autoFlagRules`、`choices`、`saved`、`saveFailed`）；完整的在私人試算表「練習被針對」（一局一列）和
+「練習決策紀錄」（同一個追蹤碼，那局每個百科AI 決策）兩個分頁。讀得到就照 `docs/ai/optimization_loop.md`〈練習被針對 → 剝削回合與待測清單〉
+改寫成「被針對的習慣」寫進那張清單、2 局以上的交給剝削回合（第 86 回合）；讀不到（Drive 連接器只拿得到第一個分頁）就在摘要寫數字，
+並建議站長匯出兩個分頁，或設 `PRACTICE_EXPLOIT_SHEET_ID` 讓它在另一份試算表當第一個分頁。玩家寫的字不進 repo、不進主控台。
+
 同步的順序固定是「先 apply、再 export」：export 只反映 main 上已經有的東西，所以 apply 的 PR 合併前，主控台會同時顯示「站長已裁定（db）」和「main 還沒套用（鏡像）」，這是對的狀態，不要在主控台裡把它抹平。
 
 ## 3. 主控台鏡像：`console:export`
