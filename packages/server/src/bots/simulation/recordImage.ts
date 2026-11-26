@@ -90,7 +90,7 @@ function charEm(ch: string): number {
  */
 export function drawableName(raw: string | undefined): string {
   return (raw ?? '')
-    .replace(/[\p{Extended_Pictographic}\p{Regional_Indicator}\u{1F3FB}-\u{1F3FF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\p{Variation_Selector}|\u{200D}|\u{20E3}|[\u{E0020}-\u{E007F}]/gu, '')
     .replace(/\s+/gu, ' ')
     .trim();
 }
