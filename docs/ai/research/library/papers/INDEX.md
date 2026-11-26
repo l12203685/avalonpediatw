@@ -26,7 +26,7 @@
 | [P008](./READING_MATRIX.md) | Do LLMs Trust the Accuser or the Accusation? Measuring Belief Shifts in Werewolf | 2026 | EMNLP 2026 | [來源](https://aclanthology.org/2026.emnlp-main.1628/) | P1 |
 | [P009](./READING_MATRIX.md) | MARBO: Relational Belief Grounding for LLM Agents in Social Deduction Games | 2026 | EMNLP 2026 | [來源](https://aclanthology.org/2026.emnlp-main.1376/) | P1 |
 | [P010](./READING_MATRIX.md) | Auditing Belief-Conditioned LLM Agents in Hidden-Information Social Deduction Games | 2026 | arXiv preprint | [來源](https://arxiv.org/abs/2607.10814) | P1 |
-| [P011](./READING_MATRIX.md) | MafiaScope: Non-Invasive, Time-Resolved Belief Probing for LLM Agents in Social Deduction Games | 2026 | arXiv preprint | [來源](https://arxiv.org/abs/2607.10645) | P2 |
+| [P011](./READING_MATRIX.md) | MafiaScope: Inspecting Multi-Agent Reasoning in Social Deduction Games | 2026 | arXiv preprint | [來源](https://arxiv.org/abs/2607.10645) | P2 |
 
 ## 資料集與公開程式碼（2）
 
