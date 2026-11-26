@@ -40,6 +40,24 @@ function main(): void {
     if (g.playerCount !== 10) continue;
     const p = g.proposals[it.idx ?? 0];
     if (p.forced || p.round < 2) continue;
+    // 站長 11/26「非尾派忠臣/派西維爾也應該要找前一局開紅的」：前一局任務失敗之後的非尾派提議（忠臣／派西），隊上有幾個失敗那一隊的人（自己以外）。
+    const prevF = g.quests.find((q) => q.round === p.round - 1);
+    if (prevF && prevF.failed && (it.role === 'loyal' || it.role === 'percival')) {
+      const seatF = p.leaderSeat;
+      const F = prevF.teamSeats.filter((x) => x !== seatF);
+      const redF = (x: number): boolean => EVIL_ROLES.has(g.seatRoles[x - 1] as never);
+      const needF = (AVALON_CONFIG[10]?.questFailsRequired ?? [1, 1, 1, 2, 1])[p.round - 1] ?? 1;
+      const descF = (team: readonly number[]): Record<string, number> => {
+        const o = team.filter((x) => F.includes(x)).length;
+        const reds = team.filter(redF).length;
+        return { sup: o === 0 ? 0 : o === F.length ? 2 : 1, k: o, reds, dirty: reds >= needF ? 1 : 0 };
+      };
+      const botF = parseSeatList(it.botAction ?? '');
+      lines.push(JSON.stringify({
+        gi: it.gi, role: it.role, spot: 'F', rd: p.round, att: p.attempt, s: d.s, on: prevF.teamSeats.includes(seatF) ? 1 : 0, r1red: 0,
+        h: it.human, b: it.bot, agree: it.agree ? 1 : 0, ht: descF(p.teamSeats), bt: botF.length === p.teamSeats.length ? descF(botF) : null,
+      }));
+    }
     const q1 = g.quests.find((q) => q.round === 1);
     if (!q1 || q1.failed) continue;
     const r1 = new Set(q1.teamSeats);

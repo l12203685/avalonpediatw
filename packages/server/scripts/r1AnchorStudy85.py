@@ -305,10 +305,10 @@ def pr_table(paths, base=None):
         return [json.loads(l) for l in open(p, encoding='utf-8') if l.strip()]
     out = []
     rows = load(paths)
-    B = {(r['gi'], r['rd'], r['att']): r for r in load(base)} if base else None
+    B = {(r['gi'], r['rd'], r['att']): r for r in load(base) if r['spot'] != 'F'} if base else None
     cells = defaultdict(list)
     for r in rows:
-        if not r['bt']:
+        if not r['bt'] or r['spot'] == 'F':
             continue
         for key in ((r['spot'], r['role']), (r['spot'], 'blue'), (r['spot'], 'blue', r['on'])):
             cells[key].append(r)
@@ -348,6 +348,34 @@ def pr_table(paths, base=None):
                 m2, se2 = se_mean(ds)
                 line += f' {m2:+.3f} ± {se2:.3f} | {ch} |'
             out.append(line)
+    # F 格（站長 11/26）：前一局失敗之後的非尾派提議（忠臣＋派西），sup 0 = 一個都沒帶、1 = 帶一部分、2 = 整隊
+    out.append('')
+    out.append('| F 格：前一局失敗之後、非尾派（忠臣＋派西） | n | 真人：一個都沒帶 % | 機器人 % | 真人：帶一部分 % | 機器人 % | 真人隊會失敗 % | 機器人 % | 量尺 機器人 − 真人 |' + (' 候選 − 對照（pp） | 候選改到 |' if B else ''))
+    out.append('|---|---|---|---|---|---|---|---|---|' + ('---|---|' if B else ''))
+    BF = {(r['gi'], r['rd'], r['att']): r for r in load(base) if r['spot'] == 'F'} if base else None
+    for lab, f in (('全部', lambda r: True), ('忠臣', lambda r: r['role'] == 'loyal'), ('派西', lambda r: r['role'] == 'percival'),
+                   ('在失敗那一隊上', lambda r: r['on'] == 1), ('不在失敗那一隊上', lambda r: r['on'] == 0),
+                   ('第 2 局', lambda r: r['rd'] == 2), ('第 3 局', lambda r: r['rd'] == 3), ('第 4–5 局', lambda r: r['rd'] >= 4)):
+        rs = [r for r in rows if r['spot'] == 'F' and r['bt'] and f(r)]
+        if not rs:
+            continue
+        n = len(rs)
+        m, se = se_mean([100 * (r['b'] - r['h']) for r in rs])
+        line = (f"| {lab} | {n} | {100 * sum(r['ht']['sup'] == 0 for r in rs) / n:.1f} | {100 * sum(r['bt']['sup'] == 0 for r in rs) / n:.1f} | "
+                f"{100 * sum(r['ht']['sup'] == 1 for r in rs) / n:.1f} | {100 * sum(r['bt']['sup'] == 1 for r in rs) / n:.1f} | "
+                f"{100 * sum(r['ht']['dirty'] for r in rs) / n:.1f} | {100 * sum(r['bt']['dirty'] for r in rs) / n:.1f} | {m:+.2f} ± {se:.2f} |")
+        if BF:
+            ds = []
+            ch = 0
+            for r in rs:
+                b0 = BF.get((r['gi'], r['rd'], r['att']))
+                if b0 is None:
+                    continue
+                ds.append(100 * (r['b'] - b0['b']))
+                ch += (r['bt'] != b0['bt']) or abs(r['b'] - b0['b']) > 1e-12
+            m2, se2 = se_mean(ds)
+            line += f' {m2:+.3f} ± {se2:.3f} | {ch} |'
+        out.append(line)
     return '\n'.join(out)
 
 
