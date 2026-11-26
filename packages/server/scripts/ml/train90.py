@@ -432,9 +432,13 @@ def cmd_assassin(a):
     zcf = np.zeros(len(y))
     for i in range(len(bots)):
         others = allbot & (sdom != f'bot{i}')
-        _, z = fit(h_train_spot | others, f'cf{i}')
+        jcf, z = fit(h_train_spot | others, f'cf{i}')
         m = dom == f'bot{i}'
         zcf[m] = z[m]
+        if a.out_cf_models:
+            jcf['meta'] = {'crossFit': f'真人局擬合那一半＋機器人局（留下 {a.bot[i].split("/")[-1]}）'}
+            with open(f'{a.out_cf_models}{i}.json', 'w', encoding='utf8') as fh:
+                json.dump(jcf, fh, ensure_ascii=False, separators=(',', ':'))
     print(f'  trees: full {len(js_full["trees"])}, humanOnly {len(js_h["trees"])}', file=sys.stderr)
     results = {}
 
@@ -507,6 +511,7 @@ def main():
     pa.add_argument('--human-weight', type=float, default=1.0)
     pa.add_argument('--out-cf')
     pa.add_argument('--out-human')
+    pa.add_argument('--out-cf-models')
     a = ap.parse_args()
     if a.cmd == 'belief':
         return cmd_belief(a)

@@ -5,7 +5,7 @@
  * 只有座位、角色、特徵，沒有玩家名。
  *
  *   cd packages/server && npx tsx scripts/ml/exportAssassin90.ts --export-human OUT.jsonl [--flag k=v ...]
- *   npx tsx scripts/ml/exportAssassin90.ts --export-bot NORM.jsonl OUT.jsonl [--flag k=v ...] [--limit N]
+ *   npx tsx scripts/ml/exportAssassin90.ts --export-bot NORM.jsonl OUT.jsonl [--flag k=v ...] [--limit N] [--model X.json]
  *     NORM.jsonl = `keySpotStudy.ts --export-bot` 的輸出（自我對打 detail=1 的整局紀錄，座位以 1-1 隊長為 1 家）。
  *
  * 時間切分（`late`）：十人局照日期排序，後 1/3 = 驗證（同 `exportBelief90.ts`、第 89 回合）。
@@ -22,6 +22,8 @@ import { withSeededRandom } from '../../src/ai/benchmark/agreement';
 import { campOf, type ReplayGame } from '../../src/ai/benchmark/sheetsReplay';
 import { ASSASSIN_FEATURES_90, assassinFeatures90 } from '../../src/ai/ml/assassinFeatures90';
 import { timeSplit } from './exportBelief90';
+import { setAssassinModel90 } from '../../src/ai/Round90';
+import type { ModelJson } from '../../src/ai/ml/mlModel90';
 
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
@@ -31,6 +33,9 @@ const baseTuning = resolveAgentTuning({ ...DEFAULT_AGENT_TUNING });
 const candFlags = args('--flag');
 const candTuning = candFlags.length ? resolveAgentTuning(Object.assign({ ...DEFAULT_AGENT_TUNING }, ...candFlags.map(parseTuningFlag))) : null;
 const EXCLUDED_TAGS = new Set(['flag:badGame', 'flag:incident']);
+// --model X.json：第 2 號換成這一份（交叉擬合時，量哪一組機器人局就用沒看過它的那一份）。
+const modelPath = arg('--model');
+if (modelPath) setAssassinModel90(JSON.parse(fs.readFileSync(modelPath, 'utf8')) as ModelJson);
 
 interface Spot { gi: number; late: number; s: number | null; game: ReplayGame; logged?: number | null }
 
