@@ -7,8 +7,14 @@
  */
 import { DEFAULT_AGENT_TUNING, type AgentTuning } from '../ai/AgentTuning';
 import { ARENA_KNOBS, knobFor } from './knobs';
+import { validateResidual, type ResidualWeights } from './residual';
 
 export const PROFILE_SCHEMA_VERSION = 1;
+/**
+ * schema 2 = schema 1 ＋ `residual`（AI騎士 精準度 v2 的每人殘差層權重，`residual.ts`）。只有官方 AI騎士 可以用；
+ * 社群投稿照舊只能調開關（schema 1）。
+ */
+export const PROFILE_SCHEMA_RESIDUAL = 2;
 
 export const ARENA_ROLES = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'] as const;
 export type ArenaRole = typeof ARENA_ROLES[number];
@@ -34,6 +40,8 @@ export interface BotProfile {
   sides?: Partial<Record<ArenaSide, KnobValues>>;
   /** 只在拿到這個角色時套用。 */
   roles?: Partial<Record<ArenaRole, KnobValues>>;
+  /** 每人殘差層（schema 2，只有官方 AI騎士）：引擎決定之後，用那位玩家自己的牌局學到的權重重新打分。 */
+  residual?: ResidualWeights;
 }
 
 export interface ValidationResult {
@@ -77,7 +85,7 @@ export function isHouseKnightName(name: string): boolean {
   return foldName(name).startsWith(HOUSE_NAME_PREFIX);
 }
 
-const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles']);
+const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles', 'residual']);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -133,7 +141,16 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   }
   if (!isPlainObject(raw)) return { ok: false, errors: [...errors, 'profile.json 要是一個 JSON 物件'], warnings };
   for (const key of Object.keys(raw)) if (!TOP_KEYS.has(key)) errors.push(`不認得的欄位「${key}」`);
-  if (raw.schema !== PROFILE_SCHEMA_VERSION) errors.push(`schema 要是 ${PROFILE_SCHEMA_VERSION}`);
+  const schema = raw.schema === PROFILE_SCHEMA_RESIDUAL && opts.house ? PROFILE_SCHEMA_RESIDUAL : PROFILE_SCHEMA_VERSION;
+  if (raw.schema !== schema) {
+    errors.push(raw.schema === PROFILE_SCHEMA_RESIDUAL ? 'schema 2（殘差層）只給官方的 AI騎士（community-bots/_knights/）用' : `schema 要是 ${PROFILE_SCHEMA_VERSION}`);
+  }
+  let residual: ResidualWeights | undefined;
+  if (raw.residual !== undefined) {
+    if (!opts.house) errors.push('residual（殘差層權重）只給官方的 AI騎士 用；社群投稿只能調開關');
+    else if (raw.schema !== PROFILE_SCHEMA_RESIDUAL) errors.push('有 residual 時 schema 要是 2');
+    else residual = validateResidual(raw.residual, errors);
+  }
   const name = checkText('name', raw.name, NAME_MAX, errors);
   if (name) {
     const folded = name.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
@@ -181,14 +198,15 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   const knobCount = Object.keys(overrides ?? {}).length
     + Object.values(sides ?? {}).reduce((n, v) => n + Object.keys(v ?? {}).length, 0)
     + Object.values(roles ?? {}).reduce((n, v) => n + Object.keys(v ?? {}).length, 0);
-  if (errors.length === 0 && knobCount === 0) warnings.push('沒有改任何開關：這隻會和AI騎士 打得一模一樣');
+  if (errors.length === 0 && knobCount === 0 && !residual) warnings.push('沒有改任何開關：這隻會和AI騎士 打得一模一樣');
   if (errors.length > 0) return { ok: false, errors, warnings };
-  const profile: BotProfile = { schema: PROFILE_SCHEMA_VERSION, name: name!, author: author!, style: style! };
+  const profile: BotProfile = { schema, name: name!, author: author!, style: style! };
   if (tag) profile.tag = tag;
   if (opts.house) profile.official = true;
   if (overrides) profile.overrides = overrides;
   if (sides) profile.sides = sides;
   if (roles) profile.roles = roles;
+  if (residual) profile.residual = residual;
   return { ok: true, errors, warnings, profile };
 }
 
