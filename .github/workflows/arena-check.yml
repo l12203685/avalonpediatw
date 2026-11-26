@@ -17,6 +17,7 @@ on:
       - 'packages/server/src/arena/**'
       - 'packages/server/scripts/arena*'
       - 'packages/server/scripts/arena/**'
+      - 'packages/server/scripts/knightsGenerate.ts'
       - '.github/workflows/arena-check.yml'
       - '.github/workflows/arena-tournament.yml'
 
@@ -69,6 +70,11 @@ jobs:
             exit 1
           fi
           pnpm --filter @avalon/server arena:check --all --pr-author "${PR_AUTHOR}" "${folders[@]}"
+
+      - name: Server's built-in knight list matches community-bots/_knights/
+        # 練習台、房間「指定 AI騎士」讀伺服器內建的 packages/server/src/arena/knights.generated.json；
+        # 改了 AI騎士 卻沒重跑產生器 → 這一步失敗（跑 pnpm --filter @avalon/server knights:generate 再提交）。
+        run: pnpm --filter @avalon/server knights:generate --check
 
   smoke:
     runs-on: ubuntu-latest
