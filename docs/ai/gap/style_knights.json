@@ -1,0 +1,364 @@
+{
+ "generatedAt": "2026-11-26T12:29:38.488Z",
+ "method": "真人局重播（第 1 關／人類 PR 量尺同一套）；局依局號雜湊分兩半，擬合的一半挑開關（往全體收縮，κ = 20），留出的一半比一致度；比百科AI 高才留下。",
+ "players": 30,
+ "kept": 28,
+ "selection": {
+  "minGames": 250,
+  "strongTop": 5,
+  "byGames": 27,
+  "strong": 11
+ },
+ "heldGainPp": {
+  "min": -0.79,
+  "p25": 0.83,
+  "median": 1.64,
+  "p75": 2.49,
+  "max": 3.52
+ },
+ "tagCounts": {
+  "藏鋒": 5,
+  "鐵壁": 7,
+  "穩健": 5,
+  "寬容": 8,
+  "藏鋒鐵壁": 1,
+  "明燈": 2
+ },
+ "styleCenter": {
+  "red": 0,
+  "blue": -1.5083333333333333,
+  "merlin": 0
+ },
+ "knights": [
+  {
+   "name": "AI騎士_HAO_01",
+   "kept": true,
+   "tag": "藏鋒",
+   "heldDecisions": 5199,
+   "heldAgreementDefault": 78.4,
+   "heldAgreementKnight": 80,
+   "heldGainPp": 1.58,
+   "realizedGainPp": 1.62,
+   "fitGainPp": 1.74
+  },
+  {
+   "name": "AI騎士_Sin_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 5613,
+   "heldAgreementDefault": 81.6,
+   "heldAgreementKnight": 84.8,
+   "heldGainPp": 3.22,
+   "realizedGainPp": 3.22,
+   "fitGainPp": 2.97
+  },
+  {
+   "name": "AI騎士_尼克_01",
+   "kept": true,
+   "tag": "穩健",
+   "heldDecisions": 4458,
+   "heldAgreementDefault": 81.3,
+   "heldAgreementKnight": 82.4,
+   "heldGainPp": 1.08,
+   "realizedGainPp": 1.08,
+   "fitGainPp": 1.06
+  },
+  {
+   "name": "AI騎士_軒_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 4421,
+   "heldAgreementDefault": 79.9,
+   "heldAgreementKnight": 80.5,
+   "heldGainPp": 0.59,
+   "realizedGainPp": 0.59,
+   "fitGainPp": 0.52
+  },
+  {
+   "name": "AI騎士_池_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 3442,
+   "heldAgreementDefault": 75.3,
+   "heldAgreementKnight": 76.4,
+   "heldGainPp": 1.07,
+   "realizedGainPp": 1.07,
+   "fitGainPp": 1.42
+  },
+  {
+   "name": "AI騎士_海月_01",
+   "kept": true,
+   "tag": "藏鋒",
+   "heldDecisions": 3474,
+   "heldAgreementDefault": 81.1,
+   "heldAgreementKnight": 83.1,
+   "heldGainPp": 2.01,
+   "realizedGainPp": 2.01,
+   "fitGainPp": 2.04
+  },
+  {
+   "name": "AI騎士_黑羊_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 3523,
+   "heldAgreementDefault": 80,
+   "heldAgreementKnight": 80.4,
+   "heldGainPp": 0.4,
+   "realizedGainPp": 0.4,
+   "fitGainPp": 1.27
+  },
+  {
+   "name": null,
+   "kept": false,
+   "tag": null,
+   "heldDecisions": 2907,
+   "heldAgreementDefault": 80.9,
+   "heldAgreementKnight": 80.9,
+   "heldGainPp": -0.07,
+   "realizedGainPp": null,
+   "fitGainPp": 1.52
+  },
+  {
+   "name": "AI騎士_洋蔥_01",
+   "kept": true,
+   "tag": "穩健",
+   "heldDecisions": 2954,
+   "heldAgreementDefault": 79.4,
+   "heldAgreementKnight": 81.6,
+   "heldGainPp": 2.13,
+   "realizedGainPp": 2.13,
+   "fitGainPp": 1.56
+  },
+  {
+   "name": "AI騎士_豬豬_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 2445,
+   "heldAgreementDefault": 80.2,
+   "heldAgreementKnight": 82.6,
+   "heldGainPp": 2.41,
+   "realizedGainPp": 2.41,
+   "fitGainPp": 2.42
+  },
+  {
+   "name": "AI騎士_JOY_01",
+   "kept": true,
+   "tag": "藏鋒",
+   "heldDecisions": 2129,
+   "heldAgreementDefault": 77.8,
+   "heldAgreementKnight": 79.4,
+   "heldGainPp": 1.64,
+   "realizedGainPp": 1.78,
+   "fitGainPp": 1.1
+  },
+  {
+   "name": "AI騎士_Dean_01",
+   "kept": true,
+   "tag": "藏鋒鐵壁",
+   "heldDecisions": 2179,
+   "heldAgreementDefault": 81,
+   "heldAgreementKnight": 82.6,
+   "heldGainPp": 1.56,
+   "realizedGainPp": 1.61,
+   "fitGainPp": 1.98
+  },
+  {
+   "name": "AI騎士_菜_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 2184,
+   "heldAgreementDefault": 77.4,
+   "heldAgreementKnight": 78.9,
+   "heldGainPp": 1.56,
+   "realizedGainPp": 1.56,
+   "fitGainPp": 0.78
+  },
+  {
+   "name": "AI騎士_Liang_01",
+   "kept": true,
+   "tag": "穩健",
+   "heldDecisions": 2303,
+   "heldAgreementDefault": 79.7,
+   "heldAgreementKnight": 82.1,
+   "heldGainPp": 2.39,
+   "realizedGainPp": 2.39,
+   "fitGainPp": 3
+  },
+  {
+   "name": "AI騎士_kevin_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 2185,
+   "heldAgreementDefault": 78.6,
+   "heldAgreementKnight": 79.2,
+   "heldGainPp": 0.64,
+   "realizedGainPp": 0.64,
+   "fitGainPp": 0.53
+  },
+  {
+   "name": "AI騎士_雪怪_01",
+   "kept": true,
+   "tag": "明燈",
+   "heldDecisions": 1850,
+   "heldAgreementDefault": 80.3,
+   "heldAgreementKnight": 82.4,
+   "heldGainPp": 2.11,
+   "realizedGainPp": 2.11,
+   "fitGainPp": 3.63
+  },
+  {
+   "name": null,
+   "kept": false,
+   "tag": null,
+   "heldDecisions": 2029,
+   "heldAgreementDefault": 82,
+   "heldAgreementKnight": 81.2,
+   "heldGainPp": -0.79,
+   "realizedGainPp": null,
+   "fitGainPp": 0.4
+  },
+  {
+   "name": "AI騎士_黃某人_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 1974,
+   "heldAgreementDefault": 79.4,
+   "heldAgreementKnight": 82,
+   "heldGainPp": 2.63,
+   "realizedGainPp": 2.63,
+   "fitGainPp": 0.98
+  },
+  {
+   "name": "AI騎士_午夜_01",
+   "kept": true,
+   "tag": "明燈",
+   "heldDecisions": 1817,
+   "heldAgreementDefault": 78.8,
+   "heldAgreementKnight": 80.4,
+   "heldGainPp": 1.6,
+   "realizedGainPp": 1.6,
+   "fitGainPp": 2.19
+  },
+  {
+   "name": "AI騎士_Lori_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 1602,
+   "heldAgreementDefault": 79.9,
+   "heldAgreementKnight": 83,
+   "heldGainPp": 3.12,
+   "realizedGainPp": 3.12,
+   "fitGainPp": 2.7
+  },
+  {
+   "name": "AI騎士_大星_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 1561,
+   "heldAgreementDefault": 80.4,
+   "heldAgreementKnight": 83.3,
+   "heldGainPp": 2.95,
+   "realizedGainPp": 2.95,
+   "fitGainPp": 3.63
+  },
+  {
+   "name": "AI騎士_ED_01",
+   "kept": true,
+   "tag": "藏鋒",
+   "heldDecisions": 1454,
+   "heldAgreementDefault": 79.2,
+   "heldAgreementKnight": 80,
+   "heldGainPp": 0.83,
+   "realizedGainPp": 0.76,
+   "fitGainPp": 1.64
+  },
+  {
+   "name": "AI騎士_Vash_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 1212,
+   "heldAgreementDefault": 80.5,
+   "heldAgreementKnight": 83.3,
+   "heldGainPp": 2.72,
+   "realizedGainPp": 2.72,
+   "fitGainPp": 4.69
+  },
+  {
+   "name": "AI騎士_Emma_01",
+   "kept": true,
+   "tag": "藏鋒",
+   "heldDecisions": 1238,
+   "heldAgreementDefault": 80.7,
+   "heldAgreementKnight": 81.1,
+   "heldGainPp": 0.4,
+   "realizedGainPp": 0.48,
+   "fitGainPp": 1.43
+  },
+  {
+   "name": "AI騎士_TEN_01",
+   "kept": true,
+   "tag": "穩健",
+   "heldDecisions": 1326,
+   "heldAgreementDefault": 80.9,
+   "heldAgreementKnight": 83.4,
+   "heldGainPp": 2.49,
+   "realizedGainPp": 2.49,
+   "fitGainPp": 2.15
+  },
+  {
+   "name": "AI騎士_豬羊_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 1322,
+   "heldAgreementDefault": 81.5,
+   "heldAgreementKnight": 82.8,
+   "heldGainPp": 1.29,
+   "realizedGainPp": 1.29,
+   "fitGainPp": 2.36
+  },
+  {
+   "name": "AI騎士_很乖_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 1256,
+   "heldAgreementDefault": 77.4,
+   "heldAgreementKnight": 79.5,
+   "heldGainPp": 2.07,
+   "realizedGainPp": 2.07,
+   "fitGainPp": 0.72
+  },
+  {
+   "name": "AI騎士_爾勵_01",
+   "kept": true,
+   "tag": "穩健",
+   "heldDecisions": 341,
+   "heldAgreementDefault": 78.9,
+   "heldAgreementKnight": 82.4,
+   "heldGainPp": 3.52,
+   "realizedGainPp": 3.52,
+   "fitGainPp": 3.53
+  },
+  {
+   "name": "AI騎士_Dal_01",
+   "kept": true,
+   "tag": "寬容",
+   "heldDecisions": 390,
+   "heldAgreementDefault": 80.5,
+   "heldAgreementKnight": 83.1,
+   "heldGainPp": 2.56,
+   "realizedGainPp": 2.56,
+   "fitGainPp": 3.61
+  },
+  {
+   "name": "AI騎士_C5_01",
+   "kept": true,
+   "tag": "鐵壁",
+   "heldDecisions": 212,
+   "heldAgreementDefault": 81.6,
+   "heldAgreementKnight": 82.1,
+   "heldGainPp": 0.47,
+   "realizedGainPp": 0.47,
+   "fitGainPp": 3.45
+  }
+ ]
+}

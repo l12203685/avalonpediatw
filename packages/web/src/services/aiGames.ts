@@ -5,6 +5,7 @@
  *   - flagAiDecision：「這步怪怪的」→ 伺服器貼成那篇 DC 討論串的回覆
  */
 import type { AiGameListItem, AiGameTrace } from '../utils/aiGames';
+import { knightDisplayName } from '../utils/knightNames';
 
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string) || 'http://localhost:3001';
 
@@ -31,7 +32,17 @@ export async function fetchAiGames(): Promise<{ games: AiGameListItem[]; stale: 
 
 export async function fetchAiGame(id: string): Promise<{ trace: AiGameTrace; thread: { id: string; name: string; url: string } }> {
   const res = await fetch(`${SERVER_URL}/api/ai-games/${encodeURIComponent(id)}`);
-  return readJson<{ trace: AiGameTrace; thread: { id: string; name: string; url: string } }>(res);
+  const out = await readJson<{ trace: AiGameTrace; thread: { id: string; name: string; url: string } }>(res);
+  // 舊名字（百科AI_21）顯示成新名字（AI騎士_百科_21；站長 2026-11-26），DC 上的 trace.json 不改
+  const t = out.trace;
+  return {
+    ...out,
+    trace: {
+      ...t,
+      seats: t.seats.map((s) => (s.ai && s.name ? { ...s, name: knightDisplayName(s.name) } : s)),
+      decisions: t.decisions.map((d) => (d.nick ? { ...d, nick: knightDisplayName(d.nick) } : d)),
+    },
+  };
 }
 
 export async function flagAiDecision(id: string, decisionId: number, note: string, name: string): Promise<void> {

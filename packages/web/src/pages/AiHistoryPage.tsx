@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { ArrowLeft, Bot, LineChart, ListChecks, Users } from 'lucide-react';
-import { useGameStore } from '../store/gameStore';
+import { Bot, LineChart, ListChecks, Users } from 'lucide-react';
 import historyJson from '../data/aiHistory.json';
 import { strengthReport } from '../stats/statsEngine';
 import { useCohortCuts } from '../stats/cohortCuts';
@@ -49,21 +48,13 @@ function pct(n: number | null, digits = 1): string {
 }
 
 export default function AiHistoryPage(): JSX.Element {
-  const setGameState = useGameStore((s) => s.setGameState);
   const human = useHumanRefs();
   return (
     <div className="relative z-10 mx-auto max-w-4xl space-y-6 overflow-x-hidden px-3 py-4 text-white sm:px-4">
       <header className="space-y-2">
-        <button
-          type="button"
-          onClick={() => { setGameState('aiGames'); window.scrollTo({ top: 0 }); }}
-          className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
-        >
-          <ArrowLeft size={14} />百科AI 對局
-        </button>
-        <h1 className="flex items-center gap-2 text-lg font-bold"><Bot size={20} className="text-amber-300" />百科AI 優化歷程</h1>
+        <h1 className="flex items-center gap-2 text-lg font-bold"><Bot size={20} className="text-amber-300" />AI騎士 優化歷程</h1>
         <p className="text-xs leading-relaxed text-zinc-300">
-          百科AI 從 10/28 起一回合改藍方、一回合改紅方，每個改法先在機器人互打裡量，勝率確定變好（或判斷更像真人強者）才改成預設。
+          AI騎士 從 10/28 起一回合改藍方、一回合改紅方，每個改法先在機器人互打裡量，勝率確定變好（或判斷更像真人強者）才改成預設。
           這頁只列<strong className="text-white">改成預設</strong>的改動：做了什麼、為什麼、讓勝率動了多少。
         </p>
       </header>
@@ -142,7 +133,7 @@ function Headline({ human }: { human: HumanState }): JSX.Element {
       </div>
       {now?.note && <p className="text-[11px] text-zinc-500">{now.note}。</p>}
       <p className="text-[11px] leading-relaxed text-zinc-500">
-        機器人兩列是機器人互打。真人列和數據分析「陣容強度」同一份資料、同一個算法（百科AI 局不算；只算有陣容強度 S 的局）：
+        機器人兩列是機器人互打。真人列和數據分析「陣容強度」同一份資料、同一個算法（AI騎士 局不算；只算有陣容強度 S 的局）：
         S = 桌上 10 人開打前 PR 的平均；高端桌的切點跟著數據分析「分組」的 S 上切點，高強度 = S ≥ 65。只當參考目標。
       </p>
     </section>
@@ -196,7 +187,7 @@ function TrendChart({ series, human }: { series: AiSeriesPoint[]; human: HumanRe
       </div>
       <div className="relative rounded-lg border border-zinc-800 bg-zinc-900/70 py-2">
         <div ref={wrapRef} className="w-full">
-        <svg width={BOX.width} height={BOX.height} viewBox={`0 0 ${BOX.width} ${BOX.height}`} className="block h-auto max-w-full" role="img" aria-label="百科AI 預設每回合之後的藍方最終勝率與任務三藍率">
+        <svg width={BOX.width} height={BOX.height} viewBox={`0 0 ${BOX.width} ${BOX.height}`} className="block h-auto max-w-full" role="img" aria-label="AI騎士 預設每回合之後的藍方最終勝率與任務三藍率">
           {geo.ticks.map((t) => (
             <g key={t}>
               <line x1={BOX.left} x2={BOX.width - BOX.right} y1={geo.yOf(t)} y2={geo.yOf(t)} stroke="#3f3f46" strokeWidth={t === 0 ? 1 : 0.5} />

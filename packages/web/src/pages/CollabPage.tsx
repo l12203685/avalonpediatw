@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { Check, ChevronRight, Copy, ExternalLink, Sparkles, Swords } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import '../i18n/collab';
 import { COLLAB_NS, GUIDE_URL, ISSUE_FORM_URL, REPO_URL } from '../i18n/collab';
@@ -30,13 +30,6 @@ export default function CollabPage(): JSX.Element {
   return (
     <div className="relative z-10 mx-auto max-w-3xl space-y-4 overflow-x-hidden px-3 py-4 text-white sm:px-4" data-testid="collab-page">
       <header className="space-y-1">
-        <button
-          type="button"
-          onClick={() => { setGameState('home'); window.scrollTo({ top: 0 }); }}
-          className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
-        >
-          <ArrowLeft size={14} />{t('back')}
-        </button>
         <h1 className="flex items-center gap-2 text-lg font-bold"><Sparkles size={20} className="text-amber-300" />{t('title')}</h1>
         <p className="text-xs leading-relaxed text-zinc-300">{t('intro')}</p>
       </header>
@@ -58,6 +51,20 @@ export default function CollabPage(): JSX.Element {
       <section className={cardCls}>
         <h2 className="mb-1 text-sm font-bold">{t('nextTitle')}</h2>
         <p className="text-xs leading-relaxed text-zinc-300">{t('nextBody')}</p>
+      </section>
+
+      {/* AI 擂台（#arena；站長 2026-11-26：自建 AI 對戰） */}
+      <section className={cardCls}>
+        <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold"><Swords size={16} className="text-rose-300" />{t('arenaTitle')}</h2>
+        <p className="mb-2 text-xs leading-relaxed text-zinc-300">{t('arenaBody')}</p>
+        <button
+          type="button"
+          data-testid="collab-arena-link"
+          onClick={() => { setGameState('arena'); window.scrollTo({ top: 0 }); }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
+        >
+          {t('arenaLink')}<ChevronRight size={14} className="text-zinc-400" />
+        </button>
       </section>
 
       <section className={cardCls} aria-label={t('promptTitle')}>

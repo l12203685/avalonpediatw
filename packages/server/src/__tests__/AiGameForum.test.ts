@@ -94,11 +94,11 @@ describe('貼一局', () => {
     expect(create.headers.Authorization).toBe('Bot secret-token');
     const form = create.body as FormData;
     const payload = JSON.parse(String(form.get('payload_json')));
-    expect(payload.name).toBe('【待檢視】含百科機器人_20261105_2105_Room-1460');
+    expect(payload.name).toBe('【待檢視】含AI騎士_20261105_2105_Room-1460');
     expect(payload.applied_tags.slice(0, 2)).toEqual(['7', '8']);
     expect(payload.message.allowed_mentions).toEqual({ parse: [] });
     expect(payload.message.attachments).toEqual([{ id: 0, filename: 'trace.json' }]);
-    expect(payload.message.content).toMatch(/^待檢視原因：百科AI 參與/);
+    expect(payload.message.content).toMatch(/^待檢視原因：AI騎士 參與/);
     expect(payload.message.content).toMatch(/刺客刺殺:/);
     expect(payload.message.content).toMatch(/（機器人紀錄員尚待檢視）$/);
     expect(payload.message.content).not.toMatch(/理由：/);

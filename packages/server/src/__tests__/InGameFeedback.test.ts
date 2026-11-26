@@ -32,7 +32,7 @@ const ctx = (over: Partial<InGameFeedbackContext> = {}): InGameFeedbackContext =
 
 describe('classifyInGameFeedback — flagged', () => {
   it.each([
-    ['百科AI 這把好強', 'bot-word'],
+    ['AI騎士 這把好強', 'bot-word'],
     ['AI 為什麼要這樣派', 'bot-word'],
     ['那個 ai 亂打吧', 'bot-word'],
     ['電腦是不是在送', 'bot-word'],
@@ -143,7 +143,7 @@ describe('InGameChatCapture', () => {
     expect(forwarded).toEqual([]);
     cap.onChat('room-ab12', chat({ seat: 1, text: '下一個', round: 3 }));
     expect(forwarded).toEqual([[
-      '📮 遊戲內回饋（房間 room-ab12，第1局任務3・派隊投票，4家→提到 3家百科AI）',
+      '📮 遊戲內回饋（房間 room-ab12，第1局任務3・派隊投票，4家→提到 3家AI騎士）',
       '　 2家：前面二',
       '　 2家：前面三',
       '　 2家：前面四',
@@ -156,7 +156,7 @@ describe('InGameChatCapture', () => {
     cap.onChat('room-ab12', chat({ seat: 10, text: 'AI 好強 @everyone', phase: 'ended' }));
     expect(forwarded).toHaveLength(1);
     void cap.closeGame('room-ab12');
-    expect(forwarded[1].split('\n')[0]).toBe('📮 遊戲內回饋（房間 room-ab12，第1局・局後，0家→提到 百科AI）');
+    expect(forwarded[1].split('\n')[0]).toBe('📮 遊戲內回饋（房間 room-ab12，第1局・局後，0家→提到 AI騎士）');
     expect(forwarded[1].split('\n').at(-1)).toBe('▶ 0家：AI 好強 @\u200beveryone');
     expect(cap.snapshot()).toMatchObject({ messages: 9, flagged: 2, forwarded: 2, throttled: 0 });
   });
@@ -204,11 +204,11 @@ describe('InGameChatCapture', () => {
     expect(rows[0]).toHaveLength(1);
     const row = rows[0][0];
     expect(row).toHaveLength(IN_GAME_FEEDBACK_HEADER.length);
-    expect(row.slice(1, 9)).toEqual(['r', 1, '3家、7家', 2, '派隊投票、局後', '7家百科AI、沒指名', '7家梅林', '講到百科AI 的座位、問為什麼這樣玩']);
+    expect(row.slice(1, 9)).toEqual(['r', 1, '3家、7家', 2, '派隊投票、局後', '7家AI騎士、沒指名', '7家梅林', '講到AI騎士 的座位、問為什麼這樣玩']);
     expect(row[9]).toBe([
       '【第1局任務2・派隊投票】',
       '　 2家：我覺得 4 可疑',
-      '▶ 4家：7家好強（提到 7家百科AI・講到百科AI 的座位）',
+      '▶ 4家：7家好強（提到 7家AI騎士・講到AI騎士 的座位）',
       '【第1局任務3・派隊投票】',
       '　 1家：閒聊0',
       '　 1家：閒聊1',

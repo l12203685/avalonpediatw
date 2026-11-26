@@ -50,13 +50,13 @@ describe('texts', () => {
     expect(basicHelpText('discord').split('\n').at(-1)).toBe('/help 主題 看細節（例：/help 主題:模擬；打 /說明 也一樣）');
     // 2026-11-25 第二批：兩邊同一個打法（Discord 的 /rules、/roles 照舊可以用，說明裡只寫中文的）。
     for (const p of ['line', 'discord'] as const) expect(basicHelpText(p)).toContain('/規則 /角色\u3000遊戲規則、角色介紹');
-    expect(basicHelpText('discord')).toContain('/補位 房號或描述 [人數] [密碼]\u3000叫百科AI 進房補位');
+    expect(basicHelpText('discord')).toContain('/補位 房號或描述 [人數] [密碼]\u3000叫AI騎士 進房補位');
     expect(basicHelpText('discord')).toContain('（/每日一題 哪一天:昨天 看昨天的答案）');
   });
-  it('/help 模擬 is the 模擬瓦 command list (same as /模擬 說明); /區間 shows how 百科AI reads, /區間 789=2 checks your own; no /下一步', () => {
+  it('/help 模擬 is the 模擬瓦 command list (same as /模擬 說明); /區間 shows how AI騎士 reads, /區間 789=2 checks your own; no /下一步', () => {
     expect(topicHelpText('模擬', 'line')).toBe(SIM_HELP_TEXT);
     expect(topicHelpText('模擬', 'discord')).toBe(SIM_HELP_TEXT_DISCORD);
-    expect(SIM_HELP_TEXT).toContain('/區間　百科AI 怎麼讀這個局面');
+    expect(SIM_HELP_TEXT).toContain('/區間　AI騎士 怎麼讀這個局面');
     expect(SIM_HELP_TEXT).toContain('檢查你自己的區間');
     expect(SIM_HELP_TEXT).toContain('還剩幾種可能');
     expect(SIM_HELP_TEXT).not.toContain('/下一步');
