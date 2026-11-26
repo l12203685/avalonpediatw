@@ -12,6 +12,10 @@
  *
  * 第 64 回合加：`--roles loyal,percival`（預設 merlin）＝改看這些角色當隊長的提議（每列多 role、seat；拇指 = 梅林看得到的紅，扣掉莫德雷德）；
  * `--max-round N`＝只看第 N 局以前的提議（第 1、2 局 = 2；重播到最後一個目標就停，省時間）；`--non-forced`＝只看第 1–4 次提議。
+ *
+ * 第 83 回合加：`--gate`＝梅林第 2–4 局的每一個提議多算站長 11/26 的兩個條件（`Round83.gatedThumb83Eval`，用第一組設定的讀法）：
+ * 真人的隊帶看得到的紅時算那一隊（`gate.human`），每一組設定的隊帶看得到的紅時算那一隊（`gate.<標籤>`），
+ * 再算「忠臣說得通、剛好帶一個看得到的紅」公開分數前 3 支裡門檻最寬的那一支（`gate.best`：pathProb 最高的那支的 pathProb／trustAfter）。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,6 +31,10 @@ import { withSeededRandom } from '../src/ai/benchmark/agreement';
 import { buildReplayObservation, seatId, seatOfId } from '../src/ai/benchmark/replayObservation';
 import { EVIL_ROLES, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { round58Stats } from '../src/ai/Round58';
+import { gatedThumb83Eval, type GatedThumb83Eval } from '../src/ai/Round83';
+import { loyalFree80Set } from '../src/ai/Round80';
+import { merlinPublicScoring } from '../src/ai/MerlinLoyalStyle';
+import { bayesOptionsOf } from '../src/ai/belief/BayesBelief';
 
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
@@ -78,6 +86,10 @@ function main(): void {
   const roles = (arg('--roles') ?? 'merlin').split(',').filter(Boolean);
   const maxRound = Number(arg('--max-round') ?? 99);
   const nonForced = argv.includes('--non-forced');
+  const gate = argv.includes('--gate');
+  const gTuning = variants[0].tuning;
+  const r3 = (x: number): number => Math.round(x * 1000) / 1000;
+  const gateRow = (ev: GatedThumb83Eval | null): Record<string, unknown> | null => (ev ? { p: r3(ev.pathProb), t: r3(ev.trustAfter), t0: r3(ev.trustNow), lc: ev.lakeCert, top: ev.topReds } : null);
   const lines: string[] = [];
   let n = 0;
   const [shardK, shardN] = (arg('--shard') ?? '0/1').split('/').map(Number);
@@ -109,6 +121,25 @@ function main(): void {
           const b = bot[k].get(idx);
           row[v.label] = b && b.team.length ? { ...desc(b.team), fb: b.fallback } : null;
         });
+        if (gate && role === 'merlin' && p.round >= 2 && p.round <= 4) {
+          const obs = buildReplayObservation(g, leader, { kind: 'team_select', proposal: idx });
+          const pubOpts = merlinPublicScoring(gTuning, obs).pubOpts;
+          const ownOpts = bayesOptionsOf(gTuning);
+          const ev = (team: readonly number[]): Record<string, unknown> | null => gateRow(gatedThumb83Eval(gTuning, obs, team.map(seatId), { pubOpts, ownOpts }));
+          const gr: Record<string, unknown> = {};
+          if (p.teamSeats.some((x) => seen.has(x))) gr.human = ev(p.teamSeats);
+          variants.forEach((v, k) => { const b = bot[k].get(idx); if (b && b.team.some((x) => seen.has(x))) gr[v.label] = ev(b.team); });
+          const set = loyalFree80Set(gTuning, obs, p.teamSeats.length, 0.5, () => true, []);
+          const cands = set ? set.teams.filter((t) => t.plausible && t.thumbs === 1).sort((x, y) => y.score - x.score).slice(0, 3) : [];
+          let best: Record<string, unknown> | null = null;
+          for (const c of cands) {
+            const e = gateRow(gatedThumb83Eval(gTuning, obs, c.team, { pubOpts, ownOpts }));
+            if (e && (!best || (e.p as number) > (best.p as number) || ((e.p as number) === (best.p as number) && (e.t as number) > (best.t as number)))) best = e;
+          }
+          gr.best = best;
+          gr.nCand = cands.length;
+          row.gate = gr;
+        }
         lines.push(JSON.stringify(row));
         n++;
       }

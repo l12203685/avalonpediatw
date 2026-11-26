@@ -21,6 +21,7 @@
 import { doomedProposal } from '../MerlinCover';
 import { merlinReuseProposal } from '../MerlinLoyalStyle';
 import { provenReds } from '../ProvenRed';
+import { gatedThumb83InvariantExempt } from '../Round83';
 import { computePyramidScores } from '../baseline/pyramidScorer';
 import {
   analyzeLakeChain,
@@ -62,6 +63,7 @@ const TWO_FAILS = 'two fails needed (R4)';
 /** Edward 2026-10-30：梅林「正常票內白」（自己在隊上時照忠臣贊成）沒有任何問題 — INV-V1 不算違規。 */
 const MERLIN_ON_TEAM = 'Merlin on-team normal vote (owner 10/30)';
 const MERLIN_REUSE = 'Merlin re-proposes a successful mission team (照派成功的隊, owner 11/01)';
+const MERLIN_GATED_THUMB = 'Merlin gated thumb: the good five still findable after a fail and Merlin still trusted (owner 2026-11-26, round 83)';
 /** Round 19 `assassinReuseRead`: the target's only seen-red leads re-proposed a successful mission team (the norm). */
 const ASSASSIN_REUSE = 'target only re-proposed a successful mission team (照派成功的隊, assassinReuseRead)';
 /** Round 73 `assassinNeedTwo73` bit 1: the target's only seen-red leads were two-fail-round teams with exactly one seen red. */
@@ -297,6 +299,9 @@ export function checkDecision(
       } else if (obs.myRole === 'merlin' && view.provablyFailable(team, round) && merlinReuseProposal(obs, team)) {
         // `merlinReuseNorm` ≥ 2 (round 18): R3+ non-key re-proposal of a successful mission team, seen red and all.
         L.record('INV-T1', { exempt: MERLIN_REUSE });
+      } else if (obs.myRole === 'merlin' && view.provablyFailable(team, round) && gatedThumb83InvariantExempt(obs, team)) {
+        // Round 83 `merlinGatedThumb83` (owner 2026-11-26): one seen red when the good five are still findable and Merlin stays trusted.
+        L.record('INV-T1', { exempt: MERLIN_GATED_THUMB });
       } else L.record('INV-T1', { violated: view.provablyFailable(team, round), unreliable });
       if (view.provablyFailable(team, round)) L.inc(`T1.${rb(round)}.botMustFail`);
       if (human) L.human('INV-T1', view.provablyFailable(human, round));
@@ -338,6 +343,7 @@ export function checkDecision(
         const visible = team.some((id) => obs.knownEvils.includes(id));
         if (visible && doomedProposal(obs)) L.record('INV-M1', { exempt: 'Merlin cover on a doomed R1-R2 proposal (派拇指躲刺)' });
         else if (visible && merlinReuseProposal(obs, team)) L.record('INV-M1', { exempt: MERLIN_REUSE });
+        else if (visible && gatedThumb83InvariantExempt(obs, team)) L.record('INV-M1', { exempt: MERLIN_GATED_THUMB });
         else L.record('INV-M1', { violated: visible });
         if (visible) L.inc('T.merlin.knownRedOnTeam');
       }
