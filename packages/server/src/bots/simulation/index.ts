@@ -9,6 +9,7 @@
  * 回饋是固定規則算出來的（不用 LLM、沒有 token 成本）。
  */
 
+import { aiPicks } from './aiRead';
 import { SimBankLoader, type SimBank } from './bank';
 import { SIM_CONFIG } from './config';
 import type { SimulationStatus } from './metrics';
@@ -36,7 +37,12 @@ export function getSimBankLoader(): SimBankLoader {
 export function getSimEngine(): SimEngine {
   if (!engine) {
     const l = getSimBankLoader();
-    engine = new SimEngine({ bank: (): Promise<SimBank | null> => l.get(), persistence: getSimPersistence() });
+    engine = new SimEngine({
+      bank: (): Promise<SimBank | null> => l.get(),
+      persistence: getSimPersistence(),
+      // 站長 2026-11-26：/公布 附「百科AI 會派」的前三種（正式機器人重派，aiRead.aiPicks）。
+      aiPicks: (game, seat, point) => aiPicks(game, seat, point),
+    });
   }
   return engine;
 }

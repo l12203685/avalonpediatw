@@ -113,7 +113,7 @@ import {
   type SimGame,
 } from './scenario';
 import { recordUrl } from './recordsIndex';
-import { aiReading } from './aiRead';
+import { aiReading, type AiPickPoint, type AiPicks } from './aiRead';
 import { maskOf } from './seats';
 import { selectStart } from './spotValue';
 
@@ -217,8 +217,9 @@ export interface SimReply {
   /**
    * /公布（Edward 2026-11-17）：附整局牌譜圖（recordImage.ts）。平台各自決定怎麼附：Discord 直接附檔；
    * LINE 要公開網址，借用同步的圖片中繼（ChatMirror.relayReplyPngUrl），沒有就只送文字。
+   * `names`：1～0 家的名字（跟文字那一行同一份，seatNames.ts；站長 2026-11-26「公布時的圖上沒有玩家id」）。
    */
-  image?: { game: SimGame; title: string };
+  image?: { game: SimGame; title: string; names?: readonly string[] };
 }
 
 /** 題目的 key：`平台:聊天室:使用者`，聊天室和使用者都是雜湊（存檔裡也是這個）。 */
@@ -531,6 +532,11 @@ export interface SimEngineOptions {
   persistence?: SimPersistence;
   /** 重啟後題目還在讀回來時，一個指令最久等多久（毫秒）；還沒好就回「請再打一次」。 */
   restoreWaitMs?: number;
+  /**
+   * /公布 的「百科AI 會派」那一行（站長 2026-11-26；aiRead.aiPicks：正式機器人在題目那一刻重派很多次）。
+   * 正式機（index.ts）給；沒給 = 不印那一行（測試的全題庫掃描不用每題都重派）。丟錯 = 不印，/公布 照常。
+   */
+  aiPicks?: (game: SimGame, seat: number, point: AiPickPoint) => Promise<AiPicks | null>;
 }
 
 const NOOP = (): void => undefined;
@@ -1042,8 +1048,22 @@ export class SimEngine {
     return this.reply(text, 'read', t, now, () => { this.counts.aiReads += 1; });
   }
 
-  private reveal(game: SimGame, t: SimTarget & { session: SimSession }, postId: string | undefined, req: SimRequest, seatNames?: readonly string[]): SimReply {
+  /** 百科AI 在這題那一刻會派（刺）的前幾種；沒設定、算不出來或丟錯 → null（/公布 照常，只是少那一行）。 */
+  private async revealAiPicks(game: SimGame, session: SimSession): Promise<AiPicks | null> {
+    const fn = this.opts.aiPicks;
+    if (!fn) return null;
+    try {
+      const point: AiPickPoint = session.assassin ? { kind: 'assassination' } : { kind: 'team_select', proposal: session.decision };
+      return await fn(game, session.seat, point);
+    } catch (err) {
+      console.warn(`[sim] /公布 AI picks failed (${err instanceof Error ? err.name : typeof err})`);
+      return null;
+    }
+  }
+
+  private async reveal(game: SimGame, t: SimTarget & { session: SimSession }, postId: string | undefined, req: SimRequest, seatNames?: readonly string[]): Promise<SimReply> {
     const { session } = t;
+    const ai = await this.revealAiPicks(game, session);
     const events = publicEvents(game);
     const answers = [...session.answers.entries()]
       .sort((a, b) => a[0] - b[0])
@@ -1064,6 +1084,7 @@ export class SimEngine {
       ...(session.assassin ? { kill: { target: session.kill?.target ?? null, coAnswer: !!session.kill?.coAnswer } } : {}),
       // 大家都看得到的聊天室（2026-11-21）：作答時沒有公開結果，公布時列出每一位的答案和結果。
       ...(everyone.length > 0 ? { everyone } : {}),
+      ...(ai ? { aiPicks: ai } : {}),
       platform: req.platform,
       coAnswer: t.coAnswer,
     });
@@ -1072,7 +1093,7 @@ export class SimEngine {
       text,
       kind: 'reveal',
       sessionOpen: false,
-      image: { game, title: session.exerciseId },
+      image: { game, title: session.exerciseId, ...(seatNames ? { names: seatNames } : {}) },
       commit: (): void => {
         const current = this.store.get(session.key, this.now());
         if (!current || current.version !== session.version) return;
