@@ -17,8 +17,15 @@
 
 export const AI_GAME_FORMAT = 'avalon-ai-game';
 export const AI_GAME_VERSION = 1;
-/** 論壇標籤與討論串標題開頭。 */
+/**
+ * 論壇標籤（DC 上已經建好的標籤名字，不跟著改名：改了機器人會另外加一個新標籤，舊討論串也還掛舊的）。
+ * 站長 2026-11-26 百科AI 改名 AI騎士 之後，新討論串的標題開頭是 AI_GAME_THREAD_PREFIX；讀的時候新舊都認。
+ */
 export const AI_GAME_TAG_NAME = '百科AI對局';
+/** 討論串標題開頭（站長 2026-11-26 起）。 */
+export const AI_GAME_THREAD_PREFIX = 'AI騎士對局';
+/** 認得出的標題開頭／記號（新舊都認）：舊的「百科AI對局」「含百科機器人」，新的「AI騎士對局」「含AI騎士」。 */
+export const AI_GAME_TITLE_MARKS = { prefixes: [AI_GAME_THREAD_PREFIX, AI_GAME_TAG_NAME], contains: ['含AI騎士', '含百科機器人'] } as const;
 /** Discord 一則訊息的上限是 2000 字；留一點餘裕。 */
 export const DISCORD_MESSAGE_MAX = 1900;
 /** 後續訊息最多幾則（9 個百科AI 一桌時決定很多，其餘看附檔／網站）。 */
@@ -171,13 +178,13 @@ const oneLine = (s: string): string => s.replace(/\s+/g, ' ').trim();
 
 // ── 標題與摘要 ────────────────────────────────────────────────────────────────────────
 
-/** 討論串標題：「百科AI對局 yyyymmdd_HHMM 房間描述／房號」（台灣時間的開局時刻；≤100 字）。 */
+/** 討論串標題：「AI騎士對局 yyyymmdd_HHMM 房間描述／房號」（台灣時間的開局時刻；≤100 字；2026-11-26 以前是「百科AI對局 …」）。 */
 export function aiGameThreadName(t: Pick<AiGameTrace, 'startedAt' | 'endedAt' | 'room' | 'title'>): string {
   const when = twStamp(t.startedAt || t.endedAt);
   const room = oneLine(t.room ?? '');
   const title = oneLine(t.title ?? '').replace(/[／/]+$/, '');
   const where = title && room ? `${title}／${room}` : title || room || '未知房間';
-  const name = [AI_GAME_TAG_NAME, when, where].filter(Boolean).join(' ');
+  const name = [AI_GAME_THREAD_PREFIX, when, where].filter(Boolean).join(' ');
   return [...name].length > 100 ? `${[...name].slice(0, 99).join('')}…` : name;
 }
 
@@ -204,7 +211,7 @@ export function configText(seats: readonly AiGameSeat[]): string {
 function aiSeatText(t: AiGameTrace, seat: AiGameSeat): string {
   const d = t.decisions.find((x) => x.seat === seat.seat);
   const role = seat.role || (d ? roleZh(d.role) : '?');
-  return `${seatZh(seat.seat)} ${role}（${seat.name || d?.nick || '百科AI'}）`;
+  return `${seatZh(seat.seat)} ${role}（${seat.name || d?.nick || 'AI騎士'}）`;
 }
 
 const countBy = (t: AiGameTrace): string => AI_DECISION_KINDS
@@ -223,16 +230,16 @@ export function aiGameSummary(t: AiGameTrace): string {
   // Edward 2026-11-05「百科AI 的戰局只需要貼紀錄就好 思考內容那些不用」：DC 只貼對局紀錄（不貼夜晚資訊與每一步的理由）
   const ai = t.seats.filter((s) => s.ai);
   const lines = [
-    '**百科AI 對局紀錄**（遊玩頁 avalon.signage-cloud.org）',
+    '**AI騎士 對局紀錄**（遊玩頁 avalon.signage-cloud.org）',
     `房間：${[oneLine(t.title), t.room].filter(Boolean).join('／') || '未知'}`,
     `時間：${twReadable(t.startedAt)}${t.endedAt ? `–${twHM(t.endedAt)}` : ''}（台灣）`,
     `結果：${resultText(t)}`,
     `配置：${configText(t.seats) || '（角色沒有公開）'}`,
-    `百科AI：${ai.map((s) => aiSeatText(t, s)).join('、') || '（無）'}`,
+    `AI騎士：${ai.map((s) => aiSeatText(t, s)).join('、') || '（無）'}`,
     ...t.notes.map((n) => `註：${n}`),
     '',
     FEEDBACK_HOWTO,
-    '附檔：trace.json（完整紀錄；網站的「百科AI 對局」頁看得到每一步）',
+    '附檔：trace.json（完整紀錄；網站的「AI騎士 對局」頁看得到每一步）',
   ];
   return clip(lines.join('\n'), 2000);
 }
@@ -379,7 +386,7 @@ export function aiGameFollowups(t: AiGameTrace, siteUrl?: string): string[] {
 
 /** trace.txt：完整的可讀版（摘要、座位、每一局的公開紀錄與百科AI 的決定，含嫌疑與夜晚資訊）。 */
 export function aiGameText(t: AiGameTrace): string {
-  const seats = t.seats.map((s) => `${seatZh(s.seat)} ${s.role || '?'}${s.team ? `（${s.team === 'good' ? '藍' : '紅'}）` : ''} ${s.name}${s.ai ? '【百科AI】' : ''}`);
+  const seats = t.seats.map((s) => `${seatZh(s.seat)} ${s.role || '?'}${s.team ? `（${s.team === 'good' ? '藍' : '紅'}）` : ''} ${s.name}${s.ai ? '【AI騎士】' : ''}`);
   const body = [
     aiGameThreadName(t),
     `房間：${[oneLine(t.title), t.room].filter(Boolean).join('／')}`,
@@ -515,15 +522,15 @@ export function tracePaipu(t: AiGameTrace): string {
   return lines.join('\n');
 }
 
-/** 牌譜區的標題：「【待檢視】含百科機器人_yyyymmdd_HHMM_房號」（同記錄員）。 */
+/** 牌譜區的標題：「【待檢視】含AI騎士_yyyymmdd_HHMM_房號」（同記錄員；2026-11-26 以前是「含百科機器人」）。 */
 export function paipuThreadNameOf(t: Pick<AiGameTrace, 'startedAt' | 'endedAt' | 'room'>): string {
   const stamp = twStamp(t.startedAt || t.endedAt); // yyyymmdd_HHMM
   const room = String(t.room ?? '').replace(/\s+/g, '');
-  return `【待檢視】${['含百科機器人', stamp, room].filter(Boolean).join('_')}`.slice(0, 100);
+  return `【待檢視】${['含AI騎士', stamp, room].filter(Boolean).join('_')}`.slice(0, 100);
 }
 
 /** 牌譜區的起始訊息（同記錄員的待檢視貼文）。 */
 export function paipuPostBody(t: AiGameTrace): string {
   const ai = t.seats.filter((s) => s.ai).map((s) => pd(s.seat));
-  return clip([`待檢視原因：百科AI 參與（坐 ${ai.join('、')} 家），不是真人紀錄`, tracePaipu(t), '（機器人紀錄員尚待檢視）'].join('\n'), 2000);
+  return clip([`待檢視原因：AI騎士 參與（坐 ${ai.join('、')} 家），不是真人紀錄`, tracePaipu(t), '（機器人紀錄員尚待檢視）'].join('\n'), 2000);
 }

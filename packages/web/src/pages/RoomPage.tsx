@@ -3,7 +3,6 @@ import { useTranslation, Trans } from 'react-i18next';
 import { useGameStore } from '../store/gameStore';
 import {
   kickPlayer,
-  addBot,
   removeBot,
   leaveRoom,
   setRoleOptions,
@@ -18,6 +17,7 @@ import {
   skipLakeDeclaration,
   leaveSpectate,
 } from '../services/socket';
+import KnightAddBotButton from '../components/KnightAddBotButton';
 import {
   Play,
   Copy,
@@ -655,15 +655,7 @@ export default function RoomPage(): JSX.Element {
           </div>
 
           {isHost && room.state === 'lobby' && playerList.length < room.maxPlayers && (
-            <button
-              type="button"
-              onClick={() => addBot(room.id)}
-              className="inline-flex items-center px-1.5 py-0.5 rounded border text-[clamp(0.5rem,1.5vw,0.62rem)] font-semibold bg-emerald-900/40 border-emerald-600 text-emerald-200 hover:bg-emerald-900/60 hover:text-white transition-colors whitespace-nowrap"
-              title="加入 AI"
-              data-testid="lobby-add-ai-button"
-            >
-              加入 AI
-            </button>
+            <KnightAddBotButton roomId={room.id} />
           )}
 
           <button

@@ -159,3 +159,13 @@ class OutputTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KnightNameTest(unittest.TestCase):
+    def test_bot_names_old_and_new(self) -> None:
+        # 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}；舊名字照樣認
+        for name in ("百科AI_3", "百科機器人A", "AI騎士_百科_03", "AI騎士_穩健_01", "ai騎士_百科_12"):
+            self.assertTrue(nc.is_bot_name(name), name)
+        for name in ("騎士", "我的AI騎士", "虛構甲"):
+            self.assertFalse(nc.is_bot_name(name), name)
+

@@ -120,15 +120,17 @@ describe('GET /api/ai-games', () => {
 });
 
 describe('GET /api/ai-games/:id', () => {
-  it('讀起始訊息附的 trace.json；網站版拿掉真人暱稱，百科AI 的留著', async () => {
+  it('讀起始訊息附的 trace.json；網站版拿掉真人暱稱，AI騎士 的留著', async () => {
     withService();
     const res = await request(app()).get(`/api/ai-games/${G1}`);
     expect(res.status).toBe(200);
     expect(res.body.trace.decisions).toHaveLength(2);
     expect(res.body.trace.seats).toEqual([
       { seat: 1, name: '', role: '梅林', team: 'good', ai: false },
-      { seat: 2, name: '百科AI_22', role: '刺客', team: 'evil', ai: true },
+      // 舊名字 百科AI_22 顯示成新名字（站長 2026-11-26；DC 上的 trace.json 不改）
+      { seat: 2, name: 'AI騎士_百科_22', role: '刺客', team: 'evil', ai: true },
     ]);
+    expect(res.body.trace.decisions.map((d: { nick: string }) => d.nick)).toEqual(['AI騎士_百科_22', 'AI騎士_百科_22']);
     expect(res.body.thread).toEqual({ id: G1, name: '百科AI對局 20261105_2105 週四練習團／Room-1460', url: `https://discord.com/channels/${GUILD}/${G1}` });
   });
 

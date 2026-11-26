@@ -9,6 +9,8 @@ export * from './tokenUtils';
 export * from './game_v2_adapter';
 export * from './playPlatform';
 export * from './playerNameMatch';
+// AI騎士的名字（站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}）
+export * from './knights';
 
 // V2 派生指標 + i18n（Phase 2b）
 export * from './derived/gameMetrics';

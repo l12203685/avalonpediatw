@@ -65,9 +65,13 @@ export function decisionObservation(game: SimGame, seat: number, point: Decision
  * 第 56b 回合 C（站長 2026-11-20「跟真人打的百科AI 用真人牌局當標準」）：題目都是真人局，所以用真人桌的策略層（`humanProfile.ts`）；
  * 題庫沒有桌上強度 S，一律一般真人桌（`avgHuman` = 預設＋真人桌的讀法）。
  */
-export function defaultBot(game: SimGame, seat: number): { agent: ForwardAgent; base: HeuristicAgent; tuning: AgentTuning } {
+export function defaultBot(
+  game: SimGame,
+  seat: number,
+  overrides: Readonly<Partial<AgentTuning>> = {},
+): { agent: ForwardAgent; base: HeuristicAgent; tuning: AgentTuning } {
   const id = seatId(seat);
-  const tuning: AgentTuning = tuningForOpponent(SIM_OPPONENT, DEFAULT_AGENT_TUNING);
+  const tuning: AgentTuning = { ...tuningForOpponent(SIM_OPPONENT, DEFAULT_AGENT_TUNING), ...overrides };
   const base = new HeuristicAgent(id, undefined, undefined, tuning);
   const agent = new ForwardAgent(id, base);
   agent.onGameStart(decisionObservation(game, seat, { kind: 'team_select', proposal: 0 }));
@@ -82,6 +86,15 @@ function sortedSeats(ids: readonly string[]): number[] {
  * 題目那一家（`seat`）在第 `proposalIndex` 次提議當隊長時，百科AI 的讀法與派法。
  * 沒有世界（紀錄矛盾）時紅機率照機器人回傳（未知座位 50%），topWorlds 為空。
  */
+/**
+ * 模擬瓦「百科AI 會派」（/區間 的派隊、/公布 的「百科AI 會派的組合」）額外疊的開關——只在模擬瓦的題目上派隊用，真的對局（網站房間、練習台、
+ * 機器人互打）、Threads 百科AI 作答、刺殺題都不經過這裡。
+ * 第 85 回合，站長 2026-11-26（原話）「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」：前一局任務失敗之後，第 1–4 次提議的忠臣／派西
+ * 一定帶失敗那一隊的一部分人（`failTest85`，λ = 0.01 = 有過得了隊長自己的票的就換）。真人局量尺在真的對局上是負的（第 85 回合：基準線 −0.18、
+ * 真人桌 −0.31 pp／座位局），所以只放在模擬瓦的公布，不進預設、不進真人桌。
+ */
+export const SIM_REVEAL_OVERRIDES: Readonly<Partial<AgentTuning>> = { failTest85: 0.01 };
+
 export function aiReading(game: SimGame, seat: number, proposalIndex: number): AiReading {
   return withSeededRandom(`${game.id}|${seat}|read-${proposalIndex}`, () => readNow(game, seat, proposalIndex));
 }
@@ -89,7 +102,7 @@ export function aiReading(game: SimGame, seat: number, proposalIndex: number): A
 function readNow(game: SimGame, seat: number, proposalIndex: number): AiReading {
   const obs: PlayerObservation = decisionObservation(game, seat, { kind: 'team_select', proposal: proposalIndex });
   const id = seatId(seat);
-  const { agent, tuning } = defaultBot(game, seat);
+  const { agent, tuning } = defaultBot(game, seat, SIM_REVEAL_OVERRIDES);
   const action = withSeededRandom(`${game.id}|${seat}|team-${proposalIndex}`, () => agent.act(obs));
   const chosenIds = action.type === 'team_select' ? action.teamIds : [];
 
@@ -200,7 +213,7 @@ export function aiPickOnce(game: SimGame, seat: number, point: AiPickPoint, k: n
   const p = point.proposal;
   return withSeededRandom(`${game.id}|${seat}|read-${p}${tail(k)}`, () => {
     const obs = decisionObservation(game, seat, { kind: 'team_select', proposal: p });
-    const { agent } = defaultBot(game, seat);
+    const { agent } = defaultBot(game, seat, SIM_REVEAL_OVERRIDES);
     const a = withSeededRandom(`${game.id}|${seat}|team-${p}${tail(k)}`, () => agent.act(obs));
     return a.type === 'team_select' && a.teamIds.length > 0 ? sortedSeats(a.teamIds) : null;
   });

@@ -132,6 +132,6 @@ for (let i = 0; i < days; i++) {
   }
   fs.writeFileSync(path.join(outDir, `${date}.json`), `${JSON.stringify(aiAnswer ? { ...draft, aiAnswer } : draft, null, 2)}\n`);
   fs.writeFileSync(path.join(outDir, `${date}.md`), draftMarkdown(draft));
-  console.log(`${date} ${draft.theme} ${draft.exerciseId} post ${draft.post.chars} chars${draft.answerToYesterday ? `, with ${draft.answerToYesterday.exerciseId} answer` : ''}${draft.recordId ? '' : ' (no records page)'}${aiAnswer ? `; 百科AI ${aiAnswer.pick.text}（真人 ${aiAnswer.real.text}）` : ''}`);
+  console.log(`${date} ${draft.theme} ${draft.exerciseId} post ${draft.post.chars} chars${draft.answerToYesterday ? `, with ${draft.answerToYesterday.exerciseId} answer` : ''}${draft.recordId ? '' : ' (no records page)'}${aiAnswer ? `; AI騎士 ${aiAnswer.pick.text}（真人 ${aiAnswer.real.text}）` : ''}`);
 }
 for (const w of gen.warnings) console.warn(w);

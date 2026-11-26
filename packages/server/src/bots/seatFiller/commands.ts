@@ -26,11 +26,11 @@ export type SeatFillerPlatform = 'line' | 'discord' | 'web';
 export const SEAT_FILLER_USAGE: Record<SeatFillerPlatform, string> = {
   line: '/補位 房號或房間描述 [補滿｜幾人] [密碼:xxxx]',
   discord: '/補位 房號或描述 [人數] [密碼]',
-  web: '網站「百科AI 對局」頁的「叫百科AI 補位」：填房號或房間描述、人數、密碼（選填）',
+  web: '網站「AI騎士 對局」頁的「叫AI騎士 補位」：填房號或房間描述、人數、密碼（選填）',
 };
 
 /** One-line description for the help texts. */
-export const SEAT_FILLER_HELP_TEXT = `叫百科AI 進 signage-cloud 房間補位（房號或房間描述都可以；一次 ${SEAT_FILLER_BOTS.min}–${SEAT_FILLER_BOTS.max} 個或「補滿」；私房加密碼；局數不限，房內有人說「離開」它就走）`;
+export const SEAT_FILLER_HELP_TEXT = `叫AI騎士 進 signage-cloud 房間補位（房號或房間描述都可以；一次 ${SEAT_FILLER_BOTS.min}–${SEAT_FILLER_BOTS.max} 個或「補滿」；私房加密碼；局數不限，房內有人說「離開」它就走）`;
 
 /** The abuse limits in words (Discord /help). */
 export const SEAT_FILLER_LIMITS_TEXT = `全站每 ${SEAT_FILLER_LIMITS.cooldownMs / 60000} 分鐘一次、每天最多 ${SEAT_FILLER_LIMITS.dailyMax} 次、同一房 ${SEAT_FILLER_LIMITS.sameRoomMs / 60000} 分鐘內不重複`;
@@ -118,7 +118,7 @@ export function formatSeatFillerParseError(error: SeatFillerParseError, platform
 export function formatSeatFillerOutcome(outcome: SeatFillerOutcome): string {
   switch (outcome.kind) {
     case 'dispatched':
-      return `已叫百科AI 到「${outcome.room}」（${outcome.bots === SEAT_FILLER_BOTS.max ? '補到 10 人' : `${outcome.bots} 個`}），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。`;
+      return `已叫AI騎士 到「${outcome.room}」（${outcome.bots === SEAT_FILLER_BOTS.max ? '補到 10 人' : `${outcome.bots} 個`}），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。`;
     case 'not_configured':
       return '補位機器人還沒設定好（管理者尚未完成設定），暫時不能叫。';
     case 'cooldown':
