@@ -99,6 +99,8 @@
 模擬瓦「百科AI 會派的組合」用的就是正式機器人（`bots/simulation/aiRead.ts`：一般真人桌 = `tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING)`，整份傳進去，環境變數蓋不掉），
 所以開關只要寫進基準線或 `HUMAN_READING`，模擬瓦就跟著變（`Round85.test.ts` 檢查這條路）。
 
+**採用（協調者 2026-11-26，照站長的字面）**：只有模擬瓦的公布疊 `failTest85=0.01`（`aiRead.ts` 的 `SIM_REVEAL_OVERRIDES`，`/公布` 的「百科AI 會派的組合」與 `/區間` 的派隊）；真的對局、Threads 作答、刺殺題、預設與真人桌都不變。
+
 ## 6. 改法的結果（真人局決策點、第 1H 節、自我對打）
 
 開關、判定與自我對打的表見 `optimization_loop.md` 第 85 回合第 5–7 節。下面是每個候選在真人局決策點的逐格表（候選 − 對照 = 同一批決策點配對；量尺單位 pp／決策）與第 1H 節分層（pp／座位局）。

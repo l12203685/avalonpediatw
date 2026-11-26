@@ -30,6 +30,8 @@
  *
  * 模擬瓦「百科AI 會派的組合」用的是正式機器人（`bots/simulation/aiRead.ts`：一般真人桌 = `tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING)`），
  * 所以這兩個開關只要放進基準線或真人桌的讀法，模擬瓦就跟著變。
+ * 協調者 2026-11-26 照站長的字面決定：模擬瓦的公布（`/公布` 的「百科AI 會派的組合」與 `/區間` 的派隊）疊 `failTest85=0.01`（`aiRead.ts` 的
+ * `SIM_REVEAL_OVERRIDES`）；預設與真人桌仍是 0（真的對局量尺是負的）。
  *
  * 純函式；沒有 `Math.random`。
  */

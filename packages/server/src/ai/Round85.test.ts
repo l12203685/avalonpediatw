@@ -180,3 +180,36 @@ describe('round 85 failTest85 (site owner 11/26「模擬瓦的非尾派忠臣/�
     expect(t.r1Split85).toBe(0.5);
   });
 });
+
+describe('round 85 模擬瓦 reveal (site owner 11/26「模擬瓦的非尾派忠臣/派西維爾也應該要找前一局開紅的」): failTest85 only on the reveal', () => {
+  // 第 1 局 125 一張失敗（5 家刺客）；第 2 局第 1 次是 2 家忠臣（在失敗那一隊上）。現行的機器人派 2346（1、5 家都沒帶）。
+  const built = buildScenario(fx(['125 346+', 'oox']));
+  const { names: _names, ...game } = built.game;
+  void _names;
+  const point = built.point as { kind: 'team_select'; proposal: number };
+
+  it('the reveal path layers failTest85 = 0.01; real games, human tables and the plain sim bot keep it off', async () => {
+    const { SIM_REVEAL_OVERRIDES, defaultBot } = await import('../bots/simulation/aiRead');
+    expect(SIM_REVEAL_OVERRIDES).toEqual({ failTest85: 0.01 });
+    expect(DEFAULT_AGENT_TUNING.failTest85).toBe(0);
+    for (const type of ['ai', 'weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING).failTest85).toBe(0);
+    // Threads 百科AI 作答與刺殺題用的 defaultBot（沒有疊）照舊；疊了就是一般真人桌＋failTest85
+    expect(defaultBot(game, built.seat).tuning.failTest85).toBe(0);
+    const revealed = defaultBot(game, built.seat, SIM_REVEAL_OVERRIDES).tuning;
+    expect(revealed).toEqual({ ...tuningForOpponent('avgHuman', DEFAULT_AGENT_TUNING), failTest85: 0.01 });
+  });
+
+  it('「百科AI 會派的組合」 and /區間 now test part of the failed team; the plain bot still sends 2346', async () => {
+    const { aiPickOnce, aiReading, defaultBot, decisionObservation } = await import('../bots/simulation/aiRead');
+    const { withSeededRandom } = await import('./benchmark/agreement');
+    const plain = withSeededRandom(`${game.id}|${built.seat}|team-${point.proposal}`, () => defaultBot(game, built.seat).agent.act(decisionObservation(game, built.seat, point)));
+    expect(plain.type === 'team_select' ? plain.teamIds.map((id) => Number(id.replace(/\D/g, ''))).sort((a, b) => a - b) : []).toEqual([2, 3, 4, 6]);
+    for (const k of [0, 1, 2]) {
+      const pick = aiPickOnce(game, built.seat, point, k)!;
+      expect(pick).toContain(2);
+      expect(pick.some((s) => s === 1 || s === 5)).toBe(true);
+    }
+    // /區間 的「百科AI 會派」= /公布 的第 0 次樣本（同一個種子、同一個疊法）
+    expect(aiReading(game, built.seat, point.proposal).teams[0].seats).toEqual(aiPickOnce(game, built.seat, point, 0));
+  }, 120_000);
+});
