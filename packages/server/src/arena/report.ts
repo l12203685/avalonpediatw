@@ -212,7 +212,7 @@ export function knobCatalog(): KnobCatalogEntry[] {
   });
 }
 
-const REFERENCE_STYLE = '網站上正在跑的百科AI（正式預設，沒有改任何開關）。所有分數都以它為 1500。';
+const REFERENCE_STYLE = '網站上正在跑的AI騎士_百科（目前訓練出來的引擎、正式預設，沒有改任何開關）。所有分數都以它為 1500。';
 
 export function buildLeaderboard(args: {
   bots: readonly RegisteredBot[];
@@ -269,7 +269,7 @@ export function buildLeaderboard(args: {
     games: args.tables.length,
     sizes: [...args.sizes],
     reference: REFERENCE_ID,
-    method: '每局隨機座位、每個座位隨機抽一隻機器人（可重複），角色由引擎發。分數 = 分陣營的隊伍邏輯回歸（百科AI = 1500；+100 分 ≈ 一整邊換成它時勝算 ×1.78），區間 = 95% 信賴區間。',
+    method: '每局隨機座位、每個座位隨機抽一隻機器人（可重複），角色由引擎發。分數 = 分陣營的隊伍邏輯回歸（AI騎士_百科 = 1500；+100 分 ≈ 一整邊換成它時勝算 ×1.78），區間 = 95% 信賴區間。',
     baseRedWin,
     bots: rows,
     rejected: args.rejected ?? [],

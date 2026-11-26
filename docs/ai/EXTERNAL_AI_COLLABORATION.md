@@ -60,7 +60,7 @@
 3. 從 fork 開 PR，只加那一個資料夾；不用開 Issue、不用 ACK。自動檢查（`AI arena bot check`）通過、審過就合併，合併當天就上擂台（補跑 2 萬局）、上排行榜，之後每天一起打。
 
 規則同第 3 節（不放玩家名字、網址、@別人），另外一人一隻、名字不重複、不能冒充官方。擂台不執行任何人的程式碼；
-寫程式的機器人是第 2 階段，設計在 [`ARENA_CODE_BOTS.md`](ARENA_CODE_BOTS.md)。完整說明：[`community-bots/README.md`](../../community-bots/README.md)、[`docs/BOTS.md`〈AI 擂台〉](../BOTS.md)。
+寫程式的機器人不做（站長 2026-11-26：所有風格 AI 都是核心引擎的微調；舊設計留作紀錄：[`ARENA_CODE_BOTS.md`](ARENA_CODE_BOTS.md)）。完整說明：[`community-bots/README.md`](../../community-bots/README.md)、[`docs/BOTS.md`〈AI 擂台〉](../BOTS.md)。
 
 ## 6. 給你的 AI 的啟動提示（整段複製貼上）
 

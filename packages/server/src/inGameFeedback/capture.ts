@@ -64,8 +64,8 @@ export const PHASE_LABEL_ZH: Readonly<Record<GameState, string>> = Object.freeze
 });
 
 const REASON_LABEL_ZH: Readonly<Record<InGameFeedbackReason, string>> = Object.freeze({
-  'bot-word': '講到百科AI',
-  'bot-seat': '講到百科AI 的座位',
+  'bot-word': '講到AI騎士',
+  'bot-seat': '講到AI騎士 的座位',
   judgement: '評價玩法',
   question: '問為什麼這樣玩',
 });
@@ -146,8 +146,8 @@ export interface InGameChatCaptureOptions {
 
 /** 「3家、7家百科AI」／「百科AI」／「沒指名」。 */
 function mentionLabel(hit: InGameFeedbackHit): string {
-  if (hit.botSeats.length > 0) return `${hit.botSeats.map(seatLabelZh).join('、')}百科AI`;
-  return hit.genericBot ? '百科AI' : '沒指名';
+  if (hit.botSeats.length > 0) return `${hit.botSeats.map(seatLabelZh).join('、')}AI騎士`;
+  return hit.genericBot ? 'AI騎士' : '沒指名';
 }
 
 function clipChars(text: string, max: number): string {

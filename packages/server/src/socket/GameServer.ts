@@ -1,6 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, type Role } from '@avalon/shared';
+import { Room, Player, User, AVALON_CONFIG, TimerConfig, TimerMultiplier, isTimerMultiplier, knightName, type Role } from '@avalon/shared';
 import { RoomManager } from '../game/RoomManager';
 import { setSharedRoomManager } from '../game/roomManagerSingleton';
 import { GameEngine } from '../game/GameEngine';
@@ -2347,9 +2347,13 @@ export class GameServer implements LiveSnapshotHost {
     // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
     //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
     // chip) disambiguate multiple bots in the same room.
+    // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}（風格沒指定 = 百科）：這一桌還沒用的最小號 → AI騎士_百科_01、_02…
+    const taken = new Set(Object.values(room.players).filter((p) => p.isBot).map((p) => p.name));
+    let serial = 1;
+    while (taken.has(knightName(undefined, serial))) serial++;
     room.players[botId] = {
       id: botId,
-      name: 'AI',
+      name: knightName(undefined, serial),
       role: null,
       team: null,
       status: 'active',

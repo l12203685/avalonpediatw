@@ -231,7 +231,7 @@ function beliefDrivers(obs: PlayerObservation, full: ReadonlyMap<string, number>
     const maxMove = Math.max(0, ...moves.map((m) => Math.abs(m.before - m.after)));
     out.push({
       source: 'driver',
-      label: '信念驅動（推算：拿掉這類證據重算 P(紅)，非百科AI 自己的說明）',
+      label: '信念驅動（推算：拿掉這類證據重算 P(紅)，非AI騎士 自己的說明）',
       text: `${a.label}：沒有它→有它 ${text}（所有人最大變動 ${maxMove.toFixed(2)}）`,
     });
   }
@@ -331,8 +331,8 @@ function answerTeam(game: SimGame, target: AiAnswerTarget, opts: AiAnswerOptions
   const aiP = pOf(aiSeats);
   const realP = pOf(realSeats);
   const metric = failsRequired >= 2
-    ? `百科AI 的貝氏信念下，這隊紅少於 ${failsRequired} 人（任務不會失敗）的機率；不是前向推理內部的排序分數`
-    : '百科AI 的貝氏信念下，這隊沒有紅的機率；不是前向推理內部的排序分數';
+    ? `AI騎士 的貝氏信念下，這隊紅少於 ${failsRequired} 人（任務不會失敗）的機率；不是前向推理內部的排序分數`
+    : 'AI騎士 的貝氏信念下，這隊沒有紅的機率；不是前向推理內部的排序分數';
 
   // 理由：只放決策真的用到的東西。
   const reasons: AiAnswerReason[] = [];
@@ -357,8 +357,8 @@ function answerTeam(game: SimGame, target: AiAnswerTarget, opts: AiAnswerOptions
   if (dropped.length || added.length) {
     reasons.push({
       source: 'facts',
-      label: '跟真人的差別（百科AI 的 P(紅)）',
-      text: `百科AI 多放 ${added.map((s) => `${seatTxt(s)}(${(share.get(seatId(s)) ?? 0).toFixed(2)})`).join('、') || '無'}；`
+      label: '跟真人的差別（AI騎士 的 P(紅)）',
+      text: `AI騎士 多放 ${added.map((s) => `${seatTxt(s)}(${(share.get(seatId(s)) ?? 0).toFixed(2)})`).join('、') || '無'}；`
         + `沒放真人放的 ${dropped.map((s) => `${seatTxt(s)}(${(share.get(seatId(s)) ?? 0).toFixed(2)})`).join('、') || '無'}`,
     });
   }
@@ -369,7 +369,7 @@ function answerTeam(game: SimGame, target: AiAnswerTarget, opts: AiAnswerOptions
     reasons.push({
       source: 'facts',
       label: `第 ${round} 局要 ${failsRequired} 張失敗（兩種機率對照）`,
-      text: `百科AI 派的 ${teamDigits(aiSeats)}：P(紅少於 ${failsRequired}) ${(aiP ?? 0).toFixed(2)}、P(沒有紅) ${cleanOf(aiSeats).toFixed(2)}；`
+      text: `AI騎士 派的 ${teamDigits(aiSeats)}：P(紅少於 ${failsRequired}) ${(aiP ?? 0).toFixed(2)}、P(沒有紅) ${cleanOf(aiSeats).toFixed(2)}；`
         + `P(紅少於 ${failsRequired}) 最高是 ${teamDigits(teams[0].seats)}（${teams[0].p.toFixed(2)}、P(沒有紅) ${cleanOf(teams[0].seats).toFixed(2)}）；`
         + `P(沒有紅) 最高是 ${teamDigits(bestClean.seats)}（${bestClean.p.toFixed(2)}）`,
     });
@@ -405,7 +405,7 @@ function answerTeam(game: SimGame, target: AiAnswerTarget, opts: AiAnswerOptions
       items: top.map((t) => ({ seats: t.seats, p: r3(t.p), chosen: key(t.seats) === key(aiSeats), real: key(t.seats) === key(realSeats) })),
       tiedBeyond,
     },
-    belief: { metric: 'P(red)', note: '百科AI 的貝氏信念（BayesBelief，派隊／投票／任務／湖／拇指都算進去）；自己是 0', seats: belief, topWorlds },
+    belief: { metric: 'P(red)', note: 'AI騎士 的貝氏信念（BayesBelief，派隊／投票／任務／湖／拇指都算進去）；自己是 0', seats: belief, topWorlds },
     reasons,
     real: {
       seats: realSeats,
@@ -421,7 +421,7 @@ function answerTeam(game: SimGame, target: AiAnswerTarget, opts: AiAnswerOptions
     hindsight: {
       aiPickReds: aiReds,
       realPickReds: realReds,
-      text: `百科AI 的隊上紅：${seatsTxt(aiReds)}；真人的隊上紅：${seatsTxt(realReds)}`,
+      text: `AI騎士 的隊上紅：${seatsTxt(aiReds)}；真人的隊上紅：${seatsTxt(realReds)}`,
     },
     policy: policyOf(opts, seed),
   };
@@ -519,7 +519,7 @@ function answerAssassination(game: SimGame, target: AiAnswerTarget, opts: AiAnsw
       forwardScore: null,
     },
     top: {
-      metric: '百科AI 刺殺排序用的分數（模型＋投票＋派隊＋重派讀法的 log 分數）換算成機率（softmax，候選＝全部藍方）；照它真的排序：前排優先，再看分數',
+      metric: 'AI騎士 刺殺排序用的分數（模型＋投票＋派隊＋重派讀法的 log 分數）換算成機率（softmax，候選＝全部藍方）；照它真的排序：前排優先，再看分數',
       options: order.length,
       items,
       tiedBeyond: 0,
@@ -540,7 +540,7 @@ function answerAssassination(game: SimGame, target: AiAnswerTarget, opts: AiAnsw
       realPickReds: [],
       merlinSeat,
       aiHit,
-      text: `梅林是 ${seatTxt(merlinSeat)}；百科AI ${aiHit ? '刺中' : '沒刺中'}，真人${hit ? '刺中' : '沒刺中'}`,
+      text: `梅林是 ${seatTxt(merlinSeat)}；AI騎士 ${aiHit ? '刺中' : '沒刺中'}，真人${hit ? '刺中' : '沒刺中'}`,
     },
     policy: policyOf(opts, seed),
   };
@@ -552,7 +552,7 @@ export function aiAnswerSummary(a: ThreadsAiAnswer): string {
   const beliefTxt = top.map((b) => `${seatTxt(b.seat)} ${b.p.toFixed(2)}`).join('、');
   return [
     `${a.exerciseId}｜${seatTxt(a.viewer.seat)} ${a.viewer.roleZh}`,
-    `百科AI：${a.pick.text}${a.pick.p !== null ? `（${a.pick.p.toFixed(2)}，第 ${a.pick.rank} 名）` : ''}；真人：${a.real.text}${a.real.p !== null ? `（${a.real.p.toFixed(2)}，第 ${a.real.rank} 名）` : ''} → ${a.real.outcome}`,
+    `AI騎士：${a.pick.text}${a.pick.p !== null ? `（${a.pick.p.toFixed(2)}，第 ${a.pick.rank} 名）` : ''}；真人：${a.real.text}${a.real.p !== null ? `（${a.real.p.toFixed(2)}，第 ${a.real.rank} 名）` : ''} → ${a.real.outcome}`,
     `${a.belief.metric} 最高：${beliefTxt}`,
     `事後：${a.hindsight.text}`,
   ].join('\n');

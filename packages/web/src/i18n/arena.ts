@@ -53,7 +53,7 @@ const zhTW = {
   linkReadme: '說明文件（開關表、怎麼投稿）',
   linkTemplate: '範本資料夾',
   linkFolder: '所有機器人',
-  phase2: '之後（第 2 階段）會開放真的寫程式的機器人，在隔離的沙盒裡跑；設計見 docs/ai/ARENA_CODE_BOTS.md。',
+  phase2: '不收程式碼：所有機器人（包括AI騎士）都是同一個核心引擎加上開關的微調（站長 2026-11-26 裁定）。',
   back: '返回',
   prompt: `我要參加「阿瓦隆百科 AI 擂台」，請幫我寫一份機器人的 profile.json。
 我想要的打法：<在這裡寫，例如「紅方很衝、早早出失敗；藍方很難放行」>
@@ -116,7 +116,7 @@ const en: typeof zhTW = {
   linkReadme: 'Guide (knob table, how to submit)',
   linkTemplate: 'Template folder',
   linkFolder: 'All bots',
-  phase2: 'Later (phase 2) real code bots will be allowed, running in an isolated sandbox; see docs/ai/ARENA_CODE_BOTS.md.',
+  phase2: 'No code submissions: every bot, the AI Knights included, is the same core engine tuned with knobs (owner decision, 2026-11-26).',
   back: 'Back',
   prompt: `I want to enter the "AvalonPediaTW AI Arena". Please write a profile.json for my bot.
 The style I want: <write it here, e.g. "aggressive red that fails early; blue that rarely approves">

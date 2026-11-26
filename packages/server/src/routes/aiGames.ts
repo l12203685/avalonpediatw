@@ -10,6 +10,7 @@
  * 回饋的頻率限制每個 IP 每分鐘 10 則，另有全站每小時上限。log 只寫狀態碼。
  */
 import { Router, type IRouter, type Request, type Response } from 'express';
+import { knightDisplayName } from '@avalon/shared';
 import { createHttpRateLimit } from '../middleware/rateLimit';
 import { AI_GAMES_NOT_CONFIGURED, aiGameService } from '../services/aiGameForum';
 import { cleanFlagName, cleanFlagNote, type AiGameTrace } from '../services/aiGameTrace';
@@ -18,9 +19,16 @@ const router: IRouter = Router();
 const readLimit = createHttpRateLimit(60_000, 60);
 const flagLimit = createHttpRateLimit(60_000, 10); // 同 POST /api/feedback：每個 IP 每分鐘 10 則
 
-/** 網站版：真人的暱稱拿掉（只留座位與角色），百科AI 的暱稱留著。 */
+/**
+ * 網站版：真人的暱稱拿掉（只留座位與角色），AI騎士 的暱稱留著；舊名字（百科AI_21）顯示成新名字（AI騎士_百科_21，
+ * 站長 2026-11-26；DC 上的 trace.json 不改）。
+ */
 export function publicTrace(t: AiGameTrace): AiGameTrace {
-  return { ...t, seats: t.seats.map((s) => (s.ai ? s : { ...s, name: '' })) };
+  return {
+    ...t,
+    seats: t.seats.map((s) => (s.ai ? { ...s, name: knightDisplayName(s.name) } : { ...s, name: '' })),
+    decisions: t.decisions.map((d) => (d.nick ? { ...d, nick: knightDisplayName(d.nick) } : d)),
+  };
 }
 
 function fail(res: Response, status: number, error: string): void {
