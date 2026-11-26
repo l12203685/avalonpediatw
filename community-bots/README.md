@@ -8,7 +8,7 @@
 > （排行榜上的參考點 `AI騎士_百科`）。
 
 **一隻機器人 = AI騎士 的引擎 ＋ 你選的打法開關。** 不用寫程式：你只要交一份 `profile.json`，
-說你的機器人叫什麼、怎麼打、要調哪些開關。每週一擂台會讓所有機器人和AI騎士 混在一起打很多局，
+說你的機器人叫什麼、怎麼打、要調哪些開關。擂台每天會讓所有機器人和AI騎士 混在一起打 12 萬局，
 每隻都會坐到紅方和藍方、和各種隊友同桌，算出分數上排行榜。
 
 擂台**不執行任何人的程式碼**（第 1 階段）。開關只開放下面這張表；邏輯防護（例如好人上任務一律出成功）不能關。
@@ -62,14 +62,15 @@
    你當刺客時的刺中率。區間跨過 0 就是還看不出好壞，加 `--games` 會更準。
 
 5. **投稿**：從你的 fork 開 PR，**只加你那一個資料夾**。PR 會自動跑檢查（`AI arena bot check`）；
-   通過、審過就合併，下一次每週擂台就會上場。
+   PR 上也會跑一場 2,000 局的小擂台，分數表在那次檢查的 job summary 裡（不會留言在 PR 上），先看看大概落在哪。
+   通過、審過就合併，合併當天就會補跑 2 萬局、上排行榜，之後每天一起打。
 
 ## 規則
 
 - `name`、`style` 不能放**玩家名字**、網址、`@` 別人，也不能冒充官方：`name` 不能含「百科AI」「官方」「管理員」等，也不能用「AI騎士」開頭（大小寫、全半形、空白、`_` `-` 這類分隔符號都不分）——「AI騎士」開頭只給官方的風格騎士（`community-bots/_knights/`，作者「AI騎士團」）。
   審查的人會看名字；不合適的會請你改。
 - 一開始**一人一隻**（同一個 `author` 只能有一隻）；名字不能和別隻重複。
-- 資料夾只能放 `profile.json` 和 `README.md`。想寫真的程式？那是第 2 階段（[設計](../docs/ai/ARENA_CODE_BOTS.md)），還沒開放。
+- 資料夾只能放 `profile.json` 和 `README.md`。所有機器人都是 AI騎士 核心引擎的微調，不收程式碼（站長 2026-11-26 裁定，[紀錄](../docs/ai/ARENA_CODE_BOTS.md)）。
 - 你的機器人只在擂台裡打，不會變成網站上陪真人打的AI騎士。
 
 ## 開放的開關
@@ -87,9 +88,13 @@
 | 紅方 | `redStackRate65` | 0 – 1 | 0.5 | 第 3、5 局紅方當隊長時，多帶一位隊友上任務的比例。 | 越高越常疊隊友（失敗牌比較穩，但隊伍比較好認）。 0：不多帶隊友。預設 0.5。 |
 | 紅方 | `redR1Teammate` | true / false | true | 紅方第 1 局當隊長時，前四次提議有時（約一半）放一位隊友。 | 開（預設）：像真人，偶爾帶隊友。 關：第 1 局一律不帶隊友。 |
 | 紅方 | `oberonR1AlwaysFail64` | 0 – 1 | 0 | 奧伯倫第 1 局上任務一律出失敗（0 = 關、1 = 開）。 | 1：奧伯倫開局就搶失敗。 0（預設）：照一般規則。 |
-| 藍方 | `goodCleanVote` | 0 – 0.9 | 0.3 | 第 3 局起，忠臣和派西估「這隊沒有紅」的機率低於這個門檻就投黑。 | 越高越嚴格、越常否決。 越低越寬鬆；0 = 不用這條。預設 0.3。 |
-| 藍方 | `goodKeyVote` | 0 – 0.9 | 0.3 | 紅方已拿兩局（再一個紅就輸）時，忠臣和派西的投黑門檻。 | 越高越不敢放行，關鍵局更保守。 越低越願意賭；0 = 不用這條。預設 0.3。 |
-| 藍方 | `goodTailVote` | 0 – 0.95 | 0.7 | 第 3 局起忠臣和派西不在隊上時預設投黑，這隊乾淨的機率達到這個門檻才投白。 | 越高越常投黑。 越低越常放行；0 = 不用這條。預設 0.7。 |
+| 藍方 | `goodCleanVote` | 0 – 0.9 | 0.3 | 第 3 局起，忠臣和派西估「這隊沒有紅」的機率低於這個門檻就投黑。 | 越高越嚴格、越常否決。 越低越寬鬆；0 = 不用這條。預設 0.3。（現行百科AI 第 3 局起忠臣、派西的多數票由下面的 goodBayes 門檻決定，這個開關只在少數局面有作用。） |
+| 藍方 | `goodKeyVote` | 0 – 0.9 | 0.3 | 紅方已拿兩局（再一個紅就輸）時，忠臣和派西的投黑門檻。 | 越高越不敢放行，關鍵局更保守。 越低越願意賭；0 = 不用這條。預設 0.3。（現行百科AI 第 3 局起忠臣、派西的多數票由下面的 goodBayes 門檻決定，這個開關只在少數局面有作用。） |
+| 藍方 | `goodTailVote` | 0 – 0.95 | 0.7 | 第 3 局起忠臣和派西不在隊上時預設投黑，這隊乾淨的機率達到這個門檻才投白。 | 越高越常投黑。 越低越常放行；0 = 不用這條。預設 0.7。（現行百科AI 第 3 局起忠臣、派西的多數票由下面的 goodBayes 門檻決定，這個開關只在少數局面有作用。） |
+| 藍方 | `goodBayesGood` | 0.4 – 0.95 | 0.7 | 第 3 局起（紅方還沒拿兩局），忠臣和派西不在隊上時，估「這隊沒有紅」的機率要到這個門檻才投贊成。 | 越高越常投反對（不在隊上幾乎不放行）。 越低越常放行。預設 0.7。 |
+| 藍方 | `goodBayesBad` | 0.5 – 0.99 | 0.8 | 第 3 局起（紅方還沒拿兩局），忠臣和派西在隊上時，估「這隊有紅、會失敗」的機率要到這個門檻才投反對（內黑）。 | 越高越少內黑（在隊上幾乎都贊成）。 越低越常內黑。預設 0.8。 |
+| 藍方 | `goodBayesGoodKey` | 0.5 – 0.99 | 0.9 | 紅方已拿兩局（再一個紅就輸）時，忠臣和派西不在隊上要多確定「這隊沒有紅」才投贊成。 | 越高關鍵局越不敢放行。 越低關鍵局越願意賭。預設 0.9。 |
+| 藍方 | `goodBayesBadKey` | 0.4 – 0.99 | 0.7 | 紅方已拿兩局時，忠臣和派西在隊上要多確定「這隊有紅」才投反對（內黑）。 | 越高關鍵局越少內黑。 越低關鍵局越常內黑。預設 0.7。 |
 | 藍方 | `merlinNormalVote` | 0 – 1 | 1 | 梅林第 3 局起照「只看公開紀錄的忠臣」那樣投票的比例（只在會直接輸掉時才擋）。 | 1（預設）：梅林藏得深，不容易被刺中。 越低梅林越常照自己看到的紅投票，任務比較穩，但比較容易被刺。 |
 | 藍方 | `merlinCover77` | 0 – 1 | 0 | 第 1、2 局幾乎不會出任務的提議裡，梅林照「只看公開紀錄的忠臣」會派的隊來派的比例（看得到的紅在不在隊上照公開局勢）。 | 越高梅林早期派隊越像忠臣，比較難被刺中。 0（預設）：梅林照自己看到的派。 |
 | 藍方 | `percivalNoThumbsR1` | true / false | true | 派西第 1 局當隊長時，兩根拇指（梅林／莫甘娜）都不放進隊。 | 開（預設）：沒資訊時先不派拇指。 關：第 1 局就會放一根拇指。 |
@@ -100,15 +105,28 @@
 - [`_examples/aggressive-red`](_examples/aggressive-red/profile.json)「激進派紅方」：紅方不藏牌、票照紅方利益投、常疊隊友；奧伯倫開局就搶失敗。
 - [`_examples/cautious-blue`](_examples/cautious-blue/profile.json)「保守藍方」：藍方投黑門檻都拉高；梅林早期派隊照忠臣、藏得更深。
 
-這兩隻是擂台的內建示範對手，每週都會上場（不算任何人的投稿）。
+這兩隻是擂台的內建示範對手，每天都會上場（不算任何人的投稿）。
+
+## 官方 AI騎士（`_knights/`）
+
+[`_knights/`](_knights/) 裡是**依玩家風格建立的 AI騎士**（站長 2026-11-26）：每一隻用一位玩家自己的真人牌局擬合開關，名字是
+`AI騎士_{玩家ID}_{##}`，作者固定「AI騎士團」，profile 寫 `"official": true`，另外有一個風格標籤 `tag`（穩健／激進／潛伏／鐵壁／寬容／明燈／藏鋒，
+或兩個接在一起）。它們每天都上擂台，不受「一人一隻」限制。社群投稿**不能**寫 `official`、不能用「AI騎士團」當作者、名字也不能用 `AI騎士_` 開頭。
+怎麼擬合的見 [`docs/BOTS.md`〈依玩家風格建立的 AI騎士〉](../docs/BOTS.md)。之後玩家登入網站就能認領、改名、自己調自己的那一隻（代理騎士）。
+
+網站的練習台和房間「加入 AI」也能指定哪一位 AI騎士。伺服器讀的是內建的 `packages/server/src/arena/knights.generated.json`：
+改了 `_knights/` 裡的檔案，要跑 `pnpm --filter @avalon/server knights:generate` 一起提交（PR 檢查會比對）。
 
 ## 排行榜怎麼算
 
-- 每週一（台灣時間 02:23）GitHub Actions 跑 `arena:tournament`：參賽 = AI騎士 ＋ 示範對手 ＋ 所有合併進 main 的機器人。
-  10 人局、每個座位隨機抽一隻（可重複），角色由遊戲引擎發；局數 = max(600, 150 × 參賽數)。
+- **每天凌晨 04:17（台灣時間）**GitHub Actions 跑每日大賽：12 萬局，切成 12 片同時跑（每片 1 萬局、約 1 小時）。
+  參賽 = AI騎士_百科 ＋ 示範對手 ＋ 官方 AI騎士（`_knights/`）＋ 所有合併進 main 的機器人。
+  10 人局、每個座位隨機抽一隻（可重複），角色由遊戲引擎發。**不用任何 AI 額度**：全部是 AI騎士 自己的引擎在 GitHub 上對打。
+- 有新的或改過的機器人合併進 main 時，當天再補跑 2 萬局，不用等到隔天。
 - 分數 = 分陣營的隊伍邏輯回歸：AI騎士_百科 固定 1500；+100 分大約是「一整邊都換成它、對手是 AI騎士_百科」時贏的機會變成 1.8 倍。
   分紅方分、藍方分，總分是兩者平均；括號是 95% 信賴區間。
-- 結果寫進 [`arena/leaderboard.json`](../arena/leaderboard.json)（只有機器人名字與作者自己公開的 GitHub 帳號），網站直接讀這一份。
+- 結果寫進 [`arena/leaderboard.json`](../arena/leaderboard.json)（只有機器人名字與作者自己公開的 GitHub 帳號），網站直接讀這一份；
+  每天的分數另外存一份小快照在 [`arena/history/`](../arena/history/)（網站的走勢小圖用；60 天前的併成每週一份）。
 
 ---
 
@@ -119,9 +137,9 @@
 1. Copy [`_template/`](_template/) to `community-bots/<your-id>/` (lowercase letters, digits, dashes). Only `profile.json` and an optional `README.md` are allowed.
 2. Fill in `name` (≤ 24 chars), `author` (your GitHub handle, shown publicly), `style` (≤ 300 chars), and knobs in `overrides` (all seats), `sides.good` / `sides.evil`, or `roles.<role>`. Later layers win; unset knobs keep the default.
 3. `pnpm --filter @avalon/server arena:check community-bots/<id>` validates it; `arena:local community-bots/<id> [--games N]` plays it against the AI Knight with paired control games and prints win rates per side and role, the three-outcome split and the assassin hit rate.
-4. Open a PR from your fork that adds only your folder. The `AI arena bot check` workflow validates it; once merged it plays in the next weekly tournament.
+4. Open a PR from your fork that adds only your folder. The `AI arena bot check` workflow validates it; the PR also runs a 2,000-game smoke tournament (results in the job summary). Once merged it gets a 20,000-game catch-up run the same day, then plays in the daily tournament (120,000 games every night, 04:17 Taiwan time; no AI credits, only the engine playing itself on GitHub Actions).
 
-Rules: no player names, links or @mentions in `name` / `style`; no impersonating the site (`name` may not contain "百科AI" and may not start with "AI騎士", reserved for the official knights in `_knights/`); one bot per person; names must be unique. The arena never runs submitted code (code bots are phase 2, see [`docs/ai/ARENA_CODE_BOTS.md`](../docs/ai/ARENA_CODE_BOTS.md)).
+Rules: no player names, links or @mentions in `name` / `style`; no impersonating the site (`name` may not contain "百科AI" and may not start with "AI騎士", reserved for the official knights in `_knights/`); one bot per person; names must be unique. The arena never runs submitted code: every bot is a tuning of the core engine (code bots are not planned, see [`docs/ai/ARENA_CODE_BOTS.md`](../docs/ai/ARENA_CODE_BOTS.md)).
 
 | Side | Knob | Range | Default | Meaning |
 |---|---|---|---|---|
@@ -135,6 +153,10 @@ Rules: no player names, links or @mentions in `name` / `style`; no impersonating
 | Blue | `goodCleanVote` | 0 – 0.9 | 0.3 | From round 3, loyals and Percival reject when the chance the team is clean is below this. |
 | Blue | `goodKeyVote` | 0 – 0.9 | 0.3 | When red has two fails already: the clean-chance bar below which loyals and Percival reject. |
 | Blue | `goodTailVote` | 0 – 0.95 | 0.7 | From round 3, loyals and Percival off the team reject unless the clean chance reaches this. |
+| Blue | `goodBayesGood` | 0.4 – 0.95 | 0.7 | From round 3 (red below two fails), loyals and Percival off the team approve only when the chance the team is clean reaches this. |
+| Blue | `goodBayesBad` | 0.5 – 0.99 | 0.8 | From round 3 (red below two fails), loyals and Percival on the team reject only when the chance the team fails reaches this. |
+| Blue | `goodBayesGoodKey` | 0.5 – 0.99 | 0.9 | When red has two fails: how sure loyals and Percival off the team must be that the team is clean before approving. |
+| Blue | `goodBayesBadKey` | 0.4 – 0.99 | 0.7 | When red has two fails: how sure loyals and Percival on the team must be that the team fails before rejecting. |
 | Blue | `merlinNormalVote` | 0 – 1 | 1 | From round 3, share of Merlin votes cast like a public-info loyal (blocks only when a red team would win outright). |
 | Blue | `merlinCover77` | 0 – 1 | 0 | Rounds 1-2, in proposals that will not go: share of Merlin proposals that copy what a public-info loyal would pick. |
 | Blue | `percivalNoThumbsR1` | true / false | true | Percival as leader in round 1 leaves both thumbs (Merlin / Morgana) out. |

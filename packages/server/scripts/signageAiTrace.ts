@@ -313,7 +313,7 @@ export class AiGameCollector {
       .sort((x, y) => Number(Boolean(y.record)) - Number(Boolean(x.record)) || y.users.length - x.users.length)[0];
     const ai = [...this.members.values()].map((m) => m.info).filter((x): x is AiSeatInfo => Boolean(x));
     const notes = [...this.notes];
-    if ([...this.members.values()].some((m) => m.status && m.status !== 'ended')) notes.push('有百科AI 座位沒有正常打完這局，它的決定可能不完整');
+    if ([...this.members.values()].some((m) => m.status && m.status !== 'ended')) notes.push('有AI騎士 座位沒有正常打完這局，它的決定可能不完整');
     return buildAiGameTrace({ room: this.room, title, startedAt: this.startedAt, end, ai, decisions: this.decisions, notes });
   }
 }

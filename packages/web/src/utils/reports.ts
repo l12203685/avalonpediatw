@@ -98,7 +98,7 @@ const PAGE_LABELS: readonly [RegExp, string][] = [
   [/^(wiki|concepts)\b/i, '百科攻略'],
   [/^(streams)\b/i, '直播回放'],
   [/^(records|paipu)\b/i, '牌譜紀錄'],
-  [/^(ai-?games?|seat-?filler|fill)\b/i, '百科AI 對局'],
+  [/^(ai-?games?|seat-?filler|fill)\b/i, 'AI騎士 對局'],
   [/^practice\b/i, '與機器人練習'],
   [/^(id-?)?claim\b|^idClaim\b/i, 'ID 認領'],
   [/^(reports?|feedback)\b/i, '回報與修正'],

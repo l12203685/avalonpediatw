@@ -97,6 +97,7 @@ import { loyalFree80Applies, loyalFree80Team } from '../Round80';
 import { tierCover82Applies, tierCover82Team } from '../Round82';
 import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
 import { failTest85Applies, failTest85Team, r1Split85Applies, r1Split85Team } from '../Round85';
+import { shield87Decide } from '../Round87';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -997,6 +998,14 @@ export class ForwardAgent implements AvalonAgent {
         && !mordredSoloApproveVote(t, obs) && !redMatchPointDecisiveApprove(t, obs)) {
         return this.ruleDecision(obs, { type: 'team_vote', vote: false }, 'red: I lead later this round (inner black; round 51)');
       }
+    }
+    // Round 87 `merlinInnerBlackShield87` (Round87.ts; Gemini handoff v2 item 1): Merlin on the team, about to reject — when the public loyal view
+    // of his seat holds the team clean enough and his seen reds cannot lose it on the spot, he approves as that view would. Off: never evaluated.
+    if (obs.gamePhase === 'team_vote' && obs.myRole === 'merlin' && d.action.type === 'team_vote' && !d.action.vote
+      && (this.baseline.tuning.merlinInnerBlackShield87 ?? 0) > 0) {
+      const s87 = shield87Decide(this.baseline.tuning, obs, d.action.vote, () => goodVoteGate(loyalViewOf(obs), this.gates) === null
+        && goodVoteGate(obs, { ...this.gates, mustFail: false }) === null);
+      if (s87?.approve) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `merlin on the team: the public view holds it clean enough (${s87.p.toFixed(2)}; round 87)`);
     }
     return d;
   }

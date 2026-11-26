@@ -8,6 +8,7 @@ import type { PracticeOptions, PracticeTracePayload } from '../services/practice
 const LAST_OPTIONS_KEY = 'avalon_practice_options';
 // Local copy (no value import from services/practice: socket.ts imports this store).
 const ROLE_CHOICES: readonly string[] = ['merlin', 'percival', 'loyal', 'assassin', 'morgana', 'mordred', 'oberon'];
+const KNIGHT_ID_RE = /^[a-z0-9][a-z0-9-]{1,31}$/;
 
 function readLastOptions(): PracticeOptions {
   try {
@@ -16,7 +17,17 @@ function readLastOptions(): PracticeOptions {
       const parsed = JSON.parse(raw) as Partial<PracticeOptions>;
       const seat = typeof parsed.seat === 'number' && parsed.seat >= 1 && parsed.seat <= 10 ? parsed.seat : null;
       const role = typeof parsed.role === 'string' && ROLE_CHOICES.includes(parsed.role) ? parsed.role : null;
-      return { seat, role } as PracticeOptions;
+      const knight = typeof parsed.knight === 'string' && KNIGHT_ID_RE.test(parsed.knight) ? parsed.knight : undefined;
+      const out = (knight ? { seat, role, knight } : { seat, role }) as PracticeOptions;
+      // 一隻一隻召喚的陣容（9 個座位；壞掉的格子當成沒指定）。
+      if (Array.isArray(parsed.lineup)) {
+        out.lineup = Array.from({ length: 9 }, (_, i) => {
+          const v = (parsed.lineup as unknown[])[i];
+          return typeof v === 'string' && KNIGHT_ID_RE.test(v) ? v : null;
+        });
+      }
+      if (parsed.fill === 'random' || parsed.fill === 'baike') out.fill = parsed.fill;
+      return out;
     }
   } catch {
     // storage unavailable / bad JSON → defaults

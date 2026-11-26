@@ -454,7 +454,9 @@ export default function PlayerCard({
       🤖
     </span>
   ) : null;
-  const nameFitText = `${aiInline ? '🤖' : ''}${player.name}`;
+  // AI騎士 的座位名（AI騎士_ED_02）卡片上省掉「AI騎士_」：卡片已經有機器人標記，窄卡才看得到後面的 ED_02；完整名字在 title。
+  const shownName = player.isBot ? player.name.replace(/^AI騎士_(?=.)/, '') : player.name;
+  const nameFitText = `${aiInline ? '🤖' : ''}${shownName}`;
   const nameWrap = 'line-clamp-2 text-balance [overflow-wrap:anywhere] leading-[1.15]';
   const nameLabel = isRoleHidden ? (
     <div
@@ -472,7 +474,7 @@ export default function PlayerCard({
         title={player.name}
       >
         {aiInline}
-        {player.name}
+        {shownName}
       </span>
     </div>
   ) : (
@@ -489,7 +491,7 @@ export default function PlayerCard({
         title={player.name}
       >
         {aiInline}
-        {player.name}
+        {shownName}
       </p>
     </div>
   );

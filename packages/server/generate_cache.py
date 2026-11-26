@@ -207,7 +207,18 @@ GAME_SOURCE_DISCORD = 1
 # 不算進分析快取的任何數字（戰績、排行、Elo、陣容強度、默契、特徵研究），也不進牌譜暫存匯出（機器人訓練資料）；
 # 只附在每局資料集最後面，網站篩選勾選「百科AI」分類時才看得到。
 BOT_CATEGORY = "百科AI"
-_PEDIA_BOT_NAME_RE = re.compile(r"^百科(?:機器人|ai)")  # 比對 player_name_key（NFKC、小寫）
+# 站長 2026-11-26：百科AI 改名「AI騎士_{風格}_{##}」（風格沒指定 = 「百科」，目前的引擎；補位機器人 百科AI_3 → AI騎士_百科_03）。
+# 分類值「百科AI」是資料，不改；暱稱新舊都認。同 @avalon/shared knights.ts（兩邊對 src/__tests__/fixtures/knight_names.json 測）。
+_PEDIA_BOT_NAME_RE = re.compile(r"^(?:百科(?:機器人|ai)|ai騎士)")  # 比對 player_name_key（NFKC、小寫）
+KNIGHT_PREFIX = "AI騎士"
+DEFAULT_KNIGHT_STYLE = "百科"
+# 「百科」風格在戰績上的名字：舊的 百科AI、百科AI_n 和新的 AI騎士_百科_## 都併成這一位（以前是「百科AI」）。
+DEFAULT_KNIGHT_STATS_NAME = f"{KNIGHT_PREFIX}_{DEFAULT_KNIGHT_STYLE}"
+_LEGACY_BOT_RE = re.compile(r"^百科ai(?:_(\d+))?$")
+_LEGACY_WATCH_RE = re.compile(r"^百科ai看房(\d*)$")
+_KNIGHT_NAME_RE = re.compile(r"^ai騎士_([^_\s]+)(?:_(\d+))?$")
+# 補位機器人的編號範圍（scripts/signagePlayer.ts：每晚 0 號、指定房間 20–99）。
+KNIGHT_SERIALS = range(100)
 
 # Sections built from the Sheet by this script.
 SHEET_SECTIONS = (
@@ -682,8 +693,66 @@ def player_name_key(name: object) -> str:
 
 
 def is_pedia_bot_name(name: object) -> bool:
-    """百科AI 的暱稱（「百科AI_3」、舊的「百科機器人A」；大小寫、全半形不論）。同 scripts/signagePaipu.ts 的 isPediaBotName。"""
+    """我們機器人的暱稱（「AI騎士_百科_03」、舊的「百科AI_3」「百科機器人A」；大小寫、全半形不論）。
+    同 scripts/signagePaipu.ts 的 isPediaBotName、@avalon/shared isKnightBotName。"""
     return bool(_PEDIA_BOT_NAME_RE.match(player_name_key(name)))
+
+
+def _knight_name(style: str, serial: int | None = None) -> str:
+    return f"{KNIGHT_PREFIX}_{style}" if serial is None else f"{KNIGHT_PREFIX}_{style}_{serial:02d}"
+
+
+def knight_display_name(name: str) -> str:
+    """顯示用的名字：舊名字換成新的（百科AI → AI騎士_百科、百科AI_3 → AI騎士_百科_03、百科AI看房1460 → AI騎士看房1460）；
+    其他名字照原樣。同 @avalon/shared knightDisplayName。"""
+    key = player_name_key(name)
+    m = _LEGACY_BOT_RE.match(key)
+    if m:
+        return DEFAULT_KNIGHT_STATS_NAME if m.group(1) is None else _knight_name(DEFAULT_KNIGHT_STYLE, int(m.group(1)))
+    w = _LEGACY_WATCH_RE.match(key)
+    if w:
+        return f"{KNIGHT_PREFIX}看房{w.group(1)}"
+    return name
+
+
+def knight_stats_name(name: object) -> str | None:
+    """戰績上算哪一位：「百科」風格（舊的 百科AI、百科AI_n、百科機器人…，新的 AI騎士_百科_##、沒有風格的 AI騎士）都是
+    AI騎士_百科；其他風格各自一位（AI騎士_穩健_01）；不是機器人時 None。同 @avalon/shared knightStatsName。"""
+    if not is_pedia_bot_name(name):
+        return None
+    key = player_name_key(knight_display_name(normalize_player_name(name)))
+    if key.startswith("百科"):
+        return DEFAULT_KNIGHT_STATS_NAME
+    m = _KNIGHT_NAME_RE.match(key)
+    if not m or m.group(1) == DEFAULT_KNIGHT_STYLE:
+        return DEFAULT_KNIGHT_STATS_NAME
+    # 風格標籤原樣（中文沒有大小寫）；序號照兩位數
+    return _knight_name(m.group(1), None if m.group(2) is None else int(m.group(2)))
+
+
+def knight_aliases() -> dict[str, str]:
+    """程式裡的別名表（站長 2026-11-26，不改存下來的紀錄）：舊名字 百科AI、百科AI_0～99 與新名字 AI騎士_百科_00～99
+    都是同一位 AI騎士_百科，同一隻機器人的歷史接得起來。"""
+    out = {f"百科AI_{n}": DEFAULT_KNIGHT_STATS_NAME for n in KNIGHT_SERIALS}
+    out["百科AI"] = DEFAULT_KNIGHT_STATS_NAME
+    out.update({_knight_name(DEFAULT_KNIGHT_STYLE, n): DEFAULT_KNIGHT_STATS_NAME for n in KNIGHT_SERIALS})
+    return out
+
+
+def with_knight_aliases(data: Any) -> Any:
+    """player_aliases.json 的內容加上 AI騎士 的別名（load_player_aliases 用；站長 2026-11-26）：檔案裡指向舊名字「百科AI」的
+    別名改指 AI騎士_百科，再補上 knight_aliases()（檔案已經寫了的名字不重複加）。檔案本身不改；格式不對的照原樣交給
+    parse_player_aliases 報錯。"""
+    if not isinstance(data, Mapping) or not isinstance(data.get("aliases"), Mapping):
+        return data
+    aliases: dict[Any, Any] = {}
+    for src, dst in data["aliases"].items():
+        aliases[src] = (knight_stats_name(dst) or dst) if isinstance(dst, str) else dst
+    present = {player_name_key(src) for src in aliases if isinstance(src, str)}
+    for src, dst in knight_aliases().items():
+        if player_name_key(src) not in present:
+            aliases[src] = dst
+    return {**data, "aliases": aliases}
 
 
 def is_bot_game(g: "GameRow") -> bool:
@@ -937,7 +1006,8 @@ def parse_player_aliases(data: Any, show_names: bool = True) -> PlayerAliases:
     names: dict[str, str] = {}
     keys: dict[str, str] = {}
     official: dict[str, str] = {}
-    for i, (source, target) in enumerate(raw.items(), 1):
+    items = list(raw.items())
+    for i, (source, target) in enumerate(items, 1):
         entry = _alias_entry(i, source, target, show_names)
         if not isinstance(source, str) or not isinstance(target, str):
             raise ValueError(f"{entry}: both names must be strings")
@@ -952,7 +1022,7 @@ def parse_player_aliases(data: Any, show_names: bool = True) -> PlayerAliases:
         if official.get(dst_key, dst) != dst:
             raise ValueError(f"{entry}: another entry spells this official name differently; use one spelling")
         names[src], keys[src_key], official[dst_key] = dst, dst_key, dst
-    for i, (source, target) in enumerate(raw.items(), 1):
+    for i, (source, target) in enumerate(items, 1):
         if player_name_key(normalize_player_name(target)) in keys:
             raise ValueError(f"{_alias_entry(i, source, target, show_names)}: the official name is itself an alias "
                              "(the source of another entry); point every old spelling straight at the official name")
@@ -977,7 +1047,7 @@ def load_player_aliases(path: Path | None = None, show_names: bool | None = None
             "_comment) or restore it from git.", EXIT_CONFIG, "Player alias file unreadable",
         ) from None
     try:
-        return parse_player_aliases(data, show)
+        return parse_player_aliases(with_knight_aliases(data), show)
     except ValueError as exc:
         raise FatalError(
             f"{path.name}: {exc}. See its _comment and docs/stats/two_stage_outcome.md (玩家別名).",

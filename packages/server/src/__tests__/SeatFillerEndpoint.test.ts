@@ -86,7 +86,7 @@ describe('POST /api/seat-filler — validation (same as parseSeatFillerArgs)', (
     expect(res.body).toEqual({
       ok: true,
       code: 'dispatched',
-      message: '已叫百科AI 到「Room-1460」（補到 10 人），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。',
+      message: '已叫AI騎士 到「Room-1460」（補到 10 人），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。',
     });
     expect(JSON.stringify(res.body)).not.toContain('pw-1234');
     const sent = JSON.parse(fetchMock.mock.calls[0][1].body as string);
@@ -94,7 +94,7 @@ describe('POST /api/seat-filler — validation (same as parseSeatFillerArgs)', (
 
     pastCooldown();
     const byTitle = await post({ room: '  百科陪練 ', bots: 2 });
-    expect(byTitle.body.message).toBe('已叫百科AI 到「百科陪練」（2 個），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。');
+    expect(byTitle.body.message).toBe('已叫AI騎士 到「百科陪練」（2 個），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。');
 
     pastCooldown();
     const dflt = await post({ room: 'room-77' });
@@ -109,7 +109,7 @@ describe('POST /api/seat-filler — shared limits with LINE／DC', () => {
     expect(await answerSeatFillerTextCommand('/補位 1461')).toBe('補位機器人剛被叫過，請 2 分 10 秒後再試（全站每 3 分鐘最多叫一次）。');
 
     pastCooldown();
-    expect(await answerSeatFillerTextCommand('/補位 1462')).toContain('已叫百科AI');
+    expect(await answerSeatFillerTextCommand('/補位 1462')).toContain('已叫AI騎士');
     const res = await post({ room: '1463' });
     expect(res.status).toBe(429);
     expect(res.body).toMatchObject({ ok: false, code: 'cooldown' });

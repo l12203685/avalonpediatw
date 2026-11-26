@@ -482,11 +482,13 @@ export function kickPlayer(roomId: string, targetPlayerId: string): void {
   socket.emit('game:kick-player', roomId, targetPlayerId);
 }
 
-export function addBot(roomId: string): void {
+export function addBot(roomId: string, knightId?: string): void {
   // Edward 2026-04-29 — AI difficulty tiers removed. Server ignores any
   // legacy difficulty argument and runs the unified strongest strategy.
+  // 站長 2026-11-26：房主可以指定哪一位 AI騎士（{ knightId }；沒給 = 舊的加法）。
   const socket = getSocket();
-  socket.emit('game:add-bot', roomId);
+  if (knightId) socket.emit('game:add-bot', roomId, { knightId });
+  else socket.emit('game:add-bot', roomId);
 }
 
 export function removeBot(roomId: string, botId: string): void {
