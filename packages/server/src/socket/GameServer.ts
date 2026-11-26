@@ -332,7 +332,8 @@ export class GameServer implements LiveSnapshotHost {
   private botProfiles: Map<string, OpponentType> = new Map();
   /**
    * 指定了哪一位 AI騎士 的機器人（站長 2026-11-26「練習台想呼叫AI騎士_ED」；`arena/knights.ts`）。
-   * 沒有記錄 = 舊的加機器人（名字「AI」、百科AI 本身）。開局時 `applyOpponentProfile` 把騎士的開關蓋在這一桌的策略層上。
+   * 沒有記錄 = 沒指定（AI騎士_百科）。開局時 `applyOpponentProfile` 把騎士的開關蓋在這一桌的策略層上。
+   * 伺服器更新時跟著存檔走（`liveSnapshot.ts` 的 bots[].knight），接回來的房間還是同一位騎士。
    */
   private botKnights: Map<string, string> = new Map();
   /**
@@ -487,7 +488,7 @@ export class GameServer implements LiveSnapshotHost {
         practiceConfig: engine?.getPracticeConfig() ?? null,
         timerRemainingMs: inGame && engine ? engine.getTimerRemainingMs(now) : null,
         password: this.roomManager.getRoomPassword(room.id),
-        bots: players.filter((p) => p.isBot).map((p) => ({ id: p.id, profile: this.botProfiles.get(p.id) ?? null })),
+        bots: players.filter((p) => p.isBot).map((p) => ({ id: p.id, profile: this.botProfiles.get(p.id) ?? null, knight: this.botKnights.get(p.id) ?? null })),
         startedAt: this.roomStartTimes.get(room.id) ?? null,
         supabaseIds,
         practice: session ? { ...session, flaggedEntryIds: [...session.flaggedEntryIds] } : null,
@@ -539,7 +540,18 @@ export class GameServer implements LiveSnapshotHost {
     for (const bot of snap.bots) {
       if (!room.players[bot.id]) continue;
       const profile = bot.profile !== null && bot.profile in PROFILE_OVERRIDES ? (bot.profile as OpponentType) : null;
-      const agent = new HeuristicAgent(bot.id, undefined, undefined, profile ? PROFILE_OVERRIDES[profile] : undefined);
+      const overrides = profile ? PROFILE_OVERRIDES[profile] : undefined;
+      // 指定的 AI騎士 也接回來（不然接回來的房間會變回百科）；名冊裡已經沒有這一位 → 百科。
+      const knightId = bot.knight === null ? null : getKnight(bot.knight) ? bot.knight : DEFAULT_KNIGHT_ID;
+      if (knightId) this.botKnights.set(bot.id, knightId);
+      else this.botKnights.delete(bot.id);
+      const p = room.players[bot.id];
+      const team = p.team === 'evil' ? 'evil' : p.team === 'good' ? 'good' : null;
+      // 遊戲中：和開局時 applyOpponentProfile 一樣，騎士的開關（照這一局的角色、陣營）蓋在策略層上面；大廳裡開局時才蓋。
+      const tuning = inGame && knightId && knightId !== DEFAULT_KNIGHT_ID
+        ? { ...overrides, ...knightTuningOverrides(knightId, p.role, team) }
+        : overrides;
+      const agent = new HeuristicAgent(bot.id, undefined, undefined, tuning);
       this.botAgents.set(bot.id, agent);
       if (profile) this.botProfiles.set(bot.id, profile);
       else this.botProfiles.delete(bot.id);
