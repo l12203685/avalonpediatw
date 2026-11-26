@@ -482,6 +482,7 @@ export function buildKnightProfile(playerId: string, serial: number, layers: Pic
     schema: 1,
     name: knightName(playerId, serial),
     author: HOUSE_AUTHOR,
+    official: true,
     style: describeStyle(layers, tag),
     tag,
   };

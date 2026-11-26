@@ -210,6 +210,8 @@ describe('knight names, folders and profiles', () => {
     const layers = { sides: { evil: { redNormalVote: 0.2 } }, roles: { merlin: { merlinCover77: 0.6 } } };
     const p = buildKnightProfile('測試玩家', 1, layers);
     expect(p.author).toBe(HOUSE_AUTHOR);
+    expect(p.official).toBe(true);
+    expect(validateProfile({ ...p, official: undefined }, 'knight-x-01', { house: true }).errors.join(' ')).toMatch(/official/);
     expect(p.tag).toBe(styleTag(layers));
     expect(p.style).toContain('紅方');
     expect(p.style).toContain('梅林');
@@ -220,6 +222,7 @@ describe('knight names, folders and profiles', () => {
     const community = validateProfile(p, 'someone');
     expect(community.ok).toBe(false);
     expect(community.errors.join(' ')).toMatch(/AI騎士_/);
+    expect(community.errors.join(' ')).toMatch(/official/);
   });
 
   it('describes a default-like profile plainly', () => {
@@ -237,7 +240,7 @@ describe('house knights in the roster', () => {
     write(`${HOUSE_DIR}/knight-aaaa-01`, buildKnightProfile('測試玩家', 1, { sides: { evil: { redNormalVote: 0 } } }));
     write(`${HOUSE_DIR}/knight-bbbb-01`, buildKnightProfile('tester', 1, { roles: { merlin: { merlinCover77: 1 } } }));
     write(`${HOUSE_DIR}/knight-cccc-01`, buildKnightProfile('tester', 1, {})); // 名字重複 → 不收
-    write(`${HOUSE_DIR}/knight-bad-01`, { schema: 1, name: 'AI騎士_x_01', author: 'octocat', style: 'x' }); // 作者不對
+    write(`${HOUSE_DIR}/knight-bad-01`, { schema: 1, name: 'AI騎士_x_01', author: 'octocat', official: true, style: 'x' }); // 作者不對
     write('knight-aaaa-01', { schema: 1, name: '撞名的資料夾', author: 'octocat', style: 'x', overrides: { redNormalVote: 0.5 } });
     write('fast-red', { schema: 1, name: 'AI騎士_假的_01', author: 'someone', style: 'x', overrides: { redNormalVote: 0.5 } });
     return dir;

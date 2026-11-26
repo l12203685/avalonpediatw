@@ -26,6 +26,8 @@ export interface BotProfile {
   style: string;
   /** 風格標籤（可選，最多 8 個字；例如依玩家風格建立的 AI騎士 的「穩健」「激進鐵壁」）。 */
   tag?: string;
+  /** 官方的 AI騎士（只有 `community-bots/_knights/` 裡的可以、而且一定要寫 `true`；作者固定 `HOUSE_AUTHOR`）。 */
+  official?: boolean;
   /** 所有座位都套用的開關。 */
   overrides?: KnobValues;
   /** 只在這一邊套用（後蓋前：overrides → sides → roles）。 */
@@ -48,8 +50,9 @@ export const STYLE_MAX = 300;
 export const TAG_MAX = 8;
 
 /**
- * 官方的 AI騎士（`community-bots/_knights/`，依玩家風格建立；站長 2026-11-26）：作者固定是這個名字，
- * 不是 GitHub 帳號，也不受「一人一隻」限制。社群投稿不能用這個作者、也不能用 `AI騎士_` 開頭的名字。
+ * 官方的 AI騎士（`community-bots/_knights/`，依玩家風格建立；站長 2026-11-26）：profile 寫 `"official": true`、
+ * 作者固定是這個名字（不是 GitHub 帳號），不受「一人一隻」限制。社群投稿不能寫 `official`、不能用這個作者、
+ * 也不能用 `AI騎士_` 開頭的名字。
  */
 export const HOUSE_AUTHOR = 'AI騎士團';
 export const HOUSE_NAME_PREFIX = 'ai騎士_';
@@ -63,7 +66,7 @@ const MENTION_RE = /@[A-Za-z0-9-]/;
 // eslint-disable-next-line no-control-regex
 const INVISIBLE_RE = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/;
 
-const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'overrides', 'sides', 'roles']);
+const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles']);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -127,6 +130,8 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
     if (hit) errors.push(`name 不能包含「${hit}」（保留給官方）`);
     if (!opts.house && folded.startsWith(HOUSE_NAME_PREFIX)) errors.push('name 不能用「AI騎士_」開頭（保留給官方的 AI騎士）');
   }
+  if (opts.house && raw.official !== true) errors.push('官方 AI騎士 的 profile 要寫 "official": true');
+  if (!opts.house && raw.official !== undefined) errors.push('official 只給官方的 AI騎士（community-bots/_knights/）用');
   let author: string | undefined;
   if (opts.house) {
     if (raw.author !== HOUSE_AUTHOR) errors.push(`官方 AI騎士 的 author 要是「${HOUSE_AUTHOR}」`);
@@ -168,6 +173,7 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   if (errors.length > 0) return { ok: false, errors, warnings };
   const profile: BotProfile = { schema: PROFILE_SCHEMA_VERSION, name: name!, author: author!, style: style! };
   if (tag) profile.tag = tag;
+  if (opts.house) profile.official = true;
   if (overrides) profile.overrides = overrides;
   if (sides) profile.sides = sides;
   if (roles) profile.roles = roles;

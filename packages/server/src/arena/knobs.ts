@@ -95,21 +95,21 @@ export const ARENA_KNOBS: readonly Knob[] = [
     zh: '第 3 局起，忠臣和派西估「這隊沒有紅」的機率低於這個門檻就投黑。',
     en: 'From round 3, loyals and Percival reject when the chance the team is clean is below this.',
     zhUp: '越高越嚴格、越常否決。',
-    zhDown: '越低越寬鬆；0 = 不用這條。預設 0.3。',
+    zhDown: '越低越寬鬆；0 = 不用這條。預設 0.3。（現行百科AI 第 3 局起忠臣、派西的多數票由下面的 goodBayes 門檻決定，這個開關只在少數局面有作用。）',
   },
   {
     key: 'goodKeyVote', kind: 'number', side: 'good', min: 0, max: 0.9,
     zh: '紅方已拿兩局（再一個紅就輸）時，忠臣和派西的投黑門檻。',
     en: 'When red has two fails already: the clean-chance bar below which loyals and Percival reject.',
     zhUp: '越高越不敢放行，關鍵局更保守。',
-    zhDown: '越低越願意賭；0 = 不用這條。預設 0.3。',
+    zhDown: '越低越願意賭；0 = 不用這條。預設 0.3。（現行百科AI 第 3 局起忠臣、派西的多數票由下面的 goodBayes 門檻決定，這個開關只在少數局面有作用。）',
   },
   {
     key: 'goodTailVote', kind: 'number', side: 'good', min: 0, max: 0.95,
     zh: '第 3 局起忠臣和派西不在隊上時預設投黑，這隊乾淨的機率達到這個門檻才投白。',
     en: 'From round 3, loyals and Percival off the team reject unless the clean chance reaches this.',
     zhUp: '越高越常投黑。',
-    zhDown: '越低越常放行；0 = 不用這條。預設 0.7。',
+    zhDown: '越低越常放行；0 = 不用這條。預設 0.7。（現行百科AI 第 3 局起忠臣、派西的多數票由下面的 goodBayes 門檻決定，這個開關只在少數局面有作用。）',
   },
   // 第 33 回合起忠臣、派西第 3 局起的票（不是隊長、第 1–4 次提議）由「嚴格的貝氏準則」決定（`goodBayesVote`，BlueRound33.ts），
   // 上面三個門檻在這個範圍裡不會用到。下面四個是這條準則自己的門檻（依玩家風格建立的 AI騎士 用來擬合藍方的票；2026-11-26 加）。
