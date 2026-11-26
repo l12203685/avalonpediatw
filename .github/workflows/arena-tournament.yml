@@ -14,7 +14,9 @@ name: AI arena tournament
 #       網站在瀏覽器裡直接讀 main 上的 arena/leaderboard.json。
 # 不會觸發自己：commit 用 GITHUB_TOKEN 推（GitHub 不會因為 GITHUB_TOKEN 的推送再觸發 workflow），
 #       而且只動 arena/，不在下面 push 的 paths 裡。
-# 不會重疊：concurrency 同一組，前一輪跑完才開始下一輪（不取消進行中的）。
+# 不會重疊：每日／手動一組、合併後補跑一組（同一組前一輪跑完才開始下一輪，不取消進行中的；
+#       分兩組是因為 GitHub 同一組只留一個排隊中的，補跑不能把當天的每日大賽擠掉）。
+#       兩組的分片可以同時跑（互不相干），但寫排行榜的 aggregate 全部排同一條隊，一次只有一個在 commit。
 
 on:
   schedule:
@@ -35,7 +37,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: arena-tournament
+  group: arena-tournament-${{ github.event_name == 'push' && 'push' || 'daily' }}
   cancel-in-progress: false
 
 defaults:
@@ -158,6 +160,9 @@ jobs:
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    concurrency:
+      group: arena-aggregate
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
