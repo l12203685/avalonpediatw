@@ -16,10 +16,10 @@
 |---|---|---|---|---|
 | P001 | CSP4SDG: Constraint and Information-Theory Based Role Identification in Social Deduction Games with LLM-Enhanced Inference | `full_text_read` | 已讀 arXiv:2511.06175 全文 15 頁（Table 1–9、Appendix H）；含 AvalonLogs 5–10 人非對話實驗；GitHub `Nortrom1213/CSP4SDG` 無 LICENSE 檔；AAAI 會議頁仍受保護 | Gemini（2026-11-26） |
 | P002 | Bayesian Social Deduction with Graph-Informed Language Models | `full_text_read` | 已讀 ACL 2026 長文 26 頁（Table 1–9）；**p.3 明言排除梅林等特殊角色、採 6 人局（4 好 2 壞）含對話**；不可外推至本站 10 人含湖局 | Gemini（2026-11-26） |
-| P003 | AVCORP: Identifying and Resisting Deception via Communication Theory and Theory of Mind | `abstract_verified` | 已核對 arXiv:2611.10176（2026-11-06）與 GitHub `fardinsaad/_AVCORP_`（MIT）；對話欺騙語料（250 局 5,000 句），全文待讀 | Gemini（2026-11-26） |
+| P003 | AVCORP: Identifying and Resisting Deception via Communication Theory and Theory of Mind | `full_text_read` | 已讀 arXiv:2611.10176 全文 37 頁（Table 1–24、Fig 1–17）；**5 人局（3 好 2 壞，無特殊角色／無湖中）合成 LLM 對話語料**，不可外推至本站 10 人非對話局 | Gemini（2026-11-26） |
 | P004 | Hidden-Role Games: Equilibrium Concepts and Computation | `full_text_read` | 已讀 ACM EC 2024 全文 39 頁（§1–§8、Table 1–3、Appendix E）；僅解 ≤6 人密談局，Theorem E.1 假設紅方互知（不適用奧伯倫／10 人含湖） | Gemini（2026-11-26） |
 | P005 | Finding Friend and Foe in Multi-Agent Games | `full_text_read` | 已讀 NeurIPS 2019 全文 11 頁（Figure 2–4、p.8 ProAvalon 2,189 局人機實測）；僅 5 人局無派西／莫甘娜／莫德雷德／奧伯倫／湖中 | Gemini（2026-11-26） |
-| P006 | Long-Horizon Dialogue Understanding for Role Identification in the Game of Avalon with Large Language Models | `abstract_verified` | 已核對 Findings of EMNLP 2023（DOI `10.18653/v1/2023.findings-emnlp.748`）與 `sstepput/Avalon-NLU`（MIT）；21 局 6 人對話資料集，全文待讀 | Gemini（2026-11-26） |
+| P006 | Long-Horizon Dialogue Understanding for Role Identification in the Game of Avalon with Large Language Models | `full_text_read` | 已讀 Findings of EMNLP 2023 全文 17 頁（Table 2–3, 6–7）；**6 人局 20 場真人對話（2,384 句，無莫德雷德／奧伯倫／湖中）**，與本站 10 人非對話局不同 | Gemini（2026-11-26） |
 | P007 | Balancing Epistemic Value and Social Safety: PACR-Pro for False-Consensus Intervention in One Night Ultimate Werewolf | `abstract_verified` | 已核對 EMNLP 2026（DOI `10.18653/2026.emnlp-main.2587`，pp. 58786–58810）；一夜終極狼人殺對話干預，全文待讀 | Gemini（2026-11-26） |
 | P008 | Do LLMs Trust the Accuser or the Accusation? Measuring Belief Shifts in Werewolf | `abstract_verified` | 已核對 EMNLP 2026（DOI `10.18653/2026.emnlp-main.1628`，pp. 37032–37043）；狼人殺 1,224 則指控訊息信念位移，全文待讀 | Gemini（2026-11-26） |
 | P009 | MARBO: Relational Belief Grounding for LLM Agents in Social Deduction Games | `abstract_verified` | 已核對 EMNLP 2026（DOI `10.18653/2026.emnlp-main.1376`，pp. 31414–31445）；LLM 關係信念錨定，全文待讀 | Gemini（2026-11-26） |
@@ -78,20 +78,20 @@ linked_code: [packages/server/src/ai/belief/BayesBelief.ts]
 ### P003
 ```yaml
 id: P003
-reading_status: abstract_verified
+reading_status: full_text_read
 verified_title: "AVCORP: Identifying and Resisting Deception via Communication Theory and Theory of Mind"
 authors: "Fardin Saad, Zhe Zhang, Sanjana Cheerla, Amanul Haque, Munindar P. Singh"
 published_at: 2026-11-06
 fulltext_url: "https://arxiv.org/pdf/2611.10176.pdf"
 read_at_taipei: 2026-11-26
 read_by: gemini
-pages_or_sections_checked: ["arXiv abstract page (2611.10176)", "GitHub metadata (fardinsaad/_AVCORP_, MIT)"]
-method: "摘要層：提出含 250 局 Avalon、5,000 句標註發言的 AVCORP 語料，將 37 種欺騙戰術映射至 4x4 行為矩陣，結合溝通理論與心智理論（ToM）做欺騙偵測。"
-dataset_and_protocol: "未讀全文；僅核對摘要提及 250 局 5,000 句標註發言與 MIT 授權程式碼。"
-results_with_table_or_page: "未讀全文，不記錄摘要宣稱之數值。"
-limits: "高度依賴文字發言語料；現行百科 AI 不具發言通道，轉移優先序低於非對話推理研究。"
+pages_or_sections_checked: ["p.1-10 (§1-§6, Table 1-2, Fig 1-2)", "p.13-36 (Appendices, Table 3-24, Fig 4-17)"]
+method: "建立 4×4 行為分類矩陣共 37 種欺騙戰術（Table 1, p.4；Table 5, p.19），以六階段管線生成含一階／二階心智理論（β1/β2）與 ReAct/ReCon 推理軌跡之對話語料，並以 SFT＋GRPO 訓練 Qwen3-8B 偵測紅方（Table 16–17, p.31–32）。"
+dataset_and_protocol: "5 人局簡化 Avalon（3 好 2 壞，C(5,2)=10 種組合 × 25 局 = 250 局合成 LLM 對話、1,000 回合，p.5, p.15–18）；另於 25 局保留 AVCORP 局與 20 局 Avalon-NLU（82 回合）測試跨域泛化（Table 2, p.8；Tables 18–24, p.33–36）。"
+results_with_table_or_page: "Table 2（p.8）與 Tables 18–24（p.33–36）報 AVCORP 保留集與 Avalon-NLU 之 Exact／Game-ending F1／Round F1；Table 8–11（p.26–29）報 1,000 條黃金軌跡審查通過率與回合推論準確率；Table 13–15（p.30–31）報人工標註者一致性。"
+limits: "僅 5 人簡化版（無梅林、派西、莫甘娜、莫德雷德、奧伯倫、刺殺、湖中女神），且主資料集為 LLM 合成對話而非真人對局。"
 reproduction_status: not_started
-avalon_transfer_assumptions: "僅供未來若導入語音／文字發言分析時參考，對現行無發言 10 人局 AI 無直接實作路徑。"
+avalon_transfer_assumptions: "不可直接轉移至本站 10 人含湖非對話百科 AI；僅其 37 種欺騙戰術分類與 MIT 授權程式碼（fardinsaad/_AVCORP_）可供未來若開放文字／語音發言分析時參考。"
 linked_wiki_ids: []
 linked_code: []
 ```
@@ -141,20 +141,20 @@ linked_code: [packages/server/src/ai/belief/BayesBelief.ts]
 ### P006
 ```yaml
 id: P006
-reading_status: abstract_verified
+reading_status: full_text_read
 verified_title: "Long-Horizon Dialogue Understanding for Role Identification in the Game of Avalon with Large Language Models"
 authors: "Simon Stepputtis, Joseph Campbell, Yaqi Xie, Zhengyang Qi, Wenxin Zhang, Ruiyi Wang, Sanketh Rangreji, Charles Lewis, Katia Sycara"
 published_at: 2023-12-01
 fulltext_url: "https://aclanthology.org/2023.findings-emnlp.748.pdf"
 read_at_taipei: 2026-11-26
 read_by: gemini
-pages_or_sections_checked: ["ACL Anthology BibTeX & abstract (DOI 10.18653/v1/2023.findings-emnlp.748, pp. 11193-11208)", "GitHub metadata (sstepput/Avalon-NLU, MIT)"]
-method: "摘要層：建構 6 人局 Avalon 長文本多方對話語料（Avalon-NLU，21 局，P001 p.10 亦有引用），評測 LLM 於欺騙與說服對話中之角色辨識能力。"
-dataset_and_protocol: "未讀全文；僅核對出版書目、DOI 與 MIT 授權資料集。"
-results_with_table_or_page: "未讀全文，不記錄數值。"
-limits: "6 人對話為主、樣本僅 21 局，與本站無發言 10 人局不同。"
+pages_or_sections_checked: ["p.1-10 (§1-§6, Fig 3, Table 2-3)", "p.13-17 (Appendices, Table 6-7)"]
+method: "將遊戲狀態（派隊、投票、任務結果）交錯插入長文本多方對話中，以零樣本／少樣本與微調 LLM（GPT-3.5、GPT-4、Llama-2-13b）預測各玩家隱藏角色與刺客指認梅林（§3–§5, p.4–7）。"
+dataset_and_protocol: "公開瀏覽器版 6 人局 Avalon（Merlin、Percival、Morgana、Assassin、2 Servants）之 Avalon-NLU 資料集：20 場真人對局、30 位獨立玩家、2,384 句人工標註說服／欺騙策略對話（p.2）；並與狼人殺對話資料集（Lai et al. 2022）跨遊戲對照（p.9, Table 6–7）。"
+results_with_table_or_page: "Table 2（p.7）報含私密視野下各模型角色預測與紅方找梅林 F1（微調 GPT-3.5 與原版 GPT-4 micro-F1 0.37 領先 Llama-2-13b）；Table 3（p.9）與 Table 6–7（p.16）示 Avalon 角色預測難度高於狼人殺。"
+limits: "僅 6 人局且僅 20 場真人對話（無莫德雷德、奧伯倫、湖中女神）；核心輸入為長文本聊天紀錄而非純票型推理。"
 reproduction_status: not_started
-avalon_transfer_assumptions: "僅供對話 NLU 參考，對現行無發言百科 AI 無直接轉移價值。"
+avalon_transfer_assumptions: "MIT 授權語料（sstepput/Avalon-NLU）與長對話交錯狀態格式僅供未來對話分析參考；對現行 10 人無發言百科 AI 無直接轉移實作。"
 linked_wiki_ids: []
 linked_code: []
 ```
