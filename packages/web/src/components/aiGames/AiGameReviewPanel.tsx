@@ -65,7 +65,7 @@ export default function AiGameReviewPanel({ threadId, trace, discordUrl }: Props
           </div>
         )}
         <p className="text-[11px] text-zinc-400">
-          百科AI 決定 {trace.decisions.length} 個 · 理由和網站「與機器人練習」的賽後回顧是同一套說明
+          AI騎士 決定 {trace.decisions.length} 個 · 理由和網站「與機器人練習」的賽後回顧是同一套說明
           {trace.notes.map((n) => <span key={n} className="block text-amber-300/90">註：{n}</span>)}
         </p>
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-300">
@@ -87,8 +87,8 @@ export default function AiGameReviewPanel({ threadId, trace, discordUrl }: Props
       </div>
 
       <div className="space-y-1.5">
-        <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="依百科AI 座位篩選">
-          <FilterChip active={aiSeat === null} onClick={() => setAiSeat(null)}>全部百科AI</FilterChip>
+        <div className="flex gap-1.5 overflow-x-auto pb-1" aria-label="依AI騎士 座位篩選">
+          <FilterChip active={aiSeat === null} onClick={() => setAiSeat(null)}>全部AI騎士</FilterChip>
           {aiSeats.map((s) => (
             <FilterChip key={s.seat} active={aiSeat === s.seat} onClick={() => setAiSeat(aiSeat === s.seat ? null : s.seat)} team={s.team}>
               {seatText(s.seat)} {s.role}
@@ -137,7 +137,7 @@ function SeatChip({ seat }: { seat: AiGameSeat }): JSX.Element {
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${teamTone(seat.team)} ${seat.ai ? 'ring-2 ring-amber-400' : ''}`}>
       <span className="font-mono font-bold">{seat.seat === 10 ? '0' : seat.seat}</span>
       <span>{seat.role || '?'}</span>
-      {seat.ai && <span className="font-semibold text-amber-300">百科AI</span>}
+      {seat.ai && <span className="font-semibold text-amber-300">AI騎士</span>}
     </span>
   );
 }

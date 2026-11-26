@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, Copy, ExternalLink, Loader2, RefreshCw, Swords, Trophy } from 'lucide-react';
-import { useGameStore } from '../store/gameStore';
+import { Check, Copy, ExternalLink, Loader2, RefreshCw, Swords, Trophy } from 'lucide-react';
 import '../i18n/arena';
 import { ARENA_NS } from '../i18n/arena';
 import {
@@ -17,7 +16,6 @@ import {
 export default function ArenaPage(): JSX.Element {
   const { t, i18n } = useTranslation(ARENA_NS);
   const lang: 'zh' | 'en' = i18n.language?.startsWith('en') ? 'en' : 'zh';
-  const setGameState = useGameStore((s) => s.setGameState);
   const [board, setBoard] = useState<ArenaLeaderboard | null>(null);
   const [status, setStatus] = useState<'loading' | 'ok' | 'failed'>('loading');
   const [copy, setCopy] = useState<'idle' | 'done' | 'failed'>('idle');
@@ -54,13 +52,6 @@ export default function ArenaPage(): JSX.Element {
   return (
     <div className="relative z-10 mx-auto max-w-4xl space-y-4 overflow-x-hidden px-3 py-4 text-white sm:px-4" data-testid="arena-page">
       <header className="space-y-1">
-        <button
-          type="button"
-          onClick={() => { setGameState('aiGames'); window.scrollTo({ top: 0 }); }}
-          className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white"
-        >
-          <ArrowLeft size={14} />{t('back')}
-        </button>
         <h1 className="flex items-center gap-2 text-lg font-bold"><Swords size={20} className="text-rose-300" />{t('title')}</h1>
         <p className="text-xs leading-relaxed text-zinc-300">{t('intro')}</p>
       </header>
