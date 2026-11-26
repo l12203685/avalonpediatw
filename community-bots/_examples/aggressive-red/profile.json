@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "name": "激進派紅方",
+  "author": "avalonpediatw",
+  "style": "示範對手。紅方不藏：第 1、2 局能出失敗就出，票照紅方利益投，第 3、5 局常疊隊友；奧伯倫開局就搶失敗。藍方照AI騎士。",
+  "sides": {
+    "evil": {
+      "redHideHuman": false,
+      "redNormalVote": 0.2,
+      "redStackRate65": 1,
+      "oberonR1AlwaysFail64": 1
+    }
+  }
+}
