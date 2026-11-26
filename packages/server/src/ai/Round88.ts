@@ -24,6 +24,7 @@
  * （第 83 回合的門檻 (a)、(b)），而且在不變量已經登記的例外裡：第 1、2 局非強制（派拇指躲刺，`doomedProposal`），或第 83 回合的範圍
  * （`gatedThumb83Exempt`）。所以 INV-M1／INV-T1 照舊是 0；強制局不帶（位元 16 兩樣都不看，研究用）。分數一樣時照舊（現行的那一支）。
  *
+ * `merlinEvTemp88 = τ`（0 = 取最高）：照 exp((分數 − 最高) / τ) 的比例抽（混合策略，給「紅方重新學過」用）。
  * `merlinEvAssassin88 = λ`（0 = 關）；`merlinEvScope88`（位元，0 = 2）：1 = 第 1、2 局非強制；2 = 第 3、4 局非強制；4 = 強制局；
  * 8 = 第 1、2 局非強制當成第 5 次（ρ = 1）；16 = 帶看得到的紅不看第 83 回合的門檻（研究用）；32 = 只在乾淨的隊之間挑；64 = 用機器人局的校準。
  * 範圍內的第 3、4 局，第 83 回合的有條件拇指變成這裡的一個特例（`ForwardAgent` 不再另外走第 83 回合那一步）。
@@ -54,6 +55,12 @@ const MORDRED_COVER = 0.8;
 const MORDRED_MAX = 2;
 const THUMB_TOP = 3;
 const PERMS: readonly (readonly [number, number, number])[] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+
+function hash01(key: string): number {
+  let h = 0x811c9dc5;
+  for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 0x01000193) >>> 0;
+  return (h % 100000) / 100000;
+}
 
 const logit = (p: number): number => Math.log(Math.max(p, 1e-9) / Math.max(1 - p, 1e-9));
 const sigmoid = (x: number): number => 1 / (1 + Math.exp(-x));
@@ -274,6 +281,15 @@ export function ev88Team(
   scored.forEach((c, i) => {
     if (c.score > bestScore + 1e-12) { bestScore = c.score; best = i; }
   });
+  // `merlinEvTemp88 = τ` > 0：照 exp((分數 − 最高) / τ) 的比例抽一支（混合策略；亂數照座位、局、第幾次提議、紀錄長度雜湊）。
+  const tau = tuning.merlinEvTemp88 ?? 0;
+  if (tau > 0) {
+    const ws = scored.map((c) => Math.exp((c.score - bestScore) / tau));
+    const tot = ws.reduce((x, y) => x + y, 0);
+    let u = hash01(`${me}|${obs.currentRound ?? 1}|${obs.failCount ?? 0}|${obs.voteHistory.length}|ev88`) * tot;
+    best = ws.length - 1;
+    for (let i = 0; i < ws.length; i++) { u -= ws[i]; if (u < 0) { best = i; break; } }
+  }
   if (trace) trace.push(...scored);
   if (best <= 0) return cur;
   const pick = scored[best];

@@ -16,7 +16,7 @@ import { merlinPublicScoring } from './MerlinLoyalStyle';
 import { buildReplayObservation, seatId } from './benchmark/replayObservation';
 import type { ReplayGame, ReplayProposal } from './benchmark/sheetsReplay';
 
-const KEYS = ['merlinEvAssassin88', 'merlinEvScope88'] as const;
+const KEYS = ['merlinEvAssassin88', 'merlinEvScope88', 'merlinEvTemp88'] as const;
 const T = (over: Partial<AgentTuning> = {}): AgentTuning => ({ ...DEFAULT_AGENT_TUNING, ...over });
 const obsAt = (round: number, failCount: number, extra: Partial<PlayerObservation> = {}): PlayerObservation =>
   ({ myRole: 'merlin', myPlayerId: 'p1', gamePhase: 'team_select', currentRound: round, failCount, knownEvils: ['p2', 'p3', 'p4'], voteHistory: [], questResults: [], playerCount: 10, ...extra } as unknown as PlayerObservation);
@@ -32,6 +32,7 @@ describe('round 88 flags', () => {
     expect(parseTuningFlag('merlinEvAssassin88')).toEqual({ merlinEvAssassin88: 1 });
     expect(parseTuningFlag('merlinEvAssassin88=0.5')).toEqual({ merlinEvAssassin88: 0.5 });
     expect(parseTuningFlag('merlinEvScope88=11')).toEqual({ merlinEvScope88: 11 });
+    expect(parseTuningFlag('merlinEvTemp88=0.2')).toEqual({ merlinEvTemp88: 0.2 });
     expect(() => parseTuningFlag('merlinEvAssassin88=11')).toThrow();
     expect(() => parseTuningFlag('merlinEvScope88=128')).toThrow();
     expect(describeAgentTuning(T({ merlinEvAssassin88: 1, merlinEvScope88: 3 }))).toContain('merlinEvAssassin88=1');
@@ -163,6 +164,11 @@ describe('merlinExposure88 / worldLines75LeaderProbe / ev88Team', () => {
     ev88Team(T({ merlinEvAssassin88: 1, merlinEvScope88: 2 | 16, merlinGatedThumbA83: 1, merlinGatedThumbB83: 1 }), obsL, cur, () => true, () => true, [], traceUngated);
     expect(traceUngated.some((c) => c.thumbs === 1)).toBe(true);
     expect(ev88Team(T({ merlinEvAssassin88: 0, ...OPEN }), obsL, cur, () => true, () => true, [])).toBe(cur);
+    // τ > 0: a sampled candidate (deterministic for the same observation), always one of the scored teams
+    const traceT: Ev88Cand[] = [];
+    const tt = ev88Team(T({ merlinEvAssassin88: 1, merlinEvTemp88: 1, ...OPEN }), obsL, cur, () => true, () => true, [], traceT);
+    expect(traceT.some((c) => [...c.team].sort().join() === [...tt].sort().join())).toBe(true);
+    expect(ev88Team(T({ merlinEvAssassin88: 1, merlinEvTemp88: 1, ...OPEN }), obsL, cur, () => true, () => true, [])).toEqual(tt);
     // the barred seats and Merlin's own gates bind the clean candidates
     const traceBar: Ev88Cand[] = [];
     ev88Team(T({ merlinEvAssassin88: 1 }), obs, cur, (team) => !team.includes(seatId(3)), () => true, [seatId(9)], traceBar);
