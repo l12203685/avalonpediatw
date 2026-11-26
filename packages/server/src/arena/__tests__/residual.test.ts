@@ -6,8 +6,8 @@ import {
   ResidualPolicy, SEAT_FEATURES, TEAM_FEATURES, VOTE_FEATURES, combinations, rankTeamsFrom, seatFeatures, teamCandidatesFrom,
   validateResidual, voteFeatures, type ResidualWeights,
 } from '../residual';
-import { fitChoice, fitLogistic, prf, selfConsistency, solve, toWeights, fromWeights } from '../residualFit';
-import { abnormalKind, firstSwitch, seatClass, teamSignature, trustEvidence, trustPath, type TeamRec } from '../fidelityMetrics';
+import { fitChoice, fitLogistic, prf, solve, toWeights, fromWeights } from '../residualFit';
+import { abnormalKind, firstSwitch, trustEvidence, trustPath } from '../fidelityMetrics';
 import { validateProfile, type BotProfile } from '../profile';
 import { formatKnightProfile } from '../styleKnights';
 import { playTable, quietly, type Entrant } from '../table';
@@ -147,16 +147,11 @@ describe('residual fitting', () => {
     expect(fromWeights(['a', 'b', 'c'], w)).toEqual([1.235, 0, -0.5]);
   });
 
-  it('precision / recall / F1 and leave-one-out self-consistency', () => {
+  it('precision / recall / F1', () => {
     const p = prf([[true, true], [true, false], [false, true], [false, false]]);
     expect(p.precision).toBe(0.5);
     expect(p.recall).toBe(0.5);
     expect(p.f1).toBe(0.5);
-    // 同一個簽名：a a a b → 留一後猜 a：三個 a 猜中、b 猜錯；只有一次的簽名不算。
-    const s = selfConsistency([
-      { sig: 'x', choice: 'a' }, { sig: 'x', choice: 'a' }, { sig: 'x', choice: 'a' }, { sig: 'x', choice: 'b' }, { sig: 'y', choice: 'z' },
-    ]);
-    expect(s).toEqual({ n: 4, hit: 3 });
   });
 });
 
@@ -176,16 +171,6 @@ describe('fidelity metrics', () => {
     expect(path).toEqual([1, 1, -1, -1, -1]);
     expect(firstSwitch(path)).toBe(3);
     expect(firstSwitch([0, 1, 1, 0, 1])).toBe(0);
-  });
-
-  it('team signature counts interchangeable teams', () => {
-    const blank = new Array<number>(SEAT_FEATURES.length).fill(0);
-    const S = IDS.map((_, i) => { const r = [...blank]; if (i === 0) r[SEAT_FEATURES.indexOf('self')] = 1; return r; });
-    const rec: TeamRec = { t: 'T', j: 0, p: 0, r: 2, a: 1, rf: 0, h: [1, 2, 3, 4], d: [], k: [], S, sz: 4, pp: [], lm: [] };
-    const s = teamSignature(rec, 'loyal');
-    // 自己 + 九個一樣的座位裡挑三個：C(9,3) = 84 種一樣的隊。
-    expect(s.ties).toBe(84);
-    expect(seatClass(S[0], 2)).not.toBe(seatClass(S[1], 2));
   });
 });
 

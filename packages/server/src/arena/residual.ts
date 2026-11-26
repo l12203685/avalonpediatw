@@ -31,6 +31,12 @@ export const SEAT_FEATURES = [
   'self', 'eng', 'pRed', 'knownRed', 'thumb', 'failOn', 'succOn', 'lastProp', 'lastMission',
   'lakeGood', 'lakeBad', 'myLakeGood', 'myLakeBad', 'adjacent', 'dist', 'approvedFailed', 'ledFailed',
   'propRound', 'approvedLast', 'ledRound',
+  // 完整紀錄讀出來的證據（站長 11/26：「每個 spot 都不同」——同一個局面要照他自己讀紀錄的方式讀）。
+  'failExp', 'failOnLast', 'fail2', 'succAll', 'rejSucc', 'appMine', 'rejMine', 'inclMe', 'exclSelf',
+  'lakeHolder', 'lakeAccuser', 'votedLikeMe', 'appRate', 'appDirty',
+  // 和局面的交互作用：第 1 局、第 3 局起、強制局（第 5 次提議）。
+  'self_R1', 'self_R3', 'self_forced', 'lastProp_R1', 'lastProp_forced', 'propRound_R1', 'eng_R1', 'pRed_R3',
+  'dist_R1', 'adjacent_R1', 'approvedLast_R1', 'failExp_R3',
 ] as const;
 /** 整隊多加的特徵。 */
 export const TEAM_EXTRA_FEATURES = ['exactEng', 'exactPrevProp', 'exactLastMission'] as const;
@@ -39,6 +45,8 @@ export const VOTE_FEATURES = [
   'bias', 'eng', 'leader', 'attempt', 'preForced', 'round3', 'redFails', 'blueWins', 'cleanLogit',
   'teamKnownRed', 'teamThumb', 'teamFailOn', 'teamSuccOn', 'teamLastMission', 'exactLastMission', 'exactPrevProp',
   'teamLakeBad', 'teamLakeGood', 'teamPRedMax', 'leaderPRed', 'leaderKnownRed', 'matchPoint',
+  'teamFailExp', 'teamFailOnLast', 'teamRejSucc', 'teamLikeMe', 'teamAppDirty', 'teamLakeHolder', 'leaderLikeMe', 'leaderInclMe',
+  'leaderLedFailed', 'leaderExclSelf', 'iApprovedLast', 'sameAsMyLast', 'outsideFailExp', 'cleanLogit_R3', 'eng_preForced',
 ] as const;
 export const QUEST_FEATURES = [
   'bias', 'eng', 'round', 'teamKnownRed', 'solo', 'teamSize', 'failsNeeded', 'redFails', 'blueWins',
@@ -165,6 +173,30 @@ export interface History {
   approvedLast: Set<string>;
   /** 這一局已經當過隊長的座位。 */
   ledRound: Set<string>;
+  /** Σ（失敗張數 ÷ 隊伍人數），這個座位上過的失敗任務。 */
+  failExp: Map<string, number>;
+  failOnLast: Set<string>;
+  fail2: Set<string>;
+  succAll: Set<string>;
+  /** 投反對、結果那隊出去成功了的次數。 */
+  rejSucc: Map<string, number>;
+  /** 我最近一次提議：誰贊成、誰反對。 */
+  appMine: Set<string>;
+  rejMine: Set<string>;
+  /** 這個座位的提議帶我的次數；有沒有派過不含自己的隊。 */
+  inclMe: Map<string, number>;
+  exclSelf: Set<string>;
+  lakeHolder: Set<string>;
+  /** 持湖宣告別人是紅的人。 */
+  lakeAccuser: Set<string>;
+  /** 和我投一樣票的比例（我投過的票裡）。 */
+  likeMe: Map<string, number>;
+  /** 贊成率。 */
+  appRate: Map<string, number>;
+  /** 贊成過「帶了失敗任務隊員」的隊的次數。 */
+  appDirty: Map<string, number>;
+  /** 我上一次投票的隊與票。 */
+  myLast?: { team: readonly string[]; approve: boolean };
 }
 
 export function history(obs: PlayerObservation): History {
@@ -205,9 +237,68 @@ export function history(obs: PlayerObservation): History {
   }
   const last = votes.length ? votes[votes.length - 1] : undefined;
   const approvedLast = new Set(Object.entries(last?.votes ?? {}).filter(([, yes]) => yes).map(([id]) => id));
+  const failExp = new Map<string, number>();
+  const fail2 = new Set<string>();
+  const failQuests = obs.questHistory.filter((q) => q.result === 'fail');
+  for (const q of failQuests) {
+    for (const id of q.team) failExp.set(id, (failExp.get(id) ?? 0) + (q.failCount || 1) / Math.max(1, q.team.length));
+    if (q.failCount >= 2) for (const id of q.team) fail2.add(id);
+  }
+  const failOnLast = new Set(failQuests.length ? failQuests[failQuests.length - 1].team : []);
+  const succQuests = obs.questHistory.filter((q) => q.result === 'success');
+  const succAll = new Set(succQuests.length ? obs.allPlayerIds.filter((id) => succQuests.every((q) => q.team.includes(id))) : []);
+  // 每一次提議：有沒有出任務、結果（出任務 = 那一局通過、和任務隊一樣的那一次）。
+  const outcomeOf = (v: (typeof votes)[number]): 'fail' | 'success' | null => {
+    if (!v.approved) return null;
+    const q = obs.questHistory.find((x) => x.round === v.round && sameSet(x.team, v.team));
+    return q ? q.result : null;
+  };
+  const rejSucc = new Map<string, number>();
+  const inclMe = new Map<string, number>();
+  const exclSelf = new Set<string>();
+  const likeMe = new Map<string, number>();
+  const likeN = new Map<string, number>();
+  const appRate = new Map<string, number>();
+  const voteN = new Map<string, number>();
+  const appDirty = new Map<string, number>();
+  const me = obs.myPlayerId;
+  let myLast: History['myLast'];
+  let mineLast: (typeof votes)[number] | undefined;
+  for (const v of votes) {
+    const out = outcomeOf(v);
+    const failedBefore = new Set(obs.questHistory.filter((q) => q.result === 'fail' && q.round < v.round).flatMap((q) => q.team));
+    const dirty = v.team.some((id) => id !== v.leader && failedBefore.has(id));
+    const myVote = v.votes?.[me];
+    for (const [id, yes] of Object.entries(v.votes ?? {})) {
+      voteN.set(id, (voteN.get(id) ?? 0) + 1);
+      if (yes) appRate.set(id, (appRate.get(id) ?? 0) + 1);
+      if (!yes && out === 'success') rejSucc.set(id, (rejSucc.get(id) ?? 0) + 1);
+      if (yes && dirty) appDirty.set(id, (appDirty.get(id) ?? 0) + 1);
+      if (myVote !== undefined && id !== me) {
+        likeN.set(id, (likeN.get(id) ?? 0) + 1);
+        if (yes === myVote) likeMe.set(id, (likeMe.get(id) ?? 0) + 1);
+      }
+    }
+    if (v.leader !== me && v.team.includes(me)) inclMe.set(v.leader, (inclMe.get(v.leader) ?? 0) + 1);
+    if (!v.team.includes(v.leader)) exclSelf.add(v.leader);
+    if (v.leader === me) mineLast = v;
+    if (myVote !== undefined) myLast = { team: v.team, approve: myVote };
+  }
+  for (const [id, n] of voteN) appRate.set(id, (appRate.get(id) ?? 0) / n);
+  for (const [id, n] of likeN) likeMe.set(id, (likeMe.get(id) ?? 0) / n);
+  const appMine = new Set<string>();
+  const rejMine = new Set<string>();
+  for (const [id, yes] of Object.entries(mineLast?.votes ?? {})) if (id !== me) (yes ? appMine : rejMine).add(id);
+  const lakeHolder = new Set<string>();
+  const lakeAccuser = new Set<string>();
+  for (const l of obs.lakeHistory ?? []) {
+    lakeHolder.add(l.holderId);
+    if (l.declaredClaim === 'evil') lakeAccuser.add(l.holderId);
+  }
   return {
     failOn, succOn, lastProp, lastMission: lastQuest?.team ?? [], lakeGood, lakeBad, myLakeGood, myLakeBad, approvedFailed, ledFailed,
     propRound, approvedLast, ledRound,
+    failExp, failOnLast, fail2, succAll, rejSucc, appMine, rejMine, inclMe, exclSelf, lakeHolder, lakeAccuser, likeMe, appRate, appDirty, myLast,
   };
 }
 
@@ -222,7 +313,7 @@ export function seatFeatures(obs: PlayerObservation, engine: readonly string[], 
   const eng = new Set(engine);
   return ids.map((id, i) => {
     const d = (i - me + n) % n;
-    return [
+    const base = [
       id === obs.myPlayerId ? 1 : 0,
       eng.has(id) ? 1 : 0,
       pRed.get(id) ?? 0.5,
@@ -243,6 +334,31 @@ export function seatFeatures(obs: PlayerObservation, engine: readonly string[], 
       Math.min(4, h.propRound.get(id) ?? 0) / 4,
       h.approvedLast.has(id) ? 1 : 0,
       h.ledRound.has(id) ? 1 : 0,
+    ];
+    const self = base[0];
+    const r1 = obs.currentRound === 1 ? 1 : 0;
+    const r3 = obs.currentRound >= 3 ? 1 : 0;
+    const forced = (obs.failCount ?? 0) >= 4 ? 1 : 0;
+    const fe = Math.min(2, h.failExp.get(id) ?? 0);
+    return [
+      ...base,
+      fe,
+      h.failOnLast.has(id) ? 1 : 0,
+      h.fail2.has(id) ? 1 : 0,
+      h.succAll.has(id) ? 1 : 0,
+      Math.min(2, h.rejSucc.get(id) ?? 0) / 2,
+      h.appMine.has(id) ? 1 : 0,
+      h.rejMine.has(id) ? 1 : 0,
+      Math.min(2, h.inclMe.get(id) ?? 0) / 2,
+      h.exclSelf.has(id) ? 1 : 0,
+      h.lakeHolder.has(id) ? 1 : 0,
+      h.lakeAccuser.has(id) ? 1 : 0,
+      id === obs.myPlayerId ? 1 : h.likeMe.get(id) ?? 0.5,
+      h.appRate.get(id) ?? 0.5,
+      Math.min(2, h.appDirty.get(id) ?? 0) / 2,
+      self * r1, self * r3, self * forced,
+      base[7] * r1, base[7] * forced, base[17] * r1, base[1] * r1, base[2] * r3,
+      base[14] * r1, base[13] * r1, base[18] * r1, fe * r3,
     ];
   });
 }
@@ -323,6 +439,21 @@ export function voteFeatures(obs: PlayerObservation, engineVote: boolean, tuning
     leader === me ? 0 : pRed.get(leader) ?? 0.5,
     leader !== me && obs.knownEvils.includes(leader) ? 1 : 0,
     fails(obs) >= 2 || wins(obs) >= 2 ? 1 : 0,
+    sum((id) => Math.min(2, h.failExp.get(id) ?? 0)),
+    sum((id) => (h.failOnLast.has(id) ? 1 : 0)),
+    sum((id) => Math.min(2, h.rejSucc.get(id) ?? 0) / 2),
+    others.length ? sum((id) => h.likeMe.get(id) ?? 0.5) / others.length : 0.5,
+    sum((id) => Math.min(2, h.appDirty.get(id) ?? 0) / 2),
+    sum((id) => (h.lakeHolder.has(id) ? 1 : 0)),
+    leader === me ? 1 : h.likeMe.get(leader) ?? 0.5,
+    leader === me ? 0 : Math.min(2, h.inclMe.get(leader) ?? 0) / 2,
+    leader === me ? 0 : Math.min(2, h.ledFailed.get(leader) ?? 0),
+    team.includes(leader) ? 0 : 1,
+    h.myLast?.approve ? 1 : 0,
+    h.myLast && sameSet(h.myLast.team, team) ? (h.myLast.approve ? 1 : -1) : 0,
+    obs.allPlayerIds.filter((id) => id !== me && !team.includes(id)).reduce((s, id) => s + Math.min(2, h.failExp.get(id) ?? 0), 0),
+    obs.currentRound >= 3 ? clampLogit(clean) : 0,
+    attempt === 4 ? (engineVote ? 1 : -1) : 0,
   ];
 }
 

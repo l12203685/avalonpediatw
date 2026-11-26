@@ -188,34 +188,3 @@ export function prf(pairs: ReadonlyArray<readonly [boolean, boolean]>): { tp: nu
   const f1 = precision !== null && recall !== null && precision + recall > 0 ? (2 * precision * recall) / (precision + recall) : null;
   return { tp, fp, fn, precision, recall, f1 };
 }
-
-/**
- * 自我一致度（天花板的估計）：同一個「局面簽名」裡，留一個出來、用其他次最常見的選擇去猜它，猜中的比例。
- * `ties` = 同一個簽名裡和那個選擇分不開的完全選擇有幾個（例如兩個座位特徵一樣：猜中類別也只有 1/ties 機會猜中確切的隊）。
- * 只有一次的簽名不算（沒有東西可以比）。
- */
-export function selfConsistency(items: ReadonlyArray<{ sig: string; choice: string; ties?: number }>): { n: number; hit: number } {
-  const bySig = new Map<string, Map<string, number>>();
-  for (const it of items) {
-    let m = bySig.get(it.sig);
-    if (!m) { m = new Map(); bySig.set(it.sig, m); }
-    m.set(it.choice, (m.get(it.choice) ?? 0) + 1);
-  }
-  let n = 0;
-  let hit = 0;
-  for (const it of items) {
-    const m = bySig.get(it.sig)!;
-    const total = [...m.values()].reduce((a, b) => a + b, 0);
-    if (total < 2) continue;
-    // 留一：自己的選擇少算一次。
-    let best = -1;
-    const winners: string[] = [];
-    for (const [c, k0] of m) {
-      const k = c === it.choice ? k0 - 1 : k0;
-      if (k > best) { best = k; winners.length = 0; winners.push(c); } else if (k === best) winners.push(c);
-    }
-    n += 1;
-    if (winners.includes(it.choice)) hit += 1 / winners.length / Math.max(1, it.ties ?? 1);
-  }
-  return { n, hit };
-}

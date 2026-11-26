@@ -4,7 +4,7 @@
  * 座位一律用 1..n（幾家）；`S`／`X` 的欄位照 `residual.ts` 的特徵清單。
  */
 import { SEAT_FEATURES, VOTE_FEATURES, QUEST_FEATURES, teamGroupOf } from './residual';
-import { prf, selfConsistency } from './residualFit';
+import { prf } from './residualFit';
 
 /** 一個座位（一位玩家坐過的一局的一個位置）。 */
 export interface FidJob {
@@ -78,23 +78,22 @@ export const COLS: readonly Col[] = ['D', 'K', 'V2'];
 /** 一致的個數（n 個決策點裡）。 */
 export interface Rate { n: number; D: number; K: number; V2: number }
 export interface Prf { tp: number; fp: number; fn: number; precision: number | null; recall: number | null; f1: number | null }
-export interface Ceiling { n: number; hit: number }
+export interface Count { n: number; hit: number }
 export interface RateCmp { n: number; human: number; D: number; K: number; V2: number }
 
 export interface PlayerEval {
   overall: Rate;
-  quest: Rate & { byRound: Record<string, Rate>; bySeen: Record<string, Rate>; byFails: Record<string, Rate>; ceiling: Ceiling };
-  team: { top1: Rate; top3V2: number; byRound: Record<string, Rate>; histOverlap: Rate; top1InHistTop3: Rate; histN: number; ceiling: Ceiling };
+  quest: Rate & { byRound: Record<string, Rate>; bySeen: Record<string, Rate>; byFails: Record<string, Rate> };
+  team: { top1: Rate; top3V2: number; byRound: Record<string, Rate> };
   vote: Rate & {
     abnormal: Record<'red' | 'blue', { humanAbn: number; spots: number } & Record<Col, Prf>>;
     byKind: Record<string, Rate>;
-    ceiling: Ceiling;
   };
-  lakeTarget: Rate & { top3V2: number; bySide: Record<string, Rate>; ceiling: Ceiling };
-  lakeClaim: Rate & { ceiling: Ceiling };
+  lakeTarget: Rate & { top3V2: number; bySide: Record<string, Rate> };
+  lakeClaim: Rate;
   assassin: Rate;
-  percival: { games: number; round: Rate; game: Rate; switched: Rate; humanTrustsMerlin: Ceiling };
-  merlin: { metrics: Record<string, RateCmp>; agree: Record<string, Rate>; assassinHitOnHim: Ceiling };
+  percival: { games: number; round: Rate; game: Rate; switched: Rate; humanTrustsMerlin: Count };
+  merlin: { metrics: Record<string, RateCmp>; agree: Record<string, Rate>; assassinHitOnHim: Count };
 }
 
 const emptyRate = (): Rate => ({ n: 0, D: 0, K: 0, V2: 0 });
@@ -105,49 +104,6 @@ const SI = (name: typeof SEAT_FEATURES[number]): number => SEAT_FEATURES.indexOf
 const VI = (name: typeof VOTE_FEATURES[number]): number => VOTE_FEATURES.indexOf(name);
 const QI = (name: typeof QUEST_FEATURES[number]): number => QUEST_FEATURES.indexOf(name);
 const sideOf = (role: string): 'good' | 'evil' => (['merlin', 'percival', 'loyal'].includes(role) ? 'good' : 'evil');
-
-/** 座位的「類別」（天花板、歷史分布用）：自己、看得到的紅、拇指、任務紀錄、上一隊、湖；第 1 局再加座位距離。 */
-export function seatClass(row: readonly number[], round: number): string {
-  const v = [
-    row[SI('self')], row[SI('knownRed')], row[SI('thumb')], row[SI('failOn')], Math.min(1, row[SI('succOn')]),
-    row[SI('lastProp')], row[SI('lastMission')], row[SI('lakeGood')], row[SI('lakeBad')], row[SI('myLakeGood')], row[SI('myLakeBad')],
-    round === 1 ? Math.round(row[SI('dist')] * 9) : 0,
-  ];
-  return v.join('');
-}
-
-function choose(n: number, k: number): number {
-  let r = 1;
-  for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i;
-  return r;
-}
-
-/** 派隊的局面簽名、選擇（隊員類別的多重集合）、同類可互換的隊數。 */
-export function teamSignature(r: TeamRec, group: string, team: readonly number[] = r.h): { sig: string; choice: string; ties: number } {
-  const cls = r.S.map((row) => seatClass(row, r.r));
-  const avail = new Map<string, number>();
-  for (const c of cls) avail.set(c, (avail.get(c) ?? 0) + 1);
-  const picked = new Map<string, number>();
-  for (const s of team) { const c = cls[s - 1]; picked.set(c, (picked.get(c) ?? 0) + 1); }
-  let ties = 1;
-  for (const [c, k] of picked) ties *= choose(avail.get(c) ?? k, k);
-  const sig = `${group}|R${r.r}|A${r.a}|${[...avail.entries()].sort().map(([c, k]) => `${c}x${k}`).join(';')}`;
-  const choice = [...picked.entries()].sort().map(([c, k]) => `${c}x${k}`).join(';');
-  return { sig, choice, ties };
-}
-
-function voteSignature(r: VoteRec, group: string): string {
-  const x = r.x;
-  const clean = x[VI('cleanLogit')];
-  const cb = clean < -1 ? 'd' : clean > 1 ? 'c' : 'm';
-  return [group, r.on, r.ld, r.r, r.a, x[VI('redFails')], x[VI('blueWins')], x[VI('teamKnownRed')], x[VI('teamThumb')], x[VI('teamFailOn')],
-    Math.round(x[VI('teamSuccOn')] * 2), x[VI('exactLastMission')], x[VI('exactPrevProp')], x[VI('teamLakeBad')], x[VI('teamLakeGood')], cb].join('|');
-}
-
-function questSignature(r: QuestRec): string {
-  const x = r.x;
-  return [x[QI('assassin')], x[QI('morgana')], x[QI('mordred')], x[QI('oberon')], r.r, r.seen, r.rf, x[QI('blueWins')]].join('|');
-}
 
 /** 異常票（內黑 = 在隊上投反對；外白 = 不在隊上投贊成；隊長算在隊上）。 */
 export function abnormalKind(onTeam: boolean, leader: boolean, approve: boolean): '內黑' | '外白' | null {
@@ -194,51 +150,24 @@ export function evaluatePlayer(inp: EvalInput): PlayerEval {
   const { records, meta, roleOf, isTest, v2 } = inp;
   const ev: PlayerEval = {
     overall: emptyRate(),
-    quest: { ...emptyRate(), byRound: {}, bySeen: {}, byFails: {}, ceiling: { n: 0, hit: 0 } },
-    team: { top1: emptyRate(), top3V2: 0, byRound: {}, histOverlap: emptyRate(), top1InHistTop3: emptyRate(), histN: 0, ceiling: { n: 0, hit: 0 } },
+    quest: { ...emptyRate(), byRound: {}, bySeen: {}, byFails: {} },
+    team: { top1: emptyRate(), top3V2: 0, byRound: {} },
     vote: {
       ...emptyRate(),
       abnormal: {
         red: { humanAbn: 0, spots: 0, D: prf([]), K: prf([]), V2: prf([]) },
         blue: { humanAbn: 0, spots: 0, D: prf([]), K: prf([]), V2: prf([]) },
       },
-      byKind: {}, ceiling: { n: 0, hit: 0 },
+      byKind: {},
     },
-    lakeTarget: { ...emptyRate(), top3V2: 0, bySide: {}, ceiling: { n: 0, hit: 0 } },
-    lakeClaim: { ...emptyRate(), ceiling: { n: 0, hit: 0 } },
+    lakeTarget: { ...emptyRate(), top3V2: 0, bySide: {} },
+    lakeClaim: emptyRate(),
     assassin: emptyRate(),
     percival: { games: 0, round: emptyRate(), game: emptyRate(), switched: emptyRate(), humanTrustsMerlin: { n: 0, hit: 0 } },
     merlin: { metrics: {}, agree: {}, assassinHitOnHim: { n: 0, hit: 0 } },
   };
   const groupOf = (j: number): string => teamGroupOf(roleOf(j), sideOf(roleOf(j)));
 
-  // 天花板（全部決策點，留一）與派隊的歷史分布。
-  const teamItems: Array<{ sig: string; choice: string; ties: number }> = [];
-  const teamHist = new Map<string, Map<string, number>>();
-  const voteItems: Array<{ sig: string; choice: string }> = [];
-  const questItems: Array<{ sig: string; choice: string }> = [];
-  const lakeItems: Array<{ sig: string; choice: string; ties: number }> = [];
-  const claimItems: Array<{ sig: string; choice: string }> = [];
-  for (const r of records) {
-    if (r.t === 'T') {
-      const s = teamSignature(r, groupOf(r.j));
-      teamItems.push(s);
-      let m = teamHist.get(s.sig);
-      if (!m) { m = new Map(); teamHist.set(s.sig, m); }
-      m.set(s.choice, (m.get(s.choice) ?? 0) + 1);
-    } else if (r.t === 'V') voteItems.push({ sig: voteSignature(r, groupOf(r.j)), choice: String(r.h) });
-    else if (r.t === 'Q' && r.rf < 2) questItems.push({ sig: questSignature(r), choice: String(r.h) });
-    else if (r.t === 'L') {
-      const cls = r.X.map((row) => seatClass(row, 0));
-      const mine = cls[r.c.indexOf(r.h)];
-      lakeItems.push({ sig: `${sideOf(roleOf(r.j))}|R${r.r}|${[...cls].sort().join(';')}`, choice: mine, ties: cls.filter((c) => c === mine).length });
-    } else if (r.t === 'C' && sideOf(roleOf(r.j)) === 'evil') claimItems.push({ sig: `${r.te}|${r.ally}|${r.r}|${r.rf}`, choice: String(r.h) });
-  }
-  ev.team.ceiling = selfConsistency(teamItems);
-  ev.vote.ceiling = selfConsistency(voteItems);
-  ev.quest.ceiling = selfConsistency(questItems);
-  ev.lakeTarget.ceiling = selfConsistency(lakeItems);
-  ev.lakeClaim.ceiling = selfConsistency(claimItems);
 
   const abnPairs: Record<'red' | 'blue', Record<Col, Array<readonly [boolean, boolean]>>> = {
     red: { D: [], K: [], V2: [] }, blue: { D: [], K: [], V2: [] },
@@ -264,23 +193,6 @@ export function evaluatePlayer(inp: EvalInput): PlayerEval {
         addRate(ev.overall, d, k, vv);
         addRate(bucket(ev.team.byRound, r.r === 1 ? `R1A${Math.min(r.a, 5)}` : `R${r.r}`), d, k, vv);
         if (top.some((t) => eqSeats(t, r.h))) ev.team.top3V2++;
-        // 歷史分布（同一個簽名、玩家自己其他次的選擇；留一）。
-        const g = groupOf(r.j);
-        const hs = teamSignature(r, g);
-        const hist = new Map(teamHist.get(hs.sig) ?? []);
-        hist.set(hs.choice, (hist.get(hs.choice) ?? 0) - 1);
-        const others = [...hist.entries()].filter(([, c]) => c > 0).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]));
-        if (others.reduce((s, [, c]) => s + c, 0) >= 2) {
-          ev.team.histN++;
-          const top3 = new Set(others.slice(0, 3).map(([c]) => c));
-          const ch = (team: readonly number[]): string => teamSignature(r, g, team).choice;
-          const over = (cs: string[]): number => [...new Set(cs)].filter((c) => top3.has(c)).length / top3.size;
-          ev.team.histOverlap.n++;
-          ev.team.histOverlap.D += over([ch(r.d)]);
-          ev.team.histOverlap.K += over([ch(r.k)]);
-          ev.team.histOverlap.V2 += over(top.map(ch));
-          addRate(ev.team.top1InHistTop3, top3.has(ch(r.d)), top3.has(ch(r.k)), top3.has(ch(v)));
-        }
         if (role === 'merlin') {
           const self = r.S.findIndex((row) => row[SI('self')] === 1) + 1;
           const vis = (t: readonly number[]): boolean => t.some((s) => r.S[s - 1][SI('knownRed')] === 1);
@@ -408,31 +320,29 @@ export function evaluatePlayer(inp: EvalInput): PlayerEval {
 const pct = (x: number, n: number): string => (n ? `${((100 * x) / n).toFixed(1)}%` : '—');
 const f1s = (p: Prf): string => (p.f1 === null ? '—' : p.f1.toFixed(2));
 
-function rateRow(label: string, r: Rate, extra = '', ceiling?: Ceiling): string {
-  return `| ${label} | ${r.n} | ${pct(r.D, r.n)} | ${pct(r.K, r.n)} | ${pct(r.V2, r.n)} | ${extra} | ${ceiling ? `${pct(ceiling.hit, ceiling.n)}（${ceiling.n}）` : ''} |`;
+function rateRow(label: string, r: Rate, extra = ''): string {
+  return `| ${label} | ${r.n} | ${pct(r.D, r.n)} | ${pct(r.K, r.n)} | ${pct(r.V2, r.n)} | ${extra} |`;
 }
 
 /** 一位玩家的各動作表（Markdown；私人報表、早報用）。 */
 export function formatPlayerTable(name: string, e: PlayerEval, splitLabel: string): string {
   const out: string[] = [];
-  out.push(`#### ${name}（${splitLabel}）`, '', '| 動作 | 測試決策點 | 百科AI | v1 | v2 | v2 前三名／附註 | 自我一致度（天花板，簽名內留一；可比的決策點數） |', '|---|---|---|---|---|---|---|');
+  out.push(`#### ${name}（${splitLabel}）`, '', '| 動作 | 測試決策點 | 百科AI | v1 | v2 | v2 前三名／附註 |', '|---|---|---|---|---|---|');
   out.push(rateRow('全部（各動作合計）', e.overall));
-  out.push(rateRow('1 任務牌（紅方，可確定的）', e.quest, '', e.quest.ceiling));
+  out.push(rateRow('1 任務牌（紅方，可確定的）', e.quest, ''));
   for (const [k, r] of Object.entries(e.quest.byRound).sort()) out.push(rateRow(`└ 任務牌 ${k}`, r));
   for (const [k, r] of Object.entries(e.quest.bySeen).sort()) out.push(rateRow(`└ 任務牌 ${k}`, r));
   for (const [k, r] of Object.entries(e.quest.byFails).sort()) out.push(rateRow(`└ 任務牌 ${k}`, r));
-  out.push(rateRow('2 派隊（完全一樣才算）', e.team.top1, `前三名命中 ${pct(e.team.top3V2, e.team.top1.n)}`, e.team.ceiling));
+  out.push(rateRow('2 派隊（完全一樣才算）', e.team.top1, `前三名命中 ${pct(e.team.top3V2, e.team.top1.n)}`));
   for (const [k, r] of Object.entries(e.team.byRound).sort()) out.push(rateRow(`└ 派隊 ${k}`, r));
-  out.push(rateRow('└ 派隊：AI 第一名在玩家歷史前三名', e.team.top1InHistTop3, `歷史可比 ${e.team.histN}`));
-  out.push(`| └ 派隊：前三名和玩家歷史前三名重疊 | ${e.team.histOverlap.n} | ${pct(e.team.histOverlap.D, e.team.histOverlap.n)} | ${pct(e.team.histOverlap.K, e.team.histOverlap.n)} | ${pct(e.team.histOverlap.V2, e.team.histOverlap.n)} | 百科AI／v1 只給一組 | |`);
-  out.push(rateRow('3 投票（全部）', e.vote, '', e.vote.ceiling));
+  out.push(rateRow('3 投票（全部）', e.vote, ''));
   for (const side of ['red', 'blue'] as const) {
     const a = e.vote.abnormal[side];
-    out.push(`| └ 異常票 F1（${side === 'red' ? '紅方' : '藍方'}；真人異常 ${a.humanAbn}／${a.spots}） | ${a.spots} | ${f1s(a.D)} | ${f1s(a.K)} | ${f1s(a.V2)} | v2 準確率 ${a.V2.precision?.toFixed(2) ?? '—'}、召回 ${a.V2.recall?.toFixed(2) ?? '—'} | |`);
+    out.push(`| └ 異常票 F1（${side === 'red' ? '紅方' : '藍方'}；真人異常 ${a.humanAbn}／${a.spots}） | ${a.spots} | ${f1s(a.D)} | ${f1s(a.K)} | ${f1s(a.V2)} | v2 準確率 ${a.V2.precision?.toFixed(2) ?? '—'}、召回 ${a.V2.recall?.toFixed(2) ?? '—'} |`);
   }
   for (const [k, r] of Object.entries(e.vote.byKind).sort()) out.push(rateRow(`└ 投票 ${k}`, r));
-  out.push(rateRow('4 湖中對象', e.lakeTarget, `前三名命中 ${pct(e.lakeTarget.top3V2, e.lakeTarget.n)}`, e.lakeTarget.ceiling));
-  out.push(rateRow('└ 湖中宣告（紅方）', e.lakeClaim, '', e.lakeClaim.ceiling));
+  out.push(rateRow('4 湖中對象', e.lakeTarget, `前三名命中 ${pct(e.lakeTarget.top3V2, e.lakeTarget.n)}`));
+  out.push(rateRow('└ 湖中宣告（紅方）', e.lakeClaim, ''));
   out.push(rateRow('5 刺殺（弱訊號，不當主數字）', e.assassin));
   out.push(rateRow(`6 派西信任：每局結束時信同一根拇指（${e.percival.games} 局）`, e.percival.round));
   out.push(rateRow('└ 派西信任：整場最後信的那根', e.percival.game, `真人最後信對梅林 ${pct(e.percival.humanTrustsMerlin.hit, e.percival.humanTrustsMerlin.n)}`));
@@ -489,14 +399,12 @@ export function publicSummary(players: ReadonlyArray<{ id: string; games: number
       };
       const out = {
         overall: rateOut(e.overall),
-        quest: { ...rateOut(e.quest), ceiling: frac(e.quest.ceiling.hit, e.quest.ceiling.n) },
-        teamTop1: { ...rateOut(e.team.top1), top3V2: frac(e.team.top3V2, e.team.top1.n), ceiling: frac(e.team.ceiling.hit, e.team.ceiling.n), ceilingN: e.team.ceiling.n },
-        teamTop1InHistTop3: rateOut(e.team.top1InHistTop3),
-        teamHistOverlap: rateOut(e.team.histOverlap),
-        vote: { ...rateOut(e.vote), ceiling: frac(e.vote.ceiling.hit, e.vote.ceiling.n) },
+        quest: rateOut(e.quest),
+        teamTop1: { ...rateOut(e.team.top1), top3V2: frac(e.team.top3V2, e.team.top1.n) },
+        vote: rateOut(e.vote),
         abnormalF1: Object.fromEntries((['red', 'blue'] as const).map((s) => [s, Object.fromEntries(COLS.map((c) => [c, e.vote.abnormal[s][c].f1 === null ? null : Math.round(e.vote.abnormal[s][c].f1! * 1000) / 1000]))])),
-        lakeTarget: { ...rateOut(e.lakeTarget), top3V2: frac(e.lakeTarget.top3V2, e.lakeTarget.n), ceiling: frac(e.lakeTarget.ceiling.hit, e.lakeTarget.ceiling.n) },
-        lakeClaimRed: { ...rateOut(e.lakeClaim), ceiling: frac(e.lakeClaim.ceiling.hit, e.lakeClaim.ceiling.n) },
+        lakeTarget: { ...rateOut(e.lakeTarget), top3V2: frac(e.lakeTarget.top3V2, e.lakeTarget.n) },
+        lakeClaimRed: rateOut(e.lakeClaim),
         assassinWeak: rateOut(e.assassin),
         percivalTrustRound: rateOut(e.percival.round),
         percivalTrustGame: rateOut(e.percival.game),
@@ -517,14 +425,13 @@ export function publicSummary(players: ReadonlyArray<{ id: string; games: number
       }
       push(split, 'teamTop3.V2', out.teamTop1.top3V2);
       push(split, 'lakeTop3.V2', out.lakeTarget.top3V2);
-      for (const k of ['quest', 'teamTop1', 'vote', 'lakeTarget', 'lakeClaimRed'] as const) push(split, `${k}.ceiling`, (out[k] as { ceiling: number | null }).ceiling);
     }
     knights.push(row);
   }
   const medians = Object.fromEntries(Object.entries(med).map(([s, m]) => [s, Object.fromEntries(Object.entries(m).map(([k, v]) => [k, median(v)]))]));
   return {
     generatedAt: new Date().toISOString(),
-    method: '真人局重播；每個決策點百科AI（D）、v1 AI騎士（K）、v2（K ＋ 每人殘差層）各自和真人比。時間切分 = 每位玩家較舊 70% 擬合、較新 30% 測試；隨機一半同 v1。天花板 = 玩家自己在同一個局面簽名裡做同樣選擇的比例（留一）。',
+    method: '真人局重播；每個決策點百科AI（D）、v1 AI騎士（K）、v2（K ＋ 每人殘差層）各自和真人比。時間切分 = 每位玩家較舊 70% 擬合、較新 30% 測試；隨機一半同 v1。每個決策點都當成不同的局面；紀錄裡沒有完全相同的局面，所以不報天花板（要量真的天花板，見「重玩測驗」提案）。',
     lambda,
     medians,
     knights,
