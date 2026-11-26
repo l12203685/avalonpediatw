@@ -137,7 +137,11 @@ export async function flagPracticeDecision(roomId: string, entryId: number, note
 
 /** 局後那一題：題目顯示了（伺服器只算一次）。失敗不用管。 */
 export function notePracticeExploitShown(roomId: string): void {
-  emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'shown' }).catch(() => undefined);
+  try {
+    emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'shown' }).catch(() => undefined);
+  } catch {
+    // not connected — only a counter, nothing to retry
+  }
 }
 
 /** 局後那一題：略過（這局被伺服器標記的話照樣記一列）。 */
