@@ -56,9 +56,11 @@ import {
   isNoteworthy,
   isPracticeExploitAskEnabled,
   parseExploitChoices,
+  pickFollowUp,
   sanitizeExploitText,
-  type PracticeExploitAnswerStatus,
-  type PracticeExploitChoice,
+  PRACTICE_FOLLOW_UP_WAIT_MS,
+  PRACTICE_WHOLE_GAME_MAX,
+  type PracticeExploitAskResult,
   type PracticeExploitRow,
   type PracticeExploitSink,
 } from '../practice/PracticeExploitReport';
@@ -456,7 +458,7 @@ export class GameServer {
 
       // 練習局「被針對」：局後一題（顯示／略過／回答）
       socket.on('practice:exploit-ask', (payload: unknown, ack?: unknown) => {
-        void this.handlePracticeExploitAsk(socket, payload, typeof ack === 'function' ? ack as (res: PracticeFlagResult) => void : undefined);
+        void this.handlePracticeExploitAsk(socket, payload, typeof ack === 'function' ? ack as (res: PracticeExploitAskResult) => void : undefined);
       });
 
       // Emit user authenticated
@@ -3530,7 +3532,10 @@ export class GameServer {
         },
         flags,
         shown: false,
-        written: false,
+        endCardDone: false,
+        flagsRecorded: false,
+        pending: null,
+        wholeGameCount: 0,
       };
       getPracticeExploitAskCounter().noteFlags(flags);
     } catch (err) {
@@ -3564,22 +3569,27 @@ export class GameServer {
       flaggedEntryIds: session ? [...session.flaggedEntryIds] : [],
       exploitAsk: {
         enabled: this.practiceExploitSink !== null && isPracticeExploitAskEnabled(),
-        done: session?.exploit?.written === true,
+        done: session?.exploit?.endCardDone === true,
+        wholeGameLeft: Math.max(0, PRACTICE_WHOLE_GAME_MAX - (session?.exploit?.wholeGameCount ?? 0)),
       },
     };
   }
 
   /**
-   * 練習局「被針對」局後一題（站長 2026-11-26）。`action`：'shown'（題目顯示出來，只算一次）、
-   * 'skip'（略過／先別再問：被自動標記的局照樣寫一列）、'answer'（choices＋選填 text，寫一列）。
-   * 只有練習房的玩家、局結束後；一局只收一次。玩家寫的字從不寫 log。
+   * 練習局「被針對」回饋（站長 2026-11-26；同日再裁定「…用描述性跟對話性的方式 開放式的」）。`action`：
+   *   'shown'      題目顯示出來（只算一次）
+   *   'skip'       局後那一題略過／先別再問（被自動標記的局照樣寫一列）
+   *   'answer'     { source: 'end-card' | 'whole-game', text, choices }：整局的描述（主要）＋選填標籤。
+   *                有寫字或選了標籤 → 回 `followUp`（一個開放的追問），先不寫，等 'follow-up'；否則直接寫。
+   *   'follow-up'  { text }（空字串＝略過）：寫那一列，追問的回答放在同一列。
+   * 只有練習房的玩家、局結束後。局後那一題一局一次；整局回饋每局最多 5 則。玩家寫的字從不寫 log。
    */
   private async handlePracticeExploitAsk(
     socket: Socket,
     rawPayload: unknown,
-    ack?: (res: PracticeFlagResult) => void,
+    ack?: (res: PracticeExploitAskResult) => void,
   ): Promise<void> {
-    const reply = (res: PracticeFlagResult): void => { if (ack) ack(res); };
+    const reply = (res: PracticeExploitAskResult): void => { if (ack) ack(res); };
     try {
       const obj = rawPayload && typeof rawPayload === 'object' ? rawPayload as Record<string, unknown> : {};
       const roomId = typeof obj.roomId === 'string' ? obj.roomId : '';
@@ -3594,6 +3604,7 @@ export class GameServer {
         reply({ ok: false, error: '對局結束後才能回答' });
         return;
       }
+      session.lastActivityAt = Date.now();
       const counter = getPracticeExploitAskCounter();
       const action = obj.action;
       if (action === 'shown') {
@@ -3601,14 +3612,34 @@ export class GameServer {
         reply({ ok: true });
         return;
       }
-      if (st.written) {
+      if (action === 'skip') {
+        if (!st.endCardDone) {
+          st.endCardDone = true;
+          counter.noteSkipped();
+          if (st.flags.length > 0 && !st.flagsRecorded) {
+            await this.writePracticeExploitRow(session, {
+              source: 'end-card', choices: [], text: '', followUpQuestion: '', followUpAnswer: '', status: 'skipped',
+            });
+          }
+        }
         reply({ ok: true });
         return;
       }
-      if (action === 'skip') {
-        counter.noteSkipped();
-        if (st.flags.length > 0) await this.writePracticeExploitRow(session, [], '', 'skipped');
-        else st.written = true;
+      if (action === 'follow-up') {
+        const pending = st.pending;
+        if (!pending) {
+          reply({ ok: true });
+          return;
+        }
+        const answer = sanitizeExploitText(obj.text);
+        st.pending = null;
+        const ok = await this.writePracticeExploitRow(session, { ...pending, followUpAnswer: answer, status: 'answered' });
+        if (!ok) {
+          st.pending = pending;
+          reply({ ok: false, error: '儲存失敗，請稍後再試' });
+          return;
+        }
+        if (answer) counter.noteFollowUpAnswered();
         reply({ ok: true });
         return;
       }
@@ -3616,61 +3647,90 @@ export class GameServer {
         reply({ ok: false, error: '看不懂這個回答' });
         return;
       }
+      const source = obj.source === 'whole-game' ? 'whole-game' : 'end-card';
+      if (source === 'end-card' && st.endCardDone) {
+        reply({ ok: true });
+        return;
+      }
+      if (source === 'whole-game' && st.wholeGameCount >= PRACTICE_WHOLE_GAME_MAX) {
+        reply({ ok: false, error: `每局最多 ${PRACTICE_WHOLE_GAME_MAX} 則整局回饋` });
+        return;
+      }
       const choices = parseExploitChoices(obj.choices);
       const text = sanitizeExploitText(obj.text);
       if (choices.length === 0 && !text) {
-        reply({ ok: false, error: '請至少選一項' });
+        reply({ ok: false, error: '寫一點或選一項再送' });
         return;
       }
       if (!this.practiceExploitSink) {
         reply({ ok: false, error: '這台伺服器目前存不下回答' });
         return;
       }
-      const ok = await this.writePracticeExploitRow(session, choices, text, 'answered');
-      if (!ok) {
-        reply({ ok: false, error: '儲存失敗，請稍後再試' });
-        return;
+      // 上一則還在等追問 → 先照現況寫掉。
+      if (st.pending) await this.flushPracticeExploitPending(session);
+      const followUp = pickFollowUp(choices, text);
+      if (followUp) {
+        st.pending = { source, choices, text, followUpQuestion: followUp.question, at: Date.now() };
+        counter.noteFollowUpAsked();
+      } else {
+        const ok = await this.writePracticeExploitRow(session, {
+          source, choices, text, followUpQuestion: '', followUpAnswer: '', status: 'answered',
+        });
+        if (!ok) {
+          reply({ ok: false, error: '儲存失敗，請稍後再試' });
+          return;
+        }
       }
-      counter.noteAnswered(choices);
-      reply({ ok: true });
+      if (source === 'end-card') st.endCardDone = true;
+      else st.wholeGameCount += 1;
+      counter.noteAnswered(source, choices, text !== '');
+      reply(followUp ? { ok: true, followUp: { question: followUp.question } } : { ok: true });
     } catch (err) {
       console.warn('[practice] exploit answer failed:', err instanceof Error ? err.message : 'unknown');
       reply({ ok: false, error: '儲存失敗，請稍後再試' });
     }
   }
 
+  /** 等追問的那一則照現況寫掉（追問沒答）。從不丟錯。 */
+  private async flushPracticeExploitPending(session: PracticeSession): Promise<void> {
+    const pending = session.exploit?.pending;
+    if (!session.exploit || !pending) return;
+    session.exploit.pending = null;
+    await this.writePracticeExploitRow(session, { ...pending, followUpAnswer: '', status: 'answered' });
+  }
+
   /**
-   * 寫一列「練習被針對」（有內容的局連同決策紀錄），成功後有內容的局也貼管理員頻道。
-   * 一局只寫一次（`written`）；回答寫失敗會放回去讓玩家再送。從不丟錯。
+   * 寫一列「練習被針對」（有內容的列連同那局的決策紀錄），成功後有內容的也貼管理員頻道。
+   * 這局還沒有一列帶自動標記時，這一列帶上（之後清房間就不用再寫「沒回答」）。從不丟錯。
    */
   private async writePracticeExploitRow(
     session: PracticeSession,
-    choices: PracticeExploitChoice[],
-    text: string,
-    status: PracticeExploitAnswerStatus,
+    answer: Pick<PracticeExploitRow, 'source' | 'choices' | 'text' | 'followUpQuestion' | 'followUpAnswer' | 'status'>,
   ): Promise<boolean> {
     const st = session.exploit;
     const sink = this.practiceExploitSink;
-    if (!st || st.written) return false;
-    st.written = true;
-    if (!sink) return false;
+    if (!st || !sink) return false;
+    const carriesFlags = !st.flagsRecorded;
     const row: PracticeExploitRow = {
       at: Date.now(),
       ...st.base,
-      choices,
-      text,
-      status,
-      flags: st.flags,
+      ...answer,
+      flags: carriesFlags ? st.flags : [],
       decisionCount: session.entries.length,
     };
+    st.flagsRecorded = true;
     const noteworthy = isNoteworthy(row);
+    // 決策紀錄每局只寫一次（第一則有內容的列）。
+    const withDecisions = noteworthy && !session.exploitDecisionsWritten;
+    if (withDecisions) session.exploitDecisionsWritten = true;
     const counter = getPracticeExploitAskCounter();
     try {
-      await sink.appendExploit(row, noteworthy ? [...session.entries] : []);
+      await sink.appendExploit(row, withDecisions ? [...session.entries] : []);
       counter.noteSaved(true);
     } catch (error) {
       counter.noteSaved(false);
-      if (status === 'answered') st.written = false;
+      if (carriesFlags) st.flagsRecorded = false;
+      if (withDecisions) session.exploitDecisionsWritten = false;
       // Step + HTTP status only — never the player's text or a response body.
       const what = error instanceof Error && error.name === 'PracticeExploitSheetError' ? error.message : 'unexpected error';
       console.warn(`[practice] exploit row not saved for room ${st.base.traceId}: ${what}`);
@@ -3678,6 +3738,16 @@ export class GameServer {
     }
     if (noteworthy) void this.practiceDiscord?.forwardExploit?.(row);
     return true;
+  }
+
+  /** 定期：等追問超過 10 分鐘的照現況寫掉。 */
+  private flushStalePracticeExploitAnswers(): void {
+    const now = Date.now();
+    for (const roomId of this.practice.roomIds()) {
+      const session = this.practice.get(roomId);
+      const pending = session?.exploit?.pending;
+      if (session && pending && now - pending.at >= PRACTICE_FOLLOW_UP_WAIT_MS) void this.flushPracticeExploitPending(session);
+    }
   }
 
   /**
@@ -3790,9 +3860,17 @@ export class GameServer {
   /** Remove a practice room completely (engine timers, bots, session, room). */
   private disposePracticeRoom(roomId: string): void {
     const session = this.practice.get(roomId);
-    // 練習局「被針對」：被自動標記、玩家沒回答也沒略過 → 清掉前寫一列（不等它寫完）。
-    if (session?.exploit && !session.exploit.written && session.exploit.flags.length > 0) {
-      void this.writePracticeExploitRow(session, [], '', 'no-answer');
+    // 練習局「被針對」：還在等追問的照現況寫；被自動標記、玩家沒回答也沒略過 → 清掉前寫一列（不等它寫完）。
+    if (session?.exploit) {
+      const st = session.exploit;
+      void (async (): Promise<void> => {
+        await this.flushPracticeExploitPending(session);
+        if (!st.flagsRecorded && st.flags.length > 0) {
+          await this.writePracticeExploitRow(session, {
+            source: 'auto', choices: [], text: '', followUpQuestion: '', followUpAnswer: '', status: 'no-answer',
+          });
+        }
+      })();
     }
     const engine = this.gameEngines.get(roomId);
     if (engine) engine.cleanup();
@@ -3824,6 +3902,7 @@ export class GameServer {
   /** Periodic cleanup: ended (review window over), idle, or orphaned practice rooms. */
   private sweepPracticeRooms(): void {
     try {
+      this.flushStalePracticeExploitAnswers();
       for (const roomId of this.practice.expired()) this.disposePracticeRoom(roomId);
       // A room removed by some other path (e.g. RoomManager's own cleanup)
       // leaves its session and bot agents behind — free them too.

@@ -181,7 +181,7 @@ export function formatInGameForward(
   context: { before: CapturedMessage[]; after: CapturedMessage[] } = { before: [], after: [] },
 ): string {
   const line = (x: CapturedMessage, flagged: boolean): string =>
-    `${flagged ? '▶ ' : '　 '}${seatLabelZh(x.seat)}：${neutralizeMentions(clipChars(x.text, flagged ? IN_GAME_FORWARD_TEXT_MAX : IN_GAME_CONTEXT_TEXT_MAX))}`;
+    `${flagged ? '▶ ' : '\u3000 '}${seatLabelZh(x.seat)}：${neutralizeMentions(clipChars(x.text, flagged ? IN_GAME_FORWARD_TEXT_MAX : IN_GAME_CONTEXT_TEXT_MAX))}`;
   return [
     `📮 遊戲內回饋（房間 ${roomId}，${whereLabel(gameNo, m)}，${seatLabelZh(m.seat)}→提到 ${mentionLabel(m.hit)}）`,
     ...context.before.map((x) => line(x, false)),
@@ -192,7 +192,7 @@ export function formatInGameForward(
 
 /**
  * 整局對話：被挑出的每一句前後各 3 句，重疊的併成一段；段落之間「……」；局面（第幾局任務、階段）換了就加一行【…】。
- * 被挑出的那句「▶ N家：…（提到 …・類型）」，脈絡句「　 N家：…」。
+ * 被挑出的那句「▶ N家：…（提到 …・類型）」，脈絡句前面是一個全形空白（\u3000）再接「N家：…」。
  */
 export function narrativeFor(g: Pick<GameCapture, 'gameNo' | 'messages' | 'flagged'>): string {
   const flaggedSet = new Set(g.flagged);
@@ -222,7 +222,7 @@ export function narrativeFor(g: Pick<GameCapture, 'gameNo' | 'messages' | 'flagg
       if (flaggedSet.has(m) && m.hit) {
         out.push(`▶ ${seatLabelZh(m.seat)}：${m.text}（提到 ${mentionLabel(m.hit)}・${REASON_LABEL_ZH[m.hit.reason]}）`);
       } else {
-        out.push(`　 ${seatLabelZh(m.seat)}：${m.text}`);
+        out.push(`\u3000 ${seatLabelZh(m.seat)}：${m.text}`);
       }
     }
   }

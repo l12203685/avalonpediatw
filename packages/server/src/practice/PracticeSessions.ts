@@ -12,16 +12,32 @@ import type { PracticeExploitRow } from './PracticeExploitReport';
 
 /**
  * 練習局「被針對」回報（2026-11-26）：局結束時記下這局的結果與自動標記，等玩家回答／略過，
- * 或房間清掉時（被標記但沒回答）寫一列。
+ * 或房間清掉時（被標記但沒回答）寫一列。回答後有追問時先放在 `pending`，等追問答了／略過、
+ * 10 分鐘到了、或房間清掉才寫（同一列）。
  */
+export interface PracticeExploitPending {
+  source: 'end-card' | 'whole-game';
+  choices: PracticeExploitRow['choices'];
+  text: string;
+  followUpQuestion: string;
+  /** 收到回答的時間（epoch ms）。 */
+  at: number;
+}
+
 export interface PracticeExploitState {
   /** 結果、玩家座位／角色（局結束時固定）。 */
   base: Pick<PracticeExploitRow, 'traceId' | 'humanSeat' | 'humanRole' | 'humanTeam' | 'winner' | 'endReason'>;
   flags: PracticeExploitFlag[];
   /** 題目顯示過（只算一次）。 */
   shown: boolean;
-  /** 已經寫了一列（或正在寫）；之後的回答一律不收。 */
-  written: boolean;
+  /** 局後那一題已經回答或略過。 */
+  endCardDone: boolean;
+  /** 已經有一列帶著自動標記寫出去（或排著要寫），清掉房間時就不用再寫「沒回答」那列。 */
+  flagsRecorded: boolean;
+  /** 等追問的回答。 */
+  pending: PracticeExploitPending | null;
+  /** 「整局回饋（不限某一步）」收了幾則。 */
+  wholeGameCount: number;
 }
 
 export const PRACTICE_LIMITS = Object.freeze({
@@ -65,6 +81,8 @@ export interface PracticeSession {
   lastFlagAt: number;
   /** 局結束後才有（練習局「被針對」回報）。 */
   exploit: PracticeExploitState | null;
+  /** 這局的決策已經寫進「練習決策紀錄」（一局只寫一次）。 */
+  exploitDecisionsWritten: boolean;
 }
 
 export type NewTraceEntry = Omit<PracticeTraceEntry, 'id' | 'at'>;
@@ -101,6 +119,7 @@ export class PracticeSessions {
       flaggedEntryIds: new Set(),
       lastFlagAt: 0,
       exploit: null,
+      exploitDecisionsWritten: false,
     };
     this.sessions.set(roomId, session);
     return session;

@@ -62,7 +62,7 @@ import { authenticateSocket } from '../../middleware/auth';
 import type { PracticeFlagRow, PracticeFlagSink } from '../../practice/PracticeReportWriter';
 import type { PracticeTracePayload, PracticeTraceEntry, PracticeFlagResult } from '../../practice/types';
 import type { PracticeExploitRow, PracticeExploitSink } from '../../practice/PracticeExploitReport';
-import { getPracticeExploitAskCounter } from '../../practice/PracticeExploitReport';
+import { getPracticeExploitAskCounter, type PracticeExploitAskResult } from '../../practice/PracticeExploitReport';
 import type { PracticeSession } from '../../practice/PracticeSessions';
 
 const BOT_DELAY_SCALE = 0.02;
@@ -603,19 +603,19 @@ describe('practice mode — full games over sockets', () => {
     expect(res.error).toMatch(/無法儲存/);
   }, 90000);
 
-  it('「被針對」 question: owner only, after the end, one row per game with the trace; flagged games are kept on cleanup', async () => {
+  it('「被針對」: open whole-game text + one follow-up in the same row; whole-game notes; owner only; flagged games kept on cleanup', async () => {
     const exploitSink = new FakeExploitSink();
     await boot(sink, exploitSink);
     const counter = getPracticeExploitAskCounter();
     const before = counter.snapshot();
     const { human, roomId } = await playPractice('exploit-human', { seat: 6, role: 'assassin' });
-    expect(human.trace!.exploitAsk).toEqual({ enabled: true, done: false });
+    expect(human.trace!.exploitAsk).toEqual({ enabled: true, done: false, wholeGameLeft: 5 });
     const session = internals().practice.get(roomId)!;
     expect(session.exploit?.base).toMatchObject({ traceId: roomId, humanSeat: 6, humanRole: 'assassin', humanTeam: 'evil' });
 
     const intruder = await connect(port, 'exploit-intruder', 'Intruder');
     sockets.push(intruder);
-    const stolen = await emitAck<PracticeFlagResult>(intruder, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['lake'] });
+    const stolen = await emitAck<PracticeExploitAskResult>(intruder, 'practice:exploit-ask', { roomId, action: 'answer', text: 'x' });
     expect(stolen.ok).toBe(false);
 
     // Shown counts once per game.
@@ -623,32 +623,55 @@ describe('practice mode — full games over sockets', () => {
     await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'shown' });
     expect(counter.snapshot().shown).toBe(before.shown + 1);
 
-    const empty = await emitAck<PracticeFlagResult>(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['bogus'] });
-    expect(empty).toEqual({ ok: false, error: '請至少選一項' });
+    const empty = await emitAck<PracticeExploitAskResult>(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['bogus'] });
+    expect(empty).toEqual({ ok: false, error: '寫一點或選一項再送' });
 
-    const ok = await emitAck<PracticeFlagResult>(human.socket, 'practice:exploit-ask', {
-      roomId, action: 'answer', choices: ['vote_fixed', 'none'], text: '  紅方一直贊成  ',
+    // The text is the main thing; tags are optional; a follow-up comes back and nothing is written yet.
+    const ok = await emitAck<PracticeExploitAskResult>(human.socket, 'practice:exploit-ask', {
+      roomId, action: 'answer', choices: ['vote_fixed', 'none'], text: '  紅方整局一直贊成有我的隊，藍方好像沒發現  ',
     });
-    expect(ok).toEqual({ ok: true });
+    expect(ok).toEqual({ ok: true, followUp: { question: '從哪一局開始覺得不對？' } });
+    expect(exploitSink.rows).toHaveLength(0);
+    const fu = await emitAck<PracticeExploitAskResult>(human.socket, 'practice:exploit-ask', { roomId, action: 'follow-up', text: '第二局' });
+    expect(fu).toEqual({ ok: true });
     expect(exploitSink.rows).toHaveLength(1);
     const { row, decisions } = exploitSink.rows[0];
     expect(row).toMatchObject({
-      traceId: roomId, humanSeat: 6, humanRole: 'assassin', humanTeam: 'evil',
+      traceId: roomId, source: 'end-card', humanSeat: 6, humanRole: 'assassin', humanTeam: 'evil',
       winner: human.trace!.winner, endReason: human.trace!.endReason,
-      choices: ['vote_fixed'], text: '紅方一直贊成', status: 'answered',
-      decisionCount: human.trace!.entries.length,
+      text: '紅方整局一直贊成有我的隊，藍方好像沒發現', followUpQuestion: '從哪一局開始覺得不對？', followUpAnswer: '第二局',
+      choices: ['vote_fixed'], status: 'answered', decisionCount: human.trace!.entries.length,
     });
     expect(row.flags).toEqual(session.exploit!.flags);
     expect(decisions).toBe(human.trace!.entries.length);
-    expect(counter.snapshot().answered).toBe(before.answered + 1);
-    expect(counter.snapshot().choices.vote_fixed).toBe(before.choices.vote_fixed + 1);
+    expect(counter.snapshot()).toMatchObject({
+      answered: before.answered + 1, followUpAsked: before.followUpAsked + 1, followUpAnswered: before.followUpAnswered + 1,
+    });
 
-    // A second answer / skip changes nothing; the pulled trace says done.
-    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', choices: ['lake'] });
+    // The end card is done; a second answer / skip changes nothing.
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', text: '再一次' });
     await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'skip' });
     expect(exploitSink.rows).toHaveLength(1);
+
+    // 「整局回饋（不限某一步）」: no step needed, its own row; the follow-up can be skipped (empty text).
+    const whole = await emitAck<PracticeExploitAskResult>(human.socket, 'practice:exploit-ask', {
+      roomId, action: 'answer', source: 'whole-game', text: '整體來說梅林太好認',
+    });
+    expect(whole.followUp?.question).toMatch(/梅林/);
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'follow-up', text: '' });
+    expect(exploitSink.rows).toHaveLength(2);
+    expect(exploitSink.rows[1].row).toMatchObject({ source: 'whole-game', text: '整體來說梅林太好認', followUpAnswer: '', flags: [] });
+    expect(exploitSink.rows[1].decisions).toBe(0); // decisions are written once per game
     const pulled = await emitAck<{ ok: boolean; payload: PracticeTracePayload }>(human.socket, 'practice:get-trace', roomId);
-    expect(pulled.payload.exploitAsk).toEqual({ enabled: true, done: true });
+    expect(pulled.payload.exploitAsk).toEqual({ enabled: true, done: true, wholeGameLeft: 4 });
+
+    // A whole-game note left waiting on its follow-up is written when the room is cleaned up.
+    await emitAck(human.socket, 'practice:exploit-ask', { roomId, action: 'answer', source: 'whole-game', text: '派隊都很固定' });
+    expect(exploitSink.rows).toHaveLength(2);
+    internals().roomManager.deleteRoom(roomId);
+    internals().sweepPracticeRooms();
+    await waitFor(() => exploitSink.rows.length === 3, { label: 'pending note on cleanup' });
+    expect(exploitSink.rows[2].row).toMatchObject({ source: 'whole-game', text: '派隊都很固定', followUpAnswer: '' });
 
     // Next game, not answered: on cleanup a row is written only when the game was auto-flagged
     // (forced here, so the cleanup path is always exercised).
@@ -657,9 +680,9 @@ describe('practice mode — full games over sockets', () => {
     if (s2.exploit!.flags.length === 0) s2.exploit!.flags = [{ code: 'bot_assassin_missed', detail: '測試' }];
     internals().roomManager.deleteRoom(second.roomId);
     internals().sweepPracticeRooms();
-    await waitFor(() => exploitSink.rows.length === 2, { label: 'flagged row on cleanup' });
-    expect(exploitSink.rows[1].row).toMatchObject({ traceId: second.roomId, status: 'no-answer', choices: [], text: '' });
-    expect(exploitSink.rows[1].decisions).toBeGreaterThan(0);
+    await waitFor(() => exploitSink.rows.length === 4, { label: 'flagged row on cleanup' });
+    expect(exploitSink.rows[3].row).toMatchObject({ traceId: second.roomId, source: 'auto', status: 'no-answer', choices: [], text: '' });
+    expect(exploitSink.rows[3].decisions).toBeGreaterThan(0);
 
     // Third game: not flagged, nobody answered → nothing written on cleanup.
     const third = await playPractice('exploit-human-3', { seat: 4, role: 'loyal' });
@@ -667,6 +690,6 @@ describe('practice mode — full games over sockets', () => {
     internals().roomManager.deleteRoom(third.roomId);
     internals().sweepPracticeRooms();
     await new Promise((r) => setTimeout(r, 50));
-    expect(exploitSink.rows).toHaveLength(2);
+    expect(exploitSink.rows).toHaveLength(4);
   }, 120000);
 });
