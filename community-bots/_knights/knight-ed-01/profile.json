@@ -1,10 +1,10 @@
 {
-  "schema": 1,
+  "schema": 2,
   "name": "AI騎士_ED_01",
   "author": "AI騎士團",
-  "official": true,
-  "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。",
+  "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "藏鋒",
+  "official": true,
   "sides": {
     "evil": {
       "redR1Teammate": false
@@ -29,5 +29,31 @@
     "oberon": {
       "oberonR1AlwaysFail64": 1
     }
+  },
+  "residual": {
+    "version": 1,
+    "team": {
+      "red": {"self":3.261,"eng":0.142,"pRed":-0.68,"knownRed":0.569,"failOn":-0.636,"succOn":0.928,"lastProp":0.206,"lastMission":0.455,"lakeGood":0.961,"lakeBad":-0.929,"myLakeGood":0.806,"myLakeBad":0.702,"adjacent":-0.292,"dist":-0.139,"approvedFailed":-0.278,"ledFailed":-0.508,"propRound":1.584,"approvedLast":-0.281,"ledRound":-0.336,"exactEng":0.763,"exactPrevProp":1.436,"exactLastMission":1.28},
+      "merlin": {"self":1.704,"eng":0.177,"pRed":-3.588,"knownRed":0.407,"failOn":-0.587,"succOn":1.084,"lastProp":0.122,"lastMission":0.414,"lakeGood":0.824,"lakeBad":-0.356,"myLakeGood":1.406,"myLakeBad":-0.396,"adjacent":-0.268,"dist":-0.119,"approvedFailed":-0.297,"ledFailed":-0.273,"propRound":1.332,"approvedLast":-0.104,"ledRound":-0.336,"exactEng":0.565,"exactPrevProp":1.293,"exactLastMission":-0.357},
+      "percival": {"self":1.208,"eng":0.367,"pRed":-2.965,"thumb":-0.284,"failOn":-0.468,"succOn":0.656,"lastProp":0.022,"lastMission":0.488,"lakeGood":0.4,"lakeBad":-0.256,"myLakeGood":1.29,"myLakeBad":-0.481,"adjacent":-0.181,"dist":-0.305,"approvedFailed":0.258,"ledFailed":-0.162,"propRound":1.52,"approvedLast":-0.112,"ledRound":-0.094,"exactEng":0.447,"exactPrevProp":1.022,"exactLastMission":0.183},
+      "loyal": {"self":1.792,"eng":-0.161,"pRed":-2.532,"failOn":-0.462,"succOn":0.782,"lastProp":0.242,"lastMission":0.27,"lakeGood":0.742,"lakeBad":-0.477,"myLakeGood":1.515,"myLakeBad":-0.497,"adjacent":-0.224,"dist":-0.145,"approvedFailed":0.11,"ledFailed":-0.293,"propRound":1.874,"approvedLast":-0.389,"ledRound":-0.183,"exactEng":0.751,"exactPrevProp":1.421,"exactLastMission":-0.168}
+    },
+    "vote": {
+      "red_on": {"bias":2.912,"eng":0.144,"leader":2.78,"attempt":0.4,"preForced":0.37,"round3":-0.804,"redFails":-0.7,"blueWins":-0.554,"cleanLogit":-0.038,"teamKnownRed":-0.142,"teamFailOn":-0.121,"teamSuccOn":0.628,"teamLastMission":0.353,"exactLastMission":0.535,"exactPrevProp":1.006,"teamLakeBad":-0.003,"teamLakeGood":0.243,"teamPRedMax":0.4,"leaderPRed":-0.367,"leaderKnownRed":0.117,"matchPoint":-0.771},
+      "red_off": {"bias":-3.384,"eng":0.217,"leader":4.511,"attempt":-0.786,"preForced":1.643,"round3":0.749,"redFails":0.374,"blueWins":-0.17,"cleanLogit":-0.029,"teamKnownRed":0.465,"teamFailOn":-0.492,"teamSuccOn":1.12,"teamLastMission":0.691,"exactLastMission":0.641,"exactPrevProp":0.701,"teamLakeBad":0.022,"teamLakeGood":0.29,"teamPRedMax":0.457,"leaderPRed":0.626,"leaderKnownRed":-0.966,"matchPoint":1.271},
+      "merlin_on": {"bias":3.717,"eng":0.426,"leader":2.593,"attempt":-0.719,"preForced":0.706,"round3":0.55,"redFails":-1.264,"blueWins":-0.883,"cleanLogit":0.243,"teamKnownRed":-0.584,"teamFailOn":-0.063,"teamSuccOn":0.254,"teamLastMission":-0.24,"exactLastMission":-0.121,"exactPrevProp":0.158,"teamLakeBad":-0.176,"teamLakeGood":0.184,"teamPRedMax":0.851,"leaderPRed":-1.105,"leaderKnownRed":0.743,"matchPoint":-0.549},
+      "merlin_off": {"bias":-1.408,"eng":0.832,"leader":3.665,"attempt":-0.016,"preForced":0.898,"round3":0.859,"redFails":0.15,"blueWins":-0.418,"cleanLogit":0.06,"teamKnownRed":0.18,"teamFailOn":-0.266,"teamSuccOn":0.858,"teamLastMission":0.932,"exactLastMission":1.156,"exactPrevProp":0.756,"teamLakeBad":0.331,"teamLakeGood":0.199,"teamPRedMax":-0.789,"leaderPRed":-0.444,"leaderKnownRed":-0.745,"matchPoint":0.809},
+      "percival_on": {"bias":3.413,"eng":0.109,"leader":3.186,"attempt":-0.608,"preForced":0.284,"round3":-0.185,"redFails":-1.254,"blueWins":-0.658,"cleanLogit":0.347,"teamThumb":0.246,"teamFailOn":0.045,"teamSuccOn":0.748,"teamLastMission":-0.463,"exactLastMission":-1.044,"exactPrevProp":0.551,"teamLakeBad":-0.118,"teamLakeGood":0.292,"teamPRedMax":0.145,"leaderPRed":-0.367,"matchPoint":-0.207},
+      "percival_off": {"bias":-1.422,"eng":1.295,"leader":2.451,"attempt":-0.092,"preForced":1.094,"round3":0.701,"redFails":-0.057,"blueWins":-0.437,"cleanLogit":0.401,"teamThumb":-0.016,"teamFailOn":-0.268,"teamSuccOn":0.561,"teamLastMission":1.324,"exactLastMission":0.091,"exactPrevProp":0.583,"teamLakeBad":0.417,"teamLakeGood":0.224,"teamPRedMax":1.308,"leaderPRed":-0.687,"matchPoint":1.143},
+      "loyal_on": {"bias":3.814,"eng":0.303,"leader":2.665,"attempt":-0.051,"preForced":0.566,"round3":-0.272,"redFails":-0.725,"blueWins":-0.913,"cleanLogit":0.105,"teamFailOn":-0.059,"teamSuccOn":1.268,"teamLastMission":-0.774,"exactLastMission":0.084,"exactPrevProp":1.193,"teamLakeBad":-0.038,"teamLakeGood":0.246,"teamPRedMax":-0.228,"leaderPRed":-1.541,"matchPoint":-0.698},
+      "loyal_off": {"bias":-1.656,"eng":1.307,"leader":2.363,"attempt":0.975,"preForced":0.526,"round3":0.986,"redFails":0.205,"blueWins":-0.125,"cleanLogit":0.068,"teamFailOn":-0.166,"teamSuccOn":0.305,"teamLastMission":0.746,"exactLastMission":0.407,"exactPrevProp":0.883,"teamLakeBad":-0.133,"teamLakeGood":-0.019,"teamPRedMax":1.083,"leaderPRed":-1.53,"matchPoint":0.55}
+    },
+    "quest": {"bias":-1.744,"eng":0.315,"round":-0.739,"teamKnownRed":-2.222,"solo":0.414,"teamSize":1.409,"failsNeeded":-1.046,"redFails":0.252,"blueWins":0.753,"assassin":0.068,"morgana":-0.266,"mordred":-0.29,"oberon":-1.257},
+    "lakeTarget": {
+      "good": {"eng":0.601,"pRed":-1.552,"knownRed":0.055,"thumb":0.058,"failOn":0.235,"succOn":-0.171,"lastProp":0.396,"lastMission":0.396,"adjacent":-0.808,"dist":0.4,"approvedFailed":0.05,"ledFailed":0.1,"propRound":0.632,"approvedLast":0.174,"ledRound":-1.13},
+      "evil": {"eng":-0.093,"pRed":0.98,"knownRed":-0.657,"failOn":0.21,"succOn":0.135,"lastProp":0.338,"lastMission":0.338,"adjacent":-0.323,"dist":0.268,"approvedFailed":-0.213,"ledFailed":0.145,"propRound":-0.135,"approvedLast":-0.272,"ledRound":-0.619}
+    },
+    "lakeClaim": {"bias":-1.415,"eng":0.187,"truthEvil":-0.286,"targetAlly":0.237,"round":0.058,"targetPRed":-0.844,"targetFailOn":0.348,"blueWins":-0.193,"redFails":0.251},
+    "assassinate": {"eng":1.418,"pRed":-0.595,"failOn":-0.021,"succOn":0.227,"lastProp":-0.027,"lastMission":-0.027,"lakeGood":-0.06,"lakeBad":0.362,"myLakeGood":0.392,"adjacent":0.052,"dist":0.069,"approvedFailed":0.031,"ledFailed":-0.274,"propRound":0.17,"approvedLast":-0.124,"ledRound":0.14}
   }
 }

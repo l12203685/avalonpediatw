@@ -28,7 +28,7 @@ import {
   type FidJob, type FidMeta, type FidRecord, type TeamRec, type VoteRec, type QuestRec, type LakeRec, type ClaimRec, type AssassinRec,
 } from '../src/arena/fidelityMetrics';
 import { validateProfile, type BotProfile } from '../src/arena/profile';
-import { formatKnightProfile, knightFolderId } from '../src/arena/styleKnights';
+import { buildKnightProfile, formatKnightProfile, knightFolderId } from '../src/arena/styleKnights';
 import { isInside } from '../src/ai/benchmark/playerAgreement';
 
 const SERVER = path.resolve(__dirname, '..');
@@ -59,7 +59,7 @@ function parseArgs(argv: string[]): Args {
 
 interface Extract { players: Array<{ id: string; games: number; strong: boolean; v1: boolean }>; jobs: FidJob[]; records: Array<FidRecord | FidMeta> }
 
-const LAMBDAS = [2, 8, 32];
+const LAMBDAS = [8, 32, 128, 512];
 const SIDE_OF = (role: string): 'good' | 'evil' => (['merlin', 'percival', 'loyal'].includes(role) ? 'good' : 'evil');
 
 function fnv1a(input: string): number {
@@ -107,16 +107,24 @@ interface Sample { r: FidRecord; player: number; gid: string; logistic?: Logisti
 
 function toSample(r: FidRecord, player: number, gid: string): Sample | null {
   switch (r.t) {
-    case 'T': { const { row } = teamRow(r); return row.y < 0 ? null : { r, player, gid, choice: row }; }
+    case 'T': {
+      // 候選隊的特徵很大（每點最多 252 × 20）：只先確認真人的隊找得到，要擬合時才組（`choiceOf`）。
+      const key = [...r.h].sort((x, y) => x - y).join(',');
+      return r.h.length === r.sz && r.h.every((x) => x >= 1 && x <= r.S.length) && key.length > 0 ? { r, player, gid } : null;
+    }
     case 'L': case 'A': { const row = pickRow(r); return row.y < 0 ? null : { r, player, gid, choice: row }; }
     default: return { r, player, gid, logistic: { x: (r as VoteRec | QuestRec | ClaimRec).x, y: (r as VoteRec | QuestRec | ClaimRec).h } };
   }
 }
 
+function choiceOf(s: Sample): ChoiceRow {
+  return s.choice ?? teamRow(s.r as TeamRec).row;
+}
+
 function fitKind(kind: Kind, samples: readonly Sample[], prior: readonly number[], lambda: number): number[] {
   if (samples.length === 0) return [...prior];
   if (kind === 'vote' || kind === 'quest' || kind === 'lakeClaim') return fitLogistic(samples.map((s) => s.logistic!), prior, lambda);
-  return fitChoice(samples.map((s) => s.choice!), prior, lambda);
+  return fitChoice(samples.map(choiceOf).filter((r) => r.y >= 0), prior, lambda);
 }
 
 /** 一個決策點用權重的預測是否和真人一樣（λ 選擇用）。 */
@@ -126,8 +134,9 @@ function hitWith(kind: Kind, s: Sample, beta: readonly number[]): number {
     for (let i = 0; i < beta.length; i++) z += beta[i] * s.logistic.x[i];
     return (z >= 0 ? 1 : 0) === s.logistic.y ? 1 : 0;
   }
-  const z = s.choice!.X.map((x) => { let v = 0; for (let i = 0; i < beta.length; i++) v += beta[i] * x[i]; return v; });
-  return topK(z, 1)[0] === s.choice!.y ? 1 : 0;
+  const c = choiceOf(s);
+  const z = c.X.map((x) => { let v = 0; for (let i = 0; i < beta.length; i++) v += beta[i] * x[i]; return v; });
+  return topK(z, 1)[0] === c.y ? 1 : 0;
 }
 
 function subsample<T>(xs: readonly T[], cap: number, salt: string): T[] {
@@ -179,7 +188,8 @@ function fitModel(samples: readonly Sample[], players: readonly number[], roleOf
 
   let lambda: Record<Kind, number> = fixed ?? { team: 8, vote: 8, quest: 8, lakeTarget: 8, lakeClaim: 8, assassinate: 8 };
   if (chooseLambda) {
-    const inner = (s: Sample): 0 | 1 => (fnv1a(`lambda|${s.gid}`) & 1) as 0 | 1;
+    // 不能用最低位：FNV-1a 的最低位只看字元的奇偶，會和 `halfOf`（同樣取最低位）完全相關。
+    const inner = (s: Sample): 0 | 1 => ((fnv1a(`lambda|${s.gid}`) >>> 13) & 1) as 0 | 1;
     const train = new Map<string, Sample[]>();
     const test = new Map<string, Sample[]>();
     for (const [key, list] of byKG) { train.set(key, list.filter((s) => inner(s) === 0)); test.set(key, list.filter((s) => inner(s) === 1)); }
@@ -359,18 +369,32 @@ async function main(): Promise<void> {
     const model = fitModel(samples, ex.players.map((_, i) => i), roleOf, a.popCap, false, lambda);
     calibrateAbnormal(model, samples, roleOf, a.abnSlack);
     let wrote = 0;
+    const skipped: string[] = [];
+    // 兩種切分的「全部」一致度平均：v2 要比 v1（沒有 v1 的玩家：比百科AI）高才寫進去。
+    const meanOf = (id: string, c: 'D' | 'K' | 'V2'): number => {
+      const r = results[id];
+      const xs = (['time', 'half'] as const).map((sp) => (r?.[sp]?.overall.n ? r[sp]!.overall[c] / r[sp]!.overall.n : 0));
+      return (xs[0] + xs[1]) / 2;
+    };
     for (const p of players) {
       const id = ex.players[p].id;
       const folder = knightFolderId(id, 1);
       const file = path.join(KNIGHTS_DIR, folder, 'profile.json');
-      if (!fs.existsSync(file)) continue;
-      const old = JSON.parse(fs.readFileSync(file, 'utf8')) as BotProfile;
-      const prof: BotProfile = { ...old, schema: 2, residual: residualOf(model, p) };
+      const exists = fs.existsSync(file);
+      if (meanOf(id, 'V2') <= meanOf(id, exists ? 'K' : 'D')) { skipped.push(id); continue; }
+      const base: BotProfile = exists
+        ? JSON.parse(fs.readFileSync(file, 'utf8')) as BotProfile
+        : { ...buildKnightProfile(id, 1, {}), style: `依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。` };
+      const note = ' 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。';
+      const style = exists && !base.style.includes('殘差層') && [...(base.style + note)].length <= 300 ? base.style + note : base.style;
+      const prof: BotProfile = { ...base, schema: 2, style, residual: residualOf(model, p) };
       const v = validateProfile(prof, folder, { house: true });
       if (!v.ok) throw new Error(`${id}: ${v.errors.join('; ')}`);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, formatKnightProfile(v.profile!));
       wrote++;
     }
+    if (skipped.length) console.error(`no residual (v2 not better on held-out data): ${skipped.length}`);
     console.error(`wrote residual weights into ${wrote} knights`);
   }
   if (a.summary) {
