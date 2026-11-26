@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Bot, ChevronRight, LineChart, Loader2, RefreshCw, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bot, ChevronRight, LineChart, Loader2, RefreshCw, Sparkles, Swords } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import AiGameReviewPanel from '../components/aiGames/AiGameReviewPanel';
 import SeatFillerCard from '../components/aiGames/SeatFillerCard';
@@ -72,6 +72,16 @@ function ListView(): JSX.Element {
           className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-white"
         >
           <Sparkles size={14} className="text-amber-300" />用你的 AI 一起改百科
+          <ChevronRight size={14} className="text-zinc-500" />
+        </button>
+        {/* AI 擂台（#arena；站長 2026-11-26：自建 AI 對戰） */}
+        <button
+          type="button"
+          data-testid="arena-link"
+          onClick={() => { useGameStore.getState().setGameState('arena'); window.scrollTo({ top: 0 }); }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:bg-zinc-800 hover:text-white"
+        >
+          <Swords size={14} className="text-rose-300" />AI 擂台：做你自己的機器人來對戰
           <ChevronRight size={14} className="text-zinc-500" />
         </button>
         </div>

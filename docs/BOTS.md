@@ -287,6 +287,26 @@ Discord 的指令清單從 29 個變 32 個（多 `/規則`、`/角色`、`/補�
 
 測試：`BotRulesAndFallbacks.test.ts`（兩個名字同一個回覆）、`StatsReplies.test.ts`（一句話的每一種情況＋真的快取每個人跑一次）、`DailyQuestion.test.ts`（昨天的答案：真的題庫跑兩週、接同一局時不說破、讀不到時不公布）、`LineStatsCommands.test.ts`（LINE 打字）。都不連網、不對真的 Discord／LINE 送任何東西。
 
+## AI 擂台（社群自建機器人）
+
+> 2026-11-26，站長：「我們有辦法提供個人AI的雛形嗎 然後他們再根據這個雛形送出自己認為的AI樣貌 以後就可以是一堆自建AI對戰」。
+> 這一節的機器人**不在群組或網站房間裡**，只在每週的擂台裡互打。投稿說明：[`community-bots/README.md`](../community-bots/README.md)；網站：`#arena`。
+
+- **一隻社群機器人 = 百科AI 的引擎 ＋ 作者選的打法開關**（`community-bots/<id>/profile.json`）。第 1 階段不執行任何人的程式碼；
+  開關只開放 `packages/server/src/arena/knobs.ts` 的白名單（每個都量過真的會改變打法、有範圍），邏輯防護不開放。
+- **檢查**：`pnpm --filter @avalon/server arena:check <資料夾>`（`--all` 再查整個名冊：名字不重複、一人一隻）。PR 動到 `community-bots/` 時
+  `AI arena bot check` workflow 自動跑（`pull_request`、唯讀、沒有 secret，fork 來的也安全）。
+- **本機試打**：`arena:local <資料夾> [--games 300] [--players 5-10]`：你的機器人坐一半座位、其他是百科AI，每局再打一次全百科AI 當對照，
+  印陣營／角色勝率（成對差）、三種結局、刺中率。`--workers` 預設 2。
+- **每週擂台**：`.github/workflows/arena-tournament.yml`，每週一 02:23（台灣）＋可手動跑。參賽 = 百科AI（1500 分）＋
+  `community-bots/_examples/` 兩隻示範對手（激進派紅方、保守藍方）＋ 合併進 main 的社群機器人。10 人局、隨機座位、每個座位隨機抽一隻；
+  分數 = 分陣營的隊伍邏輯回歸（紅方分、藍方分、總分，95% 區間）。結果 commit 到 `arena/leaderboard.json`，網站直接讀 GitHub 上的那一份。
+- **不會重開伺服器**：`community-bots/` 與 `arena/` 不在 Render 的 buildFilter、也不在網站部署的 `packages/**` 裡；推送用 `GITHUB_TOKEN`，不會觸發其他 workflow。
+  不需要任何 secret。（擂台的程式本身在 `packages/server/src/arena/` 與 `scripts/arena*`，第一次合併那一次會照常重新部署。）
+- **之後的「代理騎士」**（網站上登入就能用滑桿調一隻機器人）會用同一份 schema 與檢查（`src/arena/profile.ts`），
+  匯出成 `{"profiles":[{"id","title","profile"}]}` 交給 `arena:tournament --extra`，排行榜已經有 `title` 欄位（侍從／騎士／圓桌騎士）。
+- **第 2 階段**（寫程式的機器人、沙盒）只有設計：[`docs/ai/ARENA_CODE_BOTS.md`](ai/ARENA_CODE_BOTS.md)。
+
 ## 上線要注意的（只有站長能做）
 
 - **Discord 新指令要等部署**：`/說明`、`/每日一題`（第二批：`/規則`、`/角色`、`/補位`、`/每日一題` 的「哪一天」選項）和改過的說明文字，在伺服器（Render）下一次部署開機時自動註冊（`registerCommands()` 每次開機整份覆寫）。有設 `DISCORD_GUILD_ID` 時幾秒就出現；沒設（全域指令）可能要等一下，最久約一小時。這次開發沒有對真的 Discord／LINE 送過任何東西，也沒有手動註冊指令。

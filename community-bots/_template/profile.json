@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "name": "我的機器人",
+  "author": "your-github-handle",
+  "style": "用一兩句話說你的機器人怎麼打，例如：紅方早早衝失敗，藍方很難放行。",
+  "overrides": {
+    "goodCleanVote": 0.4
+  },
+  "sides": {
+    "evil": {
+      "redNormalVote": 0.5
+    }
+  },
+  "roles": {
+    "merlin": {
+      "merlinNormalVote": 0.8
+    }
+  }
+}
