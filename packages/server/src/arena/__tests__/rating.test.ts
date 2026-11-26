@@ -131,7 +131,7 @@ describe('seating and reports', () => {
     expect(board.bots.map((b) => b.rank)).toEqual([1, 2, 3]);
     const byId = Object.fromEntries(board.bots.map((b) => [b.id, b]));
     expect(byId.baike.rating.overall.rating).toBe(1500);
-    expect(byId.baike.name).toBe('百科AI');
+    expect(byId.baike.name).toBe('AI騎士_百科');
     expect(byId['example-x'].author).toBeNull();
     expect(byId.alpha.author).toBe('octocat');
     expect(byId.alpha.title).toBe('騎士');

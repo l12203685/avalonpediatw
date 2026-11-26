@@ -1,29 +1,43 @@
 name: AI arena tournament
 
-# AI 擂台（站長 2026-11-26「以後就可以是一堆自建AI對戰」；docs/BOTS.md〈AI 擂台〉）。
-# 每週一次：百科AI（參考點 1500 分）＋ community-bots/_examples 的示範對手 ＋ community-bots/<id>/ 的社群機器人
-# 一起打（10 人局、隨機座位、每隻都坐到紅藍兩邊），重算 arena/leaderboard.json，有變動才 commit 到 main。
+# AI 擂台每日大賽（站長 2026-11-26「跑AI擂台會需要耗token 嗎 如果不用的話 我希望你做成像CICD 並且每天至少跑10萬局」；
+# docs/BOTS.md〈AI 擂台〉）。不用任何 LLM、不用任何 token：只跑百科AI 自己的引擎（自我對打），社群機器人只是
+# profile.json 裡白名單的開關（資料，不是程式），而且只讀已經合併進 main 的資料夾。
 #
-# 安全：不需要任何 secret；只跑百科AI 的引擎，社群機器人只是 profile.json 裡白名單的開關（資料，不是程式），
-#       而且只讀已經合併進 main 的資料夾。
-# 不會重新部署：arena/ 與 community-bots/ 不在 Render 的 buildFilter（render.yaml）裡，也不在網站部署的 packages/** 裡；
-#       網站在瀏覽器裡直接讀 main 上的 arena/leaderboard.json。GITHUB_TOKEN 的推送也不會觸發其他 workflow。
+#   每天 04:17（台灣）：120,000 局，切成 12 片同時跑（每片 10,000 局、一台 4 vCPU runner、約 1 小時），合併後重算分數，
+#                       寫 arena/leaderboard.json 與 arena/history/<日期>.json，有變動才 commit 到 main。
+#   合併到 main 動到 community-bots/** 或擂台程式時（CD）：補跑 20,000 局（4 片），新的／改過的機器人當天就有分數。
+#   手動（workflow_dispatch）：可以指定局數。
+#
+# 安全：不需要任何 secret；fork 的 PR 不會跑這個（只有 schedule／push 到 main／手動）。
+# 不會重新部署：arena/ 不在 Render 的 buildFilter（render.yaml）裡，也不在網站部署的 packages/** 裡；
+#       網站在瀏覽器裡直接讀 main 上的 arena/leaderboard.json。
+# 不會觸發自己：commit 用 GITHUB_TOKEN 推（GitHub 不會因為 GITHUB_TOKEN 的推送再觸發 workflow），
+#       而且只動 arena/，不在下面 push 的 paths 裡。
+# 不會重疊：每日／手動一組、合併後補跑一組（同一組前一輪跑完才開始下一輪，不取消進行中的；
+#       分兩組是因為 GitHub 同一組只留一個排隊中的，補跑不能把當天的每日大賽擠掉）。
+#       兩組的分片可以同時跑（互不相干），但寫排行榜的 aggregate 全部排同一條隊，一次只有一個在 commit。
 
 on:
   schedule:
-    - cron: '23 18 * * 0'   # 每週一 02:23 台灣時間（UTC+8）；GitHub 排程偶爾會延遲
+    - cron: '17 20 * * *'   # 每天 04:17 台灣時間（UTC+8）；GitHub 排程偶爾會延遲
+  push:
+    branches: [main]
+    paths:
+      - 'community-bots/**'
+      - 'packages/server/src/arena/**'
   workflow_dispatch:
     inputs:
       games:
-        description: '局數（空白 = max(600, 150 × 參賽數)）'
+        description: '局數（空白 = 120000；每片最多 10000 局、最多 20 片，超過就每片多打一些；上限 600000）'
         required: false
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: arena-tournament
+  group: arena-tournament-${{ github.event_name == 'push' && 'push' || 'daily' }}
   cancel-in-progress: false
 
 defaults:
@@ -31,14 +45,17 @@ defaults:
     shell: bash
 
 jobs:
-  tournament:
+  plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 15
+    outputs:
+      date: ${{ steps.plan.outputs.date }}
+      kind: ${{ steps.plan.outputs.kind }}
+      games: ${{ steps.plan.outputs.games }}
+      shards: ${{ steps.plan.outputs.shards }}
+      matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          ref: main
+      - uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v3
@@ -60,44 +77,167 @@ jobs:
       - name: Check the roster
         run: pnpm --filter @avalon/server arena:check --all
 
-      - name: Play the tournament
+      - name: Plan the shards
+        id: plan
         env:
-          GAMES: ${{ github.event_name == 'workflow_dispatch' && inputs.games || '' }}
+          EVENT: ${{ github.event_name }}
+          GAMES_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.games || '' }}
         run: |
-          seed="arena-$(date -u +%G-W%V)"
-          args=(--players 10 --seed "${seed}" --workers "$(nproc)")
-          if [ -n "${GAMES}" ]; then
-            if ! [[ "${GAMES}" =~ ^[0-9]+$ ]]; then echo "::error::games must be a number"; exit 1; fi
-            args+=(--games "${GAMES}")
+          case "${EVENT}" in
+            schedule) kind=daily;  games=120000 ;;
+            push)     kind=push;   games=20000 ;;
+            *)        kind=manual; games="${GAMES_INPUT:-120000}" ;;
+          esac
+          if ! [[ "${games}" =~ ^[0-9]+$ ]] || [ "${games}" -lt 1 ] || [ "${games}" -gt 600000 ]; then
+            echo "::error::games must be a number between 1 and 600000"; exit 1
           fi
-          pnpm --filter @avalon/server arena:tournament "${args[@]}" | tee "${RUNNER_TEMP}/arena.txt"
-          { echo "### AI 擂台排行榜"; echo; sed -n '/^| 名次/,/^$/p' "${RUNNER_TEMP}/arena.txt"; } >> "$GITHUB_STEP_SUMMARY"
+          per=10000
+          shards=$(( (games + per - 1) / per ))
+          if [ "${shards}" -gt 20 ]; then shards=20; fi
+          if [ "${kind}" = push ] && [ "${shards}" -lt 4 ]; then shards=4; fi
+          matrix="[$(seq -s, 0 $((shards - 1)))]"
+          date="$(TZ=Asia/Taipei date +%F)"
+          {
+            echo "date=${date}"; echo "kind=${kind}"; echo "games=${games}"; echo "shards=${shards}"; echo "matrix=${matrix}"
+          } >> "$GITHUB_OUTPUT"
+          echo "${kind}: ${games} games in ${shards} shards on ${date} (Asia/Taipei)"
+
+  play:
+    needs: plan
+    runs-on: ubuntu-latest
+    # 實測一台 4 vCPU runner 每秒 2.89 局：每片 10,000 局約 58 分鐘（docs/BOTS.md〈AI 擂台〉）；上限遠低於 GitHub 的 6 小時。
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      # 每一片都用觸發這一輪的同一個 commit（github.sha），名冊才會一樣。
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      - name: Play this shard
+        env:
+          DATE: ${{ needs.plan.outputs.date }}
+          KIND: ${{ needs.plan.outputs.kind }}
+          GAMES: ${{ needs.plan.outputs.games }}
+          SHARDS: ${{ needs.plan.outputs.shards }}
+          SHARD: ${{ matrix.shard }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          pnpm --filter @avalon/server arena:daily shard --date "${DATE}" --kind "${KIND}" --run-id "${RUN_ID}" \
+            --games "${GAMES}" --slice "${SHARD}/${SHARDS}" --workers "$(nproc)" \
+            --out "${RUNNER_TEMP}/arena-shard/shard-${SHARD}.json"
+
+      - name: Upload the shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: arena-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/arena-shard/shard-${{ matrix.shard }}.json
+          retention-days: 7
+          if-no-files-found: error
+
+  aggregate:
+    needs: [plan, play]
+    # 某一片失敗（runner 掛掉）時，用到齊的分片照樣算，少掉的局數會寫在排行榜與 job summary 裡。
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: arena-aggregate
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      - name: Download the shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: arena-shard-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/arena-shards
+
+      # 名冊用觸發這一輪的 commit（github.sha，和分片一樣）；arena/ 的歷史用 main 最新的（中間可能有別輪 commit 了），
+      # 在 RUNNER_TEMP 的副本上算，最後整份換到 main 上。
+      - name: Copy the latest arena/ from main
+        run: |
+          git fetch -q origin main
+          mkdir -p "${RUNNER_TEMP}/work"
+          if git cat-file -e origin/main:arena 2>/dev/null; then
+            git archive origin/main arena | tar -x -C "${RUNNER_TEMP}/work"
+          else
+            mkdir -p "${RUNNER_TEMP}/work/arena"
+          fi
+
+      - name: Fit ratings and write the leaderboard
+        run: |
+          pnpm --filter @avalon/server arena:daily aggregate --in "${RUNNER_TEMP}/arena-shards" --arena "${RUNNER_TEMP}/work/arena" \
+            --summary "$GITHUB_STEP_SUMMARY"
 
       - name: Commit the leaderboard
+        env:
+          KIND: ${{ needs.plan.outputs.kind }}
+          DATE: ${{ needs.plan.outputs.date }}
         run: |
-          if [ -z "$(git status --porcelain -- arena/leaderboard.json)" ]; then
-            echo "No change in arena/leaderboard.json."
-            exit 0
-          fi
+          work="${RUNNER_TEMP}/work/arena"
+          games="$(node -e 'console.log(require(process.argv[1]).games)' "${work}/leaderboard.json")"
+          today="$(node -e 'console.log(require(process.argv[1]).daily.gamesToday)' "${work}/leaderboard.json")"
+          bots="$(node -e 'console.log(require(process.argv[1]).bots.length)' "${work}/leaderboard.json")"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- arena/leaderboard.json
-          games="$(node -e 'console.log(require("./arena/leaderboard.json").games)')"
-          bots="$(node -e 'console.log(require("./arena/leaderboard.json").bots.length)')"
-          git commit -q -m "chore(arena): 每週更新 AI 擂台排行榜（${bots} 隻、${games} 局）" \
-            -m "由 arena-tournament workflow 重算；只跑百科AI 引擎與 profile 開關。"
           for attempt in 1 2 3; do
             git fetch -q origin main
-            if ! git rebase -q origin/main; then
-              git rebase --abort || true
-              echo "::error title=Leaderboard not pushed::arena/leaderboard.json changed on main during this run; the next run rebuilds it."
-              exit 1
-            fi
-            if git push -q origin HEAD:main; then
-              echo "Pushed arena/leaderboard.json (${bots} bots, ${games} games)."
+            git checkout -q -f -B arena-update origin/main
+            # 只換 arena/（排行榜與歷史快照），其他檔案一律是 main 上的樣子。
+            rm -rf arena
+            cp -R "${work}" arena
+            git add -A -- arena/
+            if git diff --cached --quiet; then
+              echo "No change in arena/."
               exit 0
             fi
-            echo "Push rejected (attempt ${attempt}); rebasing and retrying..."
+            git commit -q -m "chore(arena): AI 擂台 ${DATE}（${KIND}，${bots} 隻、這輪 ${games} 局、今天 ${today} 局）" \
+              -m "由 arena-tournament workflow 重算；只跑百科AI 引擎與 profile 開關，不用任何 token。只動 arena/（不觸發部署）。"
+            if git push -q origin HEAD:main; then
+              echo "Pushed arena/ (${bots} bots, ${games} games this run, ${today} today)."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); retrying on the new main..."
             sleep $((attempt * 5))
           done
           echo "::error title=Leaderboard not pushed::git push to main was rejected 3 times (branch protection or concurrent pushes)."

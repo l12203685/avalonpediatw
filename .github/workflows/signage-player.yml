@@ -52,7 +52,7 @@ on:
         required: false
         default: ''
       bots:
-        description: '派幾個百科AI（1–9；「補滿」或 9 = 補到 10 人；空白 = 1）'
+        description: '派幾個AI騎士（1–9；「補滿」或 9 = 補到 10 人；空白 = 1）'
         required: false
         default: ''
       games:

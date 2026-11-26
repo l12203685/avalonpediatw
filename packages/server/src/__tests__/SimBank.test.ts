@@ -272,13 +272,13 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
       '1237', '1267 6-', '1356', '1456 3+',
       '',
       '/派 座位 作答 (沒開題的人也能作答，結果 /公布 時一起看)',
-      '/區間 (百科AI 怎麼讀)',
+      '/區間 (AI騎士 怎麼讀)',
       '/help 模擬',
       '/公布 (結束這題)',
     ].join('\n'));
   });
 
-  it('Edward 2026-11-17: /區間 without content shows how 百科AI reads QRSZY-3-5 and the team it would send', async () => {
+  it('Edward 2026-11-17: /區間 without content shows how AI騎士 reads QRSZY-3-5 and the team it would send', async () => {
     let now = 1;
     const engine = new SimEngine({ bank: async () => golden, now: () => now, rateLimit: { windowMs: 1, max: 1_000_000 } });
     const req = { platform: 'line' as const, chatId: 'G', userId: 'U', shared: true };
@@ -289,7 +289,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     r?.commit();
     const text = r?.text ?? '';
     const lines = text.split('\n');
-    expect(lines[0]).toBe('【QRSZY-3-5 百科AI 怎麼讀】');
+    expect(lines[0]).toBe('【QRSZY-3-5 AI騎士 怎麼讀】');
     // 紅機率列出另外 9 家（不含 5家），由高到低。
     const reds = /^紅機率：(.*)$/u.exec(lines[1])?.[1].split('・') ?? [];
     expect(reds).toHaveLength(9);
@@ -297,7 +297,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
     const ps = reds.map((x) => Number(/ (\d+(?:\.\d)?)%$/u.exec(x)?.[1]));
     expect([...ps].sort((a, b) => b - a)).toEqual(ps);
     expect(lines[2]).toMatch(/^最可能的紅方：\d{4} \d+%/u);
-    expect(lines[3]).toMatch(/^百科AI 會派：(?=\d*5)\d{4}（全好 \d+(?:\.\d)?%）$/u);
+    expect(lines[3]).toMatch(/^AI騎士 會派：(?=\d*5)\d{4}（全好 \d+(?:\.\d)?%）$/u);
     expect(lines.at(-1)).toBe('/派｜/公布');
     // 同一題每次讀法一樣（固定種子）。
     const again = await engine.handleText('/區間', req);
@@ -327,7 +327,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
   it('/下一步 was removed: one line pointing to /派 /區間 /公布', async () => {
     const engine = new SimEngine({ bank: async () => bank, rateLimit: { windowMs: 1, max: 1_000_000 } });
     const r = await engine.handleText('/下一步', { platform: 'line', chatId: 'C', userId: 'U' });
-    expect(r?.text).toBe('/下一步 已經拿掉了。直接 /派 作答；想看百科AI 怎麼讀打 /區間，看答案打 /公布');
+    expect(r?.text).toBe('/下一步 已經拿掉了。直接 /派 作答；想看AI騎士 怎麼讀打 /區間，看答案打 /公布');
   });
 
   it('the reviewers\' cases: 回選 is 延伸, the 對照 drops the earlier leader too, a 6-seat reading is 7 good with you', async () => {
@@ -378,7 +378,7 @@ describe('committed sim_bank.json (property test over the real bank)', () => {
             longest = Math.max(longest, r.text.length);
             expect(r.text.length).toBeLessThanOrEqual(SIM_REPLY_MAX_CHARS);
             // /派 is the two-line result since 2026-11-16 (the full reading is /分析).
-            if (r.kind === 'propose') expect(r.text).toMatch(/^(（代答：[^\n]*\n)?【[^】]+】你派 \d+：\d 好 \d 壞\n(（只有你看得到；\/公布 時會列出大家的答案）\n)?\/分析 看完整解讀｜\/區間 百科AI 怎麼讀｜\/公布$/u);
+            if (r.kind === 'propose') expect(r.text).toMatch(/^(（代答：[^\n]*\n)?【[^】]+】你派 \d+：\d 好 \d 壞\n(（只有你看得到；\/公布 時會列出大家的答案）\n)?\/分析 看完整解讀｜\/區間 AI騎士 怎麼讀｜\/公布$/u);
             if (!ALLOWED.test(r.text)) {
               const bad = [...r.text].filter((ch) => !ALLOWED.test(ch)).map((ch) => `U+${ch.codePointAt(0)?.toString(16)}`);
               throw new Error(`unexpected character ${bad.join(',')} in a reply for ${g.id}-${seat}`);

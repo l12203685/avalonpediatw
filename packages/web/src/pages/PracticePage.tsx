@@ -119,16 +119,6 @@ export default function PracticePage(): JSX.Element {
           window.scrollTo({ top: 0 });
         }}
       />
-      {/* 百科AI 在遊玩頁打的局（Edward 2026-11-05）：手機上導覽列放不下那顆按鈕，這裡也放一個入口 */}
-      <button
-        type="button"
-        onClick={() => { setGameState('aiGames'); window.scrollTo({ top: 0 }); }}
-        data-testid="practice-ai-games-link"
-        className="mt-4 flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
-      >
-        <span><span className="font-bold text-amber-200">百科AI 對局</span>：百科AI 在遊玩頁打過的局、每一步的理由，覺得怪可以直接回饋</span>
-        <ChevronRight size={14} className="flex-shrink-0 text-zinc-500" />
-      </button>
       {/* 叫百科AI 補位（站長 2026-11-19）：signage-cloud 房間缺人時，不在 LINE／DC 群組也能叫；表單在百科AI 對局頁最上面 */}
       <button
         type="button"
@@ -136,7 +126,7 @@ export default function PracticePage(): JSX.Element {
         data-testid="practice-seat-filler-link"
         className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-left text-xs text-zinc-200 transition-colors hover:bg-zinc-800"
       >
-        <span><span className="font-bold text-amber-200">叫百科AI 補位</span>：signage-cloud 開房缺人時，不用進 LINE／DC 群組，在網站叫百科AI 進房</span>
+        <span><span className="font-bold text-amber-200">叫AI騎士 補位</span>：signage-cloud 開房缺人時，不用進 LINE／DC 群組，在網站叫AI騎士 進房</span>
         <ChevronRight size={14} className="flex-shrink-0 text-zinc-500" />
       </button>
     </div>

@@ -60,10 +60,11 @@ export const TAG_MAX = 8;
 /**
  * 官方的 AI騎士（`community-bots/_knights/`，依玩家風格建立；站長 2026-11-26）：profile 寫 `"official": true`、
  * 作者固定是這個名字（不是 GitHub 帳號），不受「一人一隻」限制。社群投稿不能寫 `official`、不能用這個作者、
- * 也不能用 `AI騎士_` 開頭的名字。
+ * 也不能用「AI騎士」開頭的名字（不能冒充官方騎士）。
  */
 export const HOUSE_AUTHOR = 'AI騎士團';
-export const HOUSE_NAME_PREFIX = 'ai騎士_';
+/** 官方騎士名字的開頭（比對前先 NFKC、轉小寫、拿掉空白和分隔符號：「ＡＩ 騎士」「ai_騎士」都算）。 */
+export const HOUSE_NAME_PREFIX = 'ai騎士';
 
 /** 保留字：不能冒充官方或管理員（大小寫、空白不分）。 */
 const RESERVED_NAME_PARTS = ['百科ai', '百科機器人', 'avalonpedia', '官方', 'official', '管理員', 'admin', '站長', 'moderator'];
@@ -73,6 +74,16 @@ const MENTION_RE = /@[A-Za-z0-9-]/;
 // 控制字元與看不見的字元（零寬、雙向控制）會讓名字看起來和實際不同。
 // eslint-disable-next-line no-control-regex
 const INVISIBLE_RE = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/;
+
+/** 名字比對用：全形→半形、小寫、拿掉空白與常見分隔符號（_ - . ・ · • | / \）。 */
+function foldName(name: string): string {
+  return name.normalize('NFKC').toLowerCase().replace(/[\s_\-.・·•|/\\]+/g, '');
+}
+
+/** 這個名字是不是冒充官方的 AI騎士（「AI騎士」開頭；大小寫、全半形、空白、分隔符號不分）。 */
+export function isHouseKnightName(name: string): boolean {
+  return foldName(name).startsWith(HOUSE_NAME_PREFIX);
+}
 
 const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles', 'residual']);
 
@@ -142,10 +153,11 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   }
   const name = checkText('name', raw.name, NAME_MAX, errors);
   if (name) {
-    const folded = name.toLowerCase().replace(/\s+/g, '');
+    const folded = name.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
     const hit = RESERVED_NAME_PARTS.find((p) => folded.includes(p));
     if (hit) errors.push(`name 不能包含「${hit}」（保留給官方）`);
-    if (!opts.house && folded.startsWith(HOUSE_NAME_PREFIX)) errors.push('name 不能用「AI騎士_」開頭（保留給官方的 AI騎士）');
+    // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}。「AI騎士」開頭的名字只給官方的風格騎士（_knights/）。
+    if (!opts.house && isHouseKnightName(name)) errors.push('name 不能用「AI騎士」開頭（AI騎士_ 這類名字保留給官方的 AI騎士）');
   }
   if (opts.house && raw.official !== true) errors.push('官方 AI騎士 的 profile 要寫 "official": true');
   if (!opts.house && raw.official !== undefined) errors.push('official 只給官方的 AI騎士（community-bots/_knights/）用');
@@ -186,7 +198,7 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   const knobCount = Object.keys(overrides ?? {}).length
     + Object.values(sides ?? {}).reduce((n, v) => n + Object.keys(v ?? {}).length, 0)
     + Object.values(roles ?? {}).reduce((n, v) => n + Object.keys(v ?? {}).length, 0);
-  if (errors.length === 0 && knobCount === 0 && !residual) warnings.push('沒有改任何開關：這隻會和百科AI 打得一模一樣');
+  if (errors.length === 0 && knobCount === 0 && !residual) warnings.push('沒有改任何開關：這隻會和AI騎士 打得一模一樣');
   if (errors.length > 0) return { ok: false, errors, warnings };
   const profile: BotProfile = { schema, name: name!, author: author!, style: style! };
   if (tag) profile.tag = tag;

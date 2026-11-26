@@ -510,8 +510,8 @@ export function seatDiagram(built: Built, ans: ScenarioAnswer | null): string {
     row('這一家看到', (s) => (s === seat ? '**自己**' : thumbs.has(s) ? '拇指' : seen.has(s) ? '紅' : '')),
     ...shownQuests.map((q) => row(`第 ${q.round} 局（${q.failCount} 張失敗）`, (s) => (q.teamSeats.includes(s) ? '出' : ''))),
   ];
-  if (ans?.pRed) lines.push(row('百科AI 的 P(紅)', (s) => (s === seat ? '—' : ans.pRed![s - 1].toFixed(2))));
-  if (ans?.team) lines.push(row('百科AI 派', (s) => (ans.team!.includes(s) ? '●' : '')));
+  if (ans?.pRed) lines.push(row('AI騎士 的 P(紅)', (s) => (s === seat ? '—' : ans.pRed![s - 1].toFixed(2))));
+  if (ans?.team) lines.push(row('AI騎士 派', (s) => (ans.team!.includes(s) ? '●' : '')));
   return lines.join('\n');
 }
 

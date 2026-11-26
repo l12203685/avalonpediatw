@@ -8,6 +8,7 @@ import { ARENA_KNOBS } from './knobs';
 import { profileKnobSummary } from './profile';
 import { REFERENCE_ID, REFERENCE_NAME, type RegisteredBot } from './registry';
 import type { Outcome, TableResult } from './table';
+import type { RunKind, Trend } from './daily';
 
 // ── 座位安排 ─────────────────────────────────────────────
 
@@ -163,6 +164,26 @@ export interface Leaderboard {
   rejected: { id: string; errors: string[] }[];
   /** 開放的開關（網站的說明與「給你的 AI 的提示」用，和 knobs.ts 同一份）。 */
   knobCatalog: KnobCatalogEntry[];
+  /** 每日大賽（`arena:daily aggregate`）才有：今天與累計局數、這一輪怎麼跑的。 */
+  daily?: DailyInfo;
+  /** 每日大賽才有：最近幾天的總分走勢。 */
+  trend?: Trend;
+}
+
+export interface DailyInfo {
+  /** 台北日期。 */
+  date: string;
+  /** 這一輪：每日排程／合併到 main 後補跑／手動。 */
+  kind: RunKind;
+  gamesToday: number;
+  runsToday: number;
+  /** 開始每日大賽以來總共打了幾局（歷史快照加總）。 */
+  gamesTotal: number;
+  shards: number;
+  /** 某一片失敗時少掉的局數（0 = 全部到齊）。 */
+  missingGames: number;
+  gamesPerSecPerRunner: number;
+  slowestShardSec: number;
 }
 
 export interface KnobCatalogEntry {
@@ -191,7 +212,7 @@ export function knobCatalog(): KnobCatalogEntry[] {
   });
 }
 
-const REFERENCE_STYLE = '網站上正在跑的百科AI（正式預設，沒有改任何開關）。所有分數都以它為 1500。';
+const REFERENCE_STYLE = '網站上正在跑的AI騎士_百科（目前訓練出來的引擎、正式預設，沒有改任何開關）。所有分數都以它為 1500。';
 
 export function buildLeaderboard(args: {
   bots: readonly RegisteredBot[];
@@ -248,7 +269,7 @@ export function buildLeaderboard(args: {
     games: args.tables.length,
     sizes: [...args.sizes],
     reference: REFERENCE_ID,
-    method: '每局隨機座位、每個座位隨機抽一隻機器人（可重複），角色由引擎發。分數 = 分陣營的隊伍邏輯回歸（百科AI = 1500；+100 分 ≈ 一整邊換成它時勝算 ×1.78），區間 = 95% 信賴區間。',
+    method: '每局隨機座位、每個座位隨機抽一隻機器人（可重複），角色由引擎發。分數 = 分陣營的隊伍邏輯回歸（AI騎士_百科 = 1500；+100 分 ≈ 一整邊換成它時勝算 ×1.78），區間 = 95% 信賴區間。',
     baseRedWin,
     bots: rows,
     rejected: args.rejected ?? [],

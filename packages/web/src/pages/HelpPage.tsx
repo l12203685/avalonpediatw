@@ -50,8 +50,8 @@ const FAQ_SECTIONS: FaqSection[] = [
               {' '}signage-cloud{' '}
             </a>
             進行；開房缺人時可以到
-            <a href="#seat-filler" className="text-white font-semibold underline"> 百科AI 對局 </a>
-            頁叫百科AI 補位（不用進 LINE／DC 群組）。
+            <a href="#seat-filler" className="text-white font-semibold underline"> AI騎士 對局 </a>
+            頁叫AI騎士 補位（不用進 LINE／DC 群組）。
             <br />
             <span className="text-white font-semibold">不能：</span>
             加好友 / 出現在排行榜 / 看歷史對局回放。
