@@ -13,6 +13,7 @@ import {
   MINOR_REASONS,
   evaluateDeploySafety,
   readLiveRoomCounts,
+  setLiveRestartStatusSource,
   setLiveRoomCountsSource,
   type DeployLiveInput,
   type LiveRoomCounts,
@@ -203,12 +204,18 @@ describe('buildBotStatus().live', () => {
     expect(live.safeToDeploy).toBe(false);
     expect(live.blocking).toContain('rooms_in_game_with_humans');
     for (const [k, v] of Object.entries(live)) {
-      if (k === 'reasons' || k === 'blocking') expect(Array.isArray(v)).toBe(true);
+      if (k === 'restart') expect(v === null || typeof v === 'object').toBe(true);
+      else if (k === 'reasons' || k === 'blocking') expect(Array.isArray(v)).toBe(true);
       else if (k === 'safeToDeploy') expect(typeof v).toBe('boolean');
       else expect(typeof v).toBe('number');
     }
     setLiveRoomCountsSource(() => ZERO);
     expect(buildBotStatus().live.safeToDeploy).toBe(true);
+    // 伺服器更新時保存進度的狀態：只有數字和固定字
+    expect(buildBotStatus().live.restart).toBeNull();
+    setLiveRestartStatusSource(() => ({ configured: true, restoredRooms: 2, lastRead: 'restored', savedRooms: 0, saveFailures: 0 }));
+    expect(buildBotStatus().live.restart).toEqual({ configured: true, restoredRooms: 2, lastRead: 'restored', savedRooms: 0, saveFailures: 0 });
+    setLiveRestartStatusSource(null);
   });
 });
 

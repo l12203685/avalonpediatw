@@ -108,7 +108,7 @@ export class LiveStateStore {
   }
 
   private ensureTab(): Promise<void> {
-    this.tabReady ??= (async () => {
+    this.tabReady ??= (async (): Promise<void> => {
       const tabs = await this.sheets.listTabs();
       if (!tabs.some((t) => t.title === this.tab)) {
         await this.sheets.addTab(this.tab, { frozenRows: 1, columns: COLUMNS });

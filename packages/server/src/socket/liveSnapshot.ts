@@ -145,7 +145,9 @@ export class LiveRestore {
     this.handoverMs = opts.handoverMs ?? LIVE_HANDOVER_MS;
     this.pollMs = opts.pollMs ?? LIVE_POLL_MS;
     this.logger = opts.logger ?? {
+      // eslint-disable-next-line no-console
       info: (m): void => { console.log(`[live-state] ${m}`); },
+      // eslint-disable-next-line no-console
       warn: (m): void => { console.warn(`[live-state] ${m}`); },
     };
     this.bootAt = this.now();
