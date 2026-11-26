@@ -180,7 +180,7 @@ function BoardTable({ bots }: { bots: ArenaBot[] }): JSX.Element {
               <td className={td}>{b.rank}</td>
               <td className="px-2 py-1.5 align-top">
                 <BotName bot={b} />
-                <p className="mt-0.5 max-w-md text-[11px] leading-relaxed text-zinc-400">{b.style}</p>
+                <p className="mt-0.5 max-w-md text-[11px] leading-relaxed text-zinc-400">{b.source === 'reference' ? t('referenceStyle') : b.style}</p>
                 <p className="mt-0.5 max-w-md break-words text-[10px] text-zinc-500">{b.knobs.length ? b.knobs.join('、') : t('noKnobs')}</p>
               </td>
               <td className={td}>
@@ -214,7 +214,7 @@ function BotCard({ bot: b }: { bot: ArenaBot }): JSX.Element {
           {b.source !== 'reference' && <span className="block text-[10px] text-zinc-500 tabular-nums">{fmtInterval(b.rating.overall)}</span>}
         </div>
       </div>
-      <p className="mt-1 leading-relaxed text-zinc-400">{b.style}</p>
+      <p className="mt-1 leading-relaxed text-zinc-400">{b.source === 'reference' ? t('referenceStyle') : b.style}</p>
       <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums text-zinc-300">
         <span>{t('colRed')} <span className="text-rose-200">{fmtRating(b.rating.red)}</span></span>
         <span>{t('colBlue')} <span className="text-sky-200">{fmtRating(b.rating.blue)}</span></span>
