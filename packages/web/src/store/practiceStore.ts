@@ -16,7 +16,8 @@ function readLastOptions(): PracticeOptions {
       const parsed = JSON.parse(raw) as Partial<PracticeOptions>;
       const seat = typeof parsed.seat === 'number' && parsed.seat >= 1 && parsed.seat <= 10 ? parsed.seat : null;
       const role = typeof parsed.role === 'string' && ROLE_CHOICES.includes(parsed.role) ? parsed.role : null;
-      return { seat, role } as PracticeOptions;
+      const knight = typeof parsed.knight === 'string' && /^[a-z0-9][a-z0-9-]{1,31}$/.test(parsed.knight) ? parsed.knight : undefined;
+      return (knight ? { seat, role, knight } : { seat, role }) as PracticeOptions;
     }
   } catch {
     // storage unavailable / bad JSON → defaults

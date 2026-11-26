@@ -22,6 +22,8 @@ export interface PracticeOptions {
   /** 1..10, null = random. */
   seat: number | null;
   role: PracticeRoleChoice | null;
+  /** 對手／隊友用哪一位 AI騎士（名冊 id，或 `random-mix` 隨機混搭）；沒給 = AI騎士_百科。 */
+  knight?: string;
 }
 
 export type PracticeDecisionKind =
@@ -67,6 +69,9 @@ export interface PracticeSeatInfo {
   role: Role | null;
   team: 'good' | 'evil' | null;
   isBot: boolean;
+  /** 這個機器人座位是哪一位 AI騎士（名冊 id、不帶序號的名字）；真人座位、舊版伺服器沒有。 */
+  knightId?: string;
+  knightName?: string;
 }
 
 export interface PracticeTracePayload {

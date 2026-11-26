@@ -1,6 +1,7 @@
 /**
  * 網站「與機器人練習」— setup card (PracticePage: 導覽列「與機器人練習」按鈕 / #practice).
- * Picks a seat and an optional role, then creates + starts the practice room.
+ * Picks a seat, an optional role and which AI騎士 the 9 bots are (one knight for all, or a random mix;
+ * 站長 2026-11-26「練習台想呼叫AI騎士_ED」), then creates + starts the practice room.
  */
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,7 @@ import {
   startPractice,
   type PracticeRoleChoice,
 } from '../../services/practice';
+import { DEFAULT_KNIGHT_ID, KNIGHT_MIX_ID, useKnights } from '../../services/knights';
 
 interface Props {
   onBack: () => void;
@@ -27,12 +29,18 @@ export default function PracticeSetupPanel({ onBack, ready = true, status }: Pro
   const last = usePracticeStore((s) => s.lastOptions);
   const [seat, setSeat] = useState<number | null>(last.seat);
   const [role, setRole] = useState<PracticeRoleChoice | null>(last.role);
+  const [knight, setKnight] = useState<string>(last.knight ?? DEFAULT_KNIGHT_ID);
   const [busy, setBusy] = useState(false);
+  const { knights, ready: knightsReady } = useKnights(ready);
+  // 上次選的騎士已經不在名冊裡（或名冊還沒讀到）：選單顯示百科，送出也送百科。
+  const knightKnown = knight === KNIGHT_MIX_ID || knights.some((k) => k.id === knight);
+  const knightValue = knightKnown ? knight : DEFAULT_KNIGHT_ID;
+  const picked = knights.find((k) => k.id === knightValue);
 
   const handleStart = async (): Promise<void> => {
     if (busy || !ready) return;
     setBusy(true);
-    const ok = await startPractice({ seat, role }, (error) => t('createFailed', { error }));
+    const ok = await startPractice({ seat, role, knight: knightValue }, (error) => t('createFailed', { error }));
     if (!ok) setBusy(false);
   };
 
@@ -83,6 +91,27 @@ export default function PracticeSetupPanel({ onBack, ready = true, status }: Pro
               <option key={r} value={r}>{t(`role.${r}`)}</option>
             ))}
           </select>
+        </label>
+
+        <label className="space-y-1 block sm:col-span-2">
+          <span className="text-xs font-semibold text-zinc-400">{t('knightLabel')}</span>
+          <select
+            data-testid="practice-knight"
+            value={knightValue}
+            onChange={(e) => setKnight(e.target.value)}
+            className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-white"
+          >
+            {knights.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.id === DEFAULT_KNIGHT_ID ? t('knightDefault', { name: k.name }) : k.tag ? `${k.name}（${k.tag}）` : k.name}
+              </option>
+            ))}
+            {knights.length > 1 && <option value={KNIGHT_MIX_ID}>{t('knightMix')}</option>}
+          </select>
+          <span className="block text-[11px] leading-relaxed text-zinc-400" data-testid="practice-knight-style">
+            {knightValue === KNIGHT_MIX_ID ? t('knightMixHint') : picked?.style ?? ''}
+            {!knightsReady && ready ? ` ${t('knightLoading')}` : ''}
+          </span>
         </label>
       </div>
 
