@@ -200,7 +200,8 @@ function build(): RecordLoad {
   }
   const aka = recordAliases(doc.posts, readGameDb());
   const renames = readRenames();
-  const data = aka.size === 0 && renames.size === 0 ? doc : {
+  // 沒有別名也要走一遍：機器人的舊名字（百科AI_3）一律顯示成新名字（站長 2026-11-26）
+  const data = {
     ...doc,
     posts: doc.posts.map((raw) => {
       const p = renameRecordNames(raw, renames);

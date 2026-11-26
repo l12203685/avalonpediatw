@@ -37,12 +37,12 @@ describe('有百科機器人的局不當真人紀錄', () => {
     const g = game(10);
     expect(botSeats(g)).toEqual([10]);
     expect(isPostable(g)).toBe(false);
-    expect(postSkipReason(g)).toBe('百科機器人參與（坐 0 家），不是真人紀錄');
+    expect(postSkipReason(g)).toBe('AI騎士參與（坐 0 家），不是真人紀錄');
     const p = buildPaipuPost(g, 3);
     expect(p.verified).toBe(false);
-    expect(p.name.startsWith(`${UNVERIFIED_PREFIX}含百科機器人_20261103_2000_Room-1417`)).toBe(true);
+    expect(p.name.startsWith(`${UNVERIFIED_PREFIX}含AI騎士_20261103_2000_Room-1417`)).toBe(true);
     expect(p.tags).toEqual(['線瓦', BOT_GAME_TAG]);
-    expect(p.content.split('\n')[0]).toBe('待檢視原因：百科機器人參與（坐 0 家），不是真人紀錄');
+    expect(p.content.split('\n')[0]).toBe('待檢視原因：AI騎士參與（坐 0 家），不是真人紀錄');
     expect(p.content).toContain('刺客刺殺:8');
   });
 });
