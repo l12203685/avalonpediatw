@@ -5,7 +5,7 @@
  *   pnpm --filter @avalon/server arena:tournament [--games N] [--players 10|5-10] [--seed S] [--workers 2]
  *        [--extra profiles.json] [--no-examples] [--out ../../arena/leaderboard.json]
  *
- * 參賽：百科AI（參考點，1500 分）＋ community-bots/_examples 的示範對手 ＋ community-bots/<id>/ 的社群機器人
+ * 參賽：百科AI（參考點，1500 分）＋ community-bots/_examples 的示範對手 ＋ community-bots/_knights 的官方 AI騎士 ＋ community-bots/<id>/ 的社群機器人
  * ＋ `--extra` 外部清單（格式 {"profiles":[{"id","title","profile"}]}，例如之後網站上的「代理騎士」）。
  * 每局隨機人數（`--players`）、每個座位隨機抽一隻（可重複），所以每隻都會坐到紅藍兩邊、和各種隊友同桌。
  * 預設局數 = max(600, 150 × 參賽數)。只跑百科AI 的引擎與 profile 開關，不執行任何社群程式碼。
