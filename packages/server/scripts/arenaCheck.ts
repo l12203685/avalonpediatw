@@ -63,7 +63,7 @@ function main(): number {
     const roster = loadRoster({ dir });
     const community = roster.bots.filter((b) => b.source === 'community');
     const examples = roster.bots.filter((b) => b.source === 'example');
-    console.log(`名冊：${community.length} 隻社群機器人、${examples.length} 隻示範對手、百科AI 1 隻`);
+    console.log(`名冊：${community.length} 隻社群機器人、${examples.length} 隻示範對手、AI騎士_百科 1 隻`);
     for (const r of roster.rejected) {
       failed++;
       console.log(`✗ ${r.id}`);

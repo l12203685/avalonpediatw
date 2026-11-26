@@ -57,7 +57,7 @@ async function main(): Promise<void> {
   if (!Number.isFinite(n) || n <= 0) throw new Error('--games 要是正整數');
   const entrants = new Map<string, Entrant>(roster.bots.map((b) => [b.id, { id: b.id, profile: b.profile }]));
   // 只在主行程印（子行程的 stdout 被丟掉）。
-  console.log(`參賽 ${ids.length} 隻：${roster.bots.map((b) => b.profile?.name ?? '百科AI').join('、')}；${n} 局；人數 ${sizes.join('/')}；seed ${seed}`);
+  console.log(`參賽 ${ids.length} 隻：${roster.bots.map((b) => b.profile?.name ?? 'AI騎士_百科').join('、')}；${n} 局；人數 ${sizes.join('/')}；seed ${seed}`);
   for (const r of [...roster.rejected, ...extraRejected]) console.log(`未收：${r.id}：${r.errors.join('；')}`);
   const engine = new SelfPlayEngine();
   const tables = await runSharded<TableResult>(n, (i) => quietly(async () => {

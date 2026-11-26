@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { isKnightBotName, knightDisplayName } from '@avalon/shared';
 
 /** 本機預覽或測試用另一份清單（比照 AVALON_GAMES_DATASET）；正式環境不設。 */
 export const ENV_RECORDS_CACHE = 'AVALON_RECORDS_CACHE';
@@ -108,8 +109,8 @@ function nameKey(name: string): string {
   return name.normalize('NFKC').trim().toLowerCase();
 }
 
-/** 百科AI、百科AI_3：機器人的座位名，牌譜上保留編號。 */
-const PEDIA_BOT_NAME = /^百科AI(?:_\d+)?$/;
+/** AI騎士_百科_03、舊的 百科AI_3：機器人的座位名，牌譜上保留編號（站長 2026-11-26：舊名字顯示成新名字，見 renameRecordNames）。 */
+const isBotSeatName = (name: string): boolean => isKnightBotName(name);
 
 /**
  * player_aliases.json 的 aliases → 牌譜上要換掉的寫法（鍵 = nameKey(舊寫法)，值 = 正式名字）。
@@ -120,20 +121,27 @@ export function recordNameRenames(doc: unknown): Map<string, string> {
   const aliases = (doc as { aliases?: unknown } | null)?.aliases;
   if (!aliases || typeof aliases !== 'object' || Array.isArray(aliases)) return out;
   for (const [from, to] of Object.entries(aliases as Record<string, unknown>)) {
-    if (typeof to !== 'string' || !to.trim() || PEDIA_BOT_NAME.test(from.trim())) continue;
+    if (typeof to !== 'string' || !to.trim() || isBotSeatName(from)) continue;
     out.set(nameKey(from), to.trim());
   }
   return out;
 }
 
-/** 一篇貼文的座位名字照別名換成正式名字；沒有要換的就回傳原物件。 */
+/**
+ * 一篇貼文的座位名字照別名換成正式名字；機器人的舊名字（百科AI_3）換成新名字（AI騎士_百科_03，站長 2026-11-26；
+ * 存下來的紀錄不改）。沒有要換的就回傳原物件。
+ */
 export function renameRecordNames(post: unknown, renames: ReadonlyMap<string, string>): unknown {
-  if (renames.size === 0) return post;
   const game = (post as { game?: { names?: unknown } | null } | null)?.game;
   const names = game?.names;
   if (!Array.isArray(names)) return post;
   let changed = false;
   const next = names.map((n) => {
+    if (typeof n === 'string' && isBotSeatName(n)) {
+      const shown = knightDisplayName(n);
+      if (shown !== n) changed = true;
+      return shown;
+    }
     const to = typeof n === 'string' ? renames.get(nameKey(n)) : undefined;
     if (to === undefined || to === n) return n;
     changed = true;

@@ -87,7 +87,7 @@ export function basicHelpText(platform: HelpPlatform): string {
   if (SIM_CONFIG.commandsEnabled) lines.push('/模擬\u3000模擬瓦：真人牌譜停在派票的當下，換你派');
   lines.push(`${DAILY_QUESTION_USAGE}\u3000今天的每日一題：題目、牌譜連結、怎麼在這裡作答（${DAILY_QUESTION_YESTERDAY_USAGE[platform]} 看昨天的答案）`);
   lines.push(`${STATS_COMMAND_USAGE.player}\u3000個人戰績（還有 /排行 /默契）`);
-  lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000叫百科AI 進房補位`);
+  lines.push(`${SEAT_FILLER_USAGE[platform]}\u3000叫AI騎士 進房補位`);
   lines.push(`${PAIPU_FIX_USAGE[platform]}\u3000待修正的牌譜（${CORRECTION_USAGE[platform]} 查一局、送更正）`);
   lines.push(`${REPORT_USAGE[platform]}\u3000回報網站或文章的問題（${CLAIM_USAGE[platform]} 合併 ID）`);
   lines.push(`${STATS_COMMAND_USAGE.feedback}\u3000給管理者的建議`);

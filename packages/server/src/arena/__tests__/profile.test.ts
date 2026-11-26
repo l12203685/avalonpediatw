@@ -4,8 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { DEFAULT_AGENT_TUNING, AGENT_TUNING_KEYS } from '../../ai/AgentTuning';
 import { ARENA_KNOBS } from '../knobs';
-import { resolveProfileTuning, validateProfile, validateRoster, profileKnobSummary, type BotProfile } from '../profile';
-import { checkBotFolder, loadRoster, parseExtraProfiles, defaultCommunityDir } from '../registry';
+import { HOUSE_AUTHOR, isHouseKnightName, resolveProfileTuning, validateProfile, validateRoster, profileKnobSummary, type BotProfile } from '../profile';
+import { HOUSE_DIR, checkBotFolder, isHouseFolder, loadRoster, parseExtraProfiles, defaultCommunityDir } from '../registry';
 
 const base = { schema: 1, name: '測試機器人', author: 'octocat', style: '紅方很衝。' };
 
@@ -79,6 +79,50 @@ describe('validateProfile', () => {
     expect(validateProfile({ ...base, name: 'a​b' }, 'my-bot').errors.join()).toContain('看不見');
     expect(validateProfile(base, 'My Bot').errors.join()).toContain('資料夾名稱');
     expect(validateProfile({ ...base, schema: 2 }, 'my-bot').ok).toBe(false);
+  });
+
+  it('community bots cannot impersonate official knights (站長 2026-11-26: 百科AI → AI騎士)', () => {
+    // 「AI騎士」開頭（大小寫、全半形、空白、分隔符號不分）只給官方的風格騎士
+    for (const name of ['AI騎士_百科_03', 'AI騎士', 'ai騎士 二號', 'ＡＩ騎士_穩健_01', 'AI 騎士', 'A.I_騎士', ' AI騎士團']) {
+      expect(isHouseKnightName(name)).toBe(true);
+      expect(validateProfile({ ...base, name }, 'my-bot').errors.join()).toContain('AI騎士');
+    }
+    // 中間有「騎士」不算冒充
+    for (const name of ['我的騎士', '紅方騎士AI', '騎士團長']) {
+      expect(isHouseKnightName(name)).toBe(false);
+      expect(validateProfile({ ...base, name }, 'my-bot').ok).toBe(true);
+    }
+    // 舊的保留字照舊
+    expect(validateProfile({ ...base, name: '我是百科ＡＩ' }, 'my-bot').errors.join()).toContain('百科ai');
+    // 官方的風格騎士（_knights/）：可以用 AI騎士 開頭，作者固定 AI騎士團
+    const house = { ...base, name: 'AI騎士_穩健_01', author: HOUSE_AUTHOR };
+    expect(validateProfile(house, 'k-steady-01', { house: true }).ok).toBe(true);
+    expect(validateProfile({ ...house, author: 'octocat' }, 'k-steady-01', { house: true }).errors.join()).toContain(HOUSE_AUTHOR);
+    // 官方騎士也不能含「百科AI」
+    expect(validateProfile({ ...house, name: 'AI騎士_百科AI' }, 'k-x', { house: true }).ok).toBe(false);
+    // 社群投稿不能用官方作者（不是 GitHub 帳號的寫法）
+    expect(validateProfile({ ...base, author: HOUSE_AUTHOR }, 'my-bot').ok).toBe(false);
+  });
+
+  it('only folders under _knights/ count as official knights', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'arena-house-'));
+    try {
+      const write = (folder: string, profile: object): string => {
+        fs.mkdirSync(folder, { recursive: true });
+        fs.writeFileSync(path.join(folder, 'profile.json'), JSON.stringify(profile));
+        return folder;
+      };
+      const official = write(path.join(dir, HOUSE_DIR, 'k-steady-01'), { ...base, name: 'AI騎士_穩健_01', author: HOUSE_AUTHOR });
+      const fake = write(path.join(dir, 'k-steady-01'), { ...base, name: 'AI騎士_穩健_01' });
+      expect(isHouseFolder(official)).toBe(true);
+      expect(isHouseFolder(fake)).toBe(false);
+      expect(checkBotFolder(official).ok).toBe(true);
+      const c = checkBotFolder(fake);
+      expect(c.ok).toBe(false);
+      expect(c.errors.join()).toContain('AI騎士');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('warns about knobs placed where they cannot act', () => {

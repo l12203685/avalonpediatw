@@ -19,7 +19,8 @@ export interface RegisteredBot {
 }
 
 export const REFERENCE_ID = 'baike';
-export const REFERENCE_NAME = '百科AI';
+/** 參考點 = 目前訓練出來的引擎（站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}，風格沒指定 = 百科；同 @avalon/shared knightName()）。 */
+export const REFERENCE_NAME = 'AI騎士_百科';
 
 /** 資料夾裡允許的檔案：資料，不是程式。 */
 export const ALLOWED_FILES = new Set(['profile.json', 'README.md']);
@@ -37,7 +38,7 @@ export interface FolderCheck {
 }
 
 /** 檢查一個機器人資料夾（`arena:check` 與名冊共用）。 */
-export function checkBotFolder(folder: string): FolderCheck {
+export function checkBotFolder(folder: string, opts: { house?: boolean } = {}): FolderCheck {
   const id = path.basename(path.resolve(folder));
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -63,8 +64,17 @@ export function checkBotFolder(folder: string): FolderCheck {
   } catch (err) {
     return { id, ok: false, errors: [...errors, `profile.json 不是合法的 JSON：${(err as Error).message}`], warnings };
   }
-  const v = validateProfile(raw, id.startsWith('_') ? undefined : id);
+  const house = opts.house ?? isHouseFolder(folder);
+  const v = validateProfile(raw, id.startsWith('_') ? undefined : id, { house });
   return { id, ok: errors.length === 0 && v.ok, errors: [...errors, ...v.errors], warnings: v.warnings, profile: v.profile };
+}
+
+/** 官方 AI騎士 的資料夾（依玩家風格建立；作者固定「AI騎士團」，見 profile.ts `HOUSE_AUTHOR`）。 */
+export const HOUSE_DIR = '_knights';
+
+/** 這個資料夾在 `community-bots/_knights/` 底下嗎（只有這裡的 profile 可以用「AI騎士」開頭的名字）。 */
+export function isHouseFolder(folder: string): boolean {
+  return path.basename(path.dirname(path.resolve(folder))) === HOUSE_DIR;
 }
 
 function subfolders(dir: string): string[] {
