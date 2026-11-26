@@ -3,6 +3,8 @@ name: AI arena bot check
 # AI 擂台投稿檢查（docs/BOTS.md〈AI 擂台〉）：PR 動到 community-bots/ 時，對改到的機器人資料夾跑
 # `arena:check`（格式、開關白名單、範圍、名字規則、只能放 profile.json／README.md），再檢查整個名冊
 # （名字不重複、一人一隻）。
+# 同時跑一場 2,000 局的小擂台（smoke），分數表貼在 job summary（不留 PR 留言），看新的／改過的機器人大概落在哪。
+# 合併進 main 之後，arena-tournament.yml 會補跑 20,000 局，當天就上排行榜。
 #
 # fork 安全：用 pull_request（不是 pull_request_target），fork 來的 PR 拿到的是唯讀 token、沒有任何 secret；
 # 不執行投稿裡的任何東西（資料夾只允許 JSON 與 Markdown）。
@@ -16,6 +18,7 @@ on:
       - 'packages/server/scripts/arena*'
       - 'packages/server/scripts/arena/**'
       - '.github/workflows/arena-check.yml'
+      - '.github/workflows/arena-tournament.yml'
 
 permissions:
   contents: read
@@ -66,3 +69,41 @@ jobs:
             exit 1
           fi
           pnpm --filter @avalon/server arena:check --all --pr-author "${PR_AUTHOR}" "${folders[@]}"
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      # 和每日大賽同一條路（arena:daily shard → aggregate），只是局數少、寫在暫存資料夾、不 commit。
+      - name: Smoke tournament
+        env:
+          GAMES: '2000'
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          date="$(TZ=Asia/Taipei date +%F)"
+          pnpm --filter @avalon/server arena:daily shard --date "${date}" --kind smoke --run-id "${RUN_ID}" \
+            --games "${GAMES}" --slice 0/1 --workers "$(nproc)" --out "${RUNNER_TEMP}/smoke/shard-0.json"
+          mkdir -p "${RUNNER_TEMP}/smoke-arena"
+          cp -R arena/. "${RUNNER_TEMP}/smoke-arena/" 2>/dev/null || true
+          pnpm --filter @avalon/server arena:daily aggregate --in "${RUNNER_TEMP}/smoke" --arena "${RUNNER_TEMP}/smoke-arena" \
+            --summary "$GITHUB_STEP_SUMMARY"
+          { echo; echo "（試跑，不寫進排行榜；runner 有 $(nproc) 個 vCPU。）"; } >> "$GITHUB_STEP_SUMMARY"
