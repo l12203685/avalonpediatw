@@ -22,6 +22,7 @@ import {
   knightName,
   knightNameFits,
   scoreFamily,
+  styleCenter,
   styleTag,
   type CandidateScore,
   type DecisionType,
@@ -227,6 +228,7 @@ describe('knight names, folders and profiles', () => {
 
   it('describes a default-like profile plainly', () => {
     expect(describeStyle({}, STYLE_WORDS.steady)).toContain('和百科AI 幾乎一樣');
+    expect(styleTag({ roles: { loyal: { goodBayesGood: 0.5 }, percival: { goodBayesGood: 0.5 } } }, styleCenter([{ roles: { loyal: { goodBayesGood: 0.5 }, percival: { goodBayesGood: 0.5 } } }, {}, { roles: { loyal: { goodBayesGood: 0.4 }, percival: { goodBayesGood: 0.4 } } }]))).toBe(STYLE_WORDS.steady);
   });
 });
 

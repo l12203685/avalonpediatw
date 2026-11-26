@@ -74,10 +74,11 @@ const blueVote = (s: SpotLite): boolean => s.type === 'vote' && goodVoter(s.role
  * 藍方投票的門檻格點（`goodBayesVote` 的四個門檻）。舊的 `goodCleanVote`／`goodTailVote`／`goodKeyVote` 不擬合：
  * 現行預設裡第 3 局起忠臣、派西的票由貝氏準則決定，那三個門檻在真人局的決策點上幾乎不會改變任何一票（試跑 938 票 0 票不同）。
  */
-export const BAYES_GOOD_GRID = [0.5, 0.6, 0.7, 0.8, 0.9] as const;
-export const BAYES_BAD_GRID = [0.6, 0.7, 0.8, 0.9, 0.95] as const;
-export const BAYES_GOOD_KEY_GRID = [0.7, 0.8, 0.9, 0.95] as const;
-export const BAYES_BAD_KEY_GRID = [0.5, 0.6, 0.7, 0.8, 0.9] as const;
+// 第一次跑有很多玩家落在格點的端點（不在隊上更願意放行、在隊上更少內黑），所以端點往外加到開關的範圍邊界（新的值接在後面，probe 編號不變）。
+export const BAYES_GOOD_GRID = [0.5, 0.6, 0.7, 0.8, 0.9, 0.4] as const;
+export const BAYES_BAD_GRID = [0.6, 0.7, 0.8, 0.9, 0.95, 0.99] as const;
+export const BAYES_GOOD_KEY_GRID = [0.7, 0.8, 0.9, 0.95, 0.6, 0.5] as const;
+export const BAYES_BAD_KEY_GRID = [0.5, 0.6, 0.7, 0.8, 0.9, 0.95] as const;
 export const MIX_GRID = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1] as const;
 
 const D = DEFAULT_AGENT_TUNING;
@@ -360,9 +361,25 @@ export function styleAxes(layers: Pick<BotProfile, 'sides' | 'roles'>): { red: n
   return { red: redScore / 2, blue: blue / 2, merlin };
 }
 
-/** 風格標籤（2 或 4 個字，詞表裡的詞）。 */
-export function styleTag(layers: Pick<BotProfile, 'sides' | 'roles'>): string {
-  const ax = styleAxes(layers);
+export interface StyleCenter { red: number; blue: number; merlin: number }
+export const NO_CENTER: StyleCenter = { red: 0, blue: 0, merlin: 0 };
+
+/** 一群 AI騎士 每條方向軸的中位數（標籤和「其他 AI騎士」比，不是和百科AI 比：幾乎所有真人都比百科AI 少內黑，和百科AI 比全部都是「寬容」）。 */
+export function styleCenter(all: ReadonlyArray<Pick<BotProfile, 'sides' | 'roles'>>): StyleCenter {
+  if (all.length === 0) return NO_CENTER;
+  const med = (xs: number[]): number => {
+    const v = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(v.length / 2);
+    return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+  };
+  const ax = all.map(styleAxes);
+  return { red: med(ax.map((a) => a.red)), blue: med(ax.map((a) => a.blue)), merlin: med(ax.map((a) => a.merlin)) };
+}
+
+/** 風格標籤（2 或 4 個字，詞表裡的詞）。`center` = 比較的基準（預設 = 百科AI 本身）。 */
+export function styleTag(layers: Pick<BotProfile, 'sides' | 'roles'>, center: StyleCenter = NO_CENTER): string {
+  const raw = styleAxes(layers);
+  const ax = { red: raw.red - center.red, blue: raw.blue - center.blue, merlin: raw.merlin - center.merlin };
   const dims: Array<{ score: number; word: StyleWord }> = [
     { score: Math.abs(ax.red), word: ax.red >= 0 ? STYLE_WORDS.redBold : STYLE_WORDS.redSly },
     { score: Math.abs(ax.blue), word: ax.blue >= 0 ? STYLE_WORDS.blueStrict : STYLE_WORDS.blueLoose },
@@ -435,8 +452,8 @@ export function describeStyle(layers: Pick<BotProfile, 'sides' | 'roles'>, tag: 
     const s = describeKnob(e.key, e.value, allRedButOberon ? '紅方（奧伯倫除外）' : whoOf(e.roles, null));
     if (s) lines.push(s);
   }
-  const head = `依一位玩家自己的真人牌局擬合的打法（風格：${tag}）。`;
-  const body = lines.length ? `${lines.join('；')}。其他照百科AI。` : '和百科AI 幾乎一樣。';
+  const head = `依一位玩家自己的真人牌局擬合的打法（風格標籤：${tag}，和其他 AI騎士 比）。和百科AI 不同的地方：`;
+  const body = lines.length ? `${lines.join('；')}。其他照百科AI。` : '沒有，和百科AI 幾乎一樣。';
   let text = head + body;
   if ([...text].length > 300) text = `${[...text].slice(0, 299).join('')}…`;
   return text;
@@ -476,8 +493,8 @@ export function knightFolderId(playerId: string, serial: number): string {
 }
 
 /** 一份 AI騎士 的 profile（擂台格式，作者固定 AI騎士團）。 */
-export function buildKnightProfile(playerId: string, serial: number, layers: Pick<BotProfile, 'sides' | 'roles'>): BotProfile {
-  const tag = styleTag(layers);
+export function buildKnightProfile(playerId: string, serial: number, layers: Pick<BotProfile, 'sides' | 'roles'>, center: StyleCenter = NO_CENTER): BotProfile {
+  const tag = styleTag(layers, center);
   const p: BotProfile = {
     schema: 1,
     name: knightName(playerId, serial),

@@ -46,6 +46,7 @@ import {
   buildKnightProfile,
   buildProbes,
   chooseShrunk,
+  styleCenter,
   choicesToLayers,
   familyAgreement,
   familyOf,
@@ -90,6 +91,7 @@ interface Args {
   jobs?: string;
   shardOut?: string;
   profiles?: string;
+  probeIds?: string[];
 }
 
 function parseArgs(argv: string[]): Args {
@@ -124,6 +126,7 @@ function parseArgs(argv: string[]): Args {
       case '--jobs': a.jobs = next(); break;
       case '--shard-out': a.shardOut = next(); break;
       case '--profiles': a.profiles = next(); break;
+      case '--probe-ids': a.probeIds = next().split(','); break;
       case '--help': case '-h': console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); process.exit(0); break;
       default: throw new Error(`unknown argument ${k}`);
     }
@@ -248,7 +251,7 @@ function runShard(a: Args): void {
   const ds = loadJson<Dataset>(a.dataset);
   const jobs = loadJson<Job[]>(a.jobs!);
   const profiles = a.profiles ? loadJson<Record<string, BotProfile>>(a.profiles) : null;
-  const probes = buildProbes();
+  const probes = buildProbes().filter((p) => !a.probeIds || a.probeIds.includes(p.id));
   const families = buildFamilies();
   const [k, n] = a.shard!;
   const iId = ds.fields.indexOf('id');
@@ -447,6 +450,22 @@ async function main(): Promise<void> {
     if (JSON.stringify(cached.jobs) !== JSON.stringify(jobs)) throw new Error(`${probesFile} was made for different seats; delete it to recompute`);
     raw = cached.spots;
     console.error(`probes: reused ${raw.length} decision points from ${probesFile}`);
+    // 快取之後加的格點值：只補算缺的那幾次重播，併進去。
+    const have = new Set<string>();
+    for (const r of raw) for (const id of Object.keys(r[7])) have.add(id);
+    const missing = buildProbes().map((p) => p.id).filter((id) => !have.has(id));
+    if (missing.length) {
+      const extra = await runWorkers(a, jobs, ['--probe-ids', missing.join(',')], 'probes-extra');
+      const keyOf = (r: RawSpot): string => `${r[0]}|${r[1]}|${r[2]}|${r[3]}`;
+      const byKey = new Map(raw.map((r) => [keyOf(r), r]));
+      for (const r of extra) {
+        const old = byKey.get(keyOf(r));
+        if (old) Object.assign(old[7], r[7]);
+        else { raw.push(r); byKey.set(keyOf(r), r); }
+      }
+      fs.writeFileSync(probesFile, JSON.stringify({ jobs, spots: raw }));
+      console.error(`probes: added ${missing.join(',')}`);
+    }
   } else {
     raw = await runWorkers(a, jobs, [], 'probes');
   }
@@ -491,7 +510,8 @@ async function main(): Promise<void> {
 
   // 檢查：留出的一半用合起來的 profile 實際重播。
   const profiles: Record<string, BotProfile> = {};
-  kept.forEach((k, pi) => { if (k.keep) profiles[String(pi)] = buildKnightProfile(k.fit.id, 1, k.layers); });
+  const center = styleCenter(kept.filter((k) => k.keep).map((k) => k.layers));
+  kept.forEach((k, pi) => { if (k.keep) profiles[String(pi)] = buildKnightProfile(k.fit.id, 1, k.layers, center); });
   const profilesFile = path.join(a.out, 'profiles.json');
   fs.writeFileSync(profilesFile, JSON.stringify(profiles));
   const heldJobs = jobs.filter((j) => j[3] === 1 && profiles[String(j[2])]);
@@ -518,7 +538,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(path.join(a.out, 'fit.json'), JSON.stringify({ selected: selected.map(({ indices: _i, ...rest }) => rest), skipped, fits, kept: kept.map((k) => ({ id: k.fit.id, keep: k.keep })) }, null, 1));
   const gain = (x: { n: number; default: number; knight: number }): number => (x.n ? (100 * (x.knight - x.default)) / x.n : 0);
   const knights = kept.filter((k) => k.keep).map((k) => {
-    const profile = buildKnightProfile(k.fit.id, 1, k.layers);
+    const profile = buildKnightProfile(k.fit.id, 1, k.layers, center);
     const v = validateProfile(profile, knightFolderId(k.fit.id, 1), { house: true });
     if (!v.ok) throw new Error(`${k.fit.id}: generated profile invalid: ${v.errors.join('; ')}`);
     return { folder: knightFolderId(k.fit.id, 1), profile, fit: k.fit };
@@ -527,9 +547,9 @@ async function main(): Promise<void> {
   if (folders.size !== knights.length) throw new Error('duplicate knight folder ids');
 
   const table = kept.map((k) => ({
-    name: k.keep ? buildKnightProfile(k.fit.id, 1, k.layers).name : null,
+    name: k.keep ? buildKnightProfile(k.fit.id, 1, k.layers, center).name : null,
     kept: k.keep,
-    tag: k.keep ? buildKnightProfile(k.fit.id, 1, k.layers).tag : null,
+    tag: k.keep ? buildKnightProfile(k.fit.id, 1, k.layers, center).tag : null,
     heldDecisions: k.fit.held.n,
     heldAgreementDefault: Math.round((1000 * k.fit.held.default) / Math.max(1, k.fit.held.n)) / 10,
     heldAgreementKnight: Math.round((1000 * k.fit.held.knight) / Math.max(1, k.fit.held.n)) / 10,
@@ -549,6 +569,7 @@ async function main(): Promise<void> {
     selection: { minGames: a.minGames, strongTop: a.strongTop, byGames: selected.filter((p) => p.reason.includes('games')).length, strong: selected.filter((p) => p.strong.length).length },
     heldGainPp: gains.length ? { min: gains[0], p25: q(0.25), median: q(0.5), p75: q(0.75), max: gains[gains.length - 1] } : null,
     tagCounts,
+    styleCenter: center,
     knights: table,
   };
   console.log(JSON.stringify({ players: summary.players, kept: summary.kept, heldGainPp: summary.heldGainPp, tagCounts }, null, 1));
