@@ -113,7 +113,7 @@ function readHistory(dir: string): HistorySnapshot[] {
 function compactJson(s: HistorySnapshot): string {
   // 一隻機器人一行，diff 好讀、檔案也小。
   const bots = Object.entries(s.bots).map(([id, t]) => `    ${JSON.stringify(id)}: ${JSON.stringify(t)}`).join(',\n');
-  const { bots: _omit, ...head } = s;
+  const head = { schema: s.schema, kind: s.kind, period: s.period, games: s.games, runs: s.runs };
   const headJson = JSON.stringify(head, null, 2).replace(/\n}$/, '');
   return `${headJson},\n  "bots": {\n${bots}\n  }\n}\n`;
 }
