@@ -13213,7 +13213,7 @@ A0（好人持湖說實話）、A1（紅方已兩勝必出失敗）照舊是硬�
 
 - 新增 `Round87.test.ts`（5 個：四個開關存在、基準線與每一種真人桌都 0、解析與描述；範圍——只有梅林、在隊上、不是隊長、非強制、第 3 局起（位元 1 第 1、2 局、位元 16 第 4 局不做）、本來是贊成不做；致命不做——紅方已兩勝有看得到的紅、第 4 局兩個看得到的紅、自己湖查到的紅在隊上；位元 2／4／8；公開的 P(乾淨) 不受梅林視野影響、硬門檻、溫度可重現、比例、閘門；位元 32 的比例；在代理人裡：關的時候照原本、開的時候梅林的反對改成贊成、同隊忠臣的票不變、致命的隊照舊反對）；`AgentTuning.test`（四個新開關列為數值開關）。
 - 伺服器完整測試、`tsc --noEmit`（server 與 scripts）、新檔案 eslint：見 PR。`build_ai_history.ts` 重新產生（沒有採用，沒有新里程碑）。
-- 不變量（`invariantHarness.ts`，300 局重播＋探針＋300 局自我對打，種子 791001）：基準線、一般真人桌各加 `merlinInnerBlackShield87=0.001` 與 M50 四組——INV_PLACEHOLDER
+- 不變量（`invariantHarness.ts`，300 局重播＋探針＋300 局自我對打，種子 791001）：基準線、一般真人桌各加 `merlinInnerBlackShield87=0.001` 與 M50 四組——**每一條規則的機器人違反都是 0**；A0、A1 的編碼 INV-B1／INV-B2 0 違反（重播 3,531／5,945 個機會；自我對打 3,410–3,567／4,473–5,597）；INV-M1 0（重播 2,853、自我對打 2,981–3,088；梅林在隊上的贊成本來就是登記的例外「正常票內白」）。
 - 情境題庫（`scenarioSuite.ts`）：預設與 `merlinInnerBlackShield87=0.001`，硬規則（A0 15 題、A1 11 題、站長寫死的裁定 10 題）100%，其餘各類兩組相同。
 - 隱私：腳本的輸入輸出只有座位、角色、隊伍、票、任務牌、刺殺與比例；「強的真人梅林」的局號旗標（第 82 回合產生，要讀玩家名）沒有進 repo。
 - 新檔：`src/ai/Round87.ts`、`src/ai/Round87.test.ts`、`scripts/merlinShieldStudy87.py`、`docs/ai/gap/r87-merlin-shield.md`。改到：`ForwardAgent.ts`（梅林投票最後多一步，關的時候不走）、`AgentTuning.ts`（四個開關）、`onTeamVoteStudy59.ts`（`--roles`、`--min-round`、`--no-why`）。自我對打用 `selfplay-runs-r71` 分支的 `sp.ts`（只在本機多印每局改到幾票 `f87`，沒有改對局）。
