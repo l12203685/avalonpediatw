@@ -132,3 +132,114 @@ function readNow(game: SimGame, seat: number, proposalIndex: number): AiReading 
   }
   return { redShare, topWorlds, teams, twoFails, good };
 }
+
+// ─── /公布：百科AI 會派的前三種組合（站長 2026-11-26） ─────────────────────────
+
+/**
+ * 站長 2026-11-26：「模擬瓦公布時加入「現行百科AI會派的組合前三種可能（若只有一種可能不用硬給到三種）」」。
+ *
+ * 正式機器人（defaultBot：ForwardAgent ＋ 目前的 DEFAULT_AGENT_TUNING，網站真人桌用的同一個）的決定裡有亂數，
+ * 所以「會派哪一隊」是一個分布：換不同的種子讓它在題目那一刻、題目那一家重派很多次，數每一隊出現幾次。
+ *   - 第 0 次的種子跟 /區間 一樣（`<局>|<座位>|read-<次>` 開局、`team-<次>` 派），所以 /區間 的「百科AI 會派」一定在樣本裡；
+ *     刺殺題第 0 次跟 Threads 百科AI 作答一樣（`<局>|<座位>|assassinate`）。
+ *   - 先派 AI_PICK_PROBE 次；每次都一樣 → 這一刻沒有亂數（大部分的題目），只列那一隊。不然派滿 AI_PICK_SAMPLES 次。
+ *   - 出現不到 AI_PICK_MIN_SHARE（5%）的不列；最多列 3 種；只剩一種就只列一種（不硬湊三種）。
+ *   - 每派一次讓出一次事件迴圈（不卡住其他聊天室和網站）；超過 budgetMs 而且已經派滿 AI_PICK_PROBE 次就照手上的算。
+ * 同一題、同樣的次數，結果每次一樣（種子固定）。
+ */
+export const AI_PICK_SAMPLES = 24;
+export const AI_PICK_PROBE = 8;
+export const AI_PICK_MIN_SHARE = 0.05;
+export const AI_PICK_MAX = 3;
+/** 正式機一次 /公布 最多花多久重派（毫秒）。一般 0.1–2 秒。 */
+export const AI_PICK_BUDGET_MS = 3_000;
+
+export type AiPickPoint = { kind: 'team_select'; proposal: number } | { kind: 'assassination' };
+
+export interface AiPick {
+  /** 隊伍（座位遞增）；刺殺題是一個座位。 */
+  seats: number[];
+  /** 這一隊在樣本裡的比例。 */
+  p: number;
+}
+
+export interface AiPicks {
+  kind: 'team' | 'assassinate';
+  /** 最多 AI_PICK_MAX 種，比例高的在前（同比例照座位）。 */
+  picks: AiPick[];
+  /** 沒列出來的其他組合加起來的比例（0 = 全部列了）。 */
+  others: number;
+  /** 實際派了幾次。 */
+  samples: number;
+}
+
+export interface AiPickOptions {
+  samples?: number;
+  probe?: number;
+  budgetMs?: number;
+  now?: () => number;
+  /** 每派一次之後呼叫（預設讓出事件迴圈）。 */
+  yieldFn?: () => Promise<void>;
+}
+
+const yieldLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+/** 第 k 次的種子尾巴（第 0 次跟 /區間、Threads 一樣，沒有尾巴）。 */
+const tail = (k: number): string => (k === 0 ? '' : `|s${k}`);
+
+/** 第 k 次：正式機器人在 `point` 會派的隊（座位遞增）／會刺的座位；派不出來 → null。 */
+export function aiPickOnce(game: SimGame, seat: number, point: AiPickPoint, k: number): number[] | null {
+  if (point.kind === 'assassination') {
+    return withSeededRandom(`${game.id}|${seat}|assassinate${tail(k)}`, () => {
+      const obs = decisionObservation(game, seat, { kind: 'assassination' });
+      const { agent } = defaultBot(game, seat);
+      const a = agent.act(obs);
+      return a.type === 'assassinate' ? [seatOfId(a.targetId)] : null;
+    });
+  }
+  const p = point.proposal;
+  return withSeededRandom(`${game.id}|${seat}|read-${p}${tail(k)}`, () => {
+    const obs = decisionObservation(game, seat, { kind: 'team_select', proposal: p });
+    const { agent } = defaultBot(game, seat);
+    const a = withSeededRandom(`${game.id}|${seat}|team-${p}${tail(k)}`, () => agent.act(obs));
+    return a.type === 'team_select' && a.teamIds.length > 0 ? sortedSeats(a.teamIds) : null;
+  });
+}
+
+/** 一串樣本 → 前幾種（比例 ≥ AI_PICK_MIN_SHARE，最多 AI_PICK_MAX 種）。沒有樣本 → null。 */
+export function summarizePicks(kind: AiPicks['kind'], samples: readonly (readonly number[])[]): AiPicks | null {
+  if (samples.length === 0) return null;
+  const counts = new Map<string, { seats: number[]; n: number }>();
+  for (const s of samples) {
+    const key = s.join(',');
+    const hit = counts.get(key);
+    if (hit) hit.n += 1;
+    else counts.set(key, { seats: [...s], n: 1 });
+  }
+  const ranked = [...counts.values()]
+    .sort((a, b) => b.n - a.n || a.seats.join(',').localeCompare(b.seats.join(',')))
+    .map((c) => ({ seats: c.seats, p: c.n / samples.length }));
+  // 第一名一定列（就算每一種都很少，例如第 1 局隨便派）；其他要 ≥ 5%。
+  const picks = ranked.filter((c, i) => i === 0 || c.p >= AI_PICK_MIN_SHARE).slice(0, AI_PICK_MAX);
+  const shown = picks.reduce((a, c) => a + c.p, 0);
+  return { kind, picks, others: Math.max(0, 1 - shown), samples: samples.length };
+}
+
+/** 題目那一家（`seat`）在 `point` 那一刻，正式機器人會派（刺）的前幾種，和各自的比例。派不出來 → null。 */
+export async function aiPicks(game: SimGame, seat: number, point: AiPickPoint, opts: AiPickOptions = {}): Promise<AiPicks | null> {
+  const total = Math.max(1, opts.samples ?? AI_PICK_SAMPLES);
+  const probe = Math.min(total, Math.max(1, opts.probe ?? AI_PICK_PROBE));
+  const budget = opts.budgetMs ?? AI_PICK_BUDGET_MS;
+  const now = opts.now ?? Date.now;
+  const pause = opts.yieldFn ?? yieldLoop;
+  const t0 = now();
+  const samples: number[][] = [];
+  for (let k = 0; k < total; k++) {
+    const s = aiPickOnce(game, seat, point, k);
+    if (s) samples.push(s);
+    if (k + 1 === probe && samples.length > 0 && samples.every((x) => x.join(',') === samples[0].join(','))) break;
+    if (k + 1 >= probe && now() - t0 > budget) break;
+    await pause();
+  }
+  return summarizePicks(point.kind === 'assassination' ? 'assassinate' : 'team', samples);
+}

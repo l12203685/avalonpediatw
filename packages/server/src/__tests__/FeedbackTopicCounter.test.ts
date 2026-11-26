@@ -249,7 +249,7 @@ describe('FeedbackService.submit', () => {
     expect(r).toMatchObject({ accepted: false, reply: FEEDBACK_USAGE_TEXT });
     expect(await r.forwarded).toBe('none');
     expect(sent).toEqual([]);
-    expect(svc.snapshot()).toEqual({ weeks: [], opinions: { line: 0, discord: 0 } });
+    expect(svc.snapshot()).toEqual({ weeks: [], opinions: { line: 0, discord: 0 }, simFeedback: { sent: 0, skipped: 0, failed: 0, throttled: 0 }, inGameForwards: { sent: 0, skipped: 0, failed: 0, throttled: 0 } });
   });
 
   it('caps forwards per rolling hour (ack and counts continue)', async () => {

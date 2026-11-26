@@ -1342,7 +1342,11 @@ export class GameEngine {
    * emit a system-chat message) or `null` if nothing to update (caller
    * should treat this as a no-op).
    */
-  public declareLakeResult(playerId: string, claim: 'good' | 'evil'): LadyOfTheLakeRecord | null {
+  public declareLakeResult(
+    playerId: string,
+    claim: 'good' | 'evil',
+    opts: { via?: 'chat' } = {},
+  ): LadyOfTheLakeRecord | null {
     if (!this.room.ladyOfTheLakeHistory || this.room.ladyOfTheLakeHistory.length === 0) {
       throw new Error('No Lady of the Lake inspection to declare');
     }
@@ -1366,6 +1370,8 @@ export class GameEngine {
       ...last,
       declared: true,
       declaredClaim: claim,
+      // 站長 2026-11-26「有時候玩家的湖中宣告會只送文字」：從房間聊天讀到的宣告（game/lakeChatDeclare.ts）多記這個。
+      ...(opts.via === 'chat' ? { declaredVia: 'chat' as const } : {}),
     };
     // Immutable replace of the last history entry.
     this.room.ladyOfTheLakeHistory = [
@@ -1379,6 +1385,7 @@ export class GameEngine {
       claim,
       actualResult: last.result,
       round: last.round,
+      ...(opts.via === 'chat' ? { via: 'chat' } : {}),
     }, playerId);
 
     // Broadcast the declaration first so every client sees it on the

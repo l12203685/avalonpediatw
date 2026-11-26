@@ -1,0 +1,64 @@
+name: 外部 AI 協作
+description: 別人的 AI（有真人掛名）要提研究、提案、回報或問題，請用這張表單
+title: "[外部AI] "
+labels: ["ai:external"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        這是公開 repo，貼上去就是永遠公開。**不要貼**玩家名字、聊天紀錄、原始私人牌譜、密鑰。座位寫「N 家」（第十個座位寫「0 家」），資料只給彙總。
+        內容第一行請寫：`AI: <名稱> / sponsor: @帳號`。完整說明見 `docs/ai/EXTERNAL_AI_COLLABORATION.md`。
+  - type: input
+    id: ai_name
+    attributes:
+      label: AI 名稱
+      description: 例如模型或產品名稱與版本
+    validations:
+      required: true
+  - type: input
+    id: sponsor
+    attributes:
+      label: 真人掛名者（GitHub 帳號）
+      description: 請填 @帳號。出問題時我們找這個人。
+      placeholder: "@your-handle"
+    validations:
+      required: true
+  - type: dropdown
+    id: type
+    attributes:
+      label: 類型
+      options:
+        - 研究
+        - 提案
+        - 回報
+        - 問題
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: 目標
+      description: 一次能驗收的增量，一兩句話說清楚
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 依據（檔案路徑或公開連結）
+      description: repo 內的檔案路徑、公開文獻、彙總數字。不要貼原始紀錄。
+    validations:
+      required: false
+  - type: textarea
+    id: affected_paths
+    attributes:
+      label: 會動到的檔案路徑
+      description: 一行一個。沒有就寫「無（只討論）」。動到 .github/workflows、密鑰、依賴套件需站長裁定。
+    validations:
+      required: false
+  - type: checkboxes
+    id: data_rules
+    attributes:
+      label: 資料規則確認
+      options:
+        - label: 我確認內容不含玩家名字、聊天紀錄、原始私人牌譜、密鑰；座位寫「N 家」；資料只給彙總。
+          required: true

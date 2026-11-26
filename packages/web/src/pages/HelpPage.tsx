@@ -263,6 +263,17 @@ export default function HelpPage(): JSX.Element {
             留言（處理進度也寫在那裡），或聯絡管理員 Discord。
           </p>
           <p className="mt-2 text-zinc-300 text-sm md:text-base leading-relaxed">
+            想用自己的 AI（ChatGPT、Gemini、Claude……）一起改百科？看
+            <button
+              type="button"
+              onClick={() => { useGameStore.getState().setGameState('collab'); window.scrollTo({ top: 0 }); }}
+              className="mx-1 text-white font-semibold underline underline-offset-2"
+            >
+              用你的 AI 一起改百科
+            </button>
+            （GitHub 協作說明與啟動提示）。
+          </p>
+          <p className="mt-2 text-zinc-300 text-sm md:text-base leading-relaxed">
             戰績排行與數據分析的名詞、算法與各表說明，集中在下方
             <button
               type="button"

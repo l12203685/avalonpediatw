@@ -33,6 +33,7 @@ import { isSeatFillerCommandText } from '../seatFiller/commands';
 import { isPaipuFixCommandText } from '../paipuFix/commands';
 import { isCommunityCommandText } from '../reports/commands';
 import { isDailyQuestionCommandText } from '../dailyQuestion/commands';
+import { formatSimFeedbackForward, type SimFeedbackRecord } from '../simulation/feedback';
 
 /** What the service hands to Discord: content + no pings, ever. */
 export interface FeedbackForwardPayload {
@@ -70,6 +71,16 @@ export interface FeedbackSubmitResult {
 export interface FeedbackSnapshot {
   weeks: TopicWeekSnapshot[];
   opinions: { line: number; discord: number };
+  /**
+   * 模擬瓦的玩家回饋（2026-11-26，simulation/feedback.ts）轉到管理員頻道的結果：送出幾則、沒送（沒有頻道／Discord 沒連上）、
+   * 失敗、超過每小時上限。跟 /意見 共用頻道和每小時上限。
+   */
+  simFeedback: { sent: number; skipped: number; failed: number; throttled: number };
+  /**
+   * 網站房間聊天裡對百科AI 玩法的回饋（2026-11-26，src/inGameFeedback）轉到管理員頻道的結果。跟 /意見 共用頻道和每小時上限；
+   * 每局自己的上限在 inGameFeedback（那裡的 throttled 另算，在 feedback.inGame）。
+   */
+  inGameForwards: { sent: number; skipped: number; failed: number; throttled: number };
 }
 
 export interface FeedbackServiceOptions {
@@ -114,6 +125,8 @@ export class FeedbackService {
   private readonly now: () => number;
   private readonly logger: NonNullable<FeedbackServiceOptions['logger']>;
   private readonly opinions = { line: 0, discord: 0 };
+  private readonly simFeedback = { sent: 0, skipped: 0, failed: 0, throttled: 0 };
+  private readonly inGameForwards = { sent: 0, skipped: 0, failed: 0, throttled: 0 };
   /** Epoch ms of forwards in the last hour (for the global flood cap). */
   private forwardTimes: number[] = [];
 
@@ -201,20 +214,66 @@ export class FeedbackService {
     return { accepted: true, reply: FEEDBACK_ACK_TEXT, forwarded };
   }
 
-  snapshot(): FeedbackSnapshot {
-    return { weeks: this.counter.snapshot(), opinions: { ...this.opinions } };
+  /**
+   * 模擬瓦的玩家回饋（站長 2026-11-26「玩家如果反饋是爛局或是吐槽的內容記得記錄下來」，simulation/feedback.ts）：
+   * 跟 /意見 同一個地方——管理員頻道「大劍管理員」（FEEDBACK_DISCORD_CHANNEL_ID 可改），格式
+   * `🎲 模擬瓦回饋（LINE）｜…`，沒有名字、使用者只有雜湊、不 @ 人；同一則裡帶題號、時間和原文。
+   * 不等 Discord、從不丟錯；log 只有固定文字。結果只算數字（snapshot().simFeedback）。
+   */
+  recordSimFeedback(record: SimFeedbackRecord): Promise<FeedbackForwardOutcome> {
+    const content = formatSimFeedbackForward(record);
+    return this.send(record.platform, content, 'sim feedback')
+      .catch((err: unknown): FeedbackForwardOutcome => {
+        this.logger.error(`forwarding sim feedback failed: ${describeError(err)}`);
+        return 'failed';
+      })
+      .then((outcome) => {
+        if (outcome !== 'none') this.simFeedback[outcome] += 1;
+        return outcome;
+      });
   }
 
-  private async forward(platform: FeedbackPlatform, content: string): Promise<FeedbackForwardOutcome> {
+  /**
+   * 網站遊戲內回饋（站長 2026-11-26「遊戲中的對話你也記得讀取並學習 有可能是玩家對你玩法的反饋」，src/inGameFeedback）：
+   * 已經排好格式的一則（`📮 遊戲內回饋（房間…，第N局任務M，K家→提到 …）：…`，只有座位、沒有名字和 id）送到同一個管理員頻道。
+   * 不等 Discord、從不丟錯；log 只有固定文字。結果只算數字（snapshot().inGameForwards）。
+   */
+  recordInGameFeedback(content: string): Promise<FeedbackForwardOutcome> {
+    return this.send('site', content, 'in-game feedback')
+      .catch((err: unknown): FeedbackForwardOutcome => {
+        this.logger.error(`forwarding in-game feedback failed: ${describeError(err)}`);
+        return 'failed';
+      })
+      .then((outcome) => {
+        if (outcome !== 'none') this.inGameForwards[outcome] += 1;
+        return outcome;
+      });
+  }
+
+  snapshot(): FeedbackSnapshot {
+    return {
+      weeks: this.counter.snapshot(),
+      opinions: { ...this.opinions },
+      simFeedback: { ...this.simFeedback },
+      inGameForwards: { ...this.inGameForwards },
+    };
+  }
+
+  private forward(platform: FeedbackPlatform, content: string): Promise<FeedbackForwardOutcome> {
+    return this.send(platform, formatFeedbackForward(platform, content), 'opinion');
+  }
+
+  /** 一則（已經排好格式的）文字送到管理員頻道：頻道、每小時上限、失敗時還回額度，/意見 和模擬瓦回饋共用。 */
+  private async send(platform: FeedbackPlatform | 'site', content: string, what: string): Promise<FeedbackForwardOutcome> {
     const channelId = this.channelId();
     if (!channelId || !this.discord) {
-      this.logger.warn(`opinion from ${platform} acknowledged but not forwarded (no Discord channel / sender)`);
+      this.logger.warn(`${what} from ${platform} acknowledged but not forwarded (no Discord channel / sender)`);
       return 'skipped';
     }
     const now = this.now();
     this.forwardTimes = this.forwardTimes.filter((t) => now - t < HOUR_MS);
     if (this.forwardTimes.length >= this.maxForwardsPerHour) {
-      this.logger.warn(`opinion from ${platform} not forwarded: hourly cap (${this.maxForwardsPerHour}) reached`);
+      this.logger.warn(`${what} from ${platform} not forwarded: hourly cap (${this.maxForwardsPerHour}) reached`);
       return 'throttled';
     }
     // Reserve the slot before the send (forwards run concurrently) and give
@@ -224,18 +283,18 @@ export class FeedbackService {
     this.forwardTimes.push(now);
     try {
       const ok = await this.discord.send(channelId, {
-        content: formatFeedbackForward(platform, content),
+        content,
         allowedMentions: { parse: [] },
       });
       if (!ok) {
         this.releaseForwardSlot(now);
-        this.logger.warn(`opinion from ${platform} not forwarded: Discord channel unavailable`);
+        this.logger.warn(`${what} from ${platform} not forwarded: Discord channel unavailable`);
         return 'failed';
       }
       return 'sent';
     } catch (err) {
       this.releaseForwardSlot(now);
-      this.logger.error(`forwarding opinion from ${platform} to Discord threw: ${describeError(err)}`);
+      this.logger.error(`forwarding ${what} from ${platform} to Discord threw: ${describeError(err)}`);
       return 'failed';
     }
   }

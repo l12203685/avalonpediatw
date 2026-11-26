@@ -80,7 +80,23 @@ export interface PracticeTracePayload {
   flagUnavailableReason?: string;
   flagsLeft: number;
   flaggedEntryIds: number[];
+  /** 局後的整局回饋：enabled＝會問也存得下來；done＝局後那一題已回答或略過；wholeGameLeft＝「整局回饋」還能送幾則。 */
+  exploitAsk?: { enabled: boolean; done: boolean; wholeGameLeft?: number };
 }
+
+/** 局後那一題的選項（伺服器 practice/PracticeExploitReport.ts 有同樣一份）。 */
+export const PRACTICE_EXPLOIT_CHOICES = [
+  'red_bot_play',
+  'blue_bot_play',
+  'merlin_obvious',
+  'assassin_fooled',
+  'team_fixed',
+  'vote_fixed',
+  'lake',
+  'none',
+] as const;
+export type PracticeExploitChoice = (typeof PRACTICE_EXPLOIT_CHOICES)[number];
+export const PRACTICE_EXPLOIT_TEXT_MAX = 500;
 
 export interface PracticeFlagResult {
   ok: boolean;
@@ -117,6 +133,44 @@ export async function fetchPracticeTrace(roomId: string): Promise<PracticeTraceP
 /** 「這步怪怪的」 — server appends it to the private report sheet. */
 export async function flagPracticeDecision(roomId: string, entryId: number, note: string): Promise<PracticeFlagResult> {
   return emitWithAck<PracticeFlagResult>('practice:flag', { roomId, entryId, note });
+}
+
+/** 局後那一題：題目顯示了（伺服器只算一次）。失敗不用管。 */
+export function notePracticeExploitShown(roomId: string): void {
+  try {
+    emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'shown' }).catch(() => undefined);
+  } catch {
+    // not connected — only a counter, nothing to retry
+  }
+}
+
+/** 局後那一題：略過（這局被伺服器標記的話照樣記一列）。 */
+export async function skipPracticeExploitAsk(roomId: string): Promise<PracticeFlagResult> {
+  return emitWithAck<PracticeFlagResult>('practice:exploit-ask', { roomId, action: 'skip' });
+}
+
+export type PracticeExploitSource = 'end-card' | 'whole-game';
+
+export interface PracticeExploitAskResult {
+  ok: boolean;
+  error?: string;
+  /** 有的話：一個開放的追問（伺服器用簡單規則挑），答案寫在同一列。 */
+  followUp?: { code: string; question: string };
+}
+
+/** 整局回饋：送出描述（主要）＋選填標籤。`source`：局後那一題，或回顧裡的「整局回饋（不限某一步）」。 */
+export async function answerPracticeExploitAsk(
+  roomId: string,
+  choices: readonly PracticeExploitChoice[],
+  text: string,
+  source: PracticeExploitSource = 'end-card',
+): Promise<PracticeExploitAskResult> {
+  return emitWithAck<PracticeExploitAskResult>('practice:exploit-ask', { roomId, action: 'answer', choices, text, source });
+}
+
+/** 追問的回答（空字串＝略過）。 */
+export async function answerPracticeFollowUp(roomId: string, text: string): Promise<PracticeExploitAskResult> {
+  return emitWithAck<PracticeExploitAskResult>('practice:exploit-ask', { roomId, action: 'follow-up', text });
 }
 
 /**

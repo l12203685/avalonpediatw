@@ -28,15 +28,19 @@ interface PracticeStore {
   traces: Record<string, PracticeTracePayload>;
   /** `${roomId}:${entryId}` of decisions this player flagged. */
   flagged: Record<string, true>;
+  /** Practice rooms whose post-game 「被針對」 question was answered or skipped. */
+  exploitDone: Record<string, true>;
   lastOptions: PracticeOptions;
   setTrace: (payload: PracticeTracePayload) => void;
   markFlagged: (roomId: string, entryId: number, flagsLeft?: number) => void;
   setLastOptions: (options: PracticeOptions) => void;
+  markExploitDone: (roomId: string) => void;
 }
 
 export const usePracticeStore = create<PracticeStore>((set) => ({
   traces: {},
   flagged: {},
+  exploitDone: {},
   lastOptions: readLastOptions(),
   setTrace: (payload): void =>
     set((s) => {
@@ -64,4 +68,5 @@ export const usePracticeStore = create<PracticeStore>((set) => ({
     }
     set({ lastOptions: options });
   },
+  markExploitDone: (roomId): void => set((s) => ({ exploitDone: { ...s.exploitDone, [roomId]: true } })),
 }));

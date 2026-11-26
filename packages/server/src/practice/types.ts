@@ -123,6 +123,11 @@ export interface PracticeTracePayload {
   flagUnavailableReason?: string;
   flagsLeft: number;
   flaggedEntryIds: number[];
+  /**
+   * 局後一題「這局你有針對百科AI 的哪個習慣嗎？」（2026-11-26，practice/PracticeExploitReport.ts）：
+   * enabled＝這台伺服器會問也存得下來；done＝局後那一題已經回答或略過；wholeGameLeft＝「整局回饋（不限某一步）」還能送幾則。
+   */
+  exploitAsk?: { enabled: boolean; done: boolean; wholeGameLeft: number };
 }
 
 export interface PracticeFlagResult {
