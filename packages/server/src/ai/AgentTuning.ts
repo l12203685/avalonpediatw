@@ -1599,7 +1599,7 @@ export interface AgentTuning {
   merlinInnerBlackShieldTemp87: number;
   /** 第 87 回合：`merlinInnerBlackShield87` 只在這個比例的決策點做（0 = 全部）。 */
   merlinInnerBlackShieldRate87: number;
-  /** 第 87 回合：`merlinInnerBlackShield87` 的範圍（位元）：1 = 第 1、2 局也做；2 = 紅方已兩勝的局完全不做；4 = 只在隊上沒有看得到的紅；8 = 只在隊上有看得到的紅；16 = 第 4 局不做。 */
+  /** 第 87 回合：`merlinInnerBlackShield87` 的範圍（位元）：1 = 第 1、2 局也做；2 = 紅方已兩勝的局完全不做；4 = 只在隊上沒有看得到的紅；8 = 只在隊上有看得到的紅；16 = 第 4 局不做；32 = 門檻改看「隊上其他人照忠臣準則會贊成的比例」。 */
   merlinInnerBlackShieldScope87: number;
   /**
    * 第 63 回合（`Round63.ts`；Gemini 第二意見 G1 `innerBlackEvGate`，`docs/ai/gemini_strategy_review.md` 問題二）：忠臣／派西第 3 局起在隊上（非強制、不是隊長），
@@ -3910,7 +3910,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'merlinInnerBlackShieldScope87') {
     const value = raw === undefined ? 0 : Number.parseInt(raw, 10);
-    if (!Number.isInteger(value) || value < 0 || value > 31) throw new Error(`merlinInnerBlackShieldScope87 needs an integer 0–31, got "${raw}"`);
+    if (!Number.isInteger(value) || value < 0 || value > 63) throw new Error(`merlinInnerBlackShieldScope87 needs an integer 0–63, got "${raw}"`);
     return { merlinInnerBlackShieldScope87: value };
   }
   if (name === 'merlinGatedThumbScope83') {

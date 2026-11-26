@@ -12,13 +12,16 @@
  *   3. 硬門檻（`merlinInnerBlackShieldTemp87 = 0`）：p ≥ τ 就贊成；溫度 T > 0：以 1 / (1 + e^{−(p − τ)/T}) 的比例贊成（照座位、局、第幾次提議雜湊）。
  *   4. 比例 `merlinInnerBlackShieldRate87 = q`（0 = 1）：整條規則只在雜湊 < q 的決策點做（機率遮罩）。
  * `merlinInnerBlackShieldScope87`（位元）：1 = 第 1、2 局也做（預設只有第 3 局起，第 59／63 回合的事件範圍）；2 = 紅方已兩勝的局完全不做（預設只排除當場會輸的隊）；
- *   4 = 只在隊上沒有他看得到的紅時做；8 = 只在隊上有他看得到的紅時做；16 = 第 4 局不做。
+ *   4 = 只在隊上沒有他看得到的紅時做；8 = 只在隊上有他看得到的紅時做；16 = 第 4 局不做；
+ *   32 = p 改成「隊上其他人（他看得到的紅以外）坐在自己位置、只看公開紀錄時，照忠臣在隊上的投票準則（`bayesVoteCriteria`）會贊成的比例」——
+ *        提案原文的「隊上其他忠臣／派西投贊成的估計比例」；門檻 τ 是比例（例如 0.5 = 至少一半會贊成）。
  * 只改梅林自己的票（反對 → 贊成），不改派隊、湖、刺殺，也不改任何其他座位。A0、A1 不相干（A1 的局面 = 第 1 步排除）。
  * INV-M1 在隊上的贊成本來就是登記的例外（站長 2026-10-30「正常票內白沒有任何問題」）。開關關時逐局相同（不抽亂數、不改狀態）。
  */
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { bayesOptionsOf, bayesTeamClean, bayesTeamRedsBelow } from './belief/BayesBelief';
+import { bayesVoteCriteria } from './BlueRound33';
 import { merlinVoteFatal } from './MerlinLoyalStyle';
 import { loyalViewOf } from './RedR1Teammate';
 
@@ -85,11 +88,31 @@ export function shield87PublicClean(tuning: Readonly<Partial<AgentTuning>>, obs:
 }
 
 /**
+ * 位元 32：隊上其他人（他看得到的紅以外）坐在自己位置、只看公開紀錄的忠臣，照忠臣在隊上的投票準則會贊成的比例（沒有人 → null）。
+ * 準則不適用（null）的座位算贊成（忠臣在隊上的預設是贊成）。
+ */
+export function shield87MatesApprove(tuning: Readonly<AgentTuning>, obs: PlayerObservation): number | null {
+  const team = obs.proposedTeam ?? [];
+  const mates = team.filter((id) => id !== obs.myPlayerId && !obs.knownEvils.includes(id));
+  if (mates.length === 0) return null;
+  let yes = 0;
+  for (const id of mates) {
+    const view = {
+      ...obs, myPlayerId: id, myRole: 'loyal', myTeam: 'good', seatTeam: 'good', knownEvils: [], knownWizards: undefined,
+      allEvilIds: undefined, allEvilRoles: undefined, myLakeResults: [], publicLoyalView: true,
+    } as PlayerObservation;
+    const v = bayesVoteCriteria(tuning, view);
+    if (v === null || v.vote) yes++;
+  }
+  return yes / mates.length;
+}
+
+/**
  * 梅林在隊上的反對改成贊成嗎？`gatesOk` = 公開視角的邏輯閘門與他自己的閘門（`mustFail` 除外）都沒有擋下（呼叫端算，`ForwardAgent`）。
  * 回傳 null = 不在範圍內或這一次不做（照原本的反對）；否則 { approve, p }。
  */
 export function shield87Decide(
-  tuning: Readonly<Partial<AgentTuning>>, obs: PlayerObservation, vote: boolean, gatesOk: () => boolean,
+  tuning: Readonly<AgentTuning>, obs: PlayerObservation, vote: boolean, gatesOk: () => boolean,
 ): { approve: boolean; p: number } | null {
   if (!shield87Applies(tuning, obs, vote)) return null;
   round87Stats.applies++;
@@ -98,7 +121,7 @@ export function shield87Decide(
   if (cfg.rate < 1 && hash01(`${key}|shield87rate`) >= cfg.rate) return null;
   round87Stats.rolled++;
   if (!gatesOk()) return null;
-  const p = shield87PublicClean(tuning, obs);
+  const p = (cfg.scope & 32) !== 0 ? shield87MatesApprove(tuning, obs) : shield87PublicClean(tuning, obs);
   if (p === null) return null;
   round87Stats.evaluated++;
   const approve = cfg.temp > 0 ? hash01(`${key}|shield87temp`) < 1 / (1 + Math.exp(-(p - cfg.tau) / cfg.temp)) : p >= cfg.tau;

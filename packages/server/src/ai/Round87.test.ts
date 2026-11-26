@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { AgentTuning } from './AgentTuning';
 import type { PlayerObservation } from './types';
 import { AGENT_TUNING_KEYS, DEFAULT_AGENT_TUNING, LEGACY_AGENT_TUNING, describeAgentTuning, parseTuningFlag } from './AgentTuning';
-import { shield87Applies, shield87Config, shield87Decide, shield87PublicClean } from './Round87';
+import { shield87Applies, shield87Config, shield87Decide, shield87MatesApprove, shield87PublicClean } from './Round87';
 import { tuningForOpponent } from './humanProfile';
 import { buildReplayObservation, seatId } from './benchmark/replayObservation';
 import type { ReplayGame, ReplayProposal } from './benchmark/sheetsReplay';
@@ -50,7 +50,8 @@ describe('round 87 flags', () => {
     expect(parseTuningFlag('merlinInnerBlackShieldRate87=0.5')).toEqual({ merlinInnerBlackShieldRate87: 0.5 });
     expect(parseTuningFlag('merlinInnerBlackShieldScope87=18')).toEqual({ merlinInnerBlackShieldScope87: 18 });
     expect(() => parseTuningFlag('merlinInnerBlackShield87=2')).toThrow();
-    expect(() => parseTuningFlag('merlinInnerBlackShieldScope87=32')).toThrow();
+    expect(parseTuningFlag('merlinInnerBlackShieldScope87=32')).toEqual({ merlinInnerBlackShieldScope87: 32 });
+    expect(() => parseTuningFlag('merlinInnerBlackShieldScope87=64')).toThrow();
     expect(describeAgentTuning(T({ merlinInnerBlackShield87: 0.6 }))).toContain('merlinInnerBlackShield87=0.6');
     expect(describeAgentTuning(T())).not.toContain('merlinInnerBlackShield87');
     expect(shield87Config(T())).toEqual({ tau: 0, temp: 0, rate: 1, scope: 0 });
@@ -116,6 +117,12 @@ describe('shield87Decide', () => {
     const a = shield87Decide(warm, obs, false, () => true);
     expect(a).not.toBeNull();
     expect(shield87Decide(warm, obs, false, () => true)).toEqual(a);
+    // bit 32: the share of the other members (not seen red) whose public loyal on-team rule approves
+    const m = shield87MatesApprove(T(), obs)!;
+    expect(m).toBeGreaterThanOrEqual(0);
+    expect(m).toBeLessThanOrEqual(1);
+    expect(shield87Decide(T({ merlinInnerBlackShield87: 1, merlinInnerBlackShieldScope87: 32 }), obs, false, () => true)).toEqual({ approve: m >= 1, p: m });
+    expect(shield87MatesApprove(T(), { ...obs, proposedTeam: [obs.myPlayerId, seatId(5)] })).toBeNull();
   });
 
   it('in the agent: off → the usual vote; on with a low bar, a Merlin reject on a team without a fatal seen red becomes an approve; loyal votes unchanged', () => {

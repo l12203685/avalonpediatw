@@ -11,6 +11,7 @@
  *   - 公開視角（這個座位的後驗）的 P(隊上自己以外有紅)、P(隊上的紅夠讓任務失敗)；隊上實際的紅數；
  *   - 局面：第幾局、第幾次提議、比分、隊伍人數、這一局之後自己還會不會當隊長；座位 PR、桌上 S。
  * 輸出一行一點的 JSONL（沒有名字、沒有局號，只有資料集裡的序號），給 `onTeamVoteStudy59.py` 彙總。輸出放在 repo 外。
+ * 第 87 回合加：`--roles merlin,…`（只重播這些角色）、`--min-round 1`（第 1、2 局也重播；預設 3）、`--no-why`（不另外跑一次推理紀錄，省一半時間）。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -47,6 +48,9 @@ function main(): void {
   const out = arg('--out');
   if (!out) throw new Error('--out required');
   const [k, n] = (arg('--shard') ?? '0/1').split('/').map(Number);
+  const roles = arg('--roles') ? new Set(arg('--roles')!.split(',')) : null;
+  const minRound = Number(arg('--min-round') ?? 3);
+  const noWhy = argv.includes('--no-why');
   const games = replayGamesFromDataset(JSON.parse(fs.readFileSync(file, 'utf8'))).games.filter((g) => g.game.playerCount === 10);
   const lines: string[] = [];
   let mism = 0;
@@ -57,10 +61,10 @@ function main(): void {
     const red = (s: number): boolean => campOf(game.seatRoles[s - 1]) === 'evil';
     for (let seat = 1; seat <= 10; seat++) {
       const role = game.seatRoles[seat - 1];
-      if (campOf(role) !== 'good') continue;
+      if (campOf(role) !== 'good' || (roles && !roles.has(role))) continue;
       const id = seatId(seat);
       game.proposals.forEach((p, idx) => {
-        if (p.forced || !p.votesReliable || p.round < 3 || p.attempt > 4 || p.leaderSeat === seat || !p.teamSeats.includes(seat)) return;
+        if (p.forced || !p.votesReliable || p.round < minRound || p.attempt > 4 || p.leaderSeat === seat || !p.teamSeats.includes(seat)) return;
         const obs = buildReplayObservation(game, seat, { kind: 'team_vote', proposal: idx });
         const req = AVALON_CONFIG[10].questFailsRequired?.[p.round - 1] ?? 1;
         const reds = p.teamSeats.filter(red).length;
@@ -81,7 +85,7 @@ function main(): void {
             const act = withSeededRandom(seed, () => agent.act(obs));
             const vote = act.type === 'team_vote' ? act.vote : true;
             let why = '';
-            try {
+            if (!noWhy) try {
               const shadow = new HeuristicAgent(id, undefined, undefined, tuning);
               shadow.onGameStart(buildReplayObservation(game, seat, { kind: 'team_select', proposal: 0 }));
               const d = withSeededRandom(seed, () => new ForwardAgent(id, shadow).decide(obs));
