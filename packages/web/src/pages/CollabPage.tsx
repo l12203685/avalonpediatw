@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Check, Copy, ExternalLink, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Copy, ExternalLink, Sparkles, Swords } from 'lucide-react';
 import { useGameStore } from '../store/gameStore';
 import '../i18n/collab';
 import { COLLAB_NS, GUIDE_URL, ISSUE_FORM_URL, REPO_URL } from '../i18n/collab';
@@ -58,6 +58,20 @@ export default function CollabPage(): JSX.Element {
       <section className={cardCls}>
         <h2 className="mb-1 text-sm font-bold">{t('nextTitle')}</h2>
         <p className="text-xs leading-relaxed text-zinc-300">{t('nextBody')}</p>
+      </section>
+
+      {/* AI 擂台（#arena；站長 2026-11-26：自建 AI 對戰） */}
+      <section className={cardCls}>
+        <h2 className="mb-1 flex items-center gap-1.5 text-sm font-bold"><Swords size={16} className="text-rose-300" />{t('arenaTitle')}</h2>
+        <p className="mb-2 text-xs leading-relaxed text-zinc-300">{t('arenaBody')}</p>
+        <button
+          type="button"
+          data-testid="collab-arena-link"
+          onClick={() => { setGameState('arena'); window.scrollTo({ top: 0 }); }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
+        >
+          {t('arenaLink')}<ChevronRight size={14} className="text-zinc-400" />
+        </button>
       </section>
 
       <section className={cardCls} aria-label={t('promptTitle')}>

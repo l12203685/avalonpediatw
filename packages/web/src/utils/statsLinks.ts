@@ -24,6 +24,7 @@
  *      #seat-filler (#fill、#補位)                   → 百科AI 對局頁（最上面是「叫百科AI 補位」表單；站長 2026-11-19，不用登入）
  *      #reports (#feedback、#fixes、#回報)            → 回報與修正（站長 2026-11-19：回報的處理狀態公開在網站上；不用登入）
  *      #collab (#ai-collab、#external-ai)            → 用你的 AI 一起改百科（站長 2026-11-26；不用登入。見 pages/CollabPage.tsx）
+ *      #arena (#ai-arena、#bots、#擂台)               → AI 擂台：自建機器人與排行榜（站長 2026-11-26；不用登入。見 pages/ArenaPage.tsx）
  *      #wiki                                        → 百科攻略（Edward 2026-11-11：文章要發到 Threads）
  *      #wiki=<文章 id> (#wiki/<id>)                   → 百科攻略，打開那篇文章（同 #records=：打開時留在網址列、
  *        換文章時跟著換、關閉時由 WikiContent 清掉；不認得的 id 只開百科攻略。見 utils/wikiHash.ts）
@@ -59,6 +60,8 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'aiHistory',
   // 用你的 AI 一起改百科（站長 2026-11-26：所有人都可以開自己的 AI 下 prompt 協作）
   'collab',
+  // AI 擂台（站長 2026-11-26：自建 AI 對戰）
+  'arena',
 ]);
 
 export type StatsLink =
@@ -72,6 +75,7 @@ export type StatsLink =
   | { kind: 'aiGames'; id: string | null }
   | { kind: 'aiHistory' }
   | { kind: 'collab' }
+  | { kind: 'arena' }
   | { kind: 'wiki'; id: string | null }
   | { kind: 'concepts'; id: string | null };
 
@@ -109,6 +113,7 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   if (/^(?:seat-?filler|fill|%E8%A3%9C%E4%BD%8D|補位)$/i.test(raw)) return { kind: 'aiGames', id: null };
   if (isAiHistoryHash(raw)) return { kind: 'aiHistory' };
   if (/^(?:collab|ai-?collab|external-?ai)$/i.test(raw)) return { kind: 'collab' };
+  if (/^(?:arena|ai-?arena|bots|%E6%93%82%E5%8F%B0|擂台)$/i.test(raw)) return { kind: 'arena' };
   const aiGames = parseAiGamesHash(raw);
   if (aiGames) return { kind: 'aiGames', id: aiGames.id };
   const wiki = parseWikiHash(raw);

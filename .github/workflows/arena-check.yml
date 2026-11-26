@@ -1,0 +1,68 @@
+name: AI arena bot check
+
+# AI 擂台投稿檢查（docs/BOTS.md〈AI 擂台〉）：PR 動到 community-bots/ 時，對改到的機器人資料夾跑
+# `arena:check`（格式、開關白名單、範圍、名字規則、只能放 profile.json／README.md），再檢查整個名冊
+# （名字不重複、一人一隻）。
+#
+# fork 安全：用 pull_request（不是 pull_request_target），fork 來的 PR 拿到的是唯讀 token、沒有任何 secret；
+# 不執行投稿裡的任何東西（資料夾只允許 JSON 與 Markdown）。
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'community-bots/**'
+      - 'packages/server/src/arena/**'
+      - 'packages/server/scripts/arena*'
+      - 'packages/server/scripts/arena/**'
+      - '.github/workflows/arena-check.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      - name: Check changed bot folders and the whole roster
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          # 改到的機器人資料夾（community-bots/<id>/ 與 community-bots/_examples/<id>/；刪掉的不算）。
+          mapfile -t folders < <(git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- community-bots \
+            | awk -F/ '$2 == "_examples" && NF >= 4 { print $1 "/" $2 "/" $3; next } NF >= 3 { print $1 "/" $2 }' | sort -u)
+          echo "Changed bot folders: ${folders[*]:-(none)}"
+          # 直接放在 community-bots/ 底下的檔案（不在任何資料夾裡）只允許 README.md。
+          stray="$(git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- community-bots | awk -F/ 'NF == 2 && $2 != "README.md"')"
+          if [ -n "${stray}" ]; then
+            echo "::error::Put your bot in its own folder community-bots/<id>/ (stray files: ${stray//$'\n'/, })"
+            exit 1
+          fi
+          pnpm --filter @avalon/server arena:check --all --pr-author "${PR_AUTHOR}" "${folders[@]}"

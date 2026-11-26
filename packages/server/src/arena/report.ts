@@ -3,6 +3,8 @@
  */
 import { seededRandom } from '../ai/benchmark/agreement';
 import { fitRatings, pairedMean, wilson, type Interval, type SideRating } from './rating';
+import { DEFAULT_AGENT_TUNING } from '../ai/AgentTuning';
+import { ARENA_KNOBS } from './knobs';
 import { profileKnobSummary } from './profile';
 import { REFERENCE_ID, REFERENCE_NAME, type RegisteredBot } from './registry';
 import type { Outcome, TableResult } from './table';
@@ -157,6 +159,34 @@ export interface Leaderboard {
   bots: LeaderboardBot[];
   /** 沒收進名冊的社群資料夾（只有 id 與原因）。 */
   rejected: { id: string; errors: string[] }[];
+  /** 開放的開關（網站的說明與「給你的 AI 的提示」用，和 knobs.ts 同一份）。 */
+  knobCatalog: KnobCatalogEntry[];
+}
+
+export interface KnobCatalogEntry {
+  key: string;
+  kind: 'number' | 'boolean';
+  side: 'good' | 'evil' | 'assassin';
+  min?: number;
+  max?: number;
+  default: number | boolean;
+  zh: string;
+  en: string;
+}
+
+export function knobCatalog(): KnobCatalogEntry[] {
+  return ARENA_KNOBS.map((k) => {
+    const e: KnobCatalogEntry = {
+      key: k.key,
+      kind: k.kind,
+      side: k.side,
+      default: (DEFAULT_AGENT_TUNING as unknown as Record<string, number | boolean>)[k.key],
+      zh: k.zh,
+      en: k.en,
+    };
+    if (k.kind === 'number') { e.min = k.min; e.max = k.max; }
+    return e;
+  });
 }
 
 const REFERENCE_STYLE = '網站上正在跑的百科AI（正式預設，沒有改任何開關）。所有分數都以它為 1500。';
@@ -219,5 +249,6 @@ export function buildLeaderboard(args: {
     baseRedWin,
     bots: rows,
     rejected: args.rejected ?? [],
+    knobCatalog: knobCatalog(),
   };
 }

@@ -127,6 +127,7 @@ export async function playTable(engine: SelfPlayEngine, seats: readonly Entrant[
 }
 
 /** GameEngine 每個事件都印 JSON；跑大量對局時先靜音。 */
+/* eslint-disable no-console -- 暫時換掉 console.log 再換回來 */
 export async function quietly<T>(fn: () => Promise<T>): Promise<T> {
   const originalLog = console.log;
   console.log = (): void => undefined;
@@ -136,3 +137,4 @@ export async function quietly<T>(fn: () => Promise<T>): Promise<T> {
     console.log = originalLog;
   }
 }
+/* eslint-enable no-console */

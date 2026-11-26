@@ -137,5 +137,7 @@ describe('seating and reports', () => {
     expect(byId.alpha.title).toBe('騎士');
     expect(byId.alpha.knobs).toEqual(['goodCleanVote=0.5']);
     expect(byId.alpha.red.seats + byId.alpha.blue.seats).toBe(byId.alpha.seats);
+    expect(board.knobCatalog.map((k) => k.key)).toContain('goodCleanVote');
+    expect(board.knobCatalog.find((k) => k.key === 'goodCleanVote')?.max).toBe(0.9);
   });
 });

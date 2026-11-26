@@ -1,0 +1,104 @@
+name: AI arena tournament
+
+# AI 擂台（站長 2026-11-26「以後就可以是一堆自建AI對戰」；docs/BOTS.md〈AI 擂台〉）。
+# 每週一次：百科AI（參考點 1500 分）＋ community-bots/_examples 的示範對手 ＋ community-bots/<id>/ 的社群機器人
+# 一起打（10 人局、隨機座位、每隻都坐到紅藍兩邊），重算 arena/leaderboard.json，有變動才 commit 到 main。
+#
+# 安全：不需要任何 secret；只跑百科AI 的引擎，社群機器人只是 profile.json 裡白名單的開關（資料，不是程式），
+#       而且只讀已經合併進 main 的資料夾。
+# 不會重新部署：arena/ 與 community-bots/ 不在 Render 的 buildFilter（render.yaml）裡，也不在網站部署的 packages/** 裡；
+#       網站在瀏覽器裡直接讀 main 上的 arena/leaderboard.json。GITHUB_TOKEN 的推送也不會觸發其他 workflow。
+
+on:
+  schedule:
+    - cron: '23 18 * * 0'   # 每週一 02:23 台灣時間（UTC+8）；GitHub 排程偶爾會延遲
+  workflow_dispatch:
+    inputs:
+      games:
+        description: '局數（空白 = max(600, 150 × 參賽數)）'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arena-tournament
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tournament:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      - name: Check the roster
+        run: pnpm --filter @avalon/server arena:check --all
+
+      - name: Play the tournament
+        env:
+          GAMES: ${{ github.event_name == 'workflow_dispatch' && inputs.games || '' }}
+        run: |
+          seed="arena-$(date -u +%G-W%V)"
+          args=(--players 10 --seed "${seed}" --workers "$(nproc)")
+          if [ -n "${GAMES}" ]; then
+            if ! [[ "${GAMES}" =~ ^[0-9]+$ ]]; then echo "::error::games must be a number"; exit 1; fi
+            args+=(--games "${GAMES}")
+          fi
+          pnpm --filter @avalon/server arena:tournament "${args[@]}" | tee "${RUNNER_TEMP}/arena.txt"
+          { echo "### AI 擂台排行榜"; echo; sed -n '/^| 名次/,/^$/p' "${RUNNER_TEMP}/arena.txt"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the leaderboard
+        run: |
+          if [ -z "$(git status --porcelain -- arena/leaderboard.json)" ]; then
+            echo "No change in arena/leaderboard.json."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- arena/leaderboard.json
+          games="$(node -e 'console.log(require("./arena/leaderboard.json").games)')"
+          bots="$(node -e 'console.log(require("./arena/leaderboard.json").bots.length)')"
+          git commit -q -m "chore(arena): 每週更新 AI 擂台排行榜（${bots} 隻、${games} 局）" \
+            -m "由 arena-tournament workflow 重算；只跑百科AI 引擎與 profile 開關。"
+          for attempt in 1 2 3; do
+            git fetch -q origin main
+            if ! git rebase -q origin/main; then
+              git rebase --abort || true
+              echo "::error title=Leaderboard not pushed::arena/leaderboard.json changed on main during this run; the next run rebuilds it."
+              exit 1
+            fi
+            if git push -q origin HEAD:main; then
+              echo "Pushed arena/leaderboard.json (${bots} bots, ${games} games)."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}); rebasing and retrying..."
+            sleep $((attempt * 5))
+          done
+          echo "::error title=Leaderboard not pushed::git push to main was rejected 3 times (branch protection or concurrent pushes)."
+          exit 1

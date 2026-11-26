@@ -51,7 +51,7 @@ const URL_RE = /(https?:\/\/|www\.)/i;
 const MENTION_RE = /@[A-Za-z0-9-]/;
 // 控制字元與看不見的字元（零寬、雙向控制）會讓名字看起來和實際不同。
 // eslint-disable-next-line no-control-regex
-const INVISIBLE_RE = /[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/;
+const INVISIBLE_RE = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/;
 
 const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'overrides', 'sides', 'roles']);
 
