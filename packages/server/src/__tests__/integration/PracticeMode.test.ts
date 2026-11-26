@@ -311,7 +311,7 @@ describe('practice mode — full games over sockets', () => {
 
   async function playPractice(
     uid: string,
-    options: { seat?: number | null; role?: string | null; knight?: string },
+    options: { seat?: number | null; role?: string | null; knight?: string; lineup?: Array<string | null>; fill?: string },
     evilCard: 'success' | 'fail' = 'fail',
   ): Promise<{ human: Human; roomId: string }> {
     const socket = await connect(port, uid, `練習-${uid}`);
@@ -543,6 +543,23 @@ describe('practice mode — full games over sockets', () => {
       if (room.players[s.playerId].team === 'evil') expect(tuning.redR1Teammate).toBe(false);
       if (room.players[s.playerId].role === 'loyal') expect(tuning.goodBayesBad).toBe(0.99);
     }
+  }, 90000);
+
+  it('AI騎士 summoned seat by seat: each picked knight sits at its seat, copies numbered by seat order, the rest filled', async () => {
+    await boot(sink);
+    // Human at 3家: the bot seats in order are 1, 2, 4, 5, 6, 7, 8, 9, 0家.
+    const lineup = ['knight-ed-01', null, 'knight-ed-01', null, 'knight-c5-01', null, null, null, 'knight-ed-01'];
+    const { human } = await playPractice('lineup-human', { seat: 3, role: 'percival', lineup, fill: 'baike' });
+    const trace = human.trace!;
+    const bySeat = new Map(trace.seats.map((s) => [s.seat, s]));
+    expect(bySeat.get(3)?.isBot).toBe(false);
+    expect(bySeat.get(1)).toMatchObject({ knightId: 'knight-ed-01', name: 'AI騎士_ED_01' });
+    expect(bySeat.get(4)).toMatchObject({ knightId: 'knight-ed-01', name: 'AI騎士_ED_02' });
+    expect(bySeat.get(10)).toMatchObject({ knightId: 'knight-ed-01', name: 'AI騎士_ED_03' });
+    expect(bySeat.get(6)).toMatchObject({ knightId: 'knight-c5-01', name: 'AI騎士_C5_01' });
+    for (const seat of [2, 5, 7, 8, 9]) expect(bySeat.get(seat)?.knightId).toBe('baike');
+    expect(human.started!.players['lineup-human'].role).toBe('percival');
+    assertTraceComplete(human.ended!, 'lineup-human', human, trace);
   }, 90000);
 
   it('AI騎士: random mix gives each bot a registry knight with a unique seat name; unknown ids fall back to 百科', async () => {

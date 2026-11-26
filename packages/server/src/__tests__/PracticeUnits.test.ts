@@ -61,6 +61,31 @@ describe('GameEngine practice overrides', () => {
     }
   }
 
+  it('botOrder: the bots sit in the lined-up order around the human (fixed or random seat); a bad list is ignored', () => {
+    const order = ['bot9', 'bot3', 'bot1', 'bot2', 'bot8', 'bot4', 'bot5', 'bot7', 'bot6'];
+    for (const seat of [1, 4, 10]) {
+      const engine = new GameEngine(makeRoom(TEN));
+      engine.configurePractice({ playerId: 'human', seatIndex: seat - 1, quietEventLog: true, botOrder: order });
+      engine.startGame();
+      const ids = Object.keys(engine.getRoom().players);
+      expect(ids.indexOf('human') + 1).toBe(seat);
+      expect(ids.filter((id) => id !== 'human')).toEqual(order);
+      engine.cleanup();
+    }
+    for (let i = 0; i < 5; i++) {
+      const engine = new GameEngine(makeRoom(TEN));
+      engine.configurePractice({ playerId: 'human', quietEventLog: true, botOrder: order });
+      engine.startGame();
+      expect(Object.keys(engine.getRoom().players).filter((id) => id !== 'human')).toEqual(order);
+      engine.cleanup();
+    }
+    const engine = new GameEngine(makeRoom(TEN));
+    engine.configurePractice({ playerId: 'human', seatIndex: 2, quietEventLog: true, botOrder: ['bot1', 'bot1', 'nobody'] });
+    engine.startGame();
+    expect(Object.keys(engine.getRoom().players).indexOf('human')).toBe(2);
+    engine.cleanup();
+  });
+
   it('random seat/role when not given; quiet log silences event lines', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const engine = new GameEngine(makeRoom(TEN));
@@ -84,10 +109,16 @@ describe('GameEngine practice overrides', () => {
 
 describe('practice options + labels', () => {
   it('parses tolerant options', () => {
-    expect(parsePracticeOptions({ seat: 3, role: 'merlin' })).toEqual({ seat: 3, role: 'merlin', knight: 'baike' });
-    expect(parsePracticeOptions({ seat: '10', role: 'oberon' })).toEqual({ seat: 10, role: 'oberon', knight: 'baike' });
-    expect(parsePracticeOptions({ seat: 11, role: 'minion' })).toEqual({ seat: null, role: null, knight: 'baike' });
-    expect(parsePracticeOptions(null)).toEqual({ seat: null, role: null, knight: 'baike' });
+    expect(parsePracticeOptions({ seat: 3, role: 'merlin' })).toEqual({ seat: 3, role: 'merlin', knight: 'baike', lineup: null, fill: 'baike' });
+    expect(parsePracticeOptions({ seat: '10', role: 'oberon' })).toEqual({ seat: 10, role: 'oberon', knight: 'baike', lineup: null, fill: 'baike' });
+    expect(parsePracticeOptions({ seat: 11, role: 'minion' })).toEqual({ seat: null, role: null, knight: 'baike', lineup: null, fill: 'baike' });
+    expect(parsePracticeOptions(null)).toEqual({ seat: null, role: null, knight: 'baike', lineup: null, fill: 'baike' });
+    // 一隻一隻召喚：9 個座位；沒給／空字串 = 沒指定；名冊沒有的 → 百科；多的不看；fill 只認 random。
+    const lp = parsePracticeOptions({ lineup: ['knight-ed-01', '', null, 'no-such', 'knight-ed-01', 7, 'baike', undefined, 'random-mix', 'knight-ed-01'], fill: 'random' });
+    expect(lp.lineup).toEqual(['knight-ed-01', null, null, 'baike', 'knight-ed-01', 'baike', 'baike', null, 'baike']);
+    expect(lp.fill).toBe('random');
+    expect(parsePracticeOptions({ lineup: [], fill: 'other' })).toMatchObject({ lineup: Array(9).fill(null), fill: 'baike' });
+    expect(parsePracticeOptions({ lineup: 'knight-ed-01' }).lineup).toBeNull();
     expect(isPracticeRoomId('PRACTICE-ABC')).toBe(true);
     expect(isPracticeRoomId('1234')).toBe(false);
     expect(seatLabelZh(10)).toBe('0家');

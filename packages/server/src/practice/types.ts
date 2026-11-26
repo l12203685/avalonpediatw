@@ -11,7 +11,7 @@
  * `packages/web/src/services/practice.ts`.
  */
 import type { Role } from '@avalon/shared';
-import { DEFAULT_KNIGHT_ID, resolveKnightId } from '../arena/knights';
+import { DEFAULT_KNIGHT_ID, resolveKnightId, type KnightFill } from '../arena/knights';
 
 export const PRACTICE_ROOM_PREFIX = 'PRACTICE-';
 export const PRACTICE_PLAYER_COUNT = 10;
@@ -42,6 +42,13 @@ export interface PracticeOptions {
    * 或 `random-mix`（每個機器人座位各抽一位）。
    */
   knight: string;
+  /**
+   * 一隻一隻召喚（站長 2026-11-26）：9 個機器人座位（照座位順序、跳過玩家）各指定哪一位；`null` = 沒指定，用 `fill` 補。
+   * 有這一項就不看 `knight`。名冊沒有的 id → 百科（記一次次數）。
+   */
+  lineup: (string | null)[] | null;
+  /** 沒指定的座位用誰補（預設百科）。 */
+  fill: KnightFill;
 }
 
 /** Tolerant parse of the client payload — anything unusable becomes "random". */
@@ -54,7 +61,13 @@ export function parsePracticeOptions(raw: unknown): PracticeOptions {
     : null;
   // 沒傳 → 百科；不認得的 id → 百科（resolveKnightId 記一次次數）。
   const knight = resolveKnightId(obj.knight, { allowMix: true }) ?? DEFAULT_KNIGHT_ID;
-  return { seat, role, knight };
+  let lineup: (string | null)[] | null = null;
+  if (Array.isArray(obj.lineup)) {
+    const raw = obj.lineup as unknown[];
+    lineup = Array.from({ length: PRACTICE_PLAYER_COUNT - 1 }, (_, i) => resolveKnightId(raw[i]));
+  }
+  const fill: KnightFill = obj.fill === 'random' ? 'random' : 'baike';
+  return { seat, role, knight, lineup, fill };
 }
 
 export type PracticeDecisionKind =

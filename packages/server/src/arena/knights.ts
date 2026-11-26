@@ -155,6 +155,25 @@ export function nextKnightSeatName(baseName: string, takenNames: Iterable<string
   }
 }
 
+/** 練習台座位上沒指定騎士時用誰補：百科，或每個空位各抽一位。 */
+export type KnightFill = 'baike' | 'random';
+
+/**
+ * 練習台「一隻一隻召喚」（站長 2026-11-26：「如果要跟某幾個特定風格的AI騎士打練習局 可以在玩之前讓玩家自己設定好嗎 就像是一隻一隻召喚這樣」）：
+ * `lineup[k]` = 第 k 個機器人座位（照座位順序、跳過玩家）指定的騎士 id，`null` = 沒指定。
+ * 指定的照用（同一位可以出現好幾次）；沒指定的用 `fill` 補：百科，或從名冊各抽一位（空位之間不重複，名冊不夠再重來）。
+ */
+export function knightsForLineup(lineup: readonly (string | null)[], count: number, fill: KnightFill, rand: () => number = Math.random): string[] {
+  const empty = Array.from({ length: count }, (_, i) => (lineup[i] && getKnight(lineup[i]) ? null : i)).filter((i): i is number => i !== null);
+  const drawn = fill === 'random' ? knightsForSeats(KNIGHT_MIX_ID, empty.length, rand) : [];
+  let d = 0;
+  return Array.from({ length: count }, (_, i) => {
+    const id = lineup[i];
+    if (id && getKnight(id)) return id;
+    return fill === 'random' ? drawn[d++] : DEFAULT_KNIGHT_ID;
+  });
+}
+
 /**
  * 練習台：9 個機器人座位各用哪一位。指定一位 → 全部那一位；`random-mix` → 每個座位各抽一位
  * （先把名冊洗一輪不重複，名冊不夠再重來）。`rand` 給測試用。

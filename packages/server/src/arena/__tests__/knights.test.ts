@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildKnightsFile, GENERATED_KNIGHTS_PATH, serializeKnightsFile } from '../knightsFile';
 import {
   buildKnightRegistry, DEFAULT_KNIGHT_ID, KNIGHT_MIX_ID, knightBaseName, knightFallbackCounter, knightsForSeats,
-  knightTuningOverrides, listKnights, listKnightSummaries, nextKnightSeatName, resolveKnightId,
+  knightsForLineup, knightTuningOverrides, listKnights, listKnightSummaries, nextKnightSeatName, resolveKnightId,
 } from '../knights';
 
 describe('knights.generated.json', () => {
@@ -104,5 +104,19 @@ describe('seat names and practice seats', () => {
     expect(mix.every((id) => ids.has(id))).toBe(true);
     const long = knightsForSeats(KNIGHT_MIX_ID, ids.size + 3, rand);
     expect(new Set(long.slice(0, ids.size)).size).toBe(ids.size);
+  });
+
+  it('knightsForLineup: picked seats kept (copies allowed); empty seats filled with 百科 or distinct random knights', () => {
+    const lineup = ['knight-ed-01', null, 'knight-ed-01', 'nope', null, null, null, null, 'knight-c5-01'];
+    expect(knightsForLineup(lineup, 9, 'baike')).toEqual(['knight-ed-01', 'baike', 'knight-ed-01', 'baike', 'baike', 'baike', 'baike', 'baike', 'knight-c5-01']);
+    let x = 0.77;
+    const rand = (): number => { x = (x * 9301 + 49297) % 233280 / 233280; return x; };
+    const r = knightsForLineup(lineup, 9, 'random', rand);
+    expect([r[0], r[2], r[8]]).toEqual(['knight-ed-01', 'knight-ed-01', 'knight-c5-01']);
+    const filled = [r[1], r[3], r[4], r[5], r[6], r[7]];
+    expect(new Set(filled).size).toBe(6);
+    const ids = new Set(listKnights().map((k) => k.id));
+    expect(filled.every((id) => ids.has(id))).toBe(true);
+    expect(knightsForLineup([], 3, 'baike')).toEqual(['baike', 'baike', 'baike']);
   });
 });

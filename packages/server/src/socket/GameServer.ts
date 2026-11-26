@@ -11,7 +11,7 @@ import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { OPPONENT_LABEL, PROFILE_OVERRIDES, opponentTypeOfTable, type OpponentType } from '../ai/humanProfile';
 import { liveTableS } from '../ai/tableStrength';
 import {
-  DEFAULT_KNIGHT_ID, getKnight, knightTuningOverrides, knightsForSeats, listKnightSummaries, nextKnightSeatName, resolveKnightId,
+  DEFAULT_KNIGHT_ID, getKnight, knightTuningOverrides, knightsForLineup, knightsForSeats, listKnightSummaries, nextKnightSeatName, resolveKnightId,
 } from '../arena/knights';
 import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
@@ -3679,7 +3679,11 @@ export class GameServer implements LiveSnapshotHost {
       room.roleOptions = { ...room.roleOptions, ladyOfTheLake: true };
       room.players[uid].avatar = user.photoURL;
       // 對手／隊友用哪一位 AI騎士（預設百科；練習房的機器人一律用騎士的座位名，複盤看得出誰坐哪裡）。
-      const botIds = knightsForSeats(options.knight, PRACTICE_PLAYER_COUNT - 1).map((id) => this.addBotToRoom(room, id));
+      // 一隻一隻召喚（lineup）：第 k 個機器人照座位順序坐第 k 個機器人座位（引擎的 botOrder），同一位的序號照座位順序 _01、_02。
+      const botIds = (options.lineup
+        ? knightsForLineup(options.lineup, PRACTICE_PLAYER_COUNT - 1, options.fill)
+        : knightsForSeats(options.knight, PRACTICE_PLAYER_COUNT - 1)
+      ).map((id) => this.addBotToRoom(room, id));
 
       this.practice.create(roomId, uid, options, botIds);
       const engine = this.createGameEngine(roomId, room);
@@ -3688,6 +3692,7 @@ export class GameServer implements LiveSnapshotHost {
         seatIndex: options.seat !== null ? options.seat - 1 : undefined,
         role: options.role ?? undefined,
         quietEventLog: true,
+        ...(options.lineup ? { botOrder: botIds } : {}),
       });
       this.gameEngines.set(roomId, engine);
 
@@ -3699,7 +3704,9 @@ export class GameServer implements LiveSnapshotHost {
       if (ack) ack({ ok: true, roomId });
       this.handleStartGame(socket, roomId);
       console.log(
-        `✓ Practice room ${roomId} started (seat=${options.seat ?? 'random'}, role=${options.role ?? 'random'}, knight=${options.knight})`,
+        `✓ Practice room ${roomId} started (seat=${options.seat ?? 'random'}, role=${options.role ?? 'random'}, ${options.lineup
+          ? `lineup=${options.lineup.filter(Boolean).length}/9 picked, fill=${options.fill}`
+          : `knight=${options.knight}`})`,
       );
     } catch (error) {
       console.error('[practice] create failed:', error instanceof Error ? error.message : 'unknown');
