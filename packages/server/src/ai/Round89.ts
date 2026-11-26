@@ -129,6 +129,7 @@ export function dm89Pre(
   proposalProb: DM89Pre['proposalProb'],
   voteProb: DM89Pre['voteProb'],
 ): DM89Pre {
+  if (mode === 'percival') round89Stats.percival++; else round89Stats.applied++;
   const ids = obs.allPlayerIds;
   const me = obs.myPlayerId;
   const thumbs = mode === 'percival' ? obs.knownWizards ?? [] : [];
