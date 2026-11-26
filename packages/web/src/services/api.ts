@@ -9,6 +9,7 @@ import { filteredRoute, followsFilter, withFilteredLakeClaim } from '../stats/fi
 import { FilterUnavailableError, filteredStats } from '../stats/statsEngine';
 import { currentStatsFilter } from '../stats/statsFilter';
 import type { RecordList } from '../utils/records';
+import { knightDisplayName } from '../utils/knightNames';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -1473,7 +1474,21 @@ export async function fetchRecordsList(): Promise<RecordList> {
   if (!res.ok) throw new AnalysisApiError(res.status, '/records', await readServerError(res));
   const body = (await res.json()) as ApiEnvelope<RecordList>;
   if (!body.success || !body.data) throw new Error(body.error || 'Unknown error');
-  return body.data;
+  return withKnightNames(body.data);
+}
+
+/** 牌譜上機器人的舊名字（百科AI_3）顯示成新名字（AI騎士_百科_03；站長 2026-11-26）。存下來的紀錄不改；沒有要換的就原物件。 */
+export function withKnightNames(list: RecordList): RecordList {
+  let changed = false;
+  const posts = list.posts.map((p) => {
+    const names = p.game?.names;
+    if (!Array.isArray(names)) return p;
+    const next = names.map((n) => (typeof n === 'string' ? knightDisplayName(n) : n));
+    if (next.every((n, i) => n === names[i])) return p;
+    changed = true;
+    return { ...p, game: { ...p.game!, names: next } };
+  });
+  return changed ? { ...list, posts } : list;
 }
 
 /** 討論串裡的一則回覆（伺服器即時讀 DC，不含機器人訊息）。 */
