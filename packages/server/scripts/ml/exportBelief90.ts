@@ -9,7 +9,7 @@
  * --cand NAME=flag,flag（可重複）：另外記候選讀法（`bayesRedShare` 走執行期的路徑，例如 mlBelief90=1）的 p，接在列尾（給 evalBelief90.py 算樣本外分數）。
  * --split time-test 只跑驗證那一半。--shard k/n 分片。
  *
- *   cd packages/server && npx tsx scripts/ml/exportBelief90.ts --out ../../r90tmp/b90.bin [--shard 0/2] [--split time-test] [--cand M=mlBelief90=1]
+ *   cd packages/server && npx tsx scripts/ml/exportBelief90.ts --out ../../r90tmp/b90.bin [--shard 0/2] [--split time-test] [--cand M=mlBelief90=1] [--base-profile avgHuman]
  */
 import { DEFAULT_COHORT_CUTS } from '@avalon/shared/stats';
 import * as fs from 'fs';
@@ -22,6 +22,7 @@ import { campOf } from '../../src/ai/benchmark/sheetsReplay';
 import { replayGamesFromDataset, type DatasetHeader, type DatasetTuple } from '../../src/ai/benchmark/datasetReplay';
 import { hideLobbyOrder } from '../../src/bots/simulation/aiRead';
 import { BELIEF_FEATURES_90, beliefFeatures90 } from '../../src/ai/ml/beliefFeatures90';
+import { parseOpponentType, tuningForOpponent } from '../../src/ai/humanProfile';
 
 const argv = process.argv.slice(2);
 const arg = (name: string): string | undefined => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
@@ -45,13 +46,16 @@ function main(): void {
   const split = arg('--split') ?? 'all';
   const limit = Number(arg('--limit') ?? Infinity);
   const strongS = DEFAULT_COHORT_CUTS.sHi;
-  const base: BayesOptions = bayesOptionsOf({ ...DEFAULT_AGENT_TUNING });
+  // --base-profile avgHuman：現行信念改用真人桌的讀法（`humanProfile.ts`；給真人桌那一份模型用）；候選也疊在它上面。
+  const profile = arg('--base-profile');
+  const baseTuning: AgentTuning = profile ? tuningForOpponent(parseOpponentType(profile) ?? 'avgHuman', DEFAULT_AGENT_TUNING) : { ...DEFAULT_AGENT_TUNING };
+  const base: BayesOptions = bayesOptionsOf(baseTuning);
   const cands: { name: string; opts: BayesOptions }[] = [];
   argv.forEach((a, i) => {
     if (a !== '--cand') return;
     const s = argv[i + 1];
     const eq = s.indexOf('=');
-    const t: AgentTuning = { ...DEFAULT_AGENT_TUNING };
+    const t: AgentTuning = { ...baseTuning };
     for (const f of s.slice(eq + 1).split(',').filter(Boolean)) Object.assign(t, parseTuningFlag(f));
     cands.push({ name: s.slice(0, eq), opts: bayesOptionsOf(t) });
   });

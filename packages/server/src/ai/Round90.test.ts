@@ -44,7 +44,8 @@ describe('round 90 (roadmap Phase C): trained world-posterior and assassination 
     expect(parseTuningFlag('mlBelief90=2')).toEqual({ mlBelief90: 2 });
     expect(parseTuningFlag('mlBelief90Scope=15')).toEqual({ mlBelief90Scope: 15 });
     expect(parseTuningFlag('mlAssassin90=4')).toEqual({ mlAssassin90: 4 });
-    expect(() => parseTuningFlag('mlBelief90=3')).toThrow();
+    expect(parseTuningFlag('mlBelief90=3')).toEqual({ mlBelief90: 3 });
+    expect(() => parseTuningFlag('mlBelief90=4')).toThrow();
     expect(() => parseTuningFlag('mlBelief90Scope=16')).toThrow();
     expect(() => parseTuningFlag('mlAssassin90=5')).toThrow();
   });
@@ -52,6 +53,7 @@ describe('round 90 (roadmap Phase C): trained world-posterior and assassination 
   it('the JSON weights load against the code feature lists, and the TypeScript scores equal the numpy trainer to 1e-9', () => {
     expect(beliefModel90(1).json.features).toEqual([...BELIEF_FEATURES_90]);
     expect(beliefModel90(2).json.features).toEqual([...BELIEF_FEATURES_90]);
+    expect(beliefModel90(3).json.features).toEqual([...BELIEF_FEATURES_90]);
     expect(assassinModel90().json.features).toEqual([...ASSASSIN_FEATURES_90]);
     expect(assassinModel90(true).json.features).toEqual([...ASSASSIN_FEATURES_90]);
     // Stack model starts at the current belief's logit (offset feature 0); the pure model has none.

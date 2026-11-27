@@ -7,6 +7,7 @@
  * 2. 模型對另外每一個人估 P(紅)（`ml/beliefFeatures90.ts` 的特徵：誰上過哪幾次任務與失敗張數、票和隊伍、提議的樣子、湖的結果與宣告、座位與隊長順序，
  *    再加現行信念與「只用規則」的機率）；`mlBelief90 = 1` = 疊加版（從現行信念的 logit 出發、樹只學修正，`ml/belief90.json`）、
  *    `= 2` = 取代版（不用現行的表，只用規則＋特徵，`ml/belief90Pure.json`；起點是 L1* 世界均分）；
+ *    `= 3` = 疊加版，但用真人桌的讀法（`humanProfile.ts` 一般真人桌）當起點擬合的那一份（`ml/belief90Human.json`；給真人桌用）；
  * 3. 把世界的權重往模型的邊際機率傾斜（迭代比例調整：每一個人「在／不在紅方世界」的權重各乘一個倍數，直到每個人的紅機率等於模型說的；
  *    先把模型的機率在 logit 上平移，讓不確定的人的紅數總和等於世界裡的紅數），所以「這隊乾淨的機率」等所有讀世界的決策都跟著用新的後驗，
  *    規則推得出來的確定點（p = 0／1）不會變。
@@ -24,17 +25,20 @@ import { BELIEF_FEATURES_90, beliefFeatures90 } from './ml/beliefFeatures90';
 import { ASSASSIN_FEATURES_90, assassinFeatures90 } from './ml/assassinFeatures90';
 import BELIEF_STACK from './ml/belief90.json';
 import BELIEF_PURE from './ml/belief90Pure.json';
+import BELIEF_HUMAN from './ml/belief90Human.json';
 import ASSASSIN from './ml/assassin90.json';
 import ASSASSIN_HUMAN from './ml/assassin90Human.json';
 
 let beliefStack: MlModel90 | null = null;
 let beliefPure: MlModel90 | null = null;
+let beliefHuman: MlModel90 | null = null;
 let assassinModel: MlModel90 | null = null;
 let assassinHuman: MlModel90 | null = null;
 
-/** 第 1 號模型（1 = 疊加版、2 = 取代版）。 */
-export function beliefModel90(kind: 1 | 2): MlModel90 {
+/** 第 1 號模型（1 = 疊加版、2 = 取代版、3 = 疊加版・真人桌讀法當起點擬合的那一份）。 */
+export function beliefModel90(kind: 1 | 2 | 3): MlModel90 {
   if (kind === 1) return (beliefStack ??= new MlModel90(BELIEF_STACK as unknown as ModelJson, BELIEF_FEATURES_90));
+  if (kind === 3) return (beliefHuman ??= new MlModel90(BELIEF_HUMAN as unknown as ModelJson, BELIEF_FEATURES_90));
   return (beliefPure ??= new MlModel90(BELIEF_PURE as unknown as ModelJson, BELIEF_FEATURES_90));
 }
 
@@ -53,7 +57,7 @@ export function setAssassinModel90(json: ModelJson | null): void {
 export const round90Stats = { belief: 0, beliefPercival: 0, assassin: 0, assassinChanged: 0 };
 
 export interface Ml90Cfg {
-  model: 1 | 2;
+  model: 1 | 2 | 3;
   percival: boolean;
   noPicks: boolean;
   publicViews: boolean;
@@ -63,7 +67,7 @@ export interface Ml90Cfg {
 /** `BayesOptions.ml90`：開關的設定；關著 = undefined。 */
 export function ml90Cfg(t: Readonly<Partial<AgentTuning>>): Ml90Cfg | undefined {
   const m = t.mlBelief90 ?? 0;
-  if (m !== 1 && m !== 2) return undefined;
+  if (m !== 1 && m !== 2 && m !== 3) return undefined;
   const s = t.mlBelief90Scope ?? 0;
   return { model: m, percival: (s & 1) !== 0, noPicks: (s & 2) !== 0, publicViews: (s & 4) !== 0, half: (s & 8) !== 0 };
 }
@@ -145,9 +149,10 @@ export function ml90Weights(obs: PlayerObservation, base: { worlds: readonly num
   const pb = shareOf(wts);
   const pu = shareOf(uniW);
   const model = beliefModel90(cfg.model);
-  const fx = beliefFeatures90(obs, cfg.model === 1 ? pb : pu, pu);
-  const start = cfg.model === 1 ? wts : uniW;
-  const startShare = cfg.model === 1 ? pb : pu;
+  const stack = cfg.model !== 2;
+  const fx = beliefFeatures90(obs, stack ? pb : pu, pu);
+  const start = stack ? wts : uniW;
+  const startShare = stack ? pb : pu;
   const targets: [number, number][] = fx.ids.map((id, i) => {
     let q = model.prob(fx.rows[i]);
     if (cfg.half) q = sigmoid(0.5 * logit(q, 1e-6) + 0.5 * logit(startShare.get(id) ?? 0.5, 1e-6));

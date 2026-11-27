@@ -1611,7 +1611,8 @@ export interface AgentTuning {
   redWhiteScope84: number;
   /**
    * 第 90 回合（`Round90.ts`；路線圖 Phase C，Issue #215）：藍方座位的信念用第 1 號模型（世界後驗估值器，`ml/belief90*.json`，numpy 離線訓練、純 JSON 權重）
-   * 把 210 個紅方世界的權重往模型的 P(紅) 傾斜。1 = 疊加版（從現行信念出發、樹學修正）；2 = 取代版（不用現行的表，只用規則＋跨回合特徵）。0 = 關。
+   * 把 210 個紅方世界的權重往模型的 P(紅) 傾斜。1 = 疊加版（從現行信念出發、樹學修正）；2 = 取代版（不用現行的表，只用規則＋跨回合特徵）；
+   * 3 = 疊加版、用真人桌讀法當起點擬合的那一份（給真人桌）。0 = 關。
    */
   mlBelief90: number;
   /** 第 90 回合：`mlBelief90` 的範圍（位元）：1 = 派西也用；2 = 隊長派隊時不用（只用在投票）；4 = 梅林座位的公開忠臣視角也用；8 = 模型與現行各一半（logit 平均）。 */
@@ -4022,7 +4023,7 @@ export function parseTuningFlag(spec: string): Partial<AgentTuning> {
   }
   if (name === 'mlBelief90' || name === 'mlAssassin90') {
     const value = raw === undefined ? 1 : Number.parseInt(raw, 10);
-    const max = name === 'mlBelief90' ? 2 : 4;
+    const max = name === 'mlBelief90' ? 3 : 4;
     if (!Number.isInteger(value) || value < 0 || value > max) throw new Error(`${name} needs an integer 0–${max}, got "${raw}"`);
     return { [name]: value };
   }
