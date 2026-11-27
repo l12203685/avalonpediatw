@@ -38,7 +38,7 @@ describe('round 90 (roadmap Phase C): trained world-posterior and assassination 
     for (const k of ['mlBelief90', 'mlBelief90Scope', 'mlAssassin90'] as const) {
       expect(DEFAULT_AGENT_TUNING[k]).toBe(0);
       expect(LEGACY_AGENT_TUNING[k]).toBe(0);
-      for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING)[k]).toBe(0);
+      for (const type of ['weakHuman', 'avgHuman', 'strongHuman'] as const) expect(tuningForOpponent(type, DEFAULT_AGENT_TUNING)[k]).toBe(k === 'mlBelief90' ? 3 : 0);
     }
     expect(parseTuningFlag('mlBelief90')).toEqual({ mlBelief90: 1 });
     expect(parseTuningFlag('mlBelief90=2')).toEqual({ mlBelief90: 2 });
