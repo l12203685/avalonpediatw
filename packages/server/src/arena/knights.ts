@@ -35,6 +35,8 @@ export interface KnightSummary {
   name: string;
   tag?: string;
   style: string;
+  /** 學習樣本（站長 2026-11-27）：網站真人局場數、拿來學的座位數。百科沒有。 */
+  samples?: { games: number; seats: number };
 }
 
 const SERIAL_SUFFIX_RE = /_\d{1,3}$/;
@@ -95,6 +97,7 @@ export function listKnightSummaries(): KnightSummary[] {
   return registry().map((k) => {
     const s: KnightSummary = { id: k.id, name: k.baseName, style: k.style };
     if (k.tag) s.tag = k.tag;
+    if (k.profile?.samples) s.samples = { games: k.profile.samples.games, seats: k.profile.samples.seats };
     return s;
   });
 }

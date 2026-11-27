@@ -8,6 +8,7 @@
 import { DEFAULT_AGENT_TUNING, type AgentTuning } from '../ai/AgentTuning';
 import { ARENA_KNOBS, knobFor } from './knobs';
 import { validateResidual, type ResidualWeights } from './residual';
+import { validateSamples, type KnightSamples } from './samples';
 
 export const PROFILE_SCHEMA_VERSION = 1;
 /**
@@ -42,6 +43,8 @@ export interface BotProfile {
   roles?: Partial<Record<ArenaRole, KnobValues>>;
   /** 每人殘差層（schema 2，只有官方 AI騎士）：引擎決定之後，用那位玩家自己的牌局學到的權重重新打分。 */
   residual?: ResidualWeights;
+  /** 學習樣本數（只有官方 AI騎士；擬合程式從真人局算的數字，`samples.ts`）。 */
+  samples?: KnightSamples;
 }
 
 export interface ValidationResult {
@@ -85,7 +88,7 @@ export function isHouseKnightName(name: string): boolean {
   return foldName(name).startsWith(HOUSE_NAME_PREFIX);
 }
 
-const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles', 'residual']);
+const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles', 'residual', 'samples']);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -151,6 +154,11 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
     else if (raw.schema !== PROFILE_SCHEMA_RESIDUAL) errors.push('有 residual 時 schema 要是 2');
     else residual = validateResidual(raw.residual, errors);
   }
+  let samples: KnightSamples | undefined;
+  if (raw.samples !== undefined) {
+    if (!opts.house) errors.push('samples（學習樣本數）只給官方的 AI騎士 用');
+    else samples = validateSamples(raw.samples, errors);
+  }
   const name = checkText('name', raw.name, NAME_MAX, errors);
   if (name) {
     const folded = name.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
@@ -207,6 +215,7 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   if (sides) profile.sides = sides;
   if (roles) profile.roles = roles;
   if (residual) profile.residual = residual;
+  if (samples) profile.samples = samples;
   return { ok: true, errors, warnings, profile };
 }
 

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { addBot } from '../services/socket';
-import { DEFAULT_KNIGHT_ID, knightBlurb, useKnights } from '../services/knights';
+import { DEFAULT_KNIGHT_ID, knightBlurb, knightSamplesLine, useKnights } from '../services/knights';
 
 export default function KnightAddBotButton({ roomId }: { roomId: string }): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -93,6 +93,7 @@ export default function KnightAddBotButton({ roomId }: { roomId: string }): JSX.
                 <span className="text-sm font-semibold text-white">{k.name}</span>
                 {k.id === DEFAULT_KNIGHT_ID && <span className="text-[10px] text-zinc-400">預設</span>}
                 {k.tag && <span className="rounded border border-emerald-700/80 px-1 text-[10px] text-emerald-200">{k.tag}</span>}
+                {knightSamplesLine(k) && <span className="text-[10px] text-zinc-400">{knightSamplesLine(k)}</span>}
               </span>
               <span className="block text-[11px] leading-snug text-zinc-400 line-clamp-2">{knightBlurb(k.style)}</span>
             </button>

@@ -91,6 +91,15 @@
       "redStackRate65": 0.2
     }
   },
+  "samples": {
+    "games": 45,
+    "seats": 45,
+    "bySeat": [7,3,9,4,6,2,4,4,3,3],
+    "byRole": {"merlin":4,"percival":7,"loyal":23,"morgana":4,"assassin":3,"mordred":2,"oberon":2},
+    "byMissions": {"blue3":24,"red3":21},
+    "byResult": {"red3":21,"merlinKilled":7,"blueWin":17},
+    "decisions": {"propose":75,"vote":697,"quest":72,"lake":7,"assassinate":1}
+  },
   "residual": {
     "version": 1,
     "team": {

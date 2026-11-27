@@ -27,6 +27,15 @@
       "goodBayesBadKey": 0.95
     }
   },
+  "samples": {
+    "games": 426,
+    "seats": 405,
+    "bySeat": [40,37,35,40,48,42,43,35,41,44],
+    "byRole": {"merlin":37,"percival":34,"loyal":180,"morgana":50,"assassin":38,"mordred":31,"oberon":35},
+    "byMissions": {"blue3":212,"red3":193},
+    "byResult": {"red3":193,"merlinKilled":90,"blueWin":122},
+    "decisions": {"propose":609,"vote":6163,"quest":657,"lake":92,"assassinate":16}
+  },
   "residual": {
     "version": 1,
     "team": {

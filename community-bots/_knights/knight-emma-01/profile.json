@@ -39,6 +39,15 @@
       "oberonR1AlwaysFail64": 1
     }
   },
+  "samples": {
+    "games": 279,
+    "seats": 264,
+    "bySeat": [23,37,21,25,27,25,27,31,27,21],
+    "byRole": {"merlin":25,"percival":20,"loyal":113,"morgana":27,"assassin":25,"mordred":30,"oberon":24},
+    "byMissions": {"blue3":133,"red3":131},
+    "byResult": {"red3":131,"merlinKilled":60,"blueWin":73},
+    "decisions": {"propose":407,"vote":4027,"quest":396,"lake":43,"assassinate":12}
+  },
   "residual": {
     "version": 1,
     "team": {

@@ -6,6 +6,7 @@ import { ARENA_NS } from '../i18n/arena';
 import {
   BOTS_FOLDER_URL, BOTS_README_URL, TEMPLATE_URL, fetchLeaderboard, fmtCount, fmtInterval, fmtPct, fmtRating, fmtTaipeiTime,
   knobLines, sparkPoints, type ArenaBot, type ArenaLeaderboard, type ArenaTrend,
+  type ArenaSamples,
 } from '../utils/arena';
 
 /**
@@ -157,6 +158,35 @@ function BotName({ bot }: { bot: ArenaBot }): JSX.Element {
   );
 }
 
+/** 官方 AI騎士 的學習樣本數（站長 2026-11-27）：一行摘要，點開看依座位／角色／任務結果／遊戲結果的表。 */
+function SamplesLine({ samples }: { samples?: ArenaSamples | null }): JSX.Element | null {
+  const { t } = useTranslation(ARENA_NS);
+  // 舊的排行榜、格式壞掉的不顯示（不要整頁壞掉）。
+  if (!samples || !(samples.games > 0) || !Array.isArray(samples.bySeat) || !samples.byRole || !samples.byMissions || !samples.byResult) return null;
+  const row = (title: string, labels: string[], values: number[]): JSX.Element => (
+    <div className="flex flex-wrap gap-x-2">
+      <span className="text-zinc-500">{title}</span>
+      {labels.map((l, i) => <span key={l} className="tabular-nums">{l} {values[i] ?? 0}</span>)}
+    </div>
+  );
+  const seatLabels = samples.bySeat.map((_, i) => `${(i + 1) % 10}家`);
+  const r = samples.byRole;
+  const d = samples.decisions;
+  return (
+    <details className="mt-0.5 max-w-md text-[10px] text-zinc-400" data-testid="arena-samples">
+      <summary className="cursor-pointer select-none text-emerald-200/90 hover:underline">{t('samplesLine', { games: samples.games, seats: samples.seats })}</summary>
+      <div className="mt-1 space-y-0.5 whitespace-normal rounded border border-zinc-800 bg-black/30 p-1.5">
+        {row(t('samplesSeat'), seatLabels, samples.bySeat)}
+        {row(t('samplesRole'), t('samplesRoles').split(','), [r.merlin, r.percival, r.loyal, r.morgana, r.assassin, r.mordred, r.oberon])}
+        {row(t('samplesMissions'), t('samplesMissionLabels').split(','), [samples.byMissions.blue3, samples.byMissions.red3])}
+        {row(t('samplesResult'), t('samplesResultLabels').split(','), [samples.byResult.red3, samples.byResult.merlinKilled, samples.byResult.blueWin])}
+        {d && row(t('samplesDecisions'), t('samplesDecisionLabels').split(','), [d.propose, d.vote, d.quest, d.lake, d.assassinate])}
+        <p className="text-zinc-500">{t('samplesNote')}</p>
+      </div>
+    </details>
+  );
+}
+
 /** 一隻機器人最近幾天的總分走勢（小折線，至少兩天有分數才畫）。 */
 function Spark({ trend, id }: { trend?: ArenaTrend; id: string }): JSX.Element | null {
   const { t } = useTranslation(ARENA_NS);
@@ -206,6 +236,7 @@ function BoardTable({ bots, trend }: { bots: ArenaBot[]; trend?: ArenaTrend }): 
                 <BotName bot={b} />
                 <p className="mt-0.5 max-w-md text-[11px] leading-relaxed text-zinc-400">{b.source === 'reference' ? t('referenceStyle') : b.style}</p>
                 <p className="mt-0.5 max-w-md break-words text-[10px] text-zinc-500">{b.knobs.length ? b.knobs.join('、') : t('noKnobs')}</p>
+                <SamplesLine samples={b.samples} />
               </td>
               <td className={td}>
                 <span className="font-semibold text-white">{fmtRating(b.rating.overall)}</span>
@@ -251,6 +282,7 @@ function BotCard({ bot: b, trend }: { bot: ArenaBot; trend?: ArenaTrend }): JSX.
         <span>{t('colSeats')} {b.seats}</span>
       </div>
       <p className="mt-1 break-words text-[10px] text-zinc-500">{t('knobs')}：{b.knobs.length ? b.knobs.join('、') : t('noKnobs')}</p>
+      <SamplesLine samples={b.samples} />
     </li>
   );
 }

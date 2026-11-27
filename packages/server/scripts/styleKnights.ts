@@ -43,6 +43,7 @@ import { campOf, type ReplayGame } from '../src/ai/benchmark/sheetsReplay';
 import { buildReplayObservation, seatId, seatOfId } from '../src/ai/benchmark/replayObservation';
 import { excludedDatasetKeys, isInside, type GameDbCorrection, type GameDbRow } from '../src/ai/benchmark/playerAgreement';
 import { resolveProfileTuning, validateProfile, type BotProfile, type ArenaSide } from '../src/arena/profile';
+import { samplesFromSeats, type KnightSamples } from '../src/arena/samples';
 import {
   buildFamilies,
   buildKnightProfile,
@@ -326,7 +327,7 @@ export interface Selected {
   indices: number[];
 }
 
-export function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; jobs: Job[]; skipped: Array<{ id: string; why: string }> } {
+export function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; jobs: Job[]; skipped: Array<{ id: string; why: string }>; replayable: Map<string, ReplayGame> } {
   const aliasFile = fs.existsSync(a.aliases) ? loadJson<{ aliases?: Record<string, string> }>(a.aliases) : {};
   const aliasMap: Record<string, string> = { ...(aliasFile.aliases ?? {}), ...(ds.aliases ?? {}) };
   const keyOf = (name: string): string => playerIdentityKey(name, aliasMap);
@@ -399,7 +400,7 @@ export function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; job
       });
     }
   });
-  return { selected, jobs, skipped };
+  return { selected, jobs, skipped, replayable };
 }
 
 // ── 擬合 ───────────────────────────────────────────────────
@@ -550,8 +551,13 @@ async function main(): Promise<void> {
   // 輸出
   fs.writeFileSync(path.join(a.out, 'fit.json'), JSON.stringify({ selected: selected.map(({ indices: _i, ...rest }) => rest), skipped, fits, kept: kept.map((k) => ({ id: k.fit.id, keep: k.keep })) }, null, 1));
   const gain = (x: { n: number; default: number; knight: number }): number => (x.n ? (100 * (x.knight - x.default)) / x.n : 0);
-  const knights = kept.filter((k) => k.keep).map((k) => {
-    const profile = buildKnightProfile(k.fit.id, k.layers, center);
+  // 學習樣本數（站長 2026-11-27）：這位玩家每個可重播的座位（全部，不受 --sample 影響），只寫數字。
+  const samplesOf = (pi: number): KnightSamples => samplesFromSeats(
+    sel.jobs.filter((j) => j[2] === pi).map((j) => ({ game: sel.replayable.get(j[0])!, seat: j[1] })),
+    selected[pi].games,
+  );
+  const knights = kept.map((k, pi) => ({ k, pi })).filter(({ k }) => k.keep).map(({ k, pi }) => {
+    const profile: BotProfile = { ...buildKnightProfile(k.fit.id, k.layers, center), samples: samplesOf(pi) };
     const v = validateProfile(profile, knightFolderId(k.fit.id, 1), { house: true });
     if (!v.ok) throw new Error(`${k.fit.id}: generated profile invalid: ${v.errors.join('; ')}`);
     return { folder: knightFolderId(k.fit.id, 1), profile, fit: k.fit };
