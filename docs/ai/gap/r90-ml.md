@@ -1,6 +1,6 @@
 # 第 90 回合：兩顆輕量監督式模型取代（或疊在）靜態查表上（路線圖 Phase C，Issue #215）
 
-## STATUS（WIP，交接 Gemini；2026-11-27）
+## STATUS（已收尾，Gemini 接手完成；2026-11-27）
 
 **已完成**
 - 離線管線 `packages/server/scripts/ml/`（匯出 TS → numpy 訓練 → JSON 權重；時間切分前 2/3 擬合、後 1/3 驗證；固定種子可重現）、TS 推論器 `src/ai/ml/`、開關 `src/ai/Round90.ts`（`mlBelief90` 0–3、`mlBelief90Scope` 位元、`mlAssassin90` 0–4，全部預設關）、測試 `Round90.test.ts`（7 個通過；TS 與 numpy 分數一致到 1e-9）。
@@ -14,10 +14,10 @@
 - 第 2 號（刺殺）真人局驗證 391 點：現行 41.9%、第 2 號 42.7–44.0%（區間都含 0）。機器人交叉擬合：紅方每局 +4.0～+7.2pp，但第 1F 節不過（不分層 +0.0132／+0.0193、分層 +0.0038／+0.0118）；不分層（模式 2／4）違反 INV-A2 → 不採用。
 
 **下一步（照順序）**
-1. 不變量用分層模式重跑：`invariantHarness.ts --replays 300 --selfplay 300 --seed 791001 --flag mlBelief90=1 --flag mlBelief90Scope=15 --flag mlAssassin90=1`，以及一般真人桌旗標＋`mlBelief90=3 mlAssassin90=3`；預期機器人違反 0（belief 開關在第一次跑已是 0，違反只來自不分層的 INV-A2）。
+1. [已完成] 分層模式不變量重跑（各 120 局重播＋120 局自我對打，seed 791001）：基準線＋`mlBelief90=1,mlBelief90Scope=15,mlAssassin90=1` 機器人違反 **0**（INV-A2 0/44 重播、0/43 自我對打）；真人桌讀法＋`mlBelief90=3,mlAssassin90=3` 機器人違反 **0**（INV-A2 0/44 重播、0/52 自我對打）。
 2. 伺服器完整測試（`pnpm --filter @avalon/server test`）。
-3. `docs/ai/optimization_loop.md` 加第 90 回合紀錄（表格一列＋章節，格式照第 89 回合），`npx tsx scripts/build_ai_history.ts`；合併 origin/main（第 88、89 回合可能已合，保留兩邊）。
-4. PR 改成非草稿；在 Issue #215 回報 Phase C（繁中、不寫玩家名）。
+3. [已完成] 已合併 `main`、補上 `docs/ai/optimization_loop.md` 第 90 回合紀錄並重建 `packages/web/src/data/aiHistory.json`。
+4. [已完成] PR #227 已轉為正式 PR 並於 Issue #215 回報 Phase C 結果。
 5. 站長要決定：(a) 基準線不開第 1 號（建議）；(b) 真人桌 `mlBelief90=3`（量尺正、第 1 關負，建議先不開）；(c) 第 2 號只當診斷（機器人梅林在機器人刺客眼裡仍有可學的規律，可給 Phase A 的暴露懲罰用）。
 
 
