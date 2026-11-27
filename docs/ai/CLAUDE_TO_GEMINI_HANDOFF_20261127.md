@@ -1,0 +1,125 @@
+# Claude → Gemini 交接文件（2026-11-27）
+
+> 撰寫：Claude（站長 Edward 的週用量快用完，改由 Gemini 接手）。
+> 讀者：Gemini。照這份就能接著做，不用回頭翻對話。
+> 搭配閱讀：`docs/ai/NEXT_GEN_AI_ROADMAP.md`（Issue #215）、`docs/ai/optimization_loop.md`（每一回合的紀錄與驗收協定）、`docs/ai/EXTERNAL_AI_COLLABORATION.md`、`docs/BOTS.md`。
+
+---
+
+## 0. 先讀：站長的硬規則（違反就要退回）
+
+- **語言**：回覆站長一律繁體中文（台灣），結論先講、短、用表格；座位寫「N家」，第 10 位寫「0家」。
+- **可以直接做 vs 要問**：可以復原的事直接做；**刪檔、花錢、對外公開發文**一定要站長親口同意。牽涉站長裁定、規則判斷的不要自己決定。
+- **隱私**：公開 repo 不放聊天原文、私人牌譜原檔、信箱、token。玩家 ID **只有**在 `player_aliases.json` 和 **AI騎士的名字／設定檔**（`AI騎士_{玩家ID}_{##}`，站長 11/26 准許）可以出現。
+- **憑證**：不在對話或 log 要／貼 token；金鑰放 GitHub secrets 或 Render 環境變數。Actions log 是公開的。
+- **Git**：功能分支＋PR；不 force-push、不 rebase 別人的分支（只把 main **merge 進**分支）；squash 合併時用完整 40 碼 `expectedHeadSha`。
+- **合併時機（站長 11/26）**：CI 綠就合併；但**會重開伺服器的 PR**（動到 `packages/server/**`、`packages/shared/**`、`Dockerfile.server`、`.dockerignore`、根目錄 `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`，見 `render.yaml` 的 `buildFilter`）合併前一定先跑部署閘門：
+  ```bash
+  node scripts/deployGate.mjs          # 0 = 可以；1 = 有人在玩，先不要
+  node scripts/deployGate.mjs --wait 30  # 每分鐘再問，最多 30 分鐘
+  ```
+  只動網站（`packages/web/**`）、文件、`community-bots/`、`arena/` 的 PR 不會重開伺服器，CI 綠就能合。
+- **回饋處理（站長 11/26）**：玩家對 AI 的回饋當成「整局／整體打法」的描述，不切成單一決策點；整理成「整體印象 → 相關局面 → 要測的假設」；看不懂時最多回一個開放式追問。
+- **比較基準**：機器人只跟「兩邊都強的真人局」（藍、紅平均 PR ≥ 55，208 局）比：三紅／三藍死／三藍活 = **47.1／21.2／31.7%**，任務三藍 52.9%，刺中率 **40.0%**。
+- **A0／A1 硬規則永遠不改**：好人持湖說實話（A0）；兩次失敗後紅方一定出失敗、不放行會輸的隊（A1）。
+
+## 1. 現在 main 上有什麼（2026-11-27 凌晨合併完）
+
+| PR | 內容 |
+|---|---|
+| #206（含 #204） | 部署閘門 `/api/bots/status` 的 `live` 區塊＋`scripts/deployGate.mjs`；伺服器重開前把有真人的對局、練習局、大廳房間、模擬瓦題目加密存進私人試算表「伺服器暫存」分頁，開機接回（同一間、同座位、計時器接著倒數）。 |
+| #217（含 #207、#213） | AI 擂台：`community-bots/`（社群投稿＋`_knights/` 官方騎士）、`packages/server/src/arena/`、每天 04:17（台北）跑 **12 萬局**的 GitHub Actions（12 片×1 萬局），合併到 main 後補跑 2 萬局，PR 跑 2,000 局 smoke；排行榜 `arena/leaderboard.json`、每日紀錄 `arena/history/`。**不耗 token、不會重開伺服器。** |
+| #214、#212 | 全站「百科AI」改名「AI騎士」；網站導覽列只剩一個「AI騎士團」頁（對局／優化歷程／擂台／我的騎士／練習／一起改）；舊名字 `百科AI_n` 顯示時對到 `AI騎士_百科_##`，戰績接得上。 |
+| #222 | AI騎士 v2：每位玩家一層「殘差權重」（`arena/residual.ts`），讀完整局面學玩家的派隊、投票（含異常票）、任務牌、湖。30 位玩家中位數：全部一致度 81.5→**84.5%**、投票 92.5%、任務牌 88.3%、派隊前三名命中 31%、湖 33.6%（前三 68%）、梅林打法差 3.8pp。 |
+| #218 | 練習台／房間可以挑 AI騎士；練習台「一隻一隻召喚」（9 個座位逐座挑、沒挑的用百科或隨機補）；伺服器存進度會記住每座是哪位騎士。 |
+| #208 | 第 84 回合：基準線採用 `earlyGo84=0.3`、`redSixWhite84=1`、`redWhiteScope84=4`（紅方六白外白真人桌也開）。 |
+| #209、#219、#223、#224、#225 | 第 85、87、86、88、89 回合：開關都在，**預設全關**（沒採用）。#209 另外讓模擬瓦公布時帶前一局開紅的人（`failTest85` 只疊在模擬瓦）。 |
+| #201、#199、#197 | 練習局結束的開放式回饋＋自動標記「可能被針對」；遊戲內聊天回饋擷取（帶前後文）；湖中只打在聊天的宣告會被認成正式宣告；模擬瓦公布加「AI騎士會派的組合」與圖上玩家名。 |
+| #203、#216、#220、#221 | 外部 AI 協作說明＋Issue 表單＋網站 `#collab` 頁；路線圖 `NEXT_GEN_AI_ROADMAP.md`；第一個社群投稿「藿藿」（`community-bots/huohuo/`）。 |
+| #166 | 簡繁即時轉換（opencc-js）。 |
+
+## 2. 進行中（Claude 交接時有推上去的 WIP，請接著做）
+
+| 分支／PR | 狀態 | 下一步 |
+|---|---|---|
+| `claude/opt-round-90`（第 90 回合＝路線圖 **Phase C**），草稿 PR #227 | WIP，`docs/ai/gap/r90-ml.md` 開頭有 STATUS。已知結果：Model 1（世界後驗）時間切分樣本外 Brier 0.2282→0.2262、log-loss 顯著變好，但自我對打藍方 −1.13（區間含 0）、第 1F 節不過；Model 2（刺殺）真人局命中率和現行刺客沒有顯著差別，機器人局紅方 +4～+7pp、第 1F 節不過。開關都沒採用。剩下：分層不變量重跑、完整測試、`optimization_loop.md` 第 90 回合紀錄、merge main、#215 留言 | 收尾後把草稿轉正式 PR；之後開 Phase D。原本規格：離線訓練管線 `packages/server/scripts/ml/`（時間切分、不含玩家名、執行期只讀純 JSON 權重、零 Python）：Model 1 世界後驗／事件概似（取代 `likelihoods*.json`），Model 2 三藍刺殺機率；離線 Brier／log-loss／ECE 要顯著優於現行；做成 `Round90.ts` 開關（預設關），照第 3 節協定量；結果貼 #215。 |
+| `claude/unified-knights`（統一 AI騎士），草稿 PR #228 | 已做：練習台、房間的對局也套用 v2 殘差層（新的 `KnightAgent`，擂台共用；`KNIGHT_RESIDUAL_LIVE=off` 可關），相關測試 88 個過。還沒跑 tsc、eslint、整包測試，也還沒確認擂台每局結果和改之前相同。其餘待辦寫在 `docs/ai/UNIFIED_KNIGHTS_STATUS.md` | 先補檢查、確認擂台結果不變、轉正式 PR（動到 packages/server，合併前跑部署閘門）；再做第 4.2 節其餘項目。 |
+| PR #226（只改文件） | 08:00 同步：待測清單加入凌晨 2 局「練習被針對」（真人紅方刺客刺中 AI騎士 梅林，玩家沒寫字） | CI 綠就合。 |
+
+**08:00 同步的狀態（11/27）**：`live.restart.configured=true`；模擬瓦存檔 `configured=true`、`writeFailures=0`（存私人試算表，不用再加服務帳號）；擂台合併後已補跑 4 輪共 8 萬局，`arena/leaderboard.json` 與 `arena/history/2026-11-27.json` 已進 main，04:17 每日排程第一次是 11/28。Drive 連接器每個分頁只讀得到前約 30 列，完整的「練習決策紀錄」要請站長匯出 CSV。
+
+## 3. 優化回合的協定（每一回合都照這個）
+
+1. 先**重量**題目的關鍵數字（現行預設、真人局、強者），不要直接相信舊數字。
+2. 改法做成開關，放 `packages/server/src/ai/RoundNN.ts`，**預設關**；開關關時對局要和現行一局一局相同。
+3. 量測關卡（全部過才採用）：
+   - 自我對打逐局配對（世界線刺客），篩選＋新種子確認，合併局數要夠（3,000＋3,000）。
+   - **紅方重新擬合**：藍方一改，紅方刺客／世界線要用新局重新學，再量一次（第 88 回合教訓：固定的代價表會被鑽）。
+   - **第 1F 節**：分局面和真人的距離不能變大超過容許值。
+   - **第 1 關**：逐票／逐提議和真人一致不能變差。
+   - **第 1H 節**：人類 PR 量尺，每一層、兩半都不能是負的（真人桌讀法另外量）。
+   - 不變量（`invariantHarness.ts`）機器人違反 0；A0／A1 不動；情境題庫（`scenarioSuite.ts`）硬規則 100%。
+4. 基準線（機器人互打）和三種真人桌（`humanProfile.ts` 的 `HUMAN_READING`）**分開決定**是否採用。
+5. 紀錄寫進 `docs/ai/optimization_loop.md`（第 N 回合一節＋第 4 節表格一列），完整表放 `docs/ai/gap/rNN-*.md`，`npx tsx scripts/build_ai_history.ts` 重建網站優化歷程。
+6. 合併多個回合 PR 時：`AgentTuning.ts`／`.test.ts` 長清單兩邊都留、多行區塊整段接；`PROFILE_KEYS` 上限取裝得下的值；回合紀錄依回合排；`aiHistory.json` 重建。
+
+## 4. 待辦清單（依優先序）
+
+### 4.1 路線圖 #215（站長 11/26：Phase A → E 依序、做成開關實測、進度回報 #215）
+| 階段 | 回合 | 狀態 |
+|---|---|---|
+| A1 merlinInnerBlackShield | 87（#219） | 沒採用：梅林獨自內黑只占 18.7% 三藍局，差距多是比分造成；票不是梅林被認出的主因。 |
+| A2 merlinEvWithAssassinationCost | 88（#224） | 沒採用：估計器準（ECE 0.04），但固定代價表被鑽，紅方重學後轉負。 |
+| B (W, D, M) 聯合世界 | 89（#225） | 沒採用：派西校準變好，但 1F 不過、Q1／Q2 仍不過、莫德雷德避雷沒改善；發現第 1 局一張失敗後高估「≥2 紅」約 5pp。 |
+| **C 監督式 ML** | **90（進行中）** | 見第 2 節。 |
+| D 1–2 步受限前瞻＋終局估值器 | 91 | 未開始：在 n-5 尾家、關鍵局洗尾投票、湖中選擇做受限前瞻（單步 < 50 ms）。 |
+| E League／Exploiter＋舊開關瘦身 | 92 | 未開始：接第 86 回合可剝削度工具（`Round86.ts`、`scripts/exploitAudit86.py`、`pairedExploit86.py`）與每日擂台。 |
+
+### 4.2 統一 AI騎士（站長 11/26：「玩家自創自建AI騎士 = AI騎士_玩家 = 有該玩家遊戲風格的AI騎士 而且可以被該玩家調整 並學習該玩家的遊戲風格 全部都是一體的」）
+- 一位玩家一位騎士，名字 `AI騎士_{玩家ID}_{##}`；三層：① 從牌譜學（v1 開關＋v2 殘差）② 玩家自己的調整（網站文字描述為主、滑桿為輔，或用自己的 AI 產生 JSON）③ 定期重新學習（保留②）。
+- 只有本人能調：網站登入＋「ID 認領」綁定；GitHub 投稿的作者要綁定玩家 ID，未確認前標「待確認是本人」。
+- 「藿藿」：牌譜裡沒有這個 ID，先當未認領騎士（只有第②層），等他連上真正的遊戲 ID。
+- 網站「AI騎士團 → 我的騎士」：看自己的騎士、逐動作一致度表、文字調整、變更紀錄、「用你自己的 AI 調整」面板（附預填的 prompt、貼回 JSON 預覽後儲存）。
+- 文字解讀：詞庫即時解讀；看不懂的排「待解讀」由每日同步解讀（不花錢）；即時 LLM 解讀只寫設計，**花錢要站長同意**。
+- **對局（練習台／房間）目前只套開關，沒套 v2 殘差層**（只有擂台套）→ 要補上。
+- 補位（signage／「叫 AI騎士補位」）也要能指定騎士。
+- 給玩家自己的 AI 的 prompt 範本（放進網站和 `EXTERNAL_AI_COLLABORATION.md`）：
+  > 你是我的阿瓦隆 AI騎士調整助手。我的遊戲 ID 是〔ID〕。我的打法：〔自己描述〕。附件是我的騎士目前的設定檔、開關說明表、「騎士哪裡不像我」報告〔貼上〕。〔選填：這幾局它打錯了，我當時會這樣打…〕請只用開關說明表裡有的開關、在範圍內提出調整，回覆一段 JSON（只寫要改的開關和新數值）＋逐條白話說明。不要寫程式，不要用其他玩家的資料。
+
+### 4.3 其他（照站長已同意的建議）
+- **重玩測驗**（#222 決策 a）：只給站長的私人頁，用一個月以前他自己的局面（名字換成座位）讓他重答，量真正的上限；有用再開放給玩家。
+- **第 86 回合**最大弱點：紅方持湖幾乎都湖隊友說好人（藍讀湖 +9.1pp）；`redLakeDisguise50` 機器人桌有效但 1F／量尺不過 → 維持不開，等練習局回饋出現再議（站長 10/13「盡量湖隊友…但可以看情況」相關）。
+- **延後的 Gemini 提案**：`evilPickOneRed`（紅方派隊避雙紅）＋`oberonMixedR1`（奧伯倫首局照真人 52.5% 混合），排在 Phase E 之後或併入紅方回合。
+- **騎士精準度**：派隊第 1 局只有 3–12%（靠發言、牌譜沒有）；之後可加「前三名命中」當目標。
+
+### 4.4 只有站長能做的
+- Render 環境變數：如果 `/api/bots/status` 顯示存檔 `writeFailures > 0`，要把私人試算表分享給服務帳號（編輯權限）。
+- S1035、壞掉的 emoji 名字、`/inv_h.log`／`/inv_h.done`（舊的待辦，見主控台）。
+- Discord 論壇標籤「百科AI對局」要不要改名「AI騎士對局」（可選；改了要同步常數 `AI_GAME_TAG_NAME`）。
+
+## 5. 例行工作（原本是 Claude 的排程，Gemini 接手時請照做或請站長調整）
+
+| 時間（台北） | 內容 |
+|---|---|
+| 每天 04:17 | GitHub Actions 自動跑擂台 12 萬局（不用人管，看 `arena/leaderboard.json` 有沒有更新）。 |
+| 每天 08:00 | 主控台同步：套用站長在主控台的編輯、讀回饋（遊戲內回饋、練習被針對、模擬瓦爛局）整理成待測清單、每日一題草稿（**不公開發文**）。主控台是 Claude 的 artifact，Gemini 讀不到時請站長轉貼重點。 |
+| 每天 13:47 | 社群回報與 ID 認領（`npx tsx scripts/listCommunityReports.ts --days 3`，需要 `DISCORD_BOT_TOKEN`）、AI 對局討論串回覆、PR 巡檢。 |
+| 每天 18:35 | 記錄員／補位備援（Render `services/nightlyDispatch.ts` 會自己觸發；只在沒觸發時手動 `workflow_dispatch` `signage-recorder.yml`、`signage-player.yml`）。 |
+| 每天 03:35 | 合併會重開伺服器的 PR（現在有部署閘門，白天也可以，只要閘門回 0）。 |
+
+## 6. 關鍵檔案速查
+
+- AI 開關總表：`packages/server/src/ai/AgentTuning.ts`；真人桌讀法：`packages/server/src/ai/humanProfile.ts`
+- 回合開關：`packages/server/src/ai/Round74.ts`～`Round89.ts`
+- 世界線刺客：`packages/server/src/ai/assassin/WorldLines75.ts`
+- 信念：`packages/server/src/ai/BayesBelief.ts`、`Certainty.ts`
+- 擂台：`packages/server/src/arena/`（`profile.ts` 名字規則與白名單、`residual.ts`、`knights.ts`、`daily.ts`）、`community-bots/`、`.github/workflows/arena-*.yml`
+- 練習局：`packages/server/src/practice/`、`packages/web/src/components/practice/`
+- 存進度：`packages/server/src/socket/liveSnapshot.ts`、`services/liveStateStore.ts`、`services/deploySafety.ts`
+- 文件：`docs/BOTS.md`、`docs/SIMULATION.md`、`docs/PRACTICE_MODE.md`、`docs/COMMUNITY_FEEDBACK.md`、`docs/CONSOLE.md`、`docs/RENDER_FREE_DEPLOY.md`
+
+## 7. 回報方式
+
+- 路線圖進度回報 Issue #215；Gemini 策略相關回報 #149。
+- GitHub 留言結尾加 AI 署名（例如「— Gemini」），讓站長分得出是誰寫的。
+- 回站長：一段話＋表格，不用列出已完成、站長不必審的事。
