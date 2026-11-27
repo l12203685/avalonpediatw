@@ -6,7 +6,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { validateProfile, validateRoster, BOT_ID_RE, type BotProfile } from './profile';
+import { mergeProfileWithAdjust, validateAdjust, validateProfile, validateRoster, BOT_ID_RE, type BotProfile, type KnightAdjust } from './profile';
 
 export type BotSource = 'reference' | 'example' | 'house' | 'community' | 'extra';
 
@@ -24,6 +24,8 @@ export const REFERENCE_NAME = 'AI騎士_百科';
 
 /** 資料夾裡允許的檔案：資料，不是程式。 */
 export const ALLOWED_FILES = new Set(['profile.json', 'README.md']);
+export const ALLOWED_HOUSE_FILES = new Set(['profile.json', 'adjust.json', 'README.md']);
+export const OWNERS_FILE = '_owners.json';
 
 export function defaultCommunityDir(): string {
   return path.resolve(__dirname, '../../../../community-bots');
@@ -49,16 +51,19 @@ export function checkBotFolder(folder: string, opts: { house?: boolean } = {}): 
     return { id, ok: false, errors: [`找不到資料夾 ${folder}`], warnings };
   }
   if (!stat.isDirectory()) return { id, ok: false, errors: [`${folder} 不是資料夾`], warnings };
+  const house = opts.house ?? isHouseFolder(folder);
+  const allowed = house ? ALLOWED_HOUSE_FILES : ALLOWED_FILES;
   for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
-    if (!entry.isFile() || !ALLOWED_FILES.has(entry.name)) {
-      errors.push(`不允許的${entry.isDirectory() ? '資料夾' : '檔案'}「${entry.name}」：只能放 profile.json 和（可選的）README.md`);
+    if (!entry.isFile() || !allowed.has(entry.name)) {
+      const hint = house ? 'profile.json、adjust.json（可選）和 README.md（可選）' : 'profile.json 和（可選的）README.md';
+      errors.push(`不允許的${entry.isDirectory() ? '資料夾' : '檔案'}「${entry.name}」：只能放 ${hint}`);
     }
   }
   const file = path.join(folder, 'profile.json');
   if (!fs.existsSync(file)) return { id, ok: false, errors: [...errors, '缺少 profile.json'], warnings };
   const text = fs.readFileSync(file, 'utf8');
   // 官方 AI騎士 帶殘差層權重（schema 2），上限放寬到 32 KB；社群投稿照舊 16 KB。
-  const limitKb = (opts.house ?? isHouseFolder(folder)) ? 32 : 16;
+  const limitKb = house ? 32 : 16;
   if (text.length > limitKb * 1024) errors.push(`profile.json 太大（上限 ${limitKb} KB）`);
   let raw: unknown;
   try {
@@ -66,9 +71,38 @@ export function checkBotFolder(folder: string, opts: { house?: boolean } = {}): 
   } catch (err) {
     return { id, ok: false, errors: [...errors, `profile.json 不是合法的 JSON：${(err as Error).message}`], warnings };
   }
-  const house = opts.house ?? isHouseFolder(folder);
   const v = validateProfile(raw, id.startsWith('_') ? undefined : id, { house });
-  return { id, ok: errors.length === 0 && v.ok, errors: [...errors, ...v.errors], warnings: v.warnings, profile: v.profile };
+  const allErrors = [...errors, ...v.errors];
+  const allWarnings = [...warnings, ...v.warnings];
+  let mergedProfile = v.profile;
+  if (house) {
+    const adjustFile = path.join(folder, 'adjust.json');
+    if (fs.existsSync(adjustFile)) {
+      const adjText = fs.readFileSync(adjustFile, 'utf8');
+      if (adjText.length > 16 * 1024) allErrors.push('adjust.json 太大（上限 16 KB）');
+      let adjRaw: unknown;
+      try {
+        adjRaw = JSON.parse(adjText);
+      } catch (err) {
+        allErrors.push(`adjust.json 不是合法的 JSON：${(err as Error).message}`);
+      }
+      if (adjRaw !== undefined) {
+        const av = validateAdjust(adjRaw);
+        allErrors.push(...av.errors);
+        allWarnings.push(...av.warnings);
+        if (av.ok && av.adjust && mergedProfile) {
+          const adj: KnightAdjust = av.adjust;
+          mergedProfile = mergeProfileWithAdjust(mergedProfile, adj);
+          const hasAdjKnobs = Boolean(adj.overrides || adj.sides || adj.roles || adj.residualOff);
+          if (hasAdjKnobs) {
+            const idx = allWarnings.findIndex((w) => w.includes('一模一樣'));
+            if (idx >= 0) allWarnings.splice(idx, 1);
+          }
+        }
+      }
+    }
+  }
+  return { id, ok: allErrors.length === 0 && v.ok, errors: allErrors, warnings: allWarnings, profile: mergedProfile };
 }
 
 /** 官方 AI騎士 的資料夾（依玩家風格建立；作者固定「AI騎士團」，見 profile.ts `HOUSE_AUTHOR`）。 */
@@ -128,11 +162,9 @@ export function loadRoster(opts: { dir?: string; extra?: readonly RegisteredBot[
   const community: RegisteredBot[] = [];
   for (const name of subfolders(dir)) {
     if (name.startsWith('_')) continue;
-    const c = checkBotFolder(path.join(dir, name));
-    if (!c.ok || !c.profile) { rejected.push({ id: name, errors: c.errors }); continue; }
-    if (bots.some((b) => b.id === name)) { rejected.push({ id: name, errors: [`資料夾名稱「${name}」和官方的機器人重複`] }); continue; }
-    if (houseNames.has(c.profile.name.toLowerCase().replace(/\s+/g, ''))) { rejected.push({ id: name, errors: [`名字「${c.profile.name}」和官方的 AI騎士 重複`] }); continue; }
-    community.push({ id: name, source: 'community', profile: c.profile });
+    // 統一 AI騎士 模型（2026-11-27）：最上層社群資料夾不再收件，全部統一改用 _knights/<id>/adjust.json。
+    void houseNames;
+    rejected.push({ id: name, errors: [`最上層社群資料夾「${name}」不再收件；請改用 community-bots/_knights/<id>/adjust.json（見 community-bots/README.md）`] });
   }
   const rosterErrors = validateRoster(community.map((b) => ({ id: b.id, profile: b.profile! })));
   // 名字重複／一人兩隻：後面的（資料夾名稱排序）不收。
@@ -170,4 +202,27 @@ export function parseExtraProfiles(raw: unknown): { bots: RegisteredBot[]; rejec
     bots.push(bot);
   }
   return { bots, rejected };
+}
+
+/** 公開對照檔（community-bots/_owners.json）：騎士資料夾 ID → GitHub 帳號（玩家在網站同意公開後才寫入）。 */
+export interface OwnersFile {
+  schema: number;
+  note?: string;
+  owners: Record<string, string>;
+}
+
+export function loadOwnersFile(dir: string = defaultCommunityDir()): Record<string, string> {
+  const file = path.join(dir, OWNERS_FILE);
+  if (!fs.existsSync(file)) return {};
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Partial<OwnersFile>;
+    if (!raw || typeof raw.owners !== 'object' || raw.owners === null || Array.isArray(raw.owners)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw.owners)) {
+      if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }

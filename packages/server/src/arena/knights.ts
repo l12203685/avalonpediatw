@@ -169,7 +169,7 @@ export function createKnightAgent(
   const knight = getKnight(knightId);
   const tuning = knight?.profile ? { ...base, ...knightTuningOverrides(knight.id, role, team) } : base;
   const useResidual = opts.residual ?? liveResidualEnabled();
-  return buildKnightAgent(agentId, tuning, useResidual ? knight?.profile?.residual : undefined);
+  return buildKnightAgent(agentId, tuning, useResidual ? knight?.profile?.residual : undefined, knight?.profile?.residualOff);
 }
 
 /** 房間裡這位騎士下一個沒人用的座位名：`AI騎士_ED_01`，同房第二位 `AI騎士_ED_02`…。 */

@@ -20,6 +20,10 @@ export const ARENA_ROLES = ['merlin', 'percival', 'loyal', 'assassin', 'morgana'
 export type ArenaRole = typeof ARENA_ROLES[number];
 export type ArenaSide = 'good' | 'evil';
 
+/** 殘差層可個別關閉的動作種類（adjust.json 的 `residualOff`）。 */
+export const RESIDUAL_ACTIONS = ['team', 'vote', 'quest', 'lakeTarget', 'lakeClaim', 'assassinate'] as const;
+export type ResidualAction = typeof RESIDUAL_ACTIONS[number];
+
 export type KnobValues = Partial<Record<keyof AgentTuning, number | boolean>>;
 
 export interface BotProfile {
@@ -34,6 +38,10 @@ export interface BotProfile {
   tag?: string;
   /** 官方的 AI騎士（只有 `community-bots/_knights/` 裡的可以、而且一定要寫 `true`；作者固定 `HOUSE_AUTHOR`）。 */
   official?: boolean;
+  /** 對應的玩家 ID（官方 AI騎士 統一模型：名字須為 `AI騎士_{playerId}_{##}`）。 */
+  playerId?: string;
+  /** 第 1 層擬合狀態（`'none'` = 尚無牌譜／預設引擎；`'fitted'` = 已從牌譜擬合）。 */
+  fit?: 'none' | 'fitted';
   /** 所有座位都套用的開關。 */
   overrides?: KnobValues;
   /** 只在這一邊套用（後蓋前：overrides → sides → roles）。 */
@@ -42,6 +50,29 @@ export interface BotProfile {
   roles?: Partial<Record<ArenaRole, KnobValues>>;
   /** 每人殘差層（schema 2，只有官方 AI騎士）：引擎決定之後，用那位玩家自己的牌局學到的權重重新打分。 */
   residual?: ResidualWeights;
+  /** 合併第 2 層（adjust.json）後要停用殘差層的動作清單。 */
+  residualOff?: ResidualAction[];
+}
+
+/** 第 2 層（玩家自己的調整：`community-bots/_knights/<id>/adjust.json`）。重新擬合只改 profile.json，這一層保留。 */
+export interface KnightAdjust {
+  schema: 1;
+  /** 玩家對這次調整的說明（選填）。 */
+  note?: string;
+  /** 調整來源標記（例如 web、pr、migrated-from-community-bots/huohuo）。 */
+  source?: string;
+  overrides?: KnobValues;
+  sides?: Partial<Record<ArenaSide, KnobValues>>;
+  roles?: Partial<Record<ArenaRole, KnobValues>>;
+  /** 在這些動作停用殘差層，改照第 1＋2 層開關決定。 */
+  residualOff?: ResidualAction[];
+}
+
+export interface AdjustValidationResult {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  adjust?: KnightAdjust;
 }
 
 export interface ValidationResult {
@@ -85,7 +116,8 @@ export function isHouseKnightName(name: string): boolean {
   return foldName(name).startsWith(HOUSE_NAME_PREFIX);
 }
 
-const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'overrides', 'sides', 'roles', 'residual']);
+const TOP_KEYS = new Set(['schema', 'name', 'author', 'style', 'tag', 'official', 'playerId', 'fit', 'overrides', 'sides', 'roles', 'residual', 'residualOff']);
+const ADJUST_KEYS = new Set(['schema', 'note', 'source', 'overrides', 'sides', 'roles', 'residualOff']);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -161,6 +193,27 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   }
   if (opts.house && raw.official !== true) errors.push('官方 AI騎士 的 profile 要寫 "official": true');
   if (!opts.house && raw.official !== undefined) errors.push('official 只給官方的 AI騎士（community-bots/_knights/）用');
+  let playerId: string | undefined;
+  if (raw.playerId !== undefined) {
+    if (!opts.house) errors.push('playerId 只給官方的 AI騎士（community-bots/_knights/）用');
+    else {
+      playerId = checkText('playerId', raw.playerId, 16, errors);
+      if (playerId && name && !new RegExp(`^AI騎士_${playerId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_\\d{2}$`).test(name)) {
+        errors.push(`name 要符合 AI騎士_${playerId}_{##}（現在「${name}」）`);
+      }
+    }
+  }
+  let fit: 'none' | 'fitted' | undefined;
+  if (raw.fit !== undefined) {
+    if (!opts.house) errors.push('fit 只給官方的 AI騎士（community-bots/_knights/）用');
+    else if (raw.fit !== 'none' && raw.fit !== 'fitted') errors.push('fit 只能是 "none" 或 "fitted"');
+    else fit = raw.fit;
+  }
+  let residualOff: ResidualAction[] | undefined;
+  if (raw.residualOff !== undefined) {
+    if (!opts.house) errors.push('residualOff 只給官方的 AI騎士（community-bots/_knights/）用');
+    else residualOff = checkResidualOff(raw.residualOff, errors);
+  }
   let author: string | undefined;
   if (opts.house) {
     if (raw.author !== HOUSE_AUTHOR) errors.push(`官方 AI騎士 的 author 要是「${HOUSE_AUTHOR}」`);
@@ -203,11 +256,105 @@ export function validateProfile(raw: unknown, id?: string, opts: { house?: boole
   const profile: BotProfile = { schema, name: name!, author: author!, style: style! };
   if (tag) profile.tag = tag;
   if (opts.house) profile.official = true;
+  if (playerId) profile.playerId = playerId;
+  if (fit) profile.fit = fit;
   if (overrides) profile.overrides = overrides;
   if (sides) profile.sides = sides;
   if (roles) profile.roles = roles;
   if (residual) profile.residual = residual;
+  if (residualOff && residualOff.length > 0) profile.residualOff = residualOff;
   return { ok: true, errors, warnings, profile };
+}
+
+function checkResidualOff(raw: unknown, errors: string[]): ResidualAction[] | undefined {
+  if (!Array.isArray(raw)) { errors.push('residualOff 要是字串陣列'); return undefined; }
+  const out: ResidualAction[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string' || !(RESIDUAL_ACTIONS as readonly string[]).includes(item)) {
+      errors.push(`residualOff 不認得動作「${String(item)}」（可用：${RESIDUAL_ACTIONS.join('、')}）`);
+      continue;
+    }
+    if (!out.includes(item as ResidualAction)) out.push(item as ResidualAction);
+  }
+  return out;
+}
+
+/** 檢查第 2 層（adjust.json）：白名單開關、範圍、說明文字與 residualOff。 */
+export function validateAdjust(raw: unknown): AdjustValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!isPlainObject(raw)) return { ok: false, errors: ['adjust.json 要是一個 JSON 物件'], warnings };
+  for (const key of Object.keys(raw)) if (!ADJUST_KEYS.has(key)) errors.push(`adjust.json 不認得的欄位「${key}」`);
+  if (raw.schema !== 1) errors.push('adjust.json 的 schema 要是 1');
+  const note = raw.note === undefined ? undefined : checkText('note', raw.note, STYLE_MAX, errors, { multiline: true });
+  const source = raw.source === undefined ? undefined : checkText('source', raw.source, 64, errors);
+  const overrides = checkKnobs('adjust.overrides', raw.overrides, errors, warnings);
+  let sides: KnightAdjust['sides'];
+  if (raw.sides !== undefined) {
+    if (!isPlainObject(raw.sides)) errors.push('adjust.sides 要是物件 {"good": {...}, "evil": {...}}');
+    else {
+      sides = {};
+      for (const [k, v] of Object.entries(raw.sides)) {
+        if (k !== 'good' && k !== 'evil') { errors.push(`adjust.sides 只能有 good、evil，不認得「${k}」`); continue; }
+        const vals = checkKnobs(`adjust.sides.${k}`, v, errors, warnings, k);
+        if (vals) sides[k] = vals;
+      }
+    }
+  }
+  let roles: KnightAdjust['roles'];
+  if (raw.roles !== undefined) {
+    if (!isPlainObject(raw.roles)) errors.push('adjust.roles 要是物件 {"merlin": {...}, ...}');
+    else {
+      roles = {};
+      for (const [k, v] of Object.entries(raw.roles)) {
+        if (!(ARENA_ROLES as readonly string[]).includes(k)) { errors.push(`adjust.roles 不認得角色「${k}」（可用：${ARENA_ROLES.join('、')}）`); continue; }
+        const vals = checkKnobs(`adjust.roles.${k}`, v, errors, warnings, 'role', k as ArenaRole);
+        if (vals) roles[k as ArenaRole] = vals;
+      }
+    }
+  }
+  const residualOff = raw.residualOff === undefined ? undefined : checkResidualOff(raw.residualOff, errors);
+  if (errors.length > 0) return { ok: false, errors, warnings };
+  const adjust: KnightAdjust = { schema: 1 };
+  if (note) adjust.note = note;
+  if (source) adjust.source = source;
+  if (overrides && Object.keys(overrides).length > 0) adjust.overrides = overrides;
+  if (sides && Object.keys(sides).length > 0) adjust.sides = sides;
+  if (roles && Object.keys(roles).length > 0) adjust.roles = roles;
+  if (residualOff && residualOff.length > 0) adjust.residualOff = residualOff;
+  return { ok: true, errors, warnings, adjust };
+}
+
+/** 套用順序：預設 → 第 1 層（profile.json）→ 第 2 層（adjust.json）。不改動原物件。 */
+export function mergeProfileWithAdjust(profile: BotProfile, adjust: KnightAdjust | null | undefined): BotProfile {
+  if (!adjust) return profile;
+  const merged: BotProfile = { ...profile };
+  if (profile.overrides || adjust.overrides) {
+    merged.overrides = { ...(profile.overrides ?? {}), ...(adjust.overrides ?? {}) };
+  }
+  if (profile.sides || adjust.sides) {
+    const sides: Partial<Record<ArenaSide, KnobValues>> = {};
+    for (const side of ['good', 'evil'] as const) {
+      const a = profile.sides?.[side];
+      const b = adjust.sides?.[side];
+      if (a || b) sides[side] = { ...(a ?? {}), ...(b ?? {}) };
+    }
+    if (Object.keys(sides).length > 0) merged.sides = sides;
+  }
+  if (profile.roles || adjust.roles) {
+    const roles: Partial<Record<ArenaRole, KnobValues>> = {};
+    for (const role of ARENA_ROLES) {
+      const a = profile.roles?.[role];
+      const b = adjust.roles?.[role];
+      if (a || b) roles[role] = { ...(a ?? {}), ...(b ?? {}) };
+    }
+    if (Object.keys(roles).length > 0) merged.roles = roles;
+  }
+  if (adjust.residualOff && adjust.residualOff.length > 0) {
+    const prev = profile.residualOff ?? [];
+    merged.residualOff = Array.from(new Set([...prev, ...adjust.residualOff]));
+  }
+  return merged;
 }
 
 export interface RosterEntry {

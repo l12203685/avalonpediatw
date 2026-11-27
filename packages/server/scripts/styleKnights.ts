@@ -590,9 +590,16 @@ async function main(): Promise<void> {
 
   if (a.writeKnights) {
     fs.mkdirSync(KNIGHTS_DIR, { recursive: true });
-    // 只清掉這支程式以前寫的資料夾（knight-*）。
+    // 只清掉沒有 adjust.json 且不是 fit="none"（待認領／尚無牌譜）的舊擬合資料夾；有 adjust.json 的一律保留第 2 層。
     for (const e of fs.readdirSync(KNIGHTS_DIR, { withFileTypes: true })) {
-      if (e.isDirectory() && e.name.startsWith('knight-') && !folders.has(e.name)) fs.rmSync(path.join(KNIGHTS_DIR, e.name), { recursive: true });
+      if (!e.isDirectory() || !e.name.startsWith('knight-') || folders.has(e.name)) continue;
+      const dir = path.join(KNIGHTS_DIR, e.name);
+      if (fs.existsSync(path.join(dir, 'adjust.json'))) continue;
+      try {
+        const prev = JSON.parse(fs.readFileSync(path.join(dir, 'profile.json'), 'utf8')) as { fit?: string };
+        if (prev.fit === 'none') continue;
+      } catch { /* ignore */ }
+      fs.rmSync(dir, { recursive: true });
     }
     for (const k of knights) {
       const dir = path.join(KNIGHTS_DIR, k.folder);

@@ -4,8 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { DEFAULT_AGENT_TUNING, AGENT_TUNING_KEYS } from '../../ai/AgentTuning';
 import { ARENA_KNOBS } from '../knobs';
-import { HOUSE_AUTHOR, isHouseKnightName, resolveProfileTuning, validateProfile, validateRoster, profileKnobSummary, type BotProfile } from '../profile';
-import { HOUSE_DIR, checkBotFolder, isHouseFolder, loadRoster, parseExtraProfiles, defaultCommunityDir } from '../registry';
+import { HOUSE_AUTHOR, isHouseKnightName, mergeProfileWithAdjust, resolveProfileTuning, validateAdjust, validateProfile, validateRoster, profileKnobSummary, type BotProfile } from '../profile';
+import { HOUSE_DIR, checkBotFolder, isHouseFolder, loadOwnersFile, loadRoster, parseExtraProfiles, defaultCommunityDir } from '../registry';
 
 const base = { schema: 1, name: '測試機器人', author: 'octocat', style: '紅方很衝。' };
 
@@ -189,14 +189,18 @@ describe('bot folders and roster', () => {
     }
   });
 
-  it('loads reference, examples, community bots and extra profiles; skips _template; rejects duplicates', () => {
+  it('loads reference, examples, _knights (with adjust.json merge) and extra profiles; rejects top-level community folders', () => {
     const dir = tmp();
     try {
       writeBot(dir, '_template', base);
       writeBot(path.join(dir, '_examples'), 'demo', { ...base, name: '示範', author: 'avalonpediatw' });
+      writeBot(
+        path.join(dir, HOUSE_DIR),
+        'knight-demo-01',
+        { schema: 1, name: 'AI騎士_Demo_01', playerId: 'Demo', fit: 'none', author: HOUSE_AUTHOR, official: true, style: '測試騎士。' },
+        { 'adjust.json': JSON.stringify({ schema: 1, overrides: { goodCleanVote: 0.4 }, residualOff: ['vote'] }) },
+      );
       writeBot(dir, 'alpha', { ...base, name: 'Alpha', author: 'one' });
-      writeBot(dir, 'beta', { ...base, name: 'Beta', author: 'one' });
-      writeBot(dir, 'gamma', { ...base, name: 'Gamma', author: 'two', overrides: { nope: 1 } });
       const extra = parseExtraProfiles({ profiles: [
         { id: 'knight-1', title: '騎士', profile: { ...base, name: 'Knight', author: 'three' } },
         { id: 'BAD', profile: base },
@@ -205,11 +209,26 @@ describe('bot folders and roster', () => {
       expect(extra.bots[0].title).toBe('騎士');
       expect(extra.rejected).toHaveLength(1);
       const roster = loadRoster({ dir, extra: extra.bots });
-      expect(roster.bots.map((b) => b.id)).toEqual(['baike', 'example-demo', 'alpha', 'knight-1']);
-      expect(roster.rejected.map((r) => r.id).sort()).toEqual(['beta', 'gamma']);
+      expect(roster.bots.map((b) => b.id)).toEqual(['baike', 'example-demo', 'knight-demo-01', 'knight-1']);
+      const demo = roster.bots.find((b) => b.id === 'knight-demo-01')!;
+      expect(demo.profile?.overrides?.goodCleanVote).toBe(0.4);
+      expect(demo.profile?.residualOff).toEqual(['vote']);
+      expect(roster.rejected.map((r) => r.id)).toEqual(['alpha']);
+      expect(roster.rejected[0].errors.join()).toContain('_knights/<id>/adjust.json');
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('validateAdjust & mergeProfileWithAdjust layer Layer 2 on top of Layer 1', () => {
+    const av = validateAdjust({ schema: 1, note: '自訂投票', overrides: { goodCleanVote: 0.3 }, residualOff: ['vote', 'team'] });
+    expect(av.ok).toBe(true);
+    expect(validateAdjust({ schema: 1, residualOff: ['invalid'] }).ok).toBe(false);
+    const layer1: BotProfile = { schema: 1, name: 'AI騎士_ED_01', playerId: 'ED', fit: 'fitted', author: HOUSE_AUTHOR, official: true, style: 'x', overrides: { goodCleanVote: 0.7, redNormalVote: 0.5 } };
+    const merged = mergeProfileWithAdjust(layer1, av.adjust);
+    expect(merged.overrides).toEqual({ goodCleanVote: 0.3, redNormalVote: 0.5 });
+    expect(merged.residualOff).toEqual(['vote', 'team']);
+    expect(loadOwnersFile()['knight-885468a3-01']).toBe('f093285329000-cmd');
   });
 
   it('the committed community-bots folder, template and examples all pass', () => {
