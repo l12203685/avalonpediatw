@@ -1,3 +1,4 @@
+import { resolveKnightRef } from '../arena/knights';
 /**
  * 補位機器人（signage-cloud seat filler, 2026-11-03）— dispatch service.
  *
@@ -81,9 +82,11 @@ export interface SeatFillerRequest {
   bots: number;
   /** Private-room password ('' = none). Sent to the workflow only; never logged or echoed. */
   password: string;
+  /** Optional knight roster IDs (length <= bots; empty = default AI騎士_百科). */
+  knights: string[];
 }
 
-export type SeatFillerParseError = 'usage' | 'room' | 'bots' | 'password';
+export type SeatFillerParseError = 'usage' | 'room' | 'bots' | 'password' | 'knight';
 
 export type SeatFillerParse =
   | { ok: true; request: SeatFillerRequest }
@@ -128,11 +131,35 @@ export function parsePassword(raw: string | null | undefined): string | null {
   return /^[^\s"'`$\\]{1,32}$/u.test(t) ? t : null;
 }
 
-/** Validate room (number or description) + bots + password (Discord options, or the LINE text's arguments). */
+/**
+ * Parse optional knight list (comma / 、 / slash separated string or string[], up to `maxCount` entries).
+ * Empty -> []; any unknown ref or count > maxCount -> null.
+ */
+export function parseKnights(
+  raw: string | readonly string[] | null | undefined,
+  maxCount: number,
+): string[] | null {
+  if (raw === null || raw === undefined) return [];
+  const tokens = (Array.isArray(raw) ? raw : String(raw).split(/[,，、/]+/u))
+    .map((x) => String(x).normalize('NFKC').trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return [];
+  if (tokens.length > maxCount) return null;
+  const out: string[] = [];
+  for (const tok of tokens) {
+    const id = resolveKnightRef(tok);
+    if (!id) return null;
+    out.push(id);
+  }
+  return out;
+}
+
+/** Validate room (number or description) + bots + password + optional knights. */
 export function parseSeatFillerArgs(
   roomRaw: string | null | undefined,
   botsRaw?: string | number | null,
   passwordRaw?: string | null,
+  knightsRaw?: string | readonly string[] | null,
 ): SeatFillerParse {
   if (!(roomRaw ?? '').trim()) return { ok: false, error: 'usage' };
   const room = normalizeRoom(roomRaw);
@@ -142,13 +169,15 @@ export function parseSeatFillerArgs(
   if (bots === null) return { ok: false, error: 'bots' };
   const password = parsePassword(passwordRaw);
   if (password === null) return { ok: false, error: 'password' };
-  return { ok: true, request: { room: room ?? (title as string), byTitle: !room, bots, password } };
+  const knights = parseKnights(knightsRaw, bots);
+  if (knights === null) return { ok: false, error: 'knight' };
+  return { ok: true, request: { room: room ?? (title as string), byTitle: !room, bots, password, knights } };
 }
 
 // ─── Dispatch ────────────────────────────────────────────────────────────
 
 export type SeatFillerOutcome =
-  | { kind: 'dispatched'; room: string; bots: number }
+  | { kind: 'dispatched'; room: string; bots: number; knights?: string[] }
   | { kind: 'not_configured' }
   | { kind: 'cooldown'; retryAfterMs: number }
   | { kind: 'daily_cap'; max: number }
@@ -262,7 +291,7 @@ export class SignagePlayerDispatcher {
         },
         body: JSON.stringify({
           ref: SEAT_FILLER_DEFAULTS.ref,
-          inputs: { room: req.room, bots: String(req.bots), ...(req.password ? { password: req.password } : {}) },
+          inputs: { room: req.room, bots: String(req.bots), ...(req.password ? { password: req.password } : {}), ...(req.knights?.length ? { knights: req.knights.join(',') } : {}) },
         }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -280,7 +309,7 @@ export class SignagePlayerDispatcher {
       return { kind: 'github_error', status };
     }
     this.logger.info(`dispatched (status=${status}, bots=${req.bots}${req.password ? ', private' : ''})`);
-    return { kind: 'dispatched', room: req.room, bots: req.bots };
+    return { kind: 'dispatched', room: req.room, bots: req.bots, ...(req.knights?.length ? { knights: req.knights } : {}) };
   }
 
   /** Dispatches counted for the Taipei day of `now`. */

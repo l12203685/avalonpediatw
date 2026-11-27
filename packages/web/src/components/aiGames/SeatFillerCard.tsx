@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, AlertTriangle, Loader2, UserPlus } from 'lucide-react';
 import { PLAY_PLATFORM_URL } from '@avalon/shared';
 import { requestSeatFiller } from '../../services/seatFiller';
+import { fetchKnights, type KnightSummary } from '../../services/knights';
 import { SEAT_FILLER_BOT_OPTIONS, SEAT_FILLER_LIMITS_LINE, type SeatFillerReply } from '../../utils/seatFiller';
 
 /**
@@ -12,6 +13,14 @@ export default function SeatFillerCard(): JSX.Element {
   const [room, setRoom] = useState('');
   const [bots, setBots] = useState('1');
   const [password, setPassword] = useState('');
+  const [knight, setKnight] = useState('');
+  const [knights, setKnights] = useState<KnightSummary[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchKnights().then((list) => { if (alive) setKnights(list); }).catch(() => undefined);
+    return (): void => { alive = false; };
+  }, []);
   const [sending, setSending] = useState(false);
   const [reply, setReply] = useState<SeatFillerReply | null>(null);
 
@@ -24,7 +33,7 @@ export default function SeatFillerCard(): JSX.Element {
     }
     setSending(true);
     setReply(null);
-    const r = await requestSeatFiller({ room, bots, password });
+    const r = await requestSeatFiller({ room, bots, password, knight });
     setReply(r);
     setSending(false);
   };
@@ -40,7 +49,7 @@ export default function SeatFillerCard(): JSX.Element {
         開了房但缺人？不用進 LINE／DC 群組，在這裡叫AI騎士 進房，約 1–2 分鐘後坐下。局數不限，要它走就在房內聊天室打「離開」。
       </p>
       <form onSubmit={(e) => { void submit(e); }} className="space-y-2">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_6.5rem_8rem]">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_6.5rem_10rem_8rem]">
           <label className="block space-y-1 text-[11px] text-zinc-400">
             <span>房號或房間描述</span>
             <input
@@ -57,6 +66,15 @@ export default function SeatFillerCard(): JSX.Element {
             <select data-testid="seat-filler-bots" value={bots} onChange={(e) => setBots(e.target.value)} className={field}>
               {SEAT_FILLER_BOT_OPTIONS.map((o) => (
                 <option key={o} value={o}>{o === '補滿' ? '補滿（到 10 人）' : `${o} 個`}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1 text-[11px] text-zinc-400">
+            <span>指定騎士（選填）</span>
+            <select data-testid="seat-filler-knight" value={knight} onChange={(e) => setKnight(e.target.value)} className={field}>
+              <option value="">AI騎士_百科（預設）</option>
+              {knights.filter((k) => k.id !== 'baike').map((k) => (
+                <option key={k.id} value={k.id}>{k.name}</option>
               ))}
             </select>
           </label>

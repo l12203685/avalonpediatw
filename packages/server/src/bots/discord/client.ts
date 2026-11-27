@@ -228,6 +228,9 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
         .addStringOption((o) =>
           o.setName(SEAT_FILLER_OPTIONS.PASSWORD).setDescription('私房密碼（只用來進房）/ Private-room password').setRequired(false).setMaxLength(32)
         )
+        .addStringOption((o) =>
+          o.setName(SEAT_FILLER_OPTIONS.KNIGHTS).setDescription('指定 AI騎士（選填，多位逗號分隔；預設 AI騎士_百科）/ Knights').setRequired(false).setMaxLength(120)
+        )
     ),
 
     // 2026-11-09 待修正牌譜清單 (bots/paipuFix) — same list as LINE's /待修正, public reply.

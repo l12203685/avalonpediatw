@@ -145,6 +145,7 @@ export const SEAT_FILLER_OPTIONS = {
   ROOM: '房號或描述',
   BOTS: '人數',
   PASSWORD: '密碼',
+  KNIGHTS: '騎士',
 } as const;
 
 /** Option names of /回報 (bots/reports). */

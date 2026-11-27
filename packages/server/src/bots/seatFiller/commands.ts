@@ -1,3 +1,4 @@
+import { getKnight } from '../../arena/knights';
 /**
  * 補位機器人 commands (2026-11-03) — text parsing and reply texts shared by the
  * LINE text handler, the Discord slash command and the website form (POST /api/seat-filler, 2026-11-19). The dispatch itself (limits,
@@ -48,11 +49,14 @@ export interface SeatFillerTextCommand {
   bots?: string;
   /** Password as typed after 密碼: / pw:, undefined when missing. */
   password?: string;
+  /** Knights as typed after 騎士: / knight:, undefined when missing. */
+  knights?: string;
   /** Unrecognised or repeated arguments were typed. */
   extra: boolean;
 }
 
 const PASSWORD_ARG = /^(?:密碼|密码|pw|pass(?:word)?)[:：=]?(.*)$/iu;
+const KNIGHTS_ARG = /^(?:騎士|骑士|knights?)[:：=](.+)$/iu;
 const BOTS_ARG = /^(?:補滿|滿|fill|full|\d+\s*[人個隻位]?)$/iu;
 
 /**
@@ -77,7 +81,9 @@ export function parseSeatFillerText(text: string): SeatFillerTextCommand | null 
   const out: SeatFillerTextCommand = { room, extra: false };
   for (const a of args) {
     const pw = PASSWORD_ARG.exec(a);
+    const kn = KNIGHTS_ARG.exec(a);
     if (pw && out.password === undefined) out.password = pw[1];
+    else if (kn && out.knights === undefined) out.knights = kn[1];
     else if (BOTS_ARG.test(a) && out.bots === undefined) out.bots = a;
     else out.extra = true;
   }
@@ -112,13 +118,19 @@ export function formatSeatFillerParseError(error: SeatFillerParseError, platform
       return `人數要是 ${SEAT_FILLER_BOTS.min}–${SEAT_FILLER_BOTS.max} 或「補滿」（不填就是 ${SEAT_FILLER_BOTS.default} 個）。`;
     case 'password':
       return '密碼最多 32 個字，不能有空白或引號。';
+    case 'knight':
+      return '指定的騎士名稱不在名冊裡，或數量超過人數上限（多位可用逗號分隔，不填預設 AI騎士_百科）。';
   }
 }
 
 export function formatSeatFillerOutcome(outcome: SeatFillerOutcome): string {
   switch (outcome.kind) {
-    case 'dispatched':
-      return `已叫AI騎士 到「${outcome.room}」（${outcome.bots === SEAT_FILLER_BOTS.max ? '補到 10 人' : `${outcome.bots} 個`}），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。`;
+    case 'dispatched': {
+      const names = outcome.knights?.length
+        ? `，指定：${outcome.knights.map((id) => getKnight(id)?.baseName ?? id).join('、')}`
+        : '';
+      return `已叫AI騎士 到「${outcome.room}」（${outcome.bots === SEAT_FILLER_BOTS.max ? '補到 10 人' : `${outcome.bots} 個`}${names}），約 1–2 分鐘後進房；局數不限，要它走就在房內聊天室打「離開」。`;
+    }
     case 'not_configured':
       return '補位機器人還沒設定好（管理者尚未完成設定），暫時不能叫。';
     case 'cooldown':
@@ -148,7 +160,7 @@ export async function answerSeatFillerTextCommand(
   if (!cmd) return null;
   if (opts.redelivery) return SEAT_FILLER_REDELIVERY_TEXT;
   if (cmd.extra) return formatSeatFillerParseError('usage', platform);
-  const parsed = parseSeatFillerArgs(cmd.room, cmd.bots, cmd.password);
+  const parsed = parseSeatFillerArgs(cmd.room, cmd.bots, cmd.password, cmd.knights);
   if (!parsed.ok) return formatSeatFillerParseError(parsed.error, platform);
   return formatSeatFillerOutcome(await getSignagePlayerDispatcher().dispatch(parsed.request));
 }

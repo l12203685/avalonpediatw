@@ -115,6 +115,29 @@ export const knightFallbackCounter = { unknown: 0 };
  * 名冊裡有 → 那個 id；其他（不認得、型別不對）→ 百科，並記一次（log 只印次數）。
  * `allowMix`：練習台的「隨機混搭」也算認得。
  */
+/**
+ * 依使用者輸入（id、`AI騎士_ED_01`、`AI騎士_ED`、`ED`、`百科`）找名冊裡的騎士 id；不分大小寫、先做 NFKC。
+ * 找不到回 null（不計入未知 fallback 計數器，供補位指令驗證用）。
+ */
+export function resolveKnightRef(raw: string | null | undefined): string | null {
+  const q = (raw ?? '').normalize('NFKC').trim().toLowerCase();
+  if (!q) return null;
+  if (q === DEFAULT_KNIGHT_ID || q === '百科' || q === 'ai騎士_百科' || q === 'ai騎士_百科_00' || q === 'ai騎士_百科_01') {
+    return DEFAULT_KNIGHT_ID;
+  }
+  const stripped = q.replace(/^ai騎士_/, '').replace(/_\d{1,2}$/, '');
+  for (const k of listKnights()) {
+    const idLow = k.id.normalize('NFKC').toLowerCase();
+    const nameLow = (k.profile?.name ?? k.baseName).normalize('NFKC').toLowerCase();
+    const baseLow = k.baseName.normalize('NFKC').toLowerCase();
+    const shortLow = baseLow.replace(/^ai騎士_/, '');
+    if (q === idLow || q === nameLow || q === baseLow || q === shortLow || (stripped && stripped === shortLow)) {
+      return k.id;
+    }
+  }
+  return null;
+}
+
 export function resolveKnightId(raw: unknown, opts: { allowMix?: boolean } = {}): string | null {
   if (raw === undefined || raw === null || raw === '') return null;
   if (typeof raw === 'string') {

@@ -55,6 +55,10 @@ on:
         description: '派幾個AI騎士（1–9；「補滿」或 9 = 補到 10 人；空白 = 1）'
         required: false
         default: ''
+      knights:
+        description: '指定 AI騎士（逗號分隔名冊 id，選填；空白 = AI騎士_百科）'
+        required: false
+        default: ''
       games:
         description: '打幾局（空白 = 不限，房內有人說「離開」就走；每晚規則空白 = 不限）'
         required: false
@@ -154,6 +158,7 @@ jobs:
           GAMES: ${{ steps.cfg.outputs.games }}
           HOURS: ${{ steps.cfg.outputs.hours }}
           PASSWORD: ${{ inputs.password }}
+          KNIGHTS: ${{ inputs.knights }}
           # 百科AI 對局紀錄貼 DC 論壇 #牌譜紀錄與覆盤（同 signage-recorder.yml 的機器人 token；沒設就只打不貼）
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           # 刺殺階段紅方討論（docs/BOTS.md）：repo variable RED_ASSASSIN_TALK=off 關掉；沒設 = 開
@@ -170,7 +175,8 @@ jobs:
             if [ "$MODE" = room ]; then
               WHERE=(--room "$ROOM"); if [ -n "$TITLE" ]; then WHERE=(--title "$TITLE"); fi
               PW=(); if [ -n "$PASSWORD" ]; then PW=(--password "$PASSWORD"); fi
-              npx tsx scripts/signagePlayer.ts --mode room "${WHERE[@]}" "${PW[@]}" --bots "$BOTS" --games "$GAMES" --hours "$LEFT" --state "$STATE" && break
+              KN=(); if [ -n "${KNIGHTS:-}" ]; then KN=(--knights "$KNIGHTS"); fi
+              npx tsx scripts/signagePlayer.ts --mode room "${WHERE[@]}" "${PW[@]}" "${KN[@]}" --bots "$BOTS" --games "$GAMES" --hours "$LEFT" --state "$STATE" && break
             else
               npx tsx scripts/signagePlayer.ts --mode live --max-games "$GAMES" --hours "$LEFT" --state "$STATE" && break
             fi

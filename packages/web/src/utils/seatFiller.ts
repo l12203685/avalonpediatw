@@ -14,12 +14,20 @@ export interface SeatFillerForm {
   room: string;
   bots: string;
   password: string;
+  /** 選填：指定 AI騎士 id（空白或 baike = 預設 AI騎士_百科，不送）。 */
+  knight?: string;
 }
 
-/** 表單 → 請求內容（前後空白去掉；沒填密碼就不送）。 */
-export function seatFillerRequestBody(form: SeatFillerForm): { room: string; bots: string; password?: string } {
+/** 表單 → 請求內容（前後空白去掉；沒填密碼或未指定騎士就不送）。 */
+export function seatFillerRequestBody(form: SeatFillerForm): { room: string; bots: string; password?: string; knights?: string } {
   const password = form.password.trim();
-  return { room: form.room.trim(), bots: form.bots || '1', ...(password ? { password } : {}) };
+  const knight = (form.knight ?? '').trim();
+  return {
+    room: form.room.trim(),
+    bots: form.bots || '1',
+    ...(password ? { password } : {}),
+    ...(knight && knight !== 'baike' ? { knights: knight } : {}),
+  };
 }
 
 export type SeatFillerReply = { ok: boolean; text: string };

@@ -9,6 +9,7 @@ import {
   normalizeRoom,
   parseBots,
   parsePassword,
+  parseKnights,
   normalizeRoomTitle,
   parseSeatFillerArgs,
   SignagePlayerDispatcher,
@@ -80,13 +81,25 @@ describe('parsing', () => {
     expect(parsePassword('12 34')).toBeNull();
   });
 
+  it('parseKnights resolves roster refs and enforces maxCount', () => {
+    expect(parseKnights(undefined, 2)).toEqual([]);
+    expect(parseKnights('', 2)).toEqual([]);
+    expect(parseKnights('ED,C5', 2)).toEqual(['knight-ed-01', 'knight-c5-01']);
+    expect(parseKnights(['百科', 'AI騎士_ED'], 3)).toEqual(['baike', 'knight-ed-01']);
+    expect(parseKnights('no-such-knight', 2)).toBeNull();
+    expect(parseKnights('ED,C5', 1)).toBeNull();
+  });
+
   it('parseSeatFillerArgs reports which part is wrong', () => {
-    expect(parseSeatFillerArgs('1460')).toEqual({ ok: true, request: { room: 'Room-1460', byTitle: false, bots: 1, password: '' } });
-    expect(parseSeatFillerArgs('百科陪練', '補滿', '1234')).toEqual({ ok: true, request: { room: '百科陪練', byTitle: true, bots: 9, password: '1234' } });
+    expect(parseSeatFillerArgs('1460')).toEqual({ ok: true, request: { room: 'Room-1460', byTitle: false, bots: 1, password: '', knights: [] } });
+    expect(parseSeatFillerArgs('百科陪練', '補滿', '1234')).toEqual({ ok: true, request: { room: '百科陪練', byTitle: true, bots: 9, password: '1234', knights: [] } });
+    expect(parseSeatFillerArgs('1460', '2', '', 'ED,C5')).toEqual({ ok: true, request: { room: 'Room-1460', byTitle: false, bots: 2, password: '', knights: ['knight-ed-01', 'knight-c5-01'] } });
     expect(parseSeatFillerArgs('')).toEqual({ ok: false, error: 'usage' });
     expect(parseSeatFillerArgs('a"b')).toEqual({ ok: false, error: 'room' });
     expect(parseSeatFillerArgs('1460', '12')).toEqual({ ok: false, error: 'bots' });
     expect(parseSeatFillerArgs('1460', '1', 'a b')).toEqual({ ok: false, error: 'password' });
+    expect(parseSeatFillerArgs('1460', '1', '', 'unknown')).toEqual({ ok: false, error: 'knight' });
+    expect(parseSeatFillerArgs('1460', '1', '', 'ED,C5')).toEqual({ ok: false, error: 'knight' });
   });
 
   it('taipeiDayKey rolls over at 00:00 +08 (16:00 UTC)', () => {
@@ -107,6 +120,16 @@ describe('dispatch request', () => {
     expect(init.headers.Authorization).toBe(`Bearer ${TOKEN}`);
     expect(init.headers.Accept).toBe('application/vnd.github+json');
     expect(JSON.parse(init.body)).toEqual({ ref: 'main', inputs: { room: 'Room-1460', bots: '2' } });
+  });
+
+  it('includes inputs.knights only when knights are specified', async () => {
+    const h = harness();
+    const out = await h.d.dispatch({ room: 'Room-1460', byTitle: false, bots: 2, password: '', knights: ['knight-ed-01', 'knight-c5-01'] });
+    expect(out).toEqual({ kind: 'dispatched', room: 'Room-1460', bots: 2, knights: ['knight-ed-01', 'knight-c5-01'] });
+    expect(JSON.parse(h.calls[0].init.body)).toEqual({
+      ref: 'main',
+      inputs: { room: 'Room-1460', bots: '2', knights: 'knight-ed-01,knight-c5-01' },
+    });
   });
 
   it('honours SIGNAGE_PLAYER_WORKFLOW and GITHUB_DISPATCH_REPO', async () => {

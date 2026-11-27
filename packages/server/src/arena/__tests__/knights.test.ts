@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildKnightsFile, GENERATED_KNIGHTS_PATH, serializeKnightsFile } from '../knightsFile';
 import {
   buildKnightRegistry, DEFAULT_KNIGHT_ID, KNIGHT_MIX_ID, knightBaseName, knightFallbackCounter, knightsForSeats,
-  knightsForLineup, knightTuningOverrides, listKnights, listKnightSummaries, nextKnightSeatName, resolveKnightId,
+  knightsForLineup, knightTuningOverrides, listKnights, listKnightSummaries, nextKnightSeatName, resolveKnightId, resolveKnightRef,
 } from '../knights';
 
 describe('knights.generated.json', () => {
@@ -118,5 +118,19 @@ describe('seat names and practice seats', () => {
     const ids = new Set(listKnights().map((k) => k.id));
     expect(filled.every((id) => ids.has(id))).toBe(true);
     expect(knightsForLineup([], 3, 'baike')).toEqual(['baike', 'baike', 'baike']);
+  });
+});
+
+describe('resolveKnightRef (seat-filler knight lookup)', () => {
+  it('matches id, full name, baseName, bare short name (NFKC & case-insensitive), and baike', () => {
+    expect(resolveKnightRef('baike')).toBe('baike');
+    expect(resolveKnightRef('百科')).toBe('baike');
+    expect(resolveKnightRef('AI騎士_百科')).toBe('baike');
+    expect(resolveKnightRef('knight-ed-01')).toBe('knight-ed-01');
+    expect(resolveKnightRef('AI騎士_ED_01')).toBe('knight-ed-01');
+    expect(resolveKnightRef('AI騎士_ED')).toBe('knight-ed-01');
+    expect(resolveKnightRef('ｅｄ')).toBe('knight-ed-01');
+    expect(resolveKnightRef('不存在的騎士')).toBeNull();
+    expect(resolveKnightRef('')).toBeNull();
   });
 });
