@@ -12,6 +12,8 @@
  *   --kappa K          收縮強度（預設 20：玩家每一族的決策點少於 20 個時，全體的偏好佔一半以上）
  *   --select-only      只選玩家、寫 players.csv
  *   --exclude ID       不替這位玩家建 AI騎士（可重複；玩家不想要時用；對法同網站，舊名也認得）
+ *   --include ID[=名字] 不管場數門檻也替這位玩家建 AI騎士（可重複；站長點名時用；對法同網站）。
+ *                      「=名字」：AI騎士 改用這個名字（AI騎士_{名字}_01），玩家 ID 不寫進 profile；名字和玩家的對應只留在私人輸出
  *   --sample N         只取平均分布的 N 個座位（試跑、估時間用；結果不能用）
  *   --write-knights    把留下來的 AI騎士 寫進 community-bots/_knights/<id>/profile.json（先清掉這支程式以前寫的資料夾）
  *   --summary PATH     彙總（不含任何對局紀錄）：每隻 AI騎士 的留出一半一致度、標籤、開關
@@ -79,6 +81,7 @@ export interface Args {
   selectOnly: boolean;
   sample?: number;
   exclude: string[];
+  include: Array<{ player: string; as?: string }>;
   writeKnights: boolean;
   summary?: string;
   dataset: string;
@@ -96,7 +99,7 @@ export interface Args {
 
 export function parseArgs(argv: string[]): Args {
   const a: Args = {
-    workers: 2, minGames: 250, strongTop: 5, kappa: 20, selectOnly: false, writeKnights: false, exclude: [],
+    workers: 2, minGames: 250, strongTop: 5, kappa: 20, selectOnly: false, writeKnights: false, exclude: [], include: [],
     dataset: path.join(SERVER, 'games_cache.json'),
     gameDb: path.join(SERVER, 'game_db.json'),
     corrections: path.join(SERVER, 'game_db_corrections.json'),
@@ -115,6 +118,7 @@ export function parseArgs(argv: string[]): Args {
       case '--select-only': a.selectOnly = true; break;
       case '--sample': a.sample = Number.parseInt(next(), 10); break;
       case '--exclude': a.exclude.push(next()); break;
+      case '--include': { const [player, as] = next().split('='); a.include.push(as ? { player, as } : { player }); break; }
       case '--write-knights': a.writeKnights = true; break;
       case '--summary': a.summary = path.resolve(next()); break;
       case '--dataset': a.dataset = path.resolve(next()); break;
@@ -372,12 +376,13 @@ export function selectPlayers(a: Args, ds: Dataset): { selected: Selected[]; job
   for (const [key, idx] of groups) {
     const games = gamesOfGroup(idx);
     const strong = strongOf.get(key) ?? [];
-    if (games < a.minGames && strong.length === 0) continue;
+    const inc = a.include.find((x) => keyOf(x.player) === key);
+    if (games < a.minGames && strong.length === 0 && !inc) continue;
     if (a.exclude.some((x) => keyOf(x) === key)) { skipped.push({ id: ds.players[idx[0]], why: '--exclude' }); continue; }
     const id = idx.slice().sort((x, y) => (perIndex.get(y) ?? 0) - (perIndex.get(x) ?? 0))[0];
-    const name = ds.players[id];
+    const name = inc?.as ?? ds.players[id];
     if (!knightNameFits(name)) { skipped.push({ id: name, why: '名字太長，放不進擂台名字（24 字）' }); continue; }
-    selected.push({ id: name, games, strong, reason: [games >= a.minGames ? `games>=${a.minGames}` : '', strong.length ? 'strong' : ''].filter(Boolean).join('+'), seats: 0, indices: idx });
+    selected.push({ id: name, games, strong, reason: [games >= a.minGames ? `games>=${a.minGames}` : '', strong.length ? 'strong' : '', inc ? 'include' : ''].filter(Boolean).join('+'), seats: 0, indices: idx });
   }
   selected.sort((x, y) => y.games - x.games || x.id.localeCompare(y.id));
   const jobs: Job[] = [];
@@ -447,9 +452,17 @@ async function main(): Promise<void> {
   let raw: RawSpot[];
   if (fs.existsSync(probesFile)) {
     const cached = loadJson<{ jobs: Job[]; spots: RawSpot[] }>(probesFile);
-    if (JSON.stringify(cached.jobs) !== JSON.stringify(jobs)) throw new Error(`${probesFile} was made for different seats; delete it to recompute`);
+    const n = cached.jobs.length;
+    // 快取是這次座位的前段（例如 --include 多加了一位場數較少、排在最後的玩家）：只補算後面的座位。
+    if (n > jobs.length || JSON.stringify(cached.jobs) !== JSON.stringify(jobs.slice(0, n))) throw new Error(`${probesFile} was made for different seats; delete it to recompute`);
     raw = cached.spots;
     console.error(`probes: reused ${raw.length} decision points from ${probesFile}`);
+    if (n < jobs.length) {
+      const tail = await runWorkers(a, jobs.slice(n), [], 'probes-tail');
+      for (const r of tail) { r[0] += n; raw.push(r); }
+      fs.writeFileSync(probesFile, JSON.stringify({ jobs, spots: raw }));
+      console.error(`probes: added ${jobs.length - n} seats`);
+    }
     // 快取之後加的格點值：只補算缺的那幾次重播，併進去。
     const have = new Set<string>();
     for (const r of raw) for (const id of Object.keys(r[7])) have.add(id);
