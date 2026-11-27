@@ -13,7 +13,7 @@
  *   --select-only      只選玩家、寫 players.csv
  *   --exclude ID       不替這位玩家建 AI騎士（可重複；玩家不想要時用；對法同網站，舊名也認得）
  *   --include ID[=名字] 不管場數門檻也替這位玩家建 AI騎士（可重複；站長點名時用；對法同網站）。
- *                      「=名字」：AI騎士 改用這個名字（AI騎士_{名字}_01），玩家 ID 不寫進 profile；名字和玩家的對應只留在私人輸出
+ *                      「=名字」：AI騎士 改用這個名字（AI騎士_{名字}），玩家 ID 不寫進 profile；名字和玩家的對應只留在私人輸出
  *   --sample N         只取平均分布的 N 個座位（試跑、估時間用；結果不能用）
  *   --write-knights    把留下來的 AI騎士 寫進 community-bots/_knights/<id>/profile.json（先清掉這支程式以前寫的資料夾）
  *   --summary PATH     彙總（不含任何對局紀錄）：每隻 AI騎士 的留出一半一致度、標籤、開關
@@ -524,7 +524,7 @@ async function main(): Promise<void> {
   // 檢查：留出的一半用合起來的 profile 實際重播。
   const profiles: Record<string, BotProfile> = {};
   const center = styleCenter(kept.filter((k) => k.keep).map((k) => k.layers));
-  kept.forEach((k, pi) => { if (k.keep) profiles[String(pi)] = buildKnightProfile(k.fit.id, 1, k.layers, center); });
+  kept.forEach((k, pi) => { if (k.keep) profiles[String(pi)] = buildKnightProfile(k.fit.id, k.layers, center); });
   const profilesFile = path.join(a.out, 'profiles.json');
   fs.writeFileSync(profilesFile, JSON.stringify(profiles));
   const heldJobs = jobs.filter((j) => j[3] === 1 && profiles[String(j[2])]);
@@ -551,7 +551,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(path.join(a.out, 'fit.json'), JSON.stringify({ selected: selected.map(({ indices: _i, ...rest }) => rest), skipped, fits, kept: kept.map((k) => ({ id: k.fit.id, keep: k.keep })) }, null, 1));
   const gain = (x: { n: number; default: number; knight: number }): number => (x.n ? (100 * (x.knight - x.default)) / x.n : 0);
   const knights = kept.filter((k) => k.keep).map((k) => {
-    const profile = buildKnightProfile(k.fit.id, 1, k.layers, center);
+    const profile = buildKnightProfile(k.fit.id, k.layers, center);
     const v = validateProfile(profile, knightFolderId(k.fit.id, 1), { house: true });
     if (!v.ok) throw new Error(`${k.fit.id}: generated profile invalid: ${v.errors.join('; ')}`);
     return { folder: knightFolderId(k.fit.id, 1), profile, fit: k.fit };
@@ -560,9 +560,9 @@ async function main(): Promise<void> {
   if (folders.size !== knights.length) throw new Error('duplicate knight folder ids');
 
   const table = kept.map((k) => ({
-    name: k.keep ? buildKnightProfile(k.fit.id, 1, k.layers, center).name : null,
+    name: k.keep ? buildKnightProfile(k.fit.id, k.layers, center).name : null,
     kept: k.keep,
-    tag: k.keep ? buildKnightProfile(k.fit.id, 1, k.layers, center).tag : null,
+    tag: k.keep ? buildKnightProfile(k.fit.id, k.layers, center).tag : null,
     heldDecisions: k.fit.held.n,
     heldAgreementDefault: Math.round((1000 * k.fit.held.default) / Math.max(1, k.fit.held.n)) / 10,
     heldAgreementKnight: Math.round((1000 * k.fit.held.knight) / Math.max(1, k.fit.held.n)) / 10,

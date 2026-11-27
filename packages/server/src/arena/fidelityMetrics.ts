@@ -387,7 +387,7 @@ export function publicSummary(players: ReadonlyArray<{ id: string; games: number
   for (const p of players) {
     const r = results[p.id];
     if (!r) continue;
-    const row: Record<string, unknown> = { knight: `AI騎士_${p.id}_01` };
+    const row: Record<string, unknown> = { knight: `AI騎士_${p.id}` };
     for (const split of ['time', 'half'] as const) {
       const e = r[split];
       if (!e) continue;

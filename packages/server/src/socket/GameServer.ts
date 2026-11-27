@@ -2375,8 +2375,8 @@ export class GameServer implements LiveSnapshotHost {
 
   /**
    * Seat a new bot (HeuristicAgent) in `room`; returns its id.
-   * `knightId`（名冊裡的 id）：座位名換成那位 AI騎士＋這間房沒人用的序號（AI騎士_ED_01、第二位 AI騎士_ED_02）；
-   * 沒給 = 百科（AI騎士_百科_01、_02…）。
+   * `knightId`（名冊裡的 id）：座位名換成那位 AI騎士（AI騎士_ED）；同一間房有第二位同一騎士時才加序號（AI騎士_ED_01、AI騎士_ED_02）；
+   * 沒給 = 百科（AI騎士_百科；兩位以上 AI騎士_百科_01、_02…）。
    */
   private addBotToRoom(room: Room, knightId?: string): string {
     let botId = `BOT-${uuidv4().slice(0, 6).toUpperCase()}`;
@@ -2386,8 +2386,7 @@ export class GameServer implements LiveSnapshotHost {
     // (Wave A baseline + Wave B pyramid + Wave C role-aware decision
     //  tree + 4 hard rules). Per-player seat numbers (the PlayerCard
     // chip) disambiguate multiple bots in the same room.
-    // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}。指定了騎士 → 那位騎士＋這間房沒人用的序號（AI騎士_ED_01）；
-    // 沒指定 = 百科：AI騎士_百科_01、_02…
+    // 站長 2026-11-26：百科AI 改名 AI騎士_{風格}_{##}；2026-11-27 起一位騎士一個名字，同房有兩位以上同一騎士才加序號（tidyKnightSeatNames）。
     const knight = knightId ? getKnight(knightId) : undefined;
     const name = nextKnightSeatName(knight ? knight.baseName : knightName(), Object.values(room.players).map((p) => String(p.name ?? '')));
     room.players[botId] = {
@@ -2403,7 +2402,24 @@ export class GameServer implements LiveSnapshotHost {
     this.botProfiles.delete(botId);
     if (knight) this.botKnights.set(botId, knight.id);
     else this.botKnights.delete(botId);
+    this.tidyKnightSeatNames(room, knight ? knight.baseName : knightName());
     return botId;
+  }
+
+  /**
+   * 站長 2026-11-27：「所有的AI騎士應該都只有一隻 … 那個數字本來是場上如果有多個同一隻AI騎士才需要的」。
+   * 這間房裡 `baseName` 這位騎士的機器人座位：只有一個 → 名字不帶序號（`AI騎士_ED`）；好幾個 → 照加入順序 `_01`、`_02`…。
+   * 只在大廳（加、移除機器人）和練習房開局前呼叫；開局後名字不再動。
+   */
+  private tidyKnightSeatNames(room: Room, baseName: string): void {
+    const base = baseName.toLowerCase();
+    const seatRe = /_\d{2,3}$/;
+    const seats = Object.values(room.players).filter((p) => {
+      if (!p.isBot) return false;
+      const n = String(p.name ?? '').toLowerCase();
+      return n === base || (n.startsWith(`${base}_`) && seatRe.test(n) && n.slice(0, n.lastIndexOf('_')) === base);
+    });
+    seats.forEach((p, i) => { p.name = seats.length === 1 ? baseName : `${baseName}_${i < 9 ? `0${i + 1}` : String(i + 1)}`; });
   }
 
   private handleRemoveBot(socket: Socket, roomId: string, botId: string): void {
@@ -2420,10 +2436,14 @@ export class GameServer implements LiveSnapshotHost {
         socket.emit('error', 'Player is not a bot'); return;
       }
 
+      const removedKnight = getKnight(this.botKnights.get(botId));
+      const removedName = String(room.players[botId].name ?? '');
       delete room.players[botId];
       this.botAgents.delete(botId);
       this.botProfiles.delete(botId);
       this.botKnights.delete(botId);
+      // 同一位騎士只剩一個座位時拿掉序號（AI騎士_ED_02 移走 → 剩下的 AI騎士_ED_01 變回 AI騎士_ED）。
+      this.tidyKnightSeatNames(room, removedKnight ? removedKnight.baseName : removedName.replace(/_\d{2,3}$/, ''));
       this.broadcastRoomState(roomId, room);
     } catch (error) {
       console.error('Error removing bot:', error);

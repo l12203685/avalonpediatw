@@ -2,7 +2,8 @@
  * AI騎士的名字（站長 2026-11-26：「以後整個系統裡面的百科AI 都改名成 AI騎士_{風格}_{##} / 如果風格沒指定 就是「百科」
  * 就是目前訓練出來的」）。
  *
- *   - 一隻騎士：`AI騎士_{風格}_{##}`，例：補位機器人 `百科AI_3` → `AI騎士_百科_03`。風格沒指定 = 「百科」（目前訓練出來的引擎）。
+ *   - 一隻騎士：`AI騎士_{風格}`（站長 2026-11-27：一位騎士只有一隻，名字不帶數字）；`_{##}` 只在同一桌有好幾個座位是同一位騎士時
+ *     加在座位名上（`AI騎士_ED_01`、`AI騎士_ED_02`；補位機器人 `百科AI_3` → `AI騎士_百科_03`）。風格沒指定 = 「百科」（目前訓練出來的引擎）。
  *   - 統稱：「AI騎士」；整個頁面／團隊：「AI騎士團」。
  *   - 舊名字（`百科AI`、`百科AI_n`、`百科AI看房1460`、更早的 `百科機器人…`）還留在舊牌譜、DC 貼文、player_aliases.json 裡：
  *     不改存下來的紀錄，顯示和戰績一律經過這裡換成新名字（knightDisplayName / knightStatsName），同一隻機器人的歷史接得起來。
@@ -72,7 +73,8 @@ export function knightDisplayName(name: string): string {
 
 /**
  * 戰績上算哪一位：「百科」風格（含舊的 百科AI、百科AI_n、百科機器人…）都是 `AI騎士_百科`（同以前 player_aliases.json
- * 把 百科AI_0～99 併成「百科AI」）；其他風格的騎士各自一位（`AI騎士_穩健_01` 就是它自己）；沒有風格的（「AI騎士」）算「百科」；不是機器人時 null。
+ * 把 百科AI_0～99 併成「百科AI」）；其他騎士各自一位，座位序號不算（站長 2026-11-27「所有的AI騎士應該都只有一隻」：
+ * `AI騎士_ED`、舊的 `AI騎士_ED_01`、同桌的 `AI騎士_ED_02` 都是 `AI騎士_ED`）；沒有風格的（「AI騎士」）算「百科」；不是機器人時 null。
  */
 export function knightStatsName(name: string | null | undefined): string | null {
   const t = tidy(name ?? '');
@@ -81,5 +83,5 @@ export function knightStatsName(name: string | null | undefined): string | null 
   const k = parseKnightName(t);
   // 只寫「AI騎士」、看房帳號這類沒有風格的：當成目前的引擎。
   if (!k) return DEFAULT_KNIGHT_STATS_NAME;
-  return k.style === DEFAULT_KNIGHT_STYLE ? DEFAULT_KNIGHT_STATS_NAME : knightName(k.style, k.serial ?? undefined);
+  return k.style === DEFAULT_KNIGHT_STYLE ? DEFAULT_KNIGHT_STATS_NAME : knightName(k.style);
 }

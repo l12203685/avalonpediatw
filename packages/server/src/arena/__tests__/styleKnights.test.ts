@@ -174,9 +174,9 @@ describe('style tag vocabulary', () => {
 });
 
 describe('knight names, folders and profiles', () => {
-  it('names knights AI騎士_{玩家ID}_{##}', () => {
-    expect(knightName('測試玩家', 1)).toBe('AI騎士_測試玩家_01');
-    expect(knightName('tester', 12)).toBe('AI騎士_tester_12');
+  it('names knights AI騎士_{玩家ID} (no serial)', () => {
+    expect(knightName('測試玩家')).toBe('AI騎士_測試玩家');
+    expect(knightName('tester')).toBe('AI騎士_tester');
     expect(knightNameFits('一二三四五六七八九十一二三四五六')).toBe(true);
     expect(knightNameFits('一二三四五六七八九十一二三四五六七')).toBe(false);
   });
@@ -210,7 +210,7 @@ describe('knight names, folders and profiles', () => {
 
   it('builds a house profile that passes validation only as a house knight', () => {
     const layers = { sides: { evil: { redNormalVote: 0.2 } }, roles: { merlin: { merlinCover77: 0.6 } } };
-    const p = buildKnightProfile('測試玩家', 1, layers);
+    const p = buildKnightProfile('測試玩家', layers);
     expect(p.author).toBe(HOUSE_AUTHOR);
     expect(p.official).toBe(true);
     expect(validateProfile({ ...p, official: undefined }, 'knight-x-01', { house: true }).errors.join(' ')).toMatch(/official/);
@@ -245,9 +245,9 @@ describe('house knights in the roster', () => {
       fs.mkdirSync(path.join(dir, rel), { recursive: true });
       fs.writeFileSync(path.join(dir, rel, 'profile.json'), JSON.stringify(obj));
     };
-    write(`${HOUSE_DIR}/knight-aaaa-01`, buildKnightProfile('測試玩家', 1, { sides: { evil: { redNormalVote: 0 } } }));
-    write(`${HOUSE_DIR}/knight-bbbb-01`, buildKnightProfile('tester', 1, { roles: { merlin: { merlinCover77: 1 } } }));
-    write(`${HOUSE_DIR}/knight-cccc-01`, buildKnightProfile('tester', 1, {})); // 名字重複 → 不收
+    write(`${HOUSE_DIR}/knight-aaaa-01`, buildKnightProfile('測試玩家', { sides: { evil: { redNormalVote: 0 } } }));
+    write(`${HOUSE_DIR}/knight-bbbb-01`, buildKnightProfile('tester', { roles: { merlin: { merlinCover77: 1 } } }));
+    write(`${HOUSE_DIR}/knight-cccc-01`, buildKnightProfile('tester', {})); // 名字重複 → 不收
     write(`${HOUSE_DIR}/knight-bad-01`, { schema: 1, name: 'AI騎士_x_01', author: 'octocat', official: true, style: 'x' }); // 作者不對
     write('knight-aaaa-01', { schema: 1, name: '撞名的資料夾', author: 'octocat', style: 'x', overrides: { redNormalVote: 0.5 } });
     write('fast-red', { schema: 1, name: 'AI騎士_假的_01', author: 'someone', style: 'x', overrides: { redNormalVote: 0.5 } });
