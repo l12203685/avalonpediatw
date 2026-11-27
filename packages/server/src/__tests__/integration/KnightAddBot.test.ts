@@ -3,6 +3,7 @@
  *   - 沒給（或舊的難度字串）→ 照舊：名字「AI」、百科AI 本身。
  *   - 名冊裡的 id → 座位名 AI騎士_ED_01，同房第二位 AI騎士_ED_02；開局時騎士的開關照角色、陣營蓋上去。
  *   - 不認得的 id → 百科（AI騎士_百科_01），記一次次數。
+ *   - 開局時騎士還帶那位玩家的殘差層（KnightAgent，同擂台；站長 2026-11-27），百科沒有。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, Server as HttpServer } from 'http';
@@ -34,6 +35,8 @@ import { GameServer } from '../../socket/GameServer';
 import type { RoomManager } from '../../game/RoomManager';
 import { authenticateSocket } from '../../middleware/auth';
 import { knightFallbackCounter } from '../../arena/knights';
+import { KnightAgent } from '../../arena/knightAgent';
+import { HeuristicAgent } from '../../ai/HeuristicAgent';
 import { DEFAULT_AGENT_TUNING } from '../../ai/AgentTuning';
 
 interface Internals {
@@ -118,7 +121,11 @@ describe('game:add-bot with a knight id', () => {
     for (const id of ids) {
       const p = room.players[id];
       if (!p.isBot) continue;
-      const tuning = internals.botAgents.get(id)!.tuning;
+      const agent = internals.botAgents.get(id)!;
+      const tuning = agent.tuning;
+      // 正式對局也套殘差層：騎士是 KnightAgent（同擂台 table.ts），百科是一般的 HeuristicAgent。
+      expect(agent instanceof HeuristicAgent).toBe(true);
+      expect(agent instanceof KnightAgent).toBe(p.name.startsWith('AI騎士_ED'));
       if (p.name.startsWith('AI騎士_ED')) {
         if (p.team === 'evil') expect(tuning.redR1Teammate).toBe(false);
         if (p.role === 'merlin') expect(tuning.merlinCover77).toBe(1);

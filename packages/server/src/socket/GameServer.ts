@@ -11,7 +11,7 @@ import { HeuristicAgent } from '../ai/HeuristicAgent';
 import { OPPONENT_LABEL, PROFILE_OVERRIDES, opponentTypeOfTable, type OpponentType } from '../ai/humanProfile';
 import { liveTableS } from '../ai/tableStrength';
 import {
-  DEFAULT_KNIGHT_ID, getKnight, knightTuningOverrides, knightsForLineup, knightsForSeats, listKnightSummaries, nextKnightSeatName, resolveKnightId,
+  DEFAULT_KNIGHT_ID, createKnightAgent, getKnight, knightsForLineup, knightsForSeats, listKnightSummaries, nextKnightSeatName, resolveKnightId,
 } from '../arena/knights';
 import { hasLakeApi } from '../ai/LakePolicy';
 import { privateLakeResults, publicLakeHistory } from '../ai/lakeRecords';
@@ -547,11 +547,11 @@ export class GameServer implements LiveSnapshotHost {
       else this.botKnights.delete(bot.id);
       const p = room.players[bot.id];
       const team = p.team === 'evil' ? 'evil' : p.team === 'good' ? 'good' : null;
-      // 遊戲中：和開局時 applyOpponentProfile 一樣，騎士的開關（照這一局的角色、陣營）蓋在策略層上面；大廳裡開局時才蓋。
-      const tuning = inGame && knightId && knightId !== DEFAULT_KNIGHT_ID
-        ? { ...overrides, ...knightTuningOverrides(knightId, p.role, team) }
-        : overrides;
-      const agent = new HeuristicAgent(bot.id, undefined, undefined, tuning);
+      // 遊戲中：和開局時 applyOpponentProfile 一樣，騎士的開關（照這一局的角色、陣營）蓋在策略層上面、再加那位玩家的殘差層；
+      // 大廳裡開局時才蓋。
+      const agent = inGame && knightId && knightId !== DEFAULT_KNIGHT_ID
+        ? createKnightAgent(bot.id, knightId, p.role, team, overrides)
+        : new HeuristicAgent(bot.id, undefined, undefined, overrides);
       this.botAgents.set(bot.id, agent);
       if (profile) this.botProfiles.set(bot.id, profile);
       else this.botProfiles.delete(bot.id);
@@ -2357,11 +2357,12 @@ export class GameServer implements LiveSnapshotHost {
       if (!p.isBot) continue;
       const agent = this.botAgents.get(pid);
       if (!(agent instanceof HeuristicAgent)) continue;
-      // 指定了 AI騎士（不是百科）：角色剛發好，每一局都照這一局的角色、陣營重建（騎士的開關蓋在策略層上面）。
+      // 指定了 AI騎士（不是百科）：角色剛發好，每一局都照這一局的角色、陣營重建（騎士的開關蓋在策略層上面，
+      // 再加那位玩家的殘差層——同擂台 table.ts，arena/knightAgent.ts）。
       const knightId = this.botKnights.get(pid);
       if (knightId && knightId !== DEFAULT_KNIGHT_ID) {
         const team = p.team === 'evil' ? 'evil' : p.team === 'good' ? 'good' : null;
-        this.botAgents.set(pid, new HeuristicAgent(pid, undefined, undefined, { ...overrides, ...knightTuningOverrides(knightId, p.role, team) }));
+        this.botAgents.set(pid, createKnightAgent(pid, knightId, p.role, team, overrides));
         this.botProfiles.set(pid, type);
         continue;
       }
