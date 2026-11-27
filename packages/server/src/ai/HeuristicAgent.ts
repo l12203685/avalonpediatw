@@ -11,6 +11,7 @@
 
 import { assassinSight71 } from './Round71';
 import { worldLineParts75 } from './Round75';
+import { softTierScores86 } from './Round86';
 import { mlAssassinMode90, mlAssassinNoTier90, mlAssassinScores90 } from './Round90';
 import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
 import { r2Lead72Applies, r2Lead72Tuning, round72Stats } from './Round72';
@@ -2799,7 +2800,7 @@ export class HeuristicAgent implements AvalonAgent {
     if (!this.tuning.assassinModel) return null;
     const { allGood, goodPlayers, evilSet, visibleRed, doomedMode } = this.assassinCandidates(obs);
     if (allGood.length === 0) return null;
-    const evidence = visibleRedEvidence(obs, goodPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo);
+    const evidence = visibleRedEvidence(obs, goodPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse);
     const front = visibleRed.tier ? tierCandidates(goodPlayers, evidence) : [...goodPlayers];
     const frontSet = new Set(front);
     const { scores, terms, own } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode, frontSet);
@@ -2821,7 +2822,7 @@ export class HeuristicAgent implements AvalonAgent {
     evilSet: Set<string>;
     allGood: string[];
     goodPlayers: string[];
-    visibleRed: { tier: boolean; likelihood: boolean; ignoreDoomed: boolean; ignoreReuse: boolean; ignoreNeedTwo: boolean };
+    visibleRed: { tier: boolean; likelihood: boolean; ignoreDoomed: boolean; ignoreReuse: boolean; ignoreNeedTwo: boolean; failReuse: boolean };
     doomedMode: number;
   } {
     const allIds = this.getPlayerIds(obs);
@@ -2834,10 +2835,12 @@ export class HeuristicAgent implements AvalonAgent {
       ignoreReuse: (this.tuning.assassinReuseRead ?? 0) >= 1,
       // Round 73 `assassinNeedTwo73` bit 1: two-fail-round leads with exactly one seen red are no tier evidence.
       ignoreNeedTwo: needTwoParts73(this.tuning).tier,
+      // Round 86 `assassinFailReuse86`: re-proposing a successful team after a failed mission that held it is no longer the norm.
+      failReuse: (this.tuning.assassinFailReuse86 ?? 0) > 0,
     };
     const doomedMode = this.tuning.assassinDoomedRead ?? 0;
     if (allGood.length === 0) return { allIds, evilSet, allGood, goodPlayers: [], visibleRed, doomedMode };
-    const tiered = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo)) : allGood;
+    const tiered = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse)) : allGood;
     const goodPlayers = visibleRed.tier && (doomedMode === 1 || doomedMode === 3) ? doomedTierCandidates(obs, tiered) : tiered;
     return { allIds, evilSet, allGood, goodPlayers, visibleRed, doomedMode };
   }
@@ -2879,8 +2882,10 @@ export class HeuristicAgent implements AvalonAgent {
       ignoreReuse: (this.tuning.assassinReuseRead ?? 0) >= 1,
       // Round 73 `assassinNeedTwo73` bit 1: two-fail-round leads with exactly one seen red are no tier evidence.
       ignoreNeedTwo: needTwoParts73(this.tuning).tier,
+      // Round 86 `assassinFailReuse86`: re-proposing a successful team after a failed mission that held it is no longer the norm.
+      failReuse: (this.tuning.assassinFailReuse86 ?? 0) > 0,
     };
-    const tiered = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo)) : allGood;
+    const tiered = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse)) : allGood;
     // Round 23 (red) `assassinDoomedRead` 1 / 3: a second tier for the doomed R1–R2 leads with a seen red (R2 re-proposal of R1 excepted).
     const doomedMode = this.tuning.assassinDoomedRead ?? 0;
     const tieredPlayers = visibleRed.tier && (doomedMode === 1 || doomedMode === 3) ? doomedTierCandidates(obs, tiered) : tiered;
@@ -2898,8 +2903,14 @@ export class HeuristicAgent implements AvalonAgent {
       if (!visibleRed.tier && !visibleRed.likelihood && voteWeight <= 0 && leadWeight <= 0 && lakeWeight <= 0 && (this.tuning.assassinWorldLine75 ?? 0) <= 0) {
         return { type: 'assassinate', targetId: pickAssassinTargetByModel(obs, goodPlayers, this.assassinModelWeights) };
       }
+      // Round 86 `assassinTierSoft86` (Round86.ts; counter arm only): the tiers become a log-likelihood penalty instead of a filter.
+      if ((this.tuning.assassinTierSoft86 ?? 0) > 0 && goodPlayers.length < allGood.length) {
+        const all = this.assassinModelScores(obs, allGood, evilSet, visibleRed.ignoreReuse, doomedMode).scores;
+        const soft = softTierScores86(this.tuning, allGood, goodPlayers, all);
+        if (soft) return { type: 'assassinate', targetId: pickWithVisibleRed(obs, allGood, soft, { ...visibleRed, tier: false }) };
+      }
       const front90 = mlAssassinMode90(this.tuning) > 0
-        ? new Set(visibleRed.tier ? tierCandidates(tieredPlayers, visibleRedEvidence(obs, tieredPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo)) : tieredPlayers)
+        ? new Set(visibleRed.tier ? tierCandidates(tieredPlayers, visibleRedEvidence(obs, tieredPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse)) : tieredPlayers)
         : undefined;
       const { scores } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode, front90);
       return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, noTier90 ? { ...visibleRed, tier: false } : visibleRed) };
