@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "name": "狛枝凪斗",
+  "author": "",
+  "style": "表面自貶，實則用犧牲派票，換取後續資訊與他人覺醒。不盲目疊票、會在局勢明顯傾斜於某一邊時，嘗試派另一邊的派票，或嘗試把票投給沒票的人，但這些行動都是基於合理派票的前提。派票時，派四壞與好人都可能出現，但每個異常派票都有明確可解讀的目的，非純搗亂。外白大多傾向集中在第1輪1-1至1-4家，且需判斷對方像好人能力者、自身位置視角適合才會外白；若判斷對方像壞人能力者且派多壞，有時也會以自我犧牲式外白；第2輪2-1至2-4外白會明顯收斂。若察覺場上有人也非常喜歡外白、自己外白容易出任務，則除非判斷尾家是壞人，否則外白機率更降。外灑多壞主要在第2輪2-1至2-4時發生，且同樣會因場上有人愛外白而降低機率。紅方時不積極偽裝乾淨，而是用矛盾投票自曝式傳訊；好人時刻意不依賴自身資訊、把判斷權獻給雜魚，但保留可讀的邏輯一致性。",
+  "overrides": {
+    "redHideHuman": true,
+    "redNormalVote": 0.72,
+    "redCleanWhite": 0.22,
+    "redCleanApprove": 0.16,
+    "redStackRate65": 0.7,
+    "redR1Teammate": true,
+    "goodCleanVote": 0.17,
+    "goodKeyVote": 0.15,
+    "goodTailVote": 0.47,
+    "merlinNormalVote": 0.78,
+    "merlinCover77": 0.42,
+    "percivalNoThumbsR1": true,
+    "assassinModel": true
+  },
+  "sides": {
+    "good": {
+      "goodCleanVote": 0.16,
+      "goodKeyVote": 0.15,
+      "goodTailVote": 0.46,
+      "merlinNormalVote": 0.74,
+      "merlinCover77": 0.44
+    },
+    "evil": {
+      "redNormalVote": 0.7,
+      "redCleanWhite": 0.24,
+      "redCleanApprove": 0.17,
+      "redStackRate65": 0.72
+    }
+  },
+  "roles": {
+    "merlin": {
+      "merlinNormalVote": 0.72,
+      "merlinCover77": 0.45
+    },
+    "percival": {
+      "percivalNoThumbsR1": true,
+      "goodCleanVote": 0.16,
+      "goodTailVote": 0.46
+    },
+    "loyal": {
+      "goodCleanVote": 0.17,
+      "goodKeyVote": 0.14,
+      "goodTailVote": 0.45
+    },
+    "assassin": {
+      "assassinModel": true,
+      "redNormalVote": 0.73,
+      "redCleanWhite": 0.22,
+      "redCleanApprove": 0.16
+    },
+    "morgana": {
+      "redNormalVote": 0.7,
+      "redCleanApprove": 0.17,
+      "redStackRate65": 0.7
+    },
+    "mordred": {
+      "redNormalVote": 0.67,
+      "redCleanWhite": 0.3,
+      "redStackRate65": 0.75
+    },
+    "oberon": {
+      "oberonR1AlwaysFail64": 0.3,
+      "redNormalVote": 0.67,
+      "redCleanApprove": 0.17
+    }
+  }
+}
+
