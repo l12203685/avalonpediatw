@@ -130,14 +130,34 @@ export function resolveKnightId(raw: unknown, opts: { allowMix?: boolean } = {})
  * 這位騎士在這個角色、陣營要蓋上去的開關（只有 profile 的那幾層，不含預設值）。
  * 百科或不認得的 id → 空物件。
  */
+/** 執行期第 2 層（玩家在網站上即時儲存的調整）疊加提供者。 */
+export interface LiveKnightAdjustOverlay {
+  overrides?: KnobValues;
+  sides?: Partial<Record<ArenaSide, KnobValues>>;
+  roles?: Partial<Record<ArenaRole, KnobValues>>;
+}
+
+type LiveAdjustProvider = (knightId: string, baseName: string) => LiveKnightAdjustOverlay | null;
+let liveAdjustProvider: LiveAdjustProvider | null = null;
+
+/** 註冊網站第 2 層調整的即時讀取器（正式對局立即套用；null = 清除）。 */
+export function setLiveKnightAdjustProvider(provider: LiveAdjustProvider | null): void {
+  liveAdjustProvider = provider;
+}
+
 export function knightTuningOverrides(id: string | null | undefined, role: string | null | undefined, team: ArenaSide | null | undefined): Partial<AgentTuning> {
-  const profile = getKnight(id)?.profile;
-  if (!profile) return {};
+  const knight = getKnight(id);
+  const profile = knight?.profile;
+  if (!knight || !profile) return {};
+  const live = liveAdjustProvider ? liveAdjustProvider(knight.id, knight.baseName) : null;
   const out: Record<string, number | boolean> = {};
   const layers: (KnobValues | undefined)[] = [
     profile.overrides,
     team ? profile.sides?.[team] : undefined,
     role ? profile.roles?.[role as ArenaRole] : undefined,
+    live?.overrides,
+    team ? live?.sides?.[team] : undefined,
+    role ? live?.roles?.[role as ArenaRole] : undefined,
   ];
   for (const layer of layers) {
     if (!layer) continue;
