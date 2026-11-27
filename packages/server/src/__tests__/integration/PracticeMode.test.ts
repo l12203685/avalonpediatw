@@ -556,7 +556,7 @@ describe('practice mode — full games over sockets', () => {
     expect(bySeat.get(1)).toMatchObject({ knightId: 'knight-ed-01', name: 'AI騎士_ED_01' });
     expect(bySeat.get(4)).toMatchObject({ knightId: 'knight-ed-01', name: 'AI騎士_ED_02' });
     expect(bySeat.get(10)).toMatchObject({ knightId: 'knight-ed-01', name: 'AI騎士_ED_03' });
-    expect(bySeat.get(6)).toMatchObject({ knightId: 'knight-c5-01', name: 'AI騎士_C5_01' });
+    expect(bySeat.get(6)).toMatchObject({ knightId: 'knight-c5-01', name: 'AI騎士_C5' });
     for (const seat of [2, 5, 7, 8, 9]) expect(bySeat.get(seat)?.knightId).toBe('baike');
     expect(human.started!.players['lineup-human'].role).toBe('percival');
     assertTraceComplete(human.ended!, 'lineup-human', human, trace);
@@ -579,7 +579,7 @@ describe('practice mode — full games over sockets', () => {
     const botNames = Object.values(room.players).filter((p) => p.isBot).map((p) => p.name);
     expect(botNames).toHaveLength(9);
     expect(new Set(botNames).size).toBe(9);
-    expect(botNames.every((n) => /^AI騎士_.+_\d{2}$/.test(n))).toBe(true);
+    expect(botNames.every((n) => /^AI騎士_[^_]+(?:_\d{2})?$/.test(n))).toBe(true);
     const knightIds = Object.keys(room.players).filter((id) => room.players[id].isBot)
       .map((id) => (gameServer as unknown as { botKnights: Map<string, string> }).botKnights.get(id)!);
     expect(knightIds.every((id) => ids.has(id))).toBe(true);

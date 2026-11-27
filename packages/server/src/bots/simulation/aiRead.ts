@@ -19,7 +19,9 @@ import { HeuristicAgent } from '../../ai/HeuristicAgent';
 import { tuningForOpponent, type OpponentType } from '../../ai/humanProfile';
 import { ForwardAgent } from '../../ai/forward/ForwardAgent';
 import { bayesOptionsOf, bayesRedShare, bayesTeamClean, bayesTeamRedsBelow, bayesWorlds } from '../../ai/belief/BayesBelief';
-import type { SimGame } from './scenario';
+import { DEFAULT_KNIGHT_ID, getKnight, knightTuningOverrides } from '../../arena/knights';
+import { ResidualPolicy } from '../../arena/residual';
+import { isRed, type SimGame } from './scenario';
 
 /** 模擬瓦、Threads 百科AI 作答讀真人局時用的策略層（第 56b 回合 C）。 */
 export const SIM_OPPONENT: OpponentType = 'avgHuman';
@@ -178,6 +180,8 @@ export interface AiPick {
 
 export interface AiPicks {
   kind: 'team' | 'assassinate';
+  /** 哪一位 AI騎士 的派法（名冊裡不帶序號的名字，例：AI騎士_藿藿）；沒有 = 預設的 AI騎士_百科。 */
+  knight?: string;
   /** 最多 AI_PICK_MAX 種，比例高的在前（同比例照座位）。 */
   picks: AiPick[];
   /** 沒列出來的其他組合加起來的比例（0 = 全部列了）。 */
@@ -193,6 +197,25 @@ export interface AiPickOptions {
   now?: () => number;
   /** 每派一次之後呼叫（預設讓出事件迴圈）。 */
   yieldFn?: () => Promise<void>;
+  /**
+   * 哪一位 AI騎士（名冊 id，站長 2026-11-27「模擬局好像還不能選自建的AI騎士？」）：引擎＋那位騎士照題目那一家的角色、陣營蓋上的開關，
+   * 再用那位玩家的殘差層重新打分（有的話）。沒給、百科、不認得 → 預設的 AI騎士_百科（跟以前一樣）。
+   */
+  knightId?: string | null;
+}
+
+/** 一位騎士在題目那一家的開關和殘差層；百科／不認得 → null。 */
+interface SimKnight { name: string; overrides: Partial<AgentTuning>; residual: ResidualPolicy | null }
+
+function simKnight(game: SimGame, seat: number, knightId: string | null | undefined): SimKnight | null {
+  const k = knightId && knightId !== DEFAULT_KNIGHT_ID ? getKnight(knightId) : undefined;
+  if (!k?.profile) return null;
+  const role = game.seatRoles[seat - 1];
+  const overrides = knightTuningOverrides(k.id, role, isRed(role) ? 'evil' : 'good');
+  const residual = k.profile.residual
+    ? new ResidualPolicy(k.profile.residual, { ...tuningForOpponent(SIM_OPPONENT, DEFAULT_AGENT_TUNING), ...overrides })
+    : null;
+  return { name: k.baseName, overrides, residual };
 }
 
 const yieldLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
@@ -200,22 +223,24 @@ const yieldLoop = (): Promise<void> => new Promise((resolve) => setImmediate(res
 /** 第 k 次的種子尾巴（第 0 次跟 /區間、Threads 一樣，沒有尾巴）。 */
 const tail = (k: number): string => (k === 0 ? '' : `|s${k}`);
 
-/** 第 k 次：正式機器人在 `point` 會派的隊（座位遞增）／會刺的座位；派不出來 → null。 */
-export function aiPickOnce(game: SimGame, seat: number, point: AiPickPoint, k: number): number[] | null {
+/** 第 k 次：正式機器人（或 `knight` 那位騎士）在 `point` 會派的隊（座位遞增）／會刺的座位；派不出來 → null。 */
+export function aiPickOnce(game: SimGame, seat: number, point: AiPickPoint, k: number, knight: SimKnight | null = null): number[] | null {
   if (point.kind === 'assassination') {
     return withSeededRandom(`${game.id}|${seat}|assassinate${tail(k)}`, () => {
       const obs = decisionObservation(game, seat, { kind: 'assassination' });
-      const { agent } = defaultBot(game, seat);
+      const { agent } = defaultBot(game, seat, knight?.overrides);
       const a = agent.act(obs);
-      return a.type === 'assassinate' ? [seatOfId(a.targetId)] : null;
+      if (a.type !== 'assassinate') return null;
+      return [seatOfId(knight?.residual ? knight.residual.assassinate(obs, a.targetId) : a.targetId)];
     });
   }
   const p = point.proposal;
   return withSeededRandom(`${game.id}|${seat}|read-${p}${tail(k)}`, () => {
     const obs = decisionObservation(game, seat, { kind: 'team_select', proposal: p });
-    const { agent } = defaultBot(game, seat, SIM_REVEAL_OVERRIDES);
+    const { agent } = defaultBot(game, seat, { ...SIM_REVEAL_OVERRIDES, ...knight?.overrides });
     const a = withSeededRandom(`${game.id}|${seat}|team-${p}${tail(k)}`, () => agent.act(obs));
-    return a.type === 'team_select' && a.teamIds.length > 0 ? sortedSeats(a.teamIds) : null;
+    if (a.type !== 'team_select' || a.teamIds.length === 0) return null;
+    return sortedSeats(knight?.residual ? knight.residual.team(obs, a.teamIds) : a.teamIds);
   });
 }
 
@@ -246,13 +271,15 @@ export async function aiPicks(game: SimGame, seat: number, point: AiPickPoint, o
   const now = opts.now ?? Date.now;
   const pause = opts.yieldFn ?? yieldLoop;
   const t0 = now();
+  const knight = simKnight(game, seat, opts.knightId);
   const samples: number[][] = [];
   for (let k = 0; k < total; k++) {
-    const s = aiPickOnce(game, seat, point, k);
+    const s = aiPickOnce(game, seat, point, k, knight);
     if (s) samples.push(s);
     if (k + 1 === probe && samples.length > 0 && samples.every((x) => x.join(',') === samples[0].join(','))) break;
     if (k + 1 >= probe && now() - t0 > budget) break;
     await pause();
   }
-  return summarizePicks(point.kind === 'assassination' ? 'assassinate' : 'team', samples);
+  const out = summarizePicks(point.kind === 'assassination' ? 'assassinate' : 'team', samples);
+  return out && knight ? { ...out, knight: knight.name } : out;
 }

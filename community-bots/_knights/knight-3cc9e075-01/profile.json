@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_雪怪_01",
+  "name": "AI騎士_雪怪",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「明燈」：梅林比其他 AI騎士更常照自己看到的紅投票。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "明燈",
@@ -26,6 +26,15 @@
       "goodBayesGoodKey": 0.95,
       "goodBayesBadKey": 0.95
     }
+  },
+  "samples": {
+    "games": 426,
+    "seats": 405,
+    "bySeat": [40,37,35,40,48,42,43,35,41,44],
+    "byRole": {"merlin":37,"percival":34,"loyal":180,"morgana":50,"assassin":38,"mordred":31,"oberon":35},
+    "byMissions": {"blue3":212,"red3":193},
+    "byResult": {"red3":193,"merlinKilled":90,"blueWin":122},
+    "decisions": {"propose":609,"vote":6163,"quest":657,"lake":92,"assassinate":16}
   },
   "residual": {
     "version": 1,

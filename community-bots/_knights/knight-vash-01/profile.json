@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_Vash_01",
+  "name": "AI騎士_Vash",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "鐵壁",
@@ -25,6 +25,15 @@
     "oberon": {
       "oberonR1AlwaysFail64": 1
     }
+  },
+  "samples": {
+    "games": 282,
+    "seats": 262,
+    "bySeat": [29,31,21,12,37,24,29,20,34,25],
+    "byRole": {"merlin":27,"percival":25,"loyal":100,"morgana":22,"assassin":30,"mordred":35,"oberon":23},
+    "byMissions": {"blue3":149,"red3":113},
+    "byResult": {"red3":113,"merlinKilled":61,"blueWin":88},
+    "decisions": {"propose":391,"vote":3981,"quest":384,"lake":44,"assassinate":19}
   },
   "residual": {
     "version": 1,

@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_午夜_01",
+  "name": "AI騎士_午夜",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「明燈」：梅林比其他 AI騎士更常照自己看到的紅投票。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "明燈",
@@ -29,6 +29,15 @@
     "oberon": {
       "oberonR1AlwaysFail64": 1
     }
+  },
+  "samples": {
+    "games": 372,
+    "seats": 355,
+    "bySeat": [44,43,28,37,32,32,36,30,35,38],
+    "byRole": {"merlin":43,"percival":31,"loyal":149,"morgana":35,"assassin":25,"mordred":36,"oberon":36},
+    "byMissions": {"blue3":179,"red3":176},
+    "byResult": {"red3":176,"merlinKilled":70,"blueWin":109},
+    "decisions": {"propose":539,"vote":5347,"quest":552,"lake":71,"assassinate":9}
   },
   "residual": {
     "version": 1,

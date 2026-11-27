@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_Lori_01",
+  "name": "AI騎士_Lori",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "鐵壁",
@@ -23,6 +23,15 @@
       "goodBayesGoodKey": 0.95,
       "goodBayesBadKey": 0.95
     }
+  },
+  "samples": {
+    "games": 356,
+    "seats": 335,
+    "bySeat": [37,32,35,36,32,23,32,38,33,37],
+    "byRole": {"merlin":28,"percival":31,"loyal":132,"morgana":35,"assassin":40,"mordred":30,"oberon":39},
+    "byMissions": {"blue3":194,"red3":141},
+    "byResult": {"red3":141,"merlinKilled":79,"blueWin":115},
+    "decisions": {"propose":512,"vote":5088,"quest":516,"lake":64,"assassinate":22}
   },
   "residual": {
     "version": 1,

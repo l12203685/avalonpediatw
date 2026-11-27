@@ -717,7 +717,7 @@ def knight_display_name(name: str) -> str:
 
 def knight_stats_name(name: object) -> str | None:
     """戰績上算哪一位：「百科」風格（舊的 百科AI、百科AI_n、百科機器人…，新的 AI騎士_百科_##、沒有風格的 AI騎士）都是
-    AI騎士_百科；其他風格各自一位（AI騎士_穩健_01）；不是機器人時 None。同 @avalon/shared knightStatsName。"""
+    AI騎士_百科；其他騎士各自一位、不分座位序號（AI騎士_穩健_01 → AI騎士_穩健）；不是機器人時 None。同 @avalon/shared knightStatsName。"""
     if not is_pedia_bot_name(name):
         return None
     key = player_name_key(knight_display_name(normalize_player_name(name)))
@@ -726,8 +726,9 @@ def knight_stats_name(name: object) -> str | None:
     m = _KNIGHT_NAME_RE.match(key)
     if not m or m.group(1) == DEFAULT_KNIGHT_STYLE:
         return DEFAULT_KNIGHT_STATS_NAME
-    # 風格標籤原樣（中文沒有大小寫）；序號照兩位數
-    return _knight_name(m.group(1), None if m.group(2) is None else int(m.group(2)))
+    # 風格標籤照原本的大小寫（AI騎士_ED 不變成 ed，同 TS 那一側）；座位序號不算（站長 2026-11-27：一位騎士只有一隻）
+    shown = re.match(r"^ai騎士_([^_\s]+)", unicodedata.normalize("NFKC", knight_display_name(normalize_player_name(name))), re.IGNORECASE)
+    return _knight_name(shown.group(1) if shown else m.group(1), None)
 
 
 def knight_aliases() -> dict[str, str]:

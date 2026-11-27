@@ -478,14 +478,17 @@ export function describeStyle(layers: Pick<BotProfile, 'sides' | 'roles'>, tag: 
 
 // ── 名字與資料夾 ─────────────────────────────────────────────
 
-/** 擂台名字：`AI騎士_{玩家ID}_{##}`（## 從 01 起，每位玩家各自編號）。 */
-export function knightName(playerId: string, serial: number): string {
-  return `${KNIGHT_PREFIX}${playerId}_${String(serial).padStart(2, '0')}`;
+/**
+ * 擂台名字：`AI騎士_{玩家ID}`，不帶序號（站長 2026-11-27：「所有的AI騎士應該都只有一隻 … 那個數字本來是場上如果有多個同一隻AI騎士才需要的」）。
+ * 同一桌有好幾個座位是同一位騎士時，座位名才加 `_01`、`_02`（`arena/knights.ts` knightSeatNames）。
+ */
+export function knightName(playerId: string): string {
+  return `${KNIGHT_PREFIX}${playerId}`;
 }
 
-/** 名字放得進擂台的長度上限嗎。 */
-export function knightNameFits(playerId: string, serial = 1): boolean {
-  return [...knightName(playerId, serial)].length <= NAME_MAX;
+/** 名字放得進擂台的長度上限嗎（留 3 個字給同桌多個座位時的 `_01`）。 */
+export function knightNameFits(playerId: string): boolean {
+  return [...knightName(playerId)].length + 3 <= NAME_MAX;
 }
 
 function fnv1a(input: string): number {
@@ -510,12 +513,12 @@ export function knightFolderId(playerId: string, serial: number): string {
 }
 
 /** 一份 AI騎士 的 profile（擂台格式，作者固定 AI騎士團）。 */
-export function buildKnightProfile(playerId: string, serial: number, layers: Pick<BotProfile, 'sides' | 'roles'>, center: StyleCenter = NO_CENTER): BotProfile {
+export function buildKnightProfile(playerId: string, layers: Pick<BotProfile, 'sides' | 'roles'>, center: StyleCenter = NO_CENTER): BotProfile {
   const tag = styleTag(layers, center);
   const versus = center === NO_CENTER ? '百科AI' : '其他 AI騎士';
   const p: BotProfile = {
     schema: 1,
-    name: knightName(playerId, serial),
+    name: knightName(playerId),
     author: HOUSE_AUTHOR,
     official: true,
     style: describeStyle(layers, tag, versus),
@@ -527,12 +530,20 @@ export function buildKnightProfile(playerId: string, serial: number, layers: Pic
 }
 
 /**
- * profile.json 的寫法：一般欄位照 JSON 縮排 2；殘差層（schema 2）每一組權重寫成一行，檔案才不會太長（上限 32 KB）。
+ * profile.json 的寫法：一般欄位照 JSON 縮排 2；學習樣本數（samples）每一類一行；殘差層（schema 2）每一組權重寫成一行，
+ * 檔案才不會太長（上限 32 KB）。
  */
 export function formatKnightProfile(p: BotProfile): string {
-  const { residual, ...rest } = p;
+  const { residual, samples, ...rest } = p;
   const head = JSON.stringify(rest, null, 2);
-  if (!residual) return `${head}\n`;
+  const blocks: string[] = [];
+  if (samples) blocks.push(`  "samples": {\n${Object.entries(samples).map(([k, v]) => `    ${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(',\n')}\n  }`);
+  if (residual) blocks.push(`  "residual": {\n${residualLines(residual).join(',\n')}\n  }`);
+  if (!blocks.length) return `${head}\n`;
+  return `${head.slice(0, -2)},\n${blocks.join(',\n')}\n}\n`;
+}
+
+function residualLines(residual: NonNullable<BotProfile['residual']>): string[] {
   const lines: string[] = [];
   for (const [key, value] of Object.entries(residual)) {
     if (key === 'version' || typeof value !== 'object' || value === null) { lines.push(`    ${JSON.stringify(key)}: ${JSON.stringify(value)}`); continue; }
@@ -541,7 +552,7 @@ export function formatKnightProfile(p: BotProfile): string {
     const inner = Object.entries(value as Record<string, unknown>).map(([g, w]) => `      ${JSON.stringify(g)}: ${JSON.stringify(w)}`);
     lines.push(`    ${JSON.stringify(key)}: {\n${inner.join(',\n')}\n    }`);
   }
-  return `${head.slice(0, -2)},\n  "residual": {\n${lines.join(',\n')}\n  }\n}\n`;
+  return lines;
 }
 
 /** 兩份 profile 的開關值（展開成 role → key → value）一樣嗎（測試、重產時比對用）。 */

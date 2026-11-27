@@ -1049,11 +1049,13 @@ export function everyoneLines(list: readonly EveryoneAnswer[]): string[] {
 /**
  * 「百科AI 會派：135（約 60%）、136（25%）、145（15%）」（站長 2026-11-26）：正式機器人在這題那一刻會派的前三種。
  * 只有一種（每次都派同一隊，或其他都不到 5%）就只寫那一隊、不寫百分比；沒列的加起來 ≥ 5% 時補「其他 N%」。
- * 刺殺題寫「百科AI 會刺：7家（約 70%）、3家（30%）」。沒有結果 → ''（不印這一行）。
+ * 刺殺題寫「百科AI 會刺：7家（約 70%）、3家（30%）」。指定了騎士（/公布 藿藿）→「AI騎士_藿藿 會派：…」。沒有結果 → ''（不印這一行）。
  */
 export function aiPicksLine(ai: AiPicks | null | undefined): string {
   if (!ai || ai.picks.length === 0) return '';
-  const label = ai.kind === 'assassinate' ? 'AI騎士 會刺' : 'AI騎士 會派';
+  // 站長 2026-11-27：/公布 ED、/公布 藿藿 看那一位騎士；沒指定 = 預設的 AI騎士_百科（照舊寫「AI騎士」）。
+  const who = ai.knight ?? 'AI騎士';
+  const label = ai.kind === 'assassinate' ? `${who} 會刺` : `${who} 會派`;
   const name = (seats: readonly number[]): string => (ai.kind === 'assassinate' ? seatLabel(seats[0]) : teamDigits(seats));
   const others = Math.round(ai.others * 100);
   if (ai.picks.length === 1 && others < 5) return `${label}：${name(ai.picks[0].seats)}`;
@@ -1228,7 +1230,7 @@ export const SIM_HELP_TEXT_DISCORD = [
   `/${COMMANDS.SIM_ANALYSIS}\u3000${HELP_ANALYSIS_WORDS}`,
   `/${COMMANDS.SIM_INTERVAL}\u3000${HELP_AI_READ_WORDS}`,
   `/${COMMANDS.SIM_INTERVAL} ${SIM_OPTIONS.CONTENT}:789=2 460=1\u3000${HELP_INTERVAL_WORDS}`,
-  `/${COMMANDS.SIM_REVEAL}\u3000公布角色、對答案、附這一局的完整牌譜，這題結束`,
+  `/${COMMANDS.SIM_REVEAL}\u3000公布角色、對答案、附這一局的完整牌譜，這題結束（/${COMMANDS.SIM_REVEAL} ED、/${COMMANDS.SIM_REVEAL} 藿藿 = 看那一位 AI騎士 會派什麼）`,
   HELP_END,
   `/${COMMANDS.HELP} 主題:模擬\u3000這份說明（/${COMMANDS.SIM} ${SIM_OPTIONS.HELP}:True 也可以）`,
   '回覆公開的頻道裡，自己沒開題的人也可以幫忙答頻道裡最新開的一題（/派 /分析 /區間 /公布 /結束），回覆會標「代答」；'
@@ -1241,8 +1243,11 @@ export function simHelpText(platform: SimPlatform): string {
   return platform === 'discord' ? SIM_HELP_TEXT_DISCORD : SIM_HELP_TEXT;
 }
 
-export function usageText(command: 'start' | 'propose' | 'interval' | 'assassinate', problem?: string): string {
-  const usage = command === 'start' ? START_USAGE : command === 'propose' ? PROPOSE_USAGE : command === 'assassinate' ? ASSASSINATE_USAGE : INTERVAL_USAGE;
+/** /公布 後面接了不認得的騎士（站長 2026-11-27）。固定文字，不回顯打的字。 */
+export const REVEAL_USAGE = '用法：/公布（附 AI騎士_百科 會派的組合）；/公布 ED、/公布 藿藿 = 看那一位 AI騎士 會派什麼（名字照網站 AI騎士團 的名冊）';
+
+export function usageText(command: 'start' | 'propose' | 'interval' | 'assassinate' | 'reveal', problem?: string): string {
+  const usage = command === 'start' ? START_USAGE : command === 'propose' ? PROPOSE_USAGE : command === 'assassinate' ? ASSASSINATE_USAGE : command === 'reveal' ? REVEAL_USAGE : INTERVAL_USAGE;
   return problem ? `${problem}\n${usage}` : usage;
 }
 

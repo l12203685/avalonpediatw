@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_爾勵_01",
+  "name": "AI騎士_爾勵",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "穩健",
@@ -26,6 +26,15 @@
     "oberon": {
       "oberonR1AlwaysFail64": 1
     }
+  },
+  "samples": {
+    "games": 86,
+    "seats": 81,
+    "bySeat": [9,6,6,6,11,12,8,9,9,5],
+    "byRole": {"merlin":13,"percival":11,"loyal":36,"morgana":8,"assassin":8,"mordred":3,"oberon":2},
+    "byMissions": {"blue3":49,"red3":32},
+    "byResult": {"red3":32,"merlinKilled":17,"blueWin":32},
+    "decisions": {"propose":121,"vote":1194,"quest":136,"lake":11,"assassinate":4}
   },
   "residual": {
     "version": 1,

@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_池_01",
+  "name": "AI騎士_池",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "寬容",
@@ -29,6 +29,15 @@
     "oberon": {
       "oberonR1AlwaysFail64": 1
     }
+  },
+  "samples": {
+    "games": 775,
+    "seats": 744,
+    "bySeat": [44,71,81,82,94,73,73,78,78,70],
+    "byRole": {"merlin":56,"percival":65,"loyal":311,"morgana":71,"assassin":83,"mordred":86,"oberon":72},
+    "byMissions": {"blue3":394,"red3":350},
+    "byResult": {"red3":350,"merlinKilled":165,"blueWin":229},
+    "decisions": {"propose":1082,"vote":11065,"quest":1165,"lake":145,"assassinate":44}
   },
   "residual": {
     "version": 1,

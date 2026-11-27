@@ -7,7 +7,7 @@
 import { useTranslation } from 'react-i18next';
 import { Eraser, Shuffle } from 'lucide-react';
 import { PRACTICE_NS } from '../../i18n/practice';
-import { DEFAULT_KNIGHT_ID, knightBlurb, type KnightSummary } from '../../services/knights';
+import { DEFAULT_KNIGHT_ID, knightBlurb, knightSamplesLine, type KnightSummary } from '../../services/knights';
 
 export const LINEUP_SIZE = 9;
 export type Lineup = Array<string | null>;
@@ -41,12 +41,17 @@ export function botSeatNumbers(playerSeat: number | null): number[] | null {
   return Array.from({ length: 10 }, (_, i) => i + 1).filter((n) => n !== playerSeat);
 }
 
-/** 每一格的座位名（AI騎士_ED_01、同一位第二格 _02）；沒選 → null。 */
+/**
+ * 每一格的座位名（站長 2026-11-27：一位騎士一個名字）：只選一次 → `AI騎士_ED`；同一位選好幾格 → `AI騎士_ED_01`、`_02`…；沒選 → null。
+ */
 export function lineupSeatNames(lineup: Lineup, knights: readonly KnightSummary[]): Array<string | null> {
+  const total = new Map<string, number>();
+  for (const id of lineup) if (id) total.set(id, (total.get(id) ?? 0) + 1);
   const count = new Map<string, number>();
   return lineup.map((id) => {
     const k = id ? knights.find((x) => x.id === id) : undefined;
     if (!k) return null;
+    if ((total.get(k.id) ?? 0) <= 1) return k.name;
     const n = (count.get(k.id) ?? 0) + 1;
     count.set(k.id, n);
     return `${k.name}_${n < 10 ? `0${n}` : n}`;
@@ -137,6 +142,7 @@ export default function PracticeLineupPicker({ knights, lineup, fill, playerSeat
                   <p className="truncate text-[11px] text-zinc-400" title={k.style}>
                     <span className="text-emerald-200/90">{names[i]}</span>
                     {k.id !== DEFAULT_KNIGHT_ID ? ` · ${knightBlurb(k.style)}` : ''}
+                    {knightSamplesLine(k) ? ` · ${knightSamplesLine(k)}` : ''}
                   </p>
                 )}
               </div>

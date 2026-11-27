@@ -1,10 +1,19 @@
 {
   "schema": 2,
-  "name": "AI騎士_轆_01",
+  "name": "AI騎士_轆",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
   "tag": "穩健",
   "official": true,
+  "samples": {
+    "games": 602,
+    "seats": 574,
+    "bySeat": [55,43,67,59,53,49,61,66,61,60],
+    "byRole": {"merlin":63,"percival":46,"loyal":222,"morgana":67,"assassin":59,"mordred":57,"oberon":60},
+    "byMissions": {"blue3":303,"red3":271},
+    "byResult": {"red3":271,"merlinKilled":135,"blueWin":168},
+    "decisions": {"propose":878,"vote":8794,"quest":906,"lake":113,"assassinate":27}
+  },
   "residual": {
     "version": 1,
     "team": {

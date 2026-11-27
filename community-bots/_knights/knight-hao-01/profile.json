@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_HAO_01",
+  "name": "AI騎士_HAO",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
   "tag": "藏鋒",
@@ -26,6 +26,15 @@
       "goodBayesGoodKey": 0.95,
       "goodBayesBadKey": 0.95
     }
+  },
+  "samples": {
+    "games": 1169,
+    "seats": 1120,
+    "bySeat": [119,103,113,120,102,99,114,121,124,105],
+    "byRole": {"merlin":111,"percival":111,"loyal":477,"morgana":106,"assassin":116,"mordred":104,"oberon":95},
+    "byMissions": {"blue3":606,"red3":514},
+    "byResult": {"red3":514,"merlinKilled":264,"blueWin":342},
+    "decisions": {"propose":1707,"vote":16785,"quest":2039,"lake":219,"assassinate":45}
   },
   "residual": {
     "version": 1,

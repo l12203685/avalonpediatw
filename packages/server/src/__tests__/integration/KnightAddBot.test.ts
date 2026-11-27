@@ -1,8 +1,9 @@
 /**
  * 一般房間「指定哪一位 AI騎士」（站長 2026-11-26）：game:add-bot 第 2 個參數 { knightId }。
  *   - 沒給（或舊的難度字串）→ 照舊：名字「AI」、百科AI 本身。
- *   - 名冊裡的 id → 座位名 AI騎士_ED_01，同房第二位 AI騎士_ED_02；開局時騎士的開關照角色、陣營蓋上去。
- *   - 不認得的 id → 百科（AI騎士_百科_01），記一次次數。
+ *   - 名冊裡的 id → 座位名 AI騎士_ED（一位騎士一個名字，站長 2026-11-27）；同房第二位時才加序號 AI騎士_ED_01、AI騎士_ED_02；
+ *     開局時騎士的開關照角色、陣營蓋上去。
+ *   - 不認得的 id → 百科，記一次次數。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, Server as HttpServer } from 'http';
@@ -87,6 +88,14 @@ describe('game:add-bot with a knight id', () => {
     const room = internals.roomManager.getRoom(roomId)!;
     const botNames = (): string[] => Object.values(room.players).filter((p) => p.isBot).map((p) => p.name);
 
+    host.emit('game:add-bot', roomId, { knightId: 'knight-ed-01' });
+    await waitFor(() => botNames().length === 1, 'one knight');
+    // 只有一位 → 名字不帶序號。
+    expect(botNames()).toEqual(['AI騎士_ED']);
+    const solo = Object.keys(room.players).find((id) => room.players[id].isBot)!;
+    host.emit('game:remove-bot', roomId, solo);
+    await waitFor(() => botNames().length === 0, 'solo removed');
+
     host.emit('game:add-bot', roomId);                                   // old client: no 2nd argument
     host.emit('game:add-bot', roomId, 'hard');                           // old client: legacy difficulty string
     host.emit('game:add-bot', roomId, { knightId: 'knight-ed-01' });
@@ -101,18 +110,19 @@ describe('game:add-bot with a knight id', () => {
     await waitFor(() => latest && Object.values(latest.players).filter((p) => p.isBot).length === 5, 'client state');
     expect(Object.values(latest!.players).map((p) => p.name)).toContain('AI騎士_ED_02');
 
-    // Removing a knight frees its serial; the next one takes the smallest free number.
+    // 移走一位 → 同一騎士只剩一個座位，名字拿掉序號；再加一位 → 照加入順序 _01、_02。
     const ed1 = Object.keys(room.players).find((id) => room.players[id].name === 'AI騎士_ED_01')!;
     host.emit('game:remove-bot', roomId, ed1);
     await waitFor(() => !room.players[ed1], 'bot removed');
     expect(internals.botKnights.has(ed1)).toBe(false);
+    expect(botNames()).toEqual(['AI騎士_百科_01', 'AI騎士_百科_02', 'AI騎士_ED', 'AI騎士_百科_03']);
     host.emit('game:add-bot', roomId, { knightId: 'knight-ed-01' });
-    await waitFor(() => botNames().includes('AI騎士_ED_01'), 'serial reused');
+    await waitFor(() => botNames().includes('AI騎士_ED_02'), 'renumbered');
 
     // Game start: deal roles by hand, then the same step handleStartGame runs.
     const ids = Object.keys(room.players);
     const roles: Array<[string, 'good' | 'evil']> = [['loyal', 'good'], ['merlin', 'good'], ['morgana', 'evil'], ['assassin', 'evil'], ['percival', 'good'], ['loyal', 'good']];
-    expect(ids.map((id) => room.players[id].name)).toEqual(['Host', 'AI騎士_百科_01', 'AI騎士_百科_02', 'AI騎士_ED_02', 'AI騎士_百科_03', 'AI騎士_ED_01']);
+    expect(ids.map((id) => room.players[id].name)).toEqual(['Host', 'AI騎士_百科_01', 'AI騎士_百科_02', 'AI騎士_ED_01', 'AI騎士_百科_03', 'AI騎士_ED_02']);
     ids.forEach((id, i) => { room.players[id].role = roles[i][0] as never; room.players[id].team = roles[i][1]; });
     internals.applyOpponentProfile(room);
     for (const id of ids) {

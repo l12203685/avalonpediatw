@@ -5,7 +5,7 @@
       "id": "knight-04160113-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_豬羊_01",
+        "name": "AI騎士_豬羊",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -658,6 +658,47 @@
             "pRed_R3": -0.407,
             "failExp_R3": 0.037
           }
+        },
+        "samples": {
+          "games": 268,
+          "seats": 258,
+          "bySeat": [
+            30,
+            29,
+            27,
+            33,
+            27,
+            14,
+            23,
+            23,
+            22,
+            30
+          ],
+          "byRole": {
+            "merlin": 21,
+            "percival": 23,
+            "loyal": 105,
+            "morgana": 32,
+            "assassin": 28,
+            "mordred": 32,
+            "oberon": 17
+          },
+          "byMissions": {
+            "blue3": 148,
+            "red3": 110
+          },
+          "byResult": {
+            "red3": 110,
+            "merlinKilled": 61,
+            "blueWin": 87
+          },
+          "decisions": {
+            "propose": 399,
+            "vote": 3895,
+            "quest": 403,
+            "lake": 54,
+            "assassinate": 15
+          }
         }
       }
     },
@@ -665,7 +706,7 @@
       "id": "knight-146b7e9a-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_海月_01",
+        "name": "AI騎士_海月",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "藏鋒",
@@ -1318,6 +1359,47 @@
             "pRed_R3": -0.376,
             "failExp_R3": 0.044
           }
+        },
+        "samples": {
+          "games": 755,
+          "seats": 707,
+          "bySeat": [
+            77,
+            60,
+            75,
+            91,
+            67,
+            70,
+            66,
+            63,
+            66,
+            72
+          ],
+          "byRole": {
+            "merlin": 57,
+            "percival": 73,
+            "loyal": 267,
+            "morgana": 64,
+            "assassin": 88,
+            "mordred": 75,
+            "oberon": 83
+          },
+          "byMissions": {
+            "blue3": 410,
+            "red3": 297
+          },
+          "byResult": {
+            "red3": 297,
+            "merlinKilled": 166,
+            "blueWin": 244
+          },
+          "decisions": {
+            "propose": 1090,
+            "vote": 10768,
+            "quest": 1159,
+            "lake": 138,
+            "assassinate": 51
+          }
         }
       }
     },
@@ -1325,7 +1407,7 @@
       "id": "knight-239ef7f4-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_黃某人_01",
+        "name": "AI騎士_黃某人",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -1978,6 +2060,47 @@
             "pRed_R3": -0.412,
             "failExp_R3": 0.033
           }
+        },
+        "samples": {
+          "games": 395,
+          "seats": 384,
+          "bySeat": [
+            40,
+            53,
+            36,
+            31,
+            39,
+            38,
+            41,
+            35,
+            34,
+            37
+          ],
+          "byRole": {
+            "merlin": 36,
+            "percival": 35,
+            "loyal": 142,
+            "morgana": 44,
+            "assassin": 45,
+            "mordred": 35,
+            "oberon": 47
+          },
+          "byMissions": {
+            "blue3": 200,
+            "red3": 184
+          },
+          "byResult": {
+            "red3": 184,
+            "merlinKilled": 87,
+            "blueWin": 113
+          },
+          "decisions": {
+            "propose": 576,
+            "vote": 5736,
+            "quest": 552,
+            "lake": 69,
+            "assassinate": 29
+          }
         }
       }
     },
@@ -1985,7 +2108,7 @@
       "id": "knight-2ee2cbf1-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_午夜_01",
+        "name": "AI騎士_午夜",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「明燈」：梅林比其他 AI騎士更常照自己看到的紅投票。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "明燈",
@@ -2641,6 +2764,47 @@
             "pRed_R3": -0.407,
             "failExp_R3": 0.032
           }
+        },
+        "samples": {
+          "games": 372,
+          "seats": 355,
+          "bySeat": [
+            44,
+            43,
+            28,
+            37,
+            32,
+            32,
+            36,
+            30,
+            35,
+            38
+          ],
+          "byRole": {
+            "merlin": 43,
+            "percival": 31,
+            "loyal": 149,
+            "morgana": 35,
+            "assassin": 25,
+            "mordred": 36,
+            "oberon": 36
+          },
+          "byMissions": {
+            "blue3": 179,
+            "red3": 176
+          },
+          "byResult": {
+            "red3": 176,
+            "merlinKilled": 70,
+            "blueWin": 109
+          },
+          "decisions": {
+            "propose": 539,
+            "vote": 5347,
+            "quest": 552,
+            "lake": 71,
+            "assassinate": 9
+          }
         }
       }
     },
@@ -2648,7 +2812,7 @@
       "id": "knight-3cc9e075-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_雪怪_01",
+        "name": "AI騎士_雪怪",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「明燈」：梅林比其他 AI騎士更常照自己看到的紅投票。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "明燈",
@@ -3300,6 +3464,47 @@
             "pRed_R3": -0.414,
             "failExp_R3": 0.037
           }
+        },
+        "samples": {
+          "games": 426,
+          "seats": 405,
+          "bySeat": [
+            40,
+            37,
+            35,
+            40,
+            48,
+            42,
+            43,
+            35,
+            41,
+            44
+          ],
+          "byRole": {
+            "merlin": 37,
+            "percival": 34,
+            "loyal": 180,
+            "morgana": 50,
+            "assassin": 38,
+            "mordred": 31,
+            "oberon": 35
+          },
+          "byMissions": {
+            "blue3": 212,
+            "red3": 193
+          },
+          "byResult": {
+            "red3": 193,
+            "merlinKilled": 90,
+            "blueWin": 122
+          },
+          "decisions": {
+            "propose": 609,
+            "vote": 6163,
+            "quest": 657,
+            "lake": 92,
+            "assassinate": 16
+          }
         }
       }
     },
@@ -3307,7 +3512,7 @@
       "id": "knight-3f557abd-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_發達_01",
+        "name": "AI騎士_發達",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
         "tag": "穩健",
@@ -3938,6 +4143,47 @@
             "pRed_R3": -0.418,
             "failExp_R3": 0.035
           }
+        },
+        "samples": {
+          "games": 414,
+          "seats": 407,
+          "bySeat": [
+            41,
+            47,
+            53,
+            27,
+            35,
+            48,
+            39,
+            31,
+            39,
+            47
+          ],
+          "byRole": {
+            "merlin": 44,
+            "percival": 37,
+            "loyal": 165,
+            "morgana": 41,
+            "assassin": 40,
+            "mordred": 47,
+            "oberon": 33
+          },
+          "byMissions": {
+            "blue3": 214,
+            "red3": 193
+          },
+          "byResult": {
+            "red3": 193,
+            "merlinKilled": 87,
+            "blueWin": 127
+          },
+          "decisions": {
+            "propose": 619,
+            "vote": 6136,
+            "quest": 643,
+            "lake": 90,
+            "assassinate": 18
+          }
         }
       }
     },
@@ -3945,7 +4191,7 @@
       "id": "knight-56320d35-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_軒_01",
+        "name": "AI騎士_軒",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "鐵壁",
@@ -4598,6 +4844,47 @@
             "pRed_R3": -0.382,
             "failExp_R3": 0.056
           }
+        },
+        "samples": {
+          "games": 880,
+          "seats": 858,
+          "bySeat": [
+            88,
+            72,
+            84,
+            87,
+            101,
+            79,
+            83,
+            87,
+            89,
+            88
+          ],
+          "byRole": {
+            "merlin": 76,
+            "percival": 87,
+            "loyal": 333,
+            "morgana": 88,
+            "assassin": 96,
+            "mordred": 92,
+            "oberon": 86
+          },
+          "byMissions": {
+            "blue3": 437,
+            "red3": 421
+          },
+          "byResult": {
+            "red3": 421,
+            "merlinKilled": 194,
+            "blueWin": 243
+          },
+          "decisions": {
+            "propose": 1321,
+            "vote": 13092,
+            "quest": 1300,
+            "lake": 155,
+            "assassinate": 55
+          }
         }
       }
     },
@@ -4605,7 +4892,7 @@
       "id": "knight-5843615b-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_菜_01",
+        "name": "AI騎士_菜",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -5258,6 +5545,47 @@
             "pRed_R3": -0.404,
             "failExp_R3": 0.033
           }
+        },
+        "samples": {
+          "games": 508,
+          "seats": 485,
+          "bySeat": [
+            62,
+            48,
+            54,
+            35,
+            43,
+            61,
+            55,
+            42,
+            43,
+            42
+          ],
+          "byRole": {
+            "merlin": 42,
+            "percival": 45,
+            "loyal": 194,
+            "morgana": 49,
+            "assassin": 49,
+            "mordred": 49,
+            "oberon": 57
+          },
+          "byMissions": {
+            "blue3": 269,
+            "red3": 216
+          },
+          "byResult": {
+            "red3": 216,
+            "merlinKilled": 123,
+            "blueWin": 146
+          },
+          "decisions": {
+            "propose": 729,
+            "vote": 7270,
+            "quest": 764,
+            "lake": 81,
+            "assassinate": 28
+          }
         }
       }
     },
@@ -5265,7 +5593,7 @@
       "id": "knight-5b01f1bd-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_洋蔥_01",
+        "name": "AI騎士_洋蔥",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "穩健",
@@ -5915,6 +6243,47 @@
             "pRed_R3": -0.425,
             "failExp_R3": 0.035
           }
+        },
+        "samples": {
+          "games": 597,
+          "seats": 590,
+          "bySeat": [
+            51,
+            53,
+            67,
+            70,
+            70,
+            62,
+            54,
+            48,
+            56,
+            59
+          ],
+          "byRole": {
+            "merlin": 60,
+            "percival": 67,
+            "loyal": 205,
+            "morgana": 55,
+            "assassin": 61,
+            "mordred": 76,
+            "oberon": 66
+          },
+          "byMissions": {
+            "blue3": 306,
+            "red3": 284
+          },
+          "byResult": {
+            "red3": 284,
+            "merlinKilled": 137,
+            "blueWin": 169
+          },
+          "decisions": {
+            "propose": 878,
+            "vote": 8887,
+            "quest": 859,
+            "lake": 106,
+            "assassinate": 32
+          }
         }
       }
     },
@@ -5922,7 +6291,7 @@
       "id": "knight-885468a3-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_藿藿_01",
+        "name": "AI騎士_藿藿",
         "author": "AI騎士團",
         "style": "依站長確認的那位玩家自己的真人牌局擬合，再疊上她自己投稿的開關（社群機器人「藿藿」；兩邊衝突時照她的）。風格「鐵壁」：藍方投票比其他 AI騎士嚴，關鍵局更不敢放行，在隊上很少內黑。她投稿的部分：紅方第 1 局當隊長偶爾帶隊友、紅方偶爾照自己利益投票、比較少疊隊友，梅林偶爾不照忠臣的票。另帶她的殘差層（v2）：每個動作再用她自己的牌局重新打分。她的牌局還不多，像她的程度目前和百科AI 差不多。",
         "tag": "鐵壁",
@@ -6638,6 +7007,47 @@
             "pRed_R3": -0.409,
             "failExp_R3": 0.043
           }
+        },
+        "samples": {
+          "games": 45,
+          "seats": 45,
+          "bySeat": [
+            7,
+            3,
+            9,
+            4,
+            6,
+            2,
+            4,
+            4,
+            3,
+            3
+          ],
+          "byRole": {
+            "merlin": 4,
+            "percival": 7,
+            "loyal": 23,
+            "morgana": 4,
+            "assassin": 3,
+            "mordred": 2,
+            "oberon": 2
+          },
+          "byMissions": {
+            "blue3": 24,
+            "red3": 21
+          },
+          "byResult": {
+            "red3": 21,
+            "merlinKilled": 7,
+            "blueWin": 17
+          },
+          "decisions": {
+            "propose": 75,
+            "vote": 697,
+            "quest": 72,
+            "lake": 7,
+            "assassinate": 1
+          }
         }
       }
     },
@@ -6645,7 +7055,7 @@
       "id": "knight-93eabbbc-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_爾勵_01",
+        "name": "AI騎士_爾勵",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "穩健",
@@ -7297,6 +7707,47 @@
             "pRed_R3": -0.408,
             "failExp_R3": 0.044
           }
+        },
+        "samples": {
+          "games": 86,
+          "seats": 81,
+          "bySeat": [
+            9,
+            6,
+            6,
+            6,
+            11,
+            12,
+            8,
+            9,
+            9,
+            5
+          ],
+          "byRole": {
+            "merlin": 13,
+            "percival": 11,
+            "loyal": 36,
+            "morgana": 8,
+            "assassin": 8,
+            "mordred": 3,
+            "oberon": 2
+          },
+          "byMissions": {
+            "blue3": 49,
+            "red3": 32
+          },
+          "byResult": {
+            "red3": 32,
+            "merlinKilled": 17,
+            "blueWin": 32
+          },
+          "decisions": {
+            "propose": 121,
+            "vote": 1194,
+            "quest": 136,
+            "lake": 11,
+            "assassinate": 4
+          }
         }
       }
     },
@@ -7304,7 +7755,7 @@
       "id": "knight-c2312439-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_轆_01",
+        "name": "AI騎士_轆",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
         "tag": "穩健",
@@ -7934,6 +8385,47 @@
             "pRed_R3": -0.408,
             "failExp_R3": 0.042
           }
+        },
+        "samples": {
+          "games": 602,
+          "seats": 574,
+          "bySeat": [
+            55,
+            43,
+            67,
+            59,
+            53,
+            49,
+            61,
+            66,
+            61,
+            60
+          ],
+          "byRole": {
+            "merlin": 63,
+            "percival": 46,
+            "loyal": 222,
+            "morgana": 67,
+            "assassin": 59,
+            "mordred": 57,
+            "oberon": 60
+          },
+          "byMissions": {
+            "blue3": 303,
+            "red3": 271
+          },
+          "byResult": {
+            "red3": 271,
+            "merlinKilled": 135,
+            "blueWin": 168
+          },
+          "decisions": {
+            "propose": 878,
+            "vote": 8794,
+            "quest": 906,
+            "lake": 113,
+            "assassinate": 27
+          }
         }
       }
     },
@@ -7941,7 +8433,7 @@
       "id": "knight-c5-01",
       "profile": {
         "schema": 1,
-        "name": "AI騎士_C5_01",
+        "name": "AI騎士_C5",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。",
         "tag": "鐵壁",
@@ -7967,6 +8459,47 @@
           "oberon": {
             "oberonR1AlwaysFail64": 1
           }
+        },
+        "samples": {
+          "games": 55,
+          "seats": 50,
+          "bySeat": [
+            7,
+            6,
+            1,
+            4,
+            5,
+            6,
+            5,
+            7,
+            4,
+            5
+          ],
+          "byRole": {
+            "merlin": 4,
+            "percival": 6,
+            "loyal": 21,
+            "morgana": 6,
+            "assassin": 6,
+            "mordred": 2,
+            "oberon": 5
+          },
+          "byMissions": {
+            "blue3": 22,
+            "red3": 28
+          },
+          "byResult": {
+            "red3": 28,
+            "merlinKilled": 10,
+            "blueWin": 12
+          },
+          "decisions": {
+            "propose": 76,
+            "vote": 763,
+            "quest": 80,
+            "lake": 11,
+            "assassinate": 3
+          }
         }
       }
     },
@@ -7974,7 +8507,7 @@
       "id": "knight-c583dbb3-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_很乖_01",
+        "name": "AI騎士_很乖",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -8627,6 +9160,47 @@
             "pRed_R3": -0.413,
             "failExp_R3": 0.03
           }
+        },
+        "samples": {
+          "games": 259,
+          "seats": 256,
+          "bySeat": [
+            20,
+            28,
+            29,
+            26,
+            23,
+            29,
+            32,
+            21,
+            34,
+            14
+          ],
+          "byRole": {
+            "merlin": 17,
+            "percival": 26,
+            "loyal": 98,
+            "morgana": 35,
+            "assassin": 28,
+            "mordred": 35,
+            "oberon": 17
+          },
+          "byMissions": {
+            "blue3": 130,
+            "red3": 126
+          },
+          "byResult": {
+            "red3": 126,
+            "merlinKilled": 58,
+            "blueWin": 72
+          },
+          "decisions": {
+            "propose": 396,
+            "vote": 3940,
+            "quest": 341,
+            "lake": 30,
+            "assassinate": 14
+          }
         }
       }
     },
@@ -8634,7 +9208,7 @@
       "id": "knight-c5d06842-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_黑羊_01",
+        "name": "AI騎士_黑羊",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "鐵壁",
@@ -9282,6 +9856,47 @@
             "pRed_R3": -0.416,
             "failExp_R3": 0.041
           }
+        },
+        "samples": {
+          "games": 740,
+          "seats": 715,
+          "bySeat": [
+            70,
+            68,
+            60,
+            88,
+            71,
+            54,
+            74,
+            79,
+            76,
+            75
+          ],
+          "byRole": {
+            "merlin": 68,
+            "percival": 87,
+            "loyal": 272,
+            "morgana": 77,
+            "assassin": 72,
+            "mordred": 71,
+            "oberon": 68
+          },
+          "byMissions": {
+            "blue3": 369,
+            "red3": 346
+          },
+          "byResult": {
+            "red3": 346,
+            "merlinKilled": 170,
+            "blueWin": 199
+          },
+          "decisions": {
+            "propose": 1055,
+            "vote": 10658,
+            "quest": 1156,
+            "lake": 136,
+            "assassinate": 34
+          }
         }
       }
     },
@@ -9289,7 +9904,7 @@
       "id": "knight-d2c4009b-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_大星_01",
+        "name": "AI騎士_大星",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -9942,6 +10557,47 @@
             "pRed_R3": -0.416,
             "failExp_R3": 0.052
           }
+        },
+        "samples": {
+          "games": 344,
+          "seats": 340,
+          "bySeat": [
+            33,
+            34,
+            23,
+            25,
+            34,
+            36,
+            53,
+            34,
+            42,
+            26
+          ],
+          "byRole": {
+            "merlin": 36,
+            "percival": 33,
+            "loyal": 146,
+            "morgana": 29,
+            "assassin": 25,
+            "mordred": 38,
+            "oberon": 33
+          },
+          "byMissions": {
+            "blue3": 176,
+            "red3": 164
+          },
+          "byResult": {
+            "red3": 164,
+            "merlinKilled": 84,
+            "blueWin": 92
+          },
+          "decisions": {
+            "propose": 504,
+            "vote": 5166,
+            "quest": 479,
+            "lake": 48,
+            "assassinate": 13
+          }
         }
       }
     },
@@ -9949,7 +10605,7 @@
       "id": "knight-d7b16610-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_尼克_01",
+        "name": "AI騎士_尼克",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "穩健",
@@ -10601,6 +11257,47 @@
             "pRed_R3": -0.419,
             "failExp_R3": 0.053
           }
+        },
+        "samples": {
+          "games": 927,
+          "seats": 896,
+          "bySeat": [
+            104,
+            89,
+            98,
+            72,
+            87,
+            100,
+            72,
+            95,
+            96,
+            83
+          ],
+          "byRole": {
+            "merlin": 106,
+            "percival": 91,
+            "loyal": 356,
+            "morgana": 74,
+            "assassin": 84,
+            "mordred": 83,
+            "oberon": 102
+          },
+          "byMissions": {
+            "blue3": 476,
+            "red3": 420
+          },
+          "byResult": {
+            "red3": 420,
+            "merlinKilled": 217,
+            "blueWin": 259
+          },
+          "decisions": {
+            "propose": 1382,
+            "vote": 13700,
+            "quest": 1344,
+            "lake": 158,
+            "assassinate": 51
+          }
         }
       }
     },
@@ -10608,7 +11305,7 @@
       "id": "knight-dal-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Dal_01",
+        "name": "AI騎士_Dal",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -11262,6 +11959,47 @@
             "pRed_R3": -0.398,
             "failExp_R3": 0.039
           }
+        },
+        "samples": {
+          "games": 83,
+          "seats": 77,
+          "bySeat": [
+            12,
+            10,
+            8,
+            6,
+            6,
+            6,
+            7,
+            5,
+            8,
+            9
+          ],
+          "byRole": {
+            "merlin": 7,
+            "percival": 8,
+            "loyal": 29,
+            "morgana": 7,
+            "assassin": 9,
+            "mordred": 11,
+            "oberon": 6
+          },
+          "byMissions": {
+            "blue3": 45,
+            "red3": 32
+          },
+          "byResult": {
+            "red3": 32,
+            "merlinKilled": 23,
+            "blueWin": 22
+          },
+          "decisions": {
+            "propose": 125,
+            "vote": 1176,
+            "quest": 110,
+            "lake": 18,
+            "assassinate": 5
+          }
         }
       }
     },
@@ -11269,7 +12007,7 @@
       "id": "knight-dean-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Dean_01",
+        "name": "AI騎士_Dean",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒鐵壁」：梅林比其他 AI騎士藏得深，藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；派西第 1 局當隊長會放一根拇指。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "藏鋒鐵壁",
@@ -11923,6 +12661,47 @@
             "pRed_R3": -0.402,
             "failExp_R3": 0.038
           }
+        },
+        "samples": {
+          "games": 513,
+          "seats": 479,
+          "bySeat": [
+            44,
+            51,
+            50,
+            49,
+            47,
+            56,
+            39,
+            54,
+            38,
+            51
+          ],
+          "byRole": {
+            "merlin": 56,
+            "percival": 54,
+            "loyal": 189,
+            "morgana": 36,
+            "assassin": 39,
+            "mordred": 47,
+            "oberon": 58
+          },
+          "byMissions": {
+            "blue3": 264,
+            "red3": 215
+          },
+          "byResult": {
+            "red3": 215,
+            "merlinKilled": 104,
+            "blueWin": 160
+          },
+          "decisions": {
+            "propose": 722,
+            "vote": 7166,
+            "quest": 795,
+            "lake": 88,
+            "assassinate": 16
+          }
         }
       }
     },
@@ -11930,7 +12709,7 @@
       "id": "knight-e59066bf-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_池_01",
+        "name": "AI騎士_池",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -12586,6 +13365,47 @@
             "pRed_R3": -0.425,
             "failExp_R3": 0.04
           }
+        },
+        "samples": {
+          "games": 775,
+          "seats": 744,
+          "bySeat": [
+            44,
+            71,
+            81,
+            82,
+            94,
+            73,
+            73,
+            78,
+            78,
+            70
+          ],
+          "byRole": {
+            "merlin": 56,
+            "percival": 65,
+            "loyal": 311,
+            "morgana": 71,
+            "assassin": 83,
+            "mordred": 86,
+            "oberon": 72
+          },
+          "byMissions": {
+            "blue3": 394,
+            "red3": 350
+          },
+          "byResult": {
+            "red3": 350,
+            "merlinKilled": 165,
+            "blueWin": 229
+          },
+          "decisions": {
+            "propose": 1082,
+            "vote": 11065,
+            "quest": 1165,
+            "lake": 145,
+            "assassinate": 44
+          }
         }
       }
     },
@@ -12593,7 +13413,7 @@
       "id": "knight-e963f525-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_豬豬_01",
+        "name": "AI騎士_豬豬",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "寬容",
@@ -13243,6 +14063,47 @@
             "pRed_R3": -0.404,
             "failExp_R3": 0.054
           }
+        },
+        "samples": {
+          "games": 531,
+          "seats": 517,
+          "bySeat": [
+            58,
+            45,
+            49,
+            48,
+            42,
+            61,
+            48,
+            52,
+            55,
+            59
+          ],
+          "byRole": {
+            "merlin": 60,
+            "percival": 51,
+            "loyal": 218,
+            "morgana": 50,
+            "assassin": 42,
+            "mordred": 48,
+            "oberon": 48
+          },
+          "byMissions": {
+            "blue3": 263,
+            "red3": 254
+          },
+          "byResult": {
+            "red3": 254,
+            "merlinKilled": 120,
+            "blueWin": 143
+          },
+          "decisions": {
+            "propose": 777,
+            "vote": 7842,
+            "quest": 687,
+            "lake": 91,
+            "assassinate": 29
+          }
         }
       }
     },
@@ -13250,7 +14111,7 @@
       "id": "knight-ed-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_ED_01",
+        "name": "AI騎士_ED",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "藏鋒",
@@ -13906,6 +14767,47 @@
             "pRed_R3": -0.403,
             "failExp_R3": 0.014
           }
+        },
+        "samples": {
+          "games": 299,
+          "seats": 288,
+          "bySeat": [
+            34,
+            31,
+            33,
+            30,
+            25,
+            28,
+            27,
+            26,
+            27,
+            27
+          ],
+          "byRole": {
+            "merlin": 36,
+            "percival": 30,
+            "loyal": 108,
+            "morgana": 28,
+            "assassin": 24,
+            "mordred": 35,
+            "oberon": 27
+          },
+          "byMissions": {
+            "blue3": 172,
+            "red3": 116
+          },
+          "byResult": {
+            "red3": 116,
+            "merlinKilled": 64,
+            "blueWin": 108
+          },
+          "decisions": {
+            "propose": 444,
+            "vote": 4376,
+            "quest": 504,
+            "lake": 55,
+            "assassinate": 17
+          }
         }
       }
     },
@@ -13913,7 +14815,7 @@
       "id": "knight-emma-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Emma_01",
+        "name": "AI騎士_Emma",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；紅方（奧伯倫除外）第 1、2 局能出失敗就出，不藏牌；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "藏鋒",
@@ -14578,6 +15480,47 @@
             "pRed_R3": -0.411,
             "failExp_R3": 0.049
           }
+        },
+        "samples": {
+          "games": 279,
+          "seats": 264,
+          "bySeat": [
+            23,
+            37,
+            21,
+            25,
+            27,
+            25,
+            27,
+            31,
+            27,
+            21
+          ],
+          "byRole": {
+            "merlin": 25,
+            "percival": 20,
+            "loyal": 113,
+            "morgana": 27,
+            "assassin": 25,
+            "mordred": 30,
+            "oberon": 24
+          },
+          "byMissions": {
+            "blue3": 133,
+            "red3": 131
+          },
+          "byResult": {
+            "red3": 131,
+            "merlinKilled": 60,
+            "blueWin": 73
+          },
+          "decisions": {
+            "propose": 407,
+            "vote": 4027,
+            "quest": 396,
+            "lake": 43,
+            "assassinate": 12
+          }
         }
       }
     },
@@ -14585,7 +15528,7 @@
       "id": "knight-hao-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_HAO_01",
+        "name": "AI騎士_HAO",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "藏鋒",
@@ -15238,6 +16181,47 @@
             "pRed_R3": -0.414,
             "failExp_R3": 0.022
           }
+        },
+        "samples": {
+          "games": 1169,
+          "seats": 1120,
+          "bySeat": [
+            119,
+            103,
+            113,
+            120,
+            102,
+            99,
+            114,
+            121,
+            124,
+            105
+          ],
+          "byRole": {
+            "merlin": 111,
+            "percival": 111,
+            "loyal": 477,
+            "morgana": 106,
+            "assassin": 116,
+            "mordred": 104,
+            "oberon": 95
+          },
+          "byMissions": {
+            "blue3": 606,
+            "red3": 514
+          },
+          "byResult": {
+            "red3": 514,
+            "merlinKilled": 264,
+            "blueWin": 342
+          },
+          "decisions": {
+            "propose": 1707,
+            "vote": 16785,
+            "quest": 2039,
+            "lake": 219,
+            "assassinate": 45
+          }
         }
       }
     },
@@ -15245,7 +16229,7 @@
       "id": "knight-joy-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_JOY_01",
+        "name": "AI騎士_JOY",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "藏鋒",
@@ -15900,6 +16884,47 @@
             "pRed_R3": -0.418,
             "failExp_R3": 0.048
           }
+        },
+        "samples": {
+          "games": 520,
+          "seats": 489,
+          "bySeat": [
+            47,
+            45,
+            47,
+            60,
+            54,
+            54,
+            56,
+            51,
+            38,
+            37
+          ],
+          "byRole": {
+            "merlin": 49,
+            "percival": 47,
+            "loyal": 208,
+            "morgana": 50,
+            "assassin": 33,
+            "mordred": 54,
+            "oberon": 48
+          },
+          "byMissions": {
+            "blue3": 264,
+            "red3": 225
+          },
+          "byResult": {
+            "red3": 225,
+            "merlinKilled": 107,
+            "blueWin": 157
+          },
+          "decisions": {
+            "propose": 744,
+            "vote": 7308,
+            "quest": 843,
+            "lake": 89,
+            "assassinate": 20
+          }
         }
       }
     },
@@ -15907,7 +16932,7 @@
       "id": "knight-kevin-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_kevin_01",
+        "name": "AI騎士_kevin",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "鐵壁",
@@ -16560,6 +17585,47 @@
             "pRed_R3": -0.414,
             "failExp_R3": 0.041
           }
+        },
+        "samples": {
+          "games": 430,
+          "seats": 428,
+          "bySeat": [
+            39,
+            54,
+            43,
+            46,
+            47,
+            38,
+            40,
+            51,
+            36,
+            34
+          ],
+          "byRole": {
+            "merlin": 49,
+            "percival": 47,
+            "loyal": 174,
+            "morgana": 44,
+            "assassin": 39,
+            "mordred": 33,
+            "oberon": 42
+          },
+          "byMissions": {
+            "blue3": 219,
+            "red3": 209
+          },
+          "byResult": {
+            "red3": 209,
+            "merlinKilled": 103,
+            "blueWin": 116
+          },
+          "decisions": {
+            "propose": 661,
+            "vote": 6613,
+            "quest": 657,
+            "lake": 70,
+            "assassinate": 15
+          }
         }
       }
     },
@@ -16567,7 +17633,7 @@
       "id": "knight-liang-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Liang_01",
+        "name": "AI騎士_Liang",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "穩健",
@@ -17220,6 +18286,47 @@
             "pRed_R3": -0.408,
             "failExp_R3": 0.047
           }
+        },
+        "samples": {
+          "games": 505,
+          "seats": 496,
+          "bySeat": [
+            44,
+            40,
+            48,
+            51,
+            45,
+            66,
+            53,
+            55,
+            44,
+            50
+          ],
+          "byRole": {
+            "merlin": 49,
+            "percival": 47,
+            "loyal": 206,
+            "morgana": 62,
+            "assassin": 47,
+            "mordred": 41,
+            "oberon": 44
+          },
+          "byMissions": {
+            "blue3": 268,
+            "red3": 228
+          },
+          "byResult": {
+            "red3": 228,
+            "merlinKilled": 114,
+            "blueWin": 154
+          },
+          "decisions": {
+            "propose": 731,
+            "vote": 7463,
+            "quest": 726,
+            "lake": 91,
+            "assassinate": 26
+          }
         }
       }
     },
@@ -17227,7 +18334,7 @@
       "id": "knight-lori-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Lori_01",
+        "name": "AI騎士_Lori",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "鐵壁",
@@ -17877,6 +18984,47 @@
             "pRed_R3": -0.412,
             "failExp_R3": 0.04
           }
+        },
+        "samples": {
+          "games": 356,
+          "seats": 335,
+          "bySeat": [
+            37,
+            32,
+            35,
+            36,
+            32,
+            23,
+            32,
+            38,
+            33,
+            37
+          ],
+          "byRole": {
+            "merlin": 28,
+            "percival": 31,
+            "loyal": 132,
+            "morgana": 35,
+            "assassin": 40,
+            "mordred": 30,
+            "oberon": 39
+          },
+          "byMissions": {
+            "blue3": 194,
+            "red3": 141
+          },
+          "byResult": {
+            "red3": 141,
+            "merlinKilled": 79,
+            "blueWin": 115
+          },
+          "decisions": {
+            "propose": 512,
+            "vote": 5088,
+            "quest": 516,
+            "lake": 64,
+            "assassinate": 22
+          }
         }
       }
     },
@@ -17884,7 +19032,7 @@
       "id": "knight-sin-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Sin_01",
+        "name": "AI騎士_Sin",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "鐵壁",
@@ -18531,6 +19679,47 @@
             "pRed_R3": -0.421,
             "failExp_R3": 0.08
           }
+        },
+        "samples": {
+          "games": 1153,
+          "seats": 1119,
+          "bySeat": [
+            96,
+            112,
+            104,
+            113,
+            115,
+            120,
+            122,
+            114,
+            112,
+            111
+          ],
+          "byRole": {
+            "merlin": 113,
+            "percival": 127,
+            "loyal": 419,
+            "morgana": 122,
+            "assassin": 109,
+            "mordred": 108,
+            "oberon": 121
+          },
+          "byMissions": {
+            "blue3": 586,
+            "red3": 533
+          },
+          "byResult": {
+            "red3": 533,
+            "merlinKilled": 261,
+            "blueWin": 325
+          },
+          "decisions": {
+            "propose": 1670,
+            "vote": 17018,
+            "quest": 1741,
+            "lake": 199,
+            "assassinate": 56
+          }
         }
       }
     },
@@ -18538,7 +19727,7 @@
       "id": "knight-ten-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_TEN_01",
+        "name": "AI騎士_TEN",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "穩健",
@@ -19189,6 +20378,47 @@
             "pRed_R3": -0.413,
             "failExp_R3": 0.037
           }
+        },
+        "samples": {
+          "games": 279,
+          "seats": 272,
+          "bySeat": [
+            35,
+            30,
+            24,
+            26,
+            22,
+            25,
+            27,
+            29,
+            27,
+            27
+          ],
+          "byRole": {
+            "merlin": 26,
+            "percival": 17,
+            "loyal": 125,
+            "morgana": 25,
+            "assassin": 26,
+            "mordred": 28,
+            "oberon": 25
+          },
+          "byMissions": {
+            "blue3": 131,
+            "red3": 141
+          },
+          "byResult": {
+            "red3": 141,
+            "merlinKilled": 60,
+            "blueWin": 71
+          },
+          "decisions": {
+            "propose": 413,
+            "vote": 4127,
+            "quest": 344,
+            "lake": 46,
+            "assassinate": 12
+          }
         }
       }
     },
@@ -19196,7 +20426,7 @@
       "id": "knight-vash-01",
       "profile": {
         "schema": 2,
-        "name": "AI騎士_Vash_01",
+        "name": "AI騎士_Vash",
         "author": "AI騎士團",
         "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
         "tag": "鐵壁",
@@ -19847,6 +21077,47 @@
             "appDirty": 1.108,
             "pRed_R3": -0.405,
             "failExp_R3": 0.064
+          }
+        },
+        "samples": {
+          "games": 282,
+          "seats": 262,
+          "bySeat": [
+            29,
+            31,
+            21,
+            12,
+            37,
+            24,
+            29,
+            20,
+            34,
+            25
+          ],
+          "byRole": {
+            "merlin": 27,
+            "percival": 25,
+            "loyal": 100,
+            "morgana": 22,
+            "assassin": 30,
+            "mordred": 35,
+            "oberon": 23
+          },
+          "byMissions": {
+            "blue3": 149,
+            "red3": 113
+          },
+          "byResult": {
+            "red3": 113,
+            "merlinKilled": 61,
+            "blueWin": 88
+          },
+          "decisions": {
+            "propose": 391,
+            "vote": 3981,
+            "quest": 384,
+            "lake": 44,
+            "assassinate": 19
           }
         }
       }

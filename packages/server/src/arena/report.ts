@@ -9,6 +9,7 @@ import { profileKnobSummary } from './profile';
 import { REFERENCE_ID, REFERENCE_NAME, type RegisteredBot } from './registry';
 import type { Outcome, TableResult } from './table';
 import type { RunKind, Trend } from './daily';
+import type { KnightSamples } from './samples';
 
 // ── 座位安排 ─────────────────────────────────────────────
 
@@ -148,6 +149,8 @@ export interface LeaderboardBot {
   red: { seats: number; winRate: number };
   blue: { seats: number; winRate: number };
   assassin: { tries: number; hits: number };
+  /** 官方 AI騎士 的學習樣本數（profile 的 `samples`，只有數字）；其他為 null。 */
+  samples: KnightSamples | null;
 }
 
 export interface Leaderboard {
@@ -256,6 +259,7 @@ export function buildLeaderboard(args: {
       red: { seats: rs, winRate: rs ? Math.round((rw / rs) * 1000) / 1000 : 0 },
       blue: { seats: bs, winRate: bs ? Math.round((bw / bs) * 1000) / 1000 : 0 },
       assassin: { tries, hits },
+      samples: b.profile?.samples ?? null,
     };
   });
   rows.sort((a, b) => b.rating.overall.rating - a.rating.overall.rating || a.id.localeCompare(b.id));

@@ -1,10 +1,19 @@
 {
   "schema": 2,
-  "name": "AI騎士_發達_01",
+  "name": "AI騎士_發達",
   "author": "AI騎士團",
   "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
   "tag": "穩健",
   "official": true,
+  "samples": {
+    "games": 414,
+    "seats": 407,
+    "bySeat": [41,47,53,27,35,48,39,31,39,47],
+    "byRole": {"merlin":44,"percival":37,"loyal":165,"morgana":41,"assassin":40,"mordred":47,"oberon":33},
+    "byMissions": {"blue3":214,"red3":193},
+    "byResult": {"red3":193,"merlinKilled":87,"blueWin":127},
+    "decisions": {"propose":619,"vote":6136,"quest":643,"lake":90,"assassinate":18}
+  },
   "residual": {
     "version": 1,
     "team": {

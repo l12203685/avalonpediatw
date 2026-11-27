@@ -32,6 +32,19 @@ export interface ArenaBot {
   red: { seats: number; winRate: number };
   blue: { seats: number; winRate: number };
   assassin: { tries: number; hits: number };
+  /** 官方 AI騎士 的學習樣本數（站長 2026-11-27；舊的排行榜、其他機器人沒有）。 */
+  samples?: ArenaSamples | null;
+}
+
+/** 學習樣本數（伺服器 `arena/samples.ts` 的 KnightSamples；只有數字）。bySeat[0] = 1家 … [9] = 0家。 */
+export interface ArenaSamples {
+  games: number;
+  seats: number;
+  bySeat: number[];
+  byRole: Record<'merlin' | 'percival' | 'loyal' | 'morgana' | 'assassin' | 'mordred' | 'oberon', number>;
+  byMissions: { blue3: number; red3: number };
+  byResult: { red3: number; merlinKilled: number; blueWin: number };
+  decisions?: { propose: number; vote: number; quest: number; lake: number; assassinate: number };
 }
 
 export interface KnobCatalogEntry {

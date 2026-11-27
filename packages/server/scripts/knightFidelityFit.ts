@@ -384,7 +384,7 @@ async function main(): Promise<void> {
       if (meanOf(id, 'V2') <= meanOf(id, exists ? 'K' : 'D')) { skipped.push(id); continue; }
       const base: BotProfile = exists
         ? JSON.parse(fs.readFileSync(file, 'utf8')) as BotProfile
-        : { ...buildKnightProfile(id, 1, {}), style: `依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。` };
+        : { ...buildKnightProfile(id, {}), style: `依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。` };
       const note = ' 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。';
       const style = exists && !base.style.includes('殘差層') && [...(base.style + note)].length <= 300 ? base.style + note : base.style;
       const prof: BotProfile = { ...base, schema: 2, style, residual: residualOf(model, p) };

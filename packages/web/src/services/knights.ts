@@ -13,6 +13,8 @@ export interface KnightSummary {
   name: string;
   tag?: string;
   style: string;
+  /** 學習樣本（站長 2026-11-27）：網站真人局場數、拿來學的座位數。百科、舊版伺服器沒有。 */
+  samples?: { games: number; seats: number };
 }
 
 export const DEFAULT_KNIGHT_ID = 'baike';
@@ -99,4 +101,9 @@ export function knightBlurb(style: string): string {
   if (m) return m[1].trim();
   const first = style.split('。')[0]?.trim() ?? '';
   return first || style.trim();
+}
+
+/** 選單上的一小行「學習樣本 299 場」（站長 2026-11-27）；沒有樣本數（百科、舊版伺服器）→ 空字串。 */
+export function knightSamplesLine(k: Pick<KnightSummary, 'samples'>): string {
+  return k.samples && k.samples.games > 0 ? `學習樣本 ${k.samples.games} 場` : '';
 }

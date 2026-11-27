@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "name": "AI騎士_藿藿_01",
+  "name": "AI騎士_藿藿",
   "author": "AI騎士團",
   "style": "依站長確認的那位玩家自己的真人牌局擬合，再疊上她自己投稿的開關（社群機器人「藿藿」；兩邊衝突時照她的）。風格「鐵壁」：藍方投票比其他 AI騎士嚴，關鍵局更不敢放行，在隊上很少內黑。她投稿的部分：紅方第 1 局當隊長偶爾帶隊友、紅方偶爾照自己利益投票、比較少疊隊友，梅林偶爾不照忠臣的票。另帶她的殘差層（v2）：每個動作再用她自己的牌局重新打分。她的牌局還不多，像她的程度目前和百科AI 差不多。",
   "tag": "鐵壁",
@@ -90,6 +90,15 @@
       "redCleanApprove": 0,
       "redStackRate65": 0.2
     }
+  },
+  "samples": {
+    "games": 45,
+    "seats": 45,
+    "bySeat": [7,3,9,4,6,2,4,4,3,3],
+    "byRole": {"merlin":4,"percival":7,"loyal":23,"morgana":4,"assassin":3,"mordred":2,"oberon":2},
+    "byMissions": {"blue3":24,"red3":21},
+    "byResult": {"red3":21,"merlinKilled":7,"blueWin":17},
+    "decisions": {"propose":75,"vote":697,"quest":72,"lake":7,"assassinate":1}
   },
   "residual": {
     "version": 1,

@@ -12,10 +12,12 @@
 
 import { AttachmentBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { COMMANDS, SIM_OPTIONS } from '../discord/config';
+import { DEFAULT_KNIGHT_ID } from '../../arena/knights';
 import { describeError } from '../media/bytes';
 import { parseExerciseRef, parseInterval, parseRoleChoice, parseTeam, refCommand, type SimCommand } from './commands';
 import { SIM_CONFIG, simDiscordPublicChannelIds } from './config';
 import { getSimEngine } from './index';
+import { resolveSimKnight } from './knightChoice';
 import { renderRecordPng } from './recordImage';
 
 export const SIM_DISABLED_TEXT = '模擬瓦目前停用。';
@@ -74,8 +76,14 @@ export function simCommandFromInteraction(interaction: Pick<ChatInputCommandInte
         ? { kind: 'assassinate', seat: target }
         : { kind: 'usage', command: 'assassinate' };
     }
-    case COMMANDS.SIM_REVEAL:
-      return { kind: 'reveal' };
+    case COMMANDS.SIM_REVEAL: {
+      // 站長 2026-11-27：騎士:藿藿 → 看那一位 AI騎士 會派什麼（同 LINE 的 /公布 藿藿）。
+      const word = (opts.getString(SIM_OPTIONS.KNIGHT, false) ?? '').trim();
+      if (!word) return { kind: 'reveal' };
+      const id = resolveSimKnight(word);
+      if (!id) return { kind: 'usage', command: 'reveal', problem: '不認得這位 AI騎士。' };
+      return id === DEFAULT_KNIGHT_ID ? { kind: 'reveal' } : { kind: 'reveal', knightId: id };
+    }
     case COMMANDS.SIM_END:
       return { kind: 'end' };
     default:
