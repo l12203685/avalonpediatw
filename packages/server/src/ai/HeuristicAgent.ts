@@ -12,6 +12,7 @@
 import { assassinSight71 } from './Round71';
 import { worldLineParts75 } from './Round75';
 import { softTierScores86 } from './Round86';
+import { mlAssassinMode90, mlAssassinNoTier90, mlAssassinScores90 } from './Round90';
 import { r5Lead70Applies, r5Lead70Tuning, round70Stats } from './Round70';
 import { r2Lead72Applies, r2Lead72Tuning, round72Stats } from './Round72';
 import { exactPick53Team } from './Round53';
@@ -2698,6 +2699,7 @@ export class HeuristicAgent implements AvalonAgent {
     evilSet: ReadonlySet<string>,
     ignoreReuse: boolean,
     doomedMode: number,
+    front?: ReadonlySet<string>,
   ): { scores: Map<string, number>; terms: Map<string, AssassinScoreTerms>; own: number } {
     const voteWeight = this.tuning.assassinMerlinVotes ?? 0;
     const leadWeight = this.tuning.assassinLeadRead ?? 0;
@@ -2783,7 +2785,10 @@ export class HeuristicAgent implements AvalonAgent {
     // mixed with the score above. Off (or no red reveal / not the 10-player roles): the same Map, untouched. Outside `terms`.
     const wl = worldLineParts75(this.tuning, obs, scores);
     if (wl.add) for (const [id, v] of wl.add) { const t = terms.get(id); if (t) t.worldLine = v; }
-    return { scores: wl.scores, terms, own: wl.own };
+    // Round 90 (red) `mlAssassin90` (Round90.ts, roadmap Phase C): the trained three-blue assassination model's log P(Merlin = seat) replaces the score.
+    // Off (or no red reveal / not 10 players): the same Map, untouched.
+    const ml = mlAssassinMode90(this.tuning) > 0 ? mlAssassinScores90(this.tuning, obs, wl.scores, front ?? new Set(goodPlayers)) : wl.scores;
+    return { scores: ml, terms, own: wl.own };
   }
 
   /**
@@ -2795,12 +2800,13 @@ export class HeuristicAgent implements AvalonAgent {
     if (!this.tuning.assassinModel) return null;
     const { allGood, goodPlayers, evilSet, visibleRed, doomedMode } = this.assassinCandidates(obs);
     if (allGood.length === 0) return null;
-    const { scores, terms, own } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
     const evidence = visibleRedEvidence(obs, goodPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse);
     const front = visibleRed.tier ? tierCandidates(goodPlayers, evidence) : [...goodPlayers];
+    const frontSet = new Set(front);
+    const { scores, terms, own } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode, frontSet);
     // Scores of the seats the tiers dropped (they are never picked while a front-tier seat exists), for display.
     const dropped = allGood.filter((id) => !goodPlayers.includes(id));
-    const rest = dropped.length ? this.assassinModelScores(obs, dropped, evilSet, visibleRed.ignoreReuse, doomedMode) : null;
+    const rest = dropped.length ? this.assassinModelScores(obs, dropped, evilSet, visibleRed.ignoreReuse, doomedMode, frontSet) : null;
     return {
       candidates: allGood,
       front,
@@ -2882,7 +2888,10 @@ export class HeuristicAgent implements AvalonAgent {
     const tiered = visibleRed.tier ? tierCandidates(allGood, visibleRedEvidence(obs, allGood, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse)) : allGood;
     // Round 23 (red) `assassinDoomedRead` 1 / 3: a second tier for the doomed R1–R2 leads with a seen red (R2 re-proposal of R1 excepted).
     const doomedMode = this.tuning.assassinDoomedRead ?? 0;
-    const goodPlayers = visibleRed.tier && (doomedMode === 1 || doomedMode === 3) ? doomedTierCandidates(obs, tiered) : tiered;
+    const tieredPlayers = visibleRed.tier && (doomedMode === 1 || doomedMode === 3) ? doomedTierCandidates(obs, tiered) : tiered;
+    // Round 90 `mlAssassin90=2/4`: no tiers — the model ranks every candidate (the tier front is one of its features).
+    const noTier90 = this.tuning.assassinModel && mlAssassinNoTier90(this.tuning);
+    const goodPlayers = noTier90 ? allGood : tieredPlayers;
 
     // AgentTuning.assassinModel (2026-10-12): conditional-logit model
     // trained on the logged games (`assassin/AssassinModel.ts`), using
@@ -2900,8 +2909,11 @@ export class HeuristicAgent implements AvalonAgent {
         const soft = softTierScores86(this.tuning, allGood, goodPlayers, all);
         if (soft) return { type: 'assassinate', targetId: pickWithVisibleRed(obs, allGood, soft, { ...visibleRed, tier: false }) };
       }
-      const { scores } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode);
-      return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, visibleRed) };
+      const front90 = mlAssassinMode90(this.tuning) > 0
+        ? new Set(visibleRed.tier ? tierCandidates(tieredPlayers, visibleRedEvidence(obs, tieredPlayers, visibleRed.ignoreDoomed, visibleRed.ignoreReuse, visibleRed.ignoreNeedTwo, visibleRed.failReuse)) : tieredPlayers)
+        : undefined;
+      const { scores } = this.assassinModelScores(obs, goodPlayers, evilSet, visibleRed.ignoreReuse, doomedMode, front90);
+      return { type: 'assassinate', targetId: pickWithVisibleRed(obs, goodPlayers, scores, noTier90 ? { ...visibleRed, tier: false } : visibleRed) };
     }
 
     // Edward 2026-04-24 batch 2 fix #6: assassin must first prefer
