@@ -1,114 +1,72 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-27T04:06:09.794Z",
-  "seed": "arena-2026-11-27",
-  "games": 120000,
+  "generatedAt": "2026-11-27T07:28:59.117Z",
+  "seed": "arena-2026-11-27-push-45954854122",
+  "games": 20000,
   "sizes": [
     10
   ],
   "reference": "baike",
   "method": "每局隨機座位、每個座位隨機抽一隻機器人（可重複），角色由引擎發。分數 = 分陣營的隊伍邏輯回歸（AI騎士_百科 = 1500；+100 分 ≈ 一整邊換成它時勝算 ×1.78），區間 = 95% 信賴區間。",
   "baseRedWin": {
-    "10": 0.675
+    "10": 0.791
   },
   "bots": [
     {
       "rank": 1,
-      "id": "baike",
-      "name": "AI騎士_百科",
-      "author": null,
-      "source": "reference",
-      "title": null,
-      "tag": null,
-      "style": "網站上正在跑的AI騎士_百科（目前訓練出來的引擎、正式預設，沒有改任何開關）。所有分數都以它為 1500。",
-      "knobs": [],
-      "rating": {
-        "overall": {
-          "rating": 1500,
-          "low": 1500,
-          "high": 1500
-        },
-        "red": {
-          "rating": 1500,
-          "low": 1500,
-          "high": 1500
-        },
-        "blue": {
-          "rating": 1500,
-          "low": 1500,
-          "high": 1500
-        }
-      },
-      "seats": 34329,
-      "games": 30137,
-      "red": {
-        "seats": 13763,
-        "winRate": 0.697
-      },
-      "blue": {
-        "seats": 20566,
-        "winRate": 0.317
-      },
-      "assassin": {
-        "tries": 1895,
-        "hits": 844
-      }
-    },
-    {
-      "rank": 2,
-      "id": "knight-c5-01",
-      "name": "AI騎士_C5_01",
+      "id": "knight-239ef7f4-01",
+      "name": "AI騎士_黃某人_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
-      "tag": "鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.9",
+        "percival.goodBayesGood=0.4",
+        "percival.goodBayesBad=0.99",
         "percival.goodBayesGoodKey=0.95",
         "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.9",
+        "loyal.goodBayesGood=0.4",
+        "loyal.goodBayesBad=0.99",
         "loyal.goodBayesGoodKey=0.95",
         "loyal.goodBayesBadKey=0.95",
         "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1494.7,
-          "low": 1466.9,
-          "high": 1522.4
+          "rating": 1545.9,
+          "low": 1481.3,
+          "high": 1610.5
         },
         "red": {
-          "rating": 1521.3,
-          "low": 1485.9,
-          "high": 1556.7
+          "rating": 1505.6,
+          "low": 1421.2,
+          "high": 1589.9
         },
         "blue": {
-          "rating": 1468,
-          "low": 1425.4,
-          "high": 1510.6
+          "rating": 1586.3,
+          "low": 1488.2,
+          "high": 1684.4
         }
       },
-      "seats": 34328,
-      "games": 30127,
+      "seats": 5663,
+      "games": 5018,
       "red": {
-        "seats": 13656,
-        "winRate": 0.703
+        "seats": 2289,
+        "winRate": 0.71
       },
       "blue": {
-        "seats": 20672,
-        "winRate": 0.31
+        "seats": 3374,
+        "winRate": 0.316
       },
       "assassin": {
-        "tries": 1830,
-        "hits": 874
+        "tries": 303,
+        "hits": 136
       }
     },
     {
-      "rank": 3,
+      "rank": 2,
       "id": "huohuo",
       "name": "藿藿",
       "author": "f093285329000-cmd",
@@ -174,38 +132,38 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1493.6,
-          "low": 1465.9,
-          "high": 1521.3
+          "rating": 1538.8,
+          "low": 1474.8,
+          "high": 1602.9
         },
         "red": {
-          "rating": 1502.1,
-          "low": 1466.7,
-          "high": 1537.4
+          "rating": 1481.3,
+          "low": 1397.6,
+          "high": 1565
         },
         "blue": {
-          "rating": 1485.1,
-          "low": 1442.3,
-          "high": 1527.8
+          "rating": 1596.4,
+          "low": 1499.4,
+          "high": 1693.3
         }
       },
-      "seats": 34336,
-      "games": 30313,
+      "seats": 5730,
+      "games": 5023,
       "red": {
-        "seats": 13671,
-        "winRate": 0.697
+        "seats": 2295,
+        "winRate": 0.702
       },
       "blue": {
-        "seats": 20665,
-        "winRate": 0.313
+        "seats": 3435,
+        "winRate": 0.318
       },
       "assassin": {
-        "tries": 1903,
-        "hits": 891
+        "tries": 315,
+        "hits": 145
       }
     },
     {
-      "rank": 4,
+      "rank": 3,
       "id": "example-aggressive-red",
       "name": "激進派紅方",
       "author": null,
@@ -221,192 +179,197 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1492.2,
-          "low": 1464.4,
-          "high": 1520.1
+          "rating": 1525.4,
+          "low": 1461.7,
+          "high": 1589
         },
         "red": {
-          "rating": 1509.7,
-          "low": 1474.2,
-          "high": 1545.2
+          "rating": 1456.1,
+          "low": 1373.4,
+          "high": 1538.9
         },
         "blue": {
-          "rating": 1474.8,
-          "low": 1431.9,
-          "high": 1517.6
+          "rating": 1594.6,
+          "low": 1497,
+          "high": 1692.1
         }
       },
-      "seats": 34173,
-      "games": 30128,
+      "seats": 5817,
+      "games": 5122,
       "red": {
-        "seats": 13604,
-        "winRate": 0.699
+        "seats": 2351,
+        "winRate": 0.696
       },
       "blue": {
-        "seats": 20569,
-        "winRate": 0.311
+        "seats": 3466,
+        "winRate": 0.317
       },
       "assassin": {
-        "tries": 1928,
-        "hits": 907
+        "tries": 329,
+        "hits": 157
       }
     },
     {
-      "rank": 5,
-      "id": "knight-e59066bf-01",
-      "name": "AI騎士_池_01",
+      "rank": 4,
+      "id": "knight-joy-01",
+      "name": "AI騎士_JOY_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "tag": "藏鋒",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
-        "merlin.merlinNormalVote=0",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.5",
+        "merlin.merlinCover77=1",
+        "percival.goodBayesGood=0.4",
+        "percival.goodBayesBad=0.95",
+        "percival.goodBayesGoodKey=0.95",
         "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.5",
+        "loyal.goodBayesGood=0.4",
+        "loyal.goodBayesBad=0.95",
+        "loyal.goodBayesGoodKey=0.95",
         "loyal.goodBayesBadKey=0.95",
         "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1489.9,
-          "low": 1462.1,
-          "high": 1517.6
+          "rating": 1521.7,
+          "low": 1457.8,
+          "high": 1585.6
         },
         "red": {
-          "rating": 1491.2,
-          "low": 1455.8,
-          "high": 1526.5
+          "rating": 1405.6,
+          "low": 1322.2,
+          "high": 1489.1
         },
         "blue": {
-          "rating": 1488.6,
-          "low": 1445.8,
-          "high": 1531.3
+          "rating": 1637.7,
+          "low": 1540.6,
+          "high": 1734.9
         }
       },
-      "seats": 34023,
-      "games": 29999,
+      "seats": 5664,
+      "games": 4999,
       "red": {
-        "seats": 13721,
-        "winRate": 0.694
+        "seats": 2267,
+        "winRate": 0.68
       },
       "blue": {
-        "seats": 20302,
-        "winRate": 0.314
+        "seats": 3397,
+        "winRate": 0.327
       },
       "assassin": {
-        "tries": 1913,
-        "hits": 836
+        "tries": 314,
+        "hits": 132
+      }
+    },
+    {
+      "rank": 5,
+      "id": "knight-e963f525-01",
+      "name": "AI騎士_豬豬_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.4",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.5",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.4",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.5",
+        "loyal.goodBayesBadKey=0.95"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1517.9,
+          "low": 1453.9,
+          "high": 1582
+        },
+        "red": {
+          "rating": 1436.4,
+          "low": 1353.4,
+          "high": 1519.3
+        },
+        "blue": {
+          "rating": 1599.5,
+          "low": 1502.2,
+          "high": 1696.8
+        }
+      },
+      "seats": 5718,
+      "games": 5025,
+      "red": {
+        "seats": 2297,
+        "winRate": 0.688
+      },
+      "blue": {
+        "seats": 3421,
+        "winRate": 0.319
+      },
+      "assassin": {
+        "tries": 309,
+        "hits": 130
       }
     },
     {
       "rank": 6,
-      "id": "example-cautious-blue",
-      "name": "保守藍方",
-      "author": null,
-      "source": "example",
-      "title": null,
-      "tag": null,
-      "style": "示範對手。藍方很難放行：一般局和關鍵局的投黑門檻都拉高，不在隊上幾乎都投黑；梅林早期派隊照忠臣，藏得更深。紅方照AI騎士。",
-      "knobs": [
-        "good.goodCleanVote=0.6",
-        "good.goodKeyVote=0.6",
-        "good.goodTailVote=0.85",
-        "merlin.merlinCover77=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1486.8,
-          "low": 1459.1,
-          "high": 1514.6
-        },
-        "red": {
-          "rating": 1504.1,
-          "low": 1468.7,
-          "high": 1539.4
-        },
-        "blue": {
-          "rating": 1469.6,
-          "low": 1426.9,
-          "high": 1512.4
-        }
-      },
-      "seats": 34239,
-      "games": 30225,
-      "red": {
-        "seats": 13630,
-        "winRate": 0.698
-      },
-      "blue": {
-        "seats": 20609,
-        "winRate": 0.31
-      },
-      "assassin": {
-        "tries": 1887,
-        "hits": 861
-      }
-    },
-    {
-      "rank": 7,
-      "id": "knight-56320d35-01",
-      "name": "AI騎士_軒_01",
+      "id": "knight-d7b16610-01",
+      "name": "AI騎士_尼克_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
-      "tag": "鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "tag": "穩健",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
         "percival.goodBayesGood=0.5",
         "percival.goodBayesBad=0.95",
         "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.8",
+        "percival.goodBayesBadKey=0.95",
         "loyal.goodBayesGood=0.5",
         "loyal.goodBayesBad=0.95",
         "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.8",
+        "loyal.goodBayesBadKey=0.95",
         "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1484.9,
-          "low": 1457.3,
-          "high": 1512.5
+          "rating": 1515.9,
+          "low": 1451.6,
+          "high": 1580.2
         },
         "red": {
-          "rating": 1480.1,
-          "low": 1445,
-          "high": 1515.2
+          "rating": 1495.5,
+          "low": 1411.7,
+          "high": 1579.3
         },
         "blue": {
-          "rating": 1489.7,
-          "low": 1447.2,
-          "high": 1532.2
+          "rating": 1536.3,
+          "low": 1438.1,
+          "high": 1634.4
         }
       },
-      "seats": 34361,
-      "games": 30222,
+      "seats": 5820,
+      "games": 5122,
       "red": {
-        "seats": 13837,
-        "winRate": 0.69
+        "seats": 2336,
+        "winRate": 0.707
       },
       "blue": {
-        "seats": 20524,
-        "winRate": 0.314
+        "seats": 3484,
+        "winRate": 0.305
       },
       "assassin": {
-        "tries": 1964,
-        "hits": 888
+        "tries": 289,
+        "hits": 130
       }
     },
     {
-      "rank": 8,
+      "rank": 7,
       "id": "knight-2ee2cbf1-01",
       "name": "AI騎士_午夜_01",
       "author": null,
@@ -429,101 +392,47 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1484.8,
-          "low": 1457.3,
-          "high": 1512.4
+          "rating": 1515.6,
+          "low": 1451.4,
+          "high": 1579.8
         },
         "red": {
-          "rating": 1460.1,
-          "low": 1425,
-          "high": 1495.2
+          "rating": 1466.9,
+          "low": 1383.9,
+          "high": 1549.9
         },
         "blue": {
-          "rating": 1509.6,
-          "low": 1467.2,
-          "high": 1552
+          "rating": 1564.3,
+          "low": 1466.2,
+          "high": 1662.4
         }
       },
-      "seats": 34379,
-      "games": 30273,
+      "seats": 5764,
+      "games": 5076,
       "red": {
-        "seats": 13808,
-        "winRate": 0.685
+        "seats": 2343,
+        "winRate": 0.697
       },
       "blue": {
-        "seats": 20571,
-        "winRate": 0.318
+        "seats": 3421,
+        "winRate": 0.312
       },
       "assassin": {
-        "tries": 1888,
-        "hits": 821
+        "tries": 334,
+        "hits": 146
       }
     },
     {
-      "rank": 9,
-      "id": "knight-kevin-01",
-      "name": "AI騎士_kevin_01",
+      "rank": 8,
+      "id": "knight-liang-01",
+      "name": "AI騎士_Liang_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
-      "tag": "鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "tag": "穩健",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.6",
-        "percival.goodBayesBad=0.95",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.9",
-        "loyal.goodBayesGood=0.6",
-        "loyal.goodBayesBad=0.95",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.9",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1481.8,
-          "low": 1454.2,
-          "high": 1509.5
-        },
-        "red": {
-          "rating": 1472,
-          "low": 1436.8,
-          "high": 1507.3
-        },
-        "blue": {
-          "rating": 1491.6,
-          "low": 1449,
-          "high": 1534.2
-        }
-      },
-      "seats": 34059,
-      "games": 29983,
-      "red": {
-        "seats": 13493,
-        "winRate": 0.688
-      },
-      "blue": {
-        "seats": 20566,
-        "winRate": 0.315
-      },
-      "assassin": {
-        "tries": 1828,
-        "hits": 828
-      }
-    },
-    {
-      "rank": 10,
-      "id": "knight-3cc9e075-01",
-      "name": "AI騎士_雪怪_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "明燈",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「明燈」：梅林比其他 AI騎士更常照自己看到的紅投票。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "merlin.merlinNormalVote=0",
         "percival.goodBayesGood=0.5",
         "percival.goodBayesBad=0.99",
         "percival.goodBayesGoodKey=0.95",
@@ -531,84 +440,43 @@
         "loyal.goodBayesGood=0.5",
         "loyal.goodBayesBad=0.99",
         "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95"
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1481.2,
-          "low": 1453.5,
-          "high": 1508.9
+          "rating": 1510.4,
+          "low": 1445,
+          "high": 1575.7
         },
         "red": {
-          "rating": 1494.1,
-          "low": 1458.9,
-          "high": 1529.4
+          "rating": 1477.7,
+          "low": 1393.7,
+          "high": 1561.8
         },
         "blue": {
-          "rating": 1468.3,
-          "low": 1425.7,
-          "high": 1510.9
+          "rating": 1543,
+          "low": 1443.6,
+          "high": 1642.4
         }
       },
-      "seats": 34463,
-      "games": 30329,
+      "seats": 5632,
+      "games": 4957,
       "red": {
-        "seats": 13776,
-        "winRate": 0.695
+        "seats": 2294,
+        "winRate": 0.702
       },
       "blue": {
-        "seats": 20687,
-        "winRate": 0.31
+        "seats": 3338,
+        "winRate": 0.307
       },
       "assassin": {
-        "tries": 1908,
-        "hits": 852
+        "tries": 313,
+        "hits": 139
       }
     },
     {
-      "rank": 11,
-      "id": "knight-c2312439-01",
-      "name": "AI騎士_轆_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "穩健",
-      "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
-      "knobs": [],
-      "rating": {
-        "overall": {
-          "rating": 1480.9,
-          "low": 1453.2,
-          "high": 1508.6
-        },
-        "red": {
-          "rating": 1496.1,
-          "low": 1460.7,
-          "high": 1531.5
-        },
-        "blue": {
-          "rating": 1465.8,
-          "low": 1423.1,
-          "high": 1508.4
-        }
-      },
-      "seats": 34521,
-      "games": 30449,
-      "red": {
-        "seats": 13781,
-        "winRate": 0.695
-      },
-      "blue": {
-        "seats": 20740,
-        "winRate": 0.309
-      },
-      "assassin": {
-        "tries": 1895,
-        "hits": 827
-      }
-    },
-    {
-      "rank": 12,
+      "rank": 9,
       "id": "knight-885468a3-01",
       "name": "AI騎士_藿藿_01",
       "author": null,
@@ -682,450 +550,91 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1480.3,
-          "low": 1452.5,
-          "high": 1508
+          "rating": 1509.3,
+          "low": 1444.5,
+          "high": 1574
         },
         "red": {
-          "rating": 1483,
-          "low": 1447.8,
-          "high": 1518.2
+          "rating": 1469.3,
+          "low": 1386.2,
+          "high": 1552.4
         },
         "blue": {
-          "rating": 1477.5,
-          "low": 1434.7,
-          "high": 1520.3
+          "rating": 1549.2,
+          "low": 1450,
+          "high": 1648.4
         }
       },
-      "seats": 34194,
-      "games": 30118,
+      "seats": 5706,
+      "games": 5011,
       "red": {
-        "seats": 13763,
-        "winRate": 0.691
+        "seats": 2332,
+        "winRate": 0.699
       },
       "blue": {
-        "seats": 20431,
-        "winRate": 0.312
-      },
-      "assassin": {
-        "tries": 1877,
-        "hits": 848
-      }
-    },
-    {
-      "rank": 13,
-      "id": "knight-d7b16610-01",
-      "name": "AI騎士_尼克_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "穩健",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.95",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.95",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1479.3,
-          "low": 1451.6,
-          "high": 1506.9
-        },
-        "red": {
-          "rating": 1488.8,
-          "low": 1453.5,
-          "high": 1524.1
-        },
-        "blue": {
-          "rating": 1469.8,
-          "low": 1427.2,
-          "high": 1512.3
-        }
-      },
-      "seats": 34413,
-      "games": 30260,
-      "red": {
-        "seats": 13638,
-        "winRate": 0.693
-      },
-      "blue": {
-        "seats": 20775,
-        "winRate": 0.31
-      },
-      "assassin": {
-        "tries": 1872,
-        "hits": 860
-      }
-    },
-    {
-      "rank": 14,
-      "id": "knight-3f557abd-01",
-      "name": "AI騎士_發達_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "穩健",
-      "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
-      "knobs": [],
-      "rating": {
-        "overall": {
-          "rating": 1479.1,
-          "low": 1451.3,
-          "high": 1507
-        },
-        "red": {
-          "rating": 1496.7,
-          "low": 1461.3,
-          "high": 1532.1
-        },
-        "blue": {
-          "rating": 1461.6,
-          "low": 1418.8,
-          "high": 1504.4
-        }
-      },
-      "seats": 34229,
-      "games": 30205,
-      "red": {
-        "seats": 13659,
-        "winRate": 0.696
-      },
-      "blue": {
-        "seats": 20570,
+        "seats": 3374,
         "winRate": 0.308
       },
       "assassin": {
-        "tries": 1886,
-        "hits": 870
+        "tries": 299,
+        "hits": 132
       }
     },
     {
-      "rank": 15,
-      "id": "knight-c5d06842-01",
-      "name": "AI騎士_黑羊_01",
+      "rank": 10,
+      "id": "knight-c5-01",
+      "name": "AI騎士_C5_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
       "tag": "鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。",
       "knobs": [
         "evil.redR1Teammate=false",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.9",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.9"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1478,
-          "low": 1450.2,
-          "high": 1505.8
-        },
-        "red": {
-          "rating": 1490,
-          "low": 1454.7,
-          "high": 1525.3
-        },
-        "blue": {
-          "rating": 1465.9,
-          "low": 1423,
-          "high": 1508.8
-        }
-      },
-      "seats": 34053,
-      "games": 30048,
-      "red": {
-        "seats": 13702,
-        "winRate": 0.694
-      },
-      "blue": {
-        "seats": 20351,
-        "winRate": 0.309
-      },
-      "assassin": {
-        "tries": 1931,
-        "hits": 865
-      }
-    },
-    {
-      "rank": 16,
-      "id": "knight-hao-01",
-      "name": "AI騎士_HAO_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "藏鋒",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "merlin.merlinCover77=1",
         "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
+        "percival.goodBayesBad=0.9",
         "percival.goodBayesGoodKey=0.95",
         "percival.goodBayesBadKey=0.95",
         "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1476.5,
-          "low": 1449,
-          "high": 1504.1
-        },
-        "red": {
-          "rating": 1451.2,
-          "low": 1416.2,
-          "high": 1486.2
-        },
-        "blue": {
-          "rating": 1501.9,
-          "low": 1459.4,
-          "high": 1544.3
-        }
-      },
-      "seats": 34657,
-      "games": 30528,
-      "red": {
-        "seats": 13812,
-        "winRate": 0.682
-      },
-      "blue": {
-        "seats": 20845,
-        "winRate": 0.316
-      },
-      "assassin": {
-        "tries": 2037,
-        "hits": 896
-      }
-    },
-    {
-      "rank": 17,
-      "id": "knight-joy-01",
-      "name": "AI騎士_JOY_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "藏鋒",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "merlin.merlinCover77=1",
-        "percival.goodBayesGood=0.4",
-        "percival.goodBayesBad=0.95",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.4",
-        "loyal.goodBayesBad=0.95",
+        "loyal.goodBayesBad=0.9",
         "loyal.goodBayesGoodKey=0.95",
         "loyal.goodBayesBadKey=0.95",
         "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1474.3,
-          "low": 1446.7,
-          "high": 1502
+          "rating": 1509.2,
+          "low": 1444.9,
+          "high": 1573.4
         },
         "red": {
-          "rating": 1473.2,
-          "low": 1438.1,
-          "high": 1508.4
+          "rating": 1476.1,
+          "low": 1392.1,
+          "high": 1560.1
         },
         "blue": {
-          "rating": 1475.5,
-          "low": 1432.8,
-          "high": 1518.1
+          "rating": 1542.2,
+          "low": 1444.1,
+          "high": 1640.3
         }
       },
-      "seats": 34608,
-      "games": 30455,
+      "seats": 5743,
+      "games": 5088,
       "red": {
-        "seats": 13921,
-        "winRate": 0.688
+        "seats": 2279,
+        "winRate": 0.701
       },
       "blue": {
-        "seats": 20687,
-        "winRate": 0.311
+        "seats": 3464,
+        "winRate": 0.306
       },
       "assassin": {
-        "tries": 1891,
-        "hits": 809
+        "tries": 285,
+        "hits": 134
       }
     },
     {
-      "rank": 18,
-      "id": "knight-dal-01",
-      "name": "AI騎士_Dal_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "merlin.merlinNormalVote=0",
-        "merlin.merlinCover77=1",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.8",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.8",
-        "loyal.goodBayesBadKey=0.95"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1473.4,
-          "low": 1445.8,
-          "high": 1501.1
-        },
-        "red": {
-          "rating": 1463.3,
-          "low": 1428.2,
-          "high": 1498.5
-        },
-        "blue": {
-          "rating": 1483.5,
-          "low": 1440.7,
-          "high": 1526.2
-        }
-      },
-      "seats": 33999,
-      "games": 30070,
-      "red": {
-        "seats": 13666,
-        "winRate": 0.686
-      },
-      "blue": {
-        "seats": 20333,
-        "winRate": 0.313
-      },
-      "assassin": {
-        "tries": 1907,
-        "hits": 826
-      }
-    },
-    {
-      "rank": 19,
-      "id": "knight-sin-01",
-      "name": "AI騎士_Sin_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "percival.goodBayesGood=0.6",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.6",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1472.8,
-          "low": 1445.1,
-          "high": 1500.6
-        },
-        "red": {
-          "rating": 1473.8,
-          "low": 1438.5,
-          "high": 1509.1
-        },
-        "blue": {
-          "rating": 1471.9,
-          "low": 1429.2,
-          "high": 1514.5
-        }
-      },
-      "seats": 34338,
-      "games": 30176,
-      "red": {
-        "seats": 13618,
-        "winRate": 0.689
-      },
-      "blue": {
-        "seats": 20720,
-        "winRate": 0.311
-      },
-      "assassin": {
-        "tries": 1967,
-        "hits": 887
-      }
-    },
-    {
-      "rank": 20,
-      "id": "knight-dean-01",
-      "name": "AI騎士_Dean_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "藏鋒鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒鐵壁」：梅林比其他 AI騎士藏得深，藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；派西第 1 局當隊長會放一根拇指。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "merlin.merlinCover77=1",
-        "percival.goodBayesGood=0.9",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "percival.percivalNoThumbsR1=false",
-        "loyal.goodBayesGood=0.9",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1471.9,
-          "low": 1444.2,
-          "high": 1499.5
-        },
-        "red": {
-          "rating": 1477,
-          "low": 1441.9,
-          "high": 1512.1
-        },
-        "blue": {
-          "rating": 1466.8,
-          "low": 1424.1,
-          "high": 1509.4
-        }
-      },
-      "seats": 34337,
-      "games": 30174,
-      "red": {
-        "seats": 13809,
-        "winRate": 0.69
-      },
-      "blue": {
-        "seats": 20528,
-        "winRate": 0.309
-      },
-      "assassin": {
-        "tries": 1997,
-        "hits": 897
-      }
-    },
-    {
-      "rank": 21,
+      "rank": 11,
       "id": "knight-5b01f1bd-01",
       "name": "AI騎士_洋蔥_01",
       "author": null,
@@ -1146,89 +655,88 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1471.5,
-          "low": 1443.8,
-          "high": 1499.2
+          "rating": 1506.8,
+          "low": 1442.6,
+          "high": 1571
         },
         "red": {
-          "rating": 1467.3,
-          "low": 1432.1,
-          "high": 1502.5
+          "rating": 1419.8,
+          "low": 1336.7,
+          "high": 1502.8
         },
         "blue": {
-          "rating": 1475.7,
-          "low": 1432.8,
-          "high": 1518.5
+          "rating": 1593.8,
+          "low": 1496.4,
+          "high": 1691.3
         }
       },
-      "seats": 34178,
-      "games": 30157,
+      "seats": 5708,
+      "games": 5021,
       "red": {
-        "seats": 13769,
-        "winRate": 0.687
+        "seats": 2307,
+        "winRate": 0.684
       },
       "blue": {
-        "seats": 20409,
-        "winRate": 0.311
+        "seats": 3401,
+        "winRate": 0.319
       },
       "assassin": {
-        "tries": 1942,
-        "hits": 868
+        "tries": 322,
+        "hits": 141
       }
     },
     {
-      "rank": 22,
-      "id": "knight-ten-01",
-      "name": "AI騎士_TEN_01",
+      "rank": 12,
+      "id": "knight-c5d06842-01",
+      "name": "AI騎士_黑羊_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
-      "tag": "穩健",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "tag": "鐵壁",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
         "percival.goodBayesBad=0.99",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.9",
         "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.9"
       ],
       "rating": {
         "overall": {
-          "rating": 1470.5,
-          "low": 1442.7,
-          "high": 1498.2
+          "rating": 1505.9,
+          "low": 1441.1,
+          "high": 1570.7
         },
         "red": {
-          "rating": 1489.7,
-          "low": 1454.3,
-          "high": 1525.2
+          "rating": 1467.5,
+          "low": 1383.1,
+          "high": 1551.8
         },
         "blue": {
-          "rating": 1451.2,
-          "low": 1408.5,
-          "high": 1493.9
+          "rating": 1544.3,
+          "low": 1446.1,
+          "high": 1642.5
         }
       },
-      "seats": 34115,
-      "games": 30019,
+      "seats": 5693,
+      "games": 5001,
       "red": {
-        "seats": 13503,
-        "winRate": 0.693
+        "seats": 2240,
+        "winRate": 0.698
       },
       "blue": {
-        "seats": 20612,
-        "winRate": 0.306
+        "seats": 3453,
+        "winRate": 0.307
       },
       "assassin": {
-        "tries": 1842,
-        "hits": 828
+        "tries": 324,
+        "hits": 143
       }
     },
     {
-      "rank": 23,
+      "rank": 13,
       "id": "knight-146b7e9a-01",
       "name": "AI騎士_海月_01",
       "author": null,
@@ -1250,408 +758,270 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1469.7,
-          "low": 1442.1,
-          "high": 1497.4
+          "rating": 1504.9,
+          "low": 1440.5,
+          "high": 1569.3
         },
         "red": {
-          "rating": 1465.3,
-          "low": 1430.3,
-          "high": 1500.3
+          "rating": 1468,
+          "low": 1383.6,
+          "high": 1552.3
         },
         "blue": {
-          "rating": 1474.2,
-          "low": 1431.6,
-          "high": 1516.8
+          "rating": 1541.8,
+          "low": 1444.2,
+          "high": 1639.5
         }
       },
-      "seats": 34257,
-      "games": 30043,
+      "seats": 5713,
+      "games": 5019,
       "red": {
-        "seats": 13600,
-        "winRate": 0.686
+        "seats": 2259,
+        "winRate": 0.699
       },
       "blue": {
-        "seats": 20657,
-        "winRate": 0.311
-      },
-      "assassin": {
-        "tries": 1967,
-        "hits": 894
-      }
-    },
-    {
-      "rank": 24,
-      "id": "knight-04160113-01",
-      "name": "AI騎士_豬羊_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.7",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.7",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1469.5,
-          "low": 1441.8,
-          "high": 1497.2
-        },
-        "red": {
-          "rating": 1473.3,
-          "low": 1438.2,
-          "high": 1508.5
-        },
-        "blue": {
-          "rating": 1465.6,
-          "low": 1422.9,
-          "high": 1508.4
-        }
-      },
-      "seats": 34491,
-      "games": 30323,
-      "red": {
-        "seats": 13849,
-        "winRate": 0.688
-      },
-      "blue": {
-        "seats": 20642,
-        "winRate": 0.309
-      },
-      "assassin": {
-        "tries": 1906,
-        "hits": 800
-      }
-    },
-    {
-      "rank": 25,
-      "id": "knight-5843615b-01",
-      "name": "AI騎士_菜_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.6",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.6",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1468.7,
-          "low": 1440.9,
-          "high": 1496.5
-        },
-        "red": {
-          "rating": 1463.4,
-          "low": 1428.2,
-          "high": 1498.6
-        },
-        "blue": {
-          "rating": 1474,
-          "low": 1431.2,
-          "high": 1516.8
-        }
-      },
-      "seats": 33998,
-      "games": 29943,
-      "red": {
-        "seats": 13585,
-        "winRate": 0.686
-      },
-      "blue": {
-        "seats": 20413,
-        "winRate": 0.311
-      },
-      "assassin": {
-        "tries": 1933,
-        "hits": 857
-      }
-    },
-    {
-      "rank": 26,
-      "id": "knight-93eabbbc-01",
-      "name": "AI騎士_爾勵_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "穩健",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1467,
-          "low": 1439.2,
-          "high": 1494.9
-        },
-        "red": {
-          "rating": 1478.5,
-          "low": 1443.2,
-          "high": 1513.8
-        },
-        "blue": {
-          "rating": 1455.6,
-          "low": 1412.7,
-          "high": 1498.5
-        }
-      },
-      "seats": 34142,
-      "games": 30042,
-      "red": {
-        "seats": 13690,
-        "winRate": 0.69
-      },
-      "blue": {
-        "seats": 20452,
+        "seats": 3454,
         "winRate": 0.307
       },
       "assassin": {
-        "tries": 1875,
-        "hits": 837
+        "tries": 346,
+        "hits": 147
       }
     },
     {
-      "rank": 27,
-      "id": "knight-ed-01",
-      "name": "AI騎士_ED_01",
+      "rank": 14,
+      "id": "baike",
+      "name": "AI騎士_百科",
       "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "藏鋒",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "merlin.merlinCover77=1",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
+      "source": "reference",
+      "title": null,
+      "tag": null,
+      "style": "網站上正在跑的AI騎士_百科（目前訓練出來的引擎、正式預設，沒有改任何開關）。所有分數都以它為 1500。",
+      "knobs": [],
       "rating": {
         "overall": {
-          "rating": 1463.5,
-          "low": 1435.7,
-          "high": 1491.2
+          "rating": 1500,
+          "low": 1500,
+          "high": 1500
         },
         "red": {
-          "rating": 1468.1,
-          "low": 1432.9,
-          "high": 1503.2
+          "rating": 1500,
+          "low": 1500,
+          "high": 1500
         },
         "blue": {
-          "rating": 1458.9,
-          "low": 1416.1,
-          "high": 1501.6
+          "rating": 1500,
+          "low": 1500,
+          "high": 1500
         }
       },
-      "seats": 34184,
-      "games": 30097,
+      "seats": 5641,
+      "games": 4979,
       "red": {
-        "seats": 13709,
-        "winRate": 0.687
+        "seats": 2184,
+        "winRate": 0.713
       },
       "blue": {
-        "seats": 20475,
-        "winRate": 0.308
+        "seats": 3457,
+        "winRate": 0.295
       },
       "assassin": {
-        "tries": 2007,
-        "hits": 903
+        "tries": 311,
+        "hits": 153
       }
     },
     {
-      "rank": 28,
-      "id": "knight-lori-01",
-      "name": "AI騎士_Lori_01",
+      "rank": 15,
+      "id": "knight-kevin-01",
+      "name": "AI騎士_kevin_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
       "tag": "鐵壁",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.9",
-        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGood=0.6",
+        "percival.goodBayesBad=0.95",
         "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.9",
-        "loyal.goodBayesBad=0.99",
+        "percival.goodBayesBadKey=0.9",
+        "loyal.goodBayesGood=0.6",
+        "loyal.goodBayesBad=0.95",
         "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95"
+        "loyal.goodBayesBadKey=0.9",
+        "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1462.3,
-          "low": 1434.5,
-          "high": 1490.1
+          "rating": 1499,
+          "low": 1433.9,
+          "high": 1564.2
         },
         "red": {
-          "rating": 1476.7,
-          "low": 1441.5,
-          "high": 1511.9
+          "rating": 1493.2,
+          "low": 1409.2,
+          "high": 1577.3
         },
         "blue": {
-          "rating": 1447.9,
-          "low": 1405,
-          "high": 1490.8
+          "rating": 1504.9,
+          "low": 1406,
+          "high": 1603.7
         }
       },
-      "seats": 34298,
-      "games": 30185,
+      "seats": 5701,
+      "games": 5003,
       "red": {
-        "seats": 13859,
-        "winRate": 0.69
+        "seats": 2301,
+        "winRate": 0.707
       },
       "blue": {
-        "seats": 20439,
-        "winRate": 0.306
+        "seats": 3400,
+        "winRate": 0.299
       },
       "assassin": {
-        "tries": 1878,
-        "hits": 852
+        "tries": 330,
+        "hits": 163
       }
     },
     {
-      "rank": 29,
-      "id": "knight-liang-01",
-      "name": "AI騎士_Liang_01",
+      "rank": 16,
+      "id": "knight-3f557abd-01",
+      "name": "AI騎士_發達_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
       "tag": "穩健",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
+      "knobs": [],
+      "rating": {
+        "overall": {
+          "rating": 1498.7,
+          "low": 1434.6,
+          "high": 1562.8
+        },
+        "red": {
+          "rating": 1427.3,
+          "low": 1344.8,
+          "high": 1509.8
+        },
+        "blue": {
+          "rating": 1570,
+          "low": 1471.9,
+          "high": 1668.1
+        }
+      },
+      "seats": 5768,
+      "games": 5088,
+      "red": {
+        "seats": 2352,
+        "winRate": 0.687
+      },
+      "blue": {
+        "seats": 3416,
+        "winRate": 0.312
+      },
+      "assassin": {
+        "tries": 348,
+        "hits": 150
+      }
+    },
+    {
+      "rank": 17,
+      "id": "knight-c2312439-01",
+      "name": "AI騎士_轆_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "穩健",
+      "style": "依一位玩家自己的真人牌局擬合的打法。開關照百科AI；派隊、投票、任務牌、湖中、刺殺再用這位玩家自己的牌局重新打分（殘差層 v2）。",
+      "knobs": [],
+      "rating": {
+        "overall": {
+          "rating": 1498.7,
+          "low": 1433.5,
+          "high": 1563.9
+        },
+        "red": {
+          "rating": 1469,
+          "low": 1384.4,
+          "high": 1553.6
+        },
+        "blue": {
+          "rating": 1528.4,
+          "low": 1429.4,
+          "high": 1627.4
+        }
+      },
+      "seats": 5650,
+      "games": 4998,
+      "red": {
+        "seats": 2214,
+        "winRate": 0.699
+      },
+      "blue": {
+        "seats": 3436,
+        "winRate": 0.304
+      },
+      "assassin": {
+        "tries": 305,
+        "hits": 131
+      }
+    },
+    {
+      "rank": 18,
+      "id": "knight-d2c4009b-01",
+      "name": "AI騎士_大星_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
         "percival.goodBayesGood=0.5",
         "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesGoodKey=0.8",
         "percival.goodBayesBadKey=0.95",
         "loyal.goodBayesGood=0.5",
         "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesGoodKey=0.8",
         "loyal.goodBayesBadKey=0.95",
         "oberon.oberonR1AlwaysFail64=1"
       ],
       "rating": {
         "overall": {
-          "rating": 1459.9,
-          "low": 1432.2,
-          "high": 1487.6
+          "rating": 1498.6,
+          "low": 1433.9,
+          "high": 1563.3
         },
         "red": {
-          "rating": 1474.6,
-          "low": 1439.5,
-          "high": 1509.7
+          "rating": 1468.5,
+          "low": 1384.7,
+          "high": 1552.3
         },
         "blue": {
-          "rating": 1445.1,
-          "low": 1402.4,
-          "high": 1487.9
+          "rating": 1528.7,
+          "low": 1430.4,
+          "high": 1627
         }
       },
-      "seats": 34247,
-      "games": 30128,
+      "seats": 5700,
+      "games": 4997,
       "red": {
-        "seats": 13730,
-        "winRate": 0.689
+        "seats": 2241,
+        "winRate": 0.699
       },
       "blue": {
-        "seats": 20517,
-        "winRate": 0.305
-      },
-      "assassin": {
-        "tries": 1921,
-        "hits": 829
-      }
-    },
-    {
-      "rank": 30,
-      "id": "knight-e963f525-01",
-      "name": "AI騎士_豬豬_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.4",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.5",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.4",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.5",
-        "loyal.goodBayesBadKey=0.95"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1457.9,
-          "low": 1430.2,
-          "high": 1485.7
-        },
-        "red": {
-          "rating": 1476,
-          "low": 1441,
-          "high": 1511.1
-        },
-        "blue": {
-          "rating": 1439.9,
-          "low": 1397.1,
-          "high": 1482.7
-        }
-      },
-      "seats": 34415,
-      "games": 30244,
-      "red": {
-        "seats": 13845,
-        "winRate": 0.689
-      },
-      "blue": {
-        "seats": 20570,
+        "seats": 3459,
         "winRate": 0.304
       },
       "assassin": {
-        "tries": 1972,
-        "hits": 845
+        "tries": 314,
+        "hits": 146
       }
     },
     {
-      "rank": 31,
+      "rank": 19,
       "id": "knight-vash-01",
       "name": "AI騎士_Vash_01",
       "author": null,
@@ -1674,47 +1044,49 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1455.8,
-          "low": 1428,
-          "high": 1483.7
+          "rating": 1493.5,
+          "low": 1428.9,
+          "high": 1558.1
         },
         "red": {
-          "rating": 1472.3,
-          "low": 1436.8,
-          "high": 1507.7
+          "rating": 1418.2,
+          "low": 1334.9,
+          "high": 1501.4
         },
         "blue": {
-          "rating": 1439.4,
-          "low": 1396.5,
-          "high": 1482.3
+          "rating": 1568.8,
+          "low": 1469.8,
+          "high": 1667.8
         }
       },
-      "seats": 33960,
-      "games": 29993,
+      "seats": 5644,
+      "games": 4982,
       "red": {
-        "seats": 13427,
-        "winRate": 0.688
+        "seats": 2283,
+        "winRate": 0.683
       },
       "blue": {
-        "seats": 20533,
-        "winRate": 0.304
+        "seats": 3361,
+        "winRate": 0.312
       },
       "assassin": {
-        "tries": 1899,
-        "hits": 863
+        "tries": 324,
+        "hits": 146
       }
     },
     {
-      "rank": 32,
-      "id": "knight-d2c4009b-01",
-      "name": "AI騎士_大星_01",
+      "rank": 20,
+      "id": "knight-dal-01",
+      "name": "AI騎士_Dal_01",
       "author": null,
       "source": "house",
       "title": "AI騎士團",
       "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
       "knobs": [
         "evil.redR1Teammate=false",
+        "merlin.merlinNormalVote=0",
+        "merlin.merlinCover77=1",
         "percival.goodBayesGood=0.5",
         "percival.goodBayesBad=0.99",
         "percival.goodBayesGoodKey=0.8",
@@ -1722,149 +1094,42 @@
         "loyal.goodBayesGood=0.5",
         "loyal.goodBayesBad=0.99",
         "loyal.goodBayesGoodKey=0.8",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
+        "loyal.goodBayesBadKey=0.95"
       ],
       "rating": {
         "overall": {
-          "rating": 1455.1,
-          "low": 1427.3,
-          "high": 1482.8
+          "rating": 1492,
+          "low": 1427.7,
+          "high": 1556.3
         },
         "red": {
-          "rating": 1490.4,
-          "low": 1455.3,
-          "high": 1525.6
+          "rating": 1460.8,
+          "low": 1377.4,
+          "high": 1544.2
         },
         "blue": {
-          "rating": 1419.7,
-          "low": 1376.9,
-          "high": 1462.5
+          "rating": 1523.2,
+          "low": 1424.9,
+          "high": 1621.6
         }
       },
-      "seats": 34855,
-      "games": 30620,
+      "seats": 5759,
+      "games": 5069,
       "red": {
-        "seats": 13919,
-        "winRate": 0.694
+        "seats": 2289,
+        "winRate": 0.697
       },
       "blue": {
-        "seats": 20936,
-        "winRate": 0.3
+        "seats": 3470,
+        "winRate": 0.303
       },
       "assassin": {
-        "tries": 1960,
-        "hits": 891
+        "tries": 320,
+        "hits": 151
       }
     },
     {
-      "rank": 33,
-      "id": "knight-239ef7f4-01",
-      "name": "AI騎士_黃某人_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.4",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.95",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.4",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.95",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1454.5,
-          "low": 1426.7,
-          "high": 1482.2
-        },
-        "red": {
-          "rating": 1466.7,
-          "low": 1431.5,
-          "high": 1501.8
-        },
-        "blue": {
-          "rating": 1442.3,
-          "low": 1399.4,
-          "high": 1485.1
-        }
-      },
-      "seats": 34282,
-      "games": 30270,
-      "red": {
-        "seats": 13719,
-        "winRate": 0.687
-      },
-      "blue": {
-        "seats": 20563,
-        "winRate": 0.304
-      },
-      "assassin": {
-        "tries": 1904,
-        "hits": 796
-      }
-    },
-    {
-      "rank": 34,
-      "id": "knight-c583dbb3-01",
-      "name": "AI騎士_很乖_01",
-      "author": null,
-      "source": "house",
-      "title": "AI騎士團",
-      "tag": "寬容",
-      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
-      "knobs": [
-        "evil.redR1Teammate=false",
-        "percival.goodBayesGood=0.5",
-        "percival.goodBayesBad=0.99",
-        "percival.goodBayesGoodKey=0.7",
-        "percival.goodBayesBadKey=0.95",
-        "loyal.goodBayesGood=0.5",
-        "loyal.goodBayesBad=0.99",
-        "loyal.goodBayesGoodKey=0.7",
-        "loyal.goodBayesBadKey=0.95",
-        "oberon.oberonR1AlwaysFail64=1"
-      ],
-      "rating": {
-        "overall": {
-          "rating": 1454.5,
-          "low": 1426.7,
-          "high": 1482.3
-        },
-        "red": {
-          "rating": 1459.4,
-          "low": 1424.1,
-          "high": 1494.7
-        },
-        "blue": {
-          "rating": 1449.5,
-          "low": 1406.8,
-          "high": 1492.3
-        }
-      },
-      "seats": 34141,
-      "games": 30073,
-      "red": {
-        "seats": 13691,
-        "winRate": 0.684
-      },
-      "blue": {
-        "seats": 20450,
-        "winRate": 0.306
-      },
-      "assassin": {
-        "tries": 1947,
-        "hits": 835
-      }
-    },
-    {
-      "rank": 35,
+      "rank": 21,
       "id": "knight-emma-01",
       "name": "AI騎士_Emma_01",
       "author": null,
@@ -1890,34 +1155,769 @@
       ],
       "rating": {
         "overall": {
-          "rating": 1437.8,
-          "low": 1410.2,
-          "high": 1465.5
+          "rating": 1491.8,
+          "low": 1427.6,
+          "high": 1556.1
+        },
+        "red": {
+          "rating": 1416,
+          "low": 1333.6,
+          "high": 1498.5
+        },
+        "blue": {
+          "rating": 1567.7,
+          "low": 1469.2,
+          "high": 1666.1
+        }
+      },
+      "seats": 5778,
+      "games": 5112,
+      "red": {
+        "seats": 2316,
+        "winRate": 0.683
+      },
+      "blue": {
+        "seats": 3462,
+        "winRate": 0.311
+      },
+      "assassin": {
+        "tries": 301,
+        "hits": 127
+      }
+    },
+    {
+      "rank": 22,
+      "id": "example-cautious-blue",
+      "name": "保守藍方",
+      "author": null,
+      "source": "example",
+      "title": null,
+      "tag": null,
+      "style": "示範對手。藍方很難放行：一般局和關鍵局的投黑門檻都拉高，不在隊上幾乎都投黑；梅林早期派隊照忠臣，藏得更深。紅方照AI騎士。",
+      "knobs": [
+        "good.goodCleanVote=0.6",
+        "good.goodKeyVote=0.6",
+        "good.goodTailVote=0.85",
+        "merlin.merlinCover77=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1491.2,
+          "low": 1428,
+          "high": 1554.3
+        },
+        "red": {
+          "rating": 1394.1,
+          "low": 1311.6,
+          "high": 1476.6
+        },
+        "blue": {
+          "rating": 1588.3,
+          "low": 1492.1,
+          "high": 1684.5
+        }
+      },
+      "seats": 5828,
+      "games": 5109,
+      "red": {
+        "seats": 2278,
+        "winRate": 0.676
+      },
+      "blue": {
+        "seats": 3550,
+        "winRate": 0.317
+      },
+      "assassin": {
+        "tries": 292,
+        "hits": 110
+      }
+    },
+    {
+      "rank": 23,
+      "id": "knight-93eabbbc-01",
+      "name": "AI騎士_爾勵_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "穩健",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1489.5,
+          "low": 1423.8,
+          "high": 1555.3
+        },
+        "red": {
+          "rating": 1460.8,
+          "low": 1376.8,
+          "high": 1544.8
+        },
+        "blue": {
+          "rating": 1518.2,
+          "low": 1418.6,
+          "high": 1617.9
+        }
+      },
+      "seats": 5592,
+      "games": 4916,
+      "red": {
+        "seats": 2251,
+        "winRate": 0.696
+      },
+      "blue": {
+        "seats": 3341,
+        "winRate": 0.302
+      },
+      "assassin": {
+        "tries": 325,
+        "hits": 136
+      }
+    },
+    {
+      "rank": 24,
+      "id": "knight-hao-01",
+      "name": "AI騎士_HAO_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "藏鋒",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "merlin.merlinCover77=1",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1487.6,
+          "low": 1423,
+          "high": 1552.2
         },
         "red": {
           "rating": 1448,
-          "low": 1413.1,
-          "high": 1483
+          "low": 1364.2,
+          "high": 1531.8
         },
         "blue": {
-          "rating": 1427.7,
-          "low": 1384.8,
-          "high": 1470.5
+          "rating": 1527.2,
+          "low": 1428.4,
+          "high": 1626
         }
       },
-      "seats": 34398,
-      "games": 30326,
+      "seats": 5631,
+      "games": 4943,
       "red": {
-        "seats": 13777,
-        "winRate": 0.68
+        "seats": 2261,
+        "winRate": 0.693
       },
       "blue": {
-        "seats": 20621,
-        "winRate": 0.301
+        "seats": 3370,
+        "winRate": 0.304
       },
       "assassin": {
-        "tries": 2024,
-        "hits": 956
+        "tries": 310,
+        "hits": 151
+      }
+    },
+    {
+      "rank": 25,
+      "id": "knight-56320d35-01",
+      "name": "AI騎士_軒_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "鐵壁",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.95",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.8",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.95",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.8",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1486.8,
+          "low": 1422.9,
+          "high": 1550.7
+        },
+        "red": {
+          "rating": 1408.7,
+          "low": 1326.4,
+          "high": 1490.9
+        },
+        "blue": {
+          "rating": 1565,
+          "low": 1467.2,
+          "high": 1662.7
+        }
+      },
+      "seats": 5802,
+      "games": 5113,
+      "red": {
+        "seats": 2329,
+        "winRate": 0.681
+      },
+      "blue": {
+        "seats": 3473,
+        "winRate": 0.312
+      },
+      "assassin": {
+        "tries": 341,
+        "hits": 147
+      }
+    },
+    {
+      "rank": 26,
+      "id": "knight-04160113-01",
+      "name": "AI騎士_豬羊_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.7",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.7",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1483.1,
+          "low": 1418,
+          "high": 1548.1
+        },
+        "red": {
+          "rating": 1441.8,
+          "low": 1357.6,
+          "high": 1526
+        },
+        "blue": {
+          "rating": 1524.4,
+          "low": 1425.8,
+          "high": 1623
+        }
+      },
+      "seats": 5552,
+      "games": 4874,
+      "red": {
+        "seats": 2198,
+        "winRate": 0.691
+      },
+      "blue": {
+        "seats": 3354,
+        "winRate": 0.303
+      },
+      "assassin": {
+        "tries": 313,
+        "hits": 133
+      }
+    },
+    {
+      "rank": 27,
+      "id": "knight-e59066bf-01",
+      "name": "AI騎士_池_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "merlin.merlinNormalVote=0",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.5",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.5",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1478.3,
+          "low": 1413.9,
+          "high": 1542.7
+        },
+        "red": {
+          "rating": 1468.4,
+          "low": 1385.1,
+          "high": 1551.6
+        },
+        "blue": {
+          "rating": 1488.1,
+          "low": 1389.4,
+          "high": 1586.9
+        }
+      },
+      "seats": 5820,
+      "games": 5118,
+      "red": {
+        "seats": 2315,
+        "winRate": 0.699
+      },
+      "blue": {
+        "seats": 3505,
+        "winRate": 0.296
+      },
+      "assassin": {
+        "tries": 329,
+        "hits": 161
+      }
+    },
+    {
+      "rank": 28,
+      "id": "knight-dean-01",
+      "name": "AI騎士_Dean_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "藏鋒鐵壁",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒鐵壁」：梅林比其他 AI騎士藏得深，藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；派西第 1 局當隊長會放一根拇指。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "merlin.merlinCover77=1",
+        "percival.goodBayesGood=0.9",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "percival.percivalNoThumbsR1=false",
+        "loyal.goodBayesGood=0.9",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1478.2,
+          "low": 1413.4,
+          "high": 1542.9
+        },
+        "red": {
+          "rating": 1439.1,
+          "low": 1355,
+          "high": 1523.2
+        },
+        "blue": {
+          "rating": 1517.3,
+          "low": 1419.5,
+          "high": 1615.1
+        }
+      },
+      "seats": 5658,
+      "games": 4941,
+      "red": {
+        "seats": 2245,
+        "winRate": 0.69
+      },
+      "blue": {
+        "seats": 3413,
+        "winRate": 0.302
+      },
+      "assassin": {
+        "tries": 324,
+        "hits": 153
+      }
+    },
+    {
+      "rank": 29,
+      "id": "knight-lori-01",
+      "name": "AI騎士_Lori_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "鐵壁",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常投反對；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.9",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.9",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1477.6,
+          "low": 1413.2,
+          "high": 1542.1
+        },
+        "red": {
+          "rating": 1436.3,
+          "low": 1353.3,
+          "high": 1519.2
+        },
+        "blue": {
+          "rating": 1519,
+          "low": 1420.1,
+          "high": 1617.9
+        }
+      },
+      "seats": 5701,
+      "games": 5048,
+      "red": {
+        "seats": 2286,
+        "winRate": 0.689
+      },
+      "blue": {
+        "seats": 3415,
+        "winRate": 0.302
+      },
+      "assassin": {
+        "tries": 331,
+        "hits": 153
+      }
+    },
+    {
+      "rank": 30,
+      "id": "knight-5843615b-01",
+      "name": "AI騎士_菜_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.6",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.6",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1469.1,
+          "low": 1405.4,
+          "high": 1532.8
+        },
+        "red": {
+          "rating": 1375.7,
+          "low": 1293.2,
+          "high": 1458.3
+        },
+        "blue": {
+          "rating": 1562.5,
+          "low": 1464.7,
+          "high": 1660.2
+        }
+      },
+      "seats": 5847,
+      "games": 5147,
+      "red": {
+        "seats": 2316,
+        "winRate": 0.671
+      },
+      "blue": {
+        "seats": 3531,
+        "winRate": 0.311
+      },
+      "assassin": {
+        "tries": 322,
+        "hits": 142
+      }
+    },
+    {
+      "rank": 31,
+      "id": "knight-c583dbb3-01",
+      "name": "AI騎士_很乖_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "寬容",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「寬容」：藍方投票比其他 AI騎士鬆。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局比較願意放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.7",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.7",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1468.3,
+          "low": 1404.1,
+          "high": 1532.5
+        },
+        "red": {
+          "rating": 1462.6,
+          "low": 1379,
+          "high": 1546.2
+        },
+        "blue": {
+          "rating": 1474.1,
+          "low": 1376.3,
+          "high": 1571.8
+        }
+      },
+      "seats": 5845,
+      "games": 5131,
+      "red": {
+        "seats": 2309,
+        "winRate": 0.697
+      },
+      "blue": {
+        "seats": 3536,
+        "winRate": 0.293
+      },
+      "assassin": {
+        "tries": 336,
+        "hits": 160
+      }
+    },
+    {
+      "rank": 32,
+      "id": "knight-sin-01",
+      "name": "AI騎士_Sin_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "鐵壁",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「鐵壁」：藍方投票比其他 AI騎士嚴。和百科AI 不同的地方：忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "percival.goodBayesGood=0.6",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.6",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1467.5,
+          "low": 1402.4,
+          "high": 1532.7
+        },
+        "red": {
+          "rating": 1469,
+          "low": 1385.3,
+          "high": 1552.8
+        },
+        "blue": {
+          "rating": 1466,
+          "low": 1366.2,
+          "high": 1565.9
+        }
+      },
+      "seats": 5670,
+      "games": 5023,
+      "red": {
+        "seats": 2309,
+        "winRate": 0.699
+      },
+      "blue": {
+        "seats": 3361,
+        "winRate": 0.292
+      },
+      "assassin": {
+        "tries": 318,
+        "hits": 134
+      }
+    },
+    {
+      "rank": 33,
+      "id": "knight-ed-01",
+      "name": "AI騎士_ED_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "藏鋒",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「藏鋒」：梅林比其他 AI騎士藏得深。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 1、2 局約 100% 的提議照忠臣的派法（藏得比較深）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "merlin.merlinCover77=1",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1463.1,
+          "low": 1399.1,
+          "high": 1527.1
+        },
+        "red": {
+          "rating": 1418.2,
+          "low": 1335.3,
+          "high": 1501.2
+        },
+        "blue": {
+          "rating": 1508,
+          "low": 1409.6,
+          "high": 1606.4
+        }
+      },
+      "seats": 5744,
+      "games": 5084,
+      "red": {
+        "seats": 2303,
+        "winRate": 0.683
+      },
+      "blue": {
+        "seats": 3441,
+        "winRate": 0.3
+      },
+      "assassin": {
+        "tries": 346,
+        "hits": 181
+      }
+    },
+    {
+      "rank": 34,
+      "id": "knight-ten-01",
+      "name": "AI騎士_TEN_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "穩健",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「穩健」：各方面都接近其他 AI騎士。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在關鍵局在隊上很少內黑；奧伯倫第 1 局上任務約 100% 直接出失敗。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesBadKey=0.95",
+        "oberon.oberonR1AlwaysFail64=1"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1450.2,
+          "low": 1385.1,
+          "high": 1515.3
+        },
+        "red": {
+          "rating": 1438.1,
+          "low": 1354.7,
+          "high": 1521.6
+        },
+        "blue": {
+          "rating": 1462.2,
+          "low": 1362.3,
+          "high": 1562.1
+        }
+      },
+      "seats": 5634,
+      "games": 4961,
+      "red": {
+        "seats": 2285,
+        "winRate": 0.69
+      },
+      "blue": {
+        "seats": 3349,
+        "winRate": 0.291
+      },
+      "assassin": {
+        "tries": 298,
+        "hits": 145
+      }
+    },
+    {
+      "rank": 35,
+      "id": "knight-3cc9e075-01",
+      "name": "AI騎士_雪怪_01",
+      "author": null,
+      "source": "house",
+      "title": "AI騎士團",
+      "tag": "明燈",
+      "style": "依一位玩家自己的真人牌局擬合的打法。風格「明燈」：梅林比其他 AI騎士更常照自己看到的紅投票。和百科AI 不同的地方：紅方第 1 局當隊長不帶隊友；梅林第 3 局起約 100% 的票照自己看到的紅投（比較明顯）；忠臣和派西第 3 局起不在隊上更常放行；忠臣和派西第 3 局起在隊上很少內黑；忠臣和派西在紅方再贏一局就輸的關鍵局更不敢放行；忠臣和派西在關鍵局在隊上很少內黑。其他照百科AI。 另帶這位玩家的殘差層（v2）：每個動作再用他自己的牌局重新打分。",
+      "knobs": [
+        "evil.redR1Teammate=false",
+        "merlin.merlinNormalVote=0",
+        "percival.goodBayesGood=0.5",
+        "percival.goodBayesBad=0.99",
+        "percival.goodBayesGoodKey=0.95",
+        "percival.goodBayesBadKey=0.95",
+        "loyal.goodBayesGood=0.5",
+        "loyal.goodBayesBad=0.99",
+        "loyal.goodBayesGoodKey=0.95",
+        "loyal.goodBayesBadKey=0.95"
+      ],
+      "rating": {
+        "overall": {
+          "rating": 1441.6,
+          "low": 1376.4,
+          "high": 1506.7
+        },
+        "red": {
+          "rating": 1449,
+          "low": 1365.3,
+          "high": 1532.7
+        },
+        "blue": {
+          "rating": 1434.1,
+          "low": 1334.7,
+          "high": 1533.5
+        }
+      },
+      "seats": 5664,
+      "games": 4993,
+      "red": {
+        "seats": 2246,
+        "winRate": 0.694
+      },
+      "blue": {
+        "seats": 3418,
+        "winRate": 0.285
+      },
+      "assassin": {
+        "tries": 321,
+        "hits": 131
       }
     }
   ],
@@ -2098,124 +2098,124 @@
   ],
   "daily": {
     "date": "2026-11-27",
-    "kind": "daily",
-    "gamesToday": 220000,
-    "runsToday": 6,
-    "gamesTotal": 220000,
-    "shards": 12,
+    "kind": "push",
+    "gamesToday": 240000,
+    "runsToday": 7,
+    "gamesTotal": 240000,
+    "shards": 4,
     "missingGames": 0,
-    "gamesPerSecPerRunner": 3.39,
-    "slowestShardSec": 4166.3
+    "gamesPerSecPerRunner": 4.27,
+    "slowestShardSec": 2017.3
   },
   "trend": {
     "dates": [
       "2026-11-27"
     ],
     "ratings": {
+      "knight-239ef7f4-01": [
+        1546
+      ],
+      "huohuo": [
+        1539
+      ],
+      "example-aggressive-red": [
+        1525
+      ],
+      "knight-joy-01": [
+        1522
+      ],
+      "knight-e963f525-01": [
+        1518
+      ],
+      "knight-d7b16610-01": [
+        1516
+      ],
+      "knight-2ee2cbf1-01": [
+        1516
+      ],
+      "knight-liang-01": [
+        1510
+      ],
+      "knight-885468a3-01": [
+        1509
+      ],
+      "knight-c5-01": [
+        1509
+      ],
+      "knight-5b01f1bd-01": [
+        1507
+      ],
+      "knight-c5d06842-01": [
+        1506
+      ],
+      "knight-146b7e9a-01": [
+        1505
+      ],
       "baike": [
         1500
       ],
-      "knight-c5-01": [
-        1495
-      ],
-      "huohuo": [
-        1494
-      ],
-      "example-aggressive-red": [
-        1492
-      ],
-      "knight-e59066bf-01": [
-        1490
-      ],
-      "example-cautious-blue": [
-        1487
-      ],
-      "knight-56320d35-01": [
-        1485
-      ],
-      "knight-2ee2cbf1-01": [
-        1485
-      ],
       "knight-kevin-01": [
-        1482
-      ],
-      "knight-3cc9e075-01": [
-        1481
-      ],
-      "knight-c2312439-01": [
-        1481
-      ],
-      "knight-885468a3-01": [
-        1480
-      ],
-      "knight-d7b16610-01": [
-        1479
+        1499
       ],
       "knight-3f557abd-01": [
-        1479
+        1499
       ],
-      "knight-c5d06842-01": [
-        1478
+      "knight-c2312439-01": [
+        1499
       ],
-      "knight-hao-01": [
-        1477
+      "knight-d2c4009b-01": [
+        1499
       ],
-      "knight-joy-01": [
-        1474
+      "knight-vash-01": [
+        1494
       ],
       "knight-dal-01": [
-        1473
+        1492
       ],
-      "knight-sin-01": [
-        1473
+      "knight-emma-01": [
+        1492
       ],
-      "knight-dean-01": [
-        1472
+      "example-cautious-blue": [
+        1491
       ],
-      "knight-5b01f1bd-01": [
-        1472
+      "knight-93eabbbc-01": [
+        1490
       ],
-      "knight-ten-01": [
-        1471
+      "knight-hao-01": [
+        1488
       ],
-      "knight-146b7e9a-01": [
-        1470
+      "knight-56320d35-01": [
+        1487
       ],
       "knight-04160113-01": [
-        1470
+        1483
+      ],
+      "knight-e59066bf-01": [
+        1478
+      ],
+      "knight-dean-01": [
+        1478
+      ],
+      "knight-lori-01": [
+        1478
       ],
       "knight-5843615b-01": [
         1469
       ],
-      "knight-93eabbbc-01": [
-        1467
+      "knight-c583dbb3-01": [
+        1468
+      ],
+      "knight-sin-01": [
+        1468
       ],
       "knight-ed-01": [
-        1464
+        1463
       ],
-      "knight-lori-01": [
-        1462
+      "knight-ten-01": [
+        1450
       ],
-      "knight-liang-01": [
-        1460
-      ],
-      "knight-e963f525-01": [
-        1458
-      ],
-      "knight-vash-01": [
-        1456
-      ],
-      "knight-d2c4009b-01": [
-        1455
-      ],
-      "knight-239ef7f4-01": [
-        1455
-      ],
-      "knight-c583dbb3-01": [
-        1455
-      ],
-      "knight-emma-01": [
-        1438
+      "knight-3cc9e075-01": [
+        1442
       ]
     }
   }
