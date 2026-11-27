@@ -3,9 +3,9 @@
  * AI騎士 精準度 v2，第 1 步：重播、抽特徵（站長 2026-11-26「80% 不夠像…要切每個動作來看」）。
  * 第 2 步（擬合、各動作的一致度、寫進 profile）在 `scripts/knightFidelityFit.ts`。
  *
- *   cd packages/server && npx tsx scripts/knightFidelity.ts --out /repo 外的資料夾 [--workers 2] [--only 玩家ID]
+ *   cd packages/server && npx tsx scripts/knightFidelity.ts --out /repo 外的資料夾 [--workers 2] [--only 玩家ID] [--include ID[=名字]]
  *
- * 入選玩家同 v1（`scripts/styleKnights.ts` 的 `selectPlayers`：總場數 ≥ 250 或強者）。每位玩家坐過的每個座位，
+ * 入選玩家同 v1（`scripts/styleKnights.ts` 的 `selectPlayers`：總場數 ≥ 250 或強者；`--include` 同 v1，點名加人）。每位玩家坐過的每個座位，
  * 同一套重播（`agreement.replaySeat`：只給那個座位當時知道的東西，每個決策點獨立，之後照真人牌譜走）跑兩隻引擎：
  *   D = 百科AI 本身（預設開關）；K = 那位玩家的 v1 AI騎士（`community-bots/_knights` 的 profile；沒有就 = D）。
  * 每個決策點記下：真人的選擇、D 和 K 的選擇、殘差層的特徵（`src/arena/residual.ts`，用 K 的開關算，`eng` = K 的決定）。
@@ -38,6 +38,7 @@ interface Args {
   out?: string;
   workers: number;
   only: string[];
+  include: string[];
   dataset: string;
   shard?: [number, number];
   jobs?: string;
@@ -46,7 +47,7 @@ interface Args {
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { workers: 2, only: [], dataset: path.join(SERVER, 'games_cache.json') };
+  const a: Args = { workers: 2, only: [], include: [], dataset: path.join(SERVER, 'games_cache.json') };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const next = (): string => { const v = argv[++i]; if (v === undefined) throw new Error(`${k} needs a value`); return v; };
@@ -54,6 +55,7 @@ function parseArgs(argv: string[]): Args {
       case '--out': a.out = path.resolve(next()); break;
       case '--workers': a.workers = Math.max(1, Number.parseInt(next(), 10)); break;
       case '--only': a.only.push(next()); break;
+      case '--include': a.include.push(next()); break;
       case '--dataset': a.dataset = path.resolve(next()); break;
       case '--shard': { const [x, n] = next().split('/').map((v) => Number.parseInt(v, 10)); a.shard = [x, n]; break; }
       case '--jobs': a.jobs = next(); break;
@@ -230,7 +232,7 @@ async function main(): Promise<void> {
   if (isInside(a.out, REPO)) throw new Error(`--out must be outside the repo (${REPO})`);
   fs.mkdirSync(a.out, { recursive: true });
   const ds = loadJson<Dataset>(a.dataset);
-  const v1 = parseV1Args(['--dataset', a.dataset]);
+  const v1 = parseV1Args(['--dataset', a.dataset, ...a.include.flatMap((x) => ['--include', x])]);
   const { selected, jobs: v1Jobs } = selectPlayers(v1, ds);
   const iId = ds.fields.indexOf('id');
   const iDate = ds.fields.indexOf('date');
