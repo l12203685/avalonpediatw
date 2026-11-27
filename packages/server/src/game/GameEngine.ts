@@ -101,6 +101,11 @@ export interface PracticeAssignment {
   role?: Role;
   /** Skip the per-event console log line (practice games are never recorded). */
   quietEventLog?: boolean;
+  /**
+   * Bot ids in the seat order the player lined up (practice「一隻一隻召喚」): after the random shuffle and the human's
+   * seat, the bots fill the other seats in this order. Ignored unless it lists exactly the room's bots.
+   */
+  botOrder?: string[];
 }
 
 export class GameEngine {
@@ -185,10 +190,31 @@ export class GameEngine {
     return this.practice !== null;
   }
 
-  /** Practice rooms: move the human to the requested seat (swap with whoever sits there). */
+  /**
+   * Practice rooms: move the human to the requested seat (swap with whoever sits there); with `botOrder`, the bots then
+   * sit in the lined-up order around the human (the human keeps the requested or the shuffled seat).
+   */
   private applyPracticeSeat(): void {
     const a = this.practice;
-    if (!a || a.seatIndex === undefined) return;
+    if (!a) return;
+    const order = a.botOrder;
+    if (order) {
+      const ids = Object.keys(this.room.players);
+      const others = ids.filter((id) => id !== a.playerId);
+      const valid = ids.includes(a.playerId) && order.length === others.length && new Set(order).size === order.length
+        && order.every((id) => others.includes(id));
+      if (valid) {
+        const at = a.seatIndex !== undefined && Number.isInteger(a.seatIndex) && a.seatIndex >= 0 && a.seatIndex < ids.length
+          ? a.seatIndex : ids.indexOf(a.playerId);
+        const seated = [...order];
+        seated.splice(at, 0, a.playerId);
+        const reordered: Record<string, typeof this.room.players[string]> = {};
+        for (const id of seated) reordered[id] = this.room.players[id];
+        this.room.players = reordered;
+        return;
+      }
+    }
+    if (a.seatIndex === undefined) return;
     const ids = Object.keys(this.room.players);
     const from = ids.indexOf(a.playerId);
     const to = a.seatIndex;

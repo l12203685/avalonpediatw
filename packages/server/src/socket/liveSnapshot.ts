@@ -11,8 +11,8 @@
  *   還不在，也先看一次存檔（ensureRoom）。讀到就把房間接回來（GameServer.restoreLiveSnapshot：房間、引擎、計時器剩下
  *   的時間、機器人、練習紀錄），然後把存檔清空（不會被讀第二次）。超過 15 分鐘的存檔不讀。
  *
- * 存檔裡：房間（含角色、票、任務、湖中）、引擎的內部狀態、計時器還剩多久、房間密碼、機器人的策略層、開局時間、練習房的
- * 決策紀錄。整份加密，只在私人試算表；log 只有數字。
+ * 存檔裡：房間（含角色、票、任務、湖中）、引擎的內部狀態、計時器還剩多久、房間密碼、機器人的策略層與指定的 AI騎士、開局時間、
+ * 練習房的決策紀錄。整份加密，只在私人試算表；log 只有數字。
  */
 import type { Room } from '@avalon/shared';
 import type { GameEngineState, PracticeAssignment } from '../game/GameEngine';
@@ -43,8 +43,11 @@ export interface LiveRoomSnapshot {
   /** 這個階段的計時器還剩多久（null＝沒在跑：無限思考時間、棋瓦）。 */
   timerRemainingMs: number | null;
   password: string | null;
-  /** 機器人：id 與策略層（null＝基準線）。 */
-  bots: Array<{ id: string; profile: string | null }>;
+  /**
+   * 機器人：id、策略層（null＝基準線）、指定的 AI騎士（名冊 id；null＝沒指定＝百科）。
+   * `knight` 是後來加的：舊版存的檔沒有這一欄，讀成 null（和以前一樣接回百科）。
+   */
+  bots: Array<{ id: string; profile: string | null; knight: string | null }>;
   startedAt: number | null;
   /** 玩家 id → supabase id（戰績寫入用；正式機沒設定 supabase 時是空的）。 */
   supabaseIds: Record<string, string>;
@@ -77,7 +80,9 @@ export function parseLiveSnapshot(json: unknown, now: number, maxAgeMs = LIVE_SN
       timerRemainingMs: typeof r.timerRemainingMs === 'number' && Number.isFinite(r.timerRemainingMs) ? r.timerRemainingMs : null,
       password: typeof r.password === 'string' && r.password ? r.password : null,
       bots: Array.isArray(r.bots)
-        ? (r.bots as unknown[]).flatMap((b) => (isObj(b) && typeof b.id === 'string' ? [{ id: b.id, profile: typeof b.profile === 'string' ? b.profile : null }] : []))
+        ? (r.bots as unknown[]).flatMap((b) => (isObj(b) && typeof b.id === 'string'
+          ? [{ id: b.id, profile: typeof b.profile === 'string' ? b.profile : null, knight: typeof b.knight === 'string' && b.knight ? b.knight : null }]
+          : []))
         : [],
       startedAt: typeof r.startedAt === 'number' ? r.startedAt : null,
       supabaseIds: isObj(r.supabaseIds)

@@ -18,6 +18,7 @@ import type { GameEngine } from '../game/GameEngine';
 import type { RoomManager } from '../game/RoomManager';
 import type { PracticeSessions } from '../practice/PracticeSessions';
 import { HeuristicAgent } from '../ai/HeuristicAgent';
+import { DEFAULT_KNIGHT_ID, knightTuningOverrides } from '../arena/knights';
 import type { AvalonAgent } from '../ai/types';
 import type { SheetTab, CellValue } from '../bots/digest/sheets';
 import {
@@ -175,11 +176,13 @@ interface Internals {
   roomManager: RoomManager;
   gameEngines: Map<string, GameEngine>;
   botAgents: Map<string, AvalonAgent>;
+  botKnights: Map<string, string>;
   practice: PracticeSessions;
   roomStartTimes: Map<string, number>;
   restoredGreeting: Map<string, Set<string>>;
   frozen: boolean;
-  addBotToRoom(room: Room): string;
+  addBotToRoom(room: Room, knightId?: string): string;
+  applyOpponentProfile(room: Room): unknown;
   createGameEngine(roomId: string, room: Room): GameEngine;
   handleJoinRoom(socket: unknown, roomId: string, user: unknown, password?: string): void;
 }
@@ -422,6 +425,58 @@ describe('對局房間：每個階段存下來、另一台接回來', () => {
     expect(B.s.practice.get('P-1')?.entries).toHaveLength(1);
     expect(B.s.gameEngines.get('P-1')!.isPractice()).toBe(true);
     expect(B.server.liveCounts()).toMatchObject({ practiceInGame: 1, roomsInGame: 0 });
+  });
+
+  it('指定的 AI騎士 一起接回來（名字、騎士、這一局的開關），不會變回百科；舊存檔沒有騎士欄位＝百科；名冊裡沒有的騎士＝百科', async () => {
+    const ED = 'knight-ed-01';
+    const A = makeServer();
+    const room = A.s.roomManager.createRoom('R-knight', '真人', HUMAN);
+    const ed = [A.s.addBotToRoom(room, ED), A.s.addBotToRoom(room, ED)];
+    const plain = [A.s.addBotToRoom(room), A.s.addBotToRoom(room)];
+    const engine = A.s.createGameEngine('R-knight', room);
+    A.s.gameEngines.set('R-knight', engine);
+    engine.startGame();
+    A.s.applyOpponentProfile(room); // 開局：騎士的開關照角色、陣營蓋上去
+    propose(room, engine);
+    const namesBefore = Object.fromEntries(Object.values(room.players).map((p) => [p.id, p.name]));
+    const tuningOf = (s: Internals, id: string): unknown => JSON.parse(JSON.stringify((s.botAgents.get(id) as HeuristicAgent).tuning));
+    const snap = A.server.buildLiveSnapshot(Date.now());
+    expect(snap.rooms[0].bots.filter((b) => b.knight === ED).map((b) => b.id).sort()).toEqual([...ed].sort());
+
+    const B = makeServer();
+    const { restored } = await handOver(A.server as Internals & GameServer, B.server);
+    expect(restored).toBe(1);
+    const r2 = B.s.roomManager.getRoom('R-knight')!;
+    expect(Object.fromEntries(Object.values(r2.players).map((p) => [p.id, p.name]))).toEqual(namesBefore);
+    for (const id of ed) {
+      expect(B.s.botKnights.get(id)).toBe(ED);
+      const p = r2.players[id];
+      const team = p.team === 'evil' ? 'evil' : 'good';
+      // 和舊的那台一模一樣（策略層＋騎士的開關），而且騎士在這個角色、陣營的每個開關都在
+      expect(tuningOf(B.s, id)).toEqual(tuningOf(A.s, id));
+      const tuning = tuningOf(B.s, id) as Record<string, unknown>;
+      for (const [k, v] of Object.entries(knightTuningOverrides(ED, p.role, team))) expect(tuning[k]).toBe(v);
+    }
+    for (const id of plain) {
+      expect(B.s.botKnights.get(id)).toBe(A.s.botKnights.get(id));
+      expect(tuningOf(B.s, id)).toEqual(tuningOf(A.s, id));
+    }
+
+    // 舊版存的檔（沒有 knight 欄位）：照以前接回百科。
+    const old = JSON.parse(JSON.stringify(snap)) as LiveSnapshotFile;
+    for (const b of old.rooms[0].bots) delete (b as { knight?: string | null }).knight;
+    const parsedOld = parseLiveSnapshot(old, Date.now());
+    expect(parsedOld.file?.rooms[0].bots.every((b) => b.knight === null)).toBe(true);
+    const C = makeServer();
+    expect(C.server.restoreLiveSnapshot(parsedOld.file!)).toBe(1);
+    for (const id of ed) expect(C.s.botKnights.has(id)).toBe(false);
+
+    // 名冊裡已經沒有的騎士（換版時拿掉了）：退回百科，房間照樣接回來。
+    const gone = JSON.parse(JSON.stringify(snap)) as LiveSnapshotFile;
+    for (const b of gone.rooms[0].bots) if (b.knight === ED) b.knight = 'knight-removed-99';
+    const D = makeServer();
+    expect(D.server.restoreLiveSnapshot(parseLiveSnapshot(gone, Date.now()).file!)).toBe(1);
+    for (const id of ed) expect(D.s.botKnights.get(id)).toBe(DEFAULT_KNIGHT_ID);
   });
 
   it('真人連回來：回到同一間、同一個座位，私下收到「伺服器更新完成，已恢復進度」（只收一次）', async () => {

@@ -10,6 +10,7 @@ import { Flag, Check, ChevronDown, ChevronUp, Loader2, MessageSquare, RotateCcw 
 import '../../i18n/practice';
 import { PRACTICE_NS } from '../../i18n/practice';
 import { usePracticeStore } from '../../store/practiceStore';
+import { knightShortName } from '../../services/knights';
 import PracticeExploitAsk, { END_CARD_TEXT_ID, isExploitAskMuted } from './PracticeExploitAsk';
 import {
   fetchPracticeTrace,
@@ -154,6 +155,9 @@ function ReviewBody({ trace, currentPlayerId, botSeat, setBotSeat, kind, setKind
   }, [filtered, t]);
 
   const me = trace.seats.find((s) => s.playerId === currentPlayerId);
+  // 這局的機器人是哪幾位 AI騎士（舊版伺服器沒有 knightName：不顯示）。
+  const knightNames = [...new Set(bots.map((s) => s.knightName).filter((n): n is string => Boolean(n)))];
+  const knightLine = knightNames.length === 1 ? t('knightSummary', { name: knightNames[0] }) : knightNames.length > 1 ? t('knightSummaryMix') : '';
   // 「整局回饋（不限某一步）」：局後那一題還開著就跳到它的文字框，不然打開同一個流程（source=whole-game）。
   const exploitDone = usePracticeStore((s) => Boolean(s.exploitDone[trace.roomId])) || trace.exploitAsk?.done === true;
   const [wholeOpen, setWholeOpen] = useState(0);
@@ -192,6 +196,7 @@ function ReviewBody({ trace, currentPlayerId, botSeat, setBotSeat, kind, setKind
           {me ? ` · ${t('you')}：${seatText(me.seat)} ${me.role ? t(`role.${me.role}`) : ''}` : ''}
           {trace.canFlag ? ` · ${t('flagsLeft', { count: trace.flagsLeft })}` : ''}
         </p>
+        {knightLine && <p className="text-[11px] text-emerald-200/90" data-testid="practice-review-knights">{knightLine}</p>}
         {!trace.canFlag && trace.flagUnavailableReason && (
           <p className="text-[11px] text-amber-300/90">{trace.flagUnavailableReason}</p>
         )}
@@ -288,6 +293,7 @@ function SeatChip({ seat, isMe }: { seat: PracticeSeatInfo; isMe: boolean }): JS
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${teamTone(seat.team)} ${isMe ? 'ring-2 ring-amber-400' : ''}`}>
       <span className="font-mono font-bold">{seat.seat === 10 ? '0' : seat.seat}</span>
       <span>{seat.role ? t(`role.${seat.role}`) : '?'}</span>
+      {seat.knightName && <span className="opacity-80" title={seat.knightName}>{knightShortName(seat.knightName)}</span>}
       {isMe && <span className="font-semibold text-amber-300">{t('you')}</span>}
     </span>
   );
@@ -342,6 +348,9 @@ function EntryCard({ entry, trace, seat }: { entry: PracticeTraceEntry; trace: P
       <header className="flex flex-wrap items-center gap-1.5 text-xs">
         <span className="rounded bg-black/40 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-200">{t(`kind.${entry.kind}`)}</span>
         <span className="font-bold">{seatText(entry.botSeat)} {t(`role.${seat?.role ?? entry.botRole}`)}</span>
+        {seat?.knightName && (
+          <span className="text-[10px] text-zinc-300">{seat.name.startsWith(seat.knightName) ? seat.name : seat.knightName}</span>
+        )}
         <span className="text-white font-semibold">→ {entry.action}</span>
         {entry.source === 'fallback' && (
           <span className="rounded bg-amber-900/60 px-1.5 py-0.5 text-[10px] text-amber-200">{t('fallback')}</span>
