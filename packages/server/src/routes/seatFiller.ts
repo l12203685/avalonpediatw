@@ -85,9 +85,12 @@ function reply(res: Response, status: number, code: string, message: string): vo
 const router: IRouter = Router();
 
 router.post('/', burstLimit, async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as { room?: unknown; bots?: unknown; password?: unknown };
+  const body = (req.body ?? {}) as { room?: unknown; bots?: unknown; password?: unknown; knights?: unknown };
   const bots = typeof body.bots === 'number' ? body.bots : asText(body.bots);
-  const parsed = parseSeatFillerArgs(asText(body.room) ?? '', bots ?? null, asText(body.password) ?? null);
+  const knights = Array.isArray(body.knights)
+    ? body.knights.filter((x): x is string => typeof x === 'string')
+    : asText(body.knights) ?? null;
+  const parsed = parseSeatFillerArgs(asText(body.room) ?? '', bots ?? null, asText(body.password) ?? null, knights);
   if (!parsed.ok) return reply(res, 400, parsed.error, formatSeatFillerParseError(parsed.error, 'web'));
 
   const dispatcher = getSignagePlayerDispatcher();

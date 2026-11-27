@@ -17,7 +17,8 @@ export async function handleSeatFillerCommand(interaction: ChatInputCommandInter
   const room = interaction.options.getString(SEAT_FILLER_OPTIONS.ROOM, true) ?? '';
   const bots = interaction.options.getString(SEAT_FILLER_OPTIONS.BOTS, false);
   const password = interaction.options.getString(SEAT_FILLER_OPTIONS.PASSWORD, false);
-  const parsed = parseSeatFillerArgs(room, bots, password);
+  const knights = interaction.options.getString(SEAT_FILLER_OPTIONS.KNIGHTS, false);
+  const parsed = parseSeatFillerArgs(room, bots, password, knights);
   if (!parsed.ok) {
     await interaction.reply({ content: formatSeatFillerParseError(parsed.error, 'discord'), flags: MessageFlags.Ephemeral });
     return;

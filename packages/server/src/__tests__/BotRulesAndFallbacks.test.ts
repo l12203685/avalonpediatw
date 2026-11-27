@@ -215,7 +215,7 @@ describe('/規則、/角色、/補位：兩邊同一個打法（2026-11-25 第�
     expect(long).toBeDefined();
     expect(zh?.options).toEqual(long?.options);
     expect(zh?.description).toBe(long?.description);
-    expect(zh?.options?.map((o) => o.name)).toEqual([SEAT_FILLER_OPTIONS.ROOM, SEAT_FILLER_OPTIONS.BOTS, SEAT_FILLER_OPTIONS.PASSWORD]);
+    expect(zh?.options?.map((o) => o.name)).toEqual([SEAT_FILLER_OPTIONS.ROOM, SEAT_FILLER_OPTIONS.BOTS, SEAT_FILLER_OPTIONS.PASSWORD, SEAT_FILLER_OPTIONS.KNIGHTS]);
     expect(RELAYED_DISCORD_COMMANDS.has(COMMANDS.SEAT_FILLER_ZH)).toBe(true);
     expect(RELAYED_DISCORD_COMMANDS.has(COMMANDS.SEAT_FILLER)).toBe(true);
   });

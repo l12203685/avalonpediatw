@@ -41,6 +41,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { HeuristicAgent } from '../src/ai/HeuristicAgent';
+import { DEFAULT_KNIGHT_ID, createKnightAgent, getKnight, resolveKnightRef } from '../src/arena/knights';
 import { OPPONENT_LABEL, PROFILE_OVERRIDES, parseOpponentType, type OpponentType } from '../src/ai/humanProfile';
 import { liveTableS, opponentTypeOfHumans } from '../src/ai/tableStrength';
 import type { PlayerObservation, PrivateLakeResult, QuestRecord, VoteRecord } from '../src/ai/types';
@@ -182,8 +183,23 @@ const STATE = arg('state', '');
 const MAX_BOTS_PER_ROOM = 1;
 const MAX_BOTS_ROOM_MODE = 9;
 const BOTS = Math.max(1, Math.min(MODE === 'room' ? MAX_BOTS_ROOM_MODE : MAX_BOTS_PER_ROOM, Number(arg('bots', '1')) || 1));
-/** 第 i 個機器人（1 起算）的暱稱：只有 1 個時就是 NICK；多個時 百科AI_1 … 百科AI_9。 */
-const botNick = (i: number, n: number): string => (n <= 1 ? NICK : botNickOf(nickBase() + i));
+/** 指定騎士（--knights a,b）：只在 room 模式有效，每晚自動補位維持百科。 */
+const KNIGHT_IDS: string[] = MODE === 'room'
+  ? arg('knights', '').split(',').map((x) => resolveKnightRef(x) ?? DEFAULT_KNIGHT_ID).filter(Boolean).slice(0, BOTS)
+  : [];
+export function knightForSlot(slot1Based: number, list: readonly string[] = KNIGHT_IDS): string {
+  return list[slot1Based - 1] ?? DEFAULT_KNIGHT_ID;
+}
+/** 第 i 個機器人（1 起算）的暱稱：百科沿用原規則；指定騎士用 `AI騎士_{名字}_{##}`。 */
+export function botNick(i: number, n: number, knightId: string = knightForSlot(i)): string {
+  if (knightId && knightId !== DEFAULT_KNIGHT_ID) {
+    const k = getKnight(knightId);
+    if (k) {
+      return `${k.baseName}_${String(nickBase() + i).padStart(2, '0')}`;
+    }
+  }
+  return n <= 1 ? NICK : botNickOf(nickBase() + i);
+}
 /** 開局後的「開眼階段」狀態字串。 */
 const EYES = '開眼階段';
 /**
@@ -387,7 +403,7 @@ async function leaveRoom(p: Page, why: string, room: string): Promise<void> {
 
 // ── 一個座位 ──────────────────────────────────────────────────────────────────────────
 class Seat {
-  constructor(readonly label: string) {}
+  constructor(readonly label: string, readonly knightId: string = DEFAULT_KNIGHT_ID) {}
   /** 目前的策略層（開局時照這一桌重算，`signageOpponent`）。 */
   profile: OpponentType = OPPONENT_FIXED ?? 'avgHuman';
   agent = new HeuristicAgent('signage-player', undefined, undefined, PROFILE_OVERRIDES[this.profile]);
@@ -439,10 +455,8 @@ class Seat {
     this.redTalk = null;
     try {
       const { type, tableS } = signageOpponent(s.users, OPPONENT_FIXED);
-      if (type !== this.profile) {
-        this.profile = type;
-        this.agent = new HeuristicAgent('signage-player', undefined, undefined, PROFILE_OVERRIDES[type]);
-      }
+      this.profile = type;
+      this.agent = createKnightAgent('signage-player', this.knightId, this.k.role, this.k.team, PROFILE_OVERRIDES[type]);
       // 公開 log：只有策略層與 S（不寫暱稱）
       log(`${this.label} 策略層：${OPPONENT_LABEL[type]}${OPPONENT_FIXED ? '（指定）' : `（S ${tableS ?? '—'}）`}`);
     } catch { /* 算不出來就照舊（一般真人桌） */ }
@@ -471,8 +485,8 @@ interface GameResult { status: 'ended' | 'stalled' | 'error' | 'left'; missions:
  * 不論怎麼結束，都向對局紀錄收集器報這個座位打完了（同房的百科AI 都報完才組 trace 貼 DC）。
  * `note`：寫進 trace 的補充說明（例：程式中途重啟後回來打完）。
  */
-async function playGame(p: Page, room: string, note = ''): Promise<GameResult> {
-  const seat = new Seat(room);
+async function playGame(p: Page, room: string, note = '', knightId: string = DEFAULT_KNIGHT_ID): Promise<GameResult> {
+  const seat = new Seat(room, knightId);
   let result: GameResult = { status: 'error', missions: '', winner: '', actions: {} };
   const ended: { capture: EndCapture | null } = { capture: null };
   try {
@@ -800,7 +814,7 @@ async function decide(p: Page, seat: Seat, s: Snap, d: Decision, dkey: string, f
  * 已經坐進房間：等開局（檢查設定、人數、房主）、打 `games` 局。回傳打完的局數。
  * live 模式 `strictFull`：開局前有人離開（不再是 10 人）就離開。
  */
-async function stayAndPlay(p: Page, room: string, games: number, strictFull: boolean, isHost: boolean, greet = true): Promise<number> {
+async function stayAndPlay(p: Page, room: string, games: number, strictFull: boolean, isHost: boolean, greet = true, knightId: string = DEFAULT_KNIGHT_ID): Promise<number> {
   let played = 0;
   let greeted = false;
   while (played < games) {
@@ -849,7 +863,7 @@ async function stayAndPlay(p: Page, room: string, games: number, strictFull: boo
     }
     if (!started) { await leaveRoom(p, `${START_MIN} 分鐘沒有開局`, room); return played; }
     log(`${room}：開局（第 ${played + 1} 局）`);
-    const r = await playGame(p, room);
+    const r = await playGame(p, room, '', knightId);
     const acts = Object.entries(r.actions).map(([k, v]) => `${k}×${v}`).join(' ');
     log(`${room}：${r.status === 'ended' ? `打完，任務 ${r.missions}，${r.winner === 'good' ? '藍方勝' : r.winner === 'evil' ? '紅方勝' : '勝負不明'}` : r.status}（動作 ${acts || '無'}）`);
     if (r.status !== 'ended') { if (inRoom(p)) await leaveRoom(p, r.status === 'stalled' ? '對局卡住' : '機器人出錯', room); return played; }
@@ -1097,7 +1111,7 @@ async function roomMode(browser: Browser, deadline: number, alreadyPlayed = 0): 
     if (!seated.length) bots.length = 1;
     log(`${r.name}：坐進 ${seated.length}/${BOTS} 個AI騎士`);
     if (!seated.length) { await sleep(10000); continue; }
-    const results = await Promise.all(seated.map((b, i) => stayAndPlay(b.page, `${r.name}${b.label}`, MAX_GAMES - alreadyPlayed, false, false, i === 0)));
+    const results = await Promise.all(seated.map((b, i) => stayAndPlay(b.page, `${r.name}${b.label}`, MAX_GAMES - alreadyPlayed, false, false, i === 0, knightForSlot(i + 1))));
     log(`指定房間結束：各座位打完 ${results.join('/')} 局`);
     for (const b of seated) if (inRoom(b.page)) await leaveRoom(b.page, '結束', r.name);
     return;

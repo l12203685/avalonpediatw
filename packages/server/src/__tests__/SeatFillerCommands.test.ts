@@ -68,6 +68,8 @@ describe('LINE text parsing', () => {
     expect(parseSeatFillerText('/補位')).toEqual({ room: '', extra: false });
     expect(parseSeatFillerText('/補位 百科陪練 補滿 密碼:1234')).toEqual({ room: '百科陪練', bots: '補滿', password: '1234', extra: false });
     expect(parseSeatFillerText('/補位 「百科 陪練」 3人 pw：99')).toEqual({ room: '百科 陪練', bots: '3人', password: '99', extra: false });
+    expect(parseSeatFillerText('/補位 1460 2 騎士:ED,C5')).toEqual({ room: '1460', bots: '2', knights: 'ED,C5', extra: false });
+    expect(parseSeatFillerText('/補位 1460 knight：百科')).toEqual({ room: '1460', knights: '百科', extra: false });
     expect(parseSeatFillerText('/補位 1 2 3')).toMatchObject({ extra: true });
   });
 
@@ -85,10 +87,20 @@ describe('LINE replies', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('specifying knights echoes their base names and rejects unknown knights', async () => {
+    const ok = await answerSeatFillerTextCommand('/補位 1460 2 騎士:ED,C5');
+    expect(ok).toContain('AI騎士_ED、AI騎士_C5');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.inputs.knights).toBe('knight-ed-01,knight-c5-01');
+  });
+
   it('format errors never dispatch', async () => {
     expect(await answerSeatFillerTextCommand('/補位')).toContain('用法：/補位 房號或房間描述');
     expect(await answerSeatFillerTextCommand('/補位 a"b')).toContain('房號或房間描述不對');
     expect(await answerSeatFillerTextCommand('/補位 1460 12')).toContain('人數要是 1–9');
+    expect(await answerSeatFillerTextCommand('/補位 1460 1 騎士:不存在的人')).toContain('指定的騎士名稱不在名冊裡');
+    expect(await answerSeatFillerTextCommand('/補位 1460 1 騎士:ED,C5')).toContain('指定的騎士名稱不在名冊裡');
     expect(await answerSeatFillerTextCommand('/補位 1460 1 1')).toContain('用法');
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -172,12 +184,20 @@ describe('LINE webhook (1:1 chat)', () => {
 });
 
 describe('Discord /機器人補位', () => {
-  function interaction(room: string, bots: string | null, password: string | null = null) {
+  function interaction(room: string, bots: string | null, password: string | null = null, knights: string | null = null) {
     const fake = {
       commandName: COMMANDS.SEAT_FILLER,
       options: {
         getString: (name: string) =>
-          name === SEAT_FILLER_OPTIONS.ROOM ? room : name === SEAT_FILLER_OPTIONS.BOTS ? bots : name === SEAT_FILLER_OPTIONS.PASSWORD ? password : null,
+          name === SEAT_FILLER_OPTIONS.ROOM
+            ? room
+            : name === SEAT_FILLER_OPTIONS.BOTS
+              ? bots
+              : name === SEAT_FILLER_OPTIONS.PASSWORD
+                ? password
+                : name === SEAT_FILLER_OPTIONS.KNIGHTS
+                  ? knights
+                  : null,
       },
       reply: vi.fn(async () => undefined),
       deferReply: vi.fn(async () => undefined),
@@ -186,15 +206,16 @@ describe('Discord /機器人補位', () => {
     return fake;
   }
 
-  it('is registered with a required room-or-description and optional 人數 / 密碼', () => {
+  it('is registered with a required room-or-description and optional 人數 / 密碼 / 騎士', () => {
     const json = buildSlashCommands().map((c) => c.toJSON());
     const cmd = json.find((c) => c.name === '機器人補位') as { options: { name: string; required?: boolean; choices?: { value: string }[] }[] };
     expect(cmd).toBeDefined();
-    expect(cmd.options.map((o) => o.name)).toEqual(['房號或描述', '人數', '密碼']);
+    expect(cmd.options.map((o) => o.name)).toEqual(['房號或描述', '人數', '密碼', '騎士']);
     expect(cmd.options[0].required).toBe(true);
     expect(cmd.options[1].required).toBe(false);
     expect(cmd.options[1].choices?.map((c) => c.value)).toEqual(['補滿', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
     expect(cmd.options[2].required).toBe(false);
+    expect(cmd.options[3].required).toBe(false);
   });
 
   it('success: public deferred reply with the dispatch result', async () => {

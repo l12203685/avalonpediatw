@@ -18,7 +18,7 @@
 
 ## 還沒做的（照原本的計畫）
 
-**A2. 補位機器人可以指定 AI騎士**（站長選項 A，#218）
+**A2. [已完成，Gemini 2026-11-27] 補位機器人可以指定 AI騎士**（站長選項 A，#218）
 - `services/signagePlayerDispatch.ts`：`SeatFillerRequest` 加 `knights: string[]`（名冊 id，最多 = bots，沒寫 = 百科），
   dispatch 的 inputs 加 `knights`（逗號分隔）；解析錯誤多一種 `knight`。
 - `knights.ts` 加 `resolveKnightRef(text)`：id、`AI騎士_ED`、`AI騎士_ED_01`、`ED` 都認（NFKC、不分大小寫）。
