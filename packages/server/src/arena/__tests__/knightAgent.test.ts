@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PlayerObservation } from '../../ai/types';
 import { HeuristicAgent } from '../../ai/HeuristicAgent';
+import { withSeededRandom } from '../../ai/benchmark/agreement';
 import { createKnightAgent, getKnight, DEFAULT_KNIGHT_ID } from '../knights';
 import { KnightAgent, applyResidualAction, liveResidualEnabled, residualFallbackCounter } from '../knightAgent';
 import { resolveProfileTuning } from '../profile';
@@ -58,10 +59,11 @@ describe('createKnightAgent (live games)', () => {
       const tuning = resolveProfileTuning(profile, 'loyal', 'good');
       const engine = new HeuristicAgent('P1', undefined, undefined, tuning);
       engine.onGameStart(o);
-      const expected = applyResidualAction(new ResidualPolicy(profile.residual!, engine.tuning), o, engine.act(o));
+      const seed = `knight-agent-parity|${o.gamePhase}`;
+      const expected = withSeededRandom(seed, () => applyResidualAction(new ResidualPolicy(profile.residual!, engine.tuning), o, engine.act(o)));
       const live = createKnightAgent('P1', 'knight-ed-01', 'loyal', 'good', tuning);
       live.onGameStart(o);
-      expect(live.act(o)).toEqual(expected);
+      expect(withSeededRandom(seed, () => live.act(o))).toEqual(expected);
     }
   });
 
