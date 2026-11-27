@@ -726,8 +726,9 @@ def knight_stats_name(name: object) -> str | None:
     m = _KNIGHT_NAME_RE.match(key)
     if not m or m.group(1) == DEFAULT_KNIGHT_STYLE:
         return DEFAULT_KNIGHT_STATS_NAME
-    # 風格標籤原樣（中文沒有大小寫）；座位序號不算（站長 2026-11-27：一位騎士只有一隻）
-    return _knight_name(m.group(1), None)
+    # 風格標籤照原本的大小寫（AI騎士_ED 不變成 ed，同 TS 那一側）；座位序號不算（站長 2026-11-27：一位騎士只有一隻）
+    shown = re.match(r"^ai騎士_([^_\s]+)", unicodedata.normalize("NFKC", knight_display_name(normalize_player_name(name))), re.IGNORECASE)
+    return _knight_name(shown.group(1) if shown else m.group(1), None)
 
 
 def knight_aliases() -> dict[str, str]:
