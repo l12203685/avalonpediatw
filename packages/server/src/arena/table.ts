@@ -6,13 +6,12 @@
  * ——和 `scripts/selfPlayStrength.ts` 同一套「共同亂數」。同一個 gameSeed、同樣的座位安排，
  * 換掉一個座位的機器人，其他座位面對同樣的局面會做一樣的決定。
  */
-import { HeuristicAgent } from '../ai/HeuristicAgent';
+import type { HeuristicAgent } from '../ai/HeuristicAgent';
 import type { SelfPlayEngine } from '../ai/SelfPlayEngine';
 import { seededRandom, withSeededRandom } from '../ai/benchmark/agreement';
 import type { AgentAction, AvalonAgent, PlayerObservation } from '../ai/types';
-import { deriveValidLakeTargets } from '../ai/LakePolicy';
 import { resolveProfileTuning, type ArenaSide, type BotProfile } from './profile';
-import { ResidualPolicy } from './residual';
+import { buildKnightAgent } from './knightAgent';
 
 export interface Entrant {
   /** 名冊裡的 id（資料夾名稱；百科AI = `baike`）。 */
@@ -52,9 +51,8 @@ function fnv1a(text: string): string {
 
 class ArenaSeat implements AvalonAgent {
   readonly agentType = 'heuristic' as const;
+  /** 引擎＋開關；官方 AI騎士 帶殘差層（schema 2 的 `residual`）時是 KnightAgent（`knightAgent.ts`，正式對局同一個類別）。 */
   private inner: HeuristicAgent | null = null;
-  /** 官方 AI騎士 的每人殘差層（schema 2 的 `residual`）；沒有 = 照引擎。 */
-  private residual: ResidualPolicy | null = null;
   role = '';
   team: ArenaSide = 'good';
   assassinated: string | undefined;
@@ -74,37 +72,22 @@ class ArenaSeat implements AvalonAgent {
     this.role = obs.myRole as string;
     this.team = obs.myTeam === 'evil' ? 'evil' : 'good';
     const tuning = resolveProfileTuning(this.entrant.profile, this.role, this.team);
-    this.inner = new HeuristicAgent(this.agentId, undefined, undefined, tuning);
-    this.residual = this.entrant.profile?.residual ? new ResidualPolicy(this.entrant.profile.residual, tuning) : null;
+    this.inner = buildKnightAgent(this.agentId, tuning, this.entrant.profile?.residual);
     this.inner.onGameStart(obs);
   }
 
   act(obs: PlayerObservation): AgentAction {
-    let a = withSeededRandom(this.seedFor(obs), () => this.inner!.act(obs));
-    if (this.residual) a = this.adjust(obs, a);
+    const a = withSeededRandom(this.seedFor(obs), () => this.inner!.act(obs));
     if (a.type === 'assassinate') this.assassinated = a.targetId;
     return a;
   }
 
-  /** 殘差層：引擎決定之後重新打分（硬規則在 `ResidualPolicy` 裡）。 */
-  private adjust(obs: PlayerObservation, a: AgentAction): AgentAction {
-    const r = this.residual!;
-    switch (a.type) {
-      case 'team_select': return { type: 'team_select', teamIds: r.team(obs, a.teamIds) };
-      case 'team_vote': return { type: 'team_vote', vote: r.vote(obs, a.vote) };
-      case 'quest_vote': return { type: 'quest_vote', vote: r.questCard(obs, a.vote) };
-      case 'assassinate': return { type: 'assassinate', targetId: r.assassinate(obs, a.targetId) };
-    }
-  }
-
   pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string {
-    const t = withSeededRandom(this.seedFor(obs, 'lake'), () => this.inner!.pickLakeTarget(obs, validTargets));
-    return this.residual ? this.residual.lakeTarget(obs, validTargets ?? deriveValidLakeTargets(obs), t) : t;
+    return withSeededRandom(this.seedFor(obs, 'lake'), () => this.inner!.pickLakeTarget(obs, validTargets));
   }
 
   declareLake(obs: PlayerObservation, targetId: string, trueFaction: 'good' | 'evil' | undefined): 'good' | 'evil' | null {
-    const c = withSeededRandom(this.seedFor(obs, `claim-${targetId}`), () => this.inner!.declareLake(obs, targetId, trueFaction));
-    return this.residual ? this.residual.lakeClaim(obs, targetId, trueFaction, c) : c;
+    return withSeededRandom(this.seedFor(obs, `claim-${targetId}`), () => this.inner!.declareLake(obs, targetId, trueFaction));
   }
 
   onGameEnd(obs: PlayerObservation, won: boolean): void {

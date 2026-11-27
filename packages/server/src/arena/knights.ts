@@ -5,10 +5,13 @@
  * 外加預設的 AI騎士_百科（= 百科AI 本身，沒有任何開關）。執行期不讀 repo 最上層的資料夾——正式機（Render）只部署
  * `packages/server`、`packages/shared` 的改動，一位騎士的改動要重跑產生器、跟著伺服器一起提交。
  *
- * 一位騎士在對局裡 = 百科AI 的引擎 ＋ 那份 profile 的開關（overrides → sides[陣營] → roles[角色]，同擂台 `resolveProfileTuning`）。
- * 正式對局的基準線照舊（預設＋環境變數＋這一桌的真人桌策略層），騎士的開關蓋在最上面。
+ * 一位騎士在對局裡 = 百科AI 的引擎 ＋ 那份 profile 的開關（overrides → sides[陣營] → roles[角色]，同擂台 `resolveProfileTuning`）
+ * ＋ 那位玩家的殘差層（schema 2 的 `residual`，`knightAgent.ts`；站長 2026-11-27 起正式對局也套，同擂台）。
+ * 正式對局的基準線照舊（預設＋環境變數＋這一桌的真人桌策略層），騎士的開關蓋在最上面，殘差層在引擎決定之後重新打分。
  */
 import type { AgentTuning } from '../ai/AgentTuning';
+import type { HeuristicAgent } from '../ai/HeuristicAgent';
+import { buildKnightAgent, liveResidualEnabled } from './knightAgent';
 import GENERATED from './knights.generated.json';
 import { knobFor } from './knobs';
 import { validateProfile, type ArenaRole, type ArenaSide, type BotProfile, type KnobValues } from './profile';
@@ -144,6 +147,29 @@ export function knightTuningOverrides(id: string | null | undefined, role: strin
     }
   }
   return out as Partial<AgentTuning>;
+}
+
+/** 這位騎士的殘差層（沒有、百科、不認得 → undefined）。 */
+export function knightResidual(id: string | null | undefined): BotProfile['residual'] {
+  return getKnight(id)?.profile?.residual;
+}
+
+/**
+ * 正式對局（練習台、房間、補位機器人）裡一位騎士的機器人：`base`（基準線＋這一桌的策略層）→ 騎士的開關 → 殘差層。
+ * 百科或不認得的 id → 照 `base` 的一般機器人。`residual: false`（或環境變數 `KNIGHT_RESIDUAL_LIVE=off`）只套開關。
+ */
+export function createKnightAgent(
+  agentId: string,
+  knightId: string | null | undefined,
+  role: string | null | undefined,
+  team: ArenaSide | null | undefined,
+  base?: Partial<AgentTuning>,
+  opts: { residual?: boolean } = {},
+): HeuristicAgent {
+  const knight = getKnight(knightId);
+  const tuning = knight?.profile ? { ...base, ...knightTuningOverrides(knight.id, role, team) } : base;
+  const useResidual = opts.residual ?? liveResidualEnabled();
+  return buildKnightAgent(agentId, tuning, useResidual ? knight?.profile?.residual : undefined);
 }
 
 /** 房間裡這位騎士下一個沒人用的座位名：`AI騎士_ED_01`，同房第二位 `AI騎士_ED_02`…。 */
