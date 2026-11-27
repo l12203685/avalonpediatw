@@ -47,6 +47,8 @@ export interface Store {
 
 export function variants(): Variant[] {
   const base: AgentTuning = { ...DEFAULT_AGENT_TUNING };
+  // Round 89: --base-flag changes the base too (e.g. a human-table reading); --cand NAME=flag,flag adds a named candidate (repeatable).
+  argv.forEach((a, i) => { if (a === '--base-flag') Object.assign(base, parseTuningFlag(argv[i + 1])); });
   const out: Variant[] = [{ name: '預設', opts: bayesOptionsOf(base) }, { name: '均分', opts: 'uniform' }];
   const flags: string[] = [];
   argv.forEach((a, i) => { if (a === '--flag') flags.push(argv[i + 1]); });
@@ -55,6 +57,13 @@ export function variants(): Variant[] {
     for (const f of flags) Object.assign(t, parseTuningFlag(f));
     out.push({ name: '候選', opts: bayesOptionsOf(t) });
   }
+  argv.forEach((a, i) => {
+    if (a !== '--cand') return;
+    const [name, list] = argv[i + 1].split('=', 2).length === 2 ? [argv[i + 1].slice(0, argv[i + 1].indexOf('=')), argv[i + 1].slice(argv[i + 1].indexOf('=') + 1)] : [argv[i + 1], ''];
+    const t: AgentTuning = { ...base };
+    for (const f of list.split(',').filter(Boolean)) Object.assign(t, parseTuningFlag(f));
+    out.push({ name, opts: bayesOptionsOf(t) });
+  });
   return out;
 }
 
@@ -193,10 +202,10 @@ function report(st: Store, names: readonly string[], meta: Record<string, unknow
 
 export const newStore = (): Store => ({ acc: {}, certainWrong: {}, certainWrongConvention: {}, games: 0, points: 0 });
 
-export function loadHuman(file?: string): { game: ReplayGame; s: number | null }[] {
+export function loadHuman(file?: string): { game: ReplayGame; s: number | null; date: string }[] {
   const root = path.resolve(__dirname, '..');
   const dataset = JSON.parse(fs.readFileSync(file ?? arg('--dataset') ?? path.join(root, 'games_cache.json'), 'utf8')) as DatasetHeader & { games: readonly DatasetTuple[] };
-  return replayGamesFromDataset(dataset).games.filter((g) => g.game.playerCount === 10).map((g) => ({ game: g.game, s: g.s }));
+  return replayGamesFromDataset(dataset).games.filter((g) => g.game.playerCount === 10).map((g) => ({ game: g.game, s: g.s, date: g.date }));
 }
 
 function main(): void {
@@ -228,7 +237,10 @@ function main(): void {
     const [k, n] = (arg('--shard') ?? '0/1').split('/').map(Number);
     // Round 48: --split train = the even-indexed games (where `beliefRecalib` was fitted), test = the odd-indexed ones (held out).
     const split = arg('--split') ?? 'all';
-    const keep = (gi: number): boolean => (split === 'train' ? gi % 2 === 0 : split === 'test' ? gi % 2 === 1 : true);
+    // Round 89: time-train / time-test = the date-sorted first 2/3 / last 1/3 (missing dates first; `worldDM89Rates.ts` `timeSplit`).
+    const byDate = games.map((g, gi) => ({ gi, d: g.date || '0000' })).sort((a, b) => a.d.localeCompare(b.d));
+    const late = new Set(byDate.slice(Math.floor((2 * byDate.length) / 3)).map((x) => x.gi));
+    const keep = (gi: number): boolean => (split === 'train' ? gi % 2 === 0 : split === 'test' ? gi % 2 === 1 : split === 'time-train' ? !late.has(gi) : split === 'time-test' ? late.has(gi) : true);
     const viewers = new Set(viewersList);
     const started = Date.now();
     games.forEach((g, gi) => {
@@ -236,7 +248,7 @@ function main(): void {
       evalGame(g.game, g.s !== null && g.s >= strongS, vs, viewers, st);
       if (st.games % 100 === 0) process.stderr.write(`[calib ${k}/${n}] ${st.games} games, ${((Date.now() - started) / 1000).toFixed(0)}s\n`);
     });
-    meta = { source: `games_cache.json 真人局（datasetReplay 嚴格重播${split === 'train' ? '，偶數序號的局' : split === 'test' ? '，奇數序號的局（第 48 回合的驗證組）' : ''}）`, viewers: viewersList.map((w) => ROLE_LABEL[w] ?? w).join('、'), strongS, flags: argv.filter((_, i) => argv[i - 1] === '--flag'), seconds: Math.round((Date.now() - started) / 1000) };
+    meta = { source: `games_cache.json 真人局（datasetReplay 嚴格重播${split === 'train' ? '，偶數序號的局' : split === 'test' ? '，奇數序號的局（第 48 回合的驗證組）' : split === 'time-test' ? '，照日期排序後 1/3（第 89 回合的驗證組）' : split === 'time-train' ? '，照日期排序前 2/3' : ''}）`, viewers: viewersList.map((w) => ROLE_LABEL[w] ?? w).join('、'), strongS, flags: argv.filter((_, i) => argv[i - 1] === '--flag'), seconds: Math.round((Date.now() - started) / 1000) };
     const raw = arg('--raw');
     if (raw) fs.writeFileSync(raw, JSON.stringify({ store: st, names, meta }));
   }
