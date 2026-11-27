@@ -99,6 +99,7 @@ import { gatedThumb83Applies, gatedThumb83Team } from '../Round83';
 import { failTest85Applies, failTest85Team, r1Split85Applies, r1Split85Team } from '../Round85';
 import { shield87Decide } from '../Round87';
 import { ev88Applies, ev88Team } from '../Round88';
+import { lookahead91Team, lookahead91Vote } from '../Round91';
 import type { Role } from '@avalon/shared';
 import { AVALON_CONFIG } from '@avalon/shared';
 import type {
@@ -883,6 +884,20 @@ export class ForwardAgent implements AvalonAgent {
         const split = r1Split85Team(this.baseline.tuning, obs, d.action.teamIds, (team) => this.repairGateOk39(obs, team));
         if (split) return { ...d, action: { type: 'team_select', teamIds: split }, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → not the R1 team + 1 again after it failed (round 85)` } };
       }
+      // Round 91 `lookahead91` (Round91.ts; roadmap Phase D, Issue #215): 1–2 ply depth-limited lookahead on n-5/n-4 & match-point team selection.
+      if (d.action.type === 'team_select') {
+        const laTeam = lookahead91Team(
+          this.baseline.tuning,
+          obs,
+          d.action,
+          (team) => this.repairGateOk39(obs, team)
+            && !lakeBar.some((id) => team.includes(id))
+            && (!plan39 || percivalThumbPlanAllows(plan39, obs, team)),
+        );
+        if (laTeam !== d.action) {
+          return { ...d, action: laTeam, reasoningTrace: { ...d.reasoningTrace, summary: `${d.reasoningTrace.summary} → depth-limited lookahead team (round 91)` } };
+        }
+      }
       if (proven.length > 0) provenRedStats.teams++;
       if (lakeBar.some((id) => d.action.type === 'team_select' && d.action.teamIds.includes(id))) {
         const hasProven = d.action.teamIds.some((id) => proven.includes(id));
@@ -1189,6 +1204,17 @@ export class ForwardAgent implements AvalonAgent {
     // Round 84 `earlyGo84` / `earlyGoOn84` (Round84.ts; owner 2026-11-26): at red's match point a good seat approves (off the team: outer white;
     // on it: no inner black) when no later captain up to the forced fifth is expected to send a cleaner team and this one is near the cleanest.
     // Merlin only as the public loyal view of his seat and never on a team with a red he sees. Never past the good vote gates or Merlin's fatal team.
+    // Round 91 `lookahead91` (Round91.ts; roadmap Phase D, Issue #215): 2-ply lookahead on critical match-point / tail-washing votes.
+    const la91Vote = lookahead91Vote(this.baseline.tuning, obs);
+    if (la91Vote !== null) {
+      const gated = la91Vote.vote && (
+        goodVoteGate(obs, this.gates) !== null
+        || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning))
+      );
+      if (!gated) {
+        return this.ruleDecision(obs, { type: 'team_vote', vote: la91Vote.vote }, la91Vote.reason);
+      }
+    }
     if (earlyGo84(this.baseline.tuning, obs)) {
       const gated = goodVoteGate(obs, this.gates) !== null || (obs.myRole === 'merlin' && merlinVoteFatal(obs, this.baseline.tuning));
       if (!gated) return this.ruleDecision(obs, { type: 'team_vote', vote: true }, `red match point: no later captain sends a cleaner team (round 84, ${(obs.proposedTeam ?? []).includes(obs.myPlayerId) ? 'on the team' : 'outer white'})`);
