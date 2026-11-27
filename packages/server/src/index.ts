@@ -13,6 +13,9 @@ import { apiRouter } from './routes/api';
 import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { aiGamesRouter } from './routes/aiGames';
+import { knightsRouter } from './routes/knights';
+import { setLiveKnightAdjustProvider } from './arena/knights';
+import { getPlayerKnightsStore } from './services/playerKnightsStore';
 import { reportsRouter } from './routes/reports';
 import { seatFillerRouter } from './routes/seatFiller';
 import { analysisRouter } from './routes/analysis';
@@ -95,6 +98,8 @@ app.use('/api/friends', friendsRouter);
 app.use('/api/feedback', feedbackRouter);
 // 網站「百科AI 對局」：DC 論壇的百科AI對局紀錄＋「這步怪怪的」回饋（Edward 2026-11-05）
 app.use('/api/ai-games', aiGamesRouter);
+// 統一 AI騎士（B2）：帳號認領玩家 ID、站長審核、第 2 層私人儲存與公開開關 API
+app.use('/api/knights', knightsRouter);
 // 網站「回報與修正」：百科回報與處理狀態（DC 同步閒聊裡 bot 貼的【百科回報】＋狀態行；站長 2026-11-19）
 app.use('/api/reports', reportsRouter);
 // 網站「叫百科AI 補位」：不在 LINE／DC 群組的人也能叫補位機器人（站長 2026-11-19；限制跟 LINE／DC 共用）
@@ -183,6 +188,15 @@ async function main() {
       ? '✓ Socket.IO game server started'
       : 'Socket.IO game server started (Firebase unavailable)'
   );
+
+  // 3b. 預載玩家騎士第 2 層私人儲存，並接上正式對局即時疊加
+  const playerKnightsStore = getPlayerKnightsStore();
+  void playerKnightsStore.ready();
+  setLiveKnightAdjustProvider((knightId, baseName) => {
+    const rec = playerKnightsStore.getKnightByKnightId(knightId)
+      ?? playerKnightsStore.getKnightByPlayerId(baseName.replace(/^AI騎士_/i, ''));
+    return rec ? rec.adjust : null;
+  });
 
   // 4. Start self-play scheduler after game server is ready
   startSelfPlayScheduler();
