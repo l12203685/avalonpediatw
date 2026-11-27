@@ -8,7 +8,7 @@ import { DEFAULT_KNIGHT_ID, knightBaseName, listKnights } from '../../arena/knig
 const PREFIX_RE = /^ai騎士[_＿\s]*/i;
 
 function fold(word: string): string {
-  return knightBaseName(word.normalize('NFKC').replace(/[​-‏⁠-⁤﻿]/g, '').trim()).replace(PREFIX_RE, '').toLowerCase();
+  return knightBaseName(word.normalize('NFKC').replace(/[\u200b-\u200f\u2060-\u2064\ufeff]/g, '').trim()).replace(PREFIX_RE, '').toLowerCase();
 }
 
 /** 打的名字 → 名冊 id；空的 → 預設（百科）；不認得 → null。 */

@@ -383,6 +383,8 @@ export function parseSimCommand(text: string): SimCommand | null {
       // 站長 2026-11-27：/公布 藿藿、/公布 ED。後面一個詞看得懂 → 那一位；看不懂的一個短詞 → 用法；更長的一句 → 聊天（照舊不回）。
       const word = rest.trim();
       if (!word) return { kind: 'reveal' };
+      // 「/公布欄」這類黏在一起的字是聊天：騎士名字要空一格（/公布 藿藿）。
+      if (!/^\s/u.test(rest)) return null;
       const id = resolveSimKnight(word);
       if (id) return id === DEFAULT_KNIGHT_ID ? { kind: 'reveal' } : { kind: 'reveal', knightId: id };
       return /^\S{1,16}$/u.test(word) ? { kind: 'usage', command: 'reveal', problem: '不認得這位 AI騎士。' } : null;
