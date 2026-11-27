@@ -33,6 +33,8 @@
  */
 
 import type { Role } from '@avalon/shared';
+import { DEFAULT_KNIGHT_ID } from '../../arena/knights';
+import { resolveSimKnight } from './knightChoice';
 
 export type SimRoleChoice = Role | 'red' | 'blue';
 
@@ -44,7 +46,7 @@ export interface IntervalGroup {
   max: number;
 }
 
-export type SimUsageCommand = 'start' | 'propose' | 'interval' | 'assassinate';
+export type SimUsageCommand = 'start' | 'propose' | 'interval' | 'assassinate' | 'reveal';
 
 export type SimCommand =
   | {
@@ -62,7 +64,8 @@ export type SimCommand =
   | { kind: 'read' }
   /** 拿掉的指令（/下一步）：回一行說明。 */
   | { kind: 'removed'; command: string }
-  | { kind: 'reveal' }
+  /** `knightId`：/公布 藿藿 這類，看那一位 AI騎士 會派什麼（名冊 id；沒有 = 預設 AI騎士_百科）。 */
+  | { kind: 'reveal'; knightId?: string }
   | { kind: 'end' }
   /** /模擬 說明：全部指令的白話說明。 */
   | { kind: 'help' }
@@ -376,8 +379,14 @@ export function parseSimCommand(text: string): SimCommand | null {
     case '下一步':
       return rest.trim() ? null : { kind: 'removed', command: '下一步' };
     case '公布':
-    case '解答':
-      return rest.trim() ? null : { kind: 'reveal' };
+    case '解答': {
+      // 站長 2026-11-27：/公布 藿藿、/公布 ED。後面一個詞看得懂 → 那一位；看不懂的一個短詞 → 用法；更長的一句 → 聊天（照舊不回）。
+      const word = rest.trim();
+      if (!word) return { kind: 'reveal' };
+      const id = resolveSimKnight(word);
+      if (id) return id === DEFAULT_KNIGHT_ID ? { kind: 'reveal' } : { kind: 'reveal', knightId: id };
+      return /^\S{1,16}$/u.test(word) ? { kind: 'usage', command: 'reveal', problem: '不認得這位 AI騎士。' } : null;
+    }
     case '結束':
     case '结束':
       return rest.trim() ? null : { kind: 'end' };

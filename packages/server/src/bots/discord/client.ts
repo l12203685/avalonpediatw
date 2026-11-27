@@ -196,7 +196,10 @@ export function buildSlashCommands(): Array<Pick<SlashCommandBuilder, 'toJSON'>>
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_REVEAL)
-      .setDescription('模擬瓦：公布角色、對答案 / Reveal roles'),
+      .setDescription('模擬瓦：公布角色、對答案 / Reveal roles')
+      .addStringOption((o) =>
+        o.setName(SIM_OPTIONS.KNIGHT).setDescription('選填：看哪一位 AI騎士 會派什麼，例如 ED、藿藿（不填 = 百科）/ Optional: which knight').setRequired(false).setMaxLength(30)
+      ),
 
     new SlashCommandBuilder()
       .setName(COMMANDS.SIM_END)

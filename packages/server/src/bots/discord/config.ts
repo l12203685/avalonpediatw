@@ -138,6 +138,8 @@ export const SIM_OPTIONS = {
   HELP: '說明',
   /** /模擬 局面:1-5…4-5｜4局｜5局｜刺殺｜今天 (2026-11-16, 4局 2026-11-19; same words as LINE's /模擬 3-5 etc.). */
   STAGE: '局面',
+  /** /公布 騎士:藿藿｜ED… (2026-11-27; same words as LINE's /公布 藿藿): which AI騎士's picks to show. */
+  KNIGHT: '騎士',
 } as const;
 
 /** Option names of /補位 and /機器人補位 (bots/seatFiller). */

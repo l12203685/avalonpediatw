@@ -120,3 +120,22 @@ describe('seat names and practice seats', () => {
     expect(knightsForLineup([], 3, 'baike')).toEqual(['baike', 'baike', 'baike']);
   });
 });
+
+describe('one knight per identity, learning samples (owner 2026-11-27)', () => {
+  it('every official knight has one name without a number, exactly one 藿藿, and aggregate-only samples', () => {
+    const knights = listKnights().filter((k) => k.profile);
+    expect(knights.filter((k) => k.baseName.includes('藿藿'))).toHaveLength(1);
+    for (const k of knights) {
+      expect(k.profile!.name).toBe(k.baseName);
+      const s = k.profile!.samples!;
+      expect(s.games).toBeGreaterThan(0);
+      expect(s.seats).toBeLessThanOrEqual(s.games);
+      expect(s.bySeat.reduce((a, b) => a + b, 0)).toBe(s.seats);
+      expect(Object.values(s.byRole).reduce((a, b) => a + b, 0)).toBe(s.seats);
+      expect(s.byResult.red3 + s.byResult.merlinKilled + s.byResult.blueWin).toBe(s.seats);
+    }
+    const ed = listKnightSummaries().find((x) => x.id === 'knight-ed-01');
+    expect(ed?.samples?.games).toBeGreaterThan(0);
+    expect(listKnightSummaries()[0].samples).toBeUndefined();
+  });
+});

@@ -544,7 +544,7 @@ export interface SimEngineOptions {
    * /公布 的「百科AI 會派」那一行（站長 2026-11-26；aiRead.aiPicks：正式機器人在題目那一刻重派很多次）。
    * 正式機（index.ts）給；沒給 = 不印那一行（測試的全題庫掃描不用每題都重派）。丟錯 = 不印，/公布 照常。
    */
-  aiPicks?: (game: SimGame, seat: number, point: AiPickPoint) => Promise<AiPicks | null>;
+  aiPicks?: (game: SimGame, seat: number, point: AiPickPoint, knightId?: string) => Promise<AiPicks | null>;
   /**
    * 玩家對題目的回饋（feedback.ts，站長 2026-11-26）記到哪裡：正式機（index.ts）交給 /意見 同一個地方（feedback/service.ts，
    * 管理員頻道）。沒給 = 照樣認得、回覆、計數，只是不轉出去。從不等它（不擋回覆），丟錯也不影響回覆。
@@ -854,7 +854,7 @@ export class SimEngine {
     }
     const target: SimTarget & { session: SimSession } = { key: session.key, session, coAnswer };
     // 刺殺題只收 /刺 /公布 /結束（2026-11-16）；派票題不收 /刺。
-    const pickOnly = ['propose', 'analyze', 'interval', 'read'].includes(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'assassinate');
+    const pickOnly = ['propose', 'analyze', 'interval', 'read'].includes(cmd.kind) || (cmd.kind === 'usage' && cmd.command !== 'assassinate' && cmd.command !== 'reveal');
     if (session.assassin && pickOnly) {
       return this.reply(assassinOnlyText(session.exerciseId), 'usage', target, now, () => { this.counts.usage += 1; });
     }
@@ -876,7 +876,7 @@ export class SimEngine {
       case 'read':
         return this.read(game, target, now);
       case 'reveal':
-        return this.reveal(game, target, bank.records.get(session.game), req, bank.names?.get(session.game));
+        return this.reveal(game, target, bank.records.get(session.game), req, bank.names?.get(session.game), cmd.knightId);
       case 'end':
         return {
           text: withCoAnswerMark(endedText(session.exerciseId), coAnswer),
@@ -1144,21 +1144,28 @@ export class SimEngine {
   }
 
   /** 百科AI 在這題那一刻會派（刺）的前幾種；沒設定、算不出來或丟錯 → null（/公布 照常，只是少那一行）。 */
-  private async revealAiPicks(game: SimGame, session: SimSession): Promise<AiPicks | null> {
+  private async revealAiPicks(game: SimGame, session: SimSession, knightId?: string): Promise<AiPicks | null> {
     const fn = this.opts.aiPicks;
     if (!fn) return null;
     try {
       const point: AiPickPoint = session.assassin ? { kind: 'assassination' } : { kind: 'team_select', proposal: session.decision };
-      return await fn(game, session.seat, point);
+      return await (knightId ? fn(game, session.seat, point, knightId) : fn(game, session.seat, point));
     } catch (err) {
       console.warn(`[sim] /公布 AI picks failed (${err instanceof Error ? err.name : typeof err})`);
       return null;
     }
   }
 
-  private async reveal(game: SimGame, t: SimTarget & { session: SimSession }, postId: string | undefined, req: SimRequest, seatNames?: readonly string[]): Promise<SimReply> {
+  private async reveal(
+    game: SimGame,
+    t: SimTarget & { session: SimSession },
+    postId: string | undefined,
+    req: SimRequest,
+    seatNames?: readonly string[],
+    knightId?: string,
+  ): Promise<SimReply> {
     const { session } = t;
-    const ai = await this.revealAiPicks(game, session);
+    const ai = await this.revealAiPicks(game, session, knightId);
     const events = publicEvents(game);
     const answers = [...session.answers.entries()]
       .sort((a, b) => a[0] - b[0])

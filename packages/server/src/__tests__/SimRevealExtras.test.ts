@@ -27,6 +27,8 @@ import { __setSimForTests } from '../bots/simulation';
 import { buildRecordSvg, drawableName, renderRecordPng, wrapName } from '../bots/simulation/recordImage';
 import { aiPicksLine } from '../bots/simulation/replies';
 import { firstDecision } from '../bots/simulation/scenario';
+import { parseSimCommand } from '../bots/simulation/commands';
+import { resolveSimKnight } from '../bots/simulation/knightChoice';
 import { SimEngine, type SimRequest } from '../bots/simulation/session';
 import { FeedbackService, type FeedbackForwardPayload } from '../bots/feedback/service';
 import { FAKE_NAMES, fixtureBank } from './fixtures/simGames';
@@ -175,6 +177,52 @@ describe('/公布 with the AI騎士 line', () => {
     await say(e, '/模擬 題 W0000-4', req);
     const line = ((await say(e, '/公布', req)) ?? '').split('\n').find((l) => l.startsWith('AI騎士 會派：'));
     expect(line).toMatch(/^AI騎士 會派：\d{2,5}(?:（約 \d+%）(?:、\d{2,5}（\d+%）){0,2}(?:、其他 \d+%)?)?$/u);
+  });
+
+  it('/公布 藿藿 (owner 2026-11-27): that knight\'s picks, labelled with its name; unknown knight → usage, 百科 = default', async () => {
+    const e = engine({ aiPicks: (g, s, p, k) => aiPicks(g, s, p, { yieldFn: async () => undefined, knightId: k }) });
+    await say(e, '/模擬 題 W0000-4', req);
+    const unknown = (await say(e, '/公布 不存在的騎士', req)) ?? '';
+    expect(unknown).toContain('不認得這位 AI騎士');
+    const text = (await say(e, '/公布 藿藿', req)) ?? '';
+    expect(text.split('\n').find((l) => l.startsWith('AI騎士_藿藿 會派：'))).toBeTruthy();
+    await say(e, '/模擬 題 W0000-4', req);
+    const plain = (await say(e, '/公布 百科', req)) ?? '';
+    expect(plain.split('\n').some((l) => l.startsWith('AI騎士 會派：'))).toBe(true);
+  });
+});
+
+describe('/公布 knight names (owner 2026-11-27)', () => {
+  it('resolveSimKnight: short name, full name, old _01 name, case and width; unknown → null; empty → 百科', () => {
+    expect(resolveSimKnight('ED')).toBe('knight-ed-01');
+    expect(resolveSimKnight('ed')).toBe('knight-ed-01');
+    expect(resolveSimKnight('ＥＤ')).toBe('knight-ed-01');
+    expect(resolveSimKnight('AI騎士_ED')).toBe('knight-ed-01');
+    expect(resolveSimKnight('AI騎士_ED_01')).toBe('knight-ed-01');
+    expect(resolveSimKnight('藿藿')).toBe('knight-885468a3-01');
+    expect(resolveSimKnight('百科')).toBe('baike');
+    expect(resolveSimKnight('')).toBe('baike');
+    expect(resolveSimKnight('不存在的騎士')).toBeNull();
+  });
+
+  it('parses /公布 <knight>; a long sentence after /公布 stays chat', () => {
+    expect(parseSimCommand('/公布')).toEqual({ kind: 'reveal' });
+    expect(parseSimCommand('/公布 百科')).toEqual({ kind: 'reveal' });
+    expect(parseSimCommand('/公布 藿藿')).toEqual({ kind: 'reveal', knightId: 'knight-885468a3-01' });
+    expect(parseSimCommand('/解答 ED')).toEqual({ kind: 'reveal', knightId: 'knight-ed-01' });
+    expect(parseSimCommand('/公布 xyz')).toMatchObject({ kind: 'usage', command: 'reveal' });
+    expect(parseSimCommand('/公布 等一下 大家先想')).toBeNull();
+  });
+
+  it('a knight changes the picker (switches + residual) and the label carries its name', async () => {
+    const seat = 4;
+    const d = firstDecision(W0, seat) as number;
+    const k = await aiPicks(W0, seat, { kind: 'team_select', proposal: d }, { yieldFn: async () => undefined, knightId: 'knight-ed-01' });
+    expect(k?.knight).toBe('AI騎士_ED');
+    for (const p of k!.picks) expect(p.seats).toHaveLength(W0.proposals[d].teamSeats.length);
+    expect(aiPicksLine(k)).toMatch(/^AI騎士_ED 會派：/u);
+    const base = await aiPicks(W0, seat, { kind: 'team_select', proposal: d }, { yieldFn: async () => undefined, knightId: 'baike' });
+    expect(base?.knight).toBeUndefined();
   });
 });
 
