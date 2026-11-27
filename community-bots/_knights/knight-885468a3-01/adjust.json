@@ -1,8 +1,7 @@
 {
   "schema": 1,
-  "name": "藿藿",
-  "author": "f093285329000-cmd",
-  "style": "像藿藿一樣膽小謹慎，多數時候不敢冒險、容易緊張而派票略顯矛盾，也容易被場上語氣影響；但當局面逼她必須扛責（尾派或危急關鍵）時，會鼓起勇氣派出推測勝率較高的車，並懂得把看起來能外白的人放車外協助。",
+  "source": "migrated-from-community-bots/huohuo",
+  "note": "保留原社群投稿的第 2 層開關調整；尚未連到牌譜玩家 ID，連上後重新擬合只更新 profile.json、保留此檔。",
   "overrides": {
     "redHideHuman": true,
     "redNormalVote": 0.85,

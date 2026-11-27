@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "note": "公開對照檔（玩家在網站同意公開後才寫入）：騎士資料夾 ID → GitHub 帳號，供 arena-check.yml 驗證 PR 作者是否為本人。",
+  "owners": {
+    "knight-885468a3-01": "f093285329000-cmd"
+  }
+}

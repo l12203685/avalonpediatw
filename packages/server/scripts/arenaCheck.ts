@@ -11,7 +11,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { checkBotFolder, defaultCommunityDir, loadRoster } from '../src/arena/registry';
+import { checkBotFolder, defaultCommunityDir, isHouseFolder, loadOwnersFile, loadRoster } from '../src/arena/registry';
 import { HOUSE_AUTHOR } from '../src/arena/profile';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
@@ -32,11 +32,13 @@ function main(): number {
   const argv = process.argv.slice(2);
   let all = false;
   let prAuthor: string | undefined;
+  let prLabels: string[] = [];
   const folders: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--all') all = true;
     else if (a === '--pr-author') prAuthor = argv[++i];
+    else if (a === '--pr-labels') prLabels = (argv[++i] ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
     else if (a === '--help' || a === '-h') { console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); return 0; }
     else folders.push(a);
   }
@@ -53,7 +55,16 @@ function main(): number {
     else { failed++; console.log(`✗ ${c.id}`); }
     for (const e of c.errors) { console.log(`  錯誤：${e}`); annotate('error', file, e); }
     for (const w of c.warnings) { console.log(`  提醒：${w}`); annotate('warning', file, w); }
-    if (prAuthor && c.profile && !c.id.startsWith('_') && c.profile.author !== HOUSE_AUTHOR && c.profile.author.toLowerCase() !== prAuthor.toLowerCase()) {
+    if (prAuthor && c.profile && isHouseFolder(folder)) {
+      const owners = loadOwnersFile();
+      const mapped = owners[c.id];
+      const vouched = prLabels.includes('vouched') || prAuthor.toLowerCase() === 'l12203685' || prAuthor.toLowerCase() === 'github-actions[bot]';
+      if (!vouched && (!mapped || mapped.toLowerCase() !== prAuthor.toLowerCase())) {
+        const msg = `待確認是本人：PR 作者「${prAuthor}」未對應到 ${c.id}（請先在網站完成認領並同意公開 _owners.json，或由站長在 PR 加上 vouched 標籤）`;
+        console.log(`  提醒：${msg}`);
+        annotate('warning', path.join(folder, 'adjust.json'), msg);
+      }
+    } else if (prAuthor && c.profile && !c.id.startsWith('_') && c.profile.author !== HOUSE_AUTHOR && c.profile.author.toLowerCase() !== prAuthor.toLowerCase()) {
       const msg = `author「${c.profile.author}」和開 PR 的帳號「${prAuthor}」不同；請確認這是你本人公開的帳號`;
       console.log(`  提醒：${msg}`);
       annotate('warning', file, msg);

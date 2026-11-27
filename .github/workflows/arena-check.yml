@@ -58,18 +58,19 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           # 改到的機器人資料夾（community-bots/<id>/、community-bots/_examples/<id>/、官方 AI騎士 community-bots/_knights/<id>/；刪掉的不算）。
           mapfile -t folders < <(git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- community-bots \
             | awk -F/ '($2 == "_examples" || $2 == "_knights") && NF >= 4 { print $1 "/" $2 "/" $3; next } NF >= 3 { print $1 "/" $2 }' | sort -u)
           echo "Changed bot folders: ${folders[*]:-(none)}"
           # 直接放在 community-bots/ 底下的檔案（不在任何資料夾裡）只允許 README.md。
-          stray="$(git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- community-bots | awk -F/ 'NF == 2 && $2 != "README.md"')"
+          stray="$(git diff --name-only --diff-filter=d "${BASE_SHA}" HEAD -- community-bots | awk -F/ 'NF == 2 && $2 != "README.md" && $2 != "_owners.json"')"
           if [ -n "${stray}" ]; then
             echo "::error::Put your bot in its own folder community-bots/<id>/ (stray files: ${stray//$'\n'/, })"
             exit 1
           fi
-          pnpm --filter @avalon/server arena:check --all --pr-author "${PR_AUTHOR}" "${folders[@]}"
+          pnpm --filter @avalon/server arena:check --all --pr-author "${PR_AUTHOR}" --pr-labels "${PR_LABELS}" "${folders[@]}"
 
       - name: Server's built-in knight list matches community-bots/_knights/
         # 練習台、房間「指定 AI騎士」讀伺服器內建的 packages/server/src/arena/knights.generated.json；

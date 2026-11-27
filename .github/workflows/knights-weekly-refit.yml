@@ -1,0 +1,83 @@
+name: AI knights weekly refit
+
+# 統一 AI騎士 第 3 層（每週自動重新擬合）：
+# 用 repo 裡公開的 games_cache.json 重新擬合第 1 層（profile.json，保留每位玩家的 adjust.json），
+# 更新精準度報告與 knights.generated.json，推到分支並自動開 PR（站長 2026-11-27 裁決）。
+# 注意：此 PR 會改到 packages/server/src/arena/knights.generated.json，合併前須先跑 node scripts/deployGate.mjs。
+
+on:
+  schedule:
+    - cron: '0 21 * * 6' # 每週日 05:00 台北時間
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: knights-weekly-refit
+  cancel-in-progress: false
+
+jobs:
+  refit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @avalon/shared build
+
+      - name: Refit Layer 1 profiles and residual weights (preserving adjust.json)
+        run: |
+          OUT_DIR="${RUNNER_TEMP}/knights-refit"
+          mkdir -p "${OUT_DIR}"
+          cd packages/server
+          npx tsx scripts/styleKnights.ts --out "${OUT_DIR}" --workers "$(nproc)" --write-knights --summary ../../docs/ai/gap/style_knights.json
+          npx tsx scripts/knightFidelityFit.ts --out "${OUT_DIR}" --workers "$(nproc)" --write-knights
+          npx tsx scripts/knightFidelity.ts --out "${OUT_DIR}" --workers "$(nproc)" --summary ../../docs/ai/gap/knight_fidelity.json
+          cd ../..
+          pnpm --filter @avalon/server knights:generate
+          pnpm --filter @avalon/server arena:check --all
+
+      - name: Open or update pull request if changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- community-bots/_knights packages/server/src/arena/knights.generated.json docs/ai/gap/; then
+            echo "No changes from weekly refit."
+            exit 0
+          fi
+          DATE="$(TZ=Asia/Taipei date +%F)"
+          BRANCH="auto/knights-weekly-refit"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${BRANCH}"
+          git add community-bots/_knights packages/server/src/arena/knights.generated.json docs/ai/gap/style_knights.json docs/ai/gap/knight_fidelity.json
+          git commit -m "chore(knights): 每週自動重新擬合 AI騎士 (${DATE})"
+          git push --force-with-lease origin "${BRANCH}"
+          if gh pr list --head "${BRANCH}" --state open --json number --jq 'length' | grep -q '^0$'; then
+            gh pr create \
+              --base main \
+              --head "${BRANCH}" \
+              --title "chore(knights): 每週自動重新擬合 AI騎士 (${DATE})" \
+              --body "自動重新擬合第 1 層（\`profile.json\` 與殘差層），保留每位玩家的 \`adjust.json\`，並更新 \`knights.generated.json\`。\n\n合併前請確認 \`node scripts/deployGate.mjs\` 回傳 0。"
+          else
+            echo "Updated existing PR for ${BRANCH}."
+          fi

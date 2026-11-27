@@ -72,7 +72,7 @@ class ArenaSeat implements AvalonAgent {
     this.role = obs.myRole as string;
     this.team = obs.myTeam === 'evil' ? 'evil' : 'good';
     const tuning = resolveProfileTuning(this.entrant.profile, this.role, this.team);
-    this.inner = buildKnightAgent(this.agentId, tuning, this.entrant.profile?.residual);
+    this.inner = buildKnightAgent(this.agentId, tuning, this.entrant.profile?.residual, this.entrant.profile?.residualOff);
     this.inner.onGameStart(obs);
   }
 

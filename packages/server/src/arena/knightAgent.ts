@@ -14,17 +14,23 @@ import type { AgentTuning } from '../ai/AgentTuning';
 import type { AgentAction, PlayerObservation } from '../ai/types';
 import { deriveValidLakeTargets } from '../ai/LakePolicy';
 import { ResidualPolicy, type ResidualWeights } from './residual';
+import type { ResidualAction } from './profile';
 
 /** 殘差層出錯、退回引擎決定的次數（只記次數）。 */
 export const residualFallbackCounter = { errors: 0 };
 
 /** 一個引擎決定經過殘差層之後的決定（擂台與正式對局共用）。 */
-export function applyResidualAction(r: ResidualPolicy, obs: PlayerObservation, a: AgentAction): AgentAction {
+export function applyResidualAction(
+  r: ResidualPolicy,
+  obs: PlayerObservation,
+  a: AgentAction,
+  off?: ReadonlySet<ResidualAction>,
+): AgentAction {
   switch (a.type) {
-    case 'team_select': return { type: 'team_select', teamIds: r.team(obs, a.teamIds) };
-    case 'team_vote': return { type: 'team_vote', vote: r.vote(obs, a.vote) };
-    case 'quest_vote': return { type: 'quest_vote', vote: r.questCard(obs, a.vote) };
-    case 'assassinate': return { type: 'assassinate', targetId: r.assassinate(obs, a.targetId) };
+    case 'team_select': return off?.has('team') ? a : { type: 'team_select', teamIds: r.team(obs, a.teamIds) };
+    case 'team_vote': return off?.has('vote') ? a : { type: 'team_vote', vote: r.vote(obs, a.vote) };
+    case 'quest_vote': return off?.has('quest') ? a : { type: 'quest_vote', vote: r.questCard(obs, a.vote) };
+    case 'assassinate': return off?.has('assassinate') ? a : { type: 'assassinate', targetId: r.assassinate(obs, a.targetId) };
   }
 }
 
@@ -42,24 +48,33 @@ function safely<T>(fn: () => T, fallback: T): T {
 
 export class KnightAgent extends HeuristicAgent {
   readonly residualPolicy: ResidualPolicy;
+  readonly residualOff: ReadonlySet<ResidualAction>;
 
-  constructor(agentId: string, tuning: Partial<AgentTuning> | undefined, residual: ResidualWeights) {
+  constructor(
+    agentId: string,
+    tuning: Partial<AgentTuning> | undefined,
+    residual: ResidualWeights,
+    residualOff?: readonly ResidualAction[],
+  ) {
     super(agentId, undefined, undefined, tuning);
     this.residualPolicy = new ResidualPolicy(residual, this.tuning);
+    this.residualOff = new Set(residualOff ?? []);
   }
 
   override act(obs: PlayerObservation): AgentAction {
     const a = super.act(obs);
-    return safely(() => applyResidualAction(this.residualPolicy, obs, a), a);
+    return safely(() => applyResidualAction(this.residualPolicy, obs, a, this.residualOff), a);
   }
 
   override pickLakeTarget(obs: PlayerObservation, validTargets?: readonly string[]): string {
     const t = super.pickLakeTarget(obs, validTargets);
+    if (this.residualOff.has('lakeTarget')) return t;
     return safely(() => this.residualPolicy.lakeTarget(obs, validTargets ?? deriveValidLakeTargets(obs), t), t);
   }
 
   override declareLake(obs: PlayerObservation, targetId: string, trueFaction: 'good' | 'evil' | undefined): 'good' | 'evil' | null {
     const c = super.declareLake(obs, targetId, trueFaction);
+    if (this.residualOff.has('lakeClaim')) return c;
     return safely(() => this.residualPolicy.lakeClaim(obs, targetId, trueFaction, c), c);
   }
 }
@@ -70,6 +85,11 @@ export function liveResidualEnabled(env: NodeJS.ProcessEnv = process.env): boole
 }
 
 /** 有殘差層 → KnightAgent；沒有 → 一般的 HeuristicAgent（同樣的開關）。 */
-export function buildKnightAgent(agentId: string, tuning: Partial<AgentTuning> | undefined, residual: ResidualWeights | undefined | null): HeuristicAgent {
-  return residual ? new KnightAgent(agentId, tuning, residual) : new HeuristicAgent(agentId, undefined, undefined, tuning);
+export function buildKnightAgent(
+  agentId: string,
+  tuning: Partial<AgentTuning> | undefined,
+  residual: ResidualWeights | undefined | null,
+  residualOff?: readonly ResidualAction[],
+): HeuristicAgent {
+  return residual ? new KnightAgent(agentId, tuning, residual, residualOff) : new HeuristicAgent(agentId, undefined, undefined, tuning);
 }
