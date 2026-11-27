@@ -31,7 +31,8 @@
     "arena:tournament": "tsx scripts/arenaTournament.ts",
     "arena:knobs": "tsx scripts/arenaKnobs.ts",
     "knights:generate": "tsx scripts/knightsGenerate.ts",
-    "arena:daily": "tsx scripts/arenaDaily.ts"
+    "arena:daily": "tsx scripts/arenaDaily.ts",
+    "league:exploiter": "tsx scripts/leagueExploiter.ts"
   },
   "dependencies": {
     "@avalon/shared": "workspace:*",

@@ -142,6 +142,23 @@
  *
  * 所有函式皆為純函式；`getDefaultAgentTuning()` 每次呼叫都重讀環境變數
  * （成本可忽略），測試可直接設定 `process.env` 再呼叫。
+ *
+ * ── Phase E（第 92 回合，2026-11-27）開關盤點分組索引（只標註，不改動預設值） ──
+ * 目前共 363 個開關（`DEFAULT_AGENT_TUNING` 啟用 118 個、關閉 245 個），依用途分為五類：
+ *   1. 核心硬規則與邏輯閘門（永遠保留，剝削者／外部設定禁止關閉）：
+ *      `goodQuestSuccessGuard`、`mustFailGate`、`teamDominanceGate`、`beliefCertainFacts`、
+ *      `redPossibleClaimsOnly`、`redMatchPointFail`、`percivalLoyalVote`、
+ *      `percivalCertainExclusion`、`percivalBlueLake`、`returnLake`。
+ *   2. 現行基準線啟用中（118 個，含上述硬規則與 15 個 `arena/knobs.ts` 白名單開關）；
+ *      其中 `goodLakeTargetMostSuspicious`、`assassinHeuristicVisibility`、`mordredHideR1`、
+ *      `redHideR1`、`redHideR1Who`、`redHideR4Solo`、`goodCleanVote`、`goodKeyVote`、
+ *      `goodTailVote`、`merlinDoomedRed` 在正式路徑已由後續回合開關覆蓋，僅保留供 fallback／擂台調參。
+ *   3. 真人桌讀法專用（預設關、於 `humanProfile.ts` 啟用，共 21 個，須保留）。
+ *   4. 擂台／AI 騎士白名單專用（預設關、於 `arena/knobs.ts` 開放，共 4 個：
+ *      `redCleanApprove`、`redCleanWhite`、`oberonR1AlwaysFail64`、`merlinCover77`，須保留）。
+ *   5. 純實驗性未採用開關（預設關、未在 `humanProfile.ts` 與 `arena/knobs.ts` 使用，共 220 個：
+ *      R1–R38 早期實驗 119 個、R40 `vote40*` 動態表 21 個、R39–R59 30 個、R60–R79 20 個、R80–R90 30 個），
+ *      列為後續分批收斂與清理技術債的候選清單。完整明細見 `docs/ai/PHASE_E_LEAGUE_REPORT.md`。
  */
 
 import { AVALON_CONFIG } from '@avalon/shared';
