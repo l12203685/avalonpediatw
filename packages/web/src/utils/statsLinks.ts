@@ -67,6 +67,8 @@ export const PUBLIC_STATS_STATES: ReadonlySet<GameState> = new Set<GameState>([
   'arena',
   // 我的騎士（AI騎士團的分頁；站長 2026-11-26：代理騎士還在做）
   'myKnight',
+  // 站長私人重玩測驗（統一 AI騎士 C；頁內由後端嚴格驗證站長身分）
+  'replayQuiz',
 ]);
 
 export type StatsLink =
@@ -82,6 +84,7 @@ export type StatsLink =
   | { kind: 'collab' }
   | { kind: 'arena' }
   | { kind: 'myKnight' }
+  | { kind: 'replayQuiz' }
   | { kind: 'wiki'; id: string | null }
   | { kind: 'concepts'; id: string | null };
 
@@ -123,6 +126,7 @@ export function parseStatsHash(hash: string | null | undefined): StatsLink | nul
   // AI騎士團（站長 2026-11-26：AI騎士 相關的都在一頁）：#ai-knights 開第一個分頁「對局」；#my-knight 開「我的騎士」
   if (/^(?:ai-?knights?|knights|AI%E9%A8%8E%E5%A3%AB%E5%9C%98|AI騎士團)$/i.test(raw)) return { kind: 'aiGames', id: null };
   if (/^(?:my-?knight|%E6%88%91%E7%9A%84%E9%A8%8E%E5%A3%AB|我的騎士)$/i.test(raw)) return { kind: 'myKnight' };
+  if (/^(?:replay-?quiz|%E9%87%8D%E7%8E%A9%E6%B8%AC%E9%A9%97|重玩測驗)$/i.test(raw)) return { kind: 'replayQuiz' };
   const aiGames = parseAiGamesHash(raw);
   if (aiGames) return { kind: 'aiGames', id: aiGames.id };
   const wiki = parseWikiHash(raw);
