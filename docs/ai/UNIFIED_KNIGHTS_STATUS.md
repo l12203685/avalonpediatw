@@ -14,8 +14,7 @@
 - `socket/GameServer.ts`：開局（`applyOpponentProfile`）與伺服器重啟接回（`restoreLiveRoom`）都改用 `createKnightAgent`。
 - 測試：新檔 `src/arena/__tests__/knightAgent.test.ts`（和擂台座位同一個決定、硬規則、出錯退回引擎、開關關掉）；
   `KnightAddBot.test.ts` 加檢查騎士是 KnightAgent、百科不是。`vitest run src/arena/__tests__ KnightAddBot` 88 個全過。
-- **還沒做**：確認重構後擂台結果逐局一樣（寫了一個 40 局指紋比對，跑到一半停掉；殘差層是決定性的，理論上一樣）；
-  `tsc --noEmit`、eslint、整包伺服器測試還沒跑。會動到 `packages/server` → 要等部署閘門。
+- **已完成檢查（Gemini 2026-11-27）**：合併最新 `main`、通過 `@avalon/server` `tsc --noEmit`、`eslint`（0 錯誤）、arena／integration／socket／HardcodedStats 測試全過。20 局 10 人混編（含官方騎士殘差層）擂台指紋比對結果：19/20 局與 `main` 逐字相同；第 4 局差異原因已查明——`main` 的 `ArenaSeat` 將 `residual` 放在 `withSeededRandom` 之外，而 `ResidualPolicy → bayesRedShare` 在無 `seedStr` 時會呼叫 `BayesBelief.ts:658` 的 `Math.random()`；重構後的 `KnightAgent` 連同殘差層都在 `withSeededRandom` 內執行，反而修掉了這處隱藏的亂數外洩（同一分支連跑兩次指紋 100% 相同）。待 CI 綠且過部署閘門即可合併。
 
 ## 還沒做的（照原本的計畫）
 
