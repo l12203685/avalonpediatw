@@ -548,7 +548,18 @@ export default function MyKnightPage(): JSX.Element {
                 <h2 className="flex items-center gap-1.5 text-sm font-bold text-sky-200">
                   <ShieldCheck size={16} />站長審核介面（待審核 {pendingAdminCount} 筆）
                 </h2>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGameState('replayQuiz');
+                      window.scrollTo({ top: 0 });
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/60 bg-amber-950/50 px-2.5 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-900/50"
+                    data-testid="my-knight-replay-quiz-link"
+                  >
+                    <Sparkles size={12} />站長重玩測驗
+                  </button>
                   <button
                     type="button"
                     onClick={() => setAdminShowAll((v) => !v)}

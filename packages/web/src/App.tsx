@@ -41,6 +41,7 @@ import HelpPage from './pages/HelpPage';
 import CollabPage from './pages/CollabPage';
 import ArenaPage from './pages/ArenaPage';
 import MyKnightPage from './pages/MyKnightPage';
+import ReplayQuizPage from './pages/ReplayQuizPage';
 import AiKnightsHub, { isAiKnightsState } from './components/aiKnights/AiKnightsHub';
 import FeedbackButton from './components/FeedbackButton';
 import ToastContainer from './components/ToastContainer';
@@ -72,6 +73,8 @@ function stateOfLink(link: StatsLink | null): GameState | null {
       return 'arena';
     case 'myKnight':
       return 'myKnight';
+    case 'replayQuiz':
+      return 'replayQuiz';
     case 'wiki':
     case 'concepts':
       return 'wiki';
@@ -115,6 +118,7 @@ function App(): JSX.Element {
       else if (link.kind === 'collab') store.setGameState('collab');
       else if (link.kind === 'arena') store.setGameState('arena');
       else if (link.kind === 'myKnight') store.setGameState('myKnight');
+      else if (link.kind === 'replayQuiz') store.setGameState('replayQuiz');
       else if (link.kind === 'wiki' || link.kind === 'concepts') store.setGameState('wiki');
       else if (link.kind === 'records') {
         store.setGameState('records');
@@ -546,6 +550,7 @@ function App(): JSX.Element {
           {shownState === 'collab' && <CollabPage />}
           {shownState === 'arena' && <ArenaPage />}
           {shownState === 'myKnight' && <MyKnightPage />}
+          {shownState === 'replayQuiz' && <ReplayQuizPage />}
           {gameState === 'settings' && <SettingsPage />}
           {gameState === 'personalStats' && <PersonalStatsPage />}
           {/* P0 fix 2026-04-25: PersonalStatsPage timeline grid + ProfilePage

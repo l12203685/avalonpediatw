@@ -14,6 +14,7 @@ import { friendsRouter } from './routes/friends';
 import { feedbackRouter } from './routes/feedback';
 import { aiGamesRouter } from './routes/aiGames';
 import { knightsRouter } from './routes/knights';
+import { replayQuizRouter } from './routes/replayQuiz';
 import { setLiveKnightAdjustProvider } from './arena/knights';
 import { getPlayerKnightsStore } from './services/playerKnightsStore';
 import { reportsRouter } from './routes/reports';
@@ -100,6 +101,8 @@ app.use('/api/feedback', feedbackRouter);
 app.use('/api/ai-games', aiGamesRouter);
 // 統一 AI騎士（B2）：帳號認領玩家 ID、站長審核、第 2 層私人儲存與公開開關 API
 app.use('/api/knights', knightsRouter);
+// 統一 AI騎士（C）：站長私人重玩測驗（30 天以前歷史局，全匿名座位，私人作答統計）
+app.use('/api/replay-quiz', replayQuizRouter);
 // 網站「回報與修正」：百科回報與處理狀態（DC 同步閒聊裡 bot 貼的【百科回報】＋狀態行；站長 2026-11-19）
 app.use('/api/reports', reportsRouter);
 // 網站「叫百科AI 補位」：不在 LINE／DC 群組的人也能叫補位機器人（站長 2026-11-19；限制跟 LINE／DC 共用）
