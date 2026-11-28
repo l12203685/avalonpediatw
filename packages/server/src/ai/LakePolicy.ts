@@ -31,6 +31,7 @@ import { beliefFailCards, missionFailed } from './missionFacts';
 import { analyzeGoodLake, pickGoodLakeTargetInfoMax } from './GoodLakeInfo';
 import { untaintedLakePick51 } from './Round51';
 import { lakeChain68Pick } from './Round68';
+import { lookahead91LakeTarget } from './Round91';
 import { pickGoodLakeTargetEntropy } from './BlueRound30';
 import { pickGoodLakeTargetChain } from './BlueRound32';
 import { goodLake39Pick } from './BlueRound39';
@@ -257,6 +258,9 @@ export function pickLakeTargetForTeam(
     // the holder's own trustworthiness included (BlueRound30.publicLakeGain).
     // ── AgentTuning.goodLakeChain（第 32 回合；Edward 2026-11-05「好人湖中鏈」）── the table's public information over every
     // remaining lake (the laked seat holds the next one; each holder's trustworthiness in every declaration; BlueRound32).
+    // ── AgentTuning.lookahead91（第 91 回合；路線圖 Phase D）── 2 層前瞻選湖（資訊增益 × 對手拿湖反制）。
+    const la91Lake = lookahead91LakeTarget(tuning, obs, unknownCandidates);
+    if (la91Lake !== null) return la91Lake;
     const chainPick = pickGoodLakeTargetChain(tuning, obs, unknownCandidates);
     if (chainPick !== null) return chainPick;
     const entropyPick = pickGoodLakeTargetEntropy(tuning, obs, unknownCandidates);
